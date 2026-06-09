@@ -1,0 +1,9 @@
+{
+  "family_id": "glass-theme",
+  "display_name": "Glass Theme",
+  "default_skin": "indigo-amber-dark",
+  "skins": [
+    "indigo-amber-dark",
+    "cyan-amber-dark"
+  ]
+}

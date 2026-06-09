@@ -1,0 +1,9 @@
+{
+  "profile_id": "default",
+  "enabled_modules": [
+    "host",
+    "uniauth",
+    "rule-engine",
+    "attendance"
+  ]
+}

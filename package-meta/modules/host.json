@@ -1,0 +1,7 @@
+{
+  "module_id": "host",
+  "enabled": true,
+  "app_path": "apps/host",
+  "manifest_path": "apps/host/manifest/module.json",
+  "dependencies": []
+}

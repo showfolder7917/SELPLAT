@@ -1,0 +1,9 @@
+{
+  "module_id": "rule-engine",
+  "display_name": "Rule Engine",
+  "module_type": "business",
+  "enabled": true,
+  "route_prefix": "/rule-engine",
+  "permission_prefix": "rule_engine",
+  "manifest_version": "1.0.0"
+}

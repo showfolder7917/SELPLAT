@@ -1,0 +1,19 @@
+<svg width="1600" height="1200" viewBox="0 0 1600 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="mistA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(280 240) rotate(31) scale(380 300)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.84"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mistB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1210 300) rotate(18) scale(320 260)">
+      <stop stop-color="#FFF2D3" stop-opacity="0.74"/>
+      <stop offset="1" stop-color="#FFF2D3" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mistC" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(920 920) rotate(-12) scale(420 280)">
+      <stop stop-color="#D5D8FF" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#D5D8FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1200" fill="url(#mistA)"/>
+  <rect width="1600" height="1200" fill="url(#mistB)"/>
+  <rect width="1600" height="1200" fill="url(#mistC)"/>
+</svg>

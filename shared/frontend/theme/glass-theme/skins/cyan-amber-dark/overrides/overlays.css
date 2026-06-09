@@ -1,0 +1,42 @@
+.seladmin-empty,
+.empty-guide {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--seladmin-radius-card);
+  background: var(--seladmin-surface-muted);
+}
+
+.seladmin-empty-icon,
+.empty-guide-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--seladmin-radius-button);
+  display: grid;
+  place-items: center;
+  background: var(--seladmin-surface-info);
+  color: #8fddff;
+  font-size: 20px;
+}
+
+.seladmin-toast,
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  border-radius: var(--seladmin-radius-button);
+  padding: 14px 18px;
+}
+
+.seladmin-loading,
+.seladmin-loading-mask,
+.loading-mask {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 8, 14, 0.45);
+  color: var(--seladmin-text);
+  z-index: 20;
+}

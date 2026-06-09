@@ -1,0 +1,23 @@
+{
+  "host": [],
+  "uniauth": [
+    "host"
+  ],
+  "rule-engine": [
+    "host"
+  ],
+  "attendance": [
+    "host",
+    "uniauth",
+    "rule-engine"
+  ],
+  "crm": [
+    "host",
+    "uniauth",
+    "rule-engine"
+  ],
+  "cms": [
+    "host",
+    "uniauth"
+  ]
+}

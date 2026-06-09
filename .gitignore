@@ -1,0 +1,8 @@
+runtime/logs/
+runtime/reports/
+runtime/cache/
+
+*.log
+*.out
+*.err
+*.tmp

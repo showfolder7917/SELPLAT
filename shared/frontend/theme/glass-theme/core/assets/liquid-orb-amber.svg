@@ -1,0 +1,11 @@
+<svg width="640" height="640" viewBox="0 0 640 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="amberOrb" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(320 320) rotate(90) scale(240)">
+      <stop stop-color="#FFFDF8" stop-opacity="0.96"/>
+      <stop offset="0.34" stop-color="#FFF0D6" stop-opacity="0.88"/>
+      <stop offset="0.7" stop-color="#FFDCA6" stop-opacity="0.44"/>
+      <stop offset="1" stop-color="#FFDCA6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="320" cy="320" r="240" fill="url(#amberOrb)"/>
+</svg>

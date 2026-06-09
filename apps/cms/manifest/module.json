@@ -1,0 +1,9 @@
+{
+  "module_id": "cms",
+  "display_name": "CMS",
+  "module_type": "business",
+  "enabled": false,
+  "route_prefix": "/cms",
+  "permission_prefix": "cms",
+  "manifest_version": "1.0.0"
+}

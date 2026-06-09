@@ -1,0 +1,10 @@
+{
+  "module_id": "cms",
+  "enabled": false,
+  "app_path": "apps/cms",
+  "manifest_path": "apps/cms/manifest/module.json",
+  "dependencies": [
+    "host",
+    "uniauth"
+  ]
+}

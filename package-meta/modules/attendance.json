@@ -1,0 +1,11 @@
+{
+  "module_id": "attendance",
+  "enabled": true,
+  "app_path": "apps/attendance",
+  "manifest_path": "apps/attendance/manifest/module.json",
+  "dependencies": [
+    "host",
+    "uniauth",
+    "rule-engine"
+  ]
+}

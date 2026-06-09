@@ -1,0 +1,46 @@
+.seladmin-tab-strip,
+.section-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.seladmin-tab-button,
+.nav-button {
+  padding: 12px 14px;
+}
+
+.seladmin-tab-button.active,
+.seladmin-locale-button.active,
+.nav-button.active,
+.language-button.active {
+  background: var(--seladmin-gradient-primary);
+}
+
+.seladmin-locale-switch,
+.language-switch {
+  display: flex;
+  gap: 10px;
+}
+
+.seladmin-locale-button,
+.language-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 120px;
+  padding: 10px 14px;
+}
+
+.seladmin-locale-label,
+.language-label {
+  font-weight: 700;
+}
+
+.seladmin-locale-caption,
+.language-subtitle {
+  color: var(--seladmin-text-muted);
+  font-size: 12px;
+}

@@ -1,0 +1,43 @@
+.seladmin-table,
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.seladmin-table th,
+.seladmin-table td,
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--seladmin-border-soft);
+  vertical-align: top;
+}
+
+.seladmin-table th,
+.data-table th {
+  color: rgba(147, 205, 255, 0.92);
+  font-size: 12px;
+}
+
+.seladmin-table small,
+.data-table small {
+  color: var(--seladmin-text-muted);
+}
+
+.seladmin-inline-actions,
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.seladmin-inline-actions button,
+.table-actions button {
+  border: 0;
+  background: var(--seladmin-surface-button);
+  color: #f4f8ff;
+  padding: 8px 10px;
+  border-radius: var(--seladmin-radius-action);
+}

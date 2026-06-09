@@ -1,0 +1,9 @@
+{
+  "module_id": "attendance",
+  "display_name": "Attendance",
+  "module_type": "business",
+  "enabled": true,
+  "route_prefix": "/attendance",
+  "permission_prefix": "attendance",
+  "manifest_version": "1.0.0"
+}

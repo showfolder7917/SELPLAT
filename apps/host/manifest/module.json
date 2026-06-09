@@ -1,0 +1,9 @@
+{
+  "module_id": "host",
+  "display_name": "Platform Host",
+  "module_type": "host",
+  "enabled": true,
+  "route_prefix": "/",
+  "permission_prefix": "host",
+  "manifest_version": "1.0.0"
+}

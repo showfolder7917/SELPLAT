@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>glass-theme 皮肤预览</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page-bg: linear-gradient(180deg, #0b1220, #09111a 72%, #070c14);
+        --panel-bg: rgba(16, 24, 37, 0.82);
+        --panel-border: rgba(132, 165, 224, 0.18);
+        --text-main: #edf4ff;
+        --text-soft: rgba(220, 232, 255, 0.78);
+        --accent: #7eb7ff;
+        --accent-warm: #ffc976;
+        --shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+        --radius: 18px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, "Microsoft YaHei", "Noto Sans SC", sans-serif;
+        background: var(--page-bg);
+        color: var(--text-main);
+      }
+
+      .page {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 32px 24px 40px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 16px;
+        padding: 28px;
+        border: 1px solid var(--panel-border);
+        border-radius: 24px;
+        background: var(--panel-bg);
+        box-shadow: var(--shadow);
+      }
+
+      .hero p {
+        margin: 0;
+        color: var(--text-soft);
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-size: 32px;
+      }
+
+      .toolbar {
+        display: grid;
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .toolbar label {
+        color: var(--text-soft);
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .skin-switcher {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+
+      .skin-button {
+        appearance: none;
+        width: 100%;
+        text-align: left;
+        padding: 16px 18px;
+        border-radius: 16px;
+        border: 1px solid var(--panel-border);
+        background: rgba(13, 20, 31, 0.92);
+        color: var(--text-main);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        cursor: pointer;
+        transition:
+          transform 160ms ease,
+          border-color 160ms ease,
+          background 160ms ease,
+          box-shadow 160ms ease;
+      }
+
+      .skin-button:hover {
+        transform: translateY(-2px);
+        border-color: rgba(126, 183, 255, 0.36);
+        background: rgba(18, 29, 44, 0.96);
+        box-shadow:
+          0 12px 24px rgba(0, 0, 0, 0.22),
+          0 0 0 1px rgba(126, 183, 255, 0.08);
+      }
+
+      .skin-button:focus-visible {
+        outline: 2px solid rgba(126, 183, 255, 0.78);
+        outline-offset: 2px;
+      }
+
+      .skin-button.is-active {
+        border-color: rgba(126, 183, 255, 0.52);
+        background:
+          linear-gradient(180deg, rgba(126, 183, 255, 0.14), rgba(13, 20, 31, 0.96)),
+          rgba(13, 20, 31, 0.96);
+        box-shadow:
+          0 16px 30px rgba(0, 0, 0, 0.26),
+          0 0 0 1px rgba(126, 183, 255, 0.12);
+      }
+
+      .skin-button-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .skin-button-caption {
+        display: block;
+        color: var(--text-soft);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .skin-badge {
+        flex: 0 0 auto;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 201, 118, 0.14);
+        color: var(--accent-warm);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .skin-note {
+        min-height: 48px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(126, 183, 255, 0.07);
+        border: 1px solid rgba(126, 183, 255, 0.16);
+        color: var(--text-soft);
+        line-height: 1.5;
+      }
+
+      .preview-shell {
+        margin-top: 24px;
+        border: 1px solid var(--panel-border);
+        border-radius: 24px;
+        overflow: hidden;
+        background: rgba(8, 13, 21, 0.94);
+        box-shadow: var(--shadow);
+      }
+
+      .preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--panel-border);
+        background: rgba(18, 27, 40, 0.92);
+      }
+
+      .preview-header strong {
+        font-size: 15px;
+      }
+
+      .preview-header span {
+        color: var(--text-soft);
+        font-size: 13px;
+      }
+
+      iframe {
+        width: 100%;
+        height: 960px;
+        border: 0;
+        display: block;
+        background: #0b1220;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p>Glass Theme Family</p>
+        <h1>玻璃主题家族皮肤预览</h1>
+        <p>这个静态入口用于在同一个页面中切换查看不同皮肤效果，当前展示 `indigo-amber-dark` 与 `cyan-amber-dark` 两套皮肤。</p>
+        <div class="toolbar">
+          <label>选择皮肤</label>
+          <div class="skin-switcher" id="skinSwitcher">
+            <button class="skin-button is-active" type="button" data-skin="indigo-amber-dark">
+              <span class="skin-button-title">
+                <span>indigo-amber-dark</span>
+                <span class="skin-badge">稳重后台</span>
+              </span>
+              <span class="skin-button-caption">靛蓝主色与琥珀辅色，适合宿主、权限和通用后台管理台。</span>
+            </button>
+            <button class="skin-button" type="button" data-skin="cyan-amber-dark">
+              <span class="skin-button-title">
+                <span>cyan-amber-dark</span>
+                <span class="skin-badge">高亮数据台</span>
+              </span>
+              <span class="skin-button-caption">青蓝主色与琥珀辅色，适合信息密度更高的数据工作台。</span>
+            </button>
+          </div>
+          <div class="skin-note" id="skinNote">偏稳重后台工作台风格，适合宿主与通用管理台。</div>
+        </div>
+      </section>
+
+      <section class="preview-shell">
+        <div class="preview-header">
+          <strong id="previewTitle">indigo-amber-dark</strong>
+          <span id="previewPath">skins/indigo-amber-dark/preview/index.html</span>
+        </div>
+        <iframe
+          id="previewFrame"
+          title="glass-theme-preview"
+          src="./skins/indigo-amber-dark/preview/index.html"
+        ></iframe>
+      </section>
+    </main>
+
+    <script>
+      const skinButtons = Array.from(document.querySelectorAll('.skin-button'));
+      const previewFrame = document.getElementById('previewFrame');
+      const previewTitle = document.getElementById('previewTitle');
+      const previewPath = document.getElementById('previewPath');
+      const skinNote = document.getElementById('skinNote');
+
+      const skinDescriptions = {
+        'indigo-amber-dark': '偏稳重后台工作台风格，适合宿主与通用管理台。',
+        'cyan-amber-dark': '偏流动高亮数据台风格，适合信息密度较高的工作台。'
+      };
+
+      function applySkinSelection(selectedSkin) {
+        const targetPath = './skins/' + selectedSkin + '/preview/index.html';
+        previewFrame.src = targetPath;
+        previewTitle.textContent = selectedSkin;
+        previewPath.textContent = 'skins/' + selectedSkin + '/preview/index.html';
+        skinNote.textContent = skinDescriptions[selectedSkin] || '';
+        skinButtons.forEach((button) => {
+          button.classList.toggle('is-active', button.dataset.skin === selectedSkin);
+        });
+      }
+
+      skinButtons.forEach((button) => {
+        button.addEventListener('click', () => applySkinSelection(button.dataset.skin));
+      });
+
+      applySkinSelection('indigo-amber-dark');
+    </script>
+  </body>
+</html>

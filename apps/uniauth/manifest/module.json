@@ -1,0 +1,9 @@
+{
+  "module_id": "uniauth",
+  "display_name": "Unified Auth",
+  "module_type": "business",
+  "enabled": true,
+  "route_prefix": "/uniauth",
+  "permission_prefix": "uniauth",
+  "manifest_version": "1.0.0"
+}

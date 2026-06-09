@@ -1,0 +1,9 @@
+{
+  "module_id": "crm",
+  "display_name": "CRM",
+  "module_type": "business",
+  "enabled": false,
+  "route_prefix": "/crm",
+  "permission_prefix": "crm",
+  "manifest_version": "1.0.0"
+}
