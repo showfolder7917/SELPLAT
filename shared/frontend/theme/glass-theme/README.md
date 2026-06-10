@@ -11,12 +11,44 @@
 - `manifest/`
   放主题家族元数据。
 - `index.html`
-  放静态皮肤切换预览入口。
+  放静态皮肤导航预览入口。
 
 当前皮肤：
 
 - `indigo-amber-dark`
 - `cyan-amber-dark`
+- `emerald-aqua-dark`
+- `violet-rose-dark`
+- `crimson-amber-dark`
+- `cobalt-mint-dark`
+- `slate-lime-dark`
+- `ivory-pearl-light`
+- `champagne-blush-light`
+- `frost-sky-light`
+- `sage-cream-light`
+
+当前预览方式：
+
+- 左侧为可滚动皮肤列表。
+- 右侧为当前选中皮肤的完整预览。
+- 点击左侧皮肤条目后，右侧会同步切换对应 `preview/index.html`、标题、路径和说明。
+- 右侧预览区拥有独立滚动条，可在不影响左侧列表定位的情况下继续向下浏览预览内容。
+
+当前皮肤分组：
+
+- 深色玻璃系：
+  - `indigo-amber-dark`
+  - `cyan-amber-dark`
+  - `emerald-aqua-dark`
+  - `violet-rose-dark`
+  - `crimson-amber-dark`
+  - `cobalt-mint-dark`
+  - `slate-lime-dark`
+- 浅色轻玻璃系：
+  - `ivory-pearl-light`
+  - `champagne-blush-light`
+  - `frost-sky-light`
+  - `sage-cream-light`
 
 使用原则：
 

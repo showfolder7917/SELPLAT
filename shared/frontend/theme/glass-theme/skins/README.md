@@ -14,3 +14,12 @@
 
 - `indigo-amber-dark`
 - `cyan-amber-dark`
+- `emerald-aqua-dark`
+- `violet-rose-dark`
+- `crimson-amber-dark`
+- `cobalt-mint-dark`
+- `slate-lime-dark`
+- `ivory-pearl-light`
+- `champagne-blush-light`
+- `frost-sky-light`
+- `sage-cream-light`

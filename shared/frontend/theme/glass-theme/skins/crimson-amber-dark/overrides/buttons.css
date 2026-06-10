@@ -1,0 +1,50 @@
+.seladmin-button,
+.seladmin-tab-button,
+.seladmin-locale-button {
+  border: 0;
+  color: var(--seladmin-text);
+  min-height: 44px;
+  border-radius: var(--seladmin-radius-button);
+}
+
+.seladmin-button {
+  padding: 0 16px;
+}
+
+.seladmin-button-primary {
+  background: var(--seladmin-gradient-primary);
+}
+
+.seladmin-button-secondary {
+  background: var(--seladmin-surface-button);
+}
+
+.seladmin-button-ghost {
+  background: transparent;
+  border: 1px solid var(--seladmin-border);
+}
+
+.seladmin-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.seladmin-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--seladmin-surface-button);
+}
+
+.seladmin-warning-text {
+  color: var(--seladmin-warning);
+  font-weight: 700;
+}
+
+.seladmin-success-text {
+  color: var(--seladmin-success);
+}

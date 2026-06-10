@@ -4,6 +4,7 @@
 
 当前子目录：
 
+- `common-core`
 - `auth-kernel`
 - `common-web`
 - `common-db`

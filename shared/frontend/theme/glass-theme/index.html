@@ -3,27 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>glass-theme 皮肤预览</title>
+    <title>glass-theme 皮肤导航预览</title>
     <style>
       :root {
         color-scheme: dark;
         --page-bg: linear-gradient(180deg, #0b1220, #09111a 72%, #070c14);
-        --panel-bg: rgba(16, 24, 37, 0.82);
+        --panel-bg: rgba(14, 21, 34, 0.86);
+        --panel-bg-strong: rgba(11, 17, 27, 0.94);
         --panel-border: rgba(132, 165, 224, 0.18);
         --text-main: #edf4ff;
-        --text-soft: rgba(220, 232, 255, 0.78);
+        --text-soft: rgba(220, 232, 255, 0.76);
         --accent: #7eb7ff;
+        --accent-soft: rgba(126, 183, 255, 0.12);
         --accent-warm: #ffc976;
         --shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
-        --radius: 18px;
+        --radius: 22px;
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html,
       body {
         margin: 0;
+        min-height: 100%;
+      }
+
+      body {
         min-height: 100vh;
         font-family: Inter, "Microsoft YaHei", "Noto Sans SC", sans-serif;
         background: var(--page-bg);
@@ -31,59 +38,99 @@
       }
 
       .page {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 32px 24px 40px;
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+        gap: 24px;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .sidebar {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        gap: 16px;
+        min-height: 0;
+        padding: 22px 18px 18px;
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        background: var(--panel-bg);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(20px);
+      }
+
+      .hero p,
+      .hero h1,
+      .hero-note p,
+      .hero-note strong {
+        margin: 0;
       }
 
       .hero {
         display: grid;
-        gap: 16px;
-        padding: 28px;
-        border: 1px solid var(--panel-border);
-        border-radius: 24px;
-        background: var(--panel-bg);
-        box-shadow: var(--shadow);
-      }
-
-      .hero p {
-        margin: 0;
-        color: var(--text-soft);
+        gap: 12px;
       }
 
       .hero h1 {
-        margin: 0;
-        font-size: 32px;
+        font-size: 28px;
+        line-height: 1.2;
       }
 
-      .toolbar {
-        display: grid;
-        gap: 12px;
-        margin-top: 8px;
-      }
-
-      .toolbar label {
+      .hero p {
         color: var(--text-soft);
-        font-size: 14px;
-        font-weight: 600;
+        line-height: 1.6;
       }
 
-      .skin-switcher {
+      .hero-note {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
+        gap: 8px;
+        padding: 14px;
+        border: 1px solid rgba(126, 183, 255, 0.16);
+        border-radius: 18px;
+        background: rgba(126, 183, 255, 0.08);
       }
 
-      .skin-button {
-        appearance: none;
+      .hero-note strong {
+        font-size: 14px;
+      }
+
+      .hero-note p {
+        color: var(--text-soft);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .skin-list {
+        display: grid;
+        gap: 12px;
+        min-height: 0;
+        padding-right: 4px;
+        overflow-y: auto;
+      }
+
+      .skin-list::-webkit-scrollbar {
+        width: 10px;
+      }
+
+      .skin-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 999px;
+      }
+
+      .skin-list::-webkit-scrollbar-thumb {
+        background: rgba(126, 183, 255, 0.24);
+        border-radius: 999px;
+      }
+
+      .skin-item {
+        display: grid;
+        gap: 10px;
         width: 100%;
-        text-align: left;
-        padding: 16px 18px;
-        border-radius: 16px;
+        padding: 14px;
         border: 1px solid var(--panel-border);
-        background: rgba(13, 20, 31, 0.92);
-        color: var(--text-main);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        border-radius: 20px;
+        background: rgba(10, 16, 26, 0.82);
+        color: inherit;
+        text-align: left;
         cursor: pointer;
         transition:
           transform 160ms ease,
@@ -92,48 +139,49 @@
           box-shadow 160ms ease;
       }
 
-      .skin-button:hover {
-        transform: translateY(-2px);
-        border-color: rgba(126, 183, 255, 0.36);
-        background: rgba(18, 29, 44, 0.96);
+      .skin-item:hover {
+        transform: translateX(4px);
+        border-color: rgba(126, 183, 255, 0.34);
+        background: rgba(16, 24, 38, 0.96);
         box-shadow:
-          0 12px 24px rgba(0, 0, 0, 0.22),
+          0 14px 24px rgba(0, 0, 0, 0.18),
           0 0 0 1px rgba(126, 183, 255, 0.08);
       }
 
-      .skin-button:focus-visible {
-        outline: 2px solid rgba(126, 183, 255, 0.78);
+      .skin-item:focus-visible {
+        outline: 2px solid rgba(126, 183, 255, 0.8);
         outline-offset: 2px;
       }
 
-      .skin-button.is-active {
-        border-color: rgba(126, 183, 255, 0.52);
+      .skin-item.is-active {
+        border-color: rgba(126, 183, 255, 0.48);
         background:
-          linear-gradient(180deg, rgba(126, 183, 255, 0.14), rgba(13, 20, 31, 0.96)),
-          rgba(13, 20, 31, 0.96);
+          linear-gradient(180deg, rgba(126, 183, 255, 0.14), rgba(12, 19, 31, 0.96)),
+          rgba(12, 19, 31, 0.96);
         box-shadow:
-          0 16px 30px rgba(0, 0, 0, 0.26),
+          0 18px 28px rgba(0, 0, 0, 0.24),
           0 0 0 1px rgba(126, 183, 255, 0.12);
       }
 
-      .skin-button-title {
+      .skin-item-top {
         display: flex;
-        align-items: center;
         justify-content: space-between;
+        align-items: flex-start;
         gap: 12px;
-        margin-bottom: 8px;
+      }
+
+      .skin-item-name,
+      .skin-item-caption,
+      .skin-item-note {
+        margin: 0;
+      }
+
+      .skin-item-name {
         font-size: 15px;
         font-weight: 700;
       }
 
-      .skin-button-caption {
-        display: block;
-        color: var(--text-soft);
-        font-size: 13px;
-        line-height: 1.5;
-      }
-
-      .skin-badge {
+      .skin-item-tag {
         flex: 0 0 auto;
         padding: 4px 10px;
         border-radius: 999px;
@@ -143,119 +191,337 @@
         font-weight: 600;
       }
 
-      .skin-note {
-        min-height: 48px;
-        padding: 12px 14px;
-        border-radius: 14px;
-        background: rgba(126, 183, 255, 0.07);
-        border: 1px solid rgba(126, 183, 255, 0.16);
+      .skin-item-caption {
         color: var(--text-soft);
-        line-height: 1.5;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .skin-item-note {
+        color: rgba(237, 244, 255, 0.58);
+        font-size: 12px;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        gap: 16px;
+        min-height: 0;
+        max-height: calc(100vh - 40px);
+      }
+
+      .workspace-header,
+      .workspace-note,
+      .preview-shell {
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        background: var(--panel-bg);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(20px);
+      }
+
+      .workspace-header {
+        display: grid;
+        gap: 10px;
+        padding: 22px 24px;
+      }
+
+      .workspace-header p,
+      .workspace-header h2 {
+        margin: 0;
+      }
+
+      .workspace-header p {
+        color: var(--text-soft);
+      }
+
+      .workspace-header h2 {
+        font-size: 26px;
+      }
+
+      .workspace-note {
+        padding: 14px 18px;
+        color: var(--text-soft);
+        line-height: 1.6;
       }
 
       .preview-shell {
-        margin-top: 24px;
-        border: 1px solid var(--panel-border);
-        border-radius: 24px;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
         overflow: hidden;
-        background: rgba(8, 13, 21, 0.94);
-        box-shadow: var(--shadow);
+        background: var(--panel-bg-strong);
       }
 
       .preview-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 12px;
-        padding: 14px 18px;
+        gap: 16px;
+        padding: 16px 20px;
         border-bottom: 1px solid var(--panel-border);
         background: rgba(18, 27, 40, 0.92);
       }
 
-      .preview-header strong {
-        font-size: 15px;
+      .preview-header-left {
+        display: grid;
+        gap: 6px;
       }
 
-      .preview-header span {
+      .preview-header-left strong,
+      .preview-header-left span {
+        margin: 0;
+      }
+
+      .preview-header-left strong {
+        font-size: 16px;
+      }
+
+      .preview-header-left span,
+      .preview-mode {
         color: var(--text-soft);
         font-size: 13px;
       }
 
-      iframe {
+      .preview-body {
+        min-height: 0;
+        max-height: calc(100vh - 220px);
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+
+      .preview-body::-webkit-scrollbar {
+        width: 12px;
+      }
+
+      .preview-body::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .preview-body::-webkit-scrollbar-thumb {
+        background: rgba(126, 183, 255, 0.24);
+        border-radius: 999px;
+        border: 2px solid rgba(11, 17, 27, 0.92);
+      }
+
+      .preview-body iframe {
         width: 100%;
-        height: 960px;
+        height: 1440px;
+        min-height: 0;
         border: 0;
         display: block;
         background: #0b1220;
+      }
+
+      @media (max-width: 1180px) {
+        .page {
+          grid-template-columns: 320px minmax(0, 1fr);
+        }
+      }
+
+      @media (max-width: 960px) {
+        .page {
+          grid-template-columns: 1fr;
+          min-height: auto;
+        }
+
+        .sidebar {
+          grid-template-rows: auto auto auto;
+        }
+
+        .skin-list {
+          max-height: 420px;
+        }
+
+        .preview-body iframe {
+          height: 960px;
+        }
       }
     </style>
   </head>
   <body>
     <main class="page">
-      <section class="hero">
-        <p>Glass Theme Family</p>
-        <h1>玻璃主题家族皮肤预览</h1>
-        <p>这个静态入口用于在同一个页面中切换查看不同皮肤效果，当前展示 `indigo-amber-dark` 与 `cyan-amber-dark` 两套皮肤。</p>
-        <div class="toolbar">
-          <label>选择皮肤</label>
-          <div class="skin-switcher" id="skinSwitcher">
-            <button class="skin-button is-active" type="button" data-skin="indigo-amber-dark">
-              <span class="skin-button-title">
-                <span>indigo-amber-dark</span>
-                <span class="skin-badge">稳重后台</span>
-              </span>
-              <span class="skin-button-caption">靛蓝主色与琥珀辅色，适合宿主、权限和通用后台管理台。</span>
-            </button>
-            <button class="skin-button" type="button" data-skin="cyan-amber-dark">
-              <span class="skin-button-title">
-                <span>cyan-amber-dark</span>
-                <span class="skin-badge">高亮数据台</span>
-              </span>
-              <span class="skin-button-caption">青蓝主色与琥珀辅色，适合信息密度更高的数据工作台。</span>
-            </button>
-          </div>
-          <div class="skin-note" id="skinNote">偏稳重后台工作台风格，适合宿主与通用管理台。</div>
-        </div>
-      </section>
+      <aside class="sidebar">
+        <section class="hero">
+          <p>Glass Theme Family</p>
+          <h1>玻璃主题皮肤导航</h1>
+          <p>左侧直接选择皮肤，右侧常驻显示完整预览，不再需要上下翻找主预览区。</p>
+        </section>
 
-      <section class="preview-shell">
-        <div class="preview-header">
-          <strong id="previewTitle">indigo-amber-dark</strong>
+        <section class="hero-note">
+          <strong>当前范围</strong>
+          <p>已接入 11 套皮肤，覆盖深色玻璃、浅色轻玻璃和奶白玻璃方向。</p>
+        </section>
+
+        <section class="skin-list" id="skinList">
+          <button class="skin-item is-active" type="button" data-skin="indigo-amber-dark">
+            <div class="skin-item-top">
+              <p class="skin-item-name">indigo-amber-dark</p>
+              <span class="skin-item-tag">稳重后台</span>
+            </div>
+            <p class="skin-item-caption">靛蓝主色与琥珀辅色，适合宿主、权限和通用后台管理台。</p>
+            <p class="skin-item-note">深色玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="cyan-amber-dark">
+            <div class="skin-item-top">
+              <p class="skin-item-name">cyan-amber-dark</p>
+              <span class="skin-item-tag">高亮数据台</span>
+            </div>
+            <p class="skin-item-caption">青蓝主色与琥珀辅色，适合信息密度更高的数据工作台。</p>
+            <p class="skin-item-note">深色玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="emerald-aqua-dark">
+            <div class="skin-item-top">
+              <p class="skin-item-name">emerald-aqua-dark</p>
+              <span class="skin-item-tag">翡翠清透</span>
+            </div>
+            <p class="skin-item-caption">翡翠主色与浅青辅色，适合监控和高透明数据台。</p>
+            <p class="skin-item-note">深色玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="violet-rose-dark">
+            <div class="skin-item-top">
+              <p class="skin-item-name">violet-rose-dark</p>
+              <span class="skin-item-tag">梦幻品牌</span>
+            </div>
+            <p class="skin-item-caption">紫罗兰主色与玫瑰辅色，适合品牌感更强的创意控制台。</p>
+            <p class="skin-item-note">深色玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="crimson-amber-dark">
+            <div class="skin-item-top">
+              <p class="skin-item-name">crimson-amber-dark</p>
+              <span class="skin-item-tag">热度告警</span>
+            </div>
+            <p class="skin-item-caption">深绯红主色与琥珀辅色，适合重点状态与告警台。</p>
+            <p class="skin-item-note">深色玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="cobalt-mint-dark">
+            <div class="skin-item-top">
+              <p class="skin-item-name">cobalt-mint-dark</p>
+              <span class="skin-item-tag">冷感科技</span>
+            </div>
+            <p class="skin-item-caption">钴蓝主色与薄荷辅色，适合技术与运营工作台。</p>
+            <p class="skin-item-note">深色玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="slate-lime-dark">
+            <div class="skin-item-top">
+              <p class="skin-item-name">slate-lime-dark</p>
+              <span class="skin-item-tag">实验分析</span>
+            </div>
+            <p class="skin-item-caption">石板灰主色与青柠辅色，适合规则与分析后台。</p>
+            <p class="skin-item-note">深色玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="ivory-pearl-light">
+            <div class="skin-item-top">
+              <p class="skin-item-name">ivory-pearl-light</p>
+              <span class="skin-item-tag">奶白轻玻璃</span>
+            </div>
+            <p class="skin-item-caption">奶白珍珠感轻玻璃皮肤，整体更亮、更软、更通透。</p>
+            <p class="skin-item-note">浅色轻玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="champagne-blush-light">
+            <div class="skin-item-top">
+              <p class="skin-item-name">champagne-blush-light</p>
+              <span class="skin-item-tag">香槟粉金</span>
+            </div>
+            <p class="skin-item-caption">奶金底色加淡粉高光，适合高端品牌和轻奢展示场景。</p>
+            <p class="skin-item-note">浅色轻玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="frost-sky-light">
+            <div class="skin-item-top">
+              <p class="skin-item-name">frost-sky-light</p>
+              <span class="skin-item-tag">霜蓝轻透</span>
+            </div>
+            <p class="skin-item-caption">浅霜蓝与云白玻璃感，适合清爽的数据与运营工作台。</p>
+            <p class="skin-item-note">浅色轻玻璃系</p>
+          </button>
+
+          <button class="skin-item" type="button" data-skin="sage-cream-light">
+            <div class="skin-item-top">
+              <p class="skin-item-name">sage-cream-light</p>
+              <span class="skin-item-tag">鼠尾草奶油</span>
+            </div>
+            <p class="skin-item-caption">自然柔和的鼠尾草与奶油色，适合低压感办公后台。</p>
+            <p class="skin-item-note">浅色轻玻璃系</p>
+          </button>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <section class="workspace-header">
+          <p>当前预览</p>
+          <h2 id="previewTitle">indigo-amber-dark</h2>
+          <p id="skinNote">偏稳重后台工作台风格，适合宿主与通用管理台。</p>
+        </section>
+
+        <section class="workspace-note">
           <span id="previewPath">skins/indigo-amber-dark/preview/index.html</span>
-        </div>
-        <iframe
-          id="previewFrame"
-          title="glass-theme-preview"
-          src="./skins/indigo-amber-dark/preview/index.html"
-        ></iframe>
+        </section>
+
+        <section class="preview-shell">
+          <div class="preview-header">
+            <div class="preview-header-left">
+              <strong>右侧主预览区</strong>
+              <span>点击左侧皮肤条目后，右侧立即切换完整预览页面，并可在右侧区域内独立滚动浏览。</span>
+            </div>
+            <span class="preview-mode">固定双栏浏览模式</span>
+          </div>
+          <div class="preview-body">
+            <iframe
+              id="previewFrame"
+              title="glass-theme-preview"
+              src="./skins/indigo-amber-dark/preview/index.html"
+            ></iframe>
+          </div>
+        </section>
       </section>
     </main>
 
     <script>
-      const skinButtons = Array.from(document.querySelectorAll('.skin-button'));
+      const skinItems = Array.from(document.querySelectorAll('.skin-item'));
       const previewFrame = document.getElementById('previewFrame');
       const previewTitle = document.getElementById('previewTitle');
       const previewPath = document.getElementById('previewPath');
       const skinNote = document.getElementById('skinNote');
 
+      // 业务说明：这里统一维护皮肤说明文本，左侧点击后右侧说明区与预览路径同时刷新。
       const skinDescriptions = {
         'indigo-amber-dark': '偏稳重后台工作台风格，适合宿主与通用管理台。',
-        'cyan-amber-dark': '偏流动高亮数据台风格，适合信息密度较高的工作台。'
+        'cyan-amber-dark': '偏流动高亮数据台风格，适合信息密度较高的工作台。',
+        'emerald-aqua-dark': '偏翡翠与浅青的透明光泽感，适合监控和数据类工作台。',
+        'violet-rose-dark': '偏紫罗兰与玫瑰高光，适合品牌感更强的内容与创意后台。',
+        'crimson-amber-dark': '偏绯红热度与琥珀高光，适合告警、审批和重点状态中心。',
+        'cobalt-mint-dark': '偏钴蓝冷感与薄荷荧光，适合技术、运营和系统控制台。',
+        'slate-lime-dark': '偏石板灰与青柠点亮，适合规则、分析和实验型后台。',
+        'ivory-pearl-light': '奶白珍珠感轻玻璃皮肤，通透度更高，适合展示和柔和办公台。',
+        'champagne-blush-light': '香槟奶金与淡粉高光的轻玻璃皮肤，适合高端品牌和轻奢展示后台。',
+        'frost-sky-light': '霜蓝天空感轻玻璃皮肤，适合轻盈清澈的数据与运营工作台。',
+        'sage-cream-light': '鼠尾草与奶油色轻玻璃皮肤，适合安静、自然、低压感办公后台.'
       };
 
       function applySkinSelection(selectedSkin) {
         const targetPath = './skins/' + selectedSkin + '/preview/index.html';
+        // 业务说明：主预览区永远只展示当前被选中的皮肤完整页面，避免用户再向下翻找。
         previewFrame.src = targetPath;
         previewTitle.textContent = selectedSkin;
         previewPath.textContent = 'skins/' + selectedSkin + '/preview/index.html';
         skinNote.textContent = skinDescriptions[selectedSkin] || '';
-        skinButtons.forEach((button) => {
-          button.classList.toggle('is-active', button.dataset.skin === selectedSkin);
+
+        // 业务说明：左侧列表用选中态标记当前皮肤，保证滚动后仍能快速定位正在浏览的项。
+        skinItems.forEach((item) => {
+          item.classList.toggle('is-active', item.dataset.skin === selectedSkin);
         });
       }
 
-      skinButtons.forEach((button) => {
-        button.addEventListener('click', () => applySkinSelection(button.dataset.skin));
+      skinItems.forEach((item) => {
+        item.addEventListener('click', () => applySkinSelection(item.dataset.skin));
       });
 
       applySkinSelection('indigo-amber-dark');

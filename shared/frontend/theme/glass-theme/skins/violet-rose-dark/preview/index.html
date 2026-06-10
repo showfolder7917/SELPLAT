@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>violet-rose-dark preview</title>
+    <link rel="stylesheet" href="../skin-components.css" />
+  </head>
+  <body>
+    <main class="seladmin-page">
+      <header class="seladmin-hero seladmin-surface">
+        <div>
+          <p class="seladmin-eyebrow">Workbench Theme</p>
+          <h1>violet-rose-dark</h1>
+          <p class="seladmin-copy">偏紫罗兰与玫瑰高光的玻璃皮肤预览，适合品牌感更强的内容与创意工作台。</p>
+        </div>
+        <div class="seladmin-locale-switch">
+          <button class="seladmin-locale-button seladmin-surface active" type="button">
+            <span class="seladmin-locale-label">简体中文</span>
+            <span class="seladmin-locale-caption">CN</span>
+          </button>
+          <button class="seladmin-locale-button seladmin-surface" type="button">
+            <span class="seladmin-locale-label">日本語</span>
+            <span class="seladmin-locale-caption">JP</span>
+          </button>
+        </div>
+      </header>
+
+      <nav class="seladmin-tab-strip">
+        <button class="seladmin-tab-button seladmin-surface active" type="button">工作台</button>
+        <button class="seladmin-tab-button seladmin-surface" type="button">组织</button>
+        <button class="seladmin-tab-button seladmin-surface" type="button">员工</button>
+        <button class="seladmin-tab-button seladmin-surface" type="button">规则</button>
+        <button class="seladmin-tab-button seladmin-surface" type="button">日志</button>
+      </nav>
+
+      <div class="seladmin-two-column">
+        <section class="seladmin-panel seladmin-surface seladmin-surface-accent">
+          <div class="seladmin-panel-header">
+            <div>
+              <p class="seladmin-eyebrow">summary</p>
+              <h2>指标区块</h2>
+            </div>
+            <span class="seladmin-chip">处理中</span>
+          </div>
+          <div class="seladmin-kpi-grid">
+            <article class="seladmin-kpi-card seladmin-surface">
+              <div class="seladmin-kpi-row">
+                <span class="seladmin-kpi-title">员工</span>
+                <span class="seladmin-chip">已同步</span>
+              </div>
+              <p class="seladmin-copy">用于承接工作台级关键统计、步骤和状态。</p>
+              <strong class="seladmin-kpi-value">128</strong>
+            </article>
+            <article class="seladmin-kpi-card seladmin-surface">
+              <div class="seladmin-kpi-row">
+                <span class="seladmin-kpi-title">审批</span>
+                <span class="seladmin-chip">待处理</span>
+              </div>
+              <p class="seladmin-copy">主题不绑定业务语义，只承接通用后台呈现层。</p>
+              <strong class="seladmin-kpi-value">7</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="seladmin-panel seladmin-surface">
+          <div class="seladmin-panel-header">
+            <h2>录入与树结构</h2>
+          </div>
+          <div class="seladmin-form-grid">
+            <label class="seladmin-field"><span>租户名称</span><input value="SEL Platform" /></label>
+            <label class="seladmin-field"><span>时区</span><input value="Asia/Tokyo" /></label>
+          </div>
+          <div class="seladmin-action-row">
+            <button class="seladmin-button seladmin-button-primary" type="button">保存</button>
+            <button class="seladmin-button seladmin-button-secondary" type="button">重置</button>
+          </div>
+          <div class="seladmin-subsection">
+            <div class="seladmin-tree">
+              <div class="seladmin-tree-node" data-depth="0">组织架构</div>
+              <div class="seladmin-tree-node" data-depth="1">东京总部</div>
+              <div class="seladmin-tree-node" data-depth="2">人事总务</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="seladmin-panel seladmin-surface seladmin-list">
+        <div class="seladmin-panel-header">
+          <h2>列表区块</h2>
+        </div>
+        <table class="seladmin-table">
+          <thead>
+            <tr>
+              <th>编码</th>
+              <th>名称</th>
+              <th>状态</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ROLE_ADMIN</td>
+              <td>系统管理员</td>
+              <td>ACTIVE</td>
+              <td class="seladmin-inline-actions">
+                <button type="button">编辑</button>
+                <button type="button">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

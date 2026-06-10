@@ -13,21 +13,26 @@
 
 - `glass-theme`
 
-兼容保留目录：
-
-- `_legacy/`
-  仅用于保留重构前的旧皮肤目录快照，后续消费应以 `glass-theme` 为准。
-
 当前玻璃主题家族：
 
 - `glass-theme`
-  当前包含两套皮肤：
+  当前包含 `11` 套皮肤：
   - `indigo-amber-dark`
   - `cyan-amber-dark`
+  - `emerald-aqua-dark`
+  - `violet-rose-dark`
+  - `crimson-amber-dark`
+  - `cobalt-mint-dark`
+  - `slate-lime-dark`
+  - `ivory-pearl-light`
+  - `champagne-blush-light`
+  - `frost-sky-light`
+  - `sage-cream-light`
 
 使用入口：
 
 - 家族静态预览入口：`glass-theme/index.html`
+  当前为左侧皮肤列表、右侧常驻完整预览的双栏浏览模式。
 - 皮肤样式入口：`glass-theme/skins/<skin-name>/skin-components.css`
 
 放置原则：

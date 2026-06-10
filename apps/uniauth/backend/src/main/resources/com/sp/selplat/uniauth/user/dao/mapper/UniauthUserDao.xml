@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.selplat.uniauth.user.dao.UniauthUserDao">
+
+  <resultMap id="UserItemResultMap" type="com.sp.selplat.uniauth.user.domain.out.UniauthUserItemOut">
+    <id column="id" property="id"/>
+    <result column="tenant_id" property="tenantId"/>
+    <result column="login_name" property="loginName"/>
+    <result column="display_name" property="displayName"/>
+    <result column="display_name_kana" property="displayNameKana"/>
+    <result column="locale" property="locale"/>
+    <result column="email" property="email"/>
+    <result column="phone" property="phone"/>
+    <result column="user_status" property="userStatus"/>
+    <result column="locked_flag" property="lockedFlag"/>
+    <result column="expired_at" property="expiredAt"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="updated_at" property="updatedAt"/>
+  </resultMap>
+
+  <sql id="UserColumns">
+    id,
+    tenant_id,
+    login_name,
+    display_name,
+    display_name_kana,
+    locale,
+    email,
+    phone,
+    user_status,
+    locked_flag,
+    expired_at,
+    created_at,
+    updated_at
+  </sql>
+
+  <select id="selectUserList" resultMap="UserItemResultMap">
+    SELECT
+      <include refid="UserColumns"/>
+    FROM ua_user
+    <where>
+      <if test="query != null and query.tenantId != null">
+        tenant_id = #{query.tenantId}
+      </if>
+      <if test="query != null and query.loginName != null and query.loginName != ''">
+        AND login_name LIKE CONCAT('%', #{query.loginName}, '%')
+      </if>
+      <if test="query != null and query.displayName != null and query.displayName != ''">
+        AND display_name LIKE CONCAT('%', #{query.displayName}, '%')
+      </if>
+      <if test="query != null and query.userStatus != null and query.userStatus != ''">
+        AND user_status = #{query.userStatus}
+      </if>
+      <if test="query != null and query.lockedFlag != null">
+        AND locked_flag = #{query.lockedFlag}
+      </if>
+    </where>
+    ORDER BY id DESC
+  </select>
+
+  <select id="selectUserById" resultMap="UserItemResultMap">
+    SELECT
+      <include refid="UserColumns"/>
+    FROM ua_user
+    WHERE id = #{id}
+  </select>
+
+  <select id="selectUserByLoginName" resultMap="UserItemResultMap">
+    SELECT
+      <include refid="UserColumns"/>
+    FROM ua_user
+    WHERE login_name = #{loginName}
+  </select>
+
+  <insert id="insertUser" useGeneratedKeys="true" keyProperty="in.id" keyColumn="id">
+    INSERT INTO ua_user (
+      tenant_id,
+      login_name,
+      password_hash,
+      display_name,
+      display_name_kana,
+      locale,
+      email,
+      phone,
+      user_status,
+      locked_flag,
+      expired_at
+    ) VALUES (
+      #{in.tenantId},
+      #{in.loginName},
+      #{passwordHash},
+      #{in.displayName},
+      #{in.displayNameKana},
+      #{in.locale},
+      #{in.email},
+      #{in.phone},
+      #{in.userStatus},
+      #{in.lockedFlag},
+      #{in.expiredAt}
+    )
+  </insert>
+
+  <update id="updateUser">
+    UPDATE ua_user
+    <set>
+      tenant_id = #{in.tenantId},
+      login_name = #{in.loginName},
+      <if test="passwordHash != null and passwordHash != ''">
+        password_hash = #{passwordHash},
+      </if>
+      display_name = #{in.displayName},
+      display_name_kana = #{in.displayNameKana},
+      locale = #{in.locale},
+      email = #{in.email},
+      phone = #{in.phone},
+      user_status = #{in.userStatus},
+      locked_flag = #{in.lockedFlag},
+      expired_at = #{in.expiredAt},
+      updated_at = CURRENT_TIMESTAMP
+    </set>
+    WHERE id = #{in.id}
+  </update>
+
+  <delete id="deleteUserById">
+    DELETE FROM ua_user
+    WHERE id = #{id}
+  </delete>
+</mapper>
