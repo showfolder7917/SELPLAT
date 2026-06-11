@@ -10,3 +10,4 @@ localrepository/cache-jars/
 *.out
 *.err
 *.tmp
+*.class
