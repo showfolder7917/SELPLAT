@@ -1,0 +1,8 @@
+plugins {
+    // common-core 是公共库，只负责编译和被依赖，不承担启动职责。
+    id 'java-library'
+}
+
+java {
+    withSourcesJar()
+}

@@ -1,0 +1,26 @@
+plugins {
+    // common-db 是公共数据库层库，只承接模板和公共持久化能力。
+    id 'java-library'
+}
+
+dependencies {
+    // common-db 可以复用 common-core 里的公共支持类，保持依赖方向单向稳定。
+    api project(':shared:backend:common-core')
+
+    if (gradle.startParameter.isOffline()) {
+        // 离线模式下优先从工作区本地仓库取 MyBatis 与 H2，避免再穿透用户目录缓存解析。
+        implementation files(
+            "${rootProject.projectDir}/localrepository/cache-jars/mybatis-3.5.17.jar",
+            "${rootProject.projectDir}/localrepository/cache-jars/h2-2.3.232.jar"
+        )
+    } else {
+        // 在线模式下仍优先走标准坐标依赖，便于后续收敛到正常仓库管理。
+        api 'org.mybatis:mybatis:3.5.17'
+        // BaseTemplateDaoMain 直接使用 H2 数据源做本地演示，因此主源码编译阶段需要 H2。
+        implementation "com.h2database:h2:${h2Version}"
+    }
+}
+
+java {
+    withSourcesJar()
+}

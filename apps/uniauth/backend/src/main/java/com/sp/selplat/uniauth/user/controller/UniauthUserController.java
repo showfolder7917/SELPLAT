@@ -2,7 +2,9 @@ package com.sp.selplat.uniauth.user.controller;
 
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserQueryIn;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserSaveIn;
+import com.sp.selplat.uniauth.user.domain.out.UniauthUserHttpVerifyOut;
 import com.sp.selplat.uniauth.user.domain.out.UniauthUserItemOut;
+import java.util.Arrays;
 import com.sp.selplat.uniauth.user.service.UniauthUserService;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,6 +29,29 @@ public class UniauthUserController {
     public UniauthUserController(UniauthUserService uniauthUserService) {
         // 保存用户服务，供所有接口复用。
         this.uniauthUserService = uniauthUserService;
+    }
+
+    // HTTP 验证接口用于确认控制器已经加载，并把当前可访问的用户路由直接返回给联调人员。
+    @GetMapping("/verify/http")
+    public UniauthUserHttpVerifyOut verifyHttpAccess() {
+        // 创建验证结果对象，统一承接当前控制器装配状态和关键路由信息。
+        UniauthUserHttpVerifyOut verifyOut = new UniauthUserHttpVerifyOut();
+        // 写入固定模块编码，方便调用方确认当前返回来自 uniauth 用户模块。
+        verifyOut.setModuleCode("uniauth-user");
+        // 写入控制器已就绪状态，表示当前 HTTP 控制层已经可接收请求。
+        verifyOut.setControllerStatus("READY");
+        // 返回联调说明，提示后续可以继续访问列表、详情、新增、更新和删除接口。
+        verifyOut.setVerifyMessage("用户控制器已装配，可继续访问列表、详情、新增、更新和删除接口。");
+        // 返回当前控制器的关键路径，方便调用方直接复制 HTTP 地址进行验证。
+        verifyOut.setAvailablePaths(Arrays.asList(
+            "GET /api/uniauth/users/verify/http",
+            "GET /api/uniauth/users",
+            "GET /api/uniauth/users/{id}",
+            "POST /api/uniauth/users",
+            "PUT /api/uniauth/users/{id}",
+            "DELETE /api/uniauth/users/{id}"
+        ));
+        return verifyOut;
     }
 
     // 列表接口用于按租户、登录名、显示名、状态和锁定标记筛选账号。

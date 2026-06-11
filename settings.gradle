@@ -1,0 +1,13 @@
+rootProject.name = 'SELPLAT'
+
+// 先按蓝图把公共核心库纳入根构建，供业务模块统一依赖。
+include('shared:backend:common-core')
+// 当前 uniauth 已依赖 common-db，因此把公共数据库层一并纳入最小可编译范围。
+include('shared:backend:common-db')
+// 第一阶段业务模块先接入 uniauth backend，后续再逐步扩展其他业务域。
+include('apps:uniauth:backend')
+
+// 显式绑定物理目录，避免多层级 Gradle 项目在 IDE 和命令行下解析漂移。
+project(':shared:backend:common-core').projectDir = file('shared/backend/common-core')
+project(':shared:backend:common-db').projectDir = file('shared/backend/common-db')
+project(':apps:uniauth:backend').projectDir = file('apps/uniauth/backend')

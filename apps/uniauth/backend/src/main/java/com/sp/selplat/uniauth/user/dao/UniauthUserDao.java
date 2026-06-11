@@ -1,5 +1,6 @@
 package com.sp.selplat.uniauth.user.dao;
 
+import com.sp.selplat.common.db.dao.BaseDao;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserQueryIn;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserSaveIn;
 import com.sp.selplat.uniauth.user.domain.out.UniauthUserItemOut;
@@ -7,9 +8,9 @@ import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-// 用户 DAO 只承接 ua_user 主表的增删改查，不在第一版里混入角色关系维护。
+// 用户 DAO 继续承接 ua_user 主表的增删改查，同时继承公共模板为后续统一方法口径预留入口。
 @Mapper
-public interface UniauthUserDao {
+public interface UniauthUserDao extends BaseDao<UniauthUserItemOut, UniauthUserQueryIn, UniauthUserSaveIn, Long> {
 
     // 列表查询按可选筛选条件返回账号主表数据。
     List<UniauthUserItemOut> selectUserList(@Param("query") UniauthUserQueryIn query);

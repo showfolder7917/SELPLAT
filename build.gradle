@@ -1,0 +1,36 @@
+allprojects {
+    // 平台内所有 Java 子项目统一使用同一组坐标基础信息。
+    group = 'com.sp.selplat'
+    version = '0.0.1-SNAPSHOT'
+
+    repositories {
+        // 先查本地 Maven 仓库，兼容后续参照 SBMAB203 接入本地私仓或离线仓库。
+        mavenLocal()
+        // 默认保留 Maven Central，在线时可以自动补齐公共依赖。
+        mavenCentral()
+    }
+}
+
+subprojects {
+    // 所有子项目先统一成 Java 工程，后续按模块职责再叠加 library 或 boot 插件。
+    apply plugin: 'java'
+    // 当前执行环境不允许 Gradle 在子模块目录下动态创建 build 目录，因此统一把产物收口到根 build 下。
+    layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("gradle-projects/${project.path.replace(':', '/').replaceFirst('^/', '')}"))
+
+    java {
+        toolchain {
+            // 所有子项目统一锁到 Java 21，满足本轮版本调整要求。
+            languageVersion = JavaLanguageVersion.of(javaVersion.toInteger())
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        // Java 源码统一按 UTF-8 编译，避免 Windows 环境出现中文注释乱码。
+        options.encoding = 'UTF-8'
+    }
+
+    tasks.withType(Test).configureEach {
+        // 测试统一走 JUnit Platform，为后续 Spring Boot 测试接入留统一入口。
+        useJUnitPlatform()
+    }
+}

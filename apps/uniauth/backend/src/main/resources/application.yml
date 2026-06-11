@@ -1,0 +1,24 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: selplat-uniauth-backend
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:selplat_uniauth;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      schema-locations:
+        - classpath:schema-uniauth.sql
+      data-locations:
+        - classpath:data-uniauth.sql
+
+mybatis:
+  mapper-locations:
+    - classpath*:com/sp/selplat/uniauth/**/dao/mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true

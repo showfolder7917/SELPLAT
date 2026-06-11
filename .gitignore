@@ -2,6 +2,10 @@ runtime/logs/
 runtime/reports/
 runtime/cache/
 
+.gradle/
+build/
+localrepository/cache-jars/
+
 *.log
 *.out
 *.err

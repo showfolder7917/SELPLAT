@@ -1,0 +1,125 @@
+plugins {
+    // 当前离线环境优先保证 Java 应用可编译可运行，因此用 application 插件提供统一启动入口。
+    id 'application'
+}
+
+dependencies {
+    // uniauth 后端依赖公共核心库，复用通用值处理等基础能力。
+    implementation project(':shared:backend:common-core')
+    // uniauth 后端依赖公共数据库层，复用 BaseDao 与 BaseTemplateDao 等模板能力。
+    implementation project(':shared:backend:common-db')
+
+    if (gradle.startParameter.isOffline()) {
+        // 离线模式下直接复用工作区本地仓库里的 Spring / MyBatis / H2 jar，贴近 SELATTENDANCE 的本地 classpath 方案。
+        implementation files(fileTree(
+            dir: "${rootProject.projectDir}/localrepository/cache-jars",
+            include: ['*.jar'],
+            exclude: [
+                'slf4j-api-1.7.36.jar',
+                'spring-boot-devtools-3.5.0.jar',
+                'spring-boot-3.5.4.jar',
+                'spring-boot-autoconfigure-3.5.4.jar',
+                'spring-boot-starter-3.5.4.jar',
+                'spring-boot-starter-json-3.5.4.jar',
+                'spring-boot-starter-logging-3.5.4.jar',
+                'spring-boot-starter-test-3.5.4.jar',
+                'spring-boot-starter-tomcat-3.5.4.jar',
+                'spring-boot-starter-web-3.5.4.jar',
+                'spring-boot-test-3.5.4.jar',
+                'spring-boot-test-autoconfigure-3.5.4.jar',
+                'spring-boot-gradle-plugin-3.5.0.jar',
+                'spring-boot-buildpack-platform-3.5.0.jar',
+                'spring-boot-loader-tools-3.5.0.jar',
+                'spring-boot-configuration-processor-3.5.0.jar',
+                'spring-aop-6.2.9.jar',
+                'spring-beans-6.2.9.jar',
+                'spring-context-6.2.9.jar',
+                'spring-core-6.2.9.jar',
+                'spring-expression-6.2.9.jar',
+                'spring-jcl-6.2.9.jar',
+                'spring-web-6.2.9.jar',
+                'spring-webmvc-6.2.9.jar',
+                'spring-jdbc-6.1.1.jar',
+                'spring-tx-6.1.1.jar',
+                'mybatis-3.5.14.jar',
+                'mybatis-spring-3.0.3.jar',
+                'mybatis-spring-boot-autoconfigure-3.0.3.jar',
+                'mybatis-spring-boot-starter-3.0.3.jar',
+                'jackson-annotations-2.19.0.jar',
+                'jackson-core-2.19.0.jar',
+                'jackson-databind-2.19.0.jar',
+                'jackson-datatype-jdk8-2.19.0.jar',
+                'jackson-datatype-jsr310-2.19.0.jar',
+                'jackson-module-parameter-names-2.19.0.jar',
+                'tomcat-embed-core-10.1.41.jar',
+                'tomcat-embed-el-10.1.41.jar',
+                'tomcat-embed-websocket-10.1.41.jar'
+            ]
+        ).files)
+        runtimeOnly files(fileTree(
+            dir: "${rootProject.projectDir}/localrepository/cache-jars",
+            include: ['*.jar'],
+            exclude: [
+                'slf4j-api-1.7.36.jar',
+                'spring-boot-devtools-3.5.0.jar',
+                'spring-boot-3.5.4.jar',
+                'spring-boot-autoconfigure-3.5.4.jar',
+                'spring-boot-starter-3.5.4.jar',
+                'spring-boot-starter-json-3.5.4.jar',
+                'spring-boot-starter-logging-3.5.4.jar',
+                'spring-boot-starter-test-3.5.4.jar',
+                'spring-boot-starter-tomcat-3.5.4.jar',
+                'spring-boot-starter-web-3.5.4.jar',
+                'spring-boot-test-3.5.4.jar',
+                'spring-boot-test-autoconfigure-3.5.4.jar',
+                'spring-boot-gradle-plugin-3.5.0.jar',
+                'spring-boot-buildpack-platform-3.5.0.jar',
+                'spring-boot-loader-tools-3.5.0.jar',
+                'spring-boot-configuration-processor-3.5.0.jar',
+                'spring-aop-6.2.9.jar',
+                'spring-beans-6.2.9.jar',
+                'spring-context-6.2.9.jar',
+                'spring-core-6.2.9.jar',
+                'spring-expression-6.2.9.jar',
+                'spring-jcl-6.2.9.jar',
+                'spring-web-6.2.9.jar',
+                'spring-webmvc-6.2.9.jar',
+                'spring-jdbc-6.1.1.jar',
+                'spring-tx-6.1.1.jar',
+                'mybatis-3.5.14.jar',
+                'mybatis-spring-3.0.3.jar',
+                'mybatis-spring-boot-autoconfigure-3.0.3.jar',
+                'mybatis-spring-boot-starter-3.0.3.jar',
+                'jackson-annotations-2.19.0.jar',
+                'jackson-core-2.19.0.jar',
+                'jackson-databind-2.19.0.jar',
+                'jackson-datatype-jdk8-2.19.0.jar',
+                'jackson-datatype-jsr310-2.19.0.jar',
+                'jackson-module-parameter-names-2.19.0.jar',
+                'tomcat-embed-core-10.1.41.jar',
+                'tomcat-embed-el-10.1.41.jar',
+                'tomcat-embed-websocket-10.1.41.jar'
+            ]
+        ).files)
+        testImplementation files(fileTree(
+            dir: "${rootProject.projectDir}/localrepository/cache-jars",
+            include: ['*.jar']
+        ).files)
+    } else {
+        // Web Starter 负责把 controller 暴露成 HTTP 接口。
+        implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+        // JDBC Starter 负责本地 H2 数据源和事务边界。
+        implementation "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
+        // MyBatis Starter 负责 DAO 接口、Mapper XML 和 Spring 容器桥接。
+        implementation "org.mybatis.spring.boot:mybatis-spring-boot-starter:${mybatisSpringBootVersion}"
+        // H2 作为本地运行和最小联调数据库。
+        runtimeOnly "com.h2database:h2:${h2Version}"
+        // Spring Boot 测试套件为后续控制层和服务层测试预留统一入口。
+        testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
+    }
+}
+
+application {
+    // 明确 uniauth 启动类，保证 run 任务和后续脚本都指向统一入口。
+    mainClass = 'com.sp.selplat.uniauth.UniauthBackendApplication'
+}
