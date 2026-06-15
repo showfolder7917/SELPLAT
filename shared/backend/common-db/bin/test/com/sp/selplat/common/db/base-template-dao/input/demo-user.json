@@ -1,0 +1,17 @@
+{
+  "physicalTableName": "demo_user",
+  "tableData": [
+    {
+      "id": 1,
+      "login_name": "admin",
+      "display_name": "平台管理员",
+      "user_status": "ACTIVE"
+    },
+    {
+      "id": 2,
+      "login_name": "tenant-admin",
+      "display_name": "租户管理员",
+      "user_status": "ACTIVE"
+    }
+  ]
+}

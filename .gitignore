@@ -1,10 +1,13 @@
 runtime/logs/
 runtime/reports/
 runtime/cache/
+runtime/jdks/
 
 .gradle/
 build/
 localrepository/cache-jars/
+!scripts/build/
+!scripts/build/**
 
 *.log
 *.out

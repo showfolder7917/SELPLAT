@@ -4,7 +4,10 @@
     {
       "label": "uniauth:classes",
       "type": "shell",
-      "command": ".\\gradlew.bat :apps:uniauth:backend:classes",
+      "command": "./gradlew :apps:uniauth:backend:classes",
+      "windows": {
+        "command": ".\\gradlew.bat :apps:uniauth:backend:classes"
+      },
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -16,7 +19,10 @@
     {
       "label": "uniauth:run",
       "type": "shell",
-      "command": ".\\gradlew.bat :apps:uniauth:backend:run",
+      "command": "./gradlew :apps:uniauth:backend:run",
+      "windows": {
+        "command": ".\\gradlew.bat :apps:uniauth:backend:run"
+      },
       "options": {
         "cwd": "${workspaceFolder}"
       },

@@ -6,8 +6,7 @@
       "name": "Run UniauthBackendApplication",
       "request": "launch",
       "mainClass": "com.sp.selplat.uniauth.UniauthBackendApplication",
-      "cwd": "${workspaceFolder}/apps/uniauth/backend",
-      "preLaunchTask": "uniauth:classes"
+      "cwd": "${workspaceFolder}/apps/uniauth/backend"
     }
   ]
 }
