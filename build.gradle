@@ -14,14 +14,18 @@ allprojects {
 subprojects {
     // 所有子项目先统一成 Java 工程，后续按模块职责再叠加 library 或 boot 插件。
     apply plugin: 'java'
-    // 当前执行环境不允许 Gradle 在子模块目录下动态创建 build 目录，因此统一把产物收口到根 build 下。
-    layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("gradle-projects/${project.path.replace(':', '/').replaceFirst('^/', '')}"))
+    // 对齐 SBMAB077 的标准 Gradle 目录布局，避免 VS Code Java/Gradle 导入时因为自定义输出目录出现解析和启动漂移。
+    buildDir = 'build'
 
     java {
         toolchain {
             // 所有子项目统一锁到 Java 21，满足本轮版本调整要求。
             languageVersion = JavaLanguageVersion.of(javaVersion.toInteger())
         }
+        // 显式声明源码和目标版本，保证 VS Code 的 Java Language Server 与 Gradle 使用同一套 21 版本语义。
+        sourceCompatibility = JavaVersion.toVersion(javaVersion)
+        // 显式声明目标字节码版本，避免 IDE 在运行按钮启动时按其它默认版本推断编译参数。
+        targetCompatibility = JavaVersion.toVersion(javaVersion)
     }
 
     tasks.withType(JavaCompile).configureEach {

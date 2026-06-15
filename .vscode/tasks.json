@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "uniauth:classes",
+      "type": "shell",
+      "command": ".\\gradlew.bat :apps:uniauth:backend:classes",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$javac"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "uniauth:run",
+      "type": "shell",
+      "command": ".\\gradlew.bat :apps:uniauth:backend:run",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
