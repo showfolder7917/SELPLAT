@@ -1,20 +1,24 @@
 package com.sp.selplat.uniauth.user.controller;
 
-import com.sp.selplat.uniauth.user.domain.in.UniauthUserQueryIn;
+import com.sp.selplat.common.util.Result;
+import com.sp.selplat.common.util.JsonUtils;
+import com.sp.selplat.uniauth.user.domain.in.UniauthUserIn;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserSaveIn;
 import com.sp.selplat.uniauth.user.domain.out.UniauthUserHttpVerifyOut;
 import com.sp.selplat.uniauth.user.domain.out.UniauthUserItemOut;
 import java.util.Arrays;
 import com.sp.selplat.uniauth.user.service.UniauthUserService;
 import java.util.List;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -39,13 +43,43 @@ public class UniauthUserController {
     }
 
     /**
+     * store 列表入口用于兼容旧式 `.htm` 路由风格，把分页参数和查询条件按 Result 结构回传给调用方。
+     * 访问地址：GET /api/uniauth/users/store.htm
+     *
+     * @param queryIn 查询参数
+     * @return store JSON 结果
+     */
+    @ResponseBody
+    @RequestMapping(value = "store.htm", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String getStore(UniauthUserIn queryIn) {
+        // Result 统一承接旧式页面接口常用的成功标记、提示信息和多模型数据结构。
+        Result result = new Result(true);
+        // 写入兼容接口来源标识，便于前端区分当前返回来自用户 store 路由。
+        result.addDefaultModel("moduleCode", "uniauth-user-store");
+        // 写入当前命中的旧式访问路径，便于联调时确认真实路由是否符合预期。
+        result.addDefaultModel("requestPath", "/api/uniauth/users/store.htm");
+        // 回传查询入参对象，便于前端同时确认分页字段和实体筛选字段都已经成功绑定。
+        result.addDefaultModel("query", queryIn);
+        // 旧式 store 结构先返回空数据行集合，保证前端分页组件联调时有稳定数组结构。
+        result.addDefaultModel("rows", List.of());
+        // 旧式 store 结构先返回总数 0，便于前端先完成分页栏位联调。
+        result.addDefaultModel("total", 0);
+        // 写入通用提示语，明确当前接口尚处于兼容占位返回阶段。
+        result.addMsg("store 接口已接通，当前返回兼容占位数据。");
+        // 控制层显式使用公共 JsonUtils 输出 Result JSON，保持与其它接口一致的序列化规则。
+        return JsonUtils.toJsonExt(result);
+    }
+
+
+
+    /**
      * HTTP 验证接口，用于确认控制器已经加载，并把当前可访问的用户路由直接返回给联调人员。
      * 访问地址：GET /api/uniauth/users/verify/http
      *
      * @return HTTP 验证结果
      */
-    @GetMapping("/verify/http")
-    public UniauthUserHttpVerifyOut verifyHttpAccess() {
+    @GetMapping(value = "/verify/http", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> verifyHttpAccess() {
         // 创建验证结果对象，统一承接当前控制器装配状态和关键路由信息。
         UniauthUserHttpVerifyOut verifyOut = new UniauthUserHttpVerifyOut();
         // 写入固定模块编码，方便调用方确认当前返回来自 uniauth 用户模块。
@@ -58,12 +92,14 @@ public class UniauthUserController {
         verifyOut.setAvailablePaths(Arrays.asList(
             "GET /api/uniauth/users/verify/http",
             "GET /api/uniauth/users",
+            "GET /api/uniauth/users/pin/store.htm",
             "GET /api/uniauth/users/{id}",
             "POST /api/uniauth/users",
             "PUT /api/uniauth/users/{id}",
             "DELETE /api/uniauth/users/{id}"
         ));
-        return verifyOut;
+        // 控制层显式把验证对象转成 JSON 字符串，统一走公共 JsonUtils 的输出规则。
+        return ResponseEntity.ok(JsonUtils.toJsonExt(verifyOut));
     }
 
     /**
@@ -73,10 +109,12 @@ public class UniauthUserController {
      * @param queryIn 查询条件
      * @return 用户列表
      */
-    @GetMapping
-    public List<UniauthUserItemOut> listUsers(@ModelAttribute UniauthUserQueryIn queryIn) {
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> listUsers(UniauthUserIn queryIn) {
         // 控制层只负责接参并转给服务层，不承担业务筛选逻辑。
-        return uniauthUserService.listUsers(queryIn);
+        List<UniauthUserItemOut> userList = uniauthUserService.listUsers(queryIn);
+        // 控制层显式序列化列表结果，避免响应格式完全依赖 Spring 默认消息转换器。
+        return ResponseEntity.ok(JsonUtils.toJsonExt(userList));
     }
 
     /**
@@ -86,10 +124,12 @@ public class UniauthUserController {
      * @param id 用户主键
      * @return 用户详情
      */
-    @GetMapping("/{id}")
-    public UniauthUserItemOut getUserById(@PathVariable("id") Long id) {
+    @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> getUserById(@PathVariable("id") Long id) {
         // 详情接口直接返回服务层校验后的正式账号结果。
-        return uniauthUserService.getUserById(id);
+        UniauthUserItemOut userItemOut = uniauthUserService.getUserById(id);
+        // 控制层显式序列化详情对象，保证单对象返回也复用统一 JSON 工具。
+        return ResponseEntity.ok(JsonUtils.toJsonExt(userItemOut));
     }
 
     /**
@@ -99,10 +139,12 @@ public class UniauthUserController {
      * @param saveIn 新增入参
      * @return 新增后的用户结果
      */
-    @PostMapping
-    public UniauthUserItemOut createUser(@RequestBody UniauthUserSaveIn saveIn) {
+    @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> createUser(@RequestBody UniauthUserSaveIn saveIn) {
         // 控制层把新增请求交给服务层做默认值补齐、唯一性校验和密码哈希。
-        return uniauthUserService.createUser(saveIn);
+        UniauthUserItemOut createdUser = uniauthUserService.createUser(saveIn);
+        // 控制层显式序列化新增结果，确保创建接口与查询接口输出口径一致。
+        return ResponseEntity.ok(JsonUtils.toJsonExt(createdUser));
     }
 
     /**
@@ -113,10 +155,12 @@ public class UniauthUserController {
      * @param saveIn 更新入参
      * @return 更新后的用户结果
      */
-    @PutMapping("/{id}")
-    public UniauthUserItemOut updateUser(@PathVariable("id") Long id, @RequestBody UniauthUserSaveIn saveIn) {
+    @PutMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> updateUser(@PathVariable("id") Long id, @RequestBody UniauthUserSaveIn saveIn) {
         // 路径主键由服务层写回输入对象，控制层只负责转发。
-        return uniauthUserService.updateUser(id, saveIn);
+        UniauthUserItemOut updatedUser = uniauthUserService.updateUser(id, saveIn);
+        // 控制层显式序列化更新结果，保证修改后的响应字段过滤规则一致。
+        return ResponseEntity.ok(JsonUtils.toJsonExt(updatedUser));
     }
 
     /**

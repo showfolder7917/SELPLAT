@@ -16,6 +16,8 @@ dependencies {
     implementation "org.mybatis.spring.boot:mybatis-spring-boot-starter:${mybatisSpringBootVersion}"
     // H2 作为本地运行和最小联调数据库。
     runtimeOnly "com.h2database:h2:${h2Version}"
+    // DevTools 负责在本地开发时监听 classpath 变化并触发应用重启，配合 VS Code 自动编译实现源码保存后自动重载。
+    runtimeOnly "org.springframework.boot:spring-boot-devtools:${springBootVersion}"
     // Spring Boot 测试套件为后续控制层和服务层测试预留统一入口。
     testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
 }

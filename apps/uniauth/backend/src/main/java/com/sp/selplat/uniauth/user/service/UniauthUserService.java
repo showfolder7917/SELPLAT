@@ -1,6 +1,6 @@
 package com.sp.selplat.uniauth.user.service;
 
-import com.sp.selplat.uniauth.user.domain.in.UniauthUserQueryIn;
+import com.sp.selplat.uniauth.user.domain.in.UniauthUserIn;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserSaveIn;
 import com.sp.selplat.uniauth.user.domain.out.UniauthUserItemOut;
 import java.util.List;
@@ -9,7 +9,7 @@ import java.util.List;
 public interface UniauthUserService {
 
     // 列表查询返回符合筛选条件的账号集合。
-    List<UniauthUserItemOut> listUsers(UniauthUserQueryIn queryIn);
+    List<UniauthUserItemOut> listUsers(UniauthUserIn queryIn);
 
     // 详情查询返回指定账号的主表信息。
     UniauthUserItemOut getUserById(Long id);

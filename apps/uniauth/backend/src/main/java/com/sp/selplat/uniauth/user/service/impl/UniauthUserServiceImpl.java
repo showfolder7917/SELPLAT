@@ -1,7 +1,7 @@
 package com.sp.selplat.uniauth.user.service.impl;
 
 import com.sp.selplat.uniauth.user.dao.UniauthUserDao;
-import com.sp.selplat.uniauth.user.domain.in.UniauthUserQueryIn;
+import com.sp.selplat.uniauth.user.domain.in.UniauthUserIn;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserSaveIn;
 import com.sp.selplat.uniauth.user.domain.out.UniauthUserItemOut;
 import com.sp.selplat.uniauth.user.service.UniauthUserService;
@@ -27,7 +27,7 @@ public class UniauthUserServiceImpl implements UniauthUserService {
 
     // 列表查询直接下发筛选条件并返回账号集合。
     @Override
-    public List<UniauthUserItemOut> listUsers(UniauthUserQueryIn queryIn) {
+    public List<UniauthUserItemOut> listUsers(UniauthUserIn queryIn) {
         // 列表查询不修改数据，只负责把筛选条件透传到 DAO。
         return uniauthUserDao.selectUserList(queryIn);
     }
