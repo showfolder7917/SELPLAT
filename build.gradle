@@ -14,8 +14,6 @@ allprojects {
 subprojects {
     // 所有子项目先统一成 Java 工程，后续按模块职责再叠加 library 或 boot 插件。
     apply plugin: 'java'
-    // 所有子项目的编译产物统一收口到根 build 目录，方便集中查看和清理。
-    buildDir = rootProject.file("build/${project.path.substring(1).replace(':', '-')}")
 
     java {
         toolchain {
