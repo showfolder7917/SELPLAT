@@ -3,6 +3,9 @@ plugins {
     id 'application'
 }
 
+// 本地离线 jar 目录统一收口 Spring Boot、MyBatis 和测试依赖，保证无网环境下 backend 也能稳定导入。
+def localCacheJarDir = rootProject.file('localrepository/cache-jars')
+
 dependencies {
     // uniauth 后端依赖公共核心库，复用通用值处理等基础能力。
     implementation project(':shared:backend:common-core')

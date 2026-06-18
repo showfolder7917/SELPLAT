@@ -2,8 +2,8 @@ package com.sp.selplat.common.db.dao;
 
 import com.sp.selplat.common.db.domain.CommonTemplateLikeQuery;
 import com.sp.selplat.common.db.domain.CommonTemplateQuery;
-import com.sp.selplat.common.db.domain.CommonTemplateSaveIn;
-import com.sp.selplat.common.db.domain.CommonTemplateUpdateIn;
+import com.sp.selplat.common.db.domain.CommonTemplateSave;
+import com.sp.selplat.common.db.domain.CommonTemplateUpdate;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Delete;
@@ -82,7 +82,7 @@ public interface BaseTemplateDao {
         "</trim>",
         "</script>"
     })
-    int insert(@Param("saveIn") CommonTemplateSaveIn saveIn);
+    int insert(@Param("saveIn") CommonTemplateSave saveIn);
 
     // 更新模板按主键和列值映射覆盖目标表字段，适合通用后台维护简单主数据。
     @Update({
@@ -96,7 +96,7 @@ public interface BaseTemplateDao {
         "WHERE ${updateIn.idColumn} = #{updateIn.idValue}",
         "</script>"
     })
-    int updateById(@Param("updateIn") CommonTemplateUpdateIn updateIn);
+    int updateById(@Param("updateIn") CommonTemplateUpdate updateIn);
 
     // 删除模板按主键直接删除目标表记录，适合后台通用主数据删除操作。
     @Delete("DELETE FROM ${tableName} WHERE ${idColumn} = #{id}")

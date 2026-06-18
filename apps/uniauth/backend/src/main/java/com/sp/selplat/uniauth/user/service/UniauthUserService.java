@@ -8,6 +8,9 @@ import java.util.List;
 // 用户服务只承接 ua_user 主表的增删改查业务动作。
 public interface UniauthUserService {
 
+    // store 兼容接口返回旧式页面联调所需的统一 JSON 字符串结构。
+    String getStore(UniauthUserIn queryIn);
+
     // 列表查询返回符合筛选条件的账号集合。
     List<UniauthUserItemOut> listUsers(UniauthUserIn queryIn);
 

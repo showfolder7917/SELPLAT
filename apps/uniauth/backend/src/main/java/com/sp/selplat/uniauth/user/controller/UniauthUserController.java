@@ -1,6 +1,5 @@
 package com.sp.selplat.uniauth.user.controller;
 
-import com.sp.selplat.common.util.Result;
 import com.sp.selplat.common.util.JsonUtils;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserIn;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserSaveIn;
@@ -52,22 +51,8 @@ public class UniauthUserController {
     @ResponseBody
     @RequestMapping(value = "store.htm", produces = MediaType.APPLICATION_JSON_VALUE)
     public String getStore(UniauthUserIn queryIn) {
-        // Result 统一承接旧式页面接口常用的成功标记、提示信息和多模型数据结构。
-        Result result = new Result(true);
-        // 写入兼容接口来源标识，便于前端区分当前返回来自用户 store 路由。
-        result.addDefaultModel("moduleCode", "uniauth-user-store");
-        // 写入当前命中的旧式访问路径，便于联调时确认真实路由是否符合预期。
-        result.addDefaultModel("requestPath", "/api/uniauth/users/store.htm");
-        // 回传查询入参对象，便于前端同时确认分页字段和实体筛选字段都已经成功绑定。
-        result.addDefaultModel("query", queryIn);
-        // 旧式 store 结构先返回空数据行集合，保证前端分页组件联调时有稳定数组结构。
-        result.addDefaultModel("rows", List.of());
-        // 旧式 store 结构先返回总数 0，便于前端先完成分页栏位联调。
-        result.addDefaultModel("total", 0);
-        // 写入通用提示语，明确当前接口尚处于兼容占位返回阶段。
-        result.addMsg("store 接口已接通，当前返回兼容占位数据。");
-        // 控制层显式使用公共 JsonUtils 输出 Result JSON，保持与其它接口一致的序列化规则。
-        return JsonUtils.toJsonExt(result);
+        // 控制层只负责接收查询参数并转发给服务层，由服务层统一组装 store JSON 结构。
+        return uniauthUserService.getStore(queryIn);
     }
 
 

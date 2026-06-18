@@ -3,7 +3,7 @@ package com.sp.selplat.common.db.domain;
 import java.util.Map;
 
 // 注解式模板新增入参统一承接目标表和待写入列值集合。
-public class CommonTemplateSaveIn {
+public class CommonTemplateSave {
 
     // tableName 指定当前新增要写入的物理表。
     private String tableName;

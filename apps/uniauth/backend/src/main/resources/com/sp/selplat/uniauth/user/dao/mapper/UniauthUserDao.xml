@@ -6,34 +6,34 @@
 
   <resultMap id="UserItemResultMap" type="com.sp.selplat.uniauth.user.domain.out.UniauthUserItemOut">
     <id column="id" property="id"/>
-    <result column="tenant_id" property="tenantId"/>
-    <result column="login_name" property="loginName"/>
-    <result column="display_name" property="displayName"/>
-    <result column="display_name_kana" property="displayNameKana"/>
+    <result column="tenantId" property="tenantId"/>
+    <result column="loginName" property="loginName"/>
+    <result column="displayName" property="displayName"/>
+    <result column="displayNameKana" property="displayNameKana"/>
     <result column="locale" property="locale"/>
     <result column="email" property="email"/>
     <result column="phone" property="phone"/>
-    <result column="user_status" property="userStatus"/>
-    <result column="locked_flag" property="lockedFlag"/>
-    <result column="expired_at" property="expiredAt"/>
-    <result column="created_at" property="createdAt"/>
-    <result column="updated_at" property="updatedAt"/>
+    <result column="userStatus" property="userStatus"/>
+    <result column="lockedFlag" property="lockedFlag"/>
+    <result column="expiredAt" property="expiredAt"/>
+    <result column="createdAt" property="createdAt"/>
+    <result column="updatedAt" property="updatedAt"/>
   </resultMap>
 
   <sql id="UserColumns">
     id,
-    tenant_id,
-    login_name,
-    display_name,
-    display_name_kana,
+    tenantId,
+    loginName,
+    displayName,
+    displayNameKana,
     locale,
     email,
     phone,
-    user_status,
-    locked_flag,
-    expired_at,
-    created_at,
-    updated_at
+    userStatus,
+    lockedFlag,
+    expiredAt,
+    createdAt,
+    updatedAt
   </sql>
 
   <select id="selectUserList" resultMap="UserItemResultMap">
@@ -42,19 +42,19 @@
     FROM ua_user
     <where>
       <if test="query != null and query.tenantId != null">
-        tenant_id = #{query.tenantId}
+        tenantId = #{query.tenantId}
       </if>
       <if test="query != null and query.loginName != null and query.loginName != ''">
-        AND login_name LIKE CONCAT('%', #{query.loginName}, '%')
+        AND loginName LIKE CONCAT('%', #{query.loginName}, '%')
       </if>
       <if test="query != null and query.displayName != null and query.displayName != ''">
-        AND display_name LIKE CONCAT('%', #{query.displayName}, '%')
+        AND displayName LIKE CONCAT('%', #{query.displayName}, '%')
       </if>
       <if test="query != null and query.userStatus != null and query.userStatus != ''">
-        AND user_status = #{query.userStatus}
+        AND userStatus = #{query.userStatus}
       </if>
       <if test="query != null and query.lockedFlag != null">
-        AND locked_flag = #{query.lockedFlag}
+        AND lockedFlag = #{query.lockedFlag}
       </if>
     </where>
     ORDER BY id DESC
@@ -71,22 +71,22 @@
     SELECT
       <include refid="UserColumns"/>
     FROM ua_user
-    WHERE login_name = #{loginName}
+    WHERE loginName = #{loginName}
   </select>
 
   <insert id="insertUser" useGeneratedKeys="true" keyProperty="in.id" keyColumn="id">
     INSERT INTO ua_user (
-      tenant_id,
-      login_name,
-      password_hash,
-      display_name,
-      display_name_kana,
+      tenantId,
+      loginName,
+      passwordHash,
+      displayName,
+      displayNameKana,
       locale,
       email,
       phone,
-      user_status,
-      locked_flag,
-      expired_at
+      userStatus,
+      lockedFlag,
+      expiredAt
     ) VALUES (
       #{in.tenantId},
       #{in.loginName},
@@ -105,20 +105,20 @@
   <update id="updateUser">
     UPDATE ua_user
     <set>
-      tenant_id = #{in.tenantId},
-      login_name = #{in.loginName},
+      tenantId = #{in.tenantId},
+      loginName = #{in.loginName},
       <if test="passwordHash != null and passwordHash != ''">
-        password_hash = #{passwordHash},
+        passwordHash = #{passwordHash},
       </if>
-      display_name = #{in.displayName},
-      display_name_kana = #{in.displayNameKana},
+      displayName = #{in.displayName},
+      displayNameKana = #{in.displayNameKana},
       locale = #{in.locale},
       email = #{in.email},
       phone = #{in.phone},
-      user_status = #{in.userStatus},
-      locked_flag = #{in.lockedFlag},
-      expired_at = #{in.expiredAt},
-      updated_at = CURRENT_TIMESTAMP
+      userStatus = #{in.userStatus},
+      lockedFlag = #{in.lockedFlag},
+      expiredAt = #{in.expiredAt},
+      updatedAt = CURRENT_TIMESTAMP
     </set>
     WHERE id = #{in.id}
   </update>

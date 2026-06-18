@@ -3,7 +3,7 @@ package com.sp.selplat.common.db.domain;
 import java.util.Map;
 
 // 注解式模板更新入参统一承接目标表、主键字段、主键值和待覆盖列值集合。
-public class CommonTemplateUpdateIn {
+public class CommonTemplateUpdate {
 
     // tableName 指定当前更新要命中的物理表。
     private String tableName;

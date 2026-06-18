@@ -14,6 +14,8 @@ allprojects {
 subprojects {
     // 所有子项目先统一成 Java 工程，后续按模块职责再叠加 library 或 boot 插件。
     apply plugin: 'java'
+    // Checkstyle 插件先于 checkstyle 扩展配置加载，避免 VS Code 导入 Gradle 时在脚本评估阶段找不到该扩展。
+    apply plugin: 'checkstyle'
 
     java {
         toolchain {
@@ -34,5 +36,20 @@ subprojects {
     tasks.withType(Test).configureEach {
         // 测试统一走 JUnit Platform，为后续 Spring Boot 测试接入留统一入口。
         useJUnitPlatform()
+    }
+
+    checkstyle {
+        // Checkstyle 统一读取根目录规则文件，保证多模块在本地和 CI 下的校验口径一致。
+        configFile = rootProject.file('checkstyle.xml')
+        // 规则文件本身已经声明 UTF-8，因此这里继续显式对齐编码，避免 Windows 下中文注释校验乱码。
+        configProperties = [charset: 'UTF-8']
+    }
+
+    tasks.withType(Checkstyle).configureEach {
+        // Checkstyle 报告统一开启 HTML，方便在 IDE 或浏览器里直接查看具体违规位置。
+        reports {
+            xml.required = true
+            html.required = true
+        }
     }
 }

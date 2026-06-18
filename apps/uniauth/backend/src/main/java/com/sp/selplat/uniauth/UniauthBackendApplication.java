@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 // Uniauth 启动入口负责装配控制层、服务层、MyBatis 映射和本地验证所需的数据源配置。
 @SpringBootApplication(scanBasePackages = "com.sp.selplat")
-// Mapper 扫描只收口到 dao 包，避免把 service 等普通接口误注册成 MyBatis Bean。
-@MapperScan("com.sp.selplat.**.dao")
+// Mapper 扫描只注册公共模板 DAO，避免把业务 DAO 接口误注册成第二个 Bean 导致注入冲突。
+@MapperScan("com.sp.selplat.common.db.dao")
 public class UniauthBackendApplication {
 
     // 主方法用于直接启动 uniauth 后端服务，供本地 HTTP 联调验证控制器与 DAO 链路。

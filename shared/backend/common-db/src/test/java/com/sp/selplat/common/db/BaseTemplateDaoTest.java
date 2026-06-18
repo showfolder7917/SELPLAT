@@ -3,8 +3,8 @@ package com.sp.selplat.common.db;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.sp.selplat.common.db.domain.CommonTemplateLikeQuery;
 import com.sp.selplat.common.db.domain.CommonTemplateQuery;
-import com.sp.selplat.common.db.domain.CommonTemplateSaveIn;
-import com.sp.selplat.common.db.domain.CommonTemplateUpdateIn;
+import com.sp.selplat.common.db.domain.CommonTemplateSave;
+import com.sp.selplat.common.db.domain.CommonTemplateUpdate;
 import com.sp.selplat.common.db.support.BaseTemplateDaoTestJsonUtils;
 import com.sp.selplat.common.db.support.BaseTemplateDaoTestSupport;
 import java.util.List;
@@ -113,7 +113,7 @@ class BaseTemplateDaoTest {
         // 基于统一种子数据创建隔离测试上下文，保证写操作验证从固定初始状态开始。
         try (BaseTemplateDaoTestSupport.BaseTemplateDaoTestContext context = BaseTemplateDaoTestSupport.createContext(DEMO_TABLE_RESOURCE)) {
             // 从 JSON 资源装载新增入参，验证 insert 模板的列值映射完全支持文件化驱动。
-            CommonTemplateSaveIn saveIn = BaseTemplateDaoTestJsonUtils.readJsonResource(INSERT_RESOURCE, CommonTemplateSaveIn.class);
+            CommonTemplateSave saveIn = BaseTemplateDaoTestJsonUtils.readJsonResource(INSERT_RESOURCE, CommonTemplateSave.class);
             // 调用公共模板新增方法，把测试资源定义的新用户写入数据库。
             int insertedRows = context.mapper().insert(saveIn);
             // 新增后必须正好影响一行，证明 insert 模板成功命中目标表。
@@ -131,7 +131,7 @@ class BaseTemplateDaoTest {
             assertEquals(expectedAfterInsert, actualAfterInsert);
 
             // 从 JSON 资源装载更新入参，验证 update 模板的主键和值映射也支持文件化驱动。
-            CommonTemplateUpdateIn updateIn = BaseTemplateDaoTestJsonUtils.readJsonResource(UPDATE_RESOURCE, CommonTemplateUpdateIn.class);
+            CommonTemplateUpdate updateIn = BaseTemplateDaoTestJsonUtils.readJsonResource(UPDATE_RESOURCE, CommonTemplateUpdate.class);
             // 调用公共模板更新方法，把刚插入的新用户改成新的名称和状态。
             int updatedRows = context.mapper().updateById(updateIn);
             // 更新后必须正好影响一行，证明 updateById 模板按主键命中了目标记录。
