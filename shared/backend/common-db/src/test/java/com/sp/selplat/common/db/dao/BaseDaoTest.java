@@ -143,7 +143,7 @@ class BaseDaoTest {
     }
 
     // DemoUserBaseDao 用最小表信息配置模拟业务模块继承公共 DAO 后的实际使用方式。
-    private static final class DemoUserBaseDao extends BaseDao {
+    private static final class DemoUserBaseDao extends BaseDaoImpl {
 
         // 创建测试 DAO 时直接注入模板 DAO，保持和真实业务模块相同的桥接结构。
         private DemoUserBaseDao(BaseTemplateDao baseTemplateDao) {
@@ -152,11 +152,8 @@ class BaseDaoTest {
         }
 
         // 返回当前测试 DAO 对应的物理表，供公共基类统一拼接模板入参。
-        @Override
-        protected String getTableName() {
-            return "demo_user";
-        }
-
+        protected String tableName = "demo_user";
+        
         // 返回当前测试 DAO 的主键列名，供公共基类统一拼接更新和删除条件。
         @Override
         protected String getIdColumn() {

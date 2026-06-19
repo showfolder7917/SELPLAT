@@ -8,19 +8,25 @@ import java.util.List;
 import java.util.Map;
 
 // 公共 DAO 基类直接桥接 BaseTemplateDao，让简单主数据模块只配置表信息就能复用通用 CRUD。
-public abstract class BaseDao {
+public abstract class BaseDaoImpl {
 
     // 模板 DAO 代理对象承接真正的动态 SQL 执行，公共基类只负责把业务参数整理成模板入参。
     private final BaseTemplateDao baseTemplateDao;
 
     // 创建公共 DAO 时强制注入模板 DAO，保证后续列表、新增、更新和删除都走同一套模板能力。
-    protected BaseDao(BaseTemplateDao baseTemplateDao) {
+    protected BaseDaoImpl(BaseTemplateDao baseTemplateDao) {
         // 保存模板 DAO 代理，供所有通用方法复用同一条数据库访问链路。
         this.baseTemplateDao = baseTemplateDao;
+
+        String simpleName = this.getClass().getSimpleName();
+        if (!simpleName.endsWith("DaoImpl")) {
+            throw new IllegalStateException("DAO类名不符合约定: " + simpleName);
+        }
+        tableName = simpleName.substring(0, simpleName.length() - "DaoImpl".length());
     }
 
     // 子类必须明确当前公共 DAO 对应的物理表，避免模板层面对目标表产生歧义。
-    protected abstract String getTableName();
+    protected String tableName = null;
 
     // 子类必须明确当前公共 DAO 的主键列名，供更新和删除按唯一标识命中目标记录。
     protected abstract String getIdColumn();
@@ -47,7 +53,7 @@ public abstract class BaseDao {
         // 把调用方传入的列值映射包装成模板新增入参，统一收口目标表和写入字段集合。
         CommonTemplateSave saveIn = new CommonTemplateSave();
         // 当前新增固定写入子类声明的物理表，避免上层重复传表名。
-        saveIn.setTableName(getTableName());
+        saveIn.setTableName(tableName);
         // 使用有序映射复制业务字段，保证模板插入列顺序稳定且不污染调用方原始对象。
         saveIn.setColumnValueMap(copyColumnValueMap(columnValueMap));
         // 通过模板 DAO 执行通用新增，让不同模块共享同一套动态 insert 能力。
@@ -59,7 +65,7 @@ public abstract class BaseDao {
         // 把调用方传入的更新数据包装成模板更新入参，统一收口主键、表名和待更新字段。
         CommonTemplateUpdate updateIn = new CommonTemplateUpdate();
         // 当前更新固定命中子类声明的物理表，避免业务层重复维护表名常量。
-        updateIn.setTableName(getTableName());
+        updateIn.setTableName(tableName);
         // 当前更新固定按子类声明的主键列定位目标记录，保持公共方法口径统一。
         updateIn.setIdColumn(getIdColumn());
         // 当前更新主键值由调用方传入，供模板 where 子句唯一命中目标行。
@@ -73,13 +79,13 @@ public abstract class BaseDao {
     // 公共删除方法按主键删除目标记录，适合后台简单主数据移除场景。
     public int del(Object idValue) {
         // 通过模板 DAO 按当前子类声明的表和主键直接删除目标数据，复用统一删除链路。
-        return baseTemplateDao.deleteById(getTableName(), getIdColumn(), idValue);
+        return baseTemplateDao.deleteById(tableName, getIdColumn(), idValue);
     }
 
     // 受保护的主键查询供子类或测试在需要时回查模板操作结果，避免重复拼接表信息。
     protected Map<String, Object> getById(Object idValue) {
         // 通过模板 DAO 按主键查询当前表的一条记录，供详情回显或测试验证复用。
-        return baseTemplateDao.selectById(getTableName(), getSelectColumns(), getIdColumn(), idValue);
+        return baseTemplateDao.selectById(tableName, getSelectColumns(), getIdColumn(), idValue);
     }
 
     // 把等值查询条件组装成模板查询对象，统一沉淀公共列表查询的参数转换逻辑。
@@ -87,7 +93,7 @@ public abstract class BaseDao {
         // 创建模板查询对象，准备承接当前公共列表场景需要的表信息和筛选条件。
         CommonTemplateQuery query = new CommonTemplateQuery();
         // 当前查询固定命中子类声明的物理表，避免调用方重复维护表名。
-        query.setTableName(getTableName());
+        query.setTableName(tableName);
         // 当前查询固定读取子类声明的列清单，保持返回字段口径稳定可控。
         query.setSelectColumns(getSelectColumns());
         // 当前查询把调用方传入的字段和值复制成独立映射，防止后续模板处理误改原对象。
