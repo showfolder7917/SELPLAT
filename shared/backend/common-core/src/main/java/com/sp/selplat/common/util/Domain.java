@@ -8,12 +8,24 @@ import java.time.LocalDateTime;
  */
 public class Domain extends Page {
 
+    //默认主键名称
+    private String key="id";
+
     // id 作为通用主键字段，供大多数业务实体复用同一套主键定义。
     private Long id;
     // createdAt 作为通用创建时间字段，供实体承接数据库审计创建时间。
     private LocalDateTime createdAt;
     // updatedAt 作为通用更新时间字段，供实体承接数据库最后修改时间。
     private LocalDateTime updatedAt;
+
+    /**
+     * 默认主键名称
+     *
+     * @return 通用主键
+     */
+    public String getKey() {
+        return key;
+    }
 
     /**
      * 获取通用主键。

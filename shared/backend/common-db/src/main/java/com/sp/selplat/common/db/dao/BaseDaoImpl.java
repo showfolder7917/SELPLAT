@@ -3,6 +3,8 @@ package com.sp.selplat.common.db.dao;
 import com.sp.selplat.common.db.domain.CommonTemplateQuery;
 import com.sp.selplat.common.db.domain.CommonTemplateSave;
 import com.sp.selplat.common.db.domain.CommonTemplateUpdate;
+import com.sp.selplat.common.util.Domain;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +14,9 @@ public abstract class BaseDaoImpl {
 
     // 模板 DAO 代理对象承接真正的动态 SQL 执行，公共基类只负责把业务参数整理成模板入参。
     private final BaseTemplateDao baseTemplateDao;
+
+    // 子类必须明确当前公共 DAO 对应的物理表，避免模板层面对目标表产生歧义。
+    protected String tableName = null;
 
     // 创建公共 DAO 时强制注入模板 DAO，保证后续列表、新增、更新和删除都走同一套模板能力。
     protected BaseDaoImpl(BaseTemplateDao baseTemplateDao) {
@@ -25,11 +30,11 @@ public abstract class BaseDaoImpl {
         tableName = simpleName.substring(0, simpleName.length() - "DaoImpl".length());
     }
 
-    // 子类必须明确当前公共 DAO 对应的物理表，避免模板层面对目标表产生歧义。
-    protected String tableName = null;
-
     // 子类必须明确当前公共 DAO 的主键列名，供更新和删除按唯一标识命中目标记录。
-    protected abstract String getIdColumn();
+    protected String getId() {
+        Domain domain = new  Domain();
+        return domain.getKey();
+    }
 
     // 子类必须明确当前列表和详情默认读取的列清单，避免模板层直接无约束执行 select *。
     protected abstract String getSelectColumns();

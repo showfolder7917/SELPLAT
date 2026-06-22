@@ -18,17 +18,6 @@ public class UniauthUserDaoImpl extends BaseDaoImpl implements UniauthUserDao {
         super(baseTemplateDao);
     }
 
-     // 返回 ua_user 表名，供 BaseDao 模板查询在 store 兼容接口中命中正确主表。
-     protected String tableName = this.getClass().getSimpleName().replaceAll("DaoImpl", "");
-
-
-    // 返回 ua_user 主键列，供 BaseDao 模板能力在排序和基础主键逻辑中复用。
-    @Override
-    protected String getIdColumn() {
-        // store 兼容查询仍以 id 作为统一主键字段。
-        return "id";
-    }
-
     // 返回 store 默认读取列，保证旧式 rows 结构仍然只暴露用户主表核心字段。
     @Override
     protected String getSelectColumns() {
