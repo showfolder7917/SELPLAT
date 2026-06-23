@@ -6,6 +6,8 @@ plugins {
 dependencies {
     // common-db 可以复用 common-core 里的公共支持类，保持依赖方向单向稳定。
     api project(':shared:backend:common-core')
+    // common-db 主源码已经直接使用 @Autowired，因此离线编译时直接复用本地缓存里的 spring-beans jar。
+    compileOnly files(rootProject.file('localrepository/cache-jars/spring-beans-6.2.7.jar'))
     // 统一使用标准 Maven 坐标，让 VS Code、Gradle 在线模式和 --offline 缓存模式共享同一套解析链路。
     api 'org.mybatis:mybatis:3.5.17'
     // 公共 DAO 的正式测试仍然直接使用 H2 内存库，因此主源码编译阶段需要 H2。

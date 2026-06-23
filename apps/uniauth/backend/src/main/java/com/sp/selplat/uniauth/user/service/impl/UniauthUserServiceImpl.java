@@ -1,10 +1,10 @@
 package com.sp.selplat.uniauth.user.service.impl;
 
 import com.sp.selplat.common.util.JsonUtils;
-import com.sp.selplat.common.util.Result;
 import com.sp.selplat.uniauth.user.dao.UniauthUserDao;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserIn;
 import com.sp.selplat.uniauth.user.service.UniauthUserService;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -25,23 +25,25 @@ public class UniauthUserServiceImpl implements UniauthUserService {
     // store 兼容接口统一在服务层组装旧式返回结构，控制层只负责接参和转发。
     @Override
     public String getStore(UniauthUserIn queryIn) {
-        // Result 统一承接旧式页面接口常用的成功标记、提示信息和多模型数据结构。
-        Result result = new Result(true);
-        // 写入兼容接口来源标识，便于前端确认当前返回来自用户 store 路由。
-        result.addDefaultModel("moduleCode", "uniauth-user-store");
-        // 写入当前命中的旧式访问路径，便于联调时确认真实路由是否符合预期。
-        result.addDefaultModel("requestPath", "/api/uniauth/users/store.htm");
-        // 回传查询入参对象，便于前端同时确认分页字段和实体筛选字段都已经成功绑定。
-        result.addDefaultModel("query", queryIn);
-        // 通过模板 DAO 走公共 BaseDao#getList，把简单等值筛选直接转换成 ua_user 主表通用列表。
+        // 先通过 DAO 查询数据库用户列表，确保当前接口真正返回 ua_user 主表查出来的数据。
         List<Map<String, Object>> rowList = uniauthUserDao.getStoreList(queryIn);
-        // 把模板查询结果按旧式 store 结构写入 rows，供前端分页组件直接消费。
-        result.addDefaultModel("rows", rowList);
-        // 旧式 store 结构用当前返回行数作为最小可用总数，便于前端先完成分页联调。
-        result.addDefaultModel("total", rowList.size());
-        // 写入通用提示语，明确当前 store 已接通并通过 BaseDao 模板返回列表数据。
-        result.addMsg("store 接口已接通，当前列表通过 BaseDao 模板查询返回。");
-        // 服务层统一把旧式结果对象序列化成 JSON，控制层直接回传即可。
-        return JsonUtils.toJsonExt(result);
+        // 使用有序映射直接组装浏览器可读的顶层 JSON，避免 rows 和 total 再被额外包到 result 节点下面。
+        Map<String, Object> storeResult = new LinkedHashMap<>();
+        // success 直接暴露接口处理结果，方便浏览器和前端脚本第一时间判断请求是否成功。
+        storeResult.put("success", true);
+        // moduleCode 标记当前返回来自 uniauth 用户 store 查询链路，便于联调区分接口来源。
+        storeResult.put("moduleCode", "uniauth-user-store");
+        // requestPath 回传当前接口路径，方便浏览器直接核对命中的后端路由。
+        storeResult.put("requestPath", "/api/uniauth/users/store.htm");
+        // query 回传实际接收到的查询对象，便于确认浏览器传入的筛选参数已经绑定成功。
+        storeResult.put("query", queryIn);
+        // rows 直接承接数据库查询出来的结果集，供浏览器或前端表格组件直接读取展示。
+        storeResult.put("rows", rowList);
+        // total 直接返回当前结果集条数，便于前端先完成最小可用的列表分页联调。
+        storeResult.put("total", rowList.size());
+        // msg 用于提示当前接口已经通过 DAO 查到数据库结果，方便浏览器直接看到联调状态。
+        storeResult.put("msg", "store 接口已接通，当前列表数据通过 DAO 从数据库查询返回。");
+        // 服务层统一把顶层结果对象序列化成 JSON，控制层直接回传给浏览器。
+        return JsonUtils.toJsonExt(storeResult);
     }
 }

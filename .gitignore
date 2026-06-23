@@ -3,14 +3,17 @@ runtime/reports/
 runtime/cache/
 runtime/jdks/
 
+.gradle-codex/
+.gradle-tmp-cache/
 .gradle/
 build/
 localrepository/cache-jars/
 !scripts/build/
 !scripts/build/**
-
+tmp/
 *.log
 *.out
 *.err
 *.tmp
 *.class
+SELFMEMORY/

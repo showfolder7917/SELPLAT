@@ -1,7 +1,6 @@
 package com.sp.selplat.uniauth.user.dao;
 
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
-import com.sp.selplat.common.db.dao.BaseTemplateDao;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserIn;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,11 +11,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class UniauthUserDaoImpl extends BaseDaoImpl implements UniauthUserDao {
 
-    // 构造 DAO 时只保留 BaseDao 模板能力，收敛当前类的依赖面。
-    public UniauthUserDaoImpl(BaseTemplateDao baseTemplateDao) {
-        // 把公共模板 DAO 交给父类保存，供 getStoreList 继续复用 BaseDao#getList。
-        super(baseTemplateDao);
-    }
+    // // 构造 DAO 时只保留 BaseDao 模板能力，收敛当前类的依赖面。
+    // public UniauthUserDaoImpl() {
+    //     // 把公共模板 DAO 交给父类保存，供 getStoreList 继续复用 BaseDao#getList。
+    //     super();
+    // }
 
     // 返回 store 默认读取列，保证旧式 rows 结构仍然只暴露用户主表核心字段。
     @Override
