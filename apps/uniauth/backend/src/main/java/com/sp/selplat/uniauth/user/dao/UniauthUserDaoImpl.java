@@ -5,37 +5,18 @@ import com.sp.selplat.uniauth.user.domain.in.UniauthUserIn;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Repository;
 
 // 用户 DAO 实现当前只保留 store 模板查询职责，避免无关的正式增删改查代码继续堆在同一个类里。
 @Repository
 public class UniauthUserDaoImpl extends BaseDaoImpl implements UniauthUserDao {
 
-    // // 构造 DAO 时只保留 BaseDao 模板能力，收敛当前类的依赖面。
-    // public UniauthUserDaoImpl() {
-    //     // 把公共模板 DAO 交给父类保存，供 getStoreList 继续复用 BaseDao#getList。
-    //     super();
-    // }
-
-    // 返回 store 默认读取列，保证旧式 rows 结构仍然只暴露用户主表核心字段。
+    // 用户查询默认改成读取数据库真实字段，但口令摘要这类敏感列仍然必须从公共 select 清单里剔除。
     @Override
-    protected String getSelectColumns() {
-        // store 列清单保持和当前旧页面所需字段一致，避免模板查询返回过多无关列。
-        return """
-            id,
-            tenantId,
-            loginName,
-            displayName,
-            displayNameKana,
-            locale,
-            email,
-            phone,
-            userStatus,
-            lockedFlag,
-            expiredAt,
-            createdAt,
-            updatedAt
-            """;
+    protected Set<String> getExcludedSelectColumns() {
+        // passwordHash 只允许认证链路单独使用，禁止通过通用 store 列表接口直接返回到页面层。
+        return Set.of("passwordHash");
     }
 
     // store 查询只负责把查询对象转换成模板等值条件，再交给 BaseDao 通用列表能力执行。

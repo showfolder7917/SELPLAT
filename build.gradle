@@ -21,7 +21,7 @@ subprojects {
     // Checkstyle 插件先于 checkstyle 扩展配置加载，避免 VS Code 导入 Gradle 时在脚本评估阶段找不到该扩展。
     apply plugin: 'checkstyle'
 
-    // 当前工作区的 common-db 默认 build 目录运行时不可写，因此统一仍落到根目录 tmp 下的可写区域。
+    // 当前受管构建环境仍无法在 common-db 默认 build 目录下递归创建 classes/java/main，因此继续落到 tmp 可写目录。
     buildDir = rootProject.file("tmp/gradle-builds/${project.path.replace(':', '/')}")
 
     dependencies {
