@@ -21,9 +21,6 @@ subprojects {
     // Checkstyle 插件先于 checkstyle 扩展配置加载，避免 VS Code 导入 Gradle 时在脚本评估阶段找不到该扩展。
     apply plugin: 'checkstyle'
 
-    // 当前受管构建环境仍无法在 common-db 默认 build 目录下递归创建 classes/java/main，因此继续落到 tmp 可写目录。
-    buildDir = rootProject.file("tmp/gradle-builds/${project.path.replace(':', '/')}")
-
     dependencies {
         // 离线 jar 目录不提供 Maven 元数据，因此这里把缓存中的所有 jar 兜底加入编译类路径，补齐传递依赖。
         compileOnly fileTree(dir: rootProject.file('localrepository/cache-jars'), include: ['*.jar'])

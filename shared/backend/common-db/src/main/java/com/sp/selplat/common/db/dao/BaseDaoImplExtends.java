@@ -1,11 +1,15 @@
 package com.sp.selplat.common.db.dao;
 
+import com.sp.selplat.common.db.domain.CommonEntity;
 import com.sp.selplat.common.db.domain.CommonTemplateQuery;
 import com.sp.selplat.common.db.domain.CommonTemplateSave;
 import com.sp.selplat.common.db.domain.CommonTemplateUpdate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.sql.DataSource;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ClassUtils;
 
@@ -14,10 +18,48 @@ public abstract class BaseDaoImplExtends {
 
     // 模板 DAO 代理对象由 Spring 在实例化具体 DAO 子类后统一注入，保证无参构造链下公共 CRUD 仍能复用同一代理。
     @Autowired
-    private BaseTemplateDao baseTemplateDao;
+    protected BaseTemplateDao baseTemplateDao;
 
-    // 当前字段缓存按类名推导出的物理表名，避免同一个 DAO 在一次请求里重复解析表名约定。
-    protected String tableName = null;
+        // dataSource 承接当前模块实际使用的数据源，供公共 DAO 直接读取目标表的真实字段结构。
+    @Autowired
+    protected DataSource dataSource;
+
+
+    // 子类必须明确当前公共 DAO 的主键列名，供更新和删除按唯一标识命中目标记录。
+    protected String getId() {
+        // 公共基类默认沿用通用实体主键字段定义，让简单单表 DAO 不必重复声明同一主键名。
+        CommonEntity ce = new CommonEntity();
+        // 返回平台约定的默认主键字段，供模板更新、删除和详情查询统一定位目标记录。
+        return ce.getKey();
+    }
+
+
+    // 按公共 DAO 的命名约定延迟解析物理表名，让子类无需显式传参或依赖构造阶段赋值。
+    protected String getTableName() {
+        
+        // 先还原 Spring 代理背后的用户类，避免 CGLIB 后缀导致公共 DAO 命名约定解析失败。
+        Class<?> userClass = ClassUtils.getUserClass(this);
+        // 使用用户类类名推导默认表名，保持简单单表模块的零样板接入方式。
+        String simpleName = userClass.getSimpleName();
+        // 类名不满足平台 DAO 命名约定时立即失败，避免模板 SQL 打到错误表。
+        if (!simpleName.endsWith("DaoImpl")) {
+            throw new IllegalStateException("DAO类名不符合约定: " + simpleName);
+        }
+        // 去掉实现类后缀后缓存物理表名，供后续同一 DAO 的所有模板调用复用。
+        String tableName = simpleName.substring(0, simpleName.length() - "DaoImpl".length());
+        // 返回当前 DAO 解析出的物理表名，供通用 CRUD 模板继续拼装 SQL。
+        return tableName;
+    }
+
+    //从数据库中获取字段
+    protected String getFields(){
+       return null;
+    }
+
+
+
+
+
 
 
     // 公共列表查询按字段等值条件返回结果集，适合快速承接后台简单列表页。
@@ -99,29 +141,4 @@ public abstract class BaseDaoImplExtends {
         return new LinkedHashMap<>(sourceColumnValueMap);
     }
 
-    // 按公共 DAO 的命名约定延迟解析物理表名，让子类无需显式传参或依赖构造阶段赋值。
-    protected String getTableName() {
-        // 子类已经手工指定表名时直接复用，兼容后续存在特殊表名映射的扩展场景。
-        if (tableName != null && !tableName.isEmpty()) {
-            return tableName;
-        }
-        // 先还原 Spring 代理背后的用户类，避免 CGLIB 后缀导致公共 DAO 命名约定解析失败。
-        Class<?> userClass = ClassUtils.getUserClass(this);
-        // 使用用户类类名推导默认表名，保持简单单表模块的零样板接入方式。
-        String simpleName = userClass.getSimpleName();
-        // 类名不满足平台 DAO 命名约定时立即失败，避免模板 SQL 打到错误表。
-        if (!simpleName.endsWith("DaoImpl")) {
-            throw new IllegalStateException("DAO类名不符合约定: " + simpleName);
-        }
-        // 去掉实现类后缀后缓存物理表名，供后续同一 DAO 的所有模板调用复用。
-        tableName = simpleName.substring(0, simpleName.length() - "DaoImpl".length());
-        // 返回当前 DAO 解析出的物理表名，供通用 CRUD 模板继续拼装 SQL。
-        return tableName;
-    }
-
-    // 子类必须明确当前公共 DAO 的主键列名，供公共更新和删除统一命中目标记录。
-    protected abstract String getId();
-
-    // 子类必须明确当前列表和详情默认读取的列清单，避免模板层直接无约束执行 select *。
-    protected abstract String getSelectColumns();
 }

@@ -4,7 +4,9 @@ runtime/cache/
 runtime/jdks/
 
 .gradle-codex/
+.gradle-project-cache/
 .gradle-tmp-cache/
+.gradle-user-home/
 .gradle/
 build/
 localrepository/cache-jars/

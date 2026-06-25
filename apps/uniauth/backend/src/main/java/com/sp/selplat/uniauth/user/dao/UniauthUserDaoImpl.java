@@ -12,13 +12,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class UniauthUserDaoImpl extends BaseDaoImpl implements UniauthUserDao {
 
-    // 用户查询默认改成读取数据库真实字段，但口令摘要这类敏感列仍然必须从公共 select 清单里剔除。
-    @Override
-    protected Set<String> getExcludedSelectColumns() {
-        // passwordHash 只允许认证链路单独使用，禁止通过通用 store 列表接口直接返回到页面层。
-        return Set.of("passwordHash");
-    }
-
     // store 查询只负责把查询对象转换成模板等值条件，再交给 BaseDao 通用列表能力执行。
     @Override
     public List<Map<String, Object>> getStoreList(UniauthUserIn queryIn) {

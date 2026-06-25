@@ -17,32 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 // 公共 DAO 基类直接桥接 BaseTemplateDao，让简单主数据模块只配置表信息就能复用通用 CRUD。
 public abstract class BaseDaoImpl extends BaseDaoImplExtends {
 
-    // dataSource 承接当前模块实际使用的数据源，供公共 DAO 直接读取目标表的真实字段结构。
-    @Autowired
-    private DataSource dataSource;
 
-    // SELECT_COLUMNS_CACHE 缓存每个物理表已经解析完成的可查询字段串，避免每次列表查询都重复扫元数据。
-    private static final Map<String, String> SELECT_COLUMNS_CACHE = new ConcurrentHashMap<>();
-
-    // 子类必须明确当前公共 DAO 的主键列名，供更新和删除按唯一标识命中目标记录。
-    protected String getId() {
-        // 公共基类默认沿用通用实体主键字段定义，让简单单表 DAO 不必重复声明同一主键名。
-        CommonEntity ce = new CommonEntity();
-        // 返回平台约定的默认主键字段，供模板更新、删除和详情查询统一定位目标记录。
-        return ce.getKey();
-    }
-
-    // 默认查询列清单改成从数据库元数据动态生成，避免业务 DAO 再把完整 select 字段写死在 Java 常量里。
-    protected String getSelectColumns() {
-        // 当前表已经缓存过列清单时直接复用，保证同一个 DAO 在一次进程生命周期内稳定复用同一份字段顺序。
-        return SELECT_COLUMNS_CACHE.computeIfAbsent(getTableName(), this::loadSelectColumnsFromMetadata);
-    }
-
-    // 子类可按业务需要声明不允许对外查询的敏感字段，避免动态全字段方案把口令等列直接暴露出去。
-    protected Set<String> getExcludedSelectColumns() {
-        // 公共基类默认不过滤任何字段，交给需要保护敏感列的具体业务 DAO 按表补充排除规则。
-        return Set.of();
-    }
 
     // 从当前数据源的真实表结构中读取字段顺序，并组装成模板 DAO 可以直接拼接的 select 列串。
     private String loadSelectColumnsFromMetadata(String tableName) {
