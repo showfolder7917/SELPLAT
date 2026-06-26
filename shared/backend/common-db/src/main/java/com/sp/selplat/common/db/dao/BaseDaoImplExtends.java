@@ -1,9 +1,16 @@
 package com.sp.selplat.common.db.dao;
 
+import com.sp.selplat.common.db.config.CommonDbSource;
+import com.sp.selplat.common.db.config.CommonDbSourceResolver;
+import com.sp.selplat.common.db.domain.ColumnMetadata;
 import com.sp.selplat.common.db.domain.CommonEntity;
 import com.sp.selplat.common.db.domain.CommonTemplateQuery;
 import com.sp.selplat.common.db.domain.CommonTemplateSave;
 import com.sp.selplat.common.db.domain.CommonTemplateUpdate;
+import com.sp.selplat.common.db.metadata.DatabaseMetadataReader;
+import com.sp.selplat.common.db.metadata.DefaultDatabaseMetadataReader;
+import com.sp.selplat.common.db.metadata.MetadataSelectColumnBuilder;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +19,7 @@ import javax.sql.DataSource;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.StringUtils;
 
 // 公共 DAO 基类直接桥接 BaseTemplateDao，让简单主数据模块只配置表信息就能复用通用 CRUD。
 public abstract class BaseDaoImplExtends {
@@ -24,7 +32,6 @@ public abstract class BaseDaoImplExtends {
     @Autowired
     protected DataSource dataSource;
 
-
     // 子类必须明确当前公共 DAO 的主键列名，供更新和删除按唯一标识命中目标记录。
     protected String getId() {
         // 公共基类默认沿用通用实体主键字段定义，让简单单表 DAO 不必重复声明同一主键名。
@@ -32,7 +39,6 @@ public abstract class BaseDaoImplExtends {
         // 返回平台约定的默认主键字段，供模板更新、删除和详情查询统一定位目标记录。
         return ce.getKey();
     }
-
 
     // 按公共 DAO 的命名约定延迟解析物理表名，让子类无需显式传参或依赖构造阶段赋值。
     protected String getTableName() {
@@ -51,17 +57,31 @@ public abstract class BaseDaoImplExtends {
         return tableName;
     }
 
-    //从数据库中获取字段
-    protected String getFields(){
-       return null;
+  // COMMON_DB_SOURCE_RESOLVER 复用 config 层的数据源上下文解析能力，让 DAO 不再自己识别数据库类型和连接定位信息。
+    private static final CommonDbSourceResolver COMMON_DB_SOURCE_RESOLVER = new CommonDbSourceResolver();
+    // METADATA_READER 复用 common-db 已有的元数据读取实现，让 BaseDaoImpl 不再旁路新建一套字段查询逻辑。
+    private static final DatabaseMetadataReader METADATA_READER = new DefaultDatabaseMetadataReader();
+    // METADATA_SELECT_COLUMN_BUILDER 复用 metadata 层的字段串构建规则，让 DAO 不再自己遍历字段并拼接 select 片段。
+    private static final MetadataSelectColumnBuilder METADATA_SELECT_COLUMN_BUILDER =
+        new MetadataSelectColumnBuilder();
+
+    // 公共 DAO 统一通过现有元数据读取器生成 select 字段串，让子类不必手工维护整串字段列表。
+    protected String getFields() {
+        // 当前 DAO 的物理表名继续沿用基类约定解析，保证字段读取目标与模板 CRUD 命中同一张表。
+        String tableName = getTableName();
+        // 通过 config 层的解析器把当前真实数据源转换成 common-db 可复用的数据源上下文实体。
+        CommonDbSource commonDbSource = COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
+        // 通过现有元数据读取器实时查询目标表字段，保证字段顺序和线上真实表结构即时一致。
+        List<ColumnMetadata> columnMetadataList = METADATA_READER.listColumns(commonDbSource, tableName);
+        // 通过 metadata 层的构建器把字段元数据转换成模板 DAO 可直接使用的 select 字段串。
+        String selectColumns = METADATA_SELECT_COLUMN_BUILDER.build(columnMetadataList);
+        // 没读到任何字段时立即失败，避免模板 SQL 退化成非法 select 语句。
+        if (!StringUtils.hasText(selectColumns)) {
+            throw new IllegalStateException("no selectable columns found for table: " + tableName);
+        }
+        // 返回当前表的完整字段串，供列表和详情查询直接复用。
+        return selectColumns;
     }
-
-
-
-
-
-
-
     // 公共列表查询按字段等值条件返回结果集，适合快速承接后台简单列表页。
     public List<Map<String, Object>> getList(Map<String, Object> queryColumnValueMap) {
         // 不传排序时沿用模板默认顺序，减少调用方在简单场景下的重复样板代码。
@@ -113,7 +133,7 @@ public abstract class BaseDaoImplExtends {
     // 受保护的主键查询供子类或测试在需要时回查模板操作结果，避免重复拼接表信息。
     protected Map<String, Object> getById(Object idValue) {
         // 通过模板 DAO 按主键查询当前表的一条记录，供详情回显或测试验证复用。
-        return baseTemplateDao.selectById(getTableName(), getSelectColumns(), getId(), idValue);
+        return baseTemplateDao.selectById(getTableName(), getFields(), getId(), idValue);
     }
 
     // 把等值查询条件组装成模板查询对象，统一沉淀公共列表查询的参数转换逻辑。
@@ -123,7 +143,7 @@ public abstract class BaseDaoImplExtends {
         // 当前查询固定命中当前 DAO 约定解析出的物理表，避免调用方重复维护表名或依赖构造初始化。
         query.setTableName(getTableName());
         // 当前查询固定读取子类声明的列清单，保持返回字段口径稳定可控。
-        query.setSelectColumns(getSelectColumns());
+        query.setSelectColumns(getFields());
         // 当前查询把调用方传入的字段和值复制成独立映射，防止后续模板处理误改原对象。
         query.setQueryColumnValueMap(copyColumnValueMap(queryColumnValueMap));
         // 当前查询在需要时附带排序表达式，供后台列表页稳定控制展示顺序。
