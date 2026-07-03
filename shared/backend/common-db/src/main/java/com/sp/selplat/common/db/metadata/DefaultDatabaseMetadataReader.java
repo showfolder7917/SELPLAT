@@ -210,11 +210,7 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
      * @param tableName 表名
      * @return 主键字段集合
      */
-    private List<String> listPrimaryKeyColumns(
-        CommonDbSource dataSource,
-        Connection connection,
-        String tableName
-    ) {
+    private List<String> listPrimaryKeyColumns(CommonDbSource dataSource,Connection connection,String tableName) {
         // 创建主键字段集合承接当前表的主键列名，供字段扫描阶段统一打标。
         List<String> primaryKeyColumns = new ArrayList<>();
         try {

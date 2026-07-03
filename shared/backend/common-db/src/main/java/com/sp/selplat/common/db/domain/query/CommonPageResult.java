@@ -1,4 +1,4 @@
-package com.sp.selplat.common.db.domain;
+package com.sp.selplat.common.db.domain.query;
 
 import java.util.List;
 import java.util.Map;

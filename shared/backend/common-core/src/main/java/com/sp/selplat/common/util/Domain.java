@@ -1,5 +1,6 @@
 package com.sp.selplat.common.util;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -8,37 +9,16 @@ import java.time.LocalDateTime;
  */
 public class Domain extends Page {
 
-    // key 记录通用主键列名，供通用数据访问层在未单独指定主键时复用默认 id。
-    private String key = "id";
-
     // id 作为通用主键字段，供大多数业务实体复用同一套主键定义。
     private Long id;
-    // orderBy 作为通用排序表达式，供列表查询直接承接如 id desc 这类统一排序参数。
-    private String orderBy;
+    // sortnum 排序字段 小数点后两位
+    private BigDecimal sortnum;
     // status 作为通用假删除状态字段，默认值 1 表示启用，0 表示删除，便于查询默认只命中有效数据。
     private Integer status = 1;
     // createdAt 作为通用创建时间字段，供实体承接数据库审计创建时间。
     private LocalDateTime createdAt;
     // updatedAt 作为通用更新时间字段，供实体承接数据库最后修改时间。
     private LocalDateTime updatedAt;
-
-    /**
-     * 默认主键名称
-     *
-     * @return 通用主键
-     */
-    public String getKey() {
-        return key;
-    }
-
-    /**
-     * 设置默认主键名称。
-     *
-     * @param key 默认主键名称
-     */
-    public void setKey(String key) {
-        this.key = key;
-    }
 
     /**
      * 获取通用主键。
@@ -59,21 +39,21 @@ public class Domain extends Page {
     }
 
     /**
-     * 获取排序表达式。
+     * 获取通用排序值。
      *
-     * @return 排序表达式
+     * @return 通用排序值
      */
-    public String getOrderBy() {
-        return orderBy;
+    public BigDecimal getSortnum() {
+        return sortnum;
     }
 
     /**
-     * 设置排序表达式。
+     * 设置通用排序值。
      *
-     * @param orderBy 排序表达式
+     * @param sortnum 通用排序值，供需要按手工排序号稳定输出的业务对象复用
      */
-    public void setOrderBy(String orderBy) {
-        this.orderBy = orderBy;
+    public void setSortnum(BigDecimal sortnum) {
+        this.sortnum = sortnum;
     }
 
     /**

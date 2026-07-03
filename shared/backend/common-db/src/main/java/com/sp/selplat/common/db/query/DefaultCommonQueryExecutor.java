@@ -105,10 +105,7 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
      * @param builtQuerySql 已构建 SQL
      * @return 列表结果
      */
-    private List<Map<String, Object>> executeListQuery(
-        CommonDynamicQuery query,
-        BuiltQuerySql builtQuerySql
-    ) {
+    private List<Map<String, Object>> executeListQuery(CommonDynamicQuery query,BuiltQuerySql builtQuerySql) {
         // 创建结果集合承接 JDBC 返回的每一行数据，保持查询结果顺序与数据库返回顺序一致。
         List<Map<String, Object>> resultList = new ArrayList<>();
         // 通过真实数据源获取连接并创建预编译语句，保证执行目标库来自上层选择的数据源实体。
@@ -154,10 +151,7 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
      * @param preparedStatement 预编译语句
      * @param parameters 参数列表
      */
-    private void bindParameters(
-        PreparedStatement preparedStatement,
-        List<Object> parameters
-    ) {
+    private void bindParameters(PreparedStatement preparedStatement,List<Object> parameters) {
         // 参数列表为空时不做任何绑定，兼容无 where 条件的查询场景。
         if (parameters == null || parameters.isEmpty()) {
             return;

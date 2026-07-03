@@ -1,9 +1,0 @@
-{
-  "tableName": "demo_user",
-  "idColumn": "id",
-  "idValue": 3,
-  "columnValueMap": {
-    "display_name": "审计专员",
-    "user_status": "DISABLED"
-  }
-}

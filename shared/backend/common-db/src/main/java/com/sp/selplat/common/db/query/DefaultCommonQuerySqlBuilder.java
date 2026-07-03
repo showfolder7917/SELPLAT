@@ -26,10 +26,7 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
      * @param validator 查询校验器
      * @param dialectFactory 数据库方言工厂
      */
-    public DefaultCommonQuerySqlBuilder(
-        CommonQueryValidator validator,
-        DatabaseDialectFactory dialectFactory
-    ) {
+    public DefaultCommonQuerySqlBuilder(CommonQueryValidator validator,DatabaseDialectFactory dialectFactory) {
         // 查询校验器为空时直接拒绝创建，避免 SQL 构建脱离字段合法性边界。
         if (validator == null) {
             throw new IllegalArgumentException("validator must not be null");
@@ -107,12 +104,7 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
      * @param appendOrder 是否追加排序
      * @return 基础查询 SQL
      */
-    private String buildBaseSelectSql(
-        CommonDynamicQuery query,
-        DatabaseDialect dialect,
-        List<Object> parameters,
-        boolean appendOrder
-    ) {
+    private String buildBaseSelectSql(CommonDynamicQuery query,DatabaseDialect dialect,List<Object> parameters,boolean appendOrder) {
         // 创建 SQL 构建器承接各段查询片段，避免字符串直接多次拼接影响可读性。
         StringBuilder sqlBuilder = new StringBuilder();
         // 先写入 select 关键字和受控字段清单，确保列表查询只返回上层明确声明的字段。
@@ -161,12 +153,7 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
      * @param dialect 数据库方言
      * @param parameters 参数列表
      */
-    private void appendWhereClause(
-        StringBuilder sqlBuilder,
-        List<QueryCondition> conditions,
-        DatabaseDialect dialect,
-        List<Object> parameters
-    ) {
+    private void appendWhereClause(StringBuilder sqlBuilder,List<QueryCondition> conditions,DatabaseDialect dialect,List<Object> parameters) {
         // 条件集合为空时不追加 where 子句，兼容无筛选的列表浏览场景。
         if (conditions == null || conditions.isEmpty()) {
             return;
@@ -194,12 +181,7 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
      * @param dialect 数据库方言
      * @param parameters 参数列表
      */
-    private void appendSingleCondition(
-        StringBuilder sqlBuilder,
-        QueryCondition condition,
-        DatabaseDialect dialect,
-        List<Object> parameters
-    ) {
+    private void appendSingleCondition(StringBuilder sqlBuilder,QueryCondition condition,DatabaseDialect dialect,List<Object> parameters) {
         // 先写入当前条件命中的字段名，保证比较关系始终围绕受控业务字段展开。
         sqlBuilder.append(condition.getFieldName());
         // 根据操作符类型选择具体比较语法，并同步写入对应参数值。
