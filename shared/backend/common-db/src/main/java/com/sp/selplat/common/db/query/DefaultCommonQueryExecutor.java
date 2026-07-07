@@ -1,6 +1,6 @@
 package com.sp.selplat.common.db.query;
 
-import com.sp.selplat.common.db.domain.CommonDynamicQuery;
+import com.sp.selplat.common.db.query.model.CommonDynamicQuery;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -168,3 +168,4 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
         }
     }
 }
+

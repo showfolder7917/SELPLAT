@@ -3,7 +3,7 @@ KEY(id)
 VALUES
   (1, 'DEFAULT', '默认租户', 'enabled', '平台管理员', 'admin@selplat.com', '03-0000-0000');
 
-MERGE INTO ua_user (id, tenant_id, login_name, password_hash, display_name, display_name_kana, locale, email, phone, user_status, locked_flag)
+MERGE INTO UniauthUser (id, tenantId, loginName, passwordHash, displayName, displayNameKana, locale, email, phone, userStatus, lockedFlag)
 KEY(id)
 VALUES
   (1, 1, 'admin', '4d186321c1a7f0f354b297e8914ab240', '平台管理员', 'プラットフォーム管理者', 'zh-CN', 'admin@selplat.com', '03-0000-0000', 'ACTIVE', 0),

@@ -9,6 +9,7 @@ runtime/jdks/
 .gradle-user-home/
 .gradle/
 build/
+shared/backend/**/bin/
 localrepository/cache-jars/
 !scripts/build/
 !scripts/build/**
@@ -19,3 +20,4 @@ tmp/
 *.tmp
 *.class
 SELFMEMORY/
+OPTION/

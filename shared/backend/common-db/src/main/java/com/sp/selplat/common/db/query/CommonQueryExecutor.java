@@ -1,6 +1,6 @@
 package com.sp.selplat.common.db.query;
 
-import com.sp.selplat.common.db.domain.CommonDynamicQuery;
+import com.sp.selplat.common.db.query.model.CommonDynamicQuery;
 import java.util.List;
 import java.util.Map;
 
@@ -35,3 +35,4 @@ public interface CommonQueryExecutor {
      */
     long count(CommonDynamicQuery query);
 }
+

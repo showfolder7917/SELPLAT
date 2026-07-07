@@ -1,6 +1,6 @@
 package com.sp.selplat.common.db.query;
 
-import com.sp.selplat.common.db.domain.CommonDynamicQuery;
+import com.sp.selplat.common.db.query.model.CommonDynamicQuery;
 
 /**
  * 通用查询 SQL 构建器接口统一抽象结构化查询对象到可执行 SQL 的翻译过程。
@@ -24,3 +24,4 @@ public interface CommonQuerySqlBuilder {
      */
     BuiltQuerySql buildCount(CommonDynamicQuery query);
 }
+

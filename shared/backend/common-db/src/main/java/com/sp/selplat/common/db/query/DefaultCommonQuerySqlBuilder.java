@@ -1,11 +1,11 @@
 package com.sp.selplat.common.db.query;
 
-import com.sp.selplat.common.db.dialect.DatabaseDialect;
-import com.sp.selplat.common.db.dialect.DatabaseDialectFactory;
-import com.sp.selplat.common.db.domain.CommonDynamicQuery;
-import com.sp.selplat.common.db.domain.QueryCondition;
-import com.sp.selplat.common.db.domain.QueryOrder;
-import com.sp.selplat.common.db.domain.QueryOrderDirection;
+import com.sp.selplat.common.db.datasource.dialect.DatabaseDialect;
+import com.sp.selplat.common.db.datasource.dialect.DatabaseDialectFactory;
+import com.sp.selplat.common.db.query.model.CommonDynamicQuery;
+import com.sp.selplat.common.db.query.model.QueryCondition;
+import com.sp.selplat.common.db.query.model.QueryOrder;
+import com.sp.selplat.common.db.query.model.QueryOrderDirection;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -201,9 +201,19 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
                 sqlBuilder.append(" >= ?");
                 parameters.add(condition.getValue());
                 return;
+            // 严格大于条件统一输出 > 比较，并把首值加入参数列表。
+            case GT:
+                sqlBuilder.append(" > ?");
+                parameters.add(condition.getValue());
+                return;
             // 小于等于条件统一输出 <= 比较，并把首值加入参数列表。
             case LTE:
                 sqlBuilder.append(" <= ?");
+                parameters.add(condition.getValue());
+                return;
+            // 严格小于条件统一输出 < 比较，并把首值加入参数列表。
+            case LT:
+                sqlBuilder.append(" < ?");
                 parameters.add(condition.getValue());
                 return;
             // 区间条件统一输出 between and 比较，并按顺序写入起止值。
@@ -264,3 +274,9 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
         return builtQuerySql;
     }
 }
+
+
+
+
+
+

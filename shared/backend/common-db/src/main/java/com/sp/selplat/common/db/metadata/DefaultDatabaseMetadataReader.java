@@ -1,8 +1,8 @@
 package com.sp.selplat.common.db.metadata;
 
-import com.sp.selplat.common.db.config.CommonDbSource;
-import com.sp.selplat.common.db.domain.ColumnMetadata;
-import com.sp.selplat.common.db.domain.TableMetadata;
+import com.sp.selplat.common.db.datasource.CommonDbSource;
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
+import com.sp.selplat.common.db.metadata.model.TableMetadata;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -379,3 +379,6 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
         return value != null && !value.trim().isEmpty();
     }
 }
+
+
+

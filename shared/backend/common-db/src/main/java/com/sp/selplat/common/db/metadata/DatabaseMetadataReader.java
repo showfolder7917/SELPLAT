@@ -1,8 +1,8 @@
 package com.sp.selplat.common.db.metadata;
 
-import com.sp.selplat.common.db.config.CommonDbSource;
-import com.sp.selplat.common.db.domain.ColumnMetadata;
-import com.sp.selplat.common.db.domain.TableMetadata;
+import com.sp.selplat.common.db.datasource.CommonDbSource;
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
+import com.sp.selplat.common.db.metadata.model.TableMetadata;
 import java.util.List;
 
 /**
@@ -57,3 +57,6 @@ public interface DatabaseMetadataReader {
      */
     boolean existsColumn(CommonDbSource dataSource, String tableName, String columnName);
 }
+
+
+

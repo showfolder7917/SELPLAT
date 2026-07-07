@@ -1,10 +1,10 @@
 package com.sp.selplat.common.db.query;
 
-import com.sp.selplat.common.db.config.CommonDbSource;
-import com.sp.selplat.common.db.domain.CommonDynamicQuery;
-import com.sp.selplat.common.db.domain.QueryCondition;
-import com.sp.selplat.common.db.domain.QueryOperator;
-import com.sp.selplat.common.db.domain.QueryOrder;
+import com.sp.selplat.common.db.datasource.CommonDbSource;
+import com.sp.selplat.common.db.query.model.CommonDynamicQuery;
+import com.sp.selplat.common.db.query.model.QueryCondition;
+import com.sp.selplat.common.db.query.model.QueryOperator;
+import com.sp.selplat.common.db.query.model.QueryOrder;
 import com.sp.selplat.common.db.metadata.DatabaseMetadataReader;
 import java.util.List;
 
@@ -240,3 +240,8 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
         return value != null && !value.trim().isEmpty();
     }
 }
+
+
+
+
+

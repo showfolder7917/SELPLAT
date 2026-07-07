@@ -1,8 +1,8 @@
 package com.sp.selplat.common.db.query;
 
-import com.sp.selplat.common.db.domain.CommonDynamicQuery;
-import com.sp.selplat.common.db.domain.QueryCondition;
-import com.sp.selplat.common.db.domain.QueryOrder;
+import com.sp.selplat.common.db.query.model.CommonDynamicQuery;
+import com.sp.selplat.common.db.query.model.QueryCondition;
+import com.sp.selplat.common.db.query.model.QueryOrder;
 import java.util.List;
 
 /**
@@ -48,3 +48,6 @@ public interface CommonQueryValidator {
      */
     void validateOrders(CommonDynamicQuery query, List<QueryOrder> orders);
 }
+
+
+

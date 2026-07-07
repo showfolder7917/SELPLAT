@@ -1,10 +1,9 @@
 package com.sp.selplat.common.db.dao;
 
-import com.sp.selplat.common.db.config.CommonDbSource;
-import com.sp.selplat.common.db.config.CommonDbSourceResolver;
-import com.sp.selplat.common.db.domain.ColumnMetadata;
-import com.sp.selplat.common.db.domain.CommonEntity;
-import com.sp.selplat.common.db.domain.CommonTemplateQuery;
+import com.sp.selplat.common.db.datasource.CommonDbSource;
+import com.sp.selplat.common.db.datasource.CommonDbSourceResolver;
+import com.sp.selplat.common.db.datasource.dialect.DatabaseDialectFactory;
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import com.sp.selplat.common.db.metadata.DatabaseMetadataReader;
 import com.sp.selplat.common.db.metadata.DefaultDatabaseMetadataReader;
 import com.sp.selplat.common.db.metadata.MetadataSelectColumnBuilder;
@@ -14,6 +13,7 @@ import com.sp.selplat.common.db.query.CommonQueryValidator;
 import com.sp.selplat.common.db.query.DefaultCommonQueryExecutor;
 import com.sp.selplat.common.db.query.DefaultCommonQuerySqlBuilder;
 import com.sp.selplat.common.db.query.DefaultCommonQueryValidator;
+import com.sp.selplat.common.db.template.BaseTemplateDao;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,16 +42,21 @@ public abstract class BaseDaoSupportImpl {
     // COMMON_QUERY_VALIDATOR 统一校验动态查询对象，避免分页、排序和条件字段绕开受控边界。
     private static final CommonQueryValidator COMMON_QUERY_VALIDATOR = new DefaultCommonQueryValidator(METADATA_READER);
     // COMMON_QUERY_SQL_BUILDER 统一生成多数据库动态查询 SQL，让分页逻辑继续收口在方言查询链路里。
-    private static final CommonQuerySqlBuilder COMMON_QUERY_SQL_BUILDER = new DefaultCommonQuerySqlBuilder(COMMON_QUERY_VALIDATOR, new com.sp.selplat.common.db.dialect.DatabaseDialectFactory());
+    private static final CommonQuerySqlBuilder COMMON_QUERY_SQL_BUILDER = new DefaultCommonQuerySqlBuilder(COMMON_QUERY_VALIDATOR, new DatabaseDialectFactory());
     // COMMON_QUERY_EXECUTOR 统一执行动态查询 SQL，供分页和方言差异查询复用同一 JDBC 执行链路。
     private static final CommonQueryExecutor COMMON_QUERY_EXECUTOR = new DefaultCommonQueryExecutor(COMMON_QUERY_SQL_BUILDER);
 
+
+    // 分页查询基类需要知道当前真实数据源类型，供方言层在 SQL 构建阶段统一判断数据库差异。
+    protected CommonDbSource resolveCurrentDbSource() {
+        // 直接复用 config 层解析器，把当前注入的数据源转换成可复用的数据源上下文。
+        return COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
+    }
+
     // 子类必须明确当前公共 DAO 的主键列名，供更新和删除按唯一标识命中目标记录。
     protected String getId() {
-        // 公共基类默认沿用通用实体主键字段定义，让简单单表 DAO 不必重复声明同一主键名。
-        CommonEntity ce = new CommonEntity();
-        // 返回平台约定的默认主键字段，供模板更新、删除和详情查询统一定位目标记录。
-        return ce.getKey();
+        // 公共基类默认按平台约定的 id 主键列定位记录，让简单单表 DAO 不必重复声明同一主键名。
+        return "id";
     }
 
     // 按公共 DAO 的命名约定延迟解析物理表名，让子类无需显式传参或依赖构造阶段赋值。
@@ -86,37 +91,6 @@ public abstract class BaseDaoSupportImpl {
         return selectColumns;
     }
 
-    // 把等值查询条件组装成模板查询对象，统一沉淀公共列表查询的参数转换逻辑。
-    protected CommonTemplateQuery buildTemplateQuery(Map<String, Object> queryColumnValueMap, String orderBy) {
-        // 创建模板查询对象，准备承接当前公共列表场景需要的表信息和筛选条件。
-        CommonTemplateQuery query = new CommonTemplateQuery();
-        // 当前查询固定命中当前 DAO 约定解析出的物理表，避免调用方重复维护表名。
-        query.setTableName(getTableName());
-        // 当前查询固定读取当前表的完整字段清单，保持返回字段口径稳定。
-        query.setSelectColumns(getselectColumns());
-        // 当前查询把调用方传入的字段和值复制成独立映射，防止模板处理误改原对象。
-        query.setQueryColumnValueMap(copyColumnValueMap(queryColumnValueMap));
-        // 当前查询在需要时附带排序表达式，供简单列表页控制展示顺序。
-        query.setOrderBy(orderBy);
-        return query;
-    }
-
-    // 分页查询基类需要知道当前真实数据源类型，供方言层在 SQL 构建阶段统一判断数据库差异。
-    protected CommonDbSource resolveCurrentDbSource() {
-        // 直接复用 config 层解析器，把当前注入的数据源转换成可复用的数据源上下文。
-        return COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
-    }
-
-    // 分页查询基类需要复用当前表的默认字段清单，避免分页链路再次复制字段元数据解析逻辑。
-    protected List<String> resolveDynamicSelectFields(List<String> selectFields) {
-        // 调用方显式声明字段时直接沿用，保证复杂查询场景可以精确控制返回列。
-        if (selectFields != null && !selectFields.isEmpty()) {
-            return selectFields;
-        }
-        // 调用方未传字段时退回当前表完整字段列表，保持通用列表和分页列表的返回口径一致。
-        return List.of(getselectColumns().split(",\\s*"));
-    }
-
     // 分页查询基类需要复用同一套动态 SQL 执行器，避免在各个 DAO 子类里继续散落 JDBC 方言调用。
     protected CommonQueryExecutor getCommonQueryExecutor() {
         // 返回当前支撑层统一维护的查询执行器，让分页和动态查询共用同一条 SQL 构建与执行链路。
@@ -133,3 +107,9 @@ public abstract class BaseDaoSupportImpl {
         return new LinkedHashMap<>(sourceColumnValueMap);
     }
 }
+
+
+
+
+
+

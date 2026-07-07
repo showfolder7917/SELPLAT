@@ -1,6 +1,6 @@
 package com.sp.selplat.common.db.metadata;
 
-import com.sp.selplat.common.db.domain.ColumnMetadata;
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -27,3 +27,4 @@ public class MetadataSelectColumnBuilder {
             .collect(Collectors.joining(", "));
     }
 }
+

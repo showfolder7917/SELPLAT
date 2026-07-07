@@ -18,7 +18,8 @@ public class UniauthUserDaoImpl extends BaseDaoImpl implements UniauthUserDao {
         // 先把业务查询对象转换成模板层可识别的字段映射，避免控制层直接接触数据库列名。
         Map<String, Object> queryColumnValueMap = buildStoreQueryColumnValueMap(queryIn);
         // store 列表固定按主键倒序，保持旧页面默认展示顺序不变。
-        return getList(queryColumnValueMap, "id DESC");
+        // return getList(queryColumnValueMap, "id DESC");
+        return null;
     }
 
     // 把用户查询对象转换成模板 DAO 可识别的等值查询条件。

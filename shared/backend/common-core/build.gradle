@@ -8,6 +8,18 @@ dependencies {
     api 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
     // JsonUtils 需要支持 Java 8 时间类型序列化，并让下游模块在运行期也能拿到同一套时间序列化能力。
     api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.19.2'
+    // GenericSqlSpecDocCorrector 当前在离线环境下运行，因此 Apache POI 及其传递依赖直接复用本机 Gradle 缓存中的 jar。
+    implementation files(
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.poi/poi/5.2.5/7e00f6b2f76375fe89022d5a7db8acb71cbd55f5/poi-5.2.5.jar',
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.poi/poi-ooxml/5.2.5/df9f2c52371eeba24db8ea8cafa77285c3cc0742/poi-ooxml-5.2.5.jar',
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.poi/poi-ooxml-lite/5.2.5/eaa61452d8f0d13080fbb4757a392f09f90e4c49/poi-ooxml-lite-5.2.5.jar',
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.xmlbeans/xmlbeans/5.2.0/6198ac997b3f234f2b5393fa415f78fac2e06510/xmlbeans-5.2.0.jar',
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/commons-io/commons-io/2.15.0/5c3c2db10f6f797430a7f9c696b4d1273768c924/commons-io-2.15.0.jar',
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.commons/commons-collections4/4.4/62ebe7544cb7164d87e0637a2a6a2bdc981395e8/commons-collections4-4.4.jar',
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.commons/commons-compress/1.25.0/9d35aec423da6c8a7f93d7e9e1c6b1d9fe14bb5e/commons-compress-1.25.0.jar',
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/com.github.virtuald/curvesapi/1.08/3d3d36568154059825089b289dcfca481fe44e2c/curvesapi-1.08.jar',
+        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.logging.log4j/log4j-api/2.24.3/b02c125db8b6d295adf72ae6e71af5d83bce2370/log4j-api-2.24.3.jar'
+    )
 }
 
 java {
