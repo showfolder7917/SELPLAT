@@ -10,15 +10,17 @@ import java.util.List;
 import java.util.Map;
 
 // 公共 DAO 门面层直接桥接 BaseTemplateDao 和分页查询基类，让简单主数据模块复用统一 CRUD 与分页能力。
-public abstract class BaseDaoImpl extends BasePagingQueryDaoImpl {
+public abstract class BaseDaoImpl extends BasePagingQueryDaoImpl implements BaseDao {
 
     // 公共分页查询按等值条件返回当前页数据和总数，供后台列表页按数据库方言统一复用分页能力。
+    @Override
     public CommonPageResult getPageList(Map<String, Object> queryColumnValueMap,Integer pageNo,Integer pageSize) {
         // 不传排序时统一按 sortnum 倒序返回，保持和当前通用列表默认展示顺序一致。
         return getPageList(queryColumnValueMap, "sortnum desc", pageNo, pageSize);
     }
 
     // 公共分页查询允许调用方补充排序表达式，并继续复用底层多数据库分页方言。
+    @Override
     public CommonPageResult getPageList(Map<String,Object> queryColumnValueMap,String orderBy,Integer pageNo,Integer pageSize) {
         // 先把字段后缀驱动的查询条件转换成结构化条件集合，让分页查询走统一动态 SQL 校验和构建链路。
         List<QueryCondition> conditions = buildQueryConditions(queryColumnValueMap);
@@ -29,6 +31,7 @@ public abstract class BaseDaoImpl extends BasePagingQueryDaoImpl {
     }
 
     // 公共新增方法按列值映射写入目标表，适合后台简单主数据维护场景。
+    @Override
     public int insert(Map<String, Object> columnValueMap) {
         // 把调用方传入的列值映射包装成模板新增入参，统一收口目标表和写入字段集合。
         CommonTemplateSave saveIn = new CommonTemplateSave();
@@ -41,6 +44,7 @@ public abstract class BaseDaoImpl extends BasePagingQueryDaoImpl {
     }
 
     // 公共更新方法按主键和值映射覆盖目标记录，适合后台简单单表编辑场景。
+    @Override
     public int update(Object idValue, Map<String, Object> columnValueMap) {
         // 把调用方传入的更新数据包装成模板更新入参，统一收口主键、表名和待更新字段。
         CommonTemplateUpdate updateIn = new CommonTemplateUpdate();
@@ -57,6 +61,7 @@ public abstract class BaseDaoImpl extends BasePagingQueryDaoImpl {
     }
 
     // 公共删除方法按主键删除目标记录，适合后台简单主数据移除场景。
+    @Override
     public int del(Object idValue) {
         // 通过模板 DAO 按当前子类声明的表和主键直接删除目标数据，复用统一删除链路。
         return baseTemplateDao.deleteById(getTableName(), getId(), idValue);
