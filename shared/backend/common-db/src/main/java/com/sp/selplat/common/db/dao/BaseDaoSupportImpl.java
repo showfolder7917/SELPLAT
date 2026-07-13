@@ -53,10 +53,20 @@ public abstract class BaseDaoSupportImpl {
         return COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
     }
 
-    // 子类必须明确当前公共 DAO 的主键列名，供更新和删除按唯一标识命中目标记录。
-    protected String getId() {
-        // 公共基类默认按平台约定的 id 主键列定位记录，让简单单表 DAO 不必重复声明同一主键名。
-        return "id";
+    // 公共 DAO 统一从当前表元数据读取主键列列表，供模板更新、删除和详情查询组装复合主键条件。
+    protected List<String> getIds() {
+        // 当前 DAO 的物理表名继续沿用基类约定解析，保证主键读取与模板 CRUD 命中同一张表。
+        String tableName = getTableName();
+        // 通过 config 层解析器把当前真实数据源转换成 common-db 可复用的数据源上下文实体。
+        CommonDbSource commonDbSource = COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
+        // 通过统一元数据读取器读取当前表主键列，兼容不同数据库的标准 JDBC 元数据实现。
+        List<String> idColumnList = METADATA_READER.listPrimaryKeys(commonDbSource, tableName);
+        // 没读到任何主键时立即失败，避免模板更新或删除退化成无 where 或错误 where。
+        if (idColumnList == null || idColumnList.isEmpty()) {
+            throw new IllegalStateException("no primary keys found for table: " + tableName);
+        }
+        // 返回当前表主键列列表，供上层继续校验主键值映射并构造复合条件。
+        return idColumnList;
     }
 
     // 按公共 DAO 的命名约定延迟解析物理表名，让子类无需显式传参或依赖构造阶段赋值。
@@ -107,7 +117,6 @@ public abstract class BaseDaoSupportImpl {
         return new LinkedHashMap<>(sourceColumnValueMap);
     }
 }
-
 
 
 

@@ -12,13 +12,21 @@ import org.apache.ibatis.annotations.Update;
 // 注解式公共 DAO 模板直接提供动态表名和字段名级别的通用 SQL，供需要快速落通用表操作的模块复用。
 public interface BaseTemplateDao {
 
-    // 按主键查询模板直接从目标表返回一行键值结果，适合验证模板链路和轻量后台工具场景。
-    @Select("SELECT ${selectColumns} FROM ${tableName} WHERE ${idColumn} = #{id}")
-    Map<String, Object> selectById(
+    // 按主键列值映射查询模板直接从目标表返回一行键值结果，兼容单主键和复合主键后台场景。
+    @Select({
+        "<script>",
+        "SELECT ${selectColumns} FROM ${tableName}",
+        "<where>",
+        "<foreach collection='idColumnValueMap' index='columnName' item='columnValue'>",
+        "AND ${columnName} = #{columnValue}",
+        "</foreach>",
+        "</where>",
+        "</script>"
+    })
+    Map<String, Object> selectByIds(
         @Param("tableName") String tableName,
         @Param("selectColumns") String selectColumns,
-        @Param("idColumn") String idColumn,
-        @Param("id") Object id
+        @Param("idColumnValueMap") Map<String, Object> idColumnValueMap
     );
 
     // 新增模板按列值映射直接写入目标表，适合字段集合由上层明确控制的通用落库场景。
@@ -40,7 +48,7 @@ public interface BaseTemplateDao {
     })
     int insert(@Param("saveIn") CommonTemplateSave saveIn);
 
-    // 更新模板按主键和列值映射覆盖目标表字段，适合通用后台维护简单主数据。
+    // 更新模板按主键列值映射和列值映射覆盖目标表字段，兼容单主键和复合主键更新场景。
     @Update({
         "<script>",
         "UPDATE ${updateIn.tableName}",
@@ -49,17 +57,29 @@ public interface BaseTemplateDao {
         "${columnName} = #{columnValue},",
         "</foreach>",
         "</set>",
-        "WHERE ${updateIn.idColumn} = #{updateIn.idValue}",
+        "<where>",
+        "<foreach collection='updateIn.idColumnValueMap' index='columnName' item='columnValue'>",
+        "AND ${columnName} = #{columnValue}",
+        "</foreach>",
+        "</where>",
         "</script>"
     })
-    int updateById(@Param("updateIn") CommonTemplateUpdate updateIn);
+    int updateByIds(@Param("updateIn") CommonTemplateUpdate updateIn);
 
-    // 删除模板按主键直接删除目标表记录，适合后台通用主数据删除操作。
-    @Delete("DELETE FROM ${tableName} WHERE ${idColumn} = #{id}")
-    int deleteById(
+    // 删除模板按主键列值映射直接删除目标表记录，兼容单主键和复合主键删除场景。
+    @Delete({
+        "<script>",
+        "DELETE FROM ${tableName}",
+        "<where>",
+        "<foreach collection='idColumnValueMap' index='columnName' item='columnValue'>",
+        "AND ${columnName} = #{columnValue}",
+        "</foreach>",
+        "</where>",
+        "</script>"
+    })
+    int deleteByIds(
         @Param("tableName") String tableName,
-        @Param("idColumn") String idColumn,
-        @Param("id") Object id
+        @Param("idColumnValueMap") Map<String, Object> idColumnValueMap
     );
 }
 

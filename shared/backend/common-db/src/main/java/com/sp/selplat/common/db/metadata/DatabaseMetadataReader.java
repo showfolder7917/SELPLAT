@@ -39,6 +39,15 @@ public interface DatabaseMetadataReader {
     List<ColumnMetadata> listColumns(CommonDbSource dataSource, String tableName);
 
     /**
+     * 列出指定表主键字段集合。
+     *
+     * @param dataSource 数据源实体
+     * @param tableName 表名
+     * @return 主键字段集合
+     */
+    List<String> listPrimaryKeys(CommonDbSource dataSource, String tableName);
+
+    /**
      * 判断表是否存在。
      *
      * @param dataSource 数据源实体
@@ -57,6 +66,5 @@ public interface DatabaseMetadataReader {
      */
     boolean existsColumn(CommonDbSource dataSource, String tableName, String columnName);
 }
-
 
 

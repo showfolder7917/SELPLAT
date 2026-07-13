@@ -1,6 +1,7 @@
 package com.sp.selplat.common.db.dao;
 
 import com.sp.selplat.common.db.query.model.CommonPageResult;
+import java.util.List;
 import java.util.Map;
 
 // 公共 DAO 接口统一暴露简单单表模块可直接复用的分页和基础增删改能力。
@@ -15,9 +16,9 @@ public interface BaseDao {
     // 通用新增接口按列值映射写入当前 DAO 对应表，供简单主数据模块复用统一落库入口。
     int insert(Map<String, Object> columnValueMap);
 
-    // 通用更新接口按主键和值映射更新当前 DAO 对应表，供后台简单编辑场景复用。
-    int update(Object idValue, Map<String, Object> columnValueMap);
+    // 通用更新接口仅接收主键值列表，主键字段名由 DAO 内部自动解析，兼容单主键和复合主键场景。
+    int update(List<Object> idValues, Map<String, Object> columnValueMap);
 
-    // 通用删除接口按主键删除当前 DAO 对应表中的目标记录，供简单后台维护场景复用。
-    int del(Object idValue);
+    // 通用删除接口仅接收主键值列表，主键字段名由 DAO 内部自动解析，兼容单主键和复合主键场景。
+    int del(List<Object> idValues);
 }

@@ -120,7 +120,7 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
         // 通过数据源获取连接并读取目标表字段元数据，保证字段列表来自上层选定的数据库。
         try (Connection connection = dataSource.getDataSource().getConnection()) {
             // 先读取主键字段名集合，后续在字段扫描阶段统一打上主键标记。
-            List<String> primaryKeyColumns = listPrimaryKeyColumns(dataSource, connection, tableName);
+            List<String> primaryKeyColumns = readPrimaryKeyColumns(dataSource, connection, tableName);
             // 获取 JDBC 元数据对象，供当前字段扫描复用标准元数据接口。
             DatabaseMetaData metaData = connection.getMetaData();
             // 按指定表名读取所有字段元数据，供后续统一转换成项目内字段模型。
@@ -162,6 +162,28 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
         }
         // 返回目标表的字段集合，供上层校验字段合法性或开发期生成固定定义。
         return columnMetadataList;
+    }
+
+    /**
+     * 列出指定表主键字段集合。
+     *
+     * @param dataSource 数据源实体
+     * @param tableName 表名
+     * @return 主键字段集合
+     */
+    @Override
+    public List<String> listPrimaryKeys(CommonDbSource dataSource, String tableName) {
+        // 先校验数据源和表名，保证主键读取一定建立在明确的目标表上。
+        validateDataSource(dataSource);
+        validateTableName(tableName);
+        // 通过数据源获取连接并读取目标表主键信息，保证主键集合来自当前业务选定的数据源。
+        try (Connection connection = dataSource.getDataSource().getConnection()) {
+            // 复用统一的 JDBC 主键读取逻辑，保持字段打标和 DAO 主键定位使用同一套口径。
+            return readPrimaryKeyColumns(dataSource, connection, tableName);
+        } catch (SQLException exception) {
+            // 统一转换主键读取异常，避免接口层显式传播 JDBC 受检异常。
+            throw new IllegalStateException("failed to list primary keys: " + tableName, exception);
+        }
     }
 
     /**
@@ -210,7 +232,7 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
      * @param tableName 表名
      * @return 主键字段集合
      */
-    private List<String> listPrimaryKeyColumns(CommonDbSource dataSource,Connection connection,String tableName) {
+    private List<String> readPrimaryKeyColumns(CommonDbSource dataSource,Connection connection,String tableName) {
         // 创建主键字段集合承接当前表的主键列名，供字段扫描阶段统一打标。
         List<String> primaryKeyColumns = new ArrayList<>();
         try {
