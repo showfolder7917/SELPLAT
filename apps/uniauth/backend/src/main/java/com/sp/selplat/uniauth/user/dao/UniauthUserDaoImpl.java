@@ -12,6 +12,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class UniauthUserDaoImpl extends BaseDaoImpl implements UniauthUserDao {
 
+
+    
     // store 查询只负责把查询对象转换成模板等值条件，再交给 BaseDao 通用列表能力执行。
     @Override
     public List<Map<String, Object>> getStoreList(UniauthUserIn queryIn) {
@@ -59,4 +61,5 @@ public class UniauthUserDaoImpl extends BaseDaoImpl implements UniauthUserDao {
         // 只有非空且去空格后仍有内容的字符串，才允许进入模板查询条件。
         return value != null && !value.trim().isEmpty();
     }
+
 }

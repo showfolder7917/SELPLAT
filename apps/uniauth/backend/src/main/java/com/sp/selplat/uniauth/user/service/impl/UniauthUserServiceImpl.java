@@ -1,5 +1,6 @@
 package com.sp.selplat.uniauth.user.service.impl;
 
+import com.sp.selplat.common.service.BaseServiceImpl;
 import com.sp.selplat.common.util.JsonUtils;
 import com.sp.selplat.uniauth.user.dao.UniauthUserDao;
 import com.sp.selplat.uniauth.user.domain.in.UniauthUserIn;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Service;
 
 // 用户服务实现当前只保留 store 兼容编排，避免无关的正式增删改查逻辑继续堆在同一个类里。
 @Service
-public class UniauthUserServiceImpl implements UniauthUserService {
+public class UniauthUserServiceImpl extends BaseServiceImpl implements UniauthUserService {
 
     // 用户 DAO 当前只承接 store 模板查询，服务层不再感知其他正式持久化动作。
     private final UniauthUserDao uniauthUserDao;
