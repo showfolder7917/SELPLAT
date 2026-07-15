@@ -1,0 +1,15 @@
+plugins {
+    // common-service 作为公共服务层基类库，只负责被下游模块依赖，不承担独立启动职责。
+    id 'java-library'
+}
+
+dependencies {
+    // common-service 依赖 common-core，供后续公共服务基类扩展公共工具能力时保持依赖方向稳定。
+    api project(':shared:backend:common-core')
+    // common-service 依赖 common-db，供公共服务基类或下游服务模块直接复用数据库公共能力。
+    api project(':shared:backend:common-db')
+}
+
+java {
+    withSourcesJar()
+}

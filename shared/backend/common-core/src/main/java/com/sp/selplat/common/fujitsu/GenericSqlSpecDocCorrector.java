@@ -33,6 +33,7 @@ import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 
 /**
+ *  SQL仕様書修正ツール
   - 如果想默认只跑 10 个，直接把这一行改成 private static final Integer DEFAULT_BATCH_LIMIT = 10;。
   - 名单文件名常量：/abs/path/C:/opt/workspace/SELPLAT/shared/backend/common-core/src/main/java/com/sp/selplat/common/
     fujitsu/GenericSqlSpecDocCorrector.java:63
