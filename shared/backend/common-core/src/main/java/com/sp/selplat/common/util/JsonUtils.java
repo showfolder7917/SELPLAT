@@ -77,18 +77,18 @@ public final class JsonUtils {
     }
 
     /**
-     * 按宽松规则把对象转成 JSON 字符串，空 bean 场景下不抛出异常。
+     * 按忽略空值的规则把对象转成 JSON 字符串，空 bean 场景下不抛出异常。
      *
      * @param object 待序列化对象
-     * @return 宽松 JSON 字符串
+     * @return 忽略空值后的 JSON 字符串
      */
-    public static String toJsonExt(Object object) {
+    public static String toJsonIgnoreNull(Object object) {
         try {
-            // 使用扩展映射器输出，接口层可以忽略 null 字段并兼容空 bean 返回。
+            // 使用忽略空值的映射器输出，接口层可以省略 null 字段并兼容空 bean 返回。
             return OBJECT_MAPPER_EXT.writeValueAsString(object);
         } catch (JsonProcessingException exception) {
-            // 扩展输出仍视为响应构建失败，但空 bean 本身不会再触发该分支。
-            throw new IllegalStateException("扩展 JSON 序列化失败: " + object, exception);
+            // 忽略空值输出仍视为响应构建失败，但空 bean 本身不会再触发该分支。
+            throw new IllegalStateException("忽略空值 JSON 序列化失败: " + object, exception);
         }
     }
 

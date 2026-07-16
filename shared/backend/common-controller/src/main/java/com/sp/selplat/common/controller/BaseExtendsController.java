@@ -1,7 +1,13 @@
 package com.sp.selplat.common.controller;
 
+import com.sp.selplat.common.db.query.model.CommonPageResult;
+import com.sp.selplat.common.util.CommonPageParam;
+import com.sp.selplat.common.util.CommonStoreResult;
+import com.sp.selplat.common.util.JsonUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -10,27 +16,141 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * 公共控制器扩展基类用于承接验证接口相关的细节实现，避免主基类堆积过多辅助逻辑。
- * 当前统一沉淀模块验证文案、路径扫描和路由拼接能力，供 BaseController 直接复用。
+ * 当前统一沉淀模块验证文案、路径扫描、store 参数整理和 store 响应组装能力，供 BaseController 直接复用。
  */
 public abstract class BaseExtendsController {
 
     /**
-     * 返回当前控制器的模块编码。
+     * 把 JSON body、分页参数和普通请求参数统一合并成最终查询对象。
      *
-     * @return 当前控制器模块编码
+     * @param requestBody JSON 请求体参数
+     * @param queryIn Spring 绑定的普通请求参数
+     * @param request HTTP 请求
+     * @return 合并后的查询对象
      */
-    protected String getVerifyModuleCode() {
-        // 控制器如果显式声明了模块说明注解，则优先使用注解里的稳定编码，避免模块编码推导结果和业务约定偏离。
-        ModuleDescription moduleDescription = getClass().getAnnotation(ModuleDescription.class);
-        if (moduleDescription != null && !moduleDescription.code().trim().isEmpty()) {
-            return moduleDescription.code().trim();
+    protected CommonPageParam resolveStoreQueryIn(
+        CommonPageParam requestBody,
+        CommonPageParam queryIn,
+        HttpServletRequest request
+    ) {
+        // JSON 请求体存在时优先以 JSON 对象为主，保证前端 POST application/json 提交的分页与业务字段都能直接生效。
+        CommonPageParam finalQueryIn = requestBody != null ? requestBody : queryIn;
+        // GET 或表单提交在没有任何对象可用时，这里补一个默认共通参数，确保后续透传链路稳定。
+        if (finalQueryIn == null) {
+            finalQueryIn = new CommonPageParam();
         }
-        // 先读取当前控制器的简单类名，作为模块编码推导的唯一来源，避免子类继续重复手写同样的模块标识。
-        String simpleName = getClass().getSimpleName();
-        // 控制器类名通常以 Controller 结尾，这里统一去掉后缀，让模块编码只保留真实业务名部分。
-        String businessName = simpleName.endsWith("Controller") ? simpleName.substring(0, simpleName.length() - "Controller".length()) : simpleName;
-        // 把驼峰业务名转换成短横线小写编码，例如 UniauthUser 转成 uniauth-user，保持接口返回的模块标识稳定可读。
-        return convertCamelCaseToKebabCase(businessName);
+        // 普通请求参数若额外带了分页值，这里继续回填到最终对象，保证 query string 和 form 参数也能覆盖默认分页口径。
+        if (queryIn != null) {
+            finalQueryIn.setPageNo(queryIn.getPageNo());
+            finalQueryIn.setPageSize(queryIn.getPageSize());
+        }
+        // 再把除分页字段外的请求参数补充进动态 Map，让 JSON、GET 和表单参数最终都汇总到同一份业务字段映射里。
+        populateDynamicQueryParams(finalQueryIn, request);
+        // 返回已经完成多来源合并的共通参数对象，供控制层统一透传给服务层。
+        return finalQueryIn;
+    }
+
+    /**
+     * 把 HTTP 请求中的动态业务字段提取到共通参数对象里。
+     *
+     * @param queryIn 通用分页参数
+     * @param request HTTP 请求
+     */
+    protected void populateDynamicQueryParams(CommonPageParam queryIn, HttpServletRequest request) {
+        // 请求对象为空时直接跳过，避免极端测试场景下控制层回填动态字段时触发空指针。
+        if (queryIn == null || request == null) {
+            return;
+        }
+        // 逐个遍历请求参数名，把分页字段之外的业务字段统一写入动态 Map，供 service 和 common-db 继续透传。
+        Enumeration<String> parameterNames = request.getParameterNames();
+        while (parameterNames.hasMoreElements()) {
+            // 读取当前请求字段名，供后续识别分页保留字段和业务筛选字段。
+            String parameterName = parameterNames.nextElement();
+            // pageNo 和 pageSize 已由 Spring 直接绑定到分页基类，这里不重复写入动态 Map，避免同一语义出现双份来源。
+            if ("pageNo".equals(parameterName) || "pageSize".equals(parameterName)) {
+                continue;
+            }
+            // 读取当前字段值并写入动态 Map，让旧式 store 接口也能以通用对象承接任意筛选字段。
+            queryIn.putParam(parameterName, request.getParameter(parameterName));
+        }
+    }
+
+    /**
+     * 按统一口径组装旧式 store 接口返回对象。
+     *
+     * @param moduleCode 当前业务模块编码
+     * @param requestPath 当前 store 接口路径
+     * @param queryIn 当前生效的查询参数对象
+     * @param pageResult 公共分页查询结果
+     * @param message 当前返回说明文案
+     * @return 统一 store 返回对象
+     */
+    protected CommonStoreResult buildStoreResult(
+        String moduleCode,
+        String requestPath,
+        CommonPageParam queryIn,
+        CommonPageResult pageResult,
+        String message
+    ) {
+        // 新建统一 store 返回对象，把旧式页面依赖的顶层字段集中到公共控制器层维护，避免服务层承担 HTTP 响应包装职责。
+        CommonStoreResult storeResult = new CommonStoreResult();
+        // success 固定标记当前 store 查询链路已成功执行，供前端或浏览器快速判断请求状态。
+        storeResult.setSuccess(true);
+        // moduleCode 标记具体业务来源，便于多模块都走 store 接口时仍能区分响应归属。
+        storeResult.setModuleCode(moduleCode);
+        // requestPath 回传命中的后端路由，方便联调时直接核对当前接口入口。
+        storeResult.setRequestPath(requestPath);
+        // query 回传最终生效的共通参数对象，供前端确认筛选条件和分页参数已经进入控制器透传链路。
+        storeResult.setQuery(queryIn);
+        // rows 统一承接当前页结果列表，保持旧式 store 页面仍能按 rows 字段直接渲染表格。
+        storeResult.setRows(pageResult.getRecords());
+        // total 统一回传总记录数，避免不同控制器对总数字段各自命名。
+        storeResult.setTotal(pageResult.getTotalCount());
+        // pageNo 统一回传当前页码，保证前后端分页状态字段口径一致。
+        storeResult.setPageNo(pageResult.getPageNo());
+        // pageSize 统一回传每页条数，方便联调确认分页设置是否正确透传。
+        storeResult.setPageSize(pageResult.getPageSize());
+        // msg 统一回传当前接口说明文案，让浏览器页面可直接显示当前 store 链路状态。
+        storeResult.setMsg(message);
+        // 返回已完成统一字段填充的 store 结果对象，供控制层直接序列化输出。
+        return storeResult;
+    }
+
+    /**
+     * 按统一口径组装旧式 store 接口返回 JSON。
+     *
+     * @param moduleCode 当前业务模块编码
+     * @param requestPath 当前 store 接口路径
+     * @param queryIn 当前生效的查询参数对象
+     * @param pageResult 公共分页查询结果
+     * @param message 当前返回说明文案
+     * @return 统一 store JSON 字符串
+     */
+    protected String buildStoreResultJson(
+        String moduleCode,
+        String requestPath,
+        CommonPageParam queryIn,
+        CommonPageResult pageResult,
+        String message
+    ) {
+        // 控制器层统一把标准 store 结果对象序列化成 JSON，保证所有 store 接口对外返回口径一致。
+        return JsonUtils.toJsonIgnoreNull(buildStoreResult(moduleCode, requestPath, queryIn, pageResult, message));
+    }
+
+    /**
+     * 返回当前控制器 store 接口对应的单一路径。
+     *
+     * @return 当前 store 接口路径
+     */
+    protected String getVerifyAvailablePath() {
+        // 旧式 store 返回里的 requestPath 只需要回传当前 store 接口入口，不应该误用整组 availablePaths 列表。
+        String storeRequestPath = resolveMethodRequestPath("getStore");
+        // 成功解析到当前控制器的 getStore 路由时直接返回，保证所有同结构控制器都能复用这一套反射推导逻辑。
+        if (!storeRequestPath.isEmpty()) {
+            return storeRequestPath;
+        }
+        // 极端情况下未找到 getStore 映射时回退根路径，避免旧式返回结构中的 requestPath 变成 null。
+        return "/";
     }
 
     /**
@@ -55,6 +175,26 @@ public abstract class BaseExtendsController {
         return "控制器已装配。";
     }
 
+    
+    /**
+     * 返回当前控制器的模块编码。
+     *
+     * @return 当前控制器模块编码
+     */
+    protected String getVerifyModuleCode() {
+        // 控制器如果显式声明了模块说明注解，则优先使用注解里的稳定编码，避免模块编码推导结果和业务约定偏离。
+        ModuleDescription moduleDescription = getClass().getAnnotation(ModuleDescription.class);
+        if (moduleDescription != null && !moduleDescription.code().trim().isEmpty()) {
+            return moduleDescription.code().trim();
+        }
+        // 先读取当前控制器的简单类名，作为模块编码推导的唯一来源，避免子类继续重复手写同样的模块标识。
+        String simpleName = getClass().getSimpleName();
+        // 控制器类名通常以 Controller 结尾，这里统一去掉后缀，让模块编码只保留真实业务名部分。
+        String businessName = simpleName.endsWith("Controller") ? simpleName.substring(0, simpleName.length() - "Controller".length()) : simpleName;
+        // 把驼峰业务名转换成短横线小写编码，例如 UniauthUser 转成 uniauth-user，保持接口返回的模块标识稳定可读。
+        return convertCamelCaseToKebabCase(businessName);
+    }
+    
     /**
      * 返回当前控制器的关键可访问路径列表。
      * 返回示例：
@@ -90,6 +230,33 @@ public abstract class BaseExtendsController {
         }
         // 返回扫描完成后的关键访问路径列表，供公共验证接口统一回传给调用方。
         return new ArrayList<>(availablePathSet);
+    }
+
+    /**
+     * 按方法名解析当前控制器的完整请求路径。
+     *
+     * @param methodName 目标方法名
+     * @return 完整请求路径
+     */
+    private String resolveMethodRequestPath(String methodName) {
+        // 先读取当前控制器类级别前缀，保证最终返回路径和验证接口的全量路径拼接口径一致。
+        String classPath = resolvePrimaryPath(getClass().getAnnotation(RequestMapping.class));
+        // 扫描当前控制器对外方法，定位指定方法名上声明的 RequestMapping。
+        for (Method method : getClass().getMethods()) {
+            // 只处理名称命中的目标方法，避免把其他接口路径误当成当前 store 路由返回。
+            if (!method.getName().equals(methodName)) {
+                continue;
+            }
+            // 读取目标方法上的 RequestMapping，只有显式对外暴露的接口才参与路径拼接。
+            RequestMapping methodMapping = method.getAnnotation(RequestMapping.class);
+            if (methodMapping == null) {
+                continue;
+            }
+            // 把类级别和方法级别路径按既有规则拼成完整 URL，保证 requestPath 与 verify 返回中的路径口径一致。
+            return joinPaths(classPath, resolvePrimaryPath(methodMapping));
+        }
+        // 当前控制器未声明指定方法名的路由时返回空串，交由调用方决定最终回退策略。
+        return "";
     }
 
     /**
