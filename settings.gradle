@@ -4,8 +4,8 @@ rootProject.name = 'SELPLAT'
 include('shared:backend:common-core')
 // 公共服务层提供业务 service 统一继承入口，先以最小空壳模块接入根构建。
 include('shared:backend:common-service')
-// 公共控制器层提供后续控制器统一继承入口，先以最小空壳模块接入根构建。
-include('shared:backend:common-controller')
+// 公共 Web 层提供控制器基类和 MVC 参数解析能力，供业务模块统一复用。
+include('shared:backend:common-web')
 // 当前 uniauth 已依赖 common-db，因此把公共数据库层一并纳入最小可编译范围。
 include('shared:backend:common-db')
 // 第一阶段业务模块先接入 uniauth backend，后续再逐步扩展其他业务域。
@@ -14,6 +14,6 @@ include('apps:uniauth:backend')
 // 显式绑定物理目录，避免多层级 Gradle 项目在 IDE 和命令行下解析漂移。
 project(':shared:backend:common-core').projectDir = file('shared/backend/common-core')
 project(':shared:backend:common-service').projectDir = file('shared/backend/common-service')
-project(':shared:backend:common-controller').projectDir = file('shared/backend/common-controller')
+project(':shared:backend:common-web').projectDir = file('shared/backend/common-web')
 project(':shared:backend:common-db').projectDir = file('shared/backend/common-db')
 project(':apps:uniauth:backend').projectDir = file('apps/uniauth/backend')

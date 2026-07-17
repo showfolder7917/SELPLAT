@@ -9,8 +9,8 @@ def localCacheJarDir = rootProject.file('localrepository/cache-jars')
 dependencies {
     // uniauth 后端依赖公共核心库，复用通用值处理等基础能力。
     implementation project(':shared:backend:common-core')
-    // uniauth 后端依赖公共控制器层，供业务控制器后续直接继承 BaseController。
-    implementation project(':shared:backend:common-controller')
+    // uniauth 后端依赖公共 Web 层，供业务控制器复用 BaseController 和 MVC 参数解析能力。
+    implementation project(':shared:backend:common-web')
     // uniauth 后端依赖公共服务层，统一服务接口和实现类的继承结构。
     implementation project(':shared:backend:common-service')
     // uniauth 后端依赖公共数据库层，复用 BaseDao 与 BaseTemplateDao 等模板能力。

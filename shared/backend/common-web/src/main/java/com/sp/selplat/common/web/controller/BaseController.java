@@ -1,4 +1,4 @@
-package com.sp.selplat.common.controller;
+package com.sp.selplat.common.web.controller;
 
 import com.sp.selplat.common.service.BaseService;
 import com.sp.selplat.common.util.JsonUtils;

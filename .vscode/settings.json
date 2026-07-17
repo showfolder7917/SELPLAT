@@ -1,18 +1,21 @@
 {
-  "java.jdt.ls.java.home": "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.6.7-hotspot",
-  "java.import.gradle.java.home": "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.6.7-hotspot",
-  "java.configuration.runtimes": [
-    {
-      "name": "JavaSE-21",
-      "path": "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.6.7-hotspot",
-      "default": true
-    }
-  ],
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.import.gradle.wrapper.enabled": true,
+  "java.import.gradle.user.home": ".gradle",
+  "java.project.outputPath": "build\\java-bin",
+  "java.import.exclusions": [
+    "**/bin/**",
+    "**/build/**"
+  ],
   "java.debug.settings.onBuildFailureProceed": true,
+  "files.exclude": {},
+  "search.exclude": {
+    "**/bin": true,
+    "**/build": true
+  },
   "[java]": {
     "editor.tabSize": 2,
     "editor.insertSpaces": true
-  }
+  },
+  "java.compile.nullAnalysis.mode": "disabled"
 }

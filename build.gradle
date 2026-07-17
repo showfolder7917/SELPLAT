@@ -20,6 +20,10 @@ subprojects {
     apply plugin: 'java'
     // Checkstyle 插件先于 checkstyle 扩展配置加载，避免 VS Code 导入 Gradle 时在脚本评估阶段找不到该扩展。
     apply plugin: 'checkstyle'
+    // 把每个子项目的构建输出统一收口到根 build 目录，避免模块内外同时散落 build 产物。
+    layout.buildDirectory.set(
+        rootProject.layout.buildDirectory.dir(project.path.substring(1).replace(':', '/'))
+    )
 
     dependencies {
         // 离线 jar 目录不提供 Maven 元数据，因此这里把缓存中的所有 jar 兜底加入编译类路径，补齐传递依赖。

@@ -38,7 +38,9 @@ for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 
-set LOCAL_GRADLE_BAT=%USERPROFILE%\.gradle\wrapper\dists\gradle-8.11-bin\c4te04g51qsyw1bxcb929u7br\gradle-8.11\bin\gradle.bat
+if not defined GRADLE_USER_HOME set GRADLE_USER_HOME=%APP_HOME%\.gradle
+
+set LOCAL_GRADLE_BAT=%GRADLE_USER_HOME%\wrapper\dists\gradle-8.11-bin\c4te04g51qsyw1bxcb929u7br\gradle-8.11\bin\gradle.bat
 if exist "%LOCAL_GRADLE_BAT%" (
     pushd "%APP_HOME%"
     "%LOCAL_GRADLE_BAT%" %*

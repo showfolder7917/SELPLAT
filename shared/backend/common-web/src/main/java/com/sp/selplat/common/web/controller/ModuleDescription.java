@@ -1,4 +1,4 @@
-package com.sp.selplat.common.controller;
+package com.sp.selplat.common.web.controller;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

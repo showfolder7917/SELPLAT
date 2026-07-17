@@ -1,4 +1,4 @@
-package com.sp.selplat.common.controller;
+package com.sp.selplat.common.web.controller;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonPageParam;

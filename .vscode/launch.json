@@ -3,21 +3,7 @@
   "configurations": [
     {
       "type": "java",
-      "name": "BaseDaoQueryDemo",
-      "request": "launch",
-      "mainClass": "com.sp.selplat.common.db.dao.BaseDaoQueryDemo",
-      "projectName": "common-db"
-    },
-    {
-      "type": "java",
       "name": "UniauthBackendApplication",
-      "request": "launch",
-      "mainClass": "com.sp.selplat.uniauth.UniauthBackendApplication",
-      "cwd": "${workspaceFolder}/apps/uniauth/backend"
-    },
-    {
-      "type": "java",
-      "name": "Run UniauthBackendApplication",
       "request": "launch",
       "mainClass": "com.sp.selplat.uniauth.UniauthBackendApplication",
       "cwd": "${workspaceFolder}/apps/uniauth/backend"
