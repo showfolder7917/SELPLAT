@@ -1,11 +1,11 @@
 package com.sp.selplat.common.db.dao;
 
 import com.sp.selplat.common.db.query.model.CommonDynamicQuery;
-import com.sp.selplat.common.db.query.model.CommonPageResult;
 import com.sp.selplat.common.db.query.model.QueryCondition;
 import com.sp.selplat.common.db.query.model.QueryOperator;
 import com.sp.selplat.common.db.query.model.QueryOrder;
 import com.sp.selplat.common.db.query.model.QueryOrderDirection;
+import com.sp.selplat.common.util.CommonPageResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -215,7 +215,6 @@ public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
         return orders;
     }
 }
-
 
 
 

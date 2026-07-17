@@ -1,6 +1,6 @@
 package com.sp.selplat.common.db.dao;
 
-import com.sp.selplat.common.db.query.model.CommonPageResult;
+import com.sp.selplat.common.util.CommonPageResult;
 import java.util.List;
 import java.util.Map;
 

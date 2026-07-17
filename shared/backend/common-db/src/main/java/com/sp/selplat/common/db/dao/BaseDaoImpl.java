@@ -1,10 +1,10 @@
 package com.sp.selplat.common.db.dao;
 
-import com.sp.selplat.common.db.query.model.CommonPageResult;
 import com.sp.selplat.common.db.template.model.CommonTemplateSave;
 import com.sp.selplat.common.db.template.model.CommonTemplateUpdate;
 import com.sp.selplat.common.db.query.model.QueryCondition;
 import com.sp.selplat.common.db.query.model.QueryOrder;
+import com.sp.selplat.common.util.CommonPageResult;
 
 import java.util.LinkedHashMap;
 import java.util.List;

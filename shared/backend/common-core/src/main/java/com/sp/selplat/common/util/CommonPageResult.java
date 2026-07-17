@@ -1,4 +1,4 @@
-package com.sp.selplat.common.db.query.model;
+package com.sp.selplat.common.util;
 
 import java.util.List;
 import java.util.Map;
@@ -91,4 +91,3 @@ public class CommonPageResult {
         this.pageSize = pageSize;
     }
 }
-

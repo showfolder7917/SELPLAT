@@ -1,62 +1,54 @@
 package com.sp.selplat.common.util;
 
-import com.fasterxml.jackson.annotation.JsonAnySetter;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 /**
  * 通用分页参数对象统一承接动态查询字段和分页入参。
  * 这里把原先散落在各模块专用 In/Out 实体里的分页查询通用能力收口成一个对象，
  * 让控制层、服务层和 DAO 层都可以直接围绕同一套分页入参与动态条件传递查询语义。
  */
-public class CommonPageParam extends Page {
+public class CommonPageParam extends CommonParam {
 
-    // paramMap 承接动态查询字段，供控制层把任意请求参数透传给 service 和 common-db 分页能力。
-    private Map<String, Object> paramMap = new LinkedHashMap<>();
+    // pageNo 表示当前请求页码，默认第一页，便于非显式传值时仍能落到稳定分页语义。
+    private Integer pageNo = 1;
+    // pageSize 表示每页条数，默认二十条，便于列表接口在未传值时仍有稳定分页大小。
+    private Integer pageSize = 20;
 
     /**
-     * 获取动态查询字段映射。
+     * 获取当前页码。
      *
-     * @return 动态查询字段映射
+     * @return 当前页码
      */
-    public Map<String, Object> getParamMap() {
-        return paramMap;
+    public Integer getPageNo() {
+        // 返回当前页码，供列表控制层、服务层和 DAO 统一沿用同一分页语义。
+        return pageNo;
     }
 
     /**
-     * 设置动态查询字段映射。
+     * 设置当前页码。
      *
-     * @param paramMap 动态查询字段映射
+     * @param pageNo 当前页码
      */
-    public void setParamMap(Map<String, Object> paramMap) {
-        // 调用方未传动态字段时，统一回落为空有序映射，保证后续分页查询和结果序列化都能稳定执行。
-        this.paramMap = paramMap == null ? new LinkedHashMap<>() : new LinkedHashMap<>(paramMap);
+    public void setPageNo(Integer pageNo) {
+        // 调用方未传或传入非法页码时，统一兜底回第一页，避免出现零页或负页。
+        this.pageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
     }
 
     /**
-     * 写入单个动态字段。
+     * 获取每页条数。
      *
-     * @param key 字段名
-     * @param value 字段值
+     * @return 每页条数
      */
-    public void putParam(String key, Object value) {
-        // 字段名为空时直接忽略，避免把无意义 key 写入动态查询映射。
-        if (key == null || key.trim().isEmpty()) {
-            return;
-        }
-        // 逐个写入业务字段，供控制层把请求参数增量灌入通用分页对象。
-        paramMap.put(key, value);
+    public Integer getPageSize() {
+        // 返回当前每页条数，供分页查询链路和响应对象统一回填同一值。
+        return pageSize;
     }
 
     /**
-     * 把 JSON 里未声明成固定字段的业务属性统一回收到动态参数映射。
+     * 设置每页条数。
      *
-     * @param key JSON 字段名
-     * @param value JSON 字段值
+     * @param pageSize 每页条数
      */
-    @JsonAnySetter
-    public void putJsonParam(String key, Object value) {
-        // Jackson 反序列化 JSON 时，凡是不属于分页或结果固定字段的业务属性，都统一沉淀到动态参数映射里。
-        putParam(key, value);
+    public void setPageSize(Integer pageSize) {
+        // 调用方未传或传入非法条数时，统一回退到默认大小，避免列表接口一次取全表。
+        this.pageSize = pageSize == null || pageSize < 1 ? 20 : pageSize;
     }
 }

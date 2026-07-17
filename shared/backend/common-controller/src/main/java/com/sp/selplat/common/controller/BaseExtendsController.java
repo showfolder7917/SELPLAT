@@ -1,7 +1,9 @@
 package com.sp.selplat.common.controller;
 
-import com.sp.selplat.common.db.query.model.CommonPageResult;
+import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonPageParam;
+import com.sp.selplat.common.util.CommonPageResult;
+import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.CommonStoreResult;
 import com.sp.selplat.common.util.JsonUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,6 +21,31 @@ import org.springframework.web.bind.annotation.RequestMapping;
  * 当前统一沉淀模块验证文案、路径扫描、store 参数整理和 store 响应组装能力，供 BaseController 直接复用。
  */
 public abstract class BaseExtendsController {
+
+    /**
+     * 把 JSON body、普通参数和请求参数统一合并成最终共通入参对象。
+     *
+     * @param requestBody JSON 请求体参数
+     * @param paramIn Spring 绑定的普通请求参数
+     * @param request HTTP 请求
+     * @return 合并后的共通入参对象
+     */
+    protected CommonParam resolveCommonParam(
+        CommonParam requestBody,
+        CommonParam paramIn,
+        HttpServletRequest request
+    ) {
+        // JSON 请求体存在时优先以 JSON 对象为主，保证 application/json 提交的业务字段可以直接生效。
+        CommonParam finalParam = requestBody != null ? requestBody : paramIn;
+        // GET 或表单提交在没有任何对象可用时，这里补一个默认共通入参，保证后续服务链路稳定。
+        if (finalParam == null) {
+            finalParam = new CommonParam();
+        }
+        // 再把请求参数补充进动态 Map，让 JSON、GET 和表单参数最终都汇总到同一份业务字段映射里。
+        populateDynamicQueryParams(finalParam, request);
+        // 返回已经完成多来源合并的共通入参对象，供控制层统一透传给服务层。
+        return finalParam;
+    }
 
     /**
      * 把 JSON body、分页参数和普通请求参数统一合并成最终查询对象。
@@ -56,7 +83,7 @@ public abstract class BaseExtendsController {
      * @param queryIn 通用分页参数
      * @param request HTTP 请求
      */
-    protected void populateDynamicQueryParams(CommonPageParam queryIn, HttpServletRequest request) {
+    protected void populateDynamicQueryParams(CommonParam queryIn, HttpServletRequest request) {
         // 请求对象为空时直接跳过，避免极端测试场景下控制层回填动态字段时触发空指针。
         if (queryIn == null || request == null) {
             return;
@@ -73,6 +100,56 @@ public abstract class BaseExtendsController {
             // 读取当前字段值并写入动态 Map，让旧式 store 接口也能以通用对象承接任意筛选字段。
             queryIn.putParam(parameterName, request.getParameter(parameterName));
         }
+    }
+
+    /**
+     * 按统一口径组装非分页接口返回对象。
+     *
+     * @param moduleCode 当前业务模块编码
+     * @param requestPath 当前接口路径
+     * @param result 服务层返回的业务结果
+     * @param defaultMessage 当前接口默认说明文案
+     * @return 统一非分页返回对象
+     */
+    protected CommonResult buildCommonResult(
+        String moduleCode,
+        String requestPath,
+        CommonResult result,
+        String defaultMessage
+    ) {
+        // 服务层未显式返回结果对象时，这里补一个空的共通结果，保证控制层对外口径稳定。
+        CommonResult finalResult = result == null ? new CommonResult() : result;
+        // 统一补成功标记，当前 helper 只服务正常执行完成的非分页控制器链路。
+        finalResult.setSuccess(true);
+        // 控制层统一写入模块编码，避免服务层感知 HTTP 返回包装语义。
+        finalResult.setModuleCode(moduleCode);
+        // 控制层统一写入当前命中的接口路径，保证所有非分页接口都带上可回看的路由信息。
+        finalResult.setRequestPath(requestPath);
+        // 服务层未单独给出提示文案时回退到控制层默认说明，避免接口返回 msg 为空。
+        if (finalResult.getMsg() == null || finalResult.getMsg().trim().isEmpty()) {
+            finalResult.setMsg(defaultMessage);
+        }
+        // 返回已经补齐模块和路由元数据的共通结果对象，供控制层直接序列化输出。
+        return finalResult;
+    }
+
+    /**
+     * 按统一口径组装非分页接口返回 JSON。
+     *
+     * @param moduleCode 当前业务模块编码
+     * @param requestPath 当前接口路径
+     * @param result 服务层返回的业务结果
+     * @param defaultMessage 当前接口默认说明文案
+     * @return 统一非分页 JSON 字符串
+     */
+    protected String buildCommonResultJson(
+        String moduleCode,
+        String requestPath,
+        CommonResult result,
+        String defaultMessage
+    ) {
+        // 控制层统一把共通返回对象序列化成 JSON，保证所有非分页接口对外字段口径一致。
+        return JsonUtils.toJsonIgnoreNull(buildCommonResult(moduleCode, requestPath, result, defaultMessage));
     }
 
     /**
@@ -138,18 +215,19 @@ public abstract class BaseExtendsController {
     }
 
     /**
-     * 返回当前控制器 store 接口对应的单一路径。
+     * 返回当前控制器指定方法对应的单一路径。
      *
-     * @return 当前 store 接口路径
+     * @param methodName 方法名
+     * @return 当前方法路径
      */
-    protected String getVerifyAvailablePath() {
-        // 旧式 store 返回里的 requestPath 只需要回传当前 store 接口入口，不应该误用整组 availablePaths 列表。
-        String storeRequestPath = resolveMethodRequestPath("getStore");
-        // 成功解析到当前控制器的 getStore 路由时直接返回，保证所有同结构控制器都能复用这一套反射推导逻辑。
-        if (!storeRequestPath.isEmpty()) {
-            return storeRequestPath;
+    protected String getVerifyMethodPath(String methodName) {
+        // 当前 helper 直接复用公共反射路径解析逻辑，让 CRUD 等单条接口也能稳定回填自己的 requestPath。
+        String requestPath = resolveMethodRequestPath(methodName);
+        // 成功解析到指定方法路由时直接返回，保证控制层回传的是当前真实命中的接口入口。
+        if (!requestPath.isEmpty()) {
+            return requestPath;
         }
-        // 极端情况下未找到 getStore 映射时回退根路径，避免旧式返回结构中的 requestPath 变成 null。
+        // 极端情况下未找到目标方法映射时回退根路径，避免 requestPath 出现 null。
         return "/";
     }
 
@@ -193,6 +271,23 @@ public abstract class BaseExtendsController {
         String businessName = simpleName.endsWith("Controller") ? simpleName.substring(0, simpleName.length() - "Controller".length()) : simpleName;
         // 把驼峰业务名转换成短横线小写编码，例如 UniauthUser 转成 uniauth-user，保持接口返回的模块标识稳定可读。
         return convertCamelCaseToKebabCase(businessName);
+    }
+
+    
+    /**
+     * 返回当前控制器 store 接口对应的单一路径。
+     *
+     * @return 当前 store 接口路径
+     */
+    protected String getVerifyAvailablePath() {
+        // 旧式 store 返回里的 requestPath 只需要回传当前 store 接口入口，不应该误用整组 availablePaths 列表。
+        String storeRequestPath = resolveMethodRequestPath("getStore");
+        // 成功解析到当前控制器的 getStore 路由时直接返回，保证所有同结构控制器都能复用这一套反射推导逻辑。
+        if (!storeRequestPath.isEmpty()) {
+            return storeRequestPath;
+        }
+        // 极端情况下未找到 getStore 映射时回退根路径，避免旧式返回结构中的 requestPath 变成 null。
+        return "/";
     }
     
     /**

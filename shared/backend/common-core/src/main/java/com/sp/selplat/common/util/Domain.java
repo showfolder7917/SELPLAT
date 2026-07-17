@@ -11,6 +11,10 @@ public class Domain extends Page {
 
     // id 作为通用主键字段，供大多数业务实体复用同一套主键定义。
     private Long id;
+    // tenantId 作为通用租户字段，供多租户业务实体统一表达当前数据归属的租户边界。
+    private Long tenantId;
+    // lastOperateUserId 作为通用最近操作用户字段，供业务主表统一沉淀最后一次维护这条数据的操作人标识。
+    private Long lastOperateUserId;
     // sortnum 排序字段 小数点后两位
     private BigDecimal sortnum;
     // status 作为通用假删除状态字段，默认值 1 表示启用，0 表示删除，便于查询默认只命中有效数据。
@@ -36,6 +40,42 @@ public class Domain extends Page {
      */
     public void setId(Long id) {
         this.id = id;
+    }
+
+    /**
+     * 获取通用租户主键。
+     *
+     * @return 通用租户主键
+     */
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    /**
+     * 设置通用租户主键。
+     *
+     * @param tenantId 通用租户主键
+     */
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    /**
+     * 获取通用最近操作用户主键。
+     *
+     * @return 通用最近操作用户主键
+     */
+    public Long getLastOperateUserId() {
+        return lastOperateUserId;
+    }
+
+    /**
+     * 设置通用最近操作用户主键。
+     *
+     * @param lastOperateUserId 通用最近操作用户主键
+     */
+    public void setLastOperateUserId(Long lastOperateUserId) {
+        this.lastOperateUserId = lastOperateUserId;
     }
 
     /**
