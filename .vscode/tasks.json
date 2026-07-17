@@ -4,9 +4,9 @@
     {
       "label": "uniauth:classes",
       "type": "shell",
-      "command": "./gradlew :apps:uniauth:backend:classes",
+      "command": "./gradlew --offline --console plain :apps:uniauth:backend:classes",
       "windows": {
-        "command": ".\\gradlew.bat :apps:uniauth:backend:classes"
+        "command": ".\\gradlew.bat --offline --console plain :apps:uniauth:backend:classes"
       },
       "options": {
         "cwd": "${workspaceFolder}"
@@ -14,14 +14,17 @@
       "problemMatcher": [
         "$javac"
       ],
-      "group": "build"
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
     },
     {
       "label": "uniauth:run",
       "type": "shell",
-      "command": "./gradlew :apps:uniauth:backend:run",
+      "command": "./gradlew --offline --console plain :apps:uniauth:backend:run",
       "windows": {
-        "command": ".\\gradlew.bat :apps:uniauth:backend:run"
+        "command": ".\\gradlew.bat --offline --console plain :apps:uniauth:backend:run"
       },
       "options": {
         "cwd": "${workspaceFolder}"
