@@ -13,8 +13,12 @@ import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.servlet.HandlerMapping;
 
 /**
  * 公共控制器扩展基类用于承接验证接口相关的细节实现，避免主基类堆积过多辅助逻辑。
@@ -134,7 +138,43 @@ public abstract class BaseExtendsController {
     }
 
     /**
-     * 按统一口径组装非分页接口返回 JSON。
+     * 按统一口径组装详情或操作接口的普通响应 JSON。
+     *
+     * <p>返回示例：详情、新增、更新和删除接口统一返回 {@code success}、{@code data}、
+     * {@code msg}、{@code moduleCode} 和 {@code requestPath} 字段。</p>
+     *
+     * @param result 服务层返回的业务结果
+     * @param defaultMessage 当前接口默认说明文案
+     * @return 统一普通响应 JSON 字符串
+     */
+    protected String buildResponseJson(CommonResult result, String defaultMessage) {
+        // 当前 Controller 的模块编码和实际命中路径由公共基类自动解析，调用方只保留业务结果和本接口提示语。
+        return buildResponseJson(getVerifyModuleCode(), getVerifyAvailablePath(), result, defaultMessage);
+    }
+
+    /**
+     * 按指定元数据组装详情或操作接口的普通响应 JSON。
+     *
+     * @param moduleCode 当前业务模块编码
+     * @param requestPath 当前接口路径
+     * @param result 服务层返回的业务结果
+     * @param defaultMessage 当前接口默认说明文案
+     * @return 统一普通响应 JSON 字符串
+     */
+    protected String buildResponseJson(
+        String moduleCode,
+        String requestPath,
+        CommonResult result,
+        String defaultMessage
+    ) {
+        // 控制层统一把共通返回对象序列化成 JSON，保证所有非分页接口对外字段口径一致。
+        return JsonUtils.toJsonIgnoreNull(buildCommonResult(moduleCode, requestPath, result, defaultMessage));
+    }
+
+    /**
+     * 按旧名称组装非分页接口返回 JSON。
+     *
+     * <p>兼容既有子类调用；新控制器应使用 {@link #buildResponseJson(CommonResult, String)}。</p>
      *
      * @param moduleCode 当前业务模块编码
      * @param requestPath 当前接口路径
@@ -148,8 +188,8 @@ public abstract class BaseExtendsController {
         CommonResult result,
         String defaultMessage
     ) {
-        // 控制层统一把共通返回对象序列化成 JSON，保证所有非分页接口对外字段口径一致。
-        return JsonUtils.toJsonIgnoreNull(buildCommonResult(moduleCode, requestPath, result, defaultMessage));
+        // 旧入口直接转调语义更清晰的新普通响应方法，保证历史子类不改动也保持原有返回结构。
+        return buildResponseJson(moduleCode, requestPath, result, defaultMessage);
     }
 
     /**
@@ -194,7 +234,51 @@ public abstract class BaseExtendsController {
     }
 
     /**
-     * 按统一口径组装旧式 store 接口返回 JSON。
+     * 按统一口径组装分页列表响应 JSON。
+     *
+     * <p>返回示例：列表接口统一返回 {@code rows}、{@code total}、{@code pageNo}、
+     * {@code pageSize}、{@code moduleCode} 和 {@code requestPath} 字段。</p>
+     *
+     * @param queryIn 当前生效的查询参数对象
+     * @param pageResult 公共分页查询结果
+     * @return 统一分页响应 JSON 字符串
+     */
+    protected String buildPageResponseJson(CommonPageParam queryIn, CommonPageResult pageResult) {
+        // 当前 Controller 的模块编码、实际命中路径和验证说明由公共基类自动补齐，调用方只保留分页业务输入。
+        return buildPageResponseJson(
+            getVerifyModuleCode(),
+            getVerifyAvailablePath(),
+            queryIn,
+            pageResult,
+            getVerifyMessage()
+        );
+    }
+
+    /**
+     * 按指定元数据组装分页列表响应 JSON。
+     *
+     * @param moduleCode 当前业务模块编码
+     * @param requestPath 当前分页接口路径
+     * @param queryIn 当前生效的查询参数对象
+     * @param pageResult 公共分页查询结果
+     * @param message 当前返回说明文案
+     * @return 统一分页响应 JSON 字符串
+     */
+    protected String buildPageResponseJson(
+        String moduleCode,
+        String requestPath,
+        CommonPageParam queryIn,
+        CommonPageResult pageResult,
+        String message
+    ) {
+        // 控制器层统一把分页返回对象序列化成 JSON，保证所有列表接口对外字段口径一致。
+        return JsonUtils.toJsonIgnoreNull(buildStoreResult(moduleCode, requestPath, queryIn, pageResult, message));
+    }
+
+    /**
+     * 按旧名称组装 store 接口返回 JSON。
+     *
+     * <p>兼容既有子类调用；新控制器应使用 {@link #buildPageResponseJson(CommonPageParam, CommonPageResult)}。</p>
      *
      * @param moduleCode 当前业务模块编码
      * @param requestPath 当前 store 接口路径
@@ -210,8 +294,8 @@ public abstract class BaseExtendsController {
         CommonPageResult pageResult,
         String message
     ) {
-        // 控制器层统一把标准 store 结果对象序列化成 JSON，保证所有 store 接口对外返回口径一致。
-        return JsonUtils.toJsonIgnoreNull(buildStoreResult(moduleCode, requestPath, queryIn, pageResult, message));
+        // 旧入口直接转调语义更清晰的新分页响应方法，保证历史子类不改动也保持原有列表返回结构。
+        return buildPageResponseJson(moduleCode, requestPath, queryIn, pageResult, message);
     }
 
     /**
@@ -275,25 +359,39 @@ public abstract class BaseExtendsController {
 
     
     /**
-     * 返回当前控制器 store 接口对应的单一路径。
+     * 返回当前 HTTP 请求实际命中的控制器方法路径。
      *
-     * @return 当前 store 接口路径
+     * <p>返回示例：请求命中 {@code UniauthUserController#getStore} 时，返回
+     * {@code /api/uniauth/users/getStore.htm}。</p>
+     *
+     * @return 当前命中方法的完整映射路径；当前调用不在 Spring MVC 请求上下文中或路径无法解析时返回 {@code /}
      */
     protected String getVerifyAvailablePath() {
-        // 旧式 store 返回里的 requestPath 只需要回传当前 store 接口入口，不应该误用整组 availablePaths 列表。
-        String storeRequestPath = resolveMethodRequestPath("getStore");
-        // 成功解析到当前控制器的 getStore 路由时直接返回，保证所有同结构控制器都能复用这一套反射推导逻辑。
-        if (!storeRequestPath.isEmpty()) {
-            return storeRequestPath;
+        // 读取 Spring 为当前线程绑定的请求属性，避免把任意具体控制器方法名写死在公共基类中。
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        // 非 HTTP 调用、单元测试未绑定请求或异步线程未透传上下文时，统一回退根路径以保持旧式返回结构非空。
+        if (requestAttributes == null) {
+            return "/";
         }
-        // 极端情况下未找到 getStore 映射时回退根路径，避免旧式返回结构中的 requestPath 变成 null。
-        return "/";
+        // 读取 Spring MVC 已匹配的处理器对象，它准确代表本次请求实际进入的 Controller 方法。
+        Object matchedHandler = requestAttributes.getAttribute(
+            HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE,
+            RequestAttributes.SCOPE_REQUEST
+        );
+        // 只有标准 HandlerMethod 才携带控制器方法元数据；其它处理器类型无法安全推导映射路径时回退根路径。
+        if (!(matchedHandler instanceof HandlerMethod handlerMethod)) {
+            return "/";
+        }
+        // 从实际命中的方法读取名称，再复用已有反射路径解析逻辑得到类级和方法级拼接后的完整路径。
+        String requestPath = resolveMethodRequestPath(handlerMethod.getMethod().getName());
+        // 映射路径成功时直接回传，例如 /api/uniauth/users/getStore.htm；解析失败时继续保持非空根路径回退。
+        return requestPath.isEmpty() ? "/" : requestPath;
     }
     
     /**
      * 返回当前控制器的关键可访问路径列表。
      * 返回示例：
-     * ["GET /api/uniauth/users/verify/http", "GET /api/uniauth/users/store.htm", "POST /api/uniauth/users/store.htm"]
+     * ["GET /api/uniauth/users/verify/http", "GET /api/uniauth/users/getStore.htm", "POST /api/uniauth/users/getStore.htm"]
      *
      * @return 当前控制器关键可访问路径列表
      */

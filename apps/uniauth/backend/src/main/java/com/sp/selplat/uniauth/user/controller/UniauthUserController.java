@@ -27,45 +27,35 @@ import org.springframework.web.bind.annotation.RestController;
 public class UniauthUserController extends BaseController<UniauthUserService> {
 
     /**
-     * store 列表入口用于兼容旧式 `.htm` 路由风格，把分页参数和查询条件按 Result 结构回传给调用方。
-     * 访问地址：GET /api/uniauth/users/store.htm 或 POST /api/uniauth/users/store.htm
+     * getStore 列表入口沿用 `.htm` 路由风格，把分页参数和查询条件按 Result 结构回传给调用方。
+     * 访问地址：GET /api/uniauth/users/getStore.htm 或 POST /api/uniauth/users/getStore.htm
      *
      * @param queryIn 查询参数
      * @return store JSON 结果
      */
     @ResponseBody
-    @RequestMapping(value = "store.htm", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
+    @RequestMapping(value = "getStore.htm", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
     public String getStore(CommonPageParam queryIn) {
         // 控制层先调用服务层获取纯分页业务结果，再由公共控制器层统一包装旧式 store 顶层 JSON 结构。
         CommonPageResult pageResult = getService().getStore(queryIn);
-        // 控制层统一补齐模块编码、当前 store 路由和联调提示文案，保证 requestPath 字段只回传本接口自己的访问入口。
-        return buildStoreResultJson(
-            getVerifyModuleCode(),
-            getVerifyAvailablePath(),
-            queryIn,
-            pageResult,
-            getVerifyMessage()
-        );
+        // 分页响应由公共基类自动补齐模块编码、当前路由和验证说明，控制层只传分页业务输入。
+        return buildPageResponseJson(queryIn, pageResult);
     }
 
     /**
      * 按主键查询单个用户详情。
-     * 访问地址：GET /api/uniauth/users/get.htm 或 POST /api/uniauth/users/get.htm
+     * 访问地址：GET /api/uniauth/users/getById.htm 或 POST /api/uniauth/users/getById.htm
      *
      * @param queryIn 普通请求参数
      * @return 用户详情 JSON
      */
     @ResponseBody
-    @RequestMapping(value = "get.htm", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
+    @RequestMapping(value = "getById.htm", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
     public String getById(CommonParam queryIn) {
         // 服务层统一按共通入参读取主键并回传单条详情数据，控制层只负责补齐公共返回元数据。
         CommonResult result = getService().getById(queryIn);
-        return buildCommonResultJson(
-            getVerifyModuleCode(),
-            getVerifyMethodPath("getById"),
-            result,
-            "用户详情查询完成。"
-        );
+        // 普通响应由公共基类自动补齐模块编码和当前路由，当前接口只保留业务结果与详情提示语。
+        return buildResponseJson(result, "用户详情查询完成。");
     }
 
     /**
@@ -80,12 +70,8 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     public String create(CommonParam queryIn) {
         // 服务层负责生成主键和整理落库字段，控制层只统一包装非分页返回结构。
         CommonResult result = getService().create(queryIn);
-        return buildCommonResultJson(
-            getVerifyModuleCode(),
-            getVerifyMethodPath("create"),
-            result,
-            "用户新增完成。"
-        );
+        // 普通响应由公共基类自动补齐模块编码和当前路由，当前接口只保留业务结果与新增提示语。
+        return buildResponseJson(result, "用户新增完成。");
     }
 
     /**
@@ -100,12 +86,8 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     public String update(CommonParam queryIn) {
         // 服务层负责唯一性校验、字段筛选和更新时间维护，控制层只补公共返回元数据。
         CommonResult result = getService().update(queryIn);
-        return buildCommonResultJson(
-            getVerifyModuleCode(),
-            getVerifyMethodPath("update"),
-            result,
-            "用户更新完成。"
-        );
+        // 普通响应由公共基类自动补齐模块编码和当前路由，当前接口只保留业务结果与更新提示语。
+        return buildResponseJson(result, "用户更新完成。");
     }
 
     /**
@@ -120,11 +102,7 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     public String delete(CommonParam queryIn) {
         // 服务层统一执行假删除并返回删除结果摘要，控制层只负责补齐共通返回结构。
         CommonResult result = getService().delete(queryIn);
-        return buildCommonResultJson(
-            getVerifyModuleCode(),
-            getVerifyMethodPath("delete"),
-            result,
-            "用户删除完成。"
-        );
+        // 普通响应由公共基类自动补齐模块编码和当前路由，当前接口只保留业务结果与删除提示语。
+        return buildResponseJson(result, "用户删除完成。");
     }
 }
