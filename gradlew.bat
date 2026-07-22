@@ -38,12 +38,13 @@ for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 
-if not defined GRADLE_USER_HOME set GRADLE_USER_HOME=%APP_HOME%\.gradle
+@rem Keep wrapper distributions and Gradle caches inside the project's single temporary root.
+if not defined GRADLE_USER_HOME set GRADLE_USER_HOME=%APP_HOME%\OPTION\temp\gradle-user-home
 
 set LOCAL_GRADLE_BAT=%GRADLE_USER_HOME%\wrapper\dists\gradle-8.11-bin\c4te04g51qsyw1bxcb929u7br\gradle-8.11\bin\gradle.bat
 if exist "%LOCAL_GRADLE_BAT%" (
     pushd "%APP_HOME%"
-    "%LOCAL_GRADLE_BAT%" %*
+    "%LOCAL_GRADLE_BAT%" --project-cache-dir "%APP_HOME%\OPTION\temp\gradle-project-cache" %*
     set LOCAL_EXIT_CODE=%ERRORLEVEL%
     popd
     exit /b %LOCAL_EXIT_CODE%
@@ -85,7 +86,7 @@ set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
 
 
 @rem Execute Gradle
-"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain --project-cache-dir "%APP_HOME%\OPTION\temp\gradle-project-cache" %*
 
 :end
 @rem End local scope for the variables with windows NT shell

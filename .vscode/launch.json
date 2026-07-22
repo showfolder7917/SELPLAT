@@ -3,6 +3,45 @@
   "configurations": [
     {
       "type": "java",
+      "name": "DBデータ生成ツール",
+      "request": "launch",
+      "mainClass": "jp.or.jasdec.sbf.cp.ma.batch.biz.sub.DBデータ生成ツール.DBデータ生成ツール",
+      "cwd": "${workspaceFolder}/MEMORIES/ai/myrule/acode/java",
+      "vmArgs": "-Dfile.encoding=UTF-8 -Dlog4j2.loggerContextFactory=org.apache.logging.log4j.simple.SimpleLoggerContextFactory",
+      "classPaths": [
+        "${workspaceFolder}/MEMORIES/ai/myrule/acode/java/build/classes",
+        "${workspaceFolder}/MEMORIES/ai/myrule/acode/java/lib/*"
+      ],
+      "preLaunchTask": "acode-java: compile"
+    },
+    {
+      "type": "java",
+      "name": "CPMAB082_DBデータ生成ツール",
+      "request": "launch",
+      "mainClass": "jp.or.jasdec.sbf.cp.ma.batch.biz.sub.CPMAB082_DBデータ生成ツール",
+      "cwd": "${workspaceFolder}/MEMORIES/ai/myrule/acode/java",
+      "vmArgs": "-Dfile.encoding=UTF-8 -Dlog4j2.loggerContextFactory=org.apache.logging.log4j.simple.SimpleLoggerContextFactory",
+      "classPaths": [
+        "${workspaceFolder}/MEMORIES/ai/myrule/acode/java/build/classes",
+        "${workspaceFolder}/MEMORIES/ai/myrule/acode/java/lib/*"
+      ],
+      "preLaunchTask": "acode-java: compile"
+    },
+    {
+      "type": "java",
+      "name": "CPMAB081_DBデータ生成ツール",
+      "request": "launch",
+      "mainClass": "jp.or.jasdec.sbf.cp.ma.batch.biz.sub.CPMAB081_DBデータ生成ツール",
+      "cwd": "${workspaceFolder}/MEMORIES/ai/myrule/acode/java",
+      "vmArgs": "-Dfile.encoding=UTF-8 -Dlog4j2.loggerContextFactory=org.apache.logging.log4j.simple.SimpleLoggerContextFactory",
+      "classPaths": [
+        "${workspaceFolder}/MEMORIES/ai/myrule/acode/java/build/classes",
+        "${workspaceFolder}/MEMORIES/ai/myrule/acode/java/lib/*"
+      ],
+      "preLaunchTask": "acode-java: compile"
+    },
+    {
+      "type": "java",
       "name": "UniauthBackendApplication",
       "request": "launch",
       "mainClass": "com.sp.selplat.uniauth.UniauthBackendApplication",

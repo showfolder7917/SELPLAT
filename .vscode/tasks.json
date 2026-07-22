@@ -2,6 +2,38 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "acode-java: compile",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\MEMORIES\\ai\\myrule\\acode\\java\\compile.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/MEMORIES/ai/myrule/acode/java"
+      },
+      "problemMatcher": "$javac"
+    },
+    {
+      "label": "acode-java: import CPMAB081",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\MEMORIES\\ai\\myrule\\acode\\java\\import-cpmab081.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/MEMORIES/ai/myrule/acode/java"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "uniauth:classes",
       "type": "shell",
       "command": "./gradlew --offline --console plain :apps:uniauth:backend:classes",

@@ -1,10 +1,46 @@
+## 当前工程识别、统一能力系统与离线执行基准
+
+- 当前工程根目录不得固定为 SELPLAT：优先采用用户明确指定的工程绝对目录；未指定时，从当前命令工作目录向上查找最近的 `.git` 或 `AGENTS.md` 项目标记；没有项目标记时使用当前命令工作目录本身。
+- 当前工程独立执行内务目录：`<CURRENT_PROJECT_ROOT>\OPTION`
+- 当前工程执行文档：`<CURRENT_PROJECT_ROOT>\OPTION\执行文档.md`
+- 当前工程执行历史：`<CURRENT_PROJECT_ROOT>\OPTION\执行文档.history_YYYY-MM-DD.md`
+- 当前工程执行池：`<CURRENT_PROJECT_ROOT>\OPTION\执行池.md`
+- 当前工程唯一临时目录：`<CURRENT_PROJECT_ROOT>\OPTION\temp`
+- 统一能力调用目录：`C:\opt\workspace\SELPLAT\MEMORIES`
+- 统一能力系统：`C:\opt\workspace\SELPLAT\MEMORIES\ai\code`
+- 当前规则沉淀目录：`C:\opt\workspace\SELPLAT\MEMORIES\ai\myrule`
+- 当前工程专属规则目录：`C:\opt\workspace\SELPLAT\MEMORIES\ai\myrule\SELPLAT`
+- 本机 Python：`C:\Program Files\Microsoft SDKs\Azure\CLI2\python.exe`
+- 所有编译与依赖解析必须使用本机离线资源，禁止为完成任务从网络下载依赖或工具。
+- 统一能力系统位于 SELPLAT 不代表当前工程是 SELPLAT；工程源码命令使用当前工程根目录，能力调用可使用统一能力绝对路径，但必须向执行文档能力传递当前工程根或从当前工程工作目录调用。
+- 禁止回退到 `SELFMEMORY`、其他能力系统或跨工程共享 `OPTION`；禁止根据 `MEMORIES` 所在位置反推当前工程。
+- 程序、测试、能力、脚本、文档生成和执行记录产生的临时文件必须统一写入当前工程的 `OPTION\temp`；禁止新建或继续使用工程根 `tmp`、`OPTION\tmp` 以及未显式归属当前工程的系统临时目录。
+
+## UTF-8 文件与命令规则
+
+1. 文本文件必须按 UTF-8 完整读取和写入；修改前不得使用会清洗、截断或按系统默认编码读取正文的命令。
+2. PowerShell 读取文本前设置 `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()`，并使用 `Get-Content -LiteralPath <绝对路径> -Raw -Encoding utf8`。
+3. 使用本机 Python 时必须先设置 `$env:PYTHONUTF8='1'` 与 `$env:PYTHONIOENCODING='utf-8'`，避免 Windows 默认 `cp932` 导致中文输出失败。
+4. 使用本机 Python、执行测试或编译 Python 文件前必须设置 `$env:PYTHONPYCACHEPREFIX='<CURRENT_PROJECT_ROOT>\OPTION\temp\pycache'`，禁止在源码目录生成 `__pycache__`。
+5. 执行可能输出中文的 `.bat` 前必须切换 UTF-8 代码页并设置 PowerShell UTF-8 输出；若仍乱码，必须停止依赖乱码输出并改用可明确指定 UTF-8 的等价本机入口。
+6. 能力系统定位使用上述固定绝对路径；工程文件和执行文档定位使用当前工程根派生路径；规则正文记录可迁移引用时使用相对于 `MEMORIES` 的路径。
+
+## 完工规则治理
+
+1. 每次程序、能力、脚本或正式任务执行完成后，必须总结本轮暴露的可复用规则并检查 `C:\opt\workspace\SELPLAT\MEMORIES\ai\myrule`。
+2. 真正跨工程通用规则放入 `MEMORIES/ai/myrule/` 根目录；组织共同规则放入 `MEMORIES/ai/myrule/<organization>/`；单一工程规则放入对应组织和项目子目录；SELPLAT 专属规则放入 `MEMORIES/ai/myrule/SELPLAT/`。工程之间禁止共用 `OPTION` 或工程专属执行文档。
+3. 新规则不存在时新增；已有同义或近义规则时更新、合并现有规则，不得重复堆叠。
+4. 表面冲突但适用方向、场景或边界不同的规则必须分类到独立模块，不得互相覆盖；真正冲突且适用范围相同的规则以新规则替换旧规则。
+5. 已失效、无调用入口或被新规则完全替代的规则必须删除，并同步清理 `MEMORIES/ai/protocol/RULE_INDEX.md` 中的旧引用。
+6. 每个新主题规则使用独立 Markdown 模块；规则文件使用 HTML 注释说明问题、场景和业务含义，并使用 DSL 行表达稳定约束。
+7. 新增、更新、移动或删除规则后，必须同步唯一索引 `MEMORIES/ai/protocol/RULE_INDEX.md`；规则正文中的工程内路径优先写相对于 `MEMORIES` 的路径。
 
 ## 会话启动
 
 新会话必须完成最小启动链后才能执行任务。  
-唯一合法能力系统：`MEMORIES/ai/code`
+唯一合法能力系统：`C:\opt\workspace\SELPLAT\MEMORIES\ai\code`
 启动流程：
-- 优先使用 `MEMORIES/ai/code/abilities/startup_protocol_loader.py`
+- 优先使用 `C:\opt\workspace\SELPLAT\MEMORIES\ai\code\abilities\startup_protocol_loader.py`
 - 否则按顺序完整读取并汇报：
   `STARTER → USER → CODE → COMMAND → RULE_INDEX → GENERATOR_REPAIR_PROTOCOL`
 - `GENERATOR_REPAIR_PROTOCOL.md` 属于最小启动链的启动后必读通用修复协议；当任务暴露能力不足、规则不够、规则重复、生成器错配、模板失配或需要升级合并时，必须作为协议层执行依据。
@@ -26,12 +62,12 @@
 ## 执行文档规则
 
 
-进入正式执行前，必须通过 `MEMORIES/ai/code/abilities/execution_doc_manager.py` 维护 `OPTION/执行文档.md`；仅在能力不可用时才允许手工维护。
+进入正式执行前，必须通过统一入口 `C:\opt\workspace\SELPLAT\MEMORIES\ai\code\executor.py` 调用 `execution_doc_manager`，维护 `<CURRENT_PROJECT_ROOT>\OPTION\执行文档.md`。调用时必须显式传入 `project_root`，或确保命令工作目录位于当前工程内；仅在能力不可用时才允许手工维护。除经确认的误放迁移动作外，禁止读写其他工程的 `OPTION`。
 
 规则：
 1. 任务开始前调用 `check` 或 `start_task`；若存在未完成步骤，必须继续完成，禁止清空或开启新任务。
 2. 上一轮全部完成后，由能力自动归档至  
-   `OPTION/执行文档.history_YYYY-MM-DD.md`，再生成新文档。
+   `<CURRENT_PROJECT_ROOT>\OPTION\执行文档.history_YYYY-MM-DD.md`，再生成新文档。
    - 归档仅允许通过能力的追加式程序；禁止 `apply_patch`、全文改写或手工修改历史文件。  
    - 返回 `status=completed` 即视为完成；除非失败或路径缺失，禁止二次检查或重复归档。
 3. 日期使用当天 `YYYY-MM-DD`；同日记录写入同一历史文件。
@@ -43,13 +79,13 @@
 ## 用户确认规则
 
 1. 未先说明任务理解并给出独立 `1 / 2` 选项前，禁止进入任何任务相关的读取、分析、搜索、命令、能力调用或实现。
-2. `OPTION/执行文档.md` 的创建、续写、状态更新与结果补写属于执行内务，不需额外确认。
+2. `<CURRENT_PROJECT_ROOT>\OPTION\执行文档.md` 的创建、续写、状态更新与结果补写属于执行内务，不需额外确认。
 3. 纯查询、只读、解释或分析且不产生新增 / 删除 / 修改结果的任务，无需用户确认及 `1 / 2`。
 4. 仅当任务会产生新增 / 删除 / 修改结果时，才需说明任务理解并给出独立 `1 / 2`，等待确认后执行。
 5. 用户单独回复 `1`：仅确认最近一次明确陈述的任务并打开该任务执行门，不得扩展为确认其他任务。
 6. 用户单独回复 `2`：仅表示将最近一次任务加入执行池，不立即执行。
 7. “好 / 继续 / 可以”等非独立 `1 / 2` 不构成授权；涉及变更任务时必须重新给出 `1 / 2`。
-8. 会话执行池为 USER 协议层的临时状态，不等同正式执行或记忆写入；仅在用户明确要求时才写入 `OPTION/执行池.md`。
+8. 会话执行池为 USER 协议层的临时状态，不等同正式执行或记忆写入；仅在用户明确要求时才写入 `<CURRENT_PROJECT_ROOT>\OPTION\执行池.md`。
 9. 执行池达到 5 项及以上时，每轮必须提示当前待办。
 10. 用户明确要求执行执行池任务时，视为授权按顺序连续处理，直至全部完成或遇到不可解决的硬阻塞；最终仅交付整体结果
 11. 若 `1 / 2` 语义存在歧义，优先按本规则解释；仍无法判断时必须向用户澄清，不得擅自执行或取消。
@@ -57,7 +93,7 @@
 ## 执行池追加例外规则
 
 用户选择 `2` 或明确要求“加入执行池”时，仅表示将最近一次任务追加到  
-`OPTION/执行池.md`，不构成正式执行。
+`<CURRENT_PROJECT_ROOT>\OPTION\执行池.md`，不构成正式执行。
 
 追加时必须遵守：
 1. 不创建、修改、完成或归档执行文档。
@@ -82,4 +118,3 @@
 4. 若某几行属于同一个不可拆分的业务动作，可使用紧邻的多行注释整体说明，但不得跳过实际业务含义。
 5. 未完成 `js`、`java`、`py` 的逐行业务注释前，禁止把相关代码任务视为完成；若文件过大需分阶段补注释，必须明确当前已覆盖范围和剩余范围。
 6. import 包导入不用加注释
-每轮执行完成自动整理经验添加规则，清理废弃规则，规则如果冲突使用新规则替换旧规则，能更新的规则更新，每个新规则独立出新的模块，如果通用就抽象出新规则,新增规则放到 MEMORIES/ai/rule/ai_rule 这里并分类 并通过 MEMORIES/ai/protocol/RULE_INDEX.md 找到 禁止添加到别的地方抽象出来的通用规则放到ai_rule根目录 规则内使用相对路径记录

@@ -90,7 +90,8 @@ APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s
 ' "$PWD" ) || exit
 
 if [ -z "$GRADLE_USER_HOME" ] ; then
-    GRADLE_USER_HOME="$APP_HOME/.gradle"
+    # Keep wrapper distributions and Gradle caches inside the project's single temporary root.
+    GRADLE_USER_HOME="$APP_HOME/OPTION/temp/gradle-user-home"
 fi
 
 # Use the maximum available, or set MAX_FD != -1 to use that value.
@@ -126,7 +127,7 @@ CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 LOCAL_GRADLE_SH="$GRADLE_USER_HOME/wrapper/dists/gradle-8.11-bin/c4te04g51qsyw1bxcb929u7br/gradle-8.11/bin/gradle"
 if [ -x "$LOCAL_GRADLE_SH" ] ; then
     cd "$APP_HOME" || exit 1
-    exec "$LOCAL_GRADLE_SH" "$@"
+    exec "$LOCAL_GRADLE_SH" --project-cache-dir "$APP_HOME/OPTION/temp/gradle-project-cache" "$@"
 fi
 
 if [ -n "$JAVA_HOME" ] ; then
@@ -225,6 +226,7 @@ set -- \
         "-Dorg.gradle.appname=$APP_BASE_NAME" \
         -classpath "$CLASSPATH" \
         org.gradle.wrapper.GradleWrapperMain \
+        --project-cache-dir "$APP_HOME/OPTION/temp/gradle-project-cache" \
         "$@"
 
 # Stop when "xargs" is not available.

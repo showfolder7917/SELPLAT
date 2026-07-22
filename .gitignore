@@ -1,7 +1,9 @@
-.gradle/
 OPTION/
-build/
 localrepository/
 bin/
-tmp/
-
+.gradle/
+*.jar
+*.class
+MEMORIES
+human/
+OPTION

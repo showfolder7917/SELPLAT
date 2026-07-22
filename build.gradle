@@ -1,3 +1,8 @@
+// Gradle 构建输出统一进入 OPTION/temp，禁止在工程根或模块目录重新生成 build 临时树。
+def unifiedBuildRoot = layout.projectDirectory.dir('OPTION/temp/gradle-build')
+// 根工程的报告和聚合任务同样使用统一构建根，保证所有中间产物可集中治理。
+layout.buildDirectory.set(unifiedBuildRoot)
+
 allprojects {
     // 平台内所有 Java 子项目统一使用同一组坐标基础信息。
     group = 'com.sp.selplat'
@@ -20,9 +25,9 @@ subprojects {
     apply plugin: 'java'
     // Checkstyle 插件先于 checkstyle 扩展配置加载，避免 VS Code 导入 Gradle 时在脚本评估阶段找不到该扩展。
     apply plugin: 'checkstyle'
-    // 把每个子项目的构建输出统一收口到根 build 目录，避免模块内外同时散落 build 产物。
+    // 把每个子项目的构建输出统一收口到 OPTION/temp/gradle-build，避免模块内外散落 build 产物。
     layout.buildDirectory.set(
-        rootProject.layout.buildDirectory.dir(project.path.substring(1).replace(':', '/'))
+        unifiedBuildRoot.dir(project.path.substring(1).replace(':', '/'))
     )
 
     dependencies {
