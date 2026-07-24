@@ -8,20 +8,115 @@ dependencies {
     api 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
     // JsonUtils 需要支持 Java 8 时间类型序列化，并让下游模块在运行期也能拿到同一套时间序列化能力。
     api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.19.2'
-    // GenericSqlSpecDocCorrector 当前在离线环境下运行，因此 Apache POI 及其传递依赖直接复用本机 Gradle 缓存中的 jar。
-    implementation files(
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.poi/poi/5.2.5/7e00f6b2f76375fe89022d5a7db8acb71cbd55f5/poi-5.2.5.jar',
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.poi/poi-ooxml/5.2.5/df9f2c52371eeba24db8ea8cafa77285c3cc0742/poi-ooxml-5.2.5.jar',
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.poi/poi-ooxml-lite/5.2.5/eaa61452d8f0d13080fbb4757a392f09f90e4c49/poi-ooxml-lite-5.2.5.jar',
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.xmlbeans/xmlbeans/5.2.0/6198ac997b3f234f2b5393fa415f78fac2e06510/xmlbeans-5.2.0.jar',
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/commons-io/commons-io/2.15.0/5c3c2db10f6f797430a7f9c696b4d1273768c924/commons-io-2.15.0.jar',
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.commons/commons-collections4/4.4/62ebe7544cb7164d87e0637a2a6a2bdc981395e8/commons-collections4-4.4.jar',
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.commons/commons-compress/1.25.0/9d35aec423da6c8a7f93d7e9e1c6b1d9fe14bb5e/commons-compress-1.25.0.jar',
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/com.github.virtuald/curvesapi/1.08/3d3d36568154059825089b289dcfca481fe44e2c/curvesapi-1.08.jar',
-        'C:/Users/fj6508hr/.gradle/caches/modules-2/files-2.1/org.apache.logging.log4j/log4j-api/2.24.3/b02c125db8b6d295adf72ae6e71af5d83bce2370/log4j-api-2.24.3.jar'
-    )
+    // 文档修复工具通过标准 Maven 坐标使用 OOXML 能力，避免把某台 Windows 机器的 Gradle 缓存绝对路径写入工程。
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+    // 旧版 DOC 修复工具需要 HWPF/POIFS 扩展能力，由 scratchpad 坐标统一带入匹配版本依赖。
+    implementation 'org.apache.poi:poi-scratchpad:5.2.5'
+    // POI 运行时使用同版本 Log4j2 实现，避免文档工具每次启动都输出缺少日志实现警告。
+    runtimeOnly 'org.apache.logging.log4j:log4j-core:2.21.1'
+    // 通用注音工具需要词组分词、多音字和带声调拼音能力，文档专用纠音仍由外部词典覆盖。
+    implementation 'com.github.houbb:pinyin:0.4.0'
+    // common-core 的通用文档工具需要通过 JUnit 5 验证纠音、字符对齐和 DOCX 输出结构。
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
+    // Jupiter 5.12.2 需要匹配的 Platform Launcher，避免 Gradle 内置旧版本导致测试发现阶段失败。
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
 }
 
 java {
     withSourcesJar()
+}
+
+tasks.register('runPinyinDocxTool', JavaExec) {
+    // 通用拼音任务复用 common-core 的正式运行类路径，避免人工收集 POI 和拼音库依赖。
+    group = 'documentation'
+    description = 'Generate an editable pinyin DOCX from a Chinese DOCX source.'
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.sp.selplat.common.tool.pinyin.PinyinDocxGenerationTool'
+    // 子项目任务统一使用 UTF-8，避免 LC_ALL=C 时中文路径和业务日志退回 US-ASCII。
+    jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
+
+    doFirst {
+        // 正式运行必须显式指定源和目标，防止任务在当前目录误生成文件。
+        def source = providers.gradleProperty('pinyinSource').orNull
+        def target = providers.gradleProperty('pinyinTarget').orNull
+        if (!source || !target) {
+            throw new GradleException('Missing -PpinyinSource or -PpinyinTarget')
+        }
+        // CLI 参数统一由 Java 工具校验，Gradle 任务只负责把工程属性稳定传入运行时。
+        args '--source', rootProject.file(source).absolutePath,
+            '--target', rootProject.file(target).absolutePath,
+            '--overwrite', providers.gradleProperty('pinyinOverwrite').getOrElse('false'),
+            '--dry-run', providers.gradleProperty('pinyinDryRun').getOrElse('false'),
+            '--mode', providers.gradleProperty('pinyinMode').getOrElse('paragraph'),
+            '--layout', providers.gradleProperty('pinyinLayout').getOrElse('daodejing')
+        // 文言文正式生成时传入专用纠音词典；普通样稿允许省略该属性。
+        def dictionary = providers.gradleProperty('pinyinDictionary').orNull
+        if (dictionary) {
+            args '--dictionary', rootProject.file(dictionary).absolutePath
+        }
+    }
+}
+
+tasks.register('runDocTopicImageTool', JavaExec) {
+    // 故事图片任务复用 common-core 的 POI、Jackson 和 Java2D 运行类路径，不建立第二套脚本环境。
+    group = 'documentation'
+    description = 'Generate reviewed poetry story JPG files from finalized pinyin DOCX files.'
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.sp.selplat.common.tool.docTopic.DocTopicBatchGenerationTool'
+    // 批量中文路径、JSON 和日志统一使用 UTF-8，Windows 与 macOS 保持相同行为。
+    jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
+
+    doFirst {
+        // 正式生成必须明确输出根目录和审校故事 JSON，禁止使用当前目录隐式落盘。
+        def outputRoot = providers.gradleProperty('docTopicOutputRoot').orNull
+        def topicData = providers.gradleProperty('docTopicData').orNull
+        if (!outputRoot || !topicData) {
+            throw new GradleException('Missing -PdocTopicOutputRoot or -PdocTopicData')
+        }
+        args '--output-root', rootProject.file(outputRoot).absolutePath,
+            '--topic-data', rootProject.file(topicData).absolutePath,
+            '--limit', providers.gradleProperty('docTopicLimit').getOrElse('0'),
+            '--overwrite', providers.gradleProperty('docTopicOverwrite').getOrElse('false'),
+            '--missing-content', providers.gradleProperty('docTopicMissingContent').getOrElse('fail')
+        // 单文件样例和批量目录只能选择一个，由 Java 工具继续执行互斥校验。
+        def source = providers.gradleProperty('docTopicSource').orNull
+        def sourceRoot = providers.gradleProperty('docTopicSourceRoot').orNull
+        if (source) {
+            args '--source', rootProject.file(source).absolutePath
+        }
+        if (sourceRoot) {
+            args '--source-root', rootProject.file(sourceRoot).absolutePath
+        }
+    }
+}
+
+tasks.register('exportDocTopicManifest', JavaExec) {
+    // 图片批处理先导出核定 DOCX 清单，后续 Imagegen 和 Pillow 共用同一份原始数据。
+    group = 'documentation'
+    // 任务说明明确这里只导出核定文字，不生成插画或教学扩展文案。
+    description = 'Export finalized poetry and per-character pinyin from DOCX to a UTF-8 JSON manifest.'
+    // 运行前编译正式解析器和清单导出入口。
+    dependsOn classes
+    // 复用 common-core 的 Apache POI 与 Jackson 运行类路径。
+    classpath = sourceSets.main.runtimeClasspath
+    // 业务入口固定为只读清单导出工具。
+    mainClass = 'com.sp.selplat.common.tool.docTopic.DocTopicManifestExportTool'
+    // 中文路径、汉字和带调拼音统一使用 UTF-8。
+    jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
+
+    doFirst {
+        // 源 DOCX 必须由调用方明确指定，禁止扫描并误读其它教材。
+        def source = providers.gradleProperty('docTopicManifestSource').orNull
+        // 目标 JSON 必须由调用方明确指定，禁止落到工作区根目录。
+        def target = providers.gradleProperty('docTopicManifestTarget').orNull
+        // 任一路径缺失都在 Java 进程启动前终止。
+        if (!source || !target) {
+            throw new GradleException('Missing -PdocTopicManifestSource or -PdocTopicManifestTarget')
+        }
+        // 把工程相对路径转换为绝对路径后交给正式导出工具校验。
+        args '--source', rootProject.file(source).absolutePath,
+            '--target', rootProject.file(target).absolutePath
+    }
 }

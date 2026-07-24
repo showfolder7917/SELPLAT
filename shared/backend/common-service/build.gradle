@@ -8,6 +8,8 @@ dependencies {
     api project(':shared:backend:common-core')
     // common-service 依赖 common-db，供公共服务基类或下游服务模块直接复用数据库公共能力。
     api project(':shared:backend:common-db')
+    // 公共服务实现使用 @Service 参与 Spring 容器注册，因此显式声明 Context 编译依赖。
+    implementation 'org.springframework:spring-context:6.2.7'
 }
 
 java {
