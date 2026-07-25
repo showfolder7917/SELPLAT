@@ -10,6 +10,7 @@
 - `rule-engine.json`
 - `crm.json`
 - `cms.json`
+- `fujitsu.json`
 
 每个文件说明：
 

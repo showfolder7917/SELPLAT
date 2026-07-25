@@ -2,6 +2,8 @@
 OPTION/
 build/
 localrepository/
+build/
+cache/
 bin/
 tmp/
 MEMORIES/

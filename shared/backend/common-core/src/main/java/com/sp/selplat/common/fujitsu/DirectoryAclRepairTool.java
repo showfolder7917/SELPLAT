@@ -22,7 +22,7 @@ public class DirectoryAclRepairTool {
 
     /** 业务上这里固定维护当前要修复的目标目录，你后续只需改这一行再直接运行 main。 */
     private static final Path TARGET_DIRECTORY =
-        Paths.get("C:\\opt\\workspace\\SELPLAT\\shared\\backend\\common-db\\build")
+        Paths.get("C:\\opt\\bat\\SBMAB203\\OPTION")
             .toAbsolutePath()
             .normalize();
 

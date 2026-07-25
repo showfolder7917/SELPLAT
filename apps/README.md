@@ -16,3 +16,4 @@
 - `rule-engine`
 - `crm`
 - `cms`
+- `fujitsu`

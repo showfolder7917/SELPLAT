@@ -1,5 +1,5 @@
-// Gradle 构建输出统一进入 OPTION/temp，禁止在工程根或模块目录重新生成 build 临时树。
-def unifiedBuildRoot = layout.projectDirectory.dir('OPTION/temp/gradle-build')
+// Gradle 构建输出直接进入工程根 build，禁止增加 gradle-build 中间层或在各模块目录生成分散的 build 临时树。
+def unifiedBuildRoot = layout.projectDirectory.dir('build')
 // 根工程的报告和聚合任务同样使用统一构建根，保证所有中间产物可集中治理。
 layout.buildDirectory.set(unifiedBuildRoot)
 
@@ -11,7 +11,7 @@ allprojects {
     repositories {
         // 离线构建优先从仓库内缓存 jar 目录取依赖，避免当前环境无法访问 Maven Central 时直接失败。
         flatDir {
-            dirs rootProject.file('localrepository/cache-jars')
+            dirs rootProject.file('cache/cache-jars')
         }
         // 先查本地 Maven 仓库，兼容后续参照 SBMAB203 接入本地私仓或离线仓库。
         mavenLocal()
@@ -25,18 +25,18 @@ subprojects {
     apply plugin: 'java'
     // Checkstyle 插件先于 checkstyle 扩展配置加载，避免 VS Code 导入 Gradle 时在脚本评估阶段找不到该扩展。
     apply plugin: 'checkstyle'
-    // 把每个子项目的构建输出统一收口到 OPTION/temp/gradle-build，避免模块内外散落 build 产物。
+    // 把每个子项目的构建输出统一收口到 build/<项目路径>，避免模块内外散落 build 产物。
     layout.buildDirectory.set(
         unifiedBuildRoot.dir(project.path.substring(1).replace(':', '/'))
     )
 
     dependencies {
         // 离线 jar 目录不提供 Maven 元数据，因此这里把缓存中的所有 jar 兜底加入编译类路径，补齐传递依赖。
-        compileOnly fileTree(dir: rootProject.file('localrepository/cache-jars'), include: ['*.jar'])
+        compileOnly fileTree(dir: rootProject.file('cache/cache-jars'), include: ['*.jar'])
         // 单元测试在离线模式下同样需要这些本地缓存 jar，避免 testCompileClasspath 因缺少传递依赖而失败。
-        testImplementation fileTree(dir: rootProject.file('localrepository/cache-jars'), include: ['*.jar'])
+        testImplementation fileTree(dir: rootProject.file('cache/cache-jars'), include: ['*.jar'])
         // 测试运行期继续复用同一批缓存 jar，保证 build 阶段执行测试时也不触发在线解析。
-        testRuntimeOnly fileTree(dir: rootProject.file('localrepository/cache-jars'), include: ['*.jar'])
+        testRuntimeOnly fileTree(dir: rootProject.file('cache/cache-jars'), include: ['*.jar'])
     }
 
     java {

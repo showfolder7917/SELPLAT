@@ -1,0 +1,10 @@
+{
+  "module_id": "fujitsu",
+  "enabled": false,
+  "app_path": "apps/fujitsu",
+  "manifest_path": "apps/fujitsu/manifest/module.json",
+  "dependencies": [
+    "host",
+    "uniauth"
+  ]
+}

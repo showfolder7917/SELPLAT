@@ -1,0 +1,14 @@
+plugins {
+    // application 插件为规则引擎后端提供统一的 Gradle run 入口。
+    id 'application'
+}
+
+dependencies {
+    // 规则工具只从工程根离线依赖目录取包，禁止在源码目录维护独立 lib。
+    implementation fileTree(dir: rootProject.file('cache/cache-jars'), include: ['*.jar'])
+}
+
+application {
+    // 所有命令行、VS Code 和脚本运行入口统一指向规则引擎后端启动类。
+    mainClass = 'com.sp.selplat.ruleengine.RuleEngineBackendApplication'
+}

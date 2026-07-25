@@ -22,6 +22,7 @@
 - `rule-engine`
 - `crm`
 - `cms`
+- `fujitsu`
 
 ## 最小启动验证
 

@@ -1,28 +1,25 @@
 {
   "java.autobuild.enabled": false,
   "java.configuration.updateBuildConfiguration": "automatic",
-  "java.configuration.runtimes": [
-    {
-      "name": "JavaSE-21",
-      "path": "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
-      "default": true
-    }
-  ],
   "java.import.gradle.wrapper.enabled": true,
-  "java.import.gradle.java.home": "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+  "java.import.gradle.offline.enabled": true,
+  "java.import.gradle.user.home": "C:\\opt\\workspace\\SELPLAT\\cache\\gradle-user-home",
   "java.gradle.buildServer.enabled": "off",
+  "java.jdt.ls.vmargs": "-javaagent:C:\\opt\\workspace\\SELPLAT\\cache\\cache-jars\\lombok-1.18.38.jar",
   "java.import.exclusions": [
-    "**/bin/**",
-    "**/build/**"
+    "**/bin/**"
   ],
-  "java.debug.settings.forceBuildBeforeLaunch": false,
-  "java.debug.settings.onBuildFailureProceed": true,
+  "java.debug.settings.forceBuildBeforeLaunch": true,
+  "java.debug.settings.onBuildFailureProceed": false,
   "files.exclude": {
     "**/bin": true,
+    "build": true,
+    "cache": true
   },
   "search.exclude": {
     "**/bin": true,
-    "**/build": true
+    "**/build": true,
+    "cache": true
   },
   "[java]": {
     "editor.tabSize": 2,

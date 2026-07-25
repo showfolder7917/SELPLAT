@@ -1,0 +1,153 @@
+{
+  "version": "1.0",
+  "templatePath": "reference/SQL仕様書_アラート情報一括登録.xlsx",
+  "outputDirectory": "C:/opt/workspace/SELPLAT/OPTION/temp/sql-spec",
+  "fileNamePrefix": "SQL仕様書_",
+  "batchSourcePath": "C:/opt/bat/CPMAB081/src/main/java/jp/or/jasdec/sbf/cp/ma/batch/biz/CPMAB081.java",
+  "functionName": "格付情報作成処理",
+  "mapperSources": [
+    {
+      "kind": "XML_FILE",
+      "path": "C:/opt/bat/CPMACOMMON/src/main/resources/mapper/CPMAMapper.xml",
+      "entry": null
+    },
+    {
+      "kind": "JAR_ENTRY",
+      "path": "C:/opt/workspace/SELPLAT/cache/cache-jars/cp-biz-common-parts-1.3.5-sources.jar",
+      "entry": "mapper/CPZZEntityMapper.xml"
+    }
+  ],
+  "sqlSpecifications": [
+    {
+      "id": "CPMAQDeleteFullRatingInfo",
+      "name": "格付全量情報削除",
+      "overview": "《格付差分情報》の【レコード区分】が「削除」の対象を《格付全量情報》から削除する。",
+      "type": "DELETE",
+      "operation": "NEW",
+      "baseWorkbookPath": null,
+      "tables": [
+        { "logicalName": "格付全量情報", "physicalName": "TB_FCPFULLRATINGINFO", "lock": "なし", "note": "-" },
+        { "logicalName": "格付差分情報", "physicalName": "TB_FCPDIFFRATINGINFO", "lock": "なし", "note": "-" }
+      ],
+      "parameters": [],
+      "outputs": []
+    },
+    {
+      "id": "CPMAQSelectNewDiffCompanyName",
+      "name": "格付差分会社名取得",
+      "overview": "指定した格付会社の新規差分から、公表日付と発行体名称（和文）を取得する。",
+      "type": "SELECT",
+      "operation": "NEW",
+      "baseWorkbookPath": null,
+      "tables": [
+        { "logicalName": "格付差分情報", "physicalName": "TB_FCPDIFFRATINGINFO", "lock": "なし", "note": "-" }
+      ],
+      "parameters": [
+        { "logicalName": "格付会社区分", "fieldName": "ratingCoKbn", "dataType": "String", "note": "1：R&I、2：JCR" }
+      ],
+      "outputs": [
+        { "logicalName": "格付会社区分", "fieldName": "ratingCoKbn", "dataType": "String", "note": "出力データBean" },
+        { "logicalName": "公表日付", "fieldName": "annoDt", "dataType": "String", "note": "出力データBean" },
+        { "logicalName": "発行体名称（和文）", "fieldName": "issuerJanNm", "dataType": "String", "note": "出力データBean" }
+      ]
+    },
+    {
+      "id": "CPMAQUpdateFullRatingInfo",
+      "name": "格付全量情報更新",
+      "overview": "《格付差分情報》の新規対象と会社名編集結果を用いて《格付全量情報》を更新する。",
+      "type": "UPDATE",
+      "operation": "NEW",
+      "baseWorkbookPath": null,
+      "tables": [
+        { "logicalName": "格付全量情報", "physicalName": "TB_FCPFULLRATINGINFO", "lock": "なし", "note": "-" },
+        { "logicalName": "格付差分情報", "physicalName": "TB_FCPDIFFRATINGINFO", "lock": "なし", "note": "-" }
+      ],
+      "parameters": [
+        { "logicalName": "格付会社区分", "fieldName": "ratingCoKbn", "dataType": "String", "note": "1：R&I、2：JCR" },
+        { "logicalName": "会社名編集結果一覧", "fieldName": "companyNameList", "dataType": "List<Map<String, String>>", "note": "格付区分・会社名" }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "CPMAQInsertFullRatingInfo",
+      "name": "格付全量情報登録",
+      "overview": "《格付差分情報》の新規対象と会社名編集結果から、未登録の《格付全量情報》を登録する。",
+      "type": "INSERT",
+      "operation": "NEW",
+      "baseWorkbookPath": null,
+      "tables": [
+        { "logicalName": "格付全量情報", "physicalName": "TB_FCPFULLRATINGINFO", "lock": "なし", "note": "-" },
+        { "logicalName": "格付差分情報", "physicalName": "TB_FCPDIFFRATINGINFO", "lock": "なし", "note": "-" }
+      ],
+      "parameters": [
+        { "logicalName": "格付会社区分", "fieldName": "ratingCoKbn", "dataType": "String", "note": "1：R&I、2：JCR" },
+        { "logicalName": "会社名編集結果一覧", "fieldName": "companyNameList", "dataType": "List<Map<String, String>>", "note": "格付区分・会社名" }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "CPZZQInsertOneTbFcpalertinfo",
+      "name": "アラート情報登録",
+      "overview": "格付情報作成処理で検出した警告内容を《アラート情報》へ一件登録する。",
+      "type": "INSERT",
+      "operation": "NEW",
+      "baseWorkbookPath": null,
+      "tables": [
+        { "logicalName": "アラート情報", "physicalName": "TB_FCPALERTINFO", "lock": "なし", "note": "-" }
+      ],
+      "parameters": [
+        { "logicalName": "アラート情報データ", "fieldName": "CPZZTbFcpalertinfoDataBean", "dataType": "CPZZTbFcpalertinfoDataBean", "note": "警告内容および監査項目" }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "CPMAQSelectIssuerAndCorpAndFullRatingInfo",
+      "name": "CP発行者・法人・格付全量情報取得",
+      "overview": "CP発行者に紐づく発行者組織名称と、R&I・JCR の最新格付を取得する。",
+      "type": "SELECT",
+      "operation": "NEW",
+      "baseWorkbookPath": null,
+      "tables": [
+        { "logicalName": "CP発行者", "physicalName": "TB_FCPISSUER", "lock": "なし", "note": "-" },
+        { "logicalName": "法人", "physicalName": "TB_FCPCORP", "lock": "なし", "note": "-" },
+        { "logicalName": "格付全量情報", "physicalName": "TB_FCPFULLRATINGINFO", "lock": "なし", "note": "-" },
+        { "logicalName": "同名会社情報", "physicalName": "TB_FCPSAMENMCOINFO", "lock": "なし", "note": "-" }
+      ],
+      "parameters": [],
+      "outputs": [
+        { "logicalName": "CP発行者コード", "fieldName": "issuerCd", "dataType": "String", "note": "出力データBean" },
+        { "logicalName": "組織名称", "fieldName": "ogrniNm", "dataType": "String", "note": "出力データBean" },
+        { "logicalName": "RI格付", "fieldName": "riKbn", "dataType": "String", "note": "出力データBean" },
+        { "logicalName": "JCR格付", "fieldName": "jcrKbn", "dataType": "String", "note": "出力データBean" }
+      ]
+    },
+    {
+      "id": "CPMAQDeleteRank",
+      "name": "格付情報削除",
+      "overview": "格付情報の再作成前に《格付情報》を全件削除する。",
+      "type": "DELETE",
+      "operation": "NEW",
+      "baseWorkbookPath": null,
+      "tables": [
+        { "logicalName": "格付情報", "physicalName": "TB_FCPRANK", "lock": "なし", "note": "-" }
+      ],
+      "parameters": [],
+      "outputs": []
+    },
+    {
+      "id": "CPMAQInsertRank",
+      "name": "格付情報登録",
+      "overview": "CP発行者ごとに編集した格付情報を《格付情報》へ一括登録する。",
+      "type": "INSERT",
+      "operation": "NEW",
+      "baseWorkbookPath": null,
+      "tables": [
+        { "logicalName": "格付情報", "physicalName": "TB_FCPRANK", "lock": "なし", "note": "-" }
+      ],
+      "parameters": [
+        { "logicalName": "格付情報一覧", "fieldName": "rankLst", "dataType": "List<CPZZTbFcprankDataBean>", "note": "CP発行者コード・組織名称・RI格付・JCR格付" }
+      ],
+      "outputs": []
+    }
+  ]
+}

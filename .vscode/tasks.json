@@ -2,19 +2,23 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "acode-java: compile",
+      "type": "shell",
+      "command": "./gradlew --offline --console plain :apps:rule-engine:backend:classes",
+      "windows": {
+        "command": ".\\gradlew.bat --offline --console plain :apps:rule-engine:backend:classes"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$javac"
+    },
+    {
       "label": "uniauth:classes",
       "type": "shell",
       "command": "./gradlew --offline --console plain :apps:uniauth:backend:classes",
       "windows": {
         "command": ".\\gradlew.bat --offline --console plain :apps:uniauth:backend:classes"
-      },
-      "osx": {
-        "options": {
-          "cwd": "${workspaceFolder}",
-          "env": {
-            "JAVA_HOME": "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
-          }
-        }
       },
       "options": {
         "cwd": "${workspaceFolder}"
@@ -34,13 +38,32 @@
       "windows": {
         "command": ".\\gradlew.bat --offline --console plain :apps:uniauth:backend:run"
       },
-      "osx": {
-        "options": {
-          "cwd": "${workspaceFolder}",
-          "env": {
-            "JAVA_HOME": "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
-          }
-        }
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "rule-engine:classes",
+      "type": "shell",
+      "command": "./gradlew --offline --console plain :apps:rule-engine:backend:classes",
+      "windows": {
+        "command": ".\\gradlew.bat --offline --console plain :apps:rule-engine:backend:classes"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$javac"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "rule-engine:run",
+      "type": "shell",
+      "command": "./gradlew --offline --console plain :apps:rule-engine:backend:run",
+      "windows": {
+        "command": ".\\gradlew.bat --offline --console plain :apps:rule-engine:backend:run"
       },
       "options": {
         "cwd": "${workspaceFolder}"
