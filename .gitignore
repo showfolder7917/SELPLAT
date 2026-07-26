@@ -1,10 +1,8 @@
 .gradle/
 OPTION/
 build/
-localrepository/
-build/
 cache/
 bin/
-tmp/
 MEMORIES/
-runtime/
+**/__pycache__/
+*.py[cod]
