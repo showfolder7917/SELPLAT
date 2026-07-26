@@ -493,7 +493,11 @@ public abstract class BaseExtendsController {
         }
         // 方法级别路径为空时，直接返回带斜杠的类级别前缀，兼容后续可能存在的根路由方法。
         if (normalizedMethodPath.isEmpty()) {
-            return ensureLeadingSlash(normalizedClassPath);
+            return ensureLeadingSlash(trimTrailingSlash(normalizedClassPath));
+        }
+        // 类级路径只有根斜杠时直接返回规范化方法路径，避免拼成双斜杠 URL。
+        if ("/".equals(normalizedClassPath)) {
+            return ensureLeadingSlash(normalizedMethodPath);
         }
         // 两段路径都存在时，统一去掉多余边界斜杠后再拼接，避免生成双斜杠路径。
         return ensureLeadingSlash(trimTrailingSlash(normalizedClassPath)) + "/" + trimLeadingSlash(normalizedMethodPath);
@@ -525,11 +529,7 @@ public abstract class BaseExtendsController {
      * @return 去掉前导斜杠后的路径
      */
     private String trimLeadingSlash(String path) {
-        // 路径为空时直接返回空串，避免子串操作出现越界。
-        if (path == null || path.isEmpty()) {
-            return "";
-        }
-        // 当前路径以前导斜杠开头时去掉一层，便于和类路径统一拼接。
+        // joinPaths 已保证方法路径非空；当前路径以前导斜杠开头时去掉一层，便于和类路径统一拼接。
         return path.startsWith("/") ? path.substring(1) : path;
     }
 
@@ -540,11 +540,7 @@ public abstract class BaseExtendsController {
      * @return 去掉尾部斜杠后的路径
      */
     private String trimTrailingSlash(String path) {
-        // 根路径斜杠不做裁剪，避免把合法根路径裁成空字符串。
-        if ("/".equals(path)) {
-            return path;
-        }
-        // 只要尾部还有斜杠就持续裁掉，兼容少数历史代码可能带多个尾部斜杠的情况。
+        // joinPaths 已单独处理根路径；其余路径只要尾部还有斜杠就持续裁掉。
         while (path.endsWith("/")) {
             path = path.substring(0, path.length() - 1);
         }

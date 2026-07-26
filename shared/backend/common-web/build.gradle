@@ -1,6 +1,8 @@
 plugins {
     // common-web 作为公共 Web 基类库，只负责编译和被业务模块继承，不承担独立启动职责。
     id 'java-library'
+    // JaCoCo 记录公共控制器路径和响应边界的真实执行覆盖。
+    id 'jacoco'
 }
 
 dependencies {
@@ -26,4 +28,54 @@ dependencies {
 
 java {
     withSourcesJar()
+}
+
+jacoco {
+    // 与工程其他模块统一覆盖工具版本。
+    toolVersion = '0.8.13'
+}
+
+tasks.named('test') {
+    // 每轮 common-web 测试完成后自动输出覆盖报告。
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+tasks.named('jacocoTestReport') {
+    // 覆盖报告必须读取本轮公共控制器测试执行数据。
+    dependsOn tasks.named('test')
+    reports {
+        // XML 供自动门禁和结果核对。
+        xml.required = true
+        // HTML 供人工审核公共 Web 缺口。
+        html.required = true
+        // 当前不生成重复 CSV 产物。
+        csv.required = false
+    }
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    // 覆盖门禁必须基于公共参数、路径、元数据和响应兼容 Case。
+    dependsOn tasks.named('test')
+    violationRules {
+        // BaseExtendsController 集中承载 shared 公共控制器实际辅助行为。
+        rule {
+            // CLASS 级门禁避免其他空接口或简单注解影响覆盖结果。
+            element = 'CLASS'
+            // 当前只锁定已覆盖全部生产方法和可执行行的公共控制器扩展。
+            includes = ['com.sp.selplat.common.web.controller.BaseExtendsController']
+            limit {
+                // 行覆盖率使用真实执行比例。
+                counter = 'LINE'
+                // COVEREDRATIO 表示覆盖行数占全部可执行行比例。
+                value = 'COVEREDRATIO'
+                // 公共控制器扩展要求 100% 行覆盖。
+                minimum = 1.0
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    // common-web 标准检查必须同时执行公共控制器覆盖门禁。
+    dependsOn tasks.named('jacocoTestCoverageVerification')
 }
