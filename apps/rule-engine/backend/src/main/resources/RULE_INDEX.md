@@ -58,11 +58,11 @@ load_rule_for_selplat_common_param_dao_query = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_common_batch_param_or_thousand_item_batch = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_id_sequence_code_or_composite_id_mapping = SELPLAT_BASE_DAO_REUSE_RULES
 
-<!-- SELPLAT 业务 Service 统一通过基础类泛型 getDao() 获取 DAO，并继承公共 CRUD 默认流程的规则；适用于业务 ServiceImpl 的 DAO 装配、通用方法下沉和特殊处理覆盖治理。 -->
+<!-- SELPLAT 业务 Service 统一通过基础类泛型 getDao() 获取 DAO，并由公共 CRUD 模板调用子类受保护回调的规则；适用于业务 ServiceImpl 的 DAO 装配、通用方法下沉和特殊处理扩展治理。 -->
 SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = selplat/通用规则/RUL_基础Service统一DAO访问规则.md
 load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
-load_rule_for_selplat_base_service_default_crud_or_special_override = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
+load_rule_for_selplat_base_service_default_crud_or_special_callback = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 
 <!-- SELPLAT 工程专属的绝对真实数据集成测试规则；适用于 apps 当前及未来应用与 shared 公共模块的测试类名 fixture、数据库查询、写入、分页、排序、发号、事务和覆盖回归验证，不适用于 Fujitsu 或其他工程。 -->
 SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES = selplat/通用规则/RUL_SELPLAT真实数据集成测试规则.md

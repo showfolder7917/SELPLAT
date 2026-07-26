@@ -99,6 +99,14 @@ const rolePaths = {
   brainstorm: path.join(ROLE_ASSET_ROOT, `第${String(requestedLesson).padStart(2, "0")}课`, "口脑风暴.png"),
   performance: path.join(ROLE_ASSET_ROOT, `第${String(requestedLesson).padStart(2, "0")}课`, "粉墨登场.png"),
 };
+// 第二课两首绕口令拥有不同的教学事实，必须分别绑定黑白辨认和折纸飞机插图。
+const lessonTwoSemanticPaths = requestedLesson === 2
+  ? {
+    beibeiSister: path.join(ROLE_ASSET_ROOT, "第02课", "口脑风暴_贝贝和妹妹.png"),
+    paperPlane: path.join(ROLE_ASSET_ROOT, "第02课", "课外拓展_贝贝和菲菲.png"),
+    campusPerformance: path.join(ROLE_ASSET_ROOT, "第02课", "粉墨登场_校园是我家.png"),
+  }
+  : {};
 // 预读全部图片字节，避免异步读取改变页面生成顺序。
 const imageBytes = {
   theme: await fs.readFile(themePath),
@@ -109,6 +117,14 @@ const imageBytes = {
   pronunciation: await fs.readFile(rolePaths.pronunciation),
   brainstorm: await fs.readFile(rolePaths.brainstorm),
   performance: await fs.readFile(rolePaths.performance),
+  // 仅第二课读取两张补充语义图，其他课保持原有资源集合。
+  ...(requestedLesson === 2
+    ? {
+      beibeiSister: await fs.readFile(lessonTwoSemanticPaths.beibeiSister),
+      paperPlane: await fs.readFile(lessonTwoSemanticPaths.paperPlane),
+      campusPerformance: await fs.readFile(lessonTwoSemanticPaths.campusPerformance),
+    }
+    : {}),
 };
 // 当前课两位编号用于稳定拼接资源相对键。
 const lessonCode = String(requestedLesson).padStart(2, "0");
@@ -120,6 +136,14 @@ const safeZoneKeys = {
   pronunciation: `模块插图/第${lessonCode}课/发音训练.png`,
   brainstorm: `模块插图/第${lessonCode}课/口脑风暴.png`,
   performance: `模块插图/第${lessonCode}课/粉墨登场.png`,
+  // 第二课补图均在右侧保留连续浅色文字安全区。
+  ...(requestedLesson === 2
+    ? {
+      beibeiSister: "模块插图/第02课/口脑风暴_贝贝和妹妹.png",
+      paperPlane: "模块插图/第02课/课外拓展_贝贝和菲菲.png",
+      campusPerformance: "模块插图/第02课/粉墨登场_校园是我家.png",
+    }
+    : {}),
 };
 // 每课从空白演示文稿创建，不导入旧课件的页面、母版或媒体。
 const deck = Presentation.create({ slideSize: SLIDE_SIZE });
@@ -418,6 +442,18 @@ function parsePinyinPractice(slideInfo) {
  * 根据旧稿页序选择课堂模块图，保证同课不同教学环节使用不同视觉。
  */
 function visualRoleFor(slideInfo) {
+  // 第二课第11至12页必须使用“黑白辨认”图完成观察和《贝贝和妹妹》朗读。
+  if (requestedLesson === 2 && [11, 12].includes(slideInfo.source_slide)) {
+    return "beibeiSister";
+  }
+  // 第二课第13页必须使用“折纸飞机”图解释《贝贝和菲菲》。
+  if (requestedLesson === 2 && slideInfo.source_slide === 13) {
+    return "paperPlane";
+  }
+  // 第二课第14至15页使用专门保留左侧长文安全区的校园表演图。
+  if (requestedLesson === 2 && [14, 15].includes(slideInfo.source_slide)) {
+    return "campusPerformance";
+  }
   // 情境观察和情境正文共同使用本课情境图，形成连续课堂动作。
   if (slideInfo.source_slide <= 7) {
     return "situation";
@@ -474,6 +510,34 @@ function titleAndBody(slideInfo) {
   // 第3页必须使用用户确认的新口才之歌。
   if (slideInfo.source_slide === 3) {
     return { title: "口才之歌", body: NEW_SONG };
+  }
+  // 第二课主绕口令删除栏目碎片，只保留作品标题和完整正文。
+  if (requestedLesson === 2 && slideInfo.source_slide === 12) {
+    return {
+      title: "《贝贝和妹妹》",
+      body: "读一读 · 记一记\n\n贝贝说妹妹黑，\n妹妹说贝贝黑。\n贝贝说你黑我不黑，\n妹妹说我不黑贝贝黑。",
+    };
+  }
+  // 第二课课外拓展按完整语义重新分段，避免标题与正文混成一列。
+  if (requestedLesson === 2 && slideInfo.source_slide === 13) {
+    return {
+      title: "《贝贝和菲菲》",
+      body: "贝贝飞纸飞机，\n菲菲要贝贝的纸飞机。\n贝贝不给菲菲自己的纸飞机，\n贝贝教菲菲自己做能飞的纸飞机。",
+    };
+  }
+  // 第二课表演页删除“粉墨/登场/读一读/演一演”等重复栏目碎片。
+  if (requestedLesson === 2 && slideInfo.source_slide === 15) {
+    return {
+      title: "《校园是我家》",
+      body: "校园是我家，\n我是一朵美丽的花。\n亲爱的老师像妈妈，\n我们在爱的雨露中长大。\n每天唱歌、跳舞又画画，\n做操、游戏、过家家。\n团结友爱多愉快，\n美丽的校园是我家。",
+    };
+  }
+  // 第二课任务页重建正常编号和书名号，禁止把序号、标点和篇名拆成孤立行。
+  if (requestedLesson === 2 && slideInfo.role === "小任务") {
+    return {
+      title: "小任务",
+      body: "1. 练习发音和口部操\n2. 练习《贝贝和妹妹》《贝贝和菲菲》\n3. 回家给爸爸妈妈表演《校园是我家》",
+    };
   }
   // 学习导航按六个既定模块重新排成可读清单，不遗漏旧稿栏目。
   if (slideInfo.role === "学习导航") {
@@ -581,9 +645,98 @@ function buildCover(slideInfo) {
 }
 
 /**
+ * 创建口才之歌双栏页，让两段歌词形成清晰、均衡的课堂朗读节奏。
+ */
+function buildSongPage(slideInfo) {
+  // 从空白暖白画布创建页面，不添加无必要的大型文字底板。
+  const slide = deck.slides.add();
+  // 品牌、栏目和页码继续使用整册统一组件。
+  addChrome(slide, "课前热身", slideInfo.source_slide, C.teal);
+  // 页面标题位于视觉中心上方，并与两栏正文形成稳定层级。
+  addText(slide, "口才之歌", { left: 180, top: 120, width: 920, height: 70 }, {
+    fontSize: 44,
+    bold: true,
+    alignment: "center",
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  });
+  // 左栏承载前三句，保持每句独立一行并增加朗读呼吸。
+  addText(slide, [
+    "学口才，练口才，",
+    "想学口才跟我来。",
+    "",
+    "小舞台，大梦想，",
+    "自信登台展风采。",
+    "",
+    "同学们，快快来，",
+    "游戏课堂真精彩。",
+  ].join("\n"), {
+    left: 145,
+    top: 225,
+    width: 470,
+    height: 285,
+  }, {
+    fontSize: 28,
+    typeface: FONT_SERIF,
+    alignment: "left",
+    verticalAlignment: "middle",
+    lineSpacing: 1.48,
+    insets: { top: 8, right: 20, bottom: 8, left: 20 },
+  });
+  // 中央细线建立左右段落关系，但不形成沉重卡片边框。
+  slide.shapes.add({
+    geometry: "rect",
+    position: { left: 637, top: 238, width: 3, height: 255 },
+    fill: `${C.yellow}/75`,
+    line: { style: "solid", fill: "none", width: 0 },
+  });
+  // 右栏承载口令和收束三句，与左栏保持相同字号和行距。
+  addText(slide, [
+    "口才课，有口令，",
+    "大家一起说出来：",
+    "",
+    "勇敢讲，声音开；",
+    "自信演，站稳台。",
+    "",
+    "认真学，大胆来，",
+    "学好口才更出彩！",
+  ].join("\n"), {
+    left: 665,
+    top: 210,
+    width: 470,
+    height: 330,
+  }, {
+    fontSize: 28,
+    typeface: FONT_SERIF,
+    alignment: "left",
+    verticalAlignment: "middle",
+    lineSpacing: 1.42,
+    insets: { top: 8, right: 20, bottom: 8, left: 20 },
+  });
+  // 底部提示说明课堂动作，不与歌词正文竞争视觉焦点。
+  addText(slide, "先读准，再读响；配合动作，自信展示。", {
+    left: 250,
+    top: 575,
+    width: 780,
+    height: 42,
+  }, {
+    fontSize: 24,
+    color: C.teal,
+    alignment: "center",
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  });
+  // 备注继续记录原稿页序和图片完整性约束。
+  addNotes(slide, slideInfo);
+}
+
+/**
  * 创建普通教学页，并按内容密度选择完整图、安全区和信息卡布局。
  */
 function buildContent(slideInfo) {
+  // 口才之歌由独立函数直接创建页面，必须在普通页面对象创建前分流，避免产生空白页。
+  if (slideInfo.source_slide === 3) {
+    buildSongPage(slideInfo);
+    return;
+  }
   // 当前页保持与旧稿完全相同的序号。
   const slide = deck.slides.add();
   // 暖白底承接原创水彩图片的自然纸张底色。
@@ -596,8 +749,9 @@ function buildContent(slideInfo) {
   const title = section === "字正腔圆" ? normalizePinyinGlyphs(extracted.title) : extracted.title;
   // 发音正文同步转换带调ɑ和韵母组合，保证第一层文本检查可验证。
   const body = section === "字正腔圆" ? normalizePinyinGlyphs(extracted.body) : extracted.body;
-  // 自我介绍、口才之歌和学习导航保留第一课已确认的原生信息版式。
-  const textOnly = [2, 3, 5].includes(slideInfo.source_slide);
+  // 自我介绍、口才之歌、学习导航、课堂回顾和小任务保留第一课已确认的原生信息版式。
+  const textOnly = [2, 3, 5].includes(slideInfo.source_slide)
+    || ["课堂回顾", "小任务"].includes(slideInfo.role);
   // 主题导入页使用整幅主题底图和图片自身的自然文字安全区。
   const themeIntro = slideInfo.role === "主题导入";
   // 普通图文页按教学模块选择已经生成的专属原创图片。
@@ -616,27 +770,42 @@ function buildContent(slideInfo) {
   addChrome(slide, section, slideInfo.source_slide, section === "字正腔圆" ? C.yellow : section === "情境再现" || section === "粉墨登场" ? C.coral : C.teal);
   // 使用像素分析结果选择低复杂度文字安全侧，不再按奇偶页猜测。
   const safeSide = textOnly ? "left" : safeSideFor(visualKey);
-  // 文本底板遵循第一课标准：短信息页用宽卡，整幅图片页只占自然留白一侧。
+  // 短提示使用紧凑文字组，禁止少量文字缩在超大白卡中。
+  const compactPrompt = !textOnly && !themeIntro && body.length < 48;
+  // 当前图片页的底板尺寸由内容密度决定，长正文获得更大安全区而不靠缩小字号。
+  const imageCardWidth = compactPrompt ? 430 : 520;
+  // 文本底板遵循第一课标准：信息页用宽卡，整幅图片页只占自然留白一侧。
   const card = textOnly
     ? { left: 150, top: 145, width: 980, height: 500 }
-    : {
-      left: safeSide === "left" ? 58 : 742,
-      top: themeIntro ? 190 : 142,
-      width: themeIntro ? 520 : 480,
-      height: themeIntro ? 370 : 482,
-    };
-  // 半透明底板只增强可读性，不把整幅背景切回左右小图布局。
-  addGlassCard(slide, card);
+    : themeIntro
+      ? {
+        left: safeSide === "left" ? 58 : 702,
+        top: 190,
+        width: 520,
+        height: 370,
+      }
+      : {
+        left: safeSide === "left" ? 58 : 1280 - 58 - imageCardWidth,
+        top: compactPrompt ? 218 : 122,
+        width: imageCardWidth,
+        height: compactPrompt ? 270 : 520,
+      };
+  // 图片已有自然安全区或页面本身为干净暖白底时不使用底板。
+  const needsCard = !textOnly && !themeIntro && body.length > 150;
+  // 只有长正文在自然留白不足以稳定承载时才添加半透明底板。
+  if (needsCard) {
+    addGlassCard(slide, card);
+  }
   // 标题与正文作为一个视觉组放入自然留白侧。
   addText(slide, title, { left: card.left + 36, top: card.top + 24, width: card.width - 72, height: 74 }, {
-    fontSize: title.length > 18 ? 29 : textOnly ? 41 : 35,
+    fontSize: title.length > 18 ? 29 : textOnly ? 42 : 36,
     bold: true,
     color: title.includes("练习") || title.includes("看一看") ? C.coral : C.ink,
     alignment: title.length <= 14 ? "center" : "left",
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
   });
   // 正文在标题下方完整保留；儿童教学正文不得依赖18磅小字塞入页面。
-  const bodySize = body.length > 210 ? 22 : body.length > 150 ? 23 : body.length > 95 ? 25 : textOnly ? 29 : 27;
+  const bodySize = body.length > 210 ? 23 : body.length > 150 ? 25 : body.length > 95 ? 28 : textOnly ? 34 : 31;
   addText(slide, body, {
     left: card.left + 40,
     top: card.top + 108,
@@ -645,16 +814,16 @@ function buildContent(slideInfo) {
   }, {
     fontSize: bodySize,
     typeface: section === "字正腔圆" ? "Arial" : slideInfo.role === "情境再现" || slideInfo.role === "口脑风暴" || slideInfo.role === "粉墨登场" ? FONT_SERIF : FONT_SANS,
-    alignment: body.length < 90 ? "center" : "left",
+    alignment: requestedLesson === 2 && slideInfo.source_slide === 15
+      ? "left"
+      : body.length < 90
+        ? "center"
+        : "left",
     verticalAlignment: "middle",
     lineSpacing: body.length > 160 ? 1.18 : 1.34,
     insets: { top: 4, right: 6, bottom: 4, left: 6 },
   });
-  // 三个有声栏目页显示统一“播放”入口，点击热区只覆盖按钮自身。
-  if (["情境再现", "口脑风暴", "粉墨登场"].includes(slideInfo.role)) {
-    // 播放按钮紧邻当前文字组，且不覆盖人物或正文。
-    addAudioButton(slide, card.left + 34, 632);
-  }
+  // 三个有声栏目由后续Open XML封装阶段加入唯一可见媒体按钮，生成阶段不再叠加重复按钮。
   // 备注记录逐页内容来源和不裁剪规则。
   addNotes(slide, slideInfo);
 }

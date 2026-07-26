@@ -9,6 +9,10 @@ const PROJECT_ROOT = path.resolve(process.env.SELPLAT_PROJECT_ROOT || process.cw
 const WORKSPACE = path.join(PROJECT_ROOT, "OPTION/temp/口才与表演中册其余课程重制");
 // 覆盖清单是第2至16课逐页模块和页数的唯一核对依据。
 const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/中文教学/template/口才与表演/中册/课程内容索引.json");
+// 图片安全区映射是整幅铺底后自动避让人物的生成依据。
+const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/中文教学/template/口才与表演/中册/图片安全区映射.json");
+// 生成器源码必须先通过静态准入，防止下次批量执行重新退回小图片版式。
+const GENERATOR_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/node/com/sp/selplat/code/中文教学/教学图片与PPT生成/口才与表演/中册/口才与表演中册PPT生成器.mjs");
 // 正式输出根目录用于定位每课最终PPTX。
 const OUTPUT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/教学图片与PPT生成/项目/口才与表演/中册");
 // 第一课采用独立生成器，因此显式登记其第七版成品和已确认页数。
@@ -39,6 +43,57 @@ const REQUIRED_ROLES = new Set([
   "课堂回顾",
   "小任务",
 ]);
+
+/**
+ * 检查中册生成器是否持续使用第一课标准和完整图片安全区配置。
+ */
+async function inspectGeneratorSource(coverage) {
+  // 源码和图片安全区配置必须同时可读。
+  const [source, safeZoneMap] = await Promise.all([
+    fs.readFile(GENERATOR_FILE, "utf8"),
+    fs.readFile(SAFE_ZONE_FILE, "utf8").then((text) => JSON.parse(text)),
+  ]);
+  // 所有准入失败原因集中返回。
+  const errors = [];
+  // 这些标记共同证明生成器使用整幅铺底、自然安全区和空白画布。
+  const requiredMarkers = [
+    "SAFE_ZONE_FILE",
+    "safeSideFor",
+    "Presentation.create",
+    "width: 1280, height: 720",
+    "请看教材",
+  ];
+  // 任一关键标记缺失都说明生成链路可能回退。
+  for (const marker of requiredMarkers) {
+    if (!source.includes(marker)) errors.push(`生成器缺少准入标记：${marker}`);
+  }
+  // 每课六类现有原创资产必须全部拥有左右安全区分析，不允许按奇偶页猜测。
+  for (const lesson of coverage) {
+    // 两位课次与缓存目录命名一致。
+    const code = String(lesson.lesson).padStart(2, "0");
+    // 主题、练习和四个模块图构成当前课完整视觉资产集合。
+    const keys = [
+      `主题与练习/第${code}课_主题底图.png`,
+      `主题与练习/第${code}课_练习图.png`,
+      `模块插图/第${code}课/情境观察.png`,
+      `模块插图/第${code}课/发音训练.png`,
+      `模块插图/第${code}课/口脑风暴.png`,
+      `模块插图/第${code}课/粉墨登场.png`,
+    ];
+    // 逐图检查稳定左右值。
+    for (const key of keys) {
+      if (!["left", "right"].includes(safeZoneMap[key]?.safeSide)) {
+        errors.push(`缺少图片安全区映射：${key}`);
+      }
+    }
+  }
+  // 返回静态门禁结果供整册报告置顶展示。
+  return {
+    passed: errors.length === 0,
+    mappedAssets: Object.keys(safeZoneMap).length,
+    errors,
+  };
+}
 
 /**
  * 从压缩包读取一个明确部件，不把解包中间文件写到磁盘。

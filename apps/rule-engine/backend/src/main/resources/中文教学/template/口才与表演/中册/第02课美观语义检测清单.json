@@ -1,0 +1,61 @@
+{
+  "slides": {
+    "2": {
+      "backplate": "forbidden",
+      "textKeywords": ["自我介绍", "问好", "微笑并致谢"]
+    },
+    "3": {
+      "backplate": "forbidden",
+      "textKeywords": ["口才之歌", "想学口才跟我来", "学好口才更出彩"]
+    },
+    "4": {
+      "backplate": "forbidden",
+      "textKeywords": ["校园是我家", "第二课"],
+      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/主题与练习/第02课_主题底图.png"]
+    },
+    "5": {
+      "backplate": "forbidden",
+      "textKeywords": ["学习内容", "情境再现", "拓展训练"]
+    },
+    "7": {
+      "textKeywords": ["爱护我的校园", "见垃圾", "保护它"],
+      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/情境观察.png"],
+      "audioButtonCount": 1
+    },
+    "11": {
+      "backplate": "forbidden",
+      "textKeywords": ["看到了什么", "特点"],
+      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/口脑风暴_贝贝和妹妹.png"]
+    },
+    "12": {
+      "backplate": "forbidden",
+      "textKeywords": ["贝贝和妹妹", "妹妹说贝贝黑"],
+      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/口脑风暴_贝贝和妹妹.png"],
+      "audioButtonCount": 1
+    },
+    "13": {
+      "backplate": "forbidden",
+      "textKeywords": ["贝贝和菲菲", "纸飞机"],
+      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/课外拓展_贝贝和菲菲.png"]
+    },
+    "14": {
+      "backplate": "forbidden",
+      "textKeywords": ["在哪里", "心情怎么样"],
+      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/粉墨登场_校园是我家.png"]
+    },
+    "15": {
+      "backplate": "forbidden",
+      "textKeywords": ["校园是我家", "老师像妈妈", "团结友爱"],
+      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/粉墨登场_校园是我家.png"],
+      "audioButtonCount": 1
+    },
+    "19": {
+      "backplate": "forbidden",
+      "textKeywords": ["今天我们学到了什么", "说一说", "演一演"]
+    },
+    "20": {
+      "backplate": "forbidden",
+      "textKeywords": ["小任务", "贝贝和妹妹", "贝贝和菲菲", "校园是我家"]
+    }
+  }
+}

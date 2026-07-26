@@ -67,7 +67,7 @@ const audioSlides = lesson.source_slides
     // 返回与生成器卡片左边距加34像素完全一致的按钮位置。
     return {
       slide: slide.source_slide,
-      buttonLeft: safeZone.safeSide === "left" ? 92 : 776,
+      buttonLeft: safeZone.safeSide === "left" ? 92 : 736,
       media: `lesson-${requestedLesson}-sample-audio-${index + 1}.mp3`,
       source: index % 2 === 1 ? "media2.mp3" : "media1.mp3",
     };
