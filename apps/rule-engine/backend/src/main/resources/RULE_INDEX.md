@@ -1,0 +1,96 @@
+# rule-engine 项目资源规则索引
+
+<!-- 问题：通用规则、Fujitsu 规则和 SELPLAT 规则分散后，需要一个稳定入口确定路径与冲突优先级。 -->
+<!-- 场景：任务涉及 apps/rule-engine 的 Java 工具、资源模板、规则或文档时，先读取本索引，再按所属模块加载最少规则。 -->
+<!-- 业务含义：项目内的规则路径变化、规则新增和规则冲突都以本索引为主入口；若 MEMORIES 中已有同主题规则、协议、能力或测试失效、冲突或路径错配，必须同步修正，避免索引规则与实际能力脱节。 -->
+
+project_resource_index_scope = apps/rule-engine
+cross_project_common_rule_root = 跨工程通用规则/
+fujitsu_rule_root = fujitsu/rule/
+selplat_common_rule_root = selplat/通用规则/
+selplat_application_rule_root = selplat/应用规则/
+selplat_application_rule_path_pattern = selplat/应用规则/<app>/
+chinese_teaching_rule_root = 中文教学/rule/
+chinese_teaching_brand_asset_root = 中文教学/assets/品牌/
+fujitsu_resource_root = fujitsu/
+fujitsu_sql_generator_resource_root = fujitsu/template/sql/SQL仕様書生成ツール/
+fujitsu_sql_code_root = ../java/com/sp/selplat/code/fujitsu/sql/
+chinese_teaching_pinyin_code_root = ../java/com/sp/selplat/code/中文教学/拼音生成/
+chinese_teaching_image_ppt_code_root = ../java/com/sp/selplat/code/中文教学/教学图片与PPT生成/
+chinese_teaching_python_code_root = ../python/com/sp/selplat/code/中文教学/
+chinese_teaching_node_code_root = ../node/com/sp/selplat/code/中文教学/
+children_oral_performance_middle_node_code_root = ../node/com/sp/selplat/code/中文教学/教学图片与PPT生成/口才与表演/中册/
+children_oral_performance_middle_template_root = 中文教学/template/口才与表演/中册/
+children_oral_performance_middle_runtime_cache_root = <CURRENT_PROJECT_ROOT>/cache/中文教学/口才与表演/中册/
+cross_project_filesystem_code_root = ../java/com/sp/selplat/code/跨工程/文件系统/
+cross_project_vcs_code_root = ../java/com/sp/selplat/code/跨工程/版本控制/
+
+project_rule_loading_order = RULE_INDEX -> cross_project_common_rule_root -> matched_module_rule_root
+rule_engine_same_topic_priority = project_resource_rule > memories_rule
+protected_protocol_priority = STARTER,USER,CODE,COMMAND,GENERATOR_REPAIR_PROTOCOL > project_resource_rule
+project_rule_conflict_scope = same_topic,same_applicability
+resource_path_change_maintenance = update_this_index_and_related_memories_records
+memories_related_record_policy = inspect_and_repair_existing_related_rule_protocol_ability_test_or_index
+memories_new_rule_policy = rule_engine_is_primary_authoring_location
+rule_file_name_pattern = RUL_<主题>规则.md
+rule_file_name_policy = every_new_rule_must_use_rul_prefix_and_descriptive_topic_name
+
+<!-- 规则新增、移动、删除、分类和索引维护的主治理规则；任何规则结构变更前必须先加载。 -->
+RULE_LIFECYCLE_GOVERNANCE_RULES = 跨工程通用规则/RUL_规则生命周期治理规则.md
+load_rule_for_rule_creation_move_delete_or_classification = RULE_LIFECYCLE_GOVERNANCE_RULES
+load_rule_for_rule_index_maintenance = RULE_LIFECYCLE_GOVERNANCE_RULES
+
+<!-- 执行文档按当前 Codex 任务页面隔离；用于执行文档创建、步骤续写、归档和旧文件迁移。 -->
+EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES = 跨工程通用规则/RUL_执行文档线程隔离规则.md
+load_rule_for_execution_document_thread_isolation = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
+load_rule_for_execution_document_history_or_legacy_migration = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
+
+<!-- SELPLAT 工程目录、构建产物、项目 JDK、工具运行数据与缓存位置规则；适用于工程路径解析、旧 runtime 迁移及 Python 字节码缓存定向。 -->
+SELPLAT_PROJECT_PATH_RULES = selplat/通用规则/RUL_SELPLAT工程路径规则.md
+load_rule_for_selplat_project_path_or_runtime_output = SELPLAT_PROJECT_PATH_RULES
+load_rule_for_python_bytecode_cache_location = SELPLAT_PROJECT_PATH_RULES
+load_rule_for_selplat_project_jdk_cache_or_legacy_runtime_migration = SELPLAT_PROJECT_PATH_RULES
+
+<!-- SELPLAT 全部应用共用的基础 DAO 复用、CommonParam/CommonBatchParam 透传和主键号段定义规则；适用于简单单表 CRUD、千条分组真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
+SELPLAT_BASE_DAO_REUSE_RULES = selplat/通用规则/RUL_基础DAO复用与通用参数透传规则.md
+load_rule_for_selplat_base_dao_crud_or_paging_reuse = SELPLAT_BASE_DAO_REUSE_RULES
+load_rule_for_selplat_common_param_dao_query = SELPLAT_BASE_DAO_REUSE_RULES
+load_rule_for_selplat_common_batch_param_or_thousand_item_batch = SELPLAT_BASE_DAO_REUSE_RULES
+load_rule_for_selplat_id_sequence_code_or_composite_id_mapping = SELPLAT_BASE_DAO_REUSE_RULES
+
+<!-- SELPLAT 业务 Service 统一通过基础类泛型 getDao() 获取 DAO 的规则；适用于业务 ServiceImpl 的 DAO 字段、构造函数和持久层调用入口治理。 -->
+SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = selplat/通用规则/RUL_基础Service统一DAO访问规则.md
+load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
+load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
+
+<!-- SELPLAT 工程专属的绝对真实数据集成测试规则；适用于 apps 当前及未来应用与 shared 公共模块的测试类名 fixture、数据库查询、写入、分页、排序、发号、事务和覆盖回归验证，不适用于 Fujitsu 或其他工程。 -->
+SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES = selplat/通用规则/RUL_SELPLAT真实数据集成测试规则.md
+load_rule_for_selplat_real_database_query_or_write_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
+load_rule_for_selplat_paging_sorting_or_transaction_integration_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
+load_rule_for_selplat_batch_group_boundary_or_rollback_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
+load_rule_for_selplat_shared_database_sequence_or_web_regression_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
+load_rule_for_selplat_test_fixture_class_and_method_path = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
+
+<!-- Service 已返回 CommonResult 或 CommonPageResult 完整结构时的 Controller JSON 职责规则；适用于避免普通响应和分页响应被二次包装。 -->
+SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES = selplat/通用规则/RUL_Controller仅序列化Service返回结构规则.md
+load_rule_for_selplat_controller_service_result_serialization = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
+load_rule_for_selplat_controller_duplicate_response_wrapping = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
+load_rule_for_selplat_fixed_common_result_or_batch_response_shape = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
+
+<!-- SELPLAT 变更任务在确认前执行规则适配审查并在冲突时阻断报告的通用策略；适用于平台全部应用、shared 和规则维护任务。 -->
+SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES = selplat/通用规则/RUL_SELPLAT规则适配审查与阻断规则.md
+load_rule_for_any_selplat_change_task_compatibility_check = SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES
+load_rule_for_selplat_rule_incompatible_request_blocking = SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES
+
+<!-- 中文教学横版课件的页面结构、素材边界与验收规则；适用于课文、古诗、故事和课堂活动PPT。 -->
+HORIZONTAL_TEACHING_PPT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_横版教学PPT通用排版与检查规则.md
+load_rule_for_horizontal_teaching_ppt_generation = HORIZONTAL_TEACHING_PPT_RULES
+
+<!-- 少儿口才与表演中册的样板继承、补图编号、旧媒体禁用和嵌入式音频规则。 -->
+CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES = 中文教学/rule/口才与表演/RUL_少儿口才与表演中册PPT重制补图与音频规则.md
+load_rule_for_children_oral_performance_middle_ppt_generation = CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES
+load_rule_for_children_oral_performance_middle_ppt_audio_or_supplemental_images = CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES
+
+<!-- 成语典故绘本的事实核定、叙事分镜和40%文字卡规则；仅适用于有可靠典故的成语。 -->
+IDIOM_FABLE_PICTURE_BOOK_PPT_RULES = 中文教学/rule/成语典故/RUL_成语典故绘本PPT制作规则.md
+load_rule_for_idiom_fable_picture_book_ppt_generation = IDIOM_FABLE_PICTURE_BOOK_PPT_RULES

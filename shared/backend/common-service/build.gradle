@@ -1,6 +1,8 @@
 plugins {
     // common-service 作为公共服务层基类库，只负责被下游模块依赖，不承担独立启动职责。
     id 'java-library'
+    // JaCoCo 真实记录公共发号正常流和算法边界的执行覆盖。
+    id 'jacoco'
 }
 
 dependencies {
@@ -10,8 +12,63 @@ dependencies {
     api project(':shared:backend:common-db')
     // 公共服务实现使用 @Service 参与 Spring 容器注册，因此显式声明 Context 编译依赖。
     implementation 'org.springframework:spring-context:6.2.7'
+    // 公共服务测试使用 JUnit 验证真实数据库发号、缓存、重试和并发边界。
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
 }
 
 java {
     withSourcesJar()
+}
+
+jacoco {
+    // 与工程其他模块统一覆盖工具版本。
+    toolVersion = '0.8.13'
+}
+
+tasks.named('test') {
+    // 每轮 common-service 测试完成后自动输出覆盖报告。
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+tasks.named('jacocoTestReport') {
+    // 覆盖报告必须读取本轮真实发号和算法边界执行数据。
+    dependsOn tasks.named('test')
+    reports {
+        // XML 供自动门禁和结果核对。
+        xml.required = true
+        // HTML 供人工审核公共服务缺口。
+        html.required = true
+        // 当前不生成重复 CSV 产物。
+        csv.required = false
+    }
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    // 覆盖门禁必须基于真实数据库发号和可控算法边界测试。
+    dependsOn tasks.named('test')
+    violationRules {
+        // BaseServiceImpl 与 SequenceGeneratorImpl 是当前 shared 公共服务的核心生产执行类。
+        rule {
+            // CLASS 级门禁确保基础 DAO 入口和发号器分别满足完整覆盖。
+            element = 'CLASS'
+            // 同时锁定基础 Service DAO 访问入口和公共发号实现。
+            includes = [
+                'com.sp.selplat.common.service.BaseServiceImpl',
+                'com.sp.selplat.common.service.sequence.SequenceGeneratorImpl'
+            ]
+            limit {
+                // 行覆盖率使用真实执行比例。
+                counter = 'LINE'
+                // COVEREDRATIO 表示覆盖行数占全部可执行行比例。
+                value = 'COVEREDRATIO'
+                // 两个公共服务核心类分别要求 100% 行覆盖。
+                minimum = 1.0
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    // common-service 标准检查必须同时执行公共发号覆盖门禁。
+    dependsOn tasks.named('jacocoTestCoverageVerification')
 }

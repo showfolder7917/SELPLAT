@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLATFORM_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-PROJECT_JAVA_HOME="$PLATFORM_ROOT/runtime/jdks/temurin-21.jdk/Contents/Home"
+PROJECT_JAVA_HOME="$PLATFORM_ROOT/cache/jdks/temurin-21.jdk/Contents/Home"
 
 if [ -d "$PROJECT_JAVA_HOME" ]; then
   export JAVA_HOME="$PROJECT_JAVA_HOME"

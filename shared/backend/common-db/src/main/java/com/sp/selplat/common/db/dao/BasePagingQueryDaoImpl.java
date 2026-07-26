@@ -17,7 +17,7 @@ import java.util.Map;
  *
  * <p>这里把分页查询从基础 CRUD 支撑层中抽离出来，
  * 是为了让 BaseDaoSupport 回到元数据和模板能力边界，
- * 同时让 BaseDaoImpl 只通过单一分页门面复用数据库差异查询能力。
+ * 同时让 BaseDaoImpl 通过单一分页门面复用数据库差异查询能力。
  */
 public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
 
@@ -215,6 +215,3 @@ public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
         return orders;
     }
 }
-
-
-

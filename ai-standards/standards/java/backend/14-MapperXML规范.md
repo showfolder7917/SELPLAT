@@ -2,15 +2,15 @@
 
 ## 1. 目的
 
-本规范用于统一 Java 后端 `Mapper XML` 的书写方式，避免不同模块在 `resultMap`、公共列片段、动态 SQL、增删改查结构和参数命名上各写各的。
+本规范只用于统一未来确有专用 SQL 时引入的 Java 后端 `Mapper XML` 写法，避免启用 XML 的模块在 `resultMap`、公共列片段、动态 SQL、增删改查结构和参数命名上各写各的。
 
-本规范参考 `apps/uniauth/backend/src/main/resources/com/sp/selplat/uniauth/user/dao/mapper/UniauthUserDao.xml` 的实际写法提炼，不要求机械复制业务字段，但要求保持结构和风格一致。
+当前 SELPLAT 的通用增删改查不使用 `Mapper XML`，而是复用 `BaseTemplateDao` 的注解式 SQL 与公共 JDBC 查询链路。本规范不得作为给空业务 DAO、基础 DAO 或简单主数据模块补建 XML 的依据。
 
 ## 2. 基本定位
 
 `Mapper XML` 主要职责：
 
-- 承接 DAO 接口方法对应的 SQL 实现
+- 仅在注解式公共能力无法清晰承载专用 SQL 时，承接对应 DAO 接口方法的 SQL 实现
 - 负责数据库列到 `domain.out` 的结果映射
 - 负责 `domain.in`、简单参数和附加计算参数的绑定
 - 在不脱离业务域边界的前提下沉淀公共列片段和动态条件写法
@@ -23,14 +23,14 @@
 
 ## 3. 文件与命名规则
 
-### 3.1 XML 与 DAO 一一对应
+### 3.1 按需启用后 XML 与 DAO 一一对应
 
-每个业务 DAO 应有一份独立的 `Mapper XML`，`namespace` 必须与 DAO 接口全限定名完全一致。
+只有实际声明专用 XML SQL 方法的业务 DAO 才应创建独立的 `Mapper XML`，`namespace` 必须与 DAO 接口全限定名完全一致。仅继承基础 DAO 能力的空接口不得创建占位 XML。
 
 示例：
 
 ```xml
-<mapper namespace="com.sp.selplat.uniauth.user.dao.UniauthUserDao">
+<mapper namespace="com.sp.selplat.example.report.dao.ReportQueryDao">
 ```
 
 禁止：

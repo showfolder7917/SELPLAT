@@ -4,7 +4,7 @@ import com.sp.selplat.common.util.Domain;
 import java.time.LocalDateTime;
 
 /**
- * ua_user 实体用于承接统一认证用户主表的业务字段。
+ * UniauthUser 实体用于承接统一认证用户主表的业务字段。
  * 这里让实体继承公共 Domain，是为了少写 id、createdAt、updatedAt 和分页变量，降低后续字段维护成本。
  */
 public class UniauthUser extends Domain {

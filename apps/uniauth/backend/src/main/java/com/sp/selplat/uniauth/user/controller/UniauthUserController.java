@@ -1,15 +1,16 @@
 package com.sp.selplat.uniauth.user.controller;
 
+import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonPageParam;
-import com.sp.selplat.common.util.CommonPageResult;
-import com.sp.selplat.common.util.CommonResult;
+import com.sp.selplat.common.util.JsonUtils;
 import com.sp.selplat.common.web.controller.BaseController;
 import com.sp.selplat.common.web.controller.ModuleDescription;
 import com.sp.selplat.uniauth.user.service.UniauthUserService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,10 +37,8 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     @ResponseBody
     @RequestMapping(value = "getStore.htm", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
     public String getStore(CommonPageParam queryIn) {
-        // 控制层先调用服务层获取纯分页业务结果，再由公共控制器层统一包装旧式 store 顶层 JSON 结构。
-        CommonPageResult pageResult = getService().getStore(queryIn);
-        // 分页响应由公共基类自动补齐模块编码、当前路由和验证说明，控制层只传分页业务输入。
-        return buildPageResponseJson(queryIn, pageResult);
+        // 服务层已经返回完整分页结果结构，控制层只做 JSON 序列化，不再补字段或改变返回层级。
+        return JsonUtils.toJsonIgnoreNull(getService().getStore(queryIn));
     }
 
     /**
@@ -52,10 +51,21 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     @ResponseBody
     @RequestMapping(value = "getById.htm", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
     public String getById(CommonParam queryIn) {
-        // 服务层统一按共通入参读取主键并回传单条详情数据，控制层只负责补齐公共返回元数据。
-        CommonResult result = getService().getById(queryIn);
-        // 普通响应由公共基类自动补齐模块编码和当前路由，当前接口只保留业务结果与详情提示语。
-        return buildResponseJson(result, "用户详情查询完成。");
+        // 服务层已经返回 CommonResult 结构，控制层只做 JSON 序列化，不再执行第二次响应包装。
+        return JsonUtils.toJsonIgnoreNull(getService().getById(queryIn));
+    }
+
+    /**
+     * 按多组主键批量查询用户详情。
+     *
+     * @param queryIn items 中保存多组主键
+     * @return 批量用户详情 JSON
+     */
+    @ResponseBody
+    @RequestMapping(value = "getByIds.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
+    public String getByIds(@RequestBody CommonBatchParam queryIn) {
+        // 服务层返回完整批量查询结构，控制层只转换为 JSON。
+        return JsonUtils.toJsonIgnoreNull(getService().getByIds(queryIn));
     }
 
     /**
@@ -67,11 +77,22 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
      */
     @ResponseBody
     @RequestMapping(value = "create.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-    public String create(CommonParam queryIn) {
-        // 服务层负责生成主键和整理落库字段，控制层只统一包装非分页返回结构。
-        CommonResult result = getService().create(queryIn);
-        // 普通响应由公共基类自动补齐模块编码和当前路由，当前接口只保留业务结果与新增提示语。
-        return buildResponseJson(result, "用户新增完成。");
+    public String insert(CommonParam queryIn) {
+        // 服务层已经返回新增结果结构，控制层只转换为 JSON，不再增加额外响应字段。
+        return JsonUtils.toJsonIgnoreNull(getService().insert(queryIn));
+    }
+
+    /**
+     * 批量新增用户。
+     *
+     * @param queryIn items 中保存待新增用户
+     * @return 批量新增结果 JSON
+     */
+    @ResponseBody
+    @RequestMapping(value = "insertBatch.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
+    public String insertBatch(@RequestBody CommonBatchParam queryIn) {
+        // 服务层完成事务、发号和分组批处理，控制层只转换最终结构。
+        return JsonUtils.toJsonIgnoreNull(getService().insertBatch(queryIn));
     }
 
     /**
@@ -84,10 +105,21 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     @ResponseBody
     @RequestMapping(value = "update.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
     public String update(CommonParam queryIn) {
-        // 服务层负责唯一性校验、字段筛选和更新时间维护，控制层只补公共返回元数据。
-        CommonResult result = getService().update(queryIn);
-        // 普通响应由公共基类自动补齐模块编码和当前路由，当前接口只保留业务结果与更新提示语。
-        return buildResponseJson(result, "用户更新完成。");
+        // 服务层已经返回更新结果结构，控制层只转换为 JSON，不再增加额外响应字段。
+        return JsonUtils.toJsonIgnoreNull(getService().update(queryIn));
+    }
+
+    /**
+     * 批量更新用户。
+     *
+     * @param queryIn items 中保存主键和更新字段
+     * @return 批量更新结果 JSON
+     */
+    @ResponseBody
+    @RequestMapping(value = "updateBatch.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
+    public String updateBatch(@RequestBody CommonBatchParam queryIn) {
+        // 服务层保证全部一千条分组在同一事务中完成，控制层只转换结果。
+        return JsonUtils.toJsonIgnoreNull(getService().updateBatch(queryIn));
     }
 
     /**
@@ -100,9 +132,20 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     @ResponseBody
     @RequestMapping(value = "delete.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
     public String delete(CommonParam queryIn) {
-        // 服务层统一执行假删除并返回删除结果摘要，控制层只负责补齐共通返回结构。
-        CommonResult result = getService().delete(queryIn);
-        // 普通响应由公共基类自动补齐模块编码和当前路由，当前接口只保留业务结果与删除提示语。
-        return buildResponseJson(result, "用户删除完成。");
+        // 服务层已经返回假删除结果结构，控制层只转换为 JSON，不再增加额外响应字段。
+        return JsonUtils.toJsonIgnoreNull(getService().delete(queryIn));
+    }
+
+    /**
+     * 批量假删除用户。
+     *
+     * @param queryIn items 中保存主键和审计字段
+     * @return 批量假删除结果 JSON
+     */
+    @ResponseBody
+    @RequestMapping(value = "deleteBatch.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
+    public String deleteBatch(@RequestBody CommonBatchParam queryIn) {
+        // 服务层只执行批量假删除并返回完整结果，控制层不开放真删除能力。
+        return JsonUtils.toJsonIgnoreNull(getService().deleteBatch(queryIn));
     }
 }

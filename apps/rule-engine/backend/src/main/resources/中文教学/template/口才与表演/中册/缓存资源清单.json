@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "project_relative_cache_root": "cache/中文教学/口才与表演/中册",
+  "assets": [
+    {
+      "name": "PPT生成运行依赖",
+      "project_relative_path": "cache/node-modules/@oai/artifact-tool",
+      "scope": "Node版教学PPT生成器",
+      "version": "2.8.31",
+      "recovery": "从Codex工作区依赖运行时复制；缺失时重新安装工作区演示文稿依赖"
+    },
+    {
+      "name": "课程主题与练习插图",
+      "path_pattern": "课程插图/主题与练习/第NN课_*.png",
+      "scope": "第02课至第16课",
+      "recovery": "按课程内容索引和中册专项规则重新生成"
+    },
+    {
+      "name": "课堂模块插图",
+      "path_pattern": "课程插图/模块插图/第NN课/*.png",
+      "scope": "情境观察、发音训练、口脑风暴、粉墨登场及按需拓展训练",
+      "recovery": "按课程内容索引和中册专项规则重新生成"
+    },
+    {
+      "name": "透明玻璃播放按钮",
+      "path_pattern": "控件/音频按钮_透明玻璃.png",
+      "scope": "全部音频页面",
+      "recovery": "按已核定透明按钮设计重新生成"
+    },
+    {
+      "name": "示例音频一",
+      "path_pattern": "示例音频/media1.mp3",
+      "scope": "第一和第三音频栏目",
+      "source_file": "OPTION/temp/中文教学/0输入/1、口才与表演第一课.pptx",
+      "source_entry": "ppt/media/media1.mp3",
+      "recovery": "从用户提供的参考PPTX重新抽取"
+    },
+    {
+      "name": "示例音频二",
+      "path_pattern": "示例音频/media2.mp3",
+      "scope": "第二音频栏目",
+      "source_file": "OPTION/temp/中文教学/0输入/1、口才与表演第一课.pptx",
+      "source_entry": "ppt/media/media2.mp3",
+      "recovery": "从用户提供的参考PPTX重新抽取"
+    }
+  ]
+}

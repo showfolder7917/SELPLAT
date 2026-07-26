@@ -2,6 +2,9 @@ package com.sp.selplat.common.service.sequence;
 
 import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDao;
 import com.sp.selplat.common.db.sequence.model.CommonSequenceSegmentRange;
+import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.stereotype.Service;
@@ -59,6 +62,34 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
             // 当前段不存在或已耗尽时，再进入续段流程向数据库申请新的号段。
             refillSequenceRange(normalizedSeqCode);
         }
+    }
+
+    /**
+     * 按 DAO 主键号段定义生成单主键或复合主键字段映射。
+     *
+     * @param definition 包含每个主键字段独立号段编码的有序定义
+     * @return 按主键元数据顺序保存的字段和值映射
+     */
+    @Override
+    public Map<String, Long> getSequence(IdSequenceDefinition definition) {
+        // 缺少定义时无法确定号段编码和字段归属，因此在申请编号前直接失败。
+        if (definition == null) {
+            throw new IllegalArgumentException("definition must not be null");
+        }
+        // 有序映射保持 DAO 主键字段顺序，让复合主键每个 Long 的归属清晰且可预测。
+        Map<String, Long> idValueMap = new LinkedHashMap<>();
+        // 每个主键字段使用自己对应的数据库号段取号，形成字段、号段和生成编号的一一对应关系。
+        for (Map.Entry<String, String> idSequenceEntry : definition.getIdSequenceCodeMap().entrySet()) {
+            // 读取当前主键字段名，作为最终生成值回填数据库列的明确位置。
+            String idColumn = idSequenceEntry.getKey();
+            // IdSequenceDefinition 构造阶段已保证字段名非空，发号阶段直接使用规范化后的稳定字段。
+            // 读取当前字段自己的号段编码，例如 tenantId 对应 UniauthUserTenantId。
+            String sequenceCode = idSequenceEntry.getValue();
+            // 使用当前字段的独立编码申请下一个 Long，并按字段名写入结果映射。
+            idValueMap.put(idColumn, nextId(sequenceCode));
+        }
+        // 返回完整有序映射，调用方可按字段名将单主键或复合主键值写入对应列。
+        return idValueMap;
     }
 
     // 当当前号段不存在或已耗尽时，按模块编码申请并缓存一段新的可用主键区间。

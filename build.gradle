@@ -77,3 +77,15 @@ subprojects {
         }
     }
 }
+
+// sharedRegression 统一执行所有 shared 后端模块测试、覆盖门禁和标准检查，作为公共能力完整回归入口。
+tasks.register('sharedRegression') {
+    // 公共核心当前没有测试源码，但仍执行 test 保持未来新增用例自动进入回归。
+    dependsOn ':shared:backend:common-core:test'
+    // common-db check 包含真实 H2 DAO 测试和 BaseDaoImpl 100% 行覆盖门禁。
+    dependsOn ':shared:backend:common-db:check'
+    // common-service check 包含真实号段测试、算法边界和 SequenceGeneratorImpl 100% 行覆盖门禁。
+    dependsOn ':shared:backend:common-service:check'
+    // common-web check 包含公共参数、路径、响应测试和 BaseExtendsController 100% 行覆盖门禁。
+    dependsOn ':shared:backend:common-web:check'
+}

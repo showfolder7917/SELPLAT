@@ -13,6 +13,7 @@ import com.sp.selplat.common.db.query.CommonQueryValidator;
 import com.sp.selplat.common.db.query.DefaultCommonQueryExecutor;
 import com.sp.selplat.common.db.query.DefaultCommonQuerySqlBuilder;
 import com.sp.selplat.common.db.query.DefaultCommonQueryValidator;
+import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,7 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
-// 通用 DAO 支撑层负责表名解析、字段元数据、模板查询入参拼装和公共查询组件暴露，不直接承接业务 SQL 或分页执行。
+// 通用 DAO 支撑层负责表名解析、字段元数据、主键号段定义、模板查询入参拼装和公共查询组件暴露，不直接承接业务 SQL 或分页执行。
 public abstract class BaseDaoSupportImpl {
 
     // 模板 DAO 代理对象由 Spring 在实例化具体 DAO 子类后统一注入，保证通用 CRUD 可复用同一代理。
@@ -83,6 +84,48 @@ public abstract class BaseDaoSupportImpl {
         return simpleName.substring(0, simpleName.length() - "DaoImpl".length());
     }
 
+    // 根据当前 DAO 的表名和主键元数据构建字段到独立号段编码的定义，供 BaseDaoImpl 门面直接委托。
+    protected IdSequenceDefinition buildIdSequenceDefinition() {
+        // 读取当前 DAO 的有序主键字段，保证复合主键定义和最终发号结果使用同一顺序。
+        List<String> idColumns = getIds();
+        // 表对应的类名作为每个独立号段编码的固定前缀，例如 UniauthUser。
+        String tableName = getTableName();
+        // 表名元数据缺失时立即终止，避免生成无法与数据库号段记录匹配的编码。
+        if (tableName == null || tableName.trim().isEmpty()) {
+            throw new IllegalStateException("DAO table name must not be blank");
+        }
+        // 使用有序映射保存“字段名 → 独立号段编码”，让复合主键分别查询不同数据库记录。
+        Map<String, String> idSequenceCodeMap = new LinkedHashMap<>();
+        // 逐个处理主键字段，每个字段都使用表名前缀形成自己的号段编码。
+        for (String idColumn : idColumns) {
+            // 每个主键字段都必须有效，否则生成值无法知道应该回填到哪个字段。
+            if (idColumn == null || idColumn.trim().isEmpty()) {
+                throw new IllegalStateException("DAO id column must not be blank");
+            }
+            // 去除字段首尾空格，保证命名判断只基于真实元数据名称。
+            String normalizedColumn = idColumn.trim();
+            // 按下划线、连字符和空白切分数据库字段，兼容 camelCase 与 snake_case 元数据。
+            String[] nameParts = normalizedColumn.split("[_\\-\\s]+");
+            // 每个主键字段从表对应类名开始建立独立号段编码，例如 UniauthUserTenantId。
+            StringBuilder sequenceCode = new StringBuilder(tableName.trim());
+            // 逐段转换成 UpperCamelCase 并拼入当前字段的独立号段编码。
+            for (String namePart : nameParts) {
+                // 连续分隔符产生的空片段不参与编码，避免生成无意义字符。
+                if (namePart.isEmpty()) {
+                    continue;
+                }
+                // 每个片段首字母大写，同时保留既有 camelCase 内部大小写。
+                sequenceCode.append(Character.toUpperCase(namePart.charAt(0)));
+                // 片段剩余字符保持元数据原样，避免破坏 tenantKey 等已有业务命名。
+                sequenceCode.append(namePart.substring(1));
+            }
+            // 保存当前字段自己的号段编码，不与其他复合主键字段合并。
+            idSequenceCodeMap.put(normalizedColumn, sequenceCode.toString());
+        }
+        // 返回完整字段号段定义，使发号器逐项查询数据库并输出字段名到 Long 的有序映射。
+        return new IdSequenceDefinition(idSequenceCodeMap);
+    }
+
     // 公共 DAO 统一通过现有元数据读取器生成 select 字段串，让子类不必手工维护整串字段列表。
     protected String getselectColumns() {
         // 当前 DAO 的物理表名继续沿用基类约定解析，保证字段读取目标与模板 CRUD 命中同一张表。
@@ -117,8 +160,5 @@ public abstract class BaseDaoSupportImpl {
         return new LinkedHashMap<>(sourceColumnValueMap);
     }
 }
-
-
-
 
 

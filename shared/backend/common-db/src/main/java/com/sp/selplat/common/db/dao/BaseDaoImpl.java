@@ -1,107 +1,213 @@
 package com.sp.selplat.common.db.dao;
 
-import com.sp.selplat.common.db.template.model.CommonTemplateSave;
-import com.sp.selplat.common.db.template.model.CommonTemplateUpdate;
 import com.sp.selplat.common.db.query.model.QueryCondition;
 import com.sp.selplat.common.db.query.model.QueryOrder;
+import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
+import com.sp.selplat.common.db.template.model.CommonTemplateSave;
+import com.sp.selplat.common.db.template.model.CommonTemplateUpdate;
+import com.sp.selplat.common.util.CommonBatchParam;
+import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonPageResult;
-
-import java.util.LinkedHashMap;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-// 公共 DAO 门面层直接桥接 BaseTemplateDao 和分页查询基类，让简单主数据模块复用统一 CRUD 与分页能力。
-public abstract class BaseDaoImpl extends BasePagingQueryDaoImpl implements BaseDao {
+// BaseDaoImpl 与 BaseDao 一一对应，集中实现业务模块允许调用的全部分页、查询、新增、更新和假删除能力。
+public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
 
-    // 公共分页查询按等值条件返回当前页数据和总数，供后台列表页按数据库方言统一复用分页能力。
+    // BATCH_OPERATION_SIZE 固定每次交给底层批处理的最大记录数，避免超大请求一次占满数据库参数和内存。
+    private static final int BATCH_OPERATION_SIZE = 1000;
+    // SOFT_DELETE_STATUS_COLUMN 固定平台逻辑删除状态字段，供遵循公共审计列约定的业务表复用。
+    private static final String SOFT_DELETE_STATUS_COLUMN = "status";
+    // SOFT_DELETE_UPDATED_AT_COLUMN 固定最后更新时间字段，保证公共假删除动作留下变更时间。
+    private static final String SOFT_DELETE_UPDATED_AT_COLUMN = "updatedAt";
+    // SOFT_DELETED_STATUS_VALUE 固定逻辑删除状态值，避免各业务 DAO 重复维护相同约定。
+    private static final int SOFT_DELETED_STATUS_VALUE = 0;
+
+    // 主键号段公开能力只负责复写 BaseDao 契约，具体元数据组装由支撑层统一实现。
     @Override
-    public CommonPageResult getPageList(Map<String, Object> queryColumnValueMap,Integer pageNo,Integer pageSize) {
-        // 不传排序时统一按 sortnum 倒序返回，保持和当前通用列表默认展示顺序一致。
+    public IdSequenceDefinition getIdSequenceDefinition() {
+        // 委托支撑层根据当前 DAO 的表名和主键元数据生成字段到独立号段编码的定义。
+        return buildIdSequenceDefinition();
+    }
+
+    // 公共分页查询按默认排序返回当前页数据，作为 BaseDao 默认分页签名的唯一实现。
+    @Override
+    public CommonPageResult getPageList(Map<String, Object> queryColumnValueMap, Integer pageNo, Integer pageSize) {
+        // 默认按 sortnum 倒序查询，保持简单主数据列表的统一展示顺序。
         return getPageList(queryColumnValueMap, "sortnum desc", pageNo, pageSize);
     }
 
-    // 公共分页查询允许调用方补充排序表达式，并继续复用底层多数据库分页方言。
+    // 公共分页查询按调用方排序返回当前页数据，作为 BaseDao 自定义分页签名的唯一实现。
     @Override
-    public CommonPageResult getPageList(Map<String,Object> queryColumnValueMap,String orderBy,Integer pageNo,Integer pageSize) {
-        // 先把字段后缀驱动的查询条件转换成结构化条件集合，让分页查询走统一动态 SQL 校验和构建链路。
+    public CommonPageResult getPageList(Map<String, Object> queryColumnValueMap, String orderBy, Integer pageNo, Integer pageSize) {
+        // 把字段后缀驱动的查询条件转换成结构化条件集合，继续复用分页层内部解析能力。
         List<QueryCondition> conditions = buildQueryConditions(queryColumnValueMap);
-        // 再把排序字符串转换成结构化排序对象，让数据库差异继续收口到方言分页实现。
+        // 把排序字符串转换成结构化排序集合，继续复用分页层内部解析能力。
         List<QueryOrder> orders = buildOrders(orderBy);
-        // 当前分页查询统一委托分页基类执行，避免 BaseDaoImpl 再直接依赖底层动态分页实现细节。
+        // 委托分页层内部执行入口完成数据库方言查询，深层不再声明 getPageList。
         return queryList(null, conditions, orders, pageNo, pageSize);
     }
 
-    // 公共新增方法按列值映射写入目标表，适合后台简单主数据维护场景。
+    // 通用主键查询通过 BaseDao 公开 CommonParam 读取单条记录，业务 DAO 不再直接调用深层 getByIds。
     @Override
-    public int insert(Map<String, Object> columnValueMap) {
-        // 把调用方传入的列值映射包装成模板新增入参，统一收口目标表和写入字段集合。
-        CommonTemplateSave saveIn = new CommonTemplateSave();
-        // 当前新增固定写入当前 DAO 约定解析出的物理表，避免上层重复传表名或依赖构造函数初始化。
-        saveIn.setTableName(getTableName());
-        // 使用有序映射复制业务字段，保证模板插入列顺序稳定且不污染调用方原始对象。
-        saveIn.setColumnValueMap(copyColumnValueMap(columnValueMap));
-        // 通过模板 DAO 执行通用新增，让不同模块共享同一套动态 insert 能力。
-        return baseTemplateDao.insert(saveIn);
+    public Map<String, Object> getById(CommonParam queryIn) {
+        // 通用参数为空或没有任何前端字段时按未命中返回，避免生成没有主键条件的查询。
+        if (queryIn == null || queryIn.getParamMap() == null || queryIn.getParamMap().isEmpty()) {
+            return null;
+        }
+        // 统一委托深层主键查询按元数据提取单主键或复合主键，门面层只公开稳定的 CommonParam 能力。
+        return getByIds(queryIn);
     }
 
-    // 公共更新方法仅接收主键值列表，主键字段名由当前 DAO 自动解析后组装模板条件。
+    // 批量主键查询按固定步长拆分输入，并由深层 CRUD 支撑一次查询当前分组的全部单主键或复合主键记录。
     @Override
-    public int update(List<Object> idValues, Map<String, Object> columnValueMap) {
-        // 把调用方传入的更新数据包装成模板更新入参，统一收口主键值列表、表名和待更新字段。
+    public List<Map<String, Object>> getByIds(CommonBatchParam queryIn) {
+        // 空批量请求直接返回空结果，确保不会生成没有主键条件的 SQL。
+        if (queryIn == null || queryIn.getItems().isEmpty()) {
+            return List.of();
+        }
+        // 使用可变列表按分组顺序汇总真实数据库返回记录。
+        List<Map<String, Object>> records = new ArrayList<>();
+        // 每次最多取一千项，避免单条批量查询包含过多数据库参数。
+        for (int startIndex = 0; startIndex < queryIn.getItems().size(); startIndex += BATCH_OPERATION_SIZE) {
+            // 当前分组结束位置不得超过请求总数。
+            int endIndex = Math.min(startIndex + BATCH_OPERATION_SIZE, queryIn.getItems().size());
+            // 深层批量查询一次读取当前分组，禁止循环执行单条 select 冒充批量能力。
+            records.addAll(getByIdsBatchGroup(queryIn.getItems().subList(startIndex, endIndex)));
+        }
+        // 返回所有分组汇总后的数据库记录。
+        return records;
+    }
+
+    // 通用动态单条查询只消费上游 CommonParam，业务 DAO 不再调用条件构建或分页执行深层方法。
+    @Override
+    public Map<String, Object> getByQuery(CommonParam queryIn) {
+        // 缺少通用查询对象或动态字段时直接返回空，防止空条件退化为全表首条查询。
+        if (queryIn == null || queryIn.getParamMap() == null || queryIn.getParamMap().isEmpty()) {
+            return null;
+        }
+        // 复制上游字段映射以隔离调用方对象，同时不注入 status、登录名或其他业务特定条件。
+        Map<String, Object> queryColumnValueMap = copyColumnValueMap(queryIn.getParamMap());
+        // 只通过公开分页能力读取第一条匹配记录，BaseDaoImpl 不直接触碰分页查询深层方法。
+        CommonPageResult pageResult = getPageList(queryColumnValueMap, null, 1, 1);
+        // 查询无结果时统一返回空，让调用方按未命中处理。
+        if (pageResult == null || pageResult.getRecords() == null || pageResult.getRecords().isEmpty()) {
+            return null;
+        }
+        // 返回第一条匹配记录，形成 BaseDao 对外稳定的动态单条查询能力。
+        return pageResult.getRecords().get(0);
+    }
+
+    // 公共新增直接读取前端 CommonParam 动态字段，作为 BaseDao insert 的唯一实现。
+    @Override
+    public int insert(CommonParam saveIn) {
+        // 把业务字段包装成模板新增入参，统一收口目标表和写入字段集合。
+        CommonTemplateSave templateSave = new CommonTemplateSave();
+        // 目标表继续使用公共元数据命名约定解析，业务层无需传递表名。
+        templateSave.setTableName(getTableName());
+        // 直接读取上游 CommonParam 字段，不再要求 Service 逐列重组新的参数映射。
+        templateSave.setColumnValueMap(copyColumnValueMap(saveIn.getParamMap()));
+        // 通过模板 DAO 执行公共新增。
+        return baseTemplateDao.insert(templateSave);
+    }
+
+    // 批量新增把前端记录按一千条分组，每组只执行一次 JDBC batchUpdate。
+    @Override
+    public int insertBatch(CommonBatchParam saveIn) {
+        // 空批量新增没有数据库动作，统一返回零影响行。
+        if (saveIn == null || saveIn.getItems().isEmpty()) {
+            return 0;
+        }
+        // affectedRows 累计每个真实批处理分组的数据库影响行数。
+        int affectedRows = 0;
+        // 固定按一千条步长遍历全部新增项。
+        for (int startIndex = 0; startIndex < saveIn.getItems().size(); startIndex += BATCH_OPERATION_SIZE) {
+            // 当前新增分组最多包含一千条。
+            int endIndex = Math.min(startIndex + BATCH_OPERATION_SIZE, saveIn.getItems().size());
+            // 每组交给深层 JDBC 批处理一次执行，避免逐条调用 insert。
+            affectedRows += insertBatchGroup(saveIn.getItems().subList(startIndex, endIndex));
+        }
+        // 返回所有分组累计影响行数，供 Service 形成批量结果。
+        return affectedRows;
+    }
+
+    // 公共更新从 CommonParam 自动分离主键条件和更新字段，作为 BaseDao update 的唯一实现。
+    @Override
+    public int update(CommonParam saveIn) {
+        // 创建模板更新入参，集中承接目标表、主键和更新字段。
         CommonTemplateUpdate updateIn = new CommonTemplateUpdate();
-        // 当前更新固定命中当前 DAO 约定解析出的物理表，避免业务层重复维护表名常量。
+        // 目标表继续使用公共元数据命名约定解析。
         updateIn.setTableName(getTableName());
-        // 当前更新先把 DAO 自动解析出的主键字段列表显式写入更新入参，避免主键名称来源隐藏在黑盒 helper 中。
+        // 主键字段列表从当前表元数据读取，兼容单主键和复合主键。
         updateIn.setIdColumns(getIds());
-        // 当前更新再把外部传入的主键值列表显式写入更新入参，保证字段名和值的配对来源都清晰可见。
-        updateIn.setIdValues(resolveIdValues(updateIn.getIdColumns(), idValues));
-        // 使用有序映射复制待更新字段，保证模板 set 子句来源清晰且不回写调用方对象。
-        updateIn.setColumnValueMap(copyColumnValueMap(columnValueMap));
-        // 通过模板 DAO 执行通用更新，让不同模块共享同一套复合主键感知的动态 update 能力。
+        // 复制前端通用字段供当前 DAO 分离主键，避免移除字段时修改 Controller 传入的原对象。
+        Map<String, Object> columnValueMap = copyColumnValueMap(saveIn.getParamMap());
+        // 按 DAO 元数据顺序保存主键值，保证复合主键字段和值一一对应。
+        List<Object> idValues = new ArrayList<>();
+        // 每个主键字段从更新映射中取出后只用于 where，不会再次进入 set 子句。
+        for (String idColumn : updateIn.getIdColumns()) {
+            // 从前端通用字段中移除并保存当前主键值。
+            idValues.add(columnValueMap.remove(idColumn));
+        }
+        // 把自动提取的单主键或复合主键值写入模板更新条件。
+        updateIn.setIdValues(idValues);
+        // 主键之外的前端字段直接作为待更新内容，不再由 Service 逐字段重新封装。
+        updateIn.setColumnValueMap(columnValueMap);
+        // 通过模板 DAO 执行公共主键更新。
         return baseTemplateDao.updateByIds(updateIn);
     }
 
-    // 公共删除方法仅接收主键值列表，主键字段名由当前 DAO 自动解析后组装模板条件。
+    // 批量更新按一千条分组，并在每组内按更新字段结构继续归并真实 JDBC batch。
     @Override
-    public int del(List<Object> idValues) {
-        // 先读取当前 DAO 的主键字段列表，明确当前删除 where 条件使用哪些主键列。
-        List<String> idColumns = getIds();
-        // 通过模板 DAO 按 DAO 内部组装出的主键列值映射直接删除目标数据，复用统一复合主键删除链路。
-        return baseTemplateDao.deleteByIds(getTableName(), buildIdColumnValueMap(idColumns, resolveIdValues(idColumns, idValues)));
+    public int updateBatch(CommonBatchParam saveIn) {
+        // 空批量更新不进入数据库，统一返回零影响行。
+        if (saveIn == null || saveIn.getItems().isEmpty()) {
+            return 0;
+        }
+        // affectedRows 汇总全部字段结构分组的真实更新结果。
+        int affectedRows = 0;
+        // 固定按一千条步长拆分外部批量请求。
+        for (int startIndex = 0; startIndex < saveIn.getItems().size(); startIndex += BATCH_OPERATION_SIZE) {
+            // 当前更新分组最多包含一千条。
+            int endIndex = Math.min(startIndex + BATCH_OPERATION_SIZE, saveIn.getItems().size());
+            // 深层实现按 SQL 结构归并并执行 JDBC 批处理，不循环调用公开单条 update。
+            affectedRows += updateBatchGroup(saveIn.getItems().subList(startIndex, endIndex));
+        }
+        // 返回全部分组的累计更新行数。
+        return affectedRows;
     }
 
-    // 受保护的主键查询供子类或测试在需要时回查模板操作结果，外部仅传主键值列表。
-    protected Map<String, Object> getByIds(List<Object> idValues) {
-        // 先读取当前 DAO 的主键字段列表，明确当前详情查询 where 条件使用哪些主键列。
-        List<String> idColumns = getIds();
-        // 通过模板 DAO 按 DAO 内部组装出的主键列值映射查询当前表的一条记录，供详情回显或测试验证复用。
-        return baseTemplateDao.selectByIds(getTableName(), getselectColumns(), buildIdColumnValueMap(idColumns, resolveIdValues(idColumns, idValues)));
+    // 通用假删除在原 CommonParam 中补充公共状态和时间，再复用自动提取主键的 update。
+    @Override
+    public int softDelete(CommonParam deleteIn) {
+        // 状态字段写入平台统一的逻辑删除值，前端无需重复传递公共状态。
+        deleteIn.putParam(SOFT_DELETE_STATUS_COLUMN, SOFT_DELETED_STATUS_VALUE);
+        // 最后更新时间使用当前服务端时间，前端传入的 lastOperateUserId 等审计字段保持原样。
+        deleteIn.putParam(SOFT_DELETE_UPDATED_AT_COLUMN, LocalDateTime.now());
+        // 通过 BaseDao 公共更新入口自动提取主键并完成假删除。
+        return update(deleteIn);
     }
 
-    // 主键值列表统一校验数量和空值，保证后续字段名和值配对过程安全可控。
-    private List<Object> resolveIdValues(List<String> idColumns, List<Object> idValues) {
-        // 主键值列表为空时立即失败，避免模板 SQL 生成无主键条件的更新或删除语句。
-        if (idValues == null || idValues.isEmpty()) {
-            throw new IllegalArgumentException("idValues must not be empty");
+    // 批量假删除统一补充同一服务端删除时间，再复用每组一千条的批量更新能力。
+    @Override
+    public int softDeleteBatch(CommonBatchParam deleteIn) {
+        // 空批量删除没有目标记录，统一返回零影响行。
+        if (deleteIn == null || deleteIn.getItems().isEmpty()) {
+            return 0;
         }
-        // 主键值数量与主键字段数量不一致时立即失败，避免主键条件错位匹配。
-        if (idColumns.size() != idValues.size()) {
-            throw new IllegalArgumentException("primary key value count mismatch: expected " + idColumns.size() + " but got " + idValues.size());
+        // 同一批请求共享删除时间，保证所有分组形成一致的业务时间点。
+        LocalDateTime batchUpdatedAt = LocalDateTime.now();
+        // 逐项补充公共逻辑删除字段，保留每条前端传入的主键和审计用户。
+        for (CommonParam deleteItem : deleteIn.getItems()) {
+            // 当前记录状态统一改为逻辑删除值。
+            deleteItem.putParam(SOFT_DELETE_STATUS_COLUMN, SOFT_DELETED_STATUS_VALUE);
+            // 当前记录更新时间统一使用本次批量请求时间。
+            deleteItem.putParam(SOFT_DELETE_UPDATED_AT_COLUMN, batchUpdatedAt);
         }
-        // 返回已通过校验的主键值列表，供后续与主键字段顺序一一配对。
-        return idValues;
-    }
-
-    // 主键列值映射统一由 DAO 内部按主键列顺序和外部传入主键值列表组装，避免外部感知字段名。
-    private Map<String, Object> buildIdColumnValueMap(List<String> idColumns, List<Object> idValues) {
-        // 使用有序映射按主键字段顺序组装字段和值，供模板 SQL 稳定拼接复合主键 where 条件。
-        Map<String, Object> idColumnValueMap = new LinkedHashMap<>();
-        // 逐个把主键字段和对应值配对写入映射，保证模板层无需再感知主键字段来源。
-        for (int index = 0; index < idColumns.size(); index++) {
-            idColumnValueMap.put(idColumns.get(index), idValues.get(index));
-        }
-        // 返回经过校验的主键列值映射，供模板 SQL 逐列拼接 where 条件。
-        return idColumnValueMap;
+        // 通过批量更新入口自动完成一千条分组和复合主键提取。
+        return updateBatch(deleteIn);
     }
 
 }

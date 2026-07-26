@@ -2,7 +2,7 @@ package com.sp.selplat.common.util;
 
 /**
  * 通用返回对象统一承接非分页接口的标准响应结构。
- * 这里把单条查询、新增、更新和删除的结果统一收口成 success、data、msg 这一套稳定字段，
+ * 这里把单条查询、新增、更新和删除的结果统一收口成 success、data、affectedRows、msg 这一套稳定字段，
  * 避免各模块继续各自手拼 Map 导致返回结构不统一。
  */
 public class CommonResult {
@@ -15,6 +15,8 @@ public class CommonResult {
     private String requestPath;
     // data 承接单条详情、保存后回显或删除结果等具体业务数据。
     private Object data;
+    // affectedRows 仅在写入接口需要时返回数据库累计影响行数，普通查询保持为空并由 JSON 序列化忽略。
+    private Integer affectedRows;
     // msg 统一承接当前接口的结果说明文案，便于前端直接显示操作结果。
     private String msg;
 
@@ -96,6 +98,26 @@ public class CommonResult {
     public void setData(Object data) {
         // 写入当前接口的业务数据，避免模块继续各自散落 result、row、item 等不同返回字段命名。
         this.data = data;
+    }
+
+    /**
+     * 返回数据库累计影响行数。
+     *
+     * @return 当前写入动作的累计影响行数；非写入结果为空
+     */
+    public Integer getAffectedRows() {
+        // 返回 DAO 实际累计的写入行数，让批量接口无需把统计值嵌套进 data。
+        return affectedRows;
+    }
+
+    /**
+     * 设置数据库累计影响行数。
+     *
+     * @param affectedRows 当前写入动作的累计影响行数
+     */
+    public void setAffectedRows(Integer affectedRows) {
+        // 把写入统计放在 CommonResult 固定顶层字段，避免业务模块创造专用返回结构。
+        this.affectedRows = affectedRows;
     }
 
     /**

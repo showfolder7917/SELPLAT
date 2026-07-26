@@ -1,7 +1,0 @@
-{
-  "tableName": "demo_user",
-  "selectColumns": "id, login_name, display_name, user_status",
-  "fieldName": "display_name",
-  "fieldValue": "管理员",
-  "orderBy": "id ASC"
-}

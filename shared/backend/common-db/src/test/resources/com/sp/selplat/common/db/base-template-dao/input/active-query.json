@@ -1,8 +1,0 @@
-{
-  "tableName": "demo_user",
-  "selectColumns": "id, login_name, display_name, user_status",
-  "queryColumnValueMap": {
-    "user_status": "ACTIVE"
-  },
-  "orderBy": "id ASC"
-}

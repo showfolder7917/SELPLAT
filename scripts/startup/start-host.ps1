@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $platformRoot = (Resolve-Path (Join-Path $scriptRoot "..\..")).Path
 
-$requiredDirs = @("apps", "shared", "docs", "scripts", "runtime", "package-meta")
+$requiredDirs = @("apps", "shared", "docs", "scripts", "cache", "package-meta")
 foreach ($requiredDir in $requiredDirs) {
     $targetPath = Join-Path $platformRoot $requiredDir
     if (-not (Test-Path -Path $targetPath -PathType Container)) {

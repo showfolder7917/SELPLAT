@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 
 /**
  * 默认通用查询执行器负责把已构建 SQL 提交给 JDBC 并转换成统一结果结构。
@@ -76,11 +78,11 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
     public long count(CommonDynamicQuery query) {
         // 先构建当前总数查询的最终 SQL 和参数，保证 count 语句和列表筛选条件保持一致。
         BuiltQuerySql builtQuerySql = sqlBuilder.buildCount(query);
-        // 通过真实数据源获取连接并执行 count SQL，返回受控条件下的总记录数。
-        try (
-            Connection connection = query.getDataSource().getDataSource().getConnection();
-            PreparedStatement preparedStatement = connection.prepareStatement(builtQuerySql.getSql())
-        ) {
+        // 读取当前查询绑定的真实数据源，供 Spring 事务连接获取和释放使用同一入口。
+        DataSource dataSource = query.getDataSource().getDataSource();
+        // 通过 Spring 获取当前事务连接，保证 count 与同一业务事务中的 fixture 或写入状态一致。
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement preparedStatement = connection.prepareStatement(builtQuerySql.getSql())) {
             // 先把 count SQL 的参数按顺序绑定到预编译语句，确保 where 条件与构建结果一致。
             bindParameters(preparedStatement, builtQuerySql.getParameters());
             // 执行总数查询并读取第一列数值结果，供分页场景输出总记录数。
@@ -93,6 +95,9 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
         } catch (SQLException exception) {
             // 统一把 JDBC 执行异常收口成非法状态异常，避免上层被迫处理受检异常。
             throw new IllegalStateException("failed to execute count query", exception);
+        } finally {
+            // 通过 Spring 释放连接；事务存在时保持绑定，非事务场景下及时归还连接池。
+            DataSourceUtils.releaseConnection(connection, dataSource);
         }
         // 极端情况下若 count 查询没有任何返回行，则回退成 0，保持调用方拿到稳定结果。
         return 0L;
@@ -108,11 +113,11 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
     private List<Map<String, Object>> executeListQuery(CommonDynamicQuery query,BuiltQuerySql builtQuerySql) {
         // 创建结果集合承接 JDBC 返回的每一行数据，保持查询结果顺序与数据库返回顺序一致。
         List<Map<String, Object>> resultList = new ArrayList<>();
-        // 通过真实数据源获取连接并创建预编译语句，保证执行目标库来自上层选择的数据源实体。
-        try (
-            Connection connection = query.getDataSource().getDataSource().getConnection();
-            PreparedStatement preparedStatement = connection.prepareStatement(builtQuerySql.getSql())
-        ) {
+        // 读取当前查询绑定的真实数据源，供 Spring 事务连接获取和释放使用同一入口。
+        DataSource dataSource = query.getDataSource().getDataSource();
+        // 通过 Spring 获取当前事务连接，保证列表查询能读取同一事务内准备的真实 Case 数据。
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try (PreparedStatement preparedStatement = connection.prepareStatement(builtQuerySql.getSql())) {
             // 先把列表 SQL 的参数按顺序绑定到预编译语句，确保 where 条件准确落地。
             bindParameters(preparedStatement, builtQuerySql.getParameters());
             // 执行查询并逐行读取结果，统一转换成字段名到值的映射结构。
@@ -140,6 +145,9 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
         } catch (SQLException exception) {
             // 统一把 JDBC 执行异常收口成非法状态异常，避免调用方处理底层受检异常细节。
             throw new IllegalStateException("failed to execute select query", exception);
+        } finally {
+            // 通过 Spring 释放连接；事务存在时保持绑定，非事务场景下及时归还连接池。
+            DataSourceUtils.releaseConnection(connection, dataSource);
         }
         // 返回完整列表结果，供上层 DAO 继续映射成业务输出结构。
         return resultList;
@@ -168,4 +176,3 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
         }
     }
 }
-

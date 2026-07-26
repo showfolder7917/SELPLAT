@@ -1,6 +1,8 @@
 plugins {
     // common-db 是公共数据库层库，只承接模板和公共持久化能力。
     id 'java-library'
+    // JaCoCo 用真实执行数据衡量公共 DAO 测试覆盖，不再用测试数量推断完成度。
+    id 'jacoco'
 }
 
 dependencies {
@@ -14,10 +16,58 @@ dependencies {
     implementation "com.h2database:h2:${h2Version}"
     // 正式测试统一走 JUnit 5，保持和根工程测试平台一致。
     testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
-    // JSON 资源测试需要 Jackson 把输入和期望结果映射成对象结构。
-    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
 }
 
 java {
     withSourcesJar()
+}
+
+jacoco {
+    // 与 Uniauth 使用相同版本，保证 shared 和 apps 覆盖报告口径一致。
+    toolVersion = '0.8.13'
+}
+
+tasks.named('test') {
+    // 每轮 common-db 测试完成后自动输出覆盖报告。
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+tasks.named('jacocoTestReport') {
+    // 覆盖报告必须读取本轮真实 DAO 测试执行数据。
+    dependsOn tasks.named('test')
+    reports {
+        // XML 供自动门禁和结果核对。
+        xml.required = true
+        // HTML 供人工审核具体公共 DAO 缺口。
+        html.required = true
+        // 当前不生成重复 CSV 产物。
+        csv.required = false
+    }
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    // 覆盖门禁必须基于当前轮真实 H2 和结构边界测试数据。
+    dependsOn tasks.named('test')
+    violationRules {
+        // BaseDaoImpl 是业务模块唯一允许调用的公共 DAO 门面，要求逐行完整覆盖。
+        rule {
+            // CLASS 级门禁避免模块平均值掩盖公共门面缺口。
+            element = 'CLASS'
+            // 当前门禁只锁定本轮完整验证的公共 DAO 生产门面。
+            includes = ['com.sp.selplat.common.db.dao.BaseDaoImpl']
+            limit {
+                // 行覆盖率使用真实执行比例。
+                counter = 'LINE'
+                // COVEREDRATIO 表示覆盖行数占全部可执行行比例。
+                value = 'COVEREDRATIO'
+                // 公共门面要求 100% 行覆盖。
+                minimum = 1.0
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    // common-db 标准检查必须同时执行公共门面覆盖门禁。
+    dependsOn tasks.named('jacocoTestCoverageVerification')
 }

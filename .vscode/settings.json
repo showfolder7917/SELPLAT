@@ -1,11 +1,11 @@
 {
+  "java.import.gradle.user.home": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/cache/gradle-user-home",
   "java.autobuild.enabled": false,
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.import.gradle.wrapper.enabled": true,
   "java.import.gradle.offline.enabled": true,
-  "java.import.gradle.user.home": "C:\\opt\\workspace\\SELPLAT\\cache\\gradle-user-home",
   "java.gradle.buildServer.enabled": "off",
-  "java.jdt.ls.vmargs": "-javaagent:C:\\opt\\workspace\\SELPLAT\\cache\\cache-jars\\lombok-1.18.38.jar",
+  "java.jdt.ls.lombokSupport.enabled": true,
   "java.import.exclusions": [
     "**/bin/**"
   ],
@@ -24,6 +24,11 @@
   "[java]": {
     "editor.tabSize": 2,
     "editor.insertSpaces": true
+  },
+  "terminal.integrated.env.osx": {
+    "PYTHONUTF8": "1",
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONPYCACHEPREFIX": "${workspaceFolder}/cache/python-pycache"
   },
   "java.compile.nullAnalysis.mode": "disabled"
 }
