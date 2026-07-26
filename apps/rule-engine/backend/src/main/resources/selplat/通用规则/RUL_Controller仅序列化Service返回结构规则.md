@@ -27,3 +27,9 @@ selplat_batch_common_result_must_not_wrap_data_map = true
 
 <!-- Controller 直接序列化时不得修改 Service 返回对象；适用于空消息、空可选字段和分页字段；业务含义是返回结构不会因经过 HTTP 层而发生隐式变化。 -->
 selplat_controller_must_not_mutate_complete_service_result = true
+
+<!-- 公共 Controller 基类只能保留生产代码实际调用的 HTTP 公共能力；适用于清理旧参数适配器、响应包装器和兼容入口；业务含义是公共继承面不会继续暴露已退出真实请求链路的接口。 -->
+selplat_base_controller_public_or_protected_api_requires_production_reference = true
+
+<!-- 测试代码不得作为保留无生产调用旧接口的唯一依据；适用于公共 Controller 能力收敛；业务含义是测试应验证当前有效契约，而不是反向固化已经废弃的实现。 -->
+selplat_tests_must_not_preserve_controller_legacy_api_without_production_usage = true

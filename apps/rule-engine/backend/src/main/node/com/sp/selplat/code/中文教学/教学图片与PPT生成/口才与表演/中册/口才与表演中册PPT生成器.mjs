@@ -14,6 +14,8 @@ const { Presentation, PresentationFile } = await import(pathToFileURL(ARTIFACT_T
 const WORKSPACE = path.join(PROJECT_ROOT, "OPTION/temp/口才与表演中册其余课程重制");
 // 内容覆盖清单属于轻量课程模板配置，随规则引擎源码统一维护。
 const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/中文教学/template/口才与表演/中册/课程内容索引.json");
+// 图片安全区映射由现有原创图片像素分析生成，用于把文字放在低复杂度自然留白侧。
+const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/中文教学/template/口才与表演/中册/图片安全区映射.json");
 // 正式成品统一回写到当前工程的中文教学项目目录。
 const OUTPUT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/教学图片与PPT生成/项目/口才与表演/中册");
 // 逐页返工目录按课堂模块保存独立插图，避免整课机械复用同一张主题图。
@@ -74,6 +76,8 @@ if (!Number.isInteger(requestedLesson) || requestedLesson < 2 || requestedLesson
 }
 // 完整读取覆盖清单，确保每一页都来自已经盘点的中册内容。
 const coverage = JSON.parse(await fs.readFile(COVERAGE_FILE, "utf8"));
+// 完整读取图片安全区映射，禁止批量页面再用奇偶页猜测文字方向。
+const safeZoneMap = JSON.parse(await fs.readFile(SAFE_ZONE_FILE, "utf8"));
 // 只选择当前调用指定的一课，保持单次内存占用稳定。
 const lesson = coverage.find((item) => item.lesson === requestedLesson);
 // 缺失清单时停止生成，禁止用猜测内容补页。
@@ -106,8 +110,37 @@ const imageBytes = {
   brainstorm: await fs.readFile(rolePaths.brainstorm),
   performance: await fs.readFile(rolePaths.performance),
 };
+// 当前课两位编号用于稳定拼接资源相对键。
+const lessonCode = String(requestedLesson).padStart(2, "0");
+// 每种页面视觉都绑定安全区分析中的相对资源键。
+const safeZoneKeys = {
+  theme: `主题与练习/第${lessonCode}课_主题底图.png`,
+  exercise: `主题与练习/第${lessonCode}课_练习图.png`,
+  situation: `模块插图/第${lessonCode}课/情境观察.png`,
+  pronunciation: `模块插图/第${lessonCode}课/发音训练.png`,
+  brainstorm: `模块插图/第${lessonCode}课/口脑风暴.png`,
+  performance: `模块插图/第${lessonCode}课/粉墨登场.png`,
+};
 // 每课从空白演示文稿创建，不导入旧课件的页面、母版或媒体。
 const deck = Presentation.create({ slideSize: SLIDE_SIZE });
+
+/**
+ * 返回当前原创图片已经分析确认的自然文字安全侧。
+ */
+function safeSideFor(visualKey) {
+  // 视觉键必须先映射到配置中的资源相对路径。
+  const resourceKey = safeZoneKeys[visualKey];
+  // 缺少资源键说明生成器配置不完整，禁止退回固定左卡或奇偶页猜测。
+  if (!resourceKey) throw new Error(`缺少视觉安全区资源键：${visualKey}`);
+  // 当前图片必须拥有像素分析结果。
+  const entry = safeZoneMap[resourceKey];
+  // 安全侧只能是左右两种稳定值。
+  if (!entry || !["left", "right"].includes(entry.safeSide)) {
+    throw new Error(`缺少图片安全区映射：${resourceKey}`);
+  }
+  // 返回低复杂度留白侧供文字组定位。
+  return entry.safeSide;
+}
 
 /**
  * 添加原生可编辑文字，并统一中文字体、行距和自适应策略。
@@ -553,47 +586,48 @@ function buildCover(slideInfo) {
 function buildContent(slideInfo) {
   // 当前页保持与旧稿完全相同的序号。
   const slide = deck.slides.add();
-  // 暖白底承接完整显示产生的留白，不使用放大裁切填满。
+  // 暖白底承接原创水彩图片的自然纸张底色。
   slide.background.fill = C.cream;
-  // 主题导入页继续使用主题主视觉，其他页面按模块选择不同插图。
-  if (slideInfo.role === "主题导入") {
-    addTheme(slide);
-  }
-  // 根据角色写入稳定栏目和导航。
-  const section = sectionFor(slideInfo);
-  addChrome(slide, section, slideInfo.source_slide, section === "字正腔圆" ? C.yellow : section === "情境再现" || section === "粉墨登场" ? C.coral : C.teal);
   // 提取本页标题和正文。
   const extracted = titleAndBody(slideInfo);
+  // 根据角色写入稳定栏目和导航。
+  const section = sectionFor(slideInfo);
   // 发音页只在明确的字正腔圆教学语境中转换教材拼音ɑ，普通英文不受影响。
   const title = section === "字正腔圆" ? normalizePinyinGlyphs(extracted.title) : extracted.title;
   // 发音正文同步转换带调ɑ和韵母组合，保证第一层文本检查可验证。
   const body = section === "字正腔圆" ? normalizePinyinGlyphs(extracted.body) : extracted.body;
-  // 自我介绍、口才之歌和学习导航使用原生信息版式，不用主题图充当装饰。
+  // 自我介绍、口才之歌和学习导航保留第一课已确认的原生信息版式。
   const textOnly = [2, 3, 5].includes(slideInfo.source_slide);
-  // 主题导入页在左侧安全区放置短文字，保持主题图为主视觉。
+  // 主题导入页使用整幅主题底图和图片自身的自然文字安全区。
   const themeIntro = slideInfo.role === "主题导入";
-  // 普通页面按奇偶页交替图文方向，增加整套课件的布局节奏。
-  const imageOnLeft = !textOnly && !themeIntro && slideInfo.source_slide % 2 === 0;
-  // 非纯文字页面完整显示对应模块图，固定图文分区避免文字压住人物。
-  if (!textOnly && !themeIntro) {
-    addRoleImage(
-      slide,
-      visualRoleFor(slideInfo),
-      imageOnLeft
-        ? { left: 38, top: 118, width: 710, height: 550 }
-        : { left: 532, top: 118, width: 710, height: 550 },
-    );
+  // 普通图文页按教学模块选择已经生成的专属原创图片。
+  const visualKey = themeIntro ? "theme" : visualRoleFor(slideInfo);
+  // 纯文字页面不铺无关图片；其他页面先把原创图完整铺入整张画布。
+  if (!textOnly) {
+    if (themeIntro) {
+      // 主题图按第一课标准整幅铺底并保持16:9完整显示。
+      addTheme(slide);
+    } else {
+      // 模块图整幅铺底，禁止继续缩进成小图片窗口。
+      addRoleImage(slide, visualKey, { left: 0, top: 0, width: 1280, height: 720 });
+    }
   }
-  // 文本卡与插图分区，整组在可用高度内视觉居中。
+  // 图片铺底后再添加品牌和栏目，保证导航不会被背景图覆盖。
+  addChrome(slide, section, slideInfo.source_slide, section === "字正腔圆" ? C.yellow : section === "情境再现" || section === "粉墨登场" ? C.coral : C.teal);
+  // 使用像素分析结果选择低复杂度文字安全侧，不再按奇偶页猜测。
+  const safeSide = textOnly ? "left" : safeSideFor(visualKey);
+  // 文本底板遵循第一课标准：短信息页用宽卡，整幅图片页只占自然留白一侧。
   const card = textOnly
     ? { left: 150, top: 145, width: 980, height: 500 }
-    : themeIntro
-      ? { left: 70, top: 185, width: 520, height: 380 }
-      : imageOnLeft
-        ? { left: 770, top: 160, width: 455, height: 455 }
-        : { left: 60, top: 160, width: 455, height: 455 };
+    : {
+      left: safeSide === "left" ? 58 : 742,
+      top: themeIntro ? 190 : 142,
+      width: themeIntro ? 520 : 480,
+      height: themeIntro ? 370 : 482,
+    };
+  // 半透明底板只增强可读性，不把整幅背景切回左右小图布局。
   addGlassCard(slide, card);
-  // 标题位于卡片内而不是压在图片人物上。
+  // 标题与正文作为一个视觉组放入自然留白侧。
   addText(slide, title, { left: card.left + 36, top: card.top + 24, width: card.width - 72, height: 74 }, {
     fontSize: title.length > 18 ? 29 : textOnly ? 41 : 35,
     bold: true,
@@ -601,8 +635,8 @@ function buildContent(slideInfo) {
     alignment: title.length <= 14 ? "center" : "left",
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
   });
-  // 正文在标题下方完整保留，字号由内容长度分级但不低于20。
-  const bodySize = body.length > 220 ? 18 : body.length > 165 ? 20 : body.length > 110 ? 22 : textOnly ? 27 : 25;
+  // 正文在标题下方完整保留；儿童教学正文不得依赖18磅小字塞入页面。
+  const bodySize = body.length > 210 ? 22 : body.length > 150 ? 23 : body.length > 95 ? 25 : textOnly ? 29 : 27;
   addText(slide, body, {
     left: card.left + 40,
     top: card.top + 108,
@@ -618,8 +652,8 @@ function buildContent(slideInfo) {
   });
   // 三个有声栏目页显示统一“播放”入口，点击热区只覆盖按钮自身。
   if (["情境再现", "口脑风暴", "粉墨登场"].includes(slideInfo.role)) {
-    // 装饰按钮与后续Open XML媒体热区使用完全相同的坐标，避免出现两个播放按钮。
-    addAudioButton(slide, imageOnLeft ? 950 : 230, 622);
+    // 播放按钮紧邻当前文字组，且不覆盖人物或正文。
+    addAudioButton(slide, card.left + 34, 632);
   }
   // 备注记录逐页内容来源和不裁剪规则。
   addNotes(slide, slideInfo);
@@ -763,15 +797,21 @@ function buildExercisePage(slideInfo) {
     alignment: "center",
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
   });
-  // 句子宝库使用补充截图转写事实，拓展页同时保留原页任务与补充句式。
-  const sourceBody = normalizeText(slideInfo.source_text);
+  // 句子宝库使用补充截图转写事实，拓展页只保留真实任务并删除教材页码占位提示。
+  const sourceBody = normalizeText(slideInfo.source_text)
+    // 教材截图内容已经进入可编辑正文，因此页码提示不得继续出现在最终PPT。
+    .replace(/请看教材(?:第\s*\d+\s*页)?/g, "")
+    // 清理删除提示后留下的多余空行，保持正文视觉成组。
+    .replace(/\n{3,}/g, "\n\n")
+    // 页面正文两端空白不参与排版。
+    .trim();
   // 同一课的补充事实必须进入可编辑正文，禁止只留“看教材”占位。
-  const body = slideInfo.role === "句子宝库"
+  const body = slideInfo.role === "句子宝库" || !sourceBody
     ? SUPPLEMENT_FACTS[requestedLesson]
     : `${sourceBody}\n\n${SUPPLEMENT_FACTS[requestedLesson]}`;
   // 右侧正文做视觉垂直居中，和左侧四格图片形成平衡。
   addText(slide, body, { left: 900, top: 278, width: 290, height: 296 }, {
-    fontSize: body.length > 175 ? 19 : body.length > 115 ? 21 : 24,
+    fontSize: body.length > 175 ? 21 : body.length > 115 ? 23 : 25,
     alignment: "left",
     verticalAlignment: "middle",
     lineSpacing: 1.3,

@@ -3,6 +3,7 @@ package com.sp.selplat.uniauth.user.controller;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonPageParam;
+import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
 import com.sp.selplat.common.web.controller.BaseController;
 import com.sp.selplat.common.web.controller.ModuleDescription;
@@ -132,8 +133,10 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     @ResponseBody
     @RequestMapping(value = "delete.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
     public String delete(CommonParam queryIn) {
-        // 服务层已经返回假删除结果结构，控制层只转换为 JSON，不再增加额外响应字段。
-        return JsonUtils.toJsonIgnoreNull(getService().delete(queryIn));
+        // 先接收服务层生成的完整假删除结果，明确控制器与业务服务之间的返回结构边界。
+        CommonResult result = getService().delete(queryIn);
+        // 控制层只把既有 CommonResult 转换为 JSON，不再增加字段或改变响应层级。
+        return JsonUtils.toJsonIgnoreNull(result);
     }
 
     /**

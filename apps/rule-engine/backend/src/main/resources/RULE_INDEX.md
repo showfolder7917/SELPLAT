@@ -58,10 +58,11 @@ load_rule_for_selplat_common_param_dao_query = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_common_batch_param_or_thousand_item_batch = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_id_sequence_code_or_composite_id_mapping = SELPLAT_BASE_DAO_REUSE_RULES
 
-<!-- SELPLAT 业务 Service 统一通过基础类泛型 getDao() 获取 DAO 的规则；适用于业务 ServiceImpl 的 DAO 字段、构造函数和持久层调用入口治理。 -->
+<!-- SELPLAT 业务 Service 统一通过基础类泛型 getDao() 获取 DAO，并继承公共 CRUD 默认流程的规则；适用于业务 ServiceImpl 的 DAO 装配、通用方法下沉和特殊处理覆盖治理。 -->
 SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = selplat/通用规则/RUL_基础Service统一DAO访问规则.md
 load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
+load_rule_for_selplat_base_service_default_crud_or_special_override = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 
 <!-- SELPLAT 工程专属的绝对真实数据集成测试规则；适用于 apps 当前及未来应用与 shared 公共模块的测试类名 fixture、数据库查询、写入、分页、排序、发号、事务和覆盖回归验证，不适用于 Fujitsu 或其他工程。 -->
 SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES = selplat/通用规则/RUL_SELPLAT真实数据集成测试规则.md
@@ -71,11 +72,12 @@ load_rule_for_selplat_batch_group_boundary_or_rollback_test = SELPLAT_REAL_DATAB
 load_rule_for_selplat_shared_database_sequence_or_web_regression_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 load_rule_for_selplat_test_fixture_class_and_method_path = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 
-<!-- Service 已返回 CommonResult 或 CommonPageResult 完整结构时的 Controller JSON 职责规则；适用于避免普通响应和分页响应被二次包装。 -->
+<!-- Service 已返回 CommonResult 或 CommonPageResult 完整结构时的 Controller JSON 职责与公共基类接口收敛规则；适用于避免响应二次包装，并删除没有生产调用的旧参数适配器、响应包装器和兼容入口。 -->
 SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES = selplat/通用规则/RUL_Controller仅序列化Service返回结构规则.md
 load_rule_for_selplat_controller_service_result_serialization = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
 load_rule_for_selplat_controller_duplicate_response_wrapping = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
 load_rule_for_selplat_fixed_common_result_or_batch_response_shape = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
+load_rule_for_selplat_base_controller_unused_api_cleanup = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
 
 <!-- SELPLAT 变更任务在确认前执行规则适配审查并在冲突时阻断报告的通用策略；适用于平台全部应用、shared 和规则维护任务。 -->
 SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES = selplat/通用规则/RUL_SELPLAT规则适配审查与阻断规则.md

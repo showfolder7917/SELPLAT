@@ -8,6 +8,8 @@ const PROJECT_ROOT = path.resolve(process.env.SELPLAT_PROJECT_ROOT || process.cw
 const WORKSPACE = path.join(PROJECT_ROOT, "OPTION/temp/口才与表演中册其余课程重制");
 // 逐课清单用于精确定位情境再现、口脑风暴和粉墨登场页面。
 const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/中文教学/template/口才与表演/中册/课程内容索引.json");
+// 图片安全区映射决定每个音频栏目的文字组和播放按钮位于左侧还是右侧。
+const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/中文教学/template/口才与表演/中册/图片安全区映射.json");
 // 示例音频已经从用户参考文件抽取到可复用缓存，正常运行不再反复解包原始PPT。
 const AUDIO_CACHE_ROOT = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/中册/示例音频");
 // 用户参考PPT是示例音频缓存缺失时的可追溯恢复来源。
@@ -22,12 +24,22 @@ if (!Number.isInteger(requestedLesson) || requestedLesson < 2 || requestedLesson
 }
 // 完整读取覆盖清单并找到当前课。
 const coverage = JSON.parse(await fs.readFile(COVERAGE_FILE, "utf8"));
+// 音频热区必须读取与生成器同一份安全区配置，禁止按奇偶页猜测位置。
+const safeZoneMap = JSON.parse(await fs.readFile(SAFE_ZONE_FILE, "utf8"));
 // 当前课内容提供主题、页数和角色定位。
 const lesson = coverage.find((item) => item.lesson === requestedLesson);
 // 缺失数据时禁止继续猜测封装。
 if (!lesson) {
   throw new Error(`覆盖清单中不存在第${requestedLesson}课。`);
 }
+// 当前课两位编号与原创模块图片目录保持一致。
+const lessonCode = String(requestedLesson).padStart(2, "0");
+// 三个音频栏目分别绑定本课的模块专图。
+const audioRoleAssets = {
+  情境再现: `模块插图/第${lessonCode}课/情境观察.png`,
+  口脑风暴: `模块插图/第${lessonCode}课/口脑风暴.png`,
+  粉墨登场: `模块插图/第${lessonCode}课/粉墨登场.png`,
+};
 // 正式文件名与生成器输出保持完全一致。
 const target = path.join(
   OUTPUT_ROOT,
@@ -45,13 +57,21 @@ const audioButton = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/
 // 三类音频页按旧稿角色定位，若同类出现多页则全部封装，不依赖固定页号。
 const audioSlides = lesson.source_slides
   .filter((slide) => ["情境再现", "口脑风暴", "粉墨登场"].includes(slide.role))
-  .map((slide, index) => ({
-    slide: slide.source_slide,
-    // 偶数页的文字卡位于右侧，音频按钮随文字卡移动；奇数页保持左侧。
-    buttonLeft: slide.source_slide % 2 === 0 ? 950 : 230,
-    media: `lesson-${requestedLesson}-sample-audio-${index + 1}.mp3`,
-    source: index % 2 === 1 ? "media2.mp3" : "media1.mp3",
-  }));
+  .map((slide, index) => {
+    // 当前栏目图片必须存在安全区分析结果。
+    const safeZone = safeZoneMap[audioRoleAssets[slide.role]];
+    // 缺少映射时停止封装，避免真实热区与可见按钮错位。
+    if (!safeZone || !["left", "right"].includes(safeZone.safeSide)) {
+      throw new Error(`缺少音频栏目图片安全区：第${requestedLesson}课 ${slide.role}`);
+    }
+    // 返回与生成器卡片左边距加34像素完全一致的按钮位置。
+    return {
+      slide: slide.source_slide,
+      buttonLeft: safeZone.safeSide === "left" ? 92 : 776,
+      media: `lesson-${requestedLesson}-sample-audio-${index + 1}.mp3`,
+      source: index % 2 === 1 ? "media2.mp3" : "media1.mp3",
+    };
+  });
 
 /**
  * 向页面最上层加入与可见按钮完全重合的音频热区。

@@ -12,6 +12,8 @@ dependencies {
     api project(':shared:backend:common-db')
     // 公共服务实现使用 @Service 参与 Spring 容器注册，因此显式声明 Context 编译依赖。
     implementation 'org.springframework:spring-context:6.2.7'
+    // 公共批量写入默认实现使用事务注解统一包围全部分组，保证基础 Service 的批量动作保持原子性。
+    implementation 'org.springframework:spring-tx:6.2.7'
     // 公共服务测试使用 JUnit 验证真实数据库发号、缓存、重试和并发边界。
     testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
 }

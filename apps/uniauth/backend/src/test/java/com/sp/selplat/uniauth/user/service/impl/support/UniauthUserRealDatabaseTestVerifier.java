@@ -157,8 +157,8 @@ public final class UniauthUserRealDatabaseTestVerifier {
             IllegalArgumentException.class,
             () -> userService.getById(param("id", 2199L))
         );
-        // 未命中统一由服务层返回用户不存在提示，不再在 Service 中读取或拼装具体主键。
-        assertTrue(exception.getMessage().contains("未找到对应的用户"));
+        // 未命中统一使用公共 Service 的数据不存在提示，不再携带应用专属名词。
+        assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }
 
     // 验证 getById 缺少主键时在进入数据库前拒绝请求。
@@ -168,8 +168,8 @@ public final class UniauthUserRealDatabaseTestVerifier {
             IllegalArgumentException.class,
             () -> userService.getById(new CommonParam())
         );
-        // 空参数由 DAO 门面按未命中返回，Service 统一使用用户不存在提示。
-        assertTrue(exception.getMessage().contains("未找到对应的用户"));
+        // 空参数由 DAO 门面按未命中返回，父类 Service 统一使用数据不存在提示。
+        assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }
 
     // 验证 getById 收到空参数对象时仍按主键缺失规则稳定失败。
@@ -179,8 +179,8 @@ public final class UniauthUserRealDatabaseTestVerifier {
             IllegalArgumentException.class,
             () -> userService.getById(null)
         );
-        // 空对象与空字段必须使用同一用户不存在提示。
-        assertTrue(exception.getMessage().contains("未找到对应的用户"));
+        // 空对象与空字段必须使用同一公共数据不存在提示。
+        assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }
 
     // 验证 getById 非法字符串主键直接进入真实 DAO 后仍不能形成错误成功结果。

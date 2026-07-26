@@ -2,14 +2,20 @@ package com.sp.selplat.common.service.support;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sp.selplat.common.db.dao.BaseDao;
 import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import com.sp.selplat.common.service.BaseServiceImpl;
 import com.sp.selplat.common.service.sequence.SequenceGenerator;
+import com.sp.selplat.common.util.CommonBatchParam;
+import com.sp.selplat.common.util.CommonPageParam;
+import com.sp.selplat.common.util.CommonPageResult;
+import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import java.lang.reflect.Proxy;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -65,7 +71,125 @@ public final class BaseServiceImplTestVerifier {
             assertEquals("items", writeResult.getData());
             // 影响行数必须位于公共字段而不是嵌套 data。
             assertEquals(2, writeResult.getAffectedRows());
+            // 使用第一类 Service 执行公共 CRUD 默认流程，验证下沉能力仍通过同一个强类型 DAO 门面。
+            verifyCommonCrudDefaults(context.getBean(FirstService.class));
         }
+    }
+
+    // 验证公共 Service 默认实现完整覆盖分页、查询、新增、更新和假删除链路。
+    private static void verifyCommonCrudDefaults(FirstService service) {
+        // 构造带动态条件和分页信息的前端查询对象。
+        CommonPageParam pageIn = new CommonPageParam();
+        // 动态条件直接写入同一个分页参数，验证父类不会重组查询字段。
+        pageIn.putParam("status", 1);
+        // 当前页使用第二页，验证父类独立透传页码。
+        pageIn.setPageNo(2);
+        // 每页条数使用十条，验证父类独立透传页面容量。
+        pageIn.setPageSize(10);
+        // 公共分页入口必须直接返回 DAO 构建的固定分页结构。
+        CommonPageResult pageResult = service.getStore(pageIn);
+        // 测试 DAO 回传的真实页码必须保持不变。
+        assertEquals(2, pageResult.getPageNo());
+        // 测试 DAO 回传的记录必须进入固定 records 字段。
+        assertEquals(1L, pageResult.getRecords().get(0).get("id"));
+
+        // 构造可以命中测试 DAO 的单条主键参数。
+        CommonParam idIn = param("id", 1L);
+        // 公共单条查询入口必须把 DAO 记录放入固定 CommonResult。
+        CommonResult detailResult = service.getById(idIn);
+        // 详情结果必须保留 DAO 返回的主键值。
+        assertEquals(1L, resultMap(detailResult).get("id"));
+        // 缺少主键时测试 DAO 返回 null，父类必须统一抛出未找到异常。
+        assertThrows(IllegalArgumentException.class, () -> service.getById(new CommonParam()));
+
+        // 构造两项批量主键参数验证公共批量查询入口。
+        CommonBatchParam idsIn = batch(param("id", 1L), param("id", 2L));
+        // 公共批量查询结果必须直接使用 DAO 返回记录列表。
+        CommonResult detailsResult = service.getByIds(idsIn);
+        // 批量详情结果必须保留测试 DAO 返回的两条记录。
+        assertEquals(2, resultList(detailsResult).size());
+
+        // 构造普通新增参数验证父类统一生成主键并落库。
+        CommonParam insertIn = param("name", "insert");
+        // 公共新增入口必须返回包含生成主键的同一参数映射。
+        CommonResult insertResult = service.insert(insertIn);
+        // 第一类测试号段生成的主键必须写入新增结果。
+        assertEquals(101L, resultMap(insertResult).get("id"));
+
+        // 构造两项批量新增参数验证逐项发号和累计影响行数。
+        CommonBatchParam insertBatchIn = batch(param("name", "first"), param("name", "second"));
+        // 公共批量新增入口必须返回固定批量结果。
+        CommonResult insertBatchResult = service.insertBatch(insertBatchIn);
+        // 测试 DAO 返回的累计影响行数必须位于 CommonResult 顶层。
+        assertEquals(2, insertBatchResult.getAffectedRows());
+        // 两个新增项都必须取得当前 DAO 对应的生成主键。
+        assertTrue(insertBatchIn.getItems().stream().allMatch(item -> item.getParam("id") != null));
+
+        // 构造普通更新参数验证父类直接透传到 DAO。
+        CommonParam updateIn = param("id", 1L);
+        // 更新字段继续写入同一个参数对象。
+        updateIn.putParam("name", "updated");
+        // 公共更新入口必须返回原始更新字段映射。
+        CommonResult updateResult = service.update(updateIn);
+        // 更新结果必须保留前端提交的字段值。
+        assertEquals("updated", resultMap(updateResult).get("name"));
+
+        // 构造两项批量更新参数验证累计影响行数。
+        CommonBatchParam updateBatchIn = batch(param("id", 1L), param("id", 2L));
+        // 公共批量更新入口必须返回固定批量结果。
+        CommonResult updateBatchResult = service.updateBatch(updateBatchIn);
+        // 测试 DAO 返回的累计影响行数必须位于 CommonResult 顶层。
+        assertEquals(2, updateBatchResult.getAffectedRows());
+
+        // 构造普通假删除参数验证 DAO 补充字段可以直接回传。
+        CommonParam deleteIn = param("id", 1L);
+        // 公共假删除入口必须调用 BaseDao.softDelete。
+        CommonResult deleteResult = service.delete(deleteIn);
+        // 测试 DAO 补充的删除状态必须进入固定结果数据。
+        assertEquals(0, resultMap(deleteResult).get("status"));
+
+        // 构造两项批量假删除参数验证事务默认入口和累计影响行数。
+        CommonBatchParam deleteBatchIn = batch(param("id", 1L), param("id", 2L));
+        // 公共批量假删除入口必须返回固定批量结果。
+        CommonResult deleteBatchResult = service.deleteBatch(deleteBatchIn);
+        // 测试 DAO 返回的累计影响行数必须位于 CommonResult 顶层。
+        assertEquals(2, deleteBatchResult.getAffectedRows());
+        // 每个批量项都必须保留 DAO 补充的假删除状态。
+        assertTrue(deleteBatchIn.getItems().stream().allMatch(item -> Integer.valueOf(0).equals(item.getParam("status"))));
+    }
+
+    // 创建带一个动态字段的通用参数，供公共 CRUD Case 复用同一前端参数形状。
+    private static CommonParam param(String fieldName, Object fieldValue) {
+        // 新建独立参数对象，避免不同 CRUD 动作之间共享可变字段。
+        CommonParam param = new CommonParam();
+        // 写入当前 Case 需要的唯一动态字段。
+        param.putParam(fieldName, fieldValue);
+        // 返回已经完成字段填充的通用参数。
+        return param;
+    }
+
+    // 创建保持输入顺序的批量参数，验证父类不会复制或重排前端 items。
+    private static CommonBatchParam batch(CommonParam... items) {
+        // 新建公共批量参数承接当前 Case 的全部业务项。
+        CommonBatchParam batchParam = new CommonBatchParam();
+        // 按调用顺序写入批量项，模拟前端 JSON items 的稳定顺序。
+        batchParam.setItems(List.of(items));
+        // 返回已经完成 items 填充的批量参数。
+        return batchParam;
+    }
+
+    // 读取固定 CommonResult 中的单条字段映射。
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resultMap(CommonResult result) {
+        // 公共默认实现约定单条写入和详情 data 直接保存字段映射。
+        return (Map<String, Object>) result.getData();
+    }
+
+    // 读取固定 CommonResult 中的批量记录列表。
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> resultList(CommonResult result) {
+        // 公共批量查询约定 data 直接保存 DAO 返回的记录列表。
+        return (List<Map<String, Object>>) result.getData();
     }
 
     // 创建只用于容器类型装配的 DAO 接口代理，避免测试重新实现全部 BaseDao 业务方法。
@@ -91,7 +215,45 @@ public final class BaseServiceImplTestVerifier {
                 if ("getIdSequenceDefinition".equals(method.getName())) {
                     return new IdSequenceDefinition(Map.of("id", sequenceCode));
                 }
-                // 当前结构测试不允许执行任何真实 DAO 方法，数据库行为继续由 common-db 真实数据测试覆盖。
+                // 分页入口返回由调用参数形成的固定结果，验证父类原样透传查询和分页信息。
+                if ("getPageList".equals(method.getName())) {
+                    CommonPageResult pageResult = new CommonPageResult();
+                    pageResult.setRecords(List.of(Map.of("id", 1L, "status", ((Map<?, ?>) arguments[0]).get("status"))));
+                    pageResult.setTotalCount(1L);
+                    pageResult.setPageNo((Integer) arguments[1]);
+                    pageResult.setPageSize((Integer) arguments[2]);
+                    return pageResult;
+                }
+                // 单条查询只在参数含 id 时返回记录，让测试覆盖父类命中和未命中分支。
+                if ("getById".equals(method.getName())) {
+                    CommonParam queryIn = (CommonParam) arguments[0];
+                    return queryIn.getParam("id") == null ? null : Map.of("id", queryIn.getParam("id"));
+                }
+                // 批量查询按输入项返回对应主键记录，验证父类不循环调用单条接口。
+                if ("getByIds".equals(method.getName())) {
+                    CommonBatchParam queryIn = (CommonBatchParam) arguments[0];
+                    return queryIn.getItems().stream().map(item -> Map.of("id", item.getParam("id"))).toList();
+                }
+                // 单条新增和更新只返回一行影响数，数据库字段处理由 common-db 真实测试负责。
+                if ("insert".equals(method.getName()) || "update".equals(method.getName())) {
+                    return 1;
+                }
+                // 批量新增和更新按输入项数返回累计影响行数。
+                if ("insertBatch".equals(method.getName()) || "updateBatch".equals(method.getName())) {
+                    return ((CommonBatchParam) arguments[0]).getItems().size();
+                }
+                // 单条假删除模拟 DAO 补充公共删除状态后返回一行影响数。
+                if ("softDelete".equals(method.getName())) {
+                    ((CommonParam) arguments[0]).putParam("status", 0);
+                    return 1;
+                }
+                // 批量假删除逐项补充公共删除状态并返回累计影响行数。
+                if ("softDeleteBatch".equals(method.getName())) {
+                    CommonBatchParam deleteIn = (CommonBatchParam) arguments[0];
+                    deleteIn.getItems().forEach(item -> item.putParam("status", 0));
+                    return deleteIn.getItems().size();
+                }
+                // 未纳入当前基础 Service 默认流程的方法必须明确拒绝，避免代理静默吞掉错误调用。
                 throw new UnsupportedOperationException("DAO method is outside BaseServiceImpl injection test: " + method.getName());
             }
         );

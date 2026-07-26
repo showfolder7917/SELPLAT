@@ -31,5 +31,17 @@ selplat_base_service_success_result_entry = protected buildSuccessResult(data,me
 <!-- 业务 ServiceImpl 不得重复声明 SequenceGenerator 字段或 buildSuccessResult 实现；适用于继承 BaseServiceImpl 的全部模块；业务含义是公共依赖与公共返回构建只有一个维护入口。 -->
 selplat_application_service_must_not_redeclare_common_service_capability = SequenceGenerator,buildSuccessResult
 
+<!-- BaseServiceImpl 统一提供简单单表模块的分页、详情、批量详情、新增、批量新增、更新、批量更新、假删除和批量假删除默认实现；适用于只需透传 CommonParam/CommonBatchParam 并调用 BaseDao 门面的业务；业务含义是应用 Service 不再复制相同 CRUD 编排。 -->
+selplat_base_service_default_crud_capabilities = getStore,getById,getByIds,insert,insertBatch,update,updateBatch,delete,deleteBatch
+
+<!-- 应用 Service 存在密码摘要等模块专属落库转换时，只覆盖对应公开方法，在调用父类默认实现前后完成必要处理；适用于仍需复用公共主键生成、DAO 调用、事务和 CommonResult 构建的场景；业务含义是特殊业务只表达差异，不复制父类完整流程。 -->
+selplat_application_service_special_crud_override = before_special_processing -> super.default_crud -> after_sensitive_result_cleanup
+
+<!-- 没有模块专属处理的分页、查询和假删除方法必须直接继承 BaseServiceImpl 默认实现；适用于简单单表 ServiceImpl；业务含义是零差异方法不能继续留在应用类中。 -->
+selplat_application_service_must_inherit_zero_difference_crud = true
+
+<!-- 批量新增、更新和假删除的父类默认实现必须保留事务边界；子类覆盖批量方法时也必须维持同一请求全部分组的原子性。 -->
+selplat_base_service_batch_write_transaction = insertBatch,updateBatch,deleteBatch
+
 <!-- 基础 Service 的泛型注入必须在存在多个 BaseDao Bean 时通过真实 Spring 容器验证，并纳入 shared 覆盖率门禁。 -->
 selplat_base_service_dao_injection_test = SpringContext,multiple_BaseDao_beans,generic_binding,coverage_gate
