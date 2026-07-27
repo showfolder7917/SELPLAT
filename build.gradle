@@ -13,15 +13,19 @@ allprojects {
         flatDir {
             dirs rootProject.file('cache/cache-jars')
         }
-        // 先查本地 Maven 仓库，兼容后续参照 SBMAB203 接入本地私仓或离线仓库。
-        mavenLocal()
-        // 默认保留 Maven Central，在线时可以自动补齐公共依赖。
+        // 保留 Maven Central 的仓库身份仅用于命中 cache/gradle-user-home 中已经缓存的模块元数据；settings.gradle 已强制离线。
         mavenCentral()
     }
 }
 
-subprojects {
-    // 所有子项目先统一成 Java 工程，后续按模块职责再叠加 library 或 boot 插件。
+// 多级 Gradle 路径会隐式创建 apps、shared 等聚合节点，这些节点只组织子模块，不应进入 Java 项目模型。
+def javaLeafProjects = subprojects.findAll { currentProject ->
+    // 只有没有下级项目的叶子模块才承载源码、依赖和实际构建生命周期。
+    currentProject.childProjects.isEmpty()
+}
+
+configure(javaLeafProjects) {
+    // 所有叶子模块统一成 Java 工程，后续按模块职责再叠加 library 或 application 插件。
     apply plugin: 'java'
     // Checkstyle 插件先于 checkstyle 扩展配置加载，避免 VS Code 导入 Gradle 时在脚本评估阶段找不到该扩展。
     apply plugin: 'checkstyle'

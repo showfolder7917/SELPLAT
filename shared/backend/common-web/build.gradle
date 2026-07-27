@@ -11,19 +11,19 @@ dependencies {
     // common-web 依赖 common-service，供 BaseController 直接声明统一服务层返回类型。
     api project(':shared:backend:common-service')
     // 公共控制器与参数解析器公开 Spring MVC 类型，使用 api 让业务模块获得一致的 Web 编译契约。
-    api 'org.springframework:spring-webmvc:6.2.7'
+    api "org.springframework:spring-webmvc:${springFrameworkVersion}"
     // 参数解析器直接引用 HttpServletRequest，Servlet API 仅用于编译并由实际 Web 容器在运行期提供。
-    compileOnly 'jakarta.servlet:jakarta.servlet-api:6.1.0'
+    compileOnly "jakarta.servlet:jakarta.servlet-api:${servletApiVersion}"
     // common-web 需要用 JUnit 5 验证公共控制器的请求上下文和路径解析规则。
     testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
     // JUnit 5.12.2 需要匹配的 Platform Launcher 才能在 Gradle 测试发现阶段正确加载测试引擎。
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}"
     // Spring MVC 测试工具提供可控请求对象，避免公共控制器测试依赖真实 Tomcat 或业务数据库。
-    testImplementation 'org.springframework:spring-test:6.2.7'
+    testImplementation "org.springframework:spring-test:${springFrameworkVersion}"
     // 测试中的模拟请求需引用 Servlet API 类型，只在测试类路径提供，不引入生产运行依赖。
-    testCompileOnly 'jakarta.servlet:jakarta.servlet-api:6.1.0'
+    testCompileOnly "jakarta.servlet:jakarta.servlet-api:${servletApiVersion}"
     // JUnit 装载模拟请求测试类时也需解析 Servlet API 类型，仅在测试运行期补齐该依赖。
-    testRuntimeOnly 'jakarta.servlet:jakarta.servlet-api:6.1.0'
+    testRuntimeOnly "jakarta.servlet:jakarta.servlet-api:${servletApiVersion}"
 }
 
 java {
@@ -32,7 +32,7 @@ java {
 
 jacoco {
     // 与工程其他模块统一覆盖工具版本。
-    toolVersion = '0.8.13'
+    toolVersion = jacocoVersion
 }
 
 tasks.named('test') {

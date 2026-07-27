@@ -15,6 +15,12 @@ selplat_gradle_project_cache = cache/gradle-project-cache
 <!-- 持久化离线 jar 固定在工程根 cache；适用于所有 Java 子项目；业务含义是依赖只有一个共享来源 -->
 selplat_offline_jar_root = cache/cache-jars
 
+<!-- 第三方依赖使用标准 Maven 坐标声明，公共版本统一来自根 gradle.properties；适用于应用和共享模块；业务含义是 VS Code 与命令行读取同一依赖模型 -->
+selplat_dependency_declaration = explicit_maven_coordinate_with_root_version_property
+
+<!-- 离线坐标对应的 jar 不存在时必须先补入工程 cache；适用于编译、测试和 IDE 导入；业务含义是禁止联网下载或用错误版本伪装成功 -->
+selplat_missing_offline_dependency_policy = stop_and_place_exact_jar_in_cache/cache-jars
+
 <!-- 本机执行默认使用离线模式；适用于编译、测试和运行验证；业务含义是不得为完成任务下载依赖或工具 -->
 selplat_gradle_default_mode = offline
 

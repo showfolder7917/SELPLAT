@@ -45,11 +45,21 @@ EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES = 跨工程通用规则/RUL_执行文�
 load_rule_for_execution_document_thread_isolation = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
 load_rule_for_execution_document_history_or_legacy_migration = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
 
+<!-- CPMAB082 的测试数据、数据库集成 Case 与 JaCoCo 覆盖率规则；仅在修改或验证该批处理的测试数据、Tester、数据库结果或覆盖率时加载。 -->
+FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082测试数据覆盖规则.md
+load_rule_for_cpmab082_test_data_or_database_integration = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
+load_rule_for_cpmab082_tester_case_or_jacoco_coverage = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
+
 <!-- SELPLAT 工程目录、构建产物、项目 JDK、工具运行数据与缓存位置规则；适用于工程路径解析、旧 runtime 迁移及 Python 字节码缓存定向。 -->
 SELPLAT_PROJECT_PATH_RULES = selplat/通用规则/RUL_SELPLAT工程路径规则.md
 load_rule_for_selplat_project_path_or_runtime_output = SELPLAT_PROJECT_PATH_RULES
 load_rule_for_python_bytecode_cache_location = SELPLAT_PROJECT_PATH_RULES
 load_rule_for_selplat_project_jdk_cache_or_legacy_runtime_migration = SELPLAT_PROJECT_PATH_RULES
+
+<!-- SELPLAT 根 Gradle、统一 build/cache、离线坐标、Wrapper 与 VS Code 导入规则；适用于全工程 Java 编译和依赖配置。 -->
+SELPLAT_PROJECT_BUILD_RULES = selplat/通用规则/RUL_SELPLAT工程构建规则.md
+load_rule_for_selplat_gradle_dependency_or_build_output = SELPLAT_PROJECT_BUILD_RULES
+load_rule_for_selplat_vscode_gradle_import_or_cache = SELPLAT_PROJECT_BUILD_RULES
 
 <!-- SELPLAT 全部应用共用的基础 DAO 复用、CommonParam/CommonBatchParam 透传和主键号段定义规则；适用于简单单表 CRUD、千条分组真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
 SELPLAT_BASE_DAO_REUSE_RULES = selplat/通用规则/RUL_基础DAO复用与通用参数透传规则.md

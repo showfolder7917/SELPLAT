@@ -1,5 +1,8 @@
 rootProject.name = 'SELPLAT'
 
+// SELPLAT 的依赖解析必须只使用工程内既有缓存，命令行和 VS Code 导入均禁止隐式联网补包。
+gradle.startParameter.offline = true
+
 // 先按蓝图把公共核心库纳入根构建，供业务模块统一依赖。
 include('shared:backend:common-core')
 // 公共服务层提供业务 service 统一继承入口，先以最小空壳模块接入根构建。

@@ -11,9 +11,9 @@ dependencies {
     // common-service 依赖 common-db，供公共服务基类或下游服务模块直接复用数据库公共能力。
     api project(':shared:backend:common-db')
     // 公共服务实现使用 @Service 参与 Spring 容器注册，因此显式声明 Context 编译依赖。
-    implementation 'org.springframework:spring-context:6.2.7'
+    implementation "org.springframework:spring-context:${springFrameworkVersion}"
     // 公共批量写入默认实现使用事务注解统一包围全部分组，保证基础 Service 的批量动作保持原子性。
-    implementation 'org.springframework:spring-tx:6.2.7'
+    implementation "org.springframework:spring-tx:${springFrameworkVersion}"
     // 公共服务测试使用 JUnit 验证真实数据库发号、缓存、重试和并发边界。
     testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
 }
@@ -24,7 +24,7 @@ java {
 
 jacoco {
     // 与工程其他模块统一覆盖工具版本。
-    toolVersion = '0.8.13'
+    toolVersion = jacocoVersion
 }
 
 tasks.named('test') {

@@ -5,9 +5,9 @@ plugins {
 
 dependencies {
     // JsonUtils 作为对外可复用的公共 JSON 工具，需要把 Jackson 能力透传给依赖 common-core 的下游模块。
-    api 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    api "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
     // JsonUtils 需要支持 Java 8 时间类型序列化，并让下游模块在运行期也能拿到同一套时间序列化能力。
-    api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.19.2'
+    api "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
     // 文档修正能力所需的 POI 及传递依赖统一从工程根离线依赖目录读取。
     implementation fileTree(dir: rootProject.file('cache/cache-jars'), include: ['*.jar'])
 }
