@@ -120,16 +120,14 @@ async function embedDeck(pptxPath, lessonNumber) {
     const slideXml = await fs.readFile(slidePath, "utf8");
     // 当前页面可见文字用于精准识别教学角色。
     const text = extractText(slideXml);
-    // 只有正文标题完全命中三类角色时才嵌入音频，学习导航页不命中。
+    // 只要页面栏目明确命中三类角色且存在专用按钮即可嵌入音频。
     const role = AUDIO_ROLES.find((candidate) => new RegExp(`(^|\\n)${candidate}(\\n|$)`).test(text));
-    // 同一页面必须至少出现两次角色名，分别来自栏目标签和正文标题。
-    const roleCount = role ? text.split(role).length - 1 : 0;
-    // 导航页只在列表中出现一次，因此不加入音频。
-    if (!role || roleCount < 2) continue;
+    // 学习导航页已经由生成器删除，栏目只出现一次时也可能使用真实教学标题，不能因此漏掉音频。
+    if (!role) continue;
     // 可见按钮边界由页面XML直接读取，保证点击区不遮挡空白翻页区。
     const bounds = findVisibleButtonBounds(slideXml);
-    // 缺少可见按钮属于生成链路错误，禁止生成隐形大热区。
-    if (!bounds) throw new Error(`第${lessonNumber}课第${slideNumber}页未找到可见播放按钮。`);
+    // 同栏目续页不放播放按钮，因此只封装带有明确可见按钮的栏目首页。
+    if (!bounds) continue;
     // 每个音频页使用独立文件名，后续可逐页替换真实录音。
     const mediaName = `lesson-${lessonNumber}-${audioSlides.length + 1}.mp3`;
     // 两段示例音频交替使用，但输出文件彼此独立。
@@ -184,8 +182,8 @@ await Promise.all([
 ]);
 // 成品目录中的PPTX按自然文件名顺序读取。
 const allFiles = (await fs.readdir(OUTPUT_ROOT))
-  // 只处理PPTX，忽略artifact-tool辅助检查文件。
-  .filter((file) => /\.pptx$/i.test(file))
+  // 只处理正式PPTX，并排除PowerPoint打开文件时创建的“.~”临时锁副本。
+  .filter((file) => /\.pptx$/i.test(file) && !file.startsWith(".~"))
   // 中文数字文件名按locale自然排序。
   .sort((left, right) => left.localeCompare(right, "zh-CN", { numeric: true }));
 // 单课模式从文件名前缀筛选目标。

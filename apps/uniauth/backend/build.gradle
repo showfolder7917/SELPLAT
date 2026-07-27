@@ -18,7 +18,7 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
     // JDBC Starter 负责本地 H2 数据源和事务边界。
     implementation "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
-    // MyBatis Starter 负责注解式 BaseTemplateDao 与 Spring 容器桥接，当前模块不使用 Mapper XML。
+    // MyBatis Starter 负责注解式 BaseTemplateMapper 与模板 DAO 门面桥接，当前模块不使用 Mapper XML。
     implementation "org.mybatis.spring.boot:mybatis-spring-boot-starter:${mybatisSpringBootVersion}"
     // Lombok 负责为 final 字段自动生成构造器，离线编译统一从工程根 cache/cache-jars 读取。
     compileOnly files(rootProject.file("cache/cache-jars/lombok-${lombokVersion}.jar"))

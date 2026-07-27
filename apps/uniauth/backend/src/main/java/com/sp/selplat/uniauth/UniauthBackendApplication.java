@@ -4,9 +4,9 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-// Uniauth 启动入口负责装配控制层、服务层、MyBatis 映射和本地验证所需的数据源配置。
+// Uniauth 启动入口负责装配控制层、服务层、公共模板 Mapper 和本地验证所需的数据源配置。
 @SpringBootApplication(scanBasePackages = "com.sp.selplat")
-// Mapper 扫描只注册公共模板 DAO 所在包，避免把 BaseDao 或业务 DAO 接口误注册成第二个 Bean。
+// Mapper 扫描只注册公共模板层内部 Mapper，BaseTemplateDao 门面继续由 Spring 组件扫描装配。
 @MapperScan("com.sp.selplat.common.db.template")
 public class UniauthBackendApplication {
 

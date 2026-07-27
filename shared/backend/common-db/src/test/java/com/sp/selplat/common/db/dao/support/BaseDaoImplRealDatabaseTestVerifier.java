@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
 import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
+import com.sp.selplat.common.db.template.BaseTemplateMapper;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
@@ -34,7 +35,7 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.h2.jdbcx.JdbcDataSource;
 import org.h2.tools.RunScript;
 
-// BaseDaoImpl 真实数据库验证器用独立 H2、真实 JDBC 元数据和 MyBatis 注解模板执行每个公共 DAO Case。
+// BaseDaoImpl 真实数据库验证器用独立 H2、真实 JDBC 元数据、内部 Mapper 和模板 DAO 执行每个公共 DAO Case。
 public final class BaseDaoImplRealDatabaseTestVerifier {
 
     // 验证器没有跨 Case 状态，每次调用都创建全新的内存数据库。
@@ -349,17 +350,19 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         }
         // 创建真实 MyBatis 环境并绑定当前 H2 数据源。
         Environment environment = new Environment("common-db-real-test", new JdbcTransactionFactory(), dataSource);
-        // 创建 MyBatis 配置承接注解式 BaseTemplateDao。
+        // 创建 MyBatis 配置承接模板层内部的注解式 BaseTemplateMapper。
         Configuration configuration = new Configuration(environment);
-        // 注册当前生产使用的真实注解模板 Mapper。
-        configuration.addMapper(BaseTemplateDao.class);
+        // 注册当前生产模板 DAO 内部使用的真实注解 Mapper。
+        configuration.addMapper(BaseTemplateMapper.class);
         // 创建可提交真实 SQL 的 MyBatis 会话工厂。
         SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
         try (SqlSession sqlSession = sqlSessionFactory.openSession(true)) {
             // 创建真实公共 DAO 测试门面。
             SharedFixtureDaoImpl dao = new SharedFixtureDaoImpl();
-            // 注入真实模板 Mapper 和数据源，保持生产继承链不变。
-            dao.initialize(sqlSession.getMapper(BaseTemplateDao.class), dataSource);
+            // 使用真实 Mapper 和同一数据源创建生产模板 DAO 门面。
+            BaseTemplateDao templateDao = new BaseTemplateDao(sqlSession.getMapper(BaseTemplateMapper.class), dataSource);
+            // 注入真实模板 DAO 和数据源，保持生产继承链不变。
+            dao.initialize(templateDao, dataSource);
             // 把完整真实上下文交给当前 Case 验证动作。
             caseAction.accept(new RealContext(dao, dataSource));
         }
@@ -370,7 +373,7 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
 
         // 测试只显式注入生产中由 Spring 提供的两个基础依赖。
         private void initialize(BaseTemplateDao templateDao, DataSource fixtureDataSource) {
-            // 真实 MyBatis Mapper 进入 BaseDao 生产模板字段。
+            // 真实模板 DAO 进入 BaseDao 生产模板字段。
             this.baseTemplateDao = templateDao;
             // 真实 H2 数据源进入元数据和动态查询生产字段。
             this.dataSource = fixtureDataSource;

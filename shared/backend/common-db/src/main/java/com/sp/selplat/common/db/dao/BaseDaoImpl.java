@@ -122,12 +122,14 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         }
         // affectedRows 累计每个真实批处理分组的数据库影响行数。
         int affectedRows = 0;
+        // 目标表继续由当前 DAO 命名约定统一解析，所有分组复用同一张表。
+        String tableName = getTableName();
         // 固定按一千条步长遍历全部新增项。
         for (int startIndex = 0; startIndex < saveIn.getItems().size(); startIndex += BATCH_OPERATION_SIZE) {
             // 当前新增分组最多包含一千条。
             int endIndex = Math.min(startIndex + BATCH_OPERATION_SIZE, saveIn.getItems().size());
-            // 每组交给深层 JDBC 批处理一次执行，避免逐条调用 insert。
-            affectedRows += insertBatchGroup(saveIn.getItems().subList(startIndex, endIndex));
+            // 每组统一交给模板 DAO 执行一次真实 JDBC batch，门面层不再拼接 INSERT SQL。
+            affectedRows += baseTemplateDao.insertBatch(tableName, saveIn.getItems().subList(startIndex, endIndex));
         }
         // 返回所有分组累计影响行数，供 Service 形成批量结果。
         return affectedRows;
@@ -168,12 +170,20 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         }
         // affectedRows 汇总全部字段结构分组的真实更新结果。
         int affectedRows = 0;
+        // 目标表继续由当前 DAO 命名约定解析，避免模板层接收前端表名。
+        String tableName = getTableName();
+        // 主键字段一次性从真实表元数据读取，供所有千条分组复用同一更新条件结构。
+        List<String> idColumns = getIds();
         // 固定按一千条步长拆分外部批量请求。
         for (int startIndex = 0; startIndex < saveIn.getItems().size(); startIndex += BATCH_OPERATION_SIZE) {
             // 当前更新分组最多包含一千条。
             int endIndex = Math.min(startIndex + BATCH_OPERATION_SIZE, saveIn.getItems().size());
-            // 深层实现按 SQL 结构归并并执行 JDBC 批处理，不循环调用公开单条 update。
-            affectedRows += updateBatchGroup(saveIn.getItems().subList(startIndex, endIndex));
+            // 模板 DAO 按更新字段结构归并并执行真实 JDBC batch，不循环调用公开单条 update。
+            affectedRows += baseTemplateDao.updateBatchByIds(
+                tableName,
+                idColumns,
+                saveIn.getItems().subList(startIndex, endIndex)
+            );
         }
         // 返回全部分组的累计更新行数。
         return affectedRows;

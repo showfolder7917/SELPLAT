@@ -166,6 +166,12 @@
 26. 自动检查必须增加“底板必要性”结果：当页面为纯色或低纹理画布，或插图已提供连续自然留白且文字对比度合格时，不得添加文字底板；只有文字区域对比度不足、纹理干扰明显且无法通过移动文字组解决时，才允许使用底板。
 27. 使用底板的页面必须同时通过必要性、占用率、光学居中和主体避让四项检查。短标题、课次或三行以内提示不得放入占据半页的大卡片；取消底板后仍须按一个完整视觉组重新计算标题、正文和课次的位置，禁止只删除形状而保留原来的松散坐标。
 28. 图文语义一致性属于通用验收门禁：检测报告必须逐页登记“页面教学文本主题—插图人物/动作/物品—课堂任务”的对应关系。插图只符合宽泛课程主题但无法解释当前页文本，或连续两页使用同图而文本已切换到另一故事、动作或物品时，必须判定失败并优先查找已有匹配图；确认不存在时才补图。
+29. 自然留白充足的插画页必须执行“内容量—字号”联动检查：短诗、绕口令、四至八行儿歌或短提示不得沿用长文小字号；正文较短时应主动放大，课堂朗读正文通常不低于`30pt`，重点朗读页宜达到`34pt`以上。
+30. 文字安全区不能只按文本框是否越界判断。自动检查应允许按教学关键词定位具体文本框，并验证其最右边界、最小字号和双栏水平位置；文字框进入人物、花坛、动作物品等主体区，即使字符尚未覆盖边界，也必须判定为视觉侵入。
+31. 系列课件必须执行视觉资产多样性检测：固定Logo、控件和装饰不计入教学图片；检测器应统计唯一图片哈希、单图最大重复次数、每个教学模块实际使用的视觉角色，并把跨模块重复滥用判为失败。
+32. 同一课程分册的检测标准只能保持或增强，禁止后续分册减少模块语义检查、最低独立图片数、字号检查、遮挡检查或实际渲染抽查，以较弱检测掩盖生成器缩水。
+33. 窄栏图文页必须按“实际栏宽可容纳字符数＋显式段落数＋视觉折行数”切分连续页，禁止只按总字符数判断容量；正文所需视觉行数超过文字框可用行数时必须判定失败。正文开头若重复出现当前栏目名，必须先清理旧模板栏目字样，禁止新标题与正文中的旧标题叠放。
+34. 具有专用整页版式的单页模块必须先跳过通用正文切分，再由专用版式一次写入；自动检查必须核对这类模块的期望页数，禁止“切出多个片段、每个片段又写入完整模块”造成整页重复。
 
 <!-- 问题：传统溢出检测无法发现标题相距过远、文字缩在大卡片一角、异常字距和列表碎裂等整体不美观问题。 -->
 <!-- 场景：所有横版教学PPT在结构和溢出检查通过后，继续执行视觉层级、内容分组和页面平衡检查。 -->
@@ -175,6 +181,13 @@
 `PPT_PAGE_BALANCE_CHECK = SAFE_MARGIN + COLUMN_BALANCE + AUDIO_GROUPING`
 `PPT_BACKPLATE_NECESSITY_CHECK = NATURAL_SAFE_ZONE + TEXT_CONTRAST + CARD_REQUIRED_ONLY`
 `PPT_TEXT_IMAGE_SEMANTIC_CHECK = TEXT_TOPIC + SUBJECT_ACTION + KEY_OBJECT`
+`PPT_CONTEXT_FONT_CHECK = TEXT_DENSITY + READING_ROLE + MINIMUM_POINT`
+`PPT_TEXT_SAFE_REGION_CHECK = KEYWORD_TARGET + TEXT_BOX_BOUNDARY + SUBJECT_AVOIDANCE`
+`PPT_VISUAL_ASSET_DIVERSITY = UNIQUE_CONTENT_HASH + MODULE_ROLE_COVERAGE + MAX_REPEAT_RATIO + FIXED_ASSET_EXCLUSION`
+`PPT_SERIES_QUALITY_FLOOR = PREVIOUS_APPROVED_VOLUME_BASELINE + DETECTOR_NO_DOWNSHIFT`
+`PPT_TEXT_BOX_CAPACITY_CHECK = COLUMN_WIDTH + EXPLICIT_PARAGRAPHS + WRAPPED_LINES + FONT_LINE_HEIGHT`
+`PPT_DUPLICATE_SECTION_TITLE_CHECK = NEW_SECTION_TITLE + LEGACY_BODY_PREFIX_REMOVAL`
+`PPT_SINGLE_PAGE_MODULE_CHECK = SPECIAL_LAYOUT_BYPASS_SPLITTER + EXPECTED_PAGE_COUNT + NO_FULL_PAGE_DUPLICATE`
 
 ## 九、重试和失败处理
 

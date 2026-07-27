@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { inspectCommonDeckQuality } from "../通用/口才与表演通用质量检测核心.mjs";
 
 // 检测器从调用方工作目录识别当前工程，保证跨任务页面仍检查正确成品。
 const PROJECT_ROOT = path.resolve(process.env.SELPLAT_PROJECT_ROOT || process.cwd());
@@ -13,6 +14,8 @@ const OUTPUT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/教学图�
 const REPORT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/下册制作分析");
 // 生成器源码必须先通过准入检查，避免旧逻辑在下次批量生成时重新污染成品。
 const GENERATOR_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/node/com/sp/selplat/code/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册PPT生成器.mjs");
+// 第一课视觉计划用于核对中册式自然留白插画是否真正进入成品。
+const LESSON_ONE_VISUAL_PLAN_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/中文教学/template/口才与表演/下册/第01课视觉计划.json");
 // 下册原创缓存是最终教学主视觉的唯一合法来源。
 const ORIGINAL_ASSET_ROOT = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/下册/原创插图");
 // 教材照片只参与哈希黑名单和教学事实核对，不允许进入最终媒体。
@@ -24,7 +27,7 @@ const AUDIO_BUTTON_PATH = path.join(PROJECT_ROOT, "cache/中文教学/口才与�
 // 三个核心音频栏目是每课固定交互基线。
 const AUDIO_ROLES = ["情境再现", "口脑风暴", "粉墨登场"];
 // 关键教学板块必须从原稿延续到新版。
-const CORE_ROLES = ["口才之歌", "学习导航", "情境再现", "字正腔圆", "口脑风暴", "粉墨登场", "课堂回顾", "结束页"];
+const CORE_ROLES = ["口才之歌", "情境再现", "字正腔圆", "口脑风暴", "粉墨登场", "课堂回顾", "结束页"];
 // 旧PPT媒体和教材截图哈希在整册检查开始前统一建立。
 const forbiddenOldMediaHashes = new Set();
 // 已确认Logo与控件即使曾出现在旧稿中也允许继续使用。
@@ -102,6 +105,98 @@ function extractPictureBounds(xml) {
 }
 
 /**
+ * 提取带业务名称的文本框及其可用容量参数。
+ */
+function extractNamedTextBoxes(xml) {
+  // 每个原生文本形状独立解析，检测字号缩水和底板内文字溢出。
+  return [...xml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)].flatMap((match) => {
+    // 当前文本形状完整XML。
+    const block = match[0];
+    // 业务名称用于区分正文、标题和教材拓展。
+    const name = block.match(/<p:cNvPr[^>]*\sname="([^"]*)"/)?.[1] || "";
+    // 只检查需要承担成段教学文字的正文框。
+    if (!/^CONTENT_BODY$|^SUPPLEMENT_BODY_/u.test(name)) return [];
+    // 文本框坐标与尺寸决定可用行宽和行高。
+    const transform = block.match(/<a:off x="(\d+)" y="(\d+)"\s*\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\s*\/>/);
+    // 无尺寸时由其他结构检查处理。
+    if (!transform) return [];
+    // 实际运行字号以最小值为准，防止局部自动缩字逃过检测。
+    const fontSizes = [...block.matchAll(/\ssz="(\d+)"/g)].map((item) => Number(item[1]) / 100);
+    // 未显式写入字号时无法做容量估算。
+    if (!fontSizes.length) return [];
+    // 行距百分比不存在时按常规1.3估算。
+    const lineSpacing = Number(block.match(/<a:spcPct val="(\d+)"/)?.[1] || 130000) / 100000;
+    // 返回检测所需的可见文字和几何信息。
+    return [{
+      name,
+      text: extractText(block),
+      width: Number(transform[3]) / 9525,
+      height: Number(transform[4]) / 9525,
+      fontSize: Math.min(...fontSizes),
+      lineSpacing,
+    }];
+  });
+}
+
+/**
+ * 估算文本框在当前字号下需要的视觉行数。
+ */
+function estimateVisualLineCount(text, width, fontSize) {
+  // 左右内边距合计按32画布单位扣除，与生成器正文框保持一致。
+  const usableWidth = Math.max(1, width - 32);
+  // 中文全角字按字号宽度估算，保守系数避免渲染器字体差异造成漏报。
+  const charsPerLine = Math.max(1, Math.floor(usableWidth / (fontSize * 0.95)));
+  // 每个显式段落至少占一行，长段落按栏宽继续折行。
+  return String(text || "")
+    .split(/\n/)
+    .filter((line) => line.length > 0)
+    .reduce((sum, line) => sum + Math.max(1, Math.ceil([...line].length / charsPerLine)), 0);
+}
+
+/**
+ * 按对象名称读取单个文本形状的可见文字。
+ */
+function extractShapeTextByName(xml, shapeName) {
+  // 遍历页面文本形状并命中指定业务名称。
+  const block = [...xml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)]
+    .map((match) => match[0])
+    .find((item) => new RegExp(`<p:cNvPr[^>]*\\sname="${shapeName}"`).test(item));
+  // 未找到目标形状时返回空串，由其他结构规则判断缺失。
+  return block ? extractText(block) : "";
+}
+
+/**
+ * 按业务名称提取文本形状坐标，供拼音与汉字中心线检查。
+ */
+function extractTextShapeBounds(xml, shapeName) {
+  // 逐个文本形状查找精确业务名称。
+  const block = [...xml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)]
+    .map((match) => match[0])
+    .find((item) => new RegExp(`<p:cNvPr[^>]*\\sname="${shapeName}"`).test(item));
+  // 缺少对象时返回空值，由调用方给出明确错误。
+  if (!block) return null;
+  // 坐标和尺寸必须同时存在。
+  const transform = block.match(/<a:off x="(\d+)" y="(\d+)"\s*\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\s*\/>/);
+  // 没有变换信息无法计算中心线。
+  if (!transform) return null;
+  // 返回原始EMU坐标，避免单位换算引入误差。
+  return {
+    x: Number(transform[1]),
+    y: Number(transform[2]),
+    cx: Number(transform[3]),
+    cy: Number(transform[4]),
+  };
+}
+
+/**
+ * 把栏目名称归一为可比较的紧凑文本。
+ */
+function normalizeSectionLabel(text) {
+  // “情景再现”与“情境再现”在旧稿中属于同一栏目，统一后再比较。
+  return String(text || "").replace(/\s+/g, "").replace(/^情景再现/u, "情境再现");
+}
+
+/**
  * 对二进制内容计算稳定SHA-1，用于跨PPTX和缓存目录比较媒体来源。
  */
 function hashBytes(bytes) {
@@ -130,7 +225,21 @@ async function inspectGeneratorSource(coverage) {
   // 生成器源码按UTF-8完整读取。
   const source = await fs.readFile(GENERATOR_PATH, "utf8");
   // 必须存在的架构标记证明生成器绑定原创缓存、结构化映射和空白画布。
-  const requiredMarkers = ["ORIGINAL_ASSET_ROOT", "SUPPLEMENT_FACTS", "addOriginalVisual", "Presentation.create"];
+  const requiredMarkers = [
+    "ORIGINAL_ASSET_ROOT",
+    "SUPPLEMENT_FACTS",
+    "addOriginalVisual",
+    "Presentation.create",
+    '"theme"',
+    '"practice"',
+    '"storyboard"',
+    // 下册生成器必须接入全册共用布局核心。
+    "buildSceneLayout",
+    // 图文语义必须在生成阶段执行硬门禁。
+    "assertSemanticCoverage",
+    // 册别适配器必须按图片声明读取自然留白侧。
+    "lessonOneVisualPlans",
+  ];
   // 逐个检查关键入口。
   for (const marker of requiredMarkers) {
     // 缺少入口说明生成器未完成新链路迁移。
@@ -163,17 +272,33 @@ async function inspectGeneratorSource(coverage) {
   }
   // 重复映射会造成课程页重复或错配。
   if (new Set(mappedFiles).size !== mappedFiles.length) errors.push("生成器存在重复截图映射键。");
-  // 每课必须具有故事板和四个独立场景。
+  // 每课必须具有主题、练习、故事板和四个独立模块场景，质量基准不得低于中册。
   for (let lesson = 1; lesson <= 16; lesson += 1) {
     // 课次目录使用稳定两位编号。
     const lessonDir = path.join(ORIGINAL_ASSET_ROOT, `第${String(lesson).padStart(2, "0")}课`);
-    // 五个资产缺一不可。
-    for (const file of ["模块故事板.png", "场景1.png", "场景2.png", "场景3.png", "场景4.png"]) {
+    // 七个资产缺一不可，禁止重新回退成“四张图轮换整课”。
+    for (const file of ["主题底图.png", "课堂练习.png", "模块故事板.png", "场景1.png", "场景2.png", "场景3.png", "场景4.png"]) {
       // 缺图时记录完整课次和文件名。
       try {
         await fs.access(path.join(lessonDir, file));
       } catch {
         errors.push(`第${lesson}课缺少原创资产：${file}。`);
+      }
+    }
+    // 第一课样稿还必须具备四张中册式16:9自然留白语义插画。
+    if (lesson === 1) {
+      // 补图文件由视觉计划稳定声明，禁止检测器和生成器各维护一份文件名。
+      const visualPlans = JSON.parse(await fs.readFile(LESSON_ONE_VISUAL_PLAN_PATH, "utf8"));
+      // 非基础资产逐一检查缓存存在性。
+      for (const plan of Object.values(visualPlans)) {
+        // 基础主题图和练习图已经在七类资产检查中覆盖。
+        if (["主题底图.png", "课堂练习.png"].includes(plan.asset)) continue;
+        // 缺少任何补图都会使第一课重新退化为少图版本。
+        try {
+          await fs.access(path.join(lessonDir, plan.asset));
+        } catch {
+          errors.push(`第1课缺少中册式语义插画：${plan.asset}。`);
+        }
       }
     }
   }
@@ -226,6 +351,8 @@ async function inspectLesson(lesson) {
     .sort((left, right) => Number(left.match(/slide(\d+)/)[1]) - Number(right.match(/slide(\d+)/)[1]));
   // 源PPT中的教材提示页和“图一、图二”编号页都属于同一批截图教学单元的旧占位表达。
   const replacedSourceCount = lesson.source_slides.filter((slide) => {
+    // 学习导航属于旧课件目录页，不再作为最终教学页面。
+    if (slide.role === "学习导航") return true;
     // 原始提示语由对应的结构化教材拓展页替代。
     if (/请看教材|教材第\s*\d+\s*页/.test(slide.source_text)) return true;
     // 纯图片编号页不具备独立教学内容，已有补充截图时不得重复计入最低页数。
@@ -253,8 +380,24 @@ async function inspectLesson(lesson) {
     // 可见文字提前抽取。
     return { number, entry, xml, text: extractText(xml) };
   });
+  // 全部页面先通过三册共用质量核心，几何重叠、动态字号、长文分段和拼音中心线均为硬门禁。
+  errors.push(...inspectCommonDeckQuality(slides));
   // 全课文字用于残留占位和板块检查。
   const allText = slides.map((slide) => slide.text).join("\n");
+  // 旧模板占位栏目不得出现在面向学生的成品中。
+  if (/学习导航|内容页/u.test(allText)) {
+    errors.push("仍残留“学习导航”或“内容页”模板术语。");
+  }
+  // 自动分页不得使用“续1/续2”这类生成器痕迹。
+  if (/[（(]续\d+[）)]/u.test(allText)) {
+    errors.push("仍存在“续N”自动分页标题。");
+  }
+  // 清理旧模板动作词后不得留下独立前导标点，避免出现“，你看到什么？”之类残句。
+  if (slides.some((slide) => /^[，,、；;：:。！？!?]/u.test(
+    extractShapeTextByName(slide.xml, "CONTENT_BODY").trim(),
+  ))) {
+    errors.push("正文仍存在由旧模板提示词清理产生的前导标点。");
+  }
   // 所有教材页码提示必须已被实际截图页替换。
   if (/请看教材|教材第\s*\d+\s*页/.test(allText)) {
     errors.push("仍残留“请看教材第N页”占位提示。");
@@ -266,6 +409,98 @@ async function inspectLesson(lesson) {
     // 原稿有而成品没有时属于模块遗漏。
     if (required && !allText.includes(role)) errors.push(`缺少核心板块：${role}。`);
   }
+  // 每页右上栏目名用于检查不允许重复的单页模块。
+  const sectionNames = slides.map((slide) => normalizeSectionLabel(extractShapeTextByName(slide.xml, "SECTION_NAME")));
+  // 统一口才之歌采用一页双栏完整呈现，不得因正文切分而复制出多页相同歌词。
+  const songSlideCount = slides.filter(
+    (slide) => normalizeSectionLabel(extractShapeTextByName(slide.xml, "CONTENT_TITLE")) === "口才之歌",
+  ).length;
+  // 原稿每课只有一页口才之歌，成品必须保持一页且内容完整。
+  if (songSlideCount !== 1) errors.push(`口才之歌页面数量异常：期望1页，实际${songSlideCount}页。`);
+  // 第一课课前热身必须在单页中完成，禁止逐句拆页。
+  if (lesson.lesson === 1) {
+    // 课前热身包含口才之歌，因此用“先认识一下吧”标题精准识别自我介绍页。
+    const warmupSlideCount = slides.filter(
+      (slide) => extractShapeTextByName(slide.xml, "CONTENT_TITLE").includes("先认识一下吧"),
+    ).length;
+    // 自我介绍只能生成一页。
+    if (warmupSlideCount !== 1) errors.push(`课前自我介绍页面数量异常：期望1页，实际${warmupSlideCount}页。`);
+    // 阅读延伸页必须使用真实篇名标题，禁止模板层级与右上“字正腔圆”栏目重叠。
+    const pronunciationIntroCount = slides.filter(
+      (slide) => extractShapeTextByName(slide.xml, "CONTENT_TITLE").includes("我多想出去看看"),
+    ).length;
+    // 第一课只有一张阅读延伸页，缺失说明生成器仍在复用模板层级作正文标题。
+    if (pronunciationIntroCount !== 1) {
+      errors.push(`阅读延伸篇名标题异常：期望1页，实际${pronunciationIntroCount}页。`);
+    }
+    // 简单收束页不得使用大面积通用文字底板。
+    for (const slide of slides) {
+      // 右上栏目用于识别课堂回顾和结束页。
+      const section = normalizeSectionLabel(extractShapeTextByName(slide.xml, "SECTION_NAME"));
+      // 命中收束页仍存在TEXT_CARD时说明视觉层级退化。
+      if (["课堂回顾", "结束页"].includes(section) && slide.xml.includes('name="TEXT_CARD"')) {
+        errors.push(`第${slide.number}页${section}仍使用大面积空白文字底板。`);
+      }
+    }
+    // 第一课清理导航与占位页后页数应与有效模块数量完全一致，额外页通常意味着不合理拆分。
+    if (slideEntries.length !== minimumSlides) {
+      errors.push(`第一课存在不合理增页或漏页：期望${minimumSlides}页，实际${slideEntries.length}页。`);
+    }
+    // 第一页主题图必须完整覆盖16:9画布。
+    const coverPicture = extractPictureBounds(slides[0].xml)
+      // artifact-tool导出图片时可能不保留业务名称，因此用面积最大的图片识别封面主视觉。
+      .sort((left, right) => right.cx * right.cy - left.cx * left.cy)[0];
+    // 画布尺寸按1280×720和每像素9525EMU换算。
+    const fullCanvas = { x: 0, y: 0, cx: 1280 * 9525, cy: 720 * 9525 };
+    // 缺少图片或任一边不贴画布都视为封面未铺满。
+    const fullBleedTolerance = 9525;
+    // contain模式允许因源图比例产生不超过1像素的居中留白，但不得形成可见边框。
+    if (!coverPicture || !Object.keys(fullCanvas).every(
+      (key) => Math.abs(coverPicture[key] - fullCanvas[key]) <= fullBleedTolerance,
+    )) {
+      errors.push("第一课封面主题图没有完整铺满16:9画布。");
+    }
+  }
+  // 字正腔圆页面单独进入拼音教材字形检测，普通英文页面不参与。
+  const pinyinSlides = slides.filter((slide, index) => sectionNames[index] === "字正腔圆");
+  // 英文双层a及其预组合声调字形不得残留在拼音教学对象中。
+  for (const slide of pinyinSlides) {
+    if (/[aāáǎà]/u.test(slide.text)) errors.push(`第${slide.number}页字正腔圆仍含英文a字形。`);
+  }
+  // 原稿确实包含a系列韵母时，成品必须出现教材单层ɑ，防止简单删除规避检测。
+  const sourceRequiresTeachingAlpha = lesson.source_slides.some(
+    (slide) => slide.role === "字正腔圆" && /[aāáǎà]/u.test(slide.source_text),
+  );
+  // 任一拼音页出现单层ɑ即可证明该课转换链已生效。
+  if (sourceRequiresTeachingAlpha && !pinyinSlides.some((slide) => slide.text.includes("ɑ"))) {
+    errors.push("字正腔圆缺少教材单层ɑ字形。");
+  }
+  // 第一课专用拼音页必须让每组拼音与汉字共用同一横向中心线。
+  if (lesson.lesson === 1) {
+    // 通过业务对象名找到包含四组拼音的页面。
+    const alignedPinyinSlide = slides.find((slide) => extractTextShapeBounds(slide.xml, "PINYIN_1"));
+    // 缺少专用结构说明仍在依赖空格或自动换行排版。
+    if (!alignedPinyinSlide) {
+      errors.push("第一课缺少结构化拼音对齐页面。");
+    } else {
+      // 四组拼音逐一与对应汉字比较横向中心点。
+      for (let index = 1; index <= 4; index += 1) {
+        // 当前拼音对象坐标。
+        const pinyin = extractTextShapeBounds(alignedPinyinSlide.xml, `PINYIN_${index}`);
+        // 当前汉字对象坐标。
+        const hanzi = extractTextShapeBounds(alignedPinyinSlide.xml, `HANZI_${index}`);
+        // 两个对象都必须存在。
+        if (!pinyin || !hanzi) {
+          errors.push(`第一课拼音第${index}组缺少拼音或汉字对象。`);
+          continue;
+        }
+        // 横向中心必须完全一致，禁止使用空格模拟对齐。
+        if (pinyin.x * 2 + pinyin.cx !== hanzi.x * 2 + hanzi.cx) {
+          errors.push(`第一课拼音第${index}组与汉字中心线错位。`);
+        }
+      }
+    }
+  }
   // 每张教材截图在生成器中对应一个“教材拓展”页。
   const supplementSlides = slides.filter((slide) => slide.text.includes("教材拓展"));
   // 生成页数量必须覆盖当前课全部截图。
@@ -274,6 +509,8 @@ async function inspectLesson(lesson) {
   }
   // 汉字之间的异常空格会造成标题和短语视觉破碎。
   for (const slide of slides) {
+    // 当前页新生成的栏目标题用于精准判断正文是否重复旧栏目名。
+    const contentTitle = normalizeSectionLabel(extractShapeTextByName(slide.xml, "CONTENT_TITLE"));
     // 只检查同一文本运行中的连续汉字空格。
     if (/(?<=\p{Script=Han})[ \u3000]+(?=\p{Script=Han})/u.test(slide.text)) {
       errors.push(`第${slide.number}页存在汉字间异常空格。`);
@@ -281,6 +518,13 @@ async function inspectLesson(lesson) {
     // 孤立书名号或只剩标点的文本框属于列表破碎。
     if (/(^|\n)\s*[《》、；，。]\s*(\n|$)/.test(slide.text)) {
       errors.push(`第${slide.number}页存在孤立书名号或标点。`);
+    }
+    // 图文正文和教材拓展正文逐框检查业务语义；字号、容量和相交由三册共用核心统一裁决。
+    for (const box of extractNamedTextBoxes(slide.xml)) {
+      // 正文开头再次出现当前页栏目名说明旧模板标题未清理，会与新标题重复。
+      if (contentTitle && normalizeSectionLabel(box.text).startsWith(contentTitle)) {
+        errors.push(`第${slide.number}页${box.name}仍包含重复栏目标题。`);
+      }
     }
   }
   // 包内MP3按当前课独立文件名筛选。
@@ -297,8 +541,9 @@ async function inspectLesson(lesson) {
   }
   // 三个音频栏目逐一命中一个媒体页面。
   for (const role of AUDIO_ROLES) {
-    // 当前栏目页面同时包含右上栏目名和正文标题。
-    const matches = audioSlides.filter((slide) => slide.text.split(role).length - 1 >= 2);
+    // 原生媒体页以右上角真实栏目名为准，不再要求正文重复栏目标题。
+    const matches = audioSlides.filter((slide) =>
+      normalizeSectionLabel(extractShapeTextByName(slide.xml, "SECTION_NAME")) === role);
     // 数量不是1说明遗漏或重复嵌入。
     if (matches.length !== 1) errors.push(`栏目“${role}”音频页面数量异常：${matches.length}。`);
   }
@@ -332,6 +577,46 @@ async function inspectLesson(lesson) {
     .filter((entry) => !/audio-button/i.test(entry))
     // 每个图片按真实字节计算SHA-1。
     .map((entry) => hashBytes(readBinaryEntry(pptxPath, entry)));
+  // 包内图片哈希集合用于核对七类原创素材是否真正进入成品，而不是只存在缓存目录。
+  const packagedImageHashes = new Set(imageHashes);
+  // 当前课七类业务视觉与缓存文件建立稳定映射，避免依赖PPT库可能丢弃的对象名称。
+  const visualRoleFiles = {
+    theme: "主题底图.png",
+    practice: "课堂练习.png",
+    storyboard: "模块故事板.png",
+    scene1: "场景1.png",
+    scene2: "场景2.png",
+    scene3: "场景3.png",
+    scene4: "场景4.png",
+  };
+  // 第一课额外核对四张按正文释义生成的中册式自然留白插画。
+  if (lesson.lesson === 1) {
+    // 视觉计划作为唯一文件名来源，避免检测规则与资源索引错配。
+    const visualPlans = JSON.parse(await fs.readFile(LESSON_ONE_VISUAL_PLAN_PATH, "utf8"));
+    // 基础角色不重复写入，新增角色按计划键纳入媒体哈希检测。
+    for (const [role, plan] of Object.entries(visualPlans)) {
+      if (!(role in visualRoleFiles)) visualRoleFiles[role] = plan.asset;
+    }
+  }
+  // 当前课原创缓存目录按两位课次定位。
+  const lessonAssetDir = path.join(ORIGINAL_ASSET_ROOT, `第${String(lesson.lesson).padStart(2, "0")}课`);
+  // 实际使用角色由缓存文件内容哈希与PPT包内图片哈希相交得到。
+  const usedVisualRoles = new Set();
+  // 逐角色核对素材，确保七类视觉不是“文件存在但生成器未使用”。
+  for (const [role, file] of Object.entries(visualRoleFiles)) {
+    // 缓存图片字节哈希不受PPT内部重命名影响。
+    const assetHash = hashBytes(await fs.readFile(path.join(lessonAssetDir, file)));
+    // 成品包内存在相同字节时记录该角色已实际使用。
+    if (packagedImageHashes.has(assetHash)) usedVisualRoles.add(role);
+  }
+  // 中册同等级要求每课覆盖七类不同教学语义；第一课的分享故事图已替代无专项语义的scene1。
+  const requiredVisualRoles = Object.keys(visualRoleFiles)
+    // 第一课使用更精准的分享故事和分苹果场景替代无专项语义的scene1、scene4。
+    .filter((role) => !(lesson.lesson === 1 && ["scene1", "scene4"].includes(role)));
+  // 任一视觉角色未进入成品都属于生成器缩水。
+  for (const role of requiredVisualRoles) {
+    if (!usedVisualRoles.has(role)) errors.push(`成品未使用必需视觉角色：${role}。`);
+  }
   // 最终媒体若与旧PPT或教材截图字节相同，说明生成器仍发生了旧资产回退。
   const reusedOldHashes = [...new Set(imageHashes)].filter((hash) =>
     forbiddenOldMediaHashes.has(hash) && !approvedFixedAssetHashes.has(hash));
@@ -339,8 +624,8 @@ async function inspectLesson(lesson) {
   if (reusedOldHashes.length) errors.push(`发现${reusedOldHashes.length}个旧PPT或教材截图媒体哈希复用。`);
   // 唯一图片数量过少说明可能把同一图用于全部页面。
   const uniqueImageCount = new Set(imageHashes).size;
-  // 下册每课至少应有Logo、封面视觉和多个模块视觉。
-  if (uniqueImageCount < 6) errors.push(`主视觉多样性不足：仅${uniqueImageCount}个唯一图片内容。`);
+  // 七类业务视觉加固定Logo至少形成八个唯一图片内容。
+  if (uniqueImageCount < 8) errors.push(`主视觉多样性不足：仅${uniqueImageCount}个唯一图片内容，最低要求8个。`);
   // 相同内容占比过高时发出人工检查警告。
   const frequency = new Map();
   // 汇总每个图片哈希出现次数。
@@ -349,8 +634,10 @@ async function inspectLesson(lesson) {
   const contentFrequencies = [...frequency.values()].filter((count) => count < slideEntries.length);
   // 最大重复次数只反映非全页固定资产的滥用程度。
   const maxRepeat = Math.max(0, ...contentFrequencies);
-  // 超过页面总数一半时属于明显错配。
-  if (maxRepeat > slideEntries.length / 2) errors.push(`单一图片重复过多：最多重复${maxRepeat}次。`);
+  // 任一业务图片超过总页数35%说明仍在跨模块滥用。
+  const repeatLimit = Math.ceil(slideEntries.length * 0.35);
+  // 超过阈值属于硬错误，不再只依赖人工查看。
+  if (maxRepeat > repeatLimit) errors.push(`单一图片重复过多：最多重复${maxRepeat}次，阈值${repeatLimit}次。`);
   // 页面较少但内容完整的课程仍需人工查看联系表，不作为自动失败。
   if (slideEntries.length < lesson.source_slide_count) {
     warnings.push("输出页数少于原稿页数，请人工确认占位页替换和空白页清理合理。");
@@ -369,6 +656,7 @@ async function inspectLesson(lesson) {
     mp3Entries,
     uniqueImageCount,
     maxRepeat,
+    usedVisualRoles: [...usedVisualRoles].sort(),
     reusedOldMediaCount: reusedOldHashes.length,
     errors,
     warnings,
@@ -379,6 +667,14 @@ async function inspectLesson(lesson) {
 const coverage = JSON.parse(await fs.readFile(COVERAGE_PATH, "utf8"));
 // 整册必须恰好包含16课。
 if (coverage.length !== 16) throw new Error(`下册覆盖索引课数异常：${coverage.length}`);
+// 命令行允许指定单课返工检测；未指定时仍执行整册质量门禁。
+const requested = process.argv[2] || "all";
+// 单课模式只缩小成品检测范围，不缩减生成器和资源准入审计。
+const selectedCoverage = requested === "all"
+  ? coverage
+  : coverage.filter((lesson) => lesson.lesson === Number(requested));
+// 非法课次必须明确失败，禁止生成空报告。
+if (!selectedCoverage.length) throw new Error(`覆盖索引中不存在检测课次：${requested}`);
 // 生成器准入在读取成品前执行，防止旧逻辑凭历史文件误通过。
 const generatorAudit = await inspectGeneratorSource(coverage);
 // 固定Logo哈希加入允许列表。
@@ -397,7 +693,7 @@ for (const sourceFile of new Set(coverage.map((lesson) => lesson.source_file))) 
   for (const hash of collectPptxImageHashes(sourcePath)) forbiddenOldMediaHashes.add(hash);
 }
 // 58张教材截图原文件全部加入旧媒体黑名单。
-for (const lesson of coverage) {
+for (const lesson of selectedCoverage) {
   // 当前课逐张处理，确保覆盖清单中的每个输入都被纳入。
   for (const supplement of lesson.supplements) {
     // 截图哈希按真实字节计算，与扩展名大小写无关。
@@ -408,9 +704,9 @@ for (const lesson of coverage) {
 await fs.mkdir(REPORT_ROOT, { recursive: true });
 // 所有课程依次执行，单课错误继续收集以便一次修完。
 const lessons = [];
-// 逐课调用结构检测。
-for (const lesson of coverage) {
-  // 当前课结果追加到整册报告。
+// 逐课调用结构检测；单课返工只能审计已选择课程，禁止把其他历史成品误计入当前结果。
+for (const lesson of selectedCoverage) {
+  // 当前检测范围内的课程结果追加到报告。
   lessons.push(await inspectLesson(lesson));
 }
 // 整册错误汇总决定最终状态。
@@ -422,16 +718,19 @@ const jsonReport = {
   status: errorCount === 0 ? "passed" : "failed",
   generatorAudit,
   lessonCount: lessons.length,
-  sourceSlideCount: coverage.reduce((sum, lesson) => sum + lesson.source_slide_count, 0),
+  sourceSlideCount: selectedCoverage.reduce((sum, lesson) => sum + lesson.source_slide_count, 0),
   outputSlideCount: lessons.reduce((sum, lesson) => sum + (lesson.outputSlides || 0), 0),
-  supplementCount: coverage.reduce((sum, lesson) => sum + lesson.supplements.length, 0),
+  supplementCount: selectedCoverage.reduce((sum, lesson) => sum + lesson.supplements.length, 0),
   errorCount,
   warningCount,
   lessons,
 };
 // JSON报告写入任务临时区。
+// 单课和整册使用不同报告名，避免样稿复核覆盖正式整册历史结果。
+const reportStem = requested === "all" ? "下册整册质量检测报告" : `下册第${String(requested).padStart(2, "0")}课质量检测报告`;
+// JSON报告写入当前检测范围对应的稳定文件。
 await fs.writeFile(
-  path.join(REPORT_ROOT, "下册整册质量检测报告.json"),
+  path.join(REPORT_ROOT, `${reportStem}.json`),
   `${JSON.stringify(jsonReport, null, 2)}\n`,
   "utf8",
 );
@@ -440,7 +739,7 @@ const markdownRows = lessons.map((lesson) =>
   `| ${lesson.lesson} | ${lesson.sourceSlides || "-"} | ${lesson.outputSlides || "-"} | ${lesson.supplements || "-"} | ${lesson.audioSlides?.length || 0} | ${lesson.errors.length} | ${lesson.warnings.length} |`);
 // 报告正文包含整册汇总和逐课结果。
 const markdown = [
-  "# 少儿口才与表演下册整册质量检测报告",
+  `# 少儿口才与表演${requested === "all" ? "下册整册" : `下册第${String(requested).padStart(2, "0")}课`}质量检测报告`,
   "",
   `- 状态：${jsonReport.status}`,
   `- 生成器准入：${generatorAudit.status}`,
@@ -469,7 +768,7 @@ const markdown = [
   ]),
 ].join("\n");
 // Markdown报告按UTF-8写入。
-await fs.writeFile(path.join(REPORT_ROOT, "下册整册质量检测报告.md"), `${markdown}\n`, "utf8");
+await fs.writeFile(path.join(REPORT_ROOT, `${reportStem}.md`), `${markdown}\n`, "utf8");
 // 控制台输出精简摘要供长任务观察。
 console.log(JSON.stringify({
   status: jsonReport.status,

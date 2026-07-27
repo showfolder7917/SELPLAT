@@ -51,7 +51,7 @@ const NEW_SONG = [
 ].join("\n");
 // 补充截图中的教学事实转换成可编辑练习，不把教材照片直接贴回成品。
 const SUPPLEMENT_FACTS = {
-  2: "看一看，说一说：\n爸爸是医生。妈妈是教师。\n春天到了：我看见____，听见____，闻到____，摸到____。",
+  2: "看一看，说一说：\n爸爸是医生，\n妈妈是教师。\n\n春天到了：\n我看见____，\n听见____，闻到____，\n摸到____。",
   3: "用“这是……”说完整句：\n这是我们的教室。这是蓝色的大海。这是高高的山。\n再说一说：我们怎样保护环境？",
   4: "他们在做什么？\n小朋友在唱歌。妈妈在买蔬菜。\n森林里的小动物又在做什么？",
   5: "看状态，说动作：\n文文生病了。娃娃哭了。\n小朋友们正在放风筝。",
@@ -511,6 +511,20 @@ function titleAndBody(slideInfo) {
   if (slideInfo.source_slide === 3) {
     return { title: "口才之歌", body: NEW_SONG };
   }
+  // 第二课情境朗读页删除栏目拆字，并按短句节奏恢复四行儿歌。
+  if (requestedLesson === 2 && slideInfo.source_slide === 7) {
+    return {
+      title: "《爱护我的校园》",
+      body: "护小树，爱花草，\n见垃圾，就打扫。\n环境美，心情好，\n保护它，最重要。",
+    };
+  }
+  // 第二课发音导入页避免标题和正文重复同一句。
+  if (requestedLesson === 2 && slideInfo.source_slide === 8) {
+    return {
+      title: "发音训练（配教具）",
+      body: "看口形 · 听示范 · 跟读练习",
+    };
+  }
   // 第二课主绕口令删除栏目碎片，只保留作品标题和完整正文。
   if (requestedLesson === 2 && slideInfo.source_slide === 12) {
     return {
@@ -522,7 +536,7 @@ function titleAndBody(slideInfo) {
   if (requestedLesson === 2 && slideInfo.source_slide === 13) {
     return {
       title: "《贝贝和菲菲》",
-      body: "贝贝飞纸飞机，\n菲菲要贝贝的纸飞机。\n贝贝不给菲菲自己的纸飞机，\n贝贝教菲菲自己做能飞的纸飞机。",
+      body: "贝贝飞纸飞机，\n菲菲要贝贝的纸飞机。\n贝贝不给菲菲\n自己的纸飞机，\n贝贝教菲菲自己做\n能飞的纸飞机。",
     };
   }
   // 第二课表演页删除“粉墨/登场/读一读/演一演”等重复栏目碎片。
@@ -619,7 +633,7 @@ function buildCover(slideInfo) {
   });
   // 册别、课次和主题作为一个整体在左侧视觉垂直居中。
   addText(slide, "少儿口才与表演 · 中册", { left: 82, top: 175, width: 530, height: 58 }, {
-    fontSize: 32,
+    fontSize: 40,
     bold: true,
     color: C.teal,
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -663,29 +677,28 @@ function buildSongPage(slideInfo) {
   addText(slide, [
     "学口才，练口才，",
     "想学口才跟我来。",
-    "",
     "小舞台，大梦想，",
     "自信登台展风采。",
-    "",
     "同学们，快快来，",
     "游戏课堂真精彩。",
   ].join("\n"), {
-    left: 145,
-    top: 225,
-    width: 470,
-    height: 285,
+    left: 112,
+    top: 192,
+    width: 488,
+    height: 400,
   }, {
-    fontSize: 28,
+    fontSize: 40,
     typeface: FONT_SERIF,
     alignment: "left",
     verticalAlignment: "middle",
-    lineSpacing: 1.48,
+    lineSpacing: 1.2,
+    autoFit: "none",
     insets: { top: 8, right: 20, bottom: 8, left: 20 },
   });
-  // 中央细线建立左右段落关系，但不形成沉重卡片边框。
+  // 中央细线对齐两栏的视觉中轴，防止右栏偏向页面边缘。
   slide.shapes.add({
     geometry: "rect",
-    position: { left: 637, top: 238, width: 3, height: 255 },
+    position: { left: 621, top: 218, width: 3, height: 342 },
     fill: `${C.yellow}/75`,
     line: { style: "solid", fill: "none", width: 0 },
   });
@@ -693,33 +706,32 @@ function buildSongPage(slideInfo) {
   addText(slide, [
     "口才课，有口令，",
     "大家一起说出来：",
-    "",
     "勇敢讲，声音开；",
     "自信演，站稳台。",
-    "",
     "认真学，大胆来，",
     "学好口才更出彩！",
   ].join("\n"), {
-    left: 665,
-    top: 210,
-    width: 470,
-    height: 330,
+    left: 646,
+    top: 192,
+    width: 488,
+    height: 400,
   }, {
-    fontSize: 28,
+    fontSize: 40,
     typeface: FONT_SERIF,
     alignment: "left",
     verticalAlignment: "middle",
-    lineSpacing: 1.42,
+    lineSpacing: 1.2,
+    autoFit: "none",
     insets: { top: 8, right: 20, bottom: 8, left: 20 },
   });
   // 底部提示说明课堂动作，不与歌词正文竞争视觉焦点。
   addText(slide, "先读准，再读响；配合动作，自信展示。", {
     left: 250,
-    top: 575,
+    top: 604,
     width: 780,
     height: 42,
   }, {
-    fontSize: 24,
+    fontSize: 26,
     color: C.teal,
     alignment: "center",
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -746,9 +758,13 @@ function buildContent(slideInfo) {
   // 根据角色写入稳定栏目和导航。
   const section = sectionFor(slideInfo);
   // 发音页只在明确的字正腔圆教学语境中转换教材拼音ɑ，普通英文不受影响。
-  const title = section === "字正腔圆" ? normalizePinyinGlyphs(extracted.title) : extracted.title;
+  const title = slideInfo.role === "字正腔圆"
+    ? normalizePinyinGlyphs(extracted.title)
+    : extracted.title;
   // 发音正文同步转换带调ɑ和韵母组合，保证第一层文本检查可验证。
-  const body = section === "字正腔圆" ? normalizePinyinGlyphs(extracted.body) : extracted.body;
+  const body = slideInfo.role === "字正腔圆"
+    ? normalizePinyinGlyphs(extracted.body)
+    : extracted.body;
   // 自我介绍、口才之歌、学习导航、课堂回顾和小任务保留第一课已确认的原生信息版式。
   const textOnly = [2, 3, 5].includes(slideInfo.source_slide)
     || ["课堂回顾", "小任务"].includes(slideInfo.role);
@@ -773,7 +789,10 @@ function buildContent(slideInfo) {
   // 短提示使用紧凑文字组，禁止少量文字缩在超大白卡中。
   const compactPrompt = !textOnly && !themeIntro && body.length < 48;
   // 当前图片页的底板尺寸由内容密度决定，长正文获得更大安全区而不靠缩小字号。
-  const imageCardWidth = compactPrompt ? 430 : 520;
+  // 第二课表演长诗把文字收进更窄的左侧安全区，禁止末行侵入右侧人物和花坛。
+  const imageCardWidth = requestedLesson === 2 && slideInfo.source_slide === 15
+    ? 420
+    : compactPrompt ? 430 : 520;
   // 文本底板遵循第一课标准：信息页用宽卡，整幅图片页只占自然留白一侧。
   const card = textOnly
     ? { left: 150, top: 145, width: 980, height: 500 }
@@ -805,13 +824,34 @@ function buildContent(slideInfo) {
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
   });
   // 正文在标题下方完整保留；儿童教学正文不得依赖18磅小字塞入页面。
-  const bodySize = body.length > 210 ? 23 : body.length > 150 ? 25 : body.length > 95 ? 28 : textOnly ? 34 : 31;
-  addText(slide, body, {
-    left: card.left + 40,
-    top: card.top + 108,
-    width: card.width - 80,
-    height: card.height - 140,
-  }, {
+  // 第二课反馈页使用课堂投影可读的大字号；长词通过主动换行处理，不再依赖缩小字号。
+  const bodySize = requestedLesson === 2 && slideInfo.source_slide === 7
+    ? 42
+    : requestedLesson === 2 && slideInfo.source_slide === 13
+      ? 40
+      : body.length > 210 ? 23 : body.length > 150 ? 25 : body.length > 95 ? 28 : textOnly ? 34 : 31;
+  const bodyPosition = requestedLesson === 2 && slideInfo.source_slide === 7
+    ? {
+      left: card.left + 40,
+      top: card.top + 170,
+      width: card.width - 80,
+      height: card.height - 210,
+    }
+    : themeIntro
+    ? {
+      left: card.left + 40,
+      top: card.top + 130,
+      width: card.width - 80,
+      height: 82,
+    }
+    : {
+      left: card.left + 40,
+      top: card.top + 108,
+      width: card.width - 80,
+      height: card.height - 140,
+    };
+  // 主题页把课题和课次收拢成一个视觉组；普通页继续使用正文安全区。
+  addText(slide, body, bodyPosition, {
     fontSize: bodySize,
     typeface: section === "字正腔圆" ? "Arial" : slideInfo.role === "情境再现" || slideInfo.role === "口脑风暴" || slideInfo.role === "粉墨登场" ? FONT_SERIF : FONT_SANS,
     alignment: requestedLesson === 2 && slideInfo.source_slide === 15
@@ -819,8 +859,9 @@ function buildContent(slideInfo) {
       : body.length < 90
         ? "center"
         : "left",
-    verticalAlignment: "middle",
+    verticalAlignment: requestedLesson === 2 && slideInfo.source_slide === 7 ? "top" : "middle",
     lineSpacing: body.length > 160 ? 1.18 : 1.34,
+    autoFit: requestedLesson === 2 && [7, 13].includes(slideInfo.source_slide) ? "none" : "shrinkText",
     insets: { top: 4, right: 6, bottom: 4, left: 6 },
   });
   // 三个有声栏目由后续Open XML封装阶段加入唯一可见媒体按钮，生成阶段不再叠加重复按钮。
@@ -977,7 +1018,7 @@ function buildExercisePage(slideInfo) {
   // 同一课的补充事实必须进入可编辑正文，禁止只留“看教材”占位。
   const body = slideInfo.role === "句子宝库" || !sourceBody
     ? SUPPLEMENT_FACTS[requestedLesson]
-    : `${sourceBody}\n\n${SUPPLEMENT_FACTS[requestedLesson]}`;
+    : sourceBody;
   // 右侧正文做视觉垂直居中，和左侧四格图片形成平衡。
   addText(slide, body, { left: 900, top: 278, width: 290, height: 296 }, {
     fontSize: body.length > 175 ? 21 : body.length > 115 ? 23 : 25,

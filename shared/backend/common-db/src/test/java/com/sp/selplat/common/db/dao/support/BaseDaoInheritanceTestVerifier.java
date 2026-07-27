@@ -10,6 +10,7 @@ import com.sp.selplat.common.db.dao.BaseDao;
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
 import com.sp.selplat.common.db.dao.BaseDaoSupportImpl;
 import com.sp.selplat.common.db.dao.BasePagingQueryDaoImpl;
+import com.sp.selplat.common.db.template.BaseTemplateDao;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
@@ -62,20 +63,34 @@ public final class BaseDaoInheritanceTestVerifier {
             .map(Method::getName)
             // 收集为无顺序集合。
             .collect(Collectors.toSet());
-        // CRUD 深层只允许单条主键、批量 JDBC 和参数辅助方法。
+        // CRUD 深层只允许单条主键、批量主键查询和主键参数辅助方法。
         assertEquals(
             Set.of(
                 "getByIds",
                 "getByIdsBatchGroup",
-                "insertBatchGroup",
-                "updateBatchGroup",
                 "resolveIdValues",
-                "buildIdColumnValueMap",
-                "requireBatchItem",
-                "sumBatchCounts"
+                "buildIdColumnValueMap"
             ),
             declaredMethodNames
         );
+    }
+
+    // 验证批量新增和更新的公开模板能力只由 BaseTemplateDao 持有。
+    public static void verifyTemplateBatchBoundary() {
+        try {
+            // 模板层必须公开固定表名和当前千条分组的批量新增入口。
+            BaseTemplateDao.class.getDeclaredMethod("insertBatch", String.class, java.util.List.class);
+            // 模板层必须公开表名、主键元数据和当前千条分组的批量更新入口。
+            BaseTemplateDao.class.getDeclaredMethod(
+                "updateBatchByIds",
+                String.class,
+                java.util.List.class,
+                java.util.List.class
+            );
+        } catch (NoSuchMethodException exception) {
+            // 任一模板批量能力缺失都表示迁移未完成。
+            throw new AssertionError("BaseTemplateDao 缺少批量写入模板能力", exception);
+        }
     }
 
     // 把类型自身非合成方法转换成包含参数类型的稳定签名集合。

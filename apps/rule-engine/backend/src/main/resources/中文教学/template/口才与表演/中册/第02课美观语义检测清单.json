@@ -6,7 +6,13 @@
     },
     "3": {
       "backplate": "forbidden",
-      "textKeywords": ["口才之歌", "想学口才跟我来", "学好口才更出彩"]
+      "textKeywords": ["口才之歌", "想学口才跟我来", "学好口才更出彩"],
+      "textLayout": [
+        {
+          "keywords": ["想学口才跟我来", "口才课，有口令"],
+          "minimumPoint": 30
+        }
+      ]
     },
     "4": {
       "backplate": "forbidden",
@@ -20,7 +26,14 @@
     "7": {
       "textKeywords": ["爱护我的校园", "见垃圾", "保护它"],
       "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/情境观察.png"],
-      "audioButtonCount": 1
+      "audioButtonCount": 1,
+      "textLayout": [
+        {
+          "keywords": ["护小树"],
+      "minimumPoint": 30,
+          "maxRightPx": 520
+        }
+      ]
     },
     "11": {
       "backplate": "forbidden",
@@ -36,7 +49,13 @@
     "13": {
       "backplate": "forbidden",
       "textKeywords": ["贝贝和菲菲", "纸飞机"],
-      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/课外拓展_贝贝和菲菲.png"]
+      "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/课外拓展_贝贝和菲菲.png"],
+      "textLayout": [
+        {
+          "keywords": ["贝贝飞纸飞机"],
+          "minimumPoint": 30
+        }
+      ]
     },
     "14": {
       "backplate": "forbidden",
@@ -47,7 +66,13 @@
       "backplate": "forbidden",
       "textKeywords": ["校园是我家", "老师像妈妈", "团结友爱"],
       "imageFiles": ["cache/中文教学/口才与表演/中册/课程插图/模块插图/第02课/粉墨登场_校园是我家.png"],
-      "audioButtonCount": 1
+      "audioButtonCount": 1,
+      "textLayout": [
+        {
+          "keywords": ["校园是我家，"],
+          "maxRightPx": 500
+        }
+      ]
     },
     "19": {
       "backplate": "forbidden",

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { inspectCommonDeckQuality } from "../通用/口才与表演通用质量检测核心.mjs";
 
 // 检测器优先使用调用方显式传入的工程根，否则以当前工作目录作为当前工程。
 const PROJECT_ROOT = path.resolve(process.env.SELPLAT_PROJECT_ROOT || process.cwd());
@@ -331,6 +332,15 @@ async function validateLesson(lesson) {
       extractSlideText(lesson.output, entry),
     ]),
   );
+  // 页面XML进入三册共用质量核心，补充中册原检测器缺失的几何相交、动态字号和段落检查。
+  const commonQualityIssues = inspectCommonDeckQuality(
+    slideEntries.map((entry) => ({
+      // 页面编号用于通用错误信息直接定位。
+      number: Number(entry.match(/slide(\d+)\.xml$/)[1]),
+      // 页面XML按UTF-8读取，通用检测器不会写入任何临时解包文件。
+      xml: readArchiveEntry(lesson.output, entry).toString("utf8"),
+    })),
+  );
   // 第一课已由独立逐页脚本验证模块；第2至16课按覆盖清单逐页检查栏目标签。
   const missingRoles = lesson.source_slides
     ? lesson.source_slides
@@ -369,6 +379,7 @@ async function validateLesson(lesson) {
     && legacyPinyinGlyphs.length === 0
     && hasTeachingAlpha
     && pinyinLayoutIssues.length === 0
+    && commonQualityIssues.length === 0
     && mp3Entries.length === 3
     && uniqueLargeImages >= 5;
   // 返回逐课证据，不只给出布尔结论。
@@ -385,6 +396,7 @@ async function validateLesson(lesson) {
     requiresTeachingAlpha: Boolean(sourceHasPinyinA),
     hasTeachingAlpha,
     pinyinLayoutIssues,
+    commonQualityIssues,
     embeddedMp3: mp3Entries.length,
     uniqueLargeImages,
   };

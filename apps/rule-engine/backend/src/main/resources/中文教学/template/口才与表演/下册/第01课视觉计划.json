@@ -1,0 +1,62 @@
+{
+  "theme": {
+    "asset": "主题底图.png",
+    "safeSide": "left",
+    "useCard": true,
+    "keywords": ["分享", "苹果", "好孩子"]
+  },
+  "sharingStory": {
+    "asset": "分享故事_左侧留白.png",
+    "safeSide": "left",
+    "useCard": true,
+    "keywords": ["分享", "苹果", "玩具", "朋友"]
+  },
+  "appleSharingPerformance": {
+    "asset": "分苹果表演_左侧留白.png",
+    "safeSide": "left",
+    "useCard": true,
+    "keywords": ["分苹果", "苹果", "分享", "外婆"]
+  },
+  "practice": {
+    "asset": "课堂练习.png",
+    "safeSide": "right",
+    "useCard": true,
+    "keywords": ["观察", "说一说", "分享", "玩具"]
+  },
+  "warmup": {
+    "asset": "课前展示.png",
+    "safeSide": "right",
+    "useCard": false,
+    "keywords": ["自我介绍", "展示", "问好", "致谢"]
+  },
+  "pronunciation": {
+    "asset": "发音训练_留白版.png",
+    "safeSide": "left",
+    "useCard": true,
+    "keywords": ["字正腔圆", "发音", "送气", "不送气", "练习"]
+  },
+  "beijing": {
+    "asset": "北京向往.png",
+    "safeSide": "left",
+    "useCard": true,
+    "keywords": ["北京", "天安门", "升旗", "多想去看看"]
+  },
+  "tongueTwister": {
+    "asset": "绕口令_八面坡.png",
+    "safeSide": "right",
+    "useCard": true,
+    "keywords": ["炮兵", "步兵", "八面坡", "绕口令"]
+  },
+  "fruitSharing": {
+    "asset": "菠萝葡萄分享.png",
+    "safeSide": "left",
+    "useCard": true,
+    "keywords": ["菠萝", "葡萄", "宝宝", "平平", "分享"]
+  },
+  "radishSoup": {
+    "asset": "分享萝卜汤.png",
+    "safeSide": "right",
+    "useCard": true,
+    "keywords": ["萝卜汤", "分享", "准备", "好喝"]
+  }
+}

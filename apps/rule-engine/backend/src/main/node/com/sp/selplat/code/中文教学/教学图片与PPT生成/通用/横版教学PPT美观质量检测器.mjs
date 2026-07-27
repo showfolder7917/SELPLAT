@@ -105,6 +105,42 @@ function largeBackplates(xml) {
 }
 
 /**
+ * 提取文本框的可见文字、字号和页面边界，用于检查局部字号与人物避让。
+ */
+function textShapes(xml) {
+  // 每个普通形状独立保留文本和变换信息，避免只看整页文字而漏掉单个偏移文本框。
+  return [...xml.matchAll(/<p:sp>([\s\S]*?)<\/p:sp>/g)].map((shapeMatch) => {
+    // 当前文本框全部可见文字用于按教学关键词定位。
+    const text = decodeXml([...shapeMatch[1].matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)]
+      .map((match) => match[1])
+      .join(""));
+    // 文本框左上角和尺寸来自同一形状的变换节点。
+    const offset = shapeMatch[1].match(/<a:off\b[^>]*x="(\d+)"[^>]*y="(\d+)"/);
+    const extent = shapeMatch[1].match(/<a:ext\b[^>]*cx="(\d+)"[^>]*cy="(\d+)"/);
+    // 只读取实际文字运行字号；段落结束标记的默认字号不代表屏幕上正文大小。
+    const sizes = textRuns(shapeMatch[1])
+      .map((run) => run.size / 100)
+      .filter((size) => size > 0);
+    // 缺少文字或边界的形状不进入文本布局检查。
+    if (!text.trim() || !offset || !extent) return null;
+    // Open XML坐标按每像素9525 EMU换算回生成器画布像素。
+    const left = Number(offset[1]) / 9525;
+    const top = Number(offset[2]) / 9525;
+    const width = Number(extent[1]) / 9525;
+    const height = Number(extent[2]) / 9525;
+    // 返回局部布局证据供清单复用。
+    return {
+      text,
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      minimumPoint: sizes.length ? Math.min(...sizes) : 0,
+    };
+  }).filter(Boolean);
+}
+
+/**
  * 检查单页通用文字、美观、底板、语义和音频控件约束。
  */
 async function inspectSlide(slideNumber, xml, expected = {}) {
@@ -114,6 +150,8 @@ async function inspectSlide(slideNumber, xml, expected = {}) {
   const fullText = runs.map((run) => run.text).join("\n");
   // 图片标签用于判断插图是否解释当前教学文本。
   const labels = imageLabels(xml);
+  // 文本框级证据用于检测局部字号、左右偏移和图片主体侵入。
+  const shapeEvidence = textShapes(xml);
   // 汇总当前页失败原因。
   const errors = [];
   // 页码、栏目和单字符发音对象不参与通用正文最小字号检查。
@@ -161,6 +199,56 @@ async function inspectSlide(slideNumber, xml, expected = {}) {
   // 缺少教学内容关键字说明重制时发生遗漏或错页。
   if (missingTextKeywords.length) {
     errors.push({ type: "missing_text_semantics", evidence: missingTextKeywords });
+  }
+  // 专项清单可以用教学关键词定位具体文本框，并复用通用字号和安全区检查。
+  for (const layoutRule of expected.textLayout || []) {
+    // 命中任一关键词的文本框都属于本条规则的目标对象。
+    const matchedShapes = shapeEvidence.filter((shape) =>
+      (layoutRule.keywords || []).some((keyword) => shape.text.includes(keyword)));
+    // 找不到目标文本说明清单与页面内容已经错配。
+    if (!matchedShapes.length) {
+      errors.push({ type: "missing_text_layout_target", evidence: layoutRule.keywords || [] });
+      continue;
+    }
+    // 目标正文必须达到页面类型指定的投影阅读字号。
+    const undersizedTargets = matchedShapes.filter((shape) =>
+      Number(layoutRule.minimumPoint) > 0 && shape.minimumPoint < Number(layoutRule.minimumPoint));
+    if (undersizedTargets.length) {
+      errors.push({
+        type: "context_undersized_text",
+        evidence: undersizedTargets.map((shape) => ({
+          text: shape.text,
+          pointSize: shape.minimumPoint,
+          requiredPointSize: Number(layoutRule.minimumPoint),
+        })),
+      });
+    }
+    // 右侧人物场景页可声明文字最右边界，超过即表示文字侵入图片主体区。
+    const rightOverflow = matchedShapes.filter((shape) =>
+      Number(layoutRule.maxRightPx) > 0 && shape.right > Number(layoutRule.maxRightPx));
+    if (rightOverflow.length) {
+      errors.push({
+        type: "text_intrudes_visual_subject",
+        evidence: rightOverflow.map((shape) => ({
+          text: shape.text,
+          actualRightPx: Math.round(shape.right),
+          requiredMaxRightPx: Number(layoutRule.maxRightPx),
+        })),
+      });
+    }
+    // 双栏页可声明左右边界，防止单栏整体漂向页面外侧。
+    const leftDrift = matchedShapes.filter((shape) =>
+      Number(layoutRule.minLeftPx) > 0 && shape.left < Number(layoutRule.minLeftPx));
+    if (leftDrift.length) {
+      errors.push({
+        type: "text_column_horizontal_drift",
+        evidence: leftDrift.map((shape) => ({
+          text: shape.text,
+          actualLeftPx: Math.round(shape.left),
+          requiredMinLeftPx: Number(layoutRule.minLeftPx),
+        })),
+      });
+    }
   }
   // 当前页关系表将图片关系ID映射到PPTX包内媒体部件。
   const relsXml = readEntry(`ppt/slides/_rels/slide${slideNumber}.xml.rels`);
@@ -248,6 +336,8 @@ const reportPath = path.resolve(
   process.argv[4]
     || `${pptx}.美观质量检测.json`,
 );
+// 报告目录在首次验收时可能尚未建立，检测器负责创建后再写入证据。
+await fs.mkdir(path.dirname(reportPath), { recursive: true });
 // 报告使用UTF-8和稳定缩进，供人工复查与后续程序读取。
 await fs.writeFile(
   reportPath,

@@ -52,6 +52,65 @@
 6. 正式生成前必须运行生成器源码静态检查，验证原创目录绑定、截图映射覆盖、旧媒体入口禁用和空白画布创建方式。
 7. 正式生成后必须运行结果动态检查，验证零旧媒体哈希、每课原创图片差异、模块视觉分布、可编辑文字、页面边界、字号层级、音频热区和完整渲染。
 8. 静态检查或动态检查任一失败时，生成器不得继续批量交付；修正后必须重新生成受影响课程，禁止只修改最终PPT掩盖生成器缺陷。
+9. 同一册次的生成器质量不得逐册缩水；已经确认的高质量册次应作为后续册次最低基准，至少保持相同的视觉角色划分、字号门槛、图片完整性、音频交互和检测深度。
+10. 每课最低视觉角色固定为“主题底图、课堂练习图、故事板、情境图、发音图、口脑图、表演图”；七类资产必须同时存在并实际进入成品，禁止只在缓存目录放置占位文件。
+11. 封面和主题导入使用专属主题图，课堂观察或综合练习使用专属练习图；情境再现、字正腔圆、口脑风暴、粉墨登场分别绑定独立模块图，教材多格或顺序任务优先使用完整故事板。
+12. 不得继续使用“按页码区间轮换四张图”的粗粒度选图逻辑；页面必须先识别教学角色，再按“课次＋栏目＋故事主题”选择图片。
+13. 每课成品至少应形成七个不同教学视觉内容；固定Logo和播放按钮不计入教学视觉数量。任一教学图片在单课内出现次数不得超过总页数的35%，确有连续讲解需求时必须在检测报告中记录原因。
+14. 质量检测必须同时验证资产文件存在、成品实际使用、图片内容哈希、角色覆盖和最大重复次数；只检查“图片文件数量”或“页面没有越界”均不得判定合格。
+
+## 六、全册共用生成核心与自然留白构图
+
+1. 上册、中册、下册必须共同调用“口才与表演通用生成核心”；册别生成器只负责课程内容、素材目录、截图事实和少量册别栏目适配，禁止复制维护不同的字号、图片比例、安全区和语义检测逻辑。
+2. 高质量图文页默认采用“16:9完整水彩绘本场景＋图片内部自然留白安全区”，不是把一张密集图片强行铺满，也不是把图片缩进固定小图框。
+3. 原创图片生成阶段必须主动声明`safeSide=left|right`，并把人物、动作、关键物品和强线条集中在另一侧；生成器禁止再按奇偶页、课次或固定左右轮换猜测文字位置。
+4. 自然留白清洁且对比度足够时，文字直接排入图片留白，不添加无意义底板；背景复杂时才允许使用40%透明的轻底板。
+5. 图片必须解释当前页正文：生成前为每张图片记录语义关键词，正文至少命中一个关键词后才能使用；仅有相同画风但人物、动作、物品或教学关系不对应的图片视为装饰图，禁止进入成品。
+6. 同一模块中的连续页可以共享一个大场景，但正文和图片的语义关系必须持续成立；不同教学主题不得因为栏目相同而复用无关图片。
+7. 已有图片同时满足16:9清晰度、语义对应、主体完整和自然留白时直接复用；不满足其中任一项才补生成，禁止为追求“全部新图”重复生成已经合格的资产。
+8. 正文使用统一角色字号门槛：普通课堂正文不低于30，故事、表演和绕口令不低于29，发音说明不低于27；超量内容必须分页，禁止自动缩字突破门槛。
+9. 质量检测必须验证共用核心已接入、自然留白侧声明存在、图片覆盖完整画布、正文未侵入主体区、图文关键词命中、字号门槛和无意义空白；任一项失败不得以“图片完整显示”作为豁免理由。
+
+## 七、教学页命名、分页、拼音与中册基准版式
+
+1. 封面主题插画默认完整铺满16:9画布；允许图片内部自然留白承载标题，但禁止把主题图缩成右侧小图、半屏图或独立装饰卡片。
+2. “学习导航”属于旧课件目录型过渡页，不承载独立教学活动时必须删除；最终稿禁止显示“学习导航”“内容页”等模板术语。
+3. 通用占位页必须根据上下文还原真实栏目和教学动作，例如“看图说一说”“按顺序观察”“课外拓展”；禁止把内部角色名直接呈现给学生。
+4. 课前自我介绍、课堂口令和短篇热身必须优先在单页完成；不得按句子拆成多张页面，也不得生成“（续1）”“（续2）”等自动分页标题。
+5. 页面确实无法在适龄字号下容纳时，必须按独立教学子任务重新命名和设计，而不是使用“续”页；检测器必须阻断自动分页痕迹和不合理增页。
+6. 口才之歌统一继承中册第一课已验收的版式：页面主标题居中，完整歌词分入左右两张等宽轻底板，左右字号、行距、内边距和视觉重量一致。
+7. 拼音与汉字不得依赖连续空格或整段自动换行模拟对齐；每个拼音词组与对应汉字必须使用独立对象，并共用同一横向中心线。
+8. 拼音教学继续使用教材单层`ɑ`及组合声调；拼音对象和汉字对象必须分别命名，以便检测器逐组检查存在性、中心线和顺序。
+9. 图文教学页的主图必须完整覆盖画布设计区域；图片使用`contain`保证人物、边框、动作和关系完整，素材本身通过16:9自然留白实现“铺满而不裁剪”。
+10. 质量检测必须同时阻断：封面未铺满、学习导航残留、内容页占位名、自动“续N”标题、口才之歌多页、课前热身多页、拼音中心错位和有效模块之外的异常增页。
+11. 清理“说一说、做一做、读一读”等旧模板提示词时，必须同步删除提示词后残留的独立逗号、冒号和顿号；正文不得出现以标点开头的残句。
+12. 页面主标题不得机械复用右上栏目名；应采用“基本功延伸、发音练习、看图说一说”等真实教学动作，并检查主标题、正文首行和右上栏目之间无重叠、无同义重复。
+13. 课堂回顾、结束页等只有一句收束语的页面使用无底板居中排版和轻量强调线；禁止用大面积空卡片包围少量文字，造成页面空泛和视觉失衡。
+
+## 八、全册共用质量检测核心
+
+1. 上册、中册、下册的质量检测器必须共同调用“口才与表演通用质量检测核心”；册别检测器只允许补充输入覆盖、素材哈希、栏目数量和音频封装等册别事实，禁止复制维护不同的字号、容量、相交和拼音对齐算法。
+2. 版式相交必须按文本框实际矩形检测，至少阻断标题与正文、正文与图片主体、正文与音频按钮、多个正文框之间的覆盖；只检查对象是否越出画布不得判定合格。
+3. 正文字号采用“内容长度＋视觉行数＋文本框面积”的动态门槛；短内容不得用过小字号，长内容不得用过大字号硬塞，也不得通过拆出无语义“续页”规避容量检查。
+4. 长正文必须检查底部安全边距、预计视觉行数和段落结构；末行只剩标点、行首出现孤立标点、单段密集堆叠或正文越过安全区均视为硬错误。
+5. 页面标题、右上栏目和正文首行必须进行压缩空白与首尾标点后的语义去重；旧课件把标题拆字排版或在标题后附逗号时，同样不得逃过重复检测。
+6. “内容页”“学习导航”等模板角色不得直接进入成品；其栏目必须从当前课邻近真实模块继承，人工页码映射必须限制在对应课次，禁止用第一课页码规则污染其他课程。
+7. 音频页按“真实栏目名＋原生媒体动作＋可见播放按钮＋热区重合”识别；不得要求正文重复栏目标题，也不得把栏目只出现一次误判为缺少音频。
+8. 拼音对象与汉字对象按相同编号逐组检测横向中心线、顺序和教材单层`ɑ`；任一对象缺失、错位或混用英文双层`a`均不得交付。
+9. 生成和检测必须忽略演示文稿应用产生的临时锁文件；临时文件不得计入课程数量、媒体数量或失败结果。
+10. 公共检测核心升级后必须同时回归至少一个既有合格册次和当前制作册次；只有两者均通过，才能宣称升级为通用能力。
+
+## 九、整幅场景上的文字层级、底板比例与栏目可读性
+
+1. “看图说一说、说一说你看到了什么、按顺序观察、观察图片、练一练”等动作标题如果已由正文问题完整表达，必须隐藏动作标题，只保留一个学生可直接理解的视觉焦点；禁止标题和正文重复同一教学动作。
+2. 右上栏目名称叠在整幅插画上时必须放入独立轻底层；轻底层同时包住栏目短线和栏目文字，宽度与栏目文字成比例，禁止栏目名称直接压住人物面部、头发、树叶、窗框或高对比物体。
+3. 可编辑教学文字叠在整幅插画上时必须位于图片自然留白区，并使用40%透明的轻底板保障可读性；底板只包住标题与正文实际文字组，禁止固定铺满整个半屏或用大卡片包围少量文字。
+4. 底板与文字组必须共同在安全区内视觉垂直居中；左右图文页面不得仅从安全区顶部顺排，造成文字上重下空或人物侧视觉重量失衡。
+5. 字号必须同时受正文字符量、显式换行、预计视觉行数、文字框面积和另一侧人物视觉重量约束；短句不得形成小字孤岛，长文不得用大字硬塞、覆盖插画或拆成无语义“续页”。
+6. 图片生成提示必须先声明文字安全侧和安全区比例；人物、脸、手、关键道具、家具边缘和强线条必须集中到另一侧。已有图片不能自然让出文字区时必须补生成新图，禁止靠裁剪人物或在人物上覆盖文字补救。
+7. 整幅场景页若只有一个观察问题，不再额外显示栏目型大标题；若存在真实篇名、故事名或发音主题，则保留真实标题并与正文组成同一自适应文字组。
+8. 质量检测必须同时阻断：重复动作标题、栏目缺少轻底层、栏目文字未被底层完整包含、整幅插画正文缺少底板、文字超出底板、底板面积超过文字组面积2.8倍、长文大字号与短句小字号。
+9. 结构检测通过后仍必须渲染最终页做视觉复核；“没有越界、没有XML矩形相交”不等于视觉合格，至少检查人物遮挡、图文语义、留白均衡、字号层级和底板比例。
 
 `ORAL_COURSE_IMAGE_LESSON = FLOOR(NUMERIC_STEM / 10)`
 `ORAL_COURSE_IMAGE_ORDER = NUMERIC_STEM % 10`
@@ -59,3 +118,29 @@
 `ORAL_COURSE_OLD_MEDIA = SCREENSHOT_ONLY_FOR_FACTS + ZERO_BYTE_REUSE`
 `ORAL_COURSE_GENERATOR_GATE = STATIC_SOURCE_CHECK + COMPLETE_MAPPING + ORIGINAL_ASSET_BINDING + NO_OLD_MEDIA_FALLBACK`
 `ORAL_COURSE_GENERATOR_REGRESSION = REBUILD_AFFECTED_LESSONS + DYNAMIC_OUTPUT_CHECK`
+`ORAL_COURSE_VISUAL_ROLES = THEME + PRACTICE + STORYBOARD + SITUATION + PRONUNCIATION + BRAINSTORM + PERFORMANCE`
+`ORAL_COURSE_VISUAL_DIVERSITY = ASSET_EXISTS + ASSET_USED + UNIQUE_HASH + ROLE_COVERAGE + MAX_REPEAT_35_PERCENT`
+`ORAL_COURSE_CROSS_VOLUME_QUALITY = PREVIOUS_APPROVED_VOLUME_AS_MINIMUM_BASELINE + NO_GENERATOR_DOWNSHIFT + NO_DETECTOR_DOWNSHIFT`
+`ORAL_COURSE_SHARED_GENERATOR = COMMON_CORE + VOLUME_ADAPTER + SINGLE_LAYOUT_POLICY + SINGLE_QA_POLICY`
+`ORAL_COURSE_SCENE_LAYOUT = FULL_16_9_ILLUSTRATION + DECLARED_NATURAL_SAFE_SIDE + EDITABLE_TEXT_IN_SAFE_ZONE`
+`ORAL_COURSE_IMAGE_SEMANTICS = TEXT_KEYWORDS_INTERSECT_VISUAL_KEYWORDS + SUBJECT_ACTION_OBJECT_MATCH`
+`ORAL_COURSE_ASSET_REUSE = REUSE_IF_CLEAR_AND_SEMANTIC_AND_COMPLETE + GENERATE_ONLY_IF_MISSING_OR_MISMATCHED`
+`ORAL_COURSE_COVER = FULL_CANVAS_IMAGE + NATURAL_TEXT_SAFE_ZONE + NO_SMALL_SIDE_IMAGE`
+`ORAL_COURSE_TEMPLATE_LABELS = REMOVE_LEARNING_NAVIGATION + REPLACE_GENERIC_CONTENT_PAGE_WITH_REAL_SECTION`
+`ORAL_COURSE_PAGINATION = ONE_TEACHING_TASK_ONE_PAGE + NO_CONTINUATION_LABEL + RENAME_REAL_SUBTASK_IF_SPLIT_REQUIRED`
+`ORAL_COURSE_ORAL_SONG = ONE_PAGE + CENTERED_TITLE + TWO_EQUAL_LIGHT_CARDS + MATCHED_TYPOGRAPHY`
+`ORAL_COURSE_PINYIN_ALIGNMENT = INDEPENDENT_PINYIN_AND_HANZI_OBJECTS + SHARED_HORIZONTAL_CENTER`
+`ORAL_COURSE_PROMPT_CLEANUP = REMOVE_TEMPLATE_PROMPT + REMOVE_LEADING_PUNCTUATION + KEEP_COMPLETE_SENTENCE`
+`ORAL_COURSE_TITLE_DEDUP = REAL_TEACHING_ACTION_TITLE + NO_SECTION_DUPLICATION + NO_TITLE_BODY_OVERLAP`
+`ORAL_COURSE_CLOSING_LAYOUT = CENTERED_MESSAGE + LIGHT_ACCENT + NO_LARGE_EMPTY_CARD`
+`ORAL_COURSE_SHARED_QA_CORE = COMMON_LAYOUT_INSPECTOR + VOLUME_FACT_ADAPTER + SINGLE_PASS_FAIL_GATE`
+`ORAL_COURSE_TEXT_COLLISION = RECTANGLE_INTERSECTION + TITLE_BODY + TEXT_IMAGE_SUBJECT + TEXT_AUDIO_BUTTON`
+`ORAL_COURSE_DYNAMIC_TYPOGRAPHY = TEXT_LENGTH + VISUAL_LINES + BOX_AREA + MIN_MAX_FONT_GATE`
+`ORAL_COURSE_LONG_TEXT_QA = BOTTOM_SAFE_MARGIN + PARAGRAPH_STRUCTURE + NO_ORPHAN_PUNCTUATION`
+`ORAL_COURSE_ROLE_INHERITANCE = REMOVE_TEMPLATE_ROLE + NEAREST_REAL_SECTION + LESSON_SCOPED_MANUAL_MAPPING`
+`ORAL_COURSE_AUDIO_QA = EXACT_SECTION + NATIVE_MEDIA_ACTION + VISIBLE_BUTTON + MATCHED_HITBOX`
+`ORAL_COURSE_REDUNDANT_ACTION_TITLE = BODY_PROMPT_AS_SINGLE_FOCUS + HIDE_DUPLICATED_ACTION_TITLE`
+`ORAL_COURSE_SECTION_BADGE = PROPORTIONAL_BACKING + CONTAIN_RULE_AND_LABEL + AVOID_SUBJECT`
+`ORAL_COURSE_ADAPTIVE_TEXT_PANEL = TEXT_LENGTH + VISUAL_LINES + SAFE_AREA + VERTICAL_CENTER + CARD_AREA_RATIO`
+`ORAL_COURSE_IMAGE_TEXT_SAFE_ZONE = DECLARED_SIDE + SUBJECTS_OPPOSITE + NO_CROP_REPAIR`
+`ORAL_COURSE_RENDERED_VISUAL_GATE = XML_GEOMETRY + FULL_RENDER_REVIEW + SUBJECT_OCCLUSION + VISUAL_BALANCE`

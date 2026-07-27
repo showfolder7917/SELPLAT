@@ -19,8 +19,17 @@ selplat_base_dao_interface_and_impl_must_match_one_to_one = true
 <!-- BaseDaoImpl 集中实现 BaseDao 允许业务调用的全部能力；适用于主键号段定义、两个 getPageList 重载、getById、getByQuery、insert、update 和 softDelete；业务含义是深层类不得保留同名公共方法或重复委托实现。 -->
 selplat_base_dao_impl_owned_capabilities = getIdSequenceDefinition,getPageList,getById,getByIds,getByQuery,insert,insertBatch,update,updateBatch,softDelete,softDeleteBatch
 
-<!-- BaseCrudDaoImpl 只保留 BaseDaoImpl 需要的内部主键查询和参数辅助能力；适用于公共继承链内部；业务含义是深层支撑类不再 implements BaseDao，也不再声明分页、新增、更新或删除公共方法。 -->
-selplat_base_crud_dao_impl_internal_capabilities = getByIdsBatchGroup,insertBatchGroup,updateBatchGroup,resolveIdValues,buildIdColumnValueMap
+<!-- BaseCrudDaoImpl 只保留 BaseDaoImpl 需要的内部主键查询和参数辅助能力；适用于公共继承链内部；业务含义是深层支撑类不再 implements BaseDao，也不再承载批量写入 SQL 或模板层职责。 -->
+selplat_base_crud_dao_impl_internal_capabilities = getByIdsBatchGroup,resolveIdValues,buildIdColumnValueMap
+
+<!-- BaseTemplateDao 是通用单条和批量写入的唯一 SQL 模板入口；适用于 BaseDaoImpl 的新增、更新和批量写入委托；业务含义是公共 DAO 门面不直接拼 SQL，深层 CRUD 支撑类也不重复维护模板实现。 -->
+selplat_base_template_dao_write_capabilities = insert,insertBatch,updateByIds,updateBatchByIds
+
+<!-- BaseDaoImpl 的批量写入只负责空请求处理、每千条拆组和影响行数汇总；适用于 insertBatch 与 updateBatch；业务含义是批次编排保留在公开门面实现，真实 SQL 和 JDBC batch 统一交给模板层。 -->
+selplat_base_dao_impl_batch_orchestration = validate_empty_request,split_each_1000,delegate_template_batch,sum_affected_rows
+
+<!-- BaseCrudDaoImpl 禁止保留 insertBatchGroup、updateBatchGroup、批量 SQL 拼接和批处理结果累计实现；适用于模板层批量能力完成后的基础类清理；业务含义是批量写入只有一个真实实现位置。 -->
+selplat_base_crud_dao_impl_must_not_implement_batch_write = insertBatchGroup,updateBatchGroup,batch_sql_building,batch_count_summing
 
 <!-- 批量查询、新增、更新和假删除必须通过 BaseDao 与 BaseDaoImpl 公开，应用 DAO 不得重新声明或包装；适用于 SELPLAT 当前及未来全部简单单表模块；业务含义是业务层只调用门面能力，深层实现可以独立演进。 -->
 selplat_base_dao_batch_public_capabilities = getByIds(CommonBatchParam),insertBatch(CommonBatchParam),updateBatch(CommonBatchParam),softDeleteBatch(CommonBatchParam)
@@ -31,16 +40,16 @@ selplat_batch_param_shape = CommonBatchParam.items:list<CommonParam>
 <!-- 公共批量操作固定按最多一千项拆组；适用于批量查询、新增、更新和假删除；业务含义是超量请求可稳定分段，同时累计返回全部分组的真实结果。 -->
 selplat_base_dao_batch_group_size = 1000
 
-<!-- 每个新增分组必须使用 JdbcTemplate.batchUpdate 或等价数据库批处理并保持相同写入列集合，禁止循环调用公共单条 insert 冒充批处理；业务含义是批量入口必须真正减少数据库往返且不能发生列值错位。 -->
-selplat_insert_batch_execution = jdbc_batch_with_same_columns_per_group
+<!-- 每个新增分组必须由 BaseTemplateDao 使用 JdbcTemplate.batchUpdate 或等价数据库批处理，并保持相同写入列集合；禁止循环调用公共单条 insert 冒充批处理；业务含义是模板层统一减少数据库往返并防止列值错位。 -->
+selplat_insert_batch_execution = BaseDaoImpl.split_each_1000 -> BaseTemplateDao.jdbc_batch_with_same_columns
 selplat_insert_batch_must_not_loop_public_single_insert = true
 
-<!-- 每个更新分组按更新字段集合形成 SQL 结构子组后使用真实 JDBC batch，禁止循环调用公共单条 update；适用于同一请求中不同记录更新字段不同的场景；业务含义是保留动态参数能力并保证每种 SQL 参数顺序一致。 -->
-selplat_update_batch_execution = group_by_update_column_shape_then_jdbc_batch
+<!-- 每个更新分组必须由 BaseTemplateDao 按更新字段集合形成 SQL 结构子组后使用真实 JDBC batch，禁止循环调用公共单条 update；适用于同一请求中不同记录更新字段不同的场景；业务含义是模板层统一保留动态参数能力并保证每种 SQL 参数顺序一致。 -->
+selplat_update_batch_execution = BaseDaoImpl.split_each_1000 -> BaseTemplateDao.group_by_update_column_shape_then_jdbc_batch
 selplat_update_batch_must_not_loop_public_single_update = true
 
-<!-- 批量删除只允许把统一假删除字段补入每一项后复用批量更新，禁止新增物理批量删除能力；业务含义是批量与单条删除遵循同一数据保留和审计口径。 -->
-selplat_soft_delete_batch_execution = enrich_status_and_updatedAt_then_updateBatch
+<!-- 批量删除只允许由 BaseDaoImpl 把统一假删除字段补入每一项后复用 updateBatch，最终委托 BaseTemplateDao.updateBatchByIds；禁止新增独立假删除模板或物理批量删除能力；业务含义是批量与单条删除遵循同一数据保留和审计口径。 -->
+selplat_soft_delete_batch_execution = BaseDaoImpl.enrich_status_and_updatedAt -> updateBatch -> BaseTemplateDao.updateBatchByIds
 selplat_batch_hard_delete_is_not_exposed = true
 
 <!-- 一个业务批量写入请求的全部千条分组必须由 Service 事务包围；适用于 insertBatch、updateBatch 和 softDeleteBatch；业务含义是任一分组或记录失败时不得留下前面分组的部分提交。 -->
@@ -118,8 +127,20 @@ selplat_base_dao_common_batch_param_write_signatures = insertBatch(CommonBatchPa
 <!-- BaseDao.update 必须按 getIds 元数据顺序从 CommonParam 自动提取单主键或复合主键并从 set 字段中移除；适用于全部通用更新；业务含义是前端只传一个参数对象即可准确区分 where 与 set。 -->
 selplat_base_dao_update_id_extraction = ordered_extract(getIds,CommonParam)
 
-<!-- 当前 Service 写入链路不分散实现必填、唯一性、字段白名单、默认值或类型验证，这些验证等待后续统一能力；适用于 insert、update、delete；业务含义是当前阶段只保留直接透传而不重复建设临时验证。 -->
-selplat_service_deferred_write_validation = required,uniqueness,allowlist,default_value,type_conversion
+<!-- 当前 Service 写入链路不分散实现必填、唯一性、默认值或类型验证，这些验证等待后续统一能力；适用于 insert、update、delete；业务含义是 Service 继续直接透传 CommonParam，不重复建设临时验证。 -->
+selplat_service_deferred_write_validation = required,uniqueness,default_value,type_conversion
+
+<!-- 公共 DAO 必须通过 BaseDaoSupportImpl.getDbRealColumns 从当前 DAO 对应真实表的数据库元数据读取字段名；适用于查询、新增、更新和批量写入；业务含义是最终进入 SQL 的列名只来源于后端真实数据库结构，不由前端字段名直接决定。 -->
+selplat_base_dao_real_column_source = BaseDaoSupportImpl.getDbRealColumns(database_metadata)
+
+<!-- 公共写入只允许遍历后端真实字段并通过 CommonParam.getParam(columnName) 获取前端值；适用于 insert、insertBatch、update、updateBatch 和假删除复用的更新链路；业务含义是前端只提供真实字段对应的值，不能把任意标识符拼入 SQL。 -->
+selplat_base_dao_write_value_mapping = each(dbRealColumn where CommonParam.containsKey(dbRealColumn) => CommonParam.getParam(dbRealColumn))
+
+<!-- 前端写入参数包含当前真实表不存在的字段时必须在 SQL 执行前终止，禁止静默忽略未知字段；适用于单条和批量新增、更新；业务含义是字段拼写错误、越界字段和 SQL 标识符注入都不能进入模板层。 -->
+selplat_base_dao_unknown_write_column_must_fail_before_sql = true
+
+<!-- 前端未传入的真实数据库字段不得主动写成 null；适用于数据库默认值、可空字段和局部更新；业务含义是字段白名单只校验实际传入键，不改变未提交字段的数据库语义。 -->
+selplat_base_dao_missing_write_column_must_not_be_written_as_null = true
 
 <!-- Uniauth 写入当前只保留主键生成和 password 到 passwordHash 的必要落库转换；适用于用户新增和更新；业务含义是明文密码不会直接写入数据库或返回前端。 -->
 selplat_uniauth_current_required_write_processing = id_generation,password_to_passwordHash

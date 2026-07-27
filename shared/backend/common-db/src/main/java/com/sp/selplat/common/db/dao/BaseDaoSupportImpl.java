@@ -26,7 +26,7 @@ import org.springframework.util.StringUtils;
 // 通用 DAO 支撑层负责表名解析、字段元数据、主键号段定义、模板查询入参拼装和公共查询组件暴露，不直接承接业务 SQL 或分页执行。
 public abstract class BaseDaoSupportImpl {
 
-    // 模板 DAO 代理对象由 Spring 在实例化具体 DAO 子类后统一注入，保证通用 CRUD 可复用同一代理。
+    // 模板 DAO 门面由 Spring 在实例化具体 DAO 子类后统一注入，集中承接单条 Mapper 与真实 JDBC 批处理。
     @Autowired
     protected BaseTemplateDao baseTemplateDao;
 
@@ -126,7 +126,7 @@ public abstract class BaseDaoSupportImpl {
         return new IdSequenceDefinition(idSequenceCodeMap);
     }
 
-    // 公共 DAO 统一通过现有元数据读取器生成 select 字段串，让子类不必手工维护整串字段列表。
+    // 公共 DAO 统一通过现有元数据读取器生成以逗号和空格分隔的 select 字段串，例如：id, tenantId, loginName, status。
     protected String getselectColumns() {
         // 当前 DAO 的物理表名继续沿用基类约定解析，保证字段读取目标与模板 CRUD 命中同一张表。
         String tableName = getTableName();
@@ -160,5 +160,3 @@ public abstract class BaseDaoSupportImpl {
         return new LinkedHashMap<>(sourceColumnValueMap);
     }
 }
-
-

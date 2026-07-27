@@ -29,4 +29,10 @@ class BaseDaoInheritanceTest {
     void crudHelperBoundary() {
         BaseDaoInheritanceTestVerifier.verifyCrudHelperBoundary();
     }
+
+    // template-batch-boundary Case 验证真实批量新增和更新能力已经归属模板层。
+    @Test
+    void templateBatchBoundary() {
+        BaseDaoInheritanceTestVerifier.verifyTemplateBatchBoundary();
+    }
 }

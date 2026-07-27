@@ -61,7 +61,7 @@ SELPLAT_PROJECT_BUILD_RULES = selplat/通用规则/RUL_SELPLAT工程构建规则
 load_rule_for_selplat_gradle_dependency_or_build_output = SELPLAT_PROJECT_BUILD_RULES
 load_rule_for_selplat_vscode_gradle_import_or_cache = SELPLAT_PROJECT_BUILD_RULES
 
-<!-- SELPLAT 全部应用共用的基础 DAO 复用、CommonParam/CommonBatchParam 透传和主键号段定义规则；适用于简单单表 CRUD、千条分组真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
+<!-- SELPLAT 全部应用共用的基础 DAO 复用、CommonParam/CommonBatchParam 透传、真实数据库字段控制和主键号段定义规则；适用于简单单表 CRUD、BaseDaoImpl 千条分组、BaseTemplateDao 真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
 SELPLAT_BASE_DAO_REUSE_RULES = selplat/通用规则/RUL_基础DAO复用与通用参数透传规则.md
 load_rule_for_selplat_base_dao_crud_or_paging_reuse = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_common_param_dao_query = SELPLAT_BASE_DAO_REUSE_RULES
@@ -73,6 +73,11 @@ SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = selplat/通用规则/RUL_基础Service�
 load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_base_service_default_crud_or_special_callback = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
+
+<!-- 静态旧站镜像从原域名和服务器根路径迁移为本地可打开相对路径的跨工程规则；适用于 HTML、CSS、JavaScript 和媒体关联的字节保持替换与目标验证。 -->
+STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES = 跨工程通用规则/RUL_静态网站本地相对路径迁移规则.md
+load_rule_for_static_site_original_domain_or_root_path_migration = STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES
+load_rule_for_legacy_encoded_html_local_opening = STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES
 
 <!-- SELPLAT 工程专属的绝对真实数据集成测试规则；适用于 apps 当前及未来应用与 shared 公共模块的测试类名 fixture、数据库查询、写入、分页、排序、发号、事务和覆盖回归验证，不适用于 Fujitsu 或其他工程。 -->
 SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES = selplat/通用规则/RUL_SELPLAT真实数据集成测试规则.md
@@ -98,11 +103,51 @@ load_rule_for_selplat_rule_incompatible_request_blocking = SELPLAT_RULE_COMPATIB
 HORIZONTAL_TEACHING_PPT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_横版教学PPT通用排版与检查规则.md
 load_rule_for_horizontal_teaching_ppt_generation = HORIZONTAL_TEACHING_PPT_RULES
 
+<!-- 少儿口才与表演全册共用的截图映射、原创视觉、自然留白构图、自适应文字底板、重复动作标题清理、栏目可读底层、动态字号、矩形相交、渲染复核、拼音对齐和音频热区质量门禁规则。 -->
+CHILDREN_ORAL_PERFORMANCE_ALL_VOLUMES_RULES = 中文教学/rule/口才与表演/RUL_少儿口才与表演全册通用制作规则.md
+load_rule_for_children_oral_performance_all_volumes = CHILDREN_ORAL_PERFORMANCE_ALL_VOLUMES_RULES
+
 <!-- 少儿口才与表演中册的样板继承、补图编号、旧媒体禁用和嵌入式音频规则。 -->
 CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES = 中文教学/rule/口才与表演/RUL_少儿口才与表演中册PPT重制补图与音频规则.md
 load_rule_for_children_oral_performance_middle_ppt_generation = CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES
 load_rule_for_children_oral_performance_middle_ppt_audio_or_supplemental_images = CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES
 
+<!-- 少儿口才与表演下册的全量内容分析、原创素材、音频交互和逐课质量验收规则。 -->
+CHILDREN_ORAL_PERFORMANCE_LOWER_PPT_RULES = 中文教学/rule/口才与表演/RUL_少儿口才与表演下册PPT完整制作规则.md
+load_rule_for_children_oral_performance_lower_ppt_generation = CHILDREN_ORAL_PERFORMANCE_LOWER_PPT_RULES
+load_rule_for_children_oral_performance_lower_ppt_quality_check = CHILDREN_ORAL_PERFORMANCE_LOWER_PPT_RULES
+
+<!-- 中文教学拼音标注校正与项目目录工作流规则；分别用于内容校正和拼音项目组织。 -->
+CHINESE_PINYIN_CORRECTION_RULES = 中文教学/rule/拼音生成/RUL_拼音标注与朗读版校正规则.md
+CHINESE_PINYIN_WORKFLOW_RULES = 中文教学/rule/拼音生成/RUL_拼音生成目录分类与工作流程规则.md
+load_rule_for_chinese_pinyin_correction = CHINESE_PINYIN_CORRECTION_RULES
+load_rule_for_chinese_pinyin_project_workflow = CHINESE_PINYIN_WORKFLOW_RULES
+
+<!-- 古诗教学图片、无文字底图、可编辑PPT排版和少儿三页严格套版规则。 -->
+ANCIENT_POEM_IMAGE_FULL_FLOW_RULES = 中文教学/rule/教学图片与PPT生成/RUL_古诗教学图片生成全流程规则.md
+ANCIENT_POEM_BACKGROUND_RULES = 中文教学/rule/教学图片与PPT生成/RUL_古诗无文字底图生成工作流程规则.md
+ANCIENT_POEM_PPT_LAYOUT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_古诗教学图片PPT文字排版工作流程规则.md
+CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES = 中文教学/rule/教学图片与PPT生成/RUL_少儿古诗三页整张底图PPT严格套版通用规则.md
+load_rule_for_ancient_poem_teaching_image_generation = ANCIENT_POEM_IMAGE_FULL_FLOW_RULES
+load_rule_for_ancient_poem_no_text_background_generation = ANCIENT_POEM_BACKGROUND_RULES
+load_rule_for_ancient_poem_editable_ppt_generation = ANCIENT_POEM_PPT_LAYOUT_RULES
+load_rule_for_child_poetry_three_full_page_background_generation = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
+load_rule_for_child_poetry_strict_ppt_template_generation = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
+load_rule_for_child_poetry_ppt_layout_correction = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
+load_rule_for_child_poetry_visual_balance_and_readability_repair = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
+load_rule_for_poetry_atlas_to_full_page_background_task = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
+
 <!-- 成语典故绘本的事实核定、叙事分镜和40%文字卡规则；仅适用于有可靠典故的成语。 -->
 IDIOM_FABLE_PICTURE_BOOK_PPT_RULES = 中文教学/rule/成语典故/RUL_成语典故绘本PPT制作规则.md
 load_rule_for_idiom_fable_picture_book_ppt_generation = IDIOM_FABLE_PICTURE_BOOK_PPT_RULES
+
+<!-- 小学成语典故国风连续绘本的分级、分镜、图片生成和后续PPT图文避让规则。 -->
+PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES = 中文教学/rule/成语典故/RUL_小学成语典故国风连续绘本图片生成规则.md
+load_rule_for_primary_school_idiom_story_picture_book_generation = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
+load_rule_for_idiom_story_grading_and_storyboard_planning = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
+load_rule_for_primary_school_idiom_story_ppt_generation = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
+load_rule_for_idiom_story_ppt_layout_and_text_avoidance = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
+
+<!-- 三字经教学PPT的篇章拆分、图片生成、可编辑排版和批量验收规则。 -->
+THREE_CHARACTER_CLASSIC_PPT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_三字经教学PPT批量生成工作流程规则.md
+load_rule_for_three_character_classic_ppt_generation = THREE_CHARACTER_CLASSIC_PPT_RULES
