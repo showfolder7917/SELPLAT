@@ -11,7 +11,8 @@ public interface CommonSequenceSegmentDao {
      * 按号段编码申请下一段可用主键区间。
      *
      * @param seqCode 号段编码
-     * @return 本次成功申请到的号段；若乐观锁冲突则返回空
+     * @return 本次成功申请到的号段，例如
+     *     {@code {"startId":100001,"endId":101000,"stepSize":1000}}；若乐观锁冲突则返回 null
      */
     CommonSequenceSegmentRange allocateNextRange(String seqCode);
 }

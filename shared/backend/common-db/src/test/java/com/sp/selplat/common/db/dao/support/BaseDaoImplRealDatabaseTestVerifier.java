@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.common.db.template.BaseTemplateMapper;
@@ -35,14 +36,27 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.h2.jdbcx.JdbcDataSource;
 import org.h2.tools.RunScript;
 
-// BaseDaoImpl 真实数据库验证器用独立 H2、真实 JDBC 元数据、内部 Mapper 和模板 DAO 执行每个公共 DAO Case。
+/**
+ * BaseDaoImpl 真实数据库验证器用独立 H2、真实 JDBC 元数据、内部 Mapper 和模板 DAO 执行每个公共 DAO Case。
+ */
 public final class BaseDaoImplRealDatabaseTestVerifier {
 
-    // 验证器没有跨 Case 状态，每次调用都创建全新的内存数据库。
+    /**
+     * 验证器没有跨 Case 状态，每次调用都创建全新的内存数据库。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     */
     private BaseDaoImplRealDatabaseTestVerifier() {
     }
 
-    // 验证真实单主键元数据生成表名前缀号段编码。
+    /**
+     * 验证真实单主键元数据生成表名前缀号段编码。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyGetIdSequenceDefinition(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 号段定义必须通过真实 JDBC 主键元数据读取 id 字段。
@@ -52,7 +66,14 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证默认分页入口执行真实 sortnum 倒序和 count SQL。
+    /**
+     * 验证默认分页入口执行真实 sortnum 倒序和 count SQL。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyGetPageList(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 默认分页读取当前 fixture 的三条记录。
@@ -71,7 +92,14 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证真实主键查询返回 status 为零的记录，不注入业务有效状态。
+    /**
+     * 验证真实主键查询返回 status 为零的记录，不注入业务有效状态。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyGetById(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 创建前端通用参数并直接写入当前表单主键。
@@ -87,7 +115,14 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证 CommonParam 中的全部复合主键字段共同进入真实查询 where。
+    /**
+     * 验证 CommonParam 中的全部复合主键字段共同进入真实查询 where。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyGetByIdComposite(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 创建前端通用参数承接当前表的两个复合主键字段。
@@ -112,7 +147,14 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证多个 CommonParam 字段共同进入真实动态查询 where。
+    /**
+     * 验证多个 CommonParam 字段共同进入真实动态查询 where。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyGetByQuery(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 创建两个动态查询字段以区分同账号的不同租户记录。
@@ -128,7 +170,14 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证 CommonParam 全字段通过真实 MyBatis 注解模板新增。
+    /**
+     * 验证 CommonParam 全字段通过真实 MyBatis 注解模板新增。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyInsert(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 创建满足真实表约束的新增参数。
@@ -142,7 +191,127 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证真实更新只把主键用于 where，并保持原 CommonParam 不变。
+    /**
+     * 验证真实字段 Map、SELECT 字段串、数据库默认值和未知字段写入阻断共同生效。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
+    public static void verifyDatabaseColumnsAndWriteFieldSafety(String fixturePath) {
+        withFixture(fixturePath, context -> {
+            // 真实字段 Map 必须按数据库列顺序返回字段名到元数据对象的映射。
+            Map<String, ColumnMetadata> dbColumnsMap = context.dao.exposeDbColumnsMap();
+            // 第一列主键证明有序 Map 保留了数据库元数据顺序。
+            assertEquals("id", dbColumnsMap.keySet().iterator().next());
+            // 字段值必须保存同名真实列元数据。
+            assertEquals("displayName", dbColumnsMap.get("displayName").getColumnName());
+            // SELECT 字段串必须直接等于真实字段 Map 键顺序。
+            assertEquals(String.join(", ", dbColumnsMap.keySet()), context.dao.exposeSelectColumns());
+
+            // 新增只提交表约束必需字段，省略有默认值的 sortnum、status 和 updatedAt。
+            CommonParam omittedColumnsInsert = completeParam(402L, "default-columns", "数据库默认值");
+            // 删除排序值，让数据库 DEFAULT 负责补齐而不是 DAO 写入 null。
+            omittedColumnsInsert.getParamMap().remove("sortnum");
+            // 删除状态值，让数据库 DEFAULT 负责补齐。
+            omittedColumnsInsert.getParamMap().remove("status");
+            // 真实新增必须成功。
+            assertEquals(1, context.dao.insert(omittedColumnsInsert));
+            // 数据库默认排序值必须保留为零。
+            assertEquals(0L, context.queryLong("SELECT sortnum FROM SharedFixture WHERE id = 402"));
+            // 数据库默认状态必须保留为一。
+            assertEquals(1L, context.queryLong("SELECT status FROM SharedFixture WHERE id = 402"));
+
+            // 单条新增加入数据库不存在的前端字段。
+            CommonParam unknownInsert = completeParam(404L, "blocked-single", "不应新增");
+            // 未知字段不得被忽略或成为单条 INSERT 标识符。
+            unknownInsert.putParam("frontendOnly", "blocked");
+            // 单条新增必须在 Mapper 执行前失败。
+            assertThrows(IllegalArgumentException.class, () -> context.dao.insert(unknownInsert));
+            // 被阻断主键不得写入数据库。
+            assertEquals(0L, context.queryLong("SELECT COUNT(*) FROM SharedFixture WHERE id = 404"));
+
+            // 单条更新加入数据库不存在的前端字段。
+            CommonParam unknownUpdate = new CommonParam();
+            // 主键指定已新增记录。
+            unknownUpdate.putParam("id", 402L);
+            // 合法展示名用于确认整次更新被阻断。
+            unknownUpdate.putParam("displayName", "不应写入");
+            // 未知字段不得被忽略或拼入 SQL。
+            unknownUpdate.putParam("frontendOnly", "blocked");
+            // DAO 必须在执行 SQL 前报告未知字段。
+            IllegalArgumentException updateException = assertThrows(
+                IllegalArgumentException.class,
+                () -> context.dao.update(unknownUpdate)
+            );
+            // 错误信息必须指出具体未知字段。
+            assertTrue(updateException.getMessage().contains("frontendOnly"));
+            // 数据库原展示名不应发生变化。
+            assertEquals("数据库默认值", context.queryString("SELECT displayName FROM SharedFixture WHERE id = 402"));
+
+            // 单条假删除加入数据库不存在的前端字段。
+            CommonParam unknownSoftDelete = new CommonParam();
+            // 主键指向已存在记录。
+            unknownSoftDelete.putParam("id", 402L);
+            // 未知字段必须与基础假删除补充字段一起接受真实列校验。
+            unknownSoftDelete.putParam("frontendOnly", "blocked");
+            // 单条假删除必须在更新 SQL 前失败。
+            assertThrows(IllegalArgumentException.class, () -> context.dao.softDelete(unknownSoftDelete));
+            // 记录状态必须仍为数据库默认有效值。
+            assertEquals(1L, context.queryLong("SELECT status FROM SharedFixture WHERE id = 402"));
+
+            // 批量新增构造一个包含未知字段的唯一项。
+            CommonBatchParam unknownBatchInsert = new CommonBatchParam();
+            // 完整合法字段作为基础。
+            CommonParam unknownInsertItem = completeParam(403L, "blocked-batch", "不应新增");
+            // 未知字段用于验证模板批量链路同样阻断。
+            unknownInsertItem.putParam("frontendOnly", "blocked");
+            // 当前项加入批量新增请求。
+            unknownBatchInsert.getItems().add(unknownInsertItem);
+            // 批量新增必须在 JDBC 执行前失败。
+            assertThrows(IllegalArgumentException.class, () -> context.dao.insertBatch(unknownBatchInsert));
+            // 被阻断主键不得写入数据库。
+            assertEquals(0L, context.queryLong("SELECT COUNT(*) FROM SharedFixture WHERE id = 403"));
+
+            // 批量更新构造一个包含未知字段的唯一项。
+            CommonBatchParam unknownBatchUpdate = new CommonBatchParam();
+            // 当前更新项指向已存在记录。
+            CommonParam unknownUpdateItem = new CommonParam();
+            // 主键进入批量 WHERE。
+            unknownUpdateItem.putParam("id", 402L);
+            // 未知字段不得成为批量 SET 标识符。
+            unknownUpdateItem.putParam("frontendOnly", "blocked");
+            // 当前项加入批量更新请求。
+            unknownBatchUpdate.getItems().add(unknownUpdateItem);
+            // 批量更新必须在 JDBC 执行前失败。
+            assertThrows(IllegalArgumentException.class, () -> context.dao.updateBatch(unknownBatchUpdate));
+
+            // 批量假删除构造一个包含未知字段的唯一项。
+            CommonBatchParam unknownBatchDelete = new CommonBatchParam();
+            // 当前假删除项指向已存在记录。
+            CommonParam unknownDeleteItem = new CommonParam();
+            // 主键进入批量 WHERE。
+            unknownDeleteItem.putParam("id", 402L);
+            // 未知字段必须在公共状态字段补充后仍被拒绝。
+            unknownDeleteItem.putParam("frontendOnly", "blocked");
+            // 当前项加入批量假删除请求。
+            unknownBatchDelete.getItems().add(unknownDeleteItem);
+            // 批量假删除必须在 JDBC 执行前失败。
+            assertThrows(IllegalArgumentException.class, () -> context.dao.softDeleteBatch(unknownBatchDelete));
+            // 记录状态必须继续保持有效。
+            assertEquals(1L, context.queryLong("SELECT status FROM SharedFixture WHERE id = 402"));
+        });
+    }
+
+    /**
+     * 验证真实更新只把主键用于 where，并保持原 CommonParam 不变。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyUpdate(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 创建包含主键和两个更新字段的前端参数。
@@ -164,7 +333,14 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证公共逻辑删除真实更新而不物理删除。
+    /**
+     * 验证公共逻辑删除真实更新而不物理删除。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifySoftDelete(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 创建包含主键和审计用户的删除参数。
@@ -184,7 +360,85 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证一千零一条记录在两个固定分组中完成真实批量新增、查询、异构更新和假删除。
+    /**
+     * 验证单条和批量写入链路始终使用复合主键的全部字段。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
+    public static void verifyCompositeKeyWriteChain(String fixturePath) {
+        withFixture(fixturePath, context -> {
+            // 单条更新参数包含复合主键两部分和一个更新字段。
+            CommonParam updateIn = new CommonParam();
+            // tenantId 指定复合主键第一部分。
+            updateIn.putParam("tenantId", 31L);
+            // itemId 指定复合主键第二部分。
+            updateIn.putParam("itemId", 2L);
+            // 展示名只更新唯一目标记录。
+            updateIn.putParam("displayName", "复合单条更新");
+            // 单条更新必须只影响完整复合主键命中的一行。
+            assertEquals(1, context.dao.update(updateIn));
+            // 同租户另一 itemId 必须保持不变。
+            assertEquals(
+                "复合主键对照",
+                context.queryString("SELECT displayName FROM SharedFixture WHERE tenantId = 31 AND itemId = 1")
+            );
+
+            // 批量更新包含两个不同复合主键目标。
+            CommonBatchParam updateBatchIn = new CommonBatchParam();
+            // 逐个构造完整复合主键更新项。
+            for (long itemId = 1L; itemId <= 2L; itemId++) {
+                // 当前项承接同一租户下的独立 itemId。
+                CommonParam updateItem = new CommonParam();
+                // tenantId 是复合主键第一部分。
+                updateItem.putParam("tenantId", 31L);
+                // itemId 是复合主键第二部分。
+                updateItem.putParam("itemId", itemId);
+                // 每条记录写入可区分的展示名。
+                updateItem.putParam("displayName", "复合批量更新" + itemId);
+                // 当前项加入批量更新请求。
+                updateBatchIn.getItems().add(updateItem);
+            }
+            // 两个完整复合主键必须分别命中两行。
+            assertEquals(2, context.dao.updateBatch(updateBatchIn));
+
+            // 批量假删除只删除第二个复合主键目标。
+            CommonBatchParam deleteBatchIn = new CommonBatchParam();
+            // 当前假删除项保存完整复合主键。
+            CommonParam deleteItem = new CommonParam();
+            // tenantId 指定第一部分。
+            deleteItem.putParam("tenantId", 31L);
+            // itemId 指定第二部分。
+            deleteItem.putParam("itemId", 2L);
+            // 审计用户随逻辑删除一起落库。
+            deleteItem.putParam("lastOperateUserId", 77L);
+            // 当前项加入批量假删除请求。
+            deleteBatchIn.getItems().add(deleteItem);
+            // 完整复合主键只能逻辑删除一行。
+            assertEquals(1, context.dao.softDeleteBatch(deleteBatchIn));
+            // 目标记录状态必须变为零。
+            assertEquals(
+                0L,
+                context.queryLong("SELECT status FROM SharedFixture WHERE tenantId = 31 AND itemId = 2")
+            );
+            // 同租户另一复合主键记录仍保持有效。
+            assertEquals(
+                1L,
+                context.queryLong("SELECT status FROM SharedFixture WHERE tenantId = 31 AND itemId = 1")
+            );
+        });
+    }
+
+    /**
+     * 验证一千零一条记录在两个固定分组中完成真实批量新增、查询、异构更新和假删除。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyBatchCrudInThousandItemGroups(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 批量新增参数保存一千零一条相同列结构记录，确保跨越一千条边界。
@@ -256,7 +510,14 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 验证空主键和空动态条件不会进入真实 SQL。
+    /**
+     * 验证空主键和空动态条件不会进入真实 SQL。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyEmptyInput(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 空 CommonParam 按公共主键未命中语义返回 null。
@@ -283,10 +544,31 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
             assertEquals(0, context.dao.softDeleteBatch(new CommonBatchParam()));
             // null 批量假删除同样返回零。
             assertEquals(0, context.dao.softDeleteBatch(null));
+            // 空单条新增没有真实字段，必须在 SQL 前失败。
+            assertThrows(IllegalArgumentException.class, () -> context.dao.insert(new CommonParam()));
+            // 缺少主键的单条更新必须在 SQL 前失败。
+            CommonParam missingIdUpdate = new CommonParam();
+            // 只提供更新字段，明确触发缺少真实主键的边界。
+            missingIdUpdate.putParam("displayName", "缺少主键");
+            // DAO 必须指出主键值缺失。
+            assertThrows(IllegalArgumentException.class, () -> context.dao.update(missingIdUpdate));
+            // 只含主键的单条更新没有 SET 字段，必须在 SQL 前失败。
+            CommonParam missingUpdateColumns = new CommonParam();
+            // 提供合法主键以越过主键完整性校验。
+            missingUpdateColumns.putParam("id", 801L);
+            // DAO 必须拒绝生成空 SET 更新。
+            assertThrows(IllegalArgumentException.class, () -> context.dao.update(missingUpdateColumns));
         });
     }
 
-    // 验证真实动态查询没有命中记录时返回 null。
+    /**
+     * 验证真实动态查询没有命中记录时返回 null。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     */
     public static void verifyQueryNotFound(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 创建数据库中不存在的登录名条件。
@@ -298,7 +580,15 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         });
     }
 
-    // 创建满足 SharedFixture 非空约束的完整新增参数。
+    /**
+     * 创建满足 SharedFixture 非空约束的完整新增参数。
+     *
+     * @param id 当前 fixture 记录主键，例如 {@code 10001L}
+     * @param loginName 当前 fixture 登录名，例如 {@code "batch-user-1"}
+     * @param displayName 当前 fixture 展示名，例如 {@code "批量用户1"}
+     * @return 可直接进入真实 BaseDao 的参数，例如
+     *     {@code {"id":10001,"tenantId":4,"loginName":"batch-user-1","displayName":"批量用户1","status":1}}
+     */
     private static CommonParam completeParam(long id, String loginName, String displayName) {
         // 创建通用前端参数容器。
         CommonParam saveIn = new CommonParam();
@@ -322,7 +612,16 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         return saveIn;
     }
 
-    // 在独立 H2 和真实 MyBatis 会话中运行一个 fixture Case。
+    /**
+     * 在独立 H2 和真实 MyBatis 会话中运行一个 fixture Case。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @param fixturePath 当前生产方法唯一对应的 UTF-8 SQL fixture，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getByIdFound.sql"}
+     * @param caseAction 使用真实 DAO 和独立 JDBC 期待查询执行断言的 Case 动作
+     * @throws AssertionError 当 fixture 缺失、SQL 初始化失败或期待查询失败时抛出
+     */
     private static void withFixture(String fixturePath, Consumer<RealContext> caseAction) {
         // 每个 Case 使用随机数据库名，避免并行测试共享表状态。
         JdbcDataSource dataSource = new JdbcDataSource();
@@ -368,34 +667,89 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         }
     }
 
-    // SharedFixtureDaoImpl 按生产命名约定把类名自动解析成 SharedFixture 表。
+    /**
+     * SharedFixtureDaoImpl 按生产命名约定把类名自动解析成 SharedFixture 表。
+     */
     private static final class SharedFixtureDaoImpl extends BaseDaoImpl {
 
-        // 测试只显式注入生产中由 Spring 提供的两个基础依赖。
+        /**
+         * 测试只显式注入生产中由 Spring 提供的两个基础依赖。
+         *
+         * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+         *
+         * @param templateDao 绑定当前 H2 数据源和真实 MyBatis Mapper 的生产模板 DAO
+         * @param fixtureDataSource 当前 Case 独立创建的 H2 数据源
+         */
         private void initialize(BaseTemplateDao templateDao, DataSource fixtureDataSource) {
             // 真实模板 DAO 进入 BaseDao 生产模板字段。
             this.baseTemplateDao = templateDao;
             // 真实 H2 数据源进入元数据和动态查询生产字段。
             this.dataSource = fixtureDataSource;
         }
+
+        /**
+         * 向真实数据库测试暴露受保护字段映射，不改变生产公开 DAO 契约。
+         *
+         * @return 数据库真实字段元数据，例如
+         *     {@code {"id":{"columnName":"id","primaryKey":true},"loginName":{"columnName":"loginName","primaryKey":false}}}
+         */
+        private Map<String, ColumnMetadata> exposeDbColumnsMap() {
+            // 直接调用生产支撑层方法，验证真实 JDBC 元数据结果。
+            return getDbColumnsMap();
+        }
+
+        /**
+         * 向真实数据库测试暴露受保护 SELECT 字段串，不改变生产公开 DAO 契约。
+         *
+         * @return 当前 fixture 表真实 SELECT 字段，例如
+         *     {@code "id, tenantId, lastOperateUserId, loginName, passwordHash, displayName, sortnum, status, createdAt, updatedAt"}
+         */
+        private String exposeSelectColumns() {
+            // 直接调用生产支撑层方法，验证字段串来自同一字段 Map。
+            return getSelectColumns();
+        }
     }
 
-    // RealContext 保存当前 Case 的真实 DAO 和独立 JDBC 期待查询入口。
+    /**
+     * RealContext 保存当前 Case 的真实 DAO 和独立 JDBC 期待查询入口。
+     *
+     * @param dao 绑定当前独立 H2 数据库的生产基础 DAO
+     * @param dataSource 当前 Case 独立 H2 数据源
+     */
     private record RealContext(SharedFixtureDaoImpl dao, DataSource dataSource) {
 
-        // 执行返回字符串的独立数据库期待查询。
+        /**
+         * 执行返回字符串的独立数据库期待查询。
+         *
+         * @param sql 验证器内部固定的期待查询，例如
+         *     {@code "SELECT displayName FROM SharedFixture WHERE id = 701"}
+         * @return 第一行第一列字符串，例如 {@code "更新后"}
+         */
         private String queryString(String sql) {
             // JDBC 查询结果只读取第一列字符串。
             return String.valueOf(queryObject(sql));
         }
 
-        // 执行返回长整数的独立数据库期待查询。
+        /**
+         * 执行返回长整数的独立数据库期待查询。
+         *
+         * @param sql 验证器内部固定的期待查询，例如
+         *     {@code "SELECT COUNT(*) FROM SharedFixture WHERE status = 0"}
+         * @return 第一行第一列长整数，例如 {@code 1001L}
+         */
         private long queryLong(String sql) {
             // Number 统一转换为 long，隔离具体驱动数值类型。
             return ((Number) queryObject(sql)).longValue();
         }
 
-        // 执行独立单值查询并返回第一行第一列。
+        /**
+         * 执行独立单值查询并返回第一行第一列。
+         *
+         * @param sql 验证器内部固定的单值查询，例如
+         *     {@code "SELECT status FROM SharedFixture WHERE id = 701"}
+         * @return 第一行第一列真实 JDBC 值，例如 {@code 0}
+         * @throws AssertionError 当查询失败或没有返回记录时抛出
+         */
         private Object queryObject(String sql) {
             try (
                 // 从当前 Case 真实数据源获取独立连接。

@@ -28,7 +28,9 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
     /**
      * 构造公共发号服务实现。
      *
-     * @param commonSequenceSegmentDao 公共号段 DAO
+     * @param commonSequenceSegmentDao Spring 注入的真实数据库号段 DAO
+     * 执行结果示例：本地缓存耗尽时通过该 DAO 申请
+     *     {@code {"startId":100001,"endId":101000,"stepSize":1000}}。
      */
     public SequenceGeneratorImpl(CommonSequenceSegmentDao commonSequenceSegmentDao) {
         // 保存公共号段 DAO，供当前发号服务在本地号段耗尽时继续向数据库续段。
@@ -38,8 +40,12 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
     /**
      * 按模块编码获取下一个主键。
      *
-     * @param seqCode 模块号段编码
-     * @return 下一个可用主键
+     * @param seqCode 来自 DAO 主键定义的号段编码，例如 {@code "UniauthUserId"}
+     * @return 当前缓存段的下一个主键，例如 {@code 100001L}
+     * @throws IllegalArgumentException 当号段编码为空时抛出，例如
+     *     {@code IllegalArgumentException("seqCode must not be blank")}
+     * @throws IllegalStateException 当连续三次申请号段失败时抛出，例如
+     *     {@code IllegalStateException("allocate sequence range retry exhausted for seqCode: UniauthUserId")}
      */
     @Override
     public Long nextId(String seqCode) {
@@ -67,8 +73,12 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
     /**
      * 按 DAO 主键号段定义生成单主键或复合主键字段映射。
      *
-     * @param definition 包含每个主键字段独立号段编码的有序定义
-     * @return 按主键元数据顺序保存的字段和值映射
+     * @param definition DAO 提供的有序定义，例如
+     *     {@code {"tenantId":"UniauthUserTenantId","orderId":"UniauthUserOrderId"}}
+     * @return 单主键例如 {@code {"id":100001}}；复合主键例如
+     *     {@code {"tenantId":100001,"orderId":200001}}
+     * @throws IllegalArgumentException 当定义为空时抛出，例如
+     *     {@code IllegalArgumentException("definition must not be null")}
      */
     @Override
     public Map<String, Long> getSequence(IdSequenceDefinition definition) {
@@ -92,7 +102,15 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
         return idValueMap;
     }
 
-    // 当当前号段不存在或已耗尽时，按模块编码申请并缓存一段新的可用主键区间。
+    /**
+     * 当本地号段不存在或已耗尽时，按编码申请并缓存新的可用区间。
+     *
+     * @param seqCode 已去除首尾空格的号段编码，例如 {@code "UniauthUserId"}
+     * 执行结果示例：数据库返回 {@code [100001,101000]} 后，
+     *     {@code sequenceRangeMap} 保存该区间供后续内存发号。
+     * @throws IllegalStateException 当连续三次数据库号段竞争均失败时抛出，例如
+     *     {@code IllegalStateException("allocate sequence range retry exhausted for seqCode: UniauthUserId")}
+     */
     private void refillSequenceRange(String seqCode) {
         // 每个号段编码都维护独立锁对象，确保同一模块续段串行、不同模块续段并行。
         Object sequenceLock = sequenceLockMap.computeIfAbsent(seqCode, key -> new Object());

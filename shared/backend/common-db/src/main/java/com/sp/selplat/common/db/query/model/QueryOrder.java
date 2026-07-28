@@ -15,7 +15,7 @@ public class QueryOrder {
     /**
      * 获取排序字段名。
      *
-     * @return 排序字段名
+     * @return 后端白名单内的排序字段名，例如 {@code sort_num}
      */
     public String getFieldName() {
         return fieldName;
@@ -33,7 +33,7 @@ public class QueryOrder {
     /**
      * 获取排序方向。
      *
-     * @return 排序方向
+     * @return 排序方向，例如 {@code ASC}
      */
     public QueryOrderDirection getDirection() {
         return direction;
@@ -48,4 +48,3 @@ public class QueryOrder {
         this.direction = direction;
     }
 }
-

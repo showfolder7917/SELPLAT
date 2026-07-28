@@ -9,10 +9,20 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
-// 公共模板 Mapper 只保存 MyBatis 注解式单条 SQL，由 BaseTemplateDao 在模板层内部统一调用。
+/**
+ * 保存由 {@link BaseTemplateDao} 内部调用的单条 MyBatis 动态 SQL。
+ * 表名和列名必须来自 DAO 元数据控制链，本接口不接受业务层或前端直接调用。
+ */
 public interface BaseTemplateMapper {
 
-    // 按主键列值映射查询模板直接从目标表返回一行键值结果，兼容单主键和复合主键后台场景。
+    /**
+     * 按完整单主键或复合主键读取一条数据库记录。
+     *
+     * @param tableName DAO 解析出的物理表名，例如 {@code "UniauthUser"}
+     * @param selectColumns 元数据生成的真实列清单，例如 {@code "id, loginName, status"}
+     * @param idColumnValueMap DAO 组合的主键列值，例如 {@code {"tenantId":10,"orderId":20}}
+     * @return 命中记录，例如 {@code {"id":1,"loginName":"admin","status":1}}；未命中时由 MyBatis 返回 null
+     */
     @Select({
         "<script>",
         "SELECT ${selectColumns} FROM ${tableName}",
@@ -29,7 +39,13 @@ public interface BaseTemplateMapper {
         @Param("idColumnValueMap") Map<String, Object> idColumnValueMap
     );
 
-    // 新增模板按列值映射直接写入目标表，适合字段集合由上层明确控制的通用落库场景。
+    /**
+     * 按受控表名和真实列值插入一条记录。
+     *
+     * @param saveIn DAO 组装的模板参数，例如
+     *     {@code {"tableName":"UniauthUser","columnValueMap":{"id":1,"loginName":"admin"}}}
+     * @return 数据库影响行数，例如成功插入一条返回 {@code 1}
+     */
     @Insert({
         "<script>",
         "INSERT INTO ${saveIn.tableName}",
@@ -48,7 +64,14 @@ public interface BaseTemplateMapper {
     })
     int insert(@Param("saveIn") CommonTemplateSave saveIn);
 
-    // 更新模板按主键列值映射和列值映射覆盖目标表字段，兼容单主键和复合主键更新场景。
+    /**
+     * 按完整主键更新受控字段。
+     *
+     * @param updateIn DAO 组装的模板参数，例如
+     *     {@code {"tableName":"UniauthUser","idColumns":["id"],"idValues":[1],}
+     *     {@code "columnValueMap":{"displayName":"管理员"}}}
+     * @return 数据库影响行数，例如成功更新一条返回 {@code 1}
+     */
     @Update({
         "<script>",
         "UPDATE ${updateIn.tableName}",
@@ -66,7 +89,13 @@ public interface BaseTemplateMapper {
     })
     int updateByIds(@Param("updateIn") CommonTemplateUpdate updateIn);
 
-    // 删除模板按主键列值映射直接删除目标表记录，兼容单主键和复合主键删除场景。
+    /**
+     * 按完整主键物理删除一条记录，仅供模板层保留能力，当前公共 DAO 不公开该入口。
+     *
+     * @param tableName DAO 解析出的物理表名，例如 {@code "UniauthUser"}
+     * @param idColumnValueMap DAO 组合的主键列值，例如 {@code {"id":1}}
+     * @return 数据库影响行数，例如删除一条返回 {@code 1}
+     */
     @Delete({
         "<script>",
         "DELETE FROM ${tableName}",

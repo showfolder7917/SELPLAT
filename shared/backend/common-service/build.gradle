@@ -49,13 +49,14 @@ tasks.named('jacocoTestCoverageVerification') {
     // 覆盖门禁必须基于真实数据库发号和可控算法边界测试。
     dependsOn tasks.named('test')
     violationRules {
-        // BaseServiceImpl 与 SequenceGeneratorImpl 是当前 shared 公共服务的核心生产执行类。
+        // BaseServiceImpl、BaseExtendsServiceImpl 与 SequenceGeneratorImpl 是当前 shared 公共服务的核心生产执行类。
         rule {
             // CLASS 级门禁确保基础 DAO 入口和发号器分别满足完整覆盖。
             element = 'CLASS'
             // 同时锁定基础 Service DAO 访问入口和公共发号实现。
             includes = [
                 'com.sp.selplat.common.service.BaseServiceImpl',
+                'com.sp.selplat.common.service.BaseExtendsServiceImpl',
                 'com.sp.selplat.common.service.sequence.SequenceGeneratorImpl'
             ]
             limit {

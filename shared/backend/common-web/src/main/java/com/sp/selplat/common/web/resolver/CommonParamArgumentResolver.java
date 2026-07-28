@@ -14,7 +14,7 @@ public class CommonParamArgumentResolver extends AbstractCommonParamArgumentReso
     /**
      * 返回当前解析器支持的参数类型。
      *
-     * @return 支持的参数类型
+     * @return 固定返回 {@code CommonParam.class}
      */
     @Override
     protected Class<CommonParam> getSupportedType() {
@@ -25,7 +25,7 @@ public class CommonParamArgumentResolver extends AbstractCommonParamArgumentReso
     /**
      * 创建空的 CommonParam 对象。
      *
-     * @return 空参数对象
+     * @return 可继续承接请求值的空参数对象，例如 {@code {"paramMap":{}}}
      */
     @Override
     protected CommonParam createEmptyParam() {

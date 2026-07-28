@@ -16,7 +16,7 @@ public class CommonSequenceSegmentRange {
     /**
      * 获取当前号段起始主键。
      *
-     * @return 当前号段起始主键
+     * @return 当前号段起始主键，例如 {@code 100001L}
      */
     public long getStartId() {
         return startId;
@@ -34,7 +34,7 @@ public class CommonSequenceSegmentRange {
     /**
      * 获取当前号段结束主键。
      *
-     * @return 当前号段结束主键
+     * @return 当前号段结束主键，例如 {@code 101000L}
      */
     public long getEndId() {
         return endId;
@@ -52,7 +52,7 @@ public class CommonSequenceSegmentRange {
     /**
      * 获取当前号段步长。
      *
-     * @return 当前号段步长
+     * @return 当前号段步长，例如 {@code 1000}
      */
     public int getStepSize() {
         return stepSize;

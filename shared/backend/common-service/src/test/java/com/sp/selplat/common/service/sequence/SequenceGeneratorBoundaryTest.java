@@ -3,36 +3,43 @@ package com.sp.selplat.common.service.sequence;
 import com.sp.selplat.common.service.sequence.support.SequenceGeneratorTestVerifier;
 import org.junit.jupiter.api.Test;
 
-// 公共发号边界测试用可控号段替身稳定制造缓存、重试、并发和非法输入分支。
+/**
+ * 公共发号边界测试只使用真实 H2、生产号段 DAO 和生产发号器，不再手写固定号段替身。
+ */
 class SequenceGeneratorBoundaryTest {
 
-    // local-cache Case 验证同一数据库号段在本地连续发号时只申请一次。
+    /**
+     * localCache Case 验证同一真实数据库号段在本地连续发号时只推进一次数据库游标。
+     *
+     * <p>执行结果示例：当前真实数据库或边界 Case 的全部验证通过。</p>
+     */
     @Test
     void localCache() {
-        SequenceGeneratorTestVerifier.verifyLocalCache();
+        // 当前方法只调用一次真实数据库验证器。
+        SequenceGeneratorTestVerifier.verifyRealLocalCache("fixtures/SequenceGeneratorBoundaryTest/localCache.sql");
     }
 
-    // retry-then-success Case 验证一次乐观锁冲突后能够重试成功。
-    @Test
-    void retryThenSuccess() {
-        SequenceGeneratorTestVerifier.verifyRetryThenSuccess();
-    }
-
-    // retry-exhausted Case 验证连续三次冲突后返回明确异常。
-    @Test
-    void retryExhausted() {
-        SequenceGeneratorTestVerifier.verifyRetryExhausted();
-    }
-
-    // concurrent-refill Case 验证等待线程进入锁后复用其他线程已经补好的本地号段。
-    @Test
-    void concurrentRefill() {
-        SequenceGeneratorTestVerifier.verifyConcurrentRefill();
-    }
-
-    // invalid-input Case 验证空号段编码和空定义在数据库访问前被拒绝。
+    /**
+     * invalidInput Case 验证非法输入不会推进真实数据库号段。
+     *
+     * <p>执行结果示例：当前真实数据库或边界 Case 的全部验证通过。</p>
+     */
     @Test
     void invalidInput() {
-        SequenceGeneratorTestVerifier.verifyInvalidInput();
+        // 当前方法只调用一次真实数据库验证器。
+        SequenceGeneratorTestVerifier.verifyRealInvalidInput("fixtures/SequenceGeneratorBoundaryTest/invalidInput.sql");
+    }
+
+    /**
+     * concurrentContention Case 使用多个生产发号器争抢同一真实数据库号段，覆盖缓存续段锁和乐观锁重试。
+     *
+     * <p>执行结果示例：当前真实数据库或边界 Case 的全部验证通过。</p>
+     */
+    @Test
+    void concurrentContention() {
+        // 当前方法只调用一次真实并发数据库验证器。
+        SequenceGeneratorTestVerifier.verifyRealConcurrentContention(
+            "fixtures/SequenceGeneratorBoundaryTest/concurrentContention.sql"
+        );
     }
 }

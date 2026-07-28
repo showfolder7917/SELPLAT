@@ -10,14 +10,24 @@ import java.util.List;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-// 公共控制器验证器只覆盖生产验证接口实际使用的模块元数据和公开路径扫描能力。
+/**
+ * 公共控制器验证器只覆盖生产验证接口实际使用的模块元数据和公开路径扫描能力。
+ */
 public final class BaseExtendsControllerTestVerifier {
 
-    // 验证器不保存运行状态，仅通过静态 Case 入口组织断言。
+    /**
+     * 验证器不保存运行状态，仅通过静态 Case 入口组织断言。
+     *
+     * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+     */
     private BaseExtendsControllerTestVerifier() {
     }
 
-    // 验证显式模块注解、名称回退、通用回退和类名编码推导。
+    /**
+     * 验证显式模块注解、名称回退、通用回退和类名编码推导。
+     *
+     * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+     */
     public static void verifyModuleMetadata() {
         // 完整注解控制器必须优先返回业务显式编码。
         assertEquals("common-web-test", new TestController().readVerifyModuleCode());
@@ -35,7 +45,11 @@ public final class BaseExtendsControllerTestVerifier {
         assertEquals("", new Controller().readVerifyModuleCode());
     }
 
-    // 验证 value、path、空映射、根路径和多 HTTP 方法的统一路径扫描。
+    /**
+     * 验证 value、path、空映射、根路径和多 HTTP 方法的统一路径扫描。
+     *
+     * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+     */
     public static void verifyAvailablePaths() {
         // 读取完整注解控制器的公开路径列表。
         List<String> testPaths = new TestController().readVerifyAvailablePaths();
@@ -68,42 +82,70 @@ public final class BaseExtendsControllerTestVerifier {
     @RequestMapping("/api/test")
     private static class TestController extends BaseExtendsController {
 
-        // 默认方法入口用于验证未声明 HTTP Method 时的 GET 展示口径。
+        /**
+         * 默认方法入口用于验证未声明 HTTP Method 时的 GET 展示口径。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping("current.htm")
         public void currentEndpoint() {
             // 当前方法只提供路由元数据。
         }
 
-        // POST 方法入口用于验证显式请求方式。
+        /**
+         * POST 方法入口用于验证显式请求方式。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping(value = "post.htm", method = RequestMethod.POST)
         public void postEndpoint() {
             // 当前方法只提供路由元数据。
         }
 
-        // 多方法入口用于验证同一路径逐项输出全部请求方式。
+        /**
+         * 多方法入口用于验证同一路径逐项输出全部请求方式。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping(value = "multi.htm", method = {RequestMethod.GET, RequestMethod.POST})
         public void multiEndpoint() {
             // 当前方法只提供路由元数据。
         }
 
-        // 无映射公开方法用于验证路径扫描会忽略非 HTTP 入口。
+        /**
+         * 无映射公开方法用于验证路径扫描会忽略非 HTTP 入口。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         public void notMapped() {
             // 当前方法故意不声明路由。
         }
 
-        // 暴露生产模块编码供当前验证器读取。
+        /**
+         * 暴露生产模块编码供当前验证器读取。
+         *
+         * @return 生产模块编码，例如 {@code "sample-module"}；纯 Controller 类名返回空串
+         */
         private String readVerifyModuleCode() {
             // 直接调用生产受保护入口。
             return getVerifyModuleCode();
         }
 
-        // 暴露生产验证说明供当前验证器读取。
+        /**
+         * 暴露生产验证说明供当前验证器读取。
+         *
+         * @return 生产验证说明，例如 {@code "样例模块控制器已装配。"}
+         */
         private String readVerifyMessage() {
             // 直接调用生产受保护入口。
             return getVerifyMessage();
         }
 
-        // 暴露生产路径扫描结果供当前验证器读取。
+        /**
+         * 暴露生产路径扫描结果供当前验证器读取。
+         *
+         * @return 生产路径扫描结果，例如 {@code ["GET /api/current.htm","POST /api/post.htm"]}
+         */
         private List<String> readVerifyAvailablePaths() {
             // 直接调用生产受保护入口。
             return getVerifyAvailablePaths();
@@ -114,7 +156,11 @@ public final class BaseExtendsControllerTestVerifier {
     @ModuleDescription(code = "", name = "仅名称模块", description = "")
     private static class NameOnlyController extends BaseExtendsController {
 
-        // 暴露生产验证说明。
+        /**
+         * 暴露生产验证说明。
+         *
+         * @return 生产验证说明，例如 {@code "样例模块控制器已装配。"}
+         */
         private String readVerifyMessage() {
             // 直接调用生产受保护入口。
             return getVerifyMessage();
@@ -125,101 +171,167 @@ public final class BaseExtendsControllerTestVerifier {
     @ModuleDescription(code = "", name = "", description = "")
     private static class EmptyDescriptionController extends BaseExtendsController {
 
-        // 暴露生产验证说明。
+        /**
+         * 暴露生产验证说明。
+         *
+         * @return 生产验证说明，例如 {@code "样例模块控制器已装配。"}
+         */
         private String readVerifyMessage() {
             // 直接调用生产受保护入口。
             return getVerifyMessage();
         }
     }
 
-    // 无注解控制器用于验证类名编码推导和公共说明。
+    /**
+     * 无注解控制器用于验证类名编码推导和公共说明。
+     */
     private static class PlainSampleController extends BaseExtendsController {
 
-        // 暴露生产模块编码。
+        /**
+         * 暴露生产模块编码。
+         *
+         * @return 生产模块编码，例如 {@code "sample-module"}；纯 Controller 类名返回空串
+         */
         private String readVerifyModuleCode() {
             // 直接调用生产受保护入口。
             return getVerifyModuleCode();
         }
 
-        // 暴露生产验证说明。
+        /**
+         * 暴露生产验证说明。
+         *
+         * @return 生产验证说明，例如 {@code "样例模块控制器已装配。"}
+         */
         private String readVerifyMessage() {
             // 直接调用生产受保护入口。
             return getVerifyMessage();
         }
     }
 
-    // 无类级映射控制器覆盖纯方法路径、空方法映射和无映射方法。
+    /**
+     * 无类级映射控制器覆盖纯方法路径、空方法映射和无映射方法。
+     */
     private static class NoClassMappingController extends BaseExtendsController {
 
-        // 普通相对方法路径用于验证前导斜杠补齐。
+        /**
+         * 普通相对方法路径用于验证前导斜杠补齐。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping("method.htm")
         public void mapped() {
             // 当前方法只提供路由元数据。
         }
 
-        // 空方法映射和空类路径共同形成根路径。
+        /**
+         * 空方法映射和空类路径共同形成根路径。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping
         public void emptyMapping() {
             // 当前方法只提供路由元数据。
         }
 
-        // 暴露生产路径扫描结果。
+        /**
+         * 暴露生产路径扫描结果。
+         *
+         * @return 生产路径扫描结果，例如 {@code ["GET /api/current.htm","POST /api/post.htm"]}
+         */
         private List<String> readVerifyAvailablePaths() {
             // 直接调用生产受保护入口。
             return getVerifyAvailablePaths();
         }
     }
 
-    // path 属性控制器覆盖路径属性兼容、尾斜杠清理和空方法路径。
+    /**
+     * path 属性控制器覆盖路径属性兼容、尾斜杠清理和空方法路径。
+     *
+     * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+     */
     @RequestMapping(path = "path-api//")
     private static class PathOnlyController extends BaseExtendsController {
 
-        // path 方法属性用于验证 value 为空时的兼容读取。
+        /**
+         * path 方法属性用于验证 value 为空时的兼容读取。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping(path = "path.htm")
         public void pathEndpoint() {
             // 当前方法只提供路由元数据。
         }
 
-        // 空方法路径必须直接返回类级路径。
+        /**
+         * 空方法路径必须直接返回类级路径。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping
         public void classRoot() {
             // 当前方法只提供路由元数据。
         }
 
-        // 带前导斜杠的方法路径用于验证边界斜杠清理。
+        /**
+         * 带前导斜杠的方法路径用于验证边界斜杠清理。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping(path = "/leading.htm")
         public void leadingEndpoint() {
             // 当前方法只提供路由元数据。
         }
 
-        // 暴露生产路径扫描结果。
+        /**
+         * 暴露生产路径扫描结果。
+         *
+         * @return 生产路径扫描结果，例如 {@code ["GET /api/current.htm","POST /api/post.htm"]}
+         */
         private List<String> readVerifyAvailablePaths() {
             // 直接调用生产受保护入口。
             return getVerifyAvailablePaths();
         }
     }
 
-    // 根类路径控制器用于验证根斜杠不会与方法路径重复。
+    /**
+     * 根类路径控制器用于验证根斜杠不会与方法路径重复。
+     *
+     * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+     */
     @RequestMapping("/")
     private static class RootPathController extends BaseExtendsController {
 
-        // 普通方法路径与根类路径组合成唯一根级入口。
+        /**
+         * 普通方法路径与根类路径组合成唯一根级入口。
+         *
+         * <p>执行结果示例：当前控制器结构与路由 Case 的全部验证通过。</p>
+         */
         @RequestMapping("root.htm")
         public void rootEndpoint() {
             // 当前方法只提供路由元数据。
         }
 
-        // 暴露生产路径扫描结果。
+        /**
+         * 暴露生产路径扫描结果。
+         *
+         * @return 生产路径扫描结果，例如 {@code ["GET /api/current.htm","POST /api/post.htm"]}
+         */
         private List<String> readVerifyAvailablePaths() {
             // 直接调用生产受保护入口。
             return getVerifyAvailablePaths();
         }
     }
 
-    // 类名仅为 Controller 时覆盖空业务名称的模块编码边界。
+    /**
+     * 类名仅为 Controller 时覆盖空业务名称的模块编码边界。
+     */
     private static class Controller extends BaseExtendsController {
 
-        // 暴露生产模块编码。
+        /**
+         * 暴露生产模块编码。
+         *
+         * @return 生产模块编码，例如 {@code "sample-module"}；纯 Controller 类名返回空串
+         */
         private String readVerifyModuleCode() {
             // 直接调用生产受保护入口。
             return getVerifyModuleCode();

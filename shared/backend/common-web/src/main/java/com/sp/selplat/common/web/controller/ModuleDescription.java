@@ -13,12 +13,24 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ModuleDescription {
 
-    // code 表示控制器所属模块的稳定编码，供验证接口或后续日志、文档能力统一引用。
+    /**
+     * 返回控制器所属模块的稳定编码。
+     *
+     * @return 模块编码，例如 {@code "uniauth-user"}
+     */
     String code();
 
-    // name 表示控制器所属模块的人类可读名称，供后续公共提示文案或文档展示使用。
+    /**
+     * 返回控制器所属模块的人类可读名称。
+     *
+     * @return 模块名称，例如 {@code "统一认证用户"}
+     */
     String name();
 
-    // description 表示当前控制器对外职责说明，供验证接口直接回填给联调方。
+    /**
+     * 返回当前控制器对外职责说明。
+     *
+     * @return 职责说明，例如 {@code "提供用户查询、新增、更新和假删除接口"}；未声明时返回空串
+     */
     String description() default "";
 }

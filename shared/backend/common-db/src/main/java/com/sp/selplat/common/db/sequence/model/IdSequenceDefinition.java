@@ -30,7 +30,10 @@ public final class IdSequenceDefinition {
     /**
      * 创建不可变的主键号段定义。
      *
-     * @param idSequenceCodeMap DAO 元数据顺序下的“主键字段 → 独立号段编码”映射
+     * @param idSequenceCodeMap DAO 元数据顺序下的主键字段到独立号段编码映射，例如
+     *     {@code {"tenantId":"UniauthUserTenantId","orderId":"UniauthUserOrderId"}}
+     * @throws IllegalArgumentException 当映射为空、主键字段为空或号段编码为空时抛出，例如
+     *     {@code IllegalArgumentException("idSequenceCodeMap must not be empty")}
      */
     public IdSequenceDefinition(Map<String, String> idSequenceCodeMap) {
         // 主键字段和号段编码缺失时无法分别查询数据库并回填对应字段，因此禁止创建空定义。
@@ -59,7 +62,8 @@ public final class IdSequenceDefinition {
     /**
      * 返回每个主键字段需要查询的独立数据库号段编码。
      *
-     * @return 不可变的“主键字段 → 独立号段编码”有序映射
+     * @return 不可变有序映射；单主键例如 {@code {"id":"UniauthUserId"}}，复合主键例如
+     *     {@code {"tenantId":"UniauthUserTenantId","orderId":"UniauthUserOrderId"}}
      */
     public Map<String, String> getIdSequenceCodeMap() {
         // 返回字段与号段的一一对应关系，让发号器逐个查询并按相同字段名返回 Long。

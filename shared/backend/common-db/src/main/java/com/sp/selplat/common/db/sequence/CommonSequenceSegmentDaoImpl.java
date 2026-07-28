@@ -26,8 +26,13 @@ public class CommonSequenceSegmentDaoImpl implements CommonSequenceSegmentDao {
     /**
      * 按号段编码申请下一段可用主键区间。
      *
-     * @param seqCode 号段编码
-     * @return 本次成功申请到的号段；若乐观锁冲突则返回空
+     * @param seqCode 来自 DAO 主键定义的号段编码，例如 {@code "UniauthUserId"}
+     * @return 本次成功申请到的区间，例如
+     *     {@code {"startId":100001,"endId":101000,"stepSize":1000}}；乐观锁冲突时返回 null
+     * @throws IllegalArgumentException 当号段编码为空时抛出，例如
+     *     {@code IllegalArgumentException("seqCode must not be blank")}
+     * @throws IllegalStateException 当号段未配置、步长非法或数据库访问失败时抛出，例如
+     *     {@code IllegalStateException("no active sequence segment found for seqCode: UniauthUserId")}
      */
     @Override
     public CommonSequenceSegmentRange allocateNextRange(String seqCode) {
@@ -70,7 +75,15 @@ public class CommonSequenceSegmentDaoImpl implements CommonSequenceSegmentDao {
         }
     }
 
-    // 查询当前启用中的号段快照，供乐观锁更新前读取游标和版本号。
+    /**
+     * 查询当前启用号段的游标、步长和乐观锁版本。
+     *
+     * @param connection 通过 Spring 事务上下文获取的真实 JDBC 连接
+     * @param seqCode DAO 主键定义提供的号段编码，例如 {@code "UniauthUserId"}
+     * @return 内部快照，例如 {@code {"nextStartId":100001,"stepSize":1000,"versionNo":3}}；
+     *     没有启用配置时返回 null
+     * @throws SQLException 当预编译或读取号段表失败时抛出
+     */
     private SequenceSegmentSnapshot queryActiveSnapshot(Connection connection, String seqCode) throws SQLException {
         // 当前查询只读取抢号真正需要的三项核心字段，避免把无关配置字段一起带入并发路径。
         String sql = "SELECT nextStartId, stepSize, versionNo FROM " + TABLE_NAME + " WHERE seqCode = ? AND status = 1";
@@ -92,8 +105,21 @@ public class CommonSequenceSegmentDaoImpl implements CommonSequenceSegmentDao {
         }
     }
 
-    // 按版本号推进号段游标，成功返回 1，冲突返回 0。
-    private int updateNextStartId(Connection connection, String seqCode, int versionNo, long nextStartIdAfterUpdate) throws SQLException {
+    /**
+     * 按旧版本号原子推进号段游标和版本号。
+     *
+     * @param connection 与快照查询相同事务上下文中的 JDBC 连接
+     * @param seqCode 当前号段编码，例如 {@code "UniauthUserId"}
+     * @param versionNo 快照读取到的旧版本号，例如 {@code 3}
+     * @param nextStartIdAfterUpdate 当前区间发放后的新游标，例如 {@code 101001L}
+     * @return 更新成功返回 {@code 1}；并发冲突或号段失效返回 {@code 0}
+     * @throws SQLException 当预编译或更新号段表失败时抛出
+     */
+    private int updateNextStartId(
+            Connection connection,
+            String seqCode,
+            int versionNo,
+            long nextStartIdAfterUpdate) throws SQLException {
         // 当前更新只推进 nextStartId、versionNo 和 updatedAt，避免把最近操作用户字段误写成系统线程上下文。
         String sql =
             "UPDATE " + TABLE_NAME +
@@ -110,7 +136,9 @@ public class CommonSequenceSegmentDaoImpl implements CommonSequenceSegmentDao {
         }
     }
 
-    // 号段快照仅在当前 DAO 内部使用，因此用私有静态类承接读取结果即可。
+    /**
+     * 号段快照仅在当前 DAO 内部使用，因此用私有静态类承接读取结果即可。
+     */
     private static class SequenceSegmentSnapshot {
 
         // nextStartId 表示当前仍未被任何实例领取的下一个号段起点。

@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 /**
  * 公共控制器基类用于为后续业务控制器提供统一继承入口。
  * 当前只保留业务控制器最常用的服务入口和 HTTP 验证接口，复杂辅助逻辑下沉到扩展基类。
+ *
+ * @param <S> 当前业务控制器对应的 Service 接口，例如 {@code UniauthUserService}
  */
 public abstract class BaseController<S extends BaseService> extends BaseExtendsController {
 
@@ -22,7 +24,7 @@ public abstract class BaseController<S extends BaseService> extends BaseExtendsC
     /**
      * 返回当前控制器绑定的强类型服务对象，供父类和子类统一调用自己的业务服务方法。
      *
-     * @return 当前控制器绑定的强类型服务对象
+     * @return Spring 按泛型注入的业务 Service，例如 {@code UniauthUserService} 代理
      */
     protected S getService() {
         // 这里统一返回 Spring 已按子类泛型注入的服务实例，避免父类和子类之间重复维护两套服务访问入口。
@@ -33,7 +35,9 @@ public abstract class BaseController<S extends BaseService> extends BaseExtendsC
      * HTTP 验证接口统一返回当前控制器装配状态和关键可访问路径。
      * 访问地址由子类类级别的 RequestMapping 前缀与当前方法路径共同组成。
      *
-     * @return HTTP 验证结果
+     * @return HTTP 200 JSON 响应，例如
+     *     {@code {"moduleCode":"uniauth-user","controllerStatus":"READY",}
+     *     {@code "verifyMessage":"统一认证用户控制器已装配。","availablePaths":["GET /users/getById"]}}
      */
     @RequestMapping(value = "/verify/http", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> verifyHttpAccess() {

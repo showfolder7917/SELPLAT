@@ -15,7 +15,7 @@ public class CommonPageParamArgumentResolver extends AbstractCommonParamArgument
     /**
      * 返回当前解析器支持的参数类型。
      *
-     * @return 支持的参数类型
+     * @return 固定返回 {@code CommonPageParam.class}
      */
     @Override
     protected Class<CommonPageParam> getSupportedType() {
@@ -26,7 +26,7 @@ public class CommonPageParamArgumentResolver extends AbstractCommonParamArgument
     /**
      * 创建空的 CommonPageParam 对象。
      *
-     * @return 空分页参数对象
+     * @return 可继续承接请求值的空分页参数对象，例如 {@code {"pageNo":null,"pageSize":null,"paramMap":{}}}
      */
     @Override
     protected CommonPageParam createEmptyParam() {

@@ -10,6 +10,7 @@ import com.sp.selplat.common.db.dao.BaseDao;
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
 import com.sp.selplat.common.db.dao.BaseDaoSupportImpl;
 import com.sp.selplat.common.db.dao.BasePagingQueryDaoImpl;
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -17,14 +18,26 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-// 公共 DAO 继承验证器集中处理结构反射，并排除 JaCoCo 等工具生成的合成方法。
+/**
+ * 公共 DAO 继承验证器集中处理结构反射，并排除 JaCoCo 等工具生成的合成方法。
+ */
 public final class BaseDaoInheritanceTestVerifier {
 
-    // 结构验证器不保存状态，只提供静态 Case 入口。
+    /**
+     * 结构验证器不保存状态，只提供静态 Case 入口。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     */
     private BaseDaoInheritanceTestVerifier() {
     }
 
-    // 验证主键号段具体组装方法由支撑层持有且保持继承链内部可见。
+    /**
+     * 验证主键号段具体组装方法由支撑层持有且保持继承链内部可见。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @throws AssertionError 当生产类缺少 {@code buildIdSequenceDefinition} 时抛出
+     */
     public static void verifySequenceDefinitionOwner() {
         try {
             // 从支撑层自身读取真实号段定义构建方法。
@@ -37,7 +50,44 @@ public final class BaseDaoInheritanceTestVerifier {
         }
     }
 
-    // 验证公共门面继承 CRUD 层并逐项实现 BaseDao 契约。
+    /**
+     * 验证数据库字段映射和 SELECT 字段串由同一支撑层提供，并彻底移除旧大小写错误方法。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @throws AssertionError 当生产类缺少真实字段 Map 或正确驼峰 SELECT 方法时抛出
+     */
+    public static void verifyDatabaseColumnContract() {
+        try {
+            // 数据库字段能力必须返回字段名到 ColumnMetadata 的有序映射契约。
+            Method columnsMapMethod = BaseDaoSupportImpl.class.getDeclaredMethod("getDbColumnsMap");
+            // 字段映射仅供继承链内部复用，不扩大成业务 DAO 公开能力。
+            assertTrue(Modifier.isProtected(columnsMapMethod.getModifiers()));
+            // 返回原始类型必须是 Map，字段值的泛型由生产签名固定为 ColumnMetadata。
+            assertSame(java.util.Map.class, columnsMapMethod.getReturnType());
+            // SELECT 字段方法使用正确驼峰命名并保持 protected。
+            Method selectColumnsMethod = BaseDaoSupportImpl.class.getDeclaredMethod("getSelectColumns");
+            // 查询字段串只能由基础继承链调用。
+            assertTrue(Modifier.isProtected(selectColumnsMethod.getModifiers()));
+            // 泛型签名必须明确包含 ColumnMetadata，避免退化成无类型 Map。
+            assertTrue(columnsMapMethod.getGenericReturnType().getTypeName().contains(ColumnMetadata.class.getName()));
+            // 旧方法必须不存在，防止新旧字段来源继续并存。
+            assertFalse(
+                Arrays.stream(BaseDaoSupportImpl.class.getDeclaredMethods())
+                    // 只检查生产声明的方法名。
+                    .anyMatch(method -> "getselectColumns".equals(method.getName()))
+            );
+        } catch (NoSuchMethodException exception) {
+            // 任一新契约缺失都表示重命名或字段映射下沉未完成。
+            throw new AssertionError("BaseDaoSupportImpl 缺少数据库字段映射契约", exception);
+        }
+    }
+
+    /**
+     * 验证公共门面继承 CRUD 层并逐项实现 BaseDao 契约。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     */
     public static void verifyFacadeContract() {
         // BaseDaoImpl 直接父类必须是 BaseCrudDaoImpl。
         assertSame(BaseCrudDaoImpl.class, BaseDaoImpl.class.getSuperclass());
@@ -45,7 +95,11 @@ public final class BaseDaoInheritanceTestVerifier {
         assertEquals(declaredMethodSignatures(BaseDao.class), declaredMethodSignatures(BaseDaoImpl.class));
     }
 
-    // 验证 CRUD 层继承分页层但不对业务层公开 BaseDao 身份。
+    /**
+     * 验证 CRUD 层继承分页层但不对业务层公开 BaseDao 身份。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     */
     public static void verifyCrudLayerBoundary() {
         // CRUD 深层直接建立在分页查询层之上。
         assertSame(BasePagingQueryDaoImpl.class, BaseCrudDaoImpl.class.getSuperclass());
@@ -53,7 +107,11 @@ public final class BaseDaoInheritanceTestVerifier {
         assertFalse(BaseDao.class.isAssignableFrom(BaseCrudDaoImpl.class));
     }
 
-    // 验证 CRUD 深层只保存主键查询和参数辅助方法。
+    /**
+     * 验证 CRUD 深层只保存主键查询和参数辅助方法。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     */
     public static void verifyCrudHelperBoundary() {
         // 读取非合成生产方法名，避免覆盖工具内部方法污染结构契约。
         Set<String> declaredMethodNames = Arrays.stream(BaseCrudDaoImpl.class.getDeclaredMethods())
@@ -66,7 +124,7 @@ public final class BaseDaoInheritanceTestVerifier {
         // CRUD 深层只允许单条主键、批量主键查询和主键参数辅助方法。
         assertEquals(
             Set.of(
-                "getByIds",
+                "queryById",
                 "getByIdsBatchGroup",
                 "resolveIdValues",
                 "buildIdColumnValueMap"
@@ -75,16 +133,28 @@ public final class BaseDaoInheritanceTestVerifier {
         );
     }
 
-    // 验证批量新增和更新的公开模板能力只由 BaseTemplateDao 持有。
+    /**
+     * 验证批量新增和更新的公开模板能力只由 BaseTemplateDao 持有。
+     *
+     * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>
+     *
+     * @throws AssertionError 当模板层缺少批量新增或批量更新入口时抛出
+     */
     public static void verifyTemplateBatchBoundary() {
         try {
             // 模板层必须公开固定表名和当前千条分组的批量新增入口。
-            BaseTemplateDao.class.getDeclaredMethod("insertBatch", String.class, java.util.List.class);
+            BaseTemplateDao.class.getDeclaredMethod(
+                "insertBatch",
+                String.class,
+                java.util.Map.class,
+                java.util.List.class
+            );
             // 模板层必须公开表名、主键元数据和当前千条分组的批量更新入口。
             BaseTemplateDao.class.getDeclaredMethod(
                 "updateBatchByIds",
                 String.class,
                 java.util.List.class,
+                java.util.Map.class,
                 java.util.List.class
             );
         } catch (NoSuchMethodException exception) {
@@ -93,7 +163,13 @@ public final class BaseDaoInheritanceTestVerifier {
         }
     }
 
-    // 把类型自身非合成方法转换成包含参数类型的稳定签名集合。
+    /**
+     * 把类型自身非合成方法转换成包含参数类型的稳定签名集合。
+     *
+     * @param targetType 要读取自身声明方法的生产类型，例如 {@code BaseDao.class}
+     * @return 非合成方法签名集合，例如
+     *     {@code ["getById(com.sp.selplat.common.util.CommonParam)","insert(com.sp.selplat.common.util.CommonParam)"]}
+     */
     private static Set<String> declaredMethodSignatures(Class<?> targetType) {
         // 只读取目标类型自身方法，避免继承方法混入门面契约。
         return Arrays.stream(targetType.getDeclaredMethods())
@@ -105,7 +181,12 @@ public final class BaseDaoInheritanceTestVerifier {
             .collect(Collectors.toSet());
     }
 
-    // 生成“方法名(完整参数类型)”结构签名。
+    /**
+     * 生成“方法名(完整参数类型)”结构签名。
+     *
+     * @param method 反射读取的生产方法，例如 {@code BaseDao.getById(CommonParam)}
+     * @return 稳定签名，例如 {@code "getById(com.sp.selplat.common.util.CommonParam)"}
+     */
     private static String methodSignature(Method method) {
         // 参数类型按声明顺序连接，正确区分重载。
         String parameterSignature = Arrays.stream(method.getParameterTypes())

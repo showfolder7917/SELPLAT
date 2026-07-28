@@ -4,7 +4,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-// 注解式模板更新入参统一承接目标表、主键字段列表、主键值列表和待覆盖列值集合。
+/**
+ * 承接模板更新语句所需的受控表名、完整主键和真实更新列值。
+ * 对象只组合 DAO 已验证的数据，不允许前端直接决定物理表名或 SQL 字段。
+ */
 public class CommonTemplateUpdate {
 
     // tableName 指定当前更新要命中的物理表。
@@ -16,37 +19,69 @@ public class CommonTemplateUpdate {
     // columnValueMap 承接需要被覆盖的列和值集合。
     private Map<String, Object> columnValueMap;
 
-    // 获取目标表名，供模板 SQL 拼接 update 子句。
+    /**
+     * 返回 DAO 根据实现类解析出的目标表名。
+     *
+     * @return 物理表名，例如 {@code "UniauthUser"}
+     */
     public String getTableName() {
         return tableName;
     }
 
-    // 设置目标表名，供上层明确本次更新作用的业务表。
+    /**
+     * 设置 DAO 内部解析出的目标表名。
+     *
+     * @param tableName 来自 DAO 类名约定的物理表名，例如 {@code "UniauthUser"}
+     * 执行结果示例：模板更新语句使用 {@code UPDATE UniauthUser}。
+     */
     public void setTableName(String tableName) {
         this.tableName = tableName;
     }
 
-    // 获取主键字段列表，供模板入参在内部组装主键条件映射时对齐字段顺序。
+    /**
+     * 返回当前表真实主键字段。
+     *
+     * @return 单主键例如 {@code ["id"]}；复合主键例如 {@code ["tenantId","orderId"]}
+     */
     public List<String> getIdColumns() {
         return idColumns;
     }
 
-    // 设置主键字段列表，供 DAO 内部把自动解析出的主键名称显式写入更新入参对象。
+    /**
+     * 设置数据库元数据返回的有序主键字段。
+     *
+     * @param idColumns 来自元数据读取器的主键列，例如 {@code ["tenantId","orderId"]}
+     * 执行结果示例：后续主键映射按 tenantId、orderId 顺序组装。
+     */
     public void setIdColumns(List<String> idColumns) {
         this.idColumns = idColumns;
     }
 
-    // 获取主键值列表，供模板入参在内部组装主键条件映射时对齐值顺序。
+    /**
+     * 返回与主键字段顺序一一对应的值。
+     *
+     * @return 主键值，例如 {@code [10,20]}
+     */
     public List<Object> getIdValues() {
         return idValues;
     }
 
-    // 设置主键值列表，供 DAO 内部把外部传入的主键值显式写入更新入参对象。
+    /**
+     * 设置 DAO 从通用参数提取的有序主键值。
+     *
+     * @param idValues 来自前端完整主键参数的值，例如 {@code [10,20]}
+     * 执行结果示例：值分别对应 {@code tenantId=10, orderId=20}。
+     */
     public void setIdValues(List<Object> idValues) {
         this.idValues = idValues;
     }
 
-    // 获取主键列值映射，供模板 SQL 逐个拼接 where 条件。
+    /**
+     * 将主键字段与同位置值组合成模板 WHERE 条件映射。
+     *
+     * @return 复合主键映射例如 {@code {"tenantId":10,"orderId":20}}；
+     *     主键字段或值为空时返回 {@code {}}
+     */
     public Map<String, Object> getIdColumnValueMap() {
         // 主键字段或主键值任一为空时返回空映射，交由上层或模板执行链路统一判定缺参问题。
         if (idColumns == null || idValues == null || idColumns.isEmpty() || idValues.isEmpty()) {
@@ -61,14 +96,23 @@ public class CommonTemplateUpdate {
         return idColumnValueMap;
     }
 
-    // 获取待更新列值集合，供模板 SQL 动态展开 set 子句。
+    /**
+     * 返回与数据库真实字段匹配后的更新列值。
+     *
+     * @return 有序列值映射，例如 {@code {"displayName":"管理员","status":1}}
+     */
     public Map<String, Object> getColumnValueMap() {
         return columnValueMap;
     }
 
-    // 设置待更新列值集合，供服务层把允许覆盖的业务字段统一提交给模板 DAO。
+    /**
+     * 设置 DAO 按真实数据库字段筛选后的更新列值。
+     *
+     * @param columnValueMap 来自 DAO 字段匹配结果的有序映射，例如
+     *     {@code {"displayName":"管理员","status":1}}
+     * 执行结果示例：模板 SET 子句只更新 displayName 和 status。
+     */
     public void setColumnValueMap(Map<String, Object> columnValueMap) {
         this.columnValueMap = columnValueMap;
     }
 }
-

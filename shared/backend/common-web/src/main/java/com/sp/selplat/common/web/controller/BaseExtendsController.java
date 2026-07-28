@@ -16,7 +16,8 @@ public abstract class BaseExtendsController {
     /**
      * 返回当前控制器的验证说明。
      *
-     * @return 当前控制器验证说明
+     * @return 注解中的职责说明，例如 {@code "统一认证用户接口"}；
+     *     没有有效注解时返回 {@code "控制器已装配。"}
      */
     protected String getVerifyMessage() {
         // 控制器显式声明模块说明时优先使用注解内容，让验证接口展示真实业务职责。
@@ -39,7 +40,7 @@ public abstract class BaseExtendsController {
     /**
      * 返回当前控制器的模块编码。
      *
-     * @return 当前控制器模块编码
+     * @return 注解编码或类名推导编码，例如 {@code "uniauth-user"}
      */
     protected String getVerifyModuleCode() {
         // 显式模块编码优先于类名推导，保证对外编码遵循业务模块契约。
@@ -61,7 +62,8 @@ public abstract class BaseExtendsController {
     /**
      * 返回当前控制器声明的全部可访问路径。
      *
-     * @return 带 HTTP 方法的稳定路径列表
+     * @return 带 HTTP 方法的稳定路径列表，例如
+     *     {@code ["GET /users/getStore","POST /users/insert","GET /users/verify/http"]}
      */
     protected List<String> getVerifyAvailablePaths() {
         // 有序集合保证反射扫描结果去重后仍保持稳定输出顺序。
@@ -94,8 +96,8 @@ public abstract class BaseExtendsController {
     /**
      * 读取 RequestMapping 的主路径片段。
      *
-     * @param requestMapping RequestMapping 注解
-     * @return 主路径片段
+     * @param requestMapping 来自控制器类或方法的 Spring 映射注解，例如 {@code @RequestMapping("/users")}
+     * @return 首个主路径片段，例如 {@code "/users"}；注解或路径为空时返回空串
      */
     private String resolvePrimaryPath(RequestMapping requestMapping) {
         // 没有类级或方法级注解时使用空片段，让另一侧路径仍可正常输出。
@@ -117,9 +119,9 @@ public abstract class BaseExtendsController {
     /**
      * 拼接类级别和方法级别路径。
      *
-     * @param classPath 类级别路径
-     * @param methodPath 方法级别路径
-     * @return 完整路径
+     * @param classPath 控制器类级路径，例如 {@code "/users"}
+     * @param methodPath 控制器方法级路径，例如 {@code "/getById"}
+     * @return 规范化完整路径，例如 {@code "/users/getById"}
      */
     private String joinPaths(String classPath, String methodPath) {
         // 路径空值统一转换为空串，保证后续规范化逻辑稳定。
@@ -147,8 +149,8 @@ public abstract class BaseExtendsController {
     /**
      * 确保路径以斜杠开头。
      *
-     * @param path 原始路径
-     * @return 带前导斜杠的路径
+     * @param path 来自 RequestMapping 的原始路径，例如 {@code "users/getById"}
+     * @return 带前导斜杠的路径，例如 {@code "/users/getById"}；空路径返回 {@code "/"}
      */
     private String ensureLeadingSlash(String path) {
         // 空路径统一表示根路径。
@@ -166,8 +168,8 @@ public abstract class BaseExtendsController {
     /**
      * 去掉路径前导斜杠。
      *
-     * @param path 原始路径
-     * @return 去掉前导斜杠后的路径
+     * @param path 来自方法映射的原始路径，例如 {@code "/getById"}
+     * @return 去掉一层前导斜杠的路径，例如 {@code "getById"}
      */
     private String trimLeadingSlash(String path) {
         // 拼接前只移除一层方法路径前导斜杠，避免影响路径正文。
@@ -177,8 +179,8 @@ public abstract class BaseExtendsController {
     /**
      * 去掉路径尾部斜杠。
      *
-     * @param path 原始路径
-     * @return 去掉尾部斜杠后的路径
+     * @param path 来自类级映射的原始路径，例如 {@code "/users///"}
+     * @return 去掉全部尾部斜杠的路径，例如 {@code "/users"}
      */
     private String trimTrailingSlash(String path) {
         // 持续移除多余尾斜杠，让类级路径只保留有效部分。
@@ -192,8 +194,8 @@ public abstract class BaseExtendsController {
     /**
      * 把驼峰命名转换成短横线小写编码。
      *
-     * @param camelCaseValue 驼峰命名值
-     * @return 短横线小写编码
+     * @param camelCaseValue 来自控制器类名的业务部分，例如 {@code "UniauthUser"}
+     * @return 短横线小写编码，例如 {@code "uniauth-user"}；空文本返回空串
      */
     private String convertCamelCaseToKebabCase(String camelCaseValue) {
         // 空业务名称对应空模块编码，保持纯 Controller 类名的边界行为稳定。

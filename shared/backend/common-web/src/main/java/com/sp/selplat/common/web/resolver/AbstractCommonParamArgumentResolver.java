@@ -18,36 +18,39 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  * 共通参数解析器抽象基类统一承接 JSON body、query string 和表单参数的合并逻辑。
  * 这里把控制器里重复出现的参数归并动作前移到 Spring MVC 参数解析阶段，
  * 让业务控制器只声明一个共通参数对象即可拿到最终生效的入参。
+ *
+ * @param <T> 当前解析器负责创建的 CommonParam 子类型，例如 {@code CommonPageParam}
  */
 public abstract class AbstractCommonParamArgumentResolver<T extends CommonParam> implements HandlerMethodArgumentResolver {
 
     /**
      * 返回当前解析器支持的参数类型。
      *
-     * @return 支持的参数类型
+     * @return 当前解析器唯一支持的参数类型，例如 {@code CommonPageParam.class}
      */
     protected abstract Class<T> getSupportedType();
 
     /**
      * 创建一个空的参数对象，供没有 JSON body 时承接请求参数。
      *
-     * @return 空参数对象
+     * @return 可继续写入请求字段的空参数对象，例如 {@code {"paramMap":{}}}
      */
     protected abstract T createEmptyParam();
 
     /**
      * 把固定请求参数写回参数对象，例如分页页码和每页条数。
      *
-     * @param targetParam 最终参数对象
-     * @param request HTTP 请求
+     * @param targetParam 从 JSON body 创建或新建的目标参数，例如 {@code {"loginName":"admin"}}
+     * @param request 当前 Servlet 请求，例如 query string 为 {@code pageNo=1&pageSize=10}
+     * 执行结果示例：分页解析器把固定字段写为 {@code pageNo=1,pageSize=10}。
      */
     protected abstract void mergeFixedRequestParams(T targetParam, HttpServletRequest request);
 
     /**
      * 判断当前方法参数是否由当前解析器处理。
      *
-     * @param parameter 方法参数
-     * @return 是否支持
+     * @param parameter Spring 正在解析的控制器方法参数，例如类型为 {@code CommonPageParam}
+     * @return 参数类型与当前支持类型完全一致时返回 {@code true}，否则返回 {@code false}
      */
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
@@ -58,11 +61,12 @@ public abstract class AbstractCommonParamArgumentResolver<T extends CommonParam>
     /**
      * 解析最终共通参数对象。
      *
-     * @param parameter 方法参数
-     * @param mavContainer 视图模型容器
-     * @param webRequest Web 请求
-     * @param binderFactory 绑定工厂
-     * @return 解析完成的共通参数对象
+     * @param parameter Spring 正在解析的控制器方法参数，例如类型为 {@code CommonPageParam}
+     * @param mavContainer 当前 Spring MVC 视图模型容器；REST 接口中可以为空
+     * @param webRequest 当前 HTTP 请求包装，包含 JSON body、query string 或表单字段
+     * @param binderFactory Spring 提供的数据绑定工厂；当前解析流程不直接使用
+     * @return 合并后的参数，例如
+     *     {@code {"pageNo":1,"pageSize":10,"paramMap":{"loginName":"admin","status":"1"}}}
      */
     @Override
     public Object resolveArgument(
@@ -90,7 +94,15 @@ public abstract class AbstractCommonParamArgumentResolver<T extends CommonParam>
         return targetParam;
     }
 
-    // JSON body 存在时统一解析成目标参数对象，避免控制器方法再手工声明 @RequestBody 参与归并。
+    /**
+     * 在 JSON 请求中读取 body 并转换为当前解析器支持的参数类型。
+     *
+     * @param request 当前 Servlet 请求，例如 body 为 {@code {"loginName":"admin"}}
+     * @return 参数对象，例如 {@code {"paramMap":{"loginName":"admin"}}}；
+     *     非 JSON 或空 body 返回 null
+     * @throws IllegalStateException 当请求体读取失败时抛出，例如
+     *     {@code IllegalStateException("读取请求体失败: /users/getById")}
+     */
     private T resolveBodyParam(HttpServletRequest request) {
         // 只有显式 JSON 请求才尝试读取 body，避免表单或普通 GET 请求无意义消费输入流。
         if (!isJsonRequest(request)) {
@@ -111,13 +123,24 @@ public abstract class AbstractCommonParamArgumentResolver<T extends CommonParam>
         }
     }
 
-    // 判断当前请求是否是 JSON 提交，只有这类请求才应该优先从 body 解析共通参数对象。
+    /**
+     * 判断当前请求是否声明 JSON 内容类型。
+     *
+     * @param request 当前 Servlet 请求，例如 Content-Type 为 {@code application/json;charset=UTF-8}
+     * @return Content-Type 包含 {@code application/json} 时返回 {@code true}，未声明时返回 {@code false}
+     */
     private boolean isJsonRequest(HttpServletRequest request) {
         String contentType = request.getContentType();
         return contentType != null && contentType.toLowerCase().contains("application/json");
     }
 
-    // 把普通请求参数写回动态字段映射，供服务层继续按统一的 paramMap 读取业务字段。
+    /**
+     * 把 query string 或表单中的动态业务字段写入参数映射。
+     *
+     * @param targetParam 当前解析出的参数对象，例如 {@code {"paramMap":{}}}
+     * @param request 当前 Servlet 请求，例如参数为 {@code loginName=admin&pageNo=1}
+     * 执行结果示例：动态映射写入 {@code {"loginName":"admin"}}，固定分页字段不会重复写入。
+     */
     private void populateDynamicParams(T targetParam, HttpServletRequest request) {
         // 逐个遍历请求参数，把分页固定字段之外的业务字段全部沉淀到共通参数对象中。
         Enumeration<String> parameterNames = request.getParameterNames();

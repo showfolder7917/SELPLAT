@@ -17,8 +17,10 @@ public class SequenceRange {
     /**
      * 创建 JVM 本地号段对象。
      *
-     * @param startId 当前号段起始主键
-     * @param endId 当前号段结束主键
+     * @param startId 数据库分配的号段起始主键，例如 {@code 100001L}
+     * @param endId 数据库分配的号段结束主键，例如 {@code 101000L}
+     * @throws IllegalArgumentException 当起始值大于结束值时抛出，例如
+     *     {@code IllegalArgumentException("startId must be less than or equal to endId")}
      */
     public SequenceRange(long startId, long endId) {
         // 起止值非法时立即失败，避免把损坏的号段配置放进 JVM 缓存后持续扩散错误主键。
@@ -34,7 +36,8 @@ public class SequenceRange {
     /**
      * 获取当前号段里的下一个主键。
      *
-     * @return 当前号段里的下一个主键；若当前段已耗尽则返回固定失败标记
+     * @return 当前号段里的下一个主键，例如首次返回 {@code 100001L}；
+     *     当前段耗尽时返回 {@link #NO_AVAILABLE_ID}，即 {@code -1L}
      */
     public synchronized long nextId() {
         // 当前游标超过本段最大值时，说明当前号段已耗尽，交由外层统一续段。
@@ -48,7 +51,7 @@ public class SequenceRange {
     /**
      * 判断当前号段是否还有剩余主键。
      *
-     * @return 当前号段是否还有剩余主键
+     * @return 当前游标未超过最大值时返回 {@code true}；例如发完 {@code 101000L} 后返回 {@code false}
      */
     public synchronized boolean hasAvailable() {
         // 只要当前游标仍未超过本段最大值，就表示当前段还可以继续发号。
