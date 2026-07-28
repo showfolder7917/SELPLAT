@@ -14,7 +14,7 @@ chinese_teaching_rule_root = 中文教学/rule/
 chinese_teaching_brand_asset_root = 中文教学/assets/品牌/
 fujitsu_resource_root = fujitsu/
 fujitsu_sql_generator_resource_root = fujitsu/template/sql/SQL仕様書生成ツール/
-fujitsu_gradle_offline_rule_package_root = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/
+fujitsu_gradle_offline_rule_asset_root = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/
 fujitsu_sql_code_root = ../java/com/sp/selplat/code/fujitsu/sql/
 chinese_teaching_pinyin_code_root = ../java/com/sp/selplat/code/中文教学/拼音生成/
 chinese_teaching_image_ppt_code_root = ../java/com/sp/selplat/code/中文教学/教学图片与PPT生成/
@@ -33,12 +33,12 @@ project_rule_conflict_scope = same_topic,same_applicability
 resource_path_change_maintenance = update_this_index_and_related_memories_records
 memories_related_record_policy = inspect_and_repair_existing_related_rule_protocol_ability_test_or_index
 memories_new_rule_policy = rule_engine_is_primary_authoring_location
-rule_package_directory_pattern = RUL_<主题>规则/
-rule_package_main_file_pattern = RUL_<主题>规则/RUL_<主题>规则.md
-rule_file_name_policy = every_new_rule_must_use_same_name_package_and_main_file
+rule_main_file_pattern = RUL_<主题>规则.md
+rule_asset_directory_pattern = RUL_<主题>规则/
+rule_file_name_policy = main_rule_file_and_same_name_asset_directory_are_siblings
 
 <!-- 规则新增、移动、删除、分类和索引维护的主治理规则；任何规则结构变更前必须先加载。 -->
-RULE_LIFECYCLE_GOVERNANCE_RULES = 跨工程通用规则/RUL_规则生命周期治理规则/RUL_规则生命周期治理规则.md
+RULE_LIFECYCLE_GOVERNANCE_RULES = 跨工程通用规则/RUL_规则生命周期治理规则.md
 load_rule_for_rule_creation_move_delete_or_classification = RULE_LIFECYCLE_GOVERNANCE_RULES
 load_rule_for_rule_index_maintenance = RULE_LIFECYCLE_GOVERNANCE_RULES
 
@@ -47,19 +47,25 @@ EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES = 跨工程通用规则/RUL_执行文�
 load_rule_for_execution_document_thread_isolation = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
 load_rule_for_execution_document_history_or_legacy_migration = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
 
+<!-- 所有 PPT、教学图片、文档页面、海报、网页截图及其他视觉成品在自动检测后执行 AI 逐页截图审美终审的跨工程通用规则；用于视觉重心、文字层级、图文语义、色彩底板、受众适配、跨页节奏和规则外审美问题的主动修正，修复范围包含源文件、生成器与可复用规则缺口，并对未解决问题阻断交付。 -->
+AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES = 跨工程通用规则/RUL_AI视觉审美终审规则.md
+load_rule_for_any_rendered_visual_artifact_creation_or_modification = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
+load_rule_for_ppt_slide_image_document_page_or_webpage_visual_delivery = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
+load_rule_for_full_page_render_review_or_visual_quality_acceptance = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
+
 <!-- CPMAB082 的测试数据、数据库集成 Case 与 JaCoCo 覆盖率规则；仅在修改或验证该批处理的测试数据、Tester、数据库结果或覆盖率时加载。 -->
 FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082测试数据覆盖规则.md
 load_rule_for_cpmab082_test_data_or_database_integration = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
 load_rule_for_cpmab082_tester_case_or_jacoco_coverage = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
 
 <!-- Fujitsu Gradle 工程禁止下载时的本机构件发现、明确版本选择、项目 cache 离线仓库重建、临时 init script 和正常 test 恢复规则；适用于 CP、IT、SB、AP 工程。 -->
-FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/RUL_FujitsuGradle离线依赖闭包恢复规则.md
+FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则.md
 load_rule_for_fujitsu_gradle_offline_dependency_gap = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
 load_rule_for_fujitsu_dynamic_version_or_local_artifact_recovery = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
 load_rule_for_fujitsu_offline_normal_test_or_jacoco = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
 
 <!-- CPMAB082 在组织级离线恢复算法之外的只读参考工程、目标编译、Checkstyle 和 MyBatis 特殊配置。 -->
-FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082离线依赖配置规则/RUL_CPMAB082离线依赖配置规则.md
+FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082离线依赖配置规则.md
 load_rule_for_cpmab082_offline_reference_or_fallback_verification = FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES
 
 <!-- SELPLAT 工程目录、构建产物、项目 JDK、工具运行数据与缓存位置规则；适用于工程路径解析、旧 runtime 迁移及 Python 字节码缓存定向。 -->
@@ -73,14 +79,21 @@ SELPLAT_PROJECT_BUILD_RULES = selplat/通用规则/RUL_SELPLAT工程构建规则
 load_rule_for_selplat_gradle_dependency_or_build_output = SELPLAT_PROJECT_BUILD_RULES
 load_rule_for_selplat_vscode_gradle_import_or_cache = SELPLAT_PROJECT_BUILD_RULES
 
-<!-- SELPLAT 全部应用共用的基础 DAO 复用、基础类契约原子同步、CommonParam/CommonBatchParam 透传、真实数据库字段控制和主键号段定义规则；适用于简单单表 CRUD、BaseDaoImpl 千条分组、BaseTemplateDao 真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
+<!-- SELPLAT 全部应用共用的基础 DAO 复用、基础类契约原子同步、getDbColumnsMap/getSelectColumns 真实数据库字段控制和主键号段定义规则；适用于简单单表 CRUD、BaseDaoImpl 千条分组、BaseTemplateDao 真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
 SELPLAT_BASE_DAO_REUSE_RULES = selplat/通用规则/RUL_基础DAO复用与通用参数透传规则.md
 load_rule_for_selplat_base_dao_crud_or_paging_reuse = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_common_param_dao_query = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_common_batch_param_or_thousand_item_batch = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_id_sequence_code_or_composite_id_mapping = SELPLAT_BASE_DAO_REUSE_RULES
 
-<!-- SELPLAT 业务 Service 统一通过基础类泛型 getDao() 获取 DAO，并由公共 CRUD 模板调用子类受保护回调的规则；适用于业务 ServiceImpl 的 DAO 装配、通用方法下沉和特殊处理扩展治理。 -->
+<!-- SELPLAT Java 类、字段、方法、参数、逐行业务动作和实际返回示例规则；适用于 shared、apps 当前及未来应用中的 Java 新增、修改、重构、生成和审核。 -->
+SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES = selplat/通用规则/RUL_Java业务注释与返回示例规则.md
+load_rule_for_any_selplat_java_creation_modification_or_refactor = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
+load_rule_for_selplat_java_javadoc_param_return_or_exception = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
+load_rule_for_selplat_map_list_entity_common_result_or_page_result_comment = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
+load_rule_for_selplat_java_comment_template_or_actual_result_example = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
+
+<!-- SELPLAT 业务 Service 统一通过 BaseServiceImpl 泛型 getDao() 获取 DAO，公共 CRUD 下沉到 BaseExtendsServiceImpl，模块特有实现覆盖同名方法后调用 super 的规则；适用于 DAO 装配、通用方法下沉和特殊处理扩展治理。 -->
 SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = selplat/通用规则/RUL_基础Service统一DAO访问规则.md
 load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
@@ -91,13 +104,14 @@ STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES = 跨工程通用规则/RUL_静�
 load_rule_for_static_site_original_domain_or_root_path_migration = STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES
 load_rule_for_legacy_encoded_html_local_opening = STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES
 
-<!-- SELPLAT 工程专属的绝对真实数据集成测试规则；适用于 apps 当前及未来应用与 shared 公共模块的测试类名 fixture、数据库查询、写入、分页、排序、发号、事务和覆盖回归验证，不适用于 Fujitsu 或其他工程。 -->
+<!-- SELPLAT 工程专属的绝对真实数据集成测试与模拟业务测试阻断规则；适用于 apps 当前及未来应用与 shared 公共模块的测试类名 fixture、数据库查询、写入、分页、排序、发号、事务、Controller 真实响应链路和覆盖回归验证，不适用于 Fujitsu 或其他工程。 -->
 SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES = selplat/通用规则/RUL_SELPLAT真实数据集成测试规则.md
 load_rule_for_selplat_real_database_query_or_write_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 load_rule_for_selplat_paging_sorting_or_transaction_integration_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 load_rule_for_selplat_batch_group_boundary_or_rollback_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 load_rule_for_selplat_shared_database_sequence_or_web_regression_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 load_rule_for_selplat_test_fixture_class_and_method_path = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
+load_rule_for_selplat_mock_fake_stub_or_fixed_business_test_cleanup = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 
 <!-- Service 已返回 CommonResult 或 CommonPageResult 完整结构时的 Controller JSON 职责与公共基类接口收敛规则；适用于避免响应二次包装，并删除没有生产调用的旧参数适配器、响应包装器和兼容入口。 -->
 SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES = selplat/通用规则/RUL_Controller仅序列化Service返回结构规则.md
@@ -115,7 +129,7 @@ load_rule_for_selplat_rule_incompatible_request_blocking = SELPLAT_RULE_COMPATIB
 HORIZONTAL_TEACHING_PPT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_横版教学PPT通用排版与检查规则.md
 load_rule_for_horizontal_teaching_ppt_generation = HORIZONTAL_TEACHING_PPT_RULES
 
-<!-- 少儿口才与表演全册共用的截图映射、原创视觉、自然留白构图、自适应文字底板、重复动作标题清理、栏目可读底层、动态字号、矩形相交、渲染复核、拼音对齐和音频热区质量门禁规则。 -->
+<!-- 少儿口才与表演全册共用的截图映射、逐页语义视觉计划、原创视觉、18%单图复用上限、占位语清理、自然留白构图、自适应文字底板、重复动作标题清理、栏目可读底层、动态字号、矩形相交、渲染复核、拼音对齐和音频热区质量门禁规则。 -->
 CHILDREN_ORAL_PERFORMANCE_ALL_VOLUMES_RULES = 中文教学/rule/口才与表演/RUL_少儿口才与表演全册通用制作规则.md
 load_rule_for_children_oral_performance_all_volumes = CHILDREN_ORAL_PERFORMANCE_ALL_VOLUMES_RULES
 

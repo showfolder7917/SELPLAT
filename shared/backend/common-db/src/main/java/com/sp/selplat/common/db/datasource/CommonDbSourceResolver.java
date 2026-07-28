@@ -18,8 +18,11 @@ public class CommonDbSourceResolver {
     /**
      * 把真实数据源解析成通用数据源实体。
      *
-     * @param dataSource Spring 注入的真实数据源
-     * @return 通用数据源实体
+     * @param dataSource Spring 注入的真实数据源，例如连接 H2 的 {@code JdbcDataSource}
+     * @return 通用数据源实体，例如
+     *     {@code {"sourceKey":"H2","databaseType":"H2","catalogName":"运行时随机UUID","schemaName":"PUBLIC"}}
+     * @throws IllegalStateException 当数据源为空、连接失败或数据库产品不受支持时抛出，例如
+     *     {@code IllegalStateException("unsupported database product: SQLite")}
      */
     public CommonDbSource resolve(DataSource dataSource) {
         // dataSource 为空时直接拒绝继续处理，避免后续字段读取在获取连接阶段才暴露问题。
@@ -56,8 +59,10 @@ public class CommonDbSourceResolver {
     /**
      * 把 JDBC 产品名映射成 common-db 定义的数据库类型。
      *
-     * @param databaseProductName JDBC 返回的数据库产品名
-     * @return 数据库类型
+     * @param databaseProductName JDBC 元数据返回的产品名，例如 {@code "PostgreSQL"}
+     * @return 通用数据库类型，例如 {@link DatabaseType#POSTGRESQL}
+     * @throws IllegalStateException 当产品名无法映射到受支持方言时抛出，例如
+     *     {@code IllegalStateException("unsupported database product: SQLite")}
      */
     private DatabaseType resolveDatabaseType(String databaseProductName) {
         // 先把数据库产品名转成小写统一比较，避免不同驱动返回大小写差异影响识别结果。
@@ -89,12 +94,11 @@ public class CommonDbSourceResolver {
     /**
      * 把可能为空的文本统一转换成非空字符串。
      *
-     * @param value 原始文本
-     * @return 非空文本
+     * @param value 来自 JDBC 元数据的可空文本，例如 {@code "H2"}
+     * @return 非空文本，例如输入 {@code "H2"} 返回 {@code "H2"}，输入 null 返回空串
      */
     private String defaultText(String value) {
         // 文本为空时回退空串，保证后续 contains 判断逻辑可以稳定执行。
         return value == null ? "" : value;
     }
 }
-

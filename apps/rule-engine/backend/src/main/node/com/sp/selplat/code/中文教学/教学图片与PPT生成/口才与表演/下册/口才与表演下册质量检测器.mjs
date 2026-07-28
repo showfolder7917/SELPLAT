@@ -402,6 +402,14 @@ async function inspectLesson(lesson) {
   if (/请看教材|教材第\s*\d+\s*页/.test(allText)) {
     errors.push("仍残留“请看教材第N页”占位提示。");
   }
+  // 模板占位字符不是可交付教学内容，成品只能保留可现场填写的下划线。
+  if (/X{2,}/iu.test(allText)) {
+    errors.push("仍残留XXX模板占位符，必须改为可填写下划线或真实教学内容。");
+  }
+  // 旧通用兜底句无法证明图文语义一致，最终稿不得用它冒充逐页教学设计。
+  if (/观察画面，?说一说你发现了什么/u.test(allText)) {
+    errors.push("仍存在无逐页语义的通用观察占位句，必须按当前模块和图片内容改写。");
+  }
   // 原稿存在的核心角色必须在最终稿中可见。
   for (const role of CORE_ROLES) {
     // 某些极端原稿可能缺少当前角色，因此只要求原稿已存在的角色。
@@ -634,8 +642,8 @@ async function inspectLesson(lesson) {
   const contentFrequencies = [...frequency.values()].filter((count) => count < slideEntries.length);
   // 最大重复次数只反映非全页固定资产的滥用程度。
   const maxRepeat = Math.max(0, ...contentFrequencies);
-  // 任一业务图片超过总页数35%说明仍在跨模块滥用。
-  const repeatLimit = Math.ceil(slideEntries.length * 0.35);
+  // 任一业务图片超过总页数18%说明仍在跨模块滥用；至少保证约六页更换一次独立语义画面。
+  const repeatLimit = Math.max(3, Math.ceil(slideEntries.length * 0.18));
   // 超过阈值属于硬错误，不再只依赖人工查看。
   if (maxRepeat > repeatLimit) errors.push(`单一图片重复过多：最多重复${maxRepeat}次，阈值${repeatLimit}次。`);
   // 页面较少但内容完整的课程仍需人工查看联系表，不作为自动失败。

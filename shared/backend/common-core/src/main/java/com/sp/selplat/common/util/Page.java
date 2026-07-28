@@ -13,7 +13,7 @@ public class Page {
     /**
      * 获取当前页码。
      *
-     * @return 当前页码
+     * @return 当前页码，例如 {@code 1}
      */
     public Integer getPageNo() {
         return pageNo;
@@ -22,7 +22,8 @@ public class Page {
     /**
      * 设置当前页码。
      *
-     * @param pageNo 当前页码
+     * @param pageNo 来自旧式分页请求的页码，例如 {@code 2}
+     * 执行结果示例：输入 {@code null}、{@code 0} 或负数时保存为 {@code 1}。
      */
     public void setPageNo(Integer pageNo) {
         // 调用方未传或传入非法页码时，统一兜底回第一页，避免出现零页或负页。
@@ -32,7 +33,7 @@ public class Page {
     /**
      * 获取每页条数。
      *
-     * @return 每页条数
+     * @return 每页条数，例如 {@code 20}
      */
     public Integer getPageSize() {
         return pageSize;
@@ -41,7 +42,8 @@ public class Page {
     /**
      * 设置每页条数。
      *
-     * @param pageSize 每页条数
+     * @param pageSize 来自旧式分页请求的每页条数，例如 {@code 50}
+     * 执行结果示例：输入 {@code null}、{@code 0} 或负数时保存为 {@code 20}。
      */
     public void setPageSize(Integer pageSize) {
         // 调用方未传或传入非法条数时，统一兜底回默认分页大小，避免列表接口一次取全表。

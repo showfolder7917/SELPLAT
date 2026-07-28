@@ -9,20 +9,39 @@ import java.util.Map;
 import java.util.StringJoiner;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-// 基础 CRUD 支撑层只保留 BaseDaoImpl 复用的主键查询和参数辅助能力，不承载模板层批量写入实现。
+/**
+ * 为 {@link BaseDaoImpl} 提供单主键、复合主键及分组主键查询辅助能力。
+ * 本层只解析受控主键和执行查询，不承载公开 DAO 契约或模板层批量写入实现。
+ */
 public abstract class BaseCrudDaoImpl extends BasePagingQueryDaoImpl {
 
-    // 受保护的主键查询从同一个前端 CommonParam 提取当前表全部主键，统一支持单主键和复合主键。
-    protected Map<String, Object> getByIds(CommonParam queryIn) {
+    /**
+     * 从一个通用参数中提取当前表全部主键并查询单条记录。
+     *
+     * @param queryIn 来自公开 {@code getById} 的前端参数；单主键例如 {@code {"id":1}}，
+     *     复合主键例如 {@code {"tenantId":10,"orderId":20}}
+     * @return 命中的真实记录，例如 {@code {"id":1,"loginName":"admin","status":1}}；未命中时返回空映射
+     * @throws IllegalArgumentException 当参数为空或缺少任一主键值时抛出，例如
+     *     {@code IllegalArgumentException("primary key value must not be null: orderId")}
+     */
+    protected Map<String, Object> queryById(CommonParam queryIn) {
         // 先读取当前 DAO 的主键字段列表，明确当前详情查询 WHERE 条件使用哪些主键列。
         List<String> idColumns = getPrimaryKeyColumnNameList();
         // 从前端通用参数按元数据顺序解析全部主键值，缺少任一复合主键字段都会在执行 SQL 前失败。
         List<Object> idValues = resolveIdValues(idColumns, queryIn);
         // 通过模板 DAO 按 DAO 内部组装出的主键列值映射查询当前表的一条记录。
-        return baseTemplateDao.selectByIds(getTableName(), getselectColumns(), buildIdColumnValueMap(idColumns, idValues));
+        return baseTemplateDao.selectByIds(getTableName(), getSelectColumns(), buildIdColumnValueMap(idColumns, idValues));
     }
 
-    // 当前批次的全部主键条件合并成一条 SQL 查询，避免逐项调用单条 select。
+    /**
+     * 把当前分组的完整主键合并为一条参数化 SQL 并批量查询。
+     *
+     * @param queryItems 来自公开批量查询的一组参数，例如 {@code [{"id":1},{"id":2}]}
+     * @return 当前组命中的真实记录，例如 {@code [{"id":1,"loginName":"admin"},{"id":2,"loginName":"auditor"}]}；
+     *     输入 null 或空列表时返回 {@code []}
+     * @throws IllegalArgumentException 当任一项缺少完整主键时抛出，例如
+     *     {@code IllegalArgumentException("primary key value must not be null: tenantId")}
+     */
     protected List<Map<String, Object>> getByIdsBatchGroup(List<CommonParam> queryItems) {
         // 空分组直接返回空记录，避免构造没有 WHERE 条件的查询。
         if (queryItems == null || queryItems.isEmpty()) {
@@ -47,12 +66,20 @@ public abstract class BaseCrudDaoImpl extends BasePagingQueryDaoImpl {
             arguments.addAll(resolveIdValues(idColumns, queryItem));
         }
         // 批量查询只选择当前表真实字段，并命中当前分组全部主键组合。
-        String sql = "SELECT " + getselectColumns() + " FROM " + getTableName() + " WHERE " + conditions;
+        String sql = "SELECT " + getSelectColumns() + " FROM " + getTableName() + " WHERE " + conditions;
         // 使用同一数据源的 JdbcTemplate 一次读取当前分组，返回真实数据库记录列表。
         return new JdbcTemplate(dataSource).queryForList(sql, arguments.toArray());
     }
 
-    // 主键值统一从 CommonParam 按元数据顺序提取，保证前端字段名和值直接形成稳定配对。
+    /**
+     * 按真实主键元数据顺序从前端参数提取主键值。
+     *
+     * @param idColumns 当前表真实主键列，例如 {@code ["tenantId","orderId"]}
+     * @param queryIn 来自前端的主键字段，例如 {@code {"tenantId":10,"orderId":20}}
+     * @return 与主键列一一对应的值，例如 {@code [10,20]}
+     * @throws IllegalArgumentException 当参数为空或缺少任一主键值时抛出，例如
+     *     {@code IllegalArgumentException("primary key value must not be null: orderId")}
+     */
     protected List<Object> resolveIdValues(List<String> idColumns, CommonParam queryIn) {
         // 通用参数为空时立即失败，避免模板 SQL 生成无主键条件的查询语句。
         if (queryIn == null || queryIn.getParamMap() == null) {
@@ -75,7 +102,13 @@ public abstract class BaseCrudDaoImpl extends BasePagingQueryDaoImpl {
         return idValues;
     }
 
-    // 主键列值映射统一由 DAO 内部按主键列顺序和外部传入主键值列表组装，避免外部感知字段名。
+    /**
+     * 将同顺序的主键列和值组合为模板查询使用的有序映射。
+     *
+     * @param idColumns 当前表真实主键列，例如 {@code ["tenantId","orderId"]}
+     * @param idValues 已解析的主键值，例如 {@code [10,20]}
+     * @return 主键列值映射，例如 {@code {"tenantId":10,"orderId":20}}
+     */
     private Map<String, Object> buildIdColumnValueMap(List<String> idColumns, List<Object> idValues) {
         // 使用有序映射按主键字段顺序组装字段和值，供模板 SQL 稳定拼接复合主键 WHERE 条件。
         Map<String, Object> idColumnValueMap = new LinkedHashMap<>();

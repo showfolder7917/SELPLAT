@@ -16,7 +16,7 @@ public class BuiltQuerySql {
     /**
      * 获取 SQL 文本。
      *
-     * @return SQL 文本
+     * @return 带问号占位符的 SQL，例如 {@code SELECT id FROM uniauth_user WHERE status = ?}
      */
     public String getSql() {
         return sql;
@@ -34,7 +34,7 @@ public class BuiltQuerySql {
     /**
      * 获取参数列表。
      *
-     * @return 参数列表
+     * @return 与占位符顺序一致的参数列表，例如 {@code [1]}
      */
     public List<Object> getParameters() {
         return parameters;

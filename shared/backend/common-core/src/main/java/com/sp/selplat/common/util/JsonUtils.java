@@ -29,7 +29,7 @@ public final class JsonUtils {
     /**
      * 构建标准映射器，统一注册时间模块和日期格式。
      *
-     * @return 标准 JSON 映射器
+     * @return 注册 Java 时间模块且日期格式为 {@code yyyy/MM/dd HH:mm:ss} 的标准映射器
      */
     private static ObjectMapper buildDefaultMapper() {
         // 统一使用同一份日期格式，避免各接口输出的时间字符串口径不一致。
@@ -48,7 +48,7 @@ public final class JsonUtils {
     /**
      * 构建扩展映射器，专门处理接口层宽松序列化场景。
      *
-     * @return 扩展 JSON 映射器
+     * @return 忽略 null 字段并允许空对象序列化的扩展映射器，例如空对象序列化为 {@code {}}
      */
     private static ObjectMapper buildExtendedMapper() {
         // 基于标准映射器复制扩展映射器，保证日期和时间模块行为与普通输出保持一致。
@@ -63,8 +63,10 @@ public final class JsonUtils {
     /**
      * 按标准规则把对象转成 JSON 字符串。
      *
-     * @param object 待序列化对象
-     * @return 标准 JSON 字符串
+     * @param object 来自 Service 或工具调用方的待序列化对象，例如 {@code Map.of("id", 1)}
+     * @return 保留对象字段的 JSON，例如 {@code {"id":1}}
+     * @throws IllegalStateException 当对象包含 Jackson 无法序列化的结构时抛出，
+     *     例如 {@code IllegalStateException("JSON 序列化失败: <待转换对象>")}
      */
     public static String toJson(Object object) {
         try {
@@ -79,8 +81,10 @@ public final class JsonUtils {
     /**
      * 按忽略空值的规则把对象转成 JSON 字符串，空 bean 场景下不抛出异常。
      *
-     * @param object 待序列化对象
-     * @return 忽略空值后的 JSON 字符串
+     * @param object 来自 Controller 的返回对象，例如字段为 {@code id=1, displayName=null} 的用户结果
+     * @return 忽略 null 字段后的 JSON，例如 {@code {"id":1}}
+     * @throws IllegalStateException 当非空字段无法序列化时抛出，
+     *     例如 {@code IllegalStateException("忽略空值 JSON 序列化失败: <待转换对象>")}
      */
     public static String toJsonIgnoreNull(Object object) {
         try {
@@ -95,10 +99,12 @@ public final class JsonUtils {
     /**
      * 把 JSON 字符串按目标类型解析成对象。
      *
-     * @param jsonString JSON 字符串
-     * @param clazz 目标类型
-     * @param <T> 目标泛型
-     * @return 解析后的对象
+     * @param jsonString 来自请求、配置或存储内容的 JSON，例如 {@code {"id":1}}
+     * @param clazz 调用方要求转换到的目标类型，例如 {@code CommonParam.class}
+     * @param <T> 目标对象类型，例如 {@code CommonParam}
+     * @return 解析后的目标对象，例如参数映射为 {@code {"id":1}} 的 {@code CommonParam}；输入 null 时返回 null
+     * @throws IllegalStateException 当 JSON 与目标类型不匹配时抛出，
+     *     例如 {@code IllegalStateException("JSON 解析失败: {id:}")}
      */
     public static <T> T fromJson(String jsonString, Class<T> clazz) {
         // 空字符串不参与解析，直接返回 null 让上层按“无输入”语义处理。
@@ -117,10 +123,12 @@ public final class JsonUtils {
     /**
      * 把 JSON 字符串按泛型类型描述解析成对象。
      *
-     * @param jsonString JSON 字符串
-     * @param typeReference 泛型类型描述
-     * @param <T> 目标泛型
-     * @return 解析后的对象
+     * @param jsonString 来自请求、配置或存储内容的 JSON，例如 {@code [{"id":1},{"id":2}]}
+     * @param typeReference 调用方提供的泛型类型描述，例如 {@code new TypeReference<List<Map<String, Object>>>() \{\}}
+     * @param <T> 目标泛型结构，例如 {@code List<Map<String, Object>>}
+     * @return 解析后的泛型对象，例如 {@code [{"id":1},{"id":2}]}；输入 null 时返回 null
+     * @throws IllegalStateException 当 JSON 与泛型结构不匹配时抛出，
+     *     例如 {@code IllegalStateException("JSON 泛型解析失败: [}")}
      */
     public static <T> T fromJson(String jsonString, TypeReference<T> typeReference) {
         // 空字符串不参与解析，直接返回 null 让上层自行决定默认行为。

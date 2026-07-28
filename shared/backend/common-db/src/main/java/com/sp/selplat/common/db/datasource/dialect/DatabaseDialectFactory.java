@@ -16,8 +16,10 @@ public class DatabaseDialectFactory {
     /**
      * 根据数据库类型获取方言实现。
      *
-     * @param databaseType 数据库类型
-     * @return 数据库方言
+     * @param databaseType 数据源解析器识别出的数据库类型，例如 {@link DatabaseType#H2}
+     * @return 对应数据库方言，例如 {@code H2Dialect}
+     * @throws IllegalArgumentException 当类型为空或没有注册方言时抛出，例如
+     *     {@code IllegalArgumentException("databaseType must not be null")}
      */
     public DatabaseDialect getDialect(DatabaseType databaseType) {
         // 没有数据库类型时直接拒绝继续处理，避免底层在 SQL 方言上出现不确定行为。
@@ -37,7 +39,8 @@ public class DatabaseDialectFactory {
     /**
      * 构建数据库方言固定映射。
      *
-     * @return 数据库方言固定映射
+     * @return 固定方言映射，例如
+     *     {@code {"H2":"H2Dialect","MYSQL":"MySqlDialect","POSTGRESQL":"PostgreSqlDialect"}}
      */
     private static Map<DatabaseType, DatabaseDialect> buildDialectMap() {
         // 使用枚举映射承接固定数据库类型集合，保证方言缓存结构清晰且访问开销较低。
@@ -56,5 +59,4 @@ public class DatabaseDialectFactory {
         return dialectMap;
     }
 }
-
 

@@ -10,8 +10,8 @@ rule_scope = fujitsu/gradle/offline_dependency_closure_and_normal_test
 <!-- 组织级规则保存共享恢复算法；项目规则只声明特殊坐标、兼容版本、只读参考工程和额外验证项。 -->
 fujitsu_offline_recovery_authority = organization_shared_algorithm + project_specific_configuration
 
-<!-- 本主题的公共说明和模板必须保存在当前同名规则包；真实项目差异进入对应项目目录的同名规则包。 -->
-offline_recovery_rule_package_assets = docs/,template/
+<!-- 本主题的公共说明和模板必须保存在主规则同级的同名资产目录；真实项目差异进入对应项目主规则的同名资产目录。 -->
+offline_recovery_rule_asset_directories = docs/,template/
 offline_recovery_project_specific_rule_location = fujitsu/rule/<project>/RUL_<project>离线依赖配置规则/
 
 ## 无网络边界

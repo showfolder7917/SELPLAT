@@ -17,7 +17,7 @@ public class CommonParam {
     /**
      * 获取动态业务参数映射。
      *
-     * @return 动态业务参数映射
+     * @return 动态业务参数映射，例如 {@code {"id":1,"loginName":"admin"}}
      */
     public Map<String, Object> getParamMap() {
         return paramMap;
@@ -26,7 +26,8 @@ public class CommonParam {
     /**
      * 设置动态业务参数映射。
      *
-     * @param paramMap 动态业务参数映射
+     * @param paramMap 来自 Controller 或业务调用方的动态字段，例如 {@code {"id":1,"loginName":"admin"}}
+     * 执行结果示例：输入 {@code null} 时内部保存为可写的空映射 {@code {}}。
      */
     public void setParamMap(Map<String, Object> paramMap) {
         // 调用方未传动态字段时统一回落为空有序映射，保证服务层取值时不必反复判空。
@@ -36,8 +37,10 @@ public class CommonParam {
     /**
      * 写入单个动态业务字段。
      *
-     * @param key 字段名
-     * @param value 字段值
+     * @param key 来自 JSON、表单或查询串的字段名，例如 {@code "loginName"}
+     * @param value 与字段名对应的业务值，例如 {@code "admin"}
+     * 执行结果示例：输入 {@code "loginName","admin"} 后参数映射为 {@code {"loginName":"admin"}}；
+     *     空字段名不会写入映射。
      */
     public void putParam(String key, Object value) {
         // 字段名为空时直接忽略，避免把空 key 写入共通参数对象污染后续业务判断。
@@ -51,8 +54,8 @@ public class CommonParam {
     /**
      * 读取单个动态业务字段。
      *
-     * @param key 字段名
-     * @return 字段值
+     * @param key 服务层或 DAO 要读取的字段名，例如 {@code "id"}
+     * @return 对应字段值，例如参数为 {@code {"id":1}} 时返回 {@code 1}；字段不存在时返回 null
      */
     public Object getParam(String key) {
         // 未初始化动态字段映射时直接返回空，保证服务层在极端场景下也能按“未传值”处理。
@@ -66,8 +69,10 @@ public class CommonParam {
     /**
      * 把 JSON 里未声明成固定字段的业务属性统一回收到动态参数映射。
      *
-     * @param key JSON 字段名
-     * @param value JSON 字段值
+     * @param key Jackson 从请求 JSON 读取到的动态字段名，例如 {@code "displayName"}
+     * @param value 与动态字段对应的请求值，例如 {@code "管理员"}
+     * 执行结果示例：请求字段 {@code "displayName":"管理员"} 被保存为
+     *     {@code paramMap={"displayName":"管理员"}}。
      */
     @JsonAnySetter
     public void putJsonParam(String key, Object value) {

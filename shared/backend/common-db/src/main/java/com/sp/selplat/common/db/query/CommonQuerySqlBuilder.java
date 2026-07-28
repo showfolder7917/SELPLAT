@@ -12,7 +12,8 @@ public interface CommonQuerySqlBuilder {
      * 构建列表查询 SQL。
      *
      * @param query 通用查询对象
-     * @return 已构建 SQL 结果对象
+     * @return 查询 SQL 与参数，例如
+     *     {@code {"sql":"SELECT id FROM uniauth_user WHERE status = ?","parameters":[1]}}
      */
     BuiltQuerySql buildSelect(CommonDynamicQuery query);
 
@@ -20,8 +21,8 @@ public interface CommonQuerySqlBuilder {
      * 构建总数查询 SQL。
      *
      * @param query 通用查询对象
-     * @return 已构建 SQL 结果对象
+     * @return 计数 SQL 与参数，例如
+     *     {@code {"sql":"SELECT COUNT(*) FROM uniauth_user WHERE status = ?","parameters":[1]}}
      */
     BuiltQuerySql buildCount(CommonDynamicQuery query);
 }
-

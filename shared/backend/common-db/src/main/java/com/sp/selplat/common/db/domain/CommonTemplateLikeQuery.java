@@ -1,6 +1,9 @@
 package com.sp.selplat.common.db.domain;
 
-// 注解式模板模糊查询入参统一承接动态表名、返回列和单字段 like 条件。
+/**
+ * 承接模板单字段模糊查询所需的受控表名、列清单、条件和排序。
+ * 所有 SQL 标识符由后端生成，本对象只在 DAO 与模板层之间传递。
+ */
 public class CommonTemplateLikeQuery {
 
     // tableName 指定当前模糊查询要命中的物理表。
@@ -14,52 +17,67 @@ public class CommonTemplateLikeQuery {
     // orderBy 承接模糊查询结果的排序表达式。
     private String orderBy;
 
-    // 获取目标表名，供模板 SQL 拼接 from 子句。
+    /** @return DAO 解析出的物理表名，例如 {@code "UniauthUser"} */
     public String getTableName() {
         return tableName;
     }
 
-    // 设置目标表名，供上层指定当前模糊查询作用的物理表。
+    /**
+     * @param tableName 来自 DAO 类名约定的物理表名，例如 {@code "UniauthUser"}
+     * 执行结果示例：模板 FROM 子句使用 {@code UniauthUser}。
+     */
     public void setTableName(String tableName) {
         this.tableName = tableName;
     }
 
-    // 获取返回列清单，供模板 SQL 拼接 select 子句。
+    /** @return 元数据生成的列清单，例如 {@code "id, loginName, status"} */
     public String getSelectColumns() {
         return selectColumns;
     }
 
-    // 设置返回列清单，供上层控制模糊查询返回字段。
+    /**
+     * @param selectColumns 来自数据库真实字段映射的列清单，例如 {@code "id, loginName, status"}
+     * 执行结果示例：模板 SELECT 子句只读取 id、loginName 和 status。
+     */
     public void setSelectColumns(String selectColumns) {
         this.selectColumns = selectColumns;
     }
 
-    // 获取目标字段名，供模板 SQL 拼接 like 条件的列名。
+    /** @return 后端白名单确认的模糊查询字段，例如 {@code "loginName"} */
     public String getFieldName() {
         return fieldName;
     }
 
-    // 设置目标字段名，供上层明确要在哪个业务字段上做模糊检索。
+    /**
+     * @param fieldName 来自后端白名单的业务字段，例如 {@code "loginName"}
+     * 执行结果示例：模板在 loginName 真实列上执行 LIKE 条件。
+     */
     public void setFieldName(String fieldName) {
         this.fieldName = fieldName;
     }
 
-    // 获取模糊查询关键字，供模板 SQL 传给 like 条件。
+    /** @return 来自前端的模糊查询关键字，例如 {@code "admin"} */
     public String getFieldValue() {
         return fieldValue;
     }
 
-    // 设置模糊查询关键字，供上层提交用户输入的检索词。
+    /**
+     * @param fieldValue 来自前端检索框的关键字，例如 {@code "admin"}
+     * 执行结果示例：模板把 admin 作为参数绑定到 LIKE 条件。
+     */
     public void setFieldValue(String fieldValue) {
         this.fieldValue = fieldValue;
     }
 
-    // 获取排序表达式，供模板 SQL 在需要时追加 order by。
+    /** @return 后端生成的排序表达式，例如 {@code "sortnum desc id asc"} */
     public String getOrderBy() {
         return orderBy;
     }
 
-    // 设置排序表达式，供上层明确结果输出顺序。
+    /**
+     * @param orderBy 来自后端受控字段的排序表达式，例如 {@code "sortnum desc id asc"}
+     * 执行结果示例：结果先按 sortnum 降序、再按 id 升序。
+     */
     public void setOrderBy(String orderBy) {
         this.orderBy = orderBy;
     }

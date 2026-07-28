@@ -2,6 +2,7 @@ package com.sp.selplat.common.db.dao;
 
 import com.sp.selplat.common.db.query.model.QueryCondition;
 import com.sp.selplat.common.db.query.model.QueryOrder;
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import com.sp.selplat.common.db.template.model.CommonTemplateSave;
 import com.sp.selplat.common.db.template.model.CommonTemplateUpdate;
@@ -13,7 +14,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-// BaseDaoImpl 与 BaseDao 一一对应，集中实现业务模块允许调用的全部分页、查询、新增、更新和假删除能力。
+/**
+ * BaseDaoImpl 与 BaseDao 一一对应，集中实现业务模块允许调用的全部分页、查询、新增、更新和假删除能力。
+ */
 public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
 
     // BATCH_OPERATION_SIZE 固定每次交给底层批处理的最大记录数，避免超大请求一次占满数据库参数和内存。
@@ -50,7 +53,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return queryList(null, conditions, orders, pageNo, pageSize);
     }
 
-    // 通用主键查询通过 BaseDao 公开 CommonParam 读取单条记录，业务 DAO 不再直接调用深层 getByIds。
+    // 通用主键查询通过 BaseDao 公开 CommonParam 读取单条记录，业务 DAO 不再直接调用内部 queryById。
     @Override
     public Map<String, Object> getById(CommonParam queryIn) {
         // 通用参数为空或没有任何前端字段时按未命中返回，避免生成没有主键条件的查询。
@@ -58,7 +61,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
             return null;
         }
         // 统一委托深层主键查询按元数据提取单主键或复合主键，门面层只公开稳定的 CommonParam 能力。
-        return getByIds(queryIn);
+        return queryById(queryIn);
     }
 
     // 批量主键查询按固定步长拆分输入，并由深层 CRUD 支撑一次查询当前分组的全部单主键或复合主键记录。
@@ -107,8 +110,14 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         CommonTemplateSave templateSave = new CommonTemplateSave();
         // 目标表继续使用公共元数据命名约定解析，业务层无需传递表名。
         templateSave.setTableName(getTableName());
-        // 直接读取上游 CommonParam 字段，不再要求 Service 逐列重组新的参数映射。
-        templateSave.setColumnValueMap(copyColumnValueMap(saveIn.getParamMap()));
+        // 按数据库真实字段匹配上游参数，未知字段在 SQL 前阻断，未提供字段不写成 null。
+        Map<String, Object> columnValueMap = buildDbColumnValueMap(saveIn);
+        // 没有任何匹配字段时禁止生成空列 INSERT。
+        if (columnValueMap.isEmpty()) {
+            throw new IllegalArgumentException("insert columns must not be empty");
+        }
+        // 模板层只接收已经过数据库元数据匹配的受控字段和值。
+        templateSave.setColumnValueMap(columnValueMap);
         // 通过模板 DAO 执行公共新增。
         return baseTemplateDao.insert(templateSave);
     }
@@ -124,12 +133,18 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         int affectedRows = 0;
         // 目标表继续由当前 DAO 命名约定统一解析，所有分组复用同一张表。
         String tableName = getTableName();
+        // 数据库真实字段映射只读取一次，供所有千条分组校验和生成 SQL 标识符。
+        Map<String, ColumnMetadata> dbColumnsMap = getDbColumnsMap();
         // 固定按一千条步长遍历全部新增项。
         for (int startIndex = 0; startIndex < saveIn.getItems().size(); startIndex += BATCH_OPERATION_SIZE) {
             // 当前新增分组最多包含一千条。
             int endIndex = Math.min(startIndex + BATCH_OPERATION_SIZE, saveIn.getItems().size());
             // 每组统一交给模板 DAO 执行一次真实 JDBC batch，门面层不再拼接 INSERT SQL。
-            affectedRows += baseTemplateDao.insertBatch(tableName, saveIn.getItems().subList(startIndex, endIndex));
+            affectedRows += baseTemplateDao.insertBatch(
+                tableName,
+                dbColumnsMap,
+                saveIn.getItems().subList(startIndex, endIndex)
+            );
         }
         // 返回所有分组累计影响行数，供 Service 形成批量结果。
         return affectedRows;
@@ -144,18 +159,28 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         updateIn.setTableName(getTableName());
         // 主键字段列表从当前表元数据读取，兼容单主键和复合主键。
         updateIn.setIdColumns(getPrimaryKeyColumnNameList());
-        // 复制前端通用字段供当前 DAO 分离主键，避免移除字段时修改 Controller 传入的原对象。
-        Map<String, Object> columnValueMap = copyColumnValueMap(saveIn.getParamMap());
+        // 按数据库真实字段匹配前端参数，未知字段不会进入 SET 标识符。
+        Map<String, Object> columnValueMap = buildDbColumnValueMap(saveIn);
         // 按 DAO 元数据顺序保存主键值，保证复合主键字段和值一一对应。
         List<Object> idValues = new ArrayList<>();
         // 每个主键字段从更新映射中取出后只用于 where，不会再次进入 set 子句。
         for (String idColumn : updateIn.getIdColumns()) {
-            // 从前端通用字段中移除并保存当前主键值。
-            idValues.add(columnValueMap.remove(idColumn));
+            // 从已匹配字段中移除并保存当前主键值。
+            Object idValue = columnValueMap.remove(idColumn);
+            // 缺少任一单主键或复合主键值时禁止执行不完整 WHERE。
+            if (idValue == null) {
+                throw new IllegalArgumentException("primary key value must not be null: " + idColumn);
+            }
+            // 当前主键值按数据库元数据顺序进入 WHERE。
+            idValues.add(idValue);
         }
         // 把自动提取的单主键或复合主键值写入模板更新条件。
         updateIn.setIdValues(idValues);
-        // 主键之外的前端字段直接作为待更新内容，不再由 Service 逐字段重新封装。
+        // 没有任何非主键真实字段时禁止生成空 SET 更新。
+        if (columnValueMap.isEmpty()) {
+            throw new IllegalArgumentException("update columns must not be empty");
+        }
+        // 主键之外的已匹配字段作为待更新内容，不再由 Service 逐字段重新封装。
         updateIn.setColumnValueMap(columnValueMap);
         // 通过模板 DAO 执行公共主键更新。
         return baseTemplateDao.updateByIds(updateIn);
@@ -174,6 +199,8 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         String tableName = getTableName();
         // 主键字段一次性从真实表元数据读取，供所有千条分组复用同一更新条件结构。
         List<String> idColumns = getPrimaryKeyColumnNameList();
+        // 数据库真实字段映射只读取一次，供模板层校验全部动态更新字段。
+        Map<String, ColumnMetadata> dbColumnsMap = getDbColumnsMap();
         // 固定按一千条步长拆分外部批量请求。
         for (int startIndex = 0; startIndex < saveIn.getItems().size(); startIndex += BATCH_OPERATION_SIZE) {
             // 当前更新分组最多包含一千条。
@@ -182,6 +209,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
             affectedRows += baseTemplateDao.updateBatchByIds(
                 tableName,
                 idColumns,
+                dbColumnsMap,
                 saveIn.getItems().subList(startIndex, endIndex)
             );
         }

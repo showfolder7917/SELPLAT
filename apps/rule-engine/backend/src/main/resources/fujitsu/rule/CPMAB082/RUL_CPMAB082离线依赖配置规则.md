@@ -8,7 +8,7 @@
 rule_scope = CPMAB082/offline_dependency_configuration
 
 <!-- 执行 CPMAB082 离线恢复前必须加载 Fujitsu 组织级公共规则包主规则。 -->
-cpmab082_offline_recovery_shared_rule = ../../RUL_FujitsuGradle离线依赖闭包恢复规则/RUL_FujitsuGradle离线依赖闭包恢复规则.md
+cpmab082_offline_recovery_shared_rule = ../RUL_FujitsuGradle离线依赖闭包恢复规则.md
 
 <!-- CPMACOMMON 和 CPMAB081 的已构建产物只允许作为显式只读候选 classpath，禁止修改相邻工程。 -->
 cpmab082_allowed_readonly_reference_classpath = ../CPMACOMMON/build,../CPMAB081/build

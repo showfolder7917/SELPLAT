@@ -60,7 +60,7 @@ fujitsu_code_changes_require_business_semantic_comments_except_imports = true
 fujitsu_delivery_verification_must_cover_changed_contract_and_adjacent_regression = true
 
 <!-- 离线依赖缺失时必须先加载 Fujitsu 组织级闭包恢复规则；适用于标准构建入口不能解析本机构件的场景；业务含义是所有项目共享无下载恢复算法，避免各项目重复维护不同流程 -->
-fujitsu_offline_dependency_gap_must_load_shared_rule = RUL_FujitsuGradle离线依赖闭包恢复规则/RUL_FujitsuGradle离线依赖闭包恢复规则.md
+fujitsu_offline_dependency_gap_must_load_shared_rule = RUL_FujitsuGradle离线依赖闭包恢复规则.md
 
 <!-- 目标项目存在特殊坐标、兼容版本、只读参考工程或额外验证时，再加载项目专项配置规则；业务含义是项目只保存差异，不复制组织级恢复算法 -->
 fujitsu_offline_project_specific_rule_scope = artifact_coordinate,compatible_version,readonly_reference,additional_verification

@@ -23,10 +23,14 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
     /**
      * 创建默认通用查询 SQL 构建器。
      *
-     * @param validator 查询校验器
-     * @param dialectFactory 数据库方言工厂
+     * @param validator 上层提供的真实元数据查询校验器，例如 {@code DefaultCommonQueryValidator}
+     * @param dialectFactory 上层提供的数据库方言工厂，例如 {@code DatabaseDialectFactory}
+     * @throws IllegalArgumentException 当任一依赖为空时抛出，例如
+     *     {@code IllegalArgumentException("validator must not be null")}
      */
-    public DefaultCommonQuerySqlBuilder(CommonQueryValidator validator,DatabaseDialectFactory dialectFactory) {
+    public DefaultCommonQuerySqlBuilder(
+            CommonQueryValidator validator,
+            DatabaseDialectFactory dialectFactory) {
         // 查询校验器为空时直接拒绝创建，避免 SQL 构建脱离字段合法性边界。
         if (validator == null) {
             throw new IllegalArgumentException("validator must not be null");
@@ -44,8 +48,9 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
     /**
      * 构建列表查询 SQL。
      *
-     * @param query 通用查询对象
-     * @return 已构建 SQL 结果对象
+     * @param query DAO 构建的查询对象，例如查询 {@code UniauthUser} 的 status=1 第一页
+     * @return SQL 与参数，例如
+     *     {@code {"sql":"SELECT id, loginName FROM UniauthUser WHERE status = ? LIMIT 10 OFFSET 0","parameters":[1]}}
      */
     @Override
     public BuiltQuerySql buildSelect(CommonDynamicQuery query) {
@@ -74,8 +79,9 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
     /**
      * 构建总数查询 SQL。
      *
-     * @param query 通用查询对象
-     * @return 已构建 SQL 结果对象
+     * @param query DAO 构建的查询对象，例如统计 {@code UniauthUser} 的 status=1 记录
+     * @return 计数 SQL 与参数，例如
+     *     {@code {"sql":"SELECT COUNT(*) FROM (SELECT id FROM UniauthUser WHERE status = ?) T","parameters":[1]}}
      */
     @Override
     public BuiltQuerySql buildCount(CommonDynamicQuery query) {
@@ -98,13 +104,17 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
     /**
      * 构建基础查询 SQL。
      *
-     * @param query 通用查询对象
-     * @param dialect 数据库方言
-     * @param parameters 参数列表
-     * @param appendOrder 是否追加排序
-     * @return 基础查询 SQL
+     * @param query DAO 构建的查询对象，例如查询 {@code UniauthUser}
+     * @param dialect 当前数据库方言，例如 {@code H2Dialect}
+     * @param parameters 用于收集 WHERE 参数的可写列表，例如初始值 {@code []}
+     * @param appendOrder 是否追加排序；列表查询传 {@code true}，计数查询传 {@code false}
+     * @return 基础 SQL，例如 {@code "SELECT id FROM UniauthUser WHERE status = ? ORDER BY id ASC"}
      */
-    private String buildBaseSelectSql(CommonDynamicQuery query,DatabaseDialect dialect,List<Object> parameters,boolean appendOrder) {
+    private String buildBaseSelectSql(
+            CommonDynamicQuery query,
+            DatabaseDialect dialect,
+            List<Object> parameters,
+            boolean appendOrder) {
         // 创建 SQL 构建器承接各段查询片段，避免字符串直接多次拼接影响可读性。
         StringBuilder sqlBuilder = new StringBuilder();
         // 先写入 select 关键字和受控字段清单，确保列表查询只返回上层明确声明的字段。
@@ -127,7 +137,7 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
      * 构建字段清单。
      *
      * @param selectFields 字段清单
-     * @return select 字段片段
+     * @return select 字段片段，例如 {@code id, login_name, status}
      */
     private String buildSelectFields(List<String> selectFields) {
         // 创建字段片段构建器，保证字段顺序与上层 DAO 传入顺序保持一致。
@@ -148,12 +158,17 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
     /**
      * 追加 where 子句。
      *
-     * @param sqlBuilder SQL 构建器
-     * @param conditions 条件集合
-     * @param dialect 数据库方言
-     * @param parameters 参数列表
+     * @param sqlBuilder 已包含 SELECT 和 FROM 的 SQL 构建器，例如 {@code "SELECT id FROM UniauthUser"}
+     * @param conditions 结构化条件，例如 {@code [{"fieldName":"status","operator":"EQ","value":1}]}
+     * @param dialect 当前数据库方言，例如 {@code H2Dialect}
+     * @param parameters 用于收集绑定值的列表，例如初始值 {@code []}
+     * 执行结果示例：SQL 追加 {@code " WHERE status = ?"}，参数列表变为 {@code [1]}。
      */
-    private void appendWhereClause(StringBuilder sqlBuilder,List<QueryCondition> conditions,DatabaseDialect dialect,List<Object> parameters) {
+    private void appendWhereClause(
+            StringBuilder sqlBuilder,
+            List<QueryCondition> conditions,
+            DatabaseDialect dialect,
+            List<Object> parameters) {
         // 条件集合为空时不追加 where 子句，兼容无筛选的列表浏览场景。
         if (conditions == null || conditions.isEmpty()) {
             return;
@@ -176,12 +191,19 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
     /**
      * 追加单个条件片段。
      *
-     * @param sqlBuilder SQL 构建器
-     * @param condition 条件对象
-     * @param dialect 数据库方言
-     * @param parameters 参数列表
+     * @param sqlBuilder 当前 WHERE SQL 构建器，例如 {@code "SELECT id FROM UniauthUser WHERE "}
+     * @param condition 当前结构化条件，例如 {@code {"fieldName":"status","operator":"EQ","value":1}}
+     * @param dialect 当前数据库方言，例如 {@code H2Dialect}
+     * @param parameters 用于收集绑定值的列表，例如初始值 {@code []}
+     * 执行结果示例：SQL 追加 {@code "status = ?"}，参数列表变为 {@code [1]}。
+     * @throws IllegalArgumentException 当操作符不受支持时抛出，例如
+     *     {@code IllegalArgumentException("unsupported operator: <未注册操作符>")}
      */
-    private void appendSingleCondition(StringBuilder sqlBuilder,QueryCondition condition,DatabaseDialect dialect,List<Object> parameters) {
+    private void appendSingleCondition(
+            StringBuilder sqlBuilder,
+            QueryCondition condition,
+            DatabaseDialect dialect,
+            List<Object> parameters) {
         // 先写入当前条件命中的字段名，保证比较关系始终围绕受控业务字段展开。
         sqlBuilder.append(condition.getFieldName());
         // 根据操作符类型选择具体比较语法，并同步写入对应参数值。
@@ -261,7 +283,8 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
      *
      * @param sql SQL 文本
      * @param parameters 参数列表
-     * @return SQL 结果对象
+     * @return SQL 结果对象，例如
+     *     {@code {"sql":"SELECT id FROM uniauth_user WHERE status = ?","parameters":[1]}}
      */
     private BuiltQuerySql buildBuiltQuerySql(String sql, List<Object> parameters) {
         // 创建结果对象承接最终 SQL 和绑定参数，供执行器统一消费。
@@ -274,8 +297,6 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
         return builtQuerySql;
     }
 }
-
-
 
 
 

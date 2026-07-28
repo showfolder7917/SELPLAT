@@ -35,7 +35,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取租户主键。
      *
-     * @return 租户主键
+     * @return 用户所属租户主键，例如 {@code 1L}
      */
     public Long getTenantId() {
         return tenantId;
@@ -53,7 +53,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取登录账号。
      *
-     * @return 登录账号
+     * @return 登录账号，例如 {@code admin}
      */
     public String getLoginName() {
         return loginName;
@@ -71,7 +71,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取密码摘要。
      *
-     * @return 密码摘要
+     * @return SHA-256 密码摘要，例如 {@code 2bb80d537b1da3e38bd30361aa855686bde0ba...}
      */
     public String getPasswordHash() {
         return passwordHash;
@@ -89,7 +89,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取展示姓名。
      *
-     * @return 展示姓名
+     * @return 用户展示姓名，例如 {@code 系统管理员}
      */
     public String getDisplayName() {
         return displayName;
@@ -107,7 +107,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取假名展示姓名。
      *
-     * @return 假名展示姓名
+     * @return 日文假名展示姓名，例如 {@code システムカンリシャ}
      */
     public String getDisplayNameKana() {
         return displayNameKana;
@@ -125,7 +125,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取语言区域。
      *
-     * @return 语言区域
+     * @return 用户默认语言区域，例如 {@code ja-JP}
      */
     public String getLocale() {
         return locale;
@@ -143,7 +143,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取邮箱。
      *
-     * @return 邮箱
+     * @return 用户邮箱，例如 {@code admin@example.com}
      */
     public String getEmail() {
         return email;
@@ -161,7 +161,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取联系电话。
      *
-     * @return 联系电话
+     * @return 用户联系电话，例如 {@code 09012345678}
      */
     public String getPhone() {
         return phone;
@@ -179,7 +179,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取账号状态。
      *
-     * @return 账号状态
+     * @return 账号状态，例如 {@code ACTIVE}
      */
     public String getUserStatus() {
         return userStatus;
@@ -197,7 +197,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取锁定标记。
      *
-     * @return 锁定标记
+     * @return 账号锁定时返回 {@code true}，正常可登录时返回 {@code false}
      */
     public Boolean getLockedFlag() {
         return lockedFlag;
@@ -215,7 +215,7 @@ public class UniauthUser extends Domain {
     /**
      * 获取账号到期时间。
      *
-     * @return 账号到期时间
+     * @return 账号到期时间，例如 {@code 2026-12-31T23:59:59}
      */
     public LocalDateTime getExpiredAt() {
         return expiredAt;

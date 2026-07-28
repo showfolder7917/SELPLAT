@@ -16,7 +16,7 @@ public interface DatabaseMetadataReader {
      * 列出当前数据源下的表集合。
      *
      * @param dataSource 数据源实体
-     * @return 表集合
+     * @return 表元数据集合，例如 {@code [TableMetadata(tableName="uniauth_user", remarks="统一认证用户")]}
      */
     List<TableMetadata> listTables(CommonDbSource dataSource);
 
@@ -25,7 +25,7 @@ public interface DatabaseMetadataReader {
      *
      * @param dataSource 数据源实体
      * @param tableName 表名
-     * @return 表信息
+     * @return 指定表的元数据，例如 {@code TableMetadata(tableName="uniauth_user", remarks="统一认证用户")}
      */
     TableMetadata getTable(CommonDbSource dataSource, String tableName);
 
@@ -34,7 +34,7 @@ public interface DatabaseMetadataReader {
      *
      * @param dataSource 数据源实体
      * @param tableName 表名
-     * @return 字段集合
+     * @return 字段元数据集合，例如 {@code [ColumnMetadata(columnName="id", primaryKey=true)]}
      */
     List<ColumnMetadata> listColumns(CommonDbSource dataSource, String tableName);
 
@@ -43,7 +43,7 @@ public interface DatabaseMetadataReader {
      *
      * @param dataSource 数据源实体
      * @param tableName 表名
-     * @return 主键字段集合
+     * @return 数据库真实主键字段名集合，例如 {@code ["tenant_id", "user_id"]}
      */
     List<String> listPrimaryKeys(CommonDbSource dataSource, String tableName);
 
@@ -52,7 +52,7 @@ public interface DatabaseMetadataReader {
      *
      * @param dataSource 数据源实体
      * @param tableName 表名
-     * @return 是否存在
+     * @return 表存在时返回 {@code true}，例如 {@code uniauth_user} 已建表时返回 {@code true}
      */
     boolean existsTable(CommonDbSource dataSource, String tableName);
 
@@ -62,9 +62,8 @@ public interface DatabaseMetadataReader {
      * @param dataSource 数据源实体
      * @param tableName 表名
      * @param columnName 字段名
-     * @return 是否存在
+     * @return 字段存在时返回 {@code true}，例如 {@code uniauth_user.login_name} 存在时返回 {@code true}
      */
     boolean existsColumn(CommonDbSource dataSource, String tableName, String columnName);
 }
-
 

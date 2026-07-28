@@ -23,7 +23,7 @@ selplat_base_dao_interface_and_impl_must_match_one_to_one = true
 selplat_base_dao_impl_owned_capabilities = getIdSequenceDefinition,getPageList,getById,getByIds,getByQuery,insert,insertBatch,update,updateBatch,softDelete,softDeleteBatch
 
 <!-- BaseCrudDaoImpl 只保留 BaseDaoImpl 需要的内部主键查询和参数辅助能力；适用于公共继承链内部；业务含义是深层支撑类不再 implements BaseDao，也不再承载批量写入 SQL 或模板层职责。 -->
-selplat_base_crud_dao_impl_internal_capabilities = getByIdsBatchGroup,resolveIdValues,buildIdColumnValueMap
+selplat_base_crud_dao_impl_internal_capabilities = queryById,getByIdsBatchGroup,resolveIdValues,buildIdColumnValueMap
 
 <!-- BaseTemplateDao 是通用单条和批量写入的唯一 SQL 模板入口；适用于 BaseDaoImpl 的新增、更新和批量写入委托；业务含义是公共 DAO 门面不直接拼 SQL，深层 CRUD 支撑类也不重复维护模板实现。 -->
 selplat_base_template_dao_write_capabilities = insert,insertBatch,updateByIds,updateBatchByIds
@@ -73,8 +73,8 @@ selplat_dao_must_remove_zero_value_base_wrappers = true
 <!-- 主键业务查询统一使用 BaseDao.getById(CommonParam)；适用于单主键和复合主键场景；业务含义是前端主键字段从 Controller 经 Service 原样传入公共 DAO。 -->
 selplat_dao_primary_key_query_signature = getById(CommonParam)
 
-<!-- BaseCrudDaoImpl.getByIds 必须接收同一个 CommonParam，并按 getPrimaryKeyColumnNameList 元数据顺序提取全部主键字段；适用于单主键和复合主键；业务含义是 Service 不再读取、转换或重新组装主键值列表。 -->
-selplat_base_crud_get_by_ids_signature = getByIds(CommonParam)
+<!-- BaseCrudDaoImpl.queryById 必须接收同一个 CommonParam，并按 getPrimaryKeyColumnNameList 元数据顺序提取全部主键字段；适用于单主键和复合主键；业务含义是内部方法明确表达单条查询，避免与公开批量 getByIds 混淆，同时 Service 不再读取、转换或重新组装主键值列表。 -->
+selplat_base_crud_query_by_id_signature = queryById(CommonParam)
 
 <!-- 复合主键查询缺少任一元数据主键字段时必须在 SQL 前终止；适用于 tenantId 与 itemId 等组合；业务含义是不完整主键不得退化成部分条件查询。 -->
 selplat_composite_primary_key_query_requires_all_id_columns = true
@@ -133,17 +133,23 @@ selplat_base_dao_update_id_extraction = ordered_extract(getPrimaryKeyColumnNameL
 <!-- 当前 Service 写入链路不分散实现必填、唯一性、默认值或类型验证，这些验证等待后续统一能力；适用于 insert、update、delete；业务含义是 Service 继续直接透传 CommonParam，不重复建设临时验证。 -->
 selplat_service_deferred_write_validation = required,uniqueness,default_value,type_conversion
 
-<!-- 公共 DAO 必须通过 BaseDaoSupportImpl.getDbRealColumns 从当前 DAO 对应真实表的数据库元数据读取字段名；适用于查询、新增、更新和批量写入；业务含义是最终进入 SQL 的列名只来源于后端真实数据库结构，不由前端字段名直接决定。 -->
-selplat_base_dao_real_column_source = BaseDaoSupportImpl.getDbRealColumns(database_metadata)
+<!-- 公共 DAO 必须通过 BaseDaoSupportImpl.getDbColumnsMap 从当前 DAO 对应真实表的数据库元数据读取有序字段映射；适用于查询、新增、更新和批量写入；业务含义是 Map 键作为后端真实列名，ColumnMetadata 作为后续类型、长度和主键校验依据，最终进入 SQL 的列名不由前端字段名直接决定。 -->
+selplat_base_dao_real_column_source = BaseDaoSupportImpl.getDbColumnsMap():ordered_map<columnName,ColumnMetadata>
 
-<!-- 公共写入只允许遍历后端真实字段并通过 CommonParam.getParam(columnName) 获取前端值；适用于 insert、insertBatch、update、updateBatch 和假删除复用的更新链路；业务含义是前端只提供真实字段对应的值，不能把任意标识符拼入 SQL。 -->
-selplat_base_dao_write_value_mapping = each(dbRealColumn where CommonParam.containsKey(dbRealColumn) => CommonParam.getParam(dbRealColumn))
+<!-- 公共查询字段字符串统一由 BaseDaoSupportImpl.getSelectColumns 复用 getDbColumnsMap 的有序键生成；适用于详情、批量主键查询和分页查询；业务含义是 Java 方法名遵循驼峰规范，查询字段与写入字段共享同一份真实数据库元数据来源。 -->
+selplat_base_dao_select_column_source = BaseDaoSupportImpl.getSelectColumns -> BaseDaoSupportImpl.getDbColumnsMap.keySet
+
+<!-- 公共写入只允许遍历 getDbColumnsMap 的有序键并通过 CommonParam.getParam(columnName) 获取前端值；适用于 insert、insertBatch、update、updateBatch 和假删除复用的更新链路；业务含义是前端只提供真实字段对应的值，不能把任意标识符拼入 SQL。 -->
+selplat_base_dao_write_value_mapping = each(getDbColumnsMap.key where CommonParam.containsKey(columnName) => CommonParam.getParam(columnName))
 
 <!-- 前端写入参数包含当前真实表不存在的字段时必须在 SQL 执行前终止，禁止静默忽略未知字段；适用于单条和批量新增、更新；业务含义是字段拼写错误、越界字段和 SQL 标识符注入都不能进入模板层。 -->
 selplat_base_dao_unknown_write_column_must_fail_before_sql = true
 
 <!-- 前端未传入的真实数据库字段不得主动写成 null；适用于数据库默认值、可空字段和局部更新；业务含义是字段白名单只校验实际传入键，不改变未提交字段的数据库语义。 -->
 selplat_base_dao_missing_write_column_must_not_be_written_as_null = true
+
+<!-- 公共删除链路只能使用 softDelete 与 softDeleteBatch，并在补充平台假删除字段后复用真实字段匹配更新；适用于用户所称的通用增删改能力；业务含义是“删”固定表示假删除，不得借字段匹配改造新增物理删除入口。 -->
+selplat_base_dao_matched_write_scope = insert,insertBatch,update,updateBatch,softDelete,softDeleteBatch
 
 <!-- Uniauth 写入当前只保留主键生成和 password 到 passwordHash 的必要落库转换；适用于用户新增和更新；业务含义是明文密码不会直接写入数据库或返回前端。 -->
 selplat_uniauth_current_required_write_processing = id_generation,password_to_passwordHash

@@ -15,7 +15,7 @@ public interface CommonQueryExecutor {
      * 执行列表查询。
      *
      * @param query 通用查询对象
-     * @return 列表结果
+     * @return 数据库列值列表，例如 {@code [{"id":10001,"login_name":"admin","status":1}]}
      */
     List<Map<String, Object>> query(CommonDynamicQuery query);
 
@@ -23,7 +23,8 @@ public interface CommonQueryExecutor {
      * 执行单行查询。
      *
      * @param query 通用查询对象
-     * @return 单行结果
+     * @return 单行数据库列值，例如 {@code {"id":10001,"login_name":"admin","status":1}}；
+     *     无匹配记录时返回空 Map
      */
     Map<String, Object> queryOne(CommonDynamicQuery query);
 
@@ -31,8 +32,7 @@ public interface CommonQueryExecutor {
      * 执行总数查询。
      *
      * @param query 通用查询对象
-     * @return 总数结果
+     * @return 满足条件的记录数，例如 {@code 12L}
      */
     long count(CommonDynamicQuery query);
 }
-

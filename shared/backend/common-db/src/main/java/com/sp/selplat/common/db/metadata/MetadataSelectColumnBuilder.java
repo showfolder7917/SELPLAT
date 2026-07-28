@@ -14,7 +14,7 @@ public class MetadataSelectColumnBuilder {
      * 把字段元数据集合转换成逗号分隔的 select 字段串。
      *
      * @param columnMetadataList 字段元数据集合
-     * @return select 字段串
+     * @return 由真实字段组成的 select 字段串，例如 {@code id, login_name, status}
      */
     public String build(List<ColumnMetadata> columnMetadataList) {
         // 字段元数据为空时回退空串，交由调用方按无字段场景统一失败收口。
@@ -27,4 +27,3 @@ public class MetadataSelectColumnBuilder {
             .collect(Collectors.joining(", "));
     }
 }
-

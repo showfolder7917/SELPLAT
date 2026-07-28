@@ -23,7 +23,7 @@ public class CommonDbSource {
     /**
      * 获取数据源逻辑标识。
      *
-     * @return 数据源逻辑标识
+     * @return 数据源逻辑标识，例如 {@code primary}
      */
     public String getSourceKey() {
         return sourceKey;
@@ -41,7 +41,7 @@ public class CommonDbSource {
     /**
      * 获取数据库类型。
      *
-     * @return 数据库类型
+     * @return 数据库产品类型，例如 {@code MYSQL}
      */
     public DatabaseType getDatabaseType() {
         return databaseType;
@@ -59,7 +59,7 @@ public class CommonDbSource {
     /**
      * 获取真实数据源对象。
      *
-     * @return 真实数据源对象
+     * @return 可用于获取真实连接的数据源对象，例如 Spring 装配的 Hikari 数据源实例
      */
     public DataSource getDataSource() {
         return dataSource;
@@ -77,7 +77,7 @@ public class CommonDbSource {
     /**
      * 获取 catalog 名称。
      *
-     * @return catalog 名称
+     * @return catalog 名称，例如 {@code selplat}
      */
     public String getCatalogName() {
         return catalogName;
@@ -95,7 +95,7 @@ public class CommonDbSource {
     /**
      * 获取 schema 名称。
      *
-     * @return schema 名称
+     * @return schema 名称，例如 {@code public}
      */
     public String getSchemaName() {
         return schemaName;
@@ -110,4 +110,3 @@ public class CommonDbSource {
         this.schemaName = schemaName;
     }
 }
-

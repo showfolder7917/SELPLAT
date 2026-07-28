@@ -27,7 +27,7 @@ public class ColumnMetadata {
     /**
      * 获取表名。
      *
-     * @return 表名
+     * @return 字段所属物理表名，例如 {@code uniauth_user}
      */
     public String getTableName() {
         return tableName;
@@ -45,7 +45,7 @@ public class ColumnMetadata {
     /**
      * 获取字段名。
      *
-     * @return 字段名
+     * @return 数据库真实字段名，例如 {@code login_name}
      */
     public String getColumnName() {
         return columnName;
@@ -63,7 +63,7 @@ public class ColumnMetadata {
     /**
      * 获取数据库字段类型。
      *
-     * @return 数据库字段类型
+     * @return 数据库原始字段类型，例如 {@code VARCHAR}
      */
     public String getDataType() {
         return dataType;
@@ -81,7 +81,7 @@ public class ColumnMetadata {
     /**
      * 获取 Java 类型。
      *
-     * @return Java 类型
+     * @return 推荐映射的 Java 类型，例如 {@code java.lang.String}
      */
     public String getJavaType() {
         return javaType;
@@ -99,7 +99,7 @@ public class ColumnMetadata {
     /**
      * 获取字段长度。
      *
-     * @return 字段长度
+     * @return 字段长度，例如 {@code 100}
      */
     public Integer getLength() {
         return length;
@@ -117,7 +117,7 @@ public class ColumnMetadata {
     /**
      * 获取字段精度。
      *
-     * @return 字段精度
+     * @return 数值字段的小数位数，例如 {@code 2}
      */
     public Integer getScale() {
         return scale;
@@ -135,7 +135,7 @@ public class ColumnMetadata {
     /**
      * 获取主键标记。
      *
-     * @return 主键标记
+     * @return 主键标记，例如 {@code true} 表示该字段属于主键
      */
     public Boolean getPrimaryKey() {
         return primaryKey;
@@ -153,7 +153,7 @@ public class ColumnMetadata {
     /**
      * 获取字段备注。
      *
-     * @return 字段备注
+     * @return 数据库字段备注，例如 {@code 用户登录名}
      */
     public String getRemarks() {
         return remarks;
@@ -168,4 +168,3 @@ public class ColumnMetadata {
         this.remarks = remarks;
     }
 }
-

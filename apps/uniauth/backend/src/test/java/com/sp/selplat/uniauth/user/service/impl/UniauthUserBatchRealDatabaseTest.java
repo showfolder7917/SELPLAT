@@ -7,10 +7,14 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-// 用户批量真实数据库测试按公开批量方法拆分 Case，数据目录和文件名直接对应当前测试类与方法。
+/**
+ * 用户批量真实数据库测试按公开批量方法拆分 Case，数据目录和文件名直接对应当前测试类与方法。
+ */
 class UniauthUserBatchRealDatabaseTest extends AbstractUniauthUserRealDatabaseTest {
 
-    // getByIds Case 验证多主键通过公共 DAO 一次批量读取真实用户。
+    /**
+     * getByIds Case 验证多主键通过公共 DAO 一次批量读取真实用户。
+     */
     @Test
     @Sql("/fixtures/UniauthUserBatchRealDatabaseTest/getByIds.sql")
     void getByIds() {
@@ -18,7 +22,9 @@ class UniauthUserBatchRealDatabaseTest extends AbstractUniauthUserRealDatabaseTe
         UniauthUserRealDatabaseTestVerifier.verifyBatchGetByIds(uniauthUserService);
     }
 
-    // insertBatch Case 验证批量发号、密码摘要和真实 JDBC batch 新增。
+    /**
+     * insertBatch Case 验证批量发号、密码摘要和真实 JDBC batch 新增。
+     */
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     @Sql("/fixtures/UniauthUserBatchRealDatabaseTest/insertBatch.sql")
@@ -27,7 +33,9 @@ class UniauthUserBatchRealDatabaseTest extends AbstractUniauthUserRealDatabaseTe
         UniauthUserRealDatabaseTestVerifier.verifyBatchInsert(uniauthUserService, jdbcTemplate);
     }
 
-    // insertBatchRollback Case 验证批量中任一记录违反真实唯一约束时整批事务回滚。
+    /**
+     * insertBatchRollback Case 验证批量中任一记录违反真实唯一约束时整批事务回滚。
+     */
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     @Sql("/fixtures/UniauthUserBatchRealDatabaseTest/insertBatchRollback.sql")
@@ -38,7 +46,9 @@ class UniauthUserBatchRealDatabaseTest extends AbstractUniauthUserRealDatabaseTe
         UniauthUserRealDatabaseTestVerifier.verifyBatchInsertRollback(uniauthUserService, jdbcTemplate);
     }
 
-    // updateBatch Case 验证不同更新字段结构仍进入真实 JDBC batch。
+    /**
+     * updateBatch Case 验证不同更新字段结构仍进入真实 JDBC batch。
+     */
     @Test
     @Sql("/fixtures/UniauthUserBatchRealDatabaseTest/updateBatch.sql")
     void updateBatch() {
@@ -46,7 +56,9 @@ class UniauthUserBatchRealDatabaseTest extends AbstractUniauthUserRealDatabaseTe
         UniauthUserRealDatabaseTestVerifier.verifyBatchUpdate(uniauthUserService, jdbcTemplate);
     }
 
-    // deleteBatch Case 验证批量入口只执行真实假删除。
+    /**
+     * deleteBatch Case 验证批量入口只执行真实假删除。
+     */
     @Test
     @Sql("/fixtures/UniauthUserBatchRealDatabaseTest/deleteBatch.sql")
     void deleteBatch() {

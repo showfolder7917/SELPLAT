@@ -1,6 +1,6 @@
 ## 固定路径配置（文件头唯一绝对路径区）
 - 编译与依赖解析默认使用本机离线资源；仅 macOS 可在项目缓存和本机 Gradle 缓存都缺少必需依赖时，按 macOS 专属规则联网补齐并写入当前工程缓存。
-- 唯一记忆库根目录：`MEMORY_ROOT=C:/opt/workspace/SELPLAT/MEMORIES`
+- 唯一记忆库根目录：`MEMORY_ROOT=/Users/showfolder/Documents/workSpace/SELF/SELPLAT/MEMORIES`
 - 统一能力系统目录：`MEMORY_CODE_ROOT=${MEMORY_ROOT}/ai/code`
 - 统一协议目录：`MEMORY_PROTOCOL_ROOT=${MEMORY_ROOT}/ai/protocol`
 - rule-engine 规则资源根目录：`RULE_ENGINE_RESOURCE_ROOT=${MEMORY_ROOT}/../apps/rule-engine/backend/src/main/resources`
@@ -71,7 +71,7 @@
 4. 新规则不存在时新增；已有同义或近义规则时更新、合并现有规则，不得重复堆叠。
 5. 表面冲突但适用方向、场景或边界不同的规则必须分类到独立模块，不得互相覆盖；真正冲突且适用范围相同的规则以新规则替换旧规则。
 6. 已失效、无调用入口或被新规则完全替代的规则必须删除，并同步清理 `${RULE_ENGINE_RULE_INDEX}` 中的旧引用。
-7. 每个新主题规则使用独立 Markdown 模块；规则文件使用 HTML 注释说明问题、场景和业务含义，并使用 DSL 行表达稳定约束。新建规则文件必须命名为 `RUL_主题规则.md`：以 `RUL_` 前缀加可读的业务主题与“规则”后缀组成，例如 `RUL_跨工程唯一记忆库与路径变量引用规则.md`。
+7. 每个新主题规则使用直接位于所属规则根的独立 Markdown 主文件；规则文件使用 HTML 注释说明问题、场景和业务含义，并使用 DSL 行表达稳定约束。新建主规则文件必须命名为 `RUL_主题规则.md`。存在 README、说明、模板、样例或项目配置时，必须在主规则文件同级创建去掉 `.md` 后同名的资产目录，并仅使用 `docs/`、`template/`、`examples/`、`project/` 标准子目录；禁止把主规则文件放进同名资产目录。
 8. 新增、更新、移动或删除规则后，必须同步 `${RULE_ENGINE_RULE_INDEX}`；规则正文中的工程内路径优先写相对于 `${RULE_ENGINE_RESOURCE_ROOT}` 的路径。
 9. 新规则、规则主索引和规则主维护必须落在 `${RULE_ENGINE_RESOURCE_ROOT}`；但必须检查 `MEMORY_ROOT` 是否存在同主题记录。若其中的规则、协议、能力代码、测试或索引已失效、冲突、路径错配或无法满足当前规则，必须同步更新、迁移或删除对应旧记录；能力行为变更时必须同步修正其测试或验证入口。
 
@@ -166,4 +166,8 @@
 3. 常量、状态字段、条件分支、返回结构、关键赋值、异常处理、循环、数据映射、接口调用、持久化、桥接逻辑都必须有对应的业务注释覆盖。
 4. 若某几行属于同一个不可拆分的业务动作，可使用紧邻的多行注释整体说明，但不得跳过实际业务含义。
 5. 未完成 `js`、`java`、`py` 的逐行业务注释前，禁止把相关代码任务视为完成；若文件过大需分阶段补注释，必须明确当前已覆盖范围和剩余范围。
-6. import 包导入不用加注释
+6. Java 公开和受保护方法的参数注释必须说明参数来源、业务含义与实际输入示例；所有非 `void` 返回必须提供符合真实类型、字段名称和返回层级的实际结果示例。
+7. 返回 `Map`、`List`、数组、实体、元数据、动态字段、主键定义、SQL 字符串、`CommonResult` 或 `CommonPageResult` 时，禁止只写类型名称或使用 `xxx`、`foo`、省略号代替关键字段，必须展示可识别的完整结构。
+8. `void` 写入方法必须说明数据库、文件、消息或外部状态的实际副作用示例；异常分支必须说明触发条件和实际异常示例。
+9. Java 注释优先采用 `输入或动作 → 实际结果` 形式；具体模板与真实示例必须加载 `SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES`。
+10. import 包导入不用加注释。

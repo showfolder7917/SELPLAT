@@ -7,42 +7,119 @@ import com.sp.selplat.common.util.CommonPageResult;
 import java.util.List;
 import java.util.Map;
 
-// 公共 DAO 接口统一声明简单单表模块允许调用的分页、查询、新增、更新和假删除能力。
+/**
+ * 声明简单单表模块唯一允许调用的公共 DAO 能力。
+ * 接口负责固定分页、查询、写入和假删除契约，不暴露深层元数据、SQL 构建或模板执行细节。
+ */
 public interface BaseDao {
 
-    // 主键号段定义由 DAO 的表名和有序主键元数据生成每个字段的独立号段编码，业务服务无需硬编码对应关系。
+    /**
+     * 按当前 DAO 表名和真实主键元数据生成各主键字段的独立号段编码。
+     *
+     * @return 单主键示例 {@code {"id":"UniauthUserId"}}；复合主键示例
+     *     {@code {"tenantId":"UniauthUserTenantId","orderId":"UniauthUserOrderId"}}
+     */
     IdSequenceDefinition getIdSequenceDefinition();
 
-    // 默认分页查询按公共排序口径返回当前页结果，供后台列表快速复用统一分页链路。
+    /**
+     * 按动态等值或后缀条件和公共默认排序查询当前页。
+     *
+     * @param queryColumnValueMap 来自 Service 的前端查询字段，例如 {@code {"status":1,"loginNameLike":"admin"}}
+     * @param pageNo 来自前端分页请求的页码，例如 {@code 1}
+     * @param pageSize 来自前端分页请求的每页条数，例如 {@code 10}
+     * @return 分页结果，例如
+     *     {@code {"records":[{"id":2,"loginName":"admin-b"},{"id":1,"loginName":"admin-a"}],}
+     *     {@code "totalCount":2,"pageNo":1,"pageSize":10}}
+     */
     CommonPageResult getPageList(Map<String, Object> queryColumnValueMap, Integer pageNo, Integer pageSize);
 
-    // 自定义排序分页查询允许业务模块补充排序表达式，同时继续复用公共动态查询能力。
+    /**
+     * 按动态条件和调用方指定的受控排序表达式查询当前页。
+     *
+     * @param queryColumnValueMap 来自 Service 的前端查询字段，例如 {@code {"status":1}}
+     * @param orderBy 由 Service 选择的排序表达式，例如 {@code "sortnum desc id asc"}
+     * @param pageNo 来自前端分页请求的页码，例如 {@code 1}
+     * @param pageSize 来自前端分页请求的每页条数，例如 {@code 10}
+     * @return 自定义排序后的分页结果，例如
+     *     {@code {"records":[{"id":2,"sortnum":20.00},{"id":1,"sortnum":10.00}],}
+     *     {@code "totalCount":2,"pageNo":1,"pageSize":10}}
+     */
     CommonPageResult getPageList(Map<String, Object> queryColumnValueMap, String orderBy, Integer pageNo, Integer pageSize);
 
-    // 通用主键查询从前端 CommonParam 按 DAO 主键元数据提取字段值，兼容单主键和复合主键。
+    /**
+     * 从前端通用参数中按真实主键元数据提取单主键或复合主键并查询一条记录。
+     *
+     * @param queryIn 前端主键参数；单主键例如 {@code {"id":1}}，复合主键例如
+     *     {@code {"tenantId":10,"orderId":20}}
+     * @return 命中的数据库记录，例如 {@code {"id":1,"loginName":"admin","status":1}}；未命中时返回空映射
+     */
     Map<String, Object> getById(CommonParam queryIn);
 
-    // 通用批量主键查询从每个 CommonParam 提取完整主键，并按固定批次读取当前表记录。
+    /**
+     * 按每项完整主键批量查询当前表记录。
+     *
+     * @param queryIn 前端批量主键参数，例如 {@code {"items":[{"id":1},{"id":2}]}}
+     * @return 数据库记录列表，例如
+     *     {@code [{"id":1,"loginName":"admin"},{"id":2,"loginName":"auditor"}]}
+     */
     List<Map<String, Object>> getByIds(CommonBatchParam queryIn);
 
-    // 通用动态单条查询只消费上游 CommonParam 中的字段，禁止业务 DAO 再调用深层条件构建方法。
+    /**
+     * 按前端传入且与真实数据库字段匹配的动态条件查询第一条记录。
+     *
+     * @param queryIn 前端查询字段，例如 {@code {"loginName":"admin","status":1}}
+     * @return 第一条匹配记录，例如 {@code {"id":1,"loginName":"admin","status":1}}；未命中时返回空映射
+     */
     Map<String, Object> getByQuery(CommonParam queryIn);
 
-    // 通用新增接口直接读取上游 CommonParam 动态字段并写入当前 DAO 对应表。
+    /**
+     * 将前端参数中与真实数据库字段匹配的列写入当前表。
+     *
+     * @param saveIn 前端新增字段，例如 {@code {"id":1,"loginName":"admin","status":1}}
+     * @return 数据库影响行数，例如成功新增一条返回 {@code 1}
+     */
     int insert(CommonParam saveIn);
 
-    // 通用批量新增按每组最多一千条执行真实 JDBC 批处理，并汇总全部影响行数。
+    /**
+     * 将前端批量新增数据按每组最多一千条写入当前表。
+     *
+     * @param saveIn 前端批量新增字段，例如
+     *     {@code {"items":[{"id":1,"loginName":"admin"},{"id":2,"loginName":"auditor"}]}}
+     * @return 全部分组累计影响行数，例如两条均成功返回 {@code 2}
+     */
     int insertBatch(CommonBatchParam saveIn);
 
-    // 通用更新接口从 CommonParam 自动提取单主键或复合主键，其余前端字段直接作为更新内容。
+    /**
+     * 按完整主键更新前端参数中与真实数据库字段匹配的非主键列。
+     *
+     * @param saveIn 前端主键和更新字段，例如 {@code {"id":1,"displayName":"管理员"}}
+     * @return 数据库影响行数，例如成功更新一条返回 {@code 1}
+     */
     int update(CommonParam saveIn);
 
-    // 通用批量更新允许每条记录使用不同更新字段，并按 SQL 字段结构分组执行真实 JDBC 批处理。
+    /**
+     * 按每条记录的完整主键批量更新，并按相同字段结构和每组最多一千条执行。
+     *
+     * @param saveIn 前端批量更新字段，例如
+     *     {@code {"items":[{"id":1,"status":0},{"id":2,"displayName":"审计员"}]}}
+     * @return 全部分组累计影响行数，例如两条均成功返回 {@code 2}
+     */
     int updateBatch(CommonBatchParam saveIn);
 
-    // 通用假删除接口从 CommonParam 自动提取主键，并统一补充逻辑删除状态和更新时间。
+    /**
+     * 按完整主键把当前记录更新为逻辑删除状态。
+     *
+     * @param deleteIn 前端主键参数，例如 {@code {"id":1}}
+     * @return 数据库影响行数，例如记录由 {@code {"id":1,"status":1}} 变为
+     *     {@code {"id":1,"status":0}} 时返回 {@code 1}
+     */
     int softDelete(CommonParam deleteIn);
 
-    // 通用批量假删除统一补逻辑删除字段后按每组最多一千条调用批量更新。
+    /**
+     * 按每项完整主键批量更新逻辑删除状态，每组最多处理一千条。
+     *
+     * @param deleteIn 前端批量主键参数，例如 {@code {"items":[{"id":1},{"id":2}]}}
+     * @return 全部分组累计影响行数，例如两条记录均由 {@code status=1} 更新为 {@code status=0} 时返回 {@code 2}
+     */
     int softDeleteBatch(CommonBatchParam deleteIn);
 }

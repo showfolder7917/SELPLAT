@@ -12,10 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 abstract class AbstractUniauthUserRealDatabaseTest {
 
-    // 真实用户服务贯穿 Service、BaseDao、注解式模板 SQL 与数据库链路，所有方法 Case 共用这一生产入口。
+    /**
+     * 真实用户服务贯穿 Service、BaseDao、注解式模板 SQL 与数据库链路，所有方法 Case 共用这一生产入口。
+     */
     @Autowired
     protected UniauthUserService uniauthUserService;
-    // 真实 JdbcTemplate 独立读取数据库最终状态，避免测试验证器复制被测 DAO 的返回结果。
+    /**
+     * 真实 JdbcTemplate 独立读取数据库最终状态，避免测试验证器复制被测 DAO 的返回结果。
+     */
     @Autowired
     protected JdbcTemplate jdbcTemplate;
 }

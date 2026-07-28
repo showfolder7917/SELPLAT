@@ -28,7 +28,7 @@ public class CommonDynamicQuery {
     /**
      * 获取数据源实体。
      *
-     * @return 数据源实体
+     * @return 数据源实体，例如逻辑标识为 {@code primary}、数据库类型为 {@code MYSQL} 的连接上下文
      */
     public CommonDbSource getDataSource() {
         return dataSource;
@@ -46,7 +46,7 @@ public class CommonDynamicQuery {
     /**
      * 获取目标表名。
      *
-     * @return 目标表名
+     * @return 目标物理表名，例如 {@code uniauth_user}
      */
     public String getTableName() {
         return tableName;
@@ -64,7 +64,7 @@ public class CommonDynamicQuery {
     /**
      * 获取查询字段清单。
      *
-     * @return 查询字段清单
+     * @return 查询字段清单，例如 {@code ["id", "login_name", "status"]}
      */
     public List<String> getSelectFields() {
         return selectFields;
@@ -82,7 +82,7 @@ public class CommonDynamicQuery {
     /**
      * 获取结构化条件集合。
      *
-     * @return 结构化条件集合
+     * @return 结构化条件集合，例如 {@code [login_name = "admin", status = 1]}
      */
     public List<QueryCondition> getConditions() {
         return conditions;
@@ -100,7 +100,7 @@ public class CommonDynamicQuery {
     /**
      * 获取结构化排序集合。
      *
-     * @return 结构化排序集合
+     * @return 结构化排序集合，例如 {@code [sort_num ASC, id ASC]}
      */
     public List<QueryOrder> getOrders() {
         return orders;
@@ -118,7 +118,7 @@ public class CommonDynamicQuery {
     /**
      * 获取页码。
      *
-     * @return 页码
+     * @return 当前页码，例如 {@code 1}
      */
     public Integer getPageNo() {
         return pageNo;
@@ -136,7 +136,7 @@ public class CommonDynamicQuery {
     /**
      * 获取每页条数。
      *
-     * @return 每页条数
+     * @return 每页条数，例如 {@code 20}
      */
     public Integer getPageSize() {
         return pageSize;
@@ -151,5 +151,4 @@ public class CommonDynamicQuery {
         this.pageSize = pageSize;
     }
 }
-
 

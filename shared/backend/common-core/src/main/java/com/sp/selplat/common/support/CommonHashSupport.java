@@ -4,15 +4,33 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-// 通用哈希支撑类统一沉淀跨模块可复用的摘要算法，避免各模块各自复制一套密码或签名哈希代码。
+/**
+ * 为权限、规则和签名等跨模块场景提供统一的文本摘要能力。
+ * 本类只负责稳定生成 SHA-256 摘要，不负责保存明文、加盐或执行密码认证。
+ */
 public final class CommonHashSupport {
 
-    // 私有构造器用于阻止把纯工具类错误实例化。
+    /**
+     * 阻止实例化无状态的哈希工具类。
+     *
+     * <p>执行结果示例：业务代码只能调用 {@code CommonHashSupport.sha256("admin")}，
+     * 不能创建 {@code CommonHashSupport} 对象。</p>
+     */
     private CommonHashSupport() {
         // 这里没有实例级状态，所有能力都应通过静态方法共享。
     }
 
-    // SHA-256 哈希统一供权限、规则、签名等需要稳定摘要的场景复用。
+    /**
+     * 对调用方提供的有效文本生成小写 SHA-256 十六进制摘要。
+     *
+     * @param rawText 来自密码、规则内容或签名原文的文本，例如 {@code "admin"}
+     * @return 去除首尾空格后生成的 64 位摘要，例如
+     *     {@code "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"}
+     * @throws IllegalArgumentException 当输入为 {@code null}、空串或仅包含空格时抛出，
+     *     例如 {@code IllegalArgumentException("rawText 不能为空")}
+     * @throws IllegalStateException 当运行环境缺少标准 SHA-256 算法时抛出，
+     *     例如 {@code IllegalStateException("当前环境不支持 SHA-256")}
+     */
     public static String sha256(String rawText) {
         // 调用方传空时直接阻断，避免无意义地对空文本做哈希。
         if (CommonValueSupport.isBlank(rawText)) {

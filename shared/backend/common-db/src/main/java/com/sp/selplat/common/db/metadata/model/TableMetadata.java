@@ -14,7 +14,7 @@ public class TableMetadata {
     /**
      * 获取表名。
      *
-     * @return 表名
+     * @return 数据库真实表名，例如 {@code uniauth_user}
      */
     public String getTableName() {
         return tableName;
@@ -32,7 +32,7 @@ public class TableMetadata {
     /**
      * 获取表备注。
      *
-     * @return 表备注
+     * @return 数据库表备注，例如 {@code 统一认证用户}
      */
     public String getRemarks() {
         return remarks;
@@ -47,4 +47,3 @@ public class TableMetadata {
         this.remarks = remarks;
     }
 }
-

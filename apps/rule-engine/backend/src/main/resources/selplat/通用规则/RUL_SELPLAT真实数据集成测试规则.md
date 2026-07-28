@@ -15,11 +15,15 @@ selplat_real_database_rule_is_fujitsu_rule = false
 <!-- 数据库相关正常业务必须启动完整 Spring 容器并调用真实 Service、DAO、SQL 构建器和 JDBC；业务含义是测试结果必须来自生产调用链而不是测试替身。 -->
 selplat_database_normal_flow_must_use_real_chain = SpringContext,Service,Dao,SqlBuilder,Jdbc,Database
 
-<!-- 真实数据验收禁止用 Mock、Spy、反射或预设返回值替代被测数据库正常链路；业务含义是模拟成功只能作为局部单元测试，不能作为数据库功能完成证据。 -->
-selplat_real_database_completion_forbids_test_double = Mock,Spy,reflection,stubbed_query_result,stubbed_update_count
+<!-- SELPLAT 业务测试禁止使用 Mock、Spy、JDK 动态代理、手写 Fake/Stub、预设查询结果或预设影响行数；业务含义是任何成功、失败和边界结果都必须由生产类与真实数据共同产生。 -->
+selplat_business_test_forbids_test_double = MockitoMock,MockitoSpy,JdkProxy,Fake,Stub,TestDouble,stubbed_query_result,stubbed_update_count
 
-<!-- 现有单元测试可以保留用于局部边界，但数据库功能交付必须至少有一个独立真实数据用例；业务含义是单元测试与真实数据库证据并存，不能互相替代。 -->
-selplat_unit_test_does_not_replace_real_database_test = true
+<!-- 发现业务替身或固定业务返回值时必须阻断测试改造和交付；业务含义是不能保留旧模拟测试后再以少量真实用例宣称整体已经迁移。 -->
+selplat_fake_business_test_detection_action = block_and_replace_with_real_chain
+
+<!-- 仅验证注解、继承关系、公开签名或纯值算法的结构测试可以保留反射，但不得创建业务记录、模拟 DAO/Service 或返回固定业务结果。 -->
+selplat_structural_test_allowed_scope = annotation,inheritance,public_signature,pure_value_algorithm
+selplat_structural_test_forbids_business_double = true
 
 <!-- 真实数据库测试只能使用可重建、与共享环境隔离的测试库；当前 SELPLAT 默认使用由正式 schema 初始化的 H2 内存库。 -->
 selplat_real_database_must_be_isolated_and_rebuildable = schema_initialized_H2_or_equivalent_isolated_test_database
@@ -48,9 +52,17 @@ selplat_test_method_body = one_case_verifier_call
 <!-- 断言不得因为测试方法简化而删除；业务含义是 fixture 只提供输入，验证器仍必须比较服务结果和独立数据库状态。 -->
 selplat_case_verifier_must_keep_assertions = true
 
-<!-- shared 公共模块的正常数据库路径必须使用真实 H2、正式生产类和真实 SQL；缓存竞争、乐观锁冲突、重试耗尽和结构继承等无法仅靠普通数据稳定制造的边界允许使用可控替身或反射。 -->
+<!-- shared 公共模块的正常与边界数据库路径都必须使用真实 H2、正式生产类和真实 SQL；无法由真实数据稳定制造的场景不得改用替身伪造通过，应调整为可验证的真实场景或明确报告未覆盖风险。 -->
 selplat_shared_normal_database_flow = real_H2_real_production_class_real_SQL
-selplat_shared_controlled_double_allowed_scope = concurrency_conflict,retry_exhaustion,structural_inheritance,pure_controller_delegation
+selplat_shared_database_boundary_test_double_allowed = false
+
+<!-- Controller 响应测试必须调用真实 Controller、真实 Service、真实 DAO 和真实数据库；MockMvc 仅可作为 HTTP 传输工具，禁止通过 MockBean 或固定 Service 返回值代替业务链路。 -->
+selplat_controller_real_response_chain = Controller,Service,Dao,Database
+selplat_mockmvc_allowed_role = http_transport_only_without_mocked_business_bean
+
+<!-- 公共发号测试必须使用真实 CommonSequenceSegment 表、生产 DAO 和生产发号实现，禁止手写 DAO 返回固定号段或 null 来制造缓存与重试分支。 -->
+selplat_sequence_test_real_chain = CommonSequenceSegment,CommonSequenceSegmentDaoImpl,SequenceGeneratorImpl
+selplat_sequence_test_forbids_fixed_range_or_null_dao = true
 
 <!-- 每个 fixture 必须先清理本 Case 会修改的全部表，再插入完整且满足正式表约束的数据；业务含义是测试结果不继承应用初始化数据或其他用例残留。 -->
 selplat_real_fixture_case_isolation = delete_all_mutable_case_tables_then_insert_complete_rows
@@ -102,7 +114,7 @@ selplat_user_business_execution_line_coverage = 100_percent_each_class
 selplat_service_business_branch_coverage = 100_percent
 
 <!-- shared 核心门面按模块分别执行覆盖门禁；业务含义是公共 DAO、基础 Service、公共发号和公共控制器的覆盖缺口不能被其他简单类平均稀释。 -->
-selplat_shared_core_coverage_scope = BaseDaoImpl,BaseServiceImpl,SequenceGeneratorImpl,BaseExtendsController
+selplat_shared_core_coverage_scope = BaseDaoImpl,BaseServiceImpl,BaseExtendsServiceImpl,SequenceGeneratorImpl,BaseExtendsController
 selplat_shared_core_line_coverage = 100_percent_each_class
 
 <!-- sharedRegression 是 shared 后端统一回归入口，必须包含 common-core、common-db、common-service 和 common-web 的测试及覆盖门禁。 -->

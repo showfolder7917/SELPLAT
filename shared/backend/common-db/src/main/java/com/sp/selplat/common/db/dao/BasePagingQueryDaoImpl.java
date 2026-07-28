@@ -21,8 +21,24 @@ import java.util.Map;
  */
 public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
 
-    // 分页列表查询统一走 dynamic query 链路，让不同数据库的分页语法都由方言层分发。
-    protected CommonPageResult queryList(List<String> selectFields,List<QueryCondition> conditions,List<QueryOrder> orders,Integer pageNo,Integer pageSize) {
+    /**
+     * 通过公共动态查询链路读取当前页记录和同条件总数。
+     *
+     * @param selectFields DAO 选择的真实返回字段，例如 {@code ["id","loginName","status"]}；空列表表示全部真实字段
+     * @param conditions 已结构化的筛选条件，例如 {@code [{"fieldName":"status","operator":"EQ","value":1}]}
+     * @param orders 已结构化的排序条件，例如 {@code [{"fieldName":"sortnum","direction":"DESC"}]}
+     * @param pageNo 来自前端分页请求的页码，例如 {@code 1}
+     * @param pageSize 来自前端分页请求的每页条数，例如 {@code 10}
+     * @return 分页结果，例如
+     *     {@code {"records":[{"id":2,"loginName":"user-b"},{"id":1,"loginName":"user-a"}],}
+     *     {@code "totalCount":2,"pageNo":1,"pageSize":10}}
+     */
+    protected CommonPageResult queryList(
+            List<String> selectFields,
+            List<QueryCondition> conditions,
+            List<QueryOrder> orders,
+            Integer pageNo,
+            Integer pageSize) {
         // 直接创建启用分页的动态查询对象，避免单次调用的中间方法继续增加阅读跳转。
         CommonDynamicQuery query = new CommonDynamicQuery();
         // 当前动态查询固定命中当前 Spring 注入数据源，保证分页 SQL 使用正确数据库方言。
@@ -56,17 +72,30 @@ public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
         return pageResult;
     }
     
-    // 分页查询基类需要复用当前表的默认字段清单，避免分页链路再次复制字段元数据解析逻辑。
+    /**
+     * 解析动态查询实际使用的返回字段。
+     *
+     * @param selectFields 调用方选择的真实字段，例如 {@code ["id","loginName"]}；空列表表示使用当前表全部字段
+     * @return 最终 SELECT 字段，例如 {@code ["id","loginName"]}；未指定时例如
+     *     {@code ["id","tenantId","loginName","status"]}
+     */
     protected List<String> resolveDynamicSelectFields(List<String> selectFields) {
         // 调用方显式声明字段时直接沿用，保证复杂查询场景可以精确控制返回列。
         if (selectFields != null && !selectFields.isEmpty()) {
             return selectFields;
         }
         // 调用方未传字段时退回当前表完整字段列表，保持通用列表和分页列表的返回口径一致。
-        return List.of(getselectColumns().split(",\\s*"));
+        return List.of(getSelectColumns().split(",\\s*"));
     }
 
-    // 把简单列值映射转换成结构化条件集合，让分页门面可以通过字段后缀表达常见筛选语义。
+    /**
+     * 将前端动态字段映射转换为受校验的结构化查询条件。
+     *
+     * @param queryColumnValueMap 来自前端的查询字段，例如 {@code {"status":1,"loginNameLike":"admin"}}
+     * @return 结构化条件，例如
+     *     {@code [{"fieldName":"status","operator":"EQ","value":1},}
+     *     {@code {"fieldName":"loginName","operator":"LIKE","value":"admin"}]}
+     */
     protected List<QueryCondition> buildQueryConditions(Map<String, Object> queryColumnValueMap) {
         // 调用方未传筛选条件时返回空集合，表示当前分页查询按全表条件继续执行。
         List<QueryCondition> conditions = new ArrayList<>();
@@ -91,13 +120,23 @@ public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
         return conditions;
     }
 
-    // 识别只用于展示的字段后缀，让页面回显辅助字段不会误入数据库筛选条件。
+    /**
+     * 判断前端字段是否仅用于页面展示而不参与数据库筛选。
+     *
+     * @param rawFieldName 来自前端参数映射的字段名，例如 {@code "statusView"}
+     * @return 字段以 {@code View} 结尾时返回 {@code true}；例如 {@code "status"} 返回 {@code false}
+     */
     private boolean shouldIgnoreConditionField(String rawFieldName) {
         // View 后缀统一表示仅展示字段，供分页门面在条件构建前直接忽略。
         return rawFieldName != null && rawFieldName.endsWith("View");
     }
 
-    // 通过字段后缀解析真实字段名，让简单分页入参不用额外定义复杂条件对象也能表达常见筛选语义。
+    /**
+     * 移除查询操作后缀并还原数据库字段名。
+     *
+     * @param rawFieldName 来自前端参数映射的字段名，例如 {@code "loginNameLike"}
+     * @return 真实字段名，例如 {@code "loginName"}；输入 null 时返回 null
+     */
     private String resolveConditionFieldName(String rawFieldName) {
         // 字段名为空时直接原样返回，后续仍交给统一校验器按非法字段收口。
         if (rawFieldName == null || rawFieldName.trim().isEmpty()) {
@@ -139,7 +178,13 @@ public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
         return rawFieldName;
     }
 
-    // 通过字段后缀解析比较操作符，让分页门面在保持 Map 入参的前提下支持更多查询语义。
+    /**
+     * 按字段后缀解析对应的查询操作符。
+     *
+     * @param rawFieldName 来自前端参数映射的字段名，例如 {@code "createdAtBegin"}
+     * @return 查询操作符，例如 {@code "createdAtBegin"} 返回 {@link QueryOperator#GTE}，
+     *     无后缀的 {@code "status"} 返回 {@link QueryOperator#EQ}
+     */
     private QueryOperator resolveConditionOperator(String rawFieldName) {
         // 字段后缀为 Like 时按模糊查询处理，适合名称、编码等关键字检索。
         if (rawFieldName != null && rawFieldName.endsWith("Like")) {
@@ -173,7 +218,16 @@ public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
         return QueryOperator.EQ;
     }
 
-    // 把纯字段排序字符串转换成结构化排序集合，让分页门面的排序解析也收口到分页查询基类。
+    /**
+     * 将受控排序文本解析为结构化字段和方向列表。
+     *
+     * @param orderBy 由 Service 指定的排序文本，例如 {@code "sortnum desc id asc"}
+     * @return 结构化排序，例如
+     *     {@code [{"fieldName":"sortnum","direction":"DESC"},{"fieldName":"id","direction":"ASC"}]}；
+     *     空文本返回 {@code []}
+     * @throws IllegalArgumentException 当方向前缺少字段名时抛出，例如
+     *     {@code IllegalArgumentException("missing order field before direction: desc")}
+     */
     protected List<QueryOrder> buildOrders(String orderBy) {
         // 未传排序时返回空集合，表示交给底层按无显式排序规则执行。
         List<QueryOrder> orders = new ArrayList<>();

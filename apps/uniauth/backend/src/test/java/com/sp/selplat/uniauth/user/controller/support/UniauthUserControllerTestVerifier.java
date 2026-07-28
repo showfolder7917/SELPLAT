@@ -2,35 +2,32 @@ package com.sp.selplat.uniauth.user.controller.support;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonPageParam;
-import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
-import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.uniauth.user.controller.UniauthUserController;
-import com.sp.selplat.uniauth.user.service.UniauthUserService;
 import java.lang.reflect.Method;
-import java.util.List;
-import java.util.Map;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-// 用户控制器验证器集中处理路由契约和直接 JSON 序列化断言，让测试方法只保留 Case 名和单一验证入口。
+/**
+ * 用户控制器验证器分别承接无业务数据的路由结构检查和真实 Controller 到数据库链路检查。
+ */
 public final class UniauthUserControllerTestVerifier {
 
-    // 验证器没有运行期状态，只允许通过静态入口执行控制器契约检查。
+    /**
+     * 验证器没有运行期状态，只允许通过静态 Case 入口执行验证。
+     */
     private UniauthUserControllerTestVerifier() {
     }
 
-    // 验证全部公开生产方法的路径和 HTTP 方法，避免接口重命名破坏前端契约。
+    /**
+     * 验证全部公开生产方法的路径和 HTTP 方法，避免接口重命名破坏前端契约。
+     */
     public static void verifyRoutes() {
         // getStore 同时支持 GET 和 POST，并直接使用生产方法名作为路径。
         assertRoute("getStore", CommonPageParam.class, "getStore.htm", RequestMethod.GET, RequestMethod.POST);
@@ -52,121 +49,237 @@ public final class UniauthUserControllerTestVerifier {
         assertRoute("deleteBatch", CommonBatchParam.class, "deleteBatch.htm", RequestMethod.POST);
     }
 
-    // 验证控制器只序列化服务结果，不再为空消息补默认值或增加控制层元数据。
-    public static void verifyDirectServiceResultSerialization() {
-        // 创建不带业务消息和控制层元数据的共通结果，验证序列化不会改变原始结构。
-        CommonResult serviceResult = new CommonResult();
-        // 服务层明确返回成功标记，作为最终 JSON 中应保留的结构字段。
-        serviceResult.setSuccess(true);
-        // 服务层提供唯一业务数据，便于确认 Controller 没有替换返回对象。
-        serviceResult.setData(Map.of("id", 1L));
-        // 创建服务替身只隔离当前纯控制层序列化逻辑，不作为数据库功能完成证据。
-        UniauthUserService userService = mock(UniauthUserService.class);
-        // getById 固定返回当前完整服务结构。
-        when(userService.getById(any(CommonParam.class))).thenReturn(serviceResult);
-        // 创建真实控制器实例执行公开 getById 入口。
-        UniauthUserController controller = new UniauthUserController();
-        // 把服务替身注入控制器公共服务字段，保持生产调用方式不变。
-        ReflectionTestUtils.setField(controller, "service", userService);
-        // 执行控制器直接序列化并读取最终 JSON。
-        String responseJson = controller.getById(new CommonParam());
-        // 服务层成功标记必须原样进入 JSON。
-        assertTrue(responseJson.contains("\"success\":true"));
-        // 空消息通过忽略空值的序列化入口保持缺省，证明控制器没有再次包装。
-        assertFalse(responseJson.contains("\"msg\""));
-        // 模块编码不得由控制器补入已完成的服务结果。
-        assertFalse(responseJson.contains("\"moduleCode\""));
-        // 请求路径不得由控制器补入已完成的服务结果。
-        assertFalse(responseJson.contains("\"requestPath\""));
-    }
+    /**
+     * 验证九个控制器入口都通过真实 Service、DAO 和数据库完成业务，并仅序列化固定结果结构。
+     *
+     * @param controller Spring 装配的真实用户控制器，例如连接测试数据源的 {@code UniauthUserController} 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
+    public static void verifyRealPublicMethodResponses(
+        UniauthUserController controller,
+        JdbcTemplate jdbcTemplate
+    ) {
+        // 分页请求读取 fixture 中两条真实用户并验证固定 records 结构。
+        CommonPageParam pageIn = new CommonPageParam();
+        // 当前 Case 请求第一页。
+        pageIn.setPageNo(1);
+        // 当前 Case 容纳全部 fixture 用户。
+        pageIn.setPageSize(10);
+        // 真实分页 JSON 必须包含数据库账号和固定分页字段。
+        String storeJson = controller.getStore(pageIn);
+        // records 来自真实分页结果，不允许控制器重新包装。
+        assertTrue(storeJson.contains("\"records\""));
+        // fixture 中账号证明响应确实来自数据库。
+        assertTrue(storeJson.contains("controller-real-high"));
 
-    // 验证 getStore、insert、update 和 delete 公开入口都只调用服务并序列化其返回结构。
-    public static void verifyPublicMethodResponses() {
-        // 创建控制层单元替身，只验证公开方法委托和结构序列化，不代替真实数据库业务测试。
-        UniauthUserService userService = mock(UniauthUserService.class);
-        // 分页服务结果提供一条可识别记录和完整分页字段。
-        CommonPageResult pageResult = new CommonPageResult();
-        // 当前控制器 Case 使用固定业务记录验证 records 原结构序列化。
-        pageResult.setRecords(List.of(Map.of("id", 1L, "loginName", "controller-store")));
-        // 当前控制器 Case 的总数与唯一记录保持一致。
-        pageResult.setTotalCount(1L);
-        // 当前控制器 Case 固定第一页。
-        pageResult.setPageNo(1);
-        // 当前控制器 Case 固定每页十条。
-        pageResult.setPageSize(10);
-        // getStore 服务委托固定返回当前分页结果。
-        when(userService.getStore(any(CommonPageParam.class))).thenReturn(pageResult);
-        // insert 服务委托返回可识别新增结果。
-        when(userService.insert(any(CommonParam.class))).thenReturn(successResult("insert"));
-        // update 服务委托返回可识别更新结果。
-        when(userService.update(any(CommonParam.class))).thenReturn(successResult("update"));
-        // delete 服务委托返回可识别删除结果。
-        when(userService.delete(any(CommonParam.class))).thenReturn(successResult("delete"));
-        // 四个批量服务入口分别返回可识别动作结果。
-        when(userService.getByIds(any(CommonBatchParam.class))).thenReturn(successResult("getByIds"));
-        // 批量新增返回顶层影响行数和直接 items 数据，用于验证固定 CommonResult JSON 结构。
-        when(userService.insertBatch(any(CommonBatchParam.class))).thenReturn(batchSuccessResult("insertBatch", 2));
-        // 批量更新返回固定动作标记。
-        when(userService.updateBatch(any(CommonBatchParam.class))).thenReturn(successResult("updateBatch"));
-        // 批量删除返回固定动作标记。
-        when(userService.deleteBatch(any(CommonBatchParam.class))).thenReturn(successResult("deleteBatch"));
-        // 创建真实控制器并注入当前纯控制层替身。
-        UniauthUserController controller = new UniauthUserController();
-        // 服务字段注入后四个公开方法均可执行真实控制器序列化逻辑。
-        ReflectionTestUtils.setField(controller, "service", userService);
-        // getStore 最终 JSON 必须包含分页服务返回的账号。
-        assertTrue(controller.getStore(new CommonPageParam()).contains("controller-store"));
-        // 分页结果保持 Service 的 records 字段，不再转换成控制层 rows 包装。
-        assertTrue(controller.getStore(new CommonPageParam()).contains("\"records\""));
-        // insert 最终 JSON 必须包含新增服务返回标记。
-        assertTrue(controller.insert(new CommonParam()).contains("insert"));
-        // update 最终 JSON 必须包含更新服务返回标记。
-        assertTrue(controller.update(new CommonParam()).contains("update"));
-        // delete 最终 JSON 必须包含删除服务返回标记。
-        assertTrue(controller.delete(new CommonParam()).contains("delete"));
-        // 批量查询最终 JSON 必须直接保留服务动作标记。
-        assertTrue(controller.getByIds(new CommonBatchParam()).contains("getByIds"));
-        // 批量新增最终 JSON 必须直接保留服务动作标记。
-        String insertBatchJson = controller.insertBatch(new CommonBatchParam());
-        // data 中的批量项必须直接进入 JSON。
-        assertTrue(insertBatchJson.contains("insertBatch"));
-        // DAO 影响行数必须位于 CommonResult 顶层。
+        // 单条查询使用 fixture 中真实主键。
+        String detailJson = controller.getById(param("id", 8101L));
+        // 详情 JSON 必须包含真实数据库账号。
+        assertTrue(detailJson.contains("controller-real-low"));
+
+        // 批量查询使用两组真实主键。
+        CommonBatchParam idsIn = batch(param("id", 8101L), param("id", 8102L));
+        // 批量响应必须同时包含两条数据库记录。
+        String detailsJson = controller.getByIds(idsIn);
+        // 第一条真实记录必须进入响应。
+        assertTrue(detailsJson.contains("controller-real-low"));
+        // 第二条真实记录必须进入响应。
+        assertTrue(detailsJson.contains("controller-real-high"));
+
+        // 新增参数只提供前端业务字段，主键和密码摘要由生产链路生成。
+        CommonParam insertIn = user("controller-insert", "控制器真实新增");
+        // 调用真实新增入口并取得数据库发号结果。
+        String insertJson = controller.insert(insertIn);
+        // 新增响应必须保持 CommonResult 成功结构。
+        assertTrue(insertJson.contains("\"success\":true"));
+        // 数据库必须真实保存新增账号。
+        assertEquals(1L, count(jdbcTemplate, "controller-insert"));
+
+        // 更新 fixture 中用户的展示名。
+        CommonParam updateIn = param("id", 8101L);
+        // 前端更新字段直接进入生产 Service 和 DAO。
+        updateIn.putParam("displayName", "控制器真实更新");
+        // 执行真实更新入口。
+        String updateJson = controller.update(updateIn);
+        // 更新响应必须保留实际提交字段。
+        assertTrue(updateJson.contains("控制器真实更新"));
+        // 独立数据库查询确认更新已经落库。
+        assertEquals(
+            "控制器真实更新",
+            jdbcTemplate.queryForObject("SELECT displayName FROM UniauthUser WHERE id = 8101", String.class)
+        );
+
+        // 假删除第二条 fixture 用户并保存审计人。
+        CommonParam deleteIn = param("id", 8102L);
+        // 当前操作人由前端通用参数一路透传。
+        deleteIn.putParam("lastOperateUserId", 88L);
+        // 执行真实假删除入口。
+        String deleteJson = controller.delete(deleteIn);
+        // 返回结构必须明确包含假删除状态。
+        assertTrue(deleteJson.contains("\"status\":0"));
+        // 数据库记录必须保留且状态已经变为零。
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT status FROM UniauthUser WHERE id = 8102", Integer.class));
+
+        // 批量新增两名真实用户，验证 Controller 到 JDBC batch 的完整链路。
+        CommonBatchParam insertBatchIn = batch(
+            user("controller-batch-insert-1", "控制器批量新增一"),
+            user("controller-batch-insert-2", "控制器批量新增二")
+        );
+        // 执行真实批量新增并读取固定顶层影响行数。
+        String insertBatchJson = controller.insertBatch(insertBatchIn);
+        // 两条真实写入必须产生顶层 affectedRows。
         assertTrue(insertBatchJson.contains("\"affectedRows\":2"));
-        // data 不得重新嵌套 affectedRows，防止恢复历史专用 Map 包装。
-        assertFalse(insertBatchJson.contains("\"data\":{\"affectedRows\""));
-        // 批量更新最终 JSON 必须直接保留服务动作标记。
-        assertTrue(controller.updateBatch(new CommonBatchParam()).contains("updateBatch"));
-        // 批量删除最终 JSON 必须直接保留服务动作标记。
-        assertTrue(controller.deleteBatch(new CommonBatchParam()).contains("deleteBatch"));
+        // 独立数据库查询确认两个批量账号都已经落库。
+        assertEquals(2L, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM UniauthUser WHERE loginName LIKE 'controller-batch-insert-%'",
+            Long.class
+        ));
+
+        // 使用批量新增后由生产发号器写回的主键构造真实批量更新。
+        CommonBatchParam updateBatchIn = new CommonBatchParam();
+        // 第一项沿用真实新增参数并只保留主键和新展示名。
+        updateBatchIn.getItems().add(updateItem(insertBatchIn.getItems().get(0), "控制器批量更新一"));
+        // 第二项沿用另一真实新增主键。
+        updateBatchIn.getItems().add(updateItem(insertBatchIn.getItems().get(1), "控制器批量更新二"));
+        // 执行真实批量更新。
+        String updateBatchJson = controller.updateBatch(updateBatchIn);
+        // 两条更新必须返回真实影响行数。
+        assertTrue(updateBatchJson.contains("\"affectedRows\":2"));
+
+        // 把刚才真实更新的两条记录作为批量假删除目标。
+        CommonBatchParam deleteBatchIn = new CommonBatchParam();
+        // 第一项从生产发号结果取得真实主键。
+        deleteBatchIn.getItems().add(deleteItem(insertBatchIn.getItems().get(0), 91L));
+        // 第二项从另一生产发号结果取得真实主键。
+        deleteBatchIn.getItems().add(deleteItem(insertBatchIn.getItems().get(1), 92L));
+        // 执行真实批量假删除。
+        String deleteBatchJson = controller.deleteBatch(deleteBatchIn);
+        // 两条假删除必须返回真实影响行数。
+        assertTrue(deleteBatchJson.contains("\"affectedRows\":2"));
+        // 数据库必须保留记录并把两条状态都更新为零。
+        assertEquals(2L, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM UniauthUser WHERE loginName LIKE 'controller-batch-insert-%' AND status = 0",
+            Long.class
+        ));
     }
 
-    // 创建带可识别业务动作的成功结果，供控制器公开方法响应包装验证复用。
-    private static CommonResult successResult(String action) {
-        // 新建服务层共通结果。
-        CommonResult result = new CommonResult();
-        // 当前纯控制层 Case 明确标记服务执行成功。
-        result.setSuccess(true);
-        // 动作字段让每个控制器方法的最终 JSON 都可被独立识别。
-        result.setData(Map.of("action", action));
-        // 返回可直接供服务替身使用的稳定结果。
-        return result;
+    /**
+     * 创建包含一个动态字段的真实请求参数。
+     *
+     * @param key 前端动态字段名，例如 {@code id}
+     * @param value 字段值，例如 {@code 8101L}
+     * @return 可直接进入控制器的参数，例如 {@code {"paramMap":{"id":8101}}}
+     */
+    private static CommonParam param(String key, Object value) {
+        // 创建前端通用参数对象。
+        CommonParam input = new CommonParam();
+        // 写入当前业务字段。
+        input.putParam(key, value);
+        // 返回可直接进入控制器的参数。
+        return input;
     }
 
-    // 创建固定 CommonResult 批量写入结构，验证 data 与 affectedRows 各自保持顶层职责。
-    private static CommonResult batchSuccessResult(String action, int affectedRows) {
-        // 新建服务层批量共通结果。
-        CommonResult result = new CommonResult();
-        // 批量调用成功时保持统一成功标记。
-        result.setSuccess(true);
-        // data 直接承接批量 items，不再构造包含统计字段的 Map。
-        result.setData(List.of(Map.of("action", action)));
-        // 数据库累计影响行数使用已确认的 CommonResult 顶层字段。
-        result.setAffectedRows(affectedRows);
-        // 返回可由 Controller 原样序列化的固定结构。
-        return result;
+    /**
+     * 创建满足正式表约束的真实新增用户参数。
+     *
+     * @param loginName 唯一登录名，例如 {@code controller-insert}
+     * @param displayName 展示姓名，例如 {@code 控制器真实新增}
+     * @return 完整新增参数，例如
+     *     {@code {"paramMap":{"tenantId":8,"loginName":"controller-insert","displayName":"控制器真实新增"}}
+     */
+    private static CommonParam user(String loginName, String displayName) {
+        // 创建前端新增参数。
+        CommonParam input = new CommonParam();
+        // 租户字段满足正式用户归属约束。
+        input.putParam("tenantId", 8L);
+        // 审计字段记录当前真实测试操作人。
+        input.putParam("lastOperateUserId", 8L);
+        // 登录名用于独立数据库回查。
+        input.putParam("loginName", loginName);
+        // 明文密码只交给生产 Service 转换。
+        input.putParam("password", "controller-real-password");
+        // 展示名满足正式表必填约束。
+        input.putParam("displayName", displayName);
+        // 排序值参与真实分页。
+        input.putParam("sortnum", 18);
+        // 新用户初始状态为有效。
+        input.putParam("status", 1);
+        // 返回完整前端参数。
+        return input;
     }
 
-    // 按生产方法名读取并验证一个控制器路由契约。
+    /**
+     * 根据真实新增结果创建只包含主键和展示名的批量更新项。
+     *
+     * @param insertedItem 已由发号器写回主键的新增项，例如 {@code {"paramMap":{"id":10001}}}
+     * @param displayName 待更新展示姓名，例如 {@code 控制器批量更新一}
+     * @return 批量更新项，例如 {@code {"paramMap":{"id":10001,"displayName":"控制器批量更新一"}}
+     */
+    private static CommonParam updateItem(CommonParam insertedItem, String displayName) {
+        // 从生产发号器已经写回的参数中读取真实主键。
+        CommonParam updateItem = param("id", insertedItem.getParam("id"));
+        // 写入当前批量更新展示名。
+        updateItem.putParam("displayName", displayName);
+        // 返回可直接进入批量更新的参数。
+        return updateItem;
+    }
+
+    /**
+     * 根据真实新增结果创建带审计人的批量假删除项。
+     *
+     * @param insertedItem 已由发号器写回主键的新增项，例如 {@code {"paramMap":{"id":10001}}}
+     * @param operatorId 当前假删除责任人，例如 {@code 91L}
+     * @return 假删除项，例如 {@code {"paramMap":{"id":10001,"lastOperateUserId":91}}}
+     */
+    private static CommonParam deleteItem(CommonParam insertedItem, long operatorId) {
+        // 从生产新增结果读取真实主键。
+        CommonParam deleteItem = param("id", insertedItem.getParam("id"));
+        // 写入当前假删除责任人。
+        deleteItem.putParam("lastOperateUserId", operatorId);
+        // 返回可直接进入批量假删除的参数。
+        return deleteItem;
+    }
+
+    /**
+     * 创建按原顺序保存的批量参数。
+     *
+     * @param items 真实请求项，例如两个主键分别为 {@code 8101L}、{@code 8102L} 的参数
+     * @return 批量参数，例如 {@code {"items":[{"paramMap":{"id":8101}},{"paramMap":{"id":8102}}]}
+     */
+    private static CommonBatchParam batch(CommonParam... items) {
+        // 创建前端批量参数容器。
+        CommonBatchParam batchIn = new CommonBatchParam();
+        // 所有真实业务项按调用顺序加入容器。
+        batchIn.getItems().addAll(java.util.List.of(items));
+        // 返回可直接进入控制器的批量参数。
+        return batchIn;
+    }
+
+    /**
+     * 从真实数据库统计指定账号数量。
+     *
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板
+     * @param loginName 待统计登录名，例如 {@code controller-insert}
+     * @return 匹配记录数，例如新增成功后返回 {@code 1L}
+     */
+    private static long count(JdbcTemplate jdbcTemplate, String loginName) {
+        // 独立期待查询不复用生产 DAO。
+        return jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM UniauthUser WHERE loginName = ?",
+            Long.class,
+            loginName
+        );
+    }
+
+    /**
+     * 按生产方法名读取并验证一个控制器路由契约。
+     *
+     * @param methodName 控制器生产方法名，例如 {@code getById}
+     * @param parameterType 前端参数类型，例如 {@code CommonParam.class}
+     * @param expectedPath 预期路由，例如 {@code getById.htm}
+     * @param expectedMethods 允许的 HTTP 方法，例如 {@code [GET, POST]}
+     * @throws AssertionError 生产方法不存在时抛出，例如误删 {@code getById} 后携带方法名失败
+     */
     private static void assertRoute(
         String methodName,
         Class<?> parameterType,

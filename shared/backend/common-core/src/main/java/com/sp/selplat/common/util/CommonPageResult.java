@@ -22,7 +22,7 @@ public class CommonPageResult {
     /**
      * 获取当前页结果列表。
      *
-     * @return 当前页结果列表
+     * @return 当前页结果列表，例如 {@code [{"id":2,"loginName":"user-b"},{"id":1,"loginName":"user-a"}]}
      */
     public List<Map<String, Object>> getRecords() {
         return records;
@@ -31,7 +31,9 @@ public class CommonPageResult {
     /**
      * 设置当前页结果列表。
      *
-     * @param records 当前页结果列表
+     * @param records 来自 DAO 分页查询的当前页记录，例如
+     *     {@code [{"id":2,"loginName":"user-b"},{"id":1,"loginName":"user-a"}]}
+     * 执行结果示例：分页结果的 records 字段保持同样的数据库返回顺序。
      */
     public void setRecords(List<Map<String, Object>> records) {
         this.records = records;
@@ -40,7 +42,7 @@ public class CommonPageResult {
     /**
      * 获取总记录数。
      *
-     * @return 总记录数
+     * @return 当前筛选条件下的总记录数，例如 {@code 2}
      */
     public long getTotalCount() {
         return totalCount;
@@ -49,7 +51,8 @@ public class CommonPageResult {
     /**
      * 设置总记录数。
      *
-     * @param totalCount 总记录数
+     * @param totalCount 来自分页 COUNT 查询的总记录数，例如 {@code 2}
+     * 执行结果示例：分页结果顶层包含 {@code "totalCount":2}。
      */
     public void setTotalCount(long totalCount) {
         this.totalCount = totalCount;
@@ -58,7 +61,7 @@ public class CommonPageResult {
     /**
      * 获取页码。
      *
-     * @return 页码
+     * @return 当前页码，例如 {@code 1}
      */
     public Integer getPageNo() {
         return pageNo;
@@ -67,7 +70,8 @@ public class CommonPageResult {
     /**
      * 设置页码。
      *
-     * @param pageNo 页码
+     * @param pageNo 来自分页请求的页码，例如 {@code 1}
+     * 执行结果示例：分页结果顶层包含 {@code "pageNo":1}。
      */
     public void setPageNo(Integer pageNo) {
         this.pageNo = pageNo;
@@ -76,7 +80,7 @@ public class CommonPageResult {
     /**
      * 获取每页条数。
      *
-     * @return 每页条数
+     * @return 每页条数，例如 {@code 10}
      */
     public Integer getPageSize() {
         return pageSize;
@@ -85,7 +89,10 @@ public class CommonPageResult {
     /**
      * 设置每页条数。
      *
-     * @param pageSize 每页条数
+     * @param pageSize 来自分页请求的每页条数，例如 {@code 10}
+     * 执行结果示例：完整结构为
+     *     {@code {"records":[{"id":2,"loginName":"user-b"},{"id":1,"loginName":"user-a"}],}
+     *     {@code "totalCount":2,"pageNo":1,"pageSize":10}}。
      */
     public void setPageSize(Integer pageSize) {
         this.pageSize = pageSize;

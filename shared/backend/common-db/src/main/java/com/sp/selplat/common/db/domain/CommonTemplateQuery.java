@@ -2,7 +2,10 @@ package com.sp.selplat.common.db.domain;
 
 import java.util.Map;
 
-// 注解式模板查询入参统一承接动态表名、查询列和等值条件集合。
+/**
+ * 承接模板等值查询所需的受控表名、列清单、条件和排序。
+ * 所有标识符均由 DAO 或元数据链路提供，不接受前端未经匹配的字段。
+ */
 public class CommonTemplateQuery {
 
     // tableName 指定当前查询要命中的物理表。
@@ -14,42 +17,54 @@ public class CommonTemplateQuery {
     // orderBy 承接上层明确指定的排序表达式。
     private String orderBy;
 
-    // 获取目标表名，供模板 SQL 直接拼接 from 子句。
+    /** @return DAO 解析出的物理表名，例如 {@code "UniauthUser"} */
     public String getTableName() {
         return tableName;
     }
 
-    // 设置目标表名，供上层在进入模板 DAO 前明确当前业务表。
+    /**
+     * @param tableName 来自 DAO 类名约定的物理表名，例如 {@code "UniauthUser"}
+     * 执行结果示例：模板 FROM 子句使用 {@code UniauthUser}。
+     */
     public void setTableName(String tableName) {
         this.tableName = tableName;
     }
 
-    // 获取查询列清单，供模板 SQL 拼接 select 子句。
+    /** @return 元数据生成的列清单，例如 {@code "id, loginName, status"} */
     public String getSelectColumns() {
         return selectColumns;
     }
 
-    // 设置查询列清单，供上层明确本次只读取哪些业务字段。
+    /**
+     * @param selectColumns 来自数据库真实字段映射的列清单，例如 {@code "id, loginName, status"}
+     * 执行结果示例：模板 SELECT 子句只读取 id、loginName 和 status。
+     */
     public void setSelectColumns(String selectColumns) {
         this.selectColumns = selectColumns;
     }
 
-    // 获取等值查询字段和值集合，供模板 SQL 动态展开 where 条件。
+    /** @return 受控等值条件，例如 {@code {"loginName":"admin","status":1}} */
     public Map<String, Object> getQueryColumnValueMap() {
         return queryColumnValueMap;
     }
 
-    // 设置等值查询字段和值集合，供服务层把筛选条件统一交给模板 DAO。
+    /**
+     * @param queryColumnValueMap 来自 DAO 真实字段匹配的条件，例如 {@code {"loginName":"admin","status":1}}
+     * 执行结果示例：模板 WHERE 子句参数化匹配 loginName 和 status。
+     */
     public void setQueryColumnValueMap(Map<String, Object> queryColumnValueMap) {
         this.queryColumnValueMap = queryColumnValueMap;
     }
 
-    // 获取排序表达式，供模板 SQL 在需要时追加 order by。
+    /** @return 后端生成的排序表达式，例如 {@code "sortnum desc id asc"} */
     public String getOrderBy() {
         return orderBy;
     }
 
-    // 设置排序表达式，供上层控制结果顺序。
+    /**
+     * @param orderBy 来自后端受控字段的排序表达式，例如 {@code "sortnum desc id asc"}
+     * 执行结果示例：查询先按 sortnum 降序、再按 id 升序。
+     */
     public void setOrderBy(String orderBy) {
         this.orderBy = orderBy;
     }

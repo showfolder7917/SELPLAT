@@ -15,7 +15,7 @@ public class CommonPageParam extends CommonParam {
     /**
      * 获取当前页码。
      *
-     * @return 当前页码
+     * @return 当前页码，例如前端传入 {@code pageNo=2} 后返回 {@code 2}
      */
     public Integer getPageNo() {
         // 返回当前页码，供列表控制层、服务层和 DAO 统一沿用同一分页语义。
@@ -25,7 +25,8 @@ public class CommonPageParam extends CommonParam {
     /**
      * 设置当前页码。
      *
-     * @param pageNo 当前页码
+     * @param pageNo 来自前端分页请求的页码，例如 {@code 2}
+     * 执行结果示例：输入 {@code null}、{@code 0} 或负数时统一保存为第一页 {@code 1}。
      */
     public void setPageNo(Integer pageNo) {
         // 调用方未传或传入非法页码时，统一兜底回第一页，避免出现零页或负页。
@@ -35,7 +36,7 @@ public class CommonPageParam extends CommonParam {
     /**
      * 获取每页条数。
      *
-     * @return 每页条数
+     * @return 每页条数，例如前端传入 {@code pageSize=50} 后返回 {@code 50}
      */
     public Integer getPageSize() {
         // 返回当前每页条数，供分页查询链路和响应对象统一回填同一值。
@@ -45,7 +46,8 @@ public class CommonPageParam extends CommonParam {
     /**
      * 设置每页条数。
      *
-     * @param pageSize 每页条数
+     * @param pageSize 来自前端分页请求的每页条数，例如 {@code 50}
+     * 执行结果示例：输入 {@code null}、{@code 0} 或负数时统一保存为默认值 {@code 20}。
      */
     public void setPageSize(Integer pageSize) {
         // 调用方未传或传入非法条数时，统一回退到默认大小，避免列表接口一次取全表。

@@ -20,8 +20,12 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 列出当前数据源下的表集合。
      *
-     * @param dataSource 数据源实体
-     * @return 表集合
+     * @param dataSource 数据源解析器生成的真实上下文，例如 H2 的 PUBLIC schema
+     * @return 表元数据列表，例如 {@code [{"tableName":"UniauthUser","remarks":"统一认证用户"}]}
+     * @throws IllegalArgumentException 当数据源上下文或真实数据源为空时抛出，例如
+     *     {@code IllegalArgumentException("dataSource must not be null")}
+     * @throws IllegalStateException 当 JDBC 元数据读取失败时抛出，例如
+     *     {@code IllegalStateException("failed to list tables")}
      */
     @Override
     public List<TableMetadata> listTables(CommonDbSource dataSource) {
@@ -63,9 +67,13 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 获取指定表信息。
      *
-     * @param dataSource 数据源实体
-     * @param tableName 表名
-     * @return 表信息
+     * @param dataSource 数据源解析器生成的真实上下文，例如 H2 的 PUBLIC schema
+     * @param tableName DAO 解析出的物理表名，例如 {@code "UniauthUser"}
+     * @return 表元数据，例如 {@code {"tableName":"UniauthUser","remarks":"统一认证用户"}}；表不存在时返回 null
+     * @throws IllegalArgumentException 当数据源或表名无效时抛出，例如
+     *     {@code IllegalArgumentException("tableName must not be blank")}
+     * @throws IllegalStateException 当 JDBC 元数据读取失败时抛出，例如
+     *     {@code IllegalStateException("failed to get table metadata: UniauthUser")}
      */
     @Override
     public TableMetadata getTable(CommonDbSource dataSource, String tableName) {
@@ -106,9 +114,15 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 列出指定表字段集合。
      *
-     * @param dataSource 数据源实体
-     * @param tableName 表名
-     * @return 字段集合
+     * @param dataSource 数据源解析器生成的真实上下文，例如 H2 的 PUBLIC schema
+     * @param tableName DAO 解析出的物理表名，例如 {@code "UniauthUser"}
+     * @return 字段元数据，例如
+     *     {@code [{"columnName":"id","dataType":"BIGINT","javaType":"Long","primaryKey":true},}
+     *     {@code {"columnName":"loginName","dataType":"VARCHAR","javaType":"String","primaryKey":false}]}
+     * @throws IllegalArgumentException 当数据源或表名无效时抛出，例如
+     *     {@code IllegalArgumentException("tableName must not be blank")}
+     * @throws IllegalStateException 当 JDBC 字段元数据读取失败时抛出，例如
+     *     {@code IllegalStateException("failed to list columns: UniauthUser")}
      */
     @Override
     public List<ColumnMetadata> listColumns(CommonDbSource dataSource, String tableName) {
@@ -167,9 +181,13 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 列出指定表主键字段集合。
      *
-     * @param dataSource 数据源实体
-     * @param tableName 表名
-     * @return 主键字段集合
+     * @param dataSource 数据源解析器生成的真实上下文，例如 H2 的 PUBLIC schema
+     * @param tableName DAO 解析出的物理表名，例如 {@code "UniauthUser"}
+     * @return 主键列，例如单主键 {@code ["id"]} 或复合主键 {@code ["tenantId","orderId"]}
+     * @throws IllegalArgumentException 当数据源或表名无效时抛出，例如
+     *     {@code IllegalArgumentException("tableName must not be blank")}
+     * @throws IllegalStateException 当 JDBC 主键元数据读取失败时抛出，例如
+     *     {@code IllegalStateException("failed to list primary keys: UniauthUser")}
      */
     @Override
     public List<String> listPrimaryKeys(CommonDbSource dataSource, String tableName) {
@@ -189,9 +207,9 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 判断表是否存在。
      *
-     * @param dataSource 数据源实体
-     * @param tableName 表名
-     * @return 是否存在
+     * @param dataSource 数据源解析器生成的真实上下文，例如 H2 的 PUBLIC schema
+     * @param tableName DAO 要验证的物理表名，例如 {@code "UniauthUser"}
+     * @return 表存在时返回 {@code true}；例如不存在的 {@code "UnknownTable"} 返回 {@code false}
      */
     @Override
     public boolean existsTable(CommonDbSource dataSource, String tableName) {
@@ -202,10 +220,10 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 判断字段是否存在。
      *
-     * @param dataSource 数据源实体
-     * @param tableName 表名
-     * @param columnName 字段名
-     * @return 是否存在
+     * @param dataSource 数据源解析器生成的真实上下文，例如 H2 的 PUBLIC schema
+     * @param tableName DAO 要验证的物理表名，例如 {@code "UniauthUser"}
+     * @param columnName 查询构建器要验证的字段名，例如 {@code "loginName"}
+     * @return 字段存在时返回 {@code true}；例如 {@code "debugFlag"} 不存在时返回 {@code false}
      */
     @Override
     public boolean existsColumn(CommonDbSource dataSource, String tableName, String columnName) {
@@ -227,12 +245,17 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 读取目标表的主键字段集合。
      *
-     * @param dataSource 数据源实体
-     * @param connection 数据库连接
-     * @param tableName 表名
-     * @return 主键字段集合
+     * @param dataSource 当前元数据读取的数据源上下文，例如 H2 的 PUBLIC schema
+     * @param connection 当前方法持有的真实 JDBC 连接
+     * @param tableName DAO 解析出的物理表名，例如 {@code "UniauthUser"}
+     * @return 主键列，例如单主键 {@code ["id"]} 或复合主键 {@code ["tenantId","orderId"]}
+     * @throws IllegalStateException 当 JDBC 主键元数据读取失败时抛出，例如
+     *     {@code IllegalStateException("failed to read primary keys: UniauthUser")}
      */
-    private List<String> readPrimaryKeyColumns(CommonDbSource dataSource,Connection connection,String tableName) {
+    private List<String> readPrimaryKeyColumns(
+            CommonDbSource dataSource,
+            Connection connection,
+            String tableName) {
         // 创建主键字段集合承接当前表的主键列名，供字段扫描阶段统一打标。
         List<String> primaryKeyColumns = new ArrayList<>();
         try {
@@ -261,8 +284,8 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 根据 JDBC 类型码解析推荐 Java 类型。
      *
-     * @param jdbcType JDBC 类型码
-     * @return 推荐 Java 类型
+     * @param jdbcType JDBC 字段类型码，例如 {@link Types#BIGINT}
+     * @return 推荐 Java 类型名，例如 BIGINT 返回 {@code "Long"}，未知类型返回 {@code "Object"}
      */
     private String resolveJavaType(int jdbcType) {
         // 按 JDBC 类型码分发推荐 Java 类型，供开发期生成器或说明文档复用统一映射。
@@ -311,9 +334,11 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 获取当前 catalog 名称。
      *
-     * @param dataSource 数据源实体
-     * @param connection 数据库连接
-     * @return catalog 名称
+     * @param dataSource 当前元数据读取的数据源上下文，例如已指定 catalog 的 H2 上下文
+     * @param connection 当前方法持有的真实 JDBC 连接
+     * @return 显式配置或连接默认 catalog，例如 H2 运行时数据库名
+     * @throws IllegalStateException 当连接无法读取 catalog 时抛出，例如
+     *     {@code IllegalStateException("failed to resolve catalog")}
      */
     private String resolveCatalog(CommonDbSource dataSource, Connection connection) {
         try {
@@ -332,9 +357,11 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 获取当前 schema 名称。
      *
-     * @param dataSource 数据源实体
-     * @param connection 数据库连接
-     * @return schema 名称
+     * @param dataSource 当前元数据读取的数据源上下文，例如已指定 {@code "PUBLIC"} schema 的 H2 上下文
+     * @param connection 当前方法持有的真实 JDBC 连接
+     * @return 显式配置或连接默认 schema，例如 {@code "PUBLIC"}
+     * @throws IllegalStateException 当连接无法读取 schema 时抛出，例如
+     *     {@code IllegalStateException("failed to resolve schema")}
      */
     private String resolveSchema(CommonDbSource dataSource, Connection connection) {
         try {
@@ -353,7 +380,10 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 校验数据源实体是否合法。
      *
-     * @param dataSource 数据源实体
+     * @param dataSource 待校验的数据库上下文，例如包含真实 H2 {@code DataSource} 的 {@code CommonDbSource}
+     * 执行结果示例：上下文和真实数据源均存在时正常返回。
+     * @throws IllegalArgumentException 当上下文或真实数据源为空时抛出，例如
+     *     {@code IllegalArgumentException("dataSource must not be null")}
      */
     private void validateDataSource(CommonDbSource dataSource) {
         // 数据源实体为空时直接拒绝处理，避免后续所有数据库动作失去明确上下文。
@@ -369,7 +399,10 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 校验表名是否合法。
      *
-     * @param tableName 表名
+     * @param tableName DAO 解析出的待校验物理表名，例如 {@code "UniauthUser"}
+     * 执行结果示例：非空表名正常返回。
+     * @throws IllegalArgumentException 当表名为空时抛出，例如
+     *     {@code IllegalArgumentException("tableName must not be blank")}
      */
     private void validateTableName(String tableName) {
         // 表名为空或空白时直接拒绝处理，避免元数据查询落成不受控的全库模糊匹配。
@@ -381,7 +414,10 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 校验字段名是否合法。
      *
-     * @param columnName 字段名
+     * @param columnName 查询构建器提供的待校验字段名，例如 {@code "loginName"}
+     * 执行结果示例：非空字段名正常返回。
+     * @throws IllegalArgumentException 当字段名为空时抛出，例如
+     *     {@code IllegalArgumentException("columnName must not be blank")}
      */
     private void validateColumnName(String columnName) {
         // 字段名为空或空白时直接拒绝处理，避免字段存在性判断失去明确目标。
@@ -393,14 +429,13 @@ public class DefaultDatabaseMetadataReader implements DatabaseMetadataReader {
     /**
      * 判断文本是否有值。
      *
-     * @param value 文本值
-     * @return 是否有值
+     * @param value 来自表名或字段名的待校验文本，例如 {@code " loginName "}
+     * @return 非空且去空格后仍有内容时返回 {@code true}；纯空格返回 {@code false}
      */
     private boolean hasText(String value) {
         // 统一以非空且去空白后仍有长度作为有值标准，保持文本校验口径一致。
         return value != null && !value.trim().isEmpty();
     }
 }
-
 
 

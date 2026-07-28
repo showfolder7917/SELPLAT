@@ -32,7 +32,8 @@ public class Result implements Serializable {
     /**
      * 按是否成功创建结果对象。
      *
-     * @param success 是否成功
+     * @param success 来自业务执行结果的成功标记，例如 {@code true}
+     * 执行结果示例：新对象的 {@code success} 保存为 {@code true}，模型映射初始为 {@code {}}。
      */
     public Result(boolean success) {
         // 构造时直接写入成功标记，便于控制层快速返回成功或失败结果。
@@ -41,6 +42,8 @@ public class Result implements Serializable {
 
     /**
      * 创建默认结果对象。
+     *
+     * <p>执行结果示例：创建后 {@code success=false}、模型映射为 {@code {}}。</p>
      */
     public Result() {
     }
@@ -48,9 +51,9 @@ public class Result implements Serializable {
     /**
      * 按指定 key 写入默认模型数据，并把当前 key 记录为最近一次默认模型。
      *
-     * @param key 模型 key
-     * @param object 模型对象
-     * @return 被覆盖的旧值
+     * @param key 调用方约定的模型 key，例如 {@code "user"}
+     * @param object Service 返回的模型对象，例如 {@code {"id":1,"loginName":"admin"}}
+     * @return 同一 key 被覆盖前的旧值；首次写入 {@code user} 时返回 null
      */
     public Object addDefaultModel(String key, Object object) {
         // 记录当前默认模型 key，便于旧式调用方后续直接 get() 读取。
@@ -62,8 +65,8 @@ public class Result implements Serializable {
     /**
      * 写入通用消息文本。
      *
-     * @param message 消息文本
-     * @return 被覆盖的旧值
+     * @param message 来自业务动作的消息文本，例如 {@code "查询完成。"}
+     * @return 原 {@code msg} 值；首次写入时返回 null，结果映射变为 {@code {"msg":"查询完成。"}}
      */
     public Object addMsg(String message) {
         // 通用消息统一使用 msg 作为固定 key，便于前端按约定读取。
@@ -75,7 +78,7 @@ public class Result implements Serializable {
     /**
      * 返回当前结果里所有模型 key。
      *
-     * @return 模型 key 集合
+     * @return 模型 key 集合，例如 {@code ["user","msg"]}
      */
     public Set<String> keySet() {
         return result.keySet();
@@ -84,7 +87,7 @@ public class Result implements Serializable {
     /**
      * 返回最近一次写入的默认模型对象。
      *
-     * @return 默认模型对象
+     * @return 最近一次写入的默认模型对象，例如 {@code "查询完成。"}；没有默认 key 时返回 null
      */
     public Object get() {
         return result.get(modelKey);
@@ -93,8 +96,8 @@ public class Result implements Serializable {
     /**
      * 按 key 读取模型对象。
      *
-     * @param key 模型 key
-     * @return 模型对象
+     * @param key 调用方要读取的模型 key，例如 {@code "user"}
+     * @return 对应模型对象，例如 {@code {"id":1,"loginName":"admin"}}；key 不存在时返回 null
      */
     public Object get(String key) {
         return result.get(key);
@@ -103,7 +106,7 @@ public class Result implements Serializable {
     /**
      * 返回所有模型值集合。
      *
-     * @return 模型值集合
+     * @return 模型值集合，例如 {@code [{"id":1,"loginName":"admin"},"查询完成。"]}
      */
     public Collection<Object> values() {
         return result.values();
@@ -112,7 +115,7 @@ public class Result implements Serializable {
     /**
      * 返回当前结果是否成功。
      *
-     * @return 是否成功
+     * @return 是否成功，例如 {@code true}
      */
     public boolean isSuccess() {
         return success;
@@ -121,7 +124,8 @@ public class Result implements Serializable {
     /**
      * 设置当前结果是否成功。
      *
-     * @param success 是否成功
+     * @param success 来自业务执行结果的成功标记，例如 {@code true}
+     * 执行结果示例：旧式结果对象保存为 {@code success=true}。
      */
     public void setSuccess(boolean success) {
         this.success = success;
@@ -130,7 +134,7 @@ public class Result implements Serializable {
     /**
      * 返回业务结果码。
      *
-     * @return 业务结果码
+     * @return 业务结果码，例如 {@code "USER_NOT_FOUND"}
      */
     public String getResultCode() {
         return resultCode;
@@ -139,7 +143,8 @@ public class Result implements Serializable {
     /**
      * 设置业务结果码。
      *
-     * @param resultCode 业务结果码
+     * @param resultCode 来自业务异常或成功分支的结果码，例如 {@code "USER_NOT_FOUND"}
+     * 执行结果示例：结果对象保存为 {@code resultCode="USER_NOT_FOUND"}。
      */
     public void setResultCode(String resultCode) {
         this.resultCode = resultCode;
@@ -148,8 +153,9 @@ public class Result implements Serializable {
     /**
      * 设置业务结果码及其占位参数。
      *
-     * @param resultCode 业务结果码
-     * @param args 占位参数
+     * @param resultCode 来自业务异常或成功分支的结果码，例如 {@code "USER_NOT_FOUND"}
+     * @param args 用于结果文案占位的业务值，例如 {@code ["1001"]}
+     * 执行结果示例：保存 {@code resultCode="USER_NOT_FOUND"} 和 {@code resultCodeParams=["1001"]}。
      */
     public void setResultCode(String resultCode, String... args) {
         this.resultCode = resultCode;
@@ -159,7 +165,7 @@ public class Result implements Serializable {
     /**
      * 返回结果码占位参数。
      *
-     * @return 结果码占位参数
+     * @return 结果码占位参数，例如 {@code ["1001","admin"]}
      */
     public String[] getResultCodeParams() {
         return resultCodeParams;
@@ -168,7 +174,8 @@ public class Result implements Serializable {
     /**
      * 设置结果码占位参数。
      *
-     * @param resultCodeParams 结果码占位参数
+     * @param resultCodeParams 来自结果文案的占位参数，例如 {@code ["1001","admin"]}
+     * 执行结果示例：结果对象保存同顺序数组 {@code ["1001","admin"]}。
      */
     public void setResultCodeParams(String[] resultCodeParams) {
         this.resultCodeParams = resultCodeParams;
@@ -177,7 +184,7 @@ public class Result implements Serializable {
     /**
      * 返回结果模型映射。
      *
-     * @return 结果模型映射
+     * @return 结果模型映射，例如 {@code {"user":{"id":1},"msg":"查询完成。"}}
      */
     public Map<String, Object> getResult() {
         return result;
@@ -186,7 +193,8 @@ public class Result implements Serializable {
     /**
      * 设置结果模型映射。
      *
-     * @param result 结果模型映射
+     * @param result 来自旧式 Controller 的完整模型映射，例如 {@code {"user":{"id":1},"msg":"查询完成。"}}
+     * 执行结果示例：后续 {@code get("user")} 返回 {@code {"id":1}}。
      */
     public void setResult(Map<String, Object> result) {
         this.result = result;

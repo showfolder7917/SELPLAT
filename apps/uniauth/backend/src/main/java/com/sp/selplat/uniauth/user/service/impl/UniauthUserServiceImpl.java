@@ -11,7 +11,10 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 用户服务实现继承公共查询和写入流程，只覆盖新增与更新入口补充密码摘要这一项用户专属落库转换。
+/**
+ * 用户服务通过 {@link BaseServiceImpl} 复用公共查询和持久化流程。
+ * 本实现只在新增与更新同名方法中处理密码摘要，随后调用父类完成固定公共链路。
+ */
 @Service
 public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> implements UniauthUserService {
 
@@ -20,7 +23,7 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
     public CommonResult insert(CommonParam saveIn) {
         // 用户专属入口在公共新增前把 password 转换成数据库列 passwordHash。
         replacePasswordWithHash(saveIn);
-        // 父类统一生成主键、调用 BaseDao.insert 并构建固定 CommonResult。
+        // 扩展父类统一生成主键、调用 BaseDao.insert 并构建固定 CommonResult。
         CommonResult result = super.insert(saveIn);
         // 父类返回数据引用同一个参数映射，移除摘要后响应中也不会包含敏感字段。
         saveIn.getParamMap().remove("passwordHash");
@@ -39,7 +42,7 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
             // 当前项密码只在存在时转换成数据库摘要字段。
             replacePasswordWithHash(saveItem);
         }
-        // 父类统一逐项生成主键、调用 BaseDao.insertBatch 并构建固定 CommonResult。
+        // 扩展父类统一逐项生成主键、调用 BaseDao.insertBatch 并构建固定 CommonResult。
         CommonResult result = super.insertBatch(saveIn);
         // 数据库成功后逐项移除密码摘要，父类结果引用同一批量项集合。
         for (CommonParam saveItem : saveItems) {
@@ -55,7 +58,7 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
     public CommonResult update(CommonParam saveIn) {
         // 用户专属入口在公共更新前把 password 转换成数据库列 passwordHash。
         replacePasswordWithHash(saveIn);
-        // 父类统一调用 BaseDao.update 并构建固定 CommonResult。
+        // 扩展父类统一调用 BaseDao.update 并构建固定 CommonResult。
         CommonResult result = super.update(saveIn);
         // 父类返回数据引用同一个参数映射，移除摘要后响应中也不会包含敏感字段。
         saveIn.getParamMap().remove("passwordHash");
@@ -74,7 +77,7 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
             // 当前项存在 password 时转换为 passwordHash。
             replacePasswordWithHash(saveItem);
         }
-        // 父类统一调用 BaseDao.updateBatch 并构建固定 CommonResult。
+        // 扩展父类统一调用 BaseDao.updateBatch 并构建固定 CommonResult。
         CommonResult result = super.updateBatch(saveIn);
         // 批量更新成功后移除所有密码摘要，父类结果引用同一批量项集合。
         for (CommonParam saveItem : saveItems) {
@@ -85,7 +88,12 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
         return result;
     }
 
-    // 前端 password 仅在存在时转换为 passwordHash，并从通用参数中移除不可直接落库的明文字段。
+    /**
+     * 前端 password 仅在存在时转换为 passwordHash，并从通用参数中移除不可直接落库的明文字段。
+     *
+     * @param saveIn 前端新增或更新参数，例如
+     *     {@code {"paramMap":{"loginName":"admin","password":"secret"}}}；执行后只保留 passwordHash
+     */
     private void replacePasswordWithHash(CommonParam saveIn) {
         // 直接读取同一个 CommonParam 中的明文密码，不创建新的保存映射。
         Object password = saveIn.getParam("password");

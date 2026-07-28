@@ -25,7 +25,9 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
     /**
      * 创建默认通用查询执行器。
      *
-     * @param sqlBuilder 查询 SQL 构建器
+     * @param sqlBuilder 上层提供的受控查询 SQL 构建器，例如 {@code DefaultCommonQuerySqlBuilder}
+     * @throws IllegalArgumentException 当构建器为空时抛出，例如
+     *     {@code IllegalArgumentException("sqlBuilder must not be null")}
      */
     public DefaultCommonQueryExecutor(CommonQuerySqlBuilder sqlBuilder) {
         // SQL 构建器为空时直接拒绝创建执行器，避免执行阶段无法获得最终 SQL。
@@ -39,8 +41,10 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
     /**
      * 执行列表查询。
      *
-     * @param query 通用查询对象
-     * @return 列表结果
+     * @param query DAO 构建的通用查询对象，例如查询 {@code UniauthUser} 的 status=1 记录
+     * @return 列表结果，例如 {@code [{"id":1,"loginName":"admin"},{"id":2,"loginName":"auditor"}]}
+     * @throws IllegalStateException 当 JDBC 查询失败时抛出，例如
+     *     {@code IllegalStateException("failed to execute select query")}
      */
     @Override
     public List<Map<String, Object>> query(CommonDynamicQuery query) {
@@ -53,8 +57,10 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
     /**
      * 执行单行查询。
      *
-     * @param query 通用查询对象
-     * @return 单行结果
+     * @param query DAO 构建的通用查询对象，例如按 {@code loginName="admin"} 查询
+     * @return 第一条结果，例如 {@code {"id":1,"loginName":"admin"}}；未命中时返回 null
+     * @throws IllegalStateException 当 JDBC 查询失败时抛出，例如
+     *     {@code IllegalStateException("failed to execute select query")}
      */
     @Override
     public Map<String, Object> queryOne(CommonDynamicQuery query) {
@@ -71,8 +77,10 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
     /**
      * 执行总数查询。
      *
-     * @param query 通用查询对象
-     * @return 总数结果
+     * @param query DAO 构建的通用查询对象，例如统计 {@code status=1} 的用户
+     * @return 同筛选条件的总数，例如 {@code 2L}
+     * @throws IllegalStateException 当 JDBC 计数查询失败时抛出，例如
+     *     {@code IllegalStateException("failed to execute count query")}
      */
     @Override
     public long count(CommonDynamicQuery query) {
@@ -106,11 +114,16 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
     /**
      * 执行列表 SQL。
      *
-     * @param query 通用查询对象
-     * @param builtQuerySql 已构建 SQL
-     * @return 列表结果
+     * @param query DAO 构建并绑定真实数据源的查询对象，例如查询 {@code UniauthUser}
+     * @param builtQuerySql SQL 构建器输出，例如
+     *     {@code {"sql":"SELECT id FROM UniauthUser WHERE status = ?","parameters":[1]}}
+     * @return JDBC 结果列表，例如 {@code [{"id":1},{"id":2}]}
+     * @throws IllegalStateException 当 JDBC 执行失败时抛出，例如
+     *     {@code IllegalStateException("failed to execute select query")}
      */
-    private List<Map<String, Object>> executeListQuery(CommonDynamicQuery query,BuiltQuerySql builtQuerySql) {
+    private List<Map<String, Object>> executeListQuery(
+            CommonDynamicQuery query,
+            BuiltQuerySql builtQuerySql) {
         // 创建结果集合承接 JDBC 返回的每一行数据，保持查询结果顺序与数据库返回顺序一致。
         List<Map<String, Object>> resultList = new ArrayList<>();
         // 读取当前查询绑定的真实数据源，供 Spring 事务连接获取和释放使用同一入口。
@@ -156,10 +169,13 @@ public class DefaultCommonQueryExecutor implements CommonQueryExecutor {
     /**
      * 绑定预编译参数。
      *
-     * @param preparedStatement 预编译语句
-     * @param parameters 参数列表
+     * @param preparedStatement 当前查询创建的预编译语句，例如含两个问号占位符的 SELECT
+     * @param parameters SQL 构建器按占位符顺序输出的参数，例如 {@code ["admin",1]}
+     * 执行结果示例：参数依次绑定到 JDBC 位置 1 和 2；空列表不执行绑定。
+     * @throws IllegalStateException 当任一参数绑定失败时抛出，例如
+     *     {@code IllegalStateException("failed to bind query parameter")}
      */
-    private void bindParameters(PreparedStatement preparedStatement,List<Object> parameters) {
+    private void bindParameters(PreparedStatement preparedStatement, List<Object> parameters) {
         // 参数列表为空时不做任何绑定，兼容无 where 条件的查询场景。
         if (parameters == null || parameters.isEmpty()) {
             return;

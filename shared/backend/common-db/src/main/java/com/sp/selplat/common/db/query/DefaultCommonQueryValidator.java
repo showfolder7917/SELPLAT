@@ -20,7 +20,9 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 创建默认通用查询校验器。
      *
-     * @param metadataReader 元数据读取器
+     * @param metadataReader 上层提供的真实数据库元数据读取器，例如 {@code DefaultDatabaseMetadataReader}
+     * @throws IllegalArgumentException 当读取器为空时抛出，例如
+     *     {@code IllegalArgumentException("metadataReader must not be null")}
      */
     public DefaultCommonQueryValidator(DatabaseMetadataReader metadataReader) {
         // 元数据读取器为空时直接拒绝创建校验器，避免后续校验过程失去表结构依据。
@@ -34,7 +36,10 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 校验完整查询对象。
      *
-     * @param query 通用查询对象
+     * @param query DAO 构建的完整查询对象，例如表为 {@code UniauthUser}、字段为 {@code ["id","loginName"]}
+     * 执行结果示例：表、字段、条件、排序和分页全部合法时正常返回；任一结构非法时在 SQL 构建前抛出异常。
+     * @throws IllegalArgumentException 当查询对象、数据源、表、字段、条件、排序或分页非法时抛出，例如
+     *     {@code IllegalArgumentException("query must not be null")}
      */
     @Override
     public void validate(CommonDynamicQuery query) {
@@ -55,7 +60,8 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 校验表名。
      *
-     * @param query 通用查询对象
+     * @param query DAO 构建且已绑定真实数据源的查询对象，例如表名为 {@code "UniauthUser"}
+     * 执行结果示例：元数据存在 UniauthUser 时正常返回，不存在时抛出 {@code "table not found: UniauthUser"}。
      */
     @Override
     public void validateTable(CommonDynamicQuery query) {
@@ -72,7 +78,8 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 校验查询字段集合。
      *
-     * @param query 通用查询对象
+     * @param query DAO 构建的查询对象，例如字段为 {@code ["id","loginName"]}
+     * 执行结果示例：字段均存在于 UniauthUser 时正常返回，未知字段在 SQL 构建前被拒绝。
      */
     @Override
     public void validateSelectFields(CommonDynamicQuery query) {
@@ -96,8 +103,9 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 校验条件集合。
      *
-     * @param query 通用查询对象
-     * @param conditions 条件集合
+     * @param query DAO 构建且已绑定真实表的查询对象，例如表为 {@code UniauthUser}
+     * @param conditions 结构化筛选条件，例如 {@code [{"fieldName":"status","operator":"EQ","value":1}]}
+     * 执行结果示例：字段、操作符和值完整时正常返回；空条件列表表示不筛选。
      */
     @Override
     public void validateConditions(CommonDynamicQuery query, List<QueryCondition> conditions) {
@@ -131,8 +139,9 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 校验排序集合。
      *
-     * @param query 通用查询对象
-     * @param orders 排序集合
+     * @param query DAO 构建且已绑定真实表的查询对象，例如表为 {@code UniauthUser}
+     * @param orders 结构化排序条件，例如 {@code [{"fieldName":"sortnum","direction":"DESC"}]}
+     * 执行结果示例：排序字段和方向合法时正常返回；空列表表示不排序。
      */
     @Override
     public void validateOrders(CommonDynamicQuery query, List<QueryOrder> orders) {
@@ -164,7 +173,10 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 校验查询对象和数据源。
      *
-     * @param query 通用查询对象
+     * @param query 待校验的查询根对象，例如已绑定 H2 数据源和数据库类型的 {@code CommonDynamicQuery}
+     * 执行结果示例：根对象与数据源上下文完整时正常返回。
+     * @throws IllegalArgumentException 当查询、真实数据源或数据库类型为空时抛出，例如
+     *     {@code IllegalArgumentException("query must not be null")}
      */
     private void validateQuery(CommonDynamicQuery query) {
         // 查询对象为空时直接拒绝处理，避免后续所有校验失去根对象。
@@ -189,7 +201,11 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 校验条件值。
      *
-     * @param condition 条件对象
+     * @param condition 当前结构化条件，例如
+     *     {@code {"fieldName":"createdAt","operator":"BETWEEN","value":"2026-07-01","secondValue":"2026-07-31"}}
+     * 执行结果示例：BETWEEN 同时有起止值时正常返回。
+     * @throws IllegalArgumentException 当 BETWEEN 缺边界或单值条件缺值时抛出，例如
+     *     {@code IllegalArgumentException("between condition values must not be null")}
      */
     private void validateConditionValue(QueryCondition condition) {
         // BETWEEN 条件必须同时具备起止值，否则区间查询无法形成完整边界。
@@ -208,7 +224,10 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 校验分页参数。
      *
-     * @param query 通用查询对象
+     * @param query 待校验的分页查询，例如 {@code {"pageNo":1,"pageSize":10}}
+     * 执行结果示例：页码和页大小同时为空表示不分页；同时为正数表示合法分页。
+     * @throws IllegalArgumentException 当分页参数只提供一个或不是正数时抛出，例如
+     *     {@code IllegalArgumentException("pageNo and pageSize must both be provided")}
      */
     private void validatePage(CommonDynamicQuery query) {
         // 页码和页大小都为空时表示当前查询不启用分页，直接允许通过。
@@ -232,15 +251,14 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
     /**
      * 判断文本是否有值。
      *
-     * @param value 文本值
-     * @return 是否有值
+     * @param value 来自表名或字段名的待校验文本，例如 {@code " loginName "}
+     * @return 非空且去空格后仍有内容时返回 {@code true}；输入纯空格时返回 {@code false}
      */
     private boolean hasText(String value) {
         // 统一以非空且去空白后仍有长度作为文本有效标准，保持校验口径一致。
         return value != null && !value.trim().isEmpty();
     }
 }
-
 
 
 

@@ -177,7 +177,7 @@ public class BaseDaoQueryDemo {
         /**
          * 覆写表名解析，避免按当前 demo 类名推导出不存在的物理表名。
          *
-         * @return 演示表名
+         * @return 演示表名，例如 {@code DemoTable}
          */
         @Override
         protected String getTableName() {
@@ -188,10 +188,10 @@ public class BaseDaoQueryDemo {
         /**
          * 覆写字段清单解析，避免运行演示时触发真实元数据读取。
          *
-         * @return 演示字段列表
+         * @return 演示字段列表，例如 {@code "id, name"}
          */
         @Override
-        protected String getselectColumns() {
+        protected String getSelectColumns() {
             // 演示固定返回一组常见列表字段，保证 queryList 的默认字段解析可继续运行。
             return "id, name, status, startDate, endDate, price, discount, createTime, sortnum";
         }
@@ -204,10 +204,16 @@ public class BaseDaoQueryDemo {
          * @param orders 排序集合
          * @param pageNo 页码
          * @param pageSize 每页条数
-         * @return 空分页结果，仅用于保持方法签名一致
+         * @return 空分页结果，例如 {@code {"dataList":[],"total":0,"pageNo":1,"pageSize":10}}
          */
         @Override
-        protected CommonPageResult queryList(List<String> selectFields, List<QueryCondition> conditions, List<QueryOrder> orders, Integer pageNo, Integer pageSize) {
+        protected CommonPageResult queryList(
+            List<String> selectFields,
+            List<QueryCondition> conditions,
+            List<QueryOrder> orders,
+            Integer pageNo,
+            Integer pageSize
+        ) {
             // 先输出分隔线，便于区分每次演示的打印块。
             System.out.println("==================================================");
             // 输出演示命中的目标表，方便确认当前门面最终会查哪张表。

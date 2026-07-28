@@ -26,14 +26,20 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-// 用户真实数据库验证器集中承接调用参数、数据库期待查询和断言，让每个测试方法只表达一个 Case 验证动作。
+/**
+ * 用户真实数据库验证器集中承接调用参数、数据库期待查询和断言，让每个测试方法只表达一个 Case 验证动作。
+ */
 public final class UniauthUserRealDatabaseTestVerifier {
 
-    // 验证器只提供静态 Case 入口，禁止创建无业务状态的辅助对象。
+    /**
+     * 验证器只提供静态 Case 入口，禁止创建无业务状态的辅助对象。
+     */
     private UniauthUserRealDatabaseTestVerifier() {
     }
 
-    // 验证用户 Service 通过 BaseServiceImpl 泛型绑定 DAO，且不再保存业务 DAO 字段或显式依赖构造参数。
+    /**
+     * 验证用户 Service 通过 BaseServiceImpl 泛型绑定 DAO，公共能力由扩展层继承且业务类不保存公共依赖。
+     */
     public static void verifyServiceDaoAccessStructure() {
         // 读取用户 Service 的直接泛型父类，确认 DAO 类型在继承入口一次性声明。
         Type genericSuperclass = UniauthUserServiceImpl.class.getGenericSuperclass();
@@ -47,7 +53,7 @@ public final class UniauthUserRealDatabaseTestVerifier {
         for (Field field : UniauthUserServiceImpl.class.getDeclaredFields()) {
             // 业务 Service 不得再声明 UniauthUserDao 或其他 BaseDao 类型字段。
             assertFalse(UniauthUserDao.class.isAssignableFrom(field.getType()));
-            // 公共发号器必须由 BaseServiceImpl 统一保存，业务 Service 不得重复声明。
+            // 公共发号器必须由 BaseExtendsServiceImpl 统一保存，业务 Service 不得重复声明。
             assertFalse(SequenceGenerator.class.isAssignableFrom(field.getType()));
         }
         // Java 会为无显式构造函数的类生成一个零参数构造入口，当前结构只允许这一种。
@@ -58,7 +64,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertEquals(0, constructors[0].getParameterCount());
     }
 
-    // 验证 getStore 默认排序同时匹配服务返回、数据库期待顺序、总数和分页回参。
+    /**
+     * 验证 getStore 默认排序同时匹配服务返回、数据库期待顺序、总数和分页回参。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyGetStoreDefaultSortnum(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 当前 Case 使用第一页三条记录，确保 fixture 中全部排序样本进入同一页。
         CommonPageParam queryIn = pageParam(1, 3);
@@ -81,7 +92,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertEquals(3, pageResult.getPageSize());
     }
 
-    // 验证 getStore 的 Like 条件进入真实 SQL 且命中项继续按默认排序返回。
+    /**
+     * 验证 getStore 的 Like 条件进入真实 SQL 且命中项继续按默认排序返回。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyGetStoreFilter(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 当前筛选 Case 一页最多读取十条，避免分页截断两个命中样本。
         CommonPageParam queryIn = pageParam(1, 10);
@@ -102,7 +118,11 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertEquals(2L, pageResult.getTotalCount());
     }
 
-    // 验证 getStore 请求空页时列表和总数仍保持正确分页语义。
+    /**
+     * 验证 getStore 请求空页时列表和总数仍保持正确分页语义。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     */
     public static void verifyGetStoreEmptyPage(UniauthUserService userService) {
         // 当前 Case 请求第三页且每页一条，明确越过 fixture 的最后一页。
         CommonPageResult pageResult = userService.getStore(pageParam(3, 1));
@@ -116,7 +136,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertEquals(1, pageResult.getPageSize());
     }
 
-    // 验证 getById 使用数字主键命中真实用户详情。
+    /**
+     * 验证 getById 使用数字主键命中真实用户详情。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyGetByIdFoundNumber(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 数字 id 直接模拟常规 JSON 数字主键。
         CommonResult result = userService.getById(param("id", 2101L));
@@ -135,7 +160,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertTrue(result.isSuccess());
     }
 
-    // 验证 getById 能把前端字符串主键通过同一个 CommonParam 交给真实 DAO 并命中详情。
+    /**
+     * 验证 getById 能把前端字符串主键通过同一个 CommonParam 交给真实 DAO 并命中详情。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyGetByIdFoundString(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 字符串 id 模拟表单或查询字符串进入 CommonParam 的常见前端形态。
         CommonResult result = userService.getById(param("id", "2102"));
@@ -150,7 +180,11 @@ public final class UniauthUserRealDatabaseTestVerifier {
         );
     }
 
-    // 验证 getById 在真实表中未命中记录时返回明确异常。
+    /**
+     * 验证 getById 在真实表中未命中记录时返回明确异常。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     */
     public static void verifyGetByIdNotFound(UniauthUserService userService) {
         // 不存在 Case 固定查询 2199，当前 fixture 已保证用户表为空。
         IllegalArgumentException exception = assertThrows(
@@ -161,7 +195,11 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }
 
-    // 验证 getById 缺少主键时在进入数据库前拒绝请求。
+    /**
+     * 验证 getById 缺少主键时在进入数据库前拒绝请求。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     */
     public static void verifyGetByIdMissingId(UniauthUserService userService) {
         // 空 CommonParam 不包含任何主键字段，应命中业务必填校验。
         IllegalArgumentException exception = assertThrows(
@@ -172,7 +210,11 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }
 
-    // 验证 getById 收到空参数对象时仍按主键缺失规则稳定失败。
+    /**
+     * 验证 getById 收到空参数对象时仍按主键缺失规则稳定失败。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     */
     public static void verifyGetByIdNullInput(UniauthUserService userService) {
         // null 模拟控制层极端场景下没有创建 CommonParam。
         IllegalArgumentException exception = assertThrows(
@@ -183,7 +225,11 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }
 
-    // 验证 getById 非法字符串主键直接进入真实 DAO 后仍不能形成错误成功结果。
+    /**
+     * 验证 getById 非法字符串主键直接进入真实 DAO 后仍不能形成错误成功结果。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     */
     public static void verifyGetByIdInvalidId(UniauthUserService userService) {
         // 非数字字符串模拟前端提交了数据库主键类型无法接受的 id。
         RuntimeException exception = assertThrows(
@@ -194,7 +240,11 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertNotNull(exception.getMessage());
     }
 
-    // 验证 Service 批量查询通过真实 BaseDao 返回两条指定用户。
+    /**
+     * 验证 Service 批量查询通过真实 BaseDao 返回两条指定用户。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     */
     public static void verifyBatchGetByIds(UniauthUserService userService) {
         // 创建批量主键请求。
         CommonBatchParam queryIn = new CommonBatchParam();
@@ -208,7 +258,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertEquals(2, ((List<?>) result.getData()).size());
     }
 
-    // 验证批量新增逐项发号、摘要密码并真实写入用户表。
+    /**
+     * 验证批量新增逐项发号、摘要密码并真实写入用户表。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyBatchInsert(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 创建两名字段结构一致的批量新增用户。
         CommonBatchParam saveIn = new CommonBatchParam();
@@ -225,7 +280,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertFalse(saveIn.getItems().get(0).getParamMap().containsKey("passwordHash"));
     }
 
-    // 验证批量新增中任一用户违反真实唯一约束时，Service 事务不会留下部分成功数据。
+    /**
+     * 验证批量新增中任一用户违反真实唯一约束时，Service 事务不会留下部分成功数据。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyBatchInsertRollback(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         try {
             // 创建两个登录名相同的用户，让第二项通过数据库唯一约束稳定触发批处理失败。
@@ -245,7 +305,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         }
     }
 
-    // 验证批量更新支持不同字段结构，并保持密码安全转换。
+    /**
+     * 验证批量更新支持不同字段结构，并保持密码安全转换。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyBatchUpdate(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 创建两条不同字段结构的批量更新请求。
         CommonBatchParam saveIn = new CommonBatchParam();
@@ -271,7 +336,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         );
     }
 
-    // 验证批量删除只修改状态和审计字段，不物理删除用户。
+    /**
+     * 验证批量删除只修改状态和审计字段，不物理删除用户。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyBatchDelete(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 创建两条批量假删除请求。
         CommonBatchParam deleteIn = new CommonBatchParam();
@@ -293,7 +363,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertEquals(2L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM UniauthUser WHERE status = 0", Long.class));
     }
 
-    // 验证 insert 使用真实号段、密码摘要和公共模板 SQL新增用户。
+    /**
+     * 验证 insert 使用真实号段、密码摘要和公共模板 SQL新增用户。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyInsertNormal(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 构造前端新增参数，只提供真实业务字段而不提供数据库主键或密码摘要。
         CommonParam saveIn = new CommonParam();
@@ -342,7 +417,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         );
     }
 
-    // 验证 update 未传密码时只更新前端提交字段并保留原摘要。
+    /**
+     * 验证 update 未传密码时只更新前端提交字段并保留原摘要。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyUpdateWithoutPassword(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 构造普通资料更新参数并指定真实目标主键。
         CommonParam saveIn = param("id", 4101L);
@@ -366,7 +446,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertEquals("更新后名称", resultData(result).get("displayName"));
     }
 
-    // 验证 update 传入密码时转换摘要并从服务结果移除敏感字段。
+    /**
+     * 验证 update 传入密码时转换摘要并从服务结果移除敏感字段。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifyUpdateWithPassword(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 构造密码更新参数并指定真实目标主键。
         CommonParam saveIn = param("id", 4102L);
@@ -391,7 +476,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertFalse(resultData(result).containsKey("password"));
     }
 
-    // 验证 delete 通过真实公共更新执行逻辑删除而不物理移除记录。
+    /**
+     * 验证 delete 通过真实公共更新执行逻辑删除而不物理移除记录。
+     *
+     * @param userService Spring 注入并连接当前真实测试库的用户服务，例如 UniauthUserServiceImpl 实例
+     * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
+     */
     public static void verifySoftDelete(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 构造逻辑删除参数并指定真实目标主键。
         CommonParam deleteIn = param("id", 5101L);
@@ -420,7 +510,13 @@ public final class UniauthUserRealDatabaseTestVerifier {
         );
     }
 
-    // 创建稳定分页参数，避免各个 Case 在测试方法中重复设置页码和页大小。
+    /**
+     * 创建稳定分页参数，避免各个 Case 在测试方法中重复设置页码和页大小。
+     *
+     * @param pageNo 当前页码，例如 {@code 1}
+     * @param pageSize 每页条数，例如 {@code 10}
+     * @return 可进入生产服务的分页参数，例如 {@code {"pageNo":1,"pageSize":10,"paramMap":{}}}
+     */
     private static CommonPageParam pageParam(int pageNo, int pageSize) {
         // 创建前端分页容器。
         CommonPageParam queryIn = new CommonPageParam();
@@ -432,7 +528,13 @@ public final class UniauthUserRealDatabaseTestVerifier {
         return queryIn;
     }
 
-    // 创建包含一个动态字段的 CommonParam，供主键型 Case 保持统一输入形式。
+    /**
+     * 创建包含一个动态字段的 CommonParam，供主键型 Case 保持统一输入形式。
+     *
+     * @param key 动态字段名，例如 {@code id}
+     * @param value 字段值，例如 {@code 2101L}
+     * @return 通用参数，例如 {@code {"paramMap":{"id":2101}}}
+     */
     private static CommonParam param(String key, Object value) {
         // 创建前端通用参数容器。
         CommonParam input = new CommonParam();
@@ -442,7 +544,14 @@ public final class UniauthUserRealDatabaseTestVerifier {
         return input;
     }
 
-    // 创建字段结构一致的批量新增用户参数，供真实 JDBC batch 使用。
+    /**
+     * 创建字段结构一致的批量新增用户参数，供真实 JDBC batch 使用。
+     *
+     * @param loginName 唯一登录名，例如 {@code batch-insert-1}
+     * @param displayName 展示姓名，例如 {@code 批量新增一}
+     * @return 完整新增项，例如
+     *     {@code {"paramMap":{"tenantId":7,"loginName":"batch-insert-1","displayName":"批量新增一"}}
+     */
     private static CommonParam batchInsertItem(String loginName, String displayName) {
         // 新建当前用户的动态前端参数。
         CommonParam saveItem = new CommonParam();
@@ -458,7 +567,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
         return saveItem;
     }
 
-    // 从分页结果中只提取可识别业务顺序的登录名。
+    /**
+     * 从分页结果中只提取可识别业务顺序的登录名。
+     *
+     * @param pageResult 生产服务返回的真实分页结果
+     * @return 登录名顺序，例如 {@code ["sort-high", "sort-middle", "sort-low"]}
+     */
     private static List<String> loginNames(CommonPageResult pageResult) {
         // 按生产 SQL 返回顺序读取每条记录的 loginName。
         return pageResult.getRecords().stream()
@@ -468,7 +582,13 @@ public final class UniauthUserRealDatabaseTestVerifier {
             .toList();
     }
 
-    // 把共通结果中的用户数据统一转换成字段映射。
+    /**
+     * 把共通结果中的用户数据统一转换成字段映射。
+     *
+     * @param result 生产服务返回的固定结果，例如
+     *     {@code {"success":true,"data":{"id":2101,"loginName":"detail-number"}}
+     * @return 用户字段映射，例如 {@code {"id":2101,"loginName":"detail-number"}}
+     */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> resultData(CommonResult result) {
         // 每个真实业务 Case 都必须返回成功的共通结果。
@@ -479,7 +599,13 @@ public final class UniauthUserRealDatabaseTestVerifier {
         return (Map<String, Object>) result.getData();
     }
 
-    // 从批量共通结果中读取直接返回的 items，禁止测试继续依赖历史 data 包装 Map。
+    /**
+     * 从批量共通结果中读取直接返回的 items，禁止测试继续依赖历史 data 包装 Map。
+     *
+     * @param result 批量服务返回的固定结果，例如
+     *     {@code {"success":true,"affectedRows":2,"data":[{"id":7101},{"id":7102}]}
+     * @return 直接批量项，例如 {@code [{"id":7101},{"id":7102}]}
+     */
     private static List<?> resultItems(CommonResult result) {
         // 批量业务也必须返回统一成功状态。
         assertTrue(result.isSuccess());

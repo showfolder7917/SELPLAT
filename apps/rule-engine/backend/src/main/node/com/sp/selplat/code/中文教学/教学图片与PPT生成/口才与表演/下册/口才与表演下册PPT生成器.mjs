@@ -411,6 +411,22 @@ function lessonTitleFromText(text) {
 }
 
 /**
+ * 为缺少正文的旧占位页补充与当前教学模块匹配的真实课堂指令。
+ */
+function resolveFallbackBody(sectionName) {
+  // 情境再现必须引导观察人物、动作和事件关系。
+  if (sectionName === "情境再现") return "观察人物的表情和动作，说一说发生了什么。";
+  // 字正腔圆必须回到口形、听音和发音练习。
+  if (sectionName === "字正腔圆") return "看清口形，听准发音，再试着读一读。";
+  // 口脑风暴必须引导完整表达而不是机械复述提示语。
+  if (sectionName === "口脑风暴") return "先看画面，再用完整句说出你的发现。";
+  // 粉墨登场必须给出角色、动作和表演任务。
+  if (sectionName === "粉墨登场") return "分清角色，想好动作，再自信地演一演。";
+  // 其他模块使用最小观察指令，并由后续逐页视觉计划继续细化。
+  return "观察画面，用完整句说出你的发现。";
+}
+
+/**
  * 把课前自我介绍整理为一页可直接练习的结构。
  */
 function buildWarmupSlide(deck, sourceSlide, assets) {
@@ -855,12 +871,21 @@ function buildFullSceneContent(slide, lesson, sourceSlide, text, assets, scenePl
   } else if (sourceSlide.source_slide === 14) {
     // 长问题改为两行清晰观察提示，语义保持一致。
     bodyText = "图中都有谁？\n他们在做什么？";
+  } else if (sourceSlide.source_slide === 15) {
+    // 原稿本页只有篇名，必须补成可以直接开展角色表演的课堂台词，禁止生成只有标题的大空卡。
+    bodyText = [
+      "奶奶：苹果熟了，大家来尝一尝。",
+      "小朋友：奶奶先吃，我来分苹果。",
+      "把大的送给奶奶，把甜的分享给伙伴。",
+      "看一看 · 说一说 · 演一演",
+    ].join("\n");
   } else if (bodyText.startsWith(title)) {
     // 其他页面只移除完全相同的标题前缀。
     bodyText = bodyText.slice(title.length).trim();
   }
-  // 重复的观察动作标题由正文问题承担，禁止再增加一层机械标题。
-  const hideTitle = shouldSuppressInstructionTitle(title, bodyText);
+  // 重复的观察动作标题和与右上栏目相同的标题都由正文承担，禁止再增加一层机械层级。
+  const hideTitle = shouldSuppressInstructionTitle(title, bodyText)
+    || title.replace(/\s+/gu, "") === sectionName.replace(/\s+/gu, "");
   // 共用核心同时考虑正文长度、视觉行数和安全区面积，生成比例适配的文字组。
   const panel = buildAdaptiveTextPanel(layout.textArea, title, bodyText, {
     hideTitle,
@@ -1065,25 +1090,8 @@ function buildContentSlide(deck, lesson, sourceSlide, text, assets, continuation
   const imagePosition = { left: 0, top: 0, width: SLIDE_SIZE.width, height: SLIDE_SIZE.height };
   // 当前模块原创媒体完整铺满画布，人物和边框仍由contain保证不裁切。
   if (hasMedia) addOriginalVisual(slide, assets, visualKey, imagePosition);
-  // 文字底板位于无人物安全区。
-  addGlassCard(slide, cardPosition);
   // 页面标题优先使用栏目名，连续页增加续页标记。
   const title = resolvePageTitle(lesson, sourceSlide, text);
-  // 标题与正文共同在卡片中形成内容组。
-  addText(slide, title, {
-    left: cardPosition.left + 34,
-    top: cardPosition.top + 18,
-    width: cardPosition.width - 68,
-    height: 54,
-  }, {
-    name: "CONTENT_TITLE",
-    fontSize: 31,
-    bold: true,
-    color: C.coral,
-    alignment: "center",
-    autoFit: "none",
-    insets: { top: 0, right: 0, bottom: 0, left: 0 },
-  });
   // 字符量决定正文起始字号，禁止过密页面使用过大字号。
   // 第一课不以缩小字号换容量；需要压缩时应先清理模板标签和重写成真实教学语。
   const bodyFont = lesson.lesson === 1 ? 35 : text.length > 110 ? 29 : text.length > 72 ? 32 : 35;
@@ -1093,22 +1101,44 @@ function buildContentSlide(deck, lesson, sourceSlide, text, assets, continuation
     : lesson.lesson === 1 && sourceSlide.source_slide === 23
       // 家庭任务压缩为三条真实可执行练习。
       ? "1. 练习《宝宝和平平》《炮兵攻打八面坡》。\n2. 给爸爸妈妈表演《分苹果》。\n3. 看图讲述《分享好喝的萝卜汤》。"
-      : text;
+      // 原稿中的XXX只是模板占位符，成品必须改成可以现场填写的下划线。
+      : String(text || "").replace(/X{2,}/giu, "____");
   // 页面正文不得再次显示与标题或右上栏目相同的旧模板标签。
   const bodyText = removeRepeatedHeading(rawBodyText, title, sectionName);
+  // 空占位页必须先补成真实观察问题，再判断标题是否重复；禁止用补全前的空正文绕过检测。
+  const displayBody = bodyText || resolveFallbackBody(sectionName);
+  // 栏目名已经固定显示在右上角时，正文区不得再重复同名标题。
+  const hideTitle = title.replace(/\s+/gu, "") === sectionName.replace(/\s+/gu, "")
+    || shouldSuppressInstructionTitle(title, displayBody);
+  // 普通图文页也通过共用核心按实际文字量收紧底板，禁止固定大卡制造失衡留白。
+  const panel = buildAdaptiveTextPanel(cardPosition, title, displayBody, {
+    hideTitle,
+    role: sourceSlide.role,
+  });
+  // 文字底板只包围真实文字组，并位于插图预留的安全区内。
+  addGlassCard(slide, panel.cardArea);
+  // 只有真实业务标题才在卡片中显示，栏目名和机械动作标题由右上栏目或正文承担。
+  if (!panel.hideTitle) {
+    // 标题与正文共同构成视觉居中的内容组。
+    addText(slide, title, panel.titleArea, {
+      name: "CONTENT_TITLE",
+      fontSize: 31,
+      bold: true,
+      color: C.coral,
+      alignment: "center",
+      autoFit: "none",
+      insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
+  }
   // 正文在卡片有效区域内视觉垂直居中。
-  addText(slide, bodyText || "观察画面，说一说你发现了什么。", {
-    left: cardPosition.left + 34,
-    top: cardPosition.top + 82,
-    width: cardPosition.width - 68,
-    height: cardPosition.height - 98,
-  }, {
+  addText(slide, displayBody, panel.bodyArea, {
     name: "CONTENT_BODY",
-    fontSize: bodyFont,
+    // 普通图文页复用共用核心的字号决策，避免旧逻辑只按字符数导致大小失衡。
+    fontSize: Math.min(bodyFont, panel.bodyFont),
     color: C.ink,
-    alignment: bodyText.length < 70 ? "center" : "left",
+    alignment: displayBody.length < 70 ? "center" : "left",
     verticalAlignment: "middle",
-    typeface: /《|诗|歌|绕口令|儿歌/.test(bodyText) ? FONT_SERIF : FONT_SANS,
+    typeface: /《|诗|歌|绕口令|儿歌/.test(displayBody) ? FONT_SERIF : FONT_SANS,
     lineSpacing: 1.24,
     autoFit: "none",
   });

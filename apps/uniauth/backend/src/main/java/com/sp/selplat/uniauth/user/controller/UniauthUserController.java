@@ -32,8 +32,11 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
      * getStore 列表入口沿用 `.htm` 路由风格，把分页参数和查询条件按 Result 结构回传给调用方。
      * 访问地址：GET /api/uniauth/users/getStore.htm 或 POST /api/uniauth/users/getStore.htm
      *
-     * @param queryIn 查询参数
-     * @return store JSON 结果
+     * @param queryIn 前端分页与筛选参数，例如
+     *     {@code {"pageNo":1,"pageSize":10,"paramMap":{"userStatus":"ACTIVE"}}}
+     * @return 分页 JSON，例如
+     *     {@code {"result":"success","dataList":[{"id":10001,"loginName":"admin"}],}
+     *     {@code "total":1,"pageNo":1,"pageSize":10}
      */
     @ResponseBody
     @RequestMapping(value = "getStore.htm", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -46,8 +49,9 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
      * 按主键查询单个用户详情。
      * 访问地址：GET /api/uniauth/users/getById.htm 或 POST /api/uniauth/users/getById.htm
      *
-     * @param queryIn 普通请求参数
-     * @return 用户详情 JSON
+     * @param queryIn 前端主键参数，例如 {@code {"paramMap":{"id":10001}}}
+     * @return 用户详情 JSON，例如
+     *     {@code {"result":"success","data":{"id":10001,"loginName":"admin","userStatus":"ACTIVE"}}
      */
     @ResponseBody
     @RequestMapping(value = "getById.htm", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -59,8 +63,11 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     /**
      * 按多组主键批量查询用户详情。
      *
-     * @param queryIn items 中保存多组主键
-     * @return 批量用户详情 JSON
+     * @param queryIn 前端 items 中的多组主键，例如
+     *     {@code {"items":[{"paramMap":{"id":10001}},{"paramMap":{"id":10002}}]}
+     * @return 批量用户详情 JSON，例如
+     *     {@code {"result":"success","data":[{"id":10001,"loginName":"admin"},}
+     *     {@code {"id":10002,"loginName":"operator"}]}
      */
     @ResponseBody
     @RequestMapping(value = "getByIds.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -73,8 +80,10 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
      * 新增用户。
      * 访问地址：POST /api/uniauth/users/create.htm
      *
-     * @param queryIn 普通请求参数
-     * @return 新增结果 JSON
+     * @param queryIn 前端新增字段，例如
+     *     {@code {"paramMap":{"tenantId":1,"loginName":"admin","password":"secret","userStatus":"ACTIVE"}}}
+     * @return 新增结果 JSON，例如
+     *     {@code {"result":"success","affectedRows":1,"data":{"id":10001,"loginName":"admin"}}
      */
     @ResponseBody
     @RequestMapping(value = "create.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -86,8 +95,10 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     /**
      * 批量新增用户。
      *
-     * @param queryIn items 中保存待新增用户
-     * @return 批量新增结果 JSON
+     * @param queryIn 前端 items 中的待新增用户，例如
+     *     {@code {"items":[{"paramMap":{"tenantId":1,"loginName":"admin","password":"secret"}}]}
+     * @return 批量新增结果 JSON，例如
+     *     {@code {"result":"success","affectedRows":1,"data":[{"id":10001,"loginName":"admin"}]}
      */
     @ResponseBody
     @RequestMapping(value = "insertBatch.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -100,8 +111,10 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
      * 更新用户。
      * 访问地址：POST /api/uniauth/users/update.htm
      *
-     * @param queryIn 普通请求参数
-     * @return 更新结果 JSON
+     * @param queryIn 前端主键和更新字段，例如
+     *     {@code {"paramMap":{"id":10001,"displayName":"系统管理员"}}
+     * @return 更新结果 JSON，例如
+     *     {@code {"result":"success","affectedRows":1,"data":{"id":10001,"displayName":"系统管理员"}}
      */
     @ResponseBody
     @RequestMapping(value = "update.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -113,8 +126,10 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     /**
      * 批量更新用户。
      *
-     * @param queryIn items 中保存主键和更新字段
-     * @return 批量更新结果 JSON
+     * @param queryIn 前端 items 中的主键和更新字段，例如
+     *     {@code {"items":[{"paramMap":{"id":10001,"userStatus":"LOCKED"}}]}
+     * @return 批量更新结果 JSON，例如
+     *     {@code {"result":"success","affectedRows":1,"data":[{"id":10001,"userStatus":"LOCKED"}]}
      */
     @ResponseBody
     @RequestMapping(value = "updateBatch.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -127,8 +142,10 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
      * 删除用户。
      * 访问地址：POST /api/uniauth/users/delete.htm
      *
-     * @param queryIn 普通请求参数
-     * @return 删除结果 JSON
+     * @param queryIn 前端主键和审计字段，例如
+     *     {@code {"paramMap":{"id":10001,"updatedBy":90001}}
+     * @return 假删除结果 JSON，例如
+     *     {@code {"result":"success","affectedRows":1,"data":{"id":10001}}
      */
     @ResponseBody
     @RequestMapping(value = "delete.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -142,8 +159,10 @@ public class UniauthUserController extends BaseController<UniauthUserService> {
     /**
      * 批量假删除用户。
      *
-     * @param queryIn items 中保存主键和审计字段
-     * @return 批量假删除结果 JSON
+     * @param queryIn 前端 items 中的主键和审计字段，例如
+     *     {@code {"items":[{"paramMap":{"id":10001,"updatedBy":90001}}]}
+     * @return 批量假删除结果 JSON，例如
+     *     {@code {"result":"success","affectedRows":1,"data":[{"id":10001}]}
      */
     @ResponseBody
     @RequestMapping(value = "deleteBatch.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)

@@ -19,7 +19,7 @@ public class QueryCondition {
     /**
      * 获取字段名。
      *
-     * @return 字段名
+     * @return 后端白名单内的字段名，例如 {@code status}
      */
     public String getFieldName() {
         return fieldName;
@@ -37,7 +37,7 @@ public class QueryCondition {
     /**
      * 获取操作符。
      *
-     * @return 操作符
+     * @return 结构化比较操作符，例如 {@code EQ}
      */
     public QueryOperator getOperator() {
         return operator;
@@ -55,7 +55,7 @@ public class QueryCondition {
     /**
      * 获取首值。
      *
-     * @return 首值
+     * @return 单值或区间起始值，例如 {@code 1}
      */
     public Object getValue() {
         return value;
@@ -73,7 +73,7 @@ public class QueryCondition {
     /**
      * 获取次值。
      *
-     * @return 次值
+     * @return 区间结束值，例如 BETWEEN 条件中的 {@code 100}
      */
     public Object getSecondValue() {
         return secondValue;
@@ -88,4 +88,3 @@ public class QueryCondition {
         this.secondValue = secondValue;
     }
 }
-

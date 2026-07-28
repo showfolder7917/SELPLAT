@@ -7,33 +7,98 @@ import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonResult;
 
-// 用户服务统一使用共通入参和共通回参，避免模块继续维护专用的 In/Out 传输对象。
+/**
+ * 用户服务统一使用公共入参与固定的 {@link CommonResult}/{@link CommonPageResult} 回参。
+ * 前端字段从控制器原样进入公共服务链，用户模块只保留密码摘要等模块特有处理。
+ */
 public interface UniauthUserService extends BaseService {
 
-    // 前端传入 pageNo、pageSize 和任意允许查询的动态字段；服务层直接返回统一分页结果。
+    /**
+     * 按分页参数查询用户列表。
+     *
+     * @param queryIn 前端分页与筛选参数，例如
+     *     {@code {"pageNo":1,"pageSize":10,"paramMap":{"userStatus":"ACTIVE"}}}
+     * @return 固定分页结果，例如
+     *     {@code {"result":"success","dataList":[{"id":10001,"loginName":"admin"}],}
+     *     {@code "total":1,"pageNo":1,"pageSize":10}
+     */
     CommonPageResult getStore(CommonPageParam queryIn);
 
-    // 前端传入 id；服务层按主键查询单个用户详情并返回共通结果。
+    /**
+     * 按单组主键查询用户详情。
+     *
+     * @param queryIn 前端主键参数，例如 {@code {"paramMap":{"id":10001}}}
+     * @return 固定结果，例如
+     *     {@code {"result":"success","data":{"id":10001,"loginName":"admin","userStatus":"ACTIVE"}}
+     */
     CommonResult getById(CommonParam queryIn);
 
-    // 前端通过 items 传入多组单主键或复合主键；服务层返回批量详情结果。
+    /**
+     * 按多组单主键或复合主键查询用户详情。
+     *
+     * @param queryIn 前端批量主键参数，例如
+     *     {@code {"items":[{"paramMap":{"id":10001}},{"paramMap":{"id":10002}}]}
+     * @return 固定结果，例如
+     *     {@code {"result":"success","data":[{"id":10001,"loginName":"admin"},}
+     *     {@code {"id":10002,"loginName":"operator"}]}
+     */
     CommonResult getByIds(CommonBatchParam queryIn);
 
-    // 前端直接传入新增字段；当前服务只补主键并转换密码，统一验证将在后续公共能力中处理。
+    /**
+     * 新增单个用户并把明文密码转换为摘要。
+     *
+     * @param saveIn 前端新增字段，例如
+     *     {@code {"paramMap":{"tenantId":1,"loginName":"admin","password":"secret"}}
+     * @return 固定结果，例如
+     *     {@code {"result":"success","affectedRows":1,"data":{"id":10001,"loginName":"admin"}}
+     */
     CommonResult insert(CommonParam saveIn);
 
-    // 前端通过 items 批量传入新增字段；服务层逐项补主键和密码摘要后按一千条分组落库。
+    /**
+     * 批量新增用户，每一千条作为一个模板批次执行。
+     *
+     * @param saveIn 前端批量新增字段，例如
+     *     {@code {"items":[{"paramMap":{"tenantId":1,"loginName":"admin","password":"secret"}}]}
+     * @return 固定结果，例如
+     *     {@code {"result":"success","affectedRows":1,"data":[{"id":10001,"loginName":"admin"}]}
+     */
     CommonResult insertBatch(CommonBatchParam saveIn);
 
-    // 前端直接传入主键和更新字段；DAO 自动分离主键条件，统一验证将在后续公共能力中处理。
+    /**
+     * 按主键更新单个用户。
+     *
+     * @param saveIn 前端主键和更新字段，例如
+     *     {@code {"paramMap":{"id":10001,"displayName":"系统管理员"}}
+     * @return 固定结果，例如
+     *     {@code {"result":"success","affectedRows":1,"data":{"id":10001,"displayName":"系统管理员"}}
+     */
     CommonResult update(CommonParam saveIn);
 
-    // 前端通过 items 批量传入主键和更新字段；全部分组在同一事务内更新。
+    /**
+     * 批量更新用户，全部模板批次处于同一事务。
+     *
+     * @param saveIn 前端批量主键和更新字段，例如
+     *     {@code {"items":[{"paramMap":{"id":10001,"userStatus":"LOCKED"}}]}
+     * @return 固定结果，例如
+     *     {@code {"result":"success","affectedRows":1,"data":[{"id":10001,"userStatus":"LOCKED"}]}
+     */
     CommonResult updateBatch(CommonBatchParam saveIn);
 
-    // 前端直接传入主键和审计字段；DAO 自动提取主键并补充逻辑删除状态。
+    /**
+     * 按主键假删除单个用户。
+     *
+     * @param deleteIn 前端主键和审计字段，例如 {@code {"paramMap":{"id":10001,"updatedBy":90001}}}
+     * @return 固定结果，例如 {@code {"result":"success","affectedRows":1,"data":{"id":10001}}}
+     */
     CommonResult delete(CommonParam deleteIn);
 
-    // 前端通过 items 批量传入主键和审计字段；服务层只开放批量假删除。
+    /**
+     * 批量假删除用户，不开放物理删除。
+     *
+     * @param deleteIn 前端批量主键和审计字段，例如
+     *     {@code {"items":[{"paramMap":{"id":10001,"updatedBy":90001}}]}
+     * @return 固定结果，例如
+     *     {@code {"result":"success","affectedRows":1,"data":[{"id":10001}]}
+     */
     CommonResult deleteBatch(CommonBatchParam deleteIn);
 }
