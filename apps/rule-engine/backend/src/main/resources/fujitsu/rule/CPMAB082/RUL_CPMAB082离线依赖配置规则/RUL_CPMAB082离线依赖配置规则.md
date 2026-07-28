@@ -1,14 +1,14 @@
-# CPMAB082 离线依赖配置
+# CPMAB082 离线依赖配置规则
 
 ## 适用范围
 
 <!-- 问题：CPMAB082 除 Fujitsu 通用离线恢复算法外，还需要明确相邻构件来源和持久层替代验证边界。 -->
 <!-- 场景：CPMAB082 的 Gradle、Java、Checkstyle、MyBatis 或测试依赖在本机离线解析时出现缺口。 -->
-<!-- 业务含义：项目配置只保存 CPMAB082 特例，公共恢复流程统一引用规则包主规则，避免两套算法漂移。 -->
-configuration_scope = CPMAB082/offline_dependency_configuration
+<!-- 业务含义：项目规则只保存 CPMAB082 特例，公共恢复流程统一引用组织级规则包主规则，避免两套算法漂移。 -->
+rule_scope = CPMAB082/offline_dependency_configuration
 
-<!-- 执行 CPMAB082 离线恢复前必须加载同一规则包根目录的主规则。 -->
-cpmab082_offline_recovery_shared_rule = ../RUL_FujitsuGradle离线依赖闭包恢复规则.md
+<!-- 执行 CPMAB082 离线恢复前必须加载 Fujitsu 组织级公共规则包主规则。 -->
+cpmab082_offline_recovery_shared_rule = ../../RUL_FujitsuGradle离线依赖闭包恢复规则/RUL_FujitsuGradle离线依赖闭包恢复规则.md
 
 <!-- CPMACOMMON 和 CPMAB081 的已构建产物只允许作为显式只读候选 classpath，禁止修改相邻工程。 -->
 cpmab082_allowed_readonly_reference_classpath = ../CPMACOMMON/build,../CPMAB081/build

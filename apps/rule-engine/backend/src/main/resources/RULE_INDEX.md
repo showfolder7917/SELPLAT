@@ -59,8 +59,8 @@ load_rule_for_fujitsu_dynamic_version_or_local_artifact_recovery = FUJITSU_GRADL
 load_rule_for_fujitsu_offline_normal_test_or_jacoco = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
 
 <!-- CPMAB082 在组织级离线恢复算法之外的只读参考工程、目标编译、Checkstyle 和 MyBatis 特殊配置。 -->
-FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/project/CPMAB082离线依赖配置.md
-load_config_for_cpmab082_offline_reference_or_fallback_verification = FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG
+FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082离线依赖配置规则/RUL_CPMAB082离线依赖配置规则.md
+load_rule_for_cpmab082_offline_reference_or_fallback_verification = FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES
 
 <!-- SELPLAT 工程目录、构建产物、项目 JDK、工具运行数据与缓存位置规则；适用于工程路径解析、旧 runtime 迁移及 Python 字节码缓存定向。 -->
 SELPLAT_PROJECT_PATH_RULES = selplat/通用规则/RUL_SELPLAT工程路径规则.md

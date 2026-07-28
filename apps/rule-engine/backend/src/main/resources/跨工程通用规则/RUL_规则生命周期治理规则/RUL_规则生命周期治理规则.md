@@ -50,9 +50,14 @@ rule_package_standard_asset_directories = docs/,template/,examples/,project/
 <!-- README 保存规则包资产清单和入口说明，但不得复制主规则正文；业务含义是人可以从目录根快速了解组成，机器仍以主规则为唯一约束入口 -->
 rule_package_readme_policy = manifest_and_entry_description_only
 
-<!-- RULE_INDEX 必须指向同名规则包内的主规则文件；项目差异配置可作为同一规则包的附属入口登记，不得重新复制公共算法 -->
+<!-- RULE_INDEX 必须指向同名规则包内的主规则文件；业务含义是索引只加载明确归属的权威规则入口 -->
 rule_index_must_reference_rule_package_main_file = true
-project_configuration_must_remain_rule_package_asset = true
+
+<!-- 公共规则包中的 project 目录只允许保存项目配置 Schema 或非权威示例；业务含义是公共包可以定义扩展格式，但不能持有真实项目配置 -->
+shared_rule_package_project_directory_scope = configuration_schema_or_non_authoritative_example_only
+
+<!-- 真实项目规则和配置必须进入组织下对应项目目录的同名规则包；业务含义是从项目目录可以找到全部项目专项约束，公共包不会随项目数量持续膨胀 -->
+authoritative_project_rule_or_configuration_path = <organization>/rule/<project>/RUL_<项目主题>规则/RUL_<项目主题>规则.md
 
 <!-- 规则生成器必须默认创建同名目录、同名主规则文件和 README，并按调用方声明创建标准资产子目录；业务含义是生成结果天然满足组织约定而非事后人工搬运 -->
 rule_generator_default_output = same_name_directory + same_name_main_rule + README
