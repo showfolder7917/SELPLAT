@@ -155,11 +155,11 @@ public class DBデータ生成ツール {
     // 业务上无参执行时明确读取 define 与 testCase 两个目录并更新指定 xlsm，满足 VS Code 一键全量刷新。
     if (args.length == 0) {
       // 业务上 definePath 是字段定义的唯一来源，修改该变量即可明确控制 def_/inp_/exp_ 的定义内容。
-      definePath = Paths.get("C:\\opt\\bat\\CPMAB202\\test\\inputData\\CPMA\\CPMAB202\\db\\define");
+      definePath = Paths.get("C:\\opt\\bat\\CPMAB081\\test\\inputData\\CPMA\\CPMAB081\\db\\define");
       // 业务上 sourcePath 是测试数据的唯一来源，修改该变量即可明确控制写入哪些 case 数据。
-      sourcePath = Paths.get("C:\\opt\\bat\\CPMAB202\\test\\inputData\\CPMA\\CPMAB202\\db\\testCase");
+      sourcePath = Paths.get("C:\\opt\\bat\\CPMAB081\\test\\inputData\\CPMA\\CPMAB081\\db\\testCase");
       // 业务上 xlsmPath 是唯一修改目标，修改该变量即可明确控制最终覆盖哪个 DB 数据生成工具。
-      xlsmPath = Paths.get("C:\\opt\\bat\\CPMAB202\\test\\020_DBデータ生成ツール_v2.15_template_CP.xlsm");
+      xlsmPath = Paths.get("C:\\opt\\bat\\CPMAB081\\test\\020_DBデータ生成ツール_v2.15_template_CP.xlsm");
       // 业务上 VS Code 的 Run Java 无参入口必须同时使用三个显式路径，不能退回只导入 testCase 的旧行为。
       importDatabase(xlsmPath, definePath, sourcePath);
       // 业务上控制台同时回显三个路径，便于操作者执行后再次确认数据来源和修改目标。

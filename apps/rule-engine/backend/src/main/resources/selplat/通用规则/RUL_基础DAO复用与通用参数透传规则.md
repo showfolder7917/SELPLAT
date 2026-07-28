@@ -13,6 +13,9 @@ selplat_service_base_dao_public_call_entry = getDao()
 <!-- 公共 DAO 的继承方向固定为门面层、CRUD 层、分页查询层、支撑层；适用于 common-db 基础类维护；业务含义是上层扩展入口稳定且实现职责逐层下沉。 -->
 selplat_base_dao_inheritance_chain = BaseDaoImpl extends BaseCrudDaoImpl extends BasePagingQueryDaoImpl extends BaseDaoSupportImpl
 
+<!-- 明确修改基础 DAO 的受保护契约时，关联实现、内部调用、测试、注释和命中规则必须在同一变更中同步；适用于方法名、参数、返回结构或继承职责调整；业务含义是公共链路不会留下旧入口或规则失配。 -->
+selplat_base_dao_contract_change_atomic_sync = implementation,internal_callers,tests,comments,applicable_rules,rule_index
+
 <!-- BaseDao 与 BaseDaoImpl 必须作为唯一接口实现组合逐项对应；适用于分页、主键查询、CommonParam 查询、新增、更新和假删除；业务含义是公共契约的每个方法只在 BaseDaoImpl 存在一个实际实现。 -->
 selplat_base_dao_interface_and_impl_must_match_one_to_one = true
 
@@ -70,7 +73,7 @@ selplat_dao_must_remove_zero_value_base_wrappers = true
 <!-- 主键业务查询统一使用 BaseDao.getById(CommonParam)；适用于单主键和复合主键场景；业务含义是前端主键字段从 Controller 经 Service 原样传入公共 DAO。 -->
 selplat_dao_primary_key_query_signature = getById(CommonParam)
 
-<!-- BaseCrudDaoImpl.getByIds 必须接收同一个 CommonParam，并按 getIds 元数据顺序提取全部主键字段；适用于单主键和复合主键；业务含义是 Service 不再读取、转换或重新组装主键值列表。 -->
+<!-- BaseCrudDaoImpl.getByIds 必须接收同一个 CommonParam，并按 getPrimaryKeyColumnNameList 元数据顺序提取全部主键字段；适用于单主键和复合主键；业务含义是 Service 不再读取、转换或重新组装主键值列表。 -->
 selplat_base_crud_get_by_ids_signature = getByIds(CommonParam)
 
 <!-- 复合主键查询缺少任一元数据主键字段时必须在 SQL 前终止；适用于 tenantId 与 itemId 等组合；业务含义是不完整主键不得退化成部分条件查询。 -->
@@ -89,8 +92,8 @@ selplat_dao_empty_single_query_must_not_access_database = true
 selplat_base_dao_soft_delete_generated_columns = status,updatedAt
 selplat_base_dao_soft_delete_passthrough_columns = lastOperateUserId
 
-<!-- 主键号段定义的具体组装逻辑必须由 BaseDaoSupportImpl 读取 getTableName 与 getIds 自动完成，BaseDaoImpl 只复写接口并委托受保护构建方法；适用于全部单主键和复合主键 DAO；业务含义是公共门面保持简洁且 Service 与应用 DAO 不再硬编码模块号段常量。 -->
-selplat_id_sequence_definition_source = BaseDaoImpl.getIdSequenceDefinition -> BaseDaoSupportImpl.buildIdSequenceDefinition(getTableName,getIds)
+<!-- 主键号段定义的具体组装逻辑必须由 BaseDaoSupportImpl 读取 getTableName 与 getPrimaryKeyColumnNameList 自动完成，BaseDaoImpl 只复写接口并委托受保护构建方法；适用于全部单主键和复合主键 DAO；业务含义是公共门面保持简洁且 Service 与应用 DAO 不再硬编码模块号段常量。 -->
+selplat_id_sequence_definition_source = BaseDaoImpl.getIdSequenceDefinition -> BaseDaoSupportImpl.buildIdSequenceDefinition(getTableName,getPrimaryKeyColumnNameList)
 
 <!-- 下沉的号段定义构建方法只能使用 protected 可见性；适用于公共 DAO 继承链；业务含义是业务 DAO 和 Service 仍只能调用 BaseDao 公开能力，不能绕过门面访问深层实现。 -->
 selplat_id_sequence_builder_visibility = protected
@@ -124,8 +127,8 @@ selplat_common_param_service_comment_must_describe_frontend_passthrough = true
 selplat_base_dao_common_param_write_signatures = insert(CommonParam),update(CommonParam),softDelete(CommonParam)
 selplat_base_dao_common_batch_param_write_signatures = insertBatch(CommonBatchParam),updateBatch(CommonBatchParam),softDeleteBatch(CommonBatchParam)
 
-<!-- BaseDao.update 必须按 getIds 元数据顺序从 CommonParam 自动提取单主键或复合主键并从 set 字段中移除；适用于全部通用更新；业务含义是前端只传一个参数对象即可准确区分 where 与 set。 -->
-selplat_base_dao_update_id_extraction = ordered_extract(getIds,CommonParam)
+<!-- BaseDao.update 必须按 getPrimaryKeyColumnNameList 元数据顺序从 CommonParam 自动提取单主键或复合主键并从 set 字段中移除；适用于全部通用更新；业务含义是前端只传一个参数对象即可准确区分 where 与 set。 -->
+selplat_base_dao_update_id_extraction = ordered_extract(getPrimaryKeyColumnNameList,CommonParam)
 
 <!-- 当前 Service 写入链路不分散实现必填、唯一性、默认值或类型验证，这些验证等待后续统一能力；适用于 insert、update、delete；业务含义是 Service 继续直接透传 CommonParam，不重复建设临时验证。 -->
 selplat_service_deferred_write_validation = required,uniqueness,default_value,type_conversion

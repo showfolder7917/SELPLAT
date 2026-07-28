@@ -35,3 +35,31 @@ rule_change_must_sync_rule_index = RULE_INDEX.md
 
 <!-- 被完全替代或失去入口的规则必须删除并清理索引；适用于规则退役；业务含义是避免旧规则继续误导执行 -->
 obsolete_rule_and_index_reference_must_be_removed = true
+
+## 同名规则包
+
+<!-- 每个新规则必须拥有与主规则文件去掉 .md 后同名的独立目录；适用于规则生成、新增和发生结构性维护的既有规则；业务含义是看到规则名即可唯一推导全部关联资产位置 -->
+rule_package_directory_pattern = <scope-root>/RUL_<主题>规则/
+
+<!-- 主规则文件必须位于同名规则包根且与目录同名；业务含义是索引入口和人工定位都不再依赖跨目录猜测 -->
+rule_package_main_file_pattern = <scope-root>/RUL_<主题>规则/RUL_<主题>规则.md
+
+<!-- 规则说明、模板、样例和项目差异配置只能进入同名规则包的标准子目录；业务含义是一个主题的完整执行材料保持共同生命周期 -->
+rule_package_standard_asset_directories = docs/,template/,examples/,project/
+
+<!-- README 保存规则包资产清单和入口说明，但不得复制主规则正文；业务含义是人可以从目录根快速了解组成，机器仍以主规则为唯一约束入口 -->
+rule_package_readme_policy = manifest_and_entry_description_only
+
+<!-- RULE_INDEX 必须指向同名规则包内的主规则文件；项目差异配置可作为同一规则包的附属入口登记，不得重新复制公共算法 -->
+rule_index_must_reference_rule_package_main_file = true
+project_configuration_must_remain_rule_package_asset = true
+
+<!-- 规则生成器必须默认创建同名目录、同名主规则文件和 README，并按调用方声明创建标准资产子目录；业务含义是生成结果天然满足组织约定而非事后人工搬运 -->
+rule_generator_default_output = same_name_directory + same_name_main_rule + README
+rule_generator_optional_asset_directories = docs,template,examples,project
+
+<!-- 非法规则名、越出规则资源根、覆盖既有规则包或写入非标准资产目录时必须阻断；业务含义是自动生成不能破坏现有规则或把关联文件再次散开 -->
+rule_generator_must_block = invalid_rule_name,path_escape,existing_package_overwrite,nonstandard_asset_directory
+
+<!-- 尚未发生维护的历史散放规则允许渐进迁移；一旦规则被新增关联资产、移动、改名或结构性修改，必须在同一任务迁入同名规则包并修正全部引用 -->
+legacy_loose_rule_migration_policy = migrate_when_structurally_touched

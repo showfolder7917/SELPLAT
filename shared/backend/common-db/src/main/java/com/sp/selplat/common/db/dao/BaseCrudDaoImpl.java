@@ -15,7 +15,7 @@ public abstract class BaseCrudDaoImpl extends BasePagingQueryDaoImpl {
     // 受保护的主键查询从同一个前端 CommonParam 提取当前表全部主键，统一支持单主键和复合主键。
     protected Map<String, Object> getByIds(CommonParam queryIn) {
         // 先读取当前 DAO 的主键字段列表，明确当前详情查询 WHERE 条件使用哪些主键列。
-        List<String> idColumns = getIds();
+        List<String> idColumns = getPrimaryKeyColumnNameList();
         // 从前端通用参数按元数据顺序解析全部主键值，缺少任一复合主键字段都会在执行 SQL 前失败。
         List<Object> idValues = resolveIdValues(idColumns, queryIn);
         // 通过模板 DAO 按 DAO 内部组装出的主键列值映射查询当前表的一条记录。
@@ -29,7 +29,7 @@ public abstract class BaseCrudDaoImpl extends BasePagingQueryDaoImpl {
             return List.of();
         }
         // 主键字段统一从当前真实表元数据读取，兼容单主键和复合主键。
-        List<String> idColumns = getIds();
+        List<String> idColumns = getPrimaryKeyColumnNameList();
         // 单条记录的主键条件固定使用 AND 连接全部主键字段。
         StringJoiner itemCondition = new StringJoiner(" AND ", "(", ")");
         // 每个主键字段只使用参数占位符，字段名来源于受控数据库元数据。

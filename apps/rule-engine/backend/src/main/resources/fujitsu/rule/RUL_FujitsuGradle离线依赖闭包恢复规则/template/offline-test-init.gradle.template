@@ -1,0 +1,28 @@
+// 本模板归属于 Fujitsu Gradle 离线恢复同名规则包；源文件使用 .template 后缀避免编辑器按可执行 Gradle 脚本误报占位符。
+gradle.settingsEvaluated { settings ->
+    settings.pluginManagement.repositories.clear()
+@@PLUGIN_REPOSITORIES@@
+}
+
+gradle.projectsEvaluated {
+    rootProject.repositories.clear()
+@@PROJECT_REPOSITORIES@@
+
+    rootProject.configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            def offlineVersions = [
+@@VERSION_PINS@@
+            ]
+            def offlineVersion = offlineVersions[details.requested.group + ':' + details.requested.name]
+            if (offlineVersion == null) {
+                offlineVersion = offlineVersions[details.requested.group + ':*']
+            }
+            if (offlineVersion != null) {
+                details.useVersion(offlineVersion)
+                details.because('Use a concrete artifact verified in the local offline cache')
+            }
+        }
+    }
+
+@@RUNTIME_DEPENDENCIES@@
+}

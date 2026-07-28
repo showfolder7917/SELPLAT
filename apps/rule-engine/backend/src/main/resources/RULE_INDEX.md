@@ -14,6 +14,7 @@ chinese_teaching_rule_root = 中文教学/rule/
 chinese_teaching_brand_asset_root = 中文教学/assets/品牌/
 fujitsu_resource_root = fujitsu/
 fujitsu_sql_generator_resource_root = fujitsu/template/sql/SQL仕様書生成ツール/
+fujitsu_gradle_offline_rule_package_root = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/
 fujitsu_sql_code_root = ../java/com/sp/selplat/code/fujitsu/sql/
 chinese_teaching_pinyin_code_root = ../java/com/sp/selplat/code/中文教学/拼音生成/
 chinese_teaching_image_ppt_code_root = ../java/com/sp/selplat/code/中文教学/教学图片与PPT生成/
@@ -32,11 +33,12 @@ project_rule_conflict_scope = same_topic,same_applicability
 resource_path_change_maintenance = update_this_index_and_related_memories_records
 memories_related_record_policy = inspect_and_repair_existing_related_rule_protocol_ability_test_or_index
 memories_new_rule_policy = rule_engine_is_primary_authoring_location
-rule_file_name_pattern = RUL_<主题>规则.md
-rule_file_name_policy = every_new_rule_must_use_rul_prefix_and_descriptive_topic_name
+rule_package_directory_pattern = RUL_<主题>规则/
+rule_package_main_file_pattern = RUL_<主题>规则/RUL_<主题>规则.md
+rule_file_name_policy = every_new_rule_must_use_same_name_package_and_main_file
 
 <!-- 规则新增、移动、删除、分类和索引维护的主治理规则；任何规则结构变更前必须先加载。 -->
-RULE_LIFECYCLE_GOVERNANCE_RULES = 跨工程通用规则/RUL_规则生命周期治理规则.md
+RULE_LIFECYCLE_GOVERNANCE_RULES = 跨工程通用规则/RUL_规则生命周期治理规则/RUL_规则生命周期治理规则.md
 load_rule_for_rule_creation_move_delete_or_classification = RULE_LIFECYCLE_GOVERNANCE_RULES
 load_rule_for_rule_index_maintenance = RULE_LIFECYCLE_GOVERNANCE_RULES
 
@@ -50,6 +52,16 @@ FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082�
 load_rule_for_cpmab082_test_data_or_database_integration = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
 load_rule_for_cpmab082_tester_case_or_jacoco_coverage = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
 
+<!-- Fujitsu Gradle 工程禁止下载时的本机构件发现、明确版本选择、项目 cache 离线仓库重建、临时 init script 和正常 test 恢复规则；适用于 CP、IT、SB、AP 工程。 -->
+FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/RUL_FujitsuGradle离线依赖闭包恢复规则.md
+load_rule_for_fujitsu_gradle_offline_dependency_gap = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
+load_rule_for_fujitsu_dynamic_version_or_local_artifact_recovery = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
+load_rule_for_fujitsu_offline_normal_test_or_jacoco = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
+
+<!-- CPMAB082 在组织级离线恢复算法之外的只读参考工程、目标编译、Checkstyle 和 MyBatis 特殊配置。 -->
+FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/project/CPMAB082离线依赖配置.md
+load_config_for_cpmab082_offline_reference_or_fallback_verification = FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG
+
 <!-- SELPLAT 工程目录、构建产物、项目 JDK、工具运行数据与缓存位置规则；适用于工程路径解析、旧 runtime 迁移及 Python 字节码缓存定向。 -->
 SELPLAT_PROJECT_PATH_RULES = selplat/通用规则/RUL_SELPLAT工程路径规则.md
 load_rule_for_selplat_project_path_or_runtime_output = SELPLAT_PROJECT_PATH_RULES
@@ -61,7 +73,7 @@ SELPLAT_PROJECT_BUILD_RULES = selplat/通用规则/RUL_SELPLAT工程构建规则
 load_rule_for_selplat_gradle_dependency_or_build_output = SELPLAT_PROJECT_BUILD_RULES
 load_rule_for_selplat_vscode_gradle_import_or_cache = SELPLAT_PROJECT_BUILD_RULES
 
-<!-- SELPLAT 全部应用共用的基础 DAO 复用、CommonParam/CommonBatchParam 透传、真实数据库字段控制和主键号段定义规则；适用于简单单表 CRUD、BaseDaoImpl 千条分组、BaseTemplateDao 真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
+<!-- SELPLAT 全部应用共用的基础 DAO 复用、基础类契约原子同步、CommonParam/CommonBatchParam 透传、真实数据库字段控制和主键号段定义规则；适用于简单单表 CRUD、BaseDaoImpl 千条分组、BaseTemplateDao 真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
 SELPLAT_BASE_DAO_REUSE_RULES = selplat/通用规则/RUL_基础DAO复用与通用参数透传规则.md
 load_rule_for_selplat_base_dao_crud_or_paging_reuse = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_common_param_dao_query = SELPLAT_BASE_DAO_REUSE_RULES

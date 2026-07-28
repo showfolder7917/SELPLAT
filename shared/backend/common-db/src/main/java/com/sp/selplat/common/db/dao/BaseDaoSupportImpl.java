@@ -23,7 +23,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
-// 通用 DAO 支撑层负责表名解析、字段元数据、主键号段定义、模板查询入参拼装和公共查询组件暴露，不直接承接业务 SQL 或分页执行。
+/**
+ * 提供公共 DAO 的表名、元数据、主键号段和查询支撑能力。
+ */
 public abstract class BaseDaoSupportImpl {
 
     // 模板 DAO 门面由 Spring 在实例化具体 DAO 子类后统一注入，集中承接单条 Mapper 与真实 JDBC 批处理。
@@ -48,115 +50,144 @@ public abstract class BaseDaoSupportImpl {
     private static final CommonQueryExecutor COMMON_QUERY_EXECUTOR = new DefaultCommonQueryExecutor(COMMON_QUERY_SQL_BUILDER);
 
 
-    // 分页查询基类需要知道当前真实数据源类型，供方言层在 SQL 构建阶段统一判断数据库差异。
+    /**
+     * 解析当前 DAO 使用的数据库上下文。
+     *
+     * @return {"sourceKey":"H2","databaseType":"H2","dataSource":"org.h2.jdbcx.JdbcDataSource","catalogName":"运行时随机UUID","schemaName":"PUBLIC"}
+     */
     protected CommonDbSource resolveCurrentDbSource() {
-        // 直接复用 config 层解析器，把当前注入的数据源转换成可复用的数据源上下文。
+        // 解析注入的数据源 → 可供元数据、方言和查询链路复用的数据库上下文。
         return COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
     }
 
-    // 公共 DAO 统一从当前表元数据读取主键列列表，供模板更新、删除和详情查询组装复合主键条件。
-    protected List<String> getIds() {
-        // 当前 DAO 的物理表名继续沿用基类约定解析，保证主键读取与模板 CRUD 命中同一张表。
+    /**
+     * 读取当前 DAO 对应表的主键字段。
+     *
+     * @return ["id", "tenantId"]
+     */
+    protected List<String> getPrimaryKeyColumnNameList() {
+        // 解析当前表名 → "UniauthUser"。
         String tableName = getTableName();
-        // 通过 config 层解析器把当前真实数据源转换成 common-db 可复用的数据源上下文实体。
+        // 解析当前数据库上下文 → {"sourceKey":"H2","databaseType":"H2","dataSource":"org.h2.jdbcx.JdbcDataSource","catalogName":"运行时随机UUID","schemaName":"PUBLIC"}。
         CommonDbSource commonDbSource = COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
-        // 通过统一元数据读取器读取当前表主键列，兼容不同数据库的标准 JDBC 元数据实现。
+        // 读取 "UniauthUser" 的主键列名 → ["id", "tenantId"]。
         List<String> idColumnList = METADATA_READER.listPrimaryKeys(commonDbSource, tableName);
-        // 没读到任何主键时立即失败，避免模板更新或删除退化成无 where 或错误 where。
+        // 表没有主键时停止，防止后续更新或删除缺少主键条件。
         if (idColumnList == null || idColumnList.isEmpty()) {
             throw new IllegalStateException("no primary keys found for table: " + tableName);
         }
-        // 返回当前表主键列列表，供上层继续校验主键值映射并构造复合条件。
+        // 输出主键列名列表 → ["id", "tenantId"]，供查询、更新和删除构造条件。
         return idColumnList;
     }
 
-    // 按公共 DAO 的命名约定延迟解析物理表名，让子类无需显式传参或依赖构造阶段赋值。
+    /**
+     * 按 DAO 实现类命名约定解析当前表名。
+     *
+     * @return 表名，例如 "UniauthUser"
+     */
     protected String getTableName() {
-        // 先还原 Spring 代理背后的用户类，避免 CGLIB 后缀导致公共 DAO 命名约定解析失败。
+        // 获取代理背后的 DAO 实现类 → "UniauthUserDaoImpl"。
         Class<?> userClass = ClassUtils.getUserClass(this);
-        // 使用用户类类名推导默认表名，保持简单单表模块的零样板接入方式。
+        // 读取 DAO 简类名 → "UniauthUserDaoImpl"。
         String simpleName = userClass.getSimpleName();
-        // 类名不满足平台 DAO 命名约定时立即失败，避免模板 SQL 打到错误表。
+        // DAO 类名不以 "DaoImpl" 结尾时停止，防止 SQL 指向错误表。
         if (!simpleName.endsWith("DaoImpl")) {
             throw new IllegalStateException("DAO类名不符合约定: " + simpleName);
         }
-        // 去掉实现类后缀后返回物理表名，供通用 CRUD 和动态查询共用。
+        // 去除 "DaoImpl" 后缀 → "UniauthUser"。
         return simpleName.substring(0, simpleName.length() - "DaoImpl".length());
     }
 
-    // 根据当前 DAO 的表名和主键元数据构建字段到独立号段编码的定义，供 BaseDaoImpl 门面直接委托。
+    /**
+     * 为当前表的每个主键列构建独立号段编码。
+     *
+     * @return {"id":"UniauthUserId","tenantId":"UniauthUserTenantId"}
+     */
     protected IdSequenceDefinition buildIdSequenceDefinition() {
-        // 读取当前 DAO 的有序主键字段，保证复合主键定义和最终发号结果使用同一顺序。
-        List<String> idColumns = getIds();
-        // 表对应的类名作为每个独立号段编码的固定前缀，例如 UniauthUser。
+        // 读取主键列名 → ["id", "tenantId"]。
+        List<String> idColumns = getPrimaryKeyColumnNameList();
+        // 读取表名 → "UniauthUser"，作为号段编码前缀。
         String tableName = getTableName();
-        // 表名元数据缺失时立即终止，避免生成无法与数据库号段记录匹配的编码。
+        // 表名为空时停止，防止生成无法匹配数据库记录的号段编码。
         if (tableName == null || tableName.trim().isEmpty()) {
             throw new IllegalStateException("DAO table name must not be blank");
         }
-        // 使用有序映射保存“字段名 → 独立号段编码”，让复合主键分别查询不同数据库记录。
+        // 创建有序号段映射 → {}。
         Map<String, String> idSequenceCodeMap = new LinkedHashMap<>();
-        // 逐个处理主键字段，每个字段都使用表名前缀形成自己的号段编码。
+        // 遍历每个主键列 → 为每列生成独立号段编码。
         for (String idColumn : idColumns) {
-            // 每个主键字段都必须有效，否则生成值无法知道应该回填到哪个字段。
+            // 主键列名为空时停止，防止生成值无法回填。
             if (idColumn == null || idColumn.trim().isEmpty()) {
                 throw new IllegalStateException("DAO id column must not be blank");
             }
-            // 去除字段首尾空格，保证命名判断只基于真实元数据名称。
+            // 去除列名首尾空格 → "tenantId"。
             String normalizedColumn = idColumn.trim();
-            // 按下划线、连字符和空白切分数据库字段，兼容 camelCase 与 snake_case 元数据。
+            // 拆分列名 → ["tenantId"] 或 ["tenant", "id"]。
             String[] nameParts = normalizedColumn.split("[_\\-\\s]+");
-            // 每个主键字段从表对应类名开始建立独立号段编码，例如 UniauthUserTenantId。
+            // 初始化号段编码 → "UniauthUser"。
             StringBuilder sequenceCode = new StringBuilder(tableName.trim());
-            // 逐段转换成 UpperCamelCase 并拼入当前字段的独立号段编码。
+            // 遍历列名片段 → 拼接 UpperCamelCase 编码。
             for (String namePart : nameParts) {
-                // 连续分隔符产生的空片段不参与编码，避免生成无意义字符。
+                // 空片段跳过，避免编码出现无意义字符。
                 if (namePart.isEmpty()) {
                     continue;
                 }
-                // 每个片段首字母大写，同时保留既有 camelCase 内部大小写。
+                // 首字母大写后拼接 → "UniauthUserTenant"。
                 sequenceCode.append(Character.toUpperCase(namePart.charAt(0)));
-                // 片段剩余字符保持元数据原样，避免破坏 tenantKey 等已有业务命名。
+                // 拼接剩余字符 → "UniauthUserTenantId"。
                 sequenceCode.append(namePart.substring(1));
             }
-            // 保存当前字段自己的号段编码，不与其他复合主键字段合并。
+            // 保存列名和独立号段编码 → {"tenantId":"UniauthUserTenantId"}。
             idSequenceCodeMap.put(normalizedColumn, sequenceCode.toString());
         }
-        // 返回完整字段号段定义，使发号器逐项查询数据库并输出字段名到 Long 的有序映射。
+        // 输出主键列到号段编码的定义 → {"id":"UniauthUserId","tenantId":"UniauthUserTenantId"}。
         return new IdSequenceDefinition(idSequenceCodeMap);
     }
 
-    // 公共 DAO 统一通过现有元数据读取器生成以逗号和空格分隔的 select 字段串，例如：id, tenantId, loginName, status。
+    /**
+     * 生成当前表可用于 SELECT 的列名字符串。
+     *
+     * @return "id, tenantId, loginName, status"
+     */
     protected String getselectColumns() {
-        // 当前 DAO 的物理表名继续沿用基类约定解析，保证字段读取目标与模板 CRUD 命中同一张表。
+        // 解析当前表名 → "UniauthUser"。
         String tableName = getTableName();
-        // 通过 config 层的解析器把当前真实数据源转换成 common-db 可复用的数据源上下文实体。
+        // 解析数据库上下文 → {"databaseType":"H2","schemaName":"PUBLIC"}。
         CommonDbSource commonDbSource = COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
-        // 通过现有元数据读取器实时查询目标表字段，保证字段顺序和真实表结构保持一致。
+        // 读取表字段元数据 → ["id", "tenantId", "loginName", "status"]。
         List<ColumnMetadata> columnMetadataList = METADATA_READER.listColumns(commonDbSource, tableName);
-        // 通过 metadata 层的构建器把字段元数据转换成模板和动态查询都可复用的字段串。
+        // 拼接 SELECT 字段 → "id, tenantId, loginName, status"。
         String selectColumns = METADATA_SELECT_COLUMN_BUILDER.build(columnMetadataList);
-        // 没读到任何字段时立即失败，避免后续 select 退化成非法 SQL。
+        // 字段串为空时停止，防止生成非法 SELECT SQL。
         if (!StringUtils.hasText(selectColumns)) {
             throw new IllegalStateException("no selectable columns found for table: " + tableName);
         }
-        // 返回当前表的完整字段串，供详情、列表和动态查询统一复用。
+        // 输出 SELECT 列名字符串 → "id, tenantId, loginName, status"。
         return selectColumns;
     }
 
-    // 分页查询基类需要复用同一套动态 SQL 执行器，避免在各个 DAO 子类里继续散落 JDBC 方言调用。
+    /**
+     * 获取公共动态查询执行器。
+     *
+     * @return DefaultCommonQueryExecutor
+     */
     protected CommonQueryExecutor getCommonQueryExecutor() {
-        // 返回当前支撑层统一维护的查询执行器，让分页和动态查询共用同一条 SQL 构建与执行链路。
+        // 输出统一查询执行器 → 分页和动态查询共用同一条 SQL 构建与执行链路。
         return COMMON_QUERY_EXECUTOR;
     }
 
-    // 复制字段映射时统一使用 LinkedHashMap，保证列顺序稳定并兼容 null 场景。
+    /**
+     * 复制字段和值的有序映射，避免修改调用方原始参数。
+     *
+     * @param sourceColumnValueMap 原字段映射，例如 {"id":1,"status":"ENABLE"}
+     * @return 独立字段映射，例如 {"id":1,"status":"ENABLE"}
+     */
     protected Map<String, Object> copyColumnValueMap(Map<String, Object> sourceColumnValueMap) {
-        // 调用方不传条件或字段时，统一返回空有序映射，避免模板层出现空指针。
+        // 输入为空映射时输出 {}，避免模板层出现空指针。
         if (sourceColumnValueMap == null || sourceColumnValueMap.isEmpty()) {
             return new LinkedHashMap<>();
         }
-        // 复制一份独立有序映射，让模板入参和调用方原始对象完全解耦。
+        // 复制字段映射 → 保持字段顺序且不改写调用方原对象。
         return new LinkedHashMap<>(sourceColumnValueMap);
     }
 }

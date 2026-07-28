@@ -143,7 +143,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         // 目标表继续使用公共元数据命名约定解析。
         updateIn.setTableName(getTableName());
         // 主键字段列表从当前表元数据读取，兼容单主键和复合主键。
-        updateIn.setIdColumns(getIds());
+        updateIn.setIdColumns(getPrimaryKeyColumnNameList());
         // 复制前端通用字段供当前 DAO 分离主键，避免移除字段时修改 Controller 传入的原对象。
         Map<String, Object> columnValueMap = copyColumnValueMap(saveIn.getParamMap());
         // 按 DAO 元数据顺序保存主键值，保证复合主键字段和值一一对应。
@@ -173,7 +173,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         // 目标表继续由当前 DAO 命名约定解析，避免模板层接收前端表名。
         String tableName = getTableName();
         // 主键字段一次性从真实表元数据读取，供所有千条分组复用同一更新条件结构。
-        List<String> idColumns = getIds();
+        List<String> idColumns = getPrimaryKeyColumnNameList();
         // 固定按一千条步长拆分外部批量请求。
         for (int startIndex = 0; startIndex < saveIn.getItems().size(); startIndex += BATCH_OPERATION_SIZE) {
             // 当前更新分组最多包含一千条。

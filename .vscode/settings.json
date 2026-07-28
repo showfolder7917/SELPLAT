@@ -1,9 +1,9 @@
 {
-  "java.import.gradle.user.home": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/cache/gradle-user-home",
+  "java.import.gradle.user.home": "C:/opt/workspace/SELPLAT/cache/gradle-user-home",
   "java.autobuild.enabled": false,
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.import.gradle.wrapper.enabled": true,
-  "java.import.gradle.offline.enabled": true,
+  "java.import.gradle.offline.enabled": false,
   "java.gradle.buildServer.enabled": "off",
   "java.jdt.ls.lombokSupport.enabled": true,
   "java.import.exclusions": [
@@ -14,7 +14,9 @@
   "files.exclude": {
     "**/bin": true,
     "build": true,
-    "cache": true
+    "cache": true,
+    ".codex": true,
+    ".agents": true
   },
   "search.exclude": {
     "**/bin": true,

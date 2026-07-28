@@ -91,5 +91,8 @@ batch_must_inject_business_component_for_business_name_editing = true
 <!-- 持久层交付至少验证目标编译、Checkstyle、XML、statement 注册和批量 Insert 绑定；业务含义是覆盖类型、风格、映射与运行参数契约 -->
 required_mapper_change_verification = java_compile,checkstyle,xml_parse,mybatis_statement_registration,bound_sql_parameter_binding
 
-<!-- 离线依赖缺失时进入同项目独立规则模块；业务含义是本文件只声明验证目标，具体回退顺序保持单一权威来源 -->
-offline_dependency_handling_rule = fujitsu/rule/CPMAB082/RUL_CPMAB082离线依赖解析规则.md
+<!-- 离线依赖缺失时先进入 Fujitsu 组织级公共恢复规则；业务含义是闭包重建、无网络边界和正常测试入口保持跨工程单一权威来源 -->
+offline_dependency_shared_handling_rule = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/RUL_FujitsuGradle离线依赖闭包恢复规则.md
+
+<!-- CPMAB082 的只读参考工程和持久层替代验证差异由项目配置规则补充；业务含义是项目模块只维护自身特例 -->
+offline_dependency_project_configuration = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/project/CPMAB082离线依赖配置.md
