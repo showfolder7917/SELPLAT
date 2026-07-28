@@ -182,13 +182,32 @@ public final class BaseServiceImplTestVerifier {
      *
      * <p>执行结果示例：当前真实数据库或边界 Case 的全部验证通过。</p>
      *
-     * @throws AssertionError 当 {@code getDao()} 所属层级或基础类字段职责不符合约定时抛出
+     * @throws AssertionError 当 DAO、CRUD、发号或结果构建职责所属层级不符合约定时抛出
      */
     private static void verifyBaseLayerOwnership() {
         // BaseServiceImpl 必须直接继承扩展基础层。
         assertSame(BaseExtendsServiceImpl.class, BaseServiceImpl.class.getSuperclass());
-        // BaseServiceImpl 自身只允许声明 getDao。
-        assertEquals(Set.of("getDao"), declaredMethodNames(BaseServiceImpl.class));
+        // BaseServiceImpl 自身统一声明 DAO 入口和九个默认 CRUD，业务子类可直接继承或按需覆盖。
+        assertEquals(
+            Set.of(
+                "getDao",
+                "getStore",
+                "getById",
+                "getByIds",
+                "insert",
+                "insertBatch",
+                "update",
+                "updateBatch",
+                "delete",
+                "deleteBatch"
+            ),
+            declaredMethodNames(BaseServiceImpl.class)
+        );
+        // BaseExtendsServiceImpl 只保留抽象 DAO 回调、发号和固定结果构建能力。
+        assertEquals(
+            Set.of("getDao", "getSequence", "buildSuccessResult"),
+            declaredMethodNames(BaseExtendsServiceImpl.class)
+        );
         // BaseServiceImpl 只保存当前业务 DAO。
         assertEquals(1, BaseServiceImpl.class.getDeclaredFields().length);
         // 扩展基础层只保存公共发号器。
@@ -202,9 +221,13 @@ public final class BaseServiceImplTestVerifier {
             Method serviceGetDao = BaseServiceImpl.class.getDeclaredMethod("getDao");
             // 业务 Service 无需重复实现 DAO 访问。
             assertFalse(Modifier.isAbstract(serviceGetDao.getModifiers()));
+            // 发号入口必须继续由扩展基础层声明，避免迁移 CRUD 时把公共发号依赖上移。
+            Method extendsGetSequence = BaseExtendsServiceImpl.class.getDeclaredMethod("getSequence");
+            // 发号入口保持可供 BaseServiceImpl 复用的受保护具体实现。
+            assertFalse(Modifier.isAbstract(extendsGetSequence.getModifiers()));
         } catch (NoSuchMethodException exception) {
-            // 任一契约缺失都表示基础层职责错误。
-            throw new AssertionError("基础 Service 层缺少 getDao 契约", exception);
+            // 任一契约缺失都表示基础层职责迁移不完整。
+            throw new AssertionError("基础 Service 层缺少 DAO 或发号契约", exception);
         }
     }
 
@@ -212,7 +235,8 @@ public final class BaseServiceImplTestVerifier {
      * 收集目标类自身非合成方法名称。
      *
      * @param targetType 要检查自身声明方法的基础 Service 类型，例如 {@code BaseServiceImpl.class}
-     * @return 非合成方法名集合，例如 {@code ["getDao"]}
+     * @return 非合成方法名集合，例如
+     *     {@code ["getDao","getStore","getById","getByIds","insert","insertBatch","update","updateBatch","delete","deleteBatch"]}
      */
     private static Set<String> declaredMethodNames(Class<?> targetType) {
         // 只读取当前类自身声明，避免继承方法掩盖职责归属。

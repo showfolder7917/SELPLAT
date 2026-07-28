@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class BaseServiceImplRealDatabaseTest {
 
     /**
-     * defaultCrud Case 使用独立 fixture 验证 BaseServiceImpl 与 BaseExtendsServiceImpl 的真实数据库调用。
+     * defaultCrud Case 使用独立 fixture 验证 BaseServiceImpl 默认 CRUD 与 BaseExtendsServiceImpl 发号能力的真实数据库调用。
      *
      * <p>执行结果示例：当前真实数据库或边界 Case 的全部验证通过。</p>
      */

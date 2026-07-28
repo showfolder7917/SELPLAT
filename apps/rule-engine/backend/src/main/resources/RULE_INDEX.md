@@ -47,6 +47,11 @@ EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES = 跨工程通用规则/RUL_执行文�
 load_rule_for_execution_document_thread_isolation = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
 load_rule_for_execution_document_history_or_legacy_migration = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
 
+<!-- 跨平台 UTF-8 完整读写、Windows 控制台编码和旧 GBK/GB18030 文本安全转换规则；适用于乱码排查、批量字符集迁移、文件自身编码声明同步和转换后内容等价验证。 -->
+UTF8_FILE_AND_COMMAND_RULES = 跨工程通用规则/RUL_UTF8文件与命令规则.md
+load_rule_for_utf8_text_read_write_or_garbled_output = UTF8_FILE_AND_COMMAND_RULES
+load_rule_for_legacy_gbk_gb18030_to_utf8_conversion = UTF8_FILE_AND_COMMAND_RULES
+
 <!-- 所有 PPT、教学图片、文档页面、海报、网页截图及其他视觉成品在自动检测后执行 AI 逐页截图审美终审的跨工程通用规则；用于视觉重心、文字层级、图文语义、色彩底板、受众适配、跨页节奏和规则外审美问题的主动修正，修复范围包含源文件、生成器与可复用规则缺口，并对未解决问题阻断交付。 -->
 AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES = 跨工程通用规则/RUL_AI视觉审美终审规则.md
 load_rule_for_any_rendered_visual_artifact_creation_or_modification = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
@@ -93,7 +98,7 @@ load_rule_for_selplat_java_javadoc_param_return_or_exception = SELPLAT_JAVA_BUSI
 load_rule_for_selplat_map_list_entity_common_result_or_page_result_comment = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
 load_rule_for_selplat_java_comment_template_or_actual_result_example = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
 
-<!-- SELPLAT 业务 Service 统一通过 BaseServiceImpl 泛型 getDao() 获取 DAO，公共 CRUD 下沉到 BaseExtendsServiceImpl，模块特有实现覆盖同名方法后调用 super 的规则；适用于 DAO 装配、通用方法下沉和特殊处理扩展治理。 -->
+<!-- SELPLAT 业务 Service 统一通过 BaseServiceImpl 泛型 getDao() 获取 DAO，公共 CRUD 由 BaseServiceImpl 维护，BaseExtendsServiceImpl 保留发号与结果构建能力，模块特有实现覆盖同名方法后调用 super 的规则；适用于 DAO 装配、通用方法归属和特殊处理扩展治理。 -->
 SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = selplat/通用规则/RUL_基础Service统一DAO访问规则.md
 load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES

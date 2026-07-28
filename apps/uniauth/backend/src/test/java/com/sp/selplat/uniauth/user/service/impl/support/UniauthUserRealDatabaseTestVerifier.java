@@ -38,7 +38,7 @@ public final class UniauthUserRealDatabaseTestVerifier {
     }
 
     /**
-     * 验证用户 Service 通过 BaseServiceImpl 泛型绑定 DAO，公共能力由扩展层继承且业务类不保存公共依赖。
+     * 验证用户 Service 通过 BaseServiceImpl 泛型绑定 DAO 并继承默认 CRUD，业务类不重复保存公共依赖。
      */
     public static void verifyServiceDaoAccessStructure() {
         // 读取用户 Service 的直接泛型父类，确认 DAO 类型在继承入口一次性声明。
