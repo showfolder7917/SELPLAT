@@ -58,6 +58,13 @@ load_rule_for_any_rendered_visual_artifact_creation_or_modification = AI_VISUAL_
 load_rule_for_ppt_slide_image_document_page_or_webpage_visual_delivery = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
 load_rule_for_full_page_render_review_or_visual_quality_acceptance = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
 
+<!-- 网页表格、列表和卡片的上下文菜单、更多操作菜单与下拉动作菜单设计规则；用于菜单 JS/CSS/素材分层、人工项目配置、滚动阈值、二级菜单、交互状态、可伸缩图片边框和真实浏览器视觉验收。 -->
+WEB_CONTEXT_MENU_UI_DESIGN_RULES = 跨工程通用规则/RUL_网页上下文菜单设计规则.md
+load_rule_for_web_context_action_or_dropdown_menu_design = WEB_CONTEXT_MENU_UI_DESIGN_RULES
+load_rule_for_configurable_web_menu_items_scroll_threshold_or_submenu = WEB_CONTEXT_MENU_UI_DESIGN_RULES
+load_rule_for_web_menu_hover_pressed_disabled_or_danger_state = WEB_CONTEXT_MENU_UI_DESIGN_RULES
+load_rule_for_web_menu_nine_slice_border_image_or_visual_qa = WEB_CONTEXT_MENU_UI_DESIGN_RULES
+
 <!-- CPMAB082 的测试数据、数据库集成 Case 与 JaCoCo 覆盖率规则；仅在修改或验证该批处理的测试数据、Tester、数据库结果或覆盖率时加载。 -->
 FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082测试数据覆盖规则.md
 load_rule_for_cpmab082_test_data_or_database_integration = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
@@ -129,6 +136,11 @@ load_rule_for_selplat_base_controller_unused_api_cleanup = SELPLAT_CONTROLLER_SE
 SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES = selplat/通用规则/RUL_SELPLAT规则适配审查与阻断规则.md
 load_rule_for_any_selplat_change_task_compatibility_check = SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES
 load_rule_for_selplat_rule_incompatible_request_blocking = SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES
+
+<!-- TRS/WCM 历史 Oracle SQL 转为独立本地 H2、保留 SP_GETNEXTID 发号语义并以静态资源方式托管旧站入口的规则；仅适用于 apps/trs。 -->
+TRS_LEGACY_ORACLE_H2_MIGRATION_RULES = selplat/应用规则/trs/RUL_TRS旧版Oracle到H2迁移规则.md
+load_rule_for_trs_legacy_oracle_sql_to_h2 = TRS_LEGACY_ORACLE_H2_MIGRATION_RULES
+load_rule_for_trs_local_database_or_legacy_tsv_hosting = TRS_LEGACY_ORACLE_H2_MIGRATION_RULES
 
 <!-- 中文教学横版课件的页面结构、素材边界与验收规则；适用于课文、古诗、故事和课堂活动PPT。 -->
 HORIZONTAL_TEACHING_PPT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_横版教学PPT通用排版与检查规则.md
