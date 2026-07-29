@@ -34,6 +34,15 @@ selplat_application_service_must_not_redeclare_common_service_capability = Seque
 <!-- BaseServiceImpl 统一提供简单单表模块的分页、详情、批量详情、新增、批量新增、更新、批量更新、假删除和批量假删除默认实现；适用于只需透传 CommonParam/CommonBatchParam 并调用 BaseDao 门面的业务；业务含义是 DAO 装配、getDao 与默认 CRUD 收口在业务类直接继承的稳定基础层。 -->
 selplat_base_service_default_crud_capabilities = getStore,getById,getByIds,insert,insertBatch,update,updateBatch,delete,deleteBatch
 
+<!-- 基础 Service 的九个默认 CRUD 必须使用 OperationLog 标记；业务含义是所有应用继承的 Service 操作都能统一记录开始、结果、耗时和异常，不在 Controller 或 DAO 重复记业务日志。 -->
+selplat_base_service_default_crud_operation_log = OperationLog:getStore,getById,getByIds,insert,insertBatch,update,updateBatch,delete,deleteBatch
+
+<!-- 业务 Service 覆盖默认 CRUD 时也必须使用 OperationLog；业务含义是密码摘要等模块处理发生在调用 super 前时仍可从实际业务入口记录一次日志。 -->
+selplat_application_service_override_operation_log = required_on_overridden_default_crud
+
+<!-- OperationLog 日志模块名必须取真实目标实现类去掉 Impl 后缀，动作名必须取真实方法名；业务含义是 UniauthUserServiceImpl.insertBatch 统一记录为 UniauthUserService / insertBatch，无需维护重复字符串。 -->
+selplat_service_operation_log_identity = target_implementation_simple_name_without_Impl + invoked_method_name
+
 <!-- BaseServiceImpl 必须继承 BaseExtendsServiceImpl，并在自身保留泛型 DAO 注入、protected getDao 与公开默认 CRUD；适用于所有业务 Service 的稳定继承入口；业务含义是业务类仍只继承 BaseServiceImpl，不直接感知更深层发号和结果构建实现。 -->
 selplat_base_service_impl_hierarchy = ApplicationServiceImpl -> BaseServiceImpl -> BaseExtendsServiceImpl
 

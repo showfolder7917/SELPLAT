@@ -59,6 +59,16 @@ private final SomeDependency dependency;
  */
 ```
 
+异常 CommonResult 使用固定错误字段，成功时这些字段为 null 并被忽略：
+
+```java
+/**
+ * @return 系统异常固定 CommonResult，例如
+ *     {"success":false,"errorType":"SYSTEM","errorCode":"INTERNAL_ERROR",
+ *      "requestId":"gateway-20260729-001","msg":"系统异常，请稍后重试。"}
+ */
+```
+
 ## 返回 CommonPageResult 的方法
 
 ```java

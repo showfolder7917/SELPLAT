@@ -6,6 +6,7 @@ import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
+import com.sp.selplat.common.service.logging.OperationLog;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      * @return 固定分页结果，例如
      *     {@code {"records":[{"id":1,"loginName":"admin"}],"totalCount":1,"pageNo":1,"pageSize":10}}
      */
+    @OperationLog
     public CommonPageResult getStore(CommonPageParam queryIn) {
         // 单独取得前端动态查询字段，避免 DAO 调用同时承担参数解析职责。
         Map<String, Object> queryColumnValueMap = queryIn.getParamMap();
@@ -65,6 +67,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      * @throws IllegalArgumentException 当主键不完整或数据库未命中记录时抛出，例如
      *     {@code IllegalArgumentException("未找到对应的数据。")}
      */
+    @OperationLog
     public CommonResult getById(CommonParam queryIn) {
         // 基础 Service 把原始主键参数交给 BaseDao，由 DAO 元数据解析单主键或复合主键。
         Map<String, Object> record = getDao().getById(queryIn);
@@ -86,6 +89,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      * @return 固定结果，例如
      *     {@code {"success":true,"data":[{"id":1},{"id":2}],"msg":"批量详情查询完成。"}}
      */
+    @OperationLog
     public CommonResult getByIds(CommonBatchParam queryIn) {
         // 基础 Service 把全部主键项一次交给 BaseDao，避免业务模块循环执行单条查询。
         List<Map<String, Object>> records = getDao().getByIds(queryIn);
@@ -103,6 +107,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      * @return 含生成主键的固定结果，例如
      *     {@code {"success":true,"data":{"id":100001,"loginName":"admin","displayName":"管理员"},"msg":"新增完成。"}}
      */
+    @OperationLog
     public CommonResult insert(CommonParam saveIn) {
         // 复用扩展基础层发号能力，根据当前 DAO 元数据取得单主键或复合主键的全部生成值。
         Map<String, Long> generatedIdMap = getSequence();
@@ -127,6 +132,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      *     {@code {"success":true,"data":[{"id":100001},{"id":100002}],"affectedRows":2,"msg":"批量新增完成。"}}
      */
     @Transactional
+    @OperationLog
     public CommonResult insertBatch(CommonBatchParam saveIn) {
         // 单独取得前端批量项，保证主键生成、DAO 调用和结果构建使用同一有序集合。
         List<CommonParam> saveItems = saveIn.getItems();
@@ -153,6 +159,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      * @return 固定结果，例如
      *     {@code {"success":true,"data":{"id":1,"displayName":"管理员"},"msg":"更新完成。"}}
      */
+    @OperationLog
     public CommonResult update(CommonParam saveIn) {
         // 基础 Service 直接把原始参数交给 BaseDao，由 DAO 自动分离主键条件和更新字段。
         getDao().update(saveIn);
@@ -174,6 +181,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      *     {@code "affectedRows":2,"msg":"批量更新完成。"}}
      */
     @Transactional
+    @OperationLog
     public CommonResult updateBatch(CommonBatchParam saveIn) {
         // 单独取得前端批量项，保证 DAO 调用与最终返回使用同一有序集合。
         List<CommonParam> saveItems = saveIn.getItems();
@@ -193,6 +201,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      * @return 固定结果，例如
      *     {@code {"success":true,"data":{"id":1,"lastOperateUserId":9,"status":0},"msg":"删除完成。"}}
      */
+    @OperationLog
     public CommonResult delete(CommonParam deleteIn) {
         // 基础 Service 只开放 BaseDao 假删除入口，由 DAO 统一补状态和更新时间。
         getDao().softDelete(deleteIn);
@@ -214,6 +223,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      *     {@code "affectedRows":2,"msg":"批量删除完成。"}}
      */
     @Transactional
+    @OperationLog
     public CommonResult deleteBatch(CommonBatchParam deleteIn) {
         // 单独取得前端批量项，保证 DAO 补充的删除字段可以直接进入最终返回。
         List<CommonParam> deleteItems = deleteIn.getItems();

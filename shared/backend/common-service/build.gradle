@@ -14,6 +14,10 @@ dependencies {
     implementation "org.springframework:spring-context:${springFrameworkVersion}"
     // 公共批量写入默认实现使用事务注解统一包围全部分组，保证基础 Service 的批量动作保持原子性。
     implementation "org.springframework:spring-tx:${springFrameworkVersion}"
+    // 公共 Service 操作日志切面使用 Spring AOP 在各应用的 Service 调用入口统一记录耗时和异常。
+    implementation "org.springframework:spring-aop:${springFrameworkVersion}"
+    // AspectJ Weaver 提供 @Aspect、@Around 与运行期织入所需类型，版本统一由根属性维护。
+    implementation "org.aspectj:aspectjweaver:${aspectjVersion}"
     // 公共服务测试使用 JUnit 验证真实数据库发号、缓存、重试和并发边界。
     testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
 }

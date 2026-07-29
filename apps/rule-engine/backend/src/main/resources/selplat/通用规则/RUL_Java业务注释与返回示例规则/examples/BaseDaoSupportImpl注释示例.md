@@ -4,6 +4,17 @@
 
 以下示例保留生产类的真实方法、字段名和返回结构，用于判断新注释是否真正回答“输入什么、经过什么、返回什么”。
 
+## 统一异常 CommonResult
+
+异常不再创建专用 Map，而是复用 CommonResult 固定结构：
+
+```json
+{"success":false,"errorType":"BUSINESS","errorCode":"USER_NOT_FOUND",
+ "requestId":"gateway-20260729-001","msg":"用户不存在。"}
+```
+
+系统异常使用 `"errorType":"SYSTEM"` 与 `"errorCode":"INTERNAL_ERROR"`。成功结果中的 `errorType`、`errorCode`、`requestId`、`stackTrace` 均为 null，并由 `JsonUtils.toJsonIgnoreNull` 省略。
+
 ## 数据库上下文
 
 ```java

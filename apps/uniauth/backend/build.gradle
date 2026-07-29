@@ -1,115 +1,109 @@
 plugins {
-    // 当前离线环境优先保证 Java 应用可编译可运行，因此用 application 插件提供统一启动入口。
+    // Uniauth 后端需要独立启动，因此使用 application 插件提供 run 入口。
     id 'application'
-    // JaCoCo 以真实执行数据衡量生产代码覆盖率，避免用测试数量或 fixture 数量代替覆盖证据。
+    // JaCoCo 为真实业务测试生成覆盖率报告和覆盖门禁。
     id 'jacoco'
 }
 
 dependencies {
-    // uniauth 后端依赖公共核心库，复用通用值处理等基础能力。
+    // 复用通用结果、参数和基础工具。
     implementation project(':shared:backend:common-core')
-    // uniauth 后端依赖公共 Web 层，供业务控制器复用 BaseController 和 MVC 参数解析能力。
+    // 复用控制器基类和 MVC 参数解析能力。
     implementation project(':shared:backend:common-web')
-    // uniauth 后端依赖公共服务层，统一服务接口和实现类的继承结构。
+    // 复用 Service 基类和统一业务服务契约。
     implementation project(':shared:backend:common-service')
-    // uniauth 后端依赖公共数据库层，复用 BaseDao 与 BaseTemplateDao 等模板能力。
+    // 复用 DAO、MyBatis 模板和数据库公共能力。
     implementation project(':shared:backend:common-db')
-    // Web Starter 负责把 controller 暴露成 HTTP 接口。
+    // 提供 HTTP Controller、JSON 序列化和嵌入式 Web 容器。
     implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
-    // JDBC Starter 负责本地 H2 数据源和事务边界。
+    // 为业务操作日志切面提供 Spring 代理和 AspectJ 运行支持。
+    implementation "org.springframework.boot:spring-boot-starter-aop:${springBootVersion}"
+    // 提供数据源、JDBC 和事务边界。
     implementation "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
-    // MyBatis Starter 负责注解式 BaseTemplateMapper 与模板 DAO 门面桥接，当前模块不使用 Mapper XML。
+    // 提供注解式模板 Mapper 与 MyBatis-Spring 集成。
     implementation "org.mybatis.spring.boot:mybatis-spring-boot-starter:${mybatisSpringBootVersion}"
-    // Lombok 负责为 final 字段自动生成构造器，离线编译统一从工程根 cache/cache-jars 读取。
+    // Lombok 仅在编译期使用，统一从工程离线缓存读取。
     compileOnly files(rootProject.file("cache/cache-jars/lombok-${lombokVersion}.jar"))
-    // 注解处理器与编译依赖使用同一个工程内离线 jar，避免依赖用户目录。
+    // 注解处理阶段使用同一个离线 Lombok JAR。
     annotationProcessor files(rootProject.file("cache/cache-jars/lombok-${lombokVersion}.jar"))
-    // H2 作为本地运行和最小联调数据库。
+    // H2 用于本地运行和真实数据库集成测试。
     runtimeOnly "com.h2database:h2:${h2Version}"
-    // DevTools 负责在本地开发时监听 classpath 变化并触发应用重启，配合 VS Code 自动编译实现源码保存后自动重载。
+    // DevTools 用于本地保存源码后的开发期自动重启。
     runtimeOnly "org.springframework.boot:spring-boot-devtools:${springBootVersion}"
-    // Spring Boot 测试套件为后续控制层和服务层测试预留统一入口。
+    // 提供 Spring Boot、JUnit 和 MockMvc 测试能力。
     testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
-    // 测试源码如果后续也使用 Lombok，这里同步补齐测试编译期离线 jar，避免主源码和测试源码口径分裂。
+    // 测试源码使用 Lombok 时保持与主源码一致的编译依赖。
     testCompileOnly files(rootProject.file("cache/cache-jars/lombok-${lombokVersion}.jar"))
-    // 测试注解处理器与主源码保持一致，保证测试阶段也能从同一离线 jar 生成 Lombok 代码。
+    // 测试注解处理阶段使用同一个离线 Lombok JAR。
     testAnnotationProcessor files(rootProject.file("cache/cache-jars/lombok-${lombokVersion}.jar"))
 }
 
 application {
-    // 明确 uniauth 启动类，保证 run 任务和后续脚本都指向统一入口。
+    // run 任务固定启动 Uniauth HTTP 服务。
     mainClass = 'com.sp.selplat.uniauth.UniauthBackendApplication'
 }
 
 tasks.named('classes') {
-    // VS Code 的 Java 项目模型会引用共享模块发布 JAR，Uniauth 编译完成前必须保证这些工程产物已经落入根 build。
+    // 先生成公共核心 JAR，保证 IDE 与命令行都能读取统一构建产物。
     dependsOn ':shared:backend:common-core:jar'
-    // common-db JAR 是 DAO 与 MyBatis 公共契约的工程产物，不能误放入第三方依赖 cache。
+    // 先生成公共数据库 JAR，保证 DAO 与 MyBatis 契约可用。
     dependsOn ':shared:backend:common-db:jar'
-    // common-service JAR 为 Uniauth 服务层提供公共实现，清理 build 后必须由同一编译入口重新生成。
+    // 先生成公共服务 JAR，保证 Service 继承结构可用。
     dependsOn ':shared:backend:common-service:jar'
-    // common-web JAR 为控制器提供公共基类，确保 VS Code 和命令行读取同一份根 build 产物。
+    // 先生成公共 Web JAR，保证 Controller 基类和参数解析器可用。
     dependsOn ':shared:backend:common-web:jar'
 }
 
 jacoco {
-    // 覆盖工具版本固定在支持当前 Java 21 字节码的稳定版本，保证本机和 CI 报告口径一致。
+    // 使用工程统一的 JaCoCo 版本，保证 Java 21 字节码覆盖结果一致。
     toolVersion = jacocoVersion
 }
 
 tasks.named('test') {
-    // 每次执行 Uniauth 测试后自动生成覆盖报告，让真实 Case 和覆盖结果始终来自同一轮执行。
+    // 测试结束后自动生成覆盖率报告。
     finalizedBy tasks.named('jacocoTestReport')
 }
 
 tasks.named('jacocoTestReport') {
-    // 覆盖报告必须等待真实测试执行完成后再读取执行数据。
+    // 先执行测试，报告才会读取本轮真实执行数据。
     dependsOn tasks.named('test')
     reports {
-        // XML 报告供自动覆盖核对和后续 CI 阈值使用。
+        // XML 供自动化覆盖核对使用。
         xml.required = true
-        // HTML 报告供人工审核具体未覆盖方法和分支。
+        // HTML 供人工查看未覆盖代码。
         html.required = true
-        // CSV 不作为当前工程验收入口，避免生成重复覆盖产物。
+        // 当前不生成重复的 CSV 报告。
         csv.required = false
     }
 }
 
 tasks.named('jacocoTestCoverageVerification') {
-    // 覆盖门禁必须基于当前轮真实测试产生的执行数据。
+    // 覆盖门禁必须建立在本轮测试执行数据上。
     dependsOn tasks.named('test')
     violationRules {
-        // 用户业务执行类逐类要求行覆盖率 100%，避免整体平均值掩盖某个公开入口未测试。
         rule {
-            // CLASS 级门禁让 Controller、ServiceImpl 和 DaoImpl 各自独立满足阈值。
+            // 逐类验证当前 Uniauth 的业务执行类。
             element = 'CLASS'
-            // 纯实体、接口和启动 main 不属于当前用户业务执行覆盖口径。
             includes = [
                 'com.sp.selplat.uniauth.user.controller.UniauthUserController',
                 'com.sp.selplat.uniauth.user.service.impl.UniauthUserServiceImpl',
                 'com.sp.selplat.uniauth.user.dao.UniauthUserDaoImpl'
             ]
             limit {
-                // 行覆盖率必须达到完整执行。
+                // 每个纳入类都要求全部可执行行被真实测试覆盖。
                 counter = 'LINE'
-                // COVEREDRATIO 直接使用 JaCoCo 实际覆盖比例。
                 value = 'COVEREDRATIO'
-                // 1.0 表示每个纳入范围的生产类均要求 100% 行覆盖。
                 minimum = 1.0
             }
         }
-        // 用户服务包含真实参数分支，单独要求所有分支均由有意义 Case 覆盖。
         rule {
-            // CLASS 级门禁只检查当前业务编排实现。
+            // 用户服务包含业务分支，单独要求完整分支覆盖。
             element = 'CLASS'
-            // ServiceImpl 是用户模块当前唯一包含业务分支的生产执行类。
             includes = ['com.sp.selplat.uniauth.user.service.impl.UniauthUserServiceImpl']
             limit {
-                // 分支覆盖率必须达到完整执行。
+                // 每个可达业务分支都必须经过真实 Case。
                 counter = 'BRANCH'
-                // COVEREDRATIO 使用真实分支执行比例。
                 value = 'COVEREDRATIO'
-                // 1.0 表示所有可达业务分支均要求 100% 覆盖。
                 minimum = 1.0
             }
         }
@@ -117,6 +111,6 @@ tasks.named('jacocoTestCoverageVerification') {
 }
 
 tasks.named('check') {
-    // 标准检查任务必须执行覆盖门禁，避免本地测试通过但漏掉业务方法覆盖缺口。
+    // 标准检查必须包含覆盖门禁，防止只运行测试而漏掉覆盖要求。
     dependsOn tasks.named('jacocoTestCoverageVerification')
 }

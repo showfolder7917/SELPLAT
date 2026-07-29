@@ -3,6 +3,13 @@
   "configurations": [
     {
       "type": "java",
+      "name": "GenericSqlSpecDocCorrector",
+      "request": "launch",
+      "mainClass": "com.sp.selplat.code.fujitsu.sql.GenericSqlSpecDocCorrector",
+      "projectName": "rule-engine-backend"
+    },
+    {
+      "type": "java",
       "name": "DBデータ生成ツール",
       "request": "launch",
       "mainClass": "com.sp.selplat.code.fujitsu.db.DBデータ生成ツール",

@@ -19,6 +19,14 @@ public class CommonResult {
     private Integer affectedRows;
     // msg 统一承接当前接口的结果说明文案，便于前端直接显示操作结果。
     private String msg;
+    // errorType 区分 BUSINESS 与 SYSTEM，成功响应保持 null 并由 JsonUtils 忽略。
+    private String errorType;
+    // errorCode 提供前端可稳定识别的异常编码，成功响应保持 null。
+    private String errorCode;
+    // requestId 关联前端错误提示与本地完整异常日志，成功响应保持 null。
+    private String requestId;
+    // stackTrace 仅在 dev/test 异常响应中承接完整 Java 堆栈，prod 与成功响应保持 null。
+    private String stackTrace;
 
     /**
      * 返回当前请求是否成功。
@@ -145,5 +153,85 @@ public class CommonResult {
     public void setMsg(String msg) {
         // 写入统一结果说明文案字段，保证不同非分页接口对提示信息的出口保持一致。
         this.msg = msg;
+    }
+
+    /**
+     * 返回错误类型。
+     *
+     * @return 业务异常返回 {@code BUSINESS}，系统异常返回 {@code SYSTEM}，成功结果返回 {@code null}
+     */
+    public String getErrorType() {
+        // 返回前端错误框的分类依据，成功结果不输出该字段。
+        return errorType;
+    }
+
+    /**
+     * 设置错误类型。
+     *
+     * @param errorType 异常分类，例如 {@code BUSINESS} 或 {@code SYSTEM}
+     */
+    public void setErrorType(String errorType) {
+        // 写入异常分类，使前端在 success=false 时区分业务提示和系统提示。
+        this.errorType = errorType;
+    }
+
+    /**
+     * 返回错误编码。
+     *
+     * @return 业务异常返回 {@code USER_NOT_FOUND}，系统异常返回 {@code INTERNAL_ERROR}，成功结果返回 {@code null}
+     */
+    public String getErrorCode() {
+        // 返回稳定错误编码，前端可在不依赖中文文案的情况下执行专用提示处理。
+        return errorCode;
+    }
+
+    /**
+     * 设置错误编码。
+     *
+     * @param errorCode 异常编码，例如 {@code USER_NOT_FOUND} 或 {@code INTERNAL_ERROR}
+     */
+    public void setErrorCode(String errorCode) {
+        // 写入当前错误编码，成功结果不会调用该方法。
+        this.errorCode = errorCode;
+    }
+
+    /**
+     * 返回请求关联标识。
+     *
+     * @return 异常请求返回 UUID，例如 {@code 8f3c2a1b-1234-4567-8901-abcdef012345}；成功结果返回 {@code null}
+     */
+    public String getRequestId() {
+        // 返回与 HTTP 响应头和本地日志一致的 requestId，供前端问题反馈定位。
+        return requestId;
+    }
+
+    /**
+     * 设置请求关联标识。
+     *
+     * @param requestId 当前 HTTP 请求的关联标识，例如 {@code gateway-20260729-001}
+     */
+    public void setRequestId(String requestId) {
+        // 保存请求关联标识，使错误 JSON 与后端完整堆栈可以一对一关联。
+        this.requestId = requestId;
+    }
+
+    /**
+     * 返回开发或测试环境的完整异常堆栈。
+     *
+     * @return dev/test 异常返回完整 Java 堆栈文本，prod 与成功结果返回 {@code null}
+     */
+    public String getStackTrace() {
+        // 返回仅在诊断环境允许公开的堆栈文本，生产响应不会输出该字段。
+        return stackTrace;
+    }
+
+    /**
+     * 设置开发或测试环境的完整异常堆栈。
+     *
+     * @param stackTrace 完整 Java 堆栈文本，例如以 {@code java.lang.IllegalArgumentException} 开头的多行内容
+     */
+    public void setStackTrace(String stackTrace) {
+        // 保存诊断堆栈，调用方只在明确开启异常详情时写入该字段。
+        this.stackTrace = stackTrace;
     }
 }

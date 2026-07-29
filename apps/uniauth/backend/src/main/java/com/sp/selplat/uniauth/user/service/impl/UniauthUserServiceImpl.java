@@ -5,6 +5,7 @@ import com.sp.selplat.common.support.CommonHashSupport;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
+import com.sp.selplat.common.service.logging.OperationLog;
 import com.sp.selplat.uniauth.user.dao.UniauthUserDao;
 import com.sp.selplat.uniauth.user.service.UniauthUserService;
 import java.util.List;
@@ -20,6 +21,7 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
 
     // 前端直接传入数据库业务字段；用户子类先转换密码，再调用父类统一完成主键生成、新增和结果构建。
     @Override
+    @OperationLog
     public CommonResult insert(CommonParam saveIn) {
         // 用户专属入口在公共新增前把 password 转换成数据库列 passwordHash。
         replacePasswordWithHash(saveIn);
@@ -34,6 +36,7 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
     // 前端 items 中每项直接传入新增字段；用户子类完成密码转换后调用父类统一批量新增。
     @Override
     @Transactional
+    @OperationLog
     public CommonResult insertBatch(CommonBatchParam saveIn) {
         // 单独取得前端批量项，让密码转换和响应清理使用同一有序集合。
         List<CommonParam> saveItems = saveIn.getItems();
@@ -55,6 +58,7 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
 
     // 前端直接传入主键和待修改字段；用户子类先转换密码，再调用父类统一更新。
     @Override
+    @OperationLog
     public CommonResult update(CommonParam saveIn) {
         // 用户专属入口在公共更新前把 password 转换成数据库列 passwordHash。
         replacePasswordWithHash(saveIn);
@@ -69,6 +73,7 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
     // 前端 items 中每项直接传入主键和更新字段；用户子类完成密码转换后调用父类统一批量更新。
     @Override
     @Transactional
+    @OperationLog
     public CommonResult updateBatch(CommonBatchParam saveIn) {
         // 单独取得前端批量项，让密码转换和响应清理使用同一有序集合。
         List<CommonParam> saveItems = saveIn.getItems();
@@ -86,6 +91,23 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
         }
         // 返回父类已经完成统一字段填充且已清理敏感字段的批量更新结果。
         return result;
+    }
+
+    // 前端传入单个主键和审计字段；用户子类标记写操作后复用父类统一假删除。
+    @Override
+    @OperationLog
+    public CommonResult delete(CommonParam deleteIn) {
+        // 父类执行数据库假删除并返回固定 CommonResult，切面只记录动作结果与耗时。
+        return super.delete(deleteIn);
+    }
+
+    // 前端传入多组主键和审计字段；用户子类标记批量假删除后复用父类统一事务边界。
+    @Override
+    @Transactional
+    @OperationLog
+    public CommonResult deleteBatch(CommonBatchParam deleteIn) {
+        // 父类执行全部批量假删除并返回固定 CommonResult，切面不读取批量业务数据。
+        return super.deleteBatch(deleteIn);
     }
 
     /**

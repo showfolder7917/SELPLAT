@@ -7,8 +7,20 @@
 <!-- Service 已返回统一结果结构时，Controller 必须直接使用公共 JSON 工具序列化，不得再次调用 buildResponseJson、buildPageResponseJson 或构造另一层返回对象。 -->
 selplat_controller_complete_service_result_action = JsonUtils.toJsonIgnoreNull(serviceResult)
 
-<!-- CommonResult 的 success、data、affectedRows 和 msg 由 Service 一次性生成；适用于详情、新增、更新和假删除；业务含义是 Controller 不再补默认消息、模块编码、影响行数或请求路径。 -->
+<!-- CommonResult 的 success、data、affectedRows、msg 与异常字段由 Service 或全局异常处理器一次性生成；适用于详情、新增、更新、假删除和统一异常响应；业务含义是 Controller 不再补默认消息、模块编码、影响行数或请求路径。 -->
 selplat_common_result_owner = Service
+
+<!-- CommonResult 异常字段固定为 errorType、errorCode、requestId、stackTrace；适用于业务和系统异常；业务含义是前端只判断 success=false 与 msg，同时可按错误类型和编码执行精确交互。 -->
+selplat_common_result_error_fields = errorType:String,errorCode:String,requestId:String,stackTrace:String
+
+<!-- 成功结果的四个异常字段必须为 null，并由 JsonUtils.toJsonIgnoreNull 省略；业务含义是成功 JSON 不携带无意义错误字段。 -->
+selplat_common_result_success_omits_error_fields = JsonUtils.toJsonIgnoreNull + null_error_fields
+
+<!-- 业务异常使用 BUSINESS 类型和可展示 msg；系统异常使用 SYSTEM 类型和通用 msg；业务含义是前端可统一弹框并保留精确处理分支。 -->
+selplat_common_result_error_type_contract = BUSINESS:business_message,SYSTEM:generic_system_message
+
+<!-- stackTrace 仅 dev/test 异常响应可以赋值，prod 必须为 null 并省略；业务含义是诊断效率不以生产技术信息泄露为代价。 -->
+selplat_common_result_stack_trace_profile_policy = dev_test:include,prod:omit
 
 <!-- CommonPageResult 的 records、totalCount、pageNo 和 pageSize 由 Service 与 DAO 查询链路生成；适用于普通分页列表；业务含义是 Controller 不再把 records 改名包装成 rows。 -->
 selplat_common_page_result_owner = Service

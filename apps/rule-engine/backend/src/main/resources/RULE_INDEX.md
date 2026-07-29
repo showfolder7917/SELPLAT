@@ -98,7 +98,7 @@ load_rule_for_selplat_java_javadoc_param_return_or_exception = SELPLAT_JAVA_BUSI
 load_rule_for_selplat_map_list_entity_common_result_or_page_result_comment = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
 load_rule_for_selplat_java_comment_template_or_actual_result_example = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
 
-<!-- SELPLAT 业务 Service 统一通过 BaseServiceImpl 泛型 getDao() 获取 DAO，公共 CRUD 由 BaseServiceImpl 维护，BaseExtendsServiceImpl 保留发号与结果构建能力，模块特有实现覆盖同名方法后调用 super 的规则；适用于 DAO 装配、通用方法归属和特殊处理扩展治理。 -->
+<!-- SELPLAT 业务 Service 统一通过 BaseServiceImpl 泛型 getDao() 获取 DAO，公共 CRUD 由 BaseServiceImpl 维护并统一使用 OperationLog，BaseExtendsServiceImpl 保留发号与结果构建能力，模块特有实现覆盖同名方法后调用 super 并保留日志标记的规则；适用于 DAO 装配、通用方法归属、Service 操作日志和特殊处理扩展治理。 -->
 SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = selplat/通用规则/RUL_基础Service统一DAO访问规则.md
 load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
@@ -118,7 +118,7 @@ load_rule_for_selplat_shared_database_sequence_or_web_regression_test = SELPLAT_
 load_rule_for_selplat_test_fixture_class_and_method_path = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 load_rule_for_selplat_mock_fake_stub_or_fixed_business_test_cleanup = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 
-<!-- Service 已返回 CommonResult 或 CommonPageResult 完整结构时的 Controller JSON 职责与公共基类接口收敛规则；适用于避免响应二次包装，并删除没有生产调用的旧参数适配器、响应包装器和兼容入口。 -->
+<!-- Service 或全局异常处理器已返回 CommonResult / CommonPageResult 完整结构时的 Controller JSON 职责、CommonResult 固定错误字段与公共基类接口收敛规则；适用于避免响应二次包装、统一前端 success=false 错误处理，并删除没有生产调用的旧参数适配器、响应包装器和兼容入口。 -->
 SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES = selplat/通用规则/RUL_Controller仅序列化Service返回结构规则.md
 load_rule_for_selplat_controller_service_result_serialization = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
 load_rule_for_selplat_controller_duplicate_response_wrapping = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
