@@ -68,6 +68,18 @@ authoritative_project_rule_asset_path = <organization>/rule/<project>/RUL_<项�
 rule_generator_default_output = sibling_main_rule_file + same_name_asset_directory + README
 rule_generator_optional_asset_directories = docs,template,examples,project
 
+<!-- Java、Python 和 Node 能力统一保存在 rule-engine 的对应源码根；适用于规则自动生成、检测、迁移和工具交付；业务含义是能力可被多个规则包引用且不会复制到 resources。 -->
+rule_engine_ability_source_roots = ../java/com/sp/selplat/code/,../python/com/sp/selplat/code/,../node/com/sp/selplat/code/
+
+<!-- 每个规则正文必须显式登记可复用能力入口；未使用的语言写 none；业务含义是读取规则后可直接定位执行工具，不依赖目录猜测。 -->
+rule_ability_reference_fields = java_ability_refs,python_ability_refs,node_ability_refs
+
+<!-- 规则可以引用同一个能力，能力不得因多规则复用而复制到多个规则包；业务含义是共享实现只有一个维护位置。 -->
+rule_ability_reuse_policy = multiple_rule_packages_may_reference_one_ability
+
+<!-- 规则没有稳定、可重复且可验证的自动化职责时，不得创建空能力目录或虚假入口；业务含义是规则约束与可执行能力保持真实边界。 -->
+rule_ability_creation_threshold = stable,repeated,verifiable_automation_only
+
 <!-- 非法规则名、越出规则资源根、覆盖既有主规则或资产目录、写入非标准资产目录时必须阻断；业务含义是自动生成不能破坏现有规则或把关联文件再次散开。 -->
 rule_generator_must_block = invalid_rule_name,path_escape,existing_main_or_asset_overwrite,nonstandard_asset_directory
 

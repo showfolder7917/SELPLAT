@@ -38,7 +38,7 @@ rule_asset_directory_pattern = RUL_<主题>规则/
 rule_file_name_policy = main_rule_file_and_same_name_asset_directory_are_siblings
 
 <!-- 规则新增、移动、删除、分类和索引维护的主治理规则；任何规则结构变更前必须先加载。 -->
-RULE_LIFECYCLE_GOVERNANCE_RULES = 跨工程通用规则/RUL_规则生命周期治理规则.md
+RULE_LIFECYCLE_GOVERNANCE_RULES = 跨工程通用规则/RUL_规则生命周期治理规则/RUL_规则生命周期治理规则.md
 load_rule_for_rule_creation_move_delete_or_classification = RULE_LIFECYCLE_GOVERNANCE_RULES
 load_rule_for_rule_index_maintenance = RULE_LIFECYCLE_GOVERNANCE_RULES
 
@@ -64,13 +64,13 @@ load_rule_for_cpmab082_test_data_or_database_integration = FUJITSU_CPMAB082_TEST
 load_rule_for_cpmab082_tester_case_or_jacoco_coverage = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
 
 <!-- Fujitsu Gradle 工程禁止下载时的本机构件发现、明确版本选择、项目 cache 离线仓库重建、临时 init script 和正常 test 恢复规则；适用于 CP、IT、SB、AP 工程。 -->
-FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则.md
+FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/RUL_FujitsuGradle离线依赖闭包恢复规则.md
 load_rule_for_fujitsu_gradle_offline_dependency_gap = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
 load_rule_for_fujitsu_dynamic_version_or_local_artifact_recovery = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
 load_rule_for_fujitsu_offline_normal_test_or_jacoco = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
 
 <!-- CPMAB082 在组织级离线恢复算法之外的只读参考工程、目标编译、Checkstyle 和 MyBatis 特殊配置。 -->
-FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082离线依赖配置规则.md
+FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082离线依赖配置规则/RUL_CPMAB082离线依赖配置规则.md
 load_rule_for_cpmab082_offline_reference_or_fallback_verification = FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES
 
 <!-- SELPLAT 工程目录、构建产物、项目 JDK、工具运行数据与缓存位置规则；适用于工程路径解析、旧 runtime 迁移及 Python 字节码缓存定向。 -->
@@ -85,14 +85,14 @@ load_rule_for_selplat_gradle_dependency_or_build_output = SELPLAT_PROJECT_BUILD_
 load_rule_for_selplat_vscode_gradle_import_or_cache = SELPLAT_PROJECT_BUILD_RULES
 
 <!-- SELPLAT 全部应用共用的基础 DAO 复用、基础类契约原子同步、getDbColumnsMap/getSelectColumns 真实数据库字段控制和主键号段定义规则；适用于简单单表 CRUD、BaseDaoImpl 千条分组、BaseTemplateDao 真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
-SELPLAT_BASE_DAO_REUSE_RULES = selplat/通用规则/RUL_基础DAO复用与通用参数透传规则.md
+SELPLAT_BASE_DAO_REUSE_RULES = selplat/通用规则/RUL_基础DAO复用与通用参数透传规则/RUL_基础DAO复用与通用参数透传规则.md
 load_rule_for_selplat_base_dao_crud_or_paging_reuse = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_common_param_dao_query = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_common_batch_param_or_thousand_item_batch = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_id_sequence_code_or_composite_id_mapping = SELPLAT_BASE_DAO_REUSE_RULES
 
 <!-- SELPLAT Java 类、字段、方法、参数、逐行业务动作和实际返回示例规则；适用于 shared、apps 当前及未来应用中的 Java 新增、修改、重构、生成和审核。 -->
-SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES = selplat/通用规则/RUL_Java业务注释与返回示例规则.md
+SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES = selplat/通用规则/RUL_Java业务注释与返回示例规则/RUL_Java业务注释与返回示例规则.md
 load_rule_for_any_selplat_java_creation_modification_or_refactor = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
 load_rule_for_selplat_java_javadoc_param_return_or_exception = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
 load_rule_for_selplat_map_list_entity_common_result_or_page_result_comment = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES

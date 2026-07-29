@@ -1,5 +1,9 @@
 # Fujitsu Gradle 离线依赖闭包恢复规则
 
+java_ability_refs = none
+python_ability_refs = none
+node_ability_refs = none
+
 ## 适用范围
 
 <!-- 问题：Fujitsu Gradle 工程使用动态版本、私有构件或不完整 POM 时，标准离线解析可能在本机实际已有 JAR 的情况下提前停止测试。 -->

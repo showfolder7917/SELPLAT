@@ -1,5 +1,9 @@
 # 基础 DAO 复用与通用参数透传规则
 
+java_ability_refs = none
+python_ability_refs = none
+node_ability_refs = none
+
 <!-- 问题：各应用 DAO 为基础类已有的增删改查能力重复建立包装方法，并在通用查询内部硬编码业务字段时，会造成接口膨胀、隐藏查询条件和跨应用实现漂移。 -->
 <!-- 场景：SELPLAT 任意 apps/<app> 的简单单表 DAO 接入 BaseDao、BaseDaoImpl、CommonParam、CommonPageParam 或公共主键号段能力。 -->
 <!-- 业务含义：应用 DAO 只保留真正包含业务增量的动作；公共 CRUD、分页、动态条件和主键号段定义统一复用基础类，让前端参数来源、实际 SQL 条件与生成主键归属保持可追踪。 -->

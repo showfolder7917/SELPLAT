@@ -1,5 +1,9 @@
 # CPMAB082 离线依赖配置规则
 
+java_ability_refs = none
+python_ability_refs = none
+node_ability_refs = none
+
 ## 适用范围
 
 <!-- 问题：CPMAB082 除 Fujitsu 通用离线恢复算法外，还需要明确相邻构件来源和持久层替代验证边界。 -->

@@ -1,5 +1,9 @@
 # Java 业务注释与返回示例规则
 
+java_ability_refs = none
+python_ability_refs = none
+node_ability_refs = none
+
 ## 说明
 
 <!-- 问题：只描述类型或语法动作的注释无法让调用方直接判断参数如何流转、方法最终返回什么、数据库状态如何变化。 -->
