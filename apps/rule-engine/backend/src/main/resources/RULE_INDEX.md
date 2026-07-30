@@ -125,7 +125,7 @@ load_rule_for_selplat_shared_database_sequence_or_web_regression_test = SELPLAT_
 load_rule_for_selplat_test_fixture_class_and_method_path = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 load_rule_for_selplat_mock_fake_stub_or_fixed_business_test_cleanup = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
 
-<!-- Service 或全局异常处理器已返回 CommonResult / CommonPageResult 完整结构时的 Controller JSON 职责、CommonResult 固定错误字段与公共基类接口收敛规则；适用于避免响应二次包装、统一前端 success=false 错误处理，并删除没有生产调用的旧参数适配器、响应包装器和兼容入口。 -->
+<!-- Service 或公共全局异常处理器已返回 CommonResult / CommonPageResult 完整结构时的 Controller JSON 职责、CommonResult 固定错误字段、common-web 异常/追踪/配置分工与公共基类接口收敛规则；适用于避免响应二次包装、统一前端 success=false 错误处理，并删除应用重复实现和无生产调用兼容入口。 -->
 SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES = selplat/通用规则/RUL_Controller仅序列化Service返回结构规则.md
 load_rule_for_selplat_controller_service_result_serialization = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
 load_rule_for_selplat_controller_duplicate_response_wrapping = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES

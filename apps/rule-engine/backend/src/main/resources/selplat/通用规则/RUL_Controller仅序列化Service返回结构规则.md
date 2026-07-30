@@ -22,6 +22,17 @@ selplat_common_result_error_type_contract = BUSINESS:business_message,SYSTEM:gen
 <!-- stackTrace 仅 dev/test 异常响应可以赋值，prod 必须为 null 并省略；业务含义是诊断效率不以生产技术信息泄露为代价。 -->
 selplat_common_result_stack_trace_profile_policy = dev_test:include,prod:omit
 
+<!-- 公共业务异常与全局异常处理器统一位于 common-web 的 exception 包；适用于当前及未来应用；业务含义是应用不得重复实现同构异常类型、错误 JSON 和堆栈开关。 -->
+selplat_common_web_exception_owner = shared/backend/common-web:exception
+
+<!-- requestId、X-Request-Id、MDC 和 HTTP 耗时日志统一位于 common-web 的 trace 包；适用于 /api/**；业务含义是静态资源不进入业务追踪，所有应用 API 使用同一关联语义。 -->
+selplat_common_web_request_trace_owner = shared/backend/common-web:trace
+selplat_common_web_request_trace_path = /api/**
+
+<!-- 参数解析器和请求追踪只由 common-web 的单一 config 配置注册；适用于 Spring MVC 自动装配；业务含义是应用不得再建立同构 WebMvcConfigurer，也不为简单注册引入 SPI 或多层工厂。 -->
+selplat_common_web_mvc_registration_owner = shared/backend/common-web:config
+selplat_application_duplicate_common_web_registration = forbidden
+
 <!-- CommonPageResult 的 records、totalCount、pageNo 和 pageSize 由 Service 与 DAO 查询链路生成；适用于普通分页列表；业务含义是 Controller 不再把 records 改名包装成 rows。 -->
 selplat_common_page_result_owner = Service
 

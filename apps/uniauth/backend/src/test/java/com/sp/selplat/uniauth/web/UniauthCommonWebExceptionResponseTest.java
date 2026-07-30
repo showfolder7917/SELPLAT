@@ -1,8 +1,11 @@
-package com.sp.selplat.uniauth.logging;
+package com.sp.selplat.uniauth.web;
 
-import com.sp.selplat.uniauth.UniauthBackendApplication;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
+import com.sp.selplat.common.web.exception.CommonBusinessException;
+import com.sp.selplat.common.web.exception.CommonGlobalExceptionHandler;
+import com.sp.selplat.common.web.trace.CommonRequestTraceInterceptor;
+import com.sp.selplat.uniauth.UniauthBackendApplication;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,22 +21,22 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Uniauth 异常响应测试验证开发环境的页面堆栈、requestId 回传和 HTTP 500 语义。
- * 测试启动随机端口的真实 Web 服务器，通过 HTTP 调用生产 MVC 链路，不使用 MockMvc 或业务替身。
+ * Uniauth 公共 Web 异常集成测试验证下沉后的异常处理和请求追踪在真实应用中自动生效。
+ * 测试启动随机端口服务器，通过真实 HTTP 调用生产 MVC 链路，不创建业务替身。
  */
 @SpringBootTest(
     classes = UniauthBackendApplication.class,
     properties = "selplat.error.include-stacktrace=true",
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
-class UniauthExceptionResponseTest {
+class UniauthCommonWebExceptionResponseTest {
 
     // 注入真实 HTTP 客户端，请求会经过嵌入式 Web 服务器而非 MockMvc 模拟链路。
     @Autowired
     private TestRestTemplate restTemplate;
     // 注入真实全局异常处理器，业务异常格式测试直接验证生产处理逻辑而不创建替身。
     @Autowired
-    private UniauthGlobalExceptionHandler exceptionHandler;
+    private CommonGlobalExceptionHandler exceptionHandler;
     // Spring 为本 Case 分配的随机端口，避免测试依赖本机固定端口或其他应用进程。
     @LocalServerPort
     private int serverPort;
@@ -52,7 +55,7 @@ class UniauthExceptionResponseTest {
         // 未处理系统异常必须以真实 HTTP 500 返回，不能被误写成正常响应。
         assertEquals(500, response.getStatusCode().value());
         // 请求拦截器必须回传关联 ID，前端可将它提供给运维查询本地日志。
-        assertTrue(response.getHeaders().containsKey("X-Request-Id"));
+        assertTrue(response.getHeaders().containsKey(CommonRequestTraceInterceptor.REQUEST_ID_HEADER));
         // 响应体来自全局异常处理器，开发环境包含固定错误码与 requestId。
         Map<String, Object> responseBody = response.getBody();
         assertNotNull(responseBody);
@@ -71,7 +74,7 @@ class UniauthExceptionResponseTest {
     void returnsCommonResultForBusinessException() {
         // 真实业务异常携带稳定编码和可展示提示，异常处理器负责转为统一 JSON。
         String responseJson = exceptionHandler.handleBusinessException(
-            new UniauthBusinessException("USER_NOT_FOUND", "用户不存在。")
+            new CommonBusinessException("USER_NOT_FOUND", "用户不存在。")
         ).getBody();
         // 使用项目同一个 JsonUtils 解析实际响应，验证前端将收到的固定字段。
         Map<String, Object> responseBody = JsonUtils.fromJson(responseJson, Map.class);
