@@ -21,8 +21,9 @@ host_stylesheet_must_not_own_menu_internal_selectors = true
 menu_css_selector_must_use_module_prefix = true
 
 <!-- 菜单专属图片、纹理和边框必须进入独立素材目录；适用于菜单存在非标准视觉资产；业务含义是菜单资产可整体迁移、替换和清理。 -->
-web_menu_asset_directory_pattern = <web-static-root>/misc/assets/<menu-module>/
-web_menu_specific_asset_must_not_be_scattered_in_shared_asset_root = true
+web_menu_asset_directory_pattern = <web-static-root>/sel/assets/components/<menu-module>/
+web_menu_specific_asset_must_not_live_in = <web-static-root>/sel/assets/shared/,<web-static-root>/<application>/assets/
+web_menu_asset_root_must_preserve_component_layer = true
 menu_runtime_asset_must_use_local_relative_path = true
 
 ## 人工配置与项目扩展

@@ -1,0 +1,15 @@
+{
+  "gridId": "UniauthUserGrid",
+  "ariaLabel": "项目管理表格",
+  "emptyText": "没有符合当前条件的项目",
+  "items": [
+    { "id": "selection", "field": "id", "label": "", "renderer": "selection", "className": "selgrid-column-check" },
+    { "id": "project", "field": "name", "label": "项目名称", "renderer": "project", "className": "selgrid-column-project" },
+    { "id": "type", "field": "type", "label": "类型", "renderer": "type", "className": "selgrid-column-type" },
+    { "id": "owner", "field": "owner", "label": "负责人", "renderer": "owner", "className": "selgrid-column-owner" },
+    { "id": "status", "field": "status", "label": "状态", "renderer": "status", "className": "selgrid-column-status" },
+    { "id": "progress", "field": "progress", "label": "进度", "renderer": "progress", "className": "selgrid-column-progress" },
+    { "id": "updatedAt", "field": "updatedAt", "label": "更新时间", "renderer": "time", "className": "selgrid-column-time", "sortable": true, "sortDirection": "descending", "sortAriaLabel": "按更新时间降序排列" },
+    { "id": "actions", "field": "id", "label": "操作", "renderer": "actions", "className": "selgrid-column-actions" }
+  ]
+}

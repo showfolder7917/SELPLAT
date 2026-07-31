@@ -1,0 +1,32 @@
+{
+  "gridId": "UniauthUserGrid",
+  "ariaLabel": "プロジェクト操作メニュー",
+  "scrollAfter": 10,
+  "items": [
+    { "id": "view", "label": "詳細を表示", "icon": "ri-search-line" },
+    { "id": "edit", "label": "プロジェクトを編集", "icon": "ri-edit-line" },
+    { "id": "copy", "label": "プロジェクトを複製", "icon": "ri-price-tag-3-line" },
+    {
+      "id": "move",
+      "label": "移動先",
+      "icon": "ri-file-copy-2-line",
+      "children": [
+        { "id": "move-personal", "label": "マイスペース", "icon": "ri-folder-line" },
+        { "id": "move-project", "label": "プロジェクトスペース", "icon": "ri-folder-line" },
+        { "id": "move-team", "label": "チームスペース", "icon": "ri-team-line" },
+        { "id": "move-customer", "label": "顧客スペース", "icon": "ri-user-shared-line" },
+        { "id": "move-recent", "label": "最近の場所", "icon": "ri-history-line", "sectionStart": true },
+        { "id": "move-choose", "label": "場所を選択…", "icon": "ri-folder-open-line" }
+      ]
+    },
+    { "id": "archive", "label": "アーカイブ", "icon": "ri-archive-drawer-line" },
+    { "id": "add-tag", "label": "タグを追加", "icon": "ri-price-tag-3-line", "badge": "NEW" },
+    { "id": "copy-link", "label": "リンクをコピー", "icon": "ri-link", "disabled": true },
+    { "id": "export", "label": "エクスポート", "icon": "ri-upload-2-line" },
+    { "id": "new-folder", "label": "新規フォルダー", "icon": "ri-folder-add-line" },
+    { "id": "share", "label": "共有", "icon": "ri-share-line" },
+    { "id": "permissions", "label": "権限設定", "icon": "ri-shield-keyhole-line" },
+    { "id": "history", "label": "バージョン履歴", "icon": "ri-history-line" },
+    { "id": "delete", "label": "削除", "icon": "ri-delete-bin-6-line", "danger": true }
+  ]
+}

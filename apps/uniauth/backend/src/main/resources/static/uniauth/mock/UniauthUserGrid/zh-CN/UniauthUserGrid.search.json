@@ -1,0 +1,16 @@
+{
+  "gridId": "UniauthUserGrid",
+  "label": "项目搜索",
+  "placeholder": "搜索项目名称、负责人…",
+  "buttonLabel": "查询",
+  "clearLabel": "清空搜索条件",
+  "icon": "ri-search-line",
+  "buttonIcon": "ri-search-line",
+  "clearIcon": "ri-close-line",
+  "defaultValue": "",
+  "clearable": true,
+  "submitOnEnter": true,
+  "submitOnClear": true,
+  "allowEmpty": true,
+  "trim": true
+}

@@ -1,0 +1,19 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "type-filter",
+  "label": "项目类型",
+  "ariaLabel": "按项目类型筛选",
+  "currentTemplate": "{label}，当前：{value}",
+  "menuTitle": "选择项目类型",
+  "prefix": "类型：",
+  "scrollAfter": 5,
+  "options": [
+    { "value": "", "label": "全部", "menuLabel": "全部类型", "icon": "ri-apps-2-line", "description": "查看所有项目类型" },
+    { "value": "platform_architecture", "label": "平台架构", "icon": "ri-stack-line", "description": "基础平台与数据中台" },
+    { "value": "data_visualization", "label": "数据可视化", "icon": "ri-pie-chart-2-line", "description": "分析图表与可视化应用" },
+    { "value": "research_project", "label": "科研项目", "icon": "ri-flask-line", "description": "实验与研究类项目" },
+    { "value": "visualization", "label": "可视化", "icon": "ri-bar-chart-box-line", "description": "城市大屏与展示项目" },
+    { "value": "artificial_intelligence", "label": "人工智能", "icon": "ri-brain-line", "description": "模型与智能应用" },
+    { "value": "data_archive", "label": "数据归档", "icon": "ri-archive-drawer-line", "description": "历史数据与归档项目" }
+  ]
+}

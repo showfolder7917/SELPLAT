@@ -1,0 +1,64 @@
+<!doctype html>
+<!--
+    uniauth.html：统一认证前端演示应用入口。
+    页面只加载基础控件与应用装配层，并声明背景和业务面板挂载点；全部通用控件内部结构由 SEL 基础层创建。
+-->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>统一认证</title>
+    <link rel="icon" href="data:,">
+
+    <!-- ===== 第三方图标资源开始：基础控件使用统一 Remix Icon 字体；删除后控件结构仍存在但图标不可见。 ===== -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://i.pravatar.cc">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css">
+    <!-- ===== 第三方图标资源结束 ===== -->
+
+    <!-- ===== SEL 基础样式开始：先加载核心规则，再加载面板、树、下拉、表格、背景和光标组件。 ===== -->
+    <link rel="stylesheet" href="../sel/core/selBaseReset.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/core/selBaseAccessibility.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/core/selBaseToast.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/components/panel/selPanel.css?v=20260731-4">
+    <link rel="stylesheet" href="../sel/components/search/selSearch.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/components/tree/selTree.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/components/dropdown/selDropdownMenu.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/components/grid/selGrid.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/components/grid/selGridMenu.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/components/page-background/selPageBackground.css?v=20260731-1">
+    <link rel="stylesheet" href="../sel/components/cursor/selCursor.css?v=20260731-1">
+    <!-- ===== SEL 基础样式结束 ===== -->
+
+    <!-- ===== Uniauth 应用布局开始：只负责页面画布和多个基础面板的排列，不定义控件内部样式。 ===== -->
+    <link rel="stylesheet" href="./uniauth.css?v=20260731-2">
+    <!-- ===== Uniauth 应用布局结束 ===== -->
+</head>
+<body class="selcursor-crystal">
+    <!-- ===== 通用网页背景挂载点开始：删除后仅失去背景图片和选择器，业务面板继续独立装配。 ===== -->
+    <div data-sel-page-background-host></div>
+    <!-- ===== 通用网页背景挂载点结束 ===== -->
+
+    <!-- ===== Uniauth 应用挂载点开始：只声明应用边界；面板、树、下拉、表格、菜单和分页均由基础 API 创建。 ===== -->
+    <main class="uniauth-page-stage" data-uniauth-app aria-label="统一认证演示应用"></main>
+    <!-- ===== Uniauth 应用挂载点结束 ===== -->
+
+    <!-- ===== SEL 基础脚本开始：基础脚本只注册能力，禁止主动扫描或识别 Uniauth 业务。 ===== -->
+    <script src="../sel/core/selBaseRuntime.js?v=20260731-3"></script>
+    <!-- selAjax 只执行应用传入的真实地址并返回 JSON，不保存任何 Uniauth 路径。 -->
+    <script src="../sel/core/selAjax.js?v=20260731-1"></script>
+    <script src="../sel/components/panel/selPanel.js?v=20260731-5"></script>
+    <script src="../sel/components/search/selSearch.js?v=20260731-2"></script>
+    <script src="../sel/components/tree/selTree.js?v=20260731-2"></script>
+    <script src="../sel/components/dropdown/selDropdownMenu.js?v=20260731-2"></script>
+    <script src="../sel/components/grid/selGridMenu.js?v=20260731-1"></script>
+    <script src="../sel/components/grid/selGrid.js?v=20260731-2"></script>
+    <script src="../sel/components/page-background/selPageBackground.js?v=20260731-1"></script>
+    <!-- ===== SEL 基础脚本结束 ===== -->
+
+    <!-- ===== Uniauth 应用装配层开始：最后加载，只传业务配置和数据并调用基础 API。 ===== -->
+    <script src="./uniauth.js?v=20260731-6"></script>
+    <!-- ===== Uniauth 应用装配层结束 ===== -->
+</body>
+</html>

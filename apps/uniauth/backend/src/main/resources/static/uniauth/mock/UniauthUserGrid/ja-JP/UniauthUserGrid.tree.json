@@ -1,0 +1,37 @@
+{
+  "gridId": "UniauthUserGrid",
+  "ariaLabel": "プロジェクト分類ツリー",
+  "heading": "プロジェクトナビ",
+  "summary": "6 件の表示プロジェクト",
+  "expandLabelTemplate": "{label}を展開",
+  "collapseLabelTemplate": "{label}を折りたたむ",
+  "selectedId": "all",
+  "items": [
+    { "id": "all", "label": "すべてのプロジェクト", "icon": "ri-folder-3-line", "count": 6, "filter": {} },
+    {
+      "id": "types",
+      "label": "プロジェクト種類",
+      "icon": "ri-folders-line",
+      "count": 6,
+      "expanded": true,
+      "children": [
+        { "id": "platform", "label": "プラットフォーム", "icon": "ri-stack-line", "count": 1, "filter": { "type": "platform_architecture" } },
+        { "id": "visual", "label": "データ可視化", "icon": "ri-pie-chart-2-line", "count": 2, "filter": { "typeGroup": ["data_visualization", "visualization"] } },
+        { "id": "research", "label": "研究プロジェクト", "icon": "ri-flask-line", "count": 1, "filter": { "type": "research_project" } },
+        { "id": "ai", "label": "人工知能", "icon": "ri-brain-line", "count": 1, "filter": { "type": "artificial_intelligence" } }
+      ]
+    },
+    {
+      "id": "states",
+      "label": "プロジェクト状態",
+      "icon": "ri-pulse-line",
+      "count": 6,
+      "expanded": true,
+      "children": [
+        { "id": "active", "label": "進行中", "icon": "ri-loader-3-line", "count": 2, "filter": { "status": "active" } },
+        { "id": "done", "label": "完了", "icon": "ri-checkbox-circle-line", "count": 2, "filter": { "status": "done" } },
+        { "id": "archived", "label": "アーカイブ", "icon": "ri-archive-drawer-line", "count": 1, "filter": { "status": "archived" } }
+      ]
+    }
+  ]
+}

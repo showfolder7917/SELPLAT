@@ -1,0 +1,20 @@
+/*
+ * selCursor.css：通用水晶主题鼠标基础样式。
+ * 负责为任意应用提供可选发光箭头鼠标，并让输入区域继续使用便于编辑文字的文本光标。
+ * 责任边界：SEL 基础层定义素材和主题类，应用只在页面根选择是否启用。
+ */
+
+/* 页面和全部可交互元素统一使用水晶箭头，热点 5 5 对准素材左上方的箭头尖端。 */
+body.selcursor-crystal,
+body.selcursor-crystal :where(*) {
+    cursor: url("../../assets/cursors/selCursorCrystalPointer.png?v=20260731-5") 5 5, auto !important;
+}
+
+/* 文本输入、长文本和可编辑区域保留系统文本光标，避免自定义箭头遮挡插入位置。 */
+body.selcursor-crystal :where(
+    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+    textarea,
+    [contenteditable="true"]
+) {
+    cursor: text !important;
+}

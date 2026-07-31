@@ -1,0 +1,15 @@
+{
+  "gridId": "UniauthUserGrid",
+  "ariaLabel": "Project management table",
+  "emptyText": "No projects match the current filters",
+  "items": [
+    { "id": "selection", "field": "id", "label": "", "renderer": "selection", "className": "selgrid-column-check" },
+    { "id": "project", "field": "name", "label": "Project", "renderer": "project", "className": "selgrid-column-project" },
+    { "id": "type", "field": "type", "label": "Type", "renderer": "type", "className": "selgrid-column-type" },
+    { "id": "owner", "field": "owner", "label": "Owner", "renderer": "owner", "className": "selgrid-column-owner" },
+    { "id": "status", "field": "status", "label": "Status", "renderer": "status", "className": "selgrid-column-status" },
+    { "id": "progress", "field": "progress", "label": "Progress", "renderer": "progress", "className": "selgrid-column-progress" },
+    { "id": "updatedAt", "field": "updatedAt", "label": "Updated", "renderer": "time", "className": "selgrid-column-time", "sortable": true, "sortDirection": "descending", "sortAriaLabel": "Sort by updated time descending" },
+    { "id": "actions", "field": "id", "label": "Actions", "renderer": "actions", "className": "selgrid-column-actions" }
+  ]
+}

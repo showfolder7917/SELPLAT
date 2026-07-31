@@ -1,0 +1,16 @@
+{
+  "gridId": "UniauthUserGrid",
+  "label": "Project search",
+  "placeholder": "Search project name or owner…",
+  "buttonLabel": "Search",
+  "clearLabel": "Clear search",
+  "icon": "ri-search-line",
+  "buttonIcon": "ri-search-line",
+  "clearIcon": "ri-close-line",
+  "defaultValue": "",
+  "clearable": true,
+  "submitOnEnter": true,
+  "submitOnClear": true,
+  "allowEmpty": true,
+  "trim": true
+}

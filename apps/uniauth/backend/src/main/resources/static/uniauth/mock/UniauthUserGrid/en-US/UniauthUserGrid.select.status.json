@@ -1,0 +1,17 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "status-filter",
+  "label": "Project status",
+  "ariaLabel": "Filter by project status",
+  "currentTemplate": "{label}, current: {value}",
+  "menuTitle": "Choose project status",
+  "prefix": "Status: ",
+  "scrollAfter": 6,
+  "options": [
+    { "value": "", "label": "All", "menuLabel": "All statuses", "icon": "ri-apps-2-line", "description": "Show every project status" },
+    { "value": "active", "label": "In progress", "icon": "ri-loader-3-line", "tone": "active", "description": "Projects currently running" },
+    { "value": "review", "label": "In review", "icon": "ri-record-circle-line", "tone": "review", "description": "Waiting for review or approval" },
+    { "value": "done", "label": "Completed", "icon": "ri-checkbox-circle-line", "tone": "done", "description": "Projects already completed" },
+    { "value": "archived", "label": "Archived", "icon": "ri-archive-drawer-line", "tone": "muted", "description": "Moved to historical records" }
+  ]
+}

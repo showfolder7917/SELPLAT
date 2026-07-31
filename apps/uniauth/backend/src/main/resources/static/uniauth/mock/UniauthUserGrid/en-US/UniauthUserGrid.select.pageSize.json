@@ -1,0 +1,15 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "page-size",
+  "label": "Rows per page",
+  "ariaLabel": "Rows per page",
+  "currentTemplate": "{label}, current: {value}",
+  "menuTitle": "Choose rows per page",
+  "prefix": "",
+  "scrollAfter": 4,
+  "options": [
+    { "value": "10", "label": "10 / page", "icon": "ri-list-check-3", "description": "Compact view", "selected": true },
+    { "value": "20", "label": "20 / page", "icon": "ri-list-check-3", "description": "Continuous browsing" },
+    { "value": "50", "label": "50 / page", "icon": "ri-list-check-3", "description": "Bulk processing" }
+  ]
+}

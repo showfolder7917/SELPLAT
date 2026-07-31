@@ -1,0 +1,412 @@
+/*
+ * selPanel.css：通用水晶稳定面板基础控件样式。
+ * 负责标题区、工具栏、左侧导航、内容区和底栏的稳定布局及统一水晶发光外观。
+ * 责任边界：只负责标题、工具栏、主体和底栏的稳定区域关系，不包含业务表格或 Uniauth 数据样式。
+ * 组件类统一使用 selpanel-组名-单独名称；表格和树形组件的内部样式不在本文件维护。
+ */
+
+:root {
+    --selpanel-layout-gap: 10px;
+    --selpanel-layout-sidebar-width: 224px;
+    --selpanel-layout-sidebar-collapsed-width: 58px;
+    --selpanel-surface-line: rgba(105, 172, 255, 0.72);
+    --selpanel-surface-background: rgba(3, 14, 52, 0.82);
+    --selpanel-surface-glow: rgba(74, 116, 255, 0.52);
+    --selpanel-text-main: #eef2ff;
+    --selpanel-text-muted: #9daacf;
+}
+
+/* 面板根布局：纵向弹性排列让任一顶层区域删除后，其余区域仍按自身高度和剩余空间正常显示。 */
+.selpanel-shell {
+    display: flex;
+    width: min(1780px, calc(100vw - 20px));
+    height: var(--selpanel-instance-height, min(960px, calc(100vh - 20px)));
+    min-height: 680px;
+    flex-direction: column;
+    gap: var(--selpanel-layout-gap);
+}
+
+/* 水晶表面：所有区域复用同一真实边框素材，确保闪光边角和表格视觉一致。 */
+.selpanel-crystal-surface {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    border: 12px solid transparent;
+    border-image-source: url("../../assets/components/panel/crystal-table-frame.webp");
+    border-image-slice: 58 74 58 74 fill;
+    border-image-width: 12px;
+    border-image-repeat: stretch;
+    color: var(--selpanel-text-main);
+    filter: drop-shadow(0 0 8px var(--selpanel-surface-glow));
+}
+
+.selpanel-crystal-surface::after {
+    position: absolute;
+    z-index: 0;
+    inset: -5px;
+    border-radius: 18px;
+    background: linear-gradient(120deg, rgba(94, 196, 255, 0.08), transparent 25%, transparent 72%, rgba(129, 74, 255, 0.11));
+    pointer-events: none;
+    content: "";
+}
+
+.selpanel-crystal-surface > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* 顶部区域使用透明结构宿主，让标题和工具栏继续作为面板纵向弹性项独立显示。 */
+.selpanel-region-top {
+    display: contents;
+}
+
+/* 标题区：左侧品牌、中部状态标签和右侧快捷操作保持三段式稳定排列。 */
+.selpanel-header-shell {
+    z-index: 30;
+    display: grid;
+    min-height: 94px;
+    flex: 0 0 94px;
+    grid-template-columns: minmax(330px, 1fr) minmax(430px, 1.25fr) auto;
+    gap: 20px;
+    align-items: center;
+    padding: 0 18px;
+}
+
+.selpanel-brand-group,
+.selpanel-title-line,
+.selpanel-header-actions,
+.selpanel-status-tabs {
+    display: flex;
+    align-items: center;
+}
+
+.selpanel-brand-group {
+    min-width: 0;
+    gap: 13px;
+}
+
+.selpanel-brand-icon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid rgba(132, 208, 255, 0.82);
+    border-radius: 14px;
+    color: #c4edff;
+    background: linear-gradient(145deg, rgba(27, 114, 231, 0.78), rgba(104, 39, 218, 0.82));
+    box-shadow: 0 0 18px rgba(64, 152, 255, 0.72), inset 0 0 13px rgba(255, 255, 255, 0.26);
+    font-size: 27px;
+}
+
+.selpanel-brand-copy {
+    min-width: 0;
+}
+
+.selpanel-title-line {
+    gap: 12px;
+    white-space: nowrap;
+}
+
+.selpanel-title-line h1 {
+    margin: 0;
+    color: #f2f5ff;
+    font-size: clamp(24px, 2.1vw, 37px);
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 14px rgba(91, 160, 255, 0.62);
+}
+
+.selpanel-title-line span {
+    color: #aab5d6;
+    font-size: 14px;
+}
+
+.selpanel-title-line i {
+    margin-right: 5px;
+    color: #83b8ff;
+}
+
+.selpanel-brand-copy p {
+    margin: 5px 0 0;
+    color: #8e9bc1;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+}
+
+.selpanel-status-tabs {
+    overflow: hidden;
+    justify-self: center;
+    border: 1px solid rgba(96, 130, 221, 0.30);
+    border-radius: 11px;
+    background: rgba(5, 19, 61, 0.72);
+    box-shadow: inset 0 0 15px rgba(52, 93, 183, 0.18);
+}
+
+.selpanel-status-tab {
+    display: flex;
+    min-width: 105px;
+    height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-right: 1px solid rgba(89, 121, 207, 0.24);
+    color: #b8c2e0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.selpanel-status-tab:last-child {
+    border-right: 0;
+}
+
+.selpanel-status-tab strong {
+    color: #7887af;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.selpanel-status-tab:hover,
+.selpanel-status-tab-active {
+    color: white;
+    background: linear-gradient(135deg, rgba(38, 113, 237, 0.88), rgba(105, 54, 232, 0.82));
+    box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.20), 0 0 14px rgba(80, 121, 255, 0.60);
+}
+
+.selpanel-status-tab-active strong {
+    color: #dce8ff;
+}
+
+.selpanel-header-actions {
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.selpanel-action-button {
+    display: inline-flex;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 17px;
+    border: 1px solid rgba(112, 161, 255, 0.68);
+    border-radius: 12px;
+    color: #e3e8ff;
+    background: rgba(5, 20, 65, 0.80);
+    box-shadow: inset 0 0 12px rgba(63, 100, 191, 0.20), 0 0 9px rgba(65, 111, 239, 0.34);
+    cursor: pointer;
+    font-weight: 550;
+}
+
+.selpanel-action-button:hover,
+.selpanel-action-primary {
+    border-color: #8cbdff;
+    background: linear-gradient(135deg, rgba(41, 102, 235, 0.90), rgba(112, 46, 235, 0.86));
+    box-shadow: 0 0 15px rgba(74, 124, 255, 0.72), inset 0 0 12px rgba(255, 255, 255, 0.22);
+}
+
+.selpanel-action-button i {
+    font-size: 19px;
+}
+
+/* 工具栏：搜索基础控件、下拉筛选、日期范围和重置按钮保持稳定列布局。 */
+.selpanel-toolbar-shell {
+    z-index: 40;
+    display: grid;
+    min-height: 70px;
+    flex: 0 0 70px;
+    grid-template-columns: minmax(230px, 1.25fr) minmax(150px, 0.62fr) minmax(150px, 0.62fr) minmax(300px, 1fr) 102px;
+    gap: 12px;
+    align-items: center;
+    padding: 0 16px;
+}
+
+.selpanel-date-field,
+.selpanel-reset-button {
+    height: 42px;
+    border: 1px solid rgba(113, 158, 255, 0.56);
+    border-radius: 10px;
+    color: #dce3fb;
+    background: rgba(4, 17, 57, 0.82);
+    box-shadow: inset 0 0 12px rgba(59, 94, 180, 0.18);
+}
+
+.selpanel-date-field {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+}
+
+.selpanel-date-field {
+    justify-content: space-between;
+    padding: 0 13px;
+    cursor: pointer;
+}
+
+.selpanel-date-field i {
+    color: #899bc9;
+}
+
+.selpanel-reset-button {
+    cursor: pointer;
+    font-weight: 550;
+}
+
+.selpanel-reset-button:hover {
+    border-color: #8dc5ff;
+    background: rgba(22, 59, 136, 0.76);
+    box-shadow: 0 0 12px rgba(73, 137, 255, 0.52);
+}
+
+/* 主体区：弹性横排使左树或中央内容任一删除时，仍保留的区域自动占用可用空间。 */
+.selpanel-body-shell {
+    z-index: 10;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    gap: var(--selpanel-layout-gap);
+    transition: gap 180ms ease;
+}
+
+.selpanel-sidebar-shell {
+    flex: 0 0 var(--selpanel-layout-sidebar-width);
+    transition: flex-basis 180ms ease;
+}
+
+.selpanel-shell.selpanel-layout-left-collapsed .selpanel-sidebar-shell {
+    flex-basis: var(--selpanel-layout-sidebar-collapsed-width);
+}
+
+.selpanel-sidebar-shell {
+    display: grid;
+    overflow: hidden;
+    grid-template-rows: 44px minmax(0, 1fr) 42px;
+    padding: 3px 6px;
+}
+
+.selpanel-region-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 5px 0 8px;
+    border-bottom: 1px solid rgba(105, 142, 224, 0.22);
+    color: #e2e8ff;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.selpanel-region-heading span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.selpanel-region-heading button {
+    display: grid;
+    width: 31px;
+    height: 31px;
+    place-items: center;
+    border-radius: 8px;
+    color: #9fb0da;
+    background: rgba(20, 43, 101, 0.54);
+    cursor: pointer;
+    font-size: 17px;
+}
+
+.selpanel-region-heading button:hover {
+    color: white;
+    background: rgba(41, 91, 193, 0.70);
+    box-shadow: 0 0 9px rgba(74, 135, 255, 0.48);
+}
+
+.selpanel-sidebar-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 9px;
+    border-top: 1px solid rgba(105, 142, 224, 0.20);
+    color: #8290b5;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.selpanel-shell.selpanel-layout-left-collapsed .selpanel-region-heading {
+    justify-content: center;
+    padding: 0;
+}
+
+.selpanel-shell.selpanel-layout-left-collapsed .selpanel-region-heading span,
+.selpanel-shell.selpanel-layout-left-collapsed .selpanel-sidebar-summary {
+    display: none;
+}
+
+.selpanel-content-shell {
+    flex: 1 1 auto;
+    overflow: visible;
+    padding: 0;
+}
+
+/* 右侧区域默认作为浮动附加控件锚点，不挤压中央表格的自适应宽度。 */
+.selpanel-right-shell {
+    position: relative;
+    z-index: 50;
+    min-width: 0;
+    min-height: 0;
+    flex: 0 0 0;
+    overflow: visible;
+}
+
+/* 底栏：为表格摘要和分页提供独立稳定区域，避免内容区缩放时互相挤压。 */
+.selpanel-footer-shell {
+    z-index: 40;
+    display: flex;
+    min-height: 72px;
+    flex: 0 0 72px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 30px;
+}
+
+@media (max-width: 1380px) {
+    .selpanel-header-shell {
+        grid-template-columns: minmax(275px, 1fr) minmax(380px, 1.15fr) auto;
+        gap: 12px;
+    }
+
+    .selpanel-title-line span,
+    .selpanel-brand-copy p {
+        display: none;
+    }
+
+    .selpanel-status-tab {
+        min-width: 90px;
+    }
+
+    .selpanel-action-button {
+        padding: 0 13px;
+    }
+}
+
+@media (max-width: 1180px) {
+    .selpanel-shell {
+        min-width: 1060px;
+    }
+
+    .selpanel-header-actions span {
+        display: none;
+    }
+
+    .selpanel-action-button {
+        width: 43px;
+        padding: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .selpanel-body-shell,
+    .selpanel-sidebar-shell {
+        transition-duration: 0.01ms;
+    }
+}

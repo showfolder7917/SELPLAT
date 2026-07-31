@@ -1,0 +1,53 @@
+{
+  "gridId": "UniauthUserGrid",
+  "pageTitle": "项目管理 · 科技表格",
+  "title": "玻璃表格",
+  "subtitle": "Crystal Data Table",
+  "description": "通透 · 灵动 · 未来感",
+  "ariaLabel": "水晶项目管理面板",
+  "ariaLabels": {
+    "statusTabs": "项目状态筛选",
+    "headerActions": "项目快捷操作",
+    "toolbar": "项目筛选工具栏",
+    "sidebar": "项目树导航",
+    "content": "项目表格内容区",
+    "board": "项目管理表格",
+    "pagination": "项目分页"
+  },
+  "variants": {
+    "type-list": {
+      "title": "用户类型列表",
+      "subtitle": "Uniauth User Type Grid",
+      "ariaLabel": "统一认证用户类型表格"
+    }
+  },
+  "statusTabs": [
+    { "value": "", "label": "全部", "count": 128 },
+    { "value": "active", "label": "进行中", "count": 56 },
+    { "value": "done", "label": "已完成", "count": 43 },
+    { "value": "archived", "label": "已归档", "count": 29 }
+  ],
+  "actions": [
+    { "id": "new", "label": "新建", "icon": "ri-add-line", "primary": true },
+    { "id": "export", "label": "导出", "icon": "ri-download-2-line" },
+    { "id": "filter", "label": "筛选", "icon": "ri-filter-3-line" }
+  ],
+  "resetLabel": "重置",
+  "dateStart": "2024-01-01",
+  "dateEnd": "2024-05-21",
+  "messages": {
+    "selectProject": "选择项目",
+    "viewProject": "查看项目",
+    "editProject": "编辑项目",
+    "moreActions": "更多操作",
+    "filtersReset": "筛选条件已重置",
+    "treePrefix": "项目导航",
+    "expandLeftRegion": "展开项目导航",
+    "collapseLeftRegion": "收起项目导航",
+    "filterActivated": "筛选工具栏已激活",
+    "newOpened": "已打开新建项目入口",
+    "exportPreparing": "正在准备导出当前项目",
+    "dateRange": "日期范围：{start} 至 {end}",
+    "movePrefix": "移动到"
+  }
+}

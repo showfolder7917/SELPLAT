@@ -1,0 +1,37 @@
+{
+  "gridId": "UniauthUserGrid",
+  "ariaLabel": "Project category tree",
+  "heading": "Project navigation",
+  "summary": "6 projects shown",
+  "expandLabelTemplate": "Expand {label}",
+  "collapseLabelTemplate": "Collapse {label}",
+  "selectedId": "all",
+  "items": [
+    { "id": "all", "label": "All projects", "icon": "ri-folder-3-line", "count": 6, "filter": {} },
+    {
+      "id": "types",
+      "label": "Project types",
+      "icon": "ri-folders-line",
+      "count": 6,
+      "expanded": true,
+      "children": [
+        { "id": "platform", "label": "Platform architecture", "icon": "ri-stack-line", "count": 1, "filter": { "type": "platform_architecture" } },
+        { "id": "visual", "label": "Data visualization", "icon": "ri-pie-chart-2-line", "count": 2, "filter": { "typeGroup": ["data_visualization", "visualization"] } },
+        { "id": "research", "label": "Research projects", "icon": "ri-flask-line", "count": 1, "filter": { "type": "research_project" } },
+        { "id": "ai", "label": "Artificial intelligence", "icon": "ri-brain-line", "count": 1, "filter": { "type": "artificial_intelligence" } }
+      ]
+    },
+    {
+      "id": "states",
+      "label": "Project status",
+      "icon": "ri-pulse-line",
+      "count": 6,
+      "expanded": true,
+      "children": [
+        { "id": "active", "label": "In progress", "icon": "ri-loader-3-line", "count": 2, "filter": { "status": "active" } },
+        { "id": "done", "label": "Completed", "icon": "ri-checkbox-circle-line", "count": 2, "filter": { "status": "done" } },
+        { "id": "archived", "label": "Archived", "icon": "ri-archive-drawer-line", "count": 1, "filter": { "status": "archived" } }
+      ]
+    }
+  ]
+}

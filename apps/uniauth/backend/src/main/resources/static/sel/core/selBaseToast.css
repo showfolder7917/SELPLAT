@@ -1,0 +1,28 @@
+/*
+ * selBaseToast.css：基础操作反馈浮层样式。
+ * 负责反馈节点的显示、隐藏和动效；反馈文字和触发时机由应用或业务控件提供。
+ */
+
+/* 页面反馈组件归入 selgrid-feedback 组，可见状态不再使用无归属的通用 is-* 类。 */
+.selgrid-feedback-toast {
+    position: fixed;
+    z-index: 50;
+    top: 24px;
+    left: 50%;
+    max-width: 420px;
+    padding: 12px 20px;
+    border: 1px solid rgba(111, 205, 255, 0.60);
+    border-radius: 12px;
+    color: white;
+    background: rgba(5, 25, 78, 0.94);
+    box-shadow: 0 0 22px rgba(69, 126, 255, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -16px);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.selgrid-feedback-toast.selgrid-feedback-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}

@@ -1,0 +1,151 @@
+/*
+ * selTree.css：通用树形导航基础控件样式。
+ * 负责树节点层级、展开状态、当前选择、高亮反馈和面板收起后的图标模式。
+ * 责任边界：只定义 seltree 组件结构和状态，不包含任何 Uniauth 业务页面布局。
+ * 组件类统一使用 seltree-组名-单独名称。
+ */
+
+.seltree-root {
+    min-height: 0;
+    padding: 8px 2px;
+    overflow: auto;
+    scrollbar-color: #6287f3 rgba(6, 20, 62, 0.70);
+    scrollbar-width: thin;
+}
+
+.seltree-list {
+    display: grid;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.seltree-list .seltree-list {
+    margin: 2px 0 3px 17px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(104, 149, 241, 0.28);
+}
+
+.seltree-node-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #aeb9d8;
+    background: transparent;
+    transition: color 140ms ease, background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.seltree-node-row:hover {
+    color: #edf4ff;
+    background: rgba(23, 62, 141, 0.42);
+}
+
+.seltree-node-row.seltree-node-selected {
+    border-color: rgba(96, 179, 255, 0.74);
+    color: white;
+    background: linear-gradient(90deg, rgba(33, 111, 224, 0.62), rgba(81, 52, 180, 0.54));
+    box-shadow: 0 0 10px rgba(62, 129, 255, 0.52), inset 0 0 10px rgba(118, 173, 255, 0.18);
+}
+
+.seltree-node-toggle,
+.seltree-node-button {
+    height: 34px;
+    color: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+.seltree-node-toggle {
+    display: grid;
+    width: 24px;
+    padding: 0;
+    place-items: center;
+    font-size: 16px;
+}
+
+.seltree-node-toggle.seltree-node-toggle-empty {
+    cursor: default;
+    opacity: 0;
+}
+
+.seltree-node-toggle i {
+    transition: transform 140ms ease;
+}
+
+.seltree-node-toggle[aria-expanded="true"] i {
+    transform: rotate(90deg);
+}
+
+.seltree-node-button {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 0 5px;
+    text-align: left;
+}
+
+.seltree-node-button > i {
+    flex: 0 0 auto;
+    color: #91b9ff;
+    font-size: 17px;
+    text-shadow: 0 0 7px rgba(83, 149, 255, 0.50);
+}
+
+.seltree-node-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.seltree-node-count {
+    min-width: 24px;
+    margin-right: 6px;
+    padding: 2px 5px;
+    border-radius: 999px;
+    color: #8090b8;
+    background: rgba(11, 31, 82, 0.82);
+    font-size: 10px;
+    text-align: center;
+}
+
+.seltree-children-hidden {
+    display: none;
+}
+
+.selpanel-layout-left-collapsed .seltree-root {
+    padding-right: 0;
+    padding-left: 0;
+    overflow: hidden;
+}
+
+.selpanel-layout-left-collapsed .seltree-list .seltree-list,
+.selpanel-layout-left-collapsed .seltree-node-toggle,
+.selpanel-layout-left-collapsed .seltree-node-label,
+.selpanel-layout-left-collapsed .seltree-node-count {
+    display: none;
+}
+
+.selpanel-layout-left-collapsed .seltree-node-row {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+.selpanel-layout-left-collapsed .seltree-node-button {
+    justify-content: center;
+    padding: 0;
+}
+
+.selpanel-layout-left-collapsed .seltree-node-button > i {
+    font-size: 19px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .seltree-node-row,
+    .seltree-node-toggle i {
+        transition-duration: 0.01ms;
+    }
+}

@@ -6,3 +6,4 @@ bin/
 MEMORIES/
 **/__pycache__/
 *.py[cod]
+trs/

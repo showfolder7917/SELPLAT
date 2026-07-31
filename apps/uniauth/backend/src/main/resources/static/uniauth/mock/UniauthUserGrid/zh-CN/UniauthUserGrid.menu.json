@@ -1,0 +1,32 @@
+{
+  "gridId": "UniauthUserGrid",
+  "ariaLabel": "项目操作菜单",
+  "scrollAfter": 10,
+  "items": [
+    { "id": "view", "label": "查看详情", "icon": "ri-search-line" },
+    { "id": "edit", "label": "编辑项目", "icon": "ri-edit-line" },
+    { "id": "copy", "label": "复制项目", "icon": "ri-price-tag-3-line" },
+    {
+      "id": "move",
+      "label": "移动到",
+      "icon": "ri-file-copy-2-line",
+      "children": [
+        { "id": "move-personal", "label": "我的空间", "icon": "ri-folder-line" },
+        { "id": "move-project", "label": "项目空间", "icon": "ri-folder-line" },
+        { "id": "move-team", "label": "团队空间", "icon": "ri-team-line" },
+        { "id": "move-customer", "label": "客户空间", "icon": "ri-user-shared-line" },
+        { "id": "move-recent", "label": "最近位置", "icon": "ri-history-line", "sectionStart": true },
+        { "id": "move-choose", "label": "选择位置…", "icon": "ri-folder-open-line" }
+      ]
+    },
+    { "id": "archive", "label": "归档项目", "icon": "ri-archive-drawer-line" },
+    { "id": "add-tag", "label": "添加标签", "icon": "ri-price-tag-3-line", "badge": "NEW" },
+    { "id": "copy-link", "label": "复制链接", "icon": "ri-link", "disabled": true },
+    { "id": "export", "label": "导出", "icon": "ri-upload-2-line" },
+    { "id": "new-folder", "label": "新建文件夹", "icon": "ri-folder-add-line" },
+    { "id": "share", "label": "分享项目", "icon": "ri-share-line" },
+    { "id": "permissions", "label": "权限设置", "icon": "ri-shield-keyhole-line" },
+    { "id": "history", "label": "版本历史", "icon": "ri-history-line" },
+    { "id": "delete", "label": "删除项目", "icon": "ri-delete-bin-6-line", "danger": true }
+  ]
+}

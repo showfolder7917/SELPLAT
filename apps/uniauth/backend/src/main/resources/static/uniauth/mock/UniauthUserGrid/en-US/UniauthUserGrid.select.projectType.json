@@ -1,0 +1,19 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "type-filter",
+  "label": "Project type",
+  "ariaLabel": "Filter by project type",
+  "currentTemplate": "{label}, current: {value}",
+  "menuTitle": "Choose project type",
+  "prefix": "Type: ",
+  "scrollAfter": 5,
+  "options": [
+    { "value": "", "label": "All", "menuLabel": "All types", "icon": "ri-apps-2-line", "description": "View every project type" },
+    { "value": "platform_architecture", "label": "Platform architecture", "icon": "ri-stack-line", "description": "Core platforms and data infrastructure" },
+    { "value": "data_visualization", "label": "Data visualization", "icon": "ri-pie-chart-2-line", "description": "Analytics charts and visual apps" },
+    { "value": "research_project", "label": "Research project", "icon": "ri-flask-line", "description": "Experiments and research" },
+    { "value": "visualization", "label": "Visualization", "icon": "ri-bar-chart-box-line", "description": "City dashboards and displays" },
+    { "value": "artificial_intelligence", "label": "Artificial intelligence", "icon": "ri-brain-line", "description": "Models and intelligent apps" },
+    { "value": "data_archive", "label": "Data archive", "icon": "ri-archive-drawer-line", "description": "Historical and archived data" }
+  ]
+}

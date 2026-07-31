@@ -1,0 +1,17 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "status-filter",
+  "label": "项目状态",
+  "ariaLabel": "按项目状态筛选",
+  "currentTemplate": "{label}，当前：{value}",
+  "menuTitle": "选择项目状态",
+  "prefix": "状态：",
+  "scrollAfter": 6,
+  "options": [
+    { "value": "", "label": "全部", "menuLabel": "全部状态", "icon": "ri-apps-2-line", "description": "显示所有项目状态" },
+    { "value": "active", "label": "进行中", "icon": "ri-loader-3-line", "tone": "active", "description": "正在执行的项目" },
+    { "value": "review", "label": "评审中", "icon": "ri-record-circle-line", "tone": "review", "description": "等待评审或审批" },
+    { "value": "done", "label": "已完成", "icon": "ri-checkbox-circle-line", "tone": "done", "description": "已经完成的项目" },
+    { "value": "archived", "label": "已归档", "icon": "ri-archive-drawer-line", "tone": "muted", "description": "已转入历史归档" }
+  ]
+}

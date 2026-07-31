@@ -1,0 +1,32 @@
+{
+  "gridId": "UniauthUserGrid",
+  "ariaLabel": "Project actions menu",
+  "scrollAfter": 10,
+  "items": [
+    { "id": "view", "label": "View details", "icon": "ri-search-line" },
+    { "id": "edit", "label": "Edit project", "icon": "ri-edit-line" },
+    { "id": "copy", "label": "Duplicate project", "icon": "ri-price-tag-3-line" },
+    {
+      "id": "move",
+      "label": "Move to",
+      "icon": "ri-file-copy-2-line",
+      "children": [
+        { "id": "move-personal", "label": "My space", "icon": "ri-folder-line" },
+        { "id": "move-project", "label": "Project space", "icon": "ri-folder-line" },
+        { "id": "move-team", "label": "Team space", "icon": "ri-team-line" },
+        { "id": "move-customer", "label": "Customer space", "icon": "ri-user-shared-line" },
+        { "id": "move-recent", "label": "Recent locations", "icon": "ri-history-line", "sectionStart": true },
+        { "id": "move-choose", "label": "Choose location…", "icon": "ri-folder-open-line" }
+      ]
+    },
+    { "id": "archive", "label": "Archive project", "icon": "ri-archive-drawer-line" },
+    { "id": "add-tag", "label": "Add tag", "icon": "ri-price-tag-3-line", "badge": "NEW" },
+    { "id": "copy-link", "label": "Copy link", "icon": "ri-link", "disabled": true },
+    { "id": "export", "label": "Export", "icon": "ri-upload-2-line" },
+    { "id": "new-folder", "label": "New folder", "icon": "ri-folder-add-line" },
+    { "id": "share", "label": "Share project", "icon": "ri-share-line" },
+    { "id": "permissions", "label": "Permissions", "icon": "ri-shield-keyhole-line" },
+    { "id": "history", "label": "Version history", "icon": "ri-history-line" },
+    { "id": "delete", "label": "Delete project", "icon": "ri-delete-bin-6-line", "danger": true }
+  ]
+}

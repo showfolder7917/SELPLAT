@@ -1,0 +1,15 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "page-size",
+  "label": "每页显示条数",
+  "ariaLabel": "每页显示条数",
+  "currentTemplate": "{label}，当前：{value}",
+  "menuTitle": "选择每页显示条数",
+  "prefix": "",
+  "scrollAfter": 4,
+  "options": [
+    { "value": "10", "label": "10 条/页", "icon": "ri-list-check-3", "description": "适合紧凑查看", "selected": true },
+    { "value": "20", "label": "20 条/页", "icon": "ri-list-check-3", "description": "适合连续浏览" },
+    { "value": "50", "label": "50 条/页", "icon": "ri-list-check-3", "description": "适合批量处理" }
+  ]
+}

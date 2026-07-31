@@ -1,0 +1,45 @@
+/*
+ * uniauth.css：统一认证应用页面布局样式。
+ * 只负责浏览器画布、Uniauth 应用挂载点和多实例排列，不定义或覆盖 SEL 基础控件内部结构。
+ * 应用类统一使用 uniauth- 前缀；基础面板尺寸通过 selPanel.mount 的标准 height 选项传入。
+ */
+
+/* 页面画布只提供应用运行所需的最小尺寸、字体令牌和透明背景。 */
+html {
+    min-width: 1080px;
+    min-height: 100%;
+    background: var(--selgrid-theme-page-background);
+}
+
+/* body 负责整个 Uniauth 页面滚动和基础文字令牌，不承担任何控件布局。 */
+body {
+    min-height: 100vh;
+    margin: 0;
+    overflow-x: auto;
+    color: var(--selgrid-theme-text);
+    background: transparent;
+    font-family: var(--selgrid-theme-font);
+    -webkit-font-smoothing: antialiased;
+    isolation: isolate;
+}
+
+/* 应用舞台只排列 selPanel 创建的独立实例，不选择面板内部节点。 */
+.uniauth-page-stage {
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    padding: 10px;
+}
+
+/* 多实例模式由 selPanel 在应用挂载点写入标准布局标识，应用只调整实例之间的间距。 */
+.uniauth-page-stage[data-sel-panel-layout="stack"] {
+    gap: 18px;
+    place-items: start center;
+}
+
+/* 低高度窗口只改变应用舞台对齐方式，基础面板自行处理内部响应式布局。 */
+@media (max-height: 620px) {
+    .uniauth-page-stage {
+        align-items: start;
+    }
+}

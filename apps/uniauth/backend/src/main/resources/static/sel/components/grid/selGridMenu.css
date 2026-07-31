@@ -1,38 +1,44 @@
+/*
+ * selGridMenu.css：通用表格行操作菜单基础控件样式。
+ * 责任边界：只定义菜单结构、滚动、二级菜单和交互状态，不包含任何业务动作数据。
+ * 命名规则：菜单类统一使用 selgrid-menu-单独名称，菜单状态也保留 menu 组名。
+ */
+
 :root {
-    --grid-menu-width: 236px;
-    --grid-menu-row-height: 39px;
-    --grid-menu-visible-items: 10;
-    --grid-menu-edge-size: 18px;
-    --grid-menu-text: #dce5ff;
-    --grid-menu-muted: #6478ac;
-    --grid-menu-danger: #ff3159;
-    --grid-menu-focus: #61b9ff;
+    --selgrid-menu-width: 236px;
+    --selgrid-menu-row-height: 34px;
+    --selgrid-menu-visible-items: 10;
+    --selgrid-menu-edge-size: 18px;
+    --selgrid-menu-text: #dce5ff;
+    --selgrid-menu-muted: #6478ac;
+    --selgrid-menu-danger: #ff3159;
+    --selgrid-menu-focus: #61b9ff;
 }
 
-.grid-menu {
+.selgrid-menu {
     position: absolute;
     z-index: 30;
-    top: 112px;
-    right: 8px;
+    top: 26px;
+    right: -6px;
     display: none;
-    width: var(--grid-menu-width);
+    width: var(--selgrid-menu-width);
     box-sizing: border-box;
-    border: var(--grid-menu-edge-size) solid transparent;
-    border-image-source: url("../../misc/assets/gridmenu/crystal-menu-frame.png");
+    border: var(--selgrid-menu-edge-size) solid transparent;
+    border-image-source: url("../../assets/shared/crystal-menu-frame.webp");
     border-image-slice: 118 72 118 72 fill;
-    border-image-width: var(--grid-menu-edge-size);
+    border-image-width: var(--selgrid-menu-edge-size);
     border-image-repeat: stretch;
-    color: var(--grid-menu-text);
+    color: var(--selgrid-menu-text);
     filter: drop-shadow(0 0 12px rgba(56, 120, 255, 0.68));
 }
 
-.grid-menu.is-open {
+.selgrid-menu.selgrid-menu-open {
     display: block;
 }
 
-.grid-menu__viewport {
+.selgrid-menu-viewport {
     position: relative;
-    max-height: calc(var(--grid-menu-visible-items) * var(--grid-menu-row-height));
+    max-height: calc(var(--selgrid-menu-visible-items) * var(--selgrid-menu-row-height));
     margin: -3px;
     overflow: hidden;
     overscroll-behavior: contain;
@@ -40,48 +46,48 @@
     scrollbar-width: thin;
 }
 
-.grid-menu.is-scrollable .grid-menu__viewport {
+.selgrid-menu.selgrid-menu-scrollable .selgrid-menu-viewport {
     overflow-y: auto;
     padding-right: 6px;
 }
 
-.grid-menu__viewport::-webkit-scrollbar {
+.selgrid-menu-viewport::-webkit-scrollbar {
     width: 5px;
 }
 
-.grid-menu__viewport::-webkit-scrollbar-track {
+.selgrid-menu-viewport::-webkit-scrollbar-track {
     border-radius: 999px;
     background: rgba(8, 23, 72, 0.72);
 }
 
-.grid-menu__viewport::-webkit-scrollbar-thumb {
+.selgrid-menu-viewport::-webkit-scrollbar-thumb {
     border-radius: 999px;
     background: #718dff;
     box-shadow: 0 0 8px rgba(90, 135, 255, 0.88);
 }
 
-.grid-menu__list {
+.selgrid-menu-list {
     display: grid;
 }
 
-.grid-menu__item {
+.selgrid-menu-item {
     position: relative;
     display: grid;
     width: 100%;
-    height: var(--grid-menu-row-height);
+    height: var(--selgrid-menu-row-height);
     grid-template-columns: 22px minmax(0, 1fr) auto 13px;
     gap: 7px;
     align-items: center;
     padding: 0 6px;
     border: 1px solid transparent;
-    color: var(--grid-menu-text);
+    color: var(--selgrid-menu-text);
     background: transparent;
     cursor: pointer;
     text-align: left;
     transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.grid-menu__item:not(:last-child)::after {
+.selgrid-menu-item:not(:last-child)::after {
     position: absolute;
     right: 4px;
     bottom: -1px;
@@ -91,10 +97,10 @@
     content: "";
 }
 
-.grid-menu__item:hover,
-.grid-menu__item:focus-visible,
-.grid-menu__item.is-pressed,
-.grid-menu__item[aria-expanded="true"] {
+.selgrid-menu-item:hover,
+.selgrid-menu-item:focus-visible,
+.selgrid-menu-item.selgrid-menu-pressed,
+.selgrid-menu-item[aria-expanded="true"] {
     border-color: rgba(105, 179, 255, 0.82);
     outline: none;
     background: rgba(27, 79, 194, 0.42);
@@ -103,35 +109,35 @@
         inset 0 0 13px rgba(89, 126, 255, 0.34);
 }
 
-.grid-menu__item:active {
+.selgrid-menu-item:active {
     background: rgba(37, 68, 165, 0.62);
     box-shadow:
         0 0 9px rgba(70, 112, 255, 0.70),
         inset 0 0 16px rgba(46, 54, 148, 0.68);
 }
 
-.grid-menu__item:disabled {
-    color: var(--grid-menu-muted);
+.selgrid-menu-item:disabled {
+    color: var(--selgrid-menu-muted);
     cursor: not-allowed;
     opacity: 0.54;
 }
 
-.grid-menu__item:disabled:hover {
+.selgrid-menu-item:disabled:hover {
     border-color: transparent;
     background: transparent;
     box-shadow: none;
 }
 
-.grid-menu__item > i:first-child {
+.selgrid-menu-item > i:first-child {
     color: currentColor;
     font-size: 19px;
     text-align: center;
     text-shadow: 0 0 7px rgba(102, 171, 255, 0.34);
 }
 
-.grid-menu__label {
+.selgrid-menu-label {
     overflow: hidden;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     letter-spacing: 0.01em;
     line-height: 1;
@@ -139,7 +145,7 @@
     white-space: nowrap;
 }
 
-.grid-menu__badge {
+.selgrid-menu-badge {
     min-width: 30px;
     padding: 3px 5px;
     border: 1px solid rgba(94, 150, 255, 0.82);
@@ -153,18 +159,18 @@
     text-align: center;
 }
 
-.grid-menu__chevron {
+.selgrid-menu-chevron {
     color: currentColor;
     font-size: 18px;
 }
 
-.grid-menu__item.is-danger {
-    color: var(--grid-menu-danger);
+.selgrid-menu-item.selgrid-menu-danger {
+    color: var(--selgrid-menu-danger);
     text-shadow: 0 0 8px rgba(255, 49, 89, 0.26);
 }
 
-.grid-menu__item.is-danger:hover,
-.grid-menu__item.is-danger:focus-visible {
+.selgrid-menu-item.selgrid-menu-danger:hover,
+.selgrid-menu-item.selgrid-menu-danger:focus-visible {
     border-color: rgba(255, 81, 118, 0.90);
     background: rgba(153, 28, 74, 0.42);
     box-shadow:
@@ -172,51 +178,51 @@
         inset 0 0 12px rgba(220, 35, 96, 0.34);
 }
 
-.grid-menu__submenu {
+.selgrid-menu-submenu {
     position: absolute;
     z-index: 4;
-    top: var(--grid-submenu-top, 0);
+    top: var(--selgrid-menu-submenu-top, 0);
     left: calc(100% - 8px);
     display: none;
     width: 194px;
     box-sizing: border-box;
     border: 15px solid transparent;
-    border-image-source: url("../../misc/assets/gridmenu/crystal-menu-frame.png");
+    border-image-source: url("../../assets/shared/crystal-menu-frame.webp");
     border-image-slice: 118 72 118 72 fill;
     border-image-width: 15px;
     border-image-repeat: stretch;
     filter: drop-shadow(0 0 11px rgba(65, 119, 255, 0.72));
 }
 
-.grid-menu__submenu.is-open {
+.selgrid-menu-submenu.selgrid-menu-open {
     display: block;
 }
 
-.grid-menu__submenu .grid-menu__item {
+.selgrid-menu-submenu .selgrid-menu-item {
     height: 37px;
     grid-template-columns: 22px minmax(0, 1fr);
     padding: 0 7px;
 }
 
-.grid-menu__submenu .grid-menu__item.is-section-start {
+.selgrid-menu-submenu .selgrid-menu-item.selgrid-menu-section-start {
     margin-top: 5px;
     border-top-color: rgba(120, 150, 231, 0.34);
 }
 
 @media (max-width: 1280px) {
-    .grid-menu {
+    .selgrid-menu {
         right: 4px;
-        --grid-menu-width: 222px;
+        --selgrid-menu-width: 222px;
     }
 
-    .grid-menu__submenu {
+    .selgrid-menu-submenu {
         right: calc(100% - 8px);
         left: auto;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .grid-menu__item {
+    .selgrid-menu-item {
         transition-duration: 0.01ms;
     }
 }

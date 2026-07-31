@@ -1,0 +1,15 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "page-size",
+  "label": "1ページの表示件数",
+  "ariaLabel": "1ページの表示件数",
+  "currentTemplate": "{label}、現在：{value}",
+  "menuTitle": "1ページの表示件数を選択",
+  "prefix": "",
+  "scrollAfter": 4,
+  "options": [
+    { "value": "10", "label": "10 件/ページ", "icon": "ri-list-check-3", "description": "コンパクト表示", "selected": true },
+    { "value": "20", "label": "20 件/ページ", "icon": "ri-list-check-3", "description": "連続閲覧向け" },
+    { "value": "50", "label": "50 件/ページ", "icon": "ri-list-check-3", "description": "一括処理向け" }
+  ]
+}

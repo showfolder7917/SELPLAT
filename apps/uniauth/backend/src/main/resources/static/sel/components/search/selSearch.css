@@ -1,0 +1,166 @@
+/*
+ * selSearch.css：通用搜索与查询基础控件样式。
+ * 负责搜索输入、清空按钮、查询按钮、悬停、焦点和禁用状态；不定义任何 Uniauth 页面布局。
+ * 全部类使用 selsearch 组件前缀，允许同页多个搜索实例共享样式而不共享状态。
+ */
+
+/* 搜索根：填满 selPanel 提供的工具栏宿主，不干预其他工具栏控件列宽。 */
+.selsearch-root {
+    min-width: 0;
+}
+
+/* 可访问标签：视觉隐藏但保留给屏幕阅读器。 */
+.selsearch-accessibility-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    margin: -1px;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+/* 搜索表单组：水晶输入面与查询主按钮保持统一高度和稳定间距。 */
+.selsearch-form {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+}
+
+/* 输入字段组：图标、关键词和清空按钮共享一个水晶内框。 */
+.selsearch-field {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 9px;
+    padding: 0 10px 0 13px;
+    border: 1px solid rgba(113, 158, 255, 0.56);
+    border-radius: 10px;
+    color: #dce3fb;
+    background: rgba(4, 17, 57, 0.82);
+    box-shadow: inset 0 0 12px rgba(59, 94, 180, 0.18);
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+/* 输入字段聚焦态：任一内部元素聚焦时增强蓝紫光晕。 */
+.selsearch-field:focus-within {
+    border-color: rgba(132, 201, 255, 0.94);
+    background: rgba(7, 25, 76, 0.92);
+    box-shadow: 0 0 13px rgba(55, 139, 255, 0.44), inset 0 0 14px rgba(89, 115, 255, 0.20);
+}
+
+/* 搜索前置图标：保持与工具栏下拉图标相同视觉层级。 */
+.selsearch-field > i {
+    flex: 0 0 auto;
+    color: #d8e6ff;
+    font-size: 19px;
+    text-shadow: 0 0 8px rgba(101, 176, 255, 0.58);
+}
+
+/* 关键词输入：占满字段剩余区域并清除浏览器默认边框。 */
+.selsearch-field-input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    color: #edf2ff;
+    background: transparent;
+    font: inherit;
+}
+
+/* 浏览器 search 默认清除按钮由自定义清空按钮替代。 */
+.selsearch-field-input::-webkit-search-cancel-button {
+    display: none;
+}
+
+/* 占位文字保持弱层级，避免与真实关键词混淆。 */
+.selsearch-field-input::placeholder {
+    color: #7f8bad;
+}
+
+/* 清空按钮：只在存在关键词时显示紧凑圆形动作。 */
+.selsearch-field-clear {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #91a5d8;
+    background: rgba(29, 56, 120, 0.34);
+    cursor: pointer;
+}
+
+/* hidden 属性必须覆盖按钮自身 display:grid。 */
+.selsearch-field-clear[hidden] {
+    display: none;
+}
+
+/* 清空按钮悬停和键盘焦点提供明确操作反馈。 */
+.selsearch-field-clear:hover,
+.selsearch-field-clear:focus-visible {
+    border-color: rgba(128, 185, 255, 0.72);
+    color: #f0f5ff;
+    background: rgba(43, 91, 190, 0.62);
+    box-shadow: 0 0 9px rgba(74, 144, 255, 0.50);
+    outline: 0;
+}
+
+/* 查询按钮：主操作采用蓝紫渐变和稳定最小宽度。 */
+.selsearch-submit-button {
+    display: inline-flex;
+    min-width: 86px;
+    height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 15px;
+    border: 1px solid rgba(138, 198, 255, 0.92);
+    border-radius: 10px;
+    color: #fff;
+    background: linear-gradient(135deg, rgba(35, 116, 238, 0.94), rgba(112, 56, 232, 0.92));
+    box-shadow: 0 0 15px rgba(68, 134, 255, 0.50), inset 0 0 11px rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+}
+
+/* 查询按钮悬停和焦点态增强亮度但保持布局不变。 */
+.selsearch-submit-button:hover,
+.selsearch-submit-button:focus-visible {
+    filter: brightness(1.13);
+    box-shadow: 0 0 19px rgba(83, 151, 255, 0.70), inset 0 0 13px rgba(255, 255, 255, 0.24);
+    outline: 0;
+}
+
+/* 鼠标按下提供轻微位移反馈。 */
+.selsearch-submit-button:active {
+    transform: translateY(1px);
+}
+
+/* 查询中状态降低亮度并阻止重复点击。 */
+.selsearch-submit-button:disabled {
+    cursor: wait;
+    filter: saturate(0.5) brightness(0.75);
+    opacity: 0.72;
+}
+
+/* 紧凑桌面保留查询图标并隐藏文字，避免挤压关键词输入。 */
+@media (max-width: 1180px) {
+    .selsearch-submit-button {
+        min-width: 42px;
+        padding: 0 12px;
+    }
+
+    .selsearch-submit-label {
+        display: none;
+    }
+}

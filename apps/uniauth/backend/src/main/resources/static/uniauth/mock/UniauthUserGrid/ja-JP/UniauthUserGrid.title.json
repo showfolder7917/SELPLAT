@@ -1,0 +1,53 @@
+{
+  "gridId": "UniauthUserGrid",
+  "pageTitle": "プロジェクト管理 · クリスタルテーブル",
+  "title": "ガラステーブル",
+  "subtitle": "Crystal Data Table",
+  "description": "透明 · 軽快 · 未来的",
+  "ariaLabel": "クリスタルプロジェクト管理パネル",
+  "ariaLabels": {
+    "statusTabs": "プロジェクト状態フィルター",
+    "headerActions": "プロジェクトのクイック操作",
+    "toolbar": "プロジェクトフィルターツールバー",
+    "sidebar": "プロジェクトツリーナビ",
+    "content": "プロジェクトテーブル領域",
+    "board": "プロジェクト管理テーブル",
+    "pagination": "プロジェクトページ切り替え"
+  },
+  "variants": {
+    "type-list": {
+      "title": "ユーザー種類一覧",
+      "subtitle": "Uniauth User Type Grid",
+      "ariaLabel": "統合認証ユーザー種類テーブル"
+    }
+  },
+  "statusTabs": [
+    { "value": "", "label": "すべて", "count": 128 },
+    { "value": "active", "label": "進行中", "count": 56 },
+    { "value": "done", "label": "完了", "count": 43 },
+    { "value": "archived", "label": "アーカイブ", "count": 29 }
+  ],
+  "actions": [
+    { "id": "new", "label": "新規", "icon": "ri-add-line", "primary": true },
+    { "id": "export", "label": "エクスポート", "icon": "ri-download-2-line" },
+    { "id": "filter", "label": "フィルター", "icon": "ri-filter-3-line" }
+  ],
+  "resetLabel": "リセット",
+  "dateStart": "2024-01-01",
+  "dateEnd": "2024-05-21",
+  "messages": {
+    "selectProject": "プロジェクトを選択",
+    "viewProject": "プロジェクトを表示",
+    "editProject": "プロジェクトを編集",
+    "moreActions": "その他の操作",
+    "filtersReset": "フィルターをリセットしました",
+    "treePrefix": "プロジェクトナビ",
+    "expandLeftRegion": "プロジェクトナビを展開",
+    "collapseLeftRegion": "プロジェクトナビを折りたたむ",
+    "filterActivated": "フィルターツールバーを有効にしました",
+    "newOpened": "新規プロジェクト画面を開きました",
+    "exportPreparing": "プロジェクトをエクスポートしています",
+    "dateRange": "期間：{start} ～ {end}",
+    "movePrefix": "移動先"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "status-filter",
+  "label": "プロジェクト状態",
+  "ariaLabel": "状態で絞り込み",
+  "currentTemplate": "{label}、現在：{value}",
+  "menuTitle": "プロジェクト状態を選択",
+  "prefix": "状態：",
+  "scrollAfter": 6,
+  "options": [
+    { "value": "", "label": "すべて", "menuLabel": "すべての状態", "icon": "ri-apps-2-line", "description": "すべての状態を表示" },
+    { "value": "active", "label": "進行中", "icon": "ri-loader-3-line", "tone": "active", "description": "実行中のプロジェクト" },
+    { "value": "review", "label": "レビュー中", "icon": "ri-record-circle-line", "tone": "review", "description": "審査または承認待ち" },
+    { "value": "done", "label": "完了", "icon": "ri-checkbox-circle-line", "tone": "done", "description": "完了したプロジェクト" },
+    { "value": "archived", "label": "アーカイブ", "icon": "ri-archive-drawer-line", "tone": "muted", "description": "履歴に移動済み" }
+  ]
+}

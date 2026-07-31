@@ -1,0 +1,14 @@
+{
+  "gridId": "UniauthUserGrid",
+  "currentPage": 1,
+  "pageSize": 10,
+  "totalCount": 128,
+  "totalPages": 13,
+  "visiblePages": [1, 2, 3, 4, 5, 13],
+  "summaryAll": "共 {total} 条",
+  "summaryFiltered": "当前 {visible} 条 · 共 {total} 条",
+  "previousLabel": "上一页",
+  "nextLabel": "下一页",
+  "pageChangedMessage": "已切换到第 {page} 页",
+  "pageSizeChangedMessage": "每页显示 {size} 条项目"
+}

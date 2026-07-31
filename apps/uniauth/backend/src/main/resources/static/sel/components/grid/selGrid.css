@@ -1,0 +1,575 @@
+/*
+ * selGrid.css：通用水晶数据表格基础控件样式。
+ * 样式范围：表格水晶外框、表头、数据行、单元格内容、状态、进度、行操作和分页。
+ * 责任边界：不包含页面背景、应用布局、业务数据或表格上下文菜单内部样式。
+ * 命名规则：所有组件类使用 selgrid-组名-单独名称，状态类归入对应业务组。
+ */
+
+/* 表格水晶外框组：控制整张数据表的尺寸、边框、光晕和表面高光。 */
+.selgrid-board-shell {
+    position: relative;
+    width: 100%;
+    min-width: 930px;
+    height: 100%;
+    min-height: 390px;
+    overflow: visible;
+    border-radius: 18px;
+    background: rgba(2, 12, 48, 0.52);
+}
+
+.selgrid-board-shell::before,
+.selgrid-board-shell::after {
+    position: absolute;
+    z-index: 5;
+    pointer-events: none;
+    content: "";
+}
+
+.selgrid-board-shell::before {
+    display: none;
+}
+
+.selgrid-board-shell::after {
+    inset: 0;
+    border-radius: inherit;
+    background:
+        linear-gradient(122deg, rgba(255, 255, 255, 0.08), transparent 6%),
+        linear-gradient(302deg, rgba(112, 61, 255, 0.13), transparent 9%);
+    mix-blend-mode: screen;
+}
+
+.selgrid-board-highlight {
+    position: absolute;
+    z-index: 7;
+    top: -2px;
+    right: 30px;
+    left: 30px;
+    height: 3px;
+    pointer-events: none;
+    display: none;
+}
+
+/* 表格内容视口：为表头和数据行预留底部分页栏空间，并裁切表格圆角区域。 */
+.selgrid-table-scroller {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    border-radius: 15px;
+    scrollbar-color: #6287f3 rgba(6, 20, 62, 0.72);
+    scrollbar-width: thin;
+}
+
+.selgrid-table {
+    width: 100%;
+    min-width: 930px;
+    border-spacing: 0;
+    table-layout: fixed;
+    border-collapse: separate;
+}
+
+/* 表格列宽：固定各业务列占比，保证项目名称、进度和操作区按设计稿排列。 */
+.selgrid-column-check {
+    width: 6%;
+}
+
+.selgrid-column-project {
+    width: 18.5%;
+}
+
+.selgrid-column-type {
+    width: 10%;
+}
+
+.selgrid-column-owner {
+    width: 11.8%;
+}
+
+.selgrid-column-status {
+    width: 10.1%;
+}
+
+.selgrid-column-progress {
+    width: 14.8%;
+}
+
+.selgrid-column-time {
+    width: 17.4%;
+}
+
+.selgrid-column-actions {
+    width: 11.4%;
+}
+
+/* 表头与排序入口：定义表头高度、列分隔线和“更新时间”等排序按钮。 */
+.selgrid-table thead {
+    height: 55px;
+}
+
+.selgrid-table th {
+    position: relative;
+    padding: 0 18px;
+    color: #e6e8ff;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.selgrid-table th:not(:first-child)::after {
+    position: absolute;
+    top: 16px;
+    right: 0;
+    width: 1px;
+    height: 24px;
+    background: linear-gradient(transparent, rgba(126, 152, 240, 0.25), transparent);
+    content: "";
+}
+
+.selgrid-table th:last-child::after {
+    display: none;
+}
+
+.selgrid-sort-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 0;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.selgrid-sort-button i {
+    color: #a582ff;
+    font-size: 16px;
+}
+
+/* 数据行状态：包含斑马纹、分隔线、悬停反馈和当前选中行高亮。 */
+.selgrid-table tbody tr {
+    position: relative;
+    height: 56px;
+    background: var(--selgrid-theme-row-background);
+    transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.selgrid-table tbody tr:nth-child(even) {
+    background: rgba(2, 14, 52, 0.72);
+}
+
+.selgrid-table tbody tr::after {
+    position: absolute;
+    right: 20px;
+    bottom: 0;
+    left: 20px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(111, 146, 235, 0.19) 6%, rgba(111, 146, 235, 0.19) 94%, transparent);
+    content: "";
+}
+
+.selgrid-table tbody tr:hover {
+    background: rgba(12, 45, 111, 0.60);
+}
+
+.selgrid-table tbody tr.selgrid-row-selected {
+    z-index: 2;
+    background:
+        linear-gradient(90deg, rgba(15, 71, 146, 0.78), rgba(19, 45, 112, 0.70) 52%, rgba(36, 29, 118, 0.66));
+    box-shadow:
+        inset 0 1px 0 rgba(128, 202, 255, 0.68),
+        inset 0 -1px 0 rgba(111, 124, 255, 0.72),
+        inset 0 0 24px rgba(29, 113, 255, 0.26),
+        0 0 14px rgba(67, 131, 255, 0.50);
+}
+
+.selgrid-table td {
+    height: 56px;
+    padding: 0 12px;
+    color: #c2cae5;
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.selgrid-table tbody td:nth-child(7) {
+    white-space: nowrap;
+}
+
+/* 行选择框：用于表头全选和单行选择，并绘制选中后的渐变勾选状态。 */
+.selgrid-selection-cell {
+    padding-right: 8px !important;
+    padding-left: 20px !important;
+}
+
+.selgrid-selection-checkbox {
+    position: relative;
+    display: grid;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    place-items: center;
+    border: 1px solid rgba(123, 153, 228, 0.56);
+    border-radius: 6px;
+    background: rgba(4, 14, 48, 0.88);
+    box-shadow: inset 0 0 6px rgba(79, 104, 199, 0.22);
+    cursor: pointer;
+}
+
+.selgrid-selection-checkbox[aria-checked="true"] {
+    border-color: #63d8ff;
+    background: linear-gradient(135deg, #1eb8ff, #614cff 60%, #a045ff);
+    box-shadow: 0 0 13px rgba(73, 139, 255, 0.9), inset 0 0 6px rgba(255, 255, 255, 0.42);
+}
+
+.selgrid-selection-checkbox[aria-checked="true"]::after {
+    width: 10px;
+    height: 6px;
+    border-bottom: 2px solid white;
+    border-left: 2px solid white;
+    content: "";
+    transform: translateY(-1px) rotate(-45deg);
+}
+
+/* 项目信息列：排列项目图标、项目名称以及收藏标记。 */
+.selgrid-project-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.selgrid-table tbody td:nth-child(2) {
+    padding-left: 10px;
+}
+
+.selgrid-project-symbol {
+    position: relative;
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid rgba(173, 207, 255, 0.74);
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--selgrid-project-symbol-start), var(--selgrid-project-symbol-end));
+    box-shadow:
+        0 0 13px color-mix(in srgb, var(--selgrid-project-symbol-start) 64%, transparent),
+        inset 0 0 12px rgba(255, 255, 255, 0.27);
+}
+
+.selgrid-project-symbol::before {
+    position: absolute;
+    inset: 6px;
+    border: 1px solid rgba(235, 250, 255, 0.75);
+    transform: rotate(45deg);
+    content: "";
+}
+
+.selgrid-project-symbol i {
+    position: relative;
+    z-index: 1;
+    color: white;
+    font-size: 18px;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.82);
+}
+
+.selgrid-project-name {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 9px;
+}
+
+.selgrid-project-name strong {
+    overflow: hidden;
+    color: #d5daf1;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selgrid-project-name i {
+    color: #7388ff;
+    font-size: 16px;
+    text-shadow: 0 0 8px currentColor;
+}
+
+.selgrid-project-name .selgrid-project-favorite {
+    color: #ffd15c;
+}
+
+/* 负责人列：排列头像、姓名和负责人身份徽标。 */
+.selgrid-owner-cell {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.selgrid-owner-avatar {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    border: 1px solid rgba(192, 213, 255, 0.65);
+    border-radius: 50%;
+    background: #15224c;
+    object-fit: cover;
+}
+
+.selgrid-owner-name {
+    color: #c2c9e4;
+    white-space: nowrap;
+}
+
+.selgrid-owner-badge {
+    display: grid;
+    width: 16px;
+    height: 16px;
+    place-items: center;
+    border-radius: 50%;
+    color: #d9f6ff;
+    background: #2c6cff;
+    box-shadow: 0 0 8px rgba(45, 111, 255, 0.7);
+    font-size: 9px;
+}
+
+/* 项目状态标签：基础胶囊外观由 selgrid-status-pill 提供，各状态类只配置对应主题色。 */
+.selgrid-status-pill {
+    display: inline-flex;
+    min-width: 86px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--selgrid-status-line);
+    border-radius: 999px;
+    color: var(--selgrid-status-text);
+    background: var(--selgrid-status-background);
+    box-shadow:
+        0 0 12px var(--selgrid-status-glow),
+        inset 0 0 12px var(--selgrid-status-glow);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.selgrid-status-pill i {
+    font-size: 14px;
+}
+
+.selgrid-status-active {
+    --selgrid-status-line: #449aff;
+    --selgrid-status-text: #75c8ff;
+    --selgrid-status-background: rgba(8, 46, 103, 0.78);
+    --selgrid-status-glow: rgba(47, 137, 255, 0.34);
+}
+
+.selgrid-status-review {
+    --selgrid-status-line: #9268ff;
+    --selgrid-status-text: #c8b0ff;
+    --selgrid-status-background: rgba(59, 26, 121, 0.77);
+    --selgrid-status-glow: rgba(139, 78, 255, 0.42);
+}
+
+.selgrid-status-done {
+    --selgrid-status-line: #4ee8b5;
+    --selgrid-status-text: #87fbd4;
+    --selgrid-status-background: rgba(10, 78, 76, 0.68);
+    --selgrid-status-glow: rgba(59, 234, 173, 0.30);
+}
+
+.selgrid-status-archived {
+    --selgrid-status-line: rgba(116, 150, 225, 0.55);
+    --selgrid-status-text: #9caed8;
+    --selgrid-status-background: rgba(22, 38, 82, 0.72);
+    --selgrid-status-glow: rgba(77, 111, 197, 0.20);
+}
+
+/* 项目进度列：显示百分比和进度轨道，完成状态切换为绿色主题。 */
+.selgrid-progress-cell {
+    display: grid;
+    width: min(150px, 100%);
+    gap: 7px;
+}
+
+.selgrid-progress-value {
+    color: #e7eaff;
+    font-size: 13px;
+}
+
+.selgrid-progress-track {
+    height: 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(39, 55, 112, 0.68);
+}
+
+.selgrid-progress-bar {
+    display: block;
+    width: var(--selgrid-progress-value);
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #41b7ff, #6c74ff 61%, #d0b1ff);
+    box-shadow: 0 0 10px #4fc5ff, 0 0 8px #8e5dff;
+}
+
+.selgrid-progress-cell.selgrid-progress-complete .selgrid-progress-bar {
+    background: linear-gradient(90deg, #3ee6b3, #91f8d3);
+    box-shadow: 0 0 10px #45eebd;
+}
+
+/* 行操作区：承载查看、编辑和更多操作按钮的默认、悬停及激活状态。 */
+.selgrid-action-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.selgrid-action-button {
+    display: grid;
+    width: 31px;
+    height: 31px;
+    padding: 0;
+    place-items: center;
+    border-radius: 50%;
+    color: #cbd2f2;
+    background: rgba(17, 33, 84, 0.45);
+    cursor: pointer;
+    font-size: 17px;
+    transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.selgrid-action-button:hover,
+.selgrid-action-button.selgrid-action-active {
+    color: #eff7ff;
+    background: rgba(69, 93, 206, 0.66);
+    box-shadow: 0 0 14px rgba(87, 111, 255, 0.70);
+}
+
+/* 表格分页控件：底栏容器由通用 selPanel 维护，本文件只负责表格分页业务外观。 */
+.selgrid-footer-summary {
+    display: flex;
+    align-items: center;
+    gap: 17px;
+    color: #d7dcf5;
+    font-size: 14px;
+}
+
+.selgrid-footer-summary > i {
+    font-size: 21px;
+}
+
+.selgrid-pagination-size {
+    position: relative;
+    margin-left: 10px;
+}
+
+.selgrid-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.selgrid-pagination-button {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #dce2fa;
+    background: rgba(11, 28, 76, 0.54);
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.selgrid-pagination-button:hover {
+    border-color: rgba(101, 171, 255, 0.55);
+    background: rgba(24, 53, 123, 0.68);
+}
+
+.selgrid-pagination-button.selgrid-pagination-current {
+    border-color: #a889ff;
+    color: white;
+    background: linear-gradient(135deg, #385eff, #863cff 68%, #bd65ff);
+    box-shadow: 0 0 13px rgba(78, 150, 255, 0.82), inset 0 0 8px rgba(255, 255, 255, 0.38);
+}
+
+.selgrid-pagination-arrow {
+    border-color: rgba(78, 111, 194, 0.42);
+    color: #8092c0;
+    font-size: 21px;
+}
+
+.selgrid-pagination-ellipsis {
+    width: 38px;
+    color: #d9def7;
+    text-align: center;
+}
+
+/* 空结果状态：筛选无匹配时覆盖表格主体，并给出明确的视觉反馈。 */
+.selgrid-empty-state {
+    position: absolute;
+    z-index: 6;
+    inset: 56px 0 0;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #91a1ca;
+    background: rgba(3, 14, 52, 0.88);
+    font-size: 15px;
+}
+
+.selgrid-empty-state:not([hidden]) {
+    display: flex;
+}
+
+.selgrid-empty-state i {
+    color: #72b9ff;
+    font-size: 24px;
+    text-shadow: 0 0 10px rgba(72, 151, 255, 0.66);
+}
+
+/* 窄屏适配：在不改变表格业务列结构的前提下压缩间距和字号。 */
+@media (max-width: 1280px) {
+    .selgrid-board-shell {
+        min-width: 900px;
+    }
+
+    .selgrid-table th,
+    .selgrid-table td {
+        padding-right: 12px;
+        padding-left: 12px;
+        font-size: 15px;
+    }
+
+    .selgrid-selection-cell {
+        padding-left: 24px !important;
+    }
+
+    .selgrid-project-cell {
+        gap: 10px;
+    }
+
+}
+
+@media (max-height: 760px) {
+    .selgrid-table thead {
+        height: 49px;
+    }
+
+    .selgrid-table tbody tr,
+    .selgrid-table td {
+        height: 50px;
+    }
+
+    .selgrid-project-symbol {
+        width: 32px;
+        height: 32px;
+    }
+
+    .selgrid-owner-avatar {
+        width: 30px;
+        height: 30px;
+    }
+}

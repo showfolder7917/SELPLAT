@@ -1,0 +1,53 @@
+{
+  "gridId": "UniauthUserGrid",
+  "pageTitle": "Project Management · Crystal Table",
+  "title": "Crystal Table",
+  "subtitle": "Crystal Data Table",
+  "description": "Transparent · Fluid · Future-ready",
+  "ariaLabel": "Crystal project management panel",
+  "ariaLabels": {
+    "statusTabs": "Project status filters",
+    "headerActions": "Project quick actions",
+    "toolbar": "Project filter toolbar",
+    "sidebar": "Project tree navigation",
+    "content": "Project table content",
+    "board": "Project management table",
+    "pagination": "Project pagination"
+  },
+  "variants": {
+    "type-list": {
+      "title": "User Type List",
+      "subtitle": "Uniauth User Type Grid",
+      "ariaLabel": "Unified authentication user type table"
+    }
+  },
+  "statusTabs": [
+    { "value": "", "label": "All", "count": 128 },
+    { "value": "active", "label": "In progress", "count": 56 },
+    { "value": "done", "label": "Completed", "count": 43 },
+    { "value": "archived", "label": "Archived", "count": 29 }
+  ],
+  "actions": [
+    { "id": "new", "label": "New", "icon": "ri-add-line", "primary": true },
+    { "id": "export", "label": "Export", "icon": "ri-download-2-line" },
+    { "id": "filter", "label": "Filter", "icon": "ri-filter-3-line" }
+  ],
+  "resetLabel": "Reset",
+  "dateStart": "2024-01-01",
+  "dateEnd": "2024-05-21",
+  "messages": {
+    "selectProject": "Select project",
+    "viewProject": "View project",
+    "editProject": "Edit project",
+    "moreActions": "More actions",
+    "filtersReset": "Filters reset",
+    "treePrefix": "Project navigation",
+    "expandLeftRegion": "Expand project navigation",
+    "collapseLeftRegion": "Collapse project navigation",
+    "filterActivated": "Filter toolbar activated",
+    "newOpened": "New project entry opened",
+    "exportPreparing": "Preparing project export",
+    "dateRange": "Date range: {start} to {end}",
+    "movePrefix": "Move to"
+  }
+}

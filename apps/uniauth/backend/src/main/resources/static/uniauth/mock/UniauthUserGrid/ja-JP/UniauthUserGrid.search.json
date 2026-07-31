@@ -1,0 +1,16 @@
+{
+  "gridId": "UniauthUserGrid",
+  "label": "プロジェクト検索",
+  "placeholder": "プロジェクト名、担当者を検索…",
+  "buttonLabel": "検索",
+  "clearLabel": "検索条件をクリア",
+  "icon": "ri-search-line",
+  "buttonIcon": "ri-search-line",
+  "clearIcon": "ri-close-line",
+  "defaultValue": "",
+  "clearable": true,
+  "submitOnEnter": true,
+  "submitOnClear": true,
+  "allowEmpty": true,
+  "trim": true
+}

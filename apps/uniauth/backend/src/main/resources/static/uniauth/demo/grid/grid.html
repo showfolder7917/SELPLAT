@@ -1,0 +1,20 @@
+<!doctype html>
+<!--
+    grid.html：旧演示地址兼容入口。
+    本文件不实现任何页面控件，只把原查询参数和锚点转交给新的 uniauth.html 应用入口。
+-->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>正在打开统一认证演示页面</title>
+</head>
+<body>
+    <!-- 兼容提示：脚本被禁用时，用户仍可通过真实链接进入新页面。 -->
+    <p><a href="../../uniauth.html">打开统一认证演示页面</a></p>
+    <script>
+        // 保留 multi、lang 等查询参数和锚点，确保旧书签仍打开相同演示状态。
+        window.location.replace(`../../uniauth.html${window.location.search}${window.location.hash}`);
+    </script>
+</body>
+</html>

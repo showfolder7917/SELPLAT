@@ -1,0 +1,19 @@
+{
+  "gridId": "UniauthUserGrid",
+  "role": "type-filter",
+  "label": "プロジェクト種類",
+  "ariaLabel": "プロジェクト種類で絞り込み",
+  "currentTemplate": "{label}、現在：{value}",
+  "menuTitle": "プロジェクト種類を選択",
+  "prefix": "種類：",
+  "scrollAfter": 5,
+  "options": [
+    { "value": "", "label": "すべて", "menuLabel": "すべての種類", "icon": "ri-apps-2-line", "description": "すべてのプロジェクト種類を表示" },
+    { "value": "platform_architecture", "label": "プラットフォーム", "icon": "ri-stack-line", "description": "基盤とデータプラットフォーム" },
+    { "value": "data_visualization", "label": "データ可視化", "icon": "ri-pie-chart-2-line", "description": "分析チャートと可視化アプリ" },
+    { "value": "research_project", "label": "研究プロジェクト", "icon": "ri-flask-line", "description": "実験と研究" },
+    { "value": "visualization", "label": "可視化", "icon": "ri-bar-chart-box-line", "description": "都市ダッシュボード" },
+    { "value": "artificial_intelligence", "label": "人工知能", "icon": "ri-brain-line", "description": "モデルとAIアプリ" },
+    { "value": "data_archive", "label": "データアーカイブ", "icon": "ri-archive-drawer-line", "description": "履歴データとアーカイブ" }
+  ]
+}
