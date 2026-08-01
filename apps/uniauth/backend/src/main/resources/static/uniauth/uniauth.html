@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
     uniauth.html：统一认证前端演示应用入口。
-    页面只加载基础控件与应用装配层，并声明背景和业务面板挂载点；全部通用控件内部结构由 SEL 基础层创建。
+    页面加载基础控件与应用装配层，并显式保留可审阅的业务面板结构；SEL 基础控件只绑定数据、交互和标准控制器。
 -->
 <html lang="zh-CN">
 <head>
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="../sel/core/selBaseReset.css?v=20260731-1">
     <link rel="stylesheet" href="../sel/core/selBaseAccessibility.css?v=20260731-1">
     <link rel="stylesheet" href="../sel/core/selBaseToast.css?v=20260731-1">
-    <link rel="stylesheet" href="../sel/components/panel/selPanel.css?v=20260731-4">
+    <link rel="stylesheet" href="../sel/components/panel/selPanel.css?v=20260801-3">
     <link rel="stylesheet" href="../sel/components/search/selSearch.css?v=20260731-1">
     <link rel="stylesheet" href="../sel/components/tree/selTree.css?v=20260731-1">
     <link rel="stylesheet" href="../sel/components/dropdown/selDropdownMenu.css?v=20260731-1">
@@ -40,9 +40,45 @@
     <div data-sel-page-background-host></div>
     <!-- ===== 通用网页背景挂载点结束 ===== -->
 
-    <!-- ===== Uniauth 应用挂载点开始：只声明应用边界；面板、树、下拉、表格、菜单和分页均由基础 API 创建。 ===== -->
-    <main class="uniauth-page-stage" data-uniauth-app aria-label="统一认证演示应用"></main>
-    <!-- ===== Uniauth 应用挂载点结束 ===== -->
+    <!-- ===== Uniauth 应用静态审阅结构开始：删除任一区域会使对应基础控件失去绑定宿主，但不影响其他已声明区域。 ===== -->
+    <main class="uniauth-page-stage" data-uniauth-app aria-label="统一认证演示应用">
+        <!-- ===== 主项目表面板开始：基础控件以完整实例键 UniauthUserGrid 绑定此静态骨架。 ===== -->
+        <section class="selpanel-shell" data-uniauth-instance="UniauthUserGrid" data-sel-panel data-sel-grid="UniauthUserGrid" data-sel-grid-source="UniauthUserGrid" data-sel-entity="UniauthUser" data-sel-grid-view="crud" aria-label="数据面板">
+            <!-- 顶部区域开始：标题和筛选工具栏由 selPanel 写入标准展示数据。 -->
+            <div class="selpanel-region-top" data-sel-panel-region="top">
+                <header class="selpanel-crystal-surface selpanel-header-shell" data-sel-panel-component="title">
+                    <div class="selpanel-brand-group"><span class="selpanel-brand-icon" aria-hidden="true"><i class="ri-gem-line"></i></span><div class="selpanel-brand-copy"><div class="selpanel-title-line"><h1 data-sel-grid-role="panel-title"></h1><span data-sel-grid-role="panel-subtitle"><i class="ri-sparkling-2-fill" aria-hidden="true"></i></span></div><p data-sel-grid-role="panel-description"></p></div></div>
+                    <nav class="selpanel-status-tabs" data-sel-grid-role="status-tabs" aria-label="状态筛选"></nav><div class="selpanel-header-actions" data-sel-grid-role="header-actions" aria-label="快捷操作"></div>
+                </header>
+                <section class="selpanel-crystal-surface selpanel-toolbar-shell" data-sel-panel-component="toolbar" aria-label="筛选工具栏">
+                    <div class="selsearch-root selsearch-surface-toolbar" data-sel-panel-component="selSearch" data-sel-grid-role="search-host"></div>
+                    <div class="seldropdown-root seldropdown-surface-toolbar" data-sel-panel-component="selDropdownMenu" data-sel-panel-slot="projectType" data-sel-dropdown-menu><select class="seldropdown-native" data-sel-grid-role="type-filter"></select></div>
+                    <div class="seldropdown-root seldropdown-surface-toolbar" data-sel-panel-component="selDropdownMenu" data-sel-panel-slot="status" data-sel-dropdown-menu><select class="seldropdown-native" data-sel-grid-role="status-filter"></select></div>
+                    <button class="selpanel-date-field" data-sel-panel-component="dateRange" type="button" data-sel-grid-role="date-command" data-panel-command="date"><span data-sel-grid-role="date-start"></span><i class="ri-arrow-right-line" aria-hidden="true"></i><span data-sel-grid-role="date-end"></span><i class="ri-calendar-line" aria-hidden="true"></i></button><button class="selpanel-reset-button" data-sel-panel-component="filterReset" data-sel-grid-role="filter-reset" type="button"></button>
+                </section>
+            </div>
+            <!-- 顶部区域结束 -->
+            <!-- 主体区域开始：左树、中央表格和右侧操作菜单由各自基础控制器绑定。 -->
+            <div class="selpanel-body-shell" data-sel-panel-region="body">
+                <aside class="selpanel-crystal-surface selpanel-sidebar-shell" data-sel-panel-region="left" aria-label="左侧区域"><div class="selpanel-region-heading" data-sel-panel-component="selTree"><span data-sel-grid-role="tree-heading"><i class="ri-node-tree" aria-hidden="true"></i></span><button type="button" data-sel-panel-action="toggle-left" aria-label="收起左侧区域" aria-expanded="true"><i class="ri-side-bar-line" aria-hidden="true"></i></button></div><nav class="seltree-root" data-sel-grid-role="tree" aria-label="分类树"></nav><div class="selpanel-sidebar-summary"><i class="ri-database-2-line" aria-hidden="true"></i><span data-sel-grid-role="tree-summary"></span></div></aside>
+                <section class="selpanel-crystal-surface selpanel-content-shell" data-sel-panel-region="center" aria-label="中央内容区"><div class="selgrid-board-shell" data-sel-panel-component="selGrid" aria-label="数据表格"><div class="selgrid-board-highlight" aria-hidden="true"></div><div class="selgrid-table-scroller"><table class="selgrid-table" data-sel-grid-role="table"><colgroup data-sel-grid-role="column-group"></colgroup><thead data-sel-grid-role="table-head"></thead><tbody data-sel-grid-role="table-body"></tbody></table><div class="selgrid-empty-state" data-sel-grid-role="empty-state" hidden><i class="ri-search-eye-line" aria-hidden="true"></i><span data-sel-grid-role="empty-text"></span></div></div></div></section>
+                <aside class="selpanel-right-shell" data-sel-panel-region="right" aria-label="右侧附加区域"><aside class="selgrid-menu" data-sel-panel-component="selGridMenu" data-sel-grid-role="menu" aria-label="行操作菜单" aria-hidden="true"></aside></aside>
+            </div>
+            <!-- 主体区域结束 -->
+            <!-- 底部区域开始：统计、每页条数、分页和反馈仍由表格控制器更新。 -->
+            <footer class="selpanel-crystal-surface selpanel-footer-shell" data-sel-panel-region="bottom"><div class="selgrid-footer-summary" data-sel-panel-component="gridSummary"><i class="ri-briefcase-4-line" aria-hidden="true"></i><span data-sel-grid-role="total-count"></span><div class="selgrid-pagination-size" data-sel-panel-component="selDropdownMenu" data-sel-panel-slot="pageSize"><span class="selgrid-accessibility-sr-only" data-sel-grid-role="page-size-label"></span><div class="seldropdown-root seldropdown-surface-compact seldropdown-placement-top" data-sel-dropdown-menu><select class="seldropdown-native" data-sel-grid-role="page-size"></select></div></div></div><nav class="selgrid-pagination" data-sel-panel-component="pagination" data-sel-grid-role="pagination" aria-label="分页"></nav><div class="selgrid-feedback-toast" data-sel-panel-component="feedback" data-sel-grid-role="feedback" role="status" aria-live="polite"></div></footer>
+            <!-- 底部区域结束 -->
+        </section>
+        <!-- ===== 主项目表面板结束 ===== -->
+        <!-- 类型列表面板开始：完整静态结构与主实例隔离，多实例模式只切换其隐藏状态并绑定独立控制器。 -->
+        <section class="selpanel-shell" data-uniauth-instance="UniauthUserTypeGrid" data-sel-panel data-sel-grid="UniauthUserTypeGrid" data-sel-grid-source="UniauthUserGrid" data-sel-entity="UniauthUser" data-sel-grid-view="type-list" aria-label="数据面板" hidden>
+            <div class="selpanel-region-top" data-sel-panel-region="top"><header class="selpanel-crystal-surface selpanel-header-shell" data-sel-panel-component="title"><div class="selpanel-brand-group"><span class="selpanel-brand-icon" aria-hidden="true"><i class="ri-gem-line"></i></span><div class="selpanel-brand-copy"><div class="selpanel-title-line"><h1 data-sel-grid-role="panel-title"></h1><span data-sel-grid-role="panel-subtitle"><i class="ri-sparkling-2-fill" aria-hidden="true"></i></span></div><p data-sel-grid-role="panel-description"></p></div></div><nav class="selpanel-status-tabs" data-sel-grid-role="status-tabs" aria-label="状态筛选"></nav><div class="selpanel-header-actions" data-sel-grid-role="header-actions" aria-label="快捷操作"></div></header><section class="selpanel-crystal-surface selpanel-toolbar-shell" data-sel-panel-component="toolbar" aria-label="筛选工具栏"><div class="selsearch-root selsearch-surface-toolbar" data-sel-panel-component="selSearch" data-sel-grid-role="search-host"></div><div class="seldropdown-root seldropdown-surface-toolbar" data-sel-panel-component="selDropdownMenu" data-sel-panel-slot="projectType" data-sel-dropdown-menu><select class="seldropdown-native" data-sel-grid-role="type-filter"></select></div><div class="seldropdown-root seldropdown-surface-toolbar" data-sel-panel-component="selDropdownMenu" data-sel-panel-slot="status" data-sel-dropdown-menu><select class="seldropdown-native" data-sel-grid-role="status-filter"></select></div><button class="selpanel-date-field" data-sel-panel-component="dateRange" type="button" data-sel-grid-role="date-command" data-panel-command="date"><span data-sel-grid-role="date-start"></span><i class="ri-arrow-right-line" aria-hidden="true"></i><span data-sel-grid-role="date-end"></span><i class="ri-calendar-line" aria-hidden="true"></i></button><button class="selpanel-reset-button" data-sel-panel-component="filterReset" data-sel-grid-role="filter-reset" type="button"></button></section></div>
+            <div class="selpanel-body-shell" data-sel-panel-region="body"><aside class="selpanel-crystal-surface selpanel-sidebar-shell" data-sel-panel-region="left" aria-label="左侧区域"><div class="selpanel-region-heading" data-sel-panel-component="selTree"><span data-sel-grid-role="tree-heading"><i class="ri-node-tree" aria-hidden="true"></i></span><button type="button" data-sel-panel-action="toggle-left" aria-label="收起左侧区域" aria-expanded="true"><i class="ri-side-bar-line" aria-hidden="true"></i></button></div><nav class="seltree-root" data-sel-grid-role="tree" aria-label="分类树"></nav><div class="selpanel-sidebar-summary"><i class="ri-database-2-line" aria-hidden="true"></i><span data-sel-grid-role="tree-summary"></span></div></aside><section class="selpanel-crystal-surface selpanel-content-shell" data-sel-panel-region="center" aria-label="中央内容区"><div class="selgrid-board-shell" data-sel-panel-component="selGrid" aria-label="数据表格"><div class="selgrid-board-highlight" aria-hidden="true"></div><div class="selgrid-table-scroller"><table class="selgrid-table" data-sel-grid-role="table"><colgroup data-sel-grid-role="column-group"></colgroup><thead data-sel-grid-role="table-head"></thead><tbody data-sel-grid-role="table-body"></tbody></table><div class="selgrid-empty-state" data-sel-grid-role="empty-state" hidden><i class="ri-search-eye-line" aria-hidden="true"></i><span data-sel-grid-role="empty-text"></span></div></div></div></section><aside class="selpanel-right-shell" data-sel-panel-region="right" aria-label="右侧附加区域"><aside class="selgrid-menu" data-sel-panel-component="selGridMenu" data-sel-grid-role="menu" aria-label="行操作菜单" aria-hidden="true"></aside></aside></div>
+            <footer class="selpanel-crystal-surface selpanel-footer-shell" data-sel-panel-region="bottom"><div class="selgrid-footer-summary" data-sel-panel-component="gridSummary"><i class="ri-briefcase-4-line" aria-hidden="true"></i><span data-sel-grid-role="total-count"></span><div class="selgrid-pagination-size" data-sel-panel-component="selDropdownMenu" data-sel-panel-slot="pageSize"><span class="selgrid-accessibility-sr-only" data-sel-grid-role="page-size-label"></span><div class="seldropdown-root seldropdown-surface-compact seldropdown-placement-top" data-sel-dropdown-menu><select class="seldropdown-native" data-sel-grid-role="page-size"></select></div></div></div><nav class="selgrid-pagination" data-sel-panel-component="pagination" data-sel-grid-role="pagination" aria-label="分页"></nav><div class="selgrid-feedback-toast" data-sel-panel-component="feedback" data-sel-grid-role="feedback" role="status" aria-live="polite"></div></footer>
+        </section>
+        <!-- 类型列表面板结束 -->
+    </main>
+    <!-- ===== Uniauth 应用静态审阅结构结束 ===== -->
 
     <!-- ===== SEL 基础脚本开始：基础脚本只注册能力，禁止主动扫描或识别 Uniauth 业务。 ===== -->
     <script src="../sel/core/selBaseRuntime.js?v=20260731-3"></script>
@@ -58,7 +94,7 @@
     <!-- ===== SEL 基础脚本结束 ===== -->
 
     <!-- ===== Uniauth 应用装配层开始：最后加载，只传业务配置和数据并调用基础 API。 ===== -->
-    <script src="./uniauth.js?v=20260731-6"></script>
+    <script src="./uniauth.js?v=20260801-1"></script>
     <!-- ===== Uniauth 应用装配层结束 ===== -->
 </body>
 </html>

@@ -51,10 +51,12 @@ web_base_component_duplicate_mount_must_reuse_or_reject = true
 web_base_component_invalid_host_or_data_result = null-or-false-with-explicit-diagnostic
 web_base_component_registry_key = complete-business-instance-key
 
-<!-- 基础控件已经具备结构工厂时，应用 HTML 只声明应用级挂载点；标题、工具栏、树、表格、菜单和分页等内部结构由基础控件创建。 -->
-web_application_html_component_internal_markup_is_forbidden = true
-web_application_html_allowed_runtime_structure = resource-loading,application-mount-point,application-specific-static-content
-web_application_assembler_must_use_base_structure_factory = true
+<!-- 基础控件已经具备结构工厂时，应用 HTML 默认只声明应用级挂载点；标题、工具栏、树、表格、菜单和分页等内部结构通常由基础控件创建。 -->
+<!-- 为便于静态页面评审，应用可显式保留可见的页面结构；此时基础控件只绑定控制器、数据和交互，不得由应用复制通用控件逻辑或接管基础控件样式。 -->
+web_application_html_component_internal_markup_is_forbidden = default-true-except-explicit-static-review-structure
+web_application_html_static_review_structure_requires = explicit-application-declaration,base-controller-binding,base-standard-data-contract,no-generic-control-reimplementation,no-base-internal-style-ownership
+web_application_html_allowed_runtime_structure = resource-loading,application-mount-point,application-specific-static-content,explicit-static-review-structure
+web_application_assembler_must_use_base_structure_factory = unless-explicit-static-review-structure
 web_application_assembler_generic_option_button_or_region_dom_creation_is_forbidden = true
 
 <!-- 应用可以声明基础控件位于上、左、中、右、下哪个区域，但只能传组件名、标准 payload 路径、受控 slot 和 children；真实 DOM 仍由基础面板建立。 -->

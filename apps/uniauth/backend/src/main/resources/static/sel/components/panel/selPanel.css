@@ -355,6 +355,8 @@
     min-width: 0;
     min-height: 0;
     flex: 0 0 0;
+    /* 右侧仅作菜单锚点时回收 body 的末尾间距，使中央表格右边框与上下水晶区域右边线齐平。 */
+    margin-left: calc(-1 * var(--selpanel-layout-gap));
     overflow: visible;
 }
 

@@ -1,7 +1,7 @@
 /*
  * uniauth.js：统一认证前端演示应用装配层。
  * 只负责识别 Uniauth 业务实例、声明业务数据源路径、选择语言，并通过 selAjax 把标准数据传给 SEL 基础控件。
- * 责任边界：本文件不创建、克隆或修改通用控件内部 DOM；缺少能力时必须提示补充基础控件。
+ * 责任边界：本文件不创建或克隆通用控件内部 DOM；只定位 uniauth.html 的静态审阅结构并绑定基础控件。
  * 生产替换点：未来只需把数据源表中的模拟 JSON 地址切换为后端聚合接口，基础控件调用顺序保持不变。
  */
 (function uniauthInitializeApplication() {
@@ -41,7 +41,7 @@
     const uniauthRequestedLocale = uniauthBase.param("lang", "zh-CN");
     // 未支持语言安全回退中文，避免请求不存在的语言目录。
     const uniauthLocale = uniauthSupportedLocales.includes(uniauthRequestedLocale) ? uniauthRequestedLocale : "zh-CN";
-    // HTML 只提供应用挂载点，完整面板结构由 selPanel.create 生成。
+    // HTML 提供应用挂载点和可审阅的完整面板结构，装配层只在其中定位当前业务实例。
     const uniauthApplicationHost = uniauthBase.query("[data-uniauth-app]");
     // HTML 只提供背景挂载点，背景图层和选择器由 selPageBackground.mount 生成。
     const uniauthBackgroundHost = uniauthBase.query("[data-sel-page-background-host]");
@@ -298,15 +298,15 @@
         if (!uniauthLayoutComponentNames.has("selGrid")) {
             throw new Error(`Uniauth 布局缺少中央表格：${uniauthDefinition.layoutId}。请在 center 区声明 selGrid。`);
         }
-        // selPanel.create 根据五区声明创建标题、工具栏、树、表格、菜单和分页宿主。
-        const uniauthRoot = window.selPanel.create(uniauthApplicationHost, {
-            ...uniauthDefinition,
-            layout: uniauthPanelLayout,
-            structure: uniauthLayout.regions
-        });
-        // 创建失败表示基础宿主或实例定义不完整。
+        // 静态结构用完整业务实例键定位，确保 HTML 可直接审阅且双实例不会串用节点。
+        const uniauthRoot = uniauthApplicationHost.querySelector(`[data-uniauth-instance="${uniauthDefinition.gridId}"]`);
+        // 当前页面布局模式仍由应用装配层写入公开面板选项，基础组件不会识别 URL 参数。
+        uniauthApplicationHost.dataset.selPanelLayout = uniauthPanelLayout;
+        // 多实例启用时移除类型列表的静态隐藏标记，单实例页面继续保留该完整结构供源码审阅。
+        uniauthRoot?.toggleAttribute("hidden", !uniauthMultiEnabled && uniauthDefinition.gridId === "UniauthUserTypeGrid");
+        // 静态骨架缺失时阻止后续控件挂载到不完整的页面结构。
         if (!uniauthRoot) {
-            throw new Error(`基础面板创建失败：${uniauthDefinition.gridId}。请检查标准实例定义。`);
+            throw new Error(`静态面板结构缺失：${uniauthDefinition.gridId}。请检查 uniauth.html 的 data-uniauth-instance。`);
         }
         // selPanel.mount 负责把标准标题、动作、下拉数据和布局选项写入基础结构。
         const uniauthPanel = window.selPanel.mount(uniauthRoot, {
