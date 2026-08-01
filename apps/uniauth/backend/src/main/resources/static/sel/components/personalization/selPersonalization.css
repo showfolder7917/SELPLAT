@@ -5,14 +5,21 @@
  */
 
 :root {
-    /* 当前皮肤只需覆盖这三个 RGB 令牌即可整体换色，设置逻辑不写死深蓝或紫色。 */
+    /* 当前皮肤提供默认材质色；统一主题色默认引用 glow 令牌，用户选色只临时覆盖 theme-color。 */
     --selpersonal-theme-panel-rgb: 5 24 70;
     --selpersonal-theme-neutral-rgb: 1 6 22;
     --selpersonal-theme-glow-rgb: 74 139 255;
+    --selpersonal-theme-color-rgb: var(--selpersonal-theme-glow-rgb);
+    --selpersonal-frame-image: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
     /* 以下变量由 selPersonalization 根据 0% 至 100% 用户强度实时写入。 */
     --selpersonal-panel-opacity: 0.82;
     --selpersonal-panel-blur: 13.92px;
     --selpersonal-theme-tint-strength: 68%;
+    --selpersonal-theme-tint-mix: 21.76%;
+    --selpersonal-skin-soft-mix: 14.96%;
+    --selpersonal-skin-base-mix: 23.12%;
+    --selpersonal-skin-raised-mix: 32.64%;
+    --selpersonal-skin-accent-mix: 53.04%;
     --selpersonal-frame-scale: 1;
     --selpersonal-frame-width: calc(18px * var(--selpersonal-frame-scale));
     --selpersonal-content-inset-offset: 0px;
@@ -27,9 +34,17 @@
     /* 中心底板把当前皮肤色和中性深色按用户染色强度混合，透明度只作用于底板。 */
     --selpersonal-panel-surface: color-mix(
         in srgb,
-        rgb(var(--selpersonal-theme-panel-rgb) / var(--selpersonal-panel-opacity)) var(--selpersonal-theme-tint-strength),
+        rgb(var(--selpersonal-theme-color-rgb) / var(--selpersonal-panel-opacity)) var(--selpersonal-theme-tint-mix),
         rgb(var(--selpersonal-theme-neutral-rgb) / var(--selpersonal-panel-opacity))
     );
+    /* 四级皮肤色阶覆盖组件结构底板；透明度仍由各层业务密度决定。 */
+    --selpersonal-skin-deep: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb) / 0.86) var(--selpersonal-skin-soft-mix), rgb(var(--selpersonal-theme-neutral-rgb) / 0.86));
+    --selpersonal-skin-base: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb) / 0.84) var(--selpersonal-skin-base-mix), rgb(var(--selpersonal-theme-neutral-rgb) / 0.84));
+    --selpersonal-skin-raised: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb) / 0.88) var(--selpersonal-skin-raised-mix), rgb(var(--selpersonal-theme-neutral-rgb) / 0.88));
+    --selpersonal-skin-accent: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb) / 0.94) var(--selpersonal-skin-accent-mix), rgb(var(--selpersonal-theme-neutral-rgb) / 0.94));
+    --selpersonal-skin-line: rgb(var(--selpersonal-theme-color-rgb) / 0.58);
+    --selpersonal-skin-line-soft: rgb(var(--selpersonal-theme-color-rgb) / 0.28);
+    --selpersonal-skin-inset: inset 0 0 13px rgb(var(--selpersonal-theme-color-rgb) / 0.18);
 }
 
 /* 设置入口固定在右上角，不进入 selPanel 的五区布局。 */
@@ -84,13 +99,13 @@
     flex-direction: column;
     padding: calc(14px + var(--selpersonal-content-inset-offset));
     border: var(--selpersonal-frame-width) solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
+    border-image-source: var(--selpersonal-frame-image);
     border-image-slice: 58 69 58 69 fill;
     border-image-width: var(--selpersonal-frame-width);
     border-image-repeat: stretch;
     color: #f1f5ff;
     background: transparent;
-    filter: drop-shadow(0 18px 23px rgba(0, 0, 24, 0.56)) drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--selpersonal-theme-glow-rgb) / 0.42));
+    filter: drop-shadow(0 18px 23px rgba(0, 0, 24, 0.56)) drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--selpersonal-theme-color-rgb) / 0.42));
     isolation: isolate;
     overflow: visible;
 }
@@ -125,9 +140,10 @@
 .selgrid-menu,
 .selgrid-menu-submenu,
 .seldatepicker-popover {
+    border-image-source: var(--selpersonal-frame-image);
     background: transparent;
     isolation: isolate;
-    filter: drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--selpersonal-theme-glow-rgb) / calc(0.18 + (var(--selpersonal-glow-strength) * 0.45))));
+    filter: drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--selpersonal-theme-color-rgb) / calc(0.18 + (var(--selpersonal-glow-strength) * 0.45))));
     animation: selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
 }
 
@@ -236,8 +252,8 @@
     border: 1px solid rgba(107, 179, 255, 0.62);
     border-radius: 10px;
     color: #bfe8ff;
-    background: rgb(var(--selpersonal-theme-panel-rgb) / 0.82);
-    box-shadow: 0 0 12px rgb(var(--selpersonal-theme-glow-rgb) / 0.42);
+    background: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb) / 0.82) 24%, rgb(var(--selpersonal-theme-neutral-rgb) / 0.82));
+    box-shadow: 0 0 12px rgb(var(--selpersonal-theme-color-rgb) / 0.42);
     font-size: 19px;
 }
 
@@ -317,8 +333,8 @@
 .selpersonal-tab-selected {
     border-color: rgba(126, 186, 255, 0.62);
     color: #fff;
-    background: rgb(var(--selpersonal-theme-panel-rgb) / 0.82);
-    box-shadow: inset 0 0 12px rgb(var(--selpersonal-theme-glow-rgb) / 0.20), 0 0 10px rgb(var(--selpersonal-theme-glow-rgb) / 0.20);
+    background: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb) / 0.82) 24%, rgb(var(--selpersonal-theme-neutral-rgb) / 0.82));
+    box-shadow: inset 0 0 12px rgb(var(--selpersonal-theme-color-rgb) / 0.20), 0 0 10px rgb(var(--selpersonal-theme-color-rgb) / 0.20);
 }
 
 /* 每个 tabpanel 独立管理内容高度，切换时不改变外层水晶边框尺寸。 */
@@ -477,7 +493,7 @@
 .selpersonal-panel-range input {
     width: 100%;
     min-width: 0;
-    accent-color: #8467ff;
+    accent-color: rgb(var(--selpersonal-theme-color-rgb));
     cursor: pointer;
 }
 
@@ -519,8 +535,8 @@
     border-color: rgba(117, 190, 255, 0.72);
     color: #fff;
     outline: none;
-    background: rgb(var(--selpersonal-theme-panel-rgb) / 0.84);
-    box-shadow: 0 0 10px rgb(var(--selpersonal-theme-glow-rgb) / 0.28);
+    background: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb) / 0.84) 24%, rgb(var(--selpersonal-theme-neutral-rgb) / 0.84));
+    box-shadow: 0 0 10px rgb(var(--selpersonal-theme-color-rgb) / 0.28);
 }
 
 /* 面板设置长内容只在内部滚动，顶层 tab 和恢复按钮保持可见。 */
@@ -530,6 +546,99 @@
     margin-top: 9px;
     overflow-y: auto;
     overscroll-behavior: contain;
+}
+
+/* 统一主题色把任意颜色选择、皮肤默认和六个常用色收纳在一个紧凑区域。 */
+.selpersonal-color-setting {
+    display: grid;
+    gap: 8px;
+    padding: 2px 2px 5px;
+}
+
+.selpersonal-color-heading,
+.selpersonal-color-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+/* 原生颜色输入保留平台选择能力，外层同时展示当前来源或十六进制值。 */
+.selpersonal-color-picker {
+    display: inline-flex;
+    min-width: 118px;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.selpersonal-color-picker input {
+    width: 34px;
+    height: 26px;
+    padding: 2px;
+    overflow: hidden;
+    border: 1px solid rgb(var(--selpersonal-theme-color-rgb) / 0.72);
+    border-radius: 7px;
+    background: rgba(2, 8, 28, 0.72);
+    cursor: pointer;
+}
+
+.selpersonal-color-picker output {
+    min-width: 72px;
+    color: #cbd8f6;
+    font-size: 10px;
+    text-align: right;
+}
+
+.selpersonal-color-follow {
+    display: inline-flex;
+    min-height: 28px;
+    align-items: center;
+    gap: 5px;
+    padding: 0 8px;
+    border: 1px solid rgba(91, 137, 225, 0.38);
+    border-radius: 7px;
+    color: #93a6d2;
+    background: rgba(5, 18, 56, 0.54);
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+}
+
+.selpersonal-color-follow:hover,
+.selpersonal-color-follow:focus-visible,
+.selpersonal-color-follow[aria-pressed="true"] {
+    border-color: rgb(var(--selpersonal-theme-color-rgb) / 0.82);
+    color: #fff;
+    outline: none;
+    box-shadow: 0 0 9px rgb(var(--selpersonal-theme-color-rgb) / 0.24);
+}
+
+.selpersonal-color-swatches {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 色板按钮只呈现真实颜色，不承担语义状态色。 */
+.selpersonal-color-swatch {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 2px solid rgba(219, 232, 255, 0.34);
+    border-radius: 50%;
+    background: var(--selpersonal-swatch-color);
+    box-shadow: inset 0 0 0 2px rgba(1, 5, 20, 0.36);
+    cursor: pointer;
+}
+
+.selpersonal-color-swatch:hover,
+.selpersonal-color-swatch:focus-visible,
+.selpersonal-color-swatch[aria-pressed="true"] {
+    border-color: #fff;
+    outline: none;
+    box-shadow: inset 0 0 0 2px rgba(1, 5, 20, 0.36), 0 0 10px var(--selpersonal-swatch-color);
+    transform: scale(1.08);
 }
 
 .selpersonal-section {
@@ -598,7 +707,7 @@
     width: 20px;
     height: 20px;
     flex: 0 0 auto;
-    accent-color: #745fff;
+    accent-color: rgb(var(--selpersonal-theme-color-rgb));
     cursor: pointer;
 }
 
@@ -632,6 +741,278 @@
     box-shadow: 0 0 10px rgba(56, 137, 255, 0.28);
 }
 
+/* 统一主题色覆盖通用水晶组件的交互强调，不改写成功、警告、错误等业务语义色。 */
+.selpanel-status-tab:hover,
+.selpanel-status-tab-active,
+.selpanel-action-button:hover,
+.selpanel-action-primary,
+.selwindow-action-primary,
+.seldatepicker-day-selected,
+.seldatepicker-day-selected:hover,
+.seldatepicker-day-selected:focus-visible,
+.seldatepicker-action-primary {
+    border-color: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 72%, white);
+    background: linear-gradient(
+        135deg,
+        color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 84%, white 16%),
+        color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 72%, rgb(var(--selpersonal-theme-neutral-rgb)))
+    );
+    box-shadow: 0 0 15px rgb(var(--selpersonal-theme-color-rgb) / 0.64), inset 0 0 12px rgba(255, 255, 255, 0.20);
+}
+
+.seldropdown-option:hover,
+.seldropdown-option:focus-visible,
+.seldropdown-option.seldropdown-option-active,
+.seldropdown-option[aria-selected="true"],
+.selgrid-menu-item:hover,
+.selgrid-menu-item:focus-visible,
+.selgrid-menu-item.selgrid-menu-pressed,
+.selgrid-menu-item[aria-expanded="true"],
+.selgrid-action-button:hover,
+.selgrid-action-button.selgrid-action-active,
+.selgrid-pagination-button.selgrid-pagination-current {
+    border-color: rgb(var(--selpersonal-theme-color-rgb) / 0.78);
+    background: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb) / 0.72) 68%, rgb(var(--selpersonal-theme-neutral-rgb) / 0.72));
+    box-shadow: 0 0 13px rgb(var(--selpersonal-theme-color-rgb) / 0.58), inset 0 0 10px rgb(var(--selpersonal-theme-color-rgb) / 0.20);
+}
+
+/* 完整皮肤换色：面板自身的结构底板、分隔线和普通按钮统一使用主题色阶。 */
+.selpersonal-trigger,
+.selpersonal-close,
+.selpersonal-tabs,
+.selpersonal-preset,
+.selpersonal-reset,
+.selpersonal-color-follow,
+.selpanel-status-tabs,
+.selpanel-action-button,
+.selpanel-date-field,
+.selpanel-reset-button,
+.selpanel-region-heading button {
+    border-color: var(--selpersonal-skin-line-soft);
+    background: var(--selpersonal-skin-deep);
+    box-shadow: var(--selpersonal-skin-inset);
+}
+
+.selpersonal-trigger:hover,
+.selpersonal-trigger:focus-visible,
+.selpersonal-trigger[aria-expanded="true"],
+.selpersonal-close:hover,
+.selpersonal-close:focus-visible,
+.selpersonal-reset:hover,
+.selpersonal-reset:focus-visible,
+.selpanel-reset-button:hover,
+.selpanel-region-heading button:hover {
+    border-color: var(--selpersonal-skin-line);
+    background: var(--selpersonal-skin-raised);
+    box-shadow: 0 0 13px rgb(var(--selpersonal-theme-color-rgb) / 0.42), var(--selpersonal-skin-inset);
+}
+
+.selpersonal-heading-icon,
+.selpersonal-tab-selected,
+.selpersonal-preset:hover,
+.selpersonal-preset:focus-visible,
+.selpersonal-preset[aria-pressed="true"] {
+    border-color: var(--selpersonal-skin-line);
+    background: var(--selpersonal-skin-raised);
+    box-shadow: 0 0 12px rgb(var(--selpersonal-theme-color-rgb) / 0.34), var(--selpersonal-skin-inset);
+}
+
+.selpersonal-section-heading i,
+.selpanel-title-line i,
+.selwindow-control-icon,
+.seldropdown-trigger-icon,
+.seldatepicker-trigger-icon {
+    color: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 76%, white);
+    text-shadow: 0 0 8px rgb(var(--selpersonal-theme-color-rgb) / 0.52);
+}
+
+.selpanel-crystal-surface::after {
+    background: linear-gradient(120deg, rgb(var(--selpersonal-theme-color-rgb) / 0.10), transparent 28%, transparent 72%, rgb(var(--selpersonal-theme-color-rgb) / 0.14));
+}
+
+/* Window 的标题、字段、底栏、普通操作与最小化轨道共享同一皮肤色阶。 */
+.selwindow-header-shell,
+.selwindow-actions-shell {
+    border-color: var(--selpersonal-skin-line-soft);
+    background: color-mix(in srgb, var(--selpersonal-skin-deep) 72%, transparent);
+}
+
+.selwindow-frame-button,
+.selwindow-control-shell,
+.selwindow-action-button,
+.selwindow-minimized-rail,
+.selwindow-minimized-button {
+    border-color: var(--selpersonal-skin-line);
+    background: var(--selpersonal-skin-deep);
+    box-shadow: var(--selpersonal-skin-inset);
+}
+
+.selwindow-frame-button:hover,
+.selwindow-frame-button:focus-visible,
+.selwindow-control-shell:focus-within,
+.selwindow-action-button:hover,
+.selwindow-action-button:focus-visible,
+.selwindow-minimized-button:hover,
+.selwindow-minimized-button:focus-visible {
+    border-color: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 70%, white);
+    background: var(--selpersonal-skin-raised);
+    box-shadow: 0 0 12px rgb(var(--selpersonal-theme-color-rgb) / 0.46), var(--selpersonal-skin-inset);
+}
+
+.selwindow-window-active,
+.selwindow-window-interacting {
+    filter: drop-shadow(0 0 14px rgb(var(--selpersonal-theme-color-rgb) / 0.68));
+}
+
+.selwindow-checkbox-input {
+    accent-color: rgb(var(--selpersonal-theme-color-rgb));
+}
+
+/* 搜索、下拉和日期触发器不再保留独立深蓝底板。 */
+.selsearch-field,
+.seldropdown-trigger,
+.seldatepicker-trigger,
+.seldatepicker-navigation-button,
+.seldatepicker-action,
+.seldropdown-menu-heading kbd {
+    border-color: var(--selpersonal-skin-line);
+    background: var(--selpersonal-skin-deep);
+    box-shadow: var(--selpersonal-skin-inset);
+}
+
+.selsearch-field:focus-within,
+.seldropdown-trigger:hover,
+.seldropdown-trigger:focus-visible,
+.seldropdown-root-open .seldropdown-trigger,
+.seldatepicker-trigger:hover,
+.seldatepicker-trigger:focus-visible,
+.seldatepicker-root-open .seldatepicker-trigger,
+.seldatepicker-navigation-button:hover,
+.seldatepicker-navigation-button:focus-visible,
+.seldatepicker-action:hover,
+.seldatepicker-action:focus-visible {
+    border-color: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 72%, white);
+    background: var(--selpersonal-skin-raised);
+    box-shadow: 0 0 12px rgb(var(--selpersonal-theme-color-rgb) / 0.46), var(--selpersonal-skin-inset);
+}
+
+.selsearch-field-clear,
+.selgrid-action-button,
+.selgrid-pagination-button {
+    border-color: var(--selpersonal-skin-line-soft);
+    background: var(--selpersonal-skin-base);
+}
+
+.selsearch-field-clear:hover,
+.selsearch-field-clear:focus-visible,
+.selgrid-pagination-button:hover {
+    border-color: var(--selpersonal-skin-line);
+    background: var(--selpersonal-skin-raised);
+    box-shadow: 0 0 10px rgb(var(--selpersonal-theme-color-rgb) / 0.40);
+}
+
+.selsearch-submit-button {
+    border-color: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 72%, white);
+    background: linear-gradient(135deg, var(--selpersonal-skin-accent), var(--selpersonal-skin-raised));
+    box-shadow: 0 0 15px rgb(var(--selpersonal-theme-color-rgb) / 0.54), inset 0 0 11px rgba(255, 255, 255, 0.18);
+}
+
+/* 左侧导航和表格普通结构改用皮肤色阶，状态标签继续保留业务语义色。 */
+.seltree-node-row:hover {
+    background: var(--selpersonal-skin-base);
+}
+
+.seltree-node-row.seltree-node-selected {
+    border-color: var(--selpersonal-skin-line);
+    background: linear-gradient(90deg, var(--selpersonal-skin-accent), var(--selpersonal-skin-raised));
+    box-shadow: 0 0 11px rgb(var(--selpersonal-theme-color-rgb) / 0.48), var(--selpersonal-skin-inset);
+}
+
+.seltree-node-count,
+.selgrid-board-shell,
+.selgrid-table tbody tr,
+.selgrid-table tbody tr:nth-child(even),
+.selgrid-selection-checkbox,
+.selgrid-progress-track,
+.selgrid-empty-state {
+    border-color: var(--selpersonal-skin-line-soft);
+    background: var(--selpersonal-skin-deep);
+    box-shadow: var(--selpersonal-skin-inset);
+}
+
+.selgrid-table tbody tr:hover {
+    background: var(--selpersonal-skin-base);
+}
+
+.selgrid-table tbody tr.selgrid-row-selected {
+    background: linear-gradient(90deg, var(--selpersonal-skin-raised), var(--selpersonal-skin-base));
+    box-shadow: inset 3px 0 0 rgb(var(--selpersonal-theme-color-rgb) / 0.88), inset 0 0 18px rgb(var(--selpersonal-theme-color-rgb) / 0.16);
+}
+
+.selgrid-selection-checkbox[aria-checked="true"] {
+    border-color: color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 72%, white);
+    background: var(--selpersonal-skin-accent);
+    box-shadow: 0 0 12px rgb(var(--selpersonal-theme-color-rgb) / 0.72), inset 0 0 6px rgba(255, 255, 255, 0.36);
+}
+
+.selgrid-owner-avatar,
+.selgrid-feedback-toast {
+    border-color: var(--selpersonal-skin-line);
+    background: var(--selpersonal-skin-deep);
+    box-shadow: 0 0 12px rgb(var(--selpersonal-theme-color-rgb) / 0.34);
+}
+
+.selgrid-owner-badge {
+    background: var(--selpersonal-skin-accent);
+    box-shadow: 0 0 8px rgb(var(--selpersonal-theme-color-rgb) / 0.62);
+}
+
+.selgrid-table-scroller,
+.selwindow-form-fields {
+    scrollbar-color: rgb(var(--selpersonal-theme-color-rgb) / 0.82) var(--selpersonal-skin-deep);
+}
+
+.selgrid-progress-bar {
+    background: linear-gradient(90deg, rgb(var(--selpersonal-theme-color-rgb) / 0.88), color-mix(in srgb, rgb(var(--selpersonal-theme-color-rgb)) 72%, white));
+    box-shadow: 0 0 10px rgb(var(--selpersonal-theme-color-rgb) / 0.66);
+}
+
+/* 浮层内部轨道、分隔线和非语义徽标跟随完整皮肤色阶。 */
+.seldropdown-menu-viewport::-webkit-scrollbar-track,
+.selgrid-menu-viewport::-webkit-scrollbar-track {
+    background: var(--selpersonal-skin-deep);
+}
+
+.seldropdown-menu-viewport::-webkit-scrollbar-thumb,
+.selgrid-menu-viewport::-webkit-scrollbar-thumb {
+    background: rgb(var(--selpersonal-theme-color-rgb));
+    box-shadow: 0 0 8px rgb(var(--selpersonal-theme-color-rgb) / 0.76);
+}
+
+.seldropdown-option:not(:last-child)::after,
+.selgrid-menu-item:not(:last-child)::after {
+    background: var(--selpersonal-skin-line-soft);
+}
+
+.seldropdown-option-icon,
+.selgrid-menu-badge {
+    border-color: var(--selpersonal-skin-line);
+    background: var(--selpersonal-skin-raised);
+    box-shadow: var(--selpersonal-skin-inset);
+}
+
+.seldatepicker-day:hover,
+.seldatepicker-day:focus-visible {
+    border-color: var(--selpersonal-skin-line);
+    background: var(--selpersonal-skin-raised);
+    box-shadow: var(--selpersonal-skin-inset);
+}
+
+.seldatepicker-day-today::after {
+    background: rgb(var(--selpersonal-theme-color-rgb));
+    box-shadow: 0 0 6px rgb(var(--selpersonal-theme-color-rgb) / 0.82);
+}
+
 /* 窗口入场只改变透明度和垂直位移，不干扰拖动后的 left/top 几何。 */
 @keyframes selpersonal-window-enter {
     from {
@@ -647,10 +1028,10 @@
 /* 光效流动使用现有边框投影做低幅呼吸，不生成新的装饰图形。 */
 @keyframes selpersonal-glow-breathe {
     from {
-        filter: drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.62) rgb(var(--selpersonal-theme-glow-rgb) / calc(0.12 + (var(--selpersonal-glow-motion-strength) * 0.20))));
+        filter: drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.62) rgb(var(--selpersonal-theme-color-rgb) / calc(0.12 + (var(--selpersonal-glow-motion-strength) * 0.20))));
     }
     to {
-        filter: drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--selpersonal-theme-glow-rgb) / calc(0.18 + (var(--selpersonal-glow-motion-strength) * 0.42))));
+        filter: drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--selpersonal-theme-color-rgb) / calc(0.18 + (var(--selpersonal-glow-motion-strength) * 0.42))));
     }
 }
 

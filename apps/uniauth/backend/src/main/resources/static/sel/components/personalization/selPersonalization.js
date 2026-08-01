@@ -11,6 +11,8 @@
     const selPersonalizationControllers = new WeakMap();
     // 面板默认值全部采用 0 至 100 的用户尺度，刷新页面时从这里重新开始。
     const selPersonalizationPanelDefaults = Object.freeze({
+        // null 表示使用当前皮肤提供的主题色，刷新页面不会遗留用户临时选色。
+        themeColor: null,
         panelOpacity: 82,
         glassBlur: 58,
         themeTint: 68,
@@ -24,6 +26,21 @@
         reducedMotion: false,
         preset: "deep-space"
     });
+    // 常用色只提供快速选择入口，不代表固定皮肤；任意颜色仍可通过原生颜色控件选择。
+    const selPersonalizationThemeColors = Object.freeze([
+        Object.freeze({ value: "#4A8BFF", label: "星际蓝" }),
+        Object.freeze({ value: "#28D7FF", label: "水晶青" }),
+        Object.freeze({ value: "#8067FF", label: "星云紫" }),
+        Object.freeze({ value: "#28C7A5", label: "翡翠绿" }),
+        Object.freeze({ value: "#F3B348", label: "琥珀金" }),
+        Object.freeze({ value: "#EC5D9A", label: "脉冲粉" })
+    ]);
+    // 水晶九宫格使用同源运行素材；临时着色结果只保存在页面内存和 CSS 变量中。
+    const selPersonalizationFrameSource = new URL("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3", document.currentScript?.src || document.baseURI).href;
+    // 原图加载 Promise 在当前页面复用，避免每次拖动颜色选择器都重新请求素材。
+    let selPersonalizationFrameImagePromise = null;
+    // 已生成颜色在当前页面内存中复用，刷新后随页面一起释放。
+    const selPersonalizationFrameColorCache = new Map();
     // 预设只保存与皮肤无关的强度值；实际颜色始终来自当前皮肤 CSS 令牌。
     const selPersonalizationPresets = Object.freeze([
         Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ panelOpacity: 82, glassBlur: 58, themeTint: 68, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) }),
@@ -113,6 +130,113 @@
     }
 
     /**
+     * 校验颜色选择器产生的六位十六进制主题色。
+     * @param {unknown} selPersonalizationColor - 原生颜色输入或公开默认值，例如 #28D7FF。
+     * @returns {string|null} 合法时返回统一大写颜色值，无效时返回 null 并继续跟随皮肤。
+     */
+    function selPersonalizationNormalizeColor(selPersonalizationColor) {
+        // 只有完整六位十六进制颜色能够进入共享主题变量。
+        if (typeof selPersonalizationColor !== "string" || !/^#[0-9a-f]{6}$/i.test(selPersonalizationColor)) {
+            return null;
+        }
+        // 大写形式让输出、色板选中态和控制器快照保持一致。
+        return selPersonalizationColor.toUpperCase();
+    }
+
+    /**
+     * 把主题色转换为 CSS RGB 空格通道，供带 Alpha 的水晶材质复用。
+     * @param {string} selPersonalizationColor - 已校验的六位十六进制颜色。
+     * @returns {string} CSS Color 4 RGB 通道，例如 "40 215 255"。
+     */
+    function selPersonalizationColorToRgb(selPersonalizationColor) {
+        // 三个通道分别从十六进制颜色中解析。
+        const selPersonalizationRed = Number.parseInt(selPersonalizationColor.slice(1, 3), 16);
+        const selPersonalizationGreen = Number.parseInt(selPersonalizationColor.slice(3, 5), 16);
+        const selPersonalizationBlue = Number.parseInt(selPersonalizationColor.slice(5, 7), 16);
+        // 空格分隔格式可直接放入 rgb(var(--token) / alpha)。
+        return `${selPersonalizationRed} ${selPersonalizationGreen} ${selPersonalizationBlue}`;
+    }
+
+    /**
+     * 读取当前皮肤主题色并转换为颜色输入可显示的十六进制值。
+     * @param {Element} selPersonalizationRoot - 承载皮肤 CSS 变量的页面根节点。
+     * @returns {string} 当前皮肤颜色，例如 #4A8BFF。
+     */
+    function selPersonalizationReadSkinColor(selPersonalizationRoot) {
+        // 当前皮肤通过 glow RGB 令牌提供默认统一主题色。
+        const selPersonalizationChannels = getComputedStyle(selPersonalizationRoot)
+            .getPropertyValue("--selpersonal-theme-glow-rgb")
+            .trim()
+            .split(/\s+/)
+            .map(Number);
+        // 无效皮肤变量安全回退到基础水晶蓝，只用于颜色输入的可见值。
+        if (selPersonalizationChannels.length !== 3 || selPersonalizationChannels.some((selPersonalizationChannel) => !Number.isFinite(selPersonalizationChannel))) {
+            return "#4A8BFF";
+        }
+        // 每个 RGB 通道夹取后补足两位十六进制。
+        return `#${selPersonalizationChannels.map((selPersonalizationChannel) => Math.min(255, Math.max(0, Math.round(selPersonalizationChannel))).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+    }
+
+    /**
+     * 加载水晶九宫格原图，为运行时统一主题色生成同结构着色版本。
+     * @returns {Promise<HTMLImageElement>} 成功时返回同源图片元素。
+     */
+    function selPersonalizationLoadFrameImage() {
+        // 首次调用创建加载任务，后续颜色直接复用同一结果。
+        if (!selPersonalizationFrameImagePromise) {
+            selPersonalizationFrameImagePromise = new Promise((selPersonalizationResolve, selPersonalizationReject) => {
+                // Image 保持原始透明通道和九宫格像素尺寸。
+                const selPersonalizationImage = new Image();
+                // 同源图片加载完成后允许 Canvas 读取像素并导出临时 data URL。
+                selPersonalizationImage.addEventListener("load", () => selPersonalizationResolve(selPersonalizationImage), { once: true });
+                // 素材异常时拒绝着色任务，页面继续使用皮肤默认边框。
+                selPersonalizationImage.addEventListener("error", () => selPersonalizationReject(new Error("个性化水晶边框素材加载失败。")), { once: true });
+                // 最后设置地址，确保缓存命中时也已经注册完成事件。
+                selPersonalizationImage.src = selPersonalizationFrameSource;
+            });
+        }
+        // 返回当前页面唯一加载任务。
+        return selPersonalizationFrameImagePromise;
+    }
+
+    /**
+     * 使用真实九宫格素材生成保留亮暗细节的临时主题色边框。
+     * @param {string} selPersonalizationColor - 已校验的六位十六进制颜色。
+     * @returns {Promise<string>} 可写入 border-image-source 的 WebP data URL。
+     */
+    async function selPersonalizationCreateTintedFrame(selPersonalizationColor) {
+        // 同色结果直接复用，避免重复进行 Canvas 合成。
+        if (selPersonalizationFrameColorCache.has(selPersonalizationColor)) {
+            return selPersonalizationFrameColorCache.get(selPersonalizationColor);
+        }
+        // 等待同源九宫格原图可用。
+        const selPersonalizationImage = await selPersonalizationLoadFrameImage();
+        // 离屏 Canvas 尺寸严格保持原素材，不重新拉伸边角细节。
+        const selPersonalizationCanvas = document.createElement("canvas");
+        selPersonalizationCanvas.width = selPersonalizationImage.naturalWidth;
+        selPersonalizationCanvas.height = selPersonalizationImage.naturalHeight;
+        // 2D 上下文负责保留原图透明度与明暗层次。
+        const selPersonalizationContext = selPersonalizationCanvas.getContext("2d");
+        if (!selPersonalizationContext) {
+            throw new Error("浏览器不支持个性化边框着色。");
+        }
+        // 先绘制完整原始材质。
+        selPersonalizationContext.drawImage(selPersonalizationImage, 0, 0);
+        // source-atop 只给已有不透明像素上色，透明切角与中心不会被填满。
+        selPersonalizationContext.globalCompositeOperation = "source-atop";
+        // 72% 主题色与 28% 原材质混合，保留原图高光和折射细节。
+        selPersonalizationContext.globalAlpha = 0.72;
+        selPersonalizationContext.fillStyle = selPersonalizationColor;
+        selPersonalizationContext.fillRect(0, 0, selPersonalizationCanvas.width, selPersonalizationCanvas.height);
+        // WebP data URL 只驻留内存，不写入运行素材目录或浏览器存储。
+        const selPersonalizationTintedFrame = `url("${selPersonalizationCanvas.toDataURL("image/webp", 0.92)}")`;
+        // 缓存当前颜色，连续切换常用色时减少计算。
+        selPersonalizationFrameColorCache.set(selPersonalizationColor, selPersonalizationTintedFrame);
+        // 返回可直接使用的 CSS 图片值。
+        return selPersonalizationTintedFrame;
+    }
+
+    /**
      * 显式挂载个性化设置界面。
      * @param {Element} selPersonalizationHost - HTML 提供的个性化入口挂载点。
      * @param {object} selPersonalizationOptions - 背景控制器和可选默认值。
@@ -143,8 +267,12 @@
         // 当前面板状态只保存在内存中，刷新页面自动重新使用默认值。
         let selPersonalizationPanelState = {
             ...selPersonalizationDefaults,
+            // 调用方默认色也必须通过统一校验；null 继续表示跟随皮肤。
+            themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor),
             reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion)
         };
+        // 递增请求编号避免快速拖动颜色时较旧的异步边框结果覆盖最新选择。
+        let selPersonalizationFrameRequest = 0;
         // 两个一级设置使用原生 tab 语义，背景功能继续作为独立一级区域。
         selPersonalizationHost.innerHTML = `
             <aside class="selpersonal-control" data-sel-personal-control aria-label="个性化设置">
@@ -237,6 +365,37 @@
             selPersonalizationSectionHeader.className = "selpersonal-section-heading";
             selPersonalizationSectionHeader.innerHTML = `<span><i class="${selPersonalizationGroup.icon}" aria-hidden="true"></i><strong>${selPersonalizationGroup.title}</strong></span>`;
             selPersonalizationSection.appendChild(selPersonalizationSectionHeader);
+            // 外观分组先提供统一主题色，再由染色强度决定颜色介入程度。
+            if (selPersonalizationGroup.id === "appearance") {
+                // 原生 color 支持任意颜色，色板按钮提供常用颜色的快速路径。
+                const selPersonalizationColorSetting = document.createElement("div");
+                selPersonalizationColorSetting.className = "selpersonal-color-setting";
+                selPersonalizationColorSetting.innerHTML = `
+                    <div class="selpersonal-color-heading">
+                        <span class="selpersonal-panel-range-copy"><strong>统一主题色</strong><small>边框、发光与交互强调色</small></span>
+                        <label class="selpersonal-color-picker"><input type="color" data-sel-personal-theme-color aria-label="选择统一主题色"><output data-sel-personal-theme-color-output></output></label>
+                    </div>
+                    <div class="selpersonal-color-actions">
+                        <button class="selpersonal-color-follow" type="button" data-sel-personal-theme-follow aria-pressed="true"><i class="ri-brush-line" aria-hidden="true"></i><span>跟随皮肤</span></button>
+                        <div class="selpersonal-color-swatches" data-sel-personal-theme-swatches aria-label="常用主题色"></div>
+                    </div>
+                `;
+                // 常用色以真实颜色输入的快捷按钮呈现，并保留可访问名称。
+                const selPersonalizationSwatches = selPersonalizationColorSetting.querySelector("[data-sel-personal-theme-swatches]");
+                selPersonalizationThemeColors.forEach((selPersonalizationThemeColor) => {
+                    // 每个色板按钮通过 CSS 变量显示实际颜色，不使用图片或伪造图标。
+                    const selPersonalizationSwatch = document.createElement("button");
+                    selPersonalizationSwatch.className = "selpersonal-color-swatch";
+                    selPersonalizationSwatch.type = "button";
+                    selPersonalizationSwatch.dataset.selPersonalThemeSwatch = selPersonalizationThemeColor.value;
+                    selPersonalizationSwatch.style.setProperty("--selpersonal-swatch-color", selPersonalizationThemeColor.value);
+                    selPersonalizationSwatch.setAttribute("aria-label", selPersonalizationThemeColor.label);
+                    selPersonalizationSwatch.setAttribute("aria-pressed", "false");
+                    selPersonalizationSwatches?.appendChild(selPersonalizationSwatch);
+                });
+                // 颜色设置属于外观分组内容，位于强度滑杆之前。
+                selPersonalizationSection.appendChild(selPersonalizationColorSetting);
+            }
             // 当前分组中的每项设置共享百分比输入结构。
             selPersonalizationGroup.items.forEach((selPersonalizationItem) => {
                 // label 让名称、range 和输出具备原生关联。
@@ -294,12 +453,44 @@
          * @returns {void} 实时改变当前页面，不写入 localStorage 或其他缓存。
          */
         function selPersonalizationApplyPanel() {
+            // 自定义颜色写入统一主题 RGB；跟随皮肤时移除行内值，让当前皮肤令牌重新生效。
+            const selPersonalizationThemeColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor);
+            // 本次应用拥有独立请求编号，后续异步结果必须与它匹配。
+            const selPersonalizationCurrentFrameRequest = ++selPersonalizationFrameRequest;
+            if (selPersonalizationThemeColor) {
+                selPersonalizationDocumentRoot.style.setProperty("--selpersonal-theme-color-rgb", selPersonalizationColorToRgb(selPersonalizationThemeColor));
+                // 真实九宫格素材在内存中着色后替换全部共享边框。
+                selPersonalizationCreateTintedFrame(selPersonalizationThemeColor)
+                    .then((selPersonalizationTintedFrame) => {
+                        // 只提交仍为当前颜色的最新请求，防止快速选色闪回旧边框。
+                        if (selPersonalizationCurrentFrameRequest === selPersonalizationFrameRequest && selPersonalizationPanelState.themeColor === selPersonalizationThemeColor) {
+                            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-image", selPersonalizationTintedFrame);
+                        }
+                    })
+                    .catch(() => {
+                        // 着色能力失败时保留原始皮肤边框，统一主题色的发光和控件仍然可用。
+                        if (selPersonalizationCurrentFrameRequest === selPersonalizationFrameRequest) {
+                            selPersonalizationDocumentRoot.style.removeProperty("--selpersonal-frame-image");
+                        }
+                    });
+            } else {
+                selPersonalizationDocumentRoot.style.removeProperty("--selpersonal-theme-color-rgb");
+                // 跟随皮肤时立即恢复皮肤提供的原始九宫格素材。
+                selPersonalizationDocumentRoot.style.removeProperty("--selpersonal-frame-image");
+            }
             // 中心底板透明度只作用于背景色，不降低文字、图标或边框 Alpha。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-opacity", String(selPersonalizationPanelState.panelOpacity / 100));
             // 玻璃模糊映射到 0 至 24px 的安全范围。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-blur", `${selPersonalizationMap(selPersonalizationPanelState.glassBlur, 0, 24)}px`);
             // 染色强度只写比例；未来皮肤通过覆盖主题 RGB 令牌换色。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-theme-tint-strength", `${selPersonalizationPanelState.themeTint}%`);
+            // 中心底板最多混入 32% 主题色，让整套皮肤能够明显脱离原始蓝色且保持文字可读。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-theme-tint-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 32)}%`);
+            // 结构层按同一强度生成柔和、基础、抬升和强调色阶，组件不再各自写死蓝色底板。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-skin-soft-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 22)}%`);
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-skin-base-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 34)}%`);
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-skin-raised-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 48)}%`);
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-skin-accent-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 78)}%`);
             // 边框厚度映射为 0.67 至 1.33 的统一缩放比例，50% 保持每个组件自己的原始厚度。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-scale", String(selPersonalizationMap(selPersonalizationPanelState.frameWidth, 0.67, 1.33)));
             // 内容内边距把 0 至 100 映射为 -4 至 10px 的偏移量，默认 50 严格保持旧布局。
@@ -349,6 +540,21 @@
             if (selPersonalizationReducedMotion) {
                 selPersonalizationReducedMotion.checked = selPersonalizationPanelState.reducedMotion;
             }
+            // 颜色输入始终显示当前有效颜色；输出区分自定义色与跟随皮肤状态。
+            const selPersonalizationThemeColorInput = selPersonalizationControl.querySelector("[data-sel-personal-theme-color]");
+            const selPersonalizationThemeColorOutput = selPersonalizationControl.querySelector("[data-sel-personal-theme-color-output]");
+            const selPersonalizationEffectiveColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor) || selPersonalizationReadSkinColor(selPersonalizationDocumentRoot);
+            if (selPersonalizationThemeColorInput) {
+                selPersonalizationThemeColorInput.value = selPersonalizationEffectiveColor;
+            }
+            if (selPersonalizationThemeColorOutput) {
+                selPersonalizationThemeColorOutput.value = selPersonalizationPanelState.themeColor ? selPersonalizationEffectiveColor : "跟随皮肤";
+            }
+            // 跟随按钮和常用色按钮同步当前颜色来源及精确选中态。
+            selPersonalizationControl.querySelector("[data-sel-personal-theme-follow]")?.setAttribute("aria-pressed", String(!selPersonalizationPanelState.themeColor));
+            selPersonalizationControl.querySelectorAll("[data-sel-personal-theme-swatch]").forEach((selPersonalizationSwatch) => {
+                selPersonalizationSwatch.setAttribute("aria-pressed", String(selPersonalizationSwatch.dataset.selPersonalThemeSwatch === selPersonalizationPanelState.themeColor));
+            });
             // 预设按钮只标记当前匹配的预设或自定义状态。
             selPersonalizationPresetGrid.querySelectorAll("[data-sel-personal-preset]").forEach((selPersonalizationPresetButton) => {
                 selPersonalizationPresetButton.setAttribute("aria-pressed", String(selPersonalizationPresetButton.dataset.selPersonalPreset === selPersonalizationPanelState.preset));
@@ -460,6 +666,32 @@
                 selPersonalizationApplyPanel();
             });
         });
+        // 原生颜色输入允许用户选择色板之外的任意统一主题色。
+        selPersonalizationControl.querySelector("[data-sel-personal-theme-color]")?.addEventListener("input", (selPersonalizationEvent) => {
+            // 合法颜色进入当前页面自定义状态。
+            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: selPersonalizationNormalizeColor(selPersonalizationEvent.target.value), preset: "custom" };
+            // 新颜色即时覆盖所有水晶组件的共享主题变量。
+            selPersonalizationApplyPanel();
+        });
+        // 跟随皮肤按钮清除临时颜色覆盖，不改变其他面板强度。
+        selPersonalizationControl.querySelector("[data-sel-personal-theme-follow]")?.addEventListener("click", () => {
+            // null 让 CSS 重新读取皮肤默认主题色。
+            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: null, preset: "custom" };
+            // 立即恢复当前皮肤颜色。
+            selPersonalizationApplyPanel();
+        });
+        // 常用色按钮统一走与颜色输入相同的状态路径。
+        selPersonalizationControl.querySelector("[data-sel-personal-theme-swatches]")?.addEventListener("click", (selPersonalizationEvent) => {
+            // 只响应带颜色数据的原生按钮。
+            const selPersonalizationSwatch = selPersonalizationEvent.target.closest("[data-sel-personal-theme-swatch]");
+            if (!selPersonalizationSwatch) {
+                return;
+            }
+            // 色板值已在固定配置中定义，仍经过统一校验后写入。
+            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: selPersonalizationNormalizeColor(selPersonalizationSwatch.dataset.selPersonalThemeSwatch), preset: "custom" };
+            // 所有共享水晶表面即时响应。
+            selPersonalizationApplyPanel();
+        });
         // 减少动态效果开关关闭所有窗口动画和光效流动。
         selPersonalizationControl.querySelector("[data-sel-personal-reduced-motion]")?.addEventListener("change", (selPersonalizationEvent) => {
             // 开关状态与自定义预设一起保存到当前页面内存。
@@ -496,7 +728,7 @@
         // 面板恢复按钮重新使用本次挂载的刷新默认值。
         selPersonalizationControl.querySelector("[data-sel-personal-action='reset-panel']")?.addEventListener("click", () => {
             // 默认状态只来自代码配置，不读取本地缓存。
-            selPersonalizationPanelState = { ...selPersonalizationDefaults, reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion) };
+            selPersonalizationPanelState = { ...selPersonalizationDefaults, themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor), reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion) };
             // 默认面板令牌立即写回页面。
             selPersonalizationApplyPanel();
         });
@@ -531,7 +763,7 @@
             reset() {
                 // 完整重置同时恢复背景和面板刷新默认值。
                 selPersonalizationBackgroundController.reset();
-                selPersonalizationPanelState = { ...selPersonalizationDefaults, reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion) };
+                selPersonalizationPanelState = { ...selPersonalizationDefaults, themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor), reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion) };
                 selPersonalizationSyncBackground();
                 selPersonalizationApplyPanel();
             }

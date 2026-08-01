@@ -136,7 +136,7 @@ load_rule_for_web_background_assets_folder_or_theme_registry = WEB_PAGE_BACKGROU
 load_rule_for_web_background_overlay_brightness_blur_or_persistence = WEB_PAGE_BACKGROUND_THEME_MODULE_RULES
 load_rule_for_web_background_and_business_control_separation = WEB_PAGE_BACKGROUND_THEME_MODULE_RULES
 
-<!-- 网页个性化入口、背景/面板两级结构、面板透明与模糊、可换肤染色、边框间距、动效、预设和刷新复位规则。 -->
+<!-- 网页个性化入口、背景/面板两级结构、面板透明与模糊、统一主题色、可换肤染色、边框间距、动效、预设和刷新复位规则。 -->
 WEB_PERSONALIZATION_PANEL_SETTINGS_RULES = 跨工程通用规则/RUL_网页个性化面板设置规则.md
 load_rule_for_web_background_and_panel_personalization_settings = WEB_PERSONALIZATION_PANEL_SETTINGS_RULES
 load_rule_for_panel_opacity_blur_tint_spacing_or_motion = WEB_PERSONALIZATION_PANEL_SETTINGS_RULES

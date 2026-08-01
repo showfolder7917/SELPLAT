@@ -32,7 +32,7 @@ selPageBackground.mount(backgroundHost, options)
 selPersonalization.mount(personalizationHost, { backgroundController })
 ```
 
-`selPageBackground` 只维护背景图层和当前页面参数；`selPersonalization` 组合“背景设置 / 面板设置”界面并写入跨水晶组件视觉令牌。两者均不使用浏览器持久化，刷新页面恢复代码默认值。
+`selPageBackground` 只维护背景图层和当前页面参数；`selPersonalization` 组合“背景设置 / 面板设置”界面并写入跨水晶组件视觉令牌。面板设置支持跟随皮肤、任意统一主题色、常用色和染色强度，并从主题色生成深色、基础、抬升和强调四级色阶，统一作用于水晶边框、玻璃底板、标题栏、导航、表单、浮层和交互强调色。背景图片、正文和业务语义状态色保持独立。两者均不使用浏览器持久化，刷新页面恢复代码默认值。
 
 ## 新增基础控件
 

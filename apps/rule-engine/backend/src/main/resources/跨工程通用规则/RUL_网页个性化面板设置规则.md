@@ -19,9 +19,17 @@ web_personalization_component_frame_baseline_must_be_preserved = panel,window,dr
 <!-- 面板透明只改变中心玻璃承托层，禁止连带降低文字、图标、控件或九宫格边框的透明度。 -->
 web_personalization_panel_opacity_target = center-glass-backplate-only
 web_personalization_panel_opacity_must_not_fade = text,icons,controls,nine-slice-frame
-web_personalization_panel_material_controls = opacity,glass-blur,current-skin-tint-strength
+web_personalization_panel_material_controls = opacity,glass-blur,unified-theme-color,current-skin-tint-strength
 web_personalization_skin_tint_must_use = overridable-theme-rgb-tokens
 web_personalization_skin_tint_must_not_hardcode = deep-blue,purple,background-derived-color
+web_personalization_unified_theme_color_modes = follow-current-skin,arbitrary-color,quick-swatches
+web_personalization_unified_theme_color_must_affect = crystal-frame,glass-backplate,header,toolbar,navigation,form-control,table-structure,floating-surface,glow,selected-state,primary-action,range-accent,scrollbar
+web_personalization_unified_theme_color_must_not_override = background-image,body-text,success-color,warning-color,error-color
+web_personalization_unified_theme_color_scale = deep,base,raised,accent
+web_personalization_unified_theme_color_scale_source = selected-color,current-skin-tint-strength,neutral-surface-token
+web_personalization_structural_surface_must_not_keep_previous_skin_color = true
+web_personalization_runtime_frame_tint_must_preserve = source-alpha,cut-corners,nine-slice-geometry,highlight-detail
+web_personalization_runtime_frame_tint_persistence = memory-only
 
 <!-- 同一组材质变量必须覆盖主要水晶承载面，但不得改变需要 fixed/absolute 定位的浮层定位上下文。 -->
 web_personalization_shared_surface_scope = panel,window,dropdown,context-menu,date-picker
@@ -44,7 +52,7 @@ web_personalization_must_not_write = local-storage,session-storage,indexed-db,co
 web_personalization_reload_result = code-defaults
 
 <!-- 交付前验证两级信息架构、全部参数、预设、换肤 token、紧凑视口、浮层定位、刷新复位、键盘路径和控制台。 -->
-web_personalization_qa = two-top-level-sections,all-ranges,all-presets,theme-token-override,compact-viewport,popup-positioning,reload-defaults,keyboard,console,visual-comparison
+web_personalization_qa = two-top-level-sections,all-ranges,all-presets,theme-token-override,arbitrary-color,quick-swatches,follow-skin,shared-frame-tint,structural-surface-color-scan,semantic-color-isolation,compact-viewport,popup-positioning,reload-defaults,keyboard,console,visual-comparison
 
 java_ability_refs = none
 python_ability_refs = none
