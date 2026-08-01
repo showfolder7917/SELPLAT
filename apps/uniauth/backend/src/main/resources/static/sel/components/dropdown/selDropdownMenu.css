@@ -116,10 +116,10 @@
     left: var(--seldropdown-menu-inline-offset, 0px);
     width: min(max(100%, var(--seldropdown-menu-min-width)), calc(100vw - 16px));
     box-sizing: border-box;
-    border: 16px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
+    border: var(--sel-theme-frame-dropdown) solid transparent;
+    border-image-source: var(--sel-theme-frame-image);
     border-image-slice: 58 69 58 69 fill;
-    border-image-width: 16px;
+    border-image-width: var(--sel-theme-frame-dropdown);
     border-image-repeat: stretch;
     color: var(--seldropdown-text-main);
     filter: drop-shadow(0 0 12px rgba(54, 123, 255, 0.76));

@@ -8,7 +8,7 @@
     --selgrid-menu-width: 236px;
     --selgrid-menu-row-height: 34px;
     --selgrid-menu-visible-items: 10;
-    --selgrid-menu-edge-size: 18px;
+    --selgrid-menu-edge-size: var(--sel-theme-frame-menu);
     --selgrid-menu-text: #dce5ff;
     --selgrid-menu-muted: #6478ac;
     --selgrid-menu-danger: #ff3159;
@@ -24,7 +24,7 @@
     width: var(--selgrid-menu-width);
     box-sizing: border-box;
     border: var(--selgrid-menu-edge-size) solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
+    border-image-source: var(--sel-theme-frame-image);
     border-image-slice: 58 69 58 69 fill;
     border-image-width: var(--selgrid-menu-edge-size);
     border-image-repeat: stretch;
@@ -196,10 +196,10 @@
     max-width: calc(100vw - 16px);
     max-height: var(--selgrid-menu-submenu-available-height, calc(100vh - 16px));
     box-sizing: border-box;
-    border: 15px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
+    border: var(--sel-theme-frame-submenu) solid transparent;
+    border-image-source: var(--sel-theme-frame-image);
     border-image-slice: 58 69 58 69 fill;
-    border-image-width: 15px;
+    border-image-width: var(--sel-theme-frame-submenu);
     border-image-repeat: stretch;
     overflow-x: hidden;
     overflow-y: auto;

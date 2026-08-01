@@ -26,10 +26,10 @@
     box-sizing: border-box;
     grid-template-rows: 82px minmax(0, 1fr);
     overflow: visible;
-    border: 18px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
+    border: var(--sel-theme-frame-window) solid transparent;
+    border-image-source: var(--sel-theme-frame-image);
     border-image-slice: 58 69 58 69 fill;
-    border-image-width: 18px;
+    border-image-width: var(--sel-theme-frame-window);
     border-image-repeat: stretch;
     color: #eef2ff;
     background: transparent;
@@ -53,7 +53,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 18px;
-    padding: 0 10px 0 8px;
+    padding: 0 var(--sel-theme-window-safe-inline);
     border-bottom: 1px solid rgba(93, 139, 230, 0.28);
     background: rgba(3, 14, 52, 0.28);
     cursor: move;

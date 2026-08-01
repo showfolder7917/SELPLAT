@@ -9,10 +9,10 @@
 .selgrid-board-shell {
     position: relative;
     width: 100%;
-    min-width: 930px;
+    min-width: 0;
     height: 100%;
     min-height: 390px;
-    overflow: visible;
+    overflow: hidden;
     border-radius: 18px;
     background: rgba(2, 12, 48, 0.52);
 }

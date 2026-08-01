@@ -9,19 +9,21 @@
     --selpanel-layout-gap: 10px;
     --selpanel-layout-sidebar-width: 246px;
     --selpanel-layout-sidebar-collapsed-width: 58px;
-    --selpanel-surface-line: rgba(105, 172, 255, 0.72);
-    --selpanel-surface-background: rgba(3, 14, 52, 0.82);
-    --selpanel-surface-glow: rgba(74, 116, 255, 0.52);
-    --selpanel-text-main: #eef2ff;
-    --selpanel-text-muted: #9daacf;
+    --selpanel-surface-line: var(--sel-theme-line);
+    --selpanel-surface-background: var(--sel-theme-panel-surface);
+    --selpanel-surface-glow: var(--sel-theme-glow);
+    --selpanel-text-main: var(--sel-theme-text-main);
+    --selpanel-text-muted: var(--sel-theme-text-muted);
 }
 
 /* 面板根布局：纵向弹性排列让任一顶层区域删除后，其余区域仍按自身高度和剩余空间正常显示。 */
 .selpanel-shell {
     display: flex;
-    width: calc(100vw - 32px);
-    height: var(--selpanel-instance-height, calc(100vh - 32px));
+    width: 100%;
+    max-width: 100%;
+    height: var(--selpanel-instance-height, calc(100vh - (2 * var(--sel-theme-viewport-gap))));
     min-height: 680px;
+    box-sizing: border-box;
     flex-direction: column;
     gap: var(--selpanel-layout-gap);
 }
@@ -31,10 +33,11 @@
     position: relative;
     min-width: 0;
     min-height: 0;
-    border: 18px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
+    box-sizing: border-box;
+    border: var(--sel-theme-frame-panel) solid transparent;
+    border-image-source: var(--sel-theme-frame-image);
     border-image-slice: 58 69 58 69 fill;
-    border-image-width: 18px;
+    border-image-width: var(--sel-theme-frame-panel);
     border-image-repeat: stretch;
     color: var(--selpanel-text-main);
     filter: drop-shadow(0 0 8px var(--selpanel-surface-glow));
@@ -69,7 +72,7 @@
     grid-template-columns: minmax(330px, 1fr) minmax(430px, 1.25fr) auto;
     gap: 20px;
     align-items: center;
-    padding: 0 18px;
+    padding: 0 var(--sel-theme-content-safe-inline);
 }
 
 .selpanel-brand-group,
@@ -344,7 +347,7 @@
 
 .selpanel-content-shell {
     flex: 1 1 auto;
-    overflow: visible;
+    overflow: hidden;
     padding: 0;
 }
 

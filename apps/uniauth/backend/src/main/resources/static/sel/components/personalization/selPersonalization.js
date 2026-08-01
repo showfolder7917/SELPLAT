@@ -165,7 +165,7 @@
     function selPersonalizationReadSkinColor(selPersonalizationRoot) {
         // 当前皮肤通过 glow RGB 令牌提供默认统一主题色。
         const selPersonalizationChannels = getComputedStyle(selPersonalizationRoot)
-            .getPropertyValue("--selpersonal-theme-glow-rgb")
+            .getPropertyValue("--sel-theme-color-rgb")
             .trim()
             .split(/\s+/)
             .map(Number);
@@ -458,25 +458,25 @@
             // 本次应用拥有独立请求编号，后续异步结果必须与它匹配。
             const selPersonalizationCurrentFrameRequest = ++selPersonalizationFrameRequest;
             if (selPersonalizationThemeColor) {
-                selPersonalizationDocumentRoot.style.setProperty("--selpersonal-theme-color-rgb", selPersonalizationColorToRgb(selPersonalizationThemeColor));
+                selPersonalizationDocumentRoot.style.setProperty("--sel-theme-color-rgb", selPersonalizationColorToRgb(selPersonalizationThemeColor));
                 // 真实九宫格素材在内存中着色后替换全部共享边框。
                 selPersonalizationCreateTintedFrame(selPersonalizationThemeColor)
                     .then((selPersonalizationTintedFrame) => {
                         // 只提交仍为当前颜色的最新请求，防止快速选色闪回旧边框。
                         if (selPersonalizationCurrentFrameRequest === selPersonalizationFrameRequest && selPersonalizationPanelState.themeColor === selPersonalizationThemeColor) {
-                            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-image", selPersonalizationTintedFrame);
+                            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-frame-image", selPersonalizationTintedFrame);
                         }
                     })
                     .catch(() => {
                         // 着色能力失败时保留原始皮肤边框，统一主题色的发光和控件仍然可用。
                         if (selPersonalizationCurrentFrameRequest === selPersonalizationFrameRequest) {
-                            selPersonalizationDocumentRoot.style.removeProperty("--selpersonal-frame-image");
+                            selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-frame-image");
                         }
                     });
             } else {
-                selPersonalizationDocumentRoot.style.removeProperty("--selpersonal-theme-color-rgb");
+                selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-color-rgb");
                 // 跟随皮肤时立即恢复皮肤提供的原始九宫格素材。
-                selPersonalizationDocumentRoot.style.removeProperty("--selpersonal-frame-image");
+                selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-frame-image");
             }
             // 中心底板透明度只作用于背景色，不降低文字、图标或边框 Alpha。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-opacity", String(selPersonalizationPanelState.panelOpacity / 100));
@@ -487,12 +487,12 @@
             // 中心底板最多混入 32% 主题色，让整套皮肤能够明显脱离原始蓝色且保持文字可读。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-theme-tint-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 32)}%`);
             // 结构层按同一强度生成柔和、基础、抬升和强调色阶，组件不再各自写死蓝色底板。
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-skin-soft-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 22)}%`);
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-skin-base-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 34)}%`);
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-skin-raised-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 48)}%`);
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-skin-accent-mix", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 78)}%`);
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-soft", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 22)}%`);
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-base", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 34)}%`);
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-raised", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 48)}%`);
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-accent", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 78)}%`);
             // 边框厚度映射为 0.67 至 1.33 的统一缩放比例，50% 保持每个组件自己的原始厚度。
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-scale", String(selPersonalizationMap(selPersonalizationPanelState.frameWidth, 0.67, 1.33)));
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-frame-scale", String(selPersonalizationMap(selPersonalizationPanelState.frameWidth, 0.67, 1.33)));
             // 内容内边距把 0 至 100 映射为 -4 至 10px 的偏移量，默认 50 严格保持旧布局。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-content-inset-offset", `${selPersonalizationCenteredMap(selPersonalizationPanelState.contentInset, -4, 10)}px`);
             // 面板间距限制在 6 至 14px，保证紧凑视口仍保留中央内容。

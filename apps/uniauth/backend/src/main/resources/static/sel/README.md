@@ -19,6 +19,8 @@ selBaseRuntime.param(name)          读取页面查询参数
 
 `selAjax` 不保存业务地址。`./mock/UniauthUserGrid/...` 或 `/api/uniauth/...` 等路径必须由应用装配层明确传入。
 
+统一视觉令牌位于 `theme/selThemeTokens.css`。基础皮肤色、业务语义色、组件表面映射、九宫格素材、组件边框厚度、左右安全区和视口间距只能在该层声明；组件样式与个性化逻辑统一读取 `--sel-theme-*`，不得重新写死皮肤颜色或独立的左右边框尺寸。
+
 ## 当前挂载入口
 
 ```text

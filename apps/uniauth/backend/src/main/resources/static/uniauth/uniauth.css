@@ -26,9 +26,12 @@ body {
 /* 应用舞台只排列 selPanel 创建的独立实例，不选择面板内部节点。 */
 .uniauth-page-stage {
     display: grid;
+    width: 100%;
     min-height: 100vh;
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr);
     place-items: center;
-    padding: 16px;
+    padding: var(--sel-theme-viewport-gap);
 }
 
 /* 多实例模式由 selPanel 在应用挂载点写入标准布局标识，应用只调整实例之间的间距。 */

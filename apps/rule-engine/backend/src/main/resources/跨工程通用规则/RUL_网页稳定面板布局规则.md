@@ -50,6 +50,13 @@ web_panel_header_toolbar_footer_must_remain_stable = true
 web_panel_region_skin_must_share_theme_tokens = true
 web_panel_image_border_implementation = nine-slice-or-border-image
 web_panel_region_decoration_must_not_block_interaction = true
+web_panel_outer_width_basis = parent-content-box-not-viewport-width
+web_panel_stage_grid_track = minmax-zero
+web_panel_crystal_surface_box_sizing = border-box
+web_panel_horizontal_viewport_gap_must_be_equal = left,right
+web_panel_viewport_gap_measurement_source = document-client-width-excluding-scrollbar
+web_panel_table_min_width_must_scroll_inside = center-content-viewport
+web_panel_table_min_width_must_not_expand = panel,document
 
 <!-- 左树通过人工配置描述节点、层级、图标、数量、默认展开和业务筛选；展开与选择是独立状态，禁止点击父节点时隐式丢失当前筛选。 -->
 web_tree_navigation_source = explicit-config

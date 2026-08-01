@@ -95,10 +95,10 @@
     width: min(322px, calc(100vw - 24px));
     box-sizing: border-box;
     padding: 6px 8px 8px;
-    border: 12px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
+    border: var(--sel-theme-frame-datepicker) solid transparent;
+    border-image-source: var(--sel-theme-frame-image);
     border-image-slice: 58 69 58 69 fill;
-    border-image-width: 12px;
+    border-image-width: var(--sel-theme-frame-datepicker);
     border-image-repeat: stretch;
     color: var(--seldatepicker-text-main);
     background: transparent;

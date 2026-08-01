@@ -28,6 +28,10 @@ web_personalization_unified_theme_color_must_not_override = background-image,bod
 web_personalization_unified_theme_color_scale = deep,base,raised,accent
 web_personalization_unified_theme_color_scale_source = selected-color,current-skin-tint-strength,neutral-surface-token
 web_personalization_structural_surface_must_not_keep_previous_skin_color = true
+web_personalization_unified_token_layers = foundation-color,semantic-color,component-mapping,frame-geometry
+web_personalization_unified_token_prefix = --sel-theme-
+web_personalization_component_must_consume_unified_tokens = true
+web_personalization_component_must_not_define_independent_skin_color = true
 web_personalization_runtime_frame_tint_must_preserve = source-alpha,cut-corners,nine-slice-geometry,highlight-detail
 web_personalization_runtime_frame_tint_persistence = memory-only
 
@@ -35,6 +39,7 @@ web_personalization_runtime_frame_tint_persistence = memory-only
 web_personalization_shared_surface_scope = panel,window,dropdown,context-menu,date-picker
 web_personalization_shared_surface_must_not_override_popup_positioning = true
 web_personalization_border_spacing_controls = frame-width,content-inset,panel-gap,glow-spread,control-gap
+web_personalization_frame_geometry_tokens_must_define = shared-image,per-component-thickness,equal-inline-borders,equal-inline-safe-area,viewport-gap
 
 <!-- 动效既能调强度，也必须提供减少动态效果的总开关，并尊重系统减少动态偏好。 -->
 web_personalization_motion_controls = window-animation,glow-motion,reduced-motion
