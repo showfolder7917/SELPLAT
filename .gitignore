@@ -3,7 +3,6 @@ OPTION/
 build/
 cache/
 bin/
-MEMORIES/
 **/__pycache__/
 *.py[cod]
 trs/
