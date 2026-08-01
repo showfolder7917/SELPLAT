@@ -84,7 +84,7 @@
     font-size: 21px;
 }
 
-/* 选择面板采用独立水晶表面，背景再明亮也不会降低文字可读性。 */
+/* 选择面板复用主页面水晶面板九宫格，使背景选择器与窗口、下拉框和右键菜单保持同一视觉材质。 */
 .selpage-background-panel {
     position: absolute;
     top: 50px;
@@ -97,8 +97,8 @@
     flex-direction: column;
     padding: 18px 20px;
     border: 18px solid transparent;
-    border-image-source: url("../../assets/shared/selMenuCyberFrame.webp?v=20260801-2");
-    border-image-slice: 50 31 50 31 fill;
+    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-2");
+    border-image-slice: 58 69 58 69 fill;
     border-image-width: 18px;
     border-image-repeat: stretch;
     border-radius: 0;

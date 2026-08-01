@@ -35,6 +35,16 @@ web_select_dropdown_trigger_must_preserve_host_geometry = true
 web_select_dropdown_open_state_must_not_reflow_host_layout = true
 web_select_dropdown_trigger_tracks = optional_icon,prefix,current_value,chevron
 
+<!-- 工具栏筛选和表单选择必须使用同一默认视觉宿主；外层页面只分配宽度和对齐，不得为 Window、Dialog 或页面区域复制第二套字体、行高、边框素材、选项几何与状态色。 -->
+web_select_dropdown_default_visual_hosts = toolbar_filter,form_select
+web_select_dropdown_default_visual_hosts_must_share = dom_structure,trigger_typography,trigger_height,trigger_padding,trigger_radius,popup_frame_asset,option_height,state_tokens,interaction_logic
+web_select_dropdown_default_host_specific_skin_is_forbidden = true
+web_select_dropdown_host_layout_may_control = allocated_width,alignment,placement_boundary
+
+<!-- 分页条数允许使用紧凑触发器，但展开菜单和交互继续复用通用控件，禁止由紧凑宿主复制浮层。 -->
+web_select_dropdown_compact_trigger_allowed_for = pagination_size
+web_select_dropdown_compact_variant_must_preserve = popup_frame_asset,option_typography,option_height,state_tokens,interaction_logic
+
 <!-- 展开菜单使用绝对浮层并根据宿主位置选择向下或向上展开；浮层不得被后续面板区域或视口边缘裁切。 -->
 web_select_dropdown_popup_position = absolute_overlay
 web_select_dropdown_supported_placement = bottom,top

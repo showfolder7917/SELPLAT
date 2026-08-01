@@ -29,3 +29,38 @@
 ## 未解决问题
 
 无阻断或高优先级视觉问题。
+
+---
+
+# 2026-08-01 水晶窗口与浮层材质统一验收
+
+## Source truth
+
+- 主页面视觉基准：`OPTION/temp/uniauth-window-source-main-page.png`，1280 × 720，主项目表默认状态。
+- 用户补充参考：`/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-d06ac3d3-d946-4842-b5e1-1551315dbc91.png`，483 × 794，背景选择器旧边框状态。
+- 实现截图：`OPTION/temp/uniauth-window-redesign-final-current.png`、`OPTION/temp/uniauth-background-panel-final.png`，均为 1280 × 720。
+
+## Comparison evidence
+
+- 全画面对照：`OPTION/temp/uniauth-window-design-comparison.png`。
+- 窗口标题与表单重点对照：`OPTION/temp/uniauth-window-header-comparison.png`。
+- 背景选择器新旧边框对照：`OPTION/temp/uniauth-background-panel-comparison.png`。
+- 浮层状态证据：`OPTION/temp/uniauth-dropdown-panel-material.png`、`OPTION/temp/uniauth-context-menu-panel-material.png`、`OPTION/temp/uniauth-submenu-panel-material.png`。
+
+## Findings
+
+- 窗口、下拉框、右键菜单、二级菜单和背景选择器均引用主页面 `selPanelCyberFrame.webp`，不再引用旧菜单边框素材。
+- 窗口支持拖动、八方向缩放、最小化与恢复、最大化与精确还原，以及多窗口独立层级；实际浏览器交互均已通过。
+- 背景选择器在 1280 × 720 与 760 × 720 下均完整位于视口内，无横向内容溢出；主题卡片、滚动区和三个参数滑杆保持原结构。
+- 下拉选择能同步原生 `select` 值；右键菜单保留长列表滚动、禁用项、危险项、二级菜单和 Escape 逐层关闭。
+- 浏览器控制台未发现错误或警告，静态语法检查及差异格式检查通过。
+
+## Comparison history
+
+1. 初版窗口对照发现旧窗口素材与主面板边框语言不一致，改为主面板九宫格并补齐窗口状态控件。
+2. 浮层对照发现下拉框与右键菜单仍使用旧菜单九宫格，统一替换为主面板九宫格。
+3. 用户截图复核发现背景选择器仍保留旧边框，完成同源替换并在桌面与紧凑宽度复测。
+
+## Final result
+
+passed

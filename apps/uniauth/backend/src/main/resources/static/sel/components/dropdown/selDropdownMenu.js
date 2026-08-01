@@ -164,14 +164,30 @@
         const selectedIndex = instance.options.findIndex((option) => option.value === instance.select.value);
         // 向下打开从当前选项开始，向上打开从最后一个可用选项开始。
         instance.activeIndex = focusMode === "last" ? instance.options.length - 1 : Math.max(0, selectedIndex);
-        // 跳过禁用选项，确保键盘焦点始终落在可操作项目。
-        while (instance.options[instance.activeIndex]?.disabled && instance.activeIndex > 0) {
-            instance.activeIndex -= 1;
+        // 当前值是禁用占位项时，向下展开改取第一个可用业务选项，向上展开改取最后一个可用业务选项。
+        if (instance.options[instance.activeIndex]?.disabled) {
+            // 正向查找用于 ArrowDown 和鼠标展开，反向查找用于 ArrowUp 展开。
+            const enabledIndexes = instance.options
+                // 保留每个可用选项在原始业务数组中的真实索引。
+                .map((option, index) => ({ option, index }))
+                // 禁用占位项不得成为键盘焦点或确认目标。
+                .filter(({ option }) => !option.disabled)
+                // 后续只需要索引来同步活动态和焦点。
+                .map(({ index }) => index);
+            // 没有可用选项时使用 -1 表示菜单只能浏览、不能确认选择。
+            instance.activeIndex = enabledIndexes.length === 0
+                // 空菜单不把焦点强行送入禁用按钮。
+                ? -1
+                // ArrowUp 取末项，其余展开方式取首项。
+                : (focusMode === "last" ? enabledIndexes[enabledIndexes.length - 1] : enabledIndexes[0]);
         }
         // 同步活动视觉后再移动焦点。
         selDropdownMenuRefresh(instance);
-        // 当前活动按钮进入视口并接收键盘焦点。
-        instance.optionButtons[instance.activeIndex]?.focus();
+        // 仅在存在可用活动项时把焦点送入列表，避免禁用占位项让键盘停留在触发器。
+        if (instance.activeIndex >= 0) {
+            // 当前活动按钮进入视口并接收键盘焦点。
+            instance.optionButtons[instance.activeIndex]?.focus();
+        }
     }
 
     // 选择一个可用选项，同时更新原生 select 并触发现有宿主 change 逻辑。

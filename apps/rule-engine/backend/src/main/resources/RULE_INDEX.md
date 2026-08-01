@@ -65,7 +65,7 @@ load_rule_for_configurable_web_menu_items_scroll_threshold_or_submenu = WEB_CONT
 load_rule_for_web_menu_hover_pressed_disabled_or_danger_state = WEB_CONTEXT_MENU_UI_DESIGN_RULES
 load_rule_for_web_menu_nine_slice_border_image_or_visual_qa = WEB_CONTEXT_MENU_UI_DESIGN_RULES
 
-<!-- 网页工具栏、筛选区、表单和分页中的单选下拉控件设计规则；用于原生 select 数据契约、自定义 combobox/listbox、图标与说明、滚动阈值、上下展开、键盘操作、外部状态同步和同状态视觉验收。 -->
+<!-- 网页工具栏、筛选区、表单和分页中的单选下拉控件设计规则；用于原生 select 数据契约、自定义 combobox/listbox、工具栏与表单默认视觉统一、图标与说明、滚动阈值、上下展开、键盘操作、外部状态同步和同状态视觉验收。 -->
 WEB_SELECT_DROPDOWN_UI_DESIGN_RULES = 跨工程通用规则/RUL_网页选择下拉控件设计规则.md
 load_rule_for_web_select_combobox_or_filter_dropdown_design = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
 load_rule_for_native_select_custom_dropdown_and_change_sync = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
@@ -135,7 +135,7 @@ load_rule_for_web_runtime_asset_directory_or_layering = WEB_RUNTIME_ASSET_DIRECT
 load_rule_for_web_image_compression_webp_avif_or_png_optimization = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
 load_rule_for_web_asset_move_reference_or_visual_qa = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
 
-<!-- SELPLAT 水晶窗体、菜单、浮层和面板的完整材质规则；用于禁止无明确设计要求的镂空中心、要求九宫格中心填充、统一标题栏内容区底栏、约束边框内侧内容安全区与贴边浮层回收，并验证缩放后的圆角与灯光连续性。 -->
+<!-- SELPLAT 水晶窗体、菜单、浮层和面板的完整材质与窗口几何规则；用于禁止无明确设计要求的镂空中心、要求九宫格中心填充、统一标题栏内容区底栏、约束边框内侧内容安全区与贴边浮层回收，并验证八方向缩放、最大化精确还原后的圆角与灯光连续性。 -->
 SELPLAT_CRYSTAL_UI_MATERIAL_RULES = selplat/通用规则/RUL_SELPLAT水晶界面材质规则.md
 load_rule_for_selplat_crystal_window_menu_or_floating_panel = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
 load_rule_for_selplat_crystal_nine_slice_center_fill_or_non_hollow_surface = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
