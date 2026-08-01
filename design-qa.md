@@ -67,3 +67,60 @@
 - 最大化状态仍保持单列表单和底部居中操作，较大视口会出现更多呼吸空间；这是为了保持字段阅读顺序和与默认态的几何稳定，不属于阻塞项。
 
 final result: passed
+
+---
+
+# SEL 水晶日期控件 Design QA
+
+**对比对象**
+
+- source visual truth：`/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-89a96f3a-71d8-443c-ad9a-b136dd5fb303.png`。
+- implementation screenshot：`OPTION/temp/uniauth-date-picker-final-996x713.png`。
+- normalized implementation：`OPTION/temp/uniauth-date-picker-final-normalized-997x713.png`。
+- implementation URL：`http://127.0.0.1:4173/uniauth/uniauth.html?multi=1`。
+- full-view comparison evidence：`OPTION/temp/uniauth-date-picker-comparison.png`。
+- focused region comparison evidence：`OPTION/temp/uniauth-date-picker-focused-comparison.png`。
+
+**归一化信息**
+
+- source 图片为 997 × 713 px；实现以 996 × 713 CSS 视口、设备像素比 1 验证，浏览器原始截图为 975 × 698 px。
+- 完整对照将实现截图按同一宽高比缩放至 997 × 713 px，只补偿浏览器画布输出差异，不改变日期控件相对布局。
+- 对照状态均为“新建项目 Window 打开、开始日期为 2026-08-19、2026 年 8 月月历展开”。
+- focused 对照分别裁取系统日历与 SEL 水晶月历区域，用于检查标题、星期、日期网格、选中态和底部动作。
+
+**Findings**
+
+- 无未解决的 P0、P1、P2 问题。
+- 字体与排版：月份标题 15px、星期 11px、日期与动作 12px，与 Window 字段和主页面高密度信息层级一致；没有截断或异常换行。
+- 间距与布局节奏：月历为 322 × 310px，42 个日期保持固定六周高度；在 996 × 713 与 760 × 713 视口中均位于安全区内，且不覆盖日期触发器。
+- 颜色与视觉 token：浮层复用 `selPanelCyberFrame.webp`，深蓝中心填充、蓝紫选中态、青色今天标识和边缘发光与主页面一致。
+- 图片质量与素材忠实度：只复用项目真实九宫格素材和 Remix Icon，没有 CSS 图形、内联 SVG、占位素材或新增位图。
+- 文案与内容：保留月份、周一至周日、相邻月份日期、清除、今天、确定；触发器以 `YYYY / MM / DD` 显示，真实字段持续提交 `YYYY-MM-DD`。
+- 可访问性与交互：dialog、grid、aria-selected、aria-expanded、完整日期名称和唯一 roving tabindex 均已验证；支持方向键、Home/End、PageUp/PageDown、Enter/Space、Escape 和外部点击关闭。
+- 生命周期：Window 最小化或关闭时 body 门户同步回收；选日后日期进入 FormData，清除恢复必填空值，未确认日期可通过 Escape 放弃。
+- 浏览器运行：已验证上月、下月、2026-08-19 选择、今天、清除、确定、键盘选择、外部关闭、最小化与恢复；控制台 error/warning 为 0。
+
+**Comparison History**
+
+1. 首轮问题（P2，已修复）：初版月历为 354 × 424px，在参考尺寸视口中因剩余垂直空间不足而与日期触发器重叠。
+   - 修复：收紧九宫格边框、月份头、星期行、六周日期网格和底部动作，将成品压缩到 322 × 310px。
+   - 修复后证据：`OPTION/temp/uniauth-date-picker-final-996x713.png`；实测浮层矩形 x=227、y=381、width=322、height=310，触发器矩形 y=331、height=42，两者不重叠。
+
+**Open Questions**
+
+- 无。
+
+**Implementation Checklist**
+
+- [x] 用 SEL 水晶月历替换系统原生日历。
+- [x] 保留标准日期值、required、min/max 和 FormData 契约。
+- [x] 实现翻月、选日、今天、清除、确定和完整键盘导航。
+- [x] 实现视口上下定位、外部关闭和 Window 生命周期回收。
+- [x] 完成同状态全画面及重点区域视觉对照。
+- [x] 验证桌面、紧凑视口、控制台和静态语法。
+
+**Follow-up Polish**
+
+- 无。
+
+final result: passed

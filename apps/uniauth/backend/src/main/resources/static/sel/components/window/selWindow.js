@@ -159,6 +159,46 @@
             return selWindowDropdown;
         }
 
+        // 日期字段组合原生 date input 与公开 selDatePicker 基础控件，禁止调用系统灰色日历。
+        if (selWindowField.type === "date") {
+            // 标准宿主只声明日期控件契约，内部月历结构由 selDatePicker 创建。
+            const selWindowDatePicker = selWindowCreateElement("div", "seldatepicker-root");
+            // data 标识允许基础日期组件按范围幂等挂载。
+            selWindowDatePicker.dataset.selDatePicker = "";
+            // 字段名称用于日期触发器和月历的可访问文案。
+            selWindowDatePicker.dataset.selDatePickerLabel = String(selWindowField.label || "日期");
+            // 占位文案来自字段配置，缺失时使用清晰的业务回退。
+            selWindowDatePicker.dataset.selDatePickerPlaceholder = String(selWindowField.placeholder || `请选择${selWindowField.label || "日期"}`);
+            // 可见触发器沿用字段 inputId，使外部 label 点击后进入日期控件。
+            selWindowDatePicker.dataset.selDatePickerTriggerId = selWindowField.inputId;
+            // 原生 date input 是 FormData、required、min 和 max 的唯一真实来源。
+            const selWindowDateInput = selWindowCreateElement("input", "seldatepicker-native");
+            // date 类型保留浏览器标准日期值校验，但视觉交互完全由基础组件接管。
+            selWindowDateInput.type = "date";
+            // 原生输入使用内部 id，避免与可见触发器重复。
+            selWindowDateInput.id = `${selWindowField.inputId}-native`;
+            // 原生输入退出键盘顺序，可见触发器承担全部焦点交互。
+            selWindowDateInput.tabIndex = -1;
+            // 可访问树只暴露有完整名称和状态的自定义触发器，避免出现重复无名输入。
+            selWindowDateInput.setAttribute("aria-hidden", "true");
+            // hidden 属性让真实输入完全退出视觉和可访问树，但仍保留 name/value 与组件自定义校验读取。
+            selWindowDateInput.hidden = true;
+            // name 继续进入 Window 标准表单提交结果。
+            selWindowDateInput.name = selWindowField.name;
+            // 必填状态继续由真实字段参与 :invalid 检查。
+            selWindowDateInput.required = Boolean(selWindowField.required);
+            // 可选初始值必须使用 YYYY-MM-DD 标准格式。
+            if (selWindowField.value) selWindowDateInput.value = String(selWindowField.value);
+            // 可选最小日期限制进入原生校验和月历禁用态。
+            if (selWindowField.min) selWindowDateInput.min = String(selWindowField.min);
+            // 可选最大日期限制进入原生校验和月历禁用态。
+            if (selWindowField.max) selWindowDateInput.max = String(selWindowField.max);
+            // 宿主初始只包含真实输入，触发器和浮层由 selDatePicker 统一装配。
+            selWindowDatePicker.appendChild(selWindowDateInput);
+            // 返回日期基础控件宿主进入字段栅格。
+            return selWindowDatePicker;
+        }
+
         // 其他字段共享图标、输入和尾部状态三列玻璃容器。
         const selWindowControl = selWindowCreateElement("div", `selwindow-control-shell${selWindowField.type === "textarea" ? " selwindow-control-shell-textarea" : ""}`);
         // 字段图标说明项目名称、日期或描述等业务角色。
@@ -353,6 +393,8 @@
         selWindowGetMinimizedRail().appendChild(selWindowMinimizedButton);
         // 窗口内所有标准下拉通过公开基础控件一次挂载。
         window.selDropdownMenu?.mountAll(selWindowShell);
+        // 窗口内所有标准日期字段通过公开基础控件一次挂载，原生 date input 不再直接显示系统日历。
+        window.selDatePicker?.mountAll(selWindowShell);
 
         /**
          * 读取当前可用视口尺寸。
@@ -490,6 +532,8 @@
         function selWindowMinimizeWindow() {
             // 未打开或已经最小化时不重复改变停靠区状态。
             if (!selWindowState.open || selWindowState.minimized) return;
+            // 最小化前关闭 body 门户中的日期浮层，避免窗口隐藏后月历悬空。
+            window.selDatePicker?.closeWithin(selWindowShell);
             // 指针交互必须先结束，避免隐藏后仍响应移动事件。
             selWindowEndPointerInteraction();
             // 最小化属于打开窗口的展示状态，不等同于关闭。
@@ -607,6 +651,8 @@
 
         // 关闭时隐藏遮罩并保留用户输入，便于误关后继续编辑。
         function selWindowCloseWindow() {
+            // 关闭前回收当前 Window 的日期门户，避免浮层独立残留在页面上。
+            window.selDatePicker?.closeWithin(selWindowShell);
             // 关闭时同时终止未完成的拖动或缩放，避免重新打开后继续响应旧指针。
             selWindowEndPointerInteraction();
             selWindowState.open = false;
@@ -621,9 +667,15 @@
 
         // 重置清空表单、反馈和所有自定义下拉显示值。
         function selWindowReset() {
+            // 原生 form.reset 同步恢复所有真实输入的 defaultValue。
             selWindowForm.reset();
+            // 重置日期后刷新可见触发器，避免仍显示旧日期。
+            selWindowShell.querySelectorAll("input.seldatepicker-native").forEach((selWindowDateInput) => window.selDatePicker?.getForInput(selWindowDateInput)?.refresh());
+            // 重置反馈使窗口回到首次打开状态。
             selWindowFeedback.textContent = "";
+            // 清除旧校验危险色。
             selWindowFeedback.classList.remove("selwindow-feedback-error");
+            // 原生 select 重置后同步自定义下拉可见值。
             selWindowShell.querySelectorAll("select.seldropdown-native").forEach((selWindowSelect) => window.selDropdownMenu?.refresh(selWindowSelect));
         }
 
@@ -679,7 +731,11 @@
                 // 错误反馈使用统一危险色，不调用浏览器默认气泡。
                 selWindowFeedback.textContent = String(selWindowOptions.validationMessage || "请填写所有必填信息");
                 selWindowFeedback.classList.add("selwindow-feedback-error");
-                selWindowInvalid.focus();
+                // 隐藏的原生日期输入通过公开控制器把校验焦点桥接到可见日期触发器。
+                const selWindowInvalidDatePicker = selWindowInvalid.matches?.("input.seldatepicker-native") ? window.selDatePicker?.getForInput(selWindowInvalid) : null;
+                // 日期字段聚焦可见触发器，其他字段保持原生聚焦行为。
+                if (selWindowInvalidDatePicker) selWindowInvalidDatePicker.focus();
+                else selWindowInvalid.focus();
                 return;
             }
             // FormData 把标准 name/value 转换为应用可消费的对象。

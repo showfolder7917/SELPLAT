@@ -179,7 +179,7 @@
             ]) })]),
             // 开始日期与优先级共享一行，保持参考图的四轨布局。
             Object.freeze([
-                Object.freeze({ name: "startDate", label: "开始日期", type: "date", icon: "ri-calendar-line", required: true }),
+                Object.freeze({ name: "startDate", label: "开始日期", type: "date", icon: "ri-calendar-line", placeholder: "请选择开始日期", required: true }),
                 Object.freeze({ name: "priority", label: "优先级", type: "select", required: true, options: Object.freeze([
                     Object.freeze({ value: "medium", label: "中优先级", icon: "ri-flag-fill", tone: "active", selected: true }),
                     Object.freeze({ value: "high", label: "高优先级", icon: "ri-flag-fill", tone: "review" }),

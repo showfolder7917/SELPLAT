@@ -8,6 +8,7 @@ static/
 │   ├── core/                    重置、可访问性、反馈和基础运行时
 │   │   └── selAjax.js           通用请求发送与 JSON 返回能力
 │   ├── components/              可显式挂载的通用 UI 控件
+│   │   ├── date-picker/          标准日期值、水晶月历与键盘导航
 │   │   ├── dropdown/
 │   │   ├── grid/
 │   │   ├── panel/
