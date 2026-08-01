@@ -923,17 +923,12 @@
 
     // 页面首次加载立即渲染参考图默认状态。
     selGridRenderTable();
-    // 默认把菜单绑定到后端初始选择的第一条记录，便于直接检查菜单状态。
+    // 初始页面不展示行操作菜单，避免未由用户触发的菜单遮挡表格右侧内容。
     if (selGridMenuController) {
-        // 从 selectedIds 查找后端指定默认记录，不写死主键或项目名称。
-        const selGridInitialMenuProject = selGridProjects.find((selGridProject) => selGridState.selectedIds.has(selGridProject.id));
-        // 后端确实提供默认选择记录时才打开菜单。
-        if (selGridInitialMenuProject) {
-            // 菜单只接收主键和名称，不复制完整行对象。
-            selGridMenuController.open({ projectId: selGridInitialMenuProject.id, projectName: selGridInitialMenuProject.name });
-            // 初始打开后同步对应行更多按钮高亮。
-            selGridSyncMenuButtonStates();
-        }
+        // 显式关闭菜单并清空绑定记录，使默认选中行不会自动触发行操作浮层。
+        selGridMenuController.close();
+        // 关闭后的更多按钮同步回未展开状态，保持可访问语义和视觉状态一致。
+        selGridSyncMenuButtonStates();
     }
 
     // 公开重置方法优先复用当前实例按钮逻辑，没有工具栏时直接恢复内部状态。

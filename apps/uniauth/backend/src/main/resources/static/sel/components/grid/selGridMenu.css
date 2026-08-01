@@ -194,6 +194,12 @@
     filter: drop-shadow(0 0 11px rgba(65, 119, 255, 0.72));
 }
 
+/* 右侧空间不足时由菜单脚本追加翻转状态，使二级菜单留在所属水晶面板边框内。 */
+.selgrid-menu-submenu.selgrid-menu-submenu-flip {
+    right: calc(100% - 8px);
+    left: auto;
+}
+
 .selgrid-menu-submenu.selgrid-menu-open {
     display: block;
 }

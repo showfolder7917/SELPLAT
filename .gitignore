@@ -7,3 +7,4 @@ MEMORIES/
 **/__pycache__/
 *.py[cod]
 trs/
+.DS_Store

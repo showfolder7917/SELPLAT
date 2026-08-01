@@ -80,6 +80,8 @@
             state.activeSubmenuId = null;
             if (submenu) {
                 submenu.classList.remove("selgrid-menu-open");
+                // 关闭时清除动态翻转状态，确保下次展开重新按当前面板空间计算方向。
+                submenu.classList.remove("selgrid-menu-submenu-flip");
             }
             menuRoot.querySelectorAll('.selgrid-menu-item[aria-haspopup="menu"]').forEach((button) => button.setAttribute("aria-expanded", "false"));
         }
@@ -98,6 +100,22 @@
             const top = trigger.offsetTop - (viewport ? viewport.scrollTop : 0) - 5;
             submenu.style.setProperty("--selgrid-menu-submenu-top", `${top}px`);
             submenu.classList.add("selgrid-menu-open");
+            // 二级菜单优先向右展开；所属水晶面板右侧空间不足且左侧更宽时翻向左侧，避免越出边框。
+            const selGridPanelBounds = gridRoot.closest(".selpanel-shell")?.getBoundingClientRect();
+            // 当前一级菜单边界用于计算两侧实际剩余空间。
+            const selGridMenuBounds = menuRoot.getBoundingClientRect();
+            // 二级菜单已显示后读取真实宽度，避免依赖重复的样式常量。
+            const selGridSubmenuWidth = submenu.getBoundingClientRect().width;
+            // 没有面板宿主时回退到浏览器可视区域，保证基础控件可独立使用。
+            const selGridBoundaryLeft = selGridPanelBounds ? selGridPanelBounds.left : 0;
+            // 面板右边界或当前视口宽度是二级菜单不得越过的实际边界。
+            const selGridBoundaryRight = selGridPanelBounds ? selGridPanelBounds.right : window.innerWidth;
+            // 右侧空间包含一级菜单与二级菜单预留的 8px 搭接宽度。
+            const selGridRightSpace = selGridBoundaryRight - selGridMenuBounds.right + 8;
+            // 左侧空间同样保留搭接宽度，确保翻转后的视觉连接不发生断层。
+            const selGridLeftSpace = selGridMenuBounds.left - selGridBoundaryLeft + 8;
+            // 右侧放不下且左侧更适合承载完整二级菜单时才翻转，避免无必要的方向跳变。
+            submenu.classList.toggle("selgrid-menu-submenu-flip", selGridRightSpace < selGridSubmenuWidth && selGridLeftSpace > selGridRightSpace);
         }
 
         // 按当前实例配置重绘一级和二级菜单容器。

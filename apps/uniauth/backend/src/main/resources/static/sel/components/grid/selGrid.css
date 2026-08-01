@@ -109,7 +109,7 @@
 
 .selgrid-table th {
     position: relative;
-    padding: 0 18px;
+    padding: 0 12px;
     color: #e6e8ff;
     font-size: 14px;
     font-weight: 600;
@@ -238,7 +238,7 @@
 }
 
 .selgrid-table tbody td:nth-child(2) {
-    padding-left: 10px;
+    padding-left: 12px;
 }
 
 .selgrid-project-symbol {
