@@ -70,6 +70,59 @@ final result: passed
 
 ---
 
+# SEL 个性化设置 Design QA
+
+**对比对象**
+
+- source visual truth：`/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-a992c4e5-019c-4e58-ac8a-78c9ba20db93.png`。
+- implementation background screenshot：`OPTION/temp/personalization-background-final.png`。
+- implementation panel screenshot：`OPTION/temp/personalization-panel-final.png`。
+- implementation URL：`http://127.0.0.1:4173/uniauth/uniauth.html?multi=1`。
+- normalized full comparison：`OPTION/temp/personalization-background-comparison.png`。
+
+**归一化信息**
+
+- source 为 388 × 633px；实现面板为 390 × 642px，完整对照将实现裁图归一化为 388 × 633px，设备像素比为 1。
+- 浏览器验证视口为 1265 × 713px；同时在 760 × 713px 紧凑视口验证内部滚动和横向安全区。
+- 对照状态为纯黑深空背景、遮罩 0%、亮度 120%、模糊 0px；面板设置以默认“深空”预设验证。
+
+**Findings**
+
+- 无未解决的 P0、P1、P2 问题。
+- 信息架构有意升级为“背景设置 / 面板设置”两个一级入口；面板内部统一承载预设、外观、边框与间距、动效。
+- 新面板保持原参考 390px 量级、双列背景卡片、水晶九宫格边框和紧凑 range 样式；新增页头、页签与恢复默认属于本轮需求带来的必要差异。
+- 中心玻璃透明度与文字、图标、控件和九宫格边框解耦；当前皮肤染色使用可覆盖 RGB token，不依赖深蓝或紫色常量语义。
+- 面板、Window、下拉、右键菜单和日期浮层共享材质参数，并保留各自原始边框厚度基准。
+- 10 个面板强度控件均为 0%–100%；5 个预设、减少动态效果、键盘页签、Escape、外部关闭均已验证。
+- 个性化状态未写入 localStorage 或 sessionStorage；修改背景与面板参数后刷新，背景、面板预设、透明度与动效均恢复代码默认值。
+
+**Comparison History**
+
+1. P1（已修复）：共享中心材质选择器曾设置 `position: relative`，覆盖日期浮层的 `position: fixed`，导致浮层离开视口。
+   - 修复：共享规则只提供中心玻璃伪元素，不再改写组件定位上下文。
+   - 修复后：日期浮层保持 fixed，实测 322 × 310px 且完整位于视口内。
+2. P2（已修复）：统一绝对边框厚度曾把日期控件 12px 基准抬高到 18px。
+   - 修复：边框控件改为组件各自基准上的比例缩放，50% 保持 panel/window 18px、dropdown 16px、date-picker 12px。
+3. P2（已修复）：内容内距和控件间距初版在默认 50% 时改变原布局。
+   - 修复：两项改为以 50% 为零偏移的双向映射；默认值保持既有排版。
+
+**Implementation Checklist**
+
+- [x] 保留一个背景设置一级入口。
+- [x] 新增一个面板设置一级入口并收纳其余设置。
+- [x] 实现面板外观、边框与间距、动效和 5 个预设。
+- [x] 使用可换肤材质 token，避免写死深蓝/紫色皮肤语义。
+- [x] 接入主要水晶面板、Window、下拉、右键菜单和日期浮层。
+- [x] 验证刷新复位、紧凑视口、键盘路径、浮层定位和控制台。
+
+**Open Questions**
+
+- 无。
+
+final result: passed
+
+---
+
 # SEL 水晶日期控件 Design QA
 
 **对比对象**

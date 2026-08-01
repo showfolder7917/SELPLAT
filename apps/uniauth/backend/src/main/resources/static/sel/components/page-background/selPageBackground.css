@@ -1,7 +1,7 @@
 /*
  * selPageBackground.css
- * 通用网页背景基础控件样式：只负责背景图层、遮罩和背景选择器，不定义表格、面板或业务控件样式。
- * 责任边界：样式和素材都属于 SEL 基础层，应用只能通过 selPageBackground.mount 传入标准主题与文案。
+ * 通用网页背景图层样式：只负责背景图片、亮度、模糊和遮罩，不定义设置面板或业务组件视觉。
+ * 责任边界：背景显示参数来自 selPageBackground 控制器，个性化入口由 selPersonalization 独立维护。
  */
 
 :root {
@@ -11,7 +11,7 @@
     --selpage-background-blur: 0px;
 }
 
-/* 独立背景层固定在页面最底部，业务控件更换或删除时不会改变背景模块。 */
+/* 独立背景层固定在页面最底部，删除业务面板不会改变背景模块。 */
 .selpage-background-layer {
     position: fixed;
     z-index: -2;
@@ -20,7 +20,7 @@
     pointer-events: none;
 }
 
-/* 背景图片通过 CSS 变量切换，放大边缘可避免模糊滤镜露出空白。 */
+/* 背景图片通过页面级变量切换，放大边缘避免模糊滤镜露出空白。 */
 .selpage-background-image {
     position: absolute;
     inset: 0;
@@ -32,227 +32,18 @@
     transition: background-image 240ms ease, filter 180ms ease;
 }
 
-/* 遮罩统一保证各种明暗和色调的图片都能承载水晶面板。 */
+/* 独立遮罩保证复杂背景仍能承载水晶面板，不改变任何业务控件颜色。 */
 .selpage-background-overlay {
     position: absolute;
     inset: 0;
-    background:
-        radial-gradient(circle at 50% 12%, rgba(36, 54, 125, 0.08), transparent 42%),
-        rgba(1, 5, 22, var(--selpage-background-overlay));
+    background: rgba(1, 5, 22, var(--selpage-background-overlay));
     transition: background-color 180ms ease;
 }
 
-/* 背景入口固定在右上角，不占用 selPanel 的标题、工具栏或内容区。 */
-.selpage-background-control {
-    position: fixed;
-    z-index: 1000;
-    top: 18px;
-    right: 18px;
-    color: #f5f7ff;
-    font-family: var(--selgrid-theme-font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-}
-
-.selpage-background-trigger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    padding: 0;
-    border: 1px solid rgba(115, 184, 255, 0.72);
-    border-radius: 2px;
-    color: #f7f8ff;
-    background:
-        linear-gradient(145deg, rgba(52, 108, 219, 0.72), rgba(108, 53, 211, 0.74)),
-        rgba(6, 13, 48, 0.88);
-    box-shadow:
-        inset 0 0 14px rgba(102, 190, 255, 0.28),
-        0 0 18px rgba(48, 116, 255, 0.36);
-    backdrop-filter: blur(16px);
-    cursor: pointer;
-}
-
-.selpage-background-trigger:hover,
-.selpage-background-trigger[aria-expanded="true"] {
-    border-color: rgba(215, 231, 255, 0.96);
-    box-shadow:
-        inset 0 0 18px rgba(157, 212, 255, 0.38),
-        0 0 24px rgba(93, 80, 255, 0.54);
-}
-
-.selpage-background-trigger i {
-    font-size: 21px;
-}
-
-/* 选择面板复用主页面水晶面板九宫格，使背景选择器与窗口、下拉框和右键菜单保持同一视觉材质。 */
-.selpage-background-panel {
-    position: absolute;
-    top: 50px;
-    right: 0;
-    width: min(390px, calc(100vw - 36px));
-    max-height: calc(100vh - 78px);
-    box-sizing: border-box;
-    display: flex;
-    min-height: 0;
-    flex-direction: column;
-    padding: 18px 20px;
-    border: 18px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
-    border-image-slice: 58 69 58 69 fill;
-    border-image-width: 18px;
-    border-image-repeat: stretch;
-    border-radius: 0;
-    background: transparent;
-    /* 外发光只沿九宫格素材的真实透明轮廓投影，禁止矩形盒阴影在切角外形成直角边。 */
-    filter:
-        drop-shadow(0 18px 23px rgba(0, 0, 24, 0.56))
-        drop-shadow(0 0 14px rgba(47, 108, 255, 0.32));
-    /* 外层保持可见溢出，让素材的机械角和发光完整显示；实际长内容由主题网格自身滚动。 */
-    overflow: visible;
-}
-
-.selpage-background-panel[hidden] {
-    display: none;
-}
-
-.selpage-background-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 13px;
-}
-
-.selpage-background-heading strong {
-    font-size: 15px;
-    letter-spacing: 0.04em;
-}
-
-.selpage-background-heading span {
-    color: rgba(192, 207, 242, 0.7);
-    font-size: 12px;
-}
-
-.selpage-background-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 9px;
-    min-height: 0;
-    max-height: min(430px, 55vh);
-    flex: 1 1 auto;
-    padding: 1px 3px 2px 1px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-}
-
-.selpage-background-option {
-    position: relative;
-    min-height: 76px;
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid rgba(112, 154, 230, 0.42);
-    border-radius: 12px;
-    color: #ffffff;
-    background: rgba(5, 12, 42, 0.92);
-    cursor: pointer;
-}
-
-.selpage-background-option::before {
-    position: absolute;
-    inset: 0;
-    background: var(--selpage-theme-thumbnail) center / cover no-repeat;
-    content: "";
-    filter: brightness(0.78);
-    transition: filter 160ms ease, transform 180ms ease;
-}
-
-.selpage-background-option::after {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, transparent 22%, rgba(2, 6, 24, 0.88) 100%);
-    content: "";
-}
-
-.selpage-background-option:hover::before {
-    filter: brightness(0.98);
-    transform: scale(1.05);
-}
-
-.selpage-background-option[aria-pressed="true"] {
-    border-color: #aee3ff;
-    box-shadow:
-        0 0 0 1px rgba(124, 93, 255, 0.8),
-        0 0 16px rgba(54, 142, 255, 0.64);
-}
-
-.selpage-background-option-copy {
-    position: absolute;
-    z-index: 1;
-    right: 9px;
-    bottom: 8px;
-    left: 9px;
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: 6px;
-    text-align: left;
-}
-
-.selpage-background-option-copy strong {
-    font-size: 13px;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-}
-
-.selpage-background-option-copy span {
-    color: rgba(225, 234, 255, 0.76);
-    font-size: 10px;
-}
-
-.selpage-background-adjustments {
-    display: grid;
-    gap: 10px;
-    margin-top: 14px;
-    padding-top: 13px;
-    border-top: 1px solid rgba(110, 150, 225, 0.2);
-    flex: 0 0 auto;
-}
-
-.selpage-background-range {
-    display: grid;
-    grid-template-columns: 52px minmax(0, 1fr) 36px;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-    color: rgba(224, 232, 255, 0.86);
-    font-size: 12px;
-}
-
-.selpage-background-range output {
-    color: #ffffff;
-    text-align: right;
-}
-
-.selpage-background-range input {
-    width: 100%;
-    min-width: 0;
-    accent-color: #8467ff;
-    cursor: pointer;
-}
-
-@media (max-width: 720px) {
-    .selpage-background-control {
-        top: 10px;
-        right: 10px;
-    }
-
-    .selpage-background-panel {
-        width: min(350px, calc(100vw - 20px));
-    }
-}
-
+/* 系统减少动态效果偏好下，背景切换立即完成。 */
 @media (prefers-reduced-motion: reduce) {
     .selpage-background-image,
-    .selpage-background-option::before {
+    .selpage-background-overlay {
         transition: none;
     }
 }

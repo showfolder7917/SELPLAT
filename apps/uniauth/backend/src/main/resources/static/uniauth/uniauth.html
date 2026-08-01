@@ -28,9 +28,11 @@
     <link rel="stylesheet" href="../sel/components/date-picker/selDatePicker.css?v=20260801-4">
     <link rel="stylesheet" href="../sel/components/grid/selGrid.css?v=20260731-1">
     <link rel="stylesheet" href="../sel/components/grid/selGridMenu.css?v=20260801-7">
-    <link rel="stylesheet" href="../sel/components/page-background/selPageBackground.css?v=20260801-9">
+    <link rel="stylesheet" href="../sel/components/page-background/selPageBackground.css?v=20260801-10">
     <link rel="stylesheet" href="../sel/components/cursor/selCursor.css?v=20260731-1">
     <link rel="stylesheet" href="../sel/components/window/selWindow.css?v=20260801-23">
+    <!-- 个性化样式最后加载，用页面级令牌统一覆盖全部水晶组件。 -->
+    <link rel="stylesheet" href="../sel/components/personalization/selPersonalization.css?v=20260801-5">
     <!-- ===== SEL 基础样式结束 ===== -->
 
     <!-- ===== Uniauth 应用布局开始：只负责页面画布和多个基础面板的排列，不定义控件内部样式。 ===== -->
@@ -41,6 +43,9 @@
     <!-- ===== 通用网页背景挂载点开始：删除后仅失去背景图片和选择器，业务面板继续独立装配。 ===== -->
     <div data-sel-page-background-host></div>
     <!-- ===== 通用网页背景挂载点结束 ===== -->
+    <!-- ===== 个性化设置挂载点开始：删除后仅失去背景/面板设置入口，背景默认值和业务面板继续正常显示。 ===== -->
+    <div data-sel-personalization-host></div>
+    <!-- ===== 个性化设置挂载点结束 ===== -->
 
     <!-- ===== Uniauth 应用静态审阅结构开始：删除任一区域会使对应基础控件失去绑定宿主，但不影响其他已声明区域。 ===== -->
     <main class="uniauth-page-stage" data-uniauth-app aria-label="统一认证演示应用">
@@ -93,12 +98,13 @@
     <script src="../sel/components/date-picker/selDatePicker.js?v=20260801-2"></script>
     <script src="../sel/components/grid/selGridMenu.js?v=20260801-1"></script>
     <script src="../sel/components/grid/selGrid.js?v=20260801-4"></script>
-    <script src="../sel/components/page-background/selPageBackground.js?v=20260801-2"></script>
+    <script src="../sel/components/page-background/selPageBackground.js?v=20260801-3"></script>
+    <script src="../sel/components/personalization/selPersonalization.js?v=20260801-4"></script>
     <script src="../sel/components/window/selWindow.js?v=20260801-11"></script>
     <!-- ===== SEL 基础脚本结束 ===== -->
 
     <!-- ===== Uniauth 应用装配层开始：最后加载，只传业务配置和数据并调用基础 API。 ===== -->
-    <script src="./uniauth.js?v=20260801-12"></script>
+    <script src="./uniauth.js?v=20260801-13"></script>
     <!-- ===== Uniauth 应用装配层结束 ===== -->
 </body>
 </html>

@@ -8,14 +8,15 @@ web_page_background_module_name = selPageBackground
 web_page_background_shared_asset_folder = static/sel/assets/backgrounds/
 web_page_background_application_asset_folder_pattern = static/<application>/assets/backgrounds/
 web_page_background_asset_scope_choice = cross-application-theme-use-shared-folder,application-only-theme-use-application-folder
-web_page_background_css_responsibility = image-layer,overlay,background-selector
-web_page_background_js_responsibility = theme-registry,state,persistence,public-api
+web_page_background_css_responsibility = image-layer,overlay,optional-standalone-background-selector
+web_page_background_js_responsibility = theme-registry,state,public-api
 web_page_layout_css_must_not_embed_business_background_image = true
 
 <!-- 背景层、遮罩层和选择器必须与业务控件 DOM 分离；任一背景区域删除后，面板和业务控件仍可独立显示与操作。 -->
 web_page_background_layer_must_be_independent = true
 web_page_background_must_not_live_inside_grid_or_business-control = true
 web_page_background_control_is_optional = true
+web_page_background_selector_may_be_composed_by = independent-personalization-shell
 web_page_background_missing_control_fallback = default-or-saved-theme
 web_page_background_must_not_change = grid-state,panel-layout,tree-state,menu-state,pagination-state
 
@@ -40,8 +41,9 @@ web_page_background_readability_control_must_use_css_variables = true
 web_page_background_busy_image_is_allowed_with_readability_layer = true
 web_page_background_business_control_must_not_derive_skin_from_background = true
 
-<!-- 用户选择可保存在浏览器中；损坏、越界或不可用状态必须安全回退，存储失败不得阻断页面初始化。 -->
-web_page_background_persistence = optional-local-storage
+<!-- 持久化是显式可选能力；临时模式刷新后恢复代码默认值，持久化模式必须校验状态且存储失败不得阻断页面初始化。 -->
+web_page_background_persistence_modes = ephemeral-page-state,optional-local-storage
+web_page_background_refresh_behavior_must_match_configured_persistence_mode = true
 web_page_background_persisted_value_must_be_validated = theme-id,numeric-range
 web_page_background_storage_failure_must_not_block_render = true
 web_page_background_public_api = getState,setTheme,reset,themes
@@ -52,7 +54,7 @@ web_page_background_selector_accessibility = aria-expanded,aria-pressed,accessib
 web_page_background_motion_must_respect_prefers-reduced-motion = true
 
 <!-- 交付前逐项切换全部主题，验证资源、参数、刷新记忆、单/多业务控件页面和不同亮度背景下的可读性。 -->
-web_page_background_qa = all-themes,all-assets,parameter-controls,persistence,single-instance,multi-instance,console,visual-readability
+web_page_background_qa = all-themes,all-assets,parameter-controls,configured-refresh-behavior,single-instance,multi-instance,console,visual-readability
 web_page_background_missing_asset_is_forbidden = true
 web_page_background_theme_switch_must_not_reinitialize_business-controls = true
 

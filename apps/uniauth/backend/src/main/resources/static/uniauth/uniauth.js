@@ -23,6 +23,7 @@
         "selDropdownMenu",
         "selGrid",
         "selPageBackground",
+        "selPersonalization",
         "selWindow"
     ]);
     // 页面装配前一次检查全部依赖，避免加载数据后才出现半成品界面。
@@ -44,8 +45,10 @@
     const uniauthLocale = uniauthSupportedLocales.includes(uniauthRequestedLocale) ? uniauthRequestedLocale : "zh-CN";
     // HTML 提供应用挂载点和可审阅的完整面板结构，装配层只在其中定位当前业务实例。
     const uniauthApplicationHost = uniauthBase.query("[data-uniauth-app]");
-    // HTML 只提供背景挂载点，背景图层和选择器由 selPageBackground.mount 生成。
+    // HTML 只提供背景挂载点，独立背景图层由 selPageBackground.mount 生成。
     const uniauthBackgroundHost = uniauthBase.query("[data-sel-page-background-host]");
+    // HTML 只提供个性化挂载点，背景/面板两级设置由 selPersonalization.mount 生成。
+    const uniauthPersonalizationHost = uniauthBase.query("[data-sel-personalization-host]");
     // 页面排列模式作为标准选项交给 selPanel，不直接修改应用或面板类名。
     const uniauthPanelLayout = uniauthMultiEnabled ? "stack" : "single";
     // 多实例高度通过 selPanel 标准 CSS 变量入口传递，应用 CSS 不覆盖基础内部类。
@@ -429,19 +432,24 @@
     async function uniauthLoadAll() {
         // 页面语言通过基础运行时同步，不直接操作 document。
         uniauthBase.setDocument({ lang: uniauthLocale });
-        // 背景基础控件显式接收 HTML 空挂载点。
+        // 背景基础控件只创建图层和内存状态，刷新页面自动使用默认值。
         const uniauthBackgroundController = window.selPageBackground.mount(uniauthBackgroundHost, {
-            // 新视觉版本使用独立存储键，确保旧海底主题不会覆盖本轮默认纯黑深空底色。
-            storageKey: "selPageBackground.preferences.v3",
-            // 首次打开严格采用参考图的纯黑背景，用户仍可通过右上入口切换其他主题。
+            // 首次打开采用纯黑深空背景，个性化入口仍可在当前页面切换其他主题。
             defaults: Object.freeze({ theme: "void" })
         });
         // 背景区域存在但基础控件挂载失败时明确阻止半成品页面。
         if (!uniauthBackgroundController) {
             throw new Error("基础背景控件挂载失败：请检查 data-sel-page-background-host。");
         }
-        // 当前设计稿要求每次进入都以纯黑深空开场，显式设置主题同时覆盖旧浏览器里残留的海底偏好。
-        uniauthBackgroundController.setTheme("void");
+        // 个性化基础控件组合背景控制器，并用页面级令牌统一管理全部水晶面板。
+        const uniauthPersonalizationController = window.selPersonalization.mount(uniauthPersonalizationHost, {
+            // 背景状态继续由独立 selPageBackground 控制器拥有，个性化模块只调用公开 API。
+            backgroundController: uniauthBackgroundController
+        });
+        // 个性化宿主或控制器缺失时阻止交付半成品设置入口。
+        if (!uniauthPersonalizationController) {
+            throw new Error("基础个性化控件挂载失败：请检查 data-sel-personalization-host。");
+        }
         // 每个业务定义只通过基础 API 创建和挂载独立实例。
         await Promise.all(uniauthDefinitions.map((uniauthDefinition) => uniauthMountInstance(uniauthDefinition)));
         // 浏览器标题使用主实例当前语言数据。

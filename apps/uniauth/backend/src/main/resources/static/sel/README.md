@@ -28,7 +28,11 @@ selTree.mount(gridRoot, treeData)
 selGridMenu.mount(gridRoot, menuData)
 selDropdownMenu.mountAll(gridRoot)
 selGrid.mount(gridRoot, aggregatePayload)
+selPageBackground.mount(backgroundHost, options)
+selPersonalization.mount(personalizationHost, { backgroundController })
 ```
+
+`selPageBackground` 只维护背景图层和当前页面参数；`selPersonalization` 组合“背景设置 / 面板设置”界面并写入跨水晶组件视觉令牌。两者均不使用浏览器持久化，刷新页面恢复代码默认值。
 
 ## 新增基础控件
 
