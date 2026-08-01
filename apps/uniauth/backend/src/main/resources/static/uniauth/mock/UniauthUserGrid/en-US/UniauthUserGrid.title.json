@@ -22,10 +22,10 @@
     }
   },
   "statusTabs": [
-    { "value": "", "label": "All", "count": 128 },
-    { "value": "active", "label": "In progress", "count": 56 },
-    { "value": "done", "label": "Completed", "count": 43 },
-    { "value": "archived", "label": "Archived", "count": 29 }
+    { "value": "", "label": "All", "count": 58 },
+    { "value": "active", "label": "In progress", "count": 15 },
+    { "value": "done", "label": "Completed", "count": 15 },
+    { "value": "archived", "label": "Archived", "count": 14 }
   ],
   "actions": [
     { "id": "new", "label": "New", "icon": "ri-add-line", "primary": true },

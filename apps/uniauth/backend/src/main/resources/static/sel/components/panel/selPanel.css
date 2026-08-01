@@ -7,7 +7,7 @@
 
 :root {
     --selpanel-layout-gap: 10px;
-    --selpanel-layout-sidebar-width: 224px;
+    --selpanel-layout-sidebar-width: 246px;
     --selpanel-layout-sidebar-collapsed-width: 58px;
     --selpanel-surface-line: rgba(105, 172, 255, 0.72);
     --selpanel-surface-background: rgba(3, 14, 52, 0.82);
@@ -19,8 +19,8 @@
 /* 面板根布局：纵向弹性排列让任一顶层区域删除后，其余区域仍按自身高度和剩余空间正常显示。 */
 .selpanel-shell {
     display: flex;
-    width: min(1780px, calc(100vw - 20px));
-    height: var(--selpanel-instance-height, min(960px, calc(100vh - 20px)));
+    width: calc(100vw - 32px);
+    height: var(--selpanel-instance-height, calc(100vh - 32px));
     min-height: 680px;
     flex-direction: column;
     gap: var(--selpanel-layout-gap);
@@ -31,10 +31,10 @@
     position: relative;
     min-width: 0;
     min-height: 0;
-    border: 12px solid transparent;
-    border-image-source: url("../../assets/components/panel/crystal-table-frame.webp");
-    border-image-slice: 58 74 58 74 fill;
-    border-image-width: 12px;
+    border: 18px solid transparent;
+    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-2");
+    border-image-slice: 58 69 58 69 fill;
+    border-image-width: 18px;
     border-image-repeat: stretch;
     color: var(--selpanel-text-main);
     filter: drop-shadow(0 0 8px var(--selpanel-surface-glow));
@@ -64,8 +64,8 @@
 .selpanel-header-shell {
     z-index: 30;
     display: grid;
-    min-height: 94px;
-    flex: 0 0 94px;
+    min-height: 132px;
+    flex: 0 0 132px;
     grid-template-columns: minmax(330px, 1fr) minmax(430px, 1.25fr) auto;
     gap: 20px;
     align-items: center;
@@ -213,8 +213,8 @@
 .selpanel-toolbar-shell {
     z-index: 40;
     display: grid;
-    min-height: 70px;
-    flex: 0 0 70px;
+    min-height: 88px;
+    flex: 0 0 88px;
     grid-template-columns: minmax(230px, 1.25fr) minmax(150px, 0.62fr) minmax(150px, 0.62fr) minmax(300px, 1fr) 102px;
     gap: 12px;
     align-items: center;
@@ -364,8 +364,8 @@
 .selpanel-footer-shell {
     z-index: 40;
     display: flex;
-    min-height: 72px;
-    flex: 0 0 72px;
+    min-height: 104px;
+    flex: 0 0 104px;
     align-items: center;
     justify-content: space-between;
     padding: 0 30px;

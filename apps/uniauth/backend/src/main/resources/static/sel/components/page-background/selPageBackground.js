@@ -9,6 +9,8 @@
 
     // 默认主题使用 SEL 基础素材目录；相对地址按配套 CSS 的位置解析。
     const selPageBackgroundDefaultThemes = Object.freeze([
+        // 纯黑深空作为严格视觉还原的稳定底色，不依赖图片加载即可托住高亮机械边框。
+        Object.freeze({ id: "void", name: "纯黑深空", category: "极简", image: "" }),
         Object.freeze({ id: "technology", name: "赛博城市", category: "科技", image: "../../assets/backgrounds/technology-cyber-city.webp" }),
         Object.freeze({ id: "space", name: "紫色星云", category: "宇宙", image: "../../assets/backgrounds/space-purple-nebula.webp" }),
         Object.freeze({ id: "fantasy", name: "水晶森林", category: "奇幻", image: "../../assets/backgrounds/fantasy-emerald-crystal-forest.webp" }),
@@ -155,7 +157,8 @@
             selPageBackgroundButton.className = "selpage-background-option";
             selPageBackgroundButton.type = "button";
             selPageBackgroundButton.dataset.selPageBackgroundTheme = selPageBackgroundTheme.id;
-            selPageBackgroundButton.style.setProperty("--selpage-theme-thumbnail", `url("${selPageBackgroundTheme.image}")`);
+            // 空图片主题使用纯黑缩略底色，其他主题继续显示各自正式背景素材。
+            selPageBackgroundButton.style.setProperty("--selpage-theme-thumbnail", selPageBackgroundTheme.image ? `url("${selPageBackgroundTheme.image}")` : "none");
             selPageBackgroundButton.setAttribute("aria-pressed", "false");
             // 文案容器保持标题和分类层级。
             const selPageBackgroundCopy = document.createElement("span");
@@ -216,7 +219,8 @@
             // 当前主题必须来自固定清单。
             const selPageBackgroundTheme = selPageBackgroundThemes.find((selPageBackgroundItem) => selPageBackgroundItem.id === selPageBackgroundState.theme) || selPageBackgroundThemes[0];
             // 图片、遮罩、亮度和模糊分别写入独立变量。
-            selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-image", `url("${selPageBackgroundTheme.image}")`);
+            // 纯黑主题写入 none，避免空 URL 被浏览器解析为当前页面并产生无意义请求。
+            selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-image", selPageBackgroundTheme.image ? `url("${selPageBackgroundTheme.image}")` : "none");
             selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-overlay", String(selPageBackgroundState.overlay / 100));
             selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-brightness", String(selPageBackgroundState.brightness / 100));
             selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-blur", `${selPageBackgroundState.blur}px`);

@@ -22,10 +22,10 @@
     }
   },
   "statusTabs": [
-    { "value": "", "label": "全部", "count": 128 },
-    { "value": "active", "label": "进行中", "count": 56 },
-    { "value": "done", "label": "已完成", "count": 43 },
-    { "value": "archived", "label": "已归档", "count": 29 }
+    { "value": "", "label": "全部", "count": 58 },
+    { "value": "active", "label": "进行中", "count": 15 },
+    { "value": "done", "label": "已完成", "count": 15 },
+    { "value": "archived", "label": "已归档", "count": 14 }
   ],
   "actions": [
     { "id": "new", "label": "新建", "icon": "ri-add-line", "primary": true },

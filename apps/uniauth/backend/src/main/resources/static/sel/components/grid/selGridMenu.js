@@ -86,6 +86,22 @@
             menuRoot.querySelectorAll('.selgrid-menu-item[aria-haspopup="menu"]').forEach((button) => button.setAttribute("aria-expanded", "false"));
         }
 
+        // 按主体区域或所属面板的真实高度约束一级菜单，让底部危险操作始终留在水晶边框安全区内。
+        function positionMenu() {
+            // 主体区域是表格菜单最贴近的可见容器，缺失时再回退到完整面板。
+            const selGridMenuBoundaryHost = menuRoot.closest(".selpanel-body-shell") || gridRoot.closest(".selpanel-shell");
+            // 独立使用基础控件时以浏览器视口作为最终边界。
+            const selGridMenuBoundaryBounds = selGridMenuBoundaryHost?.getBoundingClientRect();
+            // 菜单顶边已由组件布局确定，读取实测位置避免重复依赖样式常量。
+            const selGridMenuBounds = menuRoot.getBoundingClientRect();
+            // 下边界同时受宿主和当前浏览器可视高度限制，并为外发光保留八像素余量。
+            const selGridMenuBoundaryBottom = Math.min(window.innerHeight - 8, (selGridMenuBoundaryBounds?.bottom || window.innerHeight) - 8);
+            // 可用高度至少容纳一个动作；超过部分由一级菜单内部滚动区承载。
+            const selGridMenuAvailableHeight = Math.max(70, selGridMenuBoundaryBottom - selGridMenuBounds.top);
+            // 动态高度只影响菜单内容区，不改变其右上角锚点。
+            menuRoot.style.setProperty("--selgrid-menu-available-height", `${selGridMenuAvailableHeight}px`);
+        }
+
         // 打开指定父动作的二级菜单。
         function openSubmenu(item, trigger) {
             if (!Array.isArray(item.children) || item.children.length === 0 || !submenu) {
@@ -97,11 +113,13 @@
             const fragment = document.createDocumentFragment();
             item.children.forEach((child) => fragment.appendChild(createItemButton(child, "secondary")));
             submenu.replaceChildren(fragment);
-            const top = trigger.offsetTop - (viewport ? viewport.scrollTop : 0) - 5;
-            submenu.style.setProperty("--selgrid-menu-submenu-top", `${top}px`);
+            // 初始纵向位置与父动作对齐，并抵消一级菜单滚动量。
+            let selGridSubmenuTop = trigger.offsetTop - (viewport ? viewport.scrollTop : 0) - 5;
+            // 先写入初始位置，后续依据真实渲染尺寸再做上下回收。
+            submenu.style.setProperty("--selgrid-menu-submenu-top", `${selGridSubmenuTop}px`);
             submenu.classList.add("selgrid-menu-open");
             // 二级菜单优先向右展开；所属水晶面板右侧空间不足且左侧更宽时翻向左侧，避免越出边框。
-            const selGridPanelBounds = gridRoot.closest(".selpanel-shell")?.getBoundingClientRect();
+            const selGridPanelBounds = (menuRoot.closest(".selpanel-body-shell") || gridRoot.closest(".selpanel-shell"))?.getBoundingClientRect();
             // 当前一级菜单边界用于计算两侧实际剩余空间。
             const selGridMenuBounds = menuRoot.getBoundingClientRect();
             // 二级菜单已显示后读取真实宽度，避免依赖重复的样式常量。
@@ -116,6 +134,24 @@
             const selGridLeftSpace = selGridMenuBounds.left - selGridBoundaryLeft + 8;
             // 右侧放不下且左侧更适合承载完整二级菜单时才翻转，避免无必要的方向跳变。
             submenu.classList.toggle("selgrid-menu-submenu-flip", selGridRightSpace < selGridSubmenuWidth && selGridLeftSpace > selGridRightSpace);
+            // 上下边界保留八像素发光安全区，并同时限制在浏览器当前可见高度内。
+            const selGridBoundaryTop = Math.max(8, (selGridPanelBounds?.top || 0) + 8);
+            // 下边界取主体区域和视口中更靠上的位置，避免滚动页面时菜单落到窗口外。
+            const selGridBoundaryBottom = Math.min(window.innerHeight - 8, (selGridPanelBounds?.bottom || window.innerHeight) - 8);
+            // 二级菜单最大高度由实际可见区域决定，超出时自身滚动而不是穿出边框。
+            submenu.style.setProperty("--selgrid-menu-submenu-available-height", `${Math.max(67, selGridBoundaryBottom - selGridBoundaryTop)}px`);
+            // 尺寸和翻转状态生效后读取最终矩形，得到需要回收的真实像素差。
+            const selGridSubmenuBounds = submenu.getBoundingClientRect();
+            // 底部越界时整体向上回收到安全边界。
+            if (selGridSubmenuBounds.bottom > selGridBoundaryBottom) selGridSubmenuTop -= selGridSubmenuBounds.bottom - selGridBoundaryBottom;
+            // 顶部越界时再向下修正，保证较矮视口中菜单仍能从安全区起始。
+            const selGridSubmenuPredictedTop = selGridSubmenuBounds.top + (selGridSubmenuTop - Number.parseFloat(submenu.style.getPropertyValue("--selgrid-menu-submenu-top")));
+            // 预测顶边低于安全值时只补齐实际差额，避免底部修正后产生过度回弹。
+            if (selGridSubmenuPredictedTop < selGridBoundaryTop) {
+                selGridSubmenuTop += selGridBoundaryTop - selGridSubmenuPredictedTop;
+            }
+            // 最终纵向位置写回组件变量，主菜单和父动作的布局保持不变。
+            submenu.style.setProperty("--selgrid-menu-submenu-top", `${selGridSubmenuTop}px`);
         }
 
         // 按当前实例配置重绘一级和二级菜单容器。
@@ -178,6 +214,8 @@
             closeSubmenu();
             menuRoot.classList.add("selgrid-menu-open");
             menuRoot.setAttribute("aria-hidden", "false");
+            // 菜单显示后按当前主体区域高度建立内部滚动安全区。
+            positionMenu();
             dispatchOpenChange();
         }
 
@@ -271,6 +309,16 @@
                 return;
             }
             close();
+        });
+
+        // 浏览器尺寸变化时更新仍打开的一级菜单，并关闭需重新测量的二级菜单。
+        window.addEventListener("resize", () => {
+            // 关闭状态无需测量，避免给同页多实例增加无效布局开销。
+            if (!menuRoot.classList.contains("selgrid-menu-open")) return;
+            // 二级菜单依赖父动作实时位置，缩放后先收起可避免保留旧坐标。
+            closeSubmenu();
+            // 一级菜单继续保持打开并适配新的主体高度。
+            positionMenu();
         });
 
         // 首次加载为当前表格实例生成菜单。

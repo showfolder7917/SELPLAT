@@ -19,13 +19,13 @@
     position: absolute;
     z-index: 30;
     top: 26px;
-    right: -6px;
+    right: 4px;
     display: none;
     width: var(--selgrid-menu-width);
     box-sizing: border-box;
     border: var(--selgrid-menu-edge-size) solid transparent;
-    border-image-source: url("../../assets/shared/crystal-menu-frame.webp");
-    border-image-slice: 118 72 118 72 fill;
+    border-image-source: url("../../assets/shared/selMenuCyberFrame.webp?v=20260801-2");
+    border-image-slice: 50 31 50 31 fill;
     border-image-width: var(--selgrid-menu-edge-size);
     border-image-repeat: stretch;
     color: var(--selgrid-menu-text);
@@ -38,9 +38,16 @@
 
 .selgrid-menu-viewport {
     position: relative;
-    max-height: calc(var(--selgrid-menu-visible-items) * var(--selgrid-menu-row-height));
-    margin: -3px;
-    overflow: hidden;
+    max-height: min(
+        calc(var(--selgrid-menu-visible-items) * var(--selgrid-menu-row-height)),
+        calc(var(--selgrid-menu-available-height, 999px) - 36px)
+    );
+    min-height: 0;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 5px 4px;
+    overflow-x: hidden;
+    overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-color: #6f8cff rgba(8, 23, 72, 0.72);
     scrollbar-width: thin;
@@ -74,6 +81,7 @@
     position: relative;
     display: grid;
     width: 100%;
+    box-sizing: border-box;
     height: var(--selgrid-menu-row-height);
     grid-template-columns: 22px minmax(0, 1fr) auto 13px;
     gap: 7px;
@@ -185,12 +193,16 @@
     left: calc(100% - 8px);
     display: none;
     width: 194px;
+    max-width: calc(100vw - 16px);
+    max-height: var(--selgrid-menu-submenu-available-height, calc(100vh - 16px));
     box-sizing: border-box;
     border: 15px solid transparent;
-    border-image-source: url("../../assets/shared/crystal-menu-frame.webp");
-    border-image-slice: 118 72 118 72 fill;
+    border-image-source: url("../../assets/shared/selMenuCyberFrame.webp?v=20260801-2");
+    border-image-slice: 50 31 50 31 fill;
     border-image-width: 15px;
     border-image-repeat: stretch;
+    overflow-x: hidden;
+    overflow-y: auto;
     filter: drop-shadow(0 0 11px rgba(65, 119, 255, 0.72));
 }
 

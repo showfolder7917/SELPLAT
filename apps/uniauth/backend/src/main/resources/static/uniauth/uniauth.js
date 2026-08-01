@@ -22,7 +22,8 @@
         "selGridMenu",
         "selDropdownMenu",
         "selGrid",
-        "selPageBackground"
+        "selPageBackground",
+        "selWindow"
     ]);
     // 页面装配前一次检查全部依赖，避免加载数据后才出现半成品界面。
     const uniauthMissingComponents = uniauthRequiredComponents.filter((uniauthComponentName) => !window[uniauthComponentName]);
@@ -48,7 +49,7 @@
     // 页面排列模式作为标准选项交给 selPanel，不直接修改应用或面板类名。
     const uniauthPanelLayout = uniauthMultiEnabled ? "stack" : "single";
     // 多实例高度通过 selPanel 标准 CSS 变量入口传递，应用 CSS 不覆盖基础内部类。
-    const uniauthPanelHeight = uniauthMultiEnabled ? "min(760px, calc(100vh - 40px))" : "";
+    const uniauthPanelHeight = uniauthMultiEnabled ? "calc(100vh - 32px)" : "";
     // 页面布局表集中声明“哪个位置放哪个基础控件、该控件接收哪份 JSON”，调整区域时只修改这里。
     const uniauthLayouts = Object.freeze({
         // UniauthGridFiveRegion 是用户表格页面使用的上、左、中、右、下五区模板。
@@ -141,6 +142,54 @@
     const uniauthInstances = new Map();
     // 同一数据源只加载一次，双实例共享只读业务响应。
     const uniauthSources = new Map();
+    // 新建窗口控制器按表格实例保存，双实例不会共用打开状态。
+    const uniauthWindowControllers = new Map();
+    // “新建”入口只声明项目表单业务字段，通用 selWindow 不识别项目实体或接口地址。
+    const uniauthProjectWindowView = Object.freeze({
+        // 标题与说明严格采用用户指定的新建项目参考图。
+        title: "新建项目",
+        subtitle: "创建一个全新的项目并设置基本信息",
+        // 标题栏关闭和底部动作使用清晰业务文案。
+        closeLabel: "关闭新建项目窗口",
+        cancelLabel: "取消",
+        submitLabel: "立即创建",
+        // 复选项和结果文案完成可操作的新建主路径。
+        checkboxLabel: "创建后立即添加任务",
+        validationMessage: "请填写项目名称并完成必填选择",
+        successMessage: "项目已创建，可以继续添加任务",
+        // rows 的顺序和单列/双列关系直接对应参考图的表单布局。
+        rows: Object.freeze([
+            // 项目名称限制 50 字并显示实时计数。
+            Object.freeze([Object.freeze({ name: "projectName", label: "项目名称", type: "text", icon: "ri-file-text-line", placeholder: "请输入项目名称", required: true, maxLength: 50 })]),
+            // 项目类型使用统一选择下拉，并保留原生 select 真实值。
+            Object.freeze([Object.freeze({ name: "projectType", label: "项目类型", type: "select", required: true, options: Object.freeze([
+                Object.freeze({ value: "", label: "请选择项目类型", icon: "ri-apps-2-line", disabled: true, selected: true }),
+                Object.freeze({ value: "platform", label: "平台架构", icon: "ri-stack-line" }),
+                Object.freeze({ value: "visualization", label: "数据可视化", icon: "ri-pie-chart-line" }),
+                Object.freeze({ value: "research", label: "科研项目", icon: "ri-flask-line" }),
+                Object.freeze({ value: "ai", label: "人工智能", icon: "ri-brain-line" })
+            ]) })]),
+            // 负责人下拉使用当前演示数据中的真实人员名称。
+            Object.freeze([Object.freeze({ name: "owner", label: "负责人", type: "select", required: true, options: Object.freeze([
+                Object.freeze({ value: "", label: "请选择负责人", icon: "ri-user-3-line", disabled: true, selected: true }),
+                Object.freeze({ value: "lin-shen", label: "林深", icon: "ri-user-star-line" }),
+                Object.freeze({ value: "su-wan", label: "苏晚", icon: "ri-user-line" }),
+                Object.freeze({ value: "lu-chuan", label: "陆川", icon: "ri-user-line" }),
+                Object.freeze({ value: "zhou-xu", label: "周叙", icon: "ri-user-line" })
+            ]) })]),
+            // 开始日期与优先级共享一行，保持参考图的四轨布局。
+            Object.freeze([
+                Object.freeze({ name: "startDate", label: "开始日期", type: "date", icon: "ri-calendar-line", required: true }),
+                Object.freeze({ name: "priority", label: "优先级", type: "select", required: true, options: Object.freeze([
+                    Object.freeze({ value: "medium", label: "中优先级", icon: "ri-flag-fill", tone: "active", selected: true }),
+                    Object.freeze({ value: "high", label: "高优先级", icon: "ri-flag-fill", tone: "review" }),
+                    Object.freeze({ value: "low", label: "低优先级", icon: "ri-flag-line", tone: "muted" })
+                ]) })
+            ]),
+            // 项目描述为可选多行字段并显示 300 字计数。
+            Object.freeze([Object.freeze({ name: "description", label: "项目描述", type: "textarea", icon: "ri-edit-2-line", placeholder: "请输入项目描述（选填）", required: false, maxLength: 300 })])
+        ])
+    });
     // Uniauth 业务数据源表明确登记实际请求地址；基础 selAjax 不允许根据实体或实例名推测路径。
     const uniauthDataSources = Object.freeze({
         // UniauthUserGrid 是用户管理主表及当前类型列表示例共同使用的数据源。
@@ -164,7 +213,7 @@
         })
     });
     // 演示数据版本用于浏览器缓存失效；生产环境应由后端响应版本或构建摘要替代。
-    const uniauthDataVersion = "20260731-4";
+    const uniauthDataVersion = "20260801-pagination-2";
 
     /**
      * 把一个区域中的嵌套布局声明展开，供装配层判断本实例实际需要挂载哪些基础控件。
@@ -349,6 +398,24 @@
         if (!uniauthGridController) {
             throw new Error(`基础表格挂载失败：${uniauthDefinition.gridId}。请检查标准 grid payload。`);
         }
+        // 每个表格实例创建独立新建项目窗口，业务字段来自应用视图配置。
+        const uniauthWindowController = window.selWindow.mount(uniauthApplicationHost, {
+            // 稳定键确保双实例的新建窗口互不共享位置、尺寸和激活栏目。
+            id: `${uniauthDefinition.gridId}CreateWindow`,
+            // 展开只读表单配置，把应用业务内容交给基础窗体的标准数据入口。
+            ...uniauthProjectWindowView
+        });
+        // 当前实例窗口挂载失败时不允许新建动作回退到应用层原生 DOM。
+        if (!uniauthWindowController) {
+            throw new Error(`基础窗口挂载失败：${uniauthDefinition.gridId}。`);
+        }
+        // 应用挂载点接收当前实例的受控新建事件，避免表格重绘替换内部节点时遗失监听。
+        uniauthApplicationHost.addEventListener("selGrid:new", (event) => {
+            // 只有事件详情中的实例键匹配时才打开本窗口，保证同页实例彼此隔离。
+            if (event.detail?.instanceKey === uniauthDefinition.gridId) uniauthWindowController.open();
+        });
+        // 注册表保留窗口控制器，供后续项目新建流程显式调用。
+        uniauthWindowControllers.set(uniauthDefinition.gridId, uniauthWindowController);
         // 应用注册表只保存业务实例与聚合响应的关系，不保存组件内部 DOM。
         uniauthInstances.set(uniauthDefinition.gridId, uniauthPayload);
         // 返回基础表格控制器供装配流程确认成功。
@@ -364,12 +431,17 @@
         uniauthBase.setDocument({ lang: uniauthLocale });
         // 背景基础控件显式接收 HTML 空挂载点。
         const uniauthBackgroundController = window.selPageBackground.mount(uniauthBackgroundHost, {
-            storageKey: "selPageBackground.preferences.v1"
+            // 新视觉版本使用独立存储键，确保旧海底主题不会覆盖本轮默认纯黑深空底色。
+            storageKey: "selPageBackground.preferences.v3",
+            // 首次打开严格采用参考图的纯黑背景，用户仍可通过右上入口切换其他主题。
+            defaults: Object.freeze({ theme: "void" })
         });
         // 背景区域存在但基础控件挂载失败时明确阻止半成品页面。
         if (!uniauthBackgroundController) {
             throw new Error("基础背景控件挂载失败：请检查 data-sel-page-background-host。");
         }
+        // 当前设计稿要求每次进入都以纯黑深空开场，显式设置主题同时覆盖旧浏览器里残留的海底偏好。
+        uniauthBackgroundController.setTheme("void");
         // 每个业务定义只通过基础 API 创建和挂载独立实例。
         await Promise.all(uniauthDefinitions.map((uniauthDefinition) => uniauthMountInstance(uniauthDefinition)));
         // 浏览器标题使用主实例当前语言数据。

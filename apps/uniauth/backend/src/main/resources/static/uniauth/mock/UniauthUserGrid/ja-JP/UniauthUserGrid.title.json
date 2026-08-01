@@ -22,10 +22,10 @@
     }
   },
   "statusTabs": [
-    { "value": "", "label": "すべて", "count": 128 },
-    { "value": "active", "label": "進行中", "count": 56 },
-    { "value": "done", "label": "完了", "count": 43 },
-    { "value": "archived", "label": "アーカイブ", "count": 29 }
+    { "value": "", "label": "すべて", "count": 58 },
+    { "value": "active", "label": "進行中", "count": 15 },
+    { "value": "done", "label": "完了", "count": 15 },
+    { "value": "archived", "label": "アーカイブ", "count": 14 }
   ],
   "actions": [
     { "id": "new", "label": "新規", "icon": "ri-add-line", "primary": true },

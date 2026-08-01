@@ -8,7 +8,7 @@
 html {
     min-width: 1080px;
     min-height: 100%;
-    background: var(--selgrid-theme-page-background);
+    background: #000;
 }
 
 /* body 负责整个 Uniauth 页面滚动和基础文字令牌，不承担任何控件布局。 */
@@ -17,7 +17,7 @@ body {
     margin: 0;
     overflow-x: auto;
     color: var(--selgrid-theme-text);
-    background: transparent;
+    background: #000;
     font-family: var(--selgrid-theme-font);
     -webkit-font-smoothing: antialiased;
     isolation: isolate;
@@ -28,7 +28,7 @@ body {
     display: grid;
     min-height: 100vh;
     place-items: center;
-    padding: 10px;
+    padding: 16px;
 }
 
 /* 多实例模式由 selPanel 在应用挂载点写入标准布局标识，应用只调整实例之间的间距。 */

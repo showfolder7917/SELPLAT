@@ -7,8 +7,8 @@
 
 :root {
     --seldropdown-surface-height: 42px;
-    --seldropdown-menu-min-width: 238px;
-    --seldropdown-option-height: 52px;
+    --seldropdown-menu-min-width: 314px;
+    --seldropdown-option-height: 56px;
     --seldropdown-visible-items: 6;
     --seldropdown-text-main: #e8edff;
     --seldropdown-text-muted: #8594bb;
@@ -49,7 +49,7 @@
     align-items: center;
     padding: 0 11px;
     border: 1px solid var(--seldropdown-line);
-    border-radius: 10px;
+    border-radius: 2px;
     color: var(--seldropdown-text-main);
     background: rgba(4, 17, 57, 0.84);
     box-shadow: inset 0 0 13px rgba(59, 94, 180, 0.20);
@@ -113,13 +113,13 @@
     position: absolute;
     z-index: 2;
     top: calc(100% + 7px);
-    left: 0;
-    width: max(100%, var(--seldropdown-menu-min-width));
+    left: var(--seldropdown-menu-inline-offset, 0px);
+    width: min(max(100%, var(--seldropdown-menu-min-width)), calc(100vw - 16px));
     box-sizing: border-box;
-    border: 14px solid transparent;
-    border-image-source: url("../../assets/shared/crystal-menu-frame.webp");
-    border-image-slice: 118 72 118 72 fill;
-    border-image-width: 14px;
+    border: 16px solid transparent;
+    border-image-source: url("../../assets/shared/selMenuCyberFrame.webp?v=20260801-2");
+    border-image-slice: 50 31 50 31 fill;
+    border-image-width: 16px;
     border-image-repeat: stretch;
     color: var(--seldropdown-text-main);
     filter: drop-shadow(0 0 12px rgba(54, 123, 255, 0.76));
@@ -139,10 +139,10 @@
     height: 30px;
     align-items: center;
     justify-content: space-between;
-    padding: 0 7px 5px;
+    padding: 0 9px 5px;
     border-bottom: 1px solid rgba(103, 142, 229, 0.24);
     color: #8092bf;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.08em;
 }
 
@@ -157,8 +157,14 @@
 }
 
 .seldropdown-menu-viewport {
-    max-height: calc(var(--seldropdown-visible-items) * var(--seldropdown-option-height));
-    margin: 0 -2px -2px;
+    max-height: min(
+        calc(var(--seldropdown-visible-items) * var(--seldropdown-option-height)),
+        calc(var(--seldropdown-menu-available-height, 999px) - 62px)
+    );
+    min-height: 0;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 5px 4px;
     overflow: hidden;
     overscroll-behavior: contain;
     scrollbar-color: #6e91ff rgba(8, 23, 72, 0.74);
@@ -194,13 +200,14 @@
     position: relative;
     display: grid;
     width: 100%;
+    box-sizing: border-box;
     min-height: var(--seldropdown-option-height);
     grid-template-columns: 27px minmax(0, 1fr) 22px;
     gap: 8px;
     align-items: center;
-    padding: 5px 7px;
+    padding: 6px 9px;
     border: 1px solid transparent;
-    border-radius: 8px;
+    border-radius: 2px;
     color: #c9d3ef;
     background: transparent;
     cursor: pointer;
@@ -327,6 +334,24 @@
     right: auto;
     left: 0;
 }
+
+/* 窗口表单下拉：复用同一基础控件，并匹配参考图 54 像素字段高度。 */
+.seldropdown-surface-window {
+    height: 54px;
+    --seldropdown-menu-min-width: 100%;
+}
+
+/* 窗口下拉触发器与其他表单字段共享深蓝玻璃、圆角和字体节奏。 */
+.seldropdown-surface-window .seldropdown-trigger {
+    padding: 0 16px;
+    border-color: rgba(42, 105, 209, 0.72);
+    border-radius: 10px;
+    background: rgba(4, 20, 65, 0.78);
+    font-size: 17px;
+}
+
+/* 窗口下拉不显示业务前缀，仅显示图标和当前值。 */
+.seldropdown-surface-window .seldropdown-trigger-prefix { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
     .seldropdown-trigger,

@@ -1,0 +1,180 @@
+/*
+ * selWindow.css：通用水晶业务表单窗口样式。
+ * 责任边界：只定义 selwindow-* 窗口、表单字段与操作区；应用只传标准字段配置和提交结果。
+ * 视觉基准：OPTION/UI/window.png 的机械切角、深蓝连续玻璃、蓝紫描边和表单节奏。
+ */
+
+/* 模态遮罩隔离当前新建流程，并保持纯黑画布与参考图一致。 */
+.selwindow-overlay {
+    position: fixed;
+    z-index: 1100;
+    inset: 0;
+    display: grid;
+    overflow: auto;
+    place-items: center;
+    padding: 28px;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(4px);
+}
+
+/* 关闭状态完全退出布局，避免不可见遮罩阻挡项目表格。 */
+.selwindow-overlay[hidden] { display: none; }
+
+/* 窗口根使用新生成的完整九宫格材质，标题与表单共享同一深蓝玻璃中心。 */
+.selwindow-window-shell {
+    display: grid;
+    width: min(1080px, 100%);
+    min-width: min(780px, 100%);
+    min-height: 720px;
+    box-sizing: border-box;
+    grid-template-rows: 116px minmax(0, 1fr);
+    border: 34px solid transparent;
+    border-image-source: url("../../assets/components/window/selWindowProjectFrame.webp?v=20260801-2");
+    border-image-slice: 122 62 100 62 fill;
+    border-image-width: 34px;
+    border-image-outset: 5px;
+    border-image-repeat: stretch;
+    color: #eaf1ff;
+    outline: none;
+    filter: drop-shadow(0 0 22px rgba(34, 126, 255, 0.68)) drop-shadow(0 0 14px rgba(121, 60, 255, 0.42));
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+}
+
+/* 标题区保持参考图的徽标、两行标题和独立关闭按钮。 */
+.selwindow-header-shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 0 12px 0 8px;
+}
+
+/* 品牌组让真实水晶徽标成为标题区视觉锚点。 */
+.selwindow-brand-group { display: flex; min-width: 0; align-items: center; gap: 18px; }
+
+/* 徽标使用生成后的真实位图资产，不使用 CSS 图形替代。 */
+.selwindow-brand-image {
+    width: 72px;
+    height: 72px;
+    flex: 0 0 auto;
+    border-radius: 18px;
+    object-fit: cover;
+    filter: drop-shadow(0 0 14px rgba(52, 146, 255, 0.92));
+}
+
+/* 标题文案按主标题与说明两行建立信息层级。 */
+.selwindow-brand-copy { display: grid; min-width: 0; gap: 8px; }
+.selwindow-brand-title { margin: 0; color: #f3f6ff; font-size: 30px; font-weight: 650; line-height: 1; letter-spacing: 0.05em; }
+.selwindow-brand-subtitle { color: #a3b4df; font-size: 16px; white-space: nowrap; }
+
+/* 关闭按钮采用参考图的八角玻璃外观并保留原生按钮语义。 */
+.selwindow-close-button {
+    display: grid;
+    width: 54px;
+    height: 54px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid rgba(80, 158, 255, 0.74);
+    border-radius: 14px;
+    color: #b9d7ff;
+    background: rgba(7, 29, 84, 0.82);
+    box-shadow: inset 0 0 15px rgba(51, 119, 255, 0.24);
+    cursor: pointer;
+    font-size: 30px;
+}
+
+/* 关闭按钮悬停和键盘聚焦只增强光效，不改变几何。 */
+.selwindow-close-button:hover,
+.selwindow-close-button:focus-visible { border-color: #79cbff; color: #fff; outline: none; box-shadow: 0 0 15px rgba(57, 139, 255, 0.66), inset 0 0 15px rgba(70, 125, 255, 0.34); }
+
+/* 表单主体按参考图使用固定标签列和可伸缩输入列。 */
+.selwindow-form-shell {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 22px;
+    padding: 36px 44px 28px;
+}
+
+/* 标准字段行让标签、必填点和控件在所有类型中保持统一基线。 */
+.selwindow-field-row { display: grid; min-width: 0; grid-template-columns: 170px minmax(0, 1fr); align-items: start; gap: 22px; }
+
+/* 日期与优先级并排时仍沿用相同标签和控件节奏。 */
+.selwindow-field-row-paired { grid-template-columns: 170px minmax(0, 1fr) 130px minmax(0, 0.9fr); }
+
+/* 字段标签使用蓝色必填点和中等字重。 */
+.selwindow-field-label { display: flex; min-height: 54px; align-items: center; gap: 11px; color: #eef3ff; font-size: 18px; font-weight: 550; }
+.selwindow-field-label::before { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #1683ff; box-shadow: 0 0 9px rgba(31, 130, 255, 0.92); content: ""; }
+.selwindow-field-label-optional::before { opacity: 0.65; }
+
+/* 控件容器统一承载图标、输入、计数和箭头。 */
+.selwindow-control-shell {
+    display: grid;
+    min-width: 0;
+    min-height: 54px;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px;
+    border: 1px solid rgba(42, 105, 209, 0.72);
+    border-radius: 10px;
+    background: rgba(4, 20, 65, 0.78);
+    box-shadow: inset 0 0 18px rgba(29, 80, 178, 0.16);
+}
+
+/* 聚焦态使用蓝紫发光并保持和下拉展开态同一视觉语言。 */
+.selwindow-control-shell:focus-within { border-color: #4ba8ff; box-shadow: 0 0 13px rgba(48, 131, 255, 0.46), inset 0 0 18px rgba(49, 86, 200, 0.24); }
+
+/* 控件图标使用统一细线图标库和蓝紫色调。 */
+.selwindow-control-icon { color: #6faaff; font-size: 22px; text-align: center; text-shadow: 0 0 8px rgba(76, 139, 255, 0.62); }
+
+/* 输入、原生下拉与文本域清除浏览器默认外观并继承玻璃表面。 */
+.selwindow-control-input,
+.selwindow-control-select,
+.selwindow-control-textarea { width: 100%; min-width: 0; border: 0; color: #e9efff; outline: 0; background: transparent; font: inherit; font-size: 17px; }
+.selwindow-control-input::placeholder,
+.selwindow-control-textarea::placeholder { color: #5874af; }
+.selwindow-control-select { appearance: none; cursor: pointer; }
+.selwindow-control-select option { color: #eaf1ff; background: #071641; }
+
+/* 计数与箭头使用弱层级，避免与真实输入内容竞争。 */
+.selwindow-control-suffix { color: #5f7fc0; font-size: 15px; white-space: nowrap; }
+.selwindow-control-chevron { color: #7998dc; font-size: 22px; pointer-events: none; }
+
+/* 描述字段增加高度并让图标与计数分别落在左上和右下。 */
+.selwindow-control-shell-textarea { min-height: 142px; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: start; padding-top: 16px; padding-bottom: 14px; }
+.selwindow-control-textarea { min-height: 108px; resize: none; line-height: 1.55; }
+.selwindow-control-shell-textarea .selwindow-control-suffix { align-self: end; }
+
+/* 复选业务行位于表单字段之后，遵循参考图的留白。 */
+.selwindow-checkbox-row { display: flex; align-items: center; gap: 12px; padding-left: 8px; color: #d7e0f7; font-size: 16px; }
+.selwindow-checkbox-input { width: 24px; height: 24px; accent-color: #4b6fff; }
+.selwindow-checkbox-info { color: #37a8ff; font-size: 21px; text-shadow: 0 0 9px rgba(38, 141, 255, 0.76); }
+
+/* 操作区通过细线与字段分隔，取消和主操作居中排列。 */
+.selwindow-actions-shell { display: flex; justify-content: center; gap: 48px; padding-top: 24px; border-top: 1px solid rgba(72, 120, 218, 0.38); }
+.selwindow-action-button { min-width: 230px; height: 60px; border: 1px solid rgba(70, 138, 245, 0.82); border-radius: 10px; color: #eef3ff; background: rgba(3, 20, 66, 0.82); box-shadow: inset 0 0 17px rgba(45, 88, 185, 0.22); cursor: pointer; font: inherit; font-size: 18px; font-weight: 600; }
+.selwindow-action-button:hover,
+.selwindow-action-button:focus-visible { outline: none; filter: brightness(1.14); }
+.selwindow-action-primary { border-color: #92c8ff; background: linear-gradient(110deg, #1d8eff, #5d64ff 58%, #a63fff); box-shadow: 0 0 22px rgba(48, 153, 255, 0.76), 0 0 18px rgba(141, 62, 255, 0.56), inset 0 0 15px rgba(255, 255, 255, 0.24); }
+
+/* 提交反馈使用固定行高，成功或错误都不会推动按钮位置。 */
+.selwindow-feedback { min-height: 22px; color: #76f1d1; text-align: center; font-size: 14px; }
+.selwindow-feedback.selwindow-feedback-error { color: #ff6b86; }
+
+/* 紧凑桌面保留所有字段并减少横向空隙。 */
+@media (max-width: 980px) {
+    .selwindow-form-shell { padding-right: 24px; padding-left: 24px; }
+    .selwindow-field-row { grid-template-columns: 140px minmax(0, 1fr); }
+    .selwindow-field-row-paired { grid-template-columns: 140px minmax(0, 1fr); }
+    .selwindow-action-button { min-width: 190px; }
+}
+
+/* 窄屏采用明确的桌面横向降级，不伪装为完整移动表单。 */
+@media (max-width: 820px) { .selwindow-overlay { place-items: start center; } }
+
+/* 低高度窗口从顶部安全区开始滚动，避免垂直居中把标题和关闭入口推到视口之外。 */
+@media (max-height: 780px) { .selwindow-overlay { place-items: start center; } }
+
+/* 减少动态效果偏好下禁用非必要的光效动画。 */
+@media (prefers-reduced-motion: reduce) { .selwindow-action-button { transition-duration: 0.01ms; } }

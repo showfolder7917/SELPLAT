@@ -100,6 +100,50 @@
         }
     }
 
+    // 按所属面板或窗口的真实可见边界放置菜单，避免固定宽高在贴边控件上越出水晶容器。
+    function selDropdownMenuPosition(instance) {
+        // 每次测量前清除上一轮横向位移，保证窗口缩放后从触发器原点重新计算。
+        instance.menu.style.setProperty("--seldropdown-menu-inline-offset", "0px");
+        // 每次测量前恢复向下展开，后续再依据上下实际空间选择方向。
+        instance.root.classList.remove("seldropdown-placement-top");
+        // 窗口表单优先以窗口为边界，普通筛选控件以所属稳定面板为边界。
+        const selDropdownBoundaryHost = instance.root.closest(".selwindow-window-shell, .selpanel-shell");
+        // 边界宿主缺失时使用浏览器视口，保证基础控件独立挂载也不会越屏。
+        const selDropdownBoundaryBounds = selDropdownBoundaryHost?.getBoundingClientRect();
+        // 八像素安全边距让外发光不会被面板或视口硬切断。
+        const selDropdownBoundaryLeft = Math.max(8, (selDropdownBoundaryBounds?.left || 0) + 8);
+        // 右侧边界同时受宿主和浏览器视口约束，避免横向滚动区域把菜单带出当前窗口。
+        const selDropdownBoundaryRight = Math.min(window.innerWidth - 8, (selDropdownBoundaryBounds?.right || window.innerWidth) - 8);
+        // 上侧边界同样保留发光安全区。
+        const selDropdownBoundaryTop = Math.max(8, (selDropdownBoundaryBounds?.top || 0) + 8);
+        // 下侧边界取宿主与浏览器视口更靠上的位置。
+        const selDropdownBoundaryBottom = Math.min(window.innerHeight - 8, (selDropdownBoundaryBounds?.bottom || window.innerHeight) - 8);
+        // 触发器位置用于计算上下两侧真实剩余空间。
+        const selDropdownTriggerBounds = instance.trigger.getBoundingClientRect();
+        // 未位移的菜单尺寸用于横向和纵向决策。
+        let selDropdownMenuBounds = instance.menu.getBoundingClientRect();
+        // 触发器下方空间扣除七像素视觉间隔。
+        const selDropdownSpaceBelow = selDropdownBoundaryBottom - selDropdownTriggerBounds.bottom - 7;
+        // 触发器上方空间扣除相同视觉间隔。
+        const selDropdownSpaceAbove = selDropdownTriggerBounds.top - selDropdownBoundaryTop - 7;
+        // 下方放不下完整菜单且上方更宽裕时翻转到触发器上方。
+        const selDropdownUseTop = selDropdownSpaceBelow < selDropdownMenuBounds.height && selDropdownSpaceAbove > selDropdownSpaceBelow;
+        // 展开方向状态只由当前实测空间决定。
+        instance.root.classList.toggle("seldropdown-placement-top", selDropdownUseTop);
+        // 可用高度至少保留标题和一个选项，更多选项交给内部滚动区访问。
+        instance.menu.style.setProperty("--seldropdown-menu-available-height", `${Math.max(118, selDropdownUseTop ? selDropdownSpaceAbove : selDropdownSpaceBelow)}px`);
+        // 高度约束生效后重新读取菜单边界，避免用旧尺寸计算横向偏移。
+        selDropdownMenuBounds = instance.menu.getBoundingClientRect();
+        // 默认不偏移，只有实际越界时才沿横轴回收。
+        let selDropdownInlineOffset = 0;
+        // 右侧越界时把菜单向左移动到安全边界内。
+        if (selDropdownMenuBounds.right > selDropdownBoundaryRight) selDropdownInlineOffset += selDropdownBoundaryRight - selDropdownMenuBounds.right;
+        // 应用右侧修正后仍可能在窄容器越过左侧，因此继续补偿左边界。
+        if (selDropdownMenuBounds.left + selDropdownInlineOffset < selDropdownBoundaryLeft) selDropdownInlineOffset += selDropdownBoundaryLeft - (selDropdownMenuBounds.left + selDropdownInlineOffset);
+        // 最终偏移通过组件变量写回，不改变触发器自身布局。
+        instance.menu.style.setProperty("--seldropdown-menu-inline-offset", `${selDropdownInlineOffset}px`);
+    }
+
     // 打开指定下拉并聚焦当前或指定方向的可用选项。
     function selDropdownMenuOpen(instance, focusMode) {
         // 先关闭其他实例，保证页面只出现一个下拉浮层。
@@ -114,6 +158,8 @@
         instance.trigger.setAttribute("aria-expanded", "true");
         // 保存全局打开实例供点击外部和滚动关闭。
         selDropdownMenuOpenInstance = instance;
+        // 菜单可见后按当前面板、窗口和视口边界完成上下翻转与横向回收。
+        selDropdownMenuPosition(instance);
         // 找到当前原生值对应的选项索引。
         const selectedIndex = instance.options.findIndex((option) => option.value === instance.select.value);
         // 向下打开从当前选项开始，向上打开从最后一个可用选项开始。
@@ -515,6 +561,12 @@
         // 页面或外部容器滚动时关闭浮层，避免空间错位。
         selDropdownMenuClose(selDropdownMenuOpenInstance, false);
     }, true);
+
+    // 浏览器尺寸变化时重新放置仍打开的菜单，避免旧坐标在新视口中形成越界。
+    window.addEventListener("resize", () => {
+        // 只有打开实例需要即时重算边界。
+        if (selDropdownMenuOpenInstance) selDropdownMenuPosition(selDropdownMenuOpenInstance);
+    });
 
     // 根据原生节点或 id 解析组件实例。
     function selDropdownMenuResolveInstance(target) {

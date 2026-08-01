@@ -96,7 +96,7 @@ load_rule_for_backend_entity_named_frontend_control_instance = WEB_BUSINESS_CONT
 load_rule_for_selgrid_get_instance_or_child_controller_scope = WEB_BUSINESS_CONTROL_MULTI_INSTANCE_RULES
 load_rule_for_multi_instance_filter_tree_menu_or_pagination_isolation = WEB_BUSINESS_CONTROL_MULTI_INSTANCE_RULES
 
-<!-- 网页表格及其列、树、标题、搜索、菜单、分页和每个下拉框的后端聚合 JSON 与国际化规则；用于业务数据分片命名、稳定业务代码、多语言目录、应用装配层和生产单接口契约。 -->
+<!-- 网页表格及其列、树、标题、搜索、菜单、分页和每个下拉框的后端聚合 JSON 与国际化规则；用于业务数据分片命名、稳定业务代码、真实分页数据切片、多语言计数一致性、应用装配层和生产单接口契约。 -->
 WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES = 跨工程通用规则/RUL_网页业务控件后端聚合JSON与国际化规则.md
 load_rule_for_web_grid_business_data_split_json_or_backend_payload = WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES
 load_rule_for_web_grid_column_tree_title_menu_pagination_select_json = WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES
@@ -134,6 +134,13 @@ WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES = 跨工程通用规则/RUL_�
 load_rule_for_web_runtime_asset_directory_or_layering = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
 load_rule_for_web_image_compression_webp_avif_or_png_optimization = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
 load_rule_for_web_asset_move_reference_or_visual_qa = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
+
+<!-- SELPLAT 水晶窗体、菜单、浮层和面板的完整材质规则；用于禁止无明确设计要求的镂空中心、要求九宫格中心填充、统一标题栏内容区底栏、约束边框内侧内容安全区与贴边浮层回收，并验证缩放后的圆角与灯光连续性。 -->
+SELPLAT_CRYSTAL_UI_MATERIAL_RULES = selplat/通用规则/RUL_SELPLAT水晶界面材质规则.md
+load_rule_for_selplat_crystal_window_menu_or_floating_panel = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
+load_rule_for_selplat_crystal_nine_slice_center_fill_or_non_hollow_surface = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
+load_rule_for_selplat_crystal_content_safe_area_popup_boundary_or_alpha_shaped_effect = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
+load_rule_for_selplat_crystal_default_resize_maximize_restore_visual_qa = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
 
 <!-- uniauth 静态页面的 JavaScript 文件、模块标识、公开接口、事件、组件类和 CSS 自定义变量命名规则；公共脚本使用 selBase，表格脚本使用 selGrid，表格样式使用 selgrid。 -->
 UNIAUTH_STATIC_PAGE_FRONTEND_NAMING_RULES = selplat/应用规则/uniauth/RUL_静态页面前端命名规则.md

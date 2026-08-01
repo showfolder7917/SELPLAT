@@ -139,8 +139,16 @@
             }
         }
 
-        // 根据 pagination JSON 生成分页按钮，页数和可见页码不再写死在 HTML。
-        function selGridRenderPaginationStructure() {
+        // 根据当前总页数和页码生成紧凑的可见页码，数据量及每页条数变化时无需依赖静态页码数组。
+        function selGridResolveVisiblePages(selGridTotalPages) {
+            // 首页、末页和当前页前后各一页组成候选集合，确保翻页后当前页始终有直接入口。
+            const selGridCandidatePages = [1, selGridState.currentPage - 1, selGridState.currentPage, selGridState.currentPage + 1, selGridTotalPages];
+            // 过滤越界页码、去重并升序排列，供渲染层在空隙中插入省略号。
+            return Array.from(new Set(selGridCandidatePages.filter((selGridPageNumber) => selGridPageNumber >= 1 && selGridPageNumber <= selGridTotalPages))).sort((selGridLeftPage, selGridRightPage) => selGridLeftPage - selGridRightPage);
+        }
+
+        // 根据当前筛选结果和页面容量重建分页按钮，页数不再由静态演示配置写死。
+        function selGridRenderPaginationStructure(selGridTotalPages) {
             // 当前实例分页根允许独立删除。
             const selGridPaginationRoot = selGridRoot.querySelector('[data-sel-grid-role="pagination"]');
             // 没有分页区域时直接返回。
@@ -165,8 +173,8 @@
             selGridPaginationFragment.appendChild(selGridPreviousButton);
             // 记录前一个页码，用于在不连续页码之间插入省略号。
             let selGridPreviousPage = 0;
-            // 后端决定需要展示哪些数字页。
-            selGridPaginationData.visiblePages.forEach((selGridPageNumber) => {
+            // 当前总页数和页码共同决定需要展示哪些数字页。
+            selGridResolveVisiblePages(selGridTotalPages).forEach((selGridPageNumber) => {
                 // 页码跳跃超过一页时插入视觉省略号。
                 if (selGridPreviousPage > 0 && selGridPageNumber - selGridPreviousPage > 1) {
                     // 省略号不参与辅助技术朗读。
@@ -182,16 +190,16 @@
                 }
                 // 每个数字页使用真实按钮。
                 const selGridPageButton = document.createElement("button");
-                // 第一页按后端初始页决定是否激活。
-                selGridPageButton.className = `selgrid-pagination-button${selGridPageNumber === selGridPaginationData.currentPage ? " selgrid-pagination-current" : ""}`;
+                // 当前页获得激活视觉，筛选和容量变化后仍与真实数据页一致。
+                selGridPageButton.className = `selgrid-pagination-button${selGridPageNumber === selGridState.currentPage ? " selgrid-pagination-current" : ""}`;
                 // 按钮不提交外部表单。
                 selGridPageButton.type = "button";
                 // 页码值供事件委托读取。
                 selGridPageButton.dataset.page = String(selGridPageNumber);
                 // 可见文字就是页码。
                 selGridPageButton.textContent = String(selGridPageNumber);
-                // 初始当前页同步 aria-current。
-                if (selGridPageNumber === selGridPaginationData.currentPage) {
+                // 当前页同步 aria-current，辅助技术可读取真实分页位置。
+                if (selGridPageNumber === selGridState.currentPage) {
                     selGridPageButton.setAttribute("aria-current", "page");
                 }
                 // 页码按钮加入片段。
@@ -213,19 +221,23 @@
             selGridNextButton.innerHTML = '<i class="ri-arrow-right-s-line" aria-hidden="true"></i>';
             // 下一页按钮放在页码之后。
             selGridPaginationFragment.appendChild(selGridNextButton);
+            // 第一页时禁用上一页，避免用户触发无效边界动作。
+            selGridPreviousButton.disabled = selGridState.currentPage <= 1;
+            // 末页时禁用下一页，末页不足一页也保持正确边界。
+            selGridNextButton.disabled = selGridState.currentPage >= selGridTotalPages;
             // 一次替换完整分页结构。
             selGridPaginationRoot.replaceChildren(selGridPaginationFragment);
         }
 
         // 表头必须先生成，后续视图缓存才能找到动态全选按钮。
         selGridRenderColumnHeader();
-        // 分页结构必须先生成，后续事件委托才能响应后端页码。
-        selGridRenderPaginationStructure();
 
     // 页面状态集中保存当前选择、菜单归属和分页位置，保证交互之间不会互相覆盖。
     const selGridState = {
         // 初始选择集合来自 data JSON。
         selectedIds: new Set(selGridInputPayload.data.selectedIds),
+        // 记录通过数据栏选中的焦点行，重绘后仍把键盘焦点还给该业务记录。
+        focusedProjectId: null,
         // 初始页码来自 pagination JSON。
         currentPage: selGridPaginationData.currentPage,
         // 初始每页条数来自 pagination JSON。
@@ -348,8 +360,14 @@
         const row = document.createElement("tr");
         // 主键用于选择交互和操作菜单定位。
         row.dataset.projectId = String(project.id);
+        // 数据行可接收程序化焦点，使栏目点击后的焦点落在实际被选业务记录上。
+        row.tabIndex = -1;
+        // 辅助技术通过行选择语义读取当前记录是否已被勾选。
+        row.setAttribute("aria-selected", String(selGridState.selectedIds.has(project.id)));
         // 当前被选中的项目行获得蓝紫色发光背景。
         row.classList.toggle("selgrid-row-selected", selGridState.selectedIds.has(project.id));
+        // 栏目点击后的焦点行额外获得聚焦边框，避免多选时无法辨认最后操作的记录。
+        row.classList.toggle("selgrid-row-focused", selGridState.focusedProjectId === project.id);
 
         // 第一列承载单行选择按钮。
         const checkCell = document.createElement("td");
@@ -564,8 +582,18 @@
 
     // 根据当前状态重新渲染可见项目记录，并同步全选、统计和空结果视觉。
     function selGridRenderTable() {
-        // 先计算本轮组合筛选后的项目集合。
-        const visibleProjects = selGridGetVisibleProjects();
+        // 先计算本轮组合筛选后的完整项目集合，分页只作用于筛选结果而不丢失匹配记录。
+        const filteredProjects = selGridGetVisibleProjects();
+        // 每页条数始终至少为一，避免异常输入造成除零或无限页数。
+        const normalizedPageSize = Math.max(1, Math.floor(Number(selGridState.pageSize) || selGridPaginationData.pageSize));
+        // 当前真实总页数由匹配数量和页面容量计算，空结果仍保留第一页导航语义。
+        const totalPages = Math.max(1, Math.ceil(filteredProjects.length / normalizedPageSize));
+        // 筛选缩短结果或外部传入越界页码时，把当前页收敛到真实页数范围。
+        selGridState.currentPage = Math.min(totalPages, Math.max(1, Math.floor(Number(selGridState.currentPage) || 1)));
+        // 当前页起始位置按零基下标计算。
+        const pageStartIndex = (selGridState.currentPage - 1) * normalizedPageSize;
+        // 当前页只截取页面容量范围内的记录，末页自然保留不足一页的数据。
+        const visibleProjects = filteredProjects.slice(pageStartIndex, pageStartIndex + normalizedPageSize);
         // 文档片段减少逐行插入引起的重复布局计算。
         const fragment = document.createDocumentFragment();
         // 每条可见项目记录生成完整交互行。
@@ -579,25 +607,34 @@
             // 表头仍存在时同步当前筛选视图的全选语义。
             selGridView.selectAll.setAttribute("aria-checked", String(allVisibleSelected));
         }
-        // 空结果区域只在当前筛选没有匹配项目时显示。
+        // 空结果区域只在完整筛选结果没有匹配项目时显示。
         if (selGridView.emptyState) {
             // 空结果区域被保留时才切换可见状态。
-            selGridView.emptyState.hidden = visibleProjects.length !== 0;
+            selGridView.emptyState.hidden = filteredProjects.length !== 0;
         }
-        // 表格统计同时说明当前可见数量和后端分页总数据量。
+        // 表格统计同时说明当前匹配数量和本次数据响应的真实总记录数。
         if (selGridView.totalCount) {
             // 全部可见时使用 summaryAll，筛选后使用 summaryFiltered。
-            const selGridSummaryTemplate = visibleProjects.length === selGridProjects.length ? selGridPaginationData.summaryAll : selGridPaginationData.summaryFiltered;
+            const selGridSummaryTemplate = filteredProjects.length === selGridProjects.length ? selGridPaginationData.summaryAll : selGridPaginationData.summaryFiltered;
             // 当前数量和总数只替换模板值，不写死任何语言单位。
             selGridView.totalCount.textContent = selGridFormatMessage(selGridSummaryTemplate, {
-                visible: visibleProjects.length,
-                total: selGridPaginationData.totalCount
+                visible: filteredProjects.length,
+                total: selGridProjects.length
             });
         }
-        // 当前菜单项目被筛选隐藏时关闭浮层，避免菜单失去可见锚点。
+        // 页码结构与真实筛选数量同步更新，容量和条件变化后按钮数量立即正确。
+        selGridRenderPaginationStructure(totalPages);
+        // 当前菜单项目离开当前数据页时关闭浮层，避免菜单失去可见锚点。
         if (selGridMenuController && selGridMenuController.getProjectId() && !visibleProjects.some((project) => project.id === selGridMenuController.getProjectId())) {
             // 独立菜单控制器负责清理自身状态。
             selGridMenuController.close();
+        }
+        // 栏目点击触发重绘后，只在目标记录仍可见时把浏览器焦点移动回该行。
+        if (selGridState.focusedProjectId !== null) {
+            // 当前实例范围内按稳定业务主键定位刚刚渲染出的目标行。
+            const focusedRow = selGridView.tableBody.querySelector(`tr[data-project-id="${selGridState.focusedProjectId}"]`);
+            // 筛选或分页隐藏目标行时不强行移动焦点，避免焦点落入不可见内容。
+            focusedRow?.focus({ preventScroll: true });
         }
     }
 
@@ -634,10 +671,32 @@
 
     // 表格事件委托统一处理选择、查看、编辑和更多菜单。
     selGridView.tableBody.addEventListener("click", (event) => {
+        // 从点击源向上定位当前实例的数据行，表格外部事件不会参与行选择。
+        const row = event.target.closest("tr[data-project-id]");
+        // 事件不属于当前表格主体时立即终止，保证同页其他实例不会串行选择。
+        if (!row || !selGridView.tableBody.contains(row)) {
+            return;
+        }
         // 只接受带业务动作的按钮点击。
         const button = event.target.closest("button[data-action]");
-        // 点击普通单元格时不改变当前状态。
+        // 非动作控件点击表示用户选中了当前数据栏。
         if (!button) {
+            const projectId = Number(row.dataset.projectId);
+            // 静态数据中找不到该主键时说明 DOM 已失配，停止当前选择操作。
+            const project = selGridProjects.find((item) => item.id === projectId);
+            // 无效行不改写选择和焦点状态。
+            if (!project) {
+                return;
+            }
+            // 普通单元格点击采用单选语义，先清空当前实例内其他项目的勾选状态。
+            selGridState.selectedIds.clear();
+            // 当前项目在清空后重新加入选择集合，成为唯一勾选且高亮的业务记录。
+            // 栏目点击自动勾选当前业务记录；已勾选记录保持勾选而不是反向取消。
+            selGridState.selectedIds.add(projectId);
+            // 保存最后栏目点击的业务主键，供重绘后的高亮焦点回填。
+            selGridState.focusedProjectId = projectId;
+            // 选择和焦点变化后一次重绘行、复选框和高亮状态。
+            selGridRenderTable();
             return;
         }
         // 把按钮上的项目主键转换成固定数据中的数字标识。
@@ -716,21 +775,12 @@
         if (button.dataset.pageAction === "previous") {
             selGridState.currentPage = Math.max(1, selGridState.currentPage - 1);
         }
-        // 下一页动作保证页码不超过后端 pagination 总页数。
+        // 下一页动作先向后推进一页，统一渲染入口会依据当前筛选数量收敛到真实末页。
         if (button.dataset.pageAction === "next") {
-            selGridState.currentPage = Math.min(selGridPaginationData.totalPages, selGridState.currentPage + 1);
+            selGridState.currentPage += 1;
         }
-        // 所有可见数字按钮同步当前页视觉。
-        selGridRoot.querySelectorAll(".selgrid-pagination-button[data-page]").forEach((pageButton) => {
-            // 当前页按钮获得发光紫色背景。
-            pageButton.classList.toggle("selgrid-pagination-current", Number(pageButton.dataset.page) === selGridState.currentPage);
-            // 只有当前页保留 aria-current。
-            if (Number(pageButton.dataset.page) === selGridState.currentPage) {
-                pageButton.setAttribute("aria-current", "page");
-            } else {
-                pageButton.removeAttribute("aria-current");
-            }
-        });
+        // 翻页后同时重绘当前页数据、页码结构、边界禁用状态和统计。
+        selGridRenderTable();
         // 用户得到当前分页位置反馈。
             selGridShowToast(selGridFormatMessage(selGridPaginationData.pageChangedMessage, { page: selGridState.currentPage }));
         });
@@ -742,6 +792,10 @@
         selGridView.pageSize.addEventListener("change", () => {
         // 将选择器字符串值转换成业务数值。
         selGridState.pageSize = Number(selGridView.pageSize.value);
+        // 页面容量变化后回到第一页，避免旧页码在新总页数中越界。
+        selGridState.currentPage = 1;
+        // 立即按新容量重新截取数据并重建页码。
+        selGridRenderTable();
         // 提示当前页面容量设置。
             selGridShowToast(selGridFormatMessage(selGridPaginationData.pageSizeChangedMessage, { size: selGridState.pageSize }));
         });
@@ -767,6 +821,8 @@
         selGridView.typeFilter.addEventListener("change", () => {
         // 保存空值或当前选择的项目类型。
         selGridState.type = selGridView.typeFilter.value;
+        // 新类型条件从第一页开始展示，避免沿用旧条件的后续页。
+        selGridState.currentPage = 1;
         // 类型条件变化后重绘项目表。
             selGridRenderTable();
         });
@@ -778,6 +834,8 @@
         selGridView.statusFilter.addEventListener("change", () => {
         // 保存空值或当前选择的项目状态。
         selGridState.status = selGridView.statusFilter.value;
+        // 新状态条件从第一页开始展示，避免筛选后出现空白旧页。
+        selGridState.currentPage = 1;
         // 顶部标签根据真实状态条件切换高亮。
         selGridRoot.querySelectorAll("[data-status-filter]").forEach((button) => button.classList.toggle("selpanel-status-tab-active", button.dataset.statusFilter === selGridState.status));
         // 状态条件变化后重绘项目表。
@@ -797,6 +855,8 @@
         }
         // 标签值写入共享状态。
         selGridState.status = button.dataset.statusFilter;
+        // 快捷状态筛选回到第一页，与工具栏筛选行为保持一致。
+        selGridState.currentPage = 1;
         // 工具栏状态选择器同步同一业务值。
         if (selGridView.statusFilter && window.selDropdownMenu) {
             // 工具栏状态下拉仍存在时同步同一业务值。
@@ -821,6 +881,8 @@
         selGridState.status = "";
         // 清空左树附加筛选。
         selGridState.treeFilter = {};
+        // 重置筛选同时回到第一页，恢复完整数据集的起始位置。
+        selGridState.currentPage = 1;
         // 独立搜索控件恢复空值但不重复提交，当前重置逻辑统一负责重绘。
         if (selGridSearchController) {
             // 搜索控制器只清空所属实例。
@@ -856,6 +918,8 @@
         const detail = event.detail || {};
         // 复制筛选对象，避免业务页面修改树组件人工配置。
         selGridState.treeFilter = { ...(detail.filter || {}) };
+        // 树节点切换后回到第一页，保证新分类首批记录立即可见。
+        selGridState.currentPage = 1;
         // 树节点变化后重绘组合筛选结果。
         selGridRenderTable();
         // 显示当前分类名称，证明树形导航已真正生效。
@@ -884,8 +948,14 @@
             // 筛选命令完成后不执行通用提示。
             return;
         }
-        // 新建和导出动作使用清晰中文反馈。
-            selGridShowToast(button.dataset.panelCommand === "new" ? selGridMessages.newOpened : selGridMessages.exportPreparing);
+        // 新建命令向当前实例根派发受控事件，应用层决定打开哪一个业务窗口。
+        if (button.dataset.panelCommand === "new") {
+            selGridRoot.dispatchEvent(new CustomEvent("selGrid:new", { bubbles: true, detail: { instanceKey: selGridId, backendEntity: selGridEntity } }));
+            selGridShowToast(selGridMessages.newOpened);
+            return;
+        }
+        // 导出动作继续使用现有反馈，不改变其业务边界。
+        selGridShowToast(selGridMessages.exportPreparing);
         });
     }
 
@@ -941,6 +1011,8 @@
         selGridState.type = "";
         selGridState.status = "";
         selGridState.treeFilter = {};
+        // 无工具栏的降级重置同样回到第一页，保持公开 reset 语义完整。
+        selGridState.currentPage = 1;
         if (selGridSearchController) {
             selGridSearchController.clear({ submit: false });
         }
@@ -950,17 +1022,12 @@
 
     // 公开分页方法只修改当前实例页码和分页按钮，不触碰其他表格根。
     function selGridSetPage(page) {
-        const normalizedPage = Math.min(selGridPaginationData.totalPages, Math.max(1, Math.floor(Number(page) || 1)));
+        // 外部页码先规范为正整数，真实末页边界由统一渲染入口结合筛选结果计算。
+        const normalizedPage = Math.max(1, Math.floor(Number(page) || 1));
+        // 只改写当前实例状态，不访问页面级固定节点。
         selGridState.currentPage = normalizedPage;
-        selGridRoot.querySelectorAll(".selgrid-pagination-button[data-page]").forEach((button) => {
-            const current = Number(button.dataset.page) === normalizedPage;
-            button.classList.toggle("selgrid-pagination-current", current);
-            if (current) {
-                button.setAttribute("aria-current", "page");
-            } else {
-                button.removeAttribute("aria-current");
-            }
-        });
+        // 重绘后当前实例显示目标页数据并同步页码可访问状态。
+        selGridRenderTable();
         return true;
     }
 
@@ -968,10 +1035,15 @@
     const selGridFiltersController = Object.freeze({
         reset: selGridResetInstance,
         setSearch(value) {
+            // 外部搜索值只写入当前实例状态，避免同页其他表格被同步筛选。
             selGridState.search = String(value ?? "");
+            // 新搜索条件始终从第一页展示，避免旧页码落到新结果范围之外。
+            selGridState.currentPage = 1;
             if (selGridSearchController) {
+                // 搜索基础控件同步当前实例输入框文字，但不重复提交事件。
                 selGridSearchController.setValue(selGridState.search);
             }
+            // 当前实例按新条件重新筛选、分页并渲染。
             selGridRenderTable();
             return true;
         },
@@ -988,11 +1060,18 @@
         setPage: selGridSetPage,
         getPage: () => selGridState.currentPage,
         setPageSize(value) {
+            // 外部容量输入规范为正整数，无效值回退当前本地化分页默认值。
             selGridState.pageSize = Math.max(1, Math.floor(Number(value) || selGridPaginationData.pageSize));
+            // 容量变化后回到第一页，避免当前页超出新的真实总页数。
+            selGridState.currentPage = 1;
             if (selGridView.pageSize) {
+                // 原生选择器同步公开 API 设置的业务值。
                 selGridView.pageSize.value = String(selGridState.pageSize);
+                // 自定义下拉外观刷新当前可见标签。
                 window.selDropdownMenu?.refresh(selGridView.pageSize);
             }
+            // 当前实例立即按新容量截取和渲染数据。
+            selGridRenderTable();
             return true;
         },
         getPageSize: () => selGridState.pageSize

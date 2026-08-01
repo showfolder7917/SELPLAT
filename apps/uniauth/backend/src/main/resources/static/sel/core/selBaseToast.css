@@ -22,6 +22,11 @@
     transition: opacity 160ms ease, transform 160ms ease;
 }
 
+/* 面板水晶表面的直接子元素规则不得把全局反馈降级为相对定位，否则隐藏反馈也会撑大整页宽度。 */
+.selpanel-crystal-surface > .selgrid-feedback-toast {
+    position: fixed;
+}
+
 .selgrid-feedback-toast.selgrid-feedback-visible {
     opacity: 1;
     transform: translate(-50%, 0);

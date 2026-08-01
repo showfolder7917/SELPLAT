@@ -23,6 +23,14 @@ business_control_select_payload_one_file_per_control = true
 business_control_select_option_required_fields = value,label
 business_control_select_option_value_semantics = stable-business-code
 
+<!-- 分页必须改变当前实例实际渲染的数据切片，禁止只切换页码高亮；演示总数、状态计数和树节点计数必须与稳定行数据一致。 -->
+business_control_pagination_render_slice = filtered-items[(current-page-1)*page-size:current-page*page-size]
+business_control_pagination_static_highlight_only_is_forbidden = true
+business_control_pagination_total_count_source = backend-total-or-stable-data-length
+business_control_demo_count_fields_must_match_stable_data = pagination-total,status-count,tree-count
+business_control_filter_or_page_size_change_must_reset_page = 1
+business_control_pagination_page_must_clamp_to_real_total_pages = true
+
 <!-- 生产页面只消费后端聚合对象；静态多文件请求仅作为数据契约样例和无后端演示，不得成为生产网络协议。 -->
 business_control_production_api_shape = one-aggregated-response-per-business-control
 business_control_static_fragment_fetch_usage = fixture-and-contract-demo-only
@@ -55,7 +63,7 @@ business_control_payload_documentation_file = README.md
 business_control_payload_documentation_language = project-primary-language
 
 <!-- 验收同时覆盖 JSON 完整性、至少三种语言、稳定代码筛选、两个实例隔离和浏览器控制台错误。 -->
-business_control_payload_qa_must_cover = json-parse,localized-parts,stable-code-filter,multi-instance-isolation,browser-console
+business_control_payload_qa_must_cover = json-parse,localized-parts,stable-code-filter,pagination-data-slice,page-size,partial-last-page,filter-page-reset,multi-instance-isolation,browser-console
 business_control_payload_i18n_qa_minimum_locales = 3
 
 java_ability_refs = none
