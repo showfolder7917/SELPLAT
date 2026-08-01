@@ -117,7 +117,7 @@
     width: min(max(100%, var(--seldropdown-menu-min-width)), calc(100vw - 16px));
     box-sizing: border-box;
     border: 16px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-2");
+    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
     border-image-slice: 58 69 58 69 fill;
     border-image-width: 16px;
     border-image-repeat: stretch;

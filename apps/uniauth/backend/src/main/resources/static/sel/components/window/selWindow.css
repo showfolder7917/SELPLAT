@@ -27,7 +27,7 @@
     grid-template-rows: 82px minmax(0, 1fr);
     overflow: visible;
     border: 18px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-2");
+    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
     border-image-slice: 58 69 58 69 fill;
     border-image-width: 18px;
     border-image-repeat: stretch;

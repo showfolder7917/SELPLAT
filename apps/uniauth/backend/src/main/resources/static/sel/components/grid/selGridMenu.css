@@ -24,7 +24,7 @@
     width: var(--selgrid-menu-width);
     box-sizing: border-box;
     border: var(--selgrid-menu-edge-size) solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-2");
+    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
     border-image-slice: 58 69 58 69 fill;
     border-image-width: var(--selgrid-menu-edge-size);
     border-image-repeat: stretch;
@@ -197,7 +197,7 @@
     max-height: var(--selgrid-menu-submenu-available-height, calc(100vh - 16px));
     box-sizing: border-box;
     border: 15px solid transparent;
-    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-2");
+    border-image-source: url("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
     border-image-slice: 58 69 58 69 fill;
     border-image-width: 15px;
     border-image-repeat: stretch;
