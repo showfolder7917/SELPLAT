@@ -14,7 +14,7 @@
         // null 表示使用当前皮肤提供的主题色，刷新页面不会遗留用户临时选色。
         themeColor: null,
         panelOpacity: 82,
-        glassBlur: 58,
+        backgroundFrost: 58,
         themeTint: 68,
         panelRadius: 50,
         panelScale: 50,
@@ -46,10 +46,10 @@
     const selPersonalizationFrameColorCache = new Map();
     // 预设只保存与皮肤无关的强度值；实际颜色始终来自当前皮肤 CSS 令牌。
     const selPersonalizationPresets = Object.freeze([
-        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ panelOpacity: 82, glassBlur: 58, themeTint: 68, panelRadius: 50, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) }),
-        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ panelOpacity: 34, glassBlur: 86, themeTint: 42, panelRadius: 68, panelScale: 48, innerPanelFit: 100, frameWidth: 46, contentInset: 56, panelGap: 58, glowSpread: 62, controlGap: 54, windowMotion: 64, glowMotion: 62, reducedMotion: false }) }),
-        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ panelOpacity: 91, glassBlur: 36, themeTint: 30, panelRadius: 62, panelScale: 46, innerPanelFit: 100, frameWidth: 48, contentInset: 58, panelGap: 58, glowSpread: 24, controlGap: 58, windowMotion: 24, glowMotion: 12, reducedMotion: true }) }),
-        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ panelOpacity: 100, glassBlur: 12, themeTint: 55, panelRadius: 42, panelScale: 50, innerPanelFit: 100, frameWidth: 58, contentInset: 54, panelGap: 54, glowSpread: 38, controlGap: 54, windowMotion: 42, glowMotion: 28, reducedMotion: false }) }),
+        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ panelOpacity: 82, backgroundFrost: 58, themeTint: 68, panelRadius: 50, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) }),
+        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ panelOpacity: 34, backgroundFrost: 86, themeTint: 42, panelRadius: 68, panelScale: 48, innerPanelFit: 100, frameWidth: 46, contentInset: 56, panelGap: 58, glowSpread: 62, controlGap: 54, windowMotion: 64, glowMotion: 62, reducedMotion: false }) }),
+        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ panelOpacity: 91, backgroundFrost: 36, themeTint: 30, panelRadius: 62, panelScale: 46, innerPanelFit: 100, frameWidth: 48, contentInset: 58, panelGap: 58, glowSpread: 24, controlGap: 58, windowMotion: 24, glowMotion: 12, reducedMotion: true }) }),
+        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ panelOpacity: 100, backgroundFrost: 12, themeTint: 55, panelRadius: 42, panelScale: 50, innerPanelFit: 100, frameWidth: 58, contentInset: 54, panelGap: 54, glowSpread: 38, controlGap: 54, windowMotion: 42, glowMotion: 28, reducedMotion: false }) }),
         Object.freeze({ id: "custom", label: "自定义", icon: "ri-equalizer-2-line", values: null })
     ]);
     // 面板 range 配置集中声明分组、标签和辅助说明，增删项目不需要复制事件分支。
@@ -60,7 +60,7 @@
             icon: "ri-palette-line",
             items: Object.freeze([
                 Object.freeze({ key: "panelOpacity", label: "面板透明度", hint: "同步玻璃底板与表格结构" }),
-                Object.freeze({ key: "glassBlur", label: "玻璃模糊", hint: "增强前后景分离" }),
+                Object.freeze({ key: "backgroundFrost", label: "背景磨砂", hint: "虚化面板后方内容" }),
                 Object.freeze({ key: "themeTint", label: "主题染色", hint: "颜色跟随当前皮肤" }),
                 Object.freeze({ key: "panelRadius", label: "面板圆角", hint: "贴合水晶边框切角" })
             ])
@@ -498,11 +498,17 @@
             // 普通行和偶数行分别使用最高 10% 与 16% 的覆盖，保留弱斑马纹而不遮挡面板透明度。
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-row-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0, 0.10)));
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-row-even-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0, 0.16)));
-            // 悬停和选中行设置最低可读 Alpha，即使面板为 0% 仍能辨认当前交互目标。
-            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-hover-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0.28, 0.56)));
-            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-selected-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0.46, 0.76)));
-            // 玻璃模糊映射到 0 至 24px 的安全范围。
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-blur", `${selPersonalizationMap(selPersonalizationPanelState.glassBlur, 0, 24)}px`);
+            // 普通交互控件从 25% 起步，保证复杂背景上仍能看出可点击边界。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-control-base-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0.25, 0.84)));
+            // 悬停、选中和主操作 Alpha 由主题默认令牌固定提供，面板透明度不再改写交互反馈强度。
+            // 背景磨砂将用户强度映射到 0 至 48px，大字和高对比表格在透明面板后方也不再保持清晰边缘。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-background-frost-blur", `${selPersonalizationMap(selPersonalizationPanelState.backgroundFrost, 0, 48)}px`);
+            // 背景亮度从原始 100% 逐步压低到 58%，削弱穿透文字与面板内容的明暗竞争。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-background-frost-brightness", String(selPersonalizationMap(selPersonalizationPanelState.backgroundFrost, 1, 0.58)));
+            // 背景饱和度最低降到 55%，防止表格状态色透过磨砂层抢占视觉层级。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-background-frost-saturation", String(selPersonalizationMap(selPersonalizationPanelState.backgroundFrost, 1, 0.55)));
+            // 独立中性遮蔽层最高为 26%，它不依赖面板透明度，因此面板 0% 时磨砂仍有效。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-background-frost-veil", String(selPersonalizationMap(selPersonalizationPanelState.backgroundFrost, 0, 0.26)));
             // 染色强度只写比例；未来皮肤通过覆盖主题 RGB 令牌换色。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-theme-tint-strength", `${selPersonalizationPanelState.themeTint}%`);
             // 中心底板最多混入 32% 主题色，让整套皮肤能够明显脱离原始蓝色且保持文字可读。

@@ -638,6 +638,38 @@
         }
     }
 
+    // 选择状态只原位同步当前页已存在的行，避免点击后重建所有单元格、头像和操作按钮。
+    function selGridSyncSelectionVisuals() {
+        // 一次读取当前页全部业务行，让行高亮和复选框在同一个点击任务中完成。
+        const selGridVisibleRows = Array.from(selGridView.tableBody.querySelectorAll("tr[data-project-id]"));
+        // 逐行把内部选择集合映射到无障碍语义、可视类和复选框。
+        selGridVisibleRows.forEach((selGridVisibleRow) => {
+            // DOM 主键转为与 selectedIds 一致的数字类型。
+            const selGridVisibleProjectId = Number(selGridVisibleRow.dataset.projectId);
+            // 当前行是否选中只以统一状态集合为准。
+            const selGridVisibleSelected = selGridState.selectedIds.has(selGridVisibleProjectId);
+            // 行选择语义与视觉类在同一轮同步，读屏和画面不产生时差。
+            selGridVisibleRow.setAttribute("aria-selected", String(selGridVisibleSelected));
+            selGridVisibleRow.classList.toggle("selgrid-row-selected", selGridVisibleSelected);
+            // 最后通过栏目点击的行继续显示键盘焦点边框。
+            selGridVisibleRow.classList.toggle("selgrid-row-focused", selGridState.focusedProjectId === selGridVisibleProjectId);
+            // 行内复选框在原节点上直接改写 aria-checked，对勾不再等待新行重建。
+            const selGridVisibleCheckbox = selGridVisibleRow.querySelector('.selgrid-selection-checkbox[data-action="select"]');
+            selGridVisibleCheckbox?.setAttribute("aria-checked", String(selGridVisibleSelected));
+        });
+        // 当前页有数据且每行都已选中时，表头复选框才显示全选。
+        const selGridAllVisibleSelected = selGridVisibleRows.length > 0 && selGridVisibleRows.every((selGridVisibleRow) => selGridState.selectedIds.has(Number(selGridVisibleRow.dataset.projectId)));
+        // 表头控件可选存在，不存在时不影响行内即时同步。
+        selGridView.selectAll?.setAttribute("aria-checked", String(selGridAllVisibleSelected));
+        // 栏目点击记录了聚焦主键时，仅把焦点放到已存在的对应行。
+        if (selGridState.focusedProjectId !== null) {
+            // 使用当前页已收集的行查找焦点目标，避免再次扫描整个表格。
+            const selGridFocusedVisibleRow = selGridVisibleRows.find((selGridVisibleRow) => Number(selGridVisibleRow.dataset.projectId) === selGridState.focusedProjectId);
+            // preventScroll 保证即时选中不改变用户当前的表格滚动位置。
+            selGridFocusedVisibleRow?.focus({ preventScroll: true });
+        }
+    }
+
     // 独立菜单状态变化后只同步更多按钮，不重绘整个表格。
     function selGridSyncMenuButtonStates() {
         // 读取菜单当前绑定项目，关闭时得到 null。
@@ -695,8 +727,8 @@
             selGridState.selectedIds.add(projectId);
             // 保存最后栏目点击的业务主键，供重绘后的高亮焦点回填。
             selGridState.focusedProjectId = projectId;
-            // 选择和焦点变化后一次重绘行、复选框和高亮状态。
-            selGridRenderTable();
+            // 选择和焦点变化后原位同步行、复选框和高亮，点击当帧即可见。
+            selGridSyncSelectionVisuals();
             return;
         }
         // 把按钮上的项目主键转换成固定数据中的数字标识。
@@ -716,8 +748,8 @@
                 // 未选项目点击后加入选择集合。
                 selGridState.selectedIds.add(projectId);
             }
-            // 选择变化后重绘表格以同步行背景和复选框。
-            selGridRenderTable();
+            // 选择变化后原位同步行背景和复选框，不重建其他业务单元格。
+            selGridSyncSelectionVisuals();
             // 选择动作结束后不继续触发其他按钮逻辑。
             return;
         }
@@ -752,8 +784,8 @@
             // 否则把当前可见项目全部加入选择集合。
             visibleProjects.forEach((project) => selGridState.selectedIds.add(project.id));
         }
-        // 全选状态变化后重新渲染所有行和表头控件。
-            selGridRenderTable();
+        // 全选状态变化后原位同步所有可见行和表头控件。
+            selGridSyncSelectionVisuals();
         });
     }
 

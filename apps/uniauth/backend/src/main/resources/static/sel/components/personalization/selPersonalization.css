@@ -7,7 +7,10 @@
 :root {
     /* 以下个性化参数由 selPersonalization 实时写入；基础颜色和几何统一由 selThemeTokens 提供。 */
     --selpersonal-panel-opacity: 0.82;
-    --selpersonal-panel-blur: 13.92px;
+    --selpersonal-background-frost-blur: 27.84px;
+    --selpersonal-background-frost-brightness: 0.76;
+    --selpersonal-background-frost-saturation: 0.74;
+    --selpersonal-background-frost-veil: 0.15;
     --selpersonal-theme-tint-strength: 68%;
     --selpersonal-theme-tint-mix: 21.76%;
     --selpersonal-frame-width: var(--sel-theme-frame-personalization);
@@ -108,8 +111,11 @@
     position: absolute;
     z-index: -1;
     background-color: var(--selpersonal-panel-surface);
-    -webkit-backdrop-filter: blur(var(--selpersonal-panel-blur));
-    backdrop-filter: blur(var(--selpersonal-panel-blur));
+    /* 独立中性磨砂纱不跟随面板透明度，保证全透明面板仍能压低后方文字细节。 */
+    background-image: linear-gradient(
+        rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-background-frost-veil)),
+        rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-background-frost-veil))
+    );
     pointer-events: none;
     content: "";
 }
@@ -131,6 +137,18 @@
     border-radius: max(2px, calc(var(--sel-theme-radius-popup) - var(--sel-theme-surface-inset-popup)));
 }
 
+/* 个性化面板保留自身独立阴影，仅把背景磨砂采样挂到表面本体。 */
+.selpersonal-panel {
+    -webkit-backdrop-filter:
+        blur(var(--selpersonal-background-frost-blur))
+        brightness(var(--selpersonal-background-frost-brightness))
+        saturate(var(--selpersonal-background-frost-saturation));
+    backdrop-filter:
+        blur(var(--selpersonal-background-frost-blur))
+        brightness(var(--selpersonal-background-frost-brightness))
+        saturate(var(--selpersonal-background-frost-saturation));
+}
+
 /* 所有使用同一九宫格素材的表面共享边框厚度、透明底板和皮肤发光令牌。 */
 .selpanel-crystal-surface,
 .selwindow-window-shell,
@@ -142,6 +160,15 @@
     border-image-source: var(--sel-theme-frame-image);
     background: transparent;
     isolation: isolate;
+    /* 背景采样必须作用在水晶表面本体；放在隔离容器内的负层级伪元素会被父级 filter 阻断。 */
+    -webkit-backdrop-filter:
+        blur(var(--selpersonal-background-frost-blur))
+        brightness(var(--selpersonal-background-frost-brightness))
+        saturate(var(--selpersonal-background-frost-saturation));
+    backdrop-filter:
+        blur(var(--selpersonal-background-frost-blur))
+        brightness(var(--selpersonal-background-frost-brightness))
+        saturate(var(--selpersonal-background-frost-saturation));
     filter: drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / calc(0.18 + (var(--selpersonal-glow-strength) * 0.45))));
     animation: selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
 }
@@ -816,8 +843,8 @@
     border-color: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 72%, white);
     background: linear-gradient(
         135deg,
-        color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 84%, white 16%),
-        color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 72%, rgb(var(--sel-theme-neutral-rgb)))
+        var(--sel-theme-selected-surface),
+        var(--sel-theme-control-hover)
     );
     box-shadow: 0 0 15px rgb(var(--sel-theme-color-rgb) / 0.64), inset 0 0 12px rgba(255, 255, 255, 0.20);
 }
@@ -825,16 +852,23 @@
 .seldropdown-option:hover,
 .seldropdown-option:focus-visible,
 .seldropdown-option.seldropdown-option-active,
-.seldropdown-option[aria-selected="true"],
 .selgrid-menu-item:hover,
 .selgrid-menu-item:focus-visible,
 .selgrid-menu-item.selgrid-menu-pressed,
 .selgrid-menu-item[aria-expanded="true"],
 .selgrid-action-button:hover,
+.selgrid-pagination-button:hover {
+    border-color: rgb(var(--sel-theme-color-rgb) / 0.78);
+    background: var(--sel-theme-interaction-surface-hover);
+    box-shadow: 0 0 13px rgb(var(--sel-theme-color-rgb) / 0.58), inset 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.20);
+}
+
+/* 已选选项与持续激活按钮使用更高的统一选中层，不与短暂悬停态混同。 */
+.seldropdown-option[aria-selected="true"],
 .selgrid-action-button.selgrid-action-active,
 .selgrid-pagination-button.selgrid-pagination-current {
-    border-color: rgb(var(--sel-theme-color-rgb) / 0.78);
-    background: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.72) 68%, rgb(var(--sel-theme-neutral-rgb) / 0.72));
+    border-color: rgb(var(--sel-theme-color-rgb) / 0.82);
+    background: var(--sel-theme-interaction-surface-selected);
     box-shadow: 0 0 13px rgb(var(--sel-theme-color-rgb) / 0.58), inset 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.20);
 }
 
@@ -851,7 +885,7 @@
 .selpanel-reset-button,
 .selpanel-region-heading button {
     border-color: var(--sel-theme-line-soft);
-    background: var(--sel-theme-surface-deep);
+    background: var(--sel-theme-control-surface);
     box-shadow: var(--sel-theme-inset);
 }
 
@@ -865,7 +899,7 @@
 .selpanel-reset-button:hover,
 .selpanel-region-heading button:hover {
     border-color: var(--sel-theme-line);
-    background: var(--sel-theme-surface-raised);
+    background: var(--sel-theme-control-hover);
     box-shadow: 0 0 13px rgb(var(--sel-theme-color-rgb) / 0.42), var(--sel-theme-inset);
 }
 
@@ -875,7 +909,7 @@
 .selpersonal-preset:focus-visible,
 .selpersonal-preset[aria-pressed="true"] {
     border-color: var(--sel-theme-line);
-    background: var(--sel-theme-surface-raised);
+    background: var(--sel-theme-control-hover);
     box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.34), var(--sel-theme-inset);
 }
 
@@ -905,7 +939,7 @@
 .selwindow-minimized-rail,
 .selwindow-minimized-button {
     border-color: var(--sel-theme-line);
-    background: var(--sel-theme-surface-deep);
+    background: var(--sel-theme-control-surface);
     box-shadow: var(--sel-theme-inset);
 }
 
@@ -917,7 +951,7 @@
 .selwindow-minimized-button:hover,
 .selwindow-minimized-button:focus-visible {
     border-color: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 70%, white);
-    background: var(--sel-theme-surface-raised);
+    background: var(--sel-theme-control-hover);
     box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.46), var(--sel-theme-inset);
 }
 
@@ -938,7 +972,7 @@
 .seldatepicker-action,
 .seldropdown-menu-heading kbd {
     border-color: var(--sel-theme-line);
-    background: var(--sel-theme-surface-deep);
+    background: var(--sel-theme-control-surface);
     box-shadow: var(--sel-theme-inset);
 }
 
@@ -954,7 +988,7 @@
 .seldatepicker-action:hover,
 .seldatepicker-action:focus-visible {
     border-color: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 72%, white);
-    background: var(--sel-theme-surface-raised);
+    background: var(--sel-theme-control-hover);
     box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.46), var(--sel-theme-inset);
 }
 
@@ -962,31 +996,42 @@
 .selgrid-action-button,
 .selgrid-pagination-button {
     border-color: var(--sel-theme-line-soft);
-    background: var(--sel-theme-surface-base);
+    background: var(--sel-theme-control-surface);
 }
 
 .selsearch-field-clear:hover,
 .selsearch-field-clear:focus-visible,
 .selgrid-pagination-button:hover {
     border-color: var(--sel-theme-line);
-    background: var(--sel-theme-surface-raised);
+    background: var(--sel-theme-control-hover);
     box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.40);
 }
 
 .selsearch-submit-button {
     border-color: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 72%, white);
-    background: linear-gradient(135deg, var(--sel-theme-surface-accent), var(--sel-theme-surface-raised));
+    background: linear-gradient(135deg, var(--sel-theme-selected-surface), var(--sel-theme-control-hover));
     box-shadow: 0 0 15px rgb(var(--sel-theme-color-rgb) / 0.54), inset 0 0 11px rgba(255, 255, 255, 0.18);
+}
+
+/* 主操作和持续选中按钮在普通控件规则之后覆盖，确保它们使用 46% 起步的强调表面。 */
+.selpanel-status-tab.selpanel-status-tab-active,
+.selpanel-action-button.selpanel-action-primary,
+.selwindow-action-button.selwindow-action-primary,
+.seldatepicker-action.seldatepicker-action-primary,
+.selpersonal-tab.selpersonal-tab-selected,
+.selpersonal-preset[aria-pressed="true"],
+.selpersonal-color-follow[aria-pressed="true"] {
+    background: linear-gradient(135deg, var(--sel-theme-selected-surface), var(--sel-theme-control-hover));
 }
 
 /* 左侧导航和表格普通结构改用皮肤色阶，状态标签继续保留业务语义色。 */
 .seltree-node-row:hover {
-    background: var(--sel-theme-surface-base);
+    background: var(--sel-theme-interaction-surface-hover);
 }
 
 .seltree-node-row.seltree-node-selected {
     border-color: var(--sel-theme-line);
-    background: linear-gradient(90deg, var(--sel-theme-surface-accent), var(--sel-theme-surface-raised));
+    background: linear-gradient(90deg, var(--sel-theme-interaction-surface-selected), var(--sel-theme-interaction-surface-hover));
     box-shadow: 0 0 11px rgb(var(--sel-theme-color-rgb) / 0.48), var(--sel-theme-inset);
 }
 

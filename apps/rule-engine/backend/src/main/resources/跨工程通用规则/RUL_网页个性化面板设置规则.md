@@ -17,14 +17,21 @@ web_personalization_frame_scale_neutral_value = 50
 web_personalization_spacing_offset_neutral_value = 50
 web_personalization_component_frame_baseline_must_be_preserved = panel,window,dropdown,context-menu,date-picker
 
-<!-- 面板透明同时控制中心玻璃与表格结构层，但禁止连带降低文字、图标、控件或九宫格边框的透明度。 -->
-web_personalization_panel_opacity_target = center-glass-backplate,table-board,table-header,table-normal-row,table-zebra-row
-web_personalization_panel_opacity_must_not_fade = text,icons,controls,nine-slice-frame
-web_personalization_table_opacity_must_use = unified-structure-opacity-token,table-surface-mapping-tokens
+<!-- 面板透明度只驱动普通结构层；悬停、选中和主操作保持固定强度，仅跟随统一主题色。 -->
+web_personalization_panel_opacity_target = center-glass-backplate,table-board,table-header,table-normal-row,table-zebra-row,control-base-surface
+web_personalization_panel_opacity_must_not_fade = text,icons,semantic-content,nine-slice-frame,hover-surface,selected-surface,primary-surface
+web_personalization_structure_opacity_must_use = unified-structure-opacity-token,table-surface-mapping-tokens,control-base-surface-mapping-token
+web_personalization_interaction_surface_must_use = unified-theme-color,fixed-hover-strength,fixed-selected-strength,fixed-primary-strength
 web_personalization_table_normal_layers_must_not_compound_to_opaque = true
-web_personalization_table_interaction_minimum_contrast = hover:0.28,selected:0.46
+web_personalization_data_interaction_fixed_strength = tree-hover:0.68,table-hover:0.68,tree-selected:0.78,table-selected:0.78
+web_personalization_control_interaction_strength = base-opacity-mapped:0.25..0.84,hover-fixed:0.72,primary-fixed:0.82
+web_personalization_selection_feedback_must_be_immediate = row-selected,selection-checkbox,aria-selected,aria-checked
 web_personalization_table_semantic_content_must_not_fade = avatar,status-badge,progress-bar,row-actions,selection-control
-web_personalization_panel_material_controls = opacity,glass-blur,unified-theme-color,current-skin-tint-strength,surface-radius
+web_personalization_panel_material_controls = opacity,background-frost,unified-theme-color,current-skin-tint-strength,surface-radius
+web_personalization_background_frost_must_combine = backdrop-blur,brightness-reduction,saturation-reduction,independent-neutral-veil
+web_personalization_background_frost_must_not_depend_on = panel-opacity
+web_personalization_background_frost_must_not_affect = panel-content,text,icons,controls,nine-slice-frame
+web_personalization_background_frost_target = panel,window,personalization-panel,dropdown,context-menu,date-picker
 web_personalization_skin_tint_must_use = overridable-theme-rgb-tokens
 web_personalization_skin_tint_must_not_hardcode = deep-blue,purple,background-derived-color
 web_personalization_unified_theme_color_modes = follow-current-skin,arbitrary-color,quick-swatches

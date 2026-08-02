@@ -22,14 +22,24 @@
     --sel-theme-table-header-opacity: 0.10;
     --sel-theme-table-row-opacity: 0.08;
     --sel-theme-table-row-even-opacity: 0.13;
-    --sel-theme-table-hover-opacity: 0.51;
-    --sel-theme-table-selected-opacity: 0.71;
+    /* 树节点、表格行和菜单项共用数据交互强度，保证悬停与选中态在全透明背景上仍可辨识。 */
+    --sel-theme-interaction-hover-opacity: 0.68;
+    --sel-theme-interaction-selected-opacity: 0.78;
+    /* 按钮、输入框和触发器保留更稳定的点击区，内容本身不参与 Alpha 衰减。 */
+    --sel-theme-control-base-opacity: 0.73;
+    --sel-theme-control-hover-opacity: 0.72;
+    --sel-theme-control-primary-opacity: 0.82;
     --sel-theme-table-surface-board: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-board-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-board-opacity)));
     --sel-theme-table-surface-header: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-header-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-header-opacity)));
     --sel-theme-table-surface-row: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-row-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-row-opacity)));
     --sel-theme-table-surface-row-even: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-row-even-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-row-even-opacity)));
-    --sel-theme-table-surface-hover: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-hover-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-hover-opacity)));
-    --sel-theme-table-surface-selected: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-selected-opacity)) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-selected-opacity)));
+    --sel-theme-interaction-surface-hover: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-interaction-hover-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-interaction-hover-opacity)));
+    --sel-theme-interaction-surface-selected: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-interaction-selected-opacity)) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-interaction-selected-opacity)));
+    --sel-theme-control-surface-base: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-base-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-base-opacity)));
+    --sel-theme-control-surface-hover: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-hover-opacity)) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-hover-opacity)));
+    --sel-theme-control-surface-primary: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-primary-opacity)) var(--sel-theme-tint-accent), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-primary-opacity)));
+    --sel-theme-table-surface-hover: var(--sel-theme-interaction-surface-hover);
+    --sel-theme-table-surface-selected: var(--sel-theme-interaction-surface-selected);
     --sel-theme-line: rgb(var(--sel-theme-color-rgb) / 0.58);
     --sel-theme-line-soft: rgb(var(--sel-theme-color-rgb) / 0.28);
     --sel-theme-glow: rgb(var(--sel-theme-color-rgb) / 0.52);
@@ -47,9 +57,9 @@
 
     /* 组件只引用映射令牌，不直接依赖基础 RGB。 */
     --sel-theme-panel-surface: var(--sel-theme-surface-deep);
-    --sel-theme-control-surface: var(--sel-theme-surface-deep);
-    --sel-theme-control-hover: var(--sel-theme-surface-raised);
-    --sel-theme-selected-surface: var(--sel-theme-surface-accent);
+    --sel-theme-control-surface: var(--sel-theme-control-surface-base);
+    --sel-theme-control-hover: var(--sel-theme-control-surface-hover);
+    --sel-theme-selected-surface: var(--sel-theme-control-surface-primary);
     --sel-theme-table-row: var(--sel-theme-table-surface-row);
     --sel-theme-table-row-hover: var(--sel-theme-table-surface-hover);
     --sel-theme-popup-surface: var(--sel-theme-surface-deep);
