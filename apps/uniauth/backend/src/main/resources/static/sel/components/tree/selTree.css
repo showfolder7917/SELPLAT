@@ -59,19 +59,19 @@
     align-items: center;
     border: 1px solid transparent;
     border-radius: 8px;
-    color: #aeb9d8;
+    color: var(--sel-theme-text-body);
     background: transparent;
     transition: color 140ms ease, background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .seltree-node-row:hover {
-    color: #edf4ff;
+    color: var(--sel-theme-text-title);
     background: rgba(23, 62, 141, 0.42);
 }
 
 .seltree-node-row.seltree-node-selected {
     border-color: rgba(96, 179, 255, 0.74);
-    color: white;
+    color: var(--sel-theme-text-on-accent);
     background: linear-gradient(90deg, rgba(33, 111, 224, 0.62), rgba(81, 52, 180, 0.54));
     box-shadow: 0 0 10px rgba(62, 129, 255, 0.52), inset 0 0 10px rgba(118, 173, 255, 0.18);
 }
@@ -116,7 +116,7 @@
 
 .seltree-node-button > i {
     flex: 0 0 auto;
-    color: #91b9ff;
+    color: var(--sel-theme-text-icon);
     font-size: 17px;
     text-shadow: 0 0 7px rgba(83, 149, 255, 0.50);
 }
@@ -132,7 +132,7 @@
     margin-right: 6px;
     padding: 2px 5px;
     border-radius: 999px;
-    color: #8090b8;
+    color: var(--sel-theme-text-soft);
     background: rgba(11, 31, 82, 0.82);
     font-size: 10px;
     text-align: center;

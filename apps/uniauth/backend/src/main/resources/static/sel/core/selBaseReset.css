@@ -10,7 +10,7 @@
     --selgrid-theme-row-background: rgba(3, 15, 55, 0.58);
     --selgrid-theme-line: rgba(119, 158, 244, 0.20);
     --selgrid-theme-line-strong: rgba(109, 166, 255, 0.62);
-    --selgrid-theme-text: #e7ebff;
+    --selgrid-theme-text: var(--sel-theme-text-body, #e7ebff);
     --selgrid-theme-muted: #a9b2d1;
     --selgrid-theme-blue: #4caaff;
     --selgrid-theme-violet: #8d61ff;

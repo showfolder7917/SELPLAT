@@ -46,6 +46,20 @@
     --sel-theme-inset: inset 0 0 13px rgb(var(--sel-theme-color-rgb) / 0.18);
     --sel-theme-text-main: #eef2ff;
     --sel-theme-text-muted: #9daacf;
+    /* 文字个性化基础令牌：设置面板只修改主色与次级色，其余角色统一从二者派生。 */
+    --sel-theme-text-title: var(--sel-theme-text-main);
+    --sel-theme-text-body: color-mix(in srgb, var(--sel-theme-text-main) 94%, var(--sel-theme-text-muted));
+    --sel-theme-text-secondary: var(--sel-theme-text-muted);
+    --sel-theme-text-soft: color-mix(in srgb, var(--sel-theme-text-muted) 78%, transparent);
+    --sel-theme-text-disabled: color-mix(in srgb, var(--sel-theme-text-muted) 52%, transparent);
+    --sel-theme-text-on-accent: #ffffff;
+    --sel-theme-text-placeholder: color-mix(in srgb, var(--sel-theme-text-muted) 82%, transparent);
+    --sel-theme-text-link: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 78%, var(--sel-theme-text-main));
+    --sel-theme-text-icon: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 66%, var(--sel-theme-text-main));
+    --sel-theme-text-shadow-rgb: 0 0 0;
+    --sel-theme-text-contrast-alpha: 0.168;
+    --sel-theme-font-scale: 1;
+    --sel-theme-text-shadow: 0 1px 4px rgb(var(--sel-theme-text-shadow-rgb) / var(--sel-theme-text-contrast-alpha));
 
     /* 业务语义色不跟随皮肤变化，保证状态在任意皮肤下含义稳定。 */
     --sel-theme-semantic-success: #55e6bb;

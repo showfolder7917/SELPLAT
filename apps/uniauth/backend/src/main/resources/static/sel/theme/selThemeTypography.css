@@ -1,0 +1,73 @@
+/*
+ * selThemeTypography.css：SEL 页面统一文字语义适配层。
+ * 负责把表格、树、窗口、菜单、下拉、日期和工具栏的中性文字接入统一令牌。
+ * 责任边界：不覆盖成功、警告、错误、进度、评审和归档等业务语义色，也不改变个性化控制面板自身的可读性。
+ */
+
+/* 组件根统一继承主文字与对比阴影；个性化控制面板保留固定控制面颜色。 */
+.selpanel-crystal-surface,
+.selgrid-board-shell,
+.seltree-root,
+.selsearch-root,
+.seldropdown-root,
+.seldropdown-menu,
+.selgrid-menu,
+.selgrid-menu-submenu,
+.seldatepicker-root,
+.seldatepicker-popover,
+.selwindow-window-shell {
+    color: var(--sel-theme-text-main);
+    text-shadow: var(--sel-theme-text-shadow);
+}
+
+/* 颜色角色已经直接写入各组件自身样式，本层不再用选择器补丁覆盖旧硬编码。 */
+
+/* 字号比例只作用于文字本身，不缩放面板、边框和点击区域。 */
+.selpanel-crystal-surface,
+.selgrid-board-shell,
+.seltree-root,
+.selsearch-root,
+.seldropdown-root,
+.seldropdown-menu,
+.selgrid-menu,
+.selgrid-menu-submenu,
+.seldatepicker-root,
+.seldatepicker-popover,
+.selwindow-window-shell {
+    font-size: calc(14px * var(--sel-theme-font-scale));
+}
+
+.selpanel-brand-title {
+    font-size: clamp(calc(24px * var(--sel-theme-font-scale)), calc(2.1vw * var(--sel-theme-font-scale)), calc(37px * var(--sel-theme-font-scale)));
+}
+
+.selwindow-brand-title {
+    font-size: calc(22px * var(--sel-theme-font-scale));
+}
+
+.selpanel-brand-subtitle,
+.selwindow-brand-subtitle,
+.selgrid-table,
+.seldropdown-trigger-value,
+.seldropdown-option-label,
+.seldatepicker-trigger-value,
+.selwindow-field-label,
+.selwindow-control-textarea,
+.selwindow-action-button {
+    font-size: calc(14px * var(--sel-theme-font-scale));
+}
+
+.selgrid-menu-item,
+.seltree-node-row,
+.selsearch-field-input,
+.selsearch-submit,
+.selwindow-checkbox-row {
+    font-size: calc(13px * var(--sel-theme-font-scale));
+}
+
+.seltree-node-count,
+.seltree-footer,
+.seldropdown-option-description,
+.selwindow-control-suffix {
+    font-size: calc(11px * var(--sel-theme-font-scale));
+}

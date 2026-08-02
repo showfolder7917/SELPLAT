@@ -1,6 +1,6 @@
 /*
  * selPersonalization.js：SEL 页面个性化设置组合控件。
- * 负责“背景设置 / 面板设置”两级界面、面板视觉令牌、动效、预设和当前页面实时预览。
+ * 负责“背景设置 / 面板设置 / 文字设置”三级界面、统一视觉令牌、动效、预设和当前页面实时预览。
  * 责任边界：背景值通过 selPageBackground 控制器修改；面板值只写页面级 selpersonal CSS 变量，不识别 Uniauth 业务数据。
  * 模块级 JavaScript 标识统一使用 selPersonalization 前缀，公开控制器为 window.selPersonalization。
  */
@@ -34,6 +34,26 @@
         // 刷新页面固定回到可见的默认预设；用户手动调整仍只进入当前页面的临时 custom 状态。
         preset: "default"
     });
+    // 文字默认值独立于面板预设保存，刷新页面固定回到当前皮肤的默认文字体系。
+    const selPersonalizationTextDefaults = Object.freeze({
+        // follow 表示不覆盖皮肤提供的明暗文字颜色。
+        mode: "follow",
+        // 自定义模式的主文字初始色与深色皮肤默认保持一致。
+        mainColor: "#EEF2FF",
+        // 次级文字用于说明、占位符、数量与时间等辅助信息。
+        mutedColor: "#9DAACF",
+        // 60% 提供清晰但不过度发硬的文字阴影对比。
+        contrast: 60,
+        // 50% 映射为 100% 字号，允许用户在 80% 至 120% 之间缩放。
+        fontScale: 50
+    });
+    // 预设模式只决定语义文字颜色；业务成功、警告和错误色不参与切换。
+    const selPersonalizationTextModes = Object.freeze([
+        Object.freeze({ id: "follow", label: "跟随皮肤", icon: "ri-brush-line", mainColor: null, mutedColor: null }),
+        Object.freeze({ id: "light", label: "浅色文字", icon: "ri-sun-line", mainColor: "#F7FAFF", mutedColor: "#B8C5E2" }),
+        Object.freeze({ id: "dark", label: "深色文字", icon: "ri-moon-line", mainColor: "#0B1633", mutedColor: "#52617A" }),
+        Object.freeze({ id: "custom", label: "自定义", icon: "ri-font-color", mainColor: null, mutedColor: null })
+    ]);
     // 常用色只提供快速选择入口，不代表固定皮肤；任意颜色仍可通过原生颜色控件选择。
     const selPersonalizationThemeColors = Object.freeze([
         Object.freeze({ value: "#4A8BFF", label: "星际蓝" }),
@@ -245,7 +265,9 @@
             themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor),
             reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion)
         };
-        // 两个一级设置使用原生 tab 语义，背景功能继续作为独立一级区域。
+        // 文字状态仅存在于当前页面内存，不写 localStorage、cookie 或服务端配置。
+        let selPersonalizationTextState = { ...selPersonalizationTextDefaults };
+        // 三个一级设置使用原生 tab 语义，背景、面板和文字保持同一信息层级。
         selPersonalizationHost.innerHTML = `
             <aside class="selpersonal-control" data-sel-personal-control aria-label="个性化设置">
                 <button class="selpersonal-trigger" type="button" data-sel-personal-action="toggle" aria-label="打开个性化设置" aria-expanded="false">
@@ -260,6 +282,7 @@
                     <div class="selpersonal-tabs" role="tablist" aria-label="个性化设置分类">
                         <button class="selpersonal-tab selpersonal-tab-selected" type="button" role="tab" aria-selected="true" aria-controls="selpersonal-background-view" data-sel-personal-tab="background"><i class="ri-landscape-line" aria-hidden="true"></i><span>背景设置</span></button>
                         <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-panel-view" data-sel-personal-tab="panel"><i class="ri-layout-4-line" aria-hidden="true"></i><span>面板设置</span></button>
+                        <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-text-view" data-sel-personal-tab="text"><i class="ri-font-size-2" aria-hidden="true"></i><span>文字设置</span></button>
                     </div>
                     <div class="selpersonal-view" id="selpersonal-background-view" role="tabpanel" data-sel-personal-view="background">
                         <header class="selpersonal-view-heading"><strong>选择网页背景</strong><span>${selPersonalizationBackgroundController.themes.length} 种独立主题</span></header>
@@ -279,6 +302,24 @@
                         <div class="selpersonal-panel-scroll" data-sel-personal-panel-scroll></div>
                         <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-panel"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复面板默认</span></button>
                     </div>
+                    <div class="selpersonal-view" id="selpersonal-text-view" role="tabpanel" data-sel-personal-view="text" hidden>
+                        <header class="selpersonal-view-heading"><strong>文字个性化</strong><span>统一作用于页面组件</span></header>
+                        <div class="selpersonal-text-scroll" data-sel-personal-text-scroll>
+                            <section class="selpersonal-section selpersonal-text-section">
+                                <header class="selpersonal-section-heading"><span><i class="ri-font-size" aria-hidden="true"></i><strong>文字模式</strong></span><small>刷新恢复默认</small></header>
+                                <div class="selpersonal-text-modes" data-sel-personal-text-modes role="group" aria-label="文字模式"></div>
+                                <div class="selpersonal-text-preview" aria-label="文字效果预览"><strong>主文字预览</strong><span>次级说明与辅助信息预览</span></div>
+                            </section>
+                            <section class="selpersonal-section selpersonal-text-section">
+                                <header class="selpersonal-section-heading"><span><i class="ri-palette-line" aria-hidden="true"></i><strong>颜色与可读性</strong></span></header>
+                                <label class="selpersonal-text-color"><span><strong>主文字颜色</strong><small>标题、正文与主要控件</small></span><input type="color" data-sel-personal-text-color="mainColor" aria-label="选择主文字颜色"><output data-sel-personal-text-color-output="mainColor"></output></label>
+                                <label class="selpersonal-text-color"><span><strong>次级文字颜色</strong><small>说明、占位符与辅助信息</small></span><input type="color" data-sel-personal-text-color="mutedColor" aria-label="选择次级文字颜色"><output data-sel-personal-text-color-output="mutedColor"></output></label>
+                                <label class="selpersonal-panel-range"><span class="selpersonal-panel-range-copy"><strong>文字对比</strong><small>增强复杂背景上的清晰度</small></span><span class="selpersonal-panel-range-control"><input type="range" min="0" max="100" step="1" data-sel-personal-text-range="contrast"><output data-sel-personal-text-output="contrast"></output></span></label>
+                                <label class="selpersonal-panel-range"><span class="selpersonal-panel-range-copy"><strong>字号缩放</strong><small>统一映射为 80%–120%</small></span><span class="selpersonal-panel-range-control"><input type="range" min="0" max="100" step="1" data-sel-personal-text-range="fontScale"><output data-sel-personal-text-output="fontScale"></output></span></label>
+                            </section>
+                        </div>
+                        <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-text"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复文字默认</span></button>
+                    </div>
                 </section>
             </aside>
         `;
@@ -288,9 +329,11 @@
         const selPersonalizationPanel = selPersonalizationHost.querySelector("[data-sel-personal-panel]");
         const selPersonalizationBackgroundGrid = selPersonalizationHost.querySelector("[data-sel-personal-background-grid]");
         const selPersonalizationPanelScroll = selPersonalizationHost.querySelector("[data-sel-personal-panel-scroll]");
+        const selPersonalizationTextScroll = selPersonalizationHost.querySelector("[data-sel-personal-text-scroll]");
+        const selPersonalizationTextModeGrid = selPersonalizationHost.querySelector("[data-sel-personal-text-modes]");
         const selPersonalizationPresetGrid = selPersonalizationHost.querySelector("[data-sel-personal-presets]");
         // 任一关键节点缺失都阻止创建不可完整操作的控制器。
-        if (!selPersonalizationControl || !selPersonalizationTrigger || !selPersonalizationPanel || !selPersonalizationBackgroundGrid || !selPersonalizationPanelScroll || !selPersonalizationPresetGrid) {
+        if (!selPersonalizationControl || !selPersonalizationTrigger || !selPersonalizationPanel || !selPersonalizationBackgroundGrid || !selPersonalizationPanelScroll || !selPersonalizationTextScroll || !selPersonalizationTextModeGrid || !selPersonalizationPresetGrid) {
             return null;
         }
 
@@ -325,6 +368,18 @@
             selPersonalizationPresetButton.setAttribute("aria-pressed", "false");
             selPersonalizationPresetButton.innerHTML = `<i class="${selPersonalizationPreset.icon}" aria-hidden="true"></i><span>${selPersonalizationPreset.label}</span>`;
             selPersonalizationPresetGrid.appendChild(selPersonalizationPresetButton);
+        });
+
+        // 四个文字模式以原生按钮生成，便于未来皮肤替换默认文字色而不改模板。
+        selPersonalizationTextModes.forEach((selPersonalizationTextMode) => {
+            // 每个按钮写入稳定模式标识，点击事件只读取固定配置。
+            const selPersonalizationTextModeButton = document.createElement("button");
+            selPersonalizationTextModeButton.className = "selpersonal-text-mode";
+            selPersonalizationTextModeButton.type = "button";
+            selPersonalizationTextModeButton.dataset.selPersonalTextMode = selPersonalizationTextMode.id;
+            selPersonalizationTextModeButton.setAttribute("aria-pressed", "false");
+            selPersonalizationTextModeButton.innerHTML = `<i class="${selPersonalizationTextMode.icon}" aria-hidden="true"></i><span>${selPersonalizationTextMode.label}</span>`;
+            selPersonalizationTextModeGrid.appendChild(selPersonalizationTextModeButton);
         });
 
         // 面板分组根据固定配置生成一致的 range 行。
@@ -586,13 +641,73 @@
         }
 
         /**
-         * 切换两个一级设置视图。
-         * @param {string} selPersonalizationViewName - background 或 panel。
+         * 把文字模式、颜色、对比与字号写入页面统一文字令牌。
+         * @returns {void} 只改变当前页面显示，并同步文字设置控件。
+         */
+        function selPersonalizationApplyText() {
+            // 当前模式只能来自固定模式清单，未知值安全恢复为跟随皮肤。
+            const selPersonalizationTextMode = selPersonalizationTextModes.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationTextState.mode) || selPersonalizationTextModes[0];
+            // 预设模式使用固定颜色，自定义模式使用用户当前选择；跟随模式移除颜色覆盖。
+            const selPersonalizationMainColor = selPersonalizationTextMode.id === "custom" ? selPersonalizationNormalizeColor(selPersonalizationTextState.mainColor) : selPersonalizationTextMode.mainColor;
+            const selPersonalizationMutedColor = selPersonalizationTextMode.id === "custom" ? selPersonalizationNormalizeColor(selPersonalizationTextState.mutedColor) : selPersonalizationTextMode.mutedColor;
+            if (selPersonalizationMainColor && selPersonalizationMutedColor) {
+                // 主文字和次级文字分别写入统一令牌，所有业务组件从同一来源消费。
+                selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-main", selPersonalizationMainColor);
+                selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-muted", selPersonalizationMutedColor);
+                // 标题、正文、弱化、禁用和占位色继续由主题文件从两个基础色自动派生，不在脚本复制第二套比例。
+                // 深色文字使用浅色微阴影，浅色文字使用深色微阴影，避免复杂背景吞字。
+                const selPersonalizationMainRgb = selPersonalizationColorToRgb(selPersonalizationMainColor).split(" ").map(Number);
+                const selPersonalizationLuminance = ((selPersonalizationMainRgb[0] * 299) + (selPersonalizationMainRgb[1] * 587) + (selPersonalizationMainRgb[2] * 114)) / 1000;
+                selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-shadow-rgb", selPersonalizationLuminance < 145 ? "255 255 255" : "0 0 0");
+            } else {
+                // 跟随皮肤时彻底移除临时覆盖，恢复主题文件中的默认文字体系。
+                ["--sel-theme-text-main", "--sel-theme-text-muted", "--sel-theme-text-shadow-rgb"].forEach((selPersonalizationToken) => selPersonalizationDocumentRoot.style.removeProperty(selPersonalizationToken));
+            }
+            // 对比强度映射到 0 至 0.28 的阴影透明度，不改变文字本身颜色。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-contrast-alpha", String(selPersonalizationMap(selPersonalizationTextState.contrast, 0, 0.28)));
+            // 字号滑杆 0、50、100 分别映射为 0.8、1、1.2，默认视觉不跳变。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-font-scale", String(selPersonalizationMap(selPersonalizationTextState.fontScale, 0.8, 1.2)));
+            // 根状态仅供视觉规则识别模式，不承担持久化。
+            selPersonalizationDocumentRoot.dataset.selPersonalTextMode = selPersonalizationTextMode.id;
+            // 设置界面和页面预览在同一帧同步。
+            selPersonalizationSyncText();
+            // 独立事件让未来组件按需读取文字状态而不耦合内部变量。
+            document.dispatchEvent(new CustomEvent("selPersonalization:text-change", { detail: Object.freeze({ ...selPersonalizationTextState }) }));
+        }
+
+        /**
+         * 同步文字模式按钮、颜色输入、滑杆输出和局部预览。
+         * @returns {void} 只更新设置控件，不重复写页面令牌。
+         */
+        function selPersonalizationSyncText() {
+            // 模式按钮通过 aria-pressed 表达唯一选中项。
+            selPersonalizationTextModeGrid.querySelectorAll("[data-sel-personal-text-mode]").forEach((selPersonalizationTextModeButton) => {
+                selPersonalizationTextModeButton.setAttribute("aria-pressed", String(selPersonalizationTextModeButton.dataset.selPersonalTextMode === selPersonalizationTextState.mode));
+            });
+            // 两个颜色输入始终保留当前自定义值，切换预设后再编辑即可自动进入自定义。
+            ["mainColor", "mutedColor"].forEach((selPersonalizationColorKey) => {
+                const selPersonalizationColorInput = selPersonalizationControl.querySelector(`[data-sel-personal-text-color="${selPersonalizationColorKey}"]`);
+                const selPersonalizationColorOutput = selPersonalizationControl.querySelector(`[data-sel-personal-text-color-output="${selPersonalizationColorKey}"]`);
+                if (selPersonalizationColorInput) selPersonalizationColorInput.value = selPersonalizationTextState[selPersonalizationColorKey];
+                if (selPersonalizationColorOutput) selPersonalizationColorOutput.value = selPersonalizationTextState[selPersonalizationColorKey];
+            });
+            // 对比输出显示用户尺度，字号输出显示实际 80% 至 120% 结果。
+            ["contrast", "fontScale"].forEach((selPersonalizationTextKey) => {
+                const selPersonalizationTextRange = selPersonalizationControl.querySelector(`[data-sel-personal-text-range="${selPersonalizationTextKey}"]`);
+                const selPersonalizationTextOutput = selPersonalizationControl.querySelector(`[data-sel-personal-text-output="${selPersonalizationTextKey}"]`);
+                if (selPersonalizationTextRange) selPersonalizationTextRange.value = String(selPersonalizationTextState[selPersonalizationTextKey]);
+                if (selPersonalizationTextOutput) selPersonalizationTextOutput.value = selPersonalizationTextKey === "fontScale" ? `${Math.round(selPersonalizationMap(selPersonalizationTextState.fontScale, 80, 120))}%` : `${selPersonalizationTextState.contrast}%`;
+            });
+        }
+
+        /**
+         * 切换三个一级设置视图。
+         * @param {string} selPersonalizationViewName - background、panel 或 text。
          * @returns {boolean} 成功切换时返回 true。
          */
         function selPersonalizationSelectView(selPersonalizationViewName) {
             // 未知视图不会隐藏当前有效界面。
-            if (!["background", "panel"].includes(selPersonalizationViewName)) {
+            if (!["background", "panel", "text"].includes(selPersonalizationViewName)) {
                 return false;
             }
             // tab 同步选中类和 aria-selected。
@@ -623,7 +738,7 @@
             selPersonalizationTrigger.setAttribute("aria-expanded", "false");
             selPersonalizationTrigger.focus();
         });
-        // tablist 使用事件委托切换两个一级设置。
+        // tablist 使用事件委托切换三个一级设置。
         selPersonalizationControl.querySelector(".selpersonal-tabs")?.addEventListener("click", (selPersonalizationEvent) => {
             // 只响应带稳定 tab 标识的按钮。
             const selPersonalizationTab = selPersonalizationEvent.target.closest("[data-sel-personal-tab]");
@@ -633,7 +748,7 @@
         });
         // tablist 支持方向键和首尾键，键盘用户不必离开分类导航。
         selPersonalizationControl.querySelector(".selpersonal-tabs")?.addEventListener("keydown", (selPersonalizationEvent) => {
-            // 当前两个 tab 按 DOM 顺序形成稳定键盘列表。
+            // 当前三个 tab 按 DOM 顺序形成稳定键盘列表。
             const selPersonalizationTabs = Array.from(selPersonalizationControl.querySelectorAll("[data-sel-personal-tab]"));
             // 只有焦点位于 tab 时才处理分类导航按键。
             const selPersonalizationCurrentIndex = selPersonalizationTabs.indexOf(selPersonalizationEvent.target);
@@ -642,7 +757,7 @@
             }
             // 阻止方向键滚动浮层内容。
             selPersonalizationEvent.preventDefault();
-            // Home 和 End 直达首尾；左右方向在两个一级设置之间循环。
+            // Home 和 End 直达首尾；左右方向在三个一级设置之间循环。
             const selPersonalizationNextIndex = selPersonalizationEvent.key === "Home"
                 ? 0
                 : selPersonalizationEvent.key === "End"
@@ -689,6 +804,35 @@
                 };
                 // 新状态即时作用于所有水晶组件。
                 selPersonalizationApplyPanel(selPersonalizationKey);
+            });
+        });
+        // 文字模式按钮实时切换统一文字预设，自定义模式保留当前选色。
+        selPersonalizationTextModeGrid.addEventListener("click", (selPersonalizationEvent) => {
+            // 只响应固定模式按钮，空白区域不改变状态。
+            const selPersonalizationTextModeButton = selPersonalizationEvent.target.closest("[data-sel-personal-text-mode]");
+            if (!selPersonalizationTextModeButton) return;
+            // 模式值已由固定配置生成，写入后立即更新页面文字。
+            selPersonalizationTextState = { ...selPersonalizationTextState, mode: selPersonalizationTextModeButton.dataset.selPersonalTextMode };
+            selPersonalizationApplyText();
+        });
+        // 编辑任一文字颜色会明确进入自定义模式，避免预设色覆盖用户选择。
+        selPersonalizationControl.querySelectorAll("[data-sel-personal-text-color]").forEach((selPersonalizationColorInput) => {
+            selPersonalizationColorInput.addEventListener("input", () => {
+                // 数据键只可能是主文字或次级文字颜色。
+                const selPersonalizationColorKey = selPersonalizationColorInput.dataset.selPersonalTextColor;
+                // 合法原生颜色值写入当前页面内存。
+                selPersonalizationTextState = { ...selPersonalizationTextState, [selPersonalizationColorKey]: selPersonalizationNormalizeColor(selPersonalizationColorInput.value), mode: "custom" };
+                selPersonalizationApplyText();
+            });
+        });
+        // 文字对比和字号都使用 input 事件，拖动过程逐帧可见而非松手后才更新。
+        selPersonalizationControl.querySelectorAll("[data-sel-personal-text-range]").forEach((selPersonalizationTextRange) => {
+            selPersonalizationTextRange.addEventListener("input", () => {
+                // 固定数据键对应文字状态中的百分比字段。
+                const selPersonalizationTextKey = selPersonalizationTextRange.dataset.selPersonalTextRange;
+                // 每次输入限制在 0 至 100，并立即应用统一令牌。
+                selPersonalizationTextState = { ...selPersonalizationTextState, [selPersonalizationTextKey]: selPersonalizationClamp(selPersonalizationTextRange.value, selPersonalizationTextDefaults[selPersonalizationTextKey]) };
+                selPersonalizationApplyText();
             });
         });
         // 原生颜色输入允许用户选择色板之外的任意统一主题色。
@@ -757,6 +901,12 @@
             // 默认面板令牌立即写回页面。
             selPersonalizationApplyPanel();
         });
+        // 文字恢复按钮只重置文字体系，不改变背景主题或面板参数。
+        selPersonalizationControl.querySelector("[data-sel-personal-action='reset-text']")?.addEventListener("click", () => {
+            // 默认值来自代码常量，刷新与手动恢复得到同一结果。
+            selPersonalizationTextState = { ...selPersonalizationTextDefaults };
+            selPersonalizationApplyText();
+        });
         // 点击个性化控件之外时关闭浮层，控件内部滚动和拖动 range 保持打开。
         document.addEventListener("pointerdown", (selPersonalizationEvent) => {
             if (!selPersonalizationControl.contains(selPersonalizationEvent.target)) {
@@ -779,24 +929,28 @@
         const selPersonalizationController = Object.freeze({
             // presets 供应用读取可用预设清单，不暴露可变对象。
             presets: selPersonalizationPresets,
-            // getState 同时返回背景与面板的不可变快照。
+            // getState 同时返回背景、面板与文字的不可变快照。
             getState: () => Object.freeze({
                 background: selPersonalizationBackgroundController.getState(),
-                panel: Object.freeze({ ...selPersonalizationPanelState })
+                panel: Object.freeze({ ...selPersonalizationPanelState }),
+                text: Object.freeze({ ...selPersonalizationTextState })
             }),
             selectView: selPersonalizationSelectView,
             reset() {
-                // 完整重置同时恢复背景和面板刷新默认值。
+                // 完整重置同时恢复背景、面板和文字刷新默认值。
                 selPersonalizationBackgroundController.reset();
                 selPersonalizationPanelState = { ...selPersonalizationDefaults, themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor), reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion) };
+                selPersonalizationTextState = { ...selPersonalizationTextDefaults };
                 selPersonalizationSyncBackground();
                 selPersonalizationApplyPanel();
+                selPersonalizationApplyText();
             }
         });
-        // 保存控制器后立即同步背景与面板默认状态。
+        // 保存控制器后立即同步背景、面板与文字默认状态。
         selPersonalizationControllers.set(selPersonalizationHost, selPersonalizationController);
         selPersonalizationSyncBackground();
         selPersonalizationApplyPanel();
+        selPersonalizationApplyText();
         // 返回组合控制器供应用确认挂载成功。
         return selPersonalizationController;
     }

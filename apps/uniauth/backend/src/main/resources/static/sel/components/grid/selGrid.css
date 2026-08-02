@@ -141,7 +141,7 @@
 .selgrid-table th {
     position: relative;
     padding: 0 12px;
-    color: #e6e8ff;
+    color: var(--sel-theme-text-title);
     font-size: 14px;
     font-weight: 600;
     text-align: left;
@@ -173,7 +173,7 @@
 }
 
 .selgrid-sort-button i {
-    color: #a582ff;
+    color: var(--sel-theme-text-link);
     font-size: 16px;
 }
 
@@ -226,7 +226,7 @@
 .selgrid-table td {
     height: 56px;
     padding: 0 12px;
-    color: #c2cae5;
+    color: var(--sel-theme-text-body);
     font-size: 14px;
     vertical-align: middle;
 }
@@ -308,7 +308,7 @@
 .selgrid-project-symbol i {
     position: relative;
     z-index: 1;
-    color: white;
+    color: var(--sel-theme-text-on-accent);
     font-size: 18px;
     text-shadow: 0 0 8px rgba(255, 255, 255, 0.82);
 }
@@ -322,20 +322,20 @@
 
 .selgrid-project-name strong {
     overflow: hidden;
-    color: #d5daf1;
+    color: var(--sel-theme-text-title);
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .selgrid-project-name i {
-    color: #7388ff;
+    color: var(--sel-theme-text-icon);
     font-size: 16px;
     text-shadow: 0 0 8px currentColor;
 }
 
 .selgrid-project-name .selgrid-project-favorite {
-    color: #ffd15c;
+    color: var(--sel-theme-semantic-warning);
 }
 
 /* 负责人列：排列头像、姓名和负责人身份徽标。 */
@@ -356,7 +356,7 @@
 }
 
 .selgrid-owner-name {
-    color: #c2c9e4;
+    color: var(--sel-theme-text-body);
     white-space: nowrap;
 }
 
@@ -366,7 +366,7 @@
     height: 16px;
     place-items: center;
     border-radius: 50%;
-    color: #d9f6ff;
+    color: var(--sel-theme-text-on-accent);
     background: #2c6cff;
     box-shadow: 0 0 8px rgba(45, 111, 255, 0.7);
     font-size: 9px;
@@ -398,28 +398,28 @@
 
 .selgrid-status-active {
     --selgrid-status-line: #449aff;
-    --selgrid-status-text: #75c8ff;
+    --selgrid-status-text: var(--sel-theme-semantic-progress);
     --selgrid-status-background: rgba(8, 46, 103, 0.78);
     --selgrid-status-glow: rgba(47, 137, 255, 0.34);
 }
 
 .selgrid-status-review {
     --selgrid-status-line: #9268ff;
-    --selgrid-status-text: #c8b0ff;
+    --selgrid-status-text: var(--sel-theme-semantic-review);
     --selgrid-status-background: rgba(59, 26, 121, 0.77);
     --selgrid-status-glow: rgba(139, 78, 255, 0.42);
 }
 
 .selgrid-status-done {
     --selgrid-status-line: #4ee8b5;
-    --selgrid-status-text: #87fbd4;
+    --selgrid-status-text: var(--sel-theme-semantic-success);
     --selgrid-status-background: rgba(10, 78, 76, 0.68);
     --selgrid-status-glow: rgba(59, 234, 173, 0.30);
 }
 
 .selgrid-status-archived {
     --selgrid-status-line: rgba(116, 150, 225, 0.55);
-    --selgrid-status-text: #9caed8;
+    --selgrid-status-text: var(--sel-theme-semantic-archived);
     --selgrid-status-background: rgba(22, 38, 82, 0.72);
     --selgrid-status-glow: rgba(77, 111, 197, 0.20);
 }
@@ -432,7 +432,7 @@
 }
 
 .selgrid-progress-value {
-    color: #e7eaff;
+    color: var(--sel-theme-text-secondary);
     font-size: 13px;
 }
 
@@ -471,7 +471,7 @@
     padding: 0;
     place-items: center;
     border-radius: 50%;
-    color: #cbd2f2;
+    color: var(--sel-theme-text-secondary);
     background: rgba(17, 33, 84, 0.45);
     cursor: pointer;
     font-size: 17px;
@@ -480,7 +480,7 @@
 
 .selgrid-action-button:hover,
 .selgrid-action-button.selgrid-action-active {
-    color: #eff7ff;
+    color: var(--sel-theme-text-title);
     background: rgba(69, 93, 206, 0.66);
     box-shadow: 0 0 14px rgba(87, 111, 255, 0.70);
 }
@@ -490,7 +490,7 @@
     display: flex;
     align-items: center;
     gap: 17px;
-    color: #d7dcf5;
+    color: var(--sel-theme-text-body);
     font-size: 14px;
 }
 
@@ -517,7 +517,7 @@
     place-items: center;
     border: 1px solid transparent;
     border-radius: 9px;
-    color: #dce2fa;
+    color: var(--sel-theme-text-body);
     background: rgba(11, 28, 76, 0.54);
     cursor: pointer;
     font-size: 16px;
@@ -530,20 +530,20 @@
 
 .selgrid-pagination-button.selgrid-pagination-current {
     border-color: #a889ff;
-    color: white;
+    color: var(--sel-theme-text-on-accent);
     background: linear-gradient(135deg, #385eff, #863cff 68%, #bd65ff);
     box-shadow: 0 0 13px rgba(78, 150, 255, 0.82), inset 0 0 8px rgba(255, 255, 255, 0.38);
 }
 
 .selgrid-pagination-arrow {
     border-color: rgba(78, 111, 194, 0.42);
-    color: #8092c0;
+    color: var(--sel-theme-text-disabled);
     font-size: 21px;
 }
 
 .selgrid-pagination-ellipsis {
     width: 38px;
-    color: #d9def7;
+    color: var(--sel-theme-text-secondary);
     text-align: center;
 }
 
@@ -555,7 +555,7 @@
     align-items: center;
     justify-content: center;
     gap: 10px;
-    color: #91a1ca;
+    color: var(--sel-theme-text-secondary);
     background: rgba(3, 14, 52, 0.88);
     font-size: 15px;
 }
@@ -565,7 +565,7 @@
 }
 
 .selgrid-empty-state i {
-    color: #72b9ff;
+    color: var(--sel-theme-text-icon);
     font-size: 24px;
     text-shadow: 0 0 10px rgba(72, 151, 255, 0.66);
 }

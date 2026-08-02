@@ -487,10 +487,10 @@
     outline: none;
 }
 
-/* 两个一级设置使用等宽 tab，避免再增加不必要的顶层分类。 */
+/* 背景、面板和文字三个一级设置使用等宽 tab，保持同级能力边界清晰。 */
 .selpersonal-tabs {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: 12px;
     padding: 4px;
@@ -504,8 +504,8 @@
     min-height: 38px;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 0 12px;
+    gap: 5px;
+    padding: 0 7px;
     border: 1px solid transparent;
     border-radius: 7px;
     color: #91a2cc;
@@ -732,8 +732,9 @@
     box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.28);
 }
 
-/* 面板设置长内容只在内部滚动，顶层 tab 和恢复按钮保持可见。 */
-.selpersonal-panel-scroll {
+/* 面板与文字长内容只在内部滚动，顶层 tab 和恢复按钮保持可见。 */
+.selpersonal-panel-scroll,
+.selpersonal-text-scroll {
     display: grid;
     min-height: 0;
     margin-top: 9px;
@@ -745,31 +746,36 @@
 
 /* 个性化面板的两个内容视口统一使用面板尺寸档，不再显示浏览器原生白色滚动条。 */
 .selpersonal-background-grid::-webkit-scrollbar,
-.selpersonal-panel-scroll::-webkit-scrollbar {
+.selpersonal-panel-scroll::-webkit-scrollbar,
+.selpersonal-text-scroll::-webkit-scrollbar {
     width: var(--sel-theme-scrollbar-size-panel);
     height: var(--sel-theme-scrollbar-size-panel);
 }
 
 .selpersonal-background-grid::-webkit-scrollbar-track,
-.selpersonal-panel-scroll::-webkit-scrollbar-track {
+.selpersonal-panel-scroll::-webkit-scrollbar-track,
+.selpersonal-text-scroll::-webkit-scrollbar-track {
     border-radius: var(--sel-theme-scrollbar-radius);
     background: var(--sel-theme-scrollbar-track);
 }
 
 .selpersonal-background-grid::-webkit-scrollbar-thumb,
-.selpersonal-panel-scroll::-webkit-scrollbar-thumb {
+.selpersonal-panel-scroll::-webkit-scrollbar-thumb,
+.selpersonal-text-scroll::-webkit-scrollbar-thumb {
     border-radius: var(--sel-theme-scrollbar-radius);
     background: var(--sel-theme-scrollbar-thumb);
     box-shadow: var(--sel-theme-scrollbar-glow);
 }
 
 .selpersonal-background-grid::-webkit-scrollbar-thumb:hover,
-.selpersonal-panel-scroll::-webkit-scrollbar-thumb:hover {
+.selpersonal-panel-scroll::-webkit-scrollbar-thumb:hover,
+.selpersonal-text-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--sel-theme-scrollbar-thumb-hover);
 }
 
 .selpersonal-background-grid::-webkit-scrollbar-thumb:active,
-.selpersonal-panel-scroll::-webkit-scrollbar-thumb:active {
+.selpersonal-panel-scroll::-webkit-scrollbar-thumb:active,
+.selpersonal-text-scroll::-webkit-scrollbar-thumb:active {
     background: var(--sel-theme-scrollbar-thumb-active);
 }
 
@@ -1332,6 +1338,110 @@
     .selpersonal-panel {
         width: min(370px, calc(100vw - 20px));
     }
+}
+
+/* 文字模式采用四列紧凑卡片，模式名称在窄面板中仍保持完整可点。 */
+.selpersonal-text-modes {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 8px 0 10px;
+}
+
+.selpersonal-text-mode {
+    display: grid;
+    min-height: 52px;
+    place-items: center;
+    gap: 3px;
+    padding: 5px 2px;
+    border: 1px solid rgba(91, 137, 225, 0.34);
+    border-radius: 8px;
+    color: #8fa1cd;
+    background: rgba(5, 18, 56, 0.54);
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+}
+
+.selpersonal-text-mode i {
+    font-size: 17px;
+}
+
+.selpersonal-text-mode:hover,
+.selpersonal-text-mode:focus-visible,
+.selpersonal-text-mode[aria-pressed="true"] {
+    border-color: rgba(117, 190, 255, 0.72);
+    color: #fff;
+    outline: none;
+    background: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.84) 24%, rgb(var(--sel-theme-neutral-rgb) / 0.84));
+    box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.28);
+}
+
+/* 预览区局部消费文字令牌，但设置面板的控制标签始终保持可读。 */
+.selpersonal-text-preview {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid rgb(var(--sel-theme-color-rgb) / 0.38);
+    border-radius: 9px;
+    background: var(--sel-theme-control-surface);
+}
+
+.selpersonal-text-preview strong {
+    color: var(--sel-theme-text-main);
+    font-size: calc(14px * var(--sel-theme-font-scale));
+    text-shadow: var(--sel-theme-text-shadow);
+}
+
+.selpersonal-text-preview span {
+    color: var(--sel-theme-text-muted);
+    font-size: calc(11px * var(--sel-theme-font-scale));
+    text-shadow: var(--sel-theme-text-shadow);
+}
+
+.selpersonal-text-section {
+    display: grid;
+    gap: 10px;
+    padding: 10px 2px;
+}
+
+/* 两个颜色角色并排展示色块与十六进制输出，避免用户混淆主次文字。 */
+.selpersonal-text-color {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 38px 68px;
+    align-items: center;
+    gap: 8px;
+}
+
+.selpersonal-text-color > span {
+    display: grid;
+    gap: 2px;
+}
+
+.selpersonal-text-color strong {
+    color: #dce7ff;
+    font-size: 12px;
+}
+
+.selpersonal-text-color small {
+    color: #7588b6;
+    font-size: 10px;
+}
+
+.selpersonal-text-color input {
+    width: 34px;
+    height: 27px;
+    padding: 2px;
+    border: 1px solid rgb(var(--sel-theme-color-rgb) / 0.62);
+    border-radius: 7px;
+    background: rgba(2, 8, 28, 0.72);
+    cursor: pointer;
+}
+
+.selpersonal-text-color output {
+    color: #cbd8f6;
+    font-size: 10px;
+    text-align: right;
 }
 
 @media (prefers-reduced-motion: reduce) {

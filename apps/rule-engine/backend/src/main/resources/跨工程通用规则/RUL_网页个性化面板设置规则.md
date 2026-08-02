@@ -4,8 +4,9 @@
 <!-- 场景：网页需要用一个个性化入口管理背景以及面板外观、边框间距、动效和预设，同时允许刷新恢复默认。 -->
 <!-- 业务含义：个性化外壳只负责组合独立能力和实时参数；背景仍是独立模块，所有水晶表面共享可换肤 token。 -->
 
-web_personalization_top_level_sections = background,panel
+web_personalization_top_level_sections = background,panel,text
 web_personalization_panel_groups = presets,appearance,border-spacing,motion
+web_personalization_text_groups = mode,main-color,muted-color,contrast,font-scale
 web_personalization_background_must_compose = independent-background-controller
 web_personalization_must_not_merge_background_state_into_business-control = true
 
@@ -54,6 +55,23 @@ web_personalization_unified_token_layers = foundation-color,semantic-color,compo
 web_personalization_unified_token_prefix = --sel-theme-
 web_personalization_component_must_consume_unified_tokens = true
 web_personalization_component_must_not_define_independent_skin_color = true
+<!-- 文字设置与背景、面板保持同级；适用于白色玻璃、深色玻璃与任意皮肤；业务含义是文字颜色、层级和字号不能继续作为面板外观的隐含副作用。 -->
+web_personalization_text_settings_level = same-as-background-and-panel
+web_personalization_text_modes = follow-skin,light,dark,custom
+web_personalization_text_base_tokens = main,muted
+web_personalization_text_derived_tokens = title,body,secondary,soft,disabled,placeholder,on-accent,link,icon,contrast-shadow,font-scale
+web_personalization_text_derived_source = main,muted,current-theme-color
+web_personalization_component_neutral_text_must_consume = unified-text-role-token
+web_personalization_component_neutral_text_must_not_define = fixed-color,compatibility-override-only
+web_personalization_text_dark_mode_default_colors = main:#0B1633,muted:#52617A
+web_personalization_text_light_mode_default_colors = main:#F7FAFF,muted:#B8C5E2
+web_personalization_text_custom_color_controls = main-color,muted-color
+web_personalization_text_contrast_user_range = 0..100
+web_personalization_text_scale_user_range = 0..100
+web_personalization_text_scale_css_mapping = 0:0.80,50:1.00,100:1.20
+web_personalization_text_semantic_colors_must_not_change = success,warning,error,progress,review,archived
+web_personalization_text_control_plane_must_remain_readable = personalization-panel
+web_personalization_text_state_persistence = ephemeral-page-state
 <!-- 滚动条属于统一皮肤的一部分；页面、普通内容面板与紧凑浮层只允许使用语义尺寸档，轨道、滑块、悬停、按下、圆角和光效必须来自同一主题令牌，禁止浏览器原生白色样式与组件硬编码并存。 -->
 web_personalization_scrollbar_token_parts = track,thumb,thumb-hover,thumb-active,radius,glow,size-page,size-panel,size-compact
 web_personalization_scrollbar_size_tiers = page,panel,compact

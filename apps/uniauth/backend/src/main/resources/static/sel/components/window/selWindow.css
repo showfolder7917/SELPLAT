@@ -31,7 +31,7 @@
     border-image-slice: 58 69 58 69 fill;
     border-image-width: var(--sel-theme-frame-window);
     border-image-repeat: stretch;
-    color: #eef2ff;
+    color: var(--sel-theme-text-body);
     background: transparent;
     outline: none;
     filter: drop-shadow(0 0 9px rgba(48, 128, 255, 0.48));
@@ -68,8 +68,8 @@
 .selwindow-brand-group { display: flex; min-width: 0; align-items: center; gap: 13px; }
 .selwindow-brand-image { width: 46px; height: 46px; flex: 0 0 auto; border-radius: 13px; object-fit: cover; filter: drop-shadow(0 0 10px rgba(63, 152, 255, 0.68)); }
 .selwindow-brand-copy { display: grid; min-width: 0; gap: 4px; }
-.selwindow-brand-title { margin: 0; overflow: hidden; color: #f2f5ff; font-size: 22px; font-weight: 650; line-height: 1.08; letter-spacing: 0.04em; text-overflow: ellipsis; text-shadow: 0 0 12px rgba(91, 160, 255, 0.46); white-space: nowrap; }
-.selwindow-brand-subtitle { overflow: hidden; color: #91a1ca; font-size: 13px; letter-spacing: 0.03em; text-overflow: ellipsis; white-space: nowrap; }
+.selwindow-brand-title { margin: 0; overflow: hidden; color: var(--sel-theme-text-title); font-size: 22px; font-weight: 650; line-height: 1.08; letter-spacing: 0.04em; text-overflow: ellipsis; text-shadow: var(--sel-theme-text-shadow); white-space: nowrap; }
+.selwindow-brand-subtitle { overflow: hidden; color: var(--sel-theme-text-secondary); font-size: 13px; letter-spacing: 0.03em; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 窗口控制区采用紧凑方形按钮，顺序固定为最小化、最大化、关闭。 */
 .selwindow-header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
@@ -80,16 +80,16 @@
     place-items: center;
     border: 1px solid rgba(101, 151, 244, 0.54);
     border-radius: 10px;
-    color: #bcd5ff;
+    color: var(--sel-theme-text-icon);
     background: rgba(5, 21, 65, 0.86);
     box-shadow: inset 0 0 12px rgba(49, 92, 181, 0.22);
     cursor: pointer;
     font-size: 19px;
 }
 .selwindow-frame-button:hover,
-.selwindow-frame-button:focus-visible { border-color: #82c7ff; color: #fff; outline: none; box-shadow: 0 0 12px rgba(55, 137, 255, 0.52), inset 0 0 12px rgba(64, 111, 220, 0.30); }
+.selwindow-frame-button:focus-visible { border-color: #82c7ff; color: var(--sel-theme-text-on-accent); outline: none; box-shadow: 0 0 12px rgba(55, 137, 255, 0.52), inset 0 0 12px rgba(64, 111, 220, 0.30); }
 .selwindow-close-button:hover,
-.selwindow-close-button:focus-visible { border-color: rgba(255, 111, 143, 0.82); color: #ffdce5; box-shadow: 0 0 12px rgba(255, 71, 117, 0.38), inset 0 0 12px rgba(177, 47, 87, 0.24); }
+.selwindow-close-button:focus-visible { border-color: rgba(255, 111, 143, 0.82); color: var(--sel-theme-semantic-error); box-shadow: 0 0 12px rgba(255, 71, 117, 0.38), inset 0 0 12px rgba(177, 47, 87, 0.24); }
 
 /* 表单保持标题、可滚动内容和固定操作区的稳定纵向结构。 */
 .selwindow-form-shell { display: grid; min-width: 0; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
@@ -109,18 +109,18 @@
 .selwindow-field-row-paired { grid-template-columns: 142px minmax(0, 1fr) 96px minmax(0, 0.9fr); }
 
 /* 标签用文字层级和现成图标体系表达角色，不再保留旧窗框的蓝色圆点装饰。 */
-.selwindow-field-label { display: flex; min-width: 0; min-height: 42px; align-items: center; color: #dfe7fb; font-size: 15px; font-weight: 560; white-space: nowrap; }
-.selwindow-field-label-optional { color: #b8c5e4; }
+.selwindow-field-label { display: flex; min-width: 0; min-height: 42px; align-items: center; color: var(--sel-theme-text-title); font-size: 15px; font-weight: 560; white-space: nowrap; }
+.selwindow-field-label-optional { color: var(--sel-theme-text-secondary); }
 
 /* 输入底板复用首页筛选控件的边框、尺寸和深蓝表面。 */
 .selwindow-control-shell { display: grid; min-width: 0; min-height: 42px; box-sizing: border-box; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 0 12px; border: 1px solid rgba(82, 130, 220, 0.58); border-radius: 9px; background: rgba(4, 18, 58, 0.80); box-shadow: inset 0 0 13px rgba(35, 76, 163, 0.18); }
 .selwindow-control-shell:focus-within { border-color: #65b2ff; box-shadow: 0 0 11px rgba(48, 131, 255, 0.36), inset 0 0 15px rgba(48, 84, 188, 0.24); }
-.selwindow-control-icon { color: #73aaff; font-size: 18px; text-align: center; text-shadow: 0 0 7px rgba(76, 139, 255, 0.48); }
+.selwindow-control-icon { color: var(--sel-theme-text-icon); font-size: 18px; text-align: center; text-shadow: 0 0 7px rgba(76, 139, 255, 0.48); }
 .selwindow-control-input,
-.selwindow-control-textarea { width: 100%; min-width: 0; border: 0; color: #e9efff; outline: 0; background: transparent; font: inherit; font-size: 15px; }
+.selwindow-control-textarea { width: 100%; min-width: 0; border: 0; color: var(--sel-theme-text-body); outline: 0; background: transparent; font: inherit; font-size: 15px; }
 .selwindow-control-input::placeholder,
-.selwindow-control-textarea::placeholder { color: #667aa8; }
-.selwindow-control-suffix { color: #7389b7; font-size: 13px; white-space: nowrap; }
+.selwindow-control-textarea::placeholder { color: var(--sel-theme-text-placeholder); }
+.selwindow-control-suffix { color: var(--sel-theme-text-secondary); font-size: 13px; white-space: nowrap; }
 
 /* 描述字段在默认尺寸中保留编辑空间，缩小时随字段区一起滚动。 */
 .selwindow-field-row:has(.selwindow-control-shell-textarea) { min-height: 126px; align-items: start; }
@@ -130,18 +130,18 @@
 .selwindow-control-shell-textarea .selwindow-control-suffix { align-self: end; }
 
 /* 复选项和反馈属于字段内容流，避免固定操作区上下跳动。 */
-.selwindow-checkbox-row { display: flex; min-height: 36px; align-items: center; gap: 9px; color: #c7d2ef; font-size: 14px; }
+.selwindow-checkbox-row { display: flex; min-height: 36px; align-items: center; gap: 9px; color: var(--sel-theme-text-body); font-size: 14px; }
 .selwindow-checkbox-input { width: 19px; height: 19px; accent-color: #526fff; }
-.selwindow-checkbox-info { color: #42a8ff; font-size: 18px; text-shadow: 0 0 7px rgba(38, 141, 255, 0.56); }
-.selwindow-feedback { min-height: 19px; color: #76f1d1; text-align: center; font-size: 13px; }
-.selwindow-feedback.selwindow-feedback-error { color: #ff7893; }
+.selwindow-checkbox-info { color: var(--sel-theme-text-link); font-size: 18px; text-shadow: 0 0 7px rgba(38, 141, 255, 0.56); }
+.selwindow-feedback { min-height: 19px; color: var(--sel-theme-semantic-success); text-align: center; font-size: 13px; }
+.selwindow-feedback.selwindow-feedback-error { color: var(--sel-theme-semantic-error); }
 
 /* 底部操作区通过轻分隔线连接同一水晶底板，不形成独立不透明色块。 */
 .selwindow-actions-shell { display: flex; min-width: 0; justify-content: flex-end; gap: 12px; padding: 13px 27px 15px; border-top: 1px solid rgba(80, 129, 220, 0.28); background: rgba(2, 12, 44, 0.18); }
-.selwindow-action-button { min-width: 142px; height: 44px; border: 1px solid rgba(91, 143, 235, 0.66); border-radius: 10px; color: #e8eeff; background: rgba(5, 21, 66, 0.86); box-shadow: inset 0 0 14px rgba(42, 84, 176, 0.20); cursor: pointer; font: inherit; font-size: 15px; font-weight: 600; }
+.selwindow-action-button { min-width: 142px; height: 44px; border: 1px solid rgba(91, 143, 235, 0.66); border-radius: 10px; color: var(--sel-theme-text-body); background: rgba(5, 21, 66, 0.86); box-shadow: inset 0 0 14px rgba(42, 84, 176, 0.20); cursor: pointer; font: inherit; font-size: 15px; font-weight: 600; }
 .selwindow-action-button:hover,
 .selwindow-action-button:focus-visible { border-color: #8dc5ff; outline: none; box-shadow: 0 0 12px rgba(73, 137, 255, 0.48), inset 0 0 12px rgba(70, 112, 220, 0.28); }
-.selwindow-action-primary { border-color: #9abfff; color: #fff; background: #4e65e8; box-shadow: 0 0 16px rgba(67, 132, 255, 0.58), 0 0 10px rgba(126, 72, 255, 0.36), inset 0 0 12px rgba(255, 255, 255, 0.18); }
+.selwindow-action-primary { border-color: #9abfff; color: var(--sel-theme-text-on-accent); background: #4e65e8; box-shadow: 0 0 16px rgba(67, 132, 255, 0.58), 0 0 10px rgba(126, 72, 255, 0.36), inset 0 0 12px rgba(255, 255, 255, 0.18); }
 
 /* 八方向透明手柄扩大命中区，视觉边框始终来自真实九宫格素材。 */
 .selwindow-resize-handle { position: absolute; z-index: 12; display: block; touch-action: none; }
@@ -159,8 +159,8 @@
 .selwindow-minimized-rail { position: fixed; z-index: 2200; right: 18px; bottom: 18px; display: flex; max-width: calc(100vw - 36px); align-items: center; justify-content: flex-end; gap: 8px; padding: 8px; border: 1px solid rgba(100, 160, 255, 0.56); border-radius: 13px; background: rgba(3, 15, 53, 0.94); box-shadow: 0 0 14px rgba(57, 129, 255, 0.42), inset 0 0 13px rgba(55, 94, 181, 0.22); }
 .selwindow-minimized-rail[hidden],
 .selwindow-minimized-button[hidden] { display: none; }
-.selwindow-minimized-button { display: inline-flex; min-width: 152px; max-width: 230px; height: 40px; align-items: center; gap: 9px; overflow: hidden; padding: 0 14px; border: 1px solid rgba(106, 160, 248, 0.58); border-radius: 9px; color: #e8efff; background: rgba(6, 24, 73, 0.92); box-shadow: inset 0 0 11px rgba(52, 95, 187, 0.24); cursor: pointer; font: inherit; text-overflow: ellipsis; white-space: nowrap; }
-.selwindow-minimized-button i { color: #79b7ff; font-size: 18px; }
+.selwindow-minimized-button { display: inline-flex; min-width: 152px; max-width: 230px; height: 40px; align-items: center; gap: 9px; overflow: hidden; padding: 0 14px; border: 1px solid rgba(106, 160, 248, 0.58); border-radius: 9px; color: var(--sel-theme-text-body); background: rgba(6, 24, 73, 0.92); box-shadow: inset 0 0 11px rgba(52, 95, 187, 0.24); cursor: pointer; font: inherit; text-overflow: ellipsis; white-space: nowrap; }
+.selwindow-minimized-button i { color: var(--sel-theme-text-icon); font-size: 18px; }
 .selwindow-minimized-button:hover,
 .selwindow-minimized-button:focus-visible { border-color: #93ccff; outline: none; box-shadow: 0 0 12px rgba(63, 142, 255, 0.52), inset 0 0 11px rgba(66, 112, 217, 0.28); }
 
