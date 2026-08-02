@@ -15,8 +15,10 @@
         themeColor: null,
         // 原始水晶边框默认完整显示；透明度只影响独立图片层，不影响内板、内容或发光。
         frameOpacity: 100,
-        panelOpacity: 82,
-        backgroundFrost: 58,
+        // 默认面板保留接近一半的玻璃底色，让背景可感知但不压过表格与树形内容。
+        panelOpacity: 48,
+        // 默认磨砂与截图确认值一致，兼顾背景虚化和中端设备的实时响应。
+        backgroundFrost: 39,
         themeTint: 68,
         panelRadius: 50,
         panelScale: 50,
@@ -29,7 +31,8 @@
         windowMotion: 60,
         glowMotion: 46,
         reducedMotion: false,
-        preset: "deep-space"
+        // 刷新页面固定回到可见的默认预设；用户手动调整仍只进入当前页面的临时 custom 状态。
+        preset: "default"
     });
     // 常用色只提供快速选择入口，不代表固定皮肤；任意颜色仍可通过原生颜色控件选择。
     const selPersonalizationThemeColors = Object.freeze([
@@ -41,12 +44,14 @@
         Object.freeze({ value: "#EC5D9A", label: "脉冲粉" })
     ]);
     // 预设只保存与皮肤无关的强度值；实际颜色始终来自当前皮肤 CSS 令牌。
+    // 四套场景预设基于真实页面视觉校准，分别强化沉浸、通透、舒适和可读性，不把某一种深蓝皮肤写死。
     const selPersonalizationPresets = Object.freeze([
-        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 82, backgroundFrost: 58, themeTint: 68, panelRadius: 50, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) }),
-        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ frameOpacity: 72, panelOpacity: 34, backgroundFrost: 86, themeTint: 42, panelRadius: 68, panelScale: 48, innerPanelFit: 100, frameWidth: 46, contentInset: 56, panelGap: 58, glowSpread: 62, controlGap: 54, windowMotion: 64, glowMotion: 62, reducedMotion: false }) }),
-        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ frameOpacity: 58, panelOpacity: 91, backgroundFrost: 36, themeTint: 30, panelRadius: 62, panelScale: 46, innerPanelFit: 100, frameWidth: 48, contentInset: 58, panelGap: 58, glowSpread: 24, controlGap: 58, windowMotion: 24, glowMotion: 12, reducedMotion: true }) }),
-        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 100, backgroundFrost: 12, themeTint: 55, panelRadius: 42, panelScale: 50, innerPanelFit: 100, frameWidth: 58, contentInset: 54, panelGap: 54, glowSpread: 38, controlGap: 54, windowMotion: 42, glowMotion: 28, reducedMotion: false }) }),
-        Object.freeze({ id: "custom", label: "自定义", icon: "ri-equalizer-2-line", values: null })
+        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 78, backgroundFrost: 64, themeTint: 78, panelRadius: 46, panelScale: 50, innerPanelFit: 100, frameWidth: 54, contentInset: 52, panelGap: 50, glowSpread: 64, controlGap: 50, windowMotion: 50, glowMotion: 34, reducedMotion: false }) }),
+        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ frameOpacity: 82, panelOpacity: 28, backgroundFrost: 72, themeTint: 40, panelRadius: 60, panelScale: 50, innerPanelFit: 100, frameWidth: 46, contentInset: 54, panelGap: 56, glowSpread: 42, controlGap: 54, windowMotion: 46, glowMotion: 24, reducedMotion: false }) }),
+        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ frameOpacity: 70, panelOpacity: 78, backgroundFrost: 54, themeTint: 22, panelRadius: 58, panelScale: 50, innerPanelFit: 100, frameWidth: 46, contentInset: 60, panelGap: 62, glowSpread: 18, controlGap: 62, windowMotion: 16, glowMotion: 0, reducedMotion: true }) }),
+        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 94, backgroundFrost: 64, themeTint: 54, panelRadius: 38, panelScale: 50, innerPanelFit: 100, frameWidth: 62, contentInset: 56, panelGap: 50, glowSpread: 30, controlGap: 54, windowMotion: 28, glowMotion: 10, reducedMotion: false }) }),
+        // 默认预设完整复刻用户确认的截图参数，刷新页面以及“恢复面板默认”都回到这组值。
+        Object.freeze({ id: "default", label: "默认", icon: "ri-equalizer-2-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 48, backgroundFrost: 39, themeTint: 68, panelRadius: 50, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) })
     ]);
     // 面板 range 配置集中声明分组、标签和辅助说明，增删项目不需要复制事件分支。
     const selPersonalizationPanelRangeGroups = Object.freeze([
@@ -182,6 +187,28 @@
     }
 
     /**
+     * 根据浏览器公开的设备能力选择水晶材质性能档位。
+     * @returns {"full"|"reduced"} 常规设备返回 full；四核、4GB、节省流量或慢更新设备返回 reduced。
+     */
+    function selPersonalizationResolvePerformanceMode() {
+        // 浏览器未公开内存时保留 0，避免把未知设备误判为低性能。
+        const selPersonalizationDeviceMemory = Number(navigator.deviceMemory || 0);
+        // 硬件线程用于识别四核及以下设备；未公开时同样不单独触发降级。
+        const selPersonalizationHardwareConcurrency = Number(navigator.hardwareConcurrency || 0);
+        // 节省流量模式代表用户主动要求降低资源开销，应同步采用轻量水晶效果。
+        const selPersonalizationSaveData = Boolean(navigator.connection?.saveData);
+        // 慢更新媒体特征覆盖电子墨水或浏览器明确声明的低刷新环境。
+        const selPersonalizationSlowUpdate = Boolean(window.matchMedia?.("(update: slow)").matches);
+        // 任一可靠低性能信号命中时降低磨砂采样与光效更新频率，但不改变交互反馈。
+        const selPersonalizationShouldReduce = selPersonalizationSaveData
+            || selPersonalizationSlowUpdate
+            || (selPersonalizationDeviceMemory > 0 && selPersonalizationDeviceMemory <= 4)
+            || (selPersonalizationHardwareConcurrency > 0 && selPersonalizationHardwareConcurrency <= 4);
+        // 返回稳定字符串供 CSS 根状态直接选择性能令牌。
+        return selPersonalizationShouldReduce ? "reduced" : "full";
+    }
+
+    /**
      * 显式挂载个性化设置界面。
      * @param {Element} selPersonalizationHost - HTML 提供的个性化入口挂载点。
      * @param {object} selPersonalizationOptions - 背景控制器和可选默认值。
@@ -204,6 +231,8 @@
         }
         // 页面根节点承载跨组件共享的视觉令牌。
         const selPersonalizationDocumentRoot = document.documentElement;
+        // 性能档位只保存在当前页面根状态，刷新时会根据当前设备重新评估。
+        selPersonalizationDocumentRoot.dataset.selPersonalPerformance = selPersonalizationResolvePerformanceMode();
         // 调用方可以覆盖面板刷新默认值，但每个强度仍会限制到 0 至 100。
         const selPersonalizationDefaults = Object.freeze({
             ...selPersonalizationPanelDefaults,

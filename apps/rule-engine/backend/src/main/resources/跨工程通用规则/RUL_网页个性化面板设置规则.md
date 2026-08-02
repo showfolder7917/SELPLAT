@@ -35,6 +35,13 @@ web_personalization_background_frost_target = panel,window,personalization-panel
 web_personalization_background_frost_geometry_must_equal = inner-glass-backplate-size,inner-glass-backplate-inset,inner-glass-backplate-radius
 web_personalization_background_frost_geometry_must_follow = unified-large-surface-inset-token,unified-popup-inset-token,shared-inner-backplate-token
 web_personalization_background_frost_must_not_attach_to = outer-crystal-frame-border-box
+web_personalization_window_material_layer_order = background-frost:0,interactive-content:1,crystal-frame:2,resize-handles:above-frame
+web_personalization_window_material_must_create = positioned-z-index-stacking-context-without-backdrop-root
+web_personalization_window_background_frost_must_sample = content-behind-window-outside-window-stacking-context
+web_personalization_window_background_frost_must_not_use = isolation-isolate,ancestor-filter,ancestor-backdrop-filter
+web_personalization_window_entrance_animation_must_release_after_finish = transform,translate,scale,opacity-compositing-layer
+web_personalization_window_entrance_animation_fill_mode_must_not_be = forwards,both
+web_personalization_window_material_must_not_rely_on = negative-z-index-for-frost,negative-z-index-for-frame
 web_personalization_skin_tint_must_use = overridable-theme-rgb-tokens
 web_personalization_skin_tint_must_not_hardcode = deep-blue,purple,background-derived-color
 web_personalization_unified_theme_color_modes = follow-current-skin,arbitrary-color,quick-swatches
@@ -89,11 +96,19 @@ web_personalization_window_open_must_replay_current_motion = true
 web_personalization_reduced_motion_must_disable = window-entrance,glow-flow,decorative-transitions
 web_personalization_reduced_motion_must_disable_motion_inputs = true
 web_personalization_motion_must_respect_prefers_reduced_motion = true
+web_personalization_continuous_glow_animation_owner = independent-frame-decoration-layer
+web_personalization_continuous_glow_animation_must_not_target = backdrop-frost-owner,table-container,tree-container,interactive-content-surface
+web_personalization_low_performance_mode_must_reduce = backdrop-blur-sampling-radius,decorative-glow-update-frequency
+web_personalization_low_performance_mode_must_preserve = crystal-frame-image,content-readability,hover-feedback,selected-feedback
+web_personalization_hover_and_selection_must_not_be_disabled_by = reduced-motion,low-performance-mode
 
-<!-- 预设表达参数组合而非固定皮肤颜色；自定义由任意手工改动自动进入。 -->
-web_personalization_presets = deep-space,transparent,eye-care,high-contrast,custom
+<!-- 预设表达参数组合而非固定皮肤颜色；默认预设复刻产品确认值，手工改动只进入不可见的页面临时状态。 -->
+web_personalization_presets = deep-space,transparent,eye-care,high-contrast,default
+web_personalization_default_preset_values = frame-opacity:100,panel-opacity:48,background-frost:39,theme-tint:68,panel-radius:50,frame-width:50,panel-scale:50,inner-panel-fit:100,content-inset:50,panel-gap:50,glow-spread:55,control-gap:50,window-motion:60,glow-motion:46,reduced-motion:false
+web_personalization_manual_change_state = custom-runtime-only
+web_personalization_manual_change_must_not_create_visible_preset = true
 web_personalization_preset_must_be_skin_independent = true
-web_personalization_manual_change_selects_custom = true
+web_personalization_manual_change_clears_visible_preset_selection = true
 
 <!-- 临时个性化模式禁止写入浏览器持久化存储，刷新页面必须恢复代码默认值。 -->
 web_personalization_persistence_mode = ephemeral-page-state

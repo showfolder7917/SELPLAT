@@ -9,6 +9,8 @@
     --selpersonal-panel-opacity: 0.82;
     --selpersonal-frame-opacity: 1;
     --selpersonal-background-frost-blur: 27.84px;
+    /* 有效模糊默认保持用户设置，低性能模式只覆盖计算结果而不改动滑杆状态。 */
+    --selpersonal-background-frost-effective-blur: var(--selpersonal-background-frost-blur);
     --selpersonal-background-frost-brightness: 0.76;
     --selpersonal-background-frost-saturation: 0.74;
     --selpersonal-background-frost-veil: 0.15;
@@ -29,6 +31,9 @@
     --selpersonal-window-motion-distance: 8.4px;
     --selpersonal-glow-motion-strength: 0.46;
     --selpersonal-glow-motion-duration: 6.87s;
+    /* 完整性能模式使用平滑合成动画，设备降级时由根状态改为低频阶梯更新。 */
+    --selpersonal-glow-motion-effective-duration: var(--selpersonal-glow-motion-duration);
+    --selpersonal-glow-motion-timing: ease-in-out;
     --selpersonal-panel-scale: 1;
     /* 中心底板把当前皮肤色和中性深色按用户染色强度混合，透明度只作用于底板。 */
     --selpersonal-panel-surface: color-mix(
@@ -36,6 +41,13 @@
         rgb(var(--sel-theme-color-rgb) / var(--selpersonal-panel-opacity)) var(--selpersonal-theme-tint-mix),
         rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-panel-opacity))
     );
+}
+
+/* 低性能设备保留水晶材质，但降低大面积磨砂采样半径与装饰光效更新频率。 */
+:root[data-sel-personal-performance="reduced"] {
+    --selpersonal-background-frost-effective-blur: calc(var(--selpersonal-background-frost-blur) * 0.68);
+    --selpersonal-glow-motion-effective-duration: calc(var(--selpersonal-glow-motion-duration) * 1.4);
+    --selpersonal-glow-motion-timing: steps(12, end);
 }
 
 /* 设置入口固定在右上角，不进入 selPanel 的五区布局。 */
@@ -136,11 +148,11 @@
     );
     /* 磨砂采样与玻璃底板共用同一个伪元素，因此尺寸、内缩和圆角始终完全重合。 */
     -webkit-backdrop-filter:
-        blur(var(--selpersonal-background-frost-blur))
+        blur(var(--selpersonal-background-frost-effective-blur))
         brightness(var(--selpersonal-background-frost-brightness))
         saturate(var(--selpersonal-background-frost-saturation));
     backdrop-filter:
-        blur(var(--selpersonal-background-frost-blur))
+        blur(var(--selpersonal-background-frost-effective-blur))
         brightness(var(--selpersonal-background-frost-brightness))
         saturate(var(--selpersonal-background-frost-saturation));
     pointer-events: none;
@@ -166,8 +178,22 @@
     border-image-repeat: stretch;
     border-radius: inherit;
     opacity: var(--selpersonal-frame-opacity);
+    /* 边框图片层独立建立合成面，后续滤镜动画不再让磨砂底板参与循环重绘。 */
+    transform: translateZ(0);
     pointer-events: none;
     content: "";
+}
+
+/* 只有明确开启光效且未启用减少动态时，边框装饰层才执行独立呼吸动画。 */
+:root[data-sel-personal-glow-motion="on"]:not([data-sel-personal-reduced-motion="true"]) .selpersonal-panel::after,
+:root[data-sel-personal-glow-motion="on"]:not([data-sel-personal-reduced-motion="true"]) .selpanel-crystal-surface::after,
+:root[data-sel-personal-glow-motion="on"]:not([data-sel-personal-reduced-motion="true"]) .selwindow-window-shell::after,
+:root[data-sel-personal-glow-motion="on"]:not([data-sel-personal-reduced-motion="true"]) .seldropdown-menu::after,
+:root[data-sel-personal-glow-motion="on"]:not([data-sel-personal-reduced-motion="true"]) .selgrid-menu::after,
+:root[data-sel-personal-glow-motion="on"]:not([data-sel-personal-reduced-motion="true"]) .selgrid-menu-submenu::after,
+:root[data-sel-personal-glow-motion="on"]:not([data-sel-personal-reduced-motion="true"]) .seldatepicker-popover::after {
+    animation: selpersonal-frame-glow-breathe var(--selpersonal-glow-motion-effective-duration) var(--selpersonal-glow-motion-timing) infinite alternate;
+    will-change: filter;
 }
 
 /* 每类表面把自身真实边框厚度传给图片层，确保九宫格边角与原布局边界完全重合。 */
@@ -228,7 +254,29 @@
     isolation: auto;
     filter: none;
     box-shadow: 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-glow-alpha));
-    animation: selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
+}
+
+/* 窗口使用定位层级建立普通堆叠上下文，既固定伪元素顺序又允许磨砂采样窗口后方页面。 */
+.selwindow-window-shell {
+    z-index: 0;
+    isolation: auto;
+}
+
+/* 窗口磨砂底板固定为第 0 层，确保 backdrop-filter 采样窗口后方页面。 */
+.selwindow-window-shell::before {
+    z-index: 0;
+}
+
+/* 标题和表单属于第 1 层；八方向手柄继续使用窗口组件原有的第 12 层。 */
+.selwindow-window-shell > .selwindow-header-shell,
+.selwindow-window-shell > .selwindow-form-shell {
+    position: relative;
+    z-index: 1;
+}
+
+/* 原始水晶边框和独立光效位于第 2 层，透明命中保证不会遮挡表单操作。 */
+.selwindow-window-shell::after {
+    z-index: 2;
 }
 
 /* 大型面板和窗口共享外层圆角，小型浮层共享更紧凑的弹出层圆角。 */
@@ -370,16 +418,12 @@
 
 /* 新窗口使用用户选择的入场时长和位移；拖动坐标本身不添加过渡。 */
 .selwindow-window-shell {
-    animation:
-        selpersonal-window-enter var(--selpersonal-window-motion-duration) ease-out both,
-        selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
+    animation: selpersonal-window-enter var(--selpersonal-window-motion-duration) ease-out;
 }
 
 /* 滑杆预览和每次重新打开窗口都使用独立关键帧名称，确保已有 DOM 也能可靠重播。 */
 .selwindow-window-shell.selwindow-window-motion-preview {
-    animation:
-        selpersonal-window-enter-replay var(--selpersonal-window-motion-duration) ease-out both,
-        selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
+    animation: selpersonal-window-enter-replay var(--selpersonal-window-motion-duration) ease-out;
 }
 
 /* 设置面板标题采用图标、文案和关闭操作三轨结构。 */
@@ -1220,13 +1264,13 @@
     }
 }
 
-/* 光效流动使用现有边框投影做低幅呼吸，不生成新的装饰图形。 */
-@keyframes selpersonal-glow-breathe {
+/* 光效只改变独立边框图片层的合成滤镜，不再动画承载磨砂和交互内容的大面板。 */
+@keyframes selpersonal-frame-glow-breathe {
     from {
-        box-shadow: 0 0 calc(var(--selpersonal-glow-spread) * 0.62) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-from-alpha));
+        filter: drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.46) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-from-alpha)));
     }
     to {
-        box-shadow: 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-to-alpha));
+        filter: drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.82) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-to-alpha)));
     }
 }
 
@@ -1242,14 +1286,23 @@
     transition: none;
 }
 
-/* 光效强度为 0 时停止无意义动画并移除外扩散。 */
-:root[data-sel-personal-glow-motion="off"] .selpanel-crystal-surface,
-:root[data-sel-personal-glow-motion="off"] .selwindow-window-shell,
-:root[data-sel-personal-glow-motion="off"] .seldropdown-menu,
-:root[data-sel-personal-glow-motion="off"] .selgrid-menu,
-:root[data-sel-personal-glow-motion="off"] .selgrid-menu-submenu,
-:root[data-sel-personal-glow-motion="off"] .seldatepicker-popover {
+/* 手动减少动态或光效为 0 时只停止边框装饰层，不覆盖表格行与树节点的即时交互反馈。 */
+:root[data-sel-personal-reduced-motion="true"] .selpersonal-panel::after,
+:root[data-sel-personal-reduced-motion="true"] .selpanel-crystal-surface::after,
+:root[data-sel-personal-reduced-motion="true"] .selwindow-window-shell::after,
+:root[data-sel-personal-reduced-motion="true"] .seldropdown-menu::after,
+:root[data-sel-personal-reduced-motion="true"] .selgrid-menu::after,
+:root[data-sel-personal-reduced-motion="true"] .selgrid-menu-submenu::after,
+:root[data-sel-personal-reduced-motion="true"] .seldatepicker-popover::after,
+:root[data-sel-personal-glow-motion="off"] .selpersonal-panel::after,
+:root[data-sel-personal-glow-motion="off"] .selpanel-crystal-surface::after,
+:root[data-sel-personal-glow-motion="off"] .selwindow-window-shell::after,
+:root[data-sel-personal-glow-motion="off"] .seldropdown-menu::after,
+:root[data-sel-personal-glow-motion="off"] .selgrid-menu::after,
+:root[data-sel-personal-glow-motion="off"] .selgrid-menu-submenu::after,
+:root[data-sel-personal-glow-motion="off"] .seldatepicker-popover::after {
     animation: none;
+    will-change: auto;
 }
 
 @media (max-width: 720px) {
@@ -1274,5 +1327,17 @@
     .selpersonal-background-option::before {
         animation: none;
         transition: none;
+    }
+
+    /* 系统减少动态偏好同样直接停止独立边框光效合成层。 */
+    .selpersonal-panel::after,
+    .selpanel-crystal-surface::after,
+    .selwindow-window-shell::after,
+    .seldropdown-menu::after,
+    .selgrid-menu::after,
+    .selgrid-menu-submenu::after,
+    .seldatepicker-popover::after {
+        animation: none;
+        will-change: auto;
     }
 }
