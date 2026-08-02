@@ -18,3 +18,60 @@ body.selcursor-crystal :where(
 ) {
     cursor: text !important;
 }
+
+/* 可移动窗口标题区必须恢复系统移动反馈；控制按钮继续保留可点击箭头。 */
+body.selcursor-crystal .selwindow-header-shell,
+body.selcursor-crystal .selwindow-brand-group,
+body.selcursor-crystal .selwindow-brand-group :where(*) {
+    cursor: move !important;
+}
+
+/* 最大化窗口不允许拖动，标题及品牌区同步恢复默认箭头，避免错误操作暗示。 */
+body.selcursor-crystal .selwindow-window-maximized .selwindow-header-shell,
+body.selcursor-crystal .selwindow-window-maximized .selwindow-brand-group,
+body.selcursor-crystal .selwindow-window-maximized .selwindow-brand-group :where(*) {
+    cursor: default !important;
+}
+
+/* 八方向透明手柄覆盖全局水晶箭头，悬停时显示与真实几何方向一致的系统缩放指针。 */
+body.selcursor-crystal :where(.selwindow-resize-north, .selwindow-resize-south) {
+    cursor: ns-resize !important;
+}
+
+body.selcursor-crystal :where(.selwindow-resize-east, .selwindow-resize-west) {
+    cursor: ew-resize !important;
+}
+
+body.selcursor-crystal :where(.selwindow-resize-north-west, .selwindow-resize-south-east) {
+    cursor: nwse-resize !important;
+}
+
+body.selcursor-crystal :where(.selwindow-resize-north-east, .selwindow-resize-south-west) {
+    cursor: nesw-resize !important;
+}
+
+/* 指针捕获离开窄手柄后，页面仍锁定当前操作方向；松开、取消或窗口失焦后由窗口控制器清除状态。 */
+body[data-sel-window-interaction-cursor="move"],
+body[data-sel-window-interaction-cursor="move"] :where(*) {
+    cursor: move !important;
+}
+
+body[data-sel-window-interaction-cursor="ns-resize"],
+body[data-sel-window-interaction-cursor="ns-resize"] :where(*) {
+    cursor: ns-resize !important;
+}
+
+body[data-sel-window-interaction-cursor="ew-resize"],
+body[data-sel-window-interaction-cursor="ew-resize"] :where(*) {
+    cursor: ew-resize !important;
+}
+
+body[data-sel-window-interaction-cursor="nwse-resize"],
+body[data-sel-window-interaction-cursor="nwse-resize"] :where(*) {
+    cursor: nwse-resize !important;
+}
+
+body[data-sel-window-interaction-cursor="nesw-resize"],
+body[data-sel-window-interaction-cursor="nesw-resize"] :where(*) {
+    cursor: nesw-resize !important;
+}

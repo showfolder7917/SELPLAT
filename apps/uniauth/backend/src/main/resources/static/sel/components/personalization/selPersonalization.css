@@ -7,6 +7,7 @@
 :root {
     /* 以下个性化参数由 selPersonalization 实时写入；基础颜色和几何统一由 selThemeTokens 提供。 */
     --selpersonal-panel-opacity: 0.82;
+    --selpersonal-frame-opacity: 1;
     --selpersonal-background-frost-blur: 27.84px;
     --selpersonal-background-frost-brightness: 0.76;
     --selpersonal-background-frost-saturation: 0.74;
@@ -18,6 +19,11 @@
     --selpersonal-panel-gap: 10px;
     --selpersonal-glow-spread: 12.1px;
     --selpersonal-glow-strength: 0.55;
+    --selpersonal-frame-glow-alpha: 0.428;
+    --selpersonal-frame-panel-glow-alpha: 0.42;
+    --selpersonal-frame-active-glow-alpha: 0.68;
+    --selpersonal-frame-motion-from-alpha: 0.212;
+    --selpersonal-frame-motion-to-alpha: 0.373;
     --selpersonal-control-gap-offset: 0px;
     --selpersonal-window-motion-duration: 180ms;
     --selpersonal-window-motion-distance: 8.4px;
@@ -84,20 +90,32 @@
     flex-direction: column;
     padding: calc(14px + var(--selpersonal-content-inset-offset));
     border: var(--selpersonal-frame-width) solid transparent;
-    border-image-source: var(--sel-theme-frame-image);
+    /* 九宫格图片只允许独立 ::after 层绘制，外层透明边界仅负责稳定布局。 */
+    border-image-source: none;
     border-image-slice: 58 69 58 69 fill;
     border-image-width: var(--selpersonal-frame-width);
     border-image-repeat: stretch;
     color: #f1f5ff;
     background: transparent;
     border-radius: var(--sel-theme-radius-panel);
-    filter: drop-shadow(0 18px 23px rgba(0, 0, 24, 0.56)) drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / 0.42));
-    isolation: isolate;
+    box-shadow: 0 18px 23px rgba(0, 0, 24, 0.56), 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-panel-glow-alpha));
+    isolation: auto;
     overflow: visible;
 }
 
 .selpersonal-panel[hidden] {
     display: none;
+}
+
+/* 外层元素只保留透明布局边界，原始九宫格图片交给独立装饰层控制透明度。 */
+.selpersonal-panel,
+.selpanel-crystal-surface,
+.selwindow-window-shell,
+.seldropdown-menu,
+.selgrid-menu,
+.selgrid-menu-submenu,
+.seldatepicker-popover {
+    border-image-source: none;
 }
 
 /* 中心玻璃底板位于水晶边框内侧，透明度不会影响正文或外框。 */
@@ -116,8 +134,66 @@
         rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-background-frost-veil)),
         rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-background-frost-veil))
     );
+    /* 磨砂采样与玻璃底板共用同一个伪元素，因此尺寸、内缩和圆角始终完全重合。 */
+    -webkit-backdrop-filter:
+        blur(var(--selpersonal-background-frost-blur))
+        brightness(var(--selpersonal-background-frost-brightness))
+        saturate(var(--selpersonal-background-frost-saturation));
+    backdrop-filter:
+        blur(var(--selpersonal-background-frost-blur))
+        brightness(var(--selpersonal-background-frost-brightness))
+        saturate(var(--selpersonal-background-frost-saturation));
     pointer-events: none;
     content: "";
+}
+
+/* 独立边框层始终使用皮肤原图；调整透明度不会降低内容、磨砂或主题色发光的可读性。 */
+.selpersonal-panel::after,
+.selpanel-crystal-surface::after,
+.selwindow-window-shell::after,
+.seldropdown-menu::after,
+.selgrid-menu::after,
+.selgrid-menu-submenu::after,
+.seldatepicker-popover::after {
+    position: absolute;
+    z-index: -1;
+    box-sizing: border-box;
+    inset: calc(0px - var(--selpersonal-frame-layer-width));
+    border: var(--selpersonal-frame-layer-width) solid transparent;
+    border-image-source: var(--sel-theme-frame-image);
+    border-image-slice: 58 69 58 69 fill;
+    border-image-width: var(--selpersonal-frame-layer-width);
+    border-image-repeat: stretch;
+    border-radius: inherit;
+    opacity: var(--selpersonal-frame-opacity);
+    pointer-events: none;
+    content: "";
+}
+
+/* 每类表面把自身真实边框厚度传给图片层，确保九宫格边角与原布局边界完全重合。 */
+.selpersonal-panel {
+    --selpersonal-frame-layer-width: var(--selpersonal-frame-width);
+}
+
+.selpanel-crystal-surface,
+.selwindow-window-shell {
+    --selpersonal-frame-layer-width: var(--sel-theme-frame-panel);
+}
+
+.seldropdown-menu {
+    --selpersonal-frame-layer-width: var(--sel-theme-frame-dropdown);
+}
+
+.selgrid-menu {
+    --selpersonal-frame-layer-width: var(--sel-theme-frame-menu);
+}
+
+.selgrid-menu-submenu {
+    --selpersonal-frame-layer-width: var(--sel-theme-frame-submenu);
+}
+
+.seldatepicker-popover {
+    --selpersonal-frame-layer-width: var(--sel-theme-frame-datepicker);
 }
 
 /* 大型面板使用统一的大表面贴合令牌，四个方向严格采用相同 inset 保持上下左右对称。 */
@@ -137,18 +213,6 @@
     border-radius: max(2px, calc(var(--sel-theme-radius-popup) - var(--sel-theme-surface-inset-popup)));
 }
 
-/* 个性化面板保留自身独立阴影，仅把背景磨砂采样挂到表面本体。 */
-.selpersonal-panel {
-    -webkit-backdrop-filter:
-        blur(var(--selpersonal-background-frost-blur))
-        brightness(var(--selpersonal-background-frost-brightness))
-        saturate(var(--selpersonal-background-frost-saturation));
-    backdrop-filter:
-        blur(var(--selpersonal-background-frost-blur))
-        brightness(var(--selpersonal-background-frost-brightness))
-        saturate(var(--selpersonal-background-frost-saturation));
-}
-
 /* 所有使用同一九宫格素材的表面共享边框厚度、透明底板和皮肤发光令牌。 */
 .selpanel-crystal-surface,
 .selwindow-window-shell,
@@ -157,19 +221,13 @@
 .selgrid-menu-submenu,
 .seldatepicker-popover {
     box-sizing: border-box;
-    border-image-source: var(--sel-theme-frame-image);
+    /* 外层不再重复绘制边框，透明度统一由同尺寸的独立图片层承担。 */
+    border-image-source: none;
     background: transparent;
-    isolation: isolate;
-    /* 背景采样必须作用在水晶表面本体；放在隔离容器内的负层级伪元素会被父级 filter 阻断。 */
-    -webkit-backdrop-filter:
-        blur(var(--selpersonal-background-frost-blur))
-        brightness(var(--selpersonal-background-frost-brightness))
-        saturate(var(--selpersonal-background-frost-saturation));
-    backdrop-filter:
-        blur(var(--selpersonal-background-frost-blur))
-        brightness(var(--selpersonal-background-frost-brightness))
-        saturate(var(--selpersonal-background-frost-saturation));
-    filter: drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / calc(0.18 + (var(--selpersonal-glow-strength) * 0.45))));
+    /* 外层不再建立磨砂采样边界；背景虚化只由与内板同尺寸的 ::before 承担。 */
+    isolation: auto;
+    filter: none;
+    box-shadow: 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-glow-alpha));
     animation: selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
 }
 
@@ -957,7 +1015,8 @@
 
 .selwindow-window-active,
 .selwindow-window-interacting {
-    filter: drop-shadow(0 0 14px rgb(var(--sel-theme-color-rgb) / 0.68));
+    filter: none;
+    box-shadow: 0 0 14px rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-active-glow-alpha));
 }
 
 .selwindow-checkbox-input {
@@ -1164,10 +1223,10 @@
 /* 光效流动使用现有边框投影做低幅呼吸，不生成新的装饰图形。 */
 @keyframes selpersonal-glow-breathe {
     from {
-        filter: drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.62) rgb(var(--sel-theme-color-rgb) / calc(0.12 + (var(--selpersonal-glow-motion-strength) * 0.20))));
+        box-shadow: 0 0 calc(var(--selpersonal-glow-spread) * 0.62) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-from-alpha));
     }
     to {
-        filter: drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / calc(0.18 + (var(--selpersonal-glow-motion-strength) * 0.42))));
+        box-shadow: 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-to-alpha));
     }
 }
 

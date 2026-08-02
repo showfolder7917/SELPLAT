@@ -25,8 +25,14 @@ custom_web_cursor_page_opt_in_must_use = explicit_theme_class
 custom_web_cursor_text_editing_exception = input,textarea,contenteditable
 custom_web_cursor_text_editing_cursor = text
 
+<!-- 可移动、可缩放窗口必须优先显示原生几何反馈；全局品牌指针不得覆盖标题栏移动和八方向手柄。 -->
+custom_web_cursor_native_geometry_exception = window-move,resize-north,resize-east,resize-south,resize-west,resize-north-east,resize-south-east,resize-south-west,resize-north-west
+custom_web_cursor_resize_mapping = north|south:ns-resize,east|west:ew-resize,north-west|south-east:nwse-resize,north-east|south-west:nesw-resize
+custom_web_cursor_active_drag_must_lock = current-interaction-cursor-across-page
+custom_web_cursor_active_drag_must_release_on = pointerup,pointercancel,window-blur
+
 <!-- 验收必须覆盖默认区域、按钮和文本输入区的计算后 cursor，并检查素材可访问、透明通道与控制台。 -->
-custom_web_cursor_browser_qa_must_cover = page_surface,interactive_control,text_input
+custom_web_cursor_browser_qa_must_cover = page_surface,interactive_control,text_input,window-header,all-eight-resize-handles,active-drag-lock,post-drag-restore
 custom_web_cursor_asset_qa_must_cover = http_200,alpha_channel,canvas_size,hotspot
 custom_web_cursor_console_error_or_warning_is_forbidden = true
 

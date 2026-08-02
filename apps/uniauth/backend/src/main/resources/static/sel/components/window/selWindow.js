@@ -601,6 +601,27 @@
             selWindowState.interaction = null;
             // 移除拖动状态类，恢复正常光标与文字选择。
             selWindowShell.classList.remove("selwindow-window-interacting");
+            // 页面级方向锁只服务当前拖拽，结束、取消或失焦后立即恢复各控件自己的指针。
+            delete document.body.dataset.selWindowInteractionCursor;
+        }
+
+        /**
+         * 把窗口几何方向转换为浏览器原生鼠标指针。
+         * @param {"move"|"resize"} selWindowMode - 标题栏移动或边缘缩放模式。
+         * @param {string} selWindowDirection - 八方向手柄值，例如 north-east。
+         * @returns {"move"|"ns-resize"|"ew-resize"|"nwse-resize"|"nesw-resize"} 页面拖拽期间锁定的真实方向指针。
+         */
+        function selWindowResolveInteractionCursor(selWindowMode, selWindowDirection) {
+            // 标题栏操作始终使用移动指针，与缩放方向映射完全分离。
+            if (selWindowMode === "move") return "move";
+            // 上下两条边共享纵向缩放反馈。
+            if (selWindowDirection === "north" || selWindowDirection === "south") return "ns-resize";
+            // 左右两条边共享横向缩放反馈。
+            if (selWindowDirection === "east" || selWindowDirection === "west") return "ew-resize";
+            // 左上和右下沿同一条斜轴缩放。
+            if (selWindowDirection === "north-west" || selWindowDirection === "south-east") return "nwse-resize";
+            // 右上和左下沿另一条斜轴缩放；未知值也安全回退到该系统缩放指针。
+            return "nesw-resize";
         }
 
         /**
@@ -620,6 +641,8 @@
             selWindowState.interaction = { mode: selWindowMode, direction: selWindowDirection, pointerX: selWindowEvent.clientX, pointerY: selWindowEvent.clientY, geometry: { ...(selWindowState.geometry || selWindowCreateDefaultGeometry()) } };
             // 交互状态类暂停文字选择并加强窗口活动反馈。
             selWindowShell.classList.add("selwindow-window-interacting");
+            // 页面级状态覆盖全局水晶箭头，使指针离开窄手柄后仍保持本次拖拽方向。
+            document.body.dataset.selWindowInteractionCursor = selWindowResolveInteractionCursor(selWindowMode, selWindowDirection);
         }
 
         // 打开时重置反馈、恢复可用几何并把焦点交给第一个业务输入。
@@ -708,6 +731,8 @@
         window.addEventListener("pointerup", selWindowEndPointerInteraction);
         // pointercancel 处理系统手势或浏览器取消事件。
         window.addEventListener("pointercancel", selWindowEndPointerInteraction);
+        // 页面失焦可能收不到 pointerup，主动结束交互避免方向指针永久锁定。
+        window.addEventListener("blur", selWindowEndPointerInteraction);
         // 浏览器视口变化时最大化窗口重新铺满，普通窗口保持在安全区内。
         window.addEventListener("resize", () => {
             // 隐藏窗口无需重复写入几何。

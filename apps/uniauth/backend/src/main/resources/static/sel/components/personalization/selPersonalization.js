@@ -13,6 +13,8 @@
     const selPersonalizationPanelDefaults = Object.freeze({
         // null 表示使用当前皮肤提供的主题色，刷新页面不会遗留用户临时选色。
         themeColor: null,
+        // 原始水晶边框默认完整显示；透明度只影响独立图片层，不影响内板、内容或发光。
+        frameOpacity: 100,
         panelOpacity: 82,
         backgroundFrost: 58,
         themeTint: 68,
@@ -38,18 +40,12 @@
         Object.freeze({ value: "#F3B348", label: "琥珀金" }),
         Object.freeze({ value: "#EC5D9A", label: "脉冲粉" })
     ]);
-    // 水晶九宫格使用同源运行素材；临时着色结果只保存在页面内存和 CSS 变量中。
-    const selPersonalizationFrameSource = new URL("../../assets/components/panel/selPanelCyberFrame.webp?v=20260802-2", document.currentScript?.src || document.baseURI).href;
-    // 原图加载 Promise 在当前页面复用，避免每次拖动颜色选择器都重新请求素材。
-    let selPersonalizationFrameImagePromise = null;
-    // 已生成颜色在当前页面内存中复用，刷新后随页面一起释放。
-    const selPersonalizationFrameColorCache = new Map();
     // 预设只保存与皮肤无关的强度值；实际颜色始终来自当前皮肤 CSS 令牌。
     const selPersonalizationPresets = Object.freeze([
-        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ panelOpacity: 82, backgroundFrost: 58, themeTint: 68, panelRadius: 50, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) }),
-        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ panelOpacity: 34, backgroundFrost: 86, themeTint: 42, panelRadius: 68, panelScale: 48, innerPanelFit: 100, frameWidth: 46, contentInset: 56, panelGap: 58, glowSpread: 62, controlGap: 54, windowMotion: 64, glowMotion: 62, reducedMotion: false }) }),
-        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ panelOpacity: 91, backgroundFrost: 36, themeTint: 30, panelRadius: 62, panelScale: 46, innerPanelFit: 100, frameWidth: 48, contentInset: 58, panelGap: 58, glowSpread: 24, controlGap: 58, windowMotion: 24, glowMotion: 12, reducedMotion: true }) }),
-        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ panelOpacity: 100, backgroundFrost: 12, themeTint: 55, panelRadius: 42, panelScale: 50, innerPanelFit: 100, frameWidth: 58, contentInset: 54, panelGap: 54, glowSpread: 38, controlGap: 54, windowMotion: 42, glowMotion: 28, reducedMotion: false }) }),
+        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 82, backgroundFrost: 58, themeTint: 68, panelRadius: 50, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) }),
+        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ frameOpacity: 72, panelOpacity: 34, backgroundFrost: 86, themeTint: 42, panelRadius: 68, panelScale: 48, innerPanelFit: 100, frameWidth: 46, contentInset: 56, panelGap: 58, glowSpread: 62, controlGap: 54, windowMotion: 64, glowMotion: 62, reducedMotion: false }) }),
+        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ frameOpacity: 58, panelOpacity: 91, backgroundFrost: 36, themeTint: 30, panelRadius: 62, panelScale: 46, innerPanelFit: 100, frameWidth: 48, contentInset: 58, panelGap: 58, glowSpread: 24, controlGap: 58, windowMotion: 24, glowMotion: 12, reducedMotion: true }) }),
+        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 100, backgroundFrost: 12, themeTint: 55, panelRadius: 42, panelScale: 50, innerPanelFit: 100, frameWidth: 58, contentInset: 54, panelGap: 54, glowSpread: 38, controlGap: 54, windowMotion: 42, glowMotion: 28, reducedMotion: false }) }),
         Object.freeze({ id: "custom", label: "自定义", icon: "ri-equalizer-2-line", values: null })
     ]);
     // 面板 range 配置集中声明分组、标签和辅助说明，增删项目不需要复制事件分支。
@@ -59,6 +55,7 @@
             title: "外观",
             icon: "ri-palette-line",
             items: Object.freeze([
+                Object.freeze({ key: "frameOpacity", label: "边框透明度", hint: "仅调整原始水晶图片层" }),
                 Object.freeze({ key: "panelOpacity", label: "面板透明度", hint: "同步玻璃底板与表格结构" }),
                 Object.freeze({ key: "backgroundFrost", label: "背景磨砂", hint: "虚化面板后方内容" }),
                 Object.freeze({ key: "themeTint", label: "主题染色", hint: "颜色跟随当前皮肤" }),
@@ -185,65 +182,6 @@
     }
 
     /**
-     * 加载水晶九宫格原图，为运行时统一主题色生成同结构着色版本。
-     * @returns {Promise<HTMLImageElement>} 成功时返回同源图片元素。
-     */
-    function selPersonalizationLoadFrameImage() {
-        // 首次调用创建加载任务，后续颜色直接复用同一结果。
-        if (!selPersonalizationFrameImagePromise) {
-            selPersonalizationFrameImagePromise = new Promise((selPersonalizationResolve, selPersonalizationReject) => {
-                // Image 保持原始透明通道和九宫格像素尺寸。
-                const selPersonalizationImage = new Image();
-                // 同源图片加载完成后允许 Canvas 读取像素并导出临时 data URL。
-                selPersonalizationImage.addEventListener("load", () => selPersonalizationResolve(selPersonalizationImage), { once: true });
-                // 素材异常时拒绝着色任务，页面继续使用皮肤默认边框。
-                selPersonalizationImage.addEventListener("error", () => selPersonalizationReject(new Error("个性化水晶边框素材加载失败。")), { once: true });
-                // 最后设置地址，确保缓存命中时也已经注册完成事件。
-                selPersonalizationImage.src = selPersonalizationFrameSource;
-            });
-        }
-        // 返回当前页面唯一加载任务。
-        return selPersonalizationFrameImagePromise;
-    }
-
-    /**
-     * 使用真实九宫格素材生成保留亮暗细节的临时主题色边框。
-     * @param {string} selPersonalizationColor - 已校验的六位十六进制颜色。
-     * @returns {Promise<string>} 可写入 border-image-source 的 WebP data URL。
-     */
-    async function selPersonalizationCreateTintedFrame(selPersonalizationColor) {
-        // 同色结果直接复用，避免重复进行 Canvas 合成。
-        if (selPersonalizationFrameColorCache.has(selPersonalizationColor)) {
-            return selPersonalizationFrameColorCache.get(selPersonalizationColor);
-        }
-        // 等待同源九宫格原图可用。
-        const selPersonalizationImage = await selPersonalizationLoadFrameImage();
-        // 离屏 Canvas 尺寸严格保持原素材，不重新拉伸边角细节。
-        const selPersonalizationCanvas = document.createElement("canvas");
-        selPersonalizationCanvas.width = selPersonalizationImage.naturalWidth;
-        selPersonalizationCanvas.height = selPersonalizationImage.naturalHeight;
-        // 2D 上下文负责保留原图透明度与明暗层次。
-        const selPersonalizationContext = selPersonalizationCanvas.getContext("2d");
-        if (!selPersonalizationContext) {
-            throw new Error("浏览器不支持个性化边框着色。");
-        }
-        // 先绘制完整原始材质。
-        selPersonalizationContext.drawImage(selPersonalizationImage, 0, 0);
-        // source-atop 只给已有不透明像素上色，透明切角与中心不会被填满。
-        selPersonalizationContext.globalCompositeOperation = "source-atop";
-        // 72% 主题色与 28% 原材质混合，保留原图高光和折射细节。
-        selPersonalizationContext.globalAlpha = 0.72;
-        selPersonalizationContext.fillStyle = selPersonalizationColor;
-        selPersonalizationContext.fillRect(0, 0, selPersonalizationCanvas.width, selPersonalizationCanvas.height);
-        // WebP data URL 只驻留内存，不写入运行素材目录或浏览器存储。
-        const selPersonalizationTintedFrame = `url("${selPersonalizationCanvas.toDataURL("image/webp", 0.92)}")`;
-        // 缓存当前颜色，连续切换常用色时减少计算。
-        selPersonalizationFrameColorCache.set(selPersonalizationColor, selPersonalizationTintedFrame);
-        // 返回可直接使用的 CSS 图片值。
-        return selPersonalizationTintedFrame;
-    }
-
-    /**
      * 显式挂载个性化设置界面。
      * @param {Element} selPersonalizationHost - HTML 提供的个性化入口挂载点。
      * @param {object} selPersonalizationOptions - 背景控制器和可选默认值。
@@ -278,8 +216,6 @@
             themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor),
             reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion)
         };
-        // 递增请求编号避免快速拖动颜色时较旧的异步边框结果覆盖最新选择。
-        let selPersonalizationFrameRequest = 0;
         // 两个一级设置使用原生 tab 语义，背景功能继续作为独立一级区域。
         selPersonalizationHost.innerHTML = `
             <aside class="selpersonal-control" data-sel-personal-control aria-label="个性化设置">
@@ -464,29 +400,19 @@
         function selPersonalizationApplyPanel(selPersonalizationPreviewKey = "") {
             // 自定义颜色写入统一主题 RGB；跟随皮肤时移除行内值，让当前皮肤令牌重新生效。
             const selPersonalizationThemeColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor);
-            // 本次应用拥有独立请求编号，后续异步结果必须与它匹配。
-            const selPersonalizationCurrentFrameRequest = ++selPersonalizationFrameRequest;
+            // 边框视觉强度统一驱动原图、静态外光和呼吸光效，0 表示完全移除边框痕迹。
+            const selPersonalizationFrameVisualStrength = selPersonalizationPanelState.frameOpacity / 100;
             if (selPersonalizationThemeColor) {
+                // 拖动取色器时只更新轻量主题令牌，内板、发光与交互状态可以逐帧响应。
                 selPersonalizationDocumentRoot.style.setProperty("--sel-theme-color-rgb", selPersonalizationColorToRgb(selPersonalizationThemeColor));
-                // 真实九宫格素材在内存中着色后替换全部共享边框。
-                selPersonalizationCreateTintedFrame(selPersonalizationThemeColor)
-                    .then((selPersonalizationTintedFrame) => {
-                        // 只提交仍为当前颜色的最新请求，防止快速选色闪回旧边框。
-                        if (selPersonalizationCurrentFrameRequest === selPersonalizationFrameRequest && selPersonalizationPanelState.themeColor === selPersonalizationThemeColor) {
-                            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-frame-image", selPersonalizationTintedFrame);
-                        }
-                    })
-                    .catch(() => {
-                        // 着色能力失败时保留原始皮肤边框，统一主题色的发光和控件仍然可用。
-                        if (selPersonalizationCurrentFrameRequest === selPersonalizationFrameRequest) {
-                            selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-frame-image");
-                        }
-                    });
             } else {
+                // 跟随皮肤时恢复皮肤提供的主题 RGB，不触碰独立的原始边框图片。
                 selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-color-rgb");
-                // 跟随皮肤时立即恢复皮肤提供的原始九宫格素材。
-                selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-frame-image");
             }
+            // 清理旧版本可能遗留的行内着色边框，确保水晶框始终回到皮肤提供的原始九宫格素材。
+            selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-frame-image");
+            // 原始九宫格图片直接消费用户百分比，不改变图片色彩和透明通道细节。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-opacity", String(selPersonalizationFrameVisualStrength));
             // 中心底板透明度只作用于背景色，不降低文字、图标或边框 Alpha。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-opacity", String(selPersonalizationPanelState.panelOpacity / 100));
             // 结构透明度记录与面板相同的用户强度，供表格装饰层和未来结构组件统一读取。
@@ -539,6 +465,12 @@
             // 发光扩散映射到 0 至 22px，并单独写强度供动效使用。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-spread", `${selPersonalizationMap(selPersonalizationPanelState.glowSpread, 0, 22)}px`);
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-strength", String(selPersonalizationPanelState.glowSpread / 100));
+            // 静态边框外光把扩散强度与边框透明度相乘，确保 0% 时不残留彩色轮廓。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-glow-alpha", String(Math.round((0.18 + ((selPersonalizationPanelState.glowSpread / 100) * 0.45)) * selPersonalizationFrameVisualStrength * 1000) / 1000));
+            // 个性化浮层保留独立暗影，但其彩色边框外光必须与边框图片同步衰减。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-panel-glow-alpha", String(Math.round(0.42 * selPersonalizationFrameVisualStrength * 1000) / 1000));
+            // 活动窗口的强调外光继续高于普通面板，但边框为 0% 时同样完全透明。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-active-glow-alpha", String(Math.round(0.68 * selPersonalizationFrameVisualStrength * 1000) / 1000));
             // 控件间距扩大到 -5 至 12px 的可感知范围，50% 保持旧密度且不改变最小点击尺寸。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-control-gap-offset", `${selPersonalizationCenteredMap(selPersonalizationPanelState.controlGap, -5, 12)}px`);
             // 窗口动画强度同时决定入场时长和位移幅度。
@@ -547,6 +479,9 @@
             // 光效流动写入不透明度和周期；0% 时 CSS 会直接停止动画。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-motion-strength", String(selPersonalizationPanelState.glowMotion / 100));
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-motion-duration", `${selPersonalizationMap(100 - selPersonalizationPanelState.glowMotion, 2.2, 12)}s`);
+            // 呼吸动画的起止 Alpha 同时乘以边框视觉强度，中间值平滑衰减，0% 两端都不可见。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-motion-from-alpha", String(Math.round((0.12 + ((selPersonalizationPanelState.glowMotion / 100) * 0.20)) * selPersonalizationFrameVisualStrength * 1000) / 1000));
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-motion-to-alpha", String(Math.round((0.18 + ((selPersonalizationPanelState.glowMotion / 100) * 0.42)) * selPersonalizationFrameVisualStrength * 1000) / 1000));
             // 页面标识统一控制用户开关和系统减少动态偏好的降级路径。
             selPersonalizationDocumentRoot.dataset.selPersonalReducedMotion = String(selPersonalizationPanelState.reducedMotion);
             // 明确的开关标识替代字符串模糊匹配，只有强度精确为 0 时才停止光效动画。
