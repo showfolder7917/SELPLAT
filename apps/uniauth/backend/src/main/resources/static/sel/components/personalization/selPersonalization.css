@@ -587,6 +587,8 @@
     padding: 1px 3px 2px 1px;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
 }
 
 .selpersonal-background-option {
@@ -737,6 +739,38 @@
     margin-top: 9px;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+/* 个性化面板的两个内容视口统一使用面板尺寸档，不再显示浏览器原生白色滚动条。 */
+.selpersonal-background-grid::-webkit-scrollbar,
+.selpersonal-panel-scroll::-webkit-scrollbar {
+    width: var(--sel-theme-scrollbar-size-panel);
+    height: var(--sel-theme-scrollbar-size-panel);
+}
+
+.selpersonal-background-grid::-webkit-scrollbar-track,
+.selpersonal-panel-scroll::-webkit-scrollbar-track {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-track);
+}
+
+.selpersonal-background-grid::-webkit-scrollbar-thumb,
+.selpersonal-panel-scroll::-webkit-scrollbar-thumb {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
+.selpersonal-background-grid::-webkit-scrollbar-thumb:hover,
+.selpersonal-panel-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--sel-theme-scrollbar-thumb-hover);
+}
+
+.selpersonal-background-grid::-webkit-scrollbar-thumb:active,
+.selpersonal-panel-scroll::-webkit-scrollbar-thumb:active {
+    background: var(--sel-theme-scrollbar-thumb-active);
 }
 
 /* 统一主题色把任意颜色选择、皮肤默认和六个常用色收纳在一个紧凑区域。 */
@@ -1194,28 +1228,12 @@
     box-shadow: 0 0 8px rgb(var(--sel-theme-color-rgb) / 0.62);
 }
 
-.selgrid-table-scroller,
-.selwindow-form-fields {
-    scrollbar-color: rgb(var(--sel-theme-color-rgb) / 0.82) var(--sel-theme-surface-deep);
-}
-
 .selgrid-progress-bar {
     background: linear-gradient(90deg, rgb(var(--sel-theme-color-rgb) / 0.88), color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 72%, white));
     box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.66);
 }
 
-/* 浮层内部轨道、分隔线和非语义徽标跟随完整皮肤色阶。 */
-.seldropdown-menu-viewport::-webkit-scrollbar-track,
-.selgrid-menu-viewport::-webkit-scrollbar-track {
-    background: var(--sel-theme-surface-deep);
-}
-
-.seldropdown-menu-viewport::-webkit-scrollbar-thumb,
-.selgrid-menu-viewport::-webkit-scrollbar-thumb {
-    background: rgb(var(--sel-theme-color-rgb));
-    box-shadow: 0 0 8px rgb(var(--sel-theme-color-rgb) / 0.76);
-}
-
+/* 浮层内部的分隔线和非语义徽标跟随完整皮肤色阶。 */
 .seldropdown-option:not(:last-child)::after,
 .selgrid-menu-item:not(:last-child)::after {
     background: var(--sel-theme-line-soft);

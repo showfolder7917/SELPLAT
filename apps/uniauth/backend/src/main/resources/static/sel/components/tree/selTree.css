@@ -10,8 +10,33 @@
     padding: 8px 2px;
     /* 树形内容层消费统一滚动令牌，避免把裁切职责放回水晶材质外层。 */
     overflow: var(--sel-theme-scroll-content-overflow);
-    scrollbar-color: #6287f3 rgba(6, 20, 62, 0.70);
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
     scrollbar-width: thin;
+}
+
+/* 树形导航使用常规面板尺寸档，并把轨道保持在水晶边框的内容安全区内。 */
+.seltree-root::-webkit-scrollbar {
+    width: var(--sel-theme-scrollbar-size-panel);
+    height: var(--sel-theme-scrollbar-size-panel);
+}
+
+.seltree-root::-webkit-scrollbar-track {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-track);
+}
+
+.seltree-root::-webkit-scrollbar-thumb {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
+.seltree-root::-webkit-scrollbar-thumb:hover {
+    background: var(--sel-theme-scrollbar-thumb-hover);
+}
+
+.seltree-root::-webkit-scrollbar-thumb:active {
+    background: var(--sel-theme-scrollbar-thumb-active);
 }
 
 .seltree-list {

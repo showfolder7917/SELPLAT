@@ -95,6 +95,9 @@ web_menu_required_accessibility = accessible_name,menu_role,aria_haspopup,aria_e
 web_menu_close_behavior = outside_click_closes_all,trigger_reclick_toggles
 web_menu_escape_order = close_deepest_submenu_then_primary_menu
 web_menu_action_event_must_include = action_id,label,level,target
+web_context_menu_pointer_anchor_source = contextmenu.clientX,contextmenu.clientY
+web_context_menu_pointer_anchor_must_follow = each_explicit_contextmenu_event
+web_context_menu_pointer_anchor_must_clamp_to = nearest_visible_host_then_viewport
 
 ## 验证与交付
 

@@ -54,6 +54,16 @@ web_personalization_unified_token_layers = foundation-color,semantic-color,compo
 web_personalization_unified_token_prefix = --sel-theme-
 web_personalization_component_must_consume_unified_tokens = true
 web_personalization_component_must_not_define_independent_skin_color = true
+<!-- 滚动条属于统一皮肤的一部分；页面、普通内容面板与紧凑浮层只允许使用语义尺寸档，轨道、滑块、悬停、按下、圆角和光效必须来自同一主题令牌，禁止浏览器原生白色样式与组件硬编码并存。 -->
+web_personalization_scrollbar_token_parts = track,thumb,thumb-hover,thumb-active,radius,glow,size-page,size-panel,size-compact
+web_personalization_scrollbar_size_tiers = page,panel,compact
+web_personalization_scrollbar_page_scope = html,body
+web_personalization_scrollbar_panel_scope = table-scroller,tree-scroller,window-body,personalization-scroll-region
+web_personalization_scrollbar_compact_scope = dropdown-viewport,context-menu-viewport,submenu-viewport
+web_personalization_scrollbar_component_style_must_consume = unified-scrollbar-tokens
+web_personalization_scrollbar_component_must_not_define = fixed-skin-color,fixed-pixel-size,out-of-theme-glow
+web_personalization_scrollbar_theme_change_must_update = page,panel,compact
+web_personalization_scrollbar_must_not_cause = outer-frame-resize,horizontal-page-overflow,content-safe-area-overlap
 web_personalization_crystal_frame_image_must_use = original-skin-nine-slice-asset,independent-frame-layer
 web_personalization_crystal_frame_image_must_not_use = runtime-canvas-tint,runtime-image-reencode,flat-color-overlay
 web_personalization_crystal_frame_opacity_range = 0..100

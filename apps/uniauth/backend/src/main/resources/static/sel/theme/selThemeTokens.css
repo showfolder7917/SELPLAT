@@ -84,6 +84,16 @@
     /* 水晶材质允许越过组件盒显示，真实业务内容在各自内部滚动层完成裁切。 */
     --sel-theme-crystal-surface-overflow: visible;
     --sel-theme-scroll-content-overflow: auto;
+    /* 滚动条统一令牌：外层页面、常规面板和紧凑浮层只区分尺寸，颜色与状态始终跟随当前皮肤。 */
+    --sel-theme-scrollbar-size-page: 9px;
+    --sel-theme-scrollbar-size-panel: 7px;
+    --sel-theme-scrollbar-size-compact: 5px;
+    --sel-theme-scrollbar-radius: 999px;
+    --sel-theme-scrollbar-track: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.18) 30%, rgb(var(--sel-theme-neutral-rgb) / 0.72));
+    --sel-theme-scrollbar-thumb: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 82%, white 18%);
+    --sel-theme-scrollbar-thumb-hover: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 68%, white 32%);
+    --sel-theme-scrollbar-thumb-active: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 88%, white 12%);
+    --sel-theme-scrollbar-glow: 0 0 8px rgb(var(--sel-theme-color-rgb) / 0.64);
     --sel-theme-viewport-gap: 16px;
     --sel-theme-content-safe-inline: 18px;
     --sel-theme-window-safe-inline: 10px;

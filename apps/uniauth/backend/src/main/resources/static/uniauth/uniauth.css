@@ -9,6 +9,43 @@ html {
     min-width: 1080px;
     min-height: 100%;
     background: #000;
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+/* 页面滚动条使用外层尺寸档，横向与纵向轨道共享当前皮肤的颜色和交互反馈。 */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    width: var(--sel-theme-scrollbar-size-page);
+    height: var(--sel-theme-scrollbar-size-page);
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-track);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+    background: var(--sel-theme-scrollbar-thumb-hover);
+}
+
+html::-webkit-scrollbar-thumb:active,
+body::-webkit-scrollbar-thumb:active {
+    background: var(--sel-theme-scrollbar-thumb-active);
+}
+
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner {
+    background: var(--sel-theme-scrollbar-track);
 }
 
 /* body 负责整个 Uniauth 页面滚动和基础文字令牌，不承担任何控件布局。 */

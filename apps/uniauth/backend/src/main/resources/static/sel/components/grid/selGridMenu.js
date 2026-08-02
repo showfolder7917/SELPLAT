@@ -26,6 +26,8 @@
         // 每个菜单实例独立保存项目、二级菜单和人工配置副本。
         const state = {
             project: null,
+            // 当前打开锚点保存视口鼠标坐标；窗口缩放时可据此重新回收到可见区域。
+            anchor: null,
             activeSubmenuId: null,
             items: selGridMenuInputData.items.map((item) => ({ ...item, children: Array.isArray(item.children) ? item.children.map((child) => ({ ...child })) : undefined })),
             scrollAfter: selGridMenuInputData.scrollAfter
@@ -86,20 +88,60 @@
             menuRoot.querySelectorAll('.selgrid-menu-item[aria-haspopup="menu"]').forEach((button) => button.setAttribute("aria-expanded", "false"));
         }
 
-        // 按主体区域或所属面板的真实高度约束一级菜单，让底部危险操作始终留在水晶边框安全区内。
-        function positionMenu() {
+        // 按鼠标或按钮锚点定位一级菜单，并在所属面板与浏览器视口四边自动翻转回收。
+        function positionMenu(selGridMenuAnchor) {
             // 主体区域是表格菜单最贴近的可见容器，缺失时再回退到完整面板。
             const selGridMenuBoundaryHost = menuRoot.closest(".selpanel-body-shell") || gridRoot.closest(".selpanel-shell");
             // 独立使用基础控件时以浏览器视口作为最终边界。
             const selGridMenuBoundaryBounds = selGridMenuBoundaryHost?.getBoundingClientRect();
-            // 菜单顶边已由组件布局确定，读取实测位置避免重复依赖样式常量。
-            const selGridMenuBounds = menuRoot.getBoundingClientRect();
-            // 下边界同时受宿主和当前浏览器可视高度限制，并为外发光保留八像素余量。
+            // 四条安全边界同时受最近面板和浏览器视口限制，并为水晶发光保留八像素余量。
+            const selGridMenuBoundaryLeft = Math.max(8, (selGridMenuBoundaryBounds?.left || 0) + 8);
+            const selGridMenuBoundaryTop = Math.max(8, (selGridMenuBoundaryBounds?.top || 0) + 8);
+            const selGridMenuBoundaryRight = Math.min(window.innerWidth - 8, (selGridMenuBoundaryBounds?.right || window.innerWidth) - 8);
             const selGridMenuBoundaryBottom = Math.min(window.innerHeight - 8, (selGridMenuBoundaryBounds?.bottom || window.innerHeight) - 8);
-            // 可用高度至少容纳一个动作；超过部分由一级菜单内部滚动区承载。
-            const selGridMenuAvailableHeight = Math.max(70, selGridMenuBoundaryBottom - selGridMenuBounds.top);
-            // 动态高度只影响菜单内容区，不改变其右上角锚点。
+            // 有效鼠标锚点优先使用调用方传入坐标；缺失时回退到所属面板右上安全区，兼容公开 API 调用。
+            const selGridMenuResolvedAnchor = selGridMenuAnchor && Number.isFinite(selGridMenuAnchor.clientX) && Number.isFinite(selGridMenuAnchor.clientY)
+                ? selGridMenuAnchor
+                : { clientX: selGridMenuBoundaryRight, clientY: selGridMenuBoundaryTop };
+            // 初始可用高度覆盖完整安全区，先让菜单得到受约束后的真实渲染尺寸。
+            const selGridMenuAvailableHeight = Math.max(70, selGridMenuBoundaryBottom - selGridMenuBoundaryTop);
+            // 动态高度只影响菜单内部滚动区，外层水晶边框保持完整。
             menuRoot.style.setProperty("--selgrid-menu-available-height", `${selGridMenuAvailableHeight}px`);
+            // 先把 CSS 定位值归零，用真实矩形测出 fixed 元素受祖先定位上下文影响后的视口原点。
+            menuRoot.style.setProperty("--selgrid-menu-left", "0px");
+            menuRoot.style.setProperty("--selgrid-menu-top", "0px");
+            // 菜单显示后读取真实尺寸与原点，避免祖先面板偏移、缩放或边框令牌造成位置误差。
+            const selGridMenuBounds = menuRoot.getBoundingClientRect();
+            // 实测尺寸与 CSS 布局尺寸的比例用于兼容祖先存在缩放的页面状态。
+            const selGridMenuScaleX = selGridMenuBounds.width / Math.max(1, menuRoot.offsetWidth);
+            // 纵向比例独立计算，保证非等比缩放下仍能贴合鼠标落点。
+            const selGridMenuScaleY = selGridMenuBounds.height / Math.max(1, menuRoot.offsetHeight);
+            // 右侧空间不足时优先把菜单放到指针左侧；两侧都不足时贴合安全边界。
+            const selGridMenuAnchorRight = Number.isFinite(selGridMenuResolvedAnchor.right) ? selGridMenuResolvedAnchor.right : selGridMenuResolvedAnchor.clientX;
+            // 触发按钮提供左边界时，向左翻转必须停在按钮外侧；鼠标落点则退化为同一个横坐标。
+            const selGridMenuAnchorLeft = Number.isFinite(selGridMenuResolvedAnchor.left) ? selGridMenuResolvedAnchor.left : selGridMenuResolvedAnchor.clientX;
+            // 右侧能完整容纳时从锚点右边展开，否则以锚点左边为终点向左展开。
+            const selGridMenuPreferredLeft = selGridMenuAnchorRight + 4 + selGridMenuBounds.width <= selGridMenuBoundaryRight
+                ? selGridMenuAnchorRight + 4
+                : selGridMenuAnchorLeft - selGridMenuBounds.width - 4;
+            // 最终横坐标夹取到安全区，保证窄窗口中菜单仍完整可见。
+            const selGridMenuLeft = Math.min(Math.max(selGridMenuPreferredLeft, selGridMenuBoundaryLeft), Math.max(selGridMenuBoundaryLeft, selGridMenuBoundaryRight - selGridMenuBounds.width));
+            // 底部空间不足时优先把菜单放到指针上方；较矮视口则交给内部滚动区承载。
+            const selGridMenuAnchorBottom = Number.isFinite(selGridMenuResolvedAnchor.bottom) ? selGridMenuResolvedAnchor.bottom : selGridMenuResolvedAnchor.clientY;
+            // 按钮锚点向上翻转时避开按钮顶边；鼠标落点继续使用当前指针纵坐标。
+            const selGridMenuAnchorTop = Number.isFinite(selGridMenuResolvedAnchor.top) ? selGridMenuResolvedAnchor.top : selGridMenuResolvedAnchor.clientY;
+            // 下方能完整容纳时从锚点下边展开，否则以锚点上边为终点向上展开。
+            const selGridMenuPreferredTop = selGridMenuAnchorBottom + 4 + selGridMenuBounds.height <= selGridMenuBoundaryBottom
+                ? selGridMenuAnchorBottom + 4
+                : selGridMenuAnchorTop - selGridMenuBounds.height - 4;
+            // 最终纵坐标夹取到安全区，避免顶部和底部水晶边框被视口裁切。
+            const selGridMenuTop = Math.min(Math.max(selGridMenuPreferredTop, selGridMenuBoundaryTop), Math.max(selGridMenuBoundaryTop, selGridMenuBoundaryBottom - selGridMenuBounds.height));
+            // 把最终视口横坐标换算回当前 fixed 定位上下文的 CSS 坐标，消除面板自身偏移。
+            menuRoot.style.setProperty("--selgrid-menu-left", `${(selGridMenuLeft - selGridMenuBounds.left) / selGridMenuScaleX}px`);
+            // 纵坐标使用同样的原点与缩放换算，确保上下翻转后仍落在精确安全位置。
+            menuRoot.style.setProperty("--selgrid-menu-top", `${(selGridMenuTop - selGridMenuBounds.top) / selGridMenuScaleY}px`);
+            // 顶部翻转后的实际剩余高度重新写回滚动约束，长菜单不会穿过底边。
+            menuRoot.style.setProperty("--selgrid-menu-available-height", `${Math.max(70, selGridMenuBoundaryBottom - selGridMenuTop)}px`);
         }
 
         // 打开指定父动作的二级菜单。
@@ -208,14 +250,25 @@
             }));
         }
 
-        // 打开菜单并绑定当前实例中的业务记录。
-        function open(project) {
+        // 打开菜单并绑定当前实例中的业务记录与鼠标或按钮锚点。
+        function open(project, selGridMenuAnchor) {
             state.project = project;
+            // 锚点只保留视口坐标，禁止把事件对象或业务 DOM 长期保存在菜单状态中。
+            state.anchor = selGridMenuAnchor && Number.isFinite(selGridMenuAnchor.clientX) && Number.isFinite(selGridMenuAnchor.clientY)
+                ? {
+                    clientX: selGridMenuAnchor.clientX,
+                    clientY: selGridMenuAnchor.clientY,
+                    left: selGridMenuAnchor.left,
+                    right: selGridMenuAnchor.right,
+                    top: selGridMenuAnchor.top,
+                    bottom: selGridMenuAnchor.bottom
+                }
+                : null;
             closeSubmenu();
             menuRoot.classList.add("selgrid-menu-open");
             menuRoot.setAttribute("aria-hidden", "false");
-            // 菜单显示后按当前主体区域高度建立内部滚动安全区。
-            positionMenu();
+            // 菜单显示后使用本次实际锚点计算四边位置和内部滚动安全区。
+            positionMenu(state.anchor);
             dispatchOpenChange();
         }
 
@@ -225,16 +278,19 @@
             menuRoot.classList.remove("selgrid-menu-open");
             menuRoot.setAttribute("aria-hidden", "true");
             state.project = null;
+            // 关闭时清除旧鼠标坐标，下一次打开不得复用上一次右键位置。
+            state.anchor = null;
             dispatchOpenChange();
         }
 
-        // 同一记录重复触发时关闭，不同记录触发时切换归属。
-        function toggle(project) {
+        // 同一记录重复触发时关闭，不同记录或新锚点触发时切换归属和位置。
+        function toggle(project, selGridMenuAnchor) {
             if (menuRoot.classList.contains("selgrid-menu-open") && state.project && state.project.projectId === project.projectId) {
                 close();
                 return;
             }
-            open(project);
+            // 新记录打开时把当前鼠标或按钮坐标完整交给统一定位函数。
+            open(project, selGridMenuAnchor);
         }
 
         // 当前菜单根使用事件委托处理一级与二级动作。
@@ -317,8 +373,8 @@
             if (!menuRoot.classList.contains("selgrid-menu-open")) return;
             // 二级菜单依赖父动作实时位置，缩放后先收起可避免保留旧坐标。
             closeSubmenu();
-            // 一级菜单继续保持打开并适配新的主体高度。
-            positionMenu();
+            // 一级菜单继续保持打开，并用原锚点重新夹取到新的安全区域。
+            positionMenu(state.anchor);
         });
 
         // 首次加载为当前表格实例生成菜单。

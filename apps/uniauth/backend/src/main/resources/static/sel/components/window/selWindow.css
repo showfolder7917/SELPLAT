@@ -93,7 +93,15 @@
 
 /* 表单保持标题、可滚动内容和固定操作区的稳定纵向结构。 */
 .selwindow-form-shell { display: grid; min-width: 0; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
-.selwindow-form-fields { display: grid; min-width: 0; min-height: 0; align-content: start; gap: 10px; overflow: auto; padding: 16px 27px 10px; scrollbar-color: #557dff rgba(5, 17, 55, 0.50); scrollbar-width: thin; }
+.selwindow-form-fields { display: grid; min-width: 0; min-height: 0; align-content: start; gap: 10px; overflow: auto; padding: 16px 27px 10px; scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track); scrollbar-width: thin; }
+
+/* 窗口表单滚动区使用常规面板尺寸档，缩放窗口时继续沿用同一皮肤反馈。 */
+.selwindow-form-fields::-webkit-scrollbar { width: var(--sel-theme-scrollbar-size-panel); height: var(--sel-theme-scrollbar-size-panel); }
+.selwindow-form-fields::-webkit-scrollbar-track { border-radius: var(--sel-theme-scrollbar-radius); background: var(--sel-theme-scrollbar-track); }
+.selwindow-form-fields::-webkit-scrollbar-thumb { border-radius: var(--sel-theme-scrollbar-radius); background: var(--sel-theme-scrollbar-thumb); box-shadow: var(--sel-theme-scrollbar-glow); }
+.selwindow-form-fields::-webkit-scrollbar-thumb:hover { background: var(--sel-theme-scrollbar-thumb-hover); }
+.selwindow-form-fields::-webkit-scrollbar-thumb:active { background: var(--sel-theme-scrollbar-thumb-active); }
+.selwindow-form-fields::-webkit-scrollbar-corner { background: var(--sel-theme-scrollbar-track); }
 
 /* 字段栅格继承首页工具栏的紧凑密度，双字段行在宽窗体内并排。 */
 .selwindow-field-row { display: grid; min-width: 0; min-height: 52px; grid-template-columns: 142px minmax(0, 1fr); align-items: center; gap: 16px; }

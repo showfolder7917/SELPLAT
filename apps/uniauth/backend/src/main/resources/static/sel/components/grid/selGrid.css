@@ -58,8 +58,37 @@
     height: 100%;
     overflow: auto;
     border-radius: 15px;
-    scrollbar-color: #6287f3 rgba(6, 20, 62, 0.72);
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
     scrollbar-width: thin;
+}
+
+/* 表格主体使用常规面板尺寸档，避免浏览器默认白色轨道破坏水晶面板的一致性。 */
+.selgrid-table-scroller::-webkit-scrollbar {
+    width: var(--sel-theme-scrollbar-size-panel);
+    height: var(--sel-theme-scrollbar-size-panel);
+}
+
+.selgrid-table-scroller::-webkit-scrollbar-track {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-track);
+}
+
+.selgrid-table-scroller::-webkit-scrollbar-thumb {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
+.selgrid-table-scroller::-webkit-scrollbar-thumb:hover {
+    background: var(--sel-theme-scrollbar-thumb-hover);
+}
+
+.selgrid-table-scroller::-webkit-scrollbar-thumb:active {
+    background: var(--sel-theme-scrollbar-thumb-active);
+}
+
+.selgrid-table-scroller::-webkit-scrollbar-corner {
+    background: var(--sel-theme-scrollbar-track);
 }
 
 .selgrid-table {

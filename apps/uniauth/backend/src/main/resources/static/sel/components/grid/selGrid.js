@@ -759,8 +759,19 @@
             if (!selGridMenuController) {
                 return;
             }
-            // 独立菜单控制器接收项目主键和名称，内部处理打开、关闭和切换。
-            selGridMenuController.toggle({ projectId, projectName: project.name });
+            // 按钮触发使用自身完整矩形作为锚点，菜单翻转后不会覆盖按钮而阻断再次点击关闭。
+            const selGridMenuButtonBounds = button.getBoundingClientRect();
+            // 视口中心坐标兼容控制器的通用锚点校验，四边坐标负责决定实际展开侧。
+            const selGridMenuButtonAnchor = {
+                clientX: selGridMenuButtonBounds.left + (selGridMenuButtonBounds.width / 2),
+                clientY: selGridMenuButtonBounds.top + (selGridMenuButtonBounds.height / 2),
+                left: selGridMenuButtonBounds.left,
+                right: selGridMenuButtonBounds.right,
+                top: selGridMenuButtonBounds.top,
+                bottom: selGridMenuButtonBounds.bottom
+            };
+            // 独立菜单控制器接收业务记录与触发锚点，内部统一处理打开、关闭、翻转和视口回收。
+            selGridMenuController.toggle({ projectId, projectName: project.name }, selGridMenuButtonAnchor);
             // 同步全部更多按钮的展开状态。
             selGridSyncMenuButtonStates();
             // 更多动作结束后不显示通用操作提示。
@@ -768,6 +779,29 @@
         }
         // 查看和编辑按钮使用当前语言动作名称展示项目反馈。
         selGridShowToast(`${button.dataset.action === "view" ? selGridMessages.viewProject : selGridMessages.editProject}：${project.name}`);
+    });
+
+    // 表格行原生右键事件在鼠标落点打开同一套操作菜单。
+    selGridView.tableBody.addEventListener("contextmenu", (event) => {
+        // 只接受当前表格主体内带业务主键的数据行，空白区和其他实例继续使用浏览器默认行为。
+        const selGridContextRow = event.target.closest("tr[data-project-id]");
+        // 无效或越出当前 tbody 的事件不阻止浏览器原生菜单。
+        if (!selGridContextRow || !selGridView.tableBody.contains(selGridContextRow) || !selGridMenuController) return;
+        // 当前行主键用于查找真实业务记录，禁止从可见文案反推对象。
+        const selGridContextProjectId = Number(selGridContextRow.dataset.projectId);
+        // 只有当前数据集中存在的项目才能打开业务上下文菜单。
+        const selGridContextProject = selGridProjects.find((selGridProject) => selGridProject.id === selGridContextProjectId);
+        // 数据失配时保留原生菜单，方便用户仍能使用浏览器功能。
+        if (!selGridContextProject) return;
+        // 业务菜单能够正常处理后才屏蔽浏览器原生右键菜单。
+        event.preventDefault();
+        // 右键是明确的重新定位动作，同一行连续右键也必须移动菜单而不是执行 toggle 关闭。
+        selGridMenuController.open(
+            { projectId: selGridContextProjectId, projectName: selGridContextProject.name },
+            { clientX: event.clientX, clientY: event.clientY }
+        );
+        // 菜单归属变化后立即同步当前行的更多按钮展开语义。
+        selGridSyncMenuButtonStates();
     });
 
     // 表头全选按钮在全部选中和全部取消之间切换。

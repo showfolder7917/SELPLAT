@@ -16,10 +16,12 @@
 }
 
 .selgrid-menu {
-    position: absolute;
+    /* 右键事件提供视口坐标，fixed 让菜单与 clientX/clientY 使用同一坐标系并随落点定位。 */
+    position: fixed;
     z-index: 30;
-    top: 26px;
-    right: 4px;
+    top: var(--selgrid-menu-top, 8px);
+    left: var(--selgrid-menu-left, 8px);
+    right: auto;
     display: none;
     width: var(--selgrid-menu-width);
     box-sizing: border-box;
@@ -49,7 +51,7 @@
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-color: #6f8cff rgba(8, 23, 72, 0.72);
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
     scrollbar-width: thin;
 }
 
@@ -59,18 +61,29 @@
 }
 
 .selgrid-menu-viewport::-webkit-scrollbar {
-    width: 5px;
+    width: var(--sel-theme-scrollbar-size-compact);
+    height: var(--sel-theme-scrollbar-size-compact);
 }
 
 .selgrid-menu-viewport::-webkit-scrollbar-track {
-    border-radius: 999px;
-    background: rgba(8, 23, 72, 0.72);
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-track);
 }
 
 .selgrid-menu-viewport::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: #718dff;
-    box-shadow: 0 0 8px rgba(90, 135, 255, 0.88);
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
+.selgrid-menu-viewport::-webkit-scrollbar-thumb:hover,
+.selgrid-menu-submenu::-webkit-scrollbar-thumb:hover {
+    background: var(--sel-theme-scrollbar-thumb-hover);
+}
+
+.selgrid-menu-viewport::-webkit-scrollbar-thumb:active,
+.selgrid-menu-submenu::-webkit-scrollbar-thumb:active {
+    background: var(--sel-theme-scrollbar-thumb-active);
 }
 
 .selgrid-menu-list {
@@ -216,6 +229,28 @@
     display: block;
 }
 
+/* 二级菜单复用紧凑滚动条令牌，避免长列表回退成系统白色滚动条。 */
+.selgrid-menu-submenu {
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+.selgrid-menu-submenu::-webkit-scrollbar {
+    width: var(--sel-theme-scrollbar-size-compact);
+    height: var(--sel-theme-scrollbar-size-compact);
+}
+
+.selgrid-menu-submenu::-webkit-scrollbar-track {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-track);
+}
+
+.selgrid-menu-submenu::-webkit-scrollbar-thumb {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
 .selgrid-menu-submenu .selgrid-menu-item {
     height: 37px;
     grid-template-columns: 22px minmax(0, 1fr);
@@ -229,7 +264,7 @@
 
 @media (max-width: 1280px) {
     .selgrid-menu {
-        right: 4px;
+        right: auto;
         --selgrid-menu-width: 222px;
     }
 
