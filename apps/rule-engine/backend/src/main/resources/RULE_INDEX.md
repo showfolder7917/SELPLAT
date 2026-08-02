@@ -149,7 +149,7 @@ load_rule_for_web_runtime_asset_directory_or_layering = WEB_RUNTIME_ASSET_DIRECT
 load_rule_for_web_image_compression_webp_avif_or_png_optimization = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
 load_rule_for_web_asset_move_reference_or_visual_qa = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
 
-<!-- SELPLAT 水晶窗体、菜单、浮层和面板的完整材质与窗口几何规则；用于禁止无明确设计要求的镂空中心、要求九宫格中心填充、统一标题栏内容区底栏、约束边框内侧内容安全区与贴边浮层回收，并验证八方向缩放、最大化精确还原后的圆角与灯光连续性。 -->
+<!-- SELPLAT 水晶窗体、菜单、浮层和面板的完整材质与窗口几何规则；用于禁止无明确设计要求的镂空中心、要求九宫格中心填充、约束源素材左右与上下双轴对称、统一标题栏内容区底栏、约束边框内侧内容安全区与贴边浮层回收，并验证八方向缩放、最大化精确还原后的圆角与灯光连续性。 -->
 SELPLAT_CRYSTAL_UI_MATERIAL_RULES = selplat/通用规则/RUL_SELPLAT水晶界面材质规则.md
 load_rule_for_selplat_crystal_window_menu_or_floating_panel = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
 load_rule_for_selplat_crystal_nine_slice_center_fill_or_non_hollow_surface = SELPLAT_CRYSTAL_UI_MATERIAL_RULES

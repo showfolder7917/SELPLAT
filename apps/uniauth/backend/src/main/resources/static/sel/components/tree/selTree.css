@@ -8,7 +8,8 @@
 .seltree-root {
     min-height: 0;
     padding: 8px 2px;
-    overflow: auto;
+    /* 树形内容层消费统一滚动令牌，避免把裁切职责放回水晶材质外层。 */
+    overflow: var(--sel-theme-scroll-content-overflow);
     scrollbar-color: #6287f3 rgba(6, 20, 62, 0.70);
     scrollbar-width: thin;
 }

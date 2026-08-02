@@ -20,6 +20,7 @@
     --selpersonal-window-motion-distance: 8.4px;
     --selpersonal-glow-motion-strength: 0.46;
     --selpersonal-glow-motion-duration: 6.87s;
+    --selpersonal-panel-scale: 1;
     /* 中心底板把当前皮肤色和中性深色按用户染色强度混合，透明度只作用于底板。 */
     --selpersonal-panel-surface: color-mix(
         in srgb,
@@ -86,6 +87,7 @@
     border-image-repeat: stretch;
     color: #f1f5ff;
     background: transparent;
+    border-radius: var(--sel-theme-radius-panel);
     filter: drop-shadow(0 18px 23px rgba(0, 0, 24, 0.56)) drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / 0.42));
     isolation: isolate;
     overflow: visible;
@@ -105,13 +107,28 @@
 .seldatepicker-popover::before {
     position: absolute;
     z-index: -1;
-    inset: 0;
-    border-radius: 7px;
     background-color: var(--selpersonal-panel-surface);
     -webkit-backdrop-filter: blur(var(--selpersonal-panel-blur));
     backdrop-filter: blur(var(--selpersonal-panel-blur));
     pointer-events: none;
     content: "";
+}
+
+/* 大型面板使用统一的大表面贴合令牌，四个方向严格采用相同 inset 保持上下左右对称。 */
+.selpersonal-panel::before,
+.selpanel-crystal-surface::before,
+.selwindow-window-shell::before {
+    inset: var(--sel-theme-surface-inset-large);
+    border-radius: max(2px, calc(var(--sel-theme-radius-inner) - var(--sel-theme-surface-inset-large)));
+}
+
+/* 下拉、右键菜单和日期浮层使用紧凑映射，但继续与大型面板消费同一主题令牌层。 */
+.seldropdown-menu::before,
+.selgrid-menu::before,
+.selgrid-menu-submenu::before,
+.seldatepicker-popover::before {
+    inset: var(--sel-theme-surface-inset-popup);
+    border-radius: max(2px, calc(var(--sel-theme-radius-popup) - var(--sel-theme-surface-inset-popup)));
 }
 
 /* 所有使用同一九宫格素材的表面共享边框厚度、透明底板和皮肤发光令牌。 */
@@ -127,6 +144,43 @@
     isolation: isolate;
     filter: drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / calc(0.18 + (var(--selpersonal-glow-strength) * 0.45))));
     animation: selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
+}
+
+/* 大型面板和窗口共享外层圆角，小型浮层共享更紧凑的弹出层圆角。 */
+.selpersonal-panel,
+.selpanel-crystal-surface,
+.selwindow-window-shell {
+    border-radius: var(--sel-theme-radius-panel);
+}
+
+.seldropdown-menu,
+.selgrid-menu,
+.selgrid-menu-submenu,
+.seldatepicker-popover {
+    border-radius: var(--sel-theme-radius-popup);
+}
+
+/* 窗口内部色块分别贴合顶部和底部圆角，外框继续保持 overflow:visible 展示水晶高光。 */
+.selwindow-header-shell {
+    border-radius: var(--sel-theme-radius-inner) var(--sel-theme-radius-inner) 0 0;
+}
+
+.selwindow-form-shell,
+.selwindow-actions-shell {
+    border-radius: 0 0 var(--sel-theme-radius-inner) var(--sel-theme-radius-inner);
+}
+
+/* 主面板和独立窗口以自身中心等比缩放，scale 独立属性不会覆盖窗口入场使用的 transform。 */
+.selpanel-shell,
+.selwindow-window-shell {
+    scale: var(--selpersonal-panel-scale);
+    transform-origin: center;
+}
+
+/* 日期浮层通过 body 门户脱离窗口继承链，需显式消费同一缩放令牌并保持触发点不漂移。 */
+.seldatepicker-popover {
+    scale: var(--selpersonal-panel-scale);
+    transform-origin: top left;
 }
 
 /* 各组件按自身原始边框厚度缩放，50% 设置严格保持旧几何。 */
@@ -195,9 +249,28 @@
 }
 
 .selwindow-field-row,
-.selwindow-header-actions,
 .selwindow-actions-shell {
     column-gap: calc(12px + var(--selpersonal-control-gap-offset));
+}
+
+/* 各组件的主要同级控件组消费同一间距偏移，滑杆变化能够在主页面、窗口和弹出菜单中直接观察。 */
+.selwindow-header-actions {
+    gap: calc(7px + var(--selpersonal-control-gap-offset));
+}
+
+.selpanel-header-actions {
+    gap: calc(10px + var(--selpersonal-control-gap-offset));
+}
+
+.selpanel-toolbar-shell {
+    gap: calc(12px + var(--selpersonal-control-gap-offset));
+}
+
+.seldropdown-option,
+.selgrid-menu-item,
+.seldatepicker-header,
+.seldatepicker-footer {
+    column-gap: calc(7px + var(--selpersonal-control-gap-offset));
 }
 
 .selwindow-actions-shell {
@@ -214,6 +287,13 @@
 .selwindow-window-shell {
     animation:
         selpersonal-window-enter var(--selpersonal-window-motion-duration) ease-out both,
+        selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
+}
+
+/* 滑杆预览和每次重新打开窗口都使用独立关键帧名称，确保已有 DOM 也能可靠重播。 */
+.selwindow-window-shell.selwindow-window-motion-preview {
+    animation:
+        selpersonal-window-enter-replay var(--selpersonal-window-motion-duration) ease-out both,
         selpersonal-glow-breathe var(--selpersonal-glow-motion-duration) ease-in-out infinite alternate;
 }
 
@@ -910,24 +990,41 @@
     box-shadow: 0 0 11px rgb(var(--sel-theme-color-rgb) / 0.48), var(--sel-theme-inset);
 }
 
-.seltree-node-count,
 .selgrid-board-shell,
 .selgrid-table tbody tr,
-.selgrid-table tbody tr:nth-child(even),
-.selgrid-selection-checkbox,
-.selgrid-progress-track,
 .selgrid-empty-state {
+    border-color: var(--sel-theme-line-soft);
+    background: var(--sel-theme-table-surface-board);
+    box-shadow: var(--sel-theme-inset);
+}
+
+.selgrid-table thead {
+    background: var(--sel-theme-table-surface-header);
+}
+
+.selgrid-table tbody tr {
+    background: var(--sel-theme-table-row);
+}
+
+.selgrid-table tbody tr:nth-child(even) {
+    background: var(--sel-theme-table-surface-row-even);
+}
+
+/* 控件与语义内容继续使用稳定表面色，不跟随结构透明度降低自身可读性。 */
+.seltree-node-count,
+.selgrid-selection-checkbox,
+.selgrid-progress-track {
     border-color: var(--sel-theme-line-soft);
     background: var(--sel-theme-surface-deep);
     box-shadow: var(--sel-theme-inset);
 }
 
 .selgrid-table tbody tr:hover {
-    background: var(--sel-theme-surface-base);
+    background: var(--sel-theme-table-row-hover);
 }
 
 .selgrid-table tbody tr.selgrid-row-selected {
-    background: linear-gradient(90deg, var(--sel-theme-surface-raised), var(--sel-theme-surface-base));
+    background: linear-gradient(90deg, var(--sel-theme-table-surface-selected), var(--sel-theme-table-surface-hover));
     box-shadow: inset 3px 0 0 rgb(var(--sel-theme-color-rgb) / 0.88), inset 0 0 18px rgb(var(--sel-theme-color-rgb) / 0.16);
 }
 
@@ -1007,6 +1104,18 @@
     }
 }
 
+/* 重播关键帧与正式入场保持完全相同的几何语义，只用不同名称触发浏览器重新计时。 */
+@keyframes selpersonal-window-enter-replay {
+    from {
+        opacity: 0;
+        transform: translateY(var(--selpersonal-window-motion-distance)) scale(0.992);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 /* 光效流动使用现有边框投影做低幅呼吸，不生成新的装饰图形。 */
 @keyframes selpersonal-glow-breathe {
     from {
@@ -1030,12 +1139,12 @@
 }
 
 /* 光效强度为 0 时停止无意义动画并移除外扩散。 */
-:root[style*="--selpersonal-glow-motion-strength: 0"] .selpanel-crystal-surface,
-:root[style*="--selpersonal-glow-motion-strength: 0"] .selwindow-window-shell,
-:root[style*="--selpersonal-glow-motion-strength: 0"] .seldropdown-menu,
-:root[style*="--selpersonal-glow-motion-strength: 0"] .selgrid-menu,
-:root[style*="--selpersonal-glow-motion-strength: 0"] .selgrid-menu-submenu,
-:root[style*="--selpersonal-glow-motion-strength: 0"] .seldatepicker-popover {
+:root[data-sel-personal-glow-motion="off"] .selpanel-crystal-surface,
+:root[data-sel-personal-glow-motion="off"] .selwindow-window-shell,
+:root[data-sel-personal-glow-motion="off"] .seldropdown-menu,
+:root[data-sel-personal-glow-motion="off"] .selgrid-menu,
+:root[data-sel-personal-glow-motion="off"] .selgrid-menu-submenu,
+:root[data-sel-personal-glow-motion="off"] .seldatepicker-popover {
     animation: none;
 }
 

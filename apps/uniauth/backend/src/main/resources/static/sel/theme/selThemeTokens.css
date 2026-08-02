@@ -16,6 +16,20 @@
     --sel-theme-surface-base: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.84) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / 0.84));
     --sel-theme-surface-raised: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.88) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / 0.88));
     --sel-theme-surface-accent: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.94) var(--sel-theme-tint-accent), rgb(var(--sel-theme-neutral-rgb) / 0.94));
+    /* 表格结构层只提供轻量覆盖，主要透明度由所属水晶面板底板承担，避免多层 Alpha 叠加后重新变得不透明。 */
+    --sel-theme-structure-opacity: 0.82;
+    --sel-theme-table-board-opacity: 0.07;
+    --sel-theme-table-header-opacity: 0.10;
+    --sel-theme-table-row-opacity: 0.08;
+    --sel-theme-table-row-even-opacity: 0.13;
+    --sel-theme-table-hover-opacity: 0.51;
+    --sel-theme-table-selected-opacity: 0.71;
+    --sel-theme-table-surface-board: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-board-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-board-opacity)));
+    --sel-theme-table-surface-header: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-header-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-header-opacity)));
+    --sel-theme-table-surface-row: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-row-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-row-opacity)));
+    --sel-theme-table-surface-row-even: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-row-even-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-row-even-opacity)));
+    --sel-theme-table-surface-hover: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-hover-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-hover-opacity)));
+    --sel-theme-table-surface-selected: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-selected-opacity)) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-selected-opacity)));
     --sel-theme-line: rgb(var(--sel-theme-color-rgb) / 0.58);
     --sel-theme-line-soft: rgb(var(--sel-theme-color-rgb) / 0.28);
     --sel-theme-glow: rgb(var(--sel-theme-color-rgb) / 0.52);
@@ -36,12 +50,12 @@
     --sel-theme-control-surface: var(--sel-theme-surface-deep);
     --sel-theme-control-hover: var(--sel-theme-surface-raised);
     --sel-theme-selected-surface: var(--sel-theme-surface-accent);
-    --sel-theme-table-row: var(--sel-theme-surface-deep);
-    --sel-theme-table-row-hover: var(--sel-theme-surface-base);
+    --sel-theme-table-row: var(--sel-theme-table-surface-row);
+    --sel-theme-table-row-hover: var(--sel-theme-table-surface-hover);
     --sel-theme-popup-surface: var(--sel-theme-surface-deep);
 
     /* 同一素材和缩放系数生成组件边框；左右始终使用相同厚度。 */
-    --sel-theme-frame-image: url("/sel/assets/components/panel/selPanelCyberFrame.webp?v=20260801-3");
+    --sel-theme-frame-image: url("/sel/assets/components/panel/selPanelCyberFrame.webp?v=20260802-2");
     --sel-theme-frame-scale: 1;
     --sel-theme-frame-panel: calc(18px * var(--sel-theme-frame-scale));
     --sel-theme-frame-window: calc(18px * var(--sel-theme-frame-scale));
@@ -50,6 +64,16 @@
     --sel-theme-frame-submenu: calc(15px * var(--sel-theme-frame-scale));
     --sel-theme-frame-datepicker: calc(12px * var(--sel-theme-frame-scale));
     --sel-theme-frame-personalization: calc(18px * var(--sel-theme-frame-scale));
+    /* 面板圆角令牌由个性化滑杆实时覆盖；组件不得再固定自己的外层玻璃圆角。 */
+    --sel-theme-radius-panel: 18px;
+    --sel-theme-radius-popup: 12.5px;
+    --sel-theme-radius-inner: 14px;
+    /* 内板贴合令牌分别限制大型表面与紧凑浮层，正值内收、负值向水晶边框扩展。 */
+    --sel-theme-surface-inset-large: -8px;
+    --sel-theme-surface-inset-popup: -6px;
+    /* 水晶材质允许越过组件盒显示，真实业务内容在各自内部滚动层完成裁切。 */
+    --sel-theme-crystal-surface-overflow: visible;
+    --sel-theme-scroll-content-overflow: auto;
     --sel-theme-viewport-gap: 16px;
     --sel-theme-content-safe-inline: 18px;
     --sel-theme-window-safe-inline: 10px;

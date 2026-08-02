@@ -41,13 +41,14 @@
     border-image-repeat: stretch;
     color: var(--selpanel-text-main);
     filter: drop-shadow(0 0 8px var(--selpanel-surface-glow));
+    overflow: var(--sel-theme-crystal-surface-overflow);
 }
 
 .selpanel-crystal-surface::after {
     position: absolute;
     z-index: 0;
     inset: -5px;
-    border-radius: 18px;
+    border-radius: var(--sel-theme-radius-panel);
     background: linear-gradient(120deg, rgba(94, 196, 255, 0.08), transparent 25%, transparent 72%, rgba(129, 74, 255, 0.11));
     pointer-events: none;
     content: "";
@@ -283,7 +284,8 @@
 
 .selpanel-sidebar-shell {
     display: grid;
-    overflow: hidden;
+    /* 外层只承载连续水晶材质，树形列表在自身滚动层裁切内容。 */
+    overflow: var(--sel-theme-crystal-surface-overflow);
     grid-template-rows: 44px minmax(0, 1fr) 42px;
     padding: 3px 6px;
 }
@@ -347,7 +349,8 @@
 
 .selpanel-content-shell {
     flex: 1 1 auto;
-    overflow: hidden;
+    /* 表格内部 selgrid-board-shell 已负责裁切，外层继续完整显示扩展后的玻璃底板。 */
+    overflow: var(--sel-theme-crystal-surface-overflow);
     padding: 0;
 }
 

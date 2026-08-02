@@ -16,6 +16,9 @@
         panelOpacity: 82,
         glassBlur: 58,
         themeTint: 68,
+        panelRadius: 50,
+        panelScale: 50,
+        innerPanelFit: 100,
         frameWidth: 50,
         contentInset: 50,
         panelGap: 50,
@@ -36,17 +39,17 @@
         Object.freeze({ value: "#EC5D9A", label: "脉冲粉" })
     ]);
     // 水晶九宫格使用同源运行素材；临时着色结果只保存在页面内存和 CSS 变量中。
-    const selPersonalizationFrameSource = new URL("../../assets/components/panel/selPanelCyberFrame.webp?v=20260801-3", document.currentScript?.src || document.baseURI).href;
+    const selPersonalizationFrameSource = new URL("../../assets/components/panel/selPanelCyberFrame.webp?v=20260802-2", document.currentScript?.src || document.baseURI).href;
     // 原图加载 Promise 在当前页面复用，避免每次拖动颜色选择器都重新请求素材。
     let selPersonalizationFrameImagePromise = null;
     // 已生成颜色在当前页面内存中复用，刷新后随页面一起释放。
     const selPersonalizationFrameColorCache = new Map();
     // 预设只保存与皮肤无关的强度值；实际颜色始终来自当前皮肤 CSS 令牌。
     const selPersonalizationPresets = Object.freeze([
-        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ panelOpacity: 82, glassBlur: 58, themeTint: 68, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) }),
-        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ panelOpacity: 34, glassBlur: 86, themeTint: 42, frameWidth: 46, contentInset: 56, panelGap: 58, glowSpread: 62, controlGap: 54, windowMotion: 64, glowMotion: 62, reducedMotion: false }) }),
-        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ panelOpacity: 91, glassBlur: 36, themeTint: 30, frameWidth: 48, contentInset: 58, panelGap: 58, glowSpread: 24, controlGap: 58, windowMotion: 24, glowMotion: 12, reducedMotion: true }) }),
-        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ panelOpacity: 100, glassBlur: 12, themeTint: 55, frameWidth: 58, contentInset: 54, panelGap: 54, glowSpread: 38, controlGap: 54, windowMotion: 42, glowMotion: 28, reducedMotion: false }) }),
+        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ panelOpacity: 82, glassBlur: 58, themeTint: 68, panelRadius: 50, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) }),
+        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ panelOpacity: 34, glassBlur: 86, themeTint: 42, panelRadius: 68, panelScale: 48, innerPanelFit: 100, frameWidth: 46, contentInset: 56, panelGap: 58, glowSpread: 62, controlGap: 54, windowMotion: 64, glowMotion: 62, reducedMotion: false }) }),
+        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ panelOpacity: 91, glassBlur: 36, themeTint: 30, panelRadius: 62, panelScale: 46, innerPanelFit: 100, frameWidth: 48, contentInset: 58, panelGap: 58, glowSpread: 24, controlGap: 58, windowMotion: 24, glowMotion: 12, reducedMotion: true }) }),
+        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ panelOpacity: 100, glassBlur: 12, themeTint: 55, panelRadius: 42, panelScale: 50, innerPanelFit: 100, frameWidth: 58, contentInset: 54, panelGap: 54, glowSpread: 38, controlGap: 54, windowMotion: 42, glowMotion: 28, reducedMotion: false }) }),
         Object.freeze({ id: "custom", label: "自定义", icon: "ri-equalizer-2-line", values: null })
     ]);
     // 面板 range 配置集中声明分组、标签和辅助说明，增删项目不需要复制事件分支。
@@ -56,9 +59,10 @@
             title: "外观",
             icon: "ri-palette-line",
             items: Object.freeze([
-                Object.freeze({ key: "panelOpacity", label: "面板透明度", hint: "只调整中心底板" }),
+                Object.freeze({ key: "panelOpacity", label: "面板透明度", hint: "同步玻璃底板与表格结构" }),
                 Object.freeze({ key: "glassBlur", label: "玻璃模糊", hint: "增强前后景分离" }),
-                Object.freeze({ key: "themeTint", label: "主题染色", hint: "颜色跟随当前皮肤" })
+                Object.freeze({ key: "themeTint", label: "主题染色", hint: "颜色跟随当前皮肤" }),
+                Object.freeze({ key: "panelRadius", label: "面板圆角", hint: "贴合水晶边框切角" })
             ])
         }),
         Object.freeze({
@@ -67,6 +71,8 @@
             icon: "ri-layout-grid-line",
             items: Object.freeze([
                 Object.freeze({ key: "frameWidth", label: "边框厚度", hint: "保持九宫格切角比例" }),
+                Object.freeze({ key: "panelScale", label: "面板等比大小", hint: "宽高内容与边框同步缩放" }),
+                Object.freeze({ key: "innerPanelFit", label: "边框/内板比例", hint: "四边同步贴近或远离外框", maximum: 150 }),
                 Object.freeze({ key: "contentInset", label: "内容内边距", hint: "文字远离发光边带" }),
                 Object.freeze({ key: "panelGap", label: "面板间距", hint: "控制区域之间留白" }),
                 Object.freeze({ key: "glowSpread", label: "发光扩散", hint: "不改变边框颜色" }),
@@ -85,20 +91,21 @@
     ]);
 
     /**
-     * 把个性化强度限制在统一的 0 至 100 范围。
+     * 把个性化强度限制在当前控件声明的合法范围。
      * @param {unknown} selPersonalizationValue - range、预设或公开 API 输入，例如 "68"。
      * @param {number} selPersonalizationFallback - 无效输入采用的刷新默认值。
-     * @returns {number} 0 至 100 的稳定整数，例如 68。
+     * @param {number} selPersonalizationMaximum - 当前控件规则允许的上限，常规为 100，内板比例为 150。
+     * @returns {number} 0 至当前上限的稳定整数，例如内板比例可返回 150。
      */
-    function selPersonalizationClamp(selPersonalizationValue, selPersonalizationFallback) {
+    function selPersonalizationClamp(selPersonalizationValue, selPersonalizationFallback, selPersonalizationMaximum = 100) {
         // 数字转换兼容原生 range 返回的字符串。
         const selPersonalizationNumber = Number(selPersonalizationValue);
         // 非有限输入直接回退当前字段默认值。
         if (!Number.isFinite(selPersonalizationNumber)) {
             return selPersonalizationFallback;
         }
-        // 四舍五入后夹取到统一百分比范围。
-        return Math.min(100, Math.max(0, Math.round(selPersonalizationNumber)));
+        // 四舍五入后夹取到当前配置范围，未登记例外的控件继续严格封顶 100。
+        return Math.min(selPersonalizationMaximum, Math.max(0, Math.round(selPersonalizationNumber)));
     }
 
     /**
@@ -398,12 +405,14 @@
             }
             // 当前分组中的每项设置共享百分比输入结构。
             selPersonalizationGroup.items.forEach((selPersonalizationItem) => {
+                // 常规滑杆上限为 100，只有规则登记的内板比例项读取 150 例外值。
+                const selPersonalizationRangeMaximum = Number(selPersonalizationItem.maximum || 100);
                 // label 让名称、range 和输出具备原生关联。
                 const selPersonalizationRange = document.createElement("label");
                 selPersonalizationRange.className = "selpersonal-panel-range";
                 selPersonalizationRange.innerHTML = `
                     <span class="selpersonal-panel-range-copy"><strong>${selPersonalizationItem.label}</strong><small>${selPersonalizationItem.hint}</small></span>
-                    <span class="selpersonal-panel-range-control"><input type="range" min="0" max="100" step="1" data-sel-personal-panel-range="${selPersonalizationItem.key}"><output data-sel-personal-panel-output="${selPersonalizationItem.key}"></output></span>
+                    <span class="selpersonal-panel-range-control"><input type="range" min="0" max="${selPersonalizationRangeMaximum}" step="1" data-sel-personal-panel-range="${selPersonalizationItem.key}"><output data-sel-personal-panel-output="${selPersonalizationItem.key}"></output></span>
                 `;
                 selPersonalizationSection.appendChild(selPersonalizationRange);
             });
@@ -452,7 +461,7 @@
          * 把面板强度映射为所有水晶组件共享的 CSS 令牌。
          * @returns {void} 实时改变当前页面，不写入 localStorage 或其他缓存。
          */
-        function selPersonalizationApplyPanel() {
+        function selPersonalizationApplyPanel(selPersonalizationPreviewKey = "") {
             // 自定义颜色写入统一主题 RGB；跟随皮肤时移除行内值，让当前皮肤令牌重新生效。
             const selPersonalizationThemeColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor);
             // 本次应用拥有独立请求编号，后续异步结果必须与它匹配。
@@ -480,6 +489,18 @@
             }
             // 中心底板透明度只作用于背景色，不降低文字、图标或边框 Alpha。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-opacity", String(selPersonalizationPanelState.panelOpacity / 100));
+            // 结构透明度记录与面板相同的用户强度，供表格装饰层和未来结构组件统一读取。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-structure-opacity", String(selPersonalizationPanelState.panelOpacity / 100));
+            // 表格外壳只叠加最高 8% 颜色，防止它与面板底板复合后重新接近不透明。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-board-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0, 0.08)));
+            // 表头使用最高 12% 的轻量覆盖，列结构可辨识但仍清晰显示背景变化。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-header-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0, 0.12)));
+            // 普通行和偶数行分别使用最高 10% 与 16% 的覆盖，保留弱斑马纹而不遮挡面板透明度。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-row-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0, 0.10)));
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-row-even-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0, 0.16)));
+            // 悬停和选中行设置最低可读 Alpha，即使面板为 0% 仍能辨认当前交互目标。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-hover-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0.28, 0.56)));
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-table-selected-opacity", String(selPersonalizationMap(selPersonalizationPanelState.panelOpacity, 0.46, 0.76)));
             // 玻璃模糊映射到 0 至 24px 的安全范围。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-blur", `${selPersonalizationMap(selPersonalizationPanelState.glassBlur, 0, 24)}px`);
             // 染色强度只写比例；未来皮肤通过覆盖主题 RGB 令牌换色。
@@ -491,6 +512,18 @@
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-base", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 34)}%`);
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-raised", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 48)}%`);
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-accent", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 78)}%`);
+            // 面板圆角以 18px 为 50% 旧基准，上限提高到 48px，让最大值继续贴合大切角水晶框。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-radius-panel", `${18 + selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -14, 30)}px`);
+            // 浮层在 50% 保持 12.5px，最大 30px，避免升级圆角后默认视觉发生跳变。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-radius-popup", `${12.5 + selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -9.5, 17.5)}px`);
+            // 内部玻璃底板在 50% 保持 14px，最大 42px，使深色承托层可进一步贴合外框切角。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-radius-inner", `${14 + selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -12, 28)}px`);
+            // 等比大小以 50% 为原始尺寸，向下最多缩小 18%，向上最多放大 2%，保留视口边缘的水晶高光安全区。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-scale", String(Math.round((1 + selPersonalizationCenteredMap(selPersonalizationPanelState.panelScale, -0.18, 0.02)) * 100) / 100));
+            // 大型内板以 50% 为原始比例，100% 扩展 8px，150% 继续扩展到 16px。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-surface-inset-large", `${-selPersonalizationCenteredMap(selPersonalizationPanelState.innerPanelFit, -12, 8)}px`);
+            // 紧凑浮层以 50% 为原始比例，100% 扩展 6px，150% 扩展到 12px。
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-surface-inset-popup", `${-selPersonalizationCenteredMap(selPersonalizationPanelState.innerPanelFit, -8, 6)}px`);
             // 边框厚度映射为 0.67 至 1.33 的统一缩放比例，50% 保持每个组件自己的原始厚度。
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-frame-scale", String(selPersonalizationMap(selPersonalizationPanelState.frameWidth, 0.67, 1.33)));
             // 内容内边距把 0 至 100 映射为 -4 至 10px 的偏移量，默认 50 严格保持旧布局。
@@ -500,17 +533,29 @@
             // 发光扩散映射到 0 至 22px，并单独写强度供动效使用。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-spread", `${selPersonalizationMap(selPersonalizationPanelState.glowSpread, 0, 22)}px`);
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-strength", String(selPersonalizationPanelState.glowSpread / 100));
-            // 控件间距映射为 -3 至 7px 的局部偏移，默认 50 保持旧密度且不改变最小点击尺寸。
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-control-gap-offset", `${selPersonalizationCenteredMap(selPersonalizationPanelState.controlGap, -3, 7)}px`);
+            // 控件间距扩大到 -5 至 12px 的可感知范围，50% 保持旧密度且不改变最小点击尺寸。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-control-gap-offset", `${selPersonalizationCenteredMap(selPersonalizationPanelState.controlGap, -5, 12)}px`);
             // 窗口动画强度同时决定入场时长和位移幅度。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-window-motion-duration", `${selPersonalizationMap(selPersonalizationPanelState.windowMotion, 0, 300)}ms`);
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-window-motion-distance", `${selPersonalizationMap(selPersonalizationPanelState.windowMotion, 0, 14)}px`);
             // 光效流动写入不透明度和周期；0% 时 CSS 会直接停止动画。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-motion-strength", String(selPersonalizationPanelState.glowMotion / 100));
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-motion-duration", `${selPersonalizationMap(100 - selPersonalizationPanelState.glowMotion, 3.2, 10)}s`);
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-motion-duration", `${selPersonalizationMap(100 - selPersonalizationPanelState.glowMotion, 2.2, 12)}s`);
             // 页面标识统一控制用户开关和系统减少动态偏好的降级路径。
             selPersonalizationDocumentRoot.dataset.selPersonalReducedMotion = String(selPersonalizationPanelState.reducedMotion);
+            // 明确的开关标识替代字符串模糊匹配，只有强度精确为 0 时才停止光效动画。
+            selPersonalizationDocumentRoot.dataset.selPersonalGlowMotion = selPersonalizationPanelState.glowMotion === 0 ? "off" : "on";
             selPersonalizationDocumentRoot.dataset.selPersonalPreset = selPersonalizationPanelState.preset;
+            // 只在用户拖动窗口动画滑杆时重播当前可见窗口，让强度变化获得即时视觉反馈。
+            if (selPersonalizationPreviewKey === "windowMotion" && !selPersonalizationPanelState.reducedMotion && selPersonalizationPanelState.windowMotion > 0) {
+                document.querySelectorAll(".selwindow-window-shell").forEach((selPersonalizationWindowShell) => {
+                    // 先移除预览类并强制提交当前帧，保证连续拖动也能重新开始动画。
+                    selPersonalizationWindowShell.classList.remove("selwindow-window-motion-preview");
+                    void selPersonalizationWindowShell.offsetWidth;
+                    // 独立预览关键帧不会覆盖窗口当前 left、top、width 或 height。
+                    selPersonalizationWindowShell.classList.add("selwindow-window-motion-preview");
+                });
+            }
             // 设置界面同步当前强度、开关和预设选中态。
             selPersonalizationSyncPanel();
             // 页面级事件供窗口或未来皮肤读取当前强度，不暴露可变内部对象。
@@ -540,6 +585,15 @@
             if (selPersonalizationReducedMotion) {
                 selPersonalizationReducedMotion.checked = selPersonalizationPanelState.reducedMotion;
             }
+            // 减少动态开启后禁用两个动效滑杆，明确表达它们当前不会作用于页面。
+            ["windowMotion", "glowMotion"].forEach((selPersonalizationMotionKey) => {
+                const selPersonalizationMotionRange = selPersonalizationControl.querySelector(`[data-sel-personal-panel-range="${selPersonalizationMotionKey}"]`);
+                if (selPersonalizationMotionRange) {
+                    // disabled 同时阻止键盘和指针继续修改被总开关覆盖的参数。
+                    selPersonalizationMotionRange.disabled = selPersonalizationPanelState.reducedMotion;
+                    selPersonalizationMotionRange.setAttribute("aria-disabled", String(selPersonalizationPanelState.reducedMotion));
+                }
+            });
             // 颜色输入始终显示当前有效颜色；输出区分自定义色与跟随皮肤状态。
             const selPersonalizationThemeColorInput = selPersonalizationControl.querySelector("[data-sel-personal-theme-color]");
             const selPersonalizationThemeColorOutput = selPersonalizationControl.querySelector("[data-sel-personal-theme-color-output]");
@@ -659,11 +713,12 @@
                 // 当前字段使用自己的默认值完成范围归一化。
                 selPersonalizationPanelState = {
                     ...selPersonalizationPanelState,
-                    [selPersonalizationKey]: selPersonalizationClamp(selPersonalizationRange.value, selPersonalizationDefaults[selPersonalizationKey]),
+                    // 当前 input.max 来自固定配置，因此内板比例允许 150，其他控件仍封顶 100。
+                    [selPersonalizationKey]: selPersonalizationClamp(selPersonalizationRange.value, selPersonalizationDefaults[selPersonalizationKey], Number(selPersonalizationRange.max || 100)),
                     preset: "custom"
                 };
                 // 新状态即时作用于所有水晶组件。
-                selPersonalizationApplyPanel();
+                selPersonalizationApplyPanel(selPersonalizationKey);
             });
         });
         // 原生颜色输入允许用户选择色板之外的任意统一主题色。

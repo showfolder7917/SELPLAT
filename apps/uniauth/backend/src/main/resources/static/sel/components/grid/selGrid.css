@@ -14,7 +14,7 @@
     min-height: 390px;
     overflow: hidden;
     border-radius: 18px;
-    background: rgba(2, 12, 48, 0.52);
+    background: var(--sel-theme-table-surface-board);
 }
 
 .selgrid-board-shell::before,
@@ -36,6 +36,7 @@
         linear-gradient(122deg, rgba(255, 255, 255, 0.08), transparent 6%),
         linear-gradient(302deg, rgba(112, 61, 255, 0.13), transparent 9%);
     mix-blend-mode: screen;
+    opacity: var(--sel-theme-structure-opacity);
 }
 
 .selgrid-board-highlight {
@@ -105,6 +106,7 @@
 /* 表头与排序入口：定义表头高度、列分隔线和“更新时间”等排序按钮。 */
 .selgrid-table thead {
     height: 55px;
+    background: var(--sel-theme-table-surface-header);
 }
 
 .selgrid-table th {
@@ -150,12 +152,12 @@
 .selgrid-table tbody tr {
     position: relative;
     height: 56px;
-    background: var(--selgrid-theme-row-background);
+    background: var(--sel-theme-table-row);
     transition: background 160ms ease, box-shadow 160ms ease;
 }
 
 .selgrid-table tbody tr:nth-child(even) {
-    background: rgba(2, 14, 52, 0.72);
+    background: var(--sel-theme-table-surface-row-even);
 }
 
 .selgrid-table tbody tr::after {
@@ -169,13 +171,12 @@
 }
 
 .selgrid-table tbody tr:hover {
-    background: rgba(12, 45, 111, 0.60);
+    background: var(--sel-theme-table-row-hover);
 }
 
 .selgrid-table tbody tr.selgrid-row-selected {
     z-index: 2;
-    background:
-        linear-gradient(90deg, rgba(15, 71, 146, 0.78), rgba(19, 45, 112, 0.70) 52%, rgba(36, 29, 118, 0.66));
+    background: linear-gradient(90deg, var(--sel-theme-table-surface-selected), var(--sel-theme-table-surface-hover));
     box-shadow:
         inset 0 1px 0 rgba(128, 202, 255, 0.68),
         inset 0 -1px 0 rgba(111, 124, 255, 0.72),

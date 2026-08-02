@@ -646,6 +646,12 @@
             }
             // 新打开或恢复的窗口成为当前活动实例。
             selWindowBringToFront();
+            // 每次打开或从最小化恢复时先移除旧预览类，允许已有窗口重新播放当前个性化入场强度。
+            selWindowShell.classList.remove("selwindow-window-motion-preview");
+            // 强制读取布局把“移除”提交为独立帧，随后重新添加才会可靠重启动画计时。
+            void selWindowShell.offsetWidth;
+            // 减少动态效果由 CSS 根状态统一拦截，因此这里无需复制偏好判断。
+            selWindowShell.classList.add("selwindow-window-motion-preview");
             requestAnimationFrame(() => selWindowForm.querySelector("input, select, textarea, button")?.focus({ preventScroll: true }));
         }
 

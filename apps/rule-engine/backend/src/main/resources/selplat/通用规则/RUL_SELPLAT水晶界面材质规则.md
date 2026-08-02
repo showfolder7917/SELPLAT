@@ -13,7 +13,8 @@ selplat_crystal_hollow_frame_allowed_only_when = explicit_design_reference_requi
 selplat_crystal_nine_slice_must_preserve = all_corners,all_edges,center_fill
 selplat_crystal_border_image_slice_requires_fill = true
 selplat_crystal_center_fill_must_be = readable,low_detail,stretch_safe,deep_glass_surface
-selplat_crystal_runtime_asset_must_not_contain = hollow_opening,green_center,detached_frame_only
+selplat_crystal_runtime_asset_must_not_contain = green_center,detached_frame_only
+selplat_crystal_runtime_asset_hollow_opening_requires = explicit_design_reference
 
 <!-- 切角外侧属于页面背景而不是水晶材质；适用于 PNG/WebP 九宫格素材；业务含义是浅色或图片背景下不得暴露素材画布的黑色矩形边界。 -->
 selplat_crystal_runtime_asset_outer_canvas_must_be = transparent_outside_outermost_visible_frame
@@ -49,6 +50,12 @@ selplat_crystal_stretchable_asset_detail_distribution = rich_corners,simple_edge
 selplat_crystal_resize_must_preserve = corner_radius,corner_glints,edge_continuity,center_readability
 selplat_crystal_full_raster_uniform_stretch_is_forbidden = true
 
+<!-- CSS 几何相等不能替代源素材轮廓验收；适用于要求视觉对称的面板与窗口；业务含义是九宫格源图左右与上下两组透明内缩、切角、边框厚度、发光占用和中部凹槽必须分别以垂直、水平中轴互为镜像，避免窄侧栏出现单侧鼓出或上下厚度不同。 -->
+selplat_crystal_symmetric_frame_source_axes = horizontal,vertical
+selplat_crystal_symmetric_frame_source_must_mirror = inner_contour,transparent_inset,bevel_thickness,cut_corner_profile,glow_footprint,center_notch
+selplat_crystal_symmetric_frame_qa_must_cover = source_horizontal_pixel_mirror_difference,source_vertical_pixel_mirror_difference,browser_narrow_panel,browser_wide_panel,browser_window,browser_floating_panel
+selplat_crystal_equal_css_border_width_or_height_without_source_asset_symmetry_is_insufficient = true
+
 <!-- 可调整窗口必须把移动、八方向缩放、最小尺寸、视口夹取、最大化和精确还原作为同一几何状态机；业务含义是任一入口都不能产生不可触达窗口、丢失用户尺寸或挤掉主要操作。 -->
 selplat_resizable_window_drag_surface = header_excluding_window_controls
 selplat_resizable_window_resize_directions = north,east,south,west,north_east,south_east,south_west,north_west
@@ -62,7 +69,7 @@ selplat_resizable_window_maximized_resize_handles = disabled
 <!-- 交付必须同时检查默认尺寸、放大尺寸和最大化还原后的完整材质；适用于真实浏览器终审；业务含义是静态源图好看不能替代运行时整体性验证。 -->
 selplat_crystal_visual_qa_states = default,resized,maximized,restored
 selplat_crystal_visual_qa_must_compare = source_reference,browser_rendered_result
-selplat_crystal_visual_qa_must_reject = detached_border,flat_hollow_center,square_corner_leak,rectangular_effect_behind_cut_corner,stretched_glint,internal_plate_fragmentation
+selplat_crystal_visual_qa_must_reject = detached_border,unapproved_flat_hollow_center,square_corner_leak,rectangular_effect_behind_cut_corner,stretched_glint,internal_plate_fragmentation,asymmetric_inner_contour,asymmetric_top_bottom_profile
 
 java_ability_refs = none
 python_ability_refs = none

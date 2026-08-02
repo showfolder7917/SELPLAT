@@ -64,3 +64,57 @@
 ## Final result
 
 passed
+
+---
+
+# 2026-08-02 水晶边框四边双轴对称验收
+
+## Source truth
+
+- 用户问题参考：`/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-8120c0e3-a976-4aab-8c18-3d9273ffaeb8.png`，左右修复后顶部与底部轮廓仍不一致。
+- 运行时素材：`static/sel/assets/components/panel/selPanelCyberFrame.webp`，2025 × 777，RGBA 无损 WebP。
+- 修改前备份：`OPTION/temp/selPanelCyberFrame.before-top-bottom-symmetry.webp`。
+
+## Comparison evidence
+
+- 主页面与窄侧栏：`OPTION/temp/uniauth-frame-four-way-main.png`。
+- 新建项目窗口：`OPTION/temp/uniauth-frame-four-way-window.png`。
+- 个性化浮动面板：`OPTION/temp/uniauth-frame-four-way-personalization.png`。
+
+## Findings
+
+- 以顶部边框为基准镜像到底部，保留已经完成的左右镜像；水平、垂直翻转像素差异边界均为 `None`。
+- 上下边框的内缩、切角、厚度、发光占用和中部凹槽完全一致，透明中心和透明外角未改变。
+- 素材保持 2025 × 777 RGBA 无损 WebP，成品 129426 字节；缓存引用统一更新为 `v=20260802-2`。
+- 真实浏览器中的窄侧栏、宽面板、窗口和个性化面板均未发现上下厚度差、凹槽错位、单边鼓出或页面横向溢出。
+
+## Final result
+
+passed
+
+---
+
+# 2026-08-02 水晶边框源素材左右对称验收
+
+## Source truth
+
+- 用户问题参考：`/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-49336a3d-7b53-4d7f-b122-acb0b420f321.png`，窄侧栏中左侧内轮廓明显宽于右侧。
+- 运行时素材：`static/sel/assets/components/panel/selPanelCyberFrame.webp`，2025 × 777，RGBA 无损 WebP。
+- 修改前备份：`OPTION/temp/selPanelCyberFrame.before-symmetry-fix.webp`。
+
+## Comparison evidence
+
+- 主页面多尺寸面板：`OPTION/temp/uniauth-frame-symmetry-main.png`。
+- 新建项目窗口：`OPTION/temp/uniauth-frame-symmetry-window.png`。
+- 个性化浮动面板：`OPTION/temp/uniauth-frame-symmetry-personalization.png`。
+
+## Findings
+
+- 源素材以较干净的右侧轮廓为基准镜像到左侧；水平翻转像素差异边界为 `None`，左右透明内缩、切角、边框厚度和发光占用严格相同。
+- 透明中心与透明外角完整保留；素材仍为 2025 × 777 RGBA WebP，体积由 131180 字节降至 129108 字节。
+- 页面计算样式统一解析到缓存版本 `v=20260802-1`；资源请求返回 HTTP 200、`image/webp`，旧缓存引用已清零。
+- 1280 × 720 实际浏览器中，窄侧栏、宽表格、窗口和个性化面板均未出现单侧鼓出、切角错位或横向页面溢出。
+
+## Final result
+
+passed
