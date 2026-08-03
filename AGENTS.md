@@ -1,6 +1,6 @@
 ## 固定路径配置（文件头唯一绝对路径区）
 - 编译与依赖解析默认使用本机离线资源；仅 macOS 可在项目缓存和本机 Gradle 缓存都缺少必需依赖时，按 macOS 专属规则联网补齐并写入当前工程缓存。
-- 唯一记忆库根目录：`MEMORY_ROOT=/Users/showfolder/Documents/workSpace/SELF/SELPLAT/MEMORIES`
+- 唯一记忆库根目录：`MEMORY_ROOT=C:/opt/workspace/SELPLAT/MEMORIES`
 - 统一能力系统目录：`MEMORY_CODE_ROOT=${MEMORY_ROOT}/ai/code`
 - 统一协议目录：`MEMORY_PROTOCOL_ROOT=${MEMORY_ROOT}/ai/protocol`
 - rule-engine 规则资源根目录：`RULE_ENGINE_RESOURCE_ROOT=${MEMORY_ROOT}/../apps/rule-engine/backend/src/main/resources`

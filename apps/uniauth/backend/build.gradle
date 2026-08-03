@@ -43,7 +43,16 @@ application {
     mainClass = 'com.sp.selplat.uniauth.UniauthBackendApplication'
 }
 
+tasks.register('syncVsCodeResources', Copy) {
+    // VS Code 的 Gradle Java 启动器只稳定装载编译类输出，因此同步标准资源到同一统一 build 类目录。
+    from(sourceSets.main.resources)
+    // 静态页面、配置和 SQL 初始化脚本 → 与应用 class 一起进入 VS Code 已加载的运行目录。
+    into(layout.buildDirectory.dir('classes/java/main'))
+}
+
 tasks.named('classes') {
+    // 编译完成前同步资源 → 每次 VS Code 启动前任务都会拥有最新页面和运行配置。
+    dependsOn tasks.named('syncVsCodeResources')
     // 先生成公共核心 JAR，保证 IDE 与命令行都能读取统一构建产物。
     dependsOn ':shared:backend:common-core:jar'
     // 先生成公共数据库 JAR，保证 DAO 与 MyBatis 契约可用。
