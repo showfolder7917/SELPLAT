@@ -23,6 +23,7 @@
     --sel-theme-control-base-opacity: 0.73;
     --sel-theme-control-hover-opacity: 0.72;
     --sel-theme-control-primary-opacity: 0.82;
+    --sel-theme-structure-surface: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-structure-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-structure-opacity)));
     --sel-theme-table-surface-board: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-board-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-board-opacity)));
     --sel-theme-table-surface-header: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-header-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-header-opacity)));
     --sel-theme-table-surface-row: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-row-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-row-opacity)));
@@ -50,6 +51,13 @@
     --sel-theme-text-contrast-alpha: 0.168;
     --sel-theme-font-scale: 1;
     --sel-theme-text-shadow: 0 1px 4px rgb(var(--sel-theme-text-shadow-rgb) / var(--sel-theme-text-contrast-alpha));
+
+    /* 状态胶囊也只消费语义令牌，深浅皮肤不再维护两套组件选择器。 */
+    --sel-theme-status-progress-surface: color-mix(in srgb, var(--sel-theme-semantic-progress) 18%, rgb(var(--sel-theme-neutral-rgb) / 0.82));
+    --sel-theme-status-review-surface: color-mix(in srgb, var(--sel-theme-semantic-review) 18%, rgb(var(--sel-theme-neutral-rgb) / 0.82));
+    --sel-theme-status-success-surface: color-mix(in srgb, var(--sel-theme-semantic-success) 18%, rgb(var(--sel-theme-neutral-rgb) / 0.82));
+    --sel-theme-status-archived-surface: color-mix(in srgb, var(--sel-theme-semantic-archived) 18%, rgb(var(--sel-theme-neutral-rgb) / 0.82));
+    --sel-theme-feedback-surface: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.90) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / 0.90));
 
     /* 组件只引用映射令牌，不直接依赖基础 RGB。 */
     --sel-theme-panel-surface: var(--sel-theme-surface-deep);

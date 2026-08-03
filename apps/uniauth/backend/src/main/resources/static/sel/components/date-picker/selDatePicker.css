@@ -88,7 +88,7 @@
     transform: rotate(180deg);
 }
 
-/* 月历浮层直接复用主页面九宫格，中心填充保证任何背景主题下都有稳定可读底板。 */
+/* 月历浮层直接复用主页面九宫格，独立玻璃底板保证不同背景下的稳定可读性。 */
 .seldatepicker-popover {
     position: fixed;
     z-index: 5600;
@@ -97,7 +97,8 @@
     padding: 6px 8px 8px;
     border: var(--sel-theme-frame-datepicker) solid transparent;
     border-image-source: var(--sel-theme-frame-image);
-    border-image-slice: 58 69 58 69 fill;
+    /* 九宫格图片只绘制四边，中心透明度与磨砂继续跟随统一面板令牌。 */
+    border-image-slice: 58 69 58 69;
     border-image-width: var(--sel-theme-frame-datepicker);
     border-image-repeat: stretch;
     color: var(--seldatepicker-text-main);

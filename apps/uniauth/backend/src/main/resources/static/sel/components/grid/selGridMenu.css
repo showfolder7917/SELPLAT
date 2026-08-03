@@ -27,7 +27,8 @@
     box-sizing: border-box;
     border: var(--selgrid-menu-edge-size) solid transparent;
     border-image-source: var(--sel-theme-frame-image);
-    border-image-slice: 58 69 58 69 fill;
+    /* 菜单中心由统一玻璃底板承托，九宫格图片仅保留四周折射边缘。 */
+    border-image-slice: 58 69 58 69;
     border-image-width: var(--selgrid-menu-edge-size);
     border-image-repeat: stretch;
     color: var(--selgrid-menu-text);
@@ -211,7 +212,8 @@
     box-sizing: border-box;
     border: var(--sel-theme-frame-submenu) solid transparent;
     border-image-source: var(--sel-theme-frame-image);
-    border-image-slice: 58 69 58 69 fill;
+    /* 二级菜单沿用同一边框与底板分层，避免浅色中心重复覆盖。 */
+    border-image-slice: 58 69 58 69;
     border-image-width: var(--sel-theme-frame-submenu);
     border-image-repeat: stretch;
     overflow-x: hidden;

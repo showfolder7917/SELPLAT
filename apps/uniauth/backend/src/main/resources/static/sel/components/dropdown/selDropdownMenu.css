@@ -118,7 +118,8 @@
     box-sizing: border-box;
     border: var(--sel-theme-frame-dropdown) solid transparent;
     border-image-source: var(--sel-theme-frame-image);
-    border-image-slice: 58 69 58 69 fill;
+    /* 下拉框中心复用统一玻璃底板，避免皮肤图片中心阻断透明度。 */
+    border-image-slice: 58 69 58 69;
     border-image-width: var(--sel-theme-frame-dropdown);
     border-image-repeat: stretch;
     color: var(--seldropdown-text-main);

@@ -104,7 +104,7 @@
     border: var(--selpersonal-frame-width) solid transparent;
     /* 九宫格图片只允许独立 ::after 层绘制，外层透明边界仅负责稳定布局。 */
     border-image-source: none;
-    border-image-slice: 58 69 58 69 fill;
+    border-image-slice: 58 69 58 69;
     border-image-width: var(--selpersonal-frame-width);
     border-image-repeat: stretch;
     color: #f1f5ff;
@@ -159,7 +159,7 @@
     content: "";
 }
 
-/* 独立边框层始终使用皮肤原图；调整透明度不会降低内容、磨砂或主题色发光的可读性。 */
+/* 独立边框层只绘制皮肤原图四边；中心交给同尺寸玻璃底板，透明度和磨砂不会被图片中心覆盖。 */
 .selpersonal-panel::after,
 .selpanel-crystal-surface::after,
 .selwindow-window-shell::after,
@@ -173,7 +173,7 @@
     inset: calc(0px - var(--selpersonal-frame-layer-width));
     border: var(--selpersonal-frame-layer-width) solid transparent;
     border-image-source: var(--sel-theme-frame-image);
-    border-image-slice: 58 69 58 69 fill;
+    border-image-slice: 58 69 58 69;
     border-image-width: var(--selpersonal-frame-layer-width);
     border-image-repeat: stretch;
     border-radius: inherit;
@@ -1178,6 +1178,31 @@
     background: linear-gradient(120deg, rgb(var(--sel-theme-color-rgb) / 0.10), transparent 28%, transparent 72%, rgb(var(--sel-theme-color-rgb) / 0.14));
 }
 
+/* 所有内部结构层共用同一透明度令牌；深浅皮肤只改变令牌值，不再复制组件规则。 */
+.selpanel-status-tabs,
+.selsearch-root,
+.seldropdown-root,
+.seltree-root,
+.selwindow-form-shell,
+.selwindow-actions-shell,
+.selpersonal-tabs,
+.selpersonal-section,
+.selpersonal-preset-section {
+    border-color: var(--sel-theme-line-soft);
+    background-color: var(--sel-theme-structure-surface);
+    box-shadow: var(--sel-theme-inset);
+}
+
+.selpersonal-panel,
+.selpanel-crystal-surface,
+.selwindow-window-shell,
+.seldropdown-menu,
+.selgrid-menu,
+.selgrid-menu-submenu,
+.seldatepicker-popover {
+    box-shadow: 0 8px 24px rgb(var(--sel-theme-neutral-rgb) / 0.16), 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / 0.20);
+}
+
 /* Window 的标题、字段、底栏、普通操作与最小化轨道共享同一皮肤色阶。 */
 .selwindow-header-shell,
 .selwindow-actions-shell {
@@ -1296,6 +1321,16 @@
     box-shadow: var(--sel-theme-inset);
 }
 
+.selgrid-table-scroller {
+    background: transparent;
+}
+
+.selgrid-table th,
+.selgrid-table td {
+    border-color: var(--sel-theme-line-soft);
+    color: var(--sel-theme-text-body);
+}
+
 .selgrid-table thead {
     background: var(--sel-theme-table-surface-header);
 }
@@ -1347,6 +1382,55 @@
 .selgrid-progress-bar {
     background: linear-gradient(90deg, rgb(var(--sel-theme-color-rgb) / 0.88), color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 72%, white));
     box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.66);
+}
+
+/* 业务语义状态的结构完全共享，皮肤只替换文字色和中性色令牌。 */
+.selgrid-status-active {
+    --selgrid-status-line: color-mix(in srgb, var(--sel-theme-semantic-progress) 58%, transparent);
+    --selgrid-status-text: var(--sel-theme-semantic-progress);
+    --selgrid-status-background: var(--sel-theme-status-progress-surface);
+    --selgrid-status-glow: color-mix(in srgb, var(--sel-theme-semantic-progress) 34%, transparent);
+}
+
+.selgrid-status-review {
+    --selgrid-status-line: color-mix(in srgb, var(--sel-theme-semantic-review) 58%, transparent);
+    --selgrid-status-text: var(--sel-theme-semantic-review);
+    --selgrid-status-background: var(--sel-theme-status-review-surface);
+    --selgrid-status-glow: color-mix(in srgb, var(--sel-theme-semantic-review) 34%, transparent);
+}
+
+.selgrid-status-done {
+    --selgrid-status-line: color-mix(in srgb, var(--sel-theme-semantic-success) 58%, transparent);
+    --selgrid-status-text: var(--sel-theme-semantic-success);
+    --selgrid-status-background: var(--sel-theme-status-success-surface);
+    --selgrid-status-glow: color-mix(in srgb, var(--sel-theme-semantic-success) 30%, transparent);
+}
+
+.selgrid-status-archived {
+    --selgrid-status-line: color-mix(in srgb, var(--sel-theme-semantic-archived) 50%, transparent);
+    --selgrid-status-text: var(--sel-theme-semantic-archived);
+    --selgrid-status-background: var(--sel-theme-status-archived-surface);
+    --selgrid-status-glow: color-mix(in srgb, var(--sel-theme-semantic-archived) 24%, transparent);
+}
+
+.selgrid-feedback-toast {
+    color: var(--sel-theme-text-main);
+    background: var(--sel-theme-feedback-surface);
+    text-shadow: var(--sel-theme-text-shadow);
+}
+
+.selpersonal-heading-copy strong,
+.selpersonal-view-heading strong,
+.selpersonal-section-heading > span,
+.selpersonal-section-heading strong {
+    color: var(--sel-theme-text-main);
+    text-shadow: var(--sel-theme-text-shadow);
+}
+
+.selpersonal-heading-copy small,
+.selpersonal-view-heading span,
+.selpersonal-section-heading small {
+    color: var(--sel-theme-text-secondary);
 }
 
 /* 浮层内部的分隔线和非语义徽标跟随完整皮肤色阶。 */

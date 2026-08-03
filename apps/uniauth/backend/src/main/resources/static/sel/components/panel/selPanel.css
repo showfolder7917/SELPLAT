@@ -36,7 +36,8 @@
     box-sizing: border-box;
     border: var(--sel-theme-frame-panel) solid transparent;
     border-image-source: var(--sel-theme-frame-image);
-    border-image-slice: 58 69 58 69 fill;
+    /* 图片只绘制四边，中心玻璃由统一底板层负责，避免浅色素材的实心中心盖住透明度。 */
+    border-image-slice: 58 69 58 69;
     border-image-width: var(--sel-theme-frame-panel);
     border-image-repeat: stretch;
     color: var(--selpanel-text-main);

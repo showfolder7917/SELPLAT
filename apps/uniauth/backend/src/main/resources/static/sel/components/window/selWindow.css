@@ -28,7 +28,8 @@
     overflow: visible;
     border: var(--sel-theme-frame-window) solid transparent;
     border-image-source: var(--sel-theme-frame-image);
-    border-image-slice: 58 69 58 69 fill;
+    /* 窗体图片只负责边框，中心透明度与磨砂由独立玻璃底板实时控制。 */
+    border-image-slice: 58 69 58 69;
     border-image-width: var(--sel-theme-frame-window);
     border-image-repeat: stretch;
     color: var(--sel-theme-text-body);
