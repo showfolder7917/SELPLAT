@@ -1,0 +1,28 @@
+/*
+ * selSkinDark.css：SEL 深色皮肤基础令牌。
+ * 负责深背景、浅文字、深空水晶材质和适配深色表面的业务语义色。
+ * 责任边界：只提供皮肤差异，不复制组件结构、布局或交互状态机。
+ */
+
+:root,
+:root[data-sel-skin="dark"] {
+    color-scheme: dark;
+    --sel-theme-color-rgb: 74 139 255;
+    --sel-theme-neutral-rgb: 1 6 22;
+    --sel-theme-tint-soft: 14.96%;
+    --sel-theme-tint-base: 23.12%;
+    --sel-theme-tint-raised: 32.64%;
+    --sel-theme-tint-accent: 53.04%;
+    --sel-theme-page-background: #000000;
+    --sel-theme-text-main: #eef2ff;
+    --sel-theme-text-muted: #9daacf;
+    --sel-theme-text-on-accent: #ffffff;
+    --sel-theme-text-shadow-rgb: 0 0 0;
+    --sel-theme-semantic-success: #55e6bb;
+    --sel-theme-semantic-warning: #ffd15c;
+    --sel-theme-semantic-error: #ff7893;
+    --sel-theme-semantic-progress: #59b8ff;
+    --sel-theme-semantic-review: #ad78ff;
+    --sel-theme-semantic-archived: #91a4d7;
+    --sel-theme-frame-image: url("/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp?v=20260804-1");
+}

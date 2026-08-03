@@ -1,7 +1,7 @@
 /*
  * selPersonalization.js：SEL 页面个性化设置组合控件。
- * 负责“背景设置 / 面板设置 / 文字设置”三级界面、统一视觉令牌、动效、预设和当前页面实时预览。
- * 责任边界：背景值通过 selPageBackground 控制器修改；面板值只写页面级 selpersonal CSS 变量，不识别 Uniauth 业务数据。
+ * 负责“皮肤 / 背景 / 面板 / 文字”四级界面、统一视觉令牌、动效、预设和当前页面实时预览。
+ * 责任边界：皮肤只切换根标识；背景值通过 selPageBackground 控制器修改；面板值只写页面级 selpersonal CSS 变量，不识别 Uniauth 业务数据。
  * 模块级 JavaScript 标识统一使用 selPersonalization 前缀，公开控制器为 window.selPersonalization。
  */
 (function selPersonalizationInitialize() {
@@ -9,6 +9,13 @@
 
     // 每个个性化宿主只创建一个控制器，避免重复绑定全局输入事件。
     const selPersonalizationControllers = new WeakMap();
+    // 皮肤只描述基础明暗和配套材质；组件结构、面板参数与文字覆盖保持独立。
+    const selPersonalizationSkins = Object.freeze([
+        Object.freeze({ id: "dark", label: "深空水晶", description: "深背景 · 浅文字", icon: "ri-moon-clear-line", frameImage: "/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp?v=20260804-1" }),
+        Object.freeze({ id: "light", label: "晨雾水晶", description: "浅背景 · 深文字", icon: "ri-sun-line", frameImage: "/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp?v=20260804-1" })
+    ]);
+    // 刷新和完整恢复固定回到现行深色皮肤；用户切换只在当前页面生效。
+    const selPersonalizationDefaultSkin = "dark";
     // 面板默认值全部采用 0 至 100 的用户尺度，刷新页面时从这里重新开始。
     const selPersonalizationPanelDefaults = Object.freeze({
         // null 表示使用当前皮肤提供的主题色，刷新页面不会遗留用户临时选色。
@@ -251,6 +258,10 @@
         }
         // 页面根节点承载跨组件共享的视觉令牌。
         const selPersonalizationDocumentRoot = document.documentElement;
+        // 只接受正式登记的皮肤标识，避免页面根出现无法解析的任意状态。
+        let selPersonalizationSkinState = selPersonalizationSkins.some((selPersonalizationSkin) => selPersonalizationSkin.id === selPersonalizationDocumentRoot.dataset.selSkin)
+            ? selPersonalizationDocumentRoot.dataset.selSkin
+            : selPersonalizationDefaultSkin;
         // 性能档位只保存在当前页面根状态，刷新时会根据当前设备重新评估。
         selPersonalizationDocumentRoot.dataset.selPersonalPerformance = selPersonalizationResolvePerformanceMode();
         // 调用方可以覆盖面板刷新默认值，但每个强度仍会限制到 0 至 100。
@@ -267,7 +278,7 @@
         };
         // 文字状态仅存在于当前页面内存，不写 localStorage、cookie 或服务端配置。
         let selPersonalizationTextState = { ...selPersonalizationTextDefaults };
-        // 三个一级设置使用原生 tab 语义，背景、面板和文字保持同一信息层级。
+        // 四个一级设置使用原生 tab 语义，皮肤、背景、面板和文字保持同一信息层级。
         selPersonalizationHost.innerHTML = `
             <aside class="selpersonal-control" data-sel-personal-control aria-label="个性化设置">
                 <button class="selpersonal-trigger" type="button" data-sel-personal-action="toggle" aria-label="打开个性化设置" aria-expanded="false">
@@ -280,11 +291,18 @@
                         <button class="selpersonal-close" type="button" data-sel-personal-action="close" aria-label="关闭个性化设置"><i class="ri-close-line" aria-hidden="true"></i></button>
                     </header>
                     <div class="selpersonal-tabs" role="tablist" aria-label="个性化设置分类">
-                        <button class="selpersonal-tab selpersonal-tab-selected" type="button" role="tab" aria-selected="true" aria-controls="selpersonal-background-view" data-sel-personal-tab="background"><i class="ri-landscape-line" aria-hidden="true"></i><span>背景设置</span></button>
-                        <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-panel-view" data-sel-personal-tab="panel"><i class="ri-layout-4-line" aria-hidden="true"></i><span>面板设置</span></button>
-                        <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-text-view" data-sel-personal-tab="text"><i class="ri-font-size-2" aria-hidden="true"></i><span>文字设置</span></button>
+                        <button class="selpersonal-tab selpersonal-tab-selected" type="button" role="tab" aria-selected="true" aria-controls="selpersonal-skin-view" data-sel-personal-tab="skin"><i class="ri-contrast-2-line" aria-hidden="true"></i><span>皮肤</span></button>
+                        <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-background-view" data-sel-personal-tab="background"><i class="ri-landscape-line" aria-hidden="true"></i><span>背景</span></button>
+                        <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-panel-view" data-sel-personal-tab="panel"><i class="ri-layout-4-line" aria-hidden="true"></i><span>面板</span></button>
+                        <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-text-view" data-sel-personal-tab="text"><i class="ri-font-size-2" aria-hidden="true"></i><span>文字</span></button>
                     </div>
-                    <div class="selpersonal-view" id="selpersonal-background-view" role="tabpanel" data-sel-personal-view="background">
+                    <div class="selpersonal-view" id="selpersonal-skin-view" role="tabpanel" data-sel-personal-view="skin">
+                        <header class="selpersonal-view-heading"><strong>选择界面皮肤</strong><span>基础明暗与水晶材质</span></header>
+                        <div class="selpersonal-skin-grid" data-sel-personal-skin-grid role="group" aria-label="界面皮肤"></div>
+                        <p class="selpersonal-skin-note"><i class="ri-information-line" aria-hidden="true"></i><span>皮肤不会重置背景、面板参数或已明确选择的文字颜色。</span></p>
+                        <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-skin"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复默认皮肤</span></button>
+                    </div>
+                    <div class="selpersonal-view" id="selpersonal-background-view" role="tabpanel" data-sel-personal-view="background" hidden>
                         <header class="selpersonal-view-heading"><strong>选择网页背景</strong><span>${selPersonalizationBackgroundController.themes.length} 种独立主题</span></header>
                         <div class="selpersonal-background-grid" data-sel-personal-background-grid aria-label="背景主题"></div>
                         <div class="selpersonal-group selpersonal-background-adjustments" aria-label="背景显示参数">
@@ -327,15 +345,28 @@
         const selPersonalizationControl = selPersonalizationHost.querySelector("[data-sel-personal-control]");
         const selPersonalizationTrigger = selPersonalizationHost.querySelector("[data-sel-personal-action='toggle']");
         const selPersonalizationPanel = selPersonalizationHost.querySelector("[data-sel-personal-panel]");
+        const selPersonalizationSkinGrid = selPersonalizationHost.querySelector("[data-sel-personal-skin-grid]");
         const selPersonalizationBackgroundGrid = selPersonalizationHost.querySelector("[data-sel-personal-background-grid]");
         const selPersonalizationPanelScroll = selPersonalizationHost.querySelector("[data-sel-personal-panel-scroll]");
         const selPersonalizationTextScroll = selPersonalizationHost.querySelector("[data-sel-personal-text-scroll]");
         const selPersonalizationTextModeGrid = selPersonalizationHost.querySelector("[data-sel-personal-text-modes]");
         const selPersonalizationPresetGrid = selPersonalizationHost.querySelector("[data-sel-personal-presets]");
         // 任一关键节点缺失都阻止创建不可完整操作的控制器。
-        if (!selPersonalizationControl || !selPersonalizationTrigger || !selPersonalizationPanel || !selPersonalizationBackgroundGrid || !selPersonalizationPanelScroll || !selPersonalizationTextScroll || !selPersonalizationTextModeGrid || !selPersonalizationPresetGrid) {
+        if (!selPersonalizationControl || !selPersonalizationTrigger || !selPersonalizationPanel || !selPersonalizationSkinGrid || !selPersonalizationBackgroundGrid || !selPersonalizationPanelScroll || !selPersonalizationTextScroll || !selPersonalizationTextModeGrid || !selPersonalizationPresetGrid) {
             return null;
         }
+
+        // 两套正式皮肤以材质预览卡呈现；按钮只保存稳定 ID，不复制皮肤样式到脚本。
+        selPersonalizationSkins.forEach((selPersonalizationSkin) => {
+            const selPersonalizationSkinButton = document.createElement("button");
+            selPersonalizationSkinButton.className = "selpersonal-skin-option";
+            selPersonalizationSkinButton.type = "button";
+            selPersonalizationSkinButton.dataset.selPersonalSkin = selPersonalizationSkin.id;
+            selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-frame-image", `url("${selPersonalizationSkin.frameImage}")`);
+            selPersonalizationSkinButton.setAttribute("aria-pressed", "false");
+            selPersonalizationSkinButton.innerHTML = `<span class="selpersonal-skin-preview" aria-hidden="true"><i class="${selPersonalizationSkin.icon}"></i></span><span class="selpersonal-skin-copy"><strong>${selPersonalizationSkin.label}</strong><small>${selPersonalizationSkin.description}</small></span><i class="ri-checkbox-circle-fill selpersonal-skin-selected-icon" aria-hidden="true"></i>`;
+            selPersonalizationSkinGrid.appendChild(selPersonalizationSkinButton);
+        });
 
         // 背景缩略图按钮直接复用背景控制器提供的正式素材与稳定主题标识。
         selPersonalizationBackgroundController.themes.forEach((selPersonalizationTheme) => {
@@ -475,6 +506,33 @@
                     selPersonalizationOutput.value = selPersonalizationParameter === "blur" ? `${selPersonalizationBackgroundState.blur}px` : `${selPersonalizationBackgroundState[selPersonalizationParameter]}%`;
                 }
             });
+        }
+
+        /**
+         * 同步皮肤预览卡的选中语义。
+         * @returns {void} 只更新当前个性化界面，不改变其他设置状态。
+         */
+        function selPersonalizationSyncSkin() {
+            selPersonalizationSkinGrid.querySelectorAll("[data-sel-personal-skin]").forEach((selPersonalizationSkinButton) => {
+                selPersonalizationSkinButton.setAttribute("aria-pressed", String(selPersonalizationSkinButton.dataset.selPersonalSkin === selPersonalizationSkinState));
+            });
+        }
+
+        /**
+         * 应用一个正式皮肤标识，并同步浏览器原生控件的明暗模式。
+         * @param {string} selPersonalizationSkinId - dark 或 light。
+         * @returns {boolean} 皮肤存在并成功应用时返回 true。
+         */
+        function selPersonalizationApplySkin(selPersonalizationSkinId) {
+            if (!selPersonalizationSkins.some((selPersonalizationSkin) => selPersonalizationSkin.id === selPersonalizationSkinId)) {
+                return false;
+            }
+            selPersonalizationSkinState = selPersonalizationSkinId;
+            selPersonalizationDocumentRoot.dataset.selSkin = selPersonalizationSkinState;
+            document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", selPersonalizationSkinState);
+            selPersonalizationSyncSkin();
+            document.dispatchEvent(new CustomEvent("selPersonalization:skin-change", { detail: Object.freeze({ skin: selPersonalizationSkinState }) }));
+            return true;
         }
 
         /**
@@ -701,13 +759,13 @@
         }
 
         /**
-         * 切换三个一级设置视图。
-         * @param {string} selPersonalizationViewName - background、panel 或 text。
+         * 切换四个一级设置视图。
+         * @param {string} selPersonalizationViewName - skin、background、panel 或 text。
          * @returns {boolean} 成功切换时返回 true。
          */
         function selPersonalizationSelectView(selPersonalizationViewName) {
             // 未知视图不会隐藏当前有效界面。
-            if (!["background", "panel", "text"].includes(selPersonalizationViewName)) {
+            if (!["skin", "background", "panel", "text"].includes(selPersonalizationViewName)) {
                 return false;
             }
             // tab 同步选中类和 aria-selected。
@@ -738,7 +796,7 @@
             selPersonalizationTrigger.setAttribute("aria-expanded", "false");
             selPersonalizationTrigger.focus();
         });
-        // tablist 使用事件委托切换三个一级设置。
+        // tablist 使用事件委托切换四个一级设置。
         selPersonalizationControl.querySelector(".selpersonal-tabs")?.addEventListener("click", (selPersonalizationEvent) => {
             // 只响应带稳定 tab 标识的按钮。
             const selPersonalizationTab = selPersonalizationEvent.target.closest("[data-sel-personal-tab]");
@@ -748,7 +806,7 @@
         });
         // tablist 支持方向键和首尾键，键盘用户不必离开分类导航。
         selPersonalizationControl.querySelector(".selpersonal-tabs")?.addEventListener("keydown", (selPersonalizationEvent) => {
-            // 当前三个 tab 按 DOM 顺序形成稳定键盘列表。
+            // 当前四个 tab 按 DOM 顺序形成稳定键盘列表。
             const selPersonalizationTabs = Array.from(selPersonalizationControl.querySelectorAll("[data-sel-personal-tab]"));
             // 只有焦点位于 tab 时才处理分类导航按键。
             const selPersonalizationCurrentIndex = selPersonalizationTabs.indexOf(selPersonalizationEvent.target);
@@ -757,7 +815,7 @@
             }
             // 阻止方向键滚动浮层内容。
             selPersonalizationEvent.preventDefault();
-            // Home 和 End 直达首尾；左右方向在三个一级设置之间循环。
+            // Home 和 End 直达首尾；左右方向在四个一级设置之间循环。
             const selPersonalizationNextIndex = selPersonalizationEvent.key === "Home"
                 ? 0
                 : selPersonalizationEvent.key === "End"
@@ -766,6 +824,16 @@
             // 焦点和选中视图同步移动。
             selPersonalizationTabs[selPersonalizationNextIndex].focus();
             selPersonalizationSelectView(selPersonalizationTabs[selPersonalizationNextIndex].dataset.selPersonalTab);
+        });
+        // 皮肤预览卡只切换基础皮肤；面板强度与文字显式覆盖保持原状态。
+        selPersonalizationSkinGrid.addEventListener("click", (selPersonalizationEvent) => {
+            const selPersonalizationSkinButton = selPersonalizationEvent.target.closest("[data-sel-personal-skin]");
+            if (!selPersonalizationSkinButton || !selPersonalizationApplySkin(selPersonalizationSkinButton.dataset.selPersonalSkin)) {
+                return;
+            }
+            // 跟随皮肤的主题色和文字必须重新读取新皮肤；自定义值会由各自状态继续覆盖。
+            selPersonalizationApplyPanel();
+            selPersonalizationApplyText();
         });
         // 背景主题按钮继续调用背景控制器，不直接写图片变量。
         selPersonalizationBackgroundGrid.addEventListener("click", (selPersonalizationEvent) => {
@@ -894,6 +962,12 @@
             // 个性化界面同步默认背景。
             selPersonalizationSyncBackground();
         });
+        // 皮肤恢复只回到默认深色，不改变其他三个 Tab 的当前状态。
+        selPersonalizationControl.querySelector("[data-sel-personal-action='reset-skin']")?.addEventListener("click", () => {
+            selPersonalizationApplySkin(selPersonalizationDefaultSkin);
+            selPersonalizationApplyPanel();
+            selPersonalizationApplyText();
+        });
         // 面板恢复按钮重新使用本次挂载的刷新默认值。
         selPersonalizationControl.querySelector("[data-sel-personal-action='reset-panel']")?.addEventListener("click", () => {
             // 默认状态只来自代码配置，不读取本地缓存。
@@ -927,17 +1001,22 @@
 
         // 公开控制器提供当前状态、视图切换和刷新默认动作。
         const selPersonalizationController = Object.freeze({
+            // skins 供应用读取正式皮肤清单，不暴露内部状态。
+            skins: selPersonalizationSkins,
             // presets 供应用读取可用预设清单，不暴露可变对象。
             presets: selPersonalizationPresets,
-            // getState 同时返回背景、面板与文字的不可变快照。
+            // getState 同时返回皮肤、背景、面板与文字的不可变快照。
             getState: () => Object.freeze({
+                skin: selPersonalizationSkinState,
                 background: selPersonalizationBackgroundController.getState(),
                 panel: Object.freeze({ ...selPersonalizationPanelState }),
                 text: Object.freeze({ ...selPersonalizationTextState })
             }),
             selectView: selPersonalizationSelectView,
+            setSkin: selPersonalizationApplySkin,
             reset() {
-                // 完整重置同时恢复背景、面板和文字刷新默认值。
+                // 完整重置同时恢复皮肤、背景、面板和文字刷新默认值。
+                selPersonalizationApplySkin(selPersonalizationDefaultSkin);
                 selPersonalizationBackgroundController.reset();
                 selPersonalizationPanelState = { ...selPersonalizationDefaults, themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor), reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion) };
                 selPersonalizationTextState = { ...selPersonalizationTextDefaults };
@@ -946,8 +1025,9 @@
                 selPersonalizationApplyText();
             }
         });
-        // 保存控制器后立即同步背景、面板与文字默认状态。
+        // 保存控制器后立即同步皮肤、背景、面板与文字默认状态。
         selPersonalizationControllers.set(selPersonalizationHost, selPersonalizationController);
+        selPersonalizationApplySkin(selPersonalizationSkinState);
         selPersonalizationSyncBackground();
         selPersonalizationApplyPanel();
         selPersonalizationApplyText();
@@ -957,6 +1037,8 @@
 
     // 个性化模块只注册公开能力，不主动扫描页面。
     window.selPersonalization = Object.freeze({
+        // skins 提供正式深浅皮肤清单。
+        skins: selPersonalizationSkins,
         // presets 提供标准面板预设清单。
         presets: selPersonalizationPresets,
         // mount 是创建个性化设置 UI 的唯一入口。

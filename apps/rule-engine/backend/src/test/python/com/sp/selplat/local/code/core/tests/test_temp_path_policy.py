@@ -30,11 +30,13 @@ FFMPEG_SKILL_PATHS = [
     CODE_ROOT / "skill" / "ffmpeg_vob_to_mp3.py",
     CODE_ROOT / "skill" / "ffmpeg_vob_to_mp4.py",
 ]
-# 三个生产入口必须在动态加载工程模块前主动设置缓存根，不能只依赖 VS Code 环境变量。
+# 生产入口和可直接运行的 XUNAN 测试入口必须在动态加载工程模块前主动设置缓存根，
+# 不能只依赖 VS Code 环境变量或统一测试入口。
 PYTHON_ENTRY_PATHS = [
     CODE_ROOT / "abilities" / "startup_protocol_loader.py",
     CODE_ROOT / "executor.py",
     PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/ai_rule_package_integrator.py",
+    PROJECT_ROOT / "apps/rule-engine/backend/src/test/python/com/sp/selplat/local/code/XUNAN/tests/test_ai_rule_package_integrator.py",
 ]
 # Python 测试统一入口必须在发现测试模块前设置同一个缓存根。
 PYTHON_TEST_RUNNER_PATH = (

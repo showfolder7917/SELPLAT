@@ -1,17 +1,11 @@
 /*
  * selThemeTokens.css：SEL 网页视觉与几何统一令牌。
- * 负责基础皮肤色阶、业务语义颜色、组件表面映射以及水晶边框的左右对称几何基准。
- * 责任边界：只声明令牌，不选择应用业务节点；组件样式必须消费令牌而不是固定颜色或独立边框尺寸。
+ * 负责皮肤共享的派生色阶、组件表面映射以及水晶边框的左右对称几何基准。
+ * 责任边界：深浅基础颜色和材质由 theme/skins 提供；本文件不选择应用业务节点或固定某套皮肤。
  */
 
 :root {
-    /* 皮肤基础色由个性化组件临时覆盖；默认值代表当前深空皮肤。 */
-    --sel-theme-color-rgb: 74 139 255;
-    --sel-theme-neutral-rgb: 1 6 22;
-    --sel-theme-tint-soft: 14.96%;
-    --sel-theme-tint-base: 23.12%;
-    --sel-theme-tint-raised: 32.64%;
-    --sel-theme-tint-accent: 53.04%;
+    /* color、neutral、tint 基础值由当前 skin 声明，以下表面始终从当前皮肤实时派生。 */
     --sel-theme-surface-deep: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.86) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / 0.86));
     --sel-theme-surface-base: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.84) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / 0.84));
     --sel-theme-surface-raised: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.88) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / 0.88));
@@ -44,30 +38,18 @@
     --sel-theme-line-soft: rgb(var(--sel-theme-color-rgb) / 0.28);
     --sel-theme-glow: rgb(var(--sel-theme-color-rgb) / 0.52);
     --sel-theme-inset: inset 0 0 13px rgb(var(--sel-theme-color-rgb) / 0.18);
-    --sel-theme-text-main: #eef2ff;
-    --sel-theme-text-muted: #9daacf;
-    /* 文字个性化基础令牌：设置面板只修改主色与次级色，其余角色统一从二者派生。 */
+    /* 文字主色、次级色与阴影基色由当前 skin 声明，其余角色统一从二者派生。 */
     --sel-theme-text-title: var(--sel-theme-text-main);
     --sel-theme-text-body: color-mix(in srgb, var(--sel-theme-text-main) 94%, var(--sel-theme-text-muted));
     --sel-theme-text-secondary: var(--sel-theme-text-muted);
     --sel-theme-text-soft: color-mix(in srgb, var(--sel-theme-text-muted) 78%, transparent);
     --sel-theme-text-disabled: color-mix(in srgb, var(--sel-theme-text-muted) 52%, transparent);
-    --sel-theme-text-on-accent: #ffffff;
     --sel-theme-text-placeholder: color-mix(in srgb, var(--sel-theme-text-muted) 82%, transparent);
     --sel-theme-text-link: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 78%, var(--sel-theme-text-main));
     --sel-theme-text-icon: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 66%, var(--sel-theme-text-main));
-    --sel-theme-text-shadow-rgb: 0 0 0;
     --sel-theme-text-contrast-alpha: 0.168;
     --sel-theme-font-scale: 1;
     --sel-theme-text-shadow: 0 1px 4px rgb(var(--sel-theme-text-shadow-rgb) / var(--sel-theme-text-contrast-alpha));
-
-    /* 业务语义色不跟随皮肤变化，保证状态在任意皮肤下含义稳定。 */
-    --sel-theme-semantic-success: #55e6bb;
-    --sel-theme-semantic-warning: #ffd15c;
-    --sel-theme-semantic-error: #ff7893;
-    --sel-theme-semantic-progress: #59b8ff;
-    --sel-theme-semantic-review: #ad78ff;
-    --sel-theme-semantic-archived: #91a4d7;
 
     /* 组件只引用映射令牌，不直接依赖基础 RGB。 */
     --sel-theme-panel-surface: var(--sel-theme-surface-deep);
@@ -78,8 +60,7 @@
     --sel-theme-table-row-hover: var(--sel-theme-table-surface-hover);
     --sel-theme-popup-surface: var(--sel-theme-surface-deep);
 
-    /* 同一素材和缩放系数生成组件边框；左右始终使用相同厚度。 */
-    --sel-theme-frame-image: url("/sel/assets/components/panel/selPanelCyberFrame.webp?v=20260802-2");
+    /* 当前 skin 提供边框素材；共享缩放系数保证左右始终使用相同厚度。 */
     --sel-theme-frame-scale: 1;
     --sel-theme-frame-panel: calc(18px * var(--sel-theme-frame-scale));
     --sel-theme-frame-window: calc(18px * var(--sel-theme-frame-scale));

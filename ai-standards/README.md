@@ -29,7 +29,7 @@
 1. 当任务涉及新增、删除、重构时，应优先查看对应修正索引。
 2. 当某类结构变更已形成稳定联动范围时，应补充或更新这里的索引文件。
 3. 稳定工程规范放入 `standards/`，联动修改范围由各类修正索引承接。
-4. `MEMORIES/ai/protocol/RULE_INDEX.md` 是本目录在统一能力系统中的检索入口。
+4. `ai-standards/索引.md` 是本目录的当前检索入口；规则引擎统一入口为 `apps/rule-engine/backend/src/main/resources/RULE_INDEX.md`。
 
 当前入口文件：
 

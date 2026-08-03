@@ -19,7 +19,9 @@ selBaseRuntime.param(name)          读取页面查询参数
 
 `selAjax` 不保存业务地址。`./mock/UniauthUserGrid/...` 或 `/api/uniauth/...` 等路径必须由应用装配层明确传入。
 
-统一视觉令牌位于 `theme/selThemeTokens.css`。基础皮肤色、业务语义色、组件表面映射、九宫格素材、组件边框厚度、左右安全区和视口间距只能在该层声明；组件样式与个性化逻辑统一读取 `--sel-theme-*`，不得重新写死皮肤颜色或独立的左右边框尺寸。
+统一视觉契约位于 `theme/selThemeTokens.css`，深浅皮肤分别位于 `theme/skins/selSkinDark.css` 和 `theme/skins/selSkinLight.css`。共享文件只维护派生表面、组件映射、边框几何、安全区和视口间距；每套皮肤独立提供基础明暗、文字、语义色和九宫格素材。组件样式与个性化逻辑统一读取 `--sel-theme-*`，不得复制组件或重新写死皮肤颜色。
+
+皮肤素材与共享素材分离：`assets/skins/<skin>/components/` 只保存当前皮肤需要的真实运行材质，`assets/components/` 继续保存不随深浅变化的共用素材。页面通过根节点 `data-sel-skin="dark|light"` 切换皮肤，不建立 `sel-dark`、`sel-light` 两套组件目录。
 
 ## 当前挂载入口
 
@@ -34,7 +36,7 @@ selPageBackground.mount(backgroundHost, options)
 selPersonalization.mount(personalizationHost, { backgroundController })
 ```
 
-`selPageBackground` 只维护背景图层和当前页面参数；`selPersonalization` 组合“背景设置 / 面板设置”界面并写入跨水晶组件视觉令牌。面板设置支持跟随皮肤、任意统一主题色、常用色和染色强度，并从主题色生成深色、基础、抬升和强调四级色阶，统一作用于水晶边框、玻璃底板、标题栏、导航、表单、浮层和交互强调色。背景图片、正文和业务语义状态色保持独立。两者均不使用浏览器持久化，刷新页面恢复代码默认值。
+`selPageBackground` 只维护背景图层和当前页面参数；`selPersonalization` 组合“皮肤 / 背景 / 面板 / 文字”四个独立 Tab。皮肤 Tab 切换深色与浅色基础令牌和配套材质；面板设置继续支持跟随皮肤、任意统一主题色、常用色和染色强度，并从主题色生成柔和、基础、抬升和强调四级色阶。切换皮肤不会重置背景、面板参数或用户明确选择的文字覆盖。所有状态均不使用浏览器持久化，刷新页面恢复代码默认值。
 
 ## 新增基础控件
 

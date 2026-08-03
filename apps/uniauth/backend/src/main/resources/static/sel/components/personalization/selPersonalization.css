@@ -487,16 +487,126 @@
     outline: none;
 }
 
-/* 背景、面板和文字三个一级设置使用等宽 tab，保持同级能力边界清晰。 */
+/* 皮肤、背景、面板和文字四个一级设置使用等宽 tab，保持同级能力边界清晰。 */
 .selpersonal-tabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: 12px;
     padding: 4px;
     border: 1px solid rgba(91, 136, 224, 0.28);
     border-radius: 10px;
     background: rgba(2, 10, 35, 0.46);
+}
+
+/* 深浅皮肤使用独立材质预览卡，皮肤选择不与背景缩略图或面板预设混合。 */
+.selpersonal-skin-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.selpersonal-skin-option {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    grid-template-rows: 88px auto;
+    gap: 9px;
+    padding: 8px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: 12px;
+    color: var(--sel-theme-text-main);
+    background: var(--sel-theme-control-surface);
+    box-shadow: var(--sel-theme-inset);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.selpersonal-skin-option:hover,
+.selpersonal-skin-option:focus-visible {
+    border-color: var(--sel-theme-line);
+    outline: none;
+    background: var(--sel-theme-control-hover);
+}
+
+.selpersonal-skin-option[aria-pressed="true"] {
+    border-color: var(--sel-theme-line);
+    background: var(--sel-theme-selected-surface);
+    box-shadow: var(--sel-theme-inset), 0 0 14px var(--sel-theme-glow);
+}
+
+.selpersonal-skin-preview {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--sel-theme-page-background);
+}
+
+.selpersonal-skin-preview::before {
+    position: absolute;
+    inset: 3px;
+    background: var(--selpersonal-skin-frame-image) center / 100% 100% no-repeat;
+    content: "";
+}
+
+.selpersonal-skin-preview > i {
+    position: relative;
+    z-index: 1;
+    color: var(--sel-theme-text-icon);
+    font-size: 22px;
+}
+
+.selpersonal-skin-copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.selpersonal-skin-copy strong {
+    overflow: hidden;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selpersonal-skin-copy small {
+    color: var(--sel-theme-text-secondary);
+    font-size: 11px;
+}
+
+.selpersonal-skin-selected-icon {
+    position: absolute;
+    top: 13px;
+    right: 13px;
+    z-index: 2;
+    color: rgb(var(--sel-theme-color-rgb));
+    filter: drop-shadow(0 1px 3px rgb(var(--sel-theme-neutral-rgb) / 0.34));
+    opacity: 0;
+}
+
+.selpersonal-skin-option[aria-pressed="true"] .selpersonal-skin-selected-icon {
+    opacity: 1;
+}
+
+.selpersonal-skin-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 12px 2px 0;
+    color: var(--sel-theme-text-secondary);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.selpersonal-skin-note i {
+    margin-top: 1px;
+    color: var(--sel-theme-text-icon);
+    font-size: 14px;
 }
 
 .selpersonal-tab {

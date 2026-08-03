@@ -1,0 +1,199 @@
+/*
+ * selSkinLight.css：SEL 浅色皮肤基础令牌与必要的浅表面适配。
+ * 负责浅背景、深文字、珍珠水晶材质以及现有共享组件中的浅色可读性。
+ * 责任边界：组件 DOM、布局和 JavaScript 与深色皮肤完全共用；这里只表达皮肤差异。
+ */
+
+:root[data-sel-skin="light"] {
+    color-scheme: light;
+    --sel-theme-color-rgb: 54 112 176;
+    --sel-theme-neutral-rgb: 247 250 255;
+    --sel-theme-tint-soft: 9%;
+    --sel-theme-tint-base: 14%;
+    --sel-theme-tint-raised: 21%;
+    --sel-theme-tint-accent: 38%;
+    --sel-theme-page-background: #edf4fb;
+    --sel-theme-text-main: #17243d;
+    --sel-theme-text-muted: #5b6a82;
+    --sel-theme-text-on-accent: #ffffff;
+    --sel-theme-text-shadow-rgb: 255 255 255;
+    --sel-theme-text-contrast-alpha: 0.34;
+    --sel-theme-semantic-success: #08765d;
+    --sel-theme-semantic-warning: #8a5a00;
+    --sel-theme-semantic-error: #b4234d;
+    --sel-theme-semantic-progress: #1b67ad;
+    --sel-theme-semantic-review: #7042ad;
+    --sel-theme-semantic-archived: #536279;
+    --sel-theme-frame-image: url("/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp?v=20260804-1");
+    --sel-theme-line: rgb(var(--sel-theme-color-rgb) / 0.48);
+    --sel-theme-line-soft: rgb(var(--sel-theme-color-rgb) / 0.22);
+    --sel-theme-glow: rgb(var(--sel-theme-color-rgb) / 0.26);
+    --sel-theme-inset: inset 0 0 13px rgb(var(--sel-theme-color-rgb) / 0.10);
+    --sel-theme-scrollbar-track: rgb(213 224 238 / 0.78);
+    --sel-theme-scrollbar-thumb: rgb(76 122 171 / 0.72);
+    --sel-theme-scrollbar-thumb-hover: rgb(55 105 160 / 0.82);
+    --sel-theme-scrollbar-thumb-active: rgb(40 88 143 / 0.92);
+    --sel-theme-scrollbar-glow: 0 0 6px rgb(54 112 176 / 0.24);
+}
+
+/* 浅色皮肤使用白色玻璃底板和柔和外影，避免深色内板从共享组件中残留。 */
+:root[data-sel-skin="light"] :is(
+    .selpersonal-panel,
+    .selpanel-crystal-surface,
+    .selwindow-window-shell,
+    .seldropdown-menu,
+    .selgrid-menu,
+    .selgrid-menu-submenu,
+    .seldatepicker-popover
+) {
+    box-shadow: 0 8px 24px rgb(47 73 105 / 0.16), 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / 0.20);
+}
+
+/* 面板、表格、树、输入和弹出层继续共用组件结构，仅把固定深色承托面替换为浅玻璃。 */
+:root[data-sel-skin="light"] :is(
+    .selgrid-board-shell,
+    .selgrid-table-scroller,
+    .selpanel-status-tabs,
+    .selsearch-root,
+    .seldropdown-root,
+    .seltree-root,
+    .selwindow-form-shell,
+    .selwindow-actions-shell,
+    .selpersonal-tabs,
+    .selpersonal-section,
+    .selpersonal-preset-section
+) {
+    border-color: rgb(72 119 173 / 0.28);
+    background-color: rgb(255 255 255 / 0.48);
+    box-shadow: inset 0 0 14px rgb(72 119 173 / 0.07);
+}
+
+/* 可点击控件使用稍实的浅色底，确保深文字与复杂背景之间保持稳定对比。 */
+:root[data-sel-skin="light"] :is(
+    .selpanel-action-button,
+    .selpanel-status-tab,
+    .selpanel-date-field,
+    .selpanel-reset-button,
+    .selsearch-input-shell,
+    .selsearch-submit,
+    .seldropdown-trigger,
+    .selgrid-pagination-button,
+    .selgrid-checkbox,
+    .seltree-node,
+    .selwindow-control-shell,
+    .selwindow-header-button,
+    .selwindow-action-button,
+    .selpersonal-trigger,
+    .selpersonal-close,
+    .selpersonal-tab,
+    .selpersonal-preset,
+    .selpersonal-text-mode,
+    .selpersonal-reset
+) {
+    border-color: rgb(66 111 164 / 0.34);
+    color: var(--sel-theme-text-main);
+    background-color: rgb(248 251 255 / 0.82);
+    text-shadow: none;
+    box-shadow: inset 0 0 10px rgb(72 119 173 / 0.06);
+}
+
+/* 选中和悬停态以蓝灰强调色表达，不回退到深蓝大色块。 */
+:root[data-sel-skin="light"] :is(
+    .selpanel-status-tab:hover,
+    .selpanel-status-tab-selected,
+    .selgrid-pagination-button:hover,
+    .selgrid-pagination-button-selected,
+    .seltree-node:hover,
+    .seltree-node-selected,
+    .selpersonal-tab:hover,
+    .selpersonal-tab-selected,
+    .selpersonal-preset:hover,
+    .selpersonal-preset[aria-pressed="true"],
+    .selpersonal-text-mode:hover,
+    .selpersonal-text-mode[aria-pressed="true"]
+) {
+    border-color: rgb(46 104 170 / 0.56);
+    color: #102a4b;
+    background-color: rgb(211 229 248 / 0.84);
+    box-shadow: inset 0 0 12px rgb(54 112 176 / 0.12), 0 4px 12px rgb(47 73 105 / 0.10);
+}
+
+/* 表格结构层保持轻微蓝灰分隔，深文字直接继承皮肤语义令牌。 */
+:root[data-sel-skin="light"] :is(.selgrid-table th, .selgrid-table td) {
+    border-color: rgb(73 111 153 / 0.16);
+    color: var(--sel-theme-text-body);
+}
+
+:root[data-sel-skin="light"] .selgrid-table tbody tr {
+    background-color: rgb(255 255 255 / 0.32);
+}
+
+:root[data-sel-skin="light"] .selgrid-table tbody tr:nth-child(even) {
+    background-color: rgb(232 241 250 / 0.48);
+}
+
+:root[data-sel-skin="light"] .selgrid-table tbody tr:hover {
+    background-color: rgb(204 225 247 / 0.58);
+}
+
+/* 个性化中的背景缩略图保留暗渐变文字承托，不让皮肤切换降低图片标题可读性。 */
+:root[data-sel-skin="light"] .selpersonal-background-option {
+    color: #ffffff;
+}
+
+/* 设置面板标题和说明必须覆盖旧深色皮肤中的固定浅文字，避免白底白字。 */
+:root[data-sel-skin="light"] :is(
+    .selpersonal-heading-copy strong,
+    .selpersonal-view-heading strong,
+    .selpersonal-section-heading > span,
+    .selpersonal-section-heading strong
+) {
+    color: var(--sel-theme-text-main);
+    text-shadow: none;
+}
+
+:root[data-sel-skin="light"] :is(
+    .selpersonal-heading-copy small,
+    .selpersonal-view-heading span,
+    .selpersonal-section-heading small
+) {
+    color: var(--sel-theme-text-secondary);
+}
+
+/* 业务状态继续使用同一语义色，但浅皮肤改用低饱和浅底，保证文字与标签底均可辨识。 */
+:root[data-sel-skin="light"] .selgrid-status-pill {
+    box-shadow: inset 0 0 8px currentColor;
+}
+
+:root[data-sel-skin="light"] .selgrid-status-active {
+    border-color: rgb(27 103 173 / 0.36);
+    color: var(--sel-theme-semantic-progress);
+    background: rgb(219 235 250 / 0.88);
+}
+
+:root[data-sel-skin="light"] .selgrid-status-review {
+    border-color: rgb(112 66 173 / 0.34);
+    color: var(--sel-theme-semantic-review);
+    background: rgb(237 227 249 / 0.88);
+}
+
+:root[data-sel-skin="light"] .selgrid-status-done {
+    border-color: rgb(8 118 93 / 0.34);
+    color: var(--sel-theme-semantic-success);
+    background: rgb(216 241 232 / 0.88);
+}
+
+:root[data-sel-skin="light"] .selgrid-status-archived {
+    border-color: rgb(83 98 121 / 0.30);
+    color: var(--sel-theme-semantic-archived);
+    background: rgb(229 234 241 / 0.90);
+}
+
+/* 页面反馈条使用浅底深字，避免深色皮肤固定白字在浅色玻璃上消失。 */
+:root[data-sel-skin="light"] .selgrid-feedback-toast {
+    border-color: rgb(54 112 176 / 0.34);
+    color: var(--sel-theme-text-main);
+    background: rgb(226 238 250 / 0.94);
+    box-shadow: 0 6px 18px rgb(47 73 105 / 0.16);
+    text-shadow: none;
+}

@@ -8,7 +8,7 @@
 html {
     min-width: 1080px;
     min-height: 100%;
-    background: #000;
+    background: var(--sel-theme-page-background);
     scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
     scrollbar-width: thin;
 }
@@ -54,7 +54,7 @@ body {
     margin: 0;
     overflow-x: auto;
     color: var(--selgrid-theme-text);
-    background: #000;
+    background: var(--sel-theme-page-background);
     font-family: var(--selgrid-theme-font);
     -webkit-font-smoothing: antialiased;
     isolation: isolate;

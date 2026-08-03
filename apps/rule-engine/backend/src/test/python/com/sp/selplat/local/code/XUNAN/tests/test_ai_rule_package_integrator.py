@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -13,6 +14,11 @@ PROJECT_ROOT = next(
     candidate for candidate in Path(__file__).resolve().parents
     if (candidate / "settings.gradle").is_file()
 )
+# 文件直接运行时必须在动态加载 XUNAN 程序前切换字节码缓存根；
+# 否则 importlib 会先在生产源码旁创建 __pycache__，程序自身再设置已经来不及。
+PYTHON_PYCACHE_ROOT = PROJECT_ROOT / "cache/python-pycache"
+sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)
+os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)
 PROGRAM_PATH = (
     PROJECT_ROOT
     / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/ai_rule_package_integrator.py"

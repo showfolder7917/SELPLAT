@@ -1,14 +1,8 @@
 # SELPLAT Agent 启动入口
 
-## 当前身份与工程作用域
+## 当前身份
 
 - 当前稳定用户 ID：`XUNAN`
-- 当前使用工程名：`SELPLAT`
-- 当前 common 规则作用域：`selplat`
-- 当前用户规则根：`apps/rule-engine/backend/src/main/resources/local/XUNAN/`
-- 当前用户规则索引：`apps/rule-engine/backend/src/main/resources/local/XUNAN/RULE_INDEX.md`
-- 当前用户 Python 能力根：`apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/`
-- 当前用户智慧整合程序：`apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/ai_rule_package_integrator.py`
 
 ## 唯一绝对路径
 
@@ -32,7 +26,10 @@
 
 ## 索引加载与分层边界
 
-- 所有专项规则必须先读取 `${RULE_ENGINE_RULE_INDEX}`；core 由根索引直接登记，common 必须经 `local/common/RULE_INDEX.md` 和当前作用域索引递归命中，当前用户必须经根索引登记的 `local/XUNAN/RULE_INDEX.md` 递归命中；未命中规则不得作为执行依据。
+- 所有专项规则必须从 `${RULE_ENGINE_RULE_INDEX}` 唯一入口开始；禁止在本文件重复写死 common 作用域、用户规则路径、用户能力路径或具体执行程序。
+- 当前 common 作用域必须根据用户明确指出的工程、当前工程根或被操作文件所属工程识别，并且每轮只能命中一个；证据不足或出现多个候选时必须停止并报告，禁止猜测或合并加载。
+- 当前用户只提供稳定用户 ID；用户规则入口必须通过根索引中的 `USER_RULE_INDEX@<稳定用户ID>` 取得，禁止根据目录名称拼接路径。
+- 专项规则必须根据当前任务从索引选择实际需要的逻辑 ID；core 由根索引直接登记，common 经汇总索引和已识别作用域递归命中，当前用户经根索引登记入口递归命中；未命中规则不得作为执行依据。
 - 生产加载顺序为 `local/core → local/common/跨工程通用规则 → local/common/当前作用域 → local/active_user`，冲突优先级为 `active_user > 当前作用域 > 跨工程通用 > core`。
 - 用户覆盖必须通过稳定逻辑 ID 显式登记；只能加载已验证的一个当前作用域和一个当前用户，禁止猜测或合并加载多个无关作用域、用户目录。
 - `local/core` 与 `local/common` 默认保持冻结；没有用户明确点名修改目标时，自动修正只能写入当前已验证用户层。
