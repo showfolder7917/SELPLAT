@@ -1,0 +1,7 @@
+# XUNAN SELPLAT 应用项目汇总索引
+
+<!-- 应用索引只汇总真实二级项目，不复制叶子规则逻辑 ID。 -->
+xunan_selplat_application_index_child_reference_only = true
+
+<!-- rule-engine 保存 XUNAN 对规则引擎应用的专项智慧整合规则包。 -->
+XUNAN_SELPLAT_RULE_ENGINE_RULE_INDEX = local/XUNAN/selplat/应用/rule-engine/RULE_INDEX.md

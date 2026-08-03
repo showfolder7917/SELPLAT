@@ -1,15 +1,16 @@
-"""规则主文件与同名资产目录生成能力。
+"""规则主文件与叶子索引生成能力。
 
 功能：
-按“主规则 Markdown 与同名资产目录并列”的结构规划或生成规则骨架，
-并在调用方提供索引键时登记唯一规则入口。
+按“项目或子项目/rule/主规则”的结构规划或生成规则骨架，
+并在调用方提供索引键时登记当前作用域的叶子索引。
+模板材料必须来自已核验的真实资料，因此本能力不自动创建 template、README 或样例。
 """
 
 from __future__ import annotations
 
 # 导入正则能力，校验规则名称和索引键只包含受控字符。
 import re
-# 导入 Path，统一处理规则资源根、范围目录和索引文件。
+# 导入 Path，统一处理规则资源根、所属作用域和叶子索引。
 from pathlib import Path
 # 导入 Any，为能力上下文和固定返回结构补充类型说明。
 from typing import Any
@@ -17,37 +18,20 @@ from typing import Any
 
 # 当前能力的唯一调用标识。
 ABILITY_ID = "rule_package_generator"
-# 当前能力名称直接说明并列规则结构的生成职责。
-ABILITY_NAME = "规则主文件与同名资产目录生成"
+# 当前能力名称直接说明规则正文与叶子索引的生成职责。
+ABILITY_NAME = "规则主文件与叶子索引生成"
 # 当前能力描述用于能力注册表和执行结果展示。
-ABILITY_DESC = "规划或生成同级主规则文件、同名资产目录、README、可选资产目录和规则索引入口。"
+ABILITY_DESC = "在项目或子项目的 rule 目录生成主规则并更新叶子索引，不自动创建模板材料。"
 
 # 当前能力不依赖外部 skill。
 REQUIRED_SKILLS: list[str] = []
 # 当前能力不依赖外部 app。
 REQUIRED_APPS: list[str] = []
 
-# 资产目录只允许使用生命周期治理规则已经确认的四种稳定分类。
-ALLOWED_ASSET_DIRECTORIES = {"docs", "template", "examples", "project"}
 # 规则名固定使用 RUL_ 前缀和“规则”后缀，避免生成无法被索引识别的散乱文件。
 RULE_NAME_PATTERN = re.compile(r"^RUL_[^/\\\\]+规则$")
 # 索引键只允许大写英文、数字和下划线，保持现有 RULE_INDEX DSL 风格。
 INDEX_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
-
-
-# 把列表或逗号分隔文本统一转换成稳定资产目录列表。
-def _normalize_asset_directories(raw_value: Any) -> list[str]:
-    # 列表输入逐项转换为去空格文本。
-    if isinstance(raw_value, list):
-        asset_directories = [str(item).strip() for item in raw_value if str(item).strip()]
-    # 字符串输入按逗号拆分。
-    elif isinstance(raw_value, str):
-        asset_directories = [item.strip() for item in raw_value.split(",") if item.strip()]
-    # 未提供资产目录时只创建 README，不创建多余空目录。
-    else:
-        asset_directories = []
-    # 去重并排序，保证计划和生成结果稳定。
-    return sorted(set(asset_directories))
 
 
 # 解析显式规则资源根，禁止能力根据当前工作目录猜测目标。
@@ -61,14 +45,17 @@ def _resolve_resource_root(context: dict[str, Any]) -> Path:
     return Path(raw_root).expanduser().resolve()
 
 
-# 在规则资源根内解析所属范围目录，禁止路径逃逸。
+# 在规则资源根内解析项目或子项目根目录，禁止路径逃逸。
 def _resolve_scope_root(resource_root: Path, context: dict[str, Any]) -> tuple[Path, str]:
-    # scope_path 使用相对于规则资源根的目录，例如 selplat/通用规则。
+    # scope_path 使用相对于规则资源根的项目路径，例如 selplat/通用。
     scope_path = str(context.get("scope_path") or "").strip().strip("/")
-    # 拼接并规范化最终范围目录。
+    # 缺少所属作用域时禁止把规则写入资源根。
+    if not scope_path:
+        raise ValueError("缺少 scope_path。")
+    # 拼接并规范化最终作用域目录。
     scope_root = (resource_root / scope_path).resolve()
     # 规范化结果必须仍位于规则资源根内。
-    if scope_root != resource_root and resource_root not in scope_root.parents:
+    if resource_root not in scope_root.parents:
         raise ValueError("scope_path 越出规则资源根。")
     # 返回物理目录和稳定相对路径。
     return scope_root, scope_path
@@ -80,58 +67,41 @@ def _resolve_index_path(
     scope_root: Path,
     context: dict[str, Any],
 ) -> Path:
-    # 调用方可显式指定相对于资源根的索引，例如 local/common/selplat/RULE_INDEX.md。
+    # 调用方可显式指定相对于资源根的 RULE_INDEX.md。
     raw_index_path = str(context.get("index_path") or "").strip()
     # 显式索引存在时优先使用，避免复杂项目结构依赖目录推断。
     if raw_index_path:
         # 绝对路径和相对路径统一规范化，再执行资源根边界检查。
         requested_path = Path(raw_index_path).expanduser()
-        index_path = (
-            requested_path.resolve()
-            if requested_path.is_absolute()
-            else (resource_root / requested_path).resolve()
-        )
+        index_path = requested_path.resolve() if requested_path.is_absolute() else (
+            resource_root / requested_path
+        ).resolve()
         # 索引必须位于当前规则资源根内。
         if index_path != resource_root and resource_root not in index_path.parents:
             raise ValueError("index_path 越出规则资源根。")
         # 只有标准 RULE_INDEX.md 可以成为规则登记入口。
         if index_path.name != "RULE_INDEX.md":
             raise ValueError("index_path 必须指向 RULE_INDEX.md。")
-        # 叶子索引必须位于规则范围目录或其祖先，禁止跨项目登记。
-        if index_path.parent != scope_root and index_path.parent not in scope_root.parents:
-            raise ValueError("index_path 不属于当前 scope_path 的祖先索引链。")
+        # 规则必须登记在当前作用域自己的叶子索引，禁止写入祖先汇总索引。
+        if index_path.parent != scope_root:
+            raise ValueError("index_path 必须是当前 scope_path 的叶子 RULE_INDEX.md。")
         # 返回经过边界和归属校验的显式索引。
         return index_path
-    # 未显式指定时，从规则范围向资源根逐级寻找最近的现有 RULE_INDEX.md。
-    current_scope = scope_root
-    while current_scope == resource_root or resource_root in current_scope.parents:
-        # 最近索引代表当前规则的最小所属作用域或项目叶子索引。
-        candidate = current_scope / "RULE_INDEX.md"
-        # 命中后立即返回，禁止继续上溯到 common 汇总或全局根造成重复登记。
-        if candidate.is_file():
-            return candidate
-        # 到达资源根仍未找到索引时停止，避免继续搜索工程外目录。
-        if current_scope == resource_root:
-            break
-        # 继续检查上一级作用域，例如从 `selplat/通用规则` 回到 `selplat`。
-        current_scope = current_scope.parent
-    # 没有所属索引说明分级结构不完整，生成前必须阻断。
-    raise ValueError("scope_path 没有可达的所属 RULE_INDEX.md。")
+    # 默认索引就是项目或子项目根下的叶子索引。
+    return scope_root / "RULE_INDEX.md"
 
 
-# 校验规则名、索引键和资产目录，形成生成前统一阻断边界。
-def _validate_inputs(rule_name: str, index_key: str, asset_directories: list[str]) -> None:
+# 校验规则名、索引键和废弃参数，形成生成前统一阻断边界。
+def _validate_inputs(context: dict[str, Any], rule_name: str, index_key: str) -> None:
     # 规则名必须符合统一命名约定。
     if not RULE_NAME_PATTERN.fullmatch(rule_name):
         raise ValueError("rule_name 必须使用 RUL_<主题>规则 格式。")
     # 提供索引键时必须符合 DSL 标识符格式。
     if index_key and not INDEX_KEY_PATTERN.fullmatch(index_key):
         raise ValueError("index_key 必须使用大写英文、数字和下划线。")
-    # 任一非标准资产目录都必须阻断。
-    invalid_directories = sorted(set(asset_directories) - ALLOWED_ASSET_DIRECTORIES)
-    # 返回明确非法目录，方便调用方修正。
-    if invalid_directories:
-        raise ValueError("非标准资产目录: " + ", ".join(invalid_directories))
+    # 旧 asset_directories 会重新制造空模板，必须明确阻断调用方升级。
+    if context.get("asset_directories") not in (None, "", []):
+        raise ValueError("asset_directories 已废弃；模板只能人工收集已核验的真实材料。")
 
 
 # 构造默认主规则正文，避免生成没有问题、场景和业务含义的空规则。
@@ -148,42 +118,23 @@ def _default_rule_content(rule_name: str) -> str:
     )
 
 
-# 构造资产目录 README，只登记入口和资产清单，不复制主规则正文。
-def _build_readme(rule_name: str, asset_directories: list[str]) -> str:
-    # 将实际声明的标准子目录转换成人工可读清单。
-    asset_lines = "\n".join(f"- `{directory}/`：当前规则的{directory}配套资产。" for directory in asset_directories)
-    # 没有可选目录时明确只有 README，避免误以为生成遗漏。
-    if not asset_lines:
-        asset_lines = "- 当前没有额外 docs、template、examples 或 project 资产。"
-    # 主入口使用上级相对路径，体现主规则与资产目录并列。
-    return (
-        f"# {rule_name.removeprefix('RUL_')}资产目录\n\n"
-        "## 主入口\n\n"
-        f"- `../{rule_name}.md`：当前主题唯一权威规则正文。\n\n"
-        "## 配套资产\n\n"
-        f"{asset_lines}\n"
-    )
-
-
 # 根据调用上下文构建不产生写入的完整生成计划。
 def _build_plan(context: dict[str, Any]) -> dict[str, Any]:
     # 解析规则资源根。
     resource_root = _resolve_resource_root(context)
-    # 解析规则所属范围目录。
+    # 解析规则所属项目或子项目根。
     scope_root, scope_path = _resolve_scope_root(resource_root, context)
     # 读取不带 .md 的完整规则名。
     rule_name = str(context.get("rule_name") or "").strip().removesuffix(".md")
     # 读取可选唯一索引键。
     index_key = str(context.get("index_key") or "").strip()
-    # 解析可选资产目录。
-    asset_directories = _normalize_asset_directories(context.get("asset_directories"))
     # 在形成任何文件路径前完成输入校验。
-    _validate_inputs(rule_name, index_key, asset_directories)
-    # 主规则文件直接位于范围根。
-    main_rule_path = scope_root / f"{rule_name}.md"
-    # 同名资产目录与主规则文件并列。
-    asset_root = scope_root / rule_name
-    # 索引使用当前规则范围最近的所属叶子入口，不再固定写全局根索引。
+    _validate_inputs(context, rule_name, index_key)
+    # 主规则固定写入当前作用域的 rule 目录。
+    main_rule_path = scope_root / "rule" / f"{rule_name}.md"
+    # template 只提供约定位置供人工收集真实材料，本能力不创建它。
+    template_root = scope_root / "template" / rule_name
+    # 索引固定使用当前项目或子项目的叶子入口。
     index_path = _resolve_index_path(resource_root, scope_root, context)
     # 索引值使用相对于规则资源根的 POSIX 路径。
     index_value = str(main_rule_path.relative_to(resource_root)).replace("\\", "/")
@@ -194,10 +145,8 @@ def _build_plan(context: dict[str, Any]) -> dict[str, Any]:
         "scope_path": scope_path,
         "rule_name": rule_name,
         "index_key": index_key,
-        "asset_directories": asset_directories,
         "main_rule_path": main_rule_path,
-        "asset_root": asset_root,
-        "readme_path": asset_root / "README.md",
+        "template_root": template_root,
         "index_path": index_path,
         "index_value": index_value,
     }
@@ -212,36 +161,22 @@ def execute(context: dict[str, Any], skills: dict[str, Any], apps: dict[str, Any
         plan = _build_plan(context)
     except (ValueError, OSError) as exception:
         # 输入或路径不合法时返回阻断结果，不产生任何文件。
-        return {
-            "status": "blocked",
-            "ability": ABILITY_ID,
-            "message": str(exception),
-        }
+        return {"status": "blocked", "ability": ABILITY_ID, "message": str(exception)}
     # action 默认使用 plan，避免调用方遗漏动作时意外写入。
     action = str(context.get("action") or "plan").strip().lower()
-    # 对外路径统一转成字符串。
+    # 对外路径统一转成字符串，并明确模板目录不会自动创建。
     public_plan = {
         "main_rule_path": str(plan["main_rule_path"]),
-        "asset_root": str(plan["asset_root"]),
-        "readme_path": str(plan["readme_path"]),
-        "asset_directories": [
-            str(plan["asset_root"] / directory)
-            for directory in plan["asset_directories"]
-        ],
+        "template_root": str(plan["template_root"]),
+        "template_creation": "manual_verified_materials_only",
         "index_path": str(plan["index_path"]),
         "index_entry": (
-            f'{plan["index_key"]} = {plan["index_value"]}'
-            if plan["index_key"]
-            else ""
+            f'{plan["index_key"]} = {plan["index_value"]}' if plan["index_key"] else ""
         ),
     }
-    # plan 只返回并列结构，不产生写入。
+    # plan 只返回规则与索引结构，不产生写入。
     if action == "plan":
-        return {
-            "status": "planned",
-            "ability": ABILITY_ID,
-            **public_plan,
-        }
+        return {"status": "planned", "ability": ABILITY_ID, **public_plan}
     # 仅允许 generate 执行真实生成。
     if action != "generate":
         return {
@@ -249,51 +184,33 @@ def execute(context: dict[str, Any], skills: dict[str, Any], apps: dict[str, Any
             "ability": ABILITY_ID,
             "message": f"不支持的 action: {action}",
         }
-    # 主规则或同名资产目录已存在时阻断覆盖。
-    if plan["main_rule_path"].exists() or plan["asset_root"].exists():
-        return {
-            "status": "blocked_existing_rule",
-            "ability": ABILITY_ID,
-            **public_plan,
-        }
-    # 生成前要求范围目录和唯一索引已经存在。
-    if not plan["scope_root"].is_dir() or not plan["index_path"].is_file():
+    # 主规则已存在时阻断覆盖。
+    if plan["main_rule_path"].exists():
+        return {"status": "blocked_existing_rule", "ability": ABILITY_ID, **public_plan}
+    # 生成前要求作用域、rule 目录和叶子索引已经存在。
+    if (
+        not plan["scope_root"].is_dir()
+        or not plan["main_rule_path"].parent.is_dir()
+        or not plan["index_path"].is_file()
+    ):
         return {
             "status": "blocked_missing_rule_root_or_index",
             "ability": ABILITY_ID,
             **public_plan,
         }
     # 调用方可提供完整规则正文，否则使用明确待完善的安全骨架。
-    rule_content = str(context.get("rule_content") or "").strip() or _default_rule_content(plan["rule_name"])
-    # 创建主规则文件。
-    plan["main_rule_path"].write_text(rule_content.rstrip() + "\n", encoding="utf-8")
-    # 创建同级同名资产目录。
-    plan["asset_root"].mkdir()
-    # 创建调用方声明的标准资产子目录。
-    for directory in plan["asset_directories"]:
-        # 每个目录都位于当前同名资产根下。
-        (plan["asset_root"] / directory).mkdir()
-    # 创建只登记入口和资产清单的 README。
-    plan["readme_path"].write_text(
-        _build_readme(plan["rule_name"], plan["asset_directories"]),
-        encoding="utf-8",
+    rule_content = str(context.get("rule_content") or "").strip() or _default_rule_content(
+        plan["rule_name"]
     )
-    # 提供索引键时向唯一索引追加主规则入口。
+    # 创建主规则文件；模板材料不属于自动生成范围。
+    plan["main_rule_path"].write_text(rule_content.rstrip() + "\n", encoding="utf-8")
+    # 提供索引键时向当前叶子索引追加主规则入口。
     if plan["index_key"]:
         # 读取现有索引完整正文。
         index_text = plan["index_path"].read_text(encoding="utf-8")
-        # 重复索引键必须阻断；生成前已确认新规则不存在，此处仍保护索引唯一性。
+        # 重复索引键必须阻断，并回滚刚生成的主规则。
         if re.search(rf"(?m)^{re.escape(plan['index_key'])}\s*=", index_text):
-            # 删除刚生成的空资产目录和文件，恢复生成前状态。
-            plan["readme_path"].unlink()
-            # 仅有声明目录且为空时逐个删除。
-            for directory in reversed(plan["asset_directories"]):
-                (plan["asset_root"] / directory).rmdir()
-            # 删除同名资产根。
-            plan["asset_root"].rmdir()
-            # 删除主规则文件。
             plan["main_rule_path"].unlink()
-            # 返回明确重复索引阻断。
             return {
                 "status": "blocked_existing_index_key",
                 "ability": ABILITY_ID,
@@ -302,10 +219,9 @@ def execute(context: dict[str, Any], skills: dict[str, Any], apps: dict[str, Any
         # 在索引末尾追加一个稳定入口。
         index_entry = f'{plan["index_key"]} = {plan["index_value"]}'
         # 保留原索引正文并确保新入口独立成行。
-        plan["index_path"].write_text(index_text.rstrip() + "\n\n" + index_entry + "\n", encoding="utf-8")
-    # 返回实际生成的并列结构和索引入口。
-    return {
-        "status": "generated",
-        "ability": ABILITY_ID,
-        **public_plan,
-    }
+        plan["index_path"].write_text(
+            index_text.rstrip() + "\n\n" + index_entry + "\n",
+            encoding="utf-8",
+        )
+    # 返回实际生成的主规则和索引入口。
+    return {"status": "generated", "ability": ABILITY_ID, **public_plan}

@@ -1,4 +1,4 @@
-"""规则主文件与同名资产目录生成能力测试。"""
+"""规则主文件与叶子索引生成能力测试。"""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def load_ability_module():
     return module
 
 
-# 验证并列目录规划、真实生成和非法输入阻断。
+# 验证标准目录规划、真实生成和旧模板参数阻断。
 class RulePackageGeneratorTests(unittest.TestCase):
 
     # 每个 Case 创建独立规则资源根。
@@ -58,12 +58,12 @@ class RulePackageGeneratorTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="rule_package_", dir=OPTION_TEMP_ROOT)
         # 临时目录根模拟 rule-engine resources。
         self.resource_root = Path(self.temp_dir.name).resolve()
-        # 创建 SELPLAT 通用规则范围目录。
-        self.scope_root = self.resource_root / "selplat" / "通用规则"
-        # 创建完整父目录。
-        self.scope_root.mkdir(parents=True)
-        # 创建 SELPLAT 作用域叶子索引，模拟生产分级索引结构。
-        self.scope_index = self.resource_root / "selplat" / "RULE_INDEX.md"
+        # 创建 SELPLAT 通用作用域及其规则正文目录。
+        self.scope_root = self.resource_root / "selplat" / "通用"
+        # 创建完整 rule 目录，生成器不得猜测或新造项目分类。
+        (self.scope_root / "rule").mkdir(parents=True)
+        # 创建 SELPLAT 通用叶子索引，模拟生产分级索引结构。
+        self.scope_index = self.scope_root / "RULE_INDEX.md"
         # 写入空测试索引供生成能力追加当前作用域规则。
         self.scope_index.write_text("# test scope index\n", encoding="utf-8")
 
@@ -72,71 +72,62 @@ class RulePackageGeneratorTests(unittest.TestCase):
         # 删除当前 Case 全部临时文件。
         self.temp_dir.cleanup()
 
-    # 验证 plan 返回主规则与资产目录并列结构且不写文件。
-    def test_plan_returns_sibling_main_rule_and_asset_directory(self) -> None:
-        # 请求带模板和样例目录的只读计划。
+    # 验证 plan 返回 rule 主文件和可选模板约定位置且不写文件。
+    def test_plan_returns_rule_file_and_optional_template_location(self) -> None:
+        # 请求只读计划。
         result = self.module.execute(self._context("plan"), {}, {})
         # 能力必须返回 planned。
         self.assertEqual("planned", result["status"])
-        # 主规则文件直接位于通用规则根。
+        # 主规则文件固定位于通用/rule。
         self.assertEqual(
-            self.scope_root / "RUL_Java业务注释规则.md",
+            self.scope_root / "rule" / "RUL_Java业务注释规则.md",
             Path(result["main_rule_path"]),
         )
-        # 同名资产目录与主规则文件并列。
+        # 模板只返回约定位置，不代表应自动创建。
         self.assertEqual(
-            self.scope_root / "RUL_Java业务注释规则",
-            Path(result["asset_root"]),
+            self.scope_root / "template" / "RUL_Java业务注释规则",
+            Path(result["template_root"]),
         )
         # plan 不得提前创建主规则。
         self.assertFalse(Path(result["main_rule_path"]).exists())
-        # plan 不得提前创建资产目录。
-        self.assertFalse(Path(result["asset_root"]).exists())
+        # plan 不得提前创建模板目录。
+        self.assertFalse(Path(result["template_root"]).exists())
 
-    # 验证 generate 创建并列结构、README、可选目录和索引入口。
-    def test_generate_creates_sibling_structure_and_index_entry(self) -> None:
+    # 验证 generate 只创建规则正文和索引入口。
+    def test_generate_creates_rule_and_index_without_synthetic_template(self) -> None:
         # 执行真实生成。
         result = self.module.execute(self._context("generate"), {}, {})
         # 能力必须明确返回 generated。
         self.assertEqual("generated", result["status"])
         # 主规则文件必须存在。
         self.assertTrue(Path(result["main_rule_path"]).is_file())
-        # 同名资产目录必须存在。
-        self.assertTrue(Path(result["asset_root"]).is_dir())
-        # README 必须通过上级相对路径指向并列主规则。
+        # 未提供真实材料时不得创建 template 或 README。
+        self.assertFalse(Path(result["template_root"]).exists())
+        # 所属 SELPLAT 叶子索引必须直接指向 rule 下的主规则文件。
         self.assertIn(
-            "../RUL_Java业务注释规则.md",
-            Path(result["readme_path"]).read_text(encoding="utf-8"),
-        )
-        # 模板目录必须按声明创建。
-        self.assertTrue((Path(result["asset_root"]) / "template").is_dir())
-        # 样例目录必须按声明创建。
-        self.assertTrue((Path(result["asset_root"]) / "examples").is_dir())
-        # 所属 SELPLAT 叶子索引必须直接指向范围根下的主规则文件。
-        self.assertIn(
-            "SELPLAT_JAVA_COMMENT_RULES = selplat/通用规则/RUL_Java业务注释规则.md",
+            "SELPLAT_JAVA_COMMENT_RULES = selplat/通用/rule/RUL_Java业务注释规则.md",
             self.scope_index.read_text(encoding="utf-8"),
         )
         # 全局根索引没有参与测试，也证明生成器不再要求把作用域规则写入根入口。
         self.assertFalse((self.resource_root / "RULE_INDEX.md").exists())
 
-    # 验证非标准资产目录在生成前被阻断。
-    def test_nonstandard_asset_directory_is_blocked(self) -> None:
-        # 构造不允许的 assets 目录。
+    # 验证旧资产目录参数在生成前被阻断，防止重建废弃结构。
+    def test_legacy_asset_directories_are_blocked(self) -> None:
+        # 构造旧版自动模板目录参数。
         context = self._context("generate")
-        # 替换成非法目录。
-        context["asset_directories"] = ["assets"]
+        # 即使目录名曾经合法，也不得再由程序自动创建。
+        context["asset_directories"] = ["template"]
         # 执行能力。
         result = self.module.execute(context, {}, {})
         # 必须返回 blocked。
         self.assertEqual("blocked", result["status"])
         # 被阻断后不得创建主规则。
-        self.assertFalse((self.scope_root / "RUL_Java业务注释规则.md").exists())
+        self.assertFalse((self.scope_root / "rule" / "RUL_Java业务注释规则.md").exists())
 
     # 验证现有主规则文件不会被生成器覆盖。
     def test_existing_main_rule_is_blocked(self) -> None:
         # 预先创建人工维护的真实主规则。
-        existing_rule = self.scope_root / "RUL_Java业务注释规则.md"
+        existing_rule = self.scope_root / "rule" / "RUL_Java业务注释规则.md"
         # 写入可识别原正文。
         existing_rule.write_text("# existing rule\n", encoding="utf-8")
         # 再次请求生成同名规则。
@@ -145,8 +136,8 @@ class RulePackageGeneratorTests(unittest.TestCase):
         self.assertEqual("blocked_existing_rule", result["status"])
         # 原主规则正文必须保持不变。
         self.assertEqual("# existing rule\n", existing_rule.read_text(encoding="utf-8"))
-        # 被阻断后不得创建同名资产目录。
-        self.assertFalse((self.scope_root / "RUL_Java业务注释规则").exists())
+        # 被阻断后不得创建模板目录。
+        self.assertFalse((self.scope_root / "template").exists())
 
     # 验证重复索引键会回滚新生成文件。
     def test_duplicate_index_key_is_blocked_and_generated_files_are_removed(self) -> None:
@@ -160,9 +151,9 @@ class RulePackageGeneratorTests(unittest.TestCase):
         # 必须返回重复索引键阻断。
         self.assertEqual("blocked_existing_index_key", result["status"])
         # 回滚后主规则文件不得残留。
-        self.assertFalse((self.scope_root / "RUL_Java业务注释规则.md").exists())
-        # 回滚后同名资产目录不得残留。
-        self.assertFalse((self.scope_root / "RUL_Java业务注释规则").exists())
+        self.assertFalse((self.scope_root / "rule" / "RUL_Java业务注释规则.md").exists())
+        # 回滚后 template 根也不得被创建。
+        self.assertFalse((self.scope_root / "template").exists())
 
     # 验证显式索引不能越出规则资源根。
     def test_explicit_index_path_escape_is_blocked(self) -> None:
@@ -175,17 +166,16 @@ class RulePackageGeneratorTests(unittest.TestCase):
         # 路径越界必须返回 blocked。
         self.assertEqual("blocked", result["status"])
         # 被阻断后不得创建主规则。
-        self.assertFalse((self.scope_root / "RUL_Java业务注释规则.md").exists())
+        self.assertFalse((self.scope_root / "rule" / "RUL_Java业务注释规则.md").exists())
 
     # 构造当前测试统一能力上下文。
     def _context(self, action: str) -> dict:
-        # 返回完整规则资源、范围、名称、资产和索引事实。
+        # 返回完整规则资源、范围、名称和索引事实。
         return {
             "action": action,
             "resource_root": str(self.resource_root),
-            "scope_path": "selplat/通用规则",
+            "scope_path": "selplat/通用",
             "rule_name": "RUL_Java业务注释规则",
-            "asset_directories": ["template", "examples"],
             "index_key": "SELPLAT_JAVA_COMMENT_RULES",
             "rule_content": "# Java 业务注释规则\n",
         }

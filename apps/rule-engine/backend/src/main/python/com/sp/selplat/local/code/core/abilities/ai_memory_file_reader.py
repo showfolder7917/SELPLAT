@@ -17,7 +17,7 @@ ABILITY_ID = "ai_memory_file_reader"
 # 能力名称，便于人类和 AI 理解用途。
 ABILITY_NAME = "AI记忆文件读取"
 # 能力说明，描述当前能力负责的任务范围。
-ABILITY_DESC = "读取 rule-engine local/core 文件，并返回去注释去空行后的稳定文本。"
+ABILITY_DESC = "读取 rule-engine local/core 文件或唯一根规则索引，并返回去注释去空行后的稳定文本。"
 
 # 记录当前能力依赖的单技能列表。
 REQUIRED_SKILLS = ["read_ai_memory_file"]

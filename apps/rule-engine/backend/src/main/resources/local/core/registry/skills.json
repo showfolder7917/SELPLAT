@@ -1,13 +1,7 @@
 {
-  "read_file": {
-    "path": "./skill/read_file.py",
-    "summary": "读取 UTF-8 文本文件内容",
-    "inputs": ["file_path"],
-    "outputs": ["content"]
-  },
   "read_ai_memory_file": {
     "path": "./skill/read_ai_memory_file.py",
-    "summary": "读取 rule-engine local/core 资源文件，并输出去注释去空行后的稳定文本",
+    "summary": "读取 rule-engine local/core 资源或唯一根规则索引，并输出去注释去空行后的稳定文本",
     "inputs": ["file_path"],
     "outputs": ["source_path", "cleaned_content", "line_count"]
   },
@@ -16,24 +10,6 @@
     "summary": "读取工程目录文件，并返回完整原文",
     "inputs": ["file_path"],
     "outputs": ["source_path", "content", "line_count"]
-  },
-  "write_file": {
-    "path": "./skill/write_file.py",
-    "summary": "将文本写入 UTF-8 文件",
-    "inputs": ["file_path", "content"],
-    "outputs": ["written"]
-  },
-  "run_pytest": {
-    "path": "./skill/run_pytest.py",
-    "summary": "运行 pytest 并返回结果",
-    "inputs": ["target"],
-    "outputs": ["returncode", "stdout", "stderr"]
-  },
-  "fix_small_bug": {
-    "path": "./skill/fix_small_bug.py",
-    "summary": "处理已有定位信息的小范围问题修复",
-    "inputs": ["target_file", "bug_summary"],
-    "outputs": ["status", "next_action"]
   },
   "ffmpeg_vob_to_mp4": {
     "path": "./skill/ffmpeg_vob_to_mp4.py",

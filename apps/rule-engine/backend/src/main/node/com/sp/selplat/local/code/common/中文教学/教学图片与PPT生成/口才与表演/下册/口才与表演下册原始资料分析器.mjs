@@ -9,7 +9,7 @@ const SOURCE_PPT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/0输�
 // 下册教材截图按全册通用编号规则归入对应课次。
 const SOURCE_IMAGE_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/0输入/下册/下册截图");
 // 逐课覆盖清单属于稳定配置，进入规则引擎资源目录供生成器和检测器共同使用。
-const COVERAGE_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/下册/课程内容索引.json");
+const COVERAGE_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/课程内容索引.json");
 // 可删除分析报告统一写入当前工程OPTION/temp。
 const REPORT_PATH = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/下册制作分析/下册原始资料覆盖报告.md");
 

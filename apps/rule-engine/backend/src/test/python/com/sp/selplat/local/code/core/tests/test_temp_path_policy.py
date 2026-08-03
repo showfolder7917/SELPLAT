@@ -30,6 +30,16 @@ FFMPEG_SKILL_PATHS = [
     CODE_ROOT / "skill" / "ffmpeg_vob_to_mp3.py",
     CODE_ROOT / "skill" / "ffmpeg_vob_to_mp4.py",
 ]
+# 三个生产入口必须在动态加载工程模块前主动设置缓存根，不能只依赖 VS Code 环境变量。
+PYTHON_ENTRY_PATHS = [
+    CODE_ROOT / "abilities" / "startup_protocol_loader.py",
+    CODE_ROOT / "executor.py",
+    PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/ai_rule_package_integrator.py",
+]
+# Python 测试统一入口必须在发现测试模块前设置同一个缓存根。
+PYTHON_TEST_RUNNER_PATH = (
+    PROJECT_ROOT / "apps/rule-engine/backend/src/test/python/run_tests.py"
+)
 
 
 def load_module(module_path: Path, module_name: str):
@@ -83,6 +93,24 @@ class TempPathPolicyTests(unittest.TestCase):
                     violations.append(f"{python_file}:{node.lineno}")
         # 空清单表示所有创建入口均显式声明了工程归属目录。
         self.assertEqual(violations, [])
+
+    def test_python_entries_set_project_pycache_before_dynamic_imports(self) -> None:
+        """生产和测试入口必须主动设置 cache/python-pycache。"""
+
+        # 生产入口和统一测试入口共同组成受检清单。
+        entry_paths = [*PYTHON_ENTRY_PATHS, PYTHON_TEST_RUNNER_PATH]
+        # 每个入口都必须同时约束当前解释器和未来子进程。
+        for entry_path in entry_paths:
+            source = entry_path.read_text(encoding="utf-8")
+            # 当前解释器通过 sys.pycache_prefix 立即切换缓存位置。
+            self.assertIn("sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)", source)
+            # 子进程通过环境变量继承同一工程缓存位置。
+            self.assertIn(
+                'os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)',
+                source,
+            )
+            # 稳定缓存目录必须由工程根派生，禁止机器绝对路径。
+            self.assertIn('PROJECT_ROOT / "cache/python-pycache"', source)
 
 
 if __name__ == "__main__":

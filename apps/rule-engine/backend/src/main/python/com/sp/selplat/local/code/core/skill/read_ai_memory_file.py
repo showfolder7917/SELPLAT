@@ -1,7 +1,7 @@
 """AI 记忆文件读取技能。
 
 功能：
-用于读取 rule-engine `local/core` 下的文本资源，并清洗为更稳定的 AI 可读文本。
+用于读取 rule-engine `local/core` 文本资源和唯一根规则索引，并清洗为更稳定的 AI 可读文本。
 
 作用：
 为整理 core 协议和规则时提供统一读取入口，避免直接读取原文件。
@@ -17,7 +17,7 @@ SKILL_ID = "read_ai_memory_file"
 # 技能名称，便于人类和 AI 理解用途。
 SKILL_NAME = "AI记忆文件读取器"
 # 技能说明，描述当前技能负责的动作。
-SKILL_DESC = "读取 rule-engine local/core 资源，并输出仅保留机器可读行的稳定文本。"
+SKILL_DESC = "读取 rule-engine local/core 资源或唯一根规则索引，并输出仅保留机器可读行的稳定文本。"
 
 # 技能必需输入，表示调用前必须提供的参数。
 REQUIRED_INPUTS = ["file_path"]
@@ -43,6 +43,11 @@ CORE_RESOURCE_ROOT = (
     PROJECT_ROOT
     / "apps/rule-engine/backend/src/main/resources/local/core"
 )
+# 唯一正式规则索引位于 resources 根；仅对这一份文件开放 core 读取器，避免再次维护协议内兼容副本。
+ROOT_RULE_INDEX_PATH = (
+    PROJECT_ROOT
+    / "apps/rule-engine/backend/src/main/resources/RULE_INDEX.md"
+)
 
 
 # 定义相对路径格式化函数，便于返回稳定路径。
@@ -59,9 +64,10 @@ def validate_ai_memory_file_path(file_path: str) -> Path:
     # 禁止读取目录，当前技能只处理单文件。
     if not target_path.is_file():
         raise FileNotFoundError(f"目标文件不存在或不是文件：{target_path}")
-    # 仅允许读取不可变 core 资源，禁止借能力越界读取 common 或其他用户层。
-    if target_path != CORE_RESOURCE_ROOT and CORE_RESOURCE_ROOT not in target_path.parents:
-        raise ValueError("该读取器仅允许读取 rule-engine local/core 资源文件。")
+    # 仅允许读取 core 资源或唯一正式根索引，禁止借能力越界读取 common 或用户层正文。
+    is_core_resource = target_path == CORE_RESOURCE_ROOT or CORE_RESOURCE_ROOT in target_path.parents
+    if not is_core_resource and target_path != ROOT_RULE_INDEX_PATH:
+        raise ValueError("该读取器仅允许读取 rule-engine local/core 资源文件或唯一根 RULE_INDEX.md。")
     # 返回校验通过的目标文件路径。
     return target_path
 
@@ -81,15 +87,17 @@ def is_machine_readable_line(line: str) -> bool:
         return False
     if line.startswith(("- ", "* ")):
         return False
-    if _CJK_PATTERN.search(line):
-        return False
     if "=" in line:
         left, _, right = line.partition("=")
         left = left.strip()
         right = right.strip()
         if not left or not right:
             return False
+        # 规则值允许使用中文路径和业务枚举；只限制键名，避免把合法的 XUNAN 规则索引误删。
         return bool(_MACHINE_KEY_PATTERN.fullmatch(left))
+    # 没有赋值符的纯中文说明仍属于人类文本，不进入机器清洗结果。
+    if _CJK_PATTERN.search(line):
+        return False
     return bool(_MACHINE_KEY_PATTERN.fullmatch(line))
 
 

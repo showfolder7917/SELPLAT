@@ -13,10 +13,28 @@
 - 将依赖模块加载后交给 ability 自身编排
 """
 
-import importlib.util
-import json
+# 导入 os，让能力启动的 Python 子进程继承工程字节码缓存根。
+import os
 import sys
 from pathlib import Path
+
+
+# 执行器加载任何工程能力前先识别当前工程根。
+PROJECT_ROOT = next(
+    candidate
+    for candidate in Path(__file__).resolve().parents
+    if (candidate / "settings.gradle").is_file()
+)
+# 工程 Python 字节码缓存统一位于 cache，不允许回写 main/test 源码目录。
+PYTHON_PYCACHE_ROOT = PROJECT_ROOT / "cache/python-pycache"
+# 当前解释器的后续模块加载立即使用统一缓存根。
+sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)
+# 后续子进程继承同一缓存根。
+os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)
+
+# 缓存策略生效后再导入动态加载和 JSON 能力。
+import importlib.util
+import json
 
 
 # 这个常量是给外部文档和调试输出看的执行器名称。
@@ -34,12 +52,8 @@ def get_library_root() -> Path:
 def get_project_root() -> Path:
     """返回包含 settings.gradle 的当前工程根，例如 `C:/opt/workspace/SELPLAT`。"""
 
-    # 从迁移后的深层 Python 包向上查找工程标记，避免依赖固定父目录层数。
-    return next(
-        candidate
-        for candidate in Path(__file__).resolve().parents
-        if (candidate / "settings.gradle").is_file()
-    )
+    # 返回模块加载阶段已经核验的唯一工程根，避免不同能力重复推断。
+    return PROJECT_ROOT
 
 
 def get_registry_root() -> Path:

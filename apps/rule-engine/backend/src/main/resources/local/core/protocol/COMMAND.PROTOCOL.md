@@ -7,9 +7,9 @@
 
 ## 强制协议（Mandatory）
 
-<!-- COMMAND 协议装载完成后，必须继续通过 ai_memory_file_reader 装载 RULE_INDEX.md；该装载属于协议链后的规则入口装载，不构成执行，不需要用户确认 -->
+<!-- COMMAND 协议装载完成后，必须继续通过 ai_memory_file_reader 装载唯一正式根 RULE_INDEX.md；该装载属于协议链后的规则入口装载，不构成执行，不需要用户确认 -->
 after_command_must_load_rule_index_via_ability = ai_memory_file_reader
-after_command_rule_index = ${PRT}RULE_INDEX.md
+after_command_rule_index = ${RES}RULE_INDEX.md
 rule_index_loading_is_not_execution = true
 rule_index_is_mandatory_rule_entry = true
 rule_index_loaded_before_first_rule_file = true
@@ -19,6 +19,14 @@ sync_unique_rule_index_md_after_rule_file_change = true
 
 <!-- 后续核心启动能力统一通过 STARTER 声明的 Python 入口调度 -->
 post_starter_ability_executor = ${EXE}
+
+<!-- 所有 SELPLAT Python 入口必须在导入工程模块前把字节码缓存固定到工程 cache，禁止在 main/test 源码目录生成 __pycache__。 -->
+python_process_pycache_prefix = <CURRENT_PROJECT_ROOT>/cache/python-pycache
+python_source_tree_pycache_policy = forbidden
+
+<!-- rule-engine Python 测试统一通过自带入口运行，入口负责当前进程和子进程的缓存归属。 -->
+rule_engine_python_test_entry = apps/rule-engine/backend/src/test/python/run_tests.py
+rule_engine_python_test_command = python3 apps/rule-engine/backend/src/test/python/run_tests.py all
 
 <!-- Python execution_doc_manager 保持原语言迁入 core，并作为执行文档统一内务入口。 -->
 execution_doc_manager_entry = src/main/python/com/sp/selplat/local/code/core/executor.py execution_doc_manager
@@ -49,7 +57,6 @@ return_direct_result_for_simple_commands
 <!-- 复杂命令返回结论和关键输出 -->
 return_conclusion_and_key_output_for_complex_commands
 
-<!-- 规则体系结构与规则进入边界的唯一权威来源 -->
 <!-- 最终答复不得直接输出工具调用 JSON 或原始工具参数结构 -->
 forbid_raw_tool_json_as_final_answer
 

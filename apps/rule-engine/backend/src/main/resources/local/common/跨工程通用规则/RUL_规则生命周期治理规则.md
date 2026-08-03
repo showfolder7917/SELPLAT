@@ -10,23 +10,24 @@ rule_layer_values = core,common,<stable-user-id>
 <!-- 跨工程通用规则直接放在“跨工程通用规则”目录；适用于不依赖组织或工程语义的稳定规则；业务含义是目录语义明确，避免被误认作任意模块规则 -->
 cross_project_rules_must_live_in_rule_root = apps/rule-engine/backend/src/main/resources/local/<layer>/跨工程通用规则/
 
-<!-- 组织共同规则放入组织目录；适用于 Fujitsu 等跨项目共用约束；业务含义是组织规则可以共享但不提升为全平台规则 -->
-organization_scoped_rules_must_live_under_organization_subdirectory = apps/rule-engine/backend/src/main/resources/local/<layer>/<organization>/rule/
+<!-- common 中除“跨工程通用规则”外，每个一级目录都是一个大项目；业务含义是 Fujitsu、SELPLAT、中文教学等项目拥有独立索引和分类边界。 -->
+common_first_level_project_pattern = apps/rule-engine/backend/src/main/resources/local/common/<large-project>/
 
-<!-- 单一项目规则放入组织和项目子目录；适用于只服务一个交付项目的约束；业务含义是保持项目边界清晰 -->
-project_specific_rules_must_live_under_applicable_organization_and_project = apps/rule-engine/backend/src/main/resources/local/<layer>/<organization>/rule/<applicable_project>/
+<!-- 大项目跨子项目共享的规则统一进入“通用/rule”；业务含义是共享规则不再与应用规则或材料混放。 -->
+common_large_project_general_rule_root = apps/rule-engine/backend/src/main/resources/local/common/<large-project>/通用/rule/
 
-<!-- SELPLAT 全部应用共用的规则进入明确命名的“通用规则”目录；适用于平台内部构建、路径、DAO 等共同行为；业务含义是既避免其他工程误用，也避免 rule 目录语义不清 -->
-selplat_common_rules_must_live_under = apps/rule-engine/backend/src/main/resources/local/<layer>/selplat/通用规则/
+<!-- 大项目的二级子项目统一进入“应用/<subproject>”；业务含义是每个二级项目在一个位置聚合自己的规则和真实材料。 -->
+common_large_project_application_root = apps/rule-engine/backend/src/main/resources/local/common/<large-project>/应用/<subproject>/
+
+<!-- 二级子项目规则正文统一进入自己的 rule 目录。 -->
+common_subproject_rule_root = apps/rule-engine/backend/src/main/resources/local/common/<large-project>/应用/<subproject>/rule/
 
 <!-- SELPLAT 的 apps 目录允许持续新增应用工程；适用于当前和未来任意 apps/<app>；业务含义是新增应用不再膨胀规则资源顶层目录 -->
 selplat_application_source_pattern = apps/<app>/
 
-<!-- SELPLAT 内部应用专项规则统一放入“应用规则”下的应用子目录；适用于 uniauth、cms、host 以及未来新增应用；业务含义是平台归属和应用边界可以同时从目录表达 -->
-selplat_application_rule_path_pattern = apps/rule-engine/backend/src/main/resources/local/<layer>/selplat/应用规则/<app>/
-
-<!-- SELPLAT 规则禁止继续使用语义不明的 rule 目录；适用于规则新增、迁移和索引维护；业务含义是目录名称直接表达规则作用域 -->
-selplat_ambiguous_rule_directory_is_forbidden = apps/rule-engine/backend/src/main/resources/local/<layer>/selplat/rule/
+<!-- SELPLAT 内部应用同样遵循大项目分类，不再维护“通用规则”和“应用规则”两套旧目录名。 -->
+selplat_common_rule_path = apps/rule-engine/backend/src/main/resources/local/common/selplat/通用/rule/
+selplat_application_rule_path_pattern = apps/rule-engine/backend/src/main/resources/local/common/selplat/应用/<app>/rule/
 
 <!-- apps 下应用不得在规则资源根创建同名顶层目录；适用于新增或迁移 SELPLAT 应用规则；业务含义是避免把平台内部应用误判成组织级或跨项目业务模块 -->
 selplat_application_must_not_create_resource_root_peer = true
@@ -54,9 +55,11 @@ cross_project_common_loading_policy = matched_rules_only,no_bulk_loading
 common_aggregate_index = local/common/RULE_INDEX.md
 common_aggregate_index_content = child_scope_index_references_only
 
-<!-- 每个 common 一级作用域必须维护自己的索引；若作用域内还存在真实项目边界，则项目继续维护下一级索引。 -->
+<!-- 每个 common 一级大项目必须维护自己的索引，并分别汇总通用索引与应用索引。 -->
 common_scope_index_pattern = local/common/<scope>/RULE_INDEX.md
-common_nested_project_index_pattern = local/common/<scope>/<project-scope>/RULE_INDEX.md
+common_general_index_pattern = local/common/<scope>/通用/RULE_INDEX.md
+common_application_aggregate_index_pattern = local/common/<scope>/应用/RULE_INDEX.md
+common_application_leaf_index_pattern = local/common/<scope>/应用/<subproject>/RULE_INDEX.md
 
 <!-- 最下级所属索引唯一登记规则逻辑 ID 和主规则文件；所有父索引只登记子索引入口。 -->
 rule_logical_id_authority = nearest_owning_leaf_index
@@ -76,37 +79,47 @@ legacy_unlayered_rule_layout_policy = read_for_migration_only,no_new_authoring
 <!-- 被完全替代或失去入口的规则必须删除并清理索引；适用于规则退役；业务含义是避免旧规则继续误导执行 -->
 obsolete_rule_and_index_reference_must_be_removed = true
 
-## 主规则与同名资产目录
+## 规则正文与可选真实材料
 
-<!-- 每个新规则的主规则文件必须直接位于所属范围根目录；适用于规则生成、新增和结构性维护；业务含义是 RULE_INDEX 可以用最短稳定路径直接加载权威规则正文。 -->
-rule_main_file_pattern = <scope-root>/RUL_<主题>规则.md
+<!-- common 大项目中的主规则文件必须位于所属通用或应用子项目的 rule 目录。 -->
+common_rule_main_file_pattern = <project-or-subproject>/rule/RUL_<主题>规则.md
 
-<!-- 需要 README、模板、样例、说明或项目配置时，必须在主规则文件同级创建去掉 .md 后同名的资产目录；业务含义是规则正文保持直接可加载，关联资产仍可通过同名关系唯一定位。 -->
-rule_asset_directory_pattern = <scope-root>/RUL_<主题>规则/
+<!-- 规则需要真实辅助材料时，材料统一进入同一项目下 template 中与规则文件去扩展名同名的目录。 -->
+common_rule_template_material_pattern = <project-or-subproject>/template/RUL_<主题>规则/
 
-<!-- 主规则文件与同名资产目录必须并列，禁止把主规则文件放入资产目录；业务含义是规则入口与配套材料职责清晰，不再形成重复规则名嵌套路径。 -->
-rule_main_file_and_asset_directory_relationship = sibling
-rule_main_file_inside_asset_directory_is_forbidden = true
+<!-- template 目录和规则同名材料目录都不是必建项；没有真实材料时不得创建空目录。 -->
+common_rule_template_directory_policy = optional_create_only_when_verified_material_exists
 
-<!-- 规则说明、模板、样例和项目差异配置只能进入同名资产目录的标准子目录；业务含义是一个主题的完整配套材料保持共同生命周期。 -->
-rule_asset_directory_standard_subdirectories = docs/,template/,examples/,project/
+<!-- template 只能收集已经存在、来源可说明且确实帮助规则稳定运行的材料，禁止为补齐结构自行生成模板、案例或素材。 -->
+common_rule_template_material_source_policy = collect_verified_existing_material_only,no_synthetic_material
 
-<!-- README 保存同名资产目录清单和主规则入口说明，但不得复制主规则正文；业务含义是人可以从资产目录快速了解组成，机器仍以并列主规则文件为唯一约束入口。 -->
-rule_asset_readme_policy = manifest_and_sibling_main_rule_entry_only
+<!-- 无法证明材料属于哪条规则时必须停止归类并报告，禁止按文件名或目录相似度猜测。 -->
+unowned_template_material_policy = report_without_guessing_or_copying
 
-<!-- RULE_INDEX 必须直接指向范围根目录下的主规则文件，不得指向同名资产目录内部；业务含义是索引只加载唯一权威规则正文。 -->
-rule_index_must_reference_sibling_main_rule_file = true
+<!-- 同一真实材料被多个子项目复用时必须提升到大项目通用规则包，禁止复制二进制或维护多个版本。 -->
+shared_template_material_policy = promote_to_large_project_general_rule_package,no_duplicate_binary
 
-<!-- 公共规则同名资产目录中的 project 只允许保存项目配置 Schema 或非权威示例；业务含义是公共规则可以定义扩展格式，但不能持有真实项目配置。 -->
-shared_rule_asset_project_directory_scope = configuration_schema_or_non_authoritative_example_only
+<!-- 需要解释材料来源、用途、使用方法或主规则入口时可以编写 README，但不得复制规则正文。 -->
+common_rule_template_readme_policy = optional_manifest_source_usage_and_rule_entry_only
 
-<!-- 真实项目主规则必须位于组织下对应项目规则根，项目差异资产进入其同级同名目录；业务含义是项目主规则同样直接可加载，公共范围不会随项目数量持续膨胀。 -->
-authoritative_project_rule_path = <organization>/rule/<project>/RUL_<项目主题>规则.md
-authoritative_project_rule_asset_path = <organization>/rule/<project>/RUL_<项目主题>规则/
+<!-- RULE_INDEX 只指向 rule 下的主规则文件，不得指向 template 材料或 README。 -->
+common_rule_index_target_policy = rule_main_file_only,no_template_or_readme_target
 
-<!-- 规则生成器必须默认创建范围根目录下的主规则文件、同级同名资产目录和其中的 README，并按调用方声明创建标准资产子目录；业务含义是生成结果天然满足并列结构而非事后人工搬运。 -->
-rule_generator_default_output = sibling_main_rule_file + same_name_asset_directory + README
-rule_generator_optional_asset_directories = docs,template,examples,project
+<!-- 跨工程通用规则是明确例外，继续直接位于其作用域根；已有真实同名材料目录可以保留，但不强制创建。 -->
+cross_project_rule_layout_exception = direct_rule_file_in_cross_project_root,optional_existing_same_name_material_directory
+
+<!-- 当前用户规则层镜像 common 的大项目、通用/应用、rule 和可选 template 结构；业务含义是成熟用户规则提升到 common 时可以保持相对分类和规则包边界。 -->
+active_user_rule_layout_policy = mirror_common_project_general_application_rule_optional_template_structure
+
+<!-- 用户根索引只汇总跨工程和大项目索引，具体逻辑 ID 由最下级所属索引维护。 -->
+active_user_index_pattern = local/<stable-user-id>/RULE_INDEX.md -> cross-project-or-project-index -> owning-leaf-index
+
+<!-- 用户注册表和二次执行器不是规则提升所需结构；没有多个真实程序路由需求时不得预建。 -->
+active_user_program_registry_policy = create_only_for_multiple_registered_runtime_routes,otherwise_direct_program_entry
+
+<!-- 规则生成器只创建 rule 主文件和索引入口；真实材料的核验与 template 收集保持人工处理，避免程序复制或生成虚假材料。 -->
+rule_generator_default_output = rule_main_file + owning_leaf_rule_index_entry
+rule_generator_template_output_condition = manual_collection_after_source_verification_only
 
 <!-- Java、Python 和 Node 能力统一保存在 rule-engine 的对应源码根；适用于规则自动生成、检测、迁移和工具交付；业务含义是能力可被多个规则包引用且不会复制到 resources。 -->
 rule_engine_ability_source_roots = ../java/com/sp/selplat/local/code/<layer>/
@@ -122,8 +135,8 @@ rule_ability_reuse_policy = multiple_rule_packages_may_reference_one_ability
 <!-- 规则没有稳定、可重复且可验证的自动化职责时，不得创建空能力目录或虚假入口；业务含义是规则约束与可执行能力保持真实边界。 -->
 rule_ability_creation_threshold = stable,repeated,verifiable_automation_only
 
-<!-- 非法规则名、越出规则资源根、覆盖既有主规则或资产目录、写入非标准资产目录时必须阻断；业务含义是自动生成不能破坏现有规则或把关联文件再次散开。 -->
-rule_generator_must_block = invalid_rule_name,path_escape,existing_main_or_asset_overwrite,nonstandard_asset_directory
+<!-- 非法规则名、路径逃逸、覆盖既有规则、创建空模板目录或生成虚假材料时必须阻断。 -->
+rule_generator_must_block = invalid_rule_name,path_escape,existing_main_overwrite,empty_template_directory,synthetic_material
 
-<!-- 历史上把主规则放入同名目录的错误结构一旦被发现必须迁出为同级主规则文件，并同步索引和正文引用；业务含义是禁止继续复制旧嵌套结构。 -->
-legacy_nested_main_rule_migration_policy = move_main_rule_to_scope_root_and_keep_asset_directory
+<!-- common 旧“通用规则/应用规则”、根 rule/template、散落 docs/assets 和规则旁同名资产目录必须迁入新分类并清理旧引用。 -->
+legacy_common_layout_migration_policy = move_to_general_or_application_rule_and_optional_template,clean_old_paths

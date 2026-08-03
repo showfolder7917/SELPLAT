@@ -13,9 +13,9 @@ const { Presentation, PresentationFile } = await import(pathToFileURL(ARTIFACT_T
 // 本任务工作区只保存生成结果和验证数据，便于后续统一清理。
 const WORKSPACE = path.join(PROJECT_ROOT, "OPTION/temp/口才与表演中册其余课程重制");
 // 内容覆盖清单属于轻量课程模板配置，随规则引擎源码统一维护。
-const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/中册/课程内容索引.json");
+const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/课程内容索引.json");
 // 图片安全区映射由现有原创图片像素分析生成，用于把文字放在低复杂度自然留白侧。
-const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/中册/图片安全区映射.json");
+const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/图片安全区映射.json");
 // 正式成品统一回写到当前工程的中文教学项目目录。
 const OUTPUT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/教学图片与PPT生成/项目/口才与表演/中册");
 // 逐页返工目录按课堂模块保存独立插图，避免整课机械复用同一张主题图。
@@ -89,7 +89,7 @@ const themePath = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/�
 // 本课多场景练习图专门承载句子宝库和拓展训练，不复用教材截图。
 const exercisePath = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/中册/课程插图/主题与练习", `第${String(requestedLesson).padStart(2, "0")}课_练习图.png`);
 // 品牌Logo使用项目已确认的真实透明资产。
-const logoPath = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/assets/品牌/新思度华文学堂.png");
+const logoPath = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/通用/template/RUL_中文教学公共品牌素材使用规则/新思度华文学堂.png");
 // 透明玻璃按钮只承担可见播放入口，音频在后续Open XML封装阶段嵌入。
 const audioButtonPath = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/中册/控件/音频按钮_透明玻璃.png");
 // 四个核心课堂模块各读取一张独立插图，拓展页继续使用本课完整组合练习图。

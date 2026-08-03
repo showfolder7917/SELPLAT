@@ -1,12 +1,7 @@
 {
-  "bugfix_and_verify": {
-    "path": "./abilities/bugfix_and_verify.py",
-    "summary": "修复 Python 问题并完成验证",
-    "skills": ["read_file", "fix_small_bug", "run_pytest"]
-  },
   "ai_memory_file_reader": {
     "path": "./abilities/ai_memory_file_reader.py",
-    "summary": "读取 rule-engine local/core 资源，并返回去注释去空行后的稳定文本",
+    "summary": "读取 rule-engine local/core 资源或唯一根规则索引，并返回去注释去空行后的稳定文本",
     "skills": ["read_ai_memory_file"]
   },
   "startup_protocol_loader": {
@@ -14,20 +9,10 @@
     "summary": "按 STARTER_PROTOCOL.md 声明顺序装载启动协议链",
     "skills": ["read_ai_memory_file"]
   },
-  "user_confirmation_gatekeeper": {
-    "path": "./abilities/user_confirmation_gatekeeper.py",
-    "summary": "只处理独立 1/2 确认的最小确认门",
-    "skills": []
-  },
   "memory_file_full_reader": {
     "path": "./abilities/memory_file_full_reader.py",
     "summary": "读取工程目录文件，并返回完整原文",
     "skills": ["read_memory_file_full"]
-  },
-  "feature_delivery": {
-    "path": "./abilities/feature_delivery.py",
-    "summary": "完成 Python 功能修改并进行基础验证",
-    "skills": ["read_file", "write_file", "fix_small_bug", "run_pytest"]
   },
   "h2_query_workbench_delivery": {
     "path": "./abilities/h2_query_workbench_delivery.py",
@@ -39,11 +24,6 @@
     "summary": "在离线约束下规划、恢复并验证 Gradle 测试依赖闭包",
     "skills": [],
     "apps": []
-  },
-  "script_delivery": {
-    "path": "./abilities/script_delivery.py",
-    "summary": "完成 Python 脚本编写或调整并执行验证",
-    "skills": ["read_file", "write_file", "run_pytest"]
   },
   "gui_human_like_delivery": {
     "path": "./abilities/gui_human_like_delivery.py",
@@ -94,25 +74,7 @@
   },
   "rule_package_generator": {
     "path": "./abilities/rule_package_generator.py",
-    "summary": "生成同级主规则文件、同名资产目录、README、可选资产目录和规则索引入口",
-    "skills": [],
-    "apps": []
-  },
-  "detailed_design_xls_delivery": {
-    "path": "./abilities/detailed_design_xls_delivery.py",
-    "summary": "返回详细设计 Excel 模板路径、规则路径、生成器分流口和填写约束",
-    "skills": [],
-    "apps": []
-  },
-  "api_detailed_design_xls_auto_generator": {
-    "path": "./abilities/api_detailed_design_xls_auto_generator.py",
-    "summary": "返回 API 详细设计自动生成所需的事实模型、通用修复循环和 BAT/其他类型扩展口",
-    "skills": [],
-    "apps": []
-  },
-  "table_structure_definition_xls_delivery": {
-    "path": "./abilities/table_structure_definition_xls_delivery.py",
-    "summary": "返回通用表结构定义 Excel 中文模板路径、规则路径和填写约束",
+    "summary": "在项目或子项目的 rule 目录生成主规则并更新叶子索引，不自动创建模板材料",
     "skills": [],
     "apps": []
   },

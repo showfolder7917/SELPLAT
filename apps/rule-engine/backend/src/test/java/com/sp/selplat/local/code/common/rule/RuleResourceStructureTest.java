@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
 /**
- * 验证主规则文件与同名资产目录保持并列，并确保 Java 注释规则的模板和实际返回示例可以从规则资源加载。
+ * 验证项目规则使用 rule 与可选 template 分层，并确保 Java 注释规则的真实模板和实际返回示例可以加载。
  */
 class RuleResourceStructureTest {
 
@@ -19,13 +19,13 @@ class RuleResourceStructureTest {
      *
      * 执行结果示例：SELPLAT 索引包含
      * `SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES =
-     * local/common/selplat/通用规则/RUL_Java业务注释与返回示例规则.md`，
+     * local/common/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md`，
      * 且不包含 `RUL_Java业务注释与返回示例规则/RUL_Java业务注释与返回示例规则.md`。
      *
      * @throws IOException 规则索引读取失败
      */
     @Test
-    void shouldReferenceSiblingMainRuleFilesFromIndex() throws IOException {
+    void shouldReferenceLayeredMainRuleFilesFromLeafIndexes() throws IOException {
         // 读取根索引 → 只保留 core 直登和 common 汇总入口。
         String rootIndex = readResource("RULE_INDEX.md");
         // 读取 common 汇总索引 → 只引用四个一级规则作用域。
@@ -34,11 +34,15 @@ class RuleResourceStructureTest {
         String crossProjectIndex = readResource(
             "local/common/跨工程通用规则/RULE_INDEX.md"
         );
-        // 读取 SELPLAT 作用域索引 → 平台通用规则唯一登记位置。
+        // 读取 SELPLAT 项目索引 → 只汇总通用和应用两类子索引。
         String selplatIndex = readResource("local/common/selplat/RULE_INDEX.md");
+        // 读取 SELPLAT 通用叶子索引 → 平台通用规则唯一登记位置。
+        String selplatGeneralIndex = readResource(
+            "local/common/selplat/通用/RULE_INDEX.md"
+        );
         // 读取 rule-engine 项目索引 → 分层治理规则唯一登记位置。
         String ruleEngineIndex = readResource(
-            "local/common/selplat/应用规则/rule-engine/RULE_INDEX.md"
+            "local/common/selplat/应用/rule-engine/RULE_INDEX.md"
         );
         // 根索引只允许通过 common 汇总入口进入所有公共作用域。
         assertTrue(rootIndex.contains("COMMON_RULE_INDEX = local/common/RULE_INDEX.md"));
@@ -49,30 +53,37 @@ class RuleResourceStructureTest {
         assertTrue(commonIndex.contains(
             "SELPLAT_RULE_INDEX = local/common/selplat/RULE_INDEX.md"
         ));
-        // Java 注释主规则必须直接位于 SELPLAT 通用规则根。
+        // SELPLAT 项目索引必须只进入通用和应用分类。
         assertTrue(selplatIndex.contains(
-            "SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES = "
-                + "local/common/selplat/通用规则/RUL_Java业务注释与返回示例规则.md"
+            "SELPLAT_GENERAL_RULE_INDEX = local/common/selplat/通用/RULE_INDEX.md"
         ));
-        // 生命周期治理主规则必须直接位于跨工程通用规则根 → 索引不再进入同名资产目录。
+        assertTrue(selplatIndex.contains(
+            "SELPLAT_APPLICATION_RULE_INDEX = local/common/selplat/应用/RULE_INDEX.md"
+        ));
+        // Java 注释主规则必须由 SELPLAT 通用叶子索引登记。
+        assertTrue(selplatGeneralIndex.contains(
+            "SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES = "
+                + "local/common/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md"
+        ));
+        // 跨工程通用规则是分类例外，生命周期主规则继续直接位于该根目录。
         assertTrue(crossProjectIndex.contains(
             "RULE_LIFECYCLE_GOVERNANCE_RULES = local/common/跨工程通用规则/RUL_规则生命周期治理规则.md"
         ));
         // 基础 DAO 主规则必须直接位于 SELPLAT 通用规则根 → 同名目录只保留 README 等资产。
-        assertTrue(selplatIndex.contains(
-            "SELPLAT_BASE_DAO_REUSE_RULES = local/common/selplat/通用规则/RUL_基础DAO复用与通用参数透传规则.md"
+        assertTrue(selplatGeneralIndex.contains(
+            "SELPLAT_BASE_DAO_REUSE_RULES = local/common/selplat/通用/rule/RUL_基础DAO复用与通用参数透传规则.md"
         ));
         // 分层治理规则必须由 rule-engine 项目叶子索引唯一登记。
         assertTrue(ruleEngineIndex.contains(
             "RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES = "
-                + "local/common/selplat/应用规则/rule-engine/RUL_本地规则引擎CoreCommon用户分层治理规则.md"
+                + "local/common/selplat/应用/rule-engine/rule/RUL_本地规则引擎CoreCommon用户分层治理规则.md"
         ));
         // 生命周期主规则不得继续使用“同名目录内再放同名主规则”的错误嵌套路径。
         assertFalse(crossProjectIndex.contains(
             "RUL_规则生命周期治理规则/RUL_规则生命周期治理规则.md"
         ));
         // 基础 DAO 主规则也必须完成并列结构迁移。
-        assertFalse(selplatIndex.contains(
+        assertFalse(selplatGeneralIndex.contains(
             "RUL_基础DAO复用与通用参数透传规则/RUL_基础DAO复用与通用参数透传规则.md"
         ));
     }
@@ -90,15 +101,15 @@ class RuleResourceStructureTest {
     void shouldLoadJavaCommentRuleTemplateAndActualExamples() throws IOException {
         // 读取 Java 注释唯一主规则 → 包含返回示例强制约束的 DSL 正文。
         String mainRule = readResource(
-            "local/common/selplat/通用规则/RUL_Java业务注释与返回示例规则.md"
+            "local/common/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md"
         );
-        // 读取同名资产目录中的生成模板 → JavaDoc 与逐行业务注释骨架。
+        // 读取通用/template/<规则名称> 中的真实模板 → JavaDoc 与逐行业务注释骨架。
         String template = readResource(
-            "local/common/selplat/通用规则/RUL_Java业务注释与返回示例规则/template/Java业务注释模板.md"
+            "local/common/selplat/通用/template/RUL_Java业务注释与返回示例规则/template/Java业务注释模板.md"
         );
         // 读取从生产 BaseDaoSupportImpl 提取的真实示例 → 实际字段和结果结构。
         String examples = readResource(
-            "local/common/selplat/通用规则/RUL_Java业务注释与返回示例规则/examples/BaseDaoSupportImpl注释示例.md"
+            "local/common/selplat/通用/template/RUL_Java业务注释与返回示例规则/examples/BaseDaoSupportImpl注释示例.md"
         );
         // 单主键真实号段示例必须存在，禁止只写返回类型。
         assertTrue(mainRule.contains("{\"id\":\"UniauthUserId\"}"));
@@ -120,7 +131,7 @@ class RuleResourceStructureTest {
     void shouldLoadLocalCoreCommonAndActiveUserLayerGovernance() throws IOException {
         // 从正式资源入口读取分层治理规则 → 后续迁移和运行时路由共享同一份约束。
         String layerRule = readResource(
-            "local/common/selplat/应用规则/rule-engine/RUL_本地规则引擎CoreCommon用户分层治理规则.md"
+            "local/common/selplat/应用/rule-engine/rule/RUL_本地规则引擎CoreCommon用户分层治理规则.md"
         );
         // 固定加载顺序必须先建立不可变基础，再叠加公共层和当前用户层。
         assertTrue(layerRule.contains("local/core -> local/common -> local/active_user"));
@@ -146,7 +157,7 @@ class RuleResourceStructureTest {
      * 读取一份 UTF-8 规则资源。
      *
      * @param resourcePath 相对于 rule-engine resources 的真实路径，例如
-     *     `local/common/selplat/通用规则/RUL_Java业务注释与返回示例规则.md`
+     *     `local/common/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md`
      * @return 完整规则正文，例如 `# Java 业务注释与返回示例规则`
      * @throws IOException 资源流读取失败
      */

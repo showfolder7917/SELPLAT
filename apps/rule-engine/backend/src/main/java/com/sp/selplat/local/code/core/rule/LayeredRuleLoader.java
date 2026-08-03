@@ -26,6 +26,8 @@ public final class LayeredRuleLoader {
     private static final String COMMON_INDEX_KEY = "COMMON_RULE_INDEX";
     // common 汇总索引通过该稳定键进入跨工程共享规则基线。
     private static final String CROSS_PROJECT_INDEX_KEY = "CROSS_PROJECT_COMMON_RULE_INDEX";
+    // 当前用户通过带用户后缀的稳定键进入自己的递归索引树。
+    private static final String USER_INDEX_KEY_PREFIX = "USER_RULE_INDEX@";
     // 递归最多允许 16 层，防止异常索引链耗尽调用栈或隐藏过深依赖。
     private static final int MAX_INDEX_DEPTH = 16;
     // 用户标识只允许稳定路径安全字符，阻止身份值逃逸到其他资源目录。
@@ -61,7 +63,7 @@ public final class LayeredRuleLoader {
      *     {@code 中文教学}；无工程作用域时传 {@code null}
      * @param activeUser 已验证用户，例如 {@code TongXiaoFeng}；无用户时传 {@code null}
      * @return 实际命中结果，例如
-     *     {@code {logicalId=SELPLAT_PROJECT_BUILD_RULES,layer=common,resourcePath=local/common/selplat/通用规则/RUL_SELPLAT工程构建规则.md}}
+     *     {@code {logicalId=SELPLAT_PROJECT_BUILD_RULES,layer=common,resourcePath=local/common/selplat/通用/rule/RUL_SELPLAT工程构建规则.md}}
      * @throws IOException 循环引用、重复逻辑 ID、路径越界、缺失索引、深度超限或规则缺失
      */
     public static LoadedRule load(
@@ -74,20 +76,30 @@ public final class LayeredRuleLoader {
         validateActiveUser(activeUser);
         validateActiveScope(activeScope);
 
-        // 完整读取根索引 → 同时获得 core 直登规则、用户兼容覆盖和 common 汇总入口。
+        // 完整读取根索引 → 同时获得 core 直登规则、用户索引入口和 common 汇总入口。
         Map<String, String> rootEntries = parseIndex(ROOT_INDEX, readResource(ROOT_INDEX));
-        // 迁移兼容的用户覆盖仍使用 `<LOGICAL_ID>@<USER>`，但只加载当前一个用户。
+        // 用户规则使用独立分级索引，并且只允许递归当前一个已验证用户。
         if (activeUser != null && !activeUser.isBlank()) {
-            // 用户层优先级最高 → 命中后无需继续读取任何 common 或 core 规则正文。
-            LoadedRule userRule = loadRegistered(
+            // 根索引必须显式登记当前用户索引，禁止根据用户 ID 拼接并扫描目录。
+            String userIndexPath = optionalUserIndexReference(rootEntries, activeUser);
+            // 用户层优先级最高；当前用户有索引时只递归这一棵树。
+            LoadedRule userRule = userIndexPath == null
+                ? null
+                : loadFromIndexTree(userIndexPath, logicalId, activeUser);
+            // 当前用户树命中后无需继续读取任何 common 或 core 规则正文。
+            if (userRule != null) {
+                return userRule;
+            }
+            // 兼容尚未迁移的其他用户直接 `<LOGICAL_ID>@<USER>` 根登记。
+            LoadedRule legacyUserRule = loadRegistered(
                 rootEntries,
                 logicalId + "@" + activeUser,
                 logicalId,
                 activeUser
             );
-            // 当前用户没有显式覆盖时才继续进入 common 层。
-            if (userRule != null) {
-                return userRule;
+            // 只有真实存在的历史登记可以返回，不扫描用户目录猜测规则。
+            if (legacyUserRule != null) {
+                return legacyUserRule;
             }
         }
 
@@ -162,12 +174,48 @@ public final class LayeredRuleLoader {
     /**
      * 验证根、common 汇总和每个作用域索引树，不读取规则正文。
      *
-     * @return 索引和规则登记计数，例如 {@code {indexCount=9,ruleCount=71}}
+     * @return 索引和规则登记计数，例如 {@code {indexCount=19,ruleCount=65}}
      * @throws IOException 任一索引循环、重复、越界、缺失或深度超过 16 层
      */
     public static IndexValidation validateIndexTree() throws IOException {
         // 生产验证统一读取打包后的真实 classpath 资源。
         return validateIndexTree(ROOT_INDEX, LayeredRuleLoader::readResource);
+    }
+
+    /**
+     * 验证一个已登记用户的完整递归索引树，不把用户规则混入 core/common 统计。
+     *
+     * @param activeUser 已验证用户，例如 {@code XUNAN}
+     * @return 当前用户索引和逻辑 ID 数，例如 {@code {indexCount=7,ruleCount=4}}
+     * @throws IOException 用户入口缺失、索引循环、重复、越界或目标路径非法
+     */
+    public static IndexValidation validateUserIndexTree(String activeUser) throws IOException {
+        // 用户 ID 先经过统一路径安全校验。
+        validateActiveUser(activeUser);
+        // 空用户无法形成明确验证目标，必须阻断。
+        if (activeUser == null || activeUser.isBlank()) {
+            throw new IllegalArgumentException("Active user is required for user index validation.");
+        }
+        // 用户入口只能从正式根索引取得，禁止根据目录存在性猜测。
+        Map<String, String> rootEntries = parseIndex(ROOT_INDEX, readResource(ROOT_INDEX));
+        String userIndexPath = optionalUserIndexReference(rootEntries, activeUser);
+        // 已请求用户没有登记入口时属于结构缺失。
+        if (userIndexPath == null) {
+            throw new IOException("Active user index is not registered: " + activeUser);
+        }
+        // 独立集合记录这棵用户树的真实索引数量。
+        Set<String> userIndexPaths = new LinkedHashSet<>();
+        // 递归收集全部用户规则，同时执行循环、重复和路径边界校验。
+        Map<String, RuleRegistration> userRules = collectRuleEntries(
+            userIndexPath,
+            0,
+            new LinkedHashSet<>(),
+            new HashSet<>(),
+            userIndexPaths,
+            LayeredRuleLoader::readResource
+        );
+        // 返回独立用户指标，便于迁移和提升前验证完整性。
+        return new IndexValidation(userIndexPaths.size(), userRules.size());
     }
 
     // 测试入口允许用内存资源构造循环、重复、越界、缺失和深度异常，不污染生产 resources。
@@ -418,6 +466,29 @@ public final class LayeredRuleLoader {
         return indexPath;
     }
 
+    // 从根索引读取当前用户的唯一递归入口；未登记表示该用户没有规则覆盖。
+    private static String optionalUserIndexReference(
+            Map<String, String> rootEntries,
+            String activeUser) throws IOException {
+        // 用户索引键包含已验证用户 ID，使根索引无需加载其他用户目录。
+        String indexPath = rootEntries.get(USER_INDEX_KEY_PREFIX + activeUser);
+        // 没有当前用户入口时返回空，由 common 和 core 优先级继续处理。
+        if (indexPath == null) {
+            return null;
+        }
+        // 物理路径必须恰好是当前用户根索引，禁止把一个用户路由到另一个用户。
+        String expectedPath = "local/" + activeUser + "/RULE_INDEX.md";
+        if (!expectedPath.equals(indexPath)) {
+            throw new IOException(
+                "Active user index path mismatch: user=" + activeUser + ", path=" + indexPath
+            );
+        }
+        // 最终执行统一索引路径安全校验。
+        validateIndexResourcePath(indexPath);
+        // 返回根索引真实登记值供递归加载。
+        return indexPath;
+    }
+
     // 根据根索引兼容键加载单条规则；键不存在时返回 null 供优先级链回落。
     private static LoadedRule loadRegistered(
             Map<String, String> index,
@@ -566,7 +637,7 @@ public final class LayeredRuleLoader {
      * @param logicalId 请求的稳定 ID，例如 {@code SELPLAT_PROJECT_BUILD_RULES}
      * @param layer 实际命中层，例如 {@code core}、{@code common} 或 {@code XUNAN}
      * @param resourcePath resources 相对路径，例如
-     *     {@code local/common/selplat/通用规则/RUL_SELPLAT工程构建规则.md}
+     *     {@code local/common/selplat/通用/rule/RUL_SELPLAT工程构建规则.md}
      * @param content 完整 UTF-8 规则正文，例如以 {@code # SELPLAT 工程构建规则} 开头
      */
     public record LoadedRule(String logicalId, String layer, String resourcePath, String content) {
@@ -575,8 +646,8 @@ public final class LayeredRuleLoader {
     /**
      * 表示完整分级索引验证结果。
      *
-     * @param indexCount 从根入口实际到达的索引文件数，例如 {@code 9}
-     * @param ruleCount 根 core 与全部 common 作用域登记的规则 ID 数，例如 {@code 71}
+     * @param indexCount 从根入口实际到达的索引文件数，例如 {@code 19}
+     * @param ruleCount 根 core 与全部 common 作用域登记的规则 ID 数，例如 {@code 65}
      */
     public record IndexValidation(int indexCount, int ruleCount) {
     }

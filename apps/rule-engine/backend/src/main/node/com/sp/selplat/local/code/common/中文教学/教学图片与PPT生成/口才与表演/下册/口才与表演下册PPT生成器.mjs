@@ -19,13 +19,13 @@ await fs.access(ARTIFACT_TOOL_ENTRY);
 // 文件URL用于稳定加载缓存内ES模块。
 const { Presentation, PresentationFile } = await import(pathToFileURL(ARTIFACT_TOOL_ENTRY).href);
 // 全量分析器生成的覆盖清单是下册内容唯一入口。
-const COVERAGE_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/下册/课程内容索引.json");
+const COVERAGE_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/课程内容索引.json");
 // 第一课视觉计划把中册验证过的“自然留白侧”契约带入下册适配器。
-const LESSON_ONE_VISUAL_PLAN_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/下册/第01课视觉计划.json");
+const LESSON_ONE_VISUAL_PLAN_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/第01课视觉计划.json");
 // 正式成品进入口才与表演下册目录并保持原始文件名。
 const OUTPUT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/教学图片与PPT生成/成品/口才与表演/下册");
 // 真实品牌Logo由规则引擎长期维护。
-const LOGO_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/assets/品牌/新思度华文学堂.png");
+const LOGO_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/通用/template/RUL_中文教学公共品牌素材使用规则/新思度华文学堂.png");
 // 已确认透明玻璃播放按钮属于全系列可复用缓存资产。
 const AUDIO_BUTTON_PATH = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/中册/控件/音频按钮_透明玻璃.png");
 // 下册原创插图按课次缓存，生成器只能读取这一目录，禁止回退到旧PPT媒体或教材截图。

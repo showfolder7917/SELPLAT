@@ -9,9 +9,9 @@ const PROJECT_ROOT = path.resolve(process.env.SELPLAT_PROJECT_ROOT || process.cw
 // 当前工作区保存原稿覆盖清单和本轮验证报告，避免把检测产物写入正式成品目录。
 const WORKSPACE = path.join(PROJECT_ROOT, "OPTION/temp/口才与表演中册其余课程重制");
 // 覆盖清单是第2至16课逐页模块和页数的唯一核对依据。
-const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/中册/课程内容索引.json");
+const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/课程内容索引.json");
 // 图片安全区映射是整幅铺底后自动避让人物的生成依据。
-const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/中册/图片安全区映射.json");
+const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/图片安全区映射.json");
 // 生成器源码必须先通过静态准入，防止下次批量执行重新退回小图片版式。
 const GENERATOR_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/common/中文教学/教学图片与PPT生成/口才与表演/中册/口才与表演中册PPT生成器.mjs");
 // 正式输出根目录用于定位每课最终PPTX。

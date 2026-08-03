@@ -1,0 +1,10 @@
+{
+  "logical_id": "RULE_LOGICAL_ID",
+  "scope": "XUNAN",
+  "rule_path": "local/XUNAN/<大项目>/<通用或应用子项目>/rule/RUL_主题规则.md",
+  "template": {"status": "required|not_applicable", "paths": [], "reason": ""},
+  "examples": {"status": "required|not_applicable", "paths": [], "reason": ""},
+  "programs": {"status": "required|not_applicable", "ability_ids": [], "paths": []},
+  "verification": {"status": "required", "commands": [], "evidence": []},
+  "upgrade": {"version": "1", "reason": "", "before_gaps": [], "after_gaps": []}
+}

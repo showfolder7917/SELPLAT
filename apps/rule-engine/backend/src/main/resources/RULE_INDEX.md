@@ -30,8 +30,8 @@ protected_protocol_priority = STARTER,USER,CODE,COMMAND,GENERATOR_REPAIR_PROTOCO
 project_rule_conflict_scope = same_topic,same_applicability
 resource_path_change_maintenance = update_owning_leaf_index_and_validate_parent_chain
 rule_main_file_pattern = RUL_<主题>规则.md
-rule_asset_directory_pattern = RUL_<主题>规则/
-rule_file_name_policy = main_rule_file_and_same_name_asset_directory_are_siblings
+rule_template_directory_pattern = <project-or-subproject>/template/RUL_<主题>规则/
+rule_file_name_policy = main_rule_in_rule_directory_and_optional_verified_materials_in_same_name_template_directory
 
 <!-- common 只通过一个汇总入口进入；其规则逻辑 ID 由所属叶子索引唯一维护。 -->
 COMMON_RULE_INDEX = local/common/RULE_INDEX.md
@@ -45,14 +45,13 @@ CODE_PYTHON_RULES = local/core/rule/CODE_PYTHON_RULES.md
 CODE_TEST_RULES = local/core/rule/CODE_TEST_RULES.md
 CODE_VUE_CODING_RULES = local/core/rule/CODE_VUE_CODING_RULES.md
 CODE_VUE_FRONTEND_PROJECT_RULES = local/core/rule/CODE_VUE_FRONTEND_PROJECT_RULES.md
-CODE_VUE_RULES = local/core/rule/CODE_VUE_RULES.md
+<!-- 旧 CODE_VUE_RULES 逻辑 ID 直接复用现行 Vue 编码规则，不再保留单独兼容文件。 -->
+CODE_VUE_RULES = local/core/rule/CODE_VUE_CODING_RULES.md
 CODE_VUE_TEST_RULES = local/core/rule/CODE_VUE_TEST_RULES.md
 GUI_VIDEO_TASK_RULES = local/core/rule/GUI_VIDEO_TASK_RULES.md
 MEMORY_FILE_EDIT_RULES = local/core/rule/MEMORY_FILE_EDIT_RULES.md
-PROJECT_EXECUTION_RULES = local/core/rule/PROJECT_EXECUTION_RULES.md
-AUTO_UPGRADE_AND_REPAIR_RULES = local/core/rule/common_rules/auto_upgrade_and_repair_rules.md
-EXPERIENCE_ADJUDICATION_PROMPT_RULES = local/core/rule/common_rules/experience_adjudication_prompt.md
-DETAILED_DESIGN_DOC_RULES = local/core/rule/common_rules/md_detailed_design_rules.md
-DETAILED_DESIGN_XLS_RULES = local/core/rule/common_rules/xls_detailed_design_rules.md
-XLS_OUTPUT_TEST_RULES = local/core/rule/common_rules/xls_output_test_rules.md
-TABLE_STRUCTURE_XLS_RULES = local/core/rule/common_rules/xls_table_structure_definition_rules.md
+
+<!-- XUNAN 是 AGENTS.md 已验证的当前唯一用户；用户规则通过独立分级索引进入，只有明确激活该用户时才递归加载。 -->
+USER_RULE_INDEX@XUNAN = local/XUNAN/RULE_INDEX.md
+load_rule_for_xunan_rule_cleanup_package_completion_or_continuous_upgrade = AI_RULE_PACKAGE_INTELLIGENCE_RULES
+load_rule_for_xunan_explicit_ai_managed_core_or_common_change = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES

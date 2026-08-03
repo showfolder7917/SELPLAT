@@ -73,7 +73,7 @@ class LayeredRuleLoaderTest {
         assertEquals("common", rule.layer());
         // 目标来自 SELPLAT 自己的索引，不再依赖根索引平铺。
         assertEquals(
-            "local/common/selplat/通用规则/RUL_SELPLAT工程构建规则.md",
+            "local/common/selplat/通用/rule/RUL_SELPLAT工程构建规则.md",
             rule.resourcePath()
         );
     }
@@ -95,7 +95,7 @@ class LayeredRuleLoaderTest {
         assertEquals("common", rule.layer());
         // 返回 CPMAB082 的真实主规则文件。
         assertEquals(
-            "local/common/fujitsu/rule/CPMAB082/RUL_CPMAB082项目风格规则.md",
+            "local/common/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082项目风格规则.md",
             rule.resourcePath()
         );
     }
@@ -163,12 +163,12 @@ class LayeredRuleLoaderTest {
      */
     @Test
     void shouldValidateCompleteProductionIndexTree() throws IOException {
-        // 从根递归真实索引 → 9 个索引文件和 71 个规则逻辑 ID。
+        // 从根递归真实索引 → 19 个索引文件和 65 个规则逻辑 ID。
         LayeredRuleLoader.IndexValidation validation = LayeredRuleLoader.validateIndexTree();
-        // 根、common、四个一级作用域和三个项目应用索引必须全部可达。
-        assertEquals(9, validation.indexCount());
-        // 19 个 core 与 52 个 common 主规则全部拥有唯一入口。
-        assertEquals(71, validation.ruleCount());
+        // 根、common、一级项目、通用/应用分类和项目叶子索引必须全部可达。
+        assertEquals(19, validation.indexCount());
+        // 当前 core、common 与 XUNAN 规则全部拥有唯一入口。
+        assertEquals(65, validation.ruleCount());
     }
 
     /**

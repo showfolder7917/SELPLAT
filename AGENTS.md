@@ -1,8 +1,18 @@
 # SELPLAT Agent 启动入口
 
+## 当前身份与工程作用域
+
+- 当前稳定用户 ID：`XUNAN`
+- 当前使用工程名：`SELPLAT`
+- 当前 common 规则作用域：`selplat`
+- 当前用户规则根：`apps/rule-engine/backend/src/main/resources/local/XUNAN/`
+- 当前用户规则索引：`apps/rule-engine/backend/src/main/resources/local/XUNAN/RULE_INDEX.md`
+- 当前用户 Python 能力根：`apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/`
+- 当前用户智慧整合程序：`apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/ai_rule_package_integrator.py`
+
 ## 唯一绝对路径
 
-- 不可变核心资源根：`MEMORY_ROOT=C:/opt/workspace/SELPLAT/apps/rule-engine/backend/src/main/resources/local/core`
+- 不可变核心资源根：`MEMORY_ROOT=/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/core`
 - 核心协议目录：`CORE_PROTOCOL_ROOT=${MEMORY_ROOT}/protocol`
 - rule-engine 资源根：`RULE_ENGINE_RESOURCE_ROOT=${MEMORY_ROOT}/../..`
 - 唯一规则索引：`RULE_ENGINE_RULE_INDEX=${RULE_ENGINE_RESOURCE_ROOT}/RULE_INDEX.md`
@@ -22,14 +32,16 @@
 
 ## 索引加载与分层边界
 
-- 所有专项规则必须先读取 `${RULE_ENGINE_RULE_INDEX}`；core 由根索引直接登记，common 必须经 `local/common/RULE_INDEX.md` 和当前作用域索引递归命中，未命中规则不得作为执行依据。
+- 所有专项规则必须先读取 `${RULE_ENGINE_RULE_INDEX}`；core 由根索引直接登记，common 必须经 `local/common/RULE_INDEX.md` 和当前作用域索引递归命中，当前用户必须经根索引登记的 `local/XUNAN/RULE_INDEX.md` 递归命中；未命中规则不得作为执行依据。
 - 生产加载顺序为 `local/core → local/common/跨工程通用规则 → local/common/当前作用域 → local/active_user`，冲突优先级为 `active_user > 当前作用域 > 跨工程通用 > core`。
 - 用户覆盖必须通过稳定逻辑 ID 显式登记；只能加载已验证的一个当前作用域和一个当前用户，禁止猜测或合并加载多个无关作用域、用户目录。
-- `local/core` 完成迁移冻结后禁止新增、删除或修改；`local/common` 只允许人工审查后手工合并；自动修正只能写入当前已验证用户层。
+- `local/core` 与 `local/common` 默认保持冻结；没有用户明确点名修改目标时，自动修正只能写入当前已验证用户层。
+- 当用户明确提出 `local/core` 或 `local/common` 的具体修改需求，并以独立 `1` 启动后，视为把该次指定范围托管给 AI；AI 可以直接完成分析、修改、引用同步和验证，但不得扩大目标范围。
+- 用户明确托管的修改必须在执行前核对索引、调用方、注册表和测试；删除或合并必须记录保留方与替代关系，执行后必须完成相关回归。
 - Java、Python、Node 执行代码分别位于 `src/main/<java|python|node>/com/sp/selplat/local/code/<layer>/`；禁止跨语言源目录混放；规则与协议仅位于 `src/main/resources/local/<layer>/`。
 
 ## 失败阻断
 
 - 对会产生新增、删除或修改的任务，必须先按 USER 协议取得独立 `1`；独立 `2` 只追加执行池。
-- 用户方案违反已加载规则、当前用户无法验证、索引登记缺失、路径逃逸、core/common 写入越权或代码进入错误语言源目录时，必须停止并报告具体冲突。
+- 用户方案违反已加载规则、当前用户无法验证、索引登记缺失、路径逃逸、未取得明确托管授权的 core/common 写入或代码进入错误语言源目录时，必须停止并报告具体冲突。
 - 代码变更必须按索引加载对应编码、业务注释与测试规则，并在交付前完成相匹配的离线验证。

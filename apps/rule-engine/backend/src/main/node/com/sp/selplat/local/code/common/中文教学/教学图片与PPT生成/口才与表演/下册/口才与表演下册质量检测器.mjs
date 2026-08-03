@@ -7,7 +7,7 @@ import { inspectCommonDeckQuality } from "../通用/口才与表演通用质量�
 // 检测器从调用方工作目录识别当前工程，保证跨任务页面仍检查正确成品。
 const PROJECT_ROOT = path.resolve(process.env.SELPLAT_PROJECT_ROOT || process.cwd());
 // 全量分析索引提供每课源页、截图和栏目基线。
-const COVERAGE_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/下册/课程内容索引.json");
+const COVERAGE_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/课程内容索引.json");
 // 正式下册成品目录只读取保持原名的PPTX。
 const OUTPUT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/教学图片与PPT生成/成品/口才与表演/下册");
 // 检测报告统一进入当前工程任务临时区。
@@ -15,13 +15,13 @@ const REPORT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/下册制�
 // 生成器源码必须先通过准入检查，避免旧逻辑在下次批量生成时重新污染成品。
 const GENERATOR_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/common/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册PPT生成器.mjs");
 // 第一课视觉计划用于核对中册式自然留白插画是否真正进入成品。
-const LESSON_ONE_VISUAL_PLAN_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/下册/第01课视觉计划.json");
+const LESSON_ONE_VISUAL_PLAN_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/第01课视觉计划.json");
 // 下册原创缓存是最终教学主视觉的唯一合法来源。
 const ORIGINAL_ASSET_ROOT = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/下册/原创插图");
 // 教材照片只参与哈希黑名单和教学事实核对，不允许进入最终媒体。
 const SCREENSHOT_ROOT = path.join(PROJECT_ROOT, "OPTION/temp/中文教学/0输入/下册/下册截图");
 // 品牌Logo属于已确认固定资产，不因旧稿也曾使用而误判为教学旧图复用。
-const LOGO_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/assets/品牌/新思度华文学堂.png");
+const LOGO_PATH = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/通用/template/RUL_中文教学公共品牌素材使用规则/新思度华文学堂.png");
 // 透明玻璃播放按钮属于已确认控件，不参与旧教学媒体黑名单。
 const AUDIO_BUTTON_PATH = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/中册/控件/音频按钮_透明玻璃.png");
 // 三个核心音频栏目是每课固定交互基线。

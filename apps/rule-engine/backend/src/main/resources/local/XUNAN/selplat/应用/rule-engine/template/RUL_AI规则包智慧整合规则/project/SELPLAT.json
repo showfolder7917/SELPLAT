@@ -1,0 +1,9 @@
+{
+  "stable_user_id": "XUNAN",
+  "project_name": "SELPLAT",
+  "active_common_scope": "selplat",
+  "automatic_write_layer": "local/XUNAN",
+  "common_policy": "human_review_patch_only",
+  "core_policy": "frozen"
+}
+

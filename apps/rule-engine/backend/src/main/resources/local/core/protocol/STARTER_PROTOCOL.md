@@ -9,8 +9,6 @@ LOG = ${OUT}log/
 RES = ./apps/rule-engine/backend/src/main/resources/
 <!-- 不可变核心资源目录 -->
 CORE = ${RES}local/core/
-<!-- 人类侧基线资料目录 -->
-HUM = ${CORE}human/
 <!-- 协议文件目录 -->
 PRT = ${CORE}protocol/
 <!-- 核心规则文件目录 -->
@@ -42,6 +40,6 @@ protocol_chain_loading_via_reader_is_not_execution = true
 user_protocol_direct_file_read_exemption = false
 <!-- 启动协议链的声明顺序 -->
 startup_protocol_chain_order = STARTER_PROTOCOL.md -> USER.PROTOCOL.md -> CODE.PROTOCOL.md -> COMMAND.PROTOCOL.md -> RULE_INDEX.md -> GENERATOR_REPAIR_PROTOCOL.md
-<!-- 启动主链只加载协议正文；RULE_INDEX 作为 COMMAND 后置入口，不在启动阶段批量展开专项规则。 -->
+<!-- 启动主链只加载协议正文；正式根 RULE_INDEX 作为 COMMAND 后置入口，不在启动阶段批量展开专项规则。 -->
 startup_chain_does_not_load_rule_files = true
 rule_files_are_not_part_of_startup_protocol_chain = true

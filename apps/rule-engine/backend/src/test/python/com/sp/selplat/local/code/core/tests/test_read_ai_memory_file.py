@@ -20,10 +20,15 @@ import unittest
 
 CODE_ROOT = MAIN_CODE_ROOT
 SKILL_PATH = CODE_ROOT / "skill" / "read_ai_memory_file.py"
-# 固定测试资源位于 core 文档示例，不在运行时向不可变 core 创建临时数据。
+# 直接使用真实 STARTER 协议验证读取能力，避免在生产 core 中保留测试专用样本。
 AI_READER_FIXTURE = (
     PROJECT_ROOT
-    / "apps/rule-engine/backend/src/main/resources/local/core/docs/code/examples/python-tests/read_ai_memory_file/temp_protocol.md"
+    / "apps/rule-engine/backend/src/main/resources/local/core/protocol/STARTER_PROTOCOL.md"
+)
+# 唯一根索引是 core 读取器允许访问的唯一 core 外资源。
+ROOT_RULE_INDEX = (
+    PROJECT_ROOT
+    / "apps/rule-engine/backend/src/main/resources/RULE_INDEX.md"
 )
 
 
@@ -54,6 +59,7 @@ class ReadAiMemoryFileTests(unittest.TestCase):
 - 这是用户协作层的协议文件
 中文说明行
 default_language = zh
+rule_path = local/XUNAN/跨工程通用规则/RUL_用户明确委托AI修正规则.md
 code_runtime_reads_registry_in_order
 """
         cleaned = self.module.clean_ai_memory_content(raw_content)
@@ -61,6 +67,7 @@ code_runtime_reads_registry_in_order
             cleaned.splitlines(),
             [
                 "default_language = zh",
+                "rule_path = local/XUNAN/跨工程通用规则/RUL_用户明确委托AI修正规则.md",
                 "code_runtime_reads_registry_in_order",
             ],
         )
@@ -68,22 +75,30 @@ code_runtime_reads_registry_in_order
     def test_run_reads_ai_file_and_returns_filtered_content(self) -> None:
         """应返回过滤后的 AI 记忆内容。"""
 
-        # 读取 core 内稳定 fixture，运行期不向不可变资源写入测试数据。
+        # 读取 core 内真实协议，运行期不创建测试数据。
         result = self.module.run(str(AI_READER_FIXTURE))
 
         # 返回路径保持相对于 rule-engine resources 的稳定位置。
         self.assertEqual(
             result["source_path"],
-            "local/core/docs/code/examples/python-tests/read_ai_memory_file/temp_protocol.md",
+            "local/core/protocol/STARTER_PROTOCOL.md",
         )
-        self.assertEqual(
+        self.assertIn(
+            "startup_entry_is_single_minimum_entry = true",
             result["cleaned_content"].splitlines(),
-            [
-                "startup_entry_is_single_minimum_entry = true",
-                "ai_calls_ability_only",
-            ],
         )
-        self.assertEqual(result["line_count"], 2)
+        self.assertGreater(result["line_count"], 2)
+
+    def test_run_allows_unique_root_rule_index(self) -> None:
+        """应允许启动链读取唯一根索引，而不需要 protocol 内兼容副本。"""
+
+        result = self.module.run(str(ROOT_RULE_INDEX))
+
+        self.assertEqual(result["source_path"], "RULE_INDEX.md")
+        self.assertIn(
+            "COMMON_RULE_INDEX = local/common/RULE_INDEX.md",
+            result["cleaned_content"].splitlines(),
+        )
 
 
 if __name__ == "__main__":

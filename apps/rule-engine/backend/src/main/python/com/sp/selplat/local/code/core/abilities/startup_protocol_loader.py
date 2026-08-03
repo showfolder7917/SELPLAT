@@ -9,16 +9,32 @@
 适用场景：
 - 启动阶段读取完整协议链
 - 校验 USER/CODE/COMMAND 协议是否按顺序装载
-- 在 COMMAND 协议后装载 RULE_INDEX.md 作为规则入口索引
+- 在 COMMAND 协议后装载 resources 根的唯一 RULE_INDEX.md 作为规则入口索引
 - 明确排除规则文件，不把规则装载混入启动主链
 """
 
-# 导入 importlib.util，用于直接运行脚本时加载默认读取技能。
-import importlib.util
-# 导入 sys，用于直接运行脚本时返回退出码。
+# 导入 os，用于让后续子进程继承统一的 Python 字节码缓存根。
+import os
+# 导入 sys，用于在加载任何工程模块前设置字节码缓存根，并在脚本直跑时返回退出码。
 import sys
-# 导入 Path，用于基于当前代码树反推协议目录。
+# 导入 Path，用于基于当前代码树反推工程与协议目录。
 from pathlib import Path
+
+# 启动入口最先识别 SELPLAT 工程根，禁止后续动态导入把 __pycache__ 写回源码目录。
+PROJECT_ROOT = next(
+    candidate
+    for candidate in Path(__file__).resolve().parents
+    if (candidate / "settings.gradle").is_file()
+)
+# Python 字节码统一进入工程 cache；同时设置当前进程和未来子进程两种入口。
+PYTHON_PYCACHE_ROOT = PROJECT_ROOT / "cache/python-pycache"
+# 当前解释器后续导入立即使用工程缓存根。
+sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)
+# 子进程继承相同缓存根，避免能力继续启动 Python 时回写源码。
+os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)
+
+# 导入 importlib.util，用于在缓存策略生效后加载默认读取技能。
+import importlib.util
 
 # 能力唯一标识，用于在注册表中定位当前能力。
 ABILITY_ID = "startup_protocol_loader"
@@ -32,17 +48,17 @@ REQUIRED_SKILLS = ["read_ai_memory_file"]
 
 # 定义 code 根目录，统一基于当前代码树反推协议位置。
 CODE_ROOT = Path(__file__).resolve().parents[1]
-# 从迁移后的 Python 包向上识别当前工程根，禁止根据已删除的 MEMORIES 层级推断。
-PROJECT_ROOT = next(
-    candidate
-    for candidate in Path(__file__).resolve().parents
-    if (candidate / "settings.gradle").is_file()
-)
-# 定义协议目录绝对路径，确保装载始终落到不可变 core 资源。
-PROTOCOL_DIR = (
+# 定义 rule-engine 资源根，唯一正式规则索引固定从这里进入。
+RESOURCE_ROOT = (
     PROJECT_ROOT
-    / "apps/rule-engine/backend/src/main/resources/local/core/protocol"
+    / "apps/rule-engine/backend/src/main/resources"
 )
+# 定义协议目录绝对路径，确保协议装载始终落到 core 资源。
+PROTOCOL_DIR = (
+    RESOURCE_ROOT / "local/core/protocol"
+)
+# 定义唯一正式根规则索引，禁止回退到 protocol 内兼容副本。
+ROOT_RULE_INDEX_PATH = RESOURCE_ROOT / "RULE_INDEX.md"
 # 定义默认启动协议路径，便于外部省略上下文时直接复用。
 DEFAULT_STARTER_PATH = str(PROTOCOL_DIR / "STARTER_PROTOCOL.md")
 # 定义默认 AI 记忆读取技能路径，供脚本直接运行时自举使用。
@@ -83,8 +99,11 @@ def build_protocol_path(protocol_file_name: str) -> str:
 
 
 def resolve_protocol_reference(protocol_reference: str) -> str:
-    # 支持协议中的 ${PRT} 引用，同时保持普通文件名可用。
+    # 支持协议中的 ${PRT} 与 ${RES} 引用，同时保持普通协议文件名可用。
     normalized_reference = protocol_reference.strip()
+    if normalized_reference.startswith("${RES}"):
+        resource_path = normalized_reference.removeprefix("${RES}").strip()
+        return str(RESOURCE_ROOT / resource_path)
     if normalized_reference.startswith("${PRT}"):
         protocol_file_name = normalized_reference.removeprefix("${PRT}").strip()
         return build_protocol_path(protocol_file_name)
@@ -279,7 +298,7 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
         command_config = parse_key_values(command_protocol_entry["result"]["cleaned_content"])
         rule_index_reference = command_config.get("after_command_rule_index", "")
         if not rule_index_reference and post_chain_rule_index_requested:
-            rule_index_reference = "${PRT}RULE_INDEX.md"
+            rule_index_reference = "${RES}RULE_INDEX.md"
         if rule_index_reference:
             rule_index_path = resolve_protocol_reference(rule_index_reference)
             try:

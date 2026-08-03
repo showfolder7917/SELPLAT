@@ -5,7 +5,6 @@
 - 本文件承接代码测试、前端测试、页面测试和回归验证相关规则。
 - 本文件只在涉及测试、验证、页面布局核验或用户明确要求测试时按需读取。
 - 语言专项测试仍可同时读取对应语言规则；本文件负责测试行为约束。
-- `xlsx` 工作簿成品验证不直接套用本文件的网页页面测试步骤；涉及 Excel / XLSX 生成后验收时，应额外加载 `common_rules/xls_output_test_rules.md`。
 
 ## 强制规则（Mandatory）
 
@@ -44,9 +43,6 @@ web_page_visual_test_must_call_standard_ability = true
 
 <!-- 标准页面测试能力必须输出 JSON 结果和截图路径 便于复核 -->
 standard_ability_must_output_json_and_screenshot_paths = true
-
-<!-- xlsx 工作簿成品验证应由专门的 xls 输出测试规则承接；适用于表格文档生成后的验收场景；业务含义是避免把网页页面规则误当作工作簿验收规则 -->
-spreadsheet_output_test_should_delegate_to_xls_output_test_rules = true
 
 <!-- 自动纠错、自愈、自我修复或能力升级任务在测试闭环缺失时不得宣称稳定；业务含义是把“先补测再纠错”提升为通用硬约束 -->
 auto_correction_must_not_claim_stable_without_minimal_test_closure = true

@@ -7,9 +7,9 @@ const PROJECT_ROOT = path.resolve(process.env.SELPLAT_PROJECT_ROOT || process.cw
 // 当前任务工作区承载音频封装中间包和无音频备份。
 const WORKSPACE = path.join(PROJECT_ROOT, "OPTION/temp/口才与表演中册其余课程重制");
 // 逐课清单用于精确定位情境再现、口脑风暴和粉墨登场页面。
-const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/中册/课程内容索引.json");
+const COVERAGE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/课程内容索引.json");
 // 图片安全区映射决定每个音频栏目的文字组和播放按钮位于左侧还是右侧。
-const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/template/口才与表演/中册/图片安全区映射.json");
+const SAFE_ZONE_FILE = path.join(PROJECT_ROOT, "apps/rule-engine/backend/src/main/resources/local/common/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/图片安全区映射.json");
 // 示例音频已经从用户参考文件抽取到可复用缓存，正常运行不再反复解包原始PPT。
 const AUDIO_CACHE_ROOT = path.join(PROJECT_ROOT, "cache/中文教学/口才与表演/中册/示例音频");
 // 用户参考PPT是示例音频缓存缺失时的可追溯恢复来源。
