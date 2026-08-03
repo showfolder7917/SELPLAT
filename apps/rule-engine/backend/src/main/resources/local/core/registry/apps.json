@@ -1,0 +1,17 @@
+{
+  "h2_query_workbench": {
+    "path": "./app/h2_query_workbench/main.py",
+    "summary": "启动 H2 数据库查询台本地后端，提供表结构浏览、SQL 查询与快速模板能力",
+    "inputs": [],
+    "python_candidates": ["python3", "python"],
+    "supports_automation_plan": false
+  },
+  "vob_to_mp4_gui_pyside6": {
+    "path": "./app/vob_to_mp4_gui_pyside6.py",
+    "summary": "弹出 PySide6 图形界面显示 VOB 转 MP4 的实时进度、日志和完成提示",
+    "inputs": ["input_file", "output_file", "log_file"],
+    "python_candidates": ["python3", "python"],
+    "runtime_check_module": "PySide6",
+    "supports_automation_plan": true
+  }
+}

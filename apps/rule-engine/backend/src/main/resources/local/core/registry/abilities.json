@@ -1,0 +1,125 @@
+{
+  "bugfix_and_verify": {
+    "path": "./abilities/bugfix_and_verify.py",
+    "summary": "修复 Python 问题并完成验证",
+    "skills": ["read_file", "fix_small_bug", "run_pytest"]
+  },
+  "ai_memory_file_reader": {
+    "path": "./abilities/ai_memory_file_reader.py",
+    "summary": "读取 rule-engine local/core 资源，并返回去注释去空行后的稳定文本",
+    "skills": ["read_ai_memory_file"]
+  },
+  "startup_protocol_loader": {
+    "path": "./abilities/startup_protocol_loader.py",
+    "summary": "按 STARTER_PROTOCOL.md 声明顺序装载启动协议链",
+    "skills": ["read_ai_memory_file"]
+  },
+  "user_confirmation_gatekeeper": {
+    "path": "./abilities/user_confirmation_gatekeeper.py",
+    "summary": "只处理独立 1/2 确认的最小确认门",
+    "skills": []
+  },
+  "memory_file_full_reader": {
+    "path": "./abilities/memory_file_full_reader.py",
+    "summary": "读取工程目录文件，并返回完整原文",
+    "skills": ["read_memory_file_full"]
+  },
+  "feature_delivery": {
+    "path": "./abilities/feature_delivery.py",
+    "summary": "完成 Python 功能修改并进行基础验证",
+    "skills": ["read_file", "write_file", "fix_small_bug", "run_pytest"]
+  },
+  "h2_query_workbench_delivery": {
+    "path": "./abilities/h2_query_workbench_delivery.py",
+    "summary": "启动 H2 数据库查询台本地后端，并按需打开浏览器",
+    "apps": ["h2_query_workbench"]
+  },
+  "gradle_offline_test_restorer": {
+    "path": "./abilities/gradle_offline_test_restorer.py",
+    "summary": "在离线约束下规划、恢复并验证 Gradle 测试依赖闭包",
+    "skills": [],
+    "apps": []
+  },
+  "script_delivery": {
+    "path": "./abilities/script_delivery.py",
+    "summary": "完成 Python 脚本编写或调整并执行验证",
+    "skills": ["read_file", "write_file", "run_pytest"]
+  },
+  "gui_human_like_delivery": {
+    "path": "./abilities/gui_human_like_delivery.py",
+    "summary": "按统一协议打开已登记 GUI 应用，并执行可视化自动化计划",
+    "skills": ["launch_gui_app_with_plan"]
+  },
+  "vob_to_mp4_delivery": {
+    "path": "./abilities/vob_to_mp4_delivery.py",
+    "summary": "完成 VOB/MP4 媒体文件到目标格式的转码或音频提取交付",
+    "skills": ["ffmpeg_vob_to_mp4", "ffmpeg_vob_to_mp3", "ffmpeg_mp4_to_wav", "launch_gui_app_with_plan"],
+    "apps": ["vob_to_mp4_gui_pyside6"]
+  },
+  "mp4_to_transparent_png_sequence_delivery": {
+    "path": "./abilities/mp4_to_transparent_png_sequence_delivery.py",
+    "summary": "将白底 MP4 拆为透明 PNG 序列",
+    "skills": [],
+    "apps": []
+  },
+  "ledger_http_submitter": {
+    "path": "./abilities/ledger_http_submitter.py",
+    "summary": "通过 INIT_PROTOCOL 与 natural-run 执行统一账本 HTTP 提交",
+    "skills": [],
+    "apps": []
+  },
+  "ledger_utf8_submitter": {
+    "path": "./abilities/ledger_utf8_submitter.py",
+    "summary": "统一从 UTF-8 上下文或 UTF-8 JSON 文件读取 payload，再调用账本 HTTP 提交",
+    "skills": [],
+    "apps": []
+  },
+  "experience_query_bridge": {
+    "path": "./abilities/experience_query_bridge.py",
+    "summary": "通过 experience/query 执行统一经验查询，并返回查询条数与查询参数",
+    "skills": [],
+    "apps": []
+  },
+  "execution_doc_manager": {
+    "path": "./abilities/execution_doc_manager.py",
+    "summary": "统一维护执行文档：任务前检查未完成、创建新任务、步骤回写和任务后归档",
+    "skills": [],
+    "apps": []
+  },
+  "project_text_replace_unifier": {
+    "path": "./abilities/project_text_replace_unifier.py",
+    "summary": "统一扫描工程文本文件并执行批量替换，同时返回残留结果",
+    "skills": [],
+    "apps": []
+  },
+  "rule_package_generator": {
+    "path": "./abilities/rule_package_generator.py",
+    "summary": "生成同级主规则文件、同名资产目录、README、可选资产目录和规则索引入口",
+    "skills": [],
+    "apps": []
+  },
+  "detailed_design_xls_delivery": {
+    "path": "./abilities/detailed_design_xls_delivery.py",
+    "summary": "返回详细设计 Excel 模板路径、规则路径、生成器分流口和填写约束",
+    "skills": [],
+    "apps": []
+  },
+  "api_detailed_design_xls_auto_generator": {
+    "path": "./abilities/api_detailed_design_xls_auto_generator.py",
+    "summary": "返回 API 详细设计自动生成所需的事实模型、通用修复循环和 BAT/其他类型扩展口",
+    "skills": [],
+    "apps": []
+  },
+  "table_structure_definition_xls_delivery": {
+    "path": "./abilities/table_structure_definition_xls_delivery.py",
+    "summary": "返回通用表结构定义 Excel 中文模板路径、规则路径和填写约束",
+    "skills": [],
+    "apps": []
+  },
+  "page_visual_tester": {
+    "path": "./abilities/page_visual_tester.py",
+    "summary": "使用 Python/Playwright 打开真实页面并输出截图、布局检查和 JSON 结果",
+    "skills": [],
+    "apps": []
+  }
+}

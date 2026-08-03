@@ -1,295 +1,58 @@
-# rule-engine 项目资源规则索引
+# rule-engine 全局规则索引
 
-<!-- 问题：通用规则、Fujitsu 规则和 SELPLAT 规则分散后，需要一个稳定入口确定路径与冲突优先级。 -->
-<!-- 场景：任务涉及 apps/rule-engine 的 Java 工具、资源模板、规则或文档时，先读取本索引，再按所属模块加载最少规则。 -->
-<!-- 业务含义：项目内的规则路径变化、规则新增和规则冲突都以本索引为主入口；若 MEMORIES 中已有同主题规则、协议、能力或测试失效、冲突或路径错配，必须同步修正，避免索引规则与实际能力脱节。 -->
+<!-- 问题：core、跨工程规则和多个工程作用域需要从一个稳定入口按层定位，禁止根索引复制所有 common 规则。 -->
+<!-- 场景：启动后按任务命中逻辑 ID，并根据当前工程作用域和用户身份加载最少规则。 -->
+<!-- 业务含义：冻结 core 由根索引直接登记，common 通过唯一汇总索引递归进入，用户覆盖保持最高优先级。 -->
 
 project_resource_index_scope = apps/rule-engine
-cross_project_common_rule_root = 跨工程通用规则/
-fujitsu_rule_root = fujitsu/rule/
-selplat_common_rule_root = selplat/通用规则/
-selplat_application_rule_root = selplat/应用规则/
-selplat_application_rule_path_pattern = selplat/应用规则/<app>/
-chinese_teaching_rule_root = 中文教学/rule/
-chinese_teaching_brand_asset_root = 中文教学/assets/品牌/
-fujitsu_resource_root = fujitsu/
-fujitsu_sql_generator_resource_root = fujitsu/template/sql/SQL仕様書生成ツール/
-fujitsu_gradle_offline_rule_asset_root = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/
-fujitsu_sql_code_root = ../java/com/sp/selplat/code/fujitsu/sql/
-chinese_teaching_pinyin_code_root = ../java/com/sp/selplat/code/中文教学/拼音生成/
-chinese_teaching_image_ppt_code_root = ../java/com/sp/selplat/code/中文教学/教学图片与PPT生成/
-chinese_teaching_python_code_root = ../python/com/sp/selplat/code/中文教学/
-chinese_teaching_node_code_root = ../node/com/sp/selplat/code/中文教学/
-children_oral_performance_middle_node_code_root = ../node/com/sp/selplat/code/中文教学/教学图片与PPT生成/口才与表演/中册/
-children_oral_performance_middle_template_root = 中文教学/template/口才与表演/中册/
-children_oral_performance_middle_runtime_cache_root = <CURRENT_PROJECT_ROOT>/cache/中文教学/口才与表演/中册/
-cross_project_filesystem_code_root = ../java/com/sp/selplat/code/跨工程/文件系统/
-cross_project_vcs_code_root = ../java/com/sp/selplat/code/跨工程/版本控制/
+rule_engine_layer_migration_status = migration_complete_core_frozen
+rule_engine_hierarchical_index_status = active_core_refrozen
+rule_engine_core_resource_root = local/core/
+rule_engine_common_resource_root = local/common/
+rule_engine_user_resource_root_pattern = local/<stable-user-id>/
+rule_engine_core_java_root = ../java/com/sp/selplat/local/code/core/
+rule_engine_common_java_root = ../java/com/sp/selplat/local/code/common/
+rule_engine_user_java_root_pattern = ../java/com/sp/selplat/local/code/<stable-user-id>/
+rule_engine_core_python_root = ../python/com/sp/selplat/local/code/core/
+rule_engine_common_python_root = ../python/com/sp/selplat/local/code/common/
+rule_engine_user_python_root_pattern = ../python/com/sp/selplat/local/code/<stable-user-id>/
+rule_engine_core_node_root = ../node/com/sp/selplat/local/code/core/
+rule_engine_common_node_root = ../node/com/sp/selplat/local/code/common/
+rule_engine_user_node_root_pattern = ../node/com/sp/selplat/local/code/<stable-user-id>/
+core_startup_protocol_loader = ../python/com/sp/selplat/local/code/core/abilities/startup_protocol_loader.py
+core_layered_rule_loader = ../java/com/sp/selplat/local/code/core/rule/LayeredRuleLoader.java
 
-project_rule_loading_order = RULE_INDEX -> cross_project_common_rule_root -> matched_module_rule_root
-rule_engine_same_topic_priority = project_resource_rule > memories_rule
+project_rule_loading_order = root_RULE_INDEX -> common_aggregate_index -> matched_scope_index
+target_layered_rule_loading_order = local/core -> local/common/跨工程通用规则 -> local/common/matched_scope -> local/active_user
+target_layered_rule_conflict_priority = local/active_user > local/common/matched_scope > local/common/跨工程通用规则 > local/core
+layered_loading_activation_requires = indexes,recursive_loader,scope_selection,registries,call_paths,build,tests
 protected_protocol_priority = STARTER,USER,CODE,COMMAND,GENERATOR_REPAIR_PROTOCOL > project_resource_rule
 project_rule_conflict_scope = same_topic,same_applicability
-resource_path_change_maintenance = update_this_index_and_related_memories_records
-memories_related_record_policy = inspect_and_repair_existing_related_rule_protocol_ability_test_or_index
-memories_new_rule_policy = rule_engine_is_primary_authoring_location
+resource_path_change_maintenance = update_owning_leaf_index_and_validate_parent_chain
 rule_main_file_pattern = RUL_<主题>规则.md
 rule_asset_directory_pattern = RUL_<主题>规则/
 rule_file_name_policy = main_rule_file_and_same_name_asset_directory_are_siblings
 
-<!-- 规则新增、移动、删除、分类和索引维护的主治理规则；任何规则结构变更前必须先加载。 -->
-RULE_LIFECYCLE_GOVERNANCE_RULES = 跨工程通用规则/RUL_规则生命周期治理规则/RUL_规则生命周期治理规则.md
-load_rule_for_rule_creation_move_delete_or_classification = RULE_LIFECYCLE_GOVERNANCE_RULES
-load_rule_for_rule_index_maintenance = RULE_LIFECYCLE_GOVERNANCE_RULES
+<!-- common 只通过一个汇总入口进入；其规则逻辑 ID 由所属叶子索引唯一维护。 -->
+COMMON_RULE_INDEX = local/common/RULE_INDEX.md
 
-<!-- 执行文档按当前 Codex 任务页面隔离；用于执行文档创建、步骤续写、归档和旧文件迁移。 -->
-EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES = 跨工程通用规则/RUL_执行文档线程隔离规则.md
-load_rule_for_execution_document_thread_isolation = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
-load_rule_for_execution_document_history_or_legacy_migration = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
-
-<!-- 跨平台 UTF-8 完整读写、Windows 控制台编码和旧 GBK/GB18030 文本安全转换规则；适用于乱码排查、批量字符集迁移、文件自身编码声明同步和转换后内容等价验证。 -->
-UTF8_FILE_AND_COMMAND_RULES = 跨工程通用规则/RUL_UTF8文件与命令规则.md
-load_rule_for_utf8_text_read_write_or_garbled_output = UTF8_FILE_AND_COMMAND_RULES
-load_rule_for_legacy_gbk_gb18030_to_utf8_conversion = UTF8_FILE_AND_COMMAND_RULES
-
-<!-- 所有 PPT、教学图片、文档页面、海报、网页截图及其他视觉成品在自动检测后执行 AI 逐页截图审美终审的跨工程通用规则；用于视觉重心、文字层级、图文语义、色彩底板、受众适配、跨页节奏和规则外审美问题的主动修正，修复范围包含源文件、生成器与可复用规则缺口，并对未解决问题阻断交付。 -->
-AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES = 跨工程通用规则/RUL_AI视觉审美终审规则.md
-load_rule_for_any_rendered_visual_artifact_creation_or_modification = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
-load_rule_for_ppt_slide_image_document_page_or_webpage_visual_delivery = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
-load_rule_for_full_page_render_review_or_visual_quality_acceptance = AI_VISUAL_AESTHETIC_FINAL_REVIEW_RULES
-
-<!-- 网页表格、列表和卡片的上下文菜单、更多操作菜单与下拉动作菜单设计规则；用于菜单 JS/CSS/素材分层、人工项目配置、滚动阈值、二级菜单、交互状态、可伸缩图片边框和真实浏览器视觉验收。 -->
-WEB_CONTEXT_MENU_UI_DESIGN_RULES = 跨工程通用规则/RUL_网页上下文菜单设计规则.md
-load_rule_for_web_context_action_or_dropdown_menu_design = WEB_CONTEXT_MENU_UI_DESIGN_RULES
-load_rule_for_configurable_web_menu_items_scroll_threshold_or_submenu = WEB_CONTEXT_MENU_UI_DESIGN_RULES
-load_rule_for_web_menu_hover_pressed_disabled_or_danger_state = WEB_CONTEXT_MENU_UI_DESIGN_RULES
-load_rule_for_web_menu_nine_slice_border_image_or_visual_qa = WEB_CONTEXT_MENU_UI_DESIGN_RULES
-
-<!-- 网页工具栏、筛选区、表单和分页中的单选下拉控件设计规则；用于原生 select 数据契约、自定义 combobox/listbox、工具栏与表单默认视觉统一、图标与说明、滚动阈值、上下展开、键盘操作、外部状态同步和同状态视觉验收。 -->
-WEB_SELECT_DROPDOWN_UI_DESIGN_RULES = 跨工程通用规则/RUL_网页选择下拉控件设计规则.md
-load_rule_for_web_select_combobox_or_filter_dropdown_design = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
-load_rule_for_native_select_custom_dropdown_and_change_sync = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
-load_rule_for_select_dropdown_scroll_threshold_keyboard_or_placement = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
-load_rule_for_select_dropdown_visual_qa_or_accessibility = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
-
-<!-- 网页表单和业务窗口中的单日期选择控件设计规则；用于标准 YYYY-MM-DD 值契约、自定义水晶月历、待选与确认、今天与清除、键盘导航、上下定位、宿主生命周期和同状态视觉验收。 -->
-WEB_DATE_PICKER_UI_DESIGN_RULES = 跨工程通用规则/RUL_网页日期选择控件设计规则.md
-load_rule_for_web_form_or_window_single_date_picker_design = WEB_DATE_PICKER_UI_DESIGN_RULES
-load_rule_for_native_date_value_custom_calendar_and_form_sync = WEB_DATE_PICKER_UI_DESIGN_RULES
-load_rule_for_date_picker_keyboard_min_max_or_popup_placement = WEB_DATE_PICKER_UI_DESIGN_RULES
-load_rule_for_date_picker_visual_qa_accessibility_or_host_lifecycle = WEB_DATE_PICKER_UI_DESIGN_RULES
-
-<!-- 网页品牌化、主题化与发光自定义鼠标指针设计规则；用于透明小尺寸素材、热点定位、公共样式分层、文本光标例外和真实浏览器验收。 -->
-WEB_CUSTOM_CURSOR_UI_DESIGN_RULES = 跨工程通用规则/RUL_网页自定义鼠标指针设计规则.md
-load_rule_for_web_custom_mouse_cursor_or_pointer_design = WEB_CUSTOM_CURSOR_UI_DESIGN_RULES
-load_rule_for_css_cursor_image_hotspot_or_fallback = WEB_CUSTOM_CURSOR_UI_DESIGN_RULES
-load_rule_for_custom_cursor_asset_transparency_or_size = WEB_CUSTOM_CURSOR_UI_DESIGN_RULES
-load_rule_for_custom_cursor_text_input_exception_or_browser_qa = WEB_CUSTOM_CURSOR_UI_DESIGN_RULES
-
-<!-- 网页数据表格、列表、图表和配置器的稳定面板布局规则；用于上左中右下五区声明、组件与 payload 位置映射、标题、工具栏、可折叠侧栏、中央内容自适应、树形导航配置、统一区域皮肤和多视口验收。 -->
-WEB_STABLE_PANEL_LAYOUT_RULES = 跨工程通用规则/RUL_网页稳定面板布局规则.md
-load_rule_for_web_panel_header_toolbar_body_footer_layout = WEB_STABLE_PANEL_LAYOUT_RULES
-load_rule_for_web_panel_left_center_right_or_collapsible_sidebar = WEB_STABLE_PANEL_LAYOUT_RULES
-load_rule_for_web_panel_top_left_center_right_bottom_declarative_layout = WEB_STABLE_PANEL_LAYOUT_RULES
-load_rule_for_web_panel_component_payload_position_mapping = WEB_STABLE_PANEL_LAYOUT_RULES
-load_rule_for_web_tree_navigation_inside_data_panel = WEB_STABLE_PANEL_LAYOUT_RULES
-load_rule_for_web_panel_shared_crystal_surface_or_viewport_qa = WEB_STABLE_PANEL_LAYOUT_RULES
-load_rule_for_web_panel_region_comments_or_independent_deletion = WEB_STABLE_PANEL_LAYOUT_RULES
-
-<!-- 网页通用增删改查、实体列表及其树、菜单、筛选和分页的多实例注册与后端实体映射规则；用于业务实例命名、显式实体元数据、根节点作用域、子控制器归属和双实例隔离验收。 -->
-WEB_BUSINESS_CONTROL_MULTI_INSTANCE_RULES = 跨工程通用规则/RUL_网页业务控件多实例注册与后端实体映射规则.md
-load_rule_for_web_grid_or_crud_multi_instance_registry = WEB_BUSINESS_CONTROL_MULTI_INSTANCE_RULES
-load_rule_for_backend_entity_named_frontend_control_instance = WEB_BUSINESS_CONTROL_MULTI_INSTANCE_RULES
-load_rule_for_selgrid_get_instance_or_child_controller_scope = WEB_BUSINESS_CONTROL_MULTI_INSTANCE_RULES
-load_rule_for_multi_instance_filter_tree_menu_or_pagination_isolation = WEB_BUSINESS_CONTROL_MULTI_INSTANCE_RULES
-
-<!-- 网页表格及其列、树、标题、搜索、菜单、分页和每个下拉框的后端聚合 JSON 与国际化规则；用于业务数据分片命名、稳定业务代码、真实分页数据切片、多语言计数一致性、应用装配层和生产单接口契约。 -->
-WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES = 跨工程通用规则/RUL_网页业务控件后端聚合JSON与国际化规则.md
-load_rule_for_web_grid_business_data_split_json_or_backend_payload = WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES
-load_rule_for_web_grid_column_tree_title_menu_pagination_select_json = WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES
-load_rule_for_web_business_search_json_or_localized_search_payload = WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES
-load_rule_for_web_business_control_i18n_locale_or_stable_codes = WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES
-load_rule_for_frontend_static_fragments_and_production_aggregated_response = WEB_BUSINESS_CONTROL_BACKEND_AGGREGATED_JSON_I18N_RULES
-
-<!-- 网页基础控件、应用装配层、演示数据和主题的目录与调用规则；用于 static/sel 分层、应用同名入口、声明式五区装配、显式 mount、缺失基础控件提示、禁止业务层重写通用原生 UI 和新模块创建流程。 -->
-WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES = 跨工程通用规则/RUL_网页基础控件与应用装配层结构规则.md
-load_rule_for_web_static_base_component_and_application_directory = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-load_rule_for_application_assembler_or_explicit_component_mount = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-load_rule_for_new_web_module_or_missing_base_component = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-load_rule_for_html_css_javascript_responsibility_comments = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-load_rule_for_business_layer_raw_dom_component_implementation = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-load_rule_for_application_html_mount_point_or_application_css_component_boundary = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-load_rule_for_base_component_create_mount_structure_factory = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-load_rule_for_application_declared_layout_and_base_component_whitelist_rendering = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-load_rule_for_selajax_application_request_path_or_json_response_boundary = WEB_BASE_COMPONENT_APPLICATION_ASSEMBLER_STRUCTURE_RULES
-
-<!-- 网页搜索框、查询按钮、Enter、清空、加载状态、独立 search JSON 和多实例事件隔离规则；用于工具栏搜索、列表查询和后端关键词提交。 -->
-WEB_SEARCH_QUERY_BASE_COMPONENT_RULES = 跨工程通用规则/RUL_网页搜索查询基础控件设计规则.md
-load_rule_for_web_search_box_query_button_or_enter_submit = WEB_SEARCH_QUERY_BASE_COMPONENT_RULES
-load_rule_for_selsearch_component_search_json_or_clear_action = WEB_SEARCH_QUERY_BASE_COMPONENT_RULES
-load_rule_for_search_multi_instance_event_or_backend_query_boundary = WEB_SEARCH_QUERY_BASE_COMPONENT_RULES
-
-<!-- 网页背景图片、主题注册、遮罩/亮度/模糊度调节、本地记忆和业务控件解耦规则；适用于风景、卡通、可爱、科技、国风、宇宙等可切换网页背景。 -->
-WEB_PAGE_BACKGROUND_THEME_MODULE_RULES = 跨工程通用规则/RUL_网页背景主题模块设计规则.md
-load_rule_for_web_page_background_theme_or_selector = WEB_PAGE_BACKGROUND_THEME_MODULE_RULES
-load_rule_for_web_background_assets_folder_or_theme_registry = WEB_PAGE_BACKGROUND_THEME_MODULE_RULES
-load_rule_for_web_background_overlay_brightness_blur_or_persistence = WEB_PAGE_BACKGROUND_THEME_MODULE_RULES
-load_rule_for_web_background_and_business_control_separation = WEB_PAGE_BACKGROUND_THEME_MODULE_RULES
-
-<!-- 网页个性化入口、背景/面板/文字三级同级结构、面板透明与模糊、统一主题色、文字明暗模式与字号、三档滚动条令牌、可换肤染色、边框间距、动效、预设和刷新复位规则。 -->
-WEB_PERSONALIZATION_PANEL_SETTINGS_RULES = 跨工程通用规则/RUL_网页个性化面板设置规则.md
-load_rule_for_web_background_and_panel_personalization_settings = WEB_PERSONALIZATION_PANEL_SETTINGS_RULES
-load_rule_for_web_text_personalization_mode_color_contrast_or_scale = WEB_PERSONALIZATION_PANEL_SETTINGS_RULES
-load_rule_for_panel_opacity_blur_tint_spacing_or_motion = WEB_PERSONALIZATION_PANEL_SETTINGS_RULES
-load_rule_for_skin_agnostic_personalization_tokens_or_presets = WEB_PERSONALIZATION_PANEL_SETTINGS_RULES
-load_rule_for_web_page_panel_or_popup_scrollbar_theme_tokens = WEB_PERSONALIZATION_PANEL_SETTINGS_RULES
-load_rule_for_non_persistent_personalization_reset_on_reload = WEB_PERSONALIZATION_PANEL_SETTINGS_RULES
-
-<!-- 网页运行时素材统一分层、基础与应用归属、位图压缩、格式选择和迁移验收规则；用于背景、透明边框、纹理、光标、图标及其他 static 图片素材。 -->
-WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES = 跨工程通用规则/RUL_网页运行时素材目录与压缩规则.md
-load_rule_for_web_runtime_asset_directory_or_layering = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
-load_rule_for_web_image_compression_webp_avif_or_png_optimization = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
-load_rule_for_web_asset_move_reference_or_visual_qa = WEB_RUNTIME_ASSET_DIRECTORY_AND_COMPRESSION_RULES
-
-<!-- SELPLAT 水晶窗体、菜单、浮层和面板的完整材质与窗口几何规则；用于禁止无明确设计要求的镂空中心、要求九宫格中心填充、约束源素材左右与上下双轴对称、统一标题栏内容区底栏、约束边框内侧内容安全区与贴边浮层回收，并验证八方向缩放、最大化精确还原后的圆角与灯光连续性。 -->
-SELPLAT_CRYSTAL_UI_MATERIAL_RULES = selplat/通用规则/RUL_SELPLAT水晶界面材质规则.md
-load_rule_for_selplat_crystal_window_menu_or_floating_panel = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
-load_rule_for_selplat_crystal_nine_slice_center_fill_or_non_hollow_surface = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
-load_rule_for_selplat_crystal_content_safe_area_popup_boundary_or_alpha_shaped_effect = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
-load_rule_for_selplat_crystal_default_resize_maximize_restore_visual_qa = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
-
-<!-- uniauth 静态页面的 JavaScript 文件、模块标识、公开接口、事件、组件类和 CSS 自定义变量命名规则；公共脚本使用 selBase，表格脚本使用 selGrid，表格样式使用 selgrid。 -->
-UNIAUTH_STATIC_PAGE_FRONTEND_NAMING_RULES = selplat/应用规则/uniauth/RUL_静态页面前端命名规则.md
-load_rule_for_uniauth_static_page_javascript_file_identifier_api_or_event_naming = UNIAUTH_STATIC_PAGE_FRONTEND_NAMING_RULES
-load_rule_for_uniauth_static_page_css_class_or_custom_property_naming = UNIAUTH_STATIC_PAGE_FRONTEND_NAMING_RULES
-load_rule_for_uniauth_selbase_selgrid_or_group_state_rename = UNIAUTH_STATIC_PAGE_FRONTEND_NAMING_RULES
-
-<!-- CPMAB082 的测试数据、数据库集成 Case 与 JaCoCo 覆盖率规则；仅在修改或验证该批处理的测试数据、Tester、数据库结果或覆盖率时加载。 -->
-FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082测试数据覆盖规则.md
-load_rule_for_cpmab082_test_data_or_database_integration = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
-load_rule_for_cpmab082_tester_case_or_jacoco_coverage = FUJITSU_CPMAB082_TEST_DATA_COVERAGE_RULES
-
-<!-- Fujitsu Gradle 工程禁止下载时的本机构件发现、明确版本选择、项目 cache 离线仓库重建、临时 init script 和正常 test 恢复规则；适用于 CP、IT、SB、AP 工程。 -->
-FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES = fujitsu/rule/RUL_FujitsuGradle离线依赖闭包恢复规则/RUL_FujitsuGradle离线依赖闭包恢复规则.md
-load_rule_for_fujitsu_gradle_offline_dependency_gap = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
-load_rule_for_fujitsu_dynamic_version_or_local_artifact_recovery = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
-load_rule_for_fujitsu_offline_normal_test_or_jacoco = FUJITSU_GRADLE_OFFLINE_DEPENDENCY_CLOSURE_RULES
-
-<!-- CPMAB082 在组织级离线恢复算法之外的只读参考工程、目标编译、Checkstyle 和 MyBatis 特殊配置。 -->
-FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES = fujitsu/rule/CPMAB082/RUL_CPMAB082离线依赖配置规则/RUL_CPMAB082离线依赖配置规则.md
-load_rule_for_cpmab082_offline_reference_or_fallback_verification = FUJITSU_CPMAB082_OFFLINE_DEPENDENCY_CONFIG_RULES
-
-<!-- SELPLAT 工程目录、构建产物、项目 JDK、工具运行数据与缓存位置规则；适用于工程路径解析、旧 runtime 迁移及 Python 字节码缓存定向。 -->
-SELPLAT_PROJECT_PATH_RULES = selplat/通用规则/RUL_SELPLAT工程路径规则.md
-load_rule_for_selplat_project_path_or_runtime_output = SELPLAT_PROJECT_PATH_RULES
-load_rule_for_python_bytecode_cache_location = SELPLAT_PROJECT_PATH_RULES
-load_rule_for_selplat_project_jdk_cache_or_legacy_runtime_migration = SELPLAT_PROJECT_PATH_RULES
-
-<!-- SELPLAT 根 Gradle、统一 build/cache、离线坐标、Wrapper 与 VS Code 导入规则；适用于全工程 Java 编译和依赖配置。 -->
-SELPLAT_PROJECT_BUILD_RULES = selplat/通用规则/RUL_SELPLAT工程构建规则.md
-load_rule_for_selplat_gradle_dependency_or_build_output = SELPLAT_PROJECT_BUILD_RULES
-load_rule_for_selplat_vscode_gradle_import_or_cache = SELPLAT_PROJECT_BUILD_RULES
-
-<!-- SELPLAT 全部应用共用的基础 DAO 复用、基础类契约原子同步、getDbColumnsMap/getSelectColumns 真实数据库字段控制和主键号段定义规则；适用于简单单表 CRUD、BaseDaoImpl 千条分组、BaseTemplateDao 真实批处理、分页、主键查询、动态单条查询及单主键或复合主键发号。 -->
-SELPLAT_BASE_DAO_REUSE_RULES = selplat/通用规则/RUL_基础DAO复用与通用参数透传规则/RUL_基础DAO复用与通用参数透传规则.md
-load_rule_for_selplat_base_dao_crud_or_paging_reuse = SELPLAT_BASE_DAO_REUSE_RULES
-load_rule_for_selplat_common_param_dao_query = SELPLAT_BASE_DAO_REUSE_RULES
-load_rule_for_selplat_common_batch_param_or_thousand_item_batch = SELPLAT_BASE_DAO_REUSE_RULES
-load_rule_for_selplat_id_sequence_code_or_composite_id_mapping = SELPLAT_BASE_DAO_REUSE_RULES
-
-<!-- SELPLAT Java 类、字段、方法、参数、逐行业务动作和实际返回示例规则；适用于 shared、apps 当前及未来应用中的 Java 新增、修改、重构、生成和审核。 -->
-SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES = selplat/通用规则/RUL_Java业务注释与返回示例规则/RUL_Java业务注释与返回示例规则.md
-load_rule_for_any_selplat_java_creation_modification_or_refactor = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
-load_rule_for_selplat_java_javadoc_param_return_or_exception = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
-load_rule_for_selplat_map_list_entity_common_result_or_page_result_comment = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
-load_rule_for_selplat_java_comment_template_or_actual_result_example = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
-
-<!-- SELPLAT 业务 Service 统一通过 BaseServiceImpl 泛型 getDao() 获取 DAO，公共 CRUD 由 BaseServiceImpl 维护并统一使用 OperationLog，BaseExtendsServiceImpl 保留发号与结果构建能力，模块特有实现覆盖同名方法后调用 super 并保留日志标记的规则；适用于 DAO 装配、通用方法归属、Service 操作日志和特殊处理扩展治理。 -->
-SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = selplat/通用规则/RUL_基础Service统一DAO访问规则.md
-load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
-load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
-load_rule_for_selplat_base_service_default_crud_or_special_callback = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
-
-<!-- 静态旧站镜像从原域名和服务器根路径迁移为本地可打开相对路径的跨工程规则；适用于 HTML、CSS、JavaScript 和媒体关联的字节保持替换与目标验证。 -->
-STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES = 跨工程通用规则/RUL_静态网站本地相对路径迁移规则.md
-load_rule_for_static_site_original_domain_or_root_path_migration = STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES
-load_rule_for_legacy_encoded_html_local_opening = STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES
-
-<!-- SELPLAT 工程专属的绝对真实数据集成测试与模拟业务测试阻断规则；适用于 apps 当前及未来应用与 shared 公共模块的测试类名 fixture、数据库查询、写入、分页、排序、发号、事务、Controller 真实响应链路和覆盖回归验证，不适用于 Fujitsu 或其他工程。 -->
-SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES = selplat/通用规则/RUL_SELPLAT真实数据集成测试规则.md
-load_rule_for_selplat_real_database_query_or_write_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
-load_rule_for_selplat_paging_sorting_or_transaction_integration_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
-load_rule_for_selplat_batch_group_boundary_or_rollback_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
-load_rule_for_selplat_shared_database_sequence_or_web_regression_test = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
-load_rule_for_selplat_test_fixture_class_and_method_path = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
-load_rule_for_selplat_mock_fake_stub_or_fixed_business_test_cleanup = SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES
-
-<!-- Service 或公共全局异常处理器已返回 CommonResult / CommonPageResult 完整结构时的 Controller JSON 职责、CommonResult 固定错误字段、common-web 异常/追踪/配置分工与公共基类接口收敛规则；适用于避免响应二次包装、统一前端 success=false 错误处理，并删除应用重复实现和无生产调用兼容入口。 -->
-SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES = selplat/通用规则/RUL_Controller仅序列化Service返回结构规则.md
-load_rule_for_selplat_controller_service_result_serialization = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
-load_rule_for_selplat_controller_duplicate_response_wrapping = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
-load_rule_for_selplat_fixed_common_result_or_batch_response_shape = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
-load_rule_for_selplat_base_controller_unused_api_cleanup = SELPLAT_CONTROLLER_SERVICE_RESULT_SERIALIZATION_RULES
-
-<!-- SELPLAT 变更任务在确认前执行规则适配审查并在冲突时阻断报告的通用策略；适用于平台全部应用、shared 和规则维护任务。 -->
-SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES = selplat/通用规则/RUL_SELPLAT规则适配审查与阻断规则.md
-load_rule_for_any_selplat_change_task_compatibility_check = SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES
-load_rule_for_selplat_rule_incompatible_request_blocking = SELPLAT_RULE_COMPATIBILITY_BLOCKING_RULES
-
-<!-- TRS/WCM 历史 Oracle SQL 转为独立本地 H2、保留 SP_GETNEXTID 发号语义并以静态资源方式托管旧站入口的规则；仅适用于 apps/trs。 -->
-TRS_LEGACY_ORACLE_H2_MIGRATION_RULES = selplat/应用规则/trs/RUL_TRS旧版Oracle到H2迁移规则.md
-load_rule_for_trs_legacy_oracle_sql_to_h2 = TRS_LEGACY_ORACLE_H2_MIGRATION_RULES
-load_rule_for_trs_local_database_or_legacy_tsv_hosting = TRS_LEGACY_ORACLE_H2_MIGRATION_RULES
-
-<!-- 中文教学横版课件的页面结构、素材边界与验收规则；适用于课文、古诗、故事和课堂活动PPT。 -->
-HORIZONTAL_TEACHING_PPT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_横版教学PPT通用排版与检查规则.md
-load_rule_for_horizontal_teaching_ppt_generation = HORIZONTAL_TEACHING_PPT_RULES
-
-<!-- 少儿口才与表演全册共用的截图映射、逐页语义视觉计划、原创视觉、18%单图复用上限、占位语清理、自然留白构图、自适应文字底板、重复动作标题清理、栏目可读底层、动态字号、矩形相交、渲染复核、拼音对齐和音频热区质量门禁规则。 -->
-CHILDREN_ORAL_PERFORMANCE_ALL_VOLUMES_RULES = 中文教学/rule/口才与表演/RUL_少儿口才与表演全册通用制作规则.md
-load_rule_for_children_oral_performance_all_volumes = CHILDREN_ORAL_PERFORMANCE_ALL_VOLUMES_RULES
-
-<!-- 少儿口才与表演中册的样板继承、补图编号、旧媒体禁用和嵌入式音频规则。 -->
-CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES = 中文教学/rule/口才与表演/RUL_少儿口才与表演中册PPT重制补图与音频规则.md
-load_rule_for_children_oral_performance_middle_ppt_generation = CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES
-load_rule_for_children_oral_performance_middle_ppt_audio_or_supplemental_images = CHILDREN_ORAL_PERFORMANCE_MIDDLE_PPT_RULES
-
-<!-- 少儿口才与表演下册的全量内容分析、原创素材、音频交互和逐课质量验收规则。 -->
-CHILDREN_ORAL_PERFORMANCE_LOWER_PPT_RULES = 中文教学/rule/口才与表演/RUL_少儿口才与表演下册PPT完整制作规则.md
-load_rule_for_children_oral_performance_lower_ppt_generation = CHILDREN_ORAL_PERFORMANCE_LOWER_PPT_RULES
-load_rule_for_children_oral_performance_lower_ppt_quality_check = CHILDREN_ORAL_PERFORMANCE_LOWER_PPT_RULES
-
-<!-- 中文教学拼音标注校正与项目目录工作流规则；分别用于内容校正和拼音项目组织。 -->
-CHINESE_PINYIN_CORRECTION_RULES = 中文教学/rule/拼音生成/RUL_拼音标注与朗读版校正规则.md
-CHINESE_PINYIN_WORKFLOW_RULES = 中文教学/rule/拼音生成/RUL_拼音生成目录分类与工作流程规则.md
-load_rule_for_chinese_pinyin_correction = CHINESE_PINYIN_CORRECTION_RULES
-load_rule_for_chinese_pinyin_project_workflow = CHINESE_PINYIN_WORKFLOW_RULES
-
-<!-- 古诗教学图片、无文字底图、可编辑PPT排版和少儿三页严格套版规则。 -->
-ANCIENT_POEM_IMAGE_FULL_FLOW_RULES = 中文教学/rule/教学图片与PPT生成/RUL_古诗教学图片生成全流程规则.md
-ANCIENT_POEM_BACKGROUND_RULES = 中文教学/rule/教学图片与PPT生成/RUL_古诗无文字底图生成工作流程规则.md
-ANCIENT_POEM_PPT_LAYOUT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_古诗教学图片PPT文字排版工作流程规则.md
-CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES = 中文教学/rule/教学图片与PPT生成/RUL_少儿古诗三页整张底图PPT严格套版通用规则.md
-load_rule_for_ancient_poem_teaching_image_generation = ANCIENT_POEM_IMAGE_FULL_FLOW_RULES
-load_rule_for_ancient_poem_no_text_background_generation = ANCIENT_POEM_BACKGROUND_RULES
-load_rule_for_ancient_poem_editable_ppt_generation = ANCIENT_POEM_PPT_LAYOUT_RULES
-load_rule_for_child_poetry_three_full_page_background_generation = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
-load_rule_for_child_poetry_strict_ppt_template_generation = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
-load_rule_for_child_poetry_ppt_layout_correction = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
-load_rule_for_child_poetry_visual_balance_and_readability_repair = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
-load_rule_for_poetry_atlas_to_full_page_background_task = CHILD_POETRY_THREE_FULL_PAGE_BACKGROUND_STRICT_TEMPLATE_RULES
-
-<!-- 成语典故绘本的事实核定、叙事分镜和40%文字卡规则；仅适用于有可靠典故的成语。 -->
-IDIOM_FABLE_PICTURE_BOOK_PPT_RULES = 中文教学/rule/成语典故/RUL_成语典故绘本PPT制作规则.md
-load_rule_for_idiom_fable_picture_book_ppt_generation = IDIOM_FABLE_PICTURE_BOOK_PPT_RULES
-
-<!-- 小学成语典故国风连续绘本的分级、分镜、图片生成和后续PPT图文避让规则。 -->
-PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES = 中文教学/rule/成语典故/RUL_小学成语典故国风连续绘本图片生成规则.md
-load_rule_for_primary_school_idiom_story_picture_book_generation = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
-load_rule_for_idiom_story_grading_and_storyboard_planning = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
-load_rule_for_primary_school_idiom_story_ppt_generation = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
-load_rule_for_idiom_story_ppt_layout_and_text_avoidance = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
-
-<!-- 三字经教学PPT的篇章拆分、图片生成、可编辑排版和批量验收规则。 -->
-THREE_CHARACTER_CLASSIC_PPT_RULES = 中文教学/rule/教学图片与PPT生成/RUL_三字经教学PPT批量生成工作流程规则.md
-load_rule_for_three_character_classic_ppt_generation = THREE_CHARACTER_CLASSIC_PPT_RULES
+<!-- 已退役记忆库迁入后冻结的 core 规则基线；根索引直接登记但不移动实体文件。 -->
+CODE_JAVA_BACKEND_PROJECT_RULES = local/core/rule/CODE_JAVA_BACKEND_PROJECT_RULES.md
+CODE_JAVA_CODING_RULES = local/core/rule/CODE_JAVA_CODING_RULES.md
+CODE_JAVA_TEST_RULES = local/core/rule/CODE_JAVA_TEST_RULES.md
+CODE_JS_RULES = local/core/rule/CODE_JS_RULES.md
+CODE_PYTHON_RULES = local/core/rule/CODE_PYTHON_RULES.md
+CODE_TEST_RULES = local/core/rule/CODE_TEST_RULES.md
+CODE_VUE_CODING_RULES = local/core/rule/CODE_VUE_CODING_RULES.md
+CODE_VUE_FRONTEND_PROJECT_RULES = local/core/rule/CODE_VUE_FRONTEND_PROJECT_RULES.md
+CODE_VUE_RULES = local/core/rule/CODE_VUE_RULES.md
+CODE_VUE_TEST_RULES = local/core/rule/CODE_VUE_TEST_RULES.md
+GUI_VIDEO_TASK_RULES = local/core/rule/GUI_VIDEO_TASK_RULES.md
+MEMORY_FILE_EDIT_RULES = local/core/rule/MEMORY_FILE_EDIT_RULES.md
+PROJECT_EXECUTION_RULES = local/core/rule/PROJECT_EXECUTION_RULES.md
+AUTO_UPGRADE_AND_REPAIR_RULES = local/core/rule/common_rules/auto_upgrade_and_repair_rules.md
+EXPERIENCE_ADJUDICATION_PROMPT_RULES = local/core/rule/common_rules/experience_adjudication_prompt.md
+DETAILED_DESIGN_DOC_RULES = local/core/rule/common_rules/md_detailed_design_rules.md
+DETAILED_DESIGN_XLS_RULES = local/core/rule/common_rules/xls_detailed_design_rules.md
+XLS_OUTPUT_TEST_RULES = local/core/rule/common_rules/xls_output_test_rules.md
+TABLE_STRUCTURE_XLS_RULES = local/core/rule/common_rules/xls_table_structure_definition_rules.md

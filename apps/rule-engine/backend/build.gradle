@@ -27,5 +27,5 @@ dependencies {
 
 application {
     // 所有命令行、VS Code 和脚本运行入口统一指向规则引擎后端启动类。
-    mainClass = 'com.sp.selplat.code.RuleEngineBackendApplication'
+    mainClass = 'com.sp.selplat.local.code.common.RuleEngineBackendApplication'
 }
