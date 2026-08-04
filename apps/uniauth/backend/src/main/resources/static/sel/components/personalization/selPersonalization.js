@@ -9,10 +9,10 @@
 
     // 每个个性化宿主只创建一个控制器，避免重复绑定全局输入事件。
     const selPersonalizationControllers = new WeakMap();
-    // 皮肤只描述基础明暗和配套材质；组件结构、面板参数与文字覆盖保持独立。
+    // 皮肤描述基础明暗、边框材质和配套背景参数；面板参数与文字覆盖保持独立。
     const selPersonalizationSkins = Object.freeze([
-        Object.freeze({ id: "dark", label: "深空水晶", description: "深背景 · 浅文字", icon: "ri-moon-clear-line", frameImage: "/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp?v=20260804-1" }),
-        Object.freeze({ id: "light", label: "晨雾水晶", description: "浅背景 · 深文字", icon: "ri-sun-line", frameImage: "/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp?v=20260804-1" })
+        Object.freeze({ id: "dark", label: "深空水晶", description: "深背景 · 浅文字", icon: "ri-moon-clear-line", frameImage: "/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp?v=20260804-1", backgroundTheme: "void", backgroundDisplay: Object.freeze({ overlay: 52, brightness: 86, blur: 0 }) }),
+        Object.freeze({ id: "light", label: "晨雾水晶", description: "浅背景 · 深文字", icon: "ri-sun-line", frameImage: "/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp?v=20260804-1", backgroundTheme: "morning-mist", backgroundDisplay: Object.freeze({ overlay: 16, brightness: 96, blur: 0 }) })
     ]);
     // 刷新和完整恢复固定回到现行深色皮肤；用户切换只在当前页面生效。
     const selPersonalizationDefaultSkin = "dark";
@@ -22,44 +22,48 @@
         themeColor: null,
         // 原始水晶边框默认完整显示；透明度只影响独立图片层，不影响内板、内容或发光。
         frameOpacity: 100,
-        // 默认面板保留接近一半的玻璃底色，让背景可感知但不压过表格与树形内容。
-        panelOpacity: 48,
-        // 默认磨砂与截图确认值一致，兼顾背景虚化和中端设备的实时响应。
-        backgroundFrost: 39,
-        themeTint: 68,
-        panelRadius: 50,
+        // 深色默认保留接近一半的玻璃底色，让背景可感知但不压过表格与树形内容。
+        panelOpacity: 52,
+        // 默认磨砂兼顾背景虚化和中端设备的实时响应。
+        backgroundFrost: 44,
+        themeTint: 60,
+        panelRadius: 52,
         panelScale: 50,
         innerPanelFit: 100,
         frameWidth: 50,
         contentInset: 50,
         panelGap: 50,
-        glowSpread: 55,
+        glowSpread: 44,
         controlGap: 50,
-        windowMotion: 60,
-        glowMotion: 46,
+        windowMotion: 36,
+        glowMotion: 22,
         reducedMotion: false,
         // 刷新页面固定回到可见的默认预设；用户手动调整仍只进入当前页面的临时 custom 状态。
         preset: "default"
     });
-    // 文字默认值独立于面板预设保存，刷新页面固定回到当前皮肤的默认文字体系。
+    // 文字默认只声明跟随模式；实际颜色由当前皮肤令牌在应用时解析，避免浅色皮肤继承深色白字。
     const selPersonalizationTextDefaults = Object.freeze({
-        // follow 表示不覆盖皮肤提供的明暗文字颜色。
         mode: "follow",
-        // 自定义模式的主文字初始色与深色皮肤默认保持一致。
-        mainColor: "#EEF2FF",
-        // 次级文字用于说明、占位符、数量与时间等辅助信息。
-        mutedColor: "#9DAACF",
-        // 60% 提供清晰但不过度发硬的文字阴影对比。
+        mainColor: null,
+        mutedColor: null,
         contrast: 60,
-        // 50% 映射为 100% 字号，允许用户在 80% 至 120% 之间缩放。
         fontScale: 50
     });
-    // 预设模式只决定语义文字颜色；业务成功、警告和错误色不参与切换。
+    // 文字模式使用中性名称，并为深浅皮肤提供独立颜色与对比参数；custom 继续保留用户当前值。
     const selPersonalizationTextModes = Object.freeze([
-        Object.freeze({ id: "follow", label: "跟随皮肤", icon: "ri-brush-line", mainColor: null, mutedColor: null }),
-        Object.freeze({ id: "light", label: "浅色文字", icon: "ri-sun-line", mainColor: "#F7FAFF", mutedColor: "#B8C5E2" }),
-        Object.freeze({ id: "dark", label: "深色文字", icon: "ri-moon-line", mainColor: "#0B1633", mutedColor: "#52617A" }),
-        Object.freeze({ id: "custom", label: "自定义", icon: "ri-font-color", mainColor: null, mutedColor: null })
+        Object.freeze({ id: "follow", label: "跟随皮肤", icon: "ri-brush-line", values: Object.freeze({
+            dark: Object.freeze({ mainColor: null, mutedColor: null, contrast: 60, fontScale: 50 }),
+            light: Object.freeze({ mainColor: null, mutedColor: null, contrast: 72, fontScale: 50 })
+        }) }),
+        Object.freeze({ id: "soft", label: "柔和", icon: "ri-feather-line", values: Object.freeze({
+            dark: Object.freeze({ mainColor: "#DCE6FA", mutedColor: "#9BAAC4", contrast: 42, fontScale: 50 }),
+            light: Object.freeze({ mainColor: "#33445E", mutedColor: "#728096", contrast: 46, fontScale: 50 })
+        }) }),
+        Object.freeze({ id: "clear", label: "清晰", icon: "ri-focus-3-line", values: Object.freeze({
+            dark: Object.freeze({ mainColor: "#FFFFFF", mutedColor: "#C8D4EA", contrast: 78, fontScale: 52 }),
+            light: Object.freeze({ mainColor: "#0B1633", mutedColor: "#44536B", contrast: 68, fontScale: 52 })
+        }) }),
+        Object.freeze({ id: "custom", label: "自定义", icon: "ri-font-color", values: null })
     ]);
     // 常用色只提供快速选择入口，不代表固定皮肤；任意颜色仍可通过原生颜色控件选择。
     const selPersonalizationThemeColors = Object.freeze([
@@ -70,15 +74,28 @@
         Object.freeze({ value: "#F3B348", label: "琥珀金" }),
         Object.freeze({ value: "#EC5D9A", label: "脉冲粉" })
     ]);
-    // 预设只保存与皮肤无关的强度值；实际颜色始终来自当前皮肤 CSS 令牌。
-    // 四套场景预设基于真实页面视觉校准，分别强化沉浸、通透、舒适和可读性，不把某一种深蓝皮肤写死。
+    // 每个预设分别保存深浅皮肤参数；稳定 ID 保持不变，显示名称改用不限定明暗的“沉浸”。
     const selPersonalizationPresets = Object.freeze([
-        Object.freeze({ id: "deep-space", label: "深空", icon: "ri-moon-clear-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 78, backgroundFrost: 64, themeTint: 78, panelRadius: 46, panelScale: 50, innerPanelFit: 100, frameWidth: 54, contentInset: 52, panelGap: 50, glowSpread: 64, controlGap: 50, windowMotion: 50, glowMotion: 34, reducedMotion: false }) }),
-        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({ frameOpacity: 82, panelOpacity: 28, backgroundFrost: 72, themeTint: 40, panelRadius: 60, panelScale: 50, innerPanelFit: 100, frameWidth: 46, contentInset: 54, panelGap: 56, glowSpread: 42, controlGap: 54, windowMotion: 46, glowMotion: 24, reducedMotion: false }) }),
-        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({ frameOpacity: 70, panelOpacity: 78, backgroundFrost: 54, themeTint: 22, panelRadius: 58, panelScale: 50, innerPanelFit: 100, frameWidth: 46, contentInset: 60, panelGap: 62, glowSpread: 18, controlGap: 62, windowMotion: 16, glowMotion: 0, reducedMotion: true }) }),
-        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 94, backgroundFrost: 64, themeTint: 54, panelRadius: 38, panelScale: 50, innerPanelFit: 100, frameWidth: 62, contentInset: 56, panelGap: 50, glowSpread: 30, controlGap: 54, windowMotion: 28, glowMotion: 10, reducedMotion: false }) }),
-        // 默认预设完整复刻用户确认的截图参数，刷新页面以及“恢复面板默认”都回到这组值。
-        Object.freeze({ id: "default", label: "默认", icon: "ri-equalizer-2-line", values: Object.freeze({ frameOpacity: 100, panelOpacity: 48, backgroundFrost: 39, themeTint: 68, panelRadius: 50, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 55, controlGap: 50, windowMotion: 60, glowMotion: 46, reducedMotion: false }) })
+        Object.freeze({ id: "deep-space", label: "沉浸", icon: "ri-focus-2-line", values: Object.freeze({
+            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 80, backgroundFrost: 60, themeTint: 72, panelRadius: 46, panelScale: 50, innerPanelFit: 100, frameWidth: 54, contentInset: 52, panelGap: 50, glowSpread: 56, controlGap: 50, windowMotion: 34, glowMotion: 24, reducedMotion: false }),
+            light: Object.freeze({ frameOpacity: 90, panelOpacity: 86, backgroundFrost: 58, themeTint: 28, panelRadius: 54, panelScale: 50, innerPanelFit: 100, frameWidth: 48, contentInset: 54, panelGap: 50, glowSpread: 32, controlGap: 52, windowMotion: 30, glowMotion: 16, reducedMotion: false })
+        }) }),
+        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({
+            dark: Object.freeze({ frameOpacity: 82, panelOpacity: 30, backgroundFrost: 68, themeTint: 34, panelRadius: 62, panelScale: 50, innerPanelFit: 100, frameWidth: 46, contentInset: 54, panelGap: 56, glowSpread: 32, controlGap: 54, windowMotion: 30, glowMotion: 14, reducedMotion: false }),
+            light: Object.freeze({ frameOpacity: 72, panelOpacity: 48, backgroundFrost: 68, themeTint: 10, panelRadius: 68, panelScale: 50, innerPanelFit: 100, frameWidth: 38, contentInset: 56, panelGap: 58, glowSpread: 16, controlGap: 56, windowMotion: 28, glowMotion: 8, reducedMotion: false })
+        }) }),
+        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({
+            dark: Object.freeze({ frameOpacity: 72, panelOpacity: 74, backgroundFrost: 50, themeTint: 18, panelRadius: 60, panelScale: 50, innerPanelFit: 100, frameWidth: 44, contentInset: 60, panelGap: 60, glowSpread: 10, controlGap: 60, windowMotion: 10, glowMotion: 0, reducedMotion: true }),
+            light: Object.freeze({ frameOpacity: 66, panelOpacity: 80, backgroundFrost: 56, themeTint: 6, panelRadius: 64, panelScale: 50, innerPanelFit: 100, frameWidth: 38, contentInset: 62, panelGap: 62, glowSpread: 6, controlGap: 62, windowMotion: 10, glowMotion: 0, reducedMotion: true })
+        }) }),
+        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({
+            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 94, backgroundFrost: 58, themeTint: 48, panelRadius: 38, panelScale: 50, innerPanelFit: 100, frameWidth: 62, contentInset: 56, panelGap: 50, glowSpread: 24, controlGap: 54, windowMotion: 18, glowMotion: 4, reducedMotion: false }),
+            light: Object.freeze({ frameOpacity: 94, panelOpacity: 96, backgroundFrost: 62, themeTint: 14, panelRadius: 48, panelScale: 50, innerPanelFit: 100, frameWidth: 56, contentInset: 58, panelGap: 50, glowSpread: 18, controlGap: 54, windowMotion: 16, glowMotion: 4, reducedMotion: false })
+        }) }),
+        Object.freeze({ id: "default", label: "默认", icon: "ri-equalizer-2-line", values: Object.freeze({
+            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 52, backgroundFrost: 44, themeTint: 60, panelRadius: 52, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 44, controlGap: 50, windowMotion: 36, glowMotion: 22, reducedMotion: false }),
+            light: Object.freeze({ frameOpacity: 82, panelOpacity: 72, backgroundFrost: 52, themeTint: 18, panelRadius: 58, panelScale: 50, innerPanelFit: 100, frameWidth: 44, contentInset: 54, panelGap: 52, glowSpread: 24, controlGap: 52, windowMotion: 34, glowMotion: 14, reducedMotion: false })
+        }) })
     ]);
     // 面板 range 配置集中声明分组、标签和辅助说明，增删项目不需要复制事件分支。
     const selPersonalizationPanelRangeGroups = Object.freeze([
@@ -264,11 +281,16 @@
             : selPersonalizationDefaultSkin;
         // 性能档位只保存在当前页面根状态，刷新时会根据当前设备重新评估。
         selPersonalizationDocumentRoot.dataset.selPersonalPerformance = selPersonalizationResolvePerformanceMode();
-        // 调用方可以覆盖面板刷新默认值，但每个强度仍会限制到 0 至 100。
-        const selPersonalizationDefaults = Object.freeze({
+        // 调用方覆盖只作为两套皮肤默认值的共同增量；未覆盖字段始终读取当前皮肤的 default 预设。
+        const selPersonalizationDefaultOverrides = Object.freeze({ ...(selPersonalizationOptions.defaults || {}) });
+        const selPersonalizationResolveDefaults = (selPersonalizationSkinId) => Object.freeze({
             ...selPersonalizationPanelDefaults,
-            ...(selPersonalizationOptions.defaults || {})
+            ...selPersonalizationPresets.find((selPersonalizationPreset) => selPersonalizationPreset.id === "default").values[selPersonalizationSkinId],
+            ...selPersonalizationDefaultOverrides,
+            preset: "default"
         });
+        // 当前默认值会随皮肤切换，恢复按钮因此不会把浅色参数重置成深色参数。
+        let selPersonalizationDefaults = selPersonalizationResolveDefaults(selPersonalizationSkinState);
         // 当前面板状态只保存在内存中，刷新页面自动重新使用默认值。
         let selPersonalizationPanelState = {
             ...selPersonalizationDefaults,
@@ -299,7 +321,7 @@
                     <div class="selpersonal-view" id="selpersonal-skin-view" role="tabpanel" data-sel-personal-view="skin">
                         <header class="selpersonal-view-heading"><strong>选择界面皮肤</strong><span>基础明暗与水晶材质</span></header>
                         <div class="selpersonal-skin-grid" data-sel-personal-skin-grid role="group" aria-label="界面皮肤"></div>
-                        <p class="selpersonal-skin-note"><i class="ri-information-line" aria-hidden="true"></i><span>皮肤不会重置背景、面板参数或已明确选择的文字颜色。</span></p>
+                        <p class="selpersonal-skin-note"><i class="ri-information-line" aria-hidden="true"></i><span>换肤会同步配套背景与当前预设；自定义参数保持当前值。</span></p>
                         <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-skin"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复默认皮肤</span></button>
                     </div>
                     <div class="selpersonal-view" id="selpersonal-background-view" role="tabpanel" data-sel-personal-view="background" hidden>
@@ -524,12 +546,24 @@
          * @returns {boolean} 皮肤存在并成功应用时返回 true。
          */
         function selPersonalizationApplySkin(selPersonalizationSkinId) {
-            if (!selPersonalizationSkins.some((selPersonalizationSkin) => selPersonalizationSkin.id === selPersonalizationSkinId)) {
+            const selPersonalizationSkin = selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationSkinId);
+            if (!selPersonalizationSkin) {
                 return false;
             }
             selPersonalizationSkinState = selPersonalizationSkinId;
             selPersonalizationDocumentRoot.dataset.selSkin = selPersonalizationSkinState;
             document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", selPersonalizationSkinState);
+            // 当前皮肤拥有独立默认值；非自定义预设在换肤时同步切换到对应参数组。
+            selPersonalizationDefaults = selPersonalizationResolveDefaults(selPersonalizationSkinState);
+            const selPersonalizationActivePreset = selPersonalizationPresets.find((selPersonalizationPreset) => selPersonalizationPreset.id === selPersonalizationPanelState.preset);
+            const selPersonalizationActiveValues = selPersonalizationActivePreset?.values?.[selPersonalizationSkinState];
+            if (selPersonalizationActiveValues) {
+                selPersonalizationPanelState = { ...selPersonalizationPanelState, ...selPersonalizationActiveValues };
+            }
+            // 每次主动切换皮肤时同步配套背景和显示参数；随后手动调节仍可在当前页面独立覆盖。
+            selPersonalizationBackgroundController.setTheme(selPersonalizationSkin.backgroundTheme);
+            selPersonalizationBackgroundController.setDisplay(selPersonalizationSkin.backgroundDisplay);
+            selPersonalizationSyncBackground();
             selPersonalizationSyncSkin();
             document.dispatchEvent(new CustomEvent("selPersonalization:skin-change", { detail: Object.freeze({ skin: selPersonalizationSkinState }) }));
             return true;
@@ -705,10 +739,17 @@
         function selPersonalizationApplyText() {
             // 当前模式只能来自固定模式清单，未知值安全恢复为跟随皮肤。
             const selPersonalizationTextMode = selPersonalizationTextModes.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationTextState.mode) || selPersonalizationTextModes[0];
-            // 预设模式使用固定颜色，自定义模式使用用户当前选择；跟随模式移除颜色覆盖。
-            const selPersonalizationMainColor = selPersonalizationTextMode.id === "custom" ? selPersonalizationNormalizeColor(selPersonalizationTextState.mainColor) : selPersonalizationTextMode.mainColor;
-            const selPersonalizationMutedColor = selPersonalizationTextMode.id === "custom" ? selPersonalizationNormalizeColor(selPersonalizationTextState.mutedColor) : selPersonalizationTextMode.mutedColor;
-            if (selPersonalizationMainColor && selPersonalizationMutedColor) {
+            // 非自定义模式读取当前皮肤对应参数；跟随模式的 null 颜色表示直接读取皮肤令牌。
+            const selPersonalizationTextModeValues = selPersonalizationTextMode.values?.[selPersonalizationSkinState] || null;
+            let selPersonalizationMainColor = selPersonalizationTextMode.id === "custom" ? selPersonalizationNormalizeColor(selPersonalizationTextState.mainColor) : selPersonalizationTextModeValues?.mainColor;
+            let selPersonalizationMutedColor = selPersonalizationTextMode.id === "custom" ? selPersonalizationNormalizeColor(selPersonalizationTextState.mutedColor) : selPersonalizationTextModeValues?.mutedColor;
+            // 跟随皮肤先清除所有文字色覆盖，再读取深浅皮肤真正提供的颜色供控件显示。
+            if (selPersonalizationTextMode.id === "follow") {
+                ["--sel-theme-text-main", "--sel-theme-text-muted", "--sel-theme-text-shadow-rgb"].forEach((selPersonalizationToken) => selPersonalizationDocumentRoot.style.removeProperty(selPersonalizationToken));
+                const selPersonalizationSkinStyles = getComputedStyle(selPersonalizationDocumentRoot);
+                selPersonalizationMainColor = selPersonalizationNormalizeColor(selPersonalizationSkinStyles.getPropertyValue("--sel-theme-text-main").trim());
+                selPersonalizationMutedColor = selPersonalizationNormalizeColor(selPersonalizationSkinStyles.getPropertyValue("--sel-theme-text-muted").trim());
+            } else if (selPersonalizationMainColor && selPersonalizationMutedColor) {
                 // 主文字和次级文字分别写入统一令牌，所有业务组件从同一来源消费。
                 selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-main", selPersonalizationMainColor);
                 selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-muted", selPersonalizationMutedColor);
@@ -717,14 +758,23 @@
                 const selPersonalizationMainRgb = selPersonalizationColorToRgb(selPersonalizationMainColor).split(" ").map(Number);
                 const selPersonalizationLuminance = ((selPersonalizationMainRgb[0] * 299) + (selPersonalizationMainRgb[1] * 587) + (selPersonalizationMainRgb[2] * 114)) / 1000;
                 selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-shadow-rgb", selPersonalizationLuminance < 145 ? "255 255 255" : "0 0 0");
-            } else {
-                // 跟随皮肤时彻底移除临时覆盖，恢复主题文件中的默认文字体系。
-                ["--sel-theme-text-main", "--sel-theme-text-muted", "--sel-theme-text-shadow-rgb"].forEach((selPersonalizationToken) => selPersonalizationDocumentRoot.style.removeProperty(selPersonalizationToken));
             }
+            // 模式预设采用分肤对比和字号；自定义继续读取用户当前滑杆值。
+            const selPersonalizationContrast = selPersonalizationTextMode.id === "custom" ? selPersonalizationTextState.contrast : selPersonalizationTextModeValues.contrast;
+            const selPersonalizationFontScale = selPersonalizationTextMode.id === "custom" ? selPersonalizationTextState.fontScale : selPersonalizationTextModeValues.fontScale;
+            // 状态始终保存界面当前真实值，切到自定义时不会跳回上一套皮肤颜色。
+            selPersonalizationTextState = {
+                ...selPersonalizationTextState,
+                mode: selPersonalizationTextMode.id,
+                mainColor: selPersonalizationMainColor,
+                mutedColor: selPersonalizationMutedColor,
+                contrast: selPersonalizationContrast,
+                fontScale: selPersonalizationFontScale
+            };
             // 对比强度映射到 0 至 0.28 的阴影透明度，不改变文字本身颜色。
-            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-contrast-alpha", String(selPersonalizationMap(selPersonalizationTextState.contrast, 0, 0.28)));
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-contrast-alpha", String(selPersonalizationMap(selPersonalizationContrast, 0, 0.28)));
             // 字号滑杆 0、50、100 分别映射为 0.8、1、1.2，默认视觉不跳变。
-            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-font-scale", String(selPersonalizationMap(selPersonalizationTextState.fontScale, 0.8, 1.2)));
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-font-scale", String(selPersonalizationMap(selPersonalizationFontScale, 0.8, 1.2)));
             // 根状态仅供视觉规则识别模式，不承担持久化。
             selPersonalizationDocumentRoot.dataset.selPersonalTextMode = selPersonalizationTextMode.id;
             // 设置界面和页面预览在同一帧同步。
@@ -742,7 +792,7 @@
             selPersonalizationTextModeGrid.querySelectorAll("[data-sel-personal-text-mode]").forEach((selPersonalizationTextModeButton) => {
                 selPersonalizationTextModeButton.setAttribute("aria-pressed", String(selPersonalizationTextModeButton.dataset.selPersonalTextMode === selPersonalizationTextState.mode));
             });
-            // 两个颜色输入始终保留当前自定义值，切换预设后再编辑即可自动进入自定义。
+            // 两个颜色输入显示当前模式在当前皮肤中的真实颜色，浅色跟随模式不再显示深色白字。
             ["mainColor", "mutedColor"].forEach((selPersonalizationColorKey) => {
                 const selPersonalizationColorInput = selPersonalizationControl.querySelector(`[data-sel-personal-text-color="${selPersonalizationColorKey}"]`);
                 const selPersonalizationColorOutput = selPersonalizationControl.querySelector(`[data-sel-personal-text-color-output="${selPersonalizationColorKey}"]`);
@@ -825,7 +875,7 @@
             selPersonalizationTabs[selPersonalizationNextIndex].focus();
             selPersonalizationSelectView(selPersonalizationTabs[selPersonalizationNextIndex].dataset.selPersonalTab);
         });
-        // 皮肤预览卡只切换基础皮肤；面板强度与文字显式覆盖保持原状态。
+        // 皮肤预览卡同步基础皮肤和配套背景；面板强度与文字显式覆盖保持原状态。
         selPersonalizationSkinGrid.addEventListener("click", (selPersonalizationEvent) => {
             const selPersonalizationSkinButton = selPersonalizationEvent.target.closest("[data-sel-personal-skin]");
             if (!selPersonalizationSkinButton || !selPersonalizationApplySkin(selPersonalizationSkinButton.dataset.selPersonalSkin)) {
@@ -874,12 +924,12 @@
                 selPersonalizationApplyPanel(selPersonalizationKey);
             });
         });
-        // 文字模式按钮实时切换统一文字预设，自定义模式保留当前选色。
+        // 文字模式按钮实时切换当前皮肤对应的文字预设；进入自定义时沿用当前真实颜色和滑杆值。
         selPersonalizationTextModeGrid.addEventListener("click", (selPersonalizationEvent) => {
             // 只响应固定模式按钮，空白区域不改变状态。
             const selPersonalizationTextModeButton = selPersonalizationEvent.target.closest("[data-sel-personal-text-mode]");
             if (!selPersonalizationTextModeButton) return;
-            // 模式值已由固定配置生成，写入后立即更新页面文字。
+            // 模式值已由固定配置生成，应用函数会解析当前深浅皮肤的独立参数。
             selPersonalizationTextState = { ...selPersonalizationTextState, mode: selPersonalizationTextModeButton.dataset.selPersonalTextMode };
             selPersonalizationApplyText();
         });
@@ -898,8 +948,8 @@
             selPersonalizationTextRange.addEventListener("input", () => {
                 // 固定数据键对应文字状态中的百分比字段。
                 const selPersonalizationTextKey = selPersonalizationTextRange.dataset.selPersonalTextRange;
-                // 每次输入限制在 0 至 100，并立即应用统一令牌。
-                selPersonalizationTextState = { ...selPersonalizationTextState, [selPersonalizationTextKey]: selPersonalizationClamp(selPersonalizationTextRange.value, selPersonalizationTextDefaults[selPersonalizationTextKey]) };
+                // 手动调整意味着进入自定义模式，同时保留当前皮肤模式已经同步的真实颜色。
+                selPersonalizationTextState = { ...selPersonalizationTextState, [selPersonalizationTextKey]: selPersonalizationClamp(selPersonalizationTextRange.value, selPersonalizationTextDefaults[selPersonalizationTextKey]), mode: "custom" };
                 selPersonalizationApplyText();
             });
         });
@@ -936,7 +986,7 @@
             // 页面根标识立即触发动效降级规则。
             selPersonalizationApplyPanel();
         });
-        // 预设按钮一次应用一组与皮肤无关的强度值。
+        // 预设按钮一次应用当前皮肤对应的一组强度值。
         selPersonalizationPresetGrid.addEventListener("click", (selPersonalizationEvent) => {
             // 找到稳定预设按钮。
             const selPersonalizationPresetButton = selPersonalizationEvent.target.closest("[data-sel-personal-preset]");
@@ -948,18 +998,23 @@
             if (!selPersonalizationPreset) {
                 return;
             }
-            // 有固定值的预设替换全部面板字段；自定义只改变当前标识。
-            selPersonalizationPanelState = selPersonalizationPreset.values
-                ? { ...selPersonalizationPanelState, ...selPersonalizationPreset.values, preset: selPersonalizationPreset.id }
+            // 深浅皮肤读取各自参数组，避免浅色沿用高染色、高发光的深色数值。
+            const selPersonalizationPresetValues = selPersonalizationPreset.values?.[selPersonalizationSkinState];
+            selPersonalizationPanelState = selPersonalizationPresetValues
+                ? { ...selPersonalizationPanelState, ...selPersonalizationPresetValues, preset: selPersonalizationPreset.id }
                 : { ...selPersonalizationPanelState, preset: "custom" };
             // 预设结果立即作用于页面。
             selPersonalizationApplyPanel();
         });
-        // 背景恢复按钮调用背景模块自己的刷新默认状态。
+        // 背景恢复按钮采用当前皮肤的配套背景，不再把浅色皮肤恢复成深色显示参数。
         selPersonalizationControl.querySelector("[data-sel-personal-action='reset-background']")?.addEventListener("click", () => {
-            // 背景控制器恢复主题和三个显示参数。
-            selPersonalizationBackgroundController.reset();
-            // 个性化界面同步默认背景。
+            // 当前皮肤必定来自正式清单；异常时回退刷新默认深色皮肤。
+            const selPersonalizationSkin = selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationSkinState)
+                || selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationDefaultSkin);
+            // 主题和三个显示参数作为同一组皮肤背景令牌恢复。
+            selPersonalizationBackgroundController.setTheme(selPersonalizationSkin.backgroundTheme);
+            selPersonalizationBackgroundController.setDisplay(selPersonalizationSkin.backgroundDisplay);
+            // 个性化界面同步当前皮肤背景。
             selPersonalizationSyncBackground();
         });
         // 皮肤恢复只回到默认深色，不改变其他三个 Tab 的当前状态。
@@ -1013,7 +1068,12 @@
                 text: Object.freeze({ ...selPersonalizationTextState })
             }),
             selectView: selPersonalizationSelectView,
-            setSkin: selPersonalizationApplySkin,
+            setSkin(selPersonalizationSkinId) {
+                if (!selPersonalizationApplySkin(selPersonalizationSkinId)) return false;
+                selPersonalizationApplyPanel();
+                selPersonalizationApplyText();
+                return true;
+            },
             reset() {
                 // 完整重置同时恢复皮肤、背景、面板和文字刷新默认值。
                 selPersonalizationApplySkin(selPersonalizationDefaultSkin);

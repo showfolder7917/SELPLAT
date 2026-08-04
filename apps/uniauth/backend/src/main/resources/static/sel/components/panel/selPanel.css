@@ -173,13 +173,13 @@
 
 .selpanel-status-tab:hover,
 .selpanel-status-tab-active {
-    color: var(--sel-theme-text-on-accent);
+    color: var(--sel-theme-text-on-selected-surface);
     background: linear-gradient(135deg, rgba(38, 113, 237, 0.88), rgba(105, 54, 232, 0.82));
     box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.20), 0 0 14px rgba(80, 121, 255, 0.60);
 }
 
 .selpanel-status-tab-active strong {
-    color: var(--sel-theme-text-on-accent);
+    color: var(--sel-theme-text-on-selected-surface);
 }
 
 .selpanel-header-actions {

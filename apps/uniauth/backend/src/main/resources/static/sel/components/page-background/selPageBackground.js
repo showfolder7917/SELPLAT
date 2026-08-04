@@ -9,8 +9,10 @@
 
     // 默认主题使用 SEL 基础素材目录；换皮肤时可以由应用传入另一份显式主题清单。
     const selPageBackgroundDefaultThemes = Object.freeze([
-        // 纯黑深空不依赖图片加载，是页面刷新后的稳定默认背景。
-        Object.freeze({ id: "void", name: "纯黑深空", category: "极简", image: "" }),
+        // 纯黑深空使用低亮度真实图片，浅色皮肤选择后也不会回退页面基础底色。
+        Object.freeze({ id: "void", name: "纯黑深空", category: "极简", image: "../../assets/backgrounds/dark-void-deep-space.webp" }),
+        // 晨雾水晶为浅色皮肤提供低对比配套背景，同时保留为背景设置中的独立可选主题。
+        Object.freeze({ id: "morning-mist", name: "晨雾水晶", category: "浅色", image: "../../assets/backgrounds/light-morning-mist-crystal.webp" }),
         Object.freeze({ id: "technology", name: "赛博城市", category: "科技", image: "../../assets/backgrounds/technology-cyber-city.webp" }),
         Object.freeze({ id: "space", name: "紫色星云", category: "宇宙", image: "../../assets/backgrounds/space-purple-nebula.webp" }),
         Object.freeze({ id: "fantasy", name: "水晶森林", category: "奇幻", image: "../../assets/backgrounds/fantasy-emerald-crystal-forest.webp" }),
@@ -92,7 +94,7 @@
         function selPageBackgroundApply() {
             // 当前主题必须来自显式清单，异常标识回退第一项。
             const selPageBackgroundTheme = selPageBackgroundThemes.find((selPageBackgroundItem) => selPageBackgroundItem.id === selPageBackgroundState.theme) || selPageBackgroundThemes[0];
-            // 空图片主题写入 none，避免浏览器把空 URL 解析成当前页面。
+            // 所有正式主题统一写入真实图片；异常扩展主题仍安全回退 none。
             selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-image", selPageBackgroundTheme.image ? `url("${selPageBackgroundTheme.image}")` : "none");
             // 遮罩、亮度与模糊继续使用原背景模块的独立变量。
             selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-overlay", String(selPageBackgroundState.overlay / 100));

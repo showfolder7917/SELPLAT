@@ -264,8 +264,9 @@
 .selgrid-selection-checkbox[aria-checked="true"]::after {
     width: 10px;
     height: 6px;
-    border-bottom: 2px solid white;
-    border-left: 2px solid white;
+    /* 对勾使用选中表面的统一文字令牌：深色为白，浅色为深蓝。 */
+    border-bottom: 2px solid var(--sel-theme-text-on-selected-surface);
+    border-left: 2px solid var(--sel-theme-text-on-selected-surface);
     content: "";
     transform: translateY(-1px) rotate(-45deg);
 }
@@ -530,7 +531,7 @@
 
 .selgrid-pagination-button.selgrid-pagination-current {
     border-color: #a889ff;
-    color: var(--sel-theme-text-on-accent);
+    color: var(--sel-theme-text-on-selected-surface);
     background: linear-gradient(135deg, #385eff, #863cff 68%, #bd65ff);
     box-shadow: 0 0 13px rgba(78, 150, 255, 0.82), inset 0 0 8px rgba(255, 255, 255, 0.38);
 }

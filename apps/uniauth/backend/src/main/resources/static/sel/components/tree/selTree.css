@@ -71,7 +71,7 @@
 
 .seltree-node-row.seltree-node-selected {
     border-color: rgba(96, 179, 255, 0.74);
-    color: var(--sel-theme-text-on-accent);
+    color: var(--sel-theme-text-on-selected-surface);
     background: linear-gradient(90deg, rgba(33, 111, 224, 0.62), rgba(81, 52, 180, 0.54));
     box-shadow: 0 0 10px rgba(62, 129, 255, 0.52), inset 0 0 10px rgba(118, 173, 255, 0.18);
 }

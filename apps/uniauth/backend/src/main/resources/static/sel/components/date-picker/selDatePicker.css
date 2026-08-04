@@ -218,7 +218,7 @@
 .seldatepicker-day-selected:hover,
 .seldatepicker-day-selected:focus-visible {
     border-color: rgba(167, 205, 255, 0.94);
-    color: var(--sel-theme-text-on-accent);
+    color: var(--sel-theme-text-on-selected-surface);
     background: linear-gradient(135deg, rgba(52, 119, 240, 0.96), rgba(116, 71, 236, 0.94));
     box-shadow: 0 0 12px rgba(69, 137, 255, 0.68), inset 0 0 9px rgba(255, 255, 255, 0.18);
 }
@@ -260,7 +260,7 @@
 .seldatepicker-action-primary {
     justify-self: stretch;
     border-color: #94bfff;
-    color: var(--sel-theme-text-on-accent);
+    color: var(--sel-theme-text-on-selected-surface);
     background: linear-gradient(135deg, #356fe2, #7556ea);
     box-shadow: 0 0 12px rgba(69, 134, 255, 0.52), inset 0 0 9px rgba(255, 255, 255, 0.16);
     font-weight: 650;

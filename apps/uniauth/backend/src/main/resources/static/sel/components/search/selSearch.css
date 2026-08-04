@@ -123,7 +123,7 @@
     padding: 0 15px;
     border: 1px solid rgba(138, 198, 255, 0.92);
     border-radius: 10px;
-    color: var(--sel-theme-text-on-accent);
+    color: var(--sel-theme-text-on-selected-surface);
     background: linear-gradient(135deg, rgba(35, 116, 238, 0.94), rgba(112, 56, 232, 0.92));
     box-shadow: 0 0 15px rgba(68, 134, 255, 0.50), inset 0 0 11px rgba(255, 255, 255, 0.18);
     cursor: pointer;

@@ -633,7 +633,7 @@
 
 .selpersonal-tab-selected {
     border-color: rgba(126, 186, 255, 0.62);
-    color: var(--sel-theme-text-main);
+    color: var(--sel-theme-text-on-selected-surface);
     background: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.82) 24%, rgb(var(--sel-theme-neutral-rgb) / 0.82));
     box-shadow: inset 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.20), 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.20);
 }
@@ -836,7 +836,7 @@
 .selpersonal-preset:focus-visible,
 .selpersonal-preset[aria-pressed="true"] {
     border-color: rgba(117, 190, 255, 0.72);
-    color: var(--sel-theme-text-main);
+    color: var(--sel-theme-text-on-selected-surface);
     outline: none;
     background: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.84) 24%, rgb(var(--sel-theme-neutral-rgb) / 0.84));
     box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.28);
@@ -950,7 +950,7 @@
 .selpersonal-color-follow:focus-visible,
 .selpersonal-color-follow[aria-pressed="true"] {
     border-color: rgb(var(--sel-theme-color-rgb) / 0.82);
-    color: var(--sel-theme-text-main);
+    color: var(--sel-theme-text-on-selected-surface);
     outline: none;
     box-shadow: 0 0 9px rgb(var(--sel-theme-color-rgb) / 0.24);
 }
@@ -1439,11 +1439,17 @@
     background: var(--sel-theme-line-soft);
 }
 
-.seldropdown-option-icon,
-.selgrid-menu-badge {
+.seldropdown-option-icon {
     border-color: var(--sel-theme-line);
     background: var(--sel-theme-surface-raised);
     box-shadow: var(--sel-theme-inset);
+}
+
+.selgrid-menu-badge {
+    border-color: var(--sel-theme-soft-accent-line);
+    color: var(--sel-theme-text-on-soft-accent);
+    background: var(--sel-theme-soft-accent-surface);
+    box-shadow: var(--sel-theme-soft-accent-glow);
 }
 
 .seldatepicker-day:hover,
@@ -1565,7 +1571,7 @@
 .selpersonal-text-mode:focus-visible,
 .selpersonal-text-mode[aria-pressed="true"] {
     border-color: rgba(117, 190, 255, 0.72);
-    color: var(--sel-theme-text-main);
+    color: var(--sel-theme-text-on-selected-surface);
     outline: none;
     background: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.84) 24%, rgb(var(--sel-theme-neutral-rgb) / 0.84));
     box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.28);

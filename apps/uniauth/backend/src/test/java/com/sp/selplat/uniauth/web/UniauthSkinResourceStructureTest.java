@@ -40,7 +40,21 @@ class UniauthSkinResourceStructureTest {
         assertTrue(script.contains("data-sel-personal-tab=\"skin\""));
         assertTrue(script.contains("data-sel-personal-view=\"skin\""));
         assertTrue(script.contains("skin: selPersonalizationSkinState"));
-        assertTrue(script.contains("setSkin: selPersonalizationApplySkin"));
+        // 公开方法需要在换肤后继续同步面板与文字，因此验证包装方法及其真实皮肤调用，而不是旧式直接引用。
+        assertTrue(script.contains("setSkin(selPersonalizationSkinId)"));
+        assertTrue(script.contains("selPersonalizationApplySkin(selPersonalizationSkinId)"));
+    }
+
+    /**
+     * gridSelectionCheckmarkToken 验证表格对勾跟随深浅皮肤的选中表面文字令牌。
+     */
+    @Test
+    void gridSelectionCheckmarkToken() throws IOException {
+        String gridCss = readText("static/sel/components/grid/selGrid.css");
+        assertTrue(gridCss.contains("border-bottom: 2px solid var(--sel-theme-text-on-selected-surface)"));
+        assertTrue(gridCss.contains("border-left: 2px solid var(--sel-theme-text-on-selected-surface)"));
+        assertFalse(gridCss.contains("border-bottom: 2px solid white"));
+        assertFalse(gridCss.contains("border-left: 2px solid white"));
     }
 
     /**
@@ -52,11 +66,15 @@ class UniauthSkinResourceStructureTest {
         byte[] darkFrame = readBytes("static/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp");
         // 浅色皮肤必须交付配套真实素材，禁止用空文件或 CSS 占位。
         byte[] lightFrame = readBytes("static/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp");
+        // 纯黑深空必须是正式图片主题，浅色皮肤选择时不得回退页面基础底色。
+        byte[] darkSpaceBackground = readBytes("static/sel/assets/backgrounds/dark-void-deep-space.webp");
         assertTrue(darkFrame.length > 10_000);
         assertTrue(lightFrame.length > 10_000);
+        assertTrue(darkSpaceBackground.length > 10_000);
         // WebP 文件以 RIFF 开头；快速头校验可阻断扩展名正确但内容损坏的资源。
         assertTrue(new String(darkFrame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
         assertTrue(new String(lightFrame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
+        assertTrue(new String(darkSpaceBackground, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
     }
 
     /**

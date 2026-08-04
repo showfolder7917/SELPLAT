@@ -33,6 +33,10 @@
     --sel-theme-control-surface-base: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-base-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-base-opacity)));
     --sel-theme-control-surface-hover: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-hover-opacity)) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-hover-opacity)));
     --sel-theme-control-surface-primary: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-primary-opacity)) var(--sel-theme-tint-accent), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-primary-opacity)));
+    /* NEW 等非业务徽标使用软强调表面；文字由当前皮肤提供感知等效颜色。 */
+    --sel-theme-soft-accent-surface: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.76) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / 0.76));
+    --sel-theme-soft-accent-line: rgb(var(--sel-theme-color-rgb) / 0.58);
+    --sel-theme-soft-accent-glow: 0 0 9px rgb(var(--sel-theme-color-rgb) / 0.34);
     --sel-theme-table-surface-hover: var(--sel-theme-interaction-surface-hover);
     --sel-theme-table-surface-selected: var(--sel-theme-interaction-surface-selected);
     --sel-theme-line: rgb(var(--sel-theme-color-rgb) / 0.58);

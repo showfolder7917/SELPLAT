@@ -17,6 +17,8 @@
     --sel-theme-text-main: #eef2ff;
     --sel-theme-text-muted: #9daacf;
     --sel-theme-text-on-accent: #ffffff;
+    --sel-theme-text-on-selected-surface: #ffffff;
+    --sel-theme-text-on-soft-accent: #ffffff;
     --sel-theme-text-shadow-rgb: 0 0 0;
     --sel-theme-text-contrast-alpha: 0.168;
     --sel-theme-semantic-success: #55e6bb;
