@@ -6,7 +6,13 @@
 
 ## 唯一绝对路径
 
-- 不可变核心资源根：`MEMORY_ROOT=/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/core`
+- 执行路径解析前必须按实际运行环境设置 `CURRENT_OS=windows|macos|linux`；禁止根据路径文本或工程来源推断操作系统。
+- Windows 工程根：`SELPLAT_ROOT_WINDOWS=C:/opt/workspace/SELPLAT`
+- macOS 工程根：`SELPLAT_ROOT_MACOS=/Users/showfolder/Documents/workSpace/SELF/SELPLAT`
+- `CURRENT_OS=windows` 时：`SELPLAT_ROOT=${SELPLAT_ROOT_WINDOWS}`
+- `CURRENT_OS=macos` 时：`SELPLAT_ROOT=${SELPLAT_ROOT_MACOS}`
+- `CURRENT_OS=linux` 时不固定机器绝对路径；必须从当前工作目录向上识别本文件所属工程根，并设置 `SELPLAT_ROOT=<识别出的工程根>`。
+- 不可变核心资源根：`MEMORY_ROOT=${SELPLAT_ROOT}/apps/rule-engine/backend/src/main/resources/local/core`
 - 核心协议目录：`CORE_PROTOCOL_ROOT=${MEMORY_ROOT}/protocol`
 - rule-engine 资源根：`RULE_ENGINE_RESOURCE_ROOT=${MEMORY_ROOT}/../..`
 - 唯一规则索引：`RULE_ENGINE_RULE_INDEX=${RULE_ENGINE_RESOURCE_ROOT}/RULE_INDEX.md`
@@ -40,5 +46,6 @@
 ## 失败阻断
 
 - 对会产生新增、删除或修改的任务，必须先按 USER 协议取得独立 `1`；独立 `2` 只追加执行池。
+- 独立 `1` 打开的执行窗口持续到当前任务完成验证与交付；窗口内追加的文件、材料、参数和同目标要求属于已授权补充，可以直接继续执行。补充内容改变总体目标、进入新工程或系统、新增未授权 core/common 层级、扩大删除范围或形成独立新任务时，必须重新说明并取得 `1`。
 - 用户方案违反已加载规则、当前用户无法验证、索引登记缺失、路径逃逸、未取得明确托管授权的 core/common 写入或代码进入错误语言源目录时，必须停止并报告具体冲突。
 - 代码变更必须按索引加载对应编码、业务注释与测试规则，并在交付前完成相匹配的离线验证。

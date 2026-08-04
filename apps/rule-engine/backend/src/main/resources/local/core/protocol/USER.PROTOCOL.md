@@ -24,6 +24,16 @@ startup_chain_and_rule_index_loading_are_not_task_execution = true
 <!-- 用户输入 1 表示按当前理解立即执行 -->
 standalone_reply_1_means_execute_based_on_stated_understanding = true
 
+<!-- 独立 1 打开的执行窗口持续到当前任务完成验证与交付；业务含义是同一任务不因用户补充材料而反复关闭授权。 -->
+standalone_1_execution_window_remains_open_until = verification_and_delivery
+
+<!-- 执行窗口内追加的文件、材料、参数或同目标要求属于已授权任务的补充说明；业务含义是补充内容可以直接纳入执行，无需再次回复 1。 -->
+followup_after_standalone_1_within_same_task_is_authorized_supplement = true
+authorized_same_task_supplement_types = file,material,parameter,same_goal_requirement
+
+<!-- 补充内容改变总体目标、进入新工程或系统、新增未授权 core/common 层级、扩大删除范围或形成独立新任务时重新确认；业务含义是延续授权不得演变为无限范围授权。 -->
+followup_requires_new_confirmation_when = overall_goal_changes,new_project_or_system,new_core_or_common_layer,destructive_scope_expands,independent_new_task
+
 <!-- 用户输入 2 表示将当前事项写入执行池而不立即执行 -->
 standalone_reply_2_means_append_current_item_to_execution_pool = true
 

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sp.selplat.local.code.common.fujitsu.app.db.DBデータ生成ツール;
+import com.sp.selplat.local.code.common.fujitsu.app.design.SbmaaApiOverviewGenerator;
+import com.sp.selplat.local.code.common.fujitsu.app.design.SbmaaInterfaceSpecificationGenerator;
 import com.sp.selplat.local.code.common.fujitsu.app.sql.GenericSqlSpecDocCorrector;
 import com.sp.selplat.local.code.common.fujitsu.app.sql.SQL仕様書生成ツール;
 import java.lang.reflect.Method;
@@ -25,11 +27,13 @@ class FujitsuAppEntryPointTest {
      */
     @Test
     void shouldExposeManualAndAiCallableMainEntries() throws NoSuchMethodException {
-        // 三个已核验完整程序形成当前 Fujitsu app 清单，新增入口必须显式加入验证。
+        // 五个已核验完整程序形成当前 Fujitsu app 清单，新增入口必须显式加入验证。
         List<Class<?>> appClasses = List.of(
             DBデータ生成ツール.class,
             SQL仕様書生成ツール.class,
-            GenericSqlSpecDocCorrector.class
+            GenericSqlSpecDocCorrector.class,
+            SbmaaApiOverviewGenerator.class,
+            SbmaaInterfaceSpecificationGenerator.class
         );
         // 逐个确认包边界和 Java 标准入口，防止迁移后只移动文件却留下旧包名或私有方法。
         for (Class<?> appClass : appClasses) {

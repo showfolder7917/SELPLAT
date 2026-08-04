@@ -138,6 +138,53 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             leaf_index,
         )
 
+    def test_same_task_followup_after_standalone_one_remains_authorized(self) -> None:
+        """独立 1 后的同任务补充必须延续授权，同时保留实质扩张的重新确认边界。"""
+
+        # 读取核心 USER 协议 → 验证补充授权来自协议权威入口而不是用户层自行推断。
+        protocol_text = (
+            PROJECT_ROOT
+            / "apps/rule-engine/backend/src/main/resources/local/core/protocol/USER.PROTOCOL.md"
+        ).read_text(encoding="utf-8")
+        # 同任务补充 → 协议明确允许文件、材料、参数和同目标要求直接继续执行。
+        self.assertIn(
+            "followup_after_standalone_1_within_same_task_is_authorized_supplement = true",
+            protocol_text,
+        )
+        # 实质范围扩张 → 协议仍要求重新取得用户确认，防止授权无限延伸。
+        self.assertIn(
+            "followup_requires_new_confirmation_when = overall_goal_changes,new_project_or_system,"
+            "new_core_or_common_layer,destructive_scope_expands,independent_new_task",
+            protocol_text,
+        )
+
+        # 读取 XUNAN 委托规则 → 验证用户层托管窗口与核心协议保持同一补充语义。
+        delegation_text = (
+            PROJECT_ROOT
+            / "apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/"
+            "RUL_用户明确委托AI修正规则.md"
+        ).read_text(encoding="utf-8")
+        # 用户补充同任务材料 → 现有托管窗口继续生效且无需重复确认。
+        self.assertIn(
+            "explicit_ai_managed_same_task_followup_policy = "
+            "authorized_supplement_without_reconfirmation",
+            delegation_text,
+        )
+        # 规则版本升级 → 授权语义变化具备可追踪的治理记录。
+        self.assertIn("rule_version = 1.1.0", delegation_text)
+
+        # 读取根索引 → 验证新增确认场景仍通过既有稳定逻辑 ID 命中用户规则。
+        root_index_text = (
+            PROJECT_ROOT
+            / "apps/rule-engine/backend/src/main/resources/RULE_INDEX.md"
+        ).read_text(encoding="utf-8")
+        # 根索引选择器 → 同任务补充不会绕过分层规则加载链。
+        self.assertIn(
+            "load_rule_for_xunan_same_task_followup_after_standalone_1 = "
+            "RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES",
+            root_index_text,
+        )
+
     def test_registry_and_secondary_executor_are_removed(self) -> None:
         """单一用户程序必须直接运行，不保留无用注册表和二次执行器。"""
 

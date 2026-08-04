@@ -7,13 +7,13 @@ python_ability_refs = none
 <!-- Node 当前不承担委托授权判定，显式写 none 防止猜测程序入口。 -->
 node_ability_refs = none
 <!-- 规则从 1.0.0 起步，委托范围或确认条件变化时必须升级版本。 -->
-rule_version = 1.0.0
+rule_version = 1.1.0
 <!-- 本覆盖规则仅属于已验证用户 XUNAN。 -->
 rule_owner = XUNAN
 <!-- active 表示该覆盖已由根索引登记并用于当前 SELPLAT 工程。 -->
 rule_status = active
 <!-- 记录用户明确要求 AI 可以托管其提出的修改需求。 -->
-upgrade_record = 2026-08-03:建立用户明确委托后的AI托管修正例外
+upgrade_record = 2026-08-03:建立用户明确委托后的AI托管修正例外;2026-08-04:允许独立1后的同任务补充说明延续现有托管窗口
 
 <!-- 问题：默认冻结规则会阻止用户已经明确提出并希望交由 AI 完成的 core 或 common 修改。 -->
 <!-- 场景：XUNAN 明确点名修改 local/core 或 local/common 的具体目标，并随后以独立 1 启动执行。 -->
@@ -28,8 +28,14 @@ rule_engine_automatic_correction_target = explicitly_delegated_scope_otherwise_a
 <!-- 明确委托的 core 修改不再被视为越权，但不得推定其他目录也已获授权。 -->
 rule_engine_user_merge_to_core_is_forbidden = false_only_within_explicitly_delegated_scope
 
-<!-- 托管窗口必须同时具备具体目标、独立 1、当前用户可验证和范围可解析四项条件。 -->
-explicit_ai_managed_change_required_evidence = explicitly_named_target,standalone_1,verified_active_user,resolved_scope
+<!-- 托管窗口必须同时具备明确任务、独立 1、当前用户可验证和范围可解析四项条件；业务含义是初始目标与后续同任务补充共同组成已授权范围。 -->
+explicit_ai_managed_change_required_evidence = explicitly_stated_task,standalone_1,verified_active_user,resolved_scope
+<!-- 独立 1 后追加的文件、材料、参数或同目标要求延续当前托管窗口；业务含义是用户补充制作依据时 AI 可以继续执行而不重复索要确认。 -->
+explicit_ai_managed_same_task_followup_policy = authorized_supplement_without_reconfirmation
+<!-- 已授权补充仅包含文件、材料、参数和同目标要求；业务含义是执行方可以识别正常补充而不把新任务误归入现有窗口。 -->
+explicit_ai_managed_authorized_supplement_types = file,material,parameter,same_goal_requirement
+<!-- 新任务或实质扩张必须重新确认；业务含义是补充授权不能越过原任务的工程、系统、层级和破坏性边界。 -->
+explicit_ai_managed_followup_requires_new_confirmation = overall_goal_changes,new_project_or_system,new_core_or_common_layer,destructive_scope_expands,independent_new_task
 <!-- AI 修改前必须核对索引、调用方、注册表、测试和替代关系。 -->
 explicit_ai_managed_change_preflight = indexes,callers,registries,tests,replacement_relationships
 <!-- 合并或删除必须记录保留方、清理引用并运行相关回归。 -->
