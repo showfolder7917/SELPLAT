@@ -65,15 +65,18 @@
         }) }),
         Object.freeze({ id: "custom", label: "自定义", icon: "ri-font-color", values: null })
     ]);
-    // 常用色只提供快速选择入口，不代表固定皮肤；任意颜色仍可通过原生颜色控件选择。
+    // 六组常用色同时登记深浅皮肤的独立水晶边框与配套背景；任意自定义颜色仍只改变统一颜色令牌。
     const selPersonalizationThemeColors = Object.freeze([
-        Object.freeze({ value: "#4A8BFF", label: "星际蓝" }),
-        Object.freeze({ value: "#28D7FF", label: "水晶青" }),
-        Object.freeze({ value: "#8067FF", label: "星云紫" }),
-        Object.freeze({ value: "#28C7A5", label: "翡翠绿" }),
-        Object.freeze({ value: "#F3B348", label: "琥珀金" }),
-        Object.freeze({ value: "#EC5D9A", label: "脉冲粉" })
+        Object.freeze({ id: "stellar-blue", value: "#4A8BFF", label: "星际蓝" }),
+        Object.freeze({ id: "crystal-cyan", value: "#28D7FF", label: "水晶青" }),
+        Object.freeze({ id: "nebula-purple", value: "#8067FF", label: "星云紫" }),
+        Object.freeze({ id: "emerald-green", value: "#28C7A5", label: "翡翠绿" }),
+        Object.freeze({ id: "amber-gold", value: "#F3B348", label: "琥珀金" }),
+        Object.freeze({ id: "pulse-pink", value: "#EC5D9A", label: "脉冲粉" })
     ]);
+    // 主题素材路径由稳定色板 ID 和当前皮肤共同解析，避免在事件分支中复制 12 组路径。
+    const selPersonalizationThemeAssetRoot = "/sel/assets/skins";
+    const selPersonalizationThemeAssetVersion = "20260804-1";
     // 每个预设分别保存深浅皮肤参数；稳定 ID 保持不变，显示名称改用不限定明暗的“沉浸”。
     const selPersonalizationPresets = Object.freeze([
         Object.freeze({ id: "deep-space", label: "沉浸", icon: "ri-focus-2-line", values: Object.freeze({
@@ -541,6 +544,40 @@
         }
 
         /**
+         * 根据当前统一颜色查找正式色板主题；自定义颜色没有独立图片包。
+         * @returns {object|null} 命中色板时返回不可变配置，否则返回 null。
+         */
+        function selPersonalizationResolveThemeColor() {
+            const selPersonalizationThemeColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor);
+            return selPersonalizationThemeColors.find((selPersonalizationItem) => selPersonalizationItem.value === selPersonalizationThemeColor) || null;
+        }
+
+        /**
+         * 同步色板对应的深浅边框和配套背景；跟随皮肤或自定义颜色恢复当前皮肤默认素材。
+         * @param {boolean} selPersonalizationUpdateBackground - true 时同时切换配套背景及显示参数。
+         * @returns {void}
+         */
+        function selPersonalizationApplyThemeAssets(selPersonalizationUpdateBackground = false) {
+            const selPersonalizationSkin = selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationSkinState)
+                || selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationDefaultSkin);
+            const selPersonalizationTheme = selPersonalizationResolveThemeColor();
+            const selPersonalizationFrameImage = selPersonalizationTheme
+                ? `${selPersonalizationThemeAssetRoot}/${selPersonalizationSkin.id}/components/panel/themes/selPanelFrame-${selPersonalizationTheme.id}.webp?v=${selPersonalizationThemeAssetVersion}`
+                : selPersonalizationSkin.frameImage;
+            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-frame-image", `url("${selPersonalizationFrameImage}")`);
+            selPersonalizationDocumentRoot.dataset.selThemeAsset = selPersonalizationTheme?.id || "follow-skin";
+            if (!selPersonalizationUpdateBackground) {
+                return;
+            }
+            const selPersonalizationBackgroundTheme = selPersonalizationTheme
+                ? `${selPersonalizationSkin.id}-${selPersonalizationTheme.id}`
+                : selPersonalizationSkin.backgroundTheme;
+            selPersonalizationBackgroundController.setTheme(selPersonalizationBackgroundTheme);
+            selPersonalizationBackgroundController.setDisplay(selPersonalizationSkin.backgroundDisplay);
+            selPersonalizationSyncBackground();
+        }
+
+        /**
          * 应用一个正式皮肤标识，并同步浏览器原生控件的明暗模式。
          * @param {string} selPersonalizationSkinId - dark 或 light。
          * @returns {boolean} 皮肤存在并成功应用时返回 true。
@@ -560,10 +597,8 @@
             if (selPersonalizationActiveValues) {
                 selPersonalizationPanelState = { ...selPersonalizationPanelState, ...selPersonalizationActiveValues };
             }
-            // 每次主动切换皮肤时同步配套背景和显示参数；随后手动调节仍可在当前页面独立覆盖。
-            selPersonalizationBackgroundController.setTheme(selPersonalizationSkin.backgroundTheme);
-            selPersonalizationBackgroundController.setDisplay(selPersonalizationSkin.backgroundDisplay);
-            selPersonalizationSyncBackground();
+            // 每次主动切换皮肤时同步当前色板在新皮肤下的独立边框、配套背景和显示参数。
+            selPersonalizationApplyThemeAssets(true);
             selPersonalizationSyncSkin();
             document.dispatchEvent(new CustomEvent("selPersonalization:skin-change", { detail: Object.freeze({ skin: selPersonalizationSkinState }) }));
             return true;
@@ -585,8 +620,8 @@
                 // 跟随皮肤时恢复皮肤提供的主题 RGB，不触碰独立的原始边框图片。
                 selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-color-rgb");
             }
-            // 清理旧版本可能遗留的行内着色边框，确保水晶框始终回到皮肤提供的原始九宫格素材。
-            selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-frame-image");
+            // 正式色板读取 12 套预生成水晶框；自定义颜色和跟随模式使用当前皮肤原始边框。
+            selPersonalizationApplyThemeAssets(false);
             // 原始九宫格图片直接消费用户百分比，不改变图片色彩和透明通道细节。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-opacity", String(selPersonalizationFrameVisualStrength));
             // 中心底板透明度只作用于背景色，不降低文字、图标或边框 Alpha。
@@ -641,8 +676,8 @@
             // 发光扩散映射到 0 至 22px，并单独写强度供动效使用。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-spread", `${selPersonalizationMap(selPersonalizationPanelState.glowSpread, 0, 22)}px`);
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-glow-strength", String(selPersonalizationPanelState.glowSpread / 100));
-            // 静态边框外光把扩散强度与边框透明度相乘，确保 0% 时不残留彩色轮廓。
-            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-glow-alpha", String(Math.round((0.18 + ((selPersonalizationPanelState.glowSpread / 100) * 0.45)) * selPersonalizationFrameVisualStrength * 1000) / 1000));
+            // 静态边框外光同时乘以扩散强度与边框透明度；任一项为 0 时都不残留彩色轮廓。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-glow-alpha", String(Math.round((selPersonalizationPanelState.glowSpread / 100) * 0.78 * selPersonalizationFrameVisualStrength * 1000) / 1000));
             // 个性化浮层保留独立暗影，但其彩色边框外光必须与边框图片同步衰减。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-panel-glow-alpha", String(Math.round(0.42 * selPersonalizationFrameVisualStrength * 1000) / 1000));
             // 活动窗口的强调外光继续高于普通面板，但边框为 0% 时同样完全透明。
@@ -660,8 +695,12 @@
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-motion-to-alpha", String(Math.round((0.18 + ((selPersonalizationPanelState.glowMotion / 100) * 0.42)) * selPersonalizationFrameVisualStrength * 1000) / 1000));
             // 页面标识统一控制用户开关和系统减少动态偏好的降级路径。
             selPersonalizationDocumentRoot.dataset.selPersonalReducedMotion = String(selPersonalizationPanelState.reducedMotion);
-            // 明确的开关标识替代字符串模糊匹配，只有强度精确为 0 时才停止光效动画。
-            selPersonalizationDocumentRoot.dataset.selPersonalGlowMotion = selPersonalizationPanelState.glowMotion === 0 ? "off" : "on";
+            // 发光扩散、流动强度或边框透明度任一为 0 时停止边框动画，避免 0px 模糊产生锐利彩色轮廓。
+            selPersonalizationDocumentRoot.dataset.selPersonalGlowMotion = (
+                selPersonalizationPanelState.glowMotion === 0
+                || selPersonalizationPanelState.glowSpread === 0
+                || selPersonalizationPanelState.frameOpacity === 0
+            ) ? "off" : "on";
             selPersonalizationDocumentRoot.dataset.selPersonalPreset = selPersonalizationPanelState.preset;
             // 只在用户拖动窗口动画滑杆时重播当前可见窗口，让强度变化获得即时视觉反馈。
             if (selPersonalizationPreviewKey === "windowMotion" && !selPersonalizationPanelState.reducedMotion && selPersonalizationPanelState.windowMotion > 0) {
@@ -957,14 +996,22 @@
         selPersonalizationControl.querySelector("[data-sel-personal-theme-color]")?.addEventListener("input", (selPersonalizationEvent) => {
             // 合法颜色进入当前页面自定义状态。
             selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: selPersonalizationNormalizeColor(selPersonalizationEvent.target.value), preset: "custom" };
+            // 拖动取色器期间只更新边框和颜色令牌，避免反复解码背景造成指针延迟。
+            selPersonalizationApplyThemeAssets(false);
             // 新颜色即时覆盖所有水晶组件的共享主题变量。
+            selPersonalizationApplyPanel();
+        });
+        // 原生取色结束后再一次性同步背景；正式色板命中配套图，其他颜色回到皮肤默认背景。
+        selPersonalizationControl.querySelector("[data-sel-personal-theme-color]")?.addEventListener("change", () => {
+            selPersonalizationApplyThemeAssets(true);
             selPersonalizationApplyPanel();
         });
         // 跟随皮肤按钮清除临时颜色覆盖，不改变其他面板强度。
         selPersonalizationControl.querySelector("[data-sel-personal-theme-follow]")?.addEventListener("click", () => {
             // null 让 CSS 重新读取皮肤默认主题色。
             selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: null, preset: "custom" };
-            // 立即恢复当前皮肤颜色。
+            // 立即恢复当前皮肤颜色、原始边框和配套背景。
+            selPersonalizationApplyThemeAssets(true);
             selPersonalizationApplyPanel();
         });
         // 常用色按钮统一走与颜色输入相同的状态路径。
@@ -976,6 +1023,8 @@
             }
             // 色板值已在固定配置中定义，仍经过统一校验后写入。
             selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: selPersonalizationNormalizeColor(selPersonalizationSwatch.dataset.selPersonalThemeSwatch), preset: "custom" };
+            // 正式色板作为一个主题包同步边框、背景和统一颜色令牌。
+            selPersonalizationApplyThemeAssets(true);
             // 所有共享水晶表面即时响应。
             selPersonalizationApplyPanel();
         });
@@ -1008,14 +1057,8 @@
         });
         // 背景恢复按钮采用当前皮肤的配套背景，不再把浅色皮肤恢复成深色显示参数。
         selPersonalizationControl.querySelector("[data-sel-personal-action='reset-background']")?.addEventListener("click", () => {
-            // 当前皮肤必定来自正式清单；异常时回退刷新默认深色皮肤。
-            const selPersonalizationSkin = selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationSkinState)
-                || selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationDefaultSkin);
-            // 主题和三个显示参数作为同一组皮肤背景令牌恢复。
-            selPersonalizationBackgroundController.setTheme(selPersonalizationSkin.backgroundTheme);
-            selPersonalizationBackgroundController.setDisplay(selPersonalizationSkin.backgroundDisplay);
-            // 个性化界面同步当前皮肤背景。
-            selPersonalizationSyncBackground();
+            // 当前色板存在时恢复它的配套背景；跟随或自定义颜色恢复当前皮肤默认背景。
+            selPersonalizationApplyThemeAssets(true);
         });
         // 皮肤恢复只回到默认深色，不改变其他三个 Tab 的当前状态。
         selPersonalizationControl.querySelector("[data-sel-personal-action='reset-skin']")?.addEventListener("click", () => {
@@ -1027,7 +1070,8 @@
         selPersonalizationControl.querySelector("[data-sel-personal-action='reset-panel']")?.addEventListener("click", () => {
             // 默认状态只来自代码配置，不读取本地缓存。
             selPersonalizationPanelState = { ...selPersonalizationDefaults, themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor), reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion) };
-            // 默认面板令牌立即写回页面。
+            // 默认面板令牌与当前皮肤配套素材立即写回页面。
+            selPersonalizationApplyThemeAssets(true);
             selPersonalizationApplyPanel();
         });
         // 文字恢复按钮只重置文字体系，不改变背景主题或面板参数。

@@ -21,6 +21,7 @@
     --selpersonal-panel-gap: 10px;
     --selpersonal-glow-spread: 12.1px;
     --selpersonal-glow-strength: 0.55;
+    --selpersonal-frame-shadow-alpha: 0.16;
     --selpersonal-frame-glow-alpha: 0.428;
     --selpersonal-frame-panel-glow-alpha: 0.42;
     --selpersonal-frame-active-glow-alpha: 0.68;
@@ -110,7 +111,7 @@
     color: var(--sel-theme-text-body);
     background: transparent;
     border-radius: var(--sel-theme-radius-panel);
-    box-shadow: 0 18px 23px rgba(0, 0, 24, 0.56), 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-panel-glow-alpha));
+    box-shadow: none;
     isolation: auto;
     overflow: visible;
 }
@@ -178,7 +179,11 @@
     border-image-repeat: stretch;
     border-radius: inherit;
     opacity: var(--selpersonal-frame-opacity);
-    /* 边框图片层独立建立合成面，后续滤镜动画不再让磨砂底板参与循环重绘。 */
+    /* 投影与主题外光只采样水晶图片的真实 Alpha，避免切角外侧重新出现矩形黑底。 */
+    filter:
+        drop-shadow(0 8px 12px rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-frame-shadow-alpha)))
+        drop-shadow(0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-glow-alpha)));
+    /* 边框图片层独立建立合成面，透明度会同步衰减图片、投影和主题外光。 */
     transform: translateZ(0);
     pointer-events: none;
     content: "";
@@ -253,7 +258,7 @@
     /* 外层不再建立磨砂采样边界；背景虚化只由与内板同尺寸的 ::before 承担。 */
     isolation: auto;
     filter: none;
-    box-shadow: 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-glow-alpha));
+    box-shadow: none;
 }
 
 /* 窗口使用定位层级建立普通堆叠上下文，既固定伪元素顺序又允许磨砂采样窗口后方页面。 */
@@ -1175,7 +1180,8 @@
 }
 
 .selpanel-crystal-surface::after {
-    background: linear-gradient(120deg, rgb(var(--sel-theme-color-rgb) / 0.10), transparent 28%, transparent 72%, rgb(var(--sel-theme-color-rgb) / 0.14));
+    /* 边框装饰层必须保持透明中心，确保 drop-shadow 沿九宫格图片轮廓采样。 */
+    background: transparent;
 }
 
 /* 所有内部结构层共用同一透明度令牌；深浅皮肤只改变令牌值，不再复制组件规则。 */
@@ -1200,7 +1206,7 @@
 .selgrid-menu,
 .selgrid-menu-submenu,
 .seldatepicker-popover {
-    box-shadow: 0 8px 24px rgb(var(--sel-theme-neutral-rgb) / 0.16), 0 0 var(--selpersonal-glow-spread) rgb(var(--sel-theme-color-rgb) / 0.20);
+    box-shadow: none;
 }
 
 /* Window 的标题、字段、底栏、普通操作与最小化轨道共享同一皮肤色阶。 */
@@ -1235,7 +1241,14 @@
 .selwindow-window-active,
 .selwindow-window-interacting {
     filter: none;
-    box-shadow: 0 0 14px rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-active-glow-alpha));
+    box-shadow: none;
+}
+
+.selwindow-window-active::after,
+.selwindow-window-interacting::after {
+    filter:
+        drop-shadow(0 8px 12px rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-frame-shadow-alpha)))
+        drop-shadow(0 0 14px rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-active-glow-alpha)));
 }
 
 .selwindow-checkbox-input {
@@ -1491,10 +1504,14 @@
 /* 光效只改变独立边框图片层的合成滤镜，不再动画承载磨砂和交互内容的大面板。 */
 @keyframes selpersonal-frame-glow-breathe {
     from {
-        filter: drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.46) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-from-alpha)));
+        filter:
+            drop-shadow(0 8px 12px rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-frame-shadow-alpha)))
+            drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.46) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-from-alpha)));
     }
     to {
-        filter: drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.82) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-to-alpha)));
+        filter:
+            drop-shadow(0 8px 12px rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-frame-shadow-alpha)))
+            drop-shadow(0 0 calc(var(--selpersonal-glow-spread) * 0.82) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-motion-to-alpha)));
     }
 }
 

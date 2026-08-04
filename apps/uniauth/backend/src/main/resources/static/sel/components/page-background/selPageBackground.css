@@ -9,6 +9,12 @@
     --selpage-background-overlay: 0.58;
     --selpage-background-brightness: 0.82;
     --selpage-background-blur: 0px;
+    --selpage-background-invert: 0;
+}
+
+/* 极暗深空图片通过皮肤令牌决定是否反相；浅色皮肤保留星空细节但不再产生黑色面板间距。 */
+:root[data-sel-page-background-theme="void"] {
+    --selpage-background-invert: var(--sel-theme-void-background-invert, 0);
 }
 
 /* 独立背景层固定在页面最底部，删除业务面板不会改变背景模块。 */
@@ -26,6 +32,7 @@
     inset: 0;
     background: var(--selpage-background-image) center / cover no-repeat;
     filter:
+        invert(var(--selpage-background-invert))
         brightness(var(--selpage-background-brightness))
         blur(var(--selpage-background-blur));
     transform: scale(1.035);
@@ -36,7 +43,8 @@
 .selpage-background-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(1, 5, 22, var(--selpage-background-overlay));
+    /* 遮罩颜色由当前皮肤提供：深色压暗背景，浅色提亮背景，避免面板间距露出固定黑边。 */
+    background: rgb(var(--sel-theme-background-overlay-rgb, 1 5 22) / var(--selpage-background-overlay));
     transition: background-color 180ms ease;
 }
 

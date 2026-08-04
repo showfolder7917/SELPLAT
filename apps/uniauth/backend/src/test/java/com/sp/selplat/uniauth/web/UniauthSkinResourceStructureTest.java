@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -75,6 +76,34 @@ class UniauthSkinResourceStructureTest {
         assertTrue(new String(darkFrame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
         assertTrue(new String(lightFrame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
         assertTrue(new String(darkSpaceBackground, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
+    }
+
+    /**
+     * themeColorMaterialPacks 验证六个色板在深浅皮肤下都有独立边框与配套背景。
+     */
+    @Test
+    void themeColorMaterialPacks() throws IOException {
+        // 稳定主题 ID 与生产脚本一致，新增或删除色板时必须原子更新完整素材包。
+        List<String> themeIds = List.of(
+                "stellar-blue", "crystal-cyan", "nebula-purple", "emerald-green", "amber-gold", "pulse-pink");
+        String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
+        String backgroundScript = readText("static/sel/components/page-background/selPageBackground.js");
+        for (String skin : List.of("dark", "light")) {
+            for (String themeId : themeIds) {
+                // 边框与背景均必须为可读取的真实 WebP，禁止仅登记令牌或空占位文件。
+                byte[] frame = readBytes("static/sel/assets/skins/" + skin
+                        + "/components/panel/themes/selPanelFrame-" + themeId + ".webp");
+                byte[] background = readBytes("static/sel/assets/backgrounds/themes/" + skin + "-" + themeId + ".webp");
+                assertTrue(frame.length > 10_000);
+                assertTrue(background.length > 10_000);
+                assertTrue(new String(frame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
+                assertTrue(new String(background, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
+                // 页面背景注册表必须同时包含深浅主题 ID，确保色块点击能够成功切换配套图片。
+                assertTrue(backgroundScript.contains("id: \"" + skin + "-" + themeId + "\""));
+            }
+            // 个性化脚本使用统一路径解析器消费当前皮肤，避免为 12 张边框复制事件分支。
+            assertTrue(personalizationScript.contains("${selPersonalizationSkin.id}/components/panel/themes/selPanelFrame-"));
+        }
     }
 
     /**
