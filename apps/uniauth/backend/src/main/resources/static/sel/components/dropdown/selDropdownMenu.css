@@ -222,7 +222,7 @@
     background: transparent;
     cursor: pointer;
     text-align: left;
-    transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, color 120ms ease;
+    transition: none;
 }
 
 .seldropdown-option:not(:last-child)::after {
@@ -238,11 +238,11 @@
 .seldropdown-option:hover,
 .seldropdown-option:focus-visible,
 .seldropdown-option.seldropdown-option-active {
-    border-color: rgba(97, 180, 255, 0.72);
+    border-color: var(--sel-theme-interaction-hover-line);
     outline: none;
-    color: var(--sel-theme-text-on-selected-surface);
-    background: linear-gradient(90deg, rgba(24, 91, 194, 0.58), rgba(66, 50, 170, 0.50));
-    box-shadow: 0 0 11px rgba(54, 127, 255, 0.55), inset 0 0 11px rgba(92, 143, 255, 0.20);
+    color: var(--sel-theme-text-title);
+    background: var(--sel-theme-interaction-surface-hover);
+    box-shadow: none;
 }
 
 .seldropdown-option[aria-selected="true"] {

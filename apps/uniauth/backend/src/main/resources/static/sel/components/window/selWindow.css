@@ -94,7 +94,7 @@
 
 /* 表单保持标题、可滚动内容和固定操作区的稳定纵向结构。 */
 .selwindow-form-shell { display: grid; min-width: 0; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
-.selwindow-form-fields { display: grid; min-width: 0; min-height: 0; align-content: start; gap: 10px; overflow: auto; padding: 16px 27px 10px; scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track); scrollbar-width: thin; }
+.selwindow-form-fields { display: grid; min-width: 0; min-height: 0; align-content: start; gap: 10px; overflow: auto; overscroll-behavior: contain; padding: 16px 27px 10px; scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track); scrollbar-width: thin; }
 
 /* 窗口表单滚动区使用常规面板尺寸档，缩放窗口时继续沿用同一皮肤反馈。 */
 .selwindow-form-fields::-webkit-scrollbar { width: var(--sel-theme-scrollbar-size-panel); height: var(--sel-theme-scrollbar-size-panel); }

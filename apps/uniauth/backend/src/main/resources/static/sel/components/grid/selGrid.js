@@ -254,6 +254,8 @@
 
     // 缓存表格和浮层固定节点，交互更新时避免重复查找页面结构。
     const selGridView = {
+        // 表格滚动视口负责截断顶部、底部及横向边界的滚轮穿透。
+        tableScroller: selGridRoot.querySelector('.selgrid-table-scroller'),
         // 表格主体承接项目行的动态渲染。
         tableBody: selGridRoot.querySelector('[data-sel-grid-role="table-body"]'),
         // 全选按钮同步全部项目的选择状态。
@@ -700,6 +702,29 @@
         // 两秒后自动收起提示，保持表格视野整洁。
         selGridToastTimer = window.setTimeout(() => selGridView.feedbackToast.classList.remove("selgrid-feedback-visible"), 2000);
     }
+
+    /**
+     * 表格滚轮只在自身滚动视口内消费，到达四向边界后不再驱动浏览器页面。
+     * @param {WheelEvent} selGridEvent - 表格滚动视口收到的滚轮事件。
+     */
+    function selGridHandleWheel(selGridEvent) {
+        // 缺少滚动视口时不改变页面原生行为。
+        if (!selGridView.tableScroller) return;
+        // 纵向仍有滚动余量时保留浏览器的原生表格滚动。
+        const selGridCanScrollY = selGridView.tableScroller.scrollHeight > selGridView.tableScroller.clientHeight + 1
+            && ((selGridEvent.deltaY < 0 && selGridView.tableScroller.scrollTop > 0)
+                || (selGridEvent.deltaY > 0 && selGridView.tableScroller.scrollTop + selGridView.tableScroller.clientHeight < selGridView.tableScroller.scrollHeight - 1));
+        // 横向滚动采用同一边界规则，兼容窄视口和 Shift 滚轮。
+        const selGridCanScrollX = selGridView.tableScroller.scrollWidth > selGridView.tableScroller.clientWidth + 1
+            && ((selGridEvent.deltaX < 0 && selGridView.tableScroller.scrollLeft > 0)
+                || (selGridEvent.deltaX > 0 && selGridView.tableScroller.scrollLeft + selGridView.tableScroller.clientWidth < selGridView.tableScroller.scrollWidth - 1));
+        // 事件始终停留在表格组件内；到达边界时同时取消页面默认滚动。
+        selGridEvent.stopPropagation();
+        if (!selGridCanScrollY && !selGridCanScrollX) selGridEvent.preventDefault();
+    }
+
+    // 非被动监听允许表格在滚动边界取消默认行为，避免浏览器页面跟随移动。
+    selGridView.tableScroller?.addEventListener("wheel", selGridHandleWheel, { passive: false });
 
     // 表格事件委托统一处理选择、查看、编辑和更多菜单。
     selGridView.tableBody.addEventListener("click", (event) => {

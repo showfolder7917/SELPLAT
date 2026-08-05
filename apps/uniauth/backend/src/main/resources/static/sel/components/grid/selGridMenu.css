@@ -106,7 +106,7 @@
     background: transparent;
     cursor: pointer;
     text-align: left;
-    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    transition: none;
 }
 
 .selgrid-menu-item:not(:last-child)::after {
@@ -123,12 +123,10 @@
 .selgrid-menu-item:focus-visible,
 .selgrid-menu-item.selgrid-menu-pressed,
 .selgrid-menu-item[aria-expanded="true"] {
-    border-color: rgba(105, 179, 255, 0.82);
+    border-color: var(--sel-theme-interaction-hover-line);
     outline: none;
-    background: rgba(27, 79, 194, 0.42);
-    box-shadow:
-        0 0 12px rgba(44, 128, 255, 0.70),
-        inset 0 0 13px rgba(89, 126, 255, 0.34);
+    background: var(--sel-theme-interaction-surface-hover);
+    box-shadow: none;
 }
 
 .selgrid-menu-item:active {

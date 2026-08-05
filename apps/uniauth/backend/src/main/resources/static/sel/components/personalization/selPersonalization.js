@@ -303,18 +303,28 @@
         };
         // 文字状态仅存在于当前页面内存，不写 localStorage、cookie 或服务端配置。
         let selPersonalizationTextState = { ...selPersonalizationTextDefaults };
-        // 四个一级设置使用原生 tab 语义，皮肤、背景、面板和文字保持同一信息层级。
-        selPersonalizationHost.innerHTML = `
-            <aside class="selpersonal-control" data-sel-personal-control aria-label="个性化设置">
-                <button class="selpersonal-trigger" type="button" data-sel-personal-action="toggle" aria-label="打开个性化设置" aria-expanded="false">
-                    <i class="ri-equalizer-2-line" aria-hidden="true"></i>
-                </button>
-                <section class="selpersonal-panel" data-sel-personal-panel role="dialog" aria-label="个性化设置" hidden>
-                    <header class="selpersonal-heading">
-                        <span class="selpersonal-heading-icon" aria-hidden="true"><i class="ri-magic-line"></i></span>
-                        <span class="selpersonal-heading-copy"><strong>个性化设置</strong><small>当前页面实时预览</small></span>
-                        <button class="selpersonal-close" type="button" data-sel-personal-action="close" aria-label="关闭个性化设置"><i class="ri-close-line" aria-hidden="true"></i></button>
-                    </header>
+        // 通用浮动面板负责入口、外壳、标题、关闭和交互隔离；本组件只提供四个业务设置视图。
+        const selPersonalizationFloatingPanel = window.selFloatingPanel?.mount(selPersonalizationHost, {
+            id: "personalization",
+            title: "个性化设置",
+            subtitle: "当前页面实时预览",
+            label: "个性化设置",
+            triggerIcon: "ri-equalizer-2-line",
+            icon: "ri-magic-line",
+            openLabel: "打开个性化设置",
+            closeLabel: "关闭个性化设置",
+            // 兼容类只保留个性化面板的尺寸和皮肤细节，基础结构与行为已经由 selFloatingPanel 承担。
+            classes: {
+                control: "selpersonal-control",
+                trigger: "selpersonal-trigger",
+                panel: "selpersonal-panel",
+                heading: "selpersonal-heading",
+                headingIcon: "selpersonal-heading-icon",
+                headingCopy: "selpersonal-heading-copy",
+                close: "selpersonal-close"
+            },
+            // 四个一级设置使用原生 tab 语义，皮肤、背景、面板和文字保持同一信息层级。
+            contentHtml: `
                     <div class="selpersonal-tabs" role="tablist" aria-label="个性化设置分类">
                         <button class="selpersonal-tab selpersonal-tab-selected" type="button" role="tab" aria-selected="true" aria-controls="selpersonal-skin-view" data-sel-personal-tab="skin"><i class="ri-contrast-2-line" aria-hidden="true"></i><span>皮肤</span></button>
                         <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-background-view" data-sel-personal-tab="background"><i class="ri-landscape-line" aria-hidden="true"></i><span>背景</span></button>
@@ -371,14 +381,14 @@
                             </section>
                         </div>
                         <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-text"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复文字默认</span></button>
-                    </div>
-                </section>
-            </aside>
-        `;
-        // 固定节点集中缓存，后续状态同步不重复查询整个页面。
-        const selPersonalizationControl = selPersonalizationHost.querySelector("[data-sel-personal-control]");
-        const selPersonalizationTrigger = selPersonalizationHost.querySelector("[data-sel-personal-action='toggle']");
-        const selPersonalizationPanel = selPersonalizationHost.querySelector("[data-sel-personal-panel]");
+                    </div>`
+        });
+        // 缺少通用浮动面板注册能力时拒绝创建半套个性化界面。
+        if (!selPersonalizationFloatingPanel) return null;
+        // 固定节点直接使用基础控制器返回值，后续状态同步不再了解外壳内部实现。
+        const selPersonalizationControl = selPersonalizationFloatingPanel.root;
+        const selPersonalizationTrigger = selPersonalizationFloatingPanel.trigger;
+        const selPersonalizationPanel = selPersonalizationFloatingPanel.panel;
         const selPersonalizationSkinGrid = selPersonalizationHost.querySelector("[data-sel-personal-skin-grid]");
         const selPersonalizationSkinThemeRows = selPersonalizationHost.querySelector("[data-sel-personal-skin-theme-rows]");
         const selPersonalizationBackgroundGrid = selPersonalizationHost.querySelector("[data-sel-personal-background-grid]");
@@ -902,20 +912,7 @@
             return true;
         }
 
-        // 入口按钮展开或收起整个个性化面板。
-        selPersonalizationTrigger.addEventListener("click", () => {
-            // hidden 状态是面板开关的唯一真实来源。
-            const selPersonalizationOpen = selPersonalizationPanel.hidden;
-            selPersonalizationPanel.hidden = !selPersonalizationOpen;
-            selPersonalizationTrigger.setAttribute("aria-expanded", String(selPersonalizationOpen));
-        });
-        // 关闭按钮提供明确的鼠标和键盘关闭路径。
-        selPersonalizationControl.querySelector("[data-sel-personal-action='close']")?.addEventListener("click", () => {
-            // 收起面板并同步入口展开语义。
-            selPersonalizationPanel.hidden = true;
-            selPersonalizationTrigger.setAttribute("aria-expanded", "false");
-            selPersonalizationTrigger.focus();
-        });
+        // 面板打开、关闭、外部点击、Escape 与焦点归还统一由 selFloatingPanel 处理。
         // tablist 使用事件委托切换四个一级设置。
         selPersonalizationControl.querySelector(".selpersonal-tabs")?.addEventListener("click", (selPersonalizationEvent) => {
             // 只响应带稳定 tab 标识的按钮。
@@ -1120,21 +1117,6 @@
             selPersonalizationTextState = { ...selPersonalizationTextDefaults };
             selPersonalizationApplyText();
         });
-        // 点击个性化控件之外时关闭浮层，控件内部滚动和拖动 range 保持打开。
-        document.addEventListener("pointerdown", (selPersonalizationEvent) => {
-            if (!selPersonalizationControl.contains(selPersonalizationEvent.target)) {
-                selPersonalizationPanel.hidden = true;
-                selPersonalizationTrigger.setAttribute("aria-expanded", "false");
-            }
-        });
-        // Escape 从任一内部状态关闭个性化面板并把焦点交还入口。
-        document.addEventListener("keydown", (selPersonalizationEvent) => {
-            if (selPersonalizationEvent.key === "Escape" && !selPersonalizationPanel.hidden) {
-                selPersonalizationPanel.hidden = true;
-                selPersonalizationTrigger.setAttribute("aria-expanded", "false");
-                selPersonalizationTrigger.focus();
-            }
-        });
         // 背景模块从其他公开入口变化时，组合界面同步状态。
         document.addEventListener("selPageBackground:change", selPersonalizationSyncBackground);
 
@@ -1151,6 +1133,11 @@
                 panel: Object.freeze({ ...selPersonalizationPanelState }),
                 text: Object.freeze({ ...selPersonalizationTextState })
             }),
+            // 外壳开关能力直接转交通用浮动面板，业务调用方无需访问内部 DOM。
+            open: selPersonalizationFloatingPanel.open,
+            close: selPersonalizationFloatingPanel.close,
+            toggle: selPersonalizationFloatingPanel.toggle,
+            isOpen: selPersonalizationFloatingPanel.isOpen,
             selectView: selPersonalizationSelectView,
             setSkin(selPersonalizationSkinId) {
                 if (!selPersonalizationApplySkin(selPersonalizationSkinId)) return false;

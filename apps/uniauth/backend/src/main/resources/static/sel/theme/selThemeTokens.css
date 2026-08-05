@@ -30,6 +30,9 @@
     --sel-theme-table-surface-row-even: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-table-row-even-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-table-row-even-opacity)));
     --sel-theme-interaction-surface-hover: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-interaction-hover-opacity)) var(--sel-theme-tint-base), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-interaction-hover-opacity)));
     --sel-theme-interaction-surface-selected: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-interaction-selected-opacity)) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-interaction-selected-opacity)));
+    /* 悬停反馈只绘制无模糊的主题色表面与 1px 边缘，避免宽表格和长菜单反复触发大范围阴影重绘。 */
+    --sel-theme-interaction-hover-line: rgb(var(--sel-theme-color-rgb) / 0.62);
+    --sel-theme-interaction-hover-edge: inset 0 1px 0 var(--sel-theme-interaction-hover-line), inset 0 -1px 0 rgb(var(--sel-theme-color-rgb) / 0.46);
     --sel-theme-control-surface-base: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-base-opacity)) var(--sel-theme-tint-soft), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-base-opacity)));
     --sel-theme-control-surface-hover: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-hover-opacity)) var(--sel-theme-tint-raised), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-hover-opacity)));
     --sel-theme-control-surface-primary: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / var(--sel-theme-control-primary-opacity)) var(--sel-theme-tint-accent), rgb(var(--sel-theme-neutral-rgb) / var(--sel-theme-control-primary-opacity)));

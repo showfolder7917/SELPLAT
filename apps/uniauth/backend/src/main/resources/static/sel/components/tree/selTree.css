@@ -61,12 +61,14 @@
     border-radius: 8px;
     color: var(--sel-theme-text-body);
     background: transparent;
-    transition: color 140ms ease, background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+    transition: none;
 }
 
 .seltree-node-row:hover {
+    border-color: var(--sel-theme-interaction-hover-line);
     color: var(--sel-theme-text-title);
-    background: rgba(23, 62, 141, 0.42);
+    background: var(--sel-theme-interaction-surface-hover);
+    box-shadow: none;
 }
 
 .seltree-node-row.seltree-node-selected {

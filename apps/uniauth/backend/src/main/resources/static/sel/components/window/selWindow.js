@@ -708,6 +708,37 @@
             selWindowShell.querySelectorAll("select.seldropdown-native").forEach((selWindowSelect) => window.selDropdownMenu?.refresh(selWindowSelect));
         }
 
+        /**
+         * 隔离窗口内的滚轮交互，允许实际滚动容器响应，但不把边界滚动传给后方页面。
+         * @param {WheelEvent} selWindowEvent - 当前窗口区域收到的滚轮事件。
+         */
+        function selWindowHandleWheel(selWindowEvent) {
+            // 从实际命中节点向窗口根查找能沿当前方向继续滚动的内部容器。
+            let selWindowScrollNode = selWindowEvent.target instanceof Element ? selWindowEvent.target : selWindowEvent.target?.parentElement;
+            // 横纵滚动分别判断，保留文本域及未来嵌套滚动控件的原生行为。
+            let selWindowCanConsumeWheel = false;
+            while (selWindowScrollNode && selWindowScrollNode !== selWindowShell) {
+                // 只有显式滚动容器才可消费滚轮，普通布局节点不参与。
+                const selWindowScrollStyle = window.getComputedStyle(selWindowScrollNode);
+                const selWindowCanScrollY = /^(auto|scroll|overlay)$/.test(selWindowScrollStyle.overflowY)
+                    && selWindowScrollNode.scrollHeight > selWindowScrollNode.clientHeight + 1
+                    && ((selWindowEvent.deltaY < 0 && selWindowScrollNode.scrollTop > 0)
+                        || (selWindowEvent.deltaY > 0 && selWindowScrollNode.scrollTop + selWindowScrollNode.clientHeight < selWindowScrollNode.scrollHeight - 1));
+                const selWindowCanScrollX = /^(auto|scroll|overlay)$/.test(selWindowScrollStyle.overflowX)
+                    && selWindowScrollNode.scrollWidth > selWindowScrollNode.clientWidth + 1
+                    && ((selWindowEvent.deltaX < 0 && selWindowScrollNode.scrollLeft > 0)
+                        || (selWindowEvent.deltaX > 0 && selWindowScrollNode.scrollLeft + selWindowScrollNode.clientWidth < selWindowScrollNode.scrollWidth - 1));
+                if (selWindowCanScrollY || selWindowCanScrollX) {
+                    selWindowCanConsumeWheel = true;
+                    break;
+                }
+                selWindowScrollNode = selWindowScrollNode.parentElement;
+            }
+            // 窗口内始终终止冒泡；没有内部滚动余量时再取消默认页面滚动。
+            selWindowEvent.stopPropagation();
+            if (!selWindowCanConsumeWheel) selWindowEvent.preventDefault();
+        }
+
         // 标题关闭和底部取消都结束当前窗口但不提交数据。
         selWindowClose.addEventListener("click", selWindowCloseWindow);
         selWindowCancel.addEventListener("click", selWindowCloseWindow);
@@ -723,6 +754,8 @@
         selWindowHeader.addEventListener("pointerdown", (selWindowEvent) => { if (!selWindowEvent.target.closest("button")) selWindowStartPointerInteraction(selWindowEvent, "move"); });
         // 点击窗口任意区域都会提升层级，符合桌面多窗口的激活习惯。
         selWindowShell.addEventListener("pointerdown", selWindowBringToFront);
+        // 鼠标位于窗口时只操作窗口内部滚动区，到达边界也不带动后方页面。
+        selWindowShell.addEventListener("wheel", selWindowHandleWheel, { passive: false });
         // 八方向手柄通过稳定 data 方向启动同一缩放算法。
         selWindowShell.querySelectorAll("[data-sel-window-resize-direction]").forEach((selWindowResizeHandle) => selWindowResizeHandle.addEventListener("pointerdown", (selWindowEvent) => selWindowStartPointerInteraction(selWindowEvent, "resize", selWindowResizeHandle.dataset.selWindowResizeDirection)));
         // 全局移动保证指针离开窄手柄后仍能连续缩放。

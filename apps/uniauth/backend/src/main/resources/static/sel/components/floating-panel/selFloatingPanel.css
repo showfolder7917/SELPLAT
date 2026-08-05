@@ -1,0 +1,142 @@
+/*
+ * selFloatingPanel.css：锚定式水晶浮动面板基础外壳。
+ * 只定义定位、标题、开关、内容插槽与水晶材质；业务内容由调用组件负责。
+ */
+
+.selfloating-control {
+    position: fixed;
+    z-index: var(--selfloating-z-index, 3000);
+    top: var(--selfloating-top, 18px);
+    right: var(--selfloating-right, 18px);
+    color: var(--sel-theme-text-body);
+    font-family: var(--sel-theme-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+
+.selfloating-trigger {
+    display: inline-flex;
+    width: var(--selfloating-trigger-size, 42px);
+    height: var(--selfloating-trigger-size, 42px);
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgb(var(--sel-theme-color-rgb) / 0.58);
+    border-radius: var(--sel-theme-radius-control, 9px);
+    color: var(--sel-theme-text-body);
+    background: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.30) 24%, rgb(var(--sel-theme-neutral-rgb) / 0.88));
+    box-shadow: var(--sel-theme-inset), 0 0 18px rgb(var(--sel-theme-color-rgb) / 0.28);
+    cursor: pointer;
+    font: inherit;
+}
+
+.selfloating-trigger:hover,
+.selfloating-trigger:focus-visible,
+.selfloating-trigger[aria-expanded="true"] {
+    border-color: rgb(var(--sel-theme-color-rgb) / 0.88);
+    outline: none;
+    box-shadow: var(--sel-theme-inset), 0 0 22px rgb(var(--sel-theme-color-rgb) / 0.46);
+}
+
+.selfloating-trigger i { font-size: 21px; }
+
+.selfloating-panel {
+    position: absolute;
+    top: var(--selfloating-panel-offset, 50px);
+    right: 0;
+    display: flex;
+    width: var(--selfloating-panel-width, min(390px, calc(100vw - 36px)));
+    max-height: var(--selfloating-panel-max-height, calc(100vh - 78px));
+    min-height: 0;
+    box-sizing: border-box;
+    flex-direction: column;
+    padding: var(--selfloating-panel-padding, 14px);
+    border: var(--selfloating-frame-width, var(--sel-theme-frame-personalization, 12px)) solid transparent;
+    border-radius: var(--sel-theme-radius-panel);
+    color: var(--sel-theme-text-body);
+    background: transparent;
+    box-shadow: none;
+    isolation: auto;
+    overflow: visible;
+}
+
+.selfloating-panel[hidden] { display: none; }
+
+/* 玻璃底板与边框图片分层，透明度和磨砂继续消费页面统一令牌。 */
+.selfloating-panel::before {
+    position: absolute;
+    z-index: -1;
+    inset: var(--sel-theme-surface-inset-large);
+    border-radius: max(2px, calc(var(--sel-theme-radius-inner) - var(--sel-theme-surface-inset-large)));
+    background-color: var(--selpersonal-panel-surface, rgb(var(--sel-theme-neutral-rgb) / 0.82));
+    background-image: linear-gradient(rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-background-frost-veil, 0.15)), rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-background-frost-veil, 0.15)));
+    -webkit-backdrop-filter: blur(var(--selpersonal-background-frost-effective-blur, 20px));
+    backdrop-filter: blur(var(--selpersonal-background-frost-effective-blur, 20px));
+    pointer-events: none;
+    content: "";
+}
+
+.selfloating-panel::after {
+    position: absolute;
+    z-index: -1;
+    box-sizing: border-box;
+    inset: calc(0px - var(--selfloating-frame-width, var(--sel-theme-frame-personalization, 12px)));
+    border: var(--selfloating-frame-width, var(--sel-theme-frame-personalization, 12px)) solid transparent;
+    border-image-source: var(--sel-theme-frame-image);
+    border-image-slice: 58 69 58 69;
+    border-image-width: var(--selfloating-frame-width, var(--sel-theme-frame-personalization, 12px));
+    border-image-repeat: stretch;
+    border-radius: inherit;
+    opacity: var(--selpersonal-frame-opacity, 1);
+    filter: drop-shadow(0 8px 12px rgb(var(--sel-theme-neutral-rgb) / var(--selpersonal-frame-shadow-alpha, 0.16))) drop-shadow(0 0 var(--selpersonal-glow-spread, 12px) rgb(var(--sel-theme-color-rgb) / var(--selpersonal-frame-glow-alpha, 0.42)));
+    pointer-events: none;
+    content: "";
+}
+
+.selfloating-heading {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.selfloating-heading-icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border: 1px solid rgb(var(--sel-theme-color-rgb) / 0.62);
+    border-radius: 10px;
+    color: var(--sel-theme-text-icon);
+    background: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.82) 24%, rgb(var(--sel-theme-neutral-rgb) / 0.82));
+    box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.42);
+    font-size: 19px;
+}
+
+.selfloating-heading-copy { display: grid; min-width: 0; gap: 3px; }
+.selfloating-heading-copy strong { font-size: 16px; letter-spacing: 0.04em; }
+.selfloating-heading-copy small { color: var(--sel-theme-text-secondary); font-size: 11px; }
+
+.selfloating-close {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgb(var(--sel-theme-color-rgb) / 0.42);
+    border-radius: 8px;
+    color: var(--sel-theme-text-secondary);
+    background: rgb(var(--sel-theme-neutral-rgb) / 0.72);
+    cursor: pointer;
+    font: inherit;
+    font-size: 18px;
+}
+
+.selfloating-close:hover,
+.selfloating-close:focus-visible { border-color: rgb(var(--sel-theme-color-rgb) / 0.88); color: var(--sel-theme-text-main); outline: none; }
+
+.selfloating-body { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
+
+@media (max-width: 640px) {
+    .selfloating-control { top: 12px; right: 12px; }
+    .selfloating-panel { width: min(390px, calc(100vw - 24px)); max-height: calc(100vh - 66px); }
+}

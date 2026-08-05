@@ -87,9 +87,13 @@
 .selpersonal-panel-range-copy strong,
 .selpersonal-toggle strong,
 .selpersonal-text-color strong {
-    font-size: calc(12px * var(--sel-theme-font-scale));
+    font-size: max(11px, calc(12px * var(--sel-theme-font-scale)));
 }
 
+/*
+ * 完整说明与次级信息保持可连续阅读：即使字号缩放降到 80%，
+ * 也不允许落到 11px 以下，避免深浅玻璃背景上出现细小发虚的文字。
+ */
 .seltree-node-count,
 .seltree-footer,
 .seldropdown-option-description,
@@ -103,9 +107,10 @@
 .selpersonal-panel-range-control output,
 .selpersonal-reset,
 .selpersonal-text-preview span {
-    font-size: calc(11px * var(--sel-theme-font-scale));
+    font-size: max(11px, calc(12px * var(--sel-theme-font-scale)));
 }
 
+/* 微型标签仍保留较低层级，但设置 10px 的最终可读下限。 */
 .selgrid-menu-badge,
 .selpersonal-background-option-copy span,
 .selpersonal-preset,
@@ -116,7 +121,7 @@
 .selpersonal-text-mode,
 .selpersonal-text-color small,
 .selpersonal-text-color output {
-    font-size: calc(10px * var(--sel-theme-font-scale));
+    font-size: max(10px, calc(11px * var(--sel-theme-font-scale)));
 }
 
 .selpanel-region-heading,
