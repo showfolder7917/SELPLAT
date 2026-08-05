@@ -55,7 +55,7 @@ body {
     overflow-x: auto;
     color: var(--selgrid-theme-text);
     background: var(--sel-theme-page-background);
-    font-family: var(--selgrid-theme-font);
+    font-family: var(--sel-theme-font-family, var(--selgrid-theme-font));
     -webkit-font-smoothing: antialiased;
     isolation: isolate;
 }

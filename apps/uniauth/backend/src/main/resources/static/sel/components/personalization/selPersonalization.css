@@ -58,7 +58,7 @@
     top: 18px;
     right: 18px;
     color: var(--sel-theme-text-body);
-    font-family: var(--selgrid-theme-font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    font-family: var(--sel-theme-font-family, var(--selgrid-theme-font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif));
 }
 
 /* 入口按钮继续使用现有 Remix Icon，不绘制额外图标素材。 */
@@ -521,8 +521,8 @@
     padding: 8px;
     border: 1px solid var(--sel-theme-line-soft);
     border-radius: 12px;
-    color: var(--sel-theme-text-main);
-    background: var(--sel-theme-control-surface);
+    color: var(--selpersonal-skin-preview-main);
+    background: var(--selpersonal-skin-card-surface);
     box-shadow: var(--sel-theme-inset);
     cursor: pointer;
     font: inherit;
@@ -531,15 +531,16 @@
 
 .selpersonal-skin-option:hover,
 .selpersonal-skin-option:focus-visible {
-    border-color: var(--sel-theme-line);
+    border-color: var(--selpersonal-skin-preview-accent);
     outline: none;
-    background: var(--sel-theme-control-hover);
+    background: color-mix(in srgb, var(--selpersonal-skin-preview-accent) 16%, var(--selpersonal-skin-card-surface));
 }
 
 .selpersonal-skin-option[aria-pressed="true"] {
-    border-color: var(--sel-theme-line);
-    background: var(--sel-theme-selected-surface);
-    box-shadow: var(--sel-theme-inset), 0 0 14px var(--sel-theme-glow);
+    border-color: var(--selpersonal-skin-preview-accent);
+    /* 选中只增加边线、外光与对勾，卡片自身深浅代表色始终保持不变。 */
+    background: var(--selpersonal-skin-card-surface);
+    box-shadow: var(--sel-theme-inset), 0 0 14px color-mix(in srgb, var(--selpersonal-skin-preview-accent) 58%, transparent);
 }
 
 .selpersonal-skin-preview {
@@ -549,7 +550,7 @@
     place-items: center;
     overflow: hidden;
     border-radius: 8px;
-    background: var(--sel-theme-page-background);
+    background: var(--selpersonal-skin-preview-surface);
 }
 
 .selpersonal-skin-preview::before {
@@ -562,7 +563,7 @@
 .selpersonal-skin-preview > i {
     position: relative;
     z-index: 1;
-    color: var(--sel-theme-text-icon);
+    color: var(--selpersonal-skin-preview-accent);
     font-size: 22px;
 }
 
@@ -580,7 +581,7 @@
 }
 
 .selpersonal-skin-copy small {
-    color: var(--sel-theme-text-secondary);
+    color: var(--selpersonal-skin-preview-muted);
     font-size: 11px;
 }
 
@@ -589,13 +590,52 @@
     top: 13px;
     right: 13px;
     z-index: 2;
-    color: rgb(var(--sel-theme-color-rgb));
-    filter: drop-shadow(0 1px 3px rgb(var(--sel-theme-neutral-rgb) / 0.34));
+    color: var(--selpersonal-skin-preview-accent);
+    filter: drop-shadow(0 1px 3px color-mix(in srgb, var(--selpersonal-skin-preview-surface) 68%, transparent));
     opacity: 0;
 }
 
 .selpersonal-skin-option[aria-pressed="true"] .selpersonal-skin-selected-icon {
     opacity: 1;
+}
+
+/* 十四套主题在皮肤页按深浅分行，基础水晶与六套配色都能一次完成明暗、边框与背景选择。 */
+.selpersonal-skin-theme-section {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 2px 4px;
+    border-top: 1px solid var(--sel-theme-line-soft);
+}
+
+.selpersonal-skin-theme-rows {
+    display: grid;
+    gap: 8px;
+}
+
+.selpersonal-skin-theme-row {
+    display: grid;
+    grid-template-columns: 68px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+
+.selpersonal-skin-theme-row > strong {
+    color: var(--sel-theme-text-body);
+    font-size: 11px;
+    font-weight: 560;
+}
+
+.selpersonal-skin-theme-swatches {
+    justify-content: space-between;
+}
+
+.selpersonal-skin-custom-color {
+    padding-top: 2px;
+}
+
+.selpersonal-skin-theme-section .selpersonal-color-follow {
+    width: max-content;
 }
 
 .selpersonal-skin-note {
@@ -985,6 +1025,58 @@
     outline: none;
     box-shadow: inset 0 0 0 2px rgba(1, 5, 20, 0.36), 0 0 10px var(--selpersonal-swatch-color);
     transform: scale(1.08);
+}
+
+/* 每行首项以月亮或太阳标记基础水晶，区别于仅表达主题色的六个宝石色板。 */
+.selpersonal-color-swatch-base {
+    display: grid;
+    color: color-mix(in srgb, var(--selpersonal-swatch-color) 38%, #FFFFFF);
+    place-items: center;
+}
+
+.selpersonal-color-swatch-base i {
+    font-size: 10px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.selpersonal-skin-theme-row[data-sel-personal-theme-skin-row="light"] .selpersonal-color-swatch-base {
+    color: color-mix(in srgb, var(--selpersonal-swatch-color) 76%, #17243D);
+}
+
+/* 深色行使用暗芯宝石材质，同一主题色在深色皮肤中保持更高饱和度与边缘发光。 */
+.selpersonal-skin-theme-row[data-sel-personal-theme-skin-row="dark"] .selpersonal-color-swatch {
+    border-color: color-mix(in srgb, var(--selpersonal-swatch-color) 58%, #DCE8FF);
+    background:
+        radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--selpersonal-swatch-color) 42%, #FFFFFF) 0 11%, transparent 13%),
+        linear-gradient(145deg, color-mix(in srgb, var(--selpersonal-swatch-color) 82%, #FFFFFF), var(--selpersonal-swatch-color) 48%, color-mix(in srgb, var(--selpersonal-swatch-color) 52%, #020612));
+    box-shadow:
+        inset 0 0 0 2px rgb(1 5 20 / 0.52),
+        0 0 6px color-mix(in srgb, var(--selpersonal-swatch-color) 52%, transparent);
+}
+
+/* 浅色行加入大面积白色透光层和柔和内环，视觉上明确区别于上方深色宝石。 */
+.selpersonal-skin-theme-row[data-sel-personal-theme-skin-row="light"] .selpersonal-color-swatch {
+    border-color: color-mix(in srgb, var(--selpersonal-swatch-color) 48%, #526984);
+    background:
+        radial-gradient(circle at 32% 28%, #FFFFFF 0 18%, transparent 20%),
+        linear-gradient(145deg, color-mix(in srgb, var(--selpersonal-swatch-color) 24%, #FFFFFF), color-mix(in srgb, var(--selpersonal-swatch-color) 52%, #FFFFFF) 54%, color-mix(in srgb, var(--selpersonal-swatch-color) 76%, #DCE8F3));
+    box-shadow:
+        inset 0 0 0 2px rgb(255 255 255 / 0.58),
+        0 1px 4px rgb(42 65 96 / 0.22);
+}
+
+/* 两行使用相反明度的选中圈，浅色水晶不会再因白圈而丢失选中反馈。 */
+.selpersonal-skin-theme-row[data-sel-personal-theme-skin-row="dark"] .selpersonal-color-swatch[aria-pressed="true"] {
+    border-color: #FFFFFF;
+    outline: 2px solid #DCE8FF;
+    outline-offset: 2px;
+}
+
+.selpersonal-skin-theme-row[data-sel-personal-theme-skin-row="light"] .selpersonal-color-swatch[aria-pressed="true"] {
+    border-color: #24415F;
+    outline: 2px solid #456987;
+    outline-offset: 2px;
 }
 
 .selpersonal-section {
@@ -1594,7 +1686,7 @@
     box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.28);
 }
 
-/* 预览区局部消费文字令牌，但设置面板的控制标签始终保持可读。 */
+/* 预览区与设置面板正文共同消费文字令牌，预览仍单独展示主次文字角色。 */
 .selpersonal-text-preview {
     display: grid;
     gap: 4px;

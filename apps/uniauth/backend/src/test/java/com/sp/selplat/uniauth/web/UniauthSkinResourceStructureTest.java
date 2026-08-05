@@ -41,6 +41,25 @@ class UniauthSkinResourceStructureTest {
         assertTrue(script.contains("data-sel-personal-tab=\"skin\""));
         assertTrue(script.contains("data-sel-personal-view=\"skin\""));
         assertTrue(script.contains("skin: selPersonalizationSkinState"));
+        // 十四套主题必须在皮肤页按深浅行呈现，面板页不再生成第二套常用色入口。
+        assertTrue(script.contains("data-sel-personal-skin-themes"));
+        assertTrue(script.contains("dataset.selPersonalThemeSkin"));
+        assertTrue(script.contains("深色主题"));
+        assertTrue(script.contains("浅色主题"));
+        assertTrue(script.contains("深浅各 7 套"));
+        // 顶部卡片只表达明暗切换，具体基础主题名称只能出现在下方主题入口。
+        assertTrue(script.contains("label: \"深色皮肤\", themeLabel: \"深空水晶\""));
+        assertTrue(script.contains("label: \"浅色皮肤\", themeLabel: \"晨雾水晶\""));
+        assertTrue(script.contains("选择界面明暗"));
+        assertTrue(script.contains("保留当前主题配色"));
+        // 每行首项必须恢复该皮肤的原始边框和背景，不能伪装成第七套重复配色素材。
+        assertTrue(script.contains("dataset.selPersonalThemeBase = \"true\""));
+        assertTrue(script.contains("selPersonalizationBaseTheme"));
+        assertTrue(script.contains("themeColor: selPersonalizationRequestedColor"));
+        assertFalse(script.contains("data-sel-personal-theme-swatches"));
+        // 两张基础皮肤卡使用固定预览色，不能被当前统一主题色重新染色。
+        assertTrue(script.contains("--selpersonal-skin-preview-surface"));
+        assertTrue(script.contains("--selpersonal-skin-preview-accent"));
         // 公开方法需要在换肤后继续同步面板与文字，因此验证包装方法及其真实皮肤调用，而不是旧式直接引用。
         assertTrue(script.contains("setSkin(selPersonalizationSkinId)"));
         assertTrue(script.contains("selPersonalizationApplySkin(selPersonalizationSkinId)"));
@@ -56,6 +75,29 @@ class UniauthSkinResourceStructureTest {
         assertTrue(gridCss.contains("border-left: 2px solid var(--sel-theme-text-on-selected-surface)"));
         assertFalse(gridCss.contains("border-bottom: 2px solid white"));
         assertFalse(gridCss.contains("border-left: 2px solid white"));
+    }
+
+    /**
+     * typographyTokens 验证业务文字与个性化设置自身共同消费字体族和字号令牌。
+     */
+    @Test
+    void typographyTokens() throws IOException {
+        String tokensCss = readText("static/sel/theme/selThemeTokens.css");
+        String typographyCss = readText("static/sel/theme/selThemeTypography.css");
+        String personalizationCss = readText("static/sel/components/personalization/selPersonalization.css");
+        // 字体族和字号比例必须由页面级令牌提供，组件不得各自形成孤立开关。
+        assertTrue(tokensCss.contains("--sel-theme-font-family:"));
+        assertTrue(tokensCss.contains("--sel-theme-font-scale: 1"));
+        assertTrue(typographyCss.contains("font-family: var(--sel-theme-font-family)"));
+        // 表头、数据单元格、树节点和个性化设置标签必须位于同一字号适配层。
+        assertTrue(typographyCss.contains(".selgrid-table th"));
+        assertTrue(typographyCss.contains(".selgrid-table td"));
+        assertTrue(typographyCss.contains(".seltree-node-row"));
+        assertTrue(typographyCss.contains(".selpersonal-panel-range-copy strong"));
+        assertTrue(typographyCss.contains(".selpersonal-text-mode"));
+        assertTrue(typographyCss.contains("calc(14px * var(--sel-theme-font-scale))"));
+        // 个性化面板不能继续绑定旧表格私有字体，避免用户改变字体时设置面板自身不响应。
+        assertTrue(personalizationCss.contains("var(--sel-theme-font-family"));
     }
 
     /**

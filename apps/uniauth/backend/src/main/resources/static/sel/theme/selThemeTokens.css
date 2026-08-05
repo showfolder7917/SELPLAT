@@ -53,6 +53,8 @@
     --sel-theme-text-link: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 78%, var(--sel-theme-text-main));
     --sel-theme-text-icon: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 66%, var(--sel-theme-text-main));
     --sel-theme-text-contrast-alpha: 0.168;
+    /* 字体族和字号缩放属于页面级文字令牌，业务组件与个性化设置面板共同消费。 */
+    --sel-theme-font-family: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
     --sel-theme-font-scale: 1;
     --sel-theme-text-shadow: 0 1px 4px rgb(var(--sel-theme-text-shadow-rgb) / var(--sel-theme-text-contrast-alpha));
 

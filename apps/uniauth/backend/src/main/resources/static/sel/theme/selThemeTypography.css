@@ -1,10 +1,10 @@
 /*
  * selThemeTypography.css：SEL 页面统一文字语义适配层。
- * 负责把表格、树、窗口、菜单、下拉、日期和工具栏的中性文字接入统一令牌。
- * 责任边界：不覆盖成功、警告、错误、进度、评审和归档等业务语义色，也不改变个性化控制面板自身的可读性。
+ * 负责把表格、树、窗口、菜单、下拉、日期、工具栏与个性化设置的全部文字接入统一令牌。
+ * 责任边界：不覆盖成功、警告、错误、进度、评审和归档等业务语义色；图标、头像与复选框尺寸不随字号令牌缩放。
  */
 
-/* 组件根统一继承主文字与对比阴影；个性化控制面板保留固定控制面颜色。 */
+/* 组件根统一继承字体族、主文字与对比阴影。 */
 .selpanel-crystal-surface,
 .selgrid-board-shell,
 .seltree-root,
@@ -15,8 +15,10 @@
 .selgrid-menu-submenu,
 .seldatepicker-root,
 .seldatepicker-popover,
-.selwindow-window-shell {
+.selwindow-window-shell,
+.selpersonal-control {
     color: var(--sel-theme-text-main);
+    font-family: var(--sel-theme-font-family);
     text-shadow: var(--sel-theme-text-shadow);
 }
 
@@ -33,11 +35,12 @@
 .selgrid-menu-submenu,
 .seldatepicker-root,
 .seldatepicker-popover,
-.selwindow-window-shell {
+.selwindow-window-shell,
+.selpersonal-control {
     font-size: calc(14px * var(--sel-theme-font-scale));
 }
 
-.selpanel-brand-title {
+.selpanel-title-line h1 {
     font-size: clamp(calc(24px * var(--sel-theme-font-scale)), calc(2.1vw * var(--sel-theme-font-scale)), calc(37px * var(--sel-theme-font-scale)));
 }
 
@@ -45,29 +48,100 @@
     font-size: calc(22px * var(--sel-theme-font-scale));
 }
 
-.selpanel-brand-subtitle,
-.selwindow-brand-subtitle,
-.selgrid-table,
+.selpanel-title-line span,
+.selgrid-table th,
+.selgrid-table td,
+.selgrid-footer-summary,
+.selgrid-menu-label,
 .seldropdown-trigger-value,
 .seldropdown-option-label,
-.seldatepicker-trigger-value,
-.selwindow-field-label,
-.selwindow-control-textarea,
-.selwindow-action-button {
+.selwindow-checkbox-row,
+.selpersonal-text-preview strong {
     font-size: calc(14px * var(--sel-theme-font-scale));
 }
 
+.selpanel-brand-copy p,
+.selpanel-status-tab strong,
+.selgrid-status-pill,
+.selgrid-progress-value,
 .selgrid-menu-item,
 .seltree-node-row,
 .selsearch-field-input,
 .selsearch-submit,
-.selwindow-checkbox-row {
+.selwindow-brand-subtitle,
+.selwindow-control-suffix,
+.selwindow-feedback,
+.selpersonal-skin-copy strong,
+.selpersonal-tab,
+.selpersonal-view-heading strong,
+.selpersonal-section-heading strong,
+.selpersonal-background-option-copy strong,
+.selpersonal-range {
     font-size: calc(13px * var(--sel-theme-font-scale));
+}
+
+.selpanel-sidebar-summary,
+.seldropdown-menu-heading,
+.seldatepicker-day,
+.seldatepicker-action,
+.selpersonal-panel-range-copy strong,
+.selpersonal-toggle strong,
+.selpersonal-text-color strong {
+    font-size: calc(12px * var(--sel-theme-font-scale));
 }
 
 .seltree-node-count,
 .seltree-footer,
 .seldropdown-option-description,
-.selwindow-control-suffix {
+.seldatepicker-weekdays,
+.selpersonal-heading-copy small,
+.selpersonal-section-heading small,
+.selpersonal-skin-copy small,
+.selpersonal-skin-theme-row > strong,
+.selpersonal-skin-note,
+.selpersonal-view-heading span,
+.selpersonal-panel-range-control output,
+.selpersonal-reset,
+.selpersonal-text-preview span {
     font-size: calc(11px * var(--sel-theme-font-scale));
+}
+
+.selgrid-menu-badge,
+.selpersonal-background-option-copy span,
+.selpersonal-preset,
+.selpersonal-color-picker output,
+.selpersonal-color-follow,
+.selpersonal-panel-range-copy small,
+.selpersonal-toggle small,
+.selpersonal-text-mode,
+.selpersonal-text-color small,
+.selpersonal-text-color output {
+    font-size: calc(10px * var(--sel-theme-font-scale));
+}
+
+.selpanel-region-heading,
+.seldatepicker-trigger-value,
+.seldatepicker-month-title,
+.selgrid-empty-state,
+.selwindow-field-label,
+.selwindow-control-textarea,
+.selwindow-control-input,
+.selwindow-action-button {
+    font-size: calc(15px * var(--sel-theme-font-scale));
+}
+
+.selgrid-pagination-button {
+    font-size: calc(16px * var(--sel-theme-font-scale));
+}
+
+.selpersonal-heading-copy strong {
+    font-size: calc(16px * var(--sel-theme-font-scale));
+}
+
+/* 原表格窄屏字号提升继续保留，并始终乘以同一个字号令牌。 */
+@media (max-width: 1280px) {
+    .selgrid-table th,
+    .selgrid-table td {
+        font-size: calc(15px * var(--sel-theme-font-scale));
+    }
 }

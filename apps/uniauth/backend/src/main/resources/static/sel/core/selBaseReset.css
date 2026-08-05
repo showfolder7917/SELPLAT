@@ -17,7 +17,8 @@
     --selgrid-theme-cyan: #47ddff;
     --selgrid-theme-green: #58efc0;
     --selgrid-theme-danger: #ff345a;
-    --selgrid-theme-font: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    /* 兼容旧变量名；字体唯一真实来源迁移到页面级统一令牌。 */
+    --selgrid-theme-font: var(--sel-theme-font-family, Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif);
 }
 
 * {
