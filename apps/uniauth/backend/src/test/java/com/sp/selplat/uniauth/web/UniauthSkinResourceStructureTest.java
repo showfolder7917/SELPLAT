@@ -101,6 +101,23 @@ class UniauthSkinResourceStructureTest {
     }
 
     /**
+     * textScaleKeepsSkinFollowing 验证字号和对比覆盖不再把颜色模式误切成自定义。
+     */
+    @Test
+    void textScaleKeepsSkinFollowing() throws IOException {
+        String script = readText("static/sel/components/personalization/selPersonalization.js");
+        // 两个排版参数分别记录覆盖状态，换肤时只保留用户调整过的滑杆值。
+        assertTrue(script.contains("contrastOverride: false"));
+        assertTrue(script.contains("fontScaleOverride: false"));
+        assertTrue(script.contains("const selPersonalizationTextOverrideKey = `${selPersonalizationTextKey}Override`"));
+        assertTrue(script.contains("[selPersonalizationTextOverrideKey]: true"));
+        // 应用文字时必须分别判断覆盖状态，不能再用颜色 custom 模式承载字号和对比变化。
+        assertTrue(script.contains("selPersonalizationTextState.contrastOverride"));
+        assertTrue(script.contains("selPersonalizationTextState.fontScaleOverride"));
+        assertFalse(script.contains("[selPersonalizationTextKey]: selPersonalizationClamp(selPersonalizationTextRange.value, selPersonalizationTextDefaults[selPersonalizationTextKey]), mode: \"custom\""));
+    }
+
+    /**
      * skinMaterials 验证两套皮肤都引用真实且非空的 WebP 九宫格素材。
      */
     @Test

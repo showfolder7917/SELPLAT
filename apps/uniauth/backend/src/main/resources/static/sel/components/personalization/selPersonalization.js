@@ -48,7 +48,10 @@
         mainColor: null,
         mutedColor: null,
         contrast: 60,
-        fontScale: 50
+        fontScale: 50,
+        // 对比与字号分别记录用户是否主动覆盖，避免调整排版时把跟随皮肤的颜色误切成自定义。
+        contrastOverride: false,
+        fontScaleOverride: false
     });
     // 文字模式使用中性名称，并为深浅皮肤提供独立颜色与对比参数；custom 继续保留用户当前值。
     const selPersonalizationTextModes = Object.freeze([
@@ -845,9 +848,13 @@
                 const selPersonalizationLuminance = ((selPersonalizationMainRgb[0] * 299) + (selPersonalizationMainRgb[1] * 587) + (selPersonalizationMainRgb[2] * 114)) / 1000;
                 selPersonalizationDocumentRoot.style.setProperty("--sel-theme-text-shadow-rgb", selPersonalizationLuminance < 145 ? "255 255 255" : "0 0 0");
             }
-            // 模式预设采用分肤对比和字号；自定义继续读取用户当前滑杆值。
-            const selPersonalizationContrast = selPersonalizationTextMode.id === "custom" ? selPersonalizationTextState.contrast : selPersonalizationTextModeValues.contrast;
-            const selPersonalizationFontScale = selPersonalizationTextMode.id === "custom" ? selPersonalizationTextState.fontScale : selPersonalizationTextModeValues.fontScale;
+            // 自定义颜色模式和已被用户单独调整的滑杆保留当前值；其余参数继续跟随当前皮肤的模式预设。
+            const selPersonalizationContrast = selPersonalizationTextMode.id === "custom" || selPersonalizationTextState.contrastOverride
+                ? selPersonalizationTextState.contrast
+                : selPersonalizationTextModeValues.contrast;
+            const selPersonalizationFontScale = selPersonalizationTextMode.id === "custom" || selPersonalizationTextState.fontScaleOverride
+                ? selPersonalizationTextState.fontScale
+                : selPersonalizationTextModeValues.fontScale;
             // 状态始终保存界面当前真实值，切到自定义时不会跳回上一套皮肤颜色。
             selPersonalizationTextState = {
                 ...selPersonalizationTextState,
@@ -997,13 +1004,20 @@
                 selPersonalizationApplyPanel(selPersonalizationKey);
             });
         });
-        // 文字模式按钮实时切换当前皮肤对应的文字预设；进入自定义时沿用当前真实颜色和滑杆值。
+        // 文字模式按钮实时切换当前皮肤对应的完整文字预设；直接进入自定义时沿用当前真实值。
         selPersonalizationTextModeGrid.addEventListener("click", (selPersonalizationEvent) => {
             // 只响应固定模式按钮，空白区域不改变状态。
             const selPersonalizationTextModeButton = selPersonalizationEvent.target.closest("[data-sel-personal-text-mode]");
             if (!selPersonalizationTextModeButton) return;
-            // 模式值已由固定配置生成，应用函数会解析当前深浅皮肤的独立参数。
-            selPersonalizationTextState = { ...selPersonalizationTextState, mode: selPersonalizationTextModeButton.dataset.selPersonalTextMode };
+            // 选择正式模式时恢复其分肤对比与字号；自定义入口继续承接当前页面已经显示的参数。
+            const selPersonalizationRequestedTextMode = selPersonalizationTextModeButton.dataset.selPersonalTextMode;
+            const selPersonalizationKeepRangeOverrides = selPersonalizationRequestedTextMode === "custom";
+            selPersonalizationTextState = {
+                ...selPersonalizationTextState,
+                mode: selPersonalizationRequestedTextMode,
+                contrastOverride: selPersonalizationKeepRangeOverrides && selPersonalizationTextState.contrastOverride,
+                fontScaleOverride: selPersonalizationKeepRangeOverrides && selPersonalizationTextState.fontScaleOverride
+            };
             selPersonalizationApplyText();
         });
         // 编辑任一文字颜色会明确进入自定义模式，避免预设色覆盖用户选择。
@@ -1016,13 +1030,18 @@
                 selPersonalizationApplyText();
             });
         });
-        // 文字对比和字号都使用 input 事件，拖动过程逐帧可见而非松手后才更新。
+        // 文字对比和字号都使用 input 事件，拖动过程逐帧可见且不改变当前颜色模式。
         selPersonalizationControl.querySelectorAll("[data-sel-personal-text-range]").forEach((selPersonalizationTextRange) => {
             selPersonalizationTextRange.addEventListener("input", () => {
                 // 固定数据键对应文字状态中的百分比字段。
                 const selPersonalizationTextKey = selPersonalizationTextRange.dataset.selPersonalTextRange;
-                // 手动调整意味着进入自定义模式，同时保留当前皮肤模式已经同步的真实颜色。
-                selPersonalizationTextState = { ...selPersonalizationTextState, [selPersonalizationTextKey]: selPersonalizationClamp(selPersonalizationTextRange.value, selPersonalizationTextDefaults[selPersonalizationTextKey]), mode: "custom" };
+                // 滑杆只覆盖自己的参数；颜色仍保持跟随、柔和、清晰或自定义，换肤时不会遗留上一套文字色。
+                const selPersonalizationTextOverrideKey = `${selPersonalizationTextKey}Override`;
+                selPersonalizationTextState = {
+                    ...selPersonalizationTextState,
+                    [selPersonalizationTextKey]: selPersonalizationClamp(selPersonalizationTextRange.value, selPersonalizationTextDefaults[selPersonalizationTextKey]),
+                    [selPersonalizationTextOverrideKey]: true
+                };
                 selPersonalizationApplyText();
             });
         });
