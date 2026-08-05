@@ -15,6 +15,14 @@
     const selPanelOptions = new WeakMap();
     // 每个面板保存应用声明的五区布局，公开查询时不需要反向分析 DOM。
     const selPanelLayouts = new WeakMap();
+    // 每个面板的左侧分隔控制器独立登记，防止重复挂载指针与键盘事件。
+    const selPanelSidebarResizers = new WeakMap();
+
+    // 左侧区域宽度只在当前页面内存生效；刷新后回到 CSS 默认值。
+    const selPanelSidebarWidthDefault = 246;
+    const selPanelSidebarWidthMinimum = 190;
+    const selPanelSidebarWidthMaximum = 520;
+    const selPanelSidebarKeyboardStep = 12;
 
     // 默认五区结构仅作为未传布局时的通用回退，应用可显式调整组件所在区域。
     const selPanelDefaultStructure = Object.freeze({
@@ -549,6 +557,136 @@
         }));
     }
 
+    // 把任意宽度限制在基础控件允许的安全范围内，保证左树和中央表格都保留可用空间。
+    function selPanelClampSidebarWidth(selPanelWidth) {
+        return Math.min(selPanelSidebarWidthMaximum, Math.max(selPanelSidebarWidthMinimum, Math.round(selPanelWidth)));
+    }
+
+    /**
+     * 为同时拥有左区和中央区的面板建立左右拖拽分隔条。
+     * @param {Element} selPanelRoot - 当前标准面板根。
+     * @returns {Element|null} 已创建或复用的分隔条。
+     */
+    function selPanelEnsureSidebarResizer(selPanelRoot) {
+        // 同一面板重复挂载时直接复用现有分隔条和事件。
+        if (selPanelSidebarResizers.has(selPanelRoot)) {
+            return selPanelSidebarResizers.get(selPanelRoot);
+        }
+        const selPanelBody = selPanelRoot.querySelector('[data-sel-panel-region="body"]');
+        const selPanelSidebar = selPanelRoot.querySelector('[data-sel-panel-region="left"]');
+        const selPanelContent = selPanelRoot.querySelector('[data-sel-panel-region="center"]');
+        // 缺少任一区域时不生成悬空或无效的拖拽控件。
+        if (!selPanelBody || !selPanelSidebar || !selPanelContent) {
+            return null;
+        }
+
+        const selPanelResizer = document.createElement("div");
+        selPanelResizer.className = "selpanel-sidebar-resizer";
+        selPanelResizer.dataset.selPanelAction = "resize-left";
+        selPanelResizer.setAttribute("role", "separator");
+        selPanelResizer.setAttribute("aria-label", "调整左侧区域宽度");
+        selPanelResizer.setAttribute("aria-orientation", "vertical");
+        selPanelResizer.setAttribute("aria-valuemin", String(selPanelSidebarWidthMinimum));
+        selPanelResizer.setAttribute("aria-valuemax", String(selPanelSidebarWidthMaximum));
+        selPanelResizer.setAttribute("aria-valuenow", String(selPanelSidebarWidthDefault));
+        selPanelResizer.setAttribute("aria-pressed", "false");
+        selPanelResizer.tabIndex = 0;
+        selPanelBody.appendChild(selPanelResizer);
+
+        let selPanelPointerId = null;
+        let selPanelPointerStartX = 0;
+        let selPanelPointerStartWidth = selPanelSidebarWidthDefault;
+        let selPanelPendingWidth = null;
+        let selPanelResizeFrame = 0;
+
+        // 宽度写入面板实例变量，Flex 会在同一帧把剩余空间实时交给中央表格。
+        function selPanelApplySidebarWidth(selPanelWidth) {
+            const selPanelSafeWidth = selPanelClampSidebarWidth(selPanelWidth);
+            selPanelRoot.style.setProperty("--selpanel-layout-sidebar-width", `${selPanelSafeWidth}px`);
+            selPanelResizer.setAttribute("aria-valuenow", String(selPanelSafeWidth));
+            return selPanelSafeWidth;
+        }
+
+        // 高频指针事件合并到浏览器绘制帧，避免大表格连续重排造成拖拽延迟。
+        function selPanelScheduleSidebarWidth(selPanelWidth) {
+            selPanelPendingWidth = selPanelWidth;
+            if (selPanelResizeFrame) return;
+            selPanelResizeFrame = window.requestAnimationFrame(() => {
+                selPanelResizeFrame = 0;
+                selPanelApplySidebarWidth(selPanelPendingWidth);
+            });
+        }
+
+        function selPanelFinishSidebarResize(selPanelEvent) {
+            if (selPanelPointerId === null || (selPanelEvent?.pointerId !== undefined && selPanelEvent.pointerId !== selPanelPointerId)) return;
+            if (selPanelResizeFrame) {
+                window.cancelAnimationFrame(selPanelResizeFrame);
+                selPanelResizeFrame = 0;
+            }
+            const selPanelFinalWidth = selPanelApplySidebarWidth(selPanelPendingWidth ?? selPanelPointerStartWidth);
+            const selPanelFinishedPointerId = selPanelPointerId;
+            selPanelPointerId = null;
+            selPanelPendingWidth = null;
+            // 先清空活动指针再释放捕获，避免同步 lostpointercapture 重复派发完成事件。
+            if (selPanelResizer.hasPointerCapture?.(selPanelFinishedPointerId)) selPanelResizer.releasePointerCapture(selPanelFinishedPointerId);
+            selPanelResizer.setAttribute("aria-pressed", "false");
+            document.body.classList.remove("selpanel-sidebar-resizing");
+            // 拖拽完成事件供图表等需要显式重算的内容监听；普通 Flex 表格无需额外处理。
+            selPanelRoot.dispatchEvent(new CustomEvent("selPanel:leftResize", {
+                bubbles: true,
+                detail: { width: selPanelFinalWidth }
+            }));
+        }
+
+        selPanelResizer.addEventListener("pointerdown", (selPanelEvent) => {
+            // 左侧收起时按钮不可见；此保护同时避免脚本触发无意义拖拽。
+            if (selPanelRoot.classList.contains("selpanel-layout-left-collapsed") || selPanelEvent.button !== 0) return;
+            selPanelEvent.preventDefault();
+            selPanelPointerId = selPanelEvent.pointerId;
+            selPanelPointerStartX = selPanelEvent.clientX;
+            selPanelPointerStartWidth = selPanelSidebar.getBoundingClientRect().width;
+            selPanelPendingWidth = selPanelPointerStartWidth;
+            selPanelResizer.setPointerCapture?.(selPanelPointerId);
+            selPanelResizer.setAttribute("aria-pressed", "true");
+            document.body.classList.add("selpanel-sidebar-resizing");
+        });
+        function selPanelHandleSidebarPointerMove(selPanelEvent) {
+            if (selPanelPointerId === null || selPanelEvent.pointerId !== selPanelPointerId) return;
+            selPanelScheduleSidebarWidth(selPanelPointerStartWidth + selPanelEvent.clientX - selPanelPointerStartX);
+        }
+        selPanelResizer.addEventListener("pointermove", selPanelHandleSidebarPointerMove);
+        selPanelResizer.addEventListener("pointerup", selPanelFinishSidebarResize);
+        selPanelResizer.addEventListener("pointercancel", selPanelFinishSidebarResize);
+        selPanelResizer.addEventListener("lostpointercapture", selPanelFinishSidebarResize);
+        // 浏览器或自动化环境若把结束事件投递到捕获元素之外，窗口级兜底仍会清理拖拽状态。
+        window.addEventListener("pointerup", selPanelFinishSidebarResize);
+        window.addEventListener("pointercancel", selPanelFinishSidebarResize);
+        // 捕获异常时指针移动仍由窗口接收，保证快速拖出窄热区后宽度继续实时变化。
+        window.addEventListener("pointermove", selPanelHandleSidebarPointerMove);
+        window.addEventListener("blur", selPanelFinishSidebarResize);
+        // 键盘左右键提供与鼠标相同的连续宽度控制，Home 和 End 直达安全边界。
+        selPanelResizer.addEventListener("keydown", (selPanelEvent) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(selPanelEvent.key)) return;
+            selPanelEvent.preventDefault();
+            const selPanelCurrentWidth = Number(selPanelResizer.getAttribute("aria-valuenow")) || selPanelSidebar.getBoundingClientRect().width;
+            const selPanelTargetWidth = selPanelEvent.key === "Home"
+                ? selPanelSidebarWidthMinimum
+                : selPanelEvent.key === "End"
+                    ? selPanelSidebarWidthMaximum
+                    : selPanelCurrentWidth + (selPanelEvent.key === "ArrowRight" ? selPanelSidebarKeyboardStep : -selPanelSidebarKeyboardStep);
+            const selPanelAppliedWidth = selPanelApplySidebarWidth(selPanelTargetWidth);
+            selPanelRoot.dispatchEvent(new CustomEvent("selPanel:leftResize", { bubbles: true, detail: { width: selPanelAppliedWidth } }));
+        });
+        // 双击恢复默认宽度，仍不写入任何缓存。
+        selPanelResizer.addEventListener("dblclick", () => {
+            const selPanelAppliedWidth = selPanelApplySidebarWidth(selPanelSidebarWidthDefault);
+            selPanelRoot.dispatchEvent(new CustomEvent("selPanel:leftResize", { bubbles: true, detail: { width: selPanelAppliedWidth } }));
+        });
+
+        selPanelSidebarResizers.set(selPanelRoot, selPanelResizer);
+        return selPanelResizer;
+    }
+
     /**
      * 显式挂载一个面板并应用标准视图数据。
      * @param {Element} selPanelRoot - 由 create 创建或符合标准结构的面板根。
@@ -573,6 +711,8 @@
             expand: selPanelMountOptions.expandLeftLabel || "展开左侧区域",
             collapse: selPanelMountOptions.collapseLeftLabel || "收起左侧区域"
         });
+        // 分隔条属于通用布局能力，静态骨架与 create 生成结构都在 mount 时统一补齐。
+        selPanelEnsureSidebarResizer(selPanelRoot);
         // 已挂载面板只刷新视图和选项，不重复绑定事件。
         if (selPanelRoots.has(selPanelRoot)) {
             return selPanelRoot;

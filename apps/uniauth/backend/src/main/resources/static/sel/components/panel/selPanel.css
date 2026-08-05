@@ -9,6 +9,7 @@
     --selpanel-layout-gap: 10px;
     --selpanel-layout-sidebar-width: 246px;
     --selpanel-layout-sidebar-collapsed-width: 58px;
+    --selpanel-layout-sidebar-resizer-hit-size: 18px;
     --selpanel-surface-line: var(--sel-theme-line);
     --selpanel-surface-background: var(--sel-theme-panel-surface);
     --selpanel-surface-glow: var(--sel-theme-glow);
@@ -265,6 +266,7 @@
 
 /* 主体区：弹性横排使左树或中央内容任一删除时，仍保留的区域自动占用可用空间。 */
 .selpanel-body-shell {
+    position: relative;
     z-index: 10;
     display: flex;
     flex: 1 1 auto;
@@ -272,6 +274,64 @@
     min-height: 0;
     gap: var(--selpanel-layout-gap);
     transition: gap 180ms ease;
+}
+
+/* 左树与中央内容之间的分隔条覆盖原有间距，不额外挤占表格宽度。 */
+.selpanel-sidebar-resizer {
+    position: absolute;
+    z-index: 35;
+    top: 12px;
+    bottom: 12px;
+    left: calc(var(--selpanel-layout-sidebar-width) + (var(--selpanel-layout-gap) / 2));
+    width: var(--selpanel-layout-sidebar-resizer-hit-size);
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    cursor: ew-resize;
+    touch-action: none;
+    transform: translateX(-50%);
+}
+
+/* 默认只显示克制的水晶细线，悬停、键盘聚焦和拖拽时再增强提示。 */
+.selpanel-sidebar-resizer::before {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 50%;
+    width: 2px;
+    border-radius: 999px;
+    background: rgb(var(--sel-theme-color-rgb) / 0.24);
+    box-shadow: 0 0 5px rgb(var(--sel-theme-color-rgb) / 0.18);
+    content: "";
+    transform: translateX(-50%);
+    transition: width 100ms ease, background-color 100ms ease, box-shadow 100ms ease;
+}
+
+.selpanel-sidebar-resizer:hover::before,
+.selpanel-sidebar-resizer:focus-visible::before,
+.selpanel-sidebar-resizer[aria-pressed="true"]::before {
+    width: 4px;
+    background: rgb(var(--sel-theme-color-rgb) / 0.78);
+    box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.62);
+}
+
+.selpanel-sidebar-resizer:focus-visible {
+    outline: 1px solid rgb(var(--sel-theme-color-rgb) / 0.68);
+    outline-offset: -5px;
+    border-radius: 999px;
+}
+
+/* 左区收起时固定使用紧凑宽度，不暴露无效的拖拽热区。 */
+.selpanel-shell.selpanel-layout-left-collapsed .selpanel-sidebar-resizer {
+    display: none;
+}
+
+/* 拖拽期间全页维持左右缩放光标，并阻止文字被意外选中。 */
+body.selpanel-sidebar-resizing,
+body.selpanel-sidebar-resizing * {
+    cursor: ew-resize !important;
+    user-select: none !important;
 }
 
 .selpanel-sidebar-shell {

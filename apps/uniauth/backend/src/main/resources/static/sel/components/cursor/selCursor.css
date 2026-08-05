@@ -38,7 +38,7 @@ body.selcursor-crystal :where(.selwindow-resize-north, .selwindow-resize-south) 
     cursor: ns-resize !important;
 }
 
-body.selcursor-crystal :where(.selwindow-resize-east, .selwindow-resize-west) {
+body.selcursor-crystal :where(.selwindow-resize-east, .selwindow-resize-west, .selpanel-sidebar-resizer) {
     cursor: ew-resize !important;
 }
 
