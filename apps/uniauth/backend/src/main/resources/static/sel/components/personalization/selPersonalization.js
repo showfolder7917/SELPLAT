@@ -31,6 +31,7 @@
         panelScale: 50,
         innerPanelFit: 100,
         frameWidth: 50,
+        panelInset: 50,
         contentInset: 50,
         panelGap: 50,
         glowSpread: 44,
@@ -80,24 +81,24 @@
     // 每个预设分别保存深浅皮肤参数；稳定 ID 保持不变，显示名称改用不限定明暗的“沉浸”。
     const selPersonalizationPresets = Object.freeze([
         Object.freeze({ id: "deep-space", label: "沉浸", icon: "ri-focus-2-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 80, backgroundFrost: 60, themeTint: 72, panelRadius: 46, panelScale: 50, innerPanelFit: 100, frameWidth: 54, contentInset: 52, panelGap: 50, glowSpread: 56, controlGap: 50, windowMotion: 34, glowMotion: 24, reducedMotion: false }),
-            light: Object.freeze({ frameOpacity: 90, panelOpacity: 86, backgroundFrost: 58, themeTint: 28, panelRadius: 54, panelScale: 50, innerPanelFit: 100, frameWidth: 48, contentInset: 54, panelGap: 50, glowSpread: 32, controlGap: 52, windowMotion: 30, glowMotion: 16, reducedMotion: false })
+            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 80, backgroundFrost: 60, themeTint: 72, panelRadius: 46, panelScale: 50, innerPanelFit: 100, frameWidth: 54, panelInset: 48, contentInset: 52, panelGap: 50, glowSpread: 56, controlGap: 50, windowMotion: 34, glowMotion: 24, reducedMotion: false }),
+            light: Object.freeze({ frameOpacity: 90, panelOpacity: 86, backgroundFrost: 58, themeTint: 28, panelRadius: 54, panelScale: 50, innerPanelFit: 100, frameWidth: 48, panelInset: 48, contentInset: 54, panelGap: 50, glowSpread: 32, controlGap: 52, windowMotion: 30, glowMotion: 16, reducedMotion: false })
         }) }),
         Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 82, panelOpacity: 30, backgroundFrost: 68, themeTint: 34, panelRadius: 62, panelScale: 50, innerPanelFit: 100, frameWidth: 46, contentInset: 54, panelGap: 56, glowSpread: 32, controlGap: 54, windowMotion: 30, glowMotion: 14, reducedMotion: false }),
-            light: Object.freeze({ frameOpacity: 72, panelOpacity: 48, backgroundFrost: 68, themeTint: 10, panelRadius: 68, panelScale: 50, innerPanelFit: 100, frameWidth: 38, contentInset: 56, panelGap: 58, glowSpread: 16, controlGap: 56, windowMotion: 28, glowMotion: 8, reducedMotion: false })
+            dark: Object.freeze({ frameOpacity: 82, panelOpacity: 30, backgroundFrost: 68, themeTint: 34, panelRadius: 62, panelScale: 50, innerPanelFit: 100, frameWidth: 46, panelInset: 44, contentInset: 54, panelGap: 56, glowSpread: 32, controlGap: 54, windowMotion: 30, glowMotion: 14, reducedMotion: false }),
+            light: Object.freeze({ frameOpacity: 72, panelOpacity: 48, backgroundFrost: 68, themeTint: 10, panelRadius: 68, panelScale: 50, innerPanelFit: 100, frameWidth: 38, panelInset: 44, contentInset: 56, panelGap: 58, glowSpread: 16, controlGap: 56, windowMotion: 28, glowMotion: 8, reducedMotion: false })
         }) }),
         Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 72, panelOpacity: 74, backgroundFrost: 50, themeTint: 18, panelRadius: 60, panelScale: 50, innerPanelFit: 100, frameWidth: 44, contentInset: 60, panelGap: 60, glowSpread: 10, controlGap: 60, windowMotion: 10, glowMotion: 0, reducedMotion: true }),
-            light: Object.freeze({ frameOpacity: 66, panelOpacity: 80, backgroundFrost: 56, themeTint: 6, panelRadius: 64, panelScale: 50, innerPanelFit: 100, frameWidth: 38, contentInset: 62, panelGap: 62, glowSpread: 6, controlGap: 62, windowMotion: 10, glowMotion: 0, reducedMotion: true })
+            dark: Object.freeze({ frameOpacity: 72, panelOpacity: 74, backgroundFrost: 50, themeTint: 18, panelRadius: 60, panelScale: 50, innerPanelFit: 100, frameWidth: 44, panelInset: 52, contentInset: 60, panelGap: 60, glowSpread: 10, controlGap: 60, windowMotion: 10, glowMotion: 0, reducedMotion: true }),
+            light: Object.freeze({ frameOpacity: 66, panelOpacity: 80, backgroundFrost: 56, themeTint: 6, panelRadius: 64, panelScale: 50, innerPanelFit: 100, frameWidth: 38, panelInset: 52, contentInset: 62, panelGap: 62, glowSpread: 6, controlGap: 62, windowMotion: 10, glowMotion: 0, reducedMotion: true })
         }) }),
         Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 94, backgroundFrost: 58, themeTint: 48, panelRadius: 38, panelScale: 50, innerPanelFit: 100, frameWidth: 62, contentInset: 56, panelGap: 50, glowSpread: 24, controlGap: 54, windowMotion: 18, glowMotion: 4, reducedMotion: false }),
-            light: Object.freeze({ frameOpacity: 94, panelOpacity: 96, backgroundFrost: 62, themeTint: 14, panelRadius: 48, panelScale: 50, innerPanelFit: 100, frameWidth: 56, contentInset: 58, panelGap: 50, glowSpread: 18, controlGap: 54, windowMotion: 16, glowMotion: 4, reducedMotion: false })
+            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 94, backgroundFrost: 58, themeTint: 48, panelRadius: 38, panelScale: 50, innerPanelFit: 100, frameWidth: 62, panelInset: 46, contentInset: 56, panelGap: 50, glowSpread: 24, controlGap: 54, windowMotion: 18, glowMotion: 4, reducedMotion: false }),
+            light: Object.freeze({ frameOpacity: 94, panelOpacity: 96, backgroundFrost: 62, themeTint: 14, panelRadius: 48, panelScale: 50, innerPanelFit: 100, frameWidth: 56, panelInset: 46, contentInset: 58, panelGap: 50, glowSpread: 18, controlGap: 54, windowMotion: 16, glowMotion: 4, reducedMotion: false })
         }) }),
         Object.freeze({ id: "default", label: "默认", icon: "ri-equalizer-2-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 52, backgroundFrost: 44, themeTint: 60, panelRadius: 52, panelScale: 50, innerPanelFit: 100, frameWidth: 50, contentInset: 50, panelGap: 50, glowSpread: 44, controlGap: 50, windowMotion: 36, glowMotion: 22, reducedMotion: false }),
-            light: Object.freeze({ frameOpacity: 82, panelOpacity: 72, backgroundFrost: 52, themeTint: 18, panelRadius: 58, panelScale: 50, innerPanelFit: 100, frameWidth: 44, contentInset: 54, panelGap: 52, glowSpread: 24, controlGap: 52, windowMotion: 34, glowMotion: 14, reducedMotion: false })
+            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 52, backgroundFrost: 44, themeTint: 60, panelRadius: 52, panelScale: 50, innerPanelFit: 100, frameWidth: 50, panelInset: 50, contentInset: 50, panelGap: 50, glowSpread: 44, controlGap: 50, windowMotion: 36, glowMotion: 22, reducedMotion: false }),
+            light: Object.freeze({ frameOpacity: 82, panelOpacity: 72, backgroundFrost: 52, themeTint: 18, panelRadius: 58, panelScale: 50, innerPanelFit: 100, frameWidth: 44, panelInset: 50, contentInset: 54, panelGap: 52, glowSpread: 24, controlGap: 52, windowMotion: 34, glowMotion: 14, reducedMotion: false })
         }) })
     ]);
     // 面板 range 配置集中声明分组、标签和辅助说明，增删项目不需要复制事件分支。
@@ -122,6 +123,7 @@
                 Object.freeze({ key: "frameWidth", label: "边框厚度", hint: "保持九宫格切角比例" }),
                 Object.freeze({ key: "panelScale", label: "面板等比大小", hint: "宽高内容与边框同步缩放" }),
                 Object.freeze({ key: "innerPanelFit", label: "边框/内板比例", hint: "四边同步贴近或远离外框", maximum: 150 }),
+                Object.freeze({ key: "panelInset", label: "外框/内板间距", hint: "控制内板贴近水晶外框" }),
                 Object.freeze({ key: "contentInset", label: "内容内边距", hint: "文字远离发光边带" }),
                 Object.freeze({ key: "panelGap", label: "面板间距", hint: "控制区域之间留白" }),
                 Object.freeze({ key: "glowSpread", label: "发光扩散", hint: "不改变边框颜色" }),
@@ -713,6 +715,10 @@
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-frame-scale", String(selPersonalizationMap(selPersonalizationPanelState.frameWidth, 0.67, 1.33)));
             // 内容内边距把 0 至 100 映射为 -4 至 10px 的偏移量，默认 50 严格保持旧布局。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-content-inset-offset", `${selPersonalizationCenteredMap(selPersonalizationPanelState.contentInset, -4, 10)}px`);
+            // 外框/内板间距独立映射到 6 至 12px，默认 9px，让内板贴近外框但不压住水晶亮边。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-shell-inset", `${selPersonalizationMap(selPersonalizationPanelState.panelInset, 6, 12)}px`);
+            // 现有内容内边距只控制内板中文字，默认 14px，不再推动整个内板远离外框。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-inner-content-inset", `${selPersonalizationMap(selPersonalizationPanelState.contentInset, 10, 18)}px`);
             // 面板间距限制在 6 至 14px，保证紧凑视口仍保留中央内容。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-gap", `${selPersonalizationMap(selPersonalizationPanelState.panelGap, 6, 14)}px`);
             // 发光扩散映射到 0 至 22px，并单独写强度供动效使用。

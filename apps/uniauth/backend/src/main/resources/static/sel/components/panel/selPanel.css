@@ -291,6 +291,7 @@
     cursor: ew-resize;
     touch-action: none;
     transform: translateX(-50%);
+    transition: left 180ms ease;
 }
 
 /* 默认只显示克制的水晶细线，悬停、键盘聚焦和拖拽时再增强提示。 */
@@ -332,6 +333,12 @@ body.selpanel-sidebar-resizing,
 body.selpanel-sidebar-resizing * {
     cursor: ew-resize !important;
     user-select: none !important;
+}
+
+/* 实时拖拽不得沿用折叠动画，否则每次宽度更新都会落后鼠标 180ms。 */
+body.selpanel-sidebar-resizing .selpanel-sidebar-shell,
+body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
+    transition: none !important;
 }
 
 .selpanel-sidebar-shell {
