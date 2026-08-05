@@ -7,6 +7,11 @@
 (function selPageBackgroundInitialize() {
     "use strict";
 
+    // 主题包可携带自己的背景清单；背景控件只消费稳定字段，不识别具体主题名称。
+    const selPageBackgroundPackThemes = (window.selThemeRegistry?.list?.() || [])
+        .flatMap((selPageBackgroundThemePack) => Array.isArray(selPageBackgroundThemePack.backgrounds) ? selPageBackgroundThemePack.backgrounds : [])
+        .filter((selPageBackgroundTheme) => /^[a-z][a-z0-9-]*$/.test(selPageBackgroundTheme?.id || "") && typeof selPageBackgroundTheme.image === "string")
+        .map((selPageBackgroundTheme) => Object.freeze({ ...selPageBackgroundTheme }));
     // 默认主题使用 SEL 基础素材目录；换皮肤时可以由应用传入另一份显式主题清单。
     const selPageBackgroundDefaultThemes = Object.freeze([
         // 纯黑深空使用低亮度真实图片，浅色皮肤选择后也不会回退页面基础底色。
@@ -32,7 +37,9 @@
         Object.freeze({ id: "oriental", name: "青绿山水", category: "国风", image: "../../assets/backgrounds/oriental-jade-landscape.webp" }),
         Object.freeze({ id: "minimal", name: "珊瑚流光", category: "简约", image: "../../assets/backgrounds/minimal-coral-lavender-flow.webp" }),
         Object.freeze({ id: "cute", name: "糖果云朵", category: "可爱", image: "../../assets/backgrounds/cute-candy-cloud-world.webp" }),
-        Object.freeze({ id: "ocean", name: "珊瑚海城", category: "海洋", image: "../../assets/backgrounds/ocean-turquoise-coral-city.webp" })
+        Object.freeze({ id: "ocean", name: "珊瑚海城", category: "海洋", image: "../../assets/backgrounds/ocean-turquoise-coral-city.webp" }),
+        // 主题包背景在注册表加载完成后自动合并，新增主题不再修改本组件。
+        ...selPageBackgroundPackThemes
     ]);
     // 每个背景宿主只创建一个控制器，避免重复挂载背景图层。
     const selPageBackgroundControllers = new WeakMap();

@@ -1,13 +1,6 @@
-/*
- * selSkinDark.css：SEL 深色皮肤基础令牌。
- * 负责深背景、浅文字、深空水晶材质和适配深色表面的业务语义色。
- * 责任边界：只提供皮肤差异，不复制组件结构、布局或交互状态机。
- */
-
-:root,
-:root[data-sel-skin="dark"] {
+/* 水晶科技深色模式：深背景、浅文字和深空水晶材质。 */
+:root[data-sel-theme="crystal-tech"][data-sel-mode="dark"] {
     color-scheme: dark;
-    --sel-theme-color-rgb: 74 139 255;
     --sel-theme-neutral-rgb: 1 6 22;
     --sel-theme-tint-soft: 14.96%;
     --sel-theme-tint-base: 23.12%;
@@ -29,7 +22,6 @@
     --sel-theme-semantic-progress: #59b8ff;
     --sel-theme-semantic-review: #ad78ff;
     --sel-theme-semantic-archived: #91a4d7;
-    --sel-theme-frame-image: url("/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp?v=20260804-1");
     --sel-theme-line: rgb(var(--sel-theme-color-rgb) / 0.58);
     --sel-theme-line-soft: rgb(var(--sel-theme-color-rgb) / 0.28);
     --sel-theme-glow: rgb(var(--sel-theme-color-rgb) / 0.52);

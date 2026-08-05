@@ -19,9 +19,9 @@ selBaseRuntime.param(name)          读取页面查询参数
 
 `selAjax` 不保存业务地址。`./mock/UniauthUserGrid/...` 或 `/api/uniauth/...` 等路径必须由应用装配层明确传入。
 
-统一视觉契约位于 `theme/selThemeTokens.css`，深浅皮肤分别位于 `theme/skins/selSkinDark.css` 和 `theme/skins/selSkinLight.css`。共享文件只维护派生表面、组件映射、边框几何、安全区和视口间距；每套皮肤独立提供基础明暗、文字、语义色和九宫格素材。组件样式与个性化逻辑统一读取 `--sel-theme-*`，不得复制组件或重新写死皮肤颜色。
+统一视觉契约位于 `theme/contract/`，主题注册表与切换管理器位于 `theme/runtime/`，完整主题放在 `theme/packs/<theme-id>/`。一个主题包同时提供深色、浅色两种模式，每种模式拥有独立基础材质、Accent 配色、边框和背景。组件样式与个性化逻辑统一读取 `--sel-theme-*`，不得复制组件或重新写死主题颜色；新增主题按 `theme/packs/README.md` 接入。
 
-皮肤素材与共享素材分离：`assets/skins/<skin>/components/` 只保存当前皮肤需要的真实运行材质，`assets/components/` 继续保存不随深浅变化的共用素材。页面通过根节点 `data-sel-skin="dark|light"` 切换皮肤，不建立 `sel-dark`、`sel-light` 两套组件目录。
+模式素材与共享素材分离：`assets/skins/<mode>/components/` 保存当前模式需要的真实运行材质，`assets/components/` 继续保存不随模式变化的共用素材。页面根节点通过 `data-sel-theme`、`data-sel-mode`、`data-sel-accent` 和 `data-sel-density` 表达统一主题状态，不建立两套组件目录。
 
 ## 当前挂载入口
 
@@ -36,7 +36,7 @@ selPageBackground.mount(backgroundHost, options)
 selPersonalization.mount(personalizationHost, { backgroundController })
 ```
 
-`selPageBackground` 只维护背景图层和当前页面参数；`selPersonalization` 组合“皮肤 / 背景 / 面板 / 文字”四个独立 Tab。皮肤 Tab 切换深色与浅色基础令牌和配套材质；面板设置继续支持跟随皮肤、任意统一主题色、常用色和染色强度，并从主题色生成柔和、基础、抬升和强调四级色阶。切换皮肤不会重置背景、面板参数或用户明确选择的文字覆盖。所有状态均不使用浏览器持久化，刷新页面恢复代码默认值。
+`selPageBackground` 只维护背景图层和当前页面参数；`selPersonalization` 组合“主题 / 背景 / 面板 / 文字”四个独立 Tab。主题 Tab 先选择视觉风格，再选择深浅模式及该模式的独立 Accent；面板设置继续支持跟随主题、任意统一主题色和染色强度，并从主题色生成柔和、基础、抬升和强调四级色阶。切换主题或模式不会重建业务组件，也不会清除用户明确选择的文字覆盖。所有状态均不使用浏览器持久化，刷新页面恢复代码默认值。
 
 ## 新增基础控件
 

@@ -1,12 +1,6 @@
-/*
- * selSkinLight.css：SEL 浅色皮肤基础令牌。
- * 负责浅背景、深文字、珍珠水晶材质和适配浅色表面的业务语义色。
- * 责任边界：只提供皮肤差异，不复制组件结构、布局或交互状态机。
- */
-
-:root[data-sel-skin="light"] {
+/* 水晶科技浅色模式：浅背景、深文字和珍珠水晶材质。 */
+:root[data-sel-theme="crystal-tech"][data-sel-mode="light"] {
     color-scheme: light;
-    --sel-theme-color-rgb: 54 112 176;
     --sel-theme-neutral-rgb: 247 250 255;
     --sel-theme-tint-soft: 9%;
     --sel-theme-tint-base: 14%;
@@ -28,7 +22,6 @@
     --sel-theme-semantic-progress: #1b67ad;
     --sel-theme-semantic-review: #7042ad;
     --sel-theme-semantic-archived: #536279;
-    --sel-theme-frame-image: url("/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp?v=20260804-1");
     --sel-theme-line: rgb(var(--sel-theme-color-rgb) / 0.48);
     --sel-theme-line-soft: rgb(var(--sel-theme-color-rgb) / 0.22);
     --sel-theme-glow: rgb(var(--sel-theme-color-rgb) / 0.26);

@@ -9,16 +9,18 @@
 
     // 每个个性化宿主只创建一个控制器，避免重复绑定全局输入事件。
     const selPersonalizationControllers = new WeakMap();
-    // 顶部皮肤卡只表达明暗模式；themeLabel 专供下方具体基础主题使用，避免把换肤误解为恢复主题。
-    const selPersonalizationSkins = Object.freeze([
-        Object.freeze({ id: "dark", label: "深色皮肤", themeLabel: "深空水晶", description: "深色界面 · 浅色文字", icon: "ri-moon-clear-line", frameImage: "/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp?v=20260804-1", previewSurface: "#020816", previewCard: "#07132E", previewMain: "#F7FAFF", previewMuted: "#AFC0DD", previewAccent: "#8067FF", backgroundTheme: "void", backgroundDisplay: Object.freeze({ overlay: 52, brightness: 86, blur: 0 }) }),
-        Object.freeze({ id: "light", label: "浅色皮肤", themeLabel: "晨雾水晶", description: "浅色界面 · 深色文字", icon: "ri-sun-line", frameImage: "/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp?v=20260804-1", previewSurface: "#EAF3FB", previewCard: "#DCE8F3", previewMain: "#0B1633", previewMuted: "#52617A", previewAccent: "#4A8BFF", backgroundTheme: "morning-mist", backgroundDisplay: Object.freeze({ overlay: 16, brightness: 96, blur: 0 }) })
-    ]);
-    // 刷新和完整恢复固定回到现行深色皮肤；用户切换只在当前页面生效。
-    const selPersonalizationDefaultSkin = "dark";
+    // 主题、模式、颜色和素材只能来自注册表；个性化控件不再保存水晶主题私有清单。
+    const selPersonalizationThemeManager = window.selThemeManager;
+    const selPersonalizationThemes = selPersonalizationThemeManager?.themes?.() || Object.freeze([]);
+    const selPersonalizationDefaultTheme = selPersonalizationThemes[0] || null;
+    // 当前主题和模式数组可在运行时替换，新增主题无需修改本组件事件分支。
+    let selPersonalizationActiveTheme = selPersonalizationThemeManager?.getTheme?.() || selPersonalizationDefaultTheme;
+    let selPersonalizationSkins = selPersonalizationActiveTheme?.modes || Object.freeze([]);
+    let selPersonalizationDefaultSkin = selPersonalizationActiveTheme?.defaults?.mode || selPersonalizationSkins[0]?.id || "dark";
     // 面板默认值全部采用 0 至 100 的用户尺度，刷新页面时从这里重新开始。
     const selPersonalizationPanelDefaults = Object.freeze({
-        // null 表示使用当前皮肤提供的主题色，刷新页面不会遗留用户临时选色。
+        // accent 保存正式颜色组合 ID，themeColor 只保存任意自定义色；二者同时为空表示主题基础材质。
+        themeAccent: null,
         themeColor: null,
         // 原始水晶边框默认完整显示；透明度只影响独立图片层，不影响内板、内容或发光。
         frameOpacity: 100,
@@ -69,18 +71,6 @@
         }) }),
         Object.freeze({ id: "custom", label: "自定义", icon: "ri-font-color", values: null })
     ]);
-    // 六组常用色同时登记深浅皮肤的独立水晶边框与配套背景；任意自定义颜色仍只改变统一颜色令牌。
-    const selPersonalizationThemeColors = Object.freeze([
-        Object.freeze({ id: "stellar-blue", value: "#4A8BFF", label: "星际蓝" }),
-        Object.freeze({ id: "crystal-cyan", value: "#28D7FF", label: "水晶青" }),
-        Object.freeze({ id: "nebula-purple", value: "#8067FF", label: "星云紫" }),
-        Object.freeze({ id: "emerald-green", value: "#28C7A5", label: "翡翠绿" }),
-        Object.freeze({ id: "amber-gold", value: "#F3B348", label: "琥珀金" }),
-        Object.freeze({ id: "pulse-pink", value: "#EC5D9A", label: "脉冲粉" })
-    ]);
-    // 主题素材路径由稳定色板 ID 和当前皮肤共同解析，避免在事件分支中复制 12 组路径。
-    const selPersonalizationThemeAssetRoot = "/sel/assets/skins";
-    const selPersonalizationThemeAssetVersion = "20260804-1";
     // 每个预设分别保存深浅皮肤参数；稳定 ID 保持不变，显示名称改用不限定明暗的“沉浸”。
     const selPersonalizationPresets = Object.freeze([
         Object.freeze({ id: "deep-space", label: "沉浸", icon: "ri-focus-2-line", values: Object.freeze({
@@ -278,14 +268,15 @@
         // 背景控制器必须提供主题、状态与调整 API，组合控件不得绕过它修改背景内部状态。
         const selPersonalizationBackgroundController = selPersonalizationOptions.backgroundController;
         // 缺少标准背景控制器时不创建只有半套功能的设置面板。
-        if (!selPersonalizationBackgroundController?.themes || typeof selPersonalizationBackgroundController.setDisplay !== "function") {
+        if (!selPersonalizationBackgroundController?.themes || typeof selPersonalizationBackgroundController.setDisplay !== "function" || !selPersonalizationThemeManager || !selPersonalizationActiveTheme) {
             return null;
         }
         // 页面根节点承载跨组件共享的视觉令牌。
         const selPersonalizationDocumentRoot = document.documentElement;
-        // 只接受正式登记的皮肤标识，避免页面根出现无法解析的任意状态。
-        let selPersonalizationSkinState = selPersonalizationSkins.some((selPersonalizationSkin) => selPersonalizationSkin.id === selPersonalizationDocumentRoot.dataset.selSkin)
-            ? selPersonalizationDocumentRoot.dataset.selSkin
+        // 当前主题和模式从统一管理器读取，避免根属性、素材和设置面板各保存一份状态。
+        let selPersonalizationThemeState = selPersonalizationThemeManager.getState().theme;
+        let selPersonalizationSkinState = selPersonalizationSkins.some((selPersonalizationSkin) => selPersonalizationSkin.id === selPersonalizationThemeManager.getState().mode)
+            ? selPersonalizationThemeManager.getState().mode
             : selPersonalizationDefaultSkin;
         // 性能档位只保存在当前页面根状态，刷新时会根据当前设备重新评估。
         selPersonalizationDocumentRoot.dataset.selPersonalPerformance = selPersonalizationResolvePerformanceMode();
@@ -302,6 +293,7 @@
         // 当前面板状态只保存在内存中，刷新页面自动重新使用默认值。
         let selPersonalizationPanelState = {
             ...selPersonalizationDefaults,
+            themeAccent: selPersonalizationThemeManager.getState().accent,
             // 调用方默认色也必须通过统一校验；null 继续表示跟随皮肤。
             themeColor: selPersonalizationNormalizeColor(selPersonalizationDefaults.themeColor),
             reducedMotion: Boolean(selPersonalizationDefaults.reducedMotion)
@@ -331,12 +323,14 @@
             // 四个一级设置使用原生 tab 语义，皮肤、背景、面板和文字保持同一信息层级。
             contentHtml: `
                     <div class="selpersonal-tabs" role="tablist" aria-label="个性化设置分类">
-                        <button class="selpersonal-tab selpersonal-tab-selected" type="button" role="tab" aria-selected="true" aria-controls="selpersonal-skin-view" data-sel-personal-tab="skin"><i class="ri-contrast-2-line" aria-hidden="true"></i><span>皮肤</span></button>
+                        <button class="selpersonal-tab selpersonal-tab-selected" type="button" role="tab" aria-selected="true" aria-controls="selpersonal-skin-view" data-sel-personal-tab="skin"><i class="ri-contrast-2-line" aria-hidden="true"></i><span>主题</span></button>
                         <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-background-view" data-sel-personal-tab="background"><i class="ri-landscape-line" aria-hidden="true"></i><span>背景</span></button>
                         <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-panel-view" data-sel-personal-tab="panel"><i class="ri-layout-4-line" aria-hidden="true"></i><span>面板</span></button>
                         <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-text-view" data-sel-personal-tab="text"><i class="ri-font-size-2" aria-hidden="true"></i><span>文字</span></button>
                     </div>
                     <div class="selpersonal-view" id="selpersonal-skin-view" role="tabpanel" data-sel-personal-view="skin">
+                        <header class="selpersonal-view-heading"><strong>选择主题风格</strong><span>一个主题包含深浅皮肤与独立配色</span></header>
+                        <div class="selpersonal-skin-grid" data-sel-personal-theme-grid role="group" aria-label="主题风格"></div>
                         <header class="selpersonal-view-heading"><strong>选择界面明暗</strong><span>保留当前主题配色</span></header>
                         <div class="selpersonal-skin-grid" data-sel-personal-skin-grid role="group" aria-label="界面明暗"></div>
                         <section class="selpersonal-skin-theme-section" data-sel-personal-skin-themes aria-labelledby="selpersonal-skin-theme-title">
@@ -349,7 +343,7 @@
                             <button class="selpersonal-color-follow" type="button" data-sel-personal-theme-follow aria-pressed="true"><i class="ri-brush-line" aria-hidden="true"></i><span>跟随当前皮肤</span></button>
                         </section>
                         <p class="selpersonal-skin-note"><i class="ri-information-line" aria-hidden="true"></i><span>选择主题会同步深浅皮肤、专属边框与配套背景；两张基础皮肤卡保持固定预览色。</span></p>
-                        <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-skin"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复默认皮肤</span></button>
+                        <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-skin"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复默认主题</span></button>
                     </div>
                     <div class="selpersonal-view" id="selpersonal-background-view" role="tabpanel" data-sel-personal-view="background" hidden>
                         <header class="selpersonal-view-heading"><strong>选择网页背景</strong><span>${selPersonalizationBackgroundController.themes.length} 种独立主题</span></header>
@@ -394,6 +388,7 @@
         const selPersonalizationControl = selPersonalizationFloatingPanel.root;
         const selPersonalizationTrigger = selPersonalizationFloatingPanel.trigger;
         const selPersonalizationPanel = selPersonalizationFloatingPanel.panel;
+        const selPersonalizationThemeGrid = selPersonalizationHost.querySelector("[data-sel-personal-theme-grid]");
         const selPersonalizationSkinGrid = selPersonalizationHost.querySelector("[data-sel-personal-skin-grid]");
         const selPersonalizationSkinThemeRows = selPersonalizationHost.querySelector("[data-sel-personal-skin-theme-rows]");
         const selPersonalizationBackgroundGrid = selPersonalizationHost.querySelector("[data-sel-personal-background-grid]");
@@ -402,65 +397,76 @@
         const selPersonalizationTextModeGrid = selPersonalizationHost.querySelector("[data-sel-personal-text-modes]");
         const selPersonalizationPresetGrid = selPersonalizationHost.querySelector("[data-sel-personal-presets]");
         // 任一关键节点缺失都阻止创建不可完整操作的控制器。
-        if (!selPersonalizationControl || !selPersonalizationTrigger || !selPersonalizationPanel || !selPersonalizationSkinGrid || !selPersonalizationSkinThemeRows || !selPersonalizationBackgroundGrid || !selPersonalizationPanelScroll || !selPersonalizationTextScroll || !selPersonalizationTextModeGrid || !selPersonalizationPresetGrid) {
+        if (!selPersonalizationControl || !selPersonalizationTrigger || !selPersonalizationPanel || !selPersonalizationThemeGrid || !selPersonalizationSkinGrid || !selPersonalizationSkinThemeRows || !selPersonalizationBackgroundGrid || !selPersonalizationPanelScroll || !selPersonalizationTextScroll || !selPersonalizationTextModeGrid || !selPersonalizationPresetGrid) {
             return null;
         }
 
-        // 两套正式皮肤以材质预览卡呈现；按钮只保存稳定 ID，不复制皮肤样式到脚本。
-        selPersonalizationSkins.forEach((selPersonalizationSkin) => {
-            const selPersonalizationSkinButton = document.createElement("button");
-            selPersonalizationSkinButton.className = "selpersonal-skin-option";
-            selPersonalizationSkinButton.type = "button";
-            selPersonalizationSkinButton.dataset.selPersonalSkin = selPersonalizationSkin.id;
-            selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-frame-image", `url("${selPersonalizationSkin.frameImage}")`);
-            // 皮肤样本使用自身固定色，不读取当前页面主题令牌，确保切换主题后代表色不漂移。
-            selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-surface", selPersonalizationSkin.previewSurface);
-            selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-card-surface", selPersonalizationSkin.previewCard);
-            selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-main", selPersonalizationSkin.previewMain);
-            selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-muted", selPersonalizationSkin.previewMuted);
-            selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-accent", selPersonalizationSkin.previewAccent);
-            selPersonalizationSkinButton.setAttribute("aria-pressed", "false");
-            selPersonalizationSkinButton.innerHTML = `<span class="selpersonal-skin-preview" aria-hidden="true"><i class="${selPersonalizationSkin.icon}"></i></span><span class="selpersonal-skin-copy"><strong>${selPersonalizationSkin.label}</strong><small>${selPersonalizationSkin.description}</small></span><i class="ri-checkbox-circle-fill selpersonal-skin-selected-icon" aria-hidden="true"></i>`;
-            selPersonalizationSkinGrid.appendChild(selPersonalizationSkinButton);
-        });
-
-        // 十四套主题按深色与浅色分成两行；每行首项为基础水晶，其余六项为专属配色素材包。
-        selPersonalizationSkins.forEach((selPersonalizationSkin) => {
-            const selPersonalizationThemeRow = document.createElement("div");
-            selPersonalizationThemeRow.className = "selpersonal-skin-theme-row";
-            selPersonalizationThemeRow.dataset.selPersonalThemeSkinRow = selPersonalizationSkin.id;
-            const selPersonalizationThemeRowLabel = document.createElement("strong");
-            selPersonalizationThemeRowLabel.textContent = selPersonalizationSkin.id === "dark" ? "深色主题" : "浅色主题";
-            const selPersonalizationThemeSwatches = document.createElement("div");
-            selPersonalizationThemeSwatches.className = "selpersonal-color-swatches selpersonal-skin-theme-swatches";
-            selPersonalizationThemeSwatches.setAttribute("role", "group");
-            selPersonalizationThemeSwatches.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent}色板`);
-            // 基础水晶入口复用皮肤原始色、边框和背景，不为相同素材再复制一套资源。
-            const selPersonalizationBaseSwatch = document.createElement("button");
-            selPersonalizationBaseSwatch.className = "selpersonal-color-swatch selpersonal-color-swatch-base";
-            selPersonalizationBaseSwatch.type = "button";
-            selPersonalizationBaseSwatch.dataset.selPersonalThemeSwatch = "follow-skin";
-            selPersonalizationBaseSwatch.dataset.selPersonalThemeBase = "true";
-            selPersonalizationBaseSwatch.dataset.selPersonalThemeSkin = selPersonalizationSkin.id;
-            selPersonalizationBaseSwatch.style.setProperty("--selpersonal-swatch-color", selPersonalizationSkin.previewAccent);
-            selPersonalizationBaseSwatch.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent} · ${selPersonalizationSkin.themeLabel}`);
-            selPersonalizationBaseSwatch.setAttribute("aria-pressed", "false");
-            selPersonalizationBaseSwatch.innerHTML = `<i class="${selPersonalizationSkin.icon}" aria-hidden="true"></i>`;
-            selPersonalizationThemeSwatches.appendChild(selPersonalizationBaseSwatch);
-            selPersonalizationThemeColors.forEach((selPersonalizationThemeColor) => {
-                const selPersonalizationSwatch = document.createElement("button");
-                selPersonalizationSwatch.className = "selpersonal-color-swatch";
-                selPersonalizationSwatch.type = "button";
-                selPersonalizationSwatch.dataset.selPersonalThemeSwatch = selPersonalizationThemeColor.value;
-                selPersonalizationSwatch.dataset.selPersonalThemeSkin = selPersonalizationSkin.id;
-                selPersonalizationSwatch.style.setProperty("--selpersonal-swatch-color", selPersonalizationThemeColor.value);
-                selPersonalizationSwatch.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent} · ${selPersonalizationThemeColor.label}`);
-                selPersonalizationSwatch.setAttribute("aria-pressed", "false");
-                selPersonalizationThemeSwatches.appendChild(selPersonalizationSwatch);
+        /** 按当前注册表重新绘制主题、明暗模式和各模式独立颜色组合。 */
+        function selPersonalizationRenderThemeOptions() {
+            selPersonalizationThemeGrid.replaceChildren();
+            selPersonalizationSkinGrid.replaceChildren();
+            selPersonalizationSkinThemeRows.replaceChildren();
+            selPersonalizationThemes.forEach((selPersonalizationTheme) => {
+                const selPersonalizationThemeButton = document.createElement("button");
+                selPersonalizationThemeButton.className = "selpersonal-skin-option";
+                selPersonalizationThemeButton.type = "button";
+                selPersonalizationThemeButton.dataset.selPersonalTheme = selPersonalizationTheme.id;
+                selPersonalizationThemeButton.setAttribute("aria-pressed", "false");
+                selPersonalizationThemeButton.innerHTML = `<span class="selpersonal-skin-preview" aria-hidden="true"><i class="${selPersonalizationTheme.icon || "ri-palette-line"}"></i></span><span class="selpersonal-skin-copy"><strong>${selPersonalizationTheme.name}</strong><small>${selPersonalizationTheme.description || "可扩展主题包"}</small></span><i class="ri-checkbox-circle-fill selpersonal-skin-selected-icon" aria-hidden="true"></i>`;
+                selPersonalizationThemeGrid.appendChild(selPersonalizationThemeButton);
             });
-            selPersonalizationThemeRow.append(selPersonalizationThemeRowLabel, selPersonalizationThemeSwatches);
-            selPersonalizationSkinThemeRows.appendChild(selPersonalizationThemeRow);
-        });
+            selPersonalizationSkins.forEach((selPersonalizationSkin) => {
+                const selPersonalizationSkinButton = document.createElement("button");
+                selPersonalizationSkinButton.className = "selpersonal-skin-option";
+                selPersonalizationSkinButton.type = "button";
+                selPersonalizationSkinButton.dataset.selPersonalSkin = selPersonalizationSkin.id;
+                selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-frame-image", `url("${selPersonalizationSkin.base.frameImage}")`);
+                selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-surface", selPersonalizationSkin.preview.surface);
+                selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-card-surface", selPersonalizationSkin.preview.card);
+                selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-main", selPersonalizationSkin.preview.main);
+                selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-muted", selPersonalizationSkin.preview.muted);
+                selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-accent", selPersonalizationSkin.preview.accent);
+                selPersonalizationSkinButton.setAttribute("aria-pressed", "false");
+                selPersonalizationSkinButton.innerHTML = `<span class="selpersonal-skin-preview" aria-hidden="true"><i class="${selPersonalizationSkin.icon}"></i></span><span class="selpersonal-skin-copy"><strong>${selPersonalizationSkin.label}</strong><small>${selPersonalizationSkin.description}</small></span><i class="ri-checkbox-circle-fill selpersonal-skin-selected-icon" aria-hidden="true"></i>`;
+                selPersonalizationSkinGrid.appendChild(selPersonalizationSkinButton);
+
+                const selPersonalizationThemeRow = document.createElement("div");
+                selPersonalizationThemeRow.className = "selpersonal-skin-theme-row";
+                selPersonalizationThemeRow.dataset.selPersonalThemeSkinRow = selPersonalizationSkin.id;
+                const selPersonalizationThemeRowLabel = document.createElement("strong");
+                selPersonalizationThemeRowLabel.textContent = `${selPersonalizationSkin.label}配色`;
+                const selPersonalizationThemeSwatches = document.createElement("div");
+                selPersonalizationThemeSwatches.className = "selpersonal-color-swatches selpersonal-skin-theme-swatches";
+                selPersonalizationThemeSwatches.setAttribute("role", "group");
+                selPersonalizationThemeSwatches.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent}色板`);
+                const selPersonalizationBaseSwatch = document.createElement("button");
+                selPersonalizationBaseSwatch.className = "selpersonal-color-swatch selpersonal-color-swatch-base";
+                selPersonalizationBaseSwatch.type = "button";
+                selPersonalizationBaseSwatch.dataset.selPersonalThemeSwatch = "base";
+                selPersonalizationBaseSwatch.dataset.selPersonalThemeBase = "true";
+                selPersonalizationBaseSwatch.dataset.selPersonalThemeSkin = selPersonalizationSkin.id;
+                selPersonalizationBaseSwatch.style.setProperty("--selpersonal-swatch-color", selPersonalizationSkin.base.color);
+                selPersonalizationBaseSwatch.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent} · ${selPersonalizationSkin.themeLabel}`);
+                selPersonalizationBaseSwatch.setAttribute("aria-pressed", "false");
+                selPersonalizationBaseSwatch.innerHTML = `<i class="${selPersonalizationSkin.icon}" aria-hidden="true"></i>`;
+                selPersonalizationThemeSwatches.appendChild(selPersonalizationBaseSwatch);
+                selPersonalizationSkin.accents.forEach((selPersonalizationAccent) => {
+                    const selPersonalizationSwatch = document.createElement("button");
+                    selPersonalizationSwatch.className = "selpersonal-color-swatch";
+                    selPersonalizationSwatch.type = "button";
+                    selPersonalizationSwatch.dataset.selPersonalThemeSwatch = selPersonalizationAccent.color;
+                    selPersonalizationSwatch.dataset.selPersonalThemeAccent = selPersonalizationAccent.id;
+                    selPersonalizationSwatch.dataset.selPersonalThemeSkin = selPersonalizationSkin.id;
+                    selPersonalizationSwatch.style.setProperty("--selpersonal-swatch-color", selPersonalizationAccent.color);
+                    selPersonalizationSwatch.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent} · ${selPersonalizationAccent.label}`);
+                    selPersonalizationSwatch.setAttribute("aria-pressed", "false");
+                    selPersonalizationThemeSwatches.appendChild(selPersonalizationSwatch);
+                });
+                selPersonalizationThemeRow.append(selPersonalizationThemeRowLabel, selPersonalizationThemeSwatches);
+                selPersonalizationSkinThemeRows.appendChild(selPersonalizationThemeRow);
+            });
+        }
+        selPersonalizationRenderThemeOptions();
 
         // 背景缩略图按钮直接复用背景控制器提供的正式素材与稳定主题标识。
         selPersonalizationBackgroundController.themes.forEach((selPersonalizationTheme) => {
@@ -576,27 +582,31 @@
          * @returns {void} 只更新当前个性化界面，不改变其他设置状态。
          */
         function selPersonalizationSyncSkin() {
+            selPersonalizationThemeGrid.querySelectorAll("[data-sel-personal-theme]").forEach((selPersonalizationThemeButton) => {
+                selPersonalizationThemeButton.setAttribute("aria-pressed", String(selPersonalizationThemeButton.dataset.selPersonalTheme === selPersonalizationThemeState));
+            });
             selPersonalizationSkinGrid.querySelectorAll("[data-sel-personal-skin]").forEach((selPersonalizationSkinButton) => {
                 selPersonalizationSkinButton.setAttribute("aria-pressed", String(selPersonalizationSkinButton.dataset.selPersonalSkin === selPersonalizationSkinState));
             });
-            // 十四套主题只有皮肤与主题来源同时命中时才显示选中，深浅两行不会互相误选。
+            // 配色只有模式与 Accent 同时命中时才显示选中，深浅两行不会互相误选。
             selPersonalizationSkinThemeRows.querySelectorAll("[data-sel-personal-theme-swatch]").forEach((selPersonalizationSwatch) => {
                 const selPersonalizationBaseSelected = selPersonalizationSwatch.dataset.selPersonalThemeBase === "true"
+                    && !selPersonalizationPanelState.themeAccent
                     && !selPersonalizationPanelState.themeColor;
                 const selPersonalizationThemeSelected = selPersonalizationSwatch.dataset.selPersonalThemeSkin === selPersonalizationSkinState
                     && (selPersonalizationBaseSelected
-                        || selPersonalizationSwatch.dataset.selPersonalThemeSwatch === selPersonalizationPanelState.themeColor);
+                        || selPersonalizationSwatch.dataset.selPersonalThemeAccent === selPersonalizationPanelState.themeAccent);
                 selPersonalizationSwatch.setAttribute("aria-pressed", String(selPersonalizationThemeSelected));
             });
         }
 
         /**
-         * 根据当前统一颜色查找正式色板主题；自定义颜色没有独立图片包。
+         * 根据当前模式和正式 Accent ID 查找颜色与素材；自定义颜色没有独立图片包。
          * @returns {object|null} 命中色板时返回不可变配置，否则返回 null。
          */
         function selPersonalizationResolveThemeColor() {
-            const selPersonalizationThemeColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor);
-            return selPersonalizationThemeColors.find((selPersonalizationItem) => selPersonalizationItem.value === selPersonalizationThemeColor) || null;
+            const selPersonalizationSkin = selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationSkinState);
+            return selPersonalizationSkin?.accents.find((selPersonalizationAccent) => selPersonalizationAccent.id === selPersonalizationPanelState.themeAccent) || null;
         }
 
         /**
@@ -608,19 +618,15 @@
             const selPersonalizationSkin = selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationSkinState)
                 || selPersonalizationSkins.find((selPersonalizationItem) => selPersonalizationItem.id === selPersonalizationDefaultSkin);
             const selPersonalizationTheme = selPersonalizationResolveThemeColor();
-            const selPersonalizationFrameImage = selPersonalizationTheme
-                ? `${selPersonalizationThemeAssetRoot}/${selPersonalizationSkin.id}/components/panel/themes/selPanelFrame-${selPersonalizationTheme.id}.webp?v=${selPersonalizationThemeAssetVersion}`
-                : selPersonalizationSkin.frameImage;
-            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-frame-image", `url("${selPersonalizationFrameImage}")`);
+            selPersonalizationThemeManager.setAccent(selPersonalizationTheme?.id || null);
             selPersonalizationDocumentRoot.dataset.selThemeAsset = selPersonalizationTheme?.id || "follow-skin";
             if (!selPersonalizationUpdateBackground) {
                 return;
             }
-            const selPersonalizationBackgroundTheme = selPersonalizationTheme
-                ? `${selPersonalizationSkin.id}-${selPersonalizationTheme.id}`
-                : selPersonalizationSkin.backgroundTheme;
+            const selPersonalizationMaterial = selPersonalizationTheme || selPersonalizationSkin.base;
+            const selPersonalizationBackgroundTheme = selPersonalizationMaterial.backgroundTheme;
             selPersonalizationBackgroundController.setTheme(selPersonalizationBackgroundTheme);
-            selPersonalizationBackgroundController.setDisplay(selPersonalizationSkin.backgroundDisplay);
+            selPersonalizationBackgroundController.setDisplay(selPersonalizationMaterial.backgroundDisplay);
             selPersonalizationSyncBackground();
         }
 
@@ -635,8 +641,7 @@
                 return false;
             }
             selPersonalizationSkinState = selPersonalizationSkinId;
-            selPersonalizationDocumentRoot.dataset.selSkin = selPersonalizationSkinState;
-            document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", selPersonalizationSkinState);
+            selPersonalizationThemeManager.setMode(selPersonalizationSkinState);
             // 当前皮肤拥有独立默认值；非自定义预设在换肤时同步切换到对应参数组。
             selPersonalizationDefaults = selPersonalizationResolveDefaults(selPersonalizationSkinState);
             const selPersonalizationActivePreset = selPersonalizationPresets.find((selPersonalizationPreset) => selPersonalizationPreset.id === selPersonalizationPanelState.preset);
@@ -647,7 +652,7 @@
             // 每次主动切换皮肤时同步当前色板在新皮肤下的独立边框、配套背景和显示参数。
             selPersonalizationApplyThemeAssets(true);
             selPersonalizationSyncSkin();
-            document.dispatchEvent(new CustomEvent("selPersonalization:skin-change", { detail: Object.freeze({ skin: selPersonalizationSkinState }) }));
+            document.dispatchEvent(new CustomEvent("selPersonalization:skin-change", { detail: Object.freeze({ theme: selPersonalizationThemeState, skin: selPersonalizationSkinState }) }));
             return true;
         }
 
@@ -656,19 +661,15 @@
          * @returns {void} 实时改变当前页面，不写入 localStorage 或其他缓存。
          */
         function selPersonalizationApplyPanel(selPersonalizationPreviewKey = "") {
-            // 自定义颜色写入统一主题 RGB；跟随皮肤时移除行内值，让当前皮肤令牌重新生效。
+            // 先让主题管理器应用正式 Accent 的独立颜色与素材，再由任意自定义色覆盖颜色令牌。
             const selPersonalizationThemeColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor);
+            selPersonalizationApplyThemeAssets(false);
             // 边框视觉强度统一驱动原图、静态外光和呼吸光效，0 表示完全移除边框痕迹。
             const selPersonalizationFrameVisualStrength = selPersonalizationPanelState.frameOpacity / 100;
             if (selPersonalizationThemeColor) {
                 // 拖动取色器时只更新轻量主题令牌，内板、发光与交互状态可以逐帧响应。
                 selPersonalizationDocumentRoot.style.setProperty("--sel-theme-color-rgb", selPersonalizationColorToRgb(selPersonalizationThemeColor));
-            } else {
-                // 跟随皮肤时恢复皮肤提供的主题 RGB，不触碰独立的原始边框图片。
-                selPersonalizationDocumentRoot.style.removeProperty("--sel-theme-color-rgb");
             }
-            // 正式色板读取 12 套预生成水晶框；自定义颜色和跟随模式使用当前皮肤原始边框。
-            selPersonalizationApplyThemeAssets(false);
             // 原始九宫格图片直接消费用户百分比，不改变图片色彩和透明通道细节。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-frame-opacity", String(selPersonalizationFrameVisualStrength));
             // 中心底板透明度只作用于背景色，不降低文字、图标或边框 Alpha。
@@ -804,15 +805,21 @@
             // 颜色输入始终显示当前有效颜色；输出区分自定义色与跟随皮肤状态。
             const selPersonalizationThemeColorInput = selPersonalizationControl.querySelector("[data-sel-personal-theme-color]");
             const selPersonalizationThemeColorOutput = selPersonalizationControl.querySelector("[data-sel-personal-theme-color-output]");
-            const selPersonalizationEffectiveColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor) || selPersonalizationReadSkinColor(selPersonalizationDocumentRoot);
+            const selPersonalizationEffectiveColor = selPersonalizationNormalizeColor(selPersonalizationPanelState.themeColor)
+                || selPersonalizationResolveThemeColor()?.color
+                || selPersonalizationReadSkinColor(selPersonalizationDocumentRoot);
             if (selPersonalizationThemeColorInput) {
                 selPersonalizationThemeColorInput.value = selPersonalizationEffectiveColor;
             }
             if (selPersonalizationThemeColorOutput) {
-                selPersonalizationThemeColorOutput.value = selPersonalizationPanelState.themeColor ? selPersonalizationEffectiveColor : "跟随皮肤";
+                selPersonalizationThemeColorOutput.value = selPersonalizationPanelState.themeColor
+                    ? selPersonalizationEffectiveColor
+                    : selPersonalizationPanelState.themeAccent
+                        ? selPersonalizationResolveThemeColor()?.label || "主题配色"
+                        : "跟随主题";
             }
             // 跟随按钮和常用色按钮同步当前颜色来源及精确选中态。
-            selPersonalizationControl.querySelector("[data-sel-personal-theme-follow]")?.setAttribute("aria-pressed", String(!selPersonalizationPanelState.themeColor));
+            selPersonalizationControl.querySelector("[data-sel-personal-theme-follow]")?.setAttribute("aria-pressed", String(!selPersonalizationPanelState.themeAccent && !selPersonalizationPanelState.themeColor));
             // 色板的深浅行选中态由皮肤同步函数统一计算，避免同一颜色在两行同时点亮。
             selPersonalizationSyncSkin();
             // 预设按钮只标记当前匹配的预设或自定义状态。
@@ -955,7 +962,30 @@
             selPersonalizationTabs[selPersonalizationNextIndex].focus();
             selPersonalizationSelectView(selPersonalizationTabs[selPersonalizationNextIndex].dataset.selPersonalTab);
         });
-        // 皮肤预览卡同步基础皮肤和配套背景；面板强度与文字显式覆盖保持原状态。
+        // 主题风格切换后从新 manifest 重绘明暗模式和独立配色，不重建业务面板。
+        selPersonalizationThemeGrid.addEventListener("click", (selPersonalizationEvent) => {
+            const selPersonalizationThemeButton = selPersonalizationEvent.target.closest("[data-sel-personal-theme]");
+            if (!selPersonalizationThemeButton || !selPersonalizationThemeManager.setTheme(selPersonalizationThemeButton.dataset.selPersonalTheme)) {
+                return;
+            }
+            selPersonalizationThemeState = selPersonalizationThemeManager.getState().theme;
+            selPersonalizationActiveTheme = selPersonalizationThemeManager.getTheme();
+            selPersonalizationSkins = selPersonalizationActiveTheme.modes;
+            // 每套主题拥有自己的默认模式；恢复主题时不得沿用首次加载主题的默认值。
+            selPersonalizationDefaultSkin = selPersonalizationActiveTheme.defaults?.mode || selPersonalizationSkins[0]?.id || "dark";
+            selPersonalizationSkinState = selPersonalizationThemeManager.getState().mode;
+            selPersonalizationPanelState = {
+                ...selPersonalizationPanelState,
+                themeAccent: selPersonalizationThemeManager.getState().accent,
+                themeColor: null,
+                preset: "custom"
+            };
+            selPersonalizationRenderThemeOptions();
+            selPersonalizationApplySkin(selPersonalizationSkinState);
+            selPersonalizationApplyPanel();
+            selPersonalizationApplyText();
+        });
+        // 皮肤预览卡同步当前主题的明暗模式和配套背景；面板强度与文字显式覆盖保持原状态。
         selPersonalizationSkinGrid.addEventListener("click", (selPersonalizationEvent) => {
             const selPersonalizationSkinButton = selPersonalizationEvent.target.closest("[data-sel-personal-skin]");
             if (!selPersonalizationSkinButton || !selPersonalizationApplySkin(selPersonalizationSkinButton.dataset.selPersonalSkin)) {
@@ -1048,7 +1078,7 @@
         // 原生颜色输入允许用户选择色板之外的任意统一主题色。
         selPersonalizationControl.querySelector("[data-sel-personal-theme-color]")?.addEventListener("input", (selPersonalizationEvent) => {
             // 合法颜色进入当前页面自定义状态。
-            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: selPersonalizationNormalizeColor(selPersonalizationEvent.target.value), preset: "custom" };
+            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeAccent: null, themeColor: selPersonalizationNormalizeColor(selPersonalizationEvent.target.value), preset: "custom" };
             // 拖动取色器期间只更新边框和颜色令牌，避免反复解码背景造成指针延迟。
             selPersonalizationApplyThemeAssets(false);
             // 新颜色即时覆盖所有水晶组件的共享主题变量。
@@ -1062,12 +1092,12 @@
         // 跟随皮肤按钮清除临时颜色覆盖，不改变其他面板强度。
         selPersonalizationControl.querySelector("[data-sel-personal-theme-follow]")?.addEventListener("click", () => {
             // null 让 CSS 重新读取皮肤默认主题色。
-            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: null, preset: "custom" };
+            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeAccent: null, themeColor: null, preset: "custom" };
             // 立即恢复当前皮肤颜色、原始边框和配套背景。
             selPersonalizationApplyThemeAssets(true);
             selPersonalizationApplyPanel();
         });
-        // 十四套主题入口同时切换目标皮肤与素材；基础水晶清除临时颜色并恢复皮肤原始资源。
+        // 配色入口同时切换目标模式与素材；基础入口清除临时颜色并恢复当前主题原始资源。
         selPersonalizationControl.querySelector("[data-sel-personal-skin-themes]")?.addEventListener("click", (selPersonalizationEvent) => {
             // 只响应带颜色数据的原生按钮。
             const selPersonalizationSwatch = selPersonalizationEvent.target.closest("[data-sel-personal-theme-swatch]");
@@ -1076,10 +1106,10 @@
             }
             // 在换肤前先写入目标主题来源，避免皮肤切换瞬间短暂应用上一套颜色素材。
             const selPersonalizationBaseTheme = selPersonalizationSwatch.dataset.selPersonalThemeBase === "true";
-            const selPersonalizationRequestedColor = selPersonalizationBaseTheme
+            const selPersonalizationRequestedAccent = selPersonalizationBaseTheme
                 ? null
-                : selPersonalizationNormalizeColor(selPersonalizationSwatch.dataset.selPersonalThemeSwatch);
-            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeColor: selPersonalizationRequestedColor, preset: "custom" };
+                : selPersonalizationSwatch.dataset.selPersonalThemeAccent;
+            selPersonalizationPanelState = { ...selPersonalizationPanelState, themeAccent: selPersonalizationRequestedAccent, themeColor: null, preset: "custom" };
             // 再切换到按钮所属明暗皮肤，基础入口会直接解析原始边框和背景。
             if (!selPersonalizationApplySkin(selPersonalizationSwatch.dataset.selPersonalThemeSkin)) {
                 return;
@@ -1122,7 +1152,7 @@
             // 当前色板存在时恢复它的配套背景；跟随或自定义颜色恢复当前皮肤默认背景。
             selPersonalizationApplyThemeAssets(true);
         });
-        // 皮肤恢复只回到默认深色，不改变其他三个 Tab 的当前状态。
+        // 主题恢复回到当前 manifest 声明的默认模式，不改变其他三个 Tab 的当前状态。
         selPersonalizationControl.querySelector("[data-sel-personal-action='reset-skin']")?.addEventListener("click", () => {
             selPersonalizationApplySkin(selPersonalizationDefaultSkin);
             selPersonalizationApplyPanel();
@@ -1147,12 +1177,15 @@
 
         // 公开控制器提供当前状态、视图切换和刷新默认动作。
         const selPersonalizationController = Object.freeze({
-            // skins 供应用读取正式皮肤清单，不暴露内部状态。
-            skins: selPersonalizationSkins,
+            // themes 与 skins 始终返回注册表和当前主题的不可变清单。
+            themes: selPersonalizationThemes,
+            get skins() { return selPersonalizationSkins; },
             // presets 供应用读取可用预设清单，不暴露可变对象。
             presets: selPersonalizationPresets,
             // getState 同时返回皮肤、背景、面板与文字的不可变快照。
             getState: () => Object.freeze({
+                theme: selPersonalizationThemeState,
+                mode: selPersonalizationSkinState,
                 skin: selPersonalizationSkinState,
                 background: selPersonalizationBackgroundController.getState(),
                 panel: Object.freeze({ ...selPersonalizationPanelState }),
@@ -1164,6 +1197,18 @@
             toggle: selPersonalizationFloatingPanel.toggle,
             isOpen: selPersonalizationFloatingPanel.isOpen,
             selectView: selPersonalizationSelectView,
+            setTheme(selPersonalizationThemeId) {
+                const selPersonalizationThemeButton = selPersonalizationThemeGrid.querySelector(`[data-sel-personal-theme="${selPersonalizationThemeId}"]`);
+                if (!selPersonalizationThemeButton) return false;
+                selPersonalizationThemeButton.click();
+                return true;
+            },
+            setMode(selPersonalizationModeId) {
+                if (!selPersonalizationApplySkin(selPersonalizationModeId)) return false;
+                selPersonalizationApplyPanel();
+                selPersonalizationApplyText();
+                return true;
+            },
             setSkin(selPersonalizationSkinId) {
                 if (!selPersonalizationApplySkin(selPersonalizationSkinId)) return false;
                 selPersonalizationApplyPanel();

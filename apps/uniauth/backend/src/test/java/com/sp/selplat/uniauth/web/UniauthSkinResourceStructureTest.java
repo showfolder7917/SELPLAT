@@ -22,13 +22,22 @@ class UniauthSkinResourceStructureTest {
     void skinResources() throws IOException {
         // 读取真实应用入口，避免测试复制资源路径后掩盖页面漏装配。
         String html = readText("static/uniauth/uniauth.html");
-        // 根节点必须提供确定默认皮肤，刷新后不依赖脚本执行时序猜测明暗。
-        assertTrue(html.contains("data-sel-skin=\"dark\""));
-        // 深浅皮肤均从独立 skin 文件进入，组件 CSS 仍只加载一次。
-        assertTrue(html.contains("../sel/theme/skins/selSkinDark.css"));
-        assertTrue(html.contains("../sel/theme/skins/selSkinLight.css"));
-        // 旧材质位置已由 skin 目录替代，禁止继续保留第二条兼容路径。
-        assertFalse(html.contains("assets/components/panel/selPanelCyberFrame.webp"));
+        // 根节点必须显式声明四个独立主题维度，刷新后不依赖脚本时序猜测默认状态。
+        assertTrue(html.contains("data-sel-theme=\"crystal-tech\""));
+        assertTrue(html.contains("data-sel-mode=\"dark\""));
+        assertTrue(html.contains("data-sel-accent=\"base\""));
+        assertTrue(html.contains("data-sel-density=\"comfortable\""));
+        // 页面先加载主题契约，再加载当前主题包的深浅模式和运行管理器。
+        assertTrue(html.contains("../sel/theme/contract/selThemeContract.css"));
+        assertTrue(html.contains("../sel/theme/packs/crystal-tech/modes/dark.css"));
+        assertTrue(html.contains("../sel/theme/packs/crystal-tech/modes/light.css"));
+        assertTrue(html.contains("../sel/theme/packs/candy-adventure/modes/dark.css"));
+        assertTrue(html.contains("../sel/theme/packs/candy-adventure/modes/light.css"));
+        assertTrue(html.contains("../sel/theme/runtime/selThemeRegistry.js"));
+        assertTrue(html.contains("../sel/theme/packs/crystal-tech/manifest.js"));
+        assertTrue(html.contains("../sel/theme/packs/candy-adventure/manifest.js"));
+        assertTrue(html.contains("../sel/theme/runtime/selThemeManager.js"));
+        assertFalse(html.contains("../sel/theme/skins/"));
     }
 
     /**
@@ -44,23 +53,27 @@ class UniauthSkinResourceStructureTest {
         // 十四套主题必须在皮肤页按深浅行呈现，面板页不再生成第二套常用色入口。
         assertTrue(script.contains("data-sel-personal-skin-themes"));
         assertTrue(script.contains("dataset.selPersonalThemeSkin"));
-        assertTrue(script.contains("深色主题"));
-        assertTrue(script.contains("浅色主题"));
-        assertTrue(script.contains("深浅各 7 套"));
-        // 顶部卡片只表达明暗切换，具体基础主题名称只能出现在下方主题入口。
-        assertTrue(script.contains("label: \"深色皮肤\", themeLabel: \"深空水晶\""));
-        assertTrue(script.contains("label: \"浅色皮肤\", themeLabel: \"晨雾水晶\""));
+        assertTrue(script.contains("data-sel-personal-theme-grid"));
+        assertTrue(script.contains("selPersonalizationThemeManager.getTheme()"));
+        assertTrue(script.contains("selPersonalizationSkin.accents.forEach"));
+        // 风格、明暗和颜色分别来自注册表，个性化脚本不能再内置水晶主题名称或素材路径。
+        assertTrue(script.contains("选择主题风格"));
+        assertTrue(script.contains("一个主题包含深浅皮肤与独立配色"));
+        assertFalse(script.contains("label: \"深色皮肤\", themeLabel: \"深空水晶\""));
+        assertFalse(script.contains("/sel/assets/skins/dark/"));
         assertTrue(script.contains("选择界面明暗"));
         assertTrue(script.contains("保留当前主题配色"));
         // 每行首项必须恢复该皮肤的原始边框和背景，不能伪装成第七套重复配色素材。
         assertTrue(script.contains("dataset.selPersonalThemeBase = \"true\""));
         assertTrue(script.contains("selPersonalizationBaseTheme"));
-        assertTrue(script.contains("themeColor: selPersonalizationRequestedColor"));
+        assertTrue(script.contains("themeAccent: selPersonalizationRequestedAccent"));
         assertFalse(script.contains("data-sel-personal-theme-swatches"));
-        // 两张基础皮肤卡使用固定预览色，不能被当前统一主题色重新染色。
+        // 皮肤卡使用 manifest 固定预览色，不能被当前统一主题色重新染色。
         assertTrue(script.contains("--selpersonal-skin-preview-surface"));
         assertTrue(script.contains("--selpersonal-skin-preview-accent"));
         // 公开方法需要在换肤后继续同步面板与文字，因此验证包装方法及其真实皮肤调用，而不是旧式直接引用。
+        assertTrue(script.contains("setTheme(selPersonalizationThemeId)"));
+        assertTrue(script.contains("setMode(selPersonalizationModeId)"));
         assertTrue(script.contains("setSkin(selPersonalizationSkinId)"));
         assertTrue(script.contains("selPersonalizationApplySkin(selPersonalizationSkinId)"));
     }
@@ -83,11 +96,13 @@ class UniauthSkinResourceStructureTest {
     @Test
     void typographyTokens() throws IOException {
         String tokensCss = readText("static/sel/theme/selThemeTokens.css");
+        String contractCss = readText("static/sel/theme/contract/selThemeContract.css");
         String typographyCss = readText("static/sel/theme/selThemeTypography.css");
         String personalizationCss = readText("static/sel/components/personalization/selPersonalization.css");
         // 字体族和字号比例必须由页面级令牌提供，组件不得各自形成孤立开关。
         assertTrue(tokensCss.contains("--sel-theme-font-family:"));
         assertTrue(tokensCss.contains("--sel-theme-font-scale: 1"));
+        assertTrue(contractCss.contains("../selThemeTokens.css"));
         assertTrue(typographyCss.contains("font-family: var(--sel-theme-font-family)"));
         // 表头、数据单元格、树节点和个性化设置标签必须位于同一字号适配层。
         assertTrue(typographyCss.contains(".selgrid-table th"));
@@ -145,7 +160,8 @@ class UniauthSkinResourceStructureTest {
         // 稳定主题 ID 与生产脚本一致，新增或删除色板时必须原子更新完整素材包。
         List<String> themeIds = List.of(
                 "stellar-blue", "crystal-cyan", "nebula-purple", "emerald-green", "amber-gold", "pulse-pink");
-        String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
+        String themeManifest = readText("static/sel/theme/packs/crystal-tech/manifest.js");
+        String themeManager = readText("static/sel/theme/runtime/selThemeManager.js");
         String backgroundScript = readText("static/sel/components/page-background/selPageBackground.js");
         for (String skin : List.of("dark", "light")) {
             for (String themeId : themeIds) {
@@ -157,11 +173,58 @@ class UniauthSkinResourceStructureTest {
                 assertTrue(background.length > 10_000);
                 assertTrue(new String(frame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
                 assertTrue(new String(background, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
-                // 页面背景注册表必须同时包含深浅主题 ID，确保色块点击能够成功切换配套图片。
+                // 页面背景与主题 manifest 必须同时登记深浅资源，确保色块切换到对应模式素材。
                 assertTrue(backgroundScript.contains("id: \"" + skin + "-" + themeId + "\""));
+                assertTrue(themeManifest.contains("`${selCrystalTechMode}-${selCrystalTechId}`"));
             }
-            // 个性化脚本使用统一路径解析器消费当前皮肤，避免为 12 张边框复制事件分支。
-            assertTrue(personalizationScript.contains("${selPersonalizationSkin.id}/components/panel/themes/selPanelFrame-"));
+        }
+        // 主题管理器按 Accent ID 从当前模式解析颜色与素材，组件和个性化脚本不再拼接路径。
+        assertTrue(themeManager.contains("selThemeManagerMode.accents.find"));
+        assertTrue(themeManager.contains("selThemeManagerMaterial.frameImage"));
+    }
+
+    /**
+     * candyAdventureThemePack 验证儿童主题拥有独立深浅图片包和各模式可读配色。
+     */
+    @Test
+    void candyAdventureThemePack() throws IOException {
+        String manifest = readText("static/sel/theme/packs/candy-adventure/manifest.js");
+        String darkCss = readText("static/sel/theme/packs/candy-adventure/modes/dark.css");
+        String lightCss = readText("static/sel/theme/packs/candy-adventure/modes/light.css");
+        String backgroundScript = readText("static/sel/components/page-background/selPageBackground.js");
+        // 主题必须保持同一稳定 ID，并提供深浅两套相同语义、不同数值的 Accent。
+        assertTrue(manifest.contains("id: \"candy-adventure\""));
+        for (String accentId : List.of("sky-blue", "mint-green", "grape-purple", "sunshine-yellow", "peach-orange", "berry-pink")) {
+            assertTrue(manifest.contains("[\"" + accentId + "\""));
+        }
+        assertTrue(manifest.contains("#6BA8FF"));
+        assertTrue(manifest.contains("#3478C9"));
+        assertTrue(backgroundScript.contains("selPageBackgroundThemePack.backgrounds"));
+        assertTrue(manifest.contains("/${selCandyAdventureMode}/accents/${selCandyAdventureId}-frame.webp"));
+        assertTrue(manifest.contains("candy-adventure-${selCandyAdventureMode}-${selCandyAdventureId}"));
+        // 深浅文字颜色必须由主题模式令牌提供，不能沿用水晶主题的白字覆盖。
+        assertTrue(darkCss.contains("--sel-theme-text-main: #fff9ee"));
+        assertTrue(lightCss.contains("--sel-theme-text-main: #25324a"));
+        // 两种模式分别拥有正式背景和透明卡通边框 WebP。
+        for (String mode : List.of("dark", "light")) {
+            byte[] background = readBytes("static/sel/assets/themes/candy-adventure/" + mode + "/background.webp");
+            byte[] frame = readBytes("static/sel/assets/themes/candy-adventure/" + mode + "/frame.webp");
+            assertTrue(background.length > 50_000);
+            assertTrue(frame.length > 50_000);
+            assertTrue(new String(background, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
+            assertTrue(new String(frame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
+            assertTrue(manifest.contains("id: \"candy-adventure-" + mode + "\""));
+            // 六个 Accent 必须各自交付背景和边框，不能继续共享模式基础图片。
+            for (String accentId : List.of("sky-blue", "mint-green", "grape-purple", "sunshine-yellow", "peach-orange", "berry-pink")) {
+                byte[] accentBackground = readBytes("static/sel/assets/themes/candy-adventure/" + mode
+                        + "/accents/" + accentId + "-background.webp");
+                byte[] accentFrame = readBytes("static/sel/assets/themes/candy-adventure/" + mode
+                        + "/accents/" + accentId + "-frame.webp");
+                assertTrue(accentBackground.length > 20_000);
+                assertTrue(accentFrame.length > 50_000);
+                assertTrue(new String(accentBackground, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
+                assertTrue(new String(accentFrame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
+            }
         }
     }
 

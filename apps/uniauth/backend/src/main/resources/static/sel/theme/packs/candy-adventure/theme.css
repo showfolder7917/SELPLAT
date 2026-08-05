@@ -1,0 +1,36 @@
+/* 糖果冒险风格层：使用圆润排版、柔软圆角和克制的卡通反馈，不改变业务组件结构。 */
+:root[data-sel-theme="candy-adventure"] {
+    --sel-theme-font-family: "Arial Rounded MT Bold", "PingFang SC", "Microsoft YaHei", ui-rounded, system-ui, sans-serif;
+    --sel-theme-radius-panel: 24px;
+    --sel-theme-radius-popup: 18px;
+    --sel-theme-radius-inner: 16px;
+    --sel-theme-crystal-surface-overflow: visible;
+}
+
+/* 卡通边框源图装饰范围更宽，主题内统一采用适合其四角与边带的九宫格切片。 */
+:root[data-sel-theme="candy-adventure"] :is(
+    .selpanel-crystal-surface,
+    .selgrid-menu,
+    .selgrid-menu-submenu,
+    .seldropdown-menu,
+    .seldatepicker-popover,
+    .selwindow-window-shell
+) {
+    border-image-slice: 150 180 150 180;
+}
+
+:root[data-sel-theme="candy-adventure"] .selfloating-panel::after {
+    border-image-slice: 150 180 150 180;
+}
+
+:root[data-sel-theme="candy-adventure"] :is(
+    .selpersonal-panel,
+    .selpanel-crystal-surface,
+    .selwindow-window-shell,
+    .seldropdown-menu,
+    .selgrid-menu,
+    .selgrid-menu-submenu,
+    .seldatepicker-popover
+)::after {
+    border-image-slice: 150 180 150 180;
+}
