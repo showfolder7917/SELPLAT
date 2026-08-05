@@ -1,0 +1,51 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(':shared:backend:common-core')
+    implementation project(':shared:backend:common-web')
+    implementation project(':shared:backend:common-service')
+    implementation project(':shared:backend:common-db')
+    implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+    implementation "org.springframework.boot:spring-boot-starter-aop:${springBootVersion}"
+    implementation "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
+    implementation "org.mybatis.spring.boot:mybatis-spring-boot-starter:${mybatisSpringBootVersion}"
+    runtimeOnly "com.h2database:h2:${h2Version}"
+    // 四种商用/外部数据库驱动按文件名从离线缓存选装；未投放时 H2 仍可独立运行。
+    runtimeOnly fileTree(dir: rootProject.file('cache/cache-jars'), include: [
+        'mysql-connector-j-*.jar',
+        'mysql-connector-java-*.jar',
+        'mssql-jdbc-*.jar',
+        'ojdbc*.jar',
+        'postgresql-*.jar'
+    ])
+    testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
+}
+
+application {
+    mainClass = 'com.sp.selplat.mda.MdaBackendApplication'
+}
+
+tasks.register('syncVsCodeResources', Copy) {
+    from(sourceSets.main.resources)
+    into(layout.buildDirectory.dir('classes/java/main'))
+}
+
+tasks.named('classes') {
+    dependsOn tasks.named('syncVsCodeResources')
+    dependsOn ':shared:backend:common-core:jar'
+    dependsOn ':shared:backend:common-db:jar'
+    dependsOn ':shared:backend:common-service:jar'
+    dependsOn ':shared:backend:common-web:jar'
+}
+
+tasks.named('jar') {
+    // VS Code 资源同步目录与标准 resources 都进入 JAR 时保留第一份，避免同名配置和静态页面重复。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('installDist') {
+    // 根构建的离线 fileTree 兜底与模块坐标可能指向同一 JAR，分发目录仅保留一份同名依赖。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

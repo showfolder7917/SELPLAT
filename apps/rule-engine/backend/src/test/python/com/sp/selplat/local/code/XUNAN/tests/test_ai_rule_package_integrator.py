@@ -51,10 +51,10 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["model"], "ai_rule_driven_execution_and_continuous_rule_package_growth")
         self.assertEqual(result["indexes"], 19)
-        self.assertEqual(result["indexed_rules"], 65)
+        self.assertEqual(result["indexed_rules"], 66)
         self.assertEqual(result["xunan_indexes"], 7)
-        self.assertEqual(result["xunan_user_overrides"], 4)
-        self.assertEqual(result["xunan_user_rule_files"], 3)
+        self.assertEqual(result["xunan_user_overrides"], 5)
+        self.assertEqual(result["xunan_user_rule_files"], 4)
         self.assertEqual(result["xunan_standard_asset_packages"], 1)
         self.assertEqual(result["xunan_rules_with_program_references"], 2)
         self.assertEqual(result["decision_boundary"], "facts_only_ai_must_review_before_merge_or_delete")
@@ -89,7 +89,7 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             / "apps/rule-engine/backend/src/main/resources/local/XUNAN"
         )
         rule_paths = sorted(user_root.rglob("RUL_*.md"))
-        self.assertEqual(len(rule_paths), 3)
+        self.assertEqual(len(rule_paths), 4)
         for rule_path in rule_paths:
             previous_nonempty = ""
             for line_number, raw_line in enumerate(

@@ -1,0 +1,53 @@
+:root {
+  color-scheme: light;
+  --sel-bg: #eef1f5;
+  --sel-surface: #ffffff;
+  --sel-surface-soft: #f7f8fa;
+  --sel-ink: #172033;
+  --sel-muted: #667085;
+  --sel-line: #dce1e8;
+  --sel-accent: #246bfe;
+  --sel-accent-soft: #e9f0ff;
+  --sel-danger: #c43d4b;
+  --sel-radius: 12px;
+  --sel-shadow: 0 12px 32px rgba(25, 39, 68, 0.08);
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; }
+body { color: var(--sel-ink); background: var(--sel-bg); }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(36, 107, 254, 0.24);
+  outline-offset: 1px;
+}
+
+.sel-button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--sel-line);
+  border-radius: 8px;
+  color: var(--sel-ink);
+  background: var(--sel-surface);
+  font-weight: 650;
+}
+.sel-button:hover { border-color: #aeb8c7; background: #fafbfc; }
+.sel-button--primary { border-color: var(--sel-accent); color: white; background: var(--sel-accent); }
+.sel-button--primary:hover { background: #1558de; }
+.sel-button--danger { color: var(--sel-danger); }
+.sel-field { display: grid; gap: 6px; }
+.sel-field label { color: #475467; font-size: 12px; font-weight: 700; }
+.sel-field input, .sel-field select, .sel-field textarea {
+  width: 100%;
+  border: 1px solid var(--sel-line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: var(--sel-ink);
+  background: white;
+}
+.sel-visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}

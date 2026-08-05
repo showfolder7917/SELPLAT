@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class XunanRuleOverrideIntegrationTest {
 
     /**
-     * XUNAN 必须通过独立递归索引完整登记四个覆盖逻辑 ID。
+     * XUNAN 必须通过独立递归索引完整登记五个用户逻辑 ID。
      */
     @Test
     void shouldValidateCompleteXunanIndexTree() throws IOException {
@@ -21,7 +21,7 @@ class XunanRuleOverrideIntegrationTest {
             LayeredRuleLoader.validateUserIndexTree("XUNAN");
 
         assertEquals(7, validation.indexCount());
-        assertEquals(4, validation.ruleCount());
+        assertEquals(5, validation.ruleCount());
     }
 
     /**
@@ -83,6 +83,33 @@ class XunanRuleOverrideIntegrationTest {
         );
         assertTrue(rule.content().contains(
             "explicit_user_delegation_with_standalone_1_only"
+        ));
+    }
+
+    /**
+     * Excel修订履历规则必须限制到实际修改Sheet，并要求履历字体可见。
+     */
+    @Test
+    void shouldLoadExcelRevisionHistoryRuleForXunan() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = LayeredRuleLoader.load(
+            "XUNAN_EXCEL_REVISION_HISTORY_RULES",
+            "fujitsu",
+            "XUNAN"
+        );
+
+        assertEquals("XUNAN", rule.layer());
+        assertEquals(
+            "local/XUNAN/跨工程通用规则/RUL_Excel修订履历填写规则.md",
+            rule.resourcePath()
+        );
+        assertTrue(rule.content().contains(
+            "excel_revision_history_write_scope = actually_modified_worksheets_only"
+        ));
+        assertTrue(rule.content().contains(
+            "excel_revision_history_visibility_policy = revision_red_font_for_version_update_date_updater,visible_contrast"
+        ));
+        assertTrue(rule.content().contains(
+            "excel_cell_edit_implementation_policy = native_excel_or_apache_poi,no_manual_ooxml_cell_splicing"
         ));
     }
 }

@@ -163,12 +163,12 @@ class LayeredRuleLoaderTest {
      */
     @Test
     void shouldValidateCompleteProductionIndexTree() throws IOException {
-        // 从根递归真实索引 → 19 个索引文件和 65 个规则逻辑 ID。
+        // 从根递归真实索引 → 19 个索引文件和 66 个规则逻辑 ID。
         LayeredRuleLoader.IndexValidation validation = LayeredRuleLoader.validateIndexTree();
         // 根、common、一级项目、通用/应用分类和项目叶子索引必须全部可达。
         assertEquals(19, validation.indexCount());
         // 当前 core、common 与 XUNAN 规则全部拥有唯一入口。
-        assertEquals(65, validation.ruleCount());
+        assertEquals(66, validation.ruleCount());
     }
 
     /**
