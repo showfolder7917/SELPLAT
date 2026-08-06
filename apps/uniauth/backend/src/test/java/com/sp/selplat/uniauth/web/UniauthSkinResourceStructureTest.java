@@ -50,15 +50,33 @@ class UniauthSkinResourceStructureTest {
         assertTrue(script.contains("data-sel-personal-tab=\"skin\""));
         assertTrue(script.contains("data-sel-personal-view=\"skin\""));
         assertTrue(script.contains("skin: selPersonalizationSkinState"));
-        // 十四套主题必须在皮肤页按深浅行呈现，面板页不再生成第二套常用色入口。
+        // 主题库负责风格扩展；选定明暗模式后只呈现该模式的七套皮肤。
         assertTrue(script.contains("data-sel-personal-skin-themes"));
         assertTrue(script.contains("dataset.selPersonalThemeSkin"));
         assertTrue(script.contains("data-sel-personal-theme-grid"));
+        assertTrue(script.contains("data-sel-personal-theme-library"));
+        assertTrue(script.contains("data-sel-personal-theme-search"));
+        assertTrue(script.contains("data-sel-personal-theme-category"));
+        assertTrue(script.contains("data-sel-personal-theme-category-root"));
+        assertTrue(script.contains("data-sel-personal-theme-home"));
+        assertTrue(script.contains("data-sel-personal-theme-library-back"));
+        assertTrue(script.contains("data-sel-personal-theme-library-count"));
+        assertTrue(script.contains("selPersonalizationSetThemeLibraryOpen"));
+        assertTrue(script.contains("selPersonalizationThemeMode.id === \"dark\""));
+        assertTrue(script.contains("selPersonalizationThemeMode.id === \"light\""));
+        assertTrue(script.contains("window.selDropdownMenu?.mount(selPersonalizationThemeCategoryRoot)"));
+        assertTrue(script.contains("window.selDropdownMenu.setLocale(selPersonalizationThemeCategoryRoot)"));
+        String personalizationCss = readText("static/sel/components/personalization/selPersonalization.css");
+        assertTrue(personalizationCss.contains("grid-template-columns: repeat(auto-fill, minmax(185px, 1fr))"));
+        assertTrue(personalizationCss.contains(".selpersonal-theme-card-compact .selpersonal-theme-card-mode span"));
+        assertTrue(personalizationCss.contains("white-space: nowrap"));
+        assertTrue(personalizationCss.contains("flex: 1 1 auto"));
+        assertFalse(personalizationCss.contains("max-height: min(430px, 46vh)"));
         assertTrue(script.contains("selPersonalizationThemeManager.getTheme()"));
         assertTrue(script.contains("selPersonalizationSkin.accents.forEach"));
         // 风格、明暗和颜色分别来自注册表，个性化脚本不能再内置水晶主题名称或素材路径。
-        assertTrue(script.contains("选择主题风格"));
-        assertTrue(script.contains("一个主题包含深浅皮肤与独立配色"));
+        assertTrue(script.contains("当前主题"));
+        assertTrue(script.contains("更换主题"));
         assertFalse(script.contains("label: \"深色皮肤\", themeLabel: \"深空水晶\""));
         assertFalse(script.contains("/sel/assets/skins/dark/"));
         assertTrue(script.contains("选择界面明暗"));
@@ -102,6 +120,9 @@ class UniauthSkinResourceStructureTest {
         // 字体族和字号比例必须由页面级令牌提供，组件不得各自形成孤立开关。
         assertTrue(tokensCss.contains("--sel-theme-font-family:"));
         assertTrue(tokensCss.contains("--sel-theme-font-scale: 1"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-primary: max(12px, calc(14px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-secondary: max(11px, calc(13px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-caption: max(10px, calc(12px * var(--sel-theme-font-scale)))"));
         assertTrue(contractCss.contains("../selThemeTokens.css"));
         assertTrue(typographyCss.contains("font-family: var(--sel-theme-font-family)"));
         // 表头、数据单元格、树节点和个性化设置标签必须位于同一字号适配层。
@@ -110,9 +131,24 @@ class UniauthSkinResourceStructureTest {
         assertTrue(typographyCss.contains(".seltree-node-row"));
         assertTrue(typographyCss.contains(".selpersonal-panel-range-copy strong"));
         assertTrue(typographyCss.contains(".selpersonal-text-mode"));
-        assertTrue(typographyCss.contains("calc(14px * var(--sel-theme-font-scale))"));
+        assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-primary)"));
+        assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-secondary)"));
+        assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-caption)"));
         // 个性化面板不能继续绑定旧表格私有字体，避免用户改变字体时设置面板自身不响应。
         assertTrue(personalizationCss.contains("var(--sel-theme-font-family"));
+        // 选项卡内层文字、主题缩略图小字和主题库入口必须直接消费字号令牌，不能被固定 px 覆盖。
+        assertTrue(personalizationCss.contains(".selpersonal-tab span"));
+        assertTrue(personalizationCss.contains("font-size: var(--sel-theme-font-size-primary)"));
+        assertTrue(personalizationCss.contains("font-size: var(--sel-theme-font-size-secondary)"));
+        assertTrue(personalizationCss.contains("font-size: var(--sel-theme-font-size-caption)"));
+        assertFalse(personalizationCss.contains("calc(14px * var(--sel-theme-font-scale))"));
+        assertFalse(personalizationCss.contains("calc(13px * var(--sel-theme-font-scale))"));
+        assertFalse(personalizationCss.contains("calc(12px * var(--sel-theme-font-scale))"));
+        assertTrue(personalizationCss.contains(".selpersonal-theme-card-mode"));
+        assertTrue(personalizationCss.contains("[data-sel-personal-theme-library-toggle]"));
+        assertTrue(personalizationCss.contains("background: linear-gradient(135deg, var(--sel-theme-selected-surface), var(--sel-theme-control-hover))"));
+        assertFalse(personalizationCss.contains("translate: 0 -1px"));
+        assertFalse(personalizationCss.contains(".selpersonal-tab span {\n    overflow: hidden;\n    font-size: 11px"));
     }
 
     /**
@@ -361,12 +397,15 @@ class UniauthSkinResourceStructureTest {
         assertTrue(floatingCss.contains(".selfloating-resize-bottom"));
         assertTrue(floatingCss.contains(".selfloating-resize-corner"));
         assertTrue(floatingCss.contains("width: min(390px, calc(100vw - 24px)) !important"));
-        // 当前只有个性化设置开启缩放，并显式声明最小尺寸和最大宽度。
+        // 个性化设置采用加宽后的桌面尺寸，仍显式声明可缩放边界。
         assertTrue(personalizationScript.contains("resizable: Object.freeze({"));
-        assertTrue(personalizationScript.contains("minWidth: 340"));
+        assertTrue(personalizationScript.contains("minWidth: 420"));
         assertTrue(personalizationScript.contains("minHeight: 420"));
-        assertTrue(personalizationScript.contains("maxWidth: 720"));
+        assertTrue(personalizationScript.contains("maxWidth: 960"));
         String personalizationCss = readText("static/sel/components/personalization/selPersonalization.css");
+        assertTrue(personalizationCss.contains("width: min(560px, calc(100vw - 36px))"));
+        assertTrue(personalizationCss.contains("@media (max-width: 720px)"));
+        assertTrue(personalizationCss.contains("inset: 10px"));
         assertTrue(personalizationCss.contains(".selpersonal-view::-webkit-scrollbar"));
         assertTrue(personalizationCss.contains("overscroll-behavior: contain"));
     }

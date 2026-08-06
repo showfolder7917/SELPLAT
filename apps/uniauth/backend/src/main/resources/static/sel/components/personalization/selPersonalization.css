@@ -98,7 +98,8 @@
     top: 50px;
     right: 0;
     display: flex;
-    width: min(390px, calc(100vw - 36px));
+    width: min(560px, calc(100vw - 36px));
+    height: min(760px, calc(100vh - 78px));
     max-height: calc(100vh - 78px);
     min-height: 0;
     box-sizing: border-box;
@@ -463,14 +464,14 @@
 }
 
 .selpersonal-heading-copy strong {
-    font-size: 16px;
+    font-size: var(--sel-theme-font-size-primary);
     letter-spacing: 0.04em;
 }
 
 .selpersonal-heading-copy small,
 .selpersonal-section-heading small {
     color: var(--sel-theme-text-secondary);
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-close {
@@ -495,16 +496,394 @@
     outline: none;
 }
 
-/* 主题、背景、面板、文字和语言五个一级设置使用等宽 tab，保持同级能力边界清晰。 */
+/* 设置中心只保留外观、用户和页面编辑三个长期稳定入口。 */
+.selpersonal-areas {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 10px;
+}
+
+.selpersonal-area {
+    display: inline-flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 10px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-secondary);
+    background: var(--sel-theme-control-surface);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--sel-theme-font-size-primary);
+}
+
+.selpersonal-area:hover,
+.selpersonal-area:focus-visible,
+.selpersonal-area-selected {
+    border-color: var(--sel-theme-line);
+    color: var(--sel-theme-text-on-selected-surface);
+    outline: none;
+    background: linear-gradient(135deg, var(--sel-theme-selected-surface), var(--sel-theme-control-hover));
+    box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.32), var(--sel-theme-inset);
+}
+
+.selpersonal-area-panel {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
+.selpersonal-area-panel[hidden],
+.selpersonal-theme-home[hidden],
+.selpersonal-theme-library[hidden],
+.selpersonal-skin-theme-row[hidden],
+.selpersonal-extension-empty[hidden] {
+    display: none;
+}
+
+/* 区域内部选项卡只承载同类设置，不再随着主题或页面属性数量增长。 */
 .selpersonal-tabs {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
     gap: 6px;
     margin-bottom: 12px;
     padding: 4px;
     border: 1px solid rgba(91, 136, 224, 0.28);
     border-radius: 10px;
     background: rgba(2, 10, 35, 0.46);
+}
+
+/* 当前主题、最近使用与主题库共同使用“一主题一卡、深浅双预览”的可扩展结构。 */
+.selpersonal-theme-home {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+}
+
+.selpersonal-current-theme,
+.selpersonal-recent-theme-section {
+    display: grid;
+    gap: 7px;
+    margin-bottom: 11px;
+}
+
+.selpersonal-view-heading button {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+/* 更换主题是进入独立主题库的主操作，使用主题色表面、方向提示和明确悬浮反馈。 */
+.selpersonal-view-heading [data-sel-personal-theme-library-toggle] {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 11px;
+    border-color: var(--sel-theme-line);
+    color: var(--sel-theme-text-on-selected-surface);
+    background: linear-gradient(135deg, var(--sel-theme-selected-surface), var(--sel-theme-control-hover));
+    box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.34), var(--sel-theme-inset);
+    font-size: var(--sel-theme-font-size-secondary);
+    font-weight: 600;
+    transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.selpersonal-view-heading [data-sel-personal-theme-library-toggle] span {
+    color: inherit;
+    font-size: var(--sel-theme-font-size-secondary);
+    font-weight: inherit;
+}
+
+.selpersonal-view-heading [data-sel-personal-theme-library-toggle]:hover,
+.selpersonal-view-heading [data-sel-personal-theme-library-toggle]:focus-visible {
+    border-color: var(--sel-theme-text-link);
+    outline: none;
+    background: linear-gradient(135deg, var(--sel-theme-control-hover), var(--sel-theme-selected-surface));
+    box-shadow: 0 0 18px rgb(var(--sel-theme-color-rgb) / 0.52), var(--sel-theme-inset);
+}
+
+.selpersonal-theme-card {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(180px, 48%) minmax(0, 1fr);
+    align-items: stretch;
+    gap: 12px;
+    padding: 8px;
+    overflow: hidden;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    box-shadow: var(--sel-theme-inset);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.selpersonal-theme-card:hover,
+.selpersonal-theme-card:focus-visible,
+.selpersonal-theme-card[aria-pressed="true"] {
+    border-color: var(--sel-theme-line);
+    outline: none;
+    background: var(--sel-theme-control-hover);
+    box-shadow: 0 0 14px rgb(var(--sel-theme-color-rgb) / 0.38), var(--sel-theme-inset);
+}
+
+.selpersonal-theme-card-preview {
+    display: grid;
+    min-height: 94px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px;
+    overflow: hidden;
+    border-radius: calc(var(--sel-theme-radius-control) - 3px);
+}
+
+.selpersonal-theme-card-mode {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 7px 4px;
+    overflow: hidden;
+    color: #fff;
+    background: var(--selpersonal-theme-mode-image) center / cover no-repeat, var(--sel-theme-surface-deep);
+    font-size: var(--sel-theme-font-size-caption);
+    text-align: center;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.92);
+}
+
+.selpersonal-theme-card-mode::before {
+    position: absolute;
+    inset: 2px;
+    background: var(--selpersonal-theme-mode-frame) center / 100% 100% no-repeat;
+    content: "";
+}
+
+.selpersonal-theme-card-mode::after {
+    position: absolute;
+    inset: 45% 0 0;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.68));
+    content: "";
+}
+
+.selpersonal-theme-card-mode span {
+    position: relative;
+    z-index: 1;
+}
+
+.selpersonal-theme-card-copy {
+    display: grid;
+    min-width: 0;
+    align-content: center;
+    gap: 5px;
+}
+
+.selpersonal-theme-card-copy strong {
+    color: var(--sel-theme-text-main);
+    font-size: var(--sel-theme-font-size-primary);
+}
+
+.selpersonal-theme-card-copy small {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.selpersonal-theme-card-selected {
+    position: absolute;
+    top: 11px;
+    right: 11px;
+    color: var(--sel-theme-text-icon);
+    opacity: 0;
+}
+
+.selpersonal-theme-card[aria-pressed="true"] .selpersonal-theme-card-selected {
+    opacity: 1;
+}
+
+.selpersonal-recent-themes {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.selpersonal-theme-card-compact {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 5px;
+}
+
+.selpersonal-theme-card-compact .selpersonal-theme-card-preview {
+    min-height: 50px;
+}
+
+.selpersonal-theme-card-compact .selpersonal-theme-card-mode span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selpersonal-theme-card-compact .selpersonal-theme-card-copy {
+    padding: 1px 3px 3px;
+}
+
+.selpersonal-theme-card-compact .selpersonal-theme-card-copy strong {
+    overflow: hidden;
+    font-size: var(--sel-theme-font-size-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selpersonal-theme-card-compact .selpersonal-theme-card-copy small {
+    display: none;
+}
+
+.selpersonal-theme-library {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 10px;
+    padding: 2px 3px 1px 1px;
+    overflow: hidden;
+}
+
+.selpersonal-theme-library-heading {
+    display: grid;
+    min-height: 46px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid var(--sel-theme-line-soft);
+}
+
+.selpersonal-theme-library-heading button {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    gap: 5px;
+    padding: 0 10px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    cursor: pointer;
+    font: inherit;
+}
+
+.selpersonal-theme-library-heading button:hover,
+.selpersonal-theme-library-heading button:focus-visible {
+    border-color: var(--sel-theme-line);
+    outline: none;
+    background: var(--sel-theme-control-hover);
+}
+
+.selpersonal-theme-library-heading-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.selpersonal-theme-library-heading-copy strong {
+    color: var(--sel-theme-text-main);
+    font-size: var(--sel-theme-font-size-primary);
+}
+
+.selpersonal-theme-library-heading-copy small,
+.selpersonal-theme-library-heading output {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selpersonal-theme-library-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 118px;
+    gap: 8px;
+}
+
+.selpersonal-theme-library-tools label {
+    min-width: 0;
+    min-height: 38px;
+    box-sizing: border-box;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    font: inherit;
+}
+
+.selpersonal-theme-library-tools label {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: center;
+    padding: 0 8px;
+}
+
+.selpersonal-theme-library-tools input {
+    min-width: 0;
+    border: 0;
+    color: inherit;
+    outline: 0;
+    background: transparent;
+    font: inherit;
+}
+
+.selpersonal-theme-category {
+    width: 100%;
+    height: 38px;
+    --seldropdown-menu-min-width: 196px;
+}
+
+.selpersonal-theme-category .seldropdown-menu {
+    right: 0;
+    left: auto;
+}
+
+.selpersonal-theme-library-grid {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+    align-content: start;
+    flex: 1 1 auto;
+    gap: 10px;
+    padding: 1px 4px 8px 1px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+.selpersonal-theme-library-grid .selpersonal-theme-card {
+    grid-template-columns: 1fr;
+    gap: 7px;
+}
+
+.selpersonal-theme-library-grid .selpersonal-theme-card-preview {
+    min-height: 108px;
+}
+
+.selpersonal-theme-library-empty {
+    margin: 12px 0;
+    color: var(--sel-theme-text-secondary);
+    text-align: center;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-tab {
@@ -515,7 +894,7 @@
 
 .selpersonal-tab span {
     overflow: hidden;
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -570,7 +949,7 @@
 
 .selpersonal-language-option small {
     color: var(--sel-theme-text-secondary);
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-caption);
     line-height: 1.35;
 }
 
@@ -654,14 +1033,14 @@
 
 .selpersonal-skin-copy strong {
     overflow: hidden;
-    font-size: 13px;
+    font-size: var(--sel-theme-font-size-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .selpersonal-skin-copy small {
     color: var(--selpersonal-skin-preview-muted);
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-skin-selected-icon {
@@ -701,7 +1080,7 @@
 
 .selpersonal-skin-theme-row > strong {
     color: var(--sel-theme-text-body);
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-caption);
     font-weight: 560;
 }
 
@@ -723,7 +1102,7 @@
     gap: 7px;
     margin: 12px 2px 0;
     color: var(--sel-theme-text-secondary);
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-caption);
     line-height: 1.5;
 }
 
@@ -731,6 +1110,111 @@
     margin-top: 1px;
     color: var(--sel-theme-text-icon);
     font-size: 14px;
+}
+
+/* 用户设置与页面编辑从后端 JSON 注册模块；摘要卡只显示当前可访问能力，不伪造保存结果。 */
+.selpersonal-page-editor-heading {
+    display: flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.selpersonal-page-editor-heading > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--sel-theme-text-main);
+}
+
+.selpersonal-page-editor-heading small {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selpersonal-extension-modules {
+    display: grid;
+    gap: 8px;
+    overflow-y: auto;
+}
+
+.selpersonal-extension-module {
+    display: grid;
+    min-width: 0;
+    min-height: 74px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    box-shadow: var(--sel-theme-inset);
+}
+
+.selpersonal-extension-module > i {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: var(--sel-theme-radius-icon);
+    color: var(--sel-theme-text-icon);
+    background: rgb(var(--sel-theme-color-rgb) / 0.14);
+    font-size: 18px;
+}
+
+.selpersonal-extension-module > span {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.selpersonal-extension-module strong {
+    color: var(--sel-theme-text-main);
+    font-size: var(--sel-theme-font-size-secondary);
+}
+
+.selpersonal-extension-module small {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selpersonal-extension-module em {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+    font-style: normal;
+    white-space: nowrap;
+}
+
+.selpersonal-extension-empty {
+    display: grid;
+    min-height: 180px;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    padding: 24px;
+    border: 1px dashed var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-secondary);
+    text-align: center;
+}
+
+.selpersonal-extension-empty i {
+    color: var(--sel-theme-text-icon);
+    font-size: 28px;
+}
+
+.selpersonal-extension-empty strong {
+    color: var(--sel-theme-text-main);
+}
+
+.selpersonal-extension-empty span {
+    max-width: 330px;
+    font-size: var(--sel-theme-font-size-caption);
+    line-height: 1.55;
 }
 
 .selpersonal-tab {
@@ -746,7 +1230,7 @@
     background: transparent;
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--sel-theme-font-size-secondary);
 }
 
 .selpersonal-tab:hover,
@@ -809,13 +1293,13 @@
 
 .selpersonal-view-heading strong,
 .selpersonal-section-heading strong {
-    font-size: 13px;
+    font-size: var(--sel-theme-font-size-secondary);
     letter-spacing: 0.03em;
 }
 
 .selpersonal-view-heading span {
     color: var(--sel-theme-text-secondary);
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-section-heading > span {
@@ -897,13 +1381,13 @@
 }
 
 .selpersonal-background-option-copy strong {
-    font-size: 13px;
+    font-size: var(--sel-theme-font-size-secondary);
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
 .selpersonal-background-option-copy span {
     color: rgba(225, 234, 255, 0.76);
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 /* 背景和面板参数都使用统一的百分比视觉轨道。 */
@@ -927,7 +1411,7 @@
     gap: 9px;
     min-width: 0;
     color: var(--sel-theme-text-body);
-    font-size: 12px;
+    font-size: var(--sel-theme-font-size-secondary);
 }
 
 .selpersonal-range output,
@@ -972,7 +1456,7 @@
     background: rgba(5, 18, 56, 0.54);
     cursor: pointer;
     font: inherit;
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-preset i {
@@ -1074,7 +1558,7 @@
 .selpersonal-color-picker output {
     min-width: 72px;
     color: var(--sel-theme-text-secondary);
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-caption);
     text-align: right;
 }
 
@@ -1090,7 +1574,7 @@
     background: rgba(5, 18, 56, 0.54);
     cursor: pointer;
     font: inherit;
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-color-follow:hover,
@@ -1210,7 +1694,7 @@
 .selpersonal-panel-range-copy strong,
 .selpersonal-toggle strong {
     color: var(--sel-theme-text-body);
-    font-size: 12px;
+    font-size: var(--sel-theme-font-size-secondary);
     font-weight: 560;
 }
 
@@ -1218,7 +1702,7 @@
 .selpersonal-toggle small {
     overflow: hidden;
     color: var(--sel-theme-text-secondary);
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -1231,7 +1715,7 @@
 }
 
 .selpersonal-panel-range-control output {
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 /* 减少动态效果使用原生 checkbox，保留系统可访问语义。 */
@@ -1277,7 +1761,7 @@
     background: rgba(4, 17, 53, 0.58);
     cursor: pointer;
     font: inherit;
-    font-size: 11px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-reset:hover,
@@ -1759,7 +2243,45 @@
     }
 
     .selpersonal-panel {
-        width: min(370px, calc(100vw - 20px));
+        position: fixed;
+        inset: 10px;
+        width: auto;
+        height: auto;
+        max-height: none;
+    }
+
+    .selpersonal-theme-card {
+        grid-template-columns: 1fr;
+    }
+
+    .selpersonal-recent-themes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .selpersonal-theme-library-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .selpersonal-theme-library-heading {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .selpersonal-theme-library-heading output {
+        display: none;
+    }
+
+    .selpersonal-area {
+        gap: 4px;
+        padding: 0 5px;
+        font-size: var(--sel-theme-font-size-primary);
+    }
+
+    .selpersonal-extension-module {
+        grid-template-columns: 34px minmax(0, 1fr);
+    }
+
+    .selpersonal-extension-module em {
+        grid-column: 2;
     }
 }
 
@@ -1784,7 +2306,7 @@
     box-shadow: var(--sel-theme-inset);
     cursor: pointer;
     font: inherit;
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-text-mode i {
@@ -1817,13 +2339,13 @@
 
 .selpersonal-text-preview strong {
     color: var(--sel-theme-text-main);
-    font-size: calc(14px * var(--sel-theme-font-scale));
+    font-size: var(--sel-theme-font-size-primary);
     text-shadow: var(--sel-theme-text-shadow);
 }
 
 .selpersonal-text-preview span {
     color: var(--sel-theme-text-muted);
-    font-size: calc(11px * var(--sel-theme-font-scale));
+    font-size: var(--sel-theme-font-size-caption);
     text-shadow: var(--sel-theme-text-shadow);
 }
 
@@ -1848,12 +2370,12 @@
 
 .selpersonal-text-color strong {
     color: var(--sel-theme-text-body);
-    font-size: 12px;
+    font-size: var(--sel-theme-font-size-secondary);
 }
 
 .selpersonal-text-color small {
     color: var(--sel-theme-text-secondary);
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpersonal-text-color input {
@@ -1868,7 +2390,7 @@
 
 .selpersonal-text-color output {
     color: var(--sel-theme-text-secondary);
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-caption);
     text-align: right;
 }
 

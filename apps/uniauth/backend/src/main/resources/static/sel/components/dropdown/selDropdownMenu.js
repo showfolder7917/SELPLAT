@@ -144,6 +144,23 @@
         instance.menu.style.setProperty("--seldropdown-menu-inline-offset", `${selDropdownInlineOffset}px`);
     }
 
+    // 聚焦菜单选项时只滚动组件自己的视口，禁止 scrollIntoView 连带滚动外层设置面板。
+    function selDropdownMenuFocusOption(instance, optionIndex) {
+        // 越界或缺少按钮时不改变当前焦点。
+        const button = instance.optionButtons[optionIndex];
+        if (!button) return;
+        // preventScroll 保证浏览器不会为了焦点自行移动任何祖先滚动容器。
+        button.focus({ preventScroll: true });
+        // offsetTop 以选项列表为基准，与菜单视口 scrollTop 处于同一纵向坐标系。
+        const optionTop = button.offsetTop;
+        const optionBottom = optionTop + button.offsetHeight;
+        const viewportTop = instance.viewport.scrollTop;
+        const viewportBottom = viewportTop + instance.viewport.clientHeight;
+        // 只有选项超出菜单自身可视范围时才调整内部 scrollTop。
+        if (optionTop < viewportTop) instance.viewport.scrollTop = optionTop;
+        if (optionBottom > viewportBottom) instance.viewport.scrollTop = optionBottom - instance.viewport.clientHeight;
+    }
+
     // 打开指定下拉并聚焦当前或指定方向的可用选项。
     function selDropdownMenuOpen(instance, focusMode) {
         // 先关闭其他实例，保证页面只出现一个下拉浮层。
@@ -185,8 +202,8 @@
         selDropdownMenuRefresh(instance);
         // 仅在存在可用活动项时把焦点送入列表，避免禁用占位项让键盘停留在触发器。
         if (instance.activeIndex >= 0) {
-            // 当前活动按钮进入视口并接收键盘焦点。
-            instance.optionButtons[instance.activeIndex]?.focus();
+            // 阻止聚焦动作滚动设置面板等外层容器，否则外部滚动关闭契约会把刚展开的菜单立即关闭。
+            selDropdownMenuFocusOption(instance, instance.activeIndex);
         }
     }
 
@@ -236,8 +253,8 @@
         instance.activeIndex = nextIndex;
         // 更新活动光带视觉。
         selDropdownMenuRefresh(instance);
-        // 新项目接收焦点并自动滚动到可见区域。
-        instance.optionButtons[nextIndex].focus();
+        // 焦点不滚动外层面板，选项可见性只由菜单内部滚动承担。
+        selDropdownMenuFocusOption(instance, nextIndex);
     }
 
     // 为单个根节点创建完整触发器、菜单和交互实例。
@@ -570,8 +587,10 @@
         if (!selDropdownMenuOpenInstance) {
             return;
         }
-        // 菜单内部滚动用于访问超出阈值的项目，不应触发关闭。
-        if (selDropdownMenuOpenInstance.root.contains(event.target)) {
+        // 菜单内部滚动以及承载当前控件的祖先容器滚动都会同步移动根和浮层，不应触发关闭。
+        const selDropdownScrollTarget = event.target;
+        if (selDropdownMenuOpenInstance.root.contains(selDropdownScrollTarget)
+            || (selDropdownScrollTarget instanceof Node && selDropdownScrollTarget.contains(selDropdownMenuOpenInstance.root))) {
             return;
         }
         // 页面或外部容器滚动时关闭浮层，避免空间错位。

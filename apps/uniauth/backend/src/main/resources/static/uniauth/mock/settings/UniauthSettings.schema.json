@@ -1,0 +1,66 @@
+{
+  "version": "1.0",
+  "project": "uniauth",
+  "modules": [
+    {
+      "id": "uniauth.user.display",
+      "area": "user",
+      "scope": "user",
+      "titleKey": "显示偏好",
+      "descriptionKey": "字号、密度和动态效果等用户级设置",
+      "icon": "ri-eye-settings-line",
+      "order": 20,
+      "permission": "uniauth.preference.read",
+      "fields": [
+        { "id": "fontScale", "type": "range", "minimum": 80, "maximum": 120, "defaultValue": 100 },
+        { "id": "density", "type": "select", "options": ["compact", "comfortable"] },
+        { "id": "reducedMotion", "type": "boolean", "defaultValue": false }
+      ]
+    },
+    {
+      "id": "uniauth.page.layout",
+      "area": "page",
+      "scope": "page",
+      "titleKey": "页面布局与面板大小",
+      "descriptionKey": "初始大小、最小最大尺寸和区域布局",
+      "icon": "ri-layout-2-line",
+      "order": 10,
+      "permission": "uniauth.page.layout.edit",
+      "fields": [
+        { "id": "initialWidth", "type": "number", "minimum": 320, "maximum": 1920 },
+        { "id": "initialHeight", "type": "number", "minimum": 360, "maximum": 1200 },
+        { "id": "minimumWidth", "type": "number", "minimum": 280, "maximum": 960 },
+        { "id": "maximumWidth", "type": "number", "minimum": 420, "maximum": 2560 }
+      ]
+    },
+    {
+      "id": "uniauth.page.grid-fields",
+      "area": "page",
+      "scope": "page",
+      "titleKey": "表格字段显示",
+      "descriptionKey": "默认字段数量、顺序、宽度和可见范围",
+      "icon": "ri-table-view",
+      "order": 20,
+      "permission": "uniauth.page.fields.edit",
+      "fields": [
+        { "id": "visibleColumns", "type": "column-list" },
+        { "id": "defaultColumnCount", "type": "number", "minimum": 1, "maximum": 30 },
+        { "id": "pageSize", "type": "select", "options": [10, 20, 50, 100] }
+      ]
+    },
+    {
+      "id": "uniauth.page.actions",
+      "area": "page",
+      "scope": "page",
+      "titleKey": "按钮与操作入口",
+      "descriptionKey": "按钮是否出现以及允许哪些角色操作",
+      "icon": "ri-toggle-line",
+      "order": 30,
+      "permission": "uniauth.page.actions.edit",
+      "fields": [
+        { "id": "visibleActions", "type": "action-list" },
+        { "id": "roleBindings", "type": "permission-map", "editable": false }
+      ]
+    }
+  ]
+}

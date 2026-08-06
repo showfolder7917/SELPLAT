@@ -37,7 +37,7 @@
 .seldatepicker-popover,
 .selwindow-window-shell,
 .selpersonal-control {
-    font-size: calc(14px * var(--sel-theme-font-scale));
+    font-size: var(--sel-theme-font-size-primary);
 }
 
 .selpanel-title-line h1 {
@@ -57,7 +57,7 @@
 .seldropdown-option-label,
 .selwindow-checkbox-row,
 .selpersonal-text-preview strong {
-    font-size: calc(14px * var(--sel-theme-font-scale));
+    font-size: var(--sel-theme-font-size-primary);
 }
 
 .selpanel-brand-copy p,
@@ -74,20 +74,20 @@
 .selpersonal-skin-copy strong,
 .selpersonal-tab,
 .selpersonal-view-heading strong,
-.selpersonal-section-heading strong,
-.selpersonal-background-option-copy strong,
-.selpersonal-range {
-    font-size: calc(13px * var(--sel-theme-font-scale));
+    .selpersonal-section-heading strong,
+    .selpersonal-background-option-copy strong,
+    .selpersonal-range,
+    .selpersonal-panel-range-copy strong,
+    .selpersonal-toggle strong,
+    .selpersonal-text-color strong {
+    font-size: var(--sel-theme-font-size-secondary);
 }
 
 .selpanel-sidebar-summary,
 .seldropdown-menu-heading,
 .seldatepicker-day,
-.seldatepicker-action,
-.selpersonal-panel-range-copy strong,
-.selpersonal-toggle strong,
-.selpersonal-text-color strong {
-    font-size: max(11px, calc(12px * var(--sel-theme-font-scale)));
+.seldatepicker-action {
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 /*
@@ -107,7 +107,7 @@
 .selpersonal-panel-range-control output,
 .selpersonal-reset,
 .selpersonal-text-preview span {
-    font-size: max(11px, calc(12px * var(--sel-theme-font-scale)));
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 /* 微型标签仍保留较低层级，但设置 10px 的最终可读下限。 */
@@ -121,7 +121,7 @@
 .selpersonal-text-mode,
 .selpersonal-text-color small,
 .selpersonal-text-color output {
-    font-size: max(10px, calc(11px * var(--sel-theme-font-scale)));
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .selpanel-region-heading,
@@ -132,21 +132,21 @@
 .selwindow-control-textarea,
 .selwindow-control-input,
 .selwindow-action-button {
-    font-size: calc(15px * var(--sel-theme-font-scale));
+    font-size: var(--sel-theme-font-size-primary);
 }
 
 .selgrid-pagination-button {
-    font-size: calc(16px * var(--sel-theme-font-scale));
+    font-size: var(--sel-theme-font-size-primary);
 }
 
 .selpersonal-heading-copy strong {
-    font-size: calc(16px * var(--sel-theme-font-scale));
+    font-size: var(--sel-theme-font-size-primary);
 }
 
 /* 原表格窄屏字号提升继续保留，并始终乘以同一个字号令牌。 */
 @media (max-width: 1280px) {
     .selgrid-table th,
     .selgrid-table td {
-        font-size: calc(15px * var(--sel-theme-font-scale));
+        font-size: var(--sel-theme-font-size-primary);
     }
 }

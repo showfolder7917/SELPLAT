@@ -55,6 +55,8 @@
     const uniauthCommonWindowUrl = "../sel/components/window/i18n/{locale}.json";
     // 日期选择器拥有独立公共语言包，业务字段只提供“开始日期”等项目标签。
     const uniauthCommonDatePickerUrl = "../sel/components/date-picker/i18n/{locale}.json";
+    // 当前项目设置 Schema 独立于公共组件文案；生产环境只需把此地址替换为后端聚合接口。
+    const uniauthSettingsSchemaUrl = "./mock/settings/UniauthSettings.schema.json";
     // HTML 提供应用挂载点和可审阅的完整面板结构，装配层只在其中定位当前业务实例。
     const uniauthApplicationHost = uniauthBase.query("[data-uniauth-app]");
     // HTML 只提供背景挂载点，独立背景图层由 selPageBackground.mount 生成。
@@ -462,7 +464,7 @@
         // 页面语言通过基础运行时同步，不直接操作 document。
         uniauthBase.setDocument({ lang: uniauthLocale });
         // 公共个性化文案从 SEL 公共组件目录加载，禁止并入当前项目聚合响应。
-        const [uniauthPersonalizationMessages, uniauthWindowMessages, uniauthDatePickerMessages] = await Promise.all([
+        const [uniauthPersonalizationMessages, uniauthWindowMessages, uniauthDatePickerMessages, uniauthSettingsSchema] = await Promise.all([
             uniauthAjax.json({
                 url: uniauthVersionedUrl(uniauthCommonPersonalizationUrl.replaceAll("{locale}", uniauthLocale))
             }),
@@ -471,6 +473,10 @@
             }),
             uniauthAjax.json({
                 url: uniauthVersionedUrl(uniauthCommonDatePickerUrl.replaceAll("{locale}", uniauthLocale))
+            }),
+            // 页面编辑和用户扩展属性由项目 JSON 描述，公共组件不内置 Uniauth 字段或按钮。
+            uniauthAjax.json({
+                url: uniauthVersionedUrl(uniauthSettingsSchemaUrl)
             })
         ]);
         // 背景基础控件只创建图层和内存状态，刷新页面自动使用默认值。
@@ -488,6 +494,10 @@
             backgroundController: uniauthBackgroundController,
             // 公共语言文案与当前项目业务 JSON 分别加载，基础组件只接收已经解析的标准输入。
             messages: uniauthPersonalizationMessages,
+            // Schema 未来直接来自后端；当前静态 JSON 用于验证模块、作用域和权限接口契约。
+            settingsSchema: uniauthSettingsSchema,
+            // 演示数据全部可见；生产回调必须消费登录用户已获授权结果，后端保存接口仍做最终校验。
+            canAccessSetting: () => true,
             locale: Object.freeze({
                 current: uniauthLocale,
                 onChange(uniauthNextLocale) {

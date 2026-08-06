@@ -67,6 +67,7 @@
     window.selThemeRegistry?.register({
         id: "candy-adventure",
         name: "糖果冒险",
+        category: "可爱",
         description: "星空糖果、云朵气球与柔软圆角的儿童冒险乐园",
         icon: "ri-magic-line",
         defaults: Object.freeze({ mode: "light", accent: "sky-blue", density: "comfortable" }),
