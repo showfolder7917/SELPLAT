@@ -12,6 +12,8 @@ import com.sp.selplat.common.db.dao.BaseDaoImpl;
 import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.common.db.template.BaseTemplateMapper;
+import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.service.BaseCrudService;
 import com.sp.selplat.common.service.BaseExtendsServiceImpl;
 import com.sp.selplat.common.service.BaseServiceImpl;
 import com.sp.selplat.common.service.sequence.SequenceGeneratorImpl;
@@ -88,8 +90,13 @@ public final class BaseServiceImplTestVerifier {
             CommonResult detailResult = service.getById(param("id", 1L));
             // 详情数据来自真实表。
             assertEquals("fixture-one", data(detailResult).get("name"));
-            // 不存在主键必须由真实 DAO 未命中触发统一异常。
-            assertThrows(IllegalArgumentException.class, () -> service.getById(param("id", 999L)));
+            // 不存在主键必须由真实 DAO 未命中触发可识别的业务异常。
+            CommonBusinessException notFoundException = assertThrows(
+                CommonBusinessException.class,
+                () -> service.getById(param("id", 999L))
+            );
+            // 稳定错误码允许全局处理器和客户端区分未命中与系统故障。
+            assertEquals("RECORD_NOT_FOUND", notFoundException.getErrorCode());
 
             // 批量查询使用两组真实主键。
             CommonResult detailsResult = service.getByIds(batch(param("id", 1L), param("id", 2L)));
@@ -187,6 +194,8 @@ public final class BaseServiceImplTestVerifier {
     private static void verifyBaseLayerOwnership() {
         // BaseServiceImpl 必须直接继承扩展基础层。
         assertSame(BaseExtendsServiceImpl.class, BaseServiceImpl.class.getSuperclass());
+        // 公共 CRUD 实现必须显式受 BaseCrudService 契约约束，非 CRUD 服务不得因 BaseService 自动获得维护方法。
+        assertTrue(BaseCrudService.class.isAssignableFrom(BaseServiceImpl.class));
         // BaseServiceImpl 自身统一声明 DAO 入口和九个默认 CRUD，业务子类可直接继承或按需覆盖。
         assertEquals(
             Set.of(

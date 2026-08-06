@@ -32,6 +32,9 @@ selplat_java_comment_excluded_syntax = import,plain_brace,trivial_getter_setter,
 
 ## 参数与实际结果示例
 
+<!-- 方法 Javadoc 的固定阅读顺序必须是“方法作用与边界 → 参数来源、含义和真实示例 → 返回含义和真实示例 → 异常触发条件或 void 副作用示例”；业务含义是调用方按同一顺序即可还原完整调用逻辑。 -->
+selplat_java_method_javadoc_primary_sequence = purpose_and_boundary,param_source_meaning_actual_example,return_meaning_actual_example,exception_trigger_or_void_side_effect_example
+
 <!-- 公开和受保护方法的 Javadoc 必须描述每个参数来自哪里、代表什么以及实际输入示例；业务含义是 CommonParam、Map 等动态类型也能直接看出允许字段。 -->
 selplat_java_param_javadoc_must_include = source,business_meaning,actual_example
 
@@ -46,6 +49,12 @@ selplat_java_void_method_must_describe_actual_side_effect_example = true
 
 <!-- 异常分支必须说明触发条件和实际异常示例；业务含义是调用方可以区分未找到、非法字段、配置缺失和数据库失败。 -->
 selplat_java_exception_comment_must_include_trigger_and_example = true
+
+<!-- 可预期且可安全展示的业务失败统一抛 CommonBusinessException；数据库、文件、远程服务或运行环境技术失败统一包装 CommonSystemException 并保留 cause；业务含义是 Web 层能稳定区分 BUSINESS 和 SYSTEM。 -->
+selplat_java_custom_exception_contract = business:CommonBusinessException(errorCode,safeMessage,optional_cause),system:CommonSystemException(errorCode,safeMessage,required_cause)
+
+<!-- 异常类型位于 common-core，HTTP 映射位于 common-web；业务含义是 Service、DAO 可依赖异常契约而不反向依赖 Web 层。 -->
+selplat_java_exception_layer_owner = type:shared/backend/common-core:com.sp.selplat.common.exception,handler:shared/backend/common-web:com.sp.selplat.common.web.exception
 
 ## 示例格式
 

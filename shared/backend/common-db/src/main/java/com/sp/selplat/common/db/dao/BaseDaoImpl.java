@@ -28,21 +28,40 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
     // SOFT_DELETED_STATUS_VALUE 固定逻辑删除状态值，避免各业务 DAO 重复维护相同约定。
     private static final int SOFT_DELETED_STATUS_VALUE = 0;
 
-    // 主键号段公开能力只负责复写 BaseDao 契约，具体元数据组装由支撑层统一实现。
+    /**
+     * 根据当前 DAO 的表名和主键元数据生成发号定义，具体组装由支撑层完成。
+     *
+     * @return 主键字段到号段编码的定义，例如 {@code {"id":"UniauthUserId"}}
+     */
     @Override
     public IdSequenceDefinition getIdSequenceDefinition() {
         // 委托支撑层根据当前 DAO 的表名和主键元数据生成字段到独立号段编码的定义。
         return buildIdSequenceDefinition();
     }
 
-    // 公共分页查询按默认排序返回当前页数据，作为 BaseDao 默认分页签名的唯一实现。
+    /**
+     * 按动态条件和默认 {@code sortnum desc} 排序查询当前页。
+     *
+     * @param queryColumnValueMap 前端查询字段，例如 {@code {"status":1,"loginNameLike":"admin"}}
+     * @param pageNo 当前页码，例如 {@code 1}
+     * @param pageSize 每页条数，例如 {@code 10}
+     * @return 分页结果，例如 {@code {"records":[{"id":1}],"totalCount":1,"pageNo":1,"pageSize":10}}
+     */
     @Override
     public CommonPageResult getPageList(Map<String, Object> queryColumnValueMap, Integer pageNo, Integer pageSize) {
         // 默认按 sortnum 倒序查询，保持简单主数据列表的统一展示顺序。
         return getPageList(queryColumnValueMap, "sortnum desc", pageNo, pageSize);
     }
 
-    // 公共分页查询按调用方排序返回当前页数据，作为 BaseDao 自定义分页签名的唯一实现。
+    /**
+     * 按动态条件和调用方选择的受控排序查询当前页。
+     *
+     * @param queryColumnValueMap 前端查询字段，例如 {@code {"status":1}}
+     * @param orderBy 受控排序表达式，例如 {@code "sortnum desc id asc"}
+     * @param pageNo 当前页码，例如 {@code 1}
+     * @param pageSize 每页条数，例如 {@code 10}
+     * @return 排序后的分页结果，例如 {@code {"records":[{"id":2},{"id":1}],"totalCount":2}}
+     */
     @Override
     public CommonPageResult getPageList(Map<String, Object> queryColumnValueMap, String orderBy, Integer pageNo, Integer pageSize) {
         // 把字段后缀驱动的查询条件转换成结构化条件集合，继续复用分页层内部解析能力。
@@ -53,7 +72,12 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return queryList(null, conditions, orders, pageNo, pageSize);
     }
 
-    // 通用主键查询通过 BaseDao 公开 CommonParam 读取单条记录，业务 DAO 不再直接调用内部 queryById。
+    /**
+     * 从公共参数中提取单主键或复合主键并查询一条记录。
+     *
+     * @param queryIn 主键参数，例如 {@code {"id":1}} 或 {@code {"tenantId":10,"orderId":20}}
+     * @return 命中记录，例如 {@code {"id":1,"loginName":"admin"}}；参数为空或未命中时返回 {@code null}
+     */
     @Override
     public Map<String, Object> getById(CommonParam queryIn) {
         // 通用参数为空或没有任何前端字段时按未命中返回，避免生成没有主键条件的查询。
@@ -64,7 +88,12 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return queryById(queryIn);
     }
 
-    // 批量主键查询按固定步长拆分输入，并由深层 CRUD 支撑一次查询当前分组的全部单主键或复合主键记录。
+    /**
+     * 按每组最多一千项拆分主键，并批量查询全部匹配记录。
+     *
+     * @param queryIn 多组主键参数，例如 {@code {"items":[{"id":1},{"id":2}]}}
+     * @return 数据库记录列表，例如 {@code [{"id":1},{"id":2}]}；空请求返回空列表
+     */
     @Override
     public List<Map<String, Object>> getByIds(CommonBatchParam queryIn) {
         // 空批量请求直接返回空结果，确保不会生成没有主键条件的 SQL。
@@ -84,7 +113,12 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return records;
     }
 
-    // 通用动态单条查询只消费上游 CommonParam，业务 DAO 不再调用条件构建或分页执行深层方法。
+    /**
+     * 按与真实数据库字段匹配的动态条件查询第一条记录。
+     *
+     * @param queryIn 动态条件，例如 {@code {"loginName":"admin","status":1}}
+     * @return 第一条匹配记录，例如 {@code {"id":1,"loginName":"admin"}}；空条件或未命中时返回 {@code null}
+     */
     @Override
     public Map<String, Object> getByQuery(CommonParam queryIn) {
         // 缺少通用查询对象或动态字段时直接返回空，防止空条件退化为全表首条查询。
@@ -103,7 +137,13 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return pageResult.getRecords().get(0);
     }
 
-    // 公共新增直接读取前端 CommonParam 动态字段，作为 BaseDao insert 的唯一实现。
+    /**
+     * 将公共参数中与真实数据库字段匹配的列新增到当前表。
+     *
+     * @param saveIn 新增字段，例如 {@code {"id":1,"loginName":"admin","status":1}}
+     * @return 数据库影响行数，例如新增成功返回 {@code 1}
+     * @throws IllegalArgumentException 没有可写数据库字段时抛出，例如 {@code "insert columns must not be empty"}
+     */
     @Override
     public int insert(CommonParam saveIn) {
         // 把业务字段包装成模板新增入参，统一收口目标表和写入字段集合。
@@ -122,7 +162,12 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return baseTemplateDao.insert(templateSave);
     }
 
-    // 批量新增把前端记录按一千条分组，每组只执行一次 JDBC batchUpdate。
+    /**
+     * 将新增项按每组最多一千条执行真实 JDBC 批处理。
+     *
+     * @param saveIn 批量新增字段，例如 {@code {"items":[{"id":1},{"id":2}]}}
+     * @return 全部分组累计影响行数，例如两条成功返回 {@code 2}；空请求返回 {@code 0}
+     */
     @Override
     public int insertBatch(CommonBatchParam saveIn) {
         // 空批量新增没有数据库动作，统一返回零影响行。
@@ -150,7 +195,14 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return affectedRows;
     }
 
-    // 公共更新从 CommonParam 自动分离主键条件和更新字段，作为 BaseDao update 的唯一实现。
+    /**
+     * 从公共参数自动分离完整主键和非主键字段后更新当前表。
+     *
+     * @param saveIn 主键和更新字段，例如 {@code {"id":1,"displayName":"管理员"}}
+     * @return 数据库影响行数，例如更新成功返回 {@code 1}
+     * @throws IllegalArgumentException 缺少主键或没有更新字段时抛出，例如
+     *     {@code "primary key value must not be null: id"}
+     */
     @Override
     public int update(CommonParam saveIn) {
         // 创建模板更新入参，集中承接目标表、主键和更新字段。
@@ -186,7 +238,12 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return baseTemplateDao.updateByIds(updateIn);
     }
 
-    // 批量更新按一千条分组，并在每组内按更新字段结构继续归并真实 JDBC batch。
+    /**
+     * 按每组最多一千条拆分更新项，并按相同字段结构执行真实 JDBC 批处理。
+     *
+     * @param saveIn 批量主键和更新字段，例如 {@code {"items":[{"id":1,"status":0},{"id":2,"status":0}]}}
+     * @return 全部分组累计影响行数，例如两条成功返回 {@code 2}；空请求返回 {@code 0}
+     */
     @Override
     public int updateBatch(CommonBatchParam saveIn) {
         // 空批量更新不进入数据库，统一返回零影响行。
@@ -217,7 +274,12 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return affectedRows;
     }
 
-    // 通用假删除在原 CommonParam 中补充公共状态和时间，再复用自动提取主键的 update。
+    /**
+     * 在原参数中补充公共删除状态和服务端时间，再按完整主键执行更新。
+     *
+     * @param deleteIn 主键和审计字段，例如 {@code {"id":1,"lastOperateUserId":9}}
+     * @return 数据库影响行数，例如假删除成功返回 {@code 1}
+     */
     @Override
     public int softDelete(CommonParam deleteIn) {
         // 状态字段写入平台统一的逻辑删除值，前端无需重复传递公共状态。
@@ -228,7 +290,12 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         return update(deleteIn);
     }
 
-    // 批量假删除统一补充同一服务端删除时间，再复用每组一千条的批量更新能力。
+    /**
+     * 为全部删除项补充同一服务端时间和删除状态，再执行批量更新。
+     *
+     * @param deleteIn 多组主键和审计字段，例如 {@code {"items":[{"id":1},{"id":2}]}}
+     * @return 全部分组累计影响行数，例如两条成功返回 {@code 2}；空请求返回 {@code 0}
+     */
     @Override
     public int softDeleteBatch(CommonBatchParam deleteIn) {
         // 空批量删除没有目标记录，统一返回零影响行。

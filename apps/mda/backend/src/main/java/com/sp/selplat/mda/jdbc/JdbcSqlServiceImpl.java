@@ -34,8 +34,16 @@ public class JdbcSqlServiceImpl implements JdbcSqlService {
     private final MdaConnectionProfileService profileService;
     private final JdbcConnectionFactory connectionFactory;
 
+    /**
+     * 创建使用连接配置服务和动态连接工厂的 SQL 执行服务。
+     *
+     * @param profileService Spring 注入的连接配置服务，例如 {@code MdaConnectionProfileServiceImpl}
+     * @param connectionFactory Spring 注入的目标库连接工厂，例如 {@code JdbcConnectionFactory}
+     */
     public JdbcSqlServiceImpl(MdaConnectionProfileService profileService, JdbcConnectionFactory connectionFactory) {
+        // 配置服务负责加载已保存连接或采用页面临时连接字段。
         this.profileService = profileService;
+        // 连接工厂负责打开不会污染 MDA 配置库事务的目标库连接。
         this.connectionFactory = connectionFactory;
     }
 

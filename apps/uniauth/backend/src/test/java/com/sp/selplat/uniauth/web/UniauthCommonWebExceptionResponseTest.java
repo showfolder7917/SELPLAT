@@ -1,8 +1,9 @@
 package com.sp.selplat.uniauth.web;
 
+import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.exception.CommonSystemException;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
-import com.sp.selplat.common.web.exception.CommonBusinessException;
 import com.sp.selplat.common.web.exception.CommonGlobalExceptionHandler;
 import com.sp.selplat.common.web.trace.CommonRequestTraceInterceptor;
 import com.sp.selplat.uniauth.UniauthBackendApplication;
@@ -85,6 +86,32 @@ class UniauthCommonWebExceptionResponseTest {
         assertEquals("USER_NOT_FOUND", responseBody.get("errorCode"));
         assertEquals("用户不存在。", responseBody.get("msg"));
         // 当前测试开启 dev 诊断详情，因此业务异常也返回真实 Java 堆栈。
+        assertNotNull(responseBody.get("stackTrace"));
+    }
+
+    /**
+     * 已包装系统异常使用稳定错误编码和安全提示，同时保留开发环境诊断堆栈。
+     */
+    @Test
+    void returnsSafeCommonResultForSystemException() {
+        // 原始数据库消息只作为 cause 保存，安全提示才允许进入响应。
+        CommonSystemException exception = new CommonSystemException(
+            "DATABASE_QUERY_FAILED",
+            "数据读取失败，请稍后重试。",
+            new IllegalStateException("connection password leaked")
+        );
+        // 调用真实公共处理器 → HTTP 500 SYSTEM CommonResult。
+        ResponseEntity<String> response = exceptionHandler.handleSystemException(exception);
+        // 已包装系统异常仍使用 HTTP 500，稳定编码不改变系统故障语义。
+        assertEquals(500, response.getStatusCode().value());
+        // 使用生产 JsonUtils 解析真实响应结构。
+        Map<String, Object> responseBody = JsonUtils.fromJson(response.getBody(), Map.class);
+        assertNotNull(responseBody);
+        assertEquals(false, responseBody.get("success"));
+        assertEquals("SYSTEM", responseBody.get("errorType"));
+        assertEquals("DATABASE_QUERY_FAILED", responseBody.get("errorCode"));
+        assertEquals("数据读取失败，请稍后重试。", responseBody.get("msg"));
+        // 开发配置允许返回包装异常堆栈，但公开安全文案不得被底层消息替换。
         assertNotNull(responseBody.get("stackTrace"));
     }
 

@@ -22,8 +22,11 @@ selplat_common_result_error_type_contract = BUSINESS:business_message,SYSTEM:gen
 <!-- stackTrace 仅 dev/test 异常响应可以赋值，prod 必须为 null 并省略；业务含义是诊断效率不以生产技术信息泄露为代价。 -->
 selplat_common_result_stack_trace_profile_policy = dev_test:include,prod:omit
 
-<!-- 公共业务异常与全局异常处理器统一位于 common-web 的 exception 包；适用于当前及未来应用；业务含义是应用不得重复实现同构异常类型、错误 JSON 和堆栈开关。 -->
-selplat_common_web_exception_owner = shared/backend/common-web:exception
+<!-- 公共业务异常和系统异常类型统一位于 common-core；适用于 Service、DAO 和基础设施；业务含义是下层可抛稳定异常而不反向依赖 Web。 -->
+selplat_common_exception_type_owner = shared/backend/common-core:com.sp.selplat.common.exception
+
+<!-- 全局异常处理器统一位于 common-web；适用于当前及未来应用；业务含义是应用不得重复实现同构 HTTP 错误 JSON 和堆栈开关。 -->
+selplat_common_web_exception_handler_owner = shared/backend/common-web:com.sp.selplat.common.web.exception
 
 <!-- requestId、X-Request-Id、MDC 和 HTTP 耗时日志统一位于 common-web 的 trace 包；适用于 /api/**；业务含义是静态资源不进入业务追踪，所有应用 API 使用同一关联语义。 -->
 selplat_common_web_request_trace_owner = shared/backend/common-web:trace

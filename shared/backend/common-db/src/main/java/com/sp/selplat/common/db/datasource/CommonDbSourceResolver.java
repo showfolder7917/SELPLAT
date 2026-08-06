@@ -1,6 +1,7 @@
 package com.sp.selplat.common.db.datasource;
 
 import com.sp.selplat.common.db.datasource.dialect.DatabaseDialectFactory;
+import com.sp.selplat.common.exception.CommonSystemException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Locale;
@@ -21,8 +22,10 @@ public class CommonDbSourceResolver {
      * @param dataSource Spring 注入的真实数据源，例如连接 H2 的 {@code JdbcDataSource}
      * @return 通用数据源实体，例如
      *     {@code {"sourceKey":"H2","databaseType":"H2","catalogName":"运行时随机UUID","schemaName":"PUBLIC"}}
-     * @throws IllegalStateException 当数据源为空、连接失败或数据库产品不受支持时抛出，例如
+     * @throws IllegalStateException 当数据源为空或数据库产品不受支持时抛出，例如
      *     {@code IllegalStateException("unsupported database product: SQLite")}
+     * @throws CommonSystemException 当 JDBC 连接或元数据读取失败时抛出，例如
+     *     {@code CommonSystemException("DATABASE_SOURCE_RESOLVE_FAILED", "数据库连接信息读取失败。", cause)}
      */
     public CommonDbSource resolve(DataSource dataSource) {
         // dataSource 为空时直接拒绝继续处理，避免后续字段读取在获取连接阶段才暴露问题。
@@ -49,8 +52,12 @@ public class CommonDbSourceResolver {
             // 把数据库产品名作为 sourceKey 落入上下文，便于排障时快速识别当前连接类型。
             commonDbSource.setSourceKey(databaseProductName);
         } catch (SQLException exception) {
-            // 获取连接上下文失败时统一收口成非法状态异常，避免调用方继续在无效上下文上执行。
-            throw new IllegalStateException("failed to build common db source", exception);
+            // JDBC 技术故障 → 稳定系统编码和安全提示；原始 SQLException 只保留在 cause 链和服务端日志。
+            throw new CommonSystemException(
+                "DATABASE_SOURCE_RESOLVE_FAILED",
+                "数据库连接信息读取失败。",
+                exception
+            );
         }
         // 返回已补齐上下文的通用数据源实体，供上层 DAO 和公共组件继续复用。
         return commonDbSource;

@@ -1,10 +1,15 @@
 package com.sp.selplat.common.web.controller;
 
+import com.sp.selplat.common.util.JsonUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
@@ -12,6 +17,30 @@ import org.springframework.web.bind.annotation.RequestMethod;
  * 公共控制器扩展基类只维护 HTTP 验证接口实际使用的模块说明、模块编码和可访问路径扫描能力。
  */
 public abstract class BaseExtendsController {
+
+    /**
+     * 返回当前控制器装配状态和公开访问路径，供 HTTP 联调和部署探针确认模块已经可用。
+     * 访问地址由子类类级 {@link RequestMapping} 前缀与 {@code /verify/http} 共同组成。
+     *
+     * @return HTTP 200 JSON 响应，例如
+     *     {@code {"moduleCode":"mda-sql","controllerStatus":"READY",}
+     *     {@code "verifyMessage":"执行目标数据库 SQL","availablePaths":["POST /api/mda/sql/execute.htm"]}}
+     */
+    @RequestMapping(value = "/verify/http", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> verifyHttpAccess() {
+        // 有序映射保证验证响应字段顺序稳定，便于人工联调和契约测试读取。
+        Map<String, Object> verifyResult = new LinkedHashMap<>();
+        // 模块编码来自控制器注解或类名推导。
+        verifyResult.put("moduleCode", getVerifyModuleCode());
+        // READY 表示当前控制器已经由 Spring 正常装配。
+        verifyResult.put("controllerStatus", "READY");
+        // 模块说明用于区分同一服务中的不同控制器职责。
+        verifyResult.put("verifyMessage", getVerifyMessage());
+        // 公开路径来自真实 RequestMapping 反射扫描结果。
+        verifyResult.put("availablePaths", getVerifyAvailablePaths());
+        // 扩展基类只序列化既有验证结构，不参与业务结果组装。
+        return ResponseEntity.ok(JsonUtils.toJsonIgnoreNull(verifyResult));
+    }
 
     /**
      * 返回当前控制器的验证说明。

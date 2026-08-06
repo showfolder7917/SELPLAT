@@ -1,6 +1,7 @@
 package com.sp.selplat.common.service;
 
 import com.sp.selplat.common.db.dao.BaseDao;
+import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonPageResult;
@@ -18,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * @param <D> 当前业务 Service 对应的 BaseDao 子接口，例如 {@code UniauthUserDao}
  */
-public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServiceImpl<D> implements BaseService {
+public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServiceImpl<D> implements BaseCrudService {
 
     // 当前业务 DAO 由 Spring 按子类声明的泛型类型注入，避免每个 ServiceImpl 重复声明 DAO 字段和构造函数。
     @Autowired
@@ -64,8 +65,8 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      *     {@code {"tenantId":10,"orderId":20}}
      * @return 固定结果，例如
      *     {@code {"success":true,"data":{"id":1,"loginName":"admin"},"msg":"详情查询完成。"}}
-     * @throws IllegalArgumentException 当主键不完整或数据库未命中记录时抛出，例如
-     *     {@code IllegalArgumentException("未找到对应的数据。")}
+     * @throws CommonBusinessException 当主键不完整或数据库未命中记录时抛出，例如
+     *     {@code CommonBusinessException("RECORD_NOT_FOUND", "未找到对应的数据。")}
      */
     @OperationLog
     public CommonResult getById(CommonParam queryIn) {
@@ -73,7 +74,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
         Map<String, Object> record = getDao().getById(queryIn);
         // 未提供完整主键或数据库未命中记录时统一返回明确业务异常。
         if (record == null) {
-            throw new IllegalArgumentException("未找到对应的数据。");
+            throw new CommonBusinessException("RECORD_NOT_FOUND", "未找到对应的数据。");
         }
         // 复用扩展基础层的固定结果构建能力生成详情查询成功结果。
         CommonResult result = buildSuccessResult(record, "详情查询完成。");

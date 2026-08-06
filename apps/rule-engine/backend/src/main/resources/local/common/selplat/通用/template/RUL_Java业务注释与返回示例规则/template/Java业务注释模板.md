@@ -1,5 +1,7 @@
 # Java 业务注释模板
 
+方法 Javadoc 固定按“方法作用与边界 → 参数来源、含义和真实示例 → 返回含义和真实示例 → 异常触发条件或 void 副作用示例”书写。
+
 ## 类级 Javadoc
 
 ```java
@@ -104,6 +106,36 @@ private final SomeDependency dependency;
 ```
 
 ## 异常
+
+可预期、可安全展示的业务失败使用 `CommonBusinessException`：
+
+```java
+/**
+ * 按主键查询一条业务记录。
+ *
+ * @param queryIn 来自前端的主键参数，例如 {"id":10001}
+ * @return 详情结果，例如 {"success":true,"data":{"id":10001}}
+ * @throws CommonBusinessException 未命中记录时抛出，例如
+ *     CommonBusinessException("RECORD_NOT_FOUND", "未找到对应的数据。")
+ */
+```
+
+数据库、文件、远程服务或运行环境故障使用 `CommonSystemException`，并保留原始 `cause`：
+
+```java
+try (Connection connection = dataSource.getConnection()) {
+    // 读取连接元数据并形成公共数据库上下文。
+} catch (SQLException exception) {
+    // 技术故障只公开稳定编码和安全提示，原始 SQLException 保留在 cause 链。
+    throw new CommonSystemException(
+        "DATABASE_SOURCE_RESOLVE_FAILED",
+        "数据库连接信息读取失败。",
+        exception
+    );
+}
+```
+
+构造参数非法、内部状态断言等编程契约仍可使用 JDK 异常，但必须写清触发条件和示例：
 
 ```java
 // 主键列表为空时停止 → 抛出 IllegalStateException("no primary keys found for table: UniauthUser")。

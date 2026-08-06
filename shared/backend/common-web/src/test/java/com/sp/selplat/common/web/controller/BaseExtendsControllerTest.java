@@ -29,4 +29,15 @@ class BaseExtendsControllerTest {
         // 当前测试方法只调用一次验证器，路径形态和 HTTP 方法断言集中在同域验证器。
         BaseExtendsControllerTestVerifier.verifyAvailablePaths();
     }
+
+    /**
+     * http-response Case 验证公共探针返回模块状态和真实访问路径 JSON。
+     *
+     * <p>执行结果示例：HTTP 200 且响应包含 {@code controllerStatus=READY}。</p>
+     */
+    @Test
+    void httpResponse() {
+        // 当前测试方法只调用一次验证器，HTTP 状态和 JSON 字段断言集中在同域验证器。
+        BaseExtendsControllerTestVerifier.verifyHttpResponse();
+    }
 }

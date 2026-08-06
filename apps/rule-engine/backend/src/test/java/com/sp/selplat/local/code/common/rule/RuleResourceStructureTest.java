@@ -117,6 +117,13 @@ class RuleResourceStructureTest {
         assertTrue(template.contains("CommonPageResult"));
         // 前端字段匹配示例必须使用生产类中的真实字段和值。
         assertTrue(examples.contains("{\"id\":1,\"displayName\":\"新名称\"}"));
+        // 主规则必须固定方法作用、参数、返回和异常或副作用的统一阅读顺序。
+        assertTrue(mainRule.contains("purpose_and_boundary,param_source_meaning_actual_example,"));
+        // 模板必须分别展示公共业务异常和系统异常，禁止继续只使用不分类的 JDK 异常。
+        assertTrue(template.contains("CommonBusinessException(\"RECORD_NOT_FOUND\""));
+        assertTrue(template.contains("CommonSystemException("));
+        // 生产样例必须明确异常类型与 HTTP 处理器分层，避免 common-core 反向依赖 common-web。
+        assertTrue(examples.contains("异常类型由 `common-core` 提供，Web 映射由 `common-web` 提供"));
     }
 
     /**

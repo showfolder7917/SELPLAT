@@ -15,6 +15,30 @@
 
 系统异常使用 `"errorType":"SYSTEM"` 与 `"errorCode":"INTERNAL_ERROR"`。成功结果中的 `errorType`、`errorCode`、`requestId`、`stackTrace` 均为 null，并由 `JsonUtils.toJsonIgnoreNull` 省略。
 
+异常类型由 `common-core` 提供，Web 映射由 `common-web` 提供：
+
+```java
+// 可预期未命中 → 业务异常，页面可以安全展示原提示。
+throw new CommonBusinessException("RECORD_NOT_FOUND", "未找到对应的数据。");
+
+// JDBC 连接读取失败 → 系统异常，公开安全提示并保留原始 cause。
+throw new CommonSystemException(
+    "DATABASE_SOURCE_RESOLVE_FAILED",
+    "数据库连接信息读取失败。",
+    exception
+);
+```
+
+对应实际响应分别为：
+
+```json
+{"success":false,"errorType":"BUSINESS","errorCode":"RECORD_NOT_FOUND","msg":"未找到对应的数据。"}
+```
+
+```json
+{"success":false,"errorType":"SYSTEM","errorCode":"DATABASE_SOURCE_RESOLVE_FAILED","msg":"数据库连接信息读取失败。"}
+```
+
 ## 数据库上下文
 
 ```java

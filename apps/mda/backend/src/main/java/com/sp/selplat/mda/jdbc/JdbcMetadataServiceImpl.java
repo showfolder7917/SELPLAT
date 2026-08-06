@@ -23,10 +23,18 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
     private final MdaConnectionProfileService profileService;
     private final JdbcConnectionFactory connectionFactory;
 
+    /**
+     * 创建使用连接配置服务和动态连接工厂的元数据服务。
+     *
+     * @param profileService Spring 注入的连接配置服务，例如 {@code MdaConnectionProfileServiceImpl}
+     * @param connectionFactory Spring 注入的目标库连接工厂，例如 {@code JdbcConnectionFactory}
+     */
     public JdbcMetadataServiceImpl(
             MdaConnectionProfileService profileService,
             JdbcConnectionFactory connectionFactory) {
+        // 配置服务负责从已保存或临时参数形成运行期连接定义。
         this.profileService = profileService;
+        // 连接工厂负责按定义打开目标数据库连接。
         this.connectionFactory = connectionFactory;
     }
 

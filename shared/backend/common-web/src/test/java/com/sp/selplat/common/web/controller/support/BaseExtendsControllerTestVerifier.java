@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.sp.selplat.common.web.controller.BaseExtendsController;
 import com.sp.selplat.common.web.controller.ModuleDescription;
 import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
@@ -43,6 +45,25 @@ public final class BaseExtendsControllerTestVerifier {
         assertEquals("控制器已装配。", new PlainSampleController().readVerifyMessage());
         // 类名仅包含 Controller 后缀时业务名称为空，对应空模块编码。
         assertEquals("", new Controller().readVerifyModuleCode());
+    }
+
+    /**
+     * 验证公共 HTTP 探针把模块元数据和真实路径序列化为固定 JSON。
+     *
+     * 执行结果示例：HTTP 200 body 包含
+     * {@code {"moduleCode":"common-web-test","controllerStatus":"READY"}}。
+     */
+    public static void verifyHttpResponse() {
+        // 调用生产探针入口并取得真实 ResponseEntity。
+        ResponseEntity<String> response = new TestController().verifyHttpAccess();
+        // 公共探针正常装配时固定返回 HTTP 200。
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        // JSON 必须包含注解提供的模块编码。
+        assertTrue(response.getBody().contains("\"moduleCode\":\"common-web-test\""));
+        // READY 表示当前控制器已经具备处理请求的完整依赖。
+        assertTrue(response.getBody().contains("\"controllerStatus\":\"READY\""));
+        // 路径列表必须来自当前控制器的真实 RequestMapping。
+        assertTrue(response.getBody().contains("POST /api/test/post.htm"));
     }
 
     /**

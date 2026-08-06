@@ -39,8 +39,6 @@
 - `uniauth.html?lang=en-US`
 - `uniauth.html?multi=1&lang=zh-CN`
 
-旧地址 `/demo/grid/grid.html` 和 `/uniauth/demo/grid/grid.html` 只负责保留查询参数并转到新入口，不包含任何控件实现。
-
 ## 接入后端
 
 后端未接入前，`mock/` 负责模拟聚合数据，全部路径在 `uniauth.js` 的 `uniauthDataSources` 中显式登记。接入后端时把数据源切换为登记好的 `backendUrl`，再通过 `selAjax.request({ url })` 获取聚合响应；基础控件及其挂载顺序保持不变。

@@ -26,7 +26,9 @@ public class CredentialCipher {
     /**
      * 从环境变量或应用属性派生固定长度 AES 密钥。
      *
-     * @param secret 外部密钥文本；本地默认值仅用于开发运行
+     * @param secret 来自 {@code mda.secret-key} 的部署密钥，例如 {@code production-mda-key-2026}；
+     *     本地默认值仅用于开发运行
+     * 执行结果示例：密钥文本经 SHA-256 派生为 32 字节 AES-256 密钥，原文本不保存到数据库。
      */
     public CredentialCipher(@Value("${mda.secret-key:selplat-mda-local-development-key}") String secret) {
         // SHA-256 把任意长度部署密钥转换为 AES-256 所需的 32 字节密钥。
@@ -36,8 +38,10 @@ public class CredentialCipher {
     /**
      * 加密页面提交的明文口令。
      *
-     * @param plaintext 明文，例如 {@code secret}
-     * @return Base64 密文；空口令返回空字符串
+     * @param plaintext 来自连接编辑页面的明文口令，例如 {@code secret}
+     * @return 含随机 IV 和认证标签的 Base64 密文，例如 {@code D5U7QyZ0...}；空口令返回空字符串
+     * @throws IllegalStateException 当运行环境无法完成 AES/GCM 加密时抛出，例如
+     *     {@code IllegalStateException("数据库口令加密失败。")}
      */
     public String encrypt(String plaintext) {
         if (plaintext == null || plaintext.isEmpty()) {
@@ -61,8 +65,10 @@ public class CredentialCipher {
     /**
      * 解密配置库中的连接口令。
      *
-     * @param ciphertext Base64 密文
-     * @return JDBC 使用的明文口令；空密文返回空字符串
+     * @param ciphertext 来自连接配置表的 Base64 密文，例如 {@code D5U7QyZ0...}
+     * @return 仅供运行期 JDBC 连接使用的明文，例如 {@code secret}；空密文返回空字符串
+     * @throws IllegalStateException 当密文格式、认证标签或部署密钥不匹配时抛出，例如
+     *     {@code IllegalStateException("数据库口令解密失败，请检查 MDA_SECRET_KEY。")}
      */
     public String decrypt(String ciphertext) {
         if (ciphertext == null || ciphertext.isEmpty()) {

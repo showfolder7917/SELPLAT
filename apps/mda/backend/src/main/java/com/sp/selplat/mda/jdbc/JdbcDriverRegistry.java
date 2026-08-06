@@ -12,8 +12,12 @@ public class JdbcDriverRegistry {
     /**
      * 解析配置并生成可直接连接的驱动信息。
      *
-     * @param definition 连接配置，例如 H2 内存库
-     * @return 驱动类名和 JDBC URL
+     * @param definition Service 组装的连接配置，例如
+     *     {@code {"databaseType":"POSTGRESQL","host":"127.0.0.1","port":5432,"databaseName":"demo"}}
+     * @return 驱动类名和最终 URL，例如
+     *     {@code {"driverClass":"org.postgresql.Driver","jdbcUrl":"jdbc:postgresql://127.0.0.1:5432/demo"}}
+     * @throws IllegalArgumentException 当数据库类型不受支持或必填字段为空时抛出，例如
+     *     {@code IllegalArgumentException("不支持的数据库类型：SQLITE")}
      */
     public JdbcTarget resolve(MdaConnectionDefinition definition) {
         String type = required(definition.databaseType(), "databaseType").toUpperCase(Locale.ROOT);
@@ -84,8 +88,10 @@ public class JdbcDriverRegistry {
     }
 
     /**
-     * @param driverClass JDBC 驱动类
-     * @param jdbcUrl 最终 JDBC URL
+     * 保存一次驱动解析得到的类名和可直接连接 URL。
+     *
+     * @param driverClass JDBC 驱动类，例如 {@code org.postgresql.Driver}
+     * @param jdbcUrl 最终 JDBC URL，例如 {@code jdbc:postgresql://127.0.0.1:5432/demo}
      */
     public record JdbcTarget(String driverClass, String jdbcUrl) {
     }

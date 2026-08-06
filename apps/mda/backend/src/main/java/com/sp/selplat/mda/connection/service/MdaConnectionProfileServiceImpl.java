@@ -1,8 +1,6 @@
 package com.sp.selplat.mda.connection.service;
 
 import com.sp.selplat.common.service.BaseServiceImpl;
-import com.sp.selplat.common.util.CommonPageParam;
-import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.mda.connection.CredentialCipher;
@@ -13,7 +11,6 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -28,19 +25,27 @@ public class MdaConnectionProfileServiceImpl extends BaseServiceImpl<MdaConnecti
     private final CredentialCipher credentialCipher;
     private final JdbcConnectionFactory connectionFactory;
 
+    /**
+     * 创建同时具备口令保护和动态 JDBC 连接能力的配置服务。
+     *
+     * @param credentialCipher Spring 注入的口令加解密组件，例如 {@code CredentialCipher}
+     * @param connectionFactory Spring 注入的动态连接工厂，例如 {@code JdbcConnectionFactory}
+     */
     public MdaConnectionProfileServiceImpl(CredentialCipher credentialCipher, JdbcConnectionFactory connectionFactory) {
+        // 口令组件只在保存、详情脱敏和运行期连接加载时使用。
         this.credentialCipher = credentialCipher;
+        // 动态连接工厂只创建目标库连接，不替换 MDA 自身配置数据源。
         this.connectionFactory = connectionFactory;
     }
 
-    @Override
-    public CommonPageResult getStore(CommonPageParam queryIn) {
-        CommonPageResult result = super.getStore(queryIn);
-        // 列表中的每条记录都删除密文，只返回 passwordSaved 帮助页面判断是否已有口令。
-        result.getRecords().forEach(this::scrubSecret);
-        return result;
-    }
-
+    /**
+     * 复用公共主键查询，并在返回前移除口令密文和明文。
+     *
+     * @param queryIn 连接配置主键，例如 {@code {"id":10001}}
+     * @return 脱敏详情，例如
+     *     {@code {"success":true,"data":{"id":10001,"connectionName":"本地 H2","passwordSaved":true},}
+     *     {@code "msg":"详情查询完成。"}}
+     */
     @Override
     public CommonResult getById(CommonParam queryIn) {
         CommonResult result = super.getById(queryIn);
@@ -50,6 +55,14 @@ public class MdaConnectionProfileServiceImpl extends BaseServiceImpl<MdaConnecti
         return result;
     }
 
+    /**
+     * 规范化新连接默认字段、加密页面口令后复用公共新增流程，并对返回数据脱敏。
+     *
+     * @param saveIn 页面连接字段，例如
+     *     {@code {"connectionName":"本地 H2","databaseType":"h2","databaseName":"mem:mda","password":"secret"}}
+     * @return 不含口令和密文的新增结果，例如
+     *     {@code {"success":true,"data":{"id":10001,"databaseType":"H2","passwordSaved":true},"msg":"新增完成。"}}
+     */
     @Override
     public CommonResult insert(CommonParam saveIn) {
         normalizeNewProfile(saveIn);
@@ -59,6 +72,15 @@ public class MdaConnectionProfileServiceImpl extends BaseServiceImpl<MdaConnecti
         return result;
     }
 
+    /**
+     * 规范化数据库类型、按需更新加密口令后复用公共更新流程，并对返回数据脱敏。
+     *
+     * @param saveIn 主键和更新字段，例如
+     *     {@code {"id":10001,"databaseType":"postgresql","password":"new-secret"}}
+     * @return 不含口令和密文的更新结果，例如
+     *     {@code {"success":true,"data":{"id":10001,"databaseType":"POSTGRESQL","passwordSaved":true},}
+     *     {@code "msg":"更新完成。"}}
+     */
     @Override
     public CommonResult update(CommonParam saveIn) {
         normalizeType(saveIn);
@@ -66,11 +88,6 @@ public class MdaConnectionProfileServiceImpl extends BaseServiceImpl<MdaConnecti
         CommonResult result = super.update(saveIn);
         scrubSecret(saveIn.getParamMap());
         return result;
-    }
-
-    @Override
-    public CommonResult delete(CommonParam deleteIn) {
-        return super.delete(deleteIn);
     }
 
     @Override

@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.support.CommonHashSupport;
 import com.sp.selplat.common.service.sequence.SequenceGenerator;
 import com.sp.selplat.common.util.CommonBatchParam;
@@ -187,10 +188,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
      */
     public static void verifyGetByIdNotFound(UniauthUserService userService) {
         // 不存在 Case 固定查询 2199，当前 fixture 已保证用户表为空。
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
+        CommonBusinessException exception = assertThrows(
+            CommonBusinessException.class,
             () -> userService.getById(param("id", 2199L))
         );
+        // 稳定错误码供全局处理器输出明确的业务失败类型。
+        assertEquals("RECORD_NOT_FOUND", exception.getErrorCode());
         // 未命中统一使用公共 Service 的数据不存在提示，不再携带应用专属名词。
         assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }
@@ -202,10 +205,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
      */
     public static void verifyGetByIdMissingId(UniauthUserService userService) {
         // 空 CommonParam 不包含任何主键字段，应命中业务必填校验。
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
+        CommonBusinessException exception = assertThrows(
+            CommonBusinessException.class,
             () -> userService.getById(new CommonParam())
         );
+        // 主键缺失与未命中遵循同一公开业务契约。
+        assertEquals("RECORD_NOT_FOUND", exception.getErrorCode());
         // 空参数由 DAO 门面按未命中返回，父类 Service 统一使用数据不存在提示。
         assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }
@@ -217,10 +222,12 @@ public final class UniauthUserRealDatabaseTestVerifier {
      */
     public static void verifyGetByIdNullInput(UniauthUserService userService) {
         // null 模拟控制层极端场景下没有创建 CommonParam。
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
+        CommonBusinessException exception = assertThrows(
+            CommonBusinessException.class,
             () -> userService.getById(null)
         );
+        // 空对象不得退化为不稳定的系统异常。
+        assertEquals("RECORD_NOT_FOUND", exception.getErrorCode());
         // 空对象与空字段必须使用同一公共数据不存在提示。
         assertTrue(exception.getMessage().contains("未找到对应的数据"));
     }

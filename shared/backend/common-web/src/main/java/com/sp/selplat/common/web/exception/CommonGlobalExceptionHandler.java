@@ -1,5 +1,7 @@
 package com.sp.selplat.common.web.exception;
 
+import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.exception.CommonSystemException;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
 import com.sp.selplat.common.web.trace.CommonRequestTraceInterceptor;
@@ -50,6 +52,37 @@ public class CommonGlobalExceptionHandler {
         return failureResponse(
             HttpStatus.BAD_REQUEST,
             "BUSINESS",
+            exception.getErrorCode(),
+            exception.getMessage(),
+            requestId,
+            exception
+        );
+    }
+
+    /**
+     * 将应用或公共基础设施主动包装的系统异常转换为 HTTP 500 统一响应。
+     *
+     * @param exception 来源于 DAO、Service 或基础设施的系统异常，例如
+     *     {@code CommonSystemException("DATABASE_QUERY_FAILED", "数据读取失败，请稍后重试。", cause)}
+     * @return 系统错误响应，例如
+     *     {@code {"success":false,"errorType":"SYSTEM","errorCode":"DATABASE_QUERY_FAILED",}
+     *     {@code "msg":"数据读取失败，请稍后重试。","requestId":"gateway-20260807-001"}}
+     */
+    @ExceptionHandler(CommonSystemException.class)
+    public ResponseEntity<String> handleSystemException(CommonSystemException exception) {
+        // 当前 MDC requestId → 系统失败响应、完整异常日志和运维排查的共同关联标识。
+        String requestId = MDC.get(CommonRequestTraceInterceptor.REQUEST_ID_MDC_KEY);
+        // 已包装系统失败 → 服务端 error 日志，cause 链保留数据库或基础设施的真实故障。
+        LOGGER.error(
+            "systemRequestFailed requestId={} errorCode={}",
+            requestId,
+            exception.getErrorCode(),
+            exception
+        );
+        // 已知系统失败事实 → HTTP 500 与带稳定编码的 SYSTEM CommonResult。
+        return failureResponse(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "SYSTEM",
             exception.getErrorCode(),
             exception.getMessage(),
             requestId,

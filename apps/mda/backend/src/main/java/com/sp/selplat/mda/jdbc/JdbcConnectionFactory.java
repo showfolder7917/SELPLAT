@@ -14,15 +14,25 @@ public class JdbcConnectionFactory {
 
     private final JdbcDriverRegistry driverRegistry;
 
+    /**
+     * 创建按数据库类型解析驱动和 URL 的动态连接工厂。
+     *
+     * @param driverRegistry Spring 注入的驱动注册表，例如 {@code JdbcDriverRegistry}
+     */
     public JdbcConnectionFactory(JdbcDriverRegistry driverRegistry) {
+        // 注册表负责数据库类型到驱动和 URL 的映射，连接工厂只负责加载驱动并打开连接。
         this.driverRegistry = driverRegistry;
     }
 
     /**
      * 打开一个由调用方负责关闭的 JDBC 连接。
      *
-     * @param definition 已解密连接配置
-     * @return 打开的 JDBC 连接
+     * @param definition Service 在内存中组装的已解密连接配置，例如
+     *     {@code {"databaseType":"H2","databaseName":"mem:mda_demo","username":"sa"}}
+     * @return 由调用方关闭的目标库连接，例如 URL 为 {@code jdbc:h2:mem:mda_demo} 的 {@code Connection}
+     * @throws SQLException 当 DriverManager 无法连接目标数据库时抛出，例如 {@code SQLException("Connection refused")}
+     * @throws IllegalStateException 当目标数据库驱动未安装时抛出，例如
+     *     {@code IllegalStateException("JDBC 驱动未安装：org.postgresql.Driver")}
      */
     public Connection open(MdaConnectionDefinition definition) throws SQLException {
         JdbcDriverRegistry.JdbcTarget target = driverRegistry.resolve(definition);
