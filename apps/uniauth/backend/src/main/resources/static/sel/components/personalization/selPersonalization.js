@@ -703,12 +703,10 @@
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-base", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 34)}%`);
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-raised", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 48)}%`);
             selPersonalizationDocumentRoot.style.setProperty("--sel-theme-tint-accent", `${selPersonalizationMap(selPersonalizationPanelState.themeTint, 0, 78)}%`);
-            // 面板圆角以 18px 为 50% 旧基准，上限提高到 48px，让最大值继续贴合大切角水晶框。
-            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-radius-panel", `${18 + selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -14, 30)}px`);
-            // 浮层在 50% 保持 12.5px，最大 30px，避免升级圆角后默认视觉发生跳变。
-            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-radius-popup", `${12.5 + selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -9.5, 17.5)}px`);
-            // 内部玻璃底板在 50% 保持 14px，最大 42px，使深色承托层可进一步贴合外框切角。
-            selPersonalizationDocumentRoot.style.setProperty("--sel-theme-radius-inner", `${14 + selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -12, 28)}px`);
+            // 圆角滑杆只写偏移量，最终值由当前主题基准与偏移量相加，切换主题后不会退回水晶基准。
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-radius-panel-offset", `${selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -14, 30)}px`);
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-radius-popup-offset", `${selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -9.5, 17.5)}px`);
+            selPersonalizationDocumentRoot.style.setProperty("--selpersonal-radius-inner-offset", `${selPersonalizationCenteredMap(selPersonalizationPanelState.panelRadius, -12, 28)}px`);
             // 等比大小以 50% 为原始尺寸，向下最多缩小 18%，向上最多放大 2%，保留视口边缘的水晶高光安全区。
             selPersonalizationDocumentRoot.style.setProperty("--selpersonal-panel-scale", String(Math.round((1 + selPersonalizationCenteredMap(selPersonalizationPanelState.panelScale, -0.18, 0.02)) * 100) / 100));
             // 大型内板以 50% 为原始比例，100% 扩展 8px，150% 继续扩展到 16px。

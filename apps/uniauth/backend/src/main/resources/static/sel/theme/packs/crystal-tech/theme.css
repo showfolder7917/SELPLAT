@@ -4,8 +4,13 @@
  */
 :root[data-sel-theme="crystal-tech"] {
     --sel-theme-font-family: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
-    --sel-theme-radius-panel: 18px;
-    --sel-theme-radius-popup: 12.5px;
-    --sel-theme-radius-inner: 14px;
+    --sel-theme-radius-panel-base: 24px;
+    --sel-theme-radius-popup-base: 16px;
+    --sel-theme-radius-inner-base: 20px;
+    --sel-theme-radius-control: 10px;
+    --sel-theme-radius-action: 9px;
+    --sel-theme-radius-icon: 8px;
+    --sel-theme-grid-radius-row: 0px;
+    --sel-theme-grid-row-gap: 0px;
     --sel-theme-crystal-surface-overflow: visible;
 }

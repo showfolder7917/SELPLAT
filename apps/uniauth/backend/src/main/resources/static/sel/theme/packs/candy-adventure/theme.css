@@ -1,10 +1,152 @@
-/* 糖果冒险风格层：使用圆润排版、柔软圆角和克制的卡通反馈，不改变业务组件结构。 */
+/* 糖果冒险风格层：在保留业务结构与交互逻辑的前提下，提供独立的圆润组件造型。 */
 :root[data-sel-theme="candy-adventure"] {
     --sel-theme-font-family: "Arial Rounded MT Bold", "PingFang SC", "Microsoft YaHei", ui-rounded, system-ui, sans-serif;
-    --sel-theme-radius-panel: 24px;
-    --sel-theme-radius-popup: 18px;
-    --sel-theme-radius-inner: 16px;
+    --sel-theme-radius-panel-base: 28px;
+    --sel-theme-radius-popup-base: 20px;
+    --sel-theme-radius-inner-base: 22px;
+    --sel-theme-radius-control: 16px;
+    --sel-theme-radius-action: 14px;
+    --sel-theme-radius-icon: 12px;
+    --sel-theme-grid-radius-row: 14px;
+    --sel-theme-grid-row-gap: 6px;
+    --sel-theme-tree-node-radius: 13px;
     --sel-theme-crystal-surface-overflow: visible;
+    --sel-candy-surface-soft: color-mix(in srgb, var(--sel-theme-control-surface) 82%, rgb(var(--sel-theme-color-rgb) / 0.18));
+    --sel-candy-surface-raised: color-mix(in srgb, var(--sel-theme-surface-raised) 86%, white 14%);
+    --sel-candy-line: color-mix(in srgb, rgb(var(--sel-theme-color-rgb)) 62%, var(--sel-theme-text-main) 38%);
+    --sel-candy-line-soft: color-mix(in srgb, var(--sel-candy-line) 38%, transparent);
+    --sel-candy-control-shadow: inset 0 1px 0 rgb(255 255 255 / 0.34), inset 0 -2px 0 rgb(var(--sel-theme-color-rgb) / 0.14);
+}
+
+/* 糖果主题的工具栏、按钮与导航使用统一的软质胶囊表面，不复用水晶主题的锐利蓝紫渐变。 */
+:root[data-sel-theme="candy-adventure"] :is(
+    .selpanel-status-tabs,
+    .selpanel-action-button,
+    .selpanel-date-field,
+    .selpanel-reset-button,
+    .selsearch-field,
+    .seldropdown-trigger,
+    .seldatepicker-trigger,
+    .selwindow-control-shell,
+    .selwindow-action-button
+) {
+    border-color: var(--sel-candy-line-soft);
+    background: var(--sel-candy-surface-soft);
+    box-shadow: var(--sel-candy-control-shadow);
+}
+
+:root[data-sel-theme="candy-adventure"] :is(
+    .selpanel-status-tab:hover,
+    .selpanel-status-tab-active,
+    .selpanel-action-button:hover,
+    .selpanel-action-primary,
+    .selsearch-submit-button,
+    .selwindow-action-primary
+) {
+    border-color: var(--sel-candy-line);
+    color: var(--sel-theme-text-on-selected-surface);
+    background: linear-gradient(135deg, var(--sel-theme-selected-surface), var(--sel-candy-surface-raised));
+    box-shadow: var(--sel-candy-control-shadow), 0 0 0 2px rgb(var(--sel-theme-color-rgb) / 0.12);
+}
+
+:root[data-sel-theme="candy-adventure"] .seltree-list {
+    gap: 5px;
+}
+
+:root[data-sel-theme="candy-adventure"] .seltree-node-row {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--sel-candy-surface-soft) 54%, transparent);
+}
+
+:root[data-sel-theme="candy-adventure"] .seltree-node-row:hover {
+    border-color: var(--sel-candy-line-soft);
+    background: var(--sel-theme-interaction-surface-hover);
+}
+
+:root[data-sel-theme="candy-adventure"] .seltree-node-row.seltree-node-selected {
+    border-color: var(--sel-candy-line);
+    color: var(--sel-theme-text-on-selected-surface);
+    background: linear-gradient(110deg, var(--sel-theme-selected-surface), var(--sel-candy-surface-raised));
+    box-shadow: var(--sel-candy-control-shadow);
+}
+
+/* 表格在糖果主题中使用独立圆角卡片行；水晶主题仍保持连续数据栅格。 */
+:root[data-sel-theme="candy-adventure"] .selgrid-table thead {
+    background: transparent;
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table thead th {
+    border-top: 1px solid var(--sel-candy-line-soft);
+    border-bottom: 1px solid var(--sel-candy-line-soft);
+    background: var(--sel-theme-table-surface-header);
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table thead th:first-child {
+    border-left: 1px solid var(--sel-candy-line-soft);
+    border-radius: var(--sel-theme-grid-radius-header) 0 0 var(--sel-theme-grid-radius-header);
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table thead th:last-child {
+    border-right: 1px solid var(--sel-candy-line-soft);
+    border-radius: 0 var(--sel-theme-grid-radius-header) var(--sel-theme-grid-radius-header) 0;
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody tr,
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody tr:nth-child(even),
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody tr:hover,
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody tr.selgrid-row-selected {
+    background: transparent;
+    box-shadow: none;
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody tr::after {
+    display: none;
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody td {
+    border-top: 1px solid var(--sel-candy-line-soft);
+    border-bottom: 1px solid var(--sel-candy-line-soft);
+    background: var(--sel-theme-table-row);
+    background-clip: padding-box;
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody tr:nth-child(even) td {
+    background: var(--sel-theme-table-surface-row-even);
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody tr:hover td {
+    background: var(--sel-theme-table-row-hover);
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody tr.selgrid-row-selected td {
+    background: linear-gradient(100deg, var(--sel-theme-table-surface-selected), var(--sel-theme-table-surface-hover));
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody td:first-child {
+    border-left: 1px solid var(--sel-candy-line-soft);
+    border-radius: var(--sel-theme-grid-radius-row) 0 0 var(--sel-theme-grid-radius-row);
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-table tbody td:last-child {
+    border-right: 1px solid var(--sel-candy-line-soft);
+    border-radius: 0 var(--sel-theme-grid-radius-row) var(--sel-theme-grid-radius-row) 0;
+}
+
+:root[data-sel-theme="candy-adventure"] :is(
+    .selgrid-selection-checkbox,
+    .selgrid-action-button,
+    .selgrid-pagination-button,
+    .selpanel-region-heading button
+) {
+    border-color: var(--sel-candy-line-soft);
+    background: var(--sel-candy-surface-soft);
+    box-shadow: var(--sel-candy-control-shadow);
+}
+
+:root[data-sel-theme="candy-adventure"] .selgrid-status-pill {
+    border-width: 2px;
+    box-shadow: var(--sel-candy-control-shadow);
+    font-weight: 650;
 }
 
 /* 卡通边框源图装饰范围更宽，主题内统一采用适合其四角与边带的九宫格切片。 */

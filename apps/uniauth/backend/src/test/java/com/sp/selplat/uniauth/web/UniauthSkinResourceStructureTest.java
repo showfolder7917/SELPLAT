@@ -116,6 +116,37 @@ class UniauthSkinResourceStructureTest {
     }
 
     /**
+     * componentGeometryTokens 验证公共组件消费统一几何令牌，主题与用户调节各自保持责任边界。
+     */
+    @Test
+    void componentGeometryTokens() throws IOException {
+        String tokensCss = readText("static/sel/theme/selThemeTokens.css");
+        String gridCss = readText("static/sel/components/grid/selGrid.css");
+        String treeCss = readText("static/sel/components/tree/selTree.css");
+        String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
+        String crystalTheme = readText("static/sel/theme/packs/crystal-tech/theme.css");
+        String candyTheme = readText("static/sel/theme/packs/candy-adventure/theme.css");
+        // 主题基准与用户偏移必须分离，防止切换主题后被固定的水晶圆角覆盖。
+        assertTrue(tokensCss.contains("--sel-theme-radius-panel-base:"));
+        assertTrue(tokensCss.contains("--selpersonal-radius-panel-offset:"));
+        assertTrue(tokensCss.contains("calc(var(--sel-theme-radius-panel-base) + var(--selpersonal-radius-panel-offset))"));
+        assertTrue(personalizationScript.contains("--selpersonal-radius-panel-offset"));
+        assertFalse(personalizationScript.contains("setProperty(\"--sel-theme-radius-panel\""));
+        // 表格和树形组件只能读取组件语义令牌，不再固定水晶主题的像素圆角。
+        assertTrue(gridCss.contains("border-radius: var(--sel-theme-grid-radius-board)"));
+        assertTrue(gridCss.contains("border-radius: var(--sel-theme-grid-radius-content)"));
+        assertTrue(gridCss.contains("border-spacing: 0 var(--sel-theme-grid-row-gap)"));
+        assertTrue(treeCss.contains("border-radius: var(--sel-theme-tree-node-radius)"));
+        assertFalse(gridCss.contains(".selgrid-board-shell {\n    position: relative;\n    width: 100%;\n    min-width: 0;\n    height: 100%;\n    min-height: 390px;\n    overflow: hidden;\n    border-radius: 18px;"));
+        // 两个主题分别登记组件几何；糖果主题还必须拥有独立卡片行造型。
+        assertTrue(crystalTheme.contains("--sel-theme-radius-panel-base: 24px"));
+        assertTrue(candyTheme.contains("--sel-theme-radius-panel-base: 28px"));
+        assertTrue(candyTheme.contains("--sel-theme-grid-row-gap: 6px"));
+        assertTrue(candyTheme.contains(".selgrid-table tbody td:first-child"));
+        assertTrue(candyTheme.contains(".seltree-node-row.seltree-node-selected"));
+    }
+
+    /**
      * textScaleKeepsSkinFollowing 验证字号和对比覆盖不再把颜色模式误切成自定义。
      */
     @Test

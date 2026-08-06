@@ -86,10 +86,30 @@
     --sel-theme-frame-submenu: calc(15px * var(--sel-theme-frame-scale));
     --sel-theme-frame-datepicker: calc(12px * var(--sel-theme-frame-scale));
     --sel-theme-frame-personalization: calc(18px * var(--sel-theme-frame-scale));
-    /* 面板圆角令牌由个性化滑杆实时覆盖；组件不得再固定自己的外层玻璃圆角。 */
-    --sel-theme-radius-panel: 18px;
-    --sel-theme-radius-popup: 12.5px;
-    --sel-theme-radius-inner: 14px;
+    /* 每个主题只声明三项圆角基准；个性化滑杆写入偏移量，禁止覆盖主题自身的造型。 */
+    --sel-theme-radius-panel-base: 18px;
+    --sel-theme-radius-popup-base: 12.5px;
+    --sel-theme-radius-inner-base: 14px;
+    --selpersonal-radius-panel-offset: 0px;
+    --selpersonal-radius-popup-offset: 0px;
+    --selpersonal-radius-inner-offset: 0px;
+    --sel-theme-radius-panel: max(2px, calc(var(--sel-theme-radius-panel-base) + var(--selpersonal-radius-panel-offset)));
+    --sel-theme-radius-popup: max(2px, calc(var(--sel-theme-radius-popup-base) + var(--selpersonal-radius-popup-offset)));
+    --sel-theme-radius-inner: max(2px, calc(var(--sel-theme-radius-inner-base) + var(--selpersonal-radius-inner-offset)));
+    /* 组件几何契约：公共组件只消费这些语义令牌，主题包统一覆盖而不复制组件结构。 */
+    --sel-theme-radius-control: 10px;
+    --sel-theme-radius-action: 9px;
+    --sel-theme-radius-icon: 8px;
+    --sel-theme-radius-chip: 999px;
+    --sel-theme-grid-radius-board: var(--sel-theme-radius-panel);
+    --sel-theme-grid-radius-content: var(--sel-theme-radius-inner);
+    --sel-theme-grid-radius-header: var(--sel-theme-radius-inner);
+    --sel-theme-grid-radius-row: 0px;
+    --sel-theme-grid-row-gap: 0px;
+    --sel-theme-tree-node-radius: var(--sel-theme-radius-icon);
+    --sel-theme-control-line: var(--sel-theme-line);
+    --sel-theme-control-line-soft: var(--sel-theme-line-soft);
+    --sel-theme-control-shadow: var(--sel-theme-inset);
     /* 内板贴合令牌分别限制大型表面与紧凑浮层，正值内收、负值向水晶边框扩展。 */
     --sel-theme-surface-inset-large: -8px;
     --sel-theme-surface-inset-popup: -6px;

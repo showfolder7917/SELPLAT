@@ -169,7 +169,7 @@
     min-width: 30px;
     padding: 3px 5px;
     border: 1px solid var(--sel-theme-soft-accent-line);
-    border-radius: 7px;
+    border-radius: var(--sel-theme-radius-icon);
     color: var(--sel-theme-text-on-soft-accent);
     background: var(--sel-theme-soft-accent-surface);
     box-shadow: var(--sel-theme-soft-accent-glow);
