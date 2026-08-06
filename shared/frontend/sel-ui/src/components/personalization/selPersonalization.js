@@ -1,7 +1,7 @@
 /*
  * selPersonalization.js：SEL 页面个性化设置组合控件。
  * 负责“主题 / 背景 / 面板 / 文字 / 语言”五级界面、统一视觉令牌、动效、预设和当前页面实时预览。
- * 责任边界：公共文案与语言选项由调用方传入；项目业务数据仍由应用装配层按 locale 加载，本组件不识别 Uniauth 目录。
+ * 责任边界：公共文案与语言选项由调用方传入；项目业务数据仍由应用装配层按 locale 加载，本组件不识别 具体应用 目录。
  * 模块级 JavaScript 标识统一使用 selPersonalization 前缀，公开控制器为 window.selPersonalization。
  */
 (function selPersonalizationInitialize() {
@@ -552,7 +552,7 @@
 
         /**
          * 根据项目 JSON 和前端已获授权结果绘制扩展模块摘要；具体编辑器以后按字段类型插入同一插槽。
-         * @returns {void} 用户与页面区域都只消费注册表，不读取 Uniauth 私有路径。
+         * @returns {void} 用户与页面区域都只消费注册表，不读取 具体应用 私有路径。
          */
         function selPersonalizationRenderExtensionModules() {
             ["user", "page"].forEach((selPersonalizationArea) => {
@@ -583,7 +583,7 @@
             const selPersonalizationBackgroundTheme = selPersonalizationBackgroundController.themes.find((selPersonalizationTheme) => selPersonalizationTheme.id === selPersonalizationThemeMode?.base?.backgroundTheme);
             if (!selPersonalizationBackgroundTheme?.image) return "none";
             // 背景注册表中的相对路径以 page-background 组件目录为基准，转成绝对地址后再放入主题卡行内令牌。
-            const selPersonalizationBackgroundBase = new URL("../sel/components/page-background/", document.baseURI);
+            const selPersonalizationBackgroundBase = new URL("/sel/components/page-background/", document.baseURI);
             return `url('${new URL(selPersonalizationBackgroundTheme.image, selPersonalizationBackgroundBase).href}')`;
         }
 

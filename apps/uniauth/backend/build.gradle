@@ -6,6 +6,8 @@ plugins {
 }
 
 dependencies {
+    // Uniauth 独立启动时也从唯一公共模块发布 /sel/**，不再保存应用内源码副本。
+    runtimeOnly project(':shared:frontend:sel-ui')
     // 复用通用结果、参数和基础工具。
     implementation project(':shared:backend:common-core')
     // 复用控制器基类和 MVC 参数解析能力。
@@ -61,6 +63,18 @@ tasks.named('classes') {
     dependsOn ':shared:backend:common-service:jar'
     // 先生成公共 Web JAR，保证 Controller 基类和参数解析器可用。
     dependsOn ':shared:backend:common-web:jar'
+    // 页面启动前生成公共前端资源 JAR，保证独立运行和统一 Host 使用相同组件版本。
+    dependsOn ':shared:frontend:sel-ui:jar'
+}
+
+tasks.named('jar') {
+    // VS Code 资源同步目录与标准 resources 都进入 JAR 时保留第一份，避免配置和静态页面重复。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('installDist') {
+    // 公共依赖可能同时由模块坐标和离线兜底提供，分发目录只保留一份同名 JAR。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 jacoco {

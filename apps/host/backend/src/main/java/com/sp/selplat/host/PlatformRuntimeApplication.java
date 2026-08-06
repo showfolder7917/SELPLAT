@@ -1,6 +1,7 @@
 package com.sp.selplat.host;
 
 import com.sp.selplat.referencedata.backend.config.ReferenceDataModuleConfiguration;
+import com.sp.selplat.uniauth.config.UniauthModuleConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Import;
@@ -10,7 +11,7 @@ import org.springframework.context.annotation.Import;
  * 宿主只扫描自己的平台组件，并通过显式 Import 装配已验证模块，避免把其他应用的独立启动类和数据源配置意外带入同一进程。
  */
 @SpringBootApplication(scanBasePackages = "com.sp.selplat.host")
-@Import(ReferenceDataModuleConfiguration.class)
+@Import({ReferenceDataModuleConfiguration.class, UniauthModuleConfiguration.class})
 public class PlatformRuntimeApplication {
 
     /**

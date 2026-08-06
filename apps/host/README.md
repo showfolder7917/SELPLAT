@@ -25,7 +25,8 @@ scripts/startup/start-host.ps1
               ▼
 apps/host/backend
               │
-              └── 显式装配 reference-data 等模块
+              ├── 显式装配 reference-data、uniauth 等业务模块
+              └── 统一发布 shared/frontend/sel-ui 公共资源
 ```
 
-当前阶段先装配 `reference-data` 框架。Uniauth 的独立启动类和单数据源配置尚未迁入宿主，必须在后续多数据源任务中单独接入，禁止在本次骨架中隐式合并。
+当前 Host 已显式装配 `reference-data` 与 `uniauth`，并通过一个 `8080` 端口发布 Uniauth 页面和 `/sel/**` 公共资源。Uniauth 仍保留独立启动入口，但业务模块配置已经与启动类分离，Host 不会启动第二个 Web 容器。

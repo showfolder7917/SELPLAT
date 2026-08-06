@@ -28,6 +28,23 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(jsonPath("$.data.status").value("READY"))
                 .andExpect(jsonPath("$.data.modules[0]").value("host"))
                 .andExpect(jsonPath("$.data.modules[1]").value("reference-data"))
+                .andExpect(jsonPath("$.data.modules[2]").value("uniauth"))
                 .andExpect(jsonPath("$.data.referenceDataServiceReady").value(true));
+    }
+
+    /**
+     * 验证统一端口同时发布公共组件和 Uniauth 页面。
+     *
+     * 执行结果示例：{@code /sel/core/selBaseRuntime.js} 与
+     * {@code /uniauth/uniauth.html} 均返回 HTTP 200。
+     */
+    @Test
+    void shouldExposeSharedUiAndUniauthPageFromOneRuntime() throws Exception {
+        // 公共运行时必须来自 sel-ui 依赖 JAR，而不是 Host 或 Uniauth 的复制目录。
+        mockMvc.perform(get("/sel/core/selBaseRuntime.js"))
+                .andExpect(status().isOk());
+        // Uniauth 页面由同一个 Host Web 容器发布，浏览器无需跨端口访问。
+        mockMvc.perform(get("/uniauth/uniauth.html"))
+                .andExpect(status().isOk());
     }
 }

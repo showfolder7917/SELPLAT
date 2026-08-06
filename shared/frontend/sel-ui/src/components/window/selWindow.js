@@ -1,7 +1,7 @@
 /*
  * selWindow.js：可复用水晶业务表单窗口基础控件。
  * 责任边界：基础控件根据标准 rows 配置创建表单、校验、打开与关闭；应用只声明字段和消费提交事件。
- * 命名前缀：模块级标识使用 selWindow，样式使用 selwindow-*；控件不识别 Uniauth 实体或接口地址。
+ * 命名前缀：模块级标识使用 selWindow，样式使用 selwindow-*；控件不识别 具体应用 实体或接口地址。
  */
 (function selWindowInitializeRegistry() {
     "use strict";
@@ -280,7 +280,7 @@
         const selWindowBrand = selWindowCreateElement("div", "selwindow-brand-group");
         const selWindowBrandImage = selWindowCreateElement("img", "selwindow-brand-image");
         // 生成后的统一晶体徽标由组件素材目录提供。
-        selWindowBrandImage.src = "../sel/assets/components/window/selWindowCrystalCube.webp";
+        selWindowBrandImage.src = "/sel/assets/components/window/selWindowCrystalCube.webp";
         // 徽标为装饰图，不重复播报标题。
         selWindowBrandImage.alt = "";
         const selWindowBrandCopy = selWindowCreateElement("div", "selwindow-brand-copy");

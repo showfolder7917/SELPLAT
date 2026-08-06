@@ -7,6 +7,10 @@ plugins {
 group = 'com.sp.selplat.host'
 
 dependencies {
+    // 统一宿主从唯一公共模块发布 /sel/** 主题、组件和素材。
+    runtimeOnly project(':shared:frontend:sel-ui')
+    // Uniauth 作为显式业务模块装配到统一端口，同时继续保留自己的独立启动入口。
+    implementation project(':apps:uniauth:backend')
     // 公共结果和 JSON 工具用于平台健康响应保持 SELPLAT 统一结构。
     implementation project(':shared:backend:common-core')
     // 当前宿主显式装配 reference-data 的 Provider 与查询 Service 框架。
@@ -36,4 +40,17 @@ tasks.named('classes') {
     dependsOn ':shared:backend:common-core:jar'
     dependsOn ':apps:reference-data:contract:jar'
     dependsOn ':apps:reference-data:backend:jar'
+    // 公共前端和 Uniauth 资源必须在 Host 启动前生成可依赖 JAR。
+    dependsOn ':shared:frontend:sel-ui:jar'
+    dependsOn ':apps:uniauth:backend:jar'
+}
+
+tasks.named('jar') {
+    // VS Code 资源同步目录与标准 resources 都进入 JAR 时保留第一份，避免平台配置重复。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('installDist') {
+    // 统一宿主聚合多个模块时，同名离线依赖只写入一次分发目录。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

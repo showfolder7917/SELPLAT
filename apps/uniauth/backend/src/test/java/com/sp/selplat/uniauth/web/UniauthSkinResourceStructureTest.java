@@ -28,16 +28,16 @@ class UniauthSkinResourceStructureTest {
         assertTrue(html.contains("data-sel-accent=\"base\""));
         assertTrue(html.contains("data-sel-density=\"comfortable\""));
         // 页面先加载主题契约，再加载当前主题包的深浅模式和运行管理器。
-        assertTrue(html.contains("../sel/theme/contract/selThemeContract.css"));
-        assertTrue(html.contains("../sel/theme/packs/crystal-tech/modes/dark.css"));
-        assertTrue(html.contains("../sel/theme/packs/crystal-tech/modes/light.css"));
-        assertTrue(html.contains("../sel/theme/packs/candy-adventure/modes/dark.css"));
-        assertTrue(html.contains("../sel/theme/packs/candy-adventure/modes/light.css"));
-        assertTrue(html.contains("../sel/theme/runtime/selThemeRegistry.js"));
-        assertTrue(html.contains("../sel/theme/packs/crystal-tech/manifest.js"));
-        assertTrue(html.contains("../sel/theme/packs/candy-adventure/manifest.js"));
-        assertTrue(html.contains("../sel/theme/runtime/selThemeManager.js"));
-        assertFalse(html.contains("../sel/theme/skins/"));
+        assertTrue(html.contains("/sel/theme/contract/selThemeContract.css"));
+        assertTrue(html.contains("/sel/theme/packs/crystal-tech/modes/dark.css"));
+        assertTrue(html.contains("/sel/theme/packs/crystal-tech/modes/light.css"));
+        assertTrue(html.contains("/sel/theme/packs/candy-adventure/modes/dark.css"));
+        assertTrue(html.contains("/sel/theme/packs/candy-adventure/modes/light.css"));
+        assertTrue(html.contains("/sel/theme/runtime/selThemeRegistry.js"));
+        assertTrue(html.contains("/sel/theme/packs/crystal-tech/manifest.js"));
+        assertTrue(html.contains("/sel/theme/packs/candy-adventure/manifest.js"));
+        assertTrue(html.contains("/sel/theme/runtime/selThemeManager.js"));
+        assertFalse(html.contains("/sel/theme/skins/"));
     }
 
     /**
@@ -46,7 +46,7 @@ class UniauthSkinResourceStructureTest {
     @Test
     void personalizationSkinTab() throws IOException {
         // 直接检查生产脚本的稳定数据属性和公开状态，不依赖压缩后偶然文本。
-        String script = readText("static/sel/components/personalization/selPersonalization.js");
+        String script = readText("META-INF/resources/sel/components/personalization/selPersonalization.js");
         assertTrue(script.contains("data-sel-personal-tab=\"skin\""));
         assertTrue(script.contains("data-sel-personal-view=\"skin\""));
         assertTrue(script.contains("skin: selPersonalizationSkinState"));
@@ -66,7 +66,7 @@ class UniauthSkinResourceStructureTest {
         assertTrue(script.contains("selPersonalizationThemeMode.id === \"light\""));
         assertTrue(script.contains("window.selDropdownMenu?.mount(selPersonalizationThemeCategoryRoot)"));
         assertTrue(script.contains("window.selDropdownMenu.setLocale(selPersonalizationThemeCategoryRoot)"));
-        String personalizationCss = readText("static/sel/components/personalization/selPersonalization.css");
+        String personalizationCss = readText("META-INF/resources/sel/components/personalization/selPersonalization.css");
         assertTrue(personalizationCss.contains("grid-template-columns: repeat(auto-fill, minmax(185px, 1fr))"));
         assertTrue(personalizationCss.contains(".selpersonal-theme-card-compact .selpersonal-theme-card-mode span"));
         assertTrue(personalizationCss.contains("white-space: nowrap"));
@@ -101,7 +101,7 @@ class UniauthSkinResourceStructureTest {
      */
     @Test
     void gridSelectionCheckmarkToken() throws IOException {
-        String gridCss = readText("static/sel/components/grid/selGrid.css");
+        String gridCss = readText("META-INF/resources/sel/components/grid/selGrid.css");
         assertTrue(gridCss.contains("border-bottom: 2px solid var(--sel-theme-text-on-selected-surface)"));
         assertTrue(gridCss.contains("border-left: 2px solid var(--sel-theme-text-on-selected-surface)"));
         assertFalse(gridCss.contains("border-bottom: 2px solid white"));
@@ -113,10 +113,10 @@ class UniauthSkinResourceStructureTest {
      */
     @Test
     void typographyTokens() throws IOException {
-        String tokensCss = readText("static/sel/theme/selThemeTokens.css");
-        String contractCss = readText("static/sel/theme/contract/selThemeContract.css");
-        String typographyCss = readText("static/sel/theme/selThemeTypography.css");
-        String personalizationCss = readText("static/sel/components/personalization/selPersonalization.css");
+        String tokensCss = readText("META-INF/resources/sel/theme/selThemeTokens.css");
+        String contractCss = readText("META-INF/resources/sel/theme/contract/selThemeContract.css");
+        String typographyCss = readText("META-INF/resources/sel/theme/selThemeTypography.css");
+        String personalizationCss = readText("META-INF/resources/sel/components/personalization/selPersonalization.css");
         // 字体族和字号比例必须由页面级令牌提供，组件不得各自形成孤立开关。
         assertTrue(tokensCss.contains("--sel-theme-font-family:"));
         assertTrue(tokensCss.contains("--sel-theme-font-scale: 1"));
@@ -156,12 +156,12 @@ class UniauthSkinResourceStructureTest {
      */
     @Test
     void componentGeometryTokens() throws IOException {
-        String tokensCss = readText("static/sel/theme/selThemeTokens.css");
-        String gridCss = readText("static/sel/components/grid/selGrid.css");
-        String treeCss = readText("static/sel/components/tree/selTree.css");
-        String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
-        String crystalTheme = readText("static/sel/theme/packs/crystal-tech/theme.css");
-        String candyTheme = readText("static/sel/theme/packs/candy-adventure/theme.css");
+        String tokensCss = readText("META-INF/resources/sel/theme/selThemeTokens.css");
+        String gridCss = readText("META-INF/resources/sel/components/grid/selGrid.css");
+        String treeCss = readText("META-INF/resources/sel/components/tree/selTree.css");
+        String personalizationScript = readText("META-INF/resources/sel/components/personalization/selPersonalization.js");
+        String crystalTheme = readText("META-INF/resources/sel/theme/packs/crystal-tech/theme.css");
+        String candyTheme = readText("META-INF/resources/sel/theme/packs/candy-adventure/theme.css");
         // 主题基准与用户偏移必须分离，防止切换主题后被固定的水晶圆角覆盖。
         assertTrue(tokensCss.contains("--sel-theme-radius-panel-base:"));
         assertTrue(tokensCss.contains("--selpersonal-radius-panel-offset:"));
@@ -187,8 +187,8 @@ class UniauthSkinResourceStructureTest {
      */
     @Test
     void textScaleKeepsSkinFollowing() throws IOException {
-        String script = readText("static/sel/components/personalization/selPersonalization.js");
-        String css = readText("static/sel/components/personalization/selPersonalization.css");
+        String script = readText("META-INF/resources/sel/components/personalization/selPersonalization.js");
+        String css = readText("META-INF/resources/sel/components/personalization/selPersonalization.css");
         // 两个排版参数分别记录覆盖状态，换肤时只保留用户调整过的滑杆值。
         assertTrue(script.contains("contrastOverride: false"));
         assertTrue(script.contains("fontScaleOverride: false"));
@@ -211,11 +211,11 @@ class UniauthSkinResourceStructureTest {
     @Test
     void skinMaterials() throws IOException {
         // 深色皮肤继续使用迁移后的现行材质，不复制旧路径。
-        byte[] darkFrame = readBytes("static/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp");
+        byte[] darkFrame = readBytes("META-INF/resources/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp");
         // 浅色皮肤必须交付配套真实素材，禁止用空文件或 CSS 占位。
-        byte[] lightFrame = readBytes("static/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp");
+        byte[] lightFrame = readBytes("META-INF/resources/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp");
         // 纯黑深空必须是正式图片主题，浅色皮肤选择时不得回退页面基础底色。
-        byte[] darkSpaceBackground = readBytes("static/sel/assets/backgrounds/dark-void-deep-space.webp");
+        byte[] darkSpaceBackground = readBytes("META-INF/resources/sel/assets/backgrounds/dark-void-deep-space.webp");
         assertTrue(darkFrame.length > 10_000);
         assertTrue(lightFrame.length > 10_000);
         assertTrue(darkSpaceBackground.length > 10_000);
@@ -233,15 +233,15 @@ class UniauthSkinResourceStructureTest {
         // 稳定主题 ID 与生产脚本一致，新增或删除色板时必须原子更新完整素材包。
         List<String> themeIds = List.of(
                 "stellar-blue", "crystal-cyan", "nebula-purple", "emerald-green", "amber-gold", "pulse-pink");
-        String themeManifest = readText("static/sel/theme/packs/crystal-tech/manifest.js");
-        String themeManager = readText("static/sel/theme/runtime/selThemeManager.js");
-        String backgroundScript = readText("static/sel/components/page-background/selPageBackground.js");
+        String themeManifest = readText("META-INF/resources/sel/theme/packs/crystal-tech/manifest.js");
+        String themeManager = readText("META-INF/resources/sel/theme/runtime/selThemeManager.js");
+        String backgroundScript = readText("META-INF/resources/sel/components/page-background/selPageBackground.js");
         for (String skin : List.of("dark", "light")) {
             for (String themeId : themeIds) {
                 // 边框与背景均必须为可读取的真实 WebP，禁止仅登记令牌或空占位文件。
-                byte[] frame = readBytes("static/sel/assets/skins/" + skin
+                byte[] frame = readBytes("META-INF/resources/sel/assets/skins/" + skin
                         + "/components/panel/themes/selPanelFrame-" + themeId + ".webp");
-                byte[] background = readBytes("static/sel/assets/backgrounds/themes/" + skin + "-" + themeId + ".webp");
+                byte[] background = readBytes("META-INF/resources/sel/assets/backgrounds/themes/" + skin + "-" + themeId + ".webp");
                 assertTrue(frame.length > 10_000);
                 assertTrue(background.length > 10_000);
                 assertTrue(new String(frame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
@@ -261,10 +261,10 @@ class UniauthSkinResourceStructureTest {
      */
     @Test
     void candyAdventureThemePack() throws IOException {
-        String manifest = readText("static/sel/theme/packs/candy-adventure/manifest.js");
-        String darkCss = readText("static/sel/theme/packs/candy-adventure/modes/dark.css");
-        String lightCss = readText("static/sel/theme/packs/candy-adventure/modes/light.css");
-        String backgroundScript = readText("static/sel/components/page-background/selPageBackground.js");
+        String manifest = readText("META-INF/resources/sel/theme/packs/candy-adventure/manifest.js");
+        String darkCss = readText("META-INF/resources/sel/theme/packs/candy-adventure/modes/dark.css");
+        String lightCss = readText("META-INF/resources/sel/theme/packs/candy-adventure/modes/light.css");
+        String backgroundScript = readText("META-INF/resources/sel/components/page-background/selPageBackground.js");
         // 主题必须保持同一稳定 ID，并提供深浅两套相同语义、不同数值的 Accent。
         assertTrue(manifest.contains("id: \"candy-adventure\""));
         for (String accentId : List.of("sky-blue", "mint-green", "grape-purple", "sunshine-yellow", "peach-orange", "berry-pink")) {
@@ -280,8 +280,8 @@ class UniauthSkinResourceStructureTest {
         assertTrue(lightCss.contains("--sel-theme-text-main: #25324a"));
         // 两种模式分别拥有正式背景和透明卡通边框 WebP。
         for (String mode : List.of("dark", "light")) {
-            byte[] background = readBytes("static/sel/assets/themes/candy-adventure/" + mode + "/background.webp");
-            byte[] frame = readBytes("static/sel/assets/themes/candy-adventure/" + mode + "/frame.webp");
+            byte[] background = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode + "/background.webp");
+            byte[] frame = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode + "/frame.webp");
             assertTrue(background.length > 50_000);
             assertTrue(frame.length > 50_000);
             assertTrue(new String(background, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
@@ -289,9 +289,9 @@ class UniauthSkinResourceStructureTest {
             assertTrue(manifest.contains("id: \"candy-adventure-" + mode + "\""));
             // 六个 Accent 必须各自交付背景和边框，不能继续共享模式基础图片。
             for (String accentId : List.of("sky-blue", "mint-green", "grape-purple", "sunshine-yellow", "peach-orange", "berry-pink")) {
-                byte[] accentBackground = readBytes("static/sel/assets/themes/candy-adventure/" + mode
+                byte[] accentBackground = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode
                         + "/accents/" + accentId + "-background.webp");
-                byte[] accentFrame = readBytes("static/sel/assets/themes/candy-adventure/" + mode
+                byte[] accentFrame = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode
                         + "/accents/" + accentId + "-frame.webp");
                 assertTrue(accentBackground.length > 20_000);
                 assertTrue(accentFrame.length > 50_000);
@@ -307,19 +307,19 @@ class UniauthSkinResourceStructureTest {
     @Test
     void internationalizationBoundaries() throws IOException {
         String applicationScript = readText("static/uniauth/uniauth.js");
-        String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
-        String windowScript = readText("static/sel/components/window/selWindow.js");
-        String runtimeScript = readText("static/sel/core/selBaseRuntime.js");
-        String localeRuntimeScript = readText("static/sel/core/selLocaleRuntime.js");
-        String gridScript = readText("static/sel/components/grid/selGrid.js");
-        String searchScript = readText("static/sel/components/search/selSearch.js");
-        String treeScript = readText("static/sel/components/tree/selTree.js");
-        String menuScript = readText("static/sel/components/grid/selGridMenu.js");
-        String datePickerScript = readText("static/sel/components/date-picker/selDatePicker.js");
+        String personalizationScript = readText("META-INF/resources/sel/components/personalization/selPersonalization.js");
+        String windowScript = readText("META-INF/resources/sel/components/window/selWindow.js");
+        String runtimeScript = readText("META-INF/resources/sel/core/selBaseRuntime.js");
+        String localeRuntimeScript = readText("META-INF/resources/sel/core/selLocaleRuntime.js");
+        String gridScript = readText("META-INF/resources/sel/components/grid/selGrid.js");
+        String searchScript = readText("META-INF/resources/sel/components/search/selSearch.js");
+        String treeScript = readText("META-INF/resources/sel/components/tree/selTree.js");
+        String menuScript = readText("META-INF/resources/sel/components/grid/selGridMenu.js");
+        String datePickerScript = readText("META-INF/resources/sel/components/date-picker/selDatePicker.js");
         // 应用装配层独立登记公共文案与项目业务目录，公共组件不能识别 Uniauth 文件位置。
-        assertTrue(applicationScript.contains("../sel/components/personalization/i18n/{locale}.json"));
-        assertTrue(applicationScript.contains("../sel/components/window/i18n/{locale}.json"));
-        assertTrue(applicationScript.contains("../sel/components/date-picker/i18n/{locale}.json"));
+        assertTrue(applicationScript.contains("/sel/components/personalization/i18n/{locale}.json"));
+        assertTrue(applicationScript.contains("/sel/components/window/i18n/{locale}.json"));
+        assertTrue(applicationScript.contains("/sel/components/date-picker/i18n/{locale}.json"));
         assertTrue(applicationScript.contains("./mock/UniauthUserGrid/{locale}/UniauthUserGrid.window.create.json"));
         assertTrue(applicationScript.contains("messages: uniauthPersonalizationMessages"));
         assertTrue(applicationScript.contains("window: Object.freeze({ create: Object.freeze(uniauthParts.createWindow) })"));
@@ -354,11 +354,11 @@ class UniauthSkinResourceStructureTest {
         assertTrue(datePickerScript.contains("setLocale: selDatePickerSetLocale"));
 
         for (String locale : List.of("zh-CN", "ja-JP", "en-US")) {
-            String commonMessages = readText("static/sel/components/personalization/i18n/" + locale + ".json");
+            String commonMessages = readText("META-INF/resources/sel/components/personalization/i18n/" + locale + ".json");
             String projectWindow = readText("static/uniauth/mock/UniauthUserGrid/" + locale
                     + "/UniauthUserGrid.window.create.json");
-            String commonWindowMessages = readText("static/sel/components/window/i18n/" + locale + ".json");
-            String commonDatePickerMessages = readText("static/sel/components/date-picker/i18n/" + locale + ".json");
+            String commonWindowMessages = readText("META-INF/resources/sel/components/window/i18n/" + locale + ".json");
+            String commonDatePickerMessages = readText("META-INF/resources/sel/components/date-picker/i18n/" + locale + ".json");
             // 三份公共配置都登记自身 BCP-47 值与三种稳定选项。
             assertTrue(commonMessages.contains("\"locale\": \"" + locale + "\""));
             assertTrue(commonMessages.contains("\"value\": \"zh-CN\""));
@@ -378,9 +378,9 @@ class UniauthSkinResourceStructureTest {
      */
     @Test
     void floatingPanelResizeContract() throws IOException {
-        String floatingScript = readText("static/sel/components/floating-panel/selFloatingPanel.js");
-        String floatingCss = readText("static/sel/components/floating-panel/selFloatingPanel.css");
-        String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
+        String floatingScript = readText("META-INF/resources/sel/components/floating-panel/selFloatingPanel.js");
+        String floatingCss = readText("META-INF/resources/sel/components/floating-panel/selFloatingPanel.css");
+        String personalizationScript = readText("META-INF/resources/sel/components/personalization/selPersonalization.js");
         // 公共组件只在调用方显式传入 resizable 后创建稳定的三个手柄。
         assertTrue(floatingScript.contains("const selFloatingPanelResizeEnabled = selFloatingPanelResizeOption === true"));
         assertTrue(floatingScript.contains("dataset.selFloatingResize = selFloatingPanelResizeDirection"));
@@ -402,7 +402,7 @@ class UniauthSkinResourceStructureTest {
         assertTrue(personalizationScript.contains("minWidth: 420"));
         assertTrue(personalizationScript.contains("minHeight: 420"));
         assertTrue(personalizationScript.contains("maxWidth: 960"));
-        String personalizationCss = readText("static/sel/components/personalization/selPersonalization.css");
+        String personalizationCss = readText("META-INF/resources/sel/components/personalization/selPersonalization.css");
         assertTrue(personalizationCss.contains("width: min(560px, calc(100vw - 36px))"));
         assertTrue(personalizationCss.contains("@media (max-width: 720px)"));
         assertTrue(personalizationCss.contains("inset: 10px"));

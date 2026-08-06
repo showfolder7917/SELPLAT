@@ -1,7 +1,7 @@
 /*
  * selDatePicker.js：SEL 水晶单日期选择基础控件。
  * 负责标准日期值、月历绘制、键盘导航、浮层定位和表单事件同步。
- * 责任边界：只识别 data-sel-date-picker 契约，不识别 Window、Uniauth 或具体业务字段。
+ * 责任边界：只识别 data-sel-date-picker 契约，不识别 Window、具体应用 或具体业务字段。
  */
 (function selDatePickerInitializeRegistry() {
     "use strict";

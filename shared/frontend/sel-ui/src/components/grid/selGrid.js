@@ -1,7 +1,7 @@
 /*
  * selGrid.js：通用数据表格多实例基础控件。
  * 负责接收调用方传入的标准聚合 payload，创建独立表格状态，并协调已挂载的树、菜单、筛选和分页子控制器。
- * 责任边界：本文件不请求接口、不读取 Uniauth 数据，也不自行扫描并初始化业务模块。
+ * 责任边界：本文件不请求接口、不读取 具体应用 数据，也不自行扫描并初始化业务模块。
  * 模块级 JavaScript 标识统一使用 selGrid 前缀，公开注册表为 window.selGrid。
  */
 (function selGridInitializeRegistry() {

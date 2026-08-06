@@ -12,10 +12,11 @@
 当前装配模块：
 
 - `reference-data:backend`
+- `uniauth:backend`
+- `shared:frontend:sel-ui`：通过 `/sel/**` 发布唯一公共组件、主题和素材。
 
 暂未装配模块：
 
-- `uniauth:backend`：当前仍拥有独立 `SpringApplication`、端口和单数据源配置，后续需要先完成模块化与多数据源边界。
 - `mda:backend`：开发工具是否进入正式宿主需要独立决策。
 - `rule-engine:backend`：当前是独立应用，不在本次骨架范围。
 
@@ -30,5 +31,21 @@
 ```text
 GET http://localhost:8080/api/platform/runtime/health
 ```
+
+Uniauth 与公共前端：
+
+```text
+http://127.0.0.1:8080/uniauth/uniauth.html
+http://127.0.0.1:8080/sel/core/selBaseRuntime.js
+```
+
+开发期自动重启采用两个终端，但只有 Host 使用 `8080` 端口：
+
+```text
+终端一：./gradlew :apps:host:backend:run --offline
+终端二：./gradlew :apps:host:backend:classes --continuous --offline
+```
+
+终端二只监听 Java、资源和共享前端源码变化并重新编译；DevTools 检测到类路径更新后重启终端一中的 Host。生产运行不使用 `--continuous`。
 
 新增业务模块时，必须同时更新 Gradle 依赖、显式模块配置、manifest、module metadata、测试和本 README。

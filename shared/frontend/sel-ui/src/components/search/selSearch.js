@@ -1,7 +1,7 @@
 /*
  * selSearch.js：通用搜索与查询多实例基础控件。
  * 负责根据标准搜索数据创建图标、关键词输入框、清空按钮和查询按钮，并向所属业务实例发送提交事件。
- * 责任边界：本文件不读取 Uniauth 数据、不请求接口、不直接筛选表格；实际查询行为由所属业务控件响应。
+ * 责任边界：本文件不读取 具体应用 数据、不请求接口、不直接筛选表格；实际查询行为由所属业务控件响应。
  * 模块级 JavaScript 标识统一使用 selSearch 前缀，公开只读注册表为 window.selSearch。
  */
 (function selSearchCreateRegistry(global) {

@@ -1,7 +1,7 @@
 /*
  * selPanel.js：通用稳定面板布局基础控件。
  * 负责创建标题、工具栏、左侧导航、中央内容、底栏和反馈区的稳定宿主，并管理左侧区域收起状态。
- * 责任边界：本文件只识别标准 panel/grid payload 和通用区域角色，不识别 Uniauth、业务接口或后端实体名称。
+ * 责任边界：本文件只识别标准 panel/grid payload 和通用区域角色，不识别 具体应用、业务接口或后端实体名称。
  * 模块级 JavaScript 标识统一使用 selPanel 前缀，公开控制器为 window.selPanel。
  */
 (function selPanelInitialize() {
@@ -287,7 +287,7 @@
 
     /**
      * 为一个空业务宿主创建稳定的面板区域结构。
-     * @param {Element} selPanelHost - 应用提供的页面挂载点，例如带 data-uniauth-app 的 main。
+     * @param {Element} selPanelHost - 应用提供的页面挂载点，例如带 data-sel-app-host 的 main。
      * @param {object} selPanelDefinition - 标准实例定义，包含 gridId、sourceId、entity、view、layout 和 structure。
      * @returns {Element|null} 创建成功时返回带 data-sel-grid 的面板根；定义无效时返回 null。
      */

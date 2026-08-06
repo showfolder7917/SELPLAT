@@ -37,7 +37,7 @@ public class PlatformRuntimeController {
      *
      * @return 固定成功结构，例如
      *     {@code {"success":true,"data":{"status":"READY","runtime":"platform-runtime",}}
-     *     {@code "modules":["host","reference-data"],"referenceDataServiceReady":true},}
+     *     {@code "modules":["host","reference-data","uniauth"],"referenceDataServiceReady":true},}
      *     {@code "msg":"平台宿主已启动。"}}
      */
     @GetMapping(value = "/health", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -46,7 +46,7 @@ public class PlatformRuntimeController {
         // 当前 Spring 上下文事实 → 平台状态、运行时身份和已装配模块清单。
         data.put("status", "READY");
         data.put("runtime", "platform-runtime");
-        data.put("modules", List.of("host", "reference-data"));
+        data.put("modules", List.of("host", "reference-data", "uniauth"));
         data.put("referenceDataServiceReady", referenceDataQueryService != null);
 
         CommonResult result = new CommonResult();

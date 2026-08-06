@@ -1,0 +1,59 @@
+plugins {
+    // sel-ui 以标准资源 JAR 参与 Gradle 依赖，不引入第二套独立构建入口。
+    id 'java-library'
+}
+
+tasks.named('processResources') {
+    // 公共源码按 Spring Boot 依赖 JAR 的标准静态资源位置发布，运行时 URL 固定为 /sel/**。
+    from('src') {
+        include 'README.md'
+        include 'core/**'
+        include 'components/**'
+        include 'theme/**'
+        include 'assets/**'
+        into 'META-INF/resources/sel'
+    }
+}
+
+tasks.register('verifySelUiSourceBoundary') {
+    // 边界检查直接读取权威源码，不检查 build 中可以删除和重建的资源副本。
+    inputs.files(fileTree('src') {
+        include '**/*.js'
+        include '**/*.css'
+        include '**/*.json'
+    })
+
+    doLast {
+        // 公共运行时不得识别 Uniauth 实体、接口或应用挂载点，避免共享组件重新绑定单一业务。
+        def forbiddenPatterns = [
+            ~/Uniauth/,
+            ~/\/api\/uniauth\//,
+            ~/data-uniauth-/,
+            ~/mock\/Uniauth/
+        ]
+        def violations = []
+        inputs.files.files.sort().each { sourceFile ->
+            def sourceText = sourceFile.getText('UTF-8')
+            forbiddenPatterns.each { forbiddenPattern ->
+                if (sourceText =~ forbiddenPattern) {
+                    violations.add("${project.relativePath(sourceFile)} -> ${forbiddenPattern}")
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                "sel-ui 公共源码包含应用业务语义：\n" + violations.join('\n')
+            )
+        }
+    }
+}
+
+tasks.named('check') {
+    // 标准检查必须同时验证公共前端没有反向依赖具体应用。
+    dependsOn tasks.named('verifySelUiSourceBoundary')
+}
+
+tasks.named('jar') {
+    // 发布资源 JAR 前先确认共享源码边界，防止业务地址进入所有项目。
+    dependsOn tasks.named('verifySelUiSourceBoundary')
+}

@@ -1,7 +1,7 @@
 /*
  * selAjax.js：SEL 网页通用异步请求基础能力。
  * 负责接收调用方显式传入的请求地址、发送同源请求、解析 JSON，并统一报告 HTTP、解析和业务响应错误。
- * 责任边界：本文件不知道 Uniauth、业务实体、接口路由或模拟数据目录；所有实际地址必须由应用装配层传入。
+ * 责任边界：本文件不知道 具体应用、业务实体、接口路由或模拟数据目录；所有实际地址必须由应用装配层传入。
  * 模块级 JavaScript 标识统一使用 selAjax 前缀，公开只读接口为 window.selAjax。
  */
 (function selAjaxCreateClient(global) {

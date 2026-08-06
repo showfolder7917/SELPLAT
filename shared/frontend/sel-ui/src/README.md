@@ -17,7 +17,7 @@ selBaseRuntime.query(selector)      查询应用必需挂载点
 selBaseRuntime.param(name)          读取页面查询参数
 ```
 
-`selAjax` 不保存业务地址。`./mock/UniauthUserGrid/...` 或 `/api/uniauth/...` 等路径必须由应用装配层明确传入。
+`selAjax` 不保存业务地址。模拟数据目录或业务接口路径必须由应用装配层明确传入。
 
 统一视觉契约位于 `theme/contract/`，主题注册表与切换管理器位于 `theme/runtime/`，完整主题放在 `theme/packs/<theme-id>/`。一个主题包同时提供深色、浅色两种模式，每种模式拥有独立基础材质、Accent 配色、边框和背景。组件样式与个性化逻辑统一读取 `--sel-theme-*`，不得复制组件或重新写死主题颜色；新增主题按 `theme/packs/README.md` 接入。
 

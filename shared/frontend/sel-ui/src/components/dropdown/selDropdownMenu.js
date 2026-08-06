@@ -1,7 +1,7 @@
 /*
  * selDropdownMenu.js：通用水晶选择下拉基础控件。
  * 负责从原生 select 构建可配置下拉、同步选中值、滚动阈值、互斥打开、点击外部关闭和完整键盘交互。
- * 责任边界：本文件只读取调用方已经写入原生 select 的标准选项，不请求接口、不读取 Uniauth 数据。
+ * 责任边界：本文件只读取调用方已经写入原生 select 的标准选项，不请求接口、不读取 具体应用 数据。
  * 模块级 JavaScript 标识统一使用 selDropdownMenu 前缀，公开控制器为 window.selDropdownMenu。
  */
 (function selDropdownMenuInitialize() {

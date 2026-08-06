@@ -50,11 +50,11 @@
     // 合法最终语言同步到偏好，刷新和下一次直接访问保持一致。
     uniauthBase.preference.set(uniauthLocalePreferenceKey, uniauthLocale);
     // 公共属性配置位于 SEL 组件目录，与任何 Uniauth 项目数据目录保持物理隔离。
-    const uniauthCommonPersonalizationUrl = "../sel/components/personalization/i18n/{locale}.json";
+    const uniauthCommonPersonalizationUrl = "/sel/components/personalization/i18n/{locale}.json";
     // 公共窗口框架拥有独立语言配置，不能把最小化、最大化等公共属性塞入项目业务 JSON。
-    const uniauthCommonWindowUrl = "../sel/components/window/i18n/{locale}.json";
+    const uniauthCommonWindowUrl = "/sel/components/window/i18n/{locale}.json";
     // 日期选择器拥有独立公共语言包，业务字段只提供“开始日期”等项目标签。
-    const uniauthCommonDatePickerUrl = "../sel/components/date-picker/i18n/{locale}.json";
+    const uniauthCommonDatePickerUrl = "/sel/components/date-picker/i18n/{locale}.json";
     // 当前项目设置 Schema 独立于公共组件文案；生产环境只需把此地址替换为后端聚合接口。
     const uniauthSettingsSchemaUrl = "./mock/settings/UniauthSettings.schema.json";
     // HTML 提供应用挂载点和可审阅的完整面板结构，装配层只在其中定位当前业务实例。
