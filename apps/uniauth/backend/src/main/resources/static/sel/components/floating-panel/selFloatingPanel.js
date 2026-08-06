@@ -131,8 +131,13 @@
         function selFloatingPanelResizeBounds() {
             const selFloatingPanelRect = selFloatingPanelPanel.getBoundingClientRect();
             const selFloatingPanelViewportGap = 12;
+            // 语言切换后的内存快照会在浮层重新打开前恢复；hidden 元素没有可用 rect，
+            // 此时改用视口右边界，避免合法的自定义宽度被错误夹回最小宽度。
+            const selFloatingPanelAvailableRight = selFloatingPanelRect.right > 0
+                ? selFloatingPanelRect.right
+                : window.innerWidth - selFloatingPanelViewportGap;
             return {
-                maxWidth: Math.max(selFloatingPanelResizeMinimumWidth, Math.min(selFloatingPanelResizeMaximumWidth, selFloatingPanelRect.right - selFloatingPanelViewportGap)),
+                maxWidth: Math.max(selFloatingPanelResizeMinimumWidth, Math.min(selFloatingPanelResizeMaximumWidth, selFloatingPanelAvailableRight - selFloatingPanelViewportGap)),
                 maxHeight: Math.max(selFloatingPanelResizeMinimumHeight, Math.min(selFloatingPanelResizeMaximumHeight, window.innerHeight - selFloatingPanelRect.top - selFloatingPanelViewportGap))
             };
         }
@@ -312,6 +317,7 @@
             panel: selFloatingPanelPanel,
             body: selFloatingPanelBody,
             resetSize: selFloatingPanelResetSize,
+            setSize: (selFloatingPanelSize = {}) => selFloatingPanelApplySize(Number(selFloatingPanelSize.width), Number(selFloatingPanelSize.height)),
             getSize: () => Object.freeze({
                 width: selFloatingPanelPanel.getBoundingClientRect().width,
                 height: selFloatingPanelPanel.getBoundingClientRect().height,

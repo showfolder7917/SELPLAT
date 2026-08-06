@@ -394,6 +394,15 @@
                 state.items = Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
                 render();
             },
+            // setLocale 使用标准菜单片段原位替换文字，当前行归属和打开位置继续保留。
+            setLocale: (selGridMenuNext = {}) => {
+                const selGridMenuNextData = selGridMenuNext.resource || selGridMenuNext.messages || selGridMenuNext;
+                if (!selGridMenuNextData || !Array.isArray(selGridMenuNextData.items)) return false;
+                state.items = selGridMenuNextData.items.map((item) => ({ ...item, children: Array.isArray(item.children) ? item.children.map((child) => ({ ...child })) : undefined }));
+                state.scrollAfter = Math.max(1, Math.floor(Number(selGridMenuNextData.scrollAfter) || 1));
+                render();
+                return true;
+            },
             setScrollAfter: (count) => {
                 state.scrollAfter = Math.max(1, Math.floor(Number(count) || 1));
                 render();

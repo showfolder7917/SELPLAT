@@ -274,9 +274,16 @@ class UniauthSkinResourceStructureTest {
         String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
         String windowScript = readText("static/sel/components/window/selWindow.js");
         String runtimeScript = readText("static/sel/core/selBaseRuntime.js");
+        String localeRuntimeScript = readText("static/sel/core/selLocaleRuntime.js");
+        String gridScript = readText("static/sel/components/grid/selGrid.js");
+        String searchScript = readText("static/sel/components/search/selSearch.js");
+        String treeScript = readText("static/sel/components/tree/selTree.js");
+        String menuScript = readText("static/sel/components/grid/selGridMenu.js");
+        String datePickerScript = readText("static/sel/components/date-picker/selDatePicker.js");
         // 应用装配层独立登记公共文案与项目业务目录，公共组件不能识别 Uniauth 文件位置。
         assertTrue(applicationScript.contains("../sel/components/personalization/i18n/{locale}.json"));
         assertTrue(applicationScript.contains("../sel/components/window/i18n/{locale}.json"));
+        assertTrue(applicationScript.contains("../sel/components/date-picker/i18n/{locale}.json"));
         assertTrue(applicationScript.contains("./mock/UniauthUserGrid/{locale}/UniauthUserGrid.window.create.json"));
         assertTrue(applicationScript.contains("messages: uniauthPersonalizationMessages"));
         assertTrue(applicationScript.contains("window: Object.freeze({ create: Object.freeze(uniauthParts.createWindow) })"));
@@ -285,24 +292,44 @@ class UniauthSkinResourceStructureTest {
         assertTrue(personalizationScript.contains("data-sel-personal-language"));
         assertTrue(personalizationScript.contains("selPersonalizationOptions.locale?.onChange"));
         assertFalse(personalizationScript.contains("UniauthUserGrid"));
-        assertTrue(windowScript.contains("selWindowOptions.messages"));
+        assertTrue(windowScript.contains("selWindowLocaleOptions.messages"));
         assertFalse(windowScript.contains("setAttribute(\"aria-label\", \"最小化窗口\")"));
-        // 语言偏好键和 URL 参数由项目应用决定；公共运行时只提供通用存取与保参导航能力。
+        // 语言偏好键和 URL 参数由项目应用决定；公共运行时只提供通用存取与无刷新地址同步能力。
         assertTrue(applicationScript.contains("selplat.uniauth.locale"));
-        assertTrue(runtimeScript.contains("selBaseNavigateWithParam"));
+        assertTrue(runtimeScript.contains("selBaseReplaceParam"));
         assertTrue(runtimeScript.contains("target.searchParams.set"));
+        // 统一协调器必须先准备全部资源，再按登记顺序调用组件 setLocale；项目应用不再触发整页导航。
+        assertTrue(localeRuntimeScript.contains("Promise.all"));
+        assertTrue(localeRuntimeScript.contains("controller?.setLocale"));
+        assertTrue(localeRuntimeScript.contains("selLocale:change"));
+        assertTrue(applicationScript.contains("window.selLocaleRuntime.create"));
+        assertTrue(applicationScript.contains("uniauthLocaleController.register"));
+        assertTrue(applicationScript.contains("uniauthApplyProjectLocale"));
+        assertTrue(applicationScript.contains("uniauthBase.replaceParam(\"lang\", uniauthLocale)"));
+        assertFalse(applicationScript.contains("navigateWithParam(\"lang\""));
+        assertFalse(applicationScript.contains("location.reload"));
+        assertFalse(applicationScript.contains("sessionStorage"));
+        assertTrue(personalizationScript.contains("setLocale: selPersonalizationSetLocale"));
+        assertTrue(windowScript.contains("setLocale: selWindowSetLocale"));
+        assertTrue(gridScript.contains("setLocale: selGridSetLocale"));
+        assertTrue(searchScript.contains("setLocale: selSearchSetLocale"));
+        assertTrue(treeScript.contains("setLocale: selTreeSetLocale"));
+        assertTrue(menuScript.contains("setLocale:"));
+        assertTrue(datePickerScript.contains("setLocale: selDatePickerSetLocale"));
 
         for (String locale : List.of("zh-CN", "ja-JP", "en-US")) {
             String commonMessages = readText("static/sel/components/personalization/i18n/" + locale + ".json");
             String projectWindow = readText("static/uniauth/mock/UniauthUserGrid/" + locale
                     + "/UniauthUserGrid.window.create.json");
             String commonWindowMessages = readText("static/sel/components/window/i18n/" + locale + ".json");
+            String commonDatePickerMessages = readText("static/sel/components/date-picker/i18n/" + locale + ".json");
             // 三份公共配置都登记自身 BCP-47 值与三种稳定选项。
             assertTrue(commonMessages.contains("\"locale\": \"" + locale + "\""));
             assertTrue(commonMessages.contains("\"value\": \"zh-CN\""));
             assertTrue(commonMessages.contains("\"value\": \"ja-JP\""));
             assertTrue(commonMessages.contains("\"value\": \"en-US\""));
             assertTrue(commonWindowMessages.contains("\"locale\": \"" + locale + "\""));
+            assertTrue(commonDatePickerMessages.contains("\"locale\": \"" + locale + "\""));
             // 项目显示标签可本地化，但提交值必须跨语言保持一致。
             assertTrue(projectWindow.contains("\"value\": \"platform\""));
             assertTrue(projectWindow.contains("\"value\": \"lin-shen\""));
@@ -326,6 +353,7 @@ class UniauthSkinResourceStructureTest {
         assertTrue(floatingScript.contains("document.addEventListener(\"pointermove\", selFloatingPanelHandleResizePointerMove"));
         assertTrue(floatingScript.contains("document.removeEventListener(\"pointermove\", selFloatingPanelHandleResizePointerMove)"));
         assertTrue(floatingScript.contains("getSize: () => Object.freeze"));
+        assertTrue(floatingScript.contains("setSize: (selFloatingPanelSize = {})"));
         // 宽高必须受视口和调用方上下限共同约束，移动端不允许内联桌面尺寸破坏自适应。
         assertTrue(floatingScript.contains("window.innerHeight - selFloatingPanelRect.top"));
         assertTrue(floatingScript.contains("selFloatingPanelResizeMaximumWidth"));

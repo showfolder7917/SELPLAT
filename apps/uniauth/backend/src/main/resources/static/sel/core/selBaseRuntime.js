@@ -99,13 +99,59 @@
      * 保留当前页面其他查询参数，仅替换一个应用显式指定的参数并重新装配页面。
      * @param {string} name - 需要修改的查询参数名称。
      * @param {string} value - 参数新值。
+     * @param {{key?: string, value?: unknown}} transient - 可选的一次性内存状态；新页面读取后必须立即清除。
      * @returns {boolean} 已发起同页导航时返回 true。
      */
-    function selBaseNavigateWithParam(name, value) {
+    function selBaseNavigateWithParam(name, value, transient = {}) {
         const target = new URL(global.location.href);
         target.searchParams.set(String(name), String(value));
+        // 一次性交接写入当前浏览器历史条目，不使用 localStorage、sessionStorage、Cookie 或后端。
+        const transientKey = String(transient?.key || "");
+        if (transientKey) {
+            try {
+                const currentState = global.history.state && typeof global.history.state === "object" ? global.history.state : {};
+                global.history.replaceState({ ...currentState, [transientKey]: transient.value }, "", target.toString());
+                global.location.reload();
+                return true;
+            } catch (error) {
+                // 历史状态不可用时安全退回普通导航；视觉状态会按页面默认值重建。
+            }
+        }
         global.location.assign(target.toString());
         return true;
+    }
+
+    /** 原位更新一个查询参数，不触发导航或组件重建。 */
+    function selBaseReplaceParam(name, value) {
+        try {
+            const target = new URL(global.location.href);
+            target.searchParams.set(String(name), String(value));
+            global.history.replaceState(global.history.state, "", target.toString());
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * 读取并立即删除一个一次性历史状态，防止普通刷新继续恢复旧视觉设置。
+     * @param {string} key - 应用拥有的瞬时状态键。
+     * @returns {unknown|null} 本次导航交接值；不存在或不可读取时返回 null。
+     */
+    function selBaseTakeTransientState(key) {
+        const transientKey = String(key || "");
+        if (!transientKey) return null;
+        try {
+            const currentState = global.history.state && typeof global.history.state === "object" ? global.history.state : {};
+            if (!Object.prototype.hasOwnProperty.call(currentState, transientKey)) return null;
+            const transientValue = currentState[transientKey];
+            const nextState = { ...currentState };
+            delete nextState[transientKey];
+            global.history.replaceState(nextState, "", global.location.href);
+            return transientValue;
+        } catch (error) {
+            return null;
+        }
     }
 
     /**
@@ -248,6 +294,10 @@
         preference: Object.freeze({ get: selBaseGetPreference, set: selBaseSetPreference }),
         // navigateWithParam 用于保留其他页面状态并按新 locale 重新装配当前应用。
         navigateWithParam: selBaseNavigateWithParam,
+        // replaceParam 用于运行时语言切换同步分享地址，但不刷新当前页面。
+        replaceParam: selBaseReplaceParam,
+        // takeTransientState 只消费一次浏览器历史内存状态，不形成长期偏好。
+        takeTransientState: selBaseTakeTransientState,
         // query 负责取得页面必需节点并在结构失配时快速报错。
         query: selBaseQuery,
         // text 负责把可空业务值转换为安全展示文本。

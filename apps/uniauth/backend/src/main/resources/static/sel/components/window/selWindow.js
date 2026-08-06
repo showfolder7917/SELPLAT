@@ -248,7 +248,8 @@
         // 重复挂载返回既有控制器，避免遮罩和事件叠加。
         if (selWindowInstances.has(selWindowId)) return selWindowInstances.get(selWindowId);
         // 窗口框架文案来自 selWindow 公共配置；项目标题、字段和业务反馈仍属于调用方项目配置。
-        const selWindowMessages = selWindowOptions.messages || {};
+        let selWindowLocaleOptions = selWindowOptions;
+        let selWindowMessages = selWindowLocaleOptions.messages || {};
         const selWindowFormatMessage = (selWindowKey, selWindowFallback, selWindowValues = {}) => Object.entries(selWindowValues).reduce(
             (selWindowResult, [selWindowValueKey, selWindowValue]) => selWindowResult.replaceAll(`{${selWindowValueKey}}`, String(selWindowValue)),
             String(selWindowMessages[selWindowKey] || selWindowFallback)
@@ -403,7 +404,7 @@
         // 窗口内所有标准下拉通过公开基础控件一次挂载。
         window.selDropdownMenu?.mountAll(selWindowShell);
         // 窗口内所有标准日期字段通过公开基础控件一次挂载，原生 date input 不再直接显示系统日历。
-        window.selDatePicker?.mountAll(selWindowShell);
+        window.selDatePicker?.mountAll(selWindowShell, { locale: selWindowOptions.locale, messages: selWindowOptions.datePickerMessages });
 
         /**
          * 读取当前可用视口尺寸。
@@ -827,6 +828,69 @@
         });
 
         // 控制器只暴露应用所需动作和不可变状态快照。
+        // 公共窗口动作与项目字段分别原位更新，窗口开关、表单值、位置和尺寸不变。
+        function selWindowSetLocale(selWindowNext = {}) {
+            const selWindowNextResource = selWindowNext.resource || selWindowNext;
+            const selWindowNextOptions = selWindowNextResource.options || selWindowNextResource.project || selWindowNextResource;
+            if (!selWindowNextOptions || typeof selWindowNextOptions !== "object") return false;
+            selWindowLocaleOptions = { ...selWindowLocaleOptions, ...selWindowNextOptions };
+            selWindowLocaleOptions.locale = selWindowNext.locale || selWindowLocaleOptions.locale;
+            selWindowLocaleOptions.datePickerMessages = selWindowNextResource.datePickerMessages || selWindowLocaleOptions.datePickerMessages;
+            selWindowOptions = selWindowLocaleOptions;
+            selWindowMessages = selWindowNextResource.messages || selWindowLocaleOptions.messages || selWindowMessages;
+            selWindowShell.setAttribute("aria-label", String(selWindowLocaleOptions.title || "业务窗口"));
+            selWindowTitle.textContent = String(selWindowLocaleOptions.title || "新建项目");
+            selWindowSubtitle.textContent = String(selWindowLocaleOptions.subtitle || "");
+            selWindowMinimize.setAttribute("aria-label", selWindowFormatMessage("minimize", "最小化窗口"));
+            selWindowMaximize.setAttribute("aria-label", selWindowFormatMessage(selWindowState.maximized ? "restore" : "maximize", selWindowState.maximized ? "还原窗口" : "最大化窗口"));
+            selWindowClose.setAttribute("aria-label", String(selWindowLocaleOptions.closeLabel || "关闭新建项目窗口"));
+            selWindowCancel.textContent = String(selWindowLocaleOptions.cancelLabel || "取消");
+            selWindowSubmit.textContent = String(selWindowLocaleOptions.submitLabel || "立即创建");
+            const selWindowCheckboxText = Array.from(selWindowCheckboxLabel.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
+            if (selWindowCheckboxText) selWindowCheckboxText.nodeValue = String(selWindowLocaleOptions.checkboxLabel || "");
+            const selWindowNextFields = (selWindowLocaleOptions.rows || []).flat();
+            selWindowNextFields.forEach((selWindowField) => {
+                const selWindowInput = selWindowForm.elements.namedItem(selWindowField.name);
+                if (!(selWindowInput instanceof Element)) return;
+                const selWindowLabelFor = selWindowInput.id.endsWith("-native") ? selWindowInput.id.slice(0, -7) : selWindowInput.id;
+                const selWindowLabel = selWindowForm.querySelector(`label[for="${CSS.escape(selWindowLabelFor)}"]`);
+                if (selWindowLabel) selWindowLabel.textContent = String(selWindowField.label || "");
+                if ("placeholder" in selWindowInput) selWindowInput.placeholder = String(selWindowField.placeholder || "");
+                if (selWindowInput instanceof HTMLSelectElement) {
+                    const selWindowCurrentValue = selWindowInput.value;
+                    selWindowInput.replaceChildren();
+                    selWindowFillSelect(selWindowInput, selWindowField.options);
+                    if (Array.from(selWindowInput.options).some((option) => option.value === selWindowCurrentValue)) selWindowInput.value = selWindowCurrentValue;
+                    const selWindowDropdownRoot = selWindowInput.closest("[data-sel-dropdown-menu]");
+                    if (selWindowDropdownRoot) {
+                        selWindowDropdownRoot.dataset.selDropdownMenuLabel = String(selWindowField.label || "");
+                        selWindowDropdownRoot.dataset.selDropdownMenuTitle = String(selWindowField.label || "");
+                        window.selDropdownMenu?.setLocale(selWindowDropdownRoot);
+                    }
+                }
+                const selWindowDateRoot = selWindowInput.closest("[data-sel-date-picker]");
+                if (selWindowDateRoot) {
+                    selWindowDateRoot.dataset.selDatePickerLabel = String(selWindowField.label || "");
+                    selWindowDateRoot.dataset.selDatePickerPlaceholder = String(selWindowField.placeholder || "");
+                    const selWindowDateValue = selWindowDateRoot.querySelector(".seldatepicker-trigger-value");
+                    if (selWindowDateValue && !selWindowInput.value) selWindowDateValue.textContent = String(selWindowField.placeholder || "");
+                    const selWindowDateController = window.selDatePicker?.getForInput(selWindowInput);
+                    if (selWindowDateController) {
+                        selWindowDateController.setLocale({
+                            locale: selWindowLocaleOptions.locale,
+                            messages: selWindowLocaleOptions.datePickerMessages,
+                            label: selWindowField.label,
+                            placeholder: selWindowField.placeholder
+                        });
+                    }
+                }
+            });
+            selWindowMinimizedButton.setAttribute("aria-label", selWindowFormatMessage("restoreWindow", "恢复{title}窗口", { title: String(selWindowLocaleOptions.title || "业务") }));
+            selWindowMinimizedButton.lastChild.nodeValue = String(selWindowLocaleOptions.title || "业务窗口");
+            selWindowGetMinimizedRail(selWindowMessages);
+            return true;
+        }
+
         const selWindowController = Object.freeze({
             // open 由表格新建事件调用。
             open: selWindowOpen,
@@ -840,6 +904,7 @@
             restore: () => selWindowSetMaximized(false),
             // minimize 供应用或自动化显式把窗口收起到停靠区。
             minimize: selWindowMinimizeWindow,
+            setLocale: selWindowSetLocale,
             // getState 返回可见性、最小化、提交数据、几何和最大化状态的独立快照。
             getState: () => Object.freeze({ open: selWindowState.open, minimized: selWindowState.minimized, submitted: selWindowState.submitted, geometry: selWindowState.geometry ? Object.freeze({ ...selWindowState.geometry }) : null, maximized: selWindowState.maximized })
         });

@@ -10,8 +10,6 @@
     const selDatePickerControllers = new WeakMap();
     // 活跃控制器集合用于打开新月历时关闭其他实例，并支持 Window 按范围关闭。
     const selDatePickerControllerSet = new Set();
-    // 中文星期从周一开始，与项目计划和企业日历的阅读顺序一致。
-    const selDatePickerWeekdays = Object.freeze(["一", "二", "三", "四", "五", "六", "日"]);
     // 日期浮层与视口之间保留安全距离，避免水晶发光被屏幕边缘裁切。
     const selDatePickerViewportGap = 12;
 
@@ -153,19 +151,25 @@
      * @param {HTMLElement} selDatePickerHost - 含原生 date input 的标准宿主。
      * @returns {object|null} 日期选择器公开控制器。
      */
-    function selDatePickerMount(selDatePickerHost) {
+    function selDatePickerMount(selDatePickerHost, selDatePickerOptions = {}) {
         // 非元素宿主无法承载日期触发器和控制器。
         if (!(selDatePickerHost instanceof HTMLElement)) return null;
         // 重复装配直接返回既有实例，避免文档事件监听叠加。
-        if (selDatePickerControllers.has(selDatePickerHost)) return selDatePickerControllers.get(selDatePickerHost);
+        if (selDatePickerControllers.has(selDatePickerHost)) {
+            const selDatePickerExisting = selDatePickerControllers.get(selDatePickerHost);
+            if (selDatePickerOptions.messages || selDatePickerOptions.locale) selDatePickerExisting.setLocale(selDatePickerOptions);
+            return selDatePickerExisting;
+        }
         // 原生 date input 是唯一表单值来源。
         const selDatePickerInput = selDatePickerHost.querySelector('input[type="date"].seldatepicker-native');
         // 缺少真实输入时拒绝生成只有视觉没有业务值的控件。
         if (!(selDatePickerInput instanceof HTMLInputElement)) return null;
         // 字段名称只用于可访问文案，不参与日期逻辑。
-        const selDatePickerLabel = String(selDatePickerHost.dataset.selDatePickerLabel || "日期");
+        let selDatePickerLocale = String(selDatePickerOptions.locale || "zh-CN");
+        let selDatePickerMessages = selDatePickerOptions.messages || {};
+        let selDatePickerLabel = String(selDatePickerHost.dataset.selDatePickerLabel || "日期");
         // 未选日期时显示应用提供的占位文案。
-        const selDatePickerPlaceholder = String(selDatePickerHost.dataset.selDatePickerPlaceholder || `请选择${selDatePickerLabel}`);
+        let selDatePickerPlaceholder = String(selDatePickerHost.dataset.selDatePickerPlaceholder || `请选择${selDatePickerLabel}`);
         // 触发器 id 与外部 label 的 htmlFor 对应。
         const selDatePickerTriggerId = String(selDatePickerHost.dataset.selDatePickerTriggerId || `${selDatePickerInput.id}-trigger`);
         // 每个浮层拥有稳定唯一 id，供 aria-controls 关联。
@@ -207,7 +211,7 @@
         // dialog 说明月份选择属于一个聚焦交互区域。
         selDatePickerPopover.setAttribute("role", "dialog");
         // 可访问名称包含业务字段名称。
-        selDatePickerPopover.setAttribute("aria-label", `选择${selDatePickerLabel}`);
+        selDatePickerPopover.setAttribute("aria-label", String(selDatePickerMessages.chooseTemplate || "选择{label}").replaceAll("{label}", selDatePickerLabel));
         // 初始不参与布局和命中。
         selDatePickerPopover.hidden = true;
 
@@ -218,7 +222,7 @@
         // 非提交按钮保持表单安全。
         selDatePickerPrevious.type = "button";
         // 读屏名称不依赖箭头图形。
-        selDatePickerPrevious.setAttribute("aria-label", "上个月");
+        selDatePickerPrevious.setAttribute("aria-label", selDatePickerMessages.previousMonth || "上个月");
         // 使用左箭头图标表达向前导航。
         selDatePickerPrevious.appendChild(selDatePickerCreateIcon("ri-arrow-left-s-line"));
         // 年月标题在每次导航后刷新。
@@ -230,7 +234,7 @@
         // 非提交按钮保持表单安全。
         selDatePickerNext.type = "button";
         // 读屏名称说明向后导航。
-        selDatePickerNext.setAttribute("aria-label", "下个月");
+        selDatePickerNext.setAttribute("aria-label", selDatePickerMessages.nextMonth || "下个月");
         // 使用右箭头图标表达向后导航。
         selDatePickerNext.appendChild(selDatePickerCreateIcon("ri-arrow-right-s-line"));
         // 月份导航按左、标题、右的稳定顺序装配。
@@ -240,30 +244,30 @@
         const selDatePickerWeekdayRow = selDatePickerCreateElement("div", "seldatepicker-weekdays");
         // 星期标题不重复进入键盘焦点。
         selDatePickerWeekdayRow.setAttribute("aria-hidden", "true");
-        // 固定七天逐项生成中文短标签。
-        selDatePickerWeekdays.forEach((selDatePickerWeekday) => {
-            // 每个星期标签占据一个稳定网格列。
-            selDatePickerWeekdayRow.appendChild(selDatePickerCreateElement("span", "seldatepicker-weekday", selDatePickerWeekday));
-        });
+        function selDatePickerRenderWeekdays() {
+            const selDatePickerWeekdays = Array.isArray(selDatePickerMessages.weekdays) ? selDatePickerMessages.weekdays : ["一", "二", "三", "四", "五", "六", "日"];
+            selDatePickerWeekdayRow.replaceChildren(...selDatePickerWeekdays.map((selDatePickerWeekday) => selDatePickerCreateElement("span", "seldatepicker-weekday", selDatePickerWeekday)));
+        }
+        selDatePickerRenderWeekdays();
         // 日期网格由 render 按当前月份重建 42 个日期按钮。
         const selDatePickerDays = selDatePickerCreateElement("div", "seldatepicker-days");
         // grid 语义帮助辅助技术理解二维日期选择。
         selDatePickerDays.setAttribute("role", "grid");
         // 可访问名称随字段含义保持明确。
-        selDatePickerDays.setAttribute("aria-label", `${selDatePickerLabel}月历`);
+        selDatePickerDays.setAttribute("aria-label", String(selDatePickerMessages.calendarTemplate || "{label}月历").replaceAll("{label}", selDatePickerLabel));
 
         // 底部提供清除、今天和确定三类稳定动作。
         const selDatePickerFooter = selDatePickerCreateElement("footer", "seldatepicker-footer");
         // 清除会提交空日期并关闭控件。
-        const selDatePickerClear = selDatePickerCreateElement("button", "seldatepicker-action", "清除");
+        const selDatePickerClear = selDatePickerCreateElement("button", "seldatepicker-action", selDatePickerMessages.clear || "清除");
         // 非提交按钮不触发外层业务表单。
         selDatePickerClear.type = "button";
         // 今天只移动待选日期，用户仍通过确定提交。
-        const selDatePickerToday = selDatePickerCreateElement("button", "seldatepicker-action", "今天");
+        const selDatePickerToday = selDatePickerCreateElement("button", "seldatepicker-action", selDatePickerMessages.today || "今天");
         // 非提交按钮不触发外层业务表单。
         selDatePickerToday.type = "button";
         // 确定是月历唯一主要操作。
-        const selDatePickerConfirm = selDatePickerCreateElement("button", "seldatepicker-action seldatepicker-action-primary", "确定");
+        const selDatePickerConfirm = selDatePickerCreateElement("button", "seldatepicker-action seldatepicker-action-primary", selDatePickerMessages.confirm || "确定");
         // 非提交按钮只提交日期到原生 input。
         selDatePickerConfirm.type = "button";
         // 三个动作按清理、快捷选择和确认顺序装配。
@@ -294,14 +298,14 @@
             selDatePickerState.committed = selDatePickerCommitted;
             // 有值时使用清晰的年/月/日格式。
             const selDatePickerDisplay = selDatePickerCommitted
-                ? `${selDatePickerCommitted.getFullYear()} / ${selDatePickerPad(selDatePickerCommitted.getMonth() + 1)} / ${selDatePickerPad(selDatePickerCommitted.getDate())}`
+                ? new Intl.DateTimeFormat(selDatePickerLocale, { year: "numeric", month: "2-digit", day: "2-digit" }).format(selDatePickerCommitted)
                 : selDatePickerPlaceholder;
             // 可见文本同步当前值或占位文案。
             selDatePickerTriggerValue.textContent = selDatePickerDisplay;
             // data 状态让占位色与真实值色清晰区分。
             selDatePickerTriggerValue.dataset.placeholder = String(!selDatePickerCommitted);
             // 按钮名称同时播报字段和当前值。
-            selDatePickerTrigger.setAttribute("aria-label", `${selDatePickerLabel}：${selDatePickerDisplay}`);
+            selDatePickerTrigger.setAttribute("aria-label", String(selDatePickerMessages.valueTemplate || "{label}：{value}").replaceAll("{label}", selDatePickerLabel).replaceAll("{value}", selDatePickerDisplay));
         }
 
         /** 把当前浮层夹在视口内并自动选择上下方向。 */
@@ -351,7 +355,7 @@
         /** 绘制当前观察月份的 42 个日期格。 */
         function selDatePickerRender() {
             // 标题显示完整年份和自然月份。
-            selDatePickerMonthTitle.textContent = `${selDatePickerState.view.getFullYear()} 年 ${selDatePickerState.view.getMonth() + 1} 月`;
+            selDatePickerMonthTitle.textContent = new Intl.DateTimeFormat(selDatePickerLocale, { year: "numeric", month: "long" }).format(selDatePickerState.view);
             // 清空旧日期按钮，避免翻月后保留错误状态。
             selDatePickerDays.replaceChildren();
             // 当月一号决定周一制网格前置多少天。
@@ -381,7 +385,7 @@
                 // 稳定日期值用于点击和键盘焦点恢复。
                 selDatePickerDayButton.dataset.selDatePickerDate = selDatePickerDateValue;
                 // 完整中文日期让读屏用户不依赖网格上下文猜测。
-                selDatePickerDayButton.setAttribute("aria-label", `${selDatePickerDate.getFullYear()}年${selDatePickerDate.getMonth() + 1}月${selDatePickerDate.getDate()}日`);
+                selDatePickerDayButton.setAttribute("aria-label", new Intl.DateTimeFormat(selDatePickerLocale, { year: "numeric", month: "long", day: "numeric" }).format(selDatePickerDate));
                 // 选中态通过 aria-selected 暴露给网格语义。
                 selDatePickerDayButton.setAttribute("aria-selected", String(selDatePickerIsSelected));
                 // 网格只保留一个顺序焦点入口，其余用箭头导航。
@@ -612,6 +616,29 @@
         // 外部脚本修改原生 input 后刷新可见值。
         selDatePickerInput.addEventListener("change", selDatePickerSyncTrigger);
 
+        // 原位更新日期组件公共文案和格式，已选日期、观察月份与打开状态保持不变。
+        function selDatePickerSetLocale(selDatePickerLocaleUpdate = {}) {
+            const selDatePickerNextMessages = selDatePickerLocaleUpdate.resource || selDatePickerLocaleUpdate.messages || {};
+            const selDatePickerNextLocale = String(selDatePickerLocaleUpdate.locale || selDatePickerNextMessages.locale || selDatePickerLocale);
+            if (!selDatePickerNextLocale || typeof selDatePickerNextMessages !== "object") return false;
+            selDatePickerLocale = selDatePickerNextLocale;
+            selDatePickerMessages = selDatePickerNextMessages;
+            selDatePickerLabel = String(selDatePickerLocaleUpdate.label || selDatePickerHost.dataset.selDatePickerLabel || selDatePickerLabel);
+            selDatePickerPlaceholder = String(selDatePickerLocaleUpdate.placeholder || selDatePickerHost.dataset.selDatePickerPlaceholder || selDatePickerPlaceholder);
+            selDatePickerPopover.setAttribute("aria-label", String(selDatePickerMessages.chooseTemplate || "选择{label}").replaceAll("{label}", selDatePickerLabel));
+            selDatePickerPrevious.setAttribute("aria-label", selDatePickerMessages.previousMonth || "上个月");
+            selDatePickerNext.setAttribute("aria-label", selDatePickerMessages.nextMonth || "下个月");
+            selDatePickerDays.setAttribute("aria-label", String(selDatePickerMessages.calendarTemplate || "{label}月历").replaceAll("{label}", selDatePickerLabel));
+            selDatePickerClear.textContent = selDatePickerMessages.clear || "清除";
+            selDatePickerToday.textContent = selDatePickerMessages.today || "今天";
+            selDatePickerConfirm.textContent = selDatePickerMessages.confirm || "确定";
+            selDatePickerRenderWeekdays();
+            selDatePickerSyncTrigger();
+            // 关闭状态无需提前创建 42 个日期按钮；下次打开会使用新语言完整绘制。
+            if (selDatePickerState.open) selDatePickerRender();
+            return true;
+        }
+
         // 公开控制器只暴露装配方真正需要的动作和只读状态。
         const selDatePickerController = Object.freeze({
             // host 用于 closeWithin 判断当前控件是否属于目标 Window。
@@ -622,6 +649,7 @@
             open: selDatePickerOpen,
             // close 放弃未确认选择并关闭浮层。
             close: selDatePickerClose,
+            setLocale: selDatePickerSetLocale,
             // refresh 在 form.reset 或外部赋值后同步显示。
             refresh: () => {
                 // 重新读取原生真实值。
@@ -654,11 +682,11 @@
      * @param {ParentNode} selDatePickerScope - Window 或页面根节点。
      * @returns {Array<object>} 成功挂载的控制器列表。
      */
-    function selDatePickerMountAll(selDatePickerScope = document) {
+    function selDatePickerMountAll(selDatePickerScope = document, selDatePickerOptions = {}) {
         // 只扫描显式 data 契约，禁止根据业务字段名猜测日期控件。
         return Array.from(selDatePickerScope.querySelectorAll("[data-sel-date-picker]"))
             // 每个宿主走幂等单实例入口。
-            .map((selDatePickerHost) => selDatePickerMount(selDatePickerHost))
+            .map((selDatePickerHost) => selDatePickerMount(selDatePickerHost, selDatePickerOptions))
             // 过滤结构不完整的失败结果。
             .filter(Boolean);
     }

@@ -22,22 +22,22 @@
         }
 
         // 当前实例全部业务数据由应用装配层显式传入，不读取页面全局业务对象。
-        const selGridInputPayload = selGridPayload || null;
+        let selGridInputPayload = selGridPayload || null;
         // 缺少完整 payload 时不创建半成品表格实例。
         if (!selGridInputPayload || !Array.isArray(selGridInputPayload.data?.items) || !Array.isArray(selGridInputPayload.column?.items)) {
             return null;
         }
 
         // 行数据保持后端顺序并冻结外层数组，运行状态不能改写业务响应。
-        const selGridProjects = Object.freeze(selGridInputPayload.data.items);
+        let selGridProjects = Object.freeze(selGridInputPayload.data.items);
         // 类型显示映射使用稳定代码查找当前语言文字。
-        const selGridTypeLabels = new Map(selGridInputPayload.select.projectType.options.map((selGridTypeOption) => [selGridTypeOption.value, selGridTypeOption.label]));
+        let selGridTypeLabels = new Map(selGridInputPayload.select.projectType.options.map((selGridTypeOption) => [selGridTypeOption.value, selGridTypeOption.label]));
         // 状态显示映射使用稳定代码查找当前语言文字。
-        const selGridStatusLabels = new Map(selGridInputPayload.select.status.options.map((selGridStatusOption) => [selGridStatusOption.value, selGridStatusOption.label]));
+        let selGridStatusLabels = new Map(selGridInputPayload.select.status.options.map((selGridStatusOption) => [selGridStatusOption.value, selGridStatusOption.label]));
         // 当前语言业务提示集中来自 title JSON。
-        const selGridMessages = selGridInputPayload.title.messages;
+        let selGridMessages = selGridInputPayload.title.messages;
         // 当前语言分页模板集中来自 pagination JSON。
-        const selGridPaginationData = selGridInputPayload.pagination;
+        let selGridPaginationData = selGridInputPayload.pagination;
 
         // 把后端本地化模板中的 {name} 占位符替换成当前业务值。
         function selGridFormatMessage(selGridTemplate, selGridValues) {
@@ -1168,6 +1168,22 @@
         getPageSize: () => selGridState.pageSize
     });
 
+    // 运行时语言切换只替换标准聚合数据并重绘文字，筛选、页码、选择和滚动容器均保留。
+    function selGridSetLocale(selGridNext = {}) {
+        const selGridNextPayload = selGridNext.resource || selGridNext.messages || selGridNext;
+        if (!selGridNextPayload || !Array.isArray(selGridNextPayload.data?.items) || !Array.isArray(selGridNextPayload.column?.items)) return false;
+        selGridInputPayload = selGridNextPayload;
+        selGridProjects = Object.freeze(selGridInputPayload.data.items);
+        selGridTypeLabels = new Map(selGridInputPayload.select.projectType.options.map((item) => [item.value, item.label]));
+        selGridStatusLabels = new Map(selGridInputPayload.select.status.options.map((item) => [item.value, item.label]));
+        selGridMessages = selGridInputPayload.title.messages;
+        selGridPaginationData = selGridInputPayload.pagination;
+        selGridRenderColumnHeader();
+        selGridView.selectAll = selGridRoot.querySelector('[data-sel-grid-role="select-all"]');
+        selGridRenderTable();
+        return true;
+    }
+
     // 返回业务实例控制器，子控件通过属性归属于当前表格。
     return Object.freeze({
         id: selGridId,
@@ -1180,6 +1196,7 @@
         refresh: selGridRenderTable,
         reset: selGridResetInstance,
         setPage: selGridSetPage,
+        setLocale: selGridSetLocale,
         getState: () => Object.freeze({
             currentPage: selGridState.currentPage,
             pageSize: selGridState.pageSize,

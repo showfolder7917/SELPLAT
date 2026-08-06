@@ -595,8 +595,61 @@
             // 查询结果可能不存在，映射安全返回空值。
             return selDropdownMenuInstancesBySelect.get(document.getElementById(target)) || null;
         }
+        // 组件根允许应用在面板原位更新后直接刷新同一实例。
+        if (target instanceof Element) {
+            const selDropdownSelect = target.matches("select") ? target : target.querySelector("select");
+            return selDropdownMenuInstancesBySelect.get(selDropdownSelect) || null;
+        }
         // 其他类型不是公开接口支持目标。
         return null;
+    }
+
+    // 原生 select 已由面板写入新语言选项后，原位刷新自定义浮层并保留真实业务值。
+    function selDropdownMenuSetLocale(target) {
+        const instance = selDropdownMenuResolveInstance(target);
+        if (!instance) return false;
+        const options = selDropdownMenuReadOptions(instance.select);
+        const list = instance.menu.querySelector(".seldropdown-option-list");
+        const heading = instance.menu.querySelector(".seldropdown-menu-heading");
+        if (!list || !heading) return false;
+        instance.label = instance.root.dataset.selDropdownMenuLabel || instance.select.getAttribute("aria-label") || "下拉菜单";
+        instance.currentTemplate = instance.root.dataset.selDropdownMenuCurrentTemplate || "{label}：{value}";
+        instance.options = options;
+        instance.trigger.querySelector(".seldropdown-trigger-prefix").textContent = instance.root.dataset.selDropdownMenuPrefix || "";
+        instance.menu.setAttribute("aria-label", instance.label);
+        heading.firstChild.nodeValue = instance.root.dataset.selDropdownMenuTitle || instance.label;
+        const buttons = options.map((option, optionIndex) => {
+            const button = document.createElement("button");
+            button.className = "seldropdown-option";
+            button.type = "button";
+            button.setAttribute("role", "option");
+            button.setAttribute("aria-selected", "false");
+            button.dataset.optionIndex = String(option.index);
+            if (option.tone) button.dataset.tone = option.tone;
+            button.disabled = option.disabled;
+            button.appendChild(selDropdownMenuCreateIcon(option.icon, "seldropdown-option-icon"));
+            const copy = document.createElement("span");
+            copy.className = "seldropdown-option-copy";
+            const label = document.createElement("span");
+            label.className = "seldropdown-option-label";
+            label.textContent = option.menuLabel;
+            const description = document.createElement("span");
+            description.className = "seldropdown-option-description";
+            description.textContent = option.description;
+            copy.append(label, description);
+            button.append(copy, selDropdownMenuCreateIcon("ri-check-line", "seldropdown-option-check"));
+            button.addEventListener("focus", () => {
+                instance.activeIndex = optionIndex;
+                selDropdownMenuRefresh(instance);
+            });
+            return button;
+        });
+        list.replaceChildren(...buttons);
+        instance.optionButtons = buttons;
+        instance.activeIndex = Math.max(0, instance.select.selectedIndex);
+        instance.root.classList.toggle("seldropdown-root-scrollable", options.length > Math.max(1, Number(instance.root.dataset.selDropdownMenuScrollAfter) || 6));
+        selDropdownMenuRefresh(instance);
+        return true;
     }
 
     // 公开最小控制器，宿主可以同步外部状态但不依赖组件内部 DOM。
@@ -636,6 +689,8 @@
             // true 表示值已成功同步。
             return true;
         },
+        // setLocale 在面板更新原生选项后刷新同一自定义下拉实例。
+        setLocale: selDropdownMenuSetLocale,
         // 打开指定下拉。
         open(target) {
             // 解析目标组件实例。

@@ -272,11 +272,11 @@
             return null;
         }
         // 公共组件国际化数据由应用装配层从 SEL 公共配置目录加载后传入，不读取任何项目业务目录。
-        const selPersonalizationLocale = String(selPersonalizationOptions.locale?.current || "zh-CN");
-        const selPersonalizationMessages = selPersonalizationOptions.messages || {};
-        const selPersonalizationTextMap = selPersonalizationMessages.text || {};
-        const selPersonalizationTemplates = selPersonalizationMessages.templates || {};
-        const selPersonalizationLanguageOptions = Array.isArray(selPersonalizationMessages.languageOptions)
+        let selPersonalizationLocale = String(selPersonalizationOptions.locale?.current || "zh-CN");
+        let selPersonalizationMessages = selPersonalizationOptions.messages || {};
+        let selPersonalizationTextMap = selPersonalizationMessages.text || {};
+        let selPersonalizationTemplates = selPersonalizationMessages.templates || {};
+        let selPersonalizationLanguageOptions = Array.isArray(selPersonalizationMessages.languageOptions)
             ? selPersonalizationMessages.languageOptions
             : [];
         // 精确文本映射只处理公共组件自身文案；项目名称、表格列和业务状态不进入本组件。
@@ -298,15 +298,17 @@
             );
         };
         // 已生成的公共节点按精确映射本地化，避免把业务数据中的同形文字误当作组件属性翻译。
-        function selPersonalizationLocalizeNode(selPersonalizationNode) {
+        function selPersonalizationLocalizeNode(selPersonalizationNode, selPersonalizationPreviousTextMap = {}) {
             if (!(selPersonalizationNode instanceof Element)) return;
+            const selPersonalizationPreviousValues = new Map(Object.entries(selPersonalizationPreviousTextMap).map(([selPersonalizationSource, selPersonalizationTranslated]) => [String(selPersonalizationTranslated), selPersonalizationSource]));
             const selPersonalizationWalker = document.createTreeWalker(selPersonalizationNode, NodeFilter.SHOW_TEXT);
             let selPersonalizationTextNode = selPersonalizationWalker.nextNode();
             while (selPersonalizationTextNode) {
                 const selPersonalizationOriginal = selPersonalizationTextNode.nodeValue || "";
                 const selPersonalizationTrimmed = selPersonalizationOriginal.trim();
-                const selPersonalizationTranslated = selPersonalizationTextMap[selPersonalizationTrimmed];
-                if (selPersonalizationTranslated) {
+                const selPersonalizationSource = selPersonalizationPreviousValues.get(selPersonalizationTrimmed) || selPersonalizationTrimmed;
+                const selPersonalizationTranslated = selPersonalizationTextMap[selPersonalizationSource] || selPersonalizationSource;
+                if (selPersonalizationTranslated && selPersonalizationTranslated !== selPersonalizationTrimmed) {
                     selPersonalizationTextNode.nodeValue = selPersonalizationOriginal.replace(selPersonalizationTrimmed, selPersonalizationTranslated);
                 }
                 selPersonalizationTextNode = selPersonalizationWalker.nextNode();
@@ -314,8 +316,9 @@
             selPersonalizationNode.querySelectorAll("[aria-label], [title], [placeholder]").forEach((selPersonalizationElement) => {
                 ["aria-label", "title", "placeholder"].forEach((selPersonalizationAttribute) => {
                     const selPersonalizationOriginal = selPersonalizationElement.getAttribute(selPersonalizationAttribute);
-                    if (selPersonalizationOriginal && selPersonalizationTextMap[selPersonalizationOriginal]) {
-                        selPersonalizationElement.setAttribute(selPersonalizationAttribute, selPersonalizationTextMap[selPersonalizationOriginal]);
+                    const selPersonalizationSource = selPersonalizationPreviousValues.get(selPersonalizationOriginal) || selPersonalizationOriginal;
+                    if (selPersonalizationOriginal && selPersonalizationTextMap[selPersonalizationSource]) {
+                        selPersonalizationElement.setAttribute(selPersonalizationAttribute, selPersonalizationTextMap[selPersonalizationSource]);
                     }
                 });
             });
@@ -470,15 +473,19 @@
         }
 
         // 语言卡只消费公共个性化配置，稳定 locale 值由应用回调决定加载哪个项目目录。
-        selPersonalizationLanguageOptions.forEach((selPersonalizationLanguage) => {
-            const selPersonalizationLanguageButton = document.createElement("button");
-            selPersonalizationLanguageButton.className = "selpersonal-language-option";
-            selPersonalizationLanguageButton.type = "button";
-            selPersonalizationLanguageButton.dataset.selPersonalLanguage = selPersonalizationLanguage.value;
-            selPersonalizationLanguageButton.setAttribute("aria-pressed", String(selPersonalizationLanguage.value === selPersonalizationLocale));
-            selPersonalizationLanguageButton.innerHTML = `<span class="selpersonal-language-icon" aria-hidden="true"><i class="ri-translate-2"></i></span><span><strong>${selPersonalizationLanguage.label}</strong><small>${selPersonalizationLanguage.description}</small></span><i class="ri-checkbox-circle-fill selpersonal-language-selected" aria-hidden="true"></i>`;
-            selPersonalizationLanguageGrid.appendChild(selPersonalizationLanguageButton);
-        });
+        function selPersonalizationRenderLanguageOptions() {
+            selPersonalizationLanguageGrid.replaceChildren();
+            selPersonalizationLanguageOptions.forEach((selPersonalizationLanguage) => {
+                const selPersonalizationLanguageButton = document.createElement("button");
+                selPersonalizationLanguageButton.className = "selpersonal-language-option";
+                selPersonalizationLanguageButton.type = "button";
+                selPersonalizationLanguageButton.dataset.selPersonalLanguage = selPersonalizationLanguage.value;
+                selPersonalizationLanguageButton.setAttribute("aria-pressed", String(selPersonalizationLanguage.value === selPersonalizationLocale));
+                selPersonalizationLanguageButton.innerHTML = `<span class="selpersonal-language-icon" aria-hidden="true"><i class="ri-translate-2"></i></span><span><strong>${selPersonalizationLanguage.label}</strong><small>${selPersonalizationLanguage.description}</small></span><i class="ri-checkbox-circle-fill selpersonal-language-selected" aria-hidden="true"></i>`;
+                selPersonalizationLanguageGrid.appendChild(selPersonalizationLanguageButton);
+            });
+        }
+        selPersonalizationRenderLanguageOptions();
 
         /** 按当前注册表重新绘制主题、明暗模式和各模式独立颜色组合。 */
         function selPersonalizationRenderThemeOptions() {
@@ -1266,6 +1273,125 @@
         // 背景模块从其他公开入口变化时，组合界面同步状态。
         document.addEventListener("selPageBackground:change", selPersonalizationSyncBackground);
 
+        /**
+         * 恢复一次语言切换前的当前页面视觉快照；所有字段仍经过现有注册表和范围校验。
+         * @param {object} selPersonalizationSnapshot - getState 返回的主题、背景、面板、文字和浮层状态。
+         * @returns {boolean} 快照结构合法并已应用时返回 true。
+         */
+        function selPersonalizationRestoreState(selPersonalizationSnapshot = {}) {
+            if (!selPersonalizationSnapshot || typeof selPersonalizationSnapshot !== "object") return false;
+
+            // 主题必须来自注册表按钮；复用真实点击路径以同步当前主题的模式清单和素材配置。
+            const selPersonalizationRequestedTheme = String(selPersonalizationSnapshot.theme || "");
+            const selPersonalizationRequestedThemeKnown = selPersonalizationThemes.some((selPersonalizationTheme) => selPersonalizationTheme.id === selPersonalizationRequestedTheme);
+            const selPersonalizationRequestedThemeButton = selPersonalizationRequestedThemeKnown
+                ? selPersonalizationThemeGrid.querySelector(`[data-sel-personal-theme="${CSS.escape(selPersonalizationRequestedTheme)}"]`)
+                : null;
+            if (selPersonalizationRequestedThemeButton && selPersonalizationRequestedTheme !== selPersonalizationThemeState) {
+                selPersonalizationRequestedThemeButton.click();
+            }
+            // 模式必须属于恢复后的当前主题，未知值继续保留该主题安全默认值。
+            const selPersonalizationRequestedMode = String(selPersonalizationSnapshot.mode || selPersonalizationSnapshot.skin || "");
+            if (selPersonalizationSkins.some((selPersonalizationSkin) => selPersonalizationSkin.id === selPersonalizationRequestedMode)) {
+                selPersonalizationApplySkin(selPersonalizationRequestedMode);
+            }
+
+            // 面板滑杆逐项按各自最大值夹取，禁止瞬时状态绕过公共控件范围。
+            const selPersonalizationRequestedPanel = selPersonalizationSnapshot.panel && typeof selPersonalizationSnapshot.panel === "object"
+                ? selPersonalizationSnapshot.panel
+                : {};
+            const selPersonalizationRestoredPanel = { ...selPersonalizationPanelState };
+            selPersonalizationPanelRangeGroups.flatMap((selPersonalizationGroup) => selPersonalizationGroup.items).forEach((selPersonalizationItem) => {
+                selPersonalizationRestoredPanel[selPersonalizationItem.key] = selPersonalizationClamp(
+                    selPersonalizationRequestedPanel[selPersonalizationItem.key],
+                    selPersonalizationRestoredPanel[selPersonalizationItem.key],
+                    selPersonalizationItem.maximum || 100
+                );
+            });
+            const selPersonalizationRestoredColor = selPersonalizationNormalizeColor(selPersonalizationRequestedPanel.themeColor);
+            const selPersonalizationCurrentSkin = selPersonalizationSkins.find((selPersonalizationSkin) => selPersonalizationSkin.id === selPersonalizationSkinState);
+            const selPersonalizationRestoredAccent = selPersonalizationCurrentSkin?.accents.some((selPersonalizationAccent) => selPersonalizationAccent.id === selPersonalizationRequestedPanel.themeAccent)
+                ? selPersonalizationRequestedPanel.themeAccent
+                : null;
+            selPersonalizationRestoredPanel.themeColor = selPersonalizationRestoredColor;
+            selPersonalizationRestoredPanel.themeAccent = selPersonalizationRestoredColor ? null : selPersonalizationRestoredAccent;
+            selPersonalizationRestoredPanel.reducedMotion = Boolean(selPersonalizationRequestedPanel.reducedMotion);
+            selPersonalizationRestoredPanel.preset = selPersonalizationPresets.some((selPersonalizationPreset) => selPersonalizationPreset.id === selPersonalizationRequestedPanel.preset)
+                ? selPersonalizationRequestedPanel.preset
+                : "custom";
+            selPersonalizationPanelState = selPersonalizationRestoredPanel;
+
+            // 文字模式与颜色分别校验；对比和字号继续使用现有 0 至 100 业务范围。
+            const selPersonalizationRequestedText = selPersonalizationSnapshot.text && typeof selPersonalizationSnapshot.text === "object"
+                ? selPersonalizationSnapshot.text
+                : {};
+            const selPersonalizationRestoredTextMode = selPersonalizationTextModes.some((selPersonalizationMode) => selPersonalizationMode.id === selPersonalizationRequestedText.mode)
+                ? selPersonalizationRequestedText.mode
+                : selPersonalizationTextDefaults.mode;
+            selPersonalizationTextState = {
+                mode: selPersonalizationRestoredTextMode,
+                mainColor: selPersonalizationNormalizeColor(selPersonalizationRequestedText.mainColor),
+                mutedColor: selPersonalizationNormalizeColor(selPersonalizationRequestedText.mutedColor),
+                contrast: selPersonalizationClamp(selPersonalizationRequestedText.contrast, selPersonalizationTextDefaults.contrast),
+                fontScale: selPersonalizationClamp(selPersonalizationRequestedText.fontScale, selPersonalizationTextDefaults.fontScale),
+                contrastOverride: Boolean(selPersonalizationRequestedText.contrastOverride),
+                fontScaleOverride: Boolean(selPersonalizationRequestedText.fontScaleOverride)
+            };
+
+            // 先恢复主题令牌与文字，再显式恢复用户独立选择的背景，防止主题配套背景覆盖它。
+            selPersonalizationApplyPanel();
+            selPersonalizationApplyText();
+            const selPersonalizationRequestedBackground = selPersonalizationSnapshot.background && typeof selPersonalizationSnapshot.background === "object"
+                ? selPersonalizationSnapshot.background
+                : {};
+            if (selPersonalizationRequestedBackground.theme) {
+                selPersonalizationBackgroundController.setTheme(selPersonalizationRequestedBackground.theme);
+            }
+            selPersonalizationBackgroundController.setDisplay(selPersonalizationRequestedBackground);
+            selPersonalizationSyncBackground();
+
+            // 浮层尺寸、当前页签和打开状态同样属于本次页面视觉，但不会写入任何长期存储。
+            if (selPersonalizationSnapshot.floating?.customized) {
+                selPersonalizationFloatingPanel.setSize(selPersonalizationSnapshot.floating);
+            } else {
+                selPersonalizationFloatingPanel.resetSize();
+            }
+            if (["skin", "background", "panel", "text", "language"].includes(selPersonalizationSnapshot.view)) {
+                selPersonalizationSelectView(selPersonalizationSnapshot.view);
+            }
+            if (selPersonalizationSnapshot.open) selPersonalizationFloatingPanel.open();
+            return true;
+        }
+
+        /**
+         * 原位切换公共组件语言；主题、面板参数、当前标签、打开状态和拖拽尺寸均保持同一实例。
+         * @param {{locale:string,resource:object}} selPersonalizationNext - 统一语言管理器准备好的公共文案。
+         * @returns {boolean} 文案结构有效并已更新时返回 true。
+         */
+        function selPersonalizationSetLocale(selPersonalizationNext = {}) {
+            const selPersonalizationNextMessages = selPersonalizationNext.resource || selPersonalizationNext.messages;
+            const selPersonalizationNextLocale = String(selPersonalizationNext.locale || selPersonalizationNextMessages?.locale || "");
+            if (!selPersonalizationNextLocale || !selPersonalizationNextMessages || typeof selPersonalizationNextMessages !== "object") return false;
+            const selPersonalizationPreviousTextMap = selPersonalizationTextMap;
+            selPersonalizationLocale = selPersonalizationNextLocale;
+            selPersonalizationMessages = selPersonalizationNextMessages;
+            selPersonalizationTextMap = selPersonalizationMessages.text || {};
+            selPersonalizationTemplates = selPersonalizationMessages.templates || {};
+            selPersonalizationLanguageOptions = Array.isArray(selPersonalizationMessages.languageOptions) ? selPersonalizationMessages.languageOptions : [];
+            // 先把现有静态文字从旧语言还原到稳定源文本，再映射成新语言。
+            selPersonalizationLocalizeNode(selPersonalizationControl, selPersonalizationPreviousTextMap);
+            // 动态主题卡和语言卡使用新配置重绘，所有选择状态随后由内存状态重新同步。
+            selPersonalizationRenderLanguageOptions();
+            selPersonalizationRenderThemeOptions();
+            const selPersonalizationVariantCount = selPersonalizationControl.querySelector(".selpersonal-skin-theme-section .selpersonal-section-heading > small");
+            const selPersonalizationBackgroundCount = selPersonalizationControl.querySelector("[data-sel-personal-view='background'] > .selpersonal-view-heading > span");
+            if (selPersonalizationVariantCount) selPersonalizationVariantCount.textContent = selPersonalizationFormat("variantCount", { count: 7 }, "深浅各 {count} 套");
+            if (selPersonalizationBackgroundCount) selPersonalizationBackgroundCount.textContent = selPersonalizationFormat("backgroundCount", { count: selPersonalizationBackgroundController.themes.length }, "{count} 种独立主题");
+            selPersonalizationApplyPanel();
+            selPersonalizationApplyText();
+            return true;
+        }
+
         // 公开控制器提供当前状态、视图切换和刷新默认动作。
         const selPersonalizationController = Object.freeze({
             // themes 与 skins 始终返回注册表和当前主题的不可变清单。
@@ -1281,7 +1407,10 @@
                 skin: selPersonalizationSkinState,
                 background: selPersonalizationBackgroundController.getState(),
                 panel: Object.freeze({ ...selPersonalizationPanelState }),
-                text: Object.freeze({ ...selPersonalizationTextState })
+                text: Object.freeze({ ...selPersonalizationTextState }),
+                floating: selPersonalizationFloatingPanel.getSize(),
+                open: selPersonalizationFloatingPanel.isOpen(),
+                view: selPersonalizationControl.querySelector('[data-sel-personal-tab][aria-selected="true"]')?.dataset.selPersonalTab || "skin"
             }),
             // 外壳开关能力直接转交通用浮动面板，业务调用方无需访问内部 DOM。
             open: selPersonalizationFloatingPanel.open,
@@ -1289,6 +1418,8 @@
             toggle: selPersonalizationFloatingPanel.toggle,
             isOpen: selPersonalizationFloatingPanel.isOpen,
             selectView: selPersonalizationSelectView,
+            setLocale: selPersonalizationSetLocale,
+            restoreState: selPersonalizationRestoreState,
             setTheme(selPersonalizationThemeId) {
                 const selPersonalizationThemeButton = selPersonalizationThemeGrid.querySelector(`[data-sel-personal-theme="${selPersonalizationThemeId}"]`);
                 if (!selPersonalizationThemeButton) return false;
@@ -1324,6 +1455,10 @@
         selPersonalizationSyncBackground();
         selPersonalizationApplyPanel();
         selPersonalizationApplyText();
+        // 应用装配层只可传入本次导航从内存取得的一次性状态；恢复路径不会自行读取任何存储。
+        if (selPersonalizationOptions.initialState) {
+            selPersonalizationRestoreState(selPersonalizationOptions.initialState);
+        }
         // 返回组合控制器供应用确认挂载成功。
         return selPersonalizationController;
     }

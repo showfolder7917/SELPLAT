@@ -1,0 +1,12 @@
+{
+  "locale": "en-US",
+  "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  "chooseTemplate": "Choose {label}",
+  "calendarTemplate": "{label} calendar",
+  "valueTemplate": "{label}: {value}",
+  "previousMonth": "Previous month",
+  "nextMonth": "Next month",
+  "clear": "Clear",
+  "today": "Today",
+  "confirm": "Confirm"
+}

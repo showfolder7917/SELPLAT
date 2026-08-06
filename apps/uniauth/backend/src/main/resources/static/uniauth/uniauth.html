@@ -99,7 +99,8 @@
     <!-- ===== Uniauth 应用静态审阅结构结束 ===== -->
 
     <!-- ===== SEL 基础脚本开始：基础脚本只注册能力，禁止主动扫描或识别 Uniauth 业务。 ===== -->
-    <script src="../sel/core/selBaseRuntime.js?v=20260806-i18n-1"></script>
+    <script src="../sel/core/selBaseRuntime.js?v=20260806-runtime-i18n-1"></script>
+    <script src="../sel/core/selLocaleRuntime.js?v=20260806-runtime-i18n-1"></script>
     <!-- selAjax 只执行应用传入的真实地址并返回 JSON，不保存任何 Uniauth 路径。 -->
     <script src="../sel/core/selAjax.js?v=20260731-1"></script>
     <!-- 主题注册表先接收全部主题包，再由管理器原子应用 Theme、Mode、Accent 与 Density。 -->
@@ -107,21 +108,21 @@
     <script src="../sel/theme/packs/crystal-tech/manifest.js?v=20260806-1"></script>
     <script src="../sel/theme/packs/candy-adventure/manifest.js?v=20260806-2"></script>
     <script src="../sel/theme/runtime/selThemeManager.js?v=20260806-1"></script>
-    <script src="../sel/components/panel/selPanel.js?v=20260805-1"></script>
-    <script src="../sel/components/search/selSearch.js?v=20260731-2"></script>
-    <script src="../sel/components/tree/selTree.js?v=20260731-2"></script>
-    <script src="../sel/components/dropdown/selDropdownMenu.js?v=20260801-2"></script>
-    <script src="../sel/components/date-picker/selDatePicker.js?v=20260801-2"></script>
-    <script src="../sel/components/grid/selGridMenu.js?v=20260802-4"></script>
-    <script src="../sel/components/grid/selGrid.js?v=20260805-1"></script>
+    <script src="../sel/components/panel/selPanel.js?v=20260806-runtime-i18n-1"></script>
+    <script src="../sel/components/search/selSearch.js?v=20260806-runtime-i18n-1"></script>
+    <script src="../sel/components/tree/selTree.js?v=20260806-runtime-i18n-1"></script>
+    <script src="../sel/components/dropdown/selDropdownMenu.js?v=20260806-runtime-i18n-1"></script>
+    <script src="../sel/components/date-picker/selDatePicker.js?v=20260806-runtime-i18n-3"></script>
+    <script src="../sel/components/grid/selGridMenu.js?v=20260806-runtime-i18n-1"></script>
+    <script src="../sel/components/grid/selGrid.js?v=20260806-runtime-i18n-1"></script>
     <script src="../sel/components/page-background/selPageBackground.js?v=20260805-1"></script>
-    <script src="../sel/components/floating-panel/selFloatingPanel.js?v=20260806-resize-2"></script>
-    <script src="../sel/components/personalization/selPersonalization.js?v=20260806-i18n-1"></script>
-    <script src="../sel/components/window/selWindow.js?v=20260806-i18n-1"></script>
+    <script src="../sel/components/floating-panel/selFloatingPanel.js?v=20260806-locale-memory-2"></script>
+    <script src="../sel/components/personalization/selPersonalization.js?v=20260806-runtime-i18n-1"></script>
+    <script src="../sel/components/window/selWindow.js?v=20260806-runtime-i18n-4"></script>
     <!-- ===== SEL 基础脚本结束 ===== -->
 
     <!-- ===== Uniauth 应用装配层开始：最后加载，只传业务配置和数据并调用基础 API。 ===== -->
-    <script src="./uniauth.js?v=20260806-i18n-1"></script>
+    <script src="./uniauth.js?v=20260806-runtime-i18n-5"></script>
     <!-- ===== Uniauth 应用装配层结束 ===== -->
 </body>
 </html>

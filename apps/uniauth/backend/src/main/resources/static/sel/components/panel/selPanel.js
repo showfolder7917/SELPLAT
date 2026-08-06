@@ -749,6 +749,8 @@
         create: selPanelCreate,
         // mount 负责应用标准视图数据并建立布局交互。
         mount: selPanelMount,
+        // setLocale 原位应用新语言视图，面板收起状态、尺寸和节点实例保持不变。
+        setLocale: (selPanelRoot, selPanelLocaleOptions = {}) => selPanelMount(selPanelRoot, selPanelLocaleOptions),
         // get 按完整业务实例键返回面板根。
         get: (selPanelGridId) => selPanelInstances.get(selPanelGridId) || null,
         // getLayout 返回指定业务实例经过白名单规范化后的五区声明。

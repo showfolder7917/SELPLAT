@@ -16,6 +16,7 @@
     // 应用所需能力清单只包含公开基础 API，selAjax 专门承担请求与 JSON 解析。
     const uniauthRequiredComponents = Object.freeze([
         "selAjax",
+        "selLocaleRuntime",
         "selPanel",
         "selSearch",
         "selTree",
@@ -45,13 +46,15 @@
     // URL lang 参数优先用于共享链接；缺失时使用用户上次在个性化设置中的选择。
     const uniauthRequestedLocale = uniauthBase.param("lang", uniauthStoredLocale);
     // 未支持语言安全回退中文，避免请求不存在的语言目录。
-    const uniauthLocale = uniauthSupportedLocales.includes(uniauthRequestedLocale) ? uniauthRequestedLocale : "zh-CN";
+    let uniauthLocale = uniauthSupportedLocales.includes(uniauthRequestedLocale) ? uniauthRequestedLocale : "zh-CN";
     // 合法最终语言同步到偏好，刷新和下一次直接访问保持一致。
     uniauthBase.preference.set(uniauthLocalePreferenceKey, uniauthLocale);
     // 公共属性配置位于 SEL 组件目录，与任何 Uniauth 项目数据目录保持物理隔离。
     const uniauthCommonPersonalizationUrl = "../sel/components/personalization/i18n/{locale}.json";
     // 公共窗口框架拥有独立语言配置，不能把最小化、最大化等公共属性塞入项目业务 JSON。
     const uniauthCommonWindowUrl = "../sel/components/window/i18n/{locale}.json";
+    // 日期选择器拥有独立公共语言包，业务字段只提供“开始日期”等项目标签。
+    const uniauthCommonDatePickerUrl = "../sel/components/date-picker/i18n/{locale}.json";
     // HTML 提供应用挂载点和可审阅的完整面板结构，装配层只在其中定位当前业务实例。
     const uniauthApplicationHost = uniauthBase.query("[data-uniauth-app]");
     // HTML 只提供背景挂载点，独立背景图层由 selPageBackground.mount 生成。
@@ -156,6 +159,8 @@
     const uniauthSources = new Map();
     // 新建窗口控制器按表格实例保存，双实例不会共用打开状态。
     const uniauthWindowControllers = new Map();
+    // 页面级语言会话在全部组件挂载后登记；语言按钮回调只调用这一公共协调器。
+    let uniauthLocaleController = null;
     // Uniauth 业务数据源表明确登记实际请求地址；基础 selAjax 不允许根据实体或实例名推测路径。
     const uniauthDataSources = Object.freeze({
         // UniauthUserGrid 是用户管理主表及当前类型列表示例共同使用的数据源。
@@ -235,10 +240,11 @@
      * @param {string} uniauthSourceId - 数据源名称，例如 UniauthUserGrid。
      * @returns {Promise<object>} 包含 data、column、tree、title、search、menu、pagination 和 select 的聚合对象。
      */
-    async function uniauthLoadSource(uniauthSourceId) {
+    async function uniauthLoadSource(uniauthSourceId, uniauthRequestedSourceLocale = uniauthLocale) {
+        const uniauthSourceCacheKey = `${uniauthRequestedSourceLocale}:${uniauthSourceId}`;
         // 同一数据源已经开始加载时复用 Promise，避免双实例重复请求。
-        if (uniauthSources.has(uniauthSourceId)) {
-            return uniauthSources.get(uniauthSourceId);
+        if (uniauthSources.has(uniauthSourceCacheKey)) {
+            return uniauthSources.get(uniauthSourceCacheKey);
         }
         // 数据源必须在 Uniauth 应用表中明确登记，禁止根据 sourceId 自动猜测目录。
         const uniauthSource = uniauthDataSources[uniauthSourceId];
@@ -254,7 +260,7 @@
         const uniauthPartEntriesPromise = Promise.all(
             Object.entries(uniauthSource.localizedUrls).map(async ([uniauthKey, uniauthPathTemplate]) => {
                 // 应用只替换当前语言占位符，不改变已登记的业务文件位置。
-                const uniauthLocalizedUrl = uniauthPathTemplate.replaceAll("{locale}", uniauthLocale);
+                const uniauthLocalizedUrl = uniauthPathTemplate.replaceAll("{locale}", uniauthRequestedSourceLocale);
                 // selAjax 接收完整实际地址并返回解析后的 JSON。
                 const uniauthPartData = await uniauthAjax.json({
                     url: uniauthVersionedUrl(uniauthLocalizedUrl)
@@ -271,7 +277,7 @@
             return Object.freeze({
                 gridId: uniauthSourceId,
                 entity: uniauthData.entity,
-                locale: uniauthLocale,
+                locale: uniauthRequestedSourceLocale,
                 data: Object.freeze(uniauthData),
                 column: Object.freeze(uniauthParts.column),
                 tree: Object.freeze(uniauthParts.tree),
@@ -288,7 +294,7 @@
             });
         });
         // 保存正在执行的 Promise，使并发实例复用相同请求。
-        uniauthSources.set(uniauthSourceId, uniauthSourcePromise);
+        uniauthSources.set(uniauthSourceCacheKey, uniauthSourcePromise);
         // 调用方等待标准聚合结果完成。
         return uniauthSourcePromise;
     }
@@ -298,7 +304,7 @@
      * @param {object} uniauthDefinition - 明确声明 gridId、sourceId、entity 和 view 的业务实例定义。
      * @returns {Promise<object>} 返回 selGrid 创建的当前实例控制器。
      */
-    async function uniauthMountInstance(uniauthDefinition, uniauthWindowMessages) {
+    async function uniauthMountInstance(uniauthDefinition, uniauthWindowMessages, uniauthDatePickerMessages) {
         // 当前实例只读取定义中显式声明的数据源。
         const uniauthPayload = await uniauthLoadSource(uniauthDefinition.sourceId);
         // layoutId 明确选择当前实例使用的页面模板，不根据实体名称猜测布局。
@@ -372,6 +378,8 @@
             id: `${uniauthDefinition.gridId}CreateWindow`,
             // 公共窗口动作来自 selWindow 配置，业务标题与字段继续来自 Uniauth 项目配置。
             messages: uniauthWindowMessages,
+            locale: uniauthLocale,
+            datePickerMessages: uniauthDatePickerMessages,
             // 展开只读表单配置，把应用业务内容交给基础窗体的标准数据入口。
             ...uniauthPayload.window.create
         });
@@ -392,6 +400,60 @@
         return uniauthGridController;
     }
 
+    // 运行时切换先并行准备当前项目全部本地化片段，公共窗口文案仍从 SEL 公共目录独立加载。
+    async function uniauthLoadProjectLocale(uniauthNextLocale) {
+        const uniauthUniqueSourceIds = Array.from(new Set(uniauthDefinitions.map((uniauthDefinition) => uniauthDefinition.sourceId)));
+        const [uniauthWindowMessages, uniauthDatePickerMessages, uniauthPayloadEntries] = await Promise.all([
+            uniauthAjax.json({ url: uniauthVersionedUrl(uniauthCommonWindowUrl.replaceAll("{locale}", uniauthNextLocale)) }),
+            uniauthAjax.json({ url: uniauthVersionedUrl(uniauthCommonDatePickerUrl.replaceAll("{locale}", uniauthNextLocale)) }),
+            Promise.all(uniauthUniqueSourceIds.map(async (uniauthSourceId) => [uniauthSourceId, await uniauthLoadSource(uniauthSourceId, uniauthNextLocale)]))
+        ]);
+        return Object.freeze({
+            windowMessages: Object.freeze(uniauthWindowMessages),
+            datePickerMessages: Object.freeze(uniauthDatePickerMessages),
+            payloads: Object.freeze(Object.fromEntries(uniauthPayloadEntries))
+        });
+    }
+
+    // 项目控制器只消费 Uniauth 自己的数据源；每个公共组件通过统一 setLocale 原位更新现有实例。
+    async function uniauthApplyProjectLocale(uniauthLocaleUpdate = {}) {
+        const uniauthNextLocale = String(uniauthLocaleUpdate.locale || "");
+        const uniauthProjectResources = uniauthLocaleUpdate.resource;
+        if (!uniauthSupportedLocales.includes(uniauthNextLocale) || !uniauthProjectResources?.payloads) return false;
+        uniauthDefinitions.forEach((uniauthDefinition) => {
+            const uniauthPayload = uniauthProjectResources.payloads[uniauthDefinition.sourceId];
+            const uniauthRoot = uniauthApplicationHost.querySelector(`[data-uniauth-instance="${uniauthDefinition.gridId}"]`);
+            const uniauthGridController = window.selGrid.get(uniauthDefinition.gridId);
+            if (!uniauthPayload || !uniauthRoot || !uniauthGridController) throw new Error(`运行时语言更新缺少实例：${uniauthDefinition.gridId}`);
+            const uniauthGridState = uniauthGridController.getState();
+            window.selPanel.setLocale(uniauthRoot, {
+                view: uniauthPayload,
+                height: uniauthPanelHeight,
+                expandLeftLabel: uniauthPayload.title.messages.expandLeftRegion,
+                collapseLeftLabel: uniauthPayload.title.messages.collapseLeftRegion
+            });
+            window.selSearch.get(uniauthDefinition.gridId)?.setLocale({ locale: uniauthNextLocale, resource: uniauthPayload.search });
+            window.selTree.get(uniauthDefinition.gridId)?.setLocale({ locale: uniauthNextLocale, resource: uniauthPayload.tree });
+            window.selGridMenu.get(uniauthDefinition.gridId)?.setLocale({ locale: uniauthNextLocale, resource: uniauthPayload.menu });
+            uniauthRoot.querySelectorAll("[data-sel-dropdown-menu]").forEach((uniauthDropdownRoot) => window.selDropdownMenu.setLocale(uniauthDropdownRoot));
+            window.selDropdownMenu.setValue(uniauthRoot.querySelector('[data-sel-grid-role="type-filter"]'), uniauthGridState.type);
+            window.selDropdownMenu.setValue(uniauthRoot.querySelector('[data-sel-grid-role="status-filter"]'), uniauthGridState.status);
+            window.selDropdownMenu.setValue(uniauthRoot.querySelector('[data-sel-grid-role="page-size"]'), uniauthGridState.pageSize);
+            uniauthGridController.setLocale({ locale: uniauthNextLocale, resource: uniauthPayload });
+            uniauthWindowControllers.get(uniauthDefinition.gridId)?.setLocale({
+                locale: uniauthNextLocale,
+                resource: Object.freeze({ messages: uniauthProjectResources.windowMessages, datePickerMessages: uniauthProjectResources.datePickerMessages, options: uniauthPayload.window.create })
+            });
+            uniauthInstances.set(uniauthDefinition.gridId, uniauthPayload);
+        });
+        uniauthLocale = uniauthNextLocale;
+        uniauthBase.preference.set(uniauthLocalePreferenceKey, uniauthLocale);
+        uniauthBase.replaceParam("lang", uniauthLocale);
+        const uniauthPrimaryPayload = uniauthInstances.get("UniauthUserGrid");
+        uniauthBase.setDocument({ lang: uniauthLocale, title: uniauthPrimaryPayload?.title.pageTitle || "" });
+        return true;
+    }
+
     /**
      * 装配背景和全部业务实例。
      * @returns {Promise<boolean>} 全部基础控件成功挂载时返回 true。
@@ -400,12 +462,15 @@
         // 页面语言通过基础运行时同步，不直接操作 document。
         uniauthBase.setDocument({ lang: uniauthLocale });
         // 公共个性化文案从 SEL 公共组件目录加载，禁止并入当前项目聚合响应。
-        const [uniauthPersonalizationMessages, uniauthWindowMessages] = await Promise.all([
+        const [uniauthPersonalizationMessages, uniauthWindowMessages, uniauthDatePickerMessages] = await Promise.all([
             uniauthAjax.json({
                 url: uniauthVersionedUrl(uniauthCommonPersonalizationUrl.replaceAll("{locale}", uniauthLocale))
             }),
             uniauthAjax.json({
                 url: uniauthVersionedUrl(uniauthCommonWindowUrl.replaceAll("{locale}", uniauthLocale))
+            }),
+            uniauthAjax.json({
+                url: uniauthVersionedUrl(uniauthCommonDatePickerUrl.replaceAll("{locale}", uniauthLocale))
             })
         ]);
         // 背景基础控件只创建图层和内存状态，刷新页面自动使用默认值。
@@ -427,8 +492,7 @@
                 current: uniauthLocale,
                 onChange(uniauthNextLocale) {
                     if (!uniauthSupportedLocales.includes(uniauthNextLocale)) return false;
-                    uniauthBase.preference.set(uniauthLocalePreferenceKey, uniauthNextLocale);
-                    return uniauthBase.navigateWithParam("lang", uniauthNextLocale);
+                    return uniauthLocaleController?.setLocale(uniauthNextLocale) || false;
                 }
             })
         });
@@ -437,7 +501,21 @@
             throw new Error("基础个性化控件挂载失败：请检查 data-sel-personalization-host。");
         }
         // 每个业务定义只通过基础 API 创建和挂载独立实例。
-        await Promise.all(uniauthDefinitions.map((uniauthDefinition) => uniauthMountInstance(uniauthDefinition, uniauthWindowMessages)));
+        await Promise.all(uniauthDefinitions.map((uniauthDefinition) => uniauthMountInstance(uniauthDefinition, uniauthWindowMessages, uniauthDatePickerMessages)));
+        // 公共个性化与当前项目分别登记资源加载器；协调器只负责原子准备和统一通知。
+        uniauthLocaleController = window.selLocaleRuntime.create({ initialLocale: uniauthLocale, supportedLocales: uniauthSupportedLocales });
+        uniauthLocaleController.register({
+            id: "sel.personalization",
+            priority: 10,
+            controller: uniauthPersonalizationController,
+            load: (uniauthNextLocale) => uniauthAjax.json({ url: uniauthVersionedUrl(uniauthCommonPersonalizationUrl.replaceAll("{locale}", uniauthNextLocale)) })
+        });
+        uniauthLocaleController.register({
+            id: "uniauth.project",
+            priority: 20,
+            load: uniauthLoadProjectLocale,
+            apply: uniauthApplyProjectLocale
+        });
         // 浏览器标题使用主实例当前语言数据。
         const uniauthPrimaryPayload = uniauthInstances.get("UniauthUserGrid");
         // 主实例存在时通过基础运行时更新标题。
@@ -461,7 +539,9 @@
         // ready 表示全部业务实例和背景基础控件的装配结果。
         ready: uniauthReady,
         // locale 表达当前聚合响应语言。
-        locale: uniauthLocale,
+        get locale() { return uniauthLocale; },
+        // setLocale 暴露与语言卡相同的无刷新切换入口，便于其他项目导航复用。
+        setLocale: (uniauthNextLocale) => uniauthLocaleController?.setLocale(uniauthNextLocale) || Promise.resolve(false),
         // getPayload 返回指定实例聚合对象，不存在时返回 null。
         getPayload: (uniauthGridId) => uniauthInstances.get(uniauthGridId) || null,
         // hasPayload 便于调用方判断实例是否完成装配。

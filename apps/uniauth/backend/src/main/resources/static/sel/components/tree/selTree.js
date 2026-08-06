@@ -33,7 +33,7 @@
         // 业务实例名来自表格根节点，不通过字符串拆分推测实体。
         const gridId = gridRoot.dataset.selGrid;
         // 当前实例树数据只能由应用装配层显式传入，基础控件不读取任何页面全局业务数据。
-        const selTreeInputData = selTreeNavigationData || null;
+        let selTreeInputData = selTreeNavigationData || null;
         // 树节点只允许从当前表格根节点内部查找。
         const treeRoot = gridRoot.querySelector('[data-sel-grid-role="tree"]');
         // 当前实例没有名称、树区域或后端树片段时不创建空控制器。
@@ -182,12 +182,25 @@
         collectExpanded(selTreeInputData.items);
         render();
 
+        // 语言配置原位替换后保留当前节点与展开集合，只重绘显示文字和可访问名称。
+        function selTreeSetLocale(selTreeNext = {}) {
+            const selTreeNextData = selTreeNext.resource || selTreeNext.messages || selTreeNext;
+            if (!selTreeNextData || !Array.isArray(selTreeNextData.items)) return false;
+            selTreeInputData = selTreeNextData;
+            messages.expandTemplate = selTreeInputData.expandLabelTemplate || "展开{label}";
+            messages.collapseTemplate = selTreeInputData.collapseLabelTemplate || "收起{label}";
+            if (!selTreeFindItem(selTreeInputData.items, state.selectedId)) state.selectedId = selTreeInputData.selectedId;
+            render();
+            return true;
+        }
+
         // 冻结公开控制器，外部只能通过稳定方法操作当前树实例。
         return Object.freeze({
             id: gridId,
             root: treeRoot,
             select,
             refresh: render,
+            setLocale: selTreeSetLocale,
             getSelectedId: () => state.selectedId
         });
     }

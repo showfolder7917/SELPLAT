@@ -37,6 +37,8 @@
         if (!selSearchGridId || !selSearchHost || !selSearchData) {
             return null;
         }
+        // 当前语言配置可由统一语言管理器原位替换，输入值和加载状态不随文案切换重建。
+        let selSearchLocaleData = selSearchData;
 
         // 原生 form 提供 Enter 提交、键盘导航和搜索语义。
         const selSearchForm = document.createElement("form");
@@ -45,7 +47,7 @@
         // search 角色让辅助技术快速识别查询区域。
         selSearchForm.setAttribute("role", "search");
         // 可访问名称由当前语言 JSON 提供。
-        selSearchForm.setAttribute("aria-label", selSearchData.label || "搜索");
+        selSearchForm.setAttribute("aria-label", selSearchLocaleData.label || "搜索");
         // 浏览器不对演示页面执行真实页面跳转。
         selSearchForm.action = "";
 
@@ -61,7 +63,7 @@
         // 搜索组件使用自己的隐藏文字类，不依赖表格内部样式。
         selSearchLabel.className = "selsearch-accessibility-label";
         // 标签文字来自当前语言搜索 JSON。
-        selSearchLabel.textContent = selSearchData.label || "搜索";
+        selSearchLabel.textContent = selSearchLocaleData.label || "搜索";
 
         // 原生 search 输入保留移动端键盘、清除语义和浏览器自动填充控制。
         const selSearchInput = document.createElement("input");
@@ -72,9 +74,9 @@
         // 禁用浏览器历史补全，演示数据不会混入旧关键词。
         selSearchInput.autocomplete = "off";
         // 当前语言可访问名称与隐藏标签一致。
-        selSearchInput.setAttribute("aria-label", selSearchData.label || "搜索");
+        selSearchInput.setAttribute("aria-label", selSearchLocaleData.label || "搜索");
         // 占位文字解释可搜索字段。
-        selSearchInput.placeholder = selSearchData.placeholder || "";
+        selSearchInput.placeholder = selSearchLocaleData.placeholder || "";
         // 默认关键词由数据显式提供。
         selSearchInput.value = String(selSearchData.defaultValue || "");
 
@@ -85,7 +87,7 @@
         // 清空操作不得触发表单默认提交。
         selSearchClearButton.type = "button";
         // 当前语言完整说明用于鼠标悬停和屏幕阅读器。
-        selSearchClearButton.setAttribute("aria-label", selSearchData.clearLabel || "清空");
+        selSearchClearButton.setAttribute("aria-label", selSearchLocaleData.clearLabel || "清空");
         // 清空图标允许应用选择视觉，但不改变动作语义。
         selSearchClearButton.appendChild(selSearchCreateIcon(selSearchData.clearIcon || "ri-close-line"));
 
@@ -102,7 +104,7 @@
         // 文案类用于紧凑屏幕隐藏策略。
         selSearchSubmitLabel.className = "selsearch-submit-label";
         // 按钮名称完全由当前语言 JSON 控制。
-        selSearchSubmitLabel.textContent = selSearchData.buttonLabel || "查询";
+        selSearchSubmitLabel.textContent = selSearchLocaleData.buttonLabel || "查询";
         // 图标与文字共同加入主按钮。
         selSearchSubmitButton.appendChild(selSearchSubmitLabel);
 
@@ -124,7 +126,7 @@
         // 根据输入内容同步清空按钮，空值时避免显示无效动作。
         function selSearchSyncClearButton() {
             // 配置关闭清空能力时按钮始终隐藏。
-            const selSearchCanClear = selSearchData.clearable !== false && Boolean(selSearchInput.value);
+            const selSearchCanClear = selSearchLocaleData.clearable !== false && Boolean(selSearchInput.value);
             // hidden 属性同时控制视觉和辅助技术。
             selSearchClearButton.hidden = !selSearchCanClear;
         }
@@ -136,9 +138,9 @@
                 return false;
             }
             // 当前输入转为字符串并按配置决定是否去除首尾空格。
-            const selSearchKeyword = selSearchData.trim === false ? selSearchInput.value : selSearchInput.value.trim();
+            const selSearchKeyword = selSearchLocaleData.trim === false ? selSearchInput.value : selSearchInput.value.trim();
             // 不允许空查询时保持焦点并停止事件。
-            if (selSearchData.allowEmpty === false && !selSearchKeyword) {
+            if (selSearchLocaleData.allowEmpty === false && !selSearchKeyword) {
                 selSearchInput.focus();
                 return false;
             }
@@ -179,7 +181,7 @@
             // 输入框与控制器状态同时恢复空值。
             selSearchSetValue("");
             // 默认遵循 JSON 的 submitOnClear；调用方可用 submit 明确覆盖。
-            const selSearchShouldSubmit = selSearchOptions.submit ?? (selSearchData.submitOnClear !== false);
+            const selSearchShouldSubmit = selSearchOptions.submit ?? (selSearchLocaleData.submitOnClear !== false);
             // 需要刷新时复用统一提交入口。
             if (selSearchShouldSubmit) {
                 selSearchSubmit();
@@ -220,7 +222,7 @@
             // Enter 始终阻止页面跳转，查询是否执行由配置决定。
             selSearchEvent.preventDefault();
             // 配置允许时复用统一提交入口。
-            if (selSearchData.submitOnEnter !== false) {
+            if (selSearchLocaleData.submitOnEnter !== false) {
                 selSearchSubmit();
             }
         });
@@ -228,6 +230,21 @@
         selSearchClearButton.addEventListener("click", () => selSearchClear());
         // 首次同步清空按钮，默认空关键词时不显示。
         selSearchSyncClearButton();
+
+        // 运行时切换只替换可见文案与行为配置，不重建输入框，因此关键词、焦点和加载状态保持不变。
+        function selSearchSetLocale(selSearchNext = {}) {
+            const selSearchNextData = selSearchNext.resource || selSearchNext.messages || selSearchNext;
+            if (!selSearchNextData || typeof selSearchNextData !== "object") return false;
+            selSearchLocaleData = selSearchNextData;
+            selSearchForm.setAttribute("aria-label", selSearchLocaleData.label || "搜索");
+            selSearchLabel.textContent = selSearchLocaleData.label || "搜索";
+            selSearchInput.setAttribute("aria-label", selSearchLocaleData.label || "搜索");
+            selSearchInput.placeholder = selSearchLocaleData.placeholder || "";
+            selSearchClearButton.setAttribute("aria-label", selSearchLocaleData.clearLabel || "清空");
+            selSearchSubmitLabel.textContent = selSearchLocaleData.buttonLabel || "查询";
+            selSearchSyncClearButton();
+            return true;
+        }
 
         // 返回冻结控制器，应用和其他基础控件只能通过稳定方法协作。
         return Object.freeze({
@@ -250,7 +267,9 @@
             // setLoading 控制重复提交和忙碌语义。
             setLoading: selSearchSetLoading,
             // isLoading 返回当前实例查询状态。
-            isLoading: () => selSearchState.loading
+            isLoading: () => selSearchState.loading,
+            // setLocale 供统一语言管理器原位替换公共文案。
+            setLocale: selSearchSetLocale
         });
     }
 
