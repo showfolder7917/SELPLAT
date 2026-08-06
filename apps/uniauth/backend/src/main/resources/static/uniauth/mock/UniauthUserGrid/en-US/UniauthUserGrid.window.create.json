@@ -1,0 +1,36 @@
+{
+  "title": "Create Project",
+  "subtitle": "Create a new project and set its basic information",
+  "closeLabel": "Close create project window",
+  "cancelLabel": "Cancel",
+  "submitLabel": "Create Now",
+  "checkboxLabel": "Add tasks immediately after creation",
+  "validationMessage": "Enter a project name and complete all required selections",
+  "successMessage": "Project created. You can continue adding tasks",
+  "rows": [
+    [{ "name": "projectName", "label": "Project name", "type": "text", "icon": "ri-file-text-line", "placeholder": "Enter project name", "required": true, "maxLength": 50 }],
+    [{ "name": "projectType", "label": "Project type", "type": "select", "required": true, "options": [
+      { "value": "", "label": "Select project type", "icon": "ri-apps-2-line", "disabled": true, "selected": true },
+      { "value": "platform", "label": "Platform architecture", "icon": "ri-stack-line" },
+      { "value": "visualization", "label": "Data visualization", "icon": "ri-pie-chart-line" },
+      { "value": "research", "label": "Research project", "icon": "ri-flask-line" },
+      { "value": "ai", "label": "Artificial intelligence", "icon": "ri-brain-line" }
+    ] }],
+    [{ "name": "owner", "label": "Owner", "type": "select", "required": true, "options": [
+      { "value": "", "label": "Select owner", "icon": "ri-user-3-line", "disabled": true, "selected": true },
+      { "value": "lin-shen", "label": "林深", "icon": "ri-user-star-line" },
+      { "value": "su-wan", "label": "苏晚", "icon": "ri-user-line" },
+      { "value": "lu-chuan", "label": "陆川", "icon": "ri-user-line" },
+      { "value": "zhou-xu", "label": "周叙", "icon": "ri-user-line" }
+    ] }],
+    [
+      { "name": "startDate", "label": "Start date", "type": "date", "icon": "ri-calendar-line", "placeholder": "Select start date", "required": true },
+      { "name": "priority", "label": "Priority", "type": "select", "required": true, "options": [
+        { "value": "medium", "label": "Medium", "icon": "ri-flag-fill", "tone": "active", "selected": true },
+        { "value": "high", "label": "High", "icon": "ri-flag-fill", "tone": "review" },
+        { "value": "low", "label": "Low", "icon": "ri-flag-line", "tone": "muted" }
+      ] }
+    ],
+    [{ "name": "description", "label": "Description", "type": "textarea", "icon": "ri-edit-2-line", "placeholder": "Enter project description (optional)", "required": false, "maxLength": 300 }]
+  ]
+}

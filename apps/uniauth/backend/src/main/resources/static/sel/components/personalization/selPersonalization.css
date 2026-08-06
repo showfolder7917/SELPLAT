@@ -495,16 +495,92 @@
     outline: none;
 }
 
-/* 皮肤、背景、面板和文字四个一级设置使用等宽 tab，保持同级能力边界清晰。 */
+/* 主题、背景、面板、文字和语言五个一级设置使用等宽 tab，保持同级能力边界清晰。 */
 .selpersonal-tabs {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: 12px;
     padding: 4px;
     border: 1px solid rgba(91, 136, 224, 0.28);
     border-radius: 10px;
     background: rgba(2, 10, 35, 0.46);
+}
+
+.selpersonal-tab {
+    min-width: 0;
+    padding-right: 5px;
+    padding-left: 5px;
+}
+
+.selpersonal-tab span {
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 语言选项属于公共组件配置，只展示稳定 BCP-47 值对应的本地语言名称。 */
+.selpersonal-language-grid {
+    display: grid;
+    gap: 9px;
+    margin-top: 8px;
+}
+
+.selpersonal-language-option {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 64px;
+    grid-template-columns: 38px minmax(0, 1fr) 20px;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 11px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    cursor: pointer;
+    text-align: left;
+}
+
+.selpersonal-language-option:hover,
+.selpersonal-language-option[aria-pressed="true"] {
+    border-color: var(--sel-theme-line);
+    background: var(--sel-theme-selected-surface);
+    box-shadow: var(--sel-theme-inset);
+}
+
+.selpersonal-language-icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: var(--sel-theme-radius-icon);
+    color: var(--sel-theme-text-icon);
+    background: rgb(var(--sel-theme-color-rgb) / 0.16);
+    font-size: 18px;
+}
+
+.selpersonal-language-option > span:nth-child(2) {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.selpersonal-language-option small {
+    color: var(--sel-theme-text-secondary);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.selpersonal-language-selected {
+    color: var(--sel-theme-text-icon);
+    opacity: 0;
+}
+
+.selpersonal-language-option[aria-pressed="true"] .selpersonal-language-selected {
+    opacity: 1;
 }
 
 /* 深浅皮肤使用独立材质预览卡，皮肤选择不与背景缩略图或面板预设混合。 */
@@ -692,6 +768,26 @@
     min-height: 0;
     flex: 1 1 auto;
     flex-direction: column;
+    padding-right: 2px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+.selpersonal-view::-webkit-scrollbar {
+    width: var(--sel-theme-scrollbar-size-panel);
+}
+
+.selpersonal-view::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: var(--sel-theme-scrollbar-track);
+}
+
+.selpersonal-view::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--sel-theme-scrollbar-thumb);
 }
 
 .selpersonal-view[hidden] {
@@ -1239,6 +1335,7 @@
 .selpersonal-close,
 .selpersonal-tabs,
 .selpersonal-preset,
+.selpersonal-text-mode,
 .selpersonal-reset,
 .selpersonal-color-follow,
 .selpanel-status-tabs,
@@ -1269,7 +1366,10 @@
 .selpersonal-tab-selected,
 .selpersonal-preset:hover,
 .selpersonal-preset:focus-visible,
-.selpersonal-preset[aria-pressed="true"] {
+.selpersonal-preset[aria-pressed="true"],
+.selpersonal-text-mode:hover,
+.selpersonal-text-mode:focus-visible,
+.selpersonal-text-mode[aria-pressed="true"] {
     border-color: var(--sel-theme-line);
     background: var(--sel-theme-control-hover);
     box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.34), var(--sel-theme-inset);
@@ -1416,6 +1516,7 @@
 .seldatepicker-action.seldatepicker-action-primary,
 .selpersonal-tab.selpersonal-tab-selected,
 .selpersonal-preset[aria-pressed="true"],
+.selpersonal-text-mode[aria-pressed="true"],
 .selpersonal-color-follow[aria-pressed="true"] {
     background: linear-gradient(135deg, var(--sel-theme-selected-surface), var(--sel-theme-control-hover));
 }
@@ -1676,10 +1777,11 @@
     place-items: center;
     gap: 3px;
     padding: 5px 2px;
-    border: 1px solid rgba(91, 137, 225, 0.34);
+    border: 1px solid var(--sel-theme-line-soft);
     border-radius: 8px;
     color: var(--sel-theme-text-secondary);
-    background: rgba(5, 18, 56, 0.54);
+    background: var(--sel-theme-control-surface);
+    box-shadow: var(--sel-theme-inset);
     cursor: pointer;
     font: inherit;
     font-size: 10px;
@@ -1692,11 +1794,15 @@
 .selpersonal-text-mode:hover,
 .selpersonal-text-mode:focus-visible,
 .selpersonal-text-mode[aria-pressed="true"] {
-    border-color: rgba(117, 190, 255, 0.72);
+    border-color: var(--sel-theme-line);
     color: var(--sel-theme-text-on-selected-surface);
     outline: none;
-    background: color-mix(in srgb, rgb(var(--sel-theme-color-rgb) / 0.84) 24%, rgb(var(--sel-theme-neutral-rgb) / 0.84));
-    box-shadow: 0 0 10px rgb(var(--sel-theme-color-rgb) / 0.28);
+    background: var(--sel-theme-control-hover);
+    box-shadow: 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.34), var(--sel-theme-inset);
+}
+
+.selpersonal-text-mode[aria-pressed="true"] {
+    background: linear-gradient(135deg, var(--sel-theme-selected-surface), var(--sel-theme-control-hover));
 }
 
 /* 预览区与设置面板正文共同消费文字令牌，预览仍单独展示主次文字角色。 */

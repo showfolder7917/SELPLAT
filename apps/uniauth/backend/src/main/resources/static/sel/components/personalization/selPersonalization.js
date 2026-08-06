@@ -1,7 +1,7 @@
 /*
  * selPersonalization.js：SEL 页面个性化设置组合控件。
- * 负责“皮肤 / 背景 / 面板 / 文字”四级界面、统一视觉令牌、动效、预设和当前页面实时预览。
- * 责任边界：皮肤只切换根标识；背景值通过 selPageBackground 控制器修改；面板值只写页面级 selpersonal CSS 变量，不识别 Uniauth 业务数据。
+ * 负责“主题 / 背景 / 面板 / 文字 / 语言”五级界面、统一视觉令牌、动效、预设和当前页面实时预览。
+ * 责任边界：公共文案与语言选项由调用方传入；项目业务数据仍由应用装配层按 locale 加载，本组件不识别 Uniauth 目录。
  * 模块级 JavaScript 标识统一使用 selPersonalization 前缀，公开控制器为 window.selPersonalization。
  */
 (function selPersonalizationInitialize() {
@@ -271,6 +271,55 @@
         if (!selPersonalizationBackgroundController?.themes || typeof selPersonalizationBackgroundController.setDisplay !== "function" || !selPersonalizationThemeManager || !selPersonalizationActiveTheme) {
             return null;
         }
+        // 公共组件国际化数据由应用装配层从 SEL 公共配置目录加载后传入，不读取任何项目业务目录。
+        const selPersonalizationLocale = String(selPersonalizationOptions.locale?.current || "zh-CN");
+        const selPersonalizationMessages = selPersonalizationOptions.messages || {};
+        const selPersonalizationTextMap = selPersonalizationMessages.text || {};
+        const selPersonalizationTemplates = selPersonalizationMessages.templates || {};
+        const selPersonalizationLanguageOptions = Array.isArray(selPersonalizationMessages.languageOptions)
+            ? selPersonalizationMessages.languageOptions
+            : [];
+        // 精确文本映射只处理公共组件自身文案；项目名称、表格列和业务状态不进入本组件。
+        const selPersonalizationTranslate = (selPersonalizationValue) => {
+            const selPersonalizationSource = String(selPersonalizationValue);
+            if (selPersonalizationTextMap[selPersonalizationSource]) return selPersonalizationTextMap[selPersonalizationSource];
+            // 背景包可用“模式 · 配色”组合公共标签；逐段翻译可避免每个主题重复登记笛卡尔积文案。
+            if (selPersonalizationSource.includes(" · ")) {
+                return selPersonalizationSource.split(" · ").map((selPersonalizationPart) => selPersonalizationTextMap[selPersonalizationPart] || selPersonalizationPart).join(" · ");
+            }
+            return selPersonalizationSource;
+        };
+        // 模板占位符使用中性字段名，日中英语序由各自公共配置完整控制。
+        const selPersonalizationFormat = (selPersonalizationTemplateKey, selPersonalizationValues, selPersonalizationFallback) => {
+            const selPersonalizationTemplate = selPersonalizationTemplates[selPersonalizationTemplateKey] || selPersonalizationFallback;
+            return Object.entries(selPersonalizationValues).reduce(
+                (selPersonalizationResult, [selPersonalizationKey, selPersonalizationValue]) => selPersonalizationResult.replaceAll(`{${selPersonalizationKey}}`, String(selPersonalizationValue)),
+                selPersonalizationTemplate
+            );
+        };
+        // 已生成的公共节点按精确映射本地化，避免把业务数据中的同形文字误当作组件属性翻译。
+        function selPersonalizationLocalizeNode(selPersonalizationNode) {
+            if (!(selPersonalizationNode instanceof Element)) return;
+            const selPersonalizationWalker = document.createTreeWalker(selPersonalizationNode, NodeFilter.SHOW_TEXT);
+            let selPersonalizationTextNode = selPersonalizationWalker.nextNode();
+            while (selPersonalizationTextNode) {
+                const selPersonalizationOriginal = selPersonalizationTextNode.nodeValue || "";
+                const selPersonalizationTrimmed = selPersonalizationOriginal.trim();
+                const selPersonalizationTranslated = selPersonalizationTextMap[selPersonalizationTrimmed];
+                if (selPersonalizationTranslated) {
+                    selPersonalizationTextNode.nodeValue = selPersonalizationOriginal.replace(selPersonalizationTrimmed, selPersonalizationTranslated);
+                }
+                selPersonalizationTextNode = selPersonalizationWalker.nextNode();
+            }
+            selPersonalizationNode.querySelectorAll("[aria-label], [title], [placeholder]").forEach((selPersonalizationElement) => {
+                ["aria-label", "title", "placeholder"].forEach((selPersonalizationAttribute) => {
+                    const selPersonalizationOriginal = selPersonalizationElement.getAttribute(selPersonalizationAttribute);
+                    if (selPersonalizationOriginal && selPersonalizationTextMap[selPersonalizationOriginal]) {
+                        selPersonalizationElement.setAttribute(selPersonalizationAttribute, selPersonalizationTextMap[selPersonalizationOriginal]);
+                    }
+                });
+            });
+        }
         // 页面根节点承载跨组件共享的视觉令牌。
         const selPersonalizationDocumentRoot = document.documentElement;
         // 当前主题和模式从统一管理器读取，避免根属性、素材和设置面板各保存一份状态。
@@ -300,16 +349,28 @@
         };
         // 文字状态仅存在于当前页面内存，不写 localStorage、cookie 或服务端配置。
         let selPersonalizationTextState = { ...selPersonalizationTextDefaults };
-        // 通用浮动面板负责入口、外壳、标题、关闭和交互隔离；本组件只提供四个业务设置视图。
+        // 通用浮动面板负责入口、外壳、标题、关闭和交互隔离；本组件提供五个公共设置视图。
         const selPersonalizationFloatingPanel = window.selFloatingPanel?.mount(selPersonalizationHost, {
             id: "personalization",
-            title: "个性化设置",
-            subtitle: "当前页面实时预览",
-            label: "个性化设置",
+            title: selPersonalizationTranslate("个性化设置"),
+            subtitle: selPersonalizationTranslate("当前页面实时预览"),
+            label: selPersonalizationTranslate("个性化设置"),
             triggerIcon: "ri-equalizer-2-line",
             icon: "ri-magic-line",
-            openLabel: "打开个性化设置",
-            closeLabel: "关闭个性化设置",
+            openLabel: selPersonalizationTranslate("打开个性化设置"),
+            closeLabel: selPersonalizationTranslate("关闭个性化设置"),
+            // 个性化面板显式启用公共浮层缩放；右侧锚点固定，从左边和底边改变可用空间。
+            resizable: Object.freeze({
+                minWidth: 340,
+                minHeight: 420,
+                maxWidth: 720,
+                labels: Object.freeze({
+                    left: selPersonalizationTranslate("调整面板宽度"),
+                    bottom: selPersonalizationTranslate("调整面板高度"),
+                    corner: selPersonalizationTranslate("同时调整面板宽度和高度")
+                }),
+                resetLabel: selPersonalizationTranslate("双击恢复面板默认大小")
+            }),
             // 兼容类只保留个性化面板的尺寸和皮肤细节，基础结构与行为已经由 selFloatingPanel 承担。
             classes: {
                 control: "selpersonal-control",
@@ -320,13 +381,14 @@
                 headingCopy: "selpersonal-heading-copy",
                 close: "selpersonal-close"
             },
-            // 四个一级设置使用原生 tab 语义，皮肤、背景、面板和文字保持同一信息层级。
+            // 五个一级设置使用原生 tab 语义，公共语言选择与视觉设置保持同一信息层级。
             contentHtml: `
                     <div class="selpersonal-tabs" role="tablist" aria-label="个性化设置分类">
                         <button class="selpersonal-tab selpersonal-tab-selected" type="button" role="tab" aria-selected="true" aria-controls="selpersonal-skin-view" data-sel-personal-tab="skin"><i class="ri-contrast-2-line" aria-hidden="true"></i><span>主题</span></button>
                         <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-background-view" data-sel-personal-tab="background"><i class="ri-landscape-line" aria-hidden="true"></i><span>背景</span></button>
                         <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-panel-view" data-sel-personal-tab="panel"><i class="ri-layout-4-line" aria-hidden="true"></i><span>面板</span></button>
                         <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-text-view" data-sel-personal-tab="text"><i class="ri-font-size-2" aria-hidden="true"></i><span>文字</span></button>
+                        <button class="selpersonal-tab" type="button" role="tab" aria-selected="false" aria-controls="selpersonal-language-view" data-sel-personal-tab="language"><i class="ri-translate-2" aria-hidden="true"></i><span>语言</span></button>
                     </div>
                     <div class="selpersonal-view" id="selpersonal-skin-view" role="tabpanel" data-sel-personal-view="skin">
                         <header class="selpersonal-view-heading"><strong>选择主题风格</strong><span>一个主题包含深浅皮肤与独立配色</span></header>
@@ -334,7 +396,7 @@
                         <header class="selpersonal-view-heading"><strong>选择界面明暗</strong><span>保留当前主题配色</span></header>
                         <div class="selpersonal-skin-grid" data-sel-personal-skin-grid role="group" aria-label="界面明暗"></div>
                         <section class="selpersonal-skin-theme-section" data-sel-personal-skin-themes aria-labelledby="selpersonal-skin-theme-title">
-                            <header class="selpersonal-section-heading"><span><i class="ri-palette-line" aria-hidden="true"></i><strong id="selpersonal-skin-theme-title">主题皮肤</strong></span><small>深浅各 7 套</small></header>
+                            <header class="selpersonal-section-heading"><span><i class="ri-palette-line" aria-hidden="true"></i><strong id="selpersonal-skin-theme-title">主题皮肤</strong></span><small>${selPersonalizationFormat("variantCount", { count: 7 }, "深浅各 {count} 套")}</small></header>
                             <div class="selpersonal-skin-theme-rows" data-sel-personal-skin-theme-rows></div>
                             <div class="selpersonal-color-heading selpersonal-skin-custom-color">
                                 <span class="selpersonal-panel-range-copy"><strong>自定义主题色</strong><small>仅改变统一颜色令牌</small></span>
@@ -346,7 +408,7 @@
                         <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-skin"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复默认主题</span></button>
                     </div>
                     <div class="selpersonal-view" id="selpersonal-background-view" role="tabpanel" data-sel-personal-view="background" hidden>
-                        <header class="selpersonal-view-heading"><strong>选择网页背景</strong><span>${selPersonalizationBackgroundController.themes.length} 种独立主题</span></header>
+                        <header class="selpersonal-view-heading"><strong>选择网页背景</strong><span>${selPersonalizationFormat("backgroundCount", { count: selPersonalizationBackgroundController.themes.length }, "{count} 种独立主题")}</span></header>
                         <div class="selpersonal-background-grid" data-sel-personal-background-grid aria-label="背景主题"></div>
                         <div class="selpersonal-group selpersonal-background-adjustments" aria-label="背景显示参数">
                             <label class="selpersonal-range"><span>遮罩</span><input type="range" min="0" max="85" step="1" data-sel-personal-background-range="overlay"><output data-sel-personal-background-output="overlay"></output></label>
@@ -380,6 +442,11 @@
                             </section>
                         </div>
                         <button class="selpersonal-reset" type="button" data-sel-personal-action="reset-text"><i class="ri-restart-line" aria-hidden="true"></i><span>恢复文字默认</span></button>
+                    </div>
+                    <div class="selpersonal-view" id="selpersonal-language-view" role="tabpanel" data-sel-personal-view="language" hidden>
+                        <header class="selpersonal-view-heading"><strong>选择界面语言</strong><span>公共界面与当前项目配置分别加载</span></header>
+                        <div class="selpersonal-language-grid" data-sel-personal-language-grid role="group" aria-label="界面语言"></div>
+                        <p class="selpersonal-skin-note"><i class="ri-information-line" aria-hidden="true"></i><span>切换语言后会保留当前页面参数并重新加载对应项目配置。</span></p>
                     </div>`
         });
         // 缺少通用浮动面板注册能力时拒绝创建半套个性化界面。
@@ -396,10 +463,22 @@
         const selPersonalizationTextScroll = selPersonalizationHost.querySelector("[data-sel-personal-text-scroll]");
         const selPersonalizationTextModeGrid = selPersonalizationHost.querySelector("[data-sel-personal-text-modes]");
         const selPersonalizationPresetGrid = selPersonalizationHost.querySelector("[data-sel-personal-presets]");
+        const selPersonalizationLanguageGrid = selPersonalizationHost.querySelector("[data-sel-personal-language-grid]");
         // 任一关键节点缺失都阻止创建不可完整操作的控制器。
-        if (!selPersonalizationControl || !selPersonalizationTrigger || !selPersonalizationPanel || !selPersonalizationThemeGrid || !selPersonalizationSkinGrid || !selPersonalizationSkinThemeRows || !selPersonalizationBackgroundGrid || !selPersonalizationPanelScroll || !selPersonalizationTextScroll || !selPersonalizationTextModeGrid || !selPersonalizationPresetGrid) {
+        if (!selPersonalizationControl || !selPersonalizationTrigger || !selPersonalizationPanel || !selPersonalizationThemeGrid || !selPersonalizationSkinGrid || !selPersonalizationSkinThemeRows || !selPersonalizationBackgroundGrid || !selPersonalizationPanelScroll || !selPersonalizationTextScroll || !selPersonalizationTextModeGrid || !selPersonalizationPresetGrid || !selPersonalizationLanguageGrid) {
             return null;
         }
+
+        // 语言卡只消费公共个性化配置，稳定 locale 值由应用回调决定加载哪个项目目录。
+        selPersonalizationLanguageOptions.forEach((selPersonalizationLanguage) => {
+            const selPersonalizationLanguageButton = document.createElement("button");
+            selPersonalizationLanguageButton.className = "selpersonal-language-option";
+            selPersonalizationLanguageButton.type = "button";
+            selPersonalizationLanguageButton.dataset.selPersonalLanguage = selPersonalizationLanguage.value;
+            selPersonalizationLanguageButton.setAttribute("aria-pressed", String(selPersonalizationLanguage.value === selPersonalizationLocale));
+            selPersonalizationLanguageButton.innerHTML = `<span class="selpersonal-language-icon" aria-hidden="true"><i class="ri-translate-2"></i></span><span><strong>${selPersonalizationLanguage.label}</strong><small>${selPersonalizationLanguage.description}</small></span><i class="ri-checkbox-circle-fill selpersonal-language-selected" aria-hidden="true"></i>`;
+            selPersonalizationLanguageGrid.appendChild(selPersonalizationLanguageButton);
+        });
 
         /** 按当前注册表重新绘制主题、明暗模式和各模式独立颜色组合。 */
         function selPersonalizationRenderThemeOptions() {
@@ -412,7 +491,7 @@
                 selPersonalizationThemeButton.type = "button";
                 selPersonalizationThemeButton.dataset.selPersonalTheme = selPersonalizationTheme.id;
                 selPersonalizationThemeButton.setAttribute("aria-pressed", "false");
-                selPersonalizationThemeButton.innerHTML = `<span class="selpersonal-skin-preview" aria-hidden="true"><i class="${selPersonalizationTheme.icon || "ri-palette-line"}"></i></span><span class="selpersonal-skin-copy"><strong>${selPersonalizationTheme.name}</strong><small>${selPersonalizationTheme.description || "可扩展主题包"}</small></span><i class="ri-checkbox-circle-fill selpersonal-skin-selected-icon" aria-hidden="true"></i>`;
+                selPersonalizationThemeButton.innerHTML = `<span class="selpersonal-skin-preview" aria-hidden="true"><i class="${selPersonalizationTheme.icon || "ri-palette-line"}"></i></span><span class="selpersonal-skin-copy"><strong>${selPersonalizationTranslate(selPersonalizationTheme.name)}</strong><small>${selPersonalizationTranslate(selPersonalizationTheme.description || "可扩展主题包")}</small></span><i class="ri-checkbox-circle-fill selpersonal-skin-selected-icon" aria-hidden="true"></i>`;
                 selPersonalizationThemeGrid.appendChild(selPersonalizationThemeButton);
             });
             selPersonalizationSkins.forEach((selPersonalizationSkin) => {
@@ -427,18 +506,18 @@
                 selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-muted", selPersonalizationSkin.preview.muted);
                 selPersonalizationSkinButton.style.setProperty("--selpersonal-skin-preview-accent", selPersonalizationSkin.preview.accent);
                 selPersonalizationSkinButton.setAttribute("aria-pressed", "false");
-                selPersonalizationSkinButton.innerHTML = `<span class="selpersonal-skin-preview" aria-hidden="true"><i class="${selPersonalizationSkin.icon}"></i></span><span class="selpersonal-skin-copy"><strong>${selPersonalizationSkin.label}</strong><small>${selPersonalizationSkin.description}</small></span><i class="ri-checkbox-circle-fill selpersonal-skin-selected-icon" aria-hidden="true"></i>`;
+                selPersonalizationSkinButton.innerHTML = `<span class="selpersonal-skin-preview" aria-hidden="true"><i class="${selPersonalizationSkin.icon}"></i></span><span class="selpersonal-skin-copy"><strong>${selPersonalizationTranslate(selPersonalizationSkin.label)}</strong><small>${selPersonalizationTranslate(selPersonalizationSkin.description)}</small></span><i class="ri-checkbox-circle-fill selpersonal-skin-selected-icon" aria-hidden="true"></i>`;
                 selPersonalizationSkinGrid.appendChild(selPersonalizationSkinButton);
 
                 const selPersonalizationThemeRow = document.createElement("div");
                 selPersonalizationThemeRow.className = "selpersonal-skin-theme-row";
                 selPersonalizationThemeRow.dataset.selPersonalThemeSkinRow = selPersonalizationSkin.id;
                 const selPersonalizationThemeRowLabel = document.createElement("strong");
-                selPersonalizationThemeRowLabel.textContent = `${selPersonalizationSkin.label}配色`;
+                selPersonalizationThemeRowLabel.textContent = selPersonalizationFormat("accentRow", { label: selPersonalizationTranslate(selPersonalizationSkin.label) }, "{label}配色");
                 const selPersonalizationThemeSwatches = document.createElement("div");
                 selPersonalizationThemeSwatches.className = "selpersonal-color-swatches selpersonal-skin-theme-swatches";
                 selPersonalizationThemeSwatches.setAttribute("role", "group");
-                selPersonalizationThemeSwatches.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent}色板`);
+                selPersonalizationThemeSwatches.setAttribute("aria-label", selPersonalizationFormat("swatchGroup", { label: selPersonalizationThemeRowLabel.textContent }, "{label}色板"));
                 const selPersonalizationBaseSwatch = document.createElement("button");
                 selPersonalizationBaseSwatch.className = "selpersonal-color-swatch selpersonal-color-swatch-base";
                 selPersonalizationBaseSwatch.type = "button";
@@ -446,7 +525,7 @@
                 selPersonalizationBaseSwatch.dataset.selPersonalThemeBase = "true";
                 selPersonalizationBaseSwatch.dataset.selPersonalThemeSkin = selPersonalizationSkin.id;
                 selPersonalizationBaseSwatch.style.setProperty("--selpersonal-swatch-color", selPersonalizationSkin.base.color);
-                selPersonalizationBaseSwatch.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent} · ${selPersonalizationSkin.themeLabel}`);
+                selPersonalizationBaseSwatch.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent} · ${selPersonalizationTranslate(selPersonalizationSkin.themeLabel)}`);
                 selPersonalizationBaseSwatch.setAttribute("aria-pressed", "false");
                 selPersonalizationBaseSwatch.innerHTML = `<i class="${selPersonalizationSkin.icon}" aria-hidden="true"></i>`;
                 selPersonalizationThemeSwatches.appendChild(selPersonalizationBaseSwatch);
@@ -458,13 +537,16 @@
                     selPersonalizationSwatch.dataset.selPersonalThemeAccent = selPersonalizationAccent.id;
                     selPersonalizationSwatch.dataset.selPersonalThemeSkin = selPersonalizationSkin.id;
                     selPersonalizationSwatch.style.setProperty("--selpersonal-swatch-color", selPersonalizationAccent.color);
-                    selPersonalizationSwatch.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent} · ${selPersonalizationAccent.label}`);
+                    selPersonalizationSwatch.setAttribute("aria-label", `${selPersonalizationThemeRowLabel.textContent} · ${selPersonalizationTranslate(selPersonalizationAccent.label)}`);
                     selPersonalizationSwatch.setAttribute("aria-pressed", "false");
                     selPersonalizationThemeSwatches.appendChild(selPersonalizationSwatch);
                 });
                 selPersonalizationThemeRow.append(selPersonalizationThemeRowLabel, selPersonalizationThemeSwatches);
                 selPersonalizationSkinThemeRows.appendChild(selPersonalizationThemeRow);
             });
+            selPersonalizationLocalizeNode(selPersonalizationThemeGrid);
+            selPersonalizationLocalizeNode(selPersonalizationSkinGrid);
+            selPersonalizationLocalizeNode(selPersonalizationSkinThemeRows);
         }
         selPersonalizationRenderThemeOptions();
 
@@ -481,9 +563,9 @@
             const selPersonalizationThemeCopy = document.createElement("span");
             selPersonalizationThemeCopy.className = "selpersonal-background-option-copy";
             const selPersonalizationThemeName = document.createElement("strong");
-            selPersonalizationThemeName.textContent = selPersonalizationTheme.name;
+            selPersonalizationThemeName.textContent = selPersonalizationTranslate(selPersonalizationTheme.name);
             const selPersonalizationThemeCategory = document.createElement("span");
-            selPersonalizationThemeCategory.textContent = selPersonalizationTheme.category;
+            selPersonalizationThemeCategory.textContent = selPersonalizationTranslate(selPersonalizationTheme.category);
             selPersonalizationThemeCopy.append(selPersonalizationThemeName, selPersonalizationThemeCategory);
             selPersonalizationThemeButton.appendChild(selPersonalizationThemeCopy);
             selPersonalizationBackgroundGrid.appendChild(selPersonalizationThemeButton);
@@ -497,7 +579,7 @@
             selPersonalizationPresetButton.type = "button";
             selPersonalizationPresetButton.dataset.selPersonalPreset = selPersonalizationPreset.id;
             selPersonalizationPresetButton.setAttribute("aria-pressed", "false");
-            selPersonalizationPresetButton.innerHTML = `<i class="${selPersonalizationPreset.icon}" aria-hidden="true"></i><span>${selPersonalizationPreset.label}</span>`;
+            selPersonalizationPresetButton.innerHTML = `<i class="${selPersonalizationPreset.icon}" aria-hidden="true"></i><span>${selPersonalizationTranslate(selPersonalizationPreset.label)}</span>`;
             selPersonalizationPresetGrid.appendChild(selPersonalizationPresetButton);
         });
 
@@ -509,7 +591,7 @@
             selPersonalizationTextModeButton.type = "button";
             selPersonalizationTextModeButton.dataset.selPersonalTextMode = selPersonalizationTextMode.id;
             selPersonalizationTextModeButton.setAttribute("aria-pressed", "false");
-            selPersonalizationTextModeButton.innerHTML = `<i class="${selPersonalizationTextMode.icon}" aria-hidden="true"></i><span>${selPersonalizationTextMode.label}</span>`;
+            selPersonalizationTextModeButton.innerHTML = `<i class="${selPersonalizationTextMode.icon}" aria-hidden="true"></i><span>${selPersonalizationTranslate(selPersonalizationTextMode.label)}</span>`;
             selPersonalizationTextModeGrid.appendChild(selPersonalizationTextModeButton);
         });
 
@@ -521,7 +603,7 @@
             selPersonalizationSection.dataset.selPersonalGroup = selPersonalizationGroup.id;
             const selPersonalizationSectionHeader = document.createElement("header");
             selPersonalizationSectionHeader.className = "selpersonal-section-heading";
-            selPersonalizationSectionHeader.innerHTML = `<span><i class="${selPersonalizationGroup.icon}" aria-hidden="true"></i><strong>${selPersonalizationGroup.title}</strong></span>`;
+            selPersonalizationSectionHeader.innerHTML = `<span><i class="${selPersonalizationGroup.icon}" aria-hidden="true"></i><strong>${selPersonalizationTranslate(selPersonalizationGroup.title)}</strong></span>`;
             selPersonalizationSection.appendChild(selPersonalizationSectionHeader);
             // 当前分组中的每项设置共享百分比输入结构。
             selPersonalizationGroup.items.forEach((selPersonalizationItem) => {
@@ -531,7 +613,7 @@
                 const selPersonalizationRange = document.createElement("label");
                 selPersonalizationRange.className = "selpersonal-panel-range";
                 selPersonalizationRange.innerHTML = `
-                    <span class="selpersonal-panel-range-copy"><strong>${selPersonalizationItem.label}</strong><small>${selPersonalizationItem.hint}</small></span>
+                    <span class="selpersonal-panel-range-copy"><strong>${selPersonalizationTranslate(selPersonalizationItem.label)}</strong><small>${selPersonalizationTranslate(selPersonalizationItem.hint)}</small></span>
                     <span class="selpersonal-panel-range-control"><input type="range" min="0" max="${selPersonalizationRangeMaximum}" step="1" data-sel-personal-panel-range="${selPersonalizationItem.key}"><output data-sel-personal-panel-output="${selPersonalizationItem.key}"></output></span>
                 `;
                 selPersonalizationSection.appendChild(selPersonalizationRange);
@@ -550,6 +632,8 @@
             }
             selPersonalizationPanelScroll.appendChild(selPersonalizationSection);
         });
+        // 静态模板和动态配置渲染完成后统一应用公共文案，不触碰项目业务面板。
+        selPersonalizationLocalizeNode(selPersonalizationControl);
 
         /**
          * 同步背景主题、参数和输出文案。
@@ -813,8 +897,8 @@
                 selPersonalizationThemeColorOutput.value = selPersonalizationPanelState.themeColor
                     ? selPersonalizationEffectiveColor
                     : selPersonalizationPanelState.themeAccent
-                        ? selPersonalizationResolveThemeColor()?.label || "主题配色"
-                        : "跟随主题";
+                        ? selPersonalizationTranslate(selPersonalizationResolveThemeColor()?.label || "主题配色")
+                        : selPersonalizationTranslate("跟随主题");
             }
             // 跟随按钮和常用色按钮同步当前颜色来源及精确选中态。
             selPersonalizationControl.querySelector("[data-sel-personal-theme-follow]")?.setAttribute("aria-pressed", String(!selPersonalizationPanelState.themeAccent && !selPersonalizationPanelState.themeColor));
@@ -907,17 +991,17 @@
         }
 
         /**
-         * 切换四个一级设置视图。
-         * @param {string} selPersonalizationViewName - skin、background、panel 或 text。
+         * 切换五个一级设置视图。
+         * @param {string} selPersonalizationViewName - skin、background、panel、text 或 language。
          * @returns {boolean} 成功切换时返回 true。
          */
         function selPersonalizationSelectView(selPersonalizationViewName) {
             // 未知视图不会隐藏当前有效界面。
-            if (!["skin", "background", "panel", "text"].includes(selPersonalizationViewName)) {
+            if (!["skin", "background", "panel", "text", "language"].includes(selPersonalizationViewName)) {
                 return false;
             }
             // tab 同步选中类和 aria-selected。
-            selPersonalizationControl.querySelectorAll("[data-sel-personal-tab]").forEach((selPersonalizationTab) => {
+        selPersonalizationControl.querySelectorAll("[data-sel-personal-tab]").forEach((selPersonalizationTab) => {
                 const selPersonalizationSelected = selPersonalizationTab.dataset.selPersonalTab === selPersonalizationViewName;
                 selPersonalizationTab.classList.toggle("selpersonal-tab-selected", selPersonalizationSelected);
                 selPersonalizationTab.setAttribute("aria-selected", String(selPersonalizationSelected));
@@ -931,7 +1015,7 @@
         }
 
         // 面板打开、关闭、外部点击、Escape 与焦点归还统一由 selFloatingPanel 处理。
-        // tablist 使用事件委托切换四个一级设置。
+        // tablist 使用事件委托切换五个一级设置。
         selPersonalizationControl.querySelector(".selpersonal-tabs")?.addEventListener("click", (selPersonalizationEvent) => {
             // 只响应带稳定 tab 标识的按钮。
             const selPersonalizationTab = selPersonalizationEvent.target.closest("[data-sel-personal-tab]");
@@ -939,9 +1023,18 @@
                 selPersonalizationSelectView(selPersonalizationTab.dataset.selPersonalTab);
             }
         });
+        // 语言选择只把稳定 BCP-47 值交回应用装配层；公共组件不拼接项目配置路径。
+        selPersonalizationLanguageGrid.addEventListener("click", (selPersonalizationEvent) => {
+            const selPersonalizationLanguageButton = selPersonalizationEvent.target.closest("[data-sel-personal-language]");
+            if (!selPersonalizationLanguageButton || selPersonalizationLanguageButton.dataset.selPersonalLanguage === selPersonalizationLocale) return;
+            const selPersonalizationRequestedLocale = selPersonalizationLanguageButton.dataset.selPersonalLanguage;
+            const selPersonalizationLocaleKnown = selPersonalizationLanguageOptions.some((selPersonalizationLanguage) => selPersonalizationLanguage.value === selPersonalizationRequestedLocale);
+            if (!selPersonalizationLocaleKnown || typeof selPersonalizationOptions.locale?.onChange !== "function") return;
+            selPersonalizationOptions.locale.onChange(selPersonalizationRequestedLocale);
+        });
         // tablist 支持方向键和首尾键，键盘用户不必离开分类导航。
         selPersonalizationControl.querySelector(".selpersonal-tabs")?.addEventListener("keydown", (selPersonalizationEvent) => {
-            // 当前四个 tab 按 DOM 顺序形成稳定键盘列表。
+            // 当前五个 tab 按 DOM 顺序形成稳定键盘列表。
             const selPersonalizationTabs = Array.from(selPersonalizationControl.querySelectorAll("[data-sel-personal-tab]"));
             // 只有焦点位于 tab 时才处理分类导航按键。
             const selPersonalizationCurrentIndex = selPersonalizationTabs.indexOf(selPersonalizationEvent.target);
@@ -950,7 +1043,7 @@
             }
             // 阻止方向键滚动浮层内容。
             selPersonalizationEvent.preventDefault();
-            // Home 和 End 直达首尾；左右方向在四个一级设置之间循环。
+            // Home 和 End 直达首尾；左右方向在五个一级设置之间循环。
             const selPersonalizationNextIndex = selPersonalizationEvent.key === "Home"
                 ? 0
                 : selPersonalizationEvent.key === "End"
@@ -1182,6 +1275,7 @@
             presets: selPersonalizationPresets,
             // getState 同时返回皮肤、背景、面板与文字的不可变快照。
             getState: () => Object.freeze({
+                locale: selPersonalizationLocale,
                 theme: selPersonalizationThemeState,
                 mode: selPersonalizationSkinState,
                 skin: selPersonalizationSkinState,

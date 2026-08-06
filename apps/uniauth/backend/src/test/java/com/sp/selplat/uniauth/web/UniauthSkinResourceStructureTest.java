@@ -152,6 +152,7 @@ class UniauthSkinResourceStructureTest {
     @Test
     void textScaleKeepsSkinFollowing() throws IOException {
         String script = readText("static/sel/components/personalization/selPersonalization.js");
+        String css = readText("static/sel/components/personalization/selPersonalization.css");
         // 两个排版参数分别记录覆盖状态，换肤时只保留用户调整过的滑杆值。
         assertTrue(script.contains("contrastOverride: false"));
         assertTrue(script.contains("fontScaleOverride: false"));
@@ -161,6 +162,11 @@ class UniauthSkinResourceStructureTest {
         assertTrue(script.contains("selPersonalizationTextState.contrastOverride"));
         assertTrue(script.contains("selPersonalizationTextState.fontScaleOverride"));
         assertFalse(script.contains("[selPersonalizationTextKey]: selPersonalizationClamp(selPersonalizationTextRange.value, selPersonalizationTextDefaults[selPersonalizationTextKey]), mode: \"custom\""));
+        // 文字模式按钮必须与面板预设共同消费皮肤控件表面，浅色模式不能停留在写死的深蓝底色。
+        assertTrue(css.contains(".selpersonal-preset,\n.selpersonal-text-mode,"));
+        assertTrue(css.contains(".selpersonal-text-mode[aria-pressed=\"true\"]"));
+        assertTrue(css.contains("background: var(--sel-theme-control-surface);"));
+        assertFalse(css.contains(".selpersonal-text-mode {\n    display: grid;\n    min-height: 52px;\n    place-items: center;\n    gap: 3px;\n    padding: 5px 2px;\n    border: 1px solid rgba(91, 137, 225, 0.34);"));
     }
 
     /**
@@ -257,6 +263,84 @@ class UniauthSkinResourceStructureTest {
                 assertTrue(new String(accentFrame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
             }
         }
+    }
+
+    /**
+     * internationalizationBoundaries 验证公共设置与 Uniauth 业务配置按项目边界分别加载。
+     */
+    @Test
+    void internationalizationBoundaries() throws IOException {
+        String applicationScript = readText("static/uniauth/uniauth.js");
+        String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
+        String windowScript = readText("static/sel/components/window/selWindow.js");
+        String runtimeScript = readText("static/sel/core/selBaseRuntime.js");
+        // 应用装配层独立登记公共文案与项目业务目录，公共组件不能识别 Uniauth 文件位置。
+        assertTrue(applicationScript.contains("../sel/components/personalization/i18n/{locale}.json"));
+        assertTrue(applicationScript.contains("../sel/components/window/i18n/{locale}.json"));
+        assertTrue(applicationScript.contains("./mock/UniauthUserGrid/{locale}/UniauthUserGrid.window.create.json"));
+        assertTrue(applicationScript.contains("messages: uniauthPersonalizationMessages"));
+        assertTrue(applicationScript.contains("window: Object.freeze({ create: Object.freeze(uniauthParts.createWindow) })"));
+        assertTrue(applicationScript.contains("...uniauthPayload.window.create"));
+        assertFalse(applicationScript.contains("const uniauthProjectWindowView"));
+        assertTrue(personalizationScript.contains("data-sel-personal-language"));
+        assertTrue(personalizationScript.contains("selPersonalizationOptions.locale?.onChange"));
+        assertFalse(personalizationScript.contains("UniauthUserGrid"));
+        assertTrue(windowScript.contains("selWindowOptions.messages"));
+        assertFalse(windowScript.contains("setAttribute(\"aria-label\", \"最小化窗口\")"));
+        // 语言偏好键和 URL 参数由项目应用决定；公共运行时只提供通用存取与保参导航能力。
+        assertTrue(applicationScript.contains("selplat.uniauth.locale"));
+        assertTrue(runtimeScript.contains("selBaseNavigateWithParam"));
+        assertTrue(runtimeScript.contains("target.searchParams.set"));
+
+        for (String locale : List.of("zh-CN", "ja-JP", "en-US")) {
+            String commonMessages = readText("static/sel/components/personalization/i18n/" + locale + ".json");
+            String projectWindow = readText("static/uniauth/mock/UniauthUserGrid/" + locale
+                    + "/UniauthUserGrid.window.create.json");
+            String commonWindowMessages = readText("static/sel/components/window/i18n/" + locale + ".json");
+            // 三份公共配置都登记自身 BCP-47 值与三种稳定选项。
+            assertTrue(commonMessages.contains("\"locale\": \"" + locale + "\""));
+            assertTrue(commonMessages.contains("\"value\": \"zh-CN\""));
+            assertTrue(commonMessages.contains("\"value\": \"ja-JP\""));
+            assertTrue(commonMessages.contains("\"value\": \"en-US\""));
+            assertTrue(commonWindowMessages.contains("\"locale\": \"" + locale + "\""));
+            // 项目显示标签可本地化，但提交值必须跨语言保持一致。
+            assertTrue(projectWindow.contains("\"value\": \"platform\""));
+            assertTrue(projectWindow.contains("\"value\": \"lin-shen\""));
+            assertTrue(projectWindow.contains("\"value\": \"medium\""));
+        }
+    }
+
+    /**
+     * floatingPanelResizeContract 验证公共浮层默认不改变行为，个性化设置按配置启用受限缩放。
+     */
+    @Test
+    void floatingPanelResizeContract() throws IOException {
+        String floatingScript = readText("static/sel/components/floating-panel/selFloatingPanel.js");
+        String floatingCss = readText("static/sel/components/floating-panel/selFloatingPanel.css");
+        String personalizationScript = readText("static/sel/components/personalization/selPersonalization.js");
+        // 公共组件只在调用方显式传入 resizable 后创建稳定的三个手柄。
+        assertTrue(floatingScript.contains("const selFloatingPanelResizeEnabled = selFloatingPanelResizeOption === true"));
+        assertTrue(floatingScript.contains("dataset.selFloatingResize = selFloatingPanelResizeDirection"));
+        assertTrue(floatingScript.contains("selFloatingPanelApplySize"));
+        assertTrue(floatingScript.contains("selFloatingPanelResetSize"));
+        assertTrue(floatingScript.contains("document.addEventListener(\"pointermove\", selFloatingPanelHandleResizePointerMove"));
+        assertTrue(floatingScript.contains("document.removeEventListener(\"pointermove\", selFloatingPanelHandleResizePointerMove)"));
+        assertTrue(floatingScript.contains("getSize: () => Object.freeze"));
+        // 宽高必须受视口和调用方上下限共同约束，移动端不允许内联桌面尺寸破坏自适应。
+        assertTrue(floatingScript.contains("window.innerHeight - selFloatingPanelRect.top"));
+        assertTrue(floatingScript.contains("selFloatingPanelResizeMaximumWidth"));
+        assertTrue(floatingCss.contains(".selfloating-resize-left"));
+        assertTrue(floatingCss.contains(".selfloating-resize-bottom"));
+        assertTrue(floatingCss.contains(".selfloating-resize-corner"));
+        assertTrue(floatingCss.contains("width: min(390px, calc(100vw - 24px)) !important"));
+        // 当前只有个性化设置开启缩放，并显式声明最小尺寸和最大宽度。
+        assertTrue(personalizationScript.contains("resizable: Object.freeze({"));
+        assertTrue(personalizationScript.contains("minWidth: 340"));
+        assertTrue(personalizationScript.contains("minHeight: 420"));
+        assertTrue(personalizationScript.contains("maxWidth: 720"));
+        String personalizationCss = readText("static/sel/components/personalization/selPersonalization.css");
+        assertTrue(personalizationCss.contains(".selpersonal-view::-webkit-scrollbar"));
+        assertTrue(personalizationCss.contains("overscroll-behavior: contain"));
     }
 
     /**

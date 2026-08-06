@@ -39,10 +39,19 @@
     const uniauthMultiEnabled = uniauthBase.param("multi") === "1";
     // 三种支持语言与未来后端 locale 参数保持一致。
     const uniauthSupportedLocales = Object.freeze(["zh-CN", "ja-JP", "en-US"]);
-    // URL lang 参数用于模拟后端按语言返回聚合数据。
-    const uniauthRequestedLocale = uniauthBase.param("lang", "zh-CN");
+    // 语言偏好只保存稳定 BCP-47 值；项目配置仍由当前项目数据源表显式登记。
+    const uniauthLocalePreferenceKey = "selplat.uniauth.locale";
+    const uniauthStoredLocale = uniauthBase.preference.get(uniauthLocalePreferenceKey, "zh-CN");
+    // URL lang 参数优先用于共享链接；缺失时使用用户上次在个性化设置中的选择。
+    const uniauthRequestedLocale = uniauthBase.param("lang", uniauthStoredLocale);
     // 未支持语言安全回退中文，避免请求不存在的语言目录。
     const uniauthLocale = uniauthSupportedLocales.includes(uniauthRequestedLocale) ? uniauthRequestedLocale : "zh-CN";
+    // 合法最终语言同步到偏好，刷新和下一次直接访问保持一致。
+    uniauthBase.preference.set(uniauthLocalePreferenceKey, uniauthLocale);
+    // 公共属性配置位于 SEL 组件目录，与任何 Uniauth 项目数据目录保持物理隔离。
+    const uniauthCommonPersonalizationUrl = "../sel/components/personalization/i18n/{locale}.json";
+    // 公共窗口框架拥有独立语言配置，不能把最小化、最大化等公共属性塞入项目业务 JSON。
+    const uniauthCommonWindowUrl = "../sel/components/window/i18n/{locale}.json";
     // HTML 提供应用挂载点和可审阅的完整面板结构，装配层只在其中定位当前业务实例。
     const uniauthApplicationHost = uniauthBase.query("[data-uniauth-app]");
     // HTML 只提供背景挂载点，独立背景图层由 selPageBackground.mount 生成。
@@ -147,52 +156,6 @@
     const uniauthSources = new Map();
     // 新建窗口控制器按表格实例保存，双实例不会共用打开状态。
     const uniauthWindowControllers = new Map();
-    // “新建”入口只声明项目表单业务字段，通用 selWindow 不识别项目实体或接口地址。
-    const uniauthProjectWindowView = Object.freeze({
-        // 标题与说明严格采用用户指定的新建项目参考图。
-        title: "新建项目",
-        subtitle: "创建一个全新的项目并设置基本信息",
-        // 标题栏关闭和底部动作使用清晰业务文案。
-        closeLabel: "关闭新建项目窗口",
-        cancelLabel: "取消",
-        submitLabel: "立即创建",
-        // 复选项和结果文案完成可操作的新建主路径。
-        checkboxLabel: "创建后立即添加任务",
-        validationMessage: "请填写项目名称并完成必填选择",
-        successMessage: "项目已创建，可以继续添加任务",
-        // rows 的顺序和单列/双列关系直接对应参考图的表单布局。
-        rows: Object.freeze([
-            // 项目名称限制 50 字并显示实时计数。
-            Object.freeze([Object.freeze({ name: "projectName", label: "项目名称", type: "text", icon: "ri-file-text-line", placeholder: "请输入项目名称", required: true, maxLength: 50 })]),
-            // 项目类型使用统一选择下拉，并保留原生 select 真实值。
-            Object.freeze([Object.freeze({ name: "projectType", label: "项目类型", type: "select", required: true, options: Object.freeze([
-                Object.freeze({ value: "", label: "请选择项目类型", icon: "ri-apps-2-line", disabled: true, selected: true }),
-                Object.freeze({ value: "platform", label: "平台架构", icon: "ri-stack-line" }),
-                Object.freeze({ value: "visualization", label: "数据可视化", icon: "ri-pie-chart-line" }),
-                Object.freeze({ value: "research", label: "科研项目", icon: "ri-flask-line" }),
-                Object.freeze({ value: "ai", label: "人工智能", icon: "ri-brain-line" })
-            ]) })]),
-            // 负责人下拉使用当前演示数据中的真实人员名称。
-            Object.freeze([Object.freeze({ name: "owner", label: "负责人", type: "select", required: true, options: Object.freeze([
-                Object.freeze({ value: "", label: "请选择负责人", icon: "ri-user-3-line", disabled: true, selected: true }),
-                Object.freeze({ value: "lin-shen", label: "林深", icon: "ri-user-star-line" }),
-                Object.freeze({ value: "su-wan", label: "苏晚", icon: "ri-user-line" }),
-                Object.freeze({ value: "lu-chuan", label: "陆川", icon: "ri-user-line" }),
-                Object.freeze({ value: "zhou-xu", label: "周叙", icon: "ri-user-line" })
-            ]) })]),
-            // 开始日期与优先级共享一行，保持参考图的四轨布局。
-            Object.freeze([
-                Object.freeze({ name: "startDate", label: "开始日期", type: "date", icon: "ri-calendar-line", placeholder: "请选择开始日期", required: true }),
-                Object.freeze({ name: "priority", label: "优先级", type: "select", required: true, options: Object.freeze([
-                    Object.freeze({ value: "medium", label: "中优先级", icon: "ri-flag-fill", tone: "active", selected: true }),
-                    Object.freeze({ value: "high", label: "高优先级", icon: "ri-flag-fill", tone: "review" }),
-                    Object.freeze({ value: "low", label: "低优先级", icon: "ri-flag-line", tone: "muted" })
-                ]) })
-            ]),
-            // 项目描述为可选多行字段并显示 300 字计数。
-            Object.freeze([Object.freeze({ name: "description", label: "项目描述", type: "textarea", icon: "ri-edit-2-line", placeholder: "请输入项目描述（选填）", required: false, maxLength: 300 })])
-        ])
-    });
     // Uniauth 业务数据源表明确登记实际请求地址；基础 selAjax 不允许根据实体或实例名推测路径。
     const uniauthDataSources = Object.freeze({
         // UniauthUserGrid 是用户管理主表及当前类型列表示例共同使用的数据源。
@@ -211,12 +174,13 @@
                 pagination: "./mock/UniauthUserGrid/{locale}/UniauthUserGrid.pagination.json",
                 projectTypeSelect: "./mock/UniauthUserGrid/{locale}/UniauthUserGrid.select.projectType.json",
                 statusSelect: "./mock/UniauthUserGrid/{locale}/UniauthUserGrid.select.status.json",
-                pageSizeSelect: "./mock/UniauthUserGrid/{locale}/UniauthUserGrid.select.pageSize.json"
+                pageSizeSelect: "./mock/UniauthUserGrid/{locale}/UniauthUserGrid.select.pageSize.json",
+                createWindow: "./mock/UniauthUserGrid/{locale}/UniauthUserGrid.window.create.json"
             })
         })
     });
     // 演示数据版本用于浏览器缓存失效；生产环境应由后端响应版本或构建摘要替代。
-    const uniauthDataVersion = "20260801-pagination-2";
+    const uniauthDataVersion = "20260806-i18n-1";
 
     /**
      * 把一个区域中的嵌套布局声明展开，供装配层判断本实例实际需要挂载哪些基础控件。
@@ -315,6 +279,7 @@
                 search: Object.freeze(uniauthParts.search),
                 menu: Object.freeze(uniauthParts.menu),
                 pagination: Object.freeze(uniauthParts.pagination),
+                window: Object.freeze({ create: Object.freeze(uniauthParts.createWindow) }),
                 select: Object.freeze({
                     projectType: Object.freeze(uniauthParts.projectTypeSelect),
                     status: Object.freeze(uniauthParts.statusSelect),
@@ -333,7 +298,7 @@
      * @param {object} uniauthDefinition - 明确声明 gridId、sourceId、entity 和 view 的业务实例定义。
      * @returns {Promise<object>} 返回 selGrid 创建的当前实例控制器。
      */
-    async function uniauthMountInstance(uniauthDefinition) {
+    async function uniauthMountInstance(uniauthDefinition, uniauthWindowMessages) {
         // 当前实例只读取定义中显式声明的数据源。
         const uniauthPayload = await uniauthLoadSource(uniauthDefinition.sourceId);
         // layoutId 明确选择当前实例使用的页面模板，不根据实体名称猜测布局。
@@ -405,8 +370,10 @@
         const uniauthWindowController = window.selWindow.mount(uniauthApplicationHost, {
             // 稳定键确保双实例的新建窗口互不共享位置、尺寸和激活栏目。
             id: `${uniauthDefinition.gridId}CreateWindow`,
+            // 公共窗口动作来自 selWindow 配置，业务标题与字段继续来自 Uniauth 项目配置。
+            messages: uniauthWindowMessages,
             // 展开只读表单配置，把应用业务内容交给基础窗体的标准数据入口。
-            ...uniauthProjectWindowView
+            ...uniauthPayload.window.create
         });
         // 当前实例窗口挂载失败时不允许新建动作回退到应用层原生 DOM。
         if (!uniauthWindowController) {
@@ -432,6 +399,15 @@
     async function uniauthLoadAll() {
         // 页面语言通过基础运行时同步，不直接操作 document。
         uniauthBase.setDocument({ lang: uniauthLocale });
+        // 公共个性化文案从 SEL 公共组件目录加载，禁止并入当前项目聚合响应。
+        const [uniauthPersonalizationMessages, uniauthWindowMessages] = await Promise.all([
+            uniauthAjax.json({
+                url: uniauthVersionedUrl(uniauthCommonPersonalizationUrl.replaceAll("{locale}", uniauthLocale))
+            }),
+            uniauthAjax.json({
+                url: uniauthVersionedUrl(uniauthCommonWindowUrl.replaceAll("{locale}", uniauthLocale))
+            })
+        ]);
         // 背景基础控件只创建图层和内存状态，刷新页面自动使用默认值。
         const uniauthBackgroundController = window.selPageBackground.mount(uniauthBackgroundHost, {
             // 首次打开采用深色皮肤的完整配套背景参数，个性化入口仍可在当前页面切换和调节。
@@ -444,14 +420,24 @@
         // 个性化基础控件组合背景控制器，并用页面级令牌统一管理全部水晶面板。
         const uniauthPersonalizationController = window.selPersonalization.mount(uniauthPersonalizationHost, {
             // 背景状态继续由独立 selPageBackground 控制器拥有，个性化模块只调用公开 API。
-            backgroundController: uniauthBackgroundController
+            backgroundController: uniauthBackgroundController,
+            // 公共语言文案与当前项目业务 JSON 分别加载，基础组件只接收已经解析的标准输入。
+            messages: uniauthPersonalizationMessages,
+            locale: Object.freeze({
+                current: uniauthLocale,
+                onChange(uniauthNextLocale) {
+                    if (!uniauthSupportedLocales.includes(uniauthNextLocale)) return false;
+                    uniauthBase.preference.set(uniauthLocalePreferenceKey, uniauthNextLocale);
+                    return uniauthBase.navigateWithParam("lang", uniauthNextLocale);
+                }
+            })
         });
         // 个性化宿主或控制器缺失时阻止交付半成品设置入口。
         if (!uniauthPersonalizationController) {
             throw new Error("基础个性化控件挂载失败：请检查 data-sel-personalization-host。");
         }
         // 每个业务定义只通过基础 API 创建和挂载独立实例。
-        await Promise.all(uniauthDefinitions.map((uniauthDefinition) => uniauthMountInstance(uniauthDefinition)));
+        await Promise.all(uniauthDefinitions.map((uniauthDefinition) => uniauthMountInstance(uniauthDefinition, uniauthWindowMessages)));
         // 浏览器标题使用主实例当前语言数据。
         const uniauthPrimaryPayload = uniauthInstances.get("UniauthUserGrid");
         // 主实例存在时通过基础运行时更新标题。

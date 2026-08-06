@@ -136,7 +136,68 @@
 
 .selfloating-body { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
 
+/* 缩放手柄只在调用方显式启用后出现；右上锚定面板从左边和底边向外扩展。 */
+.selfloating-resize-handle {
+    position: absolute;
+    z-index: 5;
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    touch-action: none;
+}
+
+.selfloating-resize-left {
+    top: 22px;
+    bottom: 22px;
+    left: -11px;
+    width: 18px;
+    cursor: ew-resize;
+}
+
+.selfloating-resize-bottom {
+    right: 22px;
+    bottom: -11px;
+    left: 22px;
+    height: 18px;
+    cursor: ns-resize;
+}
+
+.selfloating-resize-corner {
+    bottom: -13px;
+    left: -13px;
+    width: 30px;
+    height: 30px;
+    cursor: nesw-resize;
+}
+
+.selfloating-resize-corner::before {
+    position: absolute;
+    bottom: 7px;
+    left: 7px;
+    width: 10px;
+    height: 10px;
+    border-bottom: 2px solid rgb(var(--sel-theme-color-rgb) / 0.72);
+    border-left: 2px solid rgb(var(--sel-theme-color-rgb) / 0.72);
+    border-radius: 0 0 0 3px;
+    box-shadow: -2px 2px 8px rgb(var(--sel-theme-color-rgb) / 0.38);
+    content: "";
+}
+
+.selfloating-resize-handle:hover::before,
+.selfloating-resize-handle:focus-visible::before {
+    border-color: var(--sel-theme-text-icon);
+    filter: drop-shadow(0 0 4px rgb(var(--sel-theme-color-rgb) / 0.72));
+}
+
+.selfloating-panel[data-sel-floating-resizing] {
+    user-select: none;
+}
+
 @media (max-width: 640px) {
     .selfloating-control { top: 12px; right: 12px; }
-    .selfloating-panel { width: min(390px, calc(100vw - 24px)); max-height: calc(100vh - 66px); }
+    .selfloating-panel { width: min(390px, calc(100vw - 24px)) !important; height: auto !important; max-height: calc(100vh - 66px); }
+    .selfloating-resize-handle { display: none; }
 }

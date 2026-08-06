@@ -29,15 +29,18 @@
      * 获取或创建窗口最小化停靠区。
      * @returns {HTMLElement} 页面级窗口停靠区。
      */
-    function selWindowGetMinimizedRail() {
+    function selWindowGetMinimizedRail(selWindowMessages = {}) {
         // 已创建时直接复用同一停靠区，避免多实例各自生成重复任务栏。
-        if (selWindowMinimizedRail) return selWindowMinimizedRail;
+        if (selWindowMinimizedRail) {
+            selWindowMinimizedRail.setAttribute("aria-label", String(selWindowMessages.minimizedRail || "已最小化窗口"));
+            return selWindowMinimizedRail;
+        }
         // 原生 aside 说明这里是辅助性的窗口恢复区域。
         selWindowMinimizedRail = document.createElement("aside");
         // 稳定类名让基础样式独立控制停靠区，不泄漏应用业务名称。
         selWindowMinimizedRail.className = "selwindow-minimized-rail";
         // 可访问名称帮助键盘和读屏用户理解按钮用途。
-        selWindowMinimizedRail.setAttribute("aria-label", "已最小化窗口");
+        selWindowMinimizedRail.setAttribute("aria-label", String(selWindowMessages.minimizedRail || "已最小化窗口"));
         // 没有最小化窗口时停靠区完全退出布局。
         selWindowMinimizedRail.hidden = true;
         // 停靠区属于窗口基础能力，因此直接进入页面 body。
@@ -244,6 +247,12 @@
         if (!selWindowHost || !selWindowId || !Array.isArray(selWindowOptions.rows)) return null;
         // 重复挂载返回既有控制器，避免遮罩和事件叠加。
         if (selWindowInstances.has(selWindowId)) return selWindowInstances.get(selWindowId);
+        // 窗口框架文案来自 selWindow 公共配置；项目标题、字段和业务反馈仍属于调用方项目配置。
+        const selWindowMessages = selWindowOptions.messages || {};
+        const selWindowFormatMessage = (selWindowKey, selWindowFallback, selWindowValues = {}) => Object.entries(selWindowValues).reduce(
+            (selWindowResult, [selWindowValueKey, selWindowValue]) => selWindowResult.replaceAll(`{${selWindowValueKey}}`, String(selWindowValue)),
+            String(selWindowMessages[selWindowKey] || selWindowFallback)
+        );
 
         // 挂载顺序用于首次打开时的级联错位，确保同页窗口不会完全重叠。
         const selWindowCascadeIndex = selWindowInstances.size;
@@ -287,7 +296,7 @@
         // 原生 button 避免误触发表单提交。
         selWindowMinimize.type = "button";
         // 可访问名称明确按钮执行的是窗口级最小化。
-        selWindowMinimize.setAttribute("aria-label", "最小化窗口");
+        selWindowMinimize.setAttribute("aria-label", selWindowFormatMessage("minimize", "最小化窗口"));
         // 使用图标库中的减号图标表达桌面窗口习惯。
         selWindowMinimize.appendChild(selWindowCreateIcon("ri-subtract-line"));
         // 最大化按钮在最大化后切换为还原动作和图标。
@@ -295,7 +304,7 @@
         // 原生 button 避免触发表单提交。
         selWindowMaximize.type = "button";
         // 可访问名称明确当前动作而不是只播报图标。
-        selWindowMaximize.setAttribute("aria-label", "最大化窗口");
+        selWindowMaximize.setAttribute("aria-label", selWindowFormatMessage("maximize", "最大化窗口"));
         // aria-pressed 暴露最大化开关状态。
         selWindowMaximize.setAttribute("aria-pressed", "false");
         // 图标节点在最大化和还原之间原位切换。
@@ -384,13 +393,13 @@
         // 实例键让自动化与多窗口状态检查能够稳定定位恢复入口。
         selWindowMinimizedButton.dataset.selWindowRestoreId = selWindowId;
         // 按钮名称同时说明窗口标题和恢复动作。
-        selWindowMinimizedButton.setAttribute("aria-label", `恢复${String(selWindowOptions.title || "业务")}窗口`);
+        selWindowMinimizedButton.setAttribute("aria-label", selWindowFormatMessage("restoreWindow", "恢复{title}窗口", { title: String(selWindowOptions.title || "业务") }));
         // 真实 Remix Icon 表达窗口恢复入口，不使用字符或 CSS 图形代替。
         selWindowMinimizedButton.append(selWindowCreateIcon("ri-window-line"), document.createTextNode(String(selWindowOptions.title || "业务窗口")));
         // 普通打开状态不显示停靠按钮。
         selWindowMinimizedButton.hidden = true;
         // 把实例恢复入口加入基础组件维护的全局停靠区。
-        selWindowGetMinimizedRail().appendChild(selWindowMinimizedButton);
+        selWindowGetMinimizedRail(selWindowMessages).appendChild(selWindowMinimizedButton);
         // 窗口内所有标准下拉通过公开基础控件一次挂载。
         window.selDropdownMenu?.mountAll(selWindowShell);
         // 窗口内所有标准日期字段通过公开基础控件一次挂载，原生 date input 不再直接显示系统日历。
@@ -494,7 +503,9 @@
             // 最大化状态类只表达交互状态，不复制另一套窗口结构。
             selWindowShell.classList.toggle("selwindow-window-maximized", selWindowState.maximized);
             // 按钮名称始终说明下一次点击将执行的动作。
-            selWindowMaximize.setAttribute("aria-label", selWindowState.maximized ? "还原窗口" : "最大化窗口");
+            selWindowMaximize.setAttribute("aria-label", selWindowState.maximized
+                ? selWindowFormatMessage("restore", "还原窗口")
+                : selWindowFormatMessage("maximize", "最大化窗口"));
             // pressed 状态让辅助技术读取当前是否最大化。
             selWindowMaximize.setAttribute("aria-pressed", String(selWindowState.maximized));
             // 图标在进入最大化后切换为退出全屏语义。

@@ -1,0 +1,36 @@
+{
+  "title": "プロジェクトを新規作成",
+  "subtitle": "新しいプロジェクトの基本情報を設定します",
+  "closeLabel": "新規プロジェクト画面を閉じる",
+  "cancelLabel": "キャンセル",
+  "submitLabel": "作成する",
+  "checkboxLabel": "作成後すぐにタスクを追加",
+  "validationMessage": "プロジェクト名と必須項目を入力してください",
+  "successMessage": "プロジェクトを作成しました。続けてタスクを追加できます",
+  "rows": [
+    [{ "name": "projectName", "label": "プロジェクト名", "type": "text", "icon": "ri-file-text-line", "placeholder": "プロジェクト名を入力", "required": true, "maxLength": 50 }],
+    [{ "name": "projectType", "label": "プロジェクト種類", "type": "select", "required": true, "options": [
+      { "value": "", "label": "プロジェクト種類を選択", "icon": "ri-apps-2-line", "disabled": true, "selected": true },
+      { "value": "platform", "label": "プラットフォーム基盤", "icon": "ri-stack-line" },
+      { "value": "visualization", "label": "データ可視化", "icon": "ri-pie-chart-line" },
+      { "value": "research", "label": "研究プロジェクト", "icon": "ri-flask-line" },
+      { "value": "ai", "label": "人工知能", "icon": "ri-brain-line" }
+    ] }],
+    [{ "name": "owner", "label": "担当者", "type": "select", "required": true, "options": [
+      { "value": "", "label": "担当者を選択", "icon": "ri-user-3-line", "disabled": true, "selected": true },
+      { "value": "lin-shen", "label": "林深", "icon": "ri-user-star-line" },
+      { "value": "su-wan", "label": "苏晚", "icon": "ri-user-line" },
+      { "value": "lu-chuan", "label": "陆川", "icon": "ri-user-line" },
+      { "value": "zhou-xu", "label": "周叙", "icon": "ri-user-line" }
+    ] }],
+    [
+      { "name": "startDate", "label": "開始日", "type": "date", "icon": "ri-calendar-line", "placeholder": "開始日を選択", "required": true },
+      { "name": "priority", "label": "優先度", "type": "select", "required": true, "options": [
+        { "value": "medium", "label": "中", "icon": "ri-flag-fill", "tone": "active", "selected": true },
+        { "value": "high", "label": "高", "icon": "ri-flag-fill", "tone": "review" },
+        { "value": "low", "label": "低", "icon": "ri-flag-line", "tone": "muted" }
+      ] }
+    ],
+    [{ "name": "description", "label": "プロジェクト説明", "type": "textarea", "icon": "ri-edit-2-line", "placeholder": "プロジェクト説明を入力（任意）", "required": false, "maxLength": 300 }]
+  ]
+}

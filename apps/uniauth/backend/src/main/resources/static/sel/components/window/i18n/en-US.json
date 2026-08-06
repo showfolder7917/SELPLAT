@@ -1,0 +1,8 @@
+{
+  "locale": "en-US",
+  "minimizedRail": "Minimized windows",
+  "minimize": "Minimize window",
+  "maximize": "Maximize window",
+  "restore": "Restore window",
+  "restoreWindow": "Restore {title} window"
+}

@@ -33,9 +33,9 @@
     <link rel="stylesheet" href="../sel/components/page-background/selPageBackground.css?v=20260804-2">
     <link rel="stylesheet" href="../sel/components/cursor/selCursor.css?v=20260805-1">
     <link rel="stylesheet" href="../sel/components/window/selWindow.css?v=20260806-1">
-    <link rel="stylesheet" href="../sel/components/floating-panel/selFloatingPanel.css?v=20260806-1">
+    <link rel="stylesheet" href="../sel/components/floating-panel/selFloatingPanel.css?v=20260806-resize-1">
     <!-- 个性化样式最后加载，用页面级令牌统一覆盖全部水晶组件。 -->
-    <link rel="stylesheet" href="../sel/components/personalization/selPersonalization.css?v=20260805-6">
+    <link rel="stylesheet" href="../sel/components/personalization/selPersonalization.css?v=20260806-resize-scroll-1">
     <!-- 当前主题包同时提供深浅模式；颜色与素材组合由 manifest 注册，不复制组件结构。 -->
     <link rel="stylesheet" href="../sel/theme/packs/crystal-tech/theme.css?v=20260806-3">
     <link rel="stylesheet" href="../sel/theme/packs/crystal-tech/modes/dark.css?v=20260806-1">
@@ -99,7 +99,7 @@
     <!-- ===== Uniauth 应用静态审阅结构结束 ===== -->
 
     <!-- ===== SEL 基础脚本开始：基础脚本只注册能力，禁止主动扫描或识别 Uniauth 业务。 ===== -->
-    <script src="../sel/core/selBaseRuntime.js?v=20260731-3"></script>
+    <script src="../sel/core/selBaseRuntime.js?v=20260806-i18n-1"></script>
     <!-- selAjax 只执行应用传入的真实地址并返回 JSON，不保存任何 Uniauth 路径。 -->
     <script src="../sel/core/selAjax.js?v=20260731-1"></script>
     <!-- 主题注册表先接收全部主题包，再由管理器原子应用 Theme、Mode、Accent 与 Density。 -->
@@ -115,13 +115,13 @@
     <script src="../sel/components/grid/selGridMenu.js?v=20260802-4"></script>
     <script src="../sel/components/grid/selGrid.js?v=20260805-1"></script>
     <script src="../sel/components/page-background/selPageBackground.js?v=20260805-1"></script>
-    <script src="../sel/components/floating-panel/selFloatingPanel.js?v=20260805-1"></script>
-    <script src="../sel/components/personalization/selPersonalization.js?v=20260806-1"></script>
-    <script src="../sel/components/window/selWindow.js?v=20260805-1"></script>
+    <script src="../sel/components/floating-panel/selFloatingPanel.js?v=20260806-resize-2"></script>
+    <script src="../sel/components/personalization/selPersonalization.js?v=20260806-i18n-1"></script>
+    <script src="../sel/components/window/selWindow.js?v=20260806-i18n-1"></script>
     <!-- ===== SEL 基础脚本结束 ===== -->
 
     <!-- ===== Uniauth 应用装配层开始：最后加载，只传业务配置和数据并调用基础 API。 ===== -->
-    <script src="./uniauth.js?v=20260804-1"></script>
+    <script src="./uniauth.js?v=20260806-i18n-1"></script>
     <!-- ===== Uniauth 应用装配层结束 ===== -->
 </body>
 </html>

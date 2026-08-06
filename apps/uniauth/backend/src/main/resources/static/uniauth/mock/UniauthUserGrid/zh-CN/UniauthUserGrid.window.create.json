@@ -1,0 +1,36 @@
+{
+  "title": "新建项目",
+  "subtitle": "创建一个全新的项目并设置基本信息",
+  "closeLabel": "关闭新建项目窗口",
+  "cancelLabel": "取消",
+  "submitLabel": "立即创建",
+  "checkboxLabel": "创建后立即添加任务",
+  "validationMessage": "请填写项目名称并完成必填选择",
+  "successMessage": "项目已创建，可以继续添加任务",
+  "rows": [
+    [{ "name": "projectName", "label": "项目名称", "type": "text", "icon": "ri-file-text-line", "placeholder": "请输入项目名称", "required": true, "maxLength": 50 }],
+    [{ "name": "projectType", "label": "项目类型", "type": "select", "required": true, "options": [
+      { "value": "", "label": "请选择项目类型", "icon": "ri-apps-2-line", "disabled": true, "selected": true },
+      { "value": "platform", "label": "平台架构", "icon": "ri-stack-line" },
+      { "value": "visualization", "label": "数据可视化", "icon": "ri-pie-chart-line" },
+      { "value": "research", "label": "科研项目", "icon": "ri-flask-line" },
+      { "value": "ai", "label": "人工智能", "icon": "ri-brain-line" }
+    ] }],
+    [{ "name": "owner", "label": "负责人", "type": "select", "required": true, "options": [
+      { "value": "", "label": "请选择负责人", "icon": "ri-user-3-line", "disabled": true, "selected": true },
+      { "value": "lin-shen", "label": "林深", "icon": "ri-user-star-line" },
+      { "value": "su-wan", "label": "苏晚", "icon": "ri-user-line" },
+      { "value": "lu-chuan", "label": "陆川", "icon": "ri-user-line" },
+      { "value": "zhou-xu", "label": "周叙", "icon": "ri-user-line" }
+    ] }],
+    [
+      { "name": "startDate", "label": "开始日期", "type": "date", "icon": "ri-calendar-line", "placeholder": "请选择开始日期", "required": true },
+      { "name": "priority", "label": "优先级", "type": "select", "required": true, "options": [
+        { "value": "medium", "label": "中优先级", "icon": "ri-flag-fill", "tone": "active", "selected": true },
+        { "value": "high", "label": "高优先级", "icon": "ri-flag-fill", "tone": "review" },
+        { "value": "low", "label": "低优先级", "icon": "ri-flag-line", "tone": "muted" }
+      ] }
+    ],
+    [{ "name": "description", "label": "项目描述", "type": "textarea", "icon": "ri-edit-2-line", "placeholder": "请输入项目描述（选填）", "required": false, "maxLength": 300 }]
+  ]
+}

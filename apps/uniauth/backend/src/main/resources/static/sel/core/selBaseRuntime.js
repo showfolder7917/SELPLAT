@@ -67,6 +67,48 @@
     }
 
     /**
+     * 读取应用显式声明的轻量用户偏好；浏览器禁用存储时安全回退。
+     * @param {string} name - 应用拥有的稳定偏好键。
+     * @param {string} fallback - 缺失或不可读取时采用的值。
+     * @returns {string} 已保存的字符串值或回退值。
+     */
+    function selBaseGetPreference(name, fallback = "") {
+        try {
+            return global.localStorage.getItem(String(name)) || fallback;
+        } catch (error) {
+            return fallback;
+        }
+    }
+
+    /**
+     * 保存应用显式声明的轻量用户偏好；失败时返回 false，不阻断页面功能。
+     * @param {string} name - 应用拥有的稳定偏好键。
+     * @param {string} value - 需要跨刷新保留的字符串值。
+     * @returns {boolean} 写入成功时返回 true。
+     */
+    function selBaseSetPreference(name, value) {
+        try {
+            global.localStorage.setItem(String(name), String(value));
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * 保留当前页面其他查询参数，仅替换一个应用显式指定的参数并重新装配页面。
+     * @param {string} name - 需要修改的查询参数名称。
+     * @param {string} value - 参数新值。
+     * @returns {boolean} 已发起同页导航时返回 true。
+     */
+    function selBaseNavigateWithParam(name, value) {
+        const target = new URL(global.location.href);
+        target.searchParams.set(String(name), String(value));
+        global.location.assign(target.toString());
+        return true;
+    }
+
+    /**
      * 设置页面级语言与标题元数据。
      * @param {{lang?: string, title?: string}} metadata - 应用装配层提供的当前语言和页面标题。
      * @returns {boolean} 元数据应用完成时返回 true。
@@ -202,6 +244,10 @@
         formatDateTime: selBaseFormatDateTime,
         // param 负责读取当前页面查询参数。
         param: selBaseGetLocationParam,
+        // preference 只提供通用字符串存取，具体键名与语言选择仍由应用装配层拥有。
+        preference: Object.freeze({ get: selBaseGetPreference, set: selBaseSetPreference }),
+        // navigateWithParam 用于保留其他页面状态并按新 locale 重新装配当前应用。
+        navigateWithParam: selBaseNavigateWithParam,
         // query 负责取得页面必需节点并在结构失配时快速报错。
         query: selBaseQuery,
         // text 负责把可空业务值转换为安全展示文本。
