@@ -1,0 +1,21 @@
+plugins {
+    // backend 对 host 暴露模块配置和查询实现，因此保持标准 Java library 依赖语义。
+    id 'java-library'
+}
+
+// 独立模块坐标用于区分 host/backend、uniauth/backend 等同名 Gradle 子项目。
+group = 'com.sp.selplat.referencedata'
+
+dependencies {
+    // 对外实现并继续暴露 reference-data 的稳定查询契约。
+    api project(':apps:reference-data:contract')
+    // Spring Context 提供模块配置、Provider 注册和 Service 依赖注入。
+    implementation "org.springframework:spring-context:${springFrameworkVersion}"
+    // JUnit 5 验证 Provider 路由成功、未登记和重复登记边界。
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
+}
+
+tasks.named('classes') {
+    // backend 编译前先生成 contract，保证 IDE 与命令行使用同一份公开接口。
+    dependsOn ':apps:reference-data:contract:jar'
+}

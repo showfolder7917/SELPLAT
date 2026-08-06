@@ -1,0 +1,12 @@
+plugins {
+    // contract 需要把公开模型和接口传递给业务模块，因此使用 java-library。
+    id 'java-library'
+}
+
+// 多个 apps 子项目都叫 backend；reference-data 使用独立 group，防止 Gradle 把跨项目依赖误判为同一组件。
+group = 'com.sp.selplat.referencedata'
+
+dependencies {
+    // JUnit 5 验证契约对象的不可变边界和默认值行为。
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
+}

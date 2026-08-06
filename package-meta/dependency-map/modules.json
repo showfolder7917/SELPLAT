@@ -1,5 +1,8 @@
 {
   "host": [],
+  "reference-data": [
+    "host"
+  ],
   "uniauth": [
     "host"
   ],

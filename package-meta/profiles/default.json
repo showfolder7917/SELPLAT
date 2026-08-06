@@ -2,6 +2,7 @@
   "profile_id": "default",
   "enabled_modules": [
     "host",
+    "reference-data",
     "uniauth",
     "rule-engine",
     "attendance"

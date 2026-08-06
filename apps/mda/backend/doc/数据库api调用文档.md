@@ -33,13 +33,15 @@ MDA 是一个“本地保存连接配置、按请求临时连接目标库、使�
 | MDA 配置库 | 保存连接配置与公共主键号段 | Spring 主数据源、公共 `BaseService`/`BaseDao` | `MdaConnectionProfile`、`CommonSequenceSegment` |
 | 动态目标库 | 被浏览、测试或执行 SQL 的 H2/MySQL/SQL Server/Oracle/PostgreSQL | `DriverManager` 按请求创建 JDBC 连接 | 目标库自己的真实业务数据 |
 
-默认配置库是文件型 H2：
+默认配置库当前按测试模式使用内存 H2：
 
 ```properties
-spring.datasource.url=jdbc:h2:file:./OPTION/temp/mda/mda-config;MODE=MySQL;AUTO_SERVER=TRUE;DATABASE_TO_UPPER=false
+spring.datasource.url=jdbc:h2:mem:selplat_mda;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false
 ```
 
-测试环境改用内存 H2。应用每次启动都会执行 `schema-mda.sql` 和 `data-mda.sql`：建表使用 `CREATE TABLE IF NOT EXISTS`，演示连接和号段使用 `MERGE`，因此初始化可重复执行。
+`DB_CLOSE_DELAY=-1` 使数据库在当前 JVM 进程存活期间保持可用，进程结束后数据消失。下次启动会得到空数据库，并重新执行 `schema-mda.sql` 和 `data-mda.sql`：建表使用 `CREATE TABLE IF NOT EXISTS`，演示连接和号段使用 `MERGE`，因此每次新进程启动都会恢复相同初始数据。`test` Profile 同样使用内存 H2，但数据库名独立为 `selplat_mda_test`，避免测试上下文与默认运行实例共享数据。
+
+原路径 `OPTION/temp/mda/mda-config.mv.db` 中已有的文件库不会被读取、迁移或删除；切换为内存模式后它只是历史运行文件。
 
 ### 3.2 分层职责
 

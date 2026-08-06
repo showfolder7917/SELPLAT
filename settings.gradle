@@ -11,6 +11,12 @@ include('shared:backend:common-service')
 include('shared:backend:common-web')
 // 当前 uniauth 已依赖 common-db，因此把公共数据库层一并纳入最小可编译范围。
 include('shared:backend:common-db')
+// 平台宿主作为统一进程和单端口的目标启动入口，不承载业务私有实现。
+include('apps:host:backend')
+// 引用数据 contract 提供跨项目可依赖的树、类型和 Service 稳定契约。
+include('apps:reference-data:contract')
+// 引用数据 backend 提供 Provider 注册和查询路由，由 host 显式装配。
+include('apps:reference-data:backend')
 // 第一阶段业务模块先接入 uniauth backend，后续再逐步扩展其他业务域。
 include('apps:uniauth:backend')
 // 规则引擎后端作为独立 Java 应用接入根构建，支持统一编译、运行和 IDE 导入。
@@ -27,6 +33,9 @@ project(':shared:backend:common-core').projectDir = file('shared/backend/common-
 project(':shared:backend:common-service').projectDir = file('shared/backend/common-service')
 project(':shared:backend:common-web').projectDir = file('shared/backend/common-web')
 project(':shared:backend:common-db').projectDir = file('shared/backend/common-db')
+project(':apps:host:backend').projectDir = file('apps/host/backend')
+project(':apps:reference-data:contract').projectDir = file('apps/reference-data/contract')
+project(':apps:reference-data:backend').projectDir = file('apps/reference-data/backend')
 project(':apps:uniauth:backend').projectDir = file('apps/uniauth/backend')
 project(':apps:rule-engine:backend').projectDir = file('apps/rule-engine/backend')
 project(':apps:mda:backend').projectDir = file('apps/mda/backend')

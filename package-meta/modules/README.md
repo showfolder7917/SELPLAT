@@ -5,6 +5,7 @@
 当前已存在：
 
 - `host.json`
+- `reference-data.json`
 - `uniauth.json`
 - `attendance.json`
 - `rule-engine.json`

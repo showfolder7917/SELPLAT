@@ -1,0 +1,39 @@
+plugins {
+    // platform-runtime 是统一 JVM 的目标启动入口，application 插件提供受终端托管的 run 任务。
+    id 'application'
+}
+
+// host/backend 使用宿主专属坐标，避免与其他名为 backend 的应用模块发生组件替换。
+group = 'com.sp.selplat.host'
+
+dependencies {
+    // 公共结果和 JSON 工具用于平台健康响应保持 SELPLAT 统一结构。
+    implementation project(':shared:backend:common-core')
+    // 当前宿主显式装配 reference-data 的 Provider 与查询 Service 框架。
+    implementation project(':apps:reference-data:backend')
+    // Web Starter 提供唯一内嵌 HTTP 容器和平台级 Controller。
+    implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+    // DevTools 为后续开发启动模式提供类路径变化后的自动重启能力。
+    runtimeOnly "org.springframework.boot:spring-boot-devtools:${springBootVersion}"
+    // Spring Boot Test 和 MockMvc 验证宿主上下文、模块装配与健康接口。
+    testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
+}
+
+application {
+    // host 是 platform-runtime 唯一目标启动类，不使用业务模块自己的 main 方法。
+    mainClass = 'com.sp.selplat.host.PlatformRuntimeApplication'
+}
+
+tasks.register('syncVsCodeResources', Copy) {
+    // 平台配置同步到统一 class 输出，保证 VS Code 与 Gradle run 使用相同资源。
+    from(sourceSets.main.resources)
+    into(layout.buildDirectory.dir('classes/java/main'))
+}
+
+tasks.named('classes') {
+    // 启动宿主前同步平台配置，并准备显式装配模块及公共契约的 JAR。
+    dependsOn tasks.named('syncVsCodeResources')
+    dependsOn ':shared:backend:common-core:jar'
+    dependsOn ':apps:reference-data:contract:jar'
+    dependsOn ':apps:reference-data:backend:jar'
+}

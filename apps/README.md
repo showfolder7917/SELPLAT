@@ -11,6 +11,7 @@
 当前模块：
 
 - `host`
+- `reference-data`
 - `uniauth`
 - `attendance`
 - `rule-engine`
