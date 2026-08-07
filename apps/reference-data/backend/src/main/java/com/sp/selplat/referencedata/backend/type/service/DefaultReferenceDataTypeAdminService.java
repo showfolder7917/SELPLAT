@@ -9,7 +9,6 @@ import com.sp.selplat.referencedata.backend.type.repository.ReferenceDataTypeRep
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
@@ -24,8 +23,6 @@ public class DefaultReferenceDataTypeAdminService implements ReferenceDataTypeAd
     private static final String MODULE_CODE = "reference-data";
     // CODE_PATTERN 限制项目和资源编码为稳定小写短横线形式，避免 URL 坐标出现空格或本地化字符。
     private static final Pattern CODE_PATTERN = Pattern.compile("^[a-z][a-z0-9-]{1,63}$");
-    // ALLOWED_DATA_SHAPES 固定查询 API 支持的树、选项和双形态能力。
-    private static final Set<String> ALLOWED_DATA_SHAPES = Set.of("TREE", "OPTIONS", "BOTH");
     // repository 负责 reference-data 独立数据库中的类型聚合持久化。
     private final ReferenceDataTypeRepository repository;
 
@@ -130,7 +127,7 @@ public class DefaultReferenceDataTypeAdminService implements ReferenceDataTypeAd
      * @param source 前端表单动态参数，例如
      *     {@code {"projectCode":"cms","resourceCode":"article-category","nameZh":"文章分类"}}
      * @return 固定字段映射，例如
-     *     {@code {"projectCode":"cms","resourceCode":"article-category","nameZh":"文章分类","dataShape":"BOTH","status":1,"sortnum":0}}
+     *     {@code {"projectCode":"cms","resourceCode":"article-category","nameZh":"文章分类","status":1,"sortnum":0}}
      */
     private Map<String, Object> normalizeValues(CommonParam source) {
         if (source == null) {
@@ -140,12 +137,6 @@ public class DefaultReferenceDataTypeAdminService implements ReferenceDataTypeAd
         String projectCode = requiredCode(source.getParam("projectCode"), "projectCode", "项目编码不能为空。");
         String resourceCode = requiredCode(source.getParam("resourceCode"), "resourceCode", "资源编码不能为空。");
         String nameZh = requiredText(source.getParam("nameZh"), 120, "nameZh", "中文名称不能为空。");
-        String dataShape = requiredText(source.getParam("dataShape"), 16, "dataShape", "数据形态不能为空。").toUpperCase();
-        if (!ALLOWED_DATA_SHAPES.contains(dataShape)) {
-            throw new CommonBusinessException(
-                    "REFERENCE_DATA_TYPE_SHAPE_INVALID",
-                    "数据形态只能是 TREE、OPTIONS 或 BOTH。");
-        }
         // 状态只允许启用或停用，删除状态必须通过独立删除动作产生。
         Integer status = source.getParam("status") == null ? 1 : integerValue(source.getParam("status"), "status");
         if (status != 1 && status != 2) {
@@ -164,7 +155,6 @@ public class DefaultReferenceDataTypeAdminService implements ReferenceDataTypeAd
         values.put("descriptionZh", optionalText(source.getParam("descriptionZh"), 500, "descriptionZh"));
         values.put("descriptionJa", optionalText(source.getParam("descriptionJa"), 500, "descriptionJa"));
         values.put("descriptionEn", optionalText(source.getParam("descriptionEn"), 500, "descriptionEn"));
-        values.put("dataShape", dataShape);
         values.put("status", status);
         values.put("sortnum", sortnum);
         return values;

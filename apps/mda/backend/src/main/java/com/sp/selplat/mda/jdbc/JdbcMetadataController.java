@@ -2,10 +2,8 @@ package com.sp.selplat.mda.jdbc;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.JsonUtils;
-import com.sp.selplat.common.web.controller.BaseExtendsController;
 import com.sp.selplat.common.web.controller.ModuleDescription;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @ModuleDescription(code = "mda-metadata", name = "MDA 元数据", description = "浏览数据库结构")
 @RequestMapping("/api/mda/metadata")
-public class JdbcMetadataController extends BaseExtendsController {
+public class JdbcMetadataController {
 
     // 元数据控制器只持有自己的只读 Service，不继承公共 CRUD 路由。
     private final JdbcMetadataService service;
@@ -40,7 +38,7 @@ public class JdbcMetadataController extends BaseExtendsController {
      *     {@code "tableCount":0,"truncated":false},"msg":"数据库结构读取完成。"}}
      */
     @RequestMapping(value = "tree.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-    public String tree(@RequestBody CommonParam queryIn) {
+    public String tree(CommonParam queryIn) {
         // Service 已完成连接读取和元数据遍历，控制器只序列化固定结果。
         return JsonUtils.toJsonIgnoreNull(service.getTree(queryIn));
     }

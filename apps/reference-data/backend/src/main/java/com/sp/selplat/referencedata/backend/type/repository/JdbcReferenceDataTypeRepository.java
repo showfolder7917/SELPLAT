@@ -24,7 +24,7 @@ public class JdbcReferenceDataTypeRepository implements ReferenceDataTypeReposit
 
     // SELECT_COLUMNS 固定管理端允许读取的类型字段，避免列表与详情返回结构漂移。
     private static final String SELECT_COLUMNS = "id, projectCode, resourceCode, nameZh, nameJa, nameEn, "
-            + "descriptionZh, descriptionJa, descriptionEn, dataShape, status, sortnum, createdAt, updatedAt";
+            + "descriptionZh, descriptionJa, descriptionEn, status, sortnum, createdAt, updatedAt";
     // database 保存独立 JDBC 和事务上下文，Repository 不会误用 Host 主数据库。
     private final ReferenceDataDatabase database;
 
@@ -144,8 +144,8 @@ public class JdbcReferenceDataTypeRepository implements ReferenceDataTypeReposit
             database.jdbcTemplate().update(connection -> {
                 PreparedStatement statement = connection.prepareStatement(
                         "INSERT INTO ReferenceDataType (projectCode, resourceCode, nameZh, nameJa, nameEn, "
-                                + "descriptionZh, descriptionJa, descriptionEn, dataShape, status, sortnum) "
-                                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                + "descriptionZh, descriptionJa, descriptionEn, status, sortnum) "
+                                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         new String[] {"id"});
                 // Service 已校验字段按固定数据库列顺序绑定，禁止 Map 键参与 SQL 拼接。
                 statement.setObject(1, values.get("projectCode"));
@@ -156,9 +156,8 @@ public class JdbcReferenceDataTypeRepository implements ReferenceDataTypeReposit
                 statement.setObject(6, values.get("descriptionZh"));
                 statement.setObject(7, values.get("descriptionJa"));
                 statement.setObject(8, values.get("descriptionEn"));
-                statement.setObject(9, values.get("dataShape"));
-                statement.setObject(10, values.get("status"));
-                statement.setObject(11, values.get("sortnum"));
+                statement.setObject(9, values.get("status"));
+                statement.setObject(10, values.get("sortnum"));
                 return statement;
             }, keyHolder);
             Number generatedId = keyHolder.getKey();
@@ -182,7 +181,7 @@ public class JdbcReferenceDataTypeRepository implements ReferenceDataTypeReposit
             return database.jdbcTemplate().update(
                     "UPDATE ReferenceDataType SET projectCode = ?, resourceCode = ?, nameZh = ?, nameJa = ?, "
                             + "nameEn = ?, descriptionZh = ?, descriptionJa = ?, descriptionEn = ?, "
-                            + "dataShape = ?, status = ?, sortnum = ?, updatedAt = CURRENT_TIMESTAMP "
+                            + "status = ?, sortnum = ?, updatedAt = CURRENT_TIMESTAMP "
                             + "WHERE id = ? AND status <> 0",
                     values.get("projectCode"),
                     values.get("resourceCode"),
@@ -192,7 +191,6 @@ public class JdbcReferenceDataTypeRepository implements ReferenceDataTypeReposit
                     values.get("descriptionZh"),
                     values.get("descriptionJa"),
                     values.get("descriptionEn"),
-                    values.get("dataShape"),
                     values.get("status"),
                     values.get("sortnum"),
                     id);
@@ -237,7 +235,6 @@ public class JdbcReferenceDataTypeRepository implements ReferenceDataTypeReposit
         record.put("descriptionZh", resultSet.getString("descriptionZh"));
         record.put("descriptionJa", resultSet.getString("descriptionJa"));
         record.put("descriptionEn", resultSet.getString("descriptionEn"));
-        record.put("dataShape", resultSet.getString("dataShape"));
         record.put("status", resultSet.getInt("status"));
         record.put("sortnum", resultSet.getBigDecimal("sortnum"));
         record.put("createdAt", resultSet.getTimestamp("createdAt").toLocalDateTime());

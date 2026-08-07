@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 from pathlib import Path
+import re
 # 从迁移后的测试包向上识别工程根，测试数据和输出必须继续归属当前工程。
 PROJECT_ROOT = next(
     candidate
@@ -30,13 +31,23 @@ FFMPEG_SKILL_PATHS = [
     CODE_ROOT / "skill" / "ffmpeg_vob_to_mp3.py",
     CODE_ROOT / "skill" / "ffmpeg_vob_to_mp4.py",
 ]
-# 生产入口和可直接运行的 XUNAN 测试入口必须在动态加载工程模块前主动设置缓存根，
+# 当前稳定用户只从 AGENTS.md 读取，禁止扫描代码目录推断。
+ACTIVE_USER_MATCHES = re.findall(
+    r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
+    (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+)
+if len(ACTIVE_USER_MATCHES) != 1:
+    raise RuntimeError("AGENTS.md 必须且只能声明一个当前稳定用户 ID。")
+ACTIVE_STABLE_USER_ID = ACTIVE_USER_MATCHES[0].strip()
+# 生产入口和可直接运行的当前用户测试入口必须在动态加载工程模块前主动设置缓存根，
 # 不能只依赖 VS Code 环境变量或统一测试入口。
 PYTHON_ENTRY_PATHS = [
     CODE_ROOT / "abilities" / "startup_protocol_loader.py",
     CODE_ROOT / "executor.py",
-    PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/ai_rule_package_integrator.py",
-    PROJECT_ROOT / "apps/rule-engine/backend/src/test/python/com/sp/selplat/local/code/XUNAN/tests/test_ai_rule_package_integrator.py",
+    PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code"
+    / ACTIVE_STABLE_USER_ID / "abilities/ai_rule_package_integrator.py",
+    PROJECT_ROOT / "apps/rule-engine/backend/src/test/python/com/sp/selplat/local/code"
+    / ACTIVE_STABLE_USER_ID / "tests/test_ai_rule_package_integrator.py",
 ]
 # Python 测试统一入口必须在发现测试模块前设置同一个缓存根。
 PYTHON_TEST_RUNNER_PATH = (

@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sp.selplat.mda.persistence.MdaDatabase;
 import java.util.Map;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -17,7 +18,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -33,15 +33,14 @@ class MdaApiIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
-    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private MdaDatabase database;
 
     @Test
     @Order(1)
     void shouldListConnectionsWithoutCiphertext() throws Exception {
-        mockMvc.perform(get("/api/mda/connections/getStore.htm")
-                        .param("pageNo", "1").param("pageSize", "20").param("status", "1"))
+        mockMvc.perform(get("/api/mda/connections"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.records[0].connectionName").value("本地 H2 演示库"))
+                .andExpect(jsonPath("$.records[0].connectionName").value("MDA 本地工作库"))
                 .andExpect(jsonPath("$.records[0].passwordCiphertext").doesNotExist())
                 .andExpect(jsonPath("$.records[0].passwordSaved").value(false));
     }
@@ -55,7 +54,7 @@ class MdaApiIntegrationTest {
                 "databaseName", "mem:mda_cipher_test;DB_CLOSE_DELAY=-1",
                 "username", "sa",
                 "password", "plain-secret"));
-        MvcResult result = mockMvc.perform(post("/api/mda/connections/create.htm")
+        MvcResult result = mockMvc.perform(post("/api/mda/connections")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -64,7 +63,7 @@ class MdaApiIntegrationTest {
                 .andReturn();
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
         long id = response.path("data").path("id").asLong();
-        String ciphertext = jdbcTemplate.queryForObject(
+        String ciphertext = database.controlJdbc().queryForObject(
                 "SELECT passwordCiphertext FROM MdaConnectionProfile WHERE id = ?", String.class, id);
         assertThat(ciphertext).isNotBlank().doesNotContain("plain-secret");
     }
@@ -104,7 +103,7 @@ class MdaApiIntegrationTest {
     @Test
     @Order(5)
     void shouldTestSavedConnection() throws Exception {
-        mockMvc.perform(post("/api/mda/connections/test.htm")
+        mockMvc.perform(post("/api/mda/connections/test")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"connectionId\":10001}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))

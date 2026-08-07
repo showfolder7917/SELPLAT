@@ -117,6 +117,9 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
             while (resultSet.next() && tableCounter[0] < MAX_TABLES) {
                 String tableName = resultSet.getString("TABLE_NAME");
                 Map<String, Object> tableNode = node("table", tableName);
+                tableNode.put("catalog", catalog);
+                tableNode.put("schema", schema);
+                tableNode.put("tableName", tableName);
                 tableNode.put("tableType", resultSet.getString("TABLE_TYPE"));
                 tableNode.put("remarks", resultSet.getString("REMARKS"));
                 tableNode.put("children", readColumns(metadata, catalog, schema, tableName));

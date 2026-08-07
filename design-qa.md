@@ -70,6 +70,66 @@ final result: passed
 
 ---
 
+# 晶透管理一体化工作台 Design QA
+
+**对比对象**
+
+- source visual truth：`OPTION/temp/glass-admin-unified/source-horizontal-bands.png`（用户指出横向卡片分层过重的当前状态）。
+- implementation screenshot：`OPTION/temp/glass-admin-unified/implementation-dark.png`。
+- light mode evidence：`OPTION/temp/glass-admin-unified/implementation-light.png`。
+- Window 与下拉证据：`OPTION/temp/glass-admin-unified/implementation-window-light-dropdown.png`。
+- full-view comparison evidence：`OPTION/temp/glass-admin-unified/before-after-comparison.png`。
+- focused region comparison evidence：`OPTION/temp/glass-admin-unified/focused-header-toolbar-comparison.png`。
+- implementation URL：`http://127.0.0.1:8080/reference-data/reference-data.html`。
+
+**归一化信息**
+
+- 原始问题截图为 2555 × 1103 px；实现截图为 1280 × 720 px，CSS 视口为 1280 × 720，设备像素比为 1。
+- 完整对照将原始问题截图等比缩放到 1280px 宽并补齐为 1280 × 720；实现保持 1280 × 720，随后水平并排。该对照用于判断分区关系和横向节奏，不宣称不同视口下逐像素同构。
+- 重点对照分别截取标题、工具栏和主体起始区域并归一化到 1280 × 240，用于检查横向卡片、分隔线、标题层级和工具栏连续性。
+- 主验收状态为晶透管理深色模式；补充验证浅色模式、浅色 Window、表单下拉菜单和页容量下拉菜单。
+
+**Findings**
+
+- 无未解决的 P0、P1、P2 问题。
+- 字体与排版：标题、状态分段、表头和正文继续使用公共三级文字令牌，没有为晶透管理新增固定字号；标题层级清楚，表头与数据行无异常换行。
+- 间距与布局节奏：五区公共结构保持不变，主题内将区域间距从 10px 收拢为 0；标题、工具栏、主体和底栏由一个外层圆角面板承载，内部仅保留细分隔线，不再形成四条独立圆角横带。
+- 颜色与视觉令牌：外层表面、边框、分隔线、控件、选中态和表格继续读取 `--sel-theme-*` 与 `--selpersonal-*` 统一令牌；深浅模式切换后层级和文字对比正常。
+- 图片质量与素材忠实度：晶透管理仍为纯色/玻璃管理主题，没有引入或跨主题引用水晶科技、糖果冒险素材；本次不需要新增图片资产。
+- 文案与内容：引用数据类型名称、状态、筛选、分页和表单内容保持不变。
+- 交互与浮层：顶部状态下拉和底部分页下拉均完整位于 1280 × 720 视口内；浅色新增类型 Window 与输出形态下拉正常显示。
+- 主题隔离：水晶科技和糖果冒险仍保持约 10px 公共区域间距；只有 `glass-admin` 命中 0px 一体化覆盖，证明本次没有改变公共面板实现。
+
+**Comparison History**
+
+1. 首轮问题（P1，已修复）：标题、工具栏、主体和底栏都绘制完整边框、圆角、阴影，并以 10px 间距分隔，宽屏下形成明显的多条横向卡片。
+   - 修复：仅在 `glass-admin` 主题限定选择器内，为 `.selpanel-shell` 建立唯一外轮廓；子区域取消独立圆角、阴影和表面高光，改用统一底板与细分隔线。
+   - 修复后证据：`OPTION/temp/glass-admin-unified/before-after-comparison.png`、`OPTION/temp/glass-admin-unified/focused-header-toolbar-comparison.png`。
+2. 次轮问题（P2，已修复）：首次收拢后子区域透明度不同，工具栏和底栏仍呈现较深的横向色带，且边缘存在背景外溢感。
+   - 修复：标题、工具栏、主体、侧栏和底栏统一改为透明内部区域；外层启用圆角裁切；标题、工具栏和底栏高度进一步收紧。
+   - 修复后证据：`OPTION/temp/glass-admin-unified/implementation-dark.png`、`OPTION/temp/glass-admin-unified/implementation-light.png`。
+
+**Open Questions**
+
+- 无。
+
+**Implementation Checklist**
+
+- [x] 只修改晶透管理主题限定样式。
+- [x] 保留公共五区 DOM、拖拽侧栏和所有统一令牌接口。
+- [x] 合并顶层视觉轮廓并移除独立横向卡片。
+- [x] 验证深色、浅色、Window、顶部下拉和底部下拉。
+- [x] 验证水晶科技和糖果冒险未命中晶透管理的一体化覆盖。
+- [x] 完成 SEL UI 检查、Reference Data 资源处理和 Host 开发运行时准备。
+
+**Follow-up Polish**
+
+- 无。
+
+final result: passed
+
+---
+
 # SEL 统一令牌与左右对称 Design QA
 
 **验证对象**

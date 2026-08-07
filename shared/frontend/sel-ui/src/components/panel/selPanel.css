@@ -227,6 +227,16 @@
     padding: 0 16px;
 }
 
+/* 三控件工具栏按“搜索 + 筛选 + 重置”紧凑分栏，避免缺少日期等可选控件时遗留空白列。 */
+.selpanel-toolbar-shell[data-sel-panel-child-count="3"] {
+    grid-template-columns: minmax(280px, 1fr) minmax(180px, 0.48fr) 102px;
+}
+
+/* 四控件工具栏保留双筛选的均衡宽度，最后一列始终是紧凑重置动作。 */
+.selpanel-toolbar-shell[data-sel-panel-child-count="4"] {
+    grid-template-columns: minmax(260px, 1.2fr) minmax(150px, 0.55fr) minmax(150px, 0.55fr) 102px;
+}
+
 .selpanel-date-field,
 .selpanel-reset-button {
     height: 42px;

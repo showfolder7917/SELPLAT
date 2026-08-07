@@ -1,391 +1,415 @@
 /*
  * reference-data.js：引用数据类型管理应用装配层。
- * 只声明真实业务接口、页面状态和 DOM 绑定；请求、主题和下拉交互复用 SEL 公共能力。
+ * 只负责真实接口、业务实例、五区布局和标准 payload；不创建通用控件 DOM，不定义组件视觉。
  */
-(function referenceDataInitializeAdmin() {
+(function referenceDataInitializeApplication() {
     "use strict";
 
-    // 公共异步请求和主题能力必须先加载，应用不建立第二套 fetch 或主题状态机。
+    // 应用只依赖 SEL 公开能力；缺失组件必须停止装配，禁止回退为应用层原生控件。
+    const referenceDataRequiredComponents = Object.freeze([
+        "selBaseRuntime", "selAjax", "selPanel", "selSearch", "selTree", "selDropdownMenu",
+        "selGrid", "selWindow", "selPageBackground", "selPersonalization", "selThemeManager"
+    ]);
+    const referenceDataMissingComponents = referenceDataRequiredComponents.filter((referenceDataName) => !window[referenceDataName]);
+    if (referenceDataMissingComponents.length > 0) {
+        throw new Error(`引用数据管理缺少公共组件：${referenceDataMissingComponents.join("、")}。`);
+    }
+
+    const referenceDataBase = window.selBaseRuntime;
     const referenceDataAjax = window.selAjax;
-    const referenceDataTheme = window.selThemeManager;
-    const referenceDataDropdown = window.selDropdownMenu;
-    const referenceDataPageBackground = window.selPageBackground;
-    const referenceDataPersonalization = window.selPersonalization;
-    if (!referenceDataAjax || !referenceDataTheme || !referenceDataDropdown || !referenceDataPageBackground || !referenceDataPersonalization) {
-        throw new Error("引用数据管理后台缺少 SEL 公共运行时。");
-    }
-
-    // HTML 静态结构是应用唯一挂载范围，业务脚本不扫描其他模块页面。
-    const referenceDataHost = document.querySelector("[data-reference-data-app]");
-    const referenceDataRows = document.querySelector("[data-reference-data-role='rows']");
-    const referenceDataLoading = document.querySelector("[data-reference-data-role='loading']");
-    const referenceDataEmpty = document.querySelector("[data-reference-data-role='empty']");
-    const referenceDataDialog = document.querySelector("[data-reference-data-role='dialog']");
-    const referenceDataForm = document.querySelector("[data-reference-data-role='form']");
-    const referenceDataToast = document.querySelector("[data-reference-data-role='toast']");
-    const referenceDataKeyword = document.querySelector("[data-reference-data-role='keyword']");
-    const referenceDataStatus = document.querySelector("[data-reference-data-role='status']");
-    const referenceDataBackgroundHost = document.querySelector("[data-sel-page-background-host]");
-    const referenceDataPersonalizationHost = document.querySelector("[data-sel-personalization-host]");
-    // 管理 API 根路径由应用显式登记，公共 selAjax 不推测项目或实体地址。
+    const referenceDataApplicationHost = referenceDataBase.query("[data-reference-data-app]");
+    const referenceDataBackgroundHost = referenceDataBase.query("[data-sel-page-background-host]");
+    const referenceDataPersonalizationHost = referenceDataBase.query("[data-sel-personalization-host]");
     const referenceDataTypeApi = "/api/reference-data/admin/types";
-    // 当前页状态只驻留内存，刷新时重新读取永久数据库事实。
+    const referenceDataGridId = "ReferenceDataTypeGrid";
     const referenceDataState = {
-        pageNo: 1,
-        pageSize: 20,
-        totalCount: 0,
         editingId: null,
-        loading: false
+        pendingDeleteId: null,
+        gridController: null,
+        editWindowController: null,
+        deleteWindowController: null
     };
-    let referenceDataToastTimer = null;
+
+    // 五区布局只声明组件、数据片段和位置，真实结构全部由 selPanel 白名单创建。
+    const referenceDataLayout = Object.freeze({
+        top: Object.freeze([
+            Object.freeze({ component: "title", payload: "title" }),
+            Object.freeze({
+                component: "toolbar",
+                children: Object.freeze([
+                    Object.freeze({ component: "selSearch", payload: "search" }),
+                    Object.freeze({ component: "selDropdownMenu", slot: "status", payload: "select.status" }),
+                    Object.freeze({ component: "filterReset", payload: "title" })
+                ])
+            })
+        ]),
+        left: Object.freeze([Object.freeze({ component: "selTree", payload: "tree" })]),
+        center: Object.freeze([Object.freeze({ component: "selGrid", payload: "$aggregate" })]),
+        right: Object.freeze([]),
+        bottom: Object.freeze([
+            Object.freeze({
+                component: "footer",
+                children: Object.freeze([
+                    Object.freeze({
+                        component: "gridSummary",
+                        payload: "pagination",
+                        children: Object.freeze([
+                            Object.freeze({ component: "selDropdownMenu", slot: "pageSize", payload: "select.pageSize" })
+                        ])
+                    }),
+                    Object.freeze({ component: "pagination", payload: "pagination" }),
+                    Object.freeze({ component: "feedback", payload: "title.messages" })
+                ])
+            })
+        ])
+    });
 
     /**
-     * 按角色取得一个静态展示节点。
-     * @param {string} referenceDataRole - HTML 中 data-reference-data-role 的实际值。
-     * @returns {Element|null} 当前页面对应节点。
+     * 分批读取全部类型，避免后端单页上限影响公共表格的真实分页和筛选。
+     * 请求示例：GET /api/reference-data/admin/types?pageNo=1&pageSize=100
+     * 返回示例：{records:[{id:1,resourceCode:"resource-kind"}],totalCount:1,pageNo:1,pageSize:100}
+     * @returns {Promise<Array<object>>} 保持数据库排序的完整类型记录。
      */
-    function referenceDataRole(referenceDataRole) {
-        // 所有角色查询限定在当前页面文档内，角色名由应用常量提供。
-        return document.querySelector(`[data-reference-data-role='${referenceDataRole}']`);
-    }
-
-    /**
-     * 创建带稳定类名和文字的 DOM 节点。
-     * @param {string} referenceDataTag - 受控 HTML 标签名。
-     * @param {string} referenceDataClassName - 当前应用 CSS 类名。
-     * @param {string} referenceDataText - 后端返回或应用固定的可见文字。
-     * @returns {HTMLElement} 未使用 innerHTML 的安全实时节点。
-     */
-    function referenceDataElement(referenceDataTag, referenceDataClassName, referenceDataText = "") {
-        const referenceDataNode = document.createElement(referenceDataTag);
-        if (referenceDataClassName) referenceDataNode.className = referenceDataClassName;
-        referenceDataNode.textContent = referenceDataText ?? "";
-        return referenceDataNode;
-    }
-
-    /**
-     * 显示成功或错误反馈。
-     * @param {string} referenceDataMessage - 后端安全消息或应用提示。
-     * @param {boolean} referenceDataError - 是否使用错误视觉。
-     * @returns {void}
-     */
-    function referenceDataShowToast(referenceDataMessage, referenceDataError = false) {
-        // 新反馈覆盖旧定时器，连续操作时不会提前隐藏最新消息。
-        window.clearTimeout(referenceDataToastTimer);
-        referenceDataToast.textContent = referenceDataMessage;
-        referenceDataToast.classList.toggle("reference-data-toast-error", referenceDataError);
-        referenceDataToast.classList.add("reference-data-toast-visible");
-        referenceDataToastTimer = window.setTimeout(() => {
-            referenceDataToast.classList.remove("reference-data-toast-visible");
-        }, 3200);
-    }
-
-    /**
-     * 将数据库时间转换为紧凑本地显示。
-     * @param {unknown} referenceDataValue - 后端 ISO LocalDateTime 字符串。
-     * @returns {string} 例如 2026-08-07 08:10；无值返回短横线。
-     */
-    function referenceDataFormatTime(referenceDataValue) {
-        if (!referenceDataValue) return "—";
-        // Java LocalDateTime 使用 ISO 文本，管理列表只显示到分钟。
-        return String(referenceDataValue).replace("T", " ").slice(0, 16);
-    }
-
-    /**
-     * 根据后端类型记录创建一行实时表格节点。
-     * @param {object} referenceDataRecord - 管理 API records 中的一条类型。
-     * @returns {HTMLTableRowElement} 完整业务表格行。
-     */
-    function referenceDataBuildRow(referenceDataRecord) {
-        const referenceDataRow = document.createElement("tr");
-        referenceDataRow.dataset.referenceDataId = String(referenceDataRecord.id);
-
-        // 项目编码和资源编码共同表达跨项目稳定坐标。
-        const referenceDataCoordinateCell = document.createElement("td");
-        const referenceDataCoordinate = referenceDataElement("div", "reference-data-coordinate");
-        referenceDataCoordinate.append(
-            referenceDataElement("strong", "", referenceDataRecord.resourceCode),
-            referenceDataElement("span", "", referenceDataRecord.projectCode)
-        );
-        referenceDataCoordinateCell.append(referenceDataCoordinate);
-
-        // 中文名称是当前管理页主展示名称。
-        const referenceDataNameCell = referenceDataElement("td", "", referenceDataRecord.nameZh);
-
-        // 英文和日文按固定两行展示，缺失值保持短横线而不改变行高。
-        const referenceDataMultilingualCell = document.createElement("td");
-        const referenceDataMultilingual = referenceDataElement("div", "reference-data-multilingual");
-        referenceDataMultilingual.append(
-            referenceDataElement("strong", "", referenceDataRecord.nameEn || "—"),
-            referenceDataElement("span", "", referenceDataRecord.nameJa || "—")
-        );
-        referenceDataMultilingualCell.append(referenceDataMultilingual);
-
-        // 输出形态使用稳定业务值，避免根据本地化名称判断 API 能力。
-        const referenceDataShapeCell = document.createElement("td");
-        referenceDataShapeCell.append(referenceDataElement("span", "reference-data-shape", referenceDataRecord.dataShape));
-
-        // 状态 1/2 分别映射启用与停用，删除记录不会进入管理列表。
-        const referenceDataStatusCell = document.createElement("td");
-        const referenceDataStatusBadge = referenceDataElement(
-            "span",
-            `reference-data-status ${referenceDataRecord.status === 1 ? "reference-data-status-enabled" : "reference-data-status-disabled"}`,
-            referenceDataRecord.status === 1 ? "已启用" : "已停用"
-        );
-        referenceDataStatusCell.append(referenceDataStatusBadge);
-
-        const referenceDataSortCell = referenceDataElement("td", "", String(referenceDataRecord.sortnum ?? 0));
-        const referenceDataUpdatedCell = referenceDataElement("td", "", referenceDataFormatTime(referenceDataRecord.updatedAt));
-
-        // 行操作按钮只保存稳定主键，实际动作由应用事件委托处理。
-        const referenceDataActionCell = document.createElement("td");
-        const referenceDataActions = referenceDataElement("div", "reference-data-row-actions");
-        const referenceDataEditButton = referenceDataElement("button", "", "✎");
-        referenceDataEditButton.type = "button";
-        referenceDataEditButton.title = "编辑类型";
-        referenceDataEditButton.dataset.referenceDataAction = "edit";
-        referenceDataEditButton.dataset.referenceDataId = String(referenceDataRecord.id);
-        const referenceDataDeleteButton = referenceDataElement("button", "", "×");
-        referenceDataDeleteButton.type = "button";
-        referenceDataDeleteButton.title = "删除类型";
-        referenceDataDeleteButton.dataset.referenceDataAction = "delete";
-        referenceDataDeleteButton.dataset.referenceDataId = String(referenceDataRecord.id);
-        referenceDataActions.append(referenceDataEditButton, referenceDataDeleteButton);
-        referenceDataActionCell.append(referenceDataActions);
-
-        referenceDataRow.append(
-            referenceDataCoordinateCell,
-            referenceDataNameCell,
-            referenceDataMultilingualCell,
-            referenceDataShapeCell,
-            referenceDataStatusCell,
-            referenceDataSortCell,
-            referenceDataUpdatedCell,
-            referenceDataActionCell
-        );
-        return referenceDataRow;
-    }
-
-    /**
-     * 同步列表、统计和分页状态。
-     * @param {object} referenceDataPage - 后端 CommonPageResult。
-     * @returns {void}
-     */
-    function referenceDataRenderPage(referenceDataPage) {
-        const referenceDataRecords = Array.isArray(referenceDataPage.records) ? referenceDataPage.records : [];
-        referenceDataState.totalCount = Number(referenceDataPage.totalCount || 0);
-        // 后端有序 records → 当前 tbody 的完整实时节点集合。
-        referenceDataRows.replaceChildren(...referenceDataRecords.map(referenceDataBuildRow));
-        referenceDataEmpty.hidden = referenceDataRecords.length > 0;
-        referenceDataRole("type-count").textContent = String(referenceDataState.totalCount);
-        referenceDataRole("summary").textContent = `共 ${referenceDataState.totalCount} 个类型`;
-        referenceDataRole("current-page").textContent = String(referenceDataState.pageNo);
-        const referenceDataPageCount = Math.max(1, Math.ceil(referenceDataState.totalCount / referenceDataState.pageSize));
-        referenceDataRole("page-info").textContent = `第 ${referenceDataState.pageNo} / ${referenceDataPageCount} 页 · 每页 ${referenceDataState.pageSize} 条`;
-        document.querySelector("[data-reference-data-action='previous']").disabled = referenceDataState.pageNo <= 1;
-        document.querySelector("[data-reference-data-action='next']").disabled = referenceDataState.pageNo >= referenceDataPageCount;
-    }
-
-    /**
-     * 从永久数据库加载当前筛选页。
-     * @returns {Promise<void>} 请求完成后更新列表或显示安全错误。
-     */
-    async function referenceDataLoadPage() {
-        if (referenceDataState.loading) return;
-        referenceDataState.loading = true;
-        referenceDataLoading.hidden = false;
-        const referenceDataQuery = new URLSearchParams({
-            pageNo: String(referenceDataState.pageNo),
-            pageSize: String(referenceDataState.pageSize)
+    async function referenceDataLoadAllTypes() {
+        const referenceDataPageSize = 100;
+        const referenceDataFirstPage = await referenceDataAjax.json({
+            url: `${referenceDataTypeApi}?pageNo=1&pageSize=${referenceDataPageSize}`
         });
-        // 空筛选不进入 URL，后端按全部未删除类型处理。
-        if (referenceDataKeyword.value.trim()) referenceDataQuery.set("keyword", referenceDataKeyword.value.trim());
-        if (referenceDataStatus.value) referenceDataQuery.set("status", referenceDataStatus.value);
-        try {
-            // 显式 API 路径 → CommonPageResult，不使用模拟 JSON 或内存数据。
-            const referenceDataPage = await referenceDataAjax.json({
-                url: `${referenceDataTypeApi}?${referenceDataQuery.toString()}`
-            });
-            referenceDataRenderPage(referenceDataPage);
-        } catch (referenceDataError) {
-            referenceDataShowToast(referenceDataError.message || "类型目录读取失败。", true);
-        } finally {
-            referenceDataState.loading = false;
-            referenceDataLoading.hidden = true;
-        }
+        const referenceDataTotalPages = Math.max(1, Math.ceil(Number(referenceDataFirstPage.totalCount || 0) / referenceDataPageSize));
+        if (referenceDataTotalPages === 1) return Array.isArray(referenceDataFirstPage.records) ? referenceDataFirstPage.records : [];
+        const referenceDataOtherPages = await Promise.all(
+            Array.from({ length: referenceDataTotalPages - 1 }, (_, referenceDataIndex) => referenceDataAjax.json({
+                url: `${referenceDataTypeApi}?pageNo=${referenceDataIndex + 2}&pageSize=${referenceDataPageSize}`
+            }))
+        );
+        return [referenceDataFirstPage, ...referenceDataOtherPages].flatMap((referenceDataPage) => referenceDataPage.records || []);
     }
 
     /**
-     * 打开新增窗口并恢复表单默认值。
-     * @returns {void}
+     * 把管理接口记录适配成 SEL 聚合 payload。
+     * 传参示例：[{id:1,status:1,resourceCode:"resource-kind"}]
+     * 返回示例：{data:{items:[...]},column:{items:[...]},title:{...},select:{status:{...}}}
+     * @param {Array<object>} referenceDataRecords - 管理接口返回的稳定业务记录。
+     * @returns {object} selPanel、selSearch、selTree、selDropdownMenu 和 selGrid 共享的标准输入。
      */
-    function referenceDataOpenCreate() {
-        referenceDataState.editingId = null;
-        referenceDataForm.reset();
-        referenceDataForm.elements.dataShape.value = "BOTH";
-        referenceDataForm.elements.status.value = "1";
-        referenceDataForm.elements.sortnum.value = "0";
-        referenceDataRole("dialog-title").textContent = "新增类型";
-        referenceDataDialog.showModal();
-        referenceDataForm.elements.projectCode.focus();
+    function referenceDataBuildPayload(referenceDataRecords) {
+        const referenceDataEnabledCount = referenceDataRecords.filter((referenceDataRecord) => Number(referenceDataRecord.status) === 1).length;
+        const referenceDataDisabledCount = referenceDataRecords.filter((referenceDataRecord) => Number(referenceDataRecord.status) === 2).length;
+        return Object.freeze({
+            grid: Object.freeze({
+                mode: "records",
+                idField: "id",
+                statusField: "status",
+                searchFields: Object.freeze(["projectCode", "resourceCode", "nameZh", "nameJa", "nameEn"])
+            }),
+            data: Object.freeze({ items: Object.freeze([...referenceDataRecords]), selectedIds: Object.freeze([]) }),
+            column: Object.freeze({
+                gridId: referenceDataGridId,
+                ariaLabel: "引用数据类型表格",
+                emptyText: "没有符合当前条件的引用数据类型",
+                items: Object.freeze([
+                    Object.freeze({ id: "coordinate", field: "resourceCode", secondaryField: "projectCode", label: "类型坐标", renderer: "stack", width: "22%" }),
+                    Object.freeze({ id: "nameZh", field: "nameZh", label: "中文名称", renderer: "text", width: "17%" }),
+                    Object.freeze({ id: "localized", field: "nameEn", secondaryField: "nameJa", label: "英文 / 日文", renderer: "stack", width: "21%" }),
+                    Object.freeze({ id: "status", field: "status", label: "状态", renderer: "badge", labelSource: "status", toneMap: Object.freeze({ "1": "enabled", "2": "disabled" }), width: "10%" }),
+                    Object.freeze({ id: "sortnum", field: "sortnum", label: "排序", renderer: "text", width: "8%" }),
+                    Object.freeze({ id: "updatedAt", field: "updatedAt", label: "更新时间", renderer: "time", nowrap: true, width: "14%" }),
+                    Object.freeze({
+                        id: "actions", field: "id", label: "操作", renderer: "actions", width: "8%",
+                        actions: Object.freeze([
+                            Object.freeze({ id: "edit", label: "编辑类型", icon: "ri-edit-line" }),
+                            Object.freeze({ id: "delete", label: "删除类型", icon: "ri-delete-bin-6-line", tone: "danger" })
+                        ])
+                    })
+                ])
+            }),
+            title: Object.freeze({
+                title: "引用数据类型管理",
+                subtitle: "Reference Data Catalog",
+                description: "维护跨项目稳定坐标、多语言名称和类型启停状态",
+                ariaLabel: "引用数据类型管理面板",
+                ariaLabels: Object.freeze({
+                    statusTabs: "类型状态筛选", headerActions: "类型快捷操作", toolbar: "类型筛选工具栏",
+                    sidebar: "类型状态导航", content: "类型列表内容区", board: "引用数据类型表格", pagination: "类型分页"
+                }),
+                statusTabs: Object.freeze([
+                    Object.freeze({ value: "", label: "全部", count: referenceDataRecords.length }),
+                    Object.freeze({ value: "1", label: "已启用", count: referenceDataEnabledCount }),
+                    Object.freeze({ value: "2", label: "已停用", count: referenceDataDisabledCount })
+                ]),
+                actions: Object.freeze([Object.freeze({ id: "new", label: "新增类型", icon: "ri-add-line", primary: true })]),
+                resetLabel: "重置",
+                messages: Object.freeze({
+                    selectProject: "选择类型", viewProject: "查看类型", editProject: "编辑类型", moreActions: "更多操作",
+                    filtersReset: "筛选条件已重置", treePrefix: "类型导航", expandLeftRegion: "展开类型导航",
+                    collapseLeftRegion: "收起类型导航", filterActivated: "筛选工具栏已激活",
+                    newOpened: "已打开新增类型窗口", exportPreparing: "正在准备导出", dateRange: "日期范围：{start} 至 {end}", movePrefix: "移动到"
+                })
+            }),
+            search: Object.freeze({
+                gridId: referenceDataGridId,
+                label: "类型搜索",
+                placeholder: "搜索项目、资源编码或多语言名称…",
+                buttonLabel: "查询",
+                clearLabel: "清空搜索条件",
+                icon: "ri-search-line",
+                buttonIcon: "ri-search-line",
+                clearIcon: "ri-close-line",
+                defaultValue: "",
+                clearable: true,
+                submitOnEnter: true,
+                submitOnClear: true,
+                allowEmpty: true,
+                trim: true
+            }),
+            tree: Object.freeze({
+                gridId: referenceDataGridId,
+                ariaLabel: "类型状态导航",
+                heading: "类型导航",
+                summary: `${referenceDataRecords.length} 个类型`,
+                expandLabelTemplate: "展开{label}",
+                collapseLabelTemplate: "收起{label}",
+                selectedId: "all",
+                items: Object.freeze([
+                    Object.freeze({ id: "all", label: "全部类型", icon: "ri-database-2-line", count: referenceDataRecords.length, filter: Object.freeze({}) }),
+                    Object.freeze({ id: "enabled", label: "已启用", icon: "ri-checkbox-circle-line", count: referenceDataEnabledCount, filter: Object.freeze({ status: "1" }) }),
+                    Object.freeze({ id: "disabled", label: "已停用", icon: "ri-forbid-2-line", count: referenceDataDisabledCount, filter: Object.freeze({ status: "2" }) })
+                ])
+            }),
+            menu: Object.freeze({ gridId: referenceDataGridId, ariaLabel: "类型行操作" }),
+            pagination: Object.freeze({
+                gridId: referenceDataGridId,
+                currentPage: 1,
+                pageSize: 20,
+                totalCount: referenceDataRecords.length,
+                summaryAll: "共 {total} 条",
+                summaryFiltered: "当前 {visible} 条 · 共 {total} 条",
+                previousLabel: "上一页",
+                nextLabel: "下一页",
+                pageChangedMessage: "已切换到第 {page} 页",
+                pageSizeChangedMessage: "每页显示 {size} 条类型"
+            }),
+            select: Object.freeze({
+                status: Object.freeze({
+                    gridId: referenceDataGridId,
+                    role: "status-filter",
+                    label: "类型状态",
+                    ariaLabel: "按类型状态筛选",
+                    currentTemplate: "{label}，当前：{value}",
+                    menuTitle: "选择类型状态",
+                    prefix: "状态：",
+                    scrollAfter: 6,
+                    options: Object.freeze([
+                        Object.freeze({ value: "", label: "全部状态", icon: "ri-apps-2-line", description: "显示全部引用数据类型" }),
+                        Object.freeze({ value: "1", label: "已启用", icon: "ri-checkbox-circle-line", tone: "done", description: "可以被业务项目调用" }),
+                        Object.freeze({ value: "2", label: "已停用", icon: "ri-forbid-2-line", tone: "muted", description: "暂时停止对外使用" })
+                    ])
+                }),
+                pageSize: Object.freeze({
+                    gridId: referenceDataGridId,
+                    role: "page-size",
+                    label: "每页显示条数",
+                    ariaLabel: "每页显示条数",
+                    currentTemplate: "{label}，当前：{value}",
+                    menuTitle: "选择每页显示条数",
+                    scrollAfter: 4,
+                    options: Object.freeze([
+                        Object.freeze({ value: "10", label: "10 条/页", icon: "ri-list-check-3" }),
+                        Object.freeze({ value: "20", label: "20 条/页", icon: "ri-list-check-3", selected: true }),
+                        Object.freeze({ value: "50", label: "50 条/页", icon: "ri-list-check-3" })
+                    ])
+                })
+            })
+        });
     }
 
     /**
-     * 读取真实详情并打开编辑窗口。
-     * @param {number} referenceDataId - 数据库生成主键。
-     * @returns {Promise<void>} 详情加载完成后显示窗口。
+     * 创建新增或编辑窗口的标准字段配置。
+     * @param {boolean} referenceDataEditing - true 表示编辑窗口文案。
+     * @returns {object} selWindow.mount 或 setLocale 可直接消费的窗口配置。
      */
-    async function referenceDataOpenEdit(referenceDataId) {
+    function referenceDataBuildEditWindow(referenceDataEditing) {
+        return Object.freeze({
+            title: referenceDataEditing ? "编辑类型" : "新增类型",
+            subtitle: "类型坐标用于跨项目稳定调用，保存后请谨慎修改",
+            closeLabel: `关闭${referenceDataEditing ? "编辑" : "新增"}类型窗口`,
+            cancelLabel: "取消",
+            submitLabel: referenceDataEditing ? "保存修改" : "保存类型",
+            validationMessage: "请完成全部必填字段",
+            autoSuccess: false,
+            rows: Object.freeze([
+                Object.freeze([
+                    Object.freeze({ name: "projectCode", label: "项目编码", type: "text", icon: "ri-code-box-line", placeholder: "例如 cms", required: true, maxLength: 64 }),
+                    Object.freeze({ name: "resourceCode", label: "资源编码", type: "text", icon: "ri-key-2-line", placeholder: "例如 article-category", required: true, maxLength: 64 })
+                ]),
+                Object.freeze([Object.freeze({ name: "nameZh", label: "中文名称", type: "text", icon: "ri-translate-2", placeholder: "例如 文章分类", required: true, maxLength: 120 })]),
+                Object.freeze([
+                    Object.freeze({ name: "nameJa", label: "日文名称", type: "text", icon: "ri-translate", placeholder: "例：記事カテゴリ", maxLength: 120 }),
+                    Object.freeze({ name: "nameEn", label: "英文名称", type: "text", icon: "ri-english-input", placeholder: "e.g. Article categories", maxLength: 120 })
+                ]),
+                Object.freeze([
+                    Object.freeze({ name: "status", label: "状态", type: "select", required: true, options: Object.freeze([
+                        Object.freeze({ value: "1", label: "启用", icon: "ri-checkbox-circle-line", tone: "done", selected: true }),
+                        Object.freeze({ value: "2", label: "停用", icon: "ri-forbid-2-line", tone: "muted" })
+                    ]) })
+                ]),
+                Object.freeze([Object.freeze({ name: "sortnum", label: "排序值", type: "number", icon: "ri-sort-number-asc", value: "0" })]),
+                Object.freeze([Object.freeze({ name: "descriptionZh", label: "中文说明", type: "textarea", icon: "ri-file-text-line", placeholder: "说明由哪个项目使用，以及数据用途", maxLength: 500 })])
+            ])
+        });
+    }
+
+    /**
+     * 使用最新数据库记录更新已挂载公共面板与表格。
+     * @returns {Promise<void>} 更新完成后保留当前组件实例。
+     */
+    async function referenceDataRefresh() {
+        const referenceDataRecords = await referenceDataLoadAllTypes();
+        const referenceDataPayload = referenceDataBuildPayload(referenceDataRecords);
+        const referenceDataPanelRoot = window.selPanel.get(referenceDataGridId);
+        if (referenceDataPanelRoot) window.selPanel.setLocale(referenceDataPanelRoot, { view: referenceDataPayload });
+        if (referenceDataState.gridController) referenceDataState.gridController.setLocale(referenceDataPayload);
+    }
+
+    /**
+     * 保存新增或编辑表单。
+     * 传参示例：{projectCode:"cms",resourceCode:"article-category",status:"1"}
+     * 返回示例：{success:true,data:{id:2},affectedRows:1,msg:"类型新增完成。"}
+     * @param {object} referenceDataValues - selWindow 提交的标准表单值。
+     * @returns {Promise<void>} 保存成功后关闭窗口并刷新当前表格。
+     */
+    async function referenceDataSave(referenceDataValues) {
+        referenceDataState.editWindowController.setLoading(true);
+        referenceDataState.editWindowController.setFeedback("正在保存类型…");
         try {
-            // 主键详情 API → 当前数据库最新类型记录。
             const referenceDataResult = await referenceDataAjax.request({
-                url: `${referenceDataTypeApi}/${referenceDataId}`,
-                method: "GET"
-            });
-            const referenceDataRecord = referenceDataResult.data;
-            referenceDataState.editingId = referenceDataId;
-            referenceDataForm.reset();
-            // 固定表单字段逐项回填，未知响应字段不会进入表单或后续保存请求。
-            [
-                "projectCode", "resourceCode", "nameZh", "nameJa", "nameEn",
-                "descriptionZh", "dataShape", "status", "sortnum"
-            ].forEach((referenceDataField) => {
-                if (referenceDataForm.elements[referenceDataField]) {
-                    referenceDataForm.elements[referenceDataField].value = referenceDataRecord[referenceDataField] ?? "";
-                }
-            });
-            referenceDataRole("dialog-title").textContent = "编辑类型";
-            referenceDataDialog.showModal();
-            referenceDataForm.elements.nameZh.focus();
-        } catch (referenceDataError) {
-            referenceDataShowToast(referenceDataError.message || "类型详情读取失败。", true);
-        }
-    }
-
-    /**
-     * 保存当前新增或编辑表单。
-     * @param {SubmitEvent} referenceDataEvent - dialog 表单提交事件。
-     * @returns {Promise<void>} 保存成功后关闭窗口并刷新当前页。
-     */
-    async function referenceDataSave(referenceDataEvent) {
-        referenceDataEvent.preventDefault();
-        if (!referenceDataForm.reportValidity()) return;
-        // FormData 固定字段 → selAjax 通用表单请求数据。
-        const referenceDataData = Object.fromEntries(new FormData(referenceDataForm).entries());
-        const referenceDataUrl = referenceDataState.editingId
-            ? `${referenceDataTypeApi}/${referenceDataState.editingId}`
-            : referenceDataTypeApi;
-        const referenceDataSubmitButton = referenceDataForm.querySelector("button[type='submit']");
-        referenceDataSubmitButton.disabled = true;
-        try {
-            const referenceDataResult = await referenceDataAjax.request({
-                url: referenceDataUrl,
+                url: referenceDataState.editingId ? `${referenceDataTypeApi}/${referenceDataState.editingId}` : referenceDataTypeApi,
                 method: "POST",
-                data: referenceDataData
+                data: referenceDataValues
             });
-            referenceDataDialog.close();
-            referenceDataShowToast(referenceDataResult.msg || "类型保存完成。");
-            await referenceDataLoadPage();
+            referenceDataState.editWindowController.setFeedback(referenceDataResult.msg || "类型保存完成。");
+            await referenceDataRefresh();
+            referenceDataState.editWindowController.close();
         } catch (referenceDataError) {
-            referenceDataShowToast(referenceDataError.message || "类型保存失败。", true);
+            referenceDataState.editWindowController.setFeedback(referenceDataError.message || "类型保存失败。", true);
         } finally {
-            referenceDataSubmitButton.disabled = false;
+            referenceDataState.editWindowController.setLoading(false);
         }
     }
 
     /**
-     * 逻辑删除一条非内置类型。
-     * @param {number} referenceDataId - 数据库生成主键。
-     * @returns {Promise<void>} 删除完成后刷新当前页。
+     * 删除当前确认窗口指向的类型。
+     * @returns {Promise<void>} 删除成功后关闭确认窗口并刷新表格。
      */
-    async function referenceDataDelete(referenceDataId) {
-        // 第一版使用浏览器确认保护破坏性入口，后端仍执行内置类型保护和逻辑删除。
-        if (!window.confirm("确定删除这个引用数据类型吗？已有记录将保留但不再出现在管理列表。")) return;
+    async function referenceDataDelete() {
+        if (!referenceDataState.pendingDeleteId) return;
+        referenceDataState.deleteWindowController.setLoading(true);
+        referenceDataState.deleteWindowController.setFeedback("正在删除类型…");
         try {
             const referenceDataResult = await referenceDataAjax.request({
-                url: `${referenceDataTypeApi}/${referenceDataId}/delete`,
+                url: `${referenceDataTypeApi}/${referenceDataState.pendingDeleteId}/delete`,
                 method: "POST"
             });
-            referenceDataShowToast(referenceDataResult.msg || "类型删除完成。");
-            await referenceDataLoadPage();
+            referenceDataState.deleteWindowController.setFeedback(referenceDataResult.msg || "类型删除完成。");
+            await referenceDataRefresh();
+            referenceDataState.deleteWindowController.close();
+            referenceDataState.pendingDeleteId = null;
         } catch (referenceDataError) {
-            referenceDataShowToast(referenceDataError.message || "类型删除失败。", true);
+            referenceDataState.deleteWindowController.setFeedback(referenceDataError.message || "类型删除失败。", true);
+        } finally {
+            referenceDataState.deleteWindowController.setLoading(false);
         }
     }
 
     /**
-     * 在当前主题内切换深浅模式，不改变业务筛选或编辑状态。
-     * @returns {void}
+     * 装配唯一 Reference Data 业务实例。
+     * @returns {Promise<void>} 全部公共组件挂载完成后返回。
      */
-    function referenceDataToggleMode() {
-        const referenceDataNextMode = referenceDataTheme.getState().mode === "dark" ? "light" : "dark";
-        referenceDataTheme.setMode(referenceDataNextMode);
-        referenceDataRole("mode-label").textContent = referenceDataNextMode === "dark" ? "浅色模式" : "深色模式";
+    async function referenceDataMountApplication() {
+        const [referenceDataRecords, referenceDataWindowMessages] = await Promise.all([
+            referenceDataLoadAllTypes(),
+            referenceDataAjax.json({ url: "/sel/components/window/i18n/zh-CN.json?v=20260807-reference-1" })
+        ]);
+        const referenceDataPayload = referenceDataBuildPayload(referenceDataRecords);
+        const referenceDataPanelRoot = window.selPanel.create(referenceDataApplicationHost, {
+            gridId: referenceDataGridId,
+            sourceId: referenceDataGridId,
+            entity: "ReferenceDataType",
+            view: "catalog",
+            layout: "single",
+            structure: referenceDataLayout,
+            ariaLabel: referenceDataPayload.title.ariaLabel
+        });
+        if (!referenceDataPanelRoot) throw new Error("引用数据公共面板创建失败。");
+        if (!window.selPanel.mount(referenceDataPanelRoot, {
+            view: referenceDataPayload,
+            expandLeftLabel: referenceDataPayload.title.messages.expandLeftRegion,
+            collapseLeftLabel: referenceDataPayload.title.messages.collapseLeftRegion
+        })) throw new Error("引用数据公共面板挂载失败。");
+        if (!window.selSearch.mount(referenceDataPanelRoot, referenceDataPayload.search)) throw new Error("引用数据搜索控件挂载失败。");
+        if (!window.selTree.mount(referenceDataPanelRoot, referenceDataPayload.tree)) throw new Error("引用数据导航树挂载失败。");
+        window.selDropdownMenu.mountAll(referenceDataPanelRoot);
+        referenceDataState.gridController = window.selGrid.mount(referenceDataPanelRoot, referenceDataPayload);
+        if (!referenceDataState.gridController) throw new Error("引用数据表格挂载失败。");
+
+        referenceDataState.editWindowController = window.selWindow.mount(referenceDataApplicationHost, {
+            id: "ReferenceDataTypeEditWindow",
+            messages: referenceDataWindowMessages,
+            ...referenceDataBuildEditWindow(false)
+        });
+        referenceDataState.deleteWindowController = window.selWindow.mount(referenceDataApplicationHost, {
+            id: "ReferenceDataTypeDeleteWindow",
+            messages: referenceDataWindowMessages,
+            title: "删除类型",
+            subtitle: "删除采用逻辑删除；内置类型受后台保护，无法删除",
+            closeLabel: "关闭删除确认窗口",
+            cancelLabel: "取消",
+            submitLabel: "确认删除",
+            validationMessage: "请确认删除操作",
+            autoSuccess: false,
+            rows: Object.freeze([])
+        });
+        if (!referenceDataState.editWindowController || !referenceDataState.deleteWindowController) throw new Error("引用数据公共窗口挂载失败。");
+
+        referenceDataPanelRoot.addEventListener("selGrid:new", () => {
+            referenceDataState.editingId = null;
+            referenceDataState.editWindowController.setLocale(referenceDataBuildEditWindow(false));
+            referenceDataState.editWindowController.reset();
+            referenceDataState.editWindowController.open();
+        });
+        referenceDataPanelRoot.addEventListener("selGrid:action", async (referenceDataEvent) => {
+            const referenceDataDetail = referenceDataEvent.detail;
+            if (!referenceDataDetail || referenceDataDetail.instanceKey !== referenceDataGridId) return;
+            if (referenceDataDetail.action === "edit") {
+                referenceDataState.editingId = Number(referenceDataDetail.record.id);
+                referenceDataState.editWindowController.setLocale(referenceDataBuildEditWindow(true));
+                referenceDataState.editWindowController.reset();
+                referenceDataState.editWindowController.setValues(referenceDataDetail.record);
+                referenceDataState.editWindowController.open();
+            }
+            if (referenceDataDetail.action === "delete") {
+                referenceDataState.pendingDeleteId = Number(referenceDataDetail.record.id);
+                referenceDataState.deleteWindowController.setFeedback(`即将删除：${referenceDataDetail.record.projectCode}/${referenceDataDetail.record.resourceCode}`);
+                referenceDataState.deleteWindowController.open();
+            }
+        });
+        referenceDataApplicationHost.addEventListener("selWindow:submit", (referenceDataEvent) => {
+            if (referenceDataEvent.detail?.id === "ReferenceDataTypeEditWindow") referenceDataSave(referenceDataEvent.detail.values);
+            if (referenceDataEvent.detail?.id === "ReferenceDataTypeDeleteWindow") referenceDataDelete();
+        });
     }
 
-    // 背景控制器拥有当前页面的图片和显示参数，刷新后恢复晶透管理默认背景。
-    const referenceDataBackgroundController = referenceDataPageBackground.mount(referenceDataBackgroundHost, {
+    // 背景与个性化组件独立挂载；主题切换只更新令牌，不重建业务实例或重新请求数据。
+    const referenceDataBackgroundController = window.selPageBackground.mount(referenceDataBackgroundHost, {
         defaults: Object.freeze({ theme: "solid-dark", overlay: 0, brightness: 100, blur: 0 })
     });
-    if (!referenceDataBackgroundController) {
-        throw new Error("引用数据管理后台背景控件挂载失败。");
+    if (!referenceDataBackgroundController) throw new Error("引用数据页面背景挂载失败。");
+    if (!window.selPersonalization.mount(referenceDataPersonalizationHost, { backgroundController: referenceDataBackgroundController })) {
+        throw new Error("引用数据个性化设置挂载失败。");
     }
-    // 个性化面板复用完整公共主题库；新增主题注册后无需修改本应用的选择界面。
-    const referenceDataPersonalizationController = referenceDataPersonalization.mount(referenceDataPersonalizationHost, {
-        backgroundController: referenceDataBackgroundController
-    });
-    if (!referenceDataPersonalizationController) {
-        throw new Error("引用数据管理后台个性化控件挂载失败。");
-    }
-    // 主题库切换明暗模式时同步页头快捷按钮，不重新加载页面或业务数据。
-    document.addEventListener("selTheme:change", (referenceDataThemeEvent) => {
-        const referenceDataMode = referenceDataThemeEvent.detail?.mode || referenceDataTheme.getState().mode;
-        referenceDataRole("mode-label").textContent = referenceDataMode === "dark" ? "浅色模式" : "深色模式";
-    });
 
-    // 页面范围内的标准下拉宿主由应用显式交给公共控件挂载。
-    referenceDataDropdown.mountAll(referenceDataHost);
-    // 点击动作通过 data 属性委托，新增按钮、分页和行按钮共享一个稳定入口。
-    document.addEventListener("click", (referenceDataEvent) => {
-        const referenceDataButton = referenceDataEvent.target.closest("[data-reference-data-action]");
-        if (!referenceDataButton) return;
-        const referenceDataAction = referenceDataButton.dataset.referenceDataAction;
-        if (referenceDataAction === "create") referenceDataOpenCreate();
-        if (referenceDataAction === "close") referenceDataDialog.close();
-        if (referenceDataAction === "toggle-mode") referenceDataToggleMode();
-        if (referenceDataAction === "search") {
-            referenceDataState.pageNo = 1;
-            referenceDataLoadPage();
-        }
-        if (referenceDataAction === "reset") {
-            referenceDataKeyword.value = "";
-            referenceDataDropdown.setValue(referenceDataStatus, "", true);
-            referenceDataState.pageNo = 1;
-            referenceDataLoadPage();
-        }
-        if (referenceDataAction === "previous" && referenceDataState.pageNo > 1) {
-            referenceDataState.pageNo -= 1;
-            referenceDataLoadPage();
-        }
-        if (referenceDataAction === "next") {
-            const referenceDataPageCount = Math.max(1, Math.ceil(referenceDataState.totalCount / referenceDataState.pageSize));
-            if (referenceDataState.pageNo < referenceDataPageCount) {
-                referenceDataState.pageNo += 1;
-                referenceDataLoadPage();
-            }
-        }
-        if (referenceDataAction === "edit") referenceDataOpenEdit(Number(referenceDataButton.dataset.referenceDataId));
-        if (referenceDataAction === "delete") referenceDataDelete(Number(referenceDataButton.dataset.referenceDataId));
+    referenceDataMountApplication().catch((referenceDataError) => {
+        console.error("引用数据管理初始化失败。", referenceDataError);
+        throw referenceDataError;
     });
-    // Enter 搜索与查询按钮使用相同加载入口。
-    referenceDataKeyword.addEventListener("keydown", (referenceDataEvent) => {
-        if (referenceDataEvent.key === "Enter") {
-            referenceDataEvent.preventDefault();
-            referenceDataState.pageNo = 1;
-            referenceDataLoadPage();
-        }
-    });
-    referenceDataForm.addEventListener("submit", referenceDataSave);
-    // 首屏直接读取永久数据库，页面不包含模拟业务记录。
-    referenceDataLoadPage();
-})();
+}());

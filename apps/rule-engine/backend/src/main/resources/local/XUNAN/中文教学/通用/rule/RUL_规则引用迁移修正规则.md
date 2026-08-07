@@ -1,4 +1,4 @@
-# XUNAN 规则引用迁移修正
+# 规则引用迁移修正
 
 <!-- Java 当前没有独立修正程序，实际 Java 工具路径由本规则映射。 -->
 java_ability_refs = none
@@ -7,16 +7,16 @@ python_ability_refs = ai_rule_package_integrator
 <!-- Node 当前没有参与这些引用迁移修正。 -->
 node_ability_refs = none
 <!-- 当前修正规则从 1.0.0 开始记录版本。 -->
-rule_version = 1.1.0
-<!-- 修正只对已验证用户 XUNAN 生效。 -->
-rule_owner = XUNAN
-<!-- active 表示根索引中的 XUNAN 覆盖已经通过加载测试。 -->
+rule_version = 1.2.0
+<!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明。 -->
+rule_owner_source = AGENTS.md.current_stable_user_id
+<!-- active 表示当前用户覆盖已经通过加载测试。 -->
 rule_status = active
 <!-- 首次升级记录说明本规则处理的是迁移后旧路径。 -->
-upgrade_record = 2026-08-03:为迁移后失效程序与模板路径建立用户层修正;2026-08-03:core表结构规则完成正式路径修复后移除冗余用户覆盖;2026-08-03:用户确认详细设计与XLS规则及能力整体退役
+upgrade_record = 2026-08-03:为迁移后失效程序与模板路径建立用户层修正;2026-08-03:core表结构规则完成正式路径修复后移除冗余用户覆盖;2026-08-03:用户确认详细设计与XLS规则及能力整体退役;2026-08-07:所有者与用户资产路径改为动态当前用户语义
 
 <!-- 问题：规则分层迁移已经完成，但少量规则正文仍引用迁移前路径。 -->
-<!-- 场景：XUNAN 命中下列逻辑 ID 时，必须读取原权威规则语义并使用本文件登记的当前程序或模板路径。 -->
+<!-- 场景：当前稳定用户命中下列逻辑 ID 时，必须读取原权威规则语义并使用本文件登记的当前程序或模板路径。 -->
 <!-- 业务含义：不修改冻结 core、不自动覆盖 common，也不会因为路径陈旧而删除仍有效的业务规则。 -->
 
 <!-- 用户覆盖只替换登记的失效引用，原规则其他业务语义继续生效。 -->
@@ -26,7 +26,7 @@ common_merge_target = human_review_patch
 <!-- 本规则不生成结构化成品，所以模板不适用并显式说明原因。 -->
 template_applicability = not_applicable:本规则只修正引用映射不生成结构化成品
 <!-- 正确处理过程复用 AI 智慧整合规则包中的迁移修正案例。 -->
-example_path = local/XUNAN/selplat/应用/rule-engine/template/RUL_AI规则包智慧整合规则/examples/AI规则整合案例.md
+example_path = local/<active-stable-user-id>/selplat/应用/rule-engine/template/RUL_AI规则包智慧整合规则/examples/AI规则整合案例.md
 <!-- 失效路径扫描和修正后验证统一使用已登记的智慧整合能力。 -->
 verification_program = ai_rule_package_integrator
 

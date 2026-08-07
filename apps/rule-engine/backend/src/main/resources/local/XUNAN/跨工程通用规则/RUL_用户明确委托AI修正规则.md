@@ -7,16 +7,16 @@ python_ability_refs = none
 <!-- Node 当前不承担委托授权判定，显式写 none 防止猜测程序入口。 -->
 node_ability_refs = none
 <!-- 规则从 1.0.0 起步，委托范围或确认条件变化时必须升级版本。 -->
-rule_version = 1.1.0
-<!-- 本覆盖规则仅属于已验证用户 XUNAN。 -->
-rule_owner = XUNAN
+rule_version = 1.2.0
+<!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明。 -->
+rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示该覆盖已由根索引登记并用于当前 SELPLAT 工程。 -->
 rule_status = active
 <!-- 记录用户明确要求 AI 可以托管其提出的修改需求。 -->
-upgrade_record = 2026-08-03:建立用户明确委托后的AI托管修正例外;2026-08-04:允许独立1后的同任务补充说明延续现有托管窗口
+upgrade_record = 2026-08-03:建立用户明确委托后的AI托管修正例外;2026-08-04:允许独立1后的同任务补充说明延续现有托管窗口;2026-08-07:所有者与验证契约改为从AGENTS动态解析当前稳定用户
 
 <!-- 问题：默认冻结规则会阻止用户已经明确提出并希望交由 AI 完成的 core 或 common 修改。 -->
-<!-- 场景：XUNAN 明确点名修改 local/core 或 local/common 的具体目标，并随后以独立 1 启动执行。 -->
+<!-- 场景：当前稳定用户明确点名修改 local/core 或 local/common 的具体目标，并随后以独立 1 启动执行。 -->
 <!-- 业务含义：冻结仍是默认状态，但项目所有者可以为一次边界清晰的任务打开受控 AI 托管窗口。 -->
 
 <!-- 用户明确点名修改目标并以独立 1 启动后，本次指定范围允许由 AI 直接修改。 -->
@@ -51,5 +51,5 @@ template_not_applicable_reason = authorization_boundary_has_no_repeatable_output
 example_not_applicable_reason = verified_loading_test_is_authoritative_evidence
 <!-- 独立 1 来自会话协议和用户输入，程序不得代替用户生成或推断授权。 -->
 program_not_applicable_reason = explicit_user_confirmation_must_not_be_generated_by_program
-<!-- 验证由 XUNAN 覆盖加载测试、逐行注释测试和相关任务回归共同完成。 -->
-verification_contract = xunan_layered_override_test,line_comment_test,relevant_task_regression
+<!-- 验证由当前用户覆盖加载测试、逐行注释测试和相关任务回归共同完成。 -->
+verification_contract = active_user_layered_override_test,line_comment_test,relevant_task_regression

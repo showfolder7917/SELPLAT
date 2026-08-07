@@ -1,9 +1,8 @@
 {
-  "stable_user_id": "XUNAN",
+  "stable_user_id_source": "AGENTS.md.current_stable_user_id",
   "project_name": "SELPLAT",
   "active_common_scope": "selplat",
-  "automatic_write_layer": "local/XUNAN",
+  "automatic_write_layer": "local/<active-stable-user-id>",
   "common_policy": "human_review_patch_only",
   "core_policy": "frozen"
 }
-

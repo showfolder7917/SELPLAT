@@ -28,12 +28,16 @@
             return null;
         }
 
+        // records 模式按列契约渲染任意后台记录；未声明时继续保持已有项目表格兼容模式。
+        const selGridRecordMode = selGridInputPayload.grid?.mode === "records";
+        // 通用记录配置只保存字段名、搜索字段和状态映射，不包含任何具体应用语义。
+        const selGridRecordOptions = selGridInputPayload.grid || {};
         // 行数据保持后端顺序并冻结外层数组，运行状态不能改写业务响应。
         let selGridProjects = Object.freeze(selGridInputPayload.data.items);
         // 类型显示映射使用稳定代码查找当前语言文字。
-        let selGridTypeLabels = new Map(selGridInputPayload.select.projectType.options.map((selGridTypeOption) => [selGridTypeOption.value, selGridTypeOption.label]));
+        let selGridTypeLabels = new Map((selGridInputPayload.select?.projectType?.options || []).map((selGridTypeOption) => [String(selGridTypeOption.value), selGridTypeOption.label]));
         // 状态显示映射使用稳定代码查找当前语言文字。
-        let selGridStatusLabels = new Map(selGridInputPayload.select.status.options.map((selGridStatusOption) => [selGridStatusOption.value, selGridStatusOption.label]));
+        let selGridStatusLabels = new Map((selGridInputPayload.select?.status?.options || []).map((selGridStatusOption) => [String(selGridStatusOption.value), selGridStatusOption.label]));
         // 当前语言业务提示集中来自 title JSON。
         let selGridMessages = selGridInputPayload.title.messages;
         // 当前语言分页模板集中来自 pagination JSON。
@@ -70,6 +74,8 @@
                 const selGridColumn = document.createElement("col");
                 // className 由基础控件公开列样式白名单提供。
                 selGridColumn.className = selGridColumnData.className;
+                // 通用记录列允许通过标准百分比或像素宽度控制布局，不要求应用选择组件内部类。
+                if (selGridRecordMode && selGridColumnData.width) selGridColumn.style.width = String(selGridColumnData.width);
                 // 返回列节点供一次替换。
                 return selGridColumn;
             });
@@ -356,6 +362,88 @@
         return button;
     }
 
+    /**
+     * 读取通用记录中的稳定字段值。
+     * @param {object} selGridRecord - 后端聚合结果中的一条业务记录。
+     * @param {string} selGridField - column 或 grid 契约声明的字段名。
+     * @returns {unknown} 字段不存在时返回空字符串。
+     */
+    function selGridReadRecordValue(selGridRecord, selGridField) {
+        if (!selGridField) return "";
+        return String(selGridField).split(".").reduce(
+            (selGridValue, selGridPart) => selGridValue && typeof selGridValue === "object" ? selGridValue[selGridPart] : "",
+            selGridRecord
+        );
+    }
+
+    /**
+     * 创建通用记录模式的单元格内容。
+     * @param {object} selGridRecord - 当前业务记录。
+     * @param {object} selGridColumn - 标准列定义。
+     * @returns {HTMLTableCellElement} 仅使用受控 text、stack、badge、time、actions 渲染器的单元格。
+     */
+    function selGridCreateRecordCell(selGridRecord, selGridColumn) {
+        const selGridCell = document.createElement("td");
+        const selGridRenderer = String(selGridColumn.renderer || "text");
+        const selGridRawValue = selGridReadRecordValue(selGridRecord, selGridColumn.field);
+        if (selGridRenderer === "stack") {
+            const selGridStack = document.createElement("span");
+            selGridStack.className = "selgrid-record-stack";
+            const selGridPrimary = document.createElement("strong");
+            selGridPrimary.textContent = String(selGridRawValue ?? "—") || "—";
+            const selGridSecondary = document.createElement("span");
+            selGridSecondary.textContent = String(selGridReadRecordValue(selGridRecord, selGridColumn.secondaryField) ?? "—") || "—";
+            selGridStack.append(selGridPrimary, selGridSecondary);
+            selGridCell.appendChild(selGridStack);
+            return selGridCell;
+        }
+        if (selGridRenderer === "badge") {
+            const selGridBadge = document.createElement("span");
+            const selGridMappedTone = selGridColumn.toneMap?.[String(selGridRawValue)];
+            const selGridTone = String(selGridMappedTone || selGridReadRecordValue(selGridRecord, selGridColumn.toneField) || selGridColumn.tone || "neutral");
+            selGridBadge.className = `selgrid-record-badge selgrid-record-badge-${selGridTone.replace(/[^a-z0-9_-]/gi, "")}`;
+            const selGridLabelMap = selGridColumn.labelSource === "status" ? selGridStatusLabels : selGridTypeLabels;
+            selGridBadge.textContent = selGridLabelMap.get(String(selGridRawValue)) || String(selGridRawValue ?? "—") || "—";
+            selGridCell.appendChild(selGridBadge);
+            return selGridCell;
+        }
+        if (selGridRenderer === "actions") {
+            const selGridActions = document.createElement("div");
+            selGridActions.className = "selgrid-action-group";
+            (selGridColumn.actions || []).forEach((selGridAction) => {
+                const selGridButton = document.createElement("button");
+                selGridButton.className = `selgrid-action-button${selGridAction.tone ? ` selgrid-action-${selGridAction.tone}` : ""}`;
+                selGridButton.type = "button";
+                selGridButton.dataset.action = String(selGridAction.id || "");
+                selGridButton.setAttribute("aria-label", String(selGridAction.label || selGridAction.id || "操作"));
+                selGridButton.appendChild(selGridCreateIcon(selGridAction.icon || "ri-more-line"));
+                selGridActions.appendChild(selGridButton);
+            });
+            selGridCell.appendChild(selGridActions);
+            return selGridCell;
+        }
+        const selGridDisplayValue = selGridRenderer === "time" && selGridRawValue
+            ? String(selGridRawValue).replace("T", " ").slice(0, 16)
+            : String(selGridRawValue ?? "—") || "—";
+        selGridCell.textContent = selGridDisplayValue;
+        if (selGridColumn.nowrap || selGridRenderer === "time") selGridCell.classList.add("selgrid-record-nowrap");
+        return selGridCell;
+    }
+
+    /**
+     * 按 column.items 创建一条通用后台记录行。
+     * @param {object} selGridRecord - 后端返回的任意实体记录。
+     * @returns {HTMLTableRowElement} 可通过 selGrid:action 事件操作的完整表格行。
+     */
+    function selGridCreateRecordRow(selGridRecord) {
+        const selGridRow = document.createElement("tr");
+        const selGridRecordId = selGridReadRecordValue(selGridRecord, selGridRecordOptions.idField || "id");
+        selGridRow.dataset.selGridRecordId = String(selGridRecordId);
+        selGridRow.tabIndex = -1;
+        selGridInputPayload.column.items.forEach((selGridColumn) => selGridRow.appendChild(selGridCreateRecordCell(selGridRecord, selGridColumn)));
+        return selGridRow;
+    }
+
     // 创建项目行并按参考图的八列结构填充真实可交互内容。
     function selGridCreateProjectRow(project) {
         // 每条项目数据对应一个可选择的表格行。
@@ -561,6 +649,21 @@
     function selGridGetVisibleProjects() {
         // 搜索关键字统一转为小写，英文内容匹配时不区分大小写。
         const keyword = selGridState.search.trim().toLocaleLowerCase();
+        // 通用记录模式由 grid.searchFields、typeField 和 statusField 明确声明筛选字段。
+        if (selGridRecordMode) {
+            const selGridSearchFields = Array.isArray(selGridRecordOptions.searchFields) ? selGridRecordOptions.searchFields : [];
+            return selGridProjects.filter((selGridRecord) => {
+                const selGridSearchableText = selGridSearchFields.map((selGridField) => selGridReadRecordValue(selGridRecord, selGridField)).join(" ").toLocaleLowerCase();
+                const selGridMatchesSearch = !keyword || selGridSearchableText.includes(keyword);
+                const selGridTypeValue = String(selGridReadRecordValue(selGridRecord, selGridRecordOptions.typeField));
+                const selGridStatusValue = String(selGridReadRecordValue(selGridRecord, selGridRecordOptions.statusField));
+                const selGridMatchesType = !selGridState.type || selGridTypeValue === String(selGridState.type);
+                const selGridMatchesStatus = !selGridState.status || selGridStatusValue === String(selGridState.status);
+                const selGridMatchesTreeType = !selGridState.treeFilter.type || selGridTypeValue === String(selGridState.treeFilter.type);
+                const selGridMatchesTreeStatus = !selGridState.treeFilter.status || selGridStatusValue === String(selGridState.treeFilter.status);
+                return selGridMatchesSearch && selGridMatchesType && selGridMatchesStatus && selGridMatchesTreeType && selGridMatchesTreeStatus;
+            });
+        }
         // 后端项目数据逐项检查全部组合条件。
         return selGridProjects.filter((project) => {
             // 名称、负责人、本地化类型和状态组成当前记录的可搜索文本。
@@ -599,11 +702,11 @@
         // 文档片段减少逐行插入引起的重复布局计算。
         const fragment = document.createDocumentFragment();
         // 每条可见项目记录生成完整交互行。
-        visibleProjects.forEach((project) => fragment.appendChild(selGridCreateProjectRow(project)));
+        visibleProjects.forEach((project) => fragment.appendChild(selGridRecordMode ? selGridCreateRecordRow(project) : selGridCreateProjectRow(project)));
         // 一次替换旧表格内容，确保状态与视觉完全同步。
         selGridView.tableBody.replaceChildren(fragment);
         // 当前视图存在记录且全部被选中时才标记表头全选。
-        const allVisibleSelected = visibleProjects.length > 0 && visibleProjects.every((project) => selGridState.selectedIds.has(project.id));
+        const allVisibleSelected = !selGridRecordMode && visibleProjects.length > 0 && visibleProjects.every((project) => selGridState.selectedIds.has(project.id));
         // 表头复选框只表达当前筛选视图的选择状态。
         if (selGridView.selectAll) {
             // 表头仍存在时同步当前筛选视图的全选语义。
@@ -627,7 +730,7 @@
         // 页码结构与真实筛选数量同步更新，容量和条件变化后按钮数量立即正确。
         selGridRenderPaginationStructure(totalPages);
         // 当前菜单项目离开当前数据页时关闭浮层，避免菜单失去可见锚点。
-        if (selGridMenuController && selGridMenuController.getProjectId() && !visibleProjects.some((project) => project.id === selGridMenuController.getProjectId())) {
+        if (!selGridRecordMode && selGridMenuController && selGridMenuController.getProjectId() && !visibleProjects.some((project) => project.id === selGridMenuController.getProjectId())) {
             // 独立菜单控制器负责清理自身状态。
             selGridMenuController.close();
         }
@@ -728,6 +831,25 @@
 
     // 表格事件委托统一处理选择、查看、编辑和更多菜单。
     selGridView.tableBody.addEventListener("click", (event) => {
+        // 通用记录模式只派发稳定动作事件，应用通过公开事件消费业务主键和原始记录。
+        if (selGridRecordMode) {
+            const selGridRecordRow = event.target.closest("tr[data-sel-grid-record-id]");
+            const selGridRecordAction = event.target.closest("button[data-action]");
+            if (!selGridRecordRow || !selGridRecordAction || !selGridView.tableBody.contains(selGridRecordRow)) return;
+            const selGridRecordId = selGridRecordRow.dataset.selGridRecordId;
+            const selGridRecord = selGridProjects.find((selGridItem) => String(selGridReadRecordValue(selGridItem, selGridRecordOptions.idField || "id")) === selGridRecordId);
+            if (!selGridRecord) return;
+            selGridRoot.dispatchEvent(new CustomEvent("selGrid:action", {
+                bubbles: true,
+                detail: Object.freeze({
+                    instanceKey: selGridId,
+                    entity: selGridEntity,
+                    action: String(selGridRecordAction.dataset.action || ""),
+                    record: selGridRecord
+                })
+            }));
+            return;
+        }
         // 从点击源向上定位当前实例的数据行，表格外部事件不会参与行选择。
         const row = event.target.closest("tr[data-project-id]");
         // 事件不属于当前表格主体时立即终止，保证同页其他实例不会串行选择。
@@ -808,6 +930,8 @@
 
     // 表格行原生右键事件在鼠标落点打开同一套操作菜单。
     selGridView.tableBody.addEventListener("contextmenu", (event) => {
+        // 通用记录模式不推测应用菜单语义，调用方可通过标准 actions 列声明实际动作。
+        if (selGridRecordMode) return;
         // 只接受当前表格主体内带业务主键的数据行，空白区和其他实例继续使用浏览器默认行为。
         const selGridContextRow = event.target.closest("tr[data-project-id]");
         // 无效或越出当前 tbody 的事件不阻止浏览器原生菜单。
@@ -1174,8 +1298,8 @@
         if (!selGridNextPayload || !Array.isArray(selGridNextPayload.data?.items) || !Array.isArray(selGridNextPayload.column?.items)) return false;
         selGridInputPayload = selGridNextPayload;
         selGridProjects = Object.freeze(selGridInputPayload.data.items);
-        selGridTypeLabels = new Map(selGridInputPayload.select.projectType.options.map((item) => [item.value, item.label]));
-        selGridStatusLabels = new Map(selGridInputPayload.select.status.options.map((item) => [item.value, item.label]));
+        selGridTypeLabels = new Map((selGridInputPayload.select?.projectType?.options || []).map((item) => [String(item.value), item.label]));
+        selGridStatusLabels = new Map((selGridInputPayload.select?.status?.options || []).map((item) => [String(item.value), item.label]));
         selGridMessages = selGridInputPayload.title.messages;
         selGridPaginationData = selGridInputPayload.pagination;
         selGridRenderColumnHeader();

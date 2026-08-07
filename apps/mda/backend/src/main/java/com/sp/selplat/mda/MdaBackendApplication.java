@@ -1,14 +1,18 @@
 package com.sp.selplat.mda;
 
-import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 
 /**
  * MDA 多数据库工作台启动入口，统一扫描 SELPLAT 公共层和当前应用组件。
  */
-@SpringBootApplication(scanBasePackages = "com.sp.selplat")
-@MapperScan(basePackages = "com.sp.selplat.common.db.template")
+@SpringBootApplication(
+        scanBasePackages = {
+            "com.sp.selplat.mda",
+            "com.sp.selplat.common.web"
+        },
+        exclude = DataSourceAutoConfiguration.class)
 public class MdaBackendApplication {
 
     /**

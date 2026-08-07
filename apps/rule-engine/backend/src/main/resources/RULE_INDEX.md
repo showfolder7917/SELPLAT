@@ -52,8 +52,8 @@ CODE_VUE_TEST_RULES = local/core/rule/CODE_VUE_TEST_RULES.md
 GUI_VIDEO_TASK_RULES = local/core/rule/GUI_VIDEO_TASK_RULES.md
 MEMORY_FILE_EDIT_RULES = local/core/rule/MEMORY_FILE_EDIT_RULES.md
 
-<!-- XUNAN 是 AGENTS.md 已验证的当前唯一用户；用户规则通过独立分级索引进入，只有明确激活该用户时才递归加载。 -->
-USER_RULE_INDEX@XUNAN = local/XUNAN/RULE_INDEX.md
-load_rule_for_xunan_rule_cleanup_package_completion_or_continuous_upgrade = AI_RULE_PACKAGE_INTELLIGENCE_RULES
-load_rule_for_xunan_explicit_ai_managed_core_or_common_change = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
-load_rule_for_xunan_same_task_followup_after_standalone_1 = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
+<!-- 当前稳定用户只从工程根 AGENTS.md 读取；加载器把安全校验后的值代入该唯一模式。 -->
+USER_RULE_INDEX_PATTERN = local/<stable-user-id>/RULE_INDEX.md
+load_rule_for_active_user_rule_cleanup_package_completion_or_continuous_upgrade = AI_RULE_PACKAGE_INTELLIGENCE_RULES
+load_rule_for_active_user_explicit_ai_managed_core_or_common_change = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
+load_rule_for_active_user_same_task_followup_after_standalone_1 = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES

@@ -7,16 +7,16 @@ python_ability_refs = ai_rule_package_integrator
 <!-- Node 当前没有承载本规则的自动化程序，显式写 none 防止误调用生成器。 -->
 node_ability_refs = none
 <!-- 规则版本从 1.0.0 起步，后续语义变化必须递增并记录升级原因。 -->
-rule_version = 1.1.0
-<!-- 当前规则只属于已验证用户 XUNAN，公共合并前不得扩大作用域。 -->
-rule_owner = XUNAN
+rule_version = 1.2.0
+<!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，公共合并前不得扩大作用域。 -->
+rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已由根索引登记并通过当前回归验证。 -->
 rule_status = active
 <!-- 升级记录同时保存首次整合和用户发现的逐行注释缺口，防止修正规范被口头带过。 -->
-upgrade_record = 2026-08-03:清理废弃传统链并建立AI规则包持续整合入口;2026-08-03:补齐新增规则逐行中文业务注释并增加自动检查;2026-08-03:增加用户明确委托后的AI托管修正边界
+upgrade_record = 2026-08-03:清理废弃传统链并建立AI规则包持续整合入口;2026-08-03:补齐新增规则逐行中文业务注释并增加自动检查;2026-08-03:增加用户明确委托后的AI托管修正边界;2026-08-07:程序_规则路径和所有者统一改为AGENTS动态当前用户
 
 <!-- 问题：历史规则、模板、案例和程序分别增长，迁移后仍存在旧路径、缺失关联和只修成品不升级规则包的问题。 -->
-<!-- 场景：XUNAN 在 SELPLAT 中新增、审查、执行、修正、合并或退役规则。 -->
+<!-- 场景：当前稳定用户在 SELPLAT 中新增、审查、执行、修正、合并或退役规则。 -->
 <!-- 业务含义：AI 以规则包为唯一成长单元，在不污染 core/common 的前提下持续减少执行偏差。 -->
 
 <!-- 当前唯一模型是 AI 按规则执行并持续补全规则包，不再建设传统规则服务流水线。 -->
@@ -66,7 +66,7 @@ ai_must_prefer_repairing_the_rule_package_over_repairing_one_output = true
 
 <!-- 正式执行按最小规则、资产加载、任务执行、偏差验证、结果记录和升级判断顺序进行。 -->
 execution_sequence = load_minimum_rules,load_rule_package_assets,execute_by_rule,verify_deviation,record_result,evaluate_upgrade
-<!-- 规则选择只能使用索引登记的 SELPLAT 作用域和 XUNAN 用户，不得扫描其他作用域。 -->
+<!-- 规则选择只能使用索引登记的 SELPLAT 作用域和 AGENTS.md 当前稳定用户，不得扫描其他作用域。 -->
 rule_selection_must_follow_registered_scope_and_user = true
 <!-- 程序、模板和案例必须通过登记入口或已验证路径定位，禁止按名称猜测。 -->
 physical_path_guessing_is_forbidden = true
@@ -81,8 +81,8 @@ rule_without_required_asset_must_report_gap_before_claiming_repeatable_execution
 upgrade_trigger = repeated_deviation,user_correction,stale_reference,missing_asset,missing_program,missing_verification,near_duplicate_rule
 <!-- 升级先建立验证证据，再依次修正规则包组成和最后的索引注册。 -->
 upgrade_target_order = verification_evidence,rule,template,example,program,index_and_registry
-<!-- 没有用户明确点名目标并以独立 1 启动时，AI 自动生成的修正只能进入当前已验证的 XUNAN 用户层。 -->
-automatic_change_target_without_explicit_delegation = local/XUNAN
+<!-- 没有用户明确点名目标并以独立 1 启动时，AI 自动生成的修正只能进入动态解析的当前用户层。 -->
+automatic_change_target_without_explicit_delegation = local/<active-stable-user-id>
 <!-- 用户明确点名 core 或 common 修改并以独立 1 启动后，AI 可以托管该次指定范围内的修改与验证。 -->
 explicit_user_delegation_policy = ai_may_modify_explicitly_named_core_or_common_scope_after_standalone_1
 <!-- 托管授权只覆盖用户指定目标，不允许借清理或重构扩大到无关文件。 -->
@@ -98,10 +98,10 @@ upgrade_must_record_before_after_gap_counts = true
 
 <!-- 稳定程序 ID 供规则正文、测试和直接命令共同引用。 -->
 python_ability_id = ai_rule_package_integrator
-<!-- 能力文件固定进入 XUNAN Python 原生分层目录。 -->
-python_ability_path = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/ai_rule_package_integrator.py
-<!-- 用户程序无需注册表或二次执行器，直接接收 JSON 上下文并复用同一 execute 实现。 -->
-python_program_command = python3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/ai_rule_package_integrator.py <context_json>
+<!-- 能力文件进入 AGENTS.md 当前稳定用户对应的 Python 原生分层目录。 -->
+python_ability_path = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/<active-stable-user-id>/abilities/ai_rule_package_integrator.py
+<!-- 用户程序无需注册表或二次执行器，代入当前稳定用户后直接接收 JSON 上下文并复用同一 execute 实现。 -->
+python_program_command = python3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/<active-stable-user-id>/abilities/ai_rule_package_integrator.py <context_json>
 <!-- audit 只返回事实，write_report 只允许把同一事实写入 OPTION。 -->
 ability_actions = audit,write_report
 

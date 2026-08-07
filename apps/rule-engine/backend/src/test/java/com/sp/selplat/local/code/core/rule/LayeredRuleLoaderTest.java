@@ -121,10 +121,10 @@ class LayeredRuleLoaderTest {
      */
     @Test
     void shouldRejectUnsafeActiveUserIdentifier() {
-        // 路径穿越身份不得参与根索引兼容覆盖键解析。
+        // 路径穿越身份不得参与根索引模式解析。
         assertThrows(
             IllegalArgumentException.class,
-            () -> LayeredRuleLoader.load("CODE_JAVA_CODING_RULES", "../TongXiaoFeng")
+            () -> LayeredRuleLoader.load("CODE_JAVA_CODING_RULES", "../invalid-user")
         );
     }
 
@@ -152,7 +152,11 @@ class LayeredRuleLoaderTest {
         // 所有已选层都没有 ID → 必须返回 IOException。
         assertThrows(
             IOException.class,
-            () -> LayeredRuleLoader.load("UNREGISTERED_RULE", "selplat", "XUNAN")
+            () -> LayeredRuleLoader.load(
+                "UNREGISTERED_RULE",
+                "selplat",
+                LayeredRuleLoader.currentStableUserId()
+            )
         );
     }
 
@@ -167,7 +171,7 @@ class LayeredRuleLoaderTest {
         LayeredRuleLoader.IndexValidation validation = LayeredRuleLoader.validateIndexTree();
         // 根、common、一级项目、通用/应用分类和项目叶子索引必须全部可达。
         assertEquals(19, validation.indexCount());
-        // 当前 core、common 与 XUNAN 规则全部拥有唯一入口。
+        // 当前 core 与 common 规则全部拥有唯一入口，用户树另行动态验证。
         assertEquals(66, validation.ruleCount());
     }
 

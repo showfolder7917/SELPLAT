@@ -453,6 +453,9 @@
             }
             // Escape 在意外保持打开时安全关闭。
             if (event.key === "Escape") {
+                // 当前控件先消费退出键，避免外层业务窗口同时收到 Escape 后被关闭。
+                event.preventDefault();
+                event.stopPropagation();
                 selDropdownMenuClose(instance, true);
             }
         });
@@ -506,6 +509,8 @@
             // Escape 关闭并回到触发器。
             if (event.key === "Escape") {
                 event.preventDefault();
+                // 下拉浮层关闭后终止冒泡，外层 Window 保持打开并继续承载当前表单。
+                event.stopPropagation();
                 selDropdownMenuClose(instance, true);
                 return;
             }

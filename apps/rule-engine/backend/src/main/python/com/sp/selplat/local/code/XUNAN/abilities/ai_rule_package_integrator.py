@@ -41,7 +41,10 @@ CORE_EXECUTOR_PATH = (
     / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/executor.py"
 )
 OPTION_ROOT = PROJECT_ROOT / "OPTION"
+AGENTS_PATH = PROJECT_ROOT / "AGENTS.md"
 LOGICAL_ID_PATTERN = re.compile(r"[A-Z][A-Z0-9_]{1,127}")
+ACTIVE_USER_PATTERN = re.compile(r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$")
+SAFE_USER_ID_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}")
 REFERENCE_FIELDS = ("java_ability_refs", "python_ability_refs", "node_ability_refs")
 NOT_APPLICABLE_VALUES = {"none", "null", "n/a", "无", "[]"}
 PROJECT_REFERENCE_PREFIXES = ("apps/", "shared/", "local/", "ai/", "公共/工具/")
@@ -54,7 +57,7 @@ DEPRECATED_CHAIN_TEXTS = (
 def _load_core_executor():
     """复用冻结 core 的完整文件读取能力，禁止绕过协议直接读取规则 Markdown。"""
 
-    spec = importlib.util.spec_from_file_location("xunan_integrator_core_executor", CORE_EXECUTOR_PATH)
+    spec = importlib.util.spec_from_file_location("active_user_integrator_core_executor", CORE_EXECUTOR_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"无法加载 core executor：{CORE_EXECUTOR_PATH}")
     module = importlib.util.module_from_spec(spec)
@@ -89,11 +92,26 @@ def _parse_assignments(text: str) -> list[tuple[str, str, int]]:
     return assignments
 
 
+def _active_stable_user_id() -> str:
+    """从工程根 AGENTS.md 读取唯一且路径安全的当前稳定用户。"""
+
+    agents_text = AGENTS_PATH.read_text(encoding="utf-8")
+    matches = ACTIVE_USER_PATTERN.findall(agents_text)
+    if len(matches) != 1:
+        raise RuntimeError("AGENTS.md 必须且只能声明一个当前稳定用户 ID。")
+    active_user = matches[0].strip()
+    if not SAFE_USER_ID_PATTERN.fullmatch(active_user):
+        raise RuntimeError(f"当前稳定用户 ID 不符合安全格式：{active_user}")
+    return active_user
+
+
 def _collect_indexed_rules(
         core_executor: Any,
-) -> tuple[list[str], list[dict[str, Any]], list[str], list[dict[str, Any]], int]:
+) -> tuple[str, list[str], list[dict[str, Any]], list[str], list[dict[str, Any]], int]:
     """从唯一根索引递归收集正式规则，并单独统计当前用户覆盖。"""
 
+    active_user = _active_stable_user_id()
+    active_user_prefix = f"local/{active_user}/"
     visited: list[str] = []
     rules: list[dict[str, Any]] = []
     user_indexes: list[str] = []
@@ -108,6 +126,8 @@ def _collect_indexed_rules(
         for key, value, line_number in _parse_assignments(text):
             if not LOGICAL_ID_PATTERN.fullmatch(key):
                 continue
+            if key == "USER_RULE_INDEX_PATTERN":
+                continue
             if value.endswith("/RULE_INDEX.md"):
                 walk(value)
             elif value.startswith("local/") and value.endswith(".md"):
@@ -119,7 +139,7 @@ def _collect_indexed_rules(
                 })
 
     def walk_user(index_path: str) -> None:
-        """只递归 XUNAN 已登记索引树，并按物理规则文件去重审查。"""
+        """只递归 AGENTS.md 当前用户索引树，并按物理规则文件去重审查。"""
 
         nonlocal user_registration_count
         if index_path in user_indexes:
@@ -131,7 +151,7 @@ def _collect_indexed_rules(
                 continue
             if value.endswith("/RULE_INDEX.md"):
                 walk_user(value)
-            elif value.startswith("local/XUNAN/") and value.endswith(".md"):
+            elif value.startswith(active_user_prefix) and value.endswith(".md"):
                 user_registration_count += 1
                 existing = user_rules_by_path.setdefault(value, {
                     "logical_id": key,
@@ -144,10 +164,15 @@ def _collect_indexed_rules(
 
     walk("RULE_INDEX.md")
     root_text = _read_markdown("RULE_INDEX.md", core_executor)
-    for key, value, _ in _parse_assignments(root_text):
-        if key == "USER_RULE_INDEX@XUNAN" and value == "local/XUNAN/RULE_INDEX.md":
-            walk_user(value)
+    user_patterns = [
+        value for key, value, _ in _parse_assignments(root_text)
+        if key == "USER_RULE_INDEX_PATTERN"
+    ]
+    if user_patterns != ["local/<stable-user-id>/RULE_INDEX.md"]:
+        raise RuntimeError("根索引必须登记唯一标准 USER_RULE_INDEX_PATTERN。")
+    walk_user(user_patterns[0].replace("<stable-user-id>", active_user))
     return (
+        active_user,
         visited,
         rules,
         user_indexes,
@@ -241,7 +266,7 @@ def _audit_rule(rule: dict[str, Any], core_executor: Any) -> dict[str, Any]:
         gaps.append("ability_reference_fields_incomplete")
     if not any(key.lower() in {"version", "rule_version"} for key in assignments):
         gaps.append("version_metadata_missing")
-    if not any(key.lower() in {"owner", "rule_owner"} for key in assignments):
+    if not any(key.lower() in {"owner", "rule_owner", "rule_owner_source"} for key in assignments):
         gaps.append("owner_metadata_missing")
     if stale_references:
         gaps.append("stale_reference_detected")
@@ -261,7 +286,7 @@ def _build_audit() -> dict[str, Any]:
     """生成全量规则包审查结果。"""
 
     core_executor = _load_core_executor()
-    indexes, rules, user_indexes, user_rules, user_registration_count = (
+    active_user, indexes, rules, user_indexes, user_rules, user_registration_count = (
         _collect_indexed_rules(core_executor)
     )
     audited_rules = [_audit_rule(rule, core_executor) for rule in rules]
@@ -273,11 +298,12 @@ def _build_audit() -> dict[str, Any]:
         "model": "ai_rule_driven_execution_and_continuous_rule_package_growth",
         "indexes": len(indexes),
         "indexed_rules": len(rules),
-        "xunan_indexes": len(user_indexes),
-        "xunan_user_overrides": user_registration_count,
-        "xunan_user_rule_files": len(audited_user_rules),
-        "xunan_standard_asset_packages": sum(bool(rule["asset_root"]) for rule in audited_user_rules),
-        "xunan_rules_with_program_references": sum(
+        "active_user_id": active_user,
+        "active_user_indexes": len(user_indexes),
+        "active_user_overrides": user_registration_count,
+        "active_user_rule_files": len(audited_user_rules),
+        "active_user_standard_asset_packages": sum(bool(rule["asset_root"]) for rule in audited_user_rules),
+        "active_user_rules_with_program_references": sum(
             bool(rule["program_references"]) for rule in audited_user_rules
         ),
         "standard_asset_packages": sum(bool(rule["asset_root"]) for rule in audited_rules),
@@ -289,7 +315,7 @@ def _build_audit() -> dict[str, Any]:
         "stale_reference_count": sum(len(rule["stale_references"]) for rule in audited_rules),
         "gap_counts": dict(gap_counts),
         "rules": audited_rules,
-        "xunan_rules": audited_user_rules,
+        "active_user_rules": audited_user_rules,
         "decision_boundary": "facts_only_ai_must_review_before_merge_or_delete",
     }
 

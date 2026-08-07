@@ -64,7 +64,7 @@ public class ReferenceDataTypeAdminController {
      * 新增引用数据类型。
      *
      * @param saveIn 表单参数，例如
-     *     {@code projectCode=cms&resourceCode=article-category&nameZh=文章分类&dataShape=BOTH}
+     *     {@code projectCode=cms&resourceCode=article-category&nameZh=文章分类&status=1}
      * @return 新增 JSON，例如
      *     {@code {"success":true,"data":{"id":2,"projectCode":"cms"},"affectedRows":1,"msg":"类型新增完成。"}}
      */

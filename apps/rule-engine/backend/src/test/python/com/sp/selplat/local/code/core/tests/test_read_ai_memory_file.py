@@ -59,7 +59,7 @@ class ReadAiMemoryFileTests(unittest.TestCase):
 - 这是用户协作层的协议文件
 中文说明行
 default_language = zh
-rule_path = local/XUNAN/跨工程通用规则/RUL_用户明确委托AI修正规则.md
+rule_path = local/<stable-user-id>/跨工程通用规则/RUL_用户明确委托AI修正规则.md
 code_runtime_reads_registry_in_order
 """
         cleaned = self.module.clean_ai_memory_content(raw_content)
@@ -67,7 +67,7 @@ code_runtime_reads_registry_in_order
             cleaned.splitlines(),
             [
                 "default_language = zh",
-                "rule_path = local/XUNAN/跨工程通用规则/RUL_用户明确委托AI修正规则.md",
+                "rule_path = local/<stable-user-id>/跨工程通用规则/RUL_用户明确委托AI修正规则.md",
                 "code_runtime_reads_registry_in_order",
             ],
         )

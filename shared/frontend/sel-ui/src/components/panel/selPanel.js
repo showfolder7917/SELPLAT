@@ -99,9 +99,10 @@
         }
         // 工具栏组件提供横向容器，实际子控件顺序完全来自布局声明。
         if (selPanelComponentName === "toolbar") {
+            const selPanelToolbarChildren = selPanelGetChildren(selPanelComponentDefinition);
             return `
-                <section class="selpanel-crystal-surface selpanel-toolbar-shell" data-sel-panel-component="toolbar" aria-label="筛选工具栏">
-                    ${selPanelGetChildren(selPanelComponentDefinition).map(selPanelRenderComponent).join("")}
+                <section class="selpanel-crystal-surface selpanel-toolbar-shell" data-sel-panel-component="toolbar" data-sel-panel-child-count="${selPanelToolbarChildren.length}" aria-label="筛选工具栏">
+                    ${selPanelToolbarChildren.map(selPanelRenderComponent).join("")}
                 </section>
             `;
         }

@@ -24,10 +24,10 @@ dependencies {
 }
 
 tasks.named('processResources') {
-    // db/migration 是 reference-data 数据库脚本的唯一权威来源，构建时只复制脚本而不复制运行数据文件。
-    from('../db/migration') {
+    // db/sql 是 reference-data 数据库脚本的唯一权威来源，构建时只复制结构和初始化 SQL，不复制运行数据文件。
+    from('../db/sql') {
         include '*.sql'
-        into 'db/reference-data/migration'
+        into 'db/reference-data/sql'
     }
 }
 

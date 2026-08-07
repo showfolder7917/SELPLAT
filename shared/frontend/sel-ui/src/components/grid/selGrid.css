@@ -229,6 +229,61 @@
     vertical-align: middle;
 }
 
+/* 通用记录单元格：应用只声明列字段与渲染器，文字层级和状态色由公共表格统一控制。 */
+.selgrid-record-stack {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.selgrid-record-stack strong,
+.selgrid-record-stack > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selgrid-record-stack strong {
+    color: var(--sel-theme-text-title);
+    font-weight: 620;
+}
+
+.selgrid-record-stack > span {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-secondary);
+}
+
+.selgrid-record-nowrap { white-space: nowrap; }
+
+.selgrid-record-badge {
+    display: inline-flex;
+    min-height: 28px;
+    align-items: center;
+    padding: 0 11px;
+    border: 1px solid var(--sel-theme-control-line-soft);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    white-space: nowrap;
+}
+
+.selgrid-record-badge-enabled {
+    border-color: color-mix(in srgb, var(--sel-theme-semantic-success) 54%, transparent);
+    color: var(--sel-theme-semantic-success);
+    background: var(--sel-theme-status-success-surface);
+}
+
+.selgrid-record-badge-disabled {
+    border-color: color-mix(in srgb, var(--sel-theme-semantic-warning) 48%, transparent);
+    color: var(--sel-theme-semantic-warning);
+}
+
+.selgrid-action-danger:hover,
+.selgrid-action-danger:focus-visible {
+    border-color: color-mix(in srgb, var(--sel-theme-semantic-error) 72%, transparent);
+    color: var(--sel-theme-semantic-error);
+}
+
 .selgrid-table tbody td:nth-child(7) {
     white-space: nowrap;
 }

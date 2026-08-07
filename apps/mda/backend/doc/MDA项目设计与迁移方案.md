@@ -10,11 +10,12 @@ MDA 是 SELPLAT 下独立的数据库工作台，负责保存连接、测试连�
 
 ## 2. 数据库设计
 
-连接配置存储于 MDA 自身 H2 数据库 `MdaConnectionProfile`。目标数据库数据不复制到 MDA。
+连接配置永久存储于 `apps/mda/db/mda.mv.db` 的 `MdaConnectionProfile`。默认查询工作库永久存储于
+`apps/mda/db/mda-workspace.mv.db`，用于直接展示表结构和前台查询；外部目标数据库数据不复制到控制库。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| id | BIGINT PK | 公共号段 `MdaConnectionProfileId` 生成 |
+| id | BIGINT PK | 控制库 identity 生成 |
 | tenantId | BIGINT | 租户标识 |
 | lastOperateUserId | BIGINT | 最近操作用户 |
 | connectionName | VARCHAR(120) UNIQUE | 页面显示名称 |
@@ -36,14 +37,16 @@ MDA 是 SELPLAT 下独立的数据库工作台，负责保存连接、测试连�
 
 ```text
 apps/mda/backend
-├─ connection  连接配置 DAO、Service、Controller 与口令加密
+├─ config      统一宿主模块入口与独立数据库配置
+├─ connection  连接配置 Repository、Service、Controller 与口令加密
 ├─ jdbc        五类驱动定义、动态连接、元数据和原始 SQL 执行
+├─ persistence MDA 独立 JDBC 上下文
 └─ resources
-   ├─ schema-mda.sql / data-mda.sql
+   ├─ schema-mda.sql / schema-mda-workspace.sql
    └─ static/mda  页面装配、布局和交互
 ```
 
-连接配置属于简单单表模块，DAO 仅继承 `BaseDao`，Service 继承 `BaseServiceImpl`。元数据和 SQL 执行属于跨数据库 JDBC 能力，不伪装成业务表 DAO。
+连接配置通过 MDA 专用 JDBC 上下文访问，不继承平台主数据源 DAO。元数据和 SQL 执行属于跨数据库 JDBC 能力，不伪装成业务表 DAO。MDA 可以被 8080 统一宿主显式导入，也保留 8082 独立启动入口。
 
 ## 4. API 结构
 
@@ -51,12 +54,12 @@ apps/mda/backend
 
 | 方法 | 路径 | 主要入参 | 返回 data |
 | --- | --- | --- | --- |
-| GET/POST | `/api/mda/connections/getStore.htm` | pageNo/pageSize/status | 连接分页列表 |
-| GET/POST | `/api/mda/connections/getById.htm` | id | 脱敏连接详情 |
-| POST | `/api/mda/connections/create.htm` | 连接字段、password | 新连接 |
-| POST | `/api/mda/connections/update.htm` | id、需更新字段 | 更新结果 |
-| POST | `/api/mda/connections/delete.htm` | id | 逻辑删除结果 |
-| POST | `/api/mda/connections/test.htm` | id 或未保存连接字段 | 测试结果与数据库产品信息 |
+| GET | `/api/mda/connections` | 无 | 全部有效连接 |
+| GET | `/api/mda/connections/{id}` | 路径 id | 脱敏连接详情 |
+| POST | `/api/mda/connections` | 连接字段、password | 新连接 |
+| POST | `/api/mda/connections/{id}` | 需更新字段 | 更新结果 |
+| POST | `/api/mda/connections/{id}/delete` | 路径 id | 逻辑删除结果 |
+| POST | `/api/mda/connections/test` | connectionId 或未保存连接字段 | 测试结果与数据库产品信息 |
 | POST | `/api/mda/metadata/tree.htm` | connectionId | catalogs/schemas/tables/columns 树 |
 | POST | `/api/mda/sql/execute.htm` | connectionId/sql/autoCommit/maxRows/queryTimeoutSeconds | 多结果集、更新计数、警告与耗时 |
 
@@ -77,7 +80,7 @@ SQL 返回中的结果集包含 `columns`、`rows`、`rowCount`、`truncated`；
 
 ## 6. 分阶段迁移与回退
 
-1. MDA 在独立端口和独立配置库运行，不改动 `xsd-fts`。
+1. MDA 使用独立配置库，可在统一 8080 宿主或独立 8082 端口运行，不改动 `xsd-fts`。
 2. 先用 H2 验证连接保存、树浏览、SELECT、DDL/DML、更新计数和异常返回。
 3. 投放四种厂商驱动后，逐库验证 URL、catalog/schema 可见性、存储过程与多结果集。
 4. 业务入口切换到 MDA 后，再由人工决定旧 `h2` 包的下线时间；本次不删除旧工程文件。

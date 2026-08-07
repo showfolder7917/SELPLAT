@@ -1,5 +1,9 @@
 # MDA 后端设计与数据库 API 调用文档
 
+> 2026-08-07 当前入口说明：控制库已改为 `apps/mda/db/mda.mv.db`，默认工作库为
+> `apps/mda/db/mda-workspace.mv.db`。连接管理接口已升级为 `/api/mda/connections` REST 路径；
+> 本文后续旧 `.htm` 连接管理示例仅作历史迁移参考，元数据与 SQL 接口仍保持 `.htm` 路径。
+
 ## 1. 文档范围
 
 本文以 `apps/mda/backend` 当前源码、配置、静态页面和集成测试为准，说明：
@@ -10,10 +14,11 @@
 - 每个 API 的请求、返回、数据库访问和注意事项；
 - 当前实现已经存在的安全边界与使用限制。
 
-服务默认端口为 `8082`，页面入口为：
+页面默认通过统一宿主 8080 访问，也保留独立 8082 启动入口：
 
 ```text
-http://localhost:8082/mda/mda.html
+http://127.0.0.1:8080/mda/mda.html
+http://127.0.0.1:8082/mda/mda.html
 ```
 
 API 统一位于 `/api/mda/**`。

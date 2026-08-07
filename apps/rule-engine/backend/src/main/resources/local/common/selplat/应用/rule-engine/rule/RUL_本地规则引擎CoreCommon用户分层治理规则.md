@@ -26,12 +26,12 @@ rule_engine_node_layer_root = src/main/node/com/sp/selplat/local/code/<layer>/
 <!-- 规则、协议、注册信息和规则资产继续位于标准 resources source set，并以首级目录表达所属层；业务含义是规则可以被 Gradle 正常打包且不会与 Java 源码混放。 -->
 rule_engine_resource_layer_root = src/main/resources/local/<layer>/
 
-<!-- 固定层名为 core 与 common；用户层直接使用经过路径安全校验的稳定用户标识，例如 XUNAN 或 TongXiaoFeng。 -->
+<!-- 固定层名为 core 与 common；用户层直接使用从 AGENTS.md 读取并经过路径安全校验的稳定用户标识。 -->
 rule_engine_fixed_layers = core,common
 rule_engine_user_layer_pattern = <stable-user-id>
-rule_engine_user_layer_examples = XUNAN,TongXiaoFeng
+rule_engine_user_layer_example = <stable-user-id>
 
-<!-- Java、Python、Node 与 resources 必须使用相同层标识；业务含义是 XUNAN 的各语言代码只与 XUNAN 的规则组成同一用户覆盖层。 -->
+<!-- Java、Python、Node 与 resources 必须使用相同层标识；业务含义是当前用户各语言代码只与同一当前用户规则组成覆盖层。 -->
 rule_engine_code_resource_layer_name_must_match = true
 
 ## 来源归属与迁移

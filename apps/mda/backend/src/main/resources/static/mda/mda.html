@@ -1,115 +1,67 @@
 <!doctype html>
-<html lang="zh-CN">
+<!-- MDA 应用入口只声明三个挂载点；全部可交互控件由 SEL 公共组件创建。 -->
+<html lang="zh-CN" data-sel-theme="glass-admin" data-sel-mode="dark" data-sel-accent="base" data-sel-density="comfortable">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MDA · 多数据库工作台</title>
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/sel/core/selBase.css">
-  <link rel="stylesheet" href="/sel/components/panel/selPanel.css">
-  <link rel="stylesheet" href="/mda/mda.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>MDA 数据库工作台</title>
+    <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css">
+
+    <!-- SEL 主题契约与公共组件。 -->
+    <link rel="stylesheet" href="/sel/core/selBaseReset.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/core/selBaseAccessibility.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/core/selBaseToast.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeContract.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeStates.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeTypography.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/panel/selPanel.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/search/selSearch.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/tree/selTree.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/dropdown/selDropdownMenu.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/grid/selGrid.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/page-background/selPageBackground.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/window/selWindow.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/floating-panel/selFloatingPanel.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/components/personalization/selPersonalization.css?v=20260807-mda-1">
+
+    <!-- 三套主题包并列加载；主题切换只替换令牌和主题所属素材。 -->
+    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/theme.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/modes/dark.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/modes/light.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/theme.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/modes/dark.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/modes/light.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/packs/glass-admin/theme.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/packs/glass-admin/modes/dark.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="/sel/theme/packs/glass-admin/modes/light.css?v=20260807-mda-1">
+    <link rel="stylesheet" href="./mda.css?v=20260807-mda-1">
 </head>
 <body>
-  <div class="mda-app">
-    <header class="mda-header">
-      <div class="mda-brand">
-        <div class="mda-brand__mark" aria-hidden="true">M</div>
-        <div><strong>MDA</strong><span>Multi-Database Access</span></div>
-      </div>
-      <div class="mda-header__context">
-        <span class="mda-live-dot" aria-hidden="true"></span>
-        <span id="activeConnectionLabel">未选择连接</span>
-      </div>
-    </header>
+    <div data-sel-page-background-host></div>
+    <div data-sel-personalization-host></div>
+    <main class="mda-page-stage" data-mda-app aria-label="MDA 数据库工作台"></main>
 
-    <main class="mda-workspace">
-      <aside class="mda-connections" data-sel-panel>
-        <div class="sel-panel__head">
-          <h1 class="sel-panel__title">连接</h1>
-          <button class="mda-icon-button" id="addConnectionButton" title="新建连接" aria-label="新建连接">＋</button>
-        </div>
-        <div class="mda-connection-tools">
-          <label class="sel-visually-hidden" for="connectionFilter">筛选连接</label>
-          <input id="connectionFilter" type="search" placeholder="筛选连接…" autocomplete="off">
-        </div>
-        <div class="mda-connection-list" id="connectionList" role="listbox" aria-label="已保存连接"></div>
-        <div class="mda-connection-actions">
-          <button class="sel-button" id="editConnectionButton" disabled>编辑</button>
-          <button class="sel-button sel-button--danger" id="deleteConnectionButton" disabled>删除</button>
-        </div>
-      </aside>
-
-      <section class="mda-editor" data-sel-panel>
-        <div class="mda-query-toolbar">
-          <div class="mda-query-name"><span>SQL</span><strong>查询窗口</strong></div>
-          <div class="mda-query-options">
-            <label>最大行数 <input id="maxRowsInput" type="number" value="1000" min="1" max="10000"></label>
-            <label>超时(秒) <input id="timeoutInput" type="number" value="30" min="0" max="3600"></label>
-            <label class="mda-check"><input id="autoCommitInput" type="checkbox" checked> 自动提交</label>
-            <button class="sel-button sel-button--primary" id="executeButton" disabled><span aria-hidden="true">▶</span> 执行</button>
-          </div>
-        </div>
-        <div class="mda-sql-wrap">
-          <div class="mda-line-number" aria-hidden="true">1</div>
-          <label class="sel-visually-hidden" for="sqlEditor">SQL 编辑器</label>
-          <textarea id="sqlEditor" spellcheck="false">SELECT 1 AS id, 'MDA ready' AS message;</textarea>
-        </div>
-        <div class="mda-result-head">
-          <strong>执行结果</strong>
-          <span id="resultSummary">等待执行</span>
-        </div>
-        <div class="mda-results" id="resultArea">
-          <div class="mda-empty-state"><span>⌁</span><strong>结果会显示在这里</strong><small>选择左侧连接，然后执行 SQL</small></div>
-        </div>
-      </section>
-
-      <aside class="mda-schema" data-sel-panel>
-        <div class="sel-panel__head">
-          <h2 class="sel-panel__title">数据库结构</h2>
-          <button class="mda-icon-button" id="refreshTreeButton" title="刷新结构" aria-label="刷新数据库结构" disabled>↻</button>
-        </div>
-        <div class="mda-schema-meta" id="schemaMeta">选择连接后读取</div>
-        <div class="mda-tree" id="metadataTree"></div>
-      </aside>
-    </main>
-
-    <footer class="mda-status" aria-live="polite">
-      <span id="statusMessage">MDA 已就绪</span>
-      <span id="statusDetail">H2 · MySQL · SQL Server · Oracle · PostgreSQL</span>
-    </footer>
-  </div>
-
-  <dialog class="mda-dialog" id="connectionDialog" aria-labelledby="connectionDialogTitle">
-    <form method="dialog" id="connectionForm">
-      <div class="mda-dialog__head">
-        <div><span>CONNECTION PROFILE</span><h2 id="connectionDialogTitle">新建连接</h2></div>
-        <button class="mda-dialog__close" value="cancel" aria-label="关闭">×</button>
-      </div>
-      <div class="mda-dialog__grid">
-        <input type="hidden" name="id">
-        <div class="sel-field mda-span-2"><label for="connectionName">连接名称</label><input id="connectionName" name="connectionName" required placeholder="例如：订单库 / 本地开发"></div>
-        <div class="sel-field"><label for="databaseType">数据库类型</label><select id="databaseType" name="databaseType"><option>H2</option><option>MYSQL</option><option>SQLSERVER</option><option>ORACLE</option><option>POSTGRESQL</option></select></div>
-        <div class="sel-field"><label for="schemaName">默认 Schema</label><input id="schemaName" name="schemaName" placeholder="可选"></div>
-        <div class="sel-field"><label for="host">主机</label><input id="host" name="host" placeholder="127.0.0.1"></div>
-        <div class="sel-field"><label for="port">端口</label><input id="port" name="port" type="number" placeholder="使用类型默认端口"></div>
-        <div class="sel-field mda-span-2"><label for="databaseName">数据库名 / H2 路径 / Oracle Service</label><input id="databaseName" name="databaseName" required placeholder="例如：appdb"></div>
-        <div class="sel-field"><label for="username">用户名</label><input id="username" name="username" autocomplete="username"></div>
-        <div class="sel-field"><label for="password">密码</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="编辑时留空即保留"></div>
-        <div class="sel-field mda-span-2"><label for="customJdbcUrl">完整 JDBC URL（可选，优先）</label><input id="customJdbcUrl" name="customJdbcUrl" placeholder="jdbc:…"></div>
-        <div class="sel-field mda-span-2"><label for="jdbcParameters">附加参数</label><input id="jdbcParameters" name="jdbcParameters" placeholder="useSSL=false&amp;serverTimezone=UTC"></div>
-      </div>
-      <div class="mda-dialog__message" id="dialogMessage" aria-live="polite"></div>
-      <div class="mda-dialog__actions">
-        <button class="sel-button" type="button" id="testConnectionButton">测试连接</button>
-        <span></span>
-        <button class="sel-button" value="cancel">取消</button>
-        <button class="sel-button sel-button--primary" type="submit">保存连接</button>
-      </div>
-    </form>
-  </dialog>
-
-  <script src="/sel/core/selAjax.js"></script>
-  <script src="/sel/components/panel/selPanel.js"></script>
-  <script src="/mda/mda.js"></script>
+    <!-- 公共能力先注册，MDA 应用装配层最后运行。 -->
+    <script src="/sel/core/selBaseRuntime.js?v=20260807-mda-1"></script>
+    <script src="/sel/core/selAjax.js?v=20260807-mda-1"></script>
+    <script src="/sel/theme/runtime/selThemeRegistry.js?v=20260807-mda-1"></script>
+    <script src="/sel/theme/packs/crystal-tech/manifest.js?v=20260807-mda-1"></script>
+    <script src="/sel/theme/packs/candy-adventure/manifest.js?v=20260807-mda-1"></script>
+    <script src="/sel/theme/packs/glass-admin/manifest.js?v=20260807-mda-1"></script>
+    <script src="/sel/theme/runtime/selThemeManager.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/panel/selPanel.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/search/selSearch.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/tree/selTree.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/dropdown/selDropdownMenu.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/grid/selGrid.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/page-background/selPageBackground.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/floating-panel/selFloatingPanel.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/personalization/selPersonalizationRegistry.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/personalization/selPersonalization.js?v=20260807-mda-1"></script>
+    <script src="/sel/components/window/selWindow.js?v=20260807-mda-1"></script>
+    <script src="./mda.js?v=20260807-mda-1"></script>
 </body>
 </html>

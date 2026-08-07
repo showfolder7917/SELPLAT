@@ -1,4 +1,4 @@
-# XUNAN Excel 修订履历填写规则
+# Excel 修订履历填写规则
 
 <!-- 当前规则只约束工作簿修订语义，不提供Java自动化入口。 -->
 java_ability_refs = none
@@ -7,16 +7,16 @@ python_ability_refs = none
 <!-- 当前规则不涉及Node处理。 -->
 node_ability_refs = none
 <!-- 本规则从用户发现全部Sheet误填履历和履历字体不可见的问题开始记录版本。 -->
-rule_version = 1.1.0
-<!-- 本规则只属于已验证用户XUNAN。 -->
-rule_owner = XUNAN
-<!-- active表示该规则已由XUNAN叶子索引登记。 -->
+rule_version = 1.2.0
+<!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明。 -->
+rule_owner_source = AGENTS.md.current_stable_user_id
+<!-- active 表示该规则已由当前用户叶子索引登记。 -->
 rule_status = active
 <!-- 升级记录说明原问题、规则变化和回归目标。 -->
-upgrade_record = 2026-08-05:禁止把局部Excel修正的履历写入全部Sheet并要求更新日和更新者实际可见;2026-08-05:版号更新日更新人作为本次修改履历统一使用红字并禁止手工拼接OOXML单元格
+upgrade_record = 2026-08-05:禁止把局部Excel修正的履历写入全部Sheet并要求更新日和更新者实际可见;2026-08-05:版号更新日更新人作为本次修改履历统一使用红字并禁止手工拼接OOXML单元格;2026-08-07:规则所有者改为从AGENTS动态解析当前稳定用户
 
 <!-- 问题：局部修正工作簿时把版数、更新日和更新者写入所有Sheet，会伪造未修改Sheet的修订记录；沿用空白占位格的白色字体还会造成履历肉眼不可见。 -->
-<!-- 场景：XUNAN要求AI修正既有Excel，并使用删除线、红字和Sheet头部履历表达修订。 -->
+<!-- 场景：当前稳定用户要求 AI 修正既有 Excel，并使用删除线、红字和 Sheet 头部履历表达修订。 -->
 <!-- 业务含义：履历必须准确指向真实修改的Sheet，且审查者打开Excel即可看到修订人和日期。 -->
 
 <!-- 只有本次实际发生内容、公式或修订标识变化的Sheet才允许填写本次版数、更新日和更新者。 -->

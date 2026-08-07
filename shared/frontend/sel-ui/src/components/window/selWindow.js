@@ -218,6 +218,11 @@
         selWindowInput.id = selWindowField.inputId;
         // name 用于提交时组装标准业务结果。
         selWindowInput.name = selWindowField.name;
+        // 初始值由窗口标准字段配置提供，新增与编辑都不要求应用访问内部 DOM。
+        if (selWindowField.value !== undefined && selWindowField.value !== null) {
+            selWindowInput.value = String(selWindowField.value);
+            selWindowInput.defaultValue = String(selWindowField.value);
+        }
         // 占位文案直接来自应用字段配置。
         selWindowInput.placeholder = String(selWindowField.placeholder || "");
         // 必填约束交给浏览器与本组件共同校验。
@@ -352,7 +357,8 @@
         selWindowCheckboxLabel.append(selWindowCheckbox, document.createTextNode(String(selWindowOptions.checkboxLabel || "")), selWindowCreateIcon("ri-information-line"));
         // 信息图标获得独立样式类但仍作为装饰节点。
         selWindowCheckboxLabel.lastElementChild.className = "ri-information-line selwindow-checkbox-info";
-        selWindowFields.appendChild(selWindowCheckboxLabel);
+        // 没有复选业务配置时不生成空白占位，基础窗口可服务普通 CRUD 表单。
+        if (selWindowOptions.checkboxLabel) selWindowFields.appendChild(selWindowCheckboxLabel);
 
         // 固定高度反馈区在提交或校验失败时显示结果。
         const selWindowFeedback = selWindowCreateElement("div", "selwindow-feedback");
@@ -710,6 +716,11 @@
         function selWindowReset() {
             // 原生 form.reset 同步恢复所有真实输入的 defaultValue。
             selWindowForm.reset();
+            // form.reset 不派发 input 事件，显式刷新字符计数，避免编辑记录的旧计数残留到新增窗口。
+            selWindowShell.querySelectorAll("input[maxlength], textarea[maxlength]").forEach((selWindowInput) => {
+                const selWindowSuffix = selWindowInput.closest(".selwindow-control-shell")?.querySelector(".selwindow-control-suffix");
+                if (selWindowSuffix) selWindowSuffix.textContent = `${selWindowInput.value.length}/${selWindowInput.maxLength}`;
+            });
             // 重置日期后刷新可见触发器，避免仍显示旧日期。
             selWindowShell.querySelectorAll("input.seldatepicker-native").forEach((selWindowDateInput) => window.selDatePicker?.getForInput(selWindowDateInput)?.refresh());
             // 重置反馈使窗口回到首次打开状态。
@@ -718,6 +729,49 @@
             selWindowFeedback.classList.remove("selwindow-feedback-error");
             // 原生 select 重置后同步自定义下拉可见值。
             selWindowShell.querySelectorAll("select.seldropdown-native").forEach((selWindowSelect) => window.selDropdownMenu?.refresh(selWindowSelect));
+        }
+
+        /**
+         * 通过字段名写入窗口表单值，供编辑业务在不访问组件内部 DOM 的前提下回填数据。
+         * @param {object} selWindowValues - name 到业务值的受控映射。
+         * @returns {boolean} 值已同步时返回 true。
+         */
+        function selWindowSetValues(selWindowValues = {}) {
+            Object.entries(selWindowValues).forEach(([selWindowName, selWindowValue]) => {
+                const selWindowControl = selWindowForm.elements.namedItem(selWindowName);
+                if (!(selWindowControl instanceof Element)) return;
+                if (selWindowControl instanceof HTMLInputElement && selWindowControl.type === "checkbox") {
+                    selWindowControl.checked = Boolean(selWindowValue);
+                } else {
+                    selWindowControl.value = selWindowValue === undefined || selWindowValue === null ? "" : String(selWindowValue);
+                }
+                selWindowControl.dispatchEvent(new Event("input", { bubbles: true }));
+                if (selWindowControl instanceof HTMLSelectElement) window.selDropdownMenu?.refresh(selWindowControl);
+            });
+            return true;
+        }
+
+        /**
+         * 更新窗口反馈区，异步业务保存结果仍使用公共窗口的统一状态视觉。
+         * @param {string} selWindowMessage - 当前业务反馈。
+         * @param {boolean} selWindowIsError - 是否使用错误语义色。
+         * @returns {boolean} 反馈已更新时返回 true。
+         */
+        function selWindowSetFeedback(selWindowMessage = "", selWindowIsError = false) {
+            selWindowFeedback.textContent = String(selWindowMessage || "");
+            selWindowFeedback.classList.toggle("selwindow-feedback-error", Boolean(selWindowIsError));
+            return true;
+        }
+
+        /**
+         * 控制提交按钮忙碌状态，避免异步保存期间重复提交。
+         * @param {boolean} selWindowLoading - true 时禁用提交按钮。
+         * @returns {boolean} 状态已更新时返回 true。
+         */
+        function selWindowSetLoading(selWindowLoading) {
+            selWindowSubmit.disabled = Boolean(selWindowLoading);
+            selWindowForm.setAttribute("aria-busy", String(Boolean(selWindowLoading)));
+            return true;
         }
 
         /**
@@ -795,7 +849,10 @@
             selWindowApplyGeometry(selWindowState.geometry || selWindowCreateDefaultGeometry());
         });
         // Escape 提供模态窗口的标准键盘退出路径。
-        selWindowShell.addEventListener("keydown", (selWindowEvent) => { if (selWindowEvent.key === "Escape") selWindowCloseWindow(); });
+        selWindowShell.addEventListener("keydown", (selWindowEvent) => {
+            // 内部下拉、日期等控件已消费 Escape 时只关闭其自身浮层，不连带关闭业务窗口。
+            if (selWindowEvent.key === "Escape" && !selWindowEvent.defaultPrevented) selWindowCloseWindow();
+        });
 
         // 提交时执行真实必填校验并向应用派发标准数据。
         selWindowForm.addEventListener("submit", (selWindowEvent) => {
@@ -817,12 +874,14 @@
             // FormData 把标准 name/value 转换为应用可消费的对象。
             const selWindowResult = Object.fromEntries(new FormData(selWindowForm).entries());
             // 未勾选复选框时 FormData 不含键，这里补齐明确布尔值。
-            selWindowResult.createTaskImmediately = selWindowCheckbox.checked;
+            if (selWindowOptions.checkboxLabel) selWindowResult.createTaskImmediately = selWindowCheckbox.checked;
             // 保存只读提交快照供控制器和测试读取。
             selWindowState.submitted = Object.freeze({ ...selWindowResult });
             // 成功反馈保持窗口可见，让用户确认主路径已完成。
-            selWindowFeedback.textContent = String(selWindowOptions.successMessage || "项目信息已创建");
-            selWindowFeedback.classList.remove("selwindow-feedback-error");
+            if (selWindowOptions.autoSuccess !== false) {
+                selWindowFeedback.textContent = String(selWindowOptions.successMessage || "项目信息已创建");
+                selWindowFeedback.classList.remove("selwindow-feedback-error");
+            }
             // 受控事件只携带当前窗口键和标准字段值。
             selWindowShell.dispatchEvent(new CustomEvent("selWindow:submit", { bubbles: true, detail: { id: selWindowId, values: selWindowState.submitted } }));
         });
@@ -898,6 +957,13 @@
             close: selWindowCloseWindow,
             // reset 明确清空当前表单值。
             reset: selWindowReset,
+            // setValues 供编辑流程通过公开 API 回填业务记录。
+            setValues: selWindowSetValues,
+            // getValues 返回当前表单实时值，不暴露组件内部节点。
+            getValues: () => Object.freeze(Object.fromEntries(new FormData(selWindowForm).entries())),
+            // setFeedback 与 setLoading 供异步保存复用公共反馈和忙碌状态。
+            setFeedback: selWindowSetFeedback,
+            setLoading: selWindowSetLoading,
             // maximize 供应用或自动化显式进入最大化状态。
             maximize: () => selWindowSetMaximized(true),
             // restore 供应用或自动化显式恢复最大化前矩形。

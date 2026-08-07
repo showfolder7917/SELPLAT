@@ -93,7 +93,7 @@ def is_machine_readable_line(line: str) -> bool:
         right = right.strip()
         if not left or not right:
             return False
-        # 规则值允许使用中文路径和业务枚举；只限制键名，避免把合法的 XUNAN 规则索引误删。
+        # 规则值允许使用中文路径和业务枚举；只限制键名，避免把合法的当前用户规则索引误删。
         return bool(_MACHINE_KEY_PATTERN.fullmatch(left))
     # 没有赋值符的纯中文说明仍属于人类文本，不进入机器清洗结果。
     if _CJK_PATTERN.search(line):

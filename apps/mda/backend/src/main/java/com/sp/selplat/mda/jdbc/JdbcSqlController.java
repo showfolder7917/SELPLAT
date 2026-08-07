@@ -2,10 +2,8 @@ package com.sp.selplat.mda.jdbc;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.JsonUtils;
-import com.sp.selplat.common.web.controller.BaseExtendsController;
 import com.sp.selplat.common.web.controller.ModuleDescription;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @ModuleDescription(code = "mda-sql", name = "MDA SQL", description = "执行目标数据库 SQL")
 @RequestMapping("/api/mda/sql")
-public class JdbcSqlController extends BaseExtendsController {
+public class JdbcSqlController {
 
     // SQL 控制器只持有自己的执行 Service，不继承公共 CRUD 路由。
     private final JdbcSqlService service;
@@ -40,7 +38,7 @@ public class JdbcSqlController extends BaseExtendsController {
      *     {@code "warnings":[],"elapsedMs":12,"autoCommit":true,"maxRows":1000},"msg":"SQL 执行完成。"}}
      */
     @RequestMapping(value = "execute.htm", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-    public String execute(@RequestBody CommonParam executeIn) {
+    public String execute(CommonParam executeIn) {
         // Service 已完成 SQL 执行和结果构建，控制器只序列化固定结果。
         return JsonUtils.toJsonIgnoreNull(service.execute(executeIn));
     }

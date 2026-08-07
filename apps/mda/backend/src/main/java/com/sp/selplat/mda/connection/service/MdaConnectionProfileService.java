@@ -1,15 +1,24 @@
 package com.sp.selplat.mda.connection.service;
 
-import com.sp.selplat.common.service.BaseCrudService;
+import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.mda.jdbc.MdaConnectionDefinition;
 
 /**
- * 连接配置服务继承公共 CRUD 契约，只额外声明连接测试和运行期 JDBC 配置加载能力。
- * 公共增删改查方法及注释统一复用 {@link BaseCrudService}，本接口不重复声明。
+ * 声明 MDA 连接配置管理、连接测试和运行期 JDBC 配置加载能力。
  */
-public interface MdaConnectionProfileService extends BaseCrudService {
+public interface MdaConnectionProfileService {
+
+    CommonPageResult getStore();
+
+    CommonResult getById(long id);
+
+    CommonResult insert(CommonParam saveIn);
+
+    CommonResult update(long id, CommonParam saveIn);
+
+    CommonResult delete(long id);
 
     /**
      * 使用已保存配置或页面临时字段测试目标数据库连接。

@@ -2,6 +2,9 @@ plugins {
     id 'application'
 }
 
+// MDA backend 使用模块专属坐标，避免统一宿主聚合多个 backend 项目时发生组件替换。
+group = 'com.sp.selplat.mda'
+
 dependencies {
     implementation project(':shared:backend:common-core')
     implementation project(':shared:backend:common-web')

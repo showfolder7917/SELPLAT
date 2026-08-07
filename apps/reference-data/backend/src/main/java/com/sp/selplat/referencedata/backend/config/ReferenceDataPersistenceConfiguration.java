@@ -24,10 +24,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 @PropertySource("classpath:reference-data-module.properties")
 public class ReferenceDataPersistenceConfiguration {
 
-    // 数据库脚本按固定版本顺序执行；脚本使用 IF NOT EXISTS 和条件种子保证服务重启安全。
-    private static final String[] MIGRATION_RESOURCES = {
-        "db/reference-data/migration/V001__create_reference_data_tables.sql",
-        "db/reference-data/migration/V002__seed_reference_data_catalog.sql"
+    // 数据库脚本按类型表、树节点表和类型初始数据的固定职责顺序执行，避免依赖文件系统遍历顺序。
+    private static final String[] DATABASE_RESOURCES = {
+        "db/reference-data/sql/schema-ReferenceDataType.sql",
+        "db/reference-data/sql/schema-ReferenceDataTreeNode.sql",
+        "db/reference-data/sql/data-ReferenceDataType.sql"
     };
 
     /**
@@ -55,7 +56,7 @@ public class ReferenceDataPersistenceConfiguration {
             dataSource.setUrl(databaseUrl);
             dataSource.setUsername(username);
             dataSource.setPassword(password);
-            // 版本脚本依次执行 → 创建缺失表并仅补充缺失的内置目录记录。
+            // 固定 SQL 清单依次执行 → 创建缺失表、清理旧结构并仅补充缺失的内置目录记录。
             initializeDatabase(dataSource);
             // 同一独立数据源 → 查询模板和显式事务模板。
             JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
@@ -128,15 +129,15 @@ public class ReferenceDataPersistenceConfiguration {
      * 按版本顺序执行 reference-data 建表与种子脚本。
      *
      * @param dataSource 当前独立文件库或隔离测试库
-     * 执行结果示例：数据库包含 {@code ReferenceDataType}、{@code ReferenceDataItem} 和内置
+     * 执行结果示例：数据库包含 {@code ReferenceDataType}、{@code ReferenceDataTreeNode} 和内置
      *     {@code reference-data/resource-kind} 类型。
      */
     private void initializeDatabase(DataSource dataSource) {
-        // 固定资源清单 → 可重复执行的数据库初始化器。
+        // 固定结构和数据资源清单 → 可重复执行的数据库初始化器。
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-        for (String migrationResource : MIGRATION_RESOURCES) {
-            // 每个版本脚本按数组顺序加入，禁止依赖文件系统遍历顺序。
-            populator.addScript(new ClassPathResource(migrationResource));
+        for (String databaseResource : DATABASE_RESOURCES) {
+            // 每个职责脚本按数组顺序加入，禁止把多张表重新合并到同一个 SQL 文件。
+            populator.addScript(new ClassPathResource(databaseResource));
         }
         // 当前数据源执行完整脚本；任一 SQL 失败都会阻止模块以半初始化状态启动。
         populator.execute(dataSource);

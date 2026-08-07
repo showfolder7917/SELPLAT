@@ -34,7 +34,7 @@ public interface ReferenceDataTypeAdminService {
      * 新增一条引用数据类型。
      *
      * @param saveIn 前端表单字段，例如
-     *     {@code {"projectCode":"cms","resourceCode":"article-category","nameZh":"文章分类","dataShape":"BOTH"}}
+     *     {@code {"projectCode":"cms","resourceCode":"article-category","nameZh":"文章分类","status":1}}
      * @return 含数据库生成主键的固定结果，例如
      *     {@code {"success":true,"data":{"id":2,"projectCode":"cms"},"affectedRows":1,"msg":"类型新增完成。"}}
      */

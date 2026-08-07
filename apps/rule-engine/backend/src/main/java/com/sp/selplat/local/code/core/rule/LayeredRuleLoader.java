@@ -3,6 +3,8 @@ package com.sp.selplat.local.code.core.rule;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -10,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -26,12 +29,18 @@ public final class LayeredRuleLoader {
     private static final String COMMON_INDEX_KEY = "COMMON_RULE_INDEX";
     // common 汇总索引通过该稳定键进入跨工程共享规则基线。
     private static final String CROSS_PROJECT_INDEX_KEY = "CROSS_PROJECT_COMMON_RULE_INDEX";
-    // 当前用户通过带用户后缀的稳定键进入自己的递归索引树。
-    private static final String USER_INDEX_KEY_PREFIX = "USER_RULE_INDEX@";
+    // 根索引只保存这一份用户路径模式，具体用户值必须来自工程根 AGENTS.md。
+    private static final String USER_INDEX_PATTERN_KEY = "USER_RULE_INDEX_PATTERN";
+    // 用户索引模式中的占位符只能由经过安全校验的当前稳定用户替换。
+    private static final String USER_ID_PLACEHOLDER = "<stable-user-id>";
     // 递归最多允许 16 层，防止异常索引链耗尽调用栈或隐藏过深依赖。
     private static final int MAX_INDEX_DEPTH = 16;
     // 用户标识只允许稳定路径安全字符，阻止身份值逃逸到其他资源目录。
     private static final Pattern USER_ID_PATTERN = Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,63}");
+    // 工程根 AGENTS.md 用这一行声明唯一当前稳定用户，不从目录或历史索引推断。
+    private static final Pattern ACTIVE_USER_DECLARATION = Pattern.compile(
+        "(?m)^- 当前稳定用户 ID：`([^`]+)`\\s*$"
+    );
     // 作用域允许中英文、数字、下划线和连字符，但禁止斜杠与路径跳转。
     private static final Pattern SCOPE_PATTERN = Pattern.compile("[\\p{L}\\p{N}][\\p{L}\\p{N}_-]{0,63}");
     // 规则逻辑 ID 使用稳定大写命名，索引汇总键也复用同一安全字符集合。
@@ -42,10 +51,54 @@ public final class LayeredRuleLoader {
     }
 
     /**
+     * 从工程根 {@code AGENTS.md} 读取唯一当前稳定用户。
+     *
+     * @return 当前稳定用户，例如根文件声明值 {@code CURRENT_USER}
+     * @throws IOException 工程根、身份声明缺失，声明重复或用户 ID 不安全
+     */
+    public static String currentStableUserId() throws IOException {
+        // 从实际工作目录逐级向上寻找工程根，禁止绑定机器绝对路径。
+        Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        while (current != null && !Files.isRegularFile(current.resolve("AGENTS.md"))) {
+            current = current.getParent();
+        }
+        // 找不到工程根事实源时闭锁失败，禁止从 local 子目录反推用户。
+        if (current == null) {
+            throw new IOException("Project AGENTS.md was not found from current working directory.");
+        }
+        // 完整读取根文件并只接受唯一身份声明。
+        String agentsText = Files.readString(current.resolve("AGENTS.md"), StandardCharsets.UTF_8);
+        Matcher matcher = ACTIVE_USER_DECLARATION.matcher(agentsText);
+        if (!matcher.find()) {
+            throw new IOException("Current stable user id is missing in AGENTS.md.");
+        }
+        String activeUser = matcher.group(1).trim();
+        if (matcher.find()) {
+            throw new IOException("Current stable user id is declared more than once in AGENTS.md.");
+        }
+        // 身份值进入索引路径前必须通过统一路径安全校验。
+        validateActiveUser(activeUser);
+        return activeUser;
+    }
+
+    /**
+     * 使用 {@code AGENTS.md} 当前稳定用户和可选 common 作用域加载规则。
+     *
+     * @param logicalId 稳定规则 ID，例如 {@code CODE_JAVA_CODING_RULES}
+     * @param activeScope 当前 common 作用域，例如 {@code selplat}；无作用域时传 {@code null}
+     * @return 实际命中的用户、common 或 core 规则
+     * @throws IOException 身份、索引或规则结构无效
+     */
+    public static LoadedRule loadForCurrentUser(String logicalId, String activeScope)
+            throws IOException {
+        return load(logicalId, activeScope, currentStableUserId());
+    }
+
+    /**
      * 按当前用户 → 跨工程通用 → core 加载规则，兼容迁移前没有作用域参数的调用方。
      *
      * @param logicalId 稳定规则 ID，例如 {@code CODE_JAVA_CODING_RULES}
-     * @param activeUser 已验证用户，例如 {@code XUNAN}；无用户时传 {@code null}
+     * @param activeUser 与 AGENTS.md 一致的当前稳定用户；无用户层时传 {@code null}
      * @return 实际命中结果，例如
      *     {@code {logicalId=CODE_JAVA_CODING_RULES,layer=core,resourcePath=local/core/rule/CODE_JAVA_CODING_RULES.md}}
      * @throws IOException 索引、子索引或目标规则缺失，或索引结构违反安全约束
@@ -61,7 +114,7 @@ public final class LayeredRuleLoader {
      * @param logicalId 稳定规则 ID，例如 {@code SELPLAT_PROJECT_BUILD_RULES}
      * @param activeScope common 汇总索引登记的一级作用域，例如 {@code selplat} 或
      *     {@code 中文教学}；无工程作用域时传 {@code null}
-     * @param activeUser 已验证用户，例如 {@code TongXiaoFeng}；无用户时传 {@code null}
+     * @param activeUser 与 AGENTS.md 一致的当前稳定用户；无用户层时传 {@code null}
      * @return 实际命中结果，例如
      *     {@code {logicalId=SELPLAT_PROJECT_BUILD_RULES,layer=common,resourcePath=local/common/selplat/通用/rule/RUL_SELPLAT工程构建规则.md}}
      * @throws IOException 循环引用、重复逻辑 ID、路径越界、缺失索引、深度超限或规则缺失
@@ -75,31 +128,23 @@ public final class LayeredRuleLoader {
         // 用户和作用域都必须先通过路径安全校验，再参与任何索引选择。
         validateActiveUser(activeUser);
         validateActiveScope(activeScope);
+        // 启用用户层时，调用值必须与 AGENTS.md 唯一事实源完全一致。
+        if (activeUser != null && !activeUser.isBlank()
+                && !currentStableUserId().equals(activeUser)) {
+            throw new IOException("Active user does not match AGENTS.md: " + activeUser);
+        }
 
         // 完整读取根索引 → 同时获得 core 直登规则、用户索引入口和 common 汇总入口。
         Map<String, String> rootEntries = parseIndex(ROOT_INDEX, readResource(ROOT_INDEX));
         // 用户规则使用独立分级索引，并且只允许递归当前一个已验证用户。
         if (activeUser != null && !activeUser.isBlank()) {
-            // 根索引必须显式登记当前用户索引，禁止根据用户 ID 拼接并扫描目录。
+            // 根索引只登记用户索引模式，当前用户值来自 AGENTS.md 且不会触发目录扫描。
             String userIndexPath = optionalUserIndexReference(rootEntries, activeUser);
-            // 用户层优先级最高；当前用户有索引时只递归这一棵树。
-            LoadedRule userRule = userIndexPath == null
-                ? null
-                : loadFromIndexTree(userIndexPath, logicalId, activeUser);
+            // 用户层优先级最高；当前用户只递归这一棵已解析索引树。
+            LoadedRule userRule = loadFromIndexTree(userIndexPath, logicalId, activeUser);
             // 当前用户树命中后无需继续读取任何 common 或 core 规则正文。
             if (userRule != null) {
                 return userRule;
-            }
-            // 兼容尚未迁移的其他用户直接 `<LOGICAL_ID>@<USER>` 根登记。
-            LoadedRule legacyUserRule = loadRegistered(
-                rootEntries,
-                logicalId + "@" + activeUser,
-                logicalId,
-                activeUser
-            );
-            // 只有真实存在的历史登记可以返回，不扫描用户目录猜测规则。
-            if (legacyUserRule != null) {
-                return legacyUserRule;
             }
         }
 
@@ -185,7 +230,7 @@ public final class LayeredRuleLoader {
     /**
      * 验证一个已登记用户的完整递归索引树，不把用户规则混入 core/common 统计。
      *
-     * @param activeUser 已验证用户，例如 {@code XUNAN}
+     * @param activeUser 与 AGENTS.md 一致的当前稳定用户
      * @return 当前用户索引和逻辑 ID 数，例如 {@code {indexCount=7,ruleCount=4}}
      * @throws IOException 用户入口缺失、索引循环、重复、越界或目标路径非法
      */
@@ -196,13 +241,13 @@ public final class LayeredRuleLoader {
         if (activeUser == null || activeUser.isBlank()) {
             throw new IllegalArgumentException("Active user is required for user index validation.");
         }
+        // 只允许验证 AGENTS.md 当前用户，禁止把测试或调用参数变成跨用户扫描入口。
+        if (!currentStableUserId().equals(activeUser)) {
+            throw new IOException("Active user does not match AGENTS.md: " + activeUser);
+        }
         // 用户入口只能从正式根索引取得，禁止根据目录存在性猜测。
         Map<String, String> rootEntries = parseIndex(ROOT_INDEX, readResource(ROOT_INDEX));
         String userIndexPath = optionalUserIndexReference(rootEntries, activeUser);
-        // 已请求用户没有登记入口时属于结构缺失。
-        if (userIndexPath == null) {
-            throw new IOException("Active user index is not registered: " + activeUser);
-        }
         // 独立集合记录这棵用户树的真实索引数量。
         Set<String> userIndexPaths = new LinkedHashSet<>();
         // 递归收集全部用户规则，同时执行循环、重复和路径边界校验。
@@ -216,6 +261,16 @@ public final class LayeredRuleLoader {
         );
         // 返回独立用户指标，便于迁移和提升前验证完整性。
         return new IndexValidation(userIndexPaths.size(), userRules.size());
+    }
+
+    /**
+     * 验证 {@code AGENTS.md} 当前稳定用户的完整递归索引树。
+     *
+     * @return 当前用户索引和逻辑 ID 数，例如 {@code {indexCount=7,ruleCount=4}}
+     * @throws IOException 身份声明、用户索引或规则登记无效
+     */
+    public static IndexValidation validateCurrentUserIndexTree() throws IOException {
+        return validateUserIndexTree(currentStableUserId());
     }
 
     // 测试入口允许用内存资源构造循环、重复、越界、缺失和深度异常，不污染生产 resources。
@@ -466,17 +521,17 @@ public final class LayeredRuleLoader {
         return indexPath;
     }
 
-    // 从根索引读取当前用户的唯一递归入口；未登记表示该用户没有规则覆盖。
+    // 从根索引模式解析当前用户的唯一递归入口；不扫描任何用户目录。
     private static String optionalUserIndexReference(
             Map<String, String> rootEntries,
             String activeUser) throws IOException {
-        // 用户索引键包含已验证用户 ID，使根索引无需加载其他用户目录。
-        String indexPath = rootEntries.get(USER_INDEX_KEY_PREFIX + activeUser);
-        // 没有当前用户入口时返回空，由 common 和 core 优先级继续处理。
-        if (indexPath == null) {
-            return null;
+        // 根索引必须只提供统一模式，禁止恢复 `USER_RULE_INDEX@具体用户` 条目。
+        String indexPattern = rootEntries.get(USER_INDEX_PATTERN_KEY);
+        if (indexPattern == null || !indexPattern.contains(USER_ID_PLACEHOLDER)) {
+            throw new IOException("User index pattern is missing or invalid in root index.");
         }
-        // 物理路径必须恰好是当前用户根索引，禁止把一个用户路由到另一个用户。
+        // 只替换一个已验证占位符，形成当前用户的确定索引路径。
+        String indexPath = indexPattern.replace(USER_ID_PLACEHOLDER, activeUser);
         String expectedPath = "local/" + activeUser + "/RULE_INDEX.md";
         if (!expectedPath.equals(indexPath)) {
             throw new IOException(
@@ -635,7 +690,7 @@ public final class LayeredRuleLoader {
      * 表示一次经过分级索引和物理层校验的规则加载结果。
      *
      * @param logicalId 请求的稳定 ID，例如 {@code SELPLAT_PROJECT_BUILD_RULES}
-     * @param layer 实际命中层，例如 {@code core}、{@code common} 或 {@code XUNAN}
+     * @param layer 实际命中层，例如 {@code core}、{@code common} 或当前稳定用户 ID
      * @param resourcePath resources 相对路径，例如
      *     {@code local/common/selplat/通用/rule/RUL_SELPLAT工程构建规则.md}
      * @param content 完整 UTF-8 规则正文，例如以 {@code # SELPLAT 工程构建规则} 开头
