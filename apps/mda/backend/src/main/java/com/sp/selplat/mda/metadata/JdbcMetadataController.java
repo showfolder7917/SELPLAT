@@ -1,4 +1,4 @@
-package com.sp.selplat.mda.jdbc;
+package com.sp.selplat.mda.metadata;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.JsonUtils;

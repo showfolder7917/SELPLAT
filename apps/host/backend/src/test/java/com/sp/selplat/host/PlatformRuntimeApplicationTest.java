@@ -1,6 +1,7 @@
 package com.sp.selplat.host;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,6 +52,17 @@ class PlatformRuntimeApplicationTest {
         // reference-data 管理后台同样由统一 Host 发布，不增加第二个前端端口。
         mockMvc.perform(get("/reference-data/reference-data.html"))
                 .andExpect(status().isOk());
+        // Host 桌面只提供工程入口，不复制任何业务页面。
+        mockMvc.perform(get("/desktop/desktop.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("data-hostdesktop-app")));
+        // 静态入口清单预留 permissionCode，后续后端权限接口可保持相同 JSON 结构。
+        mockMvc.perform(get("/desktop/applications.json"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applications.length()").value(3))
+                .andExpect(jsonPath("$.applications[0].url").value("/mda/mda.html"))
+                .andExpect(jsonPath("$.applications[1].url").value("/reference-data/reference-data.html"))
+                .andExpect(jsonPath("$.applications[2].url").value("/uniauth/uniauth.html"));
     }
 
     /**

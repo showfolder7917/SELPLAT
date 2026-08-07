@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "applications": [
+    {
+      "code": "mda",
+      "name": "MDA 数据库工作台",
+      "shortName": "MDA",
+      "description": "管理数据库连接、结构与数据",
+      "icon": "ri-database-2-line",
+      "tone": "blue",
+      "url": "/mda/mda.html",
+      "openMode": "new-tab",
+      "permissionCode": "mda:access",
+      "visible": true,
+      "enabled": true,
+      "sortnum": 10
+    },
+    {
+      "code": "reference-data",
+      "name": "引用数据中心",
+      "shortName": "引用数据",
+      "description": "维护共通类型、树与选项数据",
+      "icon": "ri-node-tree",
+      "tone": "cyan",
+      "url": "/reference-data/reference-data.html",
+      "openMode": "new-tab",
+      "permissionCode": "reference-data:access",
+      "visible": true,
+      "enabled": true,
+      "sortnum": 20
+    },
+    {
+      "code": "uniauth",
+      "name": "统一身份权限",
+      "shortName": "身份权限",
+      "description": "管理用户、身份与访问权限",
+      "icon": "ri-shield-user-line",
+      "tone": "violet",
+      "url": "/uniauth/uniauth.html",
+      "openMode": "new-tab",
+      "permissionCode": "uniauth:access",
+      "visible": true,
+      "enabled": true,
+      "sortnum": 30
+    }
+  ]
+}

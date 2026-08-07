@@ -1,7 +1,9 @@
-package com.sp.selplat.mda.jdbc;
+package com.sp.selplat.mda.sql;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
+import com.sp.selplat.mda.common.jdbc.JdbcConnectionFactory;
+import com.sp.selplat.mda.common.jdbc.MdaConnectionDefinition;
 import com.sp.selplat.mda.connectionprofile.service.MdaConnectionProfileService;
 import java.io.InputStream;
 import java.io.Reader;

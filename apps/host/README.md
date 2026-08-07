@@ -30,3 +30,11 @@ apps/host/backend
 ```
 
 当前 Host 已显式装配 `reference-data` 与 `uniauth`，并通过一个 `8080` 端口发布 Uniauth 页面和 `/sel/**` 公共资源。Uniauth 仍保留独立启动入口，但业务模块配置已经与启动类分离，Host 不会启动第二个 Web 容器。
+
+统一桌面入口：
+
+```text
+http://127.0.0.1:8080/desktop/desktop.html
+```
+
+桌面的每个图标对应一个工程，点击后在新标签页打开现有页面。入口当前来自 `applications.json`，字段已预留 `permissionCode`，未来可由后端按权限返回同结构 JSON。

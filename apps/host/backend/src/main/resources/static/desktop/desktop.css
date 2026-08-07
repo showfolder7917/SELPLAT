@@ -1,0 +1,334 @@
+/* desktop.css：Host 桌面入口布局；颜色、字号、圆角与表面均来自 SEL 统一主题令牌。 */
+
+html,
+body {
+    min-width: 320px;
+    height: 100%;
+    min-height: 100%;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    overflow: hidden;
+    color: var(--sel-theme-text-body);
+    font-family: var(--sel-theme-font-family);
+    background: var(--sel-theme-page-background);
+}
+
+.hostdesktop-stage {
+    position: relative;
+    z-index: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-height: 100vh;
+    padding: 14px 18px 18px;
+    box-sizing: border-box;
+}
+
+.hostdesktop-menubar,
+.hostdesktop-dock {
+    border: 1px solid var(--sel-theme-line-soft);
+    color: var(--sel-theme-text-body);
+    background: color-mix(in srgb, var(--sel-theme-panel-surface) 76%, transparent);
+    box-shadow: var(--sel-theme-inset), 0 14px 38px rgb(var(--sel-theme-neutral-rgb) / 0.22);
+    backdrop-filter: blur(18px) saturate(128%);
+    -webkit-backdrop-filter: blur(18px) saturate(128%);
+}
+
+.hostdesktop-menubar {
+    display: flex;
+    min-height: 50px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-radius: var(--sel-theme-radius-inner);
+}
+
+.hostdesktop-brand,
+.hostdesktop-status,
+.hostdesktop-dock {
+    display: flex;
+    align-items: center;
+}
+
+.hostdesktop-brand {
+    gap: 10px;
+}
+
+.hostdesktop-brand-mark {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border: 1px solid var(--sel-theme-line);
+    border-radius: var(--sel-theme-radius-icon);
+    color: var(--sel-theme-text-on-selected-surface);
+    font-size: var(--sel-theme-font-size-primary);
+    font-weight: 800;
+    background: var(--sel-theme-selected-surface);
+    box-shadow: 0 0 18px var(--sel-theme-glow);
+}
+
+.hostdesktop-brand-name,
+.hostdesktop-heading {
+    color: var(--sel-theme-text-title);
+    text-shadow: var(--sel-theme-text-shadow);
+}
+
+.hostdesktop-brand-name {
+    font-size: var(--sel-theme-font-size-primary);
+    letter-spacing: 0.08em;
+}
+
+.hostdesktop-brand-separator,
+.hostdesktop-brand-caption,
+.hostdesktop-status,
+.hostdesktop-lead,
+.hostdesktop-application-description,
+.hostdesktop-dock-hint {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.hostdesktop-status {
+    gap: 10px;
+}
+
+.hostdesktop-online-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: var(--sel-theme-radius-chip);
+    background: var(--sel-theme-semantic-success);
+    box-shadow: 0 0 10px var(--sel-theme-semantic-success);
+}
+
+.hostdesktop-clock {
+    min-width: 42px;
+    color: var(--sel-theme-text-body);
+    font-variant-numeric: tabular-nums;
+}
+
+.hostdesktop-workspace {
+    display: grid;
+    grid-template-columns: minmax(280px, 430px) 1fr;
+    gap: clamp(42px, 8vw, 140px);
+    align-items: center;
+    padding: clamp(38px, 8vh, 92px) clamp(24px, 7vw, 120px) clamp(60px, 10vh, 120px);
+}
+
+.hostdesktop-intro {
+    max-width: 430px;
+    padding: 26px 0 26px 26px;
+    border-left: 2px solid var(--sel-theme-line);
+}
+
+.hostdesktop-eyebrow {
+    display: block;
+    margin-bottom: 14px;
+    color: var(--sel-theme-text-link);
+    font-size: var(--sel-theme-font-size-caption);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+}
+
+.hostdesktop-heading {
+    margin: 0;
+    font-size: clamp(30px, 3.35vw, 48px);
+    font-weight: 720;
+    line-height: 1.08;
+    letter-spacing: -0.04em;
+}
+
+.hostdesktop-lead {
+    max-width: 370px;
+    margin: 18px 0 0;
+    line-height: 1.75;
+}
+
+.hostdesktop-application-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(130px, 168px));
+    gap: clamp(20px, 3vw, 42px);
+    justify-content: start;
+}
+
+.hostdesktop-application-item {
+    min-width: 0;
+}
+
+.hostdesktop-application {
+    display: flex;
+    min-height: 188px;
+    align-items: center;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 18px 10px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--sel-theme-radius-inner);
+    color: var(--sel-theme-text-body);
+    text-align: center;
+    text-decoration: none;
+    outline: none;
+    transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.hostdesktop-application:hover,
+.hostdesktop-application:focus-visible {
+    border-color: var(--sel-theme-line);
+    background: color-mix(in srgb, var(--sel-theme-interaction-surface-hover) 78%, transparent);
+    box-shadow: var(--sel-theme-interaction-hover-edge), 0 16px 34px rgb(var(--sel-theme-neutral-rgb) / 0.28);
+    transform: translateY(-3px);
+}
+
+.hostdesktop-application:active {
+    transform: translateY(-1px) scale(0.985);
+}
+
+.hostdesktop-application-icon {
+    position: relative;
+    display: grid;
+    width: 84px;
+    height: 84px;
+    place-items: center;
+    margin-bottom: 16px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--hostdesktop-tone) 72%, var(--sel-theme-line));
+    border-radius: calc(var(--sel-theme-radius-inner) + 8px);
+    color: var(--sel-theme-text-on-selected-surface);
+    font-size: 38px;
+    background:
+        linear-gradient(145deg, color-mix(in srgb, var(--hostdesktop-tone) 74%, white 8%), color-mix(in srgb, var(--hostdesktop-tone) 48%, rgb(var(--sel-theme-neutral-rgb)))) padding-box;
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.34),
+        inset 0 -18px 28px rgb(var(--sel-theme-neutral-rgb) / 0.24),
+        0 0 24px color-mix(in srgb, var(--hostdesktop-tone) 48%, transparent),
+        0 14px 26px rgb(var(--sel-theme-neutral-rgb) / 0.34);
+}
+
+.hostdesktop-application-icon::after {
+    position: absolute;
+    inset: 5px;
+    border: 1px solid rgb(255 255 255 / 0.24);
+    border-radius: calc(var(--sel-theme-radius-inner) + 3px);
+    content: "";
+    pointer-events: none;
+}
+
+.hostdesktop-tone-blue { --hostdesktop-tone: #4a8bff; }
+.hostdesktop-tone-cyan { --hostdesktop-tone: #28d7ff; }
+.hostdesktop-tone-violet { --hostdesktop-tone: #9a67ff; }
+
+.hostdesktop-application-name {
+    display: block;
+    color: var(--sel-theme-text-title);
+    font-size: var(--sel-theme-font-size-primary);
+    font-weight: 650;
+    line-height: 1.35;
+    text-shadow: var(--sel-theme-text-shadow);
+}
+
+.hostdesktop-application-description {
+    display: -webkit-box;
+    max-width: 154px;
+    margin-top: 7px;
+    overflow: hidden;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.hostdesktop-dock {
+    justify-self: center;
+    gap: 10px;
+    min-height: 46px;
+    padding: 0 16px;
+    border-radius: var(--sel-theme-radius-popup);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.hostdesktop-dock-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--sel-theme-radius-chip);
+    background: var(--sel-theme-text-link);
+    box-shadow: 0 0 11px var(--sel-theme-glow);
+}
+
+.hostdesktop-dock-copy {
+    color: var(--sel-theme-text-body);
+}
+
+.hostdesktop-dock-hint {
+    padding-left: 10px;
+    border-left: 1px solid var(--sel-theme-line-soft);
+}
+
+@media (max-width: 980px) {
+    .hostdesktop-workspace {
+        grid-template-columns: 1fr;
+        align-content: center;
+        gap: 32px;
+        padding-inline: 7vw;
+    }
+
+    .hostdesktop-application-grid {
+        justify-content: start;
+    }
+}
+
+@media (max-width: 620px) {
+    body {
+        overflow: auto;
+    }
+
+    .hostdesktop-stage {
+        min-height: 100svh;
+        padding: 10px;
+    }
+
+    .hostdesktop-menubar {
+        padding-inline: 14px;
+    }
+
+    .hostdesktop-brand-caption,
+    .hostdesktop-brand-separator,
+    .hostdesktop-status > span:not(.hostdesktop-online-dot),
+    .hostdesktop-dock-hint {
+        display: none;
+    }
+
+    .hostdesktop-workspace {
+        padding: 42px 6px 60px;
+    }
+
+    .hostdesktop-intro {
+        padding-left: 18px;
+    }
+
+    .hostdesktop-application-grid {
+        grid-template-columns: repeat(3, minmax(86px, 1fr));
+        gap: 8px;
+    }
+
+    .hostdesktop-application {
+        min-height: 154px;
+        padding-inline: 4px;
+    }
+
+    .hostdesktop-application-icon {
+        width: 64px;
+        height: 64px;
+        font-size: 30px;
+    }
+
+    .hostdesktop-application-description {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hostdesktop-application {
+        transition: none;
+    }
+}

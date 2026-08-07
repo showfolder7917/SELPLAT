@@ -1,4 +1,4 @@
-package com.sp.selplat.mda.jdbc;
+package com.sp.selplat.mda.common.jdbc;
 
 /**
  * 动态 JDBC 连接所需的不可变配置，不携带连接配置表的审计字段。

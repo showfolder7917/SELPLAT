@@ -150,6 +150,11 @@ class RuleResourceStructureTest {
             "selplat_independent_project_datasource_chain = ProjectPersistenceConfiguration "
                 + "-> qualified_BaseDataSourceContext -> ProjectBaseDao -> BaseDaoImpl"
         ));
+        // 项目 common 只允许基础设施，不得吸收具体 Controller 或业务编排。
+        assertTrue(baseDaoRule.contains(
+            "selplat_project_common_package_boundary = "
+                + "reusable_infrastructure_without_controller_or_business_orchestration"
+        ));
         // 固定表、实体类与 DAO 去后缀名称必须一一对应。
         assertTrue(baseDaoRule.contains(
             "selplat_fixed_table_type_mapping = databaseTableName == entitySimpleName "

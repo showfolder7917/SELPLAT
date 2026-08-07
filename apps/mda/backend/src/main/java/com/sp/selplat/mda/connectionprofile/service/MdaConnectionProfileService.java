@@ -4,7 +4,7 @@ import com.sp.selplat.common.service.BaseService;
 import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
-import com.sp.selplat.mda.jdbc.MdaConnectionDefinition;
+import com.sp.selplat.mda.common.jdbc.MdaConnectionDefinition;
 
 /**
  * 声明 MDA 固定连接配置表的公共 CRUD，以及动态目标库连接所需的业务动作。

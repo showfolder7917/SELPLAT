@@ -1,4 +1,4 @@
-package com.sp.selplat.mda.jdbc;
+package com.sp.selplat.mda.common.jdbc;
 
 import java.sql.Connection;
 import java.sql.DriverManager;

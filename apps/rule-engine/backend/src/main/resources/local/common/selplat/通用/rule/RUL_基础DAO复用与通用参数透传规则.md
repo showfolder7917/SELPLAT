@@ -79,6 +79,11 @@ selplat_application_dao_inheritance_chain = ConcreteDaoImpl extends ProjectBaseD
 selplat_independent_project_datasource_chain = ProjectPersistenceConfiguration -> qualified_BaseDataSourceContext -> ProjectBaseDao -> BaseDaoImpl
 selplat_independent_project_datasource_must_not_be_host_primary_candidate = true
 
+<!-- 项目 common 只收纳被两个以上业务模块复用且不表达具体页面动作的基础能力；例如 MDA 的连接工厂、驱动注册表和连接定义可以进入 common/jdbc，元数据浏览与 SQL 执行的 Controller、Service 必须分别留在 metadata、sql 业务包。 -->
+selplat_project_common_package_boundary = reusable_infrastructure_without_controller_or_business_orchestration
+selplat_project_common_jdbc_example = common/jdbc:connection_factory,driver_registry,connection_definition;metadata:controller_and_service;sql:controller_and_service
+selplat_project_common_must_not_contain_business_controller = true
+
 <!-- Java 固定表业务包必须使用数据库表名去除项目重复前缀后的全小写稳定资源名；表名本身就是资源名时直接全小写，例如 MdaConnectionProfile 对应 connectionprofile、ReferenceDataType 对应 referencedatatype；禁止大驼峰目录。 -->
 selplat_business_package_directory_pattern = lowercase_stable_table_resource_name
 selplat_business_package_directory_examples = user,role,permission,connectionprofile,referencedatatype
