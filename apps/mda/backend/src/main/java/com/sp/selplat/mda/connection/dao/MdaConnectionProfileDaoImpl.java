@@ -27,7 +27,7 @@ public class MdaConnectionProfileDaoImpl implements MdaConnectionProfileDao {
     public List<Map<String, Object>> findAll() {
         return jdbc.queryForList("""
                 SELECT id, connectionName, databaseType, host, port, databaseName, schemaName, username,
-                       passwordCiphertext, customJdbcUrl, jdbcParameters, defaultAutoCommit, sortnum, status,
+                       password, customJdbcUrl, jdbcParameters, defaultAutoCommit, sortnum, status,
                        createdAt, updatedAt
                   FROM MdaConnectionProfile
                  WHERE status = 1
@@ -39,7 +39,7 @@ public class MdaConnectionProfileDaoImpl implements MdaConnectionProfileDao {
     public Map<String, Object> findById(long id) {
         List<Map<String, Object>> records = jdbc.queryForList("""
                 SELECT id, connectionName, databaseType, host, port, databaseName, schemaName, username,
-                       passwordCiphertext, customJdbcUrl, jdbcParameters, defaultAutoCommit, sortnum, status,
+                       password, customJdbcUrl, jdbcParameters, defaultAutoCommit, sortnum, status,
                        createdAt, updatedAt
                   FROM MdaConnectionProfile
                  WHERE id = ? AND status = 1
@@ -54,7 +54,7 @@ public class MdaConnectionProfileDaoImpl implements MdaConnectionProfileDao {
             PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO MdaConnectionProfile (
                         tenantId, lastOperateUserId, connectionName, databaseType, host, port, databaseName,
-                        schemaName, username, passwordCiphertext, customJdbcUrl, jdbcParameters,
+                        schemaName, username, password, customJdbcUrl, jdbcParameters,
                         defaultAutoCommit, sortnum, status, createdAt, updatedAt)
                     VALUES (1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     """, Statement.RETURN_GENERATED_KEYS);
@@ -72,7 +72,7 @@ public class MdaConnectionProfileDaoImpl implements MdaConnectionProfileDao {
             PreparedStatement statement = connection.prepareStatement("""
                     UPDATE MdaConnectionProfile
                        SET connectionName=?, databaseType=?, host=?, port=?, databaseName=?, schemaName=?,
-                           username=?, passwordCiphertext=?, customJdbcUrl=?, jdbcParameters=?,
+                           username=?, password=?, customJdbcUrl=?, jdbcParameters=?,
                            defaultAutoCommit=?, sortnum=?, updatedAt=CURRENT_TIMESTAMP
                      WHERE id=? AND status=1
                     """);
@@ -95,7 +95,7 @@ public class MdaConnectionProfileDaoImpl implements MdaConnectionProfileDao {
         statement.setObject(5, values.get("databaseName"));
         statement.setObject(6, values.get("schemaName"));
         statement.setObject(7, values.get("username"));
-        statement.setObject(8, values.get("passwordCiphertext"));
+        statement.setObject(8, values.get("password"));
         statement.setObject(9, values.get("customJdbcUrl"));
         statement.setObject(10, values.get("jdbcParameters"));
         statement.setObject(11, values.get("defaultAutoCommit"));

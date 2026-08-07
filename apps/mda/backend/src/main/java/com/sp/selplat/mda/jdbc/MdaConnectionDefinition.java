@@ -9,7 +9,7 @@ package com.sp.selplat.mda.jdbc;
  * @param databaseName 数据库名、H2 路径或 Oracle service name
  * @param schemaName 默认 schema，可空
  * @param username 用户名
- * @param password 解密后的运行时口令
+ * @param password 控制库保存并用于建立目标连接的明文口令
  * @param customJdbcUrl 可选完整 JDBC URL
  * @param jdbcParameters URL 附加参数
  * @param defaultAutoCommit 默认自动提交开关

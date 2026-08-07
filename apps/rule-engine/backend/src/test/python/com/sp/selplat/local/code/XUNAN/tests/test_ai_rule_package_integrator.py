@@ -63,9 +63,9 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertEqual(result["indexes"], 19)
         self.assertEqual(result["indexed_rules"], 66)
         self.assertEqual(result["active_user_id"], ACTIVE_STABLE_USER_ID)
-        self.assertEqual(result["active_user_indexes"], 8)
-        self.assertEqual(result["active_user_overrides"], 6)
-        self.assertEqual(result["active_user_rule_files"], 5)
+        self.assertEqual(result["active_user_indexes"], 9)
+        self.assertEqual(result["active_user_overrides"], 7)
+        self.assertEqual(result["active_user_rule_files"], 6)
         self.assertEqual(result["active_user_standard_asset_packages"], 1)
         self.assertEqual(result["active_user_rules_with_program_references"], 2)
         self.assertEqual(result["decision_boundary"], "facts_only_ai_must_review_before_merge_or_delete")
@@ -101,7 +101,7 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             / ACTIVE_STABLE_USER_ID
         )
         rule_paths = sorted(user_root.rglob("RUL_*.md"))
-        self.assertEqual(len(rule_paths), 5)
+        self.assertEqual(len(rule_paths), 6)
         for rule_path in rule_paths:
             previous_nonempty = ""
             for line_number, raw_line in enumerate(

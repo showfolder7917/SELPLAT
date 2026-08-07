@@ -13,15 +13,15 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 当前稳定用户必须通过动态解析的独立递归索引完整登记六个用户逻辑 ID。
+     * 当前稳定用户必须通过动态解析的独立递归索引完整登记七个用户逻辑 ID。
      */
     @Test
     void shouldValidateCompleteActiveUserIndexTree() throws IOException {
         LayeredRuleLoader.IndexValidation validation =
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
-        assertEquals(8, validation.indexCount());
-        assertEquals(6, validation.ruleCount());
+        assertEquals(9, validation.indexCount());
+        assertEquals(7, validation.ruleCount());
     }
 
     /**

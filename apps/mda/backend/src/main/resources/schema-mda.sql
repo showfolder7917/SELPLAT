@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS MdaConnectionProfile (
     schemaName VARCHAR(120),
     -- username 保存连接目标数据库使用的登录账号，最终 SQL 权限由该数据库账号决定。
     username VARCHAR(120),
-    -- passwordCiphertext 保存 AES/GCM 加密后的数据库口令，Service 解密后仅在建立 JDBC 连接时使用。
-    passwordCiphertext VARCHAR(1000) NOT NULL DEFAULT '',
+    -- password 明文保存目标数据库口令；MDA 仅作为不部署上线的本地开发工具使用。
+    password VARCHAR(1000) NOT NULL DEFAULT '',
     -- customJdbcUrl 保存人工填写的完整 JDBC URL；存在时优先使用，不再根据 host、port 等字段自动拼接。
     customJdbcUrl VARCHAR(1000),
     -- jdbcParameters 保存自动拼接 JDBC URL 时追加的厂商参数，例如 useSSL=false 或 sslmode=disable。
@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS MdaConnectionProfile (
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 兼容已经由旧版本创建的控制库：新增明文字段并移除不再使用的密文字段。
+ALTER TABLE MdaConnectionProfile ADD COLUMN IF NOT EXISTS password VARCHAR(1000) NOT NULL DEFAULT '';
+ALTER TABLE MdaConnectionProfile DROP COLUMN IF EXISTS passwordCiphertext;
+
 COMMENT ON TABLE MdaConnectionProfile IS 'MDA 目标数据库连接配置表';
 COMMENT ON COLUMN MdaConnectionProfile.id IS '连接配置主键，由公共号段生成';
 COMMENT ON COLUMN MdaConnectionProfile.tenantId IS '连接配置所属租户标识';
@@ -94,7 +98,7 @@ COMMENT ON COLUMN MdaConnectionProfile.port IS '目标数据库监听端口';
 COMMENT ON COLUMN MdaConnectionProfile.databaseName IS '数据库名、H2路径或Oracle服务名';
 COMMENT ON COLUMN MdaConnectionProfile.schemaName IS '连接后的默认Schema';
 COMMENT ON COLUMN MdaConnectionProfile.username IS '目标数据库登录账号';
-COMMENT ON COLUMN MdaConnectionProfile.passwordCiphertext IS 'AES/GCM加密连接口令，禁止返回页面';
+COMMENT ON COLUMN MdaConnectionProfile.password IS '本地开发工具使用的明文连接口令';
 COMMENT ON COLUMN MdaConnectionProfile.customJdbcUrl IS '优先使用的完整JDBC URL';
 COMMENT ON COLUMN MdaConnectionProfile.jdbcParameters IS '自动拼接JDBC URL时追加的厂商参数';
 COMMENT ON COLUMN MdaConnectionProfile.defaultAutoCommit IS 'SQL执行默认自动提交开关';
@@ -102,3 +106,8 @@ COMMENT ON COLUMN MdaConnectionProfile.sortnum IS '页面连接列表排序值';
 COMMENT ON COLUMN MdaConnectionProfile.status IS '逻辑状态，1有效、0逻辑删除';
 COMMENT ON COLUMN MdaConnectionProfile.createdAt IS '数据创建时间';
 COMMENT ON COLUMN MdaConnectionProfile.updatedAt IS '数据最后更新时间';
+
+-- 旧版自动创建的默认工作库已经退出架构，不再作为可选连接保留。
+DELETE FROM MdaConnectionProfile
+ WHERE connectionName = 'MDA 本地工作库'
+   AND (databaseName LIKE '%mda-workspace%' OR customJdbcUrl LIKE '%mda-workspace%');

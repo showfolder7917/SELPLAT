@@ -31,7 +31,7 @@ public interface MdaConnectionProfileService {
     CommonResult testConnection(CommonParam testIn);
 
     /**
-     * 把已保存连接或页面临时字段转换为 JDBC 运行配置；已保存口令仅在内存中解密。
+     * 把已保存连接或页面临时字段转换为 JDBC 运行配置。
      *
      * @param queryIn 已保存连接例如 {@code {"connectionId":10001}}；临时配置例如
      *     {@code {"databaseType":"H2","databaseName":"mem:mda_demo","username":"sa"}}

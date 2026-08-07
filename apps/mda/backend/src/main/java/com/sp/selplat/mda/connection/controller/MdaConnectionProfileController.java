@@ -40,7 +40,7 @@ public class MdaConnectionProfileController {
      * 查询连接详情。
      *
      * @param id URL 中的控制库主键，例如 {@code 10001}
-     * @return 脱敏详情，例如 {@code {"success":true,"data":{"id":10001,"passwordSaved":false}}}
+     * @return 连接详情，例如 {@code {"success":true,"data":{"id":10001,"password":"dev-password"}}}
      */
     @GetMapping("/{id}")
     public String getById(@PathVariable("id") long id) {

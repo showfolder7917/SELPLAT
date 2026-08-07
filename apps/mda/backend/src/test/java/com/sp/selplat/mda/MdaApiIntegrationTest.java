@@ -23,7 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * 使用真实 H2 配置库和目标库验证页面依赖的完整 API 主流程。
+ * 使用真实 H2 控制库和动态目标库验证页面依赖的完整 API 主流程。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -34,22 +34,38 @@ class MdaApiIntegrationTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private MdaDatabase database;
+    private static long targetConnectionId;
 
     @Test
     @Order(1)
-    void shouldListConnectionsWithoutCiphertext() throws Exception {
+    void shouldStartWithoutDefaultWorkspaceAndCreateDynamicConnection() throws Exception {
         mockMvc.perform(get("/api/mda/connections"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.records[0].connectionName").value("MDA 本地工作库"))
-                .andExpect(jsonPath("$.records[0].passwordCiphertext").doesNotExist())
-                .andExpect(jsonPath("$.records[0].passwordSaved").value(false));
+                .andExpect(jsonPath("$.totalCount").value(0));
+
+        String body = objectMapper.writeValueAsString(Map.of(
+                "connectionName", "动态目标库",
+                "databaseType", "H2",
+                "databaseName", "mem:mda_dynamic_target;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+                "schemaName", "PUBLIC",
+                "username", "sa",
+                "password", ""));
+        MvcResult result = mockMvc.perform(post("/api/mda/connections")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.connectionName").value("动态目标库"))
+                .andReturn();
+        targetConnectionId = objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("data").path("id").asLong();
+        assertThat(targetConnectionId).isPositive();
     }
 
     @Test
     @Order(2)
-    void shouldSaveEncryptedConnectionPassword() throws Exception {
+    void shouldSaveAndReturnPlaintextPassword() throws Exception {
         String body = objectMapper.writeValueAsString(Map.of(
-                "connectionName", "加密连接测试",
+                "connectionName", "明文连接测试",
                 "databaseType", "H2",
                 "databaseName", "mem:mda_cipher_test;DB_CLOSE_DELAY=-1",
                 "username", "sa",
@@ -58,14 +74,18 @@ class MdaApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.password").doesNotExist())
+                .andExpect(jsonPath("$.data.password").value("plain-secret"))
                 .andExpect(jsonPath("$.data.passwordCiphertext").doesNotExist())
                 .andReturn();
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
         long id = response.path("data").path("id").asLong();
-        String ciphertext = database.controlJdbc().queryForObject(
-                "SELECT passwordCiphertext FROM MdaConnectionProfile WHERE id = ?", String.class, id);
-        assertThat(ciphertext).isNotBlank().doesNotContain("plain-secret");
+        String password = database.controlJdbc().queryForObject(
+                "SELECT password FROM MdaConnectionProfile WHERE id = ?", String.class, id);
+        assertThat(password).isEqualTo("plain-secret");
+
+        mockMvc.perform(get("/api/mda/connections/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.password").value("plain-secret"));
     }
 
     @Test
@@ -93,7 +113,8 @@ class MdaApiIntegrationTest {
                 .andExpect(jsonPath("$.data.results[0].rows[0][1]").value("alpha"));
 
         MvcResult metadata = mockMvc.perform(post("/api/mda/metadata/tree.htm")
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"connectionId\":10001}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"connectionId\":" + targetConnectionId + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
@@ -104,7 +125,8 @@ class MdaApiIntegrationTest {
     @Order(5)
     void shouldTestSavedConnection() throws Exception {
         mockMvc.perform(post("/api/mda/connections/test")
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"connectionId\":10001}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"connectionId\":" + targetConnectionId + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.databaseProductName").value("H2"));
@@ -112,7 +134,7 @@ class MdaApiIntegrationTest {
 
     private org.springframework.test.web.servlet.ResultActions execute(String sql) throws Exception {
         String body = objectMapper.writeValueAsString(Map.of(
-                "connectionId", 10001,
+                "connectionId", targetConnectionId,
                 "sql", sql,
                 "autoCommit", true,
                 "maxRows", 1000,

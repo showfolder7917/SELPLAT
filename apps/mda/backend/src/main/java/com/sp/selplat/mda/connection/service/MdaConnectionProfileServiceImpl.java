@@ -5,7 +5,6 @@ import com.sp.selplat.common.exception.CommonSystemException;
 import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
-import com.sp.selplat.mda.connection.CredentialCipher;
 import com.sp.selplat.mda.connection.dao.MdaConnectionProfileDao;
 import com.sp.selplat.mda.jdbc.JdbcConnectionFactory;
 import com.sp.selplat.mda.jdbc.MdaConnectionDefinition;
@@ -19,36 +18,31 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 
 /**
- * 管理 MDA 独立控制库中的连接配置，并在运行边界完成口令加解密和响应脱敏。
+ * 管理 MDA 独立控制库中的连接配置，并按本地开发工具约定原样保存连接口令。
  */
 @Service
 public class MdaConnectionProfileServiceImpl implements MdaConnectionProfileService {
 
     private final MdaConnectionProfileDao dao;
-    private final CredentialCipher credentialCipher;
     private final JdbcConnectionFactory connectionFactory;
 
     /**
      * 装配连接配置业务服务。
      *
      * @param dao MDA 独立控制库 DAO
-     * @param credentialCipher 口令加解密组件
      * @param connectionFactory 动态目标库连接工厂
      * 执行结果示例：连接配置只进入 apps/mda/db/mda.mv.db，目标查询使用配置指向的数据库。
      */
     public MdaConnectionProfileServiceImpl(
             MdaConnectionProfileDao dao,
-            CredentialCipher credentialCipher,
             JdbcConnectionFactory connectionFactory) {
         this.dao = dao;
-        this.credentialCipher = credentialCipher;
         this.connectionFactory = connectionFactory;
     }
 
     @Override
     public CommonPageResult getStore() {
         List<Map<String, Object>> records = dao.findAll();
-        records.forEach(this::scrubSecret);
         CommonPageResult result = new CommonPageResult();
         result.setRecords(records);
         result.setTotalCount(records.size());
@@ -60,7 +54,6 @@ public class MdaConnectionProfileServiceImpl implements MdaConnectionProfileServ
     @Override
     public CommonResult getById(long id) {
         Map<String, Object> record = requiredRecord(id);
-        scrubSecret(record);
         return success(record, null, "/api/mda/connections/" + id, "连接详情查询完成。");
     }
 
@@ -69,7 +62,6 @@ public class MdaConnectionProfileServiceImpl implements MdaConnectionProfileServ
         Map<String, Object> values = normalize(saveIn, null);
         long id = dao.insert(values);
         Map<String, Object> record = requiredRecord(id);
-        scrubSecret(record);
         return success(record, 1, "/api/mda/connections", "连接新增完成。");
     }
 
@@ -79,7 +71,6 @@ public class MdaConnectionProfileServiceImpl implements MdaConnectionProfileServ
         Map<String, Object> values = normalize(saveIn, current);
         int affectedRows = dao.update(id, values);
         Map<String, Object> record = requiredRecord(id);
-        scrubSecret(record);
         return success(record, affectedRows, "/api/mda/connections/" + id, "连接更新完成。");
     }
 
@@ -116,7 +107,6 @@ public class MdaConnectionProfileServiceImpl implements MdaConnectionProfileServ
         Map<String, Object> source;
         if (connectionId != null && !String.valueOf(connectionId).isBlank()) {
             source = requiredRecord(longValue(connectionId, "connectionId"));
-            source.put("password", credentialCipher.decrypt(text(source.get("passwordCiphertext"))));
         } else if (queryIn != null) {
             source = new LinkedHashMap<>(queryIn.getParamMap());
         } else {
@@ -140,9 +130,9 @@ public class MdaConnectionProfileServiceImpl implements MdaConnectionProfileServ
         values.put("schemaName", optionalText(source.getParam("schemaName")));
         values.put("username", optionalText(source.getParam("username")));
         Object password = source.getParam("password");
-        values.put("passwordCiphertext", password == null || String.valueOf(password).isEmpty()
-                ? current == null ? "" : current.get("passwordCiphertext")
-                : credentialCipher.encrypt(String.valueOf(password)));
+        values.put("password", password == null
+                ? current == null ? "" : current.get("password")
+                : String.valueOf(password));
         values.put("customJdbcUrl", optionalText(source.getParam("customJdbcUrl")));
         values.put("jdbcParameters", optionalText(source.getParam("jdbcParameters")));
         values.put("defaultAutoCommit", bool(source.getParam("defaultAutoCommit"), true));
@@ -160,12 +150,6 @@ public class MdaConnectionProfileServiceImpl implements MdaConnectionProfileServ
         } catch (RuntimeException exception) {
             throw new CommonSystemException("MDA_CONTROL_DATABASE_FAILED", "MDA 控制库操作失败。", exception);
         }
-    }
-
-    private void scrubSecret(Map<String, Object> record) {
-        Object ciphertext = record.remove("passwordCiphertext");
-        record.remove("password");
-        record.put("passwordSaved", ciphertext != null && !String.valueOf(ciphertext).isEmpty());
     }
 
     private CommonResult success(Object data, Integer affectedRows, String requestPath, String message) {
