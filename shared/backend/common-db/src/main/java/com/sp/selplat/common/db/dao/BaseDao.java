@@ -1,5 +1,6 @@
 package com.sp.selplat.common.db.dao;
 
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonParam;
@@ -12,6 +13,16 @@ import java.util.Map;
  * 接口负责固定分页、查询、写入和假删除契约，不暴露深层元数据、SQL 构建或模板执行细节。
  */
 public interface BaseDao {
+
+    /**
+     * 按数据库返回顺序读取当前业务表的真实字段元数据。
+     *
+     * @return 不可修改的有序字段映射，例如
+     *     {@code {"id":{"columnName":"id","dataType":"BIGINT","primaryKey":true},}
+     *     {@code "loginName":{"columnName":"loginName","remarks":"登录账号"}}}
+     * @throws IllegalStateException 当当前表没有字段、字段名为空或字段重复时抛出
+     */
+    Map<String, ColumnMetadata> getDbColumnsMap();
 
     /**
      * 按当前 DAO 表名和真实主键元数据生成各主键字段的独立号段编码。

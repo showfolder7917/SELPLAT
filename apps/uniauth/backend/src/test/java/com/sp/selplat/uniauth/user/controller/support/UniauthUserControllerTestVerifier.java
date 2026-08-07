@@ -3,8 +3,10 @@ package com.sp.selplat.uniauth.user.controller.support;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonParam;
@@ -72,16 +74,13 @@ public final class UniauthUserControllerTestVerifier {
         String managementDefinitionJson = controller.getTableDefinition("user-management", "zh-CN");
         // 当前未接 reference-data，因此来源必须明确标记为 DEFAULT_METADATA。
         assertTrue(managementDefinitionJson.contains("\"source\":\"DEFAULT_METADATA\""));
-        // 具体 DAO 类名必须稳定映射到真实 UniauthUser 物理表。
-        assertTrue(managementDefinitionJson.contains("\"resourceCode\":\"UniauthUser\""));
-        // 数据库 COMMENT ON COLUMN 的登录账号备注必须成为默认标题和原始 comment。
-        assertTrue(managementDefinitionJson.contains("\"title\":\"登录账号\""));
-        assertTrue(managementDefinitionJson.contains("\"comment\":\"登录账号\""));
-        // 口令摘要字段保留元数据，但默认 visible=false，禁止普通表格直接显示。
-        assertTrue(managementDefinitionJson.contains(
-            "\"field\":\"passwordHash\",\"title\":\"口令摘要\",\"comment\":\"口令摘要\""
-        ));
-        assertTrue(managementDefinitionJson.contains("\"visible\":false"));
+        // 数据库 COMMENT ON COLUMN 的登录账号备注必须来自公共 ColumnMetadata。
+        assertTrue(managementDefinitionJson.contains("\"columnName\":\"loginName\""));
+        assertTrue(managementDefinitionJson.contains("\"remarks\":\"登录账号\""));
+        // 口令摘要字段只返回字段结构，不建立 Uniauth 专属表格 DTO。
+        assertTrue(managementDefinitionJson.contains("\"columnName\":\"passwordHash\""));
+        // 公共字段类型必须一并返回，供前端或未来 reference-data 配置校验。
+        assertTrue(managementDefinitionJson.contains("\"dataType\""));
 
         // 用户选择器使用第二个 viewCode 请求同一资源的另一张前端表格定义。
         String selectorDefinitionJson = controller.getTableDefinition("user-selector", "ja-JP");
@@ -89,6 +88,21 @@ public final class UniauthUserControllerTestVerifier {
         assertTrue(selectorDefinitionJson.contains("\"viewCode\":\"user-selector\""));
         // locale 同样原样返回，后续 reference-data 可据此选择日文标题。
         assertTrue(selectorDefinitionJson.contains("\"locale\":\"ja-JP\""));
+
+        // 空表格实例编码必须进入统一业务异常体系，禁止退化为 Spring IllegalArgumentException。
+        CommonBusinessException viewCodeException = assertThrows(
+            CommonBusinessException.class,
+            () -> controller.getTableDefinition(" ", "zh-CN")
+        );
+        // 稳定错误编码供前端精确标记 viewCode 参数。
+        assertEquals("INVALID_VIEW_CODE", viewCodeException.getErrorCode());
+        // 空语言编码必须使用独立业务编码，避免调用方只能解析异常文本。
+        CommonBusinessException localeException = assertThrows(
+            CommonBusinessException.class,
+            () -> controller.getTableDefinition("user-management", " ")
+        );
+        // 稳定错误编码供前端回退到默认语言或提示用户。
+        assertEquals("INVALID_LOCALE", localeException.getErrorCode());
 
         // 分页请求读取 fixture 中两条真实用户并验证固定 records 结构。
         CommonPageParam pageIn = new CommonPageParam();

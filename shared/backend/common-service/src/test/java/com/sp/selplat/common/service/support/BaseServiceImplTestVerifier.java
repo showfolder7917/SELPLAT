@@ -14,8 +14,8 @@ import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.common.db.template.BaseTemplateMapper;
 import com.sp.selplat.common.exception.CommonBusinessException;
-import com.sp.selplat.common.service.BaseCrudService;
 import com.sp.selplat.common.service.BaseExtendsServiceImpl;
+import com.sp.selplat.common.service.BaseService;
 import com.sp.selplat.common.service.BaseServiceImpl;
 import com.sp.selplat.common.service.sequence.SequenceGeneratorImpl;
 import com.sp.selplat.common.util.CommonBatchParam;
@@ -195,8 +195,8 @@ public final class BaseServiceImplTestVerifier {
     private static void verifyBaseLayerOwnership() {
         // BaseServiceImpl 必须直接继承扩展基础层。
         assertSame(BaseExtendsServiceImpl.class, BaseServiceImpl.class.getSuperclass());
-        // 公共 CRUD 实现必须显式受 BaseCrudService 契约约束，非 CRUD 服务不得因 BaseService 自动获得维护方法。
-        assertTrue(BaseCrudService.class.isAssignableFrom(BaseServiceImpl.class));
+        // 公共 CRUD 实现必须直接受唯一 BaseService 契约约束，不得再建立平行 CRUD 基础接口。
+        assertTrue(BaseService.class.isAssignableFrom(BaseServiceImpl.class));
         // BaseServiceImpl 自身统一声明 DAO 入口和九个默认 CRUD，业务子类可直接继承或按需覆盖。
         assertEquals(
             Set.of(

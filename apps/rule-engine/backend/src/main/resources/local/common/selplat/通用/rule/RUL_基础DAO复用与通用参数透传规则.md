@@ -89,8 +89,8 @@ selplat_fixed_table_type_mapping_example = package:user,table:UniauthUser,entity
 selplat_base_dao_table_name_source = BaseDaoSupportImpl.getTableName(concreteDaoSimpleName)
 selplat_package_directory_must_not_determine_table_name = true
 
-<!-- BasePagingQueryDaoImpl、BaseCrudDaoImpl 和 BaseDaoSupportImpl 的深层方法只允许公共 DAO 继承链内部使用；适用于业务 Service 与业务 DAO；业务含义是模块调用必须全部通过 BaseDao 公开签名。 -->
-selplat_application_must_not_call_deep_dao_methods = true
+<!-- 除 BaseDao 已声明的 getDbColumnsMap 只读字段元数据门面外，BasePagingQueryDaoImpl、BaseCrudDaoImpl 和 BaseDaoSupportImpl 的深层方法只允许公共 DAO 继承链内部使用；适用于业务 Service 与业务 DAO；业务含义是模块调用必须全部通过 BaseDao 公开签名。 -->
+selplat_application_must_not_call_deep_dao_methods = except_BaseDao.getDbColumnsMap
 
 <!-- 应用 DAO 不得保留仅调用同名基础能力的包装方法；适用于 insertUser、updateUser、getStorePage 等没有业务增量的接口；业务含义是减少重复接口和维护点。 -->
 selplat_dao_must_remove_zero_value_base_wrappers = true
@@ -160,6 +160,12 @@ selplat_service_deferred_write_validation = required,uniqueness,default_value,ty
 
 <!-- 公共 DAO 必须通过 BaseDaoSupportImpl.getDbColumnsMap 从当前 DAO 对应真实表的数据库元数据读取有序字段映射；适用于查询、新增、更新和批量写入；业务含义是 Map 键作为后端真实列名，ColumnMetadata 作为后续类型、长度和主键校验依据，最终进入 SQL 的列名不由前端字段名直接决定。 -->
 selplat_base_dao_real_column_source = BaseDaoSupportImpl.getDbColumnsMap():ordered_map<columnName,ColumnMetadata>
+
+<!-- getDbColumnsMap 必须由 BaseDao 声明并由 BaseDaoSupportImpl 公开实现，返回不可修改的有序 Map；适用于业务 Service 读取默认字段名、备注、类型和主键信息；业务含义是项目不需要再建立同义元数据 DAO。 -->
+selplat_base_dao_columns_map_public_contract = public BaseDao.getDbColumnsMap() -> BaseDaoSupportImpl.unmodifiable_ordered_map
+
+<!-- 应用项目不得为 getDbColumnsMap 新建 UniauthTableMetadataDao 等平行接口，也不得复制 ColumnMetadata 为项目专属表格 DTO；适用于默认表格列定义和后续 reference-data 兜底；业务含义是数据库结构只有一个公共可信来源，页面配置只负责覆盖显示属性。 -->
+selplat_project_must_not_duplicate_table_metadata_contract = no_project_metadata_dao,no_project_column_metadata_dto,reuse_ColumnMetadata
 
 <!-- 公共查询字段字符串统一由 BaseDaoSupportImpl.getSelectColumns 复用 getDbColumnsMap 的有序键生成；适用于详情、批量主键查询和分页查询；业务含义是 Java 方法名遵循驼峰规范，查询字段与写入字段共享同一份真实数据库元数据来源。 -->
 selplat_base_dao_select_column_source = BaseDaoSupportImpl.getSelectColumns -> BaseDaoSupportImpl.getDbColumnsMap.keySet

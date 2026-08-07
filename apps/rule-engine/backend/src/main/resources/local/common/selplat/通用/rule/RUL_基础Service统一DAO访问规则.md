@@ -7,6 +7,15 @@
 <!-- BaseServiceImpl 必须以 D extends BaseDao 声明 DAO 泛型，并由 Spring 在基础类中统一注入当前业务 DAO。 -->
 selplat_base_service_impl_signature = BaseServiceImpl<D extends BaseDao>
 
+<!-- 简单单表业务的分页、查询、写入和假删除接口只能由 BaseService 统一声明；适用于 BaseController、业务 Service 接口和 BaseServiceImpl；业务含义是公共 Service 只有一个稳定契约入口。 -->
+selplat_base_service_public_contract_owner = BaseService
+
+<!-- 禁止为了区分 CRUD 与非 CRUD 再创建 BaseCrudService 等平行基础接口；适用于 shared 公共 Service 维护；业务含义是相同 CRUD 契约不得出现两个继承入口。 -->
+selplat_parallel_base_crud_service_interface_is_forbidden = BaseCrudService
+
+<!-- 元数据浏览、SQL 执行等不提供简单单表 CRUD 的服务不得继承 BaseService；适用于 MDA JdbcMetadataService、JdbcSqlService 等工具服务；业务含义是非 CRUD 服务不会被迫实现或意外暴露数据维护能力。 -->
+selplat_non_crud_service_must_not_extend_base_service = true
+
 <!-- 基础 Service 只允许通过受保护的强类型 getDao() 向业务子类提供 DAO；业务含义是外部调用方不能越过 Service 直接取得持久层对象。 -->
 selplat_base_service_dao_accessor = protected D getDao()
 
@@ -45,6 +54,9 @@ selplat_service_operation_log_identity = target_implementation_simple_name_witho
 
 <!-- BaseServiceImpl 必须继承 BaseExtendsServiceImpl，并在自身保留泛型 DAO 注入、protected getDao 与公开默认 CRUD；适用于所有业务 Service 的稳定继承入口；业务含义是业务类仍只继承 BaseServiceImpl，不直接感知更深层发号和结果构建实现。 -->
 selplat_base_service_impl_hierarchy = ApplicationServiceImpl -> BaseServiceImpl -> BaseExtendsServiceImpl
+
+<!-- BaseServiceImpl 必须直接实现唯一 BaseService 接口，业务 Service 接口也只继承 BaseService；适用于全部简单单表模块；业务含义是接口契约与默认实现保持一一对应。 -->
+selplat_base_service_interface_hierarchy = ApplicationService extends BaseService;BaseServiceImpl implements BaseService
 
 <!-- BaseServiceImpl 的公开 CRUD 方法负责调用 BaseExtendsServiceImpl 的主键生成和结果构建能力，并统一完成 DAO 调用与事务编排；适用于全部简单单表业务；业务含义是零差异模块直接继承默认实现，稳定基础层成为公共 CRUD 的唯一默认实现位置。 -->
 selplat_base_service_public_crud_owner = BaseServiceImpl

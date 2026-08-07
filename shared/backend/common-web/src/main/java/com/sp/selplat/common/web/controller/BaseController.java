@@ -1,6 +1,6 @@
 package com.sp.selplat.common.web.controller;
 
-import com.sp.selplat.common.service.BaseCrudService;
+import com.sp.selplat.common.service.BaseService;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonParam;
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  *
  * @param <S> 当前业务控制器对应的 CRUD Service，例如 {@code UniauthUserService}
  */
-public abstract class BaseController<S extends BaseCrudService> extends BaseExtendsController {
+public abstract class BaseController<S extends BaseService> extends BaseExtendsController {
 
     // Spring 按子类泛型注入唯一 CRUD Service，避免每个业务控制器重复声明同义字段。
     @Autowired

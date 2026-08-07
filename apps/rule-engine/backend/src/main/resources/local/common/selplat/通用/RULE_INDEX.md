@@ -31,6 +31,8 @@ load_rule_for_selplat_common_batch_param_or_thousand_item_batch = SELPLAT_BASE_D
 load_rule_for_selplat_id_sequence_code_or_composite_id_mapping = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_project_base_dao_inheritance_or_datasource_boundary = SELPLAT_BASE_DAO_REUSE_RULES
 load_rule_for_selplat_business_package_entity_dao_or_table_naming = SELPLAT_BASE_DAO_REUSE_RULES
+load_rule_for_selplat_database_column_metadata_or_table_definition = SELPLAT_BASE_DAO_REUSE_RULES
+load_rule_for_selplat_project_metadata_dao_or_column_dto = SELPLAT_BASE_DAO_REUSE_RULES
 
 <!-- SELPLAT Java 逐行业务注释和真实返回示例。 -->
 SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES = local/common/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md
@@ -41,11 +43,13 @@ load_rule_for_selplat_java_comment_template_or_actual_result_example = SELPLAT_J
 load_rule_for_selplat_java_method_purpose_param_return_exception_sequence = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
 load_rule_for_selplat_common_business_or_system_exception_comment = SELPLAT_JAVA_BUSINESS_COMMENT_AND_RETURN_EXAMPLE_RULES
 
-<!-- SELPLAT 基础 Service 统一 DAO 访问。 -->
+<!-- SELPLAT 基础 Service 唯一 CRUD 契约、统一 DAO 访问及非 CRUD 服务边界。 -->
 SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES = local/common/selplat/通用/rule/RUL_基础Service统一DAO访问规则.md
 load_rule_for_selplat_base_service_get_dao = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_service_dao_field_or_constructor = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 load_rule_for_selplat_base_service_default_crud_or_special_callback = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
+load_rule_for_selplat_base_service_interface_or_parallel_crud_interface = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
+load_rule_for_selplat_non_crud_service_inheritance = SELPLAT_BASE_SERVICE_DAO_ACCESS_RULES
 
 <!-- SELPLAT 真实数据库集成测试。 -->
 SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES = local/common/selplat/通用/rule/RUL_SELPLAT真实数据集成测试规则.md

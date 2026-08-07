@@ -1,6 +1,7 @@
 package com.sp.selplat.uniauth.user.service.impl;
 
 import com.sp.selplat.common.service.BaseServiceImpl;
+import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.support.CommonHashSupport;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonParam;
@@ -8,10 +9,12 @@ import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.service.logging.OperationLog;
 import com.sp.selplat.uniauth.user.dao.UniauthUserDao;
 import com.sp.selplat.uniauth.user.service.UniauthUserService;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
 /**
  * 用户服务通过 {@link BaseServiceImpl} 复用公共查询和持久化流程。
@@ -21,23 +24,41 @@ import org.springframework.util.Assert;
 public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> implements UniauthUserService {
 
     /**
-     * 返回用户资源的默认表格定义，并保留未来查询 reference-data 的统一替换入口。
+     * 返回用户资源的默认字段元数据，并保留未来查询 reference-data 的统一替换入口。
      *
      * @param viewCode 前端表格实例编码，例如 {@code user-management}
      * @param locale 当前语言，例如 {@code zh-CN}
      * @return 成功结果，例如
-     *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management"}}}
-     * @throws IllegalArgumentException viewCode 或 locale 为空时抛出，例如 {@code "viewCode must not be blank"}
+     *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management",}
+     *     {@code "columns":{"loginName":{"remarks":"登录账号","dataType":"VARCHAR"}}}}}
+     * @throws CommonBusinessException viewCode 或 locale 为空时抛出，例如
+     *     {@code CommonBusinessException("INVALID_VIEW_CODE", "表格实例编码不能为空。")}
      */
     @Override
     public CommonResult getTableDefinition(String viewCode, String locale) {
-        // 每个前端表格必须有稳定 viewCode，后续 reference-data 才能精确覆盖对应配置。
-        Assert.hasText(viewCode, "viewCode must not be blank");
+        // 每个前端表格必须有稳定 viewCode，空值统一转换为可识别的业务异常。
+        if (!StringUtils.hasText(viewCode)) {
+            // 使用稳定错误编码，让前端可以定位表格实例参数而不是接收 IllegalArgumentException。
+            throw new CommonBusinessException("INVALID_VIEW_CODE", "表格实例编码不能为空。");
+        }
         // 当前语言必须明确传递，避免未来配置接入时无法选择对应标题。
-        Assert.hasText(locale, "locale must not be blank");
-        // 当前阶段从项目 BaseDao 读取默认元数据；未来只在这里增加配置优先和默认兜底选择。
+        if (!StringUtils.hasText(locale)) {
+            // 语言错误同样进入公共业务异常响应，不使用测试式断言终止请求。
+            throw new CommonBusinessException("INVALID_LOCALE", "语言编码不能为空。");
+        }
+        // 使用有序结果保持来源、页面、语言和字段元数据的固定输出顺序。
+        Map<String, Object> definition = new LinkedHashMap<>();
+        // 标记当前结果直接来自数据库元数据，未来 reference-data 命中时可切换为配置来源。
+        definition.put("source", "DEFAULT_METADATA");
+        // 原样保留表格实例编码，供前端区分同一资源的不同页面表格。
+        definition.put("viewCode", viewCode);
+        // 原样保留语言，供未来 reference-data 选择对应字段标题。
+        definition.put("locale", locale);
+        // 直接复用 BaseDao 公共只读字段元数据，不在 Uniauth 新建同义 DTO 或 DAO 接口。
+        definition.put("columns", getDao().getDbColumnsMap());
+        // 当前阶段返回数据库默认定义；未来只在本方法增加配置优先和默认兜底选择。
         return buildSuccessResult(
-            getDao().getDefaultTableDefinition(viewCode, locale),
+            definition,
             "表格定义查询完成。"
         );
     }

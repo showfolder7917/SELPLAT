@@ -16,6 +16,7 @@ import com.sp.selplat.common.db.query.DefaultCommonQueryValidator;
 import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.common.util.CommonParam;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +25,7 @@ import org.springframework.util.ClassUtils;
 
 /**
  * 为基础 DAO 继承链提供受控表名、真实数据库元数据、主键号段和动态查询组件。
- * 本层不公开业务 CRUD，也不允许前端直接提供 SQL 表名或列名。
+ * 本层只公开 {@link #getDbColumnsMap()} 这一项只读元数据门面，不公开 SQL 构建或模板执行细节。
  */
 public abstract class BaseDaoSupportImpl {
 
@@ -202,7 +203,7 @@ public abstract class BaseDaoSupportImpl {
      * @throws IllegalStateException 当字段元数据为空、字段名为空或字段重复时抛出，例如
      *     {@code IllegalStateException("duplicate database column found: id")}
      */
-    protected Map<String, ColumnMetadata> getDbColumnsMap() {
+    public Map<String, ColumnMetadata> getDbColumnsMap() {
         // 解析当前表名 → "UniauthUser"。
         String tableName = getTableName();
         // 解析数据库上下文 → {"databaseType":"H2","schemaName":"PUBLIC"}。
@@ -229,8 +230,8 @@ public abstract class BaseDaoSupportImpl {
                 throw new IllegalStateException("duplicate database column found: " + columnName);
             }
         }
-        // 输出真实字段有序映射 → {"id":ColumnMetadata,"loginName":ColumnMetadata}。
-        return dbColumnsMap;
+        // 输出不可修改的真实字段有序映射，外部调用方只能读取，不能改变后续 SQL 使用的可信元数据。
+        return Collections.unmodifiableMap(dbColumnsMap);
     }
 
     /**

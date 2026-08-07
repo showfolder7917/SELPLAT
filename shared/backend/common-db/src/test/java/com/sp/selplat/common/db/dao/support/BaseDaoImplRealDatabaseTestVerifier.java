@@ -203,7 +203,7 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
     public static void verifyDatabaseColumnsAndWriteFieldSafety(String fixturePath) {
         withFixture(fixturePath, context -> {
             // 真实字段 Map 必须按数据库列顺序返回字段名到元数据对象的映射。
-            Map<String, ColumnMetadata> dbColumnsMap = context.dao.exposeDbColumnsMap();
+            Map<String, ColumnMetadata> dbColumnsMap = context.dao.getDbColumnsMap();
             // 第一列主键证明有序 Map 保留了数据库元数据顺序。
             assertEquals("id", dbColumnsMap.keySet().iterator().next());
             // 字段值必须保存同名真实列元数据。
@@ -698,17 +698,6 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
         protected BaseDataSourceContext getDataSourceContext() {
             // 返回测试初始化阶段保存的同库上下文，复现项目 DAO 的生产接入方式。
             return dataSourceContext;
-        }
-
-        /**
-         * 向真实数据库测试暴露受保护字段映射，不改变生产公开 DAO 契约。
-         *
-         * @return 数据库真实字段元数据，例如
-         *     {@code {"id":{"columnName":"id","primaryKey":true},"loginName":{"columnName":"loginName","primaryKey":false}}}
-         */
-        private Map<String, ColumnMetadata> exposeDbColumnsMap() {
-            // 直接调用生产支撑层方法，验证真实 JDBC 元数据结果。
-            return getDbColumnsMap();
         }
 
         /**

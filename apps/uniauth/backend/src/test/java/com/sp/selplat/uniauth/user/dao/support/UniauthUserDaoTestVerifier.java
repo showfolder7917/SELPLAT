@@ -1,16 +1,13 @@
 package com.sp.selplat.uniauth.user.dao.support;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sp.selplat.common.db.dao.BaseDao;
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
 import com.sp.selplat.uniauth.persistence.UniauthBaseDao;
-import com.sp.selplat.uniauth.persistence.UniauthTableMetadataDao;
 import com.sp.selplat.uniauth.user.dao.UniauthUserDao;
 import com.sp.selplat.uniauth.user.dao.UniauthUserDaoImpl;
-import java.lang.reflect.Modifier;
 
 /**
  * 用户 DAO 结构验证器集中承接边界断言，让测试方法只表达被检查的生产类型。
@@ -31,8 +28,6 @@ public final class UniauthUserDaoTestVerifier {
         assertEquals(0L, declaredBusinessMethodCount(UniauthUserDao.class));
         // 用户 DAO 必须继续属于 BaseDao 契约。
         assertTrue(BaseDao.class.isAssignableFrom(UniauthUserDao.class));
-        // 用户 DAO 同时继承 Uniauth 项目级表格元数据契约，不在具体接口重复声明方法。
-        assertTrue(UniauthTableMetadataDao.class.isAssignableFrom(UniauthUserDao.class));
     }
 
     /**
@@ -45,15 +40,8 @@ public final class UniauthUserDaoTestVerifier {
         assertEquals(UniauthBaseDao.class, UniauthUserDaoImpl.class.getSuperclass());
         // Uniauth 项目基类必须继续继承公共 BaseDaoImpl，保持全部公共 CRUD 契约不变。
         assertEquals(BaseDaoImpl.class, UniauthBaseDao.class.getSuperclass());
-        try {
-            // Spring 使用 CGLIB 代理 DAO，对外持久化方法不得使用 final 阻断代理和已注入上下文。
-            assertFalse(Modifier.isFinal(UniauthBaseDao.class
-                .getDeclaredMethod("getDefaultTableDefinition", String.class, String.class)
-                .getModifiers()));
-        } catch (NoSuchMethodException exception) {
-            // 方法契约缺失时转为明确的结构断言失败。
-            throw new AssertionError("UniauthBaseDao 缺少默认表格定义方法。", exception);
-        }
+        // 项目 Base 只负责数据源上下文，不声明表格 DTO 或平行元数据 DAO 契约。
+        assertEquals(2L, declaredBusinessMethodCount(UniauthBaseDao.class));
     }
 
     /**

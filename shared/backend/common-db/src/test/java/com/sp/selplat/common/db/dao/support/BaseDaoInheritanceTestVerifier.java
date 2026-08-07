@@ -61,8 +61,10 @@ public final class BaseDaoInheritanceTestVerifier {
         try {
             // 数据库字段能力必须返回字段名到 ColumnMetadata 的有序映射契约。
             Method columnsMapMethod = BaseDaoSupportImpl.class.getDeclaredMethod("getDbColumnsMap");
-            // 字段映射仅供继承链内部复用，不扩大成业务 DAO 公开能力。
-            assertTrue(Modifier.isProtected(columnsMapMethod.getModifiers()));
+            // 字段映射作为 BaseDao 唯一公共只读元数据门面，业务层无需建立项目级平行接口。
+            assertTrue(Modifier.isPublic(columnsMapMethod.getModifiers()));
+            // BaseDao 必须声明同一个公开契约，强类型业务 DAO 才能直接访问。
+            assertSame(java.util.Map.class, BaseDao.class.getMethod("getDbColumnsMap").getReturnType());
             // 返回原始类型必须是 Map，字段值的泛型由生产签名固定为 ColumnMetadata。
             assertSame(java.util.Map.class, columnsMapMethod.getReturnType());
             // SELECT 字段方法使用正确驼峰命名并保持 protected。
@@ -91,8 +93,22 @@ public final class BaseDaoInheritanceTestVerifier {
     public static void verifyFacadeContract() {
         // BaseDaoImpl 直接父类必须是 BaseCrudDaoImpl。
         assertSame(BaseCrudDaoImpl.class, BaseDaoImpl.class.getSuperclass());
-        // 接口和实现的非合成方法签名必须完全一致。
-        assertEquals(declaredMethodSignatures(BaseDao.class), declaredMethodSignatures(BaseDaoImpl.class));
+        // 除支撑层直接提供的只读字段元数据外，接口和门面实现的方法签名必须逐项一致。
+        Set<String> expectedFacadeMethods = declaredMethodSignatures(BaseDao.class);
+        // getDbColumnsMap 由现有支撑层公开实现，BaseDaoImpl 只继承，不再增加同义包装。
+        expectedFacadeMethods.remove("getDbColumnsMap()");
+        // 其余 CRUD 门面继续由 BaseDaoImpl 自身唯一实现。
+        assertEquals(expectedFacadeMethods, declaredMethodSignatures(BaseDaoImpl.class));
+        try {
+            // 公开字段元数据方法必须仍由原有支撑层实现，证明本次没有复制元数据读取逻辑。
+            assertSame(
+                BaseDaoSupportImpl.class,
+                BaseDaoImpl.class.getMethod("getDbColumnsMap").getDeclaringClass()
+            );
+        } catch (NoSuchMethodException exception) {
+            // 公共契约缺失时转成明确结构失败。
+            throw new AssertionError("BaseDaoImpl 缺少继承的 getDbColumnsMap 公共契约", exception);
+        }
     }
 
     /**
