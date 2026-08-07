@@ -7,16 +7,35 @@
 ## 目录归属
 
 web_base_runtime_asset_root = static/sel/assets/
-web_base_runtime_asset_layers = components/,shared/,backgrounds/,cursors/,icons/
+web_base_runtime_asset_layers = components/,themes/,shared/,backgrounds/,cursors/,icons/
 web_base_component_asset_directory_pattern = static/sel/assets/components/<component>/
+web_base_theme_asset_directory_pattern = static/sel/assets/themes/<theme-id>/
+web_base_theme_mode_base_asset_directory_pattern = static/sel/assets/themes/<theme-id>/<mode>/base/
+web_base_theme_mode_accent_asset_directory_pattern = static/sel/assets/themes/<theme-id>/<mode>/accents/<accent-id>/
 web_application_runtime_asset_directory_pattern = static/<application>/assets/<category>/
 web_runtime_asset_root_must_not_be_flat = true
 
 <!-- 控件专用素材必须保留组件归属；只有两个及以上基础控件真实复用的素材才进入 shared，应用专用素材禁止进入基础素材根。 -->
 web_component_specific_asset_must_live_in_component_layer = true
+web_theme_specific_asset_must_live_in_theme_layer = true
+web_theme_asset_reference_owner = static/sel/theme/packs/<theme-id>/manifest.js
+web_theme_asset_directory_id_must_equal_theme_pack_id = true
+web_image_theme_skin_bundle_files = frame.webp,background.webp
+web_image_theme_base_skin_bundle_must_live_in = <theme-id>/<mode>/base/
+web_image_theme_accent_skin_bundle_must_live_in = <theme-id>/<mode>/accents/<accent-id>/
+web_image_theme_skin_bundle_assets_must_not_be_flattened_by_type_or_filename_prefix = true
 web_shared_asset_minimum_independent_consumers = 2
 web_application_specific_asset_in_base_root_is_forbidden = true
 web_base_asset_in_application_directory_is_forbidden = true
+
+<!-- 主题自动绑定的边框、纹理和背景必须进入自己的 themes/<theme-id>；禁止一个主题把其他主题或公共背景当作自动配套素材。公共背景只由背景模块供用户独立选择。 -->
+web_theme_exclusive_asset_examples = frame,texture,theme-only-background
+web_theme_automatic_background_must_live_in = static/sel/assets/themes/<same-theme-id>/
+web_theme_automatic_cross_theme_or_public_background_reference_is_forbidden = true
+web_public_selectable_background_must_live_in = static/sel/assets/backgrounds/
+web_public_selectable_background_must_not_be_theme_automatic_material = true
+web_theme_without_image_background_may_use = registered-solid-background-id
+web_theme_asset_duplicate_in_shared_or_backgrounds_is_forbidden = true
 
 ## 压缩与格式
 

@@ -14,6 +14,7 @@ load_rule_for_selplat_crystal_default_resize_maximize_restore_visual_qa = SELPLA
 <!-- SELPLAT 工程目录、构建产物、项目 JDK、运行数据与缓存。 -->
 SELPLAT_PROJECT_PATH_RULES = local/common/selplat/通用/rule/RUL_SELPLAT工程路径规则.md
 load_rule_for_selplat_project_path_or_runtime_output = SELPLAT_PROJECT_PATH_RULES
+load_rule_for_selplat_application_authoritative_local_database = SELPLAT_PROJECT_PATH_RULES
 load_rule_for_python_bytecode_cache_location = SELPLAT_PROJECT_PATH_RULES
 load_rule_for_selplat_project_jdk_cache_or_legacy_runtime_migration = SELPLAT_PROJECT_PATH_RULES
 

@@ -1,0 +1,176 @@
+<!doctype html>
+<!-- reference-data 类型管理后台：页面只装配公共主题、下拉和请求能力，业务数据全部来自真实管理 API。 -->
+<html lang="zh-CN" data-sel-theme="glass-admin" data-sel-mode="dark" data-sel-accent="crystal-cyan" data-sel-density="comfortable">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>引用数据管理</title>
+    <link rel="icon" href="data:,">
+    <!-- 公共主题令牌和选择控件由 sel-ui 发布，当前应用不复制组件实现。 -->
+    <link rel="stylesheet" href="/sel/core/selBaseReset.css">
+    <link rel="stylesheet" href="/sel/core/selBaseAccessibility.css">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeContract.css">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeStates.css">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeTypography.css">
+    <link rel="stylesheet" href="/sel/components/dropdown/selDropdownMenu.css">
+    <link rel="stylesheet" href="/sel/components/page-background/selPageBackground.css">
+    <link rel="stylesheet" href="/sel/components/floating-panel/selFloatingPanel.css">
+    <link rel="stylesheet" href="/sel/components/personalization/selPersonalization.css">
+    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/theme.css">
+    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/modes/dark.css">
+    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/modes/light.css">
+    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/theme.css">
+    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/modes/dark.css">
+    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/modes/light.css">
+    <link rel="stylesheet" href="/sel/theme/packs/glass-admin/theme.css?v=20260807-1">
+    <link rel="stylesheet" href="/sel/theme/packs/glass-admin/modes/dark.css?v=20260807-1">
+    <link rel="stylesheet" href="/sel/theme/packs/glass-admin/modes/light.css?v=20260807-1">
+    <link rel="stylesheet" href="./reference-data.css?v=20260807-4">
+</head>
+<body>
+    <!-- 页面背景与业务工作台分层，主题切换只更新令牌和素材。 -->
+    <div data-sel-page-background-host></div>
+    <!-- 公共个性化入口负责主题、深浅模式、颜色皮肤和背景选择，状态只保存在当前页面内存。 -->
+    <div data-sel-personalization-host></div>
+    <main class="reference-data-workspace" data-reference-data-app>
+        <!-- 左侧导航只表达模块信息和未来功能入口，当前类型管理保持选中。 -->
+        <aside class="reference-data-sidebar">
+            <div class="reference-data-brand">
+                <span class="reference-data-brand-mark" aria-hidden="true">◇</span>
+                <div>
+                    <strong>引用数据中心</strong>
+                    <span>REFERENCE DATA</span>
+                </div>
+            </div>
+            <nav class="reference-data-navigation" aria-label="引用数据后台导航">
+                <button class="reference-data-nav-item reference-data-nav-item-active" type="button">
+                    <span aria-hidden="true">▦</span><span>类型管理</span><b data-reference-data-role="type-count">0</b>
+                </button>
+                <button class="reference-data-nav-item" type="button" disabled title="数据项管理将在下一阶段开放">
+                    <span aria-hidden="true">⌘</span><span>数据项管理</span><small>预留</small>
+                </button>
+                <button class="reference-data-nav-item" type="button" disabled title="发布管理将在下一阶段开放">
+                    <span aria-hidden="true">◉</span><span>发布管理</span><small>预留</small>
+                </button>
+            </nav>
+            <section class="reference-data-storage-card">
+                <span class="reference-data-storage-icon" aria-hidden="true">▱</span>
+                <div><strong>永久数据库</strong><span>独立文件存储已启用</span></div>
+                <i class="reference-data-health-dot" title="数据库已连接"></i>
+            </section>
+        </aside>
+
+        <!-- 主区域固定为标题、筛选、表格和分页四层，不因加载或空状态改变几何。 -->
+        <section class="reference-data-main-panel">
+            <header class="reference-data-header">
+                <div>
+                    <p class="reference-data-eyebrow">平台主数据 · 类型目录</p>
+                    <h1>引用数据类型管理</h1>
+                    <p>维护项目资源坐标、多语言名称和树/选项输出形态。</p>
+                </div>
+                <div class="reference-data-header-actions">
+                    <button class="reference-data-button reference-data-button-quiet" type="button" data-reference-data-action="toggle-mode" aria-label="切换深浅模式">
+                        <span aria-hidden="true">◐</span><span data-reference-data-role="mode-label">浅色模式</span>
+                    </button>
+                    <button class="reference-data-button reference-data-button-primary" type="button" data-reference-data-action="create">
+                        <span aria-hidden="true">＋</span><span>新增类型</span>
+                    </button>
+                </div>
+            </header>
+
+            <section class="reference-data-filter-bar" aria-label="类型筛选">
+                <label class="reference-data-search-field">
+                    <span aria-hidden="true">⌕</span>
+                    <input type="search" data-reference-data-role="keyword" placeholder="搜索项目、资源编码或多语言名称" autocomplete="off">
+                </label>
+                <div class="seldropdown-root seldropdown-surface-toolbar reference-data-status-filter" data-sel-dropdown-menu data-sel-dropdown-menu-label="类型状态">
+                    <select class="seldropdown-native" data-reference-data-role="status" aria-label="类型状态">
+                        <option value="">全部状态</option>
+                        <option value="1">已启用</option>
+                        <option value="2">已停用</option>
+                    </select>
+                </div>
+                <button class="reference-data-button reference-data-button-filter" type="button" data-reference-data-action="search">查询</button>
+                <button class="reference-data-button reference-data-button-quiet" type="button" data-reference-data-action="reset">重置</button>
+                <span class="reference-data-result-summary" data-reference-data-role="summary">正在读取类型目录…</span>
+            </section>
+
+            <section class="reference-data-table-card" aria-label="引用数据类型列表">
+                <div class="reference-data-table-scroller">
+                    <table class="reference-data-table">
+                        <thead>
+                            <tr>
+                                <th>类型坐标</th>
+                                <th>中文名称</th>
+                                <th>英文 / 日文</th>
+                                <th>输出形态</th>
+                                <th>状态</th>
+                                <th>排序</th>
+                                <th>更新时间</th>
+                                <th class="reference-data-table-action-heading">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody data-reference-data-role="rows"></tbody>
+                    </table>
+                </div>
+                <div class="reference-data-empty" data-reference-data-role="empty" hidden>
+                    <span aria-hidden="true">◇</span><strong>没有匹配的类型</strong><p>调整筛选条件，或创建新的引用数据类型。</p>
+                </div>
+                <div class="reference-data-loading" data-reference-data-role="loading" aria-live="polite"><span></span>正在同步永久数据库…</div>
+            </section>
+
+            <footer class="reference-data-footer">
+                <span data-reference-data-role="page-info">第 1 页</span>
+                <div class="reference-data-pagination">
+                    <button type="button" data-reference-data-action="previous" aria-label="上一页">‹</button>
+                    <b data-reference-data-role="current-page">1</b>
+                    <button type="button" data-reference-data-action="next" aria-label="下一页">›</button>
+                </div>
+            </footer>
+        </section>
+    </main>
+
+    <!-- 编辑窗口使用实时 DOM 与主题令牌，深浅主题下保持同一字段结构。 -->
+    <dialog class="reference-data-dialog" data-reference-data-role="dialog">
+        <form method="dialog" data-reference-data-role="form">
+            <header>
+                <div><span class="reference-data-dialog-mark" aria-hidden="true">◇</span><div><h2 data-reference-data-role="dialog-title">新增类型</h2><p>类型坐标用于跨项目稳定调用，请保存后谨慎修改。</p></div></div>
+                <button class="reference-data-icon-button" type="button" data-reference-data-action="close" aria-label="关闭">×</button>
+            </header>
+            <div class="reference-data-form-grid">
+                <label><span>项目编码 <i>*</i></span><input name="projectCode" required maxlength="64" placeholder="例如 cms"></label>
+                <label><span>资源编码 <i>*</i></span><input name="resourceCode" required maxlength="64" placeholder="例如 article-category"></label>
+                <label class="reference-data-form-wide"><span>中文名称 <i>*</i></span><input name="nameZh" required maxlength="120" placeholder="例如 文章分类"></label>
+                <label><span>日文名称</span><input name="nameJa" maxlength="120" placeholder="例：記事カテゴリ"></label>
+                <label><span>英文名称</span><input name="nameEn" maxlength="120" placeholder="e.g. Article categories"></label>
+                <label><span>输出形态 <i>*</i></span><select name="dataShape" required><option value="BOTH">树 + 选项</option><option value="TREE">仅树形</option><option value="OPTIONS">仅选项</option></select></label>
+                <label><span>状态 <i>*</i></span><select name="status" required><option value="1">启用</option><option value="2">停用</option></select></label>
+                <label><span>排序值</span><input name="sortnum" type="number" step="1" value="0"></label>
+                <label class="reference-data-form-wide"><span>中文说明</span><textarea name="descriptionZh" maxlength="500" rows="3" placeholder="说明这个类型由哪个项目使用，以及数据用途"></textarea></label>
+            </div>
+            <footer>
+                <span data-reference-data-role="form-hint">带 * 的字段必须填写</span>
+                <div><button class="reference-data-button reference-data-button-quiet" type="button" data-reference-data-action="close">取消</button><button class="reference-data-button reference-data-button-primary" type="submit">保存类型</button></div>
+            </footer>
+        </form>
+    </dialog>
+
+    <div class="reference-data-toast" data-reference-data-role="toast" role="status" aria-live="polite"></div>
+
+    <!-- 公共运行时先注册，再由 reference-data 装配层显式挂载。 -->
+    <script src="/sel/core/selBaseRuntime.js"></script>
+    <script src="/sel/core/selAjax.js"></script>
+    <script src="/sel/theme/runtime/selThemeRegistry.js"></script>
+    <script src="/sel/theme/packs/crystal-tech/manifest.js"></script>
+    <script src="/sel/theme/packs/candy-adventure/manifest.js"></script>
+    <script src="/sel/theme/packs/glass-admin/manifest.js?v=20260807-1"></script>
+    <script src="/sel/theme/runtime/selThemeManager.js"></script>
+    <script src="/sel/components/dropdown/selDropdownMenu.js"></script>
+    <script src="/sel/components/page-background/selPageBackground.js"></script>
+    <script src="/sel/components/floating-panel/selFloatingPanel.js"></script>
+    <script src="/sel/components/personalization/selPersonalizationRegistry.js"></script>
+    <script src="/sel/components/personalization/selPersonalization.js"></script>
+    <script src="./reference-data.js?v=20260807-2"></script>
+</body>
+</html>

@@ -28,6 +28,16 @@ web_page_background_theme_must_not_infer_from_filename = true
 web_page_background_color_palette_is_unrestricted = true
 web_page_background_theme_may_include = landscape,cartoon,cute,technology,space,fantasy,oriental,minimal,ocean
 
+<!-- 完整主题自动配套的图片背景属于主题包，不属于公共背景库；每个主题只能引用自己目录的配套背景。无图纯色模式可使用背景模块登记的通用纯色 ID。 -->
+web_complete_theme_automatic_image_background_directory_pattern = static/sel/assets/themes/<same-theme-id>/
+web_complete_theme_base_background_pattern = static/sel/assets/themes/<same-theme-id>/<mode>/base/background.webp
+web_complete_theme_accent_background_pattern = static/sel/assets/themes/<same-theme-id>/<mode>/accents/<accent-id>/background.webp
+web_complete_theme_manifest_must_own_automatic_background_registry = true
+web_complete_theme_cross_theme_background_reference_is_forbidden = true
+web_complete_theme_public_background_as_automatic_material_is_forbidden = true
+web_complete_theme_solid_background_exception = registered-solid-background-with-empty-image
+web_public_background_library_usage = explicit-user-selection-only
+
 <!-- 图片素材使用清晰、稳定、语义化的英文文件名；网页背景优先使用压缩后的 WebP，避免把生成源文件或临时文件留在运行资源目录。 -->
 web_page_background_asset_filename_pattern = category-subject-or-palette.webp
 web_page_background_runtime_image_format_preferred = webp
@@ -55,7 +65,7 @@ web_page_background_motion_must_respect_prefers-reduced-motion = true
 
 <!-- 交付前逐项切换全部主题，验证资源、参数、刷新记忆、单/多业务控件页面和不同亮度背景下的可读性。 -->
 web_page_background_qa = all-themes,all-assets,parameter-controls,configured-refresh-behavior,single-instance,multi-instance,console,visual-readability
-web_page_background_missing_asset_is_forbidden = true
+web_page_background_missing_asset_is_forbidden = true-except-registered-solid-background
 web_page_background_theme_switch_must_not_reinitialize_business-controls = true
 
 java_ability_refs = none

@@ -1,0 +1,112 @@
+/*
+ * 晶透管理风格层：以 CSS 玻璃表面替代图片窗框，统一公共面板、表格、弹窗与设置浮层的视觉。
+ * 组件结构和交互继续由各公共组件拥有，本文件仅覆盖可视材质。
+ */
+:root[data-sel-theme="glass-admin"] {
+    --sel-theme-font-family: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    --sel-theme-radius-panel-base: 22px;
+    --sel-theme-radius-popup-base: 17px;
+    --sel-theme-radius-inner-base: 16px;
+    --sel-theme-radius-control: 12px;
+    --sel-theme-radius-action: 11px;
+    --sel-theme-radius-icon: 10px;
+    --sel-theme-grid-radius-row: 0px;
+    --sel-theme-grid-row-gap: 0px;
+    --sel-theme-crystal-surface-overflow: hidden;
+    --sel-glass-admin-surface: color-mix(in srgb, rgb(var(--sel-theme-neutral-rgb) / 0.86) 88%, rgb(var(--sel-theme-color-rgb) / 0.12));
+    --sel-glass-admin-surface-raised: color-mix(in srgb, rgb(var(--sel-theme-neutral-rgb) / 0.94) 90%, rgb(var(--sel-theme-color-rgb) / 0.10));
+    --sel-glass-admin-border: rgb(var(--sel-theme-color-rgb) / 0.34);
+    --sel-glass-admin-border-soft: rgb(var(--sel-theme-color-rgb) / 0.16);
+    --sel-glass-admin-shadow: 0 18px 52px rgb(0 8 30 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.12);
+    --sel-glass-admin-control-shadow: inset 0 1px 0 rgb(255 255 255 / 0.10), 0 6px 18px rgb(0 8 30 / 0.12);
+}
+
+/* 公共图片框在本主题中退化为轻量玻璃描边，避免无图片主题出现透明厚边。 */
+:root[data-sel-theme="glass-admin"] :is(.selpanel-crystal-surface, .selwindow-window-shell) {
+    border: 1px solid var(--sel-glass-admin-border);
+    border-image: none;
+    border-radius: var(--sel-theme-radius-panel);
+    background: var(--sel-glass-admin-surface);
+    box-shadow: var(--sel-glass-admin-shadow);
+    filter: none;
+    -webkit-backdrop-filter: blur(22px) saturate(130%);
+    backdrop-filter: blur(22px) saturate(130%);
+}
+
+:root[data-sel-theme="glass-admin"] .selpanel-crystal-surface::after {
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(130deg, rgb(255 255 255 / 0.07), transparent 34%, rgb(var(--sel-theme-color-rgb) / 0.06));
+}
+
+:root[data-sel-theme="glass-admin"] .selfloating-panel {
+    padding: 14px;
+    border: 1px solid var(--sel-glass-admin-border);
+    background: transparent;
+    box-shadow: var(--sel-glass-admin-shadow);
+    overflow: hidden;
+}
+
+:root[data-sel-theme="glass-admin"] .selfloating-panel::before {
+    inset: 0;
+    border-radius: inherit;
+    background-color: var(--sel-glass-admin-surface-raised);
+}
+
+:root[data-sel-theme="glass-admin"] .selfloating-panel::after {
+    display: none;
+}
+
+:root[data-sel-theme="glass-admin"] :is(
+    .selpanel-status-tabs,
+    .selpanel-action-button,
+    .selpanel-date-field,
+    .selpanel-reset-button,
+    .selsearch-field,
+    .seldropdown-trigger,
+    .seldatepicker-trigger,
+    .selwindow-control-shell,
+    .selwindow-action-button,
+    .selfloating-trigger,
+    .selfloating-close
+) {
+    border-color: var(--sel-glass-admin-border-soft);
+    background: var(--sel-glass-admin-surface-raised);
+    box-shadow: var(--sel-glass-admin-control-shadow);
+}
+
+:root[data-sel-theme="glass-admin"] :is(
+    .selpanel-action-button:hover,
+    .selpanel-action-primary,
+    .selsearch-submit-button,
+    .selwindow-action-primary
+) {
+    border-color: var(--sel-glass-admin-border);
+    background: linear-gradient(135deg, rgb(var(--sel-theme-color-rgb) / 0.42), rgb(var(--sel-theme-color-rgb) / 0.20));
+    box-shadow: var(--sel-glass-admin-control-shadow), 0 0 18px rgb(var(--sel-theme-color-rgb) / 0.20);
+}
+
+:root[data-sel-theme="glass-admin"] .selgrid-board-shell {
+    border: 1px solid var(--sel-glass-admin-border-soft);
+    border-radius: var(--sel-theme-radius-inner);
+    background: color-mix(in srgb, var(--sel-glass-admin-surface) 80%, transparent);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+:root[data-sel-theme="glass-admin"] .selgrid-board-shell::after {
+    opacity: 0.36;
+}
+
+:root[data-sel-theme="glass-admin"] :is(.seldropdown-menu, .seldatepicker-popover, .selgrid-menu, .selgrid-menu-submenu) {
+    border: 1px solid var(--sel-glass-admin-border);
+    border-image: none;
+    border-radius: var(--sel-theme-radius-popup);
+    background: var(--sel-glass-admin-surface-raised);
+    box-shadow: var(--sel-glass-admin-shadow);
+    -webkit-backdrop-filter: blur(22px) saturate(130%);
+    backdrop-filter: blur(22px) saturate(130%);
+}
+
+:root[data-sel-theme="glass-admin"] :is(.seldropdown-menu, .seldatepicker-popover, .selgrid-menu, .selgrid-menu-submenu)::after {
+    display: none;
+}

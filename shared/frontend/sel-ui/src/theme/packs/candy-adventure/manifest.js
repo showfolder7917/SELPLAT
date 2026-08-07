@@ -5,16 +5,16 @@
 (function selCandyAdventureThemeRegister() {
     "use strict";
 
-    const selCandyAdventureAssetVersion = "20260806-2";
+    const selCandyAdventureAssetVersion = "20260807-3";
     const selCandyAdventureAssetRoot = "/sel/assets/themes/candy-adventure";
     const selCandyAdventureModeSettings = Object.freeze({
         dark: Object.freeze({
-            frameImage: `${selCandyAdventureAssetRoot}/dark/frame.webp?v=${selCandyAdventureAssetVersion}`,
+            frameImage: `${selCandyAdventureAssetRoot}/dark/base/frame.webp?v=${selCandyAdventureAssetVersion}`,
             backgroundTheme: "candy-adventure-dark",
             backgroundDisplay: Object.freeze({ overlay: 42, brightness: 92, blur: 0 })
         }),
         light: Object.freeze({
-            frameImage: `${selCandyAdventureAssetRoot}/light/frame.webp?v=${selCandyAdventureAssetVersion}`,
+            frameImage: `${selCandyAdventureAssetRoot}/light/base/frame.webp?v=${selCandyAdventureAssetVersion}`,
             backgroundTheme: "candy-adventure-light",
             backgroundDisplay: Object.freeze({ overlay: 12, brightness: 96, blur: 0 })
         })
@@ -45,7 +45,7 @@
             id: selCandyAdventureId,
             label: selCandyAdventureLabel,
             color: selCandyAdventureColor,
-            frameImage: `${selCandyAdventureAssetRoot}/${selCandyAdventureMode}/accents/${selCandyAdventureId}-frame.webp?v=${selCandyAdventureAssetVersion}`,
+            frameImage: `${selCandyAdventureAssetRoot}/${selCandyAdventureMode}/accents/${selCandyAdventureId}/frame.webp?v=${selCandyAdventureAssetVersion}`,
             backgroundTheme: `candy-adventure-${selCandyAdventureMode}-${selCandyAdventureId}`,
             backgroundDisplay: selCandyAdventureModeSetting.backgroundDisplay
         }));
@@ -59,7 +59,7 @@
                 id: `candy-adventure-${selCandyAdventureMode}-${selCandyAdventureId}`,
                 name: `${selCandyAdventureModeNames[selCandyAdventureMode]} · ${selCandyAdventureLabel}`,
                 category: "糖果冒险",
-                image: `../../assets/themes/candy-adventure/${selCandyAdventureMode}/accents/${selCandyAdventureId}-background.webp?v=${selCandyAdventureAssetVersion}`
+                image: `../../assets/themes/candy-adventure/${selCandyAdventureMode}/accents/${selCandyAdventureId}/background.webp?v=${selCandyAdventureAssetVersion}`
             }))
         );
     }
@@ -72,8 +72,8 @@
         icon: "ri-magic-line",
         defaults: Object.freeze({ mode: "light", accent: "sky-blue", density: "comfortable" }),
         backgrounds: Object.freeze([
-            Object.freeze({ id: "candy-adventure-dark", name: "星空糖果岛", category: "糖果冒险", image: "../../assets/themes/candy-adventure/dark/background.webp?v=20260806-1" }),
-            Object.freeze({ id: "candy-adventure-light", name: "糖果云朵城", category: "糖果冒险", image: "../../assets/themes/candy-adventure/light/background.webp?v=20260806-1" }),
+            Object.freeze({ id: "candy-adventure-dark", name: "星空糖果岛", category: "糖果冒险", image: `../../assets/themes/candy-adventure/dark/base/background.webp?v=${selCandyAdventureAssetVersion}` }),
+            Object.freeze({ id: "candy-adventure-light", name: "糖果云朵城", category: "糖果冒险", image: `../../assets/themes/candy-adventure/light/base/background.webp?v=${selCandyAdventureAssetVersion}` }),
             ...selCandyAdventureBackgrounds()
         ]),
         modes: Object.freeze([

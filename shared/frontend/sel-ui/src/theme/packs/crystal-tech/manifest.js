@@ -5,8 +5,8 @@
 (function selCrystalTechThemeRegister() {
     "use strict";
 
-    const selCrystalTechAssetVersion = "20260804-1";
-    const selCrystalTechFrameRoot = "/sel/assets/skins";
+    const selCrystalTechAssetVersion = "20260807-3";
+    const selCrystalTechAssetRoot = "/sel/assets/themes/crystal-tech";
     const selCrystalTechBackgroundDisplay = Object.freeze({
         dark: Object.freeze({ overlay: 52, brightness: 86, blur: 0 }),
         light: Object.freeze({ overlay: 16, brightness: 96, blur: 0 })
@@ -26,10 +26,37 @@
             id: selCrystalTechId,
             label: selCrystalTechLabel,
             color: selCrystalTechColor,
-            frameImage: `${selCrystalTechFrameRoot}/${selCrystalTechMode}/components/panel/themes/selPanelFrame-${selCrystalTechId}.webp?v=${selCrystalTechAssetVersion}`,
-            backgroundTheme: `${selCrystalTechMode}-${selCrystalTechId}`,
+            frameImage: `${selCrystalTechAssetRoot}/${selCrystalTechMode}/accents/${selCrystalTechId}/frame.webp?v=${selCrystalTechAssetVersion}`,
+            backgroundTheme: `crystal-tech-${selCrystalTechMode}-${selCrystalTechId}`,
             backgroundDisplay: selCrystalTechBackgroundDisplay[selCrystalTechMode]
         }));
+    }
+
+    /** 登记水晶科技自己的深浅基础背景和六组 Accent 背景。 */
+    function selCrystalTechBackgrounds() {
+        const selCrystalTechModeNames = Object.freeze({ dark: "深空", light: "晨雾" });
+        const selCrystalTechDefinitions = Object.freeze([
+            ["stellar-blue", "星际蓝"],
+            ["crystal-cyan", "水晶青"],
+            ["nebula-purple", "星云紫"],
+            ["emerald-green", "翡翠绿"],
+            ["amber-gold", "琥珀金"],
+            ["pulse-pink", "脉冲粉"]
+        ]);
+        return ["dark", "light"].flatMap((selCrystalTechMode) => [
+            Object.freeze({
+                id: `crystal-tech-${selCrystalTechMode}`,
+                name: `${selCrystalTechModeNames[selCrystalTechMode]} · 水晶`,
+                category: "水晶科技",
+                image: `../../assets/themes/crystal-tech/${selCrystalTechMode}/base/background.webp?v=${selCrystalTechAssetVersion}`
+            }),
+            ...selCrystalTechDefinitions.map(([selCrystalTechId, selCrystalTechLabel]) => Object.freeze({
+                id: `crystal-tech-${selCrystalTechMode}-${selCrystalTechId}`,
+                name: `${selCrystalTechModeNames[selCrystalTechMode]} · ${selCrystalTechLabel}`,
+                category: "水晶科技",
+                image: `../../assets/themes/crystal-tech/${selCrystalTechMode}/accents/${selCrystalTechId}/background.webp?v=${selCrystalTechAssetVersion}`
+            }))
+        ]);
     }
 
     window.selThemeRegistry?.register({
@@ -39,6 +66,7 @@
         description: "透明水晶边框、深海玻璃与蓝紫光效",
         icon: "ri-gem-line",
         defaults: Object.freeze({ mode: "dark", accent: null, density: "comfortable" }),
+        backgrounds: Object.freeze(selCrystalTechBackgrounds()),
         modes: Object.freeze([
             Object.freeze({
                 id: "dark",
@@ -49,8 +77,8 @@
                 preview: Object.freeze({ surface: "#020816", card: "#07132E", main: "#F7FAFF", muted: "#AFC0DD", accent: "#8067FF" }),
                 base: Object.freeze({
                     color: "#4A8BFF",
-                    frameImage: `${selCrystalTechFrameRoot}/dark/components/panel/selPanelCyberFrame.webp?v=${selCrystalTechAssetVersion}`,
-                    backgroundTheme: "void",
+                    frameImage: `${selCrystalTechAssetRoot}/dark/base/frame.webp?v=${selCrystalTechAssetVersion}`,
+                    backgroundTheme: "crystal-tech-dark",
                     backgroundDisplay: selCrystalTechBackgroundDisplay.dark
                 }),
                 accents: Object.freeze(selCrystalTechAccents("dark"))
@@ -64,8 +92,8 @@
                 preview: Object.freeze({ surface: "#EAF3FB", card: "#DCE8F3", main: "#0B1633", muted: "#52617A", accent: "#4A8BFF" }),
                 base: Object.freeze({
                     color: "#3670B0",
-                    frameImage: `${selCrystalTechFrameRoot}/light/components/panel/selPanelLightCrystalFrame.webp?v=${selCrystalTechAssetVersion}`,
-                    backgroundTheme: "morning-mist",
+                    frameImage: `${selCrystalTechAssetRoot}/light/base/frame.webp?v=${selCrystalTechAssetVersion}`,
+                    backgroundTheme: "crystal-tech-light",
                     backgroundDisplay: selCrystalTechBackgroundDisplay.light
                 }),
                 accents: Object.freeze(selCrystalTechAccents("light"))

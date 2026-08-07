@@ -8,6 +8,8 @@
 
     // 注册表只保存经过完整校验的主题快照，避免主题包在注册后继续修改运行契约。
     const selThemeRegistryThemes = new Map();
+    // 纯色背景不对应位图，是唯一允许跨主题使用的背景 ID。
+    const selThemeRegistrySolidBackgroundIds = new Set(["solid-dark", "solid-light"]);
 
     /**
      * 递归冻结主题定义，使模式、颜色和素材在运行期保持稳定。
@@ -34,18 +36,35 @@
         if (typeof selThemeRegistryTheme.name !== "string" || !Array.isArray(selThemeRegistryTheme.modes) || selThemeRegistryTheme.modes.length === 0) {
             return false;
         }
+        // 主题自动背景必须由自己的 manifest 登记，且图片路径只能指向同名主题素材目录。
+        const selThemeRegistryBackgroundIds = new Set();
+        for (const selThemeRegistryBackground of selThemeRegistryTheme.backgrounds || []) {
+            const selThemeRegistryBackgroundId = selThemeRegistryBackground?.id || "";
+            const selThemeRegistryBackgroundImage = selThemeRegistryBackground?.image || "";
+            if (!/^[a-z][a-z0-9-]*$/.test(selThemeRegistryBackgroundId)
+                || selThemeRegistryBackgroundIds.has(selThemeRegistryBackgroundId)
+                || typeof selThemeRegistryBackground?.name !== "string"
+                || typeof selThemeRegistryBackground?.category !== "string"
+                || typeof selThemeRegistryBackground?.image !== "string"
+                || !selThemeRegistryBackgroundImage.includes(`/assets/themes/${selThemeRegistryTheme.id}/`)) {
+                return false;
+            }
+            selThemeRegistryBackgroundIds.add(selThemeRegistryBackgroundId);
+        }
+        const selThemeRegistryOwnsBackground = (selThemeRegistryBackgroundId) => selThemeRegistrySolidBackgroundIds.has(selThemeRegistryBackgroundId)
+            || selThemeRegistryBackgroundIds.has(selThemeRegistryBackgroundId);
         const selThemeRegistryModeIds = new Set();
         for (const selThemeRegistryMode of selThemeRegistryTheme.modes) {
             if (!selThemeRegistryMode || !/^[a-z][a-z0-9-]*$/.test(selThemeRegistryMode.id || "") || selThemeRegistryModeIds.has(selThemeRegistryMode.id)) {
                 return false;
             }
             selThemeRegistryModeIds.add(selThemeRegistryMode.id);
-            if (!selThemeRegistryMode.base || !Array.isArray(selThemeRegistryMode.accents)) {
+            if (!selThemeRegistryMode.base || !selThemeRegistryOwnsBackground(selThemeRegistryMode.base.backgroundTheme) || !Array.isArray(selThemeRegistryMode.accents)) {
                 return false;
             }
             const selThemeRegistryAccentIds = new Set();
             for (const selThemeRegistryAccent of selThemeRegistryMode.accents) {
-                if (!selThemeRegistryAccent || !/^[a-z][a-z0-9-]*$/.test(selThemeRegistryAccent.id || "") || selThemeRegistryAccentIds.has(selThemeRegistryAccent.id) || typeof selThemeRegistryAccent.color !== "string") {
+                if (!selThemeRegistryAccent || !/^[a-z][a-z0-9-]*$/.test(selThemeRegistryAccent.id || "") || selThemeRegistryAccentIds.has(selThemeRegistryAccent.id) || typeof selThemeRegistryAccent.color !== "string" || !selThemeRegistryOwnsBackground(selThemeRegistryAccent.backgroundTheme)) {
                     return false;
                 }
                 selThemeRegistryAccentIds.add(selThemeRegistryAccent.id);

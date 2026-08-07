@@ -9,6 +9,8 @@ web_static_base_core_directory = static/sel/core/
 web_static_base_component_directory_pattern = static/sel/components/<component>/
 web_static_base_asset_root = static/sel/assets/
 web_static_base_component_asset_directory_pattern = static/sel/assets/components/<component>/
+web_static_base_theme_asset_directory_pattern = static/sel/assets/themes/<theme-id>/
+web_static_base_theme_skin_bundle_directory_pattern = static/sel/assets/themes/<theme-id>/<mode>/base/|static/sel/assets/themes/<theme-id>/<mode>/accents/<accent-id>/
 web_static_base_shared_asset_directory = static/sel/assets/shared/
 web_static_base_background_asset_directory = static/sel/assets/backgrounds/
 web_static_base_cursor_asset_directory = static/sel/assets/cursors/
@@ -19,9 +21,11 @@ web_static_application_mock_directory = static/<application>/mock/
 web_static_application_theme_directory = static/<application>/theme/
 web_static_application_asset_directory = static/<application>/assets/
 
-<!-- 基础素材统一进入 static/sel/assets 并按用途分层；控件专用素材保留组件归属，真正被多个控件复用的素材才允许进入 shared。 -->
+<!-- 基础素材统一进入 static/sel/assets 并按用途分层；控件专用素材保留组件归属，主题独占素材保留主题归属，真正被多个控件复用的素材才允许进入 shared。 -->
 web_static_base_asset_root_must_not_be_flat = true
 web_static_component_specific_asset_must_live_in = static/sel/assets/components/<component>/
+web_static_theme_specific_asset_must_live_in = static/sel/assets/themes/<theme-id>/
+web_static_theme_asset_owner = static/sel/theme/packs/<theme-id>/manifest.js
 web_static_shared_asset_requires_multiple_component_consumers = true
 web_static_application_specific_asset_must_not_live_in_base_asset_root = true
 

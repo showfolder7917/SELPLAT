@@ -9,13 +9,32 @@ group = 'com.sp.selplat.referencedata'
 dependencies {
     // 对外实现并继续暴露 reference-data 的稳定查询契约。
     api project(':apps:reference-data:contract')
-    // Spring Context 提供模块配置、Provider 注册和 Service 依赖注入。
-    implementation "org.springframework:spring-context:${springFrameworkVersion}"
-    // JUnit 5 验证 Provider 路由成功、未登记和重复登记边界。
-    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
+    // 公共结果、JSON 工具和自定义异常用于固定 API 成功与失败契约。
+    implementation project(':shared:backend:common-core')
+    // 公共 Web 层提供统一异常响应和请求追踪，不在模块内复制处理器。
+    implementation project(':shared:backend:common-web')
+    // JDBC Starter 提供 reference-data 独立文件数据库所需的模板与事务能力。
+    implementation "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
+    // Web Starter 提供 Controller 注解、参数绑定和 Host 内的 HTTP 路由。
+    implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+    // H2 仅在运行期承载 apps/reference-data/db 中的永久本地数据库。
+    runtimeOnly "com.h2database:h2:${h2Version}"
+    // Spring Boot Test 提供 JUnit 5、MockMvc 和 JSON 响应断言。
+    testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
+}
+
+tasks.named('processResources') {
+    // db/migration 是 reference-data 数据库脚本的唯一权威来源，构建时只复制脚本而不复制运行数据文件。
+    from('../db/migration') {
+        include '*.sql'
+        into 'db/reference-data/migration'
+    }
 }
 
 tasks.named('classes') {
     // backend 编译前先生成 contract，保证 IDE 与命令行使用同一份公开接口。
     dependsOn ':apps:reference-data:contract:jar'
+    // HTTP API 编译前准备公共 JSON、异常和 Web 处理能力。
+    dependsOn ':shared:backend:common-core:jar'
+    dependsOn ':shared:backend:common-web:jar'
 }

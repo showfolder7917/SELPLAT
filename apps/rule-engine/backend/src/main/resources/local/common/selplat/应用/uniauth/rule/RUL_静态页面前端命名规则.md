@@ -61,7 +61,14 @@ uniauth_base_static_root = static/sel
 uniauth_base_component_directory_pattern = static/sel/components/<component>/
 uniauth_base_asset_root = static/sel/assets/
 uniauth_base_component_asset_directory_pattern = static/sel/assets/components/<component>/
+uniauth_base_theme_asset_directory_pattern = static/sel/assets/themes/<theme-id>/
+uniauth_theme_base_skin_bundle_directory_pattern = static/sel/assets/themes/<theme-id>/<mode>/base/
+uniauth_theme_accent_skin_bundle_directory_pattern = static/sel/assets/themes/<theme-id>/<mode>/accents/<accent-id>/
 uniauth_base_shared_asset_directory = static/sel/assets/shared/
+uniauth_theme_asset_directory_id_must_equal_theme_pack_id = true
+uniauth_theme_asset_reference_owner = static/sel/theme/packs/<theme-id>/manifest.js
+uniauth_theme_automatic_background_directory_pattern = static/sel/assets/themes/<same-theme-id>/
+uniauth_theme_cross_theme_or_public_automatic_background_reference_is_forbidden = true
 
 <!-- 通用异步请求能力采用独立 selAjax 命名，不继续混入 selBaseRuntime。 -->
 uniauth_ajax_javascript_file = static/sel/core/selAjax.js

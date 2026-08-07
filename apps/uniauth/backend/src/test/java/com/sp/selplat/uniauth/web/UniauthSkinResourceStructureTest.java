@@ -36,8 +36,36 @@ class UniauthSkinResourceStructureTest {
         assertTrue(html.contains("/sel/theme/runtime/selThemeRegistry.js"));
         assertTrue(html.contains("/sel/theme/packs/crystal-tech/manifest.js"));
         assertTrue(html.contains("/sel/theme/packs/candy-adventure/manifest.js"));
+        assertTrue(html.contains("/sel/theme/packs/glass-admin/manifest.js"));
         assertTrue(html.contains("/sel/theme/runtime/selThemeManager.js"));
         assertFalse(html.contains("/sel/theme/skins/"));
+    }
+
+    /**
+     * glassAdminThemePack 验证晶透管理是独立主题，并固定提供深浅模式与每种模式七套皮肤。
+     */
+    @Test
+    void glassAdminThemePack() throws IOException {
+        // 主题清单、风格层和明暗令牌必须随公共前端一起发布，应用只登记 manifest。
+        String manifest = readText("META-INF/resources/sel/theme/packs/glass-admin/manifest.js");
+        String themeCss = readText("META-INF/resources/sel/theme/packs/glass-admin/theme.css");
+        String darkCss = readText("META-INF/resources/sel/theme/packs/glass-admin/modes/dark.css");
+        String lightCss = readText("META-INF/resources/sel/theme/packs/glass-admin/modes/light.css");
+        assertTrue(manifest.contains("id: \"glass-admin\""));
+        assertTrue(manifest.contains("name: \"晶透管理\""));
+        assertTrue(manifest.contains("id: \"dark\""));
+        assertTrue(manifest.contains("id: \"light\""));
+        assertTrue(manifest.contains("selGlassAdminAccentDefinitions"));
+        assertTrue(manifest.contains("frameImage: \"\""));
+        assertTrue(manifest.contains("backgroundTheme: `solid-${selGlassAdminMode}`"));
+        assertTrue(manifest.contains("backgroundTheme: \"solid-dark\""));
+        assertTrue(manifest.contains("backgroundTheme: \"solid-light\""));
+        assertFalse(manifest.contains("assets/backgrounds"));
+        assertFalse(manifest.contains("assets/themes/crystal-tech"));
+        assertTrue(themeCss.contains("border-image: none"));
+        assertTrue(themeCss.contains(".selfloating-panel::after"));
+        assertTrue(darkCss.contains("data-sel-theme=\"glass-admin\""));
+        assertTrue(lightCss.contains("data-sel-theme=\"glass-admin\""));
     }
 
     /**
@@ -211,11 +239,11 @@ class UniauthSkinResourceStructureTest {
     @Test
     void skinMaterials() throws IOException {
         // 深色皮肤继续使用迁移后的现行材质，不复制旧路径。
-        byte[] darkFrame = readBytes("META-INF/resources/sel/assets/skins/dark/components/panel/selPanelCyberFrame.webp");
+        byte[] darkFrame = readBytes("META-INF/resources/sel/assets/themes/crystal-tech/dark/base/frame.webp");
         // 浅色皮肤必须交付配套真实素材，禁止用空文件或 CSS 占位。
-        byte[] lightFrame = readBytes("META-INF/resources/sel/assets/skins/light/components/panel/selPanelLightCrystalFrame.webp");
-        // 纯黑深空必须是正式图片主题，浅色皮肤选择时不得回退页面基础底色。
-        byte[] darkSpaceBackground = readBytes("META-INF/resources/sel/assets/backgrounds/dark-void-deep-space.webp");
+        byte[] lightFrame = readBytes("META-INF/resources/sel/assets/themes/crystal-tech/light/base/frame.webp");
+        // 水晶科技的深色基础背景必须归属自己的主题素材包。
+        byte[] darkSpaceBackground = readBytes("META-INF/resources/sel/assets/themes/crystal-tech/dark/base/background.webp");
         assertTrue(darkFrame.length > 10_000);
         assertTrue(lightFrame.length > 10_000);
         assertTrue(darkSpaceBackground.length > 10_000);
@@ -236,24 +264,37 @@ class UniauthSkinResourceStructureTest {
         String themeManifest = readText("META-INF/resources/sel/theme/packs/crystal-tech/manifest.js");
         String themeManager = readText("META-INF/resources/sel/theme/runtime/selThemeManager.js");
         String backgroundScript = readText("META-INF/resources/sel/components/page-background/selPageBackground.js");
+        String themeRegistry = readText("META-INF/resources/sel/theme/runtime/selThemeRegistry.js");
         for (String skin : List.of("dark", "light")) {
             for (String themeId : themeIds) {
                 // 边框与背景均必须为可读取的真实 WebP，禁止仅登记令牌或空占位文件。
-                byte[] frame = readBytes("META-INF/resources/sel/assets/skins/" + skin
-                        + "/components/panel/themes/selPanelFrame-" + themeId + ".webp");
-                byte[] background = readBytes("META-INF/resources/sel/assets/backgrounds/themes/" + skin + "-" + themeId + ".webp");
+                byte[] frame = readBytes("META-INF/resources/sel/assets/themes/crystal-tech/" + skin
+                        + "/accents/" + themeId + "/frame.webp");
+                byte[] background = readBytes("META-INF/resources/sel/assets/themes/crystal-tech/" + skin
+                        + "/accents/" + themeId + "/background.webp");
                 assertTrue(frame.length > 10_000);
                 assertTrue(background.length > 10_000);
                 assertTrue(new String(frame, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
                 assertTrue(new String(background, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
-                // 页面背景与主题 manifest 必须同时登记深浅资源，确保色块切换到对应模式素材。
-                assertTrue(backgroundScript.contains("id: \"" + skin + "-" + themeId + "\""));
-                assertTrue(themeManifest.contains("`${selCrystalTechMode}-${selCrystalTechId}`"));
+                // 水晶 manifest 自己登记深浅资源，公共背景脚本不再持有主题专属路径。
+                assertTrue(themeManifest.contains("`crystal-tech-${selCrystalTechMode}-${selCrystalTechId}`"));
+                assertTrue(themeManifest.contains("/${selCrystalTechMode}/accents/${selCrystalTechId}/background.webp"));
             }
         }
         // 主题管理器按 Accent ID 从当前模式解析颜色与素材，组件和个性化脚本不再拼接路径。
         assertTrue(themeManager.contains("selThemeManagerMode.accents.find"));
         assertTrue(themeManager.contains("selThemeManagerMaterial.frameImage"));
+        assertTrue(themeManifest.contains("/sel/assets/themes/crystal-tech"));
+        assertFalse(themeManifest.contains("/sel/assets/skins"));
+        assertTrue(themeManifest.contains("backgrounds: Object.freeze(selCrystalTechBackgrounds())"));
+        assertTrue(backgroundScript.contains("id: \"solid-dark\""));
+        assertTrue(backgroundScript.contains("id: \"solid-light\""));
+        assertFalse(backgroundScript.contains("assets/backgrounds/themes"));
+        assertFalse(backgroundScript.contains("dark-void-deep-space"));
+        assertFalse(backgroundScript.contains("light-morning-mist-crystal"));
+        // 注册表必须在运行时拒绝跨主题和公共自动背景引用。
+        assertTrue(themeRegistry.contains("/assets/themes/${selThemeRegistryTheme.id}/"));
+        assertTrue(themeRegistry.contains("selThemeRegistrySolidBackgroundIds"));
     }
 
     /**
@@ -273,15 +314,15 @@ class UniauthSkinResourceStructureTest {
         assertTrue(manifest.contains("#6BA8FF"));
         assertTrue(manifest.contains("#3478C9"));
         assertTrue(backgroundScript.contains("selPageBackgroundThemePack.backgrounds"));
-        assertTrue(manifest.contains("/${selCandyAdventureMode}/accents/${selCandyAdventureId}-frame.webp"));
+        assertTrue(manifest.contains("/${selCandyAdventureMode}/accents/${selCandyAdventureId}/frame.webp"));
         assertTrue(manifest.contains("candy-adventure-${selCandyAdventureMode}-${selCandyAdventureId}"));
         // 深浅文字颜色必须由主题模式令牌提供，不能沿用水晶主题的白字覆盖。
         assertTrue(darkCss.contains("--sel-theme-text-main: #fff9ee"));
         assertTrue(lightCss.contains("--sel-theme-text-main: #25324a"));
         // 两种模式分别拥有正式背景和透明卡通边框 WebP。
         for (String mode : List.of("dark", "light")) {
-            byte[] background = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode + "/background.webp");
-            byte[] frame = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode + "/frame.webp");
+            byte[] background = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode + "/base/background.webp");
+            byte[] frame = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode + "/base/frame.webp");
             assertTrue(background.length > 50_000);
             assertTrue(frame.length > 50_000);
             assertTrue(new String(background, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));
@@ -290,9 +331,9 @@ class UniauthSkinResourceStructureTest {
             // 六个 Accent 必须各自交付背景和边框，不能继续共享模式基础图片。
             for (String accentId : List.of("sky-blue", "mint-green", "grape-purple", "sunshine-yellow", "peach-orange", "berry-pink")) {
                 byte[] accentBackground = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode
-                        + "/accents/" + accentId + "-background.webp");
+                        + "/accents/" + accentId + "/background.webp");
                 byte[] accentFrame = readBytes("META-INF/resources/sel/assets/themes/candy-adventure/" + mode
-                        + "/accents/" + accentId + "-frame.webp");
+                        + "/accents/" + accentId + "/frame.webp");
                 assertTrue(accentBackground.length > 20_000);
                 assertTrue(accentFrame.length > 50_000);
                 assertTrue(new String(accentBackground, 0, 4, StandardCharsets.US_ASCII).equals("RIFF"));

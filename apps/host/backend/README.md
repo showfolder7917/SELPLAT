@@ -43,9 +43,11 @@ http://127.0.0.1:8080/sel/core/selBaseRuntime.js
 
 ```text
 终端一：./gradlew :apps:host:backend:run --offline
-终端二：./gradlew :apps:host:backend:classes --continuous --offline
+终端二：./gradlew :apps:host:backend:signalDevReload --continuous --offline
 ```
 
-终端二只监听 Java、资源和共享前端源码变化并重新编译；DevTools 检测到类路径更新后重启终端一中的 Host。生产运行不使用 `--continuous`。
+终端二只监听 Java、资源和共享前端源码变化并重新编译；全部模块 JAR 写入完成后，
+先将工程依赖展开到独立开发快照，再由 `signalDevReload` 更新 `reload.trigger`。
+DevTools 随后从完整快照安全重启 Host，不会与 Gradle 正在写入的 JAR 共用文件。生产运行不使用 `--continuous`。
 
 新增业务模块时，必须同时更新 Gradle 依赖、显式模块配置、manifest、module metadata、测试和本 README。

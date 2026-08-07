@@ -1,0 +1,33 @@
+/* 晶透管理深色模式：低反光深海玻璃和高可读浅色文字。 */
+:root[data-sel-theme="glass-admin"][data-sel-mode="dark"] {
+    color-scheme: dark;
+    --sel-theme-neutral-rgb: 5 15 34;
+    --sel-theme-tint-soft: 9%;
+    --sel-theme-tint-base: 15%;
+    --sel-theme-tint-raised: 23%;
+    --sel-theme-tint-accent: 38%;
+    --sel-theme-page-background: #030a18;
+    --sel-theme-background-overlay-rgb: 3 10 24;
+    --sel-theme-text-main: #eef6ff;
+    --sel-theme-text-muted: #98a9c8;
+    --sel-theme-text-on-accent: #ffffff;
+    --sel-theme-text-on-selected-surface: #ffffff;
+    --sel-theme-text-on-soft-accent: #eef6ff;
+    --sel-theme-text-shadow-rgb: 0 0 0;
+    --sel-theme-text-contrast-alpha: 0.12;
+    --sel-theme-semantic-success: #55d8b0;
+    --sel-theme-semantic-warning: #f2be64;
+    --sel-theme-semantic-error: #ff7893;
+    --sel-theme-semantic-progress: #64a8ff;
+    --sel-theme-semantic-review: #a980ff;
+    --sel-theme-semantic-archived: #91a4c5;
+    --sel-theme-line: rgb(var(--sel-theme-color-rgb) / 0.42);
+    --sel-theme-line-soft: rgb(var(--sel-theme-color-rgb) / 0.18);
+    --sel-theme-glow: rgb(var(--sel-theme-color-rgb) / 0.20);
+    --sel-theme-inset: inset 0 1px 0 rgb(255 255 255 / 0.08);
+    --sel-theme-scrollbar-track: rgb(12 25 48 / 0.68);
+    --sel-theme-scrollbar-thumb: rgb(var(--sel-theme-color-rgb) / 0.58);
+    --sel-theme-scrollbar-thumb-hover: rgb(var(--sel-theme-color-rgb) / 0.78);
+    --sel-theme-scrollbar-thumb-active: rgb(var(--sel-theme-color-rgb) / 0.92);
+    --sel-theme-scrollbar-glow: 0 0 6px rgb(var(--sel-theme-color-rgb) / 0.24);
+}

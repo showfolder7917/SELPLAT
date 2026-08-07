@@ -13,6 +13,16 @@ selplat_build_artifact_root = build
 <!-- Java、Python、能力、脚本和其他执行工具生成的全部运行数据进入 OPTION/temp；适用于业务输出、中间文件、日志、验证结果和临时副本；业务含义是运行副作用只有一个统一出口 -->
 selplat_tool_runtime_generated_data_root = OPTION/temp
 
+<!-- 应用自身拥有且需要跨服务重启长期保留的权威业务数据库允许进入对应应用的 db 目录；适用于用户明确指定由应用本身管理的本地文件数据库；业务含义是正式业务数据不被当作可清理的工具临时产物。 -->
+selplat_application_authoritative_local_database_root = apps/<app>/db
+
+<!-- 应用 db 目录只允许保存数据库迁移脚本、初始化脚本和本地数据库文件；构建产物、缓存、日志、测试报告与普通临时文件仍必须进入 build、cache 或 OPTION/temp。 -->
+selplat_application_db_allowed_content = migration_scripts,seed_scripts,authoritative_local_database_files
+selplat_application_db_forbidden_content = build_artifacts,dependency_cache,tool_logs,test_reports,temporary_copies
+
+<!-- 测试不得读写应用正式 db 目录，必须继续使用可重建的隔离测试数据库；业务含义是自动化验证不会污染用户长期保存的引用数据。 -->
+selplat_application_authoritative_database_test_policy = isolated_rebuildable_test_database_only
+
 <!-- Gradle 用户缓存、项目缓存和离线 jar 进入工程根 cache；适用于所有离线构建与依赖解析；业务含义是缓存可复用且不属于正式产物 -->
 selplat_cache_root = cache
 

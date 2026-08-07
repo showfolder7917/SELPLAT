@@ -28,6 +28,24 @@ application {
     mainClass = 'com.sp.selplat.host.PlatformRuntimeApplication'
 }
 
+// Gradle 生成的工程 JAR 与开发进程直接共用路径时，覆盖 JAR 会使旧类加载器持有的 ZIP 句柄失效。
+def runtimeProjectJarFiles = providers.provider {
+    def rootBuildPath = rootProject.layout.buildDirectory.get().asFile.toPath().normalize()
+    configurations.runtimeClasspath.files.findAll { runtimeFile ->
+        runtimeFile.isFile()
+                && runtimeFile.name.endsWith('.jar')
+                && runtimeFile.toPath().normalize().startsWith(rootBuildPath)
+    }
+}
+
+// 第三方依赖位于只读缓存，不参与本工程重编译，可以继续由 JVM 直接加载。
+def runtimeExternalFiles = providers.provider {
+    def rootBuildPath = rootProject.layout.buildDirectory.get().asFile.toPath().normalize()
+    configurations.runtimeClasspath.files.findAll { runtimeFile ->
+        !runtimeFile.toPath().normalize().startsWith(rootBuildPath)
+    }
+}
+
 tasks.register('syncVsCodeResources', Copy) {
     // 平台配置同步到统一 class 输出，保证 VS Code 与 Gradle run 使用相同资源。
     from(sourceSets.main.resources)
@@ -43,6 +61,50 @@ tasks.named('classes') {
     // 公共前端和 Uniauth 资源必须在 Host 启动前生成可依赖 JAR。
     dependsOn ':shared:frontend:sel-ui:jar'
     dependsOn ':apps:uniauth:backend:jar'
+}
+
+tasks.register('prepareDevRuntimeClasses', Sync) {
+    // 先生成所有工程依赖，再把 JAR 展开到开发进程专用目录，彻底隔离构建路径与运行路径。
+    dependsOn tasks.named('classes')
+    into(layout.buildDirectory.dir('dev-runtime/classes'))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(runtimeProjectJarFiles.map { projectJars ->
+        projectJars.collect { projectJar -> zipTree(projectJar) }
+    })
+    // 同步依赖类时保留安全重启信号；只有 signalDevReload 可以修改它。
+    preserve {
+        include 'reload.trigger'
+    }
+    doLast {
+        File reloadTrigger = layout.buildDirectory.file('dev-runtime/classes/reload.trigger').get().asFile
+        if (!reloadTrigger.exists()) {
+            reloadTrigger.setText('initial', 'UTF-8')
+        }
+    }
+}
+
+tasks.named('run') {
+    // 开发启动只读取展开后的工程类快照，后续构建不再覆盖运行进程正在读取的 JAR。
+    dependsOn tasks.named('prepareDevRuntimeClasses')
+    doFirst {
+        classpath = files(
+                sourceSets.main.output,
+                layout.buildDirectory.dir('dev-runtime/classes'),
+                runtimeExternalFiles.get())
+    }
+}
+
+tasks.register('signalDevReload') {
+    // 先完成全部工程类快照，再通知 DevTools 使用完整快照重启。
+    dependsOn tasks.named('prepareDevRuntimeClasses')
+    // 连续构建每轮都需要更新触发文件，不能因为没有正式输出声明而跳过通知。
+    outputs.upToDateWhen { false }
+    doLast {
+        // 已完成全部依赖类快照 → 更新开发运行目录中的唯一安全重启信号。
+        File reloadTrigger = layout.buildDirectory.file('dev-runtime/classes/reload.trigger').get().asFile
+        reloadTrigger.parentFile.mkdirs()
+        reloadTrigger.setText(String.valueOf(System.currentTimeMillis()), 'UTF-8')
+    }
 }
 
 tasks.named('jar') {

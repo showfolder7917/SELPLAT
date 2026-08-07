@@ -21,7 +21,7 @@ selBaseRuntime.param(name)          读取页面查询参数
 
 统一视觉契约位于 `theme/contract/`，主题注册表与切换管理器位于 `theme/runtime/`，完整主题放在 `theme/packs/<theme-id>/`。一个主题包同时提供深色、浅色两种模式，每种模式拥有独立基础材质、Accent 配色、边框和背景。组件样式与个性化逻辑统一读取 `--sel-theme-*`，不得复制组件或重新写死主题颜色；新增主题按 `theme/packs/README.md` 接入。
 
-模式素材与共享素材分离：`assets/skins/<mode>/components/` 保存当前模式需要的真实运行材质，`assets/components/` 继续保存不随模式变化的共用素材。页面根节点通过 `data-sel-theme`、`data-sel-mode`、`data-sel-accent` 和 `data-sel-density` 表达统一主题状态，不建立两套组件目录。
+主题与素材使用同一稳定 ID 归档：主题定义位于 `theme/packs/<theme-id>/`，主题独占边框、纹理和背景位于 `assets/themes/<theme-id>/`。`assets/components/<component>/` 只保存组件专属且不随主题切换的素材；`assets/shared/` 只保存被两个及以上基础控件复用的素材；`assets/backgrounds/` 只保存由用户在背景面板独立选择的公共背景。主题 manifest 不得把其他主题或公共背景作为自动配套素材。页面根节点通过 `data-sel-theme`、`data-sel-mode`、`data-sel-accent` 和 `data-sel-density` 表达统一主题状态，不建立两套组件目录。
 
 ## 当前挂载入口
 

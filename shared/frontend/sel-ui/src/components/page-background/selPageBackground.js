@@ -12,24 +12,11 @@
         .flatMap((selPageBackgroundThemePack) => Array.isArray(selPageBackgroundThemePack.backgrounds) ? selPageBackgroundThemePack.backgrounds : [])
         .filter((selPageBackgroundTheme) => /^[a-z][a-z0-9-]*$/.test(selPageBackgroundTheme?.id || "") && typeof selPageBackgroundTheme.image === "string")
         .map((selPageBackgroundTheme) => Object.freeze({ ...selPageBackgroundTheme }));
-    // 默认主题使用 SEL 基础素材目录；换皮肤时可以由应用传入另一份显式主题清单。
+    // 默认清单只保留通用纯色和用户可独立选择的公共背景；主题配套背景由各自 manifest 登记。
     const selPageBackgroundDefaultThemes = Object.freeze([
-        // 纯黑深空使用低亮度真实图片，浅色皮肤选择后也不会回退页面基础底色。
-        Object.freeze({ id: "void", name: "纯黑深空", category: "极简", image: "../../assets/backgrounds/dark-void-deep-space.webp" }),
-        // 晨雾水晶为浅色皮肤提供低对比配套背景，同时保留为背景设置中的独立可选主题。
-        Object.freeze({ id: "morning-mist", name: "晨雾水晶", category: "浅色", image: "../../assets/backgrounds/light-morning-mist-crystal.webp" }),
-        Object.freeze({ id: "dark-stellar-blue", name: "星际蓝 · 深色", category: "主题", image: "../../assets/backgrounds/themes/dark-stellar-blue.webp?v=20260804-1" }),
-        Object.freeze({ id: "light-stellar-blue", name: "星际蓝 · 浅色", category: "主题", image: "../../assets/backgrounds/themes/light-stellar-blue.webp?v=20260804-1" }),
-        Object.freeze({ id: "dark-crystal-cyan", name: "水晶青 · 深色", category: "主题", image: "../../assets/backgrounds/themes/dark-crystal-cyan.webp?v=20260804-1" }),
-        Object.freeze({ id: "light-crystal-cyan", name: "水晶青 · 浅色", category: "主题", image: "../../assets/backgrounds/themes/light-crystal-cyan.webp?v=20260804-1" }),
-        Object.freeze({ id: "dark-nebula-purple", name: "星云紫 · 深色", category: "主题", image: "../../assets/backgrounds/themes/dark-nebula-purple.webp?v=20260804-1" }),
-        Object.freeze({ id: "light-nebula-purple", name: "星云紫 · 浅色", category: "主题", image: "../../assets/backgrounds/themes/light-nebula-purple.webp?v=20260804-1" }),
-        Object.freeze({ id: "dark-emerald-green", name: "翡翠绿 · 深色", category: "主题", image: "../../assets/backgrounds/themes/dark-emerald-green.webp?v=20260804-1" }),
-        Object.freeze({ id: "light-emerald-green", name: "翡翠绿 · 浅色", category: "主题", image: "../../assets/backgrounds/themes/light-emerald-green.webp?v=20260804-1" }),
-        Object.freeze({ id: "dark-amber-gold", name: "琥珀金 · 深色", category: "主题", image: "../../assets/backgrounds/themes/dark-amber-gold.webp?v=20260804-1" }),
-        Object.freeze({ id: "light-amber-gold", name: "琥珀金 · 浅色", category: "主题", image: "../../assets/backgrounds/themes/light-amber-gold.webp?v=20260804-1" }),
-        Object.freeze({ id: "dark-pulse-pink", name: "脉冲粉 · 深色", category: "主题", image: "../../assets/backgrounds/themes/dark-pulse-pink.webp?v=20260804-1" }),
-        Object.freeze({ id: "light-pulse-pink", name: "脉冲粉 · 浅色", category: "主题", image: "../../assets/backgrounds/themes/light-pulse-pink.webp?v=20260804-1" }),
+        // 纯色 ID 没有图片；背景层透明后直接显示当前主题的 --sel-theme-page-background。
+        Object.freeze({ id: "solid-dark", name: "深色纯色", category: "纯色", image: "" }),
+        Object.freeze({ id: "solid-light", name: "浅色纯色", category: "纯色", image: "" }),
         Object.freeze({ id: "technology", name: "赛博城市", category: "科技", image: "../../assets/backgrounds/technology-cyber-city.webp" }),
         Object.freeze({ id: "space", name: "紫色星云", category: "宇宙", image: "../../assets/backgrounds/space-purple-nebula.webp" }),
         Object.freeze({ id: "fantasy", name: "水晶森林", category: "奇幻", image: "../../assets/backgrounds/fantasy-emerald-crystal-forest.webp" }),
@@ -113,7 +100,7 @@
         function selPageBackgroundApply() {
             // 当前主题必须来自显式清单，异常标识回退第一项。
             const selPageBackgroundTheme = selPageBackgroundThemes.find((selPageBackgroundItem) => selPageBackgroundItem.id === selPageBackgroundState.theme) || selPageBackgroundThemes[0];
-            // 所有正式主题统一写入真实图片；异常扩展主题仍安全回退 none。
+            // 图片背景写入真实路径；已登记纯色 ID 使用 none，直接显示主题页面底色。
             selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-image", selPageBackgroundTheme.image ? `url("${selPageBackgroundTheme.image}")` : "none");
             // 遮罩、亮度与模糊继续使用原背景模块的独立变量。
             selPageBackgroundDocumentRoot.style.setProperty("--selpage-background-overlay", String(selPageBackgroundState.overlay / 100));

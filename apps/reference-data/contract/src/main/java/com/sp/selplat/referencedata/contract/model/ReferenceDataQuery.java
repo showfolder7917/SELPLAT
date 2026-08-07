@@ -1,5 +1,6 @@
 package com.sp.selplat.referencedata.contract.model;
 
+import com.sp.selplat.common.exception.CommonBusinessException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,13 +27,15 @@ public record ReferenceDataQuery(
      * @param resourceCode 调用方提供的资源编码，例如 {@code "product-category"}
      * @param tenantId 当前请求的租户标识，例如 {@code "10001"}
      * @param parameters 调用方提供的过滤条件，例如 {@code {"status":1}}
-     * @throws IllegalArgumentException 当项目编码或资源编码为空时抛出，例如
-     *     {@code IllegalArgumentException("projectCode 不能为空。")}
+     * @throws CommonBusinessException 当项目编码或资源编码为空时抛出，例如
+     *     {@code CommonBusinessException("REFERENCE_DATA_PROJECT_CODE_REQUIRED", "projectCode 不能为空。")}
      */
     public ReferenceDataQuery {
         // 外部逻辑坐标 → 去除首尾空格后的稳定注册表键。
         projectCode = requiredCode(projectCode, "projectCode");
         resourceCode = requiredCode(resourceCode, "resourceCode");
+        // 空白租户 → 平台级公共查询使用 null；非空租户 → 去除首尾空格后透传给 Provider。
+        tenantId = tenantId == null || tenantId.isBlank() ? null : tenantId.trim();
         // 外部可变 Map → 保留原顺序且不可被调用方在查询期间修改的参数快照。
         parameters = parameters == null
                 ? Map.of()
@@ -41,8 +44,13 @@ public record ReferenceDataQuery(
 
     private static String requiredCode(String value, String fieldName) {
         if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " 不能为空。");
+            // 缺少逻辑坐标 → 可安全展示并由公共 Web 层映射为 HTTP 400 的业务异常。
+            String errorCode = "projectCode".equals(fieldName)
+                    ? "REFERENCE_DATA_PROJECT_CODE_REQUIRED"
+                    : "REFERENCE_DATA_RESOURCE_CODE_REQUIRED";
+            throw new CommonBusinessException(errorCode, fieldName + " 不能为空。");
         }
+        // 合法逻辑编码 → 统一去除首尾空格后作为 Provider 注册表键。
         return value.trim();
     }
 }

@@ -482,7 +482,7 @@
         // 背景基础控件只创建图层和内存状态，刷新页面自动使用默认值。
         const uniauthBackgroundController = window.selPageBackground.mount(uniauthBackgroundHost, {
             // 首次打开采用深色皮肤的完整配套背景参数，个性化入口仍可在当前页面切换和调节。
-            defaults: Object.freeze({ theme: "void", overlay: 52, brightness: 86, blur: 0 })
+            defaults: Object.freeze({ theme: "crystal-tech-dark", overlay: 52, brightness: 86, blur: 0 })
         });
         // 背景区域存在但基础控件挂载失败时明确阻止半成品页面。
         if (!uniauthBackgroundController) {
