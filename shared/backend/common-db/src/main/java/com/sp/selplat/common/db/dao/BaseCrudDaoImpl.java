@@ -30,7 +30,11 @@ public abstract class BaseCrudDaoImpl extends BasePagingQueryDaoImpl {
         // 从前端通用参数按元数据顺序解析全部主键值，缺少任一复合主键字段都会在执行 SQL 前失败。
         List<Object> idValues = resolveIdValues(idColumns, queryIn);
         // 通过模板 DAO 按 DAO 内部组装出的主键列值映射查询当前表的一条记录。
-        return baseTemplateDao.selectByIds(getTableName(), getSelectColumns(), buildIdColumnValueMap(idColumns, idValues));
+        return getBaseTemplateDao().selectByIds(
+            getTableName(),
+            getSelectColumns(),
+            buildIdColumnValueMap(idColumns, idValues)
+        );
     }
 
     /**
@@ -68,7 +72,7 @@ public abstract class BaseCrudDaoImpl extends BasePagingQueryDaoImpl {
         // 批量查询只选择当前表真实字段，并命中当前分组全部主键组合。
         String sql = "SELECT " + getSelectColumns() + " FROM " + getTableName() + " WHERE " + conditions;
         // 使用同一数据源的 JdbcTemplate 一次读取当前分组，返回真实数据库记录列表。
-        return new JdbcTemplate(dataSource).queryForList(sql, arguments.toArray());
+        return new JdbcTemplate(getDataSource()).queryForList(sql, arguments.toArray());
     }
 
     /**

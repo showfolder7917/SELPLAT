@@ -1,7 +1,11 @@
 package com.sp.selplat.uniauth.config;
 
+import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
+import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.uniauth.UniauthBackendApplication;
+import javax.sql.DataSource;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
@@ -25,5 +29,21 @@ import org.springframework.context.annotation.FilterType;
 )
 @MapperScan("com.sp.selplat.common.db.template")
 public class UniauthModuleConfiguration {
-    // Spring 通过配置注解完成模块装配，本类不重复声明公共层已经提供的 Bean。
+
+    /**
+     * 把 Uniauth 当前数据源与使用同一数据源的模板 DAO 绑定为项目上下文。
+     *
+     * @param dataSource Uniauth 独立运行或 Host 装配时提供的业务数据源
+     * @param baseTemplateDao 使用同一数据源创建的公共模板 DAO
+     * @return Uniauth 基础 DAO 上下文，例如
+     *     {@code new BaseDataSourceContext(uniauthDataSource, uniauthBaseTemplateDao)}
+     */
+    @Bean("uniauthBaseDataSourceContext")
+    public BaseDataSourceContext uniauthBaseDataSourceContext(
+        DataSource dataSource,
+        BaseTemplateDao baseTemplateDao
+    ) {
+        // 明确把当前 Uniauth 数据源与模板 DAO 成对交给项目 DAO 基类。
+        return new BaseDataSourceContext(dataSource, baseTemplateDao);
+    }
 }

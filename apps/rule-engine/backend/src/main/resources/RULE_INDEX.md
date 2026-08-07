@@ -25,7 +25,22 @@ core_layered_rule_loader = ../java/com/sp/selplat/local/code/core/rule/LayeredRu
 project_rule_loading_order = root_RULE_INDEX -> common_aggregate_index -> matched_scope_index
 target_layered_rule_loading_order = local/core -> local/common/跨工程通用规则 -> local/common/matched_scope -> local/active_user
 target_layered_rule_conflict_priority = local/active_user > local/common/matched_scope > local/common/跨工程通用规则 > local/core
-layered_loading_activation_requires = indexes,recursive_loader,scope_selection,registries,call_paths,build,tests
+<!-- 一次任务以相关逻辑 ID 集合为加载单位，并递归补全显式依赖。 -->
+task_rule_loading_unit = matched_logical_id_set_plus_requires_rule_ids_dependency_closure
+<!-- 同一逻辑 ID 先读取所有相关层，再生成唯一有效 DSL 值。 -->
+same_logical_id_loading_policy = read_all_relevant_layers_then_merge_effective_values
+<!-- 用户层未明确整份替换时默认扩展低层规则。 -->
+same_logical_id_default_override_mode = extend
+<!-- 只有精确 override_mode=replace 可以清除低层有效结果。 -->
+same_logical_id_explicit_replace_mode = override_mode=replace
+<!-- extend 模式下未冲突的 core/common 键继续有效。 -->
+same_logical_id_non_conflicting_lower_values = retained
+<!-- 执行前回执逻辑 ID、已读层、路径和覆盖模式。 -->
+task_rule_loading_receipt = logical_id,all_loaded_layers,resource_paths,override_mode
+<!-- core/common 默认可读可执行但不可写。 -->
+core_common_default_runtime_access = readable_and_executable_not_writable
+<!-- 分层加载正式启用必须同时具备索引、规则集合、依赖、回执、调用和测试证据。 -->
+layered_loading_activation_requires = indexes,recursive_loader,scope_selection,rule_bundles,dependency_closure,receipts,registries,call_paths,build,tests
 protected_protocol_priority = STARTER,USER,CODE,COMMAND,GENERATOR_REPAIR_PROTOCOL > project_resource_rule
 user_confirmation_protocol = local/core/protocol/USER.PROTOCOL.md
 project_rule_conflict_scope = same_topic,same_applicability

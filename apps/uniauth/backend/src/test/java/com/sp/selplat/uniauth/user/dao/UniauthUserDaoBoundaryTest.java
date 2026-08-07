@@ -17,7 +17,7 @@ class UniauthUserDaoBoundaryTest {
     }
 
     /**
-     * implementation-boundary Case 验证业务 DAO 实现只继承 BaseDaoImpl 门面。
+     * implementation-boundary Case 验证业务 DAO 通过 Uniauth 项目基类继承 BaseDaoImpl 门面。
      */
     @Test
     void implementationBoundary() {

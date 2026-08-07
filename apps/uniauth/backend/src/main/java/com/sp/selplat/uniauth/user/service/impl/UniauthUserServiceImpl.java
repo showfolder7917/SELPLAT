@@ -11,6 +11,7 @@ import com.sp.selplat.uniauth.user.service.UniauthUserService;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 
 /**
  * 用户服务通过 {@link BaseServiceImpl} 复用公共查询和持久化流程。
@@ -18,6 +19,28 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> implements UniauthUserService {
+
+    /**
+     * 返回用户资源的默认表格定义，并保留未来查询 reference-data 的统一替换入口。
+     *
+     * @param viewCode 前端表格实例编码，例如 {@code user-management}
+     * @param locale 当前语言，例如 {@code zh-CN}
+     * @return 成功结果，例如
+     *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management"}}}
+     * @throws IllegalArgumentException viewCode 或 locale 为空时抛出，例如 {@code "viewCode must not be blank"}
+     */
+    @Override
+    public CommonResult getTableDefinition(String viewCode, String locale) {
+        // 每个前端表格必须有稳定 viewCode，后续 reference-data 才能精确覆盖对应配置。
+        Assert.hasText(viewCode, "viewCode must not be blank");
+        // 当前语言必须明确传递，避免未来配置接入时无法选择对应标题。
+        Assert.hasText(locale, "locale must not be blank");
+        // 当前阶段从项目 BaseDao 读取默认元数据；未来只在这里增加配置优先和默认兜底选择。
+        return buildSuccessResult(
+            getDao().getDefaultTableDefinition(viewCode, locale),
+            "表格定义查询完成。"
+        );
+    }
 
     // 前端直接传入数据库业务字段；用户子类先转换密码，再调用父类统一完成主键生成、新增和结果构建。
     @Override

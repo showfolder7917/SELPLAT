@@ -1,5 +1,6 @@
 package com.sp.selplat.common.db.dao;
 
+import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
 import com.sp.selplat.common.db.query.model.QueryCondition;
 import com.sp.selplat.common.db.query.model.QueryOperator;
 import com.sp.selplat.common.db.query.model.QueryOrder;
@@ -173,6 +174,19 @@ public class BaseDaoQueryDemo {
      * 但最终只输出结构化结果，不连接数据库。
      */
     private static class DemoBaseDaoImpl extends BaseDaoImpl {
+
+        /**
+         * 演示只验证查询参数解析，不创建真实数据库上下文。
+         *
+         * @return 本演示不会调用的数据源上下文
+         * @throws UnsupportedOperationException 演示误入真实数据库链路时抛出，例如
+         *     {@code UnsupportedOperationException("demo does not use a database")}
+         */
+        @Override
+        protected BaseDataSourceContext getDataSourceContext() {
+            // 演示 DAO 一旦进入真实元数据或 SQL 链路就立即停止，避免误用宿主数据库。
+            throw new UnsupportedOperationException("demo does not use a database");
+        }
 
         /**
          * 覆写表名解析，避免按当前 demo 类名推导出不存在的物理表名。

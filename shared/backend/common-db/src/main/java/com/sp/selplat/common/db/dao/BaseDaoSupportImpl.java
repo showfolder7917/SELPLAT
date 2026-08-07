@@ -2,6 +2,7 @@ package com.sp.selplat.common.db.dao;
 
 import com.sp.selplat.common.db.datasource.CommonDbSource;
 import com.sp.selplat.common.db.datasource.CommonDbSourceResolver;
+import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
 import com.sp.selplat.common.db.datasource.dialect.DatabaseDialectFactory;
 import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import com.sp.selplat.common.db.metadata.DatabaseMetadataReader;
@@ -19,7 +20,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ClassUtils;
 
 /**
@@ -27,14 +27,6 @@ import org.springframework.util.ClassUtils;
  * 本层不公开业务 CRUD，也不允许前端直接提供 SQL 表名或列名。
  */
 public abstract class BaseDaoSupportImpl {
-
-    // 模板 DAO 门面由 Spring 在实例化具体 DAO 子类后统一注入，集中承接单条 Mapper 与真实 JDBC 批处理。
-    @Autowired
-    protected BaseTemplateDao baseTemplateDao;
-
-    // dataSource 承接当前模块实际使用的数据源，供公共 DAO 读取表结构并执行方言查询。
-    @Autowired
-    protected DataSource dataSource;
 
     // COMMON_DB_SOURCE_RESOLVER 复用 config 层的数据源上下文解析能力，让 DAO 不再自己识别数据库类型。
     private static final CommonDbSourceResolver COMMON_DB_SOURCE_RESOLVER = new CommonDbSourceResolver();
@@ -48,6 +40,55 @@ public abstract class BaseDaoSupportImpl {
     // COMMON_QUERY_EXECUTOR 统一执行动态查询 SQL，供分页和方言差异查询复用同一 JDBC 执行链路。
     private static final CommonQueryExecutor COMMON_QUERY_EXECUTOR = new DefaultCommonQueryExecutor(COMMON_QUERY_SQL_BUILDER);
 
+    /**
+     * 由当前业务项目返回已经绑定的数据源上下文。
+     *
+     * @return 项目上下文，例如 Uniauth 返回
+     *     {@code new BaseDataSourceContext(uniauthDataSource, uniauthBaseTemplateDao)}
+     */
+    protected abstract BaseDataSourceContext getDataSourceContext();
+
+    /**
+     * 返回当前项目上下文中的真实数据源。
+     *
+     * @return 当前项目数据源，例如 {@code HikariDataSource}
+     * @throws IllegalStateException 项目没有提供上下文时抛出，例如
+     *     {@code IllegalStateException("BaseDataSourceContext must be provided by project DAO")}
+     */
+    protected final DataSource getDataSource() {
+        // 先要求业务项目显式提供上下文，公共层不再回退到宿主默认数据源。
+        BaseDataSourceContext context = requireDataSourceContext();
+        // 返回上下文绑定的数据源，供元数据和动态 JDBC 查询使用。
+        return context.getDataSource();
+    }
+
+    /**
+     * 返回与当前项目数据源成对绑定的模板 DAO。
+     *
+     * @return 当前项目模板 DAO，例如 Uniauth 的公共模板 DAO 实例
+     */
+    protected final BaseTemplateDao getBaseTemplateDao() {
+        // 从同一个项目上下文读取模板 DAO，防止 Mapper 和元数据访问不同数据库。
+        return requireDataSourceContext().getBaseTemplateDao();
+    }
+
+    /**
+     * 校验项目 DAO 是否已经提供数据源上下文。
+     *
+     * @return 非空项目上下文
+     * @throws IllegalStateException 子类返回空上下文时抛出，例如
+     *     {@code IllegalStateException("BaseDataSourceContext must be provided by project DAO")}
+     */
+    private BaseDataSourceContext requireDataSourceContext() {
+        // 调用项目实现取得上下文，Base 层不感知具体 Bean 名称或配置属性。
+        BaseDataSourceContext context = getDataSourceContext();
+        // 空上下文表示项目没有完成数据源边界装配，必须在执行 SQL 前阻断。
+        if (context == null) {
+            throw new IllegalStateException("BaseDataSourceContext must be provided by project DAO");
+        }
+        // 返回经过校验的项目上下文。
+        return context;
+    }
 
     /**
      * 解析当前 DAO 使用的数据库上下文。
@@ -58,7 +99,7 @@ public abstract class BaseDaoSupportImpl {
      */
     protected CommonDbSource resolveCurrentDbSource() {
         // 解析注入的数据源 → 可供元数据、方言和查询链路复用的数据库上下文。
-        return COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
+        return COMMON_DB_SOURCE_RESOLVER.resolve(getDataSource());
     }
 
     /**
@@ -72,7 +113,7 @@ public abstract class BaseDaoSupportImpl {
         // 解析当前表名 → "UniauthUser"。
         String tableName = getTableName();
         // 解析当前数据库上下文 → H2、运行时 catalog 和 PUBLIC schema 等真实连接信息。
-        CommonDbSource commonDbSource = COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
+        CommonDbSource commonDbSource = COMMON_DB_SOURCE_RESOLVER.resolve(getDataSource());
         // 读取 "UniauthUser" 的主键列名 → ["id", "tenantId"]。
         List<String> idColumnList = METADATA_READER.listPrimaryKeys(commonDbSource, tableName);
         // 表没有主键时停止，防止后续更新或删除缺少主键条件。
@@ -165,7 +206,7 @@ public abstract class BaseDaoSupportImpl {
         // 解析当前表名 → "UniauthUser"。
         String tableName = getTableName();
         // 解析数据库上下文 → {"databaseType":"H2","schemaName":"PUBLIC"}。
-        CommonDbSource commonDbSource = COMMON_DB_SOURCE_RESOLVER.resolve(dataSource);
+        CommonDbSource commonDbSource = COMMON_DB_SOURCE_RESOLVER.resolve(getDataSource());
         // 读取表字段元数据 → ["id", "tenantId", "loginName", "status"]。
         List<ColumnMetadata> columnMetadataList = METADATA_READER.listColumns(commonDbSource, tableName);
         // 元数据为空时停止，防止查询和写入链路生成没有真实字段的 SQL。

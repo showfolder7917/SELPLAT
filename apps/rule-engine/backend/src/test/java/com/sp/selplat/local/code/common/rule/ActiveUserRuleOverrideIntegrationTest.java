@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 当前稳定用户必须通过动态解析的独立递归索引完整登记七个用户逻辑 ID。
+     * 当前稳定用户必须通过动态解析的独立递归索引完整登记八个用户逻辑 ID。
      */
     @Test
     void shouldValidateCompleteActiveUserIndexTree() throws IOException {
@@ -21,7 +21,7 @@ class ActiveUserRuleOverrideIntegrationTest {
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
         assertEquals(9, validation.indexCount());
-        assertEquals(7, validation.ruleCount());
+        assertEquals(8, validation.ruleCount());
     }
 
     /**
@@ -49,6 +49,28 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat_schema_sql_single_formal_table_policy"
         );
         assertTrue(rule.content().contains("selplat_database_field_requires_real_call_chain"));
+    }
+
+    /**
+     * SELPLAT 基础 DAO 必须从当前用户规则中命中项目数据源上下文约束。
+     */
+    @Test
+    void shouldLoadBaseDaoProjectDataSourceContextRuleFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES",
+            "selplat",
+            "selplat/通用/rule/RUL_SELPLAT基础DAO项目数据源上下文规则.md",
+            "common_base_datasource_policy = abstract_project_context_only"
+        );
+        assertTrue(rule.content().contains(
+            "concrete_dao_inheritance = concrete_DAO_to_project_BaseDao_to_common_BaseDaoImpl"
+        ));
+        assertTrue(rule.content().contains(
+            "default_table_definition_source = project_BaseDao_real_database_metadata"
+        ));
+        assertTrue(rule.content().contains(
+            "table_definition_resolution = reference_data_configuration_when_present_otherwise_project_metadata"
+        ));
     }
 
     /**

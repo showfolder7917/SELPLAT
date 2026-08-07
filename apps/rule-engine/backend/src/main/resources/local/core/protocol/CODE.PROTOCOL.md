@@ -57,10 +57,29 @@ fallback_to_manual_execution_doc_rules_only_when_ability_unavailable = true
 <!-- 新增能力前必须按语言从根索引加载对应编码、测试与注释规则。 -->
 load_language_specific_rules_before_new_ability = true
 
+<!-- 一次工程任务必须先形成所有相关逻辑 ID 集合，禁止在首条用户规则命中后停止识别测试、分层或安全规则。 -->
+task_rule_selection_unit = all_relevant_logical_ids_not_first_match_only
+<!-- 规则集合必须递归补全有效 DSL 中 requires_rule_ids 的依赖闭包，循环依赖闭锁失败。 -->
+task_rule_dependency_loading = recursive_requires_rule_ids_with_cycle_blocking
+<!-- 每个逻辑 ID 都必须读取所有相关层，用户层命中不得阻断 core/common 的读取。 -->
+same_logical_id_layer_loading = core_then_cross_project_common_then_matched_scope_common_then_active_user
+<!-- 分层默认 extend：高层只覆盖同名 DSL 键，其他低层键继续有效；只有精确 override_mode=replace 才整份替换低层有效结果。 -->
+layered_rule_default_override_mode = extend
+<!-- 整份替换必须使用精确机器值，历史自然语义 override_mode 按 extend 兼容。 -->
+layered_rule_explicit_full_replace = override_mode=replace
+<!-- 同名 DSL 键冲突使用 active_user > matched_scope_common > cross_project_common > core。 -->
+layered_rule_value_conflict_priority = active_user,matched_scope_common,cross_project_common,core
+<!-- 正式执行前必须回执每个逻辑 ID 实际读取的层、物理路径和覆盖模式。 -->
+task_rule_loading_receipt_required = logical_id,layer,resource_path,override_mode
+<!-- 规则读取与规则写入权限分离；core/common 默认可读可执行但不可写，只有 USER 协议的明确委托和独立 1 可打开指定范围写入。 -->
+core_common_default_access = readable_and_executable_but_not_writable
+<!-- core/common 写入门必须同时具备明确目标和独立 1，读取不需要打开写入门。 -->
+core_common_write_gate = explicit_target_plus_standalone_1
+
 ## 读取链路（Routing）
 
-<!-- Code 运行层先加载 core 协议，再由唯一根索引解析 common 与当前用户覆盖。 -->
-code_runtime_loading_order = core_protocol -> root_RULE_INDEX -> common -> active_user
+<!-- Code 运行层先加载 core 协议，再由唯一根索引对任务逻辑 ID 集合逐条执行分层叠加。 -->
+code_runtime_loading_order = core_protocol -> root_RULE_INDEX -> matched_rule_id_set -> core_common_active_user_layer_stack
 
 ## 文件定位（Locations）
 

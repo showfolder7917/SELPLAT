@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
+import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
 import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
@@ -672,6 +673,9 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
      */
     private static final class SharedFixtureDaoImpl extends BaseDaoImpl {
 
+        // dataSourceContext 保存当前 Case 的独立 H2 与模板 DAO，模拟业务项目显式提供上下文。
+        private BaseDataSourceContext dataSourceContext;
+
         /**
          * 测试只显式注入生产中由 Spring 提供的两个基础依赖。
          *
@@ -681,10 +685,19 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
          * @param fixtureDataSource 当前 Case 独立创建的 H2 数据源
          */
         private void initialize(BaseTemplateDao templateDao, DataSource fixtureDataSource) {
-            // 真实模板 DAO 进入 BaseDao 生产模板字段。
-            this.baseTemplateDao = templateDao;
-            // 真实 H2 数据源进入元数据和动态查询生产字段。
-            this.dataSource = fixtureDataSource;
+            // 把真实模板 DAO 和同一 H2 数据源绑定成当前测试项目上下文。
+            this.dataSourceContext = new BaseDataSourceContext(fixtureDataSource, templateDao);
+        }
+
+        /**
+         * 返回当前 Case 显式创建的数据源上下文。
+         *
+         * @return 当前独立 H2 与模板 DAO 的绑定上下文
+         */
+        @Override
+        protected BaseDataSourceContext getDataSourceContext() {
+            // 返回测试初始化阶段保存的同库上下文，复现项目 DAO 的生产接入方式。
+            return dataSourceContext;
         }
 
         /**

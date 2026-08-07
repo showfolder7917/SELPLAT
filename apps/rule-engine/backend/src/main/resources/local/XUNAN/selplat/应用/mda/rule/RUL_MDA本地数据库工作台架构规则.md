@@ -47,8 +47,8 @@ mda_sql_authority_boundary = target_database_account_permissions
 mda_base_crud_reuse_boundary = fixed_business_table_only
 <!-- MDA 控制库保持模块私有上下文，不得注册为统一宿主主数据源。 -->
 mda_control_datasource_scope = module_private_not_host_primary
-<!-- 当前公共 BaseDao 绑定宿主主数据源时，控制库 DAO 必须使用显式私有 JDBC 上下文避免写错库。 -->
-mda_control_dao_policy = explicit_private_jdbc_until_base_supports_named_datasources
+<!-- 公共 BaseDao 已支持项目上下文；MDA 当前私有 JDBC 控制库 DAO 保持不变，后续迁移必须单独验证动态目标库边界。 -->
+mda_control_dao_policy = explicit_private_jdbc_until_separately_migrated_to_project_context
 <!-- Controller、Service 和 DAO 职责仍必须分开，数据源隔离不能成为跨层直连的理由。 -->
 mda_layering_required = controller_service_dao
 

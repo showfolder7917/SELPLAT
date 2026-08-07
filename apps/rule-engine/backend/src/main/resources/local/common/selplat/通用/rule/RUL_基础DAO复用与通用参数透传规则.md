@@ -3,9 +3,13 @@
 java_ability_refs = none
 python_ability_refs = none
 node_ability_refs = none
+<!-- 2.0.0 表示应用 DAO 接入结构已经从直接继承公共 Base 升级为项目 BaseDao 中间层。 -->
+rule_version = 2.0.0
+<!-- 本次升级同步固定包目录、类型名称、DAO 类名与数据库表名的可追踪映射。 -->
+upgrade_record = 2026-08-07:应用DAO改经项目BaseDao接入并补齐包目录到数据库表的命名映射
 
 <!-- 问题：各应用 DAO 为基础类已有的增删改查能力重复建立包装方法，并在通用查询内部硬编码业务字段时，会造成接口膨胀、隐藏查询条件和跨应用实现漂移。 -->
-<!-- 场景：SELPLAT 任意 apps/<app> 的简单单表 DAO 接入 BaseDao、BaseDaoImpl、CommonParam、CommonPageParam 或公共主键号段能力。 -->
+<!-- 场景：SELPLAT 任意 apps/<app> 的简单单表 DAO 经项目 BaseDao 接入 BaseDao、BaseDaoImpl、CommonParam、CommonPageParam 或公共主键号段能力。 -->
 <!-- 业务含义：应用 DAO 只保留真正包含业务增量的动作；公共 CRUD、分页、动态条件和主键号段定义统一复用基础类，让前端参数来源、实际 SQL 条件与生成主键归属保持可追踪。 -->
 
 <!-- BaseDao 已公开的查询、新增、更新、删除和分页能力必须由 Service 直接调用；适用于没有额外业务处理的薄包装方法；业务含义是禁止业务 DAO 仅改名后再次委托基础方法。 -->
@@ -65,8 +69,25 @@ selplat_batch_write_service_transaction = all_groups_atomic
 <!-- 真删除能力当前不得通过 BaseDao 暴露或在 BaseDaoImpl、BaseCrudDaoImpl 中实现；适用于所有 SELPLAT 应用；业务含义是删除流程暂时只能使用平台统一假删除。 -->
 selplat_base_dao_hard_delete_is_not_exposed = true
 
-<!-- 业务模块的 DAO 接口只能作为 extends BaseDao 的类型标记，DAO 实现只能作为 extends BaseDaoImpl 的仓储入口；适用于 SELPLAT 全部应用；业务含义是模块代码不能声明、包装或调用深层 DAO 方法。 -->
+<!-- 业务模块的 DAO 接口只能作为 extends BaseDao 的类型标记；具体 DAO 实现只能直接继承当前项目 BaseDao，再由项目 BaseDao 继承公共 BaseDaoImpl；适用于 SELPLAT 全部固定表应用；业务含义是项目统一选择数据源上下文，具体模块不能重复注入数据库能力或调用深层 DAO 方法。 -->
 selplat_application_dao_must_be_empty_base_dao_marker = true
+selplat_application_dao_inheritance_chain = ConcreteDaoImpl extends ProjectBaseDao extends BaseDaoImpl
+
+<!-- Java 包目录必须使用全小写业务资源名，例如 user、role、permission；禁止用 UniauthUser 这类大驼峰目录模拟数据库表名；适用于固定表业务模块；业务含义是包路径符合 Java 规范且不会与同名实体类混淆。 -->
+selplat_business_package_directory_pattern = lowercase_business_resource_name
+selplat_business_package_directory_examples = user,role,permission,organization,menu
+selplat_business_package_directory_must_not_use_table_class_name = true
+
+<!-- 固定表模块通过完整包路径表达项目归属，通过类型名称表达数据库表归属；适用于 apps/uniauth 等业务应用；业务含义是 com.sp.selplat.uniauth.user 已足以区分项目，类名无需再次污染包目录。 -->
+selplat_project_ownership_source = full_java_package_path
+selplat_table_ownership_source = entity_and_dao_simple_class_name
+
+<!-- 简单单表模块的数据库表名、实体简单类名和 DAO 实现去掉 DaoImpl 后的名称必须一致；适用于 BaseDaoSupportImpl.getTableName 自动推导；业务含义是 UniauthUserDaoImpl 可稳定映射 UniauthUser 表。 -->
+selplat_fixed_table_type_mapping = databaseTableName == entitySimpleName == removeSuffix(concreteDaoSimpleName,DaoImpl)
+selplat_fixed_table_type_mapping_example = package:user,table:UniauthUser,entity:UniauthUser,dao:UniauthUserDaoImpl
+<!-- 表名只能由具体 DAO 类名推导，禁止根据全小写业务包目录猜测数据库表名。 -->
+selplat_base_dao_table_name_source = BaseDaoSupportImpl.getTableName(concreteDaoSimpleName)
+selplat_package_directory_must_not_determine_table_name = true
 
 <!-- BasePagingQueryDaoImpl、BaseCrudDaoImpl 和 BaseDaoSupportImpl 的深层方法只允许公共 DAO 继承链内部使用；适用于业务 Service 与业务 DAO；业务含义是模块调用必须全部通过 BaseDao 公开签名。 -->
 selplat_application_must_not_call_deep_dao_methods = true

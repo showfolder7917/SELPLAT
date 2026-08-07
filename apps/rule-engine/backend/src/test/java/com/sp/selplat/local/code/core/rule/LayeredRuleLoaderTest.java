@@ -1,11 +1,13 @@
 package com.sp.selplat.local.code.core.rule;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -75,6 +77,147 @@ class LayeredRuleLoaderTest {
         assertEquals(
             "local/common/selplat/通用/rule/RUL_SELPLAT工程构建规则.md",
             rule.resourcePath()
+        );
+    }
+
+    /**
+     * 验证当前用户规则与不同逻辑 ID 的 common 规则可在同一任务集合中同时加载。
+     *
+     * @throws IOException 当前用户、SELPLAT 索引或任一规则缺失
+     */
+    @Test
+    void shouldLoadActiveUserAndRelevantCommonRulesInOneBundle() throws IOException {
+        LayeredRuleLoader.LoadedRuleBundle bundle =
+            LayeredRuleLoader.loadBundleForCurrentUser(
+                List.of(
+                    "SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES",
+                    "SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES"
+                ),
+                "selplat"
+            );
+
+        // BaseDao 专项规则实际来自当前 XUNAN 层。
+        assertEquals(
+            LayeredRuleLoader.currentStableUserId(),
+            bundle.rules().get("SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES")
+                .effectiveRule().layer()
+        );
+        // 真实数据库测试规则在 XUNAN 未登记时仍从 SELPLAT common 加载。
+        assertEquals(
+            "common",
+            bundle.rules().get("SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES")
+                .effectiveRule().layer()
+        );
+        // 回执必须直接展示 common 真实数据规则的物理路径。
+        assertTrue(bundle.receipt().stream().anyMatch(line -> line.contains(
+            "local/common/selplat/通用/rule/RUL_SELPLAT真实数据集成测试规则.md"
+        )));
+    }
+
+    /**
+     * 验证同一逻辑 ID 同时读取 common 基线和当前用户覆盖。
+     *
+     * @throws IOException 分层治理规则或用户覆盖缺失
+     */
+    @Test
+    void shouldExtendCommonRuleWithActiveUserConflictPriority() throws IOException {
+        LayeredRuleLoader.RuleStack stack = LayeredRuleLoader.loadRuleStack(
+            "RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES",
+            "selplat",
+            LayeredRuleLoader.currentStableUserId()
+        );
+
+        // 低层 common 和高层 XUNAN 都保留在已读分层证据中。
+        assertEquals(2, stack.layers().size());
+        assertEquals("common", stack.layers().get(0).layer());
+        assertEquals(LayeredRuleLoader.currentStableUserId(), stack.layers().get(1).layer());
+        // XUNAN 未覆盖的 common 作用域约束继续有效。
+        assertEquals(
+            "apps/rule-engine/backend",
+            stack.effectiveValues().get("rule_engine_layer_governance_scope")
+        );
+        // 同名冻结策略冲突时使用 XUNAN 的明确委托值。
+        assertEquals(
+            "explicit_user_delegation_with_standalone_1_only",
+            stack.effectiveValues().get("rule_engine_core_after_freeze_write_policy")
+        );
+        assertEquals("extend", stack.overrideMode());
+    }
+
+    /**
+     * 验证默认 extend 只覆盖冲突键，显式 replace 才清除低层有效键。
+     */
+    @Test
+    void shouldApplyExtendByDefaultAndReplaceOnlyWhenExplicit() {
+        LayeredRuleLoader.LoadedRule common = loadedRule(
+            "TEST_LAYER_RULE",
+            "common",
+            "common_only = keep\nshared_key = common"
+        );
+        LayeredRuleLoader.LoadedRule extendingUser = loadedRule(
+            "TEST_LAYER_RULE",
+            "TESTUSER",
+            "shared_key = user\nuser_only = keep"
+        );
+        LayeredRuleLoader.RuleStack extended = LayeredRuleLoader.mergeRuleStack(
+            "TEST_LAYER_RULE",
+            List.of(common, extendingUser)
+        );
+
+        assertEquals("keep", extended.effectiveValues().get("common_only"));
+        assertEquals("user", extended.effectiveValues().get("shared_key"));
+        assertEquals("extend", extended.overrideMode());
+
+        LayeredRuleLoader.LoadedRule replacingUser = loadedRule(
+            "TEST_LAYER_RULE",
+            "TESTUSER",
+            "override_mode = replace\nuser_only = replace-result"
+        );
+        LayeredRuleLoader.RuleStack replaced = LayeredRuleLoader.mergeRuleStack(
+            "TEST_LAYER_RULE",
+            List.of(common, replacingUser)
+        );
+
+        // replace 只改变有效结果，两层原文仍保留为已读证据。
+        assertEquals(2, replaced.layers().size());
+        assertFalse(replaced.effectiveValues().containsKey("common_only"));
+        assertEquals("replace-result", replaced.effectiveValues().get("user_only"));
+        assertEquals("replace", replaced.overrideMode());
+    }
+
+    /**
+     * 验证 requires_rule_ids 在上层规则之前加载依赖，并阻断依赖循环。
+     *
+     * @throws IOException 规则依赖闭包无效
+     */
+    @Test
+    void shouldResolveRequiredRuleIdsAndRejectDependencyCycle() throws IOException {
+        Map<String, LayeredRuleLoader.RuleStack> rules = new LinkedHashMap<>();
+        rules.put("TEST_DEP_RULE", ruleStack("TEST_DEP_RULE", "dep_value = loaded"));
+        rules.put(
+            "TEST_ROOT_RULE",
+            ruleStack("TEST_ROOT_RULE", "requires_rule_ids = TEST_DEP_RULE\nroot_value = loaded")
+        );
+
+        LayeredRuleLoader.LoadedRuleBundle bundle = LayeredRuleLoader.assembleBundle(
+            List.of("TEST_ROOT_RULE"),
+            rules::get
+        );
+        assertEquals(List.of("TEST_DEP_RULE", "TEST_ROOT_RULE"),
+            List.copyOf(bundle.rules().keySet()));
+
+        Map<String, LayeredRuleLoader.RuleStack> cyclicRules = new LinkedHashMap<>();
+        cyclicRules.put(
+            "TEST_A_RULE",
+            ruleStack("TEST_A_RULE", "requires_rule_ids = TEST_B_RULE")
+        );
+        cyclicRules.put(
+            "TEST_B_RULE",
+            ruleStack("TEST_B_RULE", "requires_rule_ids = TEST_A_RULE")
+        );
+        assertThrows(
+            IOException.class,
+            () -> LayeredRuleLoader.assembleBundle(List.of("TEST_A_RULE"), cyclicRules::get)
         );
     }
 
@@ -291,6 +434,27 @@ class LayeredRuleLoaderTest {
                 }
                 return content;
             }
+        );
+    }
+
+    // 构造一个内存分层正文，专用于验证合并与依赖算法。
+    private static LayeredRuleLoader.LoadedRule loadedRule(
+            String logicalId,
+            String layer,
+            String content) {
+        return new LayeredRuleLoader.LoadedRule(
+            logicalId,
+            layer,
+            "local/" + layer + "/test/" + logicalId + ".md",
+            content
+        );
+    }
+
+    // 把单层内存规则转换成依赖组装器可使用的规则栈。
+    private static LayeredRuleLoader.RuleStack ruleStack(String logicalId, String content) {
+        return LayeredRuleLoader.mergeRuleStack(
+            logicalId,
+            List.of(loadedRule(logicalId, "common", content))
         );
     }
 }

@@ -13,6 +13,7 @@ import java.lang.reflect.Method;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * 用户控制器验证器分别承接无业务数据的路由结构检查和真实 Controller 到数据库链路检查。
@@ -47,10 +48,18 @@ public final class UniauthUserControllerTestVerifier {
         assertRoute("updateBatch", CommonBatchParam.class, "updateBatch.htm", RequestMethod.POST);
         // 批量删除只暴露假删除业务入口。
         assertRoute("deleteBatch", CommonBatchParam.class, "deleteBatch.htm", RequestMethod.POST);
+        // 表格定义使用两个字符串参数区分视图实例和当前语言，只允许 GET 查询。
+        assertRoute(
+            "getTableDefinition",
+            String.class,
+            String.class,
+            "getTableDefinition.htm",
+            RequestMethod.GET
+        );
     }
 
     /**
-     * 验证九个控制器入口都通过真实 Service、DAO 和数据库完成业务，并仅序列化固定结果结构。
+     * 验证十个控制器入口都通过真实 Service、DAO 和数据库完成业务，并仅序列化固定结果结构。
      *
      * @param controller Spring 装配的真实用户控制器，例如连接测试数据源的 {@code UniauthUserController} 实例
      * @param jdbcTemplate 连接当前 Case 真实 H2 数据库的查询模板，用于独立核对落库结果
@@ -59,6 +68,28 @@ public final class UniauthUserControllerTestVerifier {
         UniauthUserController controller,
         JdbcTemplate jdbcTemplate
     ) {
+        // 管理列表使用第一个 viewCode 请求默认数据库元数据定义。
+        String managementDefinitionJson = controller.getTableDefinition("user-management", "zh-CN");
+        // 当前未接 reference-data，因此来源必须明确标记为 DEFAULT_METADATA。
+        assertTrue(managementDefinitionJson.contains("\"source\":\"DEFAULT_METADATA\""));
+        // 具体 DAO 类名必须稳定映射到真实 UniauthUser 物理表。
+        assertTrue(managementDefinitionJson.contains("\"resourceCode\":\"UniauthUser\""));
+        // 数据库 COMMENT ON COLUMN 的登录账号备注必须成为默认标题和原始 comment。
+        assertTrue(managementDefinitionJson.contains("\"title\":\"登录账号\""));
+        assertTrue(managementDefinitionJson.contains("\"comment\":\"登录账号\""));
+        // 口令摘要字段保留元数据，但默认 visible=false，禁止普通表格直接显示。
+        assertTrue(managementDefinitionJson.contains(
+            "\"field\":\"passwordHash\",\"title\":\"口令摘要\",\"comment\":\"口令摘要\""
+        ));
+        assertTrue(managementDefinitionJson.contains("\"visible\":false"));
+
+        // 用户选择器使用第二个 viewCode 请求同一资源的另一张前端表格定义。
+        String selectorDefinitionJson = controller.getTableDefinition("user-selector", "ja-JP");
+        // 默认阶段两套视图共享数据库列，但必须原样保留各自 viewCode 供未来配置覆盖。
+        assertTrue(selectorDefinitionJson.contains("\"viewCode\":\"user-selector\""));
+        // locale 同样原样返回，后续 reference-data 可据此选择日文标题。
+        assertTrue(selectorDefinitionJson.contains("\"locale\":\"ja-JP\""));
+
         // 分页请求读取 fixture 中两条真实用户并验证固定 records 结构。
         CommonPageParam pageIn = new CommonPageParam();
         // 当前 Case 请求第一页。
@@ -297,6 +328,50 @@ public final class UniauthUserControllerTestVerifier {
             assertEquals(expectedPath, requestMapping.value()[0]);
             // 当前接口允许的 HTTP 方法必须与既有客户端契约一致。
             assertArrayEquals(expectedMethods, requestMapping.method());
+        } catch (NoSuchMethodException exception) {
+            // 生产方法缺失时把反射异常转换成明确的路由契约失败。
+            throw new AssertionError("未找到用户控制器方法: " + methodName, exception);
+        }
+    }
+
+    /**
+     * 按生产方法名读取并验证两个字符串参数的控制器路由契约。
+     *
+     * @param methodName 控制器生产方法名，例如 {@code getTableDefinition}
+     * @param firstParameterType 第一个参数类型，例如 {@code String.class}
+     * @param secondParameterType 第二个参数类型，例如 {@code String.class}
+     * @param expectedPath 预期路由，例如 {@code getTableDefinition.htm}
+     * @param expectedMethods 允许的 HTTP 方法，例如 {@code [GET]}
+     * @throws AssertionError 生产方法不存在时抛出，例如误删 {@code getTableDefinition} 后携带方法名失败
+     */
+    private static void assertRoute(
+        String methodName,
+        Class<?> firstParameterType,
+        Class<?> secondParameterType,
+        String expectedPath,
+        RequestMethod... expectedMethods
+    ) {
+        try {
+            // 按方法名和两个字符串参数定位真实表格定义入口。
+            Method controllerMethod = UniauthUserController.class.getMethod(
+                methodName,
+                firstParameterType,
+                secondParameterType
+            );
+            // 读取真实入口的 Spring 请求映射。
+            RequestMapping requestMapping = controllerMethod.getAnnotation(RequestMapping.class);
+            // 表格定义接口必须显式声明请求映射。
+            assertNotNull(requestMapping);
+            // 当前接口主路径必须与生产约定一致。
+            assertEquals(expectedPath, requestMapping.value()[0]);
+            // 当前接口只允许声明的 HTTP 方法。
+            assertArrayEquals(expectedMethods, requestMapping.method());
+            // 生产编译不依赖 -parameters，所以两个查询参数名必须在注解中明确声明。
+            assertEquals("viewCode", controllerMethod.getParameters()[0]
+                .getAnnotation(RequestParam.class).name());
+            // locale 同样使用稳定 HTTP 参数名，禁止依赖 Java 反射参数名。
+            assertEquals("locale", controllerMethod.getParameters()[1]
+                .getAnnotation(RequestParam.class).name());
         } catch (NoSuchMethodException exception) {
             // 生产方法缺失时把反射异常转换成明确的路由契约失败。
             throw new AssertionError("未找到用户控制器方法: " + methodName, exception);

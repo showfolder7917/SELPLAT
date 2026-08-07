@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sp.selplat.common.db.dao.BaseDao;
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
+import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
 import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.common.db.template.BaseTemplateMapper;
@@ -419,6 +420,9 @@ public final class BaseServiceImplTestVerifier {
      */
     private static final class SharedServiceFixtureDaoImpl extends BaseDaoImpl implements SharedServiceFixtureDao {
 
+        // dataSourceContext 保存当前 Service Case 的独立数据库访问上下文。
+        private BaseDataSourceContext dataSourceContext;
+
         /**
          * 注入生产中由 Spring 提供的模板 DAO 与数据源。
          *
@@ -428,10 +432,19 @@ public final class BaseServiceImplTestVerifier {
          * @param fixtureDataSource 当前 Case 独立 H2 数据源
          */
         private void initialize(BaseTemplateDao templateDao, DataSource fixtureDataSource) {
-            // 真实模板 DAO进入基础 DAO 生产字段。
-            this.baseTemplateDao = templateDao;
-            // 真实 H2 进入元数据和动态查询生产字段。
-            this.dataSource = fixtureDataSource;
+            // 把真实模板 DAO 与同一 H2 数据源绑定，模拟业务项目提供的数据源上下文。
+            this.dataSourceContext = new BaseDataSourceContext(fixtureDataSource, templateDao);
+        }
+
+        /**
+         * 返回当前 Service Case 绑定的数据源上下文。
+         *
+         * @return 当前独立 H2 与模板 DAO 的绑定上下文
+         */
+        @Override
+        protected BaseDataSourceContext getDataSourceContext() {
+            // 返回初始化阶段保存的同库上下文，供公共 DAO 继承链执行真实 SQL。
+            return dataSourceContext;
         }
     }
 

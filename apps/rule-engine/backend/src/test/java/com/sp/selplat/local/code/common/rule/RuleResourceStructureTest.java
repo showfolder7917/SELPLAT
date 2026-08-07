@@ -127,6 +127,36 @@ class RuleResourceStructureTest {
     }
 
     /**
+     * 验证基础 DAO 规则使用项目 BaseDao 中间层，并明确包目录、类型与数据库表的映射。
+     *
+     * @throws IOException 基础 DAO 规则资源读取失败
+     */
+    @Test
+    void shouldLoadProjectBaseDaoAndFixedTableNamingRules() throws IOException {
+        // 读取基础 DAO 公共规则 → 同时验证继承结构与固定表命名映射。
+        String baseDaoRule = readResource(
+            "local/common/selplat/通用/rule/RUL_基础DAO复用与通用参数透传规则.md"
+        );
+        // 具体 DAO 必须经项目 BaseDao 接入公共 BaseDaoImpl，禁止恢复旧的直接继承结构。
+        assertTrue(baseDaoRule.contains(
+            "selplat_application_dao_inheritance_chain = ConcreteDaoImpl extends ProjectBaseDao extends BaseDaoImpl"
+        ));
+        // 包目录只表达小写业务资源名，数据库表归属由实体和 DAO 类型名称表达。
+        assertTrue(baseDaoRule.contains(
+            "selplat_business_package_directory_pattern = lowercase_business_resource_name"
+        ));
+        // 固定表、实体类与 DAO 去后缀名称必须一一对应。
+        assertTrue(baseDaoRule.contains(
+            "selplat_fixed_table_type_mapping = databaseTableName == entitySimpleName "
+                + "== removeSuffix(concreteDaoSimpleName,DaoImpl)"
+        ));
+        // 表名不得从全小写包目录猜测，避免 user 被错误当成物理表名。
+        assertTrue(baseDaoRule.contains(
+            "selplat_package_directory_must_not_determine_table_name = true"
+        ));
+    }
+
+    /**
      * 验证规则引擎分层治理规则声明稳定的加载顺序、冲突优先级和写入边界。
      *
      * 执行结果示例：规则正文包含 `core -> common -> active_user`、

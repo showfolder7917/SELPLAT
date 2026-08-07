@@ -159,7 +159,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         // 模板层只接收已经过数据库元数据匹配的受控字段和值。
         templateSave.setColumnValueMap(columnValueMap);
         // 通过模板 DAO 执行公共新增。
-        return baseTemplateDao.insert(templateSave);
+        return getBaseTemplateDao().insert(templateSave);
     }
 
     /**
@@ -185,7 +185,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
             // 当前新增分组最多包含一千条。
             int endIndex = Math.min(startIndex + BATCH_OPERATION_SIZE, saveIn.getItems().size());
             // 每组统一交给模板 DAO 执行一次真实 JDBC batch，门面层不再拼接 INSERT SQL。
-            affectedRows += baseTemplateDao.insertBatch(
+            affectedRows += getBaseTemplateDao().insertBatch(
                 tableName,
                 dbColumnsMap,
                 saveIn.getItems().subList(startIndex, endIndex)
@@ -235,7 +235,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
         // 主键之外的已匹配字段作为待更新内容，不再由 Service 逐字段重新封装。
         updateIn.setColumnValueMap(columnValueMap);
         // 通过模板 DAO 执行公共主键更新。
-        return baseTemplateDao.updateByIds(updateIn);
+        return getBaseTemplateDao().updateByIds(updateIn);
     }
 
     /**
@@ -263,7 +263,7 @@ public abstract class BaseDaoImpl extends BaseCrudDaoImpl implements BaseDao {
             // 当前更新分组最多包含一千条。
             int endIndex = Math.min(startIndex + BATCH_OPERATION_SIZE, saveIn.getItems().size());
             // 模板 DAO 按更新字段结构归并并执行真实 JDBC batch，不循环调用公开单条 update。
-            affectedRows += baseTemplateDao.updateBatchByIds(
+            affectedRows += getBaseTemplateDao().updateBatchByIds(
                 tableName,
                 idColumns,
                 dbColumnsMap,

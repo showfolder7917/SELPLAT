@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -18,8 +19,8 @@ import java.util.regex.Pattern;
 /**
  * 从根索引、common 汇总索引和显式当前作用域索引加载分层规则。
  *
- * <p>加载边界为当前用户 → 当前作用域 → 跨工程通用 → core；不会扫描或叠加其他
- * common 作用域。</p>
+ * <p>单个逻辑 ID 按 core → 跨工程 common → 当前作用域 common → 当前用户叠加；
+ * 一次任务可加载多个逻辑 ID 并递归补全它们的显式依赖，不会扫描其他 common 作用域。</p>
  */
 public final class LayeredRuleLoader {
 
@@ -45,6 +46,10 @@ public final class LayeredRuleLoader {
     private static final Pattern SCOPE_PATTERN = Pattern.compile("[\\p{L}\\p{N}][\\p{L}\\p{N}_-]{0,63}");
     // 规则逻辑 ID 使用稳定大写命名，索引汇总键也复用同一安全字符集合。
     private static final Pattern LOGICAL_ID_PATTERN = Pattern.compile("[A-Z][A-Z0-9_]{1,127}");
+    // 规则 DSL 键只允许稳定标识字符，避免把 Markdown 说明或代码示例中的等号当成规则键。
+    private static final Pattern RULE_VALUE_KEY_PATTERN = Pattern.compile(
+        "[A-Za-z][A-Za-z0-9_.-]{0,127}"
+    );
 
     // 工具类不承载隐式用户或工程状态，所有选择都由调用参数显式传入。
     private LayeredRuleLoader() {
@@ -95,7 +100,21 @@ public final class LayeredRuleLoader {
     }
 
     /**
-     * 按当前用户 → 跨工程通用 → core 加载规则，兼容迁移前没有作用域参数的调用方。
+     * 使用当前稳定用户加载一组任务规则及显式依赖。
+     *
+     * @param logicalIds 当前任务命中的逻辑 ID，例如数据源与真实数据库测试两条规则
+     * @param activeScope 当前 common 作用域，例如 {@code selplat}
+     * @return 包含依赖闭包、分层结果和加载回执的规则集合
+     * @throws IOException 身份、索引、依赖或规则结构无效
+     */
+    public static LoadedRuleBundle loadBundleForCurrentUser(
+            List<String> logicalIds,
+            String activeScope) throws IOException {
+        return loadBundle(logicalIds, activeScope, currentStableUserId());
+    }
+
+    /**
+     * 按 core → 跨工程 common → 当前用户叠加规则，兼容迁移前没有作用域参数的调用方。
      *
      * @param logicalId 稳定规则 ID，例如 {@code CODE_JAVA_CODING_RULES}
      * @param activeUser 与 AGENTS.md 一致的当前稳定用户；无用户层时传 {@code null}
@@ -109,7 +128,7 @@ public final class LayeredRuleLoader {
     }
 
     /**
-     * 按当前用户 → 当前 common 作用域 → 跨工程通用 → core 加载规则。
+     * 按 core → 跨工程 common → 当前 common 作用域 → 当前用户叠加规则。
      *
      * @param logicalId 稳定规则 ID，例如 {@code SELPLAT_PROJECT_BUILD_RULES}
      * @param activeScope common 汇总索引登记的一级作用域，例如 {@code selplat} 或
@@ -120,6 +139,23 @@ public final class LayeredRuleLoader {
      * @throws IOException 循环引用、重复逻辑 ID、路径越界、缺失索引、深度超限或规则缺失
      */
     public static LoadedRule load(
+            String logicalId,
+            String activeScope,
+            String activeUser) throws IOException {
+        // 旧入口保持 LoadedRule 返回型，但正文已由完整分层规则栈合并。
+        return loadRuleStack(logicalId, activeScope, activeUser).effectiveRule();
+    }
+
+    /**
+     * 加载一个逻辑 ID 在 core、common 和当前用户中的完整叠加栈。
+     *
+     * @param logicalId 稳定规则 ID
+     * @param activeScope 当前 common 作用域
+     * @param activeUser 与 AGENTS.md 一致的当前用户
+     * @return 低层到高层的全部正文、有效 DSL 值和兼容单规则结果
+     * @throws IOException 任一层索引、身份或资源无效
+     */
+    public static RuleStack loadRuleStack(
             String logicalId,
             String activeScope,
             String activeUser) throws IOException {
@@ -136,17 +172,10 @@ public final class LayeredRuleLoader {
 
         // 完整读取根索引 → 同时获得 core 直登规则、用户索引入口和 common 汇总入口。
         Map<String, String> rootEntries = parseIndex(ROOT_INDEX, readResource(ROOT_INDEX));
-        // 用户规则使用独立分级索引，并且只允许递归当前一个已验证用户。
-        if (activeUser != null && !activeUser.isBlank()) {
-            // 根索引只登记用户索引模式，当前用户值来自 AGENTS.md 且不会触发目录扫描。
-            String userIndexPath = optionalUserIndexReference(rootEntries, activeUser);
-            // 用户层优先级最高；当前用户只递归这一棵已解析索引树。
-            LoadedRule userRule = loadFromIndexTree(userIndexPath, logicalId, activeUser);
-            // 当前用户树命中后无需继续读取任何 common 或 core 规则正文。
-            if (userRule != null) {
-                return userRule;
-            }
-        }
+        // 分层集合始终使用低层到高层顺序，便于高层只覆盖冲突键。
+        List<LoadedRule> layers = new ArrayList<>();
+        // core 是最低冻结基线；未登记返回 null，不阻止 common 独立规则。
+        addIfPresent(layers, loadRegistered(rootEntries, logicalId, logicalId, "core"));
 
         // 根索引必须显式登记 common 汇总索引；缺失时禁止扫描 local/common 猜测入口。
         String commonIndexPath = requiredIndexReference(
@@ -160,16 +189,14 @@ public final class LayeredRuleLoader {
             readResource(commonIndexPath)
         );
 
+        // 当前作用域结果先单独保存，等跨工程 common 读取后再按优先级加入。
+        LoadedRule scopeRule = null;
         // 存在明确当前作用域时，只递归这一棵作用域索引树，不加载其他工程规则。
         if (activeScope != null && !activeScope.isBlank()) {
             // 作用域路径必须已登记在 common 汇总索引，禁止按目录名称直接拼接。
             String scopeIndexPath = findScopeIndex(commonIndexPath, commonEntries, activeScope);
-            // 递归收集当前作用域及其项目子索引 → 同一树内重复 ID 会立即阻断。
-            LoadedRule scopeRule = loadFromIndexTree(scopeIndexPath, logicalId, "common");
-            // 当前作用域规则优先于跨工程共享基线。
-            if (scopeRule != null) {
-                return scopeRule;
-            }
+            // 当前作用域层在跨工程 common 之后叠加，但延后到跨工程规则读取完成后加入。
+            scopeRule = loadFromIndexTree(scopeIndexPath, logicalId, "common");
         }
 
         // 无论是否指定工程作用域，都允许按需命中跨工程共享规则。
@@ -184,11 +211,6 @@ public final class LayeredRuleLoader {
             logicalId,
             "common"
         );
-        // 跨工程规则存在时优先于冻结 core 基线。
-        if (crossProjectRule != null) {
-            return crossProjectRule;
-        }
-
         // 兼容迁移期显式 `<LOGICAL_ID>@common` 根登记，但新索引不得继续新增这种条目。
         LoadedRule legacyCommonRule = loadRegistered(
             rootEntries,
@@ -196,24 +218,238 @@ public final class LayeredRuleLoader {
             logicalId,
             "common"
         );
-        // 仅当历史兼容条目真实存在时返回，不通过目录扫描补齐。
-        if (legacyCommonRule != null) {
-            return legacyCommonRule;
+        // 历史 common 兼容条目低于现行跨工程和作用域索引，但高于 core。
+        addIfPresent(layers, legacyCommonRule);
+        // 跨工程 common 在历史兼容条目之后叠加。
+        addIfPresent(layers, crossProjectRule);
+        // 当前作用域 common 高于跨工程 common。
+        addIfPresent(layers, scopeRule);
+        // 当前用户最后叠加；命中后不再导致低层正文未读取。
+        if (activeUser != null && !activeUser.isBlank()) {
+            String userIndexPath = optionalUserIndexReference(rootEntries, activeUser);
+            addIfPresent(layers, loadFromIndexTree(userIndexPath, logicalId, activeUser));
         }
-
-        // 根索引默认规则只能命中冻结 core，common 规则必须从分级索引进入。
-        LoadedRule coreRule = loadRegistered(
-            rootEntries,
-            logicalId,
-            logicalId,
-            "core"
-        );
         // 所有层都未登记时闭锁失败，禁止猜测同名文件。
-        if (coreRule == null) {
+        if (layers.isEmpty()) {
             throw new IOException("Rule logical id is not registered for active scope: " + logicalId);
         }
-        // 返回根索引直接登记的不可变 core 规则。
-        return coreRule;
+        // 合并所有已读层，对冲突 DSL 键使用最后的高优先级值。
+        return mergeRuleStack(logicalId, layers);
+    }
+
+    /**
+     * 加载一组任务规则，并递归加载每个规则有效 DSL 中的 {@code requires_rule_ids}。
+     *
+     * @param logicalIds 当前任务明确命中的一个或多个逻辑 ID
+     * @param activeScope 当前 common 作用域
+     * @param activeUser 当前稳定用户；不启用用户层时可为 null
+     * @return 按依赖在前、请求规则在后排序的规则集合和回执
+     * @throws IOException 逻辑 ID 未登记、依赖循环或分层资源无效
+     */
+    public static LoadedRuleBundle loadBundle(
+            List<String> logicalIds,
+            String activeScope,
+            String activeUser) throws IOException {
+        // 生产 provider 固定使用同一作用域和当前用户加载每个依赖 ID。
+        return assembleBundle(
+            logicalIds,
+            logicalId -> loadRuleStack(logicalId, activeScope, activeUser)
+        );
+    }
+
+    // 组装逻辑与物理索引读取分离，同包测试可用内存规则栈验证依赖和循环。
+    static LoadedRuleBundle assembleBundle(
+            List<String> logicalIds,
+            RuleStackProvider ruleStackProvider) throws IOException {
+        // 空集合无法证明当前任务命中任何规则，必须闭锁失败。
+        if (logicalIds == null || logicalIds.isEmpty()) {
+            throw new IllegalArgumentException("At least one rule logical id is required.");
+        }
+        // LinkedHashMap 保持依赖拓扑顺序，同一 ID 只加载一次。
+        Map<String, RuleStack> resolvedRules = new LinkedHashMap<>();
+        // 递归栈用于报告 A → B → A 类依赖循环。
+        Set<String> dependencyStack = new LinkedHashSet<>();
+        for (String logicalId : logicalIds) {
+            // 每个任务入口都通过同一递归逻辑补全其依赖闭包。
+            loadRuleWithDependencies(
+                logicalId,
+                resolvedRules,
+                dependencyStack,
+                ruleStackProvider
+            );
+        }
+        // 回执明确列出每个 ID 真实读取的分层和最终覆盖模式。
+        List<String> receipt = resolvedRules.values().stream()
+            .map(LayeredRuleLoader::buildReceiptLine)
+            .toList();
+        // 返回不可变快照，调用方不能在执行过程改写规则集合。
+        return new LoadedRuleBundle(resolvedRules, receipt);
+    }
+
+    // 深度优先加载显式依赖；依赖完成后才登记当前规则。
+    private static void loadRuleWithDependencies(
+            String logicalId,
+            Map<String, RuleStack> resolvedRules,
+            Set<String> dependencyStack,
+            RuleStackProvider ruleStackProvider) throws IOException {
+        // 已加载规则直接复用，避免多个上层规则的共享依赖重复读取。
+        if (resolvedRules.containsKey(logicalId)) {
+            return;
+        }
+        // 逻辑 ID 在进入递归栈前验证，依赖字符串不能变成路径入口。
+        validateLogicalId(logicalId);
+        if (!dependencyStack.add(logicalId)) {
+            throw new IOException("Rule dependency cycle detected: "
+                + String.join(" -> ", dependencyStack) + " -> " + logicalId);
+        }
+        try {
+            // 先完整读取当前 ID 的全部分层，依赖以最终有效 DSL 值为准。
+            RuleStack ruleStack = ruleStackProvider.load(logicalId);
+            // provider 缺失目标时返回明确结构异常，禁止后续以空指针掩盖缺失 ID。
+            if (ruleStack == null) {
+                throw new IOException("Rule stack provider returned no rule: " + logicalId);
+            }
+            for (String dependencyId : parseRequiredRuleIds(ruleStack.effectiveValues())) {
+                // 每个依赖继续使用同一 provider；生产中因此保持相同作用域和当前用户。
+                loadRuleWithDependencies(
+                    dependencyId,
+                    resolvedRules,
+                    dependencyStack,
+                    ruleStackProvider
+                );
+            }
+            // 依赖已先加载，当前规则保存在其后，形成稳定执行顺序。
+            resolvedRules.put(logicalId, ruleStack);
+        } finally {
+            // 退出当前分支时清理栈标记，共享依赖不会被误判为循环。
+            dependencyStack.remove(logicalId);
+        }
+    }
+
+    // 把有效 requires_rule_ids 拆成已校验的稳定逻辑 ID。
+    private static List<String> parseRequiredRuleIds(Map<String, String> effectiveValues) {
+        String requiredIds = effectiveValues.get("requires_rule_ids");
+        if (requiredIds == null || requiredIds.isBlank()) {
+            return List.of();
+        }
+        // 逗号或空白均可分隔 ID，便于规则正文保持紧凑单行 DSL。
+        return java.util.Arrays.stream(requiredIds.split("[,\\s]+"))
+            .map(String::trim)
+            .filter(value -> !value.isEmpty())
+            .peek(LayeredRuleLoader::validateLogicalId)
+            .distinct()
+            .toList();
+    }
+
+    // 加载回执使用真实物理层和路径，不隐藏 common 被读取的证据。
+    private static String buildReceiptLine(RuleStack ruleStack) {
+        String sources = ruleStack.layers().stream()
+            .map(layer -> "[" + layer.layer() + "] " + layer.resourcePath())
+            .reduce((left, right) -> left + " -> " + right)
+            .orElse("[none]");
+        return ruleStack.logicalId() + " | " + sources
+            + " | override_mode=" + ruleStack.overrideMode();
+    }
+
+    // 只在当前层真实命中时加入栈，避免 null 占位污染分层回执。
+    private static void addIfPresent(List<LoadedRule> layers, LoadedRule loadedRule) {
+        if (loadedRule != null) {
+            layers.add(loadedRule);
+        }
+    }
+
+    // 合并低层到高层规则；包内测试可直接使用手工分层验证 extend/replace 语义。
+    static RuleStack mergeRuleStack(String logicalId, List<LoadedRule> inputLayers) {
+        validateLogicalId(logicalId);
+        if (inputLayers == null || inputLayers.isEmpty()) {
+            throw new IllegalArgumentException("At least one loaded layer is required: " + logicalId);
+        }
+        // 原始分层始终全部保留，即使 replace 也能证明低层已经读取。
+        List<LoadedRule> layers = List.copyOf(inputLayers);
+        // 有效 DSL 键使用声明顺序稳定的 Map，高层同键覆盖低层值。
+        Map<String, String> effectiveValues = new LinkedHashMap<>();
+        // 有效正文保留未被 replace 整体替换的分层文档。
+        List<LoadedRule> effectiveContentLayers = new ArrayList<>();
+        boolean replaceApplied = false;
+        for (LoadedRule layer : layers) {
+            Map<String, String> layerValues = parseRuleValues(layer.content());
+            // 只有精确机器值 replace 才整份替换；历史自然语义值按默认 extend 兼容。
+            boolean replaceLayer = "replace".equalsIgnoreCase(layerValues.get("override_mode"));
+            if (replaceLayer) {
+                // 清除低层有效键与有效正文，但 RuleStack.layers 仍保留已读证据。
+                effectiveValues.clear();
+                effectiveContentLayers.clear();
+                replaceApplied = true;
+            }
+            // 默认 extend 仅覆盖同名 DSL 键，不会删除 common/core 的其他键。
+            effectiveValues.putAll(layerValues);
+            effectiveContentLayers.add(layer);
+        }
+        // 有效快照中的 override_mode 只返回机器可执行值，历史自然语义值仍保留在分层原文。
+        effectiveValues.put("override_mode", replaceApplied ? "replace" : "extend");
+        // 生成正文先列出唯一有效 DSL 快照，再附加全部有效源文档供人工阅读。
+        String effectiveContent = buildEffectiveContent(
+            logicalId,
+            effectiveValues,
+            effectiveContentLayers
+        );
+        // 兼容单规则返回的层和路径使用最高优先级命中层。
+        LoadedRule highestLayer = layers.get(layers.size() - 1);
+        LoadedRule effectiveRule = new LoadedRule(
+            logicalId,
+            highestLayer.layer(),
+            highestLayer.resourcePath(),
+            effectiveContent
+        );
+        return new RuleStack(
+            logicalId,
+            layers,
+            effectiveValues,
+            replaceApplied ? "replace" : "extend",
+            effectiveRule
+        );
+    }
+
+    // 从规则 Markdown 提取单行 key=value DSL，标题、注释和普通说明不参与键覆盖。
+    private static Map<String, String> parseRuleValues(String content) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (String line : String.valueOf(content).split("\\R")) {
+            String trimmedLine = line.trim();
+            if (trimmedLine.isEmpty() || trimmedLine.startsWith("#")
+                    || trimmedLine.startsWith("<!--") || !trimmedLine.contains("=")) {
+                continue;
+            }
+            String[] parts = trimmedLine.split("=", 2);
+            String key = parts[0].trim();
+            String value = parts[1].trim();
+            if (RULE_VALUE_KEY_PATTERN.matcher(key).matches() && !value.isEmpty()) {
+                // 同一正文内使用后声明值，分层之间则由高优先级文档继续覆盖。
+                values.put(key, value);
+            }
+        }
+        return values;
+    }
+
+    // 合并正文以有效 DSL 快照为机器事实源，并保留当前有效的分层原文。
+    private static String buildEffectiveContent(
+            String logicalId,
+            Map<String, String> effectiveValues,
+            List<LoadedRule> effectiveContentLayers) {
+        StringBuilder content = new StringBuilder();
+        content.append("# Effective layered rule: ").append(logicalId).append('\n');
+        content.append("\n## Effective DSL values\n\n");
+        effectiveValues.forEach((key, value) -> content
+            .append(key).append(" = ").append(value).append('\n'));
+        for (LoadedRule layer : effectiveContentLayers) {
+            content.append("\n## Loaded source [")
+                .append(layer.layer())
+                .append("] ")
+                .append(layer.resourcePath())
+                .append("\n\n")
+                .append(layer.content().strip())
+                .append('\n');
+        }
+        return content.toString();
     }
 
     /**
@@ -699,6 +935,50 @@ public final class LayeredRuleLoader {
     }
 
     /**
+     * 表示同一逻辑 ID 在全部相关层的叠加结果。
+     *
+     * @param logicalId 当前规则逻辑 ID
+     * @param layers 按 core 到当前用户排列的全部已读正文
+     * @param effectiveValues 高优先级同键覆盖后的唯一 DSL 快照
+     * @param overrideMode 实际合并模式，返回 {@code extend} 或 {@code replace}
+     * @param effectiveRule 供旧单规则入口继续使用的合并结果
+     */
+    public record RuleStack(
+        String logicalId,
+        List<LoadedRule> layers,
+        Map<String, String> effectiveValues,
+        String overrideMode,
+        LoadedRule effectiveRule
+    ) {
+        /**
+         * 对分层集合和 DSL 快照执行防御性复制。
+         */
+        public RuleStack {
+            layers = List.copyOf(layers);
+            effectiveValues = Collections.unmodifiableMap(new LinkedHashMap<>(effectiveValues));
+        }
+    }
+
+    /**
+     * 表示一次任务加载的多规则依赖闭包。
+     *
+     * @param rules 依赖在前、上层规则在后的有序规则栈
+     * @param receipt 列出每个逻辑 ID 实际读取层和路径的回执
+     */
+    public record LoadedRuleBundle(
+        Map<String, RuleStack> rules,
+        List<String> receipt
+    ) {
+        /**
+         * 对规则闭包和回执执行防御性复制。
+         */
+        public LoadedRuleBundle {
+            rules = Collections.unmodifiableMap(new LinkedHashMap<>(rules));
+            receipt = List.copyOf(receipt);
+        }
+    }
+
+    /**
      * 表示完整分级索引验证结果。
      *
      * @param indexCount 从根入口实际到达的索引文件数，例如 {@code 19}
@@ -716,5 +996,12 @@ public final class LayeredRuleLoader {
     interface ResourceProvider {
         // 根据类路径相对地址返回完整 UTF-8 索引正文；缺失时抛出 IOException。
         String read(String resourcePath) throws IOException;
+    }
+
+    // 可替换规则栈 provider 只用于把依赖组装算法与物理索引读取分离测试。
+    @FunctionalInterface
+    interface RuleStackProvider {
+        // 根据稳定逻辑 ID 返回已完成分层合并的规则栈。
+        RuleStack load(String logicalId) throws IOException;
     }
 }

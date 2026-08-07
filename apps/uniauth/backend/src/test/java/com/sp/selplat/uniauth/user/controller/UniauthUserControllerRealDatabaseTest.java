@@ -27,7 +27,7 @@ class UniauthUserControllerRealDatabaseTest {
     private JdbcTemplate jdbcTemplate;
 
     /**
-     * publicMethodResponses Case 使用一个隔离 fixture 覆盖九个公开入口的真实响应和数据库变化。
+     * publicMethodResponses Case 使用一个隔离 fixture 覆盖十个公开入口的真实响应和数据库变化。
      */
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)

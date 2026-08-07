@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class UniauthUserControllerRouteTest {
 
     /**
-     * routes Case 验证九个生产方法的 HTTP 路径和请求方式。
+     * routes Case 验证十个生产方法的 HTTP 路径和请求方式。
      */
     @Test
     void routes() {
