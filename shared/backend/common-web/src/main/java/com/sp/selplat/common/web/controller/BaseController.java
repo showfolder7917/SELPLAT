@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
@@ -32,6 +33,25 @@ public abstract class BaseController<S extends BaseService> extends BaseExtendsC
     protected S getService() {
         // 只暴露已注入对象，不在控制器层创建或包装 Service。
         return service;
+    }
+
+    /**
+     * 返回当前业务资源指定 Grid 的默认字段列元数据。
+     *
+     * @param viewCode Grid 实例编码，例如 {@code user-management}
+     * @param locale 当前语言，例如 {@code zh-CN}
+     * @return Grid 字段列 JSON，例如
+     *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management"}}}
+     */
+    @ResponseBody
+    @RequestMapping(value = "getGridColumn.htm", method = RequestMethod.GET,
+        produces = MediaType.APPLICATION_JSON_VALUE)
+    public String getGridColumn(
+        @RequestParam(name = "viewCode", defaultValue = "default") String viewCode,
+        @RequestParam(name = "locale", defaultValue = "zh-CN") String locale
+    ) {
+        // Service 负责字段来源和业务异常，公共 Controller 只执行一次 JSON 序列化。
+        return JsonUtils.toJsonIgnoreNull(getService().getGridColumn(viewCode, locale));
     }
 
     /**

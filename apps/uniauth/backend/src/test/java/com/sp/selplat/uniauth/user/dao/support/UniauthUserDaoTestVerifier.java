@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sp.selplat.common.db.dao.BaseDao;
 import com.sp.selplat.common.db.dao.BaseDaoImpl;
-import com.sp.selplat.uniauth.persistence.UniauthBaseDao;
+import com.sp.selplat.uniauth.common.persistence.UniauthBaseDao;
 import com.sp.selplat.uniauth.user.dao.UniauthUserDao;
 import com.sp.selplat.uniauth.user.dao.UniauthUserDaoImpl;
 

@@ -15,7 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 public abstract class BaseExtendsServiceImpl<D extends BaseDao> {
 
     // 公共发号器由扩展基础层统一注入，避免 BaseServiceImpl 和各业务 Service 重复保存同一依赖。
-    @Autowired
+    @Autowired(required = false)
     private SequenceGenerator sequenceGenerator;
 
     /**
@@ -32,6 +32,9 @@ public abstract class BaseExtendsServiceImpl<D extends BaseDao> {
      *     {@code {"tenantId":100001,"orderId":200001}}
      */
     protected Map<String, Long> getSequence() {
+        if (sequenceGenerator == null) {
+            throw new IllegalStateException("current module does not provide a SequenceGenerator");
+        }
         // 当前 DAO 负责提供单主键或复合主键定义，公共发号器负责生成可直接回填的字段值。
         return sequenceGenerator.getSequence(getDao().getIdSequenceDefinition());
     }

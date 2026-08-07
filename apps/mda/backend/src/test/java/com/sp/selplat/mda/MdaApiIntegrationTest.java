@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sp.selplat.mda.persistence.MdaDatabase;
+import com.sp.selplat.mda.common.persistence.MdaDatabase;
 import java.util.Map;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -39,7 +39,7 @@ class MdaApiIntegrationTest {
     @Test
     @Order(1)
     void shouldStartWithoutDefaultWorkspaceAndCreateDynamicConnection() throws Exception {
-        mockMvc.perform(get("/api/mda/connections"))
+        mockMvc.perform(get("/api/mda/connections/getStore.htm"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalCount").value(0));
 
@@ -50,7 +50,7 @@ class MdaApiIntegrationTest {
                 "schemaName", "PUBLIC",
                 "username", "sa",
                 "password", ""));
-        MvcResult result = mockMvc.perform(post("/api/mda/connections")
+        MvcResult result = mockMvc.perform(post("/api/mda/connections/create.htm")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -70,7 +70,7 @@ class MdaApiIntegrationTest {
                 "databaseName", "mem:mda_cipher_test;DB_CLOSE_DELAY=-1",
                 "username", "sa",
                 "password", "plain-secret"));
-        MvcResult result = mockMvc.perform(post("/api/mda/connections")
+        MvcResult result = mockMvc.perform(post("/api/mda/connections/create.htm")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -83,7 +83,7 @@ class MdaApiIntegrationTest {
                 "SELECT password FROM MdaConnectionProfile WHERE id = ?", String.class, id);
         assertThat(password).isEqualTo("plain-secret");
 
-        mockMvc.perform(get("/api/mda/connections/{id}", id))
+        mockMvc.perform(get("/api/mda/connections/getById.htm").param("id", String.valueOf(id)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.password").value("plain-secret"));
     }
@@ -124,12 +124,24 @@ class MdaApiIntegrationTest {
     @Test
     @Order(5)
     void shouldTestSavedConnection() throws Exception {
-        mockMvc.perform(post("/api/mda/connections/test")
+        mockMvc.perform(post("/api/mda/connections/test.htm")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"connectionId\":" + targetConnectionId + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.databaseProductName").value("H2"));
+    }
+
+    @Test
+    @Order(6)
+    void shouldExposeConnectionGridColumnsFromMdaControlDatabase() throws Exception {
+        mockMvc.perform(get("/api/mda/connections/getGridColumn.htm")
+                        .param("viewCode", "mda-connections")
+                        .param("locale", "zh-CN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.source").value("DEFAULT_METADATA"))
+                .andExpect(jsonPath("$.data.columns.connectionName.columnName").value("connectionName"));
     }
 
     private org.springframework.test.web.servlet.ResultActions execute(String sql) throws Exception {

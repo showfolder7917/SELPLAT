@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -74,6 +75,28 @@ public final class BaseServiceImplTestVerifier {
         withFixture(fixturePath, context -> {
             // 取得由 Spring 按泛型注入真实 DAO 的业务 Service。
             SharedServiceFixtureService service = context.service();
+            // 公共 Grid 字段列入口必须直接读取当前真实业务表元数据。
+            CommonResult gridColumnResult = service.getGridColumn("shared-management", "zh-CN");
+            // 默认来源用于未来 reference-data 配置覆盖时区分数据库兜底结果。
+            assertEquals("DEFAULT_METADATA", data(gridColumnResult).get("source"));
+            // Grid 实例编码必须原样返回。
+            assertEquals("shared-management", data(gridColumnResult).get("viewCode"));
+            // 当前语言必须原样返回。
+            assertEquals("zh-CN", data(gridColumnResult).get("locale"));
+            // 字段元数据必须包含真实 fixture 主键列。
+            assertTrue(((Map<?, ?>) data(gridColumnResult).get("columns")).containsKey("id"));
+            // 空 Grid 编码必须进入统一业务异常体系。
+            assertEquals(
+                "INVALID_VIEW_CODE",
+                assertThrows(CommonBusinessException.class, () -> service.getGridColumn(" ", "zh-CN"))
+                    .getErrorCode()
+            );
+            // 空语言编码必须使用独立稳定业务编码。
+            assertEquals(
+                "INVALID_LOCALE",
+                assertThrows(CommonBusinessException.class, () -> service.getGridColumn("shared-management", " "))
+                    .getErrorCode()
+            );
             // 真实分页参数请求全部初始记录。
             CommonPageParam pageIn = new CommonPageParam();
             // 当前 Case 固定第一页。
@@ -197,10 +220,17 @@ public final class BaseServiceImplTestVerifier {
         assertSame(BaseExtendsServiceImpl.class, BaseServiceImpl.class.getSuperclass());
         // 公共 CRUD 实现必须直接受唯一 BaseService 契约约束，不得再建立平行 CRUD 基础接口。
         assertTrue(BaseService.class.isAssignableFrom(BaseServiceImpl.class));
+        // 未装配发号器的 identity 模块只要不调用平台发号即可启动；误调用时必须给出明确失败。
+        assertEquals(
+            "current module does not provide a SequenceGenerator",
+            assertThrows(IllegalStateException.class, () -> new SharedServiceFixtureService().requestSequence())
+                .getMessage()
+        );
         // BaseServiceImpl 自身统一声明 DAO 入口和九个默认 CRUD，业务子类可直接继承或按需覆盖。
         assertEquals(
             Set.of(
                 "getDao",
+                "getGridColumn",
                 "getStore",
                 "getById",
                 "getByIds",
@@ -452,6 +482,10 @@ public final class BaseServiceImplTestVerifier {
      * 当前真实业务 Service 不覆盖任何默认方法，只绑定自己的 DAO 泛型。
      */
     private static final class SharedServiceFixtureService extends BaseServiceImpl<SharedServiceFixtureDao> {
+
+        private Map<String, Long> requestSequence() {
+            return getSequence();
+        }
     }
 
     /**

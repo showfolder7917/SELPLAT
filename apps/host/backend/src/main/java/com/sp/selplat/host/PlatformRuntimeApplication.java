@@ -1,8 +1,8 @@
 package com.sp.selplat.host;
 
-import com.sp.selplat.referencedata.backend.config.ReferenceDataModuleConfiguration;
-import com.sp.selplat.mda.config.MdaModuleConfiguration;
-import com.sp.selplat.uniauth.config.UniauthModuleConfiguration;
+import com.sp.selplat.referencedata.backend.common.config.ReferenceDataModuleConfiguration;
+import com.sp.selplat.mda.common.config.MdaModuleConfiguration;
+import com.sp.selplat.uniauth.common.config.UniauthModuleConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Import;

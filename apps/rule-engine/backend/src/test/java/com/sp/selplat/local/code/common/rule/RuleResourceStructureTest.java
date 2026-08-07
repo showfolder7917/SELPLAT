@@ -141,9 +141,14 @@ class RuleResourceStructureTest {
         assertTrue(baseDaoRule.contains(
             "selplat_application_dao_inheritance_chain = ConcreteDaoImpl extends ProjectBaseDao extends BaseDaoImpl"
         ));
-        // 包目录只表达小写业务资源名，数据库表归属由实体和 DAO 类型名称表达。
+        // 包目录使用固定表对应的全小写稳定资源名，禁止大驼峰包目录。
         assertTrue(baseDaoRule.contains(
-            "selplat_business_package_directory_pattern = lowercase_business_resource_name"
+            "selplat_business_package_directory_pattern = lowercase_stable_table_resource_name"
+        ));
+        // 独立数据库项目必须通过限定的数据源上下文进入项目 BaseDao。
+        assertTrue(baseDaoRule.contains(
+            "selplat_independent_project_datasource_chain = ProjectPersistenceConfiguration "
+                + "-> qualified_BaseDataSourceContext -> ProjectBaseDao -> BaseDaoImpl"
         ));
         // 固定表、实体类与 DAO 去后缀名称必须一一对应。
         assertTrue(baseDaoRule.contains(

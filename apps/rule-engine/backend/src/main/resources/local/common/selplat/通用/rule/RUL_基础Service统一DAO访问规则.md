@@ -31,8 +31,9 @@ selplat_application_service_dao_call_form = getDao().BaseDaoPublicMethod
 <!-- 发号器、远程客户端等非 DAO 依赖不得塞入 getDao()；适用于业务编排依赖；业务含义是 getDao() 始终只代表当前业务持久层门面。 -->
 selplat_base_service_get_dao_scope = BaseDao_only
 
-<!-- 公共发号器必须由 BaseExtendsServiceImpl 统一注入，并通过无参数 getSequence() 读取 BaseServiceImpl.getDao() 的主键号段定义；适用于所有需要新增单主键或复合主键数据的业务 Service；业务含义是业务类不再重复保存 SequenceGenerator 字段或拼接定义。 -->
+<!-- 公共发号器由 BaseExtendsServiceImpl 统一可选注入，并通过无参数 getSequence() 读取 BaseServiceImpl.getDao() 的主键号段定义；使用平台号段的模块必须提供 SequenceGenerator，使用数据库 identity 的独立控制库可以覆盖新增入口且不注册错误数据源的发号器。 -->
 selplat_base_extends_service_sequence_entry = protected getSequence() -> SequenceGenerator.getSequence(getDao().getIdSequenceDefinition())
+selplat_sequence_generator_requirement = platform_sequence:required;database_generated_identity:not_required
 
 <!-- 非分页成功结果必须由 BaseExtendsServiceImpl.buildSuccessResult 统一构建固定 CommonResult，并由 BaseServiceImpl 的默认 CRUD 调用；普通入口使用 data、message，写入入口增加已确认的 affectedRows 参数；业务含义是业务 Service 不再重复设置 success、data、affectedRows 和 msg。 -->
 selplat_base_extends_service_success_result_entry = protected buildSuccessResult(data,message),protected buildSuccessResult(data,affectedRows,message) -> CommonResult
@@ -42,6 +43,10 @@ selplat_application_service_must_not_redeclare_common_service_capability = Seque
 
 <!-- BaseServiceImpl 统一提供简单单表模块的分页、详情、批量详情、新增、批量新增、更新、批量更新、假删除和批量假删除默认实现；适用于只需透传 CommonParam/CommonBatchParam 并调用 BaseDao 门面的业务；业务含义是 DAO 装配、getDao 与默认 CRUD 收口在业务类直接继承的稳定基础层。 -->
 selplat_base_service_default_crud_capabilities = getStore,getById,getByIds,insert,insertBatch,update,updateBatch,delete,deleteBatch
+
+<!-- Grid 默认字段列必须由 BaseController、BaseService 和 BaseServiceImpl 统一提供，并最终调用 BaseDao.getDbColumnsMap；适用于全部简单单表模块；业务含义是应用 Controller 和 Service 不再重复声明或实现同义 getGridColumn。 -->
+selplat_base_grid_column_owner_chain = BaseController.getGridColumn -> BaseService.getGridColumn -> BaseServiceImpl.getGridColumn -> BaseDao.getDbColumnsMap
+selplat_application_must_inherit_grid_column_without_redeclaration = true
 
 <!-- 基础 Service 的九个默认 CRUD 必须使用 OperationLog 标记；业务含义是所有应用继承的 Service 操作都能统一记录开始、结果、耗时和异常，不在 Controller 或 DAO 重复记业务日志。 -->
 selplat_base_service_default_crud_operation_log = OperationLog:getStore,getById,getByIds,insert,insertBatch,update,updateBatch,delete,deleteBatch
@@ -64,8 +69,9 @@ selplat_base_service_public_crud_owner = BaseServiceImpl
 <!-- 应用 Service 存在密码摘要等模块特有处理时，允许直接覆盖对应公开 CRUD 方法，并在模块处理完成后调用同名 super 方法；适用于新增、更新及其批量入口；业务含义是每个入口保持一个可追踪方法，不增加 before/after 回调协议。 -->
 selplat_application_service_special_crud_override = module_process -> super.same_public_crud_method
 
-<!-- 模块覆盖公开 CRUD 时必须调用同名父类实现，禁止复制父类 DAO 调用、结果构建或事务编排；适用于所有模块特有实现；业务含义是模块只增加差异处理，公共主流程仍由 BaseServiceImpl 执行。 -->
-selplat_application_service_override_must_call_super = required
+<!-- 模块覆盖公开 CRUD 时默认调用同名父类实现；数据库 identity 生成主键且必须返回生成值时，允许调用 DAO 的 insertReturningId 并继续复用 buildSuccessResult；业务含义是只有真实数据库生成策略可以替代父类号段新增。 -->
+selplat_application_service_override_must_call_super = required_except_database_generated_identity_insert
+selplat_database_generated_identity_insert_chain = ApplicationService.insert -> ApplicationDao.insertReturningId -> BaseExtendsServiceImpl.buildSuccessResult
 
 <!-- 单条与批量入口必须分别保持真实语义；批量覆盖只能预处理 items 后调用 super.insertBatch、super.updateBatch 或 super.deleteBatch，禁止循环调用单条父类方法冒充批处理；业务含义是模块扩展不能破坏 DAO 一千条分组和真实 JDBC batch。 -->
 selplat_application_service_batch_override_boundary = preprocess_items -> super.batch_method;forbid_loop_super_single_method
@@ -73,8 +79,9 @@ selplat_application_service_batch_override_boundary = preprocess_items -> super.
 <!-- 没有模块特有处理的方法必须直接继承 BaseServiceImpl 默认实现；适用于简单单表 ServiceImpl；业务含义是零差异方法不能继续留在应用类中。 -->
 selplat_application_service_must_inherit_zero_difference_crud = BaseServiceImpl
 
-<!-- 批量新增、更新和假删除的 BaseServiceImpl 默认实现必须保留事务边界；模块覆盖批量方法时也必须声明事务并调用同名 super 批量方法；业务含义是同一请求全部分组始终保持原子性。 -->
+<!-- 批量新增、更新和假删除的 BaseServiceImpl 默认实现必须保留事务边界；identity 模块覆盖批量新增时允许在预处理后直接调用 BaseDao.insertBatch，但仍必须声明事务并保留真实 JDBC batch；禁止循环单条新增。 -->
 selplat_base_service_batch_write_transaction = insertBatch,updateBatch,deleteBatch;module_override_transaction_required
+selplat_identity_batch_insert_override = preprocess_items -> BaseDao.insertBatch;transaction_required;forbid_loop_single_insert
 
 <!-- 基础 Service 的泛型注入必须在存在多个 BaseDao Bean 时通过真实 Spring 容器验证，并纳入 shared 覆盖率门禁。 -->
 selplat_base_service_dao_injection_test = SpringContext,multiple_BaseDao_beans,generic_binding,coverage_gate

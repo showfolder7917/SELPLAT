@@ -20,7 +20,7 @@
     const referenceDataApplicationHost = referenceDataBase.query("[data-reference-data-app]");
     const referenceDataBackgroundHost = referenceDataBase.query("[data-sel-page-background-host]");
     const referenceDataPersonalizationHost = referenceDataBase.query("[data-sel-personalization-host]");
-    const referenceDataTypeApi = "/api/reference-data/admin/types";
+    const referenceDataTypeApi = "/api/reference-data/admin/types/";
     const referenceDataGridId = "ReferenceDataTypeGrid";
     const referenceDataState = {
         editingId: null,
@@ -73,13 +73,13 @@
     async function referenceDataLoadAllTypes() {
         const referenceDataPageSize = 100;
         const referenceDataFirstPage = await referenceDataAjax.json({
-            url: `${referenceDataTypeApi}?pageNo=1&pageSize=${referenceDataPageSize}`
+            url: `${referenceDataTypeApi}getStore.htm?pageNo=1&pageSize=${referenceDataPageSize}`
         });
         const referenceDataTotalPages = Math.max(1, Math.ceil(Number(referenceDataFirstPage.totalCount || 0) / referenceDataPageSize));
         if (referenceDataTotalPages === 1) return Array.isArray(referenceDataFirstPage.records) ? referenceDataFirstPage.records : [];
         const referenceDataOtherPages = await Promise.all(
             Array.from({ length: referenceDataTotalPages - 1 }, (_, referenceDataIndex) => referenceDataAjax.json({
-                url: `${referenceDataTypeApi}?pageNo=${referenceDataIndex + 2}&pageSize=${referenceDataPageSize}`
+                url: `${referenceDataTypeApi}getStore.htm?pageNo=${referenceDataIndex + 2}&pageSize=${referenceDataPageSize}`
             }))
         );
         return [referenceDataFirstPage, ...referenceDataOtherPages].flatMap((referenceDataPage) => referenceDataPage.records || []);
@@ -283,9 +283,11 @@
         referenceDataState.editWindowController.setFeedback("正在保存类型…");
         try {
             const referenceDataResult = await referenceDataAjax.request({
-                url: referenceDataState.editingId ? `${referenceDataTypeApi}/${referenceDataState.editingId}` : referenceDataTypeApi,
+                url: referenceDataState.editingId ? `${referenceDataTypeApi}update.htm` : `${referenceDataTypeApi}create.htm`,
                 method: "POST",
-                data: referenceDataValues
+                data: referenceDataState.editingId
+                    ? { ...referenceDataValues, id: referenceDataState.editingId }
+                    : referenceDataValues
             });
             referenceDataState.editWindowController.setFeedback(referenceDataResult.msg || "类型保存完成。");
             await referenceDataRefresh();
@@ -307,8 +309,9 @@
         referenceDataState.deleteWindowController.setFeedback("正在删除类型…");
         try {
             const referenceDataResult = await referenceDataAjax.request({
-                url: `${referenceDataTypeApi}/${referenceDataState.pendingDeleteId}/delete`,
-                method: "POST"
+                url: `${referenceDataTypeApi}delete.htm`,
+                method: "POST",
+                data: { id: referenceDataState.pendingDeleteId }
             });
             referenceDataState.deleteWindowController.setFeedback(referenceDataResult.msg || "类型删除完成。");
             await referenceDataRefresh();

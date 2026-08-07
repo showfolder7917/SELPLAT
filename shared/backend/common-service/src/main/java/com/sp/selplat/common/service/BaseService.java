@@ -13,6 +13,17 @@ import com.sp.selplat.common.util.CommonResult;
 public interface BaseService {
 
     /**
+     * 返回当前业务资源指定 Grid 的默认字段列元数据。
+     *
+     * @param viewCode 前端 Grid 实例编码，例如 {@code user-management}
+     * @param locale 当前语言，例如 {@code zh-CN}
+     * @return 成功结果，例如
+     *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management",}
+     *     {@code "columns":{"loginName":{"remarks":"登录账号","dataType":"VARCHAR"}}}}}
+     */
+    CommonResult getGridColumn(String viewCode, String locale);
+
+    /**
      * 分页查询当前业务表。
      *
      * @param queryIn 前端分页和筛选参数，例如 {@code {"pageNo":1,"pageSize":10,"status":1}}

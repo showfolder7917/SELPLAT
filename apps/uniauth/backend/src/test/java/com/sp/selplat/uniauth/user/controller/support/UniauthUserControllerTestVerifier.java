@@ -50,12 +50,12 @@ public final class UniauthUserControllerTestVerifier {
         assertRoute("updateBatch", CommonBatchParam.class, "updateBatch.htm", RequestMethod.POST);
         // 批量删除只暴露假删除业务入口。
         assertRoute("deleteBatch", CommonBatchParam.class, "deleteBatch.htm", RequestMethod.POST);
-        // 表格定义使用两个字符串参数区分视图实例和当前语言，只允许 GET 查询。
+        // Grid 字段列使用两个字符串参数区分视图实例和当前语言，只允许 GET 查询。
         assertRoute(
-            "getTableDefinition",
+            "getGridColumn",
             String.class,
             String.class,
-            "getTableDefinition.htm",
+            "getGridColumn.htm",
             RequestMethod.GET
         );
     }
@@ -71,7 +71,7 @@ public final class UniauthUserControllerTestVerifier {
         JdbcTemplate jdbcTemplate
     ) {
         // 管理列表使用第一个 viewCode 请求默认数据库元数据定义。
-        String managementDefinitionJson = controller.getTableDefinition("user-management", "zh-CN");
+        String managementDefinitionJson = controller.getGridColumn("user-management", "zh-CN");
         // 当前未接 reference-data，因此来源必须明确标记为 DEFAULT_METADATA。
         assertTrue(managementDefinitionJson.contains("\"source\":\"DEFAULT_METADATA\""));
         // 数据库 COMMENT ON COLUMN 的登录账号备注必须来自公共 ColumnMetadata。
@@ -83,7 +83,7 @@ public final class UniauthUserControllerTestVerifier {
         assertTrue(managementDefinitionJson.contains("\"dataType\""));
 
         // 用户选择器使用第二个 viewCode 请求同一资源的另一张前端表格定义。
-        String selectorDefinitionJson = controller.getTableDefinition("user-selector", "ja-JP");
+        String selectorDefinitionJson = controller.getGridColumn("user-selector", "ja-JP");
         // 默认阶段两套视图共享数据库列，但必须原样保留各自 viewCode 供未来配置覆盖。
         assertTrue(selectorDefinitionJson.contains("\"viewCode\":\"user-selector\""));
         // locale 同样原样返回，后续 reference-data 可据此选择日文标题。
@@ -92,14 +92,14 @@ public final class UniauthUserControllerTestVerifier {
         // 空表格实例编码必须进入统一业务异常体系，禁止退化为 Spring IllegalArgumentException。
         CommonBusinessException viewCodeException = assertThrows(
             CommonBusinessException.class,
-            () -> controller.getTableDefinition(" ", "zh-CN")
+            () -> controller.getGridColumn(" ", "zh-CN")
         );
         // 稳定错误编码供前端精确标记 viewCode 参数。
         assertEquals("INVALID_VIEW_CODE", viewCodeException.getErrorCode());
         // 空语言编码必须使用独立业务编码，避免调用方只能解析异常文本。
         CommonBusinessException localeException = assertThrows(
             CommonBusinessException.class,
-            () -> controller.getTableDefinition("user-management", " ")
+            () -> controller.getGridColumn("user-management", " ")
         );
         // 稳定错误编码供前端回退到默认语言或提示用户。
         assertEquals("INVALID_LOCALE", localeException.getErrorCode());
@@ -351,12 +351,12 @@ public final class UniauthUserControllerTestVerifier {
     /**
      * 按生产方法名读取并验证两个字符串参数的控制器路由契约。
      *
-     * @param methodName 控制器生产方法名，例如 {@code getTableDefinition}
+     * @param methodName 控制器生产方法名，例如 {@code getGridColumn}
      * @param firstParameterType 第一个参数类型，例如 {@code String.class}
      * @param secondParameterType 第二个参数类型，例如 {@code String.class}
-     * @param expectedPath 预期路由，例如 {@code getTableDefinition.htm}
+     * @param expectedPath 预期路由，例如 {@code getGridColumn.htm}
      * @param expectedMethods 允许的 HTTP 方法，例如 {@code [GET]}
-     * @throws AssertionError 生产方法不存在时抛出，例如误删 {@code getTableDefinition} 后携带方法名失败
+     * @throws AssertionError 生产方法不存在时抛出，例如误删 {@code getGridColumn} 后携带方法名失败
      */
     private static void assertRoute(
         String methodName,
@@ -366,7 +366,7 @@ public final class UniauthUserControllerTestVerifier {
         RequestMethod... expectedMethods
     ) {
         try {
-            // 按方法名和两个字符串参数定位真实表格定义入口。
+            // 按方法名和两个字符串参数定位真实 Grid 字段列入口。
             Method controllerMethod = UniauthUserController.class.getMethod(
                 methodName,
                 firstParameterType,
@@ -374,7 +374,7 @@ public final class UniauthUserControllerTestVerifier {
             );
             // 读取真实入口的 Spring 请求映射。
             RequestMapping requestMapping = controllerMethod.getAnnotation(RequestMapping.class);
-            // 表格定义接口必须显式声明请求映射。
+            // Grid 字段列接口必须显式声明请求映射。
             assertNotNull(requestMapping);
             // 当前接口主路径必须与生产约定一致。
             assertEquals(expectedPath, requestMapping.value()[0]);

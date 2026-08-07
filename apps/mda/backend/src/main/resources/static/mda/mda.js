@@ -19,7 +19,7 @@
     const mdaPersonalizationHost = mdaBase.query("[data-sel-personalization-host]");
     const mdaGridId = "MdaDatabaseGrid";
     const mdaApi = Object.freeze({
-        connections: "/api/mda/connections",
+        connections: "/api/mda/connections/",
         metadata: "/api/mda/metadata/tree.htm",
         execute: "/api/mda/sql/execute.htm"
     });
@@ -246,7 +246,7 @@
     }
 
     async function mdaReloadConnections(preferredId) {
-        const connectionPage = await mdaAjax.json({ url: mdaApi.connections });
+        const connectionPage = await mdaAjax.json({ url: `${mdaApi.connections}getStore.htm` });
         mdaState.connections = connectionPage.records || [];
         mdaState.selectedConnection = mdaState.connections.find((item) => String(item.id) === String(preferredId || "")) || mdaState.connections[0] || null;
         if (mdaState.selectedConnection) {
@@ -265,7 +265,7 @@
 
     async function mdaMountApplication() {
         const [connectionPage, windowMessages] = await Promise.all([
-            mdaAjax.json({ url: mdaApi.connections }),
+            mdaAjax.json({ url: `${mdaApi.connections}getStore.htm` }),
             mdaAjax.json({ url: "/sel/components/window/i18n/zh-CN.json?v=20260807-mda-1" })
         ]);
         mdaState.connections = connectionPage.records || [];
@@ -298,7 +298,7 @@
                 mdaState.connectionWindowController.open();
             }
             if (command === "connection-edit" && mdaState.selectedConnection) {
-                const detail = await mdaAjax.json({ url: `${mdaApi.connections}/${mdaState.selectedConnection.id}` });
+                const detail = await mdaAjax.json({ url: `${mdaApi.connections}getById.htm?id=${mdaState.selectedConnection.id}` });
                 mdaState.editingConnectionId = mdaState.selectedConnection.id;
                 mdaState.connectionWindowController.setLocale(mdaBuildConnectionWindow());
                 mdaState.connectionWindowController.reset();
@@ -331,8 +331,11 @@
             if (event.detail?.id === "MdaConnectionWindow") {
                 mdaState.connectionWindowController.setLoading(true);
                 try {
-                    const url = mdaState.editingConnectionId ? `${mdaApi.connections}/${mdaState.editingConnectionId}` : mdaApi.connections;
-                    const response = await mdaAjax.request({ url, method: "POST", data: event.detail.values });
+                    const url = mdaState.editingConnectionId ? `${mdaApi.connections}update.htm` : `${mdaApi.connections}create.htm`;
+                    const values = mdaState.editingConnectionId
+                        ? { ...event.detail.values, id: mdaState.editingConnectionId }
+                        : event.detail.values;
+                    const response = await mdaAjax.request({ url, method: "POST", data: values });
                     const savedId = response.data?.id || mdaState.editingConnectionId;
                     mdaState.connectionWindowController.setFeedback(response.msg || "连接配置保存完成。");
                     mdaState.connectionWindowController.close();
@@ -345,7 +348,7 @@
             if (event.detail?.id === "MdaConnectionDeleteWindow" && event.detail.values.confirmation === "DELETE" && mdaState.selectedConnection) {
                 mdaState.deleteWindowController.setLoading(true);
                 try {
-                    const response = await mdaAjax.request({ url: `${mdaApi.connections}/${mdaState.selectedConnection.id}/delete`, method: "POST", data: {} });
+                    const response = await mdaAjax.request({ url: `${mdaApi.connections}delete.htm`, method: "POST", data: { id: mdaState.selectedConnection.id } });
                     mdaState.deleteWindowController.setFeedback(response.msg || "连接配置删除完成。");
                     mdaState.deleteWindowController.close();
                     await mdaReloadConnections();

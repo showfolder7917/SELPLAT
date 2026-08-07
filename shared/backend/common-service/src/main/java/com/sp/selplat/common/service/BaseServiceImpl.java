@@ -8,10 +8,12 @@ import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.service.logging.OperationLog;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 为业务 Service 统一装配强类型 {@link BaseDao} 门面并提供默认 CRUD 主流程。
@@ -34,6 +36,44 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
     protected D getDao() {
         // 统一返回 Spring 已按业务 Service 泛型注入的 DAO，子类只能通过 BaseDao 公开契约访问持久层。
         return dao;
+    }
+
+    /**
+     * 返回当前业务资源指定 Grid 的默认字段列元数据。
+     *
+     * @param viewCode 前端 Grid 实例编码，例如 {@code user-management}
+     * @param locale 当前语言，例如 {@code zh-CN}
+     * @return 成功结果，例如
+     *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management",}
+     *     {@code "columns":{"loginName":{"remarks":"登录账号","dataType":"VARCHAR"}}}}}
+     * @throws CommonBusinessException viewCode 或 locale 为空时抛出，例如
+     *     {@code CommonBusinessException("INVALID_VIEW_CODE", "表格实例编码不能为空。")}
+     */
+    @Override
+    @OperationLog
+    public CommonResult getGridColumn(String viewCode, String locale) {
+        // 每个前端 Grid 必须有稳定 viewCode，空值统一转换为可识别的业务异常。
+        if (!StringUtils.hasText(viewCode)) {
+            // 使用稳定错误编码，让前端可以定位 Grid 实例参数。
+            throw new CommonBusinessException("INVALID_VIEW_CODE", "表格实例编码不能为空。");
+        }
+        // 当前语言必须明确传递，避免未来配置接入时无法选择对应标题。
+        if (!StringUtils.hasText(locale)) {
+            // 语言错误进入公共业务异常响应，不向前端暴露 IllegalArgumentException。
+            throw new CommonBusinessException("INVALID_LOCALE", "语言编码不能为空。");
+        }
+        // 使用有序结果保持来源、页面、语言和字段元数据的固定输出顺序。
+        Map<String, Object> gridColumn = new LinkedHashMap<>();
+        // 标记当前结果直接来自数据库元数据，未来 reference-data 命中时可切换为配置来源。
+        gridColumn.put("source", "DEFAULT_METADATA");
+        // 原样保留 Grid 实例编码，供前端区分同一资源的不同表格。
+        gridColumn.put("viewCode", viewCode);
+        // 原样保留语言，供未来 reference-data 选择对应字段标题。
+        gridColumn.put("locale", locale);
+        // 直接复用 BaseDao 公共只读字段元数据，全部固定表模块共享同一默认来源。
+        gridColumn.put("columns", getDao().getDbColumnsMap());
+        // 返回公共成功结构，业务模块不再重复组装 Grid 字段列。
+        return buildSuccessResult(gridColumn, "Grid 字段列查询完成。");
     }
 
     /**
