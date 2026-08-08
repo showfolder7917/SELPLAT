@@ -231,20 +231,38 @@
         }
     }
 
-    // Toast 向固定可访问区域追加短时业务反馈。
+    // Toast 自动复用或创建页面级可访问区域，业务页面无需长期保留反馈节点。
     function selBaseShowToast(message, type = "info") {
-        // 页面固定 Toast 区域承接所有异步操作结果。
-        const region = selBaseQuery("#toast-region");
+        const normalizedMessage = String(message || "").trim();
+        if (!normalizedMessage) return false;
+        const normalizedType = ["success", "error", "warning"].includes(type) ? type : "info";
+        // 首条反馈到来时才建立全局宿主，避免空 Toast 区域参与页面布局。
+        let region = global.document.getElementById("toast-region");
+        if (!region) {
+            region = selBaseCreateElement("div", {
+                className: "selbase-toast-region",
+                attributes: { id: "toast-region", "aria-live": "polite", "aria-atomic": "false" }
+            });
+            global.document.body.appendChild(region);
+        }
         // 每条提示使用独立节点，连续操作不会互相覆盖。
         const item = selBaseCreateElement("div", {
-            className: `selbase-feedback-toast selbase-feedback-${type}`,
-            text: message,
-            attributes: { role: type === "error" ? "alert" : "status" }
+            className: `selbase-feedback-toast selbase-feedback-${normalizedType}`,
+            text: normalizedMessage,
+            attributes: { role: normalizedType === "error" ? "alert" : "status" }
         });
         // 新提示追加到区域底部，保持操作发生顺序。
         region.appendChild(item);
-        // 四秒后移除已读提示，避免页面长期堆积历史消息。
-        global.setTimeout(() => item.remove(), 4000);
+        global.requestAnimationFrame(() => item.classList.add("selbase-feedback-visible"));
+        // 短时展示后先播放退出动效再删除节点，提示不会长期占用工作区。
+        global.setTimeout(() => {
+            item.classList.remove("selbase-feedback-visible");
+            global.setTimeout(() => {
+                item.remove();
+                if (!region.childElementCount) region.remove();
+            }, 180);
+        }, 2200);
+        return true;
     }
 
     // confirm 使用浏览器可靠确认能力承接删除等不可逆业务动作。

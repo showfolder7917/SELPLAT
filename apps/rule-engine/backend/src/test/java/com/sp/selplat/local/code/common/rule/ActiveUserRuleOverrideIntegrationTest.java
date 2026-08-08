@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 验证当前稳定用户通过九层动态递归索引完整登记十个用户逻辑 ID。
+     * 验证当前稳定用户通过九层动态递归索引完整登记十一个用户逻辑 ID。
      * 真实传参示例：读取工程根 {@code AGENTS.md} 中的当前稳定用户并递归加载其 {@code RULE_INDEX.md}。
-     * 真实返回示例：索引验证结果为 {@code indexCount=9, ruleCount=10}。
+     * 真实返回示例：索引验证结果为 {@code indexCount=9, ruleCount=11}。
      * 异常或副作用示例：身份、索引或规则路径无效时抛出 {@link IOException}，不修改规则资源。
      */
     @Test
@@ -24,7 +24,7 @@ class ActiveUserRuleOverrideIntegrationTest {
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
         assertEquals(9, validation.indexCount());
-        assertEquals(10, validation.ruleCount());
+        assertEquals(11, validation.ruleCount());
     }
 
     /**
@@ -70,6 +70,26 @@ class ActiveUserRuleOverrideIntegrationTest {
         );
         assertTrue(rule.content().contains(
             "selgrid_explicit_horizontal_scroll_option_boundary = wide_column_layout_only_not_scrollbar_visibility"
+        ));
+    }
+
+    /**
+     * 验证 SELPLAT 短时反馈规则能从当前用户通用索引命中，并固定 Toast 与状态栏职责边界。
+     * 真实传参示例：逻辑 ID 为 {@code SELPLAT_TRANSIENT_OPERATION_FEEDBACK_TOAST_RULES}，作用域为 {@code selplat}。
+     * 真实返回示例：加载结果路径为 {@code selplat/通用/rule/RUL_SELPLAT短时操作反馈规则.md}，正文包含二至四秒自动清理声明。
+     * 异常或副作用示例：索引缺失、路径逃逸或正文缺少状态栏边界时抛出 {@link IOException} 或断言失败，不修改规则文件。
+     */
+    @Test
+    void shouldLoadTransientOperationFeedbackRuleFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "SELPLAT_TRANSIENT_OPERATION_FEEDBACK_TOAST_RULES",
+            "selplat",
+            "selplat/通用/rule/RUL_SELPLAT短时操作反馈规则.md",
+            "selplat_transient_toast_lifecycle = fixed_overlay_auto_remove_after_2_to_4_seconds"
+        );
+        // 短时 Toast 加载成功 → 编辑器状态栏仍只承担实时位置或上下文展示。
+        assertTrue(rule.content().contains(
+            "selplat_editor_status_bar_boundary = current_position_or_live_context_not_completed_action_message"
         ));
     }
 

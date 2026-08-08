@@ -12,6 +12,15 @@ load_rule_for_active_user_selplat_grid_columns_data_resize_or_scrollbar_change =
 <!-- 对比多个应用的表格滚动条亮度、尺寸和轨道样式时加载，保证复用公共主题令牌。 -->
 load_rule_for_active_user_selplat_grid_scrollbar_visual_consistency_review = SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES
 
+<!-- SELPLAT 非阻断操作结果统一使用公共短时 Toast，禁止完成提示长期占用工作区状态栏。 -->
+SELPLAT_TRANSIENT_OPERATION_FEEDBACK_TOAST_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT短时操作反馈规则.md
+<!-- 新增或修改保存、查询、清空、刷新和可恢复错误提示时加载，保证反馈自动消失且不挤占业务布局。 -->
+load_rule_for_active_user_selplat_non_blocking_operation_feedback = SELPLAT_TRANSIENT_OPERATION_FEEDBACK_TOAST_RULES
+<!-- 修改编辑器状态栏、公共 Toast 运行时或提示生命周期时加载，保证常驻信息与短时反馈职责分开。 -->
+load_rule_for_active_user_selplat_editor_status_or_toast_lifecycle = SELPLAT_TRANSIENT_OPERATION_FEEDBACK_TOAST_RULES
+<!-- 验证 Toast 显示、超时删除、错误语义和连续排列时加载，保证真实浏览器闭环。 -->
+load_rule_for_active_user_selplat_transient_feedback_browser_regression = SELPLAT_TRANSIENT_OPERATION_FEEDBACK_TOAST_RULES
+
 <!-- SELPLAT 动态页签工作区统一采用切换保留、关闭销毁和公共主题语义令牌。 -->
 SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT动态页签工作区生命周期规则.md
 <!-- 新增或修改动态业务页签、页签注册表和关闭行为时加载，防止隐藏实例持续积累。 -->

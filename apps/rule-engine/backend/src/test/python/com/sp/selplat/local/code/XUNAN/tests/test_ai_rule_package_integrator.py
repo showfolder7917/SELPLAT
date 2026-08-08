@@ -61,11 +61,13 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["model"], "ai_rule_driven_execution_and_continuous_rule_package_growth")
         self.assertEqual(result["indexes"], 19)
+        # 根索引递归统计只计算 core/common；当前用户规则通过独立用户索引统计。
         self.assertEqual(result["indexed_rules"], 66)
         self.assertEqual(result["active_user_id"], ACTIVE_STABLE_USER_ID)
         self.assertEqual(result["active_user_indexes"], 9)
-        self.assertEqual(result["active_user_overrides"], 8)
-        self.assertEqual(result["active_user_rule_files"], 7)
+        # 用户层新增一个 SELPLAT 通用规则入口和规则正文，当前用户统计必须同步增长。
+        self.assertEqual(result["active_user_overrides"], 11)
+        self.assertEqual(result["active_user_rule_files"], 10)
         self.assertEqual(result["active_user_standard_asset_packages"], 1)
         self.assertEqual(result["active_user_rules_with_program_references"], 2)
         self.assertEqual(result["decision_boundary"], "facts_only_ai_must_review_before_merge_or_delete")
@@ -101,7 +103,8 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             / ACTIVE_STABLE_USER_ID
         )
         rule_paths = sorted(user_root.rglob("RUL_*.md"))
-        self.assertEqual(len(rule_paths), 7)
+        # 当前用户新增的 Toast 规则也必须逐项接受紧邻中文业务注释检查。
+        self.assertEqual(len(rule_paths), 10)
         for rule_path in rule_paths:
             previous_nonempty = ""
             for line_number, raw_line in enumerate(
@@ -131,6 +134,36 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertIn(
             "rule_edit_preflight_required_rules = MEMORY_FILE_EDIT_RULES,RULE_LIFECYCLE_GOVERNANCE_RULES",
             text,
+        )
+
+    def test_transient_operation_feedback_rule_is_registered(self) -> None:
+        """非阻断操作提示必须从当前用户 SELPLAT 通用索引稳定命中。"""
+
+        user_rule_root = (
+            PROJECT_ROOT
+            / "apps/rule-engine/backend/src/main/resources/local"
+            / ACTIVE_STABLE_USER_ID
+            / "selplat/通用"
+        )
+        # 叶子索引必须登记稳定逻辑 ID，禁止依赖扫描目录猜测规则入口。
+        index_text = (user_rule_root / "RULE_INDEX.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "SELPLAT_TRANSIENT_OPERATION_FEEDBACK_TOAST_RULES = "
+            f"local/{ACTIVE_STABLE_USER_ID}/selplat/通用/rule/RUL_SELPLAT短时操作反馈规则.md",
+            index_text,
+        )
+        # 规则正文必须同时固定短时生命周期和编辑器常驻状态栏的职责边界。
+        rule_text = (
+            user_rule_root / "rule/RUL_SELPLAT短时操作反馈规则.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "selplat_transient_toast_lifecycle = fixed_overlay_auto_remove_after_2_to_4_seconds",
+            rule_text,
+        )
+        self.assertIn(
+            "selplat_editor_status_bar_boundary = "
+            "current_position_or_live_context_not_completed_action_message",
+            rule_text,
         )
 
     def test_explicit_delegation_rule_is_registered_for_active_user(self) -> None:

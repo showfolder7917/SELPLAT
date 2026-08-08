@@ -191,7 +191,7 @@
         if (!mdaSplitController) throw new Error("MDA SQL 分隔面板挂载失败。");
         const mdaEditorController = window.selCodeEditor.mount(mdaSplitController.start, {
             id: mdaSession.editorId, language: "sql", label: "SQL 查询", icon: "ri-terminal-box-line",
-            value: mdaSession.sql, placeholder: "SELECT * FROM table_name", statusText: "SQL 编辑器已就绪",
+            value: mdaSession.sql, placeholder: "SELECT * FROM table_name", statusText: "",
             actions: Object.freeze([
                 Object.freeze({ id: "execute", label: "执行", icon: "ri-play-fill", primary: true }),
                 Object.freeze({ id: "clear", label: "清空", icon: "ri-delete-bin-line" })
@@ -211,17 +211,19 @@
         const mdaHandleEditorAction = async (mdaEvent) => {
             if (mdaEvent.detail?.editorId !== mdaSession.editorId) return;
             if (mdaEvent.detail.action === "clear") {
-                mdaEditorController.setFeedback("SQL 已清空。");
+                // 清空结果使用短时页面反馈，编辑器底栏只保留光标位置。
+                mdaBase.toast("SQL 已清空。", "info");
                 return;
             }
             if (mdaEvent.detail.action !== "execute") return;
             mdaEditorController.setLoading(true);
-            mdaEditorController.setFeedback("正在执行 SQL…");
             try {
                 const mdaResponse = await mdaExecuteSql(mdaSession, mdaEvent.detail.value);
-                mdaEditorController.setFeedback(mdaResponse.msg || "SQL 执行完成。", "success");
+                // SQL 结果已经进入下方表格，成功消息仅短时提示而不占用上下分区高度。
+                mdaBase.toast(mdaResponse.msg || "SQL 执行完成。", "success");
             } catch (mdaError) {
-                mdaEditorController.setFeedback(mdaError.message || "SQL 执行失败。", "error");
+                // 异常仍以警示 Toast 告知用户，加载状态由 finally 统一解除。
+                mdaBase.toast(mdaError.message || "SQL 执行失败。", "error");
             } finally {
                 mdaEditorController.setLoading(false);
             }

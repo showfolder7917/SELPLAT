@@ -81,7 +81,8 @@
         selCodeEditorStatus.setAttribute("role", "status");
         selCodeEditorStatus.setAttribute("aria-live", "polite");
         const selCodeEditorStatusText = document.createElement("span");
-        selCodeEditorStatusText.textContent = String(selCodeEditorOptions.statusText || "就绪");
+        // 未声明状态文字时保留通用默认值；应用明确传入空字符串时只显示右侧光标位置。
+        selCodeEditorStatusText.textContent = String(selCodeEditorOptions.statusText ?? "就绪");
         const selCodeEditorPosition = document.createElement("span");
         selCodeEditorStatus.append(selCodeEditorStatusText, selCodeEditorPosition);
         selCodeEditorRoot.append(selCodeEditorToolbar, selCodeEditorBody, selCodeEditorStatus);
