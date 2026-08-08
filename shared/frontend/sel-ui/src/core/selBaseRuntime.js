@@ -265,6 +265,42 @@
         return true;
     }
 
+    /**
+     * 把调用方提供的纯文本写入系统剪贴板，并在权限受限时退回浏览器兼容路径。
+     * @param {unknown} value - 需要复制的节点名称或其他纯文本。
+     * @returns {Promise<boolean>} 成功复制非空文本时返回 true。
+     */
+    async function selBaseCopyText(value) {
+        const normalizedText = String(value ?? "");
+        if (!normalizedText) return false;
+        try {
+            if (global.navigator.clipboard?.writeText) {
+                await global.navigator.clipboard.writeText(normalizedText);
+                return true;
+            }
+        } catch (error) {
+            // 剪贴板权限被浏览器拒绝时继续使用仅承载本次文本的兼容输入框。
+        }
+        const fallbackInput = selBaseCreateElement("textarea", {
+            attributes: { "aria-hidden": "true", tabindex: "-1" }
+        });
+        fallbackInput.value = normalizedText;
+        fallbackInput.style.position = "fixed";
+        fallbackInput.style.opacity = "0";
+        fallbackInput.style.pointerEvents = "none";
+        global.document.body.appendChild(fallbackInput);
+        fallbackInput.select();
+        let copied = false;
+        try {
+            copied = Boolean(global.document.execCommand("copy"));
+        } catch (error) {
+            copied = false;
+        } finally {
+            fallbackInput.remove();
+        }
+        return copied;
+    }
+
     // confirm 使用浏览器可靠确认能力承接删除等不可逆业务动作。
     function selBaseConfirmAction(message) {
         // 返回布尔结果给业务动作，用户取消时不会发送写请求。
@@ -302,6 +338,8 @@
         Store: SelBaseStore,
         // confirm 为删除等危险操作返回用户确认结果。
         confirm: selBaseConfirmAction,
+        // copyText 只复制调用方显式提供的纯文本，不读取页面选择内容。
+        copyText: selBaseCopyText,
         // element 负责创建带安全文本和可访问属性的 DOM 节点。
         element: selBaseCreateElement,
         // formatDateTime 负责把接口时间转换为本地展示格式。

@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由 MDA 应用脚本和浏览器回归承载。 -->
 node_ability_refs = none
-<!-- 2.0.0 固定左树右页签以及页签内 SQL 编辑区和查询结果区布局。 -->
-rule_version = 2.0.0
+<!-- 2.2.0 把删除确认从大型业务窗口迁移到紧凑公共确认框。 -->
+rule_version = 2.2.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已经进入当前用户索引并完成实现回归。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自用户对双数据库和连接配置职责的纠正。 -->
-upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责;2026-08-08:数据库页面升级为左树右查询页签且页签内上方SQL下方结果表格
+upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责;2026-08-08:数据库页面升级为左树右查询页签且页签内上方SQL下方结果表格;2026-08-09:数据库连接与表视图节点增加编辑删除复制右键菜单并固定删除确认边界;2026-08-09:删除确认迁移为紧凑公共确认框并默认聚焦取消
 
 ## 数据库边界
 
@@ -90,8 +90,8 @@ mda_legacy_package_compatibility = forbidden
 
 ## 前端组件
 
-<!-- 连接新增、编辑和删除必须使用共享窗口和共享下拉组件，禁止原生弹窗和裸 select 形成第二套样式。 -->
-mda_connection_management_components = shared_window_and_shared_dropdown_only
+<!-- 连接新增与编辑使用共享窗口和下拉，删除使用共享紧凑确认框，禁止原生弹窗形成第二套样式。 -->
+mda_connection_management_components = shared_window_shared_dropdown_and_shared_compact_confirm_dialog
 <!-- 连接窗口必须保留公共窗口的移动、缩放、最小化和最大化能力。 -->
 mda_window_capabilities = movable_resizable_minimizable_maximizable
 <!-- 空连接时只显示可执行的新增入口，有连接后再显示编辑、删除和 SQL 操作。 -->
@@ -130,6 +130,22 @@ mda_connection_switch_query_policy = destroy_all_query_tabs_before_loading_selec
 mda_query_workspace_shared_components = selTabs_selSplitPane_selCodeEditor_selGrid
 <!-- MDA 工作区颜色、边框、焦点和活动状态只消费公共主题语义令牌，禁止页面内建立第二套颜色值。 -->
 mda_query_workspace_visual_tokens = unified_shared_theme_semantic_tokens_only
+<!-- 数据库目录节点右键菜单固定提供编辑连接、删除连接和复制名称；删除只影响 MDA 连接配置。 -->
+mda_catalog_context_actions = edit_connection_delete_connection_profile_copy_display_label
+<!-- 表或视图节点右键菜单固定提供结构编辑、真实删除和复制显示名称，并按 JDBC tableType 区分表与视图。 -->
+mda_table_context_actions = edit_structure_delete_real_target_object_copy_display_label_with_table_type
+<!-- 编辑表结构只打开未自动执行的安全 DDL 模板，用户补全语句并主动执行后才允许修改目标库。 -->
+mda_table_structure_edit_safety = open_non_executed_placeholder_ddl_query_tab
+<!-- 删除表或视图前必须显示带 schema 的完整限定名称并等待确认；取消时不得发送 SQL。 -->
+mda_table_drop_confirmation = show_qualified_name_and_wait_explicit_confirm_before_drop
+<!-- 删除确认属于短消息交互，必须使用不可拖动缩放的紧凑公共确认框，禁止复用大型业务表单窗口。 -->
+mda_destructive_confirmation_component = compact_shared_confirm_dialog_without_window_management_controls
+<!-- 危险确认默认焦点必须停在取消按钮，避免用户按回车时直接执行删除。 -->
+mda_destructive_confirmation_default_focus = cancel_action
+<!-- 删除成功后只关闭对应查询与结构编辑页签，刷新元数据树并使用短时 Toast 反馈。 -->
+mda_table_drop_refresh_scope = close_target_tabs_refresh_metadata_tree_and_show_transient_toast
+<!-- 菜单行为由共享 selTree、确认行为由共享 selConfirmDialog 承担，MDA 只声明动作并处理数据库副作用。 -->
+mda_tree_context_component_boundary = shared_seltree_menu_and_shared_confirm_dialog_with_application_owned_side_effects
 
 ## 规则包组成与验证
 

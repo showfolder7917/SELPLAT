@@ -7,3 +7,5 @@ MDA_LOCAL_DATABASE_WORKBENCH_RULES = local/XUNAN/selplat/应用/mda/rule/RUL_MDA
 mda_connection_profile_and_target_runtime_boundary_trigger = MDA_LOCAL_DATABASE_WORKBENCH_RULES
 <!-- 修改 MDA 左树右页签、页签内 SQL 编辑区或查询结果区时必须加载 MDA 架构规则。 -->
 mda_database_query_workspace_layout_trigger = MDA_LOCAL_DATABASE_WORKBENCH_RULES
+<!-- 修改数据库连接、表或视图节点右键菜单及真实删除行为时必须加载 MDA 架构规则。 -->
+mda_tree_context_actions_trigger = MDA_LOCAL_DATABASE_WORKBENCH_RULES

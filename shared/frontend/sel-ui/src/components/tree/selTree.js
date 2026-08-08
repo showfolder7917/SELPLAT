@@ -49,8 +49,18 @@
         // 展开与收起使用业务 JSON 的完整句式模板，基础树控件不推测当前语言语序。
         const messages = {
             expandTemplate: selTreeInputData.expandLabelTemplate || "展开{label}",
-            collapseTemplate: selTreeInputData.collapseLabelTemplate || "收起{label}"
+            collapseTemplate: selTreeInputData.collapseLabelTemplate || "收起{label}",
+            contextMenuLabelTemplate: selTreeInputData.contextMenuLabelTemplate || "{label}操作"
         };
+        // 右键菜单挂到 body，避免树滚动容器裁切；菜单动作仍只向当前 gridRoot 广播。
+        const contextMenu = document.createElement("div");
+        contextMenu.className = "seltree-context-menu";
+        contextMenu.setAttribute("role", "menu");
+        contextMenu.setAttribute("aria-hidden", "true");
+        contextMenu.hidden = true;
+        document.body.appendChild(contextMenu);
+        let contextItem = null;
+        let contextTrigger = null;
 
         // 收集配置中默认展开的全部父节点。
         function collectExpanded(items) {
@@ -135,6 +145,58 @@
             treeRoot.replaceChildren(createList(selTreeInputData.items));
         }
 
+        // 关闭当前实例菜单；键盘打开的菜单可把焦点还给对应树节点。
+        function closeContextMenu(restoreFocus = false) {
+            contextMenu.hidden = true;
+            contextMenu.setAttribute("aria-hidden", "true");
+            contextMenu.replaceChildren();
+            if (restoreFocus && contextTrigger?.isConnected) contextTrigger.focus();
+            contextItem = null;
+            contextTrigger = null;
+            return true;
+        }
+
+        // 菜单位置使用视口坐标，并在右侧或底部空间不足时向内收拢。
+        function positionContextMenu(clientX, clientY) {
+            const viewportGap = 8;
+            contextMenu.style.left = `${Math.max(viewportGap, clientX)}px`;
+            contextMenu.style.top = `${Math.max(viewportGap, clientY)}px`;
+            const bounds = contextMenu.getBoundingClientRect();
+            const left = Math.min(Math.max(viewportGap, clientX), Math.max(viewportGap, document.documentElement.clientWidth - bounds.width - viewportGap));
+            const top = Math.min(Math.max(viewportGap, clientY), Math.max(viewportGap, document.documentElement.clientHeight - bounds.height - viewportGap));
+            contextMenu.style.left = `${left}px`;
+            contextMenu.style.top = `${top}px`;
+        }
+
+        // 只为节点显式声明的动作创建安全文本按钮，基础树不推测编辑或删除的业务含义。
+        function openContextMenu(item, trigger, clientX, clientY, focusFirst = false) {
+            const actions = Array.isArray(item.contextActions) ? item.contextActions.filter((action) => action?.id && action?.label) : [];
+            if (!actions.length) return false;
+            closeContextMenu(false);
+            state.selectedId = item.id;
+            render();
+            contextItem = item;
+            contextTrigger = treeRoot.querySelector(`[data-tree-action="select"][data-tree-id="${CSS.escape(String(item.id))}"]`);
+            contextMenu.setAttribute("aria-label", messages.contextMenuLabelTemplate.replaceAll("{label}", item.label));
+            actions.forEach((action) => {
+                const button = document.createElement("button");
+                button.className = `seltree-context-menu-item${action.danger ? " seltree-context-menu-item-danger" : ""}`;
+                button.type = "button";
+                button.dataset.treeContextAction = String(action.id);
+                button.setAttribute("role", "menuitem");
+                button.appendChild(createIcon(String(action.icon || "ri-circle-line")));
+                const label = document.createElement("span");
+                label.textContent = String(action.label);
+                button.appendChild(label);
+                contextMenu.appendChild(button);
+            });
+            contextMenu.hidden = false;
+            contextMenu.setAttribute("aria-hidden", "false");
+            positionContextMenu(clientX, clientY);
+            if (focusFirst) contextMenu.querySelector("button")?.focus();
+            return true;
+        }
+
         // 选择节点并向所属 data-sel-grid 根节点广播局部事件。
         function select(nodeId) {
             const item = selTreeFindItem(selTreeInputData.items, nodeId);
@@ -178,6 +240,73 @@
             select(item.id);
         });
 
+        // 鼠标右键只选中节点并打开业务菜单，不触发普通选择动作造成查询页签提前打开。
+        treeRoot.addEventListener("contextmenu", (event) => {
+            const button = event.target.closest('[data-tree-action="select"]');
+            if (!button || !treeRoot.contains(button)) return;
+            const item = selTreeFindItem(selTreeInputData.items, button.dataset.treeId);
+            if (!item || !openContextMenu(item, button, event.clientX, event.clientY)) return;
+            event.preventDefault();
+        });
+
+        // ContextMenu 键和 Shift+F10 为键盘用户提供与鼠标右键一致的入口。
+        treeRoot.addEventListener("keydown", (event) => {
+            if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+            const button = event.target.closest('[data-tree-action="select"]');
+            if (!button || !treeRoot.contains(button)) return;
+            const item = selTreeFindItem(selTreeInputData.items, button.dataset.treeId);
+            const bounds = button.getBoundingClientRect();
+            if (!item || !openContextMenu(item, button, bounds.left + 24, bounds.bottom, true)) return;
+            event.preventDefault();
+        });
+
+        // 菜单动作只提交稳定动作 ID 和节点快照，具体数据库副作用由应用装配层决定。
+        contextMenu.addEventListener("click", (event) => {
+            const button = event.target.closest("button[data-tree-context-action]");
+            if (!button || !contextItem) return;
+            const item = contextItem;
+            const action = button.dataset.treeContextAction;
+            closeContextMenu(false);
+            gridRoot.dispatchEvent(new CustomEvent("selTree:contextAction", {
+                bubbles: true,
+                detail: Object.freeze({
+                    gridId,
+                    entity: gridRoot.dataset.selEntity || "",
+                    id: item.id,
+                    label: item.label,
+                    filter: Object.freeze({ ...(item.filter || {}) }),
+                    action
+                })
+            }));
+        });
+
+        // 菜单内上下键循环移动焦点，Escape 关闭并返回原节点。
+        contextMenu.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                closeContextMenu(true);
+                return;
+            }
+            if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+            const buttons = Array.from(contextMenu.querySelectorAll("button:not(:disabled)"));
+            const currentIndex = buttons.indexOf(document.activeElement);
+            const offset = event.key === "ArrowDown" ? 1 : -1;
+            buttons[(currentIndex + offset + buttons.length) % buttons.length]?.focus();
+            event.preventDefault();
+        });
+
+        function handleOutsidePointer(event) {
+            if (!contextMenu.hidden && !contextMenu.contains(event.target)) closeContextMenu(false);
+        }
+
+        function handleViewportChange() {
+            if (!contextMenu.hidden) closeContextMenu(false);
+        }
+
+        document.addEventListener("pointerdown", handleOutsidePointer, true);
+        window.addEventListener("resize", handleViewportChange);
+        window.addEventListener("scroll", handleViewportChange, true);
+
         // 默认展开状态和首次树结构只影响当前实例。
         collectExpanded(selTreeInputData.items);
         render();
@@ -189,8 +318,21 @@
             selTreeInputData = selTreeNextData;
             messages.expandTemplate = selTreeInputData.expandLabelTemplate || "展开{label}";
             messages.collapseTemplate = selTreeInputData.collapseLabelTemplate || "收起{label}";
+            messages.contextMenuLabelTemplate = selTreeInputData.contextMenuLabelTemplate || "{label}操作";
             if (!selTreeFindItem(selTreeInputData.items, state.selectedId)) state.selectedId = selTreeInputData.selectedId;
+            closeContextMenu(false);
             render();
+            return true;
+        }
+
+        // 销毁时回收 body 门户和全局监听，避免动态工作区反复挂载后残留菜单实例。
+        function destroy() {
+            closeContextMenu(false);
+            document.removeEventListener("pointerdown", handleOutsidePointer, true);
+            window.removeEventListener("resize", handleViewportChange);
+            window.removeEventListener("scroll", handleViewportChange, true);
+            contextMenu.remove();
+            selTreeInstances.delete(gridId);
             return true;
         }
 
@@ -201,7 +343,9 @@
             select,
             refresh: render,
             setLocale: selTreeSetLocale,
-            getSelectedId: () => state.selectedId
+            getSelectedId: () => state.selectedId,
+            closeContextMenu,
+            destroy
         });
     }
 

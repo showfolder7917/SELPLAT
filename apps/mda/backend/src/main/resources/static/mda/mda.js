@@ -7,7 +7,7 @@
 
     const mdaRequiredComponents = Object.freeze([
         "selBaseRuntime", "selAjax", "selPanel", "selTree", "selDropdownMenu", "selGrid", "selTabs",
-        "selSplitPane", "selCodeEditor", "selWindow", "selPageBackground", "selPersonalization", "selThemeManager"
+        "selSplitPane", "selCodeEditor", "selWindow", "selConfirmDialog", "selPageBackground", "selPersonalization", "selThemeManager"
     ]);
     const mdaMissingComponents = mdaRequiredComponents.filter((mdaName) => !window[mdaName]);
     if (mdaMissingComponents.length > 0) throw new Error(`MDA 缺少公共组件：${mdaMissingComponents.join("、")}。`);
@@ -27,7 +27,7 @@
     const mdaState = {
         connections: [], selectedConnection: null, metadata: [], panelRoot: null,
         treeController: null, tabsController: null, querySessions: new Map(), querySequence: 1,
-        connectionWindowController: null, deleteWindowController: null, editingConnectionId: null
+        connectionWindowController: null, confirmDialogController: null, editingConnectionId: null
     };
 
     // MDA 只声明公共组件所在区域；页签内部结构继续由各公共控件自身创建。
@@ -53,6 +53,21 @@
             const mdaNodePath = `${mdaPath}-${mdaIndex}-${mdaNode.type}-${mdaNode.label}`;
             const mdaChildren = mdaMapMetadataNodes(mdaNode.children, mdaNodePath);
             const mdaIcons = { catalog: "ri-database-2-line", schema: "ri-folder-3-line", table: "ri-table-2", column: "ri-key-2-line" };
+            const mdaIsView = String(mdaNode.tableType || "").toUpperCase().includes("VIEW");
+            // 目录节点代表当前连接中的数据库，表或视图节点承接真实目标库结构动作。
+            const mdaContextActions = mdaNode.type === "catalog"
+                ? Object.freeze([
+                    Object.freeze({ id: "connection-edit", label: "编辑连接", icon: "ri-edit-line" }),
+                    Object.freeze({ id: "connection-delete", label: "删除连接", icon: "ri-delete-bin-6-line", danger: true }),
+                    Object.freeze({ id: "copy-label", label: "复制名称", icon: "ri-file-copy-line" })
+                ])
+                : mdaNode.type === "table"
+                    ? Object.freeze([
+                        Object.freeze({ id: "table-edit", label: mdaIsView ? "编辑视图定义" : "编辑表结构", icon: "ri-edit-line" }),
+                        Object.freeze({ id: "table-delete", label: mdaIsView ? "删除视图" : "删除表", icon: "ri-delete-bin-6-line", danger: true }),
+                        Object.freeze({ id: "copy-label", label: mdaIsView ? "复制视图名" : "复制表名", icon: "ri-file-copy-line" })
+                    ])
+                    : Object.freeze([]);
             return Object.freeze({
                 id: mdaNodePath,
                 label: mdaNode.type === "column" && mdaNode.typeName ? `${mdaNode.label} · ${mdaNode.typeName}` : mdaNode.label,
@@ -62,8 +77,10 @@
                     nodeType: mdaNode.type,
                     catalog: mdaNode.catalog || "",
                     schema: mdaNode.schema || "",
-                    tableName: mdaNode.tableName || ""
+                    tableName: mdaNode.tableName || "",
+                    tableType: mdaNode.tableType || ""
                 }),
+                contextActions: mdaContextActions,
                 children: Object.freeze(mdaChildren)
             });
         });
@@ -122,7 +139,7 @@
                 })
             }),
             search: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", label: "结果搜索", placeholder: "搜索当前结果…", buttonLabel: "查询", clearLabel: "清空搜索", icon: "ri-search-line", buttonIcon: "ri-search-line", clearIcon: "ri-close-line", defaultValue: "", clearable: true, submitOnEnter: true, submitOnClear: true, allowEmpty: true, trim: true }),
-            tree: Object.freeze({ gridId: mdaWorkspaceId, ariaLabel: "数据库结构", heading: "数据库结构", summary: `${mdaCountTables(mdaState.metadata)} 个表／视图`, expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}", selectedId: "", items: Object.freeze(mdaMapMetadataNodes(mdaState.metadata, "mda")) }),
+            tree: Object.freeze({ gridId: mdaWorkspaceId, ariaLabel: "数据库结构", heading: "数据库结构", summary: `${mdaCountTables(mdaState.metadata)} 个表／视图`, expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}", contextMenuLabelTemplate: "{label}操作", selectedId: "", items: Object.freeze(mdaMapMetadataNodes(mdaState.metadata, "mda")) }),
             menu: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", ariaLabel: "查询结果操作" }),
             pagination: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", currentPage: 1, pageSize: 20, totalCount: mdaDataItems.length, summaryAll: "共 {total} 行", summaryFiltered: "当前 {visible} 行 · 共 {total} 行", previousLabel: "上一页", nextLabel: "下一页", pageChangedMessage: "已切换到第 {page} 页", pageSizeChangedMessage: "每页显示 {size} 行" }),
             select: Object.freeze({
@@ -154,6 +171,20 @@
         const mdaType = String(mdaState.selectedConnection?.databaseType || "").toUpperCase();
         const mdaParts = [mdaFilter.schema, mdaFilter.tableName].filter(Boolean).map((mdaPart) => mdaQuoteIdentifier(mdaPart, mdaType));
         return Object.freeze({ label: mdaFilter.tableName, qualifiedName: mdaParts.join("."), sql: `SELECT * FROM ${mdaParts.join(".")}` });
+    }
+
+    // JDBC 表类型决定删除关键字，视图不能误用 DROP TABLE。
+    function mdaBuildTableStructureAction(mdaFilter) {
+        const mdaTableQuery = mdaBuildTableQuery(mdaFilter);
+        const mdaIsView = String(mdaFilter.tableType || "").toUpperCase().includes("VIEW");
+        return Object.freeze({
+            ...mdaTableQuery,
+            catalog: mdaFilter.catalog || "",
+            schema: mdaFilter.schema || "",
+            tableName: mdaFilter.tableName || "",
+            isView: mdaIsView,
+            dropSql: `DROP ${mdaIsView ? "VIEW" : "TABLE"} ${mdaTableQuery.qualifiedName}`
+        });
     }
 
     // 业务键附加稳定短哈希，避免相同表名位于不同 schema 时页签实例冲突。
@@ -279,6 +310,16 @@
         return mdaOpenQuerySession({ id: mdaSessionId, label: mdaTableQuery.label, qualifiedName: mdaTableQuery.qualifiedName, sql: mdaTableQuery.sql, icon: "ri-table-2" }, true);
     }
 
+    // 编辑动作只打开带安全占位符的 SQL 页签，用户明确补全语句并点击执行后才会修改目标库。
+    function mdaOpenTableStructureEditor(mdaFilter) {
+        const mdaAction = mdaBuildTableStructureAction(mdaFilter);
+        const mdaSessionId = `MdaTableStructure${mdaState.selectedConnection.id}_${mdaStableKey(`${mdaFilter.catalog}.${mdaFilter.schema}.${mdaFilter.tableName}`)}`;
+        const mdaSql = mdaAction.isView
+            ? `-- 请按目标数据库语法填写 ${mdaAction.qualifiedName} 的 CREATE OR REPLACE VIEW 语句`
+            : `-- 请把占位注释替换为 ADD / ALTER / DROP COLUMN 等目标数据库语句\nALTER TABLE ${mdaAction.qualifiedName}\n    /* 表结构变更语句 */;`;
+        return mdaOpenQuerySession({ id: mdaSessionId, label: `编辑 ${mdaAction.label}`, qualifiedName: mdaAction.qualifiedName, sql: mdaSql, icon: "ri-edit-line" });
+    }
+
     function mdaOpenAdHocQuery() {
         const mdaSequence = mdaState.querySequence++;
         return mdaOpenQuerySession({ id: `MdaAdHocQuery${mdaSequence}`, label: `SQL ${mdaSequence}`, sql: "SELECT 1 AS ready", icon: "ri-terminal-box-line" });
@@ -325,34 +366,96 @@
         });
     }
 
-    function mdaBuildDeleteWindow() {
-        return Object.freeze({
-            title: "删除数据库连接", subtitle: "只删除控制库中的连接配置，不删除目标数据库",
-            closeLabel: "关闭删除确认窗口", cancelLabel: "取消", submitLabel: "确认删除",
-            validationMessage: "请选择确认删除", autoSuccess: false,
-            rows: Object.freeze([Object.freeze([Object.freeze({
-                name: "confirmation", label: "删除确认", type: "select", required: true,
-                options: Object.freeze([
-                    Object.freeze({ value: "", label: "请选择", icon: "ri-question-line", selected: true }),
-                    Object.freeze({ value: "DELETE", label: "确认删除当前连接", icon: "ri-delete-bin-6-line", tone: "danger" })
-                ])
-            })])])
-        });
-    }
-
     function mdaEmptyConnectionValues() {
         return { connectionName: "", databaseType: "H2", host: "", port: "", databaseName: "", schemaName: "PUBLIC", username: "sa", password: "", customJdbcUrl: "", jdbcParameters: "", defaultAutoCommit: "true", sortnum: "0" };
+    }
+
+    async function mdaOpenSelectedConnectionEditor() {
+        if (!mdaState.selectedConnection) return false;
+        const mdaDetail = await mdaAjax.json({ url: `${mdaApi.connections}getById.htm?id=${mdaState.selectedConnection.id}` });
+        mdaState.editingConnectionId = mdaState.selectedConnection.id;
+        mdaState.connectionWindowController.setLocale(mdaBuildConnectionWindow());
+        mdaState.connectionWindowController.reset();
+        mdaState.connectionWindowController.setValues({ ...mdaDetail.data, defaultAutoCommit: String(mdaDetail.data.defaultAutoCommit), port: mdaDetail.data.port ?? "", sortnum: mdaDetail.data.sortnum ?? 0 });
+        mdaState.connectionWindowController.open();
+        return true;
+    }
+
+    async function mdaConfirmAndDeleteSelectedConnection() {
+        const mdaConnection = mdaState.selectedConnection;
+        if (!mdaConnection) return false;
+        const mdaConfirmed = await mdaState.confirmDialogController.open({
+            title: "删除数据库连接",
+            message: "是否删除此连接配置？不会删除目标数据库。",
+            target: mdaConnection.connectionName,
+            icon: "ri-delete-bin-6-line",
+            tone: "danger",
+            confirmLabel: "确认删除",
+            cancelLabel: "取消",
+            closeLabel: "关闭删除连接确认框"
+        });
+        if (!mdaConfirmed) return false;
+        try {
+            const mdaResponse = await mdaAjax.request({ url: `${mdaApi.connections}delete.htm`, method: "POST", data: { id: mdaConnection.id } });
+            await mdaReloadConnections();
+            mdaBase.toast(mdaResponse.msg || `连接“${mdaConnection.connectionName}”已删除。`, "success");
+            return true;
+        } catch (mdaError) {
+            mdaBase.toast(mdaError.message || "连接配置删除失败。", "error");
+            return false;
+        }
+    }
+
+    async function mdaConfirmAndDeleteTable(mdaFilter) {
+        if (!mdaState.selectedConnection) return false;
+        const mdaConnectionId = mdaState.selectedConnection.id;
+        const mdaDeleteTarget = mdaBuildTableStructureAction(mdaFilter);
+        const mdaObjectLabel = mdaDeleteTarget.isView ? "视图" : "数据表";
+        const mdaConfirmed = await mdaState.confirmDialogController.open({
+            title: `删除${mdaObjectLabel}`,
+            message: `是否永久删除此${mdaObjectLabel}？此操作无法撤销。`,
+            target: mdaDeleteTarget.qualifiedName,
+            icon: "ri-delete-bin-6-line",
+            tone: "danger",
+            confirmLabel: "确认删除",
+            cancelLabel: "取消",
+            closeLabel: `关闭删除${mdaObjectLabel}确认框`
+        });
+        if (!mdaConfirmed) return false;
+        try {
+            await mdaAjax.request({
+                url: mdaApi.execute,
+                method: "POST",
+                data: { connectionId: mdaConnectionId, sql: mdaDeleteTarget.dropSql, autoCommit: true, maxRows: 1, queryTimeoutSeconds: 30 }
+            });
+            const mdaStableTablePath = `${mdaDeleteTarget.catalog || ""}.${mdaDeleteTarget.schema || ""}.${mdaDeleteTarget.label}`;
+            mdaState.tabsController.close(`MdaTableQuery${mdaConnectionId}_${mdaStableKey(mdaStableTablePath)}`, { force: true });
+            mdaState.tabsController.close(`MdaTableStructure${mdaConnectionId}_${mdaStableKey(mdaStableTablePath)}`, { force: true });
+            await mdaRefreshSelectedMetadata();
+            mdaBase.toast(`${mdaObjectLabel}“${mdaDeleteTarget.qualifiedName}”已删除。`, "success");
+            return true;
+        } catch (mdaError) {
+            mdaBase.toast(mdaError.message || `${mdaObjectLabel}删除失败。`, "error");
+            return false;
+        }
+    }
+
+    // 同一连接结构刷新不关闭其他查询页签，删除目标表后只移除该表自己的页签。
+    async function mdaRefreshSelectedMetadata() {
+        if (!mdaState.selectedConnection) return false;
+        const mdaResponse = await mdaAjax.request({ url: mdaApi.metadata, method: "POST", data: { connectionId: mdaState.selectedConnection.id } });
+        mdaState.metadata = mdaResponse.data?.nodes || [];
+        const mdaPayload = mdaBuildPayload();
+        mdaState.treeController.setLocale(mdaPayload.tree);
+        mdaSyncPanel(mdaPayload);
+        return true;
     }
 
     // 切换连接时关闭并销毁旧连接的全部动态查询页签，再加载新连接元数据。
     async function mdaLoadMetadata(mdaConnection) {
         mdaState.tabsController?.closeAll();
         mdaState.selectedConnection = mdaConnection;
-        const mdaResponse = await mdaAjax.request({ url: mdaApi.metadata, method: "POST", data: { connectionId: mdaConnection.id } });
-        mdaState.metadata = mdaResponse.data?.nodes || [];
-        const mdaPayload = mdaBuildPayload();
-        mdaState.treeController.setLocale(mdaPayload.tree);
-        mdaSyncPanel(mdaPayload);
+        await mdaRefreshSelectedMetadata();
     }
 
     async function mdaReloadConnections(mdaPreferredId) {
@@ -381,8 +484,8 @@
         const mdaTabsHost = window.selPanel.getComponent(mdaWorkspaceId, "selTabs");
         mdaState.tabsController = window.selTabs.mount(mdaTabsHost, { id: mdaTabsId, ariaLabel: "数据库查询页签", tabListLabel: "已打开的数据库查询", emptyIcon: "ri-terminal-window-line", emptyTitle: "选择数据表开始查询", emptyDescription: "左侧选择表后，将在这里打开 SQL 编辑区和查询结果" });
         mdaState.connectionWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaConnectionWindow", messages: mdaWindowMessages, ...mdaBuildConnectionWindow() });
-        mdaState.deleteWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaConnectionDeleteWindow", messages: mdaWindowMessages, ...mdaBuildDeleteWindow() });
-        if (!mdaState.treeController || !mdaState.tabsController || !mdaState.connectionWindowController || !mdaState.deleteWindowController) throw new Error("MDA 公共业务组件挂载失败。");
+        mdaState.confirmDialogController = window.selConfirmDialog.mount(mdaApplicationHost, { id: "MdaDeleteConfirmDialog", title: "删除确认", tone: "danger" });
+        if (!mdaState.treeController || !mdaState.tabsController || !mdaState.connectionWindowController || !mdaState.confirmDialogController) throw new Error("MDA 公共业务组件挂载失败。");
 
         // 面板命令只负责连接窗口和新建查询，SQL 执行由当前页签编辑器自己的动作事件承接。
         mdaState.panelRoot.addEventListener("click", async (mdaEvent) => {
@@ -395,16 +498,10 @@
                 mdaState.connectionWindowController.open();
             }
             if (mdaCommand === "connection-edit" && mdaState.selectedConnection) {
-                const mdaDetail = await mdaAjax.json({ url: `${mdaApi.connections}getById.htm?id=${mdaState.selectedConnection.id}` });
-                mdaState.editingConnectionId = mdaState.selectedConnection.id;
-                mdaState.connectionWindowController.setLocale(mdaBuildConnectionWindow());
-                mdaState.connectionWindowController.reset();
-                mdaState.connectionWindowController.setValues({ ...mdaDetail.data, defaultAutoCommit: String(mdaDetail.data.defaultAutoCommit), port: mdaDetail.data.port ?? "", sortnum: mdaDetail.data.sortnum ?? 0 });
-                mdaState.connectionWindowController.open();
+                await mdaOpenSelectedConnectionEditor();
             }
             if (mdaCommand === "connection-delete" && mdaState.selectedConnection) {
-                mdaState.deleteWindowController.reset();
-                mdaState.deleteWindowController.open();
+                await mdaConfirmAndDeleteSelectedConnection();
             }
             if (mdaCommand === "query-new" && mdaState.selectedConnection) mdaOpenAdHocQuery();
         });
@@ -414,6 +511,23 @@
                 mdaOpenTableQuery(mdaEvent.detail.filter);
             } catch (mdaError) {
                 console.error("MDA 数据表查询页签打开失败。", mdaError);
+            }
+        });
+        // 公共树只上报动作；连接配置、目标库 DDL 和剪贴板副作用全部留在 MDA 装配层。
+        mdaState.panelRoot.addEventListener("selTree:contextAction", async (mdaEvent) => {
+            const mdaAction = mdaEvent.detail?.action;
+            const mdaFilter = mdaEvent.detail?.filter || {};
+            try {
+                if (mdaAction === "connection-edit") await mdaOpenSelectedConnectionEditor();
+                if (mdaAction === "connection-delete") await mdaConfirmAndDeleteSelectedConnection();
+                if (mdaAction === "table-edit") mdaOpenTableStructureEditor(mdaFilter);
+                if (mdaAction === "table-delete") await mdaConfirmAndDeleteTable(mdaFilter);
+                if (mdaAction === "copy-label") {
+                    const mdaCopied = await mdaBase.copyText(mdaEvent.detail?.label || "");
+                    mdaBase.toast(mdaCopied ? `已复制“${mdaEvent.detail.label}”。` : "复制失败，请检查浏览器剪贴板权限。", mdaCopied ? "success" : "error");
+                }
+            } catch (mdaError) {
+                mdaBase.toast(mdaError.message || "右键菜单操作失败。", "error");
             }
         });
         // 切换仅隐藏非活动页签，关闭事件则在子清理完成后刷新计数。
@@ -437,19 +551,6 @@
                     mdaState.connectionWindowController.setLoading(false);
                 }
                 return;
-            }
-            if (mdaEvent.detail?.id === "MdaConnectionDeleteWindow" && mdaEvent.detail.values.confirmation === "DELETE" && mdaState.selectedConnection) {
-                mdaState.deleteWindowController.setLoading(true);
-                try {
-                    const mdaResponse = await mdaAjax.request({ url: `${mdaApi.connections}delete.htm`, method: "POST", data: { id: mdaState.selectedConnection.id } });
-                    mdaState.deleteWindowController.setFeedback(mdaResponse.msg || "连接配置删除完成。");
-                    mdaState.deleteWindowController.close();
-                    await mdaReloadConnections();
-                } catch (mdaError) {
-                    mdaState.deleteWindowController.setFeedback(mdaError.message || "连接配置删除失败。", true);
-                } finally {
-                    mdaState.deleteWindowController.setLoading(false);
-                }
             }
         });
         const mdaConnectionSelect = mdaState.panelRoot.querySelector('[data-sel-grid-role="type-filter"]');
