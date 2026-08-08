@@ -1,13 +1,13 @@
 /*
  * mda.js：MDA 数据库工作台应用装配层。
- * 负责调用真实接口、转换元数据树和查询结果，并把标准 payload 交给 SEL 公共组件。
+ * 负责调用真实连接、元数据和 SQL 接口，并组合公共树、页签、分隔面板、代码编辑器、表格与窗口。
  */
 (function mdaInitializeApplication() {
     "use strict";
 
     const mdaRequiredComponents = Object.freeze([
-        "selBaseRuntime", "selAjax", "selPanel", "selSearch", "selTree", "selDropdownMenu",
-        "selGrid", "selWindow", "selPageBackground", "selPersonalization", "selThemeManager"
+        "selBaseRuntime", "selAjax", "selPanel", "selTree", "selDropdownMenu", "selGrid", "selTabs",
+        "selSplitPane", "selCodeEditor", "selWindow", "selPageBackground", "selPersonalization", "selThemeManager"
     ]);
     const mdaMissingComponents = mdaRequiredComponents.filter((mdaName) => !window[mdaName]);
     if (mdaMissingComponents.length > 0) throw new Error(`MDA 缺少公共组件：${mdaMissingComponents.join("、")}。`);
@@ -17,173 +17,269 @@
     const mdaApplicationHost = mdaBase.query("[data-mda-app]");
     const mdaBackgroundHost = mdaBase.query("[data-sel-page-background-host]");
     const mdaPersonalizationHost = mdaBase.query("[data-sel-personalization-host]");
-    const mdaGridId = "MdaDatabaseGrid";
+    const mdaWorkspaceId = "MdaDatabaseWorkspace";
+    const mdaTabsId = "MdaDatabaseQueryTabs";
     const mdaApi = Object.freeze({
         connections: "/api/mda/connections/",
         metadata: "/api/mda/metadata/tree.htm",
         execute: "/api/mda/sql/execute.htm"
     });
     const mdaState = {
-        connections: [], selectedConnection: null, metadata: [], currentTable: null,
-        columns: [], rows: [], gridController: null, treeController: null, sqlWindowController: null,
+        connections: [], selectedConnection: null, metadata: [], panelRoot: null,
+        treeController: null, tabsController: null, querySessions: new Map(), querySequence: 1,
         connectionWindowController: null, deleteWindowController: null, editingConnectionId: null
     };
 
+    // MDA 只声明公共组件所在区域；页签内部结构继续由各公共控件自身创建。
     const mdaLayout = Object.freeze({
         top: Object.freeze([
             Object.freeze({ component: "title", payload: "title" }),
             Object.freeze({
                 component: "toolbar",
                 children: Object.freeze([
-                    Object.freeze({ component: "selSearch", payload: "search" }),
-                    Object.freeze({ component: "selDropdownMenu", slot: "projectType", payload: "select.projectType" }),
-                    Object.freeze({ component: "filterReset", payload: "title" })
+                    Object.freeze({ component: "selDropdownMenu", slot: "projectType", payload: "select.projectType" })
                 ])
             })
         ]),
         left: Object.freeze([Object.freeze({ component: "selTree", payload: "tree" })]),
-        center: Object.freeze([Object.freeze({ component: "selGrid", payload: "$aggregate" })]),
+        center: Object.freeze([Object.freeze({ component: "selTabs", payload: "workspace.tabs" })]),
         right: Object.freeze([]),
-        bottom: Object.freeze([
-            Object.freeze({
-                component: "footer",
-                children: Object.freeze([
-                    Object.freeze({
-                        component: "gridSummary", payload: "pagination",
-                        children: Object.freeze([Object.freeze({ component: "selDropdownMenu", slot: "pageSize", payload: "select.pageSize" })])
-                    }),
-                    Object.freeze({ component: "pagination", payload: "pagination" }),
-                    Object.freeze({ component: "feedback", payload: "title.messages" })
-                ])
-            })
-        ])
+        bottom: Object.freeze([])
     });
 
-    /** 把 JDBC 元数据节点转换为 selTree 标准节点，并保留表查询所需的稳定值。 */
-    function mdaMapMetadataNodes(nodes, path) {
-        return (nodes || []).map((node, index) => {
-            const nodePath = `${path}-${index}-${node.type}-${node.label}`;
-            const children = mdaMapMetadataNodes(node.children, nodePath);
-            const icons = { catalog: "ri-database-2-line", schema: "ri-folder-3-line", table: "ri-table-2", column: "ri-key-2-line" };
+    /** 把 JDBC 元数据节点转换为 selTree 标准节点，并保留打开表查询页签所需的稳定字段。 */
+    function mdaMapMetadataNodes(mdaNodes, mdaPath) {
+        return (mdaNodes || []).map((mdaNode, mdaIndex) => {
+            const mdaNodePath = `${mdaPath}-${mdaIndex}-${mdaNode.type}-${mdaNode.label}`;
+            const mdaChildren = mdaMapMetadataNodes(mdaNode.children, mdaNodePath);
+            const mdaIcons = { catalog: "ri-database-2-line", schema: "ri-folder-3-line", table: "ri-table-2", column: "ri-key-2-line" };
             return Object.freeze({
-                id: nodePath,
-                label: node.type === "column" && node.typeName ? `${node.label} · ${node.typeName}` : node.label,
-                icon: icons[node.type] || "ri-circle-line",
-                count: children.length,
+                id: mdaNodePath,
+                label: mdaNode.type === "column" && mdaNode.typeName ? `${mdaNode.label} · ${mdaNode.typeName}` : mdaNode.label,
+                icon: mdaIcons[mdaNode.type] || "ri-circle-line",
+                count: mdaChildren.length,
                 filter: Object.freeze({
-                    nodeType: node.type,
-                    catalog: node.catalog || "",
-                    schema: node.schema || "",
-                    tableName: node.tableName || ""
+                    nodeType: mdaNode.type,
+                    catalog: mdaNode.catalog || "",
+                    schema: mdaNode.schema || "",
+                    tableName: mdaNode.tableName || ""
                 }),
-                children: Object.freeze(children)
+                children: Object.freeze(mdaChildren)
             });
         });
     }
 
-    /** 构建当前连接、元数据树和查询结果共用的聚合 payload。 */
-    function mdaBuildPayload() {
-        const connectionId = String(mdaState.selectedConnection?.id || "");
-        const dataItems = mdaState.rows.map((row, index) => Object.freeze({ _row: index + 1, _connectionId: connectionId, ...row }));
-        const columnItems = mdaState.columns.length > 0
-            ? mdaState.columns.map((column) => Object.freeze({ id: column.name, field: column.name, label: column.label, renderer: "text" }))
+    // 统计真实表节点数量供标题和左树摘要同步显示。
+    function mdaCountTables(mdaNodes) {
+        return (mdaNodes || []).reduce((mdaCount, mdaNode) => mdaCount + (mdaNode.type === "table" ? 1 : 0) + mdaCountTables(mdaNode.children), 0);
+    }
+
+    // 活动页签决定标题说明和结果行统计；没有页签时返回空结果状态。
+    function mdaGetActiveSession() {
+        const mdaActiveId = mdaState.tabsController?.getState().activeId;
+        return mdaActiveId ? mdaState.querySessions.get(mdaActiveId) || null : null;
+    }
+
+    /** 构建外层工作台和页签表格共同消费的标准聚合 payload。 */
+    function mdaBuildPayload(mdaSession = mdaGetActiveSession()) {
+        const mdaConnectionId = String(mdaSession?.connectionId || mdaState.selectedConnection?.id || "");
+        const mdaColumns = mdaSession?.columns || [];
+        const mdaRows = mdaSession?.rows || [];
+        const mdaDataItems = mdaRows.map((mdaRow, mdaIndex) => Object.freeze({ _row: mdaIndex + 1, _connectionId: mdaConnectionId, ...mdaRow }));
+        const mdaColumnItems = mdaColumns.length > 0
+            ? mdaColumns.map((mdaColumn) => Object.freeze({ id: mdaColumn.name, field: mdaColumn.name, label: mdaColumn.label, renderer: "text" }))
             : [Object.freeze({ id: "empty", field: "message", label: "查询提示", renderer: "text" })];
         return Object.freeze({
-            // 数据库字段数量不固定；显式启用公共宽表模式，列宽总和超出结果区时只在表格内部水平滚动。
-            grid: Object.freeze({ mode: "records", horizontalScroll: true, defaultColumnWidth: 150, idField: "_row", typeField: "_connectionId", statusField: "_status", searchFields: Object.freeze(mdaState.columns.map((column) => column.name)) }),
-            data: Object.freeze({ items: Object.freeze(dataItems), selectedIds: Object.freeze([]) }),
-            column: Object.freeze({ gridId: mdaGridId, ariaLabel: "数据库查询结果", emptyText: "选择左侧数据表即可查询前 1000 行", items: Object.freeze(columnItems) }),
+            // 目标库字段动态变化，公共宽表模式按列数在结果区内部提供水平滚动。
+            grid: Object.freeze({ mode: "records", horizontalScroll: true, defaultColumnWidth: 150, idField: "_row", typeField: "_connectionId", statusField: "_status", searchFields: Object.freeze(mdaColumns.map((mdaColumn) => mdaColumn.name)) }),
+            data: Object.freeze({ items: Object.freeze(mdaDataItems), selectedIds: Object.freeze([]) }),
+            column: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", ariaLabel: "数据库查询结果", emptyText: "在上方输入 SQL 后执行查询", items: Object.freeze(mdaColumnItems) }),
             title: Object.freeze({
                 title: "MDA 数据库工作台", subtitle: "Multi-Database Access",
-                description: mdaState.currentTable ? `正在浏览 ${mdaState.currentTable}` : "浏览数据库表结构并在前台执行真实查询",
-                ariaLabel: "MDA 数据库工作台", ariaLabels: Object.freeze({ statusTabs: "查询状态", headerActions: "查询操作", toolbar: "数据库工具栏", sidebar: "数据库结构", content: "查询结果", board: "查询结果表格", pagination: "结果分页" }),
+                description: mdaSession ? `正在使用 ${mdaSession.label} 查询页签` : "从左侧选择数据表，在右侧上方编写 SQL 并查看下方结果",
+                ariaLabel: "MDA 数据库工作台",
+                ariaLabels: Object.freeze({ statusTabs: "工作台状态", headerActions: "数据库操作", toolbar: "数据库连接工具栏", sidebar: "数据库结构", content: "SQL 查询工作区", board: "查询结果表格", pagination: "结果分页" }),
                 statusTabs: Object.freeze([
                     Object.freeze({ value: "", label: "连接", count: mdaState.connections.length }),
-                    Object.freeze({ value: "ready", label: "数据表", count: mdaCountTables(mdaState.metadata) }),
-                    Object.freeze({ value: "rows", label: "结果行", count: dataItems.length })
+                    Object.freeze({ value: "tables", label: "数据表", count: mdaCountTables(mdaState.metadata) }),
+                    Object.freeze({ value: "tabs", label: "查询页签", count: mdaState.querySessions.size }),
+                    Object.freeze({ value: "rows", label: "结果行", count: mdaDataItems.length })
                 ]),
                 actions: Object.freeze([
                     Object.freeze({ id: "connection-add", label: "新增连接", icon: "ri-database-2-line", primary: true }),
                     ...(mdaState.selectedConnection ? [
                         Object.freeze({ id: "connection-edit", label: "编辑连接", icon: "ri-edit-line" }),
                         Object.freeze({ id: "connection-delete", label: "删除连接", icon: "ri-delete-bin-6-line" }),
-                        Object.freeze({ id: "new", label: "SQL 查询", icon: "ri-terminal-box-line" })
+                        Object.freeze({ id: "query-new", label: "新建查询", icon: "ri-terminal-box-line" })
                     ] : [])
                 ]),
-                resetLabel: "重置", messages: Object.freeze({
+                resetLabel: "重置",
+                messages: Object.freeze({
                     selectProject: "选择记录", viewProject: "查看记录", editProject: "编辑记录", moreActions: "更多操作",
                     filtersReset: "查询筛选已重置", treePrefix: "数据库对象", expandLeftRegion: "展开数据库结构",
-                    collapseLeftRegion: "收起数据库结构", filterActivated: "查询搜索已激活", newOpened: "已打开 SQL 查询窗口",
+                    collapseLeftRegion: "收起数据库结构", filterActivated: "查询搜索已激活", newOpened: "已打开 SQL 查询页签",
                     exportPreparing: "操作已触发", dateRange: "日期范围：{start} 至 {end}", movePrefix: "移动到"
                 })
             }),
-            search: Object.freeze({ gridId: mdaGridId, label: "结果搜索", placeholder: "搜索当前查询结果…", buttonLabel: "查询", clearLabel: "清空搜索", icon: "ri-search-line", buttonIcon: "ri-search-line", clearIcon: "ri-close-line", defaultValue: "", clearable: true, submitOnEnter: true, submitOnClear: true, allowEmpty: true, trim: true }),
-            tree: Object.freeze({ gridId: mdaGridId, ariaLabel: "数据库结构", heading: "数据库结构", summary: `${mdaCountTables(mdaState.metadata)} 个表／视图`, expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}", selectedId: "", items: Object.freeze(mdaMapMetadataNodes(mdaState.metadata, "mda")) }),
-            menu: Object.freeze({ gridId: mdaGridId, ariaLabel: "查询结果操作" }),
-            pagination: Object.freeze({ gridId: mdaGridId, currentPage: 1, pageSize: 20, totalCount: dataItems.length, summaryAll: "共 {total} 行", summaryFiltered: "当前 {visible} 行 · 共 {total} 行", previousLabel: "上一页", nextLabel: "下一页", pageChangedMessage: "已切换到第 {page} 页", pageSizeChangedMessage: "每页显示 {size} 行" }),
+            search: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", label: "结果搜索", placeholder: "搜索当前结果…", buttonLabel: "查询", clearLabel: "清空搜索", icon: "ri-search-line", buttonIcon: "ri-search-line", clearIcon: "ri-close-line", defaultValue: "", clearable: true, submitOnEnter: true, submitOnClear: true, allowEmpty: true, trim: true }),
+            tree: Object.freeze({ gridId: mdaWorkspaceId, ariaLabel: "数据库结构", heading: "数据库结构", summary: `${mdaCountTables(mdaState.metadata)} 个表／视图`, expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}", selectedId: "", items: Object.freeze(mdaMapMetadataNodes(mdaState.metadata, "mda")) }),
+            menu: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", ariaLabel: "查询结果操作" }),
+            pagination: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", currentPage: 1, pageSize: 20, totalCount: mdaDataItems.length, summaryAll: "共 {total} 行", summaryFiltered: "当前 {visible} 行 · 共 {total} 行", previousLabel: "上一页", nextLabel: "下一页", pageChangedMessage: "已切换到第 {page} 页", pageSizeChangedMessage: "每页显示 {size} 行" }),
             select: Object.freeze({
-                projectType: Object.freeze({ gridId: mdaGridId, role: "type-filter", label: "数据库连接", ariaLabel: "选择数据库连接", currentTemplate: "{label}，当前：{value}", menuTitle: "选择数据库连接", prefix: "连接：", scrollAfter: 6, options: Object.freeze(mdaState.connections.length > 0
-                    ? mdaState.connections.map((connection) => Object.freeze({ value: String(connection.id), label: connection.connectionName, icon: "ri-database-2-line", description: connection.databaseType, selected: String(connection.id) === connectionId }))
+                projectType: Object.freeze({ gridId: mdaWorkspaceId, role: "type-filter", label: "数据库连接", ariaLabel: "选择数据库连接", currentTemplate: "{label}，当前：{value}", menuTitle: "选择数据库连接", prefix: "连接：", scrollAfter: 6, options: Object.freeze(mdaState.connections.length > 0
+                    ? mdaState.connections.map((mdaConnection) => Object.freeze({ value: String(mdaConnection.id), label: mdaConnection.connectionName, icon: "ri-database-2-line", description: mdaConnection.databaseType, selected: String(mdaConnection.id) === String(mdaState.selectedConnection?.id || "") }))
                     : [Object.freeze({ value: "", label: "请先新增连接", icon: "ri-database-2-line", selected: true, disabled: true })]) }),
-                status: Object.freeze({ gridId: mdaGridId, role: "status-filter", label: "状态", options: Object.freeze([Object.freeze({ value: "", label: "全部" })]) }),
-                pageSize: Object.freeze({ gridId: mdaGridId, role: "page-size", label: "每页显示行数", ariaLabel: "每页显示行数", currentTemplate: "{label}，当前：{value}", menuTitle: "选择每页显示行数", scrollAfter: 4, options: Object.freeze([10, 20, 50, 100].map((size) => Object.freeze({ value: String(size), label: `${size} 行/页`, icon: "ri-list-check-3", selected: size === 20 }))) })
+                status: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", role: "status-filter", label: "状态", options: Object.freeze([Object.freeze({ value: "", label: "全部" })]) }),
+                pageSize: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", role: "page-size", label: "每页显示行数", ariaLabel: "每页显示行数", currentTemplate: "{label}，当前：{value}", menuTitle: "选择每页显示行数", scrollAfter: 4, options: Object.freeze([10, 20, 50, 100].map((mdaSize) => Object.freeze({ value: String(mdaSize), label: `${mdaSize} 行/页`, icon: "ri-list-check-3", selected: mdaSize === 20 }))) })
             })
         });
     }
 
-    function mdaCountTables(nodes) {
-        return (nodes || []).reduce((count, node) => count + (node.type === "table" ? 1 : 0) + mdaCountTables(node.children), 0);
+    // 面板刷新只更新标准数据和已有连接下拉，不重建活动页签及其内部控制器。
+    function mdaSyncPanel(mdaPayload = mdaBuildPayload()) {
+        if (!mdaState.panelRoot) return;
+        window.selPanel.setLocale(mdaState.panelRoot, { view: mdaPayload });
+        mdaState.panelRoot.querySelectorAll("[data-sel-dropdown-menu]").forEach((mdaDropdownRoot) => window.selDropdownMenu.setLocale(mdaDropdownRoot));
+        window.selDropdownMenu.setValue(mdaState.panelRoot.querySelector('[data-sel-grid-role="type-filter"]'), String(mdaState.selectedConnection?.id || ""));
     }
 
-    function mdaSyncPanel(payload) {
-        const panelRoot = window.selPanel.get(mdaGridId);
-        window.selPanel.setLocale(panelRoot, { view: payload });
-        panelRoot.querySelectorAll("[data-sel-dropdown-menu]").forEach((dropdownRoot) => window.selDropdownMenu.setLocale(dropdownRoot));
-        window.selDropdownMenu.setValue(panelRoot.querySelector('[data-sel-grid-role="type-filter"]'), String(mdaState.selectedConnection?.id || ""));
+    // 不同数据库按各自标识符规则生成默认 SELECT，实际执行权限仍由目标数据库账号决定。
+    function mdaQuoteIdentifier(mdaIdentifier, mdaType) {
+        if (mdaType === "MYSQL") return `\`${String(mdaIdentifier).replaceAll("`", "``")}\``;
+        if (mdaType === "SQLSERVER") return "[" + String(mdaIdentifier).replaceAll("]", "]]" ) + "]";
+        return `"${String(mdaIdentifier).replaceAll('"', '""')}"`;
     }
 
-    function mdaQuoteIdentifier(identifier, type) {
-        if (type === "MYSQL") return `\`${String(identifier).replaceAll("`", "``")}\``;
-        if (type === "SQLSERVER") return "[" + String(identifier).replaceAll("]", "]]") + "]";
-        return `"${String(identifier).replaceAll('"', '""')}"`;
+    function mdaBuildTableQuery(mdaFilter) {
+        const mdaType = String(mdaState.selectedConnection?.databaseType || "").toUpperCase();
+        const mdaParts = [mdaFilter.schema, mdaFilter.tableName].filter(Boolean).map((mdaPart) => mdaQuoteIdentifier(mdaPart, mdaType));
+        return Object.freeze({ label: mdaFilter.tableName, qualifiedName: mdaParts.join("."), sql: `SELECT * FROM ${mdaParts.join(".")}` });
     }
 
-    function mdaTableSql(filter) {
-        const type = String(mdaState.selectedConnection?.databaseType || "").toUpperCase();
-        const parts = [filter.schema, filter.tableName].filter(Boolean).map((part) => mdaQuoteIdentifier(part, type));
-        return `SELECT * FROM ${parts.join(".")}`;
+    // 业务键附加稳定短哈希，避免相同表名位于不同 schema 时页签实例冲突。
+    function mdaStableKey(mdaValue) {
+        let mdaHash = 0;
+        Array.from(String(mdaValue)).forEach((mdaCharacter) => { mdaHash = ((mdaHash << 5) - mdaHash + mdaCharacter.codePointAt(0)) | 0; });
+        return Math.abs(mdaHash).toString(36);
     }
 
-    async function mdaExecuteSql(sql) {
-        const response = await mdaAjax.request({ url: mdaApi.execute, method: "POST", data: { connectionId: mdaState.selectedConnection.id, sql, autoCommit: true, maxRows: 1000, queryTimeoutSeconds: 30 } });
-        const resultSet = (response.data?.results || []).find((result) => result.kind === "resultSet");
-        mdaState.columns = (resultSet?.columns || []).map((column, index) => ({ name: `column${index}`, label: column.label }));
-        mdaState.rows = (resultSet?.rows || []).map((row) => Object.fromEntries(row.map((value, index) => [`column${index}`, value])));
-        const payload = mdaBuildPayload();
-        mdaState.gridController.setLocale(payload);
-        mdaSyncPanel(payload);
-        return response;
+    /** 在指定页签会话上执行真实 SQL，并只刷新该页签自己的结果表格。 */
+    async function mdaExecuteSql(mdaSession, mdaSql) {
+        const mdaNormalizedSql = String(mdaSql || "").trim();
+        if (!mdaNormalizedSql) throw new Error("请输入需要执行的 SQL。");
+        const mdaResponse = await mdaAjax.request({ url: mdaApi.execute, method: "POST", data: { connectionId: mdaSession.connectionId, sql: mdaNormalizedSql, autoCommit: true, maxRows: 1000, queryTimeoutSeconds: 30 } });
+        const mdaResult = (mdaResponse.data?.results || []).find((mdaItem) => mdaItem.kind === "resultSet") || mdaResponse.data?.results?.[0];
+        mdaSession.sql = mdaNormalizedSql;
+        if (mdaResult?.kind === "resultSet") {
+            mdaSession.columns = (mdaResult.columns || []).map((mdaColumn, mdaIndex) => ({ name: `column${mdaIndex}`, label: mdaColumn.label }));
+            mdaSession.rows = (mdaResult.rows || []).map((mdaRow) => Object.fromEntries(mdaRow.map((mdaValue, mdaIndex) => [`column${mdaIndex}`, mdaValue])));
+        } else {
+            mdaSession.columns = [{ name: "column0", label: "更新行数" }];
+            mdaSession.rows = [{ column0: mdaResult?.updateCount ?? 0 }];
+        }
+        mdaSession.gridController.setLocale(mdaBuildPayload(mdaSession));
+        if (mdaState.tabsController.getState().activeId === mdaSession.id) mdaSyncPanel(mdaBuildPayload(mdaSession));
+        return mdaResponse;
     }
 
-    async function mdaLoadMetadata(connection) {
-        mdaState.selectedConnection = connection;
-        const response = await mdaAjax.request({ url: mdaApi.metadata, method: "POST", data: { connectionId: connection.id } });
-        mdaState.metadata = response.data?.nodes || [];
-        mdaState.currentTable = null;
-        mdaState.columns = [];
-        mdaState.rows = [];
-        const payload = mdaBuildPayload();
-        mdaState.treeController.setLocale(payload.tree);
-        mdaState.gridController.setLocale(payload);
-        mdaSyncPanel(payload);
-    }
-
-    function mdaBuildSqlWindow() {
-        return Object.freeze({
-            title: "SQL 查询", subtitle: "SQL 将在当前选中的数据库连接中执行", closeLabel: "关闭 SQL 查询窗口",
-            cancelLabel: "取消", submitLabel: "执行 SQL", validationMessage: "请输入 SQL", autoSuccess: false,
-            rows: Object.freeze([Object.freeze([Object.freeze({ name: "sql", label: "SQL", type: "textarea", icon: "ri-terminal-box-line", required: true, placeholder: "SELECT * FROM table_name", value: "SELECT 1 AS ready" })])])
+    // 页签内容完全由三个公共控件和独立 selGrid 组成；清理函数是关闭时的统一销毁入口。
+    function mdaMountQuerySession(mdaPanel, mdaSession) {
+        const mdaSplitController = window.selSplitPane.mount(mdaPanel, {
+            id: mdaSession.splitId, direction: "vertical", ratio: 36, minRatio: 20, maxRatio: 70,
+            startLabel: "SQL 编辑区", endLabel: "查询结果区", separatorLabel: "调整 SQL 编辑区和查询结果区高度"
         });
+        if (!mdaSplitController) throw new Error("MDA SQL 分隔面板挂载失败。");
+        const mdaEditorController = window.selCodeEditor.mount(mdaSplitController.start, {
+            id: mdaSession.editorId, language: "sql", label: "SQL 查询", icon: "ri-terminal-box-line",
+            value: mdaSession.sql, placeholder: "SELECT * FROM table_name", statusText: "SQL 编辑器已就绪",
+            actions: Object.freeze([
+                Object.freeze({ id: "execute", label: "执行", icon: "ri-play-fill", primary: true }),
+                Object.freeze({ id: "clear", label: "清空", icon: "ri-delete-bin-line" })
+            ])
+        });
+        const mdaGridRoot = window.selGrid.create(mdaSplitController.end, { gridId: mdaSession.gridId, entity: "MdaQueryResult", ariaLabel: `${mdaSession.label} 查询结果` });
+        const mdaGridController = mdaGridRoot ? window.selGrid.mount(mdaGridRoot, mdaBuildPayload(mdaSession)) : null;
+        if (!mdaEditorController || !mdaGridController) {
+            mdaGridController?.destroy();
+            mdaEditorController?.destroy();
+            mdaSplitController.destroy();
+            throw new Error("MDA SQL 编辑器或结果表格挂载失败。");
+        }
+        mdaSession.splitController = mdaSplitController;
+        mdaSession.editorController = mdaEditorController;
+        mdaSession.gridController = mdaGridController;
+        const mdaHandleEditorAction = async (mdaEvent) => {
+            if (mdaEvent.detail?.editorId !== mdaSession.editorId) return;
+            if (mdaEvent.detail.action === "clear") {
+                mdaEditorController.setFeedback("SQL 已清空。");
+                return;
+            }
+            if (mdaEvent.detail.action !== "execute") return;
+            mdaEditorController.setLoading(true);
+            mdaEditorController.setFeedback("正在执行 SQL…");
+            try {
+                const mdaResponse = await mdaExecuteSql(mdaSession, mdaEvent.detail.value);
+                mdaEditorController.setFeedback(mdaResponse.msg || "SQL 执行完成。", "success");
+            } catch (mdaError) {
+                mdaEditorController.setFeedback(mdaError.message || "SQL 执行失败。", "error");
+            } finally {
+                mdaEditorController.setLoading(false);
+            }
+        };
+        mdaEditorController.root.addEventListener("selCodeEditor:action", mdaHandleEditorAction);
+        return () => {
+            mdaEditorController.root.removeEventListener("selCodeEditor:action", mdaHandleEditorAction);
+            mdaGridController.destroy();
+            mdaEditorController.destroy();
+            mdaSplitController.destroy();
+            mdaState.querySessions.delete(mdaSession.id);
+        };
+    }
+
+    // 同一表重复选择只激活既有页签；新表或人工查询才创建新的动态实例。
+    function mdaOpenQuerySession(mdaDefinition, mdaExecuteImmediately = false) {
+        if (!mdaState.selectedConnection) return null;
+        const mdaSessionId = String(mdaDefinition.id);
+        const mdaExistingSession = mdaState.querySessions.get(mdaSessionId);
+        if (mdaExistingSession) {
+            mdaState.tabsController.activate(mdaSessionId);
+            return mdaExistingSession;
+        }
+        const mdaSession = {
+            id: mdaSessionId,
+            label: String(mdaDefinition.label),
+            qualifiedName: String(mdaDefinition.qualifiedName || ""),
+            connectionId: mdaState.selectedConnection.id,
+            sql: String(mdaDefinition.sql || ""),
+            columns: [], rows: [],
+            splitId: `${mdaSessionId}SplitPane`, editorId: `${mdaSessionId}CodeEditor`, gridId: `${mdaSessionId}ResultGrid`,
+            splitController: null, editorController: null, gridController: null
+        };
+        mdaState.querySessions.set(mdaSessionId, mdaSession);
+        try {
+            mdaState.tabsController.open({
+                id: mdaSessionId, label: mdaSession.label, icon: mdaDefinition.icon || "ri-table-2", closable: true,
+                closeLabel: `关闭${mdaSession.label}查询页签`,
+                mount: (mdaPanel) => mdaMountQuerySession(mdaPanel, mdaSession)
+            });
+        } catch (mdaError) {
+            mdaState.querySessions.delete(mdaSessionId);
+            throw mdaError;
+        }
+        mdaSyncPanel(mdaBuildPayload(mdaSession));
+        if (mdaExecuteImmediately) mdaSession.editorController.action("execute");
+        return mdaSession;
+    }
+
+    function mdaOpenTableQuery(mdaFilter) {
+        const mdaTableQuery = mdaBuildTableQuery(mdaFilter);
+        const mdaSessionId = `MdaTableQuery${mdaState.selectedConnection.id}_${mdaStableKey(`${mdaFilter.catalog}.${mdaFilter.schema}.${mdaFilter.tableName}`)}`;
+        return mdaOpenQuerySession({ id: mdaSessionId, label: mdaTableQuery.label, qualifiedName: mdaTableQuery.qualifiedName, sql: mdaTableQuery.sql, icon: "ri-table-2" }, true);
+    }
+
+    function mdaOpenAdHocQuery() {
+        const mdaSequence = mdaState.querySequence++;
+        return mdaOpenQuerySession({ id: `MdaAdHocQuery${mdaSequence}`, label: `SQL ${mdaSequence}`, sql: "SELECT 1 AS ready", icon: "ri-terminal-box-line" });
     }
 
     function mdaBuildConnectionWindow() {
@@ -246,129 +342,129 @@
         return { connectionName: "", databaseType: "H2", host: "", port: "", databaseName: "", schemaName: "PUBLIC", username: "sa", password: "", customJdbcUrl: "", jdbcParameters: "", defaultAutoCommit: "true", sortnum: "0" };
     }
 
-    async function mdaReloadConnections(preferredId) {
-        const connectionPage = await mdaAjax.json({ url: `${mdaApi.connections}getStore.htm` });
-        mdaState.connections = connectionPage.records || [];
-        mdaState.selectedConnection = mdaState.connections.find((item) => String(item.id) === String(preferredId || "")) || mdaState.connections[0] || null;
+    // 切换连接时关闭并销毁旧连接的全部动态查询页签，再加载新连接元数据。
+    async function mdaLoadMetadata(mdaConnection) {
+        mdaState.tabsController?.closeAll();
+        mdaState.selectedConnection = mdaConnection;
+        const mdaResponse = await mdaAjax.request({ url: mdaApi.metadata, method: "POST", data: { connectionId: mdaConnection.id } });
+        mdaState.metadata = mdaResponse.data?.nodes || [];
+        const mdaPayload = mdaBuildPayload();
+        mdaState.treeController.setLocale(mdaPayload.tree);
+        mdaSyncPanel(mdaPayload);
+    }
+
+    async function mdaReloadConnections(mdaPreferredId) {
+        const mdaConnectionPage = await mdaAjax.json({ url: `${mdaApi.connections}getStore.htm` });
+        mdaState.connections = mdaConnectionPage.records || [];
+        mdaState.selectedConnection = mdaState.connections.find((mdaItem) => String(mdaItem.id) === String(mdaPreferredId || "")) || mdaState.connections[0] || null;
         if (mdaState.selectedConnection) {
             await mdaLoadMetadata(mdaState.selectedConnection);
             return;
         }
+        mdaState.tabsController?.closeAll();
         mdaState.metadata = [];
-        mdaState.currentTable = null;
-        mdaState.columns = [];
-        mdaState.rows = [];
-        const payload = mdaBuildPayload();
-        mdaState.treeController.setLocale(payload.tree);
-        mdaState.gridController.setLocale(payload);
-        mdaSyncPanel(payload);
+        const mdaPayload = mdaBuildPayload();
+        mdaState.treeController.setLocale(mdaPayload.tree);
+        mdaSyncPanel(mdaPayload);
     }
 
     async function mdaMountApplication() {
-        // 窗口文案是本地静态资源；先用空连接状态挂载完整工作台，不让控制库请求阻塞首屏。
-        const windowMessages = await mdaAjax.json({ url: "/sel/components/window/i18n/zh-CN.json?v=20260807-mda-1" });
-        const payload = mdaBuildPayload();
-        const panelRoot = window.selPanel.create(mdaApplicationHost, { gridId: mdaGridId, sourceId: mdaGridId, entity: "MdaQueryResult", view: "database", layout: "single", structure: mdaLayout, ariaLabel: payload.title.ariaLabel });
-        if (!panelRoot || !window.selPanel.mount(panelRoot, { view: payload, expandLeftLabel: payload.title.messages.expandLeftRegion, collapseLeftLabel: payload.title.messages.collapseLeftRegion })) throw new Error("MDA 公共面板挂载失败。");
-        if (!window.selSearch.mount(panelRoot, payload.search)) throw new Error("MDA 搜索控件挂载失败。");
-        mdaState.treeController = window.selTree.mount(panelRoot, payload.tree);
-        window.selDropdownMenu.mountAll(panelRoot);
-        mdaState.gridController = window.selGrid.mount(panelRoot, payload);
-        mdaState.sqlWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaSqlWindow", messages: windowMessages, ...mdaBuildSqlWindow() });
-        mdaState.connectionWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaConnectionWindow", messages: windowMessages, ...mdaBuildConnectionWindow() });
-        mdaState.deleteWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaConnectionDeleteWindow", messages: windowMessages, ...mdaBuildDeleteWindow() });
-        if (!mdaState.treeController || !mdaState.gridController || !mdaState.sqlWindowController || !mdaState.connectionWindowController || !mdaState.deleteWindowController) throw new Error("MDA 公共业务组件挂载失败。");
+        // 窗口文案先加载；页面骨架仍在控制库请求前完成挂载，空连接时可立即新增。
+        const mdaWindowMessages = await mdaAjax.json({ url: "/sel/components/window/i18n/zh-CN.json?v=20260807-mda-1" });
+        const mdaPayload = mdaBuildPayload();
+        mdaState.panelRoot = window.selPanel.create(mdaApplicationHost, { gridId: mdaWorkspaceId, sourceId: mdaWorkspaceId, entity: "MdaQueryWorkspace", view: "database", layout: "single", structure: mdaLayout, ariaLabel: mdaPayload.title.ariaLabel });
+        if (!mdaState.panelRoot || !window.selPanel.mount(mdaState.panelRoot, { view: mdaPayload, expandLeftLabel: mdaPayload.title.messages.expandLeftRegion, collapseLeftLabel: mdaPayload.title.messages.collapseLeftRegion })) throw new Error("MDA 公共面板挂载失败。");
+        mdaState.treeController = window.selTree.mount(mdaState.panelRoot, mdaPayload.tree);
+        window.selDropdownMenu.mountAll(mdaState.panelRoot);
+        const mdaTabsHost = window.selPanel.getComponent(mdaWorkspaceId, "selTabs");
+        mdaState.tabsController = window.selTabs.mount(mdaTabsHost, { id: mdaTabsId, ariaLabel: "数据库查询页签", tabListLabel: "已打开的数据库查询", emptyIcon: "ri-terminal-window-line", emptyTitle: "选择数据表开始查询", emptyDescription: "左侧选择表后，将在这里打开 SQL 编辑区和查询结果" });
+        mdaState.connectionWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaConnectionWindow", messages: mdaWindowMessages, ...mdaBuildConnectionWindow() });
+        mdaState.deleteWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaConnectionDeleteWindow", messages: mdaWindowMessages, ...mdaBuildDeleteWindow() });
+        if (!mdaState.treeController || !mdaState.tabsController || !mdaState.connectionWindowController || !mdaState.deleteWindowController) throw new Error("MDA 公共业务组件挂载失败。");
 
-        panelRoot.addEventListener("selGrid:new", () => {
-            mdaState.sqlWindowController.setLocale(mdaBuildSqlWindow());
-            mdaState.sqlWindowController.reset();
-            if (mdaState.currentTable) mdaState.sqlWindowController.setValues({ sql: `SELECT * FROM ${mdaState.currentTable}` });
-            mdaState.sqlWindowController.open();
-        });
-        panelRoot.addEventListener("click", async (event) => {
-            const command = event.target.closest("[data-panel-command]")?.dataset.panelCommand;
-            if (command === "connection-add") {
+        // 面板命令只负责连接窗口和新建查询，SQL 执行由当前页签编辑器自己的动作事件承接。
+        mdaState.panelRoot.addEventListener("click", async (mdaEvent) => {
+            const mdaCommand = mdaEvent.target.closest("[data-panel-command]")?.dataset.panelCommand;
+            if (mdaCommand === "connection-add") {
                 mdaState.editingConnectionId = null;
                 mdaState.connectionWindowController.setLocale(mdaBuildConnectionWindow());
                 mdaState.connectionWindowController.reset();
                 mdaState.connectionWindowController.setValues(mdaEmptyConnectionValues());
                 mdaState.connectionWindowController.open();
             }
-            if (command === "connection-edit" && mdaState.selectedConnection) {
-                const detail = await mdaAjax.json({ url: `${mdaApi.connections}getById.htm?id=${mdaState.selectedConnection.id}` });
+            if (mdaCommand === "connection-edit" && mdaState.selectedConnection) {
+                const mdaDetail = await mdaAjax.json({ url: `${mdaApi.connections}getById.htm?id=${mdaState.selectedConnection.id}` });
                 mdaState.editingConnectionId = mdaState.selectedConnection.id;
                 mdaState.connectionWindowController.setLocale(mdaBuildConnectionWindow());
                 mdaState.connectionWindowController.reset();
-                mdaState.connectionWindowController.setValues({ ...detail.data, defaultAutoCommit: String(detail.data.defaultAutoCommit), port: detail.data.port ?? "", sortnum: detail.data.sortnum ?? 0 });
+                mdaState.connectionWindowController.setValues({ ...mdaDetail.data, defaultAutoCommit: String(mdaDetail.data.defaultAutoCommit), port: mdaDetail.data.port ?? "", sortnum: mdaDetail.data.sortnum ?? 0 });
                 mdaState.connectionWindowController.open();
             }
-            if (command === "connection-delete" && mdaState.selectedConnection) {
+            if (mdaCommand === "connection-delete" && mdaState.selectedConnection) {
                 mdaState.deleteWindowController.reset();
                 mdaState.deleteWindowController.open();
             }
+            if (mdaCommand === "query-new" && mdaState.selectedConnection) mdaOpenAdHocQuery();
         });
-        panelRoot.addEventListener("selTree:select", async (event) => {
-            if (event.detail?.filter?.nodeType !== "table") return;
-            const sql = mdaTableSql(event.detail.filter);
-            mdaState.currentTable = sql.substring("SELECT * FROM ".length);
-            try { await mdaExecuteSql(sql); } catch (error) { console.error("MDA 数据表查询失败。", error); }
-        });
-        mdaApplicationHost.addEventListener("selWindow:submit", async (event) => {
-            if (event.detail?.id === "MdaSqlWindow") {
-                mdaState.sqlWindowController.setLoading(true);
-                try {
-                    const response = await mdaExecuteSql(event.detail.values.sql);
-                    mdaState.sqlWindowController.setFeedback(response.msg || "SQL 执行完成。");
-                    mdaState.sqlWindowController.close();
-                } catch (error) {
-                    mdaState.sqlWindowController.setFeedback(error.message || "SQL 执行失败。", true);
-                } finally { mdaState.sqlWindowController.setLoading(false); }
-                return;
+        mdaState.panelRoot.addEventListener("selTree:select", (mdaEvent) => {
+            if (mdaEvent.detail?.filter?.nodeType !== "table") return;
+            try {
+                mdaOpenTableQuery(mdaEvent.detail.filter);
+            } catch (mdaError) {
+                console.error("MDA 数据表查询页签打开失败。", mdaError);
             }
-            if (event.detail?.id === "MdaConnectionWindow") {
+        });
+        // 切换仅隐藏非活动页签，关闭事件则在子清理完成后刷新计数。
+        mdaState.tabsController.root.addEventListener("selTabs:change", () => mdaSyncPanel(mdaBuildPayload()));
+        mdaState.tabsController.root.addEventListener("selTabs:close", () => mdaSyncPanel(mdaBuildPayload()));
+
+        mdaApplicationHost.addEventListener("selWindow:submit", async (mdaEvent) => {
+            if (mdaEvent.detail?.id === "MdaConnectionWindow") {
                 mdaState.connectionWindowController.setLoading(true);
                 try {
-                    const url = mdaState.editingConnectionId ? `${mdaApi.connections}update.htm` : `${mdaApi.connections}create.htm`;
-                    const values = mdaState.editingConnectionId
-                        ? { ...event.detail.values, id: mdaState.editingConnectionId }
-                        : event.detail.values;
-                    const response = await mdaAjax.request({ url, method: "POST", data: values });
-                    const savedId = response.data?.id || mdaState.editingConnectionId;
-                    mdaState.connectionWindowController.setFeedback(response.msg || "连接配置保存完成。");
+                    const mdaUrl = mdaState.editingConnectionId ? `${mdaApi.connections}update.htm` : `${mdaApi.connections}create.htm`;
+                    const mdaValues = mdaState.editingConnectionId ? { ...mdaEvent.detail.values, id: mdaState.editingConnectionId } : mdaEvent.detail.values;
+                    const mdaResponse = await mdaAjax.request({ url: mdaUrl, method: "POST", data: mdaValues });
+                    const mdaSavedId = mdaResponse.data?.id || mdaState.editingConnectionId;
+                    mdaState.connectionWindowController.setFeedback(mdaResponse.msg || "连接配置保存完成。");
                     mdaState.connectionWindowController.close();
-                    await mdaReloadConnections(savedId);
-                } catch (error) {
-                    mdaState.connectionWindowController.setFeedback(error.message || "连接配置保存失败。", true);
-                } finally { mdaState.connectionWindowController.setLoading(false); }
+                    await mdaReloadConnections(mdaSavedId);
+                } catch (mdaError) {
+                    mdaState.connectionWindowController.setFeedback(mdaError.message || "连接配置保存失败。", true);
+                } finally {
+                    mdaState.connectionWindowController.setLoading(false);
+                }
                 return;
             }
-            if (event.detail?.id === "MdaConnectionDeleteWindow" && event.detail.values.confirmation === "DELETE" && mdaState.selectedConnection) {
+            if (mdaEvent.detail?.id === "MdaConnectionDeleteWindow" && mdaEvent.detail.values.confirmation === "DELETE" && mdaState.selectedConnection) {
                 mdaState.deleteWindowController.setLoading(true);
                 try {
-                    const response = await mdaAjax.request({ url: `${mdaApi.connections}delete.htm`, method: "POST", data: { id: mdaState.selectedConnection.id } });
-                    mdaState.deleteWindowController.setFeedback(response.msg || "连接配置删除完成。");
+                    const mdaResponse = await mdaAjax.request({ url: `${mdaApi.connections}delete.htm`, method: "POST", data: { id: mdaState.selectedConnection.id } });
+                    mdaState.deleteWindowController.setFeedback(mdaResponse.msg || "连接配置删除完成。");
                     mdaState.deleteWindowController.close();
                     await mdaReloadConnections();
-                } catch (error) {
-                    mdaState.deleteWindowController.setFeedback(error.message || "连接配置删除失败。", true);
-                } finally { mdaState.deleteWindowController.setLoading(false); }
+                } catch (mdaError) {
+                    mdaState.deleteWindowController.setFeedback(mdaError.message || "连接配置删除失败。", true);
+                } finally {
+                    mdaState.deleteWindowController.setLoading(false);
+                }
             }
         });
-        const connectionSelect = panelRoot.querySelector('[data-sel-grid-role="type-filter"]');
-        connectionSelect?.addEventListener("change", async () => {
-            const connection = mdaState.connections.find((item) => String(item.id) === connectionSelect.value);
-            if (connection) await mdaLoadMetadata(connection);
+        const mdaConnectionSelect = mdaState.panelRoot.querySelector('[data-sel-grid-role="type-filter"]');
+        mdaConnectionSelect?.addEventListener("change", async () => {
+            const mdaConnection = mdaState.connections.find((mdaItem) => String(mdaItem.id) === mdaConnectionSelect.value);
+            if (mdaConnection) await mdaLoadMetadata(mdaConnection);
         });
-        // 公共面板和全部交互已经可用后，再异步加载控制库配置及当前目标库元数据。
+        // 公共工作区已经可操作后再异步读取控制库配置与目标库元数据。
         try {
             await mdaReloadConnections();
-        } catch (error) {
-            console.error("MDA 连接配置加载失败。", error);
+        } catch (mdaError) {
+            console.error("MDA 连接配置加载失败。", mdaError);
         }
     }
 
-    const backgroundController = window.selPageBackground.mount(mdaBackgroundHost, { defaults: Object.freeze({ theme: "solid-dark", overlay: 0, brightness: 100, blur: 0 }) });
-    if (!backgroundController) throw new Error("MDA 页面背景挂载失败。");
-    if (!window.selPersonalization.mount(mdaPersonalizationHost, { backgroundController })) throw new Error("MDA 个性化设置挂载失败。");
-    mdaMountApplication().catch((error) => { console.error("MDA 初始化失败。", error); throw error; });
-}());
+    const mdaBackgroundController = window.selPageBackground.mount(mdaBackgroundHost, { defaults: Object.freeze({ theme: "solid-dark", overlay: 0, brightness: 100, blur: 0 }) });
+    if (!mdaBackgroundController) throw new Error("MDA 页面背景挂载失败。");
+    if (!window.selPersonalization.mount(mdaPersonalizationHost, { backgroundController: mdaBackgroundController })) throw new Error("MDA 个性化设置挂载失败。");
+    mdaMountApplication().catch((mdaError) => { console.error("MDA 初始化失败。", mdaError); throw mdaError; });
+})();

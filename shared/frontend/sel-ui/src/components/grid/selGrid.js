@@ -9,6 +9,75 @@
 
     // 注册表以调用方提供的完整业务实例名保存控制器。
     const selGridInstances = new Map();
+    // create 生成但尚未 mount 的独立表格根也按实例键登记，防止动态页签重复创建 DOM。
+    const selGridRoots = new Map();
+
+    /**
+     * 在空宿主中创建一套可独立挂载和销毁的表格结构。
+     * @param {Element} selGridHost - 页签分隔面板提供的结果区宿主。
+     * @param {object} selGridDefinition - 包含 gridId、entity 和 ariaLabel 的通用实例定义。
+     * @returns {Element|null} 成功返回独立表格根；参数无效时返回 null。
+     */
+    function selGridCreate(selGridHost, selGridDefinition = {}) {
+        if (!(selGridHost instanceof Element)) return null;
+        const selGridId = String(selGridDefinition.gridId || "").trim();
+        if (!selGridId) return null;
+        if (selGridInstances.has(selGridId)) return selGridInstances.get(selGridId).root;
+        if (selGridRoots.has(selGridId)) return selGridRoots.get(selGridId);
+        // 独立结构只包含 selGrid 自身的表格、统计、容量、分页和反馈，不复制面板或应用布局。
+        const selGridRoot = document.createElement("section");
+        selGridRoot.className = "selgrid-standalone-shell";
+        selGridRoot.dataset.selGrid = selGridId;
+        selGridRoot.dataset.selEntity = String(selGridDefinition.entity || "");
+        selGridRoot.setAttribute("aria-label", String(selGridDefinition.ariaLabel || "数据表格"));
+        selGridRoot.innerHTML = `
+            <div class="selgrid-board-shell" aria-label="数据表格">
+                <div class="selgrid-board-highlight" aria-hidden="true"></div>
+                <div class="selgrid-table-scroller">
+                    <table class="selgrid-table" data-sel-grid-role="table">
+                        <colgroup data-sel-grid-role="column-group"></colgroup>
+                        <thead data-sel-grid-role="table-head"></thead>
+                        <tbody data-sel-grid-role="table-body"></tbody>
+                    </table>
+                    <div class="selgrid-empty-state" data-sel-grid-role="empty-state" hidden>
+                        <i class="ri-search-eye-line" aria-hidden="true"></i>
+                        <span data-sel-grid-role="empty-text"></span>
+                    </div>
+                </div>
+            </div>
+            <footer class="selgrid-standalone-footer">
+                <div class="selgrid-footer-summary">
+                    <i class="ri-table-2" aria-hidden="true"></i>
+                    <span data-sel-grid-role="total-count"></span>
+                    <label class="selgrid-standalone-page-size">
+                        <span class="selgrid-accessibility-sr-only">每页显示行数</span>
+                        <select data-sel-grid-role="page-size" aria-label="每页显示行数"></select>
+                    </label>
+                </div>
+                <nav class="selgrid-pagination" data-sel-grid-role="pagination" aria-label="分页"></nav>
+                <div class="selgrid-feedback-toast" data-sel-grid-role="feedback" role="status" aria-live="polite"></div>
+            </footer>`;
+        selGridHost.appendChild(selGridRoot);
+        selGridRoots.set(selGridId, selGridRoot);
+        return selGridRoot;
+    }
+
+    // 独立表格的原生容量选择器消费标准 payload；面板表格继续由 selPanel 应用完整下拉契约。
+    function selGridApplyStandalonePayload(selGridRoot, selGridPayload) {
+        if (!selGridRoot.classList.contains("selgrid-standalone-shell")) return;
+        const selGridPageSize = selGridRoot.querySelector('[data-sel-grid-role="page-size"]');
+        if (!selGridPageSize) return;
+        const selGridPageSizeOptions = selGridPayload.select?.pageSize?.options || [10, 20, 50, 100].map((selGridSize) => ({ value: String(selGridSize), label: `${selGridSize} 行/页` }));
+        const selGridSelectedSize = String(selGridPayload.pagination?.pageSize || "20");
+        selGridPageSize.replaceChildren(...selGridPageSizeOptions.map((selGridOptionData) => {
+            const selGridOption = document.createElement("option");
+            selGridOption.value = String(selGridOptionData.value);
+            selGridOption.textContent = String(selGridOptionData.label);
+            selGridOption.selected = selGridOption.value === selGridSelectedSize;
+            return selGridOption;
+        }));
+        selGridPageSize.setAttribute("aria-label", String(selGridPayload.select?.pageSize?.ariaLabel || selGridPayload.select?.pageSize?.label || "每页显示行数"));
+    }
 
     // 创建单个业务表格实例，所有节点查询和事件监听都限制在当前根节点内。
     function selGridCreateInstance(selGridRoot, selGridPayload) {
@@ -1388,9 +1457,25 @@
         selGridStatusLabels = new Map((selGridInputPayload.select?.status?.options || []).map((item) => [String(item.value), item.label]));
         selGridMessages = selGridInputPayload.title.messages;
         selGridPaginationData = selGridInputPayload.pagination;
+        selGridApplyStandalonePayload(selGridRoot, selGridInputPayload);
+        if (selGridView.pageSize) selGridView.pageSize.value = String(selGridState.pageSize);
         selGridRenderColumnHeader();
         selGridView.selectAll = selGridRoot.querySelector('[data-sel-grid-role="select-all"]');
         selGridRenderTable();
+        return true;
+    }
+
+    let selGridDestroyed = false;
+    // 动态页签关闭时断开尺寸观察、动画帧和提示计时器，再从公开注册表与 DOM 中删除实例。
+    function selGridDestroy() {
+        if (selGridDestroyed) return false;
+        selGridDestroyed = true;
+        selGridHorizontalOverflowObserver?.disconnect();
+        if (selGridHorizontalOverflowFrame) window.cancelAnimationFrame(selGridHorizontalOverflowFrame);
+        if (selGridToastTimer) window.clearTimeout(selGridToastTimer);
+        selGridInstances.delete(selGridId);
+        selGridRoots.delete(selGridId);
+        selGridRoot.remove();
         return true;
     }
 
@@ -1407,6 +1492,7 @@
         reset: selGridResetInstance,
         setPage: selGridSetPage,
         setLocale: selGridSetLocale,
+        destroy: selGridDestroy,
         getState: () => Object.freeze({
             currentPage: selGridState.currentPage,
             pageSize: selGridState.pageSize,
@@ -1420,6 +1506,8 @@
 
     // 公开注册表由应用装配层显式传入宿主和标准聚合 payload。
     window.selGrid = Object.freeze({
+        // create 为动态工作区建立独立表格结构；业务数据仍由随后的 mount 显式传入。
+        create: selGridCreate,
         // mount 创建一个表格实例；缺失标准 payload 时返回 null 并提示应用补齐基础输入。
         mount(root, payload) {
             // 非元素宿主不能作为组件作用域。
@@ -1437,11 +1525,13 @@
                 console.warn("selGrid.mount：缺少标准聚合 payload，应用装配层必须先提供数据。", root);
                 return null;
             }
+            selGridApplyStandalonePayload(root, payload);
             // 当前实例只使用本次显式传入的 payload。
             const instance = selGridCreateInstance(root, payload);
             // 有效实例才进入公开注册表。
             if (instance) {
                 selGridInstances.set(instance.id, instance);
+                selGridRoots.set(instance.id, root);
                 // DOM 就绪标记供调试和浏览器验收确认挂载完成。
                 root.dataset.selGridReady = "true";
             } else {
@@ -1462,6 +1552,8 @@
         // reset 只重置指定实例。
         reset: (gridId) => selGridInstances.get(gridId)?.reset() ?? false,
         // setPage 只设置指定实例页码。
-        setPage: (gridId, page) => selGridInstances.get(gridId)?.setPage(page) ?? false
+        setPage: (gridId, page) => selGridInstances.get(gridId)?.setPage(page) ?? false,
+        // destroy 彻底回收动态实例；与切换页签的隐藏语义明确分离。
+        destroy: (gridId) => selGridInstances.get(gridId)?.destroy() ?? false
     });
 })();

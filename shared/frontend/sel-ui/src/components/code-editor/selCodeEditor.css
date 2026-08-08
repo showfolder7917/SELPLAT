@@ -1,0 +1,220 @@
+/*
+ * selCodeEditor.css：轻量代码编辑器的工具栏、输入区、行号、反馈和加载状态。
+ * 责任边界：只消费统一工作区、文字、语义状态和滚动条令牌，不声明应用或语言专属皮肤。
+ */
+
+.selcode-root {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-workspace-editor-surface);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.selcode-toolbar {
+    display: flex;
+    min-width: 0;
+    min-height: 48px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--sel-theme-workspace-line);
+    background: var(--sel-theme-workspace-surface);
+}
+
+.selcode-identity,
+.selcode-actions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+}
+
+.selcode-identity {
+    gap: 8px;
+    color: var(--sel-theme-text-title);
+}
+
+.selcode-identity i {
+    color: var(--sel-theme-text-icon);
+    font-size: calc(18px * var(--sel-theme-font-scale));
+}
+
+.selcode-identity strong {
+    font-size: var(--sel-theme-font-size-primary);
+    font-weight: 600;
+}
+
+.selcode-identity span {
+    overflow: hidden;
+    color: var(--sel-theme-text-soft);
+    font-size: var(--sel-theme-font-size-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selcode-actions {
+    flex: 0 0 auto;
+    gap: 7px;
+}
+
+.selcode-action {
+    display: inline-flex;
+    height: 34px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    border: 1px solid var(--sel-theme-workspace-line);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--sel-theme-font-size-secondary);
+}
+
+.selcode-action:hover:not(:disabled) {
+    border-color: var(--sel-theme-workspace-line-active);
+    background: var(--sel-theme-control-hover);
+    box-shadow: var(--sel-theme-control-shadow);
+}
+
+.selcode-action-primary {
+    border-color: var(--sel-theme-workspace-line-active);
+    color: var(--sel-theme-text-on-accent);
+    background: var(--sel-theme-control-surface-primary);
+    box-shadow: 0 0 10px var(--sel-theme-workspace-focus);
+}
+
+.selcode-action:focus-visible,
+.selcode-input:focus-visible {
+    outline: 1px solid var(--sel-theme-workspace-line-active);
+    outline-offset: -2px;
+}
+
+.selcode-action:disabled {
+    color: var(--sel-theme-text-disabled);
+    cursor: wait;
+    opacity: 0.72;
+}
+
+.selcode-body {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--sel-theme-workspace-editor-surface);
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+.selcode-gutter,
+.selcode-input {
+    height: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+    margin: 0;
+    border: 0;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: max(12px, calc(13px * var(--sel-theme-font-scale)));
+    line-height: 1.7;
+    tab-size: 4;
+}
+
+.selcode-gutter {
+    min-width: 48px;
+    overflow: hidden;
+    padding: 12px 10px;
+    border-right: 1px solid var(--sel-theme-workspace-line);
+    color: var(--sel-theme-text-soft);
+    background: var(--sel-theme-workspace-editor-gutter);
+    text-align: right;
+    user-select: none;
+}
+
+.selcode-input {
+    width: 100%;
+    min-width: 0;
+    resize: none;
+    overflow: auto;
+    padding: 12px 14px;
+    color: var(--sel-theme-text-body);
+    background: transparent;
+    caret-color: var(--sel-theme-text-link);
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+.selcode-input::placeholder {
+    color: var(--sel-theme-text-placeholder);
+}
+
+.selcode-input::-webkit-scrollbar {
+    width: var(--sel-theme-scrollbar-size-panel);
+    height: var(--sel-theme-scrollbar-size-panel);
+}
+
+.selcode-input::-webkit-scrollbar-track {
+    background: var(--sel-theme-scrollbar-track);
+}
+
+.selcode-input::-webkit-scrollbar-thumb {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
+.selcode-status {
+    display: flex;
+    min-height: 28px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 11px;
+    border-top: 1px solid var(--sel-theme-workspace-line);
+    color: var(--sel-theme-text-secondary);
+    background: var(--sel-theme-workspace-surface);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selcode-status[data-sel-code-tone="success"] span:first-child {
+    color: var(--sel-theme-semantic-success);
+}
+
+.selcode-status[data-sel-code-tone="error"] span:first-child {
+    color: var(--sel-theme-semantic-error);
+}
+
+.selcode-status[data-sel-code-tone="warning"] span:first-child {
+    color: var(--sel-theme-semantic-warning);
+}
+
+.selcode-root-loading .selcode-action-primary i {
+    animation: selcode-loading-spin 800ms linear infinite;
+}
+
+@keyframes selcode-loading-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1180px) {
+    .selcode-identity span,
+    .selcode-action span {
+        display: none;
+    }
+
+    .selcode-action {
+        width: 34px;
+        justify-content: center;
+        padding: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .selcode-root-loading .selcode-action-primary i {
+        animation: none;
+    }
+}

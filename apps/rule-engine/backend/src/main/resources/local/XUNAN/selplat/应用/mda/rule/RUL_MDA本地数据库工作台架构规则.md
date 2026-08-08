@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由 MDA 应用脚本和浏览器回归承载。 -->
 node_ability_refs = none
-<!-- 1.9.0 固定连接配置 CRUD 空实现与目标数据库运行能力的拆分边界。 -->
-rule_version = 1.9.0
+<!-- 2.0.0 固定左树右页签以及页签内 SQL 编辑区和查询结果区布局。 -->
+rule_version = 2.0.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已经进入当前用户索引并完成实现回归。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自用户对双数据库和连接配置职责的纠正。 -->
-upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责
+upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责;2026-08-08:数据库页面升级为左树右查询页签且页签内上方SQL下方结果表格
 
 ## 数据库边界
 
@@ -112,6 +112,24 @@ mda_dynamic_result_horizontal_scrollbar_discoverability = visible_at_rest_with_t
 mda_dynamic_result_scrollbar_style_owner = shared_selgrid_automatic_overflow_state
 <!-- 横向滚动条必须与同页左树纵向滚动条复用相同的静止滑块、轨道和光晕令牌，只允许操作尺寸和轨道完整性不同。 -->
 mda_dynamic_result_scrollbar_visual_consistency = same_resting_track_thumb_and_glow_tokens_as_tree_scrollbar
+<!-- 数据库结构树固定在左侧，查询工作区固定在右侧，两区宽度由公共分隔器调整。 -->
+mda_database_workspace_layout = left_metadata_tree_right_dynamic_query_tabs_with_shared_split_pane
+<!-- 每个查询页签内部固定为上方 SQL 编辑区、下方查询结果表格，并由独立分隔器调整高度。 -->
+mda_query_tab_layout = inline_sql_editor_above_result_grid_with_independent_split_pane
+<!-- 点击表节点必须打开或复用对应查询页签，填入当前 schema 和表名的默认查询并立即加载结果。 -->
+mda_table_node_open_behavior = open_or_reuse_table_query_tab_and_execute_default_select
+<!-- 新建查询必须创建独立页签，不再弹出 SQL 窗口。 -->
+mda_new_sql_query_behavior = create_independent_inline_query_tab_without_popup_window
+<!-- 每个查询页签独立保存 SQL、列定义、结果、分页和控件实例，切换不得重建。 -->
+mda_query_session_scope = one_independent_preserved_session_per_tab
+<!-- 页签切换只隐藏并保留状态，关闭必须销毁 DOM、监听器、控制器和全部公共组件注册。 -->
+mda_query_tab_lifecycle = switch_preserves_by_hiding_close_destroys_complete_session
+<!-- 切换数据库连接必须关闭旧连接的全部查询页签，禁止复用旧连接的 SQL 或结果。 -->
+mda_connection_switch_query_policy = destroy_all_query_tabs_before_loading_selected_connection_metadata
+<!-- 页签、分隔器、SQL 编辑区和查询结果统一复用公共 selTabs、selSplitPane、selCodeEditor 和 selGrid。 -->
+mda_query_workspace_shared_components = selTabs_selSplitPane_selCodeEditor_selGrid
+<!-- MDA 工作区颜色、边框、焦点和活动状态只消费公共主题语义令牌，禁止页面内建立第二套颜色值。 -->
+mda_query_workspace_visual_tokens = unified_shared_theme_semantic_tokens_only
 
 ## 规则包组成与验证
 
@@ -122,4 +140,4 @@ example_not_applicable_reason = verified_integration_and_browser_flow_are_the_au
 <!-- 当前动作跨 Spring、H2 和浏览器公共组件，暂不适合抽成单一独立程序。 -->
 program_not_applicable_reason = verification_spans_application_runtime_database_and_browser_components
 <!-- 后端必须通过 MDA 离线测试，前端必须通过语法检查和真实 8080 页面 CRUD 回归。 -->
-verification_required = mda_offline_tests,javascript_syntax_check,host_build,browser_connection_crud_regression
+verification_required = mda_offline_tests,javascript_syntax_check,host_build,browser_connection_crud_and_query_tab_lifecycle_regression

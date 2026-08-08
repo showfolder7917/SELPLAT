@@ -1,0 +1,184 @@
+/*
+ * selTabs.css：动态业务页签的稳定布局和主题映射样式。
+ * 责任边界：只负责页签条、活动态、关闭入口、内容面板和空状态，不包含页签内业务控件样式。
+ */
+
+.seltabs-host,
+.seltabs-root,
+.seltabs-panels,
+.seltabs-panel {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+.seltabs-root {
+    display: grid;
+    overflow: hidden;
+    border-radius: var(--sel-theme-radius-inner);
+    background: var(--sel-theme-workspace-surface-soft);
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.seltabs-list {
+    display: flex;
+    min-width: 0;
+    min-height: 44px;
+    align-items: end;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px 8px 0;
+    border-bottom: 1px solid var(--sel-theme-workspace-line);
+    background: var(--sel-theme-workspace-surface);
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+.seltabs-list::-webkit-scrollbar {
+    height: var(--sel-theme-scrollbar-size-compact);
+}
+
+.seltabs-list::-webkit-scrollbar-track {
+    background: var(--sel-theme-scrollbar-track);
+}
+
+.seltabs-list::-webkit-scrollbar-thumb {
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
+.seltabs-item {
+    display: flex;
+    min-width: 136px;
+    max-width: 280px;
+    height: 36px;
+    flex: 0 0 auto;
+    align-items: center;
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: var(--sel-theme-radius-action) var(--sel-theme-radius-action) 0 0;
+    color: var(--sel-theme-text-secondary);
+    background: var(--sel-theme-control-surface);
+}
+
+.seltabs-item:hover {
+    border-color: var(--sel-theme-workspace-line);
+    background: var(--sel-theme-workspace-tab-hover);
+}
+
+.seltabs-item-active {
+    border-color: var(--sel-theme-workspace-line-active);
+    color: var(--sel-theme-text-title);
+    background: var(--sel-theme-workspace-tab-active);
+    box-shadow: 0 -2px 12px var(--sel-theme-workspace-focus);
+}
+
+.seltabs-tab {
+    display: flex;
+    min-width: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px 0 11px;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--sel-theme-font-size-secondary);
+}
+
+.seltabs-tab span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.seltabs-tab i {
+    flex: 0 0 auto;
+    color: var(--sel-theme-text-icon);
+}
+
+.seltabs-tab:focus-visible,
+.seltabs-close:focus-visible {
+    outline: 1px solid var(--sel-theme-workspace-line-active);
+    outline-offset: -2px;
+}
+
+.seltabs-close {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    margin-right: 4px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--sel-theme-radius-icon);
+    color: var(--sel-theme-text-secondary);
+    background: transparent;
+    cursor: pointer;
+}
+
+.seltabs-close:hover {
+    color: var(--sel-theme-text-title);
+    background: var(--sel-theme-control-hover);
+}
+
+.seltabs-panels {
+    position: relative;
+    overflow: hidden;
+}
+
+.seltabs-panel {
+    overflow: hidden;
+}
+
+.seltabs-panel[hidden] {
+    display: none;
+}
+
+.seltabs-empty {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 300px;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: var(--sel-theme-text-secondary);
+    background: var(--sel-theme-workspace-editor-surface);
+}
+
+.seltabs-empty[hidden] {
+    display: none;
+}
+
+.seltabs-empty > i {
+    color: var(--sel-theme-text-icon);
+    font-size: calc(30px * var(--sel-theme-font-scale));
+}
+
+.seltabs-empty div {
+    display: grid;
+    gap: 5px;
+}
+
+.seltabs-empty strong {
+    color: var(--sel-theme-text-title);
+    font-size: var(--sel-theme-font-size-primary);
+}
+
+.seltabs-empty span {
+    font-size: var(--sel-theme-font-size-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .seltabs-item {
+        transition: none;
+    }
+}

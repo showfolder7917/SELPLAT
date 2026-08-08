@@ -189,6 +189,10 @@
                 </div>
             `;
         }
+        // 页签组件只预留独立生命周期宿主，页签条、内容面板和关闭销毁均由 selTabs 自身创建。
+        if (selPanelComponentName === "selTabs") {
+            return '<div class="seltabs-host" data-sel-panel-component="selTabs"></div>';
+        }
         // 表格菜单组件只创建可由 selGridMenu 挂载的右侧浮层宿主。
         if (selPanelComponentName === "selGridMenu") {
             return '<aside class="selgrid-menu" data-sel-panel-component="selGridMenu" data-sel-grid-role="menu" aria-label="行操作菜单" aria-hidden="true"></aside>';

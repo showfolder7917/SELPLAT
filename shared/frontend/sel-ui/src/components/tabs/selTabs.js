@@ -1,0 +1,276 @@
+/*
+ * selTabs.js：可复用动态业务页签基础控件。
+ * 负责页签创建、切换隐藏、键盘导航、关闭销毁和子组件清理回调，不识别应用、实体或接口。
+ * 公开 API：window.selTabs.mount(host, options)、get(id)、has(id)；每个实例使用完整业务键独立注册。
+ */
+(function selTabsInitializeRegistry() {
+    "use strict";
+
+    // 页面内每套页签工作区按完整实例键登记，动态关闭只影响所属实例。
+    const selTabsInstances = new Map();
+
+    /**
+     * 挂载一套动态页签工作区。
+     * @param {Element} selTabsHost - 基础面板或应用提供的独立页签宿主。
+     * @param {object} selTabsOptions - 包含 id、ariaLabel、emptyTitle 和 emptyDescription 的通用选项。
+     * @returns {object|null} 成功返回页签控制器，宿主或实例键无效时返回 null。
+     */
+    function selTabsMount(selTabsHost, selTabsOptions = {}) {
+        // 基础控件只接受明确宿主，不扫描 document 猜测应用位置。
+        if (!(selTabsHost instanceof Element)) return null;
+        const selTabsId = String(selTabsOptions.id || selTabsHost.dataset.selTabs || "").trim();
+        // 没有完整业务键就无法建立安全注册和销毁路径。
+        if (!selTabsId) return null;
+        // 同一实例重复挂载时复用控制器，避免页签条和事件叠加。
+        if (selTabsInstances.has(selTabsId)) return selTabsInstances.get(selTabsId);
+
+        // 根节点只承担页签条、内容区和空状态的稳定布局。
+        const selTabsRoot = document.createElement("section");
+        selTabsRoot.className = "seltabs-root";
+        selTabsRoot.dataset.selTabs = selTabsId;
+        selTabsRoot.setAttribute("aria-label", String(selTabsOptions.ariaLabel || "业务页签"));
+        const selTabsList = document.createElement("div");
+        selTabsList.className = "seltabs-list";
+        selTabsList.setAttribute("role", "tablist");
+        selTabsList.setAttribute("aria-label", String(selTabsOptions.tabListLabel || selTabsOptions.ariaLabel || "业务页签"));
+        const selTabsPanels = document.createElement("div");
+        selTabsPanels.className = "seltabs-panels";
+        const selTabsEmpty = document.createElement("div");
+        selTabsEmpty.className = "seltabs-empty";
+        const selTabsEmptyIcon = document.createElement("i");
+        selTabsEmptyIcon.className = String(selTabsOptions.emptyIcon || "ri-terminal-window-line");
+        selTabsEmptyIcon.setAttribute("aria-hidden", "true");
+        const selTabsEmptyCopy = document.createElement("div");
+        const selTabsEmptyTitle = document.createElement("strong");
+        selTabsEmptyTitle.textContent = String(selTabsOptions.emptyTitle || "尚未打开页签");
+        const selTabsEmptyDescription = document.createElement("span");
+        selTabsEmptyDescription.textContent = String(selTabsOptions.emptyDescription || "请选择左侧项目开始工作");
+        selTabsEmptyCopy.append(selTabsEmptyTitle, selTabsEmptyDescription);
+        selTabsEmpty.append(selTabsEmptyIcon, selTabsEmptyCopy);
+        selTabsPanels.appendChild(selTabsEmpty);
+        selTabsRoot.append(selTabsList, selTabsPanels);
+        selTabsHost.appendChild(selTabsRoot);
+
+        // Map 同时保存页签 DOM、调用方定义和子组件清理函数，关闭时一次回收完整生命周期。
+        const selTabsItems = new Map();
+        let selTabsActiveId = null;
+        let selTabsDestroyed = false;
+
+        // 空状态只在没有任何页签时出现，切换页签不会反复创建提示 DOM。
+        function selTabsSyncEmptyState() {
+            selTabsEmpty.hidden = selTabsItems.size > 0;
+            selTabsRoot.classList.toggle("seltabs-root-empty", selTabsItems.size === 0);
+        }
+
+        // 当前顺序取自真实页签条，关闭活动页时可稳定选择相邻页签。
+        function selTabsOrderedIds() {
+            return Array.from(selTabsList.querySelectorAll("[data-sel-tabs-item]")).map((item) => item.dataset.selTabsItem);
+        }
+
+        // 激活只隐藏其他内容面板，保留编辑值、查询结果和滚动位置。
+        function selTabsActivate(selTabsTabId, selTabsFocus = false) {
+            const selTabsTarget = selTabsItems.get(String(selTabsTabId));
+            if (!selTabsTarget || selTabsDestroyed) return false;
+            selTabsActiveId = selTabsTarget.id;
+            selTabsItems.forEach((selTabsItem) => {
+                const selTabsSelected = selTabsItem.id === selTabsActiveId;
+                selTabsItem.panel.hidden = !selTabsSelected;
+                selTabsItem.tab.setAttribute("aria-selected", String(selTabsSelected));
+                selTabsItem.tab.tabIndex = selTabsSelected ? 0 : -1;
+                selTabsItem.wrapper.classList.toggle("seltabs-item-active", selTabsSelected);
+            });
+            if (selTabsFocus) selTabsTarget.tab.focus();
+            // 业务事件只从当前实例根冒泡，并携带页签实例与页签键。
+            selTabsRoot.dispatchEvent(new CustomEvent("selTabs:change", {
+                bubbles: true,
+                detail: Object.freeze({ tabsId: selTabsId, tabId: selTabsActiveId })
+            }));
+            return true;
+        }
+
+        // 子组件清理回调允许应用组合多个公共控件，但关闭顺序仍由 selTabs 统一触发。
+        function selTabsDisposeItem(selTabsItem) {
+            let selTabsCleanupError = null;
+            try {
+                if (typeof selTabsItem.cleanup === "function") {
+                    selTabsItem.cleanup();
+                }
+            } catch (selTabsError) {
+                // 单个子控件清理失败不能让已关闭页签继续残留；完成 DOM 回收后再记录错误。
+                selTabsCleanupError = selTabsError;
+            } finally {
+                selTabsItem.panel.remove();
+                selTabsItem.wrapper.remove();
+            }
+            if (selTabsCleanupError) console.error("selTabs 子组件清理失败", selTabsCleanupError);
+        }
+
+        // 关闭是真销毁：回收内容、事件所属 DOM、调用方子实例和注册记录，不积累隐藏页签。
+        function selTabsClose(selTabsTabId, selTabsOptionsOverride = {}) {
+            const selTabsNormalizedId = String(selTabsTabId);
+            const selTabsItem = selTabsItems.get(selTabsNormalizedId);
+            if (!selTabsItem || selTabsDestroyed) return false;
+            if (!selTabsItem.closable && !selTabsOptionsOverride.force) return false;
+            const selTabsOrder = selTabsOrderedIds();
+            const selTabsClosedIndex = selTabsOrder.indexOf(selTabsNormalizedId);
+            // 用户关闭允许业务阻止未保存内容离开；实例整体 destroy 使用 force 跳过该询问。
+            if (!selTabsOptionsOverride.force) {
+                const selTabsBeforeClose = new CustomEvent("selTabs:beforeClose", {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: Object.freeze({ tabsId: selTabsId, tabId: selTabsNormalizedId })
+                });
+                if (!selTabsRoot.dispatchEvent(selTabsBeforeClose)) return false;
+            }
+            selTabsItems.delete(selTabsNormalizedId);
+            selTabsDisposeItem(selTabsItem);
+            const selTabsWasActive = selTabsActiveId === selTabsNormalizedId;
+            if (selTabsWasActive) {
+                selTabsActiveId = null;
+                const selTabsRemaining = selTabsOrderedIds();
+                const selTabsNextId = selTabsRemaining[Math.min(Math.max(selTabsClosedIndex, 0), selTabsRemaining.length - 1)];
+                if (selTabsNextId) selTabsActivate(selTabsNextId);
+            }
+            selTabsSyncEmptyState();
+            selTabsRoot.dispatchEvent(new CustomEvent("selTabs:close", {
+                bubbles: true,
+                detail: Object.freeze({ tabsId: selTabsId, tabId: selTabsNormalizedId, destroyed: true })
+            }));
+            return true;
+        }
+
+        /**
+         * 创建或激活一条业务页签。
+         * @param {object} selTabsDefinition - 包含 id、label、icon、closable 和 mount(panel) 的页签定义。
+         * @returns {Element|null} 返回当前页签内容面板；定义无效时返回 null。
+         */
+        function selTabsOpen(selTabsDefinition = {}) {
+            const selTabsTabId = String(selTabsDefinition.id || "").trim();
+            if (!selTabsTabId || selTabsDestroyed) return null;
+            const selTabsExisting = selTabsItems.get(selTabsTabId);
+            if (selTabsExisting) {
+                selTabsActivate(selTabsTabId);
+                return selTabsExisting.panel;
+            }
+
+            // 页签按钮与关闭按钮是同级原生按钮，避免按钮嵌套破坏键盘语义。
+            const selTabsWrapper = document.createElement("div");
+            selTabsWrapper.className = "seltabs-item";
+            selTabsWrapper.dataset.selTabsItem = selTabsTabId;
+            const selTabsTab = document.createElement("button");
+            selTabsTab.className = "seltabs-tab";
+            selTabsTab.type = "button";
+            selTabsTab.id = `${selTabsId}-${selTabsTabId}-tab`.replace(/[^A-Za-z0-9_-]/g, "-");
+            selTabsTab.setAttribute("role", "tab");
+            selTabsTab.setAttribute("aria-selected", "false");
+            selTabsTab.tabIndex = -1;
+            const selTabsIcon = document.createElement("i");
+            selTabsIcon.className = String(selTabsDefinition.icon || "ri-file-list-3-line");
+            selTabsIcon.setAttribute("aria-hidden", "true");
+            const selTabsLabel = document.createElement("span");
+            selTabsLabel.textContent = String(selTabsDefinition.label || selTabsTabId);
+            selTabsTab.append(selTabsIcon, selTabsLabel);
+            const selTabsPanel = document.createElement("section");
+            selTabsPanel.className = "seltabs-panel";
+            selTabsPanel.id = `${selTabsId}-${selTabsTabId}-panel`.replace(/[^A-Za-z0-9_-]/g, "-");
+            selTabsPanel.dataset.selTabsPanel = selTabsTabId;
+            selTabsPanel.setAttribute("role", "tabpanel");
+            selTabsPanel.setAttribute("aria-labelledby", selTabsTab.id);
+            selTabsPanel.hidden = true;
+            selTabsTab.setAttribute("aria-controls", selTabsPanel.id);
+            selTabsWrapper.appendChild(selTabsTab);
+            const selTabsClosable = selTabsDefinition.closable !== false;
+            if (selTabsClosable) {
+                const selTabsCloseButton = document.createElement("button");
+                selTabsCloseButton.className = "seltabs-close";
+                selTabsCloseButton.type = "button";
+                selTabsCloseButton.dataset.selTabsClose = selTabsTabId;
+                selTabsCloseButton.setAttribute("aria-label", String(selTabsDefinition.closeLabel || `关闭${selTabsDefinition.label || selTabsTabId}`));
+                selTabsCloseButton.innerHTML = '<i class="ri-close-line" aria-hidden="true"></i>';
+                selTabsWrapper.appendChild(selTabsCloseButton);
+            }
+            selTabsList.appendChild(selTabsWrapper);
+            selTabsPanels.appendChild(selTabsPanel);
+            const selTabsItem = { id: selTabsTabId, wrapper: selTabsWrapper, tab: selTabsTab, panel: selTabsPanel, closable: selTabsClosable, cleanup: null };
+            selTabsItems.set(selTabsTabId, selTabsItem);
+            // mount 回调只接收当前页签面板；返回的函数成为关闭时唯一子生命周期清理入口。
+            if (typeof selTabsDefinition.mount === "function") {
+                const selTabsCleanup = selTabsDefinition.mount(selTabsPanel, Object.freeze({ tabsId: selTabsId, tabId: selTabsTabId }));
+                if (typeof selTabsCleanup === "function") selTabsItem.cleanup = selTabsCleanup;
+            }
+            selTabsSyncEmptyState();
+            selTabsActivate(selTabsTabId);
+            selTabsRoot.dispatchEvent(new CustomEvent("selTabs:open", {
+                bubbles: true,
+                detail: Object.freeze({ tabsId: selTabsId, tabId: selTabsTabId, created: true })
+            }));
+            return selTabsPanel;
+        }
+
+        // 页签条使用事件委托，新增页签无需重复绑定监听器。
+        selTabsList.addEventListener("click", (selTabsEvent) => {
+            const selTabsCloseButton = selTabsEvent.target.closest("[data-sel-tabs-close]");
+            if (selTabsCloseButton) {
+                selTabsClose(selTabsCloseButton.dataset.selTabsClose);
+                return;
+            }
+            const selTabsItem = selTabsEvent.target.closest("[data-sel-tabs-item]");
+            if (selTabsItem) selTabsActivate(selTabsItem.dataset.selTabsItem);
+        });
+        // 左右键、Home、End 遵循标准页签键盘路径；Delete 只关闭可关闭页签。
+        selTabsList.addEventListener("keydown", (selTabsEvent) => {
+            const selTabsCurrent = selTabsEvent.target.closest("[role='tab']")?.closest("[data-sel-tabs-item]");
+            if (!selTabsCurrent) return;
+            const selTabsOrder = selTabsOrderedIds();
+            const selTabsIndex = selTabsOrder.indexOf(selTabsCurrent.dataset.selTabsItem);
+            let selTabsTargetIndex = null;
+            if (selTabsEvent.key === "ArrowLeft") selTabsTargetIndex = (selTabsIndex - 1 + selTabsOrder.length) % selTabsOrder.length;
+            if (selTabsEvent.key === "ArrowRight") selTabsTargetIndex = (selTabsIndex + 1) % selTabsOrder.length;
+            if (selTabsEvent.key === "Home") selTabsTargetIndex = 0;
+            if (selTabsEvent.key === "End") selTabsTargetIndex = selTabsOrder.length - 1;
+            if (selTabsTargetIndex !== null) {
+                selTabsEvent.preventDefault();
+                selTabsActivate(selTabsOrder[selTabsTargetIndex], true);
+            }
+            if (selTabsEvent.key === "Delete") {
+                selTabsEvent.preventDefault();
+                selTabsClose(selTabsCurrent.dataset.selTabsItem);
+            }
+        });
+
+        function selTabsDestroy() {
+            if (selTabsDestroyed) return false;
+            // 实例销毁强制关闭全部页签，逐一执行子组件清理后再移除根节点。
+            selTabsOrderedIds().forEach((selTabsTabId) => selTabsClose(selTabsTabId, { force: true }));
+            selTabsDestroyed = true;
+            selTabsInstances.delete(selTabsId);
+            selTabsRoot.remove();
+            return true;
+        }
+
+        const selTabsController = Object.freeze({
+            id: selTabsId,
+            root: selTabsRoot,
+            open: selTabsOpen,
+            activate: selTabsActivate,
+            close: selTabsClose,
+            closeAll: () => selTabsOrderedIds().reduce((selTabsClosed, selTabsTabId) => selTabsClose(selTabsTabId, { force: true }) && selTabsClosed, true),
+            getPanel: (selTabsTabId) => selTabsItems.get(String(selTabsTabId))?.panel || null,
+            has: (selTabsTabId) => selTabsItems.has(String(selTabsTabId)),
+            list: () => Object.freeze(selTabsOrderedIds()),
+            getState: () => Object.freeze({ activeId: selTabsActiveId, count: selTabsItems.size }),
+            destroy: selTabsDestroy
+        });
+        selTabsInstances.set(selTabsId, selTabsController);
+        selTabsRoot.dataset.selTabsReady = "true";
+        selTabsSyncEmptyState();
+        return selTabsController;
+    }
+
+    window.selTabs = Object.freeze({
+        mount: selTabsMount,
+        get: (selTabsId) => selTabsInstances.get(String(selTabsId)) || null,
+        has: (selTabsId) => selTabsInstances.has(String(selTabsId)),
+        list: () => Object.freeze(Array.from(selTabsInstances.keys()))
+    });
+})();

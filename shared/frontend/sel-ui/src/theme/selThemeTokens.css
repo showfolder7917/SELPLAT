@@ -79,6 +79,17 @@
     --sel-theme-table-row: var(--sel-theme-table-surface-row);
     --sel-theme-table-row-hover: var(--sel-theme-table-surface-hover);
     --sel-theme-popup-surface: var(--sel-theme-surface-deep);
+    /* 工作区控件统一映射：页签、代码编辑器和分隔面板只消费本组语义令牌，换肤时不保留组件私色。 */
+    --sel-theme-workspace-surface: var(--sel-theme-structure-surface);
+    --sel-theme-workspace-surface-soft: var(--sel-theme-table-surface-board);
+    --sel-theme-workspace-surface-raised: var(--sel-theme-surface-raised);
+    --sel-theme-workspace-line: var(--sel-theme-control-line-soft);
+    --sel-theme-workspace-line-active: var(--sel-theme-control-line);
+    --sel-theme-workspace-tab-active: var(--sel-theme-interaction-surface-selected);
+    --sel-theme-workspace-tab-hover: var(--sel-theme-interaction-surface-hover);
+    --sel-theme-workspace-editor-surface: var(--sel-theme-table-surface-row);
+    --sel-theme-workspace-editor-gutter: var(--sel-theme-table-surface-header);
+    --sel-theme-workspace-focus: var(--sel-theme-glow);
 
     /* 当前 skin 提供边框素材；共享缩放系数保证左右始终使用相同厚度。 */
     --sel-theme-frame-scale: 1;

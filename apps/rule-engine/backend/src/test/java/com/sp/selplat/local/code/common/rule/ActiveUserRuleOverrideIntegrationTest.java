@@ -13,7 +13,10 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 当前稳定用户必须通过动态解析的独立递归索引完整登记九个用户逻辑 ID。
+     * 验证当前稳定用户通过九层动态递归索引完整登记十个用户逻辑 ID。
+     * 真实传参示例：读取工程根 {@code AGENTS.md} 中的当前稳定用户并递归加载其 {@code RULE_INDEX.md}。
+     * 真实返回示例：索引验证结果为 {@code indexCount=9, ruleCount=10}。
+     * 异常或副作用示例：身份、索引或规则路径无效时抛出 {@link IOException}，不修改规则资源。
      */
     @Test
     void shouldValidateCompleteActiveUserIndexTree() throws IOException {
@@ -21,7 +24,7 @@ class ActiveUserRuleOverrideIntegrationTest {
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
         assertEquals(9, validation.indexCount());
-        assertEquals(9, validation.ruleCount());
+        assertEquals(10, validation.ruleCount());
     }
 
     /**
@@ -67,6 +70,28 @@ class ActiveUserRuleOverrideIntegrationTest {
         );
         assertTrue(rule.content().contains(
             "selgrid_explicit_horizontal_scroll_option_boundary = wide_column_layout_only_not_scrollbar_visibility"
+        ));
+    }
+
+    /**
+     * 验证 SELPLAT 动态页签规则能从当前用户通用索引命中，并固定切换保留和关闭销毁边界。
+     * 真实传参示例：逻辑 ID 为 {@code SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES}，作用域为 {@code selplat}。
+     * 真实返回示例：规则正文包含 {@code dynamic_tab_switch_lifecycle} 和 {@code dynamic_tab_close_lifecycle} 声明。
+     * 异常或副作用示例：索引缺失、路径逃逸或生命周期声明缺失时抛出 {@link IOException} 或断言失败，不修改规则文件。
+     */
+    @Test
+    void shouldLoadDynamicTabsWorkspaceLifecycleRuleFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES",
+            "selplat",
+            "selplat/通用/rule/RUL_SELPLAT动态页签工作区生命周期规则.md",
+            "dynamic_tab_switch_lifecycle = hide_inactive_panel_and_preserve_session_state"
+        );
+        assertTrue(rule.content().contains(
+            "dynamic_tab_close_lifecycle = destroy_dom_events_controllers_observers_timers_and_registry"
+        ));
+        assertTrue(rule.content().contains(
+            "dynamic_workspace_visual_token_policy = unified_theme_semantic_tokens_without_application_color_override"
         ));
     }
 

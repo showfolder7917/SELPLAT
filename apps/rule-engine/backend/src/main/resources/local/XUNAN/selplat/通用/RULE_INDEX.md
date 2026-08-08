@@ -12,6 +12,15 @@ load_rule_for_active_user_selplat_grid_columns_data_resize_or_scrollbar_change =
 <!-- 对比多个应用的表格滚动条亮度、尺寸和轨道样式时加载，保证复用公共主题令牌。 -->
 load_rule_for_active_user_selplat_grid_scrollbar_visual_consistency_review = SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES
 
+<!-- SELPLAT 动态页签工作区统一采用切换保留、关闭销毁和公共主题语义令牌。 -->
+SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT动态页签工作区生命周期规则.md
+<!-- 新增或修改动态业务页签、页签注册表和关闭行为时加载，防止隐藏实例持续积累。 -->
+load_rule_for_active_user_selplat_dynamic_tabs_creation_registry_switch_or_close = SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES
+<!-- 组合页签、分隔器、代码编辑器和表格形成工作区时加载，保证子组件由统一清理入口回收。 -->
+load_rule_for_active_user_selplat_dynamic_workspace_component_assembly = SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES
+<!-- 调整动态工作区颜色、边框、焦点或活动状态时加载，保证只消费统一主题语义令牌。 -->
+load_rule_for_active_user_selplat_dynamic_workspace_visual_token_change = SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES
+
 <!-- SELPLAT 应用本地数据库的 SQL 文件结构、命名、职责和验证约束。 -->
 SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT数据库SQL文件结构与命名规则.md
 <!-- 新建或整理 apps/<app>/db 时加载，保证数据文件和 SQL 权威来源分层稳定。 -->

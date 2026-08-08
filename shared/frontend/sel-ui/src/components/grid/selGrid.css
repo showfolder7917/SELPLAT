@@ -17,6 +17,53 @@
     background: var(--sel-theme-table-surface-board);
 }
 
+/* 独立表格外壳：供动态工作区创建可销毁实例，表格和分页只在自身区域内伸缩。 */
+.selgrid-standalone-shell {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--sel-theme-workspace-surface-soft);
+    grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.selgrid-standalone-shell .selgrid-board-shell {
+    min-height: 0;
+    border-radius: 0;
+}
+
+.selgrid-standalone-footer {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 54px;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--sel-theme-workspace-line);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-workspace-surface);
+    grid-template-columns: minmax(190px, 1fr) auto;
+}
+
+.selgrid-standalone-page-size select {
+    height: 32px;
+    padding: 0 30px 0 10px;
+    border: 1px solid var(--sel-theme-control-line-soft);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    font: inherit;
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selgrid-standalone-page-size select:focus-visible {
+    outline: 1px solid var(--sel-theme-control-line);
+    outline-offset: 1px;
+}
+
 .selgrid-board-shell::before,
 .selgrid-board-shell::after {
     position: absolute;
