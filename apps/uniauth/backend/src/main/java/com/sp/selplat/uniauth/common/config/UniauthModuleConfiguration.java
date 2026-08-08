@@ -1,6 +1,8 @@
 package com.sp.selplat.uniauth.common.config;
 
 import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
+import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDao;
+import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.uniauth.UniauthBackendApplication;
 import javax.sql.DataSource;
@@ -32,6 +34,19 @@ import org.springframework.context.annotation.PropertySource;
 )
 @MapperScan("com.sp.selplat.common.db.template")
 public class UniauthModuleConfiguration {
+
+    /**
+     * 创建只在 Uniauth 私有数据库中查询和推进号段的项目 DAO。
+     *
+     * @param dataSource Uniauth 配置按限定名提供的私有数据源
+     * @return Uniauth 号段 DAO，例如可命中 {@code UniauthUserId} 且不会访问 MDA 控制库
+     */
+    @Bean("uniauthCommonSequenceSegmentDao")
+    public CommonSequenceSegmentDao uniauthCommonSequenceSegmentDao(
+            @Qualifier("uniauthDataSource") DataSource dataSource) {
+        // Uniauth 私有数据源 → 该项目唯一的号段查询与游标推进入口。
+        return new CommonSequenceSegmentDaoImpl(dataSource);
+    }
 
     /**
      * 把 Uniauth 当前数据源与使用同一数据源的模板 DAO 绑定为项目上下文。

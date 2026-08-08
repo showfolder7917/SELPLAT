@@ -4,7 +4,7 @@ import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.mda.targetdatabase.common.jdbc.JdbcConnectionFactory;
 import com.sp.selplat.mda.targetdatabase.common.jdbc.MdaConnectionDefinition;
-import com.sp.selplat.mda.connectionprofile.service.MdaConnectionProfileService;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.MdaConnectionDefinitionResolver;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -22,23 +22,23 @@ import org.springframework.stereotype.Service;
 public class JdbcMetadataServiceImpl implements JdbcMetadataService {
 
     private static final int MAX_TABLES = 1000;
-    private final MdaConnectionProfileService profileService;
+    private final MdaConnectionDefinitionResolver definitionResolver;
     private final JdbcConnectionFactory connectionFactory;
     private final MdaMetadataCache metadataCache;
 
     /**
      * 创建使用连接配置服务和动态连接工厂的元数据服务。
      *
-     * @param profileService Spring 注入的连接配置服务，例如 {@code MdaConnectionProfileServiceImpl}
+     * @param definitionResolver 已保存或临时连接字段解析器，例如 {@code MdaConnectionDefinitionResolver}
      * @param connectionFactory Spring 注入的目标库连接工厂，例如 {@code JdbcConnectionFactory}
      * @param metadataCache 相同目标连接的短时结构缓存，例如默认有效 60 秒
      */
     public JdbcMetadataServiceImpl(
-            MdaConnectionProfileService profileService,
+            MdaConnectionDefinitionResolver definitionResolver,
             JdbcConnectionFactory connectionFactory,
             MdaMetadataCache metadataCache) {
-        // 配置服务负责从已保存或临时参数形成运行期连接定义。
-        this.profileService = profileService;
+        // 公共解析器负责从已保存或临时参数形成运行期连接定义。
+        this.definitionResolver = definitionResolver;
         // 连接工厂负责按定义打开目标数据库连接。
         this.connectionFactory = connectionFactory;
         // 缓存只复用元数据结果，真实连接仍由连接池按请求借出和归还。
@@ -47,7 +47,7 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
 
     @Override
     public CommonResult getTree(CommonParam queryIn) {
-        MdaConnectionDefinition definition = profileService.loadDefinition(queryIn);
+        MdaConnectionDefinition definition = definitionResolver.resolve(queryIn);
         Object cached = metadataCache.get(definition).orElse(null);
         if (cached != null) {
             return success(cached, "数据库结构读取完成（缓存）。");

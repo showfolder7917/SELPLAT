@@ -30,8 +30,21 @@ application {
     mainClass = 'com.sp.selplat.mda.MdaBackendApplication'
 }
 
+tasks.named('processResources') {
+    // db/sql 是 MDA 控制库脚本的唯一权威来源；构建只复制 SQL，不复制正式 mda.mv.db。
+    from('../db/sql') {
+        include '*.sql'
+        into 'db/mda/sql'
+    }
+}
+
 tasks.register('syncVsCodeResources', Copy) {
     from(sourceSets.main.resources)
+    // VS Code 直接读取 classes/java/main 时也必须获得与 Gradle 运行相同的四个具名 SQL 资源。
+    from('../db/sql') {
+        include '*.sql'
+        into 'db/mda/sql'
+    }
     into(layout.buildDirectory.dir('classes/java/main'))
 }
 

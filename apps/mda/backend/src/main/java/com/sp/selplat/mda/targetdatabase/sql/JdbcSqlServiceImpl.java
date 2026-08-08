@@ -4,7 +4,7 @@ import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.mda.targetdatabase.common.jdbc.JdbcConnectionFactory;
 import com.sp.selplat.mda.targetdatabase.common.jdbc.MdaConnectionDefinition;
-import com.sp.selplat.mda.connectionprofile.service.MdaConnectionProfileService;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.MdaConnectionDefinitionResolver;
 import com.sp.selplat.mda.targetdatabase.metadata.MdaMetadataCache;
 import java.io.InputStream;
 import java.io.Reader;
@@ -34,23 +34,23 @@ public class JdbcSqlServiceImpl implements JdbcSqlService {
     private static final int MAX_ALLOWED_ROWS = 10000;
     private static final int DEFAULT_TIMEOUT_SECONDS = 30;
     private static final int MAX_LOB_CHARS = 1_000_000;
-    private final MdaConnectionProfileService profileService;
+    private final MdaConnectionDefinitionResolver definitionResolver;
     private final JdbcConnectionFactory connectionFactory;
     private final MdaMetadataCache metadataCache;
 
     /**
      * 创建使用连接配置服务和动态连接工厂的 SQL 执行服务。
      *
-     * @param profileService Spring 注入的连接配置服务，例如 {@code MdaConnectionProfileServiceImpl}
+     * @param definitionResolver 已保存或临时连接字段解析器，例如 {@code MdaConnectionDefinitionResolver}
      * @param connectionFactory Spring 注入的目标库连接工厂，例如 {@code JdbcConnectionFactory}
      * @param metadataCache 目标库结构短缓存；SQL 成功后用于清除可能过期的表结构
      */
     public JdbcSqlServiceImpl(
-            MdaConnectionProfileService profileService,
+            MdaConnectionDefinitionResolver definitionResolver,
             JdbcConnectionFactory connectionFactory,
             MdaMetadataCache metadataCache) {
-        // 配置服务负责加载已保存连接或采用页面临时连接字段。
-        this.profileService = profileService;
+        // 公共解析器负责加载已保存连接或采用页面临时连接字段。
+        this.definitionResolver = definitionResolver;
         // 连接工厂负责打开不会污染 MDA 配置库事务的目标库连接。
         this.connectionFactory = connectionFactory;
         // SQL 可能包含 DDL，因此任何成功执行都清除当前目标连接的结构缓存。
@@ -60,7 +60,7 @@ public class JdbcSqlServiceImpl implements JdbcSqlService {
     @Override
     public CommonResult execute(CommonParam executeIn) {
         String sql = requiredSql(executeIn.getParam("sql"));
-        MdaConnectionDefinition definition = profileService.loadDefinition(executeIn);
+        MdaConnectionDefinition definition = definitionResolver.resolve(executeIn);
         boolean autoCommit = bool(executeIn.getParam("autoCommit"), definition.defaultAutoCommit());
         int maxRows = bounded(executeIn.getParam("maxRows"), DEFAULT_MAX_ROWS, 1, MAX_ALLOWED_ROWS);
         int timeout = bounded(executeIn.getParam("queryTimeoutSeconds"), DEFAULT_TIMEOUT_SECONDS, 0, 3600);

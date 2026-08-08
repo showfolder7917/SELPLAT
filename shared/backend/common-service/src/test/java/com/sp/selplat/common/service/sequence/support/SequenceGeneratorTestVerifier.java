@@ -75,6 +75,54 @@ public final class SequenceGeneratorTestVerifier {
     }
 
     /**
+     * 验证公共发号器按真实启用编码把 MDA 与 Uniauth 请求路由到各自项目数据库。
+     *
+     * @param fixturePath 当前生产方法对应的 UTF-8 SQL fixture 资源路径，例如
+     *     {@code "fixtures/SequenceGeneratorRealDatabaseTest/routeProjectDataSources.sql"}
+     * 执行结果示例：MDA 数据库游标由 {@code 100000} 推进到 {@code 101000}，
+     * Uniauth 数据库游标由 {@code 200000} 推进到 {@code 201000}。
+     */
+    public static void verifyProjectDataSourceRouting(String fixturePath) {
+        // 一个隔离 H2 实例中的两个 schema 分别模拟 MDA 与 Uniauth 私有项目数据库。
+        String databaseName = UUID.randomUUID().toString();
+        String baseUrl = "jdbc:h2:mem:" + databaseName + ";DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false";
+        JdbcDataSource adminDataSource = dataSource(baseUrl);
+        // 唯一 fixture 同时创建两个项目数据库边界及各自号段记录。
+        loadFixture(adminDataSource, fixturePath);
+        JdbcDataSource mdaDataSource = dataSource(baseUrl + ";SCHEMA=MDA_DB");
+        JdbcDataSource uniauthDataSource = dataSource(baseUrl + ";SCHEMA=UNIAUTH_DB");
+        // 两个生产 DAO 分别固定绑定自己的项目数据源，不共享 @Primary 候选。
+        CommonSequenceSegmentDaoImpl mdaDao = new CommonSequenceSegmentDaoImpl(mdaDataSource);
+        CommonSequenceSegmentDaoImpl uniauthDao = new CommonSequenceSegmentDaoImpl(uniauthDataSource);
+        SequenceGenerator generator = new SequenceGeneratorImpl(List.of(mdaDao, uniauthDao));
+        // MDA 编码只命中 MDA_DB，并返回该项目号段起点。
+        assertEquals(100000L, generator.nextId("MdaConnectionProfileId"));
+        // Uniauth 编码只命中 UNIAUTH_DB，并返回另一项目号段起点。
+        assertEquals(200000L, generator.nextId("UniauthUserId"));
+        // 两个真实数据库游标分别推进，证明没有借首选数据源交叉发号。
+        assertEquals(101000L, queryLong(mdaDataSource,
+            "SELECT nextStartId FROM CommonSequenceSegment WHERE seqCode = 'MdaConnectionProfileId'"));
+        assertEquals(201000L, queryLong(uniauthDataSource,
+            "SELECT nextStartId FROM CommonSequenceSegment WHERE seqCode = 'UniauthUserId'"));
+        // 任一项目都没有的编码必须在分配前明确失败。
+        IllegalStateException exception = assertThrows(
+            IllegalStateException.class,
+            () -> generator.nextId("MissingProjectId")
+        );
+        assertTrue(exception.getMessage().contains("no active sequence segment found"));
+        // 两个项目 DAO 同时声明同一编码时必须在领取号段前阻断，避免形成双库重复主键。
+        SequenceGenerator duplicateGenerator = new SequenceGeneratorImpl(List.of(
+            mdaDao,
+            new CommonSequenceSegmentDaoImpl(mdaDataSource)
+        ));
+        IllegalStateException duplicateException = assertThrows(
+            IllegalStateException.class,
+            () -> duplicateGenerator.nextId("MdaConnectionProfileId")
+        );
+        assertTrue(duplicateException.getMessage().contains("multiple active sequence segments found"));
+    }
+
+    /**
      * 验证同一真实数据库号段连续取号时只推进一次数据库游标并复用生产本地缓存。
      *
      * <p>执行结果示例：当前真实数据库或边界 Case 的全部验证通过。</p>
@@ -209,10 +257,20 @@ public final class SequenceGeneratorTestVerifier {
      *     {@code jdbc:h2:mem:<运行时随机UUID>;DATABASE_TO_UPPER=false}
      */
     private static JdbcDataSource newDataSource() {
-        // 创建 H2 JDBC 数据源。
-        JdbcDataSource dataSource = new JdbcDataSource();
         // 随机库名避免并发 Case 共享表状态。
-        dataSource.setURL("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false");
+        return dataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false");
+    }
+
+    /**
+     * 按明确 URL 创建可供项目 DAO 使用的隔离 H2 数据源。
+     *
+     * @param url 测试数据库或项目 schema URL，例如 {@code jdbc:h2:mem:case;SCHEMA=MDA_DB}
+     * @return 已配置 sa 用户且无密码的真实 H2 数据源
+     */
+    private static JdbcDataSource dataSource(String url) {
+        // 创建 H2 JDBC 数据源并绑定当前 Case 的数据库边界。
+        JdbcDataSource dataSource = new JdbcDataSource();
+        dataSource.setURL(url);
         // H2 默认用户使用 sa。
         dataSource.setUser("sa");
         // H2 内存库不设置密码。

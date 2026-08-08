@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 @SpringBootApplication(
         scanBasePackages = {
             "com.sp.selplat.mda",
+            "com.sp.selplat.common.service",
             "com.sp.selplat.common.web"
         },
         exclude = DataSourceAutoConfiguration.class)

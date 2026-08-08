@@ -8,20 +8,86 @@ import java.sql.SQLException;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.datasource.DataSourceUtils;
-import org.springframework.stereotype.Repository;
 
 /**
- * 公共号段 DAO 实现直接使用 JDBC 读取并更新号段表，确保抢号逻辑不依赖额外业务 Mapper。
+ * 公共号段 DAO 实现绑定一个项目明确提供的数据源，并直接使用 JDBC 读取和更新该项目号段表。
+ * 本类不注册全局 Repository，避免 Host 聚合多个数据库时依赖 {@code @Primary} 猜测号段归属。
  */
-@Repository
 public class CommonSequenceSegmentDaoImpl implements CommonSequenceSegmentDao {
 
     // 号段表固定使用统一驼峰表名，避免不同模块再各自维护表名常量。
     private static final String TABLE_NAME = "CommonSequenceSegment";
 
-    // dataSource 由 Spring 注入当前模块实际使用的数据源，供 DAO 在统一事务上下文里执行抢号 SQL。
-    @Autowired
+    // dataSource 绑定一个项目的真实数据库，号段查询和游标推进始终落在同一项目上下文。
     private DataSource dataSource;
+
+    /**
+     * 创建可由最小 Spring 测试容器注入数据源的号段 DAO。
+     *
+     * <p>执行结果示例：容器随后注入独立 H2 数据源，当前 DAO 只访问该库的
+     * {@code CommonSequenceSegment}。</p>
+     */
+    public CommonSequenceSegmentDaoImpl() {
+    }
+
+    /**
+     * 创建与指定项目数据库固定绑定的号段 DAO。
+     *
+     * @param dataSource 项目配置按限定名传入的数据源，例如 {@code mdaControlDataSource}
+     * 执行结果示例：{@code MdaConnectionProfileId} 的查询与游标推进只访问 MDA 控制库。
+     */
+    public CommonSequenceSegmentDaoImpl(DataSource dataSource) {
+        // 具名项目数据源 → 当前 DAO 的唯一号段数据库。
+        this.dataSource = requiredDataSource(dataSource);
+    }
+
+    /**
+     * 为使用无参构造的测试或单数据源容器补充真实数据源。
+     * 已由项目构造器绑定的数据源不会被 Host 中的首选数据源覆盖。
+     *
+     * @param candidate Spring 容器提供的单一或首选测试数据源
+     * 执行结果示例：无参 DAO 首次绑定测试 H2；MDA 具名 DAO 继续保留 MDA 控制库。
+     */
+    @Autowired(required = false)
+    public void setDataSource(DataSource candidate) {
+        // 只有尚未绑定项目上下文的实例才接受自动注入，防止 Host 跨模块覆盖。
+        if (dataSource == null) {
+            dataSource = requiredDataSource(candidate);
+        }
+    }
+
+    /**
+     * 查询当前项目数据库是否拥有指定启用号段，不推进游标。
+     *
+     * @param seqCode 来自主键定义的号段编码，例如 {@code "MdaConnectionProfileId"}
+     * @return 当前数据库存在且启用该号段时返回 {@code true}，否则返回 {@code false}
+     * @throws IllegalArgumentException 当号段编码为空时抛出，例如
+     *     {@code IllegalArgumentException("seqCode must not be blank")}
+     * @throws IllegalStateException 当当前 DAO 未绑定数据源或查询失败时抛出
+     */
+    @Override
+    public boolean containsActiveSequence(String seqCode) {
+        if (seqCode == null || seqCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("seqCode must not be blank");
+        }
+        // 当前项目数据源 → 只读判断该项目是否拥有目标启用号段。
+        DataSource currentDataSource = requiredDataSource(dataSource);
+        Connection connection = DataSourceUtils.getConnection(currentDataSource);
+        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE seqCode = ? AND status = 1";
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            // 稳定号段编码作为唯一查询条件，不接受动态 SQL 标识符。
+            preparedStatement.setString(1, seqCode.trim());
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                // COUNT 固定返回一行；大于零表示当前项目数据库声明了该号段归属。
+                return resultSet.next() && resultSet.getLong(1) > 0;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("query active sequence failed for seqCode: " + seqCode, exception);
+        } finally {
+            // 只读归属查询结束后归还当前项目连接。
+            DataSourceUtils.releaseConnection(connection, currentDataSource);
+        }
+    }
 
     /**
      * 按号段编码申请下一段可用主键区间。
@@ -41,7 +107,8 @@ public class CommonSequenceSegmentDaoImpl implements CommonSequenceSegmentDao {
             throw new IllegalArgumentException("seqCode must not be blank");
         }
         // 统一通过 Spring 的 DataSourceUtils 取连接，保证后续若接入事务边界时仍能复用同一连接上下文。
-        Connection connection = DataSourceUtils.getConnection(dataSource);
+        DataSource currentDataSource = requiredDataSource(dataSource);
+        Connection connection = DataSourceUtils.getConnection(currentDataSource);
         try {
             // 先读取当前启用中的号段快照，供后续基于版本号执行乐观锁更新。
             SequenceSegmentSnapshot snapshot = queryActiveSnapshot(connection, seqCode.trim());
@@ -71,8 +138,23 @@ public class CommonSequenceSegmentDaoImpl implements CommonSequenceSegmentDao {
             throw new IllegalStateException("allocate sequence range failed for seqCode: " + seqCode, exception);
         } finally {
             // 统一释放当前连接，让非事务场景下的 JDBC 连接及时归还给数据源。
-            DataSourceUtils.releaseConnection(connection, dataSource);
+            DataSourceUtils.releaseConnection(connection, currentDataSource);
         }
+    }
+
+    /**
+     * 取得当前实例已经绑定的数据源，并在 SQL 前阻断缺失上下文。
+     *
+     * @param candidate 构造器、Spring 或当前实例提供的数据源
+     * @return 可供当前号段 DAO 使用的数据源，例如 {@code mdaControlDataSource}
+     * @throws IllegalStateException 当数据源缺失时抛出，例如
+     *     {@code IllegalStateException("sequence dataSource must not be null")}
+     */
+    private DataSource requiredDataSource(DataSource candidate) {
+        if (candidate == null) {
+            throw new IllegalStateException("sequence dataSource must not be null");
+        }
+        return candidate;
     }
 
     /**

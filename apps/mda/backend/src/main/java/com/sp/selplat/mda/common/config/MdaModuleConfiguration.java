@@ -18,7 +18,10 @@ import org.springframework.context.annotation.FilterType;
 @EnableConfigurationProperties(MdaTargetPoolProperties.class)
 @PropertySource("classpath:mda-module.properties")
 @ComponentScan(
-        basePackages = "com.sp.selplat.mda",
+        basePackages = {
+            "com.sp.selplat.mda",
+            "com.sp.selplat.common.service"
+        },
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
                 classes = MdaBackendApplication.class))

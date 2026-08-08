@@ -45,9 +45,22 @@ application {
     mainClass = 'com.sp.selplat.uniauth.UniauthBackendApplication'
 }
 
+tasks.named('processResources') {
+    // db/sql 是 Uniauth 数据库脚本的唯一权威来源；构建只复制 SQL，不复制正式 uniauth.mv.db。
+    from('../db/sql') {
+        include '*.sql'
+        into 'db/uniauth/sql'
+    }
+}
+
 tasks.register('syncVsCodeResources', Copy) {
     // VS Code 的 Gradle Java 启动器只稳定装载编译类输出，因此同步标准资源到同一统一 build 类目录。
     from(sourceSets.main.resources)
+    // VS Code 直接读取 classes/java/main 时也必须获得与 Gradle 运行相同的六个具名 SQL 资源。
+    from('../db/sql') {
+        include '*.sql'
+        into 'db/uniauth/sql'
+    }
     // 静态页面、配置和 SQL 初始化脚本 → 与应用 class 一起进入 VS Code 已加载的运行目录。
     into(layout.buildDirectory.dir('classes/java/main'))
 }

@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则不涉及 Node 执行代码。 -->
 node_ability_refs = none
-<!-- 1.3.0 固定业务 Service 直接继承公共 Base 契约，只覆盖真实存在业务差异的方法。 -->
-rule_version = 1.3.0
+<!-- 1.4.0 增加多项目 CommonSequenceSegment 按具名数据源唯一定位的公共发号边界。 -->
+rule_version = 1.4.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已进入当前用户索引并完成 Uniauth 首个接入验证。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自 Uniauth 多项目数据源继承修正。 -->
-upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖
+upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖;2026-08-08:MDA与Uniauth号段DAO改按项目具名数据源注册并由公共发号器按真实seqCode唯一路由
 
 ## 公共 Base 边界
 
@@ -62,6 +62,12 @@ host_business_datasource_import_policy = forbidden
 uniauth_private_database_path = apps/uniauth/db/uniauth.mv.db
 <!-- Uniauth 的首选 DataSource 只兼容现有 Boot MyBatis 和公共号段基础设施，业务 BaseDao 仍必须使用具名项目上下文。 -->
 uniauth_primary_candidate_boundary = boot_mybatis_and_common_sequence_infrastructure_only_business_base_dao_remains_qualified
+<!-- 多个项目同时使用 CommonSequenceSegment 时，每个项目必须用自身具名 DataSource 注册独立号段 DAO；业务含义是 MDA 与 Uniauth 的游标只在各自私有库推进。 -->
+project_sequence_dao_binding = qualified_project_DataSource_to_project_CommonSequenceSegmentDao
+<!-- 公共发号器必须根据数据库中真实存在且启用的 seqCode 唯一选择项目号段 DAO，禁止依据 @Primary、Bean 注册顺序或包扫描碰巧命中数据源。 -->
+shared_sequence_generator_project_routing = unique_active_seqCode_owner_without_primary_datasource_guessing
+<!-- 同一 seqCode 在多个项目数据库同时启用时必须在发号前阻断；业务含义是禁止两个数据库分别生成可能重复的同一业务主键。 -->
+duplicate_active_sequence_code_across_projects_policy = fail_before_sequence_allocation
 <!-- Uniauth 和 Host 自动测试必须覆盖隔离内存 URL，禁止读写开发永久库。 -->
 uniauth_test_database_policy = isolated_memory_database_only
 

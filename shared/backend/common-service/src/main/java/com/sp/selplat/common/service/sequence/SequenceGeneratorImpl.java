@@ -4,13 +4,16 @@ import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDao;
 import com.sp.selplat.common.db.sequence.model.CommonSequenceSegmentRange;
 import com.sp.selplat.common.db.sequence.model.IdSequenceDefinition;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
- * 公共发号服务实现通过“数据库抢号段 + JVM 本地缓存发号”组合实现高性能主键分配。
+ * 公共发号服务从多个项目号段 DAO 中唯一定位编码归属，再通过数据库抢号段与 JVM 缓存生成主键。
+ * Host 聚合多个数据库时不依赖全局首选数据源，MDA 与 Uniauth 始终推进各自项目库中的游标。
  */
 @Service
 public class SequenceGeneratorImpl implements SequenceGenerator {
@@ -18,8 +21,8 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
     // MAX_ALLOCATE_RETRY_COUNT 统一限制单次续段最多重试次数，避免并发冲突时无限循环占用线程。
     private static final int MAX_ALLOCATE_RETRY_COUNT = 3;
 
-    // commonSequenceSegmentDao 负责真正向数据库申请下一段可用主键区间。
-    private final CommonSequenceSegmentDao commonSequenceSegmentDao;
+    // sequenceDaos 保存所有具名项目号段 DAO，发号前按真实数据库记录唯一确定编码归属。
+    private final List<CommonSequenceSegmentDao> sequenceDaos;
     // sequenceRangeMap 按号段编码缓存当前 JVM 已领取但尚未发完的主键区间。
     private final ConcurrentMap<String, SequenceRange> sequenceRangeMap = new ConcurrentHashMap<>();
     // sequenceLockMap 按号段编码维护独立锁对象，避免不同模块续段时互相阻塞。
@@ -28,13 +31,24 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
     /**
      * 构造公共发号服务实现。
      *
-     * @param commonSequenceSegmentDao Spring 注入的真实数据库号段 DAO
-     * 执行结果示例：本地缓存耗尽时通过该 DAO 申请
-     *     {@code {"startId":100001,"endId":101000,"stepSize":1000}}。
+     * @param sequenceDaos Spring 注入的项目号段 DAO 集合，例如 MDA DAO 与 Uniauth DAO
+     * 执行结果示例：{@code MdaConnectionProfileId} 唯一命中 MDA DAO 后申请
+     *     {@code {"startId":100000,"endId":100999,"stepSize":1000}}。
      */
-    public SequenceGeneratorImpl(CommonSequenceSegmentDao commonSequenceSegmentDao) {
-        // 保存公共号段 DAO，供当前发号服务在本地号段耗尽时继续向数据库续段。
-        this.commonSequenceSegmentDao = commonSequenceSegmentDao;
+    @Autowired
+    public SequenceGeneratorImpl(List<CommonSequenceSegmentDao> sequenceDaos) {
+        // 复制项目 DAO 集合，后续发号不会受调用方集合修改影响。
+        this.sequenceDaos = sequenceDaos == null ? List.of() : List.copyOf(sequenceDaos);
+    }
+
+    /**
+     * 创建只绑定一个真实数据库 DAO 的发号器，供隔离测试和独立实例竞争验证。
+     *
+     * @param sequenceDao 当前实例唯一使用的真实号段 DAO
+     * 执行结果示例：{@code CacheCode} 只从该 DAO 绑定的 H2 数据库领取号段。
+     */
+    public SequenceGeneratorImpl(CommonSequenceSegmentDao sequenceDao) {
+        this(List.of(sequenceDao));
     }
 
     /**
@@ -120,10 +134,12 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
             if (cachedRange != null && cachedRange.hasAvailable()) {
                 return;
             }
+            // 真实数据库记录唯一命中 → 当前号段所属项目 DAO。
+            CommonSequenceSegmentDao sequenceDao = resolveSequenceDao(seqCode);
             // 按统一重试次数申请下一段号段，兼容多实例并发更新时的乐观锁冲突。
             for (int retryIndex = 0; retryIndex < MAX_ALLOCATE_RETRY_COUNT; retryIndex++) {
                 // 向数据库申请下一段号段；若返回空说明本次乐观锁冲突，被其他实例抢先推进了游标。
-                CommonSequenceSegmentRange allocatedRange = commonSequenceSegmentDao.allocateNextRange(seqCode);
+                CommonSequenceSegmentRange allocatedRange = sequenceDao.allocateNextRange(seqCode);
                 if (allocatedRange == null) {
                     continue;
                 }
@@ -134,5 +150,33 @@ public class SequenceGeneratorImpl implements SequenceGenerator {
             // 连续多次都申请失败时统一抛错，避免线程无休止重试掩盖数据库或并发配置问题。
             throw new IllegalStateException("allocate sequence range retry exhausted for seqCode: " + seqCode);
         }
+    }
+
+    /**
+     * 从所有项目数据库中唯一定位指定启用号段的真实 DAO。
+     *
+     * @param seqCode 已规范化的号段编码，例如 {@code "MdaConnectionProfileId"}
+     * @return 唯一拥有该号段的项目 DAO，例如绑定 MDA 控制库的 DAO
+     * @throws IllegalStateException 当没有项目声明该号段，或多个项目重复声明时抛出，例如
+     *     {@code IllegalStateException("no active sequence segment found for seqCode: MdaConnectionProfileId")}
+     */
+    private CommonSequenceSegmentDao resolveSequenceDao(String seqCode) {
+        CommonSequenceSegmentDao matchedDao = null;
+        for (CommonSequenceSegmentDao sequenceDao : sequenceDaos) {
+            // 当前项目没有目标编码时继续检查下一项目，不触碰其号段游标。
+            if (!sequenceDao.containsActiveSequence(seqCode)) {
+                continue;
+            }
+            // 第二个数据库也声明相同编码时立即阻断，避免同一业务主键在两个库分别发号。
+            if (matchedDao != null) {
+                throw new IllegalStateException("multiple active sequence segments found for seqCode: " + seqCode);
+            }
+            matchedDao = sequenceDao;
+        }
+        if (matchedDao == null) {
+            throw new IllegalStateException("no active sequence segment found for seqCode: " + seqCode);
+        }
+        // 唯一项目 DAO → 后续抢号和版本推进只访问该 DAO 绑定的数据库。
+        return matchedDao;
     }
 }

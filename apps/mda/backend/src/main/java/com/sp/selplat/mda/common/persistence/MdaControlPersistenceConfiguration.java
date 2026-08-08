@@ -2,6 +2,8 @@ package com.sp.selplat.mda.common.persistence;
 
 import com.sp.selplat.common.exception.CommonSystemException;
 import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
+import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDao;
+import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.common.db.template.BaseTemplateMapper;
 import com.zaxxer.hikari.HikariConfig;
@@ -60,7 +62,7 @@ public class MdaControlPersistenceConfiguration {
             Files.createDirectories(databaseDirectory);
             config.setJdbcUrl(resolveUrl(config.getJdbcUrl(), databaseDirectory.resolve("mda")));
             HikariDataSource controlDataSource = new HikariDataSource(config);
-            initialize(controlDataSource, "schema-mda.sql");
+            initialize(controlDataSource);
             return controlDataSource;
         } catch (Exception exception) {
             throw new CommonSystemException(
@@ -80,6 +82,19 @@ public class MdaControlPersistenceConfiguration {
     public JdbcTemplate mdaControlJdbcTemplate(
             @Qualifier("mdaControlDataSource") DataSource dataSource) {
         return new JdbcTemplate(dataSource);
+    }
+
+    /**
+     * 创建只在 MDA 控制库中查询和推进号段的项目 DAO。
+     *
+     * @param dataSource MDA 配置按限定名提供的控制库数据源
+     * @return MDA 号段 DAO，例如可命中 {@code MdaConnectionProfileId} 且不会访问 Uniauth 数据库
+     */
+    @Bean("mdaCommonSequenceSegmentDao")
+    public CommonSequenceSegmentDao mdaCommonSequenceSegmentDao(
+            @Qualifier("mdaControlDataSource") DataSource dataSource) {
+        // MDA 控制库数据源 → 连接配置主键号段的唯一数据库入口。
+        return new CommonSequenceSegmentDaoImpl(dataSource);
     }
 
     /**
@@ -124,8 +139,23 @@ public class MdaControlPersistenceConfiguration {
                 + ";MODE=MySQL;DATABASE_TO_UPPER=false";
     }
 
-    private void initialize(DataSource dataSource, String resource) {
-        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new ClassPathResource(resource));
+    /**
+     * 按表依赖顺序执行 MDA 控制库的结构脚本和初始化数据脚本。
+     *
+     * @param dataSource 已创建的 MDA 控制库数据源，例如池名为 {@code MdaControlPool} 的内存测试数据源
+     *     {@code jdbc:h2:mem:selplat_mda_test}
+     *     <p>执行成功时无返回值；副作用是创建或迁移控制库表、清理已退役默认连接并初始化 MDA 主键号段。
+     *     脚本缺失或 SQL 执行失败时由 Spring 数据库初始化器抛出运行时异常，外层统一转换为
+     *     {@code MDA_DATABASE_INITIALIZATION_FAILED}。
+     */
+    private void initialize(DataSource dataSource) {
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+        // 先创建号段表，再创建依赖号段的连接配置表。
+        populator.addScript(new ClassPathResource("db/mda/sql/schema-CommonSequenceSegment.sql"));
+        populator.addScript(new ClassPathResource("db/mda/sql/schema-MdaConnectionProfile.sql"));
+        // 先清理连接配置表的已退役默认工作库，再按最终真实主键上界初始化项目号段。
+        populator.addScript(new ClassPathResource("db/mda/sql/data-MdaConnectionProfile.sql"));
+        populator.addScript(new ClassPathResource("db/mda/sql/data-CommonSequenceSegment.sql"));
         populator.execute(dataSource);
     }
 

@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由 MDA 应用脚本和浏览器回归承载。 -->
 node_ability_refs = none
-<!-- 1.8.0 将滚动条反馈交给 selGrid 通用默认规则，MDA 只保留动态宽表布局声明。 -->
-rule_version = 1.8.0
+<!-- 1.9.0 固定连接配置 CRUD 空实现与目标数据库运行能力的拆分边界。 -->
+rule_version = 1.9.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已经进入当前用户索引并完成实现回归。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自用户对双数据库和连接配置职责的纠正。 -->
-upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为
+upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责
 
 ## 数据库边界
 
@@ -69,8 +69,20 @@ mda_layering_required = controller_service_dao
 mda_module_configuration_boundary = common_config_contains_module_entry_common_persistence_contains_base_dao_and_control_configuration
 <!-- 所有访问控制库固定表的 DAO 必须继承 MdaBaseDao；不得由业务 DAO 重复选择控制数据源。 -->
 mda_control_dao_inheritance = all_fixed_control_table_daos_extend_mda_base_dao
-<!-- 动态目标数据库公共连接能力统一进入 targetdatabase/common，元数据与 SQL 分别保留独立分层。 -->
-mda_target_database_package_boundary = targetdatabase_common_plus_metadata_plus_sql
+<!-- 所有访问控制库固定表的 ServiceImpl 只绑定 MdaBaseServiceImpl 与业务 DAO，不得重写父类已经完整提供的 CRUD。 -->
+mda_control_service_inheritance = all_fixed_control_table_service_impls_are_empty_bindings_to_mda_base_service_and_business_dao
+<!-- MDA 工程级有效数据查询、审计默认字段和具名事务统一由 MdaBaseServiceImpl 承担，具体业务 Service 不重复添加。 -->
+mda_control_service_common_behavior_owner = mda_base_service_only
+<!-- 连接配置 CRUD 接口只继承 BaseService，禁止声明目标连接测试、定义解析或连接池管理方法。 -->
+mda_connection_profile_service_boundary = control_table_base_crud_only
+<!-- 已保存或临时连接字段统一由 targetdatabase/common/jdbc 的定义解析器转换，metadata 与 sql 禁止反向借用连接配置 CRUD Service。 -->
+mda_connection_definition_resolution = targetdatabase_common_jdbc_resolver_shared_by_connection_metadata_and_sql
+<!-- 真实连接测试进入 targetdatabase/connection，控制器只把测试请求委托给目标连接 Service。 -->
+mda_target_connection_test_owner = targetdatabase_connection_service
+<!-- 配置更新或删除后的旧目标池失效由独立生命周期处理器承接，不得把 JdbcConnectionFactory 注入连接配置 CRUD ServiceImpl。 -->
+mda_profile_pool_invalidation_owner = connection_profile_lifecycle_handler_outside_crud_service_impl
+<!-- 动态目标数据库公共连接能力统一进入 targetdatabase/common，连接测试、元数据与 SQL 分别保留独立分层。 -->
+mda_target_database_package_boundary = targetdatabase_common_plus_connection_plus_metadata_plus_sql
 <!-- 动态目标数据库能力不得继承绑定控制库的 MdaBaseDao，防止运行时查询误入 mda.mv.db。 -->
 mda_target_database_base_dao_policy = forbidden_to_extend_control_database_mda_base_dao
 <!-- 升级后不保留根级 metadata、根级 sql 或 common/jdbc 兼容包。 -->

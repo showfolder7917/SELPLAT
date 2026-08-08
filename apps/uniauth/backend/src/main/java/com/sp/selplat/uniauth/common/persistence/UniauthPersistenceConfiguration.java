@@ -68,10 +68,23 @@ public class UniauthPersistenceConfiguration {
                 + ";MODE=MySQL;DATABASE_TO_UPPER=false";
     }
 
+    /**
+     * 按表依赖顺序执行 Uniauth 的结构脚本和初始化数据脚本。
+     *
+     * @param dataSource 已创建的 Uniauth 连接池，例如池名为 {@code UniauthPool} 的内存测试数据源
+     *     {@code jdbc:h2:mem:selplat_uniauth_test}
+     *     <p>执行成功时无返回值；副作用是创建或补齐三张表，并幂等写入号段、默认租户和管理员账号。
+     *     脚本缺失或 SQL 执行失败时由 Spring 数据库初始化器抛出运行时异常，外层统一转换为
+     *     {@code UNIAUTH_DATABASE_INITIALIZATION_FAILED}。
+     */
     private void initialize(HikariDataSource dataSource) {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-        populator.addScript(new ClassPathResource("schema-uniauth.sql"));
-        populator.addScript(new ClassPathResource("data-uniauth.sql"));
+        populator.addScript(new ClassPathResource("db/uniauth/sql/schema-CommonSequenceSegment.sql"));
+        populator.addScript(new ClassPathResource("db/uniauth/sql/schema-UniauthTenant.sql"));
+        populator.addScript(new ClassPathResource("db/uniauth/sql/schema-UniauthUser.sql"));
+        populator.addScript(new ClassPathResource("db/uniauth/sql/data-CommonSequenceSegment.sql"));
+        populator.addScript(new ClassPathResource("db/uniauth/sql/data-UniauthTenant.sql"));
+        populator.addScript(new ClassPathResource("db/uniauth/sql/data-UniauthUser.sql"));
         populator.execute(dataSource);
     }
 
