@@ -44,19 +44,20 @@ public class ReferenceDataTypeServiceImpl
     }
 
     /**
-     * {@inheritDoc}
+     * 按公共动态主键参数查询唯一未删除的引用数据类型，不保留平行的 long 主键入口。
+     *
+     * @param queryIn BaseController 传入的主键参数，例如 {@code {"id":1}}
+     * @return 类型详情，例如
+     *     {@code {"success":true,"data":{"id":1,"resourceCode":"resource-kind"},"msg":"类型详情查询完成。"}}
+     * @throws CommonBusinessException id 缺失或记录不存在时抛出，例如
+     *     {@code CommonBusinessException("REFERENCE_DATA_TYPE_NOT_FOUND", "引用数据类型不存在：1")}
      */
-    @Override
-    public CommonResult getById(long id) {
-        // 正主键 → 独立数据库中的唯一未删除类型。
-        Map<String, Object> record = requiredRecord(id);
-        return buildSuccessResult(record, "类型详情查询完成。");
-    }
-
     @Override
     public CommonResult getById(CommonParam queryIn) {
         long id = requiredId(queryIn == null ? null : queryIn.getParam("id"));
-        return getById(id);
+        // 正主键 → 独立数据库中的唯一未删除类型。
+        Map<String, Object> record = requiredRecord(id);
+        return buildSuccessResult(record, "类型详情查询完成。");
     }
 
     /**
@@ -90,10 +91,18 @@ public class ReferenceDataTypeServiceImpl
     }
 
     /**
-     * {@inheritDoc}
+     * 按公共动态参数校验并更新一条引用数据类型，更新后返回数据库中的真实记录。
+     *
+     * @param saveIn BaseController 传入的主键与字段，例如
+     *     {@code {"id":1,"projectCode":"reference-data","resourceCode":"resource-kind","nameZh":"引用数据资源类型"}}
+     * @return 更新后的类型，例如
+     *     {@code {"success":true,"data":{"id":1,"nameZh":"引用数据资源类型"},"affectedRows":1,"msg":"类型更新完成。"}}
+     * @throws CommonBusinessException id 缺失、坐标重复或记录不存在时抛出，例如
+     *     {@code CommonBusinessException("REFERENCE_DATA_TYPE_NOT_FOUND", "引用数据类型不存在：1")}
      */
     @Override
-    public CommonResult update(long id, CommonParam saveIn) {
+    public CommonResult update(CommonParam saveIn) {
+        long id = requiredId(saveIn == null ? null : saveIn.getParam("id"));
         // 先验证记录存在，避免对不存在主键执行无效果更新。
         requiredRecord(id);
         CommonParam values = normalizeValues(saveIn);
@@ -107,11 +116,6 @@ public class ReferenceDataTypeServiceImpl
         // 更新后的数据库事实 → 管理表格和编辑窗口统一回显。
         Map<String, Object> record = requiredRecord(id);
         return buildSuccessResult(record, affectedRows, "类型更新完成。");
-    }
-
-    @Override
-    public CommonResult update(CommonParam saveIn) {
-        return update(requiredId(saveIn == null ? null : saveIn.getParam("id")), saveIn);
     }
 
     @Override
@@ -132,10 +136,17 @@ public class ReferenceDataTypeServiceImpl
     }
 
     /**
-     * {@inheritDoc}
+     * 按公共动态主键参数假删除一条类型，并保护平台内置资源类型不被删除。
+     *
+     * @param deleteIn BaseController 传入的主键和审计参数，例如 {@code {"id":2,"lastOperateUserId":1}}
+     * @return 假删除结果，例如
+     *     {@code {"success":true,"data":{"id":2,"status":0},"affectedRows":1,"msg":"类型删除完成。"}}
+     * @throws CommonBusinessException id 缺失、记录不存在或目标为内置类型时抛出，例如
+     *     {@code CommonBusinessException("REFERENCE_DATA_BUILTIN_TYPE_PROTECTED", "平台内置资源类型不能删除。")}
      */
     @Override
-    public CommonResult delete(long id) {
+    public CommonResult delete(CommonParam deleteIn) {
+        long id = requiredId(deleteIn == null ? null : deleteIn.getParam("id"));
         // 内置资源类型用于平台自身查询能力，管理端第一版禁止删除但允许编辑文案和状态。
         Map<String, Object> currentRecord = requiredRecord(id);
         if ("reference-data".equals(currentRecord.get("projectCode"))
@@ -145,8 +156,8 @@ public class ReferenceDataTypeServiceImpl
                     "平台内置资源类型不能删除。");
         }
         // 逻辑删除保留历史数据和未来引用关系，不执行物理 DELETE。
-        CommonParam deleteIn = idParam(id);
-        int affectedRows = getDao().softDelete(deleteIn);
+        CommonParam deleteParam = idParam(id);
+        int affectedRows = getDao().softDelete(deleteParam);
         if (affectedRows != 1) {
             throw notFound(id);
         }
@@ -154,11 +165,6 @@ public class ReferenceDataTypeServiceImpl
         deletedRecord.put("id", id);
         deletedRecord.put("status", 0);
         return buildSuccessResult(deletedRecord, affectedRows, "类型删除完成。");
-    }
-
-    @Override
-    public CommonResult delete(CommonParam deleteIn) {
-        return delete(requiredId(deleteIn == null ? null : deleteIn.getParam("id")));
     }
 
     @Override

@@ -1,6 +1,10 @@
 package com.sp.selplat.mda.common.config;
 
 import com.sp.selplat.mda.MdaBackendApplication;
+import com.sp.selplat.mda.targetdatabase.common.config.MdaTargetPoolProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
@@ -10,6 +14,9 @@ import org.springframework.context.annotation.FilterType;
  * 本配置不创建 Web 容器，也不向宿主暴露主 DataSource。
  */
 @Configuration
+@EnableScheduling
+@EnableConfigurationProperties(MdaTargetPoolProperties.class)
+@PropertySource("classpath:mda-module.properties")
 @ComponentScan(
         basePackages = "com.sp.selplat.mda",
         excludeFilters = @ComponentScan.Filter(

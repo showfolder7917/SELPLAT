@@ -93,23 +93,6 @@ public class UniauthUserServiceImpl extends BaseServiceImpl<UniauthUserDao> impl
         return result;
     }
 
-    // 前端传入单个主键和审计字段；用户子类标记写操作后复用父类统一假删除。
-    @Override
-    @OperationLog
-    public CommonResult delete(CommonParam deleteIn) {
-        // 父类执行数据库假删除并返回固定 CommonResult，切面只记录动作结果与耗时。
-        return super.delete(deleteIn);
-    }
-
-    // 前端传入多组主键和审计字段；用户子类标记批量假删除后复用父类统一事务边界。
-    @Override
-    @Transactional
-    @OperationLog
-    public CommonResult deleteBatch(CommonBatchParam deleteIn) {
-        // 父类执行全部批量假删除并返回固定 CommonResult，切面不读取批量业务数据。
-        return super.deleteBatch(deleteIn);
-    }
-
     /**
      * 前端 password 仅在存在时转换为 passwordHash，并从通用参数中移除不可直接落库的明文字段。
      *

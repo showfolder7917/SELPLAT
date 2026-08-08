@@ -1,4 +1,4 @@
-package com.sp.selplat.mda.sql;
+package com.sp.selplat.mda.targetdatabase.sql;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.JsonUtils;

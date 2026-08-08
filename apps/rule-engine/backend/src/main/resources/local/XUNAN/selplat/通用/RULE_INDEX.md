@@ -3,6 +3,15 @@
 <!-- 本索引只登记当前用户在 SELPLAT 各应用之间复用的个人工程规则。 -->
 active_user_selplat_general_rule_root = local/XUNAN/selplat/通用/rule/
 
+<!-- SELPLAT 所有公共 selGrid 在真实横向溢出时默认启用可发现且主题一致的滚动反馈。 -->
+SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT表格横向滚动默认规则.md
+<!-- 创建、装配或调整任一应用的公共 selGrid 时加载，禁止把滚动条可见性降级为应用显式开关。 -->
+load_rule_for_active_user_selplat_grid_creation_assembly_or_layout_change = SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES
+<!-- 修改 selGrid 列宽、数据刷新、面板缩放或滚动反馈时加载，保证真实溢出状态自动同步。 -->
+load_rule_for_active_user_selplat_grid_columns_data_resize_or_scrollbar_change = SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES
+<!-- 对比多个应用的表格滚动条亮度、尺寸和轨道样式时加载，保证复用公共主题令牌。 -->
+load_rule_for_active_user_selplat_grid_scrollbar_visual_consistency_review = SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES
+
 <!-- SELPLAT 应用本地数据库的 SQL 文件结构、命名、职责和验证约束。 -->
 SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT数据库SQL文件结构与命名规则.md
 <!-- 新建或整理 apps/<app>/db 时加载，保证数据文件和 SQL 权威来源分层稳定。 -->
@@ -18,6 +27,8 @@ SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES = local/XUNAN/selplat/通用/r
 load_rule_for_active_user_selplat_base_dao_datasource_or_template_binding_change = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 新建业务项目 BaseDao 或让具体 DAO 接入公共 CRUD 时加载。 -->
 load_rule_for_active_user_selplat_project_base_dao_or_common_crud_adoption = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
+<!-- 清理业务 Service 中旧主键重载、无参分页或只调用 super 的重复覆盖时加载。 -->
+load_rule_for_active_user_selplat_base_service_redundant_override_cleanup = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- Host 聚合多个含数据库模块或项目新增第二数据源时加载。 -->
 load_rule_for_active_user_selplat_host_multi_module_or_additional_datasource = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 为项目业务表返回默认前端列定义，或接入 reference-data 配置覆盖与元数据兜底时加载。 -->

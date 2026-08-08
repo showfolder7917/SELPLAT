@@ -1,4 +1,4 @@
-package com.sp.selplat.mda.common.jdbc;
+package com.sp.selplat.mda.targetdatabase.common.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

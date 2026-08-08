@@ -1,9 +1,9 @@
-package com.sp.selplat.mda.metadata;
+package com.sp.selplat.mda.targetdatabase.metadata;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
-import com.sp.selplat.mda.common.jdbc.JdbcConnectionFactory;
-import com.sp.selplat.mda.common.jdbc.MdaConnectionDefinition;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.JdbcConnectionFactory;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.MdaConnectionDefinition;
 import com.sp.selplat.mda.connectionprofile.service.MdaConnectionProfileService;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -24,25 +24,34 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
     private static final int MAX_TABLES = 1000;
     private final MdaConnectionProfileService profileService;
     private final JdbcConnectionFactory connectionFactory;
+    private final MdaMetadataCache metadataCache;
 
     /**
      * 创建使用连接配置服务和动态连接工厂的元数据服务。
      *
      * @param profileService Spring 注入的连接配置服务，例如 {@code MdaConnectionProfileServiceImpl}
      * @param connectionFactory Spring 注入的目标库连接工厂，例如 {@code JdbcConnectionFactory}
+     * @param metadataCache 相同目标连接的短时结构缓存，例如默认有效 60 秒
      */
     public JdbcMetadataServiceImpl(
             MdaConnectionProfileService profileService,
-            JdbcConnectionFactory connectionFactory) {
+            JdbcConnectionFactory connectionFactory,
+            MdaMetadataCache metadataCache) {
         // 配置服务负责从已保存或临时参数形成运行期连接定义。
         this.profileService = profileService;
         // 连接工厂负责按定义打开目标数据库连接。
         this.connectionFactory = connectionFactory;
+        // 缓存只复用元数据结果，真实连接仍由连接池按请求借出和归还。
+        this.metadataCache = metadataCache;
     }
 
     @Override
     public CommonResult getTree(CommonParam queryIn) {
         MdaConnectionDefinition definition = profileService.loadDefinition(queryIn);
+        Object cached = metadataCache.get(definition).orElse(null);
+        if (cached != null) {
+            return success(cached, "数据库结构读取完成（缓存）。");
+        }
         try (Connection connection = connectionFactory.open(definition)) {
             DatabaseMetaData metadata = connection.getMetaData();
             List<String> catalogs = readCatalogs(metadata, connection.getCatalog());
@@ -62,6 +71,7 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
             data.put("nodes", catalogNodes);
             data.put("tableCount", tableCounter[0]);
             data.put("truncated", tableCounter[0] >= MAX_TABLES);
+            metadataCache.put(definition, data);
             return success(data, "数据库结构读取完成。");
         } catch (SQLException exception) {
             throw new IllegalArgumentException("数据库结构读取失败：" + exception.getMessage(), exception);

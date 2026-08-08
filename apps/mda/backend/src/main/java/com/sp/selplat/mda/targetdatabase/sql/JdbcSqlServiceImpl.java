@@ -1,10 +1,11 @@
-package com.sp.selplat.mda.sql;
+package com.sp.selplat.mda.targetdatabase.sql;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
-import com.sp.selplat.mda.common.jdbc.JdbcConnectionFactory;
-import com.sp.selplat.mda.common.jdbc.MdaConnectionDefinition;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.JdbcConnectionFactory;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.MdaConnectionDefinition;
 import com.sp.selplat.mda.connectionprofile.service.MdaConnectionProfileService;
+import com.sp.selplat.mda.targetdatabase.metadata.MdaMetadataCache;
 import java.io.InputStream;
 import java.io.Reader;
 import java.sql.Blob;
@@ -35,18 +36,25 @@ public class JdbcSqlServiceImpl implements JdbcSqlService {
     private static final int MAX_LOB_CHARS = 1_000_000;
     private final MdaConnectionProfileService profileService;
     private final JdbcConnectionFactory connectionFactory;
+    private final MdaMetadataCache metadataCache;
 
     /**
      * 创建使用连接配置服务和动态连接工厂的 SQL 执行服务。
      *
      * @param profileService Spring 注入的连接配置服务，例如 {@code MdaConnectionProfileServiceImpl}
      * @param connectionFactory Spring 注入的目标库连接工厂，例如 {@code JdbcConnectionFactory}
+     * @param metadataCache 目标库结构短缓存；SQL 成功后用于清除可能过期的表结构
      */
-    public JdbcSqlServiceImpl(MdaConnectionProfileService profileService, JdbcConnectionFactory connectionFactory) {
+    public JdbcSqlServiceImpl(
+            MdaConnectionProfileService profileService,
+            JdbcConnectionFactory connectionFactory,
+            MdaMetadataCache metadataCache) {
         // 配置服务负责加载已保存连接或采用页面临时连接字段。
         this.profileService = profileService;
         // 连接工厂负责打开不会污染 MDA 配置库事务的目标库连接。
         this.connectionFactory = connectionFactory;
+        // SQL 可能包含 DDL，因此任何成功执行都清除当前目标连接的结构缓存。
+        this.metadataCache = metadataCache;
     }
 
     @Override
@@ -69,6 +77,7 @@ public class JdbcSqlServiceImpl implements JdbcSqlService {
                 data.put("elapsedMs", elapsedMillis(startedAt));
                 data.put("autoCommit", autoCommit);
                 data.put("maxRows", maxRows);
+                metadataCache.invalidate(definition);
                 return success(data, "SQL 执行完成。");
             } catch (SQLException exception) {
                 if (!autoCommit) {

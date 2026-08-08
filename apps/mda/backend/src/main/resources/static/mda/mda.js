@@ -89,7 +89,8 @@
             ? mdaState.columns.map((column) => Object.freeze({ id: column.name, field: column.name, label: column.label, renderer: "text" }))
             : [Object.freeze({ id: "empty", field: "message", label: "查询提示", renderer: "text" })];
         return Object.freeze({
-            grid: Object.freeze({ mode: "records", idField: "_row", typeField: "_connectionId", statusField: "_status", searchFields: Object.freeze(mdaState.columns.map((column) => column.name)) }),
+            // 数据库字段数量不固定；显式启用公共宽表模式，列宽总和超出结果区时只在表格内部水平滚动。
+            grid: Object.freeze({ mode: "records", horizontalScroll: true, defaultColumnWidth: 150, idField: "_row", typeField: "_connectionId", statusField: "_status", searchFields: Object.freeze(mdaState.columns.map((column) => column.name)) }),
             data: Object.freeze({ items: Object.freeze(dataItems), selectedIds: Object.freeze([]) }),
             column: Object.freeze({ gridId: mdaGridId, ariaLabel: "数据库查询结果", emptyText: "选择左侧数据表即可查询前 1000 行", items: Object.freeze(columnItems) }),
             title: Object.freeze({
@@ -264,12 +265,8 @@
     }
 
     async function mdaMountApplication() {
-        const [connectionPage, windowMessages] = await Promise.all([
-            mdaAjax.json({ url: `${mdaApi.connections}getStore.htm` }),
-            mdaAjax.json({ url: "/sel/components/window/i18n/zh-CN.json?v=20260807-mda-1" })
-        ]);
-        mdaState.connections = connectionPage.records || [];
-        mdaState.selectedConnection = mdaState.connections[0] || null;
+        // 窗口文案是本地静态资源；先用空连接状态挂载完整工作台，不让控制库请求阻塞首屏。
+        const windowMessages = await mdaAjax.json({ url: "/sel/components/window/i18n/zh-CN.json?v=20260807-mda-1" });
         const payload = mdaBuildPayload();
         const panelRoot = window.selPanel.create(mdaApplicationHost, { gridId: mdaGridId, sourceId: mdaGridId, entity: "MdaQueryResult", view: "database", layout: "single", structure: mdaLayout, ariaLabel: payload.title.ariaLabel });
         if (!panelRoot || !window.selPanel.mount(panelRoot, { view: payload, expandLeftLabel: payload.title.messages.expandLeftRegion, collapseLeftLabel: payload.title.messages.collapseLeftRegion })) throw new Error("MDA 公共面板挂载失败。");
@@ -362,7 +359,12 @@
             const connection = mdaState.connections.find((item) => String(item.id) === connectionSelect.value);
             if (connection) await mdaLoadMetadata(connection);
         });
-        if (mdaState.selectedConnection) await mdaLoadMetadata(mdaState.selectedConnection);
+        // 公共面板和全部交互已经可用后，再异步加载控制库配置及当前目标库元数据。
+        try {
+            await mdaReloadConnections();
+        } catch (error) {
+            console.error("MDA 连接配置加载失败。", error);
+        }
     }
 
     const backgroundController = window.selPageBackground.mount(mdaBackgroundHost, { defaults: Object.freeze({ theme: "solid-dark", overlay: 0, brightness: 100, blur: 0 }) });

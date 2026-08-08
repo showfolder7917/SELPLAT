@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 当前稳定用户必须通过动态解析的独立递归索引完整登记八个用户逻辑 ID。
+     * 当前稳定用户必须通过动态解析的独立递归索引完整登记九个用户逻辑 ID。
      */
     @Test
     void shouldValidateCompleteActiveUserIndexTree() throws IOException {
@@ -21,7 +21,7 @@ class ActiveUserRuleOverrideIntegrationTest {
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
         assertEquals(9, validation.indexCount());
-        assertEquals(8, validation.ruleCount());
+        assertEquals(9, validation.ruleCount());
     }
 
     /**
@@ -52,6 +52,25 @@ class ActiveUserRuleOverrideIntegrationTest {
     }
 
     /**
+     * 验证 SELPLAT 公共表格规则能从当前用户通用索引命中，并固定真实溢出自动启用的默认边界。
+     * 真实传参示例：逻辑 ID 为 {@code SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES}，作用域为 {@code selplat}。
+     * 真实返回示例：加载结果路径为 {@code selplat/通用/rule/RUL_SELPLAT表格横向滚动默认规则.md}，正文包含自动溢出声明。
+     * 异常或副作用示例：索引缺失、路径逃逸或正文缺少默认声明时抛出 {@link IOException} 或断言失败，不修改规则文件。
+     */
+    @Test
+    void shouldLoadGridHorizontalScrollDefaultRuleFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES",
+            "selplat",
+            "selplat/通用/rule/RUL_SELPLAT表格横向滚动默认规则.md",
+            "selgrid_horizontal_scrollbar_activation = automatic_when_scroll_width_exceeds_client_width"
+        );
+        assertTrue(rule.content().contains(
+            "selgrid_explicit_horizontal_scroll_option_boundary = wide_column_layout_only_not_scrollbar_visibility"
+        ));
+    }
+
+    /**
      * SELPLAT 基础 DAO 必须从当前用户规则中命中项目数据源上下文约束。
      */
     @Test
@@ -70,6 +89,12 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "table_definition_resolution = reference_data_configuration_when_present_otherwise_project_metadata"
+        ));
+        assertTrue(rule.content().contains(
+            "business_service_interface_contract = inherit_standard_base_service_signatures_and_declare_real_extensions_only"
+        ));
+        assertTrue(rule.content().contains(
+            "business_service_redundant_wrapper_policy = remove_unused_long_id_no_arg_paging_and_super_only_wrappers"
         ));
     }
 

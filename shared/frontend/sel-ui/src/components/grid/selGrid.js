@@ -54,6 +54,61 @@
             );
         }
 
+        /**
+         * 解析宽表模式的列像素宽度。
+         * @param {object} selGridColumnData - column.items 中的单列定义。
+         * @returns {number} 用于 col 宽度和表格最小宽度计算的正整数像素值。
+         * @example grid.defaultColumnWidth 为 150 且列未声明 width 时返回 150。
+         */
+        function selGridResolveWideColumnWidth(selGridColumnData) {
+            // 数字和 px 字符串是宽表模式可精确累计的稳定列宽格式。
+            const selGridDeclaredWidth = typeof selGridColumnData.width === "number"
+                ? selGridColumnData.width
+                : Number.parseFloat(String(selGridColumnData.width || "").match(/^([0-9]+(?:\.[0-9]+)?)px$/i)?.[1]);
+            // 未声明精确列宽时使用实例配置；无效配置回退到适合数据表的 150px。
+            const selGridDefaultWidth = Number(selGridRecordOptions.defaultColumnWidth) || 150;
+            // 公共组件限制极端输入，避免单列过窄不可读或异常撑大页面。
+            return Math.round(Math.min(480, Math.max(96, selGridDeclaredWidth || selGridDefaultWidth)));
+        }
+
+        // 横向溢出状态在动画帧内合并测量，避免列、数据和面板尺寸连续变化时重复触发布局计算。
+        let selGridHorizontalOverflowFrame = 0;
+
+        /**
+         * 根据滚动视口的真实尺寸同步横向滚动条增强状态。
+         * @returns {boolean} 当前 selGrid 是否存在需要用户横向浏览的内容。
+         * @example scrollWidth 为 1080 且 clientWidth 为 900 时返回 true 并显示完整横向轨道。
+         */
+        function selGridSyncHorizontalOverflowState() {
+            // 每个实例只测量自身中央表格视口，不读取页面或其他表格的尺寸。
+            const selGridTableScroller = selGridRoot.querySelector(".selgrid-table-scroller");
+            // 页面骨架缺少滚动视口时安全退出，不创建悬空状态。
+            if (!selGridTableScroller) {
+                return false;
+            }
+            // 容许一像素布局舍入误差，只有真实超宽时才展示可发现的完整轨道。
+            const selGridHasHorizontalOverflow = selGridTableScroller.scrollWidth > selGridTableScroller.clientWidth + 1;
+            // 增强状态由公共组件自动管理，业务应用无需再声明滚动条配置。
+            selGridTableScroller.classList.toggle("selgrid-table-scroller-horizontal-scroll", selGridHasHorizontalOverflow);
+            // 返回测量结果便于回归检查和后续内部复用。
+            return selGridHasHorizontalOverflow;
+        }
+
+        // 把本轮多次变化收敛到浏览器完成布局后的单次真实溢出判断。
+        function selGridScheduleHorizontalOverflowSync() {
+            // 新变化到来时取消尚未执行的旧测量，只保留最新布局状态。
+            if (selGridHorizontalOverflowFrame) {
+                window.cancelAnimationFrame(selGridHorizontalOverflowFrame);
+            }
+            // 下一动画帧已经包含本轮 DOM、列宽与容器尺寸更新。
+            selGridHorizontalOverflowFrame = window.requestAnimationFrame(() => {
+                // 帧开始后清空句柄，允许后续变化继续安排新测量。
+                selGridHorizontalOverflowFrame = 0;
+                // 使用最终布局尺寸切换默认横向滚动反馈。
+                selGridSyncHorizontalOverflowState();
+            });
+        }
+
         // 根据 column JSON 生成表头，使列名和排序说明不再写死在 HTML。
         function selGridRenderColumnHeader() {
             // 当前实例表格节点用于同步可访问名称。
@@ -68,14 +123,27 @@
             }
             // 表格可访问名称来自当前语言 column JSON。
             selGridTable.setAttribute("aria-label", selGridInputPayload.column.ariaLabel);
+            // 宽表能力必须由应用 payload 显式开启，已有表格继续保持原布局。
+            const selGridHorizontalScroll = selGridRecordMode && selGridRecordOptions.horizontalScroll === true;
+            // 状态类让 CSS 只约束宽表记录的截断方式，不改变项目型表格样式。
+            selGridTable.classList.toggle("selgrid-table-horizontal-scroll", selGridHorizontalScroll);
+            // 宽表按所有列宽总和产生内部溢出；关闭时恢复基础样式的默认最小宽度。
+            const selGridWideTableWidth = selGridHorizontalScroll
+                ? selGridInputPayload.column.items.reduce((selGridWidth, selGridColumnData) => selGridWidth + selGridResolveWideColumnWidth(selGridColumnData), 0)
+                : 0;
+            selGridTable.style.minWidth = selGridHorizontalScroll ? `${Math.max(930, selGridWideTableWidth)}px` : "";
             // 列宽节点严格按后端列顺序生成。
             const selGridColumns = selGridInputPayload.column.items.map((selGridColumnData) => {
                 // col 只承载稳定样式类，不包含业务文字。
                 const selGridColumn = document.createElement("col");
                 // className 由基础控件公开列样式白名单提供。
                 selGridColumn.className = selGridColumnData.className;
-                // 通用记录列允许通过标准百分比或像素宽度控制布局，不要求应用选择组件内部类。
-                if (selGridRecordMode && selGridColumnData.width) selGridColumn.style.width = String(selGridColumnData.width);
+                // 宽表统一使用可累计像素宽度；普通记录表继续兼容已有百分比或像素宽度配置。
+                if (selGridHorizontalScroll) {
+                    selGridColumn.style.width = `${selGridResolveWideColumnWidth(selGridColumnData)}px`;
+                } else if (selGridRecordMode && selGridColumnData.width) {
+                    selGridColumn.style.width = String(selGridColumnData.width);
+                }
                 // 返回列节点供一次替换。
                 return selGridColumn;
             });
@@ -143,6 +211,8 @@
             if (selGridEmptyText) {
                 selGridEmptyText.textContent = selGridInputPayload.column.emptyText;
             }
+            // 表头和列宽完成替换后重新测量，滚动条增强状态不依赖业务宽表开关。
+            selGridScheduleHorizontalOverflowSync();
         }
 
         // 根据当前总页数和页码生成紧凑的可见页码，数据量及每页条数变化时无需依赖静态页码数组。
@@ -300,6 +370,18 @@
         return null;
     }
 
+    // 面板缩放、侧栏折叠和浏览器尺寸变化都可能改变中央视口的真实溢出状态。
+    const selGridHorizontalOverflowObserver = typeof window.ResizeObserver === "function" && selGridView.tableScroller
+        ? new window.ResizeObserver(() => selGridScheduleHorizontalOverflowSync())
+        : null;
+    // 观察滚动视口可覆盖应用布局变化，无需每个调用方另行绑定折叠事件。
+    selGridHorizontalOverflowObserver?.observe(selGridView.tableScroller);
+    // 观察表格本体可覆盖运行时语言或列定义改变造成的内容宽度变化。
+    const selGridObservedTable = selGridRoot.querySelector('[data-sel-grid-role="table"]');
+    if (selGridHorizontalOverflowObserver && selGridObservedTable) {
+        selGridHorizontalOverflowObserver.observe(selGridObservedTable);
+    }
+
     // 记录 Toast 关闭计时器，连续操作时始终以最新提示为准。
     let selGridToastTimer = 0;
 
@@ -426,6 +508,8 @@
             ? String(selGridRawValue).replace("T", " ").slice(0, 16)
             : String(selGridRawValue ?? "—") || "—";
         selGridCell.textContent = selGridDisplayValue;
+        // 宽表截断后仍可通过原生悬浮提示查看完整字段值。
+        if (selGridRecordOptions.horizontalScroll === true && selGridDisplayValue !== "—") selGridCell.title = selGridDisplayValue;
         if (selGridColumn.nowrap || selGridRenderer === "time") selGridCell.classList.add("selgrid-record-nowrap");
         return selGridCell;
     }
@@ -741,6 +825,8 @@
             // 筛选或分页隐藏目标行时不强行移动焦点，避免焦点落入不可见内容。
             focusedRow?.focus({ preventScroll: true });
         }
+        // 数据刷新完成后按最终表格尺寸重算，所有 selGrid 默认获得一致的横向滚动反馈。
+        selGridScheduleHorizontalOverflowSync();
     }
 
     // 选择状态只原位同步当前页已存在的行，避免点击后重建所有单元格、头像和操作按钮。

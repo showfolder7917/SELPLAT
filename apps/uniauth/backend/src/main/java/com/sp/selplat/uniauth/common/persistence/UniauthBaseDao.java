@@ -17,7 +17,7 @@ public abstract class UniauthBaseDao extends BaseDaoImpl {
     /**
      * 注入 Uniauth 模块声明的数据源上下文。
      *
-     * @param context Uniauth 数据源上下文，例如绑定 {@code selplat_uniauth} H2 数据库的上下文
+     * @param context Uniauth 数据源上下文，例如绑定 {@code apps/uniauth/db/uniauth.mv.db} 的上下文
      * 执行结果示例：所有 Uniauth DAO 的元数据、查询与写入均使用同一个数据库连接体系。
      */
     @Autowired

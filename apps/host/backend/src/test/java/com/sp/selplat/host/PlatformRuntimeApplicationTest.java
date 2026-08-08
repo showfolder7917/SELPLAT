@@ -15,7 +15,11 @@ import org.springframework.test.web.servlet.MockMvc;
  * 验证 platform-runtime 可以启动并真实装配 reference-data 查询 Service。
  */
 @SpringBootTest(properties = {
-    "reference-data.datasource.url=jdbc:h2:mem:reference_data_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+    "reference-data.datasource.url=jdbc:h2:mem:reference_data_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+    "uniauth.datasource.jdbc-url=jdbc:h2:mem:selplat_uniauth_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+    "uniauth.datasource.password=",
+    "mda.control.datasource.jdbc-url=jdbc:h2:mem:selplat_mda_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+    "mda.control.datasource.password="
 })
 @AutoConfigureMockMvc
 class PlatformRuntimeApplicationTest {
@@ -46,12 +50,22 @@ class PlatformRuntimeApplicationTest {
         // 公共运行时必须来自 sel-ui 依赖 JAR，而不是 Host 或 Uniauth 的复制目录。
         mockMvc.perform(get("/sel/core/selBaseRuntime.js"))
                 .andExpect(status().isOk());
+        // 公共表格按显式配置提供宽表能力，默认实例不会被强制切换布局。
+        mockMvc.perform(get("/sel/components/grid/selGrid.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("selgrid-table-horizontal-scroll")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("horizontalScroll === true")));
         // Uniauth 页面由同一个 Host Web 容器发布，浏览器无需跨端口访问。
         mockMvc.perform(get("/uniauth/uniauth.html"))
                 .andExpect(status().isOk());
         // reference-data 管理后台同样由统一 Host 发布，不增加第二个前端端口。
         mockMvc.perform(get("/reference-data/reference-data.html"))
                 .andExpect(status().isOk());
+        // MDA 由应用 payload 主动启用宽表和默认列宽，字段较多时允许在结果区内水平滚动。
+        mockMvc.perform(get("/mda/mda.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("horizontalScroll: true")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("defaultColumnWidth: 150")));
         // Host 桌面只提供工程入口，不复制任何业务页面。
         mockMvc.perform(get("/desktop/desktop.html"))
                 .andExpect(status().isOk())

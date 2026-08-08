@@ -8,13 +8,15 @@ import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.mda.connectionprofile.dao.MdaConnectionProfileDao;
-import com.sp.selplat.mda.common.jdbc.JdbcConnectionFactory;
-import com.sp.selplat.mda.common.jdbc.MdaConnectionDefinition;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.JdbcConnectionFactory;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.MdaConnectionDefinition;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -40,18 +42,6 @@ public class MdaConnectionProfileServiceImpl
     }
 
     /**
-     * 兼容页面无分页参数的连接列表入口。
-     *
-     * @return 全部有效连接，按 sortnum、id 正序排列
-     */
-    @Override
-    public CommonPageResult getStore() {
-        CommonPageParam queryIn = new CommonPageParam();
-        queryIn.setPageSize(1000);
-        return getStore(queryIn);
-    }
-
-    /**
      * 查询有效连接并保持连接选择器的稳定排序。
      *
      * @param queryIn 页面分页和筛选参数
@@ -66,11 +56,6 @@ public class MdaConnectionProfileServiceImpl
                 "sortnum asc id asc",
                 requiredQuery.getPageNo(),
                 requiredQuery.getPageSize());
-    }
-
-    @Override
-    public CommonResult getById(long id) {
-        return super.getById(idParam(id));
     }
 
     /**
@@ -94,7 +79,7 @@ public class MdaConnectionProfileServiceImpl
      * @return 批量新增结果
      */
     @Override
-    @Transactional
+    @Transactional("mdaTransactionManager")
     public CommonResult insertBatch(CommonBatchParam saveIn) {
         if (saveIn == null) {
             throw new CommonBusinessException("MDA_CONNECTION_REQUIRED", "连接参数不能为空。");
@@ -104,12 +89,6 @@ public class MdaConnectionProfileServiceImpl
         }
         int affectedRows = getDao().insertBatch(saveIn);
         return buildSuccessResult(saveIn.getItems(), affectedRows, "连接批量新增完成。");
-    }
-
-    @Override
-    public CommonResult update(long id, CommonParam saveIn) {
-        saveIn.putParam("id", id);
-        return update(saveIn);
     }
 
     /**
@@ -122,11 +101,15 @@ public class MdaConnectionProfileServiceImpl
     public CommonResult update(CommonParam saveIn) {
         long id = requiredId(saveIn == null ? null : saveIn.getParam("id"));
         Map<String, Object> current = requiredRecord(id);
+        MdaConnectionDefinition previousDefinition = definition(current);
         CommonParam normalized = normalize(saveIn, current);
         normalized.putParam("id", id);
         normalized.putParam("lastOperateUserId", valueOrDefault(saveIn.getParam("lastOperateUserId"), 1L));
         normalized.putParam("updatedAt", LocalDateTime.now());
-        return super.update(normalized);
+        CommonResult result = super.update(normalized);
+        // 更新成功后立即关闭旧 URL、账号或口令对应的池，下一次请求只能使用新配置。
+        connectionFactory.invalidate(previousDefinition);
+        return result;
     }
 
     /**
@@ -136,43 +119,49 @@ public class MdaConnectionProfileServiceImpl
      * @return 公共批量更新结果
      */
     @Override
-    @Transactional
+    @Transactional("mdaTransactionManager")
     public CommonResult updateBatch(CommonBatchParam saveIn) {
         if (saveIn == null) {
             throw new CommonBusinessException("MDA_CONNECTION_REQUIRED", "连接参数不能为空。");
         }
+        List<MdaConnectionDefinition> previousDefinitions = new ArrayList<>();
         for (CommonParam item : saveIn.getItems()) {
             long id = requiredId(item.getParam("id"));
-            CommonParam normalized = normalize(item, requiredRecord(id));
+            Map<String, Object> current = requiredRecord(id);
+            previousDefinitions.add(definition(current));
+            CommonParam normalized = normalize(item, current);
             normalized.putParam("id", id);
             normalized.putParam("lastOperateUserId", valueOrDefault(item.getParam("lastOperateUserId"), 1L));
             normalized.putParam("updatedAt", LocalDateTime.now());
             item.setParamMap(normalized.getParamMap());
         }
-        return super.updateBatch(saveIn);
-    }
-
-    @Override
-    public CommonResult delete(long id) {
-        return delete(idParam(id));
+        CommonResult result = super.updateBatch(saveIn);
+        previousDefinitions.forEach(connectionFactory::invalidate);
+        return result;
     }
 
     @Override
     public CommonResult delete(CommonParam deleteIn) {
-        requiredRecord(requiredId(deleteIn == null ? null : deleteIn.getParam("id")));
-        return super.delete(deleteIn);
+        Map<String, Object> current = requiredRecord(requiredId(deleteIn == null ? null : deleteIn.getParam("id")));
+        CommonResult result = super.delete(deleteIn);
+        // 假删除完成后关闭对应目标池，页面无法再通过已停用配置继续访问目标库。
+        connectionFactory.invalidate(definition(current));
+        return result;
     }
 
     @Override
-    @Transactional
+    @Transactional("mdaTransactionManager")
     public CommonResult deleteBatch(CommonBatchParam deleteIn) {
         if (deleteIn == null) {
             throw new CommonBusinessException("MDA_CONNECTION_REQUIRED", "连接参数不能为空。");
         }
+        List<MdaConnectionDefinition> previousDefinitions = new ArrayList<>();
         for (CommonParam item : deleteIn.getItems()) {
-            requiredRecord(requiredId(item.getParam("id")));
+            previousDefinitions.add(definition(requiredRecord(requiredId(item.getParam("id")))));
         }
-        return super.deleteBatch(deleteIn);
+        CommonResult result = super.deleteBatch(deleteIn);
+        previousDefinitions.forEach(connectionFactory::invalidate);
+        return result;
     }
 
     @Override
@@ -203,6 +192,10 @@ public class MdaConnectionProfileServiceImpl
         } else {
             throw new CommonBusinessException("MDA_CONNECTION_REQUIRED", "连接参数不能为空。");
         }
+        return definition(source);
+    }
+
+    private MdaConnectionDefinition definition(Map<String, Object> source) {
         return new MdaConnectionDefinition(
                 text(source.get("databaseType")), text(source.get("host")), integer(source.get("port")),
                 text(source.get("databaseName")), text(source.get("schemaName")), text(source.get("username")),

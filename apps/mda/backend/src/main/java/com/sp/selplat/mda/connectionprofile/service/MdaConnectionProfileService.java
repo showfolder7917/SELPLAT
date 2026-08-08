@@ -1,47 +1,14 @@
 package com.sp.selplat.mda.connectionprofile.service;
 
 import com.sp.selplat.common.service.BaseService;
-import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
-import com.sp.selplat.mda.common.jdbc.MdaConnectionDefinition;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.MdaConnectionDefinition;
 
 /**
  * 声明 MDA 固定连接配置表的公共 CRUD，以及动态目标库连接所需的业务动作。
  */
 public interface MdaConnectionProfileService extends BaseService {
-
-    /**
-     * 兼容现有页面查询全部有效连接。
-     *
-     * @return 有效连接分页结果，例如 {@code {"records":[{"id":1}],"totalCount":1}}
-     */
-    CommonPageResult getStore();
-
-    /**
-     * 兼容现有页面按路径主键查询连接详情。
-     *
-     * @param id MdaConnectionProfile 主键，例如 {@code 1}
-     * @return 连接详情公共结果
-     */
-    CommonResult getById(long id);
-
-    /**
-     * 兼容现有页面按路径主键更新连接配置。
-     *
-     * @param id MdaConnectionProfile 主键，例如 {@code 1}
-     * @param saveIn 最新连接字段
-     * @return 更新后的公共结果
-     */
-    CommonResult update(long id, CommonParam saveIn);
-
-    /**
-     * 兼容现有页面按路径主键假删除连接配置。
-     *
-     * @param id MdaConnectionProfile 主键，例如 {@code 1}
-     * @return 假删除公共结果
-     */
-    CommonResult delete(long id);
 
     /**
      * 使用已保存配置或页面临时字段测试目标数据库连接。

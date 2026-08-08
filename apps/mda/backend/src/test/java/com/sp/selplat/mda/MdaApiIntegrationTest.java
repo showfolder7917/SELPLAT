@@ -8,19 +8,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sp.selplat.mda.common.persistence.MdaDatabase;
+import com.sp.selplat.mda.targetdatabase.common.jdbc.JdbcConnectionFactory;
+import com.zaxxer.hikari.HikariDataSource;
 import java.util.Map;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 使用真实 H2 控制库和动态目标库验证页面依赖的完整 API 主流程。
@@ -33,12 +36,15 @@ class MdaApiIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
-    @Autowired private MdaDatabase database;
+    @Autowired @Qualifier("mdaControlJdbcTemplate") private JdbcTemplate controlJdbc;
+    @Autowired @Qualifier("mdaControlDataSource") private HikariDataSource controlDataSource;
+    @Autowired private JdbcConnectionFactory connectionFactory;
     private static long targetConnectionId;
 
     @Test
     @Order(1)
     void shouldStartWithoutDefaultWorkspaceAndCreateDynamicConnection() throws Exception {
+        assertThat(controlDataSource.getPoolName()).isEqualTo("MdaControlPool");
         mockMvc.perform(get("/api/mda/connections/getStore.htm"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalCount").value(0));
@@ -79,7 +85,7 @@ class MdaApiIntegrationTest {
                 .andReturn();
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
         long id = response.path("data").path("id").asLong();
-        String password = database.controlJdbc().queryForObject(
+        String password = controlJdbc.queryForObject(
                 "SELECT password FROM MdaConnectionProfile WHERE id = ?", String.class, id);
         assertThat(password).isEqualTo("plain-secret");
 
@@ -119,6 +125,25 @@ class MdaApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
         assertThat(metadata.getResponse().getContentAsString()).containsIgnoringCase("MdaRawSqlCase");
+
+        mockMvc.perform(post("/api/mda/metadata/tree.htm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"connectionId\":" + targetConnectionId + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("数据库结构读取完成（缓存）。"));
+
+        execute("CREATE TABLE MdaCacheInvalidationCase(id INT PRIMARY KEY)")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+        MvcResult refreshedMetadata = mockMvc.perform(post("/api/mda/metadata/tree.htm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"connectionId\":" + targetConnectionId + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("数据库结构读取完成。"))
+                .andReturn();
+        assertThat(refreshedMetadata.getResponse().getContentAsString())
+                .containsIgnoringCase("MdaCacheInvalidationCase");
+        assertThat(connectionFactory.activePoolCount()).isEqualTo(1);
     }
 
     @Test
@@ -142,6 +167,26 @@ class MdaApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.source").value("DEFAULT_METADATA"))
                 .andExpect(jsonPath("$.data.columns.connectionName.columnName").value("connectionName"));
+    }
+
+    @Test
+    @Order(7)
+    void shouldCloseOldTargetPoolAfterConnectionUpdate() throws Exception {
+        assertThat(connectionFactory.activePoolCount()).isEqualTo(1);
+        String body = objectMapper.writeValueAsString(Map.of(
+                "id", targetConnectionId,
+                "connectionName", "动态目标库",
+                "databaseType", "H2",
+                "databaseName", "mem:mda_dynamic_target;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+                "schemaName", "PUBLIC",
+                "username", "sa",
+                "password", "",
+                "sortnum", 10));
+        mockMvc.perform(post("/api/mda/connections/update.htm")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+        assertThat(connectionFactory.activePoolCount()).isZero();
     }
 
     private org.springframework.test.web.servlet.ResultActions execute(String sql) throws Exception {

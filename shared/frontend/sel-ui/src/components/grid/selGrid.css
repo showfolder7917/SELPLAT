@@ -55,8 +55,11 @@
     position: relative;
     z-index: 2;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     height: 100%;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: auto;
     overscroll-behavior: contain;
     border-radius: var(--sel-theme-grid-radius-content);
     scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
@@ -92,12 +95,64 @@
     background: var(--sel-theme-scrollbar-track);
 }
 
+/* 横向溢出状态：由 selGrid 自动测量，使用已有页面级尺寸令牌扩大操作热区。 */
+.selgrid-table-scroller.selgrid-table-scroller-horizontal-scroll {
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: auto;
+}
+
+/* 覆盖式系统滚动条可能隐藏空轨道；溢出表格外框补充完整主题轨道，使静止画面也明确表达可横向拖动。 */
+.selgrid-board-shell:has(.selgrid-table-scroller-horizontal-scroll)::before {
+    z-index: 1;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: block;
+    height: var(--sel-theme-scrollbar-size-page);
+    border-top: 1px solid color-mix(in srgb, var(--sel-theme-scrollbar-thumb) 34%, transparent);
+    border-radius: var(--sel-theme-scrollbar-radius);
+    background: var(--sel-theme-scrollbar-track);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sel-theme-scrollbar-thumb) 22%, transparent);
+}
+
+.selgrid-table-scroller.selgrid-table-scroller-horizontal-scroll::-webkit-scrollbar:horizontal {
+    height: var(--sel-theme-scrollbar-size-page);
+}
+
+.selgrid-table-scroller.selgrid-table-scroller-horizontal-scroll::-webkit-scrollbar-track:horizontal {
+    background: var(--sel-theme-scrollbar-track);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sel-theme-scrollbar-thumb) 22%, transparent);
+}
+
+.selgrid-table-scroller.selgrid-table-scroller-horizontal-scroll::-webkit-scrollbar-thumb:horizontal {
+    border: 0;
+    background: var(--sel-theme-scrollbar-thumb);
+    box-shadow: var(--sel-theme-scrollbar-glow);
+}
+
+.selgrid-table-scroller.selgrid-table-scroller-horizontal-scroll::-webkit-scrollbar-thumb:horizontal:hover {
+    background: var(--sel-theme-scrollbar-thumb-hover);
+}
+
+.selgrid-table-scroller.selgrid-table-scroller-horizontal-scroll::-webkit-scrollbar-thumb:horizontal:active {
+    background: var(--sel-theme-scrollbar-thumb-active);
+}
+
 .selgrid-table {
     width: 100%;
     min-width: 930px;
     border-spacing: 0 var(--sel-theme-grid-row-gap);
     table-layout: fixed;
     border-collapse: separate;
+}
+
+/* 宽表模式：仅由 records payload 显式开启，列宽总和超出中央视口时在组件内部水平滚动。 */
+.selgrid-table.selgrid-table-horizontal-scroll th,
+.selgrid-table.selgrid-table-horizontal-scroll td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* 表格列宽：固定各业务列占比，保证项目名称、进度和操作区按设计稿排列。 */
@@ -626,10 +681,6 @@
 
 /* 窄屏适配：在不改变表格业务列结构的前提下压缩间距和字号。 */
 @media (max-width: 1280px) {
-    .selgrid-board-shell {
-        min-width: 900px;
-    }
-
     .selgrid-table th,
     .selgrid-table td {
         padding-right: 12px;

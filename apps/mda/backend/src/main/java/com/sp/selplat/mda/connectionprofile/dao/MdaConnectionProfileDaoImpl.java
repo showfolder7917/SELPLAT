@@ -2,12 +2,12 @@ package com.sp.selplat.mda.connectionprofile.dao;
 
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.mda.common.persistence.MdaBaseDao;
-import com.sp.selplat.mda.common.persistence.MdaDatabase;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -19,8 +19,15 @@ public class MdaConnectionProfileDaoImpl extends MdaBaseDao implements MdaConnec
 
     private final JdbcTemplate jdbc;
 
-    public MdaConnectionProfileDaoImpl(MdaDatabase database) {
-        this.jdbc = database.controlJdbc();
+    /**
+     * 绑定 MDA 控制库的 JDBC 模板。
+     *
+     * @param jdbcTemplate 只访问 {@code MdaConnectionProfile} 的模板，例如 Bean 名
+     *     {@code mdaControlJdbcTemplate}
+     */
+    public MdaConnectionProfileDaoImpl(
+            @Qualifier("mdaControlJdbcTemplate") JdbcTemplate jdbcTemplate) {
+        this.jdbc = jdbcTemplate;
     }
 
     @Override

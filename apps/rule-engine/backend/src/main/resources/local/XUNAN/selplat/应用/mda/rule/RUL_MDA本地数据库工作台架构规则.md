@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由 MDA 应用脚本和浏览器回归承载。 -->
 node_ability_refs = none
-<!-- 首版固定用户确认的单控制库、动态目标连接和本地明文口令边界。 -->
-rule_version = 1.0.0
+<!-- 1.8.0 将滚动条反馈交给 selGrid 通用默认规则，MDA 只保留动态宽表布局声明。 -->
+rule_version = 1.8.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已经进入当前用户索引并完成实现回归。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自用户对双数据库和连接配置职责的纠正。 -->
-upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构
+upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为
 
 ## 数据库边界
 
@@ -30,8 +30,18 @@ mda_retired_workspace_disposition = recoverable_backup_or_explicit_user_deletion
 
 ## 连接与口令边界
 
-<!-- 树、元数据和 SQL 必须使用当前连接配置按请求建立目标库连接。 -->
-mda_target_connection_lifecycle = load_selected_profile_open_per_request_close_after_request
+<!-- 树、元数据和 SQL 必须使用当前连接配置取得目标库连接；关闭请求连接只归还连接池，不得每次重新创建物理连接。 -->
+mda_target_connection_lifecycle = load_selected_profile_borrow_from_reusable_pool_return_after_request
+<!-- 每份目标库配置拥有独立的小型连接池；不同配置、控制库和宿主主数据源禁止共用连接池。 -->
+mda_target_pool_scope = one_isolated_pool_per_effective_connection_definition
+<!-- 目标连接池长时间没有借出连接且当前没有活动连接时必须整体关闭并从注册表移除。 -->
+mda_target_pool_idle_disposal = close_and_remove_pool_after_configured_idle_timeout_when_no_active_connection
+<!-- 更新或删除连接配置后必须立即关闭旧配置对应的连接池，禁止继续复用旧 URL、账号或口令。 -->
+mda_target_pool_profile_change_policy = invalidate_old_pool_after_successful_update_or_delete
+<!-- 应用停止时必须关闭全部目标连接池；关闭浏览器页面不直接控制后端连接生命周期。 -->
+mda_target_pool_shutdown_policy = application_shutdown_closes_all_pools_browser_close_does_not
+<!-- 元数据树允许使用短时内存缓存；SQL 成功执行后必须使当前连接的缓存失效，避免 DDL 后继续展示旧结构。 -->
+mda_metadata_cache_policy = short_lived_in_memory_cache_invalidated_after_successful_sql
 <!-- 当前用户明确 MDA 不上线，因此连接密码按开发工具要求明文保存。 -->
 mda_password_storage = plaintext_for_local_development_only
 <!-- 明文密码必须在连接列表和详情中原样返回，保证页面可以直接编辑和重连。 -->
@@ -47,10 +57,24 @@ mda_sql_authority_boundary = target_database_account_permissions
 mda_base_crud_reuse_boundary = fixed_business_table_only
 <!-- MDA 控制库保持模块私有上下文，不得注册为统一宿主主数据源。 -->
 mda_control_datasource_scope = module_private_not_host_primary
-<!-- 公共 BaseDao 已支持项目上下文；MDA 当前私有 JDBC 控制库 DAO 保持不变，后续迁移必须单独验证动态目标库边界。 -->
-mda_control_dao_policy = explicit_private_jdbc_until_separately_migrated_to_project_context
+<!-- MDA 控制库使用模块私有 Hikari DataSource、JdbcTemplate、事务管理器和 BaseDataSourceContext；禁止回退到逐次 DriverManager 连接。 -->
+mda_control_dao_policy = module_private_hikari_datasource_jdbc_template_transaction_manager_and_base_context
+<!-- 控制库连接池配置由 MDA 资源文件维护，测试必须覆盖到隔离内存库，禁止读写正式 mda.mv.db。 -->
+mda_control_pool_configuration = mda_module_properties_with_isolated_test_override
+<!-- 控制库参数直接绑定 HikariConfig，禁止另建一份带重复默认值的控制库属性类。 -->
+mda_control_pool_binding = official_hikari_config_direct_binding_without_duplicate_custom_properties
 <!-- Controller、Service 和 DAO 职责仍必须分开，数据源隔离不能成为跨层直连的理由。 -->
 mda_layering_required = controller_service_dao
+<!-- MDA 项目 common/config 只保留模块装配入口，BaseDao 与控制库配置统一放入 common/persistence。 -->
+mda_module_configuration_boundary = common_config_contains_module_entry_common_persistence_contains_base_dao_and_control_configuration
+<!-- 所有访问控制库固定表的 DAO 必须继承 MdaBaseDao；不得由业务 DAO 重复选择控制数据源。 -->
+mda_control_dao_inheritance = all_fixed_control_table_daos_extend_mda_base_dao
+<!-- 动态目标数据库公共连接能力统一进入 targetdatabase/common，元数据与 SQL 分别保留独立分层。 -->
+mda_target_database_package_boundary = targetdatabase_common_plus_metadata_plus_sql
+<!-- 动态目标数据库能力不得继承绑定控制库的 MdaBaseDao，防止运行时查询误入 mda.mv.db。 -->
+mda_target_database_base_dao_policy = forbidden_to_extend_control_database_mda_base_dao
+<!-- 升级后不保留根级 metadata、根级 sql 或 common/jdbc 兼容包。 -->
+mda_legacy_package_compatibility = forbidden
 
 ## 前端组件
 
@@ -62,6 +86,20 @@ mda_window_capabilities = movable_resizable_minimizable_maximizable
 mda_empty_state_action_policy = show_create_only_until_connection_exists
 <!-- 新增、更新或删除连接后必须刷新连接下拉、当前值、元数据树和统计数字。 -->
 mda_connection_change_refresh_scope = dropdown_selection_metadata_tree_and_counts
+<!-- 页面骨架和公共组件必须先完成挂载，再异步读取连接配置；控制库响应慢时不得阻塞整个工作台首屏。 -->
+mda_initial_render_policy = mount_shared_shell_before_async_connection_profile_loading
+<!-- 动态数据库字段数量不固定；MDA 必须通过 payload 显式启用 selGrid 宽表模式，由表格中央视口独立水平滚动。 -->
+mda_dynamic_result_grid_layout = shared_selgrid_opt_in_horizontal_scroll
+<!-- 宽表列宽由公共契约和应用 payload 声明，禁止在 MDA 页面覆盖 selGrid 内部选择器制造私有滚动实现。 -->
+mda_dynamic_result_column_width_owner = selgrid_payload_default_and_per_column_width
+<!-- 宽表不得扩张外层面板或文档，长值需要截断并保留查看完整值的可访问入口。 -->
+mda_dynamic_result_overflow_boundary = center_grid_viewport_with_ellipsis_and_full_value_title
+<!-- 宽表滚动条在未悬停时也必须有可识别的轨道、滑块对比和足够操作高度，禁止只靠用户猜测页面可横向滚动。 -->
+mda_dynamic_result_horizontal_scrollbar_discoverability = visible_at_rest_with_theme_track_thumb_contrast_and_operable_size
+<!-- 可发现性强化由公共 selGrid 根据真实溢出自动承载，MDA 的 horizontalScroll 只声明宽表列布局。 -->
+mda_dynamic_result_scrollbar_style_owner = shared_selgrid_automatic_overflow_state
+<!-- 横向滚动条必须与同页左树纵向滚动条复用相同的静止滑块、轨道和光晕令牌，只允许操作尺寸和轨道完整性不同。 -->
+mda_dynamic_result_scrollbar_visual_consistency = same_resting_track_thumb_and_glow_tokens_as_tree_scrollbar
 
 ## 规则包组成与验证
 
