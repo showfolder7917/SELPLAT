@@ -55,3 +55,12 @@ load_rule_for_active_user_selplat_multi_project_sequence_datasource_routing = SE
 load_rule_for_active_user_selplat_default_table_definition_or_reference_data_fallback = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 修改表格定义的 Controller、Service、DAO 分层或 resourceCode/viewCode/locale 标识时加载。 -->
 load_rule_for_active_user_selplat_table_definition_controller_service_dao_layering = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
+
+<!-- SELPLAT 新业务工程和可追加业务表统一由 MDA 脚手架生成，并实行无覆盖冲突保护。 -->
+SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT应用脚手架生成规则.md
+<!-- 使用工程名和表名创建 apps 下的新应用时加载，保证完整分层、默认字段和 Host 登记同步生成。 -->
+load_rule_for_active_user_selplat_application_scaffold_creation = SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES
+<!-- 向已由 MDA 生成器拥有的工程追加业务表时加载，保证新表和页面三件套不覆盖既有文件。 -->
+load_rule_for_active_user_selplat_generated_project_table_append = SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES
+<!-- 修改脚手架模板、默认字段、引用数据扩展点、生成页面或冲突策略时加载。 -->
+load_rule_for_active_user_selplat_scaffold_template_defaults_reference_data_or_collision_change = SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES

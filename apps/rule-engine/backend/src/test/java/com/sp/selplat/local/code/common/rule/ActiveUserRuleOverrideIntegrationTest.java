@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 验证当前稳定用户通过九层动态递归索引完整登记十一个用户逻辑 ID。
+     * 验证当前稳定用户通过九层动态递归索引完整登记十二个用户逻辑 ID。
      * 真实传参示例：读取工程根 {@code AGENTS.md} 中的当前稳定用户并递归加载其 {@code RULE_INDEX.md}。
-     * 真实返回示例：索引验证结果为 {@code indexCount=9, ruleCount=11}。
+     * 真实返回示例：索引验证结果为 {@code indexCount=9, ruleCount=12}。
      * 异常或副作用示例：身份、索引或规则路径无效时抛出 {@link IOException}，不修改规则资源。
      */
     @Test
@@ -24,7 +24,35 @@ class ActiveUserRuleOverrideIntegrationTest {
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
         assertEquals(9, validation.indexCount());
-        assertEquals(11, validation.ruleCount());
+        assertEquals(12, validation.ruleCount());
+    }
+
+    /**
+     * 验证 SELPLAT 应用脚手架规则能从当前用户通用索引命中。
+     * 真实传参示例：逻辑 ID 为 {@code SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES}。
+     * 真实返回示例：规则正文包含两个输入、无覆盖策略和 reference-data Provider 登记。
+     * 异常或副作用示例：索引或规则失效时抛出 {@link IOException}，不修改规则资源。
+     */
+    @Test
+    void shouldLoadApplicationScaffoldGeneratorRuleFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES",
+            "selplat",
+            "selplat/通用/rule/RUL_SELPLAT应用脚手架生成规则.md",
+            "selplat_scaffold_required_inputs = projectName,tableName"
+        );
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_existing_target_policy = reject_entire_operation_without_overwrite"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_reference_data_registration = provider(projectCode,resourceCode)"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_controller_service_dependency = interface_only,no_service_impl_import"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_service_architecture_gate = current_mda_contract"
+        ));
     }
 
     /**

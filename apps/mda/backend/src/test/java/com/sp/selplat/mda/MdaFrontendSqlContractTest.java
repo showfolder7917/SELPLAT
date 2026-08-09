@@ -59,4 +59,27 @@ class MdaFrontendSqlContractTest {
                 .contains("当前 SQL 已改变，查询结果只读")
                 .contains("primaryKeys: Object.freeze([...(mdaNode.primaryKeys || [])])");
     }
+
+    /**
+     * 验证标题动作提供创建工程窗口，并把工程名和表名提交到唯一生成接口。
+     * 真实传参示例：读取构建资源中的 {@code static/mda/mda.js}。
+     * 真实返回示例：脚本包含 {@code project-create}、两个字段和
+     * {@code /api/mda/projects/create.htm}。
+     * 异常或副作用示例：资源缺失或窗口契约退化时断言失败，不创建真实工程。
+     *
+     * @throws Exception 页面脚本资源无法读取时抛出
+     */
+    @Test
+    void shouldExposeProjectCreationWindowWithTwoRequiredFields() throws Exception {
+        String script = new ClassPathResource("static/mda/mda.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("projects: \"/api/mda/projects/create.htm\"")
+                .contains("id: \"project-create\", label: \"创建工程\"")
+                .contains("id: \"MdaProjectWindow\"")
+                .contains("name: \"projectName\"")
+                .contains("name: \"tableName\"")
+                .contains("重启平台后访问");
+    }
 }

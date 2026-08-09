@@ -21,6 +21,7 @@
     const mdaTabsId = "MdaDatabaseQueryTabs";
     const mdaApi = Object.freeze({
         connections: "/api/mda/connections/",
+        projects: "/api/mda/projects/create.htm",
         metadata: "/api/mda/metadata/tree.htm",
         execute: "/api/mda/sql/execute.htm",
         updateRow: "/api/mda/data/update-row.htm"
@@ -28,7 +29,8 @@
     const mdaState = {
         connections: [], selectedConnection: null, metadata: [], panelRoot: null,
         treeController: null, tabsController: null, querySessions: new Map(), querySequence: 1,
-        connectionWindowController: null, confirmDialogController: null, editingConnectionId: null,
+        connectionWindowController: null, projectWindowController: null,
+        confirmDialogController: null, editingConnectionId: null,
         rowEditWindows: new Map(), editingRowContext: null, windowMessages: null
     };
 
@@ -128,6 +130,7 @@
                 ]),
                 actions: Object.freeze([
                     Object.freeze({ id: "connection-add", label: "新增连接", icon: "ri-database-2-line", primary: true }),
+                    Object.freeze({ id: "project-create", label: "创建工程", icon: "ri-folder-add-line" }),
                     ...(mdaState.selectedConnection ? [
                         Object.freeze({ id: "connection-edit", label: "编辑连接", icon: "ri-edit-line" }),
                         Object.freeze({ id: "connection-delete", label: "删除连接", icon: "ri-delete-bin-6-line" }),
@@ -588,6 +591,39 @@
         return { connectionName: "", databaseType: "H2", host: "", port: "", databaseName: "", schemaName: "PUBLIC", username: "sa", password: "", customJdbcUrl: "", jdbcParameters: "", defaultAutoCommit: "true", sortnum: "0" };
     }
 
+    // 创建工程窗口固定收集工程名和表名；同一工程再次提交时解释为新增业务表。
+    function mdaBuildProjectWindow() {
+        return Object.freeze({
+            title: "创建工程",
+            subtitle: "首次创建完整工程；已有生成工程则追加一张业务表",
+            closeLabel: "关闭创建工程窗口",
+            cancelLabel: "取消",
+            submitLabel: "创建",
+            validationMessage: "请填写工程名和表名",
+            autoSuccess: false,
+            rows: Object.freeze([
+                Object.freeze([
+                    Object.freeze({
+                        name: "projectName",
+                        label: "工程名",
+                        type: "text",
+                        icon: "ri-folder-3-line",
+                        required: true,
+                        placeholder: "例如：japan"
+                    }),
+                    Object.freeze({
+                        name: "tableName",
+                        label: "表名",
+                        type: "text",
+                        icon: "ri-table-2",
+                        required: true,
+                        placeholder: "例如：region"
+                    })
+                ])
+            ])
+        });
+    }
+
     async function mdaOpenSelectedConnectionEditor() {
         if (!mdaState.selectedConnection) return false;
         const mdaDetail = await mdaAjax.json({ url: `${mdaApi.connections}getById.htm?id=${mdaState.selectedConnection.id}` });
@@ -703,8 +739,9 @@
         const mdaTabsHost = window.selPanel.getComponent(mdaWorkspaceId, "selTabs");
         mdaState.tabsController = window.selTabs.mount(mdaTabsHost, { id: mdaTabsId, ariaLabel: "数据库查询页签", tabListLabel: "已打开的数据库查询", emptyIcon: "ri-terminal-window-line", emptyTitle: "选择数据表开始查询", emptyDescription: "左侧选择表后，将在这里打开 SQL 编辑区和查询结果" });
         mdaState.connectionWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaConnectionWindow", messages: mdaWindowMessages, ...mdaBuildConnectionWindow() });
+        mdaState.projectWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaProjectWindow", messages: mdaWindowMessages, ...mdaBuildProjectWindow() });
         mdaState.confirmDialogController = window.selConfirmDialog.mount(mdaApplicationHost, { id: "MdaDeleteConfirmDialog", title: "删除确认", tone: "danger" });
-        if (!mdaState.treeController || !mdaState.tabsController || !mdaState.connectionWindowController || !mdaState.confirmDialogController) throw new Error("MDA 公共业务组件挂载失败。");
+        if (!mdaState.treeController || !mdaState.tabsController || !mdaState.connectionWindowController || !mdaState.projectWindowController || !mdaState.confirmDialogController) throw new Error("MDA 公共业务组件挂载失败。");
 
         // 面板命令只负责连接窗口和新建查询，SQL 执行由当前页签编辑器自己的动作事件承接。
         mdaState.panelRoot.addEventListener("click", async (mdaEvent) => {
@@ -715,6 +752,11 @@
                 mdaState.connectionWindowController.reset();
                 mdaState.connectionWindowController.setValues(mdaEmptyConnectionValues());
                 mdaState.connectionWindowController.open();
+            }
+            if (mdaCommand === "project-create") {
+                mdaState.projectWindowController.reset();
+                mdaState.projectWindowController.setValues({ projectName: "", tableName: "" });
+                mdaState.projectWindowController.open();
             }
             if (mdaCommand === "connection-edit" && mdaState.selectedConnection) {
                 await mdaOpenSelectedConnectionEditor();
@@ -772,6 +814,26 @@
                     mdaState.connectionWindowController.setFeedback(mdaError.message || "连接配置保存失败。", true);
                 } finally {
                     mdaState.connectionWindowController.setLoading(false);
+                }
+                return;
+            }
+            if (mdaEvent.detail?.id === "MdaProjectWindow") {
+                mdaState.projectWindowController.setLoading(true);
+                try {
+                    const mdaResponse = await mdaAjax.request({
+                        url: mdaApi.projects,
+                        method: "POST",
+                        data: mdaEvent.detail.values
+                    });
+                    const mdaPageUrl = mdaResponse.data?.pageUrl || "";
+                    const mdaMessage = (mdaResponse.msg || "工程创建完成。")
+                        + (mdaPageUrl ? " 重启平台后访问 " + mdaPageUrl : "");
+                    mdaState.projectWindowController.setFeedback(mdaMessage);
+                    mdaBase.toast(mdaMessage, "success");
+                } catch (mdaError) {
+                    mdaState.projectWindowController.setFeedback(mdaError.message || "工程创建失败。", true);
+                } finally {
+                    mdaState.projectWindowController.setLoading(false);
                 }
                 return;
             }

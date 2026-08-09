@@ -6,6 +6,8 @@ plugins {
 group = 'com.sp.selplat.mda'
 
 dependencies {
+    // MDA 独立启动时也发布唯一公共 SEL 组件，保证工作台页面可以直接访问。
+    runtimeOnly project(':shared:frontend:sel-ui')
     implementation project(':shared:backend:common-core')
     implementation project(':shared:backend:common-web')
     implementation project(':shared:backend:common-service')
@@ -24,6 +26,8 @@ dependencies {
         'postgresql-*.jar'
     ])
     testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
+    // 脚手架生成测试编译生成后的 Provider，验证 reference-data 扩展契约真实可用。
+    testImplementation project(':apps:reference-data:backend')
 }
 
 application {
@@ -54,6 +58,7 @@ tasks.named('classes') {
     dependsOn ':shared:backend:common-db:jar'
     dependsOn ':shared:backend:common-service:jar'
     dependsOn ':shared:backend:common-web:jar'
+    dependsOn ':shared:frontend:sel-ui:jar'
 }
 
 tasks.named('jar') {
