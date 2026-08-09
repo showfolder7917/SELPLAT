@@ -18,6 +18,18 @@ body {
     isolation: isolate;
 }
 
+/* MDA 数据编辑窗口把双击单元格映射为持续警告色，和公共窗口的普通蓝色焦点区分。 */
+.selwindow-window-shell[data-sel-window-id^="MdaRowEditWindow_"] .selwindow-control-shell.mda-row-edit-control-active,
+.selwindow-window-shell[data-sel-window-id^="MdaRowEditWindow_"] .selwindow-control-shell.mda-row-edit-control-active:focus-within {
+    border-color: var(--sel-theme-semantic-warning);
+    background: color-mix(in srgb, var(--sel-theme-semantic-warning) 12%, rgba(4, 18, 58, 0.88));
+    box-shadow: 0 0 14px color-mix(in srgb, var(--sel-theme-semantic-warning) 42%, transparent), inset 0 0 18px color-mix(in srgb, var(--sel-theme-semantic-warning) 13%, transparent);
+}
+
+.selwindow-window-shell[data-sel-window-id^="MdaRowEditWindow_"] .mda-row-edit-control-active .selwindow-control-icon {
+    color: var(--sel-theme-semantic-warning);
+}
+
 .mda-page-stage {
     display: grid;
     width: 100%;

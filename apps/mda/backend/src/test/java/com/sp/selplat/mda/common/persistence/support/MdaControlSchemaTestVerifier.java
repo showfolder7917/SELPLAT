@@ -34,6 +34,7 @@ public final class MdaControlSchemaTestVerifier {
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
         assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertControlSchema(jdbc);
     }
 
     /**
@@ -53,6 +54,7 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT versionNo FROM CommonSequenceSegment WHERE seqCode = 'MdaConnectionProfileId'",
             Integer.class
         ));
+        assertControlSchema(jdbc);
     }
 
     /**
@@ -73,10 +75,7 @@ public final class MdaControlSchemaTestVerifier {
         assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
-        assertEquals(0L, jdbc.queryForObject(
-            "SELECT COUNT(*) FROM CommonSequenceSegment WHERE seqCode = 'UniauthUserId'",
-            Long.class
-        ));
+        assertControlSchema(jdbc);
     }
 
     /**
@@ -118,6 +117,39 @@ public final class MdaControlSchemaTestVerifier {
                 + "WHERE TABLE_NAME = 'MdaConnectionProfile' AND COLUMN_NAME = 'id'",
             String.class
         );
+    }
+
+    /**
+     * 读取指定 MDA 控制表的真实字段数量，防止与当前表职责无关的字段重新进入。
+     *
+     * @param jdbc 当前 Case 的隔离数据库查询模板，例如已初始化的 H2 内存库
+     * @param tableName MDA 控制表名，例如 {@code "MdaConnectionProfile"}
+     * @return 当前表的真实字段数量，例如连接配置表返回 {@code 16L}
+     */
+    private static long columnCount(JdbcTemplate jdbc, String tableName) {
+        return jdbc.queryForObject(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME = ?",
+            Long.class,
+            tableName
+        );
+    }
+
+    /**
+     * 验证 MDA 控制库的连接配置和号段两张固定表均存在，且字段数量与当前单一职责一致。
+     *
+     * @param jdbc 当前 Case 已完成生产 SQL 初始化的隔离 H2 查询模板
+     *     <p>执行完成后无返回值；副作用示例为新库、重复初始化库和旧库均断言两张表及 {@code 11/16} 列。
+     */
+    private static void assertControlSchema(JdbcTemplate jdbc) {
+        assertEquals(2L, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
+                + "WHERE TABLE_SCHEMA = 'PUBLIC' "
+                + "AND TABLE_NAME IN ('CommonSequenceSegment', 'MdaConnectionProfile')",
+            Long.class
+        ));
+        assertEquals(11L, columnCount(jdbc, "CommonSequenceSegment"));
+        assertEquals(16L, columnCount(jdbc, "MdaConnectionProfile"));
     }
 
     /**

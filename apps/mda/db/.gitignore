@@ -1,0 +1,5 @@
+# H2 运行诊断和锁文件只属于本机运行现场，不进入 MDA 权威数据与 SQL 资源。
+*.trace.db
+*.lock.db
+*.temp.db
+*.before-*.db

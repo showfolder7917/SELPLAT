@@ -3,8 +3,6 @@ DELETE FROM MdaConnectionProfile;
 DELETE FROM CommonSequenceSegment;
 
 INSERT INTO CommonSequenceSegment (
-    tenantId,
-    lastOperateUserId,
     seqCode,
     seqName,
     nextStartId,
@@ -14,8 +12,6 @@ INSERT INTO CommonSequenceSegment (
     sortnum,
     status)
 VALUES (
-    1,
-    1,
     'MdaConnectionProfileId',
     'MDA连接配置主键号段',
     100000,

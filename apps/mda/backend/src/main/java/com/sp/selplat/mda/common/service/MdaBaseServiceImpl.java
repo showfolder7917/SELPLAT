@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 为 MDA 固定控制表统一补充工程级查询、审计字段和具名事务边界。
+ * 为 MDA 固定控制表统一补充工程级查询、时间字段和具名事务边界。
  * 具体业务 Service 只绑定 DAO；主键生成、CRUD 和结果构建继续调用公共父类实现。
  *
  * @param <D> 当前 MDA 固定控制表对应的 DAO，例如 {@code MdaConnectionProfileDao}
@@ -69,7 +69,7 @@ public abstract class MdaBaseServiceImpl<D extends BaseDao> extends BaseServiceI
     }
 
     /**
-     * 补齐 MDA 工程公共更新审计字段后调用父类更新当前记录。
+     * 补齐 MDA 工程公共更新时间后调用父类更新当前记录。
      *
      * @param saveIn 页面主键和更新字段，例如 {@code {"id":100000,"connectionName":"开发库二"}}
      * @return 父类固定更新结果，例如 {@code {"success":true,"data":{"id":100000},"msg":"更新完成。"}}
@@ -77,12 +77,12 @@ public abstract class MdaBaseServiceImpl<D extends BaseDao> extends BaseServiceI
     @Override
     @OperationLog
     public CommonResult update(CommonParam saveIn) {
-        applyUpdateAudit(saveIn);
+        applyUpdateTime(saveIn);
         return super.update(saveIn);
     }
 
     /**
-     * 逐项补齐 MDA 工程公共更新审计字段后调用父类真实批量更新。
+     * 逐项补齐 MDA 工程公共更新时间后调用父类真实批量更新。
      *
      * @param saveIn 页面批量更新字段，例如 {@code {"items":[{"id":100000,"status":1}]}}
      * @return 父类固定批量结果，例如 {@code {"success":true,"affectedRows":1,"msg":"批量更新完成。"}}
@@ -92,89 +92,45 @@ public abstract class MdaBaseServiceImpl<D extends BaseDao> extends BaseServiceI
     @OperationLog
     public CommonResult updateBatch(CommonBatchParam saveIn) {
         if (saveIn != null) {
-            saveIn.getItems().forEach(this::applyUpdateAudit);
+            saveIn.getItems().forEach(this::applyUpdateTime);
         }
         return super.updateBatch(saveIn);
     }
 
     /**
-     * 补齐 MDA 工程删除审计字段后调用父类执行假删除。
-     *
-     * @param deleteIn 页面主键字段，例如 {@code {"id":100000}}
-     * @return 父类固定删除结果，例如 {@code {"success":true,"data":{"id":100000,"status":0},"msg":"删除完成。"}}
-     */
-    @Override
-    @OperationLog
-    public CommonResult delete(CommonParam deleteIn) {
-        applyOperatorDefault(deleteIn);
-        return super.delete(deleteIn);
-    }
-
-    /**
-     * 逐项补齐 MDA 工程删除审计字段后调用父类真实批量假删除。
-     *
-     * @param deleteIn 页面批量主键字段，例如 {@code {"items":[{"id":100000}]}}
-     * @return 父类固定批量结果，例如 {@code {"success":true,"affectedRows":1,"msg":"批量删除完成。"}}
-     */
-    @Override
-    @Transactional("mdaTransactionManager")
-    @OperationLog
-    public CommonResult deleteBatch(CommonBatchParam deleteIn) {
-        if (deleteIn != null) {
-            deleteIn.getItems().forEach(this::applyOperatorDefault);
-        }
-        return super.deleteBatch(deleteIn);
-    }
-
-    /**
-     * 为 MDA 新增参数补齐统一租户、操作人和创建更新时间。
+     * 为 MDA 新增参数补齐创建和更新时间。
      *
      * @param saveIn 当前新增项，例如 {@code {"connectionName":"开发库"}}
-     *     <p>执行完成后无返回值；副作用是缺失时补入 tenantId、lastOperateUserId、createdAt 和 updatedAt。
+     *     <p>执行完成后无返回值；副作用是缺失时补入 createdAt 和 updatedAt。
      */
     private void applyInsertDefaults(CommonParam saveIn) {
         if (saveIn == null) {
             return;
         }
-        applyOperatorDefault(saveIn);
-        putIfAbsent(saveIn, "tenantId", 1L);
         LocalDateTime now = LocalDateTime.now();
         putIfAbsent(saveIn, "createdAt", now);
         putIfAbsent(saveIn, "updatedAt", now);
     }
 
     /**
-     * 为 MDA 更新参数补齐统一操作人和更新时间。
+     * 为 MDA 更新参数补齐更新时间。
      *
      * @param saveIn 当前更新项，例如 {@code {"id":100000,"connectionName":"开发库二"}}
-     *     <p>执行完成后无返回值；副作用是缺失时补入 lastOperateUserId，并刷新 updatedAt。
+     *     <p>执行完成后无返回值；副作用是刷新 updatedAt。
      */
-    private void applyUpdateAudit(CommonParam saveIn) {
+    private void applyUpdateTime(CommonParam saveIn) {
         if (saveIn == null) {
             return;
         }
-        applyOperatorDefault(saveIn);
         saveIn.putParam("updatedAt", LocalDateTime.now());
-    }
-
-    /**
-     * 为 MDA 写入参数补齐统一操作人。
-     *
-     * @param saveIn 当前写入项，例如 {@code {"id":100000}}
-     *     <p>执行完成后无返回值；副作用是 lastOperateUserId 缺失时补入 {@code 1L}。
-     */
-    private void applyOperatorDefault(CommonParam saveIn) {
-        if (saveIn != null) {
-            putIfAbsent(saveIn, "lastOperateUserId", 1L);
-        }
     }
 
     /**
      * 仅在公共参数没有非空字段值时写入默认值。
      *
      * @param target 待补字段的公共参数，例如 {@code {"id":100000}}
-     * @param key 数据库字段名，例如 {@code "tenantId"}
-     * @param value 默认字段值，例如 {@code 1L}
+     * @param key 数据库字段名，例如 {@code "createdAt"}
+     * @param value 默认字段值，例如当前服务时间
      *     <p>执行完成后无返回值；已有非空字段保持不变。
      */
     private void putIfAbsent(CommonParam target, String key, Object value) {

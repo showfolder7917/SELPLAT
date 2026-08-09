@@ -144,6 +144,59 @@ class ActiveUserRuleOverrideIntegrationTest {
     }
 
     /**
+     * 验证 MDA 应用规则能从当前用户应用索引命中，并固定控制库只保留连接配置与号段的边界。
+     * 真实传参示例：逻辑 ID 为 {@code MDA_LOCAL_DATABASE_WORKBENCH_RULES}，作用域为 {@code selplat}。
+     * 真实返回示例：规则路径为 {@code selplat/应用/mda/rule/RUL_MDA本地数据库工作台架构规则.md}，
+     * 正文包含控制库禁止引入其他业务表和身份字段的声明。
+     * 异常或副作用示例：当前用户、索引路径或规则正文无效时抛出 {@link IOException} 或断言失败，不修改规则资源。
+     */
+    @Test
+    void shouldLoadMdaControlDatabaseBoundaryRuleFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "MDA_LOCAL_DATABASE_WORKBENCH_RULES",
+            "selplat",
+            "selplat/应用/mda/rule/RUL_MDA本地数据库工作台架构规则.md",
+            "mda_control_database_forbidden_business_tables = authentication,tenant,role,permission,operator"
+        );
+        assertTrue(rule.content().contains(
+            "mda_control_database_forbidden_identity_columns = tenantId,lastOperateUserId"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_legacy_identity_artifact_policy = remove_from_mda_without_recreating_foreign_application_tables_or_fixtures"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_table_node_open_behavior = open_or_reuse_table_query_tab_execute_select_from_plain_table_name_without_schema_or_identifier_quotes"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_result_row_double_click_behavior = highlight_exact_row_and_open_shared_data_edit_window"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_row_edit_field_label_policy = database_field_name_only_without_inline_type"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_row_edit_character_field_control = multiline_textarea"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_double_clicked_cell_field_feedback = highlight_and_focus_matching_editable_control"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_row_edit_target_identity = actual_database_primary_key_required"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_row_edit_save_policy = prepared_single_row_update_then_refresh_and_reselect"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_ad_hoc_query_edit_policy = read_only_without_verified_table_and_primary_key"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_table_structure_edit_template = current_jdbc_database_dialect_with_original_table_and_column_comments"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_missing_original_column_comment = emit_empty_sql_string_without_synthetic_fallback"
+        ));
+    }
+
+    /**
      * 旧拼音程序路径修正必须优先于 common 原规则返回给当前稳定用户。
      */
     @Test

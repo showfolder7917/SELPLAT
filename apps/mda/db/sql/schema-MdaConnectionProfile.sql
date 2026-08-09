@@ -2,10 +2,6 @@
 CREATE TABLE IF NOT EXISTS MdaConnectionProfile (
     -- id 作为连接配置主键，由 CommonSequenceSegment 中的 MdaConnectionProfileId 号段统一生成。
     id BIGINT PRIMARY KEY,
-    -- tenantId 表达连接配置所属租户，后续多租户场景可按该字段隔离各自可见连接。
-    tenantId BIGINT NOT NULL,
-    -- lastOperateUserId 记录最后新增、修改或删除该连接配置的用户标识。
-    lastOperateUserId BIGINT NOT NULL,
     -- connectionName 保存页面左侧连接列表的显示名称，要求全局唯一以避免用户选错连接。
     connectionName VARCHAR(120) NOT NULL UNIQUE,
     -- databaseType 保存数据库类型，当前允许 H2、MYSQL、SQLSERVER、ORACLE、POSTGRESQL。
@@ -18,7 +14,7 @@ CREATE TABLE IF NOT EXISTS MdaConnectionProfile (
     databaseName VARCHAR(240) NOT NULL,
     -- schemaName 保存连接后的默认 schema，页面浏览结构时可用于定位用户优先关注的模式。
     schemaName VARCHAR(120),
-    -- username 保存连接目标数据库使用的登录账号，最终 SQL 权限由该数据库账号决定。
+    -- username 保存连接目标数据库使用的登录账号，实际 SQL 可执行范围由该账号决定。
     username VARCHAR(120),
     -- password 明文保存目标数据库口令；MDA 仅作为不部署上线的本地开发工具使用。
     password VARCHAR(1000) NOT NULL DEFAULT '',
@@ -45,10 +41,12 @@ ALTER TABLE MdaConnectionProfile ALTER COLUMN id BIGINT;
 ALTER TABLE MdaConnectionProfile ADD COLUMN IF NOT EXISTS password VARCHAR(1000) NOT NULL DEFAULT '';
 ALTER TABLE MdaConnectionProfile DROP COLUMN IF EXISTS passwordCiphertext;
 
+-- MDA 只保存本地连接定义，旧库的租户和操作人列升级时删除，其他连接数据保持不变。
+ALTER TABLE MdaConnectionProfile DROP COLUMN IF EXISTS tenantId;
+ALTER TABLE MdaConnectionProfile DROP COLUMN IF EXISTS lastOperateUserId;
+
 COMMENT ON TABLE MdaConnectionProfile IS 'MDA 目标数据库连接配置表';
 COMMENT ON COLUMN MdaConnectionProfile.id IS '连接配置主键，由公共号段生成';
-COMMENT ON COLUMN MdaConnectionProfile.tenantId IS '连接配置所属租户标识';
-COMMENT ON COLUMN MdaConnectionProfile.lastOperateUserId IS '最近操作用户标识';
 COMMENT ON COLUMN MdaConnectionProfile.connectionName IS '页面显示的唯一连接名称';
 COMMENT ON COLUMN MdaConnectionProfile.databaseType IS '数据库类型：H2、MYSQL、SQLSERVER、ORACLE、POSTGRESQL';
 COMMENT ON COLUMN MdaConnectionProfile.host IS '目标数据库服务器主机名或IP';

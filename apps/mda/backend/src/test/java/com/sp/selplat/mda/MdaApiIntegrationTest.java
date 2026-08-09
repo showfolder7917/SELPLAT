@@ -94,6 +94,14 @@ class MdaApiIntegrationTest {
                 .andExpect(jsonPath("$.data.password").value("plain-secret"));
     }
 
+    /**
+     * 验证目标库允许执行 DDL、注释、DML，并为后续元数据模板准备真实原注释。
+     * 真实传参示例：创建 {@code MdaRawSqlCase(id,name)} 并写入表注释与 id 字段注释。
+     * 真实返回示例：每条 SQL 返回成功，插入结果 {@code updateCount=1}。
+     * 异常或副作用示例：测试仅修改隔离 H2 内存库，SQL 接口失败时测试断言终止。
+     *
+     * @throws Exception MockMvc 请求或结果解析失败时抛出
+     */
     @Test
     @Order(3)
     void shouldExecuteDdlAndDmlWithoutSafeQueryRestriction() throws Exception {
@@ -103,11 +111,26 @@ class MdaApiIntegrationTest {
         execute("CREATE TABLE MdaRawSqlCase(id INT PRIMARY KEY, name VARCHAR(50))")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.results[0].kind").value("updateCount"));
+        // 隔离目标表写入原注释 → 元数据模板必须原样带回而不是生成占位描述。
+        execute("COMMENT ON TABLE MdaRawSqlCase IS '原表注释'")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+        execute("COMMENT ON COLUMN MdaRawSqlCase.id IS '原字段注释'")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
         execute("INSERT INTO MdaRawSqlCase(id, name) VALUES (1, 'alpha')")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.results[0].updateCount").value(1));
     }
 
+    /**
+     * 验证查询结果、主键元数据、结构编辑模板、单行更新和元数据缓存失效的完整 API 契约。
+     * 真实传参示例：查询 {@code MdaRawSqlCase} 并读取 connectionId 对应的 H2 元数据。
+     * 真实返回示例：模板包含裸表名 ALTER、原表注释、原字段注释和空字段注释。
+     * 异常或副作用示例：测试只创建隔离内存表，接口失败或模板缺项时断言终止。
+     *
+     * @throws Exception MockMvc 请求或 JSON 响应读取失败时抛出
+     */
     @Test
     @Order(4)
     void shouldReturnQueryColumnsRowsAndMetadataTree() throws Exception {
@@ -125,6 +148,12 @@ class MdaApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
         assertThat(metadata.getResponse().getContentAsString()).containsIgnoringCase("MdaRawSqlCase");
+        assertThat(metadata.getResponse().getContentAsString())
+                .contains("\"primaryKeys\":[\"id\"]")
+                .contains("ALTER TABLE MdaRawSqlCase ADD NEW_COLUMN VARCHAR(255);")
+                .contains("COMMENT ON TABLE MdaRawSqlCase IS '原表注释';")
+                .contains("COMMENT ON COLUMN MdaRawSqlCase.id IS '原字段注释';")
+                .contains("COMMENT ON COLUMN MdaRawSqlCase.name IS '';");
 
         mockMvc.perform(post("/api/mda/metadata/tree.htm")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -143,6 +172,25 @@ class MdaApiIntegrationTest {
                 .andReturn();
         assertThat(refreshedMetadata.getResponse().getContentAsString())
                 .containsIgnoringCase("MdaCacheInvalidationCase");
+
+        updateRow("MdaRawSqlCase", Map.of("id", 1), Map.of("name", "edited"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.affectedRows").value(1));
+        execute("SELECT name FROM MdaRawSqlCase WHERE id = 1")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.results[0].rows[0][0]").value("edited"));
+
+        updateRow("MdaRawSqlCase", Map.of("id", 99), Map.of("name", "must-rollback"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("MDA_ROW_TARGET_CHANGED"));
+        execute("CREATE TABLE MdaNoPrimaryKeyCase(name VARCHAR(50))")
+                .andExpect(status().isOk());
+        execute("INSERT INTO MdaNoPrimaryKeyCase(name) VALUES ('read-only')")
+                .andExpect(status().isOk());
+        updateRow("MdaNoPrimaryKeyCase", Map.of("name", "read-only"), Map.of("name", "blocked"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("MDA_ROW_PRIMARY_KEY_REQUIRED"));
         assertThat(connectionFactory.activePoolCount()).isEqualTo(1);
     }
 
@@ -198,5 +246,28 @@ class MdaApiIntegrationTest {
                 "queryTimeoutSeconds", 30));
         return mockMvc.perform(post("/api/mda/sql/execute.htm")
                 .contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
+    /**
+     * 按页面真实表单格式提交一条隔离目标库记录更新。
+     * 真实传参示例：{@code tableName=MdaRawSqlCase,primaryKeyValues={id=1},values={name=edited}}。
+     * 真实返回示例：返回可继续断言 HTTP 状态、错误码和影响行数的 MockMvc ResultActions。
+     * 异常或副作用示例：请求会修改隔离 H2 内存表；序列化或请求失败时抛出异常。
+     *
+     * @param tableName 目标表真实名称，例如 {@code MdaRawSqlCase}
+     * @param primaryKeyValues 原主键值，例如 {@code {id=1}}
+     * @param values 新的非主键字段值，例如 {@code {name=edited}}
+     * @return 尚未执行终态断言的 MockMvc 请求结果
+     * @throws Exception JSON 序列化或 MockMvc 请求失败时抛出
+     */
+    private org.springframework.test.web.servlet.ResultActions updateRow(
+            String tableName, Map<String, Object> primaryKeyValues, Map<String, Object> values) throws Exception {
+        return mockMvc.perform(post("/api/mda/data/update-row.htm")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("connectionId", String.valueOf(targetConnectionId))
+                .param("schema", "PUBLIC")
+                .param("tableName", tableName)
+                .param("primaryKeyValues", objectMapper.writeValueAsString(primaryKeyValues))
+                .param("values", objectMapper.writeValueAsString(values)));
     }
 }

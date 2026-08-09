@@ -91,7 +91,7 @@
 }
 ```
 
-SQL 不做 SELECT 限制。目标账号有权限时可以执行查询、DDL 和 DML。结果集返回 `columns`、`rows`、`rowCount`；修改语句返回 `updateCount`。
+SQL 不做 SELECT 限制。目标连接允许的查询、DDL 和 DML 均可执行。结果集返回 `columns`、`rows`、`rowCount`；修改语句返回 `updateCount`。
 
 ## 5. 页面调用顺序
 
