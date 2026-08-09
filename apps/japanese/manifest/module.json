@@ -1,0 +1,12 @@
+{
+  "code": "japanese",
+  "name": "N2 红蓝宝书1000题",
+  "shortName": "N2 红蓝宝书",
+  "description": "管理 N2 读音、汉字与语法选择题",
+  "icon": "ri-book-open-line",
+  "tone": "cyan",
+  "url": "/japanese/japanese.html",
+  "permissionCode": "japanese:access",
+  "backendModule": "apps:japanese:backend",
+  "referenceData": true
+}

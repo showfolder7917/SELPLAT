@@ -1,0 +1,171 @@
+/*
+ * Japanese 页面舞台与 AI 媒体业务区。
+ * 公共面板、树、搜索、表格、窗口和确认框视觉均由 SEL 组件维护，本文件不重画其内部结构。
+ */
+html {
+    min-width: 1080px;
+    min-height: 100%;
+    background: var(--sel-theme-page-background);
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+body {
+    min-height: 100vh;
+    margin: 0;
+    overflow: auto;
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-page-background);
+    font-family: var(--sel-theme-font-family);
+    -webkit-font-smoothing: antialiased;
+    isolation: isolate;
+}
+
+.japanese-page-stage {
+    display: grid;
+    width: 100%;
+    min-height: 100vh;
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr);
+    place-items: center;
+    padding: var(--sel-theme-viewport-gap);
+}
+
+/* AI 媒体区是 Japanese 独有业务内容，继续消费主题令牌并保持截图中的紧凑字号。 */
+.japanese-generation-panel {
+    display: grid;
+    gap: calc(12px * var(--sel-theme-density-scale));
+    margin-top: calc(4px * var(--sel-theme-density-scale));
+    padding: calc(14px * var(--sel-theme-density-scale));
+    border: 1px solid var(--sel-theme-line);
+    border-radius: var(--sel-theme-radius-panel);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-panel-surface);
+    box-shadow: 0 0 18px var(--sel-theme-glow);
+}
+
+.japanese-generation-panel header,
+.japanese-generation-panel header > div,
+.japanese-generation-actions button > span {
+    display: flex;
+}
+
+.japanese-generation-panel header {
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.japanese-generation-panel header > div,
+.japanese-generation-actions button > span {
+    flex-direction: column;
+    gap: 3px;
+}
+
+.japanese-generation-panel header strong {
+    color: var(--sel-theme-text-title);
+    font-size: var(--sel-theme-font-size-primary);
+}
+
+.japanese-generation-panel header span,
+.japanese-generation-panel header small,
+.japanese-generation-actions small,
+.japanese-generation-previews figcaption,
+.japanese-generation-previews p {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.japanese-generation-actions,
+.japanese-generation-previews {
+    display: grid;
+    gap: calc(10px * var(--sel-theme-density-scale));
+}
+
+.japanese-generation-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.japanese-generation-actions button {
+    display: flex;
+    min-height: calc(58px * var(--sel-theme-density-scale));
+    align-items: center;
+    gap: 11px;
+    padding: 9px 12px;
+    border: 1px solid var(--sel-theme-line);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    box-shadow: inset 0 0 12px color-mix(in srgb, var(--sel-theme-glow) 30%, transparent);
+    text-align: left;
+    cursor: pointer;
+}
+
+.japanese-generation-actions button:hover,
+.japanese-generation-actions button:focus-visible {
+    border-color: var(--sel-theme-control-line);
+    background: var(--sel-theme-control-hover);
+    outline: none;
+}
+
+.japanese-generation-actions button.is-running {
+    border-color: var(--sel-theme-control-line);
+    box-shadow: 0 0 20px var(--sel-theme-glow);
+}
+
+.japanese-generation-actions button:disabled {
+    cursor: wait;
+    opacity: .65;
+}
+
+.japanese-generation-actions i {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 9px;
+    color: var(--sel-theme-text-on-accent);
+    background: var(--sel-theme-selected-surface);
+    font-size: 19px;
+}
+
+.japanese-generation-actions strong {
+    color: var(--sel-theme-text-title);
+    font-size: var(--sel-theme-font-size-primary);
+}
+
+.japanese-generation-previews {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.japanese-generation-previews figure {
+    display: grid;
+    min-height: 70px;
+    margin: 0;
+    padding: 10px;
+    border: 1px solid var(--sel-theme-line);
+    border-radius: var(--sel-theme-radius-action);
+    align-content: start;
+    gap: 7px;
+    background: color-mix(in srgb, var(--sel-theme-panel-surface) 82%, transparent);
+}
+
+.japanese-generation-previews img {
+    width: 100%;
+    max-height: 210px;
+    border-radius: calc(var(--sel-theme-radius-action) - 2px);
+    object-fit: contain;
+}
+
+.japanese-generation-previews audio {
+    width: 100%;
+}
+
+@media (max-width: 1180px) {
+    .japanese-generation-actions { grid-template-columns: 1fr; }
+}
+
+@media (max-height: 620px) {
+    .japanese-page-stage { align-items: start; }
+}

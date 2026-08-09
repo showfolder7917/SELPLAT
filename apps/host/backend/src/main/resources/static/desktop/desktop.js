@@ -14,7 +14,13 @@
     const hostdesktopRoot = hostdesktopBase.query("[data-hostdesktop-app]");
     const hostdesktopBackgroundHost = hostdesktopBase.query("[data-sel-page-background-host]");
     const hostdesktopPersonalizationHost = hostdesktopBase.query("[data-sel-personalization-host]");
-    const hostdesktopAllowedPaths = Object.freeze(["/mda/", "/reference-data/", "/uniauth/"]);
+    const hostdesktopAllowedPaths = Object.freeze([
+        "/mda/",
+        "/reference-data/",
+        "/uniauth/",
+        // SELPLAT-GENERATED-APPLICATION-PATHS
+        "/japanese/"
+    ]);
 
     /** 验证入口仅指向当前 Host 已装配的内部应用，避免配置被改成外部跳转。 */
     function hostdesktopResolveUrl(hostdesktopUrl) {

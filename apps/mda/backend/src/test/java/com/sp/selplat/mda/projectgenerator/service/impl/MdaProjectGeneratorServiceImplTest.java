@@ -3,9 +3,11 @@ package com.sp.selplat.mda.projectgenerator.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sp.selplat.common.exception.CommonBusinessException;
-import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationRequest;
-import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationResult;
+import com.sp.selplat.common.util.CommonParam;
+import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationData;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
@@ -39,6 +41,8 @@ class MdaProjectGeneratorServiceImplTest {
     void setUp() throws Exception {
         Files.createDirectories(testRoot.resolve("apps/mda"));
         Files.createDirectories(testRoot.resolve("apps/host/backend"));
+        Files.createDirectories(testRoot.resolve(
+                "apps/host/backend/src/main/resources/static/desktop"));
         Files.writeString(
                 testRoot.resolve("settings.gradle"),
                 "rootProject.name = 'test'\n");
@@ -48,6 +52,25 @@ class MdaProjectGeneratorServiceImplTest {
                 dependencies {
                     implementation project(':apps:mda:backend')
                 }
+                """);
+        Files.writeString(
+                testRoot.resolve(
+                        "apps/host/backend/src/main/resources/static/desktop/applications.json"),
+                """
+                {
+                  "version": 1,
+                  "applications": [
+                  ]
+                }
+                """);
+        Files.writeString(
+                testRoot.resolve(
+                        "apps/host/backend/src/main/resources/static/desktop/desktop.js"),
+                """
+                const hostdesktopAllowedPaths = Object.freeze([
+                    "/mda/",
+                    // SELPLAT-GENERATED-APPLICATION-PATHS
+                ]);
                 """);
         service = new MdaProjectGeneratorServiceImpl(testRoot);
     }
@@ -62,14 +85,19 @@ class MdaProjectGeneratorServiceImplTest {
      */
     @Test
     void shouldCreateCompleteProjectFromTemplate() throws Exception {
-        MdaProjectGenerationResult result = service.generate(
-                new MdaProjectGenerationRequest("japan", "region"));
+        MdaProjectGenerationData result = service.generate(request("japan", "region"));
 
         assertThat(result.projectCreated()).isTrue();
         assertThat(result.actualTableName()).isEqualTo("JapanRegion");
         assertThat(result.pageUrl()).isEqualTo("/japan/japan.html");
         Path project = testRoot.resolve("apps/japan");
         assertThat(project.resolve(".selplat-generated-project.json")).isRegularFile();
+        assertThat(Files.readString(project.resolve(
+                "backend/src/main/java/com/sp/selplat/japan/JapanBackendApplication.java")))
+                .contains("\"com.sp.selplat.common.service\"")
+                .contains("ReferenceDataController.class")
+                .contains("ReferenceDataProviderRegistry.class")
+                .doesNotContain("\"com.sp.selplat.common.db\"");
         assertThat(project.resolve(
                 "backend/src/main/java/com/sp/selplat/japan/region/"
                         + "controller/JapanRegionController.java")).isRegularFile();
@@ -96,18 +124,70 @@ class MdaProjectGeneratorServiceImplTest {
                 "backend/src/main/resources/static/japan/japan.js")).isRegularFile();
         assertThat(project.resolve(
                 "backend/src/main/resources/static/japan/japan.css")).isRegularFile();
+        String generatedHtml = Files.readString(project.resolve(
+                "backend/src/main/resources/static/japan/japan.html"));
+        String generatedScript = Files.readString(project.resolve(
+                "backend/src/main/resources/static/japan/japan.js"));
+        String generatedStyle = Files.readString(project.resolve(
+                "backend/src/main/resources/static/japan/japan.css"));
+        assertThat(generatedHtml)
+                .contains("/sel/theme/runtime/selThemeManager.js")
+                .contains("/sel/components/panel/selPanel.js")
+                .contains("/sel/components/tree/selTree.js")
+                .contains("/sel/components/search/selSearch.js")
+                .contains("/sel/components/grid/selGrid.js")
+                .contains("/sel/components/window/selWindow.js")
+                .contains("/sel/components/confirm-dialog/selConfirmDialog.js")
+                .contains("/sel/components/personalization/selPersonalization.js");
+        assertThat(generatedScript)
+                .contains("window.selPanel.create")
+                .contains("window.selTree.mount")
+                .contains("window.selGrid.mount")
+                .contains("window.selWindow.mount")
+                .contains("window.selConfirmDialog.mount")
+                .doesNotContain("window.confirm");
+        assertThat(generatedStyle)
+                .contains("只分配 SEL 公共面板的页面舞台")
+                .doesNotContain("table {")
+                .doesNotContain("dialog {");
         assertThat(Files.readString(project.resolve(
                 "db/sql/schema-JapanRegion.sql")))
                 .contains("tenantId BIGINT NOT NULL")
                 .contains("lastOperateUserId BIGINT NOT NULL")
                 .contains("sortnum DECIMAL(10, 2) NOT NULL DEFAULT 0.00")
                 .contains("createdAt TIMESTAMP NOT NULL");
+        assertThat(Files.readString(project.resolve(
+                "db/sql/data-JapanRegion.sql")))
+                .contains("默认不写业务数据")
+                .contains("SELECT 1;");
         assertThat(Files.readString(testRoot.resolve("settings.gradle")))
                 .contains("include('apps:japan:backend')")
                 .contains("file('apps/japan/backend')");
         assertThat(Files.readString(
                 testRoot.resolve("apps/host/backend/build.gradle")))
                 .contains("implementation project(':apps:japan:backend')");
+        Path desktopManifest = testRoot.resolve(
+                "apps/host/backend/src/main/resources/static/desktop/applications.json");
+        assertThat(Files.readString(desktopManifest))
+                .contains("\"code\": \"japan\"")
+                .contains("\"url\": \"/japan/japan.html\"")
+                .contains("\"permissionCode\": \"japan:access\"");
+        JsonNode applications = new ObjectMapper().readTree(desktopManifest.toFile())
+                .path("applications");
+        assertThat(applications.isArray()).isTrue();
+        assertThat(applications.size()).isEqualTo(1);
+        assertThat(applications.get(0).path("code").asText()).isEqualTo("japan");
+        assertThat(Files.readString(testRoot.resolve(
+                "apps/host/backend/src/main/resources/static/desktop/desktop.js")))
+                .contains("\"/japan/\"");
+        try (var generatedSources = Files.walk(project.resolve("backend/src/main/java"))) {
+            assertThat(generatedSources
+                    .filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString())
+                    .filter(name -> name.matches(
+                            ".*(Request|Response|Result|Page|Param)\\.java"))
+                    .toList()).isEmpty();
+        }
     }
 
     /**
@@ -120,7 +200,7 @@ class MdaProjectGeneratorServiceImplTest {
      */
     @Test
     void shouldCompileAllGeneratedJavaSources() throws Exception {
-        service.generate(new MdaProjectGenerationRequest("japan", "region"));
+        service.generate(request("japan", "region"));
         Path sourceRoot = testRoot.resolve("apps/japan/backend/src/main/java");
         Path output = testRoot.resolve("compiled-generated-project");
         Files.createDirectories(output);
@@ -162,7 +242,7 @@ class MdaProjectGeneratorServiceImplTest {
      */
     @Test
     void shouldExecuteGeneratedSqlAgainstRealH2Database() throws Exception {
-        service.generate(new MdaProjectGenerationRequest("japan", "region"));
+        service.generate(request("japan", "region"));
         Path sqlRoot = testRoot.resolve("apps/japan/db/sql");
         try (var connection = DriverManager.getConnection(
                 "jdbc:h2:mem:mda_generated_project;DB_CLOSE_DELAY=-1;"
@@ -210,14 +290,13 @@ class MdaProjectGeneratorServiceImplTest {
      */
     @Test
     void shouldAppendNewTableWithoutOverwritingFirstTable() throws Exception {
-        service.generate(new MdaProjectGenerationRequest("japan", "region"));
+        service.generate(request("japan", "region"));
         Path firstController = testRoot.resolve(
                 "apps/japan/backend/src/main/java/com/sp/selplat/japan/region/"
                         + "controller/JapanRegionController.java");
         String firstContent = Files.readString(firstController);
 
-        MdaProjectGenerationResult result = service.generate(
-                new MdaProjectGenerationRequest("japan", "city"));
+        MdaProjectGenerationData result = service.generate(request("japan", "city"));
 
         assertThat(result.projectCreated()).isFalse();
         assertThat(result.pageUrl()).isEqualTo("/japan/city.html");
@@ -251,14 +330,13 @@ class MdaProjectGeneratorServiceImplTest {
      */
     @Test
     void shouldRejectExistingTableWithoutChangingFiles() throws Exception {
-        service.generate(new MdaProjectGenerationRequest("japan", "region"));
+        service.generate(request("japan", "region"));
         String settings = Files.readString(testRoot.resolve("settings.gradle"));
         Path sequence = testRoot.resolve(
                 "apps/japan/db/sql/data-CommonSequenceSegment.sql");
         String sequenceText = Files.readString(sequence);
 
-        assertThatThrownBy(() -> service.generate(
-                new MdaProjectGenerationRequest("japan", "region")))
+        assertThatThrownBy(() -> service.generate(request("japan", "region")))
                 .isInstanceOf(CommonBusinessException.class)
                 .hasMessageContaining("目标文件已存在");
 
@@ -277,16 +355,31 @@ class MdaProjectGeneratorServiceImplTest {
      */
     @Test
     void shouldRejectPathEscapeAndUnownedProject() throws Exception {
-        assertThatThrownBy(() -> service.generate(
-                new MdaProjectGenerationRequest("../escape", "region")))
+        assertThatThrownBy(() -> service.generate(request("../escape", "region")))
                 .isInstanceOf(CommonBusinessException.class)
                 .hasMessageContaining("工程名只能使用");
 
         Files.createDirectories(testRoot.resolve("apps/manual"));
-        assertThatThrownBy(() -> service.generate(
-                new MdaProjectGenerationRequest("manual", "region")))
+        assertThatThrownBy(() -> service.generate(request("manual", "region")))
                 .isInstanceOf(CommonBusinessException.class)
                 .hasMessageContaining("不是由创建工程功能生成");
         assertThat(testRoot.getParent().resolve("escape")).doesNotExist();
+    }
+
+    /**
+     * 使用 SELPLAT 公共单条参数构造 MDA 生成输入。
+     * 真实传参示例：工程编码 {@code japan}，表编码 {@code region}。
+     * 真实返回示例：{@code paramMap={projectName:japan,tableName:region}}。
+     * 异常或副作用示例：空值保留给生成服务校验，本方法不写入文件。
+     *
+     * @param projectName 工程编码
+     * @param tableName 表编码
+     * @return SELPLAT 公共单条请求参数
+     */
+    private CommonParam request(String projectName, String tableName) {
+        CommonParam request = new CommonParam();
+        request.putParam("projectName", projectName);
+        request.putParam("tableName", tableName);
+        return request;
     }
 }

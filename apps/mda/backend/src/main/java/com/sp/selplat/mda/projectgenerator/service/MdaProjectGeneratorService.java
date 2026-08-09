@@ -2,8 +2,8 @@ package com.sp.selplat.mda.projectgenerator.service;
 
 import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.exception.CommonSystemException;
-import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationRequest;
-import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationResult;
+import com.sp.selplat.common.util.CommonParam;
+import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationData;
 
 /** 定义 MDA 工程脚手架生成能力，Controller 只能依赖此契约。 */
 public interface MdaProjectGeneratorService {
@@ -19,5 +19,5 @@ public interface MdaProjectGeneratorService {
      * @throws CommonBusinessException 编码非法、工程不受管理或任一目标文件已存在时抛出
      * @throws CommonSystemException 文件准备或原子写入失败时抛出
      */
-    MdaProjectGenerationResult generate(MdaProjectGenerationRequest request);
+    MdaProjectGenerationData generate(CommonParam request);
 }

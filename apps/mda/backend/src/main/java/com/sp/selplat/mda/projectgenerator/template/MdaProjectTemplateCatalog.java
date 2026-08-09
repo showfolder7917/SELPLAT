@@ -48,6 +48,12 @@ public final class MdaProjectTemplateCatalog {
                 {
                   "code": "@PROJECT@",
                   "name": "@PROJECT_CLASS@",
+                  "shortName": "@PROJECT_CLASS@",
+                  "description": "管理 @PROJECT_CLASS@ 业务数据",
+                  "icon": "ri-apps-2-line",
+                  "tone": "blue",
+                  "url": "/@PROJECT@/@PROJECT@.html",
+                  "permissionCode": "@PROJECT@:access",
                   "backendModule": "apps:@PROJECT@:backend",
                   "referenceData": true
                 }
@@ -129,7 +135,8 @@ public final class MdaProjectTemplateCatalog {
                 fill(tableSchema(), names));
         files.put("db/sql/data-" + names.actualTableName() + ".sql",
                 "-- " + names.actualTableName()
-                        + " 默认不写业务数据，首次打开页面显示空表。");
+                        + " 默认不写业务数据，首次打开页面显示空表。\n"
+                        + "SELECT 1;\n");
         String staticRoot = "backend/src/main/resources/static/"
                 + names.projectCode() + "/" + pageCode;
         files.put(staticRoot + ".html",
@@ -223,15 +230,25 @@ public final class MdaProjectTemplateCatalog {
         return """
                 package @PACKAGE@;
 
+                import com.sp.selplat.referencedata.backend.controller.ReferenceDataController;
+                import com.sp.selplat.referencedata.backend.provider.ReferenceDataProviderRegistry;
+                import com.sp.selplat.referencedata.backend.service.DefaultReferenceDataApiService;
+                import com.sp.selplat.referencedata.backend.service.DefaultReferenceDataQueryService;
                 import org.springframework.boot.SpringApplication;
                 import org.springframework.boot.autoconfigure.SpringBootApplication;
+                import org.springframework.context.annotation.Import;
 
                 /** 独立启动 @PROJECT_CLASS@ 后端并装配本工程私有数据源。 */
                 @SpringBootApplication(scanBasePackages = {
                     "@PACKAGE@",
-                    "com.sp.selplat.common.db",
                     "com.sp.selplat.common.service",
                     "com.sp.selplat.common.web"
+                })
+                @Import({
+                    ReferenceDataController.class,
+                    ReferenceDataProviderRegistry.class,
+                    DefaultReferenceDataApiService.class,
+                    DefaultReferenceDataQueryService.class
                 })
                 public class @PROJECT_CLASS@BackendApplication {
 
@@ -846,65 +863,69 @@ public final class MdaProjectTemplateCatalog {
     private static String pageHtml() {
         return """
                 <!doctype html>
-                <!-- @PROJECT_CLASS@ 页面声明左树、右表格和编辑窗口。 -->
-                <html lang="zh-CN" data-sel-theme="glass-admin" data-sel-mode="dark">
+                <!-- 页面只声明挂载点；管理界面由 SEL 公共控件创建。 -->
+                <html lang="zh-CN" data-sel-theme="glass-admin" data-sel-mode="dark"
+                      data-sel-accent="base" data-sel-density="compact">
                 <head>
                     <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width,initial-scale=1">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <meta name="color-scheme" content="dark light">
                     <title>@PROJECT_CLASS@ · @TABLE_CLASS@</title>
+                    <link rel="icon" href="data:,">
+                    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+                    <link rel="stylesheet"
+                          href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css">
                     <link rel="stylesheet" href="/sel/core/selBaseReset.css">
+                    <link rel="stylesheet" href="/sel/core/selBaseAccessibility.css">
+                    <link rel="stylesheet" href="/sel/core/selBaseToast.css">
                     <link rel="stylesheet" href="/sel/theme/contract/selThemeContract.css">
+                    <link rel="stylesheet" href="/sel/theme/contract/selThemeStates.css">
+                    <link rel="stylesheet" href="/sel/theme/contract/selThemeTypography.css">
+                    <link rel="stylesheet" href="/sel/components/panel/selPanel.css">
+                    <link rel="stylesheet" href="/sel/components/search/selSearch.css">
+                    <link rel="stylesheet" href="/sel/components/tree/selTree.css">
+                    <link rel="stylesheet" href="/sel/components/dropdown/selDropdownMenu.css">
+                    <link rel="stylesheet" href="/sel/components/grid/selGrid.css">
+                    <link rel="stylesheet" href="/sel/components/page-background/selPageBackground.css">
+                    <link rel="stylesheet" href="/sel/components/window/selWindow.css">
+                    <link rel="stylesheet" href="/sel/components/confirm-dialog/selConfirmDialog.css">
+                    <link rel="stylesheet" href="/sel/components/floating-panel/selFloatingPanel.css">
+                    <link rel="stylesheet" href="/sel/components/personalization/selPersonalization.css">
+                    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/theme.css">
+                    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/modes/dark.css">
+                    <link rel="stylesheet" href="/sel/theme/packs/crystal-tech/modes/light.css">
+                    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/theme.css">
+                    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/modes/dark.css">
+                    <link rel="stylesheet" href="/sel/theme/packs/candy-adventure/modes/light.css">
                     <link rel="stylesheet" href="/sel/theme/packs/glass-admin/theme.css">
                     <link rel="stylesheet" href="/sel/theme/packs/glass-admin/modes/dark.css">
+                    <link rel="stylesheet" href="/sel/theme/packs/glass-admin/modes/light.css">
                     <link rel="stylesheet" href="./@PAGE@.css">
                 </head>
                 <body>
-                    <main class="@PROJECT@-page">
-                        <header class="@PROJECT@-header">
-                            <div>
-                                <h1>@PROJECT_CLASS@ · @TABLE_CLASS@</h1>
-                                <p>左侧引用数据树，右侧业务表格</p>
-                            </div>
-                            <div>
-                                <button type="button" data-action="refresh">刷新</button>
-                                <button type="button" data-action="create">新增记录</button>
-                            </div>
-                        </header>
-                        <section class="@PROJECT@-workspace">
-                            <aside>
-                                <h2>@TABLE_CLASS@ 树</h2>
-                                <nav data-tree></nav>
-                            </aside>
-                            <section>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>ID</th><th>名称</th><th>租户</th>
-                                            <th>排序</th><th>状态</th><th>更新时间</th>
-                                            <th>操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody data-grid></tbody>
-                                </table>
-                                <p data-empty hidden>暂无数据，可点击“新增记录”。</p>
-                            </section>
-                        </section>
-                        <dialog data-editor>
-                            <form method="dialog">
-                                <h2>编辑记录</h2>
-                                <input type="hidden" name="id">
-                                <label>名称<input name="name" required maxlength="200"></label>
-                                <label>租户 ID<input name="tenantId" type="number" value="1" required></label>
-                                <label>操作用户 ID<input name="lastOperateUserId" type="number" value="1" required></label>
-                                <label>排序<input name="sortnum" type="number" value="0"></label>
-                                <menu>
-                                    <button value="cancel">取消</button>
-                                    <button value="default" data-action="save">保存</button>
-                                </menu>
-                                <p data-feedback></p>
-                            </form>
-                        </dialog>
-                    </main>
+                    <div data-sel-page-background-host></div>
+                    <div data-sel-personalization-host></div>
+                    <main class="@PROJECT@-page-stage" data-@PROJECT@-app
+                          aria-label="@PROJECT_CLASS@ @TABLE_CLASS@ 管理"></main>
+
+                    <script src="/sel/core/selBaseRuntime.js"></script>
+                    <script src="/sel/core/selAjax.js"></script>
+                    <script src="/sel/theme/runtime/selThemeRegistry.js"></script>
+                    <script src="/sel/theme/packs/crystal-tech/manifest.js"></script>
+                    <script src="/sel/theme/packs/candy-adventure/manifest.js"></script>
+                    <script src="/sel/theme/packs/glass-admin/manifest.js"></script>
+                    <script src="/sel/theme/runtime/selThemeManager.js"></script>
+                    <script src="/sel/components/panel/selPanel.js"></script>
+                    <script src="/sel/components/search/selSearch.js"></script>
+                    <script src="/sel/components/tree/selTree.js"></script>
+                    <script src="/sel/components/dropdown/selDropdownMenu.js"></script>
+                    <script src="/sel/components/grid/selGrid.js"></script>
+                    <script src="/sel/components/page-background/selPageBackground.js"></script>
+                    <script src="/sel/components/floating-panel/selFloatingPanel.js"></script>
+                    <script src="/sel/components/personalization/selPersonalizationRegistry.js"></script>
+                    <script src="/sel/components/personalization/selPersonalization.js"></script>
+                    <script src="/sel/components/window/selWindow.js"></script>
+                    <script src="/sel/components/confirm-dialog/selConfirmDialog.js"></script>
                     <script src="./@PAGE@.js"></script>
                 </body>
                 </html>
@@ -915,28 +936,72 @@ public final class MdaProjectTemplateCatalog {
     private static String pageJs() {
         return """
                 /*
-                 * @PAGE@.js：装配 @PROJECT_CLASS@ @TABLE_CLASS@ 的引用树和业务表格。
-                 * 网络错误显式展示，不创建静默兜底数据。
+                 * @PAGE@.js：用 SEL 公共控件装配 @PROJECT_CLASS@ @TABLE_CLASS@。
+                 * 应用层只维护接口、标准 payload 和业务事件，不创建控件内部 DOM。
                  */
                 (function @JS_SCOPE@Page() {
                     "use strict";
 
-                    const root = document.querySelector(".@PROJECT@-page");
-                    const grid = root.querySelector("[data-grid]");
-                    const empty = root.querySelector("[data-empty]");
-                    const dialog = root.querySelector("[data-editor]");
-                    const form = dialog.querySelector("form");
-                    const api = "/api/@PROJECT@/@TABLE@/";
-                    const treeApi =
-                            "/api/reference-data/@PROJECT@/@TABLE@/tree";
-                    let records = [];
+                    const required = [
+                        "selBaseRuntime", "selPanel", "selSearch", "selTree",
+                        "selDropdownMenu", "selGrid", "selWindow",
+                        "selConfirmDialog", "selPageBackground",
+                        "selPersonalization", "selThemeManager"
+                    ];
+                    const missing = required.filter((name) => !window[name]);
+                    if (missing.length > 0) {
+                        throw new Error("缺少 SEL 公共组件：" + missing.join("、"));
+                    }
 
-                    // 统一解析公共成功或异常响应。
+                    const root = window.selBaseRuntime.query(
+                            "[data-@PROJECT@-app]");
+                    const backgroundHost = window.selBaseRuntime.query(
+                            "[data-sel-page-background-host]");
+                    const personalizationHost = window.selBaseRuntime.query(
+                            "[data-sel-personalization-host]");
+                    const api = "/api/@PROJECT@/@TABLE@/";
+                    const treeApi = "/api/reference-data/@PROJECT@/@TABLE@/tree";
+                    const gridId = "@ACTUAL_TABLE@Grid";
+                    const editorId = "@ACTUAL_TABLE@Editor";
+                    const state = {
+                        records: [],
+                        treeItems: [],
+                        editingId: null,
+                        grid: null,
+                        editor: null,
+                        confirm: null
+                    };
+
+                    const layout = Object.freeze({
+                        top: Object.freeze([
+                            Object.freeze({component: "title", payload: "title"}),
+                            Object.freeze({component: "toolbar", children: Object.freeze([
+                                Object.freeze({component: "selSearch", payload: "search"}),
+                                Object.freeze({component: "filterReset", payload: "title"})
+                            ])})
+                        ]),
+                        left: Object.freeze([
+                            Object.freeze({component: "selTree", payload: "tree"})
+                        ]),
+                        center: Object.freeze([
+                            Object.freeze({component: "selGrid", payload: "$aggregate"})
+                        ]),
+                        right: Object.freeze([]),
+                        bottom: Object.freeze([
+                            Object.freeze({component: "footer", children: Object.freeze([
+                                Object.freeze({component: "gridSummary", payload: "pagination",
+                                    children: Object.freeze([Object.freeze({
+                                        component: "selDropdownMenu", slot: "pageSize",
+                                        payload: "select.pageSize"
+                                    })])}),
+                                Object.freeze({component: "pagination", payload: "pagination"}),
+                                Object.freeze({component: "feedback", payload: "title.messages"})
+                            ])})
+                        ])
+                    });
+
                     async function request(url, options = {}) {
-                        const response = await fetch(url, {
-                            headers: { "Content-Type": "application/json" },
-                            ...options
-                        });
+                        const response = await fetch(url, options);
                         const data = await response.json();
                         if (!response.ok || data.success === false) {
                             throw new Error(data.msg || "请求失败。");
@@ -944,112 +1009,258 @@ public final class MdaProjectTemplateCatalog {
                         return data;
                     }
 
-                    // 用真实接口记录重绘右侧表格。
-                    function render() {
-                        grid.replaceChildren(...records.map((item) => {
-                            const row = document.createElement("tr");
-                            [
-                                item.id, item.name, item.tenantId, item.sortnum,
-                                item.status === 1 ? "有效" : "停用",
-                                item.updatedAt || ""
-                            ].forEach((value) => {
-                                const cell = document.createElement("td");
-                                cell.textContent = String(value ?? "");
-                                row.appendChild(cell);
-                            });
-                            const actions = document.createElement("td");
-                            const edit = document.createElement("button");
-                            edit.type = "button";
-                            edit.textContent = "编辑";
-                            edit.addEventListener(
-                                    "click", () => openEditor(item));
-                            const removeButton =
-                                    document.createElement("button");
-                            removeButton.type = "button";
-                            removeButton.textContent = "删除";
-                            removeButton.addEventListener(
-                                    "click", () => remove(item));
-                            actions.append(edit, removeButton);
-                            row.appendChild(actions);
-                            return row;
-                        }));
-                        empty.hidden = records.length > 0;
-                    }
-
-                    // 读取当前表前一百条有效记录。
-                    async function load() {
+                    async function loadRecords() {
                         const data = await request(
                                 api + "getStore.htm?pageNo=1&pageSize=100");
-                        records = data.records || [];
-                        render();
+                        return Array.isArray(data.records) ? data.records : [];
                     }
 
-                    // 从 reference-data 统一路由加载左侧树。
                     async function loadTree() {
                         const data = await request(treeApi + "?tenantId=1");
-                        const host = root.querySelector("[data-tree]");
-                        const items = Array.isArray(data.data) ? data.data : [];
-                        host.replaceChildren(...items.map((item) => {
-                            const button = document.createElement("button");
-                            button.type = "button";
-                            button.textContent = item.label;
-                            return button;
+                        return Array.isArray(data.data) ? data.data : [];
+                    }
+
+                    function treeItems(items) {
+                        return items.map((item) => Object.freeze({
+                            id: String(item.id || item.value || "root"),
+                            label: String(item.label || "全部@TABLE_CLASS@"),
+                            icon: "ri-folder-3-line",
+                            count: state.records.length,
+                            filter: Object.freeze({}),
+                            children: Array.isArray(item.children)
+                                ? Object.freeze(treeItems(item.children)) : undefined
                         }));
                     }
 
-                    // 新增使用默认字段，编辑回填真实记录。
-                    function openEditor(item = {}) {
-                        form.reset();
-                        form.elements.id.value = item.id || "";
-                        form.elements.name.value = item.name || "";
-                        form.elements.tenantId.value = item.tenantId || 1;
-                        form.elements.lastOperateUserId.value =
-                                item.lastOperateUserId || 1;
-                        form.elements.sortnum.value = item.sortnum || 0;
-                        dialog.showModal();
+                    function payload() {
+                        const normalizedTree = treeItems(state.treeItems);
+                        return Object.freeze({
+                            grid: Object.freeze({mode: "records", idField: "id",
+                                statusField: "status",
+                                searchFields: Object.freeze(["id", "name"])}),
+                            data: Object.freeze({items: Object.freeze([...state.records]),
+                                selectedIds: Object.freeze([])}),
+                            column: Object.freeze({gridId,
+                                ariaLabel: "@TABLE_CLASS@ 表格",
+                                emptyText: "暂无@TABLE_CLASS@记录",
+                                items: Object.freeze([
+                                    Object.freeze({id: "id", field: "id", label: "ID",
+                                        renderer: "text", width: "8%"}),
+                                    Object.freeze({id: "name", field: "name", label: "名称",
+                                        renderer: "text", width: "27%"}),
+                                    Object.freeze({id: "tenantId", field: "tenantId", label: "租户",
+                                        renderer: "text", width: "10%"}),
+                                    Object.freeze({id: "sortnum", field: "sortnum", label: "排序",
+                                        renderer: "text", width: "10%"}),
+                                    Object.freeze({id: "status", field: "status", label: "状态",
+                                        renderer: "badge", labelSource: "status", width: "10%"}),
+                                    Object.freeze({id: "updatedAt", field: "updatedAt",
+                                        label: "更新时间", renderer: "time", nowrap: true,
+                                        width: "22%"}),
+                                    Object.freeze({id: "actions", field: "id", label: "操作",
+                                        renderer: "actions", width: "13%", actions: Object.freeze([
+                                            Object.freeze({id: "edit", label: "编辑记录",
+                                                icon: "ri-edit-line"}),
+                                            Object.freeze({id: "delete", label: "删除记录",
+                                                icon: "ri-delete-bin-6-line", tone: "danger"})
+                                        ])})
+                                ])}),
+                            title: Object.freeze({title: "@PROJECT_CLASS@ · @TABLE_CLASS@",
+                                subtitle: "SELPLAT GENERATED APPLICATION",
+                                description: "左侧引用数据树，右侧业务表格",
+                                ariaLabel: "@TABLE_CLASS@ 管理面板",
+                                ariaLabels: Object.freeze({statusTabs: "状态统计",
+                                    headerActions: "快捷操作", toolbar: "筛选工具栏",
+                                    sidebar: "引用数据树", content: "业务列表",
+                                    board: "业务表格", pagination: "业务分页"}),
+                                statusTabs: Object.freeze([
+                                    Object.freeze({value: "", label: "全部",
+                                        count: state.records.length})
+                                ]),
+                                actions: Object.freeze([
+                                    Object.freeze({id: "filter", label: "搜索",
+                                        icon: "ri-search-line"}),
+                                    Object.freeze({id: "new", label: "新增记录",
+                                        icon: "ri-add-line", primary: true})
+                                ]),
+                                resetLabel: "重置",
+                                messages: Object.freeze({selectProject: "选择记录",
+                                    viewProject: "查看记录", editProject: "编辑记录",
+                                    moreActions: "更多操作", filtersReset: "筛选已重置",
+                                    treePrefix: "目录", expandLeftRegion: "展开目录",
+                                    collapseLeftRegion: "收起目录",
+                                    filterActivated: "搜索框已激活",
+                                    newOpened: "已打开新增窗口",
+                                    exportPreparing: "操作已触发", movePrefix: "移动到"})}),
+                            search: Object.freeze({gridId, label: "搜索记录",
+                                placeholder: "ID 或名称…", buttonLabel: "查询",
+                                clearLabel: "清空搜索条件", icon: "ri-search-line",
+                                buttonIcon: "ri-search-line", clearIcon: "ri-close-line",
+                                defaultValue: "", clearable: true,
+                                submitOnEnter: true, submitOnClear: true,
+                                allowEmpty: true, trim: true}),
+                            tree: Object.freeze({gridId, ariaLabel: "@TABLE_CLASS@ 引用数据树",
+                                heading: "@TABLE_CLASS@ 目录",
+                                summary: state.records.length + " 条记录",
+                                selectedId: normalizedTree[0]?.id || "root",
+                                items: Object.freeze(normalizedTree)}),
+                            menu: Object.freeze({gridId, ariaLabel: "记录操作"}),
+                            pagination: Object.freeze({gridId, currentPage: 1, pageSize: 20,
+                                totalCount: state.records.length,
+                                summaryAll: "共 {total} 条",
+                                summaryFiltered: "当前 {visible} 条 · 共 {total} 条",
+                                previousLabel: "上一页", nextLabel: "下一页",
+                                pageChangedMessage: "已切换到第 {page} 页",
+                                pageSizeChangedMessage: "每页显示 {size} 条"}),
+                            select: Object.freeze({pageSize: Object.freeze({gridId,
+                                role: "page-size", label: "每页显示条数",
+                                ariaLabel: "每页显示条数",
+                                currentTemplate: "{label}，当前：{value}",
+                                menuTitle: "选择每页显示条数", scrollAfter: 4,
+                                options: Object.freeze([
+                                    Object.freeze({value: "10", label: "10 条/页",
+                                        icon: "ri-list-check-3"}),
+                                    Object.freeze({value: "20", label: "20 条/页",
+                                        icon: "ri-list-check-3", selected: true}),
+                                    Object.freeze({value: "50", label: "50 条/页",
+                                        icon: "ri-list-check-3"})
+                                ])})})
+                        });
                     }
 
-                    // 根据是否存在主键选择新增或更新接口。
-                    async function save(event) {
-                        event.preventDefault();
-                        const values =
-                                Object.fromEntries(new FormData(form));
-                        const editing = Boolean(values.id);
-                        if (!editing) delete values.id;
-                        await request(
-                                api + (editing ? "update.htm" : "create.htm"),
-                                {
-                                    method: "POST",
-                                    body: JSON.stringify(values)
-                                });
-                        dialog.close();
-                        await load();
+                    function editorOptions(editing) {
+                        return Object.freeze({id: editorId,
+                            title: editing ? "编辑@TABLE_CLASS@" : "新增@TABLE_CLASS@",
+                            subtitle: "默认字段遵循 SELPLAT 租户、排序和操作人规则",
+                            closeLabel: "关闭编辑窗口", cancelLabel: "取消",
+                            submitLabel: editing ? "保存修改" : "保存记录",
+                            validationMessage: "请完成全部必填字段", autoSuccess: false,
+                            rows: Object.freeze([
+                                Object.freeze([Object.freeze({name: "name", label: "名称",
+                                    type: "text", icon: "ri-text", required: true,
+                                    maxLength: 200})]),
+                                Object.freeze([
+                                    Object.freeze({name: "tenantId", label: "租户 ID",
+                                        type: "number", icon: "ri-building-line", required: true,
+                                        value: "1"}),
+                                    Object.freeze({name: "lastOperateUserId", label: "操作用户 ID",
+                                        type: "number", icon: "ri-user-line", required: true,
+                                        value: "1"})
+                                ]),
+                                Object.freeze([Object.freeze({name: "sortnum", label: "排序",
+                                    type: "number", icon: "ri-sort-number-asc", value: "0"})])
+                            ])});
                     }
 
-                    // 删除提交主键和固定操作人，由公共 Service 假删除。
+                    function openEditor(item = null) {
+                        state.editingId = item?.id || null;
+                        state.editor.setLocale(editorOptions(Boolean(item)));
+                        state.editor.reset();
+                        state.editor.setValues({name: "", tenantId: 1,
+                            lastOperateUserId: 1, sortnum: 0, ...(item || {})});
+                        state.editor.open();
+                    }
+
+                    async function save(values) {
+                        state.editor.setLoading(true);
+                        try {
+                            const editing = Boolean(state.editingId);
+                            await request(api + (editing ? "update.htm" : "create.htm"), {
+                                method: "POST",
+                                headers: {"Content-Type":
+                                    "application/x-www-form-urlencoded;charset=UTF-8"},
+                                body: new URLSearchParams(editing
+                                    ? {...values, id: state.editingId} : values)
+                            });
+                            state.editor.close();
+                            await refresh();
+                        } catch (error) {
+                            state.editor.setFeedback(error.message, true);
+                        } finally {
+                            state.editor.setLoading(false);
+                        }
+                    }
+
                     async function remove(item) {
-                        if (!window.confirm(
-                                "确认删除“" + item.name + "”？")) return;
+                        const confirmed = await state.confirm.open({
+                            title: "删除@TABLE_CLASS@", message: "删除后记录将不再显示。",
+                            target: String(item.name || item.id), tone: "danger",
+                            confirmLabel: "确认删除", cancelLabel: "取消"
+                        });
+                        if (!confirmed) return;
                         await request(api + "delete.htm", {
                             method: "POST",
-                            body: JSON.stringify({
-                                id: item.id,
-                                lastOperateUserId: 1
-                            })
+                            headers: {"Content-Type":
+                                "application/x-www-form-urlencoded;charset=UTF-8"},
+                            body: new URLSearchParams({id: item.id,
+                                lastOperateUserId: 1})
                         });
-                        await load();
+                        await refresh();
                     }
 
-                    root.querySelector("[data-action='refresh']")
-                            .addEventListener("click", load);
-                    root.querySelector("[data-action='create']")
-                            .addEventListener("click", () => openEditor());
-                    root.querySelector("[data-action='save']")
-                            .addEventListener("click", save);
-                    Promise.all([load(), loadTree()]).catch((error) => {
-                        root.querySelector("[data-feedback]").textContent =
-                                error.message;
-                    });
+                    async function refresh() {
+                        [state.records, state.treeItems] = await Promise.all([
+                            loadRecords(), loadTree()
+                        ]);
+                        const nextPayload = payload();
+                        window.selPanel.setLocale(window.selPanel.get(gridId),
+                                {view: nextPayload});
+                        state.grid.setLocale(nextPayload);
+                    }
+
+                    async function mount() {
+                        [state.records, state.treeItems] = await Promise.all([
+                            loadRecords(), loadTree()
+                        ]);
+                        const view = payload();
+                        const panel = window.selPanel.create(root, {gridId,
+                            sourceId: gridId, entity: "@ACTUAL_TABLE@", view: "list",
+                            layout: "single", structure: layout,
+                            ariaLabel: view.title.ariaLabel});
+                        if (!panel || !window.selPanel.mount(panel, {view})) {
+                            throw new Error("SEL 公共面板挂载失败。");
+                        }
+                        if (!window.selSearch.mount(panel, view.search)
+                                || !window.selTree.mount(panel, view.tree)) {
+                            throw new Error("SEL 搜索或树控件挂载失败。");
+                        }
+                        window.selDropdownMenu.mountAll(panel);
+                        state.grid = window.selGrid.mount(panel, view);
+                        const messages = await request(
+                                "/sel/components/window/i18n/zh-CN.json");
+                        state.editor = window.selWindow.mount(root,
+                                {messages, ...editorOptions(false)});
+                        state.confirm = window.selConfirmDialog.mount(root,
+                                {id: "@ACTUAL_TABLE@DeleteConfirm"});
+                        if (!state.grid || !state.editor || !state.confirm) {
+                            throw new Error("SEL 表格或窗口控件挂载失败。");
+                        }
+                        panel.addEventListener("selGrid:new", () => openEditor());
+                        panel.addEventListener("selGrid:action", (event) => {
+                            const detail = event.detail;
+                            if (!detail || detail.instanceKey !== gridId) return;
+                            if (detail.action === "edit") openEditor(detail.record);
+                            if (detail.action === "delete") {
+                                remove(detail.record).catch(showError);
+                            }
+                        });
+                        root.addEventListener("selWindow:submit", (event) => {
+                            if (event.detail?.id === editorId) save(event.detail.values);
+                        });
+                    }
+
+                    function showError(error) {
+                        console.error("@TABLE_CLASS@ 页面操作失败。", error);
+                    }
+
+                    const background = window.selPageBackground.mount(backgroundHost,
+                            {defaults: Object.freeze({theme: "solid-dark", overlay: 0,
+                                brightness: 100, blur: 0})});
+                    if (!background || !window.selPersonalization.mount(
+                            personalizationHost, {backgroundController: background})) {
+                        throw new Error("SEL 主题个性化控件挂载失败。");
+                    }
+                    mount().catch(showError);
                 })();
                 """;
     }
@@ -1057,108 +1268,40 @@ public final class MdaProjectTemplateCatalog {
     /** @return 工程前缀隔离的页面样式模板。 */
     private static String pageCss() {
         return """
-                /* @PROJECT@ 页面样式严格使用工程名前缀。 */
-                html,
-                body {
+                /* 应用 CSS 只分配 SEL 公共面板的页面舞台，不覆盖控件内部结构。 */
+                html {
+                    min-width: 1080px;
                     min-height: 100%;
+                    background: var(--sel-theme-page-background);
+                    scrollbar-color: var(--sel-theme-scrollbar-thumb)
+                        var(--sel-theme-scrollbar-track);
+                    scrollbar-width: thin;
+                }
+
+                body {
+                    min-height: 100vh;
                     margin: 0;
-                    color: #e8f1ff;
-                    background: #071326;
-                    font-family: Arial, sans-serif;
+                    overflow: auto;
+                    color: var(--sel-theme-text-body);
+                    background: var(--sel-theme-page-background);
+                    font-family: var(--sel-theme-font-family);
+                    -webkit-font-smoothing: antialiased;
+                    isolation: isolate;
                 }
 
-                .@PROJECT@-page {
-                    padding: 24px;
-                }
-
-                .@PROJECT@-header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    margin-bottom: 18px;
-                    padding: 20px;
-                    border: 1px solid #24436b;
-                    border-radius: 16px;
-                    background: #0d1e36;
-                }
-
-                .@PROJECT@-header h1 {
-                    margin: 0 0 6px;
-                }
-
-                .@PROJECT@-header p {
-                    margin: 0;
-                    color: #9fb4cf;
-                }
-
-                button {
-                    margin: 3px;
-                    padding: 9px 14px;
-                    border: 1px solid #315579;
-                    border-radius: 9px;
-                    color: #eef7ff;
-                    background: #163456;
-                    cursor: pointer;
-                }
-
-                .@PROJECT@-workspace {
+                .@PROJECT@-page-stage {
                     display: grid;
-                    grid-template-columns: 260px minmax(0, 1fr);
-                    gap: 16px;
-                    min-height: 620px;
-                }
-
-                aside,
-                .@PROJECT@-workspace > section {
-                    padding: 18px;
-                    border: 1px solid #24436b;
-                    border-radius: 16px;
-                    background: #0d1e36;
-                }
-
-                nav button {
-                    display: block;
                     width: 100%;
-                    text-align: left;
+                    min-height: 100vh;
+                    box-sizing: border-box;
+                    grid-template-columns: minmax(0, 1fr);
+                    place-items: center;
+                    padding: var(--sel-theme-viewport-gap);
                 }
 
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-
-                th,
-                td {
-                    padding: 11px;
-                    border-bottom: 1px solid #213b5d;
-                    text-align: left;
-                }
-
-                dialog {
-                    min-width: 420px;
-                    border: 1px solid #315579;
-                    border-radius: 14px;
-                    color: #e8f1ff;
-                    background: #0d1e36;
-                }
-
-                dialog form,
-                dialog label {
-                    display: grid;
-                    gap: 12px;
-                }
-
-                dialog input {
-                    padding: 10px;
-                    border: 1px solid #315579;
-                    border-radius: 8px;
-                    color: #fff;
-                    background: #09172a;
-                }
-
-                @media (max-width: 900px) {
-                    .@PROJECT@-workspace {
-                        grid-template-columns: 1fr;
+                @media (max-height: 620px) {
+                    .@PROJECT@-page-stage {
+                        align-items: start;
                     }
                 }
                 """;

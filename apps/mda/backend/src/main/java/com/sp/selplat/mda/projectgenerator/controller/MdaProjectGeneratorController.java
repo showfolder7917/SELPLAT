@@ -1,9 +1,9 @@
 package com.sp.selplat.mda.projectgenerator.controller;
 
+import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
-import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationRequest;
-import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationResult;
+import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationData;
 import com.sp.selplat.mda.projectgenerator.service.MdaProjectGeneratorService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,8 +38,8 @@ public class MdaProjectGeneratorController {
      * @throws com.sp.selplat.common.exception.CommonBusinessException 输入非法或目标冲突时抛出；失败不覆盖已有文件
      */
     @PostMapping("create.htm")
-    public String create(@RequestBody MdaProjectGenerationRequest request) {
-        MdaProjectGenerationResult data = service.generate(request);
+    public String create(@RequestBody CommonParam request) {
+        MdaProjectGenerationData data = service.generate(request);
         CommonResult result = new CommonResult();
         result.setSuccess(true);
         result.setData(data);

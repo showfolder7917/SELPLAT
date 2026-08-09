@@ -1,0 +1,1 @@
+MERGE INTO CommonSequenceSegment (tenantId, lastOperateUserId, seqCode, seqName, nextStartId, stepSize, versionNo, remark, sortnum, status) KEY(seqCode) VALUES (1, 1, 'JapaneseN2BlueBookQuestionId', 'JapaneseN2BlueBookQuestion 主键号段', 100000, 1000, 0, '按模块缓存号段生成主键', 10.00, 1);

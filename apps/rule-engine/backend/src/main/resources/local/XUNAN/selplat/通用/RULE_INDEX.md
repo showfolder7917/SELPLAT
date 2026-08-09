@@ -3,6 +3,26 @@
 <!-- 本索引只登记当前用户在 SELPLAT 各应用之间复用的个人工程规则。 -->
 active_user_selplat_general_rule_root = local/XUNAN/selplat/通用/rule/
 
+<!-- SELPLAT 全部程序统一执行语言登记、源码归属和实验工具隔离门禁。 -->
+SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md
+<!-- 新建、移动或删除任一应用、shared 或 rule-engine 程序源码时加载。 -->
+load_rule_for_active_user_selplat_program_source_create_move_or_delete = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES
+<!-- 业务 Controller、Service 或生成模板变更 HTTP 请求输出类型时加载，禁止重复建立公共协议。 -->
+load_rule_for_active_user_selplat_application_http_request_response_or_result_change = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES
+<!-- 新增 src/main 语言目录、构建语言入口或规则能力时加载。 -->
+load_rule_for_active_user_selplat_source_language_root_build_entry_or_ability_change = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES
+<!-- 交付前检查未登记语言、错误能力归属、实验代码和源码缓存时加载。 -->
+load_rule_for_active_user_selplat_all_program_source_ownership_delivery_scan = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES
+
+<!-- SELPLAT 工具运行数据统一进入 OPTION/temp，并由程序路径守卫阻止通用技能默认目录逃逸。 -->
+SELPLAT_TOOL_RUNTIME_TEMP_PATH_ESCAPE_GUARD_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT工具运行临时目录防逃逸规则.md
+<!-- 运行 PDF、OCR、导入器、媒体生成或其他会产生中间文件的工具时加载。 -->
+load_rule_for_active_user_selplat_pdf_ocr_importer_media_or_tool_runtime = SELPLAT_TOOL_RUNTIME_TEMP_PATH_ESCAPE_GUARD_RULES
+<!-- 新增或修改工具输出参数、临时目录默认值、路径解析和清理逻辑时加载。 -->
+load_rule_for_active_user_selplat_tool_output_temp_default_path_guard_or_cleanup = SELPLAT_TOOL_RUNTIME_TEMP_PATH_ESCAPE_GUARD_RULES
+<!-- 交付前扫描工程根 tmp、runtime、日志或临时副本污染时加载。 -->
+load_rule_for_active_user_selplat_root_runtime_pollution_delivery_scan = SELPLAT_TOOL_RUNTIME_TEMP_PATH_ESCAPE_GUARD_RULES
+
 <!-- SELPLAT 所有公共 selGrid 在真实横向溢出时默认启用可发现且主题一致的滚动反馈。 -->
 SELPLAT_GRID_HORIZONTAL_SCROLL_DEFAULT_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT表格横向滚动默认规则.md
 <!-- 创建、装配或调整任一应用的公共 selGrid 时加载，禁止把滚动条可见性降级为应用显式开关。 -->

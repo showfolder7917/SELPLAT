@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 验证当前稳定用户通过九层动态递归索引完整登记十二个用户逻辑 ID。
+     * 验证当前稳定用户通过十层动态递归索引完整登记十五个用户逻辑 ID。
      * 真实传参示例：读取工程根 {@code AGENTS.md} 中的当前稳定用户并递归加载其 {@code RULE_INDEX.md}。
-     * 真实返回示例：索引验证结果为 {@code indexCount=9, ruleCount=12}。
+     * 真实返回示例：索引验证结果为 {@code indexCount=10, ruleCount=15}。
      * 异常或副作用示例：身份、索引或规则路径无效时抛出 {@link IOException}，不修改规则资源。
      */
     @Test
@@ -23,8 +23,61 @@ class ActiveUserRuleOverrideIntegrationTest {
         LayeredRuleLoader.IndexValidation validation =
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
-        assertEquals(9, validation.indexCount());
-        assertEquals(12, validation.ruleCount());
+        assertEquals(10, validation.indexCount());
+        assertEquals(15, validation.ruleCount());
+    }
+
+    /**
+     * 验证 SELPLAT 全部程序的源码语言与归属门禁能从当前用户通用索引命中。
+     * 真实传参示例：逻辑 ID 为 {@code SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES}。
+     * 真实返回示例：规则正文要求普通 Gradle 后端只登记 Java，rule-engine 按语言和层级管理能力。
+     * 异常或副作用示例：索引缺失或规则路径失效时抛出 {@link IOException}，不创建或移动源码。
+     */
+    @Test
+    void shouldLoadProgramSourceLanguageAndOwnershipGuardFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES",
+            "selplat",
+            "selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md",
+            "selplat_standard_gradle_backend_language_allowlist = java"
+        );
+        assertTrue(rule.content().contains(
+            "selplat_rule_engine_language_allowlist = java,python,node"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_source_ownership_blocking_gate = zero_violations_required"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_python_bytecode_cache_root = <SELPLAT_ROOT>/cache/python-pycache"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_application_http_request_contract = CommonParam,CommonBatchParam,CommonPageParam"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_application_private_http_protocol_type_policy = forbidden"
+        ));
+    }
+
+    /**
+     * 验证工具运行临时目录防逃逸规则能从当前用户通用索引命中。
+     * 真实传参示例：逻辑 ID 为 {@code SELPLAT_TOOL_RUNTIME_TEMP_PATH_ESCAPE_GUARD_RULES}。
+     * 真实返回示例：规则正文要求工程规则覆盖通用技能默认目录，并在读写前执行路径预检。
+     * 异常或副作用示例：索引缺失或规则路径失效时抛出 {@link IOException}，不创建临时文件。
+     */
+    @Test
+    void shouldLoadToolRuntimeTempPathEscapeGuardFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "SELPLAT_TOOL_RUNTIME_TEMP_PATH_ESCAPE_GUARD_RULES",
+            "selplat",
+            "selplat/通用/rule/RUL_SELPLAT工具运行临时目录防逃逸规则.md",
+            "selplat_project_rule_overrides_generic_skill_temp_default = true"
+        );
+        assertTrue(rule.content().contains(
+            "selplat_temp_path_preflight = resolve_before_io,descendant_of_OPTION_temp,root_itself_forbidden"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_root_pollution_delivery_gate = scan_tmp_runtime_logs_and_temporary_copies"
+        ));
     }
 
     /**
@@ -52,6 +105,45 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_scaffold_service_architecture_gate = current_mda_contract"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_empty_data_script = explanatory_comment,SELECT_1_statement,no_business_rows"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_desktop_registration = applications_json_entry,internal_path_allowlist"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_final_runtime = unified_host_required,standalone_application_not_sufficient"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_http_contract = CommonParam,CommonResult,"
+                + "no_private_Request_Response_Result_Page_Param"
+        ));
+    }
+
+    /**
+     * 验证 Japanese 题库生成规则从应用叶子索引命中并固定指定语音环境。
+     * 真实传参示例：逻辑 ID 为 {@code JAPANESE_QUESTION_BANK_AI_MEDIA_GENERATION_RULES}。
+     * 真实返回示例：规则正文包含 NanamiNeural、edge-tts venv 和云存储接口边界。
+     * 异常或副作用示例：索引或规则失效时抛出 {@link IOException}，不调用任何外部生成进程。
+     */
+    @Test
+    void shouldLoadJapaneseQuestionBankAiMediaRuleFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "JAPANESE_QUESTION_BANK_AI_MEDIA_GENERATION_RULES",
+            "selplat",
+            "selplat/应用/japanese/rule/RUL_日本语题库AI媒体生成规则.md",
+            "japanese_generation_confirmation_policy = direct_execution_without_second_confirmation"
+        );
+        assertTrue(rule.content().contains(
+            "OPTION/edge-tts-venv/bin/edge-tts"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_media_cloud_migration_boundary = JapaneseMediaStorage_interface"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_question_http_contract = CommonParam,CommonBatchParam,CommonPageParam,"
+                + "CommonResult,no_private_protocol_types"
         ));
     }
 

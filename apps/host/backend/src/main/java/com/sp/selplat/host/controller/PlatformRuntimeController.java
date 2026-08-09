@@ -1,11 +1,17 @@
 package com.sp.selplat.host.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
 import com.sp.selplat.referencedata.contract.service.ReferenceDataQueryService;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,15 +27,21 @@ public class PlatformRuntimeController {
 
     // 引用数据查询契约 → 宿主已成功导入 reference-data backend 的装配证据。
     private final ReferenceDataQueryService referenceDataQueryService;
+    // 桌面应用清单 → 健康接口与真实桌面共用的唯一模块代码来源。
+    private final List<String> runtimeModules;
 
     /**
      * 创建平台运行状态 Controller。
      *
      * @param referenceDataQueryService host 装配的引用数据查询 Service，例如
      *     {@code DefaultReferenceDataQueryService}
+     * @param objectMapper Spring 提供的 JSON 读取器，例如读取 desktop/applications.json
      */
-    public PlatformRuntimeController(ReferenceDataQueryService referenceDataQueryService) {
+    public PlatformRuntimeController(
+            ReferenceDataQueryService referenceDataQueryService,
+            ObjectMapper objectMapper) {
         this.referenceDataQueryService = referenceDataQueryService;
+        this.runtimeModules = loadRuntimeModules(objectMapper);
     }
 
     /**
@@ -37,7 +49,7 @@ public class PlatformRuntimeController {
      *
      * @return 固定成功结构，例如
      *     {@code {"success":true,"data":{"status":"READY","runtime":"platform-runtime",}}
-     *     {@code "modules":["host","reference-data","uniauth"],"referenceDataServiceReady":true},}
+     *     {@code "modules":["host","mda","reference-data","uniauth","japanese"],}
      *     {@code "msg":"平台宿主已启动。"}}
      */
     @GetMapping(value = "/health", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -46,7 +58,7 @@ public class PlatformRuntimeController {
         // 当前 Spring 上下文事实 → 平台状态、运行时身份和已装配模块清单。
         data.put("status", "READY");
         data.put("runtime", "platform-runtime");
-        data.put("modules", List.of("host", "reference-data", "uniauth"));
+        data.put("modules", runtimeModules);
         data.put("referenceDataServiceReady", referenceDataQueryService != null);
 
         CommonResult result = new CommonResult();
@@ -55,5 +67,34 @@ public class PlatformRuntimeController {
         result.setMsg("平台宿主已启动。");
         // 完整 CommonResult → host 健康检查使用的 application/json 文本。
         return JsonUtils.toJsonIgnoreNull(result);
+    }
+
+    /**
+     * 从桌面唯一应用清单构建统一运行时模块列表。
+     * 真实传参示例：applications.json 含 mda、reference-data、uniauth、japanese。
+     * 真实返回示例：{@code [host,mda,reference-data,uniauth,japanese]}。
+     * 异常或副作用示例：清单缺失、JSON 无效或 code 为空时阻断 Host 启动，不修改文件。
+     *
+     * @param objectMapper Spring JSON 读取器
+     * @return 包含 host 和全部桌面应用 code 的不可变列表
+     */
+    private List<String> loadRuntimeModules(ObjectMapper objectMapper) {
+        ClassPathResource manifest = new ClassPathResource("static/desktop/applications.json");
+        try (InputStream input = manifest.getInputStream()) {
+            JsonNode applications = objectMapper.readTree(input).path("applications");
+            if (!applications.isArray()) {
+                throw new IOException("desktop applications 必须是数组");
+            }
+            List<String> modules = new ArrayList<>();
+            modules.add("host");
+            for (JsonNode application : applications) {
+                String code = application.path("code").asText().strip();
+                if (code.isEmpty()) throw new IOException("desktop application code 不能为空");
+                if (!modules.contains(code)) modules.add(code);
+            }
+            return List.copyOf(modules);
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法从桌面清单建立统一运行时模块列表。", exception);
+        }
     }
 }

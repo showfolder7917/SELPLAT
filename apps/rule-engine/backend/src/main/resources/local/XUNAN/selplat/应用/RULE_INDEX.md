@@ -8,3 +8,6 @@ ACTIVE_USER_SELPLAT_RULE_ENGINE_RULE_INDEX = local/XUNAN/selplat/应用/rule-eng
 
 <!-- mda 保存当前用户对本地多数据库开发工作台的专项目标边界。 -->
 ACTIVE_USER_SELPLAT_MDA_RULE_INDEX = local/XUNAN/selplat/应用/mda/RULE_INDEX.md
+
+<!-- japanese 保存当前用户对日语题库 AI、语音与媒体存储的专项约束。 -->
+ACTIVE_USER_SELPLAT_JAPANESE_RULE_INDEX = local/XUNAN/selplat/应用/japanese/RULE_INDEX.md

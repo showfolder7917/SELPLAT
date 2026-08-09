@@ -2,8 +2,8 @@ package com.sp.selplat.mda.projectgenerator.service.impl;
 
 import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.exception.CommonSystemException;
-import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationRequest;
-import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationResult;
+import com.sp.selplat.common.util.CommonParam;
+import com.sp.selplat.mda.projectgenerator.model.MdaProjectGenerationData;
 import com.sp.selplat.mda.projectgenerator.model.MdaProjectNames;
 import com.sp.selplat.mda.projectgenerator.service.MdaProjectGeneratorService;
 import com.sp.selplat.mda.projectgenerator.template.MdaProjectTemplateCatalog;
@@ -37,6 +37,8 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
     private static final String SETTINGS_ANCHOR = "// SELPLAT-GENERATED-MODULES";
     // Host 依赖登记使用固定注释，生成模块不会进入其他 Gradle 配置区。
     private static final String HOST_ANCHOR = "    // SELPLAT-GENERATED-MODULES";
+    // Desktop 内部路径登记使用固定注释，避免生成器依赖 JavaScript 数组行号。
+    private static final String DESKTOP_PATH_ANCHOR = "// SELPLAT-GENERATED-APPLICATION-PATHS";
     // 当前服务绑定的唯一 SELPLAT 工程根。
     private final Path projectRoot;
 
@@ -69,7 +71,7 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
      * @throws CommonSystemException 文件准备或原子写入失败时抛出；副作用会回滚本次写入
      */
     @Override
-    public synchronized MdaProjectGenerationResult generate(MdaProjectGenerationRequest request) {
+    public synchronized MdaProjectGenerationData generate(CommonParam request) {
         MdaProjectNames names = normalize(request);
         Path projectDirectory = insideRoot(projectRoot.resolve("apps").resolve(names.projectCode()));
         boolean projectCreated = !Files.exists(projectDirectory);
@@ -87,7 +89,7 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
         }
         applyPlan(plan);
         String pageCode = projectCreated ? names.projectCode() : names.tableCode();
-        return new MdaProjectGenerationResult(
+        return new MdaProjectGenerationData(
                 names.projectCode(),
                 names.tableCode(),
                 names.actualTableName(),
@@ -104,9 +106,9 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
      * @return 命名集合，例如工程类名 {@code Japan}、表类名 {@code JapanRegionType}
      * @throws CommonBusinessException 任一输入不符合小写短横线规则时抛出
      */
-    private MdaProjectNames normalize(MdaProjectGenerationRequest request) {
-        String projectCode = request == null ? "" : cleanCode(request.projectName());
-        String tableCode = request == null ? "" : cleanCode(request.tableName());
+    private MdaProjectNames normalize(CommonParam request) {
+        String projectCode = cleanCode(commonText(request, "projectName"));
+        String tableCode = cleanCode(commonText(request, "tableName"));
         if (!CODE_PATTERN.matcher(projectCode).matches()) {
             throw new CommonBusinessException(
                     "MDA_PROJECT_NAME_INVALID",
@@ -126,6 +128,21 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
                 tableClass,
                 projectClass + tableClass,
                 "com.sp.selplat." + projectCode.replace("-", ""));
+    }
+
+    /**
+     * 从 SELPLAT 公共参数容器中读取一个 MDA 生成字段。
+     * 真实传参示例：参数为 {@code {projectName:"japan"}}，字段名为 {@code projectName}。
+     * 真实返回示例：返回 {@code "japan"}；字段缺失时返回空串。
+     * 异常或副作用示例：请求为空时不抛出异常，不修改参数映射。
+     *
+     * @param request SELPLAT 公共单条请求参数
+     * @param field 生成字段名
+     * @return 字段的文本值
+     */
+    private String commonText(CommonParam request, String field) {
+        Object value = request == null ? null : request.getParam(field);
+        return value == null ? "" : String.valueOf(value);
     }
 
     /**
@@ -174,6 +191,12 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
                 changedFiles.put(
                         projectRoot.resolve("apps/host/backend/build.gradle"),
                         registerHostDependency(names));
+                changedFiles.put(
+                        projectRoot.resolve("apps/host/backend/src/main/resources/static/desktop/applications.json"),
+                        registerDesktopApplication(names));
+                changedFiles.put(
+                        projectRoot.resolve("apps/host/backend/src/main/resources/static/desktop/desktop.js"),
+                        registerDesktopAllowedPath(names));
             }
             String pageCode = projectCreated ? names.projectCode() : names.tableCode();
             addRelativeFiles(
@@ -402,6 +425,69 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
             text = text.replace(mdaDependency, mdaDependency + "\n" + HOST_ANCHOR);
         }
         return text.replace(HOST_ANCHOR, HOST_ANCHOR + "\n" + declaration);
+    }
+
+    /**
+     * 在 Host 桌面清单登记新应用入口。
+     * 真实传参示例：工程 {@code japan} 生成 {@code /japan/japan.html} 入口。
+     * 真实返回示例：applications 数组新增 code 为 {@code japan} 的完整应用对象。
+     * 异常或副作用示例：清单结构失效时抛出 IOException，生成事务回滚全部新文件和登记。
+     *
+     * @param names 已验证工程命名
+     * @return 包含唯一应用入口的完整 JSON 正文
+     * @throws IOException 桌面清单缺失或结构无法识别时抛出
+     */
+    private String registerDesktopApplication(MdaProjectNames names) throws IOException {
+        Path path = projectRoot.resolve(
+                "apps/host/backend/src/main/resources/static/desktop/applications.json");
+        String text = readRequired(path);
+        if (text.contains("\"code\": \"" + names.projectCode() + "\"")) return text;
+        int arrayEnd = text.lastIndexOf("\n  ]");
+        if (arrayEnd < 0) throw new IOException("Host 桌面应用清单结构无效");
+        String before = text.substring(0, arrayEnd).stripTrailing();
+        String separator = before.endsWith("[") ? "\n" : ",\n";
+        String entry = """
+                    {
+                      \"code\": \"@PROJECT@\",
+                      \"name\": \"@PROJECT_CLASS@\",
+                      \"shortName\": \"@PROJECT_CLASS@\",
+                      \"description\": \"管理 @PROJECT_CLASS@ 业务数据\",
+                      \"icon\": \"ri-apps-2-line\",
+                      \"tone\": \"blue\",
+                      \"url\": \"/@PROJECT@/@PROJECT@.html\",
+                      \"openMode\": \"new-tab\",
+                      \"permissionCode\": \"@PROJECT@:access\",
+                      \"visible\": true,
+                      \"enabled\": true,
+                      \"sortnum\": 100
+                    }"""
+                .replace("@PROJECT@", names.projectCode())
+                .replace("@PROJECT_CLASS@", names.projectClass());
+        return before + separator + entry + text.substring(arrayEnd);
+    }
+
+    /**
+     * 把新应用根路径加入桌面同源内部跳转白名单。
+     * 真实传参示例：工程 {@code japan} 登记 {@code /japan/}。
+     * 真实返回示例：desktop.js 的固定锚点后包含唯一路径字符串。
+     * 异常或副作用示例：锚点缺失时抛出 IOException，禁止生成无法点击的桌面入口。
+     *
+     * @param names 已验证工程命名
+     * @return 包含新内部路径的完整 desktop.js
+     * @throws IOException desktop.js 缺失或登记锚点失效时抛出
+     */
+    private String registerDesktopAllowedPath(MdaProjectNames names) throws IOException {
+        Path path = projectRoot.resolve(
+                "apps/host/backend/src/main/resources/static/desktop/desktop.js");
+        String text = readRequired(path);
+        String declaration = "        \"/" + names.projectCode() + "/\",";
+        if (text.contains("\"/" + names.projectCode() + "/\"")) return text;
+        if (!text.contains(DESKTOP_PATH_ANCHOR)) {
+            throw new IOException("Host 桌面内部路径登记锚点不存在");
+        }
+        return text.replace(
+                DESKTOP_PATH_ANCHOR,
+                DESKTOP_PATH_ANCHOR + "\n" + declaration);
     }
 
     /**

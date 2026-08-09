@@ -1,0 +1,4 @@
+db/japanese/sql/schema-CommonSequenceSegment.sql
+db/japanese/sql/schema-JapaneseN2BlueBookQuestion.sql
+db/japanese/sql/data-JapaneseN2BlueBookQuestion.sql
+db/japanese/sql/data-CommonSequenceSegment.sql

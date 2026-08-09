@@ -64,12 +64,12 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         # 根索引递归统计只计算 core/common；当前用户规则通过独立用户索引统计。
         self.assertEqual(result["indexed_rules"], 66)
         self.assertEqual(result["active_user_id"], ACTIVE_STABLE_USER_ID)
-        self.assertEqual(result["active_user_indexes"], 9)
-        # 用户层新增一个 SELPLAT 通用规则入口和规则正文，当前用户统计必须同步增长。
-        self.assertEqual(result["active_user_overrides"], 11)
-        self.assertEqual(result["active_user_rule_files"], 10)
+        self.assertEqual(result["active_user_indexes"], 10)
+        # 用户层新增临时路径和全程序源码归属门禁后，统计必须同步增长。
+        self.assertEqual(result["active_user_overrides"], 15)
+        self.assertEqual(result["active_user_rule_files"], 14)
         self.assertEqual(result["active_user_standard_asset_packages"], 1)
-        self.assertEqual(result["active_user_rules_with_program_references"], 2)
+        self.assertEqual(result["active_user_rules_with_program_references"], 5)
         self.assertEqual(result["decision_boundary"], "facts_only_ai_must_review_before_merge_or_delete")
 
     def test_write_report_is_limited_to_option(self) -> None:
@@ -103,8 +103,8 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             / ACTIVE_STABLE_USER_ID
         )
         rule_paths = sorted(user_root.rglob("RUL_*.md"))
-        # 当前用户新增的 Toast 规则也必须逐项接受紧邻中文业务注释检查。
-        self.assertEqual(len(rule_paths), 10)
+        # 当前用户全部规则（含全程序源码归属门禁）必须逐项接受紧邻中文业务注释检查。
+        self.assertEqual(len(rule_paths), 14)
         for rule_path in rule_paths:
             previous_nonempty = ""
             for line_number, raw_line in enumerate(

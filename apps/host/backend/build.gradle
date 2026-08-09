@@ -17,6 +17,8 @@ dependencies {
     implementation project(':apps:reference-data:backend')
     // MDA 通过模块自持数据库上下文接入统一端口，不占用宿主主数据源。
     implementation project(':apps:mda:backend')
+    // SELPLAT-GENERATED-MODULES
+    implementation project(':apps:japanese:backend')
     // Web Starter 提供唯一内嵌 HTTP 容器和平台级 Controller。
     implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
     // DevTools 为后续开发启动模式提供类路径变化后的自动重启能力。

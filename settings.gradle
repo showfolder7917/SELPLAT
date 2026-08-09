@@ -46,3 +46,7 @@ project(':apps:mda:backend').projectDir = file('apps/mda/backend')
 project(':apps:trs:backend').projectDir = file('apps/trs/backend')
 // JSP 容器物理目录固定在 apps/trs/legacy-server，使 TRS 可在同一应用目录下独立构建和启动。
 project(':apps:trs:legacy-server').projectDir = file('apps/trs/legacy-server')
+
+// SELPLAT-GENERATED-MODULES
+include('apps:japanese:backend')
+project(':apps:japanese:backend').projectDir = file('apps/japanese/backend')
