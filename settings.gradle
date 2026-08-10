@@ -25,10 +25,6 @@ include('apps:uniauth:backend')
 include('apps:rule-engine:backend')
 // MDA 多数据库工作台作为独立应用接入根构建，复用公共 DAO、Service 与 Web 契约。
 include('apps:mda:backend')
-// TRS 旧站迁移后的独立本地应用单独接入根构建，避免复用其他业务应用的数据源和启动配置。
-include('apps:trs:backend')
-// TRS 的历史 JSP 与 javax.servlet 体系需要独立的兼容容器，不能与 Spring Boot 3 的 jakarta.servlet 容器混用。
-include('apps:trs:legacy-server')
 
 // 显式绑定物理目录，避免多层级 Gradle 项目在 IDE 和命令行下解析漂移。
 project(':shared:backend:common-core').projectDir = file('shared/backend/common-core')
@@ -42,11 +38,6 @@ project(':apps:reference-data:backend').projectDir = file('apps/reference-data/b
 project(':apps:uniauth:backend').projectDir = file('apps/uniauth/backend')
 project(':apps:rule-engine:backend').projectDir = file('apps/rule-engine/backend')
 project(':apps:mda:backend').projectDir = file('apps/mda/backend')
-// TRS 后端物理目录固定在 apps/trs/backend，供 Gradle、VS Code 和启动脚本使用同一项目模型。
-project(':apps:trs:backend').projectDir = file('apps/trs/backend')
-// JSP 容器物理目录固定在 apps/trs/legacy-server，使 TRS 可在同一应用目录下独立构建和启动。
-project(':apps:trs:legacy-server').projectDir = file('apps/trs/legacy-server')
-
 // SELPLAT-GENERATED-MODULES
 include('apps:japanese:backend')
 project(':apps:japanese:backend').projectDir = file('apps/japanese/backend')
