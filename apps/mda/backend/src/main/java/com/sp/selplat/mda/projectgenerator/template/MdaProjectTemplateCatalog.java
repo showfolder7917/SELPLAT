@@ -37,9 +37,10 @@ public final class MdaProjectTemplateCatalog {
 
                 - 首个页面：/@PROJECT@/@PROJECT@.html
                 - 数据库脚本：db/sql，按 load-order.txt 的显式顺序加载。
-                - Java 分层：Controller → Service → 项目 BaseService → DAO → 项目 BaseDao。
+                - Java 分层：业务 Controller → 唯一 Service 接口与实现 → DAO → 项目 BaseDao。
                 - 默认字段：id、tenantId、lastOperateUserId、name、sortnum、status、createdAt、updatedAt。
-                - 引用数据：每张表的 ReferenceDataProvider 已注册到 reference-data。
+                - 共通职责：common 只生成实际需要的 config 与 persistence；共通能力出现后才进入 util。
+                - 扩展能力：ReferenceDataProvider 等框架扩展必须有真实需求后再创建。
                 - 冲突保护：仅 MDA 生成器拥有的工程允许追加表，已有目标文件不会被覆盖。
                 """, names));
         files.put("build.gradle", fill(
@@ -55,7 +56,7 @@ public final class MdaProjectTemplateCatalog {
                   "url": "/@PROJECT@/@PROJECT@.html",
                   "permissionCode": "@PROJECT@:access",
                   "backendModule": "apps:@PROJECT@:backend",
-                  "referenceData": true
+                  "referenceData": false
                 }
                 """, names));
         files.put("backend/build.gradle", fill(backendBuild(), names));
@@ -70,9 +71,6 @@ public final class MdaProjectTemplateCatalog {
         files.put(javaRoot + "common/persistence/"
                         + names.projectClass() + "BaseDao.java",
                 fill(baseDaoJava(), names));
-        files.put(javaRoot + "common/service/"
-                        + names.projectClass() + "BaseServiceImpl.java",
-                fill(baseServiceJava(), names));
         files.put("backend/src/main/resources/"
                         + names.projectCode() + "-module.properties",
                 fill(moduleProperties(), names));
@@ -105,32 +103,30 @@ public final class MdaProjectTemplateCatalog {
      *
      * @param names 已验证命名，例如 {@code japan/region/JapanRegion}
      * @param pageCode 首表为工程编码，后续表为表编码
-     * @return Controller、Service、DAO、SQL 和 HTML/JS/CSS 文件
+     * @return Controller、Service、DAO、SQL 和 HTML/JS/CSS 文件，不生成未被公共 CRUD 调用的表 Domain
      */
     public static Map<String, String> tableFiles(
             MdaProjectNames names,
             String pageCode) {
         Map<String, String> files = new LinkedHashMap<>();
         String packagePath = "backend/src/main/java/"
-                + names.packageRoot().replace('.', '/') + "/"
-                + names.tableCode().replace("-", "") + "/";
-        files.put(packagePath + "domain/" + names.actualTableName() + ".java",
-                fill(domainJava(), names));
-        files.put(packagePath + "dao/" + names.actualTableName() + "Dao.java",
+                + names.packageRoot().replace('.', '/') + "/";
+        String businessPackage = names.tableCode().replace("-", "");
+        files.put(packagePath + businessPackage + "/dao/"
+                        + names.actualTableName() + "Dao.java",
                 fill(daoJava(), names));
-        files.put(packagePath + "dao/" + names.actualTableName() + "DaoImpl.java",
+        files.put(packagePath + businessPackage + "/dao/"
+                        + names.actualTableName() + "DaoImpl.java",
                 fill(daoImplJava(), names));
-        files.put(packagePath + "service/" + names.actualTableName() + "Service.java",
+        files.put(packagePath + businessPackage + "/service/"
+                        + names.actualTableName() + "Service.java",
                 fill(serviceJava(), names));
-        files.put(packagePath + "service/impl/"
+        files.put(packagePath + businessPackage + "/service/impl/"
                         + names.actualTableName() + "ServiceImpl.java",
                 fill(serviceImplJava(), names));
-        files.put(packagePath + "controller/"
+        files.put(packagePath + businessPackage + "/controller/"
                         + names.actualTableName() + "Controller.java",
                 fill(controllerJava(), names));
-        files.put(packagePath + "reference/"
-                        + names.actualTableName() + "ReferenceDataProvider.java",
-                fill(referenceProviderJava(), names));
         files.put("db/sql/schema-" + names.actualTableName() + ".sql",
                 fill(tableSchema(), names));
         files.put("db/sql/data-" + names.actualTableName() + ".sql",
@@ -200,7 +196,6 @@ public final class MdaProjectTemplateCatalog {
                     implementation project(':shared:backend:common-web')
                     implementation project(':shared:backend:common-service')
                     implementation project(':shared:backend:common-db')
-                    implementation project(':apps:reference-data:backend')
                     implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
                     implementation "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
                     implementation "org.mybatis.spring.boot:mybatis-spring-boot-starter:${mybatisSpringBootVersion}"
@@ -230,25 +225,14 @@ public final class MdaProjectTemplateCatalog {
         return """
                 package @PACKAGE@;
 
-                import com.sp.selplat.referencedata.backend.controller.ReferenceDataController;
-                import com.sp.selplat.referencedata.backend.provider.ReferenceDataProviderRegistry;
-                import com.sp.selplat.referencedata.backend.service.DefaultReferenceDataApiService;
-                import com.sp.selplat.referencedata.backend.service.DefaultReferenceDataQueryService;
                 import org.springframework.boot.SpringApplication;
                 import org.springframework.boot.autoconfigure.SpringBootApplication;
-                import org.springframework.context.annotation.Import;
 
                 /** 独立启动 @PROJECT_CLASS@ 后端并装配本工程私有数据源。 */
                 @SpringBootApplication(scanBasePackages = {
                     "@PACKAGE@",
                     "com.sp.selplat.common.service",
                     "com.sp.selplat.common.web"
-                })
-                @Import({
-                    ReferenceDataController.class,
-                    ReferenceDataProviderRegistry.class,
-                    DefaultReferenceDataApiService.class,
-                    DefaultReferenceDataQueryService.class
                 })
                 public class @PROJECT_CLASS@BackendApplication {
 
@@ -505,96 +489,6 @@ public final class MdaProjectTemplateCatalog {
                 """;
     }
 
-    /** @return 项目 BaseService 模板。 */
-    private static String baseServiceJava() {
-        return """
-                package @PACKAGE@.common.service;
-
-                import com.sp.selplat.common.db.dao.BaseDao;
-                import com.sp.selplat.common.service.BaseServiceImpl;
-                import com.sp.selplat.common.util.CommonPageParam;
-                import com.sp.selplat.common.util.CommonPageResult;
-                import com.sp.selplat.common.util.CommonParam;
-                import com.sp.selplat.common.util.CommonResult;
-                import java.time.LocalDateTime;
-
-                /**
-                 * 统一补租户、操作者、排序、状态和日期字段。
-                 *
-                 * @param <D> 当前表 DAO，例如 {@code @ACTUAL_TABLE@Dao}
-                 */
-                public abstract class @PROJECT_CLASS@BaseServiceImpl<
-                        D extends BaseDao> extends BaseServiceImpl<D> {
-
-                    /**
-                     * 查询有效记录并保持稳定排序。
-                     *
-                     * @param queryIn 分页条件，例如 {@code {pageNo:1,pageSize:20}}
-                     * @return status=1 且按 sortnum、id 排序的结果
-                     */
-                    @Override
-                    public CommonPageResult getStore(
-                            CommonPageParam queryIn) {
-                        CommonPageParam value = queryIn == null
-                                ? new CommonPageParam() : queryIn;
-                        value.putParam("status", 1);
-                        return getDao().getPageList(
-                                value.getParamMap(),
-                                "sortnum asc id asc",
-                                value.getPageNo(),
-                                value.getPageSize());
-                    }
-
-                    /**
-                     * 补齐默认字段并生成主键。
-                     *
-                     * @param saveIn 新增字段，例如 {@code {name:"示例"}}
-                     * @return 含固定字段的新增结果
-                     */
-                    @Override
-                    public CommonResult insert(CommonParam saveIn) {
-                        LocalDateTime now = LocalDateTime.now();
-                        putIfAbsent(saveIn, "tenantId", 1L);
-                        putIfAbsent(saveIn, "lastOperateUserId", 1L);
-                        putIfAbsent(saveIn, "sortnum", 0);
-                        putIfAbsent(saveIn, "status", 1);
-                        putIfAbsent(saveIn, "createdAt", now);
-                        putIfAbsent(saveIn, "updatedAt", now);
-                        return super.insert(saveIn);
-                    }
-
-                    /**
-                     * 刷新更新时间并更新记录。
-                     *
-                     * @param saveIn 更新字段，例如 {@code {id:100001,name:"新名称"}}
-                     * @return 含更新时间的更新结果
-                     */
-                    @Override
-                    public CommonResult update(CommonParam saveIn) {
-                        saveIn.putParam("updatedAt", LocalDateTime.now());
-                        return super.update(saveIn);
-                    }
-
-                    /**
-                     * 只补空字段。
-                     *
-                     * @param target 当前新增参数
-                     * @param key 默认字段名，例如 {@code tenantId}
-                     * @param value 默认值，例如 {@code 1L}
-                     *     <p>执行后无返回值；已有值保持不变。
-                     */
-                    private void putIfAbsent(
-                            CommonParam target,
-                            String key,
-                            Object value) {
-                        if (target.getParam(key) == null) {
-                            target.putParam(key, value);
-                        }
-                    }
-                }
-                """;
-    }
-
     /** @return 模块数据源属性模板。 */
     private static String moduleProperties() {
         return """
@@ -670,33 +564,6 @@ public final class MdaProjectTemplateCatalog {
                 """;
     }
 
-    /** @return 默认实体模板。 */
-    private static String domainJava() {
-        return """
-                package @PACKAGE@.@TABLE_PACKAGE@.domain;
-
-                import com.sp.selplat.common.util.Domain;
-
-                /** 承接 @ACTUAL_TABLE@ 默认业务和审计字段。 */
-                public class @ACTUAL_TABLE@ extends Domain {
-
-                    // id、tenantId、lastOperateUserId、sortnum、status 和日期字段继承公共 Domain。
-                    // name 是脚手架提供的默认业务名称。
-                    private String name;
-
-                    /** @return 业务名称，例如 {@code 东京区域}。 */
-                    public String getName() {
-                        return name;
-                    }
-
-                    /** @param name 业务名称，例如 {@code 东京区域}。 */
-                    public void setName(String name) {
-                        this.name = name;
-                    }
-                }
-                """;
-    }
-
     /** @return 默认 DAO 接口模板。 */
     private static String daoJava() {
         return """
@@ -745,16 +612,94 @@ public final class MdaProjectTemplateCatalog {
         return """
                 package @PACKAGE@.@TABLE_PACKAGE@.service.impl;
 
-                import @PACKAGE@.common.service.@PROJECT_CLASS@BaseServiceImpl;
+                import com.sp.selplat.common.service.BaseServiceImpl;
+                import com.sp.selplat.common.util.CommonPageParam;
+                import com.sp.selplat.common.util.CommonPageResult;
+                import com.sp.selplat.common.util.CommonParam;
+                import com.sp.selplat.common.util.CommonResult;
                 import @PACKAGE@.@TABLE_PACKAGE@.dao.@ACTUAL_TABLE@Dao;
                 import @PACKAGE@.@TABLE_PACKAGE@.service.@ACTUAL_TABLE@Service;
+                import java.time.LocalDateTime;
                 import org.springframework.stereotype.Service;
 
-                /** 绑定当前表 DAO，默认字段和 CRUD 由项目父类提供。 */
+                /** 绑定 @ACTUAL_TABLE@ DAO，并维护本表的查询、默认字段和更新时间规则。 */
                 @Service
                 public class @ACTUAL_TABLE@ServiceImpl
-                        extends @PROJECT_CLASS@BaseServiceImpl<@ACTUAL_TABLE@Dao>
+                        extends BaseServiceImpl<@ACTUAL_TABLE@Dao>
                         implements @ACTUAL_TABLE@Service {
+
+                    /**
+                     * 查询当前表的有效记录并保持稳定排序。
+                     * 真实传参示例：{@code {pageNo:1,pageSize:20,nameLike:"示例"}}。
+                     * 真实返回示例：返回 status=1 且按 sortnum、id 升序排列的分页结果。
+                     * 异常或副作用示例：数据库查询失败时沿用公共异常；只读当前表。
+                     *
+                     * @param queryIn 当前表分页和筛选条件
+                     * @return 有效记录的稳定分页结果
+                     */
+                    @Override
+                    public CommonPageResult getStore(CommonPageParam queryIn) {
+                        CommonPageParam value = queryIn == null
+                                ? new CommonPageParam() : queryIn;
+                        value.putParam("status", 1);
+                        return getDao().getPageList(
+                                value.getParamMap(),
+                                "sortnum asc id asc",
+                                value.getPageNo(),
+                                value.getPageSize());
+                    }
+
+                    /**
+                     * 补齐当前表新增所需的平台默认字段并调用公共新增流程。
+                     * 真实传参示例：{@code {name:"示例记录"}}。
+                     * 真实返回示例：返回含新主键、tenantId=1、status=1 和创建更新时间的记录。
+                     * 异常或副作用示例：数据库写入失败时抛出公共异常；成功后新增一条记录。
+                     *
+                     * @param saveIn 当前待新增的业务字段
+                     * @return 含生成主键和实际落库字段的公共结果
+                     */
+                    @Override
+                    public CommonResult insert(CommonParam saveIn) {
+                        LocalDateTime now = LocalDateTime.now();
+                        putIfAbsent(saveIn, "tenantId", 1L);
+                        putIfAbsent(saveIn, "lastOperateUserId", 1L);
+                        putIfAbsent(saveIn, "sortnum", 0);
+                        putIfAbsent(saveIn, "status", 1);
+                        putIfAbsent(saveIn, "createdAt", now);
+                        putIfAbsent(saveIn, "updatedAt", now);
+                        return super.insert(saveIn);
+                    }
+
+                    /**
+                     * 刷新当前记录的最后更新时间并调用公共更新流程。
+                     * 真实传参示例：{@code {id:100001,name:"修正后的名称"}}。
+                     * 真实返回示例：返回包含服务端当前 updatedAt 的更新字段。
+                     * 异常或副作用示例：主键无效或数据库失败时抛出公共异常；成功后更新记录。
+                     *
+                     * @param saveIn 当前表主键和待更新字段
+                     * @return 含最终更新时间的公共更新结果
+                     */
+                    @Override
+                    public CommonResult update(CommonParam saveIn) {
+                        saveIn.putParam("updatedAt", LocalDateTime.now());
+                        return super.update(saveIn);
+                    }
+
+                    /**
+                     * 只在字段缺失时补入服务端默认值。
+                     * 真实传参示例：参数缺少 tenantId，字段名为 tenantId，默认值为 1L。
+                     * 真实返回示例：执行后参数包含 tenantId=1；已有值时保持原值。
+                     * 异常或副作用示例：目标参数为空时调用方产生空指针异常；只修改当前参数映射。
+                     *
+                     * @param target 当前新增参数
+                     * @param key 默认字段名
+                     * @param value 缺失时写入的默认值
+                     */
+                    private void putIfAbsent(CommonParam target, String key, Object value) {
+                        if (target.getParam(key) == null) {
+                            target.putParam(key, value);
+                        }
+                    }
                 }
                 """;
     }
@@ -784,77 +729,6 @@ public final class MdaProjectTemplateCatalog {
                 )
                 public class @ACTUAL_TABLE@Controller
                         extends BaseController<@ACTUAL_TABLE@Service> {
-                }
-                """;
-    }
-
-    /** @return reference-data Provider 模板。 */
-    private static String referenceProviderJava() {
-        return """
-                package @PACKAGE@.@TABLE_PACKAGE@.reference;
-
-                import com.sp.selplat.referencedata.backend.provider.ReferenceDataProvider;
-                import com.sp.selplat.referencedata.contract.model.ReferenceDataQuery;
-                import com.sp.selplat.referencedata.contract.model.TreeNode;
-                import com.sp.selplat.referencedata.contract.model.TypeOption;
-                import java.util.List;
-                import java.util.Map;
-                import org.springframework.stereotype.Component;
-
-                /**
-                 * 向 reference-data 注册 @PROJECT@/@TABLE@。
-                 * 未来树和类型直接在本 Provider 中替换为真实业务查询。
-                 */
-                @Component
-                public class @ACTUAL_TABLE@ReferenceDataProvider
-                        implements ReferenceDataProvider {
-
-                    /** @return 工程稳定编码，例如 {@code "@PROJECT@"}。 */
-                    @Override
-                    public String getProjectCode() {
-                        return "@PROJECT@";
-                    }
-
-                    /** @return 资源稳定编码，例如 {@code "@TABLE@"}。 */
-                    @Override
-                    public String getResourceCode() {
-                        return "@TABLE@";
-                    }
-
-                    /**
-                     * 返回页面左侧树的初始根节点。
-                     *
-                     * @param query 租户和过滤条件，例如 {@code {tenantId:"1"}}
-                     * @return 初始根节点；未来替换为真实业务树
-                     */
-                    @Override
-                    public List<TreeNode> loadTree(ReferenceDataQuery query) {
-                        return List.of(new TreeNode(
-                                "@TABLE@-root",
-                                null,
-                                "全部@TABLE_CLASS@",
-                                "root",
-                                List.of(),
-                                Map.of()));
-                    }
-
-                    /**
-                     * 返回默认状态类型。
-                     *
-                     * @param query 租户和过滤条件，例如 {@code {tenantId:"1"}}
-                     * @return 有效和停用两个默认选项
-                     */
-                    @Override
-                    public List<TypeOption> loadOptions(
-                            ReferenceDataQuery query) {
-                        return List.of(
-                                new TypeOption(
-                                        "1", "有效", "status",
-                                        10, false, Map.of()),
-                                new TypeOption(
-                                        "0", "停用", "status",
-                                        20, false, Map.of()));
-                    }
                 }
                 """;
     }
@@ -960,7 +834,6 @@ public final class MdaProjectTemplateCatalog {
                     const personalizationHost = window.selBaseRuntime.query(
                             "[data-sel-personalization-host]");
                     const api = "/api/@PROJECT@/@TABLE@/";
-                    const treeApi = "/api/reference-data/@PROJECT@/@TABLE@/tree";
                     const gridId = "@ACTUAL_TABLE@Grid";
                     const editorId = "@ACTUAL_TABLE@Editor";
                     const state = {
@@ -1015,9 +888,13 @@ public final class MdaProjectTemplateCatalog {
                         return Array.isArray(data.records) ? data.records : [];
                     }
 
-                    async function loadTree() {
-                        const data = await request(treeApi + "?tenantId=1");
-                        return Array.isArray(data.data) ? data.data : [];
+                    function loadTree() {
+                        return [{
+                            id: "@TABLE@-root",
+                            label: "全部@TABLE_CLASS@",
+                            value: "ALL",
+                            children: []
+                        }];
                     }
 
                     function treeItems(items) {
@@ -1199,9 +1076,8 @@ public final class MdaProjectTemplateCatalog {
                     }
 
                     async function refresh() {
-                        [state.records, state.treeItems] = await Promise.all([
-                            loadRecords(), loadTree()
-                        ]);
+                        state.records = await loadRecords();
+                        state.treeItems = loadTree();
                         const nextPayload = payload();
                         window.selPanel.setLocale(window.selPanel.get(gridId),
                                 {view: nextPayload});
@@ -1209,9 +1085,8 @@ public final class MdaProjectTemplateCatalog {
                     }
 
                     async function mount() {
-                        [state.records, state.treeItems] = await Promise.all([
-                            loadRecords(), loadTree()
-                        ]);
+                        state.records = await loadRecords();
+                        state.treeItems = loadTree();
                         const view = payload();
                         const panel = window.selPanel.create(root, {gridId,
                             sourceId: gridId, entity: "@ACTUAL_TABLE@", view: "list",

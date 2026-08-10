@@ -6,9 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
-import com.sp.selplat.japanese.media.impl.LocalJapaneseMediaStorage;
-import com.sp.selplat.japanese.media.model.JapaneseMediaAsset;
-import com.sp.selplat.japanese.runtime.JapaneseExternalProcessRunner;
+import com.sp.selplat.japanese.common.util.codex.CodexCliUtil;
+import com.sp.selplat.japanese.common.util.image.FfmpegImageUtil;
+import com.sp.selplat.japanese.common.util.media.impl.LocalJapaneseMediaStorage;
+import com.sp.selplat.japanese.common.util.media.model.JapaneseMediaAsset;
+import com.sp.selplat.japanese.common.util.process.JapaneseExternalProcessRunner;
+import com.sp.selplat.japanese.common.util.speech.EdgeTtsSpeechUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -17,11 +20,12 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** 使用假的外部进程验证 Codex、WebP、NanamiNeural 和媒体存储编排，不触发真实模型。 */
-class JapaneseQuestionContentServiceImplTest {
+class JapaneseN2BlueBookQuestionServiceImplTest {
 
     @TempDir
     private Path projectRoot;
@@ -38,9 +42,9 @@ class JapaneseQuestionContentServiceImplTest {
     void shouldGenerateExplanationWebpAndNanamiAudioWithoutRealCodex() throws Exception {
         Files.createDirectories(projectRoot.resolve("apps/japanese"));
         Clock clock = Clock.fixed(Instant.parse("2026-08-09T12:00:00Z"), ZoneOffset.UTC);
-        JapaneseQuestionContentServiceImpl service = new JapaneseQuestionContentServiceImpl(
-                fakeProcessRunner(), new LocalJapaneseMediaStorage(projectRoot, clock),
-                "/fake/codex", "/fake/edge-tts", "/fake/ffmpeg");
+        JapaneseExternalProcessRunner runner = fakeProcessRunner();
+        JapaneseN2BlueBookQuestionServiceImpl service = service(
+                runner, new LocalJapaneseMediaStorage(projectRoot, clock));
         CommonParam request = validRequest();
 
         CommonResult explanation = service.generateExplanation(request);
@@ -72,10 +76,8 @@ class JapaneseQuestionContentServiceImplTest {
     void shouldRejectMissingCorrectOptionBeforeStartingExternalProcess() {
         AtomicInteger processCount = new AtomicInteger();
         JapaneseExternalProcessRunner runner = (command, work, timeout) -> processCount.incrementAndGet();
-        JapaneseQuestionContentServiceImpl service = new JapaneseQuestionContentServiceImpl(
-                runner,
-                new LocalJapaneseMediaStorage(projectRoot, Clock.systemUTC()),
-                "/fake/codex", "/fake/edge-tts", "/fake/ffmpeg");
+        JapaneseN2BlueBookQuestionServiceImpl service = service(
+                runner, new LocalJapaneseMediaStorage(projectRoot, Clock.systemUTC()));
         CommonParam invalid = request(
                 "PRONUNCIATION", "給与", "A", "B", "C", "D", "", "給与");
 
@@ -84,6 +86,39 @@ class JapaneseQuestionContentServiceImplTest {
                 .extracting(error -> ((CommonBusinessException) error).getErrorCode())
                 .isEqualTo("JAPANESE_CORRECT_OPTION_REQUIRED");
         assertThat(processCount).hasValue(0);
+    }
+
+    /**
+     * 验证朗读字段为空时由服务把正确选项填进题干，而不是把括号交给 NanamiNeural。
+     * 真实传参示例：第003题题干空格、C=引退且 audioText 为空。
+     * 真实返回示例：edge-tts 的 {@code --text} 参数为“田中選手は…引退するそうだ。”。
+     * 异常或副作用示例：只由假进程写一份 MP3，不调用真实语音服务。
+     */
+    @Test
+    void shouldFillCorrectOptionIntoAudioTextBeforeNanamiGeneration() {
+        AtomicReference<String> spokenText = new AtomicReference<>();
+        JapaneseExternalProcessRunner runner = (command, workingDirectory, timeout) -> {
+            try {
+                if (command.get(0).endsWith("edge-tts")) {
+                    spokenText.set(command.get(command.indexOf("--text") + 1));
+                    Files.write(
+                            Path.of(command.get(command.indexOf("--write-media") + 1)),
+                            new byte[]{7, 8, 9});
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException(exception);
+            }
+        };
+        JapaneseN2BlueBookQuestionServiceImpl service = service(
+                runner, new LocalJapaneseMediaStorage(projectRoot, Clock.systemUTC()));
+        CommonParam request = request(
+                "KANJI",
+                "田中選手は、全国大会が終わったら（　）するそうだ。",
+                "移動", "完了", "引退", "失業", "C", "");
+
+        service.generateAudio(request);
+
+        assertThat(spokenText).hasValue("田中選手は、全国大会が終わったら引退するそうだ。");
     }
 
     private CommonParam validRequest() {
@@ -154,5 +189,25 @@ class JapaneseQuestionContentServiceImplTest {
                 throw new IllegalStateException(exception);
             }
         };
+    }
+
+    /**
+     * 使用同一个假进程边界装配分类后的 Codex、语音和图片共通工具。
+     * 真实传参示例：假进程执行器和写入 JUnit 临时目录的媒体存储。
+     * 真实返回示例：返回不会启动真实 Codex、edge-tts 或 FFmpeg 的业务生成服务。
+     * 异常或副作用示例：仅调用业务方法时才由假进程写测试文件；装配本身无副作用。
+     *
+     * @param runner 假外部进程执行器
+     * @param storage JUnit 临时媒体存储
+     * @return 完整的题目内容生成服务
+     */
+    private JapaneseN2BlueBookQuestionServiceImpl service(
+            JapaneseExternalProcessRunner runner,
+            LocalJapaneseMediaStorage storage) {
+        return new JapaneseN2BlueBookQuestionServiceImpl(
+                new CodexCliUtil(runner, "/fake/codex"),
+                new EdgeTtsSpeechUtil(runner, "/fake/edge-tts"),
+                new FfmpegImageUtil(runner, "/fake/ffmpeg"),
+                storage);
     }
 }

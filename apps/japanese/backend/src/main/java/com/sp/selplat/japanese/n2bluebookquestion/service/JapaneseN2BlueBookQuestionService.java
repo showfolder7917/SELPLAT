@@ -1,8 +1,42 @@
 package com.sp.selplat.japanese.n2bluebookquestion.service;
 
 import com.sp.selplat.common.service.BaseService;
+import com.sp.selplat.common.util.CommonParam;
+import com.sp.selplat.common.util.CommonResult;
 
-/** 标记 JapaneseN2BlueBookQuestion 公共 CRUD Service。 */
-public interface JapaneseN2BlueBookQuestionService
-        extends BaseService, JapaneseQuestionContentService {
+/** 定义 N2 蓝宝书题库 CRUD、Codex 图片解释和日语语音业务能力。 */
+public interface JapaneseN2BlueBookQuestionService extends BaseService {
+
+    /**
+     * 根据题干、选项和正确答案生成中文解释。
+     * 真实传参示例：{@code {questionText:"給与",correctOption:"D"}}。
+     * 真实返回示例：{@code {success:true,data:{explanation:"給与读作きゅうよ"}}}。
+     * 异常或副作用示例：参数缺失时抛出业务异常，不启动 Codex。
+     *
+     * @param request SELPLAT 公共单条请求参数
+     * @return Codex 生成的题目解释公共结果
+     */
+    CommonResult generateExplanation(CommonParam request);
+
+    /**
+     * 根据题目上下文生成并存储 WebP 图片。
+     * 真实传参示例：{@code {questionType:"GRAMMAR",questionText:"景气が回復する"}}。
+     * 真实返回示例：{@code {success:true,data:{url:"/pic/x.webp"}}}。
+     * 异常或副作用示例：Codex 或 FFmpeg 失败时抛出系统异常，不写入题库表。
+     *
+     * @param request SELPLAT 公共单条请求参数
+     * @return 已转 WebP 并存储的图片公共结果
+     */
+    CommonResult generateImage(CommonParam request);
+
+    /**
+     * 根据日语文本生成并存储 NanamiNeural 语音。
+     * 真实传参示例：{@code {audioText:"給与",correctOption:"D"}}。
+     * 真实返回示例：{@code {success:true,data:{url:"/audio/x.mp3"}}}。
+     * 异常或副作用示例：日语文本为空时抛出业务异常，不启动 edge-tts。
+     *
+     * @param request SELPLAT 公共单条请求参数
+     * @return NanamiNeural 生成并存储的语音公共结果
+     */
+    CommonResult generateAudio(CommonParam request);
 }

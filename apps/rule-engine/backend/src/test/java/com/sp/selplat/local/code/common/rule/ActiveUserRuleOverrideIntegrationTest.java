@@ -56,6 +56,19 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "selplat_application_private_http_protocol_type_policy = forbidden"
         ));
+        assertTrue(rule.content().contains(
+            "selplat_application_table_domain_policy = "
+                + "forbidden_use_CommonParam_Map_database_metadata"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_application_package_pattern = "
+                + "<business>/controller|service|dao|<verified-extension>,"
+                + "common/config|persistence|util/<actual-capability>"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_business_service_cardinality = "
+                + "one_contract,one_impl,no_common_service,no_common_crud"
+        ));
     }
 
     /**
@@ -83,7 +96,7 @@ class ActiveUserRuleOverrideIntegrationTest {
     /**
      * 验证 SELPLAT 应用脚手架规则能从当前用户通用索引命中。
      * 真实传参示例：逻辑 ID 为 {@code SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES}。
-     * 真实返回示例：规则正文包含两个输入、无覆盖策略和 reference-data Provider 登记。
+     * 真实返回示例：规则正文包含两个输入、无覆盖策略和按真实需求创建框架扩展。
      * 异常或副作用示例：索引或规则失效时抛出 {@link IOException}，不修改规则资源。
      */
     @Test
@@ -98,7 +111,9 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat_scaffold_existing_target_policy = reject_entire_operation_without_overwrite"
         ));
         assertTrue(rule.content().contains(
-            "selplat_scaffold_reference_data_registration = provider(projectCode,resourceCode)"
+            "selplat_scaffold_default_tree_source = local_all_records_root,"
+                + "no_placeholder_backend_api,"
+                + "real_tree_requirement_before_framework_extension"
         ));
         assertTrue(rule.content().contains(
             "selplat_scaffold_controller_service_dependency = interface_only,no_service_impl_import"
@@ -118,6 +133,25 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "selplat_scaffold_http_contract = CommonParam,CommonResult,"
                 + "no_private_Request_Response_Result_Page_Param"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_table_domain_policy = "
+                + "no_domain_use_CommonParam_Map_database_metadata"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_java_package_pattern = <business>/controller,"
+                + "<business>/service,<business>/service/impl,<business>/dao,"
+                + "common/config,common/persistence,common/util/<capability>"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_business_service_cardinality = "
+                + "one_table_one_service_contract_one_service_impl,"
+                + "no_project_base_service,no_single_consumer_intermediate_service"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_framework_extension_policy = "
+                + "real_interface_and_caller_and_dependency_and_registration_required,"
+                + "no_default_reference_data_provider"
         ));
     }
 
@@ -144,6 +178,41 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "japanese_question_http_contract = CommonParam,CommonBatchParam,CommonPageParam,"
                 + "CommonResult,no_private_protocol_types"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_question_table_domain_policy = "
+                + "no_domain_use_CommonParam_Map_database_metadata"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_java_package_structure = n2bluebookquestion/"
+                + "controller|service|service/impl|dao,"
+                + "common/config|persistence|util"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_business_service_policy = one_business_one_service_contract_and_impl,"
+                + "no_single_consumer_content_service,service_calls_common_util_directly"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_common_package_boundary = no_business_service,"
+                + "no_crud_root,no_generation_root,no_media_root,no_runtime_root,"
+                + "util/codex,util/speech,util/image,util/media,util/process"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_crud_abstraction_policy = single_business_keep_in_business_service,"
+                + "extract_only_after_multiple_real_consumers"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_reference_data_policy = no_pre_reserved_provider,"
+                + "no_reference_data_runtime_import,no_reference_data_dependency,"
+                + "local_fixed_question_type_tree"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_scanned_question_ai_review_without_pdf = explicit_user_choice_only,"
+                + "local_codex_cli,all_records,locked_official_answer_letter,no_pdf_access"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_audio_text_completion = locked_correct_option_fills_all_placeholders,"
+                + "paired_answer_segments_supported,no_parenthesis_placeholder_to_tts"
         ));
     }
 

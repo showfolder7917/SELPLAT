@@ -4,7 +4,7 @@
 - 实现地址：`http://127.0.0.1:8080/japanese/japanese.html`
 - 目标视口：1808 × 1006
 - 目标状态：空题库、glass-admin 深色主题、compact 密度
-- HTTP 验证：页面、脚本、样式、题目列表和 reference-data 树均返回 200
+- HTTP 验证：页面、脚本、样式和题目列表均返回 200；题型树由页面固定配置提供
 - 自动化测试：Japanese、MDA、rule-engine 测试通过
 - 视觉对照：未完成
 - 阻断原因：Codex Desktop 内置浏览器控制进程启动时读取 `/System/Library/OpenSSL/openssl.cnf`，被系统权限拒绝并退出；因此无法取得同视口实现截图，也无法把参考图与实现图放入同一比较输入。

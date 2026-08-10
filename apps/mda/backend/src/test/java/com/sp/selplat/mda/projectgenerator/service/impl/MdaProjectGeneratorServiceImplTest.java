@@ -92,30 +92,50 @@ class MdaProjectGeneratorServiceImplTest {
         assertThat(result.pageUrl()).isEqualTo("/japan/japan.html");
         Path project = testRoot.resolve("apps/japan");
         assertThat(project.resolve(".selplat-generated-project.json")).isRegularFile();
+        assertThat(project.resolve(
+                "backend/src/main/java/com/sp/selplat/japan/controller"))
+                .doesNotExist();
         assertThat(Files.readString(project.resolve(
                 "backend/src/main/java/com/sp/selplat/japan/JapanBackendApplication.java")))
                 .contains("\"com.sp.selplat.common.service\"")
-                .contains("ReferenceDataController.class")
-                .contains("ReferenceDataProviderRegistry.class")
+                .doesNotContain("ReferenceDataController.class")
+                .doesNotContain("ReferenceDataProviderRegistry.class")
                 .doesNotContain("\"com.sp.selplat.common.db\"");
+        assertThat(Files.readString(project.resolve("backend/build.gradle")))
+                .doesNotContain("apps:reference-data:backend");
         assertThat(project.resolve(
-                "backend/src/main/java/com/sp/selplat/japan/region/"
-                        + "controller/JapanRegionController.java")).isRegularFile();
+                "backend/src/main/java/com/sp/selplat/japan/common/service"))
+                .doesNotExist();
+        assertThat(project.resolve(
+                "backend/src/main/java/com/sp/selplat/japan/common/util"))
+                .doesNotExist();
+        assertThat(project.resolve(
+                "backend/src/main/java/com/sp/selplat/japan/region/reference"))
+                .doesNotExist();
+        assertThat(Files.readString(project.resolve("manifest/module.json")))
+                .contains("\"referenceData\": false");
+        assertThat(project.resolve(
+                "backend/src/main/java/com/sp/selplat/japan/region/controller/"
+                        + "JapanRegionController.java")).isRegularFile();
         Path serviceContract = project.resolve(
-                "backend/src/main/java/com/sp/selplat/japan/region/"
-                        + "service/JapanRegionService.java");
+                "backend/src/main/java/com/sp/selplat/japan/region/service/"
+                        + "JapanRegionService.java");
         Path serviceImplementation = project.resolve(
-                "backend/src/main/java/com/sp/selplat/japan/region/"
-                        + "service/impl/JapanRegionServiceImpl.java");
+                "backend/src/main/java/com/sp/selplat/japan/region/service/impl/"
+                        + "JapanRegionServiceImpl.java");
         assertThat(serviceContract).isRegularFile();
         assertThat(Files.readString(serviceContract)).contains("public interface JapanRegionService");
         assertThat(serviceImplementation).isRegularFile();
         assertThat(Files.readString(serviceImplementation))
                 .contains("@Service")
-                .contains("implements JapanRegionService");
+                .contains("extends BaseServiceImpl<JapanRegionDao>")
+                .contains("implements JapanRegionService")
+                .contains("value.putParam(\"status\", 1)")
+                .contains("putIfAbsent(saveIn, \"tenantId\", 1L)")
+                .contains("saveIn.putParam(\"updatedAt\", LocalDateTime.now())");
         assertThat(Files.readString(project.resolve(
-                "backend/src/main/java/com/sp/selplat/japan/region/"
-                        + "controller/JapanRegionController.java")))
+                "backend/src/main/java/com/sp/selplat/japan/region/controller/"
+                        + "JapanRegionController.java")))
                 .contains("import com.sp.selplat.japan.region.service.JapanRegionService;")
                 .doesNotContain(".service.impl.");
         assertThat(project.resolve(
@@ -145,6 +165,8 @@ class MdaProjectGeneratorServiceImplTest {
                 .contains("window.selGrid.mount")
                 .contains("window.selWindow.mount")
                 .contains("window.selConfirmDialog.mount")
+                .contains("id: \"region-root\"")
+                .doesNotContain("/api/reference-data/")
                 .doesNotContain("window.confirm");
         assertThat(generatedStyle)
                 .contains("只分配 SEL 公共面板的页面舞台")
@@ -292,8 +314,8 @@ class MdaProjectGeneratorServiceImplTest {
     void shouldAppendNewTableWithoutOverwritingFirstTable() throws Exception {
         service.generate(request("japan", "region"));
         Path firstController = testRoot.resolve(
-                "apps/japan/backend/src/main/java/com/sp/selplat/japan/region/"
-                        + "controller/JapanRegionController.java");
+                "apps/japan/backend/src/main/java/com/sp/selplat/japan/region/controller/"
+                        + "JapanRegionController.java");
         String firstContent = Files.readString(firstController);
 
         MdaProjectGenerationData result = service.generate(request("japan", "city"));
@@ -302,8 +324,11 @@ class MdaProjectGeneratorServiceImplTest {
         assertThat(result.pageUrl()).isEqualTo("/japan/city.html");
         assertThat(Files.readString(firstController)).isEqualTo(firstContent);
         assertThat(testRoot.resolve(
-                "apps/japan/backend/src/main/java/com/sp/selplat/japan/city/"
-                        + "controller/JapanCityController.java")).isRegularFile();
+                "apps/japan/backend/src/main/java/com/sp/selplat/japan/city/controller/"
+                        + "JapanCityController.java")).isRegularFile();
+        assertThat(testRoot.resolve(
+                "apps/japan/backend/src/main/java/com/sp/selplat/japan/controller/city"))
+                .doesNotExist();
         String loadOrder = Files.readString(testRoot.resolve(
                 "apps/japan/backend/src/main/resources/db/japan/sql/load-order.txt"));
         assertThat(loadOrder)

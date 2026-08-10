@@ -24,6 +24,8 @@ LANGUAGE_EXTENSIONS = {
     "node": {".js", ".mjs", ".cjs", ".ts"},
 }
 FORBIDDEN_APPLICATION_PROTOCOL_SUFFIXES = ("Request", "Response", "Result", "Page", "Param")
+BUSINESS_TECHNICAL_LAYER_NAMES = {"controller", "service", "dao", "reference"}
+MANAGED_COMMON_ROLE_NAMES = {"config", "persistence", "util"}
 
 
 def active_stable_user_id(project_root: Path) -> str:
@@ -135,6 +137,76 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                     "message": (
                         "application HTTP input/output must reuse shared CommonParam, "
                         "CommonBatchParam, CommonPageParam, CommonResult, or common page results"
+                    ),
+                })
+            if "domain" in relative_source.parts:
+                violations.append({
+                    "code": "APPLICATION_UNUSED_TABLE_DOMAIN_TYPE",
+                    "path": str(relative_source),
+                    "message": (
+                        "application CRUD must use CommonParam, maps, and database metadata; "
+                        "do not generate an unreferenced table-mirror domain type"
+                    ),
+                })
+
+        for project_root_path in sorted(path for path in apps_root.iterdir() if path.is_dir()):
+            if not (project_root_path / ".selplat-generated-project.json").is_file():
+                continue
+            service_contracts: dict[str, list[Path]] = {}
+            service_implementations: dict[str, list[Path]] = {}
+            for java_file in sorted(project_root_path.rglob("*.java")):
+                relative_source = java_file.relative_to(project_root)
+                parts = relative_source.parts
+                try:
+                    java_index = parts.index("java")
+                except ValueError:
+                    continue
+                package_tail = parts[java_index + 5:]
+                if (len(package_tail) >= 3
+                        and package_tail[0] in BUSINESS_TECHNICAL_LAYER_NAMES):
+                    violations.append({
+                        "code": "MANAGED_APPLICATION_TECHNICAL_FIRST_PACKAGE",
+                        "path": str(relative_source),
+                        "message": (
+                            "managed database applications must use <business>/"
+                            "controller|service|dao|verified-extension, while reusable infrastructure "
+                            "belongs below common"
+                        ),
+                    })
+                if (len(package_tail) >= 3
+                        and package_tail[0] == "common"
+                        and package_tail[1] not in MANAGED_COMMON_ROLE_NAMES):
+                    violations.append({
+                        "code": "MANAGED_APPLICATION_COMMON_ROLE_OUTSIDE_ALLOWLIST",
+                        "path": str(relative_source),
+                        "message": (
+                            "managed application common packages are limited to config, "
+                            "persistence, and util/<actual-capability>"
+                        ),
+                    })
+                if (len(package_tail) == 3
+                        and package_tail[0] != "common"
+                        and package_tail[1] == "service"
+                        and java_file.stem.endswith("Service")):
+                    service_contracts.setdefault(package_tail[0], []).append(java_file)
+                if (len(package_tail) == 4
+                        and package_tail[0] != "common"
+                        and package_tail[1] == "service"
+                        and package_tail[2] == "impl"
+                        and java_file.stem.endswith("ServiceImpl")):
+                    service_implementations.setdefault(package_tail[0], []).append(java_file)
+
+            for business in sorted(service_contracts.keys() | service_implementations.keys()):
+                contracts = service_contracts.get(business, [])
+                implementations = service_implementations.get(business, [])
+                if len(contracts) == 1 and len(implementations) == 1:
+                    continue
+                violations.append({
+                    "code": "MANAGED_APPLICATION_BUSINESS_SERVICE_CARDINALITY",
+                    "path": str(project_root_path.relative_to(project_root) / business / "service"),
+                    "message": (
+                        "each managed business must have exactly one Service contract and "
+                        "one service/impl implementation"
                     ),
                 })
 

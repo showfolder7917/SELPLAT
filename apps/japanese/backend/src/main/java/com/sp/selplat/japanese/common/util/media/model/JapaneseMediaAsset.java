@@ -1,4 +1,4 @@
-package com.sp.selplat.japanese.media.model;
+package com.sp.selplat.japanese.common.util.media.model;
 
 /**
  * 统一描述本地或未来云存储返回的媒体对象。

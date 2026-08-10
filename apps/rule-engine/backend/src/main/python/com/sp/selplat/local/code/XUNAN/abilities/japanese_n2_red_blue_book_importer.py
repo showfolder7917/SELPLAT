@@ -37,6 +37,8 @@ FIRST_QUESTION_NO = 1
 LAST_QUESTION_NO = 730
 SOURCE_BOOK = "红蓝宝书1000题"
 API_PATH = "/api/japanese/n2-blue-book-question/"
+QUESTION_PLACEHOLDER_PATTERN = re.compile(
+    r"(?:\(\s*\)|（\s*）|\[\s*\]|［\s*］)")
 ANSWER_X_RATIOS = (0.363, 0.459, 0.570, 0.682, 0.806, 0.909)
 ANSWER_X_RATIOS_SEVEN = (0.362, 0.446, 0.531, 0.632, 0.717, 0.828, 0.918)
 
@@ -494,6 +496,8 @@ def parse_book(
     for record in records:
         record.update(VERIFIED_SOURCE_CORRECTIONS.get(
             int(record["sourceQuestionNo"]), {}))
+        # 首次 OCR 数据先用题干占位，AI 审校合并时再替换为已填入正确答案的完整朗读句。
+        record["audioText"] = str(record["questionText"])
     return records
 
 
@@ -506,7 +510,8 @@ def validate_records(records: list[dict[str, Any]]) -> list[str]:
         missing = sorted(set(expected) - set(numbers))
         duplicates = sorted(number for number in set(numbers) if numbers.count(number) > 1)
         issues.append(f"question number coverage mismatch; missing={missing}, duplicates={duplicates}")
-    required_text = ["questionText", "optionA", "optionB", "optionC", "optionD", "explanation"]
+    required_text = [
+        "questionText", "optionA", "optionB", "optionC", "optionD", "explanation", "audioText"]
     for record in records:
         question_no = int(record.get("sourceQuestionNo") or 0)
         for field in required_text:
@@ -517,6 +522,12 @@ def validate_records(records: list[dict[str, Any]]) -> list[str]:
             issues.append(f"question {question_no:03d}: invalid correctOption={record.get('correctOption')}")
         if record.get("questionType") not in {"PRONUNCIATION", "KANJI", "GRAMMAR"}:
             issues.append(f"question {question_no:03d}: invalid questionType={record.get('questionType')}")
+        option_values = [str(record.get(field) or "").strip()
+                         for field in ["optionA", "optionB", "optionC", "optionD"]]
+        if len(set(option_values)) != 4:
+            issues.append(f"question {question_no:03d}: duplicate options")
+        if QUESTION_PLACEHOLDER_PATTERN.search(str(record.get("audioText") or "")):
+            issues.append(f"question {question_no:03d}: placeholder remains in audioText")
         if question_no > LAST_QUESTION_NO:
             issues.append(f"question {question_no:03d}: mock test item is forbidden")
     return issues
@@ -552,9 +563,23 @@ def api_json(url: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
     return payload
 
 
+def validate_ai_review_ready(payload: dict[str, Any]) -> None:
+    """Block database writes until all 730 OCR records passed the no-PDF Codex review."""
+    if payload.get("aiReviewMode") != "codex_ai_without_pdf":
+        raise ValueError(
+            "dataset must pass japanese_n2_ai_question_reviewer.py apply before import or sync")
+    confidence_counts = dict(payload.get("aiReviewConfidenceCounts") or {})
+    reviewed_count = sum(int(confidence_counts.get(level) or 0)
+                         for level in ["HIGH", "MEDIUM", "LOW"])
+    if reviewed_count != LAST_QUESTION_NO:
+        raise ValueError(
+            f"AI review coverage must be 730 records, actual={reviewed_count}")
+
+
 def import_records(dataset: Path, base_url: str) -> tuple[int, int]:
     """Import validated records through BaseController and skip exact existing source numbers."""
     payload = json.loads(dataset.read_text(encoding="utf-8"))
+    validate_ai_review_ready(payload)
     records = list(payload.get("records") or [])
     issues = validate_records(records)
     if issues:
@@ -588,12 +613,61 @@ def import_records(dataset: Path, base_url: str) -> tuple[int, int]:
             "optionD": record["optionD"],
             "correctOption": record["correctOption"],
             "explanation": record["explanation"],
-            "audioText": record["questionText"],
+            "audioText": record["audioText"],
             "sortnum": question_no,
             "status": 1,
         })
         created += 1
     return created, skipped
+
+
+def sync_records(dataset: Path, base_url: str) -> tuple[int, int]:
+    """Create missing records and update existing records through the Japanese application API."""
+    payload = json.loads(dataset.read_text(encoding="utf-8"))
+    validate_ai_review_ready(payload)
+    records = list(payload.get("records") or [])
+    issues = validate_records(records)
+    if issues:
+        raise ValueError("dataset validation failed:\n" + "\n".join(issues[:100]))
+    root = base_url.rstrip("/") + API_PATH
+    existing_payload = api_json(root + "getStore.htm?pageNo=1&pageSize=1000")
+    existing = {
+        (str(item.get("sourceBook") or ""), int(item.get("sourceQuestionNo") or 0)): item
+        for item in existing_payload.get("records") or []
+    }
+    created = 0
+    updated = 0
+    for record in records:
+        question_no = int(record["sourceQuestionNo"])
+        key = (SOURCE_BOOK, question_no)
+        save_data = {
+            "tenantId": 1,
+            "lastOperateUserId": 1,
+            "name": f"红蓝宝书 N2 第{question_no:03d}题",
+            "jlptLevel": "N2",
+            "sourceBook": SOURCE_BOOK,
+            "sourceQuestionNo": question_no,
+            "questionType": record["questionType"],
+            "questionText": record["questionText"],
+            "optionA": record["optionA"],
+            "optionB": record["optionB"],
+            "optionC": record["optionC"],
+            "optionD": record["optionD"],
+            "correctOption": record["correctOption"],
+            "explanation": record["explanation"],
+            "audioText": record["audioText"],
+            "sortnum": question_no,
+            "status": 1,
+        }
+        existing_record = existing.get(key)
+        if existing_record is None:
+            api_json(root + "create.htm", save_data)
+            created += 1
+            continue
+        save_data["id"] = int(existing_record["id"])
+        api_json(root + "update.htm", save_data)
+        updated += 1
+    return created, updated
 
 
 def parse_args() -> argparse.Namespace:
@@ -622,6 +696,11 @@ def parse_args() -> argparse.Namespace:
         "--dataset", type=Path,
         default=JAPANESE_IMPORT_TEMP_ROOT / "n2-red-blue-book-basic-001-730.json")
     import_parser.add_argument("--base-url", default="http://127.0.0.1:8080")
+    sync_parser = subparsers.add_parser("sync")
+    sync_parser.add_argument(
+        "--dataset", type=Path,
+        default=JAPANESE_IMPORT_TEMP_ROOT / "n2-red-blue-book-basic-001-730.json")
+    sync_parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     return parser.parse_args()
 
 
@@ -661,8 +740,11 @@ def main() -> int:
         print(json.dumps({"issueCount": len(issues), "issues": issues[:100]},
                          ensure_ascii=False, indent=2))
         return 0 if not issues else 2
-    args.dataset = ensure_option_temp_path(
-        args.dataset, "--dataset", must_exist=True)
+    args.dataset = ensure_option_temp_path(args.dataset, "--dataset", must_exist=True)
+    if args.command == "sync":
+        created, updated = sync_records(args.dataset, args.base_url)
+        print(json.dumps({"created": created, "updated": updated}, ensure_ascii=False))
+        return 0
     created, skipped = import_records(args.dataset, args.base_url)
     print(json.dumps({"created": created, "skipped": skipped}, ensure_ascii=False))
     return 0

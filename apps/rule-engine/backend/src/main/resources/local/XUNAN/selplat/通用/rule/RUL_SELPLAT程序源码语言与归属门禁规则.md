@@ -3,7 +3,7 @@
 <!-- 本规则覆盖 SELPLAT 的 apps、shared 和 rule-engine 全部正式程序源码。 -->
 rule_scope = active_user_selplat_all_program_source_ownership
 <!-- 当前版本建立全部程序统一的语言登记、能力归属和交付扫描门禁。 -->
-rule_version = 1.2.0
+rule_version = 1.6.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示生产扫描能力、索引和测试已经形成闭环。 -->
@@ -15,7 +15,7 @@ python_ability_refs = apps/rule-engine/backend/src/main/python/com/sp/selplat/lo
 <!-- 当前规则不新增 Node 专用能力。 -->
 node_ability_refs = none
 <!-- 本规则来自 Japanese 应用误建未参与构建的 src/main/python 后的全工程防复发修正。 -->
-upgrade_record = 2026-08-09:建立SELPLAT全部程序的语言白名单_源码归属预检_用户能力分层_实验工具隔离_字节码缓存定向_公共HTTP请求输出协议复用和交付扫描门禁
+upgrade_record = 2026-08-09:建立SELPLAT全部程序的语言白名单_源码归属预检_用户能力分层_实验工具隔离_字节码缓存定向_公共HTTP请求输出协议复用_无调用方表Domain禁止生成_受管工程技术层优先包结构和交付扫描门禁;2026-08-10:纠正受管数据库应用为业务目录优先_禁止顶层技术目录拆散同一表业务_common仅承载跨业务能力;2026-08-10:增加受管数据库应用common职责白名单和一业务一Service配对门禁_规则只检查抽象职责与真实结构不写死Japanese或具体能力名
 
 ## 创建前分类
 
@@ -54,8 +54,16 @@ selplat_application_http_request_contract = CommonParam,CommonBatchParam,CommonP
 selplat_application_http_response_contract = CommonResult,CommonPageResult,CommonStoreResult
 <!-- apps 中禁止新建以 Request、Response、Result、Page 或 Param 结尾的专用 HTTP 协议类。 -->
 selplat_application_private_http_protocol_type_policy = forbidden
+<!-- 公共 CRUD 已使用 CommonParam、Map 和真实数据库元数据，apps 中禁止再生成无调用方的表镜像 Domain。 -->
+selplat_application_table_domain_policy = forbidden_use_CommonParam_Map_database_metadata
+<!-- MDA 受管数据库工程必须先按业务表聚合、业务内再按职责分层；框架扩展只能在真实需求出现后进入所属业务。 -->
+selplat_managed_application_package_pattern = <business>/controller|service|dao|<verified-extension>,common/config|persistence|util/<actual-capability>
+<!-- 每个业务目录存在 Service 时必须且只能有一个接口和一个 impl 实现，禁止项目 BaseService 和单调用方中间 Service。 -->
+selplat_managed_business_service_cardinality = one_contract,one_impl,no_common_service,no_common_crud
+<!-- common 顶层只允许配置、持久化和按实际能力分类的 util；目录和能力名称必须来自真实调用关系，禁止预留空能力。 -->
+selplat_managed_common_role_allowlist = config,persistence,util/<actual-capability>,no_placeholder
 <!-- 交付前必须扫描 apps 与 shared 的语言根、构建登记、rule-engine 分层和源码污染。 -->
-selplat_source_ownership_delivery_scan = language_roots,gradle_registration,rule_engine_layers,application_http_protocol_types,source_pollution
+selplat_source_ownership_delivery_scan = language_roots,gradle_registration,rule_engine_layers,application_http_protocol_types,application_table_domain_types,managed_application_package_structure,managed_common_roles,managed_business_service_cardinality,source_pollution
 <!-- 正式源码树禁止出现 pyc、__pycache__、DS_Store 和其他生成缓存。 -->
 selplat_source_tree_generated_file_policy = reject_pyc,reject_pycache,reject_DS_Store
 <!-- Python 程序导入本地模块前必须将字节码缓存定向到工程 cache，禁止在源码旁生成。 -->

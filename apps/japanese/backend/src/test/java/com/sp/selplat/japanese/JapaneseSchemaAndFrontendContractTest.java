@@ -96,15 +96,74 @@ class JapaneseSchemaAndFrontendContractTest {
         }
         assertThat(projectRoot).isNotNull();
         java.nio.file.Path sourceRoot = projectRoot.resolve(
-                "apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion");
+                "apps/japanese/backend/src/main/java/com/sp/selplat/japanese");
         String controller = java.nio.file.Files.readString(sourceRoot.resolve(
-                "controller/JapaneseN2BlueBookQuestionController.java"));
+                "n2bluebookquestion/controller/JapaneseN2BlueBookQuestionController.java"));
         String service = java.nio.file.Files.readString(sourceRoot.resolve(
-                "service/JapaneseQuestionContentService.java"));
+                "n2bluebookquestion/service/JapaneseN2BlueBookQuestionService.java"));
         assertThat(controller).contains("@RequestBody CommonParam request");
         assertThat(service).contains("CommonResult generateExplanation(CommonParam request)");
-        assertThat(sourceRoot.resolve("model/JapaneseQuestionGenerationRequest.java"))
+        assertThat(sourceRoot.resolve(
+                "n2bluebookquestion/service/JapaneseQuestionGenerationRequest.java"))
                 .doesNotExist();
+        assertThat(sourceRoot.resolve("domain"))
+                .doesNotExist();
+    }
+
+    /**
+     * 验证 Japanese 主源码使用业务目录优先、业务内按职责分层的稳定结构。
+     * 真实传参示例：读取 {@code n2bluebookquestion/service} 和 {@code common/util}。
+     * 真实返回示例：题库编排进入业务 Service，Codex、语音、媒体和进程能力进入分类共通工具。
+     * 异常或副作用示例：文件退回顶层技术目录或通用能力散落到业务包时断言失败；测试只读源码。
+     *
+     * @throws Exception 工程根定位或源码检查失败时终止测试
+     */
+    @Test
+    void shouldUseBusinessFirstTechnicalPackages() throws Exception {
+        java.nio.file.Path projectRoot = java.nio.file.Path.of(System.getProperty("user.dir"))
+                .toAbsolutePath().normalize();
+        while (projectRoot != null && !java.nio.file.Files.isRegularFile(
+                projectRoot.resolve("settings.gradle"))) {
+            projectRoot = projectRoot.getParent();
+        }
+        assertThat(projectRoot).isNotNull();
+        java.nio.file.Path root = projectRoot.resolve(
+                "apps/japanese/backend/src/main/java/com/sp/selplat/japanese");
+        assertThat(root.resolve(
+                "n2bluebookquestion/controller/JapaneseN2BlueBookQuestionController.java"))
+                .isRegularFile();
+        assertThat(root.resolve(
+                "n2bluebookquestion/service/JapaneseN2BlueBookQuestionService.java"))
+                .isRegularFile();
+        assertThat(root.resolve(
+                "n2bluebookquestion/dao/JapaneseN2BlueBookQuestionDao.java"))
+                .isRegularFile();
+        assertThat(root.resolve("n2bluebookquestion/reference")).doesNotExist();
+        assertThat(root.resolve(
+                "n2bluebookquestion/service/JapaneseQuestionContentService.java"))
+                .doesNotExist();
+        assertThat(root.resolve(
+                "n2bluebookquestion/service/impl/JapaneseQuestionContentServiceImpl.java"))
+                .doesNotExist();
+        assertThat(root.resolve("common/util/codex/CodexCliUtil.java"))
+                .isRegularFile();
+        assertThat(root.resolve("common/util/speech/EdgeTtsSpeechUtil.java"))
+                .isRegularFile();
+        assertThat(root.resolve("common/util/media/JapaneseMediaStorage.java"))
+                .isRegularFile();
+        assertThat(root.resolve("common/util/process/JapaneseExternalProcessRunner.java"))
+                .isRegularFile();
+        assertThat(root.resolve("common/crud")).doesNotExist();
+        assertThat(root.resolve("common/service")).doesNotExist();
+        assertThat(root.resolve("common/generation")).doesNotExist();
+        assertThat(root.resolve("common/media")).doesNotExist();
+        assertThat(root.resolve("common/runtime")).doesNotExist();
+        assertThat(root.resolve("controller")).doesNotExist();
+        assertThat(root.resolve("service")).doesNotExist();
+        assertThat(root.resolve("dao")).doesNotExist();
+        assertThat(root.resolve("reference")).doesNotExist();
+        assertThat(root.resolve("media")).doesNotExist();
+        assertThat(root.resolve("runtime")).doesNotExist();
     }
 
     private String resource(String path) throws Exception {

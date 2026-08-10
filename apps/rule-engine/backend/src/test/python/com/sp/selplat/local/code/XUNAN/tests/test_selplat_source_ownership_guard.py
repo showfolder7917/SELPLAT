@@ -130,6 +130,90 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                 {"ExampleRequest.java", "ExampleResult.java"},
             )
 
+    def test_application_rejects_generated_table_domain_type(self) -> None:
+        """公共 CRUD 已按元数据运行时，应用再生成表 Domain 必须阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            domain_root = fixture / "apps/example/backend/src/main/java/com/example/item/domain"
+            domain_root.mkdir(parents=True)
+            (domain_root / "ExampleItem.java").write_text(
+                "public class ExampleItem {}\n", encoding="utf-8"
+            )
+            (fixture / "apps/example/backend/build.gradle").write_text(
+                "plugins { id 'java' }\n", encoding="utf-8"
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "APPLICATION_UNUSED_TABLE_DOMAIN_TYPE",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_managed_application_rejects_technical_first_and_common_service(self) -> None:
+        """受管数据库工程必须按业务聚合，common 也不能建立 Service 根目录。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            old_root = project / "backend/src/main/java/com/sp/selplat/example/controller/catalog"
+            old_root.mkdir(parents=True)
+            (old_root / "CatalogController.java").write_text(
+                "public class CatalogController {}\n", encoding="utf-8"
+            )
+            common_service_root = (
+                project / "backend/src/main/java/com/sp/selplat/example/common/service"
+            )
+            common_service_root.mkdir(parents=True)
+            (common_service_root / "ExampleBaseService.java").write_text(
+                "public class ExampleBaseService {}\n", encoding="utf-8"
+            )
+            (project / "backend/build.gradle").write_text(
+                "plugins { id 'java' }\n", encoding="utf-8"
+            )
+            (project / ".selplat-generated-project.json").write_text("{}\n", encoding="utf-8")
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            structure_violations = [
+                violation for violation in result["violations"]
+                if violation["code"] == "MANAGED_APPLICATION_TECHNICAL_FIRST_PACKAGE"
+            ]
+            self.assertEqual(len(structure_violations), 1)
+            self.assertTrue(structure_violations[0]["path"].endswith("CatalogController.java"))
+            self.assertIn(
+                "MANAGED_APPLICATION_COMMON_ROLE_OUTSIDE_ALLOWLIST",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_managed_application_rejects_multiple_services_for_one_business(self) -> None:
+        """同一受管业务只能拥有一个 Service 接口和一个 impl 实现。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            service_root = (
+                project / "backend/src/main/java/com/sp/selplat/example/catalog/service"
+            )
+            implementation_root = service_root / "impl"
+            implementation_root.mkdir(parents=True)
+            for name in ("CatalogService", "CatalogContentService"):
+                (service_root / f"{name}.java").write_text(
+                    f"public interface {name} {{}}\n", encoding="utf-8"
+                )
+                (implementation_root / f"{name}Impl.java").write_text(
+                    f"public class {name}Impl {{}}\n", encoding="utf-8"
+                )
+            (project / "backend/build.gradle").write_text(
+                "plugins { id 'java' }\n", encoding="utf-8"
+            )
+            (project / ".selplat-generated-project.json").write_text("{}\n", encoding="utf-8")
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_APPLICATION_BUSINESS_SERVICE_CARDINALITY",
+                {violation["code"] for violation in result["violations"]},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

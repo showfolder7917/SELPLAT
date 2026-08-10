@@ -1,9 +1,9 @@
-package com.sp.selplat.japanese.media.impl;
+package com.sp.selplat.japanese.common.util.media.impl;
 
 import com.sp.selplat.common.exception.CommonSystemException;
-import com.sp.selplat.japanese.media.JapaneseMediaStorage;
-import com.sp.selplat.japanese.media.JapaneseMediaType;
-import com.sp.selplat.japanese.media.model.JapaneseMediaAsset;
+import com.sp.selplat.japanese.common.util.media.JapaneseMediaStorage;
+import com.sp.selplat.japanese.common.util.media.JapaneseMediaType;
+import com.sp.selplat.japanese.common.util.media.model.JapaneseMediaAsset;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

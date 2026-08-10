@@ -1,4 +1,4 @@
-package com.sp.selplat.japanese.runtime;
+package com.sp.selplat.japanese.common.util.process;
 
 import com.sp.selplat.common.exception.CommonSystemException;
 import java.io.IOException;

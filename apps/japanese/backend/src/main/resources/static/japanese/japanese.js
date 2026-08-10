@@ -13,7 +13,6 @@
     const backgroundHost = window.selBaseRuntime.query("[data-sel-page-background-host]");
     const personalizationHost = window.selBaseRuntime.query("[data-sel-personalization-host]");
     const questionApi = "/api/japanese/n2-blue-book-question/";
-    const treeApi = "/api/reference-data/japanese/n2-blue-book-question/tree?tenantId=1";
     const gridId = "JapaneseN2BlueBookQuestionGrid";
     const editorId = "JapaneseN2BlueBookQuestionEditor";
     const typeLabels = Object.freeze({
@@ -75,9 +74,17 @@
         return Array.isArray(data.records) ? data.records : [];
     }
 
-    async function loadTreeItems() {
-        const response = await request(treeApi);
-        return Array.isArray(response.data) ? response.data : [];
+    function loadTreeItems() {
+        return [{
+            id: "n2-blue-book-question-root",
+            label: "N2 蓝宝书1000题",
+            value: "ALL",
+            children: Object.entries(typeLabels).map(([value, label]) => ({
+                id: `n2-${value.toLowerCase()}`,
+                label,
+                value
+            }))
+        }];
     }
 
     function countByType(type) {
@@ -434,7 +441,8 @@
     }
 
     async function refreshApplication() {
-        [state.records, state.treeItems] = await Promise.all([loadRecords(), loadTreeItems()]);
+        state.records = await loadRecords();
+        state.treeItems = loadTreeItems();
         const payload = buildPayload();
         const panelRoot = window.selPanel.get(gridId);
         window.selPanel.setLocale(panelRoot, { view: payload });
@@ -442,7 +450,8 @@
     }
 
     async function mountApplication() {
-        [state.records, state.treeItems] = await Promise.all([loadRecords(), loadTreeItems()]);
+        state.records = await loadRecords();
+        state.treeItems = loadTreeItems();
         const payload = buildPayload();
         const panelRoot = window.selPanel.create(applicationHost, {
             gridId,

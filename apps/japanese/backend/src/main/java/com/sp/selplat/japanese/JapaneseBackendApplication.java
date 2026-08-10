@@ -1,24 +1,13 @@
 package com.sp.selplat.japanese;
 
-import com.sp.selplat.referencedata.backend.controller.ReferenceDataController;
-import com.sp.selplat.referencedata.backend.provider.ReferenceDataProviderRegistry;
-import com.sp.selplat.referencedata.backend.service.DefaultReferenceDataApiService;
-import com.sp.selplat.referencedata.backend.service.DefaultReferenceDataQueryService;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Import;
 
 /** 独立启动 Japanese 后端并装配本工程私有数据源。 */
 @SpringBootApplication(scanBasePackages = {
     "com.sp.selplat.japanese",
     "com.sp.selplat.common.service",
     "com.sp.selplat.common.web"
-})
-@Import({
-    ReferenceDataController.class,
-    ReferenceDataProviderRegistry.class,
-    DefaultReferenceDataApiService.class,
-    DefaultReferenceDataQueryService.class
 })
 public class JapaneseBackendApplication {
 

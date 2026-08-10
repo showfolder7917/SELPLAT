@@ -1,4 +1,4 @@
-package com.sp.selplat.japanese.media;
+package com.sp.selplat.japanese.common.util.media;
 
 /** 固定日语题库当前允许写入的两类媒体目录和公开类型。 */
 public enum JapaneseMediaType {

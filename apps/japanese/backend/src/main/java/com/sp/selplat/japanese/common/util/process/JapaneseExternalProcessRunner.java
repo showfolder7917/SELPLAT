@@ -1,4 +1,4 @@
-package com.sp.selplat.japanese.runtime;
+package com.sp.selplat.japanese.common.util.process;
 
 import java.nio.file.Path;
 import java.time.Duration;

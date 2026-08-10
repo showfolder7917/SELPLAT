@@ -1,6 +1,6 @@
-package com.sp.selplat.japanese.media;
+package com.sp.selplat.japanese.common.util.media;
 
-import com.sp.selplat.japanese.media.model.JapaneseMediaAsset;
+import com.sp.selplat.japanese.common.util.media.model.JapaneseMediaAsset;
 import java.nio.file.Path;
 
 /** 定义媒体对象写入契约，本地目录和未来云对象存储必须返回同一访问结构。 */
