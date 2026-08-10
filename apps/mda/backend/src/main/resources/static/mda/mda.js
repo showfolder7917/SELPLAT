@@ -6,7 +6,7 @@
     "use strict";
 
     const mdaRequiredComponents = Object.freeze([
-        "selBaseRuntime", "selAjax", "selPanel", "selTree", "selDropdownMenu", "selGrid", "selTabs",
+        "selBaseRuntime", "selAjax", "selPanel", "selTree", "selDropdownMenu", "selGrid", "selContextMenu", "selTabs",
         "selSplitPane", "selCodeEditor", "selWindow", "selConfirmDialog", "selPageBackground", "selPersonalization", "selThemeManager"
     ]);
     const mdaMissingComponents = mdaRequiredComponents.filter((mdaName) => !window[mdaName]);

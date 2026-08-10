@@ -1,6 +1,6 @@
 /*
  * selTabs.js：可复用动态业务页签基础控件。
- * 负责页签创建、切换隐藏、键盘导航、关闭销毁和子组件清理回调，不识别应用、实体或接口。
+ * 负责页签创建、切换隐藏、键盘导航、批量关闭、右键菜单组合和子组件清理回调，不识别应用、实体或接口。
  * 公开 API：window.selTabs.mount(host, options)、get(id)、has(id)；每个实例使用完整业务键独立注册。
  */
 (function selTabsInitializeRegistry() {
@@ -23,6 +23,12 @@
         if (!selTabsId) return null;
         // 同一实例重复挂载时复用控制器，避免页签条和事件叠加。
         if (selTabsInstances.has(selTabsId)) return selTabsInstances.get(selTabsId);
+        // 右键菜单默认属于 Tab 基础能力；只有调用方明确声明 false 时才允许不挂载。
+        let selTabsContextMenuEnabled = selTabsOptions.contextMenu !== false;
+        if (selTabsContextMenuEnabled && typeof window.selContextMenu?.mount !== "function") {
+            console.error("selTabs.mount：默认右键菜单缺少 selContextMenu 依赖；请先加载公共控件，或显式设置 contextMenu: false。");
+            return null;
+        }
 
         // 根节点只承担页签条、内容区和空状态的稳定布局。
         const selTabsRoot = document.createElement("section");
@@ -55,6 +61,49 @@
         const selTabsItems = new Map();
         let selTabsActiveId = null;
         let selTabsDestroyed = false;
+        // Tab 只组装通用右键菜单，菜单门户、定位和键盘交互不在本组件重复实现。
+        let selTabsContextMenu = null;
+        // 文案允许应用注入本地化值，默认使用当前 SELPLAT 工作台中文。
+        const selTabsContextMenuLabels = Object.freeze({
+            closeRight: "关闭右侧",
+            closeOthers: "关闭其他",
+            closeAll: "全部关闭",
+            ...(selTabsOptions.contextMenuLabels || {})
+        });
+
+        // 挂载函数同时服务初始默认启用和运行期重新启用，始终复用稳定实例键。
+        function selTabsMountContextMenu() {
+            if (!selTabsContextMenuEnabled) return true;
+            if (typeof window.selContextMenu?.mount !== "function") return false;
+            selTabsContextMenu = window.selContextMenu.mount(selTabsRoot, {
+                id: `${selTabsId}:tab-actions`,
+                ariaLabel: String(selTabsOptions.contextMenuAriaLabel || "页签操作")
+            });
+            return Boolean(selTabsContextMenu);
+        }
+
+        // 初始默认状态在 Tab 对外可用前完成挂载，避免首次右键才临时创建。
+        if (!selTabsMountContextMenu()) {
+            selTabsRoot.remove();
+            console.error("selTabs.mount：selContextMenu 挂载失败，已停止创建 Tab 实例。");
+            return null;
+        }
+
+        // 显式开关 API 可在运行期关闭或重新启用，关闭时销毁菜单门户与注册。
+        function selTabsSetContextMenuEnabled(selTabsEnabled) {
+            const selTabsNextEnabled = Boolean(selTabsEnabled);
+            if (selTabsNextEnabled === selTabsContextMenuEnabled) return true;
+            if (!selTabsNextEnabled) {
+                selTabsContextMenu?.destroy();
+                selTabsContextMenu = null;
+                selTabsContextMenuEnabled = false;
+                return true;
+            }
+            selTabsContextMenuEnabled = true;
+            if (selTabsMountContextMenu()) return true;
+            selTabsContextMenuEnabled = false;
+            return false;
+        }
 
         // 空状态只在没有任何页签时出现，切换页签不会反复创建提示 DOM。
         function selTabsSyncEmptyState() {
@@ -139,6 +188,62 @@
             return true;
         }
 
+        // 批量关闭使用正常 close 路径：保留固定页签，并在任意 beforeClose 取消时停止后续关闭。
+        function selTabsCloseMany(selTabsTabIds) {
+            const selTabsClosableIds = Array.from(selTabsTabIds || []).filter((selTabsTabId) => selTabsItems.get(String(selTabsTabId))?.closable);
+            if (!selTabsClosableIds.length) return false;
+            for (const selTabsTabId of selTabsClosableIds) {
+                if (!selTabsClose(selTabsTabId)) return false;
+            }
+            return true;
+        }
+
+        // 关闭右侧以当前真实 DOM 顺序为准，永远跳过不可关闭的固定页签。
+        function selTabsCloseRight(selTabsTabId) {
+            const selTabsOrder = selTabsOrderedIds();
+            const selTabsIndex = selTabsOrder.indexOf(String(selTabsTabId));
+            if (selTabsIndex < 0) return false;
+            return selTabsCloseMany(selTabsOrder.slice(selTabsIndex + 1));
+        }
+
+        // 关闭其他保留右键目标本身，其他固定页签也不受影响。
+        function selTabsCloseOthers(selTabsTabId) {
+            const selTabsNormalizedId = String(selTabsTabId);
+            if (!selTabsItems.has(selTabsNormalizedId)) return false;
+            return selTabsCloseMany(selTabsOrderedIds().filter((selTabsCandidateId) => selTabsCandidateId !== selTabsNormalizedId));
+        }
+
+        // 菜单禁用状态由页签实时顺序和 closable 声明计算，不依赖应用自行判断。
+        function selTabsContextActions(selTabsTabId) {
+            const selTabsOrder = selTabsOrderedIds();
+            const selTabsIndex = selTabsOrder.indexOf(String(selTabsTabId));
+            const selTabsRightClosable = selTabsIndex >= 0 && selTabsOrder.slice(selTabsIndex + 1)
+                .some((selTabsCandidateId) => selTabsItems.get(selTabsCandidateId)?.closable);
+            const selTabsOtherClosable = selTabsOrder
+                .some((selTabsCandidateId) => selTabsCandidateId !== String(selTabsTabId) && selTabsItems.get(selTabsCandidateId)?.closable);
+            const selTabsAnyClosable = selTabsOrder.some((selTabsCandidateId) => selTabsItems.get(selTabsCandidateId)?.closable);
+            return Object.freeze([
+                Object.freeze({ id: "close-right", label: selTabsContextMenuLabels.closeRight, icon: "ri-skip-right-line", disabled: !selTabsRightClosable }),
+                Object.freeze({ id: "close-others", label: selTabsContextMenuLabels.closeOthers, icon: "ri-close-circle-line", disabled: !selTabsOtherClosable }),
+                Object.freeze({ id: "close-all", label: selTabsContextMenuLabels.closeAll, icon: "ri-delete-bin-line", disabled: !selTabsAnyClosable })
+            ]);
+        }
+
+        // 鼠标右键与 ContextMenu/Shift+F10 键共享同一公共菜单打开路径。
+        function selTabsOpenContextMenu(selTabsItemElement, selTabsClientX, selTabsClientY, selTabsFocusFirst = false) {
+            if (!selTabsContextMenu || !selTabsItemElement) return false;
+            const selTabsTabId = String(selTabsItemElement.dataset.selTabsItem || "");
+            if (!selTabsItems.has(selTabsTabId)) return false;
+            return selTabsContextMenu.open({
+                clientX: selTabsClientX,
+                clientY: selTabsClientY,
+                focusFirst: selTabsFocusFirst,
+                restoreFocusTarget: selTabsItemElement.querySelector("[role='tab']"),
+                context: Object.freeze({ tabsId: selTabsId, tabId: selTabsTabId }),
+                items: selTabsContextActions(selTabsTabId)
+            });
+        }
+
         /**
          * 创建或激活一条业务页签。
          * @param {object} selTabsDefinition - 包含 id、label、icon、closable 和 mount(panel) 的页签定义。
@@ -217,6 +322,12 @@
             const selTabsItem = selTabsEvent.target.closest("[data-sel-tabs-item]");
             if (selTabsItem) selTabsActivate(selTabsItem.dataset.selTabsItem);
         });
+        // 只有落在当前 Tab 实例页签上的右键事件才被接管，空白页签条保留浏览器默认语义。
+        selTabsList.addEventListener("contextmenu", (selTabsEvent) => {
+            const selTabsItem = selTabsEvent.target.closest("[data-sel-tabs-item]");
+            if (!selTabsItem || !selTabsList.contains(selTabsItem)) return;
+            if (selTabsOpenContextMenu(selTabsItem, selTabsEvent.clientX, selTabsEvent.clientY)) selTabsEvent.preventDefault();
+        });
         // 左右键、Home、End 遵循标准页签键盘路径；Delete 只关闭可关闭页签。
         selTabsList.addEventListener("keydown", (selTabsEvent) => {
             const selTabsCurrent = selTabsEvent.target.closest("[role='tab']")?.closest("[data-sel-tabs-item]");
@@ -236,12 +347,28 @@
                 selTabsEvent.preventDefault();
                 selTabsClose(selTabsCurrent.dataset.selTabsItem);
             }
+            if (selTabsEvent.key === "ContextMenu" || (selTabsEvent.shiftKey && selTabsEvent.key === "F10")) {
+                const selTabsBounds = selTabsCurrent.getBoundingClientRect();
+                if (selTabsOpenContextMenu(selTabsCurrent, selTabsBounds.left + 18, selTabsBounds.bottom, true)) {
+                    selTabsEvent.preventDefault();
+                }
+            }
+        });
+
+        // 公共右键菜单只广播动作 ID，Tab 组件在自己边界内执行具体关闭语义。
+        selTabsRoot.addEventListener("selContextMenu:action", (selTabsEvent) => {
+            if (selTabsEvent.detail?.menuId !== `${selTabsId}:tab-actions`) return;
+            const selTabsTabId = String(selTabsEvent.detail.context?.tabId || "");
+            if (selTabsEvent.detail.actionId === "close-right") selTabsCloseRight(selTabsTabId);
+            if (selTabsEvent.detail.actionId === "close-others") selTabsCloseOthers(selTabsTabId);
+            if (selTabsEvent.detail.actionId === "close-all") selTabsCloseMany(selTabsOrderedIds());
         });
 
         function selTabsDestroy() {
             if (selTabsDestroyed) return false;
             // 实例销毁强制关闭全部页签，逐一执行子组件清理后再移除根节点。
             selTabsOrderedIds().forEach((selTabsTabId) => selTabsClose(selTabsTabId, { force: true }));
+            selTabsContextMenu?.destroy();
             selTabsDestroyed = true;
             selTabsInstances.delete(selTabsId);
             selTabsRoot.remove();
@@ -254,11 +381,14 @@
             open: selTabsOpen,
             activate: selTabsActivate,
             close: selTabsClose,
-            closeAll: () => selTabsOrderedIds().reduce((selTabsClosed, selTabsTabId) => selTabsClose(selTabsTabId, { force: true }) && selTabsClosed, true),
+            closeRight: selTabsCloseRight,
+            closeOthers: selTabsCloseOthers,
+            closeAll: () => selTabsCloseMany(selTabsOrderedIds()),
+            setContextMenuEnabled: selTabsSetContextMenuEnabled,
             getPanel: (selTabsTabId) => selTabsItems.get(String(selTabsTabId))?.panel || null,
             has: (selTabsTabId) => selTabsItems.has(String(selTabsTabId)),
             list: () => Object.freeze(selTabsOrderedIds()),
-            getState: () => Object.freeze({ activeId: selTabsActiveId, count: selTabsItems.size }),
+            getState: () => Object.freeze({ activeId: selTabsActiveId, count: selTabsItems.size, contextMenuEnabled: selTabsContextMenuEnabled }),
             destroy: selTabsDestroy
         });
         selTabsInstances.set(selTabsId, selTabsController);

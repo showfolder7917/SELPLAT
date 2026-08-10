@@ -1,5 +1,5 @@
 plugins {
-    // backend 对 host 暴露模块配置和查询实现，因此保持标准 Java library 依赖语义。
+    // backend 对 host 暴露模块配置和四个表业务，因此保持标准 Java library 依赖语义。
     id 'java-library'
 }
 
@@ -7,10 +7,11 @@ plugins {
 group = 'com.sp.selplat.referencedata'
 
 dependencies {
-    // 对外实现并继续暴露 reference-data 的稳定查询契约。
-    api project(':apps:reference-data:contract')
     // 公共结果、JSON 工具和自定义异常用于固定 API 成功与失败契约。
     implementation project(':shared:backend:common-core')
+    // 公共数据库与服务层提供 CommonSequenceSegment DAO 和多进程安全号段生成器。
+    implementation project(':shared:backend:common-db')
+    implementation project(':shared:backend:common-service')
     // 公共 Web 层提供统一异常响应和请求追踪，不在模块内复制处理器。
     implementation project(':shared:backend:common-web')
     // JDBC Starter 提供 reference-data 独立文件数据库所需的模板与事务能力。
@@ -32,9 +33,9 @@ tasks.named('processResources') {
 }
 
 tasks.named('classes') {
-    // backend 编译前先生成 contract，保证 IDE 与命令行使用同一份公开接口。
-    dependsOn ':apps:reference-data:contract:jar'
     // HTTP API 编译前准备公共 JSON、异常和 Web 处理能力。
     dependsOn ':shared:backend:common-core:jar'
+    dependsOn ':shared:backend:common-db:jar'
+    dependsOn ':shared:backend:common-service:jar'
     dependsOn ':shared:backend:common-web:jar'
 }

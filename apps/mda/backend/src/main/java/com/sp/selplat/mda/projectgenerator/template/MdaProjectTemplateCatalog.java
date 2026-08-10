@@ -38,27 +38,13 @@ public final class MdaProjectTemplateCatalog {
                 - 首个页面：/@PROJECT@/@PROJECT@.html
                 - 数据库脚本：db/sql，按 load-order.txt 的显式顺序加载。
                 - Java 分层：业务 Controller → 唯一 Service 接口与实现 → DAO → 项目 BaseDao。
-                - 默认字段：id、tenantId、lastOperateUserId、name、sortnum、status、createdAt、updatedAt。
+                - 默认字段：id、tenantId、lastOperateUserId、sortnum、labelZh、labelJa、labelEn、status、createdAt、updatedAt。
                 - 共通职责：common 只生成实际需要的 config 与 persistence；共通能力出现后才进入 util。
                 - 扩展能力：ReferenceDataProvider 等框架扩展必须有真实需求后再创建。
                 - 冲突保护：仅 MDA 生成器拥有的工程允许追加表，已有目标文件不会被覆盖。
                 """, names));
         files.put("build.gradle", fill(
                 "// apps/@PROJECT@ 是聚合目录；实际 Java 构建位于 backend。", names));
-        files.put("manifest/module.json", fill("""
-                {
-                  "code": "@PROJECT@",
-                  "name": "@PROJECT_CLASS@",
-                  "shortName": "@PROJECT_CLASS@",
-                  "description": "管理 @PROJECT_CLASS@ 业务数据",
-                  "icon": "ri-apps-2-line",
-                  "tone": "blue",
-                  "url": "/@PROJECT@/@PROJECT@.html",
-                  "permissionCode": "@PROJECT@:access",
-                  "backendModule": "apps:@PROJECT@:backend",
-                  "referenceData": false
-                }
-                """, names));
         files.put("backend/build.gradle", fill(backendBuild(), names));
         files.put(javaRoot + names.projectClass() + "BackendApplication.java",
                 fill(applicationJava(), names));
@@ -147,16 +133,19 @@ public final class MdaProjectTemplateCatalog {
      * 返回当前业务表主键号段初始化语句。
      *
      * @param names 表命名，例如真实表 {@code JapanRegion}
-     * @return 可重复执行的 H2 MERGE
+     * @return 仅在号段不存在时插入的幂等 H2 SQL
+     * 异常或副作用示例：已有号段的 nextStartId 和 versionNo 不会在应用重启时被模板值覆盖。
      */
     public static String sequenceSeed(MdaProjectNames names) {
-        return "MERGE INTO CommonSequenceSegment "
+        return "INSERT INTO CommonSequenceSegment "
                 + "(tenantId, lastOperateUserId, seqCode, seqName, "
                 + "nextStartId, stepSize, versionNo, remark, sortnum, status) "
-                + "KEY(seqCode) VALUES (1, 1, '" + names.actualTableName()
+                + "SELECT 1, 1, '" + names.actualTableName()
                 + "Id', '" + names.actualTableName()
                 + " 主键号段', 100000, 1000, 0, "
-                + "'按模块缓存号段生成主键', 10.00, 1);";
+                + "'按模块缓存号段生成主键', 10.00, 1 "
+                + "WHERE NOT EXISTS (SELECT 1 FROM CommonSequenceSegment WHERE seqCode = '"
+                + names.actualTableName() + "Id');";
     }
 
     /**
@@ -538,15 +527,26 @@ public final class MdaProjectTemplateCatalog {
                 """;
     }
 
-    /** @return 默认业务表结构模板。 */
+    /**
+     * 生成新业务表必须遵循的租户、操作人、排序、多语言标签、状态和时间字段结构。
+     *
+     * <p>真实返回示例：模板包含 {@code tenantId BIGINT NOT NULL}、
+     * {@code labelZh VARCHAR(200) NOT NULL} 和 {@code labelJa/labelEn} 可选字段。
+     *
+     * <p>异常或副作用示例：本方法只返回未填充占位符的 SQL 文本，不连接数据库也不创建表。
+     *
+     * @return 含 {@code @ACTUAL_TABLE@} 占位符和全部平台默认字段的幂等建表 SQL
+     */
     private static String tableSchema() {
         return """
                 CREATE TABLE IF NOT EXISTS @ACTUAL_TABLE@ (
                     id BIGINT PRIMARY KEY,
                     tenantId BIGINT NOT NULL,
                     lastOperateUserId BIGINT NOT NULL,
-                    name VARCHAR(200) NOT NULL,
                     sortnum DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+                    labelZh VARCHAR(200) NOT NULL,
+                    labelJa VARCHAR(200),
+                    labelEn VARCHAR(200),
                     status INT NOT NULL DEFAULT 1,
                     createdAt TIMESTAMP NOT NULL,
                     updatedAt TIMESTAMP NOT NULL
@@ -556,8 +556,10 @@ public final class MdaProjectTemplateCatalog {
                 COMMENT ON COLUMN @ACTUAL_TABLE@.id IS '主键，由项目号段生成';
                 COMMENT ON COLUMN @ACTUAL_TABLE@.tenantId IS '租户主键';
                 COMMENT ON COLUMN @ACTUAL_TABLE@.lastOperateUserId IS '最后操作用户主键';
-                COMMENT ON COLUMN @ACTUAL_TABLE@.name IS '业务名称';
                 COMMENT ON COLUMN @ACTUAL_TABLE@.sortnum IS '人工排序值，升序';
+                COMMENT ON COLUMN @ACTUAL_TABLE@.labelZh IS '中文显示标签';
+                COMMENT ON COLUMN @ACTUAL_TABLE@.labelJa IS '日文显示标签';
+                COMMENT ON COLUMN @ACTUAL_TABLE@.labelEn IS '英文显示标签';
                 COMMENT ON COLUMN @ACTUAL_TABLE@.status IS '状态，1 有效、0 已删除';
                 COMMENT ON COLUMN @ACTUAL_TABLE@.createdAt IS '创建时间';
                 COMMENT ON COLUMN @ACTUAL_TABLE@.updatedAt IS '最后更新时间';
@@ -651,7 +653,7 @@ public final class MdaProjectTemplateCatalog {
 
                     /**
                      * 补齐当前表新增所需的平台默认字段并调用公共新增流程。
-                     * 真实传参示例：{@code {name:"示例记录"}}。
+                     * 真实传参示例：{@code {labelZh:"示例记录",labelJa:"サンプル"}}。
                      * 真实返回示例：返回含新主键、tenantId=1、status=1 和创建更新时间的记录。
                      * 异常或副作用示例：数据库写入失败时抛出公共异常；成功后新增一条记录。
                      *
@@ -672,7 +674,7 @@ public final class MdaProjectTemplateCatalog {
 
                     /**
                      * 刷新当前记录的最后更新时间并调用公共更新流程。
-                     * 真实传参示例：{@code {id:100001,name:"修正后的名称"}}。
+                     * 真实传参示例：{@code {id:100001,labelZh:"修正后的标签"}}。
                      * 真实返回示例：返回包含服务端当前 updatedAt 的更新字段。
                      * 异常或副作用示例：主键无效或数据库失败时抛出公共异常；成功后更新记录。
                      *
@@ -914,7 +916,7 @@ public final class MdaProjectTemplateCatalog {
                         return Object.freeze({
                             grid: Object.freeze({mode: "records", idField: "id",
                                 statusField: "status",
-                                searchFields: Object.freeze(["id", "name"])}),
+                                searchFields: Object.freeze(["id", "labelZh", "labelJa", "labelEn"])}),
                             data: Object.freeze({items: Object.freeze([...state.records]),
                                 selectedIds: Object.freeze([])}),
                             column: Object.freeze({gridId,
@@ -922,20 +924,24 @@ public final class MdaProjectTemplateCatalog {
                                 emptyText: "暂无@TABLE_CLASS@记录",
                                 items: Object.freeze([
                                     Object.freeze({id: "id", field: "id", label: "ID",
-                                        renderer: "text", width: "8%"}),
-                                    Object.freeze({id: "name", field: "name", label: "名称",
-                                        renderer: "text", width: "27%"}),
+                                        renderer: "text", width: "7%"}),
+                                    Object.freeze({id: "labelZh", field: "labelZh", label: "中文",
+                                        renderer: "text", width: "15%"}),
+                                    Object.freeze({id: "labelJa", field: "labelJa", label: "日文",
+                                        renderer: "text", width: "15%"}),
+                                    Object.freeze({id: "labelEn", field: "labelEn", label: "英文",
+                                        renderer: "text", width: "15%"}),
                                     Object.freeze({id: "tenantId", field: "tenantId", label: "租户",
-                                        renderer: "text", width: "10%"}),
+                                        renderer: "text", width: "8%"}),
                                     Object.freeze({id: "sortnum", field: "sortnum", label: "排序",
-                                        renderer: "text", width: "10%"}),
+                                        renderer: "text", width: "7%"}),
                                     Object.freeze({id: "status", field: "status", label: "状态",
-                                        renderer: "badge", labelSource: "status", width: "10%"}),
+                                        renderer: "badge", labelSource: "status", width: "8%"}),
                                     Object.freeze({id: "updatedAt", field: "updatedAt",
                                         label: "更新时间", renderer: "time", nowrap: true,
-                                        width: "22%"}),
+                                        width: "15%"}),
                                     Object.freeze({id: "actions", field: "id", label: "操作",
-                                        renderer: "actions", width: "13%", actions: Object.freeze([
+                                        renderer: "actions", width: "10%", actions: Object.freeze([
                                             Object.freeze({id: "edit", label: "编辑记录",
                                                 icon: "ri-edit-line"}),
                                             Object.freeze({id: "delete", label: "删除记录",
@@ -1013,9 +1019,15 @@ public final class MdaProjectTemplateCatalog {
                             submitLabel: editing ? "保存修改" : "保存记录",
                             validationMessage: "请完成全部必填字段", autoSuccess: false,
                             rows: Object.freeze([
-                                Object.freeze([Object.freeze({name: "name", label: "名称",
-                                    type: "text", icon: "ri-text", required: true,
+                                Object.freeze([Object.freeze({name: "labelZh", label: "中文标签",
+                                    type: "text", icon: "ri-translate-2", required: true,
                                     maxLength: 200})]),
+                                Object.freeze([
+                                    Object.freeze({name: "labelJa", label: "日文标签",
+                                        type: "text", icon: "ri-translate-2", maxLength: 200}),
+                                    Object.freeze({name: "labelEn", label: "英文标签",
+                                        type: "text", icon: "ri-translate-2", maxLength: 200})
+                                ]),
                                 Object.freeze([
                                     Object.freeze({name: "tenantId", label: "租户 ID",
                                         type: "number", icon: "ri-building-line", required: true,
@@ -1033,7 +1045,7 @@ public final class MdaProjectTemplateCatalog {
                         state.editingId = item?.id || null;
                         state.editor.setLocale(editorOptions(Boolean(item)));
                         state.editor.reset();
-                        state.editor.setValues({name: "", tenantId: 1,
+                        state.editor.setValues({labelZh: "", labelJa: "", labelEn: "", tenantId: 1,
                             lastOperateUserId: 1, sortnum: 0, ...(item || {})});
                         state.editor.open();
                     }
@@ -1061,7 +1073,8 @@ public final class MdaProjectTemplateCatalog {
                     async function remove(item) {
                         const confirmed = await state.confirm.open({
                             title: "删除@TABLE_CLASS@", message: "删除后记录将不再显示。",
-                            target: String(item.name || item.id), tone: "danger",
+                            target: String(item.labelZh || item.labelJa || item.labelEn || item.id),
+                            tone: "danger",
                             confirmLabel: "确认删除", cancelLabel: "取消"
                         });
                         if (!confirmed) return;

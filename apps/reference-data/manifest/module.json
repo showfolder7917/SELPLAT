@@ -1,9 +1,0 @@
-{
-  "module_id": "reference-data",
-  "display_name": "Reference Data",
-  "module_type": "platform-service",
-  "enabled": true,
-  "route_prefix": "/reference-data",
-  "permission_prefix": "reference-data",
-  "manifest_version": "1.0.0"
-}

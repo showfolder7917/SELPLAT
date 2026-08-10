@@ -1,0 +1,237 @@
+package com.sp.selplat.referencedata.common.persistence;
+
+import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
+import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDao;
+import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
+import com.sp.selplat.common.db.template.BaseTemplateDao;
+import com.sp.selplat.common.db.template.BaseTemplateMapper;
+import com.sp.selplat.common.exception.CommonSystemException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
+
+/**
+ * 创建 reference-data 自己的永久文件数据库并执行可重复初始化脚本。
+ * 数据源使用模块限定名且不标记为 Primary，避免改变 Host 中其他应用的数据源选择。
+ */
+@Configuration
+@PropertySource("classpath:reference-data-module.properties")
+public class ReferenceDataPersistenceConfiguration {
+
+    // 数据库脚本按类型表、树节点表和类型初始数据的固定职责顺序执行，避免依赖文件系统遍历顺序。
+    private static final String[] DATABASE_RESOURCES = {
+        "db/reference-data/sql/schema-CommonSequenceSegment.sql",
+        "db/reference-data/sql/schema-ReferenceDataType.sql",
+        "db/reference-data/sql/schema-ReferenceDataTreeNode.sql",
+        "db/reference-data/sql/schema-ReferenceDataOption.sql",
+        "db/reference-data/sql/schema-ReferenceDataContextMenuItem.sql",
+        "db/reference-data/sql/data-CommonSequenceSegment.sql",
+        "db/reference-data/sql/data-ReferenceDataType.sql",
+        "db/reference-data/sql/data-ReferenceDataTreeNode.sql",
+        "db/reference-data/sql/data-ReferenceDataOption.sql",
+        "db/reference-data/sql/data-ReferenceDataContextMenuItem.sql"
+    };
+    // 旧正式库的四张表曾使用 identity；只按固定白名单迁移，禁止动态拼接外部表名。
+    private static final String[] BUSINESS_TABLES = {
+        "ReferenceDataType",
+        "ReferenceDataTreeNode",
+        "ReferenceDataOption",
+        "ReferenceDataContextMenuItem"
+    };
+
+    /**
+     * 创建并初始化 reference-data 独立数据源。
+     *
+     * @param configuredUrl 测试或部署环境显式提供的 JDBC URL；空值时定位工程内永久文件库
+     * @param username 数据库用户名，例如 {@code "sa"}
+     * @param password 数据库密码，本地默认 {@code "123456"}
+     * @return 可注入 DAO 的模块私有数据源，例如 JDBC URL 指向
+     *     {@code apps/reference-data/db/reference-data}
+     * @throws CommonSystemException 当工程根、目录或数据库脚本无法初始化时抛出，例如
+     *     {@code CommonSystemException("REFERENCE_DATA_DATABASE_INITIALIZATION_FAILED", "引用数据数据库初始化失败。", cause)}
+     */
+    @Bean("referenceDataDataSource")
+    public DataSource referenceDataDataSource(
+            @Value("${reference-data.datasource.url:}") String configuredUrl,
+            @Value("${reference-data.datasource.username:sa}") String username,
+            @Value("${reference-data.datasource.password:123456}") String password) {
+        try {
+            // 测试显式 URL 或工程永久路径 → reference-data 独立 H2 连接地址。
+            String databaseUrl = resolveDatabaseUrl(configuredUrl);
+            // 独立数据源只保存在本模块上下文对象内部，不参与 Host 主数据源候选。
+            DriverManagerDataSource dataSource = new DriverManagerDataSource();
+            dataSource.setDriverClassName("org.h2.Driver");
+            dataSource.setUrl(databaseUrl);
+            dataSource.setUsername(username);
+            dataSource.setPassword(password);
+            // 固定 SQL 清单依次执行 → 创建缺失表、兼容旧结构并仅补充缺失的内置目录记录。
+            initializeDatabase(dataSource);
+            // 返回带限定名的模块私有数据源，不参与 Host 主数据源候选。
+            return dataSource;
+        } catch (RuntimeException exception) {
+            // 路径、驱动或 SQL 初始化失败 → 保留技术原因并输出稳定系统异常。
+            throw new CommonSystemException(
+                    "REFERENCE_DATA_DATABASE_INITIALIZATION_FAILED",
+                    "引用数据数据库初始化失败。",
+                    exception);
+        }
+    }
+
+    /**
+     * 创建只访问 reference-data 永久库的 JDBC 模板。
+     *
+     * @param dataSource 带限定名的 reference-data 模块私有数据源
+     * @return ReferenceDataType 自定义查询使用的 JDBC 模板
+     */
+    @Bean("referenceDataJdbcTemplate")
+    public JdbcTemplate referenceDataJdbcTemplate(
+            @Qualifier("referenceDataDataSource") DataSource dataSource) {
+        // 模块私有数据源 → DAO 自定义查询使用的唯一 JDBC 模板。
+        return new JdbcTemplate(dataSource);
+    }
+
+    /**
+     * 创建只在 reference-data 私有数据库中查询和推进号段的项目 DAO。
+     *
+     * @param dataSource reference-data 配置按限定名提供的私有数据源
+     * @return 可分别命中四张业务表号段的 DAO，例如命中 {@code ReferenceDataTypeId}
+     * 异常或副作用示例：多个进程并发抢号时只原子推进当前 seqCode 的 nextStartId 和 versionNo。
+     */
+    @Bean("referenceDataCommonSequenceSegmentDao")
+    public CommonSequenceSegmentDao referenceDataCommonSequenceSegmentDao(
+            @Qualifier("referenceDataDataSource") DataSource dataSource) {
+        // reference-data 私有数据源 → 四张业务表号段唯一查询和推进边界。
+        return new CommonSequenceSegmentDaoImpl(dataSource);
+    }
+
+    /**
+     * 绑定 reference-data 永久库与只访问同一数据库的公共模板 DAO。
+     *
+     * @param dataSource 带限定名的 reference-data 模块私有数据源
+     * @return ReferenceDataType 等固定表使用的数据源上下文
+     */
+    @Bean("referenceDataBaseDataSourceContext")
+    public BaseDataSourceContext referenceDataBaseDataSourceContext(
+            @Qualifier("referenceDataDataSource") DataSource dataSource) {
+        org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
+        configuration.setEnvironment(new Environment(
+                "reference-data",
+                new SpringManagedTransactionFactory(),
+                dataSource));
+        configuration.addMapper(BaseTemplateMapper.class);
+        SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
+        SqlSessionTemplate sqlSessionTemplate = new SqlSessionTemplate(sqlSessionFactory);
+        BaseTemplateMapper mapper = sqlSessionTemplate.getMapper(BaseTemplateMapper.class);
+        return new BaseDataSourceContext(dataSource, new BaseTemplateDao(mapper, dataSource));
+    }
+
+    /**
+     * 解析测试 URL 或工程内永久数据库路径。
+     *
+     * @param configuredUrl 配置文件或测试传入的 URL，例如 {@code jdbc:h2:mem:reference_data_test}
+     * @return 实际 JDBC URL；本地默认形如
+     *     {@code jdbc:h2:file:/workspace/SELPLAT/apps/reference-data/db/reference-data;MODE=MySQL}
+     */
+    private String resolveDatabaseUrl(String configuredUrl) {
+        // 显式 URL 主要供隔离测试和部署覆盖，禁止再推导工程目录。
+        if (configuredUrl != null && !configuredUrl.trim().isEmpty()) {
+            return configuredUrl.trim();
+        }
+        // 当前进程目录 → 向上识别包含 settings.gradle 和 reference-data 模块的 SELPLAT 根。
+        Path projectRoot = locateProjectRoot(Path.of(System.getProperty("user.dir")));
+        // 权威数据库目录固定属于 reference-data，服务重启不删除此目录。
+        Path databaseDirectory = projectRoot.resolve("apps/reference-data/db").normalize();
+        try {
+            // 首次启动创建数据目录 → 后续 H2 在相同路径打开已有数据库。
+            Files.createDirectories(databaseDirectory);
+        } catch (Exception exception) {
+            throw new IllegalStateException("无法创建引用数据数据库目录: " + databaseDirectory, exception);
+        }
+        // 不附加 .mv.db 扩展名，由 H2 按文件数据库约定生成实际数据文件。
+        Path databaseFile = databaseDirectory.resolve("reference-data").toAbsolutePath().normalize();
+        return "jdbc:h2:file:" + databaseFile
+                + ";MODE=MySQL;AUTO_SERVER=TRUE;DATABASE_TO_UPPER=false";
+    }
+
+    /**
+     * 从当前工作目录向上定位唯一 SELPLAT 工程根。
+     *
+     * @param startPath Java 进程当前目录，例如 {@code apps/host/backend}
+     * @return 同时包含 {@code settings.gradle} 与 {@code apps/reference-data} 的工程根路径
+     * @throws IllegalStateException 当向上遍历仍无法定位工程根时抛出，例如
+     *     {@code IllegalStateException("无法定位 SELPLAT 工程根")}
+     */
+    private Path locateProjectRoot(Path startPath) {
+        // 从真实绝对目录开始逐级向上，避免依赖机器固定绝对路径。
+        Path currentPath = startPath.toAbsolutePath().normalize();
+        while (currentPath != null) {
+            // 根构建入口与目标应用同时存在 → 当前目录是唯一工程根。
+            if (Files.isRegularFile(currentPath.resolve("settings.gradle"))
+                    && Files.isDirectory(currentPath.resolve("apps/reference-data"))) {
+                return currentPath;
+            }
+            // 未命中时检查父目录，直到文件系统根为止。
+            currentPath = currentPath.getParent();
+        }
+        // 无根目录时禁止退回用户目录或临时路径，避免业务数据落到未知位置。
+        throw new IllegalStateException("无法定位 SELPLAT 工程根");
+    }
+
+    /**
+     * 按版本顺序执行 reference-data 建表与种子脚本。
+     *
+     * @param dataSource 当前独立文件库或隔离测试库
+     * 执行结果示例：数据库包含 {@code ReferenceDataType}、{@code ReferenceDataTreeNode} 和内置
+     *     {@code reference-data/resource-kind} 类型。
+     */
+    private void initializeDatabase(DataSource dataSource) {
+        // 固定结构和数据资源清单 → 可重复执行的数据库初始化器。
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+        for (String databaseResource : DATABASE_RESOURCES) {
+            // 每个职责脚本按数组顺序加入，禁止把多张表重新合并到同一个 SQL 文件。
+            populator.addScript(new ClassPathResource(databaseResource));
+        }
+        // 当前数据源执行完整脚本；任一 SQL 失败都会阻止模块以半初始化状态启动。
+        populator.execute(dataSource);
+        // 已有正式库可能仍保留旧 identity 元数据 → 数据保留不变，只移除业务表自增属性。
+        migrateLegacyIdentityColumns(dataSource);
+    }
+
+    /**
+     * 把旧正式库业务表的 identity 主键原地迁移为公共号段主键。
+     *
+     * @param dataSource 当前 reference-data 私有数据源，例如旧库中 ReferenceDataType.id 仍为 identity
+     * 执行结果示例：四张表的现有 id 和外键保持不变，IS_IDENTITY 统一变为 NO
+     * 异常或副作用示例：ALTER 失败时数据库初始化整体失败，不会创建替代表或重写已有记录。
+     */
+    private void migrateLegacyIdentityColumns(DataSource dataSource) {
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        for (String tableName : BUSINESS_TABLES) {
+            // 固定表名查询元数据 → 只在旧列仍声明 identity 时执行一次兼容 ALTER。
+            Integer identityCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                            + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME = ? "
+                            + "AND COLUMN_NAME = 'id' AND IS_IDENTITY = 'YES'",
+                    Integer.class,
+                    tableName);
+            if (identityCount != null && identityCount > 0) {
+                // H2 原地删除自增属性；主键值、索引和引用当前 id 的外键均保持不变。
+                jdbcTemplate.execute("ALTER TABLE " + tableName + " ALTER COLUMN id DROP IDENTITY");
+            }
+        }
+    }
+}

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
-import com.sp.selplat.referencedata.contract.service.ReferenceDataQueryService;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -19,28 +18,21 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 提供 platform-runtime 自身的运行状态，不承载任何业务模块数据。
- * 健康响应同时验证 reference-data 查询 Service 已由宿主成功装配。
+ * 健康响应根据桌面唯一应用清单确认 reference-data 模块已登记。
  */
 @RestController
 @RequestMapping("/api/platform/runtime")
 public class PlatformRuntimeController {
 
-    // 引用数据查询契约 → 宿主已成功导入 reference-data backend 的装配证据。
-    private final ReferenceDataQueryService referenceDataQueryService;
     // 桌面应用清单 → 健康接口与真实桌面共用的唯一模块代码来源。
     private final List<String> runtimeModules;
 
     /**
      * 创建平台运行状态 Controller。
      *
-     * @param referenceDataQueryService host 装配的引用数据查询 Service，例如
-     *     {@code DefaultReferenceDataQueryService}
      * @param objectMapper Spring 提供的 JSON 读取器，例如读取 desktop/applications.json
      */
-    public PlatformRuntimeController(
-            ReferenceDataQueryService referenceDataQueryService,
-            ObjectMapper objectMapper) {
-        this.referenceDataQueryService = referenceDataQueryService;
+    public PlatformRuntimeController(ObjectMapper objectMapper) {
         this.runtimeModules = loadRuntimeModules(objectMapper);
     }
 
@@ -59,7 +51,7 @@ public class PlatformRuntimeController {
         data.put("status", "READY");
         data.put("runtime", "platform-runtime");
         data.put("modules", runtimeModules);
-        data.put("referenceDataServiceReady", referenceDataQueryService != null);
+        data.put("referenceDataModuleReady", runtimeModules.contains("reference-data"));
 
         CommonResult result = new CommonResult();
         result.setSuccess(true);

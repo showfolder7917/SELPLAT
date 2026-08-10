@@ -1,5 +1,9 @@
 package com.sp.selplat.mda.projectgenerator.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.exception.CommonSystemException;
 import com.sp.selplat.common.util.CommonParam;
@@ -18,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
@@ -31,6 +36,11 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
 
     // 工程和表编码只接受可稳定映射到目录、Java 包及 URL 的小写短横线格式。
     private static final Pattern CODE_PATTERN = Pattern.compile("[a-z][a-z0-9-]{0,31}");
+    // 当前稳定用户只能来自根 AGENTS.md，中央登记路径不得写死具体用户名。
+    private static final Pattern STABLE_USER_PATTERN = Pattern.compile(
+            "(?m)^- 当前稳定用户 ID：`([^`]+)`\\s*$");
+    // 统一使用 Jackson 维护中央 JSON，避免字符串拼接破坏登记结构。
+    private static final ObjectMapper JSON = new ObjectMapper();
     // 此标记区分生成器拥有的工程与用户手工建立的同名目录。
     private static final String OWNERSHIP_MARKER = ".selplat-generated-project.json";
     // 根构建登记使用固定注释，后续追加和重复校验不依赖脆弱的行号。
@@ -176,6 +186,10 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
      * @param projectDirectory 目标工程目录，例如 {@code apps/japan}
      * @param projectCreated 是否首次创建完整工程
      * @return 包含新文件和允许更新文件的执行计划
+     * <p>真实传参示例：首次生成 {@code japan/region} 时 {@code projectCreated=true}。
+     * <p>真实返回示例：计划同时包含应用文件、Gradle、桌面入口和中央数据库应用登记。
+     * <p>异常或副作用示例：中央登记缺失或结构无效时抛出异常，尚未写入任何文件。
+     *
      * @throws CommonSystemException 根登记文件缺失或读取失败时抛出
      */
     private GenerationPlan buildPlan(
@@ -197,6 +211,9 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
                 changedFiles.put(
                         projectRoot.resolve("apps/host/backend/src/main/resources/static/desktop/desktop.js"),
                         registerDesktopAllowedPath(names));
+                changedFiles.put(
+                        managedDatabaseRegistryPath(),
+                        registerManagedDatabaseApplication(names));
             }
             String pageCode = projectCreated ? names.projectCode() : names.tableCode();
             addRelativeFiles(
@@ -488,6 +505,62 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
         return text.replace(
                 DESKTOP_PATH_ANCHOR,
                 DESKTOP_PATH_ANCHOR + "\n" + declaration);
+    }
+
+    /**
+     * 把新工程写入当前用户的中央数据库应用登记，门禁不再依赖应用内隐藏文件。
+     * 真实传参示例：工程 {@code japan} 登记数据库 {@code db/japan.mv.db}。
+     * 真实返回示例：中央 applications 数组新增一条 {@code table-business-only} 记录。
+     * 异常或副作用示例：版本、数组或重复工程无效时抛出 IOException，生成事务不落盘。
+     *
+     * @param names 已验证工程命名
+     * @return 更新后的中央登记完整 JSON
+     * @throws IOException 中央登记缺失、格式无效或工程重复时抛出
+     */
+    private String registerManagedDatabaseApplication(MdaProjectNames names) throws IOException {
+        Path registryPath = managedDatabaseRegistryPath();
+        JsonNode document = JSON.readTree(readRequired(registryPath));
+        if (!(document instanceof ObjectNode root)
+                || root.path("version").asInt(-1) != 1
+                || !(root.get("applications") instanceof ArrayNode applications)) {
+            throw new IOException("数据库应用中央登记结构无效");
+        }
+        for (JsonNode application : applications) {
+            if (names.projectCode().equals(application.path("projectName").asText())) {
+                throw new IOException("数据库应用中央登记已存在工程：" + names.projectCode());
+            }
+        }
+        ObjectNode application = applications.addObject();
+        application.put("projectName", names.projectCode());
+        application.put("structure", "table-business-only");
+        application.put("schemaRoot", "db/sql");
+        application.put("databaseFile", "db/" + names.projectCode() + ".mv.db");
+        application.put("primaryKeyStrategy", "one-table-one-sequence");
+        application.put("datasourcePrefix", names.projectCode() + ".datasource");
+        return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+    }
+
+    /**
+     * 根据根 AGENTS.md 的当前稳定用户定位唯一中央数据库应用登记。
+     * 真实传参示例：声明 {@code 当前稳定用户 ID：XUNAN} 时定位其 SELPLAT 通用 registry。
+     * 真实返回示例：返回 rule-engine 当前用户层的 managed-database-applications.json。
+     * 异常或副作用示例：用户声明缺失、重复或不安全时抛出 IOException，不创建目录。
+     *
+     * @return 位于当前 SELPLAT 根内的中央登记绝对路径
+     * @throws IOException AGENTS.md 用户声明不唯一或不安全时抛出
+     */
+    private Path managedDatabaseRegistryPath() throws IOException {
+        String agents = readRequired(projectRoot.resolve("AGENTS.md"));
+        Matcher matcher = STABLE_USER_PATTERN.matcher(agents);
+        if (!matcher.find()) throw new IOException("AGENTS.md 缺少当前稳定用户 ID");
+        String stableUserId = matcher.group(1).trim();
+        if (!stableUserId.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") || matcher.find()) {
+            throw new IOException("AGENTS.md 当前稳定用户 ID 不唯一或不安全");
+        }
+        return insideRoot(projectRoot.resolve(
+                "apps/rule-engine/backend/src/main/resources/local/"
+                        + stableUserId
+                        + "/selplat/通用/registry/managed-database-applications.json"));
     }
 
     /**

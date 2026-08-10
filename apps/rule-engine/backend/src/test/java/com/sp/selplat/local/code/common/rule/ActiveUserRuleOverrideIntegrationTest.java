@@ -62,12 +62,89 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_application_package_pattern = "
-                + "<business>/controller|service|dao|<verified-extension>,"
+                + "<table-business>/controller|service|dao,"
                 + "common/config|persistence|util/<actual-capability>"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_database_application_detection = "
+                + "generated_project_ownership_marker|active_user_central_registry"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_database_application_registry = "
+                + "local/<active-stable-user-id>/selplat/通用/registry/"
+                + "managed-database-applications.json,version=1,unique_projectName,"
+                + "registered_project_required"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_database_application_root_allowlist = "
+                + "backend,frontend,db,doc,README.md,build.gradle,"
+                + "generated_project_ownership_marker,no_contract,no_manifest,no_registry,"
+                + "no_temp,no_placeholder"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_nested_gitignore_policy = "
+                + "apps_and_shared_forbidden,use_SELPLAT_root_gitignore,scan_all_modules"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_database_rebuild_sql_gate = "
+                + "schema_create_if_not_exists,index_create_if_not_exists,matching_data_file,"
+                + "seed_insert_where_not_exists,no_drop,no_truncate,no_delete,no_seed_update,"
+                + "no_seed_merge"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_authoritative_database_git_tracking_gate = "
+                + "no_mvdb_ignore_pattern,all_mvdb_visible_and_trackable,"
+                + "ignore_trace,ignore_lock,ignore_temp"
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_business_service_cardinality = "
                 + "one_contract,one_impl,no_common_service,no_common_crud"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_common_persistence_class_pattern = "
+                + "<project>BaseDao,<capability>PersistenceConfiguration,"
+                + "no_database_context_wrapper,use_qualified_infrastructure_beans"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_query_representation_controller_boundary = "
+                + "tree:own_table_business,options:own_table_business,"
+                + "context-menu:own_table_business"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_table_business_schema_mapping = "
+                + "bidirectional,normalize_case_and_separator,allow_application_prefix_omission"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_table_business_role_set = controller,service,service/impl,dao,no_other_role"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_table_business_call_boundary = controller_to_own_service,"
+                + "service_to_own_dao,service_to_other_service,service_to_common_util,no_cross_table_dao"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_database_file_location = "
+                + "db/<application-name>.mv.db,no_nested_data_directory,no_parallel_migration_directory"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_table_sequence_mapping = one_business_table_one_sequence_row,"
+                + "seqCode=<TableName>Id,exactly_one_active_owner"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_business_primary_key_strategy = CommonSequenceSegment:id_identity_exception,"
+                + "business_table:no_identity,use_shared_SequenceGenerator"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_database_credential_gate = datasourcePrefix_required,"
+                + "username=sa,password=123456,production_empty_password_forbidden"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_application_contract_gate = external_production_java_caller_required,"
+                + "no_future_placeholder,internal_shape_use_CommonResult_Map_List"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_application_manifest_gate = manifestConsumer_required,"
+                + "root_relative_reader_path,src_main_reader,manifest_module_json_read_evidence,"
+                + "no_metadata_placeholder"
         ));
     }
 
@@ -153,6 +230,10 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "real_interface_and_caller_and_dependency_and_registration_required,"
                 + "no_default_reference_data_provider"
         ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_primary_key_sequence = "
+                + "<ActualTableName>Id,insert_where_not_exists,no_merge,no_cursor_reset"
+        ));
     }
 
     /**
@@ -231,6 +312,9 @@ class ActiveUserRuleOverrideIntegrationTest {
 
     /**
      * SELPLAT 数据库 SQL 文件结构规则必须从当前用户通用叶子索引命中。
+     * 真实传参示例：逻辑 ID 为 {@code SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES}。
+     * 真实返回示例：规则正文包含缺库重建、重复启动保留数据及种子写入门禁。
+     * 异常或副作用示例：规则缺失或路径失效时抛出 {@link IOException}，不执行数据库 SQL。
      */
     @Test
     void shouldLoadDatabaseSqlStructureRuleFromActiveUser() throws IOException {
@@ -241,6 +325,32 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat_schema_sql_single_formal_table_policy"
         );
         assertTrue(rule.content().contains("selplat_database_field_requires_real_call_chain"));
+        assertTrue(rule.content().contains(
+            "selplat_application_authoritative_database_root = apps/<app>/db/<app>.mv.db"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_business_table_sequence_cardinality = "
+                + "one_table_one_row,seqCode=<ActualTableName>Id,no_shared_business_sequence"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_local_database_default_credentials = "
+                + "datasourcePrefix_required,username=sa,password=123456,exactly_once"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_database_rebuild_and_reopen_contract = "
+                + "missing_file_rebuild_from_sql,existing_file_no_reset,preserve_business_rows,"
+                + "preserve_sequence_cursor,compatible_upgrade_only"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_seed_sql_write_gate = "
+                + "insert_where_not_exists,read_only_noop,no_merge,no_update,no_delete,no_ddl"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_h2_gitignore_ownership = SELPLAT_root_only,"
+                + "no_mvdb_ignore_pattern,all_mvdb_visible_and_trackable,trace_ignored,"
+                + "lock_ignored,temp_ignored,before_backup_ignored,"
+                + "no_nested_gitignore_any_module"
+        ));
     }
 
     /**

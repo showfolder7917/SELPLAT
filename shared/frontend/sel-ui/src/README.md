@@ -31,12 +31,17 @@ selSearch.mount(gridRoot, searchData)
 selTree.mount(gridRoot, treeData)
 selGridMenu.mount(gridRoot, menuData)
 selDropdownMenu.mountAll(gridRoot)
+selContextMenu.mount(host, { id, ariaLabel })
 selGrid.mount(gridRoot, aggregatePayload)
+selTabs.mount(host, { id, ariaLabel })
+tabsController.setContextMenuEnabled(false)
 selPageBackground.mount(backgroundHost, options)
 selPersonalization.mount(personalizationHost, { backgroundController })
 ```
 
 `selPageBackground` 只维护背景图层和当前页面参数；`selPersonalization` 组合“主题 / 背景 / 面板 / 文字”四个独立 Tab。主题 Tab 先选择视觉风格，再选择深浅模式及该模式的独立 Accent；面板设置继续支持跟随主题、任意统一主题色和染色强度，并从主题色生成柔和、基础、抬升和强调四级色阶。切换主题或模式不会重建业务组件，也不会清除用户明确选择的文字覆盖。所有状态均不使用浏览器持久化，刷新页面恢复代码默认值。
+
+`selContextMenu` 只负责通用右键菜单门户、视口定位、禁用状态和键盘导航，动作通过 `selContextMenu:action` 事件交回挂载宿主。`selTabs` 默认挂载该控件并提供关闭右侧、关闭其他和全部关闭；当前 Tab 继续由自身的关闭按钮处理。仅在创建时显式传入 `{ contextMenu: false }` 或运行时调用 `setContextMenuEnabled(false)` 才关闭右键菜单，传入 `true` 可重新启用。批量关闭跳过固定页签并保留 `selTabs:beforeClose` 检查。
 
 ## 新增基础控件
 

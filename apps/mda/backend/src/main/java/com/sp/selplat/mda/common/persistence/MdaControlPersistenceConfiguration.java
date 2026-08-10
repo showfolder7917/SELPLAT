@@ -154,7 +154,7 @@ public class MdaControlPersistenceConfiguration {
         // 先创建号段表，再创建依赖号段的连接配置表。
         populator.addScript(new ClassPathResource("db/mda/sql/schema-CommonSequenceSegment.sql"));
         populator.addScript(new ClassPathResource("db/mda/sql/schema-MdaConnectionProfile.sql"));
-        // 先清理连接配置表的已退役默认工作库，再按最终真实主键上界初始化项目号段。
+        // 先幂等补充 Reference Data 内置连接，再按最终真实主键上界初始化项目号段。
         populator.addScript(new ClassPathResource("db/mda/sql/data-MdaConnectionProfile.sql"));
         populator.addScript(new ClassPathResource("db/mda/sql/data-CommonSequenceSegment.sql"));
         populator.execute(dataSource);

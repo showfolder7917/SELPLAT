@@ -15,9 +15,7 @@ include('shared:backend:common-db')
 include('shared:frontend:sel-ui')
 // 平台宿主作为统一进程和单端口的目标启动入口，不承载业务私有实现。
 include('apps:host:backend')
-// 引用数据 contract 提供跨项目可依赖的树、类型和 Service 稳定契约。
-include('apps:reference-data:contract')
-// 引用数据 backend 提供 Provider 注册和查询路由，由 host 显式装配。
+// 引用数据 backend 提供四张表业务和查询路由，由 host 显式装配。
 include('apps:reference-data:backend')
 // 第一阶段业务模块先接入 uniauth backend，后续再逐步扩展其他业务域。
 include('apps:uniauth:backend')
@@ -33,7 +31,6 @@ project(':shared:backend:common-web').projectDir = file('shared/backend/common-w
 project(':shared:backend:common-db').projectDir = file('shared/backend/common-db')
 project(':shared:frontend:sel-ui').projectDir = file('shared/frontend/sel-ui')
 project(':apps:host:backend').projectDir = file('apps/host/backend')
-project(':apps:reference-data:contract').projectDir = file('apps/reference-data/contract')
 project(':apps:reference-data:backend').projectDir = file('apps/reference-data/backend')
 project(':apps:uniauth:backend').projectDir = file('apps/uniauth/backend')
 project(':apps:rule-engine:backend').projectDir = file('apps/rule-engine/backend')

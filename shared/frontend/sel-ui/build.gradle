@@ -45,6 +45,46 @@ tasks.register('verifySelUiSourceBoundary') {
                 "sel-ui 公共源码包含应用业务语义：\n" + violations.join('\n')
             )
         }
+        // Tab 右键操作是公共组件契约：缺少菜单、批量 API 或正常关闭检查时直接阻断公共前端构建。
+        def contextMenuScript = file('src/components/context-menu/selContextMenu.js')
+        def contextMenuStyle = file('src/components/context-menu/selContextMenu.css')
+        def tabsScript = file('src/components/tabs/selTabs.js')
+        if (!contextMenuScript.isFile() || !contextMenuStyle.isFile() || !tabsScript.isFile()) {
+            throw new GradleException('sel-ui 缺少 selContextMenu 或 selTabs 权威源文件')
+        }
+        def contextMenuSource = contextMenuScript.getText('UTF-8')
+        def tabsSource = tabsScript.getText('UTF-8')
+        def contextRequired = ['window.selContextMenu', 'selContextMenu:action', 'ArrowDown', 'ContextMenu']
+        def tabsRequired = ['contextMenu !== false', 'window.selContextMenu.mount', 'setContextMenuEnabled:', 'closeRight:', 'closeOthers:', 'closeAll:', 'selTabs:beforeClose']
+        def missingContracts = []
+        contextRequired.findAll { !contextMenuSource.contains(it) }.each { missingContracts.add("selContextMenu -> ${it}") }
+        tabsRequired.findAll { !tabsSource.contains(it) }.each { missingContracts.add("selTabs -> ${it}") }
+        if (!missingContracts.isEmpty()) {
+            throw new GradleException("sel-ui Tab 右键菜单契约不完整：\n" + missingContracts.join('\n'))
+        }
+        // 所有应用页面使用 selTabs 时必须先加载 selContextMenu 样式和脚本，禁止未来项目依赖安全降级而静默丢失右键功能。
+        def applicationHtmlFiles = rootProject.fileTree('apps') {
+            include '**/src/main/resources/static/**/*.html'
+        }
+        def resourcePairViolations = []
+        applicationHtmlFiles.files.sort().each { htmlFile ->
+            def htmlText = htmlFile.getText('UTF-8')
+            if (!htmlText.contains('/sel/components/tabs/selTabs.js')) return
+            def contextStyle = '/sel/components/context-menu/selContextMenu.css'
+            def contextScript = '/sel/components/context-menu/selContextMenu.js'
+            def tabsScriptPath = '/sel/components/tabs/selTabs.js'
+            if (!htmlText.contains(contextStyle)) {
+                resourcePairViolations.add("${rootProject.relativePath(htmlFile)} -> 缺少 ${contextStyle}")
+            }
+            if (!htmlText.contains(contextScript)) {
+                resourcePairViolations.add("${rootProject.relativePath(htmlFile)} -> 缺少 ${contextScript}")
+            } else if (htmlText.indexOf(contextScript) > htmlText.indexOf(tabsScriptPath)) {
+                resourcePairViolations.add("${rootProject.relativePath(htmlFile)} -> selContextMenu.js 必须先于 selTabs.js 加载")
+            }
+        }
+        if (!resourcePairViolations.isEmpty()) {
+            throw new GradleException("selTabs 默认右键菜单资源未成对加载：\n" + resourcePairViolations.join('\n'))
+        }
     }
 }
 

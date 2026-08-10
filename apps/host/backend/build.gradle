@@ -13,7 +13,7 @@ dependencies {
     implementation project(':apps:uniauth:backend')
     // 公共结果和 JSON 工具用于平台健康响应保持 SELPLAT 统一结构。
     implementation project(':shared:backend:common-core')
-    // 当前宿主显式装配 reference-data 的 Provider 与查询 Service 框架。
+    // 当前宿主显式装配 reference-data 的四张表业务和查询路由。
     implementation project(':apps:reference-data:backend')
     // MDA 通过模块自持数据库上下文接入统一端口，不占用宿主主数据源。
     implementation project(':apps:mda:backend')
@@ -57,10 +57,9 @@ tasks.register('syncVsCodeResources', Copy) {
 }
 
 tasks.named('classes') {
-    // 启动宿主前同步平台配置，并准备显式装配模块及公共契约的 JAR。
+    // 启动宿主前同步平台配置，并准备显式装配模块的 JAR。
     dependsOn tasks.named('syncVsCodeResources')
     dependsOn ':shared:backend:common-core:jar'
-    dependsOn ':apps:reference-data:contract:jar'
     dependsOn ':apps:reference-data:backend:jar'
     dependsOn ':apps:mda:backend:jar'
     // 公共前端和 Uniauth 资源必须在 Host 启动前生成可依赖 JAR。

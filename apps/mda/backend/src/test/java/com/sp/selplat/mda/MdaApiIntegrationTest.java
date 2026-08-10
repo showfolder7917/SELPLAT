@@ -43,11 +43,14 @@ class MdaApiIntegrationTest {
 
     @Test
     @Order(1)
-    void shouldStartWithoutDefaultWorkspaceAndCreateDynamicConnection() throws Exception {
+    void shouldStartWithReferenceDataAndCreateDynamicConnection() throws Exception {
         assertThat(controlDataSource.getPoolName()).isEqualTo("MdaControlPool");
         mockMvc.perform(get("/api/mda/connections/getStore.htm"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalCount").value(0));
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.records[0].connectionName").value("Reference Data 数据库"))
+                .andExpect(jsonPath("$.records[0].databaseName")
+                        .value("file:./apps/reference-data/db/reference-data"));
 
         String body = objectMapper.writeValueAsString(Map.of(
                 "connectionName", "动态目标库",

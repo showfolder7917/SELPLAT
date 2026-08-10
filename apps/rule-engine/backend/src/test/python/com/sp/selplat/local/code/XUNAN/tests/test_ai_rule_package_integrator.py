@@ -255,6 +255,40 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         ).exists())
         self.assertTrue(callable(self.program.main))
 
+    def test_gradle_gate_entries_are_portable_and_scope_aware(self) -> None:
+        """三级门禁必须由根 Gradle 稳定暴露，并支持跨平台 Python 与变更范围选择。"""
+
+        build_text = (PROJECT_ROOT / "build.gradle").read_text(encoding="utf-8")
+        # 三个稳定入口与根 check → 开发、专项和提交前验证均可从同一个构建系统启动。
+        for task_name in (
+                "selplatQuickGate", "selplatSpecialGate", "selplatFullGate", "check"):
+            self.assertRegex(
+                build_text,
+                rf"tasks\.register\('{re.escape(task_name)}'(?:,\s*Exec)?\)",
+            )
+        # Python 启动器只接受工程参数或环境变量覆盖，禁止把开发者机器路径写进仓库。
+        self.assertIn("providers.gradleProperty('selplatPython')", build_text)
+        self.assertIn("providers.environmentVariable('SELPLAT_PYTHON')", build_text)
+        self.assertNotIn("/Users/showfolder", build_text)
+        # 专项范围既可由调用方直接声明，也可由工程相对变更文件推导。
+        self.assertIn("providers.gradleProperty('selplatGateScope')", build_text)
+        self.assertIn("providers.gradleProperty('selplatGateFiles')", build_text)
+        self.assertIn("scopes.addAll(selplatKnownGateScopes)", build_text)
+        # apps 范围必须从 Gradle 叶子项目动态取得，禁止再维护会遗漏未来项目的静态名称清单。
+        self.assertIn("def selplatApplicationGateProjects = javaLeafProjects.findAll", build_text)
+        self.assertIn("pathParts[0] == 'apps'", build_text)
+        self.assertIn("pathParts[2] == 'backend'", build_text)
+        self.assertIn("selplatApplicationGateProjects.collectEntries", build_text)
+        self.assertIn('"${currentProject.path}:test"', build_text)
+        self.assertNotIn(
+            "'host', 'mda', 'reference-data', 'uniauth', 'japanese', 'rule-engine', 'shared'",
+            build_text,
+        )
+        # shared 与 rule-engine 的额外职责保留显式附加，未知范围不能静默跳过。
+        self.assertIn("selplatKnownGateScopes.add('shared')", build_text)
+        self.assertIn("selplatSpecialGateTaskPaths.containsKey('rule-engine')", build_text)
+        self.assertIn("throw new GradleException", build_text)
+
 
 
 if __name__ == "__main__":

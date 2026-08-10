@@ -21,11 +21,11 @@ public final class MdaControlSchemaTestVerifier {
     }
 
     /**
-     * 验证空库首次初始化得到普通 BIGINT 主键与一条 MDA 号段配置。
+     * 验证空库首次初始化得到普通 BIGINT 主键、MDA 号段和 reference-data 内置连接。
      *
      * @param fixturePath 当前 Case 的空库 fixture，例如
      *     {@code "fixtures/MdaControlSchemaMigrationTest/freshInitialization.sql"}
-     * 执行结果示例：{@code IS_IDENTITY=NO} 且号段起点为 {@code 100000}。
+     * 执行结果示例：{@code IS_IDENTITY=NO}、号段起点为 {@code 100000} 且内置连接为一条。
      */
     public static void verifyFreshInitialization(String fixturePath) {
         DataSource dataSource = initializedDataSource(fixturePath, 1);
@@ -33,16 +33,17 @@ public final class MdaControlSchemaTestVerifier {
         assertEquals("NO", identityFlag(jdbc));
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
-        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertReferenceDataConnection(jdbc);
         assertControlSchema(jdbc);
     }
 
     /**
-     * 验证生产初始化脚本连续执行两次仍只保留一个稳定号段且不重置游标。
+     * 验证生产初始化脚本连续执行两次仍只保留一个稳定号段和一条内置连接。
      *
      * @param fixturePath 当前 Case 的空库 fixture，例如
      *     {@code "fixtures/MdaControlSchemaMigrationTest/repeatedInitialization.sql"}
-     * 执行结果示例：两次执行后 {@code MdaConnectionProfileId} 仍只有一条且起点为 {@code 100000}。
+     * 执行结果示例：两次执行后号段和 Reference Data 连接均不重复，游标仍为 {@code 100000}。
      */
     public static void verifyRepeatedInitialization(String fixturePath) {
         DataSource dataSource = initializedDataSource(fixturePath, 2);
@@ -54,6 +55,8 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT versionNo FROM CommonSequenceSegment WHERE seqCode = 'MdaConnectionProfileId'",
             Integer.class
         ));
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertReferenceDataConnection(jdbc);
         assertControlSchema(jdbc);
     }
 
@@ -62,7 +65,7 @@ public final class MdaControlSchemaTestVerifier {
      *
      * @param fixturePath 包含旧 identity 表和连接记录的 fixture，例如
      *     {@code "fixtures/MdaControlSchemaMigrationTest/legacyUpgrade.sql"}
-     * 执行结果示例：原 {@code id=10003} 记录仍存在，主键变为非 identity，MDA 号段起点为 {@code 100000}。
+     * 执行结果示例：原 {@code id=10003} 记录与内置连接并存，主键非 identity，号段起点为 {@code 100000}。
      */
     public static void verifyLegacyUpgrade(String fixturePath) {
         DataSource dataSource = initializedDataSource(fixturePath, 1);
@@ -72,7 +75,8 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT connectionName FROM MdaConnectionProfile WHERE id = 10003",
             String.class
         ));
-        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertEquals(2L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertReferenceDataConnection(jdbc);
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
         assertControlSchema(jdbc);
@@ -150,6 +154,33 @@ public final class MdaControlSchemaTestVerifier {
         ));
         assertEquals(11L, columnCount(jdbc, "CommonSequenceSegment"));
         assertEquals(16L, columnCount(jdbc, "MdaConnectionProfile"));
+    }
+
+    /**
+     * 验证生产种子只创建一条可跨机器解析的 reference-data H2 连接。
+     * 真实传参示例：传入已经执行生产 schema/data 的隔离控制库 JdbcTemplate。
+     * 真实返回示例：连接路径为 {@code file:./apps/reference-data/db/reference-data}，账号密码为 sa/123456。
+     * 异常或副作用示例：记录缺失、重复或字段错误时断言失败，不修改隔离数据库。
+     *
+     * @param jdbc 当前 Case 的隔离控制库查询模板
+     */
+    private static void assertReferenceDataConnection(JdbcTemplate jdbc) {
+        assertEquals(1L, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM MdaConnectionProfile WHERE connectionName = 'Reference Data 数据库'",
+            Long.class
+        ));
+        assertEquals("file:./apps/reference-data/db/reference-data", jdbc.queryForObject(
+            "SELECT databaseName FROM MdaConnectionProfile WHERE connectionName = 'Reference Data 数据库'",
+            String.class
+        ));
+        assertEquals("sa", jdbc.queryForObject(
+            "SELECT username FROM MdaConnectionProfile WHERE connectionName = 'Reference Data 数据库'",
+            String.class
+        ));
+        assertEquals("123456", jdbc.queryForObject(
+            "SELECT password FROM MdaConnectionProfile WHERE connectionName = 'Reference Data 数据库'",
+            String.class
+        ));
     }
 
     /**

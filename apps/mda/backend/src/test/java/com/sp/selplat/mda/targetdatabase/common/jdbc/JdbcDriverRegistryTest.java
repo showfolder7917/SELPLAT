@@ -2,7 +2,10 @@ package com.sp.selplat.mda.targetdatabase.common.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * 五种驱动 URL 规则使用纯单元测试锁定，不依赖未投放的厂商 JDBC JAR。
@@ -10,6 +13,9 @@ import org.junit.jupiter.api.Test;
 class JdbcDriverRegistryTest {
 
     private final JdbcDriverRegistry registry = new JdbcDriverRegistry();
+
+    @TempDir
+    Path temporaryDirectory;
 
     @Test
     void shouldBuildAllSupportedJdbcUrls() {
@@ -31,6 +37,22 @@ class JdbcDriverRegistryTest {
         MdaConnectionDefinition definition = new MdaConnectionDefinition(
                 "H2", null, null, "ignored", null, "sa", "", "jdbc:h2:mem:custom", null, true);
         assertThat(registry.resolve(definition).jdbcUrl()).isEqualTo("jdbc:h2:mem:custom");
+    }
+
+    @Test
+    void shouldResolveSelplatH2ApplicationPathFromNestedHostDirectory() throws Exception {
+        Path projectRoot = temporaryDirectory.resolve("SELPLAT");
+        Path hostDirectory = projectRoot.resolve("apps/host/backend");
+        Files.createDirectories(hostDirectory);
+        Files.createFile(projectRoot.resolve("settings.gradle"));
+        JdbcDriverRegistry nestedRegistry = new JdbcDriverRegistry(hostDirectory);
+
+        JdbcDriverRegistry.JdbcTarget target = nestedRegistry.resolve(
+                definition("H2", null, null, "file:./apps/reference-data/db/reference-data", "MODE=MySQL"));
+
+        assertThat(target.jdbcUrl()).isEqualTo("jdbc:h2:file:"
+                + projectRoot.resolve("apps/reference-data/db/reference-data").toString().replace('\\', '/')
+                + ";MODE=MySQL");
     }
 
     private MdaConnectionDefinition definition(

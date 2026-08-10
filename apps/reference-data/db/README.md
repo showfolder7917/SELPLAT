@@ -6,15 +6,17 @@
 
 ```text
 db/
-├── sql/        # 纳入版本管理的表结构与初始化数据脚本
-└── data/       # 永久 H2 文件数据库，运行文件不提交 Git
+├── sql/                 # 纳入版本管理的表结构与初始化数据脚本
+└── reference-data.mv.db # 永久 H2 文件数据库，运行文件不提交 Git
 ```
 
 正式数据库文件：
 
 ```text
-apps/reference-data/db/data/reference-data.mv.db
+apps/reference-data/db/reference-data.mv.db
 ```
+
+本地正式库统一使用用户名 `sa`、默认密码 `123456`；测试必须通过测试属性显式覆盖，禁止连接正式文件。
 
 应用启动时按 Java 中登记的 `sql/*.sql` 固定顺序初始化结构。数据脚本只在目标坐标不存在时写入，重启不会覆盖后台已经修改的数据。
 
@@ -22,14 +24,16 @@ apps/reference-data/db/data/reference-data.mv.db
 
 - 表结构文件使用 `schema-<实际表名>.sql`，初始化数据文件使用 `data-<实际表名>.sql`；文件中的实际表名必须与文件名完全一致。
 - 一个 `schema-<实际表名>.sql` 只允许创建对应的一张正式业务表，不得把多张表合并到含义模糊的 `tables.sql` 中。
+- 每张业务表使用 `<实际表名>Id` 独立号段；`CommonSequenceSegment` 必须恰好存在对应的一条启用记录，禁止多表共用一个 seqCode。
+- `CommonSequenceSegment` 自身为避免循环发号可保留 identity；其余业务表主键必须由公共 SequenceGenerator 生成。
 - 每张表和每个字段必须在定义旁写明业务用途；状态、枚举、外键、唯一约束和索引必须说明取值或设置原因，不能只复述 SQL 语法。
 - 表和字段必须同时声明 `COMMENT ON TABLE`、`COMMENT ON COLUMN`，保证数据库元数据查询也能直接看到中文业务含义。
 - 初始化数据必须使用稳定业务坐标和可重复执行条件；服务重启只补缺失数据，不覆盖管理后台已经维护的名称、状态、说明和排序。
-- SQL 变更至少使用隔离 H2 执行一次首次初始化和重复初始化验证，禁止使用 `db/data` 中的正式文件作为测试库。
+- SQL 变更至少使用隔离 H2 执行一次首次初始化和重复初始化验证，禁止使用 `db/reference-data.mv.db` 正式文件作为测试库。
 
 ## 边界
 
 - 本目录不得存放构建产物、缓存、日志、临时文件或测试数据库。
 - 测试使用内存数据库或测试临时目录，禁止连接这里的正式文件。
 - 运行数据库文件由 `.gitignore` 排除；SQL、说明和空目录标记必须提交。
-- 备份时应在应用停止写入后复制 `data/reference-data.mv.db`。
+- 备份时应在应用停止写入后复制 `reference-data.mv.db`。

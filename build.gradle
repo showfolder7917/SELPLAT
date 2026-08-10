@@ -93,3 +93,149 @@ tasks.register('sharedRegression') {
     // common-web check 包含公共参数、路径、响应测试和 BaseExtendsController 100% 行覆盖门禁。
     dependsOn ':shared:backend:common-web:check'
 }
+
+// Python 启动器允许本机或 CI 通过 -PselplatPython / SELPLAT_PYTHON 显式覆盖，工程内不保存机器绝对路径。
+def selplatPythonCommand = {
+    String configuredPython = providers.gradleProperty('selplatPython')
+            .orElse(providers.environmentVariable('SELPLAT_PYTHON'))
+            .getOrElse('')
+            .trim()
+    if (!configuredPython.isEmpty()) {
+        return [configuredPython]
+    }
+    // Windows 优先使用系统 Python Launcher；macOS 与 Linux 使用标准 python3 命令。
+    return System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')
+            ? ['py', '-3']
+            : ['python3']
+}
+
+// 全部门禁 Python 统一把字节码缓存写入工程 cache，禁止污染 main 与 test 源码树。
+def selplatPythonCacheRoot = layout.projectDirectory.dir('cache/python-pycache').asFile.absolutePath
+// 快速门禁直接运行生产源码归属扫描器，不启动 Spring 或连接正式业务数据库。
+def selplatQuickGateScript = file(
+        'apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/'
+                + 'selplat_source_ownership_guard.py')
+// Python 规则测试使用唯一统一入口，scope 参数决定当前用户专项或全部规则回归。
+def selplatRuleTestScript = file('apps/rule-engine/backend/src/test/python/run_tests.py')
+
+tasks.register('selplatQuickGate', Exec) {
+    group = 'verification'
+    description = '快速检查 SELPLAT 源码归属、数据库结构、SQL 幂等和工程目录门禁。'
+    workingDir rootProject.projectDir
+    environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    doFirst {
+        // 当前机器 Python 启动器 + 唯一生产门禁程序 → 零违规时任务成功，任一违规立即阻断。
+        commandLine(selplatPythonCommand() + [selplatQuickGateScript.absolutePath])
+    }
+}
+
+tasks.register('selplatActiveUserRuleTests', Exec) {
+    group = 'verification'
+    description = '运行当前稳定用户规则和源码门禁自动化测试。'
+    workingDir rootProject.projectDir
+    environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    doFirst {
+        // 当前用户测试范围从 AGENTS.md 动态解析，禁止在 Gradle 中写死用户目录。
+        commandLine(selplatPythonCommand() + [selplatRuleTestScript.absolutePath, 'active-user'])
+    }
+}
+
+tasks.register('selplatAllRuleTests', Exec) {
+    group = 'verification'
+    description = '运行 core 与当前稳定用户的全部规则引擎 Python 测试。'
+    workingDir rootProject.projectDir
+    environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    doFirst {
+        // all 范围由统一测试入口组合 core 与当前用户，避免 Gradle 扫描用户目录自行推断身份。
+        commandLine(selplatPythonCommand() + [selplatRuleTestScript.absolutePath, 'all'])
+    }
+}
+
+// Gradle 已登记的 apps/<项目>/backend 叶子模块 → 专项门禁的动态项目事实来源。
+def selplatApplicationGateProjects = javaLeafProjects.findAll { currentProject ->
+    List<String> pathParts = currentProject.path.tokenize(':')
+    return pathParts.size() == 3 && pathParts[0] == 'apps' && pathParts[2] == 'backend'
+}.collectEntries { currentProject ->
+    List<String> pathParts = currentProject.path.tokenize(':')
+    return [(pathParts[1]): currentProject]
+}
+// shared 使用聚合回归入口；apps 范围完全来自 settings.gradle 当前项目模型，不再维护静态应用名称。
+def selplatKnownGateScopes = new LinkedHashSet<>(selplatApplicationGateProjects.keySet())
+selplatKnownGateScopes.add('shared')
+
+// 专项门禁支持显式 scope，也支持从调用方提供的工程相对变更文件推导；没有范围时安全回退为全部模块。
+def selplatRequestedGateScopes = {
+    Set<String> scopes = new LinkedHashSet<>()
+    String explicitScopes = providers.gradleProperty('selplatGateScope')
+            .orElse(providers.environmentVariable('SELPLAT_GATE_SCOPE'))
+            .getOrElse('')
+    explicitScopes.split(/[,;\s]+/).findAll { !it.isBlank() }.each { scopes.add(it.trim()) }
+
+    String changedFiles = providers.gradleProperty('selplatGateFiles')
+            .orElse(providers.environmentVariable('SELPLAT_GATE_FILES'))
+            .getOrElse('')
+    changedFiles.split(/[,;\r\n]+/).findAll { !it.isBlank() }.each { rawPath ->
+        String relativePath = rawPath.trim().replace('\\', '/')
+        String matchedScope = selplatKnownGateScopes.find { scope ->
+            relativePath.startsWith("apps/${scope}/")
+        }
+        if (relativePath.startsWith('shared/')) {
+            matchedScope = 'shared'
+        }
+        if (matchedScope == null) {
+            // 根构建、规则索引或未知公共文件可能影响所有模块 → 禁止因无法分类而漏跑专项测试。
+            scopes.addAll(selplatKnownGateScopes)
+        } else {
+            scopes.add(matchedScope)
+        }
+    }
+    if (scopes.isEmpty() || scopes.remove('all')) {
+        scopes.addAll(selplatKnownGateScopes)
+    }
+    Set<String> unknownScopes = scopes.findAll { !selplatKnownGateScopes.contains(it) } as Set
+    if (!unknownScopes.isEmpty()) {
+        throw new GradleException("未知 SELPLAT 专项门禁范围: ${unknownScopes.sort().join(', ')}")
+    }
+    return scopes
+}
+
+// 每个已登记应用自动映射自己的 test；新增 settings 模块后下一次 Gradle 启动即进入专项门禁。
+def selplatSpecialGateTaskPaths = selplatApplicationGateProjects.collectEntries { scope, currentProject ->
+    return [(scope): ["${currentProject.path}:test"]]
+}
+// rule-engine 除 Java 测试外还必须执行当前稳定用户 Python 规则测试。
+if (selplatSpecialGateTaskPaths.containsKey('rule-engine')) {
+    selplatSpecialGateTaskPaths['rule-engine'].add('selplatActiveUserRuleTests')
+}
+// shared 保持后端聚合回归和公共前端边界检查，不伪装成 apps 项目。
+selplatSpecialGateTaskPaths['shared'] = [
+        'sharedRegression', ':shared:frontend:sel-ui:verifySelUiSourceBoundary'
+]
+
+tasks.register('selplatSpecialGate') {
+    group = 'verification'
+    description = '按 -PselplatGateScope 或 -PselplatGateFiles 运行相关模块专项测试；未指定时运行全部范围。'
+    dependsOn 'selplatQuickGate'
+    Set<String> selectedScopes = selplatRequestedGateScopes()
+    dependsOn selectedScopes.collectMany { selplatSpecialGateTaskPaths[it] }.unique()
+    doFirst {
+        // 最终选择范围显式输出，便于开发者和 AI 核对本次专项测试没有遗漏模块。
+        logger.lifecycle("SELPLAT 专项门禁范围: ${selectedScopes.sort().join(', ')}")
+    }
+}
+
+tasks.register('selplatFullGate') {
+    group = 'verification'
+    description = '提交或重大重构前运行全部 Java 检查、前端边界检查和规则测试。'
+    dependsOn 'selplatQuickGate', 'selplatAllRuleTests'
+    // 所有 Java 叶子模块进入 check；后续 settings 新增叶子模块会自动纳入，无需维护静态清单。
+    dependsOn javaLeafProjects.collect { currentProject -> "${currentProject.path}:check" }
+    dependsOn ':shared:frontend:sel-ui:verifySelUiSourceBoundary'
+}
+
+// 根 check 是统一交付入口，默认执行全量门禁；快速和专项任务仍可在开发过程中单独调用。
+tasks.register('check') {
+    group = 'verification'
+    description = 'SELPLAT 根工程统一交付检查，等价于 selplatFullGate。'
+    dependsOn 'selplatFullGate'
+}

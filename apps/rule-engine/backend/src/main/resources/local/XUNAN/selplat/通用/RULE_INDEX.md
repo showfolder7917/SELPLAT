@@ -49,6 +49,8 @@ load_rule_for_active_user_selplat_dynamic_tabs_creation_registry_switch_or_close
 load_rule_for_active_user_selplat_dynamic_workspace_component_assembly = SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES
 <!-- 调整动态工作区颜色、边框、焦点或活动状态时加载，保证只消费统一主题语义令牌。 -->
 load_rule_for_active_user_selplat_dynamic_workspace_visual_token_change = SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES
+<!-- 新增或修改 Tab 右键菜单、关闭右侧、关闭其他或全部关闭时加载，保证复用 selContextMenu 并保留关闭检查。 -->
+load_rule_for_active_user_selplat_tab_context_menu_or_batch_close_change = SELPLAT_DYNAMIC_TABS_WORKSPACE_LIFECYCLE_RULES
 
 <!-- SELPLAT 应用本地数据库的 SQL 文件结构、命名、职责和验证约束。 -->
 SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT数据库SQL文件结构与命名规则.md

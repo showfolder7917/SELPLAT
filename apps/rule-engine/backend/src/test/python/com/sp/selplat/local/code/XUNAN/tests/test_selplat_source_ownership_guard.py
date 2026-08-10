@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import re
 import tempfile
@@ -54,7 +55,181 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             f"- 当前稳定用户 ID：`{ACTIVE_STABLE_USER_ID}`\n",
             encoding="utf-8",
         )
+        (temp_root / ".gitignore").write_text(
+            "*.trace.db\n*.lock.db\n*.temp.db\n*.before-*.db\n",
+            encoding="utf-8",
+        )
+        registry = (
+            temp_root / "apps/rule-engine/backend/src/main/resources/local"
+            / ACTIVE_STABLE_USER_ID
+            / "selplat/通用/registry/managed-database-applications.json"
+        )
+        registry.parent.mkdir(parents=True, exist_ok=True)
+        registry.write_text(
+            '{"version":1,"applications":[]}\n',
+            encoding="utf-8",
+        )
         return temp_root
+
+    def register_managed_database_application(
+            self,
+            fixture: Path,
+            project_name: str,
+            **registration_values: str) -> None:
+        """在隔离工程的当前用户中央登记中注册一个数据库应用。"""
+        registry = (
+            fixture / "apps/rule-engine/backend/src/main/resources/local"
+            / ACTIVE_STABLE_USER_ID
+            / "selplat/通用/registry/managed-database-applications.json"
+        )
+        registry.parent.mkdir(parents=True, exist_ok=True)
+        registration = {
+            "projectName": project_name,
+            "structure": "table-business-only",
+            "schemaRoot": "db/sql",
+            "primaryKeyStrategy": "one-table-one-sequence",
+            **registration_values,
+        }
+        registry.write_text(
+            json.dumps({"version": 1, "applications": [registration]}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def test_missing_central_registry_blocks_delivery(self) -> None:
+        """删除中央登记本身不能把全部严格数据库应用降级为未受管。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            registry = self.guard.managed_database_registry_path(
+                fixture, ACTIVE_STABLE_USER_ID
+            )
+            registry.unlink()
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_DATABASE_REGISTRY_MISSING",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_application_local_managed_registry_is_forbidden(self) -> None:
+        """旧式应用内受管隐藏文件不能重新成为第二事实来源。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            project.mkdir(parents=True)
+            (project / ".selplat-managed-database-application.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_DATABASE_APPLICATION_LOCAL_REGISTRY_FORBIDDEN",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_mda_generator_rejects_missing_multilingual_default_fields(self) -> None:
+        """新业务表模板缺少任一平台默认字段时必须在快速门禁阶段阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            template = fixture / self.guard.MDA_GENERATOR_TEMPLATE_RELATIVE
+            template.parent.mkdir(parents=True)
+            template.write_text(
+                "private static String tableSchema() {\n"
+                "  return \"CREATE TABLE Demo (tenantId BIGINT, name VARCHAR(20));\";\n"
+                "}\n"
+                "private static String daoJava() { return \"\"; }\n",
+                encoding="utf-8",
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MDA_GENERATOR_DEFAULT_BUSINESS_FIELDS_INVALID",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_managed_database_application_rejects_extra_root_directory(self) -> None:
+        """数据库应用根只保存真实工程组成，不允许增加预留或登记目录。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            (project / "backend").mkdir(parents=True)
+            (project / "future-placeholder").mkdir()
+            self.register_managed_database_application(
+                fixture,
+                "example",
+                databaseFile="db/example.mv.db",
+                datasourcePrefix="example.datasource",
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_DATABASE_APPLICATION_ROOT_CONTENT_FORBIDDEN",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_every_application_rejects_nested_gitignore(self) -> None:
+        """全部应用和共享模块不得在子目录散落仓库忽略规则。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            database_root = project / "db"
+            database_root.mkdir(parents=True)
+            (database_root / ".gitignore").write_text("*.mv.db\n", encoding="utf-8")
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "NESTED_GITIGNORE_FORBIDDEN",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_managed_database_application_rejects_non_idempotent_rebuild_sql(self) -> None:
+        """启动 SQL 不能重建已有表、覆盖种子数据或删除已有内容。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            sql_root = project / "db/sql"
+            sql_root.mkdir(parents=True)
+            (sql_root / "schema-ExampleCatalog.sql").write_text(
+                "CREATE TABLE ExampleCatalog (id BIGINT PRIMARY KEY);\n"
+                "DROP TABLE IF EXISTS ExampleLegacy;\n",
+                encoding="utf-8",
+            )
+            (sql_root / "data-ExampleCatalog.sql").write_text(
+                "MERGE INTO ExampleCatalog (id) KEY(id) VALUES (1);\n",
+                encoding="utf-8",
+            )
+            self.register_managed_database_application(
+                fixture,
+                "example",
+                databaseFile="db/example.mv.db",
+                datasourcePrefix="example.datasource",
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+            codes = {violation["code"] for violation in result["violations"]}
+
+            self.assertIn("MANAGED_APPLICATION_SCHEMA_CREATE_NOT_IDEMPOTENT", codes)
+            self.assertIn("MANAGED_APPLICATION_SCHEMA_DESTRUCTIVE_REFRESH_FORBIDDEN", codes)
+            self.assertIn("MANAGED_APPLICATION_SEED_MERGE_OVERWRITE_FORBIDDEN", codes)
+
+    def test_root_gitignore_must_not_hide_database_files(self) -> None:
+        """根规则不得用通配符隐藏 mv.db，H2 运行副产物仍必须排除。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            (fixture / ".gitignore").write_text(
+                "*.mv.db\n*.trace.db\n*.lock.db\n*.temp.db\n*.before-*.db\n",
+                encoding="utf-8",
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "ROOT_H2_GITIGNORE_POLICY_INVALID",
+                {violation["code"] for violation in result["violations"]},
+            )
 
     def test_current_selplat_source_tree_has_zero_violations(self) -> None:
         """真实工程交付前必须保持零违规。"""
@@ -167,6 +342,13 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             (common_service_root / "ExampleBaseService.java").write_text(
                 "public class ExampleBaseService {}\n", encoding="utf-8"
             )
+            persistence_root = (
+                project / "backend/src/main/java/com/sp/selplat/example/common/persistence"
+            )
+            persistence_root.mkdir(parents=True)
+            (persistence_root / "ExampleDatabase.java").write_text(
+                "public class ExampleDatabase {}\n", encoding="utf-8"
+            )
             (project / "backend/build.gradle").write_text(
                 "plugins { id 'java' }\n", encoding="utf-8"
             )
@@ -182,6 +364,60 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             self.assertTrue(structure_violations[0]["path"].endswith("CatalogController.java"))
             self.assertIn(
                 "MANAGED_APPLICATION_COMMON_ROLE_OUTSIDE_ALLOWLIST",
+                {violation["code"] for violation in result["violations"]},
+            )
+            self.assertIn(
+                "MANAGED_APPLICATION_COMMON_PERSISTENCE_ROLE_INVALID",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_registered_database_application_without_generator_marker_passes_structure_gate(self) -> None:
+        """非生成工程登记为数据库应用后，也不能逃过业务聚合门禁。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            old_root = project / "backend/src/main/java/com/sp/selplat/example/controller/catalog"
+            old_root.mkdir(parents=True)
+            (old_root / "CatalogController.java").write_text(
+                "public class CatalogController {}\n", encoding="utf-8"
+            )
+            (project / "backend/build.gradle").write_text(
+                "plugins { id 'java' }\n", encoding="utf-8"
+            )
+            self.register_managed_database_application(
+                fixture, "example", structure="table-business-only"
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_APPLICATION_TECHNICAL_FIRST_PACKAGE",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_managed_application_rejects_mixed_query_representation_controller(self) -> None:
+        """树、下拉和右键菜单必须保留在各自表业务 Controller。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            controller_root = (
+                project / "backend/src/main/java/com/sp/selplat/example/catalog/controller"
+            )
+            controller_root.mkdir(parents=True)
+            (controller_root / "CatalogQueryController.java").write_text(
+                'class CatalogQueryController { String tree = "/catalog/tree"; '
+                'String options = "/catalog/options"; }\n',
+                encoding="utf-8",
+            )
+            (project / "backend/build.gradle").write_text(
+                "plugins { id 'java' }\n", encoding="utf-8"
+            )
+            self.register_managed_database_application(fixture, "example")
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_APPLICATION_QUERY_REPRESENTATIONS_MIXED_CONTROLLER",
                 {violation["code"] for violation in result["violations"]},
             )
 
@@ -211,6 +447,154 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
 
             self.assertIn(
                 "MANAGED_APPLICATION_BUSINESS_SERVICE_CARDINALITY",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_managed_application_rejects_table_directory_mapping_gaps(self) -> None:
+        """真实表与 common 外业务目录必须双向对应，且表业务只能有三种职责。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            package_root = project / "backend/src/main/java/com/sp/selplat/example"
+            orphan_business = package_root / "orphanquery"
+            (orphan_business / "controller").mkdir(parents=True)
+            (orphan_business / "service/impl").mkdir(parents=True)
+            (orphan_business / "dao").mkdir(parents=True)
+            schema_root = project / "db/sql"
+            schema_root.mkdir(parents=True)
+            (schema_root / "schema-ExampleCatalog.sql").write_text(
+                "CREATE TABLE ExampleCatalog (id BIGINT PRIMARY KEY);\n", encoding="utf-8"
+            )
+            (project / "backend/build.gradle").write_text(
+                "plugins { id 'java' }\n", encoding="utf-8"
+            )
+            self.register_managed_database_application(fixture, "example")
+
+            result = self.guard.audit_source_ownership(fixture)
+            codes = {violation["code"] for violation in result["violations"]}
+
+            self.assertIn("MANAGED_APPLICATION_BUSINESS_WITHOUT_TABLE", codes)
+            self.assertIn("MANAGED_APPLICATION_TABLE_WITHOUT_BUSINESS", codes)
+
+    def test_managed_application_rejects_cross_table_dao_and_stateful_util(self) -> None:
+        """Controller、Service、DAO 与 common/util 的调用边界必须由源码门禁阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            package_root = project / "backend/src/main/java/com/sp/selplat/example"
+            service_root = package_root / "catalog/service/impl"
+            service_root.mkdir(parents=True)
+            (package_root / "catalog/controller").mkdir(parents=True)
+            (package_root / "catalog/dao").mkdir(parents=True)
+            (service_root / "CatalogServiceImpl.java").write_text(
+                "import com.sp.selplat.example.inventory.dao.InventoryDao; class CatalogServiceImpl {}\n",
+                encoding="utf-8",
+            )
+            util_root = package_root / "common/util/catalog"
+            util_root.mkdir(parents=True)
+            (util_root / "CatalogService.java").write_text(
+                "@Service class CatalogService {}\n", encoding="utf-8"
+            )
+            schema_root = project / "db/sql"
+            schema_root.mkdir(parents=True)
+            (schema_root / "schema-ExampleCatalog.sql").write_text(
+                "CREATE TABLE ExampleCatalog (id BIGINT PRIMARY KEY);\n", encoding="utf-8"
+            )
+            (project / "backend/build.gradle").write_text(
+                "plugins { id 'java' }\n", encoding="utf-8"
+            )
+            self.register_managed_database_application(
+                fixture, "example", structure="table-business-only"
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+            codes = {violation["code"] for violation in result["violations"]}
+
+            self.assertIn("MANAGED_APPLICATION_CROSS_TABLE_DAO_ACCESS", codes)
+            self.assertIn("MANAGED_APPLICATION_COMMON_UTIL_BUSINESS_ROLE", codes)
+
+    def test_strict_database_application_rejects_nested_database_identity_and_missing_sequence(self) -> None:
+        """严格数据库应用必须固定数据库位置并为每张业务表登记唯一号段。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            package_root = project / "backend/src/main/java/com/sp/selplat/example/examplecatalog"
+            for role in ("controller", "service/impl", "dao"):
+                (package_root / role).mkdir(parents=True)
+            schema_root = project / "db/sql"
+            schema_root.mkdir(parents=True)
+            (schema_root / "schema-ExampleCatalog.sql").write_text(
+                "CREATE TABLE ExampleCatalog (id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY);\n",
+                encoding="utf-8",
+            )
+            nested_database = project / "db/data/example.mv.db"
+            nested_database.parent.mkdir(parents=True)
+            nested_database.write_bytes(b"fixture")
+            (project / "backend/build.gradle").write_text("plugins { id 'java' }\n", encoding="utf-8")
+            self.register_managed_database_application(
+                fixture,
+                "example",
+                structure="table-business-only",
+                databaseFile="db/data/example.mv.db",
+                datasourcePrefix="example.datasource",
+            )
+            resource_root = project / "backend/src/main/resources"
+            resource_root.mkdir(parents=True)
+            (resource_root / "example-module.properties").write_text(
+                "example.datasource.username=sa\nexample.datasource.password=\n",
+                encoding="utf-8",
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+            codes = {violation["code"] for violation in result["violations"]}
+
+            self.assertIn("MANAGED_APPLICATION_DATABASE_FILE_REGISTRATION_INVALID", codes)
+            self.assertIn("MANAGED_APPLICATION_DATABASE_FILE_LOCATION_INVALID", codes)
+            self.assertIn("MANAGED_APPLICATION_COMMON_SEQUENCE_SQL_MISSING", codes)
+            self.assertIn("MANAGED_APPLICATION_BUSINESS_IDENTITY_FORBIDDEN", codes)
+            self.assertIn("MANAGED_APPLICATION_DEFAULT_DATABASE_CREDENTIAL_INVALID", codes)
+
+    def test_strict_database_application_rejects_contract_without_external_caller(self) -> None:
+        """严格数据库应用不得为未来可能调用预留无外部生产调用方的 contract。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            (project / "contract/src/main/java/com/sp/selplat/example/contract/model").mkdir(parents=True)
+            (project / "contract/src/main/java/com/sp/selplat/example/contract/model/ExampleView.java").write_text(
+                "package com.sp.selplat.example.contract.model; public record ExampleView(String value) {}\n",
+                encoding="utf-8",
+            )
+            (project / "backend/src/main/java/com/sp/selplat/example/common/config").mkdir(parents=True)
+            (project / "backend/build.gradle").write_text("plugins { id 'java' }\n", encoding="utf-8")
+            self.register_managed_database_application(
+                fixture, "example", structure="table-business-only"
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_APPLICATION_UNUSED_CONTRACT_MODULE",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_strict_database_application_rejects_manifest_without_real_reader(self) -> None:
+        """严格数据库应用不得保留没有生产读取程序的 manifest 目录。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            manifest_root = project / "manifest"
+            manifest_root.mkdir(parents=True)
+            (manifest_root / "module.json").write_text('{"code":"example"}\n', encoding="utf-8")
+            (project / "backend/src/main/java/com/sp/selplat/example/common/config").mkdir(parents=True)
+            (project / "backend/build.gradle").write_text("plugins { id 'java' }\n", encoding="utf-8")
+            self.register_managed_database_application(
+                fixture, "example", structure="table-business-only"
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_APPLICATION_UNUSED_MANIFEST_DIRECTORY",
                 {violation["code"] for violation in result["violations"]},
             )
 

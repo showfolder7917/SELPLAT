@@ -7,3 +7,9 @@ bin/
 *.py[cod]
 trs/
 .DS_Store
+
+# H2 正式数据库允许显示和提交，工程根只排除运行副产物。
+*.trace.db
+*.lock.db
+*.temp.db
+*.before-*.db

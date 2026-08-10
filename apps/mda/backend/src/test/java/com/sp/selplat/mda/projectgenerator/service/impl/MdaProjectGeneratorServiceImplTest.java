@@ -43,6 +43,22 @@ class MdaProjectGeneratorServiceImplTest {
         Files.createDirectories(testRoot.resolve("apps/host/backend"));
         Files.createDirectories(testRoot.resolve(
                 "apps/host/backend/src/main/resources/static/desktop"));
+        Files.createDirectories(testRoot.resolve(
+                "apps/rule-engine/backend/src/main/resources/local/TESTUSER/"
+                        + "selplat/通用/registry"));
+        Files.writeString(
+                testRoot.resolve("AGENTS.md"),
+                "- 当前稳定用户 ID：`TESTUSER`\n");
+        Files.writeString(
+                testRoot.resolve(
+                        "apps/rule-engine/backend/src/main/resources/local/TESTUSER/"
+                                + "selplat/通用/registry/managed-database-applications.json"),
+                """
+                {
+                  "version": 1,
+                  "applications": []
+                }
+                """);
         Files.writeString(
                 testRoot.resolve("settings.gradle"),
                 "rootProject.name = 'test'\n");
@@ -112,8 +128,7 @@ class MdaProjectGeneratorServiceImplTest {
         assertThat(project.resolve(
                 "backend/src/main/java/com/sp/selplat/japan/region/reference"))
                 .doesNotExist();
-        assertThat(Files.readString(project.resolve("manifest/module.json")))
-                .contains("\"referenceData\": false");
+        assertThat(project.resolve("manifest")).doesNotExist();
         assertThat(project.resolve(
                 "backend/src/main/java/com/sp/selplat/japan/region/controller/"
                         + "JapanRegionController.java")).isRegularFile();
@@ -177,7 +192,17 @@ class MdaProjectGeneratorServiceImplTest {
                 .contains("tenantId BIGINT NOT NULL")
                 .contains("lastOperateUserId BIGINT NOT NULL")
                 .contains("sortnum DECIMAL(10, 2) NOT NULL DEFAULT 0.00")
+                .contains("labelZh VARCHAR(200) NOT NULL")
+                .contains("labelJa VARCHAR(200)")
+                .contains("labelEn VARCHAR(200)")
+                .doesNotContain("name VARCHAR(200)")
                 .contains("createdAt TIMESTAMP NOT NULL");
+        assertThat(generatedScript)
+                .contains("field: \"labelZh\"")
+                .contains("field: \"labelJa\"")
+                .contains("field: \"labelEn\"")
+                .contains("name: \"labelZh\"")
+                .doesNotContain("field: \"name\"");
         assertThat(Files.readString(project.resolve(
                 "db/sql/data-JapanRegion.sql")))
                 .contains("默认不写业务数据")
@@ -202,6 +227,17 @@ class MdaProjectGeneratorServiceImplTest {
         assertThat(Files.readString(testRoot.resolve(
                 "apps/host/backend/src/main/resources/static/desktop/desktop.js")))
                 .contains("\"/japan/\"");
+        Path centralRegistry = testRoot.resolve(
+                "apps/rule-engine/backend/src/main/resources/local/TESTUSER/"
+                        + "selplat/通用/registry/managed-database-applications.json");
+        JsonNode managedApplications = new ObjectMapper().readTree(centralRegistry.toFile())
+                .path("applications");
+        assertThat(managedApplications.size()).isEqualTo(1);
+        assertThat(managedApplications.get(0).path("projectName").asText()).isEqualTo("japan");
+        assertThat(managedApplications.get(0).path("databaseFile").asText())
+                .isEqualTo("db/japan.mv.db");
+        assertThat(managedApplications.get(0).path("datasourcePrefix").asText())
+                .isEqualTo("japan.datasource");
         try (var generatedSources = Files.walk(project.resolve("backend/src/main/java"))) {
             assertThat(generatedSources
                     .filter(Files::isRegularFile)

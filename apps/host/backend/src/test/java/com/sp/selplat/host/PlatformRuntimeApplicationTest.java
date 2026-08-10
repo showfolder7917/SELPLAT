@@ -55,7 +55,7 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(jsonPath("$.data.modules[2]").value("reference-data"))
                 .andExpect(jsonPath("$.data.modules[3]").value("uniauth"))
                 .andExpect(jsonPath("$.data.modules[4]").value("japanese"))
-                .andExpect(jsonPath("$.data.referenceDataServiceReady").value(true));
+                .andExpect(jsonPath("$.data.referenceDataModuleReady").value(true));
     }
 
     /**
@@ -74,6 +74,11 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("selgrid-table-horizontal-scroll")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("horizontalScroll === true")));
+        // Tab 右键操作必须由 sel-ui 通用菜单发布，禁止 MDA 复制第二套浮层。
+        mockMvc.perform(get("/sel/components/context-menu/selContextMenu.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("selContextMenu:action")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("ArrowDown")));
         // Uniauth 页面由同一个 Host Web 容器发布，浏览器无需跨端口访问。
         mockMvc.perform(get("/uniauth/uniauth.html"))
                 .andExpect(status().isOk());
@@ -91,6 +96,11 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("horizontalScroll: true")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("defaultColumnWidth: 150")));
+        // MDA 入口显式先加载公共右键菜单再加载 Tab，保证页签批量关闭可用。
+        mockMvc.perform(get("/mda/mda.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/sel/components/context-menu/selContextMenu.css")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/sel/components/context-menu/selContextMenu.js")));
         // Host 桌面只提供工程入口，不复制任何业务页面。
         mockMvc.perform(get("/desktop/desktop.html"))
                 .andExpect(status().isOk())
@@ -143,13 +153,13 @@ class PlatformRuntimeApplicationTest {
      */
     @Test
     void shouldExposeReferenceDataTreeAndOptions() throws Exception {
-        // Host 显式装配的内置 Provider → 英文树 API 固定结构。
+        // Host 显式装配的 ReferenceDataTreeNode 表业务 → 英文树 API 固定结构。
         mockMvc.perform(get("/api/reference-data/reference-data/resource-kind/tree")
                         .queryParam("locale", "en-US"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].label").value("Reference data resource types"));
-        // 同一 Provider 的类型表达 → 日文选项 API 保持稳定值和本地化标签。
+        // ReferenceDataOption 表业务 → 日文选项 API 保持稳定值和本地化标签。
         mockMvc.perform(get("/api/reference-data/reference-data/resource-kind/options")
                         .queryParam("locale", "ja-JP"))
                 .andExpect(status().isOk())

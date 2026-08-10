@@ -6,14 +6,14 @@ java_ability_refs = apps/mda/backend/src/main/java/com/sp/selplat/mda/projectgen
 python_ability_refs = none
 <!-- 页面脚本由模板生成并使用现有浏览器与前端语法验证，不登记额外 Node 能力。 -->
 node_ability_refs = none
-<!-- 本版补齐 SEL 主题运行时、公共控件装配和禁止手写控件回退的生成门禁。 -->
-rule_version = 1.9.0
+<!-- 本版将新生成标准业务表的中日英标签与平台默认字段纳入生成和快速门禁。 -->
+rule_version = 1.12.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析，未经审查不得提升到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则、生成器、索引和真实隔离文件测试已经形成闭环。 -->
 rule_status = active
 <!-- 本规则来源于用户要求从 uniauth 抽取模板并让后续 AI 可重复接手。 -->
-upgrade_record = 2026-08-09:建立SELPLAT工程与业务表脚手架生成_冲突保护_reference-data扩展和左树右表页面规则;2026-08-09:修正MDA生成器具体类冒充Service接口并增加接口实现目录_Controller依赖和模板输出的自动门禁;2026-08-09:修正独立启动误扫描公共DAO_引用数据接口未装配和纯注释空数据脚本启动失败并增加真实启动门禁;2026-08-09:修正只登记Host依赖却遗漏桌面入口和同源路径白名单_将统一桌面闭环加入原子生成与构建门禁;2026-08-09:修正生成页面只加载单一皮肤并手写树_表格_窗口_改为完整SEL主题运行时和公共控件装配并增加模板输出门禁;2026-08-09:修正MDA自建Request_Result协议_统一复用CommonParam_CommonResult并增加生成门禁;2026-08-10:删除无调用方表Domain模板_统一使用CommonParam_Map_真实数据库元数据;2026-08-10:将生成包结构统一为技术层优先_层内按业务分目录_通用能力进入common;2026-08-10:以Uniauth为准改为数据库业务目录优先_Controller_Service_DAO_Reference聚合到同一业务_common只保存跨业务能力;2026-08-10:抽象SELPLAT数据库应用职责门禁_一业务一Service_common仅config_persistence_util_能力与框架扩展必须有真实需求后创建
+upgrade_record = 2026-08-09:建立SELPLAT工程与业务表脚手架生成_冲突保护_reference-data扩展和左树右表页面规则;2026-08-09:修正MDA生成器具体类冒充Service接口并增加接口实现目录_Controller依赖和模板输出的自动门禁;2026-08-09:修正独立启动误扫描公共DAO_引用数据接口未装配和纯注释空数据脚本启动失败并增加真实启动门禁;2026-08-09:修正只登记Host依赖却遗漏桌面入口和同源路径白名单_将统一桌面闭环加入原子生成与构建门禁;2026-08-09:修正生成页面只加载单一皮肤并手写树_表格_窗口_改为完整SEL主题运行时和公共控件装配并增加模板输出门禁;2026-08-09:修正MDA自建Request_Result协议_统一复用CommonParam_CommonResult并增加生成门禁;2026-08-10:删除无调用方表Domain模板_统一使用CommonParam_Map_真实数据库元数据;2026-08-10:将生成包结构统一为技术层优先_层内按业务分目录_通用能力进入common;2026-08-10:以Uniauth为准改为数据库业务目录优先_Controller_Service_DAO_Reference聚合到同一业务_common只保存跨业务能力;2026-08-10:抽象SELPLAT数据库应用职责门禁_一业务一Service_common仅config_persistence_util_能力与框架扩展必须有真实需求后创建;2026-08-10:新工程原子写入rule_engine中央数据库应用登记_停止生成无读取方manifest目录;2026-08-10:号段种子由MERGE改为INSERT_WHERE_NOT_EXISTS_禁止重启覆盖游标和版本;2026-08-10:新生成标准业务表统一中日英标签与平台默认字段_生成器测试和快速门禁同步阻断旧name字段
 
 <!-- 问题：手工复制既有应用容易遗漏项目数据源、号段、Host 登记、SQL 顺序、默认审计字段或页面资源，也容易无需求预留公共层和框架扩展。 -->
 <!-- 场景：在 SELPLAT apps 下新建业务工程，或向已由脚手架创建的工程追加一张业务表。 -->
@@ -51,8 +51,8 @@ selplat_scaffold_path_boundary = normalized_target_must_remain_inside_SELPLAT_RO
 
 ## 工程分层与登记
 
-<!-- 每个新工程必须同时生成 backend、db/sql、manifest、README 和所有权标记。 -->
-selplat_scaffold_project_roots = backend,db/sql,manifest,README.md,ownership_marker
+<!-- 每个新工程必须同时生成 backend、db/sql、README 和所有权标记；无真实读取程序不得预留 manifest。 -->
+selplat_scaffold_project_roots = backend,db/sql,README.md,ownership_marker,no_unconsumed_manifest
 <!-- Java 固定采用 Controller → 当前业务唯一 Service → DAO → 项目 BaseDao 的继承和调用顺序。 -->
 selplat_scaffold_java_layering = controller,business_service,dao,project_base_dao
 <!-- 与一张业务表相关的 Controller、Service、DAO 必须聚合在同一业务目录；common 顶层职责只允许 config、persistence、util。 -->
@@ -77,14 +77,14 @@ selplat_scaffold_standalone_component_scan_boundary = own_project,common_service
 selplat_scaffold_framework_extension_policy = real_interface_and_caller_and_dependency_and_registration_required,no_default_reference_data_provider
 <!-- 新工程必须登记到 settings.gradle 和 Host implementation，模块使用 AutoConfiguration 进入统一运行时。 -->
 selplat_scaffold_host_registration = settings_module,physical_project_dir,host_implementation,boot_auto_configuration
-<!-- 模块清单必须声明桌面名称、说明、图标、入口 URL 和权限编码，作为应用身份的完整事实。 -->
-selplat_scaffold_module_manifest_fields = code,name,shortName,description,icon,tone,url,permissionCode,backendModule,referenceData
+<!-- 应用桌面身份只登记到 Host applications.json；没有真实 src/main 读取程序时禁止另建工程 manifest。 -->
+selplat_scaffold_application_identity_source = host_desktop_applications_json,no_unconsumed_project_manifest
 <!-- 新工程必须同时登记 Host 桌面应用清单和同源内部路径白名单，禁止出现已构建但桌面不可见或入口禁用。 -->
 selplat_scaffold_desktop_registration = applications_json_entry,internal_path_allowlist,clickable_same_origin_url
 <!-- Host 健康接口必须从桌面应用清单派生模块代码，禁止维护第二份容易遗漏的硬编码模块数组。 -->
 selplat_scaffold_runtime_module_health_source = desktop_applications_json,no_hardcoded_duplicate_module_list
-<!-- Gradle、Host、桌面和白名单登记属于同一生成事务，任一失败必须恢复全部登记并删除本轮新文件。 -->
-selplat_scaffold_unified_registration_transaction = settings,host_dependency,desktop_manifest,desktop_allowlist,atomic_rollback
+<!-- Gradle、Host、桌面、白名单和中央数据库应用登记属于同一生成事务，任一失败必须恢复全部登记并删除本轮新文件。 -->
+selplat_scaffold_unified_registration_transaction = settings,host_dependency,desktop_manifest,desktop_allowlist,managed_database_central_registry,atomic_rollback
 <!-- 根登记和工程文件必须使用临时文件替换并在失败时恢复原正文、删除本轮新文件。 -->
 selplat_scaffold_write_transaction = preflight_all_targets,atomic_file_replace,restore_registries,remove_only_new_files_on_failure
 
@@ -92,10 +92,14 @@ selplat_scaffold_write_transaction = preflight_all_targets,atomic_file_replace,r
 
 <!-- 每张表生成独立 schema-实际表名.sql 和 data-实际表名.sql，加载顺序由 load-order.txt 显式登记。 -->
 selplat_scaffold_sql_files = schema-<ActualTableName>.sql,data-<ActualTableName>.sql,load-order.txt
-<!-- 新表的默认业务和平台字段固定包含以下八项，业务扩展只能在生成后按具体需求新增。 -->
-selplat_scaffold_default_columns = id,tenantId,lastOperateUserId,name,sortnum,status,createdAt,updatedAt
-<!-- id 由 CommonSequenceSegment 的实际表名加 Id 号段生成，Service 禁止自行计算主键。 -->
-selplat_scaffold_primary_key_sequence = <ActualTableName>Id
+<!-- 新生成标准业务表固定包含主键、租户、操作人、排序、中日英标签、状态和创建修改时间；业务扩展只能在生成后按真实需求新增。 -->
+selplat_scaffold_default_columns = id,tenantId,lastOperateUserId,sortnum,labelZh,labelJa,labelEn,status,createdAt,updatedAt
+<!-- 通用多语言显示字段只使用 labelZh、labelJa、labelEn，禁止模板同时保留语义不明的 name 字段。 -->
+selplat_scaffold_multilingual_label_columns = labelZh:required,labelJa:optional,labelEn:optional,no_legacy_name
+<!-- 本约束仅自动作用于今后由 MDA 新生成的标准业务表，既有专用业务表不因快速门禁被自动改名或破坏性迁移。 -->
+selplat_scaffold_default_column_scope = future_mda_generated_standard_business_tables,no_automatic_existing_specialized_table_migration
+<!-- id 由 CommonSequenceSegment 的实际表名加 Id 号段生成，Service 禁止自行计算主键；初始化只补缺失号段，禁止重启覆盖游标。 -->
+selplat_scaffold_primary_key_sequence = <ActualTableName>Id,insert_where_not_exists,no_merge,no_cursor_reset
 <!-- 新增时当前表唯一 Service 为空值补租户一、操作人一、排序零、有效状态一和当前创建更新时间。 -->
 selplat_scaffold_insert_defaults = tenantId:1,lastOperateUserId:1,sortnum:0,status:1,createdAt:now,updatedAt:now
 <!-- 新建业务表默认不写业务记录，页面首次访问必须明确显示空表状态。 -->
