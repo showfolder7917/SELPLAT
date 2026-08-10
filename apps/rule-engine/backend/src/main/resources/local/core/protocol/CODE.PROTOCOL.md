@@ -52,6 +52,10 @@ execution_doc_management_ability = execution_doc_manager
 use_execution_doc_manager_before_formal_task = true
 execution_doc_manager_checks_unfinished_steps_before_new_task = true
 execution_doc_manager_archives_completed_doc_after_task = true
+<!-- 正式任务统一使用生命周期动作，禁止只读取规则后依靠人工记忆维护执行文档。 -->
+execution_doc_manager_required_lifecycle = begin,step,active,ready,finish
+formal_task_must_enter_unified_execution_document_gate = true
+delivery_must_fail_when_execution_document_is_missing_unauthorized_pending_or_unarchived = true
 fallback_to_manual_execution_doc_rules_only_when_ability_unavailable = true
 
 <!-- 新增能力前必须按语言从根索引加载对应编码、测试与注释规则。 -->

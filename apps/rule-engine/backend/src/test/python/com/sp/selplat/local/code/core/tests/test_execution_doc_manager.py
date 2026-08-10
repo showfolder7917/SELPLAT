@@ -64,7 +64,8 @@ class ExecutionDocManagerTests(unittest.TestCase):
     def test_start_task_writes_formatted_pending_steps(self) -> None:
         result = self.module.execute(
             {
-                "action": "start_task",
+                "action": "begin",
+                "confirmation": "1",
                 "goal": "整理测试流程",
                 "steps": ["检查旧文档", "生成新步骤"],
             },
@@ -75,10 +76,45 @@ class ExecutionDocManagerTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         text = self.doc_path.read_text(encoding="utf-8")
         self.assertIn("# 本次执行文档", text)
+        self.assertIn("## 执行授权", text)
+        self.assertIn("独立确认：1", text)
+        self.assertIn("任务线程：test-thread", text)
         self.assertIn("## 总体任务目标", text)
         self.assertIn("整理测试流程", text)
         self.assertIn("1. **未完成**：检查旧文档", text)
         self.assertIn("2. **未完成**：生成新步骤", text)
+
+    def test_begin_blocks_without_standalone_confirmation(self) -> None:
+        result = self.module.execute(
+            {"action": "begin", "goal": "未授权任务", "steps": ["不得执行"]},
+            {},
+            {},
+        )
+
+        self.assertEqual(result["status"], "blocked_missing_confirmation")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertFalse(self.doc_path.exists())
+
+    def test_active_and_ready_gates_follow_document_lifecycle(self) -> None:
+        self.module.execute(
+            {
+                "action": "begin",
+                "confirmation": "1",
+                "goal": "验证统一任务门禁",
+                "steps": ["完成唯一步骤"],
+            },
+            {},
+            {},
+        )
+
+        active = self.module.execute({"action": "active"}, {}, {})
+        not_ready = self.module.execute({"action": "ready"}, {}, {})
+
+        self.assertEqual(active["status"], "completed")
+        self.assertTrue(active["authorized"])
+        self.assertEqual(active["goal"], "验证统一任务门禁")
+        self.assertEqual(not_ready["status"], "blocked_task_document_not_ready")
+        self.assertEqual(not_ready["exit_code"], 1)
 
     def test_start_task_blocks_when_existing_steps_are_unfinished(self) -> None:
         self.doc_path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,7 +124,7 @@ class ExecutionDocManagerTests(unittest.TestCase):
         )
 
         result = self.module.execute(
-            {"action": "start_task", "goal": "新任务", "steps": ["新步骤"]},
+            {"action": "begin", "confirmation": "1", "goal": "新任务", "steps": ["新步骤"]},
             {},
             {},
         )
@@ -96,10 +132,60 @@ class ExecutionDocManagerTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked_unfinished_steps")
         self.assertEqual(result["pending_steps"], [1])
 
+    def test_finish_archives_only_fully_completed_authorized_task(self) -> None:
+        self.module.execute(
+            {
+                "action": "begin",
+                "confirmation": "1",
+                "goal": "完成并归档",
+                "steps": ["完成唯一步骤"],
+            },
+            {},
+            {},
+        )
+        self.module.execute(
+            {"action": "step", "step_number": 1, "result": "步骤已经验证。"},
+            {},
+            {},
+        )
+
+        result = self.module.execute({"action": "finish"}, {}, {})
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["action"], "finish")
+        self.assertTrue(Path(result["history_path"]).exists())
+        self.assertNotIn("完成并归档", self.doc_path.read_text(encoding="utf-8"))
+
+    def test_result_text_containing_pending_word_does_not_break_completion_state(self) -> None:
+        self.module.execute(
+            {
+                "action": "begin",
+                "confirmation": "1",
+                "goal": "验证状态行解析",
+                "steps": ["验证门禁结果"],
+            },
+            {},
+            {},
+        )
+
+        result = self.module.execute(
+            {
+                "action": "step",
+                "step_number": 1,
+                "result": "ready 已正确阻断未完成步骤。",
+            },
+            {},
+            {},
+        )
+
+        self.assertEqual(result["pending_steps"], [])
+        self.assertTrue(result["all_completed"])
+
     def test_complete_step_replaces_status_and_writes_result(self) -> None:
         self.module.execute(
             {
-                "action": "start_task",
+                "action": "begin",
+                "confirmation": "1",
                 "goal": "整理测试流程",
                 "steps": ["检查旧文档", "生成新步骤"],
             },
@@ -109,7 +195,7 @@ class ExecutionDocManagerTests(unittest.TestCase):
 
         result = self.module.execute(
             {
-                "action": "complete_step",
+                "action": "step",
                 "step_number": 1,
                 "result": "已确认旧文档存在。",
             },
@@ -126,7 +212,8 @@ class ExecutionDocManagerTests(unittest.TestCase):
     def test_complete_step_keeps_document_consistent_under_parallel_updates(self) -> None:
         self.module.execute(
             {
-                "action": "start_task",
+                "action": "begin",
+                "confirmation": "1",
                 "goal": "整理测试流程",
                 "steps": ["检查旧文档", "生成新步骤", "收口"],
             },
@@ -137,7 +224,7 @@ class ExecutionDocManagerTests(unittest.TestCase):
         def complete(step_number: int, result: str) -> dict:
             return self.module.execute(
                 {
-                    "action": "complete_step",
+                    "action": "step",
                     "step_number": step_number,
                     "result": result,
                 },
@@ -169,7 +256,8 @@ class ExecutionDocManagerTests(unittest.TestCase):
     def test_complete_step_parallel_returns_latest_snapshot_after_all_steps_finish(self) -> None:
         self.module.execute(
             {
-                "action": "start_task",
+                "action": "begin",
+                "confirmation": "1",
                 "goal": "整理测试流程",
                 "steps": ["检查旧文档", "生成新步骤", "收口"],
             },
@@ -180,7 +268,7 @@ class ExecutionDocManagerTests(unittest.TestCase):
         def complete(step_number: int, result: str) -> dict:
             return self.module.execute(
                 {
-                    "action": "complete_step",
+                    "action": "step",
                     "step_number": step_number,
                     "result": result,
                 },
@@ -212,7 +300,8 @@ class ExecutionDocManagerTests(unittest.TestCase):
 
         result = self.module.execute(
             {
-                "action": "start_task",
+                "action": "begin",
+                "confirmation": "1",
                 "goal": "新任务",
                 "steps": ["新步骤"],
             },
@@ -234,7 +323,8 @@ class ExecutionDocManagerTests(unittest.TestCase):
     def test_archive_completed_blocks_unfinished_without_force(self) -> None:
         self.module.execute(
             {
-                "action": "start_task",
+                "action": "begin",
+                "confirmation": "1",
                 "goal": "整理测试流程",
                 "steps": ["检查旧文档"],
             },
@@ -242,16 +332,17 @@ class ExecutionDocManagerTests(unittest.TestCase):
             {},
         )
 
-        result = self.module.execute({"action": "archive_completed"}, {}, {})
+        result = self.module.execute({"action": "finish"}, {}, {})
 
-        self.assertEqual(result["status"], "blocked_unfinished_steps")
+        self.assertEqual(result["status"], "blocked_task_document_not_ready")
         self.assertEqual(result["pending_steps"], [1])
 
     def test_different_threads_use_independent_execution_documents(self) -> None:
         # 先为第一个任务页面创建未完成步骤，模拟用户打开的第一个 Codex 页面。
         first_result = self.module.execute(
             {
-                "action": "start_task",
+                "action": "begin",
+                "confirmation": "1",
                 "thread_id": "page-one",
                 "goal": "第一个页面任务",
                 "steps": ["页面一的步骤"],
@@ -262,7 +353,8 @@ class ExecutionDocManagerTests(unittest.TestCase):
         # 再为第二个页面创建任务；它不得被第一个页面的未完成步骤阻塞。
         second_result = self.module.execute(
             {
-                "action": "start_task",
+                "action": "begin",
+                "confirmation": "1",
                 "thread_id": "page-two",
                 "goal": "第二个页面任务",
                 "steps": ["页面二的步骤"],

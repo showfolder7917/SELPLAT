@@ -10,8 +10,11 @@ import com.sp.selplat.mda.connectionprofile.dao.MdaConnectionProfileDao;
 import com.sp.selplat.mda.connectionprofile.dao.MdaConnectionProfileDaoImpl;
 import com.sp.selplat.mda.connectionprofile.service.MdaConnectionProfileService;
 import com.sp.selplat.mda.connectionprofile.service.impl.MdaConnectionProfileServiceImpl;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -40,9 +43,15 @@ public final class MdaConnectionProfileSequenceTestVerifier {
         // 应用 DAO 接口恢复为 BaseDao 类型标记，不再声明 identity 专用写入方法。
         assertEquals(0, MdaConnectionProfileDao.class.getDeclaredMethods().length);
         assertEquals(0, MdaConnectionProfileDaoImpl.class.getDeclaredMethods().length);
-        // 连接配置接口和实现都只绑定公共 Base CRUD，不再声明目标数据库运行方法或同义覆盖。
+        // 连接配置接口继续复用公共契约；表专属默认值与事务直接留在唯一 ServiceImpl，不再建立项目 BaseService。
         assertEquals(0, MdaConnectionProfileService.class.getDeclaredMethods().length);
-        assertEquals(0, MdaConnectionProfileServiceImpl.class.getDeclaredMethods().length);
+        Set<String> declaredServiceMethods = Arrays.stream(
+                MdaConnectionProfileServiceImpl.class.getDeclaredMethods())
+            .map(method -> method.getName())
+            .collect(Collectors.toSet());
+        assertTrue(declaredServiceMethods.containsAll(Set.of(
+            "getStore", "insert", "insertBatch", "update", "updateBatch"
+        )));
 
         // 第一条页面连接参数 → 规范化后由 MdaConnectionProfileId 返回 100000。
         CommonResult singleResult = service.insert(connection("单条号段连接", "mem:mda_sequence_single"));

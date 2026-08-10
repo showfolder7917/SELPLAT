@@ -85,7 +85,6 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         registry.parent.mkdir(parents=True, exist_ok=True)
         registration = {
             "projectName": project_name,
-            "structure": "table-business-only",
             "schemaRoot": "db/sql",
             "primaryKeyStrategy": "one-table-one-sequence",
             **registration_values,
@@ -94,6 +93,123 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             json.dumps({"version": 1, "applications": [registration]}, ensure_ascii=False),
             encoding="utf-8",
         )
+
+    def write_component_registry(self, fixture: Path, components: list[dict]) -> Path:
+        """写入隔离控件登记，所有门禁测试共用同一正式策略。"""
+        component_root = fixture / self.guard.SEL_UI_COMPONENT_ROOT_RELATIVE
+        component_root.mkdir(parents=True, exist_ok=True)
+        registry_path = component_root / self.guard.SEL_UI_COMPONENT_REGISTRY_NAME
+        registry_path.write_text(
+            json.dumps({
+                "version": 1,
+                "policy": {
+                    "creationMode": "register-before-implementation",
+                    "legacyCompatibility": "forbidden",
+                    "applicationPrivateReusableControl": "forbidden",
+                    "requiredChecks": sorted(self.guard.SEL_UI_REQUIRED_GOVERNANCE_CHECKS),
+                },
+                "components": components,
+            }),
+            encoding="utf-8",
+        )
+        return component_root
+
+    def test_unregistered_component_directory_blocks_delivery(self) -> None:
+        """新增控件目录不能绕过中央登记直接进入公共源码。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            component_root = self.write_component_registry(fixture, [])
+            (component_root / "private-widget").mkdir()
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+
+            self.assertIn(
+                "SEL_UI_COMPONENT_DIRECTORY_UNREGISTERED",
+                {violation["code"] for violation in violations},
+            )
+
+    def test_application_private_body_portal_blocks_delivery(self) -> None:
+        """业务应用自行把交互门户挂到 body 时必须先抽取公共控件。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.write_component_registry(fixture, [])
+            application_js = fixture / "apps/example/backend/src/main/resources/static/example.js"
+            application_js.parent.mkdir(parents=True)
+            application_js.write_text(
+                "const menu = document.createElement('div'); document.body.appendChild(menu);\n",
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+
+            self.assertIn(
+                "SEL_UI_APPLICATION_PRIVATE_BODY_PORTAL",
+                {violation["code"] for violation in violations},
+            )
+
+    def test_component_dependency_resources_are_mandatory_and_ordered(self) -> None:
+        """页面使用依赖型控件时必须先加载登记中的公共依赖资源。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            components = [
+                {
+                    "id": "selContextMenu",
+                    "directory": "context-menu",
+                    "type": "interactive",
+                    "scripts": ["selContextMenu.js"],
+                    "styles": ["selContextMenu.css"],
+                    "globalApi": "selContextMenu",
+                    "dependencies": [],
+                    "themeAware": True,
+                    "ownedAriaRoles": ["menu"],
+                },
+                {
+                    "id": "selTree",
+                    "directory": "tree",
+                    "type": "interactive",
+                    "scripts": ["selTree.js"],
+                    "styles": ["selTree.css"],
+                    "globalApi": "selTree",
+                    "dependencies": ["selContextMenu"],
+                    "themeAware": True,
+                },
+            ]
+            component_root = self.write_component_registry(fixture, components)
+            for component in components:
+                source_root = component_root / component["directory"]
+                source_root.mkdir()
+                (source_root / component["scripts"][0]).write_text(
+                    f"window.{component['id']} = {{}}; window.selContextMenu;\n",
+                    encoding="utf-8",
+                )
+                (source_root / component["styles"][0]).write_text(
+                    ".control { color: var(--sel-theme-text-body); }\n",
+                    encoding="utf-8",
+                )
+            application_html = fixture / "apps/example/backend/src/main/resources/static/example.html"
+            application_html.parent.mkdir(parents=True)
+            application_html.write_text(
+                '<link rel="stylesheet" href="/sel/components/tree/selTree.css">\n'
+                '<script src="/sel/components/tree/selTree.js"></script>\n',
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+
+            self.assertIn(
+                "SEL_UI_COMPONENT_DEPENDENCY_RESOURCE_INVALID",
+                {violation["code"] for violation in violations},
+            )
+
+    def test_tree_uses_only_registered_context_menu(self) -> None:
+        """树只组合动作语义，不保留旧私有菜单 DOM 与 CSS。"""
+        tree_root = PROJECT_ROOT / "shared/frontend/sel-ui/src/components/tree"
+        tree_script = (tree_root / "selTree.js").read_text(encoding="utf-8")
+        tree_style = (tree_root / "selTree.css").read_text(encoding="utf-8")
+
+        self.assertIn("window.selContextMenu.mount", tree_script)
+        self.assertNotIn("seltree-context-menu", tree_script)
+        self.assertNotIn("seltree-context-menu", tree_style)
 
     def test_missing_central_registry_blocks_delivery(self) -> None:
         """删除中央登记本身不能把全部严格数据库应用降级为未受管。"""
@@ -128,11 +244,82 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                 {violation["code"] for violation in result["violations"]},
             )
 
+    def test_project_specific_structure_is_forbidden_for_every_application(self) -> None:
+        """任何项目都不能通过中央登记选择专属架构或绕过通用结构门禁。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            project.mkdir(parents=True)
+            registry = self.guard.managed_database_registry_path(fixture, ACTIVE_STABLE_USER_ID)
+            registry.write_text(
+                json.dumps({
+                    "version": 1,
+                    "applications": [{
+                        "projectName": "example",
+                        "structure": "control-table-and-dynamic-target-runtime",
+                        "schemaRoot": "db/sql",
+                        "databaseFile": "db/example.mv.db",
+                        "primaryKeyStrategy": "one-table-one-sequence",
+                        "datasourcePrefix": "example.datasource",
+                    }],
+                }),
+                encoding="utf-8",
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_DATABASE_REGISTRY_SPECIAL_STRUCTURE_FORBIDDEN",
+                {violation["code"] for violation in result["violations"]},
+            )
+
+    def test_uniform_capability_rejects_dao_and_custom_role_for_every_project(self) -> None:
+        """不落库能力只能使用通用 controller、service 和 service/impl 结构。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            capability = (
+                project / "backend/src/main/java/com/sp/selplat/example/capability/export"
+            )
+            for role in ("controller", "service/impl", "dao"):
+                (capability / role).mkdir(parents=True)
+            (capability / "dao/ExportDao.java").write_text(
+                "package com.sp.selplat.example.capability.export.dao; class ExportDao {}\n",
+                encoding="utf-8",
+            )
+            (project / "backend/build.gradle").write_text(
+                "plugins { id 'java' }\n", encoding="utf-8"
+            )
+            self.register_managed_database_application(fixture, "example")
+
+            result = self.guard.audit_source_ownership(fixture)
+            codes = {violation["code"] for violation in result["violations"]}
+
+            self.assertIn("MANAGED_APPLICATION_CAPABILITY_ROLE_SET_INVALID", codes)
+            self.assertIn("MANAGED_APPLICATION_CAPABILITY_SOURCE_ROLE_INVALID", codes)
+
+    def test_managed_application_gate_contains_no_project_name_bypass(self) -> None:
+        """生产门禁不得重新按 mda 或其他项目名编写结构放行分支。"""
+        source_text = PROGRAM_PATH.read_text(encoding="utf-8")
+
+        self.assertNotRegex(source_text, r"project_root_path\.name\s*==")
+        self.assertNotIn("control-table-and-dynamic-target-runtime", source_text)
+
+    def test_sql_statement_parser_preserves_semicolon_inside_seed_value(self) -> None:
+        """JDBC 参数值中的分号不能把一条幂等 INSERT 错拆成多条语句。"""
+        statements = self.guard.sql_statements(
+            "INSERT INTO Demo(value) SELECT 'MODE=MySQL;AUTO_SERVER=TRUE' "
+            "WHERE NOT EXISTS (SELECT 1 FROM Demo);"
+        )
+
+        self.assertEqual(1, len(statements))
+        self.assertIn("WHERE NOT EXISTS", statements[0])
+
     def test_mda_generator_rejects_missing_multilingual_default_fields(self) -> None:
         """新业务表模板缺少任一平台默认字段时必须在快速门禁阶段阻断。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
             fixture = self.create_fixture(Path(directory))
-            template = fixture / self.guard.MDA_GENERATOR_TEMPLATE_RELATIVE
+            template = fixture / self.guard.APPLICATION_SCAFFOLD_TEMPLATE_RELATIVE
             template.parent.mkdir(parents=True)
             template.write_text(
                 "private static String tableSchema() {\n"
@@ -145,7 +332,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             result = self.guard.audit_source_ownership(fixture)
 
             self.assertIn(
-                "MDA_GENERATOR_DEFAULT_BUSINESS_FIELDS_INVALID",
+                "APPLICATION_SCAFFOLD_DEFAULT_BUSINESS_FIELDS_INVALID",
                 {violation["code"] for violation in result["violations"]},
             )
 
@@ -384,9 +571,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             (project / "backend/build.gradle").write_text(
                 "plugins { id 'java' }\n", encoding="utf-8"
             )
-            self.register_managed_database_application(
-                fixture, "example", structure="table-business-only"
-            )
+            self.register_managed_database_application(fixture, "example")
 
             result = self.guard.audit_source_ownership(fixture)
 
@@ -503,9 +688,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             (project / "backend/build.gradle").write_text(
                 "plugins { id 'java' }\n", encoding="utf-8"
             )
-            self.register_managed_database_application(
-                fixture, "example", structure="table-business-only"
-            )
+            self.register_managed_database_application(fixture, "example")
 
             result = self.guard.audit_source_ownership(fixture)
             codes = {violation["code"] for violation in result["violations"]}
@@ -534,7 +717,6 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             self.register_managed_database_application(
                 fixture,
                 "example",
-                structure="table-business-only",
                 databaseFile="db/data/example.mv.db",
                 datasourcePrefix="example.datasource",
             )
@@ -566,9 +748,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             )
             (project / "backend/src/main/java/com/sp/selplat/example/common/config").mkdir(parents=True)
             (project / "backend/build.gradle").write_text("plugins { id 'java' }\n", encoding="utf-8")
-            self.register_managed_database_application(
-                fixture, "example", structure="table-business-only"
-            )
+            self.register_managed_database_application(fixture, "example")
 
             result = self.guard.audit_source_ownership(fixture)
 
@@ -587,9 +767,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             (manifest_root / "module.json").write_text('{"code":"example"}\n', encoding="utf-8")
             (project / "backend/src/main/java/com/sp/selplat/example/common/config").mkdir(parents=True)
             (project / "backend/build.gradle").write_text("plugins { id 'java' }\n", encoding="utf-8")
-            self.register_managed_database_application(
-                fixture, "example", structure="table-business-only"
-            )
+            self.register_managed_database_application(fixture, "example")
 
             result = self.guard.audit_source_ownership(fixture)
 

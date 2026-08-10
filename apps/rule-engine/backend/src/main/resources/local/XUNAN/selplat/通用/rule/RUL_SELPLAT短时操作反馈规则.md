@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则不新增独立 Node 程序；现有前端语法检查和浏览器回归覆盖行为。 -->
 node_ability_refs = none
-<!-- 首版固化用户确认的非阻断操作结果必须使用短时 Toast。 -->
-rule_version = 1.0.0
+<!-- 2.0.0 增加删除、覆盖、未保存丢弃和跨文件写入的统一确认门禁。 -->
+rule_version = 2.0.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已登记到当前用户 SELPLAT 通用索引并完成页面回归。 -->
 rule_status = active
 <!-- 升级记录说明规则由 MDA SQL 执行完成提示的常驻状态栏纠正形成。 -->
-upgrade_record = 2026-08-08:将非阻断操作完成提示统一为公共短时Toast并禁止长期占用工作区状态栏
+upgrade_record = 2026-08-08:将非阻断操作完成提示统一为公共短时Toast并禁止长期占用工作区状态栏;2026-08-11:删除_覆盖现有文件_丢弃未保存内容_跨文件写入统一要求副作用前公共确认框_同一动作多风险只弹一次
 
 <!-- 问题：操作完成文字写入编辑器状态栏、面板分区或业务内容后会长期滞留，形成过期状态并占用有效工作空间。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 任一应用中展示保存、查询、清空、刷新或可恢复错误等非阻断操作结果。 -->
@@ -29,6 +29,21 @@ selplat_recoverable_operation_error_feedback = shared_transient_error_toast_with
 selplat_acknowledgement_required_feedback = confirmable_dialog_not_transient_toast
 <!-- 应用装配层只能调用公共 Toast 接口并传入业务文字和语义类型，禁止在单个应用中复制 Toast DOM、定时器或主题样式。 -->
 selplat_toast_component_boundary = shared_runtime_api_with_application_message_and_tone_only
+
+## 危险动作确认
+
+<!-- 永久删除、覆盖现有文件、丢弃未保存内容和一次写入多个正式文件都必须在首个副作用前等待用户明确确认。 -->
+selplat_dangerous_action_confirmation_scope = permanent_delete,overwrite_existing_files,discard_unsaved_content,cross_file_write
+<!-- 确认框必须展示真实业务目标和将发生的副作用，确认按钮使用动作名称，禁止只写含义不明的“确定”。 -->
+selplat_dangerous_confirmation_content = real_target,side_effect_summary,explicit_action_confirm_label
+<!-- 同一次操作同时命中覆盖和跨文件写入等多个风险时合并为一个确认框，禁止连续弹出重复确认。 -->
+selplat_multiple_risk_confirmation_policy = one_combined_dialog_per_user_action_no_stacked_confirmations
+<!-- 用户取消或关闭确认框后不得发送写请求、执行删除、替换文件或销毁未保存状态。 -->
+selplat_confirmation_cancel_boundary = no_mutation_request_no_delete_no_file_replace_no_unsaved_state_disposal
+<!-- 所有危险确认复用公共紧凑确认控件并默认聚焦取消，应用不得回退到浏览器原生 confirm。 -->
+selplat_dangerous_confirmation_component = shared_compact_confirm_dialog_default_focus_cancel_no_native_confirm
+<!-- 跨文件写入确认应给出工程、表、目录或文件数量等稳定范围；后端原子事务和回滚仍然必须保留。 -->
+selplat_cross_file_write_confirmation = show_stable_batch_scope_before_first_write_keep_atomic_rollback
 
 ## 生命周期与布局
 

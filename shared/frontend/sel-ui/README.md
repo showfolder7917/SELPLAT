@@ -6,6 +6,7 @@
 
 - `src/core`：基础运行时、国际化和通用请求工具。
 - `src/components`：表格、树、窗口、面板等基础控件。
+- `src/components/component-registry.json`：公共控件唯一中央登记；新增控件必须先登记，未登记目录、源码、依赖或业务私造交互由门禁阻断。
 - `src/theme`：主题契约、主题注册器和 `packs/<theme-id>` 主题定义。
 - `src/assets/themes/<theme-id>`：主题独占边框、纹理和配套背景，目录 ID 与主题包一致。
 - `src/assets/components/<component>`：不随主题切换的组件专属素材。

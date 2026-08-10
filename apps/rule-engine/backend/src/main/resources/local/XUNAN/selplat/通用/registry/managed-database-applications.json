@@ -2,12 +2,32 @@
   "version": 1,
   "applications": [
     {
+      "projectName": "japanese",
+      "schemaRoot": "db/sql",
+      "databaseFile": "db/japanese.mv.db",
+      "primaryKeyStrategy": "one-table-one-sequence",
+      "datasourcePrefix": "japanese.datasource"
+    },
+    {
+      "projectName": "mda",
+      "schemaRoot": "db/sql",
+      "databaseFile": "db/mda.mv.db",
+      "primaryKeyStrategy": "one-table-one-sequence",
+      "datasourcePrefix": "mda.control.datasource"
+    },
+    {
       "projectName": "reference-data",
-      "structure": "table-business-only",
       "schemaRoot": "db/sql",
       "databaseFile": "db/reference-data.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
       "datasourcePrefix": "reference-data.datasource"
+    },
+    {
+      "projectName": "uniauth",
+      "schemaRoot": "db/sql",
+      "databaseFile": "db/uniauth.mv.db",
+      "primaryKeyStrategy": "one-table-one-sequence",
+      "datasourcePrefix": "uniauth.datasource"
     }
   ]
 }

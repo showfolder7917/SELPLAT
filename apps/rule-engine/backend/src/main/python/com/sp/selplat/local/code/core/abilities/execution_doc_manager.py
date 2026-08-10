@@ -53,6 +53,7 @@ HISTORY_ROOT = OPTION_ROOT / "temp"
 
 STATUS_DONE = "完成"
 STATUS_PENDING = "未完成"
+REQUIRED_CONFIRMATION = "1"
 STABLE_SNAPSHOT_SETTLE_SECONDS = 0.08
 STABLE_SNAPSHOT_MAX_WAIT_SECONDS = 1.2
 STABLE_SNAPSHOT_POLL_SECONDS = 0.02
@@ -178,6 +179,9 @@ def _build_state_payload(text: str) -> dict[str, Any]:
     # 把同一份正文快照统一转换为状态响应，避免不同 action 各自重复拼字段而出现口径漂移。
     return {
         "exists": bool(text),
+        "authorized": _task_confirmation(text) == REQUIRED_CONFIRMATION,
+        "goal": _task_goal(text),
+        "step_count": len(_all_steps(text)),
         "all_completed": _is_all_completed(text),
         "pending_steps": _pending_steps(text),
         "doc_revision": _doc_revision(text),
@@ -194,9 +198,28 @@ def _pending_steps(text: str) -> list[int]:
     return [int(item) for item in re.findall(r"(?m)^(\d+)\.\s+\*\*未完成\*\*：", text)]
 
 
+def _all_steps(text: str) -> list[int]:
+    # 统一读取完成与未完成步骤，门禁据此区分真实任务和只有标题的空模板。
+    return [int(item) for item in re.findall(r"(?m)^(\d+)\.\s+\*\*(?:完成|未完成)\*\*：", text)]
+
+
+def _task_goal(text: str) -> str:
+    # 目标必须位于固定章节内，避免把授权信息或步骤正文误判成正式任务目标。
+    match = re.search(r"(?ms)^## 总体任务目标\s*\n(.*?)(?=^## 执行步骤\s*$|\Z)", text)
+    return _normalize_text(match.group(1)) if match else ""
+
+
+def _task_confirmation(text: str) -> str:
+    # 独立确认写入当前线程文档，使后续 Gradle 门禁能够技术核验任务确实经过 USER 协议授权。
+    match = re.search(r"(?m)^独立确认：(.+?)\s*$", text)
+    return _normalize_text(match.group(1)) if match else ""
+
+
 def _is_all_completed(text: str) -> bool:
-    return bool(text.strip()) and "未完成" not in text and bool(
-        re.search(r"(?m)^\d+\.\s+\*\*完成\*\*：", text)
+    # 只读取步骤行状态；实际结果可以合法描述“未完成步骤已被门禁阻断”，不得因此误判整份任务。
+    all_steps = _all_steps(text)
+    return bool(all_steps) and not _pending_steps(text) and len(all_steps) == len(
+        re.findall(r"(?m)^\d+\.\s+\*\*完成\*\*：", text)
     )
 
 
@@ -208,7 +231,7 @@ def _format_step(step_number: int, content: str, *, status: str = STATUS_PENDING
     return line
 
 
-def _format_document(goal: str, steps: list[str]) -> str:
+def _format_document(goal: str, steps: list[str], thread_id: str, confirmation: str) -> str:
     step_lines = [
         _format_step(index + 1, step, status=STATUS_PENDING)
         for index, step in enumerate(steps)
@@ -216,6 +239,11 @@ def _format_document(goal: str, steps: list[str]) -> str:
     return "\n".join(
         [
             "# 本次执行文档",
+            "",
+            "## 执行授权",
+            "",
+            f"独立确认：{_normalize_text(confirmation)}",
+            f"任务线程：{thread_id}",
             "",
             "## 总体任务目标",
             "",
@@ -278,13 +306,23 @@ def check_current(context: dict[str, Any]) -> dict[str, Any]:
 
 def start_task(context: dict[str, Any]) -> dict[str, Any]:
     goal = _normalize_text(context.get("goal") or context.get("task_goal"))
+    confirmation = _normalize_text(context.get("confirmation") or context.get("authorization"))
     raw_steps = context.get("steps") or []
     steps = [_normalize_text(item) for item in raw_steps if _normalize_text(item)]
+    if confirmation != REQUIRED_CONFIRMATION:
+        return {
+            "status": "blocked_missing_confirmation",
+            "exit_code": 1,
+            "ability": ABILITY_ID,
+            "action": "begin",
+            "message": "正式任务必须先取得独立 1，并通过 confirmation 字段写入执行文档。",
+        }
     if not goal or not steps:
         return {
             "status": "blocked",
+            "exit_code": 1,
             "ability": ABILITY_ID,
-            "action": "start_task",
+            "action": "begin",
             "message": "缺少 goal 或 steps。",
         }
     # 本次创建与回写均绑定调用页面的线程 ID，防止一个页面开启任务阻塞另一个页面。
@@ -300,8 +338,9 @@ def start_task(context: dict[str, Any]) -> dict[str, Any]:
         if pending and not context.get("force"):
             return {
                 "status": "blocked_unfinished_steps",
+                "exit_code": 1,
                 "ability": ABILITY_ID,
-                "action": "start_task",
+                "action": "begin",
                 "thread_id": thread_id,
                 "doc_path": str(doc_path),
                 "pending_steps": pending,
@@ -310,13 +349,13 @@ def start_task(context: dict[str, Any]) -> dict[str, Any]:
         archived_path = None
         if _is_all_completed(current_text):
             archived_path = _append_history(current_text, thread_id)
-        new_doc = _format_document(goal, steps)
+        new_doc = _format_document(goal, steps, thread_id, confirmation)
         _write_doc(new_doc, doc_path)
         written_text = _read_doc(doc_path)
         return {
             "status": "completed",
             "ability": ABILITY_ID,
-            "action": "start_task",
+            "action": "begin",
             "thread_id": thread_id,
             "doc_path": str(doc_path),
             "archived_path": str(archived_path) if archived_path else "",
@@ -334,7 +373,7 @@ def complete_step(context: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "blocked",
             "ability": ABILITY_ID,
-            "action": "complete_step",
+            "action": "step",
             "message": "缺少有效 step_number 或 result。",
         }
     # 先解析当前页面的专属文档和锁，再在锁内完成正文替换，确保步骤回写不会互相覆盖。
@@ -352,7 +391,7 @@ def complete_step(context: dict[str, Any]) -> dict[str, Any]:
             return {
                 "status": "step_not_found",
                 "ability": ABILITY_ID,
-                "action": "complete_step",
+                "action": "step",
                 "step_number": step_number,
             }
         step_body = match.group(3)
@@ -368,7 +407,7 @@ def complete_step(context: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "completed",
         "ability": ABILITY_ID,
-        "action": "complete_step",
+        "action": "step",
         "thread_id": thread_id,
         "doc_path": str(doc_path),
         "step_number": step_number,
@@ -388,13 +427,15 @@ def archive_completed(context: dict[str, Any]) -> dict[str, Any]:
         if not text:
             return {
                 "status": "empty_doc",
+                "exit_code": 1,
                 "ability": ABILITY_ID,
                 "action": "archive_completed",
             }
         pending = _pending_steps(text)
-        if pending and not context.get("force"):
+        if pending:
             return {
                 "status": "blocked_unfinished_steps",
+                "exit_code": 1,
                 "ability": ABILITY_ID,
                 "action": "archive_completed",
                 "pending_steps": pending,
@@ -413,20 +454,78 @@ def archive_completed(context: dict[str, Any]) -> dict[str, Any]:
         _release_lock(lock_fd, lock_path)
 
 
+def gate_active(context: dict[str, Any]) -> dict[str, Any]:
+    # 快速、专项和全量门禁开始前必须命中同一线程的已授权真实任务，空模板或旧格式文档均不得放行。
+    state = check_current(context)
+    if not state.get("exists") or not state.get("authorized") or not state.get("goal") or not state.get("step_count"):
+        return {
+            **state,
+            "status": "blocked_task_document_not_active",
+            "exit_code": 1,
+            "action": "active",
+            "message": "当前线程缺少经过独立 1 授权的真实执行文档，请先调用 begin。",
+        }
+    return {
+        **state,
+        "status": "completed",
+        "action": "active",
+        "message": "当前线程执行文档已授权且处于可执行状态。",
+    }
+
+
+def gate_ready(context: dict[str, Any]) -> dict[str, Any]:
+    # 最终交付只接受全部步骤已经按实际结果回写的文档，避免测试通过但执行记录仍停留在未完成。
+    state = gate_active(context)
+    if state.get("status") != "completed":
+        return state
+    if not state.get("all_completed"):
+        return {
+            **state,
+            "status": "blocked_task_document_not_ready",
+            "exit_code": 1,
+            "action": "ready",
+            "message": "执行文档仍有未完成步骤，禁止进入最终归档。",
+        }
+    return {
+        **state,
+        "status": "completed",
+        "action": "ready",
+        "message": "执行文档全部步骤已回写，可以执行最终归档。",
+    }
+
+
+def finish_task(context: dict[str, Any]) -> dict[str, Any]:
+    # 根 check 全部通过后才执行归档；任何缺失或未完成状态都以非零退出码阻断交付。
+    ready_state = gate_ready(context)
+    if ready_state.get("status") != "completed":
+        return ready_state
+    archived = archive_completed(context)
+    return {
+        **archived,
+        "action": "finish",
+        "message": "执行文档已通过最终门禁并归档。",
+    }
+
+
 def execute(context: dict, skills: dict, apps: dict) -> dict:
     _ = skills, apps
     action = _normalize_text(context.get("action") or "check").replace("-", "_")
     if action == "check":
         return check_current(context)
-    if action == "start_task":
+    if action == "begin":
         return start_task(context)
-    if action == "complete_step":
+    if action == "step":
         return complete_step(context)
-    if action == "archive_completed":
-        return archive_completed(context)
+    if action == "active":
+        return gate_active(context)
+    if action == "ready":
+        return gate_ready(context)
+    if action == "finish":
+        return finish_task(context)
     return {
         "status": "unknown_action",
+        "exit_code": 1,
         "ability": ABILITY_ID,
         "action": action,
-        "message": "支持的 action：check/start_task/complete_step/archive_completed。",
+        "message": "支持的 action：check/begin/step/active/ready/finish。",
     }

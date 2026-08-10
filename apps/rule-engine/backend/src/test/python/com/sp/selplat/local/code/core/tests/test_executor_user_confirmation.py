@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
 # 从迁移后的测试包向上识别工程根，测试数据和输出必须继续归属当前工程。
 PROJECT_ROOT = next(
     candidate
@@ -24,6 +25,7 @@ MAIN_CODE_ROOT = (
 )
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 
 EXECUTOR_PATH = MAIN_CODE_ROOT / "executor.py"
@@ -101,6 +103,18 @@ class ExecutorBasicExecutionTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "missing_dependency")
         self.assertEqual(result["missing_skills"], ["helper_skill"])
+
+    def test_main_returns_ability_declared_blocking_exit_code(self) -> None:
+        self.module.execute_ability = lambda ability_name, context=None: {
+            "status": "blocked_task_document_not_active",
+            "exit_code": 1,
+            "ability": ability_name,
+        }
+
+        with patch.object(sys, "argv", ["executor.py", "execution_doc_manager", "{}"]):
+            exit_code = self.module.main()
+
+        self.assertEqual(exit_code, 1)
 
 
 if __name__ == "__main__":

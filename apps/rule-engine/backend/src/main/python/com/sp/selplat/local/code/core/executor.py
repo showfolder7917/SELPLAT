@@ -314,7 +314,8 @@ def main() -> int:
 
     result = execute_ability(ability_name, context=context)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0
+    # 能力可通过 exit_code 把业务阻断状态传给 Gradle 等外部门禁；未声明时保持既有成功退出行为。
+    return int(result.get("exit_code") or 0)
 
 
 if __name__ == "__main__":

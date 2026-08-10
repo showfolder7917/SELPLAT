@@ -3,6 +3,17 @@
 <!-- 本索引只登记当前用户在 SELPLAT 各应用之间复用的个人工程规则。 -->
 active_user_selplat_general_rule_root = local/XUNAN/selplat/通用/rule/
 
+<!-- SELPLAT 全部现有和未来公共控件统一执行先登记后实现、应用禁止私造和硬依赖自动检查。 -->
+SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md
+<!-- 新增、拆分、迁移或删除任一公共控件时加载，禁止未登记源码和旧私有实现兼容分支。 -->
+load_rule_for_active_user_selplat_public_component_create_split_migrate_or_delete = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 应用新增状态交互、body 门户、键盘焦点生命周期或可复用 DOM/CSS/事件组合时加载，先判断是否应建立公共控件。 -->
+load_rule_for_active_user_selplat_application_reusable_interaction_or_private_control = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 修改控件 API、主题令牌、ARIA 角色、硬依赖或应用资源顺序时加载，保证登记与调用方同步。 -->
+load_rule_for_active_user_selplat_component_api_theme_accessibility_dependency_or_resource_order = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 交付前检查未知新控件和业务私造交互时加载，扫描逻辑由中央登记驱动而非逐个控件写死。 -->
+load_rule_for_active_user_selplat_component_governance_delivery_scan = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+
 <!-- SELPLAT 全部程序统一执行语言登记、源码归属和实验工具隔离门禁。 -->
 SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md
 <!-- 新建、移动或删除任一应用、shared 或 rule-engine 程序源码时加载。 -->

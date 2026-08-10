@@ -43,12 +43,17 @@ selPersonalization.mount(personalizationHost, { backgroundController })
 
 `selContextMenu` 只负责通用右键菜单门户、视口定位、禁用状态和键盘导航，动作通过 `selContextMenu:action` 事件交回挂载宿主。`selTabs` 默认挂载该控件并提供关闭右侧、关闭其他和全部关闭；当前 Tab 继续由自身的关闭按钮处理。仅在创建时显式传入 `{ contextMenu: false }` 或运行时调用 `setContextMenuEnabled(false)` 才关闭右键菜单，传入 `true` 可重新启用。批量关闭跳过固定页签并保留 `selTabs:beforeClose` 检查。
 
+`selGrid` 默认在每个表头字段的右边界提供列宽调整手柄。鼠标拖动分隔线只改变左侧对应列，并同步扩大表格内部宽度；键盘聚焦手柄后可使用左右方向键调整。只有聚合 payload 显式声明 `grid.columnResize: false` 时才关闭，未声明或传入 `true` 均启用。
+
 ## 新增基础控件
 
-1. 建立 `components/<component>/sel<Component>.js` 和同名 CSS。
-2. 文件头使用中文说明用途、责任边界和公开前缀。
-3. JavaScript 公开 `mount`；禁止加载后自动扫描整个文档。
-4. CSS 只使用所属组件前缀；每个结构组和状态组添加中文注释。
-5. 缺少宿主结构或标准数据时返回 `null` 或 `false` 并给出明确提示。
-6. 输入型控件必须提供明确提交动作；搜索控件默认通过查询按钮或 Enter 提交，不能只依赖每次输入即时触发。
-7. 完成鼠标、键盘、无障碍、多实例和浏览器控制台验收。
+1. 先在 `components/component-registry.json` 登记唯一 ID、目录、源码、公开 API、主题属性和硬依赖，禁止先在业务页面临时实现。
+2. 建立 `components/<component>/sel<Component>.js` 和同名 CSS；未登记目录和源码会被快速门禁直接阻断。
+3. 文件头使用中文说明用途、责任边界和公开前缀。
+4. JavaScript 公开与登记 ID 相同的 API；禁止加载后自动扫描整个文档。
+5. CSS 只使用所属组件前缀并消费统一主题令牌；每个结构组和状态组添加中文注释。
+6. 缺少宿主结构、标准数据或登记的硬依赖时返回 `null` 或 `false` 并给出明确提示，不保留旧私有实现兼容分支。
+7. 输入型控件必须提供明确提交动作；搜索控件默认通过查询按钮或 Enter 提交，不能只依赖每次输入即时触发。
+8. 完成鼠标、键盘、无障碍、多实例和浏览器控制台验收；应用页面和生成模板必须按登记顺序加载硬依赖。
+
+业务应用不得发布 `window.sel<Component>`、自行创建 `body` 交互门户或重新实现已经由公共控件登记拥有的 ARIA 交互。确需新增通用交互时，先完成中央登记和公共实现，再由首个业务调用方接入。

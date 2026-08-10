@@ -265,6 +265,50 @@
     display: none;
 }
 
+/* 列宽调整手柄：透明热区覆盖表头右边界，中心线在悬停、聚焦和拖拽时增强。 */
+.selgrid-column-resize-handle {
+    position: absolute;
+    z-index: 8;
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+}
+
+.selgrid-column-resize-handle::after {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    right: 0;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--sel-theme-workspace-line-active);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--sel-theme-workspace-line-active) 52%, transparent);
+    content: "";
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+.selgrid-column-resize-handle:hover::after,
+.selgrid-column-resize-handle:focus-visible::after,
+.selgrid-column-resize-handle.selgrid-column-resize-handle-active::after {
+    opacity: 1;
+}
+
+.selgrid-column-resize-handle:focus-visible {
+    outline: none;
+}
+
+/* 调整期间整张表格保持左右调整光标，并阻止浏览器选中表头或单元格文字。 */
+.selgrid-column-resizing,
+.selgrid-column-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
 .selgrid-sort-button {
     display: inline-flex;
     align-items: center;

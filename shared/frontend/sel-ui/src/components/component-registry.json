@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "policy": {
+    "creationMode": "register-before-implementation",
+    "legacyCompatibility": "forbidden",
+    "applicationPrivateReusableControl": "forbidden",
+    "requiredChecks": [
+      "source-boundary",
+      "public-api",
+      "theme-contract",
+      "dependency-order",
+      "application-private-control"
+    ]
+  },
+  "components": [
+    {
+      "id": "selCodeEditor",
+      "directory": "code-editor",
+      "type": "interactive",
+      "scripts": ["selCodeEditor.js"],
+      "styles": ["selCodeEditor.css"],
+      "globalApi": "selCodeEditor",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selConfirmDialog",
+      "directory": "confirm-dialog",
+      "type": "interactive",
+      "scripts": ["selConfirmDialog.js"],
+      "styles": ["selConfirmDialog.css"],
+      "globalApi": "selConfirmDialog",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selContextMenu",
+      "directory": "context-menu",
+      "type": "interactive",
+      "scripts": ["selContextMenu.js"],
+      "styles": ["selContextMenu.css"],
+      "globalApi": "selContextMenu",
+      "dependencies": [],
+      "themeAware": true,
+      "ownedAriaRoles": ["menu"]
+    },
+    {
+      "id": "selCursor",
+      "directory": "cursor",
+      "type": "presentation",
+      "scripts": [],
+      "styles": ["selCursor.css"],
+      "globalApi": null,
+      "dependencies": [],
+      "themeAware": false
+    },
+    {
+      "id": "selDatePicker",
+      "directory": "date-picker",
+      "type": "interactive",
+      "scripts": ["selDatePicker.js"],
+      "styles": ["selDatePicker.css"],
+      "globalApi": "selDatePicker",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selDropdownMenu",
+      "directory": "dropdown",
+      "type": "interactive",
+      "scripts": ["selDropdownMenu.js"],
+      "styles": ["selDropdownMenu.css"],
+      "globalApi": "selDropdownMenu",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selFloatingPanel",
+      "directory": "floating-panel",
+      "type": "interactive",
+      "scripts": ["selFloatingPanel.js"],
+      "styles": ["selFloatingPanel.css"],
+      "globalApi": "selFloatingPanel",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selGrid",
+      "directory": "grid",
+      "type": "interactive",
+      "scripts": ["selGrid.js"],
+      "styles": ["selGrid.css"],
+      "globalApi": "selGrid",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selGridMenu",
+      "directory": "grid",
+      "type": "interactive",
+      "scripts": ["selGridMenu.js"],
+      "styles": ["selGridMenu.css"],
+      "globalApi": "selGridMenu",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selPageBackground",
+      "directory": "page-background",
+      "type": "presentation",
+      "scripts": ["selPageBackground.js"],
+      "styles": ["selPageBackground.css"],
+      "globalApi": "selPageBackground",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selPanel",
+      "directory": "panel",
+      "type": "layout",
+      "scripts": ["selPanel.js"],
+      "styles": ["selPanel.css"],
+      "globalApi": "selPanel",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selPersonalization",
+      "directory": "personalization",
+      "type": "interactive",
+      "scripts": ["selPersonalization.js"],
+      "styles": ["selPersonalization.css"],
+      "globalApi": "selPersonalization",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selPersonalizationRegistry",
+      "directory": "personalization",
+      "type": "registry",
+      "scripts": ["selPersonalizationRegistry.js"],
+      "styles": [],
+      "globalApi": "selPersonalizationRegistry",
+      "dependencies": [],
+      "themeAware": false
+    },
+    {
+      "id": "selSearch",
+      "directory": "search",
+      "type": "interactive",
+      "scripts": ["selSearch.js"],
+      "styles": ["selSearch.css"],
+      "globalApi": "selSearch",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selSplitPane",
+      "directory": "split-pane",
+      "type": "layout",
+      "scripts": ["selSplitPane.js"],
+      "styles": ["selSplitPane.css"],
+      "globalApi": "selSplitPane",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selTabs",
+      "directory": "tabs",
+      "type": "interactive",
+      "scripts": ["selTabs.js"],
+      "styles": ["selTabs.css"],
+      "globalApi": "selTabs",
+      "dependencies": ["selContextMenu"],
+      "themeAware": true
+    },
+    {
+      "id": "selTree",
+      "directory": "tree",
+      "type": "interactive",
+      "scripts": ["selTree.js"],
+      "styles": ["selTree.css"],
+      "globalApi": "selTree",
+      "dependencies": ["selContextMenu"],
+      "themeAware": true
+    },
+    {
+      "id": "selWindow",
+      "directory": "window",
+      "type": "interactive",
+      "scripts": ["selWindow.js"],
+      "styles": ["selWindow.css"],
+      "globalApi": "selWindow",
+      "dependencies": [],
+      "themeAware": true
+    }
+  ]
+}

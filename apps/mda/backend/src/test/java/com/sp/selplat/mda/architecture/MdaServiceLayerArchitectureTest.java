@@ -2,9 +2,9 @@ package com.sp.selplat.mda.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sp.selplat.mda.projectgenerator.controller.MdaProjectGeneratorController;
-import com.sp.selplat.mda.projectgenerator.service.MdaProjectGeneratorService;
-import com.sp.selplat.mda.projectgenerator.service.impl.MdaProjectGeneratorServiceImpl;
+import com.sp.selplat.mda.capability.projectgenerator.controller.MdaProjectGeneratorController;
+import com.sp.selplat.mda.capability.projectgenerator.service.MdaProjectGeneratorService;
+import com.sp.selplat.mda.capability.projectgenerator.service.impl.MdaProjectGeneratorServiceImpl;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,7 +57,6 @@ class MdaServiceLayerArchitectureTest {
 
         List<Path> contracts = javaFiles.stream()
                 .filter(path -> FEATURE_SERVICE_CONTRACT.matcher(relative(sourceRoot, path)).find())
-                .filter(path -> !relative(sourceRoot, path).startsWith("common/service/"))
                 .toList();
         assertThat(contracts).isNotEmpty();
         for (Path contract : contracts) {

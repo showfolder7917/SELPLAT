@@ -36,7 +36,8 @@
         selContextMenuRoot.className = "selcontext-menu";
         selContextMenuRoot.dataset.selContextMenu = selContextMenuId;
         selContextMenuRoot.setAttribute("role", "menu");
-        selContextMenuRoot.setAttribute("aria-label", String(selContextMenuOptions.ariaLabel || "操作菜单"));
+        const selContextMenuDefaultAriaLabel = String(selContextMenuOptions.ariaLabel || "操作菜单");
+        selContextMenuRoot.setAttribute("aria-label", selContextMenuDefaultAriaLabel);
         selContextMenuRoot.setAttribute("aria-hidden", "true");
         selContextMenuRoot.hidden = true;
         document.body.appendChild(selContextMenuRoot);
@@ -95,6 +96,10 @@
             }
             selContextMenuClose(false);
             selContextMenuContext = selContextMenuDefinition.context || null;
+            selContextMenuRoot.setAttribute(
+                "aria-label",
+                String(selContextMenuDefinition.ariaLabel || selContextMenuDefaultAriaLabel)
+            );
             selContextMenuRestoreFocusTarget = selContextMenuDefinition.restoreFocusTarget instanceof Element
                 ? selContextMenuDefinition.restoreFocusTarget
                 : null;

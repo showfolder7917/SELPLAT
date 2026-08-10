@@ -7,13 +7,13 @@ python_ability_refs = none
 <!-- 当前规则不需要 Node 专用能力；Node 只在受影响前端字段同步时使用现有语法检查。 -->
 node_ability_refs = none
 <!-- 首版规则固化 reference-data 重构中已经验证的 SQL 目录和单表文件约束。 -->
-rule_version = 1.9.0
+rule_version = 2.1.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，未经人工提升不得扩大到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记、真实案例核对和索引链验证。 -->
 rule_status = active
 <!-- 首次升级记录说明规则来自用户对 dataShape、混合建表文件和错误命名的连续修正。 -->
-upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套
+upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责
 
 <!-- 问题：数据库脚本使用含义模糊的 tables 或 migration 文件名、一个文件创建多张正式表、类型表混入树或选项能力字段时，后续维护者无法从目录和文件名判断真实职责。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 中新建、迁移、拆分、改名或审查 apps/<app> 的应用自有数据库和 SQL。 -->
@@ -42,8 +42,10 @@ selplat_application_database_directory_allowed_content = <app>.mv.db,sql,README.
 selplat_h2_gitignore_ownership = SELPLAT_root_only,no_mvdb_ignore_pattern,all_mvdb_visible_and_trackable,trace_ignored,lock_ignored,temp_ignored,before_backup_ignored,no_nested_gitignore_any_module
 <!-- 严格本地数据库应用必须在当前用户中央登记中声明 datasourcePrefix，正式模块属性按该前缀唯一登记 sa 与 123456。 -->
 selplat_managed_local_database_default_credentials = datasourcePrefix_required,username=sa,password=123456,exactly_once
-<!-- 数据库应用的结构、SQL 根、数据库位置、主键策略和数据源前缀只在 rule-engine 当前用户中央登记维护。 -->
-selplat_managed_database_central_registration = projectName,structure,schemaRoot,databaseFile,primaryKeyStrategy,datasourcePrefix,no_application_local_managed_marker
+<!-- 数据库应用的 SQL 根、数据库位置、主键策略和数据源前缀只在 rule-engine 当前用户中央登记维护；架构不可配置，避免任何项目通过登记选择专属结构。 -->
+selplat_managed_database_central_registration = projectName,schemaRoot,databaseFile,primaryKeyStrategy,datasourcePrefix,no_structure_switch,no_application_local_managed_marker
+<!-- 所有受管应用统一使用三类职责：真实表业务一表一目录、无状态能力进入 capability、复用实现进入 common；禁止项目名分支和专属豁免。 -->
+selplat_managed_database_uniform_architecture = table_business:<table-business>/controller|service|dao,non_persistent_capability:capability/<capability>/controller|service,reusable_implementation:common/config|persistence|util,no_project_specific_structure,no_project_name_bypass
 <!-- 空密码只允许测试属性在内存库或临时库中显式覆盖，正式模块属性禁止为空。 -->
 selplat_database_empty_password_boundary = production_forbidden,test_isolated_override_allowed
 
@@ -94,6 +96,12 @@ selplat_database_metadata_comment_requirement = COMMENT_ON_TABLE,COMMENT_ON_COLU
 selplat_seed_data_policy = stable_business_coordinate,idempotent_insert,no_restart_overwrite
 <!-- data 文件只能按稳定坐标补充缺失行；禁止 MERGE、UPDATE、DELETE、DDL 或无 NOT EXISTS 的 INSERT。 -->
 selplat_seed_sql_write_gate = insert_where_not_exists,read_only_noop,no_merge,no_update,no_delete,no_ddl
+<!-- 从正式数据库反向生成启动 SQL 时，必须先由中央登记唯一确认应用、数据库文件和 schemaRoot，禁止根据连接显示名猜目录。 -->
+selplat_database_export_target_resolution = exact_managed_application_registry_match_no_display_name_or_working_directory_guess
+<!-- 反向导出必须先完成整批表结构、主键、注释和数据校验，再生成一表一份 schema/data，禁止通过一半后留下部分新文件。 -->
+selplat_database_export_prewrite_gate = complete_batch_metadata_primary_key_comment_and_data_validation_before_any_formal_file_replace
+<!-- 反向导出先写同目录临时文件再原子替换，任一步失败必须恢复所有原正文并清理本轮临时文件。 -->
+selplat_database_export_atomic_write = sibling_temp_files_atomic_replace_restore_all_originals_and_cleanup_on_failure
 <!-- Java 或其他初始化入口必须显式登记 SQL 的业务执行顺序，禁止依赖目录遍历或文件名偶然排序。 -->
 selplat_database_sql_loader_policy = explicit_ordered_resource_registry
 <!-- SQL 改名、拆分、移动或删除时必须同步构建复制配置、运行加载清单、说明、调用方、测试和构建产物清理。 -->

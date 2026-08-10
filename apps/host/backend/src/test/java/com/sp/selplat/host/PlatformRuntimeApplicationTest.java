@@ -73,7 +73,9 @@ class PlatformRuntimeApplicationTest {
         mockMvc.perform(get("/sel/components/grid/selGrid.js"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("selgrid-table-horizontal-scroll")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("horizontalScroll === true")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("horizontalScroll === true")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("columnResize !== false")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("selGridHandleColumnResizeMove")));
         // Tab 右键操作必须由 sel-ui 通用菜单发布，禁止 MDA 复制第二套浮层。
         mockMvc.perform(get("/sel/components/context-menu/selContextMenu.js"))
                 .andExpect(status().isOk())

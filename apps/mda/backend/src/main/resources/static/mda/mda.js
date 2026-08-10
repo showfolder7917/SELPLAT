@@ -24,14 +24,17 @@
         projects: "/api/mda/projects/create.htm",
         metadata: "/api/mda/metadata/tree.htm",
         execute: "/api/mda/sql/execute.htm",
-        updateRow: "/api/mda/data/update-row.htm"
+        updateRow: "/api/mda/data/update-row.htm",
+        exportTable: "/api/mda/export/table.htm",
+        exportDatabase: "/api/mda/export/database.htm"
     });
     const mdaState = {
         connections: [], selectedConnection: null, metadata: [], panelRoot: null,
         treeController: null, tabsController: null, querySessions: new Map(), querySequence: 1,
         connectionWindowController: null, projectWindowController: null,
         confirmDialogController: null, editingConnectionId: null,
-        rowEditWindows: new Map(), editingRowContext: null, windowMessages: null
+        rowEditWindows: new Map(), editingRowContext: null, windowMessages: null,
+        closeConfirmationPending: false
     };
 
     // MDA 只声明公共组件所在区域；页签内部结构继续由各公共控件自身创建。
@@ -58,18 +61,24 @@
             const mdaChildren = mdaMapMetadataNodes(mdaNode.children, mdaNodePath);
             const mdaIcons = { catalog: "ri-database-2-line", schema: "ri-folder-3-line", table: "ri-table-2", column: "ri-key-2-line" };
             const mdaIsView = String(mdaNode.tableType || "").toUpperCase().includes("VIEW");
+            // 数据库目录与业务 PUBLIC Schema 默认展开；系统 Schema、表和字段保持折叠。
+            const mdaSchemaName = String(mdaNode.schema || mdaNode.label || "").trim().toUpperCase();
+            const mdaDefaultExpanded = mdaNode.type === "catalog"
+                || (mdaNode.type === "schema" && mdaSchemaName === "PUBLIC");
             // 目录节点代表当前连接中的数据库，表或视图节点承接真实目标库结构动作。
             const mdaContextActions = mdaNode.type === "catalog"
                 ? Object.freeze([
                     Object.freeze({ id: "connection-edit", label: "编辑连接", icon: "ri-edit-line" }),
                     Object.freeze({ id: "connection-delete", label: "删除连接", icon: "ri-delete-bin-6-line", danger: true }),
-                    Object.freeze({ id: "copy-label", label: "复制名称", icon: "ri-file-copy-line" })
+                    Object.freeze({ id: "copy-label", label: "复制名称", icon: "ri-file-copy-line" }),
+                    Object.freeze({ id: "database-export", label: "导出整个数据库", icon: "ri-download-cloud-2-line" })
                 ])
                 : mdaNode.type === "table"
                     ? Object.freeze([
                         Object.freeze({ id: "table-edit", label: mdaIsView ? "编辑视图定义" : "编辑表结构", icon: "ri-edit-line" }),
                         Object.freeze({ id: "table-delete", label: mdaIsView ? "删除视图" : "删除表", icon: "ri-delete-bin-6-line", danger: true }),
-                        Object.freeze({ id: "copy-label", label: mdaIsView ? "复制视图名" : "复制表名", icon: "ri-file-copy-line" })
+                        Object.freeze({ id: "copy-label", label: mdaIsView ? "复制视图名" : "复制表名", icon: "ri-file-copy-line" }),
+                        ...(!mdaIsView ? [Object.freeze({ id: "table-export", label: "导出表", icon: "ri-download-2-line" })] : [])
                     ])
                     : Object.freeze([]);
             return Object.freeze({
@@ -77,6 +86,7 @@
                 label: mdaNode.type === "column" && mdaNode.typeName ? `${mdaNode.label} · ${mdaNode.typeName}` : mdaNode.label,
                 icon: mdaIcons[mdaNode.type] || "ri-circle-line",
                 count: mdaChildren.length,
+                expanded: mdaDefaultExpanded,
                 filter: Object.freeze({
                     nodeType: mdaNode.type,
                     catalog: mdaNode.catalog || "",
@@ -443,12 +453,18 @@
         mdaSession.splitController = mdaSplitController;
         mdaSession.editorController = mdaEditorController;
         mdaSession.gridController = mdaGridController;
+        const mdaHandleEditorChange = (mdaEvent) => {
+            if (mdaEvent.detail?.editorId !== mdaSession.editorId) return;
+            mdaSession.dirty = String(mdaEvent.detail.value || "") !== mdaSession.closeBaselineSql;
+        };
         const mdaHandleEditorAction = async (mdaEvent) => {
             if (mdaEvent.detail?.editorId !== mdaSession.editorId) return;
             if (mdaEvent.detail.action !== "execute") return;
             mdaEditorController.setLoading(true);
             try {
                 const mdaResponse = await mdaExecuteSql(mdaSession, mdaEvent.detail.value);
+                mdaSession.closeBaselineSql = String(mdaEvent.detail.value || "");
+                mdaSession.dirty = false;
                 // SQL 结果已经进入下方表格，成功消息仅短时提示而不占用上下分区高度。
                 mdaBase.toast(mdaResponse.msg || "SQL 执行完成。", "success");
             } catch (mdaError) {
@@ -471,9 +487,11 @@
                 mdaBase.toast(mdaError.message || "数据编辑窗口打开失败。", "error");
             }
         };
+        mdaEditorController.root.addEventListener("selCodeEditor:change", mdaHandleEditorChange);
         mdaEditorController.root.addEventListener("selCodeEditor:action", mdaHandleEditorAction);
         mdaGridController.root.addEventListener("dblclick", mdaHandleGridDoubleClick);
         return () => {
+            mdaEditorController.root.removeEventListener("selCodeEditor:change", mdaHandleEditorChange);
             mdaEditorController.root.removeEventListener("selCodeEditor:action", mdaHandleEditorAction);
             mdaGridController.root.removeEventListener("dblclick", mdaHandleGridDoubleClick);
             if (mdaState.editingRowContext?.session === mdaSession) {
@@ -502,6 +520,7 @@
             qualifiedName: String(mdaDefinition.qualifiedName || ""),
             connectionId: mdaState.selectedConnection.id,
             sql: String(mdaDefinition.sql || ""),
+            closeBaselineSql: String(mdaDefinition.sql || ""), dirty: false,
             editableTable: mdaDefinition.editableTable || null,
             editableQuerySql: mdaDefinition.editableTable ? String(mdaDefinition.sql || "") : "",
             selectedRowId: null, selectedPrimaryKeyValues: null,
@@ -651,7 +670,7 @@
         if (!mdaConfirmed) return false;
         try {
             const mdaResponse = await mdaAjax.request({ url: `${mdaApi.connections}delete.htm`, method: "POST", data: { id: mdaConnection.id } });
-            await mdaReloadConnections();
+            await mdaReloadConnections(undefined, true);
             mdaBase.toast(mdaResponse.msg || `连接“${mdaConnection.connectionName}”已删除。`, "success");
             return true;
         } catch (mdaError) {
@@ -694,37 +713,129 @@
         }
     }
 
-    // 同一连接结构刷新不关闭其他查询页签，删除目标表后只移除该表自己的页签。
-    async function mdaRefreshSelectedMetadata() {
+    // 导出接口只接收当前连接和树节点坐标；输出目录、文件命名、SQL 幂等性及原子回滚全部由后端门禁决定。
+    async function mdaExportStartupSql(mdaScope, mdaFilter = {}) {
+        if (!mdaState.selectedConnection) throw new Error("请先选择数据库连接。");
+        const mdaIsTableExport = mdaScope === "table";
+        const mdaExportTarget = mdaIsTableExport
+            ? `${mdaFilter.schema || "PUBLIC"}.${mdaFilter.tableName || ""}`
+            : mdaState.selectedConnection.connectionName;
+        const mdaConfirmed = await mdaState.confirmDialogController.open({
+            title: mdaIsTableExport ? "导出表启动 SQL" : "导出数据库启动 SQL",
+            message: mdaIsTableExport
+                ? "将以当前表结构和全量数据覆盖同名 schema/data 启动 SQL，是否继续？"
+                : "将以当前数据库全部物理表结构和全量数据覆盖对应启动 SQL，是否继续？",
+            target: mdaExportTarget,
+            icon: "ri-download-cloud-2-line",
+            tone: "warning",
+            confirmLabel: "确认导出",
+            cancelLabel: "取消",
+            closeLabel: "关闭启动 SQL 导出确认框"
+        });
+        if (!mdaConfirmed) return false;
+        const mdaResponse = await mdaAjax.request({
+            url: mdaIsTableExport ? mdaApi.exportTable : mdaApi.exportDatabase,
+            method: "POST",
+            data: {
+                connectionId: mdaState.selectedConnection.id,
+                catalog: mdaFilter.catalog || "",
+                schema: mdaFilter.schema || "",
+                ...(mdaIsTableExport ? { tableName: mdaFilter.tableName || "" } : {})
+            }
+        });
+        const mdaExportData = mdaResponse.data || {};
+        mdaBase.toast(
+            `${mdaResponse.msg || "启动 SQL 导出完成。"} ${mdaExportData.tableCount || 0} 张表、${mdaExportData.rowCount || 0} 行，目录：${mdaExportData.outputDirectory || "db/sql"}`,
+            "success"
+        );
+        return true;
+    }
+
+    // 页签关闭只在 SQL 相对最近一次初始值或成功执行值发生变化时确认；同一批关闭合并成一次提示。
+    async function mdaCloseQuerySessions(mdaSessionIds, mdaOptions = {}) {
+        const mdaClosableIds = Array.from(new Set(mdaSessionIds || []))
+            .map(String)
+            .filter((mdaSessionId) => mdaState.tabsController?.has(mdaSessionId));
+        if (!mdaClosableIds.length) return true;
+        const mdaDirtySessions = mdaClosableIds
+            .map((mdaSessionId) => mdaState.querySessions.get(mdaSessionId))
+            .filter((mdaSession) => mdaSession?.dirty);
+        if (mdaDirtySessions.length && !mdaOptions.force) {
+            if (mdaState.closeConfirmationPending) return false;
+            mdaState.closeConfirmationPending = true;
+            try {
+                const mdaConfirmed = await mdaState.confirmDialogController.open({
+                    title: "关闭未保存的 SQL",
+                    message: mdaDirtySessions.length === 1
+                        ? "当前 SQL 已修改但尚未成功执行，关闭后修改内容将丢失。"
+                        : `有 ${mdaDirtySessions.length} 个页签包含未保存 SQL，关闭后修改内容将丢失。`,
+                    target: mdaDirtySessions.map((mdaSession) => mdaSession.label).join("、"),
+                    icon: "ri-file-warning-line",
+                    tone: "warning",
+                    confirmLabel: "放弃修改并关闭",
+                    cancelLabel: "继续编辑",
+                    closeLabel: "关闭未保存 SQL 确认框"
+                });
+                if (!mdaConfirmed) return false;
+            } finally {
+                mdaState.closeConfirmationPending = false;
+            }
+        }
+        mdaClosableIds.forEach((mdaSessionId) => mdaState.tabsController.close(mdaSessionId, { force: true }));
+        return true;
+    }
+
+    // 页签右键批量关闭由应用一次性确认全部脏页签，避免公共控件逐个弹窗或只关闭首个页签。
+    function mdaResolveContextCloseIds(mdaActionId, mdaTargetId) {
+        const mdaTabIds = mdaState.tabsController?.list() || [];
+        const mdaTargetIndex = mdaTabIds.indexOf(String(mdaTargetId));
+        if (mdaActionId === "close-right") return mdaTargetIndex < 0 ? [] : mdaTabIds.slice(mdaTargetIndex + 1);
+        if (mdaActionId === "close-others") return mdaTabIds.filter((mdaTabId) => mdaTabId !== String(mdaTargetId));
+        if (mdaActionId === "close-all") return mdaTabIds;
+        return [];
+    }
+
+    // 同一连接结构刷新默认保留用户展开状态；首次加载或切换连接时重新挂载树以应用新连接的默认展开节点。
+    async function mdaRefreshSelectedMetadata(mdaResetTreeExpansion = false) {
         if (!mdaState.selectedConnection) return false;
         const mdaResponse = await mdaAjax.request({ url: mdaApi.metadata, method: "POST", data: { connectionId: mdaState.selectedConnection.id } });
         mdaState.metadata = mdaResponse.data?.nodes || [];
         const mdaPayload = mdaBuildPayload();
-        mdaState.treeController.setLocale(mdaPayload.tree);
+        if (mdaResetTreeExpansion) {
+            mdaState.treeController?.destroy();
+            mdaState.treeController = window.selTree.mount(mdaState.panelRoot, mdaPayload.tree);
+            if (!mdaState.treeController) throw new Error("MDA 数据库结构树重新挂载失败。");
+        } else {
+            mdaState.treeController.setLocale(mdaPayload.tree);
+        }
         mdaSyncPanel(mdaPayload);
         return true;
     }
 
     // 切换连接时关闭并销毁旧连接的全部动态查询页签，再加载新连接元数据。
-    async function mdaLoadMetadata(mdaConnection) {
-        mdaState.tabsController?.closeAll();
+    async function mdaLoadMetadata(mdaConnection, mdaForceCloseTabs = false) {
+        const mdaClosed = await mdaCloseQuerySessions(mdaState.tabsController?.list() || [], { force: mdaForceCloseTabs });
+        if (!mdaClosed) return false;
         mdaState.selectedConnection = mdaConnection;
-        await mdaRefreshSelectedMetadata();
+        await mdaRefreshSelectedMetadata(true);
+        return true;
     }
 
-    async function mdaReloadConnections(mdaPreferredId) {
+    async function mdaReloadConnections(mdaPreferredId, mdaForceCloseTabs = false) {
         const mdaConnectionPage = await mdaAjax.json({ url: `${mdaApi.connections}getStore.htm` });
         mdaState.connections = mdaConnectionPage.records || [];
-        mdaState.selectedConnection = mdaState.connections.find((mdaItem) => String(mdaItem.id) === String(mdaPreferredId || "")) || mdaState.connections[0] || null;
-        if (mdaState.selectedConnection) {
-            await mdaLoadMetadata(mdaState.selectedConnection);
-            return;
+        const mdaNextConnection = mdaState.connections.find((mdaItem) => String(mdaItem.id) === String(mdaPreferredId || "")) || mdaState.connections[0] || null;
+        if (mdaNextConnection) {
+            return mdaLoadMetadata(mdaNextConnection, mdaForceCloseTabs);
         }
-        mdaState.tabsController?.closeAll();
+        const mdaClosed = await mdaCloseQuerySessions(mdaState.tabsController?.list() || [], { force: mdaForceCloseTabs });
+        if (!mdaClosed) return false;
+        mdaState.selectedConnection = null;
         mdaState.metadata = [];
         const mdaPayload = mdaBuildPayload();
         mdaState.treeController.setLocale(mdaPayload.tree);
         mdaSyncPanel(mdaPayload);
+        return true;
     }
 
     async function mdaMountApplication() {
@@ -742,6 +853,24 @@
         mdaState.projectWindowController = window.selWindow.mount(mdaApplicationHost, { id: "MdaProjectWindow", messages: mdaWindowMessages, ...mdaBuildProjectWindow() });
         mdaState.confirmDialogController = window.selConfirmDialog.mount(mdaApplicationHost, { id: "MdaDeleteConfirmDialog", title: "删除确认", tone: "danger" });
         if (!mdaState.treeController || !mdaState.tabsController || !mdaState.connectionWindowController || !mdaState.projectWindowController || !mdaState.confirmDialogController) throw new Error("MDA 公共业务组件挂载失败。");
+
+        // 单个关闭按钮和 Delete 键通过 beforeClose 暂停；确认后使用 force 只重放当前关闭动作。
+        mdaState.tabsController.root.addEventListener("selTabs:beforeClose", (mdaEvent) => {
+            const mdaSession = mdaState.querySessions.get(String(mdaEvent.detail?.tabId || ""));
+            if (!mdaSession?.dirty) return;
+            mdaEvent.preventDefault();
+            void mdaCloseQuerySessions([mdaSession.id]);
+        });
+        // 截获公共 Tab 的批量右键关闭动作，由 MDA 合并检查全部未保存 SQL 后再统一关闭。
+        mdaState.tabsController.root.addEventListener("selContextMenu:action", (mdaEvent) => {
+            if (mdaEvent.detail?.menuId !== `${mdaTabsId}:tab-actions`) return;
+            const mdaActionId = String(mdaEvent.detail.actionId || "");
+            if (!["close-right", "close-others", "close-all"].includes(mdaActionId)) return;
+            mdaEvent.preventDefault();
+            mdaEvent.stopImmediatePropagation();
+            const mdaCloseIds = mdaResolveContextCloseIds(mdaActionId, mdaEvent.detail.context?.tabId);
+            void mdaCloseQuerySessions(mdaCloseIds);
+        }, true);
 
         // 面板命令只负责连接窗口和新建查询，SQL 执行由当前页签编辑器自己的动作事件承接。
         mdaState.panelRoot.addEventListener("click", async (mdaEvent) => {
@@ -781,6 +910,8 @@
             try {
                 if (mdaAction === "connection-edit") await mdaOpenSelectedConnectionEditor();
                 if (mdaAction === "connection-delete") await mdaConfirmAndDeleteSelectedConnection();
+                if (mdaAction === "database-export") await mdaExportStartupSql("database", mdaFilter);
+                if (mdaAction === "table-export") await mdaExportStartupSql("table", mdaFilter);
                 if (mdaAction === "table-edit") mdaOpenTableStructureEditor(mdaFilter);
                 if (mdaAction === "table-delete") await mdaConfirmAndDeleteTable(mdaFilter);
                 if (mdaAction === "copy-label") {
@@ -818,12 +949,24 @@
                 return;
             }
             if (mdaEvent.detail?.id === "MdaProjectWindow") {
+                const mdaProjectValues = mdaEvent.detail.values || {};
+                const mdaProjectConfirmed = await mdaState.confirmDialogController.open({
+                    title: "创建工程并生成业务文件",
+                    message: "该操作会一次性创建工程、后端分层、页面、启动 SQL 和中央登记，是否继续？",
+                    target: `工程：${mdaProjectValues.projectName || ""}；表：${mdaProjectValues.tableName || ""}`,
+                    icon: "ri-folder-add-line",
+                    tone: "warning",
+                    confirmLabel: "确认创建",
+                    cancelLabel: "返回检查",
+                    closeLabel: "关闭跨文件创建确认框"
+                });
+                if (!mdaProjectConfirmed) return;
                 mdaState.projectWindowController.setLoading(true);
                 try {
                     const mdaResponse = await mdaAjax.request({
                         url: mdaApi.projects,
                         method: "POST",
-                        data: mdaEvent.detail.values
+                        data: mdaProjectValues
                     });
                     const mdaPageUrl = mdaResponse.data?.pageUrl || "";
                     const mdaMessage = (mdaResponse.msg || "工程创建完成。")
@@ -852,7 +995,11 @@
         const mdaConnectionSelect = mdaState.panelRoot.querySelector('[data-sel-grid-role="type-filter"]');
         mdaConnectionSelect?.addEventListener("change", async () => {
             const mdaConnection = mdaState.connections.find((mdaItem) => String(mdaItem.id) === mdaConnectionSelect.value);
-            if (mdaConnection) await mdaLoadMetadata(mdaConnection);
+            if (!mdaConnection) return;
+            const mdaLoaded = await mdaLoadMetadata(mdaConnection);
+            if (!mdaLoaded && mdaState.selectedConnection) {
+                window.selDropdownMenu.setValue(mdaConnectionSelect, String(mdaState.selectedConnection.id));
+            }
         });
         // 公共工作区已经可操作后再异步读取控制库配置与目标库元数据。
         try {

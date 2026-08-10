@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sp.selplat.mda.targetdatabase.common.jdbc.JdbcConnectionFactory;
+import com.sp.selplat.mda.common.util.jdbc.JdbcConnectionFactory;
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.Map;
 import org.junit.jupiter.api.MethodOrderer;

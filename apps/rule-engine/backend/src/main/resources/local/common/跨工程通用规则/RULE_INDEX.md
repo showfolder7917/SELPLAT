@@ -10,10 +10,12 @@ RULE_LIFECYCLE_GOVERNANCE_RULES = local/common/跨工程通用规则/RUL_规则�
 load_rule_for_rule_creation_move_delete_or_classification = RULE_LIFECYCLE_GOVERNANCE_RULES
 load_rule_for_rule_index_maintenance = RULE_LIFECYCLE_GOVERNANCE_RULES
 
-<!-- 执行文档按当前任务页面隔离。 -->
-EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES = local/common/跨工程通用规则/RUL_执行文档线程隔离规则.md
-load_rule_for_execution_document_thread_isolation = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
-load_rule_for_execution_document_history_or_legacy_migration = EXECUTION_DOCUMENT_THREAD_ISOLATION_RULES
+<!-- 执行文档按当前任务页面隔离，并接入 begin、step、active、ready、finish 统一任务门禁。 -->
+EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES = local/common/跨工程通用规则/RUL_执行文档任务生命周期门禁规则.md
+load_rule_for_execution_document_thread_isolation = EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES
+load_rule_for_execution_document_history_or_legacy_migration = EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES
+load_rule_for_formal_task_begin_step_or_finish = EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES
+load_rule_for_quick_special_full_or_root_delivery_gate = EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES
 
 <!-- UTF-8 完整读写、控制台编码和旧编码安全转换规则。 -->
 UTF8_FILE_AND_COMMAND_RULES = local/common/跨工程通用规则/RUL_UTF8文件与命令规则.md

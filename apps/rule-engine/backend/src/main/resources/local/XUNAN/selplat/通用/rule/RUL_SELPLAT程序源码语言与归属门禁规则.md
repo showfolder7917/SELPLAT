@@ -2,12 +2,14 @@
 
 <!-- 本规则覆盖 SELPLAT 的 apps、shared 和 rule-engine 全部正式程序源码。 -->
 rule_scope = active_user_selplat_all_program_source_ownership
-<!-- 3.4.0 增加 MDA 新生成标准业务表默认字段的快速静态门禁。 -->
-rule_version = 3.4.0
+<!-- 3.5.0 将公共控件中央登记、应用私造交互和生成模板依赖检查接入同一快速静态门禁。 -->
+rule_version = 3.6.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示生产扫描能力、索引和测试已经形成闭环。 -->
 rule_status = active
+<!-- 本次升级删除中央登记 structure 开关和任何项目名放行；真实表、无状态能力与 common 三类职责对现在及未来全部应用一致生效。 -->
+uniform_architecture_upgrade_record = 2026-08-11:no_registry_structure_switch,no_project_name_bypass,table_business_plus_capability_plus_common_for_all_projects
 <!-- Java 能力由现有 Gradle 模块和 rule-engine 分层源码承载。 -->
 java_ability_refs = none
 <!-- 全工程源码归属由当前用户 Python 能力进行可重复审计。 -->
@@ -15,7 +17,7 @@ python_ability_refs = apps/rule-engine/backend/src/main/python/com/sp/selplat/lo
 <!-- 当前规则不新增 Node 专用能力。 -->
 node_ability_refs = none
 <!-- 本规则来自 Japanese 应用误建未参与构建的 src/main/python 后的全工程防复发修正。 -->
-upgrade_record = 2026-08-09:建立SELPLAT全部程序的语言白名单_源码归属预检_用户能力分层_实验工具隔离_字节码缓存定向_公共HTTP请求输出协议复用_无调用方表Domain禁止生成_受管工程技术层优先包结构和交付扫描门禁;2026-08-10:纠正受管数据库应用为业务目录优先_禁止顶层技术目录拆散同一表业务_common仅承载跨业务能力;2026-08-10:增加受管数据库应用common职责白名单和一业务一Service配对门禁_规则只检查抽象职责与真实结构不写死Japanese或具体能力名;2026-08-10:非生成数据库应用必须显式登记受管身份并扫描backend正式Java_避免contract误判和未授权工程被隐式纳管;2026-08-10:common_persistence只保留项目BaseDao和PersistenceConfiguration_限定名基础设施Bean替代数据库上下文包装类;2026-08-10:树_下拉_右键菜单按HTTP表示拆分Controller并共享同一业务Service;2026-08-10:受管数据库应用common外一级目录与真实schema表双向对应_表业务只允许controller_service_dao_common_util只供Service调用;2026-08-10:严格数据库应用固定db根文件_每张业务表对应CommonSequenceSegment唯一号段_业务主键禁止identity并支持多进程乐观锁抢号;2026-08-10:严格本地数据库模块属性默认账号密码固定sa和123456_正式空密码阻断;2026-08-10:严格数据库应用contract必须存在外部生产Java调用方_内部返回结构统一使用CommonResult和Map_List;2026-08-10:应用manifest必须显式登记真实src_main读取程序_禁止只保存身份和未来路由的无调用方目录;2026-08-10:数据库应用身份迁移到当前用户rule_engine中央登记_删除业务工程内可自删绕过的隐藏受管文件_MDA原子维护登记;2026-08-10:中央登记数据库应用根只允许真实工程组成_禁止contract_manifest_registry_temp和未来预留目录;2026-08-10:数据库应用禁止嵌套gitignore_H2运行文件统一由SELPLAT根排除;2026-08-10:增加数据库重建SQL静态门禁_阻断非幂等建表索引_破坏式刷新和覆盖式种子;2026-08-10:根Git规则必须放行apps正式mvdb_继续阻断trace_lock_temp;2026-08-10:禁止根mvdb通配忽略_确保编辑器显示所有正式数据库;2026-08-10:嵌套gitignore扫描扩展到全部apps_shared_关闭未中央登记模块绕过;2026-08-10:建立selplatQuickGate_selplatSpecialGate_selplatFullGate三级Gradle入口_根check统一执行全量门禁;2026-08-10:专项门禁从Gradle叶子项目动态发现apps_backend_未来项目加入settings后自动映射自身test;2026-08-10:MDA标准业务表默认字段进入快速静态门禁_阻断缺失中日英标签或回退name的生成模板
+upgrade_record = 2026-08-09:建立SELPLAT全部程序的语言白名单_源码归属预检_用户能力分层_实验工具隔离_字节码缓存定向_公共HTTP请求输出协议复用_无调用方表Domain禁止生成_受管工程技术层优先包结构和交付扫描门禁;2026-08-10:纠正受管数据库应用为业务目录优先_禁止顶层技术目录拆散同一表业务_common仅承载跨业务能力;2026-08-10:增加受管数据库应用common职责白名单和一业务一Service配对门禁_规则只检查抽象职责与真实结构不写死Japanese或具体能力名;2026-08-10:非生成数据库应用必须显式登记受管身份并扫描backend正式Java_避免contract误判和未授权工程被隐式纳管;2026-08-10:common_persistence只保留项目BaseDao和PersistenceConfiguration_限定名基础设施Bean替代数据库上下文包装类;2026-08-10:树_下拉_右键菜单按HTTP表示拆分Controller并共享同一业务Service;2026-08-10:受管数据库应用common外一级目录与真实schema表双向对应_表业务只允许controller_service_dao_common_util只供Service调用;2026-08-10:严格数据库应用固定db根文件_每张业务表对应CommonSequenceSegment唯一号段_业务主键禁止identity并支持多进程乐观锁抢号;2026-08-10:严格本地数据库模块属性默认账号密码固定sa和123456_正式空密码阻断;2026-08-10:严格数据库应用contract必须存在外部生产Java调用方_内部返回结构统一使用CommonResult和Map_List;2026-08-10:应用manifest必须显式登记真实src_main读取程序_禁止只保存身份和未来路由的无调用方目录;2026-08-10:数据库应用身份迁移到当前用户rule_engine中央登记_删除业务工程内可自删绕过的隐藏受管文件_MDA原子维护登记;2026-08-10:中央登记数据库应用根只允许真实工程组成_禁止contract_manifest_registry_temp和未来预留目录;2026-08-10:数据库应用禁止嵌套gitignore_H2运行文件统一由SELPLAT根排除;2026-08-10:增加数据库重建SQL静态门禁_阻断非幂等建表索引_破坏式刷新和覆盖式种子;2026-08-10:根Git规则必须放行apps正式mvdb_继续阻断trace_lock_temp;2026-08-10:禁止根mvdb通配忽略_确保编辑器显示所有正式数据库;2026-08-10:嵌套gitignore扫描扩展到全部apps_shared_关闭未中央登记模块绕过;2026-08-10:建立selplatQuickGate_selplatSpecialGate_selplatFullGate三级Gradle入口_根check统一执行全量门禁;2026-08-10:专项门禁从Gradle叶子项目动态发现apps_backend_未来项目加入settings后自动映射自身test;2026-08-10:MDA标准业务表默认字段进入快速静态门禁_阻断缺失中日英标签或回退name的生成模板;2026-08-11:公共控件中央登记_应用私造body门户和sel全局API阻断_生成模板硬依赖顺序检查
 
 ## 创建前分类
 
@@ -86,8 +88,8 @@ selplat_business_primary_key_strategy = CommonSequenceSegment:id_identity_except
 selplat_multi_process_sequence_policy = shared_database,optimistic_version_lock,disjoint_cached_ranges,no_nextStartId_rollback,gaps_allowed_duplicates_forbidden
 <!-- 本结构只适用于显式登记或生成标记的数据库业务应用；Host、rule-engine、shared、contract、frontend 和一次性工具使用各自登记结构。 -->
 selplat_table_business_structure_exempt_module_kinds = host,rule-engine,shared,contract,frontend,disposable-tool
-<!-- 受管范围包含生成器所有权标记和当前用户中央登记；严格结构只由中央登记启用，删除应用内文件不得绕过。 -->
-selplat_managed_database_application_detection = generated_project_ownership_marker|active_user_central_registry
+<!-- 任何拥有 db/sql、生成器所有权标记或中央登记的应用都属于受管范围，并且最终必须进入中央登记；删除标记或漏登记不得绕过。 -->
+selplat_managed_database_application_detection = db_sql_directory|generated_project_ownership_marker|active_user_central_registry,central_registration_required_for_all
 <!-- 中央登记按 AGENTS 当前稳定用户动态定位，每个项目名只能出现一次，登记项目不存在也必须阻断。 -->
 selplat_managed_database_application_registry = local/<active-stable-user-id>/selplat/通用/registry/managed-database-applications.json,version=1,unique_projectName,registered_project_required
 <!-- 中央登记数据库应用根只允许真实工程组成；工程登记与规则不得回流应用，生成器所有权标记只服务追加表冲突保护。 -->
@@ -98,20 +100,22 @@ selplat_nested_gitignore_policy = apps_and_shared_forbidden,use_SELPLAT_root_git
 selplat_authoritative_database_git_tracking_gate = no_mvdb_ignore_pattern,all_mvdb_visible_and_trackable,ignore_trace,ignore_lock,ignore_temp
 <!-- 启动 SQL 必须支持缺库重建和已有库幂等升级；禁止 DROP/TRUNCATE/DELETE、非幂等建表索引、MERGE 和覆盖式种子写入。 -->
 selplat_managed_database_rebuild_sql_gate = schema_create_if_not_exists,index_create_if_not_exists,matching_data_file,seed_insert_where_not_exists,no_drop,no_truncate,no_delete,no_seed_update,no_seed_merge
-<!-- MDA 标准业务表模板必须保留平台与中日英标签字段，快速门禁仅检查生成源，不破坏性迁移已有专用业务表。 -->
-selplat_mda_generated_business_default_field_gate = tenantId,lastOperateUserId,sortnum,labelZh,labelJa,labelEn,status,createdAt,updatedAt,no_legacy_name,future_generated_tables_only
+<!-- SELPLAT 应用脚手架的标准业务表模板必须保留平台与中日英标签字段；规则按生成能力识别，不按承载生成器的项目名建立专属门禁。 -->
+selplat_application_scaffold_generated_business_default_field_gate = tenantId,lastOperateUserId,sortnum,labelZh,labelJa,labelEn,status,createdAt,updatedAt,no_legacy_name,future_generated_tables_only,no_host_project_exception
 <!-- 结构门禁只分析应用 backend 正式 Java，跨模块 contract 继续按真实调用方独立维护。 -->
 selplat_managed_database_application_scan_root = backend/src/main/java
 <!-- 每个业务目录存在 Service 时必须且只能有一个接口和一个 impl 实现，禁止项目 BaseService 和单调用方中间 Service。 -->
 selplat_managed_business_service_cardinality = one_contract,one_impl,no_common_service,no_common_crud
 <!-- common 顶层只允许配置、持久化和按实际能力分类的 util；目录和能力名称必须来自真实调用关系，禁止预留空能力。 -->
 selplat_managed_common_role_allowlist = config,persistence,util/<actual-capability>,no_placeholder
+<!-- 不对应数据库表的正式功能统一进入 capability/<能力>/controller|service；所有项目使用同一结构，DAO 与复用实现不得进入 capability。 -->
+selplat_managed_non_persistent_capability_structure = capability/<actual-capability>/controller|service,one_service_contract,one_service_impl,no_dao,reusable_helpers_to_common_util,no_project_name_branch
 <!-- common/persistence 只保留项目 BaseDao 与持久化配置；DataSource、JdbcTemplate 和事务能力使用限定名 Bean，禁止再包装 Database 上下文类。 -->
 selplat_managed_common_persistence_class_pattern = <project>BaseDao,<capability>PersistenceConfiguration,no_database_context_wrapper,use_qualified_infrastructure_beans
 <!-- 树、下拉和右键菜单各自拥有真实表，因此必须进入自己的表业务 Controller、Service 和 DAO。 -->
 selplat_query_representation_controller_boundary = tree:own_table_business,options:own_table_business,context-menu:own_table_business
 <!-- 交付前必须扫描 apps 与 shared 的语言根、构建登记、rule-engine 分层和源码污染。 -->
-selplat_source_ownership_delivery_scan = language_roots,gradle_registration,rule_engine_layers,application_http_protocol_types,application_table_domain_types,managed_application_package_structure,managed_common_roles,managed_business_service_cardinality,source_pollution
+selplat_source_ownership_delivery_scan = language_roots,gradle_registration,rule_engine_layers,application_http_protocol_types,application_table_domain_types,managed_application_package_structure,managed_common_roles,managed_business_service_cardinality,sel_ui_component_registry_and_application_private_control,source_pollution
 <!-- 正式源码树禁止出现 pyc、__pycache__、DS_Store 和其他生成缓存。 -->
 selplat_source_tree_generated_file_policy = reject_pyc,reject_pycache,reject_DS_Store
 <!-- Python 程序导入本地模块前必须将字节码缓存定向到工程 cache，禁止在源码旁生成。 -->
@@ -119,7 +123,7 @@ selplat_python_bytecode_cache_root = <SELPLAT_ROOT>/cache/python-pycache
 <!-- 任一未登记语言目录、未知用户层、错误扩展名或源码缓存都会阻断任务完成。 -->
 selplat_source_ownership_blocking_gate = zero_violations_required
 <!-- 开发过程的快速门禁只运行生产结构扫描，不启动 Spring 或连接正式业务数据库。 -->
-selplat_quick_gate_entry = ./gradlew selplatQuickGate,source_ownership_and_static_database_sql_gate,no_spring,no_formal_database_connection
+selplat_quick_gate_entry = ./gradlew selplatQuickGate,source_ownership_static_database_sql_and_component_governance_gate,no_spring,no_formal_database_connection
 <!-- 专项门禁从 Gradle 已登记 apps/<项目>/backend 叶子模块动态建立 scope 与 test 映射；无法分类或未提供范围时必须回退全部模块。 -->
 selplat_special_gate_entry = ./gradlew selplatSpecialGate,dynamic_gradle_apps_backend_scope_to_own_test,unknown_or_empty_falls_back_all
 <!-- 提交和重大重构前的全量门禁必须覆盖所有 Java 叶子模块 check、公共前端边界与全部规则 Python 测试。 -->

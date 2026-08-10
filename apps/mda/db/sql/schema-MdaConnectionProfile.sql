@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS MdaConnectionProfile (
 );
 
 -- 兼容 identity 旧库：保留现有 id 与连接记录，只移除数据库自增属性，后续显式写入公共号段生成值。
-ALTER TABLE MdaConnectionProfile ALTER COLUMN id BIGINT;
+ALTER TABLE IF EXISTS MdaConnectionProfile ALTER COLUMN id BIGINT;
 
 -- 兼容已经由旧版本创建的控制库：新增明文字段并移除不再使用的密文字段。
 ALTER TABLE MdaConnectionProfile ADD COLUMN IF NOT EXISTS password VARCHAR(1000) NOT NULL DEFAULT '';

@@ -28,6 +28,7 @@ BUSINESS_TECHNICAL_LAYER_NAMES = {"controller", "service", "dao", "reference"}
 MANAGED_COMMON_ROLE_NAMES = {"config", "persistence", "util"}
 MANAGED_COMMON_PERSISTENCE_SUFFIXES = ("BaseDao", "PersistenceConfiguration")
 MANAGED_TABLE_BUSINESS_ROLES = {"controller", "service", "dao"}
+MANAGED_CAPABILITY_ROLES = {"controller", "service"}
 MANAGED_APPLICATION_ROOT_ALLOWLIST = {
     "backend",
     "frontend",
@@ -42,11 +43,11 @@ QUERY_REPRESENTATION_PATHS = {
     "options": "/options",
     "context-menu": "/context-menu",
 }
-MDA_GENERATOR_TEMPLATE_RELATIVE = Path(
-    "apps/mda/backend/src/main/java/com/sp/selplat/mda/projectgenerator/template/"
+APPLICATION_SCAFFOLD_TEMPLATE_RELATIVE = Path(
+    "apps/mda/backend/src/main/java/com/sp/selplat/mda/common/util/projectgenerator/"
     "MdaProjectTemplateCatalog.java"
 )
-MDA_GENERATED_BUSINESS_DEFAULT_FIELDS = (
+GENERATED_BUSINESS_DEFAULT_FIELDS = (
     "tenantId",
     "lastOperateUserId",
     "sortnum",
@@ -57,9 +58,338 @@ MDA_GENERATED_BUSINESS_DEFAULT_FIELDS = (
     "createdAt",
     "updatedAt",
 )
+SEL_UI_COMPONENT_ROOT_RELATIVE = Path("shared/frontend/sel-ui/src/components")
+SEL_UI_COMPONENT_REGISTRY_NAME = "component-registry.json"
+SEL_UI_COMPONENT_TYPES = {"interactive", "layout", "presentation", "registry"}
+SEL_UI_REQUIRED_GOVERNANCE_CHECKS = {
+    "source-boundary",
+    "public-api",
+    "theme-contract",
+    "dependency-order",
+    "application-private-control",
+}
 MANAGED_DATABASE_REGISTRY_RELATIVE = Path(
     "apps/rule-engine/backend/src/main/resources/local"
 )
+
+
+def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]]:
+    """Validate the central component registry and reject private reusable controls."""
+    component_root = project_root / SEL_UI_COMPONENT_ROOT_RELATIVE
+    if not component_root.is_dir():
+        return []
+    registry_path = component_root / SEL_UI_COMPONENT_REGISTRY_NAME
+    registry_relative = str(registry_path.relative_to(project_root))
+    if not registry_path.is_file():
+        return [{
+            "code": "SEL_UI_COMPONENT_REGISTRY_MISSING",
+            "path": registry_relative,
+            "message": "sel-ui controls must be registered before implementation",
+        }]
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exception:
+        return [{
+            "code": "SEL_UI_COMPONENT_REGISTRY_INVALID",
+            "path": registry_relative,
+            "message": f"component registry is unreadable: {exception}",
+        }]
+    components = registry.get("components") if isinstance(registry, dict) else None
+    policy = registry.get("policy") if isinstance(registry, dict) else None
+    if not isinstance(registry, dict) or registry.get("version") != 1 \
+            or not isinstance(components, list) \
+            or not isinstance(policy, dict):
+        return [{
+            "code": "SEL_UI_COMPONENT_REGISTRY_INVALID",
+            "path": registry_relative,
+            "message": "component registry requires version 1, policy, and components",
+        }]
+    violations: list[dict[str, str]] = []
+    expected_policy = {
+        "creationMode": "register-before-implementation",
+        "legacyCompatibility": "forbidden",
+        "applicationPrivateReusableControl": "forbidden",
+    }
+    for field_name, expected_value in expected_policy.items():
+        if policy.get(field_name) != expected_value:
+            violations.append({
+                "code": "SEL_UI_COMPONENT_POLICY_INVALID",
+                "path": registry_relative,
+                "message": f"policy.{field_name} must be {expected_value}",
+            })
+    if set(policy.get("requiredChecks", [])) != SEL_UI_REQUIRED_GOVERNANCE_CHECKS:
+        violations.append({
+            "code": "SEL_UI_COMPONENT_POLICY_INVALID",
+            "path": registry_relative,
+            "message": "policy.requiredChecks must contain the complete governance gate set",
+        })
+
+    component_ids: set[str] = set()
+    component_entries: dict[str, dict[str, Any]] = {}
+    owned_source_files: set[Path] = set()
+    registered_directories: set[str] = set()
+    owned_aria_roles: dict[str, str] = {}
+    for component in components:
+        component_id = component.get("id") if isinstance(component, dict) else None
+        directory_name = component.get("directory") if isinstance(component, dict) else None
+        if not isinstance(component_id, str) or not re.fullmatch(
+                r"sel[A-Z][A-Za-z0-9]*", component_id):
+            violations.append({
+                "code": "SEL_UI_COMPONENT_REGISTRATION_INVALID",
+                "path": registry_relative,
+                "message": "every control requires a safe sel<Component> id",
+            })
+            continue
+        if component_id in component_ids:
+            violations.append({
+                "code": "SEL_UI_COMPONENT_ID_DUPLICATE",
+                "path": registry_relative,
+                "message": f"component id {component_id} must be registered exactly once",
+            })
+            continue
+        component_ids.add(component_id)
+        component_entries[component_id] = component
+        if not isinstance(directory_name, str) or not re.fullmatch(
+                r"[a-z][a-z0-9-]*", directory_name):
+            violations.append({
+                "code": "SEL_UI_COMPONENT_REGISTRATION_INVALID",
+                "path": registry_relative,
+                "message": f"{component_id}.directory must be a safe relative name",
+            })
+            continue
+        registered_directories.add(directory_name)
+        component_directory = component_root / directory_name
+        if not component_directory.is_dir():
+            violations.append({
+                "code": "SEL_UI_COMPONENT_DIRECTORY_MISSING",
+                "path": str(component_directory.relative_to(project_root)),
+                "message": f"registered component directory for {component_id} is missing",
+            })
+            continue
+        if component.get("type") not in SEL_UI_COMPONENT_TYPES:
+            violations.append({
+                "code": "SEL_UI_COMPONENT_TYPE_INVALID",
+                "path": registry_relative,
+                "message": f"{component_id}.type is not a governed component type",
+            })
+        scripts = component.get("scripts")
+        styles = component.get("styles")
+        dependencies = component.get("dependencies")
+        if not isinstance(scripts, list) or not isinstance(styles, list) \
+                or not isinstance(dependencies, list) \
+                or not all(isinstance(value, str) for value in scripts + styles + dependencies):
+            violations.append({
+                "code": "SEL_UI_COMPONENT_REGISTRATION_INVALID",
+                "path": registry_relative,
+                "message": f"{component_id} requires string arrays for scripts, styles, and dependencies",
+            })
+            continue
+        global_api = component.get("globalApi")
+        if scripts and global_api != component_id:
+            violations.append({
+                "code": "SEL_UI_COMPONENT_PUBLIC_API_INVALID",
+                "path": registry_relative,
+                "message": f"{component_id}.globalApi must equal its registered id",
+            })
+        if not scripts and global_api is not None:
+            violations.append({
+                "code": "SEL_UI_COMPONENT_PUBLIC_API_INVALID",
+                "path": registry_relative,
+                "message": f"style-only component {component_id} cannot declare a global API",
+            })
+        for source_name in scripts + styles:
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*(?:\.js|\.css)", source_name):
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_SOURCE_PATH_INVALID",
+                    "path": registry_relative,
+                    "message": f"{component_id} source {source_name} must be a direct JS or CSS file",
+                })
+                continue
+            source_path = component_directory / source_name
+            if source_path in owned_source_files:
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_SOURCE_DUPLICATE_OWNER",
+                    "path": str(source_path.relative_to(project_root)),
+                    "message": "one component source file cannot have multiple registered owners",
+                })
+                continue
+            owned_source_files.add(source_path)
+            if not source_path.is_file():
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_SOURCE_MISSING",
+                    "path": str(source_path.relative_to(project_root)),
+                    "message": f"registered source for {component_id} is missing",
+                })
+                continue
+            source_text = source_path.read_text(encoding="utf-8")
+            if source_path.suffix == ".js" and isinstance(global_api, str) \
+                    and not re.search(
+                        rf"\b(?:window|global)\s*\.\s*{re.escape(global_api)}\s*=",
+                        source_text,
+                    ):
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_PUBLIC_API_MISSING",
+                    "path": str(source_path.relative_to(project_root)),
+                    "message": f"{component_id} must publish its registered global API",
+                })
+            if source_path.suffix == ".css" and component.get("themeAware") is True \
+                    and "var(--sel-theme-" not in source_text:
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_THEME_TOKEN_MISSING",
+                    "path": str(source_path.relative_to(project_root)),
+                    "message": f"theme-aware component {component_id} must consume SEL theme tokens",
+                })
+        for aria_role in component.get("ownedAriaRoles", []):
+            if not isinstance(aria_role, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", aria_role):
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_ARIA_ROLE_INVALID",
+                    "path": registry_relative,
+                    "message": f"{component_id} contains an invalid owned ARIA role",
+                })
+            elif aria_role in owned_aria_roles:
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_ARIA_ROLE_DUPLICATE_OWNER",
+                    "path": registry_relative,
+                    "message": f"ARIA role {aria_role} is owned by multiple controls",
+                })
+            else:
+                owned_aria_roles[aria_role] = component_id
+
+    actual_directories = {
+        path.name for path in component_root.iterdir() if path.is_dir()
+    }
+    for unregistered_directory in sorted(actual_directories - registered_directories):
+        violations.append({
+            "code": "SEL_UI_COMPONENT_DIRECTORY_UNREGISTERED",
+            "path": str((component_root / unregistered_directory).relative_to(project_root)),
+            "message": "new component directories must be registered before implementation",
+        })
+    actual_source_files = {
+        source_file
+        for component_directory in component_root.iterdir() if component_directory.is_dir()
+        for source_file in component_directory.iterdir()
+        if source_file.is_file() and source_file.suffix in {".js", ".css"}
+    }
+    for unregistered_source in sorted(actual_source_files - owned_source_files):
+        violations.append({
+            "code": "SEL_UI_COMPONENT_SOURCE_UNREGISTERED",
+            "path": str(unregistered_source.relative_to(project_root)),
+            "message": "new component JS and CSS must belong to one registered control",
+        })
+    for component_id, component in component_entries.items():
+        for dependency in component.get("dependencies", []):
+            if dependency not in component_entries or dependency == component_id:
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_DEPENDENCY_INVALID",
+                    "path": registry_relative,
+                    "message": f"{component_id} dependency {dependency} is missing or self-referential",
+                })
+                continue
+            component_source = "\n".join(
+                (component_root / component["directory"] / script).read_text(encoding="utf-8")
+                for script in component.get("scripts", [])
+                if (component_root / component["directory"] / script).is_file()
+            )
+            if f"window.{dependency}" not in component_source:
+                violations.append({
+                    "code": "SEL_UI_COMPONENT_DEPENDENCY_CALL_MISSING",
+                    "path": str((component_root / component["directory"]).relative_to(project_root)),
+                    "message": f"{component_id} registers {dependency} but does not call its public API",
+                })
+
+    application_static_files = sorted((project_root / "apps").glob(
+        "*/backend/src/main/resources/static/**/*"
+    )) if (project_root / "apps").is_dir() else []
+    for application_file in application_static_files:
+        if not application_file.is_file() or application_file.suffix not in {".js", ".html"}:
+            continue
+        source_text = application_file.read_text(encoding="utf-8")
+        relative_source = str(application_file.relative_to(project_root))
+        if application_file.suffix == ".js" and re.search(
+                r"\bwindow\s*\.\s*sel[A-Z][A-Za-z0-9]*\s*=", source_text):
+            violations.append({
+                "code": "SEL_UI_APPLICATION_PRIVATE_PUBLIC_CONTROL",
+                "path": relative_source,
+                "message": "application code cannot publish a private sel<Component> control",
+            })
+        if application_file.suffix == ".js" and "document.body.appendChild" in source_text:
+            violations.append({
+                "code": "SEL_UI_APPLICATION_PRIVATE_BODY_PORTAL",
+                "path": relative_source,
+                "message": "body portals belong to a registered shared control",
+            })
+        for aria_role, component_id in owned_aria_roles.items():
+            role_pattern = rf"(?:(?<![-\w])role\s*=\s*[\"']{re.escape(aria_role)}[\"']|setAttribute\(\s*[\"']role[\"']\s*,\s*[\"']{re.escape(aria_role)}[\"'])"
+            if re.search(role_pattern, source_text):
+                violations.append({
+                    "code": "SEL_UI_APPLICATION_PRIVATE_OWNED_INTERACTION",
+                    "path": relative_source,
+                    "message": f"ARIA role {aria_role} must use registered {component_id}",
+                })
+
+    dependency_documents = list(application_static_files)
+    # 所有应用的 Java 生成模板都进入同一依赖检查，禁止按生成器宿主项目名建立扫描例外。
+    dependency_documents.extend(sorted((project_root / "apps").glob(
+        "*/backend/src/main/java/**/*.java"
+    )))
+    for document in dependency_documents:
+        if not document.is_file() or document.suffix not in {".html", ".java"}:
+            continue
+        document_text = document.read_text(encoding="utf-8")
+        for component_id, component in component_entries.items():
+            own_resources_by_kind = {
+                "scripts": [
+                    f"/sel/components/{component['directory']}/{source_name}"
+                    for source_name in component.get("scripts", [])
+                ],
+                "styles": [
+                    f"/sel/components/{component['directory']}/{source_name}"
+                    for source_name in component.get("styles", [])
+                ],
+            }
+            if not any(
+                    resource in document_text
+                    for resources in own_resources_by_kind.values()
+                    for resource in resources):
+                continue
+            for dependency in component.get("dependencies", []):
+                dependency_entry = component_entries.get(dependency)
+                if not dependency_entry:
+                    continue
+                missing_resources: list[str] = []
+                late_resources: list[str] = []
+                for resource_kind in ("styles", "scripts"):
+                    own_kind_resources = own_resources_by_kind[resource_kind]
+                    present_own_kind_resources = [
+                        resource for resource in own_kind_resources if resource in document_text
+                    ]
+                    dependency_resources = [
+                        f"/sel/components/{dependency_entry['directory']}/{source_name}"
+                        for source_name in dependency_entry.get(resource_kind, [])
+                    ]
+                    missing_resources.extend(
+                        resource for resource in dependency_resources if resource not in document_text
+                    )
+                    if present_own_kind_resources:
+                        first_own_kind_index = min(
+                            document_text.index(resource)
+                            for resource in present_own_kind_resources
+                        )
+                        late_resources.extend(
+                            resource for resource in dependency_resources
+                            if resource in document_text
+                            and document_text.index(resource) > first_own_kind_index
+                        )
+                if missing_resources or late_resources:
+                    violations.append({
+                        "code": "SEL_UI_COMPONENT_DEPENDENCY_RESOURCE_INVALID",
+                        "path": str(document.relative_to(project_root)),
+                        "message": (
+                            f"{component_id} requires {dependency} resources before its own resources; "
+                            f"missing={missing_resources}, late={late_resources}"
+                        ),
+                    })
+    return violations
 
 
 def managed_database_registry_path(project_root: Path, stable_user_id: str) -> Path:
@@ -73,9 +403,10 @@ def managed_database_registry_path(project_root: Path, stable_user_id: str) -> P
 def is_managed_database_application(
         project_root: Path,
         central_registrations: dict[str, dict[str, Any]]) -> bool:
-    """Identify generated or centrally registered database applications."""
+    """Identify every application that owns database SQL or generated database structure."""
     return (
         (project_root / ".selplat-generated-project.json").is_file()
+        or (project_root / "db/sql").is_dir()
         or project_root.name in central_registrations
     )
 
@@ -128,8 +459,16 @@ def load_managed_database_registry(
             })
             continue
         registrations[project_name] = application
+        if "structure" in application:
+            violations.append({
+                "code": "MANAGED_DATABASE_REGISTRY_SPECIAL_STRUCTURE_FORBIDDEN",
+                "path": relative_registry,
+                "message": (
+                    f"{project_name}.structure is forbidden; every managed application "
+                    "must use the same table-business, capability, and common architecture"
+                ),
+            })
         expected_fixed_values = {
-            "structure": "table-business-only",
             "schemaRoot": "db/sql",
             "primaryKeyStrategy": "one-table-one-sequence",
         }
@@ -149,9 +488,32 @@ def normalized_identifier(value: str) -> str:
 
 
 def sql_statements(sql_text: str) -> list[str]:
-    """Return executable SQL statements after removing line comments."""
+    """Return executable SQL statements without splitting semicolons inside quoted values."""
     without_comments = re.sub(r"(?m)--[^\r\n]*$", "", sql_text)
-    return [statement.strip() for statement in without_comments.split(";") if statement.strip()]
+    statements: list[str] = []
+    current: list[str] = []
+    in_single_quote = False
+    index = 0
+    while index < len(without_comments):
+        character = without_comments[index]
+        current.append(character)
+        if character == "'":
+            if in_single_quote and index + 1 < len(without_comments) \
+                    and without_comments[index + 1] == "'":
+                current.append(without_comments[index + 1])
+                index += 1
+            else:
+                in_single_quote = not in_single_quote
+        elif character == ";" and not in_single_quote:
+            statement = "".join(current[:-1]).strip()
+            if statement:
+                statements.append(statement)
+            current = []
+        index += 1
+    trailing_statement = "".join(current).strip()
+    if trailing_statement:
+        statements.append(trailing_statement)
+    return statements
 
 
 def table_business_candidates(table_name: str, project_name: str) -> set[str]:
@@ -191,11 +553,13 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
     project_root = project_root.resolve()
     stable_user_id = active_stable_user_id(project_root)
     violations: list[dict[str, str]] = []
+    # 公共控件登记、源码所有权、依赖顺序和应用私造控件 → 在其他工程扫描前统一阻断。
+    violations.extend(audit_sel_ui_component_governance(project_root))
     central_registrations, registry_violations = load_managed_database_registry(
         project_root, stable_user_id
     )
     violations.extend(registry_violations)
-    generator_template = project_root / MDA_GENERATOR_TEMPLATE_RELATIVE
+    generator_template = project_root / APPLICATION_SCAFFOLD_TEMPLATE_RELATIVE
     if generator_template.is_file():
         template_text = generator_template.read_text(encoding="utf-8")
         schema_start = template_text.find("private static String tableSchema()")
@@ -207,13 +571,13 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
         )
         missing_default_fields = [
             field_name
-            for field_name in MDA_GENERATED_BUSINESS_DEFAULT_FIELDS
+            for field_name in GENERATED_BUSINESS_DEFAULT_FIELDS
             if not re.search(rf"(?m)^\s*{re.escape(field_name)}\s+", schema_template)
         ]
         if missing_default_fields or re.search(r"(?m)^\s*name\s+", schema_template):
             violations.append({
-                "code": "MDA_GENERATOR_DEFAULT_BUSINESS_FIELDS_INVALID",
-                "path": str(MDA_GENERATOR_TEMPLATE_RELATIVE),
+                "code": "APPLICATION_SCAFFOLD_DEFAULT_BUSINESS_FIELDS_INVALID",
+                "path": str(APPLICATION_SCAFFOLD_TEMPLATE_RELATIVE),
                 "message": (
                     "generated business tables require tenantId, lastOperateUserId, sortnum, "
                     "labelZh, labelJa, labelEn, status, createdAt, and updatedAt; "
@@ -374,8 +738,17 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
             service_contracts: dict[str, list[Path]] = {}
             service_implementations: dict[str, list[Path]] = {}
             registration = central_registrations.get(project_root_path.name, {})
-            strict_table_business = project_root_path.name in central_registrations
-            if strict_table_business:
+            registered_database = project_root_path.name in central_registrations
+            if not registered_database:
+                violations.append({
+                    "code": "MANAGED_DATABASE_APPLICATION_CENTRAL_REGISTRATION_MISSING",
+                    "path": str(project_root_path.relative_to(project_root)),
+                    "message": (
+                        "every generated application or application with db/sql must be registered "
+                        "centrally before the uniform architecture gate can pass"
+                    ),
+                })
+            if registered_database:
                 for root_entry in sorted(project_root_path.iterdir()):
                     if root_entry.name not in MANAGED_APPLICATION_ROOT_ALLOWLIST:
                         violations.append({
@@ -392,16 +765,22 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                 if path.is_dir()
             )
             business_directories: list[Path] = []
+            capability_directories: list[Path] = []
             for application_package_root in application_package_roots:
                 business_directories.extend(sorted(
                     path for path in application_package_root.iterdir()
-                    if path.is_dir() and path.name != "common"
+                    if path.is_dir() and path.name not in {"common", "capability"}
                 ))
+                capability_root = application_package_root / "capability"
+                if capability_root.is_dir():
+                    capability_directories.extend(sorted(
+                        path for path in capability_root.iterdir() if path.is_dir()
+                    ))
             schema_tables = {
                 schema_file.stem.removeprefix("schema-")
                 for schema_file in (project_root_path / "db/sql").glob("schema-*.sql")
             }
-            if strict_table_business:
+            if registered_database:
                 contract_root = project_root_path / "contract"
                 if contract_root.is_dir():
                     contract_package = normalized_identifier(project_root_path.name)
@@ -619,6 +998,19 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                             "service/impl remains the only nested implementation role"
                         ),
                     })
+            for capability_directory in capability_directories:
+                actual_roles = {
+                    path.name for path in capability_directory.iterdir() if path.is_dir()
+                }
+                if actual_roles != MANAGED_CAPABILITY_ROLES:
+                    violations.append({
+                        "code": "MANAGED_APPLICATION_CAPABILITY_ROLE_SET_INVALID",
+                        "path": str(capability_directory.relative_to(project_root)),
+                        "message": (
+                            "each non-persistent capability must contain exactly controller and "
+                            "service; reusable implementation helpers belong below common/util"
+                        ),
+                    })
             for table_name, candidates in table_candidates.items():
                 if table_name.startswith("Common"):
                     continue
@@ -638,6 +1030,12 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                     continue
                 package_tail = parts[java_index + 5:]
                 source_text = java_file.read_text(encoding="utf-8")
+                type_declaration = re.search(
+                    r"\b(?:public\s+)?(?:class|interface|record|enum)\s+", source_text
+                )
+                declaration_header = (
+                    source_text[:type_declaration.start()] if type_declaration else source_text
+                )
                 if (len(package_tail) >= 3
                         and package_tail[0] in BUSINESS_TECHNICAL_LAYER_NAMES):
                     violations.append({
@@ -673,18 +1071,38 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                             "beans instead of creating database context wrapper classes"
                         ),
                     })
-                if (strict_table_business
-                        and len(package_tail) >= 3
+                if (len(package_tail) >= 3
                         and package_tail[0] == "common"
                         and package_tail[1] == "util"
                         and (java_file.stem.endswith(("Controller", "Service", "Dao"))
-                             or re.search(r"@(RestController|Service|Repository)\b", source_text))):
+                             or re.search(
+                                 r"@(RestController|Service|Repository)\b", declaration_header
+                             ))):
                     violations.append({
                         "code": "MANAGED_APPLICATION_COMMON_UTIL_BUSINESS_ROLE",
                         "path": str(relative_source),
-                        "message": "common/util is limited to stateless methods called by services",
+                            "message": "common/util is limited to stateless methods called by services",
                     })
-                if (strict_table_business and len(package_tail) >= 3 and package_tail[0] != "common"):
+                if package_tail and package_tail[0] == "capability":
+                    valid_capability_source = (
+                        len(package_tail) == 4
+                        and package_tail[2] in MANAGED_CAPABILITY_ROLES
+                    ) or (
+                        len(package_tail) == 5
+                        and package_tail[2] == "service"
+                        and package_tail[3] == "impl"
+                    )
+                    if not valid_capability_source:
+                        violations.append({
+                            "code": "MANAGED_APPLICATION_CAPABILITY_SOURCE_ROLE_INVALID",
+                            "path": str(relative_source),
+                            "message": (
+                                "capability source belongs only in <capability>/controller, "
+                                "<capability>/service, or <capability>/service/impl"
+                            ),
+                        })
+                if (len(package_tail) >= 3
+                        and package_tail[0] not in {"common", "capability"}):
                     current_business = package_tail[0]
                     current_role = package_tail[1]
                     application_package = parts[java_index + 4]
@@ -715,8 +1133,17 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                             "path": str(relative_source),
                             "message": "application common utilities are provided to table services only",
                         })
+                if (len(package_tail) >= 3 and package_tail[0] == "capability"):
+                    application_package = parts[java_index + 4]
+                    application_util_package = f"com.sp.selplat.{application_package}.common.util."
+                    if application_util_package in source_text and package_tail[2] != "service":
+                        violations.append({
+                            "code": "MANAGED_APPLICATION_COMMON_UTIL_CALLED_OUTSIDE_SERVICE",
+                            "path": str(relative_source),
+                            "message": "application common utilities are provided to capability services only",
+                        })
                 if (len(package_tail) == 3
-                        and package_tail[0] != "common"
+                        and package_tail[0] not in {"common", "capability"}
                         and package_tail[1] == "service"
                         and java_file.stem.endswith("Service")):
                     service_contracts.setdefault(package_tail[0], []).append(java_file)
@@ -726,6 +1153,21 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                         and package_tail[2] == "impl"
                         and java_file.stem.endswith("ServiceImpl")):
                     service_implementations.setdefault(package_tail[0], []).append(java_file)
+                if (len(package_tail) == 4
+                        and package_tail[0] == "capability"
+                        and package_tail[2] == "service"
+                        and java_file.stem.endswith("Service")):
+                    service_contracts.setdefault(
+                        f"capability/{package_tail[1]}", []
+                    ).append(java_file)
+                if (len(package_tail) == 5
+                        and package_tail[0] == "capability"
+                        and package_tail[2] == "service"
+                        and package_tail[3] == "impl"
+                        and java_file.stem.endswith("ServiceImpl")):
+                    service_implementations.setdefault(
+                        f"capability/{package_tail[1]}", []
+                    ).append(java_file)
                 if "controller" in package_tail:
                     representations = {
                         name for name, path_suffix in QUERY_REPRESENTATION_PATHS.items()

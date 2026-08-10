@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 动态页签由公共前端脚本实现，当前没有独立 Node 程序入口。 -->
 node_ability_refs = none
-<!-- 1.2.0 固定 Tab 默认挂载右键菜单，并提供创建期和运行期显式关闭 API。 -->
-rule_version = 1.2.0
+<!-- 1.3.0 增加未保存页签单个与批量关闭的一次性确认及数据源切换保护。 -->
+rule_version = 1.3.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已登记到当前用户索引并完成页面回归。 -->
 rule_status = active
 <!-- 升级记录说明规则来自用户对页签隐藏、销毁和统一令牌的确认。 -->
-upgrade_record = 2026-08-08:固定动态页签切换保留关闭销毁和公共工作区统一令牌约束;2026-08-10:抽取selContextMenu公共右键菜单_Tab统一提供关闭右侧_关闭其他_全部关闭并保留固定页签与beforeClose检查;2026-08-10:selTabs默认挂载selContextMenu_创建期contextMenu_false与运行期setContextMenuEnabled作为唯一显式关闭入口_页面资源配对进入构建门禁
+upgrade_record = 2026-08-08:固定动态页签切换保留关闭销毁和公共工作区统一令牌约束;2026-08-10:抽取selContextMenu公共右键菜单_Tab统一提供关闭右侧_关闭其他_全部关闭并保留固定页签与beforeClose检查;2026-08-10:selTabs默认挂载selContextMenu_创建期contextMenu_false与运行期setContextMenuEnabled作为唯一显式关闭入口_页面资源配对进入构建门禁;2026-08-11:未保存页签单个关闭_批量关闭_切换数据源统一先确认_批量脏页签合并一次提示
 
 ## 公共组件边界
 
@@ -42,12 +42,16 @@ dynamic_tab_child_cleanup_contract = one_cleanup_callback_per_dynamic_panel
 dynamic_tab_cleanup_failure_policy = finish_dom_and_registry_disposal_then_report_error
 <!-- 重复打开相同业务键时必须激活既有页签，禁止生成同一业务对象的重复隐藏实例。 -->
 dynamic_tab_duplicate_open_policy = activate_existing_business_key
-<!-- 工作区整体销毁或数据源切换时必须强制逐页执行同一清理链路。 -->
-dynamic_workspace_destroy_policy = force_close_all_tabs_through_shared_cleanup_chain
+<!-- 公共组件自身销毁可以强制执行清理链路；用户切换数据源前仍必须先由应用确认全部未保存页签。 -->
+dynamic_workspace_destroy_policy = component_destroy_force_cleanup,user_data_source_switch_confirm_dirty_tabs_before_cleanup
 <!-- Tab 右键菜单固定提供关闭右侧、关闭其他和全部关闭，当前 Tab 由已有关闭按钮处理；无可关闭目标时动作必须禁用。 -->
 dynamic_tab_context_actions = close_right,close_others,close_all,current_uses_existing_close_button,disable_without_closable_target
-<!-- 用户发起的批量关闭只处理 closable 页签，逐项执行 beforeClose；任意项取消时停止，禁止借用 force 跳过未保存检查。 -->
-dynamic_tab_user_batch_close_policy = closable_only,run_beforeClose_per_tab,stop_on_cancel,no_force
+<!-- 应用按初始内容或最近一次成功提交内容判断脏状态，公共 Tab 不得猜测具体编辑器的“已保存”语义。 -->
+dynamic_tab_dirty_state_owner = application_compares_current_value_with_initial_or_last_successful_commit
+<!-- 单个关闭按钮、Delete 键、数据源切换和批量关闭命中脏页签时必须先确认；取消后完整保留页签和子组件。 -->
+dynamic_tab_unsaved_close_confirmation = single_close,batch_close,data_source_switch,confirm_before_disposal,cancel_preserves_complete_session
+<!-- 用户批量关闭只处理 closable 页签，并把全部脏页签数量和名称合并为一次确认；确认后才能统一调用清理链路。 -->
+dynamic_tab_user_batch_close_policy = closable_only,collect_all_dirty_tabs,one_combined_confirmation,confirmed_force_cleanup,cancel_keeps_all
 <!-- 鼠标右键、ContextMenu 键与 Shift+F10 必须打开同一菜单，Escape 关闭并恢复原 Tab 焦点。 -->
 dynamic_tab_context_menu_accessibility = mouse_contextmenu,ContextMenu_key,Shift_F10,arrow_navigation,Escape_restore_focus
 

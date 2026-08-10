@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 验证当前稳定用户通过十层动态递归索引完整登记十五个用户逻辑 ID。
+     * 验证当前稳定用户通过十层动态递归索引完整登记十六个用户逻辑 ID。
      * 真实传参示例：读取工程根 {@code AGENTS.md} 中的当前稳定用户并递归加载其 {@code RULE_INDEX.md}。
-     * 真实返回示例：索引验证结果为 {@code indexCount=10, ruleCount=15}。
+     * 真实返回示例：索引验证结果为 {@code indexCount=10, ruleCount=16}。
      * 异常或副作用示例：身份、索引或规则路径无效时抛出 {@link IOException}，不修改规则资源。
      */
     @Test
@@ -24,7 +24,39 @@ class ActiveUserRuleOverrideIntegrationTest {
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
         assertEquals(10, validation.indexCount());
-        assertEquals(15, validation.ruleCount());
+        assertEquals(16, validation.ruleCount());
+    }
+
+    /**
+     * 验证公共控件治理规则能够从当前用户通用索引命中，并递归声明源码归属规则依赖。
+     * 真实传参示例：逻辑 ID 为 {@code SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES}。
+     * 真实返回示例：规则正文要求先登记后实现，并由中央登记驱动未来控件检查。
+     * 异常或副作用示例：索引、规则或依赖逻辑 ID 失效时抛出 {@link IOException}，不修改控件源码。
+     */
+    @Test
+    void shouldLoadPublicComponentGovernanceGateFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES",
+            "selplat",
+            "selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md",
+            "selplat_component_registry = shared/frontend/sel-ui/src/components/"
+                + "component-registry.json,version=1,one_authoritative_source"
+        );
+        assertTrue(rule.content().contains(
+            "requires_rule_ids = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_component_creation_sequence = classify_reusable_interaction,"
+                + "register_public_component,implement_public_component,connect_first_consumer,verify"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_component_legacy_replacement_policy = enable_registered_component,"
+                + "delete_private_legacy_implementation,no_compatibility_branch"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_component_future_extension_gate = "
+                + "registry_driven_directory_source_api_theme_dependency_and_application_scan"
+        ));
     }
 
     /**
@@ -67,7 +99,13 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_database_application_detection = "
-                + "generated_project_ownership_marker|active_user_central_registry"
+                + "db_sql_directory|generated_project_ownership_marker|"
+                + "active_user_central_registry,central_registration_required_for_all"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_managed_non_persistent_capability_structure = "
+                + "capability/<actual-capability>/controller|service,one_service_contract,"
+                + "one_service_impl,no_dao,reusable_helpers_to_common_util,no_project_name_branch"
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_database_application_registry = "
@@ -370,6 +408,9 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "selgrid_explicit_horizontal_scroll_option_boundary = wide_column_layout_only_not_scrollbar_visibility"
         ));
+        assertTrue(rule.content().contains(
+            "selgrid_column_resize_opt_out = grid_columnResize_false_only"
+        ));
     }
 
     /**
@@ -389,6 +430,16 @@ class ActiveUserRuleOverrideIntegrationTest {
         // 短时 Toast 加载成功 → 编辑器状态栏仍只承担实时位置或上下文展示。
         assertTrue(rule.content().contains(
             "selplat_editor_status_bar_boundary = current_position_or_live_context_not_completed_action_message"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_dangerous_action_confirmation_scope = permanent_delete,overwrite_existing_files,"
+                + "discard_unsaved_content,cross_file_write"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_multiple_risk_confirmation_policy = one_combined_dialog_per_user_action_no_stacked_confirmations"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_confirmation_cancel_boundary = no_mutation_request_no_delete_no_file_replace_no_unsaved_state_disposal"
         ));
     }
 
@@ -411,6 +462,14 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "dynamic_workspace_visual_token_policy = unified_theme_semantic_tokens_without_application_color_override"
+        ));
+        assertTrue(rule.content().contains(
+            "dynamic_tab_unsaved_close_confirmation = single_close,batch_close,data_source_switch,"
+                + "confirm_before_disposal,cancel_preserves_complete_session"
+        ));
+        assertTrue(rule.content().contains(
+            "dynamic_tab_user_batch_close_policy = closable_only,collect_all_dirty_tabs,"
+                + "one_combined_confirmation,confirmed_force_cleanup,cancel_keeps_all"
         ));
     }
 
@@ -443,18 +502,18 @@ class ActiveUserRuleOverrideIntegrationTest {
     }
 
     /**
-     * 验证 MDA 应用规则能从当前用户应用索引命中，并固定控制库只保留连接配置与号段的边界。
-     * 真实传参示例：逻辑 ID 为 {@code MDA_LOCAL_DATABASE_WORKBENCH_RULES}，作用域为 {@code selplat}。
-     * 真实返回示例：规则路径为 {@code selplat/应用/mda/rule/RUL_MDA本地数据库工作台架构规则.md}，
+     * 验证 MDA 功能规则能从当前用户应用索引命中，并且不再声明应用专属源码架构。
+     * 真实传参示例：逻辑 ID 为 {@code MDA_LOCAL_DATABASE_WORKBENCH_FUNCTIONAL_RULES}，作用域为 {@code selplat}。
+     * 真实返回示例：规则路径为 {@code selplat/应用/mda/rule/RUL_MDA本地数据库工作台功能规则.md}，
      * 正文包含控制库禁止引入其他业务表和身份字段的声明。
      * 异常或副作用示例：当前用户、索引路径或规则正文无效时抛出 {@link IOException} 或断言失败，不修改规则资源。
      */
     @Test
     void shouldLoadMdaControlDatabaseBoundaryRuleFromActiveUser() throws IOException {
         LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
-            "MDA_LOCAL_DATABASE_WORKBENCH_RULES",
+            "MDA_LOCAL_DATABASE_WORKBENCH_FUNCTIONAL_RULES",
             "selplat",
-            "selplat/应用/mda/rule/RUL_MDA本地数据库工作台架构规则.md",
+            "selplat/应用/mda/rule/RUL_MDA本地数据库工作台功能规则.md",
             "mda_control_database_forbidden_business_tables = authentication,tenant,role,permission,operator"
         );
         assertTrue(rule.content().contains(
@@ -462,6 +521,9 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "mda_legacy_identity_artifact_policy = remove_from_mda_without_recreating_foreign_application_tables_or_fixtures"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_source_structure_owner = SELPLAT_uniform_managed_application_gate_no_mda_exception"
         ));
         assertTrue(rule.content().contains(
             "mda_table_node_open_behavior = open_or_reuse_table_query_tab_execute_select_from_plain_table_name_without_schema_or_identifier_quotes"
@@ -492,6 +554,17 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "mda_missing_original_column_comment = emit_empty_sql_string_without_synthetic_fallback"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_query_tab_unsaved_close_policy = compare_initial_or_last_successful_execution,"
+                + "single_and_batch_and_connection_switch_confirm,one_dialog_for_all_dirty_tabs"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_project_generation_confirmation = shared_confirm_dialog_with_project_and_table_before_request_cancel_writes_nothing"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_table_context_actions = edit_structure_delete_real_target_object_"
+                + "copy_display_label_with_table_type_physical_table_export_last"
         ));
     }
 

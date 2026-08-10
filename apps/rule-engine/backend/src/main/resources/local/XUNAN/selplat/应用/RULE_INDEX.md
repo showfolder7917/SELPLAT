@@ -6,7 +6,7 @@ active_user_selplat_application_index_child_reference_only = true
 <!-- rule-engine 保存当前用户对规则引擎应用的专项智慧整合规则包。 -->
 ACTIVE_USER_SELPLAT_RULE_ENGINE_RULE_INDEX = local/XUNAN/selplat/应用/rule-engine/RULE_INDEX.md
 
-<!-- mda 保存当前用户对本地多数据库开发工作台的专项目标边界。 -->
+<!-- mda 只保存本地多数据库工作台的业务行为；源码结构不得覆盖通用架构门禁。 -->
 ACTIVE_USER_SELPLAT_MDA_RULE_INDEX = local/XUNAN/selplat/应用/mda/RULE_INDEX.md
 
 <!-- japanese 保存当前用户对日语题库 AI、语音与媒体存储的专项约束。 -->

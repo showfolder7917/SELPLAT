@@ -1,7 +1,7 @@
 package com.sp.selplat.mda.common.config;
 
 import com.sp.selplat.mda.MdaBackendApplication;
-import com.sp.selplat.mda.targetdatabase.common.config.MdaTargetPoolProperties;
+import com.sp.selplat.mda.common.config.MdaTargetPoolProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;

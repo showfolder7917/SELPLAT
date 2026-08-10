@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     // sel-ui 以标准资源 JAR 参与 Gradle 依赖，不引入第二套独立构建入口。
     id 'java-library'
@@ -45,6 +47,174 @@ tasks.register('verifySelUiSourceBoundary') {
                 "sel-ui 公共源码包含应用业务语义：\n" + violations.join('\n')
             )
         }
+        // 中央登记是公共控件的唯一创建入口；新增目录、脚本或样式未登记时直接阻断。
+        def registryFile = file('src/components/component-registry.json')
+        if (!registryFile.isFile()) {
+            throw new GradleException('sel-ui 缺少公共控件中央登记 component-registry.json')
+        }
+        def registry = new JsonSlurper().parse(registryFile)
+        def expectedPolicy = [
+            creationMode: 'register-before-implementation',
+            legacyCompatibility: 'forbidden',
+            applicationPrivateReusableControl: 'forbidden'
+        ]
+        def expectedChecks = [
+            'source-boundary', 'public-api', 'theme-contract', 'dependency-order',
+            'application-private-control'
+        ] as Set
+        if (registry.version != 1 || !(registry.components instanceof List)
+                || !(registry.policy instanceof Map)
+                || expectedPolicy.any { key, value -> registry.policy[key] != value }
+                || (registry.policy.requiredChecks as Set) != expectedChecks) {
+            throw new GradleException('sel-ui 公共控件中央登记策略不完整或版本无效')
+        }
+        def componentIds = [] as Set
+        def registeredDirectories = [] as Set
+        def registeredSources = [] as Set
+        def componentById = [:]
+        def registryViolations = []
+        registry.components.each { component ->
+            if (!(component.id ==~ /sel[A-Z][A-Za-z0-9]*/)
+                    || !componentIds.add(component.id)
+                    || !(component.directory ==~ /[a-z][a-z0-9-]*/)
+                    || !(component.type in ['interactive', 'layout', 'presentation', 'registry'])
+                    || !(component.scripts instanceof List)
+                    || !(component.styles instanceof List)
+                    || !(component.dependencies instanceof List)) {
+                registryViolations.add("无效控件登记 -> ${component}")
+                return
+            }
+            componentById[component.id] = component
+            registeredDirectories.add(component.directory)
+            def componentDirectory = file("src/components/${component.directory}")
+            if (!componentDirectory.isDirectory()) {
+                registryViolations.add("${component.id} -> 缺少目录 ${component.directory}")
+                return
+            }
+            if (!component.scripts.isEmpty() && component.globalApi != component.id) {
+                registryViolations.add("${component.id} -> globalApi 必须与控件 ID 相同")
+            }
+            if (component.scripts.isEmpty() && component.globalApi != null) {
+                registryViolations.add("${component.id} -> 纯样式控件不得声明 globalApi")
+            }
+            (component.scripts + component.styles).each { sourceName ->
+                def sourceFile = file("src/components/${component.directory}/${sourceName}")
+                if (!registeredSources.add(sourceFile.canonicalFile)) {
+                    registryViolations.add("${sourceFile} -> 重复登记所有者")
+                    return
+                }
+                if (!sourceFile.isFile()) {
+                    registryViolations.add("${component.id} -> 缺少 ${sourceName}")
+                    return
+                }
+                def sourceText = sourceFile.getText('UTF-8')
+                if (sourceName.endsWith('.js')
+                        && !(sourceText =~ /(?:window|global)\s*\.\s*${component.globalApi}\s*=/)) {
+                    registryViolations.add("${component.id} -> 未发布登记的公共 API")
+                }
+                if (sourceName.endsWith('.css') && component.themeAware == true
+                        && !sourceText.contains('var(--sel-theme-')) {
+                    registryViolations.add("${component.id} -> 未消费统一主题令牌")
+                }
+            }
+        }
+        file('src/components').listFiles().findAll { it.isDirectory() }.each { componentDirectory ->
+            if (!registeredDirectories.contains(componentDirectory.name)) {
+                registryViolations.add("${componentDirectory.name} -> 新控件目录未登记")
+            }
+            componentDirectory.listFiles().findAll {
+                it.isFile() && (it.name.endsWith('.js') || it.name.endsWith('.css'))
+            }.each { sourceFile ->
+                if (!registeredSources.contains(sourceFile.canonicalFile)) {
+                    registryViolations.add("${project.relativePath(sourceFile)} -> 控件源码未登记")
+                }
+            }
+        }
+        componentById.each { componentId, component ->
+            component.dependencies.each { dependencyId ->
+                if (dependencyId == componentId || !componentById.containsKey(dependencyId)) {
+                    registryViolations.add("${componentId} -> 无效依赖 ${dependencyId}")
+                    return
+                }
+                def componentSource = component.scripts.collect { sourceName ->
+                    file("src/components/${component.directory}/${sourceName}").getText('UTF-8')
+                }.join('\n')
+                if (!componentSource.contains("window.${dependencyId}")) {
+                    registryViolations.add("${componentId} -> 已登记但未调用 ${dependencyId}")
+                }
+            }
+        }
+        // 应用不得发布私有 sel<Component>、自行创建 body 门户或复写已由公共控件拥有的 ARIA 交互。
+        def ownedAriaRoles = componentById.values().collectEntries { component ->
+            (component.ownedAriaRoles ?: []).collectEntries { role -> [(role): component.id] }
+        }
+        def applicationStaticFiles = rootProject.fileTree('apps') {
+            include '**/src/main/resources/static/**/*.js'
+            include '**/src/main/resources/static/**/*.html'
+        }
+        applicationStaticFiles.files.sort().each { applicationFile ->
+            def applicationText = applicationFile.getText('UTF-8')
+            if (applicationFile.name.endsWith('.js')
+                    && applicationText =~ /window\s*\.\s*sel[A-Z][A-Za-z0-9]*\s*=/) {
+                registryViolations.add("${rootProject.relativePath(applicationFile)} -> 应用私造公共控件 API")
+            }
+            if (applicationFile.name.endsWith('.js')
+                    && applicationText.contains('document.body.appendChild')) {
+                registryViolations.add("${rootProject.relativePath(applicationFile)} -> 应用私造 body 门户")
+            }
+            ownedAriaRoles.each { role, ownerId ->
+                def rolePattern = ~/(?:(?<![-\w])role\s*=\s*[\"']${role}[\"']|setAttribute\(\s*[\"']role[\"']\s*,\s*[\"']${role}[\"'])/
+                if (applicationText =~ rolePattern) {
+                    registryViolations.add("${rootProject.relativePath(applicationFile)} -> role=${role} 必须使用 ${ownerId}")
+                }
+            }
+        }
+        // 每份应用页面和生成模板都按登记依赖自动检查资源存在性与加载顺序，新控件无需再手写专项门禁。
+        def dependencyDocuments = [] as Set
+        dependencyDocuments.addAll(applicationStaticFiles.files.findAll { it.name.endsWith('.html') })
+        dependencyDocuments.addAll(rootProject.fileTree('apps') {
+            include '*/backend/src/main/java/**/*.java'
+        }.files)
+        dependencyDocuments.sort().each { documentFile ->
+            def documentText = documentFile.getText('UTF-8')
+            componentById.each { componentId, component ->
+                def ownResourcesByKind = [
+                    styles: component.styles.collect { "/sel/components/${component.directory}/${it}" },
+                    scripts: component.scripts.collect { "/sel/components/${component.directory}/${it}" }
+                ]
+                if (!ownResourcesByKind.values().flatten().any { documentText.contains(it) }) return
+                component.dependencies.each { dependencyId ->
+                    def dependency = componentById[dependencyId]
+                    def missing = []
+                    def late = []
+                    ['styles', 'scripts'].each { resourceKind ->
+                        def presentOwnResources = ownResourcesByKind[resourceKind].findAll {
+                            documentText.contains(it)
+                        }
+                        def dependencyResources = dependency[resourceKind].collect {
+                            "/sel/components/${dependency.directory}/${it}"
+                        }
+                        missing.addAll(dependencyResources.findAll { !documentText.contains(it) })
+                        if (!presentOwnResources.isEmpty()) {
+                            def firstOwnIndex = presentOwnResources.collect {
+                                documentText.indexOf(it)
+                            }.min()
+                            late.addAll(dependencyResources.findAll {
+                                documentText.contains(it) && documentText.indexOf(it) > firstOwnIndex
+                            })
+                        }
+                    }
+                    if (!missing.isEmpty() || !late.isEmpty()) {
+                        registryViolations.add(
+                            "${rootProject.relativePath(documentFile)} -> ${componentId} 依赖 ${dependencyId}，缺少=${missing}，顺序错误=${late}"
+                        )
+                    }
+                }
+            }
+        }
+        if (!registryViolations.isEmpty()) {
+            throw new GradleException("sel-ui 公共控件治理门禁失败：\n" + registryViolations.join('\n'))
+        }
         // Tab 右键操作是公共组件契约：缺少菜单、批量 API 或正常关闭检查时直接阻断公共前端构建。
         def contextMenuScript = file('src/components/context-menu/selContextMenu.js')
         def contextMenuStyle = file('src/components/context-menu/selContextMenu.css')
@@ -62,28 +232,21 @@ tasks.register('verifySelUiSourceBoundary') {
         if (!missingContracts.isEmpty()) {
             throw new GradleException("sel-ui Tab 右键菜单契约不完整：\n" + missingContracts.join('\n'))
         }
-        // 所有应用页面使用 selTabs 时必须先加载 selContextMenu 样式和脚本，禁止未来项目依赖安全降级而静默丢失右键功能。
-        def applicationHtmlFiles = rootProject.fileTree('apps') {
-            include '**/src/main/resources/static/**/*.html'
+        // selGrid 列宽调整是默认公共契约：必须保留显式关闭属性、表头分隔线、指针调整和键盘调整。
+        def gridScript = file('src/components/grid/selGrid.js')
+        def gridStyle = file('src/components/grid/selGrid.css')
+        if (!gridScript.isFile() || !gridStyle.isFile()) {
+            throw new GradleException('sel-ui 缺少 selGrid 权威源文件')
         }
-        def resourcePairViolations = []
-        applicationHtmlFiles.files.sort().each { htmlFile ->
-            def htmlText = htmlFile.getText('UTF-8')
-            if (!htmlText.contains('/sel/components/tabs/selTabs.js')) return
-            def contextStyle = '/sel/components/context-menu/selContextMenu.css'
-            def contextScript = '/sel/components/context-menu/selContextMenu.js'
-            def tabsScriptPath = '/sel/components/tabs/selTabs.js'
-            if (!htmlText.contains(contextStyle)) {
-                resourcePairViolations.add("${rootProject.relativePath(htmlFile)} -> 缺少 ${contextStyle}")
-            }
-            if (!htmlText.contains(contextScript)) {
-                resourcePairViolations.add("${rootProject.relativePath(htmlFile)} -> 缺少 ${contextScript}")
-            } else if (htmlText.indexOf(contextScript) > htmlText.indexOf(tabsScriptPath)) {
-                resourcePairViolations.add("${rootProject.relativePath(htmlFile)} -> selContextMenu.js 必须先于 selTabs.js 加载")
-            }
-        }
-        if (!resourcePairViolations.isEmpty()) {
-            throw new GradleException("selTabs 默认右键菜单资源未成对加载：\n" + resourcePairViolations.join('\n'))
+        def gridSource = gridScript.getText('UTF-8')
+        def gridStyleSource = gridStyle.getText('UTF-8')
+        def gridResizeRequired = ['columnResize !== false', 'data-sel-grid-column-resize', 'selGridHandleColumnResizeMove', 'selGridHandleColumnResizeKeydown', 'setPointerCapture']
+        def gridResizeStyleRequired = ['selgrid-column-resize-handle', 'cursor: col-resize', 'touch-action: none']
+        def missingGridResizeContracts = []
+        gridResizeRequired.findAll { !gridSource.contains(it) }.each { missingGridResizeContracts.add("selGrid.js -> ${it}") }
+        gridResizeStyleRequired.findAll { !gridStyleSource.contains(it) }.each { missingGridResizeContracts.add("selGrid.css -> ${it}") }
+        if (!missingGridResizeContracts.isEmpty()) {
+            throw new GradleException("selGrid 默认列宽调整契约不完整：\n" + missingGridResizeContracts.join('\n'))
         }
     }
 }

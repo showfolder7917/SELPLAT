@@ -40,6 +40,11 @@
         if (!gridId || !treeRoot || !selTreeInputData || !Array.isArray(selTreeInputData.items)) {
             return null;
         }
+        // 树节点右键动作必须交给已登记的公共菜单；依赖缺失时拒绝建立残缺实例。
+        if (typeof window.selContextMenu?.mount !== "function") {
+            console.error("selTree.mount：缺少已登记的 selContextMenu 公共控件。");
+            return null;
+        }
 
         // 每个树实例独立保存当前选择和展开集合。
         const state = {
@@ -52,15 +57,16 @@
             collapseTemplate: selTreeInputData.collapseLabelTemplate || "收起{label}",
             contextMenuLabelTemplate: selTreeInputData.contextMenuLabelTemplate || "{label}操作"
         };
-        // 右键菜单挂到 body，避免树滚动容器裁切；菜单动作仍只向当前 gridRoot 广播。
-        const contextMenu = document.createElement("div");
-        contextMenu.className = "seltree-context-menu";
-        contextMenu.setAttribute("role", "menu");
-        contextMenu.setAttribute("aria-hidden", "true");
-        contextMenu.hidden = true;
-        document.body.appendChild(contextMenu);
+        // 公共菜单负责门户、边界定位、主题、焦点和键盘生命周期，树只保存当前业务节点。
+        const contextMenu = window.selContextMenu.mount(gridRoot, {
+            id: `${gridId}::tree-context-menu`,
+            ariaLabel: "树节点操作"
+        });
+        if (!contextMenu) {
+            console.error("selTree.mount：selContextMenu 挂载失败，已停止创建树实例。");
+            return null;
+        }
         let contextItem = null;
-        let contextTrigger = null;
 
         // 收集配置中默认展开的全部父节点。
         function collectExpanded(items) {
@@ -147,25 +153,8 @@
 
         // 关闭当前实例菜单；键盘打开的菜单可把焦点还给对应树节点。
         function closeContextMenu(restoreFocus = false) {
-            contextMenu.hidden = true;
-            contextMenu.setAttribute("aria-hidden", "true");
-            contextMenu.replaceChildren();
-            if (restoreFocus && contextTrigger?.isConnected) contextTrigger.focus();
             contextItem = null;
-            contextTrigger = null;
-            return true;
-        }
-
-        // 菜单位置使用视口坐标，并在右侧或底部空间不足时向内收拢。
-        function positionContextMenu(clientX, clientY) {
-            const viewportGap = 8;
-            contextMenu.style.left = `${Math.max(viewportGap, clientX)}px`;
-            contextMenu.style.top = `${Math.max(viewportGap, clientY)}px`;
-            const bounds = contextMenu.getBoundingClientRect();
-            const left = Math.min(Math.max(viewportGap, clientX), Math.max(viewportGap, document.documentElement.clientWidth - bounds.width - viewportGap));
-            const top = Math.min(Math.max(viewportGap, clientY), Math.max(viewportGap, document.documentElement.clientHeight - bounds.height - viewportGap));
-            contextMenu.style.left = `${left}px`;
-            contextMenu.style.top = `${top}px`;
+            return contextMenu.close(restoreFocus);
         }
 
         // 只为节点显式声明的动作创建安全文本按钮，基础树不推测编辑或删除的业务含义。
@@ -176,25 +165,25 @@
             state.selectedId = item.id;
             render();
             contextItem = item;
-            contextTrigger = treeRoot.querySelector(`[data-tree-action="select"][data-tree-id="${CSS.escape(String(item.id))}"]`);
-            contextMenu.setAttribute("aria-label", messages.contextMenuLabelTemplate.replaceAll("{label}", item.label));
-            actions.forEach((action) => {
-                const button = document.createElement("button");
-                button.className = `seltree-context-menu-item${action.danger ? " seltree-context-menu-item-danger" : ""}`;
-                button.type = "button";
-                button.dataset.treeContextAction = String(action.id);
-                button.setAttribute("role", "menuitem");
-                button.appendChild(createIcon(String(action.icon || "ri-circle-line")));
-                const label = document.createElement("span");
-                label.textContent = String(action.label);
-                button.appendChild(label);
-                contextMenu.appendChild(button);
+            const contextTrigger = treeRoot.querySelector(
+                `[data-tree-action="select"][data-tree-id="${CSS.escape(String(item.id))}"]`
+            );
+            return contextMenu.open({
+                clientX,
+                clientY,
+                focusFirst,
+                restoreFocusTarget: contextTrigger,
+                ariaLabel: messages.contextMenuLabelTemplate.replaceAll("{label}", item.label),
+                context: Object.freeze({ itemId: item.id }),
+                items: actions.map((action) => Object.freeze({
+                    id: String(action.id),
+                    label: String(action.label),
+                    icon: String(action.icon || "ri-circle-line"),
+                    danger: Boolean(action.danger),
+                    disabled: Boolean(action.disabled),
+                    sectionStart: Boolean(action.sectionStart)
+                }))
             });
-            contextMenu.hidden = false;
-            contextMenu.setAttribute("aria-hidden", "false");
-            positionContextMenu(clientX, clientY);
-            if (focusFirst) contextMenu.querySelector("button")?.focus();
-            return true;
         }
 
         // 选择节点并向所属 data-sel-grid 根节点广播局部事件。
@@ -260,13 +249,12 @@
             event.preventDefault();
         });
 
-        // 菜单动作只提交稳定动作 ID 和节点快照，具体数据库副作用由应用装配层决定。
-        contextMenu.addEventListener("click", (event) => {
-            const button = event.target.closest("button[data-tree-context-action]");
-            if (!button || !contextItem) return;
+        // 公共菜单动作只转换为树节点动作事件，具体数据库副作用仍由应用装配层决定。
+        function handleContextMenuAction(event) {
+            if (event.detail?.menuId !== contextMenu.id || !contextItem) return;
             const item = contextItem;
-            const action = button.dataset.treeContextAction;
-            closeContextMenu(false);
+            const action = event.detail.actionId;
+            contextItem = null;
             gridRoot.dispatchEvent(new CustomEvent("selTree:contextAction", {
                 bubbles: true,
                 detail: Object.freeze({
@@ -278,34 +266,8 @@
                     action
                 })
             }));
-        });
-
-        // 菜单内上下键循环移动焦点，Escape 关闭并返回原节点。
-        contextMenu.addEventListener("keydown", (event) => {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                closeContextMenu(true);
-                return;
-            }
-            if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-            const buttons = Array.from(contextMenu.querySelectorAll("button:not(:disabled)"));
-            const currentIndex = buttons.indexOf(document.activeElement);
-            const offset = event.key === "ArrowDown" ? 1 : -1;
-            buttons[(currentIndex + offset + buttons.length) % buttons.length]?.focus();
-            event.preventDefault();
-        });
-
-        function handleOutsidePointer(event) {
-            if (!contextMenu.hidden && !contextMenu.contains(event.target)) closeContextMenu(false);
         }
-
-        function handleViewportChange() {
-            if (!contextMenu.hidden) closeContextMenu(false);
-        }
-
-        document.addEventListener("pointerdown", handleOutsidePointer, true);
-        window.addEventListener("resize", handleViewportChange);
-        window.addEventListener("scroll", handleViewportChange, true);
+        gridRoot.addEventListener("selContextMenu:action", handleContextMenuAction);
 
         // 默认展开状态和首次树结构只影响当前实例。
         collectExpanded(selTreeInputData.items);
@@ -325,13 +287,11 @@
             return true;
         }
 
-        // 销毁时回收 body 门户和全局监听，避免动态工作区反复挂载后残留菜单实例。
+        // 销毁时回收公共菜单实例和局部动作监听，禁止保留旧私有菜单兼容路径。
         function destroy() {
             closeContextMenu(false);
-            document.removeEventListener("pointerdown", handleOutsidePointer, true);
-            window.removeEventListener("resize", handleViewportChange);
-            window.removeEventListener("scroll", handleViewportChange, true);
-            contextMenu.remove();
+            gridRoot.removeEventListener("selContextMenu:action", handleContextMenuAction);
+            contextMenu.destroy();
             selTreeInstances.delete(gridId);
             return true;
         }

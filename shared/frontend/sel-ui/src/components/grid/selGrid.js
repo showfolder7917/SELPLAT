@@ -101,6 +101,8 @@
         const selGridRecordMode = selGridInputPayload.grid?.mode === "records";
         // 通用记录配置只保存字段名、搜索字段和状态映射，不包含任何具体应用语义。
         const selGridRecordOptions = selGridInputPayload.grid || {};
+        // 用户调整后的列宽按稳定列键保存在当前实例内，刷新数据和切换语言时继续生效。
+        const selGridColumnWidths = new Map();
         // 行数据保持后端顺序并冻结外层数组，运行状态不能改写业务响应。
         let selGridProjects = Object.freeze(selGridInputPayload.data.items);
         // 类型显示映射使用稳定代码查找当前语言文字。
@@ -138,6 +140,26 @@
             const selGridDefaultWidth = Number(selGridRecordOptions.defaultColumnWidth) || 150;
             // 公共组件限制极端输入，避免单列过窄不可读或异常撑大页面。
             return Math.round(Math.min(480, Math.max(96, selGridDeclaredWidth || selGridDefaultWidth)));
+        }
+
+        /**
+         * 返回列定义在当前表格实例内的稳定键。
+         * @param {object} selGridColumnData - column.items 中的单列定义。
+         * @param {number} selGridColumnIndex - 当前列在 column.items 中的零基序号。
+         * @returns {string} 优先返回 id 或 field；两者缺失时返回 column-<序号>。
+         * @example {id:"databaseName"} 与序号 3 返回 "databaseName"。
+         */
+        function selGridResolveColumnKey(selGridColumnData, selGridColumnIndex) {
+            return String(selGridColumnData.id || selGridColumnData.field || `column-${selGridColumnIndex}`);
+        }
+
+        /**
+         * 判断当前实例是否允许用户调整列宽。
+         * @returns {boolean} grid.columnResize 明确为 false 时返回 false，其余情况返回 true。
+         * @example payload.grid 未声明 columnResize 时返回 true。
+         */
+        function selGridIsColumnResizeEnabled() {
+            return selGridInputPayload.grid?.columnResize !== false;
         }
 
         // 横向溢出状态在动画帧内合并测量，避免列、数据和面板尺寸连续变化时重复触发布局计算。
@@ -198,17 +220,27 @@
             selGridTable.classList.toggle("selgrid-table-horizontal-scroll", selGridHorizontalScroll);
             // 宽表按所有列宽总和产生内部溢出；关闭时恢复基础样式的默认最小宽度。
             const selGridWideTableWidth = selGridHorizontalScroll
-                ? selGridInputPayload.column.items.reduce((selGridWidth, selGridColumnData) => selGridWidth + selGridResolveWideColumnWidth(selGridColumnData), 0)
+                ? selGridInputPayload.column.items.reduce((selGridWidth, selGridColumnData, selGridColumnIndex) => {
+                    const selGridColumnKey = selGridResolveColumnKey(selGridColumnData, selGridColumnIndex);
+                    return selGridWidth + (selGridColumnWidths.get(selGridColumnKey) || selGridResolveWideColumnWidth(selGridColumnData));
+                }, 0)
                 : 0;
-            selGridTable.style.minWidth = selGridHorizontalScroll ? `${Math.max(930, selGridWideTableWidth)}px` : "";
+            const selGridRememberedTableWidth = Array.from(selGridColumnWidths.values()).reduce((selGridWidth, selGridColumnWidth) => selGridWidth + selGridColumnWidth, 0);
+            selGridTable.style.width = selGridRememberedTableWidth > 0 ? `${Math.max(930, selGridRememberedTableWidth)}px` : "";
+            selGridTable.style.minWidth = selGridHorizontalScroll || selGridRememberedTableWidth > 0
+                ? `${Math.max(930, selGridWideTableWidth, selGridRememberedTableWidth)}px`
+                : "";
             // 列宽节点严格按后端列顺序生成。
-            const selGridColumns = selGridInputPayload.column.items.map((selGridColumnData) => {
+            const selGridColumns = selGridInputPayload.column.items.map((selGridColumnData, selGridColumnIndex) => {
                 // col 只承载稳定样式类，不包含业务文字。
                 const selGridColumn = document.createElement("col");
                 // className 由基础控件公开列样式白名单提供。
                 selGridColumn.className = selGridColumnData.className;
+                const selGridRememberedColumnWidth = selGridColumnWidths.get(selGridResolveColumnKey(selGridColumnData, selGridColumnIndex));
                 // 宽表统一使用可累计像素宽度；普通记录表继续兼容已有百分比或像素宽度配置。
-                if (selGridHorizontalScroll) {
+                if (selGridRememberedColumnWidth) {
+                    selGridColumn.style.width = `${selGridRememberedColumnWidth}px`;
+                } else if (selGridHorizontalScroll) {
                     selGridColumn.style.width = `${selGridResolveWideColumnWidth(selGridColumnData)}px`;
                 } else if (selGridRecordMode && selGridColumnData.width) {
                     selGridColumn.style.width = String(selGridColumnData.width);
@@ -221,9 +253,12 @@
             // 单行表头承载全部列标题。
             const selGridHeaderRow = document.createElement("tr");
             // 每个 column 片段生成对应 th。
-            selGridInputPayload.column.items.forEach((selGridColumnData) => {
+            selGridInputPayload.column.items.forEach((selGridColumnData, selGridColumnIndex) => {
                 // th 保持原生表格语义。
                 const selGridHeaderCell = document.createElement("th");
+                // 列序号和稳定键供公共列宽调整逻辑精确定位 col。
+                selGridHeaderCell.dataset.selGridColumnIndex = String(selGridColumnIndex);
+                selGridHeaderCell.dataset.selGridColumnKey = selGridResolveColumnKey(selGridColumnData, selGridColumnIndex);
                 // 选择列需要创建表头复选按钮。
                 if (selGridColumnData.renderer === "selection") {
                     // 选择列沿用固定对齐视觉类。
@@ -268,6 +303,23 @@
                 } else {
                     // 普通列直接显示当前语言 label。
                     selGridHeaderCell.textContent = selGridColumnData.label;
+                }
+                if (selGridIsColumnResizeEnabled()) {
+                    // 分隔线手柄只调整当前列，不承载排序或业务点击。
+                    const selGridColumnResizeHandle = document.createElement("span");
+                    selGridColumnResizeHandle.className = "selgrid-column-resize-handle";
+                    selGridColumnResizeHandle.dataset.selGridColumnResize = String(selGridColumnIndex);
+                    selGridColumnResizeHandle.setAttribute("role", "separator");
+                    selGridColumnResizeHandle.setAttribute("aria-orientation", "vertical");
+                    selGridColumnResizeHandle.setAttribute("aria-label", `调整 ${selGridColumnData.label} 列宽`);
+                    selGridColumnResizeHandle.setAttribute("tabindex", "0");
+                    selGridColumnResizeHandle.setAttribute("aria-valuemin", String(Number(selGridInputPayload.grid?.minColumnWidth) || 72));
+                    selGridColumnResizeHandle.setAttribute("aria-valuemax", String(Number(selGridInputPayload.grid?.maxColumnWidth) || 960));
+                    selGridColumnResizeHandle.setAttribute("aria-valuenow", String(
+                        selGridColumnWidths.get(selGridResolveColumnKey(selGridColumnData, selGridColumnIndex))
+                        || (selGridHorizontalScroll ? selGridResolveWideColumnWidth(selGridColumnData) : Number.parseFloat(selGridColumnData.width) || 150)
+                    ));
+                    selGridHeaderCell.appendChild(selGridColumnResizeHandle);
                 }
                 // 完整表头加入当前行。
                 selGridHeaderRow.appendChild(selGridHeaderCell);
@@ -401,6 +453,11 @@
     const selGridView = {
         // 表格滚动视口负责截断顶部、底部及横向边界的滚轮穿透。
         tableScroller: selGridRoot.querySelector('.selgrid-table-scroller'),
+        // 表格节点和列宽组共同承接运行时列宽调整结果。
+        table: selGridRoot.querySelector('[data-sel-grid-role="table"]'),
+        columnGroup: selGridRoot.querySelector('[data-sel-grid-role="column-group"]'),
+        // 表头通过事件委托统一处理全部列分隔线手柄。
+        tableHead: selGridRoot.querySelector('[data-sel-grid-role="table-head"]'),
         // 表格主体承接项目行的动态渲染。
         tableBody: selGridRoot.querySelector('[data-sel-grid-role="table-body"]'),
         // 全选按钮同步全部项目的选择状态。
@@ -438,6 +495,143 @@
     if (!selGridView.tableBody) {
         return null;
     }
+
+    // 当前列宽拖拽状态只属于本实例，结束或销毁时必须清空。
+    let selGridColumnResizeState = null;
+
+    /**
+     * 把当前浏览器计算出的每列宽度冻结为像素值。
+     * @returns {number[]} 按表头顺序返回当前列宽；缺少表格结构时返回空数组。
+     * @example 三列实际宽度为 150、180、220 时返回 [150,180,220] 并同步到 colgroup。
+     */
+    function selGridFreezeCurrentColumnWidths() {
+        if (!selGridView.table || !selGridView.columnGroup || !selGridView.tableHead) return [];
+        const selGridHeaderCells = Array.from(selGridView.tableHead.querySelectorAll("th[data-sel-grid-column-index]"));
+        const selGridColumnElements = Array.from(selGridView.columnGroup.querySelectorAll("col"));
+        if (selGridHeaderCells.length === 0 || selGridHeaderCells.length !== selGridColumnElements.length) return [];
+        const selGridFrozenWidths = selGridHeaderCells.map((selGridHeaderCell, selGridColumnIndex) => {
+            const selGridColumnWidth = Math.max(1, Math.round(selGridHeaderCell.getBoundingClientRect().width));
+            const selGridColumnKey = selGridResolveColumnKey(selGridInputPayload.column.items[selGridColumnIndex] || {}, selGridColumnIndex);
+            selGridColumnWidths.set(selGridColumnKey, selGridColumnWidth);
+            selGridColumnElements[selGridColumnIndex].style.width = `${selGridColumnWidth}px`;
+            return selGridColumnWidth;
+        });
+        const selGridFrozenTableWidth = selGridFrozenWidths.reduce((selGridWidth, selGridColumnWidth) => selGridWidth + selGridColumnWidth, 0);
+        selGridView.table.style.width = `${Math.max(930, selGridFrozenTableWidth)}px`;
+        selGridView.table.style.minWidth = `${Math.max(930, selGridFrozenTableWidth)}px`;
+        return selGridFrozenWidths;
+    }
+
+    /**
+     * 调整指定列并同步表格总宽度与横向溢出状态。
+     * @param {number} selGridColumnIndex - column.items 中的零基列序号。
+     * @param {number} selGridRequestedWidth - 指针或键盘请求的像素宽度。
+     * @returns {number|null} 成功返回限制后的真实像素宽度；列无效时返回 null。
+     * @example 第 3 列请求 420 像素时返回 420，并只扩大第 3 列和表格总宽度。
+     */
+    function selGridApplyColumnWidth(selGridColumnIndex, selGridRequestedWidth) {
+        const selGridColumnData = selGridInputPayload.column.items[selGridColumnIndex];
+        const selGridColumnElement = selGridView.columnGroup?.querySelectorAll("col")?.[selGridColumnIndex];
+        if (!selGridColumnData || !selGridColumnElement || !selGridView.table) return null;
+        const selGridMinimumColumnWidth = Math.max(48, Number(selGridInputPayload.grid?.minColumnWidth) || 72);
+        const selGridMaximumColumnWidth = Math.max(selGridMinimumColumnWidth, Number(selGridInputPayload.grid?.maxColumnWidth) || 960);
+        const selGridColumnWidth = Math.round(Math.min(selGridMaximumColumnWidth, Math.max(selGridMinimumColumnWidth, selGridRequestedWidth)));
+        const selGridColumnKey = selGridResolveColumnKey(selGridColumnData, selGridColumnIndex);
+        selGridColumnWidths.set(selGridColumnKey, selGridColumnWidth);
+        selGridColumnElement.style.width = `${selGridColumnWidth}px`;
+        const selGridTableWidth = selGridInputPayload.column.items.reduce((selGridWidth, selGridCurrentColumn, selGridCurrentIndex) => {
+            const selGridCurrentKey = selGridResolveColumnKey(selGridCurrentColumn, selGridCurrentIndex);
+            return selGridWidth + (selGridColumnWidths.get(selGridCurrentKey) || 0);
+        }, 0);
+        selGridView.table.style.width = `${Math.max(930, selGridTableWidth)}px`;
+        selGridView.table.style.minWidth = `${Math.max(930, selGridTableWidth)}px`;
+        const selGridResizeHandle = selGridView.tableHead?.querySelector(`[data-sel-grid-column-resize="${selGridColumnIndex}"]`);
+        selGridResizeHandle?.setAttribute("aria-valuenow", String(selGridColumnWidth));
+        selGridScheduleHorizontalOverflowSync();
+        return selGridColumnWidth;
+    }
+
+    /**
+     * 从表头分隔线开始当前列宽拖拽。
+     * @param {PointerEvent} selGridEvent - 表头收到的主鼠标或触控笔指针事件。
+     * @returns {void} 非手柄、非主指针或已关闭列宽调整时不改变表格。
+     * @example 在 databaseName 右侧分隔线按下鼠标左键后记录该列起点宽度。
+     */
+    function selGridHandleColumnResizeStart(selGridEvent) {
+        const selGridResizeHandle = selGridEvent.target.closest("[data-sel-grid-column-resize]");
+        if (!selGridResizeHandle || !selGridIsColumnResizeEnabled() || !selGridEvent.isPrimary || selGridEvent.button !== 0) return;
+        const selGridColumnIndex = Number(selGridResizeHandle.dataset.selGridColumnResize);
+        const selGridFrozenWidths = selGridFreezeCurrentColumnWidths();
+        if (!Number.isInteger(selGridColumnIndex) || !selGridFrozenWidths[selGridColumnIndex]) return;
+        selGridColumnResizeState = {
+            pointerId: selGridEvent.pointerId,
+            columnIndex: selGridColumnIndex,
+            startX: selGridEvent.clientX,
+            startWidth: selGridFrozenWidths[selGridColumnIndex],
+            handle: selGridResizeHandle
+        };
+        selGridResizeHandle.classList.add("selgrid-column-resize-handle-active");
+        selGridRoot.classList.add("selgrid-column-resizing");
+        selGridResizeHandle.setPointerCapture?.(selGridEvent.pointerId);
+        selGridEvent.preventDefault();
+        selGridEvent.stopPropagation();
+    }
+
+    /**
+     * 根据当前指针水平位移连续调整目标列宽。
+     * @param {PointerEvent} selGridEvent - 与起始指针对应的移动事件。
+     * @returns {void} 非当前指针不会改变列宽；当前指针实时更新目标列像素宽度。
+     * @example 指针向右移动 80 像素时，目标列在起始宽度上增加 80 像素。
+     */
+    function selGridHandleColumnResizeMove(selGridEvent) {
+        if (!selGridColumnResizeState || selGridEvent.pointerId !== selGridColumnResizeState.pointerId) return;
+        selGridApplyColumnWidth(
+            selGridColumnResizeState.columnIndex,
+            selGridColumnResizeState.startWidth + selGridEvent.clientX - selGridColumnResizeState.startX
+        );
+        selGridEvent.preventDefault();
+    }
+
+    /**
+     * 结束当前列宽拖拽并恢复表格选择行为。
+     * @param {PointerEvent} selGridEvent - 当前指针抬起、取消或失去捕获事件。
+     * @returns {void} 非当前指针不产生副作用；当前指针结束后保留最终列宽。
+     * @example 用户松开鼠标后移除高亮分隔线，最终列宽继续用于后续数据刷新。
+     */
+    function selGridHandleColumnResizeEnd(selGridEvent) {
+        if (!selGridColumnResizeState || selGridEvent.pointerId !== selGridColumnResizeState.pointerId) return;
+        selGridColumnResizeState.handle.classList.remove("selgrid-column-resize-handle-active");
+        selGridRoot.classList.remove("selgrid-column-resizing");
+        selGridColumnResizeState = null;
+    }
+
+    /**
+     * 使用键盘方向键调整分隔线左侧列宽。
+     * @param {KeyboardEvent} selGridEvent - 聚焦列分隔线收到的键盘事件。
+     * @returns {void} 左右方向键每次调整 16 像素，按住 Shift 时每次调整 48 像素。
+     * @example 聚焦 databaseName 分隔线并按 ArrowRight 后，该列扩大 16 像素。
+     */
+    function selGridHandleColumnResizeKeydown(selGridEvent) {
+        const selGridResizeHandle = selGridEvent.target.closest("[data-sel-grid-column-resize]");
+        if (!selGridResizeHandle || !selGridIsColumnResizeEnabled() || !["ArrowLeft", "ArrowRight"].includes(selGridEvent.key)) return;
+        const selGridColumnIndex = Number(selGridResizeHandle.dataset.selGridColumnResize);
+        const selGridFrozenWidths = selGridFreezeCurrentColumnWidths();
+        if (!Number.isInteger(selGridColumnIndex) || !selGridFrozenWidths[selGridColumnIndex]) return;
+        const selGridResizeStep = selGridEvent.shiftKey ? 48 : 16;
+        selGridApplyColumnWidth(
+            selGridColumnIndex,
+            selGridFrozenWidths[selGridColumnIndex] + (selGridEvent.key === "ArrowRight" ? selGridResizeStep : -selGridResizeStep)
+        );
+        selGridEvent.preventDefault();
+        selGridEvent.stopPropagation();
+    }
+
+    selGridView.tableHead?.addEventListener("pointerdown", selGridHandleColumnResizeStart);
+    selGridView.tableHead?.addEventListener("pointermove", selGridHandleColumnResizeMove);
+    selGridView.tableHead?.addEventListener("pointerup", selGridHandleColumnResizeEnd);
+    selGridView.tableHead?.addEventListener("pointercancel", selGridHandleColumnResizeEnd);
+    selGridView.tableHead?.addEventListener("lostpointercapture", selGridHandleColumnResizeEnd);
+    selGridView.tableHead?.addEventListener("keydown", selGridHandleColumnResizeKeydown);
 
     // 面板缩放、侧栏折叠和浏览器尺寸变化都可能改变中央视口的真实溢出状态。
     const selGridHorizontalOverflowObserver = typeof window.ResizeObserver === "function" && selGridView.tableScroller
@@ -1473,6 +1667,12 @@
         selGridHorizontalOverflowObserver?.disconnect();
         if (selGridHorizontalOverflowFrame) window.cancelAnimationFrame(selGridHorizontalOverflowFrame);
         if (selGridToastTimer) window.clearTimeout(selGridToastTimer);
+        selGridView.tableHead?.removeEventListener("pointerdown", selGridHandleColumnResizeStart);
+        selGridView.tableHead?.removeEventListener("pointermove", selGridHandleColumnResizeMove);
+        selGridView.tableHead?.removeEventListener("pointerup", selGridHandleColumnResizeEnd);
+        selGridView.tableHead?.removeEventListener("pointercancel", selGridHandleColumnResizeEnd);
+        selGridView.tableHead?.removeEventListener("lostpointercapture", selGridHandleColumnResizeEnd);
+        selGridView.tableHead?.removeEventListener("keydown", selGridHandleColumnResizeKeydown);
         selGridInstances.delete(selGridId);
         selGridRoots.delete(selGridId);
         selGridRoot.remove();
@@ -1499,6 +1699,8 @@
             search: selGridState.search,
             type: selGridState.type,
             status: selGridState.status,
+            columnResize: selGridIsColumnResizeEnabled(),
+            columnWidths: Object.freeze(Object.fromEntries(selGridColumnWidths)),
             selectedIds: Object.freeze(Array.from(selGridState.selectedIds))
         })
     });

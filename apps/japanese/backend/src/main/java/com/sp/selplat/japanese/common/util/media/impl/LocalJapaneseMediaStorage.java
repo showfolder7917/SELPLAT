@@ -10,10 +10,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.util.UUID;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /** 把题库媒体写入 japanese 工程 static/pic 或 static/audio，并返回稳定公开 URL。 */
-@Service
+@Component
 public class LocalJapaneseMediaStorage implements JapaneseMediaStorage {
 
     private final Path staticRoot;

@@ -7,13 +7,13 @@ python_ability_refs = none
 <!-- 本规则不新增独立 Node 程序；selGrid 脚本由现有语法检查和浏览器回归验证。 -->
 node_ability_refs = none
 <!-- 首版固化用户确认的所有 selGrid 默认自动提供可发现横向滚动反馈。 -->
-rule_version = 1.0.0
+rule_version = 1.1.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已登记到当前用户 SELPLAT 通用索引并完成组件回归。 -->
 rule_status = active
 <!-- 升级记录说明规则由 MDA 单页修正提升为所有 selGrid 的公共默认行为。 -->
-upgrade_record = 2026-08-08:将可发现横向滚动反馈从MDA显式状态提升为所有selGrid真实溢出时的默认行为
+upgrade_record = 2026-08-08:将可发现横向滚动反馈从MDA显式状态提升为所有selGrid真实溢出时的默认行为;2026-08-11:所有selGrid表头字段边界默认支持列宽调整_允许columnResize显式关闭
 
 <!-- 问题：横向滚动条只由单个应用开关控制时，其他 selGrid 即使内容超宽也缺少明显反馈，用户无法判断页面是否可以横向浏览。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 任一应用中创建、装配、调整或复用公共 selGrid。 -->
@@ -29,6 +29,19 @@ selgrid_horizontal_scrollbar_inactive_behavior = remove_enhanced_state_and_full_
 selgrid_explicit_horizontal_scroll_option_boundary = wide_column_layout_only_not_scrollbar_visibility
 <!-- 横向滚动必须限制在 selGrid 中央视口内，禁止撑宽外层面板、应用壳或浏览器文档。 -->
 selgrid_horizontal_overflow_boundary = internal_table_scroller_only_no_panel_or_document_expansion
+
+## 列宽调整
+
+<!-- 每个 selGrid 默认在表头字段右边界提供列宽调整，调用方不得为单页复制私有拖拽实现。 -->
+selgrid_column_resize_default = enabled_on_every_header_boundary
+<!-- 只有显式传入 grid.columnResize=false 才关闭列宽调整；缺省和 true 均启用。 -->
+selgrid_column_resize_opt_out = grid_columnResize_false_only
+<!-- 开始调整时必须冻结全部当前计算列宽，移动过程只改变目标列并同步表格内部总宽度。 -->
+selgrid_column_resize_width_contract = freeze_computed_widths_then_change_target_column_and_internal_table_width
+<!-- 分隔线必须同时支持鼠标指针与左右方向键，并公开 separator 无障碍语义。 -->
+selgrid_column_resize_interaction = pointer_drag_and_arrow_keys_with_separator_semantics
+<!-- 调整后的列宽必须在当前实例数据刷新和语言切换后保留，但不得跨页面持久化或污染其他实例。 -->
+selgrid_column_resize_lifecycle = preserve_within_instance_only_reset_after_destroy_or_reload
 
 ## 状态同步
 
@@ -59,4 +72,4 @@ verified_example_refs = apps/mda/backend/src/main/resources/static/mda,apps/refe
 <!-- 现有语法检查、组件检查、规则加载测试和真实浏览器测量已经提供可重复验证。 -->
 program_not_applicable_reason = existing_javascript_component_rule_loader_and_browser_visual_tests_cover_the_behavior
 <!-- 交付必须同时验证显式宽表与普通 selGrid，并确认真实溢出、状态类、内部滚动和文档宽度边界一致。 -->
-verification_scope = javascript_syntax,shared_frontend_checks,rule_index_loading,mda_wide_grid_browser,reference_data_default_grid_browser,document_overflow_boundary,visual_review
+verification_scope = javascript_syntax,shared_frontend_checks,rule_index_loading,mda_wide_grid_browser,reference_data_default_grid_browser,column_resize_pointer_and_keyboard,document_overflow_boundary,visual_review
