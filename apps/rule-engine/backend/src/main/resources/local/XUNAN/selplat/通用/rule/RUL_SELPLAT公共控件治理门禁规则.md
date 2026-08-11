@@ -2,8 +2,8 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 1.2.0 增加统一截断文字提示所有权、Grid/Tree 默认接入、显式关闭与原生 title 禁用门禁。 -->
-rule_version = 1.2.0
+<!-- 1.3.0 增加面板横向工具栏栏目默认拖拽、单栏关闭、键盘调整和双击复位门禁。 -->
+rule_version = 1.3.0
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -52,6 +52,19 @@ selplat_component_dependency_gate = registered_target,no_self_dependency,real_pu
 <!-- 控件资源依赖检查从中央登记动态生成，新增控件不得再靠人工补一个名称专项扫描。 -->
 selplat_component_future_extension_gate = registry_driven_directory_source_api_theme_dependency_and_application_scan
 
+## 横向工具栏栏目缩放
+
+<!-- 工具栏栏目宽度属于面板外层布局职责；搜索、下拉、日期和动作控件不得分别复制分隔线与指针事件。 -->
+selplat_toolbar_column_resize_owner = selPanel,outer_layout_only,no_child_component_reimplementation
+<!-- selPanel 横向工具栏栏目默认具备拖拽能力；调用方明确不需要时才允许整体或单栏关闭。 -->
+selplat_toolbar_column_resize_default = enabled,toolbar.columnResize=false,columns.<key>.columnResize=false
+<!-- 应用只通过 mount 的 toolbar 标准选项声明默认、最小和最大宽度，禁止选择公共内部类修改几何或自行绑定 pointer 事件。 -->
+selplat_toolbar_column_resize_public_options = toolbar.columns.<key>.width|minWidth|maxWidth|label
+<!-- 鼠标、触摸和键盘共享同一真实宽度状态；左右键逐步调整、Home/End 到边界、双击恢复声明默认值。 -->
+selplat_toolbar_column_resize_interaction = pointer_drag,arrow_keys,home_end,double_click_reset,aria_separator
+<!-- 高频指针移动必须合并到绘制帧，结束、取消、失焦和捕获丢失都要清理全页光标与临时监听器。 -->
+selplat_toolbar_column_resize_lifecycle = request_animation_frame,finish_cancel_blur_lost_capture_cleanup,no_persistent_window_drag_listener
+
 ## 统一语义文字
 
 <!-- 全部公共控件和应用消费控件时只允许使用七级可读文字角色；业务含义是新增页面不再退回只有大中小三档、层级无法表达的字号体系。 -->
@@ -86,6 +99,8 @@ selplat_component_typography_quick_gate = seven_roles,weight_and_line_height_met
 selplat_component_build_gate = shared_frontend_sel_ui_verifySelUiSourceBoundary,one_registry_same_policy
 <!-- 快速门禁和公共构建同时验证 selTooltip 关键生命周期、Grid/Tree 消费、原生 title 清零和依赖资源顺序。 -->
 selplat_tooltip_gate = tooltip_contract,grid_tree_consumers,zero_native_title,registry_dependency_resource_order
+<!-- 快速门禁和公共构建必须同时验证 selPanel 工具栏缩放配置、分隔语义、双击复位和 MDA 首个调用方。 -->
+selplat_toolbar_column_resize_gate = panel_contract,default_enabled,explicit_disable,keyboard_and_pointer,double_click_reset,mda_consumer
 <!-- 控件迁移至少验证旧选择器清零、新公共 API 调用、应用装配测试和真实浏览器交互与控制台。 -->
 selplat_component_migration_verification = no_legacy_selector,registered_api_call,application_tests,real_browser_interaction_and_console
 <!-- 登记结构和首个调用方是权威样例，不复制会与真实控件漂移的静态模板。 -->

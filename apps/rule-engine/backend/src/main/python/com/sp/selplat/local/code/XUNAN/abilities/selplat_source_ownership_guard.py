@@ -408,6 +408,57 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                     "message": f"{consumer_id} cannot use native title for truncated text",
                 })
 
+    # selPanel 横向工具栏栏目默认使用同一分隔线契约；应用只传宽度，不得复制公共指针生命周期。
+    if "selPanel" in component_entries:
+        panel_entry = component_entries["selPanel"]
+        panel_directory = component_root / panel_entry["directory"]
+        panel_source = "\n".join(
+            (panel_directory / script).read_text(encoding="utf-8")
+            for script in panel_entry.get("scripts", [])
+            if (panel_directory / script).is_file()
+        )
+        panel_style = "\n".join(
+            (panel_directory / style).read_text(encoding="utf-8")
+            for style in panel_entry.get("styles", [])
+            if (panel_directory / style).is_file()
+        )
+        panel_required = {
+            "columnResize !== false", "selpanel-toolbar-column-resizer",
+            "selPanel:toolbarColumnResize", "requestAnimationFrame",
+            "lostpointercapture", "dblclick",
+        }
+        panel_style_required = {
+            "selpanel-toolbar-column-resizer", "cursor: col-resize",
+            "touch-action: none", "selpanel-toolbar-column-resizing",
+        }
+        for missing_contract in sorted(panel_required - {
+                contract for contract in panel_required if contract in panel_source}):
+            violations.append({
+                "code": "SEL_UI_PANEL_TOOLBAR_RESIZE_CONTRACT_MISSING",
+                "path": str(panel_directory.relative_to(project_root)),
+                "message": f"selPanel toolbar resize is missing {missing_contract}",
+            })
+        for missing_contract in sorted(panel_style_required - {
+                contract for contract in panel_style_required if contract in panel_style}):
+            violations.append({
+                "code": "SEL_UI_PANEL_TOOLBAR_RESIZE_STYLE_MISSING",
+                "path": str(panel_directory.relative_to(project_root)),
+                "message": f"selPanel toolbar resize style is missing {missing_contract}",
+            })
+        mda_assembler = project_root / "apps/mda/backend/src/main/resources/static/mda/mda.js"
+        mda_source = mda_assembler.read_text(encoding="utf-8") if mda_assembler.is_file() else ""
+        mda_required = {
+            "mdaToolbarOptions", "width: 360", "minWidth: 240",
+            "maxWidth: 720", "toolbar: mdaToolbarOptions",
+        }
+        for missing_contract in sorted(mda_required - {
+                contract for contract in mda_required if contract in mda_source}):
+            violations.append({
+                "code": "SEL_UI_PANEL_TOOLBAR_RESIZE_MDA_CONSUMER_MISSING",
+                "path": str(mda_assembler.relative_to(project_root)),
+                "message": f"MDA toolbar resize consumer is missing {missing_contract}",
+            })
+
     application_static_files = sorted((project_root / "apps").glob(
         "*/backend/src/main/resources/static/**/*"
     )) if (project_root / "apps").is_dir() else []

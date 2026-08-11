@@ -319,6 +319,36 @@ tasks.register('verifySelUiSourceBoundary') {
         if (!missingGridResizeContracts.isEmpty()) {
             throw new GradleException("selGrid 默认列宽调整契约不完整：\n" + missingGridResizeContracts.join('\n'))
         }
+        // selPanel 工具栏栏目默认可拖拽；公共层拥有分隔线与生命周期，MDA 只允许传标准宽度配置。
+        def panelScript = file('src/components/panel/selPanel.js')
+        def panelStyle = file('src/components/panel/selPanel.css')
+        def mdaAssembler = rootProject.file('apps/mda/backend/src/main/resources/static/mda/mda.js')
+        if (!panelScript.isFile() || !panelStyle.isFile() || !mdaAssembler.isFile()) {
+            throw new GradleException('sel-ui 工具栏栏目缩放缺少 selPanel 或 MDA 首个调用方权威源文件')
+        }
+        def panelSource = panelScript.getText('UTF-8')
+        def panelStyleSource = panelStyle.getText('UTF-8')
+        def mdaSource = mdaAssembler.getText('UTF-8')
+        def panelResizeRequired = [
+            'columnResize !== false', 'selpanel-toolbar-column-resizer',
+            'selPanel:toolbarColumnResize', 'requestAnimationFrame',
+            'lostpointercapture', 'dblclick'
+        ]
+        def panelResizeStyleRequired = [
+            'selpanel-toolbar-column-resizer', 'cursor: col-resize',
+            'touch-action: none', 'selpanel-toolbar-column-resizing'
+        ]
+        def mdaResizeRequired = [
+            'mdaToolbarOptions', 'width: 360', 'minWidth: 240',
+            'maxWidth: 720', 'toolbar: mdaToolbarOptions'
+        ]
+        def missingPanelResizeContracts = []
+        panelResizeRequired.findAll { !panelSource.contains(it) }.each { missingPanelResizeContracts.add("selPanel.js -> ${it}") }
+        panelResizeStyleRequired.findAll { !panelStyleSource.contains(it) }.each { missingPanelResizeContracts.add("selPanel.css -> ${it}") }
+        mdaResizeRequired.findAll { !mdaSource.contains(it) }.each { missingPanelResizeContracts.add("mda.js -> ${it}") }
+        if (!missingPanelResizeContracts.isEmpty()) {
+            throw new GradleException("selPanel 工具栏栏目缩放契约不完整：\n" + missingPanelResizeContracts.join('\n'))
+        }
     }
 }
 

@@ -17,12 +17,18 @@
     const selPanelLayouts = new WeakMap();
     // 每个面板的左侧分隔控制器独立登记，防止重复挂载指针与键盘事件。
     const selPanelSidebarResizers = new WeakMap();
+    // 每个面板的工具栏栏目分隔控制器独立登记，语言刷新时复用现有宽度和事件。
+    const selPanelToolbarResizers = new WeakMap();
 
     // 左侧区域宽度只在当前页面内存生效；刷新后回到 CSS 默认值。
     const selPanelSidebarWidthDefault = 246;
     const selPanelSidebarWidthMinimum = 190;
     const selPanelSidebarWidthMaximum = 520;
     const selPanelSidebarKeyboardStep = 12;
+    // 工具栏栏目默认使用适合搜索、筛选和动作控件的安全宽度范围。
+    const selPanelToolbarColumnWidthMinimum = 120;
+    const selPanelToolbarColumnWidthMaximum = 720;
+    const selPanelToolbarColumnKeyboardStep = 12;
 
     // 默认五区结构仅作为未传布局时的通用回退，应用可显式调整组件所在区域。
     const selPanelDefaultStructure = Object.freeze({
@@ -692,6 +698,250 @@
         return selPanelResizer;
     }
 
+    // 工具栏栏目标识优先使用稳定 slot；无 slot 的搜索、日期和动作控件使用组件名与序号。
+    function selPanelResolveToolbarColumnKey(selPanelColumnContent, selPanelColumnIndex) {
+        const selPanelSlot = String(selPanelColumnContent.dataset.selPanelSlot || "").trim();
+        const selPanelComponent = String(selPanelColumnContent.dataset.selPanelComponent || "column").trim();
+        return selPanelSlot || `${selPanelComponent}-${selPanelColumnIndex + 1}`;
+    }
+
+    // 非数字配置回落到公共安全值，调用方不能通过 NaN 或负数破坏工具栏布局。
+    function selPanelResolveToolbarColumnNumber(selPanelValue, selPanelFallback) {
+        const selPanelNumber = Number(selPanelValue);
+        return Number.isFinite(selPanelNumber) ? Math.round(selPanelNumber) : selPanelFallback;
+    }
+
+    /**
+     * 为工具栏直接子栏目建立与 Grid 列宽相同语义的横向拖拽分隔线。
+     * @param {Element} selPanelRoot - 当前标准面板根。
+     * @param {object} selPanelResizeOptions - columnResize 总开关与 columns 单栏宽度配置。
+     * @returns {object|null} 当前工具栏栏目缩放控制器。
+     */
+    function selPanelEnsureToolbarColumnResizers(selPanelRoot, selPanelResizeOptions = {}) {
+        const selPanelToolbar = selPanelRoot.querySelector('[data-sel-panel-component="toolbar"]');
+        // 页面没有工具栏时不创建空分隔线，也不影响其他五区挂载。
+        if (!selPanelToolbar) return null;
+
+        const selPanelSafeOptions = selPanelResizeOptions && typeof selPanelResizeOptions === "object"
+            ? selPanelResizeOptions
+            : {};
+        const selPanelColumnResizeEnabled = selPanelSafeOptions.columnResize !== false;
+        const selPanelColumnOptions = selPanelSafeOptions.columns && typeof selPanelSafeOptions.columns === "object"
+            ? selPanelSafeOptions.columns
+            : {};
+        let selPanelToolbarController = selPanelToolbarResizers.get(selPanelRoot);
+
+        // 首次挂载把直接子控件包进纯布局栏目；控件内部 DOM 和业务状态保持原样。
+        if (!selPanelToolbarController) {
+            const selPanelToolbarContents = Array.from(selPanelToolbar.children)
+                .filter((selPanelChild) => selPanelChild.matches("[data-sel-panel-component]"));
+            const selPanelColumns = selPanelToolbarContents.map((selPanelColumnContent, selPanelColumnIndex) => {
+                const selPanelColumn = document.createElement("div");
+                selPanelColumn.className = "selpanel-toolbar-column";
+                selPanelColumn.dataset.selPanelToolbarColumn = String(selPanelColumnIndex);
+                const selPanelColumnKey = selPanelResolveToolbarColumnKey(selPanelColumnContent, selPanelColumnIndex);
+                selPanelColumn.dataset.selPanelToolbarColumnKey = selPanelColumnKey;
+                selPanelColumnContent.before(selPanelColumn);
+                selPanelColumn.appendChild(selPanelColumnContent);
+
+                const selPanelColumnResizer = document.createElement("div");
+                selPanelColumnResizer.className = "selpanel-toolbar-column-resizer";
+                selPanelColumnResizer.dataset.selPanelToolbarColumnResize = selPanelColumnKey;
+                selPanelColumnResizer.setAttribute("role", "separator");
+                selPanelColumnResizer.setAttribute("aria-orientation", "vertical");
+                selPanelColumnResizer.setAttribute("aria-pressed", "false");
+                selPanelColumnResizer.tabIndex = 0;
+                selPanelColumn.appendChild(selPanelColumnResizer);
+
+                const selPanelColumnState = {
+                    content: selPanelColumnContent,
+                    column: selPanelColumn,
+                    resizer: selPanelColumnResizer,
+                    index: selPanelColumnIndex,
+                    key: selPanelColumnKey,
+                    config: {},
+                    initialized: false,
+                    pointerId: null,
+                    pointerStartX: 0,
+                    pointerStartWidth: 0,
+                    pendingWidth: null,
+                    resizeFrame: 0
+                };
+
+                function selPanelGetToolbarColumnBounds() {
+                    const selPanelMinimum = Math.max(48, selPanelResolveToolbarColumnNumber(
+                        selPanelColumnState.config.minWidth,
+                        selPanelToolbarColumnWidthMinimum
+                    ));
+                    const selPanelMaximum = Math.max(selPanelMinimum, selPanelResolveToolbarColumnNumber(
+                        selPanelColumnState.config.maxWidth,
+                        selPanelToolbarColumnWidthMaximum
+                    ));
+                    return Object.freeze({ minimum: selPanelMinimum, maximum: selPanelMaximum });
+                }
+
+                function selPanelApplyToolbarColumnWidth(selPanelWidth) {
+                    const selPanelBounds = selPanelGetToolbarColumnBounds();
+                    const selPanelSafeWidth = Math.min(selPanelBounds.maximum, Math.max(selPanelBounds.minimum, Math.round(selPanelWidth)));
+                    selPanelToolbar.style.setProperty(`--selpanel-toolbar-column-${selPanelColumnIndex + 1}-width`, `${selPanelSafeWidth}px`);
+                    selPanelColumnResizer.setAttribute("aria-valuemin", String(selPanelBounds.minimum));
+                    selPanelColumnResizer.setAttribute("aria-valuemax", String(selPanelBounds.maximum));
+                    selPanelColumnResizer.setAttribute("aria-valuenow", String(selPanelSafeWidth));
+                    return selPanelSafeWidth;
+                }
+
+                function selPanelScheduleToolbarColumnWidth(selPanelWidth) {
+                    selPanelColumnState.pendingWidth = selPanelWidth;
+                    if (selPanelColumnState.resizeFrame) return;
+                    selPanelColumnState.resizeFrame = window.requestAnimationFrame(() => {
+                        selPanelColumnState.resizeFrame = 0;
+                        selPanelApplyToolbarColumnWidth(selPanelColumnState.pendingWidth);
+                    });
+                }
+
+                function selPanelHandleToolbarColumnPointerMove(selPanelEvent) {
+                    if (selPanelColumnState.pointerId === null || selPanelEvent.pointerId !== selPanelColumnState.pointerId) return;
+                    selPanelScheduleToolbarColumnWidth(
+                        selPanelColumnState.pointerStartWidth + selPanelEvent.clientX - selPanelColumnState.pointerStartX
+                    );
+                }
+
+                function selPanelRemoveToolbarWindowListeners() {
+                    window.removeEventListener("pointermove", selPanelHandleToolbarColumnPointerMove);
+                    window.removeEventListener("pointerup", selPanelFinishToolbarColumnResize);
+                    window.removeEventListener("pointercancel", selPanelFinishToolbarColumnResize);
+                    window.removeEventListener("blur", selPanelFinishToolbarColumnResize);
+                }
+
+                function selPanelDispatchToolbarColumnResize(selPanelWidth) {
+                    selPanelRoot.dispatchEvent(new CustomEvent("selPanel:toolbarColumnResize", {
+                        bubbles: true,
+                        detail: { key: selPanelColumnKey, index: selPanelColumnIndex, width: selPanelWidth }
+                    }));
+                }
+
+                function selPanelFinishToolbarColumnResize(selPanelEvent) {
+                    if (selPanelColumnState.pointerId === null
+                            || (selPanelEvent?.pointerId !== undefined && selPanelEvent.pointerId !== selPanelColumnState.pointerId)) return;
+                    if (selPanelColumnState.resizeFrame) {
+                        window.cancelAnimationFrame(selPanelColumnState.resizeFrame);
+                        selPanelColumnState.resizeFrame = 0;
+                    }
+                    const selPanelFinalWidth = selPanelApplyToolbarColumnWidth(
+                        selPanelColumnState.pendingWidth ?? selPanelColumnState.pointerStartWidth
+                    );
+                    const selPanelFinishedPointerId = selPanelColumnState.pointerId;
+                    selPanelColumnState.pointerId = null;
+                    selPanelColumnState.pendingWidth = null;
+                    if (selPanelColumnResizer.hasPointerCapture?.(selPanelFinishedPointerId)) {
+                        selPanelColumnResizer.releasePointerCapture(selPanelFinishedPointerId);
+                    }
+                    selPanelColumnResizer.setAttribute("aria-pressed", "false");
+                    selPanelColumnResizer.classList.remove("selpanel-toolbar-column-resizer-active");
+                    document.body.classList.remove("selpanel-toolbar-column-resizing");
+                    selPanelRemoveToolbarWindowListeners();
+                    selPanelDispatchToolbarColumnResize(selPanelFinalWidth);
+                }
+
+                selPanelColumnResizer.addEventListener("pointerdown", (selPanelEvent) => {
+                    if (selPanelEvent.button !== 0 || selPanelColumnResizer.hidden) return;
+                    selPanelEvent.preventDefault();
+                    selPanelColumnState.pointerId = selPanelEvent.pointerId;
+                    selPanelColumnState.pointerStartX = selPanelEvent.clientX;
+                    selPanelColumnState.pointerStartWidth = selPanelColumn.getBoundingClientRect().width;
+                    selPanelColumnState.pendingWidth = selPanelColumnState.pointerStartWidth;
+                    selPanelColumnResizer.setPointerCapture?.(selPanelColumnState.pointerId);
+                    selPanelColumnResizer.setAttribute("aria-pressed", "true");
+                    selPanelColumnResizer.classList.add("selpanel-toolbar-column-resizer-active");
+                    document.body.classList.add("selpanel-toolbar-column-resizing");
+                    window.addEventListener("pointermove", selPanelHandleToolbarColumnPointerMove);
+                    window.addEventListener("pointerup", selPanelFinishToolbarColumnResize);
+                    window.addEventListener("pointercancel", selPanelFinishToolbarColumnResize);
+                    window.addEventListener("blur", selPanelFinishToolbarColumnResize);
+                });
+                selPanelColumnResizer.addEventListener("pointermove", selPanelHandleToolbarColumnPointerMove);
+                selPanelColumnResizer.addEventListener("pointerup", selPanelFinishToolbarColumnResize);
+                selPanelColumnResizer.addEventListener("pointercancel", selPanelFinishToolbarColumnResize);
+                selPanelColumnResizer.addEventListener("lostpointercapture", selPanelFinishToolbarColumnResize);
+                selPanelColumnResizer.addEventListener("click", (selPanelEvent) => selPanelEvent.preventDefault());
+                // 键盘左右键逐步调整，Home/End 直达当前栏目的安全边界。
+                selPanelColumnResizer.addEventListener("keydown", (selPanelEvent) => {
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(selPanelEvent.key) || selPanelColumnResizer.hidden) return;
+                    selPanelEvent.preventDefault();
+                    const selPanelBounds = selPanelGetToolbarColumnBounds();
+                    const selPanelCurrentWidth = Number(selPanelColumnResizer.getAttribute("aria-valuenow"))
+                        || selPanelColumn.getBoundingClientRect().width;
+                    const selPanelTargetWidth = selPanelEvent.key === "Home"
+                        ? selPanelBounds.minimum
+                        : selPanelEvent.key === "End"
+                            ? selPanelBounds.maximum
+                            : selPanelCurrentWidth + (selPanelEvent.key === "ArrowRight"
+                                ? selPanelToolbarColumnKeyboardStep
+                                : -selPanelToolbarColumnKeyboardStep);
+                    selPanelDispatchToolbarColumnResize(selPanelApplyToolbarColumnWidth(selPanelTargetWidth));
+                });
+                // 双击恢复调用方声明的默认宽度；未声明时恢复公共响应式轨道。
+                selPanelColumnResizer.addEventListener("dblclick", () => {
+                    const selPanelConfiguredWidth = Number(selPanelColumnState.config.width);
+                    if (Number.isFinite(selPanelConfiguredWidth)) {
+                        selPanelDispatchToolbarColumnResize(selPanelApplyToolbarColumnWidth(selPanelConfiguredWidth));
+                        return;
+                    }
+                    selPanelToolbar.style.removeProperty(`--selpanel-toolbar-column-${selPanelColumnIndex + 1}-width`);
+                    window.requestAnimationFrame(() => {
+                        const selPanelRestoredWidth = Math.round(selPanelColumn.getBoundingClientRect().width);
+                        selPanelColumnResizer.setAttribute("aria-valuenow", String(selPanelRestoredWidth));
+                        selPanelDispatchToolbarColumnResize(selPanelRestoredWidth);
+                    });
+                });
+                return selPanelColumnState;
+            });
+            selPanelToolbar.dataset.selPanelChildCount = String(selPanelColumns.length);
+            selPanelToolbarController = { toolbar: selPanelToolbar, columns: selPanelColumns };
+            selPanelToolbarResizers.set(selPanelRoot, selPanelToolbarController);
+        }
+
+        // 每次 mount 只更新配置和可访问状态，用户已经拖出的宽度不会被语言刷新覆盖。
+        selPanelToolbarController.columns.forEach((selPanelColumnState) => {
+            const selPanelColumnConfig = selPanelColumnOptions[selPanelColumnState.key] || {};
+            selPanelColumnState.config = selPanelColumnConfig && typeof selPanelColumnConfig === "object"
+                ? selPanelColumnConfig
+                : {};
+            const selPanelColumnEnabled = selPanelColumnResizeEnabled && selPanelColumnState.config.columnResize !== false;
+            const selPanelBoundsMinimum = Math.max(48, selPanelResolveToolbarColumnNumber(
+                selPanelColumnState.config.minWidth,
+                selPanelToolbarColumnWidthMinimum
+            ));
+            const selPanelBoundsMaximum = Math.max(selPanelBoundsMinimum, selPanelResolveToolbarColumnNumber(
+                selPanelColumnState.config.maxWidth,
+                selPanelToolbarColumnWidthMaximum
+            ));
+            selPanelColumnState.resizer.hidden = !selPanelColumnEnabled;
+            selPanelColumnState.resizer.tabIndex = selPanelColumnEnabled ? 0 : -1;
+            selPanelColumnState.resizer.setAttribute("aria-label", String(
+                selPanelColumnState.config.label || `调整${selPanelColumnState.key}栏目宽度`
+            ));
+            selPanelColumnState.resizer.setAttribute("aria-valuemin", String(selPanelBoundsMinimum));
+            selPanelColumnState.resizer.setAttribute("aria-valuemax", String(selPanelBoundsMaximum));
+            if (!selPanelColumnState.initialized) {
+                const selPanelConfiguredWidth = Number(selPanelColumnState.config.width);
+                const selPanelInitialWidth = Number.isFinite(selPanelConfiguredWidth)
+                    ? Math.min(selPanelBoundsMaximum, Math.max(selPanelBoundsMinimum, Math.round(selPanelConfiguredWidth)))
+                    : Math.round(selPanelColumnState.column.getBoundingClientRect().width);
+                if (Number.isFinite(selPanelConfiguredWidth)) {
+                    selPanelToolbar.style.setProperty(
+                        `--selpanel-toolbar-column-${selPanelColumnState.index + 1}-width`,
+                        `${selPanelInitialWidth}px`
+                    );
+                }
+                selPanelColumnState.resizer.setAttribute("aria-valuenow", String(selPanelInitialWidth));
+                selPanelColumnState.initialized = true;
+            }
+        });
+        selPanelToolbar.dataset.selPanelColumnResize = String(selPanelColumnResizeEnabled);
+        return selPanelToolbarController;
+    }
+
     /**
      * 显式挂载一个面板并应用标准视图数据。
      * @param {Element} selPanelRoot - 由 create 创建或符合标准结构的面板根。
@@ -711,13 +961,19 @@
         if (selPanelMountOptions.height) {
             selPanelRoot.style.setProperty("--selpanel-instance-height", String(selPanelMountOptions.height));
         }
-        // 应用可传入本地化名称；缺失时保持基础控件通用语义。
+        // 语言刷新未重复传 toolbar 时保留首次栏目缩放配置和用户已经调整的宽度。
+        const selPanelPreviousOptions = selPanelOptions.get(selPanelRoot) || {};
+        const selPanelToolbarResizeOptions = selPanelMountOptions.toolbar ?? selPanelPreviousOptions.toolbar ?? {};
+        // 应用可传入本地化名称；缺失时保持现有名称或基础控件通用语义。
         selPanelOptions.set(selPanelRoot, {
-            expand: selPanelMountOptions.expandLeftLabel || "展开左侧区域",
-            collapse: selPanelMountOptions.collapseLeftLabel || "收起左侧区域"
+            expand: selPanelMountOptions.expandLeftLabel || selPanelPreviousOptions.expand || "展开左侧区域",
+            collapse: selPanelMountOptions.collapseLeftLabel || selPanelPreviousOptions.collapse || "收起左侧区域",
+            toolbar: selPanelToolbarResizeOptions
         });
         // 分隔条属于通用布局能力，静态骨架与 create 生成结构都在 mount 时统一补齐。
         selPanelEnsureSidebarResizer(selPanelRoot);
+        // 工具栏栏目默认可调整；调用方可通过 toolbar.columnResize=false 或单栏配置显式关闭。
+        selPanelEnsureToolbarColumnResizers(selPanelRoot, selPanelToolbarResizeOptions);
         // 已挂载面板只刷新视图和选项，不重复绑定事件。
         if (selPanelRoots.has(selPanelRoot)) {
             return selPanelRoot;

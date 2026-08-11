@@ -60,6 +60,18 @@
         right: Object.freeze([]),
         bottom: Object.freeze([])
     });
+    // 数据库连接栏使用公共面板栏目缩放契约；MDA 只声明安全宽度，不接触分隔线 DOM 或指针事件。
+    const mdaToolbarOptions = Object.freeze({
+        columnResize: true,
+        columns: Object.freeze({
+            projectType: Object.freeze({
+                width: 360,
+                minWidth: 240,
+                maxWidth: 720,
+                label: "调整数据库连接栏目宽度"
+            })
+        })
+    });
 
     /** 把 JDBC 元数据节点转换为 selTree 标准节点，并保留打开表查询页签所需的稳定字段。 */
     function mdaMapMetadataNodes(mdaNodes, mdaPath) {
@@ -920,7 +932,12 @@
         mdaState.windowMessages = mdaWindowMessages;
         const mdaPayload = mdaBuildPayload();
         mdaState.panelRoot = window.selPanel.create(mdaApplicationHost, { gridId: mdaWorkspaceId, sourceId: mdaWorkspaceId, entity: "MdaQueryWorkspace", view: "database", layout: "single", structure: mdaLayout, ariaLabel: mdaPayload.title.ariaLabel });
-        if (!mdaState.panelRoot || !window.selPanel.mount(mdaState.panelRoot, { view: mdaPayload, expandLeftLabel: mdaPayload.title.messages.expandLeftRegion, collapseLeftLabel: mdaPayload.title.messages.collapseLeftRegion })) throw new Error("MDA 公共面板挂载失败。");
+        if (!mdaState.panelRoot || !window.selPanel.mount(mdaState.panelRoot, {
+            view: mdaPayload,
+            expandLeftLabel: mdaPayload.title.messages.expandLeftRegion,
+            collapseLeftLabel: mdaPayload.title.messages.collapseLeftRegion,
+            toolbar: mdaToolbarOptions
+        })) throw new Error("MDA 公共面板挂载失败。");
         mdaState.treeController = window.selTree.mount(mdaState.panelRoot, mdaPayload.tree);
         window.selDropdownMenu.mountAll(mdaState.panelRoot);
         const mdaTabsHost = window.selPanel.getComponent(mdaWorkspaceId, "selTabs");

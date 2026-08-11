@@ -10,6 +10,7 @@
     --selpanel-layout-sidebar-width: 246px;
     --selpanel-layout-sidebar-collapsed-width: 58px;
     --selpanel-layout-sidebar-resizer-hit-size: 18px;
+    --selpanel-toolbar-column-resizer-hit-size: 14px;
     --selpanel-surface-line: var(--sel-theme-line);
     --selpanel-surface-background: var(--sel-theme-panel-surface);
     --selpanel-surface-glow: var(--sel-theme-glow);
@@ -222,20 +223,112 @@
     display: grid;
     min-height: 88px;
     flex: 0 0 88px;
-    grid-template-columns: minmax(230px, 1.25fr) minmax(150px, 0.62fr) minmax(150px, 0.62fr) minmax(300px, 1fr) 102px;
+    grid-template-columns:
+        var(--selpanel-toolbar-column-1-width, minmax(230px, 1.25fr))
+        var(--selpanel-toolbar-column-2-width, minmax(150px, 0.62fr))
+        var(--selpanel-toolbar-column-3-width, minmax(150px, 0.62fr))
+        var(--selpanel-toolbar-column-4-width, minmax(300px, 1fr))
+        var(--selpanel-toolbar-column-5-width, 102px);
     gap: 12px;
     align-items: center;
     padding: 0 16px;
 }
 
+/* 单栏目工具栏只建立一条真实轨道；应用可通过公开 width 配置保留右侧工作空间。 */
+.selpanel-toolbar-shell[data-sel-panel-child-count="1"] {
+    grid-template-columns: var(--selpanel-toolbar-column-1-width, minmax(230px, 1fr));
+}
+
+/* 双栏目工具栏使用两个响应式轨道，避免沿用五栏模板产生不可见空列。 */
+.selpanel-toolbar-shell[data-sel-panel-child-count="2"] {
+    grid-template-columns:
+        var(--selpanel-toolbar-column-1-width, minmax(230px, 1fr))
+        var(--selpanel-toolbar-column-2-width, minmax(180px, 0.62fr));
+}
+
 /* 三控件工具栏按“搜索 + 筛选 + 重置”紧凑分栏，避免缺少日期等可选控件时遗留空白列。 */
 .selpanel-toolbar-shell[data-sel-panel-child-count="3"] {
-    grid-template-columns: minmax(280px, 1fr) minmax(180px, 0.48fr) 102px;
+    grid-template-columns:
+        var(--selpanel-toolbar-column-1-width, minmax(280px, 1fr))
+        var(--selpanel-toolbar-column-2-width, minmax(180px, 0.48fr))
+        var(--selpanel-toolbar-column-3-width, 102px);
 }
 
 /* 四控件工具栏保留双筛选的均衡宽度，最后一列始终是紧凑重置动作。 */
 .selpanel-toolbar-shell[data-sel-panel-child-count="4"] {
-    grid-template-columns: minmax(260px, 1.2fr) minmax(150px, 0.55fr) minmax(150px, 0.55fr) 102px;
+    grid-template-columns:
+        var(--selpanel-toolbar-column-1-width, minmax(260px, 1.2fr))
+        var(--selpanel-toolbar-column-2-width, minmax(150px, 0.55fr))
+        var(--selpanel-toolbar-column-3-width, minmax(150px, 0.55fr))
+        var(--selpanel-toolbar-column-4-width, 102px);
+}
+
+/* 纯布局栏目作为 Grid 轨道直接子项，不接管其中搜索、下拉、日期或动作控件的 DOM。 */
+.selpanel-toolbar-column {
+    position: relative;
+    min-width: 0;
+    height: 42px;
+    align-self: center;
+    overflow: visible;
+}
+
+.selpanel-toolbar-column > [data-sel-panel-component] {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* 栏目右边缘使用和 Grid 列宽一致的细热区，默认克制，悬停或拖拽时增强。 */
+.selpanel-toolbar-column-resizer {
+    position: absolute;
+    z-index: 12;
+    top: 2px;
+    right: calc(-1 * (var(--selpanel-toolbar-column-resizer-hit-size) / 2));
+    bottom: 2px;
+    width: var(--selpanel-toolbar-column-resizer-hit-size);
+    border: 0;
+    outline: none;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.selpanel-toolbar-column-resizer::after {
+    position: absolute;
+    top: 7px;
+    bottom: 7px;
+    left: 50%;
+    width: 2px;
+    border-radius: var(--sel-theme-radius-chip);
+    background: rgb(var(--sel-theme-color-rgb) / 0.22);
+    box-shadow: 0 0 4px rgb(var(--sel-theme-color-rgb) / 0.16);
+    content: "";
+    transform: translateX(-50%);
+    transition: width 100ms ease, background-color 100ms ease, box-shadow 100ms ease;
+}
+
+.selpanel-toolbar-column-resizer:hover::after,
+.selpanel-toolbar-column-resizer:focus-visible::after,
+.selpanel-toolbar-column-resizer.selpanel-toolbar-column-resizer-active::after {
+    width: 4px;
+    background: rgb(var(--sel-theme-color-rgb) / 0.78);
+    box-shadow: 0 0 11px rgb(var(--sel-theme-color-rgb) / 0.62);
+}
+
+.selpanel-toolbar-column-resizer:focus-visible {
+    outline: 1px solid rgb(var(--sel-theme-color-rgb) / 0.68);
+    outline-offset: -4px;
+    border-radius: var(--sel-theme-radius-chip);
+}
+
+.selpanel-toolbar-column-resizer[hidden] {
+    display: none;
+}
+
+/* 拖拽期间锁定横向缩放光标并阻止误选文字，结束事件会立即清理该状态。 */
+body.selpanel-toolbar-column-resizing,
+body.selpanel-toolbar-column-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
 }
 
 .selpanel-date-field,
