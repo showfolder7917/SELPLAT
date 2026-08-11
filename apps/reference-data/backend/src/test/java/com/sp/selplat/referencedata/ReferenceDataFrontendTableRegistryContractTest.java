@@ -6,14 +6,14 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
-/** 验证表格登记模块能够进入对应的数据库驱动表格头明细。 */
+/** 验证表格定义模块通过统一表格头接口进入基本信息、列配置和效果预览。 */
 class ReferenceDataFrontendTableRegistryContractTest {
 
     /**
      * 验证表格登记出现在导航和编辑表单中，并使用表格配置 ID 筛选对应列。
      *
      * 真实传参示例：点击 {@code reference-data / ReferenceDataType / selGridTypeManagementId} 表格记录。
-     * 真实返回示例：页面切换到 {@code ReferenceDataTableColumn} 并搜索 {@code selGridTypeManagementId}。
+     * 真实返回示例：页面打开 {@code ReferenceDataTableColumn} 列配置并保留三页签详情上下文。
      * 异常或副作用示例：记录不存在时不切换模块，也不会修改当前表格筛选条件。
      *
      * @throws Exception 页面脚本资源无法读取时抛出
@@ -33,10 +33,20 @@ class ReferenceDataFrontendTableRegistryContractTest {
                 .contains("key: \"tables\", tableName: \"ReferenceDataTable\", gridId: \"selGridTableManagementId\"")
                 .contains("api: \"/api/reference-data/admin/tables/\"")
                 .contains("referenceDataText(\"gridColumnId\", \"表格配置 ID\"")
+                .contains("label: \"暂无数据类型\", icon: \"ri-information-line\"")
+                .contains("disabled: true, selected: true")
+                .contains("url: `${referenceDataModule.api}getGridColumn.htm?${referenceDataQuery}`")
+                .doesNotContain("/api/reference-data/admin/table-columns/resolve.htm?${referenceDataQuery}")
+                .doesNotContain("function referenceDataSafeColumns")
                 .contains("async function referenceDataOpenTableColumns(referenceDataRecord)")
+                .contains("if (referenceDataModule.key === \"tables\") return Object.freeze([])")
                 .contains("await referenceDataSwitchModule(\"columns\")")
-                .contains("String(referenceDataRecord.gridColumnId || referenceDataRecord.tableName || \"\")")
-                .contains("label: referenceDataModule.key === \"tables\" ? \"查看表格头\"")
+                .contains("referenceDataState.selectedTable = Object.freeze({ ...referenceDataRecord })")
+                .contains("function referenceDataRenderTableDetail()")
+                .contains("data-reference-data-detail-tab=\"info\"")
+                .contains("data-reference-data-detail-tab=\"columns\"")
+                .contains("data-reference-data-detail-tab=\"preview\"")
+                .contains("label: referenceDataModule.key === \"tables\" ? \"打开表格配置\"")
                 .contains("if (referenceDataTarget.moduleKey === \"tables\")");
     }
 }

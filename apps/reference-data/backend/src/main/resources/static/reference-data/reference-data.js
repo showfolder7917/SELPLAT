@@ -83,7 +83,9 @@
         treeController: null,
         editWindowControllers: new Map(),
         deleteWindowController: null,
-        previewMenuController: null
+        previewMenuController: null,
+        selectedTable: null,
+        tableDetailTab: null
     };
 
     const referenceDataLayout = Object.freeze({
@@ -155,46 +157,39 @@
             url: `${referenceDataModule.api}getStore.htm?pageNo=1&pageSize=${referenceDataPageSize}`
         });
         const referenceDataTotalPages = Math.max(1, Math.ceil(Number(referenceDataFirstPage.totalCount || 0) / referenceDataPageSize));
-        if (referenceDataTotalPages === 1) return Array.isArray(referenceDataFirstPage.records) ? referenceDataFirstPage.records : [];
+        if (referenceDataTotalPages === 1) {
+            return (Array.isArray(referenceDataFirstPage.records) ? referenceDataFirstPage.records : [])
+                .filter((referenceDataRecord) => Number(referenceDataRecord.status) !== 0);
+        }
         const referenceDataOtherPages = await Promise.all(
             Array.from({ length: referenceDataTotalPages - 1 }, (_, referenceDataIndex) => referenceDataAjax.json({
                 url: `${referenceDataModule.api}getStore.htm?pageNo=${referenceDataIndex + 2}&pageSize=${referenceDataPageSize}`
             }))
         );
-        return [referenceDataFirstPage, ...referenceDataOtherPages].flatMap((referenceDataPage) => referenceDataPage.records || []);
+        return [referenceDataFirstPage, ...referenceDataOtherPages]
+            .flatMap((referenceDataPage) => referenceDataPage.records || [])
+            .filter((referenceDataRecord) => Number(referenceDataRecord.status) !== 0);
     }
 
     async function referenceDataResolveColumns(referenceDataModule) {
         const referenceDataQuery = new URLSearchParams({
-            tableName: referenceDataModule.tableName,
-            gridId: referenceDataModule.gridId,
+            viewCode: referenceDataModule.gridId,
             locale: referenceDataLocale
         });
+        // 所有业务表格统一调用继承自 BaseController 的 getGridColumn；后台负责配置优先和字段名静默降级。
         const referenceDataResult = await referenceDataAjax.request({
-            url: `/api/reference-data/admin/table-columns/resolve.htm?${referenceDataQuery}`
+            url: `${referenceDataModule.api}getGridColumn.htm?${referenceDataQuery}`
         });
         return Array.isArray(referenceDataResult.data?.columns) ? referenceDataResult.data.columns : [];
     }
 
-    function referenceDataSafeColumns(referenceDataModule) {
-        if (referenceDataModule.key === "tables") return Object.freeze([
-            Object.freeze({ id: "tableName", field: "tableName", label: "数据库表", renderer: "text", width: "22%" }),
-            Object.freeze({ id: "gridColumnId", field: "gridColumnId", label: "表格配置 ID", renderer: "text", width: "24%" }),
-            Object.freeze({ id: "projectName", field: "projectName", label: "所属项目", renderer: "text", width: "16%" }),
-            Object.freeze({ id: "description", field: "description", label: "表格描述", renderer: "text", width: "22%" }),
-            Object.freeze({ id: "actions", field: "id", label: "操作", renderer: "actions", width: "16%" })
-        ]);
-        const referenceDataPrimary = referenceDataModule.previewField;
-        return Object.freeze([
-            Object.freeze({ id: "primary", field: referenceDataPrimary, label: "数据编码", renderer: "text", width: "34%" }),
-            Object.freeze({ id: "labelZh", field: "labelZh", label: "中文名称", renderer: "text", width: "28%" }),
-            Object.freeze({ id: "status", field: "status", label: "状态", renderer: "badge", width: "14%" }),
-            Object.freeze({ id: "actions", field: "id", label: "操作", renderer: "actions", width: "24%" })
-        ]);
-    }
-
     function referenceDataEnrichColumns(referenceDataModule, referenceDataColumns) {
-        const referenceDataSource = referenceDataColumns.length > 0 ? referenceDataColumns : referenceDataSafeColumns(referenceDataModule);
+        // 后台始终返回统一列数组；配置缺失时 label 已经是字段名，页面不再保存第二套中文表头。
+        const referenceDataSource = [...referenceDataColumns];
+        // 操作列属于管理工作台能力；配置未声明时补一列，确保字段名降级状态下仍可完成 CRUD。
+        if (!referenceDataSource.some((referenceDataColumn) => referenceDataColumn.renderer === "actions")) {
+            referenceDataSource.push(Object.freeze({ id: "__actions", field: "id", label: "操作", renderer: "actions", width: "132px" }));
+        }
         return Object.freeze(referenceDataSource.map((referenceDataColumn) => {
             const referenceDataBaseColumn = {
                 ...referenceDataColumn,
@@ -217,7 +212,7 @@
                 if (["tables", "tree", "options", "menus"].includes(referenceDataModule.key)) {
                     referenceDataActions.push(Object.freeze({
                         id: "preview",
-                        label: referenceDataModule.key === "tables" ? "查看表格头" : `预览${referenceDataModule.itemName}`,
+                        label: referenceDataModule.key === "tables" ? "打开表格配置" : `预览${referenceDataModule.itemName}`,
                         icon: "ri-eye-line"
                     }));
                 }
@@ -257,6 +252,8 @@
 
     function referenceDataBuildTreeChildren(referenceDataModule) {
         const referenceDataRecords = referenceDataState.records.get(referenceDataModule.key) || [];
+        // 表格定义只作为一级业务入口；具体表格统一在右侧列表查看，避免左树重复形成下拉明细。
+        if (referenceDataModule.key === "tables") return Object.freeze([]);
         if (referenceDataModule.relation) return referenceDataBuildHierarchy(referenceDataModule, referenceDataRecords);
         return Object.freeze(referenceDataRecords.map((referenceDataRecord) => Object.freeze({
             id: `record-${referenceDataModule.key}-${referenceDataRecord.id}`,
@@ -324,7 +321,13 @@
 
     function referenceDataBuildPayload() {
         const referenceDataModule = referenceDataActiveModule();
-        const referenceDataRecords = referenceDataState.records.get(referenceDataModule.key) || [];
+        const referenceDataAllRecords = referenceDataState.records.get(referenceDataModule.key) || [];
+        // 表格列只显示当前选中表格的配置；其他模块继续展示自己的完整业务记录。
+        const referenceDataRecords = referenceDataModule.key === "columns" && referenceDataState.selectedTable
+            ? referenceDataAllRecords.filter((referenceDataRecord) =>
+                String(referenceDataRecord.tableName) === String(referenceDataState.selectedTable.tableName)
+                && String(referenceDataRecord.gridId) === String(referenceDataState.selectedTable.gridColumnId))
+            : referenceDataAllRecords;
         const referenceDataEnabledCount = referenceDataRecords.filter((referenceDataRecord) => Number(referenceDataRecord.status) === 1).length;
         const referenceDataDisabledCount = referenceDataRecords.filter((referenceDataRecord) => Number(referenceDataRecord.status) === 2).length;
         const referenceDataColumns = referenceDataEnrichColumns(
@@ -358,12 +361,16 @@
             }),
             title: Object.freeze({
                 title: "引用数据管理工作台",
-                subtitle: `${referenceDataModule.name} · ${referenceDataModule.tableName}`,
-                description: referenceDataModule.description,
+                subtitle: referenceDataState.selectedTable
+                    ? `表格定义 · ${referenceDataState.selectedTable.description || referenceDataState.selectedTable.tableName}`
+                    : `${referenceDataModule.name} · ${referenceDataModule.tableName}`,
+                description: referenceDataState.selectedTable
+                    ? `${referenceDataState.selectedTable.projectName} / ${referenceDataState.selectedTable.gridColumnId}`
+                    : referenceDataModule.description,
                 ariaLabel: "引用数据五模块按需加载管理面板",
                 ariaLabels: Object.freeze({
                     statusTabs: `${referenceDataModule.name}状态筛选`, headerActions: `${referenceDataModule.name}快捷操作`,
-                    toolbar: `${referenceDataModule.name}筛选工具栏`, sidebar: "数据库模块导航",
+                    toolbar: `${referenceDataModule.name}筛选工具栏`, sidebar: "业务模块导航",
                     content: `${referenceDataModule.name}内容区`, board: `${referenceDataModule.name}表格`, pagination: `${referenceDataModule.name}分页`
                 }),
                 statusTabs: Object.freeze([
@@ -375,8 +382,8 @@
                 resetLabel: "重置",
                 messages: Object.freeze({
                     selectProject: "选择数据", viewProject: "查看数据", editProject: "编辑数据", moreActions: "更多操作",
-                    filtersReset: "筛选条件已重置", treePrefix: "数据库模块", expandLeftRegion: "展开数据库模块",
-                    collapseLeftRegion: "收起数据库模块", filterActivated: "筛选工具栏已激活",
+                    filtersReset: "筛选条件已重置", treePrefix: "业务模块", expandLeftRegion: "展开业务模块",
+                    collapseLeftRegion: "收起业务模块", filterActivated: "筛选工具栏已激活",
                     newOpened: `已打开新增${referenceDataModule.itemName}窗口`, exportPreparing: "正在准备导出",
                     dateRange: "日期范围：{start} 至 {end}", movePrefix: "移动到"
                 })
@@ -388,7 +395,7 @@
                 defaultValue: "", clearable: true, submitOnEnter: true, submitOnClear: true, allowEmpty: true, trim: true
             }),
             tree: Object.freeze({
-                gridId: referenceDataGridId, ariaLabel: "数据库模块导航", heading: "数据库模块",
+                gridId: referenceDataGridId, ariaLabel: "业务模块导航", heading: "业务模块",
                 summary: `${referenceDataNavigationModuleList.length} 个一级模块`, expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}",
                 contextMenuLabelTemplate: "{label}操作",
                 selectedId: `module-${referenceDataModule.key === "columns" ? "tables" : referenceDataModule.key}`,
@@ -450,12 +457,18 @@
 
     function referenceDataTypeSelectField() {
         const referenceDataTypes = referenceDataState.records.get("types") || [];
-        return Object.freeze({
-            name: "typeId", label: "所属数据类型", type: "select", required: true,
-            options: Object.freeze(referenceDataTypes.map((referenceDataType) => Object.freeze({
+        const referenceDataTypeOptions = referenceDataTypes.length > 0
+            ? referenceDataTypes.map((referenceDataType) => Object.freeze({
                 value: String(referenceDataType.id), label: String(referenceDataType.nameZh || referenceDataType.resourceCode),
                 icon: "ri-database-2-line", description: `${referenceDataType.projectCode}/${referenceDataType.resourceCode}`
-            })))
+            }))
+            : [Object.freeze({
+                value: "", label: "暂无数据类型", icon: "ri-information-line",
+                description: "请先新增并启用数据类型", disabled: true, selected: true
+            })];
+        return Object.freeze({
+            name: "typeId", label: "所属数据类型", type: "select", required: true,
+            options: Object.freeze(referenceDataTypeOptions)
         });
     }
 
@@ -523,7 +536,7 @@
         if (referenceDataModule.key === "tables") return Object.freeze([
             Object.freeze([
                 referenceDataText("projectName", "所属项目", true, "例如 reference-data", 100),
-                referenceDataText("tableName", "对应数据库表", true, "例如 ReferenceDataType", 100)
+                referenceDataText("tableName", "对应业务数据表", true, "例如 ReferenceDataType", 100)
             ]),
             Object.freeze([
                 referenceDataText("gridColumnId", "表格配置 ID", true, "例如 selGridTypeManagementId", 100),
@@ -535,14 +548,14 @@
         ]);
         return Object.freeze([
             Object.freeze([Object.freeze({
-                name: "tableName", label: "对应数据库表", type: "select", required: true,
+                name: "tableName", label: "对应业务数据表", type: "select", required: true,
                 options: Object.freeze(referenceDataModuleList.map((referenceDataTargetModule) => Object.freeze({
                     value: referenceDataTargetModule.tableName, label: referenceDataTargetModule.name,
                     icon: referenceDataTargetModule.icon, description: referenceDataTargetModule.tableName
                 })))
             }), referenceDataText("gridId", "SEL 表格实例 ID", true, "例如 selGridOptionManagementId", 100)]),
-            Object.freeze([referenceDataText("gridColumnId", "表格列 ID", true, "例如 labelZh", 100), referenceDataText("tableFieldName", "数据库字段名", true, "例如 labelZh", 100)]),
-            Object.freeze([referenceDataText("tableSecondaryFieldName", "第二数据库字段名", false, "仅 stack 渲染使用", 100), Object.freeze({
+            Object.freeze([referenceDataText("gridColumnId", "表格列 ID", true, "例如 labelZh", 100), referenceDataText("tableFieldName", "绑定字段", true, "例如 labelZh", 100)]),
+            Object.freeze([referenceDataText("tableSecondaryFieldName", "第二绑定字段", false, "仅 stack 渲染使用", 100), Object.freeze({
                 name: "cellRenderer", label: "单元格渲染方式", type: "select", required: true, options: Object.freeze([
                     "text", "stack", "badge", "time", "boolean", "actions"
                 ].map((referenceDataRenderer) => Object.freeze({ value: referenceDataRenderer, label: referenceDataRenderer, icon: "ri-layout-column-line" })))
@@ -577,6 +590,147 @@
         referenceDataState.columns.set(referenceDataModule.key, await referenceDataResolveColumns(referenceDataModule));
     }
 
+    function referenceDataEnsureTableDetailShell() {
+        const referenceDataCenter = referenceDataState.panelRoot?.querySelector('[data-sel-panel-region="center"]');
+        if (!referenceDataCenter) return null;
+        const referenceDataExisting = referenceDataCenter.querySelector("[data-reference-data-table-detail]");
+        if (referenceDataExisting) return referenceDataExisting;
+        // 详情外壳只声明当前业务页面的固定结构；所有数据库数据使用 textContent 写入，避免解释为 HTML。
+        const referenceDataDetail = document.createElement("section");
+        referenceDataDetail.className = "reference-data-table-detail";
+        referenceDataDetail.dataset.referenceDataTableDetail = "";
+        referenceDataDetail.innerHTML = `
+            <header class="reference-data-table-detail-header">
+                <button type="button" class="reference-data-detail-back" data-reference-data-detail-action="back">
+                    <i class="ri-arrow-left-line" aria-hidden="true"></i><span>返回表格定义</span>
+                </button>
+                <div class="reference-data-table-detail-copy">
+                    <strong data-reference-data-detail-title></strong>
+                    <span data-reference-data-detail-coordinate></span>
+                </div>
+                <button type="button" class="reference-data-detail-edit" data-reference-data-detail-action="edit-table">
+                    <i class="ri-edit-line" aria-hidden="true"></i><span>编辑基本信息</span>
+                </button>
+            </header>
+            <nav class="reference-data-detail-tabs" role="tablist" aria-label="表格配置详情">
+                <button type="button" role="tab" data-reference-data-detail-tab="info">基本信息</button>
+                <button type="button" role="tab" data-reference-data-detail-tab="columns">表格列配置</button>
+                <button type="button" role="tab" data-reference-data-detail-tab="preview">效果预览</button>
+            </nav>
+            <section class="reference-data-detail-content" data-reference-data-detail-content="info"></section>
+            <section class="reference-data-detail-content" data-reference-data-detail-content="preview"></section>`;
+        const referenceDataGridBoard = referenceDataCenter.querySelector(".selgrid-board-shell");
+        referenceDataCenter.insertBefore(referenceDataDetail, referenceDataGridBoard || null);
+        return referenceDataDetail;
+    }
+
+    function referenceDataRenderTableInfo(referenceDataHost, referenceDataTable) {
+        referenceDataHost.replaceChildren();
+        const referenceDataFields = Object.freeze([
+            Object.freeze(["所属项目", referenceDataTable.projectName]),
+            Object.freeze(["业务数据表", referenceDataTable.tableName]),
+            Object.freeze(["表格控件 ID", referenceDataTable.gridColumnId]),
+            Object.freeze(["所在页面", referenceDataTable.pagePath || "未填写"]),
+            Object.freeze(["启停状态", Number(referenceDataTable.status) === 1 ? "已启用" : "已停用"]),
+            Object.freeze(["排序值", referenceDataTable.sortnum ?? 0]),
+            Object.freeze(["租户 ID", referenceDataTable.tenantId ?? 1]),
+            Object.freeze(["操作员 ID", referenceDataTable.lastOperateUserId ?? 1])
+        ]);
+        const referenceDataDescription = document.createElement("p");
+        referenceDataDescription.className = "reference-data-detail-description";
+        referenceDataDescription.textContent = String(referenceDataTable.description || "暂无表格描述");
+        const referenceDataGrid = document.createElement("dl");
+        referenceDataGrid.className = "reference-data-detail-info-grid";
+        referenceDataFields.forEach(([referenceDataLabel, referenceDataValue]) => {
+            const referenceDataItem = document.createElement("div");
+            const referenceDataTerm = document.createElement("dt");
+            const referenceDataDefinition = document.createElement("dd");
+            referenceDataTerm.textContent = referenceDataLabel;
+            referenceDataDefinition.textContent = String(referenceDataValue ?? "—");
+            referenceDataItem.append(referenceDataTerm, referenceDataDefinition);
+            referenceDataGrid.appendChild(referenceDataItem);
+        });
+        referenceDataHost.append(referenceDataDescription, referenceDataGrid);
+    }
+
+    function referenceDataRenderTablePreview(referenceDataHost, referenceDataTable) {
+        referenceDataHost.replaceChildren();
+        const referenceDataColumns = (referenceDataState.records.get("columns") || [])
+            .filter((referenceDataColumn) =>
+                String(referenceDataColumn.tableName) === String(referenceDataTable.tableName)
+                && String(referenceDataColumn.gridId) === String(referenceDataTable.gridColumnId)
+                && Number(referenceDataColumn.status) === 1
+                && Boolean(referenceDataColumn.visible))
+            .sort((referenceDataLeft, referenceDataRight) => Number(referenceDataLeft.sortnum) - Number(referenceDataRight.sortnum));
+        if (referenceDataColumns.length === 0) {
+            const referenceDataEmpty = document.createElement("div");
+            referenceDataEmpty.className = "reference-data-detail-empty";
+            referenceDataEmpty.innerHTML = '<i class="ri-layout-column-line" aria-hidden="true"></i><strong>该表格尚未配置显示列</strong>';
+            const referenceDataAdd = document.createElement("button");
+            referenceDataAdd.type = "button";
+            referenceDataAdd.dataset.referenceDataDetailAction = "add-column";
+            referenceDataAdd.textContent = "新增第一列";
+            referenceDataEmpty.appendChild(referenceDataAdd);
+            referenceDataHost.appendChild(referenceDataEmpty);
+            return;
+        }
+        const referenceDataTableElement = document.createElement("table");
+        referenceDataTableElement.className = "reference-data-detail-preview-table";
+        const referenceDataHead = document.createElement("thead");
+        const referenceDataHeadRow = document.createElement("tr");
+        const referenceDataBody = document.createElement("tbody");
+        const referenceDataFieldRow = document.createElement("tr");
+        referenceDataColumns.forEach((referenceDataColumn) => {
+            const referenceDataHeading = document.createElement("th");
+            referenceDataHeading.textContent = String(referenceDataColumn.labelZh || referenceDataColumn.gridColumnId);
+            referenceDataHeading.style.width = String(referenceDataColumn.width || "auto");
+            const referenceDataField = document.createElement("td");
+            referenceDataField.textContent = String(referenceDataColumn.tableFieldName || referenceDataColumn.gridColumnId);
+            referenceDataHeadRow.appendChild(referenceDataHeading);
+            referenceDataFieldRow.appendChild(referenceDataField);
+        });
+        referenceDataHead.appendChild(referenceDataHeadRow);
+        referenceDataBody.appendChild(referenceDataFieldRow);
+        referenceDataTableElement.append(referenceDataHead, referenceDataBody);
+        referenceDataHost.appendChild(referenceDataTableElement);
+    }
+
+    function referenceDataRenderTableDetail() {
+        const referenceDataGridBoard = referenceDataState.panelRoot?.querySelector(".selgrid-board-shell");
+        if (!referenceDataState.selectedTable) {
+            referenceDataState.panelRoot?.removeAttribute("data-reference-data-detail-tab");
+            referenceDataState.panelRoot?.querySelector("[data-reference-data-table-detail]")?.remove();
+            if (referenceDataGridBoard) referenceDataGridBoard.hidden = false;
+            return;
+        }
+        const referenceDataDetail = referenceDataEnsureTableDetailShell();
+        if (!referenceDataDetail) return;
+        const referenceDataTab = referenceDataState.tableDetailTab || "columns";
+        referenceDataState.panelRoot.dataset.referenceDataDetailTab = referenceDataTab;
+        referenceDataDetail.querySelector("[data-reference-data-detail-title]").textContent =
+            String(referenceDataState.selectedTable.description || referenceDataState.selectedTable.tableName);
+        referenceDataDetail.querySelector("[data-reference-data-detail-coordinate]").textContent =
+            `${referenceDataState.selectedTable.projectName} · ${referenceDataState.selectedTable.gridColumnId}`;
+        referenceDataDetail.querySelectorAll("[data-reference-data-detail-tab]").forEach((referenceDataButton) => {
+            const referenceDataSelected = referenceDataButton.dataset.referenceDataDetailTab === referenceDataTab;
+            referenceDataButton.setAttribute("aria-selected", String(referenceDataSelected));
+            referenceDataButton.tabIndex = referenceDataSelected ? 0 : -1;
+        });
+        const referenceDataInfo = referenceDataDetail.querySelector('[data-reference-data-detail-content="info"]');
+        const referenceDataPreview = referenceDataDetail.querySelector('[data-reference-data-detail-content="preview"]');
+        referenceDataInfo.hidden = referenceDataTab !== "info";
+        referenceDataPreview.hidden = referenceDataTab !== "preview";
+        if (referenceDataGridBoard) referenceDataGridBoard.hidden = referenceDataTab !== "columns";
+        if (referenceDataTab === "info") referenceDataRenderTableInfo(referenceDataInfo, referenceDataState.selectedTable);
+        if (referenceDataTab === "preview") referenceDataRenderTablePreview(referenceDataPreview, referenceDataState.selectedTable);
+    }
+
+    function referenceDataSetTableDetailTab(referenceDataTab) {
+        if (!referenceDataState.selectedTable || !["info", "columns", "preview"].includes(referenceDataTab)) return;
+        referenceDataState.tableDetailTab = referenceDataTab;
+        referenceDataRenderTableDetail();
+    }
+
     function referenceDataApplyPayload(referenceDataPayload) {
         if (referenceDataState.panelRoot) window.selPanel.setLocale(referenceDataState.panelRoot, { view: referenceDataPayload });
         referenceDataState.searchController?.setLocale(referenceDataPayload.search);
@@ -584,6 +738,7 @@
         referenceDataState.gridController?.setLocale(referenceDataPayload);
         referenceDataState.gridController?.reset();
         window.selDropdownMenu.mountAll(referenceDataState.panelRoot);
+        referenceDataRenderTableDetail();
     }
 
     async function referenceDataRefresh(referenceDataReloadActive = true) {
@@ -595,6 +750,11 @@
     async function referenceDataSwitchModule(referenceDataKey) {
         if (!referenceDataModules[referenceDataKey]) return;
         if (referenceDataState.activeKey === referenceDataKey && referenceDataState.loadedKeys.has(referenceDataKey)) return;
+        // 离开表格列详情时释放当前表格上下文，返回表格定义列表或其他业务模块。
+        if (referenceDataKey !== "columns") {
+            referenceDataState.selectedTable = null;
+            referenceDataState.tableDetailTab = null;
+        }
         referenceDataState.activeKey = referenceDataKey;
         referenceDataState.editingId = null;
         await referenceDataEnsureModuleLoaded(referenceDataActiveModule());
@@ -612,7 +772,17 @@
         const referenceDataController = referenceDataState.editWindowControllers.get(referenceDataModule.key);
         referenceDataController.setLocale(referenceDataBuildEditWindow(referenceDataModule, Boolean(referenceDataRecord), referenceDataRecord));
         referenceDataController.reset();
-        if (referenceDataRecord) referenceDataController.setValues(referenceDataRecord);
+        if (referenceDataRecord) {
+            referenceDataController.setValues(referenceDataRecord);
+        } else if (referenceDataModule.key === "columns" && referenceDataState.selectedTable) {
+            // 从表格详情新增列时自动绑定主表坐标，用户只需维护列本身。
+            referenceDataController.setValues({
+                tableName: referenceDataState.selectedTable.tableName,
+                gridId: referenceDataState.selectedTable.gridColumnId,
+                tenantId: referenceDataState.selectedTable.tenantId || 1,
+                lastOperateUserId: referenceDataState.selectedTable.lastOperateUserId || 1
+            });
+        }
         referenceDataController.open();
     }
 
@@ -639,7 +809,14 @@
                 data: referenceDataState.editingId ? { ...referenceDataValues, id: referenceDataState.editingId } : referenceDataValues
             });
             referenceDataController.setFeedback(referenceDataResult.msg || `${referenceDataModule.itemName}保存完成。`);
-            await referenceDataRefresh(true);
+            // 从详情页编辑主表时先刷新主表缓存，再恢复当前选中记录；列写入只刷新列模块。
+            await referenceDataEnsureModuleLoaded(referenceDataModule, true);
+            if (referenceDataModule.key === "tables" && referenceDataState.selectedTable) {
+                referenceDataState.selectedTable = referenceDataFindRecord(
+                    referenceDataModules.tables, referenceDataState.selectedTable.id
+                ) || referenceDataState.selectedTable;
+            }
+            await referenceDataRefresh(false);
             referenceDataController.close();
             referenceDataState.editingId = null;
         } catch (referenceDataError) {
@@ -680,10 +857,12 @@
     }
 
     async function referenceDataOpenTableColumns(referenceDataRecord) {
+        // 主表记录成为详情上下文；列模块仍按需加载且只展示 tableName + gridId 对应记录。
+        referenceDataState.selectedTable = Object.freeze({ ...referenceDataRecord });
+        referenceDataState.tableDetailTab = "columns";
         await referenceDataSwitchModule("columns");
-        referenceDataState.gridController.filters.setSearch(
-            String(referenceDataRecord.gridColumnId || referenceDataRecord.tableName || "")
-        );
+        // 已经位于列模块时 switch 会复用缓存，因此仍需按新主表上下文重建当前表格数据。
+        referenceDataApplyPayload(referenceDataBuildPayload());
     }
 
     async function referenceDataPreview(referenceDataModule, referenceDataRecord) {
@@ -790,6 +969,27 @@
             const referenceDataDetail = referenceDataEvent.detail;
             if (!referenceDataDetail || referenceDataDetail.instanceKey !== referenceDataGridId) return;
             referenceDataHandleAction(referenceDataActiveModule(), referenceDataDetail.action, referenceDataDetail.record);
+        });
+        referenceDataState.panelRoot.addEventListener("click", async (referenceDataEvent) => {
+            const referenceDataTabButton = referenceDataEvent.target.closest("[data-reference-data-detail-tab]");
+            if (referenceDataTabButton) {
+                referenceDataSetTableDetailTab(referenceDataTabButton.dataset.referenceDataDetailTab);
+                return;
+            }
+            const referenceDataDetailAction = referenceDataEvent.target.closest("[data-reference-data-detail-action]")
+                ?.dataset.referenceDataDetailAction;
+            if (referenceDataDetailAction === "back") {
+                await referenceDataSwitchModule("tables");
+                return;
+            }
+            if (referenceDataDetailAction === "edit-table" && referenceDataState.selectedTable) {
+                referenceDataOpenEditor(referenceDataModules.tables, referenceDataState.selectedTable);
+                return;
+            }
+            if (referenceDataDetailAction === "add-column") {
+                referenceDataSetTableDetailTab("columns");
+                referenceDataOpenEditor(referenceDataModules.columns);
+            }
         });
         referenceDataState.panelRoot.addEventListener("selTree:select", async (referenceDataEvent) => {
             const referenceDataTreeId = String(referenceDataEvent.detail?.id || "");

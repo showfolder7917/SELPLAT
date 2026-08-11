@@ -25,6 +25,21 @@ public class ReferenceDataTableColumnServiceImpl
      */
     @Override
     public CommonResult resolveColumns(String tableName, String gridId, String locale) {
+        List<Map<String, Object>> columns = resolveColumnDefinitions(tableName, gridId, locale);
+        String normalizedLocale = ReferenceDataQueryUtil.locale(Map.of("locale", locale == null ? "zh-CN" : locale));
+        // 兼容远程客户端的旧接口；未配置只返回空列，不制造需要展示的错误消息。
+        Map<String, Object> resolved = new LinkedHashMap<>();
+        resolved.put("source", columns.isEmpty() ? "NOT_CONFIGURED" : "REFERENCE_DATA_TABLE_COLUMN");
+        resolved.put("tableName", tableName);
+        resolved.put("gridId", gridId);
+        resolved.put("locale", normalizedLocale);
+        resolved.put("columns", columns);
+        return buildSuccessResult(Collections.unmodifiableMap(resolved), "页面表格头解析完成。");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<Map<String, Object>> resolveColumnDefinitions(String tableName, String gridId, String locale) {
         List<Map<String, Object>> rows = getDao().findVisibleColumns(
                 tableName == null ? "" : tableName.trim(),
                 gridId == null ? "" : gridId.trim());
@@ -44,12 +59,6 @@ public class ReferenceDataTableColumnServiceImpl
             column.put("cellIconVisible", Boolean.TRUE.equals(row.get("cellIconVisible")));
             columns.add(Collections.unmodifiableMap(column));
         }
-        Map<String, Object> resolved = new LinkedHashMap<>();
-        resolved.put("source", rows.isEmpty() ? "SAFE_DEFAULT" : "REFERENCE_DATA_TABLE_COLUMN");
-        resolved.put("tableName", tableName);
-        resolved.put("gridId", gridId);
-        resolved.put("locale", normalizedLocale);
-        resolved.put("columns", List.copyOf(columns));
-        return buildSuccessResult(Collections.unmodifiableMap(resolved), "页面表格头解析完成。");
+        return List.copyOf(columns);
     }
 }

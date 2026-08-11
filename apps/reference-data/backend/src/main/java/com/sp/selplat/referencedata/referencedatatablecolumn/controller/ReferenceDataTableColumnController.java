@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** 发布 ReferenceDataTableColumn 的维护接口和页面表头解析接口。 */
 @RestController
-@ModuleDescription(code = "reference-data-table-column", name = "页面表格头", description = "维护数据库驱动的页面表格列")
+@ModuleDescription(code = "reference-data-table-column", name = "页面表格头", description = "维护业务配置驱动的页面表格列")
 @RequestMapping(value = "/api/reference-data/admin/table-columns/", produces = MediaType.APPLICATION_JSON_VALUE)
 public class ReferenceDataTableColumnController extends BaseController<ReferenceDataTableColumnService> {
 

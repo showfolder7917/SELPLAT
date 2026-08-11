@@ -84,7 +84,7 @@ public class ReferenceDataPersistenceConfiguration {
             dataSource.setUrl(databaseUrl);
             dataSource.setUsername(username);
             dataSource.setPassword(password);
-            // 固定 SQL 清单依次执行 → 只创建缺失结构，不自动回填业务记录或号段。
+            // 固定 SQL 清单依次执行 → 创建缺失结构并幂等补充表格定义演示数据与六表号段。
             initializeDatabase(dataSource);
             // 返回带限定名的模块私有数据源，不参与 Host 主数据源候选。
             return dataSource;
@@ -198,10 +198,11 @@ public class ReferenceDataPersistenceConfiguration {
     }
 
     /**
-     * 按固定顺序执行 reference-data 建表与空数据脚本。
+     * 按固定顺序执行 reference-data 建表、号段和表格定义演示数据脚本。
      *
      * @param dataSource 当前独立文件库或隔离测试库
-     * 执行结果示例：数据库包含七张空表，不创建类型、号段、表格登记或表格头记录。
+     * 执行结果示例：数据库包含七张表、六条号段、六条表格定义和四十六条可编辑表格列；
+     *     再次执行不会覆盖管理员修改。
      */
     private void initializeDatabase(DataSource dataSource) {
         // 固定结构和数据资源清单 → 可重复执行的数据库初始化器。

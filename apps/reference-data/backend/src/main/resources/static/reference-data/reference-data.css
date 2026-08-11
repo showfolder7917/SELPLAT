@@ -59,6 +59,198 @@ body {
     padding: var(--sel-theme-viewport-gap);
 }
 
+/* 表格定义详情保留业务上下文，并与公共 selGrid 共用中央工作区。 */
+.reference-data-table-detail {
+    display: flex;
+    min-width: 0;
+    flex: 0 0 auto;
+    flex-direction: column;
+    border-bottom: 1px solid var(--sel-theme-line-soft);
+    background: color-mix(in srgb, var(--sel-theme-panel-surface) 86%, transparent);
+}
+
+.reference-data-table-detail-header {
+    display: grid;
+    min-height: 54px;
+    align-items: center;
+    gap: 16px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 8px 16px;
+}
+
+.reference-data-detail-back,
+.reference-data-detail-edit,
+.reference-data-detail-empty button {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--sel-theme-control-line);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    cursor: pointer;
+}
+
+.reference-data-detail-back:hover,
+.reference-data-detail-edit:hover,
+.reference-data-detail-empty button:hover {
+    border-color: var(--sel-theme-interaction-hover-line);
+    color: var(--sel-theme-text-title);
+}
+
+.reference-data-table-detail-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.reference-data-table-detail-copy strong {
+    overflow: hidden;
+    color: var(--sel-theme-text-title);
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reference-data-table-detail-copy span {
+    overflow: hidden;
+    color: var(--sel-theme-text-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reference-data-detail-tabs {
+    display: flex;
+    min-height: 40px;
+    align-items: end;
+    gap: 4px;
+    padding: 0 16px;
+    border-top: 1px solid var(--sel-theme-line-soft);
+}
+
+.reference-data-detail-tabs button {
+    position: relative;
+    min-height: 40px;
+    padding: 0 18px;
+    border: 0;
+    color: var(--sel-theme-text-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.reference-data-detail-tabs button[aria-selected="true"] {
+    color: var(--sel-theme-text-title);
+}
+
+.reference-data-detail-tabs button[aria-selected="true"]::after {
+    position: absolute;
+    right: 14px;
+    bottom: 0;
+    left: 14px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--sel-theme-soft-accent-line);
+    content: "";
+}
+
+.reference-data-detail-content {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 22px;
+}
+
+.reference-data-detail-description {
+    margin: 0 0 18px;
+    color: var(--sel-theme-text-body);
+    line-height: 1.7;
+}
+
+.reference-data-detail-info-grid {
+    display: grid;
+    margin: 0;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reference-data-detail-info-grid > div {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    background: var(--sel-theme-control-surface);
+}
+
+.reference-data-detail-info-grid dt {
+    margin-bottom: 7px;
+    color: var(--sel-theme-text-muted);
+    font-size: 12px;
+}
+
+.reference-data-detail-info-grid dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--sel-theme-text-title);
+}
+
+.reference-data-detail-preview-table {
+    width: max(100%, 760px);
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.reference-data-detail-preview-table th,
+.reference-data-detail-preview-table td {
+    overflow: hidden;
+    padding: 13px 14px;
+    border: 1px solid var(--sel-theme-line-soft);
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reference-data-detail-preview-table th {
+    color: var(--sel-theme-text-title);
+    background: var(--sel-theme-control-surface);
+}
+
+.reference-data-detail-preview-table td {
+    color: var(--sel-theme-text-muted);
+}
+
+.reference-data-detail-empty {
+    display: grid;
+    min-height: 260px;
+    place-items: center;
+    align-content: center;
+    gap: 12px;
+    color: var(--sel-theme-text-muted);
+}
+
+.reference-data-detail-empty i { font-size: 32px; }
+
+/* 基本信息和预览不显示列表筛选与分页；列配置页继续完整复用公共表格能力。 */
+.selpanel-shell[data-reference-data-detail-tab="info"] [data-sel-panel-component="toolbar"],
+.selpanel-shell[data-reference-data-detail-tab="preview"] [data-sel-panel-component="toolbar"],
+.selpanel-shell[data-reference-data-detail-tab="info"] [data-sel-panel-region="bottom"],
+.selpanel-shell[data-reference-data-detail-tab="preview"] [data-sel-panel-region="bottom"] {
+    display: none;
+}
+
+.selpanel-shell[data-reference-data-detail-tab="info"] .reference-data-table-detail,
+.selpanel-shell[data-reference-data-detail-tab="preview"] .reference-data-table-detail {
+    height: 100%;
+    border-bottom: 0;
+}
+
+@media (max-width: 1180px) {
+    .reference-data-detail-info-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* 低高度桌面让公共面板从顶部开始排列，避免浏览器缩小时上下裁切。 */
 @media (max-height: 620px) {
     .reference-data-page-stage { align-items: start; }

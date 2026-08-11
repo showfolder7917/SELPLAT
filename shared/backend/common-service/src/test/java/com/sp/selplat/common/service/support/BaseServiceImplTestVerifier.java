@@ -77,14 +77,15 @@ public final class BaseServiceImplTestVerifier {
             SharedServiceFixtureService service = context.service();
             // 公共 Grid 字段列入口必须直接读取当前真实业务表元数据。
             CommonResult gridColumnResult = service.getGridColumn("shared-management", "zh-CN");
-            // 默认来源用于未来 reference-data 配置覆盖时区分数据库兜底结果。
-            assertEquals("DEFAULT_METADATA", data(gridColumnResult).get("source"));
+            // 未装配 Reference Data 时必须静默返回真实字段名列。
+            assertEquals("DEFAULT_FIELD_NAME", data(gridColumnResult).get("source"));
             // Grid 实例编码必须原样返回。
             assertEquals("shared-management", data(gridColumnResult).get("viewCode"));
             // 当前语言必须原样返回。
             assertEquals("zh-CN", data(gridColumnResult).get("locale"));
-            // 字段元数据必须包含真实 fixture 主键列。
-            assertTrue(((Map<?, ?>) data(gridColumnResult).get("columns")).containsKey("id"));
+            // 后备列与配置列保持同一数组结构，主键表头直接显示真实字段名。
+            List<?> gridColumns = (List<?>) data(gridColumnResult).get("columns");
+            assertTrue(gridColumns.stream().anyMatch(column -> "id".equals(((Map<?, ?>) column).get("label"))));
             // 空 Grid 编码必须进入统一业务异常体系。
             assertEquals(
                 "INVALID_VIEW_CODE",
@@ -248,8 +249,8 @@ public final class BaseServiceImplTestVerifier {
             Set.of("getDao", "getSequence", "buildSuccessResult"),
             declaredMethodNames(BaseExtendsServiceImpl.class)
         );
-        // BaseServiceImpl 只保存当前业务 DAO。
-        assertEquals(1, BaseServiceImpl.class.getDeclaredFields().length);
+        // BaseServiceImpl 保存当前业务 DAO、可选表格头提供者和部署环境配置三个稳定依赖。
+        assertEquals(3, BaseServiceImpl.class.getDeclaredFields().length);
         // 扩展基础层只保存公共发号器。
         assertEquals(1, BaseExtendsServiceImpl.class.getDeclaredFields().length);
         try {

@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则不涉及 Node 执行代码。 -->
 node_ability_refs = none
-<!-- 1.6.0 统一表格头真实表名、SEL表格实例、数据库字段、渲染器和图标字段职责。 -->
-rule_version = 1.6.0
+<!-- 1.7.0 统一 getGridColumn 的本地/远程配置优先、字段名静默降级和相同返回结构。 -->
+rule_version = 1.7.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已进入当前用户索引并完成 Uniauth 首个接入验证。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自 Uniauth 多项目数据源继承修正。 -->
-upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖;2026-08-08:MDA与Uniauth号段DAO改按项目具名数据源注册并由公共发号器按真实seqCode唯一路由;2026-08-11:reference-data建立一行一列的数据库驱动页面表格头并由真实页面消费;2026-08-11:表格头坐标改为tableName_gridId_gridColumnId并补齐数据库字段_单元格渲染_图标_审计职责
+upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖;2026-08-08:MDA与Uniauth号段DAO改按项目具名数据源注册并由公共发号器按真实seqCode唯一路由;2026-08-11:reference-data建立一行一列的数据库驱动页面表格头并由真实页面消费;2026-08-11:表格头坐标改为tableName_gridId_gridColumnId并补齐数据库字段_单元格渲染_图标_审计职责;2026-08-11:getGridColumn统一本地Provider_远程HTTP_字段名静默降级且返回同一列数组
 
 ## 公共 Base 边界
 
@@ -75,8 +75,8 @@ uniauth_test_database_policy = isolated_memory_database_only
 
 <!-- 项目默认表格列必须由当前项目 BaseDao 读取真实数据库字段名、备注与类型，禁止 Controller 或前端重复写死。 -->
 default_table_definition_source = project_BaseDao_real_database_metadata
-<!-- 数据库备注作为默认列标题；备注缺失时才回退到真实字段名。 -->
-default_table_column_title = database_comment_then_column_name
+<!-- Reference Data 配置未命中或不可用时，默认列标题直接使用真实字段名，不把备注或技术失败变成页面提示。 -->
+default_table_column_title = real_column_name_without_user_prompt
 <!-- 同一业务资源可有多个前端表格，返回结构必须同时保留 resourceCode、viewCode 和 locale。 -->
 table_definition_identity = resourceCode_plus_viewCode_plus_locale
 <!-- 口令摘要等敏感字段可保留元数据供配置校验，但默认必须不可见。 -->
@@ -84,10 +84,16 @@ sensitive_column_default_visibility = hidden
 
 ## 配置覆盖与分层
 
-<!-- 未来接入 reference-data 后，Service 只在完整配置存在时返回配置，未配置则继续返回项目 BaseDao 默认元数据。 -->
-table_definition_resolution = reference_data_configuration_when_present_otherwise_project_metadata
+<!-- Service 先使用同进程 Provider，应用拆分后根据服务地址调用相同 HTTP 契约；无数据、超时和异常都静默降级字段名。 -->
+table_definition_resolution = local_reference_data_provider_then_remote_resolve_http_then_real_field_names_silent
 <!-- Controller 只接收 viewCode、locale 并序列化结果，Service 选择定义来源，DAO 负责项目数据库元数据。 -->
 table_definition_layering = Controller_serializes_Service_resolves_DAO_reads_project_metadata
+<!-- 配置命中和字段名降级必须返回同一 SEL Grid columns 数组，禁止前端为两种来源维护不同解析分支。 -->
+table_definition_response_shape = same_SEL_Grid_columns_array_for_configured_and_field_name_fallback
+<!-- Reference Data 服务不可达、非 2xx、超时、异常或无配置时只允许后台调试日志，页面不弹窗、不提示且列表继续显示。 -->
+table_definition_failure_user_experience = silent_field_name_fallback_without_toast_dialog_or_error_message
+<!-- 当前单工程不允许 Controller 通过 HTTP 调用同进程接口；远程 HTTP 只在未装配本地 Provider 且显式配置服务地址时启用。 -->
+table_definition_deployment_adapter = same_process_direct_provider,separate_process_configured_remote_http,no_self_http
 
 ## 数据库驱动页面表格头
 
@@ -95,12 +101,12 @@ table_definition_layering = Controller_serializes_Service_resolves_DAO_reads_pro
 database_grid_header_row_granularity = one_record_per_rendered_column,unique_tableName_gridId_gridColumnId
 <!-- 每条配置必须同时承载租户与操作员、真实字段、第二字段、三语表头、宽度、渲染器、图标及其显示开关、列显示开关、生命周期状态和排序。 -->
 database_grid_header_required_configuration = tenantId,lastOperateUserId,tableFieldName,tableSecondaryFieldName,labelZh,labelJa,labelEn,width,cellRenderer,cellIcon,cellIconVisible,visible,status,sortnum
-<!-- 页面必须从解析接口消费当前启用且显示的列；只有数据库没有任何配置时才允许最小安全兜底，禁止维护第二份完整硬编码表头。 -->
-database_grid_header_frontend_source = resolved_active_visible_database_columns,safe_minimum_only_when_empty,no_parallel_full_hardcoded_headers
+<!-- 页面只能调用当前业务 Controller 的 getGridColumn；内部本地或远程解析由 Service 决定，前端禁止直接调用 resolve.htm。 -->
+database_grid_header_frontend_source = business_getGridColumn_only,no_frontend_direct_resolve_endpoint,no_parallel_hardcoded_headers
 <!-- 表格头新增、编辑、启停或显示开关保存后必须重新解析并原位刷新当前表格，重启不得覆盖人工配置。 -->
-database_grid_header_runtime_refresh = write_then_resolve_and_refresh,empty_initial_table,no_restart_seed_or_overwrite
+database_grid_header_runtime_refresh = write_then_getGridColumn_and_refresh,idempotent_missing_test_seed_without_overwrite
 <!-- 真实数据库测试必须覆盖新增多语言列、解析宽度和标签、关闭显示后列消失及逻辑删除。 -->
-database_grid_header_real_database_test = create_multilingual_column,resolve_label_and_width,visible_false_excluded,logical_delete
+database_grid_header_real_database_test = create_multilingual_column,getGridColumn_local_provider,resolve_label_and_width,visible_false_field_name_fallback,logical_delete,remote_http_contract
 
 ## 验证
 

@@ -1,6 +1,7 @@
 package com.sp.selplat.referencedata.referencedatatype.controller;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,7 +41,7 @@ class ReferenceDataTypeControllerRealDatabaseTest {
     @Qualifier("referenceDataJdbcTemplate")
     private JdbcTemplate jdbcTemplate;
 
-    /** 为每个接口测试显式建立业务所需数据，验证生产启动脚本本身保持空表。 */
+    /** 每个接口测试先清理初始化演示数据，再显式建立当前 Case 所需的隔离数据。 */
     @BeforeEach
     void prepareExplicitFixture() {
         jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
@@ -111,6 +112,31 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 .andExpect(jsonPath("$.records[0].tableName").value("ReferenceDataType"))
                 .andExpect(jsonPath("$.records[0].description").value("引用数据类型管理表格"))
                 .andExpect(jsonPath("$.records[0].pagePath").value("/reference-data/reference-data.html"));
+
+        // 单查、更新和逻辑删除继续复用公共 CRUD，证明表格定义不是只读登记清单。
+        mockMvc.perform(get("/api/reference-data/admin/tables/getById.htm").param("id", "101000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.gridColumnId").value("selGridTypeManagementId"));
+        mockMvc.perform(post("/api/reference-data/admin/tables/update.htm")
+                        .param("id", "101000")
+                        .param("projectName", "reference-data")
+                        .param("tableName", "ReferenceDataType")
+                        .param("gridColumnId", "selGridTypeManagementId")
+                        .param("description", "引用数据类型管理表格（已更新）")
+                        .param("pagePath", "/reference-data/reference-data.html")
+                        .param("status", "2")
+                        .param("sortnum", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.description").value("引用数据类型管理表格（已更新）"));
+        mockMvc.perform(post("/api/reference-data/admin/tables/delete.htm").param("id", "101000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(0));
+        mockMvc.perform(get("/api/reference-data/admin/tables/getStore.htm")
+                        .param("gridColumnId", "selGridTypeManagementId")
+                        .param("status", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.records[0].status").value(0));
     }
 
     /**
@@ -248,8 +274,8 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                         .param("locale", "zh-CN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.source").value("DEFAULT_METADATA"))
-                .andExpect(jsonPath("$.data.columns.resourceCode.columnName").value("resourceCode"));
+                .andExpect(jsonPath("$.data.source").value("DEFAULT_FIELD_NAME"))
+                .andExpect(jsonPath("$.data.columns[?(@.field == 'resourceCode')].label").value(hasItem("resourceCode")));
     }
 
     /**
@@ -408,6 +434,14 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(101000));
 
+        mockMvc.perform(get("/api/reference-data/admin/table-columns/getById.htm").param("id", "101000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.gridColumnId").value("test-column"));
+        mockMvc.perform(get("/api/reference-data/admin/table-columns/getStore.htm")
+                        .param("gridId", "selGridTestOptionId"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(1));
+
         mockMvc.perform(get("/api/reference-data/admin/table-columns/resolve.htm")
                         .param("tableName", "ReferenceDataOption")
                         .param("gridId", "selGridTestOptionId")
@@ -420,6 +454,15 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 .andExpect(jsonPath("$.data.columns[0].width").value("180px"))
                 .andExpect(jsonPath("$.data.columns[0].cellIcon").value("ri-list-check-3"))
                 .andExpect(jsonPath("$.data.columns[0].cellIconVisible").value(true));
+
+        // 公共 getGridColumn 在同工程内直接复用配置 Service，不发送额外 HTTP。
+        mockMvc.perform(get("/api/reference-data/admin/options/getGridColumn.htm")
+                        .param("viewCode", "selGridTestOptionId")
+                        .param("locale", "ja-JP"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.source").value("REFERENCE_DATA_TABLE_COLUMN"))
+                .andExpect(jsonPath("$.data.columns", hasSize(1)))
+                .andExpect(jsonPath("$.data.columns[0].label").value("テスト列"));
 
         mockMvc.perform(post("/api/reference-data/admin/table-columns/update.htm")
                         .param("id", "101000")
@@ -444,8 +487,16 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                         .param("tableName", "ReferenceDataOption")
                         .param("gridId", "selGridTestOptionId"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.source").value("SAFE_DEFAULT"))
+                .andExpect(jsonPath("$.data.source").value("NOT_CONFIGURED"))
                 .andExpect(jsonPath("$.data.columns", hasSize(0)));
+
+        // 配置关闭后公共入口静默降级为真实字段名，不返回需要页面展示的错误提示。
+        mockMvc.perform(get("/api/reference-data/admin/options/getGridColumn.htm")
+                        .param("viewCode", "selGridTestOptionId")
+                        .param("locale", "zh-CN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.source").value("DEFAULT_FIELD_NAME"))
+                .andExpect(jsonPath("$.data.columns[?(@.field == 'optionValue')].label").value(hasItem("optionValue")));
 
         mockMvc.perform(post("/api/reference-data/admin/table-columns/delete.htm").param("id", "101000"))
                 .andExpect(status().isOk())

@@ -13,13 +13,12 @@ import com.sp.selplat.common.util.CommonResult;
 public interface BaseService {
 
     /**
-     * 返回当前业务资源指定 Grid 的默认字段列元数据。
+     * 返回业务配置优先、真实字段名静默后备的标准 SEL Grid 列定义。
      *
-     * @param viewCode 前端 Grid 实例编码，例如 {@code user-management}
-     * @param locale 当前语言，例如 {@code zh-CN}
-     * @return 成功结果，例如
-     *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management",}
-     *     {@code "columns":{"loginName":{"remarks":"登录账号","dataType":"VARCHAR"}}}}}
+     * @param viewCode 页面表格实例编码，例如 {@code "selGridUserManagementId"}
+     * @param locale 页面当前语言，例如 {@code "zh-CN"}
+     * @return 配置命中时返回中文表格头；配置不存在或不可用时返回
+     *     {@code {"source":"DEFAULT_FIELD_NAME","columns":[{"field":"loginName","label":"loginName"}]}}
      */
     CommonResult getGridColumn(String viewCode, String locale);
 

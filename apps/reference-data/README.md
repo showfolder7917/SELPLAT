@@ -6,7 +6,7 @@
 
 - 使用 `projectCode + resourceCode` 定位已登记的树或类型资源。
 - 对外提供稳定的树、下拉选项和右键菜单 HTTP 结构。
-- 四种数据分别由自己的表业务 Controller、Service 和 DAO 维护。
+- 六种数据分别由自己的表业务 Controller、Service 和 DAO 维护。
 - 已通过 `/api/reference-data/**` 提供树和类型选项 HTTP API。
 - 已提供独立的类型目录管理后台，并把正式数据永久保存在本模块 `db/reference-data.mv.db`。
 
@@ -32,7 +32,8 @@ host     → reference-data:backend
 backend  → shared
 ```
 
-业务项目只能调用公开 HTTP API，不得跨模块访问 reference-data 的 Service 或 DAO。
+同一 Host 进程中的公共 `getGridColumn` 通过受控 Provider 调用 Reference Data Service；应用拆分后配置
+`selplat.grid-column.service-url`，相同入口自动改走公开 HTTP API。业务模块不得直接访问 Reference Data DAO。
 
 ## 第一版可用接口
 
@@ -68,7 +69,8 @@ Host 启动后访问：
 http://127.0.0.1:8080/reference-data/reference-data.html
 ```
 
-当前页面支持类型分页查询、筛选、新增、编辑和逻辑删除。正式数据库文件位于：
+当前页面支持五个业务模块按需加载；“表格定义”提供基本信息、表格列配置和效果预览，
+`ReferenceDataTable` 与 `ReferenceDataTableColumn` 均支持新增、查询、编辑、启停和逻辑删除。正式数据库文件位于：
 
 ```text
 apps/reference-data/db/reference-data.mv.db
@@ -76,4 +78,5 @@ apps/reference-data/db/reference-data.mv.db
 
 迁移脚本纳入版本管理，运行数据文件不提交 Git。自动化测试使用独立的内存库或临时文件库，禁止读写正式数据库。
 
-当前管理页面维护类型目录；树、下拉选项和右键菜单通过各自表业务接口读取。
+所有页面表格头统一调用各业务 Controller 继承的 `getGridColumn.htm`：配置命中时使用多语言名称，
+配置缺失或接口不可用时静默显示真实字段名，不向用户显示错误提示。

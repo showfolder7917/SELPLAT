@@ -59,6 +59,20 @@ public class ReferenceDataOptionController {
     }
 
     /**
+     * 返回下拉选项管理表格的配置列或字段名后备列。
+     *
+     * @param viewCode 页面表格实例标识，例如 {@code "selGridOptionManagementId"}
+     * @param locale 当前语言，例如 {@code "zh-CN"}
+     * @return Grid 列 JSON，例如 {@code {"success":true,"data":{"columns":[{"field":"optionValue"}]}}}
+     */
+    @GetMapping(value = "/admin/options/getGridColumn.htm", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String getGridColumn(
+            @RequestParam(name = "viewCode", defaultValue = "default") String viewCode,
+            @RequestParam(name = "locale", defaultValue = "zh-CN") String locale) {
+        return JsonUtils.toJsonIgnoreNull(service.getGridColumn(viewCode, locale));
+    }
+
+    /**
      * 新增一条下拉选项。
      *
      * @param saveIn 选项字段，例如 {@code {"typeId":1,"optionValue":"TREE","labelZh":"树形资源"}}

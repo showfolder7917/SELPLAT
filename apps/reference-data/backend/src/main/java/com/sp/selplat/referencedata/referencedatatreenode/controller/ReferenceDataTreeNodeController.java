@@ -59,6 +59,20 @@ public class ReferenceDataTreeNodeController {
     }
 
     /**
+     * 返回树节点管理表格的配置列或字段名后备列。
+     *
+     * @param viewCode 页面表格实例标识，例如 {@code "selGridTreeNodeManagementId"}
+     * @param locale 当前语言，例如 {@code "zh-CN"}
+     * @return Grid 列 JSON，例如 {@code {"success":true,"data":{"columns":[{"field":"nodeCode"}]}}}
+     */
+    @GetMapping(value = "/admin/tree-nodes/getGridColumn.htm", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String getGridColumn(
+            @RequestParam(name = "viewCode", defaultValue = "default") String viewCode,
+            @RequestParam(name = "locale", defaultValue = "zh-CN") String locale) {
+        return JsonUtils.toJsonIgnoreNull(service.getGridColumn(viewCode, locale));
+    }
+
+    /**
      * 新增一条树节点记录。
      *
      * @param saveIn 树节点字段，例如 {@code {"typeId":1,"nodeCode":"root","nodeValue":"ROOT","labelZh":"根节点"}}

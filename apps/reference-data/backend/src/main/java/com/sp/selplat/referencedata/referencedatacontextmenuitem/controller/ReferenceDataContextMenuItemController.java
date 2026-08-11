@@ -59,6 +59,20 @@ public class ReferenceDataContextMenuItemController {
     }
 
     /**
+     * 返回菜单项目管理表格的配置列或字段名后备列。
+     *
+     * @param viewCode 页面表格实例标识，例如 {@code "selGridContextMenuManagementId"}
+     * @param locale 当前语言，例如 {@code "zh-CN"}
+     * @return Grid 列 JSON，例如 {@code {"success":true,"data":{"columns":[{"field":"itemCode"}]}}}
+     */
+    @GetMapping(value = "/admin/context-menu-items/getGridColumn.htm", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String getGridColumn(
+            @RequestParam(name = "viewCode", defaultValue = "default") String viewCode,
+            @RequestParam(name = "locale", defaultValue = "zh-CN") String locale) {
+        return JsonUtils.toJsonIgnoreNull(service.getGridColumn(viewCode, locale));
+    }
+
+    /**
      * 新增一条菜单项。
      *
      * @param saveIn 菜单字段，例如 {@code {"typeId":1,"itemCode":"create","labelZh":"新建"}}

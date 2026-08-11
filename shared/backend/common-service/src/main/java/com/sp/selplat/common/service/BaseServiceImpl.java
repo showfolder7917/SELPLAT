@@ -1,7 +1,10 @@
 package com.sp.selplat.common.service;
 
 import com.sp.selplat.common.db.dao.BaseDao;
+import com.sp.selplat.common.db.metadata.model.ColumnMetadata;
 import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.service.grid.GridColumnDefinitionProvider;
+import com.sp.selplat.common.service.grid.GridColumnDefinitionSupport;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonPageResult;
@@ -12,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -26,6 +30,14 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
     // 当前业务 DAO 由 Spring 按子类声明的泛型类型注入，避免每个 ServiceImpl 重复声明 DAO 字段和构造函数。
     @Autowired
     private D dao;
+
+    // 当前工程可选的 Reference Data 本地提供者由 Spring 注入；应用拆分后该列表可以为空。
+    @Autowired(required = false)
+    private List<GridColumnDefinitionProvider> gridColumnDefinitionProviders = List.of();
+
+    // 环境配置只用于读取未来独立 Reference Data 服务地址，不把机器地址写入源码。
+    @Autowired
+    private Environment environment;
 
     /**
      * 返回当前业务 Service 绑定的强类型 DAO 门面。
@@ -43,9 +55,10 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      *
      * @param viewCode 前端 Grid 实例编码，例如 {@code user-management}
      * @param locale 当前语言，例如 {@code zh-CN}
-     * @return 成功结果，例如
-     *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management",}
-     *     {@code "columns":{"loginName":{"remarks":"登录账号","dataType":"VARCHAR"}}}}}
+     * @return 成功结果，例如配置命中时返回
+     *     {@code {"success":true,"data":{"source":"REFERENCE_DATA_TABLE_COLUMN",}
+     *     {@code "viewCode":"user-management","columns":[{"field":"loginName","label":"登录账号"}]}}}；
+     *     配置不可用时返回 {@code label=loginName} 的字段名列且不产生页面提示
      * @throws CommonBusinessException viewCode 或 locale 为空时抛出，例如
      *     {@code CommonBusinessException("INVALID_VIEW_CODE", "表格实例编码不能为空。")}
      */
@@ -62,16 +75,31 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
             // 语言错误进入公共业务异常响应，不向前端暴露 IllegalArgumentException。
             throw new CommonBusinessException("INVALID_LOCALE", "语言编码不能为空。");
         }
-        // 使用有序结果保持来源、页面、语言和字段元数据的固定输出顺序。
+        // 当前 DAO 元数据同时提供真实表名和静默降级字段清单，只读取一次避免重复扫描数据库。
+        Map<String, ColumnMetadata> metadata = getDao().getDbColumnsMap();
+        String tableName = metadata.values().stream()
+                .map(ColumnMetadata::getTableName)
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .orElse("");
+        // 本地提供者优先；未来配置 service-url 后自动兼容独立 Reference Data HTTP 服务。
+        GridColumnDefinitionSupport.Resolution resolution = GridColumnDefinitionSupport.resolve(
+                gridColumnDefinitionProviders,
+                environment.getProperty("selplat.grid-column.service-url", ""),
+                tableName,
+                viewCode,
+                locale,
+                metadata);
+        // 使用有序结果保持来源、页面、语言和标准列清单的固定输出顺序。
         Map<String, Object> gridColumn = new LinkedHashMap<>();
-        // 标记当前结果直接来自数据库元数据，未来 reference-data 命中时可切换为配置来源。
-        gridColumn.put("source", "DEFAULT_METADATA");
+        // 来源只用于调用方诊断；无配置不是错误，也不会成为页面提示。
+        gridColumn.put("source", resolution.source());
         // 原样保留 Grid 实例编码，供前端区分同一资源的不同表格。
         gridColumn.put("viewCode", viewCode);
         // 原样保留语言，供未来 reference-data 选择对应字段标题。
         gridColumn.put("locale", locale);
-        // 直接复用 BaseDao 公共只读字段元数据，全部固定表模块共享同一默认来源。
-        gridColumn.put("columns", getDao().getDbColumnsMap());
+        // 无论配置是否命中都返回同一种 SEL Grid 列数组，前端不再维护两套解析分支。
+        gridColumn.put("columns", resolution.columns());
         // 返回公共成功结构，业务模块不再重复组装 Grid 字段列。
         return buildSuccessResult(gridColumn, "Grid 字段列查询完成。");
     }
