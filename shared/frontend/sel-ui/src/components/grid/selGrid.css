@@ -324,6 +324,35 @@
     font-size: 16px;
 }
 
+/* 可筛选字段表头：紧凑复选框与字段名共用原列宽，不改变宽表的列宽计算。 */
+.selgrid-header-field-selector {
+    display: inline-flex;
+    align-items: center;
+    max-width: calc(100% - 8px);
+    gap: 7px;
+    cursor: pointer;
+}
+
+.selgrid-header-field-checkbox {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+    margin: 0;
+    accent-color: var(--sel-theme-text-link);
+    cursor: pointer;
+}
+
+.selgrid-header-field-checkbox:focus-visible {
+    outline: 2px solid var(--sel-theme-workspace-line-active);
+    outline-offset: 2px;
+}
+
+.selgrid-header-field-selector span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* 数据行状态：包含斑马纹、分隔线、悬停反馈和当前选中行高亮。 */
 .selgrid-table tbody tr {
     position: relative;
@@ -400,6 +429,14 @@
 }
 
 .selgrid-record-nowrap { white-space: nowrap; }
+
+.selgrid-record-cell-with-icon {
+    vertical-align: middle;
+}
+
+.selgrid-record-cell-with-icon > i:first-child {
+    margin-right: 8px;
+}
 
 .selgrid-record-badge {
     display: inline-flex;

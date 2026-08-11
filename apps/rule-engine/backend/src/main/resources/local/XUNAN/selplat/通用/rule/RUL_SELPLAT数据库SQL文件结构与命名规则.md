@@ -7,13 +7,13 @@ python_ability_refs = none
 <!-- 当前规则不需要 Node 专用能力；Node 只在受影响前端字段同步时使用现有语法检查。 -->
 node_ability_refs = none
 <!-- 首版规则固化 reference-data 重构中已经验证的 SQL 目录和单表文件约束。 -->
-rule_version = 2.1.0
+rule_version = 2.2.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，未经人工提升不得扩大到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记、真实案例核对和索引链验证。 -->
 rule_status = active
 <!-- 首次升级记录说明规则来自用户对 dataShape、混合建表文件和错误命名的连续修正。 -->
-upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责
+upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责;2026-08-11:固定初始化主键不得超过六位_reference-data统一六位种子保留区并让运行号段从下一完整区间开始
 
 <!-- 问题：数据库脚本使用含义模糊的 tables 或 migration 文件名、一个文件创建多张正式表、类型表混入树或选项能力字段时，后续维护者无法从目录和文件名判断真实职责。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 中新建、迁移、拆分、改名或审查 apps/<app> 的应用自有数据库和 SQL。 -->
@@ -79,10 +79,14 @@ selplat_database_field_requires_real_call_chain = write_path,read_path,business_
 
 <!-- 严格数据库业务应用必须提供 CommonSequenceSegment 的独立结构与初始化数据脚本，由 common/persistence 绑定当前应用私有数据源。 -->
 selplat_common_sequence_sql_files = schema-CommonSequenceSegment.sql,data-CommonSequenceSegment.sql,owner_common_persistence
-<!-- 每张非 Common 业务表必须且只能在 CommonSequenceSegment 中登记一条 <ActualTableName>Id 记录，禁止多表共享号段。 -->
-selplat_business_table_sequence_cardinality = one_table_one_row,seqCode=<ActualTableName>Id,no_shared_business_sequence
+<!-- 号段数据脚本允许整体为空并由管理员逐条建立；一旦预置任一号段，就必须完整覆盖每张非 Common 业务表且禁止多表共享号段。 -->
+selplat_business_table_sequence_cardinality = fully_empty_for_manual_setup_or_one_table_one_row,seqCode=<ActualTableName>Id,no_shared_business_sequence,no_partial_seed_set
 <!-- CommonSequenceSegment 本身可使用 identity 以避免循环发号；其他业务表 id 禁止 identity，必须调用 shared SequenceGenerator。 -->
 selplat_business_table_id_generation = CommonSequenceSegment_identity_exception,other_business_tables_no_identity,shared_SequenceGenerator_required
+<!-- 显式写在 data SQL 中的固定业务主键不得超过六位，禁止重新引入 900000004003 一类脱离应用初始号段的超长编号。 -->
+selplat_fixed_seed_id_maximum_digits = six_digits,overlong_fixed_id_blocked_by_quick_gate
+<!-- 应用采用六位种子区时，种子与运行发号区必须分离；reference-data 保留 100001–100999，新建游标从 101000 起。 -->
+selplat_seed_and_runtime_sequence_separation = seed_reserved_range,runtime_nextStartId_greater_than_all_seed_ids,no_collision
 <!-- 多进程通过 versionNo 乐观锁领取互不重叠的缓存号段；允许故障产生号码空洞，禁止回退 nextStartId 或产生重复主键。 -->
 selplat_sequence_multi_process_safety = optimistic_version_lock,disjoint_ranges,gaps_allowed,no_cursor_rollback,no_duplicate_id
 

@@ -10,6 +10,8 @@
 | `ReferenceDataTreeNode` | `referencedatatreenode` | 查询和组织树节点 |
 | `ReferenceDataOption` | `referencedataoption` | 查询下拉选项 |
 | `ReferenceDataContextMenuItem` | `referencedatacontextmenuitem` | 查询多级右键菜单 |
+| `ReferenceDataTable` | `referencedatatable` | 登记项目页面表格和表格头查看入口 |
+| `ReferenceDataTableColumn` | `referencedatatablecolumn` | 维护数据库驱动的表格列定义 |
 
 每个表业务只包含 `controller`、`service/impl` 和 `dao`。跨表无状态转换进入
 `common/util`，只能由 Service 调用。common 外禁止建立无表对应的 query、provider、manager

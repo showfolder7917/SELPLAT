@@ -270,12 +270,14 @@ tasks.register('verifySelUiSourceBoundary') {
         def tooltipSource = tooltipScript.isFile() ? tooltipScript.getText('UTF-8') : ''
         def tooltipRequired = [
             'window.selTooltip', 'data-sel-tooltip', 'selTooltipIsTruncated',
+            'selTooltipShouldShow', 'dataset.selTooltipMode === "always"',
             'pointerover', 'focusin', 'aria-describedby', 'role", "tooltip',
             'if (selTooltipAriaElement &&'
         ]
         def tooltipViolations = tooltipRequired.findAll { !tooltipSource.contains(it) }.collect { "selTooltip -> ${it}" }
         if (!gridTooltipConsumer.contains('window.selTooltip.attach')
                 || !gridTooltipConsumer.contains('dataset.selTooltip')
+                || !gridTooltipConsumer.contains('dataset.selTooltipMode = "always"')
                 || gridTooltipConsumer =~ /\.title\s*=|setAttribute\(\s*["']title["']/) {
             tooltipViolations.add('selGrid -> 必须使用 selTooltip 且禁止原生 title')
         }
@@ -303,6 +305,30 @@ tasks.register('verifySelUiSourceBoundary') {
         if (!missingContracts.isEmpty()) {
             throw new GradleException("sel-ui Tab 右键菜单契约不完整：\n" + missingContracts.join('\n'))
         }
+        // 代码编辑器追加内容必须经过公开 API，并同步 change 事件、光标和焦点。
+        def codeEditorSource = file('src/components/code-editor/selCodeEditor.js').getText('UTF-8')
+        def codeEditorAppendRequired = ['function selCodeEditorAppendValue', 'appendValue: selCodeEditorAppendValue', 'selCodeEditor:change', 'setSelectionRange', 'selCodeEditorInput.focus()']
+        def missingCodeEditorAppendContracts = codeEditorAppendRequired.findAll { !codeEditorSource.contains(it) }
+        if (!missingCodeEditorAppendContracts.isEmpty()) {
+            throw new GradleException("selCodeEditor 追加 API 契约不完整：\n" + missingCodeEditorAppendContracts.join('\n'))
+        }
+        // 选区读取必须由 selCodeEditor 公开 API 承担，SQL 应用不得依赖控件内部 textarea。
+        def codeEditorSelectionRequired = [
+            'function selCodeEditorCaptureSelection',
+            'function selCodeEditorGetSelectedValue',
+            'function selCodeEditorRestoreSelection',
+            'getSelectedValue: selCodeEditorGetSelectedValue',
+            'restoreSelection: selCodeEditorRestoreSelection',
+            'selCodeEditorActions.addEventListener("mousedown"',
+            'selCodeEditorEvent.preventDefault()',
+            'selectedValue: selCodeEditorSelectedValue',
+            'selectionStart',
+            'selectionEnd'
+        ]
+        def missingCodeEditorSelectionContracts = codeEditorSelectionRequired.findAll { !codeEditorSource.contains(it) }
+        if (!missingCodeEditorSelectionContracts.isEmpty()) {
+            throw new GradleException("selCodeEditor 选区 API 契约不完整：\n" + missingCodeEditorSelectionContracts.join('\n'))
+        }
         // selGrid 列宽调整是默认公共契约：必须保留显式关闭属性、表头分隔线、指针调整和键盘调整。
         def gridScript = file('src/components/grid/selGrid.js')
         def gridStyle = file('src/components/grid/selGrid.css')
@@ -318,6 +344,12 @@ tasks.register('verifySelUiSourceBoundary') {
         gridResizeStyleRequired.findAll { !gridStyleSource.contains(it) }.each { missingGridResizeContracts.add("selGrid.css -> ${it}") }
         if (!missingGridResizeContracts.isEmpty()) {
             throw new GradleException("selGrid 默认列宽调整契约不完整：\n" + missingGridResizeContracts.join('\n'))
+        }
+        // 字段级筛选选择必须由 selGrid 提供公开契约，业务应用不得自行改写公共表头 DOM。
+        def gridHeaderSelectionRequired = ['headerSelectable === true', 'data-sel-grid-header-column-select', 'selGrid:headerSelectionChange', 'getSelectedColumnKeys:', 'selectedColumnKeys:']
+        def missingGridHeaderSelectionContracts = gridHeaderSelectionRequired.findAll { !gridSource.contains(it) }
+        if (!missingGridHeaderSelectionContracts.isEmpty()) {
+            throw new GradleException("selGrid 表头字段选择契约不完整：\n" + missingGridHeaderSelectionContracts.join('\n'))
         }
         // 记录分类既可为标量也可为数组；工具栏和树筛选必须统一按成员匹配，允许一条记录属于多个分类。
         def gridMultiValueTypeRequired = [

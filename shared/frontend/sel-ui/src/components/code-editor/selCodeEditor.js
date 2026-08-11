@@ -90,6 +90,29 @@
 
         let selCodeEditorLoading = false;
         let selCodeEditorDestroyed = false;
+        let selCodeEditorSavedSelectionStart = 0;
+        let selCodeEditorSavedSelectionEnd = 0;
+        let selCodeEditorSavedSelectionValue = selCodeEditorInput.value;
+
+        // 保存最后一个有效选区，让工具栏取得动作时仍能读取用户明确选中的代码。
+        function selCodeEditorCaptureSelection() {
+            if (selCodeEditorDestroyed) return false;
+            const selCodeEditorSelectionStart = Number(selCodeEditorInput.selectionStart || 0);
+            const selCodeEditorSelectionEnd = Number(selCodeEditorInput.selectionEnd || 0);
+            if (selCodeEditorSelectionEnd > selCodeEditorSelectionStart) {
+                selCodeEditorSavedSelectionStart = selCodeEditorSelectionStart;
+                selCodeEditorSavedSelectionEnd = selCodeEditorSelectionEnd;
+                selCodeEditorSavedSelectionValue = selCodeEditorInput.value;
+                return true;
+            }
+            // 用户在编辑区主动折叠选区时立即清空快照，防止误执行历史选区。
+            if (document.activeElement === selCodeEditorInput) {
+                selCodeEditorSavedSelectionStart = selCodeEditorSelectionStart;
+                selCodeEditorSavedSelectionEnd = selCodeEditorSelectionStart;
+                selCodeEditorSavedSelectionValue = selCodeEditorInput.value;
+            }
+            return false;
+        }
 
         // 行号和光标位置由输入值实时推导，不复制一份业务 SQL 状态。
         function selCodeEditorRefreshMetrics() {
@@ -105,28 +128,46 @@
             selCodeEditorGutter.scrollTop = selCodeEditorInput.scrollTop;
         }
 
-        // 所有业务动作都从当前编辑器根冒泡，并携带实例键、语言和实时内容。
+        // 所有业务动作都从当前编辑器根冒泡，并携带实例键、语言、实时内容和触发瞬间的选中内容。
         function selCodeEditorDispatchAction(selCodeEditorActionId) {
             if (selCodeEditorDestroyed || selCodeEditorLoading) return false;
             const selCodeEditorNormalizedAction = String(selCodeEditorActionId || "");
             if (!selCodeEditorNormalizedAction) return false;
+            const selCodeEditorSelectedValue = selCodeEditorGetSelectedValue();
             if (selCodeEditorNormalizedAction === "clear") {
                 selCodeEditorInput.value = "";
+                selCodeEditorSavedSelectionStart = 0;
+                selCodeEditorSavedSelectionEnd = 0;
+                selCodeEditorSavedSelectionValue = "";
                 selCodeEditorRefreshMetrics();
                 selCodeEditorInput.focus();
             }
             selCodeEditorRoot.dispatchEvent(new CustomEvent("selCodeEditor:action", {
                 bubbles: true,
-                detail: Object.freeze({ editorId: selCodeEditorId, action: selCodeEditorNormalizedAction, language: selCodeEditorLanguage, value: selCodeEditorInput.value })
+                detail: Object.freeze({
+                    editorId: selCodeEditorId,
+                    action: selCodeEditorNormalizedAction,
+                    language: selCodeEditorLanguage,
+                    value: selCodeEditorInput.value,
+                    selectedValue: selCodeEditorSelectedValue
+                })
             }));
             return true;
         }
 
+        // 鼠标按下工具栏动作时阻止焦点离开 textarea，原生选中高亮不会在 click 前消失。
+        selCodeEditorActions.addEventListener("mousedown", (selCodeEditorEvent) => {
+            const selCodeEditorButton = selCodeEditorEvent.target.closest("[data-sel-code-action]");
+            if (!selCodeEditorButton) return;
+            selCodeEditorCaptureSelection();
+            selCodeEditorEvent.preventDefault();
+        });
         selCodeEditorActions.addEventListener("click", (selCodeEditorEvent) => {
             const selCodeEditorButton = selCodeEditorEvent.target.closest("[data-sel-code-action]");
             if (selCodeEditorButton) selCodeEditorDispatchAction(selCodeEditorButton.dataset.selCodeAction);
         });
         selCodeEditorInput.addEventListener("input", () => {
+            selCodeEditorCaptureSelection();
             selCodeEditorRefreshMetrics();
             selCodeEditorRoot.dispatchEvent(new CustomEvent("selCodeEditor:change", {
                 bubbles: true,
@@ -134,8 +175,15 @@
             }));
         });
         selCodeEditorInput.addEventListener("scroll", selCodeEditorSyncScroll);
-        selCodeEditorInput.addEventListener("click", selCodeEditorRefreshMetrics);
-        selCodeEditorInput.addEventListener("keyup", selCodeEditorRefreshMetrics);
+        selCodeEditorInput.addEventListener("select", selCodeEditorCaptureSelection);
+        selCodeEditorInput.addEventListener("click", () => {
+            selCodeEditorCaptureSelection();
+            selCodeEditorRefreshMetrics();
+        });
+        selCodeEditorInput.addEventListener("keyup", () => {
+            selCodeEditorCaptureSelection();
+            selCodeEditorRefreshMetrics();
+        });
         // Ctrl/Command + Enter 始终触发第一项主操作；默认配置即执行代码。
         selCodeEditorInput.addEventListener("keydown", (selCodeEditorEvent) => {
             if (selCodeEditorEvent.key !== "Enter" || (!selCodeEditorEvent.ctrlKey && !selCodeEditorEvent.metaKey)) return;
@@ -148,7 +196,53 @@
         function selCodeEditorSetValue(selCodeEditorValue) {
             if (selCodeEditorDestroyed) return false;
             selCodeEditorInput.value = String(selCodeEditorValue ?? "");
+            selCodeEditorSavedSelectionStart = 0;
+            selCodeEditorSavedSelectionEnd = 0;
+            selCodeEditorSavedSelectionValue = selCodeEditorInput.value;
             selCodeEditorRefreshMetrics();
+            return true;
+        }
+
+        // 业务应用只通过公开 API 读取当前选区，避免依赖 textarea 的内部 DOM 结构。
+        function selCodeEditorGetSelectedValue() {
+            if (selCodeEditorDestroyed) return "";
+            const selCodeEditorSelectionStart = Number(selCodeEditorInput.selectionStart || 0);
+            const selCodeEditorSelectionEnd = Number(selCodeEditorInput.selectionEnd || 0);
+            if (selCodeEditorSelectionEnd > selCodeEditorSelectionStart) {
+                return selCodeEditorInput.value.slice(selCodeEditorSelectionStart, selCodeEditorSelectionEnd);
+            }
+            if (selCodeEditorSavedSelectionValue !== selCodeEditorInput.value
+                || selCodeEditorSavedSelectionEnd <= selCodeEditorSavedSelectionStart) return "";
+            return selCodeEditorInput.value.slice(selCodeEditorSavedSelectionStart, selCodeEditorSavedSelectionEnd);
+        }
+
+        // 业务动作完成后通过公开 API 恢复保存的选区和焦点，继续明确当前执行的是哪段代码。
+        function selCodeEditorRestoreSelection() {
+            if (selCodeEditorDestroyed
+                || selCodeEditorSavedSelectionValue !== selCodeEditorInput.value
+                || selCodeEditorSavedSelectionEnd <= selCodeEditorSavedSelectionStart) return false;
+            selCodeEditorInput.focus({ preventScroll: true });
+            selCodeEditorInput.setSelectionRange(selCodeEditorSavedSelectionStart, selCodeEditorSavedSelectionEnd);
+            selCodeEditorRefreshMetrics();
+            return true;
+        }
+
+        // 追加 API 统一更新内容、光标、行号和 change 事件，业务应用无需接触内部 textarea。
+        function selCodeEditorAppendValue(selCodeEditorValue) {
+            if (selCodeEditorDestroyed) return false;
+            const selCodeEditorAppendText = String(selCodeEditorValue ?? "");
+            if (!selCodeEditorAppendText) return false;
+            selCodeEditorInput.value += selCodeEditorAppendText;
+            selCodeEditorSavedSelectionStart = selCodeEditorInput.value.length;
+            selCodeEditorSavedSelectionEnd = selCodeEditorInput.value.length;
+            selCodeEditorSavedSelectionValue = selCodeEditorInput.value;
+            selCodeEditorInput.setSelectionRange(selCodeEditorInput.value.length, selCodeEditorInput.value.length);
+            selCodeEditorRefreshMetrics();
+            selCodeEditorRoot.dispatchEvent(new CustomEvent("selCodeEditor:change", {
+                bubbles: true,
+                detail: Object.freeze({ editorId: selCodeEditorId, language: selCodeEditorLanguage, value: selCodeEditorInput.value })
+            }));
+            selCodeEditorInput.focus();
             return true;
         }
 
@@ -182,7 +276,10 @@
             input: selCodeEditorInput,
             focus: () => selCodeEditorInput.focus(),
             getValue: () => selCodeEditorInput.value,
+            getSelectedValue: selCodeEditorGetSelectedValue,
+            restoreSelection: selCodeEditorRestoreSelection,
             setValue: selCodeEditorSetValue,
+            appendValue: selCodeEditorAppendValue,
             setLoading: selCodeEditorSetLoading,
             isLoading: () => selCodeEditorLoading,
             setFeedback: selCodeEditorSetFeedback,

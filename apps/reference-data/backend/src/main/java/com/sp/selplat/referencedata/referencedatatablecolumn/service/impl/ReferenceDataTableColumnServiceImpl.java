@@ -24,28 +24,30 @@ public class ReferenceDataTableColumnServiceImpl
      * 异常或副作用示例：没有启用显示列时返回空数组，由页面使用只读安全默认列，不修改数据库。
      */
     @Override
-    public CommonResult resolveColumns(String tableCode, String viewCode, String locale) {
+    public CommonResult resolveColumns(String tableName, String gridId, String locale) {
         List<Map<String, Object>> rows = getDao().findVisibleColumns(
-                tableCode == null ? "" : tableCode.trim(),
-                viewCode == null ? "" : viewCode.trim());
+                tableName == null ? "" : tableName.trim(),
+                gridId == null ? "" : gridId.trim());
         String normalizedLocale = ReferenceDataQueryUtil.locale(Map.of("locale", locale == null ? "zh-CN" : locale));
         List<Map<String, Object>> columns = new ArrayList<>();
         for (Map<String, Object> row : rows) {
             // 数据库字段 → selGrid 公共列契约；业务页面无需维护第二份表头名称和宽度。
             Map<String, Object> column = new LinkedHashMap<>();
-            column.put("id", String.valueOf(row.get("columnCode")));
-            column.put("field", String.valueOf(row.get("fieldCode")));
-            column.put("secondaryField", row.get("secondaryField") == null
-                    ? null : String.valueOf(row.get("secondaryField")));
+            column.put("id", String.valueOf(row.get("gridColumnId")));
+            column.put("field", String.valueOf(row.get("tableFieldName")));
+            column.put("secondaryField", row.get("tableSecondaryFieldName") == null
+                    ? null : String.valueOf(row.get("tableSecondaryFieldName")));
             column.put("label", ReferenceDataQueryUtil.label(row, normalizedLocale));
             column.put("width", String.valueOf(row.get("width")));
-            column.put("renderer", String.valueOf(row.get("renderer")));
+            column.put("renderer", String.valueOf(row.get("cellRenderer")));
+            column.put("cellIcon", row.get("cellIcon"));
+            column.put("cellIconVisible", Boolean.TRUE.equals(row.get("cellIconVisible")));
             columns.add(Collections.unmodifiableMap(column));
         }
         Map<String, Object> resolved = new LinkedHashMap<>();
         resolved.put("source", rows.isEmpty() ? "SAFE_DEFAULT" : "REFERENCE_DATA_TABLE_COLUMN");
-        resolved.put("tableCode", tableCode);
-        resolved.put("viewCode", viewCode);
+        resolved.put("tableName", tableName);
+        resolved.put("gridId", gridId);
         resolved.put("locale", normalizedLocale);
         resolved.put("columns", List.copyOf(columns));
         return buildSuccessResult(Collections.unmodifiableMap(resolved), "页面表格头解析完成。");

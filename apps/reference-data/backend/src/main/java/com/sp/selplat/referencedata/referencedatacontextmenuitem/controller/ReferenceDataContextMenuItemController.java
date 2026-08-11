@@ -62,7 +62,7 @@ public class ReferenceDataContextMenuItemController {
      * 新增一条菜单项。
      *
      * @param saveIn 菜单字段，例如 {@code {"typeId":1,"itemCode":"create","labelZh":"新建"}}
-     * @return 新增结果，例如 {@code {"success":true,"data":{"id":100000}}}
+     * @return 新增结果，例如 {@code {"success":true,"data":{"id":101000}}}
      * 异常或副作用示例：同一类型菜单编码重复时数据库拒绝写入。
      */
     @PostMapping(value = "/admin/context-menu-items/create.htm", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -73,8 +73,8 @@ public class ReferenceDataContextMenuItemController {
     /**
      * 更新一条菜单项。
      *
-     * @param saveIn 主键和待更新字段，例如 {@code {"id":100000,"command":"CREATE"}}
-     * @return 更新结果，例如 {@code {"success":true,"data":{"id":100000}}}
+     * @param saveIn 主键和待更新字段，例如 {@code {"id":101000,"command":"CREATE"}}
+     * @return 更新结果，例如 {@code {"success":true,"data":{"id":101000}}}
      * 异常或副作用示例：父菜单或所属类型外键无效时不产生部分更新。
      */
     @PostMapping(value = "/admin/context-menu-items/update.htm", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -85,8 +85,8 @@ public class ReferenceDataContextMenuItemController {
     /**
      * 假删除一条菜单项。
      *
-     * @param deleteIn 主键参数，例如 {@code {"id":100000}}
-     * @return 删除结果，例如 {@code {"success":true,"data":{"id":100000,"status":0}}}
+     * @param deleteIn 主键参数，例如 {@code {"id":101000}}
+     * @return 删除结果，例如 {@code {"success":true,"data":{"id":101000,"status":0}}}
      * 异常或副作用示例：菜单仍有子项时页面应先处理子项，数据库关系不会被物理删除。
      */
     @PostMapping(value = "/admin/context-menu-items/delete.htm", produces = MediaType.APPLICATION_JSON_VALUE)

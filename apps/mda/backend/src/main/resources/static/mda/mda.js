@@ -142,7 +142,17 @@
         const mdaRows = mdaSession?.rows || [];
         const mdaDataItems = mdaRows.map((mdaRow, mdaIndex) => Object.freeze({ _row: mdaIndex + 1, _connectionId: mdaConnectionId, ...mdaRow }));
         const mdaColumnItems = mdaColumns.length > 0
-            ? mdaColumns.map((mdaColumn) => Object.freeze({ id: mdaColumn.name, field: mdaColumn.name, label: mdaColumn.label, renderer: "text" }))
+            ? mdaColumns.map((mdaColumn) => Object.freeze({
+                id: mdaColumn.name,
+                field: mdaColumn.name,
+                label: mdaColumn.label,
+                renderer: "text",
+                tooltip: mdaColumn.remarks,
+                // 只有能映射回当前真实表字段的结果列才允许进入多字段 WHERE 条件。
+                headerSelectable: Boolean((mdaSession?.editableTable?.columns || []).find((mdaMetadataColumn) =>
+                    String(mdaMetadataColumn.label || "").toLowerCase() === String(mdaColumn.databaseName || "").toLowerCase()
+                ))
+            }))
             : [Object.freeze({ id: "empty", field: "message", label: "查询提示", renderer: "text" })];
         return Object.freeze({
             // 目标库字段动态变化，公共宽表模式按列数在结果区内部提供水平滚动。
@@ -201,6 +211,49 @@
         return `"${String(mdaIdentifier).replaceAll('"', '""')}"`;
     }
 
+    // JDBC 数值和布尔类型保持原生字面量，其余值使用单引号并转义内部单引号。
+    function mdaFormatWhereValue(mdaColumn, mdaValue) {
+        if (mdaValue === null || mdaValue === undefined) return null;
+        const mdaUnquotedJdbcTypes = new Set([-7, -6, -5, 2, 3, 4, 5, 6, 7, 8, 16]);
+        if (mdaUnquotedJdbcTypes.has(Number(mdaColumn.jdbcType))) {
+            if (Number(mdaColumn.jdbcType) === 16 || Number(mdaColumn.jdbcType) === -7) {
+                return String(mdaValue).toLowerCase() === "true" || mdaValue === 1 ? "TRUE" : "FALSE";
+            }
+            return String(mdaValue);
+        }
+        return `'${String(mdaValue).replaceAll("'", "''")}'`;
+    }
+
+    // 单个真实字段和值生成独立谓词；NULL 必须使用 IS NULL，不能错误拼成 = NULL。
+    function mdaBuildWherePredicate(mdaColumn, mdaValue) {
+        const mdaColumnName = String(mdaColumn?.databaseName || "").trim();
+        if (!mdaColumnName) return "";
+        const mdaFormattedValue = mdaFormatWhereValue(mdaColumn, mdaValue);
+        return mdaFormattedValue === null
+            ? `${mdaColumnName} IS NULL`
+            : `${mdaColumnName} = ${mdaFormattedValue}`;
+    }
+
+    // 右键筛选 SQL 使用当前右键行；多个已勾选字段逐行用 AND 连接，未勾选时由调用方传入当前单字段。
+    function mdaBuildSelectFromWhereSql(mdaSession, mdaColumns, mdaRow) {
+        const mdaTableName = String(mdaSession.editableTable?.tableName || "").trim();
+        const mdaPredicates = (Array.isArray(mdaColumns) ? mdaColumns : [])
+            .map((mdaColumn) => mdaBuildWherePredicate(mdaColumn, mdaRow?.[mdaColumn.name]))
+            .filter(Boolean);
+        if (!mdaTableName || mdaPredicates.length === 0) return "";
+        return `SELECT * FROM ${mdaTableName}\nWHERE ${mdaPredicates.join("\n  AND ")}`;
+    }
+
+    // 每条右键查询作为独立语句追加；已有 SQL 未带分号时先补分号，再保留一个空行分隔。
+    function mdaAppendSqlQuery(mdaEditorController, mdaSql) {
+        const mdaCurrentSql = String(mdaEditorController.getValue() || "");
+        const mdaCurrentSqlTrimmed = mdaCurrentSql.trimEnd();
+        const mdaSeparator = mdaCurrentSqlTrimmed
+            ? `${mdaCurrentSqlTrimmed.endsWith(";") ? "" : ";"}\n\n`
+            : "";
+        return mdaEditorController.appendValue(`${mdaSeparator}${mdaSql}`);
+    }
+
     function mdaBuildTableQuery(mdaFilter) {
         const mdaType = String(mdaState.selectedConnection?.databaseType || "").toUpperCase();
         const mdaParts = [mdaFilter.schema, mdaFilter.tableName].filter(Boolean).map((mdaPart) => mdaQuoteIdentifier(mdaPart, mdaType));
@@ -213,7 +266,9 @@
                 catalog: mdaFilter.catalog || "",
                 schema: mdaFilter.schema || "",
                 tableName: mdaFilter.tableName || "",
-                primaryKeys: Object.freeze([...(mdaFilter.primaryKeys || [])])
+                primaryKeys: Object.freeze([...(mdaFilter.primaryKeys || [])]),
+                // 表查询会话保留当前表全部 JDBC 字段元数据，执行结果按字段名取得 COMMENT。
+                columns: Object.freeze((mdaFilter.columns || []).map((mdaColumn) => Object.freeze({ ...mdaColumn })))
             })
         });
     }
@@ -429,7 +484,11 @@
                 databaseName: String(mdaColumn.name || mdaColumn.label || ""),
                 label: String(mdaColumn.label || mdaColumn.name || ""),
                 typeName: String(mdaColumn.typeName || ""),
-                jdbcType: mdaColumn.jdbcType
+                jdbcType: mdaColumn.jdbcType,
+                // 默认表查询把树中 JDBC 字段 COMMENT 传给全部动态表头；别名或表达式无匹配时保持空提示。
+                remarks: String((mdaSession.editableTable?.columns || []).find((mdaMetadataColumn) =>
+                    String(mdaMetadataColumn.label || "").toLowerCase() === String(mdaColumn.name || mdaColumn.label || "").toLowerCase()
+                )?.remarks || "")
             }));
             mdaSession.rows = (mdaResult.rows || []).map((mdaRow) => Object.fromEntries(mdaRow.map((mdaValue, mdaIndex) => [`column${mdaIndex}`, mdaValue])));
         } else {
@@ -443,6 +502,27 @@
         }
         if (mdaState.tabsController.getState().activeId === mdaSession.id) mdaSyncPanel(mdaBuildPayload(mdaSession));
         return mdaResponse;
+    }
+
+    /** 表节点单击时重置为该表默认查询并执行一次，不借用“执行选中 SQL”入口。 */
+    async function mdaExecuteTableSelectionOnce(mdaSession, mdaSql) {
+        const mdaTableSql = String(mdaSql || "").trim();
+        if (!mdaTableSql || !mdaSession?.editorController || mdaSession.editorController.isLoading()) return false;
+        mdaSession.editorController.setValue(mdaTableSql);
+        mdaSession.sql = mdaTableSql;
+        mdaSession.closeBaselineSql = mdaTableSql;
+        mdaSession.dirty = false;
+        mdaSession.editorController.setLoading(true);
+        try {
+            const mdaResponse = await mdaExecuteSql(mdaSession, mdaTableSql);
+            mdaBase.toast(mdaResponse.msg || "表数据查询完成。", "success");
+            return true;
+        } catch (mdaError) {
+            mdaBase.toast(mdaError.message || "表数据查询失败。", "error");
+            return false;
+        } finally {
+            mdaSession.editorController.setLoading(false);
+        }
     }
 
     // 页签内容完全由三个公共控件和独立 selGrid 组成；清理函数是关闭时的统一销毁入口。
@@ -461,11 +541,15 @@
         });
         const mdaGridRoot = window.selGrid.create(mdaSplitController.end, { gridId: mdaSession.gridId, entity: "MdaQueryResult", ariaLabel: `${mdaSession.label} 查询结果` });
         const mdaGridController = mdaGridRoot ? window.selGrid.mount(mdaGridRoot, mdaBuildPayload(mdaSession)) : null;
-        if (!mdaEditorController || !mdaGridController) {
+        const mdaCellMenuController = mdaGridController ? window.selContextMenu.mount(mdaGridController.root, {
+            id: `${mdaSession.id}CellContextMenu`, ariaLabel: "查询结果单元格操作"
+        }) : null;
+        if (!mdaEditorController || !mdaGridController || !mdaCellMenuController) {
+            mdaCellMenuController?.destroy();
             mdaGridController?.destroy();
             mdaEditorController?.destroy();
             mdaSplitController.destroy();
-            throw new Error("MDA SQL 编辑器或结果表格挂载失败。");
+            throw new Error("MDA SQL 编辑器、结果表格或单元格菜单挂载失败。");
         }
         mdaSession.splitController = mdaSplitController;
         mdaSession.editorController = mdaEditorController;
@@ -477,11 +561,20 @@
         const mdaHandleEditorAction = async (mdaEvent) => {
             if (mdaEvent.detail?.editorId !== mdaSession.editorId) return;
             if (mdaEvent.detail.action !== "execute") return;
+            // 按钮和快捷键共享同一动作入口；没有有效选区时只提示，不允许把编辑器内多条 SQL 整体提交。
+            const mdaSelectedSql = String(mdaEvent.detail.selectedValue || mdaEditorController.getSelectedValue() || "").trim();
+            if (!mdaSelectedSql) {
+                mdaBase.toast("请先选中需要执行的 SQL。", "warning");
+                return;
+            }
+            const mdaSqlToExecute = mdaSelectedSql;
             mdaEditorController.setLoading(true);
             try {
-                const mdaResponse = await mdaExecuteSql(mdaSession, mdaEvent.detail.value);
-                mdaSession.closeBaselineSql = String(mdaEvent.detail.value || "");
-                mdaSession.dirty = false;
+                const mdaResponse = await mdaExecuteSql(mdaSession, mdaSqlToExecute);
+                const mdaEditorSql = String(mdaEvent.detail.value || "");
+                // 只执行选区时其余编辑内容仍未执行，关闭提醒必须继续把两者识别为不同状态。
+                mdaSession.closeBaselineSql = mdaSqlToExecute.trim();
+                mdaSession.dirty = mdaEditorSql.trim() !== mdaSession.closeBaselineSql;
                 // SQL 结果已经进入下方表格，成功消息仅短时提示而不占用上下分区高度。
                 mdaBase.toast(mdaResponse.msg || "SQL 执行完成。", "success");
             } catch (mdaError) {
@@ -489,6 +582,8 @@
                 mdaBase.toast(mdaError.message || "SQL 执行失败。", "error");
             } finally {
                 mdaEditorController.setLoading(false);
+                // 选中 SQL 执行结束后恢复原选区，表格刷新不会抹掉用户正在处理的语句范围。
+                if (mdaSelectedSql) mdaEditorController.restoreSelection();
             }
         };
         const mdaHandleGridDoubleClick = (mdaEvent) => {
@@ -504,17 +599,68 @@
                 mdaBase.toast(mdaError.message || "数据编辑窗口打开失败。", "error");
             }
         };
+        const mdaHandleGridContextMenu = (mdaEvent) => {
+            const mdaRow = mdaEvent.target.closest("tr[data-sel-grid-record-id]");
+            const mdaCell = mdaEvent.target.closest("td");
+            if (!mdaRow || !mdaCell || !mdaRow.contains(mdaCell) || !mdaGridController.root.contains(mdaRow)) return;
+            const mdaColumn = mdaSession.columns[mdaCell.cellIndex];
+            const mdaRowIndex = Number(mdaRow.dataset.selGridRecordId) - 1;
+            const mdaMetadataColumn = (mdaSession.editableTable?.columns || []).find((mdaItem) =>
+                String(mdaItem.label || "").toLowerCase() === String(mdaColumn?.databaseName || "").toLowerCase()
+            );
+            if (!mdaColumn || !mdaMetadataColumn || !Number.isInteger(mdaRowIndex) || !mdaSession.rows[mdaRowIndex]) return;
+            mdaEvent.preventDefault();
+            mdaCellMenuController.open({
+                clientX: mdaEvent.clientX,
+                clientY: mdaEvent.clientY,
+                restoreFocusTarget: mdaCell,
+                items: Object.freeze([
+                    Object.freeze({ id: "select-from-where", label: "Select From Where", icon: "ri-filter-3-line" })
+                ]),
+                context: Object.freeze({
+                    columnIndex: mdaCell.cellIndex,
+                    rowIndex: mdaRowIndex,
+                    value: mdaSession.rows[mdaRowIndex][mdaColumn.name]
+                })
+            });
+        };
+        const mdaHandleCellMenuAction = (mdaEvent) => {
+            if (mdaEvent.detail?.menuId !== mdaCellMenuController.id || mdaEvent.detail.actionId !== "select-from-where") return;
+            const mdaContext = mdaEvent.detail.context || {};
+            const mdaColumn = mdaSession.columns[Number(mdaContext.columnIndex)];
+            const mdaRow = mdaSession.rows[Number(mdaContext.rowIndex)];
+            const mdaSelectedColumnKeys = mdaGridController.getSelectedColumnKeys();
+            const mdaSelectedColumns = mdaSelectedColumnKeys
+                .map((mdaColumnKey) => mdaSession.columns.find((mdaCandidate) => mdaCandidate.name === mdaColumnKey))
+                .filter(Boolean);
+            // 没有勾选表头字段时保持现有单元格逻辑；有勾选时统一读取右键所在行的多字段值。
+            const mdaPredicateColumns = mdaSelectedColumns.length > 0 ? mdaSelectedColumns : [mdaColumn];
+            const mdaSql = mdaBuildSelectFromWhereSql(mdaSession, mdaPredicateColumns, mdaRow);
+            if (!mdaSql || !mdaAppendSqlQuery(mdaEditorController, mdaSql)) {
+                mdaBase.toast("无法为当前单元格生成查询。", "error");
+                return;
+            }
+            const mdaSelectionDescription = mdaSelectedColumns.length > 0
+                ? `${mdaSelectedColumns.length} 个勾选字段`
+                : mdaColumn.databaseName;
+            mdaBase.toast(`已按 ${mdaSelectionDescription} 追加筛选查询。`, "success");
+        };
         mdaEditorController.root.addEventListener("selCodeEditor:change", mdaHandleEditorChange);
         mdaEditorController.root.addEventListener("selCodeEditor:action", mdaHandleEditorAction);
         mdaGridController.root.addEventListener("dblclick", mdaHandleGridDoubleClick);
+        mdaGridController.root.addEventListener("contextmenu", mdaHandleGridContextMenu);
+        mdaGridController.root.addEventListener("selContextMenu:action", mdaHandleCellMenuAction);
         return () => {
             mdaEditorController.root.removeEventListener("selCodeEditor:change", mdaHandleEditorChange);
             mdaEditorController.root.removeEventListener("selCodeEditor:action", mdaHandleEditorAction);
             mdaGridController.root.removeEventListener("dblclick", mdaHandleGridDoubleClick);
+            mdaGridController.root.removeEventListener("contextmenu", mdaHandleGridContextMenu);
+            mdaGridController.root.removeEventListener("selContextMenu:action", mdaHandleCellMenuAction);
             if (mdaState.editingRowContext?.session === mdaSession) {
                 mdaState.editingRowContext.controller.close();
                 mdaState.editingRowContext = null;
             }
+            mdaCellMenuController.destroy();
             mdaGridController.destroy();
             mdaEditorController.destroy();
             mdaSplitController.destroy();
@@ -522,13 +668,14 @@
         };
     }
 
-    // 同一表重复选择只激活既有页签；新表或人工查询才创建新的动态实例。
+    // 同一表重复选择会激活既有页签并重新执行一次默认全表查询；新表或人工查询才创建动态实例。
     function mdaOpenQuerySession(mdaDefinition, mdaExecuteImmediately = false) {
         if (!mdaState.selectedConnection) return null;
         const mdaSessionId = String(mdaDefinition.id);
         const mdaExistingSession = mdaState.querySessions.get(mdaSessionId);
         if (mdaExistingSession) {
             mdaState.tabsController.activate(mdaSessionId);
+            if (mdaExecuteImmediately) void mdaExecuteTableSelectionOnce(mdaExistingSession, mdaDefinition.sql);
             return mdaExistingSession;
         }
         const mdaSession = {
@@ -557,7 +704,7 @@
             throw mdaError;
         }
         mdaSyncPanel(mdaBuildPayload(mdaSession));
-        if (mdaExecuteImmediately) mdaSession.editorController.action("execute");
+        if (mdaExecuteImmediately) void mdaExecuteTableSelectionOnce(mdaSession, mdaDefinition.sql);
         return mdaSession;
     }
 

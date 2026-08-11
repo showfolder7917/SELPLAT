@@ -40,7 +40,7 @@ public class ReferenceDataTypeServiceImpl
      * 创建引用数据类型业务服务并绑定本项目公共号段 DAO。
      *
      * @param sequenceDao 只访问 reference-data 数据库的号段 DAO
-     * 执行结果示例：新增类型前从 {@code ReferenceDataTypeId} 取得 {@code 100000}
+     * 执行结果示例：新增类型前从 {@code ReferenceDataTypeId} 取得 {@code 101000}
      * 异常或副作用示例：号段缺失时新增被阻断；抢号成功会推进 nextStartId 和 versionNo。
      */
     public ReferenceDataTypeServiceImpl(
@@ -238,8 +238,19 @@ public class ReferenceDataTypeServiceImpl
                     "类型状态只能是启用或停用。");
         }
         BigDecimal sortnum = decimalValue(source.getParam("sortnum"), "sortnum");
+        Integer tenantId = source.getParam("tenantId") == null
+                ? 1 : integerValue(source.getParam("tenantId"), "tenantId");
+        Integer lastOperateUserId = source.getParam("lastOperateUserId") == null
+                ? 1 : integerValue(source.getParam("lastOperateUserId"), "lastOperateUserId");
+        if (tenantId < 1 || lastOperateUserId < 1) {
+            throw new CommonBusinessException(
+                    "REFERENCE_DATA_TYPE_AUDIT_ID_INVALID",
+                    "租户 ID 和操作员 ID 必须是正整数。");
+        }
         // 规范化后的固定顺序映射只供 Repository 绑定值，不参与 SQL 标识符拼接。
         CommonParam values = new CommonParam();
+        values.putParam("tenantId", tenantId);
+        values.putParam("lastOperateUserId", lastOperateUserId);
         values.putParam("projectCode", projectCode);
         values.putParam("resourceCode", resourceCode);
         values.putParam("nameZh", nameZh);

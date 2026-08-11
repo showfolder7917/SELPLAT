@@ -1,6 +1,8 @@
 -- ReferenceDataContextMenuItem 只保存某个引用数据类型下的右键菜单，并通过 parentId 组织子菜单。
 CREATE TABLE IF NOT EXISTS ReferenceDataContextMenuItem (
     id BIGINT PRIMARY KEY,
+    tenantId BIGINT NOT NULL DEFAULT 1,
+    lastOperateUserId BIGINT NOT NULL DEFAULT 1,
     typeId BIGINT NOT NULL,
     parentId BIGINT,
     itemCode VARCHAR(100) NOT NULL,
@@ -25,6 +27,8 @@ CREATE TABLE IF NOT EXISTS ReferenceDataContextMenuItem (
 ALTER TABLE IF EXISTS ReferenceDataContextMenuItem ALTER COLUMN attributesJson VARCHAR(10000);
 
 COMMENT ON TABLE ReferenceDataContextMenuItem IS '引用数据右键菜单项表';
+COMMENT ON COLUMN ReferenceDataContextMenuItem.tenantId IS '数据所属租户标识';
+COMMENT ON COLUMN ReferenceDataContextMenuItem.lastOperateUserId IS '最近维护数据的操作员标识';
 COMMENT ON COLUMN ReferenceDataContextMenuItem.parentId IS '父菜单项主键，顶级菜单为空';
 COMMENT ON COLUMN ReferenceDataContextMenuItem.command IS '叶子菜单触发的稳定业务命令';
 

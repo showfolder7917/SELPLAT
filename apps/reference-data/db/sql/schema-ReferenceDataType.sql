@@ -2,6 +2,10 @@
 CREATE TABLE IF NOT EXISTS ReferenceDataType (
     -- id 作为类型记录主键，由当前 reference-data 独立数据库生成，供树节点和管理接口稳定引用。
     id BIGINT PRIMARY KEY,
+    -- tenantId 标识当前类型所属租户。
+    tenantId BIGINT NOT NULL DEFAULT 1,
+    -- lastOperateUserId 记录最近维护该类型的操作员。
+    lastOperateUserId BIGINT NOT NULL DEFAULT 1,
     -- projectCode 保存资源所属项目编码，例如 reference-data 或 cms，是跨项目隔离类型坐标的第一部分。
     projectCode VARCHAR(64) NOT NULL,
     -- resourceCode 保存项目内稳定资源编码，例如 resource-kind，与 projectCode 共同保证类型唯一。
@@ -38,6 +42,8 @@ ALTER TABLE ReferenceDataType DROP COLUMN IF EXISTS dataShape;
 
 COMMENT ON TABLE ReferenceDataType IS '跨项目引用数据类型目录表';
 COMMENT ON COLUMN ReferenceDataType.id IS '类型记录主键，由reference-data独立数据库生成';
+COMMENT ON COLUMN ReferenceDataType.tenantId IS '数据所属租户标识';
+COMMENT ON COLUMN ReferenceDataType.lastOperateUserId IS '最近维护数据的操作员标识';
 COMMENT ON COLUMN ReferenceDataType.projectCode IS '资源所属项目稳定编码';
 COMMENT ON COLUMN ReferenceDataType.resourceCode IS '项目内引用数据资源稳定编码';
 COMMENT ON COLUMN ReferenceDataType.nameZh IS '类型中文名称';

@@ -62,7 +62,7 @@ public class ReferenceDataTreeNodeController {
      * 新增一条树节点记录。
      *
      * @param saveIn 树节点字段，例如 {@code {"typeId":1,"nodeCode":"root","nodeValue":"ROOT","labelZh":"根节点"}}
-     * @return 新增结果，例如 {@code {"success":true,"data":{"id":100000}}}
+     * @return 新增结果，例如 {@code {"success":true,"data":{"id":101000}}}
      * 异常或副作用示例：唯一编码或父节点外键冲突时事务回滚并返回统一业务错误。
      */
     @PostMapping(value = "/admin/tree-nodes/create.htm", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -73,8 +73,8 @@ public class ReferenceDataTreeNodeController {
     /**
      * 更新一条树节点记录。
      *
-     * @param saveIn 主键和待更新字段，例如 {@code {"id":100000,"labelZh":"新名称"}}
-     * @return 更新结果，例如 {@code {"success":true,"data":{"id":100000}}}
+     * @param saveIn 主键和待更新字段，例如 {@code {"id":101000,"labelZh":"新名称"}}
+     * @return 更新结果，例如 {@code {"success":true,"data":{"id":101000}}}
      * 异常或副作用示例：主键不存在或字段违反数据库约束时不产生部分更新。
      */
     @PostMapping(value = "/admin/tree-nodes/update.htm", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -85,8 +85,8 @@ public class ReferenceDataTreeNodeController {
     /**
      * 假删除一条树节点记录。
      *
-     * @param deleteIn 主键参数，例如 {@code {"id":100000}}
-     * @return 删除结果，例如 {@code {"success":true,"data":{"id":100000,"status":0}}}
+     * @param deleteIn 主键参数，例如 {@code {"id":101000}}
+     * @return 删除结果，例如 {@code {"success":true,"data":{"id":101000,"status":0}}}
      * 异常或副作用示例：存在子节点或外键保护时数据库拒绝危险删除。
      */
     @PostMapping(value = "/admin/tree-nodes/delete.htm", produces = MediaType.APPLICATION_JSON_VALUE)

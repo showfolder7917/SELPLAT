@@ -19,16 +19,16 @@ public class ReferenceDataTableColumnController extends BaseController<Reference
     /**
      * 解析一个页面表格当前启用的真实列配置。
      *
-     * @param tableCode 数据库表名，例如 {@code "ReferenceDataOption"}
-     * @param viewCode 页面实例编码，例如 {@code "option-management"}
+     * @param tableName 数据库表名，例如 {@code "ReferenceDataOption"}
+     * @param gridId SEL 表格实例标识，例如 {@code "selGridOptionManagementId"}
      * @param locale 当前语言，例如 {@code "zh-CN"}
      * @return 标准列 JSON，例如 {@code {"success":true,"data":{"columns":[{"field":"optionValue"}]}}}
      */
     @GetMapping("resolve.htm")
     public String resolve(
-            @RequestParam("tableCode") String tableCode,
-            @RequestParam("viewCode") String viewCode,
+            @RequestParam("tableName") String tableName,
+            @RequestParam("gridId") String gridId,
             @RequestParam(value = "locale", defaultValue = "zh-CN") String locale) {
-        return JsonUtils.toJsonIgnoreNull(getService().resolveColumns(tableCode, viewCode, locale));
+        return JsonUtils.toJsonIgnoreNull(getService().resolveColumns(tableName, gridId, locale));
     }
 }

@@ -1048,20 +1048,22 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                         for statement in sequence_data_text.split(";")
                         if re.search(r"INSERT\s+INTO\s+CommonSequenceSegment", statement, re.IGNORECASE)
                     ]
-                    for table_name in sorted(schema_tables):
-                        if table_name.startswith("Common"):
-                            continue
-                        sequence_code = f"{table_name}Id"
-                        declaration_count = sum(
-                            1 for insert_head in sequence_insert_heads
-                            if re.search(rf"['\"]{re.escape(sequence_code)}['\"]", insert_head)
-                        )
-                        if declaration_count != 1:
-                            violations.append({
-                                "code": "MANAGED_APPLICATION_TABLE_SEQUENCE_CARDINALITY_INVALID",
-                                "path": str(common_sequence_data.relative_to(project_root)),
-                                "message": f"{table_name} must map to exactly one {sequence_code} row",
-                            })
+                    # 整张号段数据脚本为空表示由管理员逐条建立；一旦出现任一预置号段，必须完整覆盖全部业务表。
+                    if sequence_insert_heads:
+                        for table_name in sorted(schema_tables):
+                            if table_name.startswith("Common"):
+                                continue
+                            sequence_code = f"{table_name}Id"
+                            declaration_count = sum(
+                                1 for insert_head in sequence_insert_heads
+                                if re.search(rf"['\"]{re.escape(sequence_code)}['\"]", insert_head)
+                            )
+                            if declaration_count != 1:
+                                violations.append({
+                                    "code": "MANAGED_APPLICATION_TABLE_SEQUENCE_CARDINALITY_INVALID",
+                                    "path": str(common_sequence_data.relative_to(project_root)),
+                                    "message": f"configured sequence data must map {table_name} to exactly one {sequence_code} row",
+                                })
                 for table_name in sorted(schema_tables):
                     schema_file = project_root_path / "db/sql" / f"schema-{table_name}.sql"
                     schema_text = schema_file.read_text(encoding="utf-8")
@@ -1114,6 +1116,18 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                 for data_file in sorted((project_root_path / "db/sql").glob("data-*.sql")):
                     for statement in sql_statements(data_file.read_text(encoding="utf-8")):
                         normalized_statement = re.sub(r"\s+", " ", statement).upper()
+                        # 显式 id 种子只能占用最多六位的应用初始区，阻断历史 900000004003 一类超长固定编号。
+                        seed_id_match = re.search(
+                            r"INSERT\s+INTO\s+\w+\s*\(\s*id\b[^)]*\)\s*SELECT\s+(\d+)\b",
+                            statement,
+                            re.IGNORECASE | re.DOTALL,
+                        )
+                        if seed_id_match and int(seed_id_match.group(1)) > 999999:
+                            violations.append({
+                                "code": "MANAGED_APPLICATION_SEED_ID_TOO_LONG",
+                                "path": str(data_file.relative_to(project_root)),
+                                "message": "fixed startup seed ids must not exceed the six-digit initial range",
+                            })
                         if normalized_statement.startswith("MERGE INTO "):
                             violations.append({
                                 "code": "MANAGED_APPLICATION_SEED_MERGE_OVERWRITE_FORBIDDEN",

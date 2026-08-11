@@ -15,6 +15,8 @@ load_rule_for_active_user_selplat_component_api_theme_accessibility_dependency_o
 load_rule_for_active_user_selplat_grid_record_type_or_tree_classification_filter = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 同一 selGrid 切换业务模块、替换记录字段契约或修改 selWindow 表单默认项时加载，保证新契约和默认值立即生效。 -->
 load_rule_for_active_user_selplat_grid_runtime_module_contract_or_window_form_default = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 新增或修改 SEL 控件实例 ID、业务 gridId 或事件实例键时加载，统一 sel加控件类型加业务含义加Id 的驼峰命名。 -->
+load_rule_for_active_user_selplat_component_instance_id_or_business_grid_id_naming = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 修改公共控件字号、字重、行高或树节点文字层级时加载，统一七级语义文字并阻断旧 primary/secondary 令牌。 -->
 load_rule_for_active_user_selplat_component_typography_or_tree_text_hierarchy = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 交付前检查未知新控件和业务私造交互时加载，扫描逻辑由中央登记驱动而非逐个控件写死。 -->
@@ -92,7 +94,7 @@ load_rule_for_active_user_selplat_host_multi_module_or_additional_datasource = S
 load_rule_for_active_user_selplat_multi_project_sequence_datasource_routing = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 为项目业务表返回默认前端列定义，或接入 reference-data 配置覆盖与元数据兜底时加载。 -->
 load_rule_for_active_user_selplat_default_table_definition_or_reference_data_fallback = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
-<!-- 修改表格定义的 Controller、Service、DAO 分层或 resourceCode/viewCode/locale 标识时加载。 -->
+<!-- 修改表格定义的 Controller、Service、DAO 分层或 tableName/gridId/locale 标识时加载。 -->
 load_rule_for_active_user_selplat_table_definition_controller_service_dao_layering = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 新增或修改数据库驱动的页面表格头、列宽、多语言、显示开关和排序配置时加载。 -->
 load_rule_for_active_user_selplat_database_driven_grid_header_column_configuration = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES

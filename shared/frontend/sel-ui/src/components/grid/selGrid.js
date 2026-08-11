@@ -108,6 +108,8 @@
         let selGridRecordOptions = selGridInputPayload.grid || {};
         // 用户调整后的列宽按稳定列键保存在当前实例内，刷新数据和切换语言时继续生效。
         const selGridColumnWidths = new Map();
+        // 可筛选表头字段按稳定列键保存选中状态，数据刷新后仍能继续组合当前行条件。
+        const selGridSelectedHeaderColumnKeys = new Set();
         // 行数据保持后端顺序并冻结外层数组，运行状态不能改写业务响应。
         let selGridProjects = Object.freeze(selGridInputPayload.data.items);
         // 类型显示映射使用稳定代码查找当前语言文字。
@@ -255,6 +257,13 @@
             });
             // 一次替换完整列宽定义。
             selGridColumnGroup.replaceChildren(...selGridColumns);
+            // 列契约变化时移除已经不存在或不再允许选择的字段，避免把旧结果列带入新查询。
+            const selGridSelectableHeaderKeys = new Set(selGridInputPayload.column.items
+                .filter((selGridColumnData) => selGridColumnData.headerSelectable === true)
+                .map((selGridColumnData, selGridColumnIndex) => selGridResolveColumnKey(selGridColumnData, selGridColumnIndex)));
+            Array.from(selGridSelectedHeaderColumnKeys).forEach((selGridColumnKey) => {
+                if (!selGridSelectableHeaderKeys.has(selGridColumnKey)) selGridSelectedHeaderColumnKeys.delete(selGridColumnKey);
+            });
             // 单行表头承载全部列标题。
             const selGridHeaderRow = document.createElement("tr");
             // 每个 column 片段生成对应 th。
@@ -264,6 +273,12 @@
                 // 列序号和稳定键供公共列宽调整逻辑精确定位 col。
                 selGridHeaderCell.dataset.selGridColumnIndex = String(selGridColumnIndex);
                 selGridHeaderCell.dataset.selGridColumnKey = selGridResolveColumnKey(selGridColumnData, selGridColumnIndex);
+                // 数据库 COMMENT 等表头补充说明使用标准 tooltip 输入；空说明不创建无内容浮层。
+                const selGridHeaderTooltip = String(selGridColumnData.tooltip || "").trim();
+                if (selGridHeaderTooltip) {
+                    selGridHeaderCell.dataset.selTooltip = selGridHeaderTooltip;
+                    selGridHeaderCell.dataset.selTooltipMode = "always";
+                }
                 // 选择列需要创建表头复选按钮。
                 if (selGridColumnData.renderer === "selection") {
                     // 选择列沿用固定对齐视觉类。
@@ -284,6 +299,20 @@
                     selGridSelectAll.setAttribute("aria-label", selGridMessages.selectProject);
                     // 全选按钮加入选择列表头。
                     selGridHeaderCell.appendChild(selGridSelectAll);
+                } else if (selGridColumnData.headerSelectable === true) {
+                    // 字段选择器由公共 Grid 渲染，业务应用只读取稳定列键，不接触表头内部 DOM。
+                    const selGridHeaderFieldSelector = document.createElement("label");
+                    selGridHeaderFieldSelector.className = "selgrid-header-field-selector";
+                    const selGridHeaderFieldCheckbox = document.createElement("input");
+                    selGridHeaderFieldCheckbox.type = "checkbox";
+                    selGridHeaderFieldCheckbox.className = "selgrid-header-field-checkbox";
+                    selGridHeaderFieldCheckbox.dataset.selGridHeaderColumnSelect = selGridHeaderCell.dataset.selGridColumnKey;
+                    selGridHeaderFieldCheckbox.checked = selGridSelectedHeaderColumnKeys.has(selGridHeaderCell.dataset.selGridColumnKey);
+                    selGridHeaderFieldCheckbox.setAttribute("aria-label", `选择筛选字段 ${selGridColumnData.label}`);
+                    const selGridHeaderFieldLabel = document.createElement("span");
+                    selGridHeaderFieldLabel.textContent = selGridColumnData.label;
+                    selGridHeaderFieldSelector.append(selGridHeaderFieldCheckbox, selGridHeaderFieldLabel);
+                    selGridHeaderCell.appendChild(selGridHeaderFieldSelector);
                 } else if (selGridColumnData.sortable) {
                     // 可排序列使用原生按钮表达排序动作。
                     const selGridSortButton = document.createElement("button");
@@ -339,6 +368,23 @@
             }
             // 表头和列宽完成替换后重新测量，滚动条增强状态不依赖业务宽表开关。
             selGridScheduleHorizontalOverflowSync();
+        }
+
+        // 表头字段复选框只维护当前 Grid 的稳定列键，并向业务层发布不可变选择快照。
+        function selGridHandleHeaderColumnSelection(selGridEvent) {
+            const selGridCheckbox = selGridEvent.target.closest("[data-sel-grid-header-column-select]");
+            if (!selGridCheckbox || !selGridView.tableHead?.contains(selGridCheckbox)) return;
+            const selGridColumnKey = String(selGridCheckbox.dataset.selGridHeaderColumnSelect || "");
+            if (!selGridColumnKey) return;
+            if (selGridCheckbox.checked) selGridSelectedHeaderColumnKeys.add(selGridColumnKey);
+            else selGridSelectedHeaderColumnKeys.delete(selGridColumnKey);
+            selGridRoot.dispatchEvent(new CustomEvent("selGrid:headerSelectionChange", {
+                bubbles: true,
+                detail: Object.freeze({
+                    gridId: selGridId,
+                    selectedColumnKeys: Object.freeze(Array.from(selGridSelectedHeaderColumnKeys))
+                })
+            }));
         }
 
         // 根据当前总页数和页码生成紧凑的可见页码，数据量及每页条数变化时无需依赖静态页码数组。
@@ -643,6 +689,7 @@
     selGridView.tableHead?.addEventListener("pointercancel", selGridHandleColumnResizeEnd);
     selGridView.tableHead?.addEventListener("lostpointercapture", selGridHandleColumnResizeEnd);
     selGridView.tableHead?.addEventListener("keydown", selGridHandleColumnResizeKeydown);
+    selGridView.tableHead?.addEventListener("change", selGridHandleHeaderColumnSelection);
 
     // 面板缩放、侧栏折叠和浏览器尺寸变化都可能改变中央视口的真实溢出状态。
     const selGridHorizontalOverflowObserver = typeof window.ResizeObserver === "function" && selGridView.tableScroller
@@ -743,6 +790,18 @@
     }
 
     /**
+     * 按列配置给单元格添加可选图标。
+     * @param {HTMLTableCellElement} selGridCell - 当前单元格。
+     * @param {object} selGridColumn - 标准列定义。
+     * @returns {void} 只有 cellIconVisible 为 true 且 cellIcon 非空时追加图标。
+     */
+    function selGridAppendConfiguredCellIcon(selGridCell, selGridColumn) {
+        if (selGridColumn.cellIconVisible !== true || !String(selGridColumn.cellIcon || "").trim()) return;
+        selGridCell.classList.add("selgrid-record-cell-with-icon");
+        selGridCell.appendChild(selGridCreateIcon(String(selGridColumn.cellIcon).trim()));
+    }
+
+    /**
      * 创建通用记录模式的单元格内容。
      * @param {object} selGridRecord - 当前业务记录。
      * @param {object} selGridColumn - 标准列定义。
@@ -753,6 +812,7 @@
         const selGridRenderer = String(selGridColumn.renderer || "text");
         const selGridRawValue = selGridReadRecordValue(selGridRecord, selGridColumn.field);
         if (selGridRenderer === "stack") {
+            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
             const selGridStack = document.createElement("span");
             selGridStack.className = "selgrid-record-stack";
             const selGridPrimary = document.createElement("strong");
@@ -764,6 +824,7 @@
             return selGridCell;
         }
         if (selGridRenderer === "badge") {
+            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
             const selGridBadge = document.createElement("span");
             const selGridMappedTone = selGridColumn.toneMap?.[String(selGridRawValue)];
             const selGridTone = String(selGridMappedTone || selGridReadRecordValue(selGridRecord, selGridColumn.toneField) || selGridColumn.tone || "neutral");
@@ -774,6 +835,7 @@
             return selGridCell;
         }
         if (selGridRenderer === "boolean") {
+            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
             const selGridBoolean = Boolean(selGridRawValue === true
                 || selGridRawValue === 1
                 || String(selGridRawValue).toLocaleLowerCase() === "true");
@@ -803,7 +865,10 @@
         const selGridDisplayValue = selGridRenderer === "time" && selGridRawValue
             ? String(selGridRawValue).replace("T", " ").slice(0, 16)
             : String(selGridRawValue ?? "—") || "—";
-        selGridCell.textContent = selGridDisplayValue;
+        selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
+        const selGridDisplayText = document.createElement("span");
+        selGridDisplayText.textContent = selGridDisplayValue;
+        selGridCell.appendChild(selGridDisplayText);
         // 完整文字交给 selTooltip；控件会在悬停或聚焦时再次确认是否真实截断。
         if (selGridDisplayValue !== "—") selGridCell.dataset.selTooltip = selGridDisplayValue;
         if (selGridColumn.nowrap || selGridRenderer === "time") selGridCell.classList.add("selgrid-record-nowrap");
@@ -1715,6 +1780,7 @@
         selGridView.tableHead?.removeEventListener("pointercancel", selGridHandleColumnResizeEnd);
         selGridView.tableHead?.removeEventListener("lostpointercapture", selGridHandleColumnResizeEnd);
         selGridView.tableHead?.removeEventListener("keydown", selGridHandleColumnResizeKeydown);
+        selGridView.tableHead?.removeEventListener("change", selGridHandleHeaderColumnSelection);
         selGridInstances.delete(selGridId);
         selGridRoots.delete(selGridId);
         selGridRoot.remove();
@@ -1734,6 +1800,7 @@
         reset: selGridResetInstance,
         setPage: selGridSetPage,
         setLocale: selGridSetLocale,
+        getSelectedColumnKeys: () => Object.freeze(Array.from(selGridSelectedHeaderColumnKeys)),
         destroy: selGridDestroy,
         getState: () => Object.freeze({
             currentPage: selGridState.currentPage,
@@ -1743,6 +1810,7 @@
             status: selGridState.status,
             columnResize: selGridIsColumnResizeEnabled(),
             columnWidths: Object.freeze(Object.fromEntries(selGridColumnWidths)),
+            selectedColumnKeys: Object.freeze(Array.from(selGridSelectedHeaderColumnKeys)),
             selectedIds: Object.freeze(Array.from(selGridState.selectedIds))
         })
     });

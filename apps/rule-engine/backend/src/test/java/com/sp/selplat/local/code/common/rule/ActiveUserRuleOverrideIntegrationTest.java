@@ -172,8 +172,8 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "db/<application-name>.mv.db,no_nested_data_directory,no_parallel_migration_directory"
         ));
         assertTrue(rule.content().contains(
-            "selplat_table_sequence_mapping = one_business_table_one_sequence_row,"
-                + "seqCode=<TableName>Id,exactly_one_active_owner"
+            "selplat_table_sequence_mapping = fully_empty_for_manual_setup_or_one_business_table_one_sequence_row,"
+                + "seqCode=<TableName>Id,exactly_one_active_owner,no_partial_seed_set"
         ));
         assertTrue(rule.content().contains(
             "selplat_business_primary_key_strategy = CommonSequenceSegment:id_identity_exception,"
@@ -376,7 +376,8 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_business_table_sequence_cardinality = "
-                + "one_table_one_row,seqCode=<ActualTableName>Id,no_shared_business_sequence"
+                + "fully_empty_for_manual_setup_or_one_table_one_row,"
+                + "seqCode=<ActualTableName>Id,no_shared_business_sequence,no_partial_seed_set"
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_local_database_default_credentials = "

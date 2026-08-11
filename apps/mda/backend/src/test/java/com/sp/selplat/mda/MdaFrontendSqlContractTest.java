@@ -12,6 +12,104 @@ import org.springframework.core.io.ClassPathResource;
 class MdaFrontendSqlContractTest {
 
     /**
+     * 验证单击数据库树中的表会执行一次默认全表查询，重复单击已有页签也会重新查询。
+     * 真实传参示例：单击 {@code ReferenceDataTableColumn} 表节点。
+     * 真实返回示例：编辑器写入 {@code SELECT * FROM ReferenceDataTableColumn}，立即请求并刷新结果表格。
+     * 异常或副作用示例：查询进行中重复单击不会并发提交；按钮执行仍要求用户先选中 SQL。
+     *
+     * @throws Exception 页面脚本资源无法读取时抛出
+     */
+    @Test
+    void shouldExecuteTableQueryOnceWheneverTableNodeIsSelected() throws Exception {
+        String script = new ClassPathResource("static/mda/mda.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("async function mdaExecuteTableSelectionOnce(mdaSession, mdaSql)")
+                .contains("mdaSession.editorController.setValue(mdaTableSql)")
+                .contains("await mdaExecuteSql(mdaSession, mdaTableSql)")
+                .contains("if (mdaExecuteImmediately) void mdaExecuteTableSelectionOnce(mdaExistingSession, mdaDefinition.sql)")
+                .contains("if (mdaExecuteImmediately) void mdaExecuteTableSelectionOnce(mdaSession, mdaDefinition.sql)")
+                .contains("mdaOpenTableQuery(mdaEvent.detail.filter)")
+                .doesNotContain("if (mdaExecuteImmediately) mdaSession.editorController.action(\"execute\")");
+    }
+
+    /**
+     * 验证 MDA 查询动作优先执行公共编辑器返回的选中 SQL。
+     * 真实传参示例：编辑器包含两条查询，用户选中 {@code SELECT * FROM ReferenceDataTreeNode\nWHERE typeId = 1}
+     *     后点击执行按钮或按 {@code Ctrl/Command + Enter}。
+     * 真实返回示例：请求只提交动作快照中的两行 SQL；执行完成后恢复同一选区。
+     * 异常或副作用示例：没有有效选区时提示用户先选中 SQL 且不发送请求；只执行选区不会把未执行内容标记为已保存，失败后也保留选区。
+     *
+     * @throws Exception 页面脚本或公共编辑器资源无法读取时抛出
+     */
+    @Test
+    void shouldExecuteSelectedSqlBeforeWholeEditorValue() throws Exception {
+        String script = new ClassPathResource("static/mda/mda.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+        assertThat(script)
+                .contains("const mdaSelectedSql = String(mdaEvent.detail.selectedValue || mdaEditorController.getSelectedValue() || \"\").trim()")
+                .contains("mdaBase.toast(\"请先选中需要执行的 SQL。\", \"warning\")")
+                .contains("const mdaSqlToExecute = mdaSelectedSql")
+                .contains("await mdaExecuteSql(mdaSession, mdaSqlToExecute)")
+                .contains("if (mdaSelectedSql) mdaEditorController.restoreSelection()")
+                .contains("mdaSession.dirty = mdaEditorSql.trim() !== mdaSession.closeBaselineSql")
+                .doesNotContain("mdaSelectedSql || String(mdaEvent.detail.value")
+                .doesNotContain("mdaEditorController.input");
+    }
+
+    /**
+     * 验证结果字段复选框与单元格右键操作通过公共组件 API 追加筛选 SQL。
+     * 真实传参示例：勾选 {@code databaseType}、{@code connectionName} 两个表头字段，
+     *     在值为 {@code H2}、{@code MDA 控制库} 的当前行选择 {@code Select From Where}。
+     * 真实返回示例：编辑框追加两行以上 SQL，WHERE 后使用 {@code AND} 连接当前行两个字段值；
+     *     未勾选字段时仍只使用右键单元格字段，并把已有语句用分号分隔。
+     * 异常或副作用示例：值为 {@code null} 时生成 {@code IS NULL}；数字和布尔值不加单引号；
+     *     无真实表或真实字段元数据时保留浏览器原生菜单且不修改编辑框。
+     *
+     * @throws Exception 页面脚本资源无法读取时抛出
+     */
+    @Test
+    void shouldAppendSelectFromWhereForRightClickedDatabaseValue() throws Exception {
+        String script = new ClassPathResource("static/mda/mda.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("id: \"select-from-where\", label: \"Select From Where\"")
+                .contains("window.selContextMenu.mount(mdaGridController.root")
+                .contains("mdaEditorController.appendValue(`${mdaSeparator}${mdaSql}`)")
+                .contains("headerSelectable: Boolean")
+                .contains("mdaGridController.getSelectedColumnKeys()")
+                .contains("const mdaPredicateColumns = mdaSelectedColumns.length > 0 ? mdaSelectedColumns : [mdaColumn]")
+                .contains("return `SELECT * FROM ${mdaTableName}\\nWHERE ${mdaPredicates.join(\"\\n  AND \")}`")
+                .contains("String(mdaValue).replaceAll(\"'\", \"''\")")
+                .contains("mdaColumnName} IS NULL")
+                .contains("const mdaUnquotedJdbcTypes = new Set([-7, -6, -5, 2, 3, 4, 5, 6, 7, 8, 16])")
+                .doesNotContain("mdaGridController.root.querySelector(\"th")
+                .doesNotContain("querySelector(\".selcode-input\")");
+    }
+
+    /**
+     * 验证所有默认表查询字段把 JDBC COMMENT 作为公共表格头提示传递。
+     * 真实传参示例：元数据列 {@code id} 的 {@code remarks=主键标识}，查询结果列名同为 {@code id}。
+     * 真实返回示例：MDA 动态列保存 {@code remarks}，并以 {@code tooltip} 传给 selGrid 的列定义。
+     * 异常或副作用示例：字段无 COMMENT 或查询表达式无法匹配真实列时传递空字符串，不产生空提示。
+     *
+     * @throws Exception 页面脚本资源无法读取时抛出
+     */
+    @Test
+    void shouldPassEveryDatabaseColumnCommentToGridHeaderTooltip() throws Exception {
+        String script = new ClassPathResource("static/mda/mda.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("columns: Object.freeze((mdaFilter.columns || []).map")
+                .contains("remarks: String((mdaSession.editableTable?.columns || []).find")
+                .contains("String(mdaMetadataColumn.label || \"\").toLowerCase()")
+                .contains("tooltip: mdaColumn.remarks");
+    }
+
+    /**
      * 验证页面只按裸表名生成查询，并消费后端提供的数据库结构模板。
      * 真实传参示例：读取构建资源中的 {@code static/mda/mda.js}。
      * 真实返回示例：脚本包含 {@code SELECT * FROM ${mdaFilter.tableName}} 且不含旧占位语句。
@@ -212,7 +310,8 @@ class MdaFrontendSqlContractTest {
 
         assertThat(script)
                 .contains("mdaSession.dirty = String(mdaEvent.detail.value || \"\") !== mdaSession.closeBaselineSql")
-                .contains("mdaSession.closeBaselineSql = String(mdaEvent.detail.value || \"\")")
+                .contains("mdaSession.closeBaselineSql = mdaSqlToExecute.trim()")
+                .contains("mdaSession.dirty = mdaEditorSql.trim() !== mdaSession.closeBaselineSql")
                 .contains("addEventListener(\"selTabs:beforeClose\"")
                 .contains("mdaEvent.preventDefault()")
                 .contains("title: \"关闭未保存的 SQL\"")

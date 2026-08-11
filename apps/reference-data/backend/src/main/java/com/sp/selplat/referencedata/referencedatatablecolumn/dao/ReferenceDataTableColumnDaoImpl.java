@@ -28,16 +28,17 @@ public class ReferenceDataTableColumnDaoImpl
 
     /** {@inheritDoc} */
     @Override
-    public List<Map<String, Object>> findVisibleColumns(String tableCode, String viewCode) {
-        // 稳定表名与页面编码只作为绑定参数 → 不参与 SQL 标识符拼接。
+    public List<Map<String, Object>> findVisibleColumns(String tableName, String gridId) {
+        // 稳定表名与 SEL 表格实例标识只作为绑定参数 → 不参与 SQL 标识符拼接。
         return jdbcTemplate.queryForList(
-                "SELECT columnCode AS \"columnCode\", fieldCode AS \"fieldCode\", "
-                        + "secondaryField AS \"secondaryField\", labelZh AS \"labelZh\", "
+                "SELECT gridColumnId AS \"gridColumnId\", tableFieldName AS \"tableFieldName\", "
+                        + "tableSecondaryFieldName AS \"tableSecondaryFieldName\", labelZh AS \"labelZh\", "
                         + "labelJa AS \"labelJa\", labelEn AS \"labelEn\", width AS \"width\", "
-                        + "renderer AS \"renderer\", sortnum AS \"sortnum\" "
-                        + "FROM ReferenceDataTableColumn WHERE tableCode = ? AND viewCode = ? "
+                        + "cellRenderer AS \"cellRenderer\", cellIcon AS \"cellIcon\", "
+                        + "cellIconVisible AS \"cellIconVisible\", sortnum AS \"sortnum\" "
+                        + "FROM ReferenceDataTableColumn WHERE tableName = ? AND gridId = ? "
                         + "AND status = 1 AND visible = TRUE ORDER BY sortnum ASC, id ASC",
-                tableCode,
-                viewCode);
+                tableName,
+                gridId);
     }
 }

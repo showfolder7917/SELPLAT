@@ -32,6 +32,11 @@
         return descendant && host.contains(descendant) ? descendant : null;
     }
 
+    // 默认只在文字被裁切时显示；业务说明类提示可声明 always，使 COMMENT 等补充信息不依赖标题宽度。
+    function selTooltipShouldShow(target) {
+        return target?.dataset.selTooltipMode === "always" || selTooltipIsTruncated(target);
+    }
+
     // 只在可见文字发生真实横向或纵向裁切时显示提示，完整文字不产生冗余浮层。
     function selTooltipIsTruncated(target) {
         if (!(target instanceof HTMLElement) || target.getClientRects().length === 0) return false;
@@ -77,7 +82,7 @@
     }
 
     function selTooltipShow(target, ariaElement) {
-        if (!selTooltipIsTruncated(target)) return false;
+        if (!selTooltipShouldShow(target)) return false;
         const content = String(target.dataset.selTooltip || "").trim();
         if (!content) return false;
         const portal = selTooltipEnsurePortal();
@@ -110,7 +115,7 @@
         function schedule(candidate, immediate = false) {
             if (!enabled || destroyed) return;
             const target = selTooltipResolveTarget(candidate, host, selector);
-            if (!target || !selTooltipIsTruncated(target)) return;
+            if (!target || !selTooltipShouldShow(target)) return;
             const ariaElement = candidate.closest?.("button, a, input, select, textarea, [tabindex]") || target;
             selTooltipClearTimer();
             selTooltipTimer = window.setTimeout(() => selTooltipShow(target, ariaElement), immediate ? 0 : delay);

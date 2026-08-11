@@ -6,14 +6,22 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由 MDA 应用脚本和浏览器回归承载。 -->
 node_ability_refs = none
-<!-- 3.5.0 将数据库连接栏接入公共 selPanel 横向栏目缩放，并固定安全宽度范围。 -->
-rule_version = 3.5.0
+<!-- 3.11.0 增加真实结果字段表头复选框，并按右键当前行生成 AND 多字段条件。 -->
+rule_version = 3.11.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已经进入当前用户索引并完成实现回归。 -->
 rule_status = active
+<!-- 本次升级把用户确认的选区优先执行行为固化到 MDA 工作台，避免按钮和快捷键以后再次分叉。 -->
+selected_sql_upgrade_record = 2026-08-11:execute_nonblank_editor_selection_first_fallback_to_full_value_preserve_unexecuted_dirty_state
+<!-- 本次修复把工具栏夺取焦点造成的选区丢失纳入防复发约束。 -->
+selected_sql_selection_lifecycle_upgrade_record = 2026-08-11:capture_selection_before_toolbar_focus_change_restore_after_execution
+<!-- 本次升级禁止未选中时整体提交编辑器内的多条 SQL，避免显示结果与实际副作用不一致。 -->
+selected_sql_required_upgrade_record = 2026-08-11:require_nonblank_selection_warn_and_send_no_request_when_missing
+<!-- 本次升级把多字段选择固定为公共 selGrid 表头能力，并保留未勾选时的单字段兼容行为。 -->
+multi_field_where_upgrade_record = 2026-08-11:shared_grid_header_field_selection_current_row_values_joined_by_AND
 <!-- 升级记录说明本规则来自用户对双数据库和连接配置职责的纠正。 -->
-upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责;2026-08-08:数据库页面升级为左树右查询页签且页签内上方SQL下方结果表格;2026-08-09:数据库连接与表视图节点增加编辑删除复制右键菜单并固定删除确认边界;2026-08-09:删除确认迁移为紧凑公共确认框并默认聚焦取消;2026-08-09:控制库删除认证租户操作人表字段与迁移残留;2026-08-09:默认查询改为裸表名且结构编辑按真实数据库生成原注释模板;2026-08-09:双击查询结果行按真实主键标色并通过共享窗口安全更新单行;2026-08-09:编辑窗口仅显示字段名并保留字符长文本多行输入且标色聚焦双击字段;2026-08-10:SELPLAT应用H2相对路径固定从工程根解析_阻止Host子目录误建同名空库;2026-08-10:MDA查询Tab接入selContextMenu_增加关闭右侧_关闭其他_全部关闭并保留未保存检查;2026-08-11:MDA数据库树默认展开数据库目录与PUBLIC_Schema_系统Schema与表保持折叠;2026-08-11:修正异步元数据替换保留空展开集合_首次加载与切换连接重新挂载树;2026-08-11:表与数据库右键增加中央登记H2启动SQL全量导出_原子替换并失败回滚;2026-08-11:删除_覆盖导出_未保存SQL关闭_跨文件工程生成统一使用公共确认框_表导出移到菜单末尾;2026-08-11:删除MDA专属架构门禁_固定表业务_无状态能力_common全部服从SELPLAT全项目通用结构;2026-08-11:表右键首项增加A5风格只读结构页签_展示属性字段含义索引外键且复用公共Tab与Grid;2026-08-11:数据库连接栏接入公共selPanel栏目拖拽_默认360_最小240_最大720
+upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责;2026-08-08:数据库页面升级为左树右查询页签且页签内上方SQL下方结果表格;2026-08-09:数据库连接与表视图节点增加编辑删除复制右键菜单并固定删除确认边界;2026-08-09:删除确认迁移为紧凑公共确认框并默认聚焦取消;2026-08-09:控制库删除认证租户操作人表字段与迁移残留;2026-08-09:默认查询改为裸表名且结构编辑按真实数据库生成原注释模板;2026-08-09:双击查询结果行按真实主键标色并通过共享窗口安全更新单行;2026-08-09:编辑窗口仅显示字段名并保留字符长文本多行输入且标色聚焦双击字段;2026-08-10:SELPLAT应用H2相对路径固定从工程根解析_阻止Host子目录误建同名空库;2026-08-10:MDA查询Tab接入selContextMenu_增加关闭右侧_关闭其他_全部关闭并保留未保存检查;2026-08-11:MDA数据库树默认展开数据库目录与PUBLIC_Schema_系统Schema与表保持折叠;2026-08-11:修正异步元数据替换保留空展开集合_首次加载与切换连接重新挂载树;2026-08-11:表与数据库右键增加中央登记H2启动SQL全量导出_原子替换并失败回滚;2026-08-11:删除_覆盖导出_未保存SQL关闭_跨文件工程生成统一使用公共确认框_表导出移到菜单末尾;2026-08-11:删除MDA专属架构门禁_固定表业务_无状态能力_common全部服从SELPLAT全项目通用结构;2026-08-11:表右键首项增加A5风格只读结构页签_展示属性字段含义索引外键且复用公共Tab与Grid;2026-08-11:数据库连接栏接入公共selPanel栏目拖拽_默认360_最小240_最大720;2026-08-11:全部默认表查询字段表头悬停显示数据库COMMENT_无注释不显示提示;2026-08-11:查询结果单元格增加Select_From_Where_按JDBC类型生成字面量并通过公共编辑器API追加
 
 ## 数据库边界
 
@@ -110,6 +118,10 @@ mda_connection_toolbar_resize_widths = default:360,min:240,max:720,double_click_
 mda_initial_render_policy = mount_shared_shell_before_async_connection_profile_loading
 <!-- 动态数据库字段数量不固定；MDA 必须通过 payload 显式启用 selGrid 宽表模式，由表格中央视口独立水平滚动。 -->
 mda_dynamic_result_grid_layout = shared_selgrid_opt_in_horizontal_scroll
+<!-- 默认表查询的每个真实字段必须把 JDBC 元数据 COMMENT 作为公共表格头 tooltip 输入，禁止前端写死字段说明。 -->
+mda_dynamic_result_header_comment_source = jdbc_metadata_column_remarks_to_selgrid_column_tooltip
+<!-- 字段 COMMENT 为空或查询表达式无法匹配真实表字段时不得生成空提示；有 COMMENT 时不以表头是否截断作为显示条件。 -->
+mda_dynamic_result_header_comment_behavior = all_real_columns_mouse_hover,show_nonblank_comment_without_truncation_requirement,no_empty_tooltip
 <!-- 宽表列宽由公共契约和应用 payload 声明，禁止在 MDA 页面覆盖 selGrid 内部选择器制造私有滚动实现。 -->
 mda_dynamic_result_column_width_owner = selgrid_payload_default_and_per_column_width
 <!-- 宽表不得扩张外层面板或文档，长值需要截断并保留查看完整值的可访问入口。 -->
@@ -164,8 +176,24 @@ mda_query_tab_lifecycle = switch_preserves_by_hiding_close_destroys_complete_ses
 mda_connection_switch_query_policy = destroy_all_query_tabs_before_loading_selected_connection_metadata
 <!-- 页签、右键菜单、分隔器、SQL 编辑区和查询结果统一复用公共 selTabs、selContextMenu、selSplitPane、selCodeEditor 和 selGrid。 -->
 mda_query_workspace_shared_components = selTabs_selContextMenu_selSplitPane_selCodeEditor_selGrid
+<!-- SQL 编辑器只允许执行非空选区；没有有效选区时提示先选中 SQL 且不发送请求，按钮和 Ctrl/Command+Enter 必须共用同一动作入口。 -->
+mda_query_execute_selection_policy = selection_required,empty_or_whitespace_selection_warns_and_sends_no_request,button_and_ctrl_or_command_enter_same_action
+<!-- 选区只能通过 selCodeEditor 公开 API 读取；只执行选区时未执行的其余编辑内容继续保持未保存状态。 -->
+mda_query_selection_editor_boundary = shared_selCodeEditor_getSelectedValue,no_internal_textarea_access,unexecuted_remainder_stays_dirty
+<!-- 工具栏动作必须在焦点变化前保存选区；选中 SQL 无论成功或失败都恢复原选区并保持可见高亮。 -->
+mda_query_execute_selection_visual_lifecycle = capture_before_toolbar_focus_change,restore_after_success_or_failure,selected_highlight_remains_visible
 <!-- 查询 Tab 右键操作固定提供关闭右侧、关闭其他和全部关闭，当前 Tab 由已有关闭按钮处理；无目标时显示禁用状态。 -->
 mda_query_tab_context_actions = close_right,close_others,close_all,current_uses_existing_close_button,disabled_when_unavailable
+<!-- 查询结果真实字段单元格右键固定提供 Select From Where，并把完整查询作为两行新语句追加到当前 SQL 编辑框。 -->
+mda_result_cell_select_from_where_action = shared_context_menu,SELECT_all_from_current_table_then_WHERE_real_column_equals_clicked_value,append_as_two_lines
+<!-- 查询结果只给真实数据库字段显示公共表头复选框；业务层只能通过 selGrid 公开 API 读取已选字段。 -->
+mda_result_header_field_selection = real_database_columns_only,shared_selGrid_headerSelectable,read_via_getSelectedColumnKeys,no_application_header_dom_access
+<!-- 勾选字段时取右键当前行的对应值并用 AND 连接；没有勾选字段时保持右键单元格单字段条件。 -->
+mda_result_cell_multi_field_where_policy = selected_header_fields_use_context_row_values_joined_by_AND,no_selected_header_field_falls_back_to_clicked_cell
+<!-- SQL 字面量必须按 JDBC 类型生成；数值和布尔不加单引号，其他非空值单引号包裹并把内部单引号翻倍，NULL 使用 IS NULL。 -->
+mda_result_cell_where_literal_policy = jdbc_numeric_and_boolean_unquoted,other_non_null_single_quoted_with_escape,null_uses_IS_NULL
+<!-- 应用只能调用 selCodeEditor appendValue 追加 SQL，由公共控件统一更新行号、光标、焦点和变更事件。 -->
+mda_result_cell_sql_editor_boundary = shared_selCodeEditor_appendValue,no_application_textarea_mutation
 <!-- SQL 相对页签初始值或最近一次成功执行值发生变化即为未保存；关闭、批量关闭和切换连接前合并确认。 -->
 mda_query_tab_unsaved_close_policy = compare_initial_or_last_successful_execution,single_and_batch_and_connection_switch_confirm,one_dialog_for_all_dirty_tabs
 <!-- MDA 工作区颜色、边框、焦点和活动状态只消费公共主题语义令牌，禁止页面内建立第二套颜色值。 -->

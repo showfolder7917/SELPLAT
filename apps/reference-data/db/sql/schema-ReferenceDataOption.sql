@@ -1,6 +1,8 @@
 -- ReferenceDataOption 只保存某个引用数据类型下的下拉选项，不与树节点或右键菜单混用。
 CREATE TABLE IF NOT EXISTS ReferenceDataOption (
     id BIGINT PRIMARY KEY,
+    tenantId BIGINT NOT NULL DEFAULT 1,
+    lastOperateUserId BIGINT NOT NULL DEFAULT 1,
     typeId BIGINT NOT NULL,
     optionValue VARCHAR(200) NOT NULL,
     labelZh VARCHAR(200) NOT NULL,
@@ -22,6 +24,8 @@ CREATE TABLE IF NOT EXISTS ReferenceDataOption (
 ALTER TABLE IF EXISTS ReferenceDataOption ALTER COLUMN attributesJson VARCHAR(10000);
 
 COMMENT ON TABLE ReferenceDataOption IS '引用数据下拉选项表';
+COMMENT ON COLUMN ReferenceDataOption.tenantId IS '数据所属租户标识';
+COMMENT ON COLUMN ReferenceDataOption.lastOperateUserId IS '最近维护数据的操作员标识';
 COMMENT ON COLUMN ReferenceDataOption.typeId IS '所属引用数据类型主键';
 COMMENT ON COLUMN ReferenceDataOption.optionValue IS '提交给业务接口的稳定选项值';
 COMMENT ON COLUMN ReferenceDataOption.disabled IS '选项是否展示但不可选择';

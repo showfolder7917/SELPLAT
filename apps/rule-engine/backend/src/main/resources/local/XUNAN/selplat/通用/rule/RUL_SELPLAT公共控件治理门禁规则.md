@@ -2,8 +2,8 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 1.5.0 增加 Grid 动态业务契约同步和 Window 表单默认项复位约束。 -->
-rule_version = 1.5.0
+<!-- 1.6.0 增加所有 SEL 控件实例 ID 的统一驼峰命名约束。 -->
+rule_version = 1.6.0
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -42,6 +42,11 @@ selplat_component_owned_interaction_gate = registered_owned_aria_role_single_own
 selplat_component_legacy_replacement_policy = enable_registered_component,delete_private_legacy_implementation,no_compatibility_branch
 
 ## API、主题与依赖
+
+<!-- 所有应用传给 SEL 公共控件的实例 ID 必须由 sel、控件类型、正确英文业务含义和 Id 组成，并使用 lowerCamelCase。 -->
+selplat_component_instance_id_naming = sel<ControlType><BusinessMeaning>Id,lowerCamelCase,correct_english_business_spelling
+<!-- 同一物理控件切换多个业务模块时使用一个物理实例 ID；模块自己的 gridId 只作为数据库表格头稳定坐标，禁止混用事件实例键。 -->
+selplat_shared_physical_grid_and_business_grid_id_boundary = physical_grid_instance_id_for_event_routing,business_gridId_for_database_header_coordinate
 
 <!-- 带脚本的控件必须发布与登记 ID 相同的全局 API；纯样式单元不得虚构空 API。 -->
 selplat_component_public_api_gate = script_global_api_equals_registered_id,style_only_global_api_null
@@ -123,6 +128,8 @@ selplat_toolbar_column_resize_gate = panel_contract,default_enabled,explicit_dis
 selplat_grid_multi_value_type_gate = normalize_scalar_and_array,toolbar_membership,tree_membership,type_group_any_membership
 <!-- 动态模块调用方回归必须覆盖字段契约切换、旧筛选清理和窗口选择默认项复位。 -->
 selplat_runtime_contract_and_form_default_verification = grid_module_contract_switch,filter_reset,window_select_default_after_reset
+<!-- 应用装配回归必须断言所有显式 SEL 实例 ID 符合统一命名，并阻断 Managent 等错误英文拼写。 -->
+selplat_component_instance_id_verification = all_explicit_sel_instance_ids_match_naming,zero_known_business_spelling_errors
 <!-- 控件迁移至少验证旧选择器清零、新公共 API 调用、应用装配测试和真实浏览器交互与控制台。 -->
 selplat_component_migration_verification = no_legacy_selector,registered_api_call,application_tests,real_browser_interaction_and_console
 <!-- 登记结构和首个调用方是权威样例，不复制会与真实控件漂移的静态模板。 -->

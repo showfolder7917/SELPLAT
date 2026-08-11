@@ -1,5 +1,7 @@
 # Reference Data Workbench Design QA
 
+final result: passed
+
 ## Result
 
 Passed. No open P0, P1, or P2 visual issues remain.
@@ -36,3 +38,51 @@ Passed. No open P0, P1, or P2 visual issues remain.
 - Final toolbar columns: search 408 px, data range 320 px, status 272 px, reset 104 px.
 - Final positions: the controls occupy x=34 through x=1174, with the remaining toolbar width intentionally left empty on the right.
 - Browser result: no console errors and no document-level horizontal overflow.
+
+## MDA database field COMMENT tooltip follow-up
+
+- Visual source: `/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-e33668df-1cd8-412b-914b-0112afffdfc5.png`.
+- Evaluated page: `http://127.0.0.1:8080/mda/mda.html?reload=20260811-header-comment`.
+- Evaluated state: MDA control database, `MdaConnectionProfile` default table query, pointer over the `id` table header.
+- All 16 real database fields received their own JDBC `COMMENT` through the standard `selGrid` tooltip input.
+- The visible tooltip reads `连接配置主键，由公共号段生成`; it uses the existing shared dark crystal tooltip surface and does not alter header height, column widths, or scrolling.
+- A separate `SELECT 1 AS ready` result verified that a column without a matching database COMMENT receives neither tooltip content nor always-display mode.
+- Browser result: no warning/error logs, no document-level horizontal overflow, and no open P0/P1/P2 visual issues.
+
+## MDA Select From Where context-menu follow-up
+
+- Visual source: `/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-d89bf190-dbb7-45dc-ab21-c3288f8cfecb.png`.
+- Evaluated page: `http://127.0.0.1:8080/mda/mda.html?reload=20260811-select-from-where-1`.
+- Evaluated state: MDA control database, `MdaConnectionProfile` result grid, context menu opened on the `connectionName` value `MDA 控制库`.
+- The one-row `Select From Where` menu reuses the shared dark crystal context-menu surface, stays anchored to the clicked value, and preserves the result grid geometry.
+- The editor received four verified predicates: quoted Chinese text, unquoted numeric ID, unquoted boolean, and `IS NULL`; each generated query occupies exactly two lines and is separated from the previous statement by a semicolon and blank line.
+- Escape close, reopen at a new cell, and outside-click close all passed; the public editor retained focus after append.
+- Browser result: no warning/error logs, no document-level horizontal overflow, and no open P0/P1/P2 visual issues.
+
+## MDA execute-selected-SQL follow-up
+
+- Visual source: `/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-7f05a9b9-fdfa-42b4-8d0b-f0e14f937c1b.png`.
+- Evaluated page: `http://127.0.0.1:8080/mda/mda.html?reload=20260811-execute-selected-sql-1`.
+- Evaluated state: MDA control database, `MdaConnectionProfile` query tab, SQL text visibly selected before execution.
+- The selected query `SELECT * FROM MdaConnectionProfile WHERE id = 10003` executed from the existing button and returned exactly the matching row.
+- With an empty selection, `Command + Enter` executed the complete editor value `SELECT * FROM MdaConnectionProfile WHERE id = 100000` and returned the second matching row.
+- The existing editor geometry, toolbar, line number, result grid and shared dark theme remain unchanged; the browser console contains no errors and no P0/P1/P2 visual issue was introduced.
+
+## MDA selected-SQL focus-loss regression
+
+- Regression source: `/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-78e79cb8-a86c-4ea7-8d8c-0400129cb485.png`.
+- Exact editor fixture: two queries for `ReferenceDataTableColumn`, with only the second two-line `WHERE viewCode = 'type-management'` query selected.
+- The toolbar `mousedown` now keeps focus in the shared editor and snapshots the selected text before the button action can collapse it.
+- The action event was verified to carry only the second query; after an artificial focus/selection collapse, `restoreSelection()` returned focus and the exact original start/end range.
+- The live 8080 host dev-runtime now serves the new `selectedValue`, `mousedown`, and `restoreSelection` contracts with cache-busted MDA resources.
+- The fix changes no editor or result-grid geometry, color, spacing, or typography; no new visual issue was introduced.
+- Selection is now mandatory: executing with no nonblank selection shows `请先选中需要执行的 SQL。` and sends no SQL request, preventing hidden execution of additional statements.
+
+## MDA multi-field WHERE follow-up
+
+- Visual source: `/var/folders/mm/bdkr2fj53rl88019r0hfw_y40000gn/T/codex-clipboard-42a7f67f-bf11-42bc-a5d7-1505235d0f7e.png`.
+- Every result column that maps to a real database field now shows a compact native checkbox before its existing header label; computed or aliased columns remain non-selectable.
+- The checkbox and label share the existing column width, preserve COMMENT tooltips and column resize handles, and do not change table height or horizontal-scroll calculation.
+- Automated DOM regression selected `databaseType` and `connectionName` and verified the public grid API returned both stable column keys in header order.
+- MDA consumes only that public selection snapshot and builds predicates from the right-clicked row as `WHERE databaseType = 'H2'` followed by `AND connectionName = 'MDA 控制库'`.
+- With no checked header field, `Select From Where` retains the existing single clicked-cell behavior.

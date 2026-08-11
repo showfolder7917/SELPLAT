@@ -2,6 +2,10 @@
 CREATE TABLE IF NOT EXISTS ReferenceDataTreeNode (
     -- id 作为树节点主键，由当前 reference-data 独立数据库生成。
     id BIGINT PRIMARY KEY,
+    -- tenantId 标识当前树节点所属租户。
+    tenantId BIGINT NOT NULL DEFAULT 1,
+    -- lastOperateUserId 记录最近维护该树节点的操作员。
+    lastOperateUserId BIGINT NOT NULL DEFAULT 1,
     -- typeId 关联所属 ReferenceDataType，所有树节点必须归属于一个明确类型。
     typeId BIGINT NOT NULL,
     -- parentId 关联同表父节点；根节点保持为空。
@@ -41,6 +45,8 @@ ALTER TABLE IF EXISTS ReferenceDataTreeNode ALTER COLUMN attributesJson VARCHAR(
 
 COMMENT ON TABLE ReferenceDataTreeNode IS '引用数据树节点表';
 COMMENT ON COLUMN ReferenceDataTreeNode.id IS '树节点主键，由reference-data独立数据库生成';
+COMMENT ON COLUMN ReferenceDataTreeNode.tenantId IS '数据所属租户标识';
+COMMENT ON COLUMN ReferenceDataTreeNode.lastOperateUserId IS '最近维护数据的操作员标识';
 COMMENT ON COLUMN ReferenceDataTreeNode.typeId IS '所属引用数据类型主键';
 COMMENT ON COLUMN ReferenceDataTreeNode.parentId IS '父树节点主键，根节点为空';
 COMMENT ON COLUMN ReferenceDataTreeNode.nodeCode IS '类型内稳定树节点编码';

@@ -1,6 +1,6 @@
 /*
- * reference-data.js：引用数据五表管理工作台装配层。
- * 真实数据来自五张业务表，表格列来自 ReferenceDataTableColumn；页面只装配 SEL 公共组件。
+ * reference-data.js：引用数据六表管理工作台装配层。
+ * 真实数据来自六张业务表，ReferenceDataTable 登记表格，表格列来自 ReferenceDataTableColumn。
  */
 (function referenceDataInitializeApplication() {
     "use strict";
@@ -19,45 +19,52 @@
     const referenceDataApplicationHost = referenceDataBase.query("[data-reference-data-app]");
     const referenceDataBackgroundHost = referenceDataBase.query("[data-sel-page-background-host]");
     const referenceDataPersonalizationHost = referenceDataBase.query("[data-sel-personalization-host]");
-    const referenceDataGridId = "ReferenceDataWorkbenchGrid";
+    const referenceDataGridId = "selGridReferenceDataManagementId";
     const referenceDataLocale = "zh-CN";
     const referenceDataWindowMessagesUrl = "/sel/components/window/i18n/zh-CN.json?v=20260811-reference-workbench-1";
 
     const referenceDataModules = Object.freeze({
         types: Object.freeze({
-            key: "types", tableCode: "ReferenceDataType", viewCode: "type-management",
-            entity: "ReferenceDataType", api: "/api/reference-data/admin/types/", icon: "ri-database-2-line",
+            key: "types", tableName: "ReferenceDataType", gridId: "selGridTypeManagementId",
+            entity: "ReferenceDataType", api: "/api/reference-data/admin/types/", icon: "ri-database-2-line", windowId: "selWindowTypeManagementId",
             name: "数据类型", itemName: "类型", description: "定义跨项目稳定坐标和多语言名称",
             searchFields: Object.freeze(["projectCode", "resourceCode", "nameZh", "nameJa", "nameEn"]),
             previewField: "resourceCode"
         }),
         tree: Object.freeze({
-            key: "tree", tableCode: "ReferenceDataTreeNode", viewCode: "tree-node-management",
-            entity: "ReferenceDataTreeNode", api: "/api/reference-data/admin/tree-nodes/", icon: "ri-node-tree",
+            key: "tree", tableName: "ReferenceDataTreeNode", gridId: "selGridTreeNodeManagementId",
+            entity: "ReferenceDataTreeNode", api: "/api/reference-data/admin/tree-nodes/", icon: "ri-node-tree", windowId: "selWindowTreeNodeManagementId",
             name: "树节点", itemName: "节点", description: "维护带父子关系的树形展示数据",
             searchFields: Object.freeze(["nodeCode", "nodeValue", "labelZh", "labelJa", "labelEn"]),
             previewField: "nodeCode", relation: true
         }),
         options: Object.freeze({
-            key: "options", tableCode: "ReferenceDataOption", viewCode: "option-management",
-            entity: "ReferenceDataOption", api: "/api/reference-data/admin/options/", icon: "ri-list-check-3",
+            key: "options", tableName: "ReferenceDataOption", gridId: "selGridOptionManagementId",
+            entity: "ReferenceDataOption", api: "/api/reference-data/admin/options/", icon: "ri-list-check-3", windowId: "selWindowOptionManagementId",
             name: "下拉选项", itemName: "选项", description: "维护下拉列表的值、分组和禁用状态",
             searchFields: Object.freeze(["optionValue", "groupCode", "labelZh", "labelJa", "labelEn"]),
             previewField: "optionValue", hasBoolean: true
         }),
         menus: Object.freeze({
-            key: "menus", tableCode: "ReferenceDataContextMenuItem", viewCode: "context-menu-management",
-            entity: "ReferenceDataContextMenuItem", api: "/api/reference-data/admin/context-menu-items/", icon: "ri-menu-2-line",
+            key: "menus", tableName: "ReferenceDataContextMenuItem", gridId: "selGridContextMenuManagementId",
+            entity: "ReferenceDataContextMenuItem", api: "/api/reference-data/admin/context-menu-items/", icon: "ri-menu-2-line", windowId: "selWindowContextMenuManagementId",
             name: "菜单项目", itemName: "菜单", description: "维护分层菜单、命令、图标和禁用状态",
             searchFields: Object.freeze(["itemCode", "command", "labelZh", "labelJa", "labelEn"]),
             previewField: "itemCode", relation: true, hasBoolean: true
         }),
+        tables: Object.freeze({
+            key: "tables", tableName: "ReferenceDataTable", gridId: "selGridTableManagementId",
+            entity: "ReferenceDataTable", api: "/api/reference-data/admin/tables/", icon: "ri-table-line", windowId: "selWindowTableManagementId",
+            name: "表格定义", itemName: "表格", description: "登记项目页面表格并进入对应表格头明细",
+            searchFields: Object.freeze(["projectName", "tableName", "gridColumnId", "description", "pagePath"]),
+            previewField: "gridColumnId"
+        }),
         columns: Object.freeze({
-            key: "columns", tableCode: "ReferenceDataTableColumn", viewCode: "table-column-management",
-            entity: "ReferenceDataTableColumn", api: "/api/reference-data/admin/table-columns/", icon: "ri-layout-column-line",
+            key: "columns", tableName: "ReferenceDataTableColumn", gridId: "selGridTableColumnManagementId",
+            entity: "ReferenceDataTableColumn", api: "/api/reference-data/admin/table-columns/", icon: "ri-layout-column-line", windowId: "selWindowTableColumnManagementId",
             name: "表格头", itemName: "表格列", description: "配置每个页面表格的名称、宽度、多语言和显示状态",
-            searchFields: Object.freeze(["tableCode", "viewCode", "columnCode", "fieldCode", "labelZh", "labelJa", "labelEn"]),
-            previewField: "columnCode", hasBoolean: true
+            searchFields: Object.freeze(["tableName", "gridId", "gridColumnId", "tableFieldName", "labelZh", "labelJa", "labelEn"]),
+            previewField: "gridColumnId", hasBoolean: true
         })
     });
     const referenceDataModuleList = Object.freeze(Object.values(referenceDataModules));
@@ -138,8 +145,8 @@
 
     async function referenceDataResolveColumns(referenceDataModule) {
         const referenceDataQuery = new URLSearchParams({
-            tableCode: referenceDataModule.tableCode,
-            viewCode: referenceDataModule.viewCode,
+            tableName: referenceDataModule.tableName,
+            gridId: referenceDataModule.gridId,
             locale: referenceDataLocale
         });
         const referenceDataResult = await referenceDataAjax.request({
@@ -149,6 +156,13 @@
     }
 
     function referenceDataSafeColumns(referenceDataModule) {
+        if (referenceDataModule.key === "tables") return Object.freeze([
+            Object.freeze({ id: "tableName", field: "tableName", label: "数据库表", renderer: "text", width: "22%" }),
+            Object.freeze({ id: "gridColumnId", field: "gridColumnId", label: "表格配置 ID", renderer: "text", width: "24%" }),
+            Object.freeze({ id: "projectName", field: "projectName", label: "所属项目", renderer: "text", width: "16%" }),
+            Object.freeze({ id: "description", field: "description", label: "表格描述", renderer: "text", width: "22%" }),
+            Object.freeze({ id: "actions", field: "id", label: "操作", renderer: "actions", width: "16%" })
+        ]);
         const referenceDataPrimary = referenceDataModule.previewField;
         return Object.freeze([
             Object.freeze({ id: "primary", field: referenceDataPrimary, label: "数据编码", renderer: "text", width: "34%" }),
@@ -179,8 +193,12 @@
                 const referenceDataActions = [
                     Object.freeze({ id: "edit", label: `编辑${referenceDataModule.itemName}`, icon: "ri-edit-line" })
                 ];
-                if (["tree", "options", "menus"].includes(referenceDataModule.key)) {
-                    referenceDataActions.push(Object.freeze({ id: "preview", label: `预览${referenceDataModule.itemName}`, icon: "ri-eye-line" }));
+                if (["tables", "tree", "options", "menus"].includes(referenceDataModule.key)) {
+                    referenceDataActions.push(Object.freeze({
+                        id: "preview",
+                        label: referenceDataModule.key === "tables" ? "查看表格头" : `预览${referenceDataModule.itemName}`,
+                        icon: "ri-eye-line"
+                    }));
                 }
                 referenceDataActions.push(
                     Object.freeze({ id: "toggle", label: "切换启停状态", icon: "ri-checkbox-circle-line" }),
@@ -194,7 +212,8 @@
 
     function referenceDataRecordLabel(referenceDataModule, referenceDataRecord) {
         if (referenceDataModule.key === "types") return `${referenceDataRecord.projectCode}/${referenceDataRecord.resourceCode}`;
-        if (referenceDataModule.key === "columns") return `${referenceDataRecord.tableCode} · ${referenceDataRecord.labelZh || referenceDataRecord.columnCode}`;
+        if (referenceDataModule.key === "tables") return `${referenceDataRecord.projectName} · ${referenceDataRecord.tableName}`;
+        if (referenceDataModule.key === "columns") return `${referenceDataRecord.tableName} · ${referenceDataRecord.labelZh || referenceDataRecord.gridColumnId}`;
         return String(referenceDataRecord.labelZh || referenceDataRecord[referenceDataModule.previewField] || referenceDataRecord.id);
     }
 
@@ -243,10 +262,18 @@
         }
         if (referenceDataModule.key === "columns") {
             return referenceDataModuleList.map((referenceDataTargetModule) => Object.freeze({
-                value: referenceDataTargetModule.tableCode,
+                value: referenceDataTargetModule.tableName,
                 label: referenceDataTargetModule.name,
                 icon: referenceDataTargetModule.icon,
-                description: referenceDataTargetModule.tableCode
+                description: referenceDataTargetModule.tableName
+            }));
+        }
+        if (referenceDataModule.key === "tables") {
+            return referenceDataRecords.map((referenceDataRecord) => Object.freeze({
+                value: String(referenceDataRecord.gridColumnId),
+                label: String(referenceDataRecord.tableName),
+                icon: referenceDataModule.icon,
+                description: String(referenceDataRecord.projectName || "")
             }));
         }
         if (referenceDataModule.key === "types") {
@@ -269,7 +296,8 @@
     function referenceDataTypeField(referenceDataModule) {
         if (referenceDataModule.key === "types") return "resourceCode";
         if (referenceDataModule.key === "options") return "optionValue";
-        if (referenceDataModule.key === "columns") return "tableCode";
+        if (referenceDataModule.key === "tables") return "gridColumnId";
+        if (referenceDataModule.key === "columns") return "tableName";
         return "typeId";
     }
 
@@ -308,9 +336,9 @@
             }),
             title: Object.freeze({
                 title: "引用数据管理工作台",
-                subtitle: `${referenceDataModule.name} · ${referenceDataModule.tableCode}`,
+                subtitle: `${referenceDataModule.name} · ${referenceDataModule.tableName}`,
                 description: referenceDataModule.description,
-                ariaLabel: "引用数据五表管理面板",
+                ariaLabel: "引用数据六表管理面板",
                 ariaLabels: Object.freeze({
                     statusTabs: `${referenceDataModule.name}状态筛选`, headerActions: `${referenceDataModule.name}快捷操作`,
                     toolbar: `${referenceDataModule.name}筛选工具栏`, sidebar: "数据库模块导航",
@@ -431,26 +459,33 @@
             name, label, type: "textarea", placeholder, maxLength: 1000, icon: "ri-file-text-line"
         });
         const referenceDataSort = Object.freeze({ name: "sortnum", label: "排序值", type: "number", value: "0", icon: "ri-sort-number-asc" });
+        const referenceDataAuditRow = Object.freeze([
+            Object.freeze({ name: "tenantId", label: "租户 ID", type: "number", required: true, value: "1", icon: "ri-building-line" }),
+            Object.freeze({ name: "lastOperateUserId", label: "操作员 ID", type: "number", required: true, value: "1", icon: "ri-user-settings-line" })
+        ]);
         if (referenceDataModule.key === "types") return Object.freeze([
             Object.freeze([referenceDataText("projectCode", "项目编码", true, "例如 reference-data", 64), referenceDataText("resourceCode", "资源编码", true, "例如 resource-kind", 64)]),
             Object.freeze([referenceDataText("nameZh", "中文名称", true), referenceDataText("nameJa", "日文名称")]),
             Object.freeze([referenceDataText("nameEn", "英文名称"), referenceDataStatusField()]),
             Object.freeze([referenceDataTextarea("descriptionZh", "中文说明"), referenceDataTextarea("descriptionJa", "日文说明")]),
-            Object.freeze([referenceDataTextarea("descriptionEn", "英文说明"), referenceDataSort])
+            Object.freeze([referenceDataTextarea("descriptionEn", "英文说明"), referenceDataSort]),
+            referenceDataAuditRow
         ]);
         if (referenceDataModule.key === "tree") return Object.freeze([
             Object.freeze([referenceDataTypeSelectField(), referenceDataParentSelectField(referenceDataModule, referenceDataRecord)]),
             Object.freeze([referenceDataText("nodeCode", "节点编码", true, "例如 root"), referenceDataText("nodeValue", "节点值", true, "例如 ROOT")]),
             Object.freeze([referenceDataText("labelZh", "中文名称", true), referenceDataText("labelJa", "日文名称")]),
             Object.freeze([referenceDataText("labelEn", "英文名称"), referenceDataStatusField()]),
-            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON", "例如 {\"level\":1}"), referenceDataSort])
+            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON", "例如 {\"level\":1}"), referenceDataSort]),
+            referenceDataAuditRow
         ]);
         if (referenceDataModule.key === "options") return Object.freeze([
             Object.freeze([referenceDataTypeSelectField(), referenceDataText("optionValue", "选项值", true, "例如 TREE")]),
             Object.freeze([referenceDataText("groupCode", "分组编码"), referenceDataBooleanField("disabled", "禁止选择")]),
             Object.freeze([referenceDataText("labelZh", "中文名称", true), referenceDataText("labelJa", "日文名称")]),
             Object.freeze([referenceDataText("labelEn", "英文名称"), referenceDataStatusField()]),
-            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON"), referenceDataSort])
+            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON"), referenceDataSort]),
+            referenceDataAuditRow
         ]);
         if (referenceDataModule.key === "menus") return Object.freeze([
             Object.freeze([referenceDataTypeSelectField(), referenceDataParentSelectField(referenceDataModule, referenceDataRecord)]),
@@ -458,26 +493,42 @@
             Object.freeze([referenceDataText("icon", "图标类名", false, "例如 ri-add-line", 100), referenceDataBooleanField("disabled", "禁止执行")]),
             Object.freeze([referenceDataText("labelZh", "中文名称", true), referenceDataText("labelJa", "日文名称")]),
             Object.freeze([referenceDataText("labelEn", "英文名称"), referenceDataStatusField()]),
-            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON"), referenceDataSort])
+            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON"), referenceDataSort]),
+            referenceDataAuditRow
+        ]);
+        if (referenceDataModule.key === "tables") return Object.freeze([
+            Object.freeze([
+                referenceDataText("projectName", "所属项目", true, "例如 reference-data", 100),
+                referenceDataText("tableName", "对应数据库表", true, "例如 ReferenceDataType", 100)
+            ]),
+            Object.freeze([
+                referenceDataText("gridColumnId", "表格配置 ID", true, "例如 selGridTypeManagementId", 100),
+                referenceDataText("pagePath", "所在页面", false, "例如 /reference-data/reference-data.html", 500)
+            ]),
+            Object.freeze([referenceDataTextarea("description", "表格描述"), referenceDataStatusField()]),
+            Object.freeze([referenceDataSort]),
+            referenceDataAuditRow
         ]);
         return Object.freeze([
             Object.freeze([Object.freeze({
-                name: "tableCode", label: "对应数据库表", type: "select", required: true,
+                name: "tableName", label: "对应数据库表", type: "select", required: true,
                 options: Object.freeze(referenceDataModuleList.map((referenceDataTargetModule) => Object.freeze({
-                    value: referenceDataTargetModule.tableCode, label: referenceDataTargetModule.name,
-                    icon: referenceDataTargetModule.icon, description: referenceDataTargetModule.tableCode
+                    value: referenceDataTargetModule.tableName, label: referenceDataTargetModule.name,
+                    icon: referenceDataTargetModule.icon, description: referenceDataTargetModule.tableName
                 })))
-            }), referenceDataText("viewCode", "页面实例编码", true, "例如 option-management", 100)]),
-            Object.freeze([referenceDataText("columnCode", "表格列编码", true, "例如 labelZh", 100), referenceDataText("fieldCode", "显示字段编码", true, "例如 labelZh", 100)]),
-            Object.freeze([referenceDataText("secondaryField", "第二显示字段", false, "仅 stack 渲染使用", 100), Object.freeze({
-                name: "renderer", label: "显示方式", type: "select", required: true, options: Object.freeze([
+            }), referenceDataText("gridId", "SEL 表格实例 ID", true, "例如 selGridOptionManagementId", 100)]),
+            Object.freeze([referenceDataText("gridColumnId", "表格列 ID", true, "例如 labelZh", 100), referenceDataText("tableFieldName", "数据库字段名", true, "例如 labelZh", 100)]),
+            Object.freeze([referenceDataText("tableSecondaryFieldName", "第二数据库字段名", false, "仅 stack 渲染使用", 100), Object.freeze({
+                name: "cellRenderer", label: "单元格渲染方式", type: "select", required: true, options: Object.freeze([
                     "text", "stack", "badge", "time", "boolean", "actions"
                 ].map((referenceDataRenderer) => Object.freeze({ value: referenceDataRenderer, label: referenceDataRenderer, icon: "ri-layout-column-line" })))
             })]),
+            Object.freeze([referenceDataText("cellIcon", "单元格图标", false, "例如 ri-database-line", 100), referenceDataBooleanField("cellIconVisible", "显示单元格图标")]),
             Object.freeze([referenceDataText("labelZh", "中文表头", true), referenceDataText("labelJa", "日文表头")]),
             Object.freeze([referenceDataText("labelEn", "英文表头"), referenceDataText("width", "列宽", true, "例如 160px 或 18%", 32)]),
             Object.freeze([referenceDataBooleanField("visible", "页面显示", true), referenceDataStatusField()]),
-            Object.freeze([referenceDataSort])
+            Object.freeze([referenceDataSort]),
+            referenceDataAuditRow
         ]);
     }
 
@@ -604,7 +655,18 @@
         await referenceDataRefresh(true);
     }
 
-    function referenceDataPreview(referenceDataModule, referenceDataRecord) {
+    async function referenceDataOpenTableColumns(referenceDataRecord) {
+        await referenceDataSwitchModule("columns");
+        referenceDataState.gridController.filters.setSearch(
+            String(referenceDataRecord.gridColumnId || referenceDataRecord.tableName || "")
+        );
+    }
+
+    async function referenceDataPreview(referenceDataModule, referenceDataRecord) {
+        if (referenceDataModule.key === "tables") {
+            await referenceDataOpenTableColumns(referenceDataRecord);
+            return;
+        }
         if (referenceDataModule.key === "tree") {
             referenceDataState.treeController?.select(`record-tree-${referenceDataRecord.id}`);
             return;
@@ -638,7 +700,7 @@
         if (!referenceDataRecord) return;
         if (referenceDataAction === "edit") referenceDataOpenEditor(referenceDataModule, referenceDataRecord);
         if (referenceDataAction === "delete") referenceDataOpenDelete(referenceDataModule, referenceDataRecord);
-        if (referenceDataAction === "preview") referenceDataPreview(referenceDataModule, referenceDataRecord);
+        if (referenceDataAction === "preview") await referenceDataPreview(referenceDataModule, referenceDataRecord);
         if (referenceDataAction === "toggle") {
             try {
                 await referenceDataToggle(referenceDataModule, referenceDataRecord);
@@ -649,7 +711,7 @@
     }
 
     function referenceDataParseTreeRecordId(referenceDataTreeId) {
-        const referenceDataMatch = String(referenceDataTreeId || "").match(/^record-(types|tree|options|menus|columns)-([0-9]+)$/);
+        const referenceDataMatch = String(referenceDataTreeId || "").match(/^record-(types|tree|options|menus|tables|columns)-([0-9]+)$/);
         return referenceDataMatch ? Object.freeze({ moduleKey: referenceDataMatch[1], id: Number(referenceDataMatch[2]) }) : null;
     }
 
@@ -661,7 +723,7 @@
         const referenceDataPayload = referenceDataBuildPayload();
         referenceDataState.panelRoot = window.selPanel.create(referenceDataApplicationHost, {
             gridId: referenceDataGridId, sourceId: referenceDataGridId, entity: "ReferenceDataWorkbench",
-            view: "five-table-management", layout: "single", structure: referenceDataLayout, ariaLabel: referenceDataPayload.title.ariaLabel
+            view: "six-table-management", layout: "single", structure: referenceDataLayout, ariaLabel: referenceDataPayload.title.ariaLabel
         });
         if (!referenceDataState.panelRoot) throw new Error("引用数据公共面板创建失败。");
         if (!window.selPanel.mount(referenceDataState.panelRoot, {
@@ -680,19 +742,19 @@
 
         referenceDataModuleList.forEach((referenceDataModule) => {
             const referenceDataController = window.selWindow.mount(referenceDataApplicationHost, {
-                id: `ReferenceData${referenceDataModule.tableCode}EditWindow`, messages: referenceDataWindowMessages,
+                id: referenceDataModule.windowId, messages: referenceDataWindowMessages,
                 ...referenceDataBuildEditWindow(referenceDataModule, false)
             });
             if (!referenceDataController) throw new Error(`${referenceDataModule.name}编辑窗口挂载失败。`);
             referenceDataState.editWindowControllers.set(referenceDataModule.key, referenceDataController);
         });
         referenceDataState.deleteWindowController = window.selWindow.mount(referenceDataApplicationHost, {
-            id: "ReferenceDataDeleteWindow", messages: referenceDataWindowMessages, title: "删除引用数据",
+            id: "selWindowReferenceDataDeleteId", messages: referenceDataWindowMessages, title: "删除引用数据",
             subtitle: "删除采用逻辑删除", closeLabel: "关闭删除确认窗口", cancelLabel: "取消", submitLabel: "确认删除",
             validationMessage: "请确认删除操作", autoSuccess: false, rows: Object.freeze([])
         });
         referenceDataState.previewMenuController = window.selContextMenu.mount(referenceDataState.panelRoot, {
-            id: "ReferenceDataDatabaseMenuPreview", ariaLabel: "数据库菜单预览"
+            id: "selContextMenuReferenceDataPreviewId", ariaLabel: "数据库菜单预览"
         });
         if (!referenceDataState.deleteWindowController || !referenceDataState.previewMenuController) {
             throw new Error("引用数据确认或预览组件挂载失败。");
@@ -712,6 +774,11 @@
             }
             const referenceDataTarget = referenceDataParseTreeRecordId(referenceDataTreeId);
             if (!referenceDataTarget) return;
+            if (referenceDataTarget.moduleKey === "tables") {
+                const referenceDataTableRecord = referenceDataFindRecord(referenceDataModules.tables, referenceDataTarget.id);
+                if (referenceDataTableRecord) await referenceDataOpenTableColumns(referenceDataTableRecord);
+                return;
+            }
             if (referenceDataState.activeKey !== referenceDataTarget.moduleKey) await referenceDataSwitchModule(referenceDataTarget.moduleKey);
             const referenceDataRecord = referenceDataFindRecord(referenceDataModules[referenceDataTarget.moduleKey], referenceDataTarget.id);
             if (referenceDataRecord) referenceDataState.gridController.filters.setSearch(referenceDataRecord[referenceDataModules[referenceDataTarget.moduleKey].previewField] || "");
@@ -724,17 +791,17 @@
             await referenceDataHandleAction(referenceDataModule, referenceDataEvent.detail.action, referenceDataFindRecord(referenceDataModule, referenceDataTarget.id));
         });
         referenceDataApplicationHost.addEventListener("selWindow:submit", (referenceDataEvent) => {
-            if (referenceDataEvent.detail?.id === "ReferenceDataDeleteWindow") {
+            if (referenceDataEvent.detail?.id === "selWindowReferenceDataDeleteId") {
                 referenceDataDelete();
                 return;
             }
             const referenceDataModule = referenceDataModuleList.find(
-                (referenceDataCandidate) => referenceDataEvent.detail?.id === `ReferenceData${referenceDataCandidate.tableCode}EditWindow`
+                (referenceDataCandidate) => referenceDataEvent.detail?.id === referenceDataCandidate.windowId
             );
             if (referenceDataModule) referenceDataSave(referenceDataModule, referenceDataEvent.detail.values);
         });
         referenceDataState.panelRoot.addEventListener("selContextMenu:action", (referenceDataEvent) => {
-            if (referenceDataEvent.detail?.menuId !== "ReferenceDataDatabaseMenuPreview") return;
+            if (referenceDataEvent.detail?.menuId !== "selContextMenuReferenceDataPreviewId") return;
             const referenceDataFeedback = referenceDataState.panelRoot.querySelector('[data-sel-grid-role="feedback"]');
             if (referenceDataFeedback) referenceDataFeedback.textContent = `已选择菜单命令：${referenceDataEvent.detail.actionId}`;
         });

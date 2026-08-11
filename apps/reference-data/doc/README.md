@@ -8,6 +8,8 @@ reference-data 使用数据库稳定坐标 `projectCode + resourceCode` 管理�
 - `ReferenceDataTreeNode` 保存树节点。
 - `ReferenceDataOption` 保存下拉选项。
 - `ReferenceDataContextMenuItem` 保存右键菜单和子菜单。
+- `ReferenceDataTable` 登记表格所在项目、真实表、表格配置 ID、描述和页面位置。
+- `ReferenceDataTableColumn` 保存每个已登记表格的字段列配置。
 
 业务项目通过 reference-data 的管理能力登记数据；运行时查询只按稳定坐标访问，不接受客户端
 提交表名或 SQL。

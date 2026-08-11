@@ -80,8 +80,8 @@ selplat_managed_application_contract_gate = external_production_java_caller_requ
 selplat_managed_application_manifest_gate = manifestConsumer_required,root_relative_reader_path,src_main_reader,manifest_module_json_read_evidence,no_metadata_placeholder
 <!-- 严格数据库应用必须同时提供 CommonSequenceSegment 结构与数据脚本，由 common/persistence 绑定当前应用私有数据源。 -->
 selplat_common_sequence_sql_requirement = schema-CommonSequenceSegment.sql,data-CommonSequenceSegment.sql,owner_common_persistence
-<!-- 每张非 Common 业务表必须且只能对应一条 <TableName>Id 号段数据，禁止不同表共用 seqCode。 -->
-selplat_table_sequence_mapping = one_business_table_one_sequence_row,seqCode=<TableName>Id,exactly_one_active_owner
+<!-- 号段数据允许整体为空并由管理员逐条建立；一旦预置任一号段，就必须完整覆盖每张非 Common 业务表且只能对应一条 <TableName>Id。 -->
+selplat_table_sequence_mapping = fully_empty_for_manual_setup_or_one_business_table_one_sequence_row,seqCode=<TableName>Id,exactly_one_active_owner,no_partial_seed_set
 <!-- CommonSequenceSegment 自身为避免循环依赖允许 identity；其他业务表 id 必须由公共 SequenceGenerator 生成。 -->
 selplat_business_primary_key_strategy = CommonSequenceSegment:id_identity_exception,business_table:no_identity,use_shared_SequenceGenerator
 <!-- 多进程实例从数据库通过 versionNo 乐观锁领取互不重叠号段；进程退出允许产生空洞但不得回退游标或重复主键。 -->
