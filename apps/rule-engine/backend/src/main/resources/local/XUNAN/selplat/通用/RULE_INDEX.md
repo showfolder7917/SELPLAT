@@ -11,6 +11,10 @@ load_rule_for_active_user_selplat_public_component_create_split_migrate_or_delet
 load_rule_for_active_user_selplat_application_reusable_interaction_or_private_control = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 修改控件 API、主题令牌、ARIA 角色、硬依赖或应用资源顺序时加载，保证登记与调用方同步。 -->
 load_rule_for_active_user_selplat_component_api_theme_accessibility_dependency_or_resource_order = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 修改 selGrid 记录分类字段、工具栏分类或树分类筛选时加载，保证单值和多值统一按成员匹配。 -->
+load_rule_for_active_user_selplat_grid_record_type_or_tree_classification_filter = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 同一 selGrid 切换业务模块、替换记录字段契约或修改 selWindow 表单默认项时加载，保证新契约和默认值立即生效。 -->
+load_rule_for_active_user_selplat_grid_runtime_module_contract_or_window_form_default = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 修改公共控件字号、字重、行高或树节点文字层级时加载，统一七级语义文字并阻断旧 primary/secondary 令牌。 -->
 load_rule_for_active_user_selplat_component_typography_or_tree_text_hierarchy = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 交付前检查未知新控件和业务私造交互时加载，扫描逻辑由中央登记驱动而非逐个控件写死。 -->
@@ -90,6 +94,8 @@ load_rule_for_active_user_selplat_multi_project_sequence_datasource_routing = SE
 load_rule_for_active_user_selplat_default_table_definition_or_reference_data_fallback = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 修改表格定义的 Controller、Service、DAO 分层或 resourceCode/viewCode/locale 标识时加载。 -->
 load_rule_for_active_user_selplat_table_definition_controller_service_dao_layering = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
+<!-- 新增或修改数据库驱动的页面表格头、列宽、多语言、显示开关和排序配置时加载。 -->
+load_rule_for_active_user_selplat_database_driven_grid_header_column_configuration = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 
 <!-- SELPLAT 新业务工程和可追加业务表统一由 MDA 脚手架生成，并实行无覆盖冲突保护。 -->
 SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT应用脚手架生成规则.md

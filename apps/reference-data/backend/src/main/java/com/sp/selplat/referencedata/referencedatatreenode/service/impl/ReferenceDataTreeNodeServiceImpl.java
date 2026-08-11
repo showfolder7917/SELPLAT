@@ -1,6 +1,7 @@
 package com.sp.selplat.referencedata.referencedatatreenode.service.impl;
 
 import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.service.BaseServiceImpl;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.referencedata.common.util.ReferenceDataQueryUtil;
 import com.sp.selplat.referencedata.referencedatatreenode.dao.ReferenceDataTreeNodeDao;
@@ -14,23 +15,14 @@ import org.springframework.stereotype.Service;
 
 /** 从 ReferenceDataTreeNode 表读取平铺记录并组装公共 Map 树。 */
 @Service
-public class ReferenceDataTreeNodeServiceImpl implements ReferenceDataTreeNodeService {
-
-    private final ReferenceDataTreeNodeDao dao;
-
-    /**
-     * 创建树节点 Service。
-     *
-     * @param dao ReferenceDataTreeNode 表 DAO，例如 {@code ReferenceDataTreeNodeDaoImpl}
-     */
-    public ReferenceDataTreeNodeServiceImpl(ReferenceDataTreeNodeDao dao) {
-        this.dao = dao;
-    }
+public class ReferenceDataTreeNodeServiceImpl
+        extends BaseServiceImpl<ReferenceDataTreeNodeDao>
+        implements ReferenceDataTreeNodeService {
 
     /** {@inheritDoc} */
     @Override
     public CommonResult getTree(String projectCode, String resourceCode, Map<String, String> parameters) {
-        List<Map<String, Object>> rows = dao.findEnabledNodes(projectCode, resourceCode);
+        List<Map<String, Object>> rows = getDao().findEnabledNodes(projectCode, resourceCode);
         if (rows.isEmpty()) {
             throw new CommonBusinessException(
                     "REFERENCE_DATA_TREE_NOT_FOUND",

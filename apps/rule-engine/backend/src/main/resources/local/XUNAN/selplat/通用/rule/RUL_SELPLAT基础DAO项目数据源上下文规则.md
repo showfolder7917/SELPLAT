@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则不涉及 Node 执行代码。 -->
 node_ability_refs = none
-<!-- 1.4.0 增加多项目 CommonSequenceSegment 按具名数据源唯一定位的公共发号边界。 -->
-rule_version = 1.4.0
+<!-- 1.5.0 增加数据库驱动页面表格头的一行一列、实时解析和真实数据库验证约束。 -->
+rule_version = 1.5.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已进入当前用户索引并完成 Uniauth 首个接入验证。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自 Uniauth 多项目数据源继承修正。 -->
-upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖;2026-08-08:MDA与Uniauth号段DAO改按项目具名数据源注册并由公共发号器按真实seqCode唯一路由
+upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖;2026-08-08:MDA与Uniauth号段DAO改按项目具名数据源注册并由公共发号器按真实seqCode唯一路由;2026-08-11:reference-data建立一行一列的数据库驱动页面表格头并由真实页面消费
 
 ## 公共 Base 边界
 
@@ -88,6 +88,19 @@ sensitive_column_default_visibility = hidden
 table_definition_resolution = reference_data_configuration_when_present_otherwise_project_metadata
 <!-- Controller 只接收 viewCode、locale 并序列化结果，Service 选择定义来源，DAO 负责项目数据库元数据。 -->
 table_definition_layering = Controller_serializes_Service_resolves_DAO_reads_project_metadata
+
+## 数据库驱动页面表格头
+
+<!-- 页面每个实际显示字段必须对应一条表格头记录，并由 tableCode、viewCode、columnCode 形成稳定唯一坐标。 -->
+database_grid_header_row_granularity = one_record_per_rendered_column,unique_tableCode_viewCode_columnCode
+<!-- 每条配置必须同时承载真实字段、三语表头、宽度、渲染器、显示开关、生命周期状态和从左到右排序。 -->
+database_grid_header_required_configuration = fieldCode,secondaryField,labelZh,labelJa,labelEn,width,renderer,visible,status,sortnum
+<!-- 页面必须从解析接口消费当前启用且显示的列；只有数据库没有任何配置时才允许最小安全兜底，禁止维护第二份完整硬编码表头。 -->
+database_grid_header_frontend_source = resolved_active_visible_database_columns,safe_minimum_only_when_empty,no_parallel_full_hardcoded_headers
+<!-- 表格头新增、编辑、启停或显示开关保存后必须重新解析并原位刷新当前表格，重启不得覆盖人工配置。 -->
+database_grid_header_runtime_refresh = write_then_resolve_and_refresh,seed_insert_if_missing,no_restart_overwrite
+<!-- 真实数据库测试必须覆盖新增多语言列、解析宽度和标签、关闭显示后列消失及逻辑删除。 -->
+database_grid_header_real_database_test = create_multilingual_column,resolve_label_and_width,visible_false_excluded,logical_delete
 
 ## 验证
 

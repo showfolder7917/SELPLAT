@@ -105,7 +105,7 @@
         // records 模式按列契约渲染任意后台记录；未声明时继续保持已有项目表格兼容模式。
         const selGridRecordMode = selGridInputPayload.grid?.mode === "records";
         // 通用记录配置只保存字段名、搜索字段和状态映射，不包含任何具体应用语义。
-        const selGridRecordOptions = selGridInputPayload.grid || {};
+        let selGridRecordOptions = selGridInputPayload.grid || {};
         // 用户调整后的列宽按稳定列键保存在当前实例内，刷新数据和切换语言时继续生效。
         const selGridColumnWidths = new Map();
         // 行数据保持后端顺序并冻结外层数组，运行状态不能改写业务响应。
@@ -733,6 +733,16 @@
     }
 
     /**
+     * 把通用记录的单值或多值分类收敛为稳定字符串集合。
+     * @param {unknown} selGridValue - typeField 读取值，例如 "TREE" 或 ["TREE", "OPTIONS"]。
+     * @returns {Array<string>} 去除空值后的分类值，例如 ["TREE", "OPTIONS"]。
+     */
+    function selGridNormalizeRecordTypeValues(selGridValue) {
+        const selGridValues = Array.isArray(selGridValue) ? selGridValue : [selGridValue];
+        return selGridValues.map((selGridItem) => String(selGridItem ?? "")).filter(Boolean);
+    }
+
+    /**
      * 创建通用记录模式的单元格内容。
      * @param {object} selGridRecord - 当前业务记录。
      * @param {object} selGridColumn - 标准列定义。
@@ -761,6 +771,18 @@
             const selGridLabelMap = selGridColumn.labelSource === "status" ? selGridStatusLabels : selGridTypeLabels;
             selGridBadge.textContent = selGridLabelMap.get(String(selGridRawValue)) || String(selGridRawValue ?? "—") || "—";
             selGridCell.appendChild(selGridBadge);
+            return selGridCell;
+        }
+        if (selGridRenderer === "boolean") {
+            const selGridBoolean = Boolean(selGridRawValue === true
+                || selGridRawValue === 1
+                || String(selGridRawValue).toLocaleLowerCase() === "true");
+            const selGridBooleanBadge = document.createElement("span");
+            selGridBooleanBadge.className = `selgrid-record-badge selgrid-record-badge-${selGridBoolean ? "enabled" : "disabled"}`;
+            selGridBooleanBadge.textContent = selGridBoolean
+                ? String(selGridColumn.trueLabel || "是")
+                : String(selGridColumn.falseLabel || "否");
+            selGridCell.appendChild(selGridBooleanBadge);
             return selGridCell;
         }
         if (selGridRenderer === "actions") {
@@ -1013,13 +1035,18 @@
             return selGridProjects.filter((selGridRecord) => {
                 const selGridSearchableText = selGridSearchFields.map((selGridField) => selGridReadRecordValue(selGridRecord, selGridField)).join(" ").toLocaleLowerCase();
                 const selGridMatchesSearch = !keyword || selGridSearchableText.includes(keyword);
-                const selGridTypeValue = String(selGridReadRecordValue(selGridRecord, selGridRecordOptions.typeField));
+                const selGridTypeValues = selGridNormalizeRecordTypeValues(
+                    selGridReadRecordValue(selGridRecord, selGridRecordOptions.typeField)
+                );
                 const selGridStatusValue = String(selGridReadRecordValue(selGridRecord, selGridRecordOptions.statusField));
-                const selGridMatchesType = !selGridState.type || selGridTypeValue === String(selGridState.type);
+                const selGridMatchesType = !selGridState.type || selGridTypeValues.includes(String(selGridState.type));
                 const selGridMatchesStatus = !selGridState.status || selGridStatusValue === String(selGridState.status);
-                const selGridMatchesTreeType = !selGridState.treeFilter.type || selGridTypeValue === String(selGridState.treeFilter.type);
+                const selGridMatchesTreeType = !selGridState.treeFilter.type || selGridTypeValues.includes(String(selGridState.treeFilter.type));
+                const selGridMatchesTreeTypeGroup = !Array.isArray(selGridState.treeFilter.typeGroup)
+                    || selGridState.treeFilter.typeGroup.some((selGridType) => selGridTypeValues.includes(String(selGridType)));
                 const selGridMatchesTreeStatus = !selGridState.treeFilter.status || selGridStatusValue === String(selGridState.treeFilter.status);
-                return selGridMatchesSearch && selGridMatchesType && selGridMatchesStatus && selGridMatchesTreeType && selGridMatchesTreeStatus;
+                return selGridMatchesSearch && selGridMatchesType && selGridMatchesStatus
+                    && selGridMatchesTreeType && selGridMatchesTreeTypeGroup && selGridMatchesTreeStatus;
             });
         }
         // 后端项目数据逐项检查全部组合条件。
@@ -1657,6 +1684,8 @@
         const selGridNextPayload = selGridNext.resource || selGridNext.messages || selGridNext;
         if (!selGridNextPayload || !Array.isArray(selGridNextPayload.data?.items) || !Array.isArray(selGridNextPayload.column?.items)) return false;
         selGridInputPayload = selGridNextPayload;
+        // 同一公共表格切换业务模块时同步字段契约，避免沿用上一个模块的搜索和分类字段。
+        selGridRecordOptions = selGridInputPayload.grid || {};
         selGridTooltipController?.setEnabled(selGridInputPayload.grid?.tooltip !== false);
         selGridProjects = Object.freeze(selGridInputPayload.data.items);
         selGridTypeLabels = new Map((selGridInputPayload.select?.projectType?.options || []).map((item) => [String(item.value), item.label]));

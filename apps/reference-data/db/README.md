@@ -20,6 +20,8 @@ apps/reference-data/db/reference-data.mv.db
 
 应用启动时按 Java 中登记的 `sql/*.sql` 固定顺序初始化结构。数据脚本只在目标坐标不存在时写入，重启不会覆盖后台已经修改的数据。
 
+当前五张业务表分别负责类型目录、树形节点、下拉选项、右键菜单项和页面表格头配置；`ReferenceDataTableColumn` 以一条记录描述一个可显示字段，页面按表名和 viewCode 动态解析表头。
+
 ## SQL 编写约定
 
 - 表结构文件使用 `schema-<实际表名>.sql`，初始化数据文件使用 `data-<实际表名>.sql`；文件中的实际表名必须与文件名完全一致。

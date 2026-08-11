@@ -1,10 +1,11 @@
 package com.sp.selplat.referencedata.referencedataoption.service;
 
 import com.sp.selplat.common.util.CommonResult;
+import com.sp.selplat.common.service.BaseService;
 import java.util.Map;
 
 /** 声明 ReferenceDataOption 表的下拉查询业务。 */
-public interface ReferenceDataOptionService {
+public interface ReferenceDataOptionService extends BaseService {
 
     /**
      * 查询一个资源的下拉选项。

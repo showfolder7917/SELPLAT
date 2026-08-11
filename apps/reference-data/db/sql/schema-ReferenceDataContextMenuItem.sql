@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS ReferenceDataContextMenuItem (
     CONSTRAINT ck_reference_data_context_menu_status CHECK (status IN (0, 1, 2))
 );
 
+-- 管理接口需要在数据库连接关闭后序列化扩展属性；统一使用足够大的 VARCHAR，避免驱动返回已关闭的 JdbcClob。
+ALTER TABLE IF EXISTS ReferenceDataContextMenuItem ALTER COLUMN attributesJson VARCHAR(10000);
+
 COMMENT ON TABLE ReferenceDataContextMenuItem IS '引用数据右键菜单项表';
 COMMENT ON COLUMN ReferenceDataContextMenuItem.parentId IS '父菜单项主键，顶级菜单为空';
 COMMENT ON COLUMN ReferenceDataContextMenuItem.command IS '叶子菜单触发的稳定业务命令';

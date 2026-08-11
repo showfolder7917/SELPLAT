@@ -1,5 +1,5 @@
 plugins {
-    // backend 对 host 暴露模块配置和四个表业务，因此保持标准 Java library 依赖语义。
+    // backend 对 host 暴露模块配置和五个表业务，因此保持标准 Java library 依赖语义。
     id 'java-library'
 }
 

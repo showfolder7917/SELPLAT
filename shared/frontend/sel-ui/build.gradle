@@ -319,6 +319,34 @@ tasks.register('verifySelUiSourceBoundary') {
         if (!missingGridResizeContracts.isEmpty()) {
             throw new GradleException("selGrid 默认列宽调整契约不完整：\n" + missingGridResizeContracts.join('\n'))
         }
+        // 记录分类既可为标量也可为数组；工具栏和树筛选必须统一按成员匹配，允许一条记录属于多个分类。
+        def gridMultiValueTypeRequired = [
+            'function selGridNormalizeRecordTypeValues',
+            'Array.isArray(selGridValue) ? selGridValue : [selGridValue]',
+            'selGridTypeValues.includes(String(selGridState.type))',
+            'selGridTypeValues.includes(String(selGridState.treeFilter.type))',
+            'selGridState.treeFilter.typeGroup.some((selGridType) => selGridTypeValues.includes(String(selGridType)))'
+        ]
+        def missingGridMultiValueTypeContracts = gridMultiValueTypeRequired.findAll { !gridSource.contains(it) }
+        if (!missingGridMultiValueTypeContracts.isEmpty()) {
+            throw new GradleException(
+                "selGrid 多值分类筛选契约不完整：\n"
+                        + missingGridMultiValueTypeContracts.collect { "selGrid.js -> ${it}" }.join('\n')
+            )
+        }
+        // 数据库列配置可以选择 boolean 渲染器；公共 Grid 统一处理 JDBC 布尔值和多语言真假文案。
+        def gridBooleanRequired = [
+            'selGridRenderer === "boolean"',
+            'selGridColumn.trueLabel || "是"',
+            'selGridColumn.falseLabel || "否"'
+        ]
+        def missingGridBooleanContracts = gridBooleanRequired.findAll { !gridSource.contains(it) }
+        if (!missingGridBooleanContracts.isEmpty()) {
+            throw new GradleException(
+                "selGrid 布尔列渲染契约不完整：\n"
+                        + missingGridBooleanContracts.collect { "selGrid.js -> ${it}" }.join('\n')
+            )
+        }
         // selPanel 工具栏栏目默认可拖拽；公共层拥有分隔线与生命周期，MDA 只允许传标准宽度配置。
         def panelScript = file('src/components/panel/selPanel.js')
         def panelStyle = file('src/components/panel/selPanel.css')

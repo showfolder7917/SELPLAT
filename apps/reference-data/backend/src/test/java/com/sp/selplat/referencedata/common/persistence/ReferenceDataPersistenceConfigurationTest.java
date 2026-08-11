@@ -21,7 +21,7 @@ class ReferenceDataPersistenceConfigurationTest {
     /**
      * 验证数据库文件不存在时可完全由正式 SQL 重建。
      * 真实传参示例：临时目录内使用尚不存在的 {@code reference-data-rebuild} 文件库。
-     * 真实返回示例：生成 mv.db，建立五张表并写入四条独立业务号段。
+     * 真实返回示例：生成 mv.db，建立六张表并写入五条独立业务号段。
      * 异常或副作用示例：所有文件仅写入 JUnit 临时目录，不接触正式数据库。
      *
      * @param temporaryDirectory JUnit 提供的隔离临时目录
@@ -42,21 +42,27 @@ class ReferenceDataPersistenceConfigurationTest {
                 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'PUBLIC' "
                         + "AND TABLE_NAME IN ('CommonSequenceSegment', 'ReferenceDataType', "
                         + "'ReferenceDataTreeNode', 'ReferenceDataOption', "
-                        + "'ReferenceDataContextMenuItem')",
+                        + "'ReferenceDataContextMenuItem', 'ReferenceDataTableColumn')",
                 Integer.class);
         Integer sequenceCount = rebuiltJdbc.queryForObject(
                 "SELECT COUNT(*) FROM CommonSequenceSegment WHERE seqCode IN "
                         + "('ReferenceDataTypeId', 'ReferenceDataTreeNodeId', "
-                        + "'ReferenceDataOptionId', 'ReferenceDataContextMenuItemId')",
+                        + "'ReferenceDataOptionId', 'ReferenceDataContextMenuItemId', "
+                        + "'ReferenceDataTableColumnId')",
                 Integer.class);
         Integer builtInTypeCount = rebuiltJdbc.queryForObject(
                 "SELECT COUNT(*) FROM ReferenceDataType WHERE projectCode = 'reference-data' "
                         + "AND resourceCode = 'resource-kind'",
                 Integer.class);
 
-        assertEquals(5, requiredTableCount);
-        assertEquals(4, sequenceCount);
+        Integer configuredColumnCount = rebuiltJdbc.queryForObject(
+                "SELECT COUNT(*) FROM ReferenceDataTableColumn WHERE status = 1",
+                Integer.class);
+
+        assertEquals(6, requiredTableCount);
+        assertEquals(5, sequenceCount);
         assertEquals(1, builtInTypeCount);
+        assertEquals(35, configuredColumnCount);
         assertTrue(Files.isRegularFile(Path.of(databaseBase + ".mv.db")));
     }
 
@@ -171,23 +177,30 @@ class ReferenceDataPersistenceConfigurationTest {
                 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
                         + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME = 'ReferenceDataContextMenuItem'",
                 Integer.class);
+        Integer tableColumnTableCount = upgradedJdbc.queryForObject(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
+                        + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME = 'ReferenceDataTableColumn'",
+                Integer.class);
         Integer sequenceRowCount = upgradedJdbc.queryForObject(
                 "SELECT COUNT(*) FROM CommonSequenceSegment WHERE status = 1 "
                         + "AND seqCode IN ('ReferenceDataTypeId', 'ReferenceDataTreeNodeId', "
-                        + "'ReferenceDataOptionId', 'ReferenceDataContextMenuItemId')",
+                        + "'ReferenceDataOptionId', 'ReferenceDataContextMenuItemId', "
+                        + "'ReferenceDataTableColumnId')",
                 Integer.class);
         Integer remainingBusinessIdentityCount = upgradedJdbc.queryForObject(
                 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
                         + "WHERE TABLE_SCHEMA = 'PUBLIC' AND COLUMN_NAME = 'id' AND IS_IDENTITY = 'YES' "
                         + "AND TABLE_NAME IN ('ReferenceDataType', 'ReferenceDataTreeNode', "
-                        + "'ReferenceDataOption', 'ReferenceDataContextMenuItem')",
+                        + "'ReferenceDataOption', 'ReferenceDataContextMenuItem', "
+                        + "'ReferenceDataTableColumn')",
                 Integer.class);
         assertEquals(0, legacyColumnCount);
         assertEquals(1, legacyTableCount);
         assertEquals(1, treeTableCount);
         assertEquals(1, optionTableCount);
         assertEquals(1, menuTableCount);
-        assertEquals(4, sequenceRowCount);
+        assertEquals(1, tableColumnTableCount);
+        assertEquals(5, sequenceRowCount);
         assertEquals(0, remainingBusinessIdentityCount);
     }
 }

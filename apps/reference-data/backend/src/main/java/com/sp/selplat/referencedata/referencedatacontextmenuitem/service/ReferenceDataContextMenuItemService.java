@@ -1,10 +1,11 @@
 package com.sp.selplat.referencedata.referencedatacontextmenuitem.service;
 
 import com.sp.selplat.common.util.CommonResult;
+import com.sp.selplat.common.service.BaseService;
 import java.util.Map;
 
 /** 声明 ReferenceDataContextMenuItem 表的多级右键菜单查询业务。 */
-public interface ReferenceDataContextMenuItemService {
+public interface ReferenceDataContextMenuItemService extends BaseService {
 
     /**
      * 查询一个资源的多级右键菜单。

@@ -1,6 +1,7 @@
 package com.sp.selplat.referencedata.referencedatacontextmenuitem.service.impl;
 
 import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.service.BaseServiceImpl;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.referencedata.common.util.ReferenceDataQueryUtil;
 import com.sp.selplat.referencedata.referencedatacontextmenuitem.dao.ReferenceDataContextMenuItemDao;
@@ -14,18 +15,9 @@ import org.springframework.stereotype.Service;
 
 /** 从 ReferenceDataContextMenuItem 表读取平铺记录并组装公共 Map 多级菜单。 */
 @Service
-public class ReferenceDataContextMenuItemServiceImpl implements ReferenceDataContextMenuItemService {
-
-    private final ReferenceDataContextMenuItemDao dao;
-
-    /**
-     * 创建右键菜单 Service。
-     *
-     * @param dao ReferenceDataContextMenuItem 表 DAO，例如 {@code ReferenceDataContextMenuItemDaoImpl}
-     */
-    public ReferenceDataContextMenuItemServiceImpl(ReferenceDataContextMenuItemDao dao) {
-        this.dao = dao;
-    }
+public class ReferenceDataContextMenuItemServiceImpl
+        extends BaseServiceImpl<ReferenceDataContextMenuItemDao>
+        implements ReferenceDataContextMenuItemService {
 
     /** {@inheritDoc} */
     @Override
@@ -33,7 +25,7 @@ public class ReferenceDataContextMenuItemServiceImpl implements ReferenceDataCon
             String projectCode,
             String resourceCode,
             Map<String, String> parameters) {
-        List<Map<String, Object>> rows = dao.findEnabledMenuItems(projectCode, resourceCode);
+        List<Map<String, Object>> rows = getDao().findEnabledMenuItems(projectCode, resourceCode);
         if (rows.isEmpty()) {
             throw new CommonBusinessException(
                     "REFERENCE_DATA_CONTEXT_MENU_NOT_FOUND",

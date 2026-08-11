@@ -2,8 +2,8 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 1.3.0 增加面板横向工具栏栏目默认拖拽、单栏关闭、键盘调整和双击复位门禁。 -->
-rule_version = 1.3.0
+<!-- 1.5.0 增加 Grid 动态业务契约同步和 Window 表单默认项复位约束。 -->
+rule_version = 1.5.0
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -51,6 +51,24 @@ selplat_component_theme_gate = themeAware_css_consumes_sel_theme_tokens,no_appli
 selplat_component_dependency_gate = registered_target,no_self_dependency,real_public_api_call,dependency_resource_exists_and_precedes_consumer
 <!-- 控件资源依赖检查从中央登记动态生成，新增控件不得再靠人工补一个名称专项扫描。 -->
 selplat_component_future_extension_gate = registry_driven_directory_source_api_theme_dependency_and_application_scan
+
+## Grid 多值分类筛选
+
+<!-- Grid 的 typeField 同时接受单个分类和分类数组，公共层统一转成非空字符串集合，调用方不得复制筛选算法。 -->
+selplat_grid_record_type_value_contract = scalar_or_array,normalize_to_non_empty_string_values,public_grid_owner
+<!-- 工具栏 type、树节点 type 和 typeGroup 均按集合成员匹配；同一记录可同时出现在多个数据库分类中。 -->
+selplat_grid_record_type_filter_semantics = toolbar_type_membership,tree_type_membership,tree_type_group_any_membership,multiple_categories_allowed
+<!-- 原有标量调用方必须继续可用；无分类记录由应用通过明确占位分类表达，公共 Grid 不猜测业务上的未分类文案。 -->
+selplat_grid_record_type_compatibility = preserve_scalar_consumers,application_explicit_unclassified_value,no_business_label_inference
+
+## Grid 动态业务契约与 Window 默认项
+
+<!-- 同一 selGrid 通过 setLocale 切换 records 业务模块时必须同步 grid.searchFields、typeField、statusField 等记录契约，禁止沿用旧模块字段。 -->
+selplat_grid_runtime_record_contract_refresh = setLocale_updates_grid_record_options,no_stale_search_type_or_status_field
+<!-- 应用切换独立业务模块时必须清理不再适用的搜索、分类、状态和树筛选；语言切换仍按控件原有契约保留状态。 -->
+selplat_grid_business_module_filter_reset = application_module_switch_resets_incompatible_filters,locale_switch_preserves_state
+<!-- selWindow 选择项的 selected 声明必须同时成为 form.reset 的 defaultSelected，新增窗口不得在 reset 后回到错误的第一项。 -->
+selplat_window_select_default_reset_contract = selected_option_sets_defaultSelected,form_reset_restores_business_default
 
 ## 横向工具栏栏目缩放
 
@@ -101,6 +119,10 @@ selplat_component_build_gate = shared_frontend_sel_ui_verifySelUiSourceBoundary,
 selplat_tooltip_gate = tooltip_contract,grid_tree_consumers,zero_native_title,registry_dependency_resource_order
 <!-- 快速门禁和公共构建必须同时验证 selPanel 工具栏缩放配置、分隔语义、双击复位和 MDA 首个调用方。 -->
 selplat_toolbar_column_resize_gate = panel_contract,default_enabled,explicit_disable,keyboard_and_pointer,double_click_reset,mda_consumer
+<!-- 公共前端构建必须验证 Grid 分类值归一化以及 type、tree type、typeGroup 三条成员匹配路径。 -->
+selplat_grid_multi_value_type_gate = normalize_scalar_and_array,toolbar_membership,tree_membership,type_group_any_membership
+<!-- 动态模块调用方回归必须覆盖字段契约切换、旧筛选清理和窗口选择默认项复位。 -->
+selplat_runtime_contract_and_form_default_verification = grid_module_contract_switch,filter_reset,window_select_default_after_reset
 <!-- 控件迁移至少验证旧选择器清零、新公共 API 调用、应用装配测试和真实浏览器交互与控制台。 -->
 selplat_component_migration_verification = no_legacy_selector,registered_api_call,application_tests,real_browser_interaction_and_console
 <!-- 登记结构和首个调用方是权威样例，不复制会与真实控件漂移的静态模板。 -->

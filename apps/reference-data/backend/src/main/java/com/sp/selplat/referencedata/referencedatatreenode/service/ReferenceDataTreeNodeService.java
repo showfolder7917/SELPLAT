@@ -1,10 +1,11 @@
 package com.sp.selplat.referencedata.referencedatatreenode.service;
 
 import com.sp.selplat.common.util.CommonResult;
+import com.sp.selplat.common.service.BaseService;
 import java.util.Map;
 
 /** 声明 ReferenceDataTreeNode 表的树查询业务。 */
-public interface ReferenceDataTreeNodeService {
+public interface ReferenceDataTreeNodeService extends BaseService {
 
     /**
      * 查询一个资源的完整树。

@@ -31,34 +31,62 @@ public class ReferenceDataTypeDaoImpl extends ReferenceDataBaseDao implements Re
         this.jdbc = jdbcTemplate;
     }
 
+    /**
+     * 分页查询类型目录，并根据真实树节点表与选项表聚合每个类型的数据库分类。
+     *
+     * @param keyword 稳定坐标或多语名称关键词，例如 {@code "resource-kind"}
+     * @param status 类型状态，例如 {@code 1}；查询全部未删除类型时为 {@code null}
+     * @param pageNo 一基页码，例如 {@code 1}
+     * @param pageSize 每页条数，例如 {@code 20}
+     * @return 数据库排序与分类已聚合的分页结果，例如
+     *     {@code {"records":[{"resourceCode":"resource-kind","resourceKinds":["TREE","OPTIONS"]}],"totalCount":1}}
+     * @throws CommonSystemException 分页、树节点分类或选项分类查询失败时抛出，例如数据库连接中断
+     */
     @Override
     public CommonPageResult findPage(String keyword, Integer status, int pageNo, int pageSize) {
         try {
-            StringBuilder whereSql = new StringBuilder(" WHERE status <> 0");
+            StringBuilder whereSql = new StringBuilder(" WHERE t.status <> 0");
             List<Object> parameters = new ArrayList<>();
             if (keyword != null && !keyword.isBlank()) {
-                whereSql.append(" AND (LOWER(projectCode) LIKE ? OR LOWER(resourceCode) LIKE ?")
-                        .append(" OR LOWER(nameZh) LIKE ? OR LOWER(nameJa) LIKE ? OR LOWER(nameEn) LIKE ?)");
+                whereSql.append(" AND (LOWER(t.projectCode) LIKE ? OR LOWER(t.resourceCode) LIKE ?")
+                        .append(" OR LOWER(t.nameZh) LIKE ? OR LOWER(t.nameJa) LIKE ? OR LOWER(t.nameEn) LIKE ?)");
                 String pattern = "%" + keyword.trim().toLowerCase() + "%";
                 for (int index = 0; index < 5; index++) {
                     parameters.add(pattern);
                 }
             }
             if (status != null) {
-                whereSql.append(" AND status = ?");
+                whereSql.append(" AND t.status = ?");
                 parameters.add(status);
             }
             Long totalCount = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM ReferenceDataType" + whereSql,
+                    "SELECT COUNT(*) FROM ReferenceDataType t" + whereSql,
                     Long.class,
                     parameters.toArray());
             List<Object> pageParameters = new ArrayList<>(parameters);
             pageParameters.add(pageSize);
             pageParameters.add((pageNo - 1) * pageSize);
+            // 类型主键 → 两张真实数据表中的存在性，不恢复已退役的 dataShape 字段。
             List<Map<String, Object>> records = jdbc.queryForList(
-                    "SELECT * FROM ReferenceDataType" + whereSql
-                            + " ORDER BY sortnum DESC, id ASC LIMIT ? OFFSET ?",
+                    "SELECT t.*, "
+                            + "EXISTS (SELECT 1 FROM ReferenceDataTreeNode treeData "
+                            + "WHERE treeData.typeId = t.id AND treeData.status <> 0) AS hasTreeNodes, "
+                            + "EXISTS (SELECT 1 FROM ReferenceDataOption optionData "
+                            + "WHERE optionData.typeId = t.id AND optionData.status <> 0) AS hasOptions "
+                            + "FROM ReferenceDataType t" + whereSql
+                            + " ORDER BY t.sortnum DESC, t.id ASC LIMIT ? OFFSET ?",
                     pageParameters.toArray());
+            // 查询存在性 → 页面可直接消费的多值分类；同一类型可同时归入 TREE 和 OPTIONS。
+            records.forEach(record -> {
+                List<String> resourceKinds = new ArrayList<>();
+                if (Boolean.TRUE.equals(record.remove("hasTreeNodes"))) {
+                    resourceKinds.add("TREE");
+                }
+                if (Boolean.TRUE.equals(record.remove("hasOptions"))) {
+                    resourceKinds.add("OPTIONS");
+                }
+                record.put("resourceKinds", List.copyOf(resourceKinds));
+            });
             CommonPageResult result = new CommonPageResult();
             result.setRecords(records);
             result.setTotalCount(totalCount == null ? 0 : totalCount);

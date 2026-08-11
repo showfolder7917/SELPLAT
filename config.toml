@@ -13,6 +13,9 @@ description = "SELPLAT workspace editing with network access and automatic risk 
 [permissions.selplat-custom.filesystem]
 ":minimal" = "read"
 "/Users/showfolder/Documents/workSpace/SELF/SELPLAT" = "write"
+"/Users/showfolder/.cache/codex-runtimes" = "read"
+"/Users/showfolder/.codex/skills" = "read"
+"/Users/showfolder/.codex/plugins/cache" = "read"
 
 [permissions.selplat-custom.network]
 enabled = true

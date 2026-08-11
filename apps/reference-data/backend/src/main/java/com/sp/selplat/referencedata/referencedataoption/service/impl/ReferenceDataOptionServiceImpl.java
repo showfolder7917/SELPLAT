@@ -1,6 +1,7 @@
 package com.sp.selplat.referencedata.referencedataoption.service.impl;
 
 import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.service.BaseServiceImpl;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.referencedata.common.util.ReferenceDataQueryUtil;
 import com.sp.selplat.referencedata.referencedataoption.dao.ReferenceDataOptionDao;
@@ -15,23 +16,14 @@ import org.springframework.stereotype.Service;
 
 /** 从 ReferenceDataOption 表读取记录并转换为公共 Map 下拉选项。 */
 @Service
-public class ReferenceDataOptionServiceImpl implements ReferenceDataOptionService {
-
-    private final ReferenceDataOptionDao dao;
-
-    /**
-     * 创建下拉选项 Service。
-     *
-     * @param dao ReferenceDataOption 表 DAO，例如 {@code ReferenceDataOptionDaoImpl}
-     */
-    public ReferenceDataOptionServiceImpl(ReferenceDataOptionDao dao) {
-        this.dao = dao;
-    }
+public class ReferenceDataOptionServiceImpl
+        extends BaseServiceImpl<ReferenceDataOptionDao>
+        implements ReferenceDataOptionService {
 
     /** {@inheritDoc} */
     @Override
     public CommonResult getOptions(String projectCode, String resourceCode, Map<String, String> parameters) {
-        List<Map<String, Object>> rows = dao.findEnabledOptions(projectCode, resourceCode);
+        List<Map<String, Object>> rows = getDao().findEnabledOptions(projectCode, resourceCode);
         if (rows.isEmpty()) {
             throw new CommonBusinessException(
                     "REFERENCE_DATA_OPTIONS_NOT_FOUND",

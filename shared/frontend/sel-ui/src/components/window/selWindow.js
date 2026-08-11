@@ -127,6 +127,8 @@
             selWindowOption.disabled = Boolean(selWindowOptionData.disabled);
             // 默认项决定首次打开时的真实值。
             selWindowOption.selected = Boolean(selWindowOptionData.selected);
+            // defaultSelected 保证 form.reset 后仍回到业务声明的默认项，而不是无条件回到第一项。
+            selWindowOption.defaultSelected = Boolean(selWindowOptionData.selected);
             // 把选项加入真实选择器。
             selWindowSelect.appendChild(selWindowOption);
         });

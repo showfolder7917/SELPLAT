@@ -39,18 +39,21 @@ public class ReferenceDataPersistenceConfiguration {
         "db/reference-data/sql/schema-ReferenceDataTreeNode.sql",
         "db/reference-data/sql/schema-ReferenceDataOption.sql",
         "db/reference-data/sql/schema-ReferenceDataContextMenuItem.sql",
+        "db/reference-data/sql/schema-ReferenceDataTableColumn.sql",
         "db/reference-data/sql/data-CommonSequenceSegment.sql",
         "db/reference-data/sql/data-ReferenceDataType.sql",
         "db/reference-data/sql/data-ReferenceDataTreeNode.sql",
         "db/reference-data/sql/data-ReferenceDataOption.sql",
-        "db/reference-data/sql/data-ReferenceDataContextMenuItem.sql"
+        "db/reference-data/sql/data-ReferenceDataContextMenuItem.sql",
+        "db/reference-data/sql/data-ReferenceDataTableColumn.sql"
     };
-    // 旧正式库的四张表曾使用 identity；只按固定白名单迁移，禁止动态拼接外部表名。
+    // 旧正式库的业务表曾使用 identity；只按固定白名单迁移，禁止动态拼接外部表名。
     private static final String[] BUSINESS_TABLES = {
         "ReferenceDataType",
         "ReferenceDataTreeNode",
         "ReferenceDataOption",
-        "ReferenceDataContextMenuItem"
+        "ReferenceDataContextMenuItem",
+        "ReferenceDataTableColumn"
     };
 
     /**
@@ -108,13 +111,13 @@ public class ReferenceDataPersistenceConfiguration {
      * 创建只在 reference-data 私有数据库中查询和推进号段的项目 DAO。
      *
      * @param dataSource reference-data 配置按限定名提供的私有数据源
-     * @return 可分别命中四张业务表号段的 DAO，例如命中 {@code ReferenceDataTypeId}
+     * @return 可分别命中五张业务表号段的 DAO，例如命中 {@code ReferenceDataTypeId}
      * 异常或副作用示例：多个进程并发抢号时只原子推进当前 seqCode 的 nextStartId 和 versionNo。
      */
     @Bean("referenceDataCommonSequenceSegmentDao")
     public CommonSequenceSegmentDao referenceDataCommonSequenceSegmentDao(
             @Qualifier("referenceDataDataSource") DataSource dataSource) {
-        // reference-data 私有数据源 → 四张业务表号段唯一查询和推进边界。
+        // reference-data 私有数据源 → 五张业务表号段唯一查询和推进边界。
         return new CommonSequenceSegmentDaoImpl(dataSource);
     }
 
@@ -215,7 +218,7 @@ public class ReferenceDataPersistenceConfiguration {
      * 把旧正式库业务表的 identity 主键原地迁移为公共号段主键。
      *
      * @param dataSource 当前 reference-data 私有数据源，例如旧库中 ReferenceDataType.id 仍为 identity
-     * 执行结果示例：四张表的现有 id 和外键保持不变，IS_IDENTITY 统一变为 NO
+     * 执行结果示例：五张表的现有 id 和外键保持不变，IS_IDENTITY 统一变为 NO
      * 异常或副作用示例：ALTER 失败时数据库初始化整体失败，不会创建替代表或重写已有记录。
      */
     private void migrateLegacyIdentityColumns(DataSource dataSource) {

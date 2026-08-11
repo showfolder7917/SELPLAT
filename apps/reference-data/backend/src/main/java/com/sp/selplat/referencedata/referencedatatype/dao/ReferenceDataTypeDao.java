@@ -15,7 +15,8 @@ public interface ReferenceDataTypeDao extends BaseDao {
      * @param status 启用或停用状态；为空时查询全部未删除记录
      * @param pageNo 页码，例如 {@code 1}
      * @param pageSize 每页条数，例如 {@code 20}
-     * @return 类型分页结果
+     * @return 类型分页结果，例如
+     *     {@code {"records":[{"resourceCode":"resource-kind","resourceKinds":["TREE","OPTIONS"]}]}}
      */
     CommonPageResult findPage(String keyword, Integer status, int pageNo, int pageSize);
 

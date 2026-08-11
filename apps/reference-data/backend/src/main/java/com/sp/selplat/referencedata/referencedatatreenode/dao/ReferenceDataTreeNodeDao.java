@@ -1,10 +1,11 @@
 package com.sp.selplat.referencedata.referencedatatreenode.dao;
 
+import com.sp.selplat.common.db.dao.BaseDao;
 import java.util.List;
 import java.util.Map;
 
 /** 负责从 ReferenceDataTreeNode 表读取一个已登记资源的启用节点。 */
-public interface ReferenceDataTreeNodeDao {
+public interface ReferenceDataTreeNodeDao extends BaseDao {
 
     /**
      * 按项目与资源坐标查询已排序树节点。

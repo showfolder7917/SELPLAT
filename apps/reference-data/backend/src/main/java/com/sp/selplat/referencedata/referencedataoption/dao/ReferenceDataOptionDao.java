@@ -1,10 +1,11 @@
 package com.sp.selplat.referencedata.referencedataoption.dao;
 
+import com.sp.selplat.common.db.dao.BaseDao;
 import java.util.List;
 import java.util.Map;
 
 /** 负责从 ReferenceDataOption 表读取一个已登记资源的启用选项。 */
-public interface ReferenceDataOptionDao {
+public interface ReferenceDataOptionDao extends BaseDao {
 
     /**
      * 按项目与资源坐标查询下拉选项。
