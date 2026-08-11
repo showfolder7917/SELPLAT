@@ -25,6 +25,9 @@ GET /api/reference-data/cms/content-type/context-menu?locale=zh-CN
 管理页面通过 `/reference-data/reference-data.html` 访问，正式数据写入
 `apps/reference-data/db/reference-data.mv.db`。
 
+页面一级导航由 `/api/reference-data/workbench/navigation.htm` 提供固定五模块定义。导航能力不查库；
+模块记录按点击加载，表格字段通过“表格定义 → 具体表格 → ReferenceDataTableColumn”下钻查看。
+
 ## 结构门禁
 
 受管数据库应用的 common 外一级目录必须与真实 `schema-<Table>.sql` 双向对应，每个表业务

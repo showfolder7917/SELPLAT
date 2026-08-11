@@ -11,3 +11,6 @@ ACTIVE_USER_SELPLAT_MDA_RULE_INDEX = local/XUNAN/selplat/应用/mda/RULE_INDEX.m
 
 <!-- japanese 保存当前用户对日语题库 AI、语音与媒体存储的专项约束。 -->
 ACTIVE_USER_SELPLAT_JAPANESE_RULE_INDEX = local/XUNAN/selplat/应用/japanese/RULE_INDEX.md
+
+<!-- reference-data 保存当前用户对工作台导航、按需加载和表格字段下钻的专项约束。 -->
+ACTIVE_USER_SELPLAT_REFERENCE_DATA_RULE_INDEX = local/XUNAN/selplat/应用/reference-data/RULE_INDEX.md

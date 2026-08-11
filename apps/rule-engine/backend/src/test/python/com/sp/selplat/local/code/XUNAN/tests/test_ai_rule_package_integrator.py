@@ -64,10 +64,10 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         # 根索引递归统计只计算 core/common；当前用户规则通过独立用户索引统计。
         self.assertEqual(result["indexed_rules"], 66)
         self.assertEqual(result["active_user_id"], ACTIVE_STABLE_USER_ID)
-        self.assertEqual(result["active_user_indexes"], 10)
-        # 用户层新增公共控件治理门禁后，逻辑 ID、规则文件和程序引用统计必须同步增长。
-        self.assertEqual(result["active_user_overrides"], 16)
-        self.assertEqual(result["active_user_rule_files"], 15)
+        self.assertEqual(result["active_user_indexes"], 11)
+        # 用户层新增 Reference Data 导航规则后，逻辑 ID、规则文件和索引统计必须同步增长。
+        self.assertEqual(result["active_user_overrides"], 17)
+        self.assertEqual(result["active_user_rule_files"], 16)
         self.assertEqual(result["active_user_standard_asset_packages"], 1)
         self.assertEqual(result["active_user_rules_with_program_references"], 6)
         self.assertEqual(result["decision_boundary"], "facts_only_ai_must_review_before_merge_or_delete")
@@ -103,8 +103,8 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             / ACTIVE_STABLE_USER_ID
         )
         rule_paths = sorted(user_root.rglob("RUL_*.md"))
-        # 当前用户全部规则（含公共控件治理门禁）必须逐项接受紧邻中文业务注释检查。
-        self.assertEqual(len(rule_paths), 15)
+        # 当前用户全部规则（含 Reference Data 导航规则）必须逐项接受紧邻中文业务注释检查。
+        self.assertEqual(len(rule_paths), 16)
         for rule_path in rule_paths:
             previous_nonempty = ""
             for line_number, raw_line in enumerate(

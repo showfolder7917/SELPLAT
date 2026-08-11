@@ -17,6 +17,12 @@
 `common/util`，只能由 Service 调用。common 外禁止建立无表对应的 query、provider、manager
 或 support 目录。
 
+## 不落库能力
+
+`capability/workbenchnavigation` 只返回工作台五个一级模块和下钻方式，不建立 DAO，也不查询
+数据库。原页面 `/reference-data/reference-data.html` 首次只加载导航和当前模块，其他模块在点击时
+按需读取；`ReferenceDataTableColumn` 只在点击具体表格定义后作为字段明细加载。
+
 ## 查询接口
 
 ```text

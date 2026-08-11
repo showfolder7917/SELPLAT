@@ -24,6 +24,12 @@ class ReferenceDataFrontendTableRegistryContractTest {
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertThat(script)
+                .contains("const referenceDataNavigationUrl = \"/api/reference-data/workbench/navigation.htm\"")
+                .contains("async function referenceDataLoadNavigation()")
+                .contains("referenceDataKey !== \"columns\"")
+                .contains("async function referenceDataEnsureModuleLoaded(referenceDataModule, referenceDataForce = false)")
+                .contains("await referenceDataEnsureModuleLoaded(referenceDataActiveModule())")
+                .doesNotContain("async function referenceDataLoadAllModules()")
                 .contains("key: \"tables\", tableName: \"ReferenceDataTable\", gridId: \"selGridTableManagementId\"")
                 .contains("api: \"/api/reference-data/admin/tables/\"")
                 .contains("referenceDataText(\"gridColumnId\", \"表格配置 ID\"")

@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test;
 class ActiveUserRuleOverrideIntegrationTest {
 
     /**
-     * 验证当前稳定用户通过十层动态递归索引完整登记十六个用户逻辑 ID。
+     * 验证当前稳定用户通过十一层动态递归索引完整登记十七个用户逻辑 ID。
      * 真实传参示例：读取工程根 {@code AGENTS.md} 中的当前稳定用户并递归加载其 {@code RULE_INDEX.md}。
-     * 真实返回示例：索引验证结果为 {@code indexCount=10, ruleCount=16}。
+     * 真实返回示例：索引验证结果为 {@code indexCount=11, ruleCount=17}。
      * 异常或副作用示例：身份、索引或规则路径无效时抛出 {@link IOException}，不修改规则资源。
      */
     @Test
@@ -23,8 +23,32 @@ class ActiveUserRuleOverrideIntegrationTest {
         LayeredRuleLoader.IndexValidation validation =
             LayeredRuleLoader.validateCurrentUserIndexTree();
 
-        assertEquals(10, validation.indexCount());
-        assertEquals(16, validation.ruleCount());
+        assertEquals(11, validation.indexCount());
+        assertEquals(17, validation.ruleCount());
+    }
+
+    /**
+     * 验证 Reference Data 工作台导航与按需加载规则能够从当前用户应用索引命中。
+     * 真实传参示例：逻辑 ID 为 {@code REFERENCE_DATA_WORKBENCH_NAVIGATION_AND_LAZY_LOADING_RULES}。
+     * 真实返回示例：规则正文要求五个一级模块，并禁止表格字段重新成为一级节点。
+     * 异常或副作用示例：索引或规则路径失效时抛出 {@link IOException}，不修改应用源码。
+     */
+    @Test
+    void shouldLoadReferenceDataNavigationRuleFromActiveUser() throws IOException {
+        LayeredRuleLoader.LoadedRule rule = assertCurrentUserRule(
+            "REFERENCE_DATA_WORKBENCH_NAVIGATION_AND_LAZY_LOADING_RULES",
+            "selplat",
+            "selplat/应用/reference-data/rule/RUL_ReferenceData工作台导航与按需加载规则.md",
+            "reference_data_top_level_modules = types,tree,options,menus,tables"
+        );
+        assertTrue(rule.content().contains(
+            "reference_data_table_column_navigation_level = "
+                + "internal_table_definition_drilldown_only_not_top_level"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_initial_business_request_scope = "
+                + "navigation_plus_active_module_records_plus_active_module_columns_only"
+        ));
     }
 
     /**

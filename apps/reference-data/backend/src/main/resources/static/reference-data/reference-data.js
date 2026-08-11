@@ -21,6 +21,7 @@
     const referenceDataPersonalizationHost = referenceDataBase.query("[data-sel-personalization-host]");
     const referenceDataGridId = "selGridReferenceDataManagementId";
     const referenceDataLocale = "zh-CN";
+    const referenceDataNavigationUrl = "/api/reference-data/workbench/navigation.htm";
     const referenceDataWindowMessagesUrl = "/sel/components/window/i18n/zh-CN.json?v=20260811-reference-workbench-1";
 
     const referenceDataModules = Object.freeze({
@@ -70,6 +71,8 @@
     const referenceDataModuleList = Object.freeze(Object.values(referenceDataModules));
     const referenceDataState = {
         activeKey: "types",
+        navigationKeys: [],
+        loadedKeys: new Set(),
         records: new Map(),
         columns: new Map(),
         editingId: null,
@@ -126,6 +129,24 @@
 
     function referenceDataActiveModule() {
         return referenceDataModules[referenceDataState.activeKey];
+    }
+
+    function referenceDataNavigationModules() {
+        return referenceDataState.navigationKeys
+            .map((referenceDataKey) => referenceDataModules[referenceDataKey])
+            .filter(Boolean);
+    }
+
+    async function referenceDataLoadNavigation() {
+        const referenceDataResult = await referenceDataAjax.request({ url: referenceDataNavigationUrl });
+        const referenceDataItems = Array.isArray(referenceDataResult.data?.modules) ? referenceDataResult.data.modules : [];
+        referenceDataState.navigationKeys = referenceDataItems
+            .map((referenceDataItem) => String(referenceDataItem.key || ""))
+            .filter((referenceDataKey) => referenceDataKey !== "columns" && Boolean(referenceDataModules[referenceDataKey]));
+        if (referenceDataState.navigationKeys.length === 0) throw new Error("引用数据工作台导航为空。");
+        const referenceDataInitialKey = String(referenceDataResult.data?.initialKey || referenceDataState.navigationKeys[0]);
+        referenceDataState.activeKey = referenceDataState.navigationKeys.includes(referenceDataInitialKey)
+            ? referenceDataInitialKey : referenceDataState.navigationKeys[0];
     }
 
     async function referenceDataLoadAllRecords(referenceDataModule) {
@@ -310,7 +331,8 @@
             referenceDataModule,
             referenceDataState.columns.get(referenceDataModule.key) || []
         );
-        const referenceDataTreeItems = referenceDataModuleList.map((referenceDataNavigationModule) => {
+        const referenceDataNavigationModuleList = referenceDataNavigationModules();
+        const referenceDataTreeItems = referenceDataNavigationModuleList.map((referenceDataNavigationModule) => {
             const referenceDataNavigationRecords = referenceDataState.records.get(referenceDataNavigationModule.key) || [];
             return Object.freeze({
                 id: `module-${referenceDataNavigationModule.key}`,
@@ -338,7 +360,7 @@
                 title: "引用数据管理工作台",
                 subtitle: `${referenceDataModule.name} · ${referenceDataModule.tableName}`,
                 description: referenceDataModule.description,
-                ariaLabel: "引用数据六表管理面板",
+                ariaLabel: "引用数据五模块按需加载管理面板",
                 ariaLabels: Object.freeze({
                     statusTabs: `${referenceDataModule.name}状态筛选`, headerActions: `${referenceDataModule.name}快捷操作`,
                     toolbar: `${referenceDataModule.name}筛选工具栏`, sidebar: "数据库模块导航",
@@ -367,8 +389,10 @@
             }),
             tree: Object.freeze({
                 gridId: referenceDataGridId, ariaLabel: "数据库模块导航", heading: "数据库模块",
-                summary: `${referenceDataModuleList.length} 张业务表`, expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}",
-                contextMenuLabelTemplate: "{label}操作", selectedId: `module-${referenceDataModule.key}`, items: Object.freeze(referenceDataTreeItems)
+                summary: `${referenceDataNavigationModuleList.length} 个一级模块`, expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}",
+                contextMenuLabelTemplate: "{label}操作",
+                selectedId: `module-${referenceDataModule.key === "columns" ? "tables" : referenceDataModule.key}`,
+                items: Object.freeze(referenceDataTreeItems)
             }),
             menu: Object.freeze({ gridId: referenceDataGridId, ariaLabel: `${referenceDataModule.name}行操作` }),
             pagination: Object.freeze({
@@ -543,12 +567,10 @@
         });
     }
 
-    async function referenceDataLoadAllModules() {
-        const referenceDataEntries = await Promise.all(referenceDataModuleList.map(async (referenceDataModule) => [
-            referenceDataModule.key,
-            await referenceDataLoadAllRecords(referenceDataModule)
-        ]));
-        referenceDataEntries.forEach(([referenceDataKey, referenceDataRecords]) => referenceDataState.records.set(referenceDataKey, referenceDataRecords));
+    async function referenceDataEnsureModuleLoaded(referenceDataModule, referenceDataForce = false) {
+        if (!referenceDataForce && referenceDataState.loadedKeys.has(referenceDataModule.key)) return;
+        referenceDataState.records.set(referenceDataModule.key, await referenceDataLoadAllRecords(referenceDataModule));
+        referenceDataState.loadedKeys.add(referenceDataModule.key);
     }
 
     async function referenceDataLoadResolvedColumns(referenceDataModule) {
@@ -564,16 +586,18 @@
         window.selDropdownMenu.mountAll(referenceDataState.panelRoot);
     }
 
-    async function referenceDataRefresh(referenceDataReloadAll = true) {
-        if (referenceDataReloadAll) await referenceDataLoadAllModules();
+    async function referenceDataRefresh(referenceDataReloadActive = true) {
+        await referenceDataEnsureModuleLoaded(referenceDataActiveModule(), referenceDataReloadActive);
         await referenceDataLoadResolvedColumns(referenceDataActiveModule());
         referenceDataApplyPayload(referenceDataBuildPayload());
     }
 
     async function referenceDataSwitchModule(referenceDataKey) {
-        if (!referenceDataModules[referenceDataKey] || referenceDataState.activeKey === referenceDataKey) return;
+        if (!referenceDataModules[referenceDataKey]) return;
+        if (referenceDataState.activeKey === referenceDataKey && referenceDataState.loadedKeys.has(referenceDataKey)) return;
         referenceDataState.activeKey = referenceDataKey;
         referenceDataState.editingId = null;
+        await referenceDataEnsureModuleLoaded(referenceDataActiveModule());
         await referenceDataLoadResolvedColumns(referenceDataActiveModule());
         referenceDataApplyPayload(referenceDataBuildPayload());
     }
@@ -717,13 +741,14 @@
 
     async function referenceDataMountApplication() {
         const referenceDataWindowMessagesPromise = referenceDataAjax.json({ url: referenceDataWindowMessagesUrl });
-        await referenceDataLoadAllModules();
+        await referenceDataLoadNavigation();
+        await referenceDataEnsureModuleLoaded(referenceDataActiveModule());
         await referenceDataLoadResolvedColumns(referenceDataActiveModule());
         const referenceDataWindowMessages = await referenceDataWindowMessagesPromise;
         const referenceDataPayload = referenceDataBuildPayload();
         referenceDataState.panelRoot = window.selPanel.create(referenceDataApplicationHost, {
             gridId: referenceDataGridId, sourceId: referenceDataGridId, entity: "ReferenceDataWorkbench",
-            view: "six-table-management", layout: "single", structure: referenceDataLayout, ariaLabel: referenceDataPayload.title.ariaLabel
+            view: "five-module-lazy-management", layout: "single", structure: referenceDataLayout, ariaLabel: referenceDataPayload.title.ariaLabel
         });
         if (!referenceDataState.panelRoot) throw new Error("引用数据公共面板创建失败。");
         if (!window.selPanel.mount(referenceDataState.panelRoot, {

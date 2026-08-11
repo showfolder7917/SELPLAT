@@ -114,6 +114,27 @@ class ReferenceDataTypeControllerRealDatabaseTest {
     }
 
     /**
+     * 验证工作台导航能力只返回五个一级模块且不查询表格字段模块。
+     *
+     * 真实传参示例：无参数请求 {@code /api/reference-data/workbench/navigation.htm}。
+     * 真实返回示例：第五项为表格定义，返回中不存在 {@code columns} 一级模块。
+     * 异常或副作用示例：该接口不读取或写入任何业务表，空数据库也返回相同导航。
+     *
+     * @throws Exception 当 MockMvc 请求执行失败时抛出
+     */
+    @Test
+    void shouldExposeDatabaseFreeWorkbenchNavigation() throws Exception {
+        mockMvc.perform(get("/api/reference-data/workbench/navigation.htm"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.initialKey").value("types"))
+                .andExpect(jsonPath("$.data.modules", hasSize(5)))
+                .andExpect(jsonPath("$.data.modules[0].key").value("types"))
+                .andExpect(jsonPath("$.data.modules[4].key").value("tables"))
+                .andExpect(jsonPath("$.data.modules[4].drilldown").value("tables-to-columns"));
+    }
+
+    /**
      * 验证内置类型、创建、更新、筛选和逻辑删除的连续真实数据库流程。
      *
      * 执行结果示例：新增 {@code cms/article-category} 后可查询并更新为停用，删除后列表不再返回该记录。
