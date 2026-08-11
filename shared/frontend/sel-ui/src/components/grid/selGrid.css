@@ -245,8 +245,8 @@
     position: relative;
     padding: 0 12px;
     color: var(--sel-theme-text-title);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--sel-theme-font-size-body);
+    font-weight: var(--sel-theme-font-weight-semibold);
     text-align: left;
     white-space: nowrap;
 }
@@ -371,7 +371,7 @@
     height: 56px;
     padding: 0 12px;
     color: var(--sel-theme-text-body);
-    font-size: 14px;
+    font-size: var(--sel-theme-font-size-body);
     vertical-align: middle;
 }
 
@@ -396,7 +396,7 @@
 
 .selgrid-record-stack > span {
     color: var(--sel-theme-text-secondary);
-    font-size: var(--sel-theme-font-size-secondary);
+    font-size: var(--sel-theme-font-size-label);
 }
 
 .selgrid-record-nowrap { white-space: nowrap; }
@@ -569,7 +569,7 @@
     color: var(--sel-theme-text-on-accent);
     background: #2c6cff;
     box-shadow: 0 0 8px rgba(45, 111, 255, 0.7);
-    font-size: 9px;
+    font-size: var(--sel-theme-font-size-micro);
 }
 
 /* 项目状态标签：基础胶囊外观由 selgrid-status-pill 提供，各状态类只配置对应主题色。 */
@@ -587,8 +587,8 @@
     box-shadow:
         0 0 12px var(--selgrid-status-glow),
         inset 0 0 12px var(--selgrid-status-glow);
-    font-size: 13px;
-    font-weight: 500;
+    font-size: var(--sel-theme-font-size-label);
+    font-weight: var(--sel-theme-font-weight-medium);
     white-space: nowrap;
 }
 
@@ -633,7 +633,7 @@
 
 .selgrid-progress-value {
     color: var(--sel-theme-text-secondary);
-    font-size: 13px;
+    font-size: var(--sel-theme-font-size-label);
 }
 
 .selgrid-progress-track {
@@ -691,7 +691,7 @@
     align-items: center;
     gap: 17px;
     color: var(--sel-theme-text-body);
-    font-size: 14px;
+    font-size: var(--sel-theme-font-size-body);
 }
 
 .selgrid-footer-summary > i {
@@ -757,7 +757,7 @@
     gap: 10px;
     color: var(--sel-theme-text-secondary);
     background: rgba(3, 14, 52, 0.88);
-    font-size: 15px;
+    font-size: var(--sel-theme-font-size-body);
 }
 
 .selgrid-empty-state:not([hidden]) {
@@ -776,7 +776,7 @@
     .selgrid-table td {
         padding-right: 12px;
         padding-left: 12px;
-        font-size: 15px;
+        font-size: var(--sel-theme-font-size-body);
     }
 
     .selgrid-selection-cell {

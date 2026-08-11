@@ -2,8 +2,8 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 1.0.0 建立先登记后实现、应用禁止私造、硬依赖自动检查和旧私有实现直接删除的通用门禁。 -->
-rule_version = 1.0.0
+<!-- 1.2.0 增加统一截断文字提示所有权、Grid/Tree 默认接入、显式关闭与原生 title 禁用门禁。 -->
+rule_version = 1.2.0
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -52,12 +52,40 @@ selplat_component_dependency_gate = registered_target,no_self_dependency,real_pu
 <!-- 控件资源依赖检查从中央登记动态生成，新增控件不得再靠人工补一个名称专项扫描。 -->
 selplat_component_future_extension_gate = registry_driven_directory_source_api_theme_dependency_and_application_scan
 
+## 统一语义文字
+
+<!-- 全部公共控件和应用消费控件时只允许使用七级可读文字角色；业务含义是新增页面不再退回只有大中小三档、层级无法表达的字号体系。 -->
+selplat_semantic_typography_roles = display,title,heading,body,label,caption,micro
+<!-- 七级字号必须配套统一 regular、medium、semibold、bold 字重及角色行高；业务含义是相同角色跨控件保持可读密度和视觉重量。 -->
+selplat_semantic_typography_metrics = font_size,font_weight,line_height
+<!-- primary 与 secondary 旧字号令牌已删除且禁止兼容；业务含义是新旧名称不会并存造成不同控件继续走不同体系。 -->
+selplat_legacy_typography_token_policy = forbid(--sel-theme-font-size-primary,--sel-theme-font-size-secondary),no_compatibility_alias
+<!-- 可读文字禁止直接写像素字号，图标、头像、复选框及其他几何图形尺寸除外；业务含义是主题缩放只改变文字，不破坏控件图形比例。 -->
+selplat_component_text_size_boundary = readable_text_uses_semantic_tokens,icon_avatar_checkbox_geometry_may_use_fixed_size
+<!-- 公共树按通用节点类型表达层级，调用方也可显式覆盖；未知类型回落 label，禁止按应用名推测。 -->
+selplat_tree_typography_mapping = database|catalog:heading,schema:body,table|view:label,field|column:caption,unknown:label,explicit:typographyRole
+
+## 统一截断文字提示
+
+<!-- 截断文字提示由登记的 selTooltip 独占门户、role=tooltip、定位、延时和可访问关联，Grid、Tree 或应用不得复制实现。 -->
+selplat_truncated_text_tooltip_owner = selTooltip,one_body_portal,owned_role_tooltip,no_private_reimplementation
+<!-- Grid 与 Tree 默认接入统一提示，只在真实 overflow 时展示完整文字；鼠标、键盘、滚动、缩放和 Escape 生命周期必须一致。 -->
+selplat_truncated_text_tooltip_behavior = grid_and_tree_default_enabled,real_overflow_only,pointer_and_focus,hide_on_scroll_resize_escape
+<!-- 调用方只有明确不需要提示时才可通过 grid.tooltip=false 或 tree.tooltip=false 关闭，禁止建立相反的默认关闭配置。 -->
+selplat_truncated_text_tooltip_disable_api = grid.tooltip=false,tree.tooltip=false,default_enabled
+<!-- Grid 与 Tree 的截断文字不得使用浏览器原生 title；启用 selTooltip 后必须删除旧 title 路径且不保留兼容分支。 -->
+selplat_truncated_text_native_title_policy = forbidden_in_grid_and_tree,delete_legacy_title,no_compatibility_branch
+
 ## 验证
 
 <!-- 快速门禁执行登记、源码归属、应用私造和生成模板依赖检查，不启动浏览器或业务数据库。 -->
 selplat_component_quick_gate = selplat_source_ownership_guard,zero_component_governance_violations
+<!-- 快速门禁同步检查七级令牌完整性、树层级选择器和旧字号令牌清零。 -->
+selplat_component_typography_quick_gate = seven_roles,weight_and_line_height_metrics,tree_role_mapping,zero_primary_secondary_legacy_token
 <!-- 公共前端 check 必须独立解析同一登记，阻断未登记源码、错误 API、缺失主题令牌和错误资源顺序。 -->
 selplat_component_build_gate = shared_frontend_sel_ui_verifySelUiSourceBoundary,one_registry_same_policy
+<!-- 快速门禁和公共构建同时验证 selTooltip 关键生命周期、Grid/Tree 消费、原生 title 清零和依赖资源顺序。 -->
+selplat_tooltip_gate = tooltip_contract,grid_tree_consumers,zero_native_title,registry_dependency_resource_order
 <!-- 控件迁移至少验证旧选择器清零、新公共 API 调用、应用装配测试和真实浏览器交互与控制台。 -->
 selplat_component_migration_verification = no_legacy_selector,registered_api_call,application_tests,real_browser_interaction_and_console
 <!-- 登记结构和首个调用方是权威样例，不复制会与真实控件漂移的静态模板。 -->

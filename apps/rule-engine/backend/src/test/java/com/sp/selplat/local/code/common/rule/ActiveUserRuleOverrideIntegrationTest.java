@@ -57,6 +57,14 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat_component_future_extension_gate = "
                 + "registry_driven_directory_source_api_theme_dependency_and_application_scan"
         ));
+        assertTrue(rule.content().contains(
+            "selplat_truncated_text_tooltip_behavior = grid_and_tree_default_enabled,"
+                + "real_overflow_only,pointer_and_focus,hide_on_scroll_resize_escape"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_truncated_text_native_title_policy = forbidden_in_grid_and_tree,"
+                + "delete_legacy_title,no_compatibility_branch"
+        ));
     }
 
     /**
@@ -563,8 +571,18 @@ class ActiveUserRuleOverrideIntegrationTest {
             "mda_project_generation_confirmation = shared_confirm_dialog_with_project_and_table_before_request_cancel_writes_nothing"
         ));
         assertTrue(rule.content().contains(
-            "mda_table_context_actions = edit_structure_delete_real_target_object_"
+            "mda_table_context_actions = inspect_structure_first_edit_structure_delete_real_target_object_"
                 + "copy_display_label_with_table_type_physical_table_export_last"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_table_structure_view_content = field_grid_only_name_comment_type_primary_nullable_"
+                + "default_auto_increment_generated"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_table_structure_view_safety = jdbc_metadata_only_without_sql_execution_or_database_mutation"
+        ));
+        assertTrue(rule.content().contains(
+            "mda_dynamic_grid_payload_contract = shared_complete_title_messages_for_query_and_structure_grids"
         ));
     }
 

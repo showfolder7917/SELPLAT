@@ -19,6 +19,7 @@
         "selLocaleRuntime",
         "selPanel",
         "selSearch",
+        "selTooltip",
         "selTree",
         "selGridMenu",
         "selDropdownMenu",

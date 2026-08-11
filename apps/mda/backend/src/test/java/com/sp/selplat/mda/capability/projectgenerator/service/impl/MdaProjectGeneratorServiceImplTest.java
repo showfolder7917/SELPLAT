@@ -169,6 +169,7 @@ class MdaProjectGeneratorServiceImplTest {
                 .contains("/sel/theme/runtime/selThemeManager.js")
                 .contains("/sel/components/panel/selPanel.js")
                 .contains("/sel/components/context-menu/selContextMenu.js")
+                .contains("/sel/components/tooltip/selTooltip.js")
                 .contains("/sel/components/tree/selTree.js")
                 .contains("/sel/components/search/selSearch.js")
                 .contains("/sel/components/grid/selGrid.js")
@@ -177,11 +178,13 @@ class MdaProjectGeneratorServiceImplTest {
                 .contains("/sel/components/personalization/selPersonalization.js")
                 .containsSubsequence(
                     "/sel/components/context-menu/selContextMenu.js",
+                    "/sel/components/tooltip/selTooltip.js",
                     "/sel/components/tree/selTree.js"
                 );
         assertThat(generatedScript)
                 .contains("window.selPanel.create")
                 .contains("\"selContextMenu\"")
+                .contains("\"selTooltip\"")
                 .contains("window.selTree.mount")
                 .contains("window.selGrid.mount")
                 .contains("window.selWindow.mount")

@@ -9,6 +9,9 @@
     border-radius: var(--sel-theme-radius-panel);
     color: var(--sel-theme-text-body);
     background: transparent;
+    font-family: var(--sel-theme-font-family);
+    font-size: var(--sel-theme-font-size-body);
+    line-height: var(--sel-theme-line-height-body);
     overflow: visible;
 }
 
@@ -38,8 +41,9 @@
 
 .selconfirm-title {
     color: var(--sel-theme-text-on-accent);
-    font-size: var(--sel-theme-font-size-primary);
-    font-weight: 600;
+    font-size: var(--sel-theme-font-size-heading);
+    font-weight: var(--sel-theme-font-weight-semibold);
+    line-height: var(--sel-theme-line-height-heading);
 }
 
 .selconfirm-close {
@@ -93,7 +97,8 @@
 .selconfirm-message {
     margin: 0;
     color: var(--sel-theme-text-body);
-    line-height: 1.5;
+    font-size: var(--sel-theme-font-size-body);
+    line-height: var(--sel-theme-line-height-body);
 }
 
 .selconfirm-target {
@@ -101,7 +106,8 @@
     margin-top: 5px;
     overflow-wrap: anywhere;
     color: var(--sel-theme-text-title);
-    font-size: var(--sel-theme-font-size-secondary);
+    font-size: var(--sel-theme-font-size-label);
+    line-height: var(--sel-theme-line-height-label);
 }
 
 .selconfirm-target[hidden] {
@@ -129,6 +135,9 @@
     background: var(--sel-theme-control-surface);
     cursor: pointer;
     font: inherit;
+    font-size: var(--sel-theme-font-size-label);
+    font-weight: var(--sel-theme-font-weight-medium);
+    line-height: var(--sel-theme-line-height-label);
 }
 
 .selconfirm-action:hover,

@@ -9,6 +9,8 @@ mda_connection_profile_and_target_runtime_boundary_trigger = MDA_LOCAL_DATABASE_
 mda_database_query_workspace_layout_trigger = MDA_LOCAL_DATABASE_WORKBENCH_FUNCTIONAL_RULES
 <!-- 修改默认表查询、结构编辑 SQL、数据库方言或表字段注释模板时必须加载 MDA 架构规则。 -->
 mda_table_query_and_structure_sql_template_trigger = MDA_LOCAL_DATABASE_WORKBENCH_FUNCTIONAL_RULES
+<!-- 修改表结构查看动作、字段表列顺序或只读结构页签生命周期时必须加载。 -->
+mda_table_structure_viewer_trigger = MDA_LOCAL_DATABASE_WORKBENCH_FUNCTIONAL_RULES
 <!-- 修改查询结果双击标色、数据编辑窗口、主键定位或单行保存时必须加载 MDA 架构规则。 -->
 mda_result_row_edit_trigger = MDA_LOCAL_DATABASE_WORKBENCH_FUNCTIONAL_RULES
 <!-- 修改数据库连接、表或视图节点右键菜单及真实删除行为时必须加载 MDA 架构规则。 -->

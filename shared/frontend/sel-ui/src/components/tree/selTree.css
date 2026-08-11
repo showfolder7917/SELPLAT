@@ -124,10 +124,14 @@
 }
 
 .seltree-node-label {
+    min-width: 0;
+    flex: 1 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* 文字大小、字重和行高由统一排版契约按节点角色提供，树控件只保留文本裁切职责。 */
 
 .seltree-node-count {
     min-width: 24px;
@@ -136,7 +140,9 @@
     border-radius: var(--sel-theme-radius-chip);
     color: var(--sel-theme-text-soft);
     background: rgba(11, 31, 82, 0.82);
-    font-size: 10px;
+    font-size: var(--sel-theme-font-size-micro);
+    font-weight: var(--sel-theme-font-weight-medium);
+    line-height: var(--sel-theme-line-height-micro);
     text-align: center;
 }
 

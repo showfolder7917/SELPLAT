@@ -20,6 +20,9 @@
     background: var(--sel-theme-workspace-surface);
     box-shadow: 0 14px 36px var(--sel-theme-workspace-focus), inset 0 0 18px var(--sel-theme-control-surface);
     backdrop-filter: blur(18px) saturate(125%);
+    font-family: var(--sel-theme-font-family);
+    font-size: var(--sel-theme-font-size-label);
+    line-height: var(--sel-theme-line-height-label);
 }
 
 /* hidden 必须压过 grid 显示，关闭菜单不保留不可见的可聚焦项。 */
@@ -81,7 +84,9 @@
 
 .selcontext-menu-item > span {
     overflow: hidden;
-    font-size: var(--sel-theme-font-size-secondary);
+    font-size: var(--sel-theme-font-size-label);
+    font-weight: var(--sel-theme-font-weight-medium);
+    line-height: var(--sel-theme-line-height-label);
     text-overflow: ellipsis;
     white-space: nowrap;
 }

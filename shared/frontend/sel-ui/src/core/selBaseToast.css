@@ -23,7 +23,7 @@
     color: var(--sel-theme-text-body);
     background: var(--sel-theme-feedback-surface);
     box-shadow: 0 8px 24px var(--sel-theme-workspace-focus);
-    font-size: var(--sel-theme-font-size-secondary);
+    font-size: var(--sel-theme-font-size-label);
     opacity: 0;
     transform: translateY(-10px);
     transition: opacity 160ms ease, transform 160ms ease;

@@ -6,7 +6,7 @@
     "use strict";
 
     const mdaRequiredComponents = Object.freeze([
-        "selBaseRuntime", "selAjax", "selPanel", "selTree", "selDropdownMenu", "selGrid", "selContextMenu", "selTabs",
+        "selBaseRuntime", "selAjax", "selPanel", "selTooltip", "selTree", "selDropdownMenu", "selGrid", "selContextMenu", "selTabs",
         "selSplitPane", "selCodeEditor", "selWindow", "selConfirmDialog", "selPageBackground", "selPersonalization", "selThemeManager"
     ]);
     const mdaMissingComponents = mdaRequiredComponents.filter((mdaName) => !window[mdaName]);
@@ -30,12 +30,19 @@
     });
     const mdaState = {
         connections: [], selectedConnection: null, metadata: [], panelRoot: null,
-        treeController: null, tabsController: null, querySessions: new Map(), querySequence: 1,
+        treeController: null, tabsController: null, querySessions: new Map(), structureSessions: new Map(), querySequence: 1,
         connectionWindowController: null, projectWindowController: null,
         confirmDialogController: null, editingConnectionId: null,
         rowEditWindows: new Map(), editingRowContext: null, windowMessages: null,
         closeConfirmationPending: false
     };
+    // 所有 MDA selGrid 实例消费同一份公共消息契约，避免动态页签只传数据列而遗漏 title.messages。
+    const mdaGridMessages = Object.freeze({
+        selectProject: "选择记录", viewProject: "查看记录", editProject: "编辑记录", moreActions: "更多操作",
+        filtersReset: "查询筛选已重置", treePrefix: "数据库对象", expandLeftRegion: "展开数据库结构",
+        collapseLeftRegion: "收起数据库结构", filterActivated: "查询搜索已激活", newOpened: "已打开 SQL 查询页签",
+        exportPreparing: "操作已触发", dateRange: "日期范围：{start} 至 {end}", movePrefix: "移动到"
+    });
 
     // MDA 只声明公共组件所在区域；页签内部结构继续由各公共控件自身创建。
     const mdaLayout = Object.freeze({
@@ -75,6 +82,7 @@
                 ])
                 : mdaNode.type === "table"
                     ? Object.freeze([
+                        Object.freeze({ id: "table-inspect", label: mdaIsView ? "查看视图结构" : "查看表结构", icon: "ri-layout-column-line" }),
                         Object.freeze({ id: "table-edit", label: mdaIsView ? "编辑视图定义" : "编辑表结构", icon: "ri-edit-line" }),
                         Object.freeze({ id: "table-delete", label: mdaIsView ? "删除视图" : "删除表", icon: "ri-delete-bin-6-line", danger: true }),
                         Object.freeze({ id: "copy-label", label: mdaIsView ? "复制视图名" : "复制表名", icon: "ri-file-copy-line" }),
@@ -83,6 +91,7 @@
                     : Object.freeze([]);
             return Object.freeze({
                 id: mdaNodePath,
+                type: mdaNode.type,
                 label: mdaNode.type === "column" && mdaNode.typeName ? `${mdaNode.label} · ${mdaNode.typeName}` : mdaNode.label,
                 icon: mdaIcons[mdaNode.type] || "ri-circle-line",
                 count: mdaChildren.length,
@@ -94,7 +103,8 @@
                     tableName: mdaNode.tableName || "",
                     tableType: mdaNode.tableType || "",
                     structureEditSql: mdaNode.structureEditSql || "",
-                    primaryKeys: Object.freeze([...(mdaNode.primaryKeys || [])])
+                    primaryKeys: Object.freeze([...(mdaNode.primaryKeys || [])]),
+                    columns: Object.freeze((mdaNode.children || []).map((mdaColumn) => Object.freeze({ ...mdaColumn })))
                 }),
                 contextActions: mdaContextActions,
                 children: Object.freeze(mdaChildren)
@@ -148,12 +158,7 @@
                     ] : [])
                 ]),
                 resetLabel: "重置",
-                messages: Object.freeze({
-                    selectProject: "选择记录", viewProject: "查看记录", editProject: "编辑记录", moreActions: "更多操作",
-                    filtersReset: "查询筛选已重置", treePrefix: "数据库对象", expandLeftRegion: "展开数据库结构",
-                    collapseLeftRegion: "收起数据库结构", filterActivated: "查询搜索已激活", newOpened: "已打开 SQL 查询页签",
-                    exportPreparing: "操作已触发", dateRange: "日期范围：{start} 至 {end}", movePrefix: "移动到"
-                })
+                messages: mdaGridMessages
             }),
             search: Object.freeze({ gridId: mdaSession?.gridId || "MdaEmptyQueryGrid", label: "结果搜索", placeholder: "搜索当前结果…", buttonLabel: "查询", clearLabel: "清空搜索", icon: "ri-search-line", buttonIcon: "ri-search-line", clearIcon: "ri-close-line", defaultValue: "", clearable: true, submitOnEnter: true, submitOnClear: true, allowEmpty: true, trim: true }),
             tree: Object.freeze({ gridId: mdaWorkspaceId, ariaLabel: "数据库结构", heading: "数据库结构", summary: `${mdaCountTables(mdaState.metadata)} 个表／视图`, expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}", contextMenuLabelTemplate: "{label}操作", selectedId: "", items: Object.freeze(mdaMapMetadataNodes(mdaState.metadata, "mda")) }),
@@ -550,6 +555,76 @@
         return mdaOpenQuerySession({ id: mdaSessionId, label: mdaTableQuery.label, qualifiedName: mdaTableQuery.qualifiedName, sql: mdaTableQuery.sql, editableTable: mdaTableQuery.editableTable, icon: "ri-table-2" }, true);
     }
 
+    // 只读字段表沿用 selGrid 标准 payload，不创建应用私有表格控件。
+    function mdaBuildStructureGridPayload(mdaGridId, mdaColumns, mdaItems, mdaEmptyText) {
+        return Object.freeze({
+            grid: Object.freeze({ mode: "records", horizontalScroll: true, columnResize: true, defaultColumnWidth: 150, idField: "_row", searchFields: Object.freeze([]) }),
+            data: Object.freeze({ items: Object.freeze(mdaItems.map((mdaItem, mdaIndex) => Object.freeze({ _row: mdaIndex + 1, ...mdaItem }))), selectedIds: Object.freeze([]) }),
+            column: Object.freeze({ gridId: mdaGridId, ariaLabel: mdaEmptyText, emptyText: mdaEmptyText, items: Object.freeze(mdaColumns.map((mdaColumn) => Object.freeze({ ...mdaColumn, renderer: "text" }))) }),
+            title: Object.freeze({ messages: mdaGridMessages }),
+            pagination: Object.freeze({ gridId: mdaGridId, currentPage: 1, pageSize: Math.max(mdaItems.length, 20), totalCount: mdaItems.length, summaryAll: "共 {total} 条", summaryFiltered: "当前 {visible} 条 · 共 {total} 条", previousLabel: "上一页", nextLabel: "下一页", pageChangedMessage: "已切换到第 {page} 页", pageSizeChangedMessage: "每页显示 {size} 条" })
+        });
+    }
+
+    function mdaColumnTypeLabel(mdaColumn) {
+        const mdaSize = Number(mdaColumn.size || 0);
+        const mdaDigits = Number(mdaColumn.decimalDigits || 0);
+        if (!mdaSize) return String(mdaColumn.typeName || "");
+        return `${mdaColumn.typeName || ""}(${mdaSize}${mdaDigits > 0 ? `,${mdaDigits}` : ""})`;
+    }
+
+    function mdaMountStructureGrid(mdaContainer, mdaGridId, mdaTitle, mdaColumns, mdaItems, mdaEmptyText) {
+        const mdaGridRoot = window.selGrid.create(mdaContainer, { gridId: mdaGridId, entity: "MdaTableStructure", ariaLabel: mdaTitle });
+        const mdaGridController = mdaGridRoot
+            ? window.selGrid.mount(mdaGridRoot, mdaBuildStructureGridPayload(mdaGridId, mdaColumns, mdaItems, mdaEmptyText))
+            : null;
+        if (!mdaGridController) throw new Error(`${mdaTitle}表格挂载失败。`);
+        return mdaGridController;
+    }
+
+    // 表结构页签只挂载字段 selGrid；关闭页签时销毁控制器，避免组件注册和监听器残留。
+    function mdaMountTableStructureViewer(mdaPanel, mdaSession) {
+        const mdaFilter = mdaSession.filter;
+        const mdaColumnItems = mdaFilter.columns.map((mdaColumn) => ({
+            name: mdaColumn.label, remarks: mdaColumn.remarks || "", dataType: mdaColumnTypeLabel(mdaColumn),
+            primaryKey: mdaColumn.primaryKey ? "是" : "否", nullable: mdaColumn.nullable ? "是" : "否",
+            defaultValue: mdaColumn.defaultValue ?? "", autoIncrement: mdaColumn.autoIncrement ? "是" : "否",
+            generated: mdaColumn.generated ? "是" : "否"
+        }));
+        const mdaGridController = mdaMountStructureGrid(mdaPanel, `${mdaSession.id}Columns`, "字段属性", [
+                { id: "name", field: "name", label: "字段名" }, { id: "remarks", field: "remarks", label: "字段注释" },
+                { id: "dataType", field: "dataType", label: "数据类型" }, { id: "primaryKey", field: "primaryKey", label: "主键" },
+                { id: "nullable", field: "nullable", label: "允许空" }, { id: "defaultValue", field: "defaultValue", label: "默认值" },
+                { id: "autoIncrement", field: "autoIncrement", label: "自增" }, { id: "generated", field: "generated", label: "生成列" }
+            ], mdaColumnItems, "当前对象没有字段元数据");
+        return () => {
+            mdaGridController.destroy();
+            mdaState.structureSessions.delete(mdaSession.id);
+        };
+    }
+
+    // 同一连接、Schema 和表名形成稳定 ID；重复查看只激活已有只读页签。
+    function mdaOpenTableStructureViewer(mdaFilter) {
+        if (!mdaState.selectedConnection) return null;
+        const mdaSessionId = `MdaTableStructureViewer${mdaState.selectedConnection.id}_${mdaStableKey(`${mdaFilter.catalog}.${mdaFilter.schema}.${mdaFilter.tableName}`)}`;
+        if (mdaState.tabsController.has(mdaSessionId)) {
+            mdaState.tabsController.activate(mdaSessionId);
+            return mdaState.structureSessions.get(mdaSessionId) || null;
+        }
+        const mdaSession = Object.freeze({ id: mdaSessionId, connectionId: mdaState.selectedConnection.id, filter: mdaFilter });
+        mdaState.structureSessions.set(mdaSessionId, mdaSession);
+        try {
+            mdaState.tabsController.open({
+                id: mdaSessionId, label: `结构 · ${mdaFilter.tableName}`, icon: "ri-layout-column-line", closable: true,
+                closeLabel: `关闭${mdaFilter.tableName}结构页签`, mount: (mdaPanel) => mdaMountTableStructureViewer(mdaPanel, mdaSession)
+            });
+        } catch (mdaError) {
+            mdaState.structureSessions.delete(mdaSessionId);
+            throw mdaError;
+        }
+        return mdaSession;
+    }
+
     // 编辑动作只打开带安全占位符的 SQL 页签，用户明确补全语句并点击执行后才会修改目标库。
     function mdaOpenTableStructureEditor(mdaFilter) {
         const mdaAction = mdaBuildTableStructureAction(mdaFilter);
@@ -704,6 +779,7 @@
             const mdaStableTablePath = `${mdaDeleteTarget.catalog || ""}.${mdaDeleteTarget.schema || ""}.${mdaDeleteTarget.label}`;
             mdaState.tabsController.close(`MdaTableQuery${mdaConnectionId}_${mdaStableKey(mdaStableTablePath)}`, { force: true });
             mdaState.tabsController.close(`MdaTableStructure${mdaConnectionId}_${mdaStableKey(mdaStableTablePath)}`, { force: true });
+            mdaState.tabsController.close(`MdaTableStructureViewer${mdaConnectionId}_${mdaStableKey(mdaStableTablePath)}`, { force: true });
             await mdaRefreshSelectedMetadata();
             mdaBase.toast(`${mdaObjectLabel}“${mdaDeleteTarget.qualifiedName}”已删除。`, "success");
             return true;
@@ -911,6 +987,7 @@
                 if (mdaAction === "connection-edit") await mdaOpenSelectedConnectionEditor();
                 if (mdaAction === "connection-delete") await mdaConfirmAndDeleteSelectedConnection();
                 if (mdaAction === "database-export") await mdaExportStartupSql("database", mdaFilter);
+                if (mdaAction === "table-inspect") mdaOpenTableStructureViewer(mdaFilter);
                 if (mdaAction === "table-export") await mdaExportStartupSql("table", mdaFilter);
                 if (mdaAction === "table-edit") mdaOpenTableStructureEditor(mdaFilter);
                 if (mdaAction === "table-delete") await mdaConfirmAndDeleteTable(mdaFilter);

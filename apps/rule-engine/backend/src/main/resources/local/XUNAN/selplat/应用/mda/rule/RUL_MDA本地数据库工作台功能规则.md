@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由 MDA 应用脚本和浏览器回归承载。 -->
 node_ability_refs = none
-<!-- 3.2.0 删除 MDA 专属架构口径；本规则只保存工作台业务行为，源码结构完全服从 SELPLAT 通用门禁。 -->
-rule_version = 3.2.0
+<!-- 3.4.0 将结构页精简为唯一字段表格，并删除索引外键及解释概要实现。 -->
+rule_version = 3.4.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已经进入当前用户索引并完成实现回归。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自用户对双数据库和连接配置职责的纠正。 -->
-upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责;2026-08-08:数据库页面升级为左树右查询页签且页签内上方SQL下方结果表格;2026-08-09:数据库连接与表视图节点增加编辑删除复制右键菜单并固定删除确认边界;2026-08-09:删除确认迁移为紧凑公共确认框并默认聚焦取消;2026-08-09:控制库删除认证租户操作人表字段与迁移残留;2026-08-09:默认查询改为裸表名且结构编辑按真实数据库生成原注释模板;2026-08-09:双击查询结果行按真实主键标色并通过共享窗口安全更新单行;2026-08-09:编辑窗口仅显示字段名并保留字符长文本多行输入且标色聚焦双击字段;2026-08-10:SELPLAT应用H2相对路径固定从工程根解析_阻止Host子目录误建同名空库;2026-08-10:MDA查询Tab接入selContextMenu_增加关闭右侧_关闭其他_全部关闭并保留未保存检查;2026-08-11:MDA数据库树默认展开数据库目录与PUBLIC_Schema_系统Schema与表保持折叠;2026-08-11:修正异步元数据替换保留空展开集合_首次加载与切换连接重新挂载树;2026-08-11:表与数据库右键增加中央登记H2启动SQL全量导出_原子替换并失败回滚;2026-08-11:删除_覆盖导出_未保存SQL关闭_跨文件工程生成统一使用公共确认框_表导出移到菜单末尾;2026-08-11:删除MDA专属架构门禁_固定表业务_无状态能力_common全部服从SELPLAT全项目通用结构
+upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责;2026-08-08:数据库页面升级为左树右查询页签且页签内上方SQL下方结果表格;2026-08-09:数据库连接与表视图节点增加编辑删除复制右键菜单并固定删除确认边界;2026-08-09:删除确认迁移为紧凑公共确认框并默认聚焦取消;2026-08-09:控制库删除认证租户操作人表字段与迁移残留;2026-08-09:默认查询改为裸表名且结构编辑按真实数据库生成原注释模板;2026-08-09:双击查询结果行按真实主键标色并通过共享窗口安全更新单行;2026-08-09:编辑窗口仅显示字段名并保留字符长文本多行输入且标色聚焦双击字段;2026-08-10:SELPLAT应用H2相对路径固定从工程根解析_阻止Host子目录误建同名空库;2026-08-10:MDA查询Tab接入selContextMenu_增加关闭右侧_关闭其他_全部关闭并保留未保存检查;2026-08-11:MDA数据库树默认展开数据库目录与PUBLIC_Schema_系统Schema与表保持折叠;2026-08-11:修正异步元数据替换保留空展开集合_首次加载与切换连接重新挂载树;2026-08-11:表与数据库右键增加中央登记H2启动SQL全量导出_原子替换并失败回滚;2026-08-11:删除_覆盖导出_未保存SQL关闭_跨文件工程生成统一使用公共确认框_表导出移到菜单末尾;2026-08-11:删除MDA专属架构门禁_固定表业务_无状态能力_common全部服从SELPLAT全项目通用结构;2026-08-11:表右键首项增加A5风格只读结构页签_展示属性字段含义索引外键且复用公共Tab与Grid
 
 ## 数据库边界
 
@@ -168,8 +168,18 @@ mda_query_tab_unsaved_close_policy = compare_initial_or_last_successful_executio
 mda_query_workspace_visual_tokens = unified_shared_theme_semantic_tokens_only
 <!-- 数据库目录节点右键菜单固定提供编辑连接、删除连接和复制名称；删除只影响 MDA 连接配置。 -->
 mda_catalog_context_actions = edit_connection,delete_connection_profile,copy_display_label,export_registered_application_database_last
-<!-- 表或视图节点右键菜单固定提供结构编辑、真实删除和复制显示名称，并按 JDBC tableType 区分表与视图。 -->
-mda_table_context_actions = edit_structure_delete_real_target_object_copy_display_label_with_table_type_physical_table_export_last
+<!-- 表或视图节点右键菜单首项固定为查看结构，其后提供结构编辑、真实删除和复制显示名称，并保持物理表导出在末尾。 -->
+mda_table_context_actions = inspect_structure_first_edit_structure_delete_real_target_object_copy_display_label_with_table_type_physical_table_export_last
+<!-- 查看结构必须使用连接、Schema 和表名形成稳定 ID，在右侧打开或复用可关闭的只读独立 Tab。 -->
+mda_table_structure_view_tab = stable_per_table_reusable_closable_read_only_independent_tab
+<!-- 结构页只保留字段表格，字段名后紧跟字段注释，再显示类型、主键、可空、默认值、自增和生成列。 -->
+mda_table_structure_view_content = field_grid_only_name_comment_type_primary_nullable_default_auto_increment_generated
+<!-- 结构查看只消费 JDBC 元数据，不得生成、执行或暗中提交 SQL。 -->
+mda_table_structure_view_safety = jdbc_metadata_only_without_sql_execution_or_database_mutation
+<!-- 结构页签必须复用唯一公共 selGrid，关闭时销毁该 Grid 控制器和会话登记。 -->
+mda_table_structure_view_component_lifecycle = shared_selTabs_and_one_selGrid_destroy_controller_on_close
+<!-- 查询结果和动态结构 selGrid 必须复用同一份完整 title.messages 契约，禁止只传列与数据形成半成品实例。 -->
+mda_dynamic_grid_payload_contract = shared_complete_title_messages_for_query_and_structure_grids
 <!-- 表导出只允许物理表；视图继续保留结构编辑和删除能力，但不得伪装成可重建的全量表启动 SQL。 -->
 mda_startup_sql_export_object_scope = physical_tables_only_no_views_no_system_schemas
 <!-- 导出连接必须是中央登记唯一匹配的 SELPLAT H2 文件库，无法确认工程归属时直接阻断。 -->

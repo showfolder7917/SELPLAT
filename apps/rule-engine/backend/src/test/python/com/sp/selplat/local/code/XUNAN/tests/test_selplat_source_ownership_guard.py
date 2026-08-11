@@ -211,6 +211,53 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         self.assertNotIn("seltree-context-menu", tree_script)
         self.assertNotIn("seltree-context-menu", tree_style)
 
+    def test_real_sel_ui_uses_complete_semantic_typography(self) -> None:
+        """真实公共控件必须具有七级文字角色且不再引用旧两档字号。"""
+        violations = self.guard.audit_sel_ui_typography_governance(PROJECT_ROOT)
+
+        self.assertEqual([], violations)
+
+    def test_legacy_typography_token_blocks_delivery(self) -> None:
+        """新增样式重新引用 primary 或 secondary 时必须由统一门禁阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            source_root = fixture / self.guard.SEL_UI_SOURCE_ROOT_RELATIVE
+            token_path = source_root / self.guard.SEL_UI_TYPOGRAPHY_TOKEN_RELATIVE
+            contract_path = source_root / self.guard.SEL_UI_TYPOGRAPHY_CONTRACT_RELATIVE
+            token_path.parent.mkdir(parents=True, exist_ok=True)
+            token_path.write_text(
+                "\n".join(
+                    f"--sel-theme-font-size-{role}: 12px;"
+                    for role in self.guard.SEL_UI_SEMANTIC_FONT_ROLES
+                )
+                + "\n--sel-theme-font-weight-regular: 400;"
+                + "\n--sel-theme-font-weight-medium: 500;"
+                + "\n--sel-theme-font-weight-semibold: 600;"
+                + "\n--sel-theme-font-weight-bold: 700;"
+                + "\n--sel-theme-line-height-body: 1.5;\n",
+                encoding="utf-8",
+            )
+            contract_path.write_text(
+                "\n".join(
+                    f".seltree-node-text-{role} .seltree-node-label {{}}"
+                    for role in ("heading", "body", "label", "caption")
+                ),
+                encoding="utf-8",
+            )
+            component_style = source_root / "components/example/selExample.css"
+            component_style.parent.mkdir(parents=True)
+            component_style.write_text(
+                ".example { font-size: var(--sel-theme-font-size-primary); }\n",
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_typography_governance(fixture)
+
+            self.assertIn(
+                "SEL_UI_LEGACY_TYPOGRAPHY_TOKEN",
+                {violation["code"] for violation in violations},
+            )
+
     def test_missing_central_registry_blocks_delivery(self) -> None:
         """删除中央登记本身不能把全部严格数据库应用降级为未受管。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:

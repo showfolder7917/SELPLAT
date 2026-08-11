@@ -13,6 +13,9 @@
     color: var(--sel-theme-text-body);
     background: var(--sel-theme-workspace-editor-surface);
     grid-template-rows: auto minmax(0, 1fr) auto;
+    font-family: var(--sel-theme-font-family);
+    font-size: var(--sel-theme-font-size-body);
+    line-height: var(--sel-theme-line-height-body);
 }
 
 .selcode-toolbar {
@@ -45,14 +48,15 @@
 }
 
 .selcode-identity strong {
-    font-size: var(--sel-theme-font-size-primary);
-    font-weight: 600;
+    font-size: var(--sel-theme-font-size-body);
+    font-weight: var(--sel-theme-font-weight-semibold);
 }
 
 .selcode-identity span {
     overflow: hidden;
     color: var(--sel-theme-text-soft);
     font-size: var(--sel-theme-font-size-caption);
+    line-height: var(--sel-theme-line-height-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -74,7 +78,9 @@
     background: var(--sel-theme-control-surface);
     cursor: pointer;
     font: inherit;
-    font-size: var(--sel-theme-font-size-secondary);
+    font-size: var(--sel-theme-font-size-label);
+    font-weight: var(--sel-theme-font-weight-medium);
+    line-height: var(--sel-theme-line-height-label);
 }
 
 .selcode-action:hover:not(:disabled) {
@@ -119,7 +125,7 @@
     margin: 0;
     border: 0;
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    font-size: max(12px, calc(13px * var(--sel-theme-font-scale)));
+    font-size: var(--sel-theme-font-size-body);
     line-height: 1.7;
     tab-size: 4;
 }
@@ -178,6 +184,7 @@
     color: var(--sel-theme-text-secondary);
     background: var(--sel-theme-workspace-surface);
     font-size: var(--sel-theme-font-size-caption);
+    line-height: var(--sel-theme-line-height-caption);
 }
 
 .selcode-status[data-sel-code-tone="success"] span:first-child {

@@ -7,7 +7,7 @@
 
     // 应用只依赖 SEL 公开能力；缺失组件必须停止装配，禁止回退为应用层原生控件。
     const referenceDataRequiredComponents = Object.freeze([
-        "selBaseRuntime", "selAjax", "selPanel", "selSearch", "selTree", "selDropdownMenu",
+        "selBaseRuntime", "selAjax", "selPanel", "selSearch", "selTooltip", "selTree", "selDropdownMenu",
         "selGrid", "selWindow", "selPageBackground", "selPersonalization", "selThemeManager"
     ]);
     const referenceDataMissingComponents = referenceDataRequiredComponents.filter((referenceDataName) => !window[referenceDataName]);

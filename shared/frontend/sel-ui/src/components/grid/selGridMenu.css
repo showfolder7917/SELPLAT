@@ -157,8 +157,8 @@
 
 .selgrid-menu-label {
     overflow: hidden;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: var(--sel-theme-font-size-body);
+    font-weight: var(--sel-theme-font-weight-medium);
     letter-spacing: 0.01em;
     line-height: 1;
     text-overflow: ellipsis;
@@ -173,9 +173,9 @@
     color: var(--sel-theme-text-on-soft-accent);
     background: var(--sel-theme-soft-accent-surface);
     box-shadow: var(--sel-theme-soft-accent-glow);
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1;
+    font-size: var(--sel-theme-font-size-micro);
+    font-weight: var(--sel-theme-font-weight-bold);
+    line-height: var(--sel-theme-line-height-micro);
     text-align: center;
 }
 

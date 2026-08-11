@@ -81,6 +81,11 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("selContextMenu:action")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("ArrowDown")));
+        // Grid 与 Tree 的截断文字提示必须由统一 selTooltip 提供，不再依赖浏览器原生 title。
+        mockMvc.perform(get("/sel/components/tooltip/selTooltip.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("data-sel-tooltip")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("selTooltipIsTruncated")));
         // Uniauth 页面由同一个 Host Web 容器发布，浏览器无需跨端口访问。
         mockMvc.perform(get("/uniauth/uniauth.html"))
                 .andExpect(status().isOk());
@@ -91,6 +96,7 @@ class PlatformRuntimeApplicationTest {
         mockMvc.perform(get("/japanese/japanese.html"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("data-japanese-app")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/sel/components/tooltip/selTooltip.js")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("/sel/components/grid/selGrid.js")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("/sel/components/window/selWindow.js")));
         // MDA 由应用 payload 主动启用宽表和默认列宽，字段较多时允许在结果区内水平滚动。

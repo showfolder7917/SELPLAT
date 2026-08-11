@@ -3,7 +3,7 @@
     "use strict";
 
     const requiredComponents = Object.freeze([
-        "selBaseRuntime", "selPanel", "selSearch", "selTree", "selDropdownMenu", "selGrid",
+        "selBaseRuntime", "selPanel", "selSearch", "selTooltip", "selTree", "selDropdownMenu", "selGrid",
         "selWindow", "selConfirmDialog", "selPageBackground", "selPersonalization", "selThemeManager"
     ]);
     const missingComponents = requiredComponents.filter((name) => !window[name]);

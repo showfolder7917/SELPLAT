@@ -20,6 +20,9 @@
     border-radius: var(--sel-theme-radius-inner);
     background: var(--sel-theme-workspace-surface-soft);
     grid-template-rows: auto minmax(0, 1fr);
+    font-family: var(--sel-theme-font-family);
+    font-size: var(--sel-theme-font-size-body);
+    line-height: var(--sel-theme-line-height-body);
 }
 
 .seltabs-list {
@@ -90,7 +93,9 @@
     background: transparent;
     cursor: pointer;
     font: inherit;
-    font-size: var(--sel-theme-font-size-secondary);
+    font-size: var(--sel-theme-font-size-label);
+    font-weight: var(--sel-theme-font-weight-medium);
+    line-height: var(--sel-theme-line-height-label);
 }
 
 .seltabs-tab span {
@@ -170,11 +175,14 @@
 
 .seltabs-empty strong {
     color: var(--sel-theme-text-title);
-    font-size: var(--sel-theme-font-size-primary);
+    font-size: var(--sel-theme-font-size-heading);
+    font-weight: var(--sel-theme-font-weight-semibold);
+    line-height: var(--sel-theme-line-height-heading);
 }
 
 .seltabs-empty span {
-    font-size: var(--sel-theme-font-size-secondary);
+    font-size: var(--sel-theme-font-size-label);
+    line-height: var(--sel-theme-line-height-label);
 }
 
 @media (prefers-reduced-motion: reduce) {

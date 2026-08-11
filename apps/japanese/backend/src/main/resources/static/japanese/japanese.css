@@ -64,7 +64,7 @@ body {
 
 .japanese-generation-panel header strong {
     color: var(--sel-theme-text-title);
-    font-size: var(--sel-theme-font-size-primary);
+    font-size: var(--sel-theme-font-size-body);
 }
 
 .japanese-generation-panel header span,
@@ -132,7 +132,7 @@ body {
 
 .japanese-generation-actions strong {
     color: var(--sel-theme-text-title);
-    font-size: var(--sel-theme-font-size-primary);
+    font-size: var(--sel-theme-font-size-body);
 }
 
 .japanese-generation-previews {

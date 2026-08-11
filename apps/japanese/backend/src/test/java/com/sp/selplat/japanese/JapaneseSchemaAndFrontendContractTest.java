@@ -55,6 +55,7 @@ class JapaneseSchemaAndFrontendContractTest {
         assertThat(html)
                 .contains("/sel/theme/runtime/selThemeManager.js")
                 .contains("/sel/components/panel/selPanel.js")
+                .contains("/sel/components/tooltip/selTooltip.js")
                 .contains("/sel/components/tree/selTree.js")
                 .contains("/sel/components/search/selSearch.js")
                 .contains("/sel/components/grid/selGrid.js")

@@ -60,6 +60,15 @@ GENERATED_BUSINESS_DEFAULT_FIELDS = (
 )
 SEL_UI_COMPONENT_ROOT_RELATIVE = Path("shared/frontend/sel-ui/src/components")
 SEL_UI_COMPONENT_REGISTRY_NAME = "component-registry.json"
+SEL_UI_SOURCE_ROOT_RELATIVE = Path("shared/frontend/sel-ui/src")
+SEL_UI_TYPOGRAPHY_TOKEN_RELATIVE = Path("theme/selThemeTokens.css")
+SEL_UI_TYPOGRAPHY_CONTRACT_RELATIVE = Path("theme/selThemeTypography.css")
+SEL_UI_SEMANTIC_FONT_ROLES = (
+    "display", "title", "heading", "body", "label", "caption", "micro"
+)
+SEL_UI_FORBIDDEN_LEGACY_FONT_TOKENS = (
+    "--sel-theme-font-size-primary", "--sel-theme-font-size-secondary"
+)
 SEL_UI_COMPONENT_TYPES = {"interactive", "layout", "presentation", "registry"}
 SEL_UI_REQUIRED_GOVERNANCE_CHECKS = {
     "source-boundary",
@@ -71,6 +80,65 @@ SEL_UI_REQUIRED_GOVERNANCE_CHECKS = {
 MANAGED_DATABASE_REGISTRY_RELATIVE = Path(
     "apps/rule-engine/backend/src/main/resources/local"
 )
+
+
+def audit_sel_ui_typography_governance(project_root: Path) -> list[dict[str, str]]:
+    """Validate the seven semantic text roles and reject retired font tokens."""
+    source_root = project_root / SEL_UI_SOURCE_ROOT_RELATIVE
+    if not source_root.is_dir():
+        return []
+    violations: list[dict[str, str]] = []
+    token_path = source_root / SEL_UI_TYPOGRAPHY_TOKEN_RELATIVE
+    contract_path = source_root / SEL_UI_TYPOGRAPHY_CONTRACT_RELATIVE
+    token_text = token_path.read_text(encoding="utf-8") if token_path.is_file() else ""
+    contract_text = contract_path.read_text(encoding="utf-8") if contract_path.is_file() else ""
+    for role in SEL_UI_SEMANTIC_FONT_ROLES:
+        token_name = f"--sel-theme-font-size-{role}:"
+        if token_name not in token_text:
+            violations.append({
+                "code": "SEL_UI_TYPOGRAPHY_ROLE_MISSING",
+                "path": str(token_path.relative_to(project_root)),
+                "message": f"semantic typography token {token_name[:-1]} is required",
+            })
+    for required_token in (
+            "--sel-theme-font-weight-regular:",
+            "--sel-theme-font-weight-medium:",
+            "--sel-theme-font-weight-semibold:",
+            "--sel-theme-font-weight-bold:",
+            "--sel-theme-line-height-body:"):
+        if required_token not in token_text:
+            violations.append({
+                "code": "SEL_UI_TYPOGRAPHY_METRIC_MISSING",
+                "path": str(token_path.relative_to(project_root)),
+                "message": f"semantic typography metric {required_token[:-1]} is required",
+            })
+    for tree_role in ("heading", "body", "label", "caption"):
+        selector = f".seltree-node-text-{tree_role} .seltree-node-label"
+        if selector not in contract_text:
+            violations.append({
+                "code": "SEL_UI_TREE_TYPOGRAPHY_ROLE_MISSING",
+                "path": str(contract_path.relative_to(project_root)),
+                "message": f"tree typography contract requires {selector}",
+            })
+    governed_files = list(source_root.rglob("*.css")) + list(source_root.rglob("*.js"))
+    application_static_root = project_root / "apps"
+    if application_static_root.is_dir():
+        governed_files.extend(application_static_root.glob(
+            "*/backend/src/main/resources/static/**/*.css"
+        ))
+        governed_files.extend(application_static_root.glob(
+            "*/backend/src/main/resources/static/**/*.js"
+        ))
+    for source_path in sorted(set(governed_files)):
+        source_text = source_path.read_text(encoding="utf-8")
+        for legacy_token in SEL_UI_FORBIDDEN_LEGACY_FONT_TOKENS:
+            if legacy_token in source_text:
+                violations.append({
+                    "code": "SEL_UI_LEGACY_TYPOGRAPHY_TOKEN",
+                    "path": str(source_path.relative_to(project_root)),
+                    "message": f"retired typography token {legacy_token} is forbidden",
+                })
+    return violations
 
 
 def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]]:
@@ -295,6 +363,49 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                     "code": "SEL_UI_COMPONENT_DEPENDENCY_CALL_MISSING",
                     "path": str((component_root / component["directory"]).relative_to(project_root)),
                     "message": f"{component_id} registers {dependency} but does not call its public API",
+                })
+
+    # selTooltip 登记后即成为截断文字提示的唯一实现；Grid/Tree 禁止退回浏览器原生 title。
+    if "selTooltip" in component_entries:
+        tooltip_entry = component_entries["selTooltip"]
+        tooltip_source = "\n".join(
+            (component_root / tooltip_entry["directory"] / script).read_text(encoding="utf-8")
+            for script in tooltip_entry.get("scripts", [])
+            if (component_root / tooltip_entry["directory"] / script).is_file()
+        )
+        tooltip_required = {
+            "data-sel-tooltip", "selTooltipIsTruncated", "pointerover",
+            "focusin", "aria-describedby", 'role", "tooltip',
+            "if (selTooltipAriaElement &&",
+        }
+        for missing_contract in sorted(tooltip_required - set(
+                contract for contract in tooltip_required if contract in tooltip_source)):
+            violations.append({
+                "code": "SEL_UI_TOOLTIP_CONTRACT_MISSING",
+                "path": str((component_root / tooltip_entry["directory"]).relative_to(project_root)),
+                "message": f"selTooltip is missing {missing_contract}",
+            })
+        for consumer_id in ("selGrid", "selTree"):
+            consumer = component_entries.get(consumer_id)
+            if not consumer:
+                continue
+            consumer_source = "\n".join(
+                (component_root / consumer["directory"] / script).read_text(encoding="utf-8")
+                for script in consumer.get("scripts", [])
+                if (component_root / consumer["directory"] / script).is_file()
+            )
+            if "window.selTooltip.attach" not in consumer_source \
+                    or "dataset.selTooltip" not in consumer_source:
+                violations.append({
+                    "code": "SEL_UI_TOOLTIP_CONSUMER_MISSING",
+                    "path": str((component_root / consumer["directory"]).relative_to(project_root)),
+                    "message": f"{consumer_id} must consume selTooltip for truncated text",
+                })
+            if re.search(r"\.title\s*=|setAttribute\(\s*[\"']title[\"']", consumer_source):
+                violations.append({
+                    "code": "SEL_UI_TOOLTIP_NATIVE_TITLE_FORBIDDEN",
+                    "path": str((component_root / consumer["directory"]).relative_to(project_root)),
+                    "message": f"{consumer_id} cannot use native title for truncated text",
                 })
 
     application_static_files = sorted((project_root / "apps").glob(
@@ -555,6 +666,8 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
     violations: list[dict[str, str]] = []
     # 公共控件登记、源码所有权、依赖顺序和应用私造控件 → 在其他工程扫描前统一阻断。
     violations.extend(audit_sel_ui_component_governance(project_root))
+    # 公共组件与应用文字必须消费七级语义角色，旧 primary/secondary 令牌不能重新进入源码。
+    violations.extend(audit_sel_ui_typography_governance(project_root))
     central_registrations, registry_violations = load_managed_database_registry(
         project_root, stable_user_id
     )

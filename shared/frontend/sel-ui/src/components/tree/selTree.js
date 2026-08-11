@@ -28,6 +28,25 @@
         return null;
     }
 
+    // 将节点的通用数据类型映射为公开文字角色；调用方可用 typographyRole 显式覆盖，未知值稳定回落到 label。
+    function selTreeResolveTypographyRole(item) {
+        const allowedRoles = new Set(["heading", "body", "label", "caption"]);
+        const explicitRole = String(item?.typographyRole || "").toLowerCase();
+        if (allowedRoles.has(explicitRole)) {
+            return explicitRole;
+        }
+        const typeRole = {
+            database: "heading",
+            catalog: "heading",
+            schema: "body",
+            table: "label",
+            view: "label",
+            field: "caption",
+            column: "caption"
+        }[String(item?.type || "").toLowerCase()];
+        return typeRole || "default";
+    }
+
     // 创建单个业务实例的树控制器。
     function selTreeCreateInstance(gridRoot, selTreeNavigationData) {
         // 业务实例名来自表格根节点，不通过字符串拆分推测实体。
@@ -43,6 +62,11 @@
         // 树节点右键动作必须交给已登记的公共菜单；依赖缺失时拒绝建立残缺实例。
         if (typeof window.selContextMenu?.mount !== "function") {
             console.error("selTree.mount：缺少已登记的 selContextMenu 公共控件。");
+            return null;
+        }
+        // 截断文字提示必须由已登记的公共控件统一提供，依赖缺失时拒绝建立残缺实例。
+        if (typeof window.selTooltip?.attach !== "function") {
+            console.error("selTree.mount：缺少已登记的 selTooltip 公共控件。");
             return null;
         }
 
@@ -67,6 +91,16 @@
             return null;
         }
         let contextItem = null;
+        // 默认启用真实截断提示；调用方可用 tree.tooltip=false 显式关闭。
+        const tooltip = window.selTooltip.attach(treeRoot, {
+            id: `${gridId}::tree-tooltip`,
+            enabled: selTreeInputData.tooltip !== false
+        });
+        if (!tooltip) {
+            contextMenu.destroy();
+            console.error("selTree.mount：selTooltip 挂载失败，已停止创建树实例。");
+            return null;
+        }
 
         // 收集配置中默认展开的全部父节点。
         function collectExpanded(items) {
@@ -96,7 +130,9 @@
                 const listItem = document.createElement("li");
                 listItem.dataset.treeId = item.id;
                 const row = document.createElement("div");
-                row.className = `seltree-node-row${state.selectedId === item.id ? " seltree-node-selected" : ""}`;
+                const typographyRole = selTreeResolveTypographyRole(item);
+                row.className = `seltree-node-row seltree-node-text-${typographyRole}${state.selectedId === item.id ? " seltree-node-selected" : ""}`;
+                row.dataset.treeTypographyRole = typographyRole;
                 const hasChildren = Array.isArray(item.children) && item.children.length > 0;
 
                 // 展开按钮为叶子节点保留对齐占位，为父节点同步真实展开状态。
@@ -128,6 +164,7 @@
                 const label = document.createElement("span");
                 label.className = "seltree-node-label";
                 label.textContent = item.label;
+                label.dataset.selTooltip = String(item.label || "");
                 button.appendChild(label);
                 const count = document.createElement("span");
                 count.className = "seltree-node-count";
@@ -281,6 +318,7 @@
             messages.expandTemplate = selTreeInputData.expandLabelTemplate || "展开{label}";
             messages.collapseTemplate = selTreeInputData.collapseLabelTemplate || "收起{label}";
             messages.contextMenuLabelTemplate = selTreeInputData.contextMenuLabelTemplate || "{label}操作";
+            tooltip.setEnabled(selTreeInputData.tooltip !== false);
             if (!selTreeFindItem(selTreeInputData.items, state.selectedId)) state.selectedId = selTreeInputData.selectedId;
             closeContextMenu(false);
             render();
@@ -292,6 +330,7 @@
             closeContextMenu(false);
             gridRoot.removeEventListener("selContextMenu:action", handleContextMenuAction);
             contextMenu.destroy();
+            tooltip.destroy();
             selTreeInstances.delete(gridId);
             return true;
         }

@@ -91,7 +91,7 @@
       "scripts": ["selGrid.js"],
       "styles": ["selGrid.css"],
       "globalApi": "selGrid",
-      "dependencies": [],
+      "dependencies": ["selTooltip"],
       "themeAware": true
     },
     {
@@ -175,13 +175,24 @@
       "themeAware": true
     },
     {
+      "id": "selTooltip",
+      "directory": "tooltip",
+      "type": "interactive",
+      "scripts": ["selTooltip.js"],
+      "styles": ["selTooltip.css"],
+      "globalApi": "selTooltip",
+      "dependencies": [],
+      "themeAware": true,
+      "ownedAriaRoles": ["tooltip"]
+    },
+    {
       "id": "selTree",
       "directory": "tree",
       "type": "interactive",
       "scripts": ["selTree.js"],
       "styles": ["selTree.css"],
       "globalApi": "selTree",
-      "dependencies": ["selContextMenu"],
+      "dependencies": ["selContextMenu", "selTooltip"],
       "themeAware": true
     },
     {

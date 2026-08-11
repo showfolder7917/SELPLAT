@@ -117,15 +117,16 @@
 .selpanel-title-line h1 {
     margin: 0;
     color: var(--sel-theme-text-title);
-    font-size: clamp(24px, 2.1vw, 37px);
-    font-weight: 650;
+    font-size: var(--sel-theme-font-size-display);
+    font-weight: var(--sel-theme-font-weight-bold);
+    line-height: var(--sel-theme-line-height-display);
     letter-spacing: 0.04em;
     text-shadow: 0 0 14px rgba(91, 160, 255, 0.62);
 }
 
 .selpanel-title-line span {
     color: var(--sel-theme-text-secondary);
-    font-size: 14px;
+    font-size: var(--sel-theme-font-size-body);
 }
 
 .selpanel-title-line i {
@@ -136,7 +137,7 @@
 .selpanel-brand-copy p {
     margin: 5px 0 0;
     color: var(--sel-theme-text-secondary);
-    font-size: 13px;
+    font-size: var(--sel-theme-font-size-label);
     letter-spacing: 0.18em;
 }
 
@@ -168,8 +169,8 @@
 
 .selpanel-status-tab strong {
     color: var(--sel-theme-text-soft);
-    font-size: 13px;
-    font-weight: 500;
+    font-size: var(--sel-theme-font-size-label);
+    font-weight: var(--sel-theme-font-weight-medium);
 }
 
 .selpanel-status-tab:hover,
@@ -375,8 +376,9 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
     padding: 0 5px 0 8px;
     border-bottom: 1px solid rgba(105, 142, 224, 0.22);
     color: var(--sel-theme-text-title);
-    font-size: 15px;
-    font-weight: 600;
+    font-size: var(--sel-theme-font-size-heading);
+    font-weight: var(--sel-theme-font-weight-semibold);
+    line-height: var(--sel-theme-line-height-heading);
     white-space: nowrap;
 }
 
@@ -411,7 +413,7 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
     padding: 0 9px;
     border-top: 1px solid rgba(105, 142, 224, 0.20);
     color: var(--sel-theme-text-secondary);
-    font-size: 12px;
+    font-size: var(--sel-theme-font-size-caption);
     white-space: nowrap;
 }
 

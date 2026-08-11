@@ -70,7 +70,7 @@
 .seldatepicker-trigger-value {
     overflow: hidden;
     color: var(--sel-theme-text-body);
-    font-size: 15px;
+    font-size: var(--sel-theme-font-size-body);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -121,8 +121,9 @@
 
 .seldatepicker-month-title {
     color: var(--sel-theme-text-title);
-    font-size: 15px;
-    font-weight: 650;
+    font-size: var(--sel-theme-font-size-heading);
+    font-weight: var(--sel-theme-font-weight-semibold);
+    line-height: var(--sel-theme-line-height-heading);
     letter-spacing: 0.05em;
     text-align: center;
     text-shadow: 0 0 10px rgba(79, 151, 255, 0.42);
@@ -161,8 +162,8 @@
 .seldatepicker-weekdays {
     padding: 6px 2px 3px;
     color: var(--sel-theme-text-secondary);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--sel-theme-font-size-caption);
+    font-weight: var(--sel-theme-font-weight-semibold);
     text-align: center;
 }
 
@@ -187,7 +188,7 @@
     background: transparent;
     cursor: pointer;
     font: inherit;
-    font-size: 12px;
+    font-size: var(--sel-theme-font-size-caption);
     transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, color 120ms ease;
 }
 
@@ -246,7 +247,7 @@
     background: rgba(4, 18, 58, 0.76);
     cursor: pointer;
     font: inherit;
-    font-size: 12px;
+    font-size: var(--sel-theme-font-size-caption);
 }
 
 .seldatepicker-action:hover,

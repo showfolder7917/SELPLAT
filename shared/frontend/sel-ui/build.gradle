@@ -47,6 +47,54 @@ tasks.register('verifySelUiSourceBoundary') {
                 "sel-ui 公共源码包含应用业务语义：\n" + violations.join('\n')
             )
         }
+        // 统一文字门禁要求七级语义字号、配套字重/行高和树层级契约同时存在，并禁止旧两档令牌回流。
+        def tokenFile = file('src/theme/selThemeTokens.css')
+        def typographyFile = file('src/theme/selThemeTypography.css')
+        def treeScriptFile = file('src/components/tree/selTree.js')
+        if (!tokenFile.isFile() || !typographyFile.isFile() || !treeScriptFile.isFile()) {
+            throw new GradleException('sel-ui 缺少统一文字令牌、排版契约或树控件权威源文件')
+        }
+        def tokenSource = tokenFile.getText('UTF-8')
+        def typographySource = typographyFile.getText('UTF-8')
+        def treeSource = treeScriptFile.getText('UTF-8')
+        def typographyViolations = []
+        ['display', 'title', 'heading', 'body', 'label', 'caption', 'micro'].each { role ->
+            if (!tokenSource.contains("--sel-theme-font-size-${role}:")) {
+                typographyViolations.add("selThemeTokens.css -> 缺少 ${role} 字号")
+            }
+        }
+        ['regular', 'medium', 'semibold', 'bold'].each { weight ->
+            if (!tokenSource.contains("--sel-theme-font-weight-${weight}:")) {
+                typographyViolations.add("selThemeTokens.css -> 缺少 ${weight} 字重")
+            }
+        }
+        ['heading', 'body', 'label', 'caption'].each { role ->
+            if (!typographySource.contains(".seltree-node-text-${role} .seltree-node-label")) {
+                typographyViolations.add("selThemeTypography.css -> 缺少树节点 ${role} 角色")
+            }
+        }
+        ['database: "heading"', 'schema: "body"', 'table: "label"', 'column: "caption"'].each { mapping ->
+            if (!treeSource.contains(mapping)) {
+                typographyViolations.add("selTree.js -> 缺少 ${mapping} 映射")
+            }
+        }
+        def typographyGovernedFiles = [] as Set
+        typographyGovernedFiles.addAll(fileTree('src') { include '**/*.css'; include '**/*.js' }.files)
+        typographyGovernedFiles.addAll(rootProject.fileTree('apps') {
+            include '*/backend/src/main/resources/static/**/*.css'
+            include '*/backend/src/main/resources/static/**/*.js'
+        }.files)
+        typographyGovernedFiles.sort().each { sourceFile ->
+            def sourceText = sourceFile.getText('UTF-8')
+            ['--sel-theme-font-size-primary', '--sel-theme-font-size-secondary'].each { legacyToken ->
+                if (sourceText.contains(legacyToken)) {
+                    typographyViolations.add("${rootProject.relativePath(sourceFile)} -> 禁止旧令牌 ${legacyToken}")
+                }
+            }
+        }
+        if (!typographyViolations.isEmpty()) {
+            throw new GradleException("sel-ui 统一文字治理门禁失败：\n" + typographyViolations.join('\n'))
+        }
         // 中央登记是公共控件的唯一创建入口；新增目录、脚本或样式未登记时直接阻断。
         def registryFile = file('src/components/component-registry.json')
         if (!registryFile.isFile()) {
@@ -214,6 +262,29 @@ tasks.register('verifySelUiSourceBoundary') {
         }
         if (!registryViolations.isEmpty()) {
             throw new GradleException("sel-ui 公共控件治理门禁失败：\n" + registryViolations.join('\n'))
+        }
+        // Grid 与 Tree 的截断文字提示统一归 selTooltip 所有，原生 title 和应用私有提示不得回流。
+        def tooltipScript = file('src/components/tooltip/selTooltip.js')
+        def gridTooltipConsumer = file('src/components/grid/selGrid.js').getText('UTF-8')
+        def treeTooltipConsumer = file('src/components/tree/selTree.js').getText('UTF-8')
+        def tooltipSource = tooltipScript.isFile() ? tooltipScript.getText('UTF-8') : ''
+        def tooltipRequired = [
+            'window.selTooltip', 'data-sel-tooltip', 'selTooltipIsTruncated',
+            'pointerover', 'focusin', 'aria-describedby', 'role", "tooltip',
+            'if (selTooltipAriaElement &&'
+        ]
+        def tooltipViolations = tooltipRequired.findAll { !tooltipSource.contains(it) }.collect { "selTooltip -> ${it}" }
+        if (!gridTooltipConsumer.contains('window.selTooltip.attach')
+                || !gridTooltipConsumer.contains('dataset.selTooltip')
+                || gridTooltipConsumer =~ /\.title\s*=|setAttribute\(\s*["']title["']/) {
+            tooltipViolations.add('selGrid -> 必须使用 selTooltip 且禁止原生 title')
+        }
+        if (!treeTooltipConsumer.contains('window.selTooltip.attach')
+                || !treeTooltipConsumer.contains('dataset.selTooltip')) {
+            tooltipViolations.add('selTree -> 必须使用 selTooltip')
+        }
+        if (!tooltipViolations.isEmpty()) {
+            throw new GradleException("sel-ui 统一截断文字提示门禁失败：\n" + tooltipViolations.join('\n'))
         }
         // Tab 右键操作是公共组件契约：缺少菜单、批量 API 或正常关闭检查时直接阻断公共前端构建。
         def contextMenuScript = file('src/components/context-menu/selContextMenu.js')

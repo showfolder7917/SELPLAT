@@ -199,6 +199,20 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
         return nodes;
     }
 
+    /**
+     * 读取表字段的顺序、类型、长度、默认值、可空性、生成属性和业务注释。
+     * 真实传参示例：{@code catalog=mda,schema=PUBLIC,tableName=MdaConnectionProfile,primaryKeys=[id]}。
+     * 真实返回示例：返回 {@code [{label=id,typeName=BIGINT,ordinalPosition=1,primaryKey=true}]}。
+     * 异常或副作用示例：字段元数据读取失败时抛出 {@link SQLException}，不执行任何 SQL。
+     *
+     * @param metadata 当前目标连接的 JDBC 元数据
+     * @param catalog 当前数据库目录，例如 {@code mda}
+     * @param schema 当前表所属模式，例如 {@code PUBLIC}
+     * @param tableName 当前真实表名，例如 {@code MdaConnectionProfile}
+     * @param primaryKeys 当前表主键字段集合，例如 {@code [id]}
+     * @return 按数据库字段顺序排列的字段节点
+     * @throws SQLException JDBC 字段元数据读取失败时抛出
+     */
     private List<Map<String, Object>> readColumns(
             DatabaseMetaData metadata,
             String catalog,
@@ -212,13 +226,37 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
                 columnNode.put("jdbcType", resultSet.getInt("DATA_TYPE"));
                 columnNode.put("typeName", resultSet.getString("TYPE_NAME"));
                 columnNode.put("size", resultSet.getInt("COLUMN_SIZE"));
+                columnNode.put("decimalDigits", resultSet.getInt("DECIMAL_DIGITS"));
+                columnNode.put("radix", resultSet.getInt("NUM_PREC_RADIX"));
+                columnNode.put("ordinalPosition", resultSet.getInt("ORDINAL_POSITION"));
+                columnNode.put("defaultValue", resultSet.getString("COLUMN_DEF"));
                 columnNode.put("nullable", resultSet.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls);
                 columnNode.put("remarks", resultSet.getString("REMARKS"));
+                columnNode.put("autoIncrement", "YES".equalsIgnoreCase(safeString(resultSet, "IS_AUTOINCREMENT")));
+                columnNode.put("generated", "YES".equalsIgnoreCase(safeString(resultSet, "IS_GENERATEDCOLUMN")));
                 columnNode.put("primaryKey", primaryKeys.contains(resultSet.getString("COLUMN_NAME")));
                 nodes.add(columnNode);
             }
         }
         return nodes;
+    }
+
+    /**
+     * 兼容读取不同 JDBC 驱动可能未提供的可选字符串字段。
+     * 真实传参示例：从 H2 字段元数据读取 {@code IS_AUTOINCREMENT}。
+     * 真实返回示例：驱动支持时返回 {@code YES}，不支持时返回空字符串。
+     * 异常或副作用示例：只吞掉可选列缺失产生的 {@link SQLException}，不改变结果集游标。
+     *
+     * @param resultSet 当前已定位到字段元数据行的结果集
+     * @param columnLabel JDBC 可选元数据列名，例如 {@code IS_AUTOINCREMENT}
+     * @return 可选列文本，不支持时返回空字符串
+     */
+    private String safeString(ResultSet resultSet, String columnLabel) {
+        try {
+            return display(resultSet.getString(columnLabel), "");
+        } catch (SQLException ignored) {
+            return "";
+        }
     }
 
     /**

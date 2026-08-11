@@ -764,6 +764,7 @@ public final class MdaProjectTemplateCatalog {
                     <link rel="stylesheet" href="/sel/components/panel/selPanel.css">
                     <link rel="stylesheet" href="/sel/components/search/selSearch.css">
                     <link rel="stylesheet" href="/sel/components/context-menu/selContextMenu.css">
+                    <link rel="stylesheet" href="/sel/components/tooltip/selTooltip.css">
                     <link rel="stylesheet" href="/sel/components/tree/selTree.css">
                     <link rel="stylesheet" href="/sel/components/dropdown/selDropdownMenu.css">
                     <link rel="stylesheet" href="/sel/components/grid/selGrid.css">
@@ -799,6 +800,7 @@ public final class MdaProjectTemplateCatalog {
                     <script src="/sel/components/panel/selPanel.js"></script>
                     <script src="/sel/components/search/selSearch.js"></script>
                     <script src="/sel/components/context-menu/selContextMenu.js"></script>
+                    <script src="/sel/components/tooltip/selTooltip.js"></script>
                     <script src="/sel/components/tree/selTree.js"></script>
                     <script src="/sel/components/dropdown/selDropdownMenu.js"></script>
                     <script src="/sel/components/grid/selGrid.js"></script>
@@ -829,7 +831,7 @@ public final class MdaProjectTemplateCatalog {
                     "use strict";
 
                     const required = [
-                        "selBaseRuntime", "selPanel", "selSearch", "selContextMenu", "selTree",
+                        "selBaseRuntime", "selPanel", "selSearch", "selContextMenu", "selTooltip", "selTree",
                         "selDropdownMenu", "selGrid", "selWindow",
                         "selConfirmDialog", "selPageBackground",
                         "selPersonalization", "selThemeManager"

@@ -137,7 +137,7 @@ class UniauthSkinResourceStructureTest {
     }
 
     /**
-     * typographyTokens 验证业务文字与个性化设置自身共同消费字体族和字号令牌。
+     * typographyTokens 验证业务文字与个性化设置共同消费七级语义字号、字重和行高令牌。
      */
     @Test
     void typographyTokens() throws IOException {
@@ -145,30 +145,44 @@ class UniauthSkinResourceStructureTest {
         String contractCss = readText("META-INF/resources/sel/theme/contract/selThemeContract.css");
         String typographyCss = readText("META-INF/resources/sel/theme/selThemeTypography.css");
         String personalizationCss = readText("META-INF/resources/sel/components/personalization/selPersonalization.css");
-        // 字体族和字号比例必须由页面级令牌提供，组件不得各自形成孤立开关。
+        // 字体族、字号比例、七级语义角色及配套字重与行高必须由页面级令牌提供。
         assertTrue(tokensCss.contains("--sel-theme-font-family:"));
         assertTrue(tokensCss.contains("--sel-theme-font-scale: 1"));
-        assertTrue(tokensCss.contains("--sel-theme-font-size-primary: max(12px, calc(14px * var(--sel-theme-font-scale)))"));
-        assertTrue(tokensCss.contains("--sel-theme-font-size-secondary: max(11px, calc(13px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-display: max(26px, calc(32px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-title: max(21px, calc(24px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-heading: max(16px, calc(18px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-body: max(12px, calc(14px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-label: max(11px, calc(13px * var(--sel-theme-font-scale)))"));
         assertTrue(tokensCss.contains("--sel-theme-font-size-caption: max(10px, calc(12px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-size-micro: max(9px, calc(10px * var(--sel-theme-font-scale)))"));
+        assertTrue(tokensCss.contains("--sel-theme-font-weight-semibold: 600"));
+        assertTrue(tokensCss.contains("--sel-theme-line-height-body: 1.5"));
+        assertFalse(tokensCss.contains("--sel-theme-font-size-primary"));
+        assertFalse(tokensCss.contains("--sel-theme-font-size-secondary"));
         assertTrue(contractCss.contains("../selThemeTokens.css"));
         assertTrue(typographyCss.contains("font-family: var(--sel-theme-font-family)"));
         // 表头、数据单元格、树节点和个性化设置标签必须位于同一字号适配层。
         assertTrue(typographyCss.contains(".selgrid-table th"));
         assertTrue(typographyCss.contains(".selgrid-table td"));
-        assertTrue(typographyCss.contains(".seltree-node-row"));
+        assertTrue(typographyCss.contains(".seltree-node-text-heading .seltree-node-label"));
+        assertTrue(typographyCss.contains(".seltree-node-text-body .seltree-node-label"));
+        assertTrue(typographyCss.contains(".seltree-node-text-label .seltree-node-label"));
+        assertTrue(typographyCss.contains(".seltree-node-text-caption .seltree-node-label"));
         assertTrue(typographyCss.contains(".selpersonal-panel-range-copy strong"));
         assertTrue(typographyCss.contains(".selpersonal-text-mode"));
-        assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-primary)"));
-        assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-secondary)"));
+        assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-body)"));
+        assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-label)"));
         assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-caption)"));
+        assertTrue(typographyCss.contains("font-size: var(--sel-theme-font-size-micro)"));
         // 个性化面板不能继续绑定旧表格私有字体，避免用户改变字体时设置面板自身不响应。
         assertTrue(personalizationCss.contains("var(--sel-theme-font-family"));
         // 选项卡内层文字、主题缩略图小字和主题库入口必须直接消费字号令牌，不能被固定 px 覆盖。
         assertTrue(personalizationCss.contains(".selpersonal-tab span"));
-        assertTrue(personalizationCss.contains("font-size: var(--sel-theme-font-size-primary)"));
-        assertTrue(personalizationCss.contains("font-size: var(--sel-theme-font-size-secondary)"));
+        assertTrue(personalizationCss.contains("font-size: var(--sel-theme-font-size-body)"));
+        assertTrue(personalizationCss.contains("font-size: var(--sel-theme-font-size-label)"));
         assertTrue(personalizationCss.contains("font-size: var(--sel-theme-font-size-caption)"));
+        assertFalse(personalizationCss.contains("--sel-theme-font-size-primary"));
+        assertFalse(personalizationCss.contains("--sel-theme-font-size-secondary"));
         assertFalse(personalizationCss.contains("calc(14px * var(--sel-theme-font-scale))"));
         assertFalse(personalizationCss.contains("calc(13px * var(--sel-theme-font-scale))"));
         assertFalse(personalizationCss.contains("calc(12px * var(--sel-theme-font-scale))"));
@@ -355,6 +369,12 @@ class UniauthSkinResourceStructureTest {
         String gridScript = readText("META-INF/resources/sel/components/grid/selGrid.js");
         String searchScript = readText("META-INF/resources/sel/components/search/selSearch.js");
         String treeScript = readText("META-INF/resources/sel/components/tree/selTree.js");
+        assertTrue(treeScript.contains("function selTreeResolveTypographyRole(item)"));
+        assertTrue(treeScript.contains("database: \"heading\""));
+        assertTrue(treeScript.contains("schema: \"body\""));
+        assertTrue(treeScript.contains("table: \"label\""));
+        assertTrue(treeScript.contains("column: \"caption\""));
+        assertTrue(treeScript.contains("row.dataset.treeTypographyRole = typographyRole"));
         String menuScript = readText("META-INF/resources/sel/components/grid/selGridMenu.js");
         String datePickerScript = readText("META-INF/resources/sel/components/date-picker/selDatePicker.js");
         // 应用装配层独立登记公共文案与项目业务目录，公共组件不能识别 Uniauth 文件位置。

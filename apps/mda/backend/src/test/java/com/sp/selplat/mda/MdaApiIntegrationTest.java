@@ -111,7 +111,7 @@ class MdaApiIntegrationTest {
         execute("DROP TABLE IF EXISTS MdaRawSqlCase")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
-        execute("CREATE TABLE MdaRawSqlCase(id INT PRIMARY KEY, name VARCHAR(50))")
+        execute("CREATE TABLE MdaRawSqlCase(id INT PRIMARY KEY, name VARCHAR(50) DEFAULT 'unknown')")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.results[0].kind").value("updateCount"));
         // 隔离目标表写入原注释 → 元数据模板必须原样带回而不是生成占位描述。
@@ -153,6 +153,8 @@ class MdaApiIntegrationTest {
         assertThat(metadata.getResponse().getContentAsString()).containsIgnoringCase("MdaRawSqlCase");
         assertThat(metadata.getResponse().getContentAsString())
                 .contains("\"primaryKeys\":[\"id\"]")
+                .contains("\"ordinalPosition\":1")
+                .contains("\"defaultValue\":\"'unknown'\"")
                 .contains("ALTER TABLE MdaRawSqlCase ADD NEW_COLUMN VARCHAR(255);")
                 .contains("COMMENT ON TABLE MdaRawSqlCase IS '原表注释';")
                 .contains("COMMENT ON COLUMN MdaRawSqlCase.id IS '原字段注释';")

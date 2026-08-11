@@ -86,7 +86,8 @@ class MdaFrontendSqlContractTest {
     /**
      * 验证数据库结构树默认展开数据库目录与 PUBLIC Schema，同时保持系统 Schema 和表节点折叠。
      * 真实传参示例：读取构建资源中的 {@code static/mda/mda.js}，节点类型依次为 catalog、schema、table。
-     * 真实返回示例：脚本仅在 catalog 或名称大小写归一后等于 {@code PUBLIC} 的 schema 上设置 expanded=true。
+     * 真实返回示例：脚本仅在 catalog 或名称大小写归一后等于 {@code PUBLIC} 的 schema 上设置 expanded=true，
+     *     并把 {@code type=catalog|schema|table|column} 原样交给 selTree 的统一文字层级映射。
      * 异常或副作用示例：资源缺失或默认展开条件扩大到所有 schema 时断言失败，不修改用户树状态。
      *
      * @throws Exception 页面脚本资源无法读取时抛出
@@ -99,12 +100,55 @@ class MdaFrontendSqlContractTest {
         assertThat(script)
                 .contains("const mdaDefaultExpanded = mdaNode.type === \"catalog\"")
                 .contains("mdaNode.type === \"schema\" && mdaSchemaName === \"PUBLIC\"")
+                .contains("type: mdaNode.type")
                 .contains("expanded: mdaDefaultExpanded")
                 .contains("async function mdaRefreshSelectedMetadata(mdaResetTreeExpansion = false)")
                 .contains("mdaState.treeController?.destroy()")
                 .contains("mdaState.treeController = window.selTree.mount(mdaState.panelRoot, mdaPayload.tree)")
                 .contains("await mdaRefreshSelectedMetadata(true)")
                 .doesNotContain("const mdaDefaultExpanded = mdaNode.type === \"schema\"");
+    }
+
+    /**
+     * 验证查看表结构位于表菜单首项，并在可复用、可关闭的只读独立页签中使用公共表格展示元数据。
+     * 真实传参示例：右键 {@code MdaConnectionProfile} 后点击“查看表结构”，再对同一表重复点击。
+     * 真实返回示例：首次创建 {@code MdaTableStructureViewer...} 页签，重复点击只激活原页签并只展示字段表格。
+     * 异常或副作用示例：元数据为空时显示空态；关闭页签销毁唯一 selGrid 且不执行 SQL。
+     *
+     * @throws Exception 页面脚本资源无法读取时抛出
+     */
+    @Test
+    void shouldOpenReusableReadOnlyTableStructureTabWithSharedGrids() throws Exception {
+        String script = new ClassPathResource("static/mda/mda.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        int inspectAction = script.indexOf("id: \"table-inspect\"");
+        int editAction = script.indexOf("id: \"table-edit\"", inspectAction);
+        int fieldNameColumn = script.indexOf("label: \"字段名\"", inspectAction);
+        int fieldCommentColumn = script.indexOf("label: \"字段注释\"", fieldNameColumn);
+        int fieldTypeColumn = script.indexOf("label: \"数据类型\"", fieldCommentColumn);
+        assertThat(inspectAction).isGreaterThanOrEqualTo(0);
+        assertThat(editAction).isGreaterThan(inspectAction);
+        assertThat(fieldCommentColumn).isGreaterThan(fieldNameColumn);
+        assertThat(fieldTypeColumn).isGreaterThan(fieldCommentColumn);
+        assertThat(script)
+                .contains("if (mdaAction === \"table-inspect\") mdaOpenTableStructureViewer(mdaFilter)")
+                .contains("const mdaSessionId = `MdaTableStructureViewer")
+                .contains("if (mdaState.tabsController.has(mdaSessionId))")
+                .contains("mdaState.tabsController.activate(mdaSessionId)")
+                .contains("label: `结构 · ${mdaFilter.tableName}`")
+                .contains("closable: true")
+                .contains("window.selGrid.mount")
+                .contains("const mdaGridMessages = Object.freeze({")
+                .contains("title: Object.freeze({ messages: mdaGridMessages })")
+                .contains("mdaGridController.destroy()")
+                .contains("structureSessions.delete(mdaSession.id)")
+                .contains("mdaState.tabsController.close(`MdaTableStructureViewer${mdaConnectionId}_")
+                .doesNotContain("mdaAppendStructureSummary")
+                .doesNotContain("mdaIndexItems")
+                .doesNotContain("mdaForeignKeyItems")
+                .doesNotContain("只读展示 JDBC 元数据")
+                .doesNotContain("字段属性与含义");
     }
 
     /**

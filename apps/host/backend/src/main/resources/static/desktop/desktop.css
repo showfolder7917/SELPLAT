@@ -64,7 +64,7 @@ body {
     border: 1px solid var(--sel-theme-line);
     border-radius: var(--sel-theme-radius-icon);
     color: var(--sel-theme-text-on-selected-surface);
-    font-size: var(--sel-theme-font-size-primary);
+    font-size: var(--sel-theme-font-size-body);
     font-weight: 800;
     background: var(--sel-theme-selected-surface);
     box-shadow: 0 0 18px var(--sel-theme-glow);
@@ -77,7 +77,7 @@ body {
 }
 
 .hostdesktop-brand-name {
-    font-size: var(--sel-theme-font-size-primary);
+    font-size: var(--sel-theme-font-size-body);
     letter-spacing: 0.08em;
 }
 
@@ -222,7 +222,7 @@ body {
 .hostdesktop-application-name {
     display: block;
     color: var(--sel-theme-text-title);
-    font-size: var(--sel-theme-font-size-primary);
+    font-size: var(--sel-theme-font-size-body);
     font-weight: 650;
     line-height: 1.35;
     text-shadow: var(--sel-theme-text-shadow);

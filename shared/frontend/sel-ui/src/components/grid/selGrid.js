@@ -96,6 +96,11 @@
         if (!selGridInputPayload || !Array.isArray(selGridInputPayload.data?.items) || !Array.isArray(selGridInputPayload.column?.items)) {
             return null;
         }
+        // 表格截断文字提示必须由已登记的公共控件统一提供，禁止回退到不稳定的原生 title。
+        if (typeof window.selTooltip?.attach !== "function") {
+            console.error("selGrid.mount：缺少已登记的 selTooltip 公共控件。");
+            return null;
+        }
 
         // records 模式按列契约渲染任意后台记录；未声明时继续保持已有项目表格兼容模式。
         const selGridRecordMode = selGridInputPayload.grid?.mode === "records";
@@ -496,6 +501,12 @@
         return null;
     }
 
+    // 默认启用统一截断提示；调用方可用 grid.tooltip=false 显式关闭。
+    const selGridTooltipController = window.selTooltip.attach(selGridRoot, {
+        id: `${selGridId}::grid-tooltip`,
+        enabled: selGridInputPayload.grid?.tooltip !== false
+    });
+
     // 当前列宽拖拽状态只属于本实例，结束或销毁时必须清空。
     let selGridColumnResizeState = null;
 
@@ -771,8 +782,8 @@
             ? String(selGridRawValue).replace("T", " ").slice(0, 16)
             : String(selGridRawValue ?? "—") || "—";
         selGridCell.textContent = selGridDisplayValue;
-        // 宽表截断后仍可通过原生悬浮提示查看完整字段值。
-        if (selGridRecordOptions.horizontalScroll === true && selGridDisplayValue !== "—") selGridCell.title = selGridDisplayValue;
+        // 完整文字交给 selTooltip；控件会在悬停或聚焦时再次确认是否真实截断。
+        if (selGridDisplayValue !== "—") selGridCell.dataset.selTooltip = selGridDisplayValue;
         if (selGridColumn.nowrap || selGridRenderer === "time") selGridCell.classList.add("selgrid-record-nowrap");
         return selGridCell;
     }
@@ -1646,6 +1657,7 @@
         const selGridNextPayload = selGridNext.resource || selGridNext.messages || selGridNext;
         if (!selGridNextPayload || !Array.isArray(selGridNextPayload.data?.items) || !Array.isArray(selGridNextPayload.column?.items)) return false;
         selGridInputPayload = selGridNextPayload;
+        selGridTooltipController?.setEnabled(selGridInputPayload.grid?.tooltip !== false);
         selGridProjects = Object.freeze(selGridInputPayload.data.items);
         selGridTypeLabels = new Map((selGridInputPayload.select?.projectType?.options || []).map((item) => [String(item.value), item.label]));
         selGridStatusLabels = new Map((selGridInputPayload.select?.status?.options || []).map((item) => [String(item.value), item.label]));
@@ -1667,6 +1679,7 @@
         selGridHorizontalOverflowObserver?.disconnect();
         if (selGridHorizontalOverflowFrame) window.cancelAnimationFrame(selGridHorizontalOverflowFrame);
         if (selGridToastTimer) window.clearTimeout(selGridToastTimer);
+        selGridTooltipController?.destroy();
         selGridView.tableHead?.removeEventListener("pointerdown", selGridHandleColumnResizeStart);
         selGridView.tableHead?.removeEventListener("pointermove", selGridHandleColumnResizeMove);
         selGridView.tableHead?.removeEventListener("pointerup", selGridHandleColumnResizeEnd);

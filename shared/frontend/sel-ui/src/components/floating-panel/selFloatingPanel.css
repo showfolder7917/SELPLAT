@@ -113,8 +113,8 @@
 }
 
 .selfloating-heading-copy { display: grid; min-width: 0; gap: 3px; }
-.selfloating-heading-copy strong { font-size: 16px; letter-spacing: 0.04em; }
-.selfloating-heading-copy small { color: var(--sel-theme-text-secondary); font-size: 11px; }
+.selfloating-heading-copy strong { font-size: var(--sel-theme-font-size-heading); font-weight: var(--sel-theme-font-weight-semibold); line-height: var(--sel-theme-line-height-heading); letter-spacing: 0.04em; }
+.selfloating-heading-copy small { color: var(--sel-theme-text-secondary); font-size: var(--sel-theme-font-size-caption); line-height: var(--sel-theme-line-height-caption); }
 
 .selfloating-close {
     display: grid;
