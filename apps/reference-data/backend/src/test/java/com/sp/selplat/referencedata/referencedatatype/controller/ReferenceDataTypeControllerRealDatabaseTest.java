@@ -26,7 +26,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
         classes = ReferenceDataTypeControllerRealDatabaseTest.TestApplication.class,
         properties = {
-            "reference-data.datasource.url=jdbc:h2:mem:reference_data_type_admin_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+            "reference-data.datasource.jdbc-url=jdbc:h2:mem:reference_data_type_admin_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+            "reference-data.datasource.pool-name=ReferenceDataControllerTestPool",
             "spring.datasource.url=jdbc:h2:mem:reference_data_support_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
         })
 @AutoConfigureMockMvc

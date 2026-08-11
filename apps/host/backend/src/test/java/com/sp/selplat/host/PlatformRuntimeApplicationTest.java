@@ -22,7 +22,8 @@ import org.springframework.test.web.servlet.MockMvc;
  * 验证 platform-runtime 可以启动并真实装配 reference-data 查询 Service。
  */
 @SpringBootTest(properties = {
-    "reference-data.datasource.url=jdbc:h2:mem:reference_data_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+    "reference-data.datasource.jdbc-url=jdbc:h2:mem:reference_data_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+    "reference-data.datasource.pool-name=ReferenceDataHostTestPool",
     "uniauth.datasource.jdbc-url=jdbc:h2:mem:selplat_uniauth_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
     "uniauth.datasource.password=",
     "mda.control.datasource.jdbc-url=jdbc:h2:mem:selplat_mda_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",

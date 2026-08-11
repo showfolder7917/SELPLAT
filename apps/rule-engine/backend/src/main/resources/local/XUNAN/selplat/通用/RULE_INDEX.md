@@ -92,6 +92,10 @@ load_rule_for_active_user_selplat_base_service_redundant_override_cleanup = SELP
 load_rule_for_active_user_selplat_host_multi_module_or_additional_datasource = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 多个项目注册 CommonSequenceSegment 或调整号段数据源路由时加载，禁止依赖 @Primary 猜测号段归属。 -->
 load_rule_for_active_user_selplat_multi_project_sequence_datasource_routing = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
+<!-- 新建或修改中央登记业务应用的私有数据源、连接池参数或 Bean 生命周期时加载。 -->
+load_rule_for_active_user_selplat_managed_application_private_datasource_pool_or_lifecycle = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
+<!-- 交付前检查 DriverManagerDataSource、缺失 Hikari 配置或缺失基础池参数时加载。 -->
+load_rule_for_active_user_selplat_managed_application_datasource_pool_delivery_scan = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 为项目业务表返回默认前端列定义，或接入 reference-data 配置覆盖与元数据兜底时加载。 -->
 load_rule_for_active_user_selplat_default_table_definition_or_reference_data_fallback = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 修改表格定义的 Controller、Service、DAO 分层或 tableName/gridId/locale 标识时加载。 -->

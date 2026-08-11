@@ -114,6 +114,91 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         )
         return component_root
 
+    def test_managed_database_application_rejects_unpooled_datasource(self) -> None:
+        """受管业务库改回 DriverManagerDataSource 时必须在快速门禁阶段阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.register_managed_database_application(
+                fixture,
+                "example",
+                databaseFile="db/example.mv.db",
+                datasourcePrefix="example.datasource",
+            )
+            persistence_file = (
+                fixture
+                / "apps/example/backend/src/main/java/com/sp/selplat/example/common/persistence"
+                / "ExamplePersistenceConfiguration.java"
+            )
+            persistence_file.parent.mkdir(parents=True)
+            persistence_file.write_text(
+                "import org.springframework.jdbc.datasource.DriverManagerDataSource;\n"
+                "class ExamplePersistenceConfiguration {\n"
+                "  DriverManagerDataSource dataSource() { return new DriverManagerDataSource(); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            registrations, _ = self.guard.load_managed_database_registry(
+                fixture, ACTIVE_STABLE_USER_ID
+            )
+            violations = self.guard.audit_managed_datasource_pool_governance(
+                fixture, registrations
+            )
+            codes = {violation["code"] for violation in violations}
+
+            self.assertIn("MANAGED_APPLICATION_UNPOOLED_DATASOURCE_FORBIDDEN", codes)
+            self.assertIn("MANAGED_APPLICATION_HIKARI_POOL_CONFIGURATION_MISSING", codes)
+
+    def test_managed_database_application_accepts_qualified_hikari_pool(self) -> None:
+        """具名 HikariConfig、可关闭数据源和完整基础池参数应通过连接池门禁。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.register_managed_database_application(
+                fixture,
+                "example",
+                databaseFile="db/example.mv.db",
+                datasourcePrefix="example.datasource",
+            )
+            persistence_file = (
+                fixture
+                / "apps/example/backend/src/main/java/com/sp/selplat/example/common/persistence"
+                / "ExamplePersistenceConfiguration.java"
+            )
+            persistence_file.parent.mkdir(parents=True)
+            persistence_file.write_text(
+                "import com.zaxxer.hikari.HikariConfig;\n"
+                "import com.zaxxer.hikari.HikariDataSource;\n"
+                "import org.springframework.boot.context.properties.ConfigurationProperties;\n"
+                "class ExamplePersistenceConfiguration {\n"
+                "  @ConfigurationProperties(prefix = \"example.datasource\")\n"
+                "  HikariConfig config() { return new HikariConfig(); }\n"
+                "  @Bean(name = \"exampleDataSource\", destroyMethod = \"close\")\n"
+                "  HikariDataSource dataSource(HikariConfig config) {\n"
+                "    return new HikariDataSource(config);\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            resource_file = fixture / "apps/example/backend/src/main/resources/example.properties"
+            resource_file.parent.mkdir(parents=True)
+            resource_file.write_text(
+                "example.datasource.jdbc-url=\n"
+                "example.datasource.pool-name=ExamplePool\n"
+                "example.datasource.driver-class-name=org.h2.Driver\n"
+                "example.datasource.minimum-idle=1\n"
+                "example.datasource.maximum-pool-size=4\n",
+                encoding="utf-8",
+            )
+
+            registrations, _ = self.guard.load_managed_database_registry(
+                fixture, ACTIVE_STABLE_USER_ID
+            )
+            violations = self.guard.audit_managed_datasource_pool_governance(
+                fixture, registrations
+            )
+
+            self.assertEqual([], violations)
+
     def test_unregistered_component_directory_blocks_delivery(self) -> None:
         """新增控件目录不能绕过中央登记直接进入公共源码。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:

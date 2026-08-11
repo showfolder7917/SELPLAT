@@ -644,6 +644,99 @@ def load_managed_database_registry(
     return registrations, violations
 
 
+def audit_managed_datasource_pool_governance(
+        project_root: Path,
+        registrations: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
+    """Require every centrally managed database application to own one qualified Hikari pool."""
+    violations: list[dict[str, str]] = []
+    forbidden_source_patterns = {
+        "DriverManagerDataSource": "Spring DriverManagerDataSource",
+        "SimpleDriverDataSource": "Spring SimpleDriverDataSource",
+        "DriverManager.getConnection": "direct DriverManager connection",
+        "DataSourceBuilder.create": "untyped DataSourceBuilder creation",
+    }
+    for project_name, registration in sorted(registrations.items()):
+        application_root = project_root / "apps" / project_name
+        java_root = application_root / "backend/src/main/java"
+        if not java_root.is_dir():
+            continue
+        java_files = sorted(java_root.rglob("*.java"))
+        for java_file in java_files:
+            source_text = java_file.read_text(encoding="utf-8")
+            for forbidden_pattern, forbidden_name in forbidden_source_patterns.items():
+                if forbidden_pattern in source_text:
+                    violations.append({
+                        "code": "MANAGED_APPLICATION_UNPOOLED_DATASOURCE_FORBIDDEN",
+                        "path": str(java_file.relative_to(project_root)),
+                        "message": (
+                            f"{project_name} uses {forbidden_name}; managed private databases "
+                            "must use a qualified HikariDataSource"
+                        ),
+                    })
+
+        persistence_files = sorted(java_root.rglob("*PersistenceConfiguration.java"))
+        datasource_prefix = registration.get("datasourcePrefix")
+        hikari_contract_markers = (
+            "com.zaxxer.hikari.HikariConfig",
+            "com.zaxxer.hikari.HikariDataSource",
+            "@ConfigurationProperties",
+            "destroyMethod = \"close\"",
+            "new HikariDataSource(",
+        )
+        matching_pool_configuration = None
+        for persistence_file in persistence_files:
+            source_text = persistence_file.read_text(encoding="utf-8")
+            if all(marker in source_text for marker in hikari_contract_markers) \
+                    and isinstance(datasource_prefix, str) \
+                    and re.search(
+                        rf"@ConfigurationProperties\(prefix\s*=\s*\"{re.escape(datasource_prefix)}\"\)",
+                        source_text,
+                    ):
+                matching_pool_configuration = persistence_file
+                break
+        if matching_pool_configuration is None:
+            violations.append({
+                "code": "MANAGED_APPLICATION_HIKARI_POOL_CONFIGURATION_MISSING",
+                "path": str((application_root / "backend/src/main/java").relative_to(project_root)),
+                "message": (
+                    f"{project_name} requires one PersistenceConfiguration with qualified "
+                    "HikariConfig, HikariDataSource, ConfigurationProperties, and destroyMethod=close"
+                ),
+            })
+
+        resource_root = application_root / "backend/src/main/resources"
+        property_text = "\n".join(
+            properties_file.read_text(encoding="utf-8")
+            for properties_file in sorted(resource_root.glob("*.properties"))
+        ) if resource_root.is_dir() else ""
+        required_pool_properties = (
+            "jdbc-url",
+            "pool-name",
+            "driver-class-name",
+            "minimum-idle",
+            "maximum-pool-size",
+        )
+        if isinstance(datasource_prefix, str):
+            missing_properties = [
+                property_name
+                for property_name in required_pool_properties
+                if not re.search(
+                    rf"(?m)^{re.escape(datasource_prefix)}\.{re.escape(property_name)}\s*=",
+                    property_text,
+                )
+            ]
+            if missing_properties:
+                violations.append({
+                    "code": "MANAGED_APPLICATION_HIKARI_POOL_PROPERTIES_MISSING",
+                    "path": str(resource_root.relative_to(project_root)),
+                    "message": (
+                        f"{project_name} datasource pool properties are incomplete: "
+                        + ", ".join(missing_properties)
+                    ),
+                })
+    return violations
+
+
 def normalized_identifier(value: str) -> str:
     """Normalize table, project, and package names for stable ownership comparison."""
     return re.sub(r"[^a-z0-9]", "", value.lower())
@@ -723,6 +816,10 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
         project_root, stable_user_id
     )
     violations.extend(registry_violations)
+    # 中央登记中的永久业务库 → 必须通过可关闭的具名 Hikari 池访问，禁止再次退回逐次建连。
+    violations.extend(audit_managed_datasource_pool_governance(
+        project_root, central_registrations
+    ))
     generator_template = project_root / APPLICATION_SCAFFOLD_TEMPLATE_RELATIVE
     if generator_template.is_file():
         template_text = generator_template.read_text(encoding="utf-8")

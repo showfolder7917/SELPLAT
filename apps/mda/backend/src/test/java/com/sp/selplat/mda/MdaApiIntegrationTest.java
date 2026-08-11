@@ -1,6 +1,7 @@
 package com.sp.selplat.mda;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -218,8 +219,10 @@ class MdaApiIntegrationTest {
                         .param("locale", "zh-CN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.source").value("DEFAULT_METADATA"))
-                .andExpect(jsonPath("$.data.columns.connectionName.columnName").value("connectionName"));
+                .andExpect(jsonPath("$.data.source").value("DEFAULT_FIELD_NAME"))
+                .andExpect(jsonPath(
+                        "$.data.columns[?(@.field == 'connectionName')].field",
+                        hasItem("connectionName")));
     }
 
     @Test

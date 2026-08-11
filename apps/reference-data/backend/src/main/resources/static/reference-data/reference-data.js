@@ -233,6 +233,11 @@
         return String(referenceDataRecord.labelZh || referenceDataRecord[referenceDataModule.previewField] || referenceDataRecord.id);
     }
 
+    function referenceDataSetFeedback(referenceDataMessage) {
+        const referenceDataFeedback = referenceDataState.panelRoot?.querySelector('[data-sel-grid-role="feedback"]');
+        if (referenceDataFeedback) referenceDataFeedback.textContent = String(referenceDataMessage || "");
+    }
+
     function referenceDataBuildHierarchy(referenceDataModule, referenceDataRecords, referenceDataParentId = null) {
         return referenceDataRecords
             .filter((referenceDataRecord) => String(referenceDataRecord.parentId || "") === String(referenceDataParentId || ""))
@@ -356,7 +361,9 @@
             column: Object.freeze({
                 gridId: referenceDataGridId,
                 ariaLabel: `${referenceDataModule.name}数据表格`,
-                emptyText: `没有符合当前条件的${referenceDataModule.name}记录`,
+                emptyText: referenceDataState.loadedKeys.has(referenceDataModule.key)
+                    ? `没有符合当前条件的${referenceDataModule.name}记录`
+                    : `正在加载${referenceDataModule.name}…`,
                 items: referenceDataColumns
             }),
             title: Object.freeze({
@@ -586,8 +593,17 @@
         referenceDataState.loadedKeys.add(referenceDataModule.key);
     }
 
-    async function referenceDataLoadResolvedColumns(referenceDataModule) {
+    async function referenceDataLoadResolvedColumns(referenceDataModule, referenceDataForce = false) {
+        if (!referenceDataForce && referenceDataState.columns.has(referenceDataModule.key)) return;
         referenceDataState.columns.set(referenceDataModule.key, await referenceDataResolveColumns(referenceDataModule));
+    }
+
+    async function referenceDataLoadModuleView(referenceDataModule, referenceDataReloadRecords = false, referenceDataReloadColumns = false) {
+        // 数据记录与表头配置彼此独立，必须并行请求，避免每次切换模块串行等待两次接口。
+        await Promise.all([
+            referenceDataEnsureModuleLoaded(referenceDataModule, referenceDataReloadRecords),
+            referenceDataLoadResolvedColumns(referenceDataModule, referenceDataReloadColumns)
+        ]);
     }
 
     function referenceDataEnsureTableDetailShell() {
@@ -619,6 +635,19 @@
             </nav>
             <section class="reference-data-detail-content" data-reference-data-detail-content="info"></section>
             <section class="reference-data-detail-content" data-reference-data-detail-content="preview"></section>`;
+        // 固定按钮直接绑定，不依赖事件冒泡和点击目标转换，保证公共控件嵌套时仍能可靠响应。
+        referenceDataDetail.querySelector('[data-reference-data-detail-action="back"]')
+            .addEventListener("click", () => referenceDataReturnToTableList());
+        referenceDataDetail.querySelector('[data-reference-data-detail-action="edit-table"]')
+            .addEventListener("click", () => {
+                if (!referenceDataState.selectedTable) return;
+                referenceDataOpenEditor(referenceDataModules.tables, referenceDataState.selectedTable);
+            });
+        referenceDataDetail.querySelectorAll("[data-reference-data-detail-tab]").forEach((referenceDataTabButton) => {
+            referenceDataTabButton.addEventListener("click", () => {
+                referenceDataSetTableDetailTab(referenceDataTabButton.dataset.referenceDataDetailTab);
+            });
+        });
         const referenceDataGridBoard = referenceDataCenter.querySelector(".selgrid-board-shell");
         referenceDataCenter.insertBefore(referenceDataDetail, referenceDataGridBoard || null);
         return referenceDataDetail;
@@ -670,6 +699,10 @@
             referenceDataAdd.type = "button";
             referenceDataAdd.dataset.referenceDataDetailAction = "add-column";
             referenceDataAdd.textContent = "新增第一列";
+            referenceDataAdd.addEventListener("click", () => {
+                referenceDataSetTableDetailTab("columns");
+                referenceDataOpenEditor(referenceDataModules.columns);
+            });
             referenceDataEmpty.appendChild(referenceDataAdd);
             referenceDataHost.appendChild(referenceDataEmpty);
             return;
@@ -741,9 +774,8 @@
         referenceDataRenderTableDetail();
     }
 
-    async function referenceDataRefresh(referenceDataReloadActive = true) {
-        await referenceDataEnsureModuleLoaded(referenceDataActiveModule(), referenceDataReloadActive);
-        await referenceDataLoadResolvedColumns(referenceDataActiveModule());
+    async function referenceDataRefresh(referenceDataReloadActive = true, referenceDataReloadColumns = false) {
+        await referenceDataLoadModuleView(referenceDataActiveModule(), referenceDataReloadActive, referenceDataReloadColumns);
         referenceDataApplyPayload(referenceDataBuildPayload());
     }
 
@@ -757,8 +789,27 @@
         }
         referenceDataState.activeKey = referenceDataKey;
         referenceDataState.editingId = null;
-        await referenceDataEnsureModuleLoaded(referenceDataActiveModule());
-        await referenceDataLoadResolvedColumns(referenceDataActiveModule());
+        // 已加载模块立即显示；首次进入时记录和表头并行加载，减少一半串行等待。
+        if (referenceDataState.loadedKeys.has(referenceDataKey) && referenceDataState.columns.has(referenceDataKey)) {
+            referenceDataApplyPayload(referenceDataBuildPayload());
+            return;
+        }
+        // 首次进入也先切换页面并展示加载态，避免后端响应期间按钮看起来没有生效。
+        const referenceDataTargetModule = referenceDataActiveModule();
+        referenceDataApplyPayload(referenceDataBuildPayload());
+        await referenceDataLoadModuleView(referenceDataTargetModule);
+        // 用户在请求期间可能继续切换模块；旧请求完成后不得覆盖新的页面状态。
+        if (referenceDataState.activeKey === referenceDataKey) {
+            referenceDataApplyPayload(referenceDataBuildPayload());
+        }
+    }
+
+    function referenceDataReturnToTableList() {
+        // 返回动作先使用已加载的表格定义和表头立即重绘，避免等待接口时表现为按钮失效。
+        referenceDataState.selectedTable = null;
+        referenceDataState.tableDetailTab = null;
+        referenceDataState.activeKey = "tables";
+        referenceDataState.editingId = null;
         referenceDataApplyPayload(referenceDataBuildPayload());
     }
 
@@ -810,13 +861,18 @@
             });
             referenceDataController.setFeedback(referenceDataResult.msg || `${referenceDataModule.itemName}保存完成。`);
             // 从详情页编辑主表时先刷新主表缓存，再恢复当前选中记录；列写入只刷新列模块。
-            await referenceDataEnsureModuleLoaded(referenceDataModule, true);
+            await Promise.all([
+                referenceDataEnsureModuleLoaded(referenceDataModule, true),
+                referenceDataModule.key === "columns"
+                    ? referenceDataLoadResolvedColumns(referenceDataModules.columns, true)
+                    : Promise.resolve()
+            ]);
             if (referenceDataModule.key === "tables" && referenceDataState.selectedTable) {
                 referenceDataState.selectedTable = referenceDataFindRecord(
                     referenceDataModules.tables, referenceDataState.selectedTable.id
                 ) || referenceDataState.selectedTable;
             }
-            await referenceDataRefresh(false);
+            referenceDataApplyPayload(referenceDataBuildPayload());
             referenceDataController.close();
             referenceDataState.editingId = null;
         } catch (referenceDataError) {
@@ -837,7 +893,7 @@
                 url: `${referenceDataModule.api}delete.htm`, method: "POST", data: { id: referenceDataPending.id }
             });
             referenceDataState.deleteWindowController.setFeedback(referenceDataResult.msg || `${referenceDataModule.itemName}删除完成。`);
-            await referenceDataRefresh(true);
+            await referenceDataRefresh(true, referenceDataModule.key === "columns");
             referenceDataState.deleteWindowController.close();
             referenceDataState.pendingDelete = null;
         } catch (referenceDataError) {
@@ -849,11 +905,14 @@
 
     async function referenceDataToggle(referenceDataModule, referenceDataRecord) {
         const referenceDataNextStatus = Number(referenceDataRecord.status) === 1 ? 2 : 1;
+        referenceDataSetFeedback(`正在切换${referenceDataModule.itemName}状态…`);
         await referenceDataAjax.request({
             url: `${referenceDataModule.api}update.htm`, method: "POST",
-            data: { ...referenceDataRecord, status: referenceDataNextStatus }
+            // 状态操作只提交主键和目标状态，禁止把时间、审计等只读字段重新写回更新接口。
+            data: { id: referenceDataRecord.id, status: referenceDataNextStatus }
         });
-        await referenceDataRefresh(true);
+        await referenceDataRefresh(true, referenceDataModule.key === "columns");
+        referenceDataSetFeedback(`${referenceDataModule.itemName}状态已更新。`);
     }
 
     async function referenceDataOpenTableColumns(referenceDataRecord) {
@@ -908,6 +967,7 @@
             try {
                 await referenceDataToggle(referenceDataModule, referenceDataRecord);
             } catch (referenceDataError) {
+                referenceDataSetFeedback(referenceDataError.message || `${referenceDataModule.itemName}状态切换失败。`);
                 console.error("引用数据状态切换失败。", referenceDataError);
             }
         }
@@ -921,8 +981,7 @@
     async function referenceDataMountApplication() {
         const referenceDataWindowMessagesPromise = referenceDataAjax.json({ url: referenceDataWindowMessagesUrl });
         await referenceDataLoadNavigation();
-        await referenceDataEnsureModuleLoaded(referenceDataActiveModule());
-        await referenceDataLoadResolvedColumns(referenceDataActiveModule());
+        await referenceDataLoadModuleView(referenceDataActiveModule());
         const referenceDataWindowMessages = await referenceDataWindowMessagesPromise;
         const referenceDataPayload = referenceDataBuildPayload();
         referenceDataState.panelRoot = window.selPanel.create(referenceDataApplicationHost, {
@@ -969,27 +1028,6 @@
             const referenceDataDetail = referenceDataEvent.detail;
             if (!referenceDataDetail || referenceDataDetail.instanceKey !== referenceDataGridId) return;
             referenceDataHandleAction(referenceDataActiveModule(), referenceDataDetail.action, referenceDataDetail.record);
-        });
-        referenceDataState.panelRoot.addEventListener("click", async (referenceDataEvent) => {
-            const referenceDataTabButton = referenceDataEvent.target.closest("[data-reference-data-detail-tab]");
-            if (referenceDataTabButton) {
-                referenceDataSetTableDetailTab(referenceDataTabButton.dataset.referenceDataDetailTab);
-                return;
-            }
-            const referenceDataDetailAction = referenceDataEvent.target.closest("[data-reference-data-detail-action]")
-                ?.dataset.referenceDataDetailAction;
-            if (referenceDataDetailAction === "back") {
-                await referenceDataSwitchModule("tables");
-                return;
-            }
-            if (referenceDataDetailAction === "edit-table" && referenceDataState.selectedTable) {
-                referenceDataOpenEditor(referenceDataModules.tables, referenceDataState.selectedTable);
-                return;
-            }
-            if (referenceDataDetailAction === "add-column") {
-                referenceDataSetTableDetailTab("columns");
-                referenceDataOpenEditor(referenceDataModules.columns);
-            }
         });
         referenceDataState.panelRoot.addEventListener("selTree:select", async (referenceDataEvent) => {
             const referenceDataTreeId = String(referenceDataEvent.detail?.id || "");

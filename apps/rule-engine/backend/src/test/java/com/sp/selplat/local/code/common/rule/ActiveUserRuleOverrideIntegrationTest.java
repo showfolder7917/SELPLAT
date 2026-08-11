@@ -524,7 +524,10 @@ class ActiveUserRuleOverrideIntegrationTest {
             "default_table_definition_source = project_BaseDao_real_database_metadata"
         ));
         assertTrue(rule.content().contains(
-            "table_definition_resolution = reference_data_configuration_when_present_otherwise_project_metadata"
+            "table_definition_resolution = local_reference_data_provider_then_remote_resolve_http_then_real_field_names_silent"
+        ));
+        assertTrue(rule.content().contains(
+            "managed_application_private_pool_delivery_gate = central_registry_driven_source_scan"
         ));
         assertTrue(rule.content().contains(
             "business_service_interface_contract = inherit_standard_base_service_signatures_and_declare_real_extensions_only"

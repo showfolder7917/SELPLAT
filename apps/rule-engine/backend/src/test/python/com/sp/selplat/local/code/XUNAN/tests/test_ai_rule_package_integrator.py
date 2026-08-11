@@ -69,7 +69,8 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertEqual(result["active_user_overrides"], 17)
         self.assertEqual(result["active_user_rule_files"], 16)
         self.assertEqual(result["active_user_standard_asset_packages"], 1)
-        self.assertEqual(result["active_user_rules_with_program_references"], 6)
+        # 数据源规则复用源码门禁能力后，具备真实程序引用的用户规则同步增加为 7 条。
+        self.assertEqual(result["active_user_rules_with_program_references"], 7)
         self.assertEqual(result["decision_boundary"], "facts_only_ai_must_review_before_merge_or_delete")
 
     def test_write_report_is_limited_to_option(self) -> None:

@@ -2,18 +2,18 @@
 
 <!-- 本规则没有独立 Java 自动化入口，正确性由 common-db、业务应用与 Host 的真实数据库测试共同验证。 -->
 java_ability_refs = none
-<!-- 本规则不生成 Python 成品，因此不虚构 Python 能力。 -->
-python_ability_refs = none
+<!-- 受管应用私有连接池结构由当前用户快速源码门禁统一扫描。 -->
+python_ability_refs = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/selplat_source_ownership_guard.py
 <!-- 本规则不涉及 Node 执行代码。 -->
 node_ability_refs = none
-<!-- 1.7.0 统一 getGridColumn 的本地/远程配置优先、字段名静默降级和相同返回结构。 -->
-rule_version = 1.7.0
+<!-- 1.8.0 固定受管业务应用的具名 Hikari 私有连接池，并把无池数据源退化接入快速门禁。 -->
+rule_version = 1.8.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已进入当前用户索引并完成 Uniauth 首个接入验证。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自 Uniauth 多项目数据源继承修正。 -->
-upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖;2026-08-08:MDA与Uniauth号段DAO改按项目具名数据源注册并由公共发号器按真实seqCode唯一路由;2026-08-11:reference-data建立一行一列的数据库驱动页面表格头并由真实页面消费;2026-08-11:表格头坐标改为tableName_gridId_gridColumnId并补齐数据库字段_单元格渲染_图标_审计职责;2026-08-11:getGridColumn统一本地Provider_远程HTTP_字段名静默降级且返回同一列数组
+upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖;2026-08-08:MDA与Uniauth号段DAO改按项目具名数据源注册并由公共发号器按真实seqCode唯一路由;2026-08-11:reference-data建立一行一列的数据库驱动页面表格头并由真实页面消费;2026-08-11:表格头坐标改为tableName_gridId_gridColumnId并补齐数据库字段_单元格渲染_图标_审计职责;2026-08-11:getGridColumn统一本地Provider_远程HTTP_字段名静默降级且返回同一列数组;2026-08-11:受管业务应用统一具名Hikari私有池并由快速门禁阻断DriverManagerDataSource等逐次建连退化
 
 ## 公共 Base 边界
 
@@ -36,6 +36,21 @@ concrete_dao_inheritance = concrete_DAO_to_project_BaseDao_to_common_BaseDaoImpl
 project_context_qualifier_required = true
 <!-- 项目后续增加第二数据源时，必须为该数据源建立匹配的 Mapper 会话、BaseTemplateDao 和上下文。 -->
 additional_datasource_binding = DataSource_SqlSession_BaseTemplateDao_Context_must_match
+
+## 私有连接池门禁
+
+<!-- 中央登记的每个永久数据库应用必须用 ConfigurationProperties 绑定模块专属 HikariConfig，禁止各项目手工解释同一组池参数。 -->
+managed_application_private_pool_configuration = qualified_HikariConfig_with_project_datasource_prefix
+<!-- 私有数据源 Bean 必须返回 HikariDataSource、声明 destroyMethod=close 并保持模块限定名，Host 停止时才能释放连接与文件锁。 -->
+managed_application_private_pool_lifecycle = qualified_HikariDataSource_with_destroyMethod_close
+<!-- DriverManagerDataSource、SimpleDriverDataSource、直接 DriverManager 建连和未指定类型的 DataSourceBuilder 在受管业务应用正式源码中一律阻断。 -->
+managed_application_unpooled_datasource_policy = forbidden_in_production_source
+<!-- 模块属性至少必须声明 jdbc-url、pool-name、driver-class-name、minimum-idle 和 maximum-pool-size，账号密码继续遵守中央数据库门禁。 -->
+managed_application_private_pool_required_properties = jdbc-url,pool-name,driver-class-name,minimum-idle,maximum-pool-size
+<!-- 隔离持久层测试必须断言实际返回 HikariDataSource、池名和关闭后重开不丢数据，禁止只检查 SQL 能执行。 -->
+managed_application_private_pool_test_contract = datasource_type,pool_name,close_and_reopen_persistence
+<!-- 快速门禁扫描当前及未来所有中央登记应用；发现无池实现、缺 Hikari 配置或缺基础池参数时必须以非零状态阻断。 -->
+managed_application_private_pool_delivery_gate = central_registry_driven_source_scan
 
 ## 公共 Base Service 边界
 

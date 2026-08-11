@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS ReferenceDataType (
     CONSTRAINT ck_reference_data_type_status CHECK (status IN (0, 1, 2))
 );
 
+-- 兼容早期正式库：审计字段在现有业务数据上以平台默认租户和操作员补齐，不删除或重建旧表。
+ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS tenantId BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS lastOperateUserId BIGINT NOT NULL DEFAULT 1;
+
 -- 兼容旧数据库：旧版本 dataShape 只保存展示值且从未控制查询能力，升级时安全移除该约束和字段。
 ALTER TABLE ReferenceDataType DROP CONSTRAINT IF EXISTS ck_reference_data_type_shape;
 ALTER TABLE ReferenceDataType DROP COLUMN IF EXISTS dataShape;

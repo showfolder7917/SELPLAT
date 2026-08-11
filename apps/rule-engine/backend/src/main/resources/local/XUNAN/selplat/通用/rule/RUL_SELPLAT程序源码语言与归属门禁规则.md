@@ -2,8 +2,8 @@
 
 <!-- 本规则覆盖 SELPLAT 的 apps、shared 和 rule-engine 全部正式程序源码。 -->
 rule_scope = active_user_selplat_all_program_source_ownership
-<!-- 3.5.0 将公共控件中央登记、应用私造交互和生成模板依赖检查接入同一快速静态门禁。 -->
-rule_version = 3.6.0
+<!-- 3.7.0 在既有源码归属检查上增加中央登记业务应用的具名 Hikari 私有连接池门禁。 -->
+rule_version = 3.7.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示生产扫描能力、索引和测试已经形成闭环。 -->
@@ -17,7 +17,7 @@ python_ability_refs = apps/rule-engine/backend/src/main/python/com/sp/selplat/lo
 <!-- 当前规则不新增 Node 专用能力。 -->
 node_ability_refs = none
 <!-- 本规则来自 Japanese 应用误建未参与构建的 src/main/python 后的全工程防复发修正。 -->
-upgrade_record = 2026-08-09:建立SELPLAT全部程序的语言白名单_源码归属预检_用户能力分层_实验工具隔离_字节码缓存定向_公共HTTP请求输出协议复用_无调用方表Domain禁止生成_受管工程技术层优先包结构和交付扫描门禁;2026-08-10:纠正受管数据库应用为业务目录优先_禁止顶层技术目录拆散同一表业务_common仅承载跨业务能力;2026-08-10:增加受管数据库应用common职责白名单和一业务一Service配对门禁_规则只检查抽象职责与真实结构不写死Japanese或具体能力名;2026-08-10:非生成数据库应用必须显式登记受管身份并扫描backend正式Java_避免contract误判和未授权工程被隐式纳管;2026-08-10:common_persistence只保留项目BaseDao和PersistenceConfiguration_限定名基础设施Bean替代数据库上下文包装类;2026-08-10:树_下拉_右键菜单按HTTP表示拆分Controller并共享同一业务Service;2026-08-10:受管数据库应用common外一级目录与真实schema表双向对应_表业务只允许controller_service_dao_common_util只供Service调用;2026-08-10:严格数据库应用固定db根文件_每张业务表对应CommonSequenceSegment唯一号段_业务主键禁止identity并支持多进程乐观锁抢号;2026-08-10:严格本地数据库模块属性默认账号密码固定sa和123456_正式空密码阻断;2026-08-10:严格数据库应用contract必须存在外部生产Java调用方_内部返回结构统一使用CommonResult和Map_List;2026-08-10:应用manifest必须显式登记真实src_main读取程序_禁止只保存身份和未来路由的无调用方目录;2026-08-10:数据库应用身份迁移到当前用户rule_engine中央登记_删除业务工程内可自删绕过的隐藏受管文件_MDA原子维护登记;2026-08-10:中央登记数据库应用根只允许真实工程组成_禁止contract_manifest_registry_temp和未来预留目录;2026-08-10:数据库应用禁止嵌套gitignore_H2运行文件统一由SELPLAT根排除;2026-08-10:增加数据库重建SQL静态门禁_阻断非幂等建表索引_破坏式刷新和覆盖式种子;2026-08-10:根Git规则必须放行apps正式mvdb_继续阻断trace_lock_temp;2026-08-10:禁止根mvdb通配忽略_确保编辑器显示所有正式数据库;2026-08-10:嵌套gitignore扫描扩展到全部apps_shared_关闭未中央登记模块绕过;2026-08-10:建立selplatQuickGate_selplatSpecialGate_selplatFullGate三级Gradle入口_根check统一执行全量门禁;2026-08-10:专项门禁从Gradle叶子项目动态发现apps_backend_未来项目加入settings后自动映射自身test;2026-08-10:MDA标准业务表默认字段进入快速静态门禁_阻断缺失中日英标签或回退name的生成模板;2026-08-11:公共控件中央登记_应用私造body门户和sel全局API阻断_生成模板硬依赖顺序检查
+upgrade_record = 2026-08-09:建立SELPLAT全部程序的语言白名单_源码归属预检_用户能力分层_实验工具隔离_字节码缓存定向_公共HTTP请求输出协议复用_无调用方表Domain禁止生成_受管工程技术层优先包结构和交付扫描门禁;2026-08-10:纠正受管数据库应用为业务目录优先_禁止顶层技术目录拆散同一表业务_common仅承载跨业务能力;2026-08-10:增加受管数据库应用common职责白名单和一业务一Service配对门禁_规则只检查抽象职责与真实结构不写死Japanese或具体能力名;2026-08-10:非生成数据库应用必须显式登记受管身份并扫描backend正式Java_避免contract误判和未授权工程被隐式纳管;2026-08-10:common_persistence只保留项目BaseDao和PersistenceConfiguration_限定名基础设施Bean替代数据库上下文包装类;2026-08-10:树_下拉_右键菜单按HTTP表示拆分Controller并共享同一业务Service;2026-08-10:受管数据库应用common外一级目录与真实schema表双向对应_表业务只允许controller_service_dao_common_util只供Service调用;2026-08-10:严格数据库应用固定db根文件_每张业务表对应CommonSequenceSegment唯一号段_业务主键禁止identity并支持多进程乐观锁抢号;2026-08-10:严格本地数据库模块属性默认账号密码固定sa和123456_正式空密码阻断;2026-08-10:严格数据库应用contract必须存在外部生产Java调用方_内部返回结构统一使用CommonResult和Map_List;2026-08-10:应用manifest必须显式登记真实src_main读取程序_禁止只保存身份和未来路由的无调用方目录;2026-08-10:数据库应用身份迁移到当前用户rule_engine中央登记_删除业务工程内可自删绕过的隐藏受管文件_MDA原子维护登记;2026-08-10:中央登记数据库应用根只允许真实工程组成_禁止contract_manifest_registry_temp和未来预留目录;2026-08-10:数据库应用禁止嵌套gitignore_H2运行文件统一由SELPLAT根排除;2026-08-10:增加数据库重建SQL静态门禁_阻断非幂等建表索引_破坏式刷新和覆盖式种子;2026-08-10:根Git规则必须放行apps正式mvdb_继续阻断trace_lock_temp;2026-08-10:禁止根mvdb通配忽略_确保编辑器显示所有正式数据库;2026-08-10:嵌套gitignore扫描扩展到全部apps_shared_关闭未中央登记模块绕过;2026-08-10:建立selplatQuickGate_selplatSpecialGate_selplatFullGate三级Gradle入口_根check统一执行全量门禁;2026-08-10:专项门禁从Gradle叶子项目动态发现apps_backend_未来项目加入settings后自动映射自身test;2026-08-10:MDA标准业务表默认字段进入快速静态门禁_阻断缺失中日英标签或回退name的生成模板;2026-08-11:公共控件中央登记_应用私造body门户和sel全局API阻断_生成模板硬依赖顺序检查;2026-08-11:中央登记应用增加具名Hikari私有池和无池数据源退化检查
 
 ## 创建前分类
 

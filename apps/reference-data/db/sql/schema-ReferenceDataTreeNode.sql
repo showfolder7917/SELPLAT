@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTreeNode (
     CONSTRAINT ck_reference_data_tree_node_status CHECK (status IN (0, 1, 2))
 );
 
+-- 兼容早期正式库：只补充缺失审计字段，旧树节点主键、层级和标签保持不变。
+ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS tenantId BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS lastOperateUserId BIGINT NOT NULL DEFAULT 1;
+
 -- 管理接口需要在数据库连接关闭后序列化扩展属性；统一使用足够大的 VARCHAR，避免驱动返回已关闭的 JdbcClob。
 ALTER TABLE IF EXISTS ReferenceDataTreeNode ALTER COLUMN attributesJson VARCHAR(10000);
 

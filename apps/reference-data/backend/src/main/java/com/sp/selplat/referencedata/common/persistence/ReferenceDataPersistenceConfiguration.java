@@ -6,17 +6,18 @@ import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.common.db.template.BaseTemplateMapper;
 import com.sp.selplat.common.exception.CommonSystemException;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -28,7 +29,7 @@ import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
  * 创建 reference-data 自己的永久文件数据库并执行可重复初始化脚本。
  * 数据源使用模块限定名且不标记为 Primary，避免改变 Host 中其他应用的数据源选择。
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @PropertySource("classpath:reference-data-module.properties")
 public class ReferenceDataPersistenceConfiguration {
 
@@ -60,35 +61,47 @@ public class ReferenceDataPersistenceConfiguration {
     };
 
     /**
-     * 创建并初始化 reference-data 独立数据源。
+     * 把模块资源中的私有数据库参数绑定到 Hikari 官方配置对象。
      *
-     * @param configuredUrl 测试或部署环境显式提供的 JDBC URL；空值时定位工程内永久文件库
-     * @param username 数据库用户名，例如 {@code "sa"}
-     * @param password 数据库密码，本地默认 {@code "123456"}
-     * @return 可注入 DAO 的模块私有数据源，例如 JDBC URL 指向
-     *     {@code apps/reference-data/db/reference-data}
-     * @throws CommonSystemException 当工程根、目录或数据库脚本无法初始化时抛出，例如
+     * @return Reference Data 连接池参数，例如
+     *     {@code {"poolName":"ReferenceDataPool","maximumPoolSize":4}}
+     * 异常或副作用示例：该方法只创建未启动的配置对象，不打开数据库连接。
+     */
+    @Bean("referenceDataHikariConfig")
+    @ConfigurationProperties(prefix = "reference-data.datasource")
+    public HikariConfig referenceDataHikariConfig() {
+        // 模块 properties → Hikari 标准参数；连接池的创建和关闭仍由下一个具名 Bean 管理。
+        return new HikariConfig();
+    }
+
+    /**
+     * 创建并初始化 reference-data 独立 Hikari 连接池。
+     *
+     * @param config 模块资源或隔离测试绑定的 Hikari 参数，例如
+     *     {@code {"jdbcUrl":"jdbc:h2:mem:reference_data_test","poolName":"ReferenceDataTestPool"}}
+     * @return 可注入 DAO 的模块私有连接池；本地默认指向
+     *     {@code apps/reference-data/db/reference-data.mv.db}
+     * @throws CommonSystemException 当工程根、目录、连接池或数据库脚本无法初始化时抛出，例如
      *     {@code CommonSystemException("REFERENCE_DATA_DATABASE_INITIALIZATION_FAILED", "引用数据数据库初始化失败。", cause)}
      */
-    @Bean("referenceDataDataSource")
-    public DataSource referenceDataDataSource(
-            @Value("${reference-data.datasource.url:}") String configuredUrl,
-            @Value("${reference-data.datasource.username:sa}") String username,
-            @Value("${reference-data.datasource.password:123456}") String password) {
+    @Bean(name = "referenceDataDataSource", destroyMethod = "close")
+    public HikariDataSource referenceDataDataSource(
+            @Qualifier("referenceDataHikariConfig") HikariConfig config) {
+        HikariDataSource dataSource = null;
         try {
-            // 测试显式 URL 或工程永久路径 → reference-data 独立 H2 连接地址。
-            String databaseUrl = resolveDatabaseUrl(configuredUrl);
-            // 独立数据源只保存在本模块上下文对象内部，不参与 Host 主数据源候选。
-            DriverManagerDataSource dataSource = new DriverManagerDataSource();
-            dataSource.setDriverClassName("org.h2.Driver");
-            dataSource.setUrl(databaseUrl);
-            dataSource.setUsername(username);
-            dataSource.setPassword(password);
+            // 测试显式 URL 或工程永久路径 → 连接池唯一 JDBC 地址。
+            config.setJdbcUrl(resolveDatabaseUrl(config.getJdbcUrl()));
+            // HikariConfig → 模块私有连接池；具名 Bean 保证 Host 不按类型误选其他项目数据源。
+            dataSource = new HikariDataSource(config);
             // 固定 SQL 清单依次执行 → 创建缺失结构并幂等补充表格定义演示数据与六表号段。
             initializeDatabase(dataSource);
-            // 返回带限定名的模块私有数据源，不参与 Host 主数据源候选。
+            // 初始化完成的连接池 → DAO、号段和 BaseDataSourceContext 共用同一数据库。
             return dataSource;
         } catch (RuntimeException exception) {
+            // 初始化中途失败 → 先关闭已经启动的池，避免 Host 重试时残留连接与文件锁。
+            if (dataSource != null) {
+                dataSource.close();
+            }
             // 路径、驱动或 SQL 初始化失败 → 保留技术原因并输出稳定系统异常。
             throw new CommonSystemException(
                     "REFERENCE_DATA_DATABASE_INITIALIZATION_FAILED",
@@ -170,7 +183,7 @@ public class ReferenceDataPersistenceConfiguration {
         // 不附加 .mv.db 扩展名，由 H2 按文件数据库约定生成实际数据文件。
         Path databaseFile = databaseDirectory.resolve("reference-data").toAbsolutePath().normalize();
         return "jdbc:h2:file:" + databaseFile
-                + ";MODE=MySQL;AUTO_SERVER=TRUE;DATABASE_TO_UPPER=false";
+                + ";MODE=MySQL;DATABASE_TO_UPPER=false";
     }
 
     /**
