@@ -2,10 +2,10 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 2.0.0 增加统一管理员页面编辑会话、控件登记和显式保存边界。 -->
-rule_version = 2.0.0
-<!-- 2026-08-12 依次固定纯图标可发现性、确认控件边界、真实风险文案和页面编辑公共契约。 -->
-upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存
+<!-- 2.1.0 增加 hidden 布局优先级、树叶子占位语义、窄屏动作收起和页面编辑显式保存兜底。 -->
+rule_version = 2.1.0
+<!-- 2026-08-12 依次固定纯图标可发现性、确认控件边界、真实风险文案、页面编辑契约及客户交付审计发现的通用布局与可访问性要求。 -->
+upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存;2026-08-12:hidden控件必须退出布局_树叶子占位禁止空按钮_窄屏动作先收起文字_显式保存无脏标记也保存当前控件
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -42,6 +42,15 @@ selplat_application_component_boundary = host_data_action_callback_only,no_priva
 selplat_component_owned_interaction_gate = registered_owned_aria_role_single_owner,no_application_reimplementation
 <!-- 本轮启用新公共控件后直接删除旧私有 DOM、样式、定位和事件链，不保留兼容选择或降级分支。 -->
 selplat_component_legacy_replacement_policy = enable_registered_component,delete_private_legacy_implementation,no_compatibility_branch
+
+## 通用布局与可访问语义
+
+<!-- 控件根声明原生 hidden 后必须完全退出布局；公共 display 规则不得覆盖浏览器隐藏语义，避免备用实例制造空白页和错误滚动。 -->
+selplat_native_hidden_layout_contract = hidden_root_display_none,public_display_rule_must_not_override_hidden,no_inactive_instance_layout_space
+<!-- 树的父节点展开符号使用具名按钮，叶子只使用 aria-hidden 的非交互对齐占位，禁止无名称 button 污染键盘和辅助技术控件树。 -->
+selplat_tree_toggle_semantics = parent_named_button,leaf_noninteractive_aria_hidden_placeholder,no_unnamed_leaf_button
+<!-- 常见窄屏下标题、状态和快捷动作不得重叠；动作文字空间不足时先收为保留可访问名称与提示的图标按钮。 -->
+selplat_panel_compact_header_contract = no_title_status_action_overlap,compact_icon_actions_before_overlap,preserve_accessible_name_and_tip
 
 ## API、主题与依赖
 
@@ -138,6 +147,8 @@ selplat_page_editor_owner = selPersonalization,application_registers_root_title_
 selplat_page_editor_authorization = backend_capability_controls_visibility,service_isAdmin_rechecks_every_save,no_frontend_only_authorization
 <!-- 页面编辑使用预览与编辑左右双态；进入编辑建立基线，变更实时预览并标记脏状态，取消恢复基线，保存成功才进入新基线。 -->
 selplat_page_editor_session_lifecycle = preview_edit_segmented_mode,capture_baseline,live_draft,dirty_indicator,cancel_restore,explicit_save_then_new_baseline
+<!-- 用户明确点击保存时必须至少更新当前选中控件；即使拖拽发生在进入编辑模式之前、当前没有脏标记，也不得以“无更改”跳过持久化。 -->
+selplat_page_editor_explicit_save_fallback = save_dirty_controls_or_current_selected_control,capture_current_state_when_not_dirty,no_skip_after_pre_edit_drag
 <!-- 编辑模式打开后才在已登记控件旁显示统一编辑入口；预览模式必须移除角标和编辑轮廓，保持业务页面干净。 -->
 selplat_page_editor_affordance_visibility = registered_control_badge_in_edit_mode_only,preview_mode_clean
 <!-- 每个控件必须直观显示足以定位其真实配置记录的稳定坐标；表格使用 tableName+gridId，具体列持久化再增加 gridColumnId。 -->
@@ -166,7 +177,9 @@ selplat_grid_multi_value_type_gate = normalize_scalar_and_array,toolbar_membersh
 <!-- 动态模块调用方回归必须覆盖字段契约切换、旧筛选清理和窗口选择默认项复位。 -->
 selplat_runtime_contract_and_form_default_verification = grid_module_contract_switch,filter_reset,window_select_default_after_reset
 <!-- 页面编辑公共回归必须覆盖非管理员隐藏、管理员后台二次校验、坐标可见、拖拽终值事件、取消恢复、批量保存和重新读取宽度。 -->
-selplat_page_editor_verification = non_admin_hidden,admin_service_recheck,visible_coordinates,terminal_resize_event,cancel_restore,batch_save,reload_persisted_width
+selplat_page_editor_verification = non_admin_hidden,admin_service_recheck,visible_coordinates,terminal_resize_event,cancel_restore,batch_save,explicit_save_current_control_without_dirty_marker,reload_persisted_width
+<!-- 公共控件交付回归同时检查 hidden 退出布局、树叶子非交互占位和 1380 宽度内标题动作不相撞。 -->
+selplat_layout_and_accessibility_verification = hidden_panel_display_none,tree_leaf_no_unnamed_button,compact_header_action_labels_collapsed_before_overlap
 <!-- 应用装配回归必须断言所有显式 SEL 实例 ID 符合统一命名，并阻断 Managent 等错误英文拼写。 -->
 selplat_component_instance_id_verification = all_explicit_sel_instance_ids_match_naming,zero_known_business_spelling_errors
 <!-- 控件迁移至少验证旧选择器清零、新公共 API 调用、应用装配测试和真实浏览器交互与控制台。 -->

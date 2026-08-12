@@ -534,9 +534,10 @@
         if (!mdaSplitController) throw new Error("MDA SQL 分隔面板挂载失败。");
         const mdaEditorController = window.selCodeEditor.mount(mdaSplitController.start, {
             id: mdaSession.editorId, language: "sql", label: "SQL 查询", icon: "ri-terminal-box-line",
-            value: mdaSession.sql, placeholder: "SELECT * FROM table_name", statusText: "",
+            value: mdaSession.sql, placeholder: "选中需要执行的 SQL，再点击执行或按 Ctrl/⌘ + Enter", statusText: "",
+            shortcutLabel: "选中 SQL 后按 Ctrl/⌘ + Enter 执行",
             actions: Object.freeze([
-                Object.freeze({ id: "execute", label: "执行", icon: "ri-play-fill", primary: true })
+                Object.freeze({ id: "execute", label: "执行选中 SQL", icon: "ri-play-fill", primary: true })
             ])
         });
         const mdaGridRoot = window.selGrid.create(mdaSplitController.end, { gridId: mdaSession.gridId, entity: "MdaQueryResult", ariaLabel: `${mdaSession.label} 查询结果` });

@@ -128,6 +128,9 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(jsonPath("$.applications[0].url").value("/mda/mda.html"))
                 .andExpect(jsonPath("$.applications[1].url").value("/reference-data/reference-data.html"))
                 .andExpect(jsonPath("$.applications[2].url").value("/uniauth/uniauth.html"))
+                .andExpect(jsonPath("$.applications[2].visible").value(false))
+                .andExpect(jsonPath("$.applications[2].enabled").value(false))
+                .andExpect(jsonPath("$.applications[2].releaseStatus").value("internal-remediation"))
                 .andExpect(jsonPath("$.applications[3].name").value("N2 红蓝宝书1000题"))
                 .andExpect(jsonPath("$.applications[3].url").value("/japanese/japanese.html"));
         // 桌面同源白名单必须包含 Japanese，否则图标虽显示但会被渲染成禁用入口。

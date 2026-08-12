@@ -30,6 +30,11 @@
     gap: var(--selpanel-layout-gap);
 }
 
+/* 原生 hidden 必须优先于面板 flex 布局，避免未激活实例仍占据页面高度。 */
+.selpanel-shell[hidden] {
+    display: none;
+}
+
 /* 水晶表面：所有区域复用同一真实边框素材，确保闪光边角和表格视觉一致。 */
 .selpanel-crystal-surface {
     position: relative;
@@ -566,7 +571,12 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
     }
 
     .selpanel-action-button {
-        padding: 0 13px;
+        width: 43px;
+        padding: 0;
+    }
+
+    .selpanel-header-actions span {
+        display: none;
     }
 }
 
@@ -575,14 +585,6 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
         min-width: 1060px;
     }
 
-    .selpanel-header-actions span {
-        display: none;
-    }
-
-    .selpanel-action-button {
-        width: 43px;
-        padding: 0;
-    }
 }
 
 @media (prefers-reduced-motion: reduce) {

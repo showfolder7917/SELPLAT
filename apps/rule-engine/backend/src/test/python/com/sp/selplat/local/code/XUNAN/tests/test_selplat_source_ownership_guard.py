@@ -357,6 +357,14 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         self.assertNotIn("seltree-context-menu", tree_script)
         self.assertNotIn("seltree-context-menu", tree_style)
 
+    def test_tree_leaf_alignment_placeholder_is_not_an_unnamed_button(self) -> None:
+        """叶子节点对齐占位必须是非交互元素，不能进入按钮可访问树。"""
+        tree_script = (PROJECT_ROOT / "shared/frontend/sel-ui/src/components/tree/selTree.js") \
+            .read_text(encoding="utf-8")
+
+        self.assertIn('document.createElement(hasChildren ? "button" : "span")', tree_script)
+        self.assertIn('toggle.setAttribute("aria-hidden", "true")', tree_script)
+
     def test_grid_icon_action_without_unified_tooltip_blocks_delivery(self) -> None:
         """Grid 纯图标记录操作缺少 always Tip 或可访问名称时必须阻断交付。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
@@ -433,6 +441,15 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             "SEL_UI_GRID_PAGE_EDITOR_ADAPTER_MISSING",
             {violation["code"] for violation in violations},
         )
+
+    def test_panel_respects_hidden_and_compacts_actions_before_title_overlap(self) -> None:
+        """隐藏面板不得占位，常见窄屏宽度必须先收起动作文字再允许标题相撞。"""
+        panel_style = (PROJECT_ROOT / "shared/frontend/sel-ui/src/components/panel/selPanel.css") \
+            .read_text(encoding="utf-8")
+
+        self.assertIn(".selpanel-shell[hidden]", panel_style)
+        self.assertIn("@media (max-width: 1380px)", panel_style)
+        self.assertIn(".selpanel-header-actions span", panel_style)
 
     def test_legacy_typography_token_blocks_delivery(self) -> None:
         """新增样式重新引用 primary 或 secondary 时必须由统一门禁阻断。"""

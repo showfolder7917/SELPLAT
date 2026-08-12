@@ -488,6 +488,8 @@
                 selPanelActionButton.className = `selpanel-action-button${selPanelAction.primary ? " selpanel-action-primary" : ""}`;
                 selPanelActionButton.type = "button";
                 selPanelActionButton.dataset.panelCommand = selPanelAction.id;
+                selPanelActionButton.setAttribute("aria-label", selPanelAction.label);
+                selPanelActionButton.title = selPanelAction.label;
                 const selPanelActionIcon = document.createElement("i");
                 selPanelActionIcon.className = selPanelAction.icon;
                 selPanelActionIcon.setAttribute("aria-hidden", "true");

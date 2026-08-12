@@ -135,19 +135,20 @@
                 row.dataset.treeTypographyRole = typographyRole;
                 const hasChildren = Array.isArray(item.children) && item.children.length > 0;
 
-                // 展开按钮为叶子节点保留对齐占位，为父节点同步真实展开状态。
-                const toggle = document.createElement("button");
+                // 父节点使用真实展开按钮；叶子节点只保留非交互对齐占位，避免无名称空按钮进入可访问树。
+                const toggle = document.createElement(hasChildren ? "button" : "span");
                 toggle.className = `seltree-node-toggle${hasChildren ? "" : " seltree-node-toggle-empty"}`;
-                toggle.type = "button";
-                toggle.dataset.treeAction = "toggle";
-                toggle.dataset.treeId = item.id;
-                toggle.tabIndex = hasChildren ? 0 : -1;
                 if (hasChildren) {
+                    toggle.type = "button";
+                    toggle.dataset.treeAction = "toggle";
+                    toggle.dataset.treeId = item.id;
                     const expanded = state.expandedIds.has(item.id);
                     toggle.setAttribute("aria-expanded", String(expanded));
                     // 节点名称注入本地化模板，日文和英文可采用与中文不同的语序。
                     toggle.setAttribute("aria-label", (expanded ? messages.collapseTemplate : messages.expandTemplate)
                         .replaceAll("{label}", item.label));
+                } else {
+                    toggle.setAttribute("aria-hidden", "true");
                 }
                 toggle.appendChild(createIcon("ri-arrow-right-s-line"));
 

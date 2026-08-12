@@ -423,6 +423,27 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                         "message": f"selGrid record icon action is missing {missing_contract}",
                     })
 
+    # 树的叶子对齐符号必须是非交互占位，不能用无可访问名称的空按钮伪装。
+    if "selTree" in component_entries:
+        tree_entry = component_entries["selTree"]
+        tree_directory = component_root / tree_entry["directory"]
+        tree_source = "\n".join(
+            (tree_directory / script).read_text(encoding="utf-8")
+            for script in tree_entry.get("scripts", [])
+            if (tree_directory / script).is_file()
+        )
+        tree_leaf_required = {
+            'document.createElement(hasChildren ? "button" : "span")',
+            'toggle.setAttribute("aria-hidden", "true")',
+        }
+        for missing_contract in sorted(tree_leaf_required - {
+                contract for contract in tree_leaf_required if contract in tree_source}):
+            violations.append({
+                "code": "SEL_UI_TREE_LEAF_PLACEHOLDER_SEMANTICS_MISSING",
+                "path": str(tree_directory.relative_to(project_root)),
+                "message": f"selTree leaf alignment placeholder is missing {missing_contract}",
+            })
+
     # 页面编辑必须由 selPersonalization 统一管理，并与 selGrid 的终值事件和宽度快照契约成对存在。
     personalization_entry = component_entries.get("selPersonalization")
     grid_entry = component_entries.get("selGrid")
@@ -452,6 +473,8 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
             "cancelPage: selPersonalizationCancelPageEditing",
             'data-sel-personal-page-mode="preview"',
             'data-sel-personal-page-mode="edit"',
+            "selPersonalizationSelectedControl",
+            "selPersonalizationPageControl.captureState()",
         }
         for missing_contract in sorted(page_editor_required - {
                 contract for contract in page_editor_required
@@ -512,6 +535,7 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
         panel_style_required = {
             "selpanel-toolbar-column-resizer", "cursor: col-resize",
             "touch-action: none", "selpanel-toolbar-column-resizing",
+            ".selpanel-shell[hidden]", ".selpanel-header-actions span",
         }
         for missing_contract in sorted(panel_required - {
                 contract for contract in panel_required if contract in panel_source}):

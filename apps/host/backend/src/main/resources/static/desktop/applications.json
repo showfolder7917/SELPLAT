@@ -39,8 +39,10 @@
       "url": "/uniauth/uniauth.html",
       "openMode": "new-tab",
       "permissionCode": "uniauth:access",
-      "visible": true,
-      "enabled": true,
+      "visible": false,
+      "enabled": false,
+      "releaseStatus": "internal-remediation",
+      "releaseReason": "当前静态页面仍为未接后台的项目管理演示，完成真实用户与租户数据接入后再恢复客户入口。",
       "sortnum": 30
     },
     {

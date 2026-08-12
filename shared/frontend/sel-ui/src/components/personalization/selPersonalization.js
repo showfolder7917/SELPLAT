@@ -765,20 +765,25 @@
             selPersonalizationRenderPageControls();
         }
 
-        /** 保存全部已修改控件，并在成功后重新建立数据库已接受的页面基线。 */
+        /** 保存全部已修改控件；没有脏标记时也显式保存当前控件，覆盖先拖动后开启页面编辑的操作顺序。 */
         async function selPersonalizationSavePageEditing() {
             if (selPersonalizationPageSaving) return false;
             const selPersonalizationDirtyControls = Array.from(selPersonalizationPageControls.values())
                 .filter((selPersonalizationPageControl) => selPersonalizationPageControl.dirty);
-            if (selPersonalizationDirtyControls.length === 0) {
-                window.selBaseRuntime?.toast?.("当前页面没有需要保存的更改。", "info");
-                return true;
-            }
+            const selPersonalizationSelectedControl = selPersonalizationPageControls.get(selPersonalizationSelectedPageControlId)
+                || selPersonalizationPageControls.values().next().value;
+            const selPersonalizationSaveControls = selPersonalizationDirtyControls.length > 0
+                ? selPersonalizationDirtyControls
+                : (selPersonalizationSelectedControl ? [selPersonalizationSelectedControl] : []);
+            if (selPersonalizationSaveControls.length === 0) return false;
             selPersonalizationPageSaving = true;
             if (selPersonalizationPageActions) selPersonalizationPageActions.querySelectorAll("button").forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = true; });
             try {
-                for (const selPersonalizationPageControl of selPersonalizationDirtyControls) {
-                    await selPersonalizationPageControl.saveState(selPersonalizationClonePageState(selPersonalizationPageControl.draft));
+                for (const selPersonalizationPageControl of selPersonalizationSaveControls) {
+                    const selPersonalizationStateToSave = selPersonalizationPageControl.dirty
+                        ? selPersonalizationPageControl.draft
+                        : selPersonalizationPageControl.captureState();
+                    await selPersonalizationPageControl.saveState(selPersonalizationClonePageState(selPersonalizationStateToSave));
                     selPersonalizationPageControl.baseline = selPersonalizationClonePageState(selPersonalizationPageControl.captureState());
                     selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
                     selPersonalizationPageControl.dirty = false;

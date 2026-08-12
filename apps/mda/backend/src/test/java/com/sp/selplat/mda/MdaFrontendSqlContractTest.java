@@ -49,6 +49,8 @@ class MdaFrontendSqlContractTest {
                 .getContentAsString(StandardCharsets.UTF_8);
         assertThat(script)
                 .contains("const mdaSelectedSql = String(mdaEvent.detail.selectedValue || mdaEditorController.getSelectedValue() || \"\").trim()")
+                .contains("label: \"执行选中 SQL\"")
+                .contains("shortcutLabel: \"选中 SQL 后按 Ctrl/⌘ + Enter 执行\"")
                 .contains("mdaBase.toast(\"请先选中需要执行的 SQL。\", \"warning\")")
                 .contains("const mdaSqlToExecute = mdaSelectedSql")
                 .contains("await mdaExecuteSql(mdaSession, mdaSqlToExecute)")
