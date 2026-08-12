@@ -1,12 +1,23 @@
 plugins {
     // backend 对 host 暴露模块配置、六个表业务和不落库导航能力，因此保持标准 Java library 依赖语义。
     id 'java-library'
+    // 真实执行测试必须生成 JaCoCo 报告并进入 reference-data 的 check 门禁。
+    id 'jacoco'
 }
 
 // 独立模块坐标用于区分 host/backend、uniauth/backend 等同名 Gradle 子项目。
 group = 'com.sp.selplat.referencedata'
 
 dependencies {
+    // JaCoCo Agent 使用标准坐标，并由工程根 flatDir 命中精确的 0.8.13 离线 jar。
+    jacocoAgent "org.jacoco:org.jacoco.agent:${jacocoVersion}"
+    // JaCoCo 报告工具链显式声明完整离线闭包，避免 flatDir 无 POM 时丢失传递依赖。
+    jacocoAnt "org.jacoco:org.jacoco.ant:${jacocoVersion}"
+    jacocoAnt "org.jacoco:org.jacoco.core:${jacocoVersion}"
+    jacocoAnt "org.jacoco:org.jacoco.report:${jacocoVersion}"
+    jacocoAnt "org.ow2.asm:asm:${asmVersion}"
+    jacocoAnt "org.ow2.asm:asm-commons:${asmVersion}"
+    jacocoAnt "org.ow2.asm:asm-tree:${asmVersion}"
     // 公共结果、JSON 工具和自定义异常用于固定 API 成功与失败契约。
     implementation project(':shared:backend:common-core')
     // 公共数据库与服务层提供 CommonSequenceSegment DAO 和多进程安全号段生成器。
@@ -38,4 +49,90 @@ tasks.named('classes') {
     dependsOn ':shared:backend:common-db:jar'
     dependsOn ':shared:backend:common-service:jar'
     dependsOn ':shared:backend:common-web:jar'
+}
+
+jacoco {
+    // 版本统一从根 gradle.properties 读取，避免模块与平台工具链发生漂移。
+    toolVersion = jacocoVersion
+}
+
+tasks.named('test') {
+    // 测试完成后始终生成覆盖率报告，确保报告对应本次真实执行结果。
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+tasks.named('jacocoTestReport') {
+    // 报告只允许读取本轮测试产生的执行数据。
+    dependsOn tasks.named('test')
+    reports {
+        // XML 报告供自动门禁与后续集成工具读取。
+        xml.required = true
+        // HTML 报告供人工逐类核对覆盖缺口。
+        html.required = true
+        // 当前工程不消费 CSV，避免产生无归属的重复报告。
+        csv.required = false
+    }
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    // 覆盖门禁必须建立在同一次真实数据库测试结果上。
+    dependsOn tasks.named('test')
+    violationRules {
+        rule {
+            // 当前全部 Controller、ServiceImpl 与 DaoImpl 逐类要求行覆盖 100%。
+            element = 'CLASS'
+            includes = [
+                'com.sp.selplat.referencedata.capability.workbenchnavigation.controller.ReferenceDataWorkbenchNavigationController',
+                'com.sp.selplat.referencedata.capability.workbenchnavigation.service.impl.ReferenceDataWorkbenchNavigationServiceImpl',
+                'com.sp.selplat.referencedata.referencedatacontextmenuitem.controller.ReferenceDataContextMenuItemController',
+                'com.sp.selplat.referencedata.referencedatacontextmenuitem.dao.ReferenceDataContextMenuItemDaoImpl',
+                'com.sp.selplat.referencedata.referencedatacontextmenuitem.service.impl.ReferenceDataContextMenuItemServiceImpl',
+                'com.sp.selplat.referencedata.referencedataoption.controller.ReferenceDataOptionController',
+                'com.sp.selplat.referencedata.referencedataoption.dao.ReferenceDataOptionDaoImpl',
+                'com.sp.selplat.referencedata.referencedataoption.service.impl.ReferenceDataOptionServiceImpl',
+                'com.sp.selplat.referencedata.referencedatatable.controller.ReferenceDataTableController',
+                'com.sp.selplat.referencedata.referencedatatable.dao.ReferenceDataTableDaoImpl',
+                'com.sp.selplat.referencedata.referencedatatable.service.impl.ReferenceDataTableServiceImpl',
+                'com.sp.selplat.referencedata.referencedatatablecolumn.controller.ReferenceDataTableColumnController',
+                'com.sp.selplat.referencedata.referencedatatablecolumn.dao.ReferenceDataTableColumnDaoImpl',
+                'com.sp.selplat.referencedata.referencedatatablecolumn.service.impl.ReferenceDataTableColumnServiceImpl',
+                'com.sp.selplat.referencedata.referencedatatreenode.controller.ReferenceDataTreeNodeController',
+                'com.sp.selplat.referencedata.referencedatatreenode.dao.ReferenceDataTreeNodeDaoImpl',
+                'com.sp.selplat.referencedata.referencedatatreenode.service.impl.ReferenceDataTreeNodeServiceImpl',
+                'com.sp.selplat.referencedata.referencedatatype.controller.ReferenceDataTypeController',
+                'com.sp.selplat.referencedata.referencedatatype.dao.ReferenceDataTypeDaoImpl',
+                'com.sp.selplat.referencedata.referencedatatype.service.impl.ReferenceDataTypeServiceImpl'
+            ]
+            limit {
+                // 每个纳入门禁的业务执行类都必须覆盖全部可执行行。
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 1.0
+            }
+        }
+        rule {
+            // 所有包含业务判断的 ServiceImpl 必须覆盖全部可达分支。
+            element = 'CLASS'
+            includes = [
+                'com.sp.selplat.referencedata.capability.workbenchnavigation.service.impl.ReferenceDataWorkbenchNavigationServiceImpl',
+                'com.sp.selplat.referencedata.referencedatacontextmenuitem.service.impl.ReferenceDataContextMenuItemServiceImpl',
+                'com.sp.selplat.referencedata.referencedataoption.service.impl.ReferenceDataOptionServiceImpl',
+                'com.sp.selplat.referencedata.referencedatatable.service.impl.ReferenceDataTableServiceImpl',
+                'com.sp.selplat.referencedata.referencedatatablecolumn.service.impl.ReferenceDataTableColumnServiceImpl',
+                'com.sp.selplat.referencedata.referencedatatreenode.service.impl.ReferenceDataTreeNodeServiceImpl',
+                'com.sp.selplat.referencedata.referencedatatype.service.impl.ReferenceDataTypeServiceImpl'
+            ]
+            limit {
+                // 分支覆盖单独约束，禁止用整体行覆盖掩盖业务判断缺口。
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 1.0
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    // 标准 check 必须同时通过测试、报告和覆盖率门禁。
+    dependsOn tasks.named('jacocoTestCoverageVerification')
 }

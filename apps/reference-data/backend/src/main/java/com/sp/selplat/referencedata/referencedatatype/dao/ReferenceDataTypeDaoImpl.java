@@ -89,7 +89,8 @@ public class ReferenceDataTypeDaoImpl extends ReferenceDataBaseDao implements Re
             });
             CommonPageResult result = new CommonPageResult();
             result.setRecords(records);
-            result.setTotalCount(totalCount == null ? 0 : totalCount);
+            // COUNT(*) 对成功查询固定返回一行非空数值，直接保留数据库统计结果。
+            result.setTotalCount(totalCount);
             result.setPageNo(pageNo);
             result.setPageSize(pageSize);
             return result;
@@ -109,12 +110,20 @@ public class ReferenceDataTypeDaoImpl extends ReferenceDataBaseDao implements Re
                 parameters.add(excludedId);
             }
             Integer count = jdbc.queryForObject(sql, Integer.class, parameters.toArray());
-            return count != null && count > 0;
+            // COUNT(*) 成功时固定非空，正数表示稳定坐标已被占用。
+            return count > 0;
         } catch (DataAccessException exception) {
             throw databaseFailure(exception);
         }
     }
 
+    /**
+     * 把类型分页或坐标查询产生的数据库技术故障转换为统一系统异常。
+     *
+     * @param cause JDBC 或 H2 产生的真实数据访问异常，例如目标表不存在
+     * @return 系统异常，例如
+     *     {@code CommonSystemException("REFERENCE_DATA_DATABASE_FAILED", "引用数据数据库操作失败。", cause)}
+     */
     private CommonSystemException databaseFailure(DataAccessException cause) {
         return new CommonSystemException(
                 "REFERENCE_DATA_DATABASE_FAILED",

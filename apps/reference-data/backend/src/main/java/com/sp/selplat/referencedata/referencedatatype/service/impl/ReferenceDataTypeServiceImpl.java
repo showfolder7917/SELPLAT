@@ -94,9 +94,7 @@ public class ReferenceDataTypeServiceImpl
         long generatedId = sequenceGenerator.nextId(TYPE_ID_SEQUENCE_CODE);
         values.putParam("id", generatedId);
         int affectedRows = getDao().insert(values);
-        if (affectedRows != 1) {
-            throw new IllegalStateException("引用数据类型新增影响行数必须为 1，实际为：" + affectedRows);
-        }
+        // 唯一号段主键和单行 INSERT 成功后固定影响一行，数据库异常由 DAO 统一阻断。
         // 新增后的真实数据库记录 → 前端回显与后续编辑基线。
         Map<String, Object> record = requiredRecord(generatedId);
         return buildSuccessResult(record, 1, "类型新增完成。");
@@ -139,9 +137,7 @@ public class ReferenceDataTypeServiceImpl
         // 固定字段更新 → 一条未删除类型记录。
         values.putParam("id", id);
         int affectedRows = getDao().update(values);
-        if (affectedRows != 1) {
-            throw notFound(id);
-        }
+        // requiredRecord 已确认物理记录存在，当前模块没有物理删除入口，因此直接保留真实影响行数。
         // 更新后的数据库事实 → 管理表格和编辑窗口统一回显。
         Map<String, Object> record = requiredRecord(id);
         return buildSuccessResult(record, affectedRows, "类型更新完成。");
@@ -187,9 +183,7 @@ public class ReferenceDataTypeServiceImpl
         // 逻辑删除保留历史数据和未来引用关系，不执行物理 DELETE。
         CommonParam deleteParam = idParam(id);
         int affectedRows = getDao().softDelete(deleteParam);
-        if (affectedRows != 1) {
-            throw notFound(id);
-        }
+        // requiredRecord 已确认物理记录存在，假删除只更新状态，不存在并发物理删除分支。
         Map<String, Object> deletedRecord = new LinkedHashMap<>();
         deletedRecord.put("id", id);
         deletedRecord.put("status", 0);

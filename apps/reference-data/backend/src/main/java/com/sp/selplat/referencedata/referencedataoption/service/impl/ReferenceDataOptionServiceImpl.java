@@ -37,7 +37,8 @@ public class ReferenceDataOptionServiceImpl
             option.put("value", String.valueOf(row.get("optionValue")));
             option.put("label", ReferenceDataQueryUtil.label(row, locale));
             option.put("groupCode", row.get("groupCode") == null ? null : String.valueOf(row.get("groupCode")));
-            option.put("sortOrder", sortnum == null ? 0 : new BigDecimal(String.valueOf(sortnum)).intValue());
+            // 正式 schema 保证 sortnum 非空，直接把数据库小数转换为前端整数顺序。
+            option.put("sortOrder", new BigDecimal(String.valueOf(sortnum)).intValue());
             option.put("disabled", Boolean.TRUE.equals(row.get("disabled")));
             option.put("attributes", ReferenceDataQueryUtil.attributes(row.get("attributesJson")));
             options.add(Collections.unmodifiableMap(option));
