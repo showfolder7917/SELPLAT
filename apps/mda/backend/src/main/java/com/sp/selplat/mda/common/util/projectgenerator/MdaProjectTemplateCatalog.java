@@ -654,7 +654,7 @@ public final class MdaProjectTemplateCatalog {
                     /**
                      * 补齐当前表新增所需的平台默认字段并调用公共新增流程。
                      * 真实传参示例：{@code {labelZh:"示例记录",labelJa:"サンプル"}}。
-                     * 真实返回示例：返回含新主键、tenantId=1、status=1 和创建更新时间的记录。
+                     * 真实返回示例：返回含新主键、服务端身份、status=1 和创建更新时间的记录。
                      * 异常或副作用示例：数据库写入失败时抛出公共异常；成功后新增一条记录。
                      *
                      * @param saveIn 当前待新增的业务字段
@@ -663,8 +663,6 @@ public final class MdaProjectTemplateCatalog {
                     @Override
                     public CommonResult insert(CommonParam saveIn) {
                         LocalDateTime now = LocalDateTime.now();
-                        putIfAbsent(saveIn, "tenantId", 1L);
-                        putIfAbsent(saveIn, "lastOperateUserId", 1L);
                         putIfAbsent(saveIn, "sortnum", 0);
                         putIfAbsent(saveIn, "status", 1);
                         putIfAbsent(saveIn, "createdAt", now);
@@ -689,8 +687,8 @@ public final class MdaProjectTemplateCatalog {
 
                     /**
                      * 只在字段缺失时补入服务端默认值。
-                     * 真实传参示例：参数缺少 tenantId，字段名为 tenantId，默认值为 1L。
-                     * 真实返回示例：执行后参数包含 tenantId=1；已有值时保持原值。
+                     * 真实传参示例：参数缺少 sortnum，字段名为 sortnum，默认值为 0。
+                     * 真实返回示例：执行后参数包含 sortnum=0；已有值时保持原值。
                      * 异常或副作用示例：目标参数为空时调用方产生空指针异常；只修改当前参数映射。
                      *
                      * @param target 当前新增参数
@@ -1026,7 +1024,7 @@ public final class MdaProjectTemplateCatalog {
                     function editorOptions(editing) {
                         return Object.freeze({id: editorId,
                             title: editing ? "编辑@TABLE_CLASS@" : "新增@TABLE_CLASS@",
-                            subtitle: "默认字段遵循 SELPLAT 租户、排序和操作人规则",
+                            subtitle: "租户与操作员由服务端写入，页面只维护业务字段",
                             closeLabel: "关闭编辑窗口", cancelLabel: "取消",
                             submitLabel: editing ? "保存修改" : "保存记录",
                             validationMessage: "请完成全部必填字段", autoSuccess: false,
@@ -1040,14 +1038,6 @@ public final class MdaProjectTemplateCatalog {
                                     Object.freeze({name: "labelEn", label: "英文标签",
                                         type: "text", icon: "ri-translate-2", maxLength: 200})
                                 ]),
-                                Object.freeze([
-                                    Object.freeze({name: "tenantId", label: "租户 ID",
-                                        type: "number", icon: "ri-building-line", required: true,
-                                        value: "1"}),
-                                    Object.freeze({name: "lastOperateUserId", label: "操作用户 ID",
-                                        type: "number", icon: "ri-user-line", required: true,
-                                        value: "1"})
-                                ]),
                                 Object.freeze([Object.freeze({name: "sortnum", label: "排序",
                                     type: "number", icon: "ri-sort-number-asc", value: "0"})])
                             ])});
@@ -1057,8 +1047,8 @@ public final class MdaProjectTemplateCatalog {
                         state.editingId = item?.id || null;
                         state.editor.setLocale(editorOptions(Boolean(item)));
                         state.editor.reset();
-                        state.editor.setValues({labelZh: "", labelJa: "", labelEn: "", tenantId: 1,
-                            lastOperateUserId: 1, sortnum: 0, ...(item || {})});
+                        state.editor.setValues({labelZh: "", labelJa: "", labelEn: "",
+                            sortnum: 0, ...(item || {})});
                         state.editor.open();
                     }
 
@@ -1094,8 +1084,7 @@ public final class MdaProjectTemplateCatalog {
                             method: "POST",
                             headers: {"Content-Type":
                                 "application/x-www-form-urlencoded;charset=UTF-8"},
-                            body: new URLSearchParams({id: item.id,
-                                lastOperateUserId: 1})
+                            body: new URLSearchParams({id: item.id})
                         });
                         await refresh();
                     }

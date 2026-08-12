@@ -72,15 +72,13 @@ public final class UniauthUserControllerTestVerifier {
     ) {
         // 管理列表使用第一个 viewCode 请求默认数据库元数据定义。
         String managementDefinitionJson = controller.getGridColumn("user-management", "zh-CN");
-        // 当前未接 reference-data，因此来源必须明确标记为 DEFAULT_METADATA。
-        assertTrue(managementDefinitionJson.contains("\"source\":\"DEFAULT_METADATA\""));
-        // 数据库 COMMENT ON COLUMN 的登录账号备注必须来自公共 ColumnMetadata。
-        assertTrue(managementDefinitionJson.contains("\"columnName\":\"loginName\""));
-        assertTrue(managementDefinitionJson.contains("\"remarks\":\"登录账号\""));
-        // 口令摘要字段只返回字段结构，不建立 Uniauth 专属表格 DTO。
-        assertTrue(managementDefinitionJson.contains("\"columnName\":\"passwordHash\""));
-        // 公共字段类型必须一并返回，供前端或未来 reference-data 配置校验。
-        assertTrue(managementDefinitionJson.contains("\"dataType\""));
+        // 当前 Grid 未登记 reference-data 配置，因此来源必须明确标记为字段名静默降级。
+        assertTrue(managementDefinitionJson.contains("\"source\":\"DEFAULT_FIELD_NAME\""));
+        // 登录账号字段使用与数据库字段相同的 id、field 和 label，不建立 Uniauth 私有表头 DTO。
+        assertTrue(managementDefinitionJson.contains("\"field\":\"loginName\""));
+        assertTrue(managementDefinitionJson.contains("\"label\":\"loginName\""));
+        // 口令摘要字段只返回公共 Grid 字段结构，是否展示由后续 reference-data 配置决定。
+        assertTrue(managementDefinitionJson.contains("\"field\":\"passwordHash\""));
 
         // 用户选择器使用第二个 viewCode 请求同一资源的另一张前端表格定义。
         String selectorDefinitionJson = controller.getGridColumn("user-selector", "ja-JP");

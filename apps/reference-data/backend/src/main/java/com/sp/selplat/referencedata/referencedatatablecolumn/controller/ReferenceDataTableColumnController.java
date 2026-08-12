@@ -1,11 +1,13 @@
 package com.sp.selplat.referencedata.referencedatatablecolumn.controller;
 
 import com.sp.selplat.common.util.JsonUtils;
+import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.web.controller.BaseController;
 import com.sp.selplat.common.web.controller.ModuleDescription;
 import com.sp.selplat.referencedata.referencedatatablecolumn.service.ReferenceDataTableColumnService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,5 +32,28 @@ public class ReferenceDataTableColumnController extends BaseController<Reference
             @RequestParam("gridId") String gridId,
             @RequestParam(value = "locale", defaultValue = "zh-CN") String locale) {
         return JsonUtils.toJsonIgnoreNull(getService().resolveColumns(tableName, gridId, locale));
+    }
+
+    /**
+     * 返回当前操作员是否可以进入页面编辑模式。
+     *
+     * @return 管理员能力 JSON，例如 {@code {"success":true,"data":{"canEditPage":true}}}
+     */
+    @GetMapping("page-editor-capability.htm")
+    public String getPageEditorCapability() {
+        // 权限事实只由 Service 和基础身份上下文产生，Controller 不接收用户或角色参数。
+        return JsonUtils.toJsonIgnoreNull(getService().getPageEditorCapability());
+    }
+
+    /**
+     * 批量保存当前页面表格的列宽草稿。
+     *
+     * @param saveIn 表单中的 {@code tableName}、{@code gridId} 和 {@code widths} JSON
+     * @return 保存结果 JSON，例如 {@code {"success":true,"affectedRows":2}}
+     */
+    @PostMapping("save-widths.htm")
+    public String saveColumnWidths(CommonParam saveIn) {
+        // Service 负责管理员校验、坐标校验和事务，Controller 只序列化固定结果。
+        return JsonUtils.toJsonIgnoreNull(getService().saveColumnWidths(saveIn));
     }
 }

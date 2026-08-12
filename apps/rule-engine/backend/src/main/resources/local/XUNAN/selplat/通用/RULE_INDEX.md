@@ -11,6 +11,10 @@ load_rule_for_active_user_selplat_public_component_create_split_migrate_or_delet
 load_rule_for_active_user_selplat_application_reusable_interaction_or_private_control = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 修改控件 API、主题令牌、ARIA 角色、硬依赖或应用资源顺序时加载，保证登记与调用方同步。 -->
 load_rule_for_active_user_selplat_component_api_theme_accessibility_dependency_or_resource_order = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 新增或修改页面编辑模式、控件坐标、实时草稿、取消恢复、显式保存或管理员显示能力时加载。 -->
+load_rule_for_active_user_selplat_page_editor_mode_coordinate_draft_cancel_save_or_authorization = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 将表格、菜单、树、下拉或数据类型接入统一页面编辑适配器时加载，禁止应用私造编辑外壳。 -->
+load_rule_for_active_user_selplat_control_page_editor_adapter_registration = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 修改 selGrid 记录分类字段、工具栏分类或树分类筛选时加载，保证单值和多值统一按成员匹配。 -->
 load_rule_for_active_user_selplat_grid_record_type_or_tree_classification_filter = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 同一 selGrid 切换业务模块、替换记录字段契约或修改 selWindow 表单默认项时加载，保证新契约和默认值立即生效。 -->
@@ -102,6 +106,8 @@ load_rule_for_active_user_selplat_default_table_definition_or_reference_data_fal
 load_rule_for_active_user_selplat_table_definition_controller_service_dao_layering = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 新增或修改数据库驱动的页面表格头、列宽、多语言、显示开关和排序配置时加载。 -->
 load_rule_for_active_user_selplat_database_driven_grid_header_column_configuration = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
+<!-- 新增或修改公共管理员判断、管理能力查询或 Service 权限二次校验时加载。 -->
+load_rule_for_active_user_selplat_base_service_admin_or_management_authorization = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 修改 getGridColumn 本地 Provider、独立 Reference Data HTTP 适配、字段名静默降级或统一 columns 返回结构时加载。 -->
 load_rule_for_active_user_selplat_grid_column_local_remote_provider_and_silent_field_fallback = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 

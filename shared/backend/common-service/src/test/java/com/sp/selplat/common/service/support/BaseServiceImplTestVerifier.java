@@ -75,6 +75,8 @@ public final class BaseServiceImplTestVerifier {
         withFixture(fixturePath, context -> {
             // 取得由 Spring 按泛型注入真实 DAO 的业务 Service。
             SharedServiceFixtureService service = context.service();
+            // 登录模块接入前，全部业务 Service 通过同一基础入口识别当前操作员为管理员。
+            assertTrue(service.requestAdminStatus());
             // 公共 Grid 字段列入口必须直接读取当前真实业务表元数据。
             CommonResult gridColumnResult = service.getGridColumn("shared-management", "zh-CN");
             // 未装配 Reference Data 时必须静默返回真实字段名列。
@@ -130,6 +132,9 @@ public final class BaseServiceImplTestVerifier {
 
             // 单条新增只提供真实业务字段，主键由生产发号器生成。
             CommonParam insertIn = saveItem("insert-one", 15);
+            // 客户端伪造的租户和操作员必须在持久化前被服务端身份覆盖。
+            insertIn.putParam("tenantId", 99L);
+            insertIn.putParam("lastOperateUserId", 88L);
             // 执行真实新增。
             CommonResult insertResult = service.insert(insertIn);
             // fixture 号段起点必须成为新增主键。
@@ -138,6 +143,12 @@ public final class BaseServiceImplTestVerifier {
             assertEquals(1L, context.jdbc().queryForObject(
                 "SELECT COUNT(*) FROM SharedServiceFixture WHERE id = 100",
                 Long.class
+            ));
+            // 新增落库身份固定来自 BaseServiceImpl，而不是客户端伪造值。
+            assertEquals("1:1", context.jdbc().queryForObject(
+                "SELECT CAST(tenantId AS VARCHAR) || ':' || CAST(lastOperateUserId AS VARCHAR) "
+                    + "FROM SharedServiceFixture WHERE id = 100",
+                String.class
             ));
 
             // 批量新增两条记录并逐项使用生产发号。
@@ -156,11 +167,20 @@ public final class BaseServiceImplTestVerifier {
             CommonParam updateIn = param("id", 1L);
             // 当前真实更新修改名称。
             updateIn.putParam("name", "updated-one");
+            // 更新请求携带伪造身份时也必须被服务端覆盖。
+            updateIn.putParam("tenantId", 77L);
+            updateIn.putParam("lastOperateUserId", 66L);
             // 执行生产更新链路。
             service.update(updateIn);
             // 独立查询确认真实更新结果。
             assertEquals("updated-one", context.jdbc().queryForObject(
                 "SELECT name FROM SharedServiceFixture WHERE id = 1",
+                String.class
+            ));
+            // 单条更新后的身份仍是当前默认租户与管理员。
+            assertEquals("1:1", context.jdbc().queryForObject(
+                "SELECT CAST(tenantId AS VARCHAR) || ':' || CAST(lastOperateUserId AS VARCHAR) "
+                    + "FROM SharedServiceFixture WHERE id = 1",
                 String.class
             ));
 
@@ -179,7 +199,7 @@ public final class BaseServiceImplTestVerifier {
 
             // 单条假删除保留记录并更新状态。
             CommonParam deleteIn = param("id", 1L);
-            // 当前审计人进入真实删除更新字段。
+            // 客户端伪造审计人用于验证服务端覆盖。
             deleteIn.putParam("lastOperateUserId", 31L);
             // 执行生产假删除。
             service.delete(deleteIn);
@@ -187,6 +207,11 @@ public final class BaseServiceImplTestVerifier {
             assertEquals(0, context.jdbc().queryForObject(
                 "SELECT status FROM SharedServiceFixture WHERE id = 1",
                 Integer.class
+            ));
+            // 假删除审计人必须来自 BaseServiceImpl 当前操作员。
+            assertEquals(1L, context.jdbc().queryForObject(
+                "SELECT lastOperateUserId FROM SharedServiceFixture WHERE id = 1",
+                Long.class
             ));
 
             // 批量假删除另一初始记录和单条新增记录。
@@ -240,7 +265,11 @@ public final class BaseServiceImplTestVerifier {
                 "update",
                 "updateBatch",
                 "delete",
-                "deleteBatch"
+                "deleteBatch",
+                "getCurrentOperatorId",
+                "getCurrentTenantId",
+                "isAdmin",
+                "applyCurrentIdentity"
             ),
             declaredMethodNames(BaseServiceImpl.class)
         );
@@ -249,8 +278,8 @@ public final class BaseServiceImplTestVerifier {
             Set.of("getDao", "getSequence", "buildSuccessResult"),
             declaredMethodNames(BaseExtendsServiceImpl.class)
         );
-        // BaseServiceImpl 保存当前业务 DAO、可选表格头提供者和部署环境配置三个稳定依赖。
-        assertEquals(3, BaseServiceImpl.class.getDeclaredFields().length);
+        // BaseServiceImpl 保存两个身份字段名常量和 DAO、可选表格头提供者、部署环境配置。
+        assertEquals(5, BaseServiceImpl.class.getDeclaredFields().length);
         // 扩展基础层只保存公共发号器。
         assertEquals(1, BaseExtendsServiceImpl.class.getDeclaredFields().length);
         try {
@@ -262,6 +291,17 @@ public final class BaseServiceImplTestVerifier {
             Method serviceGetDao = BaseServiceImpl.class.getDeclaredMethod("getDao");
             // 业务 Service 无需重复实现 DAO 访问。
             assertFalse(Modifier.isAbstract(serviceGetDao.getModifiers()));
+            // 当前操作员和租户由基础 Service 提供受保护入口，业务类无需接收 Controller 参数。
+            assertTrue(Modifier.isProtected(
+                BaseServiceImpl.class.getDeclaredMethod("getCurrentOperatorId").getModifiers()
+            ));
+            assertTrue(Modifier.isProtected(
+                BaseServiceImpl.class.getDeclaredMethod("getCurrentTenantId").getModifiers()
+            ));
+            // 管理员结论同样由基础 Service 提供，页面编辑等管理能力不得在业务类重复写死。
+            assertTrue(Modifier.isProtected(
+                BaseServiceImpl.class.getDeclaredMethod("isAdmin").getModifiers()
+            ));
             // 发号入口必须继续由扩展基础层声明，避免迁移 CRUD 时把公共发号依赖上移。
             Method extendsGetSequence = BaseExtendsServiceImpl.class.getDeclaredMethod("getSequence");
             // 发号入口保持可供 BaseServiceImpl 复用的受保护具体实现。
@@ -388,16 +428,12 @@ public final class BaseServiceImplTestVerifier {
      *
      * @param name 当前 fixture 记录名称，例如 {@code "新增用户"}
      * @param sortnum 当前 fixture 排序号，例如 {@code 10}
-     * @return 满足真实表约束的新增参数，例如
-     *     {@code {"tenantId":1,"lastOperateUserId":1,"name":"新增用户","sortnum":10,"status":1}}
+     * @return 不含服务端身份的新增参数，例如
+     *     {@code {"name":"新增用户","sortnum":10,"status":1}}
      */
     private static CommonParam saveItem(String name, int sortnum) {
         // 创建前端新增参数。
         CommonParam input = new CommonParam();
-        // 租户字段满足公共表约束。
-        input.putParam("tenantId", 1L);
-        // 审计字段记录当前操作人。
-        input.putParam("lastOperateUserId", 1L);
         // 名称标识当前真实数据。
         input.putParam("name", name);
         // 排序值参与真实分页。
@@ -486,6 +522,10 @@ public final class BaseServiceImplTestVerifier {
 
         private Map<String, Long> requestSequence() {
             return getSequence();
+        }
+
+        private boolean requestAdminStatus() {
+            return isAdmin();
         }
     }
 

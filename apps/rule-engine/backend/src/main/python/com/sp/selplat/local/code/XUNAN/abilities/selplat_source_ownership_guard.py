@@ -407,6 +407,88 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                     "path": str((component_root / consumer["directory"]).relative_to(project_root)),
                     "message": f"{consumer_id} cannot use native title for truncated text",
                 })
+            # Grid 的纯图标记录操作必须复用统一 Tip，并让可访问名称与动态动作标签保持一致。
+            if consumer_id == "selGrid":
+                grid_action_required = {
+                    "selGridResolveRecordActionValue",
+                    'setAttribute("aria-label", selGridActionLabel)',
+                    "dataset.selTooltip = selGridActionLabel",
+                    'dataset.selTooltipMode = "always"',
+                }
+                for missing_contract in sorted(grid_action_required - {
+                        contract for contract in grid_action_required if contract in consumer_source}):
+                    violations.append({
+                        "code": "SEL_UI_GRID_ACTION_TOOLTIP_CONTRACT_MISSING",
+                        "path": str((component_root / consumer["directory"]).relative_to(project_root)),
+                        "message": f"selGrid record icon action is missing {missing_contract}",
+                    })
+
+    # 页面编辑必须由 selPersonalization 统一管理，并与 selGrid 的终值事件和宽度快照契约成对存在。
+    personalization_entry = component_entries.get("selPersonalization")
+    grid_entry = component_entries.get("selGrid")
+    if personalization_entry and grid_entry:
+        personalization_directory = component_root / personalization_entry["directory"]
+        personalization_source = "\n".join(
+            (personalization_directory / script).read_text(encoding="utf-8")
+            for script in personalization_entry.get("scripts", [])
+            if (personalization_directory / script).is_file()
+        )
+        personalization_style = "\n".join(
+            (personalization_directory / style).read_text(encoding="utf-8")
+            for style in personalization_entry.get("styles", [])
+            if (personalization_directory / style).is_file()
+        )
+        grid_directory = component_root / grid_entry["directory"]
+        grid_source = "\n".join(
+            (grid_directory / script).read_text(encoding="utf-8")
+            for script in grid_entry.get("scripts", [])
+            if (grid_directory / script).is_file()
+        )
+        page_editor_required = {
+            "registerPageControl: selPersonalizationRegisterPageControl",
+            "updatePageControl: selPersonalizationUpdatePageControl",
+            "setPageMode: selPersonalizationSetPageMode",
+            "savePage: selPersonalizationSavePageEditing",
+            "cancelPage: selPersonalizationCancelPageEditing",
+            'data-sel-personal-page-mode="preview"',
+            'data-sel-personal-page-mode="edit"',
+        }
+        for missing_contract in sorted(page_editor_required - {
+                contract for contract in page_editor_required
+                if contract in personalization_source}):
+            violations.append({
+                "code": "SEL_UI_PAGE_EDITOR_CONTRACT_MISSING",
+                "path": str(personalization_directory.relative_to(project_root)),
+                "message": f"selPersonalization page editor is missing {missing_contract}",
+            })
+        for missing_selector in sorted({
+                ".selpersonal-page-mode",
+                ".selpersonal-page-control-edit",
+                ".selpersonal-page-inspector",
+        } - {
+                selector for selector in {
+                    ".selpersonal-page-mode",
+                    ".selpersonal-page-control-edit",
+                    ".selpersonal-page-inspector",
+                } if selector in personalization_style}):
+            violations.append({
+                "code": "SEL_UI_PAGE_EDITOR_STYLE_MISSING",
+                "path": str(personalization_directory.relative_to(project_root)),
+                "message": f"selPersonalization page editor style is missing {missing_selector}",
+            })
+        grid_page_editor_required = {
+            "selGrid:columnResizeChange",
+            "captureColumnWidths: selGridCaptureColumnWidths",
+            "setColumnWidths: selGridSetColumnWidths",
+            "resetColumnWidths: selGridResetColumnWidths",
+        }
+        for missing_contract in sorted(grid_page_editor_required - {
+                contract for contract in grid_page_editor_required if contract in grid_source}):
+            violations.append({
+                "code": "SEL_UI_GRID_PAGE_EDITOR_ADAPTER_MISSING",
+                "path": str(grid_directory.relative_to(project_root)),
+                "message": f"selGrid page editor adapter is missing {missing_contract}",
+            })
 
     # selPanel 横向工具栏栏目默认使用同一分隔线契约；应用只传宽度，不得复制公共指针生命周期。
     if "selPanel" in component_entries:
@@ -479,6 +561,25 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 "code": "SEL_UI_APPLICATION_PRIVATE_BODY_PORTAL",
                 "path": relative_source,
                 "message": "body portals belong to a registered shared control",
+            })
+        # 删除等单步布尔确认必须使用紧凑 selConfirmDialog，禁止把空白 selWindow 当成确认框。
+        destructive_window_patterns = (
+            r"(?i)\b(?:delete|remove)[A-Za-z0-9_]*(?:window|dialog|confirm)?Controller\s*=\s*window\.selWindow\.mount",
+            r"(?i)window\.selWindow\.mount\([^\n]*\n?\s*id\s*:\s*[\"'][^\"']*(?:delete|remove)[^\"']*[\"']",
+        )
+        if application_file.suffix == ".js" and any(
+                re.search(pattern, source_text) for pattern in destructive_window_patterns):
+            violations.append({
+                "code": "SEL_UI_DESTRUCTIVE_CONFIRMATION_WINDOW_FORBIDDEN",
+                "path": relative_source,
+                "message": "destructive boolean confirmation must use registered selConfirmDialog, not selWindow",
+            })
+        # 未实现关联校验时不得在确认文案中虚构“数据库会阻止”，避免用户依据错误风险说明做决定。
+        if application_file.suffix == ".js" and "存在关联数据时由数据库阻止不安全操作" in source_text:
+            violations.append({
+                "code": "SEL_UI_DESTRUCTIVE_CONFIRMATION_MISLEADING_COPY",
+                "path": relative_source,
+                "message": "destructive confirmation copy must describe implemented relation and delete semantics",
             })
         for aria_role, component_id in owned_aria_roles.items():
             role_pattern = rf"(?:(?<![-\w])role\s*=\s*[\"']{re.escape(aria_role)}[\"']|setAttribute\(\s*[\"']role[\"']\s*,\s*[\"']{re.escape(aria_role)}[\"'])"
@@ -737,6 +838,34 @@ def audit_managed_datasource_pool_governance(
     return violations
 
 
+def audit_frontend_identity_write_governance(
+        project_root: Path) -> list[dict[str, str]]:
+    """Reject tenant and operator identity fields in application write forms and payloads."""
+    violations: list[dict[str, str]] = []
+    governed_files = sorted((project_root / "apps").glob(
+        "*/backend/src/main/resources/static/**/*.js"
+    ))
+    generator_template = project_root / APPLICATION_SCAFFOLD_TEMPLATE_RELATIVE
+    if generator_template.is_file():
+        governed_files.append(generator_template)
+    forbidden_patterns = (
+        re.compile(r"\bname\s*:\s*[\"'](?:tenantId|lastOperateUserId)[\"']"),
+        re.compile(r"\b(?:tenantId|lastOperateUserId)\s*:"),
+    )
+    for source_path in governed_files:
+        source_text = source_path.read_text(encoding="utf-8")
+        if any(pattern.search(source_text) for pattern in forbidden_patterns):
+            violations.append({
+                "code": "FRONTEND_IDENTITY_WRITE_FIELD_FORBIDDEN",
+                "path": str(source_path.relative_to(project_root)),
+                "message": (
+                    "tenantId and lastOperateUserId belong to BaseServiceImpl; "
+                    "application forms and write payloads must not submit them"
+                ),
+            })
+    return violations
+
+
 def normalized_identifier(value: str) -> str:
     """Normalize table, project, and package names for stable ownership comparison."""
     return re.sub(r"[^a-z0-9]", "", value.lower())
@@ -820,6 +949,8 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
     violations.extend(audit_managed_datasource_pool_governance(
         project_root, central_registrations
     ))
+    # 租户与操作员只由 BaseServiceImpl 写入；应用页面和生成页面不得重新提交同名身份字段。
+    violations.extend(audit_frontend_identity_write_governance(project_root))
     generator_template = project_root / APPLICATION_SCAFFOLD_TEMPLATE_RELATIVE
     if generator_template.is_file():
         template_text = generator_template.read_text(encoding="utf-8")

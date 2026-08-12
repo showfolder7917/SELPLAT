@@ -146,7 +146,8 @@ class MdaProjectGeneratorServiceImplTest {
                 .contains("extends BaseServiceImpl<JapanRegionDao>")
                 .contains("implements JapanRegionService")
                 .contains("value.putParam(\"status\", 1)")
-                .contains("putIfAbsent(saveIn, \"tenantId\", 1L)")
+                .doesNotContain("putIfAbsent(saveIn, \"tenantId\"")
+                .doesNotContain("putIfAbsent(saveIn, \"lastOperateUserId\"")
                 .contains("saveIn.putParam(\"updatedAt\", LocalDateTime.now())");
         assertThat(Files.readString(project.resolve(
                 "backend/src/main/java/com/sp/selplat/japan/region/controller/"
@@ -211,6 +212,10 @@ class MdaProjectGeneratorServiceImplTest {
                 .contains("field: \"labelJa\"")
                 .contains("field: \"labelEn\"")
                 .contains("name: \"labelZh\"")
+                .doesNotContain("name: \"tenantId\"")
+                .doesNotContain("name: \"lastOperateUserId\"")
+                .doesNotContain("tenantId:")
+                .doesNotContain("lastOperateUserId:")
                 .doesNotContain("field: \"name\"");
         assertThat(Files.readString(project.resolve(
                 "db/sql/data-JapanRegion.sql")))

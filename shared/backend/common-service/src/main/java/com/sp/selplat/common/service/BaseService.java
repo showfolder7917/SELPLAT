@@ -82,7 +82,7 @@ public interface BaseService {
     /**
      * 按主键假删除一条业务记录。
      *
-     * @param deleteIn 主键和审计字段，例如 {@code {"id":1,"lastOperateUserId":9}}
+     * @param deleteIn 主键字段，例如 {@code {"id":1}}；审计身份由 BaseServiceImpl 补齐
      * @return 假删除结果，例如 {@code {"success":true,"data":{"id":1,"status":0}}}
      */
     CommonResult delete(CommonParam deleteIn);

@@ -27,6 +27,10 @@ import org.springframework.util.StringUtils;
  */
 public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServiceImpl<D> implements BaseService {
 
+    // 租户与操作员审计字段只允许由服务端身份上下文写入，前端同名参数会在持久化前被覆盖。
+    private static final String TENANT_ID_COLUMN = "tenantId";
+    private static final String OPERATOR_ID_COLUMN = "lastOperateUserId";
+
     // 当前业务 DAO 由 Spring 按子类声明的泛型类型注入，避免每个 ServiceImpl 重复声明 DAO 字段和构造函数。
     @Autowired
     private D dao;
@@ -48,6 +52,66 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
     protected D getDao() {
         // 统一返回 Spring 已按业务 Service 泛型注入的 DAO，子类只能通过 BaseDao 公开契约访问持久层。
         return dao;
+    }
+
+    /**
+     * 返回当前登录操作员的数据库主键，供全部写入入口统一维护审计字段。
+     * 真实传参示例：当前方法无参数；管理员登录上下文对应操作员主键 {@code 1L}。
+     * 真实返回示例：当前登录能力接入前固定返回管理员操作员主键 {@code 1L}。
+     * 异常或副作用示例：当前实现不读取 Cookie 且不抛异常；登录接入后只替换本方法的身份来源。
+     *
+     * @return 当前操作员主键；现阶段固定为管理员 {@code 1L}
+     */
+    protected Long getCurrentOperatorId() {
+        // 登录模块尚未接入时统一使用管理员操作员，业务 Service 不再自行写死或接收前端操作员。
+        return 1L;
+    }
+
+    /**
+     * 返回当前登录操作员所属租户的数据库主键，供全部写入入口统一维护数据归属。
+     * 真实传参示例：当前方法无参数；管理员所属默认租户主键为 {@code 1L}。
+     * 真实返回示例：当前登录能力接入前固定返回默认租户主键 {@code 1L}。
+     * 异常或副作用示例：当前实现不读取 Cookie 且不抛异常；登录接入后只替换本方法的租户来源。
+     *
+     * @return 当前租户主键；现阶段固定为默认租户 {@code 1L}
+     */
+    protected Long getCurrentTenantId() {
+        // 登录模块尚未接入时统一使用默认租户，业务 Service 不再自行写死或接收前端租户。
+        return 1L;
+    }
+
+    /**
+     * 判断当前登录操作员是否拥有管理员权限，供业务 Service 统一保护管理能力。
+     * 真实传参示例：当前方法无参数；页面编辑保存前由业务 Service 直接调用。
+     * 真实返回示例：登录权限接入前固定返回 {@code true}，表示操作员 {@code 1L} 是管理员。
+     * 异常或副作用示例：当前实现不读取 Cookie 且不修改数据；登录接入后只替换本方法的权限来源。
+     *
+     * @return 当前操作员是否为管理员；现阶段固定返回 {@code true}
+     */
+    protected boolean isAdmin() {
+        // 登录权限模块尚未接入时统一把当前操作员视为管理员，业务 Service 不再各自写死权限结论。
+        return true;
+    }
+
+    /**
+     * 使用当前服务端身份覆盖一条待写入参数中的租户和操作员字段。
+     * 真实传参示例：前端伪造 {@code {tenantId:99,lastOperateUserId:88}} 时传入该参数对象。
+     * 真实返回示例：业务表存在两个审计列时，执行后参数包含 {@code {tenantId:1,lastOperateUserId:1}}。
+     * 异常或副作用示例：参数为空时抛出空指针异常；MDA 等无身份列控制表保持参数原样。
+     *
+     * @param writeIn 即将进入 DAO 的新增、更新或假删除参数
+     */
+    protected void applyCurrentIdentity(CommonParam writeIn) {
+        // 真实表包含租户列时才覆盖，兼容按规则明确不保存身份字段的 MDA 控制表。
+        Map<String, ColumnMetadata> dbColumns = getDao().getDbColumnsMap();
+        if (dbColumns.containsKey(TENANT_ID_COLUMN)) {
+            // 当前租户覆盖前端同名值，阻止调用方把数据写入其他租户。
+            writeIn.putParam(TENANT_ID_COLUMN, getCurrentTenantId());
+        }
+        if (dbColumns.containsKey(OPERATOR_ID_COLUMN)) {
+            // 当前操作员覆盖前端同名值，保证审计字段不能由客户端冒充。
+            writeIn.putParam(OPERATOR_ID_COLUMN, getCurrentOperatorId());
+        }
     }
 
     /**
@@ -182,6 +246,8 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
         Map<String, Long> generatedIdMap = getSequence();
         // 把生成主键按字段名写回同一个前端参数对象，供 DAO 直接落库。
         generatedIdMap.forEach(saveIn::putParam);
+        // 发号完成后由服务端身份覆盖租户和操作员，前端不再拥有两个字段的写入权。
+        applyCurrentIdentity(saveIn);
         // 基础 Service 直接调用 BaseDao 新增入口，不在应用 DAO 建立同义包装方法。
         getDao().insert(saveIn);
         // 单独取得新增后的最终字段映射，供统一返回结构直接复用。
@@ -211,6 +277,8 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
             Map<String, Long> generatedIdMap = getSequence();
             // 把本项全部生成主键按字段名写回同一个参数对象。
             generatedIdMap.forEach(saveItem::putParam);
+            // 每个批量项独立覆盖当前身份，禁止其中任一项携带其他租户或操作员。
+            applyCurrentIdentity(saveItem);
         }
         // 公共 DAO 按每组最多一千条执行真实批量新增并返回累计影响行数。
         int affectedRows = getDao().insertBatch(saveIn);
@@ -230,7 +298,9 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      */
     @OperationLog
     public CommonResult update(CommonParam saveIn) {
-        // 基础 Service 直接把原始参数交给 BaseDao，由 DAO 自动分离主键条件和更新字段。
+        // 更新前统一写入当前租户和操作员，客户端同名字段不会进入数据库。
+        applyCurrentIdentity(saveIn);
+        // 基础 Service 把服务端已补身份的参数交给 BaseDao，由 DAO 自动分离主键条件和更新字段。
         getDao().update(saveIn);
         // 单独取得更新后的同一字段映射，保持前端参数来源可追踪。
         Map<String, Object> resultData = saveIn.getParamMap();
@@ -254,6 +324,8 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
     public CommonResult updateBatch(CommonBatchParam saveIn) {
         // 单独取得前端批量项，保证 DAO 调用与最终返回使用同一有序集合。
         List<CommonParam> saveItems = saveIn.getItems();
+        // 每个批量更新项统一覆盖当前身份，避免不同项冒充其他租户或操作员。
+        saveItems.forEach(this::applyCurrentIdentity);
         // 公共 DAO 按一千条分组并按更新字段结构执行真实批量更新。
         int affectedRows = getDao().updateBatch(saveIn);
         // 复用扩展基础层的固定结果构建能力返回原批量项和顶层影响行数。
@@ -263,15 +335,16 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
     }
 
     /**
-     * 使用前端主键和审计字段假删除当前 DAO 对应记录。
+     * 使用前端主键和服务端当前身份假删除当前 DAO 对应记录。
      *
-     * @param deleteIn 来自 Controller 的主键和审计字段，例如
-     *     {@code {"id":1,"lastOperateUserId":9}}
+     * @param deleteIn 来自 Controller 的主键，例如 {@code {"id":1}}
      * @return 固定结果，例如
-     *     {@code {"success":true,"data":{"id":1,"lastOperateUserId":9,"status":0},"msg":"删除完成。"}}
+     *     {@code {"success":true,"data":{"id":1,"lastOperateUserId":1,"status":0},"msg":"删除完成。"}}
      */
     @OperationLog
     public CommonResult delete(CommonParam deleteIn) {
+        // 假删除前由服务端补入当前身份，前端只需要提交目标主键。
+        applyCurrentIdentity(deleteIn);
         // 基础 Service 只开放 BaseDao 假删除入口，由 DAO 统一补状态和更新时间。
         getDao().softDelete(deleteIn);
         // 单独取得 DAO 已补删除字段的参数映射。
@@ -296,6 +369,8 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
     public CommonResult deleteBatch(CommonBatchParam deleteIn) {
         // 单独取得前端批量项，保证 DAO 补充的删除字段可以直接进入最终返回。
         List<CommonParam> deleteItems = deleteIn.getItems();
+        // 每个批量删除项统一使用当前身份，客户端不再提交审计字段。
+        deleteItems.forEach(this::applyCurrentIdentity);
         // 公共 DAO 按一千条分组执行假删除并返回累计影响行数。
         int affectedRows = getDao().softDeleteBatch(deleteIn);
         // 复用扩展基础层的固定结果构建能力返回已补删除字段的批量项和顶层影响行数。

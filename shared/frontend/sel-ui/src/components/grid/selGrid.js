@@ -557,6 +557,26 @@
     let selGridColumnResizeState = null;
 
     /**
+     * 向应用装配层发布一次已经结束的列宽变化，页面编辑器只记录稳定终值而不监听高频移动。
+     * @param {number} selGridColumnIndex - column.items 中的零基列序号。
+     * @param {number} selGridColumnWidth - 已受公共边界限制的最终像素宽度。
+     * @returns {void} 事件只携带当前实例不可变宽度快照，不执行持久化。
+     */
+    function selGridDispatchColumnResizeChange(selGridColumnIndex, selGridColumnWidth) {
+        const selGridColumnData = selGridInputPayload.column.items[selGridColumnIndex];
+        if (!selGridColumnData || !Number.isFinite(selGridColumnWidth)) return;
+        selGridRoot.dispatchEvent(new CustomEvent("selGrid:columnResizeChange", {
+            bubbles: true,
+            detail: Object.freeze({
+                gridId: selGridId,
+                columnId: selGridResolveColumnKey(selGridColumnData, selGridColumnIndex),
+                width: selGridColumnWidth,
+                columnWidths: Object.freeze(Object.fromEntries(selGridColumnWidths))
+            })
+        }));
+    }
+
+    /**
      * 把当前浏览器计算出的每列宽度冻结为像素值。
      * @returns {number[]} 按表头顺序返回当前列宽；缺少表格结构时返回空数组。
      * @example 三列实际宽度为 150、180、220 时返回 [150,180,220] 并同步到 colgroup。
@@ -625,6 +645,7 @@
             columnIndex: selGridColumnIndex,
             startX: selGridEvent.clientX,
             startWidth: selGridFrozenWidths[selGridColumnIndex],
+            currentWidth: selGridFrozenWidths[selGridColumnIndex],
             handle: selGridResizeHandle
         };
         selGridResizeHandle.classList.add("selgrid-column-resize-handle-active");
@@ -642,10 +663,11 @@
      */
     function selGridHandleColumnResizeMove(selGridEvent) {
         if (!selGridColumnResizeState || selGridEvent.pointerId !== selGridColumnResizeState.pointerId) return;
-        selGridApplyColumnWidth(
+        const selGridAppliedWidth = selGridApplyColumnWidth(
             selGridColumnResizeState.columnIndex,
             selGridColumnResizeState.startWidth + selGridEvent.clientX - selGridColumnResizeState.startX
         );
+        if (selGridAppliedWidth !== null) selGridColumnResizeState.currentWidth = selGridAppliedWidth;
         selGridEvent.preventDefault();
     }
 
@@ -657,9 +679,12 @@
      */
     function selGridHandleColumnResizeEnd(selGridEvent) {
         if (!selGridColumnResizeState || selGridEvent.pointerId !== selGridColumnResizeState.pointerId) return;
+        const selGridCompletedResize = selGridColumnResizeState;
         selGridColumnResizeState.handle.classList.remove("selgrid-column-resize-handle-active");
         selGridRoot.classList.remove("selgrid-column-resizing");
         selGridColumnResizeState = null;
+        // 只在本次指针生命周期结束后发布一次终值，页面编辑草稿不会因移动事件形成请求风暴。
+        selGridDispatchColumnResizeChange(selGridCompletedResize.columnIndex, selGridCompletedResize.currentWidth);
     }
 
     /**
@@ -675,12 +700,40 @@
         const selGridFrozenWidths = selGridFreezeCurrentColumnWidths();
         if (!Number.isInteger(selGridColumnIndex) || !selGridFrozenWidths[selGridColumnIndex]) return;
         const selGridResizeStep = selGridEvent.shiftKey ? 48 : 16;
-        selGridApplyColumnWidth(
+        const selGridAppliedWidth = selGridApplyColumnWidth(
             selGridColumnIndex,
             selGridFrozenWidths[selGridColumnIndex] + (selGridEvent.key === "ArrowRight" ? selGridResizeStep : -selGridResizeStep)
         );
+        if (selGridAppliedWidth !== null) selGridDispatchColumnResizeChange(selGridColumnIndex, selGridAppliedWidth);
         selGridEvent.preventDefault();
         selGridEvent.stopPropagation();
+    }
+
+    /** 返回当前全部可见列的真实像素宽度快照，供页面编辑会话建立恢复基线。 */
+    function selGridCaptureColumnWidths() {
+        selGridFreezeCurrentColumnWidths();
+        return Object.freeze(Object.fromEntries(selGridColumnWidths));
+    }
+
+    /** 使用页面编辑基线恢复当前列宽，不发布用户调整事件或触发业务保存。 */
+    function selGridSetColumnWidths(selGridRequestedWidths = {}) {
+        if (!selGridRequestedWidths || typeof selGridRequestedWidths !== "object") return false;
+        selGridFreezeCurrentColumnWidths();
+        let selGridApplied = false;
+        selGridInputPayload.column.items.forEach((selGridColumnData, selGridColumnIndex) => {
+            const selGridColumnKey = selGridResolveColumnKey(selGridColumnData, selGridColumnIndex);
+            const selGridRequestedWidth = Number(selGridRequestedWidths[selGridColumnKey]);
+            if (!Number.isFinite(selGridRequestedWidth)) return;
+            selGridApplied = selGridApplyColumnWidth(selGridColumnIndex, selGridRequestedWidth) !== null || selGridApplied;
+        });
+        return selGridApplied;
+    }
+
+    /** 清除当前实例运行时宽度覆盖，并重新使用最新 column JSON 中的数据库配置。 */
+    function selGridResetColumnWidths() {
+        selGridColumnWidths.clear();
+        selGridRenderColumnHeader();
+        return true;
     }
 
     selGridView.tableHead?.addEventListener("pointerdown", selGridHandleColumnResizeStart);
@@ -801,6 +854,17 @@
         selGridCell.appendChild(selGridCreateIcon(String(selGridColumn.cellIcon).trim()));
     }
 
+    // 记录操作允许调用方按当前行状态动态返回标签或图标，同时保证异常配置不会阻断整张表格渲染。
+    function selGridResolveRecordActionValue(selGridValue, selGridRecord, selGridFallback, selGridPropertyName) {
+        try {
+            const selGridResolvedValue = typeof selGridValue === "function" ? selGridValue(selGridRecord) : selGridValue;
+            return String(selGridResolvedValue || selGridFallback);
+        } catch (selGridError) {
+            console.error(`selGrid 解析记录操作 ${selGridPropertyName} 失败。`, selGridError);
+            return String(selGridFallback);
+        }
+    }
+
     /**
      * 创建通用记录模式的单元格内容。
      * @param {object} selGridRecord - 当前业务记录。
@@ -855,8 +919,17 @@
                 selGridButton.className = `selgrid-action-button${selGridAction.tone ? ` selgrid-action-${selGridAction.tone}` : ""}`;
                 selGridButton.type = "button";
                 selGridButton.dataset.action = String(selGridAction.id || "");
-                selGridButton.setAttribute("aria-label", String(selGridAction.label || selGridAction.id || "操作"));
-                selGridButton.appendChild(selGridCreateIcon(selGridAction.icon || "ri-more-line"));
+                // 当前记录状态决定按钮实际动作语义，Tip 与可访问名称必须使用同一份解析结果。
+                const selGridActionLabel = selGridResolveRecordActionValue(
+                    selGridAction.label, selGridRecord, selGridAction.id || "操作", "label"
+                );
+                const selGridActionIcon = selGridResolveRecordActionValue(
+                    selGridAction.icon, selGridRecord, "ri-more-line", "icon"
+                );
+                selGridButton.setAttribute("aria-label", selGridActionLabel);
+                selGridButton.dataset.selTooltip = selGridActionLabel;
+                selGridButton.dataset.selTooltipMode = "always";
+                selGridButton.appendChild(selGridCreateIcon(selGridActionIcon));
                 selGridActions.appendChild(selGridButton);
             });
             selGridCell.appendChild(selGridActions);
@@ -1800,6 +1873,9 @@
         reset: selGridResetInstance,
         setPage: selGridSetPage,
         setLocale: selGridSetLocale,
+        captureColumnWidths: selGridCaptureColumnWidths,
+        setColumnWidths: selGridSetColumnWidths,
+        resetColumnWidths: selGridResetColumnWidths,
         getSelectedColumnKeys: () => Object.freeze(Array.from(selGridSelectedHeaderColumnKeys)),
         destroy: selGridDestroy,
         getState: () => Object.freeze({

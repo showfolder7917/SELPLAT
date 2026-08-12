@@ -199,6 +199,27 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
 
             self.assertEqual([], violations)
 
+    def test_frontend_identity_write_fields_block_delivery(self) -> None:
+        """页面重新提供租户或操作员编辑提交时必须由快速门禁阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            application_script = (
+                fixture / "apps/example/backend/src/main/resources/static/example/example.js"
+            )
+            application_script.parent.mkdir(parents=True)
+            application_script.write_text(
+                'const rows = [{name: "tenantId", type: "number"}];\n'
+                'const payload = {lastOperateUserId: 9};\n',
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_frontend_identity_write_governance(fixture)
+
+            self.assertEqual(
+                ["FRONTEND_IDENTITY_WRITE_FIELD_FORBIDDEN"],
+                [violation["code"] for violation in violations],
+            )
+
     def test_unregistered_component_directory_blocks_delivery(self) -> None:
         """新增控件目录不能绕过中央登记直接进入公共源码。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
@@ -229,6 +250,46 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
 
             self.assertIn(
                 "SEL_UI_APPLICATION_PRIVATE_BODY_PORTAL",
+                {violation["code"] for violation in violations},
+            )
+
+    def test_delete_confirmation_using_full_window_blocks_delivery(self) -> None:
+        """删除动作使用完整 selWindow 模拟确认框时必须由公共控件门禁阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.write_component_registry(fixture, [])
+            application_js = fixture / "apps/example/backend/src/main/resources/static/example.js"
+            application_js.parent.mkdir(parents=True)
+            application_js.write_text(
+                "state.deleteWindowController = window.selWindow.mount(host, {\n"
+                "  id: \"selWindowExampleDeleteId\", title: \"删除记录\"\n"
+                "});\n",
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+
+            self.assertIn(
+                "SEL_UI_DESTRUCTIVE_CONFIRMATION_WINDOW_FORBIDDEN",
+                {violation["code"] for violation in violations},
+            )
+
+    def test_delete_confirmation_with_unimplemented_database_claim_blocks_delivery(self) -> None:
+        """删除提示虚构数据库关联阻断能力时必须由公共控件门禁阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.write_component_registry(fixture, [])
+            application_js = fixture / "apps/example/backend/src/main/resources/static/example.js"
+            application_js.parent.mkdir(parents=True)
+            application_js.write_text(
+                'const message = "存在关联数据时由数据库阻止不安全操作";\n',
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+
+            self.assertIn(
+                "SEL_UI_DESTRUCTIVE_CONFIRMATION_MISLEADING_COPY",
                 {violation["code"] for violation in violations},
             )
 
@@ -296,11 +357,82 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         self.assertNotIn("seltree-context-menu", tree_script)
         self.assertNotIn("seltree-context-menu", tree_style)
 
+    def test_grid_icon_action_without_unified_tooltip_blocks_delivery(self) -> None:
+        """Grid 纯图标记录操作缺少 always Tip 或可访问名称时必须阻断交付。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            components = [
+                {
+                    "id": "selTooltip",
+                    "directory": "tooltip",
+                    "type": "interactive",
+                    "scripts": ["selTooltip.js"],
+                    "styles": ["selTooltip.css"],
+                    "globalApi": "selTooltip",
+                    "dependencies": [],
+                    "themeAware": True,
+                    "ownedAriaRoles": ["tooltip"],
+                },
+                {
+                    "id": "selGrid",
+                    "directory": "grid",
+                    "type": "interactive",
+                    "scripts": ["selGrid.js"],
+                    "styles": ["selGrid.css"],
+                    "globalApi": "selGrid",
+                    "dependencies": ["selTooltip"],
+                    "themeAware": True,
+                },
+            ]
+            component_root = self.write_component_registry(fixture, components)
+            tooltip_root = component_root / "tooltip"
+            tooltip_root.mkdir()
+            (tooltip_root / "selTooltip.js").write_text(
+                'window.selTooltip = {}; data-sel-tooltip selTooltipIsTruncated pointerover '
+                'focusin aria-describedby role", "tooltip if (selTooltipAriaElement &&\n',
+                encoding="utf-8",
+            )
+            (tooltip_root / "selTooltip.css").write_text(
+                ".tooltip { color: var(--sel-theme-text-body); }\n",
+                encoding="utf-8",
+            )
+            grid_root = component_root / "grid"
+            grid_root.mkdir()
+            (grid_root / "selGrid.js").write_text(
+                "window.selGrid = {}; window.selTooltip.attach(); "
+                "button.dataset.selTooltip = label;\n",
+                encoding="utf-8",
+            )
+            (grid_root / "selGrid.css").write_text(
+                ".grid { color: var(--sel-theme-text-body); }\n",
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+
+            self.assertIn(
+                "SEL_UI_GRID_ACTION_TOOLTIP_CONTRACT_MISSING",
+                {violation["code"] for violation in violations},
+            )
+
     def test_real_sel_ui_uses_complete_semantic_typography(self) -> None:
         """真实公共控件必须具有七级文字角色且不再引用旧两档字号。"""
         violations = self.guard.audit_sel_ui_typography_governance(PROJECT_ROOT)
 
         self.assertEqual([], violations)
+
+    def test_real_sel_ui_has_complete_page_editor_contract(self) -> None:
+        """真实个性化与 Grid 必须同时提供页面编辑会话和列宽状态适配器。"""
+        violations = self.guard.audit_sel_ui_component_governance(PROJECT_ROOT)
+
+        self.assertNotIn(
+            "SEL_UI_PAGE_EDITOR_CONTRACT_MISSING",
+            {violation["code"] for violation in violations},
+        )
+        self.assertNotIn(
+            "SEL_UI_GRID_PAGE_EDITOR_ADAPTER_MISSING",
+            {violation["code"] for violation in violations},
+        )
 
     def test_legacy_typography_token_blocks_delivery(self) -> None:
         """新增样式重新引用 primary 或 secondary 时必须由统一门禁阻断。"""

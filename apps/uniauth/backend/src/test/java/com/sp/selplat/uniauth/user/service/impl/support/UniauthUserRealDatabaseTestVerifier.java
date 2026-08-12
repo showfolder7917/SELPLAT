@@ -352,11 +352,11 @@ public final class UniauthUserRealDatabaseTestVerifier {
     public static void verifyBatchDelete(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 创建两条批量假删除请求。
         CommonBatchParam deleteIn = new CommonBatchParam();
-        // 第一条保存主键和审计用户。
+        // 第一条携带伪造审计用户，验证服务端覆盖。
         CommonParam firstItem = param("id", 7301L);
         firstItem.putParam("lastOperateUserId", 91L);
         deleteIn.getItems().add(firstItem);
-        // 第二条保存另一主键和审计用户。
+        // 第二条携带另一伪造审计用户，验证服务端覆盖。
         CommonParam secondItem = param("id", 7302L);
         secondItem.putParam("lastOperateUserId", 92L);
         deleteIn.getItems().add(secondItem);
@@ -368,6 +368,10 @@ public final class UniauthUserRealDatabaseTestVerifier {
         // 两条记录必须保留且状态均为零。
         assertEquals(2L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM UniauthUser", Long.class));
         assertEquals(2L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM UniauthUser WHERE status = 0", Long.class));
+        assertEquals(2L, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM UniauthUser WHERE lastOperateUserId = 1",
+            Long.class
+        ));
     }
 
     /**
@@ -379,9 +383,9 @@ public final class UniauthUserRealDatabaseTestVerifier {
     public static void verifyInsertNormal(UniauthUserService userService, JdbcTemplate jdbcTemplate) {
         // 构造前端新增参数，只提供真实业务字段而不提供数据库主键或密码摘要。
         CommonParam saveIn = new CommonParam();
-        // 租户字段满足用户主表归属约束。
+        // 客户端伪造租户用于验证服务端覆盖。
         saveIn.putParam("tenantId", 3L);
-        // 最近操作用户记录当前新增责任人。
+        // 客户端伪造操作员用于验证服务端覆盖。
         saveIn.putParam("lastOperateUserId", 9L);
         // 登录名唯一标识当前 insert Case。
         saveIn.putParam("loginName", "insert-real-user");
@@ -410,6 +414,9 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertNotEquals("insert-secret", databaseRecord.get("passwordHash"));
         // 数据库密码摘要必须与公共 SHA-256 口径一致。
         assertEquals(CommonHashSupport.sha256("insert-secret"), databaseRecord.get("passwordHash"));
+        // 租户和操作员必须来自基础 Service 的当前身份。
+        assertEquals(1L, ((Number) databaseRecord.get("tenantId")).longValue());
+        assertEquals(1L, ((Number) databaseRecord.get("lastOperateUserId")).longValue());
         // 服务回参不得包含数据库密码摘要。
         assertFalse(resultData(result).containsKey("passwordHash"));
         // 服务回参不得继续包含前端明文密码。
@@ -447,8 +454,8 @@ public final class UniauthUserRealDatabaseTestVerifier {
         assertEquals("更新后名称", databaseRecord.get("displayName"));
         // 未传 password 时原数据库摘要必须保持不变。
         assertEquals("original-password-hash", databaseRecord.get("passwordHash"));
-        // 最近操作用户必须真实更新。
-        assertEquals(19L, ((Number) databaseRecord.get("lastOperateUserId")).longValue());
+        // 最近操作用户必须由基础 Service 覆盖为当前管理员。
+        assertEquals(1L, ((Number) databaseRecord.get("lastOperateUserId")).longValue());
         // 服务结果必须继续回显更新后的业务字段。
         assertEquals("更新后名称", resultData(result).get("displayName"));
     }
@@ -502,8 +509,8 @@ public final class UniauthUserRealDatabaseTestVerifier {
         );
         // 记录必须仍然存在且状态被更新为逻辑删除值。
         assertEquals(0, ((Number) databaseRecord.get("status")).intValue());
-        // 最近操作用户必须保存当前删除责任人。
-        assertEquals(29L, ((Number) databaseRecord.get("lastOperateUserId")).longValue());
+        // 最近操作用户必须由基础 Service 覆盖为当前管理员。
+        assertEquals(1L, ((Number) databaseRecord.get("lastOperateUserId")).longValue());
         // 公共逻辑删除必须写入服务端更新时间。
         assertNotNull(databaseRecord.get("updatedAt"));
         // 服务结果必须直接使用 DAO 写回的同一参数映射。
@@ -556,15 +563,13 @@ public final class UniauthUserRealDatabaseTestVerifier {
      *
      * @param loginName 唯一登录名，例如 {@code batch-insert-1}
      * @param displayName 展示姓名，例如 {@code 批量新增一}
-     * @return 完整新增项，例如
-     *     {@code {"paramMap":{"tenantId":7,"loginName":"batch-insert-1","displayName":"批量新增一"}}
+     * @return 不含服务端身份的新增项，例如
+     *     {@code {"paramMap":{"loginName":"batch-insert-1","displayName":"批量新增一"}}
      */
     private static CommonParam batchInsertItem(String loginName, String displayName) {
         // 新建当前用户的动态前端参数。
         CommonParam saveItem = new CommonParam();
-        // 写入满足正式表约束的业务字段。
-        saveItem.putParam("tenantId", 7L);
-        saveItem.putParam("lastOperateUserId", 7L);
+        // 只写入前端拥有的业务字段，租户和操作员由基础 Service 补齐。
         saveItem.putParam("loginName", loginName);
         saveItem.putParam("password", "batch-password");
         saveItem.putParam("displayName", displayName);

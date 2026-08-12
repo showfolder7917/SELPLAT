@@ -41,4 +41,30 @@ public class ReferenceDataTableColumnDaoImpl
                 tableName,
                 gridId);
     }
+
+    /** {@inheritDoc} */
+    @Override
+    public int updateColumnWidths(
+            String tableName,
+            String gridId,
+            Map<String, String> columnWidths,
+            Long tenantId,
+            Long operatorId) {
+        // 每列使用同一稳定坐标和当前服务端身份更新，前端无法借列宽保存改写其他租户数据。
+        int affectedRows = 0;
+        for (Map.Entry<String, String> columnWidth : columnWidths.entrySet()) {
+            affectedRows += jdbcTemplate.update(
+                    "UPDATE ReferenceDataTableColumn SET width = ?, lastOperateUserId = ?, "
+                            + "updatedAt = CURRENT_TIMESTAMP WHERE tenantId = ? AND tableName = ? "
+                            + "AND gridId = ? AND gridColumnId = ? AND status <> 0",
+                    columnWidth.getValue(),
+                    operatorId,
+                    tenantId,
+                    tableName,
+                    gridId,
+                    columnWidth.getKey());
+        }
+        // 返回全部语句累计影响行数，Service 据此阻断不存在或不属于当前租户的坐标。
+        return affectedRows;
+    }
 }

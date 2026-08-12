@@ -504,6 +504,10 @@
     margin-bottom: 10px;
 }
 
+.selpersonal-areas-page-hidden {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .selpersonal-area {
     display: inline-flex;
     min-height: 42px;
@@ -541,7 +545,10 @@
 .selpersonal-theme-home[hidden],
 .selpersonal-theme-library[hidden],
 .selpersonal-skin-theme-row[hidden],
-.selpersonal-extension-empty[hidden] {
+.selpersonal-extension-empty[hidden],
+.selpersonal-page-inspector[hidden],
+.selpersonal-page-actions[hidden],
+.selpersonal-page-control-edit[hidden] {
     display: none;
 }
 
@@ -1132,6 +1139,232 @@
 .selpersonal-page-editor-heading small {
     color: var(--sel-theme-text-secondary);
     font-size: var(--sel-theme-font-size-caption);
+}
+
+/* 页面编辑使用明确的左右模式切换；预览保持页面干净，编辑才显示控件角标。 */
+.selpersonal-page-mode {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 4px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    background: var(--sel-theme-control-surface);
+}
+
+.selpersonal-page-mode button,
+.selpersonal-page-actions button,
+.selpersonal-page-controls button,
+.selpersonal-page-control-edit {
+    border: 1px solid transparent;
+    color: var(--sel-theme-text-secondary);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+}
+
+.selpersonal-page-mode button {
+    display: inline-flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border-radius: var(--sel-theme-radius-action);
+}
+
+.selpersonal-page-mode button:hover,
+.selpersonal-page-mode button:focus-visible,
+.selpersonal-page-mode .selpersonal-page-mode-selected {
+    border-color: var(--sel-theme-line);
+    color: var(--sel-theme-text-on-selected-surface);
+    outline: none;
+    background: var(--sel-theme-selected-surface);
+    box-shadow: var(--sel-theme-inset);
+}
+
+.selpersonal-page-controls {
+    display: grid;
+    gap: 7px;
+    margin-bottom: 10px;
+}
+
+.selpersonal-page-controls button {
+    display: grid;
+    min-height: 58px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    border-color: var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    text-align: left;
+    background: var(--sel-theme-control-surface);
+}
+
+.selpersonal-page-controls button > i {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    color: var(--sel-theme-text-icon);
+}
+
+.selpersonal-page-controls button > span {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.selpersonal-page-controls strong {
+    color: var(--sel-theme-text-main);
+    font-size: var(--sel-theme-font-size-label);
+}
+
+.selpersonal-page-controls small {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selpersonal-page-controls button:hover,
+.selpersonal-page-controls button:focus-visible,
+.selpersonal-page-controls .selpersonal-page-control-selected {
+    border-color: var(--sel-theme-line);
+    outline: none;
+    background: var(--sel-theme-selected-surface);
+}
+
+.selpersonal-page-inspector {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    background: var(--sel-theme-control-surface);
+    box-shadow: var(--sel-theme-inset);
+}
+
+.selpersonal-page-inspector > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.selpersonal-page-inspector > header > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--sel-theme-text-main);
+}
+
+.selpersonal-page-inspector em {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+    font-style: normal;
+}
+
+.selpersonal-page-inspector .selpersonal-page-dirty {
+    color: var(--sel-theme-text-on-selected-surface);
+}
+
+.selpersonal-page-inspector dl {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+}
+
+.selpersonal-page-inspector dl > div {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+
+.selpersonal-page-inspector dt {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selpersonal-page-inspector dd {
+    min-width: 0;
+    overflow: hidden;
+    margin: 0;
+    color: var(--sel-theme-text-main);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--sel-theme-font-size-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selpersonal-page-inspector > p {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 0;
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+    line-height: 1.5;
+}
+
+.selpersonal-page-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.selpersonal-page-actions button {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-color: var(--sel-theme-line-soft);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+}
+
+.selpersonal-page-actions button:last-child {
+    border-color: var(--sel-theme-line);
+    color: var(--sel-theme-text-on-selected-surface);
+    background: var(--sel-theme-selected-surface);
+}
+
+.selpersonal-page-actions button:disabled {
+    cursor: wait;
+    opacity: 0.58;
+}
+
+/* 编辑入口属于公共页面编辑器，业务控件只提供定位宿主，不复制按钮样式。 */
+.selpersonal-page-editable {
+    position: relative;
+    outline: 1px dashed var(--sel-theme-line);
+    outline-offset: -3px;
+}
+
+.selpersonal-page-control-edit {
+    position: absolute;
+    z-index: 8;
+    top: 8px;
+    left: 10px;
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 5px;
+    padding: 0 10px;
+    border-color: var(--sel-theme-line);
+    border-radius: var(--sel-theme-radius-action);
+    color: var(--sel-theme-text-on-selected-surface);
+    background: var(--sel-theme-selected-surface);
+    box-shadow: var(--sel-theme-inset), 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.24);
+}
+
+.selpersonal-page-control-edit:hover,
+.selpersonal-page-control-edit:focus-visible {
+    outline: 2px solid var(--sel-theme-line);
+    outline-offset: 2px;
 }
 
 .selpersonal-extension-modules {

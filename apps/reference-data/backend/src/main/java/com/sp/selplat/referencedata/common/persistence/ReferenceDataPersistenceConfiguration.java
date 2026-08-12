@@ -18,7 +18,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
@@ -121,6 +123,19 @@ public class ReferenceDataPersistenceConfiguration {
             @Qualifier("referenceDataDataSource") DataSource dataSource) {
         // 模块私有数据源 → DAO 自定义查询使用的唯一 JDBC 模板。
         return new JdbcTemplate(dataSource);
+    }
+
+    /**
+     * 创建 Reference Data 永久库专用事务管理器，避免 Host 多数据源运行时误选其他应用数据库。
+     *
+     * @param dataSource Reference Data 模块私有连接池，例如池名 {@code ReferenceDataPool}
+     * @return 只提交或回滚 Reference Data 六张业务表操作的事务管理器
+     * 异常或副作用示例：页面列宽批量更新中任一列未命中时，管理器回滚同批次已经执行的更新。
+     */
+    @Bean("referenceDataTransactionManager")
+    public PlatformTransactionManager referenceDataTransactionManager(
+            @Qualifier("referenceDataDataSource") DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
     }
 
     /**

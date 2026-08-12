@@ -163,7 +163,7 @@ public class ReferenceDataTypeServiceImpl
     /**
      * 按公共动态主键参数假删除一条类型，并保护平台内置资源类型不被删除。
      *
-     * @param deleteIn BaseController 传入的主键和审计参数，例如 {@code {"id":2,"lastOperateUserId":1}}
+     * @param deleteIn BaseController 传入的主键参数，例如 {@code {"id":2}}
      * @return 假删除结果，例如
      *     {@code {"success":true,"data":{"id":2,"status":0},"affectedRows":1,"msg":"类型删除完成。"}}
      * @throws CommonBusinessException id 缺失、记录不存在或目标为内置类型时抛出，例如
@@ -182,6 +182,8 @@ public class ReferenceDataTypeServiceImpl
         }
         // 逻辑删除保留历史数据和未来引用关系，不执行物理 DELETE。
         CommonParam deleteParam = idParam(id);
+        // 特殊删除链路直接调用 DAO，因此仍由基础 Service 的当前身份入口统一补租户和操作员。
+        applyCurrentIdentity(deleteParam);
         int affectedRows = getDao().softDelete(deleteParam);
         // requiredRecord 已确认物理记录存在，假删除只更新状态，不存在并发物理删除分支。
         Map<String, Object> deletedRecord = new LinkedHashMap<>();
@@ -232,19 +234,12 @@ public class ReferenceDataTypeServiceImpl
                     "类型状态只能是启用或停用。");
         }
         BigDecimal sortnum = decimalValue(source.getParam("sortnum"), "sortnum");
-        Integer tenantId = source.getParam("tenantId") == null
-                ? 1 : integerValue(source.getParam("tenantId"), "tenantId");
-        Integer lastOperateUserId = source.getParam("lastOperateUserId") == null
-                ? 1 : integerValue(source.getParam("lastOperateUserId"), "lastOperateUserId");
-        if (tenantId < 1 || lastOperateUserId < 1) {
-            throw new CommonBusinessException(
-                    "REFERENCE_DATA_TYPE_AUDIT_ID_INVALID",
-                    "租户 ID 和操作员 ID 必须是正整数。");
-        }
         // 规范化后的固定顺序映射只供 Repository 绑定值，不参与 SQL 标识符拼接。
         CommonParam values = new CommonParam();
-        values.putParam("tenantId", tenantId);
-        values.putParam("lastOperateUserId", lastOperateUserId);
+        // 当前租户来自基础 Service 身份入口，不读取或信任前端同名字段。
+        values.putParam("tenantId", getCurrentTenantId());
+        // 当前操作员来自基础 Service 身份入口，不读取或信任前端同名字段。
+        values.putParam("lastOperateUserId", getCurrentOperatorId());
         values.putParam("projectCode", projectCode);
         values.putParam("resourceCode", resourceCode);
         values.putParam("nameZh", nameZh);

@@ -1,5 +1,7 @@
 package com.sp.selplat.referencedata.referencedatatype.controller;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,6 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sp.selplat.common.service.sequence.SequenceGeneratorImpl;
+import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.util.CommonParam;
+import com.sp.selplat.referencedata.referencedatatablecolumn.service.impl.ReferenceDataTableColumnServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -138,6 +143,100 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalCount").value(1))
                 .andExpect(jsonPath("$.records[0].status").value(0));
+    }
+
+    /**
+     * 验证页面编辑保存对权限、坐标、JSON、重复列、宽度格式、边界和数据库命中执行完整阻断。
+     * 真实传参示例：依次提交空坐标、空数组、非法 JSON、重复列、缺失宽度、{@code 12rem}、
+     *     {@code 961px} 和数据库不存在的列坐标。
+     * 真实返回示例：分别返回稳定业务错误码，非管理员直接得到
+     *     {@code PAGE_EDITOR_ADMIN_REQUIRED}。
+     * 异常或副作用示例：全部失败都发生在事务提交前，隔离数据库不会留下列宽变更。
+     *
+     * @throws Exception 当 MockMvc 请求执行失败时抛出
+     */
+    @Test
+    void shouldRejectEveryInvalidPageEditorWidthRequest() throws Exception {
+        CommonBusinessException nonAdminError = assertThrows(
+                CommonBusinessException.class,
+                () -> new NonAdminTableColumnService().saveColumnWidths(new CommonParam()));
+        assertEquals("PAGE_EDITOR_ADMIN_REQUIRED", nonAdminError.getErrorCode());
+
+        expectPageEditorSaveError(null, "selGridTestOptionId", "[]", "INVALID_PAGE_EDITOR_COORDINATE");
+        expectPageEditorSaveError("bad/table", "selGridTestOptionId", "[]", "INVALID_PAGE_EDITOR_COORDINATE");
+        expectPageEditorSaveError("ReferenceDataOption", "selGridTestOptionId", null, "EMPTY_PAGE_EDITOR_WIDTHS");
+        expectPageEditorSaveError("ReferenceDataOption", "selGridTestOptionId", "null", "EMPTY_PAGE_EDITOR_WIDTHS");
+        expectPageEditorSaveError("ReferenceDataOption", "selGridTestOptionId", "[]", "EMPTY_PAGE_EDITOR_WIDTHS");
+        expectPageEditorSaveError("ReferenceDataOption", "selGridTestOptionId", "{bad-json", "INVALID_PAGE_EDITOR_WIDTHS_JSON");
+        expectPageEditorSaveError(
+                "ReferenceDataOption",
+                "selGridTestOptionId",
+                "[{\"gridColumnId\":\"same\",\"width\":\"180px\"},{\"gridColumnId\":\"same\",\"width\":\"190px\"}]",
+                "DUPLICATE_PAGE_EDITOR_COLUMN");
+        expectPageEditorSaveError(
+                "ReferenceDataOption",
+                "selGridTestOptionId",
+                "[{\"gridColumnId\":\"missing-width\"}]",
+                "INVALID_PAGE_EDITOR_COLUMN_WIDTH");
+        expectPageEditorSaveError(
+                "ReferenceDataOption",
+                "selGridTestOptionId",
+                "[{\"gridColumnId\":\"bad-unit\",\"width\":\"12rem\"}]",
+                "INVALID_PAGE_EDITOR_COLUMN_WIDTH");
+        expectPageEditorSaveError(
+                "ReferenceDataOption",
+                "selGridTestOptionId",
+                "[{\"gridColumnId\":\"too-wide\",\"width\":\"961px\"}]",
+                "PAGE_EDITOR_COLUMN_WIDTH_OUT_OF_RANGE");
+        expectPageEditorSaveError(
+                "ReferenceDataOption",
+                "selGridTestOptionId",
+                "[{\"gridColumnId\":\"not-in-database\",\"width\":\"180px\"}]",
+                "PAGE_EDITOR_COLUMN_NOT_FOUND");
+    }
+
+    /**
+     * 提交一次页面列宽失败请求并断言公共 Web 层返回的稳定错误编码。
+     * 真实传参示例：{@code tableName=ReferenceDataOption,widths=[]}。
+     * 真实返回示例：期望 {@code EMPTY_PAGE_EDITOR_WIDTHS} 时响应 HTTP 400 且 errorCode 相同。
+     * 异常或副作用示例：参数为 null 时不添加对应表单字段，用于覆盖服务端缺参分支。
+     *
+     * @param tableName 业务表坐标；null 表示省略字段
+     * @param gridId Grid 控件坐标；null 表示省略字段
+     * @param widths 列宽 JSON；null 表示省略字段
+     * @param expectedCode 期望公共业务错误码
+     * @throws Exception 当 MockMvc 请求执行失败时抛出
+     */
+    private void expectPageEditorSaveError(
+            String tableName,
+            String gridId,
+            String widths,
+            String expectedCode) throws Exception {
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request =
+                post("/api/reference-data/admin/table-columns/save-widths.htm");
+        if (tableName != null) request.param("tableName", tableName);
+        if (gridId != null) request.param("gridId", gridId);
+        if (widths != null) request.param("widths", widths);
+        mockMvc.perform(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value(expectedCode));
+    }
+
+    /** 测试专用非管理员 Service，只覆盖后台二次鉴权的拒绝分支，不访问数据库。 */
+    private static final class NonAdminTableColumnService extends ReferenceDataTableColumnServiceImpl {
+
+        /**
+         * 返回测试身份的非管理员事实。
+         * 真实传参示例：无参数调用。
+         * 真实返回示例：固定返回 {@code false}。
+         * 异常或副作用示例：不读取登录上下文且不修改数据库。
+         *
+         * @return 固定非管理员结果
+         */
+        @Override
+        protected boolean isAdmin() {
+            return false;
+        }
     }
 
     /**
@@ -456,6 +555,36 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 .andExpect(jsonPath("$.data.columns[0].cellIcon").value("ri-list-check-3"))
                 .andExpect(jsonPath("$.data.columns[0].cellIconVisible").value(true));
 
+        // 页面编辑入口先读取后台管理员事实，前端不根据固定用户 ID 自行推断权限。
+        mockMvc.perform(get("/api/reference-data/admin/table-columns/page-editor-capability.htm"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.admin").value(true))
+                .andExpect(jsonPath("$.data.canEditPage").value(true));
+
+        // 页面编辑保存只提交三段数据库坐标和宽度，租户、操作员由基础 Service 自动取得。
+        mockMvc.perform(post("/api/reference-data/admin/table-columns/save-widths.htm")
+                        .param("tableName", "ReferenceDataOption")
+                        .param("gridId", "selGridTestOptionId")
+                        .param("widths", "[{\"gridColumnId\":\"test-column\",\"width\":\"236px\"}]"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.affectedRows").value(1))
+                .andExpect(jsonPath("$.data.tableName").value("ReferenceDataOption"))
+                .andExpect(jsonPath("$.data.gridId").value("selGridTestOptionId"))
+                .andExpect(jsonPath("$.data.columns[0].width").value("236px"));
+        mockMvc.perform(get("/api/reference-data/admin/table-columns/resolve.htm")
+                        .param("tableName", "ReferenceDataOption")
+                        .param("gridId", "selGridTestOptionId"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.columns[0].width").value("236px"));
+
+        // 超出公共 Grid 边界的宽度必须在进入 DAO 前返回稳定业务错误。
+        mockMvc.perform(post("/api/reference-data/admin/table-columns/save-widths.htm")
+                        .param("tableName", "ReferenceDataOption")
+                        .param("gridId", "selGridTestOptionId")
+                        .param("widths", "[{\"gridColumnId\":\"test-column\",\"width\":\"40px\"}]"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("PAGE_EDITOR_COLUMN_WIDTH_OUT_OF_RANGE"));
+
         // 公共 getGridColumn 在同工程内直接复用配置 Service，不发送额外 HTTP。
         mockMvc.perform(get("/api/reference-data/admin/options/getGridColumn.htm")
                         .param("viewCode", "selGridTestOptionId")
@@ -474,7 +603,7 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                         .param("labelZh", "测试表头")
                         .param("labelJa", "テスト列")
                         .param("labelEn", "Test column")
-                        .param("width", "180px")
+                        .param("width", "236px")
                         .param("cellRenderer", "text")
                         .param("cellIcon", "ri-list-check-3")
                         .param("cellIconVisible", "true")

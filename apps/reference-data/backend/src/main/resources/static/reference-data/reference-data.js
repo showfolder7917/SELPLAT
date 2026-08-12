@@ -7,7 +7,7 @@
 
     const referenceDataRequiredComponents = Object.freeze([
         "selBaseRuntime", "selAjax", "selPanel", "selSearch", "selTooltip", "selTree", "selDropdownMenu",
-        "selGrid", "selWindow", "selContextMenu", "selPageBackground", "selPersonalization", "selThemeManager"
+        "selGrid", "selWindow", "selConfirmDialog", "selContextMenu", "selPageBackground", "selPersonalization", "selThemeManager"
     ]);
     const referenceDataMissingComponents = referenceDataRequiredComponents.filter((referenceDataName) => !window[referenceDataName]);
     if (referenceDataMissingComponents.length > 0) {
@@ -76,13 +76,14 @@
         records: new Map(),
         columns: new Map(),
         editingId: null,
-        pendingDelete: null,
         panelRoot: null,
         searchController: null,
         gridController: null,
         treeController: null,
         editWindowControllers: new Map(),
-        deleteWindowController: null,
+        deleteConfirmController: null,
+        pageEditConfirmController: null,
+        personalizationController: null,
         previewMenuController: null,
         selectedTable: null,
         tableDetailTab: null
@@ -131,6 +132,69 @@
 
     function referenceDataActiveModule() {
         return referenceDataModules[referenceDataState.activeKey];
+    }
+
+    /** 返回页面编辑器展示的当前表格两段数据库定位坐标。 */
+    function referenceDataPageEditorCoordinates(referenceDataModule = referenceDataActiveModule()) {
+        return Object.freeze([
+            Object.freeze({ label: "业务数据表", value: referenceDataModule.tableName }),
+            Object.freeze({ label: "表格控件 ID", value: referenceDataModule.gridId })
+        ]);
+    }
+
+    /** 捕获公共 Grid 当前列宽，页面编辑会话据此判断拖拽前后是否真正变化。 */
+    function referenceDataCapturePageGridState() {
+        return Object.freeze({
+            columnWidths: referenceDataState.gridController?.captureColumnWidths?.() || Object.freeze({})
+        });
+    }
+
+    /** 使用页面编辑会话基线恢复列宽，不发送任何后台写请求。 */
+    function referenceDataRestorePageGridState(referenceDataPageGridState = {}) {
+        return referenceDataState.gridController?.setColumnWidths?.(referenceDataPageGridState.columnWidths || {}) || false;
+    }
+
+    /** 把当前表格草稿批量写入 ReferenceDataTableColumn，并重新读取后台确认后的真实宽度。 */
+    async function referenceDataSavePageGridState(referenceDataPageGridState = {}) {
+        const referenceDataModule = referenceDataActiveModule();
+        const referenceDataConfiguredColumnIds = new Set((referenceDataState.columns.get(referenceDataModule.key) || [])
+            .map((referenceDataColumn) => String(referenceDataColumn.id || referenceDataColumn.field || ""))
+            .filter(Boolean));
+        const referenceDataWidths = Object.entries(referenceDataPageGridState.columnWidths || {})
+            .filter(([referenceDataColumnId]) => referenceDataConfiguredColumnIds.has(referenceDataColumnId))
+            .map(([referenceDataColumnId, referenceDataWidth]) => Object.freeze({
+                gridColumnId: referenceDataColumnId,
+                width: `${Math.round(Number(referenceDataWidth))}px`
+            }));
+        if (referenceDataWidths.length === 0) throw new Error("当前表格没有可保存的数据库列配置。");
+        await referenceDataAjax.request({
+            url: "/api/reference-data/admin/table-columns/save-widths.htm",
+            method: "POST",
+            data: {
+                tableName: referenceDataModule.tableName,
+                gridId: referenceDataModule.gridId,
+                widths: JSON.stringify(referenceDataWidths)
+            }
+        });
+        // 保存后重新调用当前业务 getGridColumn，页面和下次重开都使用同一个数据库宽度来源。
+        await referenceDataLoadResolvedColumns(referenceDataModule, true);
+        referenceDataState.gridController.setLocale(referenceDataBuildPayload());
+        referenceDataState.gridController.resetColumnWidths();
+        return true;
+    }
+
+    /** 把同一物理 Grid 当前切换到的业务模块坐标同步给公共页面编辑器。 */
+    function referenceDataSyncPageEditorControl() {
+        const referenceDataModule = referenceDataActiveModule();
+        referenceDataState.personalizationController?.updatePageControl("selGridReferenceDataPageEditorId", {
+            title: `${referenceDataModule.name}表格`,
+            typeLabel: "表格控件",
+            icon: "ri-table-line",
+            coordinates: referenceDataPageEditorCoordinates(referenceDataModule),
+            captureState: referenceDataCapturePageGridState,
+            restoreState: referenceDataRestorePageGridState,
+            saveState: referenceDataSavePageGridState
+        });
     }
 
     function referenceDataNavigationModules() {
@@ -217,7 +281,13 @@
                     }));
                 }
                 referenceDataActions.push(
-                    Object.freeze({ id: "toggle", label: "切换启停状态", icon: "ri-checkbox-circle-line" }),
+                    Object.freeze({
+                        id: "toggle",
+                        // 已启用记录提供停用动作，已停用记录提供启用动作，图标和 Tip 都描述点击后的结果。
+                        label: (referenceDataRecord) => Number(referenceDataRecord.status) === 1 ? "停用" : "启用",
+                        icon: (referenceDataRecord) => Number(referenceDataRecord.status) === 1
+                            ? "ri-forbid-2-line" : "ri-checkbox-circle-line"
+                    }),
                     Object.freeze({ id: "delete", label: `删除${referenceDataModule.itemName}`, icon: "ri-delete-bin-6-line", tone: "danger" })
                 );
                 return Object.freeze({ ...referenceDataBaseColumn, actions: Object.freeze(referenceDataActions) });
@@ -503,33 +573,26 @@
             name, label, type: "textarea", placeholder, maxLength: 1000, icon: "ri-file-text-line"
         });
         const referenceDataSort = Object.freeze({ name: "sortnum", label: "排序值", type: "number", value: "0", icon: "ri-sort-number-asc" });
-        const referenceDataAuditRow = Object.freeze([
-            Object.freeze({ name: "tenantId", label: "租户 ID", type: "number", required: true, value: "1", icon: "ri-building-line" }),
-            Object.freeze({ name: "lastOperateUserId", label: "操作员 ID", type: "number", required: true, value: "1", icon: "ri-user-settings-line" })
-        ]);
         if (referenceDataModule.key === "types") return Object.freeze([
             Object.freeze([referenceDataText("projectCode", "项目编码", true, "例如 reference-data", 64), referenceDataText("resourceCode", "资源编码", true, "例如 resource-kind", 64)]),
             Object.freeze([referenceDataText("nameZh", "中文名称", true), referenceDataText("nameJa", "日文名称")]),
             Object.freeze([referenceDataText("nameEn", "英文名称"), referenceDataStatusField()]),
             Object.freeze([referenceDataTextarea("descriptionZh", "中文说明"), referenceDataTextarea("descriptionJa", "日文说明")]),
-            Object.freeze([referenceDataTextarea("descriptionEn", "英文说明"), referenceDataSort]),
-            referenceDataAuditRow
+            Object.freeze([referenceDataTextarea("descriptionEn", "英文说明"), referenceDataSort])
         ]);
         if (referenceDataModule.key === "tree") return Object.freeze([
             Object.freeze([referenceDataTypeSelectField(), referenceDataParentSelectField(referenceDataModule, referenceDataRecord)]),
             Object.freeze([referenceDataText("nodeCode", "节点编码", true, "例如 root"), referenceDataText("nodeValue", "节点值", true, "例如 ROOT")]),
             Object.freeze([referenceDataText("labelZh", "中文名称", true), referenceDataText("labelJa", "日文名称")]),
             Object.freeze([referenceDataText("labelEn", "英文名称"), referenceDataStatusField()]),
-            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON", "例如 {\"level\":1}"), referenceDataSort]),
-            referenceDataAuditRow
+            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON", "例如 {\"level\":1}"), referenceDataSort])
         ]);
         if (referenceDataModule.key === "options") return Object.freeze([
             Object.freeze([referenceDataTypeSelectField(), referenceDataText("optionValue", "选项值", true, "例如 TREE")]),
             Object.freeze([referenceDataText("groupCode", "分组编码"), referenceDataBooleanField("disabled", "禁止选择")]),
             Object.freeze([referenceDataText("labelZh", "中文名称", true), referenceDataText("labelJa", "日文名称")]),
             Object.freeze([referenceDataText("labelEn", "英文名称"), referenceDataStatusField()]),
-            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON"), referenceDataSort]),
-            referenceDataAuditRow
+            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON"), referenceDataSort])
         ]);
         if (referenceDataModule.key === "menus") return Object.freeze([
             Object.freeze([referenceDataTypeSelectField(), referenceDataParentSelectField(referenceDataModule, referenceDataRecord)]),
@@ -537,8 +600,7 @@
             Object.freeze([referenceDataText("icon", "图标类名", false, "例如 ri-add-line", 100), referenceDataBooleanField("disabled", "禁止执行")]),
             Object.freeze([referenceDataText("labelZh", "中文名称", true), referenceDataText("labelJa", "日文名称")]),
             Object.freeze([referenceDataText("labelEn", "英文名称"), referenceDataStatusField()]),
-            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON"), referenceDataSort]),
-            referenceDataAuditRow
+            Object.freeze([referenceDataTextarea("attributesJson", "扩展属性 JSON"), referenceDataSort])
         ]);
         if (referenceDataModule.key === "tables") return Object.freeze([
             Object.freeze([
@@ -550,8 +612,7 @@
                 referenceDataText("pagePath", "所在页面", false, "例如 /reference-data/reference-data.html", 500)
             ]),
             Object.freeze([referenceDataTextarea("description", "表格描述"), referenceDataStatusField()]),
-            Object.freeze([referenceDataSort]),
-            referenceDataAuditRow
+            Object.freeze([referenceDataSort])
         ]);
         return Object.freeze([
             Object.freeze([Object.freeze({
@@ -571,8 +632,7 @@
             Object.freeze([referenceDataText("labelZh", "中文表头", true), referenceDataText("labelJa", "日文表头")]),
             Object.freeze([referenceDataText("labelEn", "英文表头"), referenceDataText("width", "列宽", true, "例如 160px 或 18%", 32)]),
             Object.freeze([referenceDataBooleanField("visible", "页面显示", true), referenceDataStatusField()]),
-            Object.freeze([referenceDataSort]),
-            referenceDataAuditRow
+            Object.freeze([referenceDataSort])
         ]);
     }
 
@@ -772,6 +832,7 @@
         referenceDataState.gridController?.reset();
         window.selDropdownMenu.mountAll(referenceDataState.panelRoot);
         referenceDataRenderTableDetail();
+        referenceDataSyncPageEditorControl();
     }
 
     async function referenceDataRefresh(referenceDataReloadActive = true, referenceDataReloadColumns = false) {
@@ -781,6 +842,11 @@
 
     async function referenceDataSwitchModule(referenceDataKey) {
         if (!referenceDataModules[referenceDataKey]) return;
+        // 编辑会话中禁止业务模块悄悄切换，管理员先保存或取消后再改变数据库坐标。
+        if (referenceDataState.personalizationController?.getState().pageEditor?.mode === "edit") {
+            referenceDataBase.toast("请先保存或取消当前页面更改。", "warning");
+            return;
+        }
         if (referenceDataState.activeKey === referenceDataKey && referenceDataState.loadedKeys.has(referenceDataKey)) return;
         // 离开表格列详情时释放当前表格上下文，返回表格定义列表或其他业务模块。
         if (referenceDataKey !== "columns") {
@@ -829,24 +895,40 @@
             // 从表格详情新增列时自动绑定主表坐标，用户只需维护列本身。
             referenceDataController.setValues({
                 tableName: referenceDataState.selectedTable.tableName,
-                gridId: referenceDataState.selectedTable.gridColumnId,
-                tenantId: referenceDataState.selectedTable.tenantId || 1,
-                lastOperateUserId: referenceDataState.selectedTable.lastOperateUserId || 1
+                gridId: referenceDataState.selectedTable.gridColumnId
             });
         }
         referenceDataController.open();
     }
 
-    function referenceDataOpenDelete(referenceDataModule, referenceDataRecord) {
-        referenceDataState.pendingDelete = Object.freeze({ moduleKey: referenceDataModule.key, id: Number(referenceDataRecord.id) });
-        referenceDataState.deleteWindowController.setLocale({
+    async function referenceDataBuildDeleteMessage(referenceDataModule, referenceDataRecord) {
+        if (referenceDataModule.key !== "tables") {
+            return `删除仅将此${referenceDataModule.itemName}标记为已删除，不会物理移除数据库记录。`;
+        }
+        // 表格定义与列配置通过 tableName + gridId 形成逻辑关联；确认文案必须展示当前真实数量。
+        await referenceDataEnsureModuleLoaded(referenceDataModules.columns);
+        const referenceDataAssociatedColumnCount = (referenceDataState.records.get("columns") || [])
+            .filter((referenceDataColumn) => Number(referenceDataColumn.status) !== 0
+                && String(referenceDataColumn.tableName) === String(referenceDataRecord.tableName)
+                && String(referenceDataColumn.gridId) === String(referenceDataRecord.gridColumnId))
+            .length;
+        return `当前关联 ${referenceDataAssociatedColumnCount} 个表格列配置。删除仅停用表格定义，不会删除列配置。`;
+    }
+
+    async function referenceDataConfirmAndDelete(referenceDataModule, referenceDataRecord) {
+        const referenceDataDeleteMessage = await referenceDataBuildDeleteMessage(referenceDataModule, referenceDataRecord);
+        const referenceDataConfirmed = await referenceDataState.deleteConfirmController.open({
             title: `删除${referenceDataModule.itemName}`,
-            subtitle: "删除采用逻辑删除；存在关联数据时由数据库阻止不安全操作",
-            closeLabel: `关闭删除${referenceDataModule.itemName}确认窗口`,
-            submitLabel: "确认删除"
+            message: referenceDataDeleteMessage,
+            target: referenceDataRecordLabel(referenceDataModule, referenceDataRecord),
+            icon: "ri-delete-bin-6-line",
+            tone: "danger",
+            closeLabel: `关闭删除${referenceDataModule.itemName}确认框`,
+            cancelLabel: "取消",
+            confirmLabel: "确认删除"
         });
-        referenceDataState.deleteWindowController.setFeedback(`即将删除：${referenceDataRecordLabel(referenceDataModule, referenceDataRecord)}`);
-        referenceDataState.deleteWindowController.open();
+        if (!referenceDataConfirmed) return false;
+        return referenceDataDelete(referenceDataModule, Number(referenceDataRecord.id));
     }
 
     async function referenceDataSave(referenceDataModule, referenceDataValues) {
@@ -882,24 +964,19 @@
         }
     }
 
-    async function referenceDataDelete() {
-        const referenceDataPending = referenceDataState.pendingDelete;
-        if (!referenceDataPending) return;
-        const referenceDataModule = referenceDataModules[referenceDataPending.moduleKey];
-        referenceDataState.deleteWindowController.setLoading(true);
-        referenceDataState.deleteWindowController.setFeedback(`正在删除${referenceDataModule.itemName}…`);
+    async function referenceDataDelete(referenceDataModule, referenceDataId) {
+        referenceDataSetFeedback(`正在删除${referenceDataModule.itemName}…`);
         try {
             const referenceDataResult = await referenceDataAjax.request({
-                url: `${referenceDataModule.api}delete.htm`, method: "POST", data: { id: referenceDataPending.id }
+                url: `${referenceDataModule.api}delete.htm`, method: "POST", data: { id: referenceDataId }
             });
-            referenceDataState.deleteWindowController.setFeedback(referenceDataResult.msg || `${referenceDataModule.itemName}删除完成。`);
             await referenceDataRefresh(true, referenceDataModule.key === "columns");
-            referenceDataState.deleteWindowController.close();
-            referenceDataState.pendingDelete = null;
+            referenceDataSetFeedback(referenceDataResult.msg || `${referenceDataModule.itemName}删除完成。`);
+            return true;
         } catch (referenceDataError) {
-            referenceDataState.deleteWindowController.setFeedback(referenceDataError.message || `${referenceDataModule.itemName}删除失败。`, true);
-        } finally {
-            referenceDataState.deleteWindowController.setLoading(false);
+            referenceDataSetFeedback(referenceDataError.message || `${referenceDataModule.itemName}删除失败。`);
+            console.error("引用数据删除失败。", referenceDataError);
+            return false;
         }
     }
 
@@ -961,7 +1038,7 @@
     async function referenceDataHandleAction(referenceDataModule, referenceDataAction, referenceDataRecord) {
         if (!referenceDataRecord) return;
         if (referenceDataAction === "edit") referenceDataOpenEditor(referenceDataModule, referenceDataRecord);
-        if (referenceDataAction === "delete") referenceDataOpenDelete(referenceDataModule, referenceDataRecord);
+        if (referenceDataAction === "delete") await referenceDataConfirmAndDelete(referenceDataModule, referenceDataRecord);
         if (referenceDataAction === "preview") await referenceDataPreview(referenceDataModule, referenceDataRecord);
         if (referenceDataAction === "toggle") {
             try {
@@ -980,6 +1057,12 @@
 
     async function referenceDataMountApplication() {
         const referenceDataWindowMessagesPromise = referenceDataAjax.json({ url: referenceDataWindowMessagesUrl });
+        const referenceDataPageEditorCapabilityPromise = referenceDataAjax.request({
+            url: "/api/reference-data/admin/table-columns/page-editor-capability.htm"
+        }).catch((referenceDataCapabilityError) => {
+            console.warn("页面编辑权限读取失败，本次按无权限处理。", referenceDataCapabilityError);
+            return Object.freeze({ data: Object.freeze({ canEditPage: false }) });
+        });
         await referenceDataLoadNavigation();
         await referenceDataLoadModuleView(referenceDataActiveModule());
         const referenceDataWindowMessages = await referenceDataWindowMessagesPromise;
@@ -1011,23 +1094,56 @@
             if (!referenceDataController) throw new Error(`${referenceDataModule.name}编辑窗口挂载失败。`);
             referenceDataState.editWindowControllers.set(referenceDataModule.key, referenceDataController);
         });
-        referenceDataState.deleteWindowController = window.selWindow.mount(referenceDataApplicationHost, {
-            id: "selWindowReferenceDataDeleteId", messages: referenceDataWindowMessages, title: "删除引用数据",
-            subtitle: "删除采用逻辑删除", closeLabel: "关闭删除确认窗口", cancelLabel: "取消", submitLabel: "确认删除",
-            validationMessage: "请确认删除操作", autoSuccess: false, rows: Object.freeze([])
+        referenceDataState.deleteConfirmController = window.selConfirmDialog.mount(referenceDataApplicationHost, {
+            id: "selConfirmDialogReferenceDataDeleteId", title: "删除引用数据", tone: "danger"
+        });
+        referenceDataState.pageEditConfirmController = window.selConfirmDialog.mount(referenceDataApplicationHost, {
+            id: "selConfirmDialogReferenceDataPageEditId", title: "取消页面更改", tone: "danger"
         });
         referenceDataState.previewMenuController = window.selContextMenu.mount(referenceDataState.panelRoot, {
             id: "selContextMenuReferenceDataPreviewId", ariaLabel: "数据库菜单预览"
         });
-        if (!referenceDataState.deleteWindowController || !referenceDataState.previewMenuController) {
+        if (!referenceDataState.deleteConfirmController || !referenceDataState.pageEditConfirmController || !referenceDataState.previewMenuController) {
             throw new Error("引用数据确认或预览组件挂载失败。");
         }
 
+        const referenceDataPageEditorCapability = await referenceDataPageEditorCapabilityPromise;
+        referenceDataState.personalizationController = window.selPersonalization.mount(referenceDataPersonalizationHost, {
+            backgroundController: referenceDataBackgroundController,
+            pageEditor: Object.freeze({
+                canEdit: referenceDataPageEditorCapability.data?.canEditPage === true,
+                confirmDiscard: () => referenceDataState.pageEditConfirmController.open({
+                    title: "取消页面更改",
+                    message: "当前表格宽度尚未保存，取消后会恢复进入编辑模式前的宽度。",
+                    target: `${referenceDataActiveModule().tableName} · ${referenceDataActiveModule().gridId}`,
+                    confirmLabel: "取消更改",
+                    cancelLabel: "继续编辑",
+                    icon: "ri-arrow-go-back-line"
+                })
+            })
+        });
+        if (!referenceDataState.personalizationController) throw new Error("引用数据个性化设置挂载失败。");
+        const referenceDataGridEditHost = referenceDataState.panelRoot.querySelector(".selgrid-board-shell");
+        if (!referenceDataState.personalizationController.registerPageControl({
+            id: "selGridReferenceDataPageEditorId",
+            type: "grid",
+            typeLabel: "表格控件",
+            title: `${referenceDataActiveModule().name}表格`,
+            icon: "ri-table-line",
+            root: referenceDataState.panelRoot,
+            editHost: referenceDataGridEditHost,
+            coordinates: referenceDataPageEditorCoordinates(),
+            changeEvent: "selGrid:columnResizeChange",
+            captureState: referenceDataCapturePageGridState,
+            restoreState: referenceDataRestorePageGridState,
+            saveState: referenceDataSavePageGridState
+        })) throw new Error("引用数据表格页面编辑登记失败。");
+
         referenceDataState.panelRoot.addEventListener("selGrid:new", () => referenceDataOpenEditor(referenceDataActiveModule()));
-        referenceDataState.panelRoot.addEventListener("selGrid:action", (referenceDataEvent) => {
+        referenceDataState.panelRoot.addEventListener("selGrid:action", async (referenceDataEvent) => {
             const referenceDataDetail = referenceDataEvent.detail;
             if (!referenceDataDetail || referenceDataDetail.instanceKey !== referenceDataGridId) return;
-            referenceDataHandleAction(referenceDataActiveModule(), referenceDataDetail.action, referenceDataDetail.record);
+            await referenceDataHandleAction(referenceDataActiveModule(), referenceDataDetail.action, referenceDataDetail.record);
         });
         referenceDataState.panelRoot.addEventListener("selTree:select", async (referenceDataEvent) => {
             const referenceDataTreeId = String(referenceDataEvent.detail?.id || "");
@@ -1054,10 +1170,6 @@
             await referenceDataHandleAction(referenceDataModule, referenceDataEvent.detail.action, referenceDataFindRecord(referenceDataModule, referenceDataTarget.id));
         });
         referenceDataApplicationHost.addEventListener("selWindow:submit", (referenceDataEvent) => {
-            if (referenceDataEvent.detail?.id === "selWindowReferenceDataDeleteId") {
-                referenceDataDelete();
-                return;
-            }
             const referenceDataModule = referenceDataModuleList.find(
                 (referenceDataCandidate) => referenceDataEvent.detail?.id === referenceDataCandidate.windowId
             );
@@ -1074,9 +1186,6 @@
         defaults: Object.freeze({ theme: "solid-dark", overlay: 0, brightness: 100, blur: 0 })
     });
     if (!referenceDataBackgroundController) throw new Error("引用数据页面背景挂载失败。");
-    if (!window.selPersonalization.mount(referenceDataPersonalizationHost, { backgroundController: referenceDataBackgroundController })) {
-        throw new Error("引用数据个性化设置挂载失败。");
-    }
 
     referenceDataMountApplication().catch((referenceDataError) => {
         console.error("引用数据管理初始化失败。", referenceDataError);

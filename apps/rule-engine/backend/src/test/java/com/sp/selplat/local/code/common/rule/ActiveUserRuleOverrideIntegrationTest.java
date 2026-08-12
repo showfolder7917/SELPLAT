@@ -89,6 +89,47 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat_truncated_text_native_title_policy = forbidden_in_grid_and_tree,"
                 + "delete_legacy_title,no_compatibility_branch"
         ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_icon_action_tooltip_contract = "
+                + "icon_only_record_action_requires_selTooltip_always,"
+                + "aria_label_matches_tooltip,no_native_title"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_state_action_semantics = label_and_icon_describe_next_action,"
+                + "enabled_record_shows_disable,disabled_record_shows_enable"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_destructive_action_confirmation_component = "
+                + "selConfirmDialog,compact_boolean_confirmation,no_selWindow"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_destructive_confirmation_safety = execute_after_true_only,"
+                + "cancel_close_escape_return_false,default_focus_cancel"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_destructive_confirmation_truthful_copy = current_relation_count,"
+                + "actual_soft_or_physical_delete_semantics,"
+                + "no_unimplemented_database_block_claim"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_page_editor_owner = selPersonalization,"
+                + "application_registers_root_title_coordinates_capture_restore_save_only,"
+                + "no_private_editor_shell"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_page_editor_authorization = backend_capability_controls_visibility,"
+                + "service_isAdmin_rechecks_every_save,no_frontend_only_authorization"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_page_editor_session_lifecycle = preview_edit_segmented_mode,"
+                + "capture_baseline,live_draft,dirty_indicator,cancel_restore,"
+                + "explicit_save_then_new_baseline"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_page_editor_persistence = live_memory_resize,"
+                + "one_terminal_change_event,batch_save_widths,"
+                + "write_then_business_getGridColumn_refresh,no_request_per_pointermove"
+        ));
     }
 
     /**
@@ -303,6 +344,10 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "selplat_scaffold_primary_key_sequence = "
                 + "<ActualTableName>Id,insert_where_not_exists,no_merge,no_cursor_reset"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_scaffold_frontend_identity_fields = "
+                + "tenantId,lastOperateUserId:no_editor,no_write_payload"
         ));
     }
 
@@ -534,6 +579,22 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "business_service_redundant_wrapper_policy = remove_unused_long_id_no_arg_paging_and_super_only_wrappers"
+        ));
+        assertTrue(rule.content().contains(
+            "base_service_current_operator_source = "
+                + "BaseServiceImpl.getCurrentOperatorId,temporary_admin_id_1"
+        ));
+        assertTrue(rule.content().contains(
+            "base_service_current_tenant_source = "
+                + "BaseServiceImpl.getCurrentTenantId,temporary_tenant_id_1"
+        ));
+        assertTrue(rule.content().contains(
+            "base_service_current_admin_source = BaseServiceImpl.isAdmin,temporary_true,"
+                + "service_authorization_recheck,no_frontend_only_permission"
+        ));
+        assertTrue(rule.content().contains(
+            "frontend_identity_write_policy = tenantId,lastOperateUserId:"
+                + "read_only_or_hidden,forbid_form_and_write_payload"
         ));
     }
 

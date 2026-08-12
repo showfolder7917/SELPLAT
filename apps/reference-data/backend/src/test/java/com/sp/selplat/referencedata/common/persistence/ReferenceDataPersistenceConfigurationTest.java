@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /** 使用隔离 H2 文件验证 Hikari 私有连接池、七张表、测试数据和重启幂等性。 */
 class ReferenceDataPersistenceConfigurationTest {
@@ -69,6 +70,8 @@ class ReferenceDataPersistenceConfigurationTest {
                     "SELECT COUNT(*) FROM ReferenceDataTableColumn", Integer.class);
 
             assertInstanceOf(HikariDataSource.class, dataSource);
+            assertInstanceOf(DataSourceTransactionManager.class,
+                    new ReferenceDataPersistenceConfiguration().referenceDataTransactionManager(dataSource));
             assertEquals("ReferenceDataEmptyTestPool", dataSource.getPoolName());
             assertEquals(7, tableCount);
             assertEquals(58, rowCount);

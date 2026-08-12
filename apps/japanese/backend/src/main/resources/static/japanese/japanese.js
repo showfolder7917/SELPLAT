@@ -325,8 +325,6 @@
                 ...values,
                 ...(editing ? { id: state.editingRecord.id } : {}),
                 name: String(values.name || "").trim() || `蓝宝书 N2 第${values.sourceQuestionNo}题`,
-                tenantId: 1,
-                lastOperateUserId: 1,
                 sortnum: media.sortnum || 0,
                 status: media.status || 1,
                 jlptLevel: "N2",
@@ -366,7 +364,7 @@
         await request(`${questionApi}delete.htm`, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-            body: new URLSearchParams({ id: record.id, lastOperateUserId: 1 })
+            body: new URLSearchParams({ id: record.id })
         });
         await refreshApplication();
     }

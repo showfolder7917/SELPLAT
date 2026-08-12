@@ -2,8 +2,10 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 1.6.0 增加所有 SEL 控件实例 ID 的统一驼峰命名约束。 -->
-rule_version = 1.6.0
+<!-- 2.0.0 增加统一管理员页面编辑会话、控件登记和显式保存边界。 -->
+rule_version = 2.0.0
+<!-- 2026-08-12 依次固定纯图标可发现性、确认控件边界、真实风险文案和页面编辑公共契约。 -->
+upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -112,6 +114,39 @@ selplat_truncated_text_tooltip_disable_api = grid.tooltip=false,tree.tooltip=fal
 <!-- Grid 与 Tree 的截断文字不得使用浏览器原生 title；启用 selTooltip 后必须删除旧 title 路径且不保留兼容分支。 -->
 selplat_truncated_text_native_title_policy = forbidden_in_grid_and_tree,delete_legacy_title,no_compatibility_branch
 
+## Grid 纯图标记录操作提示
+
+<!-- 表格记录操作只显示图标时，鼠标与键盘用户都必须获得同一动作说明；统一复用 selTooltip 的 always 模式并同步 aria-label，禁止退回原生 title。 -->
+selplat_grid_icon_action_tooltip_contract = icon_only_record_action_requires_selTooltip_always,aria_label_matches_tooltip,no_native_title
+<!-- 启停类记录操作的图标和 Tip 必须描述点击后将执行的动作；已启用记录显示停用，已停用记录显示启用，禁止用当前状态冒充动作。 -->
+selplat_grid_state_action_semantics = label_and_icon_describe_next_action,enabled_record_shows_disable,disabled_record_shows_enable
+
+## 破坏性动作确认
+
+<!-- 删除等只需要一次布尔选择的破坏性动作必须使用紧凑 selConfirmDialog；selWindow 只承载表单或完整业务流程，禁止用空白大窗口模拟确认框。 -->
+selplat_destructive_action_confirmation_component = selConfirmDialog,compact_boolean_confirmation,no_selWindow
+<!-- 危险确认必须在用户明确确认后才调用业务删除；取消、关闭和 Escape 均返回 false，初始焦点停在取消按钮以避免回车误删。 -->
+selplat_destructive_confirmation_safety = execute_after_true_only,cancel_close_escape_return_false,default_focus_cancel
+<!-- 确认文案必须依据当前数据动态展示真实关联数量，并准确区分逻辑停用、物理删除与级联影响；没有后端检查时禁止声称数据库会自动阻止。 -->
+selplat_destructive_confirmation_truthful_copy = current_relation_count,actual_soft_or_physical_delete_semantics,no_unimplemented_database_block_claim
+
+## 管理员页面编辑
+
+<!-- 页面编辑模式由 selPersonalization 统一拥有，应用只登记控件根、可见名称、数据库坐标和状态适配器，禁止每页复制编辑开关与保存栏。 -->
+selplat_page_editor_owner = selPersonalization,application_registers_root_title_coordinates_capture_restore_save_only,no_private_editor_shell
+<!-- 页面编辑入口只在后台明确返回 canEditPage=true 时显示；保存接口必须再次调用 BaseServiceImpl.isAdmin，禁止以前端隐藏作为权限边界。 -->
+selplat_page_editor_authorization = backend_capability_controls_visibility,service_isAdmin_rechecks_every_save,no_frontend_only_authorization
+<!-- 页面编辑使用预览与编辑左右双态；进入编辑建立基线，变更实时预览并标记脏状态，取消恢复基线，保存成功才进入新基线。 -->
+selplat_page_editor_session_lifecycle = preview_edit_segmented_mode,capture_baseline,live_draft,dirty_indicator,cancel_restore,explicit_save_then_new_baseline
+<!-- 编辑模式打开后才在已登记控件旁显示统一编辑入口；预览模式必须移除角标和编辑轮廓，保持业务页面干净。 -->
+selplat_page_editor_affordance_visibility = registered_control_badge_in_edit_mode_only,preview_mode_clean
+<!-- 每个控件必须直观显示足以定位其真实配置记录的稳定坐标；表格使用 tableName+gridId，具体列持久化再增加 gridColumnId。 -->
+selplat_page_editor_coordinate_contract = control_specific_stable_database_coordinate,grid_tableName_plus_gridId,column_adds_gridColumnId
+<!-- Grid 拖动过程只更新内存预览，结束时发布一次终值；显式保存批量更新宽度并重新调用业务 getGridColumn，禁止移动期间逐次写库。 -->
+selplat_grid_page_editor_persistence = live_memory_resize,one_terminal_change_event,batch_save_widths,write_then_business_getGridColumn_refresh,no_request_per_pointermove
+<!-- 菜单、树、下拉和数据类型以后通过同一页面编辑注册 API 增加适配器，但仍使用各自业务表和 Service，禁止合并为不可治理的通用 JSON 表。 -->
+selplat_page_editor_extension_boundary = shared_editor_session_per_control_adapter,menu_tree_dropdown_data_type_keep_business_table_and_service,no_monolithic_json_table
+
 ## 验证
 
 <!-- 快速门禁执行登记、源码归属、应用私造和生成模板依赖检查，不启动浏览器或业务数据库。 -->
@@ -120,14 +155,18 @@ selplat_component_quick_gate = selplat_source_ownership_guard,zero_component_gov
 selplat_component_typography_quick_gate = seven_roles,weight_and_line_height_metrics,tree_role_mapping,zero_primary_secondary_legacy_token
 <!-- 公共前端 check 必须独立解析同一登记，阻断未登记源码、错误 API、缺失主题令牌和错误资源顺序。 -->
 selplat_component_build_gate = shared_frontend_sel_ui_verifySelUiSourceBoundary,one_registry_same_policy
-<!-- 快速门禁和公共构建同时验证 selTooltip 关键生命周期、Grid/Tree 消费、原生 title 清零和依赖资源顺序。 -->
-selplat_tooltip_gate = tooltip_contract,grid_tree_consumers,zero_native_title,registry_dependency_resource_order
+<!-- 快速门禁和公共构建同时验证 selTooltip 关键生命周期、Grid/Tree 消费、纯图标记录操作、原生 title 清零和依赖资源顺序。 -->
+selplat_tooltip_gate = tooltip_contract,grid_tree_consumers,grid_record_action_tooltip_and_dynamic_state_semantics,zero_native_title,registry_dependency_resource_order
+<!-- 快速门禁扫描全部应用装配层，阻断以 selWindow 承载删除确认，并由 reference-data 回归验证首个修复调用方。 -->
+selplat_destructive_confirmation_gate = application_scan_zero_delete_selWindow,reference_data_uses_selConfirmDialog,explicit_boolean_result_before_delete,zero_misleading_database_block_copy
 <!-- 快速门禁和公共构建必须同时验证 selPanel 工具栏缩放配置、分隔语义、双击复位和 MDA 首个调用方。 -->
 selplat_toolbar_column_resize_gate = panel_contract,default_enabled,explicit_disable,keyboard_and_pointer,double_click_reset,mda_consumer
 <!-- 公共前端构建必须验证 Grid 分类值归一化以及 type、tree type、typeGroup 三条成员匹配路径。 -->
 selplat_grid_multi_value_type_gate = normalize_scalar_and_array,toolbar_membership,tree_membership,type_group_any_membership
 <!-- 动态模块调用方回归必须覆盖字段契约切换、旧筛选清理和窗口选择默认项复位。 -->
 selplat_runtime_contract_and_form_default_verification = grid_module_contract_switch,filter_reset,window_select_default_after_reset
+<!-- 页面编辑公共回归必须覆盖非管理员隐藏、管理员后台二次校验、坐标可见、拖拽终值事件、取消恢复、批量保存和重新读取宽度。 -->
+selplat_page_editor_verification = non_admin_hidden,admin_service_recheck,visible_coordinates,terminal_resize_event,cancel_restore,batch_save,reload_persisted_width
 <!-- 应用装配回归必须断言所有显式 SEL 实例 ID 符合统一命名，并阻断 Managent 等错误英文拼写。 -->
 selplat_component_instance_id_verification = all_explicit_sel_instance_ids_match_naming,zero_known_business_spelling_errors
 <!-- 控件迁移至少验证旧选择器清零、新公共 API 调用、应用装配测试和真实浏览器交互与控制台。 -->

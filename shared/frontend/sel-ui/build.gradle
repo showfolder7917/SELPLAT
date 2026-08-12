@@ -95,6 +95,31 @@ tasks.register('verifySelUiSourceBoundary') {
         if (!typographyViolations.isEmpty()) {
             throw new GradleException("sel-ui 统一文字治理门禁失败：\n" + typographyViolations.join('\n'))
         }
+        // 页面编辑器与 Grid 的公共适配契约必须成对存在，应用只能登记坐标和保存回调。
+        def personalizationSource = file('src/components/personalization/selPersonalization.js').getText('UTF-8')
+        def personalizationStyle = file('src/components/personalization/selPersonalization.css').getText('UTF-8')
+        def pageEditorGridSource = file('src/components/grid/selGrid.js').getText('UTF-8')
+        def pageEditorViolations = []
+        [
+            'registerPageControl: selPersonalizationRegisterPageControl',
+            'updatePageControl: selPersonalizationUpdatePageControl',
+            'setPageMode: selPersonalizationSetPageMode',
+            'savePage: selPersonalizationSavePageEditing',
+            'cancelPage: selPersonalizationCancelPageEditing',
+            'data-sel-personal-page-mode="preview"',
+            'data-sel-personal-page-mode="edit"'
+        ].each { contract ->
+            if (!personalizationSource.contains(contract)) pageEditorViolations.add("selPersonalization.js -> 缺少 ${contract}")
+        }
+        ['selpersonal-page-mode', 'selpersonal-page-control-edit', 'selpersonal-page-inspector'].each { selector ->
+            if (!personalizationStyle.contains(".${selector}")) pageEditorViolations.add("selPersonalization.css -> 缺少 ${selector}")
+        }
+        ['selGrid:columnResizeChange', 'captureColumnWidths:', 'setColumnWidths:', 'resetColumnWidths:'].each { contract ->
+            if (!pageEditorGridSource.contains(contract)) pageEditorViolations.add("selGrid.js -> 缺少 ${contract}")
+        }
+        if (!pageEditorViolations.isEmpty()) {
+            throw new GradleException("sel-ui 页面编辑公共契约门禁失败：\n" + pageEditorViolations.join('\n'))
+        }
         // 中央登记是公共控件的唯一创建入口；新增目录、脚本或样式未登记时直接阻断。
         def registryFile = file('src/components/component-registry.json')
         if (!registryFile.isFile()) {

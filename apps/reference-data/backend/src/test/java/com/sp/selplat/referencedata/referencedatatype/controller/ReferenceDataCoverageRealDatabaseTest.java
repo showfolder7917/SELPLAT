@@ -159,6 +159,10 @@ class ReferenceDataCoverageRealDatabaseTest {
         assertEquals(2, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM ReferenceDataType WHERE projectCode = 'shop'",
                 Integer.class));
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ReferenceDataType WHERE projectCode = 'shop' "
+                        + "AND tenantId = 1 AND lastOperateUserId = 1",
+                Integer.class));
         assertEquals(0, typeService.insertBatch(new CommonBatchParam()).getAffectedRows());
 
         CommonBatchParam updateBatch = batch(
@@ -179,7 +183,7 @@ class ReferenceDataCoverageRealDatabaseTest {
     /**
      * 执行所有可由真实请求稳定制造的类型 Service 参数与业务错误验证。
      *
-     * 执行结果示例：缺字段、非法数字、审计 ID、重复坐标和保护记录分别返回稳定错误编码。
+     * 执行结果示例：缺字段、非法数字、重复坐标和保护记录分别返回稳定错误编码；伪造身份被忽略。
      */
     private void verifyInvalidTypeInputs() {
         applyFixture("shouldRejectInvalidTypeInputs");
@@ -215,10 +219,14 @@ class ReferenceDataCoverageRealDatabaseTest {
 
         CommonParam invalidTenant = typeParam("cms", "bad-tenant", "非法租户", 1, "1");
         invalidTenant.putParam("tenantId", 0);
-        assertBusiness("REFERENCE_DATA_TYPE_AUDIT_ID_INVALID", () -> typeService.insert(invalidTenant));
+        assertTrue(typeService.insert(invalidTenant).isSuccess());
         CommonParam invalidOperator = typeParam("cms", "bad-operator", "非法操作员", 1, "1");
         invalidOperator.putParam("lastOperateUserId", 0);
-        assertBusiness("REFERENCE_DATA_TYPE_AUDIT_ID_INVALID", () -> typeService.insert(invalidOperator));
+        assertTrue(typeService.insert(invalidOperator).isSuccess());
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ReferenceDataType WHERE resourceCode IN "
+                        + "('bad-tenant', 'bad-operator') AND tenantId = 1 AND lastOperateUserId = 1",
+                Integer.class));
 
         CommonParam blankOptionalValues = typeParam("cms", "blank-optional", "空白可选值", null, " ");
         blankOptionalValues.putParam("nameEn", " ");

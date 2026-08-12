@@ -156,7 +156,7 @@ public abstract class BaseController<S extends BaseService> extends BaseExtendsC
     /**
      * 按主键假删除一条当前业务记录。
      *
-     * @param deleteIn 查询字符串或表单主键与审计字段，例如 {@code id=10001&lastOperateUserId=90001}
+     * @param deleteIn 查询字符串或表单主键，例如 {@code id=10001}；审计身份由 Service 补齐
      * @return 假删除 JSON，例如 {@code {"success":true,"data":{"id":10001,"status":0}}}
      */
     @ResponseBody

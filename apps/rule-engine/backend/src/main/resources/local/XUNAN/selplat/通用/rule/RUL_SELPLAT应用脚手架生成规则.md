@@ -6,14 +6,14 @@ java_ability_refs = apps/mda/backend/src/main/java/com/sp/selplat/mda/capability
 python_ability_refs = none
 <!-- 页面脚本由模板生成并使用现有浏览器与前端语法验证，不登记额外 Node 能力。 -->
 node_ability_refs = none
-<!-- 本版将新生成标准业务表的中日英标签与平台默认字段纳入生成和快速门禁。 -->
-rule_version = 1.13.0
+<!-- 本版让新生成页面退出租户和操作员编辑提交，并统一继承 BaseServiceImpl 的服务端身份。 -->
+rule_version = 1.14.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析，未经审查不得提升到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则、生成器、索引和真实隔离文件测试已经形成闭环。 -->
 rule_status = active
 <!-- 本规则来源于用户要求从 uniauth 抽取模板并让后续 AI 可重复接手。 -->
-upgrade_record = 2026-08-09:建立SELPLAT工程与业务表脚手架生成_冲突保护_reference-data扩展和左树右表页面规则;2026-08-09:修正MDA生成器具体类冒充Service接口并增加接口实现目录_Controller依赖和模板输出的自动门禁;2026-08-09:修正独立启动误扫描公共DAO_引用数据接口未装配和纯注释空数据脚本启动失败并增加真实启动门禁;2026-08-09:修正只登记Host依赖却遗漏桌面入口和同源路径白名单_将统一桌面闭环加入原子生成与构建门禁;2026-08-09:修正生成页面只加载单一皮肤并手写树_表格_窗口_改为完整SEL主题运行时和公共控件装配并增加模板输出门禁;2026-08-09:修正MDA自建Request_Result协议_统一复用CommonParam_CommonResult并增加生成门禁;2026-08-10:删除无调用方表Domain模板_统一使用CommonParam_Map_真实数据库元数据;2026-08-10:将生成包结构统一为技术层优先_层内按业务分目录_通用能力进入common;2026-08-10:以Uniauth为准改为数据库业务目录优先_Controller_Service_DAO_Reference聚合到同一业务_common只保存跨业务能力;2026-08-10:抽象SELPLAT数据库应用职责门禁_一业务一Service_common仅config_persistence_util_能力与框架扩展必须有真实需求后创建;2026-08-10:新工程原子写入rule_engine中央数据库应用登记_停止生成无读取方manifest目录;2026-08-10:号段种子由MERGE改为INSERT_WHERE_NOT_EXISTS_禁止重启覆盖游标和版本;2026-08-10:新生成标准业务表统一中日英标签与平台默认字段_生成器测试和快速门禁同步阻断旧name字段;2026-08-11:生成器作为全项目无状态能力进入统一capability分层_取消宿主项目专属结构口径
+upgrade_record = 2026-08-09:建立SELPLAT工程与业务表脚手架生成_冲突保护_reference-data扩展和左树右表页面规则;2026-08-09:修正MDA生成器具体类冒充Service接口并增加接口实现目录_Controller依赖和模板输出的自动门禁;2026-08-09:修正独立启动误扫描公共DAO_引用数据接口未装配和纯注释空数据脚本启动失败并增加真实启动门禁;2026-08-09:修正只登记Host依赖却遗漏桌面入口和同源路径白名单_将统一桌面闭环加入原子生成与构建门禁;2026-08-09:修正生成页面只加载单一皮肤并手写树_表格_窗口_改为完整SEL主题运行时和公共控件装配并增加模板输出门禁;2026-08-09:修正MDA自建Request_Result协议_统一复用CommonParam_CommonResult并增加生成门禁;2026-08-10:删除无调用方表Domain模板_统一使用CommonParam_Map_真实数据库元数据;2026-08-10:将生成包结构统一为技术层优先_层内按业务分目录_通用能力进入common;2026-08-10:以Uniauth为准改为数据库业务目录优先_Controller_Service_DAO_Reference聚合到同一业务_common只保存跨业务能力;2026-08-10:抽象SELPLAT数据库应用职责门禁_一业务一Service_common仅config_persistence_util_能力与框架扩展必须有真实需求后创建;2026-08-10:新工程原子写入rule_engine中央数据库应用登记_停止生成无读取方manifest目录;2026-08-10:号段种子由MERGE改为INSERT_WHERE_NOT_EXISTS_禁止重启覆盖游标和版本;2026-08-10:新生成标准业务表统一中日英标签与平台默认字段_生成器测试和快速门禁同步阻断旧name字段;2026-08-11:生成器作为全项目无状态能力进入统一capability分层_取消宿主项目专属结构口径;2026-08-12:生成页面和业务Service退出租户操作员自填并继承公共身份
 
 <!-- 问题：手工复制既有应用容易遗漏项目数据源、号段、Host 登记、SQL 顺序、默认审计字段或页面资源，也容易无需求预留公共层和框架扩展。 -->
 <!-- 场景：在 SELPLAT apps 下新建业务工程，或向已由脚手架创建的工程追加一张业务表。 -->
@@ -100,8 +100,8 @@ selplat_scaffold_multilingual_label_columns = labelZh:required,labelJa:optional,
 selplat_scaffold_default_column_scope = future_mda_generated_standard_business_tables,no_automatic_existing_specialized_table_migration
 <!-- id 由 CommonSequenceSegment 的实际表名加 Id 号段生成，Service 禁止自行计算主键；初始化只补缺失号段，禁止重启覆盖游标。 -->
 selplat_scaffold_primary_key_sequence = <ActualTableName>Id,insert_where_not_exists,no_merge,no_cursor_reset
-<!-- 新增时当前表唯一 Service 为空值补租户一、操作人一、排序零、有效状态一和当前创建更新时间。 -->
-selplat_scaffold_insert_defaults = tenantId:1,lastOperateUserId:1,sortnum:0,status:1,createdAt:now,updatedAt:now
+<!-- 新增时租户和操作员由 BaseServiceImpl 无条件写入，生成业务 Service 只补排序、有效状态和创建更新时间。 -->
+selplat_scaffold_insert_defaults = BaseServiceImpl:tenantId_and_lastOperateUserId;generated_business_service:sortnum:0,status:1,createdAt:now,updatedAt:now
 <!-- 新建业务表默认不写业务记录，页面首次访问必须明确显示空表状态。 -->
 selplat_scaffold_business_seed_policy = empty_by_default
 <!-- 空业务数据脚本必须包含可执行无副作用语句，禁止纯注释文件触发 ResourceDatabasePopulator 启动失败。 -->
@@ -127,6 +127,8 @@ selplat_scaffold_default_visual_density = compact,personalization_remains_effect
 selplat_scaffold_frontend_namespace = project_prefixed_css_and_javascript
 <!-- 默认左树只使用页面本地的“全部数据”根节点，禁止为展示空树而伪造后端 Provider；真实树需求出现后再按框架契约接入。 -->
 selplat_scaffold_default_tree_source = local_all_records_root,no_placeholder_backend_api,real_tree_requirement_before_framework_extension
+<!-- 生成页面不得显示租户与操作员编辑框，也不得在新增、更新或删除 payload 中提交这两个身份字段。 -->
+selplat_scaffold_frontend_identity_fields = tenantId,lastOperateUserId:no_editor,no_write_payload
 
 ## 完成门槛
 

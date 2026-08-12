@@ -751,10 +751,14 @@
             generated: mdaColumn.generated ? "是" : "否"
         }));
         const mdaGridController = mdaMountStructureGrid(mdaPanel, `${mdaSession.id}Columns`, "字段属性", [
-                { id: "name", field: "name", label: "字段名" }, { id: "remarks", field: "remarks", label: "字段注释" },
-                { id: "dataType", field: "dataType", label: "数据类型" }, { id: "primaryKey", field: "primaryKey", label: "主键" },
-                { id: "nullable", field: "nullable", label: "允许空" }, { id: "defaultValue", field: "defaultValue", label: "默认值" },
-                { id: "autoIncrement", field: "autoIncrement", label: "自增" }, { id: "generated", field: "generated", label: "生成列" }
+                { id: "name", field: "name", label: "字段名", width: 150 },
+                { id: "remarks", field: "remarks", label: "字段注释", width: 405 },
+                { id: "dataType", field: "dataType", label: "数据类型", width: 267 },
+                { id: "primaryKey", field: "primaryKey", label: "主键", width: 150 },
+                { id: "nullable", field: "nullable", label: "允许空", width: 150 },
+                { id: "defaultValue", field: "defaultValue", label: "默认值", width: 215 },
+                { id: "autoIncrement", field: "autoIncrement", label: "自增", width: 150 },
+                { id: "generated", field: "generated", label: "生成列", width: 150 }
             ], mdaColumnItems, "当前对象没有字段元数据");
         return () => {
             mdaGridController.destroy();

@@ -99,8 +99,6 @@ public class JapaneseN2BlueBookQuestionServiceImpl
     @Override
     public CommonResult insert(CommonParam saveIn) {
         LocalDateTime now = LocalDateTime.now();
-        putIfAbsent(saveIn, "tenantId", 1L);
-        putIfAbsent(saveIn, "lastOperateUserId", 1L);
         putIfAbsent(saveIn, "sortnum", 0);
         putIfAbsent(saveIn, "status", 1);
         putIfAbsent(saveIn, "createdAt", now);

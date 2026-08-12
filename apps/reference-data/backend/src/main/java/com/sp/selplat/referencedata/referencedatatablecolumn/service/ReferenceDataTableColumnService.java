@@ -1,6 +1,7 @@
 package com.sp.selplat.referencedata.referencedatatablecolumn.service;
 
 import com.sp.selplat.common.service.BaseService;
+import com.sp.selplat.common.util.CommonParam;
 import java.util.List;
 import java.util.Map;
 import com.sp.selplat.common.util.CommonResult;
@@ -27,4 +28,21 @@ public interface ReferenceDataTableColumnService extends BaseService {
      * @return 标准列，例如 {@code [{"id":"nameZh","field":"nameZh","label":"中文名称"}]}；未配置返回空列表
      */
     List<Map<String, Object>> resolveColumnDefinitions(String tableName, String gridId, String locale);
+
+    /**
+     * 返回当前操作员可使用的页面编辑能力。
+     *
+     * @return 管理员示例 {@code {"admin":true,"canEditPage":true}}
+     */
+    CommonResult getPageEditorCapability();
+
+    /**
+     * 保存一个已登记页面表格的多列像素宽度。
+     *
+     * @param saveIn 页面提交的表格坐标与列宽 JSON，例如
+     *     {@code {"tableName":"ReferenceDataTable","gridId":"selGridTableManagementId",}
+     *     {@code "widths":"[{\"gridColumnId\":\"projectName\",\"width\":\"180px\"}]"}}
+     * @return 保存结果，例如 {@code {"success":true,"affectedRows":1}}
+     */
+    CommonResult saveColumnWidths(CommonParam saveIn);
 }

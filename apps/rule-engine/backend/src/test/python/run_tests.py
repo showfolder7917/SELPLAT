@@ -71,11 +71,10 @@ def main(arguments: list[str] | None = None) -> int:
         return 2
     # all 按 core、当前稳定用户的稳定顺序组合两个发现结果。
     selected_scopes = list(TEST_SCOPES) if scope == "all" else [scope]
-    # 使用统一加载器发现各作用域 test_*.py。
-    loader = unittest.TestLoader()
+    # 每个作用域使用独立加载器，避免 unittest 复用首个目录为 top_level_dir 后拒绝相邻作用域。
     # 多个作用域组合为一个套件，最终只输出一份总结果。
     suite = unittest.TestSuite(
-        loader.discover(str(TEST_SCOPES[selected]), pattern="test_*.py")
+        unittest.TestLoader().discover(str(TEST_SCOPES[selected]), pattern="test_*.py")
         for selected in selected_scopes
     )
     # 与现有验证保持详细输出，失败时可直接定位测试方法。

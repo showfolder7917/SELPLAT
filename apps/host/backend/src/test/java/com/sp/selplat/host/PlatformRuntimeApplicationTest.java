@@ -76,7 +76,11 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("selgrid-table-horizontal-scroll")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("horizontalScroll === true")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("columnResize !== false")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("selGridHandleColumnResizeMove")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("selGridHandleColumnResizeMove")))
+                // 纯图标记录操作必须使用统一 selTooltip，并允许标签与图标根据当前记录动态解析。
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("selGridResolveRecordActionValue")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("selGridButton.dataset.selTooltip = selGridActionLabel")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("selGridButton.dataset.selTooltipMode = \"always\"")));
         // Tab 右键操作必须由 sel-ui 通用菜单发布，禁止 MDA 复制第二套浮层。
         mockMvc.perform(get("/sel/components/context-menu/selContextMenu.js"))
                 .andExpect(status().isOk())
@@ -92,7 +96,10 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(status().isOk());
         // reference-data 管理后台同样由统一 Host 发布，不增加第二个前端端口。
         mockMvc.perform(get("/reference-data/reference-data.html"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                // 删除动作必须加载紧凑确认控件，不得用完整业务窗口承载二次确认。
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "/sel/components/confirm-dialog/selConfirmDialog.js")));
         // Japanese 必须由统一 Host 发布，禁止只在业务模块独立启动时可访问。
         mockMvc.perform(get("/japanese/japanese.html"))
                 .andExpect(status().isOk())
