@@ -27,6 +27,12 @@ PROGRAM_PATH = (
     / ACTIVE_STABLE_USER_ID
     / "abilities/selplat_source_ownership_guard.py"
 )
+RULE_PATH = (
+    PROJECT_ROOT
+    / "apps/rule-engine/backend/src/main/resources/local"
+    / ACTIVE_STABLE_USER_ID
+    / "selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md"
+)
 OPTION_TEMP_ROOT = PROJECT_ROOT / "OPTION/temp"
 
 
@@ -47,6 +53,21 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         OPTION_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
         cls.guard = load_guard_module()
+
+    def test_rule_requires_windows_and_macos_path_component_comparison(self) -> None:
+        """路径治理必须固定 Windows/macOS 目标，并禁止分隔符字符串断言。"""
+        # 读取当前用户层规则正本 → 防止跨平台约束只修测试而没有进入后续任务加载链。
+        rule_text = RULE_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            "selplat_supported_desktop_path_platforms = windows,macos",
+            rule_text,
+        )
+        self.assertIn(
+            "selplat_cross_platform_path_comparison = "
+            "java.nio.file.Path,python.pathlib.Path,component_or_relative_suffix,"
+            "no_fixed_separator_string_assertion",
+            rule_text,
+        )
 
     def create_fixture(self, temp_root: Path) -> Path:
         """创建最小 SELPLAT 工程事实，仅用于隔离扫描。"""

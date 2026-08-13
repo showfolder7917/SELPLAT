@@ -22,8 +22,17 @@ PROJECT_ROOT = next(
 )
 sys.pycache_prefix = str(PROJECT_ROOT / "cache/python-pycache")
 
-import numpy as np
-from PIL import Image, ImageOps
+# API 导入与同步不使用 OCR 图像栈；依赖缺失时仅阻断真正的扫描解析动作。
+try:
+    import numpy as np
+    from PIL import Image, ImageOps
+except ModuleNotFoundError as image_dependency_error:
+    np = None
+    Image = None
+    ImageOps = None
+    IMAGE_DEPENDENCY_IMPORT_ERROR = image_dependency_error
+else:
+    IMAGE_DEPENDENCY_IMPORT_ERROR = None
 
 from japanese_import_temp_path_guard import (
     JAPANESE_IMPORT_TEMP_ROOT,
@@ -41,6 +50,14 @@ QUESTION_PLACEHOLDER_PATTERN = re.compile(
     r"(?:\(\s*\)|（\s*）|\[\s*\]|［\s*］)")
 ANSWER_X_RATIOS = (0.363, 0.459, 0.570, 0.682, 0.806, 0.909)
 ANSWER_X_RATIOS_SEVEN = (0.362, 0.446, 0.531, 0.632, 0.717, 0.828, 0.918)
+
+
+def require_image_dependencies() -> None:
+    """仅在解析扫描页时要求 NumPy 与 Pillow，并返回明确的安装提示。"""
+    if IMAGE_DEPENDENCY_IMPORT_ERROR is not None:
+        raise RuntimeError(
+            "scanned-book parsing requires numpy and Pillow"
+        ) from IMAGE_DEPENDENCY_IMPORT_ERROR
 
 # 这些字段由原扫描题页与官方详解页逐项人工复核，避免把 OCR 漏字写入题库。
 VERIFIED_SOURCE_CORRECTIONS: dict[int, dict[str, str]] = {
@@ -308,6 +325,8 @@ def parse_question_page(
 
 def normalize_glyph(image: Image.Image) -> np.ndarray:
     """Normalize one printed answer digit to a centered 24x36 binary bitmap."""
+    # 字形归一化属于 OCR 路径，进入图像计算前统一核验可选依赖。
+    require_image_dependencies()
     gray = ImageOps.autocontrast(image.convert("L"), cutoff=1)
     binary = np.array(gray) < 190
     row_counts = binary.sum(axis=1)
@@ -354,6 +373,8 @@ def normalize_glyph(image: Image.Image) -> np.ndarray:
 
 def build_answer_templates(ocr_dir: Path, pages_dir: Path) -> dict[str, np.ndarray]:
     """Build digit templates from high-confidence official answer cells across the book."""
+    # 模板读取首先使用 Pillow，必须在打开图片前给出稳定的依赖错误。
+    require_image_dependencies()
     samples: dict[str, list[np.ndarray]] = {digit: [] for digit in "1234"}
     for page in range(FIRST_QUESTION_PAGE + 1, LAST_QUESTION_PAGE + 2, 2):
         words = read_tsv(ocr_dir / f"page-{page:03d}.tsv")
@@ -381,6 +402,8 @@ def answer_values(
         words: list[OcrWord], expected_count: int, page_path: Path,
         templates: dict[str, np.ndarray]) -> list[str]:
     """Read six official answer cells using OCR tokens plus image-template fallback."""
+    # 答案识别属于 OCR 路径，API 同步场景不会触发本检查。
+    require_image_dependencies()
     image = Image.open(page_path)
     answer_x_ratios = (
         ANSWER_X_RATIOS_SEVEN if expected_count == 7 else ANSWER_X_RATIOS)

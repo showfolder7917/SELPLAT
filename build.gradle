@@ -45,6 +45,19 @@ configure(javaLeafProjects) {
         testRuntimeOnly fileTree(dir: rootProject.file('cache/cache-jars'), include: ['*.jar'])
     }
 
+    pluginManager.withPlugin('jacoco') {
+        dependencies {
+            // flatDir 不提供 POM 传递依赖，因此所有覆盖模块统一显式补齐 JaCoCo 离线工具闭包。
+            jacocoAgent "org.jacoco:org.jacoco.agent:${jacocoVersion}"
+            jacocoAnt "org.jacoco:org.jacoco.ant:${jacocoVersion}"
+            jacocoAnt "org.jacoco:org.jacoco.core:${jacocoVersion}"
+            jacocoAnt "org.jacoco:org.jacoco.report:${jacocoVersion}"
+            jacocoAnt "org.ow2.asm:asm:${asmVersion}"
+            jacocoAnt "org.ow2.asm:asm-commons:${asmVersion}"
+            jacocoAnt "org.ow2.asm:asm-tree:${asmVersion}"
+        }
+    }
+
     java {
         toolchain {
             // 所有子项目统一锁到 Java 21，满足本轮版本调整要求。
@@ -124,10 +137,15 @@ def selplatAbilityExecutorScript = file(
         'apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/executor.py')
 // 每个任务生命周期动作都保留结构化 JSON，便于执行器和测试稳定识别 begin、step、active、ready、finish。
 def selplatExecutionDocumentCommand = { String action ->
+    String contextJson = JsonOutput.toJson([action: action])
+    // Windows CreateProcess 会消费未转义的 JSON 双引号；只在 Windows 保留字面引号供 Python 解析。
+    String contextArgument = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')
+            ? contextJson.replace('"', '\\"')
+            : contextJson
     return selplatPythonCommand() + [
         selplatAbilityExecutorScript.absolutePath,
         'execution_doc_manager',
-        JsonOutput.toJson([action: action])
+        contextArgument
     ]
 }
 
@@ -136,6 +154,7 @@ tasks.register('selplatTaskDocumentActiveGate', Exec) {
     description = '阻断没有独立 1、真实目标和执行步骤的当前线程任务。'
     workingDir rootProject.projectDir
     environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
     doFirst {
         // 快速、专项和全量门禁共用当前 Codex 线程，不允许用其他页面的文档代替本轮授权。
         commandLine(selplatExecutionDocumentCommand('active'))
@@ -147,6 +166,7 @@ tasks.register('selplatQuickGate', Exec) {
     description = '快速检查 SELPLAT 源码归属、数据库结构、SQL 幂等和工程目录门禁。'
     workingDir rootProject.projectDir
     environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
     dependsOn 'selplatTaskDocumentActiveGate'
     doFirst {
         // 当前机器 Python 启动器 + 唯一生产门禁程序 → 零违规时任务成功，任一违规立即阻断。
@@ -159,6 +179,7 @@ tasks.register('selplatActiveUserRuleTests', Exec) {
     description = '运行当前稳定用户规则和源码门禁自动化测试。'
     workingDir rootProject.projectDir
     environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
     doFirst {
         // 当前用户测试范围从 AGENTS.md 动态解析，禁止在 Gradle 中写死用户目录。
         commandLine(selplatPythonCommand() + [selplatRuleTestScript.absolutePath, 'active-user'])
@@ -170,6 +191,7 @@ tasks.register('selplatAllRuleTests', Exec) {
     description = '运行 core 与当前稳定用户的全部规则引擎 Python 测试。'
     workingDir rootProject.projectDir
     environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
     doFirst {
         // all 范围由统一测试入口组合 core 与当前用户，避免 Gradle 扫描用户目录自行推断身份。
         commandLine(selplatPythonCommand() + [selplatRuleTestScript.absolutePath, 'all'])
@@ -254,6 +276,7 @@ tasks.register('selplatTaskDocumentReadyGate', Exec) {
     description = '根交付前检查当前线程执行文档的全部步骤已经回写真实结果。'
     workingDir rootProject.projectDir
     environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
     doFirst {
         // ready 只检查不归档，后续完整门禁失败时仍保留当前文档供继续修正。
         commandLine(selplatExecutionDocumentCommand('ready'))
@@ -276,6 +299,7 @@ tasks.register('selplatTaskDocumentFinishGate', Exec) {
     description = '完整门禁成功后归档当前线程执行文档，作为统一任务交付终点。'
     workingDir rootProject.projectDir
     environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
     dependsOn 'selplatTaskDocumentReadyGate', 'selplatFullGate'
     doFirst {
         // finish 再次核验 ready 后归档；中途失败不会清空当前任务记录。

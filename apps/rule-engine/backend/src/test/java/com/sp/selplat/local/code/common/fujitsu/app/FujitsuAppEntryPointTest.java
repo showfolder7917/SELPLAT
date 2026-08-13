@@ -65,10 +65,15 @@ class FujitsuAppEntryPointTest {
         locator.setAccessible(true);
         // 无参数人工运行和 AI 调用共享这份默认 JSON。
         Path configPath = (Path) locator.invoke(null);
-        // 配置必须位于当前分层后的 Fujitsu 规则模板包。
-        assertTrue(configPath.toString().contains(
-            "local/common/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则"
-        ));
+        // 使用 Path 组件比较规则包尾部 → Windows 反斜杠与 macOS 正斜杠得到同一判断结果。
+        Path expectedConfigSuffix = Path.of(
+            "apps", "rule-engine", "backend", "src", "main", "resources",
+            "local", "common", "fujitsu", "通用", "template",
+            "RUL_FujitsuSQL规格书Excel生成规则", "SQL仕様書生成ツール",
+            "SQL仕様書生成ツール新規.json"
+        );
+        // 实际默认配置必须完整落在当前 Fujitsu 规则模板包，不接受仅包含同名目录的模糊匹配。
+        assertTrue(configPath.normalize().endsWith(expectedConfigSuffix));
         // 真实文件存在才说明 main 无参数入口没有继续引用废弃资源路径。
         assertTrue(Files.isRegularFile(configPath));
     }
