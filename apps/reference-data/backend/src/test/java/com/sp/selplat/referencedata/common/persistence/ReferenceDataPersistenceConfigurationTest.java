@@ -68,6 +68,20 @@ class ReferenceDataPersistenceConfigurationTest {
                     "SELECT COUNT(*) FROM ReferenceDataTable", Integer.class);
             Integer configuredColumnCount = jdbc.queryForObject(
                     "SELECT COUNT(*) FROM ReferenceDataTableColumn", Integer.class);
+            Integer referenceDataMetadataCommentCount = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                            + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME IN "
+                            + "('ReferenceDataType', 'ReferenceDataTreeNode', "
+                            + "'ReferenceDataOption', 'ReferenceDataContextMenuItem') "
+                            + "AND REMARKS IS NOT NULL AND TRIM(REMARKS) <> ''",
+                    Integer.class);
+            Integer serializedAttributeColumnCount = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                            + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME IN "
+                            + "('ReferenceDataTreeNode', 'ReferenceDataOption', "
+                            + "'ReferenceDataContextMenuItem') AND COLUMN_NAME = 'attributesJson' "
+                            + "AND DATA_TYPE = 'CHARACTER VARYING' AND CHARACTER_MAXIMUM_LENGTH = 10000",
+                    Integer.class);
 
             assertInstanceOf(HikariDataSource.class, dataSource);
             assertInstanceOf(DataSourceTransactionManager.class,
@@ -80,6 +94,8 @@ class ReferenceDataPersistenceConfigurationTest {
             assertEquals(8, tableHeaderColumnCount);
             assertEquals(6, registeredTableCount);
             assertEquals(46, configuredColumnCount);
+            assertEquals(62, referenceDataMetadataCommentCount);
+            assertEquals(3, serializedAttributeColumnCount);
         }
         assertTrue(Files.isRegularFile(Path.of(databaseBase + ".mv.db")));
     }

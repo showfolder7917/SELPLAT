@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTreeNode (
     -- labelEn 保存节点英文显示文本；未配置时由上层国际化回退策略处理。
     labelEn VARCHAR(200),
     -- attributesJson 保存节点业务扩展属性 JSON，不承载类型目录中的固定字段。
-    attributesJson CLOB,
+    attributesJson VARCHAR(10000),
     -- status 保存逻辑状态：0 表示逻辑删除，1 表示启用，2 表示停用。
     status INTEGER NOT NULL DEFAULT 1,
     -- sortnum 保存同类型或同父节点下的业务排序值。
