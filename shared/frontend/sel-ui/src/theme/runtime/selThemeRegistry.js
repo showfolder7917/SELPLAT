@@ -1,28 +1,17 @@
 /*
  * selThemeRegistry.js：SEL 主题包注册表。
  * 负责校验并保存主题、明暗模式、各模式颜色与素材清单，不操作页面 DOM 或业务组件。
- * 模块级 JavaScript 标识统一使用 selThemeRegistry 前缀，公开注册表为 window.selThemeRegistry。
+ * 模块级 JavaScript 标识统一使用 selThemeRegistry 前缀，公开注册表为 window.sel.theme.registry。
  */
 (function selThemeRegistryInitialize() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 注册表只保存经过完整校验的主题快照，避免主题包在注册后继续修改运行契约。
     const selThemeRegistryThemes = new Map();
     // 纯色背景不对应位图，是唯一允许跨主题使用的背景 ID。
     const selThemeRegistrySolidBackgroundIds = new Set(["solid-dark", "solid-light"]);
-
-    /**
-     * 递归冻结主题定义，使模式、颜色和素材在运行期保持稳定。
-     * @param {unknown} selThemeRegistryValue - 待冻结的主题定义节点。
-     * @returns {unknown} 已冻结的原值。
-     */
-    function selThemeRegistryFreeze(selThemeRegistryValue) {
-        if (!selThemeRegistryValue || typeof selThemeRegistryValue !== "object" || Object.isFrozen(selThemeRegistryValue)) {
-            return selThemeRegistryValue;
-        }
-        Object.values(selThemeRegistryValue).forEach(selThemeRegistryFreeze);
-        return Object.freeze(selThemeRegistryValue);
-    }
 
     /**
      * 校验主题包的最小运行契约。
@@ -77,16 +66,17 @@
     }
 
     // 公开 API 只允许显式注册、读取和枚举主题，不根据文件名或目录自动推断。
-    window.selThemeRegistry = Object.freeze({
+    window.sel.register("theme.registry", {
         register(selThemeRegistryTheme) {
             if (!selThemeRegistryValidate(selThemeRegistryTheme) || selThemeRegistryThemes.has(selThemeRegistryTheme.id)) {
                 return false;
             }
-            selThemeRegistryThemes.set(selThemeRegistryTheme.id, selThemeRegistryFreeze(selThemeRegistryTheme));
+            // 主题定义只在进入注册表时形成一次深只读快照，manifest 内部不再逐层重复冻结。
+            selThemeRegistryThemes.set(selThemeRegistryTheme.id, selFreeze(selThemeRegistryTheme));
             return true;
         },
         get: (selThemeRegistryThemeId) => selThemeRegistryThemes.get(selThemeRegistryThemeId) || null,
         has: (selThemeRegistryThemeId) => selThemeRegistryThemes.has(selThemeRegistryThemeId),
-        list: () => Object.freeze(Array.from(selThemeRegistryThemes.values()))
+        list: () => selFreeze(Array.from(selThemeRegistryThemes.values()))
     });
 })();

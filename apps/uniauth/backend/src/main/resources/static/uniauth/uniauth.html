@@ -101,7 +101,8 @@
     <!-- ===== Uniauth 应用静态审阅结构结束 ===== -->
 
     <!-- ===== SEL 基础脚本开始：基础脚本只注册能力，禁止主动扫描或识别 Uniauth 业务。 ===== -->
-    <script src="/sel/core/selBaseRuntime.js?v=20260806-runtime-i18n-1"></script>
+    <script src="/sel/core/selKernel.js?v=20260813-sel-api-1"></script>
+    <script src="/sel/core/selBaseRuntime.js?v=20260813-sel-api-1"></script>
     <script src="/sel/core/selLocaleRuntime.js?v=20260806-runtime-i18n-1"></script>
     <!-- selAjax 只执行应用传入的真实地址并返回 JSON，不保存任何 Uniauth 路径。 -->
     <script src="/sel/core/selAjax.js?v=20260731-1"></script>
@@ -128,7 +129,7 @@
     <!-- ===== SEL 基础脚本结束 ===== -->
 
     <!-- ===== Uniauth 应用装配层开始：最后加载，只传业务配置和数据并调用基础 API。 ===== -->
-    <script src="./uniauth.js?v=20260806-settings-center-1"></script>
+    <script src="./uniauth.js?v=20260814-api-refactor-1"></script>
     <!-- ===== Uniauth 应用装配层结束 ===== -->
 </body>
 </html>

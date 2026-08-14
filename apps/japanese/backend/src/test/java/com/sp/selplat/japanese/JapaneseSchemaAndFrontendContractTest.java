@@ -53,6 +53,7 @@ class JapaneseSchemaAndFrontendContractTest {
         String html = resource("/static/japanese/japanese.html");
         String script = resource("/static/japanese/japanese.js");
         assertThat(html)
+                .contains("/sel/core/selKernel.js")
                 .contains("/sel/theme/runtime/selThemeManager.js")
                 .contains("/sel/components/panel/selPanel.js")
                 .contains("/sel/components/tooltip/selTooltip.js")
@@ -64,11 +65,12 @@ class JapaneseSchemaAndFrontendContractTest {
                 .contains("/sel/components/personalization/selPersonalization.js")
                 .contains("data-sel-density=\"compact\"");
         assertThat(script)
-                .contains("window.selPanel.create")
-                .contains("window.selTree.mount")
-                .contains("window.selGrid.mount")
-                .contains("window.selWindow.mount")
-                .contains("window.selConfirmDialog.mount")
+                .contains("window.sel.require([")
+                .contains("panel.create")
+                .contains("tree.mount")
+                .contains("grid.mount")
+                .contains("windowComponent.mount")
+                .contains("confirmDialog.mount")
                 .contains("addEventListener(\"dblclick\"")
                 .contains("data-generate=\"explanation\"")
                 .contains("data-generate=\"image\"")

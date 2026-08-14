@@ -9,7 +9,7 @@
    - 基础皮肤素材：`<mode>/base/frame.webp` 和 `background.webp`
    - Accent 皮肤素材：`<mode>/accents/<accent-id>/frame.webp` 和 `background.webp`
    - 同一皮肤的边框与背景必须放在同一目录，不按素材类型或文件名前缀平铺。
-3. manifest 通过 `window.selThemeRegistry.register(...)` 登记主题，并且是主题独占素材的唯一路径持有者。
+3. manifest 通过 `window.sel.theme.registry.register(...)` 登记主题，并且是主题独占素材的唯一路径持有者。
 4. `modes` 中同时声明 `dark` 和 `light`；每个模式分别提供 `base` 与 `accents`。
 5. 主题自带背景时在 manifest 的 `backgrounds` 数组登记，图片必须来自 `assets/themes/<同一 theme-id>/`；禁止自动引用其他主题或公共背景。无图主题可使用已登记的纯色背景 ID。
 6. 在应用 HTML 中于 `selThemeRegistry.js` 之后、`selThemeManager.js` 之前加载新 manifest。
@@ -28,7 +28,7 @@
 ## Manifest 最小结构
 
 ```javascript
-window.selThemeRegistry.register({
+window.sel.theme.registry.register({
     id: "classic-enterprise",
     name: "经典商务",
     description: "紧凑、直角、低光效的企业桌面风格",

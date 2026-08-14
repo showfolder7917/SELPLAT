@@ -5,6 +5,8 @@
 (function selConfirmDialogInitializeRegistry() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     const selConfirmDialogInstances = new Map();
 
     function selConfirmDialogCreateElement(tagName, className, text) {
@@ -120,28 +122,28 @@
         });
 
         applyOptions();
-        const controller = Object.freeze({
+        const controller = {
             id,
             root: dialog,
             open,
             close: () => settle(false),
             setLocale: applyOptions,
-            getState: () => Object.freeze({ open: dialog.open, tone: dialog.dataset.selConfirmTone || "info" }),
+            getState: () => selFreeze({ open: dialog.open, tone: dialog.dataset.selConfirmTone || "info" }),
             destroy: () => {
                 settle(false);
                 dialog.remove();
                 selConfirmDialogInstances.delete(id);
                 return true;
             }
-        });
+        };
         selConfirmDialogInstances.set(id, controller);
         return controller;
     }
 
-    window.selConfirmDialog = Object.freeze({
+    window.sel.register("components.confirmDialog", {
         mount: selConfirmDialogMount,
         get: (id) => selConfirmDialogInstances.get(String(id)) || null,
         has: (id) => selConfirmDialogInstances.has(String(id)),
-        list: () => Object.freeze(Array.from(selConfirmDialogInstances.keys()))
+        list: () => selFreeze(Array.from(selConfirmDialogInstances.keys()))
     });
 })();

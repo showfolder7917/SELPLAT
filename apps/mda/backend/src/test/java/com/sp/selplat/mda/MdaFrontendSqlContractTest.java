@@ -25,13 +25,13 @@ class MdaFrontendSqlContractTest {
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertThat(script)
-                .contains("async function mdaExecuteTableSelectionOnce(mdaSession, mdaSql)")
-                .contains("mdaSession.editorController.setValue(mdaTableSql)")
-                .contains("await mdaExecuteSql(mdaSession, mdaTableSql)")
-                .contains("if (mdaExecuteImmediately) void mdaExecuteTableSelectionOnce(mdaExistingSession, mdaDefinition.sql)")
-                .contains("if (mdaExecuteImmediately) void mdaExecuteTableSelectionOnce(mdaSession, mdaDefinition.sql)")
-                .contains("mdaOpenTableQuery(mdaEvent.detail.filter)")
-                .doesNotContain("if (mdaExecuteImmediately) mdaSession.editorController.action(\"execute\")");
+                .contains("async function mdaExecuteTableSelectionOnce(session, sql)")
+                .contains("session.editorController.setValue(tableSql)")
+                .contains("await mdaExecuteSql(session, tableSql)")
+                .contains("if (executeImmediately) void mdaExecuteTableSelectionOnce(existingSession, definition.sql)")
+                .contains("if (executeImmediately) void mdaExecuteTableSelectionOnce(session, definition.sql)")
+                .contains("mdaOpenTableQuery(event.detail.filter)")
+                .doesNotContain("if (mdaExecuteImmediately) session.editorController.action(\"execute\")");
     }
 
     /**
@@ -48,16 +48,16 @@ class MdaFrontendSqlContractTest {
         String script = new ClassPathResource("static/mda/mda.js")
                 .getContentAsString(StandardCharsets.UTF_8);
         assertThat(script)
-                .contains("const mdaSelectedSql = String(mdaEvent.detail.selectedValue || mdaEditorController.getSelectedValue() || \"\").trim()")
+                .contains("const selectedSql = String(event.detail.selectedValue || editorController.getSelectedValue() || \"\").trim()")
                 .contains("label: \"执行选中 SQL\"")
                 .contains("shortcutLabel: \"选中 SQL 后按 Ctrl/⌘ + Enter 执行\"")
-                .contains("mdaBase.toast(\"请先选中需要执行的 SQL。\", \"warning\")")
-                .contains("const mdaSqlToExecute = mdaSelectedSql")
-                .contains("await mdaExecuteSql(mdaSession, mdaSqlToExecute)")
-                .contains("if (mdaSelectedSql) mdaEditorController.restoreSelection()")
-                .contains("mdaSession.dirty = mdaEditorSql.trim() !== mdaSession.closeBaselineSql")
-                .doesNotContain("mdaSelectedSql || String(mdaEvent.detail.value")
-                .doesNotContain("mdaEditorController.input");
+                .contains("selBase.toast(\"请先选中需要执行的 SQL。\", \"warning\")")
+                .contains("const sqlToExecute = selectedSql")
+                .contains("await mdaExecuteSql(session, sqlToExecute)")
+                .contains("if (selectedSql) editorController.restoreSelection()")
+                .contains("session.dirty = editorSql.trim() !== session.closeBaselineSql")
+                .doesNotContain("selectedSql || String(event.detail.value")
+                .doesNotContain("editorController.input");
     }
 
     /**
@@ -78,16 +78,16 @@ class MdaFrontendSqlContractTest {
 
         assertThat(script)
                 .contains("id: \"select-from-where\", label: \"Select From Where\"")
-                .contains("window.selContextMenu.mount(mdaGridController.root")
-                .contains("mdaEditorController.appendValue(`${mdaSeparator}${mdaSql}`)")
+                .contains("contextMenu.mount(gridController.root")
+                .contains("editorController.appendValue(`${separator}${sql}`)")
                 .contains("headerSelectable: Boolean")
-                .contains("mdaGridController.getSelectedColumnKeys()")
-                .contains("const mdaPredicateColumns = mdaSelectedColumns.length > 0 ? mdaSelectedColumns : [mdaColumn]")
-                .contains("return `SELECT * FROM ${mdaTableName}\\nWHERE ${mdaPredicates.join(\"\\n  AND \")}`")
-                .contains("String(mdaValue).replaceAll(\"'\", \"''\")")
-                .contains("mdaColumnName} IS NULL")
-                .contains("const mdaUnquotedJdbcTypes = new Set([-7, -6, -5, 2, 3, 4, 5, 6, 7, 8, 16])")
-                .doesNotContain("mdaGridController.root.querySelector(\"th")
+                .contains("gridController.getSelectedColumnKeys()")
+                .contains("const predicateColumns = selectedColumns.length > 0 ? selectedColumns : [column]")
+                .contains("return `SELECT * FROM ${tableName}\\nWHERE ${predicates.join(\"\\n  AND \")}`")
+                .contains("String(value).replaceAll(\"'\", \"''\")")
+                .contains("columnName} IS NULL")
+                .contains("const unquotedJdbcTypes = new Set([-7, -6, -5, 2, 3, 4, 5, 6, 7, 8, 16])")
+                .doesNotContain("gridController.root.querySelector(\"th")
                 .doesNotContain("querySelector(\".selcode-input\")");
     }
 
@@ -105,16 +105,16 @@ class MdaFrontendSqlContractTest {
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertThat(script)
-                .contains("columns: Object.freeze((mdaFilter.columns || []).map")
-                .contains("remarks: String((mdaSession.editableTable?.columns || []).find")
-                .contains("String(mdaMetadataColumn.label || \"\").toLowerCase()")
-                .contains("tooltip: mdaColumn.remarks");
+                .contains("columns: (filter.columns || []).map((column) => ({ ...column }))")
+                .contains("remarks: String((session.editableTable?.columns || []).find")
+                .contains("String(metadataColumn.label || \"\").toLowerCase()")
+                .contains("tooltip: column.remarks");
     }
 
     /**
      * 验证页面只按裸表名生成查询，并消费后端提供的数据库结构模板。
      * 真实传参示例：读取构建资源中的 {@code static/mda/mda.js}。
-     * 真实返回示例：脚本包含 {@code SELECT * FROM ${mdaFilter.tableName}} 且不含旧占位语句。
+     * 真实返回示例：脚本包含 {@code SELECT * FROM ${filter.tableName}} 且不含旧占位语句。
      * 异常或副作用示例：资源缺失时抛出 I/O 异常，不修改脚本文件。
      *
      * @throws Exception 页面脚本资源无法读取时抛出
@@ -125,9 +125,9 @@ class MdaFrontendSqlContractTest {
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertThat(script)
-                .contains("sql: `SELECT * FROM ${mdaFilter.tableName}`")
-                .doesNotContain("sql: `SELECT * FROM ${mdaParts.join(\".\")}`")
-                .contains("mdaFilter.structureEditSql")
+                .contains("sql: `SELECT * FROM ${filter.tableName}`")
+                .doesNotContain("sql: `SELECT * FROM ${parts.join(\".\")}`")
+                .contains("filter.structureEditSql")
                 .doesNotContain("/* 表结构变更语句 */");
     }
 
@@ -145,19 +145,19 @@ class MdaFrontendSqlContractTest {
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertThat(script)
-                .contains("addEventListener(\"dblclick\", mdaHandleGridDoubleClick)")
-                .contains("mdaTargetRow.classList.add(\"selgrid-row-selected\")")
-                .contains("const mdaSelectedColumn = mdaCell && mdaRow.contains(mdaCell) ? mdaSession.columns[mdaCell.cellIndex] : null")
-                .contains("mdaMarkSelectedEditField(mdaWindowId, mdaActiveFieldName)")
-                .contains("label: mdaColumn.databaseName")
-                .contains("type: mdaIsTextAreaColumn(mdaColumn) ? \"textarea\" : \"text\"")
-                .doesNotContain("label: `${mdaColumn.databaseName}${mdaColumn.typeName")
+                .contains("addEventListener(\"dblclick\", handleGridDoubleClick)")
+                .contains("targetRow.classList.add(\"selgrid-row-selected\")")
+                .contains("const selectedColumn = cell && row.contains(cell) ? session.columns[cell.cellIndex] : null")
+                .contains("mdaMarkSelectedEditField(windowId, activeFieldName)")
+                .contains("label: column.databaseName")
+                .contains("type: mdaIsTextAreaColumn(column) ? \"textarea\" : \"text\"")
+                .doesNotContain("label: `${column.databaseName}${column.typeName")
                 .contains("updateRow: \"/api/mda/data/update-row.htm\"")
-                .contains("primaryKeyValues: JSON.stringify(mdaContext.primaryKeyValues)")
-                .contains("values: JSON.stringify(mdaSubmittedValues)")
-                .contains("mdaValue === \"\" && mdaContext.originalValues[mdaName] === null ? null : mdaValue")
+                .contains("primaryKeyValues: JSON.stringify(context.primaryKeyValues)")
+                .contains("values: JSON.stringify(submittedValues)")
+                .contains("value === \"\" && context.originalValues[name] === null ? null : value")
                 .contains("当前 SQL 已改变，查询结果只读")
-                .contains("primaryKeys: Object.freeze([...(mdaNode.primaryKeys || [])])");
+                .contains("primaryKeys: [...(node.primaryKeys || [])]");
     }
 
     /**
@@ -198,15 +198,15 @@ class MdaFrontendSqlContractTest {
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertThat(script)
-                .contains("const mdaDefaultExpanded = mdaNode.type === \"catalog\"")
-                .contains("mdaNode.type === \"schema\" && mdaSchemaName === \"PUBLIC\"")
-                .contains("type: mdaNode.type")
-                .contains("expanded: mdaDefaultExpanded")
-                .contains("async function mdaRefreshSelectedMetadata(mdaResetTreeExpansion = false)")
+                .contains("const defaultExpanded = node.type === \"catalog\"")
+                .contains("node.type === \"schema\" && schemaName === \"PUBLIC\"")
+                .contains("type: node.type")
+                .contains("expanded: defaultExpanded")
+                .contains("async function mdaRefreshSelectedMetadata(resetTreeExpansion = false)")
                 .contains("mdaState.treeController?.destroy()")
-                .contains("mdaState.treeController = window.selTree.mount(mdaState.panelRoot, mdaPayload.tree)")
+                .contains("mdaState.treeController = tree.mount(mdaState.panelRoot, payload.tree)")
                 .contains("await mdaRefreshSelectedMetadata(true)")
-                .doesNotContain("const mdaDefaultExpanded = mdaNode.type === \"schema\"");
+                .doesNotContain("const defaultExpanded = mdaNode.type === \"schema\"");
     }
 
     /**
@@ -232,13 +232,13 @@ class MdaFrontendSqlContractTest {
         assertThat(fieldCommentColumn).isGreaterThan(fieldNameColumn);
         assertThat(fieldTypeColumn).isGreaterThan(fieldCommentColumn);
         assertThat(script)
-                .contains("if (mdaAction === \"table-inspect\") mdaOpenTableStructureViewer(mdaFilter)")
-                .contains("const mdaSessionId = `MdaTableStructureViewer")
-                .contains("if (mdaState.tabsController.has(mdaSessionId))")
-                .contains("mdaState.tabsController.activate(mdaSessionId)")
-                .contains("label: `结构 · ${mdaFilter.tableName}`")
+                .contains("if (action === \"table-inspect\") mdaOpenTableStructureViewer(filter)")
+                .contains("const sessionId = `MdaTableStructureViewer")
+                .contains("if (mdaState.tabsController.has(sessionId))")
+                .contains("mdaState.tabsController.activate(sessionId)")
+                .contains("label: `结构 · ${filter.tableName}`")
                 .contains("closable: true")
-                .contains("window.selGrid.mount")
+                .contains("grid.mount")
                 .contains("label: \"字段名\", width: 150")
                 .contains("label: \"字段注释\", width: 405")
                 .contains("label: \"数据类型\", width: 267")
@@ -247,14 +247,14 @@ class MdaFrontendSqlContractTest {
                 .contains("label: \"默认值\", width: 215")
                 .contains("label: \"自增\", width: 150")
                 .contains("label: \"生成列\", width: 150")
-                .contains("const mdaGridMessages = Object.freeze({")
-                .contains("title: Object.freeze({ messages: mdaGridMessages })")
-                .contains("mdaGridController.destroy()")
-                .contains("structureSessions.delete(mdaSession.id)")
-                .contains("mdaState.tabsController.close(`MdaTableStructureViewer${mdaConnectionId}_")
-                .doesNotContain("mdaAppendStructureSummary")
-                .doesNotContain("mdaIndexItems")
-                .doesNotContain("mdaForeignKeyItems")
+                .contains("const mdaGridMessages = selFreeze({")
+                .contains("title: { messages: mdaGridMessages }")
+                .contains("gridController.destroy()")
+                .contains("structureSessions.delete(session.id)")
+                .contains("mdaState.tabsController.close(`MdaTableStructureViewer${connectionId}_")
+                .doesNotContain("appendStructureSummary")
+                .doesNotContain("indexItems")
+                .doesNotContain("foreignKeyItems")
                 .doesNotContain("只读展示 JDBC 元数据")
                 .doesNotContain("字段属性与含义");
     }
@@ -287,12 +287,12 @@ class MdaFrontendSqlContractTest {
                 .contains("exportTable: \"/api/mda/export/table.htm\"")
                 .contains("exportDatabase: \"/api/mda/export/database.htm\"")
                 .contains("id: \"database-export\", label: \"导出整个数据库\"")
-                .contains("...(!mdaIsView ? [Object.freeze({ id: \"table-export\", label: \"导出表\"")
-                .contains("if (mdaAction === \"database-export\") await mdaExportStartupSql(\"database\", mdaFilter)")
-                .contains("if (mdaAction === \"table-export\") await mdaExportStartupSql(\"table\", mdaFilter)")
+                .contains("...(!isView ? [{ id: \"table-export\", label: \"导出表\"")
+                .contains("if (action === \"database-export\") await mdaExportStartupSql(\"database\", filter)")
+                .contains("if (action === \"table-export\") await mdaExportStartupSql(\"table\", filter)")
                 .contains("将以当前表结构和全量数据覆盖同名 schema/data 启动 SQL，是否继续？")
                 .contains("confirmLabel: \"确认导出\"")
-                .contains("if (!mdaConfirmed) return false")
+                .contains("if (!confirmed) return false")
                 .contains("connectionId: mdaState.selectedConnection.id")
                 .contains("outputDirectory || \"db/sql\"");
         assertThat(connectionEditAction).isGreaterThan(catalogBlock);
@@ -319,18 +319,18 @@ class MdaFrontendSqlContractTest {
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertThat(script)
-                .contains("mdaSession.dirty = String(mdaEvent.detail.value || \"\") !== mdaSession.closeBaselineSql")
-                .contains("mdaSession.closeBaselineSql = mdaSqlToExecute.trim()")
-                .contains("mdaSession.dirty = mdaEditorSql.trim() !== mdaSession.closeBaselineSql")
+                .contains("session.dirty = String(event.detail.value || \"\") !== session.closeBaselineSql")
+                .contains("session.closeBaselineSql = sqlToExecute.trim()")
+                .contains("session.dirty = editorSql.trim() !== session.closeBaselineSql")
                 .contains("addEventListener(\"selTabs:beforeClose\"")
-                .contains("mdaEvent.preventDefault()")
+                .contains("event.preventDefault()")
                 .contains("title: \"关闭未保存的 SQL\"")
                 .contains("confirmLabel: \"放弃修改并关闭\"")
                 .contains("cancelLabel: \"继续编辑\"")
-                .contains("mdaState.tabsController.close(mdaSessionId, { force: true })")
+                .contains("mdaState.tabsController.close(sessionId, { force: true })")
                 .contains("[\"close-right\", \"close-others\", \"close-all\"]")
-                .contains("mdaEvent.stopImmediatePropagation()")
-                .contains("void mdaCloseQuerySessions(mdaCloseIds)");
+                .contains("event.stopImmediatePropagation()")
+                .contains("void mdaCloseQuerySessions(closeIds)");
     }
 
     /**
@@ -348,10 +348,10 @@ class MdaFrontendSqlContractTest {
 
         assertThat(script)
                 .contains("title: \"创建工程并生成业务文件\"")
-                .contains("工程：${mdaProjectValues.projectName || \"\"}；表：${mdaProjectValues.tableName || \"\"}")
+                .contains("工程：${projectValues.projectName || \"\"}；表：${projectValues.tableName || \"\"}")
                 .contains("confirmLabel: \"确认创建\"")
                 .contains("cancelLabel: \"返回检查\"")
-                .contains("if (!mdaProjectConfirmed) return")
-                .contains("data: mdaProjectValues");
+                .contains("if (!projectConfirmed) return")
+                .contains("data: projectValues");
     }
 }

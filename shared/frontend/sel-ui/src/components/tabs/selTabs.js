@@ -1,10 +1,12 @@
 /*
  * selTabs.js：可复用动态业务页签基础控件。
  * 负责页签创建、切换隐藏、键盘导航、批量关闭、右键菜单组合和子组件清理回调，不识别应用、实体或接口。
- * 公开 API：window.selTabs.mount(host, options)、get(id)、has(id)；每个实例使用完整业务键独立注册。
+ * 公开 API：window.sel.components.tabs.mount(host, options)、get(id)、has(id)；每个实例使用完整业务键独立注册。
  */
 (function selTabsInitializeRegistry() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 页面内每套页签工作区按完整实例键登记，动态关闭只影响所属实例。
     const selTabsInstances = new Map();
@@ -25,7 +27,7 @@
         if (selTabsInstances.has(selTabsId)) return selTabsInstances.get(selTabsId);
         // 右键菜单默认属于 Tab 基础能力；只有调用方明确声明 false 时才允许不挂载。
         let selTabsContextMenuEnabled = selTabsOptions.contextMenu !== false;
-        if (selTabsContextMenuEnabled && typeof window.selContextMenu?.mount !== "function") {
+        if (selTabsContextMenuEnabled && typeof window.sel.components.contextMenu?.mount !== "function") {
             console.error("selTabs.mount：默认右键菜单缺少 selContextMenu 依赖；请先加载公共控件，或显式设置 contextMenu: false。");
             return null;
         }
@@ -64,7 +66,7 @@
         // Tab 只组装通用右键菜单，菜单门户、定位和键盘交互不在本组件重复实现。
         let selTabsContextMenu = null;
         // 文案允许应用注入本地化值，默认使用当前 SELPLAT 工作台中文。
-        const selTabsContextMenuLabels = Object.freeze({
+        const selTabsContextMenuLabels = selFreeze({
             closeRight: "关闭右侧",
             closeOthers: "关闭其他",
             closeAll: "全部关闭",
@@ -74,8 +76,8 @@
         // 挂载函数同时服务初始默认启用和运行期重新启用，始终复用稳定实例键。
         function selTabsMountContextMenu() {
             if (!selTabsContextMenuEnabled) return true;
-            if (typeof window.selContextMenu?.mount !== "function") return false;
-            selTabsContextMenu = window.selContextMenu.mount(selTabsRoot, {
+            if (typeof window.sel.components.contextMenu?.mount !== "function") return false;
+            selTabsContextMenu = window.sel.components.contextMenu.mount(selTabsRoot, {
                 id: `${selTabsId}:tab-actions`,
                 ariaLabel: String(selTabsOptions.contextMenuAriaLabel || "页签操作")
             });
@@ -132,7 +134,7 @@
             // 业务事件只从当前实例根冒泡，并携带页签实例与页签键。
             selTabsRoot.dispatchEvent(new CustomEvent("selTabs:change", {
                 bubbles: true,
-                detail: Object.freeze({ tabsId: selTabsId, tabId: selTabsActiveId })
+                detail: selFreeze({ tabsId: selTabsId, tabId: selTabsActiveId })
             }));
             return true;
         }
@@ -167,7 +169,7 @@
                 const selTabsBeforeClose = new CustomEvent("selTabs:beforeClose", {
                     bubbles: true,
                     cancelable: true,
-                    detail: Object.freeze({ tabsId: selTabsId, tabId: selTabsNormalizedId })
+                    detail: selFreeze({ tabsId: selTabsId, tabId: selTabsNormalizedId })
                 });
                 if (!selTabsRoot.dispatchEvent(selTabsBeforeClose)) return false;
             }
@@ -183,7 +185,7 @@
             selTabsSyncEmptyState();
             selTabsRoot.dispatchEvent(new CustomEvent("selTabs:close", {
                 bubbles: true,
-                detail: Object.freeze({ tabsId: selTabsId, tabId: selTabsNormalizedId, destroyed: true })
+                detail: selFreeze({ tabsId: selTabsId, tabId: selTabsNormalizedId, destroyed: true })
             }));
             return true;
         }
@@ -222,11 +224,11 @@
             const selTabsOtherClosable = selTabsOrder
                 .some((selTabsCandidateId) => selTabsCandidateId !== String(selTabsTabId) && selTabsItems.get(selTabsCandidateId)?.closable);
             const selTabsAnyClosable = selTabsOrder.some((selTabsCandidateId) => selTabsItems.get(selTabsCandidateId)?.closable);
-            return Object.freeze([
-                Object.freeze({ id: "close-right", label: selTabsContextMenuLabels.closeRight, icon: "ri-skip-right-line", disabled: !selTabsRightClosable }),
-                Object.freeze({ id: "close-others", label: selTabsContextMenuLabels.closeOthers, icon: "ri-close-circle-line", disabled: !selTabsOtherClosable }),
-                Object.freeze({ id: "close-all", label: selTabsContextMenuLabels.closeAll, icon: "ri-delete-bin-line", disabled: !selTabsAnyClosable })
-            ]);
+            return [
+                { id: "close-right", label: selTabsContextMenuLabels.closeRight, icon: "ri-skip-right-line", disabled: !selTabsRightClosable },
+                { id: "close-others", label: selTabsContextMenuLabels.closeOthers, icon: "ri-close-circle-line", disabled: !selTabsOtherClosable },
+                { id: "close-all", label: selTabsContextMenuLabels.closeAll, icon: "ri-delete-bin-line", disabled: !selTabsAnyClosable }
+            ];
         }
 
         // 鼠标右键与 ContextMenu/Shift+F10 键共享同一公共菜单打开路径。
@@ -239,7 +241,7 @@
                 clientY: selTabsClientY,
                 focusFirst: selTabsFocusFirst,
                 restoreFocusTarget: selTabsItemElement.querySelector("[role='tab']"),
-                context: Object.freeze({ tabsId: selTabsId, tabId: selTabsTabId }),
+                context: { tabsId: selTabsId, tabId: selTabsTabId },
                 items: selTabsContextActions(selTabsTabId)
             });
         }
@@ -300,14 +302,14 @@
             selTabsItems.set(selTabsTabId, selTabsItem);
             // mount 回调只接收当前页签面板；返回的函数成为关闭时唯一子生命周期清理入口。
             if (typeof selTabsDefinition.mount === "function") {
-                const selTabsCleanup = selTabsDefinition.mount(selTabsPanel, Object.freeze({ tabsId: selTabsId, tabId: selTabsTabId }));
+                const selTabsCleanup = selTabsDefinition.mount(selTabsPanel, selFreeze({ tabsId: selTabsId, tabId: selTabsTabId }));
                 if (typeof selTabsCleanup === "function") selTabsItem.cleanup = selTabsCleanup;
             }
             selTabsSyncEmptyState();
             selTabsActivate(selTabsTabId);
             selTabsRoot.dispatchEvent(new CustomEvent("selTabs:open", {
                 bubbles: true,
-                detail: Object.freeze({ tabsId: selTabsId, tabId: selTabsTabId, created: true })
+                detail: selFreeze({ tabsId: selTabsId, tabId: selTabsTabId, created: true })
             }));
             return selTabsPanel;
         }
@@ -375,7 +377,7 @@
             return true;
         }
 
-        const selTabsController = Object.freeze({
+        const selTabsController = {
             id: selTabsId,
             root: selTabsRoot,
             open: selTabsOpen,
@@ -387,20 +389,20 @@
             setContextMenuEnabled: selTabsSetContextMenuEnabled,
             getPanel: (selTabsTabId) => selTabsItems.get(String(selTabsTabId))?.panel || null,
             has: (selTabsTabId) => selTabsItems.has(String(selTabsTabId)),
-            list: () => Object.freeze(selTabsOrderedIds()),
-            getState: () => Object.freeze({ activeId: selTabsActiveId, count: selTabsItems.size, contextMenuEnabled: selTabsContextMenuEnabled }),
+            list: () => selFreeze(selTabsOrderedIds()),
+            getState: () => selFreeze({ activeId: selTabsActiveId, count: selTabsItems.size, contextMenuEnabled: selTabsContextMenuEnabled }),
             destroy: selTabsDestroy
-        });
+        };
         selTabsInstances.set(selTabsId, selTabsController);
         selTabsRoot.dataset.selTabsReady = "true";
         selTabsSyncEmptyState();
         return selTabsController;
     }
 
-    window.selTabs = Object.freeze({
+    window.sel.register("components.tabs", {
         mount: selTabsMount,
         get: (selTabsId) => selTabsInstances.get(String(selTabsId)) || null,
         has: (selTabsId) => selTabsInstances.has(String(selTabsId)),
-        list: () => Object.freeze(Array.from(selTabsInstances.keys()))
+        list: () => selFreeze(Array.from(selTabsInstances.keys()))
     });
 })();

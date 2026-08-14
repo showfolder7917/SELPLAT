@@ -6,6 +6,8 @@
 (function selWindowInitializeRegistry() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 控制器注册表用稳定窗口键隔离多实例状态。
     const selWindowInstances = new Map();
 
@@ -244,14 +246,18 @@
     /**
      * 创建一个独立水晶表单窗口实例。
      * @param {HTMLElement} selWindowHost - 应用提供的挂载宿主。
-     * @param {object} selWindowOptions - 标题、字段行、按钮和提交反馈配置。
+     * @param {object} selWindowOptions - 标题、字段行、自定义内容、按钮和提交反馈配置。
      * @returns {object|null} open、close、reset 与 getState 控制器。
      */
     function selWindowCreateInstance(selWindowHost, selWindowOptions) {
         // 稳定窗口键决定多实例隔离边界。
         const selWindowId = String(selWindowOptions?.id || "");
-        // 缺少宿主、键或字段行时拒绝创建半成品窗口。
-        if (!selWindowHost || !selWindowId || !Array.isArray(selWindowOptions.rows)) return null;
+        // 表单窗口使用 rows；数据管理窗口可以改由调用方提供已经安全创建的 content 根节点。
+        const selWindowRows = Array.isArray(selWindowOptions?.rows) ? selWindowOptions.rows : [];
+        // 自定义内容必须是当前页面真实元素，禁止字符串内容绕过安全节点创建边界。
+        const selWindowCustomContent = selWindowOptions?.content instanceof Element ? selWindowOptions.content : null;
+        // 缺少宿主、键，或既没有字段也没有自定义内容时拒绝创建半成品窗口。
+        if (!selWindowHost || !selWindowId || (selWindowRows.length === 0 && !selWindowCustomContent)) return null;
         // 重复挂载返回既有控制器，避免遮罩和事件叠加。
         if (selWindowInstances.has(selWindowId)) return selWindowInstances.get(selWindowId);
         // 窗口框架文案来自 selWindow 公共配置；项目标题、字段和业务反馈仍属于调用方项目配置。
@@ -336,7 +342,7 @@
         // 字段滚动区在窗口缩小时独立滚动，标题栏和底部操作始终留在视口内。
         const selWindowFields = selWindowCreateElement("div", "selwindow-form-fields");
         // 按应用声明顺序建立单列或双列字段行。
-        selWindowOptions.rows.forEach((selWindowRow, selWindowRowIndex) => {
+        selWindowRows.forEach((selWindowRow, selWindowRowIndex) => {
             // 两字段行采用 paired 四轨布局，其他行采用标准两轨布局。
             const selWindowRowShell = selWindowCreateElement("div", `selwindow-field-row${selWindowRow.length > 1 ? " selwindow-field-row-paired" : ""}`);
             // 每个字段先补充当前窗口内唯一 inputId，再创建标签和控件。
@@ -349,6 +355,13 @@
             // 当前字段行加入表单主流程。
             selWindowFields.appendChild(selWindowRowShell);
         });
+        // 数据管理等复合业务把自己的工具栏和 Grid 根整体放入公共窗口滚动区，窗口仍只负责框架与生命周期。
+        if (selWindowCustomContent) {
+            // 自定义内容模式增加稳定类，便于公共 Window 分配完整可用高度而不识别具体业务。
+            selWindowFields.classList.add("selwindow-form-fields-custom");
+            // 调用方持有该元素引用并通过公共组件继续挂载内部控件，不需要读取 Window 私有 DOM。
+            selWindowFields.appendChild(selWindowCustomContent);
+        }
 
         // 创建后任务复选项是独立业务字段，不与通用输入行混排。
         const selWindowCheckboxLabel = selWindowCreateElement("label", "selwindow-checkbox-row");
@@ -374,6 +387,8 @@
         const selWindowSubmit = selWindowCreateElement("button", "selwindow-action-button selwindow-action-primary", selWindowOptions.submitLabel || "立即创建");
         selWindowSubmit.type = "submit";
         selWindowActions.append(selWindowCancel, selWindowSubmit);
+        // 纯数据管理窗口把动作放在自定义内容中时隐藏标准表单底栏，避免出现无意义提交按钮。
+        selWindowActions.hidden = selWindowOptions.showActions === false;
         selWindowForm.append(selWindowFields, selWindowActions);
 
         // 八方向透明手柄只扩大指针命中区，不绘制额外边框或破坏九宫格素材。
@@ -410,9 +425,9 @@
         // 把实例恢复入口加入基础组件维护的全局停靠区。
         selWindowGetMinimizedRail(selWindowMessages).appendChild(selWindowMinimizedButton);
         // 窗口内所有标准下拉通过公开基础控件一次挂载。
-        window.selDropdownMenu?.mountAll(selWindowShell);
+        window.sel.components.dropdownMenu?.mountAll(selWindowShell);
         // 窗口内所有标准日期字段通过公开基础控件一次挂载，原生 date input 不再直接显示系统日历。
-        window.selDatePicker?.mountAll(selWindowShell, { locale: selWindowOptions.locale, messages: selWindowOptions.datePickerMessages });
+        window.sel.components.datePicker?.mountAll(selWindowShell, { locale: selWindowOptions.locale, messages: selWindowOptions.datePickerMessages });
 
         /**
          * 读取当前可用视口尺寸。
@@ -553,7 +568,7 @@
             // 未打开或已经最小化时不重复改变停靠区状态。
             if (!selWindowState.open || selWindowState.minimized) return;
             // 最小化前关闭 body 门户中的日期浮层，避免窗口隐藏后月历悬空。
-            window.selDatePicker?.closeWithin(selWindowShell);
+            window.sel.components.datePicker?.closeWithin(selWindowShell);
             // 指针交互必须先结束，避免隐藏后仍响应移动事件。
             selWindowEndPointerInteraction();
             // 最小化属于打开窗口的展示状态，不等同于关闭。
@@ -701,7 +716,7 @@
         // 关闭时隐藏遮罩并保留用户输入，便于误关后继续编辑。
         function selWindowCloseWindow() {
             // 关闭前回收当前 Window 的日期门户，避免浮层独立残留在页面上。
-            window.selDatePicker?.closeWithin(selWindowShell);
+            window.sel.components.datePicker?.closeWithin(selWindowShell);
             // 关闭时同时终止未完成的拖动或缩放，避免重新打开后继续响应旧指针。
             selWindowEndPointerInteraction();
             selWindowState.open = false;
@@ -724,13 +739,13 @@
                 if (selWindowSuffix) selWindowSuffix.textContent = `${selWindowInput.value.length}/${selWindowInput.maxLength}`;
             });
             // 重置日期后刷新可见触发器，避免仍显示旧日期。
-            selWindowShell.querySelectorAll("input.seldatepicker-native").forEach((selWindowDateInput) => window.selDatePicker?.getForInput(selWindowDateInput)?.refresh());
+            selWindowShell.querySelectorAll("input.seldatepicker-native").forEach((selWindowDateInput) => window.sel.components.datePicker?.getForInput(selWindowDateInput)?.refresh());
             // 重置反馈使窗口回到首次打开状态。
             selWindowFeedback.textContent = "";
             // 清除旧校验危险色。
             selWindowFeedback.classList.remove("selwindow-feedback-error");
             // 原生 select 重置后同步自定义下拉可见值。
-            selWindowShell.querySelectorAll("select.seldropdown-native").forEach((selWindowSelect) => window.selDropdownMenu?.refresh(selWindowSelect));
+            selWindowShell.querySelectorAll("select.seldropdown-native").forEach((selWindowSelect) => window.sel.components.dropdownMenu?.refresh(selWindowSelect));
         }
 
         /**
@@ -748,7 +763,7 @@
                     selWindowControl.value = selWindowValue === undefined || selWindowValue === null ? "" : String(selWindowValue);
                 }
                 selWindowControl.dispatchEvent(new Event("input", { bubbles: true }));
-                if (selWindowControl instanceof HTMLSelectElement) window.selDropdownMenu?.refresh(selWindowControl);
+                if (selWindowControl instanceof HTMLSelectElement) window.sel.components.dropdownMenu?.refresh(selWindowControl);
             });
             return true;
         }
@@ -867,7 +882,7 @@
                 selWindowFeedback.textContent = String(selWindowOptions.validationMessage || "请填写所有必填信息");
                 selWindowFeedback.classList.add("selwindow-feedback-error");
                 // 隐藏的原生日期输入通过公开控制器把校验焦点桥接到可见日期触发器。
-                const selWindowInvalidDatePicker = selWindowInvalid.matches?.("input.seldatepicker-native") ? window.selDatePicker?.getForInput(selWindowInvalid) : null;
+                const selWindowInvalidDatePicker = selWindowInvalid.matches?.("input.seldatepicker-native") ? window.sel.components.datePicker?.getForInput(selWindowInvalid) : null;
                 // 日期字段聚焦可见触发器，其他字段保持原生聚焦行为。
                 if (selWindowInvalidDatePicker) selWindowInvalidDatePicker.focus();
                 else selWindowInvalid.focus();
@@ -878,7 +893,7 @@
             // 未勾选复选框时 FormData 不含键，这里补齐明确布尔值。
             if (selWindowOptions.checkboxLabel) selWindowResult.createTaskImmediately = selWindowCheckbox.checked;
             // 保存只读提交快照供控制器和测试读取。
-            selWindowState.submitted = Object.freeze({ ...selWindowResult });
+            selWindowState.submitted = selFreeze({ ...selWindowResult });
             // 成功反馈保持窗口可见，让用户确认主路径已完成。
             if (selWindowOptions.autoSuccess !== false) {
                 selWindowFeedback.textContent = String(selWindowOptions.successMessage || "项目信息已创建");
@@ -926,7 +941,7 @@
                     if (selWindowDropdownRoot) {
                         selWindowDropdownRoot.dataset.selDropdownMenuLabel = String(selWindowField.label || "");
                         selWindowDropdownRoot.dataset.selDropdownMenuTitle = String(selWindowField.label || "");
-                        window.selDropdownMenu?.setLocale(selWindowDropdownRoot);
+                        window.sel.components.dropdownMenu?.setLocale(selWindowDropdownRoot);
                     }
                 }
                 const selWindowDateRoot = selWindowInput.closest("[data-sel-date-picker]");
@@ -935,7 +950,7 @@
                     selWindowDateRoot.dataset.selDatePickerPlaceholder = String(selWindowField.placeholder || "");
                     const selWindowDateValue = selWindowDateRoot.querySelector(".seldatepicker-trigger-value");
                     if (selWindowDateValue && !selWindowInput.value) selWindowDateValue.textContent = String(selWindowField.placeholder || "");
-                    const selWindowDateController = window.selDatePicker?.getForInput(selWindowInput);
+                    const selWindowDateController = window.sel.components.datePicker?.getForInput(selWindowInput);
                     if (selWindowDateController) {
                         selWindowDateController.setLocale({
                             locale: selWindowLocaleOptions.locale,
@@ -952,7 +967,7 @@
             return true;
         }
 
-        const selWindowController = Object.freeze({
+        const selWindowController = {
             // open 由表格新建事件调用。
             open: selWindowOpen,
             // close 供应用或测试结束窗口。
@@ -962,7 +977,7 @@
             // setValues 供编辑流程通过公开 API 回填业务记录。
             setValues: selWindowSetValues,
             // getValues 返回当前表单实时值，不暴露组件内部节点。
-            getValues: () => Object.freeze(Object.fromEntries(new FormData(selWindowForm).entries())),
+            getValues: () => selFreeze(Object.fromEntries(new FormData(selWindowForm).entries())),
             // setFeedback 与 setLoading 供异步保存复用公共反馈和忙碌状态。
             setFeedback: selWindowSetFeedback,
             setLoading: selWindowSetLoading,
@@ -974,8 +989,8 @@
             minimize: selWindowMinimizeWindow,
             setLocale: selWindowSetLocale,
             // getState 返回可见性、最小化、提交数据、几何和最大化状态的独立快照。
-            getState: () => Object.freeze({ open: selWindowState.open, minimized: selWindowState.minimized, submitted: selWindowState.submitted, geometry: selWindowState.geometry ? Object.freeze({ ...selWindowState.geometry }) : null, maximized: selWindowState.maximized })
-        });
+            getState: () => selFreeze({ open: selWindowState.open, minimized: selWindowState.minimized, submitted: selWindowState.submitted, geometry: selWindowState.geometry ? { ...selWindowState.geometry } : null, maximized: selWindowState.maximized })
+        };
         // 注册当前控制器供稳定实例键查询。
         selWindowInstances.set(selWindowId, selWindowController);
         // 返回控制器给应用装配层。
@@ -983,7 +998,7 @@
     }
 
     // 公开 API 只允许挂载和按稳定键查询窗口。
-    window.selWindow = Object.freeze({
+    window.sel.register("components.window", {
         // mount 创建或复用标准表单窗口实例。
         mount: selWindowCreateInstance,
         // get 在不存在时返回 null，避免应用读取内部注册表。

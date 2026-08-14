@@ -13,15 +13,15 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
-/** 使用隔离 H2 文件验证 Hikari 私有连接池、七张表、测试数据和重启幂等性。 */
+/** 使用隔离 H2 文件验证 Hikari 私有连接池、八张表、测试数据和重启幂等性。 */
 class ReferenceDataPersistenceConfigurationTest {
 
     /**
-     * 验证全新数据库通过具名 Hikari 池建立七张表，并只初始化号段、六个表格定义及四十六条列配置。
+     * 验证全新数据库通过具名 Hikari 池建立八张表，并只初始化号段、七个表格定义及五十四条列配置。
      *
      * @param temporaryDirectory JUnit 提供的隔离临时目录，例如 {@code /tmp/junit/reference-data-empty}
-     * 执行结果示例：池名为 {@code ReferenceDataEmptyTestPool}，总计 58 条初始化记录，
-     *     ReferenceDataTable 包含 6 条、列配置包含 46 条。
+     * 执行结果示例：池名为 {@code ReferenceDataEmptyTestPool}，总计 68 条初始化记录，
+     *     ReferenceDataTable 包含 7 条、列配置包含 54 条。
      * 异常或副作用示例：只在临时目录创建和关闭 H2 文件与连接池，不读写正式数据库。
      */
     @Test
@@ -34,7 +34,8 @@ class ReferenceDataPersistenceConfigurationTest {
                     "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'PUBLIC' "
                             + "AND TABLE_NAME IN ('CommonSequenceSegment', 'ReferenceDataType', "
                             + "'ReferenceDataTreeNode', 'ReferenceDataOption', "
-                            + "'ReferenceDataContextMenuItem', 'ReferenceDataTable', 'ReferenceDataTableColumn')",
+                            + "'ReferenceDataContextMenuItem', 'ReferenceDataTable', 'ReferenceDataTableColumn', "
+                            + "'ReferenceDataControlBinding')",
                     Integer.class);
             Integer rowCount = jdbc.queryForObject(
                     "SELECT SUM(rowCount) FROM ("
@@ -44,13 +45,15 @@ class ReferenceDataPersistenceConfigurationTest {
                             + "UNION ALL SELECT COUNT(*) FROM ReferenceDataOption "
                             + "UNION ALL SELECT COUNT(*) FROM ReferenceDataContextMenuItem "
                             + "UNION ALL SELECT COUNT(*) FROM ReferenceDataTable "
-                            + "UNION ALL SELECT COUNT(*) FROM ReferenceDataTableColumn) rows",
+                            + "UNION ALL SELECT COUNT(*) FROM ReferenceDataTableColumn "
+                            + "UNION ALL SELECT COUNT(*) FROM ReferenceDataControlBinding) rows",
                     Integer.class);
             Integer auditColumnCount = jdbc.queryForObject(
                     "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'PUBLIC' "
                             + "AND TABLE_NAME IN ('ReferenceDataType', 'ReferenceDataTreeNode', "
                             + "'ReferenceDataOption', 'ReferenceDataContextMenuItem', "
-                            + "'ReferenceDataTable', 'ReferenceDataTableColumn') "
+                            + "'ReferenceDataTable', 'ReferenceDataTableColumn', "
+                            + "'ReferenceDataControlBinding') "
                             + "AND COLUMN_NAME IN ('tenantId', 'lastOperateUserId')",
                     Integer.class);
             Integer tableRegistryColumnCount = jdbc.queryForObject(
@@ -72,7 +75,8 @@ class ReferenceDataPersistenceConfigurationTest {
                     "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
                             + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME IN "
                             + "('ReferenceDataType', 'ReferenceDataTreeNode', "
-                            + "'ReferenceDataOption', 'ReferenceDataContextMenuItem') "
+                            + "'ReferenceDataOption', 'ReferenceDataContextMenuItem', "
+                            + "'ReferenceDataControlBinding') "
                             + "AND REMARKS IS NOT NULL AND TRIM(REMARKS) <> ''",
                     Integer.class);
             Integer serializedAttributeColumnCount = jdbc.queryForObject(
@@ -87,14 +91,14 @@ class ReferenceDataPersistenceConfigurationTest {
             assertInstanceOf(DataSourceTransactionManager.class,
                     new ReferenceDataPersistenceConfiguration().referenceDataTransactionManager(dataSource));
             assertEquals("ReferenceDataEmptyTestPool", dataSource.getPoolName());
-            assertEquals(7, tableCount);
-            assertEquals(58, rowCount);
-            assertEquals(12, auditColumnCount);
+            assertEquals(8, tableCount);
+            assertEquals(68, rowCount);
+            assertEquals(14, auditColumnCount);
             assertEquals(5, tableRegistryColumnCount);
             assertEquals(8, tableHeaderColumnCount);
-            assertEquals(6, registeredTableCount);
-            assertEquals(46, configuredColumnCount);
-            assertEquals(62, referenceDataMetadataCommentCount);
+            assertEquals(7, registeredTableCount);
+            assertEquals(54, configuredColumnCount);
+            assertEquals(75, referenceDataMetadataCommentCount);
             assertEquals(3, serializedAttributeColumnCount);
         }
         assertTrue(Files.isRegularFile(Path.of(databaseBase + ".mv.db")));
@@ -104,7 +108,7 @@ class ReferenceDataPersistenceConfigurationTest {
      * 验证初始化数据在连接池关闭并重启后不重复，同时管理员后来写入的数据不会被启动过程清除。
      *
      * @param temporaryDirectory JUnit 提供的隔离临时目录，例如 {@code /tmp/junit/reference-data-reopen}
-     * 执行结果示例：重启后表格定义仍为 6；手动插入类型后再次打开仍能查询到 1 条。
+     * 执行结果示例：重启后表格定义仍为 7；手动插入类型后再次打开仍能查询到 1 条。
      * 异常或副作用示例：每次重启都先关闭旧池，仅修改 JUnit 临时文件库。
      */
     @Test
@@ -112,9 +116,9 @@ class ReferenceDataPersistenceConfigurationTest {
         Path databaseBase = temporaryDirectory.resolve("reference-data-reopen").toAbsolutePath().normalize();
         try (HikariDataSource firstDataSource = open(databaseBase, "ReferenceDataFirstTestPool")) {
             JdbcTemplate firstJdbc = new JdbcTemplate(firstDataSource);
-            assertEquals(6, firstJdbc.queryForObject(
+            assertEquals(7, firstJdbc.queryForObject(
                     "SELECT COUNT(*) FROM ReferenceDataTable", Integer.class));
-            assertEquals(46, firstJdbc.queryForObject(
+            assertEquals(54, firstJdbc.queryForObject(
                     "SELECT COUNT(*) FROM ReferenceDataTableColumn", Integer.class));
             firstJdbc.update(
                     "INSERT INTO ReferenceDataType "
@@ -127,7 +131,7 @@ class ReferenceDataPersistenceConfigurationTest {
             JdbcTemplate populatedReopenedJdbc = new JdbcTemplate(reopenedDataSource);
             assertEquals(1, populatedReopenedJdbc.queryForObject(
                     "SELECT COUNT(*) FROM ReferenceDataType WHERE id = 100001", Integer.class));
-            assertEquals(6, populatedReopenedJdbc.queryForObject(
+            assertEquals(7, populatedReopenedJdbc.queryForObject(
                     "SELECT COUNT(*) FROM CommonSequenceSegment", Integer.class));
         }
     }
@@ -200,7 +204,7 @@ class ReferenceDataPersistenceConfigurationTest {
      *
      * @param databaseBase JUnit 临时数据库基础路径，例如 {@code /tmp/reference-data-empty}
      * @param poolName 当前测试唯一池名，例如 {@code ReferenceDataEmptyTestPool}
-     * @return 已完成七表初始化的连接池，例如 JDBC URL 以 {@code jdbc:h2:file:} 开头
+     * @return 已完成八表初始化的连接池，例如 JDBC URL 以 {@code jdbc:h2:file:} 开头
      * 异常或副作用示例：初始化失败时生产配置关闭池并抛出
      *     {@code REFERENCE_DATA_DATABASE_INITIALIZATION_FAILED}；成功时调用方必须关闭返回池。
      */

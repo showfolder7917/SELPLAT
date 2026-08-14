@@ -2,10 +2,12 @@
  * selDropdownMenu.js：通用水晶选择下拉基础控件。
  * 负责从原生 select 构建可配置下拉、同步选中值、滚动阈值、互斥打开、点击外部关闭和完整键盘交互。
  * 责任边界：本文件只读取调用方已经写入原生 select 的标准选项，不请求接口、不读取 具体应用 数据。
- * 模块级 JavaScript 标识统一使用 selDropdownMenu 前缀，公开控制器为 window.selDropdownMenu。
+ * 模块级 JavaScript 标识统一使用 selDropdownMenu 前缀，公开控制器为 window.sel.components.dropdownMenu。
  */
 (function selDropdownMenuInitialize() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 实例映射允许宿主通过原生 select 或 id 调用公开接口。
     const selDropdownMenuInstancesBySelect = new Map();
@@ -677,22 +679,22 @@
     }
 
     // 公开最小控制器，宿主可以同步外部状态但不依赖组件内部 DOM。
-    window.selDropdownMenu = Object.freeze({
+    window.sel.register("components.dropdownMenu", {
         // mount 显式挂载一个已经拥有原生 select 和业务选项的下拉宿主。
         mount: selDropdownMenuMount,
         // mountAll 只扫描调用方给出的作用域，不跨业务模块初始化其他页面节点。
         mountAll(scope) {
             // 缺少有效作用域时不退回 document，避免基础控件擅自控制整页。
             if (!(scope instanceof Element)) {
-                return Object.freeze([]);
+                return [];
             }
             // 当前作用域自身和后代都可以作为下拉根。
             const roots = [
                 ...(scope.matches("[data-sel-dropdown-menu]") ? [scope] : []),
                 ...scope.querySelectorAll("[data-sel-dropdown-menu]")
             ];
-            // 逐个挂载并过滤掉结构不完整的宿主。
-            return Object.freeze(roots.map(selDropdownMenuMount).filter(Boolean));
+            // 逐个挂载并过滤掉结构不完整的宿主；运行实例需要响应语言和选项更新，不得深度冻结。
+            return roots.map(selDropdownMenuMount).filter(Boolean);
         },
         // 人工设置业务值，可选是否触发现有 change 逻辑。
         setValue(target, value, emitChange = false) {

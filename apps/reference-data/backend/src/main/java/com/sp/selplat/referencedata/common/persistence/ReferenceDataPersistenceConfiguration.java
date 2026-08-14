@@ -44,13 +44,15 @@ public class ReferenceDataPersistenceConfiguration {
         "db/reference-data/sql/schema-ReferenceDataContextMenuItem.sql",
         "db/reference-data/sql/schema-ReferenceDataTable.sql",
         "db/reference-data/sql/schema-ReferenceDataTableColumn.sql",
+        "db/reference-data/sql/schema-ReferenceDataControlBinding.sql",
         "db/reference-data/sql/data-CommonSequenceSegment.sql",
         "db/reference-data/sql/data-ReferenceDataType.sql",
         "db/reference-data/sql/data-ReferenceDataTreeNode.sql",
         "db/reference-data/sql/data-ReferenceDataOption.sql",
         "db/reference-data/sql/data-ReferenceDataContextMenuItem.sql",
         "db/reference-data/sql/data-ReferenceDataTable.sql",
-        "db/reference-data/sql/data-ReferenceDataTableColumn.sql"
+        "db/reference-data/sql/data-ReferenceDataTableColumn.sql",
+        "db/reference-data/sql/data-ReferenceDataControlBinding.sql"
     };
     // 旧正式库的业务表曾使用 identity；只按固定白名单迁移，禁止动态拼接外部表名。
     private static final String[] BUSINESS_TABLES = {
@@ -59,7 +61,8 @@ public class ReferenceDataPersistenceConfiguration {
         "ReferenceDataOption",
         "ReferenceDataContextMenuItem",
         "ReferenceDataTable",
-        "ReferenceDataTableColumn"
+        "ReferenceDataTableColumn",
+        "ReferenceDataControlBinding"
     };
 
     /**
@@ -95,7 +98,7 @@ public class ReferenceDataPersistenceConfiguration {
             config.setJdbcUrl(resolveDatabaseUrl(config.getJdbcUrl()));
             // HikariConfig → 模块私有连接池；具名 Bean 保证 Host 不按类型误选其他项目数据源。
             dataSource = new HikariDataSource(config);
-            // 固定 SQL 清单依次执行 → 创建缺失结构并幂等补充表格定义演示数据与六表号段。
+            // 固定 SQL 清单依次执行 → 创建缺失结构并幂等补充表格定义演示数据与七表号段。
             initializeDatabase(dataSource);
             // 初始化完成的连接池 → DAO、号段和 BaseDataSourceContext 共用同一数据库。
             return dataSource;
@@ -129,7 +132,7 @@ public class ReferenceDataPersistenceConfiguration {
      * 创建 Reference Data 永久库专用事务管理器，避免 Host 多数据源运行时误选其他应用数据库。
      *
      * @param dataSource Reference Data 模块私有连接池，例如池名 {@code ReferenceDataPool}
-     * @return 只提交或回滚 Reference Data 六张业务表操作的事务管理器
+     * @return 只提交或回滚 Reference Data 七张业务表操作的事务管理器
      * 异常或副作用示例：页面列宽批量更新中任一列未命中时，管理器回滚同批次已经执行的更新。
      */
     @Bean("referenceDataTransactionManager")
@@ -142,13 +145,13 @@ public class ReferenceDataPersistenceConfiguration {
      * 创建只在 reference-data 私有数据库中查询和推进号段的项目 DAO。
      *
      * @param dataSource reference-data 配置按限定名提供的私有数据源
-     * @return 可分别命中六张业务表号段的 DAO，例如命中 {@code ReferenceDataTypeId}
+     * @return 可分别命中七张业务表号段的 DAO，例如命中 {@code ReferenceDataTypeId}
      * 异常或副作用示例：多个进程并发抢号时只原子推进当前 seqCode 的 nextStartId 和 versionNo。
      */
     @Bean("referenceDataCommonSequenceSegmentDao")
     public CommonSequenceSegmentDao referenceDataCommonSequenceSegmentDao(
             @Qualifier("referenceDataDataSource") DataSource dataSource) {
-        // reference-data 私有数据源 → 六张业务表号段唯一查询和推进边界。
+        // reference-data 私有数据源 → 七张业务表号段唯一查询和推进边界。
         return new CommonSequenceSegmentDaoImpl(dataSource);
     }
 
@@ -229,7 +232,7 @@ public class ReferenceDataPersistenceConfiguration {
      * 按固定顺序执行 reference-data 建表、号段和表格定义演示数据脚本。
      *
      * @param dataSource 当前独立文件库或隔离测试库
-     * 执行结果示例：数据库包含七张表、六条号段、六条表格定义和四十六条可编辑表格列；
+     * 执行结果示例：数据库包含八张表、七条号段、七条表格定义和五十四条可编辑表格列；
      *     再次执行不会覆盖管理员修改。
      */
     private void initializeDatabase(DataSource dataSource) {
@@ -249,7 +252,7 @@ public class ReferenceDataPersistenceConfiguration {
      * 把旧正式库业务表的 identity 主键原地迁移为公共号段主键。
      *
      * @param dataSource 当前 reference-data 私有数据源，例如旧库中 ReferenceDataType.id 仍为 identity
-     * 执行结果示例：六张表的现有 id 和外键保持不变，IS_IDENTITY 统一变为 NO
+     * 执行结果示例：七张表的现有 id 和外键保持不变，IS_IDENTITY 统一变为 NO
      * 异常或副作用示例：ALTER 失败时数据库初始化整体失败，不会创建替代表或重写已有记录。
      */
     private void migrateLegacyIdentityColumns(DataSource dataSource) {

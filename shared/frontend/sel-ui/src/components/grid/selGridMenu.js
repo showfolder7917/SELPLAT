@@ -2,10 +2,12 @@
  * selGridMenu.js：通用表格行操作菜单多实例基础控件。
  * 负责接收调用方传入的菜单数据，为每个宿主创建独立状态、滚动阈值、二级菜单和局部动作事件。
  * 责任边界：本文件不请求接口、不读取 具体应用 数据，也不自行扫描并初始化业务模块。
- * 模块级标识统一使用 selGridMenu 前缀，公开注册表为 window.selGridMenu。
+ * 模块级标识统一使用 selGridMenu 前缀，公开注册表为 window.sel.components.gridMenu。
  */
 (function selGridMenuInitializeRegistry() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 注册表使用业务表格实例名隔离菜单控制器。
     const selGridMenuInstances = new Map();
@@ -380,8 +382,8 @@
         // 首次加载为当前表格实例生成菜单。
         render();
 
-        // 冻结实例控制器，外部只能通过稳定方法操作所属菜单。
-        return Object.freeze({
+        // 运行时控制器保留自身生命周期；只有 getState 等输出快照需要冻结。
+        return {
             id: gridId,
             root: menuRoot,
             open,
@@ -407,11 +409,11 @@
                 state.scrollAfter = Math.max(1, Math.floor(Number(count) || 1));
                 render();
             }
-        });
+        };
     }
 
     // 公开注册表要求应用装配层显式传入宿主和菜单数据。
-    window.selGridMenu = Object.freeze({
+    window.sel.register("components.gridMenu", {
         // mount 创建或返回当前完整业务实例名对应的菜单控制器。
         mount(gridRoot, menuData) {
             // 非元素宿主无法提供组件作用域。

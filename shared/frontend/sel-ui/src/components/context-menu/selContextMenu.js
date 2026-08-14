@@ -1,10 +1,12 @@
 /*
  * selContextMenu.js：通用右键操作菜单基础控件。
  * 负责菜单门户、视口定位、禁用状态、键盘导航和局部动作事件，不识别任何应用业务。
- * 公开 API：window.selContextMenu.mount(host, options)，每个实例由完整业务键独立登记。
+ * 公开 API：window.sel.components.contextMenu.mount(host, options)，每个实例由完整业务键独立登记。
  */
 (function selContextMenuInitializeRegistry() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 多实例注册表只保存明确挂载的菜单，页面加载时不主动扫描宿主。
     const selContextMenuInstances = new Map();
@@ -133,7 +135,7 @@
         selContextMenuRoot.addEventListener("click", (selContextMenuEvent) => {
             const selContextMenuButton = selContextMenuEvent.target.closest("[data-sel-context-menu-action]");
             if (!selContextMenuButton || selContextMenuButton.disabled) return;
-            const selContextMenuDetail = Object.freeze({
+            const selContextMenuDetail = selFreeze({
                 menuId: selContextMenuId,
                 actionId: selContextMenuButton.dataset.selContextMenuAction,
                 context: selContextMenuContext
@@ -178,7 +180,7 @@
             return true;
         }
 
-        const selContextMenuController = Object.freeze({
+        const selContextMenuController = selFreeze({
             id: selContextMenuId,
             root: selContextMenuRoot,
             open: selContextMenuOpen,
@@ -199,11 +201,11 @@
     window.addEventListener("resize", () => selContextMenuOpenController?.close(false));
     window.addEventListener("scroll", () => selContextMenuOpenController?.close(false), true);
 
-    window.selContextMenu = Object.freeze({
+    window.sel.register("components.contextMenu", {
         mount: selContextMenuMount,
         get: (selContextMenuId) => selContextMenuInstances.get(String(selContextMenuId)) || null,
         has: (selContextMenuId) => selContextMenuInstances.has(String(selContextMenuId)),
-        list: () => Object.freeze(Array.from(selContextMenuInstances.keys())),
+        list: () => selFreeze(Array.from(selContextMenuInstances.keys())),
         close: () => selContextMenuOpenController?.close(false) || false
     });
 })();

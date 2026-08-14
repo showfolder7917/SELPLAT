@@ -6,6 +6,8 @@
 (function selDatePickerInitializeRegistry() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 每个日期宿主只允许创建一个控制器，重复装配时返回既有实例。
     const selDatePickerControllers = new WeakMap();
     // 活跃控制器集合用于打开新月历时关闭其他实例，并支持 Window 按范围关闭。
@@ -640,7 +642,7 @@
         }
 
         // 公开控制器只暴露装配方真正需要的动作和只读状态。
-        const selDatePickerController = Object.freeze({
+        const selDatePickerController = {
             // host 用于 closeWithin 判断当前控件是否属于目标 Window。
             host: selDatePickerHost,
             // input 保留给表单校验焦点桥接。
@@ -660,13 +662,13 @@
             // focus 把校验焦点桥接到可见触发器。
             focus: () => selDatePickerTrigger.focus({ preventScroll: true }),
             // getState 返回标准字符串，避免泄漏可变 Date 对象。
-            getState: () => Object.freeze({
+            getState: () => selFreeze({
                 open: selDatePickerState.open,
                 value: selDatePickerInput.value,
                 pending: selDatePickerState.pending ? selDatePickerFormatIso(selDatePickerState.pending) : "",
                 view: `${selDatePickerState.view.getFullYear()}-${selDatePickerPad(selDatePickerState.view.getMonth() + 1)}`
             })
-        });
+        };
         // 宿主映射用于幂等挂载。
         selDatePickerControllers.set(selDatePickerHost, selDatePickerController);
         // 集合用于跨实例关闭和范围生命周期管理。
@@ -716,7 +718,7 @@
     }
 
     // 全局 API 保持挂载、范围关闭和真实输入桥接三个稳定能力。
-    window.selDatePicker = Object.freeze({
+    window.sel.register("components.datePicker", {
         // mount 显式装配单个宿主。
         mount: selDatePickerMount,
         // mountAll 装配页面或 Window 范围内全部日期控件。

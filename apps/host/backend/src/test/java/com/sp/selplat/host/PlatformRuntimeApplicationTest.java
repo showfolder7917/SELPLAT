@@ -62,12 +62,18 @@ class PlatformRuntimeApplicationTest {
     /**
      * 验证统一端口同时发布公共组件、业务页面和完整桌面清单。
      *
-     * 执行结果示例：{@code /sel/core/selBaseRuntime.js} 与
+     * 执行结果示例：{@code /sel/core/selKernel.js}、{@code /sel/core/selBaseRuntime.js} 与
      * {@code /uniauth/uniauth.html} 均返回 HTTP 200。
      */
     @Test
     void shouldExposeSharedUiAndUniauthPageFromOneRuntime() throws Exception {
         // 公共运行时必须来自 sel-ui 依赖 JAR，而不是 Host 或 Uniauth 的复制目录。
+        mockMvc.perform(get("/sel/core/selKernel.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Object.defineProperty(global, \"sel\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "selRegister(\"core.freeze\"")));
         mockMvc.perform(get("/sel/core/selBaseRuntime.js"))
                 .andExpect(status().isOk());
         // 公共表格按显式配置提供宽表能力，默认实例不会被强制切换布局。

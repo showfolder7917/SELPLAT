@@ -251,7 +251,7 @@
     white-space: nowrap;
 }
 
-.selgrid-table th:not(:first-child)::after {
+.selgrid-table th:not(:last-child)::after {
     position: absolute;
     top: 16px;
     right: 0;
@@ -259,10 +259,6 @@
     height: 24px;
     background: linear-gradient(transparent, rgba(126, 152, 240, 0.25), transparent);
     content: "";
-}
-
-.selgrid-table th:last-child::after {
-    display: none;
 }
 
 /* 列宽调整手柄：透明热区覆盖表头右边界，中心线在悬停、聚焦和拖拽时增强。 */

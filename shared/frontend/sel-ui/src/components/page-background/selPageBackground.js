@@ -2,29 +2,31 @@
  * selPageBackground.js：通用网页背景图层基础控件。
  * 负责主题清单、背景图层、显示参数和当前页面状态，不创建个性化设置界面。
  * 责任边界：只改变网页背景 CSS 变量；设置入口由 selPersonalization 组合，业务面板状态不进入本模块。
- * 模块级 JavaScript 标识统一使用 selPageBackground 前缀，公开控制器为 window.selPageBackground。
+ * 模块级 JavaScript 标识统一使用 selPageBackground 前缀，公开控制器为 window.sel.components.pageBackground。
  */
 (function selPageBackgroundInitialize() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 主题包可携带自己的背景清单；背景控件只消费稳定字段，不识别具体主题名称。
-    const selPageBackgroundPackThemes = (window.selThemeRegistry?.list?.() || [])
+    const selPageBackgroundPackThemes = (window.sel.theme.registry?.list?.() || [])
         .flatMap((selPageBackgroundThemePack) => Array.isArray(selPageBackgroundThemePack.backgrounds) ? selPageBackgroundThemePack.backgrounds : [])
         .filter((selPageBackgroundTheme) => /^[a-z][a-z0-9-]*$/.test(selPageBackgroundTheme?.id || "") && typeof selPageBackgroundTheme.image === "string")
-        .map((selPageBackgroundTheme) => Object.freeze({ ...selPageBackgroundTheme }));
+        .map((selPageBackgroundTheme) => ({ ...selPageBackgroundTheme }));
     // 默认清单只保留通用纯色和用户可独立选择的公共背景；主题配套背景由各自 manifest 登记。
-    const selPageBackgroundDefaultThemes = Object.freeze([
+    const selPageBackgroundDefaultThemes = selFreeze([
         // 纯色 ID 没有图片；背景层透明后直接显示当前主题的 --sel-theme-page-background。
-        Object.freeze({ id: "solid-dark", name: "深色纯色", category: "纯色", image: "" }),
-        Object.freeze({ id: "solid-light", name: "浅色纯色", category: "纯色", image: "" }),
-        Object.freeze({ id: "technology", name: "赛博城市", category: "科技", image: "../../assets/backgrounds/technology-cyber-city.webp" }),
-        Object.freeze({ id: "space", name: "紫色星云", category: "宇宙", image: "../../assets/backgrounds/space-purple-nebula.webp" }),
-        Object.freeze({ id: "fantasy", name: "水晶森林", category: "奇幻", image: "../../assets/backgrounds/fantasy-emerald-crystal-forest.webp" }),
-        Object.freeze({ id: "landscape", name: "金色山湖", category: "风景", image: "../../assets/backgrounds/landscape-golden-mountain-lake.webp" }),
-        Object.freeze({ id: "oriental", name: "青绿山水", category: "国风", image: "../../assets/backgrounds/oriental-jade-landscape.webp" }),
-        Object.freeze({ id: "minimal", name: "珊瑚流光", category: "简约", image: "../../assets/backgrounds/minimal-coral-lavender-flow.webp" }),
-        Object.freeze({ id: "cute", name: "糖果云朵", category: "可爱", image: "../../assets/backgrounds/cute-candy-cloud-world.webp" }),
-        Object.freeze({ id: "ocean", name: "珊瑚海城", category: "海洋", image: "../../assets/backgrounds/ocean-turquoise-coral-city.webp" }),
+        { id: "solid-dark", name: "深色纯色", category: "纯色", image: "" },
+        { id: "solid-light", name: "浅色纯色", category: "纯色", image: "" },
+        { id: "technology", name: "赛博城市", category: "科技", image: "../../assets/backgrounds/technology-cyber-city.webp" },
+        { id: "space", name: "紫色星云", category: "宇宙", image: "../../assets/backgrounds/space-purple-nebula.webp" },
+        { id: "fantasy", name: "水晶森林", category: "奇幻", image: "../../assets/backgrounds/fantasy-emerald-crystal-forest.webp" },
+        { id: "landscape", name: "金色山湖", category: "风景", image: "../../assets/backgrounds/landscape-golden-mountain-lake.webp" },
+        { id: "oriental", name: "青绿山水", category: "国风", image: "../../assets/backgrounds/oriental-jade-landscape.webp" },
+        { id: "minimal", name: "珊瑚流光", category: "简约", image: "../../assets/backgrounds/minimal-coral-lavender-flow.webp" },
+        { id: "cute", name: "糖果云朵", category: "可爱", image: "../../assets/backgrounds/cute-candy-cloud-world.webp" },
+        { id: "ocean", name: "珊瑚海城", category: "海洋", image: "../../assets/backgrounds/ocean-turquoise-coral-city.webp" },
         // 主题包背景在注册表加载完成后自动合并，新增主题不再修改本组件。
         ...selPageBackgroundPackThemes
     ]);
@@ -66,14 +68,14 @@
             return selPageBackgroundControllers.get(selPageBackgroundHost);
         }
         // 应用可以显式覆盖主题；缺失时继续使用 SEL 标准清单。
-        const selPageBackgroundThemes = Object.freeze(
+        const selPageBackgroundThemes = selFreeze(
             (Array.isArray(selPageBackgroundOptions.themes) && selPageBackgroundOptions.themes.length > 0
                 ? selPageBackgroundOptions.themes
                 : selPageBackgroundDefaultThemes
-            ).map((selPageBackgroundTheme) => Object.freeze({ ...selPageBackgroundTheme }))
+            ).map((selPageBackgroundTheme) => ({ ...selPageBackgroundTheme }))
         );
         // 默认状态只来自代码配置，不读取 localStorage，保证刷新页面恢复默认。
-        const selPageBackgroundDefaults = Object.freeze({
+        const selPageBackgroundDefaults = selFreeze({
             theme: selPageBackgroundThemes.some((selPageBackgroundTheme) => selPageBackgroundTheme.id === selPageBackgroundOptions.defaults?.theme)
                 ? selPageBackgroundOptions.defaults.theme
                 : selPageBackgroundThemes[0].id,
@@ -110,18 +112,18 @@
             selPageBackgroundDocumentRoot.dataset.selPageBackgroundTheme = selPageBackgroundTheme.id;
             // 页面事件让个性化界面和其他只读观察者刷新显示状态。
             document.dispatchEvent(new CustomEvent("selPageBackground:change", {
-                detail: Object.freeze({ ...selPageBackgroundState })
+                detail: selFreeze({ ...selPageBackgroundState })
             }));
         }
 
         // 公开控制器只操作背景状态，不创建或了解面板设置结构。
-        const selPageBackgroundController = Object.freeze({
+        const selPageBackgroundController = {
             // themes 供个性化界面绘制背景主题缩略图。
             themes: selPageBackgroundThemes,
             // defaults 供“恢复默认”动作读取稳定刷新值。
             defaults: selPageBackgroundDefaults,
             // getState 返回不可变副本，调用方不能越过 API 修改内部状态。
-            getState: () => Object.freeze({ ...selPageBackgroundState }),
+            getState: () => selFreeze({ ...selPageBackgroundState }),
             setTheme(selPageBackgroundThemeId) {
                 // 未注册主题不会改变现有背景。
                 if (!selPageBackgroundThemes.some((selPageBackgroundTheme) => selPageBackgroundTheme.id === selPageBackgroundThemeId)) {
@@ -145,7 +147,7 @@
                 // 调整结果只在当前页面即时生效。
                 selPageBackgroundApply();
                 // 返回当前稳定状态供组合界面同步输出。
-                return Object.freeze({ ...selPageBackgroundState });
+                return selFreeze({ ...selPageBackgroundState });
             },
             reset() {
                 // 恢复代码默认值，不读取或删除任何本地缓存。
@@ -153,9 +155,9 @@
                 // 默认背景立即写回页面。
                 selPageBackgroundApply();
                 // 返回默认状态便于个性化界面同步。
-                return Object.freeze({ ...selPageBackgroundState });
+                return selFreeze({ ...selPageBackgroundState });
             }
-        });
+        };
         // 保存控制器后立即应用刷新默认状态。
         selPageBackgroundControllers.set(selPageBackgroundHost, selPageBackgroundController);
         selPageBackgroundApply();
@@ -164,7 +166,7 @@
     }
 
     // 基础背景模块只注册能力，不主动扫描页面或创建设置入口。
-    window.selPageBackground = Object.freeze({
+    window.sel.register("components.pageBackground", {
         // 默认主题供应用或组合控件直接复用。
         themes: selPageBackgroundDefaultThemes,
         // mount 是创建背景图层的唯一入口。

@@ -200,6 +200,42 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
     }
 
     /**
+     * 把包含完整平台默认字段的表按“主键、租户、操作员、业务字段”顺序展示，同时保留真实物理序号。
+     * 真实传参示例：{@code [id(1),name(2),tenantId(3),lastOperateUserId(4)]}。
+     * 真实返回示例：返回 {@code [id(1),tenantId(3),lastOperateUserId(4),name(2)]}。
+     * 异常或副作用示例：缺少任一默认字段时保持 JDBC 原顺序；命中时只重排当前内存列表，不修改数据库。
+     *
+     * @param columns JDBC 已按物理序号返回的字段节点，例如 {@code [{label=id,ordinalPosition=1}]}
+     * @return 用于 MDA 树和结构页签展示的字段列表，ordinalPosition 仍表示真实物理位置
+     */
+    private List<Map<String, Object>> orderStandardAuditColumns(List<Map<String, Object>> columns) {
+        boolean hasId = columns.stream().anyMatch(column -> "id".equalsIgnoreCase(String.valueOf(column.get("label"))));
+        boolean hasTenantId = columns.stream().anyMatch(
+                column -> "tenantId".equalsIgnoreCase(String.valueOf(column.get("label"))));
+        boolean hasOperatorId = columns.stream().anyMatch(
+                column -> "lastOperateUserId".equalsIgnoreCase(String.valueOf(column.get("label"))));
+        if (!hasId || !hasTenantId || !hasOperatorId) {
+            return columns;
+        }
+        columns.sort(Comparator
+                .comparingInt((Map<String, Object> column) -> {
+                    String label = String.valueOf(column.get("label"));
+                    if ("id".equalsIgnoreCase(label)) {
+                        return 0;
+                    }
+                    if ("tenantId".equalsIgnoreCase(label)) {
+                        return 1;
+                    }
+                    if ("lastOperateUserId".equalsIgnoreCase(label)) {
+                        return 2;
+                    }
+                    return 3;
+                })
+                .thenComparingInt(column -> ((Number) column.get("ordinalPosition")).intValue()));
+        return columns;
+    }
+
+    /**
      * 读取表字段的顺序、类型、长度、默认值、可空性、生成属性和业务注释。
      * 真实传参示例：{@code catalog=mda,schema=PUBLIC,tableName=MdaConnectionProfile,primaryKeys=[id]}。
      * 真实返回示例：返回 {@code [{label=id,typeName=BIGINT,ordinalPosition=1,primaryKey=true}]}。
@@ -238,7 +274,7 @@ public class JdbcMetadataServiceImpl implements JdbcMetadataService {
                 nodes.add(columnNode);
             }
         }
-        return nodes;
+        return orderStandardAuditColumns(nodes);
     }
 
     /**

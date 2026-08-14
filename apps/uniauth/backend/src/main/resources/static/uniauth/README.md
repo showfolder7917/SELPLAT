@@ -7,7 +7,7 @@
 1. 根据 `multi=1` 声明需要装配的业务实例及其 `layoutId`。
 2. 从 `uniauthLayouts` 一眼确认上、左、中、右、下的位置、基础控件名称和 JSON 来源。
 3. 从 `uniauthDataSources` 取得明确登记的模拟 JSON 或后端接口地址。
-4. 根据 `lang` 使用 `selAjax.json({ url })` 读取当前语言 JSON。
+4. 根据 `lang` 使用 `sel.net.ajax.json({ url })` 读取当前语言 JSON。
 5. 聚合 `data、column、tree、title、search、menu、pagination、select`。
 6. 把五区声明交给 `selPanel.create`，由基础层白名单创建真实区域和控件宿主。
 7. 只挂载当前布局声明的 `selSearch、selTree、selGridMenu、selDropdownMenu、selGrid`。
@@ -41,4 +41,4 @@
 
 ## 接入后端
 
-后端未接入前，`mock/` 负责模拟聚合数据，全部路径在 `uniauth.js` 的 `uniauthDataSources` 中显式登记。接入后端时把数据源切换为登记好的 `backendUrl`，再通过 `selAjax.request({ url })` 获取聚合响应；基础控件及其挂载顺序保持不变。
+后端未接入前，`mock/` 负责模拟聚合数据，全部路径在 `uniauth.js` 的 `uniauthDataSources` 中显式登记。接入后端时把数据源切换为登记好的 `backendUrl`，再通过 `sel.net.ajax.request({ url })` 获取聚合响应；基础控件及其挂载顺序保持不变。

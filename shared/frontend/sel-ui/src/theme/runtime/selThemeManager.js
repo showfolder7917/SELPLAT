@@ -1,13 +1,15 @@
 /*
  * selThemeManager.js：SEL 主题运行管理器。
  * 负责切换 Theme、Mode、Accent 与 Density，并把当前主题素材映射为页面统一令牌。
- * 责任边界：不创建个性化界面，不读取业务数据；公开管理器为 window.selThemeManager。
+ * 责任边界：不创建个性化界面，不读取业务数据；公开管理器为 window.sel.theme.manager。
  */
 (function selThemeManagerInitialize() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     const selThemeManagerRoot = document.documentElement;
-    const selThemeManagerRegistry = window.selThemeRegistry;
+    const selThemeManagerRegistry = window.sel.theme.registry;
     if (!selThemeManagerRegistry?.list().length) {
         throw new Error("SEL theme registry has no registered theme pack.");
     }
@@ -76,12 +78,12 @@
         }
         document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", selThemeManagerMode.id);
         document.dispatchEvent(new CustomEvent("selTheme:change", {
-            detail: Object.freeze({ ...selThemeManagerState, source: selThemeManagerSource })
+            detail: selFreeze({ ...selThemeManagerState, source: selThemeManagerSource })
         }));
         return true;
     }
 
-    window.selThemeManager = Object.freeze({
+    window.sel.register("theme.manager", {
         themes: selThemeManagerRegistry.list,
         getTheme: () => selThemeManagerRegistry.get(selThemeManagerState.theme),
         getMode: () => selThemeManagerResolveMode(selThemeManagerRegistry.get(selThemeManagerState.theme), selThemeManagerState.mode),
@@ -89,7 +91,7 @@
             const selThemeManagerMode = selThemeManagerResolveMode(selThemeManagerRegistry.get(selThemeManagerState.theme), selThemeManagerState.mode);
             return selThemeManagerMode.accents.find((selThemeManagerAccent) => selThemeManagerAccent.id === selThemeManagerState.accent) || null;
         },
-        getState: () => Object.freeze({ ...selThemeManagerState }),
+        getState: () => selFreeze({ ...selThemeManagerState }),
         setTheme(selThemeManagerThemeId) {
             const selThemeManagerTheme = selThemeManagerRegistry.get(selThemeManagerThemeId);
             if (!selThemeManagerTheme) return false;
@@ -124,5 +126,5 @@
         },
         apply: () => selThemeManagerApply("initialize")
     });
-    window.selThemeManager.apply();
+    window.sel.theme.manager.apply();
 })();

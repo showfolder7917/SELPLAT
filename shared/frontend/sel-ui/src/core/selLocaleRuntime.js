@@ -5,6 +5,8 @@
 (function selLocaleRuntimeInitialize(global) {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     /** 创建一个页面级语言会话，所有状态仅存在于当前页面内存。 */
     function selLocaleRuntimeCreate(options = {}) {
         const supportedLocales = new Set(Array.isArray(options.supportedLocales) ? options.supportedLocales.map(String) : []);
@@ -19,7 +21,7 @@
                 ? definition.apply
                 : definition.controller?.setLocale?.bind(definition.controller);
             if (typeof apply !== "function") return false;
-            participants.set(id, Object.freeze({ id, load: definition.load, apply, priority: Number(definition.priority) || 0 }));
+            participants.set(id, selFreeze({ id, load: definition.load, apply, priority: Number(definition.priority) || 0 }));
             return true;
         }
 
@@ -30,31 +32,31 @@
             try {
                 const orderedParticipants = Array.from(participants.values()).sort((left, right) => left.priority - right.priority);
                 // 所有公共与项目资源先完整加载；任一失败时保持当前界面和语言不变。
-                const prepared = await Promise.all(orderedParticipants.map(async (participant) => Object.freeze({
+                const prepared = await Promise.all(orderedParticipants.map(async (participant) => ({
                     participant,
                     resource: await participant.load(requestedLocale)
                 })));
                 // 资源齐备后才原位更新组件，避免网络快慢造成中日英混杂界面。
                 for (const item of prepared) {
-                    const applied = await item.participant.apply(Object.freeze({ locale: requestedLocale, resource: item.resource }));
+                    const applied = await item.participant.apply(selFreeze({ locale: requestedLocale, resource: item.resource }));
                     if (applied === false) throw new Error(`语言组件更新失败：${item.participant.id}`);
                 }
                 currentLocale = requestedLocale;
-                global.dispatchEvent(new CustomEvent("selLocale:change", { detail: Object.freeze({ locale: currentLocale }) }));
+                global.dispatchEvent(new CustomEvent("selLocale:change", { detail: selFreeze({ locale: currentLocale }) }));
                 return true;
             } finally {
                 switching = false;
             }
         }
 
-        return Object.freeze({
+        return {
             register,
             setLocale,
             getLocale: () => currentLocale,
             isSwitching: () => switching,
-            list: () => Object.freeze(Array.from(participants.keys()))
-        });
+            list: () => selFreeze(Array.from(participants.keys()))
+        };
     }
 
-    global.selLocaleRuntime = Object.freeze({ create: selLocaleRuntimeCreate });
+    window.sel.register("locale.runtime", { create: selLocaleRuntimeCreate });
 })(window);

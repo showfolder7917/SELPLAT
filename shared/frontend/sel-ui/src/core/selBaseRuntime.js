@@ -7,6 +7,8 @@
 (function selBaseCreateRuntime(global) {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 把可空业务值转换成安全文本，避免数据库内容被当作 HTML 插入页面。
     function selBaseText(value, fallback = "—") {
         // null、undefined 与空字符串都使用页面指定的业务占位文案。
@@ -331,7 +333,7 @@
     }
 
     // 对外只暴露应用装配层可以复用的精简基础能力集合。
-    global.selBaseRuntime = Object.freeze({
+    window.sel.registerAll("core", {
         // Dialog 提供统一原生模态框控制能力。
         Dialog: SelBaseDialog,
         // Store 提供分页列表加载状态与数据快照能力。
@@ -347,7 +349,7 @@
         // param 负责读取当前页面查询参数。
         param: selBaseGetLocationParam,
         // preference 只提供通用字符串存取，具体键名与语言选择仍由应用装配层拥有。
-        preference: Object.freeze({ get: selBaseGetPreference, set: selBaseSetPreference }),
+        preference: { get: selBaseGetPreference, set: selBaseSetPreference },
         // navigateWithParam 用于保留其他页面状态并按新 locale 重新装配当前应用。
         navigateWithParam: selBaseNavigateWithParam,
         // replaceParam 用于运行时语言切换同步分享地址，但不刷新当前页面。

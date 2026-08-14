@@ -5,6 +5,8 @@
 (function selCodeEditorInitializeRegistry() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 动态页签中的编辑器按完整实例键登记，关闭页签时可以从注册表彻底回收。
     const selCodeEditorInstances = new Map();
 
@@ -144,7 +146,7 @@
             }
             selCodeEditorRoot.dispatchEvent(new CustomEvent("selCodeEditor:action", {
                 bubbles: true,
-                detail: Object.freeze({
+                detail: selFreeze({
                     editorId: selCodeEditorId,
                     action: selCodeEditorNormalizedAction,
                     language: selCodeEditorLanguage,
@@ -171,7 +173,7 @@
             selCodeEditorRefreshMetrics();
             selCodeEditorRoot.dispatchEvent(new CustomEvent("selCodeEditor:change", {
                 bubbles: true,
-                detail: Object.freeze({ editorId: selCodeEditorId, language: selCodeEditorLanguage, value: selCodeEditorInput.value })
+                detail: selFreeze({ editorId: selCodeEditorId, language: selCodeEditorLanguage, value: selCodeEditorInput.value })
             }));
         });
         selCodeEditorInput.addEventListener("scroll", selCodeEditorSyncScroll);
@@ -240,7 +242,7 @@
             selCodeEditorRefreshMetrics();
             selCodeEditorRoot.dispatchEvent(new CustomEvent("selCodeEditor:change", {
                 bubbles: true,
-                detail: Object.freeze({ editorId: selCodeEditorId, language: selCodeEditorLanguage, value: selCodeEditorInput.value })
+                detail: selFreeze({ editorId: selCodeEditorId, language: selCodeEditorLanguage, value: selCodeEditorInput.value })
             }));
             selCodeEditorInput.focus();
             return true;
@@ -270,7 +272,7 @@
             return true;
         }
 
-        const selCodeEditorController = Object.freeze({
+        const selCodeEditorController = {
             id: selCodeEditorId,
             root: selCodeEditorRoot,
             input: selCodeEditorInput,
@@ -284,19 +286,19 @@
             isLoading: () => selCodeEditorLoading,
             setFeedback: selCodeEditorSetFeedback,
             action: selCodeEditorDispatchAction,
-            getState: () => Object.freeze({ language: selCodeEditorLanguage, loading: selCodeEditorLoading, value: selCodeEditorInput.value }),
+            getState: () => selFreeze({ language: selCodeEditorLanguage, loading: selCodeEditorLoading, value: selCodeEditorInput.value }),
             destroy: selCodeEditorDestroy
-        });
+        };
         selCodeEditorInstances.set(selCodeEditorId, selCodeEditorController);
         selCodeEditorRoot.dataset.selCodeEditorReady = "true";
         selCodeEditorRefreshMetrics();
         return selCodeEditorController;
     }
 
-    window.selCodeEditor = Object.freeze({
+    window.sel.register("components.codeEditor", {
         mount: selCodeEditorMount,
         get: (selCodeEditorId) => selCodeEditorInstances.get(String(selCodeEditorId)) || null,
         has: (selCodeEditorId) => selCodeEditorInstances.has(String(selCodeEditorId)),
-        list: () => Object.freeze(Array.from(selCodeEditorInstances.keys()))
+        list: () => selFreeze(Array.from(selCodeEditorInstances.keys()))
     });
 })();

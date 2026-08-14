@@ -52,7 +52,7 @@ class ReferenceDataTypeControllerRealDatabaseTest {
     void prepareExplicitFixture() {
         jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
         for (String tableName : new String[] {
-            "ReferenceDataContextMenuItem", "ReferenceDataOption", "ReferenceDataTreeNode",
+            "ReferenceDataControlBinding", "ReferenceDataContextMenuItem", "ReferenceDataOption", "ReferenceDataTreeNode",
             "ReferenceDataTableColumn", "ReferenceDataTable", "ReferenceDataType", "CommonSequenceSegment"
         }) {
             jdbcTemplate.execute("DELETE FROM " + tableName);
@@ -67,6 +67,7 @@ class ReferenceDataTypeControllerRealDatabaseTest {
         jdbcTemplate.update(sequenceSql, "ReferenceDataContextMenuItemId", "菜单主键");
         jdbcTemplate.update(sequenceSql, "ReferenceDataTableId", "表格登记主键");
         jdbcTemplate.update(sequenceSql, "ReferenceDataTableColumnId", "表格头主键");
+        jdbcTemplate.update(sequenceSql, "ReferenceDataControlBindingId", "控件绑定主键");
         jdbcTemplate.update("INSERT INTO ReferenceDataType "
                 + "(id, tenantId, lastOperateUserId, projectCode, resourceCode, nameZh, status, sortnum) "
                 + "VALUES (100001, 1, 1, 'reference-data', 'resource-kind', '引用数据资源类型', 1, 100), "
@@ -87,6 +88,10 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 + "(100002,1,1,100001,100001,'create-tree-resource','新建树资源','CREATE_TREE_RESOURCE',1,1),"
                 + "(100003,1,1,100001,100001,'create-option-resource','新建选项资源','CREATE_OPTION_RESOURCE',1,2),"
                 + "(100004,1,1,100001,NULL,'refresh','刷新','REFRESH_RESOURCE_KIND',1,2)");
+        jdbcTemplate.update("INSERT INTO ReferenceDataControlBinding "
+                + "(id, tenantId, lastOperateUserId, pageProjectCode, pagePath, controlId, controlType, typeId, status, sortnum) "
+                + "VALUES (100001,1,1,'reference-data','/reference-data/reference-data.html',"
+                + "'selDropdownResourceKindId','DROPDOWN',100001,1,1)");
     }
 
     /**
@@ -240,10 +245,10 @@ class ReferenceDataTypeControllerRealDatabaseTest {
     }
 
     /**
-     * 验证工作台导航能力只返回五个一级模块且不查询表格字段模块。
+     * 验证工作台导航能力返回六个一级模块且不查询表格字段模块。
      *
      * 真实传参示例：无参数请求 {@code /api/reference-data/workbench/navigation.htm}。
-     * 真实返回示例：第五项为表格定义，返回中不存在 {@code columns} 一级模块。
+     * 真实返回示例：第四项为控件绑定、第六项为表格定义，返回中不存在 {@code columns} 一级模块。
      * 异常或副作用示例：该接口不读取或写入任何业务表，空数据库也返回相同导航。
      *
      * @throws Exception 当 MockMvc 请求执行失败时抛出
@@ -254,10 +259,11 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.initialKey").value("types"))
-                .andExpect(jsonPath("$.data.modules", hasSize(5)))
+                .andExpect(jsonPath("$.data.modules", hasSize(6)))
                 .andExpect(jsonPath("$.data.modules[0].key").value("types"))
-                .andExpect(jsonPath("$.data.modules[4].key").value("tables"))
-                .andExpect(jsonPath("$.data.modules[4].drilldown").value("tables-to-columns"));
+                .andExpect(jsonPath("$.data.modules[3].key").value("bindings"))
+                .andExpect(jsonPath("$.data.modules[5].key").value("tables"))
+                .andExpect(jsonPath("$.data.modules[5].drilldown").value("tables-to-columns"));
     }
 
     /**
@@ -400,6 +406,15 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 .andExpect(jsonPath("$.data[0].label").value("ツリーリソース"))
                 .andExpect(jsonPath("$.data[1].value").value("OPTIONS"));
 
+        // 页面控件绑定 → 同一批 ReferenceDataOption 通过页面路径和控件 ID 精确解析。
+        mockMvc.perform(get("/api/reference-data/pages/reference-data/controls/selDropdownResourceKindId/options")
+                        .param("pagePath", "/reference-data/reference-data.html")
+                        .param("locale", "ja-JP"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[0].value").value("TREE"))
+                .andExpect(jsonPath("$.data[1].label").value("選択肢リソース"));
+
         // ReferenceDataContextMenuItem 表 → 顶级菜单、两个子菜单和稳定命令。
         mockMvc.perform(get("/api/reference-data/reference-data/resource-kind/context-menu")
                         .param("locale", "zh-CN"))
@@ -408,6 +423,62 @@ class ReferenceDataTypeControllerRealDatabaseTest {
                 .andExpect(jsonPath("$.data[0].children", hasSize(2)))
                 .andExpect(jsonPath("$.data[0].children[0].command").value("CREATE_TREE_RESOURCE"))
                 .andExpect(jsonPath("$.data[1].command").value("REFRESH_RESOURCE_KIND"));
+    }
+
+    /**
+     * 验证页面控件绑定公共 CRUD、唯一坐标解析和停用边界使用同一真实数据库链路。
+     *
+     * 真实传参示例：登记 {@code cms/article.html#selDropdownArticleStatusId} 并绑定类型 {@code 100001}。
+     * 真实返回示例：新增主键为 {@code 101000}；固定绑定启用时返回两条真实 ReferenceDataOption。
+     * 异常或副作用示例：固定绑定停用后页面坐标查询返回
+     *     {@code REFERENCE_DATA_CONTROL_OPTIONS_NOT_FOUND}，逻辑删除不会物理移除新增绑定。
+     *
+     * @throws Exception 当 MockMvc 请求、真实 SQL 或统一异常响应不符合契约时抛出
+     */
+    @Test
+    void shouldManageControlBindingAndRejectDisabledBinding() throws Exception {
+        // 管理接口新增真实页面控件绑定，主键和审计身份全部由公共 Service 补齐。
+        mockMvc.perform(post("/api/reference-data/admin/control-bindings/create.htm")
+                        .param("pageProjectCode", "cms")
+                        .param("pagePath", "/cms/article.html")
+                        .param("controlId", "selDropdownArticleStatusId")
+                        .param("controlType", "DROPDOWN")
+                        .param("typeId", "100001")
+                        .param("description", "文章状态下拉框")
+                        .param("status", "1")
+                        .param("sortnum", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(101000))
+                .andExpect(jsonPath("$.data.tenantId").value(1))
+                .andExpect(jsonPath("$.data.lastOperateUserId").value(1));
+
+        // 详情接口证明新实体完整接入 BaseController 与真实表，而不是只存在建表脚本。
+        mockMvc.perform(get("/api/reference-data/admin/control-bindings/getById.htm")
+                        .param("id", "101000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pageProjectCode").value("cms"))
+                .andExpect(jsonPath("$.data.controlId").value("selDropdownArticleStatusId"));
+
+        // 停用固定绑定后，普通页面查询不能绕过绑定状态继续读取选项。
+        mockMvc.perform(post("/api/reference-data/admin/control-bindings/update.htm")
+                        .param("id", "100001")
+                        .param("status", "2"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/reference-data/pages/reference-data/controls/selDropdownResourceKindId/options")
+                        .param("pagePath", "/reference-data/reference-data.html"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_CONTROL_OPTIONS_NOT_FOUND"));
+
+        // 删除继续使用统一逻辑删除，数据库保留记录并把状态改为 0 供审计追踪。
+        mockMvc.perform(post("/api/reference-data/admin/control-bindings/delete.htm")
+                        .param("id", "101000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(0));
+        mockMvc.perform(get("/api/reference-data/admin/control-bindings/getStore.htm")
+                        .param("controlId", "selDropdownArticleStatusId"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.records[0].status").value(0));
     }
 
     /**

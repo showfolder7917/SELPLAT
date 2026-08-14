@@ -2,25 +2,27 @@
  * selPersonalization.js：SEL 页面个性化设置组合控件。
  * 负责“主题 / 背景 / 面板 / 文字 / 语言”五级界面、统一视觉令牌、动效、预设和当前页面实时预览。
  * 责任边界：公共文案与语言选项由调用方传入；项目业务数据仍由应用装配层按 locale 加载，本组件不识别 具体应用 目录。
- * 模块级 JavaScript 标识统一使用 selPersonalization 前缀，公开控制器为 window.selPersonalization。
+ * 模块级 JavaScript 标识统一使用 selPersonalization 前缀，公开控制器为 window.sel.components.personalization。
  */
 (function selPersonalizationInitialize() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 每个个性化宿主只创建一个控制器，避免重复绑定全局输入事件。
     const selPersonalizationControllers = new WeakMap();
     // 主题、模式、颜色和素材只能来自注册表；个性化控件不再保存水晶主题私有清单。
-    const selPersonalizationThemeManager = window.selThemeManager;
+    const selPersonalizationThemeManager = window.sel.theme.manager;
     // 设置注册表承接未来后端 JSON；当前组件只消费已校验的模块描述，不自行拼接项目接口。
-    const selPersonalizationSettingsRegistry = window.selPersonalizationRegistry;
-    const selPersonalizationThemes = selPersonalizationThemeManager?.themes?.() || Object.freeze([]);
+    const selPersonalizationSettingsRegistry = window.sel.components.personalizationRegistry;
+    const selPersonalizationThemes = selPersonalizationThemeManager?.themes?.() || [];
     const selPersonalizationDefaultTheme = selPersonalizationThemes[0] || null;
     // 当前主题和模式数组可在运行时替换，新增主题无需修改本组件事件分支。
     let selPersonalizationActiveTheme = selPersonalizationThemeManager?.getTheme?.() || selPersonalizationDefaultTheme;
-    let selPersonalizationSkins = selPersonalizationActiveTheme?.modes || Object.freeze([]);
+    let selPersonalizationSkins = selPersonalizationActiveTheme?.modes || [];
     let selPersonalizationDefaultSkin = selPersonalizationActiveTheme?.defaults?.mode || selPersonalizationSkins[0]?.id || "dark";
     // 面板默认值全部采用 0 至 100 的用户尺度，刷新页面时从这里重新开始。
-    const selPersonalizationPanelDefaults = Object.freeze({
+    const selPersonalizationPanelDefaults = selFreeze({
         // accent 保存正式颜色组合 ID，themeColor 只保存任意自定义色；二者同时为空表示主题基础材质。
         themeAccent: null,
         themeColor: null,
@@ -47,7 +49,7 @@
         preset: "default"
     });
     // 文字默认只声明跟随模式；实际颜色由当前皮肤令牌在应用时解析，避免浅色皮肤继承深色白字。
-    const selPersonalizationTextDefaults = Object.freeze({
+    const selPersonalizationTextDefaults = selFreeze({
         mode: "follow",
         mainColor: null,
         mutedColor: null,
@@ -58,82 +60,82 @@
         fontScaleOverride: false
     });
     // 文字模式使用中性名称，并为深浅皮肤提供独立颜色与对比参数；custom 继续保留用户当前值。
-    const selPersonalizationTextModes = Object.freeze([
-        Object.freeze({ id: "follow", label: "跟随皮肤", icon: "ri-brush-line", values: Object.freeze({
-            dark: Object.freeze({ mainColor: null, mutedColor: null, contrast: 60, fontScale: 50 }),
-            light: Object.freeze({ mainColor: null, mutedColor: null, contrast: 72, fontScale: 50 })
-        }) }),
-        Object.freeze({ id: "soft", label: "柔和", icon: "ri-feather-line", values: Object.freeze({
-            dark: Object.freeze({ mainColor: "#DCE6FA", mutedColor: "#9BAAC4", contrast: 42, fontScale: 50 }),
-            light: Object.freeze({ mainColor: "#33445E", mutedColor: "#728096", contrast: 46, fontScale: 50 })
-        }) }),
-        Object.freeze({ id: "clear", label: "清晰", icon: "ri-focus-3-line", values: Object.freeze({
-            dark: Object.freeze({ mainColor: "#FFFFFF", mutedColor: "#C8D4EA", contrast: 78, fontScale: 52 }),
-            light: Object.freeze({ mainColor: "#0B1633", mutedColor: "#44536B", contrast: 68, fontScale: 52 })
-        }) }),
-        Object.freeze({ id: "custom", label: "自定义", icon: "ri-font-color", values: null })
+    const selPersonalizationTextModes = selFreeze([
+        { id: "follow", label: "跟随皮肤", icon: "ri-brush-line", values: {
+            dark: { mainColor: null, mutedColor: null, contrast: 60, fontScale: 50 },
+            light: { mainColor: null, mutedColor: null, contrast: 72, fontScale: 50 }
+        } },
+        { id: "soft", label: "柔和", icon: "ri-feather-line", values: {
+            dark: { mainColor: "#DCE6FA", mutedColor: "#9BAAC4", contrast: 42, fontScale: 50 },
+            light: { mainColor: "#33445E", mutedColor: "#728096", contrast: 46, fontScale: 50 }
+        } },
+        { id: "clear", label: "清晰", icon: "ri-focus-3-line", values: {
+            dark: { mainColor: "#FFFFFF", mutedColor: "#C8D4EA", contrast: 78, fontScale: 52 },
+            light: { mainColor: "#0B1633", mutedColor: "#44536B", contrast: 68, fontScale: 52 }
+        } },
+        { id: "custom", label: "自定义", icon: "ri-font-color", values: null }
     ]);
     // 每个预设分别保存深浅皮肤参数；稳定 ID 保持不变，显示名称改用不限定明暗的“沉浸”。
-    const selPersonalizationPresets = Object.freeze([
-        Object.freeze({ id: "deep-space", label: "沉浸", icon: "ri-focus-2-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 80, backgroundFrost: 60, themeTint: 72, panelRadius: 46, panelScale: 50, innerPanelFit: 100, frameWidth: 54, panelInset: 48, contentInset: 52, panelGap: 50, glowSpread: 56, controlGap: 50, windowMotion: 34, glowMotion: 24, reducedMotion: false }),
-            light: Object.freeze({ frameOpacity: 90, panelOpacity: 86, backgroundFrost: 58, themeTint: 28, panelRadius: 54, panelScale: 50, innerPanelFit: 100, frameWidth: 48, panelInset: 48, contentInset: 54, panelGap: 50, glowSpread: 32, controlGap: 52, windowMotion: 30, glowMotion: 16, reducedMotion: false })
-        }) }),
-        Object.freeze({ id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 82, panelOpacity: 30, backgroundFrost: 68, themeTint: 34, panelRadius: 62, panelScale: 50, innerPanelFit: 100, frameWidth: 46, panelInset: 44, contentInset: 54, panelGap: 56, glowSpread: 32, controlGap: 54, windowMotion: 30, glowMotion: 14, reducedMotion: false }),
-            light: Object.freeze({ frameOpacity: 72, panelOpacity: 48, backgroundFrost: 68, themeTint: 10, panelRadius: 68, panelScale: 50, innerPanelFit: 100, frameWidth: 38, panelInset: 44, contentInset: 56, panelGap: 58, glowSpread: 16, controlGap: 56, windowMotion: 28, glowMotion: 8, reducedMotion: false })
-        }) }),
-        Object.freeze({ id: "eye-care", label: "护眼", icon: "ri-eye-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 72, panelOpacity: 74, backgroundFrost: 50, themeTint: 18, panelRadius: 60, panelScale: 50, innerPanelFit: 100, frameWidth: 44, panelInset: 52, contentInset: 60, panelGap: 60, glowSpread: 10, controlGap: 60, windowMotion: 10, glowMotion: 0, reducedMotion: true }),
-            light: Object.freeze({ frameOpacity: 66, panelOpacity: 80, backgroundFrost: 56, themeTint: 6, panelRadius: 64, panelScale: 50, innerPanelFit: 100, frameWidth: 38, panelInset: 52, contentInset: 62, panelGap: 62, glowSpread: 6, controlGap: 62, windowMotion: 10, glowMotion: 0, reducedMotion: true })
-        }) }),
-        Object.freeze({ id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 94, backgroundFrost: 58, themeTint: 48, panelRadius: 38, panelScale: 50, innerPanelFit: 100, frameWidth: 62, panelInset: 46, contentInset: 56, panelGap: 50, glowSpread: 24, controlGap: 54, windowMotion: 18, glowMotion: 4, reducedMotion: false }),
-            light: Object.freeze({ frameOpacity: 94, panelOpacity: 96, backgroundFrost: 62, themeTint: 14, panelRadius: 48, panelScale: 50, innerPanelFit: 100, frameWidth: 56, panelInset: 46, contentInset: 58, panelGap: 50, glowSpread: 18, controlGap: 54, windowMotion: 16, glowMotion: 4, reducedMotion: false })
-        }) }),
-        Object.freeze({ id: "default", label: "默认", icon: "ri-equalizer-2-line", values: Object.freeze({
-            dark: Object.freeze({ frameOpacity: 100, panelOpacity: 52, backgroundFrost: 44, themeTint: 60, panelRadius: 52, panelScale: 50, innerPanelFit: 100, frameWidth: 50, panelInset: 50, contentInset: 50, panelGap: 50, glowSpread: 44, controlGap: 50, windowMotion: 36, glowMotion: 22, reducedMotion: false }),
-            light: Object.freeze({ frameOpacity: 82, panelOpacity: 72, backgroundFrost: 52, themeTint: 18, panelRadius: 58, panelScale: 50, innerPanelFit: 100, frameWidth: 44, panelInset: 50, contentInset: 54, panelGap: 52, glowSpread: 24, controlGap: 52, windowMotion: 34, glowMotion: 14, reducedMotion: false })
-        }) })
+    const selPersonalizationPresets = selFreeze([
+        { id: "deep-space", label: "沉浸", icon: "ri-focus-2-line", values: {
+            dark: { frameOpacity: 100, panelOpacity: 80, backgroundFrost: 60, themeTint: 72, panelRadius: 46, panelScale: 50, innerPanelFit: 100, frameWidth: 54, panelInset: 48, contentInset: 52, panelGap: 50, glowSpread: 56, controlGap: 50, windowMotion: 34, glowMotion: 24, reducedMotion: false },
+            light: { frameOpacity: 90, panelOpacity: 86, backgroundFrost: 58, themeTint: 28, panelRadius: 54, panelScale: 50, innerPanelFit: 100, frameWidth: 48, panelInset: 48, contentInset: 54, panelGap: 50, glowSpread: 32, controlGap: 52, windowMotion: 30, glowMotion: 16, reducedMotion: false }
+        } },
+        { id: "transparent", label: "通透", icon: "ri-contrast-drop-2-line", values: {
+            dark: { frameOpacity: 82, panelOpacity: 30, backgroundFrost: 68, themeTint: 34, panelRadius: 62, panelScale: 50, innerPanelFit: 100, frameWidth: 46, panelInset: 44, contentInset: 54, panelGap: 56, glowSpread: 32, controlGap: 54, windowMotion: 30, glowMotion: 14, reducedMotion: false },
+            light: { frameOpacity: 72, panelOpacity: 48, backgroundFrost: 68, themeTint: 10, panelRadius: 68, panelScale: 50, innerPanelFit: 100, frameWidth: 38, panelInset: 44, contentInset: 56, panelGap: 58, glowSpread: 16, controlGap: 56, windowMotion: 28, glowMotion: 8, reducedMotion: false }
+        } },
+        { id: "eye-care", label: "护眼", icon: "ri-eye-line", values: {
+            dark: { frameOpacity: 72, panelOpacity: 74, backgroundFrost: 50, themeTint: 18, panelRadius: 60, panelScale: 50, innerPanelFit: 100, frameWidth: 44, panelInset: 52, contentInset: 60, panelGap: 60, glowSpread: 10, controlGap: 60, windowMotion: 10, glowMotion: 0, reducedMotion: true },
+            light: { frameOpacity: 66, panelOpacity: 80, backgroundFrost: 56, themeTint: 6, panelRadius: 64, panelScale: 50, innerPanelFit: 100, frameWidth: 38, panelInset: 52, contentInset: 62, panelGap: 62, glowSpread: 6, controlGap: 62, windowMotion: 10, glowMotion: 0, reducedMotion: true }
+        } },
+        { id: "high-contrast", label: "高对比", icon: "ri-contrast-2-line", values: {
+            dark: { frameOpacity: 100, panelOpacity: 94, backgroundFrost: 58, themeTint: 48, panelRadius: 38, panelScale: 50, innerPanelFit: 100, frameWidth: 62, panelInset: 46, contentInset: 56, panelGap: 50, glowSpread: 24, controlGap: 54, windowMotion: 18, glowMotion: 4, reducedMotion: false },
+            light: { frameOpacity: 94, panelOpacity: 96, backgroundFrost: 62, themeTint: 14, panelRadius: 48, panelScale: 50, innerPanelFit: 100, frameWidth: 56, panelInset: 46, contentInset: 58, panelGap: 50, glowSpread: 18, controlGap: 54, windowMotion: 16, glowMotion: 4, reducedMotion: false }
+        } },
+        { id: "default", label: "默认", icon: "ri-equalizer-2-line", values: {
+            dark: { frameOpacity: 100, panelOpacity: 52, backgroundFrost: 44, themeTint: 60, panelRadius: 52, panelScale: 50, innerPanelFit: 100, frameWidth: 50, panelInset: 50, contentInset: 50, panelGap: 50, glowSpread: 44, controlGap: 50, windowMotion: 36, glowMotion: 22, reducedMotion: false },
+            light: { frameOpacity: 82, panelOpacity: 72, backgroundFrost: 52, themeTint: 18, panelRadius: 58, panelScale: 50, innerPanelFit: 100, frameWidth: 44, panelInset: 50, contentInset: 54, panelGap: 52, glowSpread: 24, controlGap: 52, windowMotion: 34, glowMotion: 14, reducedMotion: false }
+        } }
     ]);
     // 面板 range 配置集中声明分组、标签和辅助说明，增删项目不需要复制事件分支。
-    const selPersonalizationPanelRangeGroups = Object.freeze([
-        Object.freeze({
+    const selPersonalizationPanelRangeGroups = selFreeze([
+        {
             id: "appearance",
             title: "外观",
             icon: "ri-palette-line",
-            items: Object.freeze([
-                Object.freeze({ key: "frameOpacity", label: "边框透明度", hint: "仅调整原始水晶图片层" }),
-                Object.freeze({ key: "panelOpacity", label: "面板透明度", hint: "同步玻璃底板与表格结构" }),
-                Object.freeze({ key: "backgroundFrost", label: "背景磨砂", hint: "虚化面板后方内容" }),
-                Object.freeze({ key: "themeTint", label: "主题染色", hint: "颜色跟随当前皮肤" }),
-                Object.freeze({ key: "panelRadius", label: "面板圆角", hint: "贴合水晶边框切角" })
-            ])
-        }),
-        Object.freeze({
+            items: [
+                { key: "frameOpacity", label: "边框透明度", hint: "仅调整原始水晶图片层" },
+                { key: "panelOpacity", label: "面板透明度", hint: "同步玻璃底板与表格结构" },
+                { key: "backgroundFrost", label: "背景磨砂", hint: "虚化面板后方内容" },
+                { key: "themeTint", label: "主题染色", hint: "颜色跟随当前皮肤" },
+                { key: "panelRadius", label: "面板圆角", hint: "贴合水晶边框切角" }
+            ]
+        },
+        {
             id: "spacing",
             title: "边框与间距",
             icon: "ri-layout-grid-line",
-            items: Object.freeze([
-                Object.freeze({ key: "frameWidth", label: "边框厚度", hint: "保持九宫格切角比例" }),
-                Object.freeze({ key: "panelScale", label: "面板等比大小", hint: "宽高内容与边框同步缩放" }),
-                Object.freeze({ key: "innerPanelFit", label: "边框/内板比例", hint: "四边同步贴近或远离外框", maximum: 150 }),
-                Object.freeze({ key: "panelInset", label: "外框/内板间距", hint: "控制内板贴近水晶外框" }),
-                Object.freeze({ key: "contentInset", label: "内容内边距", hint: "文字远离发光边带" }),
-                Object.freeze({ key: "panelGap", label: "面板间距", hint: "控制区域之间留白" }),
-                Object.freeze({ key: "glowSpread", label: "发光扩散", hint: "不改变边框颜色" }),
-                Object.freeze({ key: "controlGap", label: "控件间距", hint: "调整表单与按钮疏密" })
-            ])
-        }),
-        Object.freeze({
+            items: [
+                { key: "frameWidth", label: "边框厚度", hint: "保持九宫格切角比例" },
+                { key: "panelScale", label: "面板等比大小", hint: "宽高内容与边框同步缩放" },
+                { key: "innerPanelFit", label: "边框/内板比例", hint: "四边同步贴近或远离外框", maximum: 150 },
+                { key: "panelInset", label: "外框/内板间距", hint: "控制内板贴近水晶外框" },
+                { key: "contentInset", label: "内容内边距", hint: "文字远离发光边带" },
+                { key: "panelGap", label: "面板间距", hint: "控制区域之间留白" },
+                { key: "glowSpread", label: "发光扩散", hint: "不改变边框颜色" },
+                { key: "controlGap", label: "控件间距", hint: "调整表单与按钮疏密" }
+            ]
+        },
+        {
             id: "motion",
             title: "动效",
             icon: "ri-sparkling-line",
-            items: Object.freeze([
-                Object.freeze({ key: "windowMotion", label: "窗口动画", hint: "控制出现与状态过渡" }),
-                Object.freeze({ key: "glowMotion", label: "光效流动", hint: "控制边框呼吸强度" })
-            ])
-        })
+            items: [
+                { key: "windowMotion", label: "窗口动画", hint: "控制出现与状态过渡" },
+                { key: "glowMotion", label: "光效流动", hint: "控制边框呼吸强度" }
+            ]
+        }
     ]);
 
     /**
@@ -343,8 +345,8 @@
         // 性能档位只保存在当前页面根状态，刷新时会根据当前设备重新评估。
         selPersonalizationDocumentRoot.dataset.selPersonalPerformance = selPersonalizationResolvePerformanceMode();
         // 调用方覆盖只作为两套皮肤默认值的共同增量；未覆盖字段始终读取当前皮肤的 default 预设。
-        const selPersonalizationDefaultOverrides = Object.freeze({ ...(selPersonalizationOptions.defaults || {}) });
-        const selPersonalizationResolveDefaults = (selPersonalizationSkinId) => Object.freeze({
+        const selPersonalizationDefaultOverrides = selFreeze({ ...(selPersonalizationOptions.defaults || {}) });
+        const selPersonalizationResolveDefaults = (selPersonalizationSkinId) => ({
             ...selPersonalizationPanelDefaults,
             ...selPersonalizationPresets.find((selPersonalizationPreset) => selPersonalizationPreset.id === "default").values[selPersonalizationSkinId],
             ...selPersonalizationDefaultOverrides,
@@ -363,7 +365,7 @@
         // 文字状态仅存在于当前页面内存，不写 localStorage、cookie 或服务端配置。
         let selPersonalizationTextState = { ...selPersonalizationTextDefaults };
         // 通用浮动面板负责入口、外壳、标题、关闭和交互隔离；本组件提供五个公共设置视图。
-        const selPersonalizationFloatingPanel = window.selFloatingPanel?.mount(selPersonalizationHost, {
+        const selPersonalizationFloatingPanel = window.sel.components.floatingPanel?.mount(selPersonalizationHost, {
             id: "personalization",
             title: selPersonalizationTranslate("个性化设置"),
             subtitle: selPersonalizationTranslate("当前页面实时预览"),
@@ -373,17 +375,17 @@
             openLabel: selPersonalizationTranslate("打开个性化设置"),
             closeLabel: selPersonalizationTranslate("关闭个性化设置"),
             // 个性化面板显式启用公共浮层缩放；右侧锚点固定，从左边和底边改变可用空间。
-            resizable: Object.freeze({
+            resizable: {
                 minWidth: 420,
                 minHeight: 420,
                 maxWidth: 960,
-                labels: Object.freeze({
+                labels: {
                     left: selPersonalizationTranslate("调整面板宽度"),
                     bottom: selPersonalizationTranslate("调整面板高度"),
                     corner: selPersonalizationTranslate("同时调整面板宽度和高度")
-                }),
+                },
                 resetLabel: selPersonalizationTranslate("双击恢复面板默认大小")
-            }),
+            },
             // 兼容类只保留个性化面板的尺寸和皮肤细节，基础结构与行为已经由 selFloatingPanel 承担。
             classes: {
                 control: "selpersonal-control",
@@ -623,13 +625,14 @@
 
         /** 返回当前编辑会话是否包含尚未保存的控件草稿。 */
         function selPersonalizationHasDirtyPageControls() {
-            return Array.from(selPersonalizationPageControls.values()).some((selPersonalizationPageControl) => selPersonalizationPageControl.dirty);
+            return Array.from(selPersonalizationPageControls.values())
+                .some((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly && selPersonalizationPageControl.dirty);
         }
 
         /** 在实际控件右上角同步编辑入口，预览模式保持业务页面干净。 */
         function selPersonalizationSyncPageControlBadges() {
             selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
-                const selPersonalizationShowBadge = selPersonalizationPageMode === "edit";
+                const selPersonalizationShowBadge = selPersonalizationPageMode === "edit" && selPersonalizationPageControl.enabled;
                 selPersonalizationPageControl.editHost.classList.toggle("selpersonal-page-editable", selPersonalizationShowBadge);
                 selPersonalizationPageControl.editButton.hidden = !selPersonalizationShowBadge;
             });
@@ -670,7 +673,9 @@
         /** 绘制当前页面已登记控件列表，并保持选中控件和页面内编辑按钮一致。 */
         function selPersonalizationRenderPageControls() {
             if (!selPersonalizationPageControlsHost) return;
-            const selPersonalizationPageControlButtons = Array.from(selPersonalizationPageControls.values()).map((selPersonalizationPageControl) => {
+            const selPersonalizationVisiblePageControls = Array.from(selPersonalizationPageControls.values())
+                .filter((selPersonalizationPageControl) => selPersonalizationPageControl.enabled);
+            const selPersonalizationPageControlButtons = selPersonalizationVisiblePageControls.map((selPersonalizationPageControl) => {
                 const selPersonalizationPageControlButton = document.createElement("button");
                 selPersonalizationPageControlButton.type = "button";
                 selPersonalizationPageControlButton.dataset.selPersonalPageControl = selPersonalizationPageControl.id;
@@ -689,8 +694,9 @@
                 return selPersonalizationPageControlButton;
             });
             selPersonalizationPageControlsHost.replaceChildren(...selPersonalizationPageControlButtons);
-            if (selPersonalizationPageEmpty) selPersonalizationPageEmpty.hidden = selPersonalizationPageControls.size > 0;
-            if (selPersonalizationPageActions) selPersonalizationPageActions.hidden = selPersonalizationPageMode !== "edit" || selPersonalizationPageControls.size === 0;
+            if (selPersonalizationPageEmpty) selPersonalizationPageEmpty.hidden = selPersonalizationVisiblePageControls.length > 0;
+            if (selPersonalizationPageActions) selPersonalizationPageActions.hidden = selPersonalizationPageMode !== "edit"
+                || !selPersonalizationVisiblePageControls.some((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly);
             selPersonalizationRenderPageInspector();
         }
 
@@ -706,7 +712,7 @@
         async function selPersonalizationConfirmDiscardPageChanges() {
             if (!selPersonalizationHasDirtyPageControls()) return true;
             if (typeof selPersonalizationOptions.pageEditor?.confirmDiscard !== "function") {
-                window.selBaseRuntime?.toast?.("请先保存或明确取消页面更改。", "warning");
+                window.sel.core?.toast?.("请先保存或明确取消页面更改。", "warning");
                 return false;
             }
             return Boolean(await selPersonalizationOptions.pageEditor.confirmDiscard());
@@ -716,13 +722,14 @@
         async function selPersonalizationCancelPageEditing() {
             if (!await selPersonalizationConfirmDiscardPageChanges()) return false;
             selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
+                if (selPersonalizationPageControl.actionOnly) return;
                 if (selPersonalizationPageControl.dirty) selPersonalizationPageControl.restoreState(selPersonalizationPageControl.baseline);
                 selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
                 selPersonalizationPageControl.dirty = false;
             });
             selPersonalizationPageMode = "preview";
             selPersonalizationSyncPageMode();
-            window.selBaseRuntime?.toast?.("页面更改已取消。", "info");
+            window.sel.core?.toast?.("页面更改已取消。", "info");
             return true;
         }
 
@@ -733,6 +740,7 @@
             if (selPersonalizationNextMode === "preview" && !await selPersonalizationConfirmDiscardPageChanges()) return false;
             if (selPersonalizationNextMode === "preview") {
                 selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
+                    if (selPersonalizationPageControl.actionOnly) return;
                     if (selPersonalizationPageControl.dirty) {
                         selPersonalizationPageControl.restoreState(selPersonalizationClonePageState(selPersonalizationPageControl.baseline));
                     }
@@ -741,6 +749,7 @@
                 });
             } else {
                 selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
+                    if (selPersonalizationPageControl.actionOnly) return;
                     selPersonalizationPageControl.baseline = selPersonalizationClonePageState(selPersonalizationPageControl.captureState());
                     selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
                     selPersonalizationPageControl.dirty = false;
@@ -769,12 +778,15 @@
         async function selPersonalizationSavePageEditing() {
             if (selPersonalizationPageSaving) return false;
             const selPersonalizationDirtyControls = Array.from(selPersonalizationPageControls.values())
-                .filter((selPersonalizationPageControl) => selPersonalizationPageControl.dirty);
+                .filter((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly && selPersonalizationPageControl.dirty);
             const selPersonalizationSelectedControl = selPersonalizationPageControls.get(selPersonalizationSelectedPageControlId)
-                || selPersonalizationPageControls.values().next().value;
+                || Array.from(selPersonalizationPageControls.values()).find((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly);
+            const selPersonalizationPersistentSelectedControl = selPersonalizationSelectedControl?.actionOnly
+                ? Array.from(selPersonalizationPageControls.values()).find((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly)
+                : selPersonalizationSelectedControl;
             const selPersonalizationSaveControls = selPersonalizationDirtyControls.length > 0
                 ? selPersonalizationDirtyControls
-                : (selPersonalizationSelectedControl ? [selPersonalizationSelectedControl] : []);
+                : (selPersonalizationPersistentSelectedControl ? [selPersonalizationPersistentSelectedControl] : []);
             if (selPersonalizationSaveControls.length === 0) return false;
             selPersonalizationPageSaving = true;
             if (selPersonalizationPageActions) selPersonalizationPageActions.querySelectorAll("button").forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = true; });
@@ -790,10 +802,10 @@
                 }
                 selPersonalizationPageMode = "preview";
                 selPersonalizationSyncPageMode();
-                window.selBaseRuntime?.toast?.("页面配置已保存。", "success");
+                window.sel.core?.toast?.("页面配置已保存。", "success");
                 return true;
             } catch (selPersonalizationPageSaveError) {
-                window.selBaseRuntime?.toast?.(selPersonalizationPageSaveError.message || "页面配置保存失败。", "error");
+                window.sel.core?.toast?.(selPersonalizationPageSaveError.message || "页面配置保存失败。", "error");
                 return false;
             } finally {
                 selPersonalizationPageSaving = false;
@@ -804,13 +816,15 @@
         /** 登记一个页面可编辑控件及其状态适配器；同 ID 只允许通过 updatePageControl 更新。 */
         function selPersonalizationRegisterPageControl(selPersonalizationDefinition = {}) {
             const selPersonalizationPageControlId = String(selPersonalizationDefinition.id || "").trim();
+            const selPersonalizationPageControlActionOnly = typeof selPersonalizationDefinition.onEdit === "function";
             if (!selPersonalizationPageEditorAllowed
                 || !/^[a-z][a-z0-9]*$/i.test(selPersonalizationPageControlId)
                 || selPersonalizationPageControls.has(selPersonalizationPageControlId)
                 || !(selPersonalizationDefinition.root instanceof Element)
-                || typeof selPersonalizationDefinition.captureState !== "function"
-                || typeof selPersonalizationDefinition.restoreState !== "function"
-                || typeof selPersonalizationDefinition.saveState !== "function") return false;
+                || (!selPersonalizationPageControlActionOnly && (
+                    typeof selPersonalizationDefinition.captureState !== "function"
+                    || typeof selPersonalizationDefinition.restoreState !== "function"
+                    || typeof selPersonalizationDefinition.saveState !== "function"))) return false;
             const selPersonalizationPageControl = {
                 id: selPersonalizationPageControlId,
                 type: String(selPersonalizationDefinition.type || "control"),
@@ -822,9 +836,12 @@
                 coordinates: Array.isArray(selPersonalizationDefinition.coordinates) ? selPersonalizationDefinition.coordinates.map((selPersonalizationCoordinate) => ({
                     label: String(selPersonalizationCoordinate.label || "坐标"), value: String(selPersonalizationCoordinate.value || "—")
                 })) : [],
-                captureState: selPersonalizationDefinition.captureState,
-                restoreState: selPersonalizationDefinition.restoreState,
-                saveState: selPersonalizationDefinition.saveState,
+                enabled: selPersonalizationDefinition.enabled !== false,
+                actionOnly: selPersonalizationPageControlActionOnly,
+                onEdit: selPersonalizationPageControlActionOnly ? selPersonalizationDefinition.onEdit : null,
+                captureState: selPersonalizationDefinition.captureState || (() => ({})),
+                restoreState: selPersonalizationDefinition.restoreState || (() => true),
+                saveState: selPersonalizationDefinition.saveState || (() => Promise.resolve(true)),
                 changeEvent: String(selPersonalizationDefinition.changeEvent || "change"),
                 baseline: {}, draft: {}, dirty: false, editButton: document.createElement("button"), changeListener: null
             };
@@ -833,12 +850,18 @@
             selPersonalizationPageControl.editButton.hidden = true;
             selPersonalizationPageControl.editButton.innerHTML = `<i class="ri-edit-line" aria-hidden="true"></i><span>编辑${selPersonalizationPageControl.typeLabel}</span>`;
             selPersonalizationPageControl.editButton.addEventListener("click", () => {
+                selPersonalizationSelectPageControl(selPersonalizationPageControl.id);
+                if (selPersonalizationPageControl.actionOnly) {
+                    Promise.resolve(selPersonalizationPageControl.onEdit()).catch((selPersonalizationError) => {
+                        console.error(`页面控件“${selPersonalizationPageControl.title}”编辑动作失败。`, selPersonalizationError);
+                    });
+                    return;
+                }
                 selPersonalizationFloatingPanel.open();
                 selPersonalizationSelectArea("page");
-                selPersonalizationSelectPageControl(selPersonalizationPageControl.id);
             });
             selPersonalizationPageControl.changeListener = () => {
-                if (selPersonalizationPageMode !== "edit") return;
+                if (selPersonalizationPageMode !== "edit" || selPersonalizationPageControl.actionOnly) return;
                 selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.captureState());
                 selPersonalizationPageControl.dirty = !selPersonalizationPageStatesEqual(selPersonalizationPageControl.baseline, selPersonalizationPageControl.draft);
                 selPersonalizationRenderPageControls();
@@ -866,6 +889,13 @@
             if (typeof selPersonalizationDefinition.captureState === "function") selPersonalizationPageControl.captureState = selPersonalizationDefinition.captureState;
             if (typeof selPersonalizationDefinition.restoreState === "function") selPersonalizationPageControl.restoreState = selPersonalizationDefinition.restoreState;
             if (typeof selPersonalizationDefinition.saveState === "function") selPersonalizationPageControl.saveState = selPersonalizationDefinition.saveState;
+            if (typeof selPersonalizationDefinition.onEdit === "function") {
+                selPersonalizationPageControl.onEdit = selPersonalizationDefinition.onEdit;
+                selPersonalizationPageControl.actionOnly = true;
+            }
+            if (typeof selPersonalizationDefinition.enabled === "boolean") {
+                selPersonalizationPageControl.enabled = selPersonalizationDefinition.enabled;
+            }
             selPersonalizationPageControl.editButton.querySelector("span").textContent = `编辑${selPersonalizationPageControl.typeLabel}`;
             selPersonalizationPageControl.baseline = selPersonalizationClonePageState(selPersonalizationPageControl.captureState());
             selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
@@ -969,7 +999,7 @@
             selPersonalizationThemeCategoryRoot.dataset.selDropdownMenuTitle = selPersonalizationThemeCategoryLabel;
             selPersonalizationThemeCategoryRoot.dataset.selDropdownMenuCurrentTemplate = selPersonalizationTemplates.themeCategoryCurrent || "{label}：{value}";
             if (selPersonalizationThemeCategoryDropdown) {
-                window.selDropdownMenu.setLocale(selPersonalizationThemeCategoryRoot);
+                window.sel.components.dropdownMenu.setLocale(selPersonalizationThemeCategoryRoot);
             }
             selPersonalizationThemes.forEach((selPersonalizationTheme) => {
                 selPersonalizationThemeGrid.appendChild(selPersonalizationCreateThemeCard(selPersonalizationTheme));
@@ -1034,7 +1064,7 @@
         }
         selPersonalizationRenderThemeOptions();
         // 个性化面板为运行时创建，不在应用首次 mountAll 的扫描范围内，必须在这里显式装配公共下拉。
-        selPersonalizationThemeCategoryDropdown = window.selDropdownMenu?.mount(selPersonalizationThemeCategoryRoot) || null;
+        selPersonalizationThemeCategoryDropdown = window.sel.components.dropdownMenu?.mount(selPersonalizationThemeCategoryRoot) || null;
         if (!selPersonalizationThemeCategoryDropdown) return null;
 
         // 背景缩略图按钮直接复用背景控制器提供的正式素材与稳定主题标识。
@@ -1227,7 +1257,7 @@
             // 每次主动切换皮肤时同步当前色板在新皮肤下的独立边框、配套背景和显示参数。
             selPersonalizationApplyThemeAssets(true);
             selPersonalizationSyncSkin();
-            document.dispatchEvent(new CustomEvent("selPersonalization:skin-change", { detail: Object.freeze({ theme: selPersonalizationThemeState, skin: selPersonalizationSkinState }) }));
+            document.dispatchEvent(new CustomEvent("selPersonalization:skin-change", { detail: selFreeze({ theme: selPersonalizationThemeState, skin: selPersonalizationSkinState }) }));
             return true;
         }
 
@@ -1341,7 +1371,7 @@
             selPersonalizationSyncPanel();
             // 页面级事件供窗口或未来皮肤读取当前强度，不暴露可变内部对象。
             document.dispatchEvent(new CustomEvent("selPersonalization:change", {
-                detail: Object.freeze({ ...selPersonalizationPanelState })
+                detail: selFreeze({ ...selPersonalizationPanelState })
             }));
         }
 
@@ -1453,7 +1483,7 @@
             // 设置界面和页面预览在同一帧同步。
             selPersonalizationSyncText();
             // 独立事件让未来组件按需读取文字状态而不耦合内部变量。
-            document.dispatchEvent(new CustomEvent("selPersonalization:text-change", { detail: Object.freeze({ ...selPersonalizationTextState }) }));
+            document.dispatchEvent(new CustomEvent("selPersonalization:text-change", { detail: selFreeze({ ...selPersonalizationTextState }) }));
         }
 
         /**
@@ -1595,7 +1625,7 @@
             if (selPersonalizationThemeLibraryOpen) {
                 selPersonalizationThemeSearch.focus({ preventScroll: true });
             } else {
-                window.selDropdownMenu?.close(selPersonalizationThemeCategoryRoot);
+                window.sel.components.dropdownMenu?.close(selPersonalizationThemeCategoryRoot);
                 selPersonalizationThemeLibraryToggle.focus({ preventScroll: true });
             }
         }
@@ -1951,29 +1981,29 @@
         }
 
         // 公开控制器提供当前状态、视图切换和刷新默认动作。
-        const selPersonalizationController = Object.freeze({
+        const selPersonalizationController = {
             // themes 与 skins 始终返回注册表和当前主题的不可变清单。
             themes: selPersonalizationThemes,
             get skins() { return selPersonalizationSkins; },
             // presets 供应用读取可用预设清单，不暴露可变对象。
             presets: selPersonalizationPresets,
             // getState 同时返回皮肤、背景、面板与文字的不可变快照。
-            getState: () => Object.freeze({
+            getState: () => selFreeze({
                 locale: selPersonalizationLocale,
                 theme: selPersonalizationThemeState,
                 mode: selPersonalizationSkinState,
                 skin: selPersonalizationSkinState,
                 background: selPersonalizationBackgroundController.getState(),
-                panel: Object.freeze({ ...selPersonalizationPanelState }),
-                text: Object.freeze({ ...selPersonalizationTextState }),
+                panel: { ...selPersonalizationPanelState },
+                text: { ...selPersonalizationTextState },
                 floating: selPersonalizationFloatingPanel.getSize(),
                 open: selPersonalizationFloatingPanel.isOpen(),
-                pageEditor: Object.freeze({
+                pageEditor: {
                     canEdit: selPersonalizationPageEditorAllowed,
                     mode: selPersonalizationPageMode,
                     selectedControlId: selPersonalizationSelectedPageControlId,
                     dirty: selPersonalizationHasDirtyPageControls()
-                }),
+                },
                 area: selPersonalizationControl.querySelector('[data-sel-personal-area][aria-selected="true"]')?.dataset.selPersonalArea || "appearance",
                 view: selPersonalizationControl.querySelector('[data-sel-personal-tab][aria-selected="true"]')?.dataset.selPersonalTab || "skin"
             }),
@@ -2024,7 +2054,7 @@
                 selPersonalizationApplyPanel();
                 selPersonalizationApplyText();
             }
-        });
+        };
         // 保存控制器后立即同步皮肤、背景、面板与文字默认状态。
         selPersonalizationControllers.set(selPersonalizationHost, selPersonalizationController);
         selPersonalizationApplySkin(selPersonalizationSkinState);
@@ -2040,13 +2070,13 @@
     }
 
     // 个性化模块只注册公开能力，不主动扫描页面。
-    window.selPersonalization = Object.freeze({
+    window.sel.register("components.personalization", {
         // skins 提供正式深浅皮肤清单。
         skins: selPersonalizationSkins,
         // presets 提供标准面板预设清单。
         presets: selPersonalizationPresets,
         // scopes 与注册入口供项目在 mount 前装载后端 JSON 描述，不包含任何真实权限结论。
-        scopes: selPersonalizationSettingsRegistry?.scopes || Object.freeze([]),
+        scopes: selPersonalizationSettingsRegistry?.scopes || [],
         registerSettingModule: (selPersonalizationModule) => selPersonalizationSettingsRegistry?.register(selPersonalizationModule) || false,
         // mount 是创建个性化设置 UI 的唯一入口。
         mount: selPersonalizationMount,

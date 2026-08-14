@@ -1,12 +1,18 @@
 {
-  "version": 1,
+  "version": 2,
+  "kernel": {
+    "script": "core/selKernel.js",
+    "publicApi": "sel",
+    "loadOrder": "first"
+  },
   "policy": {
     "creationMode": "register-before-implementation",
     "legacyCompatibility": "forbidden",
     "applicationPrivateReusableControl": "forbidden",
     "requiredChecks": [
       "source-boundary",
-      "public-api",
+      "namespaced-public-api",
+      "kernel-first",
       "theme-contract",
       "dependency-order",
       "application-private-control"
@@ -19,7 +25,7 @@
       "type": "interactive",
       "scripts": ["selCodeEditor.js"],
       "styles": ["selCodeEditor.css"],
-      "globalApi": "selCodeEditor",
+      "publicApi": "sel.components.codeEditor",
       "dependencies": [],
       "themeAware": true
     },
@@ -29,7 +35,7 @@
       "type": "interactive",
       "scripts": ["selConfirmDialog.js"],
       "styles": ["selConfirmDialog.css"],
-      "globalApi": "selConfirmDialog",
+      "publicApi": "sel.components.confirmDialog",
       "dependencies": [],
       "themeAware": true
     },
@@ -39,7 +45,7 @@
       "type": "interactive",
       "scripts": ["selContextMenu.js"],
       "styles": ["selContextMenu.css"],
-      "globalApi": "selContextMenu",
+      "publicApi": "sel.components.contextMenu",
       "dependencies": [],
       "themeAware": true,
       "ownedAriaRoles": ["menu"]
@@ -50,7 +56,7 @@
       "type": "presentation",
       "scripts": [],
       "styles": ["selCursor.css"],
-      "globalApi": null,
+      "publicApi": null,
       "dependencies": [],
       "themeAware": false
     },
@@ -60,7 +66,7 @@
       "type": "interactive",
       "scripts": ["selDatePicker.js"],
       "styles": ["selDatePicker.css"],
-      "globalApi": "selDatePicker",
+      "publicApi": "sel.components.datePicker",
       "dependencies": [],
       "themeAware": true
     },
@@ -70,7 +76,7 @@
       "type": "interactive",
       "scripts": ["selDropdownMenu.js"],
       "styles": ["selDropdownMenu.css"],
-      "globalApi": "selDropdownMenu",
+      "publicApi": "sel.components.dropdownMenu",
       "dependencies": [],
       "themeAware": true
     },
@@ -80,7 +86,7 @@
       "type": "interactive",
       "scripts": ["selFloatingPanel.js"],
       "styles": ["selFloatingPanel.css"],
-      "globalApi": "selFloatingPanel",
+      "publicApi": "sel.components.floatingPanel",
       "dependencies": [],
       "themeAware": true
     },
@@ -90,7 +96,7 @@
       "type": "interactive",
       "scripts": ["selGrid.js"],
       "styles": ["selGrid.css"],
-      "globalApi": "selGrid",
+      "publicApi": "sel.components.grid",
       "dependencies": ["selTooltip"],
       "themeAware": true
     },
@@ -100,7 +106,7 @@
       "type": "interactive",
       "scripts": ["selGridMenu.js"],
       "styles": ["selGridMenu.css"],
-      "globalApi": "selGridMenu",
+      "publicApi": "sel.components.gridMenu",
       "dependencies": [],
       "themeAware": true
     },
@@ -110,7 +116,7 @@
       "type": "presentation",
       "scripts": ["selPageBackground.js"],
       "styles": ["selPageBackground.css"],
-      "globalApi": "selPageBackground",
+      "publicApi": "sel.components.pageBackground",
       "dependencies": [],
       "themeAware": true
     },
@@ -120,7 +126,7 @@
       "type": "layout",
       "scripts": ["selPanel.js"],
       "styles": ["selPanel.css"],
-      "globalApi": "selPanel",
+      "publicApi": "sel.components.panel",
       "dependencies": [],
       "themeAware": true
     },
@@ -130,7 +136,7 @@
       "type": "interactive",
       "scripts": ["selPersonalization.js"],
       "styles": ["selPersonalization.css"],
-      "globalApi": "selPersonalization",
+      "publicApi": "sel.components.personalization",
       "dependencies": [],
       "themeAware": true
     },
@@ -140,7 +146,7 @@
       "type": "registry",
       "scripts": ["selPersonalizationRegistry.js"],
       "styles": [],
-      "globalApi": "selPersonalizationRegistry",
+      "publicApi": "sel.components.personalizationRegistry",
       "dependencies": [],
       "themeAware": false
     },
@@ -150,7 +156,7 @@
       "type": "interactive",
       "scripts": ["selSearch.js"],
       "styles": ["selSearch.css"],
-      "globalApi": "selSearch",
+      "publicApi": "sel.components.search",
       "dependencies": [],
       "themeAware": true
     },
@@ -160,7 +166,7 @@
       "type": "layout",
       "scripts": ["selSplitPane.js"],
       "styles": ["selSplitPane.css"],
-      "globalApi": "selSplitPane",
+      "publicApi": "sel.components.splitPane",
       "dependencies": [],
       "themeAware": true
     },
@@ -170,7 +176,7 @@
       "type": "interactive",
       "scripts": ["selTabs.js"],
       "styles": ["selTabs.css"],
-      "globalApi": "selTabs",
+      "publicApi": "sel.components.tabs",
       "dependencies": ["selContextMenu"],
       "themeAware": true
     },
@@ -180,7 +186,7 @@
       "type": "interactive",
       "scripts": ["selTooltip.js"],
       "styles": ["selTooltip.css"],
-      "globalApi": "selTooltip",
+      "publicApi": "sel.components.tooltip",
       "dependencies": [],
       "themeAware": true,
       "ownedAriaRoles": ["tooltip"]
@@ -191,7 +197,7 @@
       "type": "interactive",
       "scripts": ["selTree.js"],
       "styles": ["selTree.css"],
-      "globalApi": "selTree",
+      "publicApi": "sel.components.tree",
       "dependencies": ["selContextMenu", "selTooltip"],
       "themeAware": true
     },
@@ -201,7 +207,7 @@
       "type": "interactive",
       "scripts": ["selWindow.js"],
       "styles": ["selWindow.css"],
-      "globalApi": "selWindow",
+      "publicApi": "sel.components.window",
       "dependencies": [],
       "themeAware": true
     }

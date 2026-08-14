@@ -64,7 +64,7 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat",
             "selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md",
             "selplat_component_registry = shared/frontend/sel-ui/src/components/"
-                + "component-registry.json,version=1,one_authoritative_source"
+                + "component-registry.json,version=2,one_authoritative_source,kernel=core/selKernel.js"
         );
         assertTrue(rule.content().contains(
             "requires_rule_ids = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES"

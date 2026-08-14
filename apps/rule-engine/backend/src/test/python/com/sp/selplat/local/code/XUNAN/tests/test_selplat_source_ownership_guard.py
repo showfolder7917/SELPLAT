@@ -33,6 +33,12 @@ RULE_PATH = (
     / ACTIVE_STABLE_USER_ID
     / "selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md"
 )
+PUBLIC_COMPONENT_RULE_PATH = (
+    PROJECT_ROOT
+    / "apps/rule-engine/backend/src/main/resources/local"
+    / ACTIVE_STABLE_USER_ID
+    / "selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md"
+)
 OPTION_TEMP_ROOT = PROJECT_ROOT / "OPTION/temp"
 
 
@@ -122,7 +128,12 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         registry_path = component_root / self.guard.SEL_UI_COMPONENT_REGISTRY_NAME
         registry_path.write_text(
             json.dumps({
-                "version": 1,
+                "version": 2,
+                "kernel": {
+                    "script": "core/selKernel.js",
+                    "publicApi": "sel",
+                    "loadOrder": "first",
+                },
                 "policy": {
                     "creationMode": "register-before-implementation",
                     "legacyCompatibility": "forbidden",
@@ -274,6 +285,153 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                 {violation["code"] for violation in violations},
             )
 
+    def test_application_legacy_flat_api_and_native_freeze_block_delivery(self) -> None:
+        """应用回流 window.selGrid 或直接 Object.freeze 时必须由统一 API 门禁阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.write_component_registry(fixture, [])
+            application_js = fixture / "apps/example/backend/src/main/resources/static/example.js"
+            application_js.parent.mkdir(parents=True)
+            application_js.write_text(
+                "const grid = window.selGrid;\nconst view = Object.freeze({items: []});\n",
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+            codes = {violation["code"] for violation in violations}
+
+            self.assertIn("SEL_UI_LEGACY_FLAT_API_FORBIDDEN", codes)
+            self.assertIn("SEL_UI_NATIVE_FREEZE_OUTSIDE_KERNEL", codes)
+
+    def test_application_native_dom_creation_blocks_but_public_element_passes(self) -> None:
+        """业务应用必须通过 sel.core.element 创建节点，公共组件内部原生实现不受此应用边界影响。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.write_component_registry(fixture, [])
+            application_js = fixture / "apps/example/backend/src/main/resources/static/example.js"
+            application_js.parent.mkdir(parents=True)
+            # 直接创建原生节点 → 快速门禁给出稳定违规码，阻止业务页面复制安全属性边界。
+            application_js.write_text(
+                "const node = document.createElement('section');\n",
+                encoding="utf-8",
+            )
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+            self.assertIn(
+                "SEL_UI_APPLICATION_NATIVE_DOM_CREATION_FORBIDDEN",
+                {violation["code"] for violation in violations},
+            )
+
+            # 使用公共 element → 同一业务结构通过，不要求应用了解原生节点创建细节。
+            application_js.write_text(
+                "const { element } = window.sel.core;\nconst node = element('section');\n",
+                encoding="utf-8",
+            )
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+            self.assertNotIn(
+                "SEL_UI_APPLICATION_NATIVE_DOM_CREATION_FORBIDDEN",
+                {violation["code"] for violation in violations},
+            )
+
+        # 规则正本必须同时声明消费入口和快速门禁，避免只改程序而后续任务无法加载约束。
+        rule_text = PUBLIC_COMPONENT_RULE_PATH.read_text(encoding="utf-8")
+        self.assertIn("selplat_application_dom_creation_entry = sel.core.element", rule_text)
+        self.assertIn("selplat_application_dom_creation_gate =", rule_text)
+        self.assertIn("nontrivial_function_chinese_contract", rule_text)
+        self.assertIn("complex_statement_group_business_intent_comment", rule_text)
+        self.assertIn("selplat_application_javascript_uniform_structure_gate =", rule_text)
+
+    def test_application_javascript_uniform_structure_gate(self) -> None:
+        """全部应用入口统一使用 app、SEL 公共短名和具名函数中文契约。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.write_component_registry(fixture, [])
+            application_js = fixture / "apps/example/backend/src/main/resources/static/example/example.js"
+            application_js.parent.mkdir(parents=True)
+            application_js.write_text(
+                "/* SEL UI 应用装配说明。 */\n"
+                "(function exampleInitializeApplication() {\n"
+                "window.sel.require([\"core.query\", \"net.ajax\"]);\n"
+                "const base = window.sel.core;\n"
+                "const { ajax } = window.sel.net;\n"
+                "function loadData() { return ajax.json({ url: '/api/example' }); }\n"
+                "loadData();\n"
+                "}());\n",
+                encoding="utf-8",
+            )
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+            codes = {violation["code"] for violation in violations}
+            self.assertIn("SEL_UI_APPLICATION_ENTRY_NAMING_INVALID", codes)
+            self.assertIn("SEL_UI_APPLICATION_BASE_ALIAS_MISSING", codes)
+            self.assertIn("SEL_UI_APPLICATION_AJAX_ALIAS_MISSING", codes)
+            self.assertIn("SEL_UI_APPLICATION_FUNCTION_COMMENT_MISSING", codes)
+
+            application_js.write_text(
+                "/* SEL UI 应用装配说明。 */\n"
+                "(function app() {\n"
+                "window.sel.require([\"core.query\", \"net.ajax\"]);\n"
+                "const selBase = window.sel.core;\n"
+                "const { ajax: selAjax } = window.sel.net;\n"
+                "/** 读取示例业务数据。 */\n"
+                "function exampleLoadData() { return selAjax.json({ url: '/api/example' }); }\n"
+                "exampleLoadData();\n"
+                "}());\n",
+                encoding="utf-8",
+            )
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+            codes = {violation["code"] for violation in violations}
+            self.assertNotIn("SEL_UI_APPLICATION_ENTRY_NAMING_INVALID", codes)
+            self.assertNotIn("SEL_UI_APPLICATION_BASE_ALIAS_MISSING", codes)
+            self.assertNotIn("SEL_UI_APPLICATION_AJAX_ALIAS_MISSING", codes)
+            self.assertNotIn("SEL_UI_APPLICATION_FUNCTION_COMMENT_MISSING", codes)
+
+    def test_nested_sel_freeze_blocks_delivery_but_single_boundary_passes(self) -> None:
+        """完整只读边界只能冻结一次，内部对象不得再次逐层冻结。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.write_component_registry(fixture, [])
+            application_js = fixture / "apps/example/backend/src/main/resources/static/example.js"
+            application_js.parent.mkdir(parents=True)
+            application_js.write_text(
+                "const view = selFreeze({ grid: selFreeze({ pageSize: 20 }) });\n",
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+            self.assertIn(
+                "SEL_UI_NESTED_FREEZE_FORBIDDEN",
+                {violation["code"] for violation in violations},
+            )
+
+            application_js.write_text(
+                "const view = selFreeze({ grid: { pageSize: 20 } });\n",
+                encoding="utf-8",
+            )
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+            self.assertNotIn(
+                "SEL_UI_NESTED_FREEZE_FORBIDDEN",
+                {violation["code"] for violation in violations},
+            )
+
+    def test_application_page_requires_kernel_before_other_sel_scripts(self) -> None:
+        """应用页面缺少 selKernel 或晚于组件加载时必须阻断交付。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            self.write_component_registry(fixture, [])
+            application_html = fixture / "apps/example/backend/src/main/resources/static/example.html"
+            application_html.parent.mkdir(parents=True)
+            application_html.write_text(
+                '<script src="/sel/core/selBaseRuntime.js"></script>\n'
+                '<script src="/sel/core/selKernel.js"></script>\n',
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_sel_ui_component_governance(fixture)
+
+            self.assertIn(
+                "SEL_UI_KERNEL_LOAD_ORDER_INVALID",
+                {violation["code"] for violation in violations},
+            )
+
     def test_delete_confirmation_using_full_window_blocks_delivery(self) -> None:
         """删除动作使用完整 selWindow 模拟确认框时必须由公共控件门禁阻断。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
@@ -325,7 +483,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                     "type": "interactive",
                     "scripts": ["selContextMenu.js"],
                     "styles": ["selContextMenu.css"],
-                    "globalApi": "selContextMenu",
+                    "publicApi": "sel.components.contextMenu",
                     "dependencies": [],
                     "themeAware": True,
                     "ownedAriaRoles": ["menu"],
@@ -336,7 +494,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                     "type": "interactive",
                     "scripts": ["selTree.js"],
                     "styles": ["selTree.css"],
-                    "globalApi": "selTree",
+                    "publicApi": "sel.components.tree",
                     "dependencies": ["selContextMenu"],
                     "themeAware": True,
                 },
@@ -345,8 +503,10 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             for component in components:
                 source_root = component_root / component["directory"]
                 source_root.mkdir()
+                component_api_name = component["id"][3:4].lower() + component["id"][4:]
                 (source_root / component["scripts"][0]).write_text(
-                    f"window.{component['id']} = {{}}; window.selContextMenu;\n",
+                    f'window.sel.register("components.{component_api_name}", {{}}); '
+                    "window.sel.components.contextMenu;\n",
                     encoding="utf-8",
                 )
                 (source_root / component["styles"][0]).write_text(
@@ -374,7 +534,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         tree_script = (tree_root / "selTree.js").read_text(encoding="utf-8")
         tree_style = (tree_root / "selTree.css").read_text(encoding="utf-8")
 
-        self.assertIn("window.selContextMenu.mount", tree_script)
+        self.assertIn("window.sel.components.contextMenu.mount", tree_script)
         self.assertNotIn("seltree-context-menu", tree_script)
         self.assertNotIn("seltree-context-menu", tree_style)
 
@@ -397,7 +557,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                     "type": "interactive",
                     "scripts": ["selTooltip.js"],
                     "styles": ["selTooltip.css"],
-                    "globalApi": "selTooltip",
+                    "publicApi": "sel.components.tooltip",
                     "dependencies": [],
                     "themeAware": True,
                     "ownedAriaRoles": ["tooltip"],
@@ -408,7 +568,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                     "type": "interactive",
                     "scripts": ["selGrid.js"],
                     "styles": ["selGrid.css"],
-                    "globalApi": "selGrid",
+                    "publicApi": "sel.components.grid",
                     "dependencies": ["selTooltip"],
                     "themeAware": True,
                 },
@@ -417,7 +577,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             tooltip_root = component_root / "tooltip"
             tooltip_root.mkdir()
             (tooltip_root / "selTooltip.js").write_text(
-                'window.selTooltip = {}; data-sel-tooltip selTooltipIsTruncated pointerover '
+                'window.sel.register("components.tooltip", {}); data-sel-tooltip selTooltipIsTruncated pointerover '
                 'focusin aria-describedby role", "tooltip if (selTooltipAriaElement &&\n',
                 encoding="utf-8",
             )
@@ -428,7 +588,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             grid_root = component_root / "grid"
             grid_root.mkdir()
             (grid_root / "selGrid.js").write_text(
-                "window.selGrid = {}; window.selTooltip.attach(); "
+                'window.sel.register("components.grid", {}); window.sel.components.tooltip.attach(); '
                 "button.dataset.selTooltip = label;\n",
                 encoding="utf-8",
             )
@@ -462,6 +622,14 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             "SEL_UI_GRID_PAGE_EDITOR_ADAPTER_MISSING",
             {violation["code"] for violation in violations},
         )
+
+    def test_real_grid_header_separator_covers_first_column_only_until_last(self) -> None:
+        """表头竖线必须从第一列开始，并只排除没有后续列的最后一列。"""
+        grid_style = (PROJECT_ROOT / "shared/frontend/sel-ui/src/components/grid/selGrid.css") \
+            .read_text(encoding="utf-8")
+
+        self.assertIn(".selgrid-table th:not(:last-child)::after", grid_style)
+        self.assertNotIn(".selgrid-table th:not(:first-child)::after", grid_style)
 
     def test_panel_respects_hidden_and_compacts_actions_before_title_overlap(self) -> None:
         """隐藏面板不得占位，常见窄屏宽度必须先收起动作文字再允许标题相撞。"""

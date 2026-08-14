@@ -2,10 +2,12 @@
  * selGrid.js：通用数据表格多实例基础控件。
  * 负责接收调用方传入的标准聚合 payload，创建独立表格状态，并协调已挂载的树、菜单、筛选和分页子控制器。
  * 责任边界：本文件不请求接口、不读取 具体应用 数据，也不自行扫描并初始化业务模块。
- * 模块级 JavaScript 标识统一使用 selGrid 前缀，公开注册表为 window.selGrid。
+ * 模块级 JavaScript 标识统一使用 selGrid 前缀，公开注册表为 window.sel.components.grid。
  */
 (function selGridInitializeRegistry() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 注册表以调用方提供的完整业务实例名保存控制器。
     const selGridInstances = new Map();
@@ -97,7 +99,7 @@
             return null;
         }
         // 表格截断文字提示必须由已登记的公共控件统一提供，禁止回退到不稳定的原生 title。
-        if (typeof window.selTooltip?.attach !== "function") {
+        if (typeof window.sel.components.tooltip?.attach !== "function") {
             console.error("selGrid.mount：缺少已登记的 selTooltip 公共控件。");
             return null;
         }
@@ -111,7 +113,7 @@
         // 可筛选表头字段按稳定列键保存选中状态，数据刷新后仍能继续组合当前行条件。
         const selGridSelectedHeaderColumnKeys = new Set();
         // 行数据保持后端顺序并冻结外层数组，运行状态不能改写业务响应。
-        let selGridProjects = Object.freeze(selGridInputPayload.data.items);
+        let selGridProjects = selFreeze(selGridInputPayload.data.items);
         // 类型显示映射使用稳定代码查找当前语言文字。
         let selGridTypeLabels = new Map((selGridInputPayload.select?.projectType?.options || []).map((selGridTypeOption) => [String(selGridTypeOption.value), selGridTypeOption.label]));
         // 状态显示映射使用稳定代码查找当前语言文字。
@@ -380,9 +382,9 @@
             else selGridSelectedHeaderColumnKeys.delete(selGridColumnKey);
             selGridRoot.dispatchEvent(new CustomEvent("selGrid:headerSelectionChange", {
                 bubbles: true,
-                detail: Object.freeze({
+                detail: selFreeze({
                     gridId: selGridId,
-                    selectedColumnKeys: Object.freeze(Array.from(selGridSelectedHeaderColumnKeys))
+                    selectedColumnKeys: Array.from(selGridSelectedHeaderColumnKeys)
                 })
             }));
         }
@@ -538,9 +540,9 @@
     };
 
     // 当前实例的搜索、树和菜单控制器按相同业务实例名获取。
-    const selGridSearchController = window.selSearch ? window.selSearch.get(selGridId) : null;
-    const selGridTreeController = window.selTree ? window.selTree.get(selGridId) : null;
-    const selGridMenuController = window.selGridMenu ? window.selGridMenu.get(selGridId) : null;
+    const selGridSearchController = window.sel.components.search ? window.sel.components.search.get(selGridId) : null;
+    const selGridTreeController = window.sel.components.tree ? window.sel.components.tree.get(selGridId) : null;
+    const selGridMenuController = window.sel.components.gridMenu ? window.sel.components.gridMenu.get(selGridId) : null;
 
     // 中央表格内容区被删除时当前实例不登记，其他业务实例继续初始化。
     if (!selGridView.tableBody) {
@@ -548,7 +550,7 @@
     }
 
     // 默认启用统一截断提示；调用方可用 grid.tooltip=false 显式关闭。
-    const selGridTooltipController = window.selTooltip.attach(selGridRoot, {
+    const selGridTooltipController = window.sel.components.tooltip.attach(selGridRoot, {
         id: `${selGridId}::grid-tooltip`,
         enabled: selGridInputPayload.grid?.tooltip !== false
     });
@@ -567,11 +569,11 @@
         if (!selGridColumnData || !Number.isFinite(selGridColumnWidth)) return;
         selGridRoot.dispatchEvent(new CustomEvent("selGrid:columnResizeChange", {
             bubbles: true,
-            detail: Object.freeze({
+            detail: selFreeze({
                 gridId: selGridId,
                 columnId: selGridResolveColumnKey(selGridColumnData, selGridColumnIndex),
                 width: selGridColumnWidth,
-                columnWidths: Object.freeze(Object.fromEntries(selGridColumnWidths))
+                columnWidths: Object.fromEntries(selGridColumnWidths)
             })
         }));
     }
@@ -712,7 +714,7 @@
     /** 返回当前全部可见列的真实像素宽度快照，供页面编辑会话建立恢复基线。 */
     function selGridCaptureColumnWidths() {
         selGridFreezeCurrentColumnWidths();
-        return Object.freeze(Object.fromEntries(selGridColumnWidths));
+        return selFreeze(Object.fromEntries(selGridColumnWidths));
     }
 
     /** 使用页面编辑基线恢复当前列宽，不发布用户调整事件或触发业务保存。 */
@@ -1366,7 +1368,7 @@
             if (!selGridRecord) return;
             selGridRoot.dispatchEvent(new CustomEvent("selGrid:action", {
                 bubbles: true,
-                detail: Object.freeze({
+                detail: selFreeze({
                     instanceKey: selGridId,
                     entity: selGridEntity,
                     action: String(selGridRecordAction.dataset.action || ""),
@@ -1598,9 +1600,9 @@
         // 快捷状态筛选回到第一页，与工具栏筛选行为保持一致。
         selGridState.currentPage = 1;
         // 工具栏状态选择器同步同一业务值。
-        if (selGridView.statusFilter && window.selDropdownMenu) {
+        if (selGridView.statusFilter && window.sel.components.dropdownMenu) {
             // 工具栏状态下拉仍存在时同步同一业务值。
-            window.selDropdownMenu.setValue(selGridView.statusFilter, selGridState.status);
+            window.sel.components.dropdownMenu.setValue(selGridView.statusFilter, selGridState.status);
         }
         // 所有标签只保留当前状态高亮。
         selGridRoot.querySelectorAll("[data-status-filter]").forEach((statusButton) => statusButton.classList.toggle("selpanel-status-tab-active", statusButton === button));
@@ -1629,14 +1631,14 @@
             selGridSearchController.clear({ submit: false });
         }
         // 类型选择器恢复全部。
-        if (selGridView.typeFilter && window.selDropdownMenu) {
+        if (selGridView.typeFilter && window.sel.components.dropdownMenu) {
             // 类型下拉仍存在时恢复全部。
-            window.selDropdownMenu.setValue(selGridView.typeFilter, "");
+            window.sel.components.dropdownMenu.setValue(selGridView.typeFilter, "");
         }
         // 状态选择器恢复全部。
-        if (selGridView.statusFilter && window.selDropdownMenu) {
+        if (selGridView.statusFilter && window.sel.components.dropdownMenu) {
             // 状态下拉仍存在时恢复全部。
-            window.selDropdownMenu.setValue(selGridView.statusFilter, "");
+            window.sel.components.dropdownMenu.setValue(selGridView.statusFilter, "");
         }
         // 左树通过公开控制器恢复全部项目节点。
         if (selGridTreeController) {
@@ -1772,7 +1774,7 @@
     }
 
     // 当前实例的筛选门面提供业务调用所需的最小稳定接口。
-    const selGridFiltersController = Object.freeze({
+    const selGridFiltersController = {
         reset: selGridResetInstance,
         setSearch(value) {
             // 外部搜索值只写入当前实例状态，避免同页其他表格被同步筛选。
@@ -1787,16 +1789,16 @@
             selGridRenderTable();
             return true;
         },
-        getState: () => Object.freeze({
+        getState: () => selFreeze({
             search: selGridState.search,
             type: selGridState.type,
             status: selGridState.status,
             treeFilter: { ...selGridState.treeFilter }
         })
-    });
+    };
 
     // 当前实例的分页门面保证外部调用仍明确归属业务表格。
-    const selGridPaginationController = Object.freeze({
+    const selGridPaginationController = {
         setPage: selGridSetPage,
         getPage: () => selGridState.currentPage,
         setPageSize(value) {
@@ -1808,14 +1810,14 @@
                 // 原生选择器同步公开 API 设置的业务值。
                 selGridView.pageSize.value = String(selGridState.pageSize);
                 // 自定义下拉外观刷新当前可见标签。
-                window.selDropdownMenu?.refresh(selGridView.pageSize);
+                window.sel.components.dropdownMenu?.refresh(selGridView.pageSize);
             }
             // 当前实例立即按新容量截取和渲染数据。
             selGridRenderTable();
             return true;
         },
         getPageSize: () => selGridState.pageSize
-    });
+    };
 
     // 运行时语言切换只替换标准聚合数据并重绘文字，筛选、页码、选择和滚动容器均保留。
     function selGridSetLocale(selGridNext = {}) {
@@ -1825,7 +1827,7 @@
         // 同一公共表格切换业务模块时同步字段契约，避免沿用上一个模块的搜索和分类字段。
         selGridRecordOptions = selGridInputPayload.grid || {};
         selGridTooltipController?.setEnabled(selGridInputPayload.grid?.tooltip !== false);
-        selGridProjects = Object.freeze(selGridInputPayload.data.items);
+        selGridProjects = selFreeze(selGridInputPayload.data.items);
         selGridTypeLabels = new Map((selGridInputPayload.select?.projectType?.options || []).map((item) => [String(item.value), item.label]));
         selGridStatusLabels = new Map((selGridInputPayload.select?.status?.options || []).map((item) => [String(item.value), item.label]));
         selGridMessages = selGridInputPayload.title.messages;
@@ -1861,7 +1863,7 @@
     }
 
     // 返回业务实例控制器，子控件通过属性归属于当前表格。
-    return Object.freeze({
+    return {
         id: selGridId,
         entity: selGridEntity,
         root: selGridRoot,
@@ -1876,24 +1878,24 @@
         captureColumnWidths: selGridCaptureColumnWidths,
         setColumnWidths: selGridSetColumnWidths,
         resetColumnWidths: selGridResetColumnWidths,
-        getSelectedColumnKeys: () => Object.freeze(Array.from(selGridSelectedHeaderColumnKeys)),
+        getSelectedColumnKeys: () => selFreeze(Array.from(selGridSelectedHeaderColumnKeys)),
         destroy: selGridDestroy,
-        getState: () => Object.freeze({
+        getState: () => selFreeze({
             currentPage: selGridState.currentPage,
             pageSize: selGridState.pageSize,
             search: selGridState.search,
             type: selGridState.type,
             status: selGridState.status,
             columnResize: selGridIsColumnResizeEnabled(),
-            columnWidths: Object.freeze(Object.fromEntries(selGridColumnWidths)),
-            selectedColumnKeys: Object.freeze(Array.from(selGridSelectedHeaderColumnKeys)),
-            selectedIds: Object.freeze(Array.from(selGridState.selectedIds))
+            columnWidths: Object.fromEntries(selGridColumnWidths),
+            selectedColumnKeys: Array.from(selGridSelectedHeaderColumnKeys),
+            selectedIds: Array.from(selGridState.selectedIds)
         })
-    });
+    };
     }
 
     // 公开注册表由应用装配层显式传入宿主和标准聚合 payload。
-    window.selGrid = Object.freeze({
+    window.sel.register("components.grid", {
         // create 为动态工作区建立独立表格结构；业务数据仍由随后的 mount 显式传入。
         create: selGridCreate,
         // mount 创建一个表格实例；缺失标准 payload 时返回 null 并提示应用补齐基础输入。
@@ -1934,7 +1936,7 @@
         // has 判断实例是否已经挂载。
         has: (gridId) => selGridInstances.has(gridId),
         // list 返回已挂载实例名的只读快照。
-        list: () => Object.freeze(Array.from(selGridInstances.keys())),
+        list: () => selFreeze(Array.from(selGridInstances.keys())),
         // refresh 只刷新指定实例。
         refresh: (gridId) => selGridInstances.get(gridId)?.refresh() ?? false,
         // reset 只重置指定实例。

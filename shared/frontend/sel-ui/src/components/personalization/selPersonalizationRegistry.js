@@ -6,10 +6,12 @@
 (function selPersonalizationRegistryInitialize() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 四种作用域区分即时预览、用户偏好、项目页面配置和系统统一配置。
-    const selPersonalizationRegistryScopes = Object.freeze(["session", "user", "page", "system"]);
+    const selPersonalizationRegistryScopes = selFreeze(["session", "user", "page", "system"]);
     // 三个一级区域保持长期稳定，新增业务属性只增加模块，不继续扩展顶部选项卡。
-    const selPersonalizationRegistryAreas = Object.freeze(["appearance", "user", "page"]);
+    const selPersonalizationRegistryAreas = selFreeze(["appearance", "user", "page"]);
     // 模块按稳定 ID 覆盖更新，便于语言或项目切换后用新 JSON 原位替换配置。
     const selPersonalizationRegistryModules = new Map();
 
@@ -30,9 +32,9 @@
         }
         // 字段只保留公开描述；实际值仍需由后端按作用域与权限校验。
         const selPersonalizationRegistryFields = Array.isArray(selPersonalizationRegistryDefinition.fields)
-            ? selPersonalizationRegistryDefinition.fields.filter((selPersonalizationRegistryField) => selPersonalizationRegistryField && typeof selPersonalizationRegistryField === "object").map((selPersonalizationRegistryField) => Object.freeze({ ...selPersonalizationRegistryField }))
+            ? selPersonalizationRegistryDefinition.fields.filter((selPersonalizationRegistryField) => selPersonalizationRegistryField && typeof selPersonalizationRegistryField === "object").map((selPersonalizationRegistryField) => ({ ...selPersonalizationRegistryField }))
             : [];
-        return Object.freeze({
+        return selFreeze({
             id: selPersonalizationRegistryId,
             area: selPersonalizationRegistryArea,
             scope: selPersonalizationRegistryScope,
@@ -42,7 +44,7 @@
             order: Number.isFinite(Number(selPersonalizationRegistryDefinition.order)) ? Number(selPersonalizationRegistryDefinition.order) : 100,
             permission: String(selPersonalizationRegistryDefinition.permission || ""),
             editable: selPersonalizationRegistryDefinition.editable !== false,
-            fields: Object.freeze(selPersonalizationRegistryFields)
+            fields: selPersonalizationRegistryFields
         });
     }
 
@@ -76,14 +78,14 @@
         const selPersonalizationRegistryCanAccess = typeof selPersonalizationRegistryOptions.canAccess === "function"
             ? selPersonalizationRegistryOptions.canAccess
             : () => true;
-        return Object.freeze(Array.from(selPersonalizationRegistryModules.values())
+        return selFreeze(Array.from(selPersonalizationRegistryModules.values())
             .filter((selPersonalizationRegistryModule) => (!selPersonalizationRegistryArea || selPersonalizationRegistryModule.area === selPersonalizationRegistryArea)
                 && selPersonalizationRegistryCanAccess(selPersonalizationRegistryModule.permission, selPersonalizationRegistryModule))
             .sort((selPersonalizationRegistryLeft, selPersonalizationRegistryRight) => selPersonalizationRegistryLeft.order - selPersonalizationRegistryRight.order));
     }
 
     // 公开 API 只管理描述元数据；真实取值、保存和权限判断继续由项目与后端拥有。
-    window.selPersonalizationRegistry = Object.freeze({
+    window.sel.register("components.personalizationRegistry", {
         scopes: selPersonalizationRegistryScopes,
         areas: selPersonalizationRegistryAreas,
         register: selPersonalizationRegistryRegister,

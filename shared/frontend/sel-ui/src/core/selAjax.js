@@ -2,13 +2,15 @@
  * selAjax.js：SEL 网页通用异步请求基础能力。
  * 负责接收调用方显式传入的请求地址、发送同源请求、解析 JSON，并统一报告 HTTP、解析和业务响应错误。
  * 责任边界：本文件不知道 具体应用、业务实体、接口路由或模拟数据目录；所有实际地址必须由应用装配层传入。
- * 模块级 JavaScript 标识统一使用 selAjax 前缀，公开只读接口为 window.selAjax。
+ * 模块级 JavaScript 标识统一使用 selAjax 前缀，公开只读接口为 window.sel.net.ajax。
  */
 (function selAjaxCreateClient(global) {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 默认请求头只表达通用异步请求特征，不携带任何应用或实体信息。
-    const selAjaxDefaultHeaders = Object.freeze({
+    const selAjaxDefaultHeaders = selFreeze({
         "X-Requested-With": "XMLHttpRequest"
     });
 
@@ -144,7 +146,7 @@
     }
 
     // 公开接口只包含稳定请求能力，应用路径和业务响应映射不得进入本对象。
-    global.selAjax = Object.freeze({
+    window.sel.register("net.ajax", {
         // json 负责加载调用方明确指定的原始 JSON 地址。
         json: selAjaxJson,
         // request 负责调用带通用业务结果包装的接口。

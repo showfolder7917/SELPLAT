@@ -92,8 +92,8 @@ class UniauthSkinResourceStructureTest {
         assertTrue(script.contains("selPersonalizationSetThemeLibraryOpen"));
         assertTrue(script.contains("selPersonalizationThemeMode.id === \"dark\""));
         assertTrue(script.contains("selPersonalizationThemeMode.id === \"light\""));
-        assertTrue(script.contains("window.selDropdownMenu?.mount(selPersonalizationThemeCategoryRoot)"));
-        assertTrue(script.contains("window.selDropdownMenu.setLocale(selPersonalizationThemeCategoryRoot)"));
+        assertTrue(script.contains("window.sel.components.dropdownMenu?.mount(selPersonalizationThemeCategoryRoot)"));
+        assertTrue(script.contains("window.sel.components.dropdownMenu.setLocale(selPersonalizationThemeCategoryRoot)"));
         String personalizationCss = readText("META-INF/resources/sel/components/personalization/selPersonalization.css");
         assertTrue(personalizationCss.contains("grid-template-columns: repeat(auto-fill, minmax(185px, 1fr))"));
         assertTrue(personalizationCss.contains(".selpersonal-theme-card-compact .selpersonal-theme-card-mode span"));
@@ -300,7 +300,7 @@ class UniauthSkinResourceStructureTest {
         assertTrue(themeManager.contains("selThemeManagerMaterial.frameImage"));
         assertTrue(themeManifest.contains("/sel/assets/themes/crystal-tech"));
         assertFalse(themeManifest.contains("/sel/assets/skins"));
-        assertTrue(themeManifest.contains("backgrounds: Object.freeze(selCrystalTechBackgrounds())"));
+        assertTrue(themeManifest.contains("backgrounds: selCrystalTechBackgrounds()"));
         assertTrue(backgroundScript.contains("id: \"solid-dark\""));
         assertTrue(backgroundScript.contains("id: \"solid-light\""));
         assertFalse(backgroundScript.contains("assets/backgrounds/themes"));
@@ -382,9 +382,9 @@ class UniauthSkinResourceStructureTest {
         assertTrue(applicationScript.contains("/sel/components/window/i18n/{locale}.json"));
         assertTrue(applicationScript.contains("/sel/components/date-picker/i18n/{locale}.json"));
         assertTrue(applicationScript.contains("./mock/UniauthUserGrid/{locale}/UniauthUserGrid.window.create.json"));
-        assertTrue(applicationScript.contains("messages: uniauthPersonalizationMessages"));
-        assertTrue(applicationScript.contains("window: Object.freeze({ create: Object.freeze(uniauthParts.createWindow) })"));
-        assertTrue(applicationScript.contains("...uniauthPayload.window.create"));
+        assertTrue(applicationScript.contains("messages: personalizationMessages"));
+        assertTrue(applicationScript.contains("window: { create: parts.createWindow }"));
+        assertTrue(applicationScript.contains("...payload.window.create"));
         assertFalse(applicationScript.contains("const uniauthProjectWindowView"));
         assertTrue(personalizationScript.contains("data-sel-personal-language"));
         assertTrue(personalizationScript.contains("selPersonalizationOptions.locale?.onChange"));
@@ -399,10 +399,10 @@ class UniauthSkinResourceStructureTest {
         assertTrue(localeRuntimeScript.contains("Promise.all"));
         assertTrue(localeRuntimeScript.contains("controller?.setLocale"));
         assertTrue(localeRuntimeScript.contains("selLocale:change"));
-        assertTrue(applicationScript.contains("window.selLocaleRuntime.create"));
+        assertTrue(applicationScript.contains("localeRuntime.create"));
         assertTrue(applicationScript.contains("uniauthLocaleController.register"));
         assertTrue(applicationScript.contains("uniauthApplyProjectLocale"));
-        assertTrue(applicationScript.contains("uniauthBase.replaceParam(\"lang\", uniauthLocale)"));
+        assertTrue(applicationScript.contains("selBase.replaceParam(\"lang\", uniauthLocale)"));
         assertFalse(applicationScript.contains("navigateWithParam(\"lang\""));
         assertFalse(applicationScript.contains("location.reload"));
         assertFalse(applicationScript.contains("sessionStorage"));
@@ -451,7 +451,7 @@ class UniauthSkinResourceStructureTest {
         assertTrue(floatingScript.contains("selFloatingPanelResetSize"));
         assertTrue(floatingScript.contains("document.addEventListener(\"pointermove\", selFloatingPanelHandleResizePointerMove"));
         assertTrue(floatingScript.contains("document.removeEventListener(\"pointermove\", selFloatingPanelHandleResizePointerMove)"));
-        assertTrue(floatingScript.contains("getSize: () => Object.freeze"));
+        assertTrue(floatingScript.contains("getSize: () => selFreeze"));
         assertTrue(floatingScript.contains("setSize: (selFloatingPanelSize = {})"));
         // 宽高必须受视口和调用方上下限共同约束，移动端不允许内联桌面尺寸破坏自适应。
         assertTrue(floatingScript.contains("window.innerHeight - selFloatingPanelRect.top"));
@@ -461,7 +461,7 @@ class UniauthSkinResourceStructureTest {
         assertTrue(floatingCss.contains(".selfloating-resize-corner"));
         assertTrue(floatingCss.contains("width: min(390px, calc(100vw - 24px)) !important"));
         // 个性化设置采用加宽后的桌面尺寸，仍显式声明可缩放边界。
-        assertTrue(personalizationScript.contains("resizable: Object.freeze({"));
+        assertTrue(personalizationScript.contains("resizable: {"));
         assertTrue(personalizationScript.contains("minWidth: 420"));
         assertTrue(personalizationScript.contains("minHeight: 420"));
         assertTrue(personalizationScript.contains("maxWidth: 960"));

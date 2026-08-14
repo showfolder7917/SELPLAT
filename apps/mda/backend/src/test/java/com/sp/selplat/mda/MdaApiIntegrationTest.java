@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sp.selplat.mda.common.util.jdbc.JdbcConnectionFactory;
 import com.zaxxer.hikari.HikariDataSource;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -112,7 +113,8 @@ class MdaApiIntegrationTest {
         execute("DROP TABLE IF EXISTS MdaRawSqlCase")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
-        execute("CREATE TABLE MdaRawSqlCase(id INT PRIMARY KEY, name VARCHAR(50) DEFAULT 'unknown')")
+        execute("CREATE TABLE MdaRawSqlCase(id INT PRIMARY KEY, name VARCHAR(50) DEFAULT 'unknown', "
+                + "tenantId BIGINT DEFAULT 1, lastOperateUserId BIGINT DEFAULT 1)")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.results[0].kind").value("updateCount"));
         // 隔离目标表写入原注释 → 元数据模板必须原样带回而不是生成占位描述。
@@ -151,8 +153,9 @@ class MdaApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
-        assertThat(metadata.getResponse().getContentAsString()).containsIgnoringCase("MdaRawSqlCase");
-        assertThat(metadata.getResponse().getContentAsString())
+        String metadataBody = metadata.getResponse().getContentAsString();
+        assertThat(metadataBody).containsIgnoringCase("MdaRawSqlCase");
+        assertThat(metadataBody)
                 .contains("\"primaryKeys\":[\"id\"]")
                 .contains("\"ordinalPosition\":1")
                 .contains("\"defaultValue\":\"'unknown'\"")
@@ -160,6 +163,19 @@ class MdaApiIntegrationTest {
                 .contains("COMMENT ON TABLE MdaRawSqlCase IS '原表注释';")
                 .contains("COMMENT ON COLUMN MdaRawSqlCase.id IS '原字段注释';")
                 .contains("COMMENT ON COLUMN MdaRawSqlCase.name IS '';");
+        // 默认审计字段即使是历史追加，也必须在 MDA 展示中紧邻主键；真实物理序号仍保留供诊断。
+        String normalizedMetadataBody = metadataBody.toLowerCase(Locale.ROOT);
+        int idIndex = normalizedMetadataBody.indexOf("\"label\":\"id\"");
+        int tenantIndex = normalizedMetadataBody.indexOf("\"label\":\"tenantid\"");
+        int operatorIndex = normalizedMetadataBody.indexOf("\"label\":\"lastoperateuserid\"");
+        int nameIndex = normalizedMetadataBody.indexOf("\"label\":\"name\"");
+        assertThat(idIndex).isGreaterThanOrEqualTo(0).isLessThan(tenantIndex);
+        assertThat(tenantIndex).isLessThan(operatorIndex);
+        assertThat(operatorIndex).isLessThan(nameIndex);
+        assertThat(normalizedMetadataBody)
+                .contains("\"label\":\"tenantid\",\"jdbctype\":-5")
+                .contains("\"ordinalposition\":3")
+                .contains("\"ordinalposition\":4");
 
         mockMvc.perform(post("/api/mda/metadata/tree.htm")
                         .contentType(MediaType.APPLICATION_JSON)

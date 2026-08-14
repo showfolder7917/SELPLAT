@@ -5,6 +5,8 @@
 (function selSplitPaneInitializeRegistry() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // 每个分隔面板按完整业务实例键独立保存，页签关闭时可以精确销毁。
     const selSplitPaneInstances = new Map();
 
@@ -60,7 +62,7 @@
             if (selSplitPaneEmit) {
                 selSplitPaneRoot.dispatchEvent(new CustomEvent("selSplitPane:resize", {
                     bubbles: true,
-                    detail: Object.freeze({ splitPaneId: selSplitPaneId, ratio: selSplitPaneRatio, direction: selSplitPaneDirection })
+                    detail: selFreeze({ splitPaneId: selSplitPaneId, ratio: selSplitPaneRatio, direction: selSplitPaneDirection })
                 }));
             }
             return true;
@@ -129,26 +131,26 @@
             return true;
         }
 
-        const selSplitPaneController = Object.freeze({
+        const selSplitPaneController = {
             id: selSplitPaneId,
             root: selSplitPaneRoot,
             start: selSplitPaneStart,
             end: selSplitPaneEnd,
             setRatio: selSplitPaneSetRatio,
             reset: () => selSplitPaneSetRatio(selSplitPaneDefaultRatio),
-            getState: () => Object.freeze({ direction: selSplitPaneDirection, ratio: selSplitPaneRatio, dragging: selSplitPaneDragging }),
+            getState: () => selFreeze({ direction: selSplitPaneDirection, ratio: selSplitPaneRatio, dragging: selSplitPaneDragging }),
             destroy: selSplitPaneDestroy
-        });
+        };
         selSplitPaneInstances.set(selSplitPaneId, selSplitPaneController);
         selSplitPaneRoot.dataset.selSplitPaneReady = "true";
         selSplitPaneSetRatio(selSplitPaneDefaultRatio, false);
         return selSplitPaneController;
     }
 
-    window.selSplitPane = Object.freeze({
+    window.sel.register("components.splitPane", {
         mount: selSplitPaneMount,
         get: (selSplitPaneId) => selSplitPaneInstances.get(String(selSplitPaneId)) || null,
         has: (selSplitPaneId) => selSplitPaneInstances.has(String(selSplitPaneId)),
-        list: () => Object.freeze(Array.from(selSplitPaneInstances.keys()))
+        list: () => selFreeze(Array.from(selSplitPaneInstances.keys()))
     });
 })();

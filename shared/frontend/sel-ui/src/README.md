@@ -11,13 +11,65 @@
 ## 当前核心入口
 
 ```text
-selAjax.json({ url })               加载调用方明确指定的原始 JSON
-selAjax.request({ url, method })    调用带业务结果包装的 JSON 接口
-selBaseRuntime.query(selector)      查询应用必需挂载点
-selBaseRuntime.param(name)          读取页面查询参数
+sel.core.freeze(value)                    深度冻结普通对象或数组快照
+sel.core.query(selector)                  查询应用必需挂载点
+sel.core.param(name)                      读取页面查询参数
+sel.net.ajax.json({ url })                加载调用方明确指定的原始 JSON
+sel.net.ajax.request({ url, method })     调用带业务结果包装的 JSON 接口
 ```
 
-`selAjax` 不保存业务地址。模拟数据目录或业务接口路径必须由应用装配层明确传入。
+页面必须先加载 `/sel/core/selKernel.js`。浏览器中唯一 SEL 公共根是 `window.sel`；
+`selGrid`、`selPanel` 等名称继续作为稳定控件 ID、文件名、CSS 前缀和组件内部标识，
+不再发布 `window.selGrid`、`window.selPanel` 等平铺全局变量。
+
+`sel.net.ajax` 不保存业务地址。模拟数据目录或业务接口路径必须由应用装配层明确传入。
+
+## 应用文件如何使用组件
+
+每个应用 JavaScript 在文件顶部校验并解构一次实际依赖，函数内部直接使用局部变量：
+
+```javascript
+window.sel.require([
+    "core.query",
+    "components.panel",
+    "components.grid",
+    "components.tree"
+]);
+
+const { freeze, query } = window.sel.core;
+const { panel, grid, tree } = window.sel.components;
+
+const host = query("[data-example-app]");
+const panelRoot = panel.create(host, { gridId: "selGridExampleId" });
+panel.mount(panelRoot, { view: freeze({ /* 标准聚合 payload */ }) });
+grid.mount(panelRoot, freeze({ /* 标准聚合 payload */ }));
+tree.mount(panelRoot, freeze({ gridId: "selGridExampleId", items: [] }));
+```
+
+组件用途与调用路径：
+
+| 稳定控件 ID | 公共调用路径 | 主要用途 |
+|---|---|---|
+| `selPanel` | `sel.components.panel` | 创建标题、工具栏、左右区域、内容区和底栏 |
+| `selSearch` | `sel.components.search` | 关键词输入、查询提交和清空 |
+| `selTree` | `sel.components.tree` | 层级导航、节点选择和右键动作 |
+| `selGrid` | `sel.components.grid` | 数据展示、筛选、分页、操作和列宽调整 |
+| `selGridMenu` | `sel.components.gridMenu` | 表格记录的扩展动作菜单 |
+| `selDropdownMenu` | `sel.components.dropdownMenu` | 把原生 select 装配为统一下拉控件 |
+| `selTabs` | `sel.components.tabs` | 动态页签创建、切换和关闭回收 |
+| `selSplitPane` | `sel.components.splitPane` | 两区拖拽分隔布局 |
+| `selCodeEditor` | `sel.components.codeEditor` | 代码输入、选区读取和执行事件 |
+| `selWindow` | `sel.components.window` | 承载完整业务表单流程 |
+| `selConfirmDialog` | `sel.components.confirmDialog` | 承载删除等布尔确认 |
+| `selTooltip` | `sel.components.tooltip` | 截断文字和纯图标动作提示 |
+| `selContextMenu` | `sel.components.contextMenu` | 通用右键菜单门户与键盘导航 |
+| `selDatePicker` | `sel.components.datePicker` | 日期选择和月历键盘操作 |
+| `selFloatingPanel` | `sel.components.floatingPanel` | 锚定式浮动面板 |
+| `selPageBackground` | `sel.components.pageBackground` | 页面背景图层与显示参数 |
+| `selPersonalization` | `sel.components.personalization` | 主题、背景、文字和页面编辑设置 |
+
+应用文件头必须用中文说明所用组件各自承担的业务职责。没有使用的组件不要解构；
+应用不得重新包装或定义同名组件。
 
 统一视觉契约位于 `theme/contract/`，主题注册表与切换管理器位于 `theme/runtime/`，完整主题放在 `theme/packs/<theme-id>/`。一个主题包同时提供深色、浅色两种模式，每种模式拥有独立基础材质、Accent 配色、边框和背景。组件样式与个性化逻辑统一读取 `--sel-theme-*`，不得复制组件或重新写死主题颜色；新增主题按 `theme/packs/README.md` 接入。
 
@@ -26,17 +78,17 @@ selBaseRuntime.param(name)          读取页面查询参数
 ## 当前挂载入口
 
 ```text
-selPanel.mount(panelRoot, options)
-selSearch.mount(gridRoot, searchData)
-selTree.mount(gridRoot, treeData)
-selGridMenu.mount(gridRoot, menuData)
-selDropdownMenu.mountAll(gridRoot)
-selContextMenu.mount(host, { id, ariaLabel })
-selGrid.mount(gridRoot, aggregatePayload)
-selTabs.mount(host, { id, ariaLabel })
+sel.components.panel.mount(panelRoot, options)
+sel.components.search.mount(gridRoot, searchData)
+sel.components.tree.mount(gridRoot, treeData)
+sel.components.gridMenu.mount(gridRoot, menuData)
+sel.components.dropdownMenu.mountAll(gridRoot)
+sel.components.contextMenu.mount(host, { id, ariaLabel })
+sel.components.grid.mount(gridRoot, aggregatePayload)
+sel.components.tabs.mount(host, { id, ariaLabel })
 tabsController.setContextMenuEnabled(false)
-selPageBackground.mount(backgroundHost, options)
-selPersonalization.mount(personalizationHost, { backgroundController })
+sel.components.pageBackground.mount(backgroundHost, options)
+sel.components.personalization.mount(personalizationHost, { backgroundController })
 ```
 
 `selTree` 节点文字使用统一语义层级：`type=database|catalog` 映射 `heading`，`schema` 映射 `body`，`table|view` 映射 `label`，`field|column` 映射 `caption`。调用方也可在单个节点传入 `typographyRole: "heading" | "body" | "label" | "caption"` 显式覆盖；未知类型固定回落到 `label`，控件不根据应用名猜测。
@@ -54,7 +106,7 @@ selPersonalization.mount(personalizationHost, { backgroundController })
 1. 先在 `components/component-registry.json` 登记唯一 ID、目录、源码、公开 API、主题属性和硬依赖，禁止先在业务页面临时实现。
 2. 建立 `components/<component>/sel<Component>.js` 和同名 CSS；未登记目录和源码会被快速门禁直接阻断。
 3. 文件头使用中文说明用途、责任边界和公开前缀。
-4. JavaScript 公开与登记 ID 相同的 API；禁止加载后自动扫描整个文档。
+4. JavaScript 通过 `window.sel.register("components.<name>", api)` 发布登记路径；禁止加载后自动扫描整个文档。
 5. CSS 只使用所属组件前缀并消费统一主题令牌；每个结构组和状态组添加中文注释。
 6. 可读文字必须按语义消费统一字号、字重和行高令牌；不得新写 `primary/secondary` 旧令牌或用像素值代替文字角色，图标几何尺寸除外。
 7. 缺少宿主结构、标准数据或登记的硬依赖时返回 `null` 或 `false` 并给出明确提示，不保留旧私有实现兼容分支。

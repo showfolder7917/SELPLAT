@@ -99,6 +99,8 @@ tasks.register('verifySelUiSourceBoundary') {
         def personalizationSource = file('src/components/personalization/selPersonalization.js').getText('UTF-8')
         def personalizationStyle = file('src/components/personalization/selPersonalization.css').getText('UTF-8')
         def pageEditorGridSource = file('src/components/grid/selGrid.js').getText('UTF-8')
+        def pageEditorWindowSource = file('src/components/window/selWindow.js').getText('UTF-8')
+        def pageEditorWindowStyle = file('src/components/window/selWindow.css').getText('UTF-8')
         def pageEditorViolations = []
         [
             'registerPageControl: selPersonalizationRegisterPageControl',
@@ -106,6 +108,9 @@ tasks.register('verifySelUiSourceBoundary') {
             'setPageMode: selPersonalizationSetPageMode',
             'savePage: selPersonalizationSavePageEditing',
             'cancelPage: selPersonalizationCancelPageEditing',
+            'typeof selPersonalizationDefinition.onEdit === "function"',
+            'actionOnly: selPersonalizationPageControlActionOnly',
+            'enabled: selPersonalizationDefinition.enabled !== false',
             'data-sel-personal-page-mode="preview"',
             'data-sel-personal-page-mode="edit"'
         ].each { contract ->
@@ -116,6 +121,11 @@ tasks.register('verifySelUiSourceBoundary') {
         }
         ['selGrid:columnResizeChange', 'captureColumnWidths:', 'setColumnWidths:', 'resetColumnWidths:'].each { contract ->
             if (!pageEditorGridSource.contains(contract)) pageEditorViolations.add("selGrid.js -> 缺少 ${contract}")
+        }
+        ['content instanceof Element', 'showActions === false', 'selwindow-form-fields-custom', 'selwindow-actions-shell[hidden]'].each { contract ->
+            if (!pageEditorWindowSource.contains(contract) && !pageEditorWindowStyle.contains(contract)) {
+                pageEditorViolations.add("selWindow -> 缺少 ${contract}")
+            }
         }
         if (!pageEditorViolations.isEmpty()) {
             throw new GradleException("sel-ui 页面编辑公共契约门禁失败：\n" + pageEditorViolations.join('\n'))
@@ -132,14 +142,28 @@ tasks.register('verifySelUiSourceBoundary') {
             applicationPrivateReusableControl: 'forbidden'
         ]
         def expectedChecks = [
-            'source-boundary', 'public-api', 'theme-contract', 'dependency-order',
-            'application-private-control'
+            'source-boundary', 'namespaced-public-api', 'kernel-first', 'theme-contract',
+            'dependency-order', 'application-private-control'
         ] as Set
-        if (registry.version != 1 || !(registry.components instanceof List)
+        if (registry.version != 2 || registry.kernel?.script != 'core/selKernel.js'
+                || registry.kernel?.publicApi != 'sel' || registry.kernel?.loadOrder != 'first'
+                || !(registry.components instanceof List)
                 || !(registry.policy instanceof Map)
                 || expectedPolicy.any { key, value -> registry.policy[key] != value }
                 || (registry.policy.requiredChecks as Set) != expectedChecks) {
             throw new GradleException('sel-ui 公共控件中央登记策略不完整或版本无效')
+        }
+        def kernelFile = file('src/core/selKernel.js')
+        def kernelSource = kernelFile.isFile() ? kernelFile.getText('UTF-8') : ''
+        [
+            'function selFreeze(', 'new WeakSet()', 'Array.isArray(value)',
+            'function selRegister(', 'function selRequire(',
+            'selRegister("core.freeze", selFreeze)',
+            'Object.defineProperty(global, "sel"'
+        ].each { contract ->
+            if (!kernelSource.contains(contract)) {
+                throw new GradleException("selKernel.js 缺少公共内核契约：${contract}")
+            }
         }
         def componentIds = [] as Set
         def registeredDirectories = [] as Set
@@ -164,11 +188,13 @@ tasks.register('verifySelUiSourceBoundary') {
                 registryViolations.add("${component.id} -> 缺少目录 ${component.directory}")
                 return
             }
-            if (!component.scripts.isEmpty() && component.globalApi != component.id) {
-                registryViolations.add("${component.id} -> globalApi 必须与控件 ID 相同")
+            def componentApiName = component.id.substring(3, 4).toLowerCase() + component.id.substring(4)
+            def expectedPublicApi = "sel.components.${componentApiName}"
+            if (!component.scripts.isEmpty() && component.publicApi != expectedPublicApi) {
+                registryViolations.add("${component.id} -> publicApi 必须为 ${expectedPublicApi}")
             }
-            if (component.scripts.isEmpty() && component.globalApi != null) {
-                registryViolations.add("${component.id} -> 纯样式控件不得声明 globalApi")
+            if (component.scripts.isEmpty() && component.publicApi != null) {
+                registryViolations.add("${component.id} -> 纯样式控件不得声明 publicApi")
             }
             (component.scripts + component.styles).each { sourceName ->
                 def sourceFile = file("src/components/${component.directory}/${sourceName}")
@@ -182,7 +208,7 @@ tasks.register('verifySelUiSourceBoundary') {
                 }
                 def sourceText = sourceFile.getText('UTF-8')
                 if (sourceName.endsWith('.js')
-                        && !(sourceText =~ /(?:window|global)\s*\.\s*${component.globalApi}\s*=/)) {
+                        && !sourceText.contains("window.sel.register(\"components.${componentApiName}\"")) {
                     registryViolations.add("${component.id} -> 未发布登记的公共 API")
                 }
                 if (sourceName.endsWith('.css') && component.themeAware == true
@@ -212,7 +238,9 @@ tasks.register('verifySelUiSourceBoundary') {
                 def componentSource = component.scripts.collect { sourceName ->
                     file("src/components/${component.directory}/${sourceName}").getText('UTF-8')
                 }.join('\n')
-                if (!componentSource.contains("window.${dependencyId}")) {
+                def dependencyPublicApi = componentById[dependencyId].publicApi
+                if (!(dependencyPublicApi instanceof String)
+                        || !componentSource.contains("window.${dependencyPublicApi}")) {
                     registryViolations.add("${componentId} -> 已登记但未调用 ${dependencyId}")
                 }
             }
@@ -220,6 +248,107 @@ tasks.register('verifySelUiSourceBoundary') {
         // 应用不得发布私有 sel<Component>、自行创建 body 门户或复写已由公共控件拥有的 ARIA 交互。
         def ownedAriaRoles = componentById.values().collectEntries { component ->
             (component.ownedAriaRoles ?: []).collectEntries { role -> [(role): component.id] }
+        }
+        // selFreeze 是深冻结入口；同一调用内部再次调用只会制造噪声和重复遍历，统一由边界扫描阻断。
+        def hasNestedSelFreeze = { String sourceText ->
+            def structural = new StringBuilder(sourceText)
+            def state = 'code'
+            def quote = (char) 0
+            int cursor = 0
+            while (cursor < sourceText.length()) {
+                char current = sourceText.charAt(cursor)
+                char next = cursor + 1 < sourceText.length() ? sourceText.charAt(cursor + 1) : (char) 0
+                if (state == 'code' && current == '/' && next == '/') {
+                    structural.setCharAt(cursor, ' ' as char)
+                    structural.setCharAt(cursor + 1, ' ' as char)
+                    cursor += 2
+                    state = 'line-comment'
+                    continue
+                }
+                if (state == 'code' && current == '/' && next == '*') {
+                    structural.setCharAt(cursor, ' ' as char)
+                    structural.setCharAt(cursor + 1, ' ' as char)
+                    cursor += 2
+                    state = 'block-comment'
+                    continue
+                }
+                if (state == 'code' && (current == '\'' || current == '"' || current == '`')) {
+                    quote = current
+                    structural.setCharAt(cursor, ' ' as char)
+                    cursor++
+                    state = 'string'
+                    continue
+                }
+                if (state == 'line-comment') {
+                    if (current == '\n') state = 'code'
+                    else structural.setCharAt(cursor, ' ' as char)
+                    cursor++
+                    continue
+                }
+                if (state == 'block-comment') {
+                    if (current == '*' && next == '/') {
+                        structural.setCharAt(cursor, ' ' as char)
+                        structural.setCharAt(cursor + 1, ' ' as char)
+                        cursor += 2
+                        state = 'code'
+                    } else {
+                        if (current != '\n') structural.setCharAt(cursor, ' ' as char)
+                        cursor++
+                    }
+                    continue
+                }
+                if (state == 'string') {
+                    if (current == '\\') {
+                        structural.setCharAt(cursor, ' ' as char)
+                        if (cursor + 1 < sourceText.length()) {
+                            if (next != '\n') structural.setCharAt(cursor + 1, ' ' as char)
+                            cursor += 2
+                        } else cursor++
+                        continue
+                    }
+                    if (current == quote) {
+                        structural.setCharAt(cursor, ' ' as char)
+                        cursor++
+                        state = 'code'
+                    } else {
+                        if (current != '\n') structural.setCharAt(cursor, ' ' as char)
+                        cursor++
+                    }
+                    continue
+                }
+                cursor++
+            }
+            int parenthesisDepth = 0
+            def activeFreezeDepths = []
+            cursor = 0
+            while (cursor < structural.length()) {
+                if (cursor + 9 <= structural.length() && structural.substring(cursor, cursor + 9) == 'selFreeze') {
+                    char before = cursor > 0 ? structural.charAt(cursor - 1) : (char) 0
+                    int afterIndex = cursor + 9
+                    char after = afterIndex < structural.length() ? structural.charAt(afterIndex) : (char) 0
+                    def isIdentifier = { char value -> Character.isLetterOrDigit(value) || value == '_' || value == '$' }
+                    if (!isIdentifier(before) && !isIdentifier(after)) {
+                        int openIndex = afterIndex
+                        while (openIndex < structural.length() && Character.isWhitespace(structural.charAt(openIndex))) openIndex++
+                        if (openIndex < structural.length() && structural.charAt(openIndex) == '(') {
+                            if (!activeFreezeDepths.isEmpty()) return true
+                            parenthesisDepth++
+                            activeFreezeDepths.add(parenthesisDepth)
+                            cursor = openIndex + 1
+                            continue
+                        }
+                    }
+                }
+                if (structural.charAt(cursor) == '(') parenthesisDepth++
+                else if (structural.charAt(cursor) == ')') {
+                    if (!activeFreezeDepths.isEmpty() && activeFreezeDepths.last() == parenthesisDepth) {
+                        activeFreezeDepths.remove(activeFreezeDepths.size() - 1)
+                    }
+                    parenthesisDepth = Math.max(0, parenthesisDepth - 1)
+                }
+                cursor++
+            }
+            return false
         }
         def applicationStaticFiles = rootProject.fileTree('apps') {
             include '**/src/main/resources/static/**/*.js'
@@ -230,6 +359,24 @@ tasks.register('verifySelUiSourceBoundary') {
             if (applicationFile.name.endsWith('.js')
                     && applicationText =~ /window\s*\.\s*sel[A-Z][A-Za-z0-9]*\s*=/) {
                 registryViolations.add("${rootProject.relativePath(applicationFile)} -> 应用私造公共控件 API")
+            }
+            if (applicationFile.name.endsWith('.js')
+                    && applicationText =~ /window\s*\.\s*sel[A-Z][A-Za-z0-9]*/) {
+                registryViolations.add("${rootProject.relativePath(applicationFile)} -> 应用仍在读取旧式平铺 SEL API")
+            }
+            if (applicationFile.name.endsWith('.js') && applicationText.contains('Object.freeze')) {
+                registryViolations.add("${rootProject.relativePath(applicationFile)} -> 应用必须使用 sel.core.freeze")
+            }
+            if (applicationFile.name.endsWith('.js') && hasNestedSelFreeze(applicationText)) {
+                registryViolations.add("${rootProject.relativePath(applicationFile)} -> selFreeze 只允许在完整只读边界调用一次")
+            }
+            if (applicationFile.name.endsWith('.js') && applicationText.contains('window.sel.require(')) {
+                def header = applicationText.readLines().take(30).join('\n')
+                if (!header.contains('SEL UI') || !(header =~ /[\u4e00-\u9fff]/)) {
+                    registryViolations.add(
+                        "${rootProject.relativePath(applicationFile)} -> 应用文件头必须用中文说明 SEL UI 组件用途"
+                    )
+                }
             }
             if (applicationFile.name.endsWith('.js')
                     && applicationText.contains('document.body.appendChild')) {
@@ -250,6 +397,26 @@ tasks.register('verifySelUiSourceBoundary') {
         }.files)
         dependencyDocuments.sort().each { documentFile ->
             def documentText = documentFile.getText('UTF-8')
+            if (documentFile.name.endsWith('.java')) {
+                def textBlockMatcher = documentText =~ /(?s)"""(.*?)"""/
+                while (textBlockMatcher.find()) {
+                    if (hasNestedSelFreeze(textBlockMatcher.group(1))) {
+                        registryViolations.add("${rootProject.relativePath(documentFile)} -> 生成脚本禁止嵌套 selFreeze")
+                        break
+                    }
+                }
+            }
+            def kernelResource = '/sel/core/selKernel.js'
+            def firstSelScriptMatcher = documentText =~ /<script[^>]+src=["'](\/sel\/(?:core|theme|components)\/[^"']+\.js)[^"']*["']/
+            if (firstSelScriptMatcher.find()) {
+                def firstSelScript = firstSelScriptMatcher.group(1)
+                if (!documentText.contains(kernelResource)
+                        || documentText.indexOf(kernelResource) > documentText.indexOf(firstSelScript)) {
+                    registryViolations.add(
+                        "${rootProject.relativePath(documentFile)} -> selKernel.js 必须先于全部 SEL 脚本加载"
+                    )
+                }
+            }
             componentById.each { componentId, component ->
                 def ownResourcesByKind = [
                     styles: component.styles.collect { "/sel/components/${component.directory}/${it}" },
@@ -285,6 +452,22 @@ tasks.register('verifySelUiSourceBoundary') {
                 }
             }
         }
+        // 只有内核可以调用原生冻结；其他 shared 脚本必须走同一深度冻结入口，并且不得回流平铺全局 API。
+        fileTree('src') {
+            include '**/*.js'
+            exclude 'core/selKernel.js'
+        }.files.sort().each { sourceFile ->
+            def sourceText = sourceFile.getText('UTF-8')
+            if (sourceText.contains('Object.freeze')) {
+                registryViolations.add("${project.relativePath(sourceFile)} -> shared 必须使用 sel.core.freeze")
+            }
+            if (hasNestedSelFreeze(sourceText)) {
+                registryViolations.add("${project.relativePath(sourceFile)} -> selFreeze 只允许在完整只读边界调用一次")
+            }
+            if (sourceText =~ /(?:window|global)\s*\.\s*sel[A-Z][A-Za-z0-9]*/) {
+                registryViolations.add("${project.relativePath(sourceFile)} -> shared 仍在读写旧式平铺 SEL API")
+            }
+        }
         if (!registryViolations.isEmpty()) {
             throw new GradleException("sel-ui 公共控件治理门禁失败：\n" + registryViolations.join('\n'))
         }
@@ -294,19 +477,19 @@ tasks.register('verifySelUiSourceBoundary') {
         def treeTooltipConsumer = file('src/components/tree/selTree.js').getText('UTF-8')
         def tooltipSource = tooltipScript.isFile() ? tooltipScript.getText('UTF-8') : ''
         def tooltipRequired = [
-            'window.selTooltip', 'data-sel-tooltip', 'selTooltipIsTruncated',
+            'window.sel.register("components.tooltip"', 'data-sel-tooltip', 'selTooltipIsTruncated',
             'selTooltipShouldShow', 'dataset.selTooltipMode === "always"',
             'pointerover', 'focusin', 'aria-describedby', 'role", "tooltip',
             'if (selTooltipAriaElement &&'
         ]
         def tooltipViolations = tooltipRequired.findAll { !tooltipSource.contains(it) }.collect { "selTooltip -> ${it}" }
-        if (!gridTooltipConsumer.contains('window.selTooltip.attach')
+        if (!gridTooltipConsumer.contains('window.sel.components.tooltip.attach')
                 || !gridTooltipConsumer.contains('dataset.selTooltip')
                 || !gridTooltipConsumer.contains('dataset.selTooltipMode = "always"')
                 || gridTooltipConsumer =~ /\.title\s*=|setAttribute\(\s*["']title["']/) {
             tooltipViolations.add('selGrid -> 必须使用 selTooltip 且禁止原生 title')
         }
-        if (!treeTooltipConsumer.contains('window.selTooltip.attach')
+        if (!treeTooltipConsumer.contains('window.sel.components.tooltip.attach')
                 || !treeTooltipConsumer.contains('dataset.selTooltip')) {
             tooltipViolations.add('selTree -> 必须使用 selTooltip')
         }
@@ -322,8 +505,8 @@ tasks.register('verifySelUiSourceBoundary') {
         }
         def contextMenuSource = contextMenuScript.getText('UTF-8')
         def tabsSource = tabsScript.getText('UTF-8')
-        def contextRequired = ['window.selContextMenu', 'selContextMenu:action', 'ArrowDown', 'ContextMenu']
-        def tabsRequired = ['contextMenu !== false', 'window.selContextMenu.mount', 'setContextMenuEnabled:', 'closeRight:', 'closeOthers:', 'closeAll:', 'selTabs:beforeClose']
+        def contextRequired = ['window.sel.register("components.contextMenu"', 'selContextMenu:action', 'ArrowDown', 'ContextMenu']
+        def tabsRequired = ['contextMenu !== false', 'window.sel.components.contextMenu.mount', 'setContextMenuEnabled:', 'closeRight:', 'closeOthers:', 'closeAll:', 'selTabs:beforeClose']
         def missingContracts = []
         contextRequired.findAll { !contextMenuSource.contains(it) }.each { missingContracts.add("selContextMenu -> ${it}") }
         tabsRequired.findAll { !tabsSource.contains(it) }.each { missingContracts.add("selTabs -> ${it}") }

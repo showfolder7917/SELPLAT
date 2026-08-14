@@ -1,5 +1,5 @@
 plugins {
-    // backend 对 host 暴露模块配置、六个表业务和不落库导航能力，因此保持标准 Java library 依赖语义。
+    // backend 对 host 暴露模块配置、七个表业务和不落库导航能力，因此保持标准 Java library 依赖语义。
     id 'java-library'
     // 真实执行测试必须生成 JaCoCo 报告并进入 reference-data 的 check 门禁。
     id 'jacoco'
@@ -87,6 +87,9 @@ tasks.named('jacocoTestCoverageVerification') {
                 'com.sp.selplat.referencedata.referencedatacontextmenuitem.controller.ReferenceDataContextMenuItemController',
                 'com.sp.selplat.referencedata.referencedatacontextmenuitem.dao.ReferenceDataContextMenuItemDaoImpl',
                 'com.sp.selplat.referencedata.referencedatacontextmenuitem.service.impl.ReferenceDataContextMenuItemServiceImpl',
+                'com.sp.selplat.referencedata.referencedatacontrolbinding.controller.ReferenceDataControlBindingController',
+                'com.sp.selplat.referencedata.referencedatacontrolbinding.dao.ReferenceDataControlBindingDaoImpl',
+                'com.sp.selplat.referencedata.referencedatacontrolbinding.service.impl.ReferenceDataControlBindingServiceImpl',
                 'com.sp.selplat.referencedata.referencedataoption.controller.ReferenceDataOptionController',
                 'com.sp.selplat.referencedata.referencedataoption.dao.ReferenceDataOptionDaoImpl',
                 'com.sp.selplat.referencedata.referencedataoption.service.impl.ReferenceDataOptionServiceImpl',
@@ -116,6 +119,7 @@ tasks.named('jacocoTestCoverageVerification') {
             includes = [
                 'com.sp.selplat.referencedata.capability.workbenchnavigation.service.impl.ReferenceDataWorkbenchNavigationServiceImpl',
                 'com.sp.selplat.referencedata.referencedatacontextmenuitem.service.impl.ReferenceDataContextMenuItemServiceImpl',
+                'com.sp.selplat.referencedata.referencedatacontrolbinding.service.impl.ReferenceDataControlBindingServiceImpl',
                 'com.sp.selplat.referencedata.referencedataoption.service.impl.ReferenceDataOptionServiceImpl',
                 'com.sp.selplat.referencedata.referencedatatable.service.impl.ReferenceDataTableServiceImpl',
                 'com.sp.selplat.referencedata.referencedatatablecolumn.service.impl.ReferenceDataTableColumnServiceImpl',

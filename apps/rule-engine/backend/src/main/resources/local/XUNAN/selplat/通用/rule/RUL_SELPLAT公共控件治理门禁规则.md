@@ -2,10 +2,10 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 2.1.0 增加 hidden 布局优先级、树叶子占位语义、窄屏动作收起和页面编辑显式保存兜底。 -->
-rule_version = 2.1.0
+<!-- 3.0.0 修正引用型下拉的数据、类型和页面控件绑定边界，禁止把管理筛选器冒充业务控件。 -->
+rule_version = 3.0.0
 <!-- 2026-08-12 依次固定纯图标可发现性、确认控件边界、真实风险文案、页面编辑契约及客户交付审计发现的通用布局与可访问性要求。 -->
-upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存;2026-08-12:hidden控件必须退出布局_树叶子占位禁止空按钮_窄屏动作先收起文字_显式保存无脏标记也保存当前控件
+upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存;2026-08-12:hidden控件必须退出布局_树叶子占位禁止空按钮_窄屏动作先收起文字_显式保存无脏标记也保存当前控件;2026-08-13:公共API统一window.sel命名空间_selKernel最先加载_应用顶部集中解构_sel.core.freeze深度冻结_中文组件用途说明;2026-08-14:完整只读边界只调用一次selFreeze_禁止嵌套逐项冻结_运行时控制器保持生命周期_生成模板同步门禁;2026-08-14:应用入口统一app_SEL公共别名使用sel前缀_业务模块使用项目lowerCamelCase前缀;2026-08-14:业务应用动态节点统一由sel.core.element创建_原生节点创建只留在公共实现层;2026-08-14:大型应用装配脚本增加函数契约和关键语句组中文教学式业务注释_禁止机械注释括号标点;2026-08-14:统一入口_SEL公共别名_具名业务函数中文契约扩展到全部应用JavaScript并接入快速门禁;2026-08-14:Grid表头竖向分隔线覆盖第一列并只排除最后一列;2026-08-14:动作型页面编辑入口统一使用onEdit_复合管理内容统一进入selWindow自定义内容_引用型下拉按typeId管理并保持树叶子;2026-08-14:引用型下拉拆分页面控件绑定_类型目录_选项数据并禁止管理筛选器注册为业务页面控件
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -26,9 +26,9 @@ selplat_component_creation_sequence = classify_reusable_interaction,register_pub
 <!-- 门禁只负责阻断和报告缺少的控件，不得静默自动生成未经过登记的公共 API。 -->
 selplat_component_gate_auto_creation_policy = block_and_report,no_silent_component_generation
 <!-- 公共控件唯一登记位于 sel-ui 组件根，版本、策略和控件数组缺一不可。 -->
-selplat_component_registry = shared/frontend/sel-ui/src/components/component-registry.json,version=1,one_authoritative_source
-<!-- 每个公开单元必须登记稳定 ID、目录、类型、JS、CSS、公开 API、硬依赖和主题属性。 -->
-selplat_component_registration_required_fields = id,directory,type,scripts,styles,globalApi,dependencies,themeAware
+selplat_component_registry = shared/frontend/sel-ui/src/components/component-registry.json,version=2,one_authoritative_source,kernel=core/selKernel.js
+<!-- 每个公开单元必须登记稳定 ID、目录、类型、JS、CSS、命名空间 API、硬依赖和主题属性。 -->
+selplat_component_registration_required_fields = id,directory,type,scripts,styles,publicApi,dependencies,themeAware
 <!-- 新控件目录和顶层 JS/CSS 必须且只能属于一个登记单元，未登记与重复所有者均直接阻断。 -->
 selplat_component_source_ownership_gate = every_directory_registered,every_top_level_js_css_exactly_one_owner,no_duplicate_owner
 
@@ -54,13 +54,42 @@ selplat_panel_compact_header_contract = no_title_status_action_overlap,compact_i
 
 ## API、主题与依赖
 
+<!-- 浏览器只允许 window.sel 一个 SEL 公共根；selGrid 等名称继续作为稳定控件 ID、文件名、CSS 前缀和内部标识，禁止重新发布平铺全局变量。 -->
+selplat_public_api_namespace = window.sel,one_public_root,no_window_selComponent,stable_component_id_preserved
+<!-- 内核必须先于基础运行时、主题和组件加载；后续能力只能通过 register/registerAll 登记且重复路径直接阻断。 -->
+selplat_kernel_registration_contract = selKernel_first,register_or_registerAll,duplicate_path_blocked,no_compatibility_alias
+<!-- 控件 ID 去掉 sel 并把首字母转小写后形成唯一调用路径，例如 selGrid 对应 sel.components.grid。 -->
+selplat_component_public_api_mapping = sel<ComponentId>->sel.components.<lowerCamelComponentId>,registry_and_source_match
+<!-- 应用必须在文件顶部使用 sel.require 校验依赖并只解构实际调用的能力；同一文件不得在各函数重复解构或重新包装同名组件。 -->
+selplat_application_api_consumption = top_level_require,destructure_once,used_dependencies_only,no_component_redefinition
+<!-- 应用装配脚本的最外层入口统一使用 app；从 window.sel 取得的公共基础能力使用 sel 前缀短名，例如 selBase、selAjax。 -->
+selplat_application_javascript_entry_and_framework_alias_naming = entry:app,window_sel_alias:sel<Capability>,examples:selBase|selAjax
+<!-- 模块级业务状态、配置、接口和函数使用所属项目的 lowerCamelCase 前缀；函数内短生命周变量只需表达当前业务含义，禁止为缩短而丢失归属。 -->
+selplat_application_javascript_business_prefix_naming = module_scope:<projectNameLowerCamelCase>*,function_local:concise_business_meaning,no_ambiguous_abbreviation
+<!-- 业务应用创建动态节点必须复用公共 element 的安全文本和属性入口；原生 DOM 创建只属于 sel-ui 公共实现层。 -->
+selplat_application_dom_creation_entry = sel.core.element,application_no_direct_native_create_element,shared_component_implementation_keeps_native_boundary
+<!-- 原生 Object.freeze 只允许出现在 selKernel；其余 shared、应用和生成模板统一调用 sel.core.freeze。 -->
+selplat_freeze_single_entry = sel.core.freeze,Object.freeze_kernel_only,shared_apps_templates_use_public_entry
+<!-- 深度冻结只递归普通对象与数组，并通过 WeakSet 处理循环引用；DOM、函数、Map、Set、Date 和类实例保持自身生命周期。 -->
+selplat_deep_freeze_boundary = plain_object_and_array,cycle_safe,skip_dom_function_map_set_date_class_instance
+<!-- 一个完整配置、聚合 payload 或对外状态快照只在最外层调用一次 selFreeze；内部对象、数组、map 结果和字段不得再次逐层或逐项冻结。 -->
+selplat_freeze_one_call_per_immutable_boundary = complete_config_payload_or_snapshot_single_call,no_nested_selFreeze,no_item_by_item_freeze
+<!-- DOM、控制器、实例注册表和其他运行时生命周期对象保持可变；需要对外返回状态时创建独立副本并只冻结该返回快照。 -->
+selplat_runtime_object_freeze_boundary = runtime_controller_dom_registry_mutable,freeze_returned_copy_only
+<!-- MDA 等生成器输出的 JavaScript 必须与现有应用遵守同一冻结结构，禁止模板继续生成已清理的嵌套写法。 -->
+selplat_generated_javascript_freeze_parity = generated_template_same_boundary_rule,nested_freeze_gate,regression_test
+<!-- 应用装配脚本文件头必须说明公共组件用途；非简单函数必须写中文契约，复杂函数内部每个连续关键语句组必须解释业务目的，禁止为括号、逗号和语法字面量堆积机械注释。 -->
+selplat_component_usage_documentation = application_header_chinese_component_purpose,nontrivial_function_chinese_contract,complex_statement_group_business_intent_comment,no_punctuation_or_syntax_literal_comment,public_api_table,minimal_mount_example
+<!-- 全部应用入口脚本统一扫描 app、selBase、可选 selAjax 和具名业务函数前置中文契约，后续项目不得退回独立命名体系。 -->
+selplat_application_javascript_uniform_structure_gate = all_application_javascript,entry_app,selBase_required,selAjax_when_used,named_business_function_preceding_chinese_contract
+
 <!-- 所有应用传给 SEL 公共控件的实例 ID 必须由 sel、控件类型、正确英文业务含义和 Id 组成，并使用 lowerCamelCase。 -->
 selplat_component_instance_id_naming = sel<ControlType><BusinessMeaning>Id,lowerCamelCase,correct_english_business_spelling
 <!-- 同一物理控件切换多个业务模块时使用一个物理实例 ID；模块自己的 gridId 只作为数据库表格头稳定坐标，禁止混用事件实例键。 -->
 selplat_shared_physical_grid_and_business_grid_id_boundary = physical_grid_instance_id_for_event_routing,business_gridId_for_database_header_coordinate
 
-<!-- 带脚本的控件必须发布与登记 ID 相同的全局 API；纯样式单元不得虚构空 API。 -->
-selplat_component_public_api_gate = script_global_api_equals_registered_id,style_only_global_api_null
+<!-- 带脚本的控件必须通过内核发布登记的命名空间 API；纯样式单元不得虚构空 API。 -->
+selplat_component_public_api_gate = script_registers_namespaced_publicApi,style_only_publicApi_null
 <!-- 主题感知样式必须消费 --sel-theme-* 令牌，应用不得复制控件边框、颜色和交互状态。 -->
 selplat_component_theme_gate = themeAware_css_consumes_sel_theme_tokens,no_application_visual_reimplementation
 <!-- 控件硬依赖必须指向已登记单元，源码必须真实调用依赖 API，应用与生成模板必须在当前控件前加载依赖 CSS/JS。 -->
@@ -83,8 +112,12 @@ selplat_grid_record_type_compatibility = preserve_scalar_consumers,application_e
 selplat_grid_runtime_record_contract_refresh = setLocale_updates_grid_record_options,no_stale_search_type_or_status_field
 <!-- 应用切换独立业务模块时必须清理不再适用的搜索、分类、状态和树筛选；语言切换仍按控件原有契约保留状态。 -->
 selplat_grid_business_module_filter_reset = application_module_switch_resets_incompatible_filters,locale_switch_preserves_state
+<!-- Grid 表头竖线表达当前列的右边界，因此第一列必须显示，只有没有后续列的最后一列不显示。 -->
+selplat_grid_header_separator_boundary = every_column_except_last,first_column_visible,no_first_column_exclusion
 <!-- selWindow 选择项的 selected 声明必须同时成为 form.reset 的 defaultSelected，新增窗口不得在 reset 后回到错误的第一项。 -->
 selplat_window_select_default_reset_contract = selected_option_sets_defaultSelected,form_reset_restores_business_default
+<!-- 表单之外的完整管理流程仍使用 selWindow 的标题栏、拖动、缩放和层级；应用只能通过 content 元素注入公共组件组合，并显式隐藏无意义的标准提交栏。 -->
+selplat_window_custom_content_contract = content_element_only,public_window_frame_lifecycle,showActions_false_for_external_actions,no_html_string_injection
 
 ## 横向工具栏栏目缩放
 
@@ -157,6 +190,14 @@ selplat_page_editor_coordinate_contract = control_specific_stable_database_coord
 selplat_grid_page_editor_persistence = live_memory_resize,one_terminal_change_event,batch_save_widths,write_then_business_getGridColumn_refresh,no_request_per_pointermove
 <!-- 菜单、树、下拉和数据类型以后通过同一页面编辑注册 API 增加适配器，但仍使用各自业务表和 Service，禁止合并为不可治理的通用 JSON 表。 -->
 selplat_page_editor_extension_boundary = shared_editor_session_per_control_adapter,menu_tree_dropdown_data_type_keep_business_table_and_service,no_monolithic_json_table
+<!-- 只触发业务管理流程、不产生页面草稿的控件使用 action-only onEdit 登记；它不参与脏状态、保存或取消恢复，但仍受管理员权限和编辑模式控制。 -->
+selplat_page_editor_action_control_contract = register_onEdit_action_only,enabled_dynamic_visibility,no_capture_restore_save_requirement,excluded_from_dirty_save_cancel
+<!-- 引用型下拉必须把页面控件坐标、类型目录和选项数据分开保存；页面坐标绑定 typeId，选项通过 typeId 归属类型，禁止在选项表复制页面坐标或类型业务坐标。 -->
+selplat_reference_dropdown_data_model = pageProjectCode_plus_pagePath_plus_controlId_to_typeId,ReferenceDataType_projectCode_plus_resourceCode,ReferenceDataOption_typeId_plus_optionValue,no_coordinate_duplication
+<!-- 管理工作台中的类型筛选器只负责过滤数据，禁止把筛选槽注册为业务页面下拉框或以其当前值冒充控件绑定。 -->
+selplat_reference_dropdown_filter_boundary = management_filter_is_not_business_control,no_page_editor_registration,no_filter_value_as_binding
+<!-- 真实业务下拉框只能由已登记页面唯一坐标解析启用绑定并查询 ReferenceDataOption；选项明细只在管理 Grid 展示，导航树中的下拉选项模块保持无子节点。 -->
+selplat_reference_dropdown_option_management = real_control_coordinate_resolves_binding,binding_typeId_queries_business_option_table_crud,tree_module_leaf,no_option_record_tree_children
 
 ## 验证
 
@@ -174,16 +215,22 @@ selplat_destructive_confirmation_gate = application_scan_zero_delete_selWindow,r
 selplat_toolbar_column_resize_gate = panel_contract,default_enabled,explicit_disable,keyboard_and_pointer,double_click_reset,mda_consumer
 <!-- 公共前端构建必须验证 Grid 分类值归一化以及 type、tree type、typeGroup 三条成员匹配路径。 -->
 selplat_grid_multi_value_type_gate = normalize_scalar_and_array,toolbar_membership,tree_membership,type_group_any_membership
+<!-- 快速门禁必须阻断第一列表头分隔线被排除或最后列表头残留无意义竖线。 -->
+selplat_grid_header_separator_gate = required_not_last_child_selector,forbidden_not_first_child_selector,real_grid_regression
 <!-- 动态模块调用方回归必须覆盖字段契约切换、旧筛选清理和窗口选择默认项复位。 -->
 selplat_runtime_contract_and_form_default_verification = grid_module_contract_switch,filter_reset,window_select_default_after_reset
 <!-- 页面编辑公共回归必须覆盖非管理员隐藏、管理员后台二次校验、坐标可见、拖拽终值事件、取消恢复、批量保存和重新读取宽度。 -->
 selplat_page_editor_verification = non_admin_hidden,admin_service_recheck,visible_coordinates,terminal_resize_event,cancel_restore,batch_save,explicit_save_current_control_without_dirty_marker,reload_persisted_width
+<!-- 引用型下拉回归必须覆盖筛选器不登记、绑定坐标唯一、绑定启停边界、按绑定查询真实选项和选项树保持叶子。 -->
+selplat_reference_dropdown_binding_verification = filter_not_registered,page_control_coordinate_unique,disabled_binding_rejected,binding_queries_real_options,option_tree_leaf
 <!-- 公共控件交付回归同时检查 hidden 退出布局、树叶子非交互占位和 1380 宽度内标题动作不相撞。 -->
 selplat_layout_and_accessibility_verification = hidden_panel_display_none,tree_leaf_no_unnamed_button,compact_header_action_labels_collapsed_before_overlap
 <!-- 应用装配回归必须断言所有显式 SEL 实例 ID 符合统一命名，并阻断 Managent 等错误英文拼写。 -->
 selplat_component_instance_id_verification = all_explicit_sel_instance_ids_match_naming,zero_known_business_spelling_errors
-<!-- 控件迁移至少验证旧选择器清零、新公共 API 调用、应用装配测试和真实浏览器交互与控制台。 -->
-selplat_component_migration_verification = no_legacy_selector,registered_api_call,application_tests,real_browser_interaction_and_console
+<!-- 快速门禁扫描全部应用 JavaScript，任何直接原生节点创建都必须在交付前迁移到 sel.core.element。 -->
+selplat_application_dom_creation_gate = all_application_javascript_zero_direct_native_create_element,public_element_positive_and_negative_regression
+<!-- 控件迁移至少验证旧选择器和平铺 API 清零、内核加载顺序、新公共 API、应用装配测试及真实浏览器交互与控制台。 -->
+selplat_component_migration_verification = no_legacy_selector,no_flat_sel_api,kernel_first,registered_api_call,application_tests,real_browser_interaction_and_console
 <!-- 登记结构和首个调用方是权威样例，不复制会与真实控件漂移的静态模板。 -->
 template_not_applicable_reason = component_registry_and_first_consumer_are_the_authoritative_structure
 <!-- 同一生产门禁同时覆盖全部控件，无需建立控件治理专用第二程序。 -->

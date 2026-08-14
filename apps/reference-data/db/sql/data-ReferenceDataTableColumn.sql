@@ -1,4 +1,4 @@
--- 六个管理表格的列配置作为可编辑测试数据写入；重启只补充缺失列，不覆盖用户修改。
+-- 七个管理表格的列配置作为可编辑测试数据写入；重启只补充缺失列，不覆盖用户修改。
 INSERT INTO ReferenceDataTableColumn
     (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
      tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
@@ -551,3 +551,98 @@ WHERE NOT EXISTS (
     WHERE tableName = 'ReferenceDataTableColumn' AND gridId = 'selGridTableColumnManagementId' AND gridColumnId = 'actions'
 );
 
+INSERT INTO ReferenceDataTableColumn
+    (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
+     tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
+     cellIcon, cellIconVisible, visible, status, sortnum)
+SELECT 210047, 1, 1, 'ReferenceDataControlBinding', 'selGridControlBindingManagementId', 'pageCoordinate', 'pageProjectCode',
+       'pagePath', '页面项目 / 路径', 'ページプロジェクト / パス', 'Page project / path', '260px', 'stack',
+       NULL, FALSE, TRUE, 1, 10
+WHERE NOT EXISTS (
+    SELECT 1 FROM ReferenceDataTableColumn
+    WHERE tableName = 'ReferenceDataControlBinding' AND gridId = 'selGridControlBindingManagementId' AND gridColumnId = 'pageCoordinate'
+);
+
+INSERT INTO ReferenceDataTableColumn
+    (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
+     tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
+     cellIcon, cellIconVisible, visible, status, sortnum)
+SELECT 210048, 1, 1, 'ReferenceDataControlBinding', 'selGridControlBindingManagementId', 'controlId', 'controlId',
+       NULL, '控件实例 ID', 'コントロールID', 'Control ID', '220px', 'text',
+       NULL, FALSE, TRUE, 1, 20
+WHERE NOT EXISTS (
+    SELECT 1 FROM ReferenceDataTableColumn
+    WHERE tableName = 'ReferenceDataControlBinding' AND gridId = 'selGridControlBindingManagementId' AND gridColumnId = 'controlId'
+);
+
+INSERT INTO ReferenceDataTableColumn
+    (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
+     tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
+     cellIcon, cellIconVisible, visible, status, sortnum)
+SELECT 210049, 1, 1, 'ReferenceDataControlBinding', 'selGridControlBindingManagementId', 'controlType', 'controlType',
+       NULL, '控件类型', 'コントロール種別', 'Control type', '140px', 'text',
+       NULL, FALSE, TRUE, 1, 30
+WHERE NOT EXISTS (
+    SELECT 1 FROM ReferenceDataTableColumn
+    WHERE tableName = 'ReferenceDataControlBinding' AND gridId = 'selGridControlBindingManagementId' AND gridColumnId = 'controlType'
+);
+
+INSERT INTO ReferenceDataTableColumn
+    (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
+     tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
+     cellIcon, cellIconVisible, visible, status, sortnum)
+SELECT 210050, 1, 1, 'ReferenceDataControlBinding', 'selGridControlBindingManagementId', 'typeId', 'typeId',
+       NULL, '引用数据类型', '参照データ種別', 'Reference data type', '130px', 'text',
+       NULL, FALSE, TRUE, 1, 40
+WHERE NOT EXISTS (
+    SELECT 1 FROM ReferenceDataTableColumn
+    WHERE tableName = 'ReferenceDataControlBinding' AND gridId = 'selGridControlBindingManagementId' AND gridColumnId = 'typeId'
+);
+
+INSERT INTO ReferenceDataTableColumn
+    (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
+     tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
+     cellIcon, cellIconVisible, visible, status, sortnum)
+SELECT 210051, 1, 1, 'ReferenceDataControlBinding', 'selGridControlBindingManagementId', 'description', 'description',
+       NULL, '控件说明', 'コントロール説明', 'Description', '220px', 'text',
+       NULL, FALSE, TRUE, 1, 50
+WHERE NOT EXISTS (
+    SELECT 1 FROM ReferenceDataTableColumn
+    WHERE tableName = 'ReferenceDataControlBinding' AND gridId = 'selGridControlBindingManagementId' AND gridColumnId = 'description'
+);
+
+INSERT INTO ReferenceDataTableColumn
+    (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
+     tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
+     cellIcon, cellIconVisible, visible, status, sortnum)
+SELECT 210052, 1, 1, 'ReferenceDataControlBinding', 'selGridControlBindingManagementId', 'status', 'status',
+       NULL, '状态', '状態', 'Status', '90px', 'badge',
+       NULL, FALSE, TRUE, 1, 60
+WHERE NOT EXISTS (
+    SELECT 1 FROM ReferenceDataTableColumn
+    WHERE tableName = 'ReferenceDataControlBinding' AND gridId = 'selGridControlBindingManagementId' AND gridColumnId = 'status'
+);
+
+INSERT INTO ReferenceDataTableColumn
+    (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
+     tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
+     cellIcon, cellIconVisible, visible, status, sortnum)
+SELECT 210053, 1, 1, 'ReferenceDataControlBinding', 'selGridControlBindingManagementId', 'sortnum', 'sortnum',
+       NULL, '排序', '並び順', 'Order', '90px', 'text',
+       NULL, FALSE, TRUE, 1, 70
+WHERE NOT EXISTS (
+    SELECT 1 FROM ReferenceDataTableColumn
+    WHERE tableName = 'ReferenceDataControlBinding' AND gridId = 'selGridControlBindingManagementId' AND gridColumnId = 'sortnum'
+);
+
+INSERT INTO ReferenceDataTableColumn
+    (id, tenantId, lastOperateUserId, tableName, gridId, gridColumnId, tableFieldName,
+     tableSecondaryFieldName, labelZh, labelJa, labelEn, width, cellRenderer,
+     cellIcon, cellIconVisible, visible, status, sortnum)
+SELECT 210054, 1, 1, 'ReferenceDataControlBinding', 'selGridControlBindingManagementId', 'actions', 'id',
+       NULL, '操作', '操作', 'Actions', '132px', 'actions',
+       NULL, FALSE, TRUE, 1, 80
+WHERE NOT EXISTS (
+    SELECT 1 FROM ReferenceDataTableColumn
+    WHERE tableName = 'ReferenceDataControlBinding' AND gridId = 'selGridControlBindingManagementId' AND gridColumnId = 'actions'
+);

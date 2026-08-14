@@ -1,10 +1,12 @@
 /*
  * selTooltip.js：统一截断文字提示公共控件。
  * 负责真实溢出判断、门户定位、鼠标与键盘生命周期；调用方只提供 data-sel-tooltip 完整文字。
- * 公开 API：window.selTooltip.attach(host, options)。
+ * 公开 API：window.sel.components.tooltip.attach(host, options)。
  */
 (function selTooltipInitializeRegistry() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     const selTooltipInstances = new Map();
     let selTooltipPortal = null;
@@ -159,7 +161,7 @@
         window.addEventListener("scroll", handleViewportChange, true);
         window.addEventListener("resize", handleViewportChange);
 
-        const controller = Object.freeze({
+        const controller = selFreeze({
             id,
             root: host,
             hide: selTooltipHide,
@@ -192,7 +194,7 @@
         return controller;
     }
 
-    window.selTooltip = Object.freeze({
+    window.sel.register("components.tooltip", {
         attach: selTooltipAttach,
         get: (id) => selTooltipInstances.get(String(id)) || null,
         destroy: (id) => selTooltipInstances.get(String(id))?.destroy() ?? false

@@ -72,7 +72,8 @@ SEL_UI_FORBIDDEN_LEGACY_FONT_TOKENS = (
 SEL_UI_COMPONENT_TYPES = {"interactive", "layout", "presentation", "registry"}
 SEL_UI_REQUIRED_GOVERNANCE_CHECKS = {
     "source-boundary",
-    "public-api",
+    "namespaced-public-api",
+    "kernel-first",
     "theme-contract",
     "dependency-order",
     "application-private-control",
@@ -80,6 +81,112 @@ SEL_UI_REQUIRED_GOVERNANCE_CHECKS = {
 MANAGED_DATABASE_REGISTRY_RELATIVE = Path(
     "apps/rule-engine/backend/src/main/resources/local"
 )
+
+
+def _strip_javascript_literals_and_comments(source_text: str) -> str:
+    """Preserve JavaScript structure while hiding strings and comments from static scans."""
+    output = list(source_text)
+    index = 0
+    state = "code"
+    quote = ""
+    while index < len(source_text):
+        character = source_text[index]
+        following = source_text[index + 1] if index + 1 < len(source_text) else ""
+        if state == "code" and character == "/" and following == "/":
+            output[index] = output[index + 1] = " "
+            index += 2
+            state = "line-comment"
+            continue
+        if state == "code" and character == "/" and following == "*":
+            output[index] = output[index + 1] = " "
+            index += 2
+            state = "block-comment"
+            continue
+        if state == "code" and character in {"'", '"', "`"}:
+            quote = character
+            output[index] = " "
+            index += 1
+            state = "string"
+            continue
+        if state == "line-comment":
+            if character == "\n":
+                state = "code"
+            else:
+                output[index] = " "
+            index += 1
+            continue
+        if state == "block-comment":
+            if character == "*" and following == "/":
+                output[index] = output[index + 1] = " "
+                index += 2
+                state = "code"
+            else:
+                if character != "\n":
+                    output[index] = " "
+                index += 1
+            continue
+        if state == "string":
+            if character == "\\":
+                output[index] = " "
+                if index + 1 < len(source_text):
+                    if source_text[index + 1] != "\n":
+                        output[index + 1] = " "
+                    index += 2
+                else:
+                    index += 1
+                continue
+            if character == quote:
+                output[index] = " "
+                index += 1
+                state = "code"
+                continue
+            if character != "\n":
+                output[index] = " "
+            index += 1
+            continue
+        index += 1
+    return "".join(output)
+
+
+def has_nested_sel_freeze(source_text: str) -> bool:
+    """Return true when one selFreeze call is syntactically inside another call."""
+    structural_text = _strip_javascript_literals_and_comments(source_text)
+    parenthesis_depth = 0
+    active_freeze_depths: list[int] = []
+    index = 0
+    while index < len(structural_text):
+        if structural_text.startswith("selFreeze", index):
+            before = structural_text[index - 1] if index > 0 else ""
+            after_index = index + len("selFreeze")
+            after = structural_text[after_index] if after_index < len(structural_text) else ""
+            if not (before.isalnum() or before in {"_", "$"}) and not (
+                    after.isalnum() or after in {"_", "$"}):
+                open_index = after_index
+                while open_index < len(structural_text) and structural_text[open_index].isspace():
+                    open_index += 1
+                if open_index < len(structural_text) and structural_text[open_index] == "(":
+                    if active_freeze_depths:
+                        return True
+                    parenthesis_depth += 1
+                    active_freeze_depths.append(parenthesis_depth)
+                    index = open_index + 1
+                    continue
+        if structural_text[index] == "(":
+            parenthesis_depth += 1
+        elif structural_text[index] == ")":
+            if active_freeze_depths and active_freeze_depths[-1] == parenthesis_depth:
+                active_freeze_depths.pop()
+            parenthesis_depth = max(0, parenthesis_depth - 1)
+        index += 1
+    return False
+
+
+def document_has_nested_sel_freeze(source_text: str, suffix: str) -> bool:
+    """Scan JavaScript directly and generated Java text blocks with the same boundary rule."""
+    candidates = [source_text] if suffix == ".js" else re.findall(
+        r'"""(.*?)"""', source_text, flags=re.DOTALL
+    )
+    return any(has_nested_sel_freeze(candidate) for candidate in candidates)
 
 
 def audit_sel_ui_typography_governance(project_root: Path) -> list[dict[str, str]]:
@@ -164,15 +271,34 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
         }]
     components = registry.get("components") if isinstance(registry, dict) else None
     policy = registry.get("policy") if isinstance(registry, dict) else None
-    if not isinstance(registry, dict) or registry.get("version") != 1 \
+    kernel = registry.get("kernel") if isinstance(registry, dict) else None
+    if not isinstance(registry, dict) or registry.get("version") != 2 \
             or not isinstance(components, list) \
-            or not isinstance(policy, dict):
+            or not isinstance(policy, dict) \
+            or kernel != {
+                "script": "core/selKernel.js",
+                "publicApi": "sel",
+                "loadOrder": "first",
+            }:
         return [{
             "code": "SEL_UI_COMPONENT_REGISTRY_INVALID",
             "path": registry_relative,
-            "message": "component registry requires version 1, policy, and components",
+            "message": "component registry requires version 2, the SEL kernel, policy, and components",
         }]
     violations: list[dict[str, str]] = []
+    kernel_path = project_root / SEL_UI_SOURCE_ROOT_RELATIVE / "core/selKernel.js"
+    kernel_source = kernel_path.read_text(encoding="utf-8") if kernel_path.is_file() else ""
+    for kernel_contract in (
+            "function selFreeze(", "new WeakSet()", "Array.isArray(value)",
+            "function selRegister(", "function selRequire(",
+            'selRegister("core.freeze", selFreeze)',
+            'Object.defineProperty(global, "sel"'):
+        if kernel_contract not in kernel_source:
+            violations.append({
+                "code": "SEL_UI_KERNEL_CONTRACT_MISSING",
+                "path": str(kernel_path.relative_to(project_root)),
+                "message": f"selKernel.js requires {kernel_contract}",
+            })
     expected_policy = {
         "creationMode": "register-before-implementation",
         "legacyCompatibility": "forbidden",
@@ -252,18 +378,20 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 "message": f"{component_id} requires string arrays for scripts, styles, and dependencies",
             })
             continue
-        global_api = component.get("globalApi")
-        if scripts and global_api != component_id:
+        public_api = component.get("publicApi")
+        component_api_name = component_id[3:4].lower() + component_id[4:]
+        expected_public_api = f"sel.components.{component_api_name}"
+        if scripts and public_api != expected_public_api:
             violations.append({
                 "code": "SEL_UI_COMPONENT_PUBLIC_API_INVALID",
                 "path": registry_relative,
-                "message": f"{component_id}.globalApi must equal its registered id",
+                "message": f"{component_id}.publicApi must be {expected_public_api}",
             })
-        if not scripts and global_api is not None:
+        if not scripts and public_api is not None:
             violations.append({
                 "code": "SEL_UI_COMPONENT_PUBLIC_API_INVALID",
                 "path": registry_relative,
-                "message": f"style-only component {component_id} cannot declare a global API",
+                "message": f"style-only component {component_id} cannot declare a public API",
             })
         for source_name in scripts + styles:
             if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*(?:\.js|\.css)", source_name):
@@ -290,11 +418,8 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 })
                 continue
             source_text = source_path.read_text(encoding="utf-8")
-            if source_path.suffix == ".js" and isinstance(global_api, str) \
-                    and not re.search(
-                        rf"\b(?:window|global)\s*\.\s*{re.escape(global_api)}\s*=",
-                        source_text,
-                    ):
+            if source_path.suffix == ".js" and isinstance(public_api, str) \
+                    and f'window.sel.register("components.{component_api_name}"' not in source_text:
                 violations.append({
                     "code": "SEL_UI_COMPONENT_PUBLIC_API_MISSING",
                     "path": str(source_path.relative_to(project_root)),
@@ -358,7 +483,9 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 for script in component.get("scripts", [])
                 if (component_root / component["directory"] / script).is_file()
             )
-            if f"window.{dependency}" not in component_source:
+            dependency_public_api = component_entries[dependency].get("publicApi")
+            if not isinstance(dependency_public_api, str) \
+                    or f"window.{dependency_public_api}" not in component_source:
                 violations.append({
                     "code": "SEL_UI_COMPONENT_DEPENDENCY_CALL_MISSING",
                     "path": str((component_root / component["directory"]).relative_to(project_root)),
@@ -394,7 +521,7 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 for script in consumer.get("scripts", [])
                 if (component_root / consumer["directory"] / script).is_file()
             )
-            if "window.selTooltip.attach" not in consumer_source \
+            if "window.sel.components.tooltip.attach" not in consumer_source \
                     or "dataset.selTooltip" not in consumer_source:
                 violations.append({
                     "code": "SEL_UI_TOOLTIP_CONSUMER_MISSING",
@@ -465,6 +592,11 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
             for script in grid_entry.get("scripts", [])
             if (grid_directory / script).is_file()
         )
+        grid_style = "\n".join(
+            (grid_directory / style).read_text(encoding="utf-8")
+            for style in grid_entry.get("styles", [])
+            if (grid_directory / style).is_file()
+        )
         page_editor_required = {
             "registerPageControl: selPersonalizationRegisterPageControl",
             "updatePageControl: selPersonalizationUpdatePageControl",
@@ -511,6 +643,14 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 "code": "SEL_UI_GRID_PAGE_EDITOR_ADAPTER_MISSING",
                 "path": str(grid_directory.relative_to(project_root)),
                 "message": f"selGrid page editor adapter is missing {missing_contract}",
+            })
+        # 表头竖向分隔线属于列的右边界，必须覆盖第一列并仅排除最后一列。
+        if ".selgrid-table th:not(:last-child)::after" not in grid_style \
+                or ".selgrid-table th:not(:first-child)::after" in grid_style:
+            violations.append({
+                "code": "SEL_UI_GRID_HEADER_SEPARATOR_BOUNDARY_INVALID",
+                "path": str(grid_directory.relative_to(project_root)),
+                "message": "selGrid header separators must cover every column except the last column",
             })
 
     # selPanel 横向工具栏栏目默认使用同一分隔线契约；应用只传宽度，不得复制公共指针生命周期。
@@ -580,6 +720,84 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 "path": relative_source,
                 "message": "application code cannot publish a private sel<Component> control",
             })
+        if application_file.suffix == ".js" and re.search(
+                r"\bwindow\s*\.\s*sel[A-Z][A-Za-z0-9]*", source_text):
+            violations.append({
+                "code": "SEL_UI_LEGACY_FLAT_API_FORBIDDEN",
+                "path": relative_source,
+                "message": "application code must consume the namespaced window.sel API",
+            })
+        if application_file.suffix == ".js" and "Object.freeze" in source_text:
+            violations.append({
+                "code": "SEL_UI_NATIVE_FREEZE_OUTSIDE_KERNEL",
+                "path": relative_source,
+                "message": "application code must use sel.core.freeze",
+            })
+        # 业务应用统一通过 sel.core.element 创建安全节点，避免各页面重复文本和属性写入边界。
+        if application_file.suffix == ".js" and re.search(
+                r"\bdocument\s*\.\s*createElement\s*\(", source_text):
+            violations.append({
+                "code": "SEL_UI_APPLICATION_NATIVE_DOM_CREATION_FORBIDDEN",
+                "path": relative_source,
+                "message": "application code must create DOM nodes through sel.core.element",
+            })
+        if application_file.suffix == ".js" and has_nested_sel_freeze(source_text):
+            violations.append({
+                "code": "SEL_UI_NESTED_FREEZE_FORBIDDEN",
+                "path": relative_source,
+                "message": "selFreeze must be called once at the complete immutable boundary",
+            })
+        if application_file.suffix == ".js" and "window.sel.require(" in source_text:
+            header = "\n".join(source_text.splitlines()[:30])
+            if "SEL UI" not in header or not re.search(r"[\u4e00-\u9fff]", header):
+                violations.append({
+                    "code": "SEL_UI_APPLICATION_COMPONENT_DOCUMENTATION_MISSING",
+                    "path": relative_source,
+                    "message": "application header must explain SEL UI component purposes in Chinese",
+                })
+            # 应用入口和公共能力别名保持统一，避免每个项目重新发明一套启动与 API 命名。
+            if not re.search(r"\(\s*function\s+app\s*\(", source_text):
+                violations.append({
+                    "code": "SEL_UI_APPLICATION_ENTRY_NAMING_INVALID",
+                    "path": relative_source,
+                    "message": "application JavaScript entry must be named app",
+                })
+            if not re.search(r"\bconst\s+selBase\s*=\s*window\.sel\.core\s*;", source_text):
+                violations.append({
+                    "code": "SEL_UI_APPLICATION_BASE_ALIAS_MISSING",
+                    "path": relative_source,
+                    "message": "application JavaScript must alias window.sel.core as selBase",
+                })
+            if '"net.ajax"' in source_text and not re.search(
+                    r"\bajax\s*:\s*selAjax\b", source_text):
+                violations.append({
+                    "code": "SEL_UI_APPLICATION_AJAX_ALIAS_MISSING",
+                    "path": relative_source,
+                    "message": "application JavaScript must alias window.sel.net.ajax as selAjax",
+                })
+            # 具名业务函数前必须有中文契约或中文业务注释，空行不会打断最近注释识别。
+            source_lines = source_text.splitlines()
+            for line_number, line in enumerate(source_lines, start=1):
+                if re.match(r"\s*(?:async\s+)?function\s+[A-Za-z_$]", line):
+                    comment_index = line_number - 2
+                    while comment_index >= 0 and not source_lines[comment_index].strip():
+                        comment_index -= 1
+                    comment_lines: list[str] = []
+                    if comment_index >= 0 and re.match(r"\s*//", source_lines[comment_index]):
+                        comment_lines.append(source_lines[comment_index])
+                    elif comment_index >= 0 and "*/" in source_lines[comment_index]:
+                        while comment_index >= 0:
+                            comment_lines.append(source_lines[comment_index])
+                            if "/*" in source_lines[comment_index]:
+                                break
+                            comment_index -= 1
+                    comment_text = "\n".join(reversed(comment_lines))
+                    if not comment_text or not re.search(r"[\u4e00-\u9fff]", comment_text):
+                        violations.append({
+                            "code": "SEL_UI_APPLICATION_FUNCTION_COMMENT_MISSING",
+                            "path": relative_source,
+                            "message": f"business function at line {line_number} requires a preceding Chinese contract comment",
+                        })
         if application_file.suffix == ".js" and "document.body.appendChild" in source_text:
             violations.append({
                 "code": "SEL_UI_APPLICATION_PRIVATE_BODY_PORTAL",
@@ -623,6 +841,24 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
         if not document.is_file() or document.suffix not in {".html", ".java"}:
             continue
         document_text = document.read_text(encoding="utf-8")
+        if document.suffix == ".java" and document_has_nested_sel_freeze(document_text, ".java"):
+            violations.append({
+                "code": "SEL_UI_NESTED_FREEZE_FORBIDDEN",
+                "path": str(document.relative_to(project_root)),
+                "message": "generated JavaScript must freeze each complete immutable boundary once",
+            })
+        sel_script_sources = re.findall(
+            r'<script[^>]+src=["\'](/sel/(?:core|theme|components)/[^"\']+\.js)[^"\']*["\']',
+            document_text,
+        )
+        if sel_script_sources and (
+                "/sel/core/selKernel.js" not in sel_script_sources
+                or sel_script_sources[0] != "/sel/core/selKernel.js"):
+            violations.append({
+                "code": "SEL_UI_KERNEL_LOAD_ORDER_INVALID",
+                "path": str(document.relative_to(project_root)),
+                "message": "selKernel.js must load before every other SEL script",
+            })
         for component_id, component in component_entries.items():
             own_resources_by_kind = {
                 "scripts": [
@@ -676,6 +912,30 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                             f"missing={missing_resources}, late={late_resources}"
                         ),
                     })
+    source_root = project_root / SEL_UI_SOURCE_ROOT_RELATIVE
+    kernel_path = source_root / "core/selKernel.js"
+    for shared_script in sorted(source_root.rglob("*.js")):
+        if shared_script == kernel_path:
+            continue
+        shared_source = shared_script.read_text(encoding="utf-8")
+        if "Object.freeze" in shared_source:
+            violations.append({
+                "code": "SEL_UI_NATIVE_FREEZE_OUTSIDE_KERNEL",
+                "path": str(shared_script.relative_to(project_root)),
+                "message": "shared code must use sel.core.freeze",
+            })
+        if has_nested_sel_freeze(shared_source):
+            violations.append({
+                "code": "SEL_UI_NESTED_FREEZE_FORBIDDEN",
+                "path": str(shared_script.relative_to(project_root)),
+                "message": "shared code must freeze each complete immutable boundary once",
+            })
+        if re.search(r"\b(?:window|global)\s*\.\s*sel[A-Z][A-Za-z0-9]*", shared_source):
+            violations.append({
+                "code": "SEL_UI_LEGACY_FLAT_API_FORBIDDEN",
+                "path": str(shared_script.relative_to(project_root)),
+                "message": "shared code must use the namespaced window.sel API",
+            })
     return violations
 
 

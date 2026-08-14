@@ -167,6 +167,7 @@ class MdaProjectGeneratorServiceImplTest {
         String generatedStyle = Files.readString(project.resolve(
                 "backend/src/main/resources/static/japan/japan.css"));
         assertThat(generatedHtml)
+                .contains("/sel/core/selKernel.js")
                 .contains("/sel/theme/runtime/selThemeManager.js")
                 .contains("/sel/components/panel/selPanel.js")
                 .contains("/sel/components/context-menu/selContextMenu.js")
@@ -183,14 +184,21 @@ class MdaProjectGeneratorServiceImplTest {
                     "/sel/components/tree/selTree.js"
                 );
         assertThat(generatedScript)
-                .contains("window.selPanel.create")
-                .contains("\"selContextMenu\"")
-                .contains("\"selTooltip\"")
-                .contains("window.selTree.mount")
-                .contains("window.selGrid.mount")
-                .contains("window.selWindow.mount")
-                .contains("window.selConfirmDialog.mount")
+                .contains("window.sel.require([")
+                .contains("\"components.contextMenu\"")
+                .contains("\"components.tooltip\"")
+                .contains("panel.create")
+                .contains("tree.mount")
+                .contains("grid.mount")
+                .contains("windowComponent.mount")
+                .contains("confirmDialog.mount")
                 .contains("id: \"region-root\"")
+                .contains("const layout = selFreeze({")
+                .contains("return selFreeze({")
+                .contains("function editorOptions(editing)")
+                .doesNotContain("top: selFreeze(")
+                .doesNotContain("grid: selFreeze(")
+                .doesNotContain("rows: selFreeze(")
                 .doesNotContain("/api/reference-data/")
                 .doesNotContain("window.confirm");
         assertThat(generatedStyle)

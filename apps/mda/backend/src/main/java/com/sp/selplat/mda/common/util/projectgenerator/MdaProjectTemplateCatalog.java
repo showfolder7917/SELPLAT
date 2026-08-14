@@ -788,6 +788,7 @@ public final class MdaProjectTemplateCatalog {
                     <main class="@PROJECT@-page-stage" data-@PROJECT@-app
                           aria-label="@PROJECT_CLASS@ @TABLE_CLASS@ 管理"></main>
 
+                    <script src="/sel/core/selKernel.js"></script>
                     <script src="/sel/core/selBaseRuntime.js"></script>
                     <script src="/sel/core/selAjax.js"></script>
                     <script src="/sel/theme/runtime/selThemeRegistry.js"></script>
@@ -816,7 +817,7 @@ public final class MdaProjectTemplateCatalog {
 
     /**
      * 生成页面真实接口装配脚本，并在挂载前检查所有登记的公共组件依赖。
-     * @return 页面 JavaScript 模板；例如缺少 {@code selContextMenu} 时抛出“缺少 SEL 公共组件”。
+     * @return 页面 JavaScript 模板；例如缺少 {@code sel.components.contextMenu} 时抛出“页面缺少 SEL UI 能力”。
      *     本方法只返回字符串，不执行浏览器脚本或业务接口调用。
      */
     private static String pageJs() {
@@ -824,27 +825,29 @@ public final class MdaProjectTemplateCatalog {
                 /*
                  * @PAGE@.js：用 SEL 公共控件装配 @PROJECT_CLASS@ @TABLE_CLASS@。
                  * 应用层只维护接口、标准 payload 和业务事件，不创建控件内部 DOM。
+                 * panel/search/tree/grid 负责工作台，windowComponent 负责编辑，confirmDialog 负责删除确认。
                  */
                 (function @JS_SCOPE@Page() {
                     "use strict";
 
-                    const required = [
-                        "selBaseRuntime", "selPanel", "selSearch", "selContextMenu", "selTooltip", "selTree",
-                        "selDropdownMenu", "selGrid", "selWindow",
-                        "selConfirmDialog", "selPageBackground",
-                        "selPersonalization", "selThemeManager"
-                    ];
-                    const missing = required.filter((name) => !window[name]);
-                    if (missing.length > 0) {
-                        throw new Error("缺少 SEL 公共组件：" + missing.join("、"));
-                    }
+                    window.sel.require([
+                        "core.query", "components.panel", "components.search", "components.contextMenu",
+                        "components.tooltip", "components.tree", "components.dropdownMenu", "components.grid",
+                        "components.window", "components.confirmDialog", "components.pageBackground",
+                        "components.personalization"
+                    ]);
+                    const {freeze: selFreeze, query} = window.sel.core;
+                    const {
+                        panel, search, tree, dropdownMenu: dropdown, grid, window: windowComponent,
+                        confirmDialog, pageBackground, personalization
+                    } = window.sel.components;
 
-                    const root = window.selBaseRuntime.query(
-                            "[data-@PROJECT@-app]");
-                    const backgroundHost = window.selBaseRuntime.query(
-                            "[data-sel-page-background-host]");
-                    const personalizationHost = window.selBaseRuntime.query(
-                            "[data-sel-personalization-host]");
+                    // selFreeze 只在 layout、payload、editorOptions 这些完整只读边界调用一次；
+                    // 边界内部的数组、字段和树节点由深冻结自动递归处理，不再逐层重复包装。
+
+                    const root = query("[data-@PROJECT@-app]");
+                    const backgroundHost = query("[data-sel-page-background-host]");
+                    const personalizationHost = query("[data-sel-personalization-host]");
                     const api = "/api/@PROJECT@/@TABLE@/";
                     const gridId = "@ACTUAL_TABLE@Grid";
                     const editorId = "@ACTUAL_TABLE@Editor";
@@ -857,32 +860,32 @@ public final class MdaProjectTemplateCatalog {
                         confirm: null
                     };
 
-                    const layout = Object.freeze({
-                        top: Object.freeze([
-                            Object.freeze({component: "title", payload: "title"}),
-                            Object.freeze({component: "toolbar", children: Object.freeze([
-                                Object.freeze({component: "selSearch", payload: "search"}),
-                                Object.freeze({component: "filterReset", payload: "title"})
-                            ])})
-                        ]),
-                        left: Object.freeze([
-                            Object.freeze({component: "selTree", payload: "tree"})
-                        ]),
-                        center: Object.freeze([
-                            Object.freeze({component: "selGrid", payload: "$aggregate"})
-                        ]),
-                        right: Object.freeze([]),
-                        bottom: Object.freeze([
-                            Object.freeze({component: "footer", children: Object.freeze([
-                                Object.freeze({component: "gridSummary", payload: "pagination",
-                                    children: Object.freeze([Object.freeze({
+                    const layout = selFreeze({
+                        top: [
+                            {component: "title", payload: "title"},
+                            {component: "toolbar", children: [
+                                {component: "selSearch", payload: "search"},
+                                {component: "filterReset", payload: "title"}
+                            ]}
+                        ],
+                        left: [
+                            {component: "selTree", payload: "tree"}
+                        ],
+                        center: [
+                            {component: "selGrid", payload: "$aggregate"}
+                        ],
+                        right: [],
+                        bottom: [
+                            {component: "footer", children: [
+                                {component: "gridSummary", payload: "pagination",
+                                    children: [{
                                         component: "selDropdownMenu", slot: "pageSize",
                                         payload: "select.pageSize"
-                                    })])}),
-                                Object.freeze({component: "pagination", payload: "pagination"}),
-                                Object.freeze({component: "feedback", payload: "title.messages"})
-                            ])})
-                        ])
+                                    }]},
+                                {component: "pagination", payload: "pagination"},
+                                {component: "feedback", payload: "title.messages"}
+                            ]}
+                        ]
                     });
 
                     async function request(url, options = {}) {
@@ -910,137 +913,137 @@ public final class MdaProjectTemplateCatalog {
                     }
 
                     function treeItems(items) {
-                        return items.map((item) => Object.freeze({
+                        return items.map((item) => ({
                             id: String(item.id || item.value || "root"),
                             label: String(item.label || "全部@TABLE_CLASS@"),
                             icon: "ri-folder-3-line",
                             count: state.records.length,
-                            filter: Object.freeze({}),
+                            filter: {},
                             children: Array.isArray(item.children)
-                                ? Object.freeze(treeItems(item.children)) : undefined
+                                ? treeItems(item.children) : undefined
                         }));
                     }
 
                     function payload() {
                         const normalizedTree = treeItems(state.treeItems);
-                        return Object.freeze({
-                            grid: Object.freeze({mode: "records", idField: "id",
+                        return selFreeze({
+                            grid: {mode: "records", idField: "id",
                                 statusField: "status",
-                                searchFields: Object.freeze(["id", "labelZh", "labelJa", "labelEn"])}),
-                            data: Object.freeze({items: Object.freeze([...state.records]),
-                                selectedIds: Object.freeze([])}),
-                            column: Object.freeze({gridId,
+                                searchFields: ["id", "labelZh", "labelJa", "labelEn"]},
+                            data: {items: [...state.records],
+                                selectedIds: []},
+                            column: {gridId,
                                 ariaLabel: "@TABLE_CLASS@ 表格",
                                 emptyText: "暂无@TABLE_CLASS@记录",
-                                items: Object.freeze([
-                                    Object.freeze({id: "id", field: "id", label: "ID",
-                                        renderer: "text", width: "7%"}),
-                                    Object.freeze({id: "labelZh", field: "labelZh", label: "中文",
-                                        renderer: "text", width: "15%"}),
-                                    Object.freeze({id: "labelJa", field: "labelJa", label: "日文",
-                                        renderer: "text", width: "15%"}),
-                                    Object.freeze({id: "labelEn", field: "labelEn", label: "英文",
-                                        renderer: "text", width: "15%"}),
-                                    Object.freeze({id: "tenantId", field: "tenantId", label: "租户",
-                                        renderer: "text", width: "8%"}),
-                                    Object.freeze({id: "sortnum", field: "sortnum", label: "排序",
-                                        renderer: "text", width: "7%"}),
-                                    Object.freeze({id: "status", field: "status", label: "状态",
-                                        renderer: "badge", labelSource: "status", width: "8%"}),
-                                    Object.freeze({id: "updatedAt", field: "updatedAt",
+                                items: [
+                                    {id: "id", field: "id", label: "ID",
+                                        renderer: "text", width: "7%"},
+                                    {id: "labelZh", field: "labelZh", label: "中文",
+                                        renderer: "text", width: "15%"},
+                                    {id: "labelJa", field: "labelJa", label: "日文",
+                                        renderer: "text", width: "15%"},
+                                    {id: "labelEn", field: "labelEn", label: "英文",
+                                        renderer: "text", width: "15%"},
+                                    {id: "tenantId", field: "tenantId", label: "租户",
+                                        renderer: "text", width: "8%"},
+                                    {id: "sortnum", field: "sortnum", label: "排序",
+                                        renderer: "text", width: "7%"},
+                                    {id: "status", field: "status", label: "状态",
+                                        renderer: "badge", labelSource: "status", width: "8%"},
+                                    {id: "updatedAt", field: "updatedAt",
                                         label: "更新时间", renderer: "time", nowrap: true,
-                                        width: "15%"}),
-                                    Object.freeze({id: "actions", field: "id", label: "操作",
-                                        renderer: "actions", width: "10%", actions: Object.freeze([
-                                            Object.freeze({id: "edit", label: "编辑记录",
-                                                icon: "ri-edit-line"}),
-                                            Object.freeze({id: "delete", label: "删除记录",
-                                                icon: "ri-delete-bin-6-line", tone: "danger"})
-                                        ])})
-                                ])}),
-                            title: Object.freeze({title: "@PROJECT_CLASS@ · @TABLE_CLASS@",
+                                        width: "15%"},
+                                    {id: "actions", field: "id", label: "操作",
+                                        renderer: "actions", width: "10%", actions: [
+                                            {id: "edit", label: "编辑记录",
+                                                icon: "ri-edit-line"},
+                                            {id: "delete", label: "删除记录",
+                                                icon: "ri-delete-bin-6-line", tone: "danger"}
+                                        ]}
+                                ]},
+                            title: {title: "@PROJECT_CLASS@ · @TABLE_CLASS@",
                                 subtitle: "SELPLAT GENERATED APPLICATION",
                                 description: "左侧引用数据树，右侧业务表格",
                                 ariaLabel: "@TABLE_CLASS@ 管理面板",
-                                ariaLabels: Object.freeze({statusTabs: "状态统计",
+                                ariaLabels: {statusTabs: "状态统计",
                                     headerActions: "快捷操作", toolbar: "筛选工具栏",
                                     sidebar: "引用数据树", content: "业务列表",
-                                    board: "业务表格", pagination: "业务分页"}),
-                                statusTabs: Object.freeze([
-                                    Object.freeze({value: "", label: "全部",
-                                        count: state.records.length})
-                                ]),
-                                actions: Object.freeze([
-                                    Object.freeze({id: "filter", label: "搜索",
-                                        icon: "ri-search-line"}),
-                                    Object.freeze({id: "new", label: "新增记录",
-                                        icon: "ri-add-line", primary: true})
-                                ]),
+                                    board: "业务表格", pagination: "业务分页"},
+                                statusTabs: [
+                                    {value: "", label: "全部",
+                                        count: state.records.length}
+                                ],
+                                actions: [
+                                    {id: "filter", label: "搜索",
+                                        icon: "ri-search-line"},
+                                    {id: "new", label: "新增记录",
+                                        icon: "ri-add-line", primary: true}
+                                ],
                                 resetLabel: "重置",
-                                messages: Object.freeze({selectProject: "选择记录",
+                                messages: {selectProject: "选择记录",
                                     viewProject: "查看记录", editProject: "编辑记录",
                                     moreActions: "更多操作", filtersReset: "筛选已重置",
                                     treePrefix: "目录", expandLeftRegion: "展开目录",
                                     collapseLeftRegion: "收起目录",
                                     filterActivated: "搜索框已激活",
                                     newOpened: "已打开新增窗口",
-                                    exportPreparing: "操作已触发", movePrefix: "移动到"})}),
-                            search: Object.freeze({gridId, label: "搜索记录",
+                                    exportPreparing: "操作已触发", movePrefix: "移动到"}},
+                            search: {gridId, label: "搜索记录",
                                 placeholder: "ID 或名称…", buttonLabel: "查询",
                                 clearLabel: "清空搜索条件", icon: "ri-search-line",
                                 buttonIcon: "ri-search-line", clearIcon: "ri-close-line",
                                 defaultValue: "", clearable: true,
                                 submitOnEnter: true, submitOnClear: true,
-                                allowEmpty: true, trim: true}),
-                            tree: Object.freeze({gridId, ariaLabel: "@TABLE_CLASS@ 引用数据树",
+                                allowEmpty: true, trim: true},
+                            tree: {gridId, ariaLabel: "@TABLE_CLASS@ 引用数据树",
                                 heading: "@TABLE_CLASS@ 目录",
                                 summary: state.records.length + " 条记录",
                                 selectedId: normalizedTree[0]?.id || "root",
-                                items: Object.freeze(normalizedTree)}),
-                            menu: Object.freeze({gridId, ariaLabel: "记录操作"}),
-                            pagination: Object.freeze({gridId, currentPage: 1, pageSize: 20,
+                                items: normalizedTree},
+                            menu: {gridId, ariaLabel: "记录操作"},
+                            pagination: {gridId, currentPage: 1, pageSize: 20,
                                 totalCount: state.records.length,
                                 summaryAll: "共 {total} 条",
                                 summaryFiltered: "当前 {visible} 条 · 共 {total} 条",
                                 previousLabel: "上一页", nextLabel: "下一页",
                                 pageChangedMessage: "已切换到第 {page} 页",
-                                pageSizeChangedMessage: "每页显示 {size} 条"}),
-                            select: Object.freeze({pageSize: Object.freeze({gridId,
+                                pageSizeChangedMessage: "每页显示 {size} 条"},
+                            select: {pageSize: {gridId,
                                 role: "page-size", label: "每页显示条数",
                                 ariaLabel: "每页显示条数",
                                 currentTemplate: "{label}，当前：{value}",
                                 menuTitle: "选择每页显示条数", scrollAfter: 4,
-                                options: Object.freeze([
-                                    Object.freeze({value: "10", label: "10 条/页",
-                                        icon: "ri-list-check-3"}),
-                                    Object.freeze({value: "20", label: "20 条/页",
-                                        icon: "ri-list-check-3", selected: true}),
-                                    Object.freeze({value: "50", label: "50 条/页",
-                                        icon: "ri-list-check-3"})
-                                ])})})
+                                options: [
+                                    {value: "10", label: "10 条/页",
+                                        icon: "ri-list-check-3"},
+                                    {value: "20", label: "20 条/页",
+                                        icon: "ri-list-check-3", selected: true},
+                                    {value: "50", label: "50 条/页",
+                                        icon: "ri-list-check-3"}
+                                ]}}
                         });
                     }
 
                     function editorOptions(editing) {
-                        return Object.freeze({id: editorId,
+                        return selFreeze({id: editorId,
                             title: editing ? "编辑@TABLE_CLASS@" : "新增@TABLE_CLASS@",
                             subtitle: "租户与操作员由服务端写入，页面只维护业务字段",
                             closeLabel: "关闭编辑窗口", cancelLabel: "取消",
                             submitLabel: editing ? "保存修改" : "保存记录",
                             validationMessage: "请完成全部必填字段", autoSuccess: false,
-                            rows: Object.freeze([
-                                Object.freeze([Object.freeze({name: "labelZh", label: "中文标签",
+                            rows: [
+                                [{name: "labelZh", label: "中文标签",
                                     type: "text", icon: "ri-translate-2", required: true,
-                                    maxLength: 200})]),
-                                Object.freeze([
-                                    Object.freeze({name: "labelJa", label: "日文标签",
-                                        type: "text", icon: "ri-translate-2", maxLength: 200}),
-                                    Object.freeze({name: "labelEn", label: "英文标签",
-                                        type: "text", icon: "ri-translate-2", maxLength: 200})
-                                ]),
-                                Object.freeze([Object.freeze({name: "sortnum", label: "排序",
-                                    type: "number", icon: "ri-sort-number-asc", value: "0"})])
-                            ])});
+                                    maxLength: 200}],
+                                [
+                                    {name: "labelJa", label: "日文标签",
+                                        type: "text", icon: "ri-translate-2", maxLength: 200},
+                                    {name: "labelEn", label: "英文标签",
+                                        type: "text", icon: "ri-translate-2", maxLength: 200}
+                                ],
+                                [{name: "sortnum", label: "排序",
+                                    type: "number", icon: "ri-sort-number-asc", value: "0"}]
+                            ]});
                     }
 
                     function openEditor(item = null) {
@@ -1093,7 +1096,7 @@ public final class MdaProjectTemplateCatalog {
                         state.records = await loadRecords();
                         state.treeItems = loadTree();
                         const nextPayload = payload();
-                        window.selPanel.setLocale(window.selPanel.get(gridId),
+                        panel.setLocale(panel.get(gridId),
                                 {view: nextPayload});
                         state.grid.setLocale(nextPayload);
                     }
@@ -1102,24 +1105,24 @@ public final class MdaProjectTemplateCatalog {
                         state.records = await loadRecords();
                         state.treeItems = loadTree();
                         const view = payload();
-                        const panel = window.selPanel.create(root, {gridId,
+                        const panel = panel.create(root, {gridId,
                             sourceId: gridId, entity: "@ACTUAL_TABLE@", view: "list",
                             layout: "single", structure: layout,
                             ariaLabel: view.title.ariaLabel});
-                        if (!panel || !window.selPanel.mount(panel, {view})) {
+                        if (!panel || !panel.mount(panel, {view})) {
                             throw new Error("SEL 公共面板挂载失败。");
                         }
-                        if (!window.selSearch.mount(panel, view.search)
-                                || !window.selTree.mount(panel, view.tree)) {
+                        if (!search.mount(panel, view.search)
+                                || !tree.mount(panel, view.tree)) {
                             throw new Error("SEL 搜索或树控件挂载失败。");
                         }
-                        window.selDropdownMenu.mountAll(panel);
-                        state.grid = window.selGrid.mount(panel, view);
+                        dropdown.mountAll(panel);
+                        state.grid = grid.mount(panel, view);
                         const messages = await request(
                                 "/sel/components/window/i18n/zh-CN.json");
-                        state.editor = window.selWindow.mount(root,
+                        state.editor = windowComponent.mount(root,
                                 {messages, ...editorOptions(false)});
-                        state.confirm = window.selConfirmDialog.mount(root,
+                        state.confirm = confirmDialog.mount(root,
                                 {id: "@ACTUAL_TABLE@DeleteConfirm"});
                         if (!state.grid || !state.editor || !state.confirm) {
                             throw new Error("SEL 表格或窗口控件挂载失败。");
@@ -1142,10 +1145,10 @@ public final class MdaProjectTemplateCatalog {
                         console.error("@TABLE_CLASS@ 页面操作失败。", error);
                     }
 
-                    const background = window.selPageBackground.mount(backgroundHost,
-                            {defaults: Object.freeze({theme: "solid-dark", overlay: 0,
-                                brightness: 100, blur: 0})});
-                    if (!background || !window.selPersonalization.mount(
+                    const background = pageBackground.mount(backgroundHost,
+                            {defaults: {theme: "solid-dark", overlay: 0,
+                                brightness: 100, blur: 0}});
+                    if (!background || !personalization.mount(
                             personalizationHost, {backgroundController: background})) {
                         throw new Error("SEL 主题个性化控件挂载失败。");
                     }

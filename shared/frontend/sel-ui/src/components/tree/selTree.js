@@ -2,10 +2,12 @@
  * selTree.js：通用树形导航多实例基础控件。
  * 负责接收调用方传入的树数据、创建独立树控制器，并把选择事件限制在所属宿主实例内部。
  * 责任边界：本文件不请求接口、不读取 具体应用 数据，也不自行扫描并初始化业务模块。
- * 模块级标识统一使用 selTree 前缀，公开注册表为 window.selTree。
+ * 模块级标识统一使用 selTree 前缀，公开注册表为 window.sel.components.tree。
  */
 (function selTreeInitializeRegistry() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 注册表以业务表格实例名保存树控制器，禁止不同表格共享选择状态。
     const selTreeInstances = new Map();
@@ -60,12 +62,12 @@
             return null;
         }
         // 树节点右键动作必须交给已登记的公共菜单；依赖缺失时拒绝建立残缺实例。
-        if (typeof window.selContextMenu?.mount !== "function") {
+        if (typeof window.sel.components.contextMenu?.mount !== "function") {
             console.error("selTree.mount：缺少已登记的 selContextMenu 公共控件。");
             return null;
         }
         // 截断文字提示必须由已登记的公共控件统一提供，依赖缺失时拒绝建立残缺实例。
-        if (typeof window.selTooltip?.attach !== "function") {
+        if (typeof window.sel.components.tooltip?.attach !== "function") {
             console.error("selTree.mount：缺少已登记的 selTooltip 公共控件。");
             return null;
         }
@@ -82,7 +84,7 @@
             contextMenuLabelTemplate: selTreeInputData.contextMenuLabelTemplate || "{label}操作"
         };
         // 公共菜单负责门户、边界定位、主题、焦点和键盘生命周期，树只保存当前业务节点。
-        const contextMenu = window.selContextMenu.mount(gridRoot, {
+        const contextMenu = window.sel.components.contextMenu.mount(gridRoot, {
             id: `${gridId}::tree-context-menu`,
             ariaLabel: "树节点操作"
         });
@@ -92,7 +94,7 @@
         }
         let contextItem = null;
         // 默认启用真实截断提示；调用方可用 tree.tooltip=false 显式关闭。
-        const tooltip = window.selTooltip.attach(treeRoot, {
+        const tooltip = window.sel.components.tooltip.attach(treeRoot, {
             id: `${gridId}::tree-tooltip`,
             enabled: selTreeInputData.tooltip !== false
         });
@@ -212,8 +214,8 @@
                 focusFirst,
                 restoreFocusTarget: contextTrigger,
                 ariaLabel: messages.contextMenuLabelTemplate.replaceAll("{label}", item.label),
-                context: Object.freeze({ itemId: item.id }),
-                items: actions.map((action) => Object.freeze({
+                context: { itemId: item.id },
+                items: actions.map((action) => ({
                     id: String(action.id),
                     label: String(action.label),
                     icon: String(action.icon || "ri-circle-line"),
@@ -295,12 +297,12 @@
             contextItem = null;
             gridRoot.dispatchEvent(new CustomEvent("selTree:contextAction", {
                 bubbles: true,
-                detail: Object.freeze({
+                detail: selFreeze({
                     gridId,
                     entity: gridRoot.dataset.selEntity || "",
                     id: item.id,
                     label: item.label,
-                    filter: Object.freeze({ ...(item.filter || {}) }),
+                    filter: { ...(item.filter || {}) },
                     action
                 })
             }));
@@ -337,7 +339,7 @@
         }
 
         // 冻结公开控制器，外部只能通过稳定方法操作当前树实例。
-        return Object.freeze({
+        return selFreeze({
             id: gridId,
             root: treeRoot,
             select,
@@ -350,7 +352,7 @@
     }
 
     // 公开注册表由应用装配层显式挂载实例，基础组件不擅自初始化业务页面。
-    window.selTree = Object.freeze({
+    window.sel.register("components.tree", {
         // mount 接收宿主根和标准树数据；缺失基础控件宿主或重复实例时返回 null。
         mount(gridRoot, treeData) {
             // 非元素宿主无法形成独立组件作用域。

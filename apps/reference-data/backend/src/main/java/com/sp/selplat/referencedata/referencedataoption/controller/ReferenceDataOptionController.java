@@ -48,6 +48,29 @@ public class ReferenceDataOptionController {
     }
 
     /**
+     * 按页面控件唯一坐标查询数据库绑定的下拉选项。
+     *
+     * @param pageProjectCode 控件所在项目编码，例如 {@code "cms"}
+     * @param controlId 页面内稳定控件 ID，例如 {@code "selDropdownArticleStatusId"}
+     * @param pagePath 控件所在页面路径，例如 {@code "/cms/article.html"}
+     * @param parameters 查询参数，例如 {@code {"locale":"zh-CN"}}
+     * @return 选项 JSON，例如 {@code {"success":true,"data":[{"value":"DRAFT"}]}}
+     * 异常或副作用示例：坐标没有启用绑定时由 Service 返回统一业务异常 JSON。
+     */
+    @GetMapping(
+            value = "/pages/{pageProjectCode}/controls/{controlId}/options",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public String controlOptions(
+            @PathVariable("pageProjectCode") String pageProjectCode,
+            @PathVariable("controlId") String controlId,
+            @RequestParam("pagePath") String pagePath,
+            @RequestParam Map<String, String> parameters) {
+        // Controller 只序列化 Service 完整结果，不重新包装选项或绑定坐标。
+        return JsonUtils.toJsonIgnoreNull(
+                service.getOptionsByControl(pageProjectCode, pagePath, controlId, parameters));
+    }
+
+    /**
      * 分页查询下拉选项管理记录。
      *
      * @param queryIn 页码、容量和字段条件，例如 {@code {"pageNo":1,"pageSize":100,"typeId":1}}

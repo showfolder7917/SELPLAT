@@ -6,6 +6,8 @@
 (function selFloatingPanelInitializeRegistry() {
     "use strict";
 
+    const selFreeze = window.sel.core.freeze;
+
     // WeakMap 以宿主元素隔离同页多个浮动面板，宿主释放后不保留全局引用。
     const selFloatingPanelControllers = new WeakMap();
 
@@ -310,7 +312,7 @@
         document.addEventListener("pointerdown", selFloatingPanelHandleDocumentPointer);
         document.addEventListener("keydown", selFloatingPanelHandleDocumentKey);
 
-        const selFloatingPanelController = Object.freeze({
+        const selFloatingPanelController = {
             id: selFloatingPanelId,
             root: selFloatingPanelControl,
             trigger: selFloatingPanelTrigger,
@@ -318,7 +320,7 @@
             body: selFloatingPanelBody,
             resetSize: selFloatingPanelResetSize,
             setSize: (selFloatingPanelSize = {}) => selFloatingPanelApplySize(Number(selFloatingPanelSize.width), Number(selFloatingPanelSize.height)),
-            getSize: () => Object.freeze({
+            getSize: () => selFreeze({
                 width: selFloatingPanelPanel.getBoundingClientRect().width,
                 height: selFloatingPanelPanel.getBoundingClientRect().height,
                 customized: Boolean(selFloatingPanelPanel.style.width || selFloatingPanelPanel.style.height)
@@ -340,12 +342,12 @@
                 selFloatingPanelControl.remove();
                 selFloatingPanelControllers.delete(selFloatingPanelHost);
             }
-        });
+        };
         selFloatingPanelControllers.set(selFloatingPanelHost, selFloatingPanelController);
         return selFloatingPanelController;
     }
 
-    window.selFloatingPanel = Object.freeze({
+    window.sel.register("components.floatingPanel", {
         mount: selFloatingPanelMount,
         get: (selFloatingPanelHost) => selFloatingPanelControllers.get(selFloatingPanelHost) || null
     });

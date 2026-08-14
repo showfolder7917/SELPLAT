@@ -1,4 +1,4 @@
--- 工作台六个业务表格定义作为可编辑测试数据写入；相同项目和控件 ID 已存在时保留用户数据。
+-- 工作台七个业务表格定义作为可编辑测试数据写入；相同项目和控件 ID 已存在时保留用户数据。
 INSERT INTO ReferenceDataTable
     (id, tenantId, lastOperateUserId, projectName, tableName, gridColumnId, description, pagePath, status, sortnum)
 SELECT 200001, 1, 1, 'reference-data', 'ReferenceDataType', 'selGridTypeManagementId',
@@ -34,3 +34,9 @@ INSERT INTO ReferenceDataTable
 SELECT 200006, 1, 1, 'reference-data', 'ReferenceDataTableColumn', 'selGridTableColumnManagementId',
        '业务表格列配置管理', '/reference-data/reference-data.html', 1, 60
 WHERE NOT EXISTS (SELECT 1 FROM ReferenceDataTable WHERE projectName = 'reference-data' AND gridColumnId = 'selGridTableColumnManagementId');
+
+INSERT INTO ReferenceDataTable
+    (id, tenantId, lastOperateUserId, projectName, tableName, gridColumnId, description, pagePath, status, sortnum)
+SELECT 200007, 1, 1, 'reference-data', 'ReferenceDataControlBinding', 'selGridControlBindingManagementId',
+       '页面控件与引用数据类型绑定管理', '/reference-data/reference-data.html', 1, 70
+WHERE NOT EXISTS (SELECT 1 FROM ReferenceDataTable WHERE projectName = 'reference-data' AND gridColumnId = 'selGridControlBindingManagementId');

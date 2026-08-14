@@ -1,26 +1,44 @@
-/* Japanese N2 蓝宝书题库：只装配 SEL 公共控件、真实接口和 AI/语音业务动作。 */
-(function japaneseN2BlueBookInitializeApplication() {
+/*
+ * Japanese N2 蓝宝书题库：只装配 SEL UI 公共控件、真实接口和 AI/语音业务动作。
+ * panel/search/tree/grid 组成题库工作台，windowComponent 编辑题目，confirmDialog 确认删除，
+ * pageBackground 与 personalization 管理页面外观；组件只在文件顶部解构一次。
+ *
+ * 阅读顺序：japaneseState 保存运行状态，japaneseBuildPayload() 组装公共视图，
+ * japaneseBuildEditorOptions() 定义表单，mountApp() 只负责编排挂载和事件。
+ * 注释约定与 Reference Data 一致：关键语句组解释业务目的，续行括号和标点不堆积机械注释。
+ */
+(function app() {
     "use strict";
 
-    const requiredComponents = Object.freeze([
-        "selBaseRuntime", "selPanel", "selSearch", "selTooltip", "selTree", "selDropdownMenu", "selGrid",
-        "selWindow", "selConfirmDialog", "selPageBackground", "selPersonalization", "selThemeManager"
+    window.sel.require([
+        "core.element", "core.query", "components.panel", "components.search",
+        "components.tree", "components.dropdownMenu", "components.grid", "components.window",
+        "components.confirmDialog", "components.pageBackground", "components.personalization"
     ]);
-    const missingComponents = requiredComponents.filter((name) => !window[name]);
-    if (missingComponents.length > 0) throw new Error(`日语题库缺少公共组件：${missingComponents.join("、")}。`);
-
-    const applicationHost = window.selBaseRuntime.query("[data-japanese-app]");
-    const backgroundHost = window.selBaseRuntime.query("[data-sel-page-background-host]");
-    const personalizationHost = window.selBaseRuntime.query("[data-sel-personalization-host]");
-    const questionApi = "/api/japanese/n2-blue-book-question/";
-    const gridId = "JapaneseN2BlueBookQuestionGrid";
-    const editorId = "JapaneseN2BlueBookQuestionEditor";
-    const typeLabels = Object.freeze({
+    // core 能力先通过 selBase 统一取得，应用后续不再直接访问 window.sel.core。
+    const selBase = window.sel.core;
+    // element 创建安全节点，query 查找宿主，selFreeze 只冻结完整配置边界。
+    const { element, freeze: selFreeze, query } = selBase;
+    const {
+        panel, search, tree, dropdownMenu: dropdown, grid, window: windowComponent,
+        confirmDialog, pageBackground, personalization
+    } = window.sel.components;
+    // 三个宿主分别承载业务工作区、背景和个性化设置。
+    const japaneseAppHost = query("[data-japanese-app]");
+    const japaneseBackgroundHost = query("[data-sel-page-background-host]");
+    const japanesePersonalizationHost = query("[data-sel-personalization-host]");
+    // CRUD 和生成动作都从统一题库接口根地址派生。
+    const japaneseQuestionApi = "/api/japanese/n2-blue-book-question/";
+    const japaneseGridId = "JapaneseN2BlueBookQuestionGrid";
+    const japaneseEditorId = "JapaneseN2BlueBookQuestionEditor";
+    // 数据库题型枚举在应用边界映射为用户可读名称。
+    const japaneseTypeLabels = selFreeze({
         PRONUNCIATION: "语音・读音题",
         KANJI: "汉字题",
         GRAMMAR: "语法题"
     });
-    const state = {
+    // 页面运行状态保持可变，控制器由 mountApp() 写入。
+    const japaneseState = {
         records: [],
         treeItems: [],
         editingRecord: null,
@@ -30,56 +48,61 @@
         generationView: null
     };
 
-    const layout = Object.freeze({
-        top: Object.freeze([
-            Object.freeze({ component: "title", payload: "title" }),
-            Object.freeze({
+    // Panel 五区布局只描述组件位置，DOM 生命周期属于公共组件。
+    const japaneseLayout = selFreeze({
+        top: [
+            { component: "title", payload: "title" },
+            {
                 component: "toolbar",
-                children: Object.freeze([
-                    Object.freeze({ component: "selSearch", payload: "search" }),
-                    Object.freeze({ component: "filterReset", payload: "title" })
-                ])
-            })
-        ]),
-        left: Object.freeze([Object.freeze({ component: "selTree", payload: "tree" })]),
-        center: Object.freeze([Object.freeze({ component: "selGrid", payload: "$aggregate" })]),
-        right: Object.freeze([]),
-        bottom: Object.freeze([
-            Object.freeze({
+                children: [
+                    { component: "selSearch", payload: "search" },
+                    { component: "filterReset", payload: "title" }
+                ]
+            }
+        ],
+        left: [{ component: "selTree", payload: "tree" }],
+        center: [{ component: "selGrid", payload: "$aggregate" }],
+        right: [],
+        bottom: [
+            {
                 component: "footer",
-                children: Object.freeze([
-                    Object.freeze({
+                children: [
+                    {
                         component: "gridSummary",
                         payload: "pagination",
-                        children: Object.freeze([
-                            Object.freeze({ component: "selDropdownMenu", slot: "pageSize", payload: "select.pageSize" })
-                        ])
-                    }),
-                    Object.freeze({ component: "pagination", payload: "pagination" }),
-                    Object.freeze({ component: "feedback", payload: "title.messages" })
-                ])
-            })
-        ])
+                        children: [
+                            { component: "selDropdownMenu", slot: "pageSize", payload: "select.pageSize" }
+                        ]
+                    },
+                    { component: "pagination", payload: "pagination" },
+                    { component: "feedback", payload: "title.messages" }
+                ]
+            }
+        ]
     });
 
-    async function request(url, options = {}) {
+    /** 读取 JSON 接口并统一处理 HTTP 与业务失败。 */
+    async function japaneseRequest(url, options = {}) {
+        // fetch 保留端点原始结构，业务 success 与 HTTP 状态必须同时成功。
         const response = await fetch(url, options);
         const data = await response.json();
         if (!response.ok || data.success === false) throw new Error(data.msg || "请求失败。");
         return data;
     }
 
-    async function loadRecords() {
-        const data = await request(`${questionApi}getStore.htm?pageNo=1&pageSize=1000`);
+    /** 读取 N2 题库全部记录。 */
+    async function japaneseLoadRecords() {
+        const data = await japaneseRequest(`${japaneseQuestionApi}getStore.htm?pageNo=1&pageSize=1000`);
         return Array.isArray(data.records) ? data.records : [];
     }
 
-    function loadTreeItems() {
+    /** 生成题库根节点和三类题型树定义。 */
+    function japaneseBuildTreeItems() {
         return [{
             id: "n2-blue-book-question-root",
             label: "N2 蓝宝书1000题",
             value: "ALL",
-            children: Object.entries(typeLabels).map(([value, label]) => ({
+            children: Object.entries(japaneseTypeLabels).map(([value, label]) => ({
                 id: `n2-${value.toLowerCase()}`,
                 label,
                 value
@@ -87,91 +110,96 @@
         }];
     }
 
-    function countByType(type) {
-        return state.records.filter((record) => record.questionType === type).length;
+    /** 统计某一题型的记录数量。 */
+    function japaneseCountByType(type) {
+        return japaneseState.records.filter((record) => record.questionType === type).length;
     }
 
-    function normalizeTreeItems(items) {
+    /** 递归转换公共 Tree 标准节点。 */
+    function japaneseNormalizeTreeItems(items) {
         return items.map((item) => {
             const value = String(item.value || "ALL");
             const normalized = {
                 id: String(item.id || value.toLowerCase()),
-                label: String(item.label || typeLabels[value] || "全部题目"),
+                label: String(item.label || japaneseTypeLabels[value] || "全部题目"),
                 icon: value === "ALL" ? "ri-book-open-line" : value === "PRONUNCIATION" ? "ri-volume-up-line" : value === "KANJI" ? "ri-font-size-2" : "ri-braces-line",
-                count: value === "ALL" ? state.records.length : countByType(value),
-                filter: value === "ALL" ? Object.freeze({}) : Object.freeze({ questionType: value })
+                count: value === "ALL" ? japaneseState.records.length : japaneseCountByType(value),
+                filter: value === "ALL" ? {} : { questionType: value }
             };
-            if (Array.isArray(item.children) && item.children.length > 0) normalized.children = normalizeTreeItems(item.children);
-            return Object.freeze(normalized);
+            if (Array.isArray(item.children) && item.children.length > 0) normalized.children = japaneseNormalizeTreeItems(item.children);
+            return normalized;
         });
     }
 
-    function buildPayload() {
-        const displayRecords = state.records.map((record) => Object.freeze({
+    /** 组装 Panel、Grid、Tree、Search 与分页共用视图。 */
+    function japaneseBuildPayload() {
+        // 复制后台记录并补充题型、图片和语音展示字段。
+        const displayRecords = japaneseState.records.map((record) => ({
             ...record,
-            questionTypeLabel: typeLabels[record.questionType] || record.questionType,
+            questionTypeLabel: japaneseTypeLabels[record.questionType] || record.questionType,
             imageState: record.imageUrl ? "已生成" : "—",
             audioState: record.audioUrl ? "已生成" : "—"
         }));
-        const treeItems = normalizeTreeItems(state.treeItems);
-        return Object.freeze({
-            grid: Object.freeze({
+        // Tree 数量依赖最新 records，所以每次组装视图都重新规范化。
+        const treeItems = japaneseNormalizeTreeItems(japaneseState.treeItems);
+        return selFreeze({
+            grid: {
                 mode: "records",
                 idField: "id",
-                searchFields: Object.freeze(["sourceQuestionNo", "questionText", "correctOption", "optionA", "optionB", "optionC", "optionD"]),
+                searchFields: ["sourceQuestionNo", "questionText", "correctOption", "optionA", "optionB", "optionC", "optionD"],
                 horizontalScroll: true
-            }),
-            data: Object.freeze({ items: Object.freeze(displayRecords), selectedIds: Object.freeze([]) }),
-            column: Object.freeze({
-                gridId,
+            },
+            data: { items: displayRecords, selectedIds: [] },
+            column: {
+                gridId: japaneseGridId,
                 ariaLabel: "N2 蓝宝书题目表格",
                 emptyText: "当前分类还没有题目",
-                items: Object.freeze([
-                    Object.freeze({ id: "sourceQuestionNo", field: "sourceQuestionNo", label: "题号", renderer: "text", nowrap: true, width: "7%" }),
-                    Object.freeze({ id: "questionType", field: "questionTypeLabel", label: "题型", renderer: "text", nowrap: true, width: "13%" }),
-                    Object.freeze({ id: "questionText", field: "questionText", label: "题干", renderer: "text", width: "31%" }),
-                    Object.freeze({ id: "correctOption", field: "correctOption", label: "答案", renderer: "badge", width: "7%" }),
-                    Object.freeze({ id: "imageState", field: "imageState", label: "图片", renderer: "text", nowrap: true, width: "8%" }),
-                    Object.freeze({ id: "audioState", field: "audioState", label: "语音", renderer: "text", nowrap: true, width: "8%" }),
-                    Object.freeze({ id: "updatedAt", field: "updatedAt", label: "更新时间", renderer: "time", nowrap: true, width: "16%" }),
-                    Object.freeze({
+                items: [
+                    { id: "sourceQuestionNo", field: "sourceQuestionNo", label: "题号", renderer: "text", nowrap: true, width: "7%" },
+                    { id: "questionType", field: "questionTypeLabel", label: "题型", renderer: "text", nowrap: true, width: "13%" },
+                    { id: "questionText", field: "questionText", label: "题干", renderer: "text", width: "31%" },
+                    { id: "correctOption", field: "correctOption", label: "答案", renderer: "badge", width: "7%" },
+                    { id: "imageState", field: "imageState", label: "图片", renderer: "text", nowrap: true, width: "8%" },
+                    { id: "audioState", field: "audioState", label: "语音", renderer: "text", nowrap: true, width: "8%" },
+                    { id: "updatedAt", field: "updatedAt", label: "更新时间", renderer: "time", nowrap: true, width: "16%" },
+                    {
                         id: "actions", field: "id", label: "操作", renderer: "actions", width: "10%",
-                        actions: Object.freeze([
-                            Object.freeze({ id: "edit", label: "编辑题目", icon: "ri-edit-line" }),
-                            Object.freeze({ id: "delete", label: "删除题目", icon: "ri-delete-bin-6-line", tone: "danger" })
-                        ])
-                    })
-                ])
-            }),
-            title: Object.freeze({
+                        actions: [
+                            { id: "edit", label: "编辑题目", icon: "ri-edit-line" },
+                            { id: "delete", label: "删除题目", icon: "ri-delete-bin-6-line", tone: "danger" }
+                        ]
+                    }
+                ]
+            },
+            title: {
                 title: "N2 蓝宝书1000题",
                 subtitle: "JLPT N2 · BLUE BOOK",
                 description: "语音・读音、汉字、语法题统一管理；双击题目进入练习内容编辑",
                 ariaLabel: "N2 蓝宝书1000题管理面板",
-                ariaLabels: Object.freeze({
+                ariaLabels: {
                     statusTabs: "题型统计", headerActions: "题库快捷操作", toolbar: "题库筛选工具栏",
                     sidebar: "题型目录", content: "题目列表内容区", board: "N2 题目表格", pagination: "题目分页"
-                }),
-                statusTabs: Object.freeze([
-                    Object.freeze({ value: "", label: "全部", count: state.records.length }),
-                    Object.freeze({ value: "PRONUNCIATION", label: "读音", count: countByType("PRONUNCIATION") }),
-                    Object.freeze({ value: "KANJI", label: "汉字", count: countByType("KANJI") }),
-                    Object.freeze({ value: "GRAMMAR", label: "语法", count: countByType("GRAMMAR") })
-                ]),
-                actions: Object.freeze([
-                    Object.freeze({ id: "filter", label: "搜索", icon: "ri-search-line" }),
-                    Object.freeze({ id: "new", label: "新增题目", icon: "ri-add-line", primary: true })
-                ]),
+                },
+                statusTabs: [
+                    { value: "", label: "全部", count: japaneseState.records.length },
+                    { value: "PRONUNCIATION", label: "读音", count: japaneseCountByType("PRONUNCIATION") },
+                    { value: "KANJI", label: "汉字", count: japaneseCountByType("KANJI") },
+                    { value: "GRAMMAR", label: "语法", count: japaneseCountByType("GRAMMAR") }
+                ],
+                actions: [
+                    { id: "filter", label: "搜索", icon: "ri-search-line" },
+                    { id: "new", label: "新增题目", icon: "ri-add-line", primary: true }
+                ],
                 resetLabel: "重置",
-                messages: Object.freeze({
+                messages: {
                     selectProject: "选择题目", viewProject: "查看题目", editProject: "编辑题目", moreActions: "更多操作",
                     filtersReset: "筛选条件已重置", treePrefix: "题型目录", expandLeftRegion: "展开题型目录",
                     collapseLeftRegion: "收起题型目录", filterActivated: "搜索框已激活", newOpened: "已打开新增题目窗口",
                     exportPreparing: "题库操作已触发", movePrefix: "移动到"
-                })
-            }),
-            search: Object.freeze({
-                gridId,
+                }
+            },
+            search: {
+                gridId: japaneseGridId,
                 label: "搜索题目",
                 placeholder: "题号、题干或答案…",
                 buttonLabel: "查询",
@@ -185,54 +213,55 @@
                 submitOnClear: true,
                 allowEmpty: true,
                 trim: true
-            }),
-            tree: Object.freeze({
-                gridId,
+            },
+            tree: {
+                gridId: japaneseGridId,
                 ariaLabel: "N2 题型目录",
                 heading: "题库目录",
-                summary: `${state.records.length} 道题`,
+                summary: `${japaneseState.records.length} 道题`,
                 expandLabelTemplate: "展开{label}",
                 collapseLabelTemplate: "收起{label}",
                 selectedId: treeItems[0]?.id || "all",
-                items: Object.freeze(treeItems)
-            }),
-            menu: Object.freeze({ gridId, ariaLabel: "题目行操作" }),
-            pagination: Object.freeze({
-                gridId,
+                items: treeItems
+            },
+            menu: { gridId: japaneseGridId, ariaLabel: "题目行操作" },
+            pagination: {
+                gridId: japaneseGridId,
                 currentPage: 1,
                 pageSize: 20,
-                totalCount: state.records.length,
+                totalCount: japaneseState.records.length,
                 summaryAll: "共 {total} 题",
                 summaryFiltered: "当前 {visible} 题 · 共 {total} 题",
                 previousLabel: "上一页",
                 nextLabel: "下一页",
                 pageChangedMessage: "已切换到第 {page} 页",
                 pageSizeChangedMessage: "每页显示 {size} 道题"
-            }),
-            select: Object.freeze({
-                pageSize: Object.freeze({
-                    gridId,
+            },
+            select: {
+                pageSize: {
+                    gridId: japaneseGridId,
                     role: "page-size",
                     label: "每页显示题数",
                     ariaLabel: "每页显示题数",
                     currentTemplate: "{label}，当前：{value}",
                     menuTitle: "选择每页显示题数",
                     scrollAfter: 4,
-                    options: Object.freeze([
-                        Object.freeze({ value: "10", label: "10 题/页", icon: "ri-list-check-3" }),
-                        Object.freeze({ value: "20", label: "20 题/页", icon: "ri-list-check-3", selected: true }),
-                        Object.freeze({ value: "50", label: "50 题/页", icon: "ri-list-check-3" })
-                    ])
-                })
-            })
+                    options: [
+                        { value: "10", label: "10 题/页", icon: "ri-list-check-3" },
+                        { value: "20", label: "20 题/页", icon: "ri-list-check-3", selected: true },
+                        { value: "50", label: "50 题/页", icon: "ri-list-check-3" }
+                    ]
+                }
+            }
         });
     }
 
-    function editorOptions(editing) {
-        const typeOptions = Object.entries(typeLabels).map(([value, label]) => Object.freeze({ value, label, icon: "ri-book-2-line" }));
-        const answerOptions = ["A", "B", "C", "D"].map((value) => Object.freeze({ value, label: `选项 ${value}`, icon: "ri-checkbox-circle-line" }));
-        return Object.freeze({
-            id: editorId,
+    /** 生成新增或编辑题目的 Window 配置。 */
+    function japaneseBuildEditorOptions(editing) {
+        const typeOptions = Object.entries(japaneseTypeLabels).map(([value, label]) => ({ value, label, icon: "ri-book-2-line" }));
+        const answerOptions = ["A", "B", "C", "D"].map((value) => ({ value, label: `选项 ${value}`, icon: "ri-checkbox-circle-line" }));
+        return selFreeze({
+            id: japaneseEditorId,
             title: editing ? "编辑 N2 题目" : "新增 N2 题目",
             subtitle: "题目、选项、解释与媒体资源在同一窗口维护",
             closeLabel: "关闭题目编辑窗口",
@@ -240,37 +269,40 @@
             submitLabel: editing ? "保存修改" : "保存题目",
             validationMessage: "请完成全部必填字段",
             autoSuccess: false,
-            rows: Object.freeze([
-                Object.freeze([
-                    Object.freeze({ name: "sourceQuestionNo", label: "来源题号", type: "number", icon: "ri-hashtag", placeholder: "例如 416", required: true }),
-                    Object.freeze({ name: "questionType", label: "题型", type: "select", required: true, options: Object.freeze(typeOptions) })
-                ]),
-                Object.freeze([Object.freeze({ name: "name", label: "显示名称", type: "text", icon: "ri-text", placeholder: "留空时自动按题号生成", maxLength: 200 })]),
-                Object.freeze([Object.freeze({ name: "questionText", label: "题干", type: "textarea", icon: "ri-question-line", placeholder: "今年の大学新卒者の平均給与は去年よりやや低い。", required: true, maxLength: 4000 })]),
-                Object.freeze([
-                    Object.freeze({ name: "optionA", label: "选项 A", type: "text", icon: "ri-checkbox-blank-circle-line", required: true, maxLength: 1000 }),
-                    Object.freeze({ name: "optionB", label: "选项 B", type: "text", icon: "ri-checkbox-blank-circle-line", required: true, maxLength: 1000 })
-                ]),
-                Object.freeze([
-                    Object.freeze({ name: "optionC", label: "选项 C", type: "text", icon: "ri-checkbox-blank-circle-line", required: true, maxLength: 1000 }),
-                    Object.freeze({ name: "optionD", label: "选项 D", type: "text", icon: "ri-checkbox-blank-circle-line", required: true, maxLength: 1000 })
-                ]),
-                Object.freeze([Object.freeze({ name: "correctOption", label: "正确答案", type: "select", required: true, options: Object.freeze(answerOptions) })]),
-                Object.freeze([Object.freeze({ name: "audioText", label: "朗读文本", type: "textarea", icon: "ri-volume-up-line", placeholder: "为空时朗读题干", maxLength: 4000 })]),
-                Object.freeze([Object.freeze({ name: "explanation", label: "题目解释", type: "textarea", icon: "ri-lightbulb-line", placeholder: "可调用本机 Codex CLI 生成后再人工修订", maxLength: 8000 })])
-            ])
+            rows: [
+                [
+                    { name: "sourceQuestionNo", label: "来源题号", type: "number", icon: "ri-hashtag", placeholder: "例如 416", required: true },
+                    { name: "questionType", label: "题型", type: "select", required: true, options: typeOptions }
+                ],
+                [{ name: "name", label: "显示名称", type: "text", icon: "ri-text", placeholder: "留空时自动按题号生成", maxLength: 200 }],
+                [{ name: "questionText", label: "题干", type: "textarea", icon: "ri-question-line", placeholder: "今年の大学新卒者の平均給与は去年よりやや低い。", required: true, maxLength: 4000 }],
+                [
+                    { name: "optionA", label: "选项 A", type: "text", icon: "ri-checkbox-blank-circle-line", required: true, maxLength: 1000 },
+                    { name: "optionB", label: "选项 B", type: "text", icon: "ri-checkbox-blank-circle-line", required: true, maxLength: 1000 }
+                ],
+                [
+                    { name: "optionC", label: "选项 C", type: "text", icon: "ri-checkbox-blank-circle-line", required: true, maxLength: 1000 },
+                    { name: "optionD", label: "选项 D", type: "text", icon: "ri-checkbox-blank-circle-line", required: true, maxLength: 1000 }
+                ],
+                [{ name: "correctOption", label: "正确答案", type: "select", required: true, options: answerOptions }],
+                [{ name: "audioText", label: "朗读文本", type: "textarea", icon: "ri-volume-up-line", placeholder: "为空时朗读题干", maxLength: 4000 }],
+                [{ name: "explanation", label: "题目解释", type: "textarea", icon: "ri-lightbulb-line", placeholder: "可调用本机 Codex CLI 生成后再人工修订", maxLength: 8000 }]
+            ]
         });
     }
 
-    function installGenerationControls() {
-        const shell = applicationHost.querySelector(`[data-sel-window-id="${editorId}"]`);
+    /** 向标准题目 Window 追加 AI 与语音生成面板。 */
+    function japaneseInstallGenerationControls() {
+        const shell = japaneseAppHost.querySelector(`[data-sel-window-id="${japaneseEditorId}"]`);
         const fields = shell?.querySelector(".selwindow-form-fields");
         const feedback = fields?.querySelector(".selwindow-feedback");
         if (!fields || !feedback) throw new Error("题目窗口未提供标准字段区。");
 
-        const section = document.createElement("section");
-        section.className = "japanese-generation-panel";
-        section.setAttribute("aria-label", "AI 与语音生成");
+        // 生成面板复用公共节点入口，类名和可访问属性由同一安全边界一次写入。
+        const section = element("section", {
+            className: "japanese-generation-panel",
+            attributes: { "aria-label": "AI 与语音生成" }
+        });
         section.innerHTML = `
             <header><div><strong>Codex &amp; Voice</strong><span>点击后直接生成，不弹出二次确认</span></div><small>媒体路径已预留云存储切换</small></header>
             <div class="japanese-generation-actions">
@@ -284,12 +316,13 @@
             </div>`;
         fields.insertBefore(section, feedback);
         section.querySelectorAll("[data-generate]").forEach((button) => {
-            button.addEventListener("click", () => generate(button.dataset.generate, button));
+            button.addEventListener("click", () => japaneseGenerate(button.dataset.generate, button));
         });
-        state.generationView = section;
+        japaneseState.generationView = section;
     }
 
-    function editorDefaults() {
+    /** 返回新增题目的稳定表单默认值。 */
+    function japaneseEditorDefaults() {
         return {
             questionType: "PRONUNCIATION",
             correctOption: "A",
@@ -305,25 +338,30 @@
         };
     }
 
-    function openEditor(record = null) {
-        state.editingRecord = record ? { ...record } : null;
-        state.editorController.setLocale(editorOptions(Boolean(record)));
-        state.editorController.reset();
-        state.editorController.setValues({ ...editorDefaults(), ...(record || {}) });
-        state.editorController.setFeedback("");
-        refreshPreviews();
-        state.editorController.open();
+    /** 打开新增或编辑题目窗口。 */
+    function japaneseOpenEditor(record = null) {
+        // 复制记录，让媒体生成在正式保存前只修改临时编辑上下文。
+        japaneseState.editingRecord = record ? { ...record } : null;
+        japaneseState.editorController.setLocale(japaneseBuildEditorOptions(Boolean(record)));
+        japaneseState.editorController.reset();
+        japaneseState.editorController.setValues({ ...japaneseEditorDefaults(), ...(record || {}) });
+        japaneseState.editorController.setFeedback("");
+        japaneseRefreshPreviews();
+        japaneseState.editorController.open();
     }
 
-    async function saveQuestion(values) {
-        state.editorController.setLoading(true);
-        state.editorController.setFeedback("正在保存题目…");
+    /** 提交新增或编辑题目并刷新页面。 */
+    async function japaneseSaveQuestion(values) {
+        // 保存期间锁定窗口并立即反馈，防止重复提交。
+        japaneseState.editorController.setLoading(true);
+        japaneseState.editorController.setFeedback("正在保存题目…");
         try {
-            const editing = Boolean(state.editingRecord?.id);
-            const media = state.editingRecord || {};
+            const editing = Boolean(japaneseState.editingRecord?.id);
+            const media = japaneseState.editingRecord || {};
+            // 前端只提交题目和媒体业务字段，身份审计由 BaseService 维护。
             const payload = {
                 ...values,
-                ...(editing ? { id: state.editingRecord.id } : {}),
+                ...(editing ? { id: japaneseState.editingRecord.id } : {}),
                 name: String(values.name || "").trim() || `蓝宝书 N2 第${values.sourceQuestionNo}题`,
                 sortnum: media.sortnum || 0,
                 status: media.status || 1,
@@ -336,22 +374,23 @@
                 audioStorageKey: media.audioStorageKey || "",
                 audioUrl: media.audioUrl || ""
             };
-            await request(questionApi + (editing ? "update.htm" : "create.htm"), {
+            await japaneseRequest(japaneseQuestionApi + (editing ? "update.htm" : "create.htm"), {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
                 body: new URLSearchParams(payload)
             });
-            state.editorController.close();
-            await refreshApplication();
+            japaneseState.editorController.close();
+            await japaneseRefresh();
         } catch (error) {
-            state.editorController.setFeedback(error.message || "题目保存失败。", true);
+            japaneseState.editorController.setFeedback(error.message || "题目保存失败。", true);
         } finally {
-            state.editorController.setLoading(false);
+            japaneseState.editorController.setLoading(false);
         }
     }
 
-    async function removeQuestion(record) {
-        const confirmed = await state.deleteController.open({
+    /** 经公共确认框确认后删除题目。 */
+    async function japaneseRemoveQuestion(record) {
+        const confirmed = await japaneseState.deleteController.open({
             title: "删除题目",
             message: "删除后题目将不再出现在题库列表中。",
             target: `第 ${record.sourceQuestionNo} 题 · ${String(record.questionText || "").slice(0, 36)}`,
@@ -361,16 +400,17 @@
             confirmLabel: "确认删除"
         });
         if (!confirmed) return;
-        await request(`${questionApi}delete.htm`, {
+        await japaneseRequest(`${japaneseQuestionApi}delete.htm`, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
             body: new URLSearchParams({ id: record.id })
         });
-        await refreshApplication();
+        await japaneseRefresh();
     }
 
-    function generationPayload() {
-        const values = state.editorController.getValues();
+    /** 提取生成接口需要的题目业务字段。 */
+    function japaneseBuildGenerationPayload() {
+        const values = japaneseState.editorController.getValues();
         return {
             questionType: values.questionType,
             questionText: values.questionText,
@@ -383,133 +423,143 @@
         };
     }
 
-    async function generate(kind, activeButton) {
+    /** 执行解释、图片或语音生成并写回结果。 */
+    async function japaneseGenerate(kind, activeButton) {
+        // 英文 kind 用于接口路径，中文 labels 只用于用户反馈。
         const labels = { explanation: "解释", image: "图片", audio: "语音" };
-        setGenerating(true, activeButton);
-        state.editorController.setFeedback(`正在调用${kind === "audio" ? " NanamiNeural" : "本机 Codex CLI"}生成${labels[kind]}…`);
+        japaneseSetGenerating(true, activeButton);
+        japaneseState.editorController.setFeedback(`正在调用${kind === "audio" ? " NanamiNeural" : "本机 Codex CLI"}生成${labels[kind]}…`);
         try {
-            const result = await request(`${questionApi}generate-${kind}.htm`, {
+            const result = await japaneseRequest(`${japaneseQuestionApi}generate-${kind}.htm`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(generationPayload())
+                body: JSON.stringify(japaneseBuildGenerationPayload())
             });
             if (kind === "explanation") {
-                const nextValues = { ...state.editorController.getValues(), explanation: result.data.explanation };
-                state.editorController.setValues(nextValues);
+                const nextValues = { ...japaneseState.editorController.getValues(), explanation: result.data.explanation };
+                japaneseState.editorController.setValues(nextValues);
             } else {
                 const prefix = kind === "image" ? "image" : "audio";
-                state.editingRecord = {
-                    ...(state.editingRecord || {}),
+                japaneseState.editingRecord = {
+                    ...(japaneseState.editingRecord || {}),
                     [`${prefix}StorageProvider`]: result.data.storageProvider,
                     [`${prefix}StorageKey`]: result.data.objectKey,
                     [`${prefix}Url`]: result.data.url
                 };
-                refreshPreviews();
+                japaneseRefreshPreviews();
             }
-            state.editorController.setFeedback(result.msg || `${labels[kind]}生成完成。`);
+            japaneseState.editorController.setFeedback(result.msg || `${labels[kind]}生成完成。`);
         } catch (error) {
-            state.editorController.setFeedback(error.message || `${labels[kind]}生成失败。`, true);
+            japaneseState.editorController.setFeedback(error.message || `${labels[kind]}生成失败。`, true);
         } finally {
-            setGenerating(false, activeButton);
+            japaneseSetGenerating(false, activeButton);
         }
     }
 
-    function setGenerating(busy, activeButton) {
-        state.generationView?.querySelectorAll("[data-generate]").forEach((button) => {
+    /** 统一切换生成按钮的忙碌状态。 */
+    function japaneseSetGenerating(busy, activeButton) {
+        japaneseState.generationView?.querySelectorAll("[data-generate]").forEach((button) => {
             button.disabled = busy;
             button.classList.toggle("is-running", busy && button === activeButton);
         });
     }
 
-    function refreshPreviews() {
-        if (!state.generationView) return;
-        const imageHost = state.generationView.querySelector("[data-image-preview]");
+    /** 同步图片和音频预览。 */
+    function japaneseRefreshPreviews() {
+        if (!japaneseState.generationView) return;
+        const imageHost = japaneseState.generationView.querySelector("[data-image-preview]");
         const image = imageHost.querySelector("img");
-        const imageUrl = state.editingRecord?.imageUrl || "";
+        const imageUrl = japaneseState.editingRecord?.imageUrl || "";
         image.hidden = !imageUrl;
         imageHost.querySelector("p").hidden = Boolean(imageUrl);
         if (imageUrl) image.src = `${imageUrl}?v=${Date.now()}`;
 
-        const audioHost = state.generationView.querySelector("[data-audio-preview]");
+        const audioHost = japaneseState.generationView.querySelector("[data-audio-preview]");
         const audio = audioHost.querySelector("audio");
-        const audioUrl = state.editingRecord?.audioUrl || "";
+        const audioUrl = japaneseState.editingRecord?.audioUrl || "";
         audio.hidden = !audioUrl;
         audioHost.querySelector("p").hidden = Boolean(audioUrl);
         if (audioUrl) audio.src = `${audioUrl}?v=${Date.now()}`;
     }
 
-    async function refreshApplication() {
-        state.records = await loadRecords();
-        state.treeItems = loadTreeItems();
-        const payload = buildPayload();
-        const panelRoot = window.selPanel.get(gridId);
-        window.selPanel.setLocale(panelRoot, { view: payload });
-        state.gridController.setLocale(payload);
+    /** 重新读取题目并原位刷新公共组件。 */
+    async function japaneseRefresh() {
+        japaneseState.records = await japaneseLoadRecords();
+        japaneseState.treeItems = japaneseBuildTreeItems();
+        const payload = japaneseBuildPayload();
+        const panelRoot = panel.get(japaneseGridId);
+        panel.setLocale(panelRoot, { view: payload });
+        japaneseState.gridController.setLocale(payload);
     }
 
-    async function mountApplication() {
-        state.records = await loadRecords();
-        state.treeItems = loadTreeItems();
-        const payload = buildPayload();
-        const panelRoot = window.selPanel.create(applicationHost, {
-            gridId,
-            sourceId: gridId,
+    /** 完成日语题库的一次性启动装配。 */
+    async function mountApp() {
+        // 先准备题目、树和聚合 Payload，再按依赖顺序挂载公共组件。
+        japaneseState.records = await japaneseLoadRecords();
+        japaneseState.treeItems = japaneseBuildTreeItems();
+        const payload = japaneseBuildPayload();
+        const panelRoot = panel.create(japaneseAppHost, {
+            gridId: japaneseGridId,
+            sourceId: japaneseGridId,
             entity: "JapaneseN2BlueBookQuestion",
             view: "question-bank",
             layout: "single",
-            structure: layout,
+            structure: japaneseLayout,
             ariaLabel: payload.title.ariaLabel
         });
         if (!panelRoot) throw new Error("日语题库公共面板创建失败。");
-        if (!window.selPanel.mount(panelRoot, {
+        if (!panel.mount(panelRoot, {
             view: payload,
             expandLeftLabel: payload.title.messages.expandLeftRegion,
             collapseLeftLabel: payload.title.messages.collapseLeftRegion
         })) throw new Error("日语题库公共面板挂载失败。");
-        if (!window.selSearch.mount(panelRoot, payload.search)) throw new Error("日语题库搜索控件挂载失败。");
-        if (!window.selTree.mount(panelRoot, payload.tree)) throw new Error("日语题库导航树挂载失败。");
-        window.selDropdownMenu.mountAll(panelRoot);
-        state.gridController = window.selGrid.mount(panelRoot, payload);
-        if (!state.gridController) throw new Error("日语题库表格挂载失败。");
+        if (!search.mount(panelRoot, payload.search)) throw new Error("日语题库搜索控件挂载失败。");
+        if (!tree.mount(panelRoot, payload.tree)) throw new Error("日语题库导航树挂载失败。");
+        dropdown.mountAll(panelRoot);
+        japaneseState.gridController = grid.mount(panelRoot, payload);
+        if (!japaneseState.gridController) throw new Error("日语题库表格挂载失败。");
 
-        const windowMessages = await request("/sel/components/window/i18n/zh-CN.json?v=20260809-japanese-2");
-        state.editorController = window.selWindow.mount(applicationHost, { messages: windowMessages, ...editorOptions(false) });
-        state.deleteController = window.selConfirmDialog.mount(applicationHost, { id: "JapaneseN2QuestionDeleteConfirm" });
-        if (!state.editorController || !state.deleteController) throw new Error("日语题库窗口控件挂载失败。");
-        installGenerationControls();
+        // 主工作区完成后再挂载编辑、确认和生成控件。
+        const windowMessages = await japaneseRequest("/sel/components/window/i18n/zh-CN.json?v=20260809-japanese-2");
+        japaneseState.editorController = windowComponent.mount(japaneseAppHost, { messages: windowMessages, ...japaneseBuildEditorOptions(false) });
+        japaneseState.deleteController = confirmDialog.mount(japaneseAppHost, { id: "JapaneseN2QuestionDeleteConfirm" });
+        if (!japaneseState.editorController || !japaneseState.deleteController) throw new Error("日语题库窗口控件挂载失败。");
+        japaneseInstallGenerationControls();
 
-        panelRoot.addEventListener("selGrid:new", () => openEditor());
+        // 新增、行操作、双击和 Window 提交都在稳定宿主集中绑定一次。
+        panelRoot.addEventListener("selGrid:new", () => japaneseOpenEditor());
         panelRoot.addEventListener("selGrid:action", (event) => {
             const detail = event.detail;
-            if (!detail || detail.instanceKey !== gridId) return;
-            if (detail.action === "edit") openEditor(detail.record);
-            if (detail.action === "delete") removeQuestion(detail.record).catch(showApplicationError);
+            if (!detail || detail.instanceKey !== japaneseGridId) return;
+            if (detail.action === "edit") japaneseOpenEditor(detail.record);
+            if (detail.action === "delete") japaneseRemoveQuestion(detail.record).catch(japaneseShowError);
         });
         panelRoot.addEventListener("dblclick", (event) => {
             const row = event.target.closest("tr[data-sel-grid-record-id]");
             if (!row) return;
-            const record = state.records.find((item) => String(item.id) === row.dataset.selGridRecordId);
-            if (record) openEditor(record);
+            const record = japaneseState.records.find((item) => String(item.id) === row.dataset.selGridRecordId);
+            if (record) japaneseOpenEditor(record);
         });
-        applicationHost.addEventListener("selWindow:submit", (event) => {
-            if (event.detail?.id === editorId) saveQuestion(event.detail.values);
+        japaneseAppHost.addEventListener("selWindow:submit", (event) => {
+            if (event.detail?.id === japaneseEditorId) japaneseSaveQuestion(event.detail.values);
         });
     }
 
-    function showApplicationError(error) {
+    /** 把操作错误写入控制台和页面反馈区。 */
+    function japaneseShowError(error) {
         console.error("日语题库操作失败。", error);
-        const panelRoot = window.selPanel.get(gridId);
+        const panelRoot = panel.get(japaneseGridId);
         const feedback = panelRoot?.querySelector("[data-sel-grid-role='feedback']");
         if (feedback) feedback.textContent = error.message || "日语题库操作失败。";
     }
 
-    const backgroundController = window.selPageBackground.mount(backgroundHost, {
-        defaults: Object.freeze({ theme: "solid-dark", overlay: 0, brightness: 100, blur: 0 })
+    const backgroundController = pageBackground.mount(japaneseBackgroundHost, {
+        defaults: { theme: "solid-dark", overlay: 0, brightness: 100, blur: 0 }
     });
     if (!backgroundController) throw new Error("日语题库页面背景挂载失败。");
-    if (!window.selPersonalization.mount(personalizationHost, { backgroundController })) {
+    if (!personalization.mount(japanesePersonalizationHost, { backgroundController })) {
         throw new Error("日语题库个性化设置挂载失败。");
     }
 
-    mountApplication().catch(showApplicationError);
+    mountApp().catch(japaneseShowError);
 }());

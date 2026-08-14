@@ -2,10 +2,12 @@
  * selPanel.js：通用稳定面板布局基础控件。
  * 负责创建标题、工具栏、左侧导航、中央内容、底栏和反馈区的稳定宿主，并管理左侧区域收起状态。
  * 责任边界：本文件只识别标准 panel/grid payload 和通用区域角色，不识别 具体应用、业务接口或后端实体名称。
- * 模块级 JavaScript 标识统一使用 selPanel 前缀，公开控制器为 window.selPanel。
+ * 模块级 JavaScript 标识统一使用 selPanel 前缀，公开控制器为 window.sel.components.panel。
  */
 (function selPanelInitialize() {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 已创建面板按完整业务实例键登记，保证同页多实例可以明确寻址。
     const selPanelInstances = new Map();
@@ -31,48 +33,48 @@
     const selPanelToolbarColumnKeyboardStep = 12;
 
     // 默认五区结构仅作为未传布局时的通用回退，应用可显式调整组件所在区域。
-    const selPanelDefaultStructure = Object.freeze({
+    const selPanelDefaultStructure = selFreeze({
         // 顶部包含标题栏和筛选工具栏。
-        top: Object.freeze([
-            Object.freeze({ component: "title", payload: "title" }),
-            Object.freeze({
+        top: [
+            { component: "title", payload: "title" },
+            {
                 component: "toolbar",
-                children: Object.freeze([
-                    Object.freeze({ component: "selSearch", payload: "search" }),
-                    Object.freeze({ component: "selDropdownMenu", slot: "projectType", payload: "select.projectType" }),
-                    Object.freeze({ component: "selDropdownMenu", slot: "status", payload: "select.status" }),
-                    Object.freeze({ component: "dateRange", payload: "title" }),
-                    Object.freeze({ component: "filterReset", payload: "title" })
-                ])
-            })
-        ]),
+                children: [
+                    { component: "selSearch", payload: "search" },
+                    { component: "selDropdownMenu", slot: "projectType", payload: "select.projectType" },
+                    { component: "selDropdownMenu", slot: "status", payload: "select.status" },
+                    { component: "dateRange", payload: "title" },
+                    { component: "filterReset", payload: "title" }
+                ]
+            }
+        ],
         // 左侧默认承载树形导航。
-        left: Object.freeze([Object.freeze({ component: "selTree", payload: "tree" })]),
+        left: [{ component: "selTree", payload: "tree" }],
         // 中央默认承载主表格。
-        center: Object.freeze([Object.freeze({ component: "selGrid", payload: "$aggregate" })]),
+        center: [{ component: "selGrid", payload: "$aggregate" }],
         // 右侧默认承载行操作菜单。
-        right: Object.freeze([Object.freeze({ component: "selGridMenu", payload: "menu" })]),
+        right: [{ component: "selGridMenu", payload: "menu" }],
         // 底部默认承载统计、每页条数、分页和反馈。
-        bottom: Object.freeze([
-            Object.freeze({
+        bottom: [
+            {
                 component: "footer",
-                children: Object.freeze([
-                    Object.freeze({
+                children: [
+                    {
                         component: "gridSummary",
                         payload: "pagination",
-                        children: Object.freeze([
-                            Object.freeze({ component: "selDropdownMenu", slot: "pageSize", payload: "select.pageSize" })
-                        ])
-                    }),
-                    Object.freeze({ component: "pagination", payload: "pagination" }),
-                    Object.freeze({ component: "feedback", payload: "title.messages" })
-                ])
-            })
-        ])
+                        children: [
+                            { component: "selDropdownMenu", slot: "pageSize", payload: "select.pageSize" }
+                        ]
+                    },
+                    { component: "pagination", payload: "pagination" },
+                    { component: "feedback", payload: "title.messages" }
+                ]
+            }
+        ]
     });
 
     // 只接受五个稳定区域，额外应用字段不会进入基础 DOM。
-    const selPanelRegionNames = Object.freeze(["top", "left", "center", "right", "bottom"]);
+    const selPanelRegionNames = selFreeze(["top", "left", "center", "right", "bottom"]);
 
     // 取得组件的子项数组，非法 children 安全回退为空数组。
     function selPanelGetChildren(selPanelComponentDefinition) {
@@ -130,10 +132,10 @@
                 `;
             }
             // 顶部项目类型和状态只允许两个稳定 slot。
-            const selPanelDropdownRoles = Object.freeze({
+            const selPanelDropdownRoles = {
                 projectType: "type-filter",
                 status: "status-filter"
-            });
+            };
             // 未知 slot 不创建不可寻址下拉框。
             const selPanelDropdownRole = selPanelDropdownRoles[selPanelComponentDefinition.slot];
             if (!selPanelDropdownRole) {
@@ -290,9 +292,9 @@
             ? selPanelStructure
             : selPanelDefaultStructure;
         // 结果只复制稳定区域，禁止基础层保留应用附加对象。
-        return Object.freeze(Object.fromEntries(selPanelRegionNames.map((selPanelRegionName) => [
+        return selFreeze(Object.fromEntries(selPanelRegionNames.map((selPanelRegionName) => [
             selPanelRegionName,
-            Object.freeze(Array.isArray(selPanelInputStructure[selPanelRegionName]) ? [...selPanelInputStructure[selPanelRegionName]] : [])
+            Array.isArray(selPanelInputStructure[selPanelRegionName]) ? [...selPanelInputStructure[selPanelRegionName]] : []
         ])));
     }
 
@@ -446,7 +448,7 @@
             selPanelDescription.textContent = selPanelView.title.description;
         }
         // 标准 ariaLabels 字段集中映射稳定区域，删除任一区域不会阻断其他区域。
-        const selPanelAriaTargets = Object.freeze({
+        const selPanelAriaTargets = {
             statusTabs: "[data-sel-grid-role='status-tabs']",
             headerActions: "[data-sel-grid-role='header-actions']",
             toolbar: "[data-sel-panel-component='toolbar']",
@@ -454,7 +456,7 @@
             content: "[data-sel-panel-region='center']",
             board: ".selgrid-board-shell",
             pagination: "[data-sel-grid-role='pagination']"
-        });
+        };
         // 每个可访问名称只写入当前面板内对应区域。
         Object.entries(selPanelAriaTargets).forEach(([selPanelAriaKey, selPanelAriaSelector]) => {
             const selPanelAriaTarget = selPanelRoot.querySelector(selPanelAriaSelector);
@@ -779,7 +781,7 @@
                         selPanelColumnState.config.maxWidth,
                         selPanelToolbarColumnWidthMaximum
                     ));
-                    return Object.freeze({ minimum: selPanelMinimum, maximum: selPanelMaximum });
+                    return { minimum: selPanelMinimum, maximum: selPanelMaximum };
                 }
 
                 function selPanelApplyToolbarColumnWidth(selPanelWidth) {
@@ -1007,7 +1009,7 @@
     }
 
     // 公开稳定控制接口，应用只传挂载点、标准数据和实例定义。
-    window.selPanel = Object.freeze({
+    window.sel.register("components.panel", {
         // create 负责生成完整通用面板 DOM。
         create: selPanelCreate,
         // mount 负责应用标准视图数据并建立布局交互。

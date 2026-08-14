@@ -2,10 +2,12 @@
  * selSearch.js：通用搜索与查询多实例基础控件。
  * 负责根据标准搜索数据创建图标、关键词输入框、清空按钮和查询按钮，并向所属业务实例发送提交事件。
  * 责任边界：本文件不读取 具体应用 数据、不请求接口、不直接筛选表格；实际查询行为由所属业务控件响应。
- * 模块级 JavaScript 标识统一使用 selSearch 前缀，公开只读注册表为 window.selSearch。
+ * 模块级 JavaScript 标识统一使用 selSearch 前缀，公开只读注册表为 window.sel.components.search。
  */
 (function selSearchCreateRegistry(global) {
     "use strict";
+
+    const selFreeze = window.sel.core.freeze;
 
     // 注册表按完整业务实例名保存控制器，保证同页多个搜索框互不共享关键词和加载状态。
     const selSearchInstances = new Map();
@@ -247,7 +249,7 @@
         }
 
         // 返回冻结控制器，应用和其他基础控件只能通过稳定方法协作。
-        return Object.freeze({
+        return selFreeze({
             // id 是完整业务实例键。
             id: selSearchGridId,
             // root 是当前搜索宿主，便于布局调试。
@@ -274,7 +276,7 @@
     }
 
     // 公开注册表由应用装配层显式挂载，基础脚本加载后不扫描业务页面。
-    global.selSearch = Object.freeze({
+    window.sel.register("components.search", {
         /**
          * 挂载一个搜索实例。
          * @param {Element} selSearchGridRoot - 当前业务实例根。
