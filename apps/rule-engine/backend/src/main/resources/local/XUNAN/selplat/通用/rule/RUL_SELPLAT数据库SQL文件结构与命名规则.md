@@ -7,13 +7,13 @@ python_ability_refs = none
 <!-- 当前规则不需要 Node 专用能力；Node 只在受影响前端字段同步时使用现有语法检查。 -->
 node_ability_refs = none
 <!-- 首版规则固化 reference-data 重构中已经验证的 SQL 目录和单表文件约束。 -->
-rule_version = 2.4.0
+rule_version = 2.6.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，未经人工提升不得扩大到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记、真实案例核对和索引链验证。 -->
 rule_status = active
 <!-- 首次升级记录说明规则来自用户对 dataShape、混合建表文件和错误命名的连续修正。 -->
-upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责;2026-08-11:固定初始化主键不得超过六位_reference-data统一六位种子保留区并让运行号段从下一完整区间开始;2026-08-15:增加全局code命名空间聚合号段策略_允许无种子业务表省略data文件_类型与树节点通过显式type模型统一承载选择项和菜单节点
+upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责;2026-08-11:固定初始化主键不得超过六位_reference-data统一六位种子保留区并让运行号段从下一完整区间开始;2026-08-15:增加全局code命名空间聚合号段策略_允许无种子业务表省略data文件_类型与树节点通过显式type模型统一承载选择项和菜单节点;2026-08-15:废弃实体表清理由兼容迁移固定白名单执行_先核对全部记录数_任一非空整体阻断_禁止依赖删除建表SQL自动清库
 <!-- 本次升级把不可辨认的项目名前缀改为对象类型前缀，并明确父容器关联不得依靠解析前缀。 -->
 upgrade_record_20260815_object_code = 全局code使用对象类型前缀加聚合主键_中央登记声明object-kind-plus-global-id_页面父容器使用kind与code显式关联
 
@@ -121,6 +121,8 @@ selplat_database_sql_change_atomic_sync = build_copy,loader_registry,documentati
 
 <!-- 修改正式数据库前必须只读核对目标表、字段和记录数量；删除或替代旧结构时必须证明数据为空或提供完整迁移路径。 -->
 selplat_database_destructive_change_precheck = resolve_exact_target,read_only_schema_check,row_count_check,preserve_or_migrate_data
+<!-- 删除建表 SQL 不会清除持久数据库中的既有表；废弃表必须由兼容迁移固定白名单处理，先验证全部为空，再统一删除，任一非空时不得发生部分清理。 -->
+selplat_deprecated_table_cleanup = compatibility_migration_fixed_allowlist,validate_all_row_counts_first,any_nonempty_blocks_all_drops,empty_tables_drop_idempotently,no_schema_startup_drop
 <!-- 自动化测试只能使用内存库或临时目录中的可重建隔离数据库，禁止读写 apps/<app>/db/<app>.mv.db 正式文件。 -->
 selplat_database_test_isolation = memory_or_temporary_database_only
 <!-- schema 变更必须覆盖新库首次初始化、重复初始化和旧库兼容升级；存在种子数据时还必须验证重复执行后稳定坐标仍只有一条。 -->
@@ -128,6 +130,8 @@ selplat_database_schema_test_matrix = fresh_initialization,repeated_initializati
 <!-- 删除数据库文件后必须能只靠登记 SQL 重建；已有文件重复启动必须保留业务记录和号段游标。 -->
 selplat_database_rebuild_and_reopen_contract = missing_file_rebuild_from_sql,existing_file_no_reset,preserve_business_rows,preserve_sequence_cursor,compatible_upgrade_only
 <!-- 字段删除必须同步 Repository、Service、Controller、前端表格、筛选、表单、接口示例和测试，禁止留下只展示或只保存的残余引用。 -->
+<!-- 控件状态采用显式保存时，数据库只保留真实读取并控制行为的几何字段；rememberLastState 等不参与决策的记忆开关必须删除。 -->
+selplat_explicit_control_state_schema = explicit_save_only,geometry_fields_have_runtime_reader,no_redundant_remember_flag
 selplat_database_field_removal_sync = repository,service,controller,frontend_grid,filter,form,api_examples,tests
 <!-- 完成证据必须包含真实 SQL 执行结果、数据库元数据、业务记录保留数量、受影响测试结果和存在页面变化时的视觉终审。 -->
 selplat_database_change_completion_evidence = sql_execution,database_metadata,preserved_record_count,relevant_test_results,visual_review_when_applicable

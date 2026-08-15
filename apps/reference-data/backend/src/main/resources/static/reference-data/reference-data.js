@@ -170,7 +170,6 @@
         editWindowControllers: new Map(),
         // 删除与取消页面编辑分别使用专用公共控制器。
         deleteConfirmController: null,
-        pageEditConfirmController: null,
         personalizationController: null,
         // 页面配置 code 与版本来自后台，保存时用于页面归属校验和并发冲突保护。
         pageCode: null,
@@ -284,18 +283,6 @@
     }
 
     /**
-     * 使用页面编辑会话基线恢复列宽，不发送任何后台写请求。
-     *
-     * @param {object} pageGridState personalization 保存的进入编辑模式前状态。
-     * @returns {boolean} Grid 是否接受并应用了列宽。
-     * @sideEffect 只改变当前页面内存和表格显示，用于“取消更改”。
-     */
-    function referenceDataRestorePageGridState(pageGridState = {}) {
-        // 取消编辑只把进入编辑模式时的内存快照交还 Grid，不调用保存接口。
-        return referenceDataState.gridController?.setColumnWidths?.(pageGridState.columnWidths || {}) || false;
-    }
-
-    /**
      * 把当前表格草稿按页面原子保存到 ReferenceDataTableElement，并重新读取后台确认值。
      *
      * @param {object} pageGridState Grid 捕获的列宽草稿。
@@ -345,6 +332,38 @@
     }
 
     /**
+     * 保存一个实际 Window 实例的当前矩形，并把保存结果设为该实例下次打开的默认位置。
+     *
+     * @param {object} windowRecord 与控制器一一对应的 ReferenceDataWindow 记录。
+     * @param {object} geometry 公共 Window 返回的 left、top、width、height 像素矩形。
+     * @param {object} controller 当前 Window 控制器。
+     * @returns {Promise<boolean>} 后台原子保存并更新实例默认矩形后返回 true。
+     * @throws {Error} 矩形缺失、版本冲突或后台拒绝保存时抛出。
+     * @sideEffect 更新 ReferenceDataWindow 的宽高与 x/y，并推进页面版本。
+     */
+    async function referenceDataSaveWindowGeometry(windowRecord, geometry = {}, controller) {
+        const width = Math.round(Number(geometry.width));
+        const height = Math.round(Number(geometry.height));
+        const x = Math.round(Number(geometry.left));
+        const y = Math.round(Number(geometry.top));
+        if (![width, height, x, y].every(Number.isFinite)) throw new Error("当前 Window 几何状态无效，无法保存。");
+        const savedGeometry = {
+            code: windowRecord.code,
+            width: `${width}px`, height: `${height}px`, x, y, positionMode: "CUSTOM",
+            breakpoint: windowRecord.breakpoint || "DESKTOP"
+        };
+        const result = await selAjax.request({
+            url: `/api/reference-data/pages/${encodeURIComponent(referenceDataState.pageCode)}/configuration`,
+            method: "POST",
+            jsonData: { baseVersion: referenceDataState.pageVersion, windows: [savedGeometry] }
+        });
+        referenceDataState.pageVersion = Number(result.data?.version || referenceDataState.pageVersion + 1);
+        Object.assign(windowRecord, savedGeometry);
+        controller.setDefaultGeometry(windowRecord);
+        return true;
+    }
+
+    /**
      * 把同一物理 Grid 当前切换到的业务模块坐标同步给公共页面编辑器。
      *
      * @returns {void}
@@ -360,9 +379,8 @@
             typeLabel: "表格控件",
             icon: "ri-table-line",
             coordinates: referenceDataPageEditorCoordinates(module),
-            // 三个适配器分别负责建立基线、取消恢复和显式入库。
+            // 当前状态与显式保存适配器随模块切换，页面总开关不维护草稿。
             captureState: referenceDataCapturePageGridState,
-            restoreState: referenceDataRestorePageGridState,
             saveState: referenceDataSavePageGridState
         });
     }
@@ -433,6 +451,11 @@
         if (Array.isArray(result.data?.tableElements)) {
             referenceDataState.records.set("columns", result.data.tableElements);
             referenceDataState.loadedKeys.add("columns");
+        }
+        // 页面配置中的 Window 列表是标题编辑入口的数据库事实来源，同时避免随后重复请求同一页面的 Window 记录。
+        if (Array.isArray(result.data?.windows)) {
+            referenceDataState.records.set("windows", result.data.windows);
+            referenceDataState.loadedKeys.add("windows");
         }
     }
 
@@ -652,8 +675,8 @@
     function referenceDataBuildTreeChildren(module) {
         // 左树只从已加载缓存读取，不在渲染过程中隐式触发网络请求。
         const records = referenceDataState.records.get(module.key) || [];
-        // 表格定义和下拉选项只作为一级业务入口；真实明细统一在右侧 Grid 或管理窗口查看。
-        if (module.key === "tables") return [];
+        // 表格定义和 Window 只作为一级业务入口；真实明细统一在右侧 Grid 或管理窗口查看。
+        if (module.key === "tables" || module.key === "windows") return [];
         // relation 模块使用递归结构；普通模块把每条记录作为一级叶子。
         if (module.relation) return referenceDataBuildHierarchy(module, records);
         // 平铺叶子仍使用与层级节点相同的稳定 ID 和右键动作协议。
@@ -744,6 +767,9 @@
             : allRecords;
         // 导航只采用后台授权并已映射成功的模块顺序。
         const navigationModules = referenceDataNavigationModules();
+        // 表格定义记录提供当前模块唯一 code，编辑态表格头和页面编辑数据库坐标共用这一事实来源。
+        const tableRecord = (referenceDataState.records.get("tables") || [])
+            .find((record) => String(record.dataTableName) === String(module.tableName));
         // 每个一级模块都带当前缓存数量和按需生成的业务子节点。
         const treeItems = navigationModules.map((navigationModule) => ({
             id: `module-${navigationModule.key}`,
@@ -755,7 +781,7 @@
         }));
         // 把一次组装反复使用的派生值集中返回，后续函数不再重复扫描缓存。
         return {
-            module, records, navigationModules, treeItems,
+            module, records, navigationModules, treeItems, tableRecord,
             // columns 是可直接交给 Grid 的最终只读列；typeOptions 是工具栏下拉输入。
             columns: referenceDataEnrichColumns(module, referenceDataState.columns.get(module.key) || []),
             typeOptions: referenceDataBuildTypeOptions(module, records),
@@ -850,7 +876,7 @@
         // 先计算共享上下文，再分别委托标题和下拉构建函数，避免一个巨型函数承担全部细节。
         const context = referenceDataBuildPayloadContext();
         // 这里只解构 Grid、Tree 和分页直接使用的字段。
-        const { module, records, navigationModules, treeItems, columns } = context;
+        const { module, records, navigationModules, treeItems, columns, tableRecord } = context;
         // selFreeze 让各公共组件只能读取视图，不能改写业务缓存。
         return selFreeze({
             // grid 段定义字段坐标和通用交互能力，不包含任何具体记录。
@@ -863,6 +889,7 @@
             // column 段定义表格实例、空状态和数据库驱动表头。
             column: {
                 gridId: referenceDataGridId, ariaLabel: `${module.name}数据表格`,
+                tableTitle: `${module.name}表格`, tableCode: tableRecord?.code || "尚未登记",
                 emptyText: referenceDataState.loadedKeys.has(module.key) ? `没有符合当前条件的${module.name}记录` : `正在加载${module.name}…`,
                 items: columns
             },
@@ -1568,11 +1595,6 @@
     async function referenceDataSwitchModule(key) {
         // 只接受注册表中的稳定 key，忽略 Tree 或外部事件传入的未知值。
         if (!referenceDataModules[key]) return;
-        // 编辑会话中禁止业务模块悄悄切换，管理员先保存或取消后再改变数据库坐标。
-        if (referenceDataState.personalizationController?.getState().pageEditor?.mode === "edit") {
-            selBase.toast("请先保存或取消当前页面更改。", "warning");
-            return;
-        }
         // 当前模块数据已经加载时重复点击无需重绘，也不会丢失当前筛选。
         if (referenceDataState.activeKey === key && referenceDataState.loadedKeys.has(key)) return;
         // 离开表格列详情时释放当前表格上下文，返回表格定义列表或其他业务模块。
@@ -1965,16 +1987,11 @@
             referenceDataState.editWindowControllers.set(module.key, controller);
         });
 
-        // 删除和取消页面编辑都只需一次布尔选择，使用紧凑 ConfirmDialog 而不是表单 Window。
         // 删除确认使用危险色，任何模块删除都复用这一实例并在 open 时传入动态文案。
         referenceDataState.deleteConfirmController = confirmDialog.mount(appHost, {
             id: "selConfirmDialogReferenceDataDeleteId", title: "删除引用数据", tone: "danger"
         });
-        // 页面编辑取消确认与业务删除完全隔离，防止文案或焦点状态串用。
-        referenceDataState.pageEditConfirmController = confirmDialog.mount(appHost, {
-            id: "selConfirmDialogReferenceDataPageEditId", title: "取消页面更改", tone: "danger"
-        });
-        if (!referenceDataState.deleteConfirmController || !referenceDataState.pageEditConfirmController) {
+        if (!referenceDataState.deleteConfirmController) {
             throw new Error("引用数据确认组件挂载失败。");
         }
     }
@@ -1992,27 +2009,15 @@
         referenceDataState.personalizationController = personalization.mount(personalizationHost, {
             // 背景控制器允许个性化面板实时预览主题、遮罩、亮度和模糊度。
             backgroundController,
-            pageEditor: {
-                // canEdit=false 时公共组件只隐藏页面编辑能力，不影响普通数据管理。
-                canEdit: canEditPage,
-                // 只有用户确认放弃时才恢复列宽基线；关闭或取消会继续保留草稿。
-                confirmDiscard: () => referenceDataState.pageEditConfirmController.open({
-                    title: "取消页面更改",
-                    message: "当前表格宽度尚未保存，取消后会恢复进入编辑模式前的宽度。",
-                    target: `${referenceDataActiveModule().tableName} · ${referenceDataActiveModule().gridId}`,
-                    confirmLabel: "取消更改",
-                    cancelLabel: "继续编辑",
-                    icon: "ri-arrow-go-back-line"
-                })
-            }
+            pageEditor: { canEdit: canEditPage }
         });
         // 个性化控制器缺失会导致页面编辑入口状态不可信，因此阻断启动。
         if (!referenceDataState.personalizationController) throw new Error("引用数据个性化设置挂载失败。");
         // 非管理员不登记任何页面控件；普通数据管理保持可用，页面编辑入口由公共组件隐藏。
         if (!canEditPage) return;
 
-        // 编辑角标定位在 Grid 画板，选中轮廓仍覆盖整个 Panel，方便用户识别当前可编辑控件。
-        const editHost = referenceDataState.panelRoot.querySelector(".selgrid-board-shell");
+        // 编辑入口停靠在只于整页编辑态显示的表格配置头，不再遮挡第一列表头或业务数据。
+        const editHost = referenceDataState.panelRoot.querySelector('[data-sel-grid-role="table-heading"]');
         // registerPageControl 把当前 Grid 的业务坐标和状态适配器登记给通用页面编辑器。
         if (!referenceDataState.personalizationController.registerPageControl({
             // id 是页面编辑器内部稳定控件坐标，与业务 Grid instanceKey 分开管理。
@@ -2026,12 +2031,32 @@
             editHost,
             // coordinates 让管理员实时看到当前配置的唯一 code 和数据库来源表。
             coordinates: referenceDataPageEditorCoordinates(),
-            // Grid 只在拖动结束时发布终值，避免指针移动过程频繁写库。
-            changeEvent: "selGrid:columnResizeChange",
             captureState: referenceDataCapturePageGridState,
-            restoreState: referenceDataRestorePageGridState,
             saveState: referenceDataSavePageGridState
         })) throw new Error("引用数据表格页面编辑登记失败。");
+
+        // 每个业务 Window 绑定独立数据库记录，拖拽或缩放后只保存当前实例。
+        referenceDataModuleList.forEach((module) => {
+            const controller = referenceDataState.editWindowControllers.get(module.key);
+            const windowRecord = (referenceDataState.records.get("windows") || []).find((record) =>
+                String(record.pageCode) === String(referenceDataState.pageCode)
+                && String(record.triggerControlCode) === String(module.windowId));
+            if (!controller || !windowRecord) throw new Error(`${module.name}尚未登记独立 Window 配置。`);
+            controller.setDefaultGeometry(windowRecord);
+            controller.setPageEditMetadata({ title: "Window", code: windowRecord.code });
+            const editTarget = controller.getPageEditTarget();
+            const editorId = `selWindow${module.key.charAt(0).toUpperCase()}${module.key.slice(1)}ReferenceDataPageEditorId`;
+            if (!referenceDataState.personalizationController.registerPageControl({
+                id: editorId, type: "window", typeLabel: "Window控件", title: `${module.name}Window`, icon: "ri-window-line",
+                root: editTarget.root, editHost: editTarget.editHost,
+                coordinates: [
+                    { label: "唯一 Code", value: windowRecord.code },
+                    { label: "来源表", value: "ReferenceDataWindow" }
+                ],
+                captureState: () => controller.getGeometry(),
+                saveState: (geometry) => referenceDataSaveWindowGeometry(windowRecord, geometry, controller)
+            })) throw new Error(`${module.name} Window 页面编辑登记失败。`);
+        });
 
     }
 

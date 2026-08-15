@@ -183,6 +183,10 @@
             return `
                 <div class="selgrid-board-shell" data-sel-panel-component="selGrid" aria-label="数据表格">
                     <div class="selgrid-board-highlight" aria-hidden="true"></div>
+                    <header class="selgrid-table-heading" data-sel-grid-role="table-heading">
+                        <span><i class="ri-table-line" aria-hidden="true"></i><strong data-sel-grid-role="table-title"></strong></span>
+                        <code data-sel-grid-role="table-code"></code>
+                    </header>
                     <div class="selgrid-table-scroller">
                         <table class="selgrid-table" data-sel-grid-role="table">
                             <colgroup data-sel-grid-role="column-group"></colgroup>

@@ -1141,19 +1141,85 @@
     font-size: var(--sel-theme-font-size-caption);
 }
 
-/* 页面编辑使用明确的左右模式切换；预览保持页面干净，编辑才显示控件角标。 */
-.selpersonal-page-mode {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
+/* 页面编辑只有一个总开关；打开后整页进入手动编辑，关闭后恢复干净业务页面。 */
+.selpersonal-page-edit-switch {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 10px;
-    padding: 4px;
+    padding: 7px 10px 7px 12px;
     border: 1px solid var(--sel-theme-line-soft);
     border-radius: var(--sel-theme-radius-control);
     background: var(--sel-theme-control-surface);
+    cursor: pointer;
 }
 
-.selpersonal-page-mode button,
+.selpersonal-page-edit-switch > span {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 2px 7px;
+    color: var(--sel-theme-text-main);
+}
+
+.selpersonal-page-edit-switch > span > i {
+    grid-row: 1 / span 2;
+    color: var(--sel-theme-text-icon);
+}
+
+.selpersonal-page-edit-switch small {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selpersonal-page-edit-switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.selpersonal-page-edit-switch > i {
+    position: relative;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 24px;
+    border: 1px solid var(--sel-theme-line-soft);
+    border-radius: 999px;
+    background: var(--sel-theme-control-surface);
+    box-shadow: var(--sel-theme-inset);
+}
+
+.selpersonal-page-edit-switch > i::after {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--sel-theme-text-secondary);
+    content: "";
+    transition: transform 160ms ease, background 160ms ease;
+}
+
+.selpersonal-page-edit-switch input:checked + i {
+    border-color: var(--sel-theme-line);
+    background: var(--sel-theme-selected-surface);
+}
+
+.selpersonal-page-edit-switch input:checked + i::after {
+    background: var(--sel-theme-text-on-selected-surface);
+    transform: translateX(18px);
+}
+
+.selpersonal-page-edit-switch:has(input:focus-visible) {
+    outline: 2px solid var(--sel-theme-line);
+    outline-offset: 2px;
+}
+
 .selpersonal-page-actions button,
 .selpersonal-page-controls button,
 .selpersonal-page-control-edit {
@@ -1162,25 +1228,6 @@
     background: transparent;
     cursor: pointer;
     font: inherit;
-}
-
-.selpersonal-page-mode button {
-    display: inline-flex;
-    min-height: 38px;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    border-radius: var(--sel-theme-radius-action);
-}
-
-.selpersonal-page-mode button:hover,
-.selpersonal-page-mode button:focus-visible,
-.selpersonal-page-mode .selpersonal-page-mode-selected {
-    border-color: var(--sel-theme-line);
-    color: var(--sel-theme-text-on-selected-surface);
-    outline: none;
-    background: var(--sel-theme-selected-surface);
-    box-shadow: var(--sel-theme-inset);
 }
 
 .selpersonal-page-controls {
@@ -1345,6 +1392,7 @@
 }
 
 .selpersonal-page-control-edit {
+    --selpersonal-page-edit-accent: var(--sel-theme-semantic-warning);
     position: absolute;
     z-index: 8;
     top: 8px;
@@ -1354,16 +1402,18 @@
     align-items: center;
     gap: 5px;
     padding: 0 10px;
-    border-color: var(--sel-theme-line);
+    border-color: color-mix(in srgb, var(--selpersonal-page-edit-accent) 74%, transparent);
     border-radius: var(--sel-theme-radius-action);
-    color: var(--sel-theme-text-on-selected-surface);
-    background: var(--sel-theme-selected-surface);
-    box-shadow: var(--sel-theme-inset), 0 0 12px rgb(var(--sel-theme-color-rgb) / 0.24);
+    color: var(--selpersonal-page-edit-accent);
+    background: color-mix(in srgb, var(--selpersonal-page-edit-accent) 16%, var(--sel-theme-control-surface));
+    box-shadow: var(--sel-theme-inset), 0 0 12px color-mix(in srgb, var(--selpersonal-page-edit-accent) 34%, transparent);
+    font-weight: var(--sel-theme-font-weight-semibold);
 }
 
 .selpersonal-page-control-edit:hover,
 .selpersonal-page-control-edit:focus-visible {
-    outline: 2px solid var(--sel-theme-line);
+    background: color-mix(in srgb, var(--selpersonal-page-edit-accent) 26%, var(--sel-theme-control-surface));
+    outline: 2px solid var(--selpersonal-page-edit-accent);
     outline-offset: 2px;
 }
 

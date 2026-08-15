@@ -99,6 +99,7 @@ tasks.register('verifySelUiSourceBoundary') {
         def personalizationSource = file('src/components/personalization/selPersonalization.js').getText('UTF-8')
         def personalizationStyle = file('src/components/personalization/selPersonalization.css').getText('UTF-8')
         def pageEditorGridSource = file('src/components/grid/selGrid.js').getText('UTF-8')
+        def pageEditorGridStyle = file('src/components/grid/selGrid.css').getText('UTF-8')
         def pageEditorWindowSource = file('src/components/window/selWindow.js').getText('UTF-8')
         def pageEditorWindowStyle = file('src/components/window/selWindow.css').getText('UTF-8')
         def pageEditorViolations = []
@@ -106,23 +107,36 @@ tasks.register('verifySelUiSourceBoundary') {
             'registerPageControl: selPersonalizationRegisterPageControl',
             'updatePageControl: selPersonalizationUpdatePageControl',
             'setPageMode: selPersonalizationSetPageMode',
-            'savePage: selPersonalizationSavePageEditing',
-            'cancelPage: selPersonalizationCancelPageEditing',
             'typeof selPersonalizationDefinition.onEdit === "function"',
             'actionOnly: selPersonalizationPageControlActionOnly',
             'enabled: selPersonalizationDefinition.enabled !== false',
-            'data-sel-personal-page-mode="preview"',
-            'data-sel-personal-page-mode="edit"'
+            'Array.isArray(selPersonalizationDefinition.roots)',
+            'Array.isArray(selPersonalizationDefinition.editHosts)',
+            'data-sel-personal-page-edit-switch',
+            'role="switch"',
+            'selPersonalizationPageEditSwitch.checked = selPersonalizationEditing',
+            '<span>保存${selPersonalizationPageControl.typeLabel}</span>'
         ].each { contract ->
             if (!personalizationSource.contains(contract)) pageEditorViolations.add("selPersonalization.js -> 缺少 ${contract}")
         }
-        ['selpersonal-page-mode', 'selpersonal-page-control-edit', 'selpersonal-page-inspector'].each { selector ->
+        ['selpersonal-page-edit-switch', 'selpersonal-page-control-edit'].each { selector ->
             if (!personalizationStyle.contains(".${selector}")) pageEditorViolations.add("selPersonalization.css -> 缺少 ${selector}")
         }
-        ['selGrid:columnResizeChange', 'captureColumnWidths:', 'setColumnWidths:', 'resetColumnWidths:'].each { contract ->
+        if (!personalizationStyle.contains('--selpersonal-page-edit-accent: var(--sel-theme-semantic-warning)')) {
+            pageEditorViolations.add('selPersonalization.css -> 页面编辑按钮缺少专属强调色')
+        }
+        ['data-sel-personal-page-actions', 'data-sel-personal-page-inspector', 'savePage: selPersonalizationSavePageEditing',
+         'cancelPage: selPersonalizationCancelPageEditing'].each { forbiddenContract ->
+            if (personalizationSource.contains(forbiddenContract)) pageEditorViolations.add("selPersonalization.js -> 页面编辑总开关禁止 ${forbiddenContract}")
+        }
+        if (!pageEditorGridStyle.contains('margin-left: 0;')) {
+            pageEditorViolations.add('selGrid.css -> 表格编辑按钮未紧邻数据库 code')
+        }
+        ['selGrid:columnResizeChange', 'captureColumnWidths:', 'setColumnWidths:', 'resetColumnWidths:', 'data-sel-grid-role="table-heading"', 'data-sel-grid-role="table-code"'].each { contract ->
             if (!pageEditorGridSource.contains(contract)) pageEditorViolations.add("selGrid.js -> 缺少 ${contract}")
         }
-        ['content instanceof Element', 'showActions === false', 'selwindow-form-fields-custom', 'selwindow-actions-shell[hidden]'].each { contract ->
+        ['content instanceof Element', 'showActions === false', 'selwindow-form-fields-custom', 'selwindow-actions-shell[hidden]',
+         'setPageEditMetadata', 'getPageEditTarget', 'setDefaultGeometry', 'getGeometry', 'selwindow-page-edit-heading'].each { contract ->
             if (!pageEditorWindowSource.contains(contract) && !pageEditorWindowStyle.contains(contract)) {
                 pageEditorViolations.add("selWindow -> 缺少 ${contract}")
             }

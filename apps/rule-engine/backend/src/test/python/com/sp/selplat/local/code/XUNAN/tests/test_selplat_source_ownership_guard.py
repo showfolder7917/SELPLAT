@@ -611,7 +611,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         self.assertEqual([], violations)
 
     def test_real_sel_ui_has_complete_page_editor_contract(self) -> None:
-        """真实个性化与 Grid 必须同时提供页面编辑会话和列宽状态适配器。"""
+        """真实个性化与 Grid 必须提供单一整页编辑开关、配置表头和列宽状态适配器。"""
         violations = self.guard.audit_sel_ui_component_governance(PROJECT_ROOT)
 
         self.assertNotIn(
@@ -622,6 +622,28 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             "SEL_UI_GRID_PAGE_EDITOR_ADAPTER_MISSING",
             {violation["code"] for violation in violations},
         )
+        self.assertNotIn(
+            "SEL_UI_WINDOW_PAGE_EDITOR_ADAPTER_MISSING",
+            {violation["code"] for violation in violations},
+        )
+        self.assertNotIn(
+            "SEL_UI_PAGE_EDITOR_BUTTON_ACCENT_MISSING",
+            {violation["code"] for violation in violations},
+        )
+        self.assertNotIn(
+            "SEL_UI_GRID_PAGE_EDITOR_BUTTON_POSITION_INVALID",
+            {violation["code"] for violation in violations},
+        )
+
+        personalization_source = (PROJECT_ROOT / "shared/frontend/sel-ui/src/components/personalization/selPersonalization.js") \
+            .read_text(encoding="utf-8")
+        self.assertIn('role="switch"', personalization_source)
+        self.assertNotIn('data-sel-personal-page-mode="preview"', personalization_source)
+        self.assertNotIn('data-sel-personal-page-mode="edit"', personalization_source)
+        self.assertNotIn("data-sel-personal-page-actions", personalization_source)
+        self.assertNotIn("data-sel-personal-page-inspector", personalization_source)
+        self.assertNotIn("savePage: selPersonalizationSavePageEditing", personalization_source)
+        self.assertNotIn("cancelPage: selPersonalizationCancelPageEditing", personalization_source)
 
     def test_real_grid_header_separator_covers_first_column_only_until_last(self) -> None:
         """表头竖线必须从第一列开始，并只排除没有后续列的最后一列。"""

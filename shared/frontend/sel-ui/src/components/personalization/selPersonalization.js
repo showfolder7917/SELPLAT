@@ -500,21 +500,11 @@
                     </section>
                     <section class="selpersonal-area-panel" id="selpersonal-page-area" data-sel-personal-area-panel="page" hidden>
                         <div class="selpersonal-page-editor-heading"><span><i class="ri-layout-masonry-line" aria-hidden="true"></i><strong>页面编辑</strong></span><small>仅管理员可操作</small></div>
-                        <div class="selpersonal-page-mode" role="group" aria-label="页面编辑模式">
-                            <button class="selpersonal-page-mode-selected" type="button" data-sel-personal-page-mode="preview" aria-pressed="true"><i class="ri-eye-line" aria-hidden="true"></i><span>预览</span></button>
-                            <button type="button" data-sel-personal-page-mode="edit" aria-pressed="false"><i class="ri-edit-box-line" aria-hidden="true"></i><span>编辑</span></button>
-                        </div>
-                        <div class="selpersonal-page-controls" data-sel-personal-page-controls></div>
-                        <article class="selpersonal-page-inspector" data-sel-personal-page-inspector hidden>
-                            <header><span><i data-sel-personal-page-control-icon aria-hidden="true"></i><strong data-sel-personal-page-control-title></strong></span><em data-sel-personal-page-dirty>未修改</em></header>
-                            <dl data-sel-personal-page-coordinates></dl>
-                            <p><i class="ri-drag-move-2-line" aria-hidden="true"></i><span data-sel-personal-page-help>进入编辑模式后拖动表头边界，页面会实时预览宽度。</span></p>
-                        </article>
-                        <div class="selpersonal-page-actions" data-sel-personal-page-actions hidden>
-                            <button type="button" data-sel-personal-page-action="cancel">取消更改</button>
-                            <button type="button" data-sel-personal-page-action="save"><i class="ri-save-3-line" aria-hidden="true"></i><span>保存页面配置</span></button>
-                        </div>
-                        <div class="selpersonal-extension-empty" data-sel-personal-page-empty><i class="ri-shield-keyhole-line" aria-hidden="true"></i><strong>等待项目配置</strong><span>当前页面注册表格、菜单、树或下拉控件后会在这里显示。</span></div>
+                        <label class="selpersonal-page-edit-switch">
+                            <span><i class="ri-edit-box-line" aria-hidden="true"></i><strong>手动编辑页面</strong><small data-sel-personal-page-edit-status>已关闭</small></span>
+                            <input type="checkbox" role="switch" data-sel-personal-page-edit-switch aria-label="开启整页手动编辑" aria-checked="false">
+                            <i aria-hidden="true"></i>
+                        </label>
                     </section>`
         });
         // 缺少通用浮动面板注册能力时拒绝创建半套个性化界面。
@@ -599,42 +589,32 @@
         const selPersonalizationPageControls = new Map();
         let selPersonalizationPageMode = "preview";
         let selPersonalizationSelectedPageControlId = "";
-        let selPersonalizationPageSaving = false;
         const selPersonalizationPageAreaButton = selPersonalizationControl.querySelector('[data-sel-personal-area="page"]');
         const selPersonalizationPageAreaPanel = selPersonalizationControl.querySelector('[data-sel-personal-area-panel="page"]');
-        const selPersonalizationPageControlsHost = selPersonalizationControl.querySelector("[data-sel-personal-page-controls]");
-        const selPersonalizationPageInspector = selPersonalizationControl.querySelector("[data-sel-personal-page-inspector]");
-        const selPersonalizationPageActions = selPersonalizationControl.querySelector("[data-sel-personal-page-actions]");
-        const selPersonalizationPageEmpty = selPersonalizationControl.querySelector("[data-sel-personal-page-empty]");
+        const selPersonalizationPageControlsHost = null;
+        const selPersonalizationPageInspector = null;
+        const selPersonalizationPageActions = null;
+        const selPersonalizationPageEmpty = null;
+        const selPersonalizationPageEditSwitch = selPersonalizationControl.querySelector("[data-sel-personal-page-edit-switch]");
+        const selPersonalizationPageEditStatus = selPersonalizationControl.querySelector("[data-sel-personal-page-edit-status]");
         // 非管理员不显示页面编辑入口；后台保存接口仍会执行第二次权限校验。
         if (selPersonalizationPageAreaButton) selPersonalizationPageAreaButton.hidden = !selPersonalizationPageEditorAllowed;
         selPersonalizationControl.querySelector(".selpersonal-areas")?.classList.toggle("selpersonal-areas-page-hidden", !selPersonalizationPageEditorAllowed);
         if (selPersonalizationPageAreaPanel && !selPersonalizationPageEditorAllowed) selPersonalizationPageAreaPanel.hidden = true;
 
-        /** 把列宽等简单页面草稿复制为独立快照，基线和运行时状态不会共享可变引用。 */
+        /** 把页面控件当前状态复制为独立快照，保存适配器不能改写控件内部对象。 */
         function selPersonalizationClonePageState(selPersonalizationPageState) {
             return selPersonalizationPageState && typeof selPersonalizationPageState === "object"
                 ? JSON.parse(JSON.stringify(selPersonalizationPageState))
                 : {};
         }
 
-        /** 使用稳定 JSON 比较页面草稿，避免对象引用变化被误判成真实修改。 */
-        function selPersonalizationPageStatesEqual(selPersonalizationLeftState, selPersonalizationRightState) {
-            return JSON.stringify(selPersonalizationLeftState || {}) === JSON.stringify(selPersonalizationRightState || {});
-        }
-
-        /** 返回当前编辑会话是否包含尚未保存的控件草稿。 */
-        function selPersonalizationHasDirtyPageControls() {
-            return Array.from(selPersonalizationPageControls.values())
-                .some((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly && selPersonalizationPageControl.dirty);
-        }
-
         /** 在实际控件右上角同步编辑入口，预览模式保持业务页面干净。 */
         function selPersonalizationSyncPageControlBadges() {
             selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
                 const selPersonalizationShowBadge = selPersonalizationPageMode === "edit" && selPersonalizationPageControl.enabled;
-                selPersonalizationPageControl.editHost.classList.toggle("selpersonal-page-editable", selPersonalizationShowBadge);
-                selPersonalizationPageControl.editButton.hidden = !selPersonalizationShowBadge;
+                selPersonalizationPageControl.roots.forEach((selPersonalizationRoot) => selPersonalizationRoot.classList.toggle("selpersonal-page-editable", selPersonalizationShowBadge));
+                selPersonalizationPageControl.editButtons.forEach((selPersonalizationEditButton) => { selPersonalizationEditButton.hidden = !selPersonalizationShowBadge; });
             });
             document.documentElement.dataset.selPageEditMode = selPersonalizationPageMode;
         }
@@ -708,122 +688,45 @@
             return true;
         }
 
-        /** 询问应用提供的公共确认控件，避免切回预览时静默丢弃未保存列宽。 */
-        async function selPersonalizationConfirmDiscardPageChanges() {
-            if (!selPersonalizationHasDirtyPageControls()) return true;
-            if (typeof selPersonalizationOptions.pageEditor?.confirmDiscard !== "function") {
-                window.sel.core?.toast?.("请先保存或明确取消页面更改。", "warning");
-                return false;
-            }
-            return Boolean(await selPersonalizationOptions.pageEditor.confirmDiscard());
-        }
-
-        /** 恢复全部控件进入编辑模式时的基线，然后退出到干净预览状态。 */
-        async function selPersonalizationCancelPageEditing() {
-            if (!await selPersonalizationConfirmDiscardPageChanges()) return false;
-            selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
-                if (selPersonalizationPageControl.actionOnly) return;
-                if (selPersonalizationPageControl.dirty) selPersonalizationPageControl.restoreState(selPersonalizationPageControl.baseline);
-                selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
-                selPersonalizationPageControl.dirty = false;
-            });
-            selPersonalizationPageMode = "preview";
-            selPersonalizationSyncPageMode();
-            window.sel.core?.toast?.("页面更改已取消。", "info");
-            return true;
-        }
-
-        /** 切换预览或编辑模式；进入编辑时为每个控件建立可恢复快照。 */
+        /** 页面编辑只负责开启或关闭整页手动编辑能力，不保存、恢复或拦截业务导航。 */
         async function selPersonalizationSetPageMode(selPersonalizationNextMode) {
             if (!selPersonalizationPageEditorAllowed || !["preview", "edit"].includes(selPersonalizationNextMode)) return false;
             if (selPersonalizationNextMode === selPersonalizationPageMode) return true;
-            if (selPersonalizationNextMode === "preview" && !await selPersonalizationConfirmDiscardPageChanges()) return false;
-            if (selPersonalizationNextMode === "preview") {
-                selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
-                    if (selPersonalizationPageControl.actionOnly) return;
-                    if (selPersonalizationPageControl.dirty) {
-                        selPersonalizationPageControl.restoreState(selPersonalizationClonePageState(selPersonalizationPageControl.baseline));
-                    }
-                    selPersonalizationPageControl.dirty = false;
-                    selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
-                });
-            } else {
-                selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
-                    if (selPersonalizationPageControl.actionOnly) return;
-                    selPersonalizationPageControl.baseline = selPersonalizationClonePageState(selPersonalizationPageControl.captureState());
-                    selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
-                    selPersonalizationPageControl.dirty = false;
-                });
-                if (!selPersonalizationSelectedPageControlId) {
-                    selPersonalizationSelectedPageControlId = selPersonalizationPageControls.keys().next().value || "";
-                }
-            }
             selPersonalizationPageMode = selPersonalizationNextMode;
             selPersonalizationSyncPageMode();
             return true;
         }
 
-        /** 同步左右模式按钮、页面控件角标、检查器和保存动作状态。 */
+        /** 同步整页编辑开关、页面控件角标、检查器和保存动作状态。 */
         function selPersonalizationSyncPageMode() {
-            selPersonalizationControl.querySelectorAll("[data-sel-personal-page-mode]").forEach((selPersonalizationPageModeButton) => {
-                const selPersonalizationSelected = selPersonalizationPageModeButton.dataset.selPersonalPageMode === selPersonalizationPageMode;
-                selPersonalizationPageModeButton.classList.toggle("selpersonal-page-mode-selected", selPersonalizationSelected);
-                selPersonalizationPageModeButton.setAttribute("aria-pressed", String(selPersonalizationSelected));
-            });
+            const selPersonalizationEditing = selPersonalizationPageMode === "edit";
+            if (selPersonalizationPageEditSwitch) {
+                selPersonalizationPageEditSwitch.checked = selPersonalizationEditing;
+                selPersonalizationPageEditSwitch.setAttribute("aria-checked", String(selPersonalizationEditing));
+            }
+            if (selPersonalizationPageEditStatus) selPersonalizationPageEditStatus.textContent = selPersonalizationEditing ? "已开启" : "已关闭";
             selPersonalizationSyncPageControlBadges();
             selPersonalizationRenderPageControls();
-        }
-
-        /** 保存全部已修改控件；没有脏标记时也显式保存当前控件，覆盖先拖动后开启页面编辑的操作顺序。 */
-        async function selPersonalizationSavePageEditing() {
-            if (selPersonalizationPageSaving) return false;
-            const selPersonalizationDirtyControls = Array.from(selPersonalizationPageControls.values())
-                .filter((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly && selPersonalizationPageControl.dirty);
-            const selPersonalizationSelectedControl = selPersonalizationPageControls.get(selPersonalizationSelectedPageControlId)
-                || Array.from(selPersonalizationPageControls.values()).find((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly);
-            const selPersonalizationPersistentSelectedControl = selPersonalizationSelectedControl?.actionOnly
-                ? Array.from(selPersonalizationPageControls.values()).find((selPersonalizationPageControl) => !selPersonalizationPageControl.actionOnly)
-                : selPersonalizationSelectedControl;
-            const selPersonalizationSaveControls = selPersonalizationDirtyControls.length > 0
-                ? selPersonalizationDirtyControls
-                : (selPersonalizationPersistentSelectedControl ? [selPersonalizationPersistentSelectedControl] : []);
-            if (selPersonalizationSaveControls.length === 0) return false;
-            selPersonalizationPageSaving = true;
-            if (selPersonalizationPageActions) selPersonalizationPageActions.querySelectorAll("button").forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = true; });
-            try {
-                for (const selPersonalizationPageControl of selPersonalizationSaveControls) {
-                    const selPersonalizationStateToSave = selPersonalizationPageControl.dirty
-                        ? selPersonalizationPageControl.draft
-                        : selPersonalizationPageControl.captureState();
-                    await selPersonalizationPageControl.saveState(selPersonalizationClonePageState(selPersonalizationStateToSave));
-                    selPersonalizationPageControl.baseline = selPersonalizationClonePageState(selPersonalizationPageControl.captureState());
-                    selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
-                    selPersonalizationPageControl.dirty = false;
-                }
-                selPersonalizationPageMode = "preview";
-                selPersonalizationSyncPageMode();
-                window.sel.core?.toast?.("页面配置已保存。", "success");
-                return true;
-            } catch (selPersonalizationPageSaveError) {
-                window.sel.core?.toast?.(selPersonalizationPageSaveError.message || "页面配置保存失败。", "error");
-                return false;
-            } finally {
-                selPersonalizationPageSaving = false;
-                if (selPersonalizationPageActions) selPersonalizationPageActions.querySelectorAll("button").forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = false; });
-            }
         }
 
         /** 登记一个页面可编辑控件及其状态适配器；同 ID 只允许通过 updatePageControl 更新。 */
         function selPersonalizationRegisterPageControl(selPersonalizationDefinition = {}) {
             const selPersonalizationPageControlId = String(selPersonalizationDefinition.id || "").trim();
             const selPersonalizationPageControlActionOnly = typeof selPersonalizationDefinition.onEdit === "function";
+            // 一个逻辑控件可以映射多个真实实例，例如同页多个 selWindow 标题栏共享同一数据库 Window 配置。
+            const selPersonalizationRoots = Array.isArray(selPersonalizationDefinition.roots)
+                ? selPersonalizationDefinition.roots.filter((selPersonalizationRoot) => selPersonalizationRoot instanceof Element)
+                : (selPersonalizationDefinition.root instanceof Element ? [selPersonalizationDefinition.root] : []);
+            const selPersonalizationEditHosts = Array.isArray(selPersonalizationDefinition.editHosts)
+                ? selPersonalizationDefinition.editHosts.filter((selPersonalizationEditHost) => selPersonalizationEditHost instanceof Element)
+                : (selPersonalizationDefinition.editHost instanceof Element ? [selPersonalizationDefinition.editHost] : [...selPersonalizationRoots]);
             if (!selPersonalizationPageEditorAllowed
                 || !/^[a-z][a-z0-9]*$/i.test(selPersonalizationPageControlId)
                 || selPersonalizationPageControls.has(selPersonalizationPageControlId)
-                || !(selPersonalizationDefinition.root instanceof Element)
+                || selPersonalizationRoots.length === 0
+                || selPersonalizationEditHosts.length === 0
                 || (!selPersonalizationPageControlActionOnly && (
                     typeof selPersonalizationDefinition.captureState !== "function"
-                    || typeof selPersonalizationDefinition.restoreState !== "function"
                     || typeof selPersonalizationDefinition.saveState !== "function"))) return false;
             const selPersonalizationPageControl = {
                 id: selPersonalizationPageControlId,
@@ -831,8 +734,9 @@
                 typeLabel: String(selPersonalizationDefinition.typeLabel || "页面控件"),
                 title: String(selPersonalizationDefinition.title || "页面控件"),
                 icon: String(selPersonalizationDefinition.icon || "ri-layout-masonry-line"),
-                root: selPersonalizationDefinition.root,
-                editHost: selPersonalizationDefinition.editHost instanceof Element ? selPersonalizationDefinition.editHost : selPersonalizationDefinition.root,
+                root: selPersonalizationRoots[0],
+                roots: selPersonalizationRoots,
+                editHosts: selPersonalizationEditHosts,
                 coordinates: Array.isArray(selPersonalizationDefinition.coordinates) ? selPersonalizationDefinition.coordinates.map((selPersonalizationCoordinate) => ({
                     label: String(selPersonalizationCoordinate.label || "坐标"), value: String(selPersonalizationCoordinate.value || "—")
                 })) : [],
@@ -840,16 +744,10 @@
                 actionOnly: selPersonalizationPageControlActionOnly,
                 onEdit: selPersonalizationPageControlActionOnly ? selPersonalizationDefinition.onEdit : null,
                 captureState: selPersonalizationDefinition.captureState || (() => ({})),
-                restoreState: selPersonalizationDefinition.restoreState || (() => true),
                 saveState: selPersonalizationDefinition.saveState || (() => Promise.resolve(true)),
-                changeEvent: String(selPersonalizationDefinition.changeEvent || "change"),
-                baseline: {}, draft: {}, dirty: false, editButton: document.createElement("button"), changeListener: null
+                editButtons: [], saving: false
             };
-            selPersonalizationPageControl.editButton.type = "button";
-            selPersonalizationPageControl.editButton.className = "selpersonal-page-control-edit";
-            selPersonalizationPageControl.editButton.hidden = true;
-            selPersonalizationPageControl.editButton.innerHTML = `<i class="ri-edit-line" aria-hidden="true"></i><span>编辑${selPersonalizationPageControl.typeLabel}</span>`;
-            selPersonalizationPageControl.editButton.addEventListener("click", () => {
+            const selPersonalizationHandleEdit = async () => {
                 selPersonalizationSelectPageControl(selPersonalizationPageControl.id);
                 if (selPersonalizationPageControl.actionOnly) {
                     Promise.resolve(selPersonalizationPageControl.onEdit()).catch((selPersonalizationError) => {
@@ -857,17 +755,29 @@
                     });
                     return;
                 }
-                selPersonalizationFloatingPanel.open();
-                selPersonalizationSelectArea("page");
-            });
-            selPersonalizationPageControl.changeListener = () => {
-                if (selPersonalizationPageMode !== "edit" || selPersonalizationPageControl.actionOnly) return;
-                selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.captureState());
-                selPersonalizationPageControl.dirty = !selPersonalizationPageStatesEqual(selPersonalizationPageControl.baseline, selPersonalizationPageControl.draft);
-                selPersonalizationRenderPageControls();
+                if (selPersonalizationPageControl.saving) return;
+                selPersonalizationPageControl.saving = true;
+                selPersonalizationPageControl.editButtons.forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = true; });
+                try {
+                    await selPersonalizationPageControl.saveState(selPersonalizationClonePageState(selPersonalizationPageControl.captureState()));
+                    window.sel.core?.toast?.(`${selPersonalizationPageControl.typeLabel}设置已保存。`, "success");
+                } catch (selPersonalizationError) {
+                    window.sel.core?.toast?.(selPersonalizationError.message || `${selPersonalizationPageControl.typeLabel}保存失败。`, "error");
+                } finally {
+                    selPersonalizationPageControl.saving = false;
+                    selPersonalizationPageControl.editButtons.forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = false; });
+                }
             };
-            selPersonalizationPageControl.root.addEventListener(selPersonalizationPageControl.changeEvent, selPersonalizationPageControl.changeListener);
-            selPersonalizationPageControl.editHost.appendChild(selPersonalizationPageControl.editButton);
+            selPersonalizationPageControl.editButtons = selPersonalizationPageControl.editHosts.map((selPersonalizationEditHost) => {
+                const selPersonalizationEditButton = document.createElement("button");
+                selPersonalizationEditButton.type = "button";
+                selPersonalizationEditButton.className = "selpersonal-page-control-edit";
+                selPersonalizationEditButton.hidden = true;
+                selPersonalizationEditButton.innerHTML = `<i class="ri-save-3-line" aria-hidden="true"></i><span>保存${selPersonalizationPageControl.typeLabel}</span>`;
+                selPersonalizationEditButton.addEventListener("click", selPersonalizationHandleEdit);
+                selPersonalizationEditHost.appendChild(selPersonalizationEditButton);
+                return selPersonalizationEditButton;
+            });
             selPersonalizationPageControls.set(selPersonalizationPageControl.id, selPersonalizationPageControl);
             if (!selPersonalizationSelectedPageControlId) selPersonalizationSelectedPageControlId = selPersonalizationPageControl.id;
             selPersonalizationSyncPageMode();
@@ -877,7 +787,7 @@
         /** 更新同一物理控件当前业务模块的名称、坐标和保存适配器。 */
         function selPersonalizationUpdatePageControl(selPersonalizationPageControlId, selPersonalizationDefinition = {}) {
             const selPersonalizationPageControl = selPersonalizationPageControls.get(String(selPersonalizationPageControlId || ""));
-            if (!selPersonalizationPageControl || selPersonalizationPageMode === "edit") return false;
+            if (!selPersonalizationPageControl) return false;
             if (selPersonalizationDefinition.title) selPersonalizationPageControl.title = String(selPersonalizationDefinition.title);
             if (selPersonalizationDefinition.typeLabel) selPersonalizationPageControl.typeLabel = String(selPersonalizationDefinition.typeLabel);
             if (selPersonalizationDefinition.icon) selPersonalizationPageControl.icon = String(selPersonalizationDefinition.icon);
@@ -887,7 +797,6 @@
                 }));
             }
             if (typeof selPersonalizationDefinition.captureState === "function") selPersonalizationPageControl.captureState = selPersonalizationDefinition.captureState;
-            if (typeof selPersonalizationDefinition.restoreState === "function") selPersonalizationPageControl.restoreState = selPersonalizationDefinition.restoreState;
             if (typeof selPersonalizationDefinition.saveState === "function") selPersonalizationPageControl.saveState = selPersonalizationDefinition.saveState;
             if (typeof selPersonalizationDefinition.onEdit === "function") {
                 selPersonalizationPageControl.onEdit = selPersonalizationDefinition.onEdit;
@@ -896,10 +805,9 @@
             if (typeof selPersonalizationDefinition.enabled === "boolean") {
                 selPersonalizationPageControl.enabled = selPersonalizationDefinition.enabled;
             }
-            selPersonalizationPageControl.editButton.querySelector("span").textContent = `编辑${selPersonalizationPageControl.typeLabel}`;
-            selPersonalizationPageControl.baseline = selPersonalizationClonePageState(selPersonalizationPageControl.captureState());
-            selPersonalizationPageControl.draft = selPersonalizationClonePageState(selPersonalizationPageControl.baseline);
-            selPersonalizationPageControl.dirty = false;
+            selPersonalizationPageControl.editButtons.forEach((selPersonalizationEditButton) => {
+                selPersonalizationEditButton.querySelector("span").textContent = `保存${selPersonalizationPageControl.typeLabel}`;
+            });
             selPersonalizationRenderPageControls();
             return true;
         }
@@ -908,11 +816,10 @@
             const selPersonalizationPageControlButton = selPersonalizationEvent.target.closest("[data-sel-personal-page-control]");
             if (selPersonalizationPageControlButton) selPersonalizationSelectPageControl(selPersonalizationPageControlButton.dataset.selPersonalPageControl);
         });
-        selPersonalizationControl.querySelectorAll("[data-sel-personal-page-mode]").forEach((selPersonalizationPageModeButton) => {
-            selPersonalizationPageModeButton.addEventListener("click", () => selPersonalizationSetPageMode(selPersonalizationPageModeButton.dataset.selPersonalPageMode));
+        selPersonalizationPageEditSwitch?.addEventListener("change", async () => {
+            const selPersonalizationChanged = await selPersonalizationSetPageMode(selPersonalizationPageEditSwitch.checked ? "edit" : "preview");
+            if (!selPersonalizationChanged) selPersonalizationSyncPageMode();
         });
-        selPersonalizationControl.querySelector('[data-sel-personal-page-action="cancel"]')?.addEventListener("click", selPersonalizationCancelPageEditing);
-        selPersonalizationControl.querySelector('[data-sel-personal-page-action="save"]')?.addEventListener("click", selPersonalizationSavePageEditing);
         selPersonalizationSyncPageMode();
 
         /** 根据主题模式的正式背景 ID 解析缩略图素材，预览不复制主题图片路径。 */
@@ -2001,8 +1908,7 @@
                 pageEditor: {
                     canEdit: selPersonalizationPageEditorAllowed,
                     mode: selPersonalizationPageMode,
-                    selectedControlId: selPersonalizationSelectedPageControlId,
-                    dirty: selPersonalizationHasDirtyPageControls()
+                    controlCount: selPersonalizationPageControls.size
                 },
                 area: selPersonalizationControl.querySelector('[data-sel-personal-area][aria-selected="true"]')?.dataset.selPersonalArea || "appearance",
                 view: selPersonalizationControl.querySelector('[data-sel-personal-tab][aria-selected="true"]')?.dataset.selPersonalTab || "skin"
@@ -2017,8 +1923,6 @@
             registerPageControl: selPersonalizationRegisterPageControl,
             updatePageControl: selPersonalizationUpdatePageControl,
             setPageMode: selPersonalizationSetPageMode,
-            savePage: selPersonalizationSavePageEditing,
-            cancelPage: selPersonalizationCancelPageEditing,
             setLocale: selPersonalizationSetLocale,
             setSettingsSchema(selPersonalizationSettingsSchema) {
                 if (!selPersonalizationSettingsRegistry?.replaceFromJson(selPersonalizationSettingsSchema)) return false;

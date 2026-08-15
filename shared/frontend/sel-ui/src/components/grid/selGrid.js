@@ -35,6 +35,10 @@
         selGridRoot.innerHTML = `
             <div class="selgrid-board-shell" aria-label="数据表格">
                 <div class="selgrid-board-highlight" aria-hidden="true"></div>
+                <header class="selgrid-table-heading" data-sel-grid-role="table-heading">
+                    <span><i class="ri-table-line" aria-hidden="true"></i><strong data-sel-grid-role="table-title"></strong></span>
+                    <code data-sel-grid-role="table-code"></code>
+                </header>
                 <div class="selgrid-table-scroller">
                     <table class="selgrid-table" data-sel-grid-role="table">
                         <colgroup data-sel-grid-role="column-group"></colgroup>
@@ -211,6 +215,14 @@
 
         // 根据 column JSON 生成表头，使列名和排序说明不再写死在 HTML。
         function selGridRenderColumnHeader() {
+            // 编辑态表格头展示调用方登记的可见名称和数据库唯一 code，关闭整页编辑时由样式彻底退出布局。
+            const selGridTableHeading = selGridRoot.querySelector('[data-sel-grid-role="table-heading"]');
+            const selGridTableTitle = selGridRoot.querySelector('[data-sel-grid-role="table-title"]');
+            const selGridTableCode = selGridRoot.querySelector('[data-sel-grid-role="table-code"]');
+            const selGridHeadingReady = Boolean(selGridInputPayload.column.tableTitle && selGridInputPayload.column.tableCode);
+            if (selGridTableTitle) selGridTableTitle.textContent = selGridInputPayload.column.tableTitle || "";
+            if (selGridTableCode) selGridTableCode.textContent = selGridInputPayload.column.tableCode || "";
+            if (selGridTableHeading) selGridTableHeading.classList.toggle("selgrid-table-heading-ready", selGridHeadingReady);
             // 当前实例表格节点用于同步可访问名称。
             const selGridTable = selGridRoot.querySelector('[data-sel-grid-role="table"]');
             // 列宽组节点承接 column JSON 的 className。

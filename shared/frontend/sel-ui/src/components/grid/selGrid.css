@@ -97,6 +97,53 @@
     display: none;
 }
 
+/* 表格配置头只属于整页手动编辑态；关闭开关时不占用任何业务表格高度。 */
+.selgrid-table-heading {
+    position: relative;
+    z-index: 8;
+    display: none;
+    min-width: 0;
+    min-height: 48px;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--sel-theme-workspace-line);
+    color: var(--sel-theme-text-main);
+    background: var(--sel-theme-workspace-surface);
+}
+
+:root[data-sel-page-edit-mode="edit"] .selgrid-board-shell:has(> .selgrid-table-heading-ready) {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+:root[data-sel-page-edit-mode="edit"] .selgrid-table-heading-ready {
+    display: flex;
+}
+
+.selgrid-table-heading > span {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 7px;
+}
+
+.selgrid-table-heading > span > i {
+    color: var(--sel-theme-text-icon);
+}
+
+.selgrid-table-heading code {
+    color: var(--sel-theme-text-secondary);
+    font-family: var(--sel-theme-font-family-code, monospace);
+    font-size: var(--sel-theme-font-size-caption);
+}
+
+.selgrid-table-heading > .selpersonal-page-control-edit {
+    position: static;
+    flex: 0 0 auto;
+    margin-left: 0;
+}
+
 /* 表格内容视口：为表头和数据行预留底部分页栏空间，并裁切表格圆角区域。 */
 .selgrid-table-scroller {
     position: relative;

@@ -277,6 +277,12 @@
 
         // 当前实例状态统一保存可见性、提交值、几何、最大化还原点和指针交互。
         const selWindowState = { open: false, minimized: false, submitted: null, geometry: null, restoreGeometry: null, maximized: false, interaction: null };
+        // 数据库配置是该实例下一次打开时的默认矩形，未显式保存的拖拽不会跨关闭动作记忆。
+        const selWindowDefaultGeometry = {
+            width: selWindowDefaultWidth, height: selWindowDefaultHeight,
+            minWidth: selWindowMinimumWidth, minHeight: selWindowMinimumHeight,
+            maxWidth: null, maxHeight: null, x: null, y: null, positionMode: "CENTER"
+        };
         // 遮罩初始隐藏，只有应用调用 open 后参与布局。
         const selWindowOverlay = selWindowCreateElement("div", "selwindow-overlay");
         // hidden 是关闭窗口的唯一布局状态。
@@ -307,6 +313,11 @@
         selWindowBrandCopy.append(selWindowTitle, selWindowSubtitle);
         // 徽标和标题按参考图顺序进入品牌组。
         selWindowBrand.append(selWindowBrandImage, selWindowBrandCopy);
+        // 页面编辑标题宿主只展示应用登记的 Window 名称、数据库 code 和公共编辑按钮；总开关关闭时完全退出布局。
+        const selWindowPageEditHeading = selWindowCreateElement("div", "selwindow-page-edit-heading");
+        const selWindowPageEditTitle = selWindowCreateElement("strong", "selwindow-page-edit-title");
+        const selWindowPageEditCode = selWindowCreateElement("code", "selwindow-page-edit-code");
+        selWindowPageEditHeading.append(selWindowCreateIcon("ri-window-line"), selWindowPageEditTitle, selWindowPageEditCode);
         // 标题栏动作组把最小化、最大化与关闭作为统一窗口级控制呈现。
         const selWindowHeaderActions = selWindowCreateElement("div", "selwindow-header-actions");
         // 最小化按钮把窗口收起到页面底部停靠区，但保留表单和几何状态。
@@ -337,7 +348,7 @@
         // 三个窗口动作按最小化、最大化、关闭顺序进入标题栏右端。
         selWindowHeaderActions.append(selWindowMinimize, selWindowMaximize, selWindowClose);
         // 标题栏左右两端完成装配，并作为整块可拖动区域。
-        selWindowHeader.append(selWindowBrand, selWindowHeaderActions);
+        selWindowHeader.append(selWindowBrand, selWindowPageEditHeading, selWindowHeaderActions);
 
         // 原生 form 负责字段值、必填校验和提交语义。
         const selWindowForm = selWindowCreateElement("form", "selwindow-form-shell");
@@ -446,6 +457,14 @@
             return { width: selWindowViewportWidth, height: selWindowViewportHeight };
         }
 
+        /** 把数据库 px 字符串或数字转为有限像素值。 */
+        function selWindowParsePixels(selWindowValue, selWindowFallback = null) {
+            const selWindowNumber = typeof selWindowValue === "number"
+                ? selWindowValue
+                : Number.parseFloat(String(selWindowValue || "").replace(/px$/i, ""));
+            return Number.isFinite(selWindowNumber) ? selWindowNumber : selWindowFallback;
+        }
+
         /**
          * 把候选几何限制在视口安全区与当前最小尺寸之间。
          * @param {{left:number,top:number,width:number,height:number}} selWindowGeometry - 拖动、缩放或恢复产生的候选矩形。
@@ -455,13 +474,15 @@
             // 当前视口决定本次可用的最大宽高。
             const selWindowViewport = selWindowGetViewport();
             // 极窄视口下最小宽度自动退让到安全区内。
-            const selWindowMinWidth = Math.min(selWindowMinimumWidth, Math.max(320, selWindowViewport.width - selWindowViewportGap * 2));
+            const selWindowMinWidth = Math.min(selWindowDefaultGeometry.minWidth, Math.max(320, selWindowViewport.width - selWindowViewportGap * 2));
             // 极低视口下最小高度自动退让，字段区改为滚动而不是越界。
-            const selWindowMinHeight = Math.min(selWindowMinimumHeight, Math.max(360, selWindowViewport.height - selWindowViewportGap * 2));
+            const selWindowMinHeight = Math.min(selWindowDefaultGeometry.minHeight, Math.max(360, selWindowViewport.height - selWindowViewportGap * 2));
             // 宽度同时受最小可用值与视口安全区上限约束。
-            const selWindowWidth = Math.min(Math.max(selWindowGeometry.width, selWindowMinWidth), selWindowViewport.width - selWindowViewportGap * 2);
+            const selWindowMaximumWidth = Math.min(selWindowDefaultGeometry.maxWidth || Number.POSITIVE_INFINITY, selWindowViewport.width - selWindowViewportGap * 2);
+            const selWindowWidth = Math.min(Math.max(selWindowGeometry.width, selWindowMinWidth), selWindowMaximumWidth);
             // 高度同时受最小可用值与视口安全区上限约束。
-            const selWindowHeight = Math.min(Math.max(selWindowGeometry.height, selWindowMinHeight), selWindowViewport.height - selWindowViewportGap * 2);
+            const selWindowMaximumHeight = Math.min(selWindowDefaultGeometry.maxHeight || Number.POSITIVE_INFINITY, selWindowViewport.height - selWindowViewportGap * 2);
+            const selWindowHeight = Math.min(Math.max(selWindowGeometry.height, selWindowMinHeight), selWindowMaximumHeight);
             // 左侧位置保证标题栏和左右缩放边始终留在视口内。
             const selWindowLeft = Math.min(Math.max(selWindowGeometry.left, selWindowViewportGap), selWindowViewport.width - selWindowWidth - selWindowViewportGap);
             // 顶部位置保证标题栏和上下缩放边始终可触达。
@@ -497,15 +518,17 @@
             // 当前视口决定默认尺寸是否需要缩小。
             const selWindowViewport = selWindowGetViewport();
             // 默认宽度不超过视口安全区。
-            const selWindowWidth = Math.min(selWindowDefaultWidth, selWindowViewport.width - selWindowViewportGap * 4);
+            const selWindowWidth = Math.min(selWindowDefaultGeometry.width, selWindowViewport.width - selWindowViewportGap * 4);
             // 默认高度不超过视口安全区。
-            const selWindowHeight = Math.min(selWindowDefaultHeight, selWindowViewport.height - selWindowViewportGap * 4);
+            const selWindowHeight = Math.min(selWindowDefaultGeometry.height, selWindowViewport.height - selWindowViewportGap * 4);
             // 多实例按注册顺序轻微错位，首次同时打开时仍能看出每个窗口的独立边界。
             const selWindowCascadeOffset = (selWindowCascadeIndex % 4) * 28;
             // 左侧位置以水平居中为基准，再加入受视口约束的级联偏移。
-            const selWindowLeft = (selWindowViewport.width - selWindowWidth) / 2 + selWindowCascadeOffset;
+            const selWindowLeft = selWindowDefaultGeometry.positionMode === "CUSTOM" && Number.isFinite(selWindowDefaultGeometry.x)
+                ? selWindowDefaultGeometry.x : (selWindowViewport.width - selWindowWidth) / 2 + selWindowCascadeOffset;
             // 顶部位置以垂直居中为基准，再加入同等的级联偏移。
-            const selWindowTop = (selWindowViewport.height - selWindowHeight) / 2 + selWindowCascadeOffset;
+            const selWindowTop = selWindowDefaultGeometry.positionMode === "CUSTOM" && Number.isFinite(selWindowDefaultGeometry.y)
+                ? selWindowDefaultGeometry.y : (selWindowViewport.height - selWindowHeight) / 2 + selWindowCascadeOffset;
             // 返回统一几何结构供打开与还原回退使用。
             return { left: selWindowLeft, top: selWindowTop, width: selWindowWidth, height: selWindowHeight };
         }
@@ -726,6 +749,10 @@
             selWindowState.open = false;
             // 关闭会退出最小化生命周期，不在停靠区保留幽灵入口。
             selWindowState.minimized = false;
+            // 未保存的临时拖拽只在本次打开期间有效，下次打开重新读取该实例已保存的默认矩形。
+            selWindowState.geometry = null;
+            selWindowState.restoreGeometry = null;
+            selWindowState.maximized = false;
             selWindowOverlay.hidden = true;
             // 关闭窗口同步隐藏对应恢复按钮。
             selWindowMinimizedButton.hidden = true;
@@ -992,6 +1019,35 @@
             // minimize 供应用或自动化显式把窗口收起到停靠区。
             minimize: selWindowMinimizeWindow,
             setLocale: selWindowSetLocale,
+            // setPageEditMetadata 只写入数据库可查询名称和 code，不拥有页面编辑开关或权限判断。
+            setPageEditMetadata(selWindowPageEditMetadata = {}) {
+                const selWindowPageEditTitleText = String(selWindowPageEditMetadata.title || "").trim();
+                const selWindowPageEditCodeText = String(selWindowPageEditMetadata.code || "").trim();
+                selWindowPageEditTitle.textContent = selWindowPageEditTitleText;
+                selWindowPageEditCode.textContent = selWindowPageEditCodeText;
+                selWindowPageEditHeading.classList.toggle("selwindow-page-edit-heading-ready", Boolean(selWindowPageEditTitleText && selWindowPageEditCodeText));
+                return Boolean(selWindowPageEditTitleText && selWindowPageEditCodeText);
+            },
+            // getPageEditTarget 把稳定窗口根和标题宿主交给 selPersonalization，应用无需查询公共 Window 内部 DOM。
+            getPageEditTarget: () => ({ root: selWindowShell, editHost: selWindowPageEditHeading }),
+            // setDefaultGeometry 接收 ReferenceDataWindow 配置，并作为此实例后续打开的唯一默认矩形。
+            setDefaultGeometry(selWindowGeometryOptions = {}) {
+                selWindowDefaultGeometry.width = selWindowParsePixels(selWindowGeometryOptions.width, selWindowDefaultGeometry.width);
+                selWindowDefaultGeometry.height = selWindowParsePixels(selWindowGeometryOptions.height, selWindowDefaultGeometry.height);
+                selWindowDefaultGeometry.minWidth = selWindowParsePixels(selWindowGeometryOptions.minWidth, selWindowDefaultGeometry.minWidth);
+                selWindowDefaultGeometry.minHeight = selWindowParsePixels(selWindowGeometryOptions.minHeight, selWindowDefaultGeometry.minHeight);
+                selWindowDefaultGeometry.maxWidth = selWindowParsePixels(selWindowGeometryOptions.maxWidth, null);
+                selWindowDefaultGeometry.maxHeight = selWindowParsePixels(selWindowGeometryOptions.maxHeight, null);
+                selWindowDefaultGeometry.x = selWindowParsePixels(selWindowGeometryOptions.x, null);
+                selWindowDefaultGeometry.y = selWindowParsePixels(selWindowGeometryOptions.y, null);
+                selWindowDefaultGeometry.positionMode = String(selWindowGeometryOptions.positionMode || "CENTER").toUpperCase() === "CUSTOM" ? "CUSTOM" : "CENTER";
+                if (!selWindowState.open) selWindowState.geometry = null;
+                return true;
+            },
+            // getGeometry 返回可保存的普通矩形；最大化时返回最大化前的真实窗口矩形。
+            getGeometry: () => selFreeze({ ...(selWindowState.maximized && selWindowState.restoreGeometry
+                ? selWindowState.restoreGeometry
+                : (selWindowState.geometry || selWindowCreateDefaultGeometry())) }),
             // getState 返回可见性、最小化、提交数据、几何和最大化状态的独立快照。
             getState: () => selFreeze({ open: selWindowState.open, minimized: selWindowState.minimized, submitted: selWindowState.submitted, geometry: selWindowState.geometry ? { ...selWindowState.geometry } : null, maximized: selWindowState.maximized })
         };

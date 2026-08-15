@@ -73,6 +73,24 @@
 .selwindow-brand-title { margin: 0; overflow: hidden; color: var(--sel-theme-text-title); font-size: var(--sel-theme-font-size-title); font-weight: var(--sel-theme-font-weight-semibold); line-height: var(--sel-theme-line-height-title); letter-spacing: 0.04em; text-overflow: ellipsis; text-shadow: var(--sel-theme-text-shadow); white-space: nowrap; }
 .selwindow-brand-subtitle { overflow: hidden; color: var(--sel-theme-text-secondary); font-size: var(--sel-theme-font-size-label); line-height: var(--sel-theme-line-height-label); letter-spacing: 0.03em; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Window 配置头由页面编辑器统一注入按钮；只有总开关开启且名称、code 完整时才占标题栏空间。 */
+.selwindow-page-edit-heading {
+    display: none;
+    min-width: 0;
+    align-items: center;
+    gap: 7px;
+    margin-left: auto;
+    color: var(--sel-theme-text-main);
+}
+
+:root[data-sel-page-edit-mode="edit"] .selwindow-page-edit-heading-ready:has(> .selpersonal-page-control-edit:not([hidden])) {
+    display: flex;
+}
+
+.selwindow-page-edit-heading > i { color: var(--sel-theme-text-icon); }
+.selwindow-page-edit-heading code { color: var(--sel-theme-text-secondary); font-family: monospace; font-size: var(--sel-theme-font-size-caption); }
+.selwindow-page-edit-heading > .selpersonal-page-control-edit { position: static; flex: 0 0 auto; }
+
 /* 窗口控制区采用紧凑方形按钮，顺序固定为最小化、最大化、关闭。 */
 .selwindow-header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
 .selwindow-frame-button {

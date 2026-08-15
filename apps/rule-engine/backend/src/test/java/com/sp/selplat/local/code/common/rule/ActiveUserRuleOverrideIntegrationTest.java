@@ -30,7 +30,7 @@ class ActiveUserRuleOverrideIntegrationTest {
     /**
      * 验证 Reference Data 工作台导航与按需加载规则能够从当前用户应用索引命中。
      * 真实传参示例：逻辑 ID 为 {@code REFERENCE_DATA_WORKBENCH_NAVIGATION_AND_LAZY_LOADING_RULES}。
-     * 真实返回示例：规则正文要求五个一级模块，并禁止表格字段重新成为一级节点。
+     * 真实返回示例：规则正文要求五个一级模块、Window 无记录下拉，并禁止表格字段重新成为一级节点。
      * 异常或副作用示例：索引或规则路径失效时抛出 {@link IOException}，不修改应用源码。
      */
     @Test
@@ -39,8 +39,12 @@ class ActiveUserRuleOverrideIntegrationTest {
             "REFERENCE_DATA_WORKBENCH_NAVIGATION_AND_LAZY_LOADING_RULES",
             "selplat",
             "selplat/应用/reference-data/rule/RUL_ReferenceData工作台导航与按需加载规则.md",
-            "reference_data_top_level_modules = types,tree,options,menus,tables"
+            "reference_data_top_level_modules = types,tree,tables,controls,windows"
         );
+        assertTrue(rule.content().contains(
+            "reference_data_window_navigation_level = "
+                + "top_level_only_no_record_children_or_expand_menu"
+        ));
         assertTrue(rule.content().contains(
             "reference_data_table_column_navigation_level = "
                 + "internal_table_definition_drilldown_only_not_top_level"
@@ -48,6 +52,16 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "reference_data_initial_business_request_scope = "
                 + "navigation_plus_active_module_records_plus_active_module_columns_only"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_page_edit_table_heading = switch_off_hidden,"
+                + "switch_on_active_module_table_title_plus_ReferenceDataTable_code_plus_adjacent_accent_edit_action,"
+                + "no_business_column_occupation"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_page_edit_window_heading = six_management_windows_six_ReferenceDataWindow_records,"
+                + "bind_by_triggerControlCode,switch_off_hidden,switch_on_code_plus_save_action,"
+                + "save_width_height_x_y_as_custom_next_default"
         ));
     }
 
@@ -82,6 +96,10 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "registry_driven_directory_source_api_theme_dependency_and_application_scan"
         ));
         assertTrue(rule.content().contains(
+            "selplat_page_editor_button_presentation = immediately_after_database_code,"
+                + "no_auto_margin_push,shared_semantic_warning_accent,grid_and_window_same_style"
+        ));
+        assertTrue(rule.content().contains(
             "selplat_truncated_text_tooltip_behavior = grid_and_tree_default_enabled,"
                 + "real_overflow_only,pointer_and_focus,hide_on_scroll_resize_escape"
         ));
@@ -99,6 +117,21 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "enabled_record_shows_disable,disabled_record_shows_enable"
         ));
         assertTrue(rule.content().contains(
+            "selplat_page_editor_session_lifecycle = single_whole_page_manual_edit_switch,"
+                + "no_preview_edit_tabs,off_normal_page,on_show_edit_affordances,no_control_cards,"
+                + "no_inspector,no_global_save_cancel,no_navigation_block"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_page_editor_heading = hidden_when_switch_off,visible_when_switch_on,"
+                + "table_title_and_database_table_code,save_action_inside_heading,"
+                + "no_business_column_overlap"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_window_page_editor_heading = one_window_instance_one_configuration_record,"
+                + "same_whole_page_switch,hidden_when_switch_off,visible_in_open_window_header_when_switch_on,"
+                + "window_title_and_database_code,save_actual_geometry_as_next_default"
+        ));
+        assertTrue(rule.content().contains(
             "selplat_destructive_action_confirmation_component = "
                 + "selConfirmDialog,compact_boolean_confirmation,no_selWindow"
         ));
@@ -113,17 +146,12 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_page_editor_owner = selPersonalization,"
-                + "application_registers_root_title_coordinates_capture_restore_save_only,"
-                + "no_private_editor_shell"
+                + "application_registers_root_title_coordinates_capture_save_only,"
+                + "no_private_editor_shell,no_global_save_cancel"
         ));
         assertTrue(rule.content().contains(
             "selplat_page_editor_authorization = backend_capability_controls_visibility,"
                 + "service_isAdmin_rechecks_every_save,no_frontend_only_authorization"
-        ));
-        assertTrue(rule.content().contains(
-            "selplat_page_editor_session_lifecycle = preview_edit_segmented_mode,"
-                + "capture_baseline,live_draft,dirty_indicator,cancel_restore,"
-                + "explicit_save_then_new_baseline"
         ));
         assertTrue(rule.content().contains(
             "selplat_grid_page_editor_persistence = live_memory_resize,"
@@ -469,6 +497,11 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat_database_rebuild_and_reopen_contract = "
                 + "missing_file_rebuild_from_sql,existing_file_no_reset,preserve_business_rows,"
                 + "preserve_sequence_cursor,compatible_upgrade_only"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_deprecated_table_cleanup = compatibility_migration_fixed_allowlist,"
+                + "validate_all_row_counts_first,any_nonempty_blocks_all_drops,"
+                + "empty_tables_drop_idempotently,no_schema_startup_drop"
         ));
         assertTrue(rule.content().contains(
             "selplat_seed_sql_write_gate = "

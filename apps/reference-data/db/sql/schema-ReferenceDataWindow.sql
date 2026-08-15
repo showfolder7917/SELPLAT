@@ -18,7 +18,6 @@ CREATE TABLE IF NOT EXISTS ReferenceDataWindow (
     draggable BOOLEAN NOT NULL DEFAULT TRUE,
     maximizable BOOLEAN NOT NULL DEFAULT TRUE,
     minimizable BOOLEAN NOT NULL DEFAULT TRUE,
-    rememberLastState BOOLEAN NOT NULL DEFAULT TRUE,
     breakpoint VARCHAR(16) NOT NULL DEFAULT 'DESKTOP',
     versionNo BIGINT NOT NULL DEFAULT 0,
     status INTEGER NOT NULL DEFAULT 1,
@@ -29,6 +28,8 @@ CREATE TABLE IF NOT EXISTS ReferenceDataWindow (
     CONSTRAINT ck_reference_data_window_position CHECK (positionMode IN ('CENTER', 'CUSTOM')),
     CONSTRAINT ck_reference_data_window_status CHECK (status IN (0, 1, 2))
 );
+-- 页面编辑采用控件级显式保存；旧库中的 rememberLastState 已无业务语义，兼容升级时直接移除。
+ALTER TABLE ReferenceDataWindow DROP COLUMN IF EXISTS rememberLastState;
 COMMENT ON TABLE ReferenceDataWindow IS 'SEL Window默认尺寸、位置和行为配置表';
 CREATE INDEX IF NOT EXISTS idx_reference_data_window_page
     ON ReferenceDataWindow(tenantId, pageCode, status, sortnum, id);

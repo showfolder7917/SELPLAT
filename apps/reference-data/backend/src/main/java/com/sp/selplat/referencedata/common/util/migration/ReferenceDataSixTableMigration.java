@@ -25,6 +25,21 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class ReferenceDataSixTableMigration implements ApplicationRunner {
 
+    private static final String[][] MANAGEMENT_WINDOWS = {
+        {"selWindowTypeManagementId", "数据类型编辑窗口"},
+        {"selWindowTreeNodeManagementId", "树与选项编辑窗口"},
+        {"selWindowTableManagementId", "表格定义编辑窗口"},
+        {"selWindowTableElementManagementId", "表格列编辑窗口"},
+        {"selWindowControlLayoutManagementId", "页面控件编辑窗口"},
+        {"selWindowWindowManagementId", "Window 管理窗口"}
+    };
+    private static final String[] DEPRECATED_EMPTY_TABLES = {
+        "ReferenceDataContextMenuItem",
+        "ReferenceDataControlBinding",
+        "ReferenceDataOption",
+        "ReferenceDataTableColumn"
+    };
+
     private final JdbcTemplate jdbc;
     private final ReferenceDataTypeService typeService;
     private final ReferenceDataTreeNodeService nodeService;
@@ -70,6 +85,8 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
         // 已完成旧表迁移的正式库仍需把历史列字段名校正为最终六表字段，并补齐 Window 表头。
         normalizeFinalTableElements();
         normalizeObjectCodesAndParents();
+        normalizeManagementWindows();
+        dropDeprecatedEmptyTables();
         if (!tableExists("LegacyReferenceDataType")) {
             return;
         }
@@ -173,7 +190,7 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
                 "projectCode", "reference-data", "pageCode", pageCode, "nameZh", "引用数据编辑窗口",
                 "width", "960px", "height", "680px", "minWidth", "480px", "minHeight", "320px",
                 "positionMode", "CENTER", "resizable", true, "draggable", true,
-                "maximizable", true, "minimizable", true, "rememberLastState", true,
+                "maximizable", true, "minimizable", true,
                 "breakpoint", "DESKTOP", "status", 1, "sortnum", 10));
 
         String[] legacyTables = {
@@ -189,6 +206,89 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
         // 新迁移产生的表格元素同样经过最终字段规范化，保证首次启动就使用六表字段名。
         normalizeFinalTableElements();
         normalizeObjectCodesAndParents();
+        normalizeManagementWindows();
+        dropDeprecatedEmptyTables();
+    }
+
+    /**
+     * 删除已经由最终六表模型替代的空旧表，且在发现任何残留记录时阻断启动。
+     * 真实传参示例：正式库仍存在空的 {@code ReferenceDataOption} 和 {@code ReferenceDataTableColumn}。
+     * 真实返回示例：四张固定白名单旧表被幂等删除，最终只保留六张业务表与公共号段表。
+     * 异常或副作用示例：任一旧表仍有一条记录即抛出异常并回滚，禁止把未核验数据静默删除。
+     */
+    private void dropDeprecatedEmptyTables() {
+        for (String deprecatedTable : DEPRECATED_EMPTY_TABLES) {
+            if (!tableExists(deprecatedTable)) {
+                continue;
+            }
+            long rowCount = count(deprecatedTable);
+            if (rowCount > 0L) {
+                throw new IllegalStateException(
+                        "废弃表仍有未核验数据，已阻止删除：" + deprecatedTable + "，记录数=" + rowCount);
+            }
+        }
+        // 全部旧表都通过空表预检后才进入删除阶段，避免后面的非空表导致前面的表已经被部分删除。
+        for (String deprecatedTable : DEPRECATED_EMPTY_TABLES) {
+            if (!tableExists(deprecatedTable)) {
+                continue;
+            }
+            jdbc.execute("DROP TABLE " + deprecatedTable);
+        }
+    }
+
+    /**
+     * 为引用数据工作台的六个真实管理 Window 建立一对一配置，并保留历史记录的几何值。
+     * 真实传参示例：页面 page101017 只有旧记录 window101064，且 triggerControlCode 为空。
+     * 真实返回示例：旧记录绑定 selWindowTypeManagementId，再新增五条记录并复制其宽高、坐标和行为边界。
+     * 异常或副作用示例：新增失败时启动事务整体回滚；已完整登记的页面再次启动不产生重复记录。
+     */
+    private void normalizeManagementWindows() {
+        if (!tableExists("ReferenceDataWindow")) {
+            return;
+        }
+        List<String> pageCodes = jdbc.queryForList(
+                "SELECT DISTINCT pageCode FROM ReferenceDataWindow WHERE projectCode='reference-data' AND status<>0 ORDER BY pageCode",
+                String.class);
+        for (String pageCode : pageCodes) {
+            List<Map<String, Object>> windows = jdbc.queryForList(
+                    "SELECT * FROM ReferenceDataWindow WHERE pageCode=? AND status<>0 ORDER BY id", pageCode);
+            if (windows.isEmpty()) {
+                continue;
+            }
+            Map<String, Map<String, Object>> byTrigger = new LinkedHashMap<>();
+            for (Map<String, Object> window : windows) {
+                Object trigger = window.get("triggerControlCode");
+                if (trigger != null && !String.valueOf(trigger).isBlank()) {
+                    byTrigger.put(String.valueOf(trigger), window);
+                }
+            }
+            Map<String, Object> template = windows.get(0);
+            for (int index = 0; index < MANAGEMENT_WINDOWS.length; index++) {
+                String triggerControlCode = MANAGEMENT_WINDOWS[index][0];
+                String nameZh = MANAGEMENT_WINDOWS[index][1];
+                if (byTrigger.containsKey(triggerControlCode)) {
+                    continue;
+                }
+                if (index == 0 && !byTrigger.containsValue(template)) {
+                    jdbc.update("UPDATE ReferenceDataWindow SET triggerControlCode=?,nameZh=?,sortnum=? WHERE id=?",
+                            triggerControlCode, nameZh, (index + 1) * 10, number(template.get("id")));
+                    byTrigger.put(triggerControlCode, template);
+                    continue;
+                }
+                Map<String, Object> created = insert(windowService, params(
+                        "projectCode", template.get("projectCode"), "pageCode", pageCode,
+                        "triggerControlCode", triggerControlCode, "nameZh", nameZh,
+                        "width", template.get("width"), "height", template.get("height"),
+                        "minWidth", template.get("minWidth"), "minHeight", template.get("minHeight"),
+                        "maxWidth", template.get("maxWidth"), "maxHeight", template.get("maxHeight"),
+                        "x", template.get("x"), "y", template.get("y"),
+                        "positionMode", template.get("positionMode"),
+                        "resizable", template.get("resizable"), "draggable", template.get("draggable"),
+                        "maximizable", template.get("maximizable"), "minimizable", template.get("minimizable"),
+                        "breakpoint", template.get("breakpoint"), "status", 1, "sortnum", (index + 1) * 10));
+                byTrigger.put(triggerControlCode, created);
+            }
+        }
     }
 
     /**

@@ -574,7 +574,8 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
     # 页面编辑必须由 selPersonalization 统一管理，并与 selGrid 的终值事件和宽度快照契约成对存在。
     personalization_entry = component_entries.get("selPersonalization")
     grid_entry = component_entries.get("selGrid")
-    if personalization_entry and grid_entry:
+    window_entry = component_entries.get("selWindow")
+    if personalization_entry and grid_entry and window_entry:
         personalization_directory = component_root / personalization_entry["directory"]
         personalization_source = "\n".join(
             (personalization_directory / script).read_text(encoding="utf-8")
@@ -597,16 +598,28 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
             for style in grid_entry.get("styles", [])
             if (grid_directory / style).is_file()
         )
+        window_directory = component_root / window_entry["directory"]
+        window_source = "\n".join(
+            (window_directory / script).read_text(encoding="utf-8")
+            for script in window_entry.get("scripts", [])
+            if (window_directory / script).is_file()
+        )
+        window_style = "\n".join(
+            (window_directory / style).read_text(encoding="utf-8")
+            for style in window_entry.get("styles", [])
+            if (window_directory / style).is_file()
+        )
         page_editor_required = {
             "registerPageControl: selPersonalizationRegisterPageControl",
             "updatePageControl: selPersonalizationUpdatePageControl",
             "setPageMode: selPersonalizationSetPageMode",
-            "savePage: selPersonalizationSavePageEditing",
-            "cancelPage: selPersonalizationCancelPageEditing",
-            'data-sel-personal-page-mode="preview"',
-            'data-sel-personal-page-mode="edit"',
-            "selPersonalizationSelectedControl",
+            "data-sel-personal-page-edit-switch",
+            'role="switch"',
+            "selPersonalizationPageEditSwitch.checked = selPersonalizationEditing",
             "selPersonalizationPageControl.captureState()",
+            '<span>保存${selPersonalizationPageControl.typeLabel}</span>',
+            "Array.isArray(selPersonalizationDefinition.roots)",
+            "Array.isArray(selPersonalizationDefinition.editHosts)",
         }
         for missing_contract in sorted(page_editor_required - {
                 contract for contract in page_editor_required
@@ -617,25 +630,46 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 "message": f"selPersonalization page editor is missing {missing_contract}",
             })
         for missing_selector in sorted({
-                ".selpersonal-page-mode",
+                ".selpersonal-page-edit-switch",
                 ".selpersonal-page-control-edit",
-                ".selpersonal-page-inspector",
         } - {
                 selector for selector in {
-                    ".selpersonal-page-mode",
+                    ".selpersonal-page-edit-switch",
                     ".selpersonal-page-control-edit",
-                    ".selpersonal-page-inspector",
                 } if selector in personalization_style}):
             violations.append({
                 "code": "SEL_UI_PAGE_EDITOR_STYLE_MISSING",
                 "path": str(personalization_directory.relative_to(project_root)),
                 "message": f"selPersonalization page editor style is missing {missing_selector}",
             })
+        for forbidden_contract in {
+                "data-sel-personal-page-actions", "data-sel-personal-page-inspector",
+                "savePage: selPersonalizationSavePageEditing", "cancelPage: selPersonalizationCancelPageEditing"}:
+            if forbidden_contract in personalization_source:
+                violations.append({
+                    "code": "SEL_UI_PAGE_EDITOR_GLOBAL_ACTION_FORBIDDEN",
+                    "path": str(personalization_directory.relative_to(project_root)),
+                    "message": f"selPersonalization page switch must not own {forbidden_contract}",
+                })
+        if "--selpersonal-page-edit-accent: var(--sel-theme-semantic-warning)" not in personalization_style:
+            violations.append({
+                "code": "SEL_UI_PAGE_EDITOR_BUTTON_ACCENT_MISSING",
+                "path": str(personalization_directory.relative_to(project_root)),
+                "message": "selPersonalization page edit button must use the dedicated semantic accent",
+            })
+        if "margin-left: 0;" not in grid_style:
+            violations.append({
+                "code": "SEL_UI_GRID_PAGE_EDITOR_BUTTON_POSITION_INVALID",
+                "path": str(grid_directory.relative_to(project_root)),
+                "message": "selGrid page edit button must stay beside the database code",
+            })
         grid_page_editor_required = {
             "selGrid:columnResizeChange",
             "captureColumnWidths: selGridCaptureColumnWidths",
             "setColumnWidths: selGridSetColumnWidths",
             "resetColumnWidths: selGridResetColumnWidths",
+            'data-sel-grid-role="table-heading"',
+            'data-sel-grid-role="table-code"',
         }
         for missing_contract in sorted(grid_page_editor_required - {
                 contract for contract in grid_page_editor_required if contract in grid_source}):
@@ -643,6 +677,20 @@ def audit_sel_ui_component_governance(project_root: Path) -> list[dict[str, str]
                 "code": "SEL_UI_GRID_PAGE_EDITOR_ADAPTER_MISSING",
                 "path": str(grid_directory.relative_to(project_root)),
                 "message": f"selGrid page editor adapter is missing {missing_contract}",
+            })
+        window_page_editor_required = {
+            "setPageEditMetadata",
+            "getPageEditTarget",
+            "setDefaultGeometry",
+            "getGeometry",
+            "selwindow-page-edit-heading",
+        }
+        for missing_contract in sorted(window_page_editor_required - {
+                contract for contract in window_page_editor_required if contract in window_source or contract in window_style}):
+            violations.append({
+                "code": "SEL_UI_WINDOW_PAGE_EDITOR_ADAPTER_MISSING",
+                "path": str(window_directory.relative_to(project_root)),
+                "message": f"selWindow page editor adapter is missing {missing_contract}",
             })
         # 表头竖向分隔线属于列的右边界，必须覆盖第一列并仅排除最后一列。
         if ".selgrid-table th:not(:last-child)::after" not in grid_style \
