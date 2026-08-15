@@ -1,10 +1,7 @@
 package com.sp.selplat.referencedata.referencedatatype.service.impl;
 
 import com.sp.selplat.common.exception.CommonBusinessException;
-import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDao;
-import com.sp.selplat.common.service.BaseServiceImpl;
-import com.sp.selplat.common.service.sequence.SequenceGenerator;
-import com.sp.selplat.common.service.sequence.SequenceGeneratorImpl;
+import com.sp.selplat.referencedata.common.util.code.ReferenceDataCodeServiceImpl;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonPageResult;
@@ -15,9 +12,9 @@ import com.sp.selplat.referencedata.referencedatatype.service.ReferenceDataTypeS
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -26,29 +23,41 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ReferenceDataTypeServiceImpl
-        extends BaseServiceImpl<ReferenceDataTypeDao>
+        extends ReferenceDataCodeServiceImpl<ReferenceDataTypeDao>
         implements ReferenceDataTypeService {
 
     // CODE_PATTERN 限制项目和资源编码为稳定小写短横线形式，避免 URL 坐标出现空格或本地化字符。
     private static final Pattern CODE_PATTERN = Pattern.compile("^[a-z][a-z0-9-]{1,63}$");
-    // 当前表只从 ReferenceDataTypeId 独立号段取号，不与树、选项或菜单表共享游标。
-    private static final String TYPE_ID_SEQUENCE_CODE = "ReferenceDataTypeId";
-
-    private final SequenceGenerator sequenceGenerator;
+    // TYPE_KEYS 是公共组件首期明确支持的消费者类型，数据库和前端不得写入未登记字符串。
+    private static final Set<String> TYPE_KEYS = Set.of(
+            "DROPDOWN", "TREE", "GRID_MENU", "PANEL_MENU", "CONTEXT_MENU");
 
     /**
-     * 创建引用数据类型业务服务并绑定本项目公共号段 DAO。
+     * 将数据类型记录编码标记为 type，数字部分仍由全局号段统一生成。
+     * 真实传参示例：{@code {"projectCode":"reference-data","type":"DROPDOWN"}}。
+     * 真实返回示例：返回 {@code type}，最终 code 形如 {@code type101001}。
+     * 异常或副作用示例：本方法不修改参数；缺少主键时由公共编码链阻止新增。
      *
-     * @param sequenceDao 只访问 reference-data 数据库的号段 DAO
-     * 执行结果示例：新增类型前从 {@code ReferenceDataTypeId} 取得 {@code 101000}
-     * 异常或副作用示例：号段缺失时新增被阻断；抢号成功会推进 nextStartId 和 versionNo。
+     * @param saveIn 已规范化的数据类型新增参数
+     * @return 数据类型对象前缀
      */
-    public ReferenceDataTypeServiceImpl(
-            @Qualifier("referenceDataCommonSequenceSegmentDao") CommonSequenceSegmentDao sequenceDao) {
-        // 模块私有号段 DAO → 可独立测试且不会错误命中其他应用同名数据库。
-        this.sequenceGenerator = new SequenceGeneratorImpl(sequenceDao);
+    @Override
+    protected String resolveCodePrefix(CommonParam saveIn) {
+        return "type";
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public CommonResult getTypeByCode(String typeCode) {
+        String requiredCode = String.valueOf(typeCode == null ? "" : typeCode).trim();
+        Map<String, Object> record = getDao().findEnabledByCode(requiredCode);
+        if (record == null) {
+            throw new CommonBusinessException(
+                    "REFERENCE_DATA_TYPE_CODE_NOT_FOUND",
+                    "未找到引用数据类型：" + requiredCode);
+        }
+        return buildSuccessResult(record, "类型详情查询完成。");
+    }
     /**
      * {@inheritDoc}
      */
@@ -90,14 +99,8 @@ public class ReferenceDataTypeServiceImpl
         // 前端动态字段 → 完整、受控且可直接绑定固定 SQL 的类型值。
         CommonParam values = normalizeValues(saveIn);
         validateUniqueCoordinate(values, null);
-        // ReferenceDataType 独立号段 → 当前新增记录的多进程安全主键。
-        long generatedId = sequenceGenerator.nextId(TYPE_ID_SEQUENCE_CODE);
-        values.putParam("id", generatedId);
-        int affectedRows = getDao().insert(values);
-        // 唯一号段主键和单行 INSERT 成功后固定影响一行，数据库异常由 DAO 统一阻断。
-        // 新增后的真实数据库记录 → 前端回显与后续编辑基线。
-        Map<String, Object> record = requiredRecord(generatedId);
-        return buildSuccessResult(record, 1, "类型新增完成。");
+        // 复用公共新增链完成全局对象发号、code 拼接、身份覆盖和 DAO 写入，避免类型表保留旁路实现。
+        return super.insert(values);
     }
 
     @Override
@@ -109,12 +112,10 @@ public class ReferenceDataTypeServiceImpl
         for (CommonParam item : saveIn.getItems()) {
             CommonParam normalized = normalizeValues(item);
             validateUniqueCoordinate(normalized, null);
-            // 每个批量项分别从当前表同一号段取一个唯一主键，失败时事务整体回滚业务写入。
-            normalized.putParam("id", sequenceGenerator.nextId(TYPE_ID_SEQUENCE_CODE));
             item.setParamMap(normalized.getParamMap());
         }
-        int affectedRows = getDao().insertBatch(saveIn);
-        return buildSuccessResult(saveIn.getItems(), affectedRows, "类型批量新增完成。");
+        // 批量新增仍逐项走公共发号扩展点，保证每条 code 都由同一全局号段生成。
+        return super.insertBatch(saveIn);
     }
 
     /**
@@ -226,6 +227,14 @@ public class ReferenceDataTypeServiceImpl
         String projectCode = requiredCode(source.getParam("projectCode"), "projectCode", "项目编码不能为空。");
         String resourceCode = requiredCode(source.getParam("resourceCode"), "resourceCode", "资源编码不能为空。");
         String nameZh = requiredText(source.getParam("nameZh"), 120, "nameZh", "中文名称不能为空。");
+        String type = source.getParam("type") == null
+                ? "TREE"
+                : String.valueOf(source.getParam("type")).trim().toUpperCase();
+        if (!TYPE_KEYS.contains(type)) {
+            throw new CommonBusinessException(
+                    "REFERENCE_DATA_TYPE_KEY_INVALID",
+                    "类型键必须是下拉框、树、表格菜单、面板菜单或右键菜单。");
+        }
         // 状态只允许启用或停用，删除状态必须通过独立删除动作产生。
         Integer status = source.getParam("status") == null ? 1 : integerValue(source.getParam("status"), "status");
         if (status != 1 && status != 2) {
@@ -242,15 +251,46 @@ public class ReferenceDataTypeServiceImpl
         values.putParam("lastOperateUserId", getCurrentOperatorId());
         values.putParam("projectCode", projectCode);
         values.putParam("resourceCode", resourceCode);
+        values.putParam("type", type);
         values.putParam("nameZh", nameZh);
         values.putParam("nameJa", optionalText(source.getParam("nameJa"), 120, "nameJa"));
         values.putParam("nameEn", optionalText(source.getParam("nameEn"), 120, "nameEn"));
         values.putParam("descriptionZh", optionalText(source.getParam("descriptionZh"), 500, "descriptionZh"));
         values.putParam("descriptionJa", optionalText(source.getParam("descriptionJa"), 500, "descriptionJa"));
         values.putParam("descriptionEn", optionalText(source.getParam("descriptionEn"), 500, "descriptionEn"));
+        values.putParam("multiple", booleanValue(source.getParam("multiple"), false));
+        values.putParam("searchable", booleanValue(source.getParam("searchable"), false));
+        values.putParam("clearable", booleanValue(source.getParam("clearable"), true));
+        values.putParam("attributesJson", optionalText(source.getParam("attributesJson"), 10000, "attributesJson"));
         values.putParam("status", status);
         values.putParam("sortnum", sortnum);
         return values;
+    }
+
+    /**
+     * 把动态请求值转换为明确布尔值。
+     * 真实传参示例：值为 {@code "true"}，默认值为 {@code false}。
+     * 真实返回示例：返回 {@code true}；值为空时返回调用方给定默认值。
+     * 异常或副作用示例：值不是 true/false 时抛出业务异常，不修改请求参数。
+     *
+     * @param value 前端布尔值或字符串布尔值
+     * @param defaultValue 未传值时使用的业务默认值
+     * @return 规范化后的布尔值
+     */
+    private boolean booleanValue(Object value, boolean defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        String normalized = String.valueOf(value).trim();
+        if ("true".equalsIgnoreCase(normalized) || "1".equals(normalized)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(normalized) || "0".equals(normalized)) {
+            return false;
+        }
+        throw new CommonBusinessException(
+                "REFERENCE_DATA_BOOLEAN_INVALID",
+                "布尔字段只能使用 true 或 false。");
     }
 
     /**

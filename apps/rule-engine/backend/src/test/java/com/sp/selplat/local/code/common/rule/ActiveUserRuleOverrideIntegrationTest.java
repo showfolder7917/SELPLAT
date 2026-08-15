@@ -198,9 +198,16 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_database_rebuild_sql_gate = "
-                + "schema_create_if_not_exists,index_create_if_not_exists,matching_data_file,"
+                + "schema_create_if_not_exists,index_create_if_not_exists,"
+                + "data_file_required_only_when_seed_exists,"
                 + "seed_insert_where_not_exists,no_drop,no_truncate,no_delete,no_seed_update,"
                 + "no_seed_merge"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_query_representation_controller_boundary = "
+                + "own_table_when_distinct_persistence_model,"
+                + "type_plus_tree_node_when_explicit_polymorphic_node_model,"
+                + "no_ui_name_driven_duplicate_table_business"
         ));
         assertTrue(rule.content().contains(
             "selplat_authoritative_database_git_tracking_gate = "
@@ -218,8 +225,9 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_query_representation_controller_boundary = "
-                + "tree:own_table_business,options:own_table_business,"
-                + "context-menu:own_table_business"
+                + "own_table_when_distinct_persistence_model,"
+                + "type_plus_tree_node_when_explicit_polymorphic_node_model,"
+                + "no_ui_name_driven_duplicate_table_business"
         ));
         assertTrue(rule.content().contains(
             "selplat_table_business_schema_mapping = "
@@ -237,8 +245,11 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "db/<application-name>.mv.db,no_nested_data_directory,no_parallel_migration_directory"
         ));
         assertTrue(rule.content().contains(
-            "selplat_table_sequence_mapping = fully_empty_for_manual_setup_or_one_business_table_one_sequence_row,"
-                + "seqCode=<TableName>Id,exactly_one_active_owner,no_partial_seed_set"
+            "selplat_table_sequence_mapping = "
+                + "default:fully_empty_for_manual_setup_or_one_business_table_one_sequence_row("
+                + "seqCode=<TableName>Id,no_partial_seed_set),"
+                + "aggregate-global-code-sequence:exactly_one_aggregateSequenceCode("
+                + "globalCodeNamespace=true)"
         ));
         assertTrue(rule.content().contains(
             "selplat_business_primary_key_strategy = CommonSequenceSegment:id_identity_exception,"
@@ -445,8 +456,10 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_business_table_sequence_cardinality = "
-                + "fully_empty_for_manual_setup_or_one_table_one_row,"
-                + "seqCode=<ActualTableName>Id,no_shared_business_sequence,no_partial_seed_set"
+                + "default:fully_empty_for_manual_setup_or_one_table_one_row("
+                + "seqCode=<ActualTableName>Id,no_partial_seed_set),"
+                + "aggregate-global-code-sequence:exactly_one_registered_aggregateSequenceCode("
+                + "globalCodeNamespace=true)"
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_local_database_default_credentials = "

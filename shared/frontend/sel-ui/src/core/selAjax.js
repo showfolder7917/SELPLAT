@@ -49,7 +49,7 @@
 
     /**
      * 发送请求并返回响应文本及状态元数据。
-     * @param {{url: string, method?: string, headers?: Record<string, string>, data?: Record<string, unknown>, signal?: AbortSignal}} selAjaxConfig - 通用请求配置。
+     * @param {{url: string, method?: string, headers?: Record<string, string>, data?: Record<string, unknown>, jsonData?: unknown, signal?: AbortSignal}} selAjaxConfig - 通用请求配置；data 与 jsonData 只能选择一种。
      * @returns {Promise<{url: string, response: Response, text: string}>} 返回真实地址、浏览器响应和 UTF-8 正文。
      */
     async function selAjaxSend(selAjaxConfig = {}) {
@@ -69,8 +69,16 @@
         if (selAjaxConfig.signal) {
             selAjaxFetchOptions.signal = selAjaxConfig.signal;
         }
-        // 非 GET 写操作存在数据时统一转换为表单正文。
-        if (selAjaxConfig.data && selAjaxMethod !== "GET") {
+        // 同一请求禁止混用表单和 JSON，避免调用方误判后台实际收到的正文格式。
+        if (selAjaxConfig.data && selAjaxConfig.jsonData !== undefined) {
+            throw new TypeError("selAjax：data 与 jsonData 不能同时使用。");
+        }
+        // JSON 写请求由公共层统一序列化并声明内容类型，应用无需直接操作 fetch。
+        if (selAjaxConfig.jsonData !== undefined && selAjaxMethod !== "GET") {
+            selAjaxFetchOptions.headers["Content-Type"] = "application/json;charset=UTF-8";
+            selAjaxFetchOptions.body = JSON.stringify(selAjaxConfig.jsonData);
+        } else if (selAjaxConfig.data && selAjaxMethod !== "GET") {
+            // 普通写操作仍维持现有表单协议，保证既有项目调用完全兼容。
             selAjaxFetchOptions.body = selAjaxToFormBody(selAjaxConfig.data);
         }
         // 浏览器负责执行调用方声明的请求地址。
@@ -126,7 +134,7 @@
 
     /**
      * 调用带 success、msg、requestId 等业务包装的 JSON 接口。
-     * @param {{url: string, method?: string, headers?: Record<string, string>, data?: Record<string, unknown>, signal?: AbortSignal}} selAjaxConfig - 必须包含实际接口地址的配置。
+     * @param {{url: string, method?: string, headers?: Record<string, string>, data?: Record<string, unknown>, jsonData?: unknown, signal?: AbortSignal}} selAjaxConfig - 必须包含实际接口地址的配置。
      * @returns {Promise<object>} 成功时返回后端完整响应对象。
      */
     async function selAjaxRequest(selAjaxConfig = {}) {

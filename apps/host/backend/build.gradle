@@ -13,7 +13,7 @@ dependencies {
     implementation project(':apps:uniauth:backend')
     // 公共结果和 JSON 工具用于平台健康响应保持 SELPLAT 统一结构。
     implementation project(':shared:backend:common-core')
-    // 当前宿主显式装配 reference-data 的四张表业务和查询路由。
+    // 当前宿主显式装配 reference-data 的六张表、唯一 code 查询和页面配置路由。
     implementation project(':apps:reference-data:backend')
     // MDA 通过模块自持数据库上下文接入统一端口，不占用宿主主数据源。
     implementation project(':apps:mda:backend')

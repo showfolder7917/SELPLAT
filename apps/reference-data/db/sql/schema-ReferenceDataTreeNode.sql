@@ -2,6 +2,8 @@
 CREATE TABLE IF NOT EXISTS ReferenceDataTreeNode (
     -- id 作为树节点主键，由当前 reference-data 独立数据库生成。
     id BIGINT PRIMARY KEY,
+    -- code 是节点跨类型、跨表唯一的公开坐标。
+    code VARCHAR(100) NOT NULL,
     -- tenantId 标识当前树节点所属租户。
     tenantId BIGINT NOT NULL DEFAULT 1,
     -- lastOperateUserId 记录最近维护该树节点的操作员。
@@ -20,6 +22,10 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTreeNode (
     labelJa VARCHAR(200),
     -- labelEn 保存节点英文显示文本；未配置时由上层国际化回退策略处理。
     labelEn VARCHAR(200),
+    icon VARCHAR(100),
+    commandCode VARCHAR(100),
+    disabled BOOLEAN NOT NULL DEFAULT FALSE,
+    selectable BOOLEAN NOT NULL DEFAULT TRUE,
     -- attributesJson 保存节点业务扩展属性 JSON，不承载类型目录中的固定字段。
     attributesJson VARCHAR(10000),
     -- status 保存逻辑状态：0 表示逻辑删除，1 表示启用，2 表示停用。
@@ -36,6 +42,7 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTreeNode (
     CONSTRAINT fk_reference_data_tree_node_parent FOREIGN KEY (parentId) REFERENCES ReferenceDataTreeNode(id),
     -- 同一类型内节点编码不得重复，保证项目按稳定编码读取时只命中一条记录。
     CONSTRAINT uk_reference_data_tree_node_code UNIQUE (typeId, nodeCode),
+    CONSTRAINT uk_reference_data_tree_node_global_code UNIQUE (code),
     -- 状态只接受删除、启用和停用三个生命周期值。
     CONSTRAINT ck_reference_data_tree_node_status CHECK (status IN (0, 1, 2))
 );
@@ -43,6 +50,12 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTreeNode (
 -- 兼容早期正式库：只补充缺失审计字段，旧树节点主键、层级和标签保持不变。
 ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS tenantId BIGINT NOT NULL DEFAULT 1;
 ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS lastOperateUserId BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS code VARCHAR(100);
+ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS icon VARCHAR(100);
+ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS commandCode VARCHAR(100);
+ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS disabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE ReferenceDataTreeNode ADD COLUMN IF NOT EXISTS selectable BOOLEAN NOT NULL DEFAULT TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS uk_reference_data_tree_node_global_code_index ON ReferenceDataTreeNode(code);
 
 -- 管理接口需要在数据库连接关闭后序列化扩展属性；统一使用足够大的 VARCHAR，避免驱动返回已关闭的 JdbcClob。
 ALTER TABLE IF EXISTS ReferenceDataTreeNode ALTER COLUMN attributesJson VARCHAR(10000);

@@ -16,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 公共全局异常处理器把应用业务异常和未处理系统异常转换为统一 CommonResult JSON。
@@ -85,6 +86,32 @@ public class CommonGlobalExceptionHandler {
             "SYSTEM",
             exception.getErrorCode(),
             exception.getMessage(),
+            requestId,
+            exception
+        );
+    }
+
+    /**
+     * 将不存在的接口或静态资源转换为 HTTP 404，避免已删除旧接口被误报成系统故障。
+     * 真实传参示例：请求已删除的 {@code /api/reference-data/admin/options/getStore.htm}。
+     * 真实返回示例：返回 {@code {"errorType":"BUSINESS","errorCode":"RESOURCE_NOT_FOUND"}} 和 HTTP 404。
+     * 异常或副作用示例：仅记录一次警告日志且不修改数据；真实未处理异常仍进入 500 处理器。
+     *
+     * @param exception Spring MVC 在路由和静态资源均未命中时抛出的异常
+     * @return 不泄露服务器路径的统一 404 JSON 响应
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<String> handleNoResourceFoundException(NoResourceFoundException exception) {
+        // 当前请求标识继续写入统一错误体，便于定位访问了哪个已删除或拼错的地址。
+        String requestId = MDC.get(CommonRequestTraceInterceptor.REQUEST_ID_MDC_KEY);
+        // 路由未命中属于客户端地址问题，只记录警告而不输出系统故障级别日志。
+        LOGGER.warn("resourceNotFound requestId={} resourcePath={}", requestId, exception.getResourcePath());
+        // 固定安全文案和稳定错误码，禁止把服务器内部资源解析细节暴露到页面。
+        return failureResponse(
+            HttpStatus.NOT_FOUND,
+            "BUSINESS",
+            "RESOURCE_NOT_FOUND",
+            "请求的资源不存在。",
             requestId,
             exception
         );

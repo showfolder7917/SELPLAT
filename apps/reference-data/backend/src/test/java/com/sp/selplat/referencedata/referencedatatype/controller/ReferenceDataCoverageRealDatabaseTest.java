@@ -1,13 +1,9 @@
 package com.sp.selplat.referencedata.referencedatatype.controller;
 
-import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.exception.CommonSystemException;
@@ -17,7 +13,6 @@ import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
-import com.sp.selplat.referencedata.referencedatatablecolumn.service.ReferenceDataTableColumnService;
 import com.sp.selplat.referencedata.referencedatatype.dao.ReferenceDataTypeDao;
 import com.sp.selplat.referencedata.referencedatatype.service.ReferenceDataTypeService;
 import java.util.Arrays;
@@ -31,13 +26,11 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * 使用独立 H2 和正式 Spring 调用链覆盖引用数据的批量、校验、转换和数据库故障分支。
@@ -50,7 +43,6 @@ import org.springframework.test.web.servlet.MockMvc;
             "reference-data.datasource.pool-name=ReferenceDataCoverageTestPool",
             "spring.datasource.url=jdbc:h2:mem:reference_data_coverage_support_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
         })
-@AutoConfigureMockMvc
 @Import(SequenceGeneratorImpl.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ReferenceDataCoverageRealDatabaseTest {
@@ -62,14 +54,6 @@ class ReferenceDataCoverageRealDatabaseTest {
     // typeDao 只验证 Service 不会自然传入的底层筛选和数据库故障边界。
     @Autowired
     private ReferenceDataTypeDao typeDao;
-
-    // 表格列 Service 用于验证空配置、空参数与第二字段的真实数据库转换。
-    @Autowired
-    private ReferenceDataTableColumnService tableColumnService;
-
-    // MockMvc 只承担 HTTP 传输，树、选项和菜单结果仍来自正式 Service、DAO 与数据库。
-    @Autowired
-    private MockMvc mockMvc;
 
     // reference-data 专用模板既执行 fixture，也独立核对最终数据库状态。
     @Autowired
@@ -99,17 +83,6 @@ class ReferenceDataCoverageRealDatabaseTest {
     }
 
     /**
-     * 验证选项、树、右键菜单、表格列的空结果与可选字段分支，以及两个管理 Grid 路由。
-     *
-     * @throws Exception 当 MockMvc 请求执行失败时抛出；预期业务缺失请求均返回 HTTP 400
-     */
-    @Test
-    @Order(3)
-    void shouldCoverOtherModuleBoundaries() throws Exception {
-        verifyOtherModuleBoundaries();
-    }
-
-    /**
      * 验证真实类型表不可用时两个 DAO 扩展入口统一包装为系统异常。
      *
      * 执行结果示例：删除测试表后分页和坐标判断均返回 {@code REFERENCE_DATA_DATABASE_FAILED}。
@@ -131,12 +104,12 @@ class ReferenceDataCoverageRealDatabaseTest {
         CommonPageResult defaultPage = typeService.getStore(null);
         assertEquals(6, defaultPage.getTotalCount());
         assertEquals(20, defaultPage.getPageSize());
-        // 没有树或选项的类型 → resourceKinds 为空，覆盖两个存在性判断的 false 分支。
+        // 类型明确保存消费形态，兼容字段 resourceKinds 只回显唯一 type，不再扫描已删除的子表。
         Map<String, Object> emptyKind = defaultPage.getRecords().stream()
                 .filter(record -> "without-children".equals(record.get("resourceCode")))
                 .findFirst()
                 .orElseThrow();
-        assertEquals(List.of(), emptyKind.get("resourceKinds"));
+        assertEquals(List.of("CONTEXT_MENU"), emptyKind.get("resourceKinds"));
 
         CommonPageParam filteredQuery = new CommonPageParam();
         filteredQuery.putParam("keyword", "cms");
@@ -172,6 +145,10 @@ class ReferenceDataCoverageRealDatabaseTest {
         updateBatch.getItems().get(1).putParam("id", 100003);
         assertEquals(2, typeService.updateBatch(updateBatch).getAffectedRows());
         assertEquals(0, typeService.updateBatch(new CommonBatchParam()).getAffectedRows());
+
+        CommonParam singleUpdate = typeParam("cms", "article-category", "文章分类（单条更新）", 1, "86");
+        singleUpdate.putParam("id", 100002);
+        assertEquals("文章分类（单条更新）", ((Map<?, ?>) typeService.update(singleUpdate).getData()).get("nameZh"));
 
         assertEquals(2, typeService.deleteBatch(batch(idParam(100002), idParam(100003))).getAffectedRows());
         assertEquals(0, typeService.deleteBatch(new CommonBatchParam()).getAffectedRows());
@@ -214,6 +191,9 @@ class ReferenceDataCoverageRealDatabaseTest {
         longOptionalText.putParam("nameEn", "e".repeat(121));
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_TOO_LONG", () -> typeService.insert(longOptionalText));
         assertBusiness("REFERENCE_DATA_TYPE_STATUS_INVALID", () -> typeService.insert(typeParam("cms", "bad-status", "非法状态", 3, "1")));
+        CommonParam invalidTypeKey = typeParam("cms", "bad-type", "非法类型", 1, "1");
+        invalidTypeKey.putParam("type", "UNKNOWN");
+        assertBusiness("REFERENCE_DATA_TYPE_KEY_INVALID", () -> typeService.insert(invalidTypeKey));
         assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.insert(typeParam("cms", "text-status", "文字状态", "invalid", "1")));
         assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.insert(typeParam("cms", "bad-sort", "非法排序", 1, "invalid")));
 
@@ -231,6 +211,19 @@ class ReferenceDataCoverageRealDatabaseTest {
         CommonParam blankOptionalValues = typeParam("cms", "blank-optional", "空白可选值", null, " ");
         blankOptionalValues.putParam("nameEn", " ");
         assertTrue(typeService.insert(blankOptionalValues).isSuccess());
+        CommonParam booleanWords = typeParam("cms", "boolean-words", "布尔文字", 1, "1");
+        booleanWords.putParam("multiple", "true");
+        booleanWords.putParam("searchable", "1");
+        booleanWords.putParam("clearable", "false");
+        assertTrue(typeService.insert(booleanWords).isSuccess());
+        CommonParam booleanNumbers = typeParam("cms", "boolean-numbers", "布尔数字", 1, "1");
+        booleanNumbers.putParam("multiple", "0");
+        booleanNumbers.putParam("searchable", "false");
+        booleanNumbers.putParam("clearable", "true");
+        assertTrue(typeService.insert(booleanNumbers).isSuccess());
+        CommonParam invalidBoolean = typeParam("cms", "bad-boolean", "非法布尔", 1, "1");
+        invalidBoolean.putParam("multiple", "maybe");
+        assertBusiness("REFERENCE_DATA_BOOLEAN_INVALID", () -> typeService.insert(invalidBoolean));
 
         assertBusiness("REFERENCE_DATA_TYPE_ID_INVALID", () -> typeService.update(null));
         CommonParam missingUpdate = typeParam("cms", "missing-update", "不存在更新", 1, "1");
@@ -241,6 +234,7 @@ class ReferenceDataCoverageRealDatabaseTest {
         assertBusiness("REFERENCE_DATA_TYPE_DUPLICATE", () -> typeService.update(duplicateUpdate));
         assertBusiness("REFERENCE_DATA_TYPE_ID_INVALID", () -> typeService.delete(null));
         assertBusiness("REFERENCE_DATA_BUILTIN_TYPE_PROTECTED", () -> typeService.delete(idParam(100001)));
+        assertTrue(typeService.delete(idParam(100002)).isSuccess());
         assertTrue(typeService.delete(idParam(100004)).isSuccess());
         assertEquals(1, typeService.deleteBatch(batch(idParam(100005))).getAffectedRows());
 
@@ -248,49 +242,6 @@ class ReferenceDataCoverageRealDatabaseTest {
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.updateBatch(null));
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.deleteBatch(null));
         assertBusiness("REFERENCE_DATA_BUILTIN_TYPE_PROTECTED", () -> typeService.deleteBatch(batch(idParam(100001))));
-    }
-
-    /**
-     * 执行其他引用数据模块的空结果、可选字段和管理 Grid 路由验证。
-     *
-     * 执行结果示例：缺失资源返回对应 BUSINESS 编码，配置列保留 secondaryField。
-     *
-     * @throws Exception 当 MockMvc 请求执行失败时抛出
-     */
-    private void verifyOtherModuleBoundaries() throws Exception {
-        applyFixture("shouldCoverOtherModuleBoundaries");
-
-        mockMvc.perform(get("/api/reference-data/missing/missing/options"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_OPTIONS_NOT_FOUND"));
-        mockMvc.perform(get("/api/reference-data/missing/missing/tree"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_TREE_NOT_FOUND"));
-        mockMvc.perform(get("/api/reference-data/missing/missing/context-menu"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_CONTEXT_MENU_NOT_FOUND"));
-
-        mockMvc.perform(get("/api/reference-data/coverage/configured/options"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(2)))
-                .andExpect(jsonPath("$.data[0].groupCode").doesNotExist())
-                .andExpect(jsonPath("$.data[1].groupCode").value("GROUP-A"));
-        mockMvc.perform(get("/api/reference-data/coverage/configured/context-menu"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].icon").value("ri-test-line"));
-        mockMvc.perform(get("/api/reference-data/admin/tree-nodes/getGridColumn.htm"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
-        mockMvc.perform(get("/api/reference-data/admin/context-menu-items/getGridColumn.htm"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
-
-        assertTrue(tableColumnService.resolveColumnDefinitions(null, null, null).isEmpty());
-        List<Map<String, Object>> configuredColumns = tableColumnService.resolveColumnDefinitions(
-                "ReferenceDataOption", "coverageGrid", null);
-        assertEquals(1, configuredColumns.size());
-        assertEquals("labelZh", configuredColumns.get(0).get("secondaryField"));
-        assertTrue(tableColumnService.resolveColumns(null, null, null).isSuccess());
     }
 
     /**
@@ -303,6 +254,7 @@ class ReferenceDataCoverageRealDatabaseTest {
         jdbcTemplate.execute("DROP TABLE ReferenceDataType CASCADE");
         assertSystem(() -> typeDao.findPage(null, null, 1, 10));
         assertSystem(() -> typeDao.existsCoordinate("cms", "article-category", null));
+        assertSystem(() -> typeDao.findEnabledByCode("type100001"));
     }
 
     /**

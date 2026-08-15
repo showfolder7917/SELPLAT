@@ -40,7 +40,7 @@ public final class GridColumnDefinitionSupport {
      * @param gridId 页面表格实例标识，例如 {@code "selGridTypeManagementId"}
      * @param locale 页面语言，例如 {@code "zh-CN"}
      * @param metadata 当前 DAO 的真实字段元数据，例如 {@code {"id":ColumnMetadata,"nameZh":ColumnMetadata}}
-     * @return 解析结果，例如 {@code source=REFERENCE_DATA_TABLE_COLUMN} 和中文列配置；全部配置未命中时
+     * @return 解析结果，例如 {@code source=REFERENCE_DATA_TABLE_ELEMENT} 和中文列配置；全部配置未命中时
      *     返回 {@code source=DEFAULT_FIELD_NAME} 且 label 等于字段名
      */
     public static Resolution resolve(
@@ -54,7 +54,7 @@ public final class GridColumnDefinitionSupport {
         for (GridColumnDefinitionProvider provider : providers == null ? List.<GridColumnDefinitionProvider>of() : providers) {
             try {
                 List<Map<String, Object>> columns = immutableColumns(provider.resolve(tableName, gridId, locale));
-                if (!columns.isEmpty()) return new Resolution("REFERENCE_DATA_TABLE_COLUMN", columns);
+                if (!columns.isEmpty()) return new Resolution("REFERENCE_DATA_TABLE_ELEMENT", columns);
             } catch (RuntimeException exception) {
                 // 某个配置提供者故障只表示当前配置不可用，继续执行静默降级。
                 System.getLogger(GridColumnDefinitionSupport.class.getName())
@@ -63,7 +63,7 @@ public final class GridColumnDefinitionSupport {
         }
         // 未来多工程只需配置服务根地址 → 公共入口自动调用同一 resolve.htm 契约。
         List<Map<String, Object>> remoteColumns = resolveRemote(serviceUrl, tableName, gridId, locale);
-        if (!remoteColumns.isEmpty()) return new Resolution("REFERENCE_DATA_TABLE_COLUMN", remoteColumns);
+        if (!remoteColumns.isEmpty()) return new Resolution("REFERENCE_DATA_TABLE_ELEMENT", remoteColumns);
         // 配置未命中或接口不可用 → 使用数据库真实字段名，不把技术失败转换成页面提示。
         return new Resolution("DEFAULT_FIELD_NAME", defaultColumns(metadata));
     }
@@ -71,7 +71,7 @@ public final class GridColumnDefinitionSupport {
     /**
      * 把解析结果交给 BaseServiceImpl 组装公共 CommonResult。
      *
-     * @param source 表格头来源，例如 {@code "REFERENCE_DATA_TABLE_COLUMN"}
+     * @param source 表格头来源，例如 {@code "REFERENCE_DATA_TABLE_ELEMENT"}
      * @param columns 标准列清单，例如 {@code [{"id":"id","field":"id","label":"id"}]}
      */
     public record Resolution(String source, List<Map<String, Object>> columns) {

@@ -231,6 +231,10 @@
         selWindowInput.placeholder = String(selWindowField.placeholder || "");
         // 必填约束交给浏览器与本组件共同校验。
         selWindowInput.required = Boolean(selWindowField.required);
+        // 只读字段用于展示数据库生成的 code 等诊断坐标；仍可选择复制，但不能被表单编辑。
+        selWindowInput.readOnly = Boolean(selWindowField.readOnly);
+        // aria-readonly 与原生状态保持一致，让辅助技术明确这是只读信息而不是禁用控件。
+        if (selWindowField.readOnly) selWindowInput.setAttribute("aria-readonly", "true");
         // 最大长度同时约束用户输入和右侧计数。
         if (selWindowField.maxLength) selWindowInput.maxLength = Number(selWindowField.maxLength);
         // 尾部默认显示最大长度或日期图标，保持参考图右侧轨道。

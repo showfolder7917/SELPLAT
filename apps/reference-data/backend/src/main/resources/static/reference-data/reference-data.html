@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-    reference-data.html：引用数据七表管理工作台入口。
+    reference-data.html：引用数据六表管理工作台入口。
     页面只声明应用、背景与个性化挂载点；面板、搜索、树、下拉、表格和窗口均由 SEL 公共组件创建。
 -->
 <html lang="zh-CN" data-sel-theme="glass-admin" data-sel-mode="dark" data-sel-accent="base" data-sel-density="comfortable">
@@ -54,7 +54,7 @@
     <!-- 可切换主题包结束。 -->
 
     <!-- 应用样式最后加载，只负责页面舞台，不覆盖公共组件内部结构。 -->
-    <link rel="stylesheet" href="./reference-data.css?v=20260814-control-binding-1">
+    <link rel="stylesheet" href="./reference-data.css?v=20260814-six-table-1">
 </head>
 <body>
     <!-- 页面背景挂载点：由 selPageBackground 创建独立背景层。 -->
@@ -63,13 +63,13 @@
     <div data-sel-personalization-host></div>
 
     <!-- 应用区域开始：selPanel.create 在此创建标准五区管理面板。 -->
-    <main class="reference-data-page-stage" data-reference-data-app aria-label="引用数据七表管理工作台"></main>
+    <main class="reference-data-page-stage" data-reference-data-app aria-label="引用数据六表管理工作台"></main>
     <!-- 应用区域结束：移除此挂载点将阻止当前业务实例初始化，不影响 SEL 公共资源。 -->
 
     <!-- SEL 公共运行时开始：先注册能力，再由应用装配层显式挂载。 -->
     <script src="/sel/core/selKernel.js?v=20260813-sel-api-1"></script>
     <script src="/sel/core/selBaseRuntime.js?v=20260813-sel-api-1"></script>
-    <script src="/sel/core/selAjax.js?v=20260807-reference-1"></script>
+    <script src="/sel/core/selAjax.js?v=20260814-json-request-1"></script>
     <script src="/sel/theme/runtime/selThemeRegistry.js?v=20260807-reference-1"></script>
     <script src="/sel/theme/packs/crystal-tech/manifest.js?v=20260807-reference-1"></script>
     <script src="/sel/theme/packs/candy-adventure/manifest.js?v=20260807-reference-1"></script>
@@ -91,6 +91,6 @@
     <!-- SEL 公共运行时结束。 -->
 
     <!-- Reference Data 应用装配层最后加载，只传业务接口、布局声明和标准 payload。 -->
-    <script src="./reference-data.js?v=20260814-control-binding-1"></script>
+    <script src="./reference-data.js?v=20260814-six-table-1"></script>
 </body>
 </html>

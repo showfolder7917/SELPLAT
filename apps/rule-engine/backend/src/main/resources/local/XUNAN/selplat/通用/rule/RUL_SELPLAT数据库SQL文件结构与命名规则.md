@@ -7,13 +7,15 @@ python_ability_refs = none
 <!-- 当前规则不需要 Node 专用能力；Node 只在受影响前端字段同步时使用现有语法检查。 -->
 node_ability_refs = none
 <!-- 首版规则固化 reference-data 重构中已经验证的 SQL 目录和单表文件约束。 -->
-rule_version = 2.2.0
+rule_version = 2.4.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，未经人工提升不得扩大到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记、真实案例核对和索引链验证。 -->
 rule_status = active
 <!-- 首次升级记录说明规则来自用户对 dataShape、混合建表文件和错误命名的连续修正。 -->
-upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责;2026-08-11:固定初始化主键不得超过六位_reference-data统一六位种子保留区并让运行号段从下一完整区间开始
+upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责;2026-08-11:固定初始化主键不得超过六位_reference-data统一六位种子保留区并让运行号段从下一完整区间开始;2026-08-15:增加全局code命名空间聚合号段策略_允许无种子业务表省略data文件_类型与树节点通过显式type模型统一承载选择项和菜单节点
+<!-- 本次升级把不可辨认的项目名前缀改为对象类型前缀，并明确父容器关联不得依靠解析前缀。 -->
+upgrade_record_20260815_object_code = 全局code使用对象类型前缀加聚合主键_中央登记声明object-kind-plus-global-id_页面父容器使用kind与code显式关联
 
 <!-- 问题：数据库脚本使用含义模糊的 tables 或 migration 文件名、一个文件创建多张正式表、类型表混入树或选项能力字段时，后续维护者无法从目录和文件名判断真实职责。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 中新建、迁移、拆分、改名或审查 apps/<app> 的应用自有数据库和 SQL。 -->
@@ -24,7 +26,7 @@ upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_�
 <!-- 本规则的格式由 DSL 本身和文件命名模式直接固定，没有独立可复用成品模板，禁止为补齐目录生成空模板。 -->
 template_not_applicable_reason = sql_layout_and_filename_patterns_are_fully_declared_in_rule_no_separate_artifact_template
 <!-- reference-data 已完成真实数据库升级、回归和页面验证，可作为规则首个已核验正确案例。 -->
-verified_example_refs = apps/reference-data/db/sql/schema-CommonSequenceSegment.sql,apps/reference-data/db/sql/data-CommonSequenceSegment.sql,apps/reference-data/db/sql/schema-ReferenceDataType.sql,apps/reference-data/db/sql/schema-ReferenceDataTreeNode.sql,apps/reference-data/db/sql/data-ReferenceDataType.sql,apps/reference-data/db/README.md
+verified_example_refs = apps/reference-data/db/sql/schema-CommonSequenceSegment.sql,apps/reference-data/db/sql/data-CommonSequenceSegment.sql,apps/reference-data/db/sql/schema-ReferenceDataType.sql,apps/reference-data/db/sql/schema-ReferenceDataTreeNode.sql,apps/reference-data/db/sql/schema-ReferenceDataTable.sql,apps/reference-data/db/README.md
 <!-- 当前验证复用应用数据库初始化器、Gradle 测试和 SQL 元数据查询，不重复建设只包装命令的专用程序。 -->
 program_not_applicable_reason = existing_application_initializer_gradle_tests_and_database_metadata_queries_provide_repeatable_verification
 <!-- 交付时必须同时验证目录结构、文件与表名映射、加载清单、隔离数据库执行和调用方字段引用。 -->
@@ -53,8 +55,10 @@ selplat_database_empty_password_boundary = production_forbidden,test_isolated_ov
 
 <!-- 正式表结构文件必须使用 schema-实际表名.sql，文件名中的表名大小写与 CREATE TABLE 实际表名完全一致。 -->
 selplat_schema_sql_filename_pattern = schema-<ActualTableName>.sql
-<!-- 初始化数据文件必须使用 data-实际表名.sql，文件名中的表名大小写与 INSERT 目标表名完全一致。 -->
+<!-- 表存在初始化数据时必须使用 data-实际表名.sql；没有种子数据的空业务表可以不创建空 data 文件。 -->
 selplat_data_sql_filename_pattern = data-<ActualTableName>.sql
+<!-- data 文件只表达真实种子数据；缺少 data 文件表示首次建库保持空表，不得为满足目录对称生成无意义空文件。 -->
+selplat_optional_seed_data_file_policy = required_when_seed_rows_exist,absent_means_empty_initial_table,no_empty_placeholder_file
 <!-- 一个 schema 文件只允许创建文件名对应的一张正式业务表，禁止使用 tables.sql 或 create_*_tables.sql 聚合多张表。 -->
 selplat_schema_sql_single_formal_table_policy = one_schema_file_creates_exactly_one_named_formal_table
 <!-- 一个 data 文件只允许初始化文件名对应表的数据，禁止把多个无关表的种子数据混入同一文件。 -->
@@ -66,8 +70,8 @@ selplat_legacy_application_schema_migration_policy = preserve_until_explicit_mig
 
 ## 表与字段职责
 
-<!-- 每张正式表必须表达单一业务职责，类型目录、树节点、普通选项和其他资源不得因共享部分字段而混入同一张表。 -->
-selplat_database_table_single_business_responsibility = type_catalog,tree_node,option_item,and_other_resources_remain_separate
+<!-- 每张正式表必须表达单一业务职责；选择项、表格菜单、面板菜单和右键菜单属于同一“类型化节点”模型时，由 ReferenceDataType.type 与 ReferenceDataTreeNode.typeId 显式区分，禁止再建立重复专表。 -->
+selplat_database_table_single_business_responsibility = explicit_polymorphic_type_catalog_plus_tree_node_allowed,separate_table_only_for_distinct_lifecycle_or_constraints,no_duplicate_option_or_menu_tables
 <!-- 类型目录表只维护类型坐标、名称、说明、状态、排序和审计信息，不得保存没有真实查询控制链路的输出形态或界面展示字段。 -->
 selplat_type_catalog_forbidden_unenforced_capability_fields = dataShape,tree_or_option_display_only_flags,other_fields_without_runtime_enforcement
 <!-- 树节点表只维护类型归属、父子关系、节点稳定值、多语言标签、扩展属性、状态、排序和审计信息。 -->
@@ -79,8 +83,10 @@ selplat_database_field_requires_real_call_chain = write_path,read_path,business_
 
 <!-- 严格数据库业务应用必须提供 CommonSequenceSegment 的独立结构与初始化数据脚本，由 common/persistence 绑定当前应用私有数据源。 -->
 selplat_common_sequence_sql_files = schema-CommonSequenceSegment.sql,data-CommonSequenceSegment.sql,owner_common_persistence
-<!-- 号段数据脚本允许整体为空并由管理员逐条建立；一旦预置任一号段，就必须完整覆盖每张非 Common 业务表且禁止多表共享号段。 -->
-selplat_business_table_sequence_cardinality = fully_empty_for_manual_setup_or_one_table_one_row,seqCode=<ActualTableName>Id,no_shared_business_sequence,no_partial_seed_set
+<!-- 默认应用仍是一表一号段；只有中央登记显式声明全局 code 命名空间的应用，才允许全部业务表共享唯一聚合号段，保证对象类型前缀与全局 id 拼接出的 code 全局不重复且人工可辨认。 -->
+selplat_business_table_sequence_cardinality = default:fully_empty_for_manual_setup_or_one_table_one_row(seqCode=<ActualTableName>Id,no_partial_seed_set),aggregate-global-code-sequence:exactly_one_registered_aggregateSequenceCode(globalCodeNamespace=true)
+<!-- 聚合全局命名空间必须登记对象类型前缀策略；关联仍依靠字段和外键，禁止解析 code 前缀推导数据库关系。 -->
+selplat_aggregate_global_code_prefix_strategy = codePrefixStrategy=object-kind-plus-global-id,readable_object_kind_prefix,shared_global_id_suffix,no_relationship_inference_from_prefix
 <!-- CommonSequenceSegment 本身可使用 identity 以避免循环发号；其他业务表 id 禁止 identity，必须调用 shared SequenceGenerator。 -->
 selplat_business_table_id_generation = CommonSequenceSegment_identity_exception,other_business_tables_no_identity,shared_SequenceGenerator_required
 <!-- 显式写在 data SQL 中的固定业务主键不得超过六位，禁止重新引入 900000004003 一类脱离应用初始号段的超长编号。 -->
@@ -117,8 +123,8 @@ selplat_database_sql_change_atomic_sync = build_copy,loader_registry,documentati
 selplat_database_destructive_change_precheck = resolve_exact_target,read_only_schema_check,row_count_check,preserve_or_migrate_data
 <!-- 自动化测试只能使用内存库或临时目录中的可重建隔离数据库，禁止读写 apps/<app>/db/<app>.mv.db 正式文件。 -->
 selplat_database_test_isolation = memory_or_temporary_database_only
-<!-- schema 变更必须覆盖新库首次初始化、重复初始化和旧库兼容升级；数据脚本必须验证重复执行后稳定坐标仍只有一条。 -->
-selplat_database_schema_test_matrix = fresh_initialization,repeated_initialization,legacy_upgrade,seed_idempotency
+<!-- schema 变更必须覆盖新库首次初始化、重复初始化和旧库兼容升级；存在种子数据时还必须验证重复执行后稳定坐标仍只有一条。 -->
+selplat_database_schema_test_matrix = fresh_initialization,repeated_initialization,legacy_upgrade,seed_idempotency_when_seed_exists
 <!-- 删除数据库文件后必须能只靠登记 SQL 重建；已有文件重复启动必须保留业务记录和号段游标。 -->
 selplat_database_rebuild_and_reopen_contract = missing_file_rebuild_from_sql,existing_file_no_reset,preserve_business_rows,preserve_sequence_cursor,compatible_upgrade_only
 <!-- 字段删除必须同步 Repository、Service、Controller、前端表格、筛选、表单、接口示例和测试，禁止留下只展示或只保存的残余引用。 -->

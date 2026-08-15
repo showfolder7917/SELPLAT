@@ -2,6 +2,8 @@
 CREATE TABLE IF NOT EXISTS ReferenceDataType (
     -- id 作为类型记录主键，由当前 reference-data 独立数据库生成，供树节点和管理接口稳定引用。
     id BIGINT PRIMARY KEY,
+    -- code 是所有外部接口使用的不可变全局坐标。
+    code VARCHAR(100) NOT NULL,
     -- tenantId 标识当前类型所属租户。
     tenantId BIGINT NOT NULL DEFAULT 1,
     -- lastOperateUserId 记录最近维护该类型的操作员。
@@ -10,6 +12,8 @@ CREATE TABLE IF NOT EXISTS ReferenceDataType (
     projectCode VARCHAR(64) NOT NULL,
     -- resourceCode 保存项目内稳定资源编码，例如 resource-kind，与 projectCode 共同保证类型唯一。
     resourceCode VARCHAR(64) NOT NULL,
+    -- type 明确表示节点由下拉、树或哪类菜单消费。
+    type VARCHAR(32) NOT NULL,
     -- nameZh 保存类型中文名称，中文界面和默认管理页面直接使用该值。
     nameZh VARCHAR(120) NOT NULL,
     -- nameJa 保存类型日文名称；未配置时由上层国际化回退策略处理。
@@ -22,6 +26,10 @@ CREATE TABLE IF NOT EXISTS ReferenceDataType (
     descriptionJa VARCHAR(500),
     -- descriptionEn 保存类型英文用途说明。
     descriptionEn VARCHAR(500),
+    multiple BOOLEAN NOT NULL DEFAULT FALSE,
+    searchable BOOLEAN NOT NULL DEFAULT FALSE,
+    clearable BOOLEAN NOT NULL DEFAULT TRUE,
+    attributesJson VARCHAR(10000),
     -- status 保存逻辑状态：0 表示逻辑删除，1 表示启用，2 表示停用。
     status INTEGER NOT NULL DEFAULT 1,
     -- sortnum 保存管理页面的业务排序值，数值越大时由当前查询规则优先展示。
@@ -32,6 +40,8 @@ CREATE TABLE IF NOT EXISTS ReferenceDataType (
     updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- 同一项目内资源编码不得重复，防止调用方命中不确定的类型定义。
     CONSTRAINT uk_reference_data_type_coordinate UNIQUE (projectCode, resourceCode),
+    CONSTRAINT uk_reference_data_type_code UNIQUE (code),
+    CONSTRAINT ck_reference_data_type_key CHECK (type IN ('DROPDOWN', 'TREE', 'GRID_MENU', 'PANEL_MENU', 'CONTEXT_MENU')),
     -- 状态只接受删除、启用和停用三个生命周期值。
     CONSTRAINT ck_reference_data_type_status CHECK (status IN (0, 1, 2))
 );
@@ -39,6 +49,13 @@ CREATE TABLE IF NOT EXISTS ReferenceDataType (
 -- 兼容早期正式库：审计字段在现有业务数据上以平台默认租户和操作员补齐，不删除或重建旧表。
 ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS tenantId BIGINT NOT NULL DEFAULT 1;
 ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS lastOperateUserId BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS code VARCHAR(100);
+ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS type VARCHAR(32);
+ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS multiple BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS searchable BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS clearable BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE ReferenceDataType ADD COLUMN IF NOT EXISTS attributesJson VARCHAR(10000);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_reference_data_type_code_index ON ReferenceDataType(code);
 
 -- 兼容旧数据库：旧版本 dataShape 只保存展示值且从未控制查询能力，升级时安全移除该约束和字段。
 ALTER TABLE ReferenceDataType DROP CONSTRAINT IF EXISTS ck_reference_data_type_shape;

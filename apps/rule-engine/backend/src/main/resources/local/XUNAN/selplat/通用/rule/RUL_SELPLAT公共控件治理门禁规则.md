@@ -3,9 +3,11 @@
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
 <!-- 3.0.0 修正引用型下拉的数据、类型和页面控件绑定边界，禁止把管理筛选器冒充业务控件。 -->
-rule_version = 3.0.0
+rule_version = 3.1.0
 <!-- 2026-08-12 依次固定纯图标可发现性、确认控件边界、真实风险文案、页面编辑契约及客户交付审计发现的通用布局与可访问性要求。 -->
 upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存;2026-08-12:hidden控件必须退出布局_树叶子占位禁止空按钮_窄屏动作先收起文字_显式保存无脏标记也保存当前控件;2026-08-13:公共API统一window.sel命名空间_selKernel最先加载_应用顶部集中解构_sel.core.freeze深度冻结_中文组件用途说明;2026-08-14:完整只读边界只调用一次selFreeze_禁止嵌套逐项冻结_运行时控制器保持生命周期_生成模板同步门禁;2026-08-14:应用入口统一app_SEL公共别名使用sel前缀_业务模块使用项目lowerCamelCase前缀;2026-08-14:业务应用动态节点统一由sel.core.element创建_原生节点创建只留在公共实现层;2026-08-14:大型应用装配脚本增加函数契约和关键语句组中文教学式业务注释_禁止机械注释括号标点;2026-08-14:统一入口_SEL公共别名_具名业务函数中文契约扩展到全部应用JavaScript并接入快速门禁;2026-08-14:Grid表头竖向分隔线覆盖第一列并只排除最后一列;2026-08-14:动作型页面编辑入口统一使用onEdit_复合管理内容统一进入selWindow自定义内容_引用型下拉按typeId管理并保持树叶子;2026-08-14:引用型下拉拆分页面控件绑定_类型目录_选项数据并禁止管理筛选器注册为业务页面控件
+<!-- 本次升级以六表最终模型替换已删除 Option/Binding 表描述，并增加 parentKind + parentCode 明确父容器。 -->
+upgrade_record_20260815_reference_model = ControlLayout绑定页面与父容器_Type维护工程和类型_TreeNode仅通过typeId归属_禁止节点复制页面坐标
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -192,12 +194,12 @@ selplat_grid_page_editor_persistence = live_memory_resize,one_terminal_change_ev
 selplat_page_editor_extension_boundary = shared_editor_session_per_control_adapter,menu_tree_dropdown_data_type_keep_business_table_and_service,no_monolithic_json_table
 <!-- 只触发业务管理流程、不产生页面草稿的控件使用 action-only onEdit 登记；它不参与脏状态、保存或取消恢复，但仍受管理员权限和编辑模式控制。 -->
 selplat_page_editor_action_control_contract = register_onEdit_action_only,enabled_dynamic_visibility,no_capture_restore_save_requirement,excluded_from_dirty_save_cancel
-<!-- 引用型下拉必须把页面控件坐标、类型目录和选项数据分开保存；页面坐标绑定 typeId，选项通过 typeId 归属类型，禁止在选项表复制页面坐标或类型业务坐标。 -->
-selplat_reference_dropdown_data_model = pageProjectCode_plus_pagePath_plus_controlId_to_typeId,ReferenceDataType_projectCode_plus_resourceCode,ReferenceDataOption_typeId_plus_optionValue,no_coordinate_duplication
+<!-- 引用型下拉必须把页面控件布局、类型目录和类型化节点分开保存；ControlLayout 表达使用位置，TreeNode 只通过 typeId 归属类型，禁止复制页面坐标。 -->
+selplat_reference_dropdown_data_model = ReferenceDataControlLayout_pageCode_plus_parentKind_plus_parentCode_plus_typeId,ReferenceDataType_projectCode_plus_resourceCode_plus_type,ReferenceDataTreeNode_typeId_plus_nodeValue,no_coordinate_duplication
 <!-- 管理工作台中的类型筛选器只负责过滤数据，禁止把筛选槽注册为业务页面下拉框或以其当前值冒充控件绑定。 -->
 selplat_reference_dropdown_filter_boundary = management_filter_is_not_business_control,no_page_editor_registration,no_filter_value_as_binding
-<!-- 真实业务下拉框只能由已登记页面唯一坐标解析启用绑定并查询 ReferenceDataOption；选项明细只在管理 Grid 展示，导航树中的下拉选项模块保持无子节点。 -->
-selplat_reference_dropdown_option_management = real_control_coordinate_resolves_binding,binding_typeId_queries_business_option_table_crud,tree_module_leaf,no_option_record_tree_children
+<!-- 真实业务下拉框只能由已登记控件的 typeId 查询 DROPDOWN 类型节点；类型导航保持叶子且不把选项记录展开为导航子节点。 -->
+selplat_reference_dropdown_option_management = registered_control_typeId_queries_dropdown_typed_tree_nodes,tree_node_business_crud,type_navigation_leaf,no_option_record_navigation_children
 
 ## 验证
 

@@ -19,7 +19,11 @@
       "projectName": "reference-data",
       "schemaRoot": "db/sql",
       "databaseFile": "db/reference-data.mv.db",
-      "primaryKeyStrategy": "one-table-one-sequence",
+      "primaryKeyStrategy": "aggregate-global-code-sequence",
+      "aggregateSequenceCode": "ReferenceDataObjectId",
+      "globalCodeNamespace": true,
+      "codePrefixStrategy": "object-kind-plus-global-id",
+      "queryRepresentationModel": "type-plus-tree-node",
       "datasourcePrefix": "reference-data.datasource"
     },
     {

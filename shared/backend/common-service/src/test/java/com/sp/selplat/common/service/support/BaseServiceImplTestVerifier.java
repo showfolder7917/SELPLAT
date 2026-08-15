@@ -252,7 +252,7 @@ public final class BaseServiceImplTestVerifier {
             assertThrows(IllegalStateException.class, () -> new SharedServiceFixtureService().requestSequence())
                 .getMessage()
         );
-        // BaseServiceImpl 自身统一声明 DAO 入口和九个默认 CRUD，业务子类可直接继承或按需覆盖。
+        // BaseServiceImpl 自身统一声明 DAO、默认 CRUD、身份入口和发号后派生字段扩展点，业务子类可直接继承或按需覆盖。
         assertEquals(
             Set.of(
                 "getDao",
@@ -261,6 +261,7 @@ public final class BaseServiceImplTestVerifier {
                 "getById",
                 "getByIds",
                 "insert",
+                "prepareGeneratedInsert",
                 "insertBatch",
                 "update",
                 "updateBatch",

@@ -8,12 +8,15 @@ import java.util.Map;
 public interface ReferenceDataTreeNodeService extends BaseService {
 
     /**
-     * 查询一个资源的完整树。
+     * 按类型唯一 code 查询节点，并依据类型键输出树、选项或菜单结构。
+     * 真实传参示例：{@code typeCode=type101001, locale=zh-CN}。
+     * 真实返回示例：DROPDOWN 类型返回 {@code {"success":true,"data":[{"value":"TREE"}]}}。
+     * 异常或副作用示例：code 不存在或没有启用节点时抛出
+     *     {@code REFERENCE_DATA_NODES_NOT_FOUND}；方法不修改数据库。
      *
-     * @param projectCode URL 项目编码，例如 {@code "reference-data"}
-     * @param resourceCode URL 资源编码，例如 {@code "resource-kind"}
-     * @param parameters URL 参数，例如 {@code {"locale":"en-US"}}
-     * @return 树结果，例如 {@code {"success":true,"data":[{"id":"resource-kind-root"}]}}
+     * @param typeCode ReferenceDataType 的唯一 code
+     * @param parameters locale 等查询参数
+     * @return 与类型表现形式匹配的节点结果
      */
-    CommonResult getTree(String projectCode, String resourceCode, Map<String, String> parameters);
+    CommonResult getNodes(String typeCode, Map<String, String> parameters);
 }

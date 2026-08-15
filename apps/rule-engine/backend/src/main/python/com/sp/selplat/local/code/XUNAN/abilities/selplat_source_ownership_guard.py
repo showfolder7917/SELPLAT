@@ -1015,10 +1015,7 @@ def load_managed_database_registry(
                     "must use the same table-business, capability, and common architecture"
                 ),
             })
-        expected_fixed_values = {
-            "schemaRoot": "db/sql",
-            "primaryKeyStrategy": "one-table-one-sequence",
-        }
+        expected_fixed_values = {"schemaRoot": "db/sql"}
         for field_name, expected_value in expected_fixed_values.items():
             if application.get(field_name) != expected_value:
                 violations.append({
@@ -1026,6 +1023,51 @@ def load_managed_database_registry(
                     "path": relative_registry,
                     "message": f"{project_name}.{field_name} must be {expected_value}",
                 })
+        primary_key_strategy = application.get("primaryKeyStrategy")
+        if primary_key_strategy not in {
+                "one-table-one-sequence", "aggregate-global-code-sequence"}:
+            violations.append({
+                "code": "MANAGED_DATABASE_REGISTRY_POLICY_INVALID",
+                "path": relative_registry,
+                "message": (
+                    f"{project_name}.primaryKeyStrategy must be one-table-one-sequence "
+                    "or aggregate-global-code-sequence"
+                ),
+            })
+        if primary_key_strategy == "aggregate-global-code-sequence":
+            aggregate_sequence_code = application.get("aggregateSequenceCode")
+            if not isinstance(aggregate_sequence_code, str) or not re.fullmatch(
+                    r"[A-Z][A-Za-z0-9]{1,99}Id", aggregate_sequence_code):
+                violations.append({
+                    "code": "MANAGED_DATABASE_AGGREGATE_SEQUENCE_REGISTRATION_INVALID",
+                    "path": relative_registry,
+                    "message": f"{project_name} aggregate strategy requires a safe aggregateSequenceCode",
+                })
+            if application.get("globalCodeNamespace") is not True:
+                violations.append({
+                    "code": "MANAGED_DATABASE_AGGREGATE_SEQUENCE_REGISTRATION_INVALID",
+                    "path": relative_registry,
+                    "message": f"{project_name} aggregate strategy requires globalCodeNamespace=true",
+                })
+            if application.get("codePrefixStrategy") != "object-kind-plus-global-id":
+                violations.append({
+                    "code": "MANAGED_DATABASE_CODE_PREFIX_STRATEGY_INVALID",
+                    "path": relative_registry,
+                    "message": (
+                        f"{project_name} aggregate code namespace must use "
+                        "codePrefixStrategy=object-kind-plus-global-id"
+                    ),
+                })
+        query_representation_model = application.get("queryRepresentationModel")
+        if query_representation_model not in {None, "type-plus-tree-node"}:
+            violations.append({
+                "code": "MANAGED_DATABASE_QUERY_REPRESENTATION_MODEL_INVALID",
+                "path": relative_registry,
+                "message": (
+                    f"{project_name}.queryRepresentationModel must be type-plus-tree-node "
+                    "when an explicit polymorphic node model is used"
+                ),
+            })
     return registrations, violations
 
 
@@ -1560,22 +1602,31 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                         for statement in sequence_data_text.split(";")
                         if re.search(r"INSERT\s+INTO\s+CommonSequenceSegment", statement, re.IGNORECASE)
                     ]
-                    # 整张号段数据脚本为空表示由管理员逐条建立；一旦出现任一预置号段，必须完整覆盖全部业务表。
+                    # 普通应用保持一表一号段；共享全局 code 命名空间的聚合应用只允许登记一个显式聚合号段。
                     if sequence_insert_heads:
-                        for table_name in sorted(schema_tables):
-                            if table_name.startswith("Common"):
-                                continue
-                            sequence_code = f"{table_name}Id"
-                            declaration_count = sum(
-                                1 for insert_head in sequence_insert_heads
-                                if re.search(rf"['\"]{re.escape(sequence_code)}['\"]", insert_head)
-                            )
-                            if declaration_count != 1:
+                        if registration.get("primaryKeyStrategy") == "aggregate-global-code-sequence":
+                            sequence_code = str(registration.get("aggregateSequenceCode", ""))
+                            declaration_count = sum(1 for insert_head in sequence_insert_heads
+                                if re.search(rf"['\"]{re.escape(sequence_code)}['\"]", insert_head))
+                            if declaration_count != 1 or len(sequence_insert_heads) != 1:
                                 violations.append({
                                     "code": "MANAGED_APPLICATION_TABLE_SEQUENCE_CARDINALITY_INVALID",
                                     "path": str(common_sequence_data.relative_to(project_root)),
-                                    "message": f"configured sequence data must map {table_name} to exactly one {sequence_code} row",
+                                    "message": f"aggregate code namespace must declare exactly one {sequence_code} row",
                                 })
+                        else:
+                            for table_name in sorted(schema_tables):
+                                if table_name.startswith("Common"):
+                                    continue
+                                sequence_code = f"{table_name}Id"
+                                declaration_count = sum(1 for insert_head in sequence_insert_heads
+                                    if re.search(rf"['\"]{re.escape(sequence_code)}['\"]", insert_head))
+                                if declaration_count != 1:
+                                    violations.append({
+                                        "code": "MANAGED_APPLICATION_TABLE_SEQUENCE_CARDINALITY_INVALID",
+                                        "path": str(common_sequence_data.relative_to(project_root)),
+                                        "message": f"configured sequence data must map {table_name} to exactly one {sequence_code} row",
+                                    })
                 for table_name in sorted(schema_tables):
                     schema_file = project_root_path / "db/sql" / f"schema-{table_name}.sql"
                     schema_text = schema_file.read_text(encoding="utf-8")
@@ -1584,14 +1635,7 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                         violations.append({
                             "code": "MANAGED_APPLICATION_BUSINESS_IDENTITY_FORBIDDEN",
                             "path": str(schema_file.relative_to(project_root)),
-                            "message": "business table ids must use <TableName>Id sequence, not database identity",
-                        })
-                    data_file = project_root_path / "db/sql" / f"data-{table_name}.sql"
-                    if not data_file.is_file():
-                        violations.append({
-                            "code": "MANAGED_APPLICATION_REBUILD_DATA_SQL_MISSING",
-                            "path": str(schema_file.relative_to(project_root)),
-                            "message": f"{table_name} requires a matching data-{table_name}.sql rebuild resource",
+                            "message": "business table ids must use the registered SequenceGenerator strategy, not database identity",
                         })
                     for statement in sql_statements(schema_text):
                         normalized_statement = re.sub(r"\s+", " ", statement).upper()
@@ -1863,13 +1907,16 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                         name for name, path_suffix in QUERY_REPRESENTATION_PATHS.items()
                         if path_suffix in source_text
                     }
-                    if len(representations) > 1:
+                    uses_polymorphic_node_model = (
+                        registration.get("queryRepresentationModel") == "type-plus-tree-node"
+                    )
+                    if len(representations) > 1 and not uses_polymorphic_node_model:
                         violations.append({
                             "code": "MANAGED_APPLICATION_QUERY_REPRESENTATIONS_MIXED_CONTROLLER",
                             "path": str(relative_source),
                             "message": (
-                                "tree, options, and context-menu HTTP representations must remain "
-                                "in separate table business controllers"
+                                "mixed tree, options, and context-menu HTTP representations require "
+                                "an explicit type-plus-tree-node central registration"
                             ),
                         })
 

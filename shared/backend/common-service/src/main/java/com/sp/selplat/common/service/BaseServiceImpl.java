@@ -120,7 +120,7 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
      * @param viewCode 前端 Grid 实例编码，例如 {@code user-management}
      * @param locale 当前语言，例如 {@code zh-CN}
      * @return 成功结果，例如配置命中时返回
-     *     {@code {"success":true,"data":{"source":"REFERENCE_DATA_TABLE_COLUMN",}
+     *     {@code {"success":true,"data":{"source":"REFERENCE_DATA_TABLE_ELEMENT",}
      *     {@code "viewCode":"user-management","columns":[{"field":"loginName","label":"登录账号"}]}}}；
      *     配置不可用时返回 {@code label=loginName} 的字段名列且不产生页面提示
      * @throws CommonBusinessException viewCode 或 locale 为空时抛出，例如
@@ -246,6 +246,8 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
         Map<String, Long> generatedIdMap = getSequence();
         // 把生成主键按字段名写回同一个前端参数对象，供 DAO 直接落库。
         generatedIdMap.forEach(saveIn::putParam);
+        // 允许业务聚合在公共发号完成后、DAO 写入前派生只读业务字段，例如用生成主键构造不可变 code。
+        prepareGeneratedInsert(saveIn, generatedIdMap);
         // 发号完成后由服务端身份覆盖租户和操作员，前端不再拥有两个字段的写入权。
         applyCurrentIdentity(saveIn);
         // 基础 Service 直接调用 BaseDao 新增入口，不在应用 DAO 建立同义包装方法。
@@ -277,6 +279,8 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
             Map<String, Long> generatedIdMap = getSequence();
             // 把本项全部生成主键按字段名写回同一个参数对象。
             generatedIdMap.forEach(saveItem::putParam);
+            // 每个批量项都复用同一扩展点派生服务端字段，禁止调用方绕开发号链自行拼接。
+            prepareGeneratedInsert(saveItem, generatedIdMap);
             // 每个批量项独立覆盖当前身份，禁止其中任一项携带其他租户或操作员。
             applyCurrentIdentity(saveItem);
         }
@@ -286,6 +290,21 @@ public abstract class BaseServiceImpl<D extends BaseDao> extends BaseExtendsServ
         CommonResult result = buildSuccessResult(saveItems, affectedRows, "批量新增完成。");
         // 返回已经完成统一字段填充的批量新增结果。
         return result;
+    }
+
+    /**
+     * 在公共号段已经写回新增参数后补充由主键派生的服务端字段。
+     * 真实传参示例：发号结果为 {@code {"id":101001}}，业务参数为
+     *     {@code {"projectCode":"reference-data","id":101001}}。
+     * 真实返回示例：默认实现无返回值且不改变参数；Reference Data 可补入
+     *     {@code {"code":"referenceData101001"}}。
+     * 异常或副作用示例：子类校验项目编码失败时抛出业务异常，当前新增不会进入 DAO；已消费号段允许跳号。
+     *
+     * @param saveIn 已写入公共号段主键、尚未进入 DAO 的新增参数
+     * @param generatedIdMap 本次公共发号生成的字段和值
+     */
+    protected void prepareGeneratedInsert(CommonParam saveIn, Map<String, Long> generatedIdMap) {
+        // 普通业务表不需要派生字段，保持原有新增行为完全不变。
     }
 
     /**

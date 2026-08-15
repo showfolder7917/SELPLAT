@@ -1,12 +1,12 @@
 # reference-data
 
-`reference-data` 是 SELPLAT 长期运行的平台引用数据服务，统一承载可被多个业务项目复用的树和类型列表能力。
+`reference-data` 是 SELPLAT 的引用数据与页面配置服务，统一承载类型、树/选项/菜单、表格元素和页面布局能力。
 
 ## 模块职责
 
-- 使用 `projectCode + resourceCode` 定位已登记的树或类型资源。
+- 所有六表记录都使用后端生成的“对象类型前缀 + 全局 ID”唯一 `code` 定位；`projectCode` 独立表达工程归属。
 - 对外提供稳定的树、下拉选项和右键菜单 HTTP 结构。
-- 六种数据分别由自己的表业务 Controller、Service 和 DAO 维护。
+- 六张业务表分别由自己的 Controller、Service 和 DAO 维护。
 - 已通过 `/api/reference-data/**` 提供树和类型选项 HTTP API。
 - 已提供独立的类型目录管理后台，并把正式数据永久保存在本模块 `db/reference-data.mv.db`。
 
@@ -19,7 +19,7 @@
 
 ## 子模块
 
-- `backend`：四张表业务、查询路由、类型管理 API 和管理页面。
+- `backend`：六张表业务、code 查询、页面原子保存 API 和管理页面。
 - `db`：正式迁移脚本与本模块独占的 H2 文件数据库。
 - `frontend`：后续拆分 Vue 管理端时的源码入口；当前页面随 backend 静态资源发布。
 - `doc`：架构、接口、资源登记和运维文档。
@@ -38,27 +38,25 @@ backend  → shared
 ## 第一版可用接口
 
 ```text
-GET /api/reference-data/{projectCode}/{resourceCode}/tree
-GET /api/reference-data/{projectCode}/{resourceCode}/options
+GET /api/reference-data/types/{typeCode}
+GET /api/reference-data/types/{typeCode}/nodes
 ```
 
 公共参数：
 
-- `tenantId`：当前租户标识；平台级资源可以不传。
 - `locale`：本地化语言参数，当前支持 `zh-CN`、`ja-JP`、`en-US`。
 
 当前真实内置资源：
 
 ```text
-projectCode  = reference-data
-resourceCode = resource-kind
+typeCode = type101000
 ```
 
 调用示例：
 
 ```text
-GET /api/reference-data/reference-data/resource-kind/tree?locale=zh-CN
-GET /api/reference-data/reference-data/resource-kind/options?locale=en-US
+GET /api/reference-data/types/type101000
+GET /api/reference-data/types/type101000/nodes?locale=en-US
 ```
 
 ## 类型管理后台
@@ -69,8 +67,9 @@ Host 启动后访问：
 http://127.0.0.1:8080/reference-data/reference-data.html
 ```
 
-当前页面支持五个业务模块按需加载；“表格定义”提供基本信息、表格列配置和效果预览，
-`ReferenceDataTable` 与 `ReferenceDataTableColumn` 均支持新增、查询、编辑、启停和逻辑删除。正式数据库文件位于：
+当前页面支持五个一级模块按需加载；“表格定义”下钻到 `ReferenceDataTableElement`，提供基本信息、元素配置和效果预览。
+页面编辑通过 `page+全局ID` 格式的 pageCode 一次保存控件、表格元素和 Window 布局；
+控件以 `parentKind + parentCode` 明确表示直属页面、Window 或其他容器。正式数据库文件位于：
 
 ```text
 apps/reference-data/db/reference-data.mv.db

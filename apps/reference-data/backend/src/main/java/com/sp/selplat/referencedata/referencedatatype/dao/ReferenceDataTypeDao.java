@@ -2,6 +2,7 @@ package com.sp.selplat.referencedata.referencedatatype.dao;
 
 import com.sp.selplat.common.db.dao.BaseDao;
 import com.sp.selplat.common.util.CommonPageResult;
+import java.util.Map;
 
 /**
  * 声明 ReferenceDataType 固定表在公共 Base CRUD 之外确有差异的分页和坐标查询能力。
@@ -29,5 +30,16 @@ public interface ReferenceDataTypeDao extends BaseDao {
      * @return 已占用返回 true
      */
     boolean existsCoordinate(String projectCode, String resourceCode, Long excludedId);
+
+    /**
+     * 按唯一公开 code 查询一个启用类型。
+     * 真实传参示例：{@code type101001}。
+     * 真实返回示例：{@code {code:"type101001",type:"DROPDOWN"}}。
+     * 异常或副作用示例：未命中时返回 null；方法不修改数据库。
+     *
+     * @param typeCode ReferenceDataType 的唯一 code
+     * @return 启用类型记录，未命中时为空
+     */
+    Map<String, Object> findEnabledByCode(String typeCode);
 
 }

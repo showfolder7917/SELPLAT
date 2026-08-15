@@ -17,18 +17,17 @@ public class ReferenceDataWorkbenchNavigationServiceImpl
      * {@inheritDoc}
      *
      * 真实传参示例：页面首次打开时无参数调用。
-     * 真实返回示例：依次返回数据类型、树节点、下拉选项、控件绑定、菜单项目和表格定义六个模块。
+     * 真实返回示例：依次返回数据类型、树与选项、表格定义、页面控件和 Window 五个模块。
      * 异常或副作用示例：方法不访问数据库、不修改缓存，也不返回表格字段一级模块。
      */
     @Override
     public CommonResult navigation() {
         List<Map<String, Object>> modules = List.of(
                 module("types", "数据类型", "ri-database-2-line", "module"),
-                module("tree", "树节点", "ri-node-tree", "module"),
-                module("options", "下拉选项", "ri-list-check-3", "module"),
-                module("bindings", "控件绑定", "ri-links-line", "module"),
-                module("menus", "菜单项目", "ri-menu-2-line", "module"),
-                module("tables", "表格定义", "ri-table-line", "tables-to-columns"));
+                module("tree", "树与选项", "ri-node-tree", "module"),
+                module("tables", "表格定义", "ri-table-line", "tables-to-elements"),
+                module("controls", "页面控件", "ri-layout-grid-line", "module"),
+                module("windows", "Window", "ri-window-line", "module"));
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("initialKey", "types");
         data.put("modules", modules);

@@ -147,19 +147,18 @@ class PlatformRuntimeApplicationTest {
 
     /**
      * 验证统一 Host 在引用数据空库时明确返回未配置题型树，题目列表接口仍可访问。
-     * 真实传参示例：访问 japanese/n2-blue-book-question 的 tree 与 getStore。
-     * 真实返回示例：树接口返回 REFERENCE_DATA_TREE_NOT_FOUND，空题库列表返回 records 数组。
+     * 真实传参示例：访问类型 code {@code japanese100001} 的 nodes 与题库 getStore。
+     * 真实返回示例：节点接口返回 REFERENCE_DATA_NODES_NOT_FOUND，空题库列表返回 records 数组。
      * 异常或副作用示例：模块未装配或路由缺失时 HTTP 断言失败，不写真实文件数据库。
      *
      * @throws Exception MockMvc 请求失败时终止测试
      */
     @Test
     void shouldExposeJapaneseQuestionBankFromUnifiedHost() throws Exception {
-        mockMvc.perform(get("/api/reference-data/japanese/n2-blue-book-question/tree")
-                        .queryParam("tenantId", "1"))
+        mockMvc.perform(get("/api/reference-data/types/japanese100001/nodes"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_TREE_NOT_FOUND"));
+                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_NODES_NOT_FOUND"));
         mockMvc.perform(get("/api/japanese/n2-blue-book-question/getStore.htm")
                         .queryParam("pageNo", "1")
                         .queryParam("pageSize", "20"))
@@ -170,24 +169,26 @@ class PlatformRuntimeApplicationTest {
     /**
      * 验证 Host 在同一端口发布 reference-data 接口，空库时返回明确未配置错误。
      *
-     * 执行结果示例：树和选项分别返回稳定的未找到业务错误码。
+     * 执行结果示例：类型与节点分别返回稳定的 code 未找到业务错误码。
      *
      * @throws Exception 当 MockMvc 请求执行失败时抛出；成功路径均返回 HTTP 200
      */
     @Test
-    void shouldExposeReferenceDataTreeAndOptions() throws Exception {
-        // ReferenceDataType 与 TreeNode 均为空 → 不伪造默认树，返回稳定未配置错误。
-        mockMvc.perform(get("/api/reference-data/reference-data/resource-kind/tree")
-                        .queryParam("locale", "en-US"))
+    void shouldExposeReferenceDataTypeAndNodesByCodeOnly() throws Exception {
+        // ReferenceDataType 为空 → 只按 code 查询并返回稳定未配置错误。
+        mockMvc.perform(get("/api/reference-data/types/referenceData100001"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_TREE_NOT_FOUND"));
-        // ReferenceDataOption 为空 → 不伪造默认选项，返回稳定未配置错误。
-        mockMvc.perform(get("/api/reference-data/reference-data/resource-kind/options")
+                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_TYPE_CODE_NOT_FOUND"));
+        // TreeNode 为空 → 不伪造默认节点，公开入口仍只接收类型 code。
+        mockMvc.perform(get("/api/reference-data/types/referenceData100001/nodes")
                         .queryParam("locale", "ja-JP"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_OPTIONS_NOT_FOUND"));
+                .andExpect(jsonPath("$.errorCode").value("REFERENCE_DATA_NODES_NOT_FOUND"));
+        // 旧 projectCode + resourceCode 路由已经删除，不能继续作为第二公开定位方式。
+        mockMvc.perform(get("/api/reference-data/reference-data/resource-kind/tree"))
+                .andExpect(status().isNotFound());
     }
 
     /**

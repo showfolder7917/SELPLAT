@@ -32,7 +32,7 @@ public class ReferenceDataTypeDaoImpl extends ReferenceDataBaseDao implements Re
     }
 
     /**
-     * 分页查询类型目录，并根据真实树节点表与选项表聚合每个类型的数据库分类。
+     * 分页查询类型目录；类型表现直接读取明确的 type 字段，不再查询已删除的平行子表。
      *
      * @param keyword 稳定坐标或多语名称关键词，例如 {@code "resource-kind"}
      * @param status 类型状态，例如 {@code 1}；查询全部未删除类型时为 {@code null}
@@ -66,26 +66,14 @@ public class ReferenceDataTypeDaoImpl extends ReferenceDataBaseDao implements Re
             List<Object> pageParameters = new ArrayList<>(parameters);
             pageParameters.add(pageSize);
             pageParameters.add((pageNo - 1) * pageSize);
-            // 类型主键 → 两张真实数据表中的存在性，不恢复已退役的 dataShape 字段。
+            // 类型记录已经包含明确 type，分页查询不再依赖 Option/Menu 等退役表。
             List<Map<String, Object>> records = jdbc.queryForList(
-                    "SELECT t.*, "
-                            + "EXISTS (SELECT 1 FROM ReferenceDataTreeNode treeData "
-                            + "WHERE treeData.typeId = t.id AND treeData.status <> 0) AS hasTreeNodes, "
-                            + "EXISTS (SELECT 1 FROM ReferenceDataOption optionData "
-                            + "WHERE optionData.typeId = t.id AND optionData.status <> 0) AS hasOptions "
-                            + "FROM ReferenceDataType t" + whereSql
+                    "SELECT t.* FROM ReferenceDataType t" + whereSql
                             + " ORDER BY t.sortnum DESC, t.id ASC LIMIT ? OFFSET ?",
                     pageParameters.toArray());
-            // 查询存在性 → 页面可直接消费的多值分类；同一类型可同时归入 TREE 和 OPTIONS。
+            // 保留旧页面短期消费的 resourceKinds 只读字段，其唯一来源是明确 type。
             records.forEach(record -> {
-                List<String> resourceKinds = new ArrayList<>();
-                if (Boolean.TRUE.equals(record.remove("hasTreeNodes"))) {
-                    resourceKinds.add("TREE");
-                }
-                if (Boolean.TRUE.equals(record.remove("hasOptions"))) {
-                    resourceKinds.add("OPTIONS");
-                }
-                record.put("resourceKinds", List.copyOf(resourceKinds));
+                record.put("resourceKinds", List.of(String.valueOf(record.get("type"))));
             });
             CommonPageResult result = new CommonPageResult();
             result.setRecords(records);
@@ -112,6 +100,19 @@ public class ReferenceDataTypeDaoImpl extends ReferenceDataBaseDao implements Re
             Integer count = jdbc.queryForObject(sql, Integer.class, parameters.toArray());
             // COUNT(*) 成功时固定非空，正数表示稳定坐标已被占用。
             return count > 0;
+        } catch (DataAccessException exception) {
+            throw databaseFailure(exception);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Map<String, Object> findEnabledByCode(String typeCode) {
+        try {
+            List<Map<String, Object>> rows = jdbc.queryForList(
+                    "SELECT * FROM ReferenceDataType WHERE code = ? AND status = 1",
+                    typeCode);
+            return rows.isEmpty() ? null : rows.get(0);
         } catch (DataAccessException exception) {
             throw databaseFailure(exception);
         }

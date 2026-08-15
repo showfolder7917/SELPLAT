@@ -27,7 +27,7 @@ class GridColumnDefinitionSupportTest {
         GridColumnDefinitionSupport.Resolution resolution = GridColumnDefinitionSupport.resolve(
                 List.of(provider), "", "ReferenceDataType", "selGridTypeManagementId", "zh-CN", metadata());
 
-        assertEquals("REFERENCE_DATA_TABLE_COLUMN", resolution.source());
+        assertEquals("REFERENCE_DATA_TABLE_ELEMENT", resolution.source());
         assertEquals("中文名称", resolution.columns().get(0).get("label"));
     }
 
@@ -35,7 +35,7 @@ class GridColumnDefinitionSupportTest {
      * 验证独立 Reference Data HTTP 服务返回的配置可以直接接入公共入口。
      *
      * @throws Exception 本地真实 HTTP Server 无法创建或关闭时抛出
-     * 执行结果示例：远程返回“远程名称”后公共结果来源为 {@code REFERENCE_DATA_TABLE_COLUMN}。
+     * 执行结果示例：远程返回“远程名称”后公共结果来源为 {@code REFERENCE_DATA_TABLE_ELEMENT}。
      */
     @Test
     void shouldUseRemoteConfiguredColumnsWhenApplicationIsSplit() throws Exception {
@@ -53,7 +53,7 @@ class GridColumnDefinitionSupportTest {
             String serviceUrl = "http://127.0.0.1:" + server.getAddress().getPort();
             GridColumnDefinitionSupport.Resolution resolution = GridColumnDefinitionSupport.resolve(
                     List.of(), serviceUrl, "ReferenceDataType", "selGridTypeManagementId", "zh-CN", metadata());
-            assertEquals("REFERENCE_DATA_TABLE_COLUMN", resolution.source());
+            assertEquals("REFERENCE_DATA_TABLE_ELEMENT", resolution.source());
             assertEquals("远程名称", resolution.columns().get(0).get("label"));
         } finally {
             server.stop(0);
