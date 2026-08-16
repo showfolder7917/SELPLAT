@@ -88,22 +88,9 @@ public class ReferenceDataTypeServiceImpl
      */
     @Override
     public CommonPageResult getStore(CommonPageParam queryIn) {
-        // 缺少分页对象时使用公共默认页码和容量，避免空请求退化为全表无界查询。
         CommonPageParam requiredQuery = queryIn == null ? new CommonPageParam() : queryIn;
-        // 配置编排按全局 code 精确定位时必须走 BaseDao 结构化条件，不能被管理页关键词协议吞掉。
-        if (requiredQuery.getParam("code") != null
-                || requiredQuery.getParam("optionSetCode") != null
-                || requiredQuery.getParam("valueCode") != null
-                || requiredQuery.getParam("parentTypeCode") != null) {
-            return super.getStore(requiredQuery);
-        }
-        int pageNo = requiredQuery.getPageNo();
-        int pageSize = Math.min(requiredQuery.getPageSize(), 100);
-        // 前端动态筛选值 → 受控关键词和状态参数。
-        String keyword = optionalText(requiredQuery.getParam("keyword"), 120, "keyword");
-        Integer status = optionalStatus(requiredQuery.getParam("status"));
-        // 返回 Repository 已构建的公共分页结构，不再包装成第三种响应类型。
-        return getDao().findPage(keyword, status, pageNo, pageSize);
+        // codeLike、parentTypeCodeLike 与其他明确字段全部交给 BaseDao 使用 AND 组合。
+        return super.getStore(requiredQuery);
     }
 
     /**
@@ -445,25 +432,6 @@ public class ReferenceDataTypeServiceImpl
             throw tooLong(fieldName, maxLength);
         }
         return text;
-    }
-
-    /**
-     * 解析可选状态筛选。
-     *
-     * @param value 前端状态值，例如 {@code "1"}
-     * @return 启用返回 {@code 1}、停用返回 {@code 2}、空值返回 {@code null}
-     */
-    private Integer optionalStatus(Object value) {
-        if (value == null || String.valueOf(value).isBlank()) {
-            return null;
-        }
-        Integer status = integerValue(value, "status");
-        if (status != 1 && status != 2) {
-            throw new CommonBusinessException(
-                    "REFERENCE_DATA_TYPE_STATUS_INVALID",
-                    "状态筛选只能是启用或停用。");
-        }
-        return status;
     }
 
     /**

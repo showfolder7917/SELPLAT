@@ -6,8 +6,8 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由应用脚本与契约测试验证。 -->
 node_ability_refs = none
-<!-- 1.26.0 固定 Window 只由 ReferenceDataWindow 保存外框几何，禁止内部字段进入 ControlLayout。 -->
-rule_version = 1.26.0
+<!-- 1.27.0 固定全部结构搜索使用真实字段独立输入、BaseDao AND 和一个共享查询按钮。 -->
+rule_version = 1.27.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记和应用回归。 -->
@@ -42,6 +42,8 @@ upgrade_record_20260816_window_layout_boundary = Window外框使用ReferenceData
 upgrade_record_20260816_control_remote_query = 控件code_父控件code_选项组code三个输入独立提交_BaseDao_AND_后台当前页_totalCount_禁止全量前端过滤
 <!-- 本次升级纠正数据类型仍使用单 keyword 的回退，并清理类型筛选器上浮的旧纵坐标表现。 -->
 upgrade_record_20260816_type_independent_query = 数据类型code_parentTypeCode两个独立输入_逐字段AND_类型状态重置与输入共享横向基线
+<!-- 本次升级把剩余模块的组合关键词彻底拆开，并物理清理 keyword 与重复查询按钮布局。 -->
+upgrade_record_20260816_all_structural_queries = tree使用code_parentId独立输入_table_elements使用code_tableId独立输入_tables_windows只保留code_BaseDao_AND_一个共享submit_删除keyword和重复submit布局
 
 ## 导航能力边界
 
@@ -96,7 +98,7 @@ reference_data_search_non_structural_fields = nameZh|nameJa|nameEn|valueCode|nod
 <!-- 页面搜索框必须根据当前模块真实白名单显示 Code 与父级坐标提示，禁止再写“多语言名称”。 -->
 reference_data_search_placeholder = active_module_code_plus_real_parent_coordinate_only,no_multilingual_name_claim
 <!-- 白名单含两个及以上结构字段时必须渲染同数量输入，提交后逐字段 AND，禁止一个 keyword 通过 OR 代替。 -->
-reference_data_structural_query_input_contract = one_input_per_whitelisted_field,types:code&parentTypeCode,AND_only,no_combined_keyword_OR,horizontal_toolbar_shared_vertical_baseline
+reference_data_structural_query_input_contract = one_input_per_whitelisted_field,types:code&parentTypeCode,tree:code&parentId,table_elements:code&tableId,tables:code,windows:code,AND_only,no_combined_keyword_OR,horizontal_toolbar_shared_vertical_baseline
 <!-- 页面控件三个输入分别映射 codeLike、parentCodeLike、optionSetCodeLike，条件之间只允许 BaseDao AND。 -->
 reference_data_control_query_contract = independent_inputs:code|parentCode|optionSetCode,BaseDao_parameters:codeLike|parentCodeLike|optionSetCodeLike,AND_only,no_OR
 <!-- 页面控件 Grid 必须使用后台 pageNo/pageSize/totalCount，禁止循环读取全部页后在浏览器过滤。 -->
@@ -118,7 +120,7 @@ reference_data_page_edit_window_heading = six_management_windows_six_ReferenceDa
 <!-- 编辑开关开启期间仍允许切换树和业务模块；未点控件保存按钮不弹提示、不阻断，也不自动提交。 -->
 reference_data_page_edit_navigation = always_switchable,no_unsaved_prompt,no_automatic_save
 <!-- 查询工具栏只提供共同查询边界；每个可见输入、下拉、查询按钮和重置都用自身 code 单独保存，条件由查询按钮统一提交。 -->
-reference_data_page_edit_query_controls = toolbar_parent_only,every_visible_query_element_independent_record,keyword_and_multi_field_layout_profiles,dropdown_change_draft_only,submit_commits_all_conditions,remount_updates_real_root,missing_record_uses_default,independent_width_ordered_auto_reflow,one_shared_save_follows_reset,current_control_code_single_record_payload,no_editor_cards,no_query_value_persistence
+reference_data_page_edit_query_controls = toolbar_parent_only,every_real_structural_field_independent_record,no_keyword_record,one_shared_submit_record,dropdown_change_draft_only,submit_commits_all_conditions,remount_updates_real_root,missing_record_uses_default,independent_width_ordered_auto_reflow,one_shared_save_follows_reset,current_control_code_single_record_payload,no_editor_cards,no_query_value_persistence
 
 ## 验证
 

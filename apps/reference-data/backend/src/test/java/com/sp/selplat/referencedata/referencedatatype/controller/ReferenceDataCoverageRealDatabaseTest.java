@@ -115,23 +115,19 @@ class ReferenceDataCoverageRealDatabaseTest {
         assertFalse(emptyKind.containsKey("resourceKinds"));
 
         CommonPageParam filteredQuery = new CommonPageParam();
-        filteredQuery.putParam("keyword", "type100002");
+        filteredQuery.putParam("codeLike", "type100002");
         filteredQuery.putParam("status", "1");
-        filteredQuery.setPageSize(101);
         CommonPageResult filteredPage = typeService.getStore(filteredQuery);
         assertEquals(1, filteredPage.getTotalCount());
-        assertEquals(100, filteredPage.getPageSize());
-        // 名称和类型值不再参与结构搜索。
-        assertEquals(0, typeService.getStore(pageParam("keyword", "Dropdown")).getTotalCount());
-        assertEquals(0, typeService.getStore(pageParam("keyword", "CONTEXT_MENU")).getTotalCount());
-        // 同一关键词可同时命中自身 code 和子级的 parentTypeCode。
-        assertEquals(2, typeService.getStore(pageParam("keyword", "type100001")).getTotalCount());
+        // code 与 parentTypeCode 分开查询，组合时只能使用 AND。
+        CommonPageParam typeAndParent = pageParam("codeLike", "type100001");
+        typeAndParent.putParam("parentTypeCodeLike", "type100001");
+        assertEquals(0, typeService.getStore(typeAndParent).getTotalCount());
         // 精确 code 关系查询均走 BaseDao 字段白名单，不做 id 转换或 JOIN。
         assertEquals(1, typeService.getStore(pageParam("code", "type100001")).getTotalCount());
         assertEquals(3, typeService.getStore(pageParam("optionSetCode", "optionSet100000")).getTotalCount());
         assertEquals(1, typeService.getStore(pageParam("valueCode", "DROPDOWN")).getTotalCount());
         assertEquals(1, typeService.getStore(pageParam("parentTypeCode", "type100001")).getTotalCount());
-        assertEquals(3, typeDao.findPage(" ", null, 1, 10).getTotalCount());
         assertTrue(typeService.getById(idParam(100002)).isSuccess());
 
         CommonBatchParam insertBatch = batch(
@@ -175,14 +171,8 @@ class ReferenceDataCoverageRealDatabaseTest {
     private void verifyInvalidTypeInputs() {
         applyFixture("shouldRejectInvalidTypeInputs");
 
-        CommonPageParam blankQuery = new CommonPageParam();
-        blankQuery.putParam("keyword", " ");
-        blankQuery.putParam("status", " ");
-        assertEquals(4, typeService.getStore(blankQuery).getTotalCount());
+        assertEquals(4, typeService.getStore(new CommonPageParam()).getTotalCount());
         assertEquals(1, typeService.getStore(pageParam("status", "2")).getTotalCount());
-        assertBusiness("REFERENCE_DATA_TYPE_STATUS_INVALID", () -> typeService.getStore(pageParam("status", "3")));
-        assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.getStore(pageParam("status", "invalid")));
-        assertBusiness("REFERENCE_DATA_TYPE_FIELD_TOO_LONG", () -> typeService.getStore(pageParam("keyword", "k".repeat(121))));
 
         assertBusiness("REFERENCE_DATA_TYPE_ID_INVALID", () -> typeService.getById(null));
         assertBusiness("REFERENCE_DATA_TYPE_ID_INVALID", () -> typeService.getById(idParam("invalid")));
@@ -241,7 +231,6 @@ class ReferenceDataCoverageRealDatabaseTest {
     private void verifyTypeDatabaseFailures() {
         applyFixture("shouldWrapTypeDatabaseFailures");
         jdbcTemplate.execute("DROP TABLE ReferenceDataType CASCADE");
-        assertSystem(() -> typeDao.findPage(null, null, 1, 10));
         assertSystem(() -> typeDao.existsOptionSetValue(1L, "optionSet100000", "MENU_GROUP", null));
         assertSystem(() -> typeDao.findEnabledByCode("type100001"));
     }

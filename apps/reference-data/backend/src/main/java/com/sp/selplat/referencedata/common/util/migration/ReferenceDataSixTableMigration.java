@@ -33,16 +33,15 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
         {"selWindowControlLayoutManagementId", "页面控件编辑窗口"},
         {"selWindowWindowManagementId", "Window 管理窗口"}
     };
-    // 查询工具栏按字段结构登记全部可见元素；当前模块缺少记录时由前端公共默认布局兜底。
+    // 查询工具栏按真实结构字段登记；同一个物理查询按钮只保留一条共享布局记录。
     private static final Object[][] QUERY_TOOLBAR_CONTROLS = {
-        {"SEARCH", 5, 8, 23, "280px", "42px", "keyword"},
         {"SEARCH", 10, 8, 23, "190px", "42px", "code"},
         {"SEARCH", 15, 206, 23, "190px", "42px", "parentCode"},
         {"SEARCH", 15, 206, 23, "190px", "42px", "parentTypeCode"},
+        {"SEARCH", 15, 206, 23, "190px", "42px", "parentId"},
+        {"SEARCH", 15, 206, 23, "190px", "42px", "tableId"},
         {"SEARCH", 17, 404, 23, "190px", "42px", "optionSetCode"},
-        {"BUTTON", 20, 296, 23, "86px", "42px", "submit.default"},
-        {"BUTTON", 20, 404, 23, "86px", "42px", "submit.types"},
-        {"BUTTON", 25, 602, 23, "86px", "42px", "submit.controls"},
+        {"BUTTON", 20, 602, 23, "86px", "42px", "submit"},
         {"FILTER", 30, 394, 23, "200px", "42px", "controlKind"},
         {"FILTER", 40, 606, 23, "180px", "42px", "status"},
         {"BUTTON", 50, 798, 23, "90px", "42px", "reset"}
@@ -213,8 +212,8 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
     /**
      * 为 Reference Data 页面建立查询工具栏父坐标，并让每种可见查询元素各自拥有布局记录。
      * 真实传参示例：页面 {@code page101017} 当前只有 PAGE 根记录。
-     * 真实返回示例：补齐 keyword、独立结构字段、三种提交布局、范围、状态和重置十一条记录。
-     * 异常或副作用示例：曾生成的 search 中间组会被拆回 TOOLBAR 直属元素并物理删除空组。
+     * 真实返回示例：补齐六种独立结构字段、一个共享提交按钮、范围、状态和重置十条记录。
+     * 异常或副作用示例：组合 keyword、重复提交布局和 search 空组会被物理删除，不再兼容旧结构。
      */
     private void normalizeQueryToolbarControls() {
         if (!tableExists("ReferenceDataControlLayout")) {
@@ -251,10 +250,25 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
                         toolbarCode, pageCode, String.valueOf(searchGroup.get("code")));
                 jdbc.update("DELETE FROM ReferenceDataControlLayout WHERE id=?", searchGroup.get("id"));
             }
-            // 旧 submit 对应多字段页面控件布局；改名后与普通单字段提交布局互不覆盖。
-            jdbc.update("UPDATE ReferenceDataControlLayout SET fieldName='submit.controls',orderNo=25,updatedAt=CURRENT_TIMESTAMP "
-                            + "WHERE pageCode=? AND parentKind='TOOLBAR' AND parentCode=? AND fieldName='submit'",
+            // 组合关键词与多份提交按钮都属于废弃结构；先选一条提交记录保留 code，再物理清理其余记录。
+            jdbc.update("DELETE FROM ReferenceDataControlLayout WHERE pageCode=? AND parentKind='TOOLBAR' "
+                            + "AND parentCode=? AND fieldName='keyword'",
                     pageCode, toolbarCode);
+            List<Map<String, Object>> submitRecords = jdbc.queryForList(
+                    "SELECT id,fieldName FROM ReferenceDataControlLayout WHERE pageCode=? AND parentKind='TOOLBAR' "
+                            + "AND parentCode=? AND fieldName IN ('submit','submit.default','submit.types','submit.controls') "
+                            + "ORDER BY CASE WHEN fieldName='submit' THEN 0 ELSE 1 END,id",
+                    pageCode, toolbarCode);
+            if (!submitRecords.isEmpty()) {
+                long survivorId = number(submitRecords.get(0).get("id"));
+                jdbc.update("DELETE FROM ReferenceDataControlLayout WHERE pageCode=? AND parentKind='TOOLBAR' "
+                                + "AND parentCode=? AND fieldName IN ('submit','submit.default','submit.types','submit.controls') "
+                                + "AND id<>?",
+                        pageCode, toolbarCode, survivorId);
+                jdbc.update("UPDATE ReferenceDataControlLayout SET fieldName='submit',orderNo=20,sortnum=20,"
+                                + "updatedAt=CURRENT_TIMESTAMP WHERE id=?",
+                        survivorId);
+            }
             // 每条记录只代表一个真实可见元素；缺少记录时补默认值，已有记录保留管理员几何。
             for (Object[] definition : QUERY_TOOLBAR_CONTROLS) {
                 int orderNo = (Integer) definition[1];

@@ -67,61 +67,8 @@ public class ReferenceDataTreeNodeServiceImpl
     @Override
     public CommonPageResult getStore(CommonPageParam queryIn) {
         CommonPageParam requiredQuery = queryIn == null ? new CommonPageParam() : queryIn;
-        // 配置编排按全局 code 精确定位时复用 BaseDao 等值/IN 条件，管理页关键词查询不接管该请求。
-        if (requiredQuery.getParam("code") != null) {
-            return super.getStore(requiredQuery);
-        }
-        int pageNo = requiredQuery.getPageNo();
-        int pageSize = Math.min(requiredQuery.getPageSize(), 100);
-        String keyword = optionalKeyword(requiredQuery.getParam("keyword"));
-        Integer status = optionalTreeStatus(requiredQuery.getParam("status"));
-        return getDao().findTreePage(keyword, status, pageNo, pageSize);
-    }
-
-    /**
-     * 规范化树管理页关键词，防止无界文本进入模糊查询。
-     * 真实传参示例：{@code " 阅读 "}。
-     * 真实返回示例：返回 {@code "阅读"}；空文本返回 null。
-     * 异常或副作用示例：超过 200 字符时抛出业务异常；方法不修改请求对象。
-     *
-     * @param value 动态查询参数
-     * @return 规范化关键词或 null
-     */
-    private String optionalKeyword(Object value) {
-        if (value == null || String.valueOf(value).isBlank()) {
-            return null;
-        }
-        String keyword = String.valueOf(value).trim();
-        if (keyword.length() > 200) {
-            throw new CommonBusinessException("REFERENCE_DATA_TREE_KEYWORD_TOO_LONG", "树节点关键词不能超过 200 个字符。");
-        }
-        return keyword;
-    }
-
-    /**
-     * 读取树节点启停筛选，只允许管理页使用 1 或 2。
-     * 真实传参示例：{@code "1"}。
-     * 真实返回示例：返回 {@code 1}；空值返回 null。
-     * 异常或副作用示例：传入删除状态或非数字值时抛出业务异常；方法不写数据库。
-     *
-     * @param value 动态状态值
-     * @return 1、2 或 null
-     */
-    private Integer optionalTreeStatus(Object value) {
-        if (value == null || String.valueOf(value).isBlank()) {
-            return null;
-        }
-        try {
-            int status = Integer.parseInt(String.valueOf(value));
-            if (status == 1 || status == 2) {
-                return status;
-            }
-        } catch (NumberFormatException ignored) {
-            // 统一在下方转换为稳定业务错误，不向前端暴露数字解析细节。
-        }
-        throw new CommonBusinessException(
-                "REFERENCE_DATA_TREE_STATUS_INVALID",
-                "树节点状态只能是启用或停用。");
+        // codeLike、parentId 和 status 都由 BaseDao 转成独立 AND 条件，不再保留关键词 OR 查询。
+        return super.getStore(requiredQuery);
     }
 
     /** {@inheritDoc} */

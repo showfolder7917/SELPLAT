@@ -141,17 +141,13 @@ class ReferenceDataSixTableWorkflowTest {
                 .getNodes(String.valueOf(savedNode.get("code")), Map.of("locale", "zh-CN")).getData();
         assertEquals("ENABLED", root.get("value"));
         assertEquals(1, ((List<?>) root.get("children")).size());
-        // 管理分页只按 code 或父节点 id 搜索，并覆盖状态和容量上限筛选。
+        // 管理分页把 code 与 parentId 作为两个独立条件交给 BaseDao，条件并存时只允许 AND。
         CommonPageParam treeFilter = new CommonPageParam();
-        treeFilter.putParam("keyword", String.valueOf(savedNode.get("id")));
+        treeFilter.putParam("parentId", savedNode.get("id"));
         treeFilter.putParam("status", "1");
-        treeFilter.setPageSize(101);
-        // 该数字同时命中根节点 code 和子节点 parentId。
-        assertEquals(2, treeNodeService.getStore(treeFilter).getTotalCount());
-        assertEquals(100, treeNodeService.getStore(treeFilter).getPageSize());
-        CommonPageParam treeNameFilter = new CommonPageParam();
-        treeNameFilter.putParam("keyword", "enabled");
-        assertEquals(0, treeNodeService.getStore(treeNameFilter).getTotalCount());
+        assertEquals(1, treeNodeService.getStore(treeFilter).getTotalCount());
+        treeFilter.putParam("codeLike", savedNode.get("code"));
+        assertEquals(0, treeNodeService.getStore(treeFilter).getTotalCount());
         CommonPageParam disabledTreeFilter = new CommonPageParam();
         disabledTreeFilter.putParam("status", "2");
         assertEquals(0, treeNodeService.getStore(disabledTreeFilter).getTotalCount());
@@ -296,7 +292,7 @@ class ReferenceDataSixTableWorkflowTest {
     /**
      * 验证查询工具栏把每个可见查询元素登记为可独立保存的真实控件。
      * 真实传参示例：新建 reference-data 页面后运行查询工具栏幂等补齐两次。
-     * 真实返回示例：普通和多字段搜索、两种查询按钮、范围、状态与重置共九条记录且没有 search 空组。
+     * 真实返回示例：六种结构字段、共享查询按钮、范围、状态与重置共十条记录且没有旧关键词。
      * 异常或副作用示例：迁移缺少元素、产生重复记录或残留中间 search 组时断言失败；方法只写测试内存库。
      */
     @Test
@@ -312,8 +308,8 @@ class ReferenceDataSixTableWorkflowTest {
                         + "AND pageCode=? AND parentKind='TOOLBAR' AND status<>0 ORDER BY orderNo",
                 String.class, pageCode);
         ReflectionTestUtils.invokeMethod(sixTableMigration, "normalizeQueryToolbarControls");
-        assertEquals(List.of("keyword", "code", "parentCode", "parentTypeCode", "optionSetCode", "submit.default",
-                "submit.types", "submit.controls", "controlKind", "status", "reset"), fieldNames);
+        assertEquals(List.of("code", "parentCode", "parentTypeCode", "parentId", "tableId", "optionSetCode",
+                "submit", "controlKind", "status", "reset"), fieldNames);
         assertEquals(0, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM ReferenceDataControlLayout WHERE pageCode=? AND fieldName='search'",
                 Integer.class, pageCode));
@@ -360,19 +356,8 @@ class ReferenceDataSixTableWorkflowTest {
                 "optionSetCode", negativeOptionSetCode, "valueCode", "MISSING_PARENT",
                 "parentTypeCode", "type999999", "nameZh", "不存在的父级"))));
         assertNotNull(treeNodeService.getStore(null));
-        CommonPageParam blankTreeFilter = new CommonPageParam();
-        blankTreeFilter.putParam("keyword", " ");
-        blankTreeFilter.putParam("status", " ");
-        assertNotNull(treeNodeService.getStore(blankTreeFilter));
-        CommonPageParam longKeyword = new CommonPageParam();
-        longKeyword.putParam("keyword", "x".repeat(201));
-        assertBusiness("REFERENCE_DATA_TREE_KEYWORD_TOO_LONG", () -> treeNodeService.getStore(longKeyword));
-        CommonPageParam invalidTreeStatus = new CommonPageParam();
-        invalidTreeStatus.putParam("status", "3");
-        assertBusiness("REFERENCE_DATA_TREE_STATUS_INVALID", () -> treeNodeService.getStore(invalidTreeStatus));
-        CommonPageParam nonNumericTreeStatus = new CommonPageParam();
-        nonNumericTreeStatus.putParam("status", "bad");
-        assertBusiness("REFERENCE_DATA_TREE_STATUS_INVALID", () -> treeNodeService.getStore(nonNumericTreeStatus));
+        CommonPageParam emptyTreeFilter = new CommonPageParam();
+        assertNotNull(treeNodeService.getStore(emptyTreeFilter));
         Map<String, Object> cycleRoot = data(treeNodeService.insert(params(Map.of(
                 "projectCode", "qa", "pageCode", negativePage.get("code"),
                 "nodeValue", "CYCLE_ROOT", "labelZh", "循环根"))));

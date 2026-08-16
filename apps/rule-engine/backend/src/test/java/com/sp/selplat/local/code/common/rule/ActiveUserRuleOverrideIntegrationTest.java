@@ -74,6 +74,12 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "BaseDao_parameters:codeLike|parentCodeLike|optionSetCodeLike,AND_only,no_OR"
         ));
         assertTrue(rule.content().contains(
+            "reference_data_structural_query_input_contract = "
+                + "one_input_per_whitelisted_field,types:code&parentTypeCode,tree:code&parentId,"
+                + "table_elements:code&tableId,tables:code,windows:code,AND_only,"
+                + "no_combined_keyword_OR,horizontal_toolbar_shared_vertical_baseline"
+        ));
+        assertTrue(rule.content().contains(
             "reference_data_control_pagination_contract = "
                 + "remote_current_page,totalCount,no_load_all_for_grid_search"
         ));

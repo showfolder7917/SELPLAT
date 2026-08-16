@@ -101,8 +101,12 @@
             entity: "ReferenceDataTreeNode", api: "/api/reference-data/admin/tree-nodes/", icon: "ri-node-tree", windowId: "selWindowTreeNodeManagementId",
             // 用户可见名称同时用于标题、按钮、空状态和反馈文案。
             name: "树节点", itemName: "树节点", description: "通过 code 与 parentId 维护独立父子树",
-            // 树节点可按系统 code、值和三种语言名称搜索。
-            searchFields: ["code", "parentId"], searchPlaceholder: "搜索 Code 或父节点 ID…",
+            // code 与 parentId 分别提交，禁止合并成一个会产生 OR 的关键词。
+            searchFields: ["code", "parentId"], searchPlaceholder: "按 Code 和父节点 ID 查询",
+            queryFields: [
+                { name: "code", label: "Code", placeholder: "Code", icon: "ri-key-2-line" },
+                { name: "parentId", label: "父节点 ID", placeholder: "父节点 ID", icon: "ri-node-tree" }
+            ],
             // relation=true 告诉左树使用 parentId 递归，而不是平铺记录。
             previewField: "code", relation: true
         },
@@ -126,6 +130,9 @@
             entity: "ReferenceDataWindow", api: "/api/reference-data/admin/windows/", icon: "ri-window-line", windowId: "selWindowWindowManagementId",
             name: "Window", itemName: "Window", description: "保存 Window 宽高、位置和调整边界",
             searchFields: ["code"], searchPlaceholder: "搜索 Code…",
+            queryFields: [
+                { name: "code", label: "Code", placeholder: "Code", icon: "ri-key-2-line" }
+            ],
             previewField: "code"
         },
         // tables 登记“哪个页面上的哪个 Grid”存在，是进入表格元素详情的父记录。
@@ -136,6 +143,9 @@
             name: "表格定义", itemName: "表格", description: "登记项目页面表格并进入对应表格头明细",
             // code 是公开定位坐标，项目、页面和真实业务表名用于管理员检索。
             searchFields: ["code"], searchPlaceholder: "搜索 Code…",
+            queryFields: [
+                { name: "code", label: "Code", placeholder: "Code", icon: "ri-key-2-line" }
+            ],
             previewField: "code"
         },
         // columns 保存每个 Grid 的真实表头、绑定字段、渲染方式、宽度和显示状态。
@@ -146,7 +156,11 @@
             // 这里的“表格头”是配置管理名称，单条记录文案使用“表格列”。
             name: "表格头", itemName: "表格列", description: "配置每个页面表格的名称、宽度、多语言和显示状态",
             // 列配置既能按父表坐标检索，也能按列 ID、字段名和多语言表头检索。
-            searchFields: ["code", "tableId"], searchPlaceholder: "搜索 Code 或所属表 ID…",
+            searchFields: ["code", "tableId"], searchPlaceholder: "按 Code 和所属表 ID 查询",
+            queryFields: [
+                { name: "code", label: "Code", placeholder: "Code", icon: "ri-key-2-line" },
+                { name: "tableId", label: "所属表 ID", placeholder: "所属表 ID", icon: "ri-table-line" }
+            ],
             // code 是表格元素的唯一公开坐标，tableId 只负责表内关联。
             previewField: "code", hasBoolean: true
         }
@@ -250,7 +264,7 @@
             "filterReset-4": { width: 90, minWidth: 80, maxWidth: 136, label: "调整重置栏目宽度" }
         }
     });
-    // 页面控件模块包含三个独立搜索字段，继续保留足够的外层宽度供数据库几何配置覆盖。
+    // 三字段模块继续保留足够的外层宽度供数据库几何配置覆盖。
     const referenceDataControlToolbar = selFreeze({
         columnResize: false,
         columns: {
@@ -261,23 +275,33 @@
         }
     });
 
+    // 两字段模块使用中等宽度，避免压缩输入，也不制造三字段工具栏的多余空白。
+    const referenceDataDoubleFieldToolbar = selFreeze({
+        columnResize: false,
+        columns: {
+            "selSearch-1": { width: 586, minWidth: 472, maxWidth: 720, label: "查询栏目宽度" },
+            projectType: { width: 200, minWidth: 160, maxWidth: 300, label: "调整数据范围栏目宽度" },
+            status: { width: 180, minWidth: 150, maxWidth: 260, label: "调整状态栏目宽度" },
+            "filterReset-4": { width: 90, minWidth: 80, maxWidth: 136, label: "调整重置栏目宽度" }
+        }
+    });
+
     /** 根据当前模块返回匹配字段数量的工具栏栏目配置。 */
     function referenceDataActiveToolbar() {
-        return referenceDataActiveModule().key === "controls"
-            ? referenceDataControlToolbar
-            : referenceDataCompactToolbar;
+        const fieldCount = referenceDataActiveModule().queryFields?.length || 1;
+        if (fieldCount >= 3) return referenceDataControlToolbar;
+        if (fieldCount === 2) return referenceDataDoubleFieldToolbar;
+        return referenceDataCompactToolbar;
     }
-    // 查询工具栏每个真实元素独立登记；不同字段结构的提交按钮使用不同布局记录，但都提交同一组查询草稿。
+    // 查询工具栏每个真实字段独立登记；查询按钮只有一条共享记录并跟随当前字段流自动排列。
     const referenceDataQueryControlDefinitions = selFreeze([
-        { orderNo: 5, key: "keyword", targetKey: "keyword", title: "查询条件", typeLabel: "查询输入控件", icon: "ri-search-line", minWidth: 150, maxWidth: 460, profile: "default" },
-        { orderNo: 10, key: "codeTypes", targetKey: "code", fieldName: "code", title: "Code 查询", typeLabel: "查询输入控件", icon: "ri-key-2-line", minWidth: 150, maxWidth: 360, profile: "types" },
-        { orderNo: 15, key: "parentTypeCode", targetKey: "parentTypeCode", title: "上级类型 Code 查询", typeLabel: "查询输入控件", icon: "ri-node-tree", minWidth: 150, maxWidth: 360, profile: "types" },
-        { orderNo: 20, key: "submitTypes", targetKey: "submit", fieldName: "submit.types", title: "查询按钮", typeLabel: "查询按钮控件", icon: "ri-search-eye-line", minWidth: 72, maxWidth: 160, profile: "types" },
-        { orderNo: 10, key: "code", targetKey: "code", title: "控件 Code 查询", typeLabel: "查询输入控件", icon: "ri-key-2-line", minWidth: 150, maxWidth: 360, profile: "controls" },
-        { orderNo: 15, key: "parentCode", targetKey: "parentCode", title: "父控件 Code 查询", typeLabel: "查询输入控件", icon: "ri-node-tree", minWidth: 150, maxWidth: 360, profile: "controls" },
-        { orderNo: 17, key: "optionSetCode", targetKey: "optionSetCode", title: "选项组 Code 查询", typeLabel: "查询输入控件", icon: "ri-list-settings-line", minWidth: 150, maxWidth: 360, profile: "controls" },
-        { orderNo: 20, key: "submitDefault", targetKey: "submit", fieldName: "submit.default", title: "查询按钮", typeLabel: "查询按钮控件", icon: "ri-search-eye-line", minWidth: 72, maxWidth: 160, profile: "default" },
-        { orderNo: 25, key: "submitControls", targetKey: "submit", fieldName: "submit.controls", title: "查询按钮", typeLabel: "查询按钮控件", icon: "ri-search-eye-line", minWidth: 72, maxWidth: 160, profile: "controls" },
+        { orderNo: 10, key: "code", targetKey: "code", title: "Code 查询", typeLabel: "查询输入控件", icon: "ri-key-2-line", minWidth: 150, maxWidth: 360 },
+        { orderNo: 15, key: "parentTypeCode", targetKey: "parentTypeCode", title: "上级类型 Code 查询", typeLabel: "查询输入控件", icon: "ri-node-tree", minWidth: 150, maxWidth: 360 },
+        { orderNo: 15, key: "parentId", targetKey: "parentId", title: "父节点 ID 查询", typeLabel: "查询输入控件", icon: "ri-node-tree", minWidth: 150, maxWidth: 360 },
+        { orderNo: 15, key: "parentCode", targetKey: "parentCode", title: "父控件 Code 查询", typeLabel: "查询输入控件", icon: "ri-node-tree", minWidth: 150, maxWidth: 360 },
+        { orderNo: 15, key: "tableId", targetKey: "tableId", title: "所属表 ID 查询", typeLabel: "查询输入控件", icon: "ri-table-line", minWidth: 150, maxWidth: 360 },
+        { orderNo: 17, key: "optionSetCode", targetKey: "optionSetCode", title: "选项组 Code 查询", typeLabel: "查询输入控件", icon: "ri-list-settings-line", minWidth: 150, maxWidth: 360 },
+        { orderNo: 20, key: "submit", targetKey: "submit", title: "查询按钮", typeLabel: "查询按钮控件", icon: "ri-search-eye-line", minWidth: 72, maxWidth: 160 },
         { orderNo: 30, key: "projectType", title: "类型筛选", typeLabel: "类型筛选控件", icon: "ri-apps-2-line", minWidth: 160, maxWidth: 420 },
         { orderNo: 40, key: "status", title: "状态筛选", typeLabel: "状态筛选控件", icon: "ri-checkbox-circle-line", minWidth: 160, maxWidth: 420 },
         { orderNo: 50, key: "reset", title: "重置按钮", typeLabel: "重置按钮控件", icon: "ri-reset-left-line", minWidth: 80, maxWidth: 160 }
@@ -285,9 +309,9 @@
 
     /** 返回当前字段结构实际可见的查询元素定义，未显示的结构记录不参与页面编辑。 */
     function referenceDataActiveQueryControlDefinitions() {
-        const moduleKey = referenceDataActiveModule().key;
-        const profile = moduleKey === "controls" ? "controls" : moduleKey === "types" ? "types" : "default";
-        return referenceDataQueryControlDefinitions.filter((definition) => !definition.profile || definition.profile === profile);
+        const fieldNames = new Set((referenceDataActiveModule().queryFields || []).map((field) => field.name));
+        return referenceDataQueryControlDefinitions.filter((definition) =>
+            !definition.targetKey || definition.key === "submit" || fieldNames.has(definition.targetKey));
     }
 
     /**
@@ -1849,7 +1873,7 @@
             toolbar: referenceDataActiveToolbar()
         });
         // 字段名集合变化时重挂载 Search；只换文案时保留当前输入和焦点。
-        const desiredSearchNames = (payload.search.fields || [{ name: "keyword" }]).map((field) => String(field.name));
+        const desiredSearchNames = (payload.search.fields || []).map((field) => String(field.name));
         const currentSearchNames = referenceDataState.searchController?.getFieldNames?.() || [];
         if (desiredSearchNames.join("|") !== currentSearchNames.join("|")) {
             referenceDataState.searchController = search.remount(referenceDataState.panelRoot, payload.search);
