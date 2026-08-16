@@ -1,0 +1,72 @@
+{
+  "projectCode": "japanese",
+  "pageKey": "n2-blue-book-question",
+  "legacyProjectCode": "reference-data",
+  "deprecatedControlFields": ["keyword"],
+  "page": {
+    "layoutMode": "FLOW",
+    "orderNo": 0,
+    "breakpoint": "DESKTOP",
+    "editable": true,
+    "status": 1,
+    "sortnum": 10
+  },
+  "table": {
+    "sourceTableName": "JapaneseN2BlueBookQuestion",
+    "gridId": "selGridJapaneseN2BlueBookQuestionId",
+    "nameZh": "N2 蓝宝书1000题表格",
+    "nameJa": "N2 青本1000問テーブル",
+    "nameEn": "N2 Blue Book 1000 Questions Grid",
+    "description": "Japanese N2 蓝宝书题库唯一公共 Grid",
+    "selectionMode": "SINGLE",
+    "pageSize": 20,
+    "rowHeight": 48,
+    "status": 1,
+    "sortnum": 10,
+    "columns": [
+      {"fieldName":"sourceQuestionNo","labelZh":"题号","labelJa":"問題番号","labelEn":"Question No.","width":"90px","cellRenderer":"text","sortnum":10},
+      {"fieldName":"questionTypeLabel","secondaryFieldName":"questionType","labelZh":"题型","labelJa":"問題形式","labelEn":"Question Type","width":"150px","cellRenderer":"text","sortnum":20},
+      {"fieldName":"questionText","labelZh":"题干","labelJa":"問題文","labelEn":"Question","width":"360px","cellRenderer":"text","sortnum":30},
+      {"fieldName":"optionA","labelZh":"A","labelJa":"A","labelEn":"A","width":"180px","cellRenderer":"text","sortnum":40},
+      {"fieldName":"optionB","labelZh":"B","labelJa":"B","labelEn":"B","width":"180px","cellRenderer":"text","sortnum":50},
+      {"fieldName":"optionC","labelZh":"C","labelJa":"C","labelEn":"C","width":"180px","cellRenderer":"text","sortnum":60},
+      {"fieldName":"optionD","labelZh":"D","labelJa":"D","labelEn":"D","width":"180px","cellRenderer":"text","sortnum":70},
+      {"fieldName":"audioState","secondaryFieldName":"audioUrl","labelZh":"语音","labelJa":"音声","labelEn":"Audio","width":"130px","cellRenderer":"actions","sortnum":80},
+      {"fieldName":"updatedAt","labelZh":"更新时间","labelJa":"更新日時","labelEn":"Updated At","width":"180px","cellRenderer":"time","sortnum":90},
+      {"fieldName":"actions","secondaryFieldName":"id","labelZh":"操作","labelJa":"操作","labelEn":"Actions","width":"120px","cellRenderer":"actions","resizable":false,"sortnum":100}
+    ]
+  },
+  "controls": [
+    {"key":"toolbar","fieldName":"queryToolbar","controlKind":"TOOLBAR","layoutMode":"ABSOLUTE","orderNo":100,"width":"100%","height":"88px","x":0,"y":0,"sortnum":100},
+    {"key":"sourceQuestionNo","parentKey":"toolbar","fieldName":"sourceQuestionNo","controlKind":"SEARCH","orderNo":10,"width":"220px","height":"42px","x":17,"y":23,"sortnum":10,"legacyGeometry":{"width":"220px","height":"42px","x":0,"y":23}},
+    {"key":"questionText","parentKey":"toolbar","fieldName":"questionText","controlKind":"SEARCH","orderNo":20,"width":"320px","height":"42px","x":232,"y":23,"sortnum":20},
+    {"key":"submit","parentKey":"toolbar","fieldName":"submit","controlKind":"BUTTON","orderNo":30,"width":"88px","height":"42px","x":564,"y":23,"sortnum":30},
+    {"key":"reset","parentKey":"toolbar","fieldName":"reset","controlKind":"BUTTON","orderNo":40,"width":"90px","height":"42px","x":664,"y":23,"sortnum":40}
+  ],
+  "windows": [
+    {
+      "triggerControlCode":"selWindowJapaneseN2BlueBookQuestionId",
+      "nameZh":"N2 题目编辑窗口",
+      "nameJa":"N2 問題編集ウィンドウ",
+      "nameEn":"N2 Question Editor",
+      "width":"960px",
+      "height":"760px",
+      "minWidth":"560px",
+      "minHeight":"420px",
+      "positionMode":"CENTER",
+      "resizable":true,
+      "draggable":true,
+      "maximizable":true,
+      "minimizable":true,
+      "breakpoint":"DESKTOP",
+      "status":1,
+      "sortnum":10
+    }
+  ],
+  "treeNodes": [
+    {"key":"root","nodeValue":"ALL","labelZh":"N2 蓝宝书1000题","labelJa":"N2 青本1000問","labelEn":"N2 Blue Book 1000 Questions","status":1,"sortnum":10},
+    {"key":"pronunciation","parentKey":"root","nodeValue":"PRONUNCIATION","legacyNodeValue":"READING","labelZh":"语音・读音题","labelJa":"音声・読み方問題","labelEn":"Pronunciation","status":1,"sortnum":20},
+    {"key":"kanji","parentKey":"root","nodeValue":"KANJI","labelZh":"汉字题","labelJa":"漢字問題","labelEn":"Kanji","status":1,"sortnum":30},
+    {"key":"grammar","parentKey":"root","nodeValue":"GRAMMAR","labelZh":"语法题","labelJa":"文法問題","labelEn":"Grammar","status":1,"sortnum":40}
+  ]
+}

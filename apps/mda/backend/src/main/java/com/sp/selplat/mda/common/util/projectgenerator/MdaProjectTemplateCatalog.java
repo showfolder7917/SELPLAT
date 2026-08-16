@@ -40,7 +40,7 @@ public final class MdaProjectTemplateCatalog {
                 - Java 分层：业务 Controller → 唯一 Service 接口与实现 → DAO → 项目 BaseDao。
                 - 默认字段：id、tenantId、lastOperateUserId、sortnum、labelZh、labelJa、labelEn、status、createdAt、updatedAt。
                 - 共通职责：common 只生成实际需要的 config 与 persistence；共通能力出现后才进入 util。
-                - 扩展能力：ReferenceDataProvider 等框架扩展必须有真实需求后再创建。
+                - 默认修复基线：三语资源、Reference Data 声明、SEL 页面编辑和无配置回退随页面一起生成。
                 - 冲突保护：仅 MDA 生成器拥有的工程允许追加表，已有目标文件不会被覆盖。
                 """, names));
         files.put("build.gradle", fill(
@@ -126,6 +126,14 @@ public final class MdaProjectTemplateCatalog {
         files.put(staticRoot + ".js",
                 fill(pageJs(), names).replace("@PAGE@", pageCode));
         files.put(staticRoot + ".css", fill(pageCss(), names));
+        String localeRoot = "backend/src/main/resources/static/"
+                + names.projectCode() + "/i18n/" + pageCode + "/";
+        files.put(localeRoot + "zh-CN.json", fill(pageMessagesZh(), names));
+        files.put(localeRoot + "ja-JP.json", fill(pageMessagesJa(), names));
+        files.put(localeRoot + "en-US.json", fill(pageMessagesEn(), names));
+        files.put("backend/src/main/resources/META-INF/selplat-reference-data-defaults/"
+                        + pageCode + ".json",
+                fill(referenceDataDefaults(), names).replace("@PAGE@", pageCode));
         return files;
     }
 
@@ -791,6 +799,7 @@ public final class MdaProjectTemplateCatalog {
                     <script src="/sel/core/selKernel.js"></script>
                     <script src="/sel/core/selBaseRuntime.js"></script>
                     <script src="/sel/core/selAjax.js"></script>
+                    <script src="/sel/core/selLocaleRuntime.js"></script>
                     <script src="/sel/theme/runtime/selThemeRegistry.js"></script>
                     <script src="/sel/theme/packs/crystal-tech/manifest.js"></script>
                     <script src="/sel/theme/packs/candy-adventure/manifest.js"></script>
@@ -831,12 +840,14 @@ public final class MdaProjectTemplateCatalog {
                     "use strict";
 
                     window.sel.require([
-                        "core.query", "components.panel", "components.search", "components.contextMenu",
+                        "core.query", "net.ajax", "locale.runtime", "components.panel", "components.search", "components.contextMenu",
                         "components.tooltip", "components.tree", "components.dropdownMenu", "components.grid",
                         "components.window", "components.confirmDialog", "components.pageBackground",
                         "components.personalization"
                     ]);
                     const {freeze: selFreeze, query} = window.sel.core;
+                    const {ajax: selAjax} = window.sel.net;
+                    const {runtime: localeRuntime} = window.sel.locale;
                     const {
                         panel, search, tree, dropdownMenu: dropdown, grid, window: windowComponent,
                         confirmDialog, pageBackground, personalization
@@ -849,16 +860,47 @@ public final class MdaProjectTemplateCatalog {
                     const backgroundHost = query("[data-sel-page-background-host]");
                     const personalizationHost = query("[data-sel-personalization-host]");
                     const api = "/api/@PROJECT@/@TABLE@/";
-                    const gridId = "@ACTUAL_TABLE@Grid";
-                    const editorId = "@ACTUAL_TABLE@Editor";
+                    const gridId = "selGrid@ACTUAL_TABLE@Id";
+                    const editorId = "selWindow@ACTUAL_TABLE@Id";
+                    const pageKey = "@PAGE@";
+                    const supportedLocales = selFreeze(["zh-CN", "ja-JP", "en-US"]);
+                    const localePreferenceKey = "selplat.@PROJECT@.@PAGE@.locale";
+                    const requestedLocale = window.sel.core.param("lang",
+                            window.sel.core.preference.get(localePreferenceKey, "zh-CN"));
+                    let locale = supportedLocales.includes(requestedLocale)
+                            ? requestedLocale : "zh-CN";
+                    let messages = {};
+                    let localeController = null;
                     const state = {
                         records: [],
                         treeItems: [],
                         editingId: null,
                         grid: null,
+                        panelRoot: null,
+                        search: null,
+                        tree: null,
                         editor: null,
-                        confirm: null
+                        confirm: null,
+                        personalization: null,
+                        pageConfig: null,
+                        configuredColumns: []
                     };
+
+                    function text(key, fallback = "") {
+                        return typeof messages[key] === "string"
+                            ? messages[key] : (fallback || key);
+                    }
+
+                    async function loadLocale(nextLocale) {
+                        const [projectMessages, windowMessages, personalizationMessages] =
+                                await Promise.all([
+                                    selAjax.json({url: `./i18n/${pageKey}/${nextLocale}.json`}),
+                                    selAjax.json({url: `/sel/components/window/i18n/${nextLocale}.json`}),
+                                    selAjax.json({url: `/sel/components/personalization/i18n/${nextLocale}.json`})
+                                ]);
+                        return selFreeze({projectMessages, windowMessages,
+                            personalizationMessages});
+                    }
 
                     const layout = selFreeze({
                         top: [
@@ -903,10 +945,29 @@ public final class MdaProjectTemplateCatalog {
                         return Array.isArray(data.records) ? data.records : [];
                     }
 
+                    async function loadPageConfiguration() {
+                        try {
+                            const result = await selAjax.request({url:
+                                `/api/reference-data/projects/@PROJECT@/pages/${pageKey}/configuration`});
+                            state.pageConfig = result.data || null;
+                            const tableCode = state.pageConfig?.table?.code;
+                            if (!tableCode) return;
+                            const columns = await request(api
+                                + `getGridColumn.htm?tableCode=${encodeURIComponent(tableCode)}`
+                                + `&locale=${encodeURIComponent(locale)}`);
+                            state.configuredColumns = Array.isArray(columns.data?.columns)
+                                ? columns.data.columns : [];
+                        } catch (error) {
+                            state.pageConfig = null;
+                            state.configuredColumns = [];
+                            console.warn("Reference Data 不可用，页面使用组件默认配置。", error);
+                        }
+                    }
+
                     function loadTree() {
                         return [{
                             id: "@TABLE@-root",
-                            label: "全部@TABLE_CLASS@",
+                            label: text("treeAll", "全部@TABLE_CLASS@"),
                             value: "ALL",
                             children: []
                         }];
@@ -933,9 +994,16 @@ public final class MdaProjectTemplateCatalog {
                             data: {items: [...state.records],
                                 selectedIds: []},
                             column: {gridId,
-                                ariaLabel: "@TABLE_CLASS@ 表格",
-                                emptyText: "暂无@TABLE_CLASS@记录",
-                                items: [
+                                ariaLabel: text("gridAria", "@TABLE_CLASS@ 表格"),
+                                emptyText: text("empty", "暂无@TABLE_CLASS@记录"),
+                                resizeLabelTemplate: text("resizeColumn", "调整 {label} 列宽"),
+                                items: state.configuredColumns.length > 0
+                                    ? state.configuredColumns.map((column) => column.id === "actions"
+                                        ? {...column, field: "id", actions: [
+                                            {id: "edit", label: text("edit", "编辑记录"), icon: "ri-edit-line"},
+                                            {id: "delete", label: text("delete", "删除记录"), icon: "ri-delete-bin-6-line", tone: "danger"}
+                                        ]} : column)
+                                    : [
                                     {id: "id", field: "id", label: "ID",
                                         renderer: "text", width: "7%"},
                                     {id: "labelZh", field: "labelZh", label: "中文",
@@ -961,25 +1029,25 @@ public final class MdaProjectTemplateCatalog {
                                                 icon: "ri-delete-bin-6-line", tone: "danger"}
                                         ]}
                                 ]},
-                            title: {title: "@PROJECT_CLASS@ · @TABLE_CLASS@",
+                            title: {title: text("title", "@PROJECT_CLASS@ · @TABLE_CLASS@"),
                                 subtitle: "SELPLAT GENERATED APPLICATION",
-                                description: "左侧引用数据树，右侧业务表格",
-                                ariaLabel: "@TABLE_CLASS@ 管理面板",
+                                description: text("description", "左侧引用数据树，右侧业务表格"),
+                                ariaLabel: text("pageAria", "@TABLE_CLASS@ 管理面板"),
                                 ariaLabels: {statusTabs: "状态统计",
                                     headerActions: "快捷操作", toolbar: "筛选工具栏",
                                     sidebar: "引用数据树", content: "业务列表",
                                     board: "业务表格", pagination: "业务分页"},
                                 statusTabs: [
-                                    {value: "", label: "全部",
+                                    {value: "", label: text("all", "全部"),
                                         count: state.records.length}
                                 ],
                                 actions: [
-                                    {id: "filter", label: "搜索",
+                                    {id: "filter", label: text("searchAction", "搜索"),
                                         icon: "ri-search-line"},
-                                    {id: "new", label: "新增记录",
+                                    {id: "new", label: text("new", "新增记录"),
                                         icon: "ri-add-line", primary: true}
                                 ],
-                                resetLabel: "重置",
+                                resetLabel: text("reset", "重置"),
                                 messages: {selectProject: "选择记录",
                                     viewProject: "查看记录", editProject: "编辑记录",
                                     moreActions: "更多操作", filtersReset: "筛选已重置",
@@ -988,16 +1056,18 @@ public final class MdaProjectTemplateCatalog {
                                     filterActivated: "搜索框已激活",
                                     newOpened: "已打开新增窗口",
                                     exportPreparing: "操作已触发", movePrefix: "移动到"}},
-                            search: {gridId, label: "搜索记录",
-                                placeholder: "ID 或名称…", buttonLabel: "查询",
-                                clearLabel: "清空搜索条件", icon: "ri-search-line",
+                            search: {gridId, label: text("search", "搜索记录"),
+                                placeholder: text("searchPlaceholder", "ID 或名称…"),
+                                buttonLabel: text("submit", "查询"),
+                                clearLabel: text("clearSearch", "清空搜索条件"), icon: "ri-search-line",
                                 buttonIcon: "ri-search-line", clearIcon: "ri-close-line",
                                 defaultValue: "", clearable: true,
                                 submitOnEnter: true, submitOnClear: true,
                                 allowEmpty: true, trim: true},
-                            tree: {gridId, ariaLabel: "@TABLE_CLASS@ 引用数据树",
-                                heading: "@TABLE_CLASS@ 目录",
-                                summary: state.records.length + " 条记录",
+                            tree: {gridId, ariaLabel: text("treeAria", "@TABLE_CLASS@ 引用数据树"),
+                                heading: text("treeHeading", "@TABLE_CLASS@ 目录"),
+                                summary: text("treeSummary", "{count} 条记录")
+                                    .replaceAll("{count}", String(state.records.length)),
                                 selectedId: normalizedTree[0]?.id || "root",
                                 items: normalizedTree},
                             menu: {gridId, ariaLabel: "记录操作"},
@@ -1026,22 +1096,22 @@ public final class MdaProjectTemplateCatalog {
 
                     function editorOptions(editing) {
                         return selFreeze({id: editorId,
-                            title: editing ? "编辑@TABLE_CLASS@" : "新增@TABLE_CLASS@",
-                            subtitle: "租户与操作员由服务端写入，页面只维护业务字段",
-                            closeLabel: "关闭编辑窗口", cancelLabel: "取消",
-                            submitLabel: editing ? "保存修改" : "保存记录",
-                            validationMessage: "请完成全部必填字段", autoSuccess: false,
+                            title: editing ? text("edit", "编辑@TABLE_CLASS@") : text("new", "新增@TABLE_CLASS@"),
+                            subtitle: text("editorSubtitle", "租户与操作员由服务端写入，页面只维护业务字段"),
+                            closeLabel: text("closeEditor", "关闭编辑窗口"), cancelLabel: text("cancel", "取消"),
+                            submitLabel: text("save", editing ? "保存修改" : "保存记录"),
+                            validationMessage: text("validation", "请完成全部必填字段"), autoSuccess: false,
                             rows: [
-                                [{name: "labelZh", label: "中文标签",
+                                [{name: "labelZh", label: text("labelZh", "中文标签"),
                                     type: "text", icon: "ri-translate-2", required: true,
                                     maxLength: 200}],
                                 [
-                                    {name: "labelJa", label: "日文标签",
+                                    {name: "labelJa", label: text("labelJa", "日文标签"),
                                         type: "text", icon: "ri-translate-2", maxLength: 200},
-                                    {name: "labelEn", label: "英文标签",
+                                    {name: "labelEn", label: text("labelEn", "英文标签"),
                                         type: "text", icon: "ri-translate-2", maxLength: 200}
                                 ],
-                                [{name: "sortnum", label: "排序",
+                                [{name: "sortnum", label: text("sort", "排序"),
                                     type: "number", icon: "ri-sort-number-asc", value: "0"}]
                             ]});
                     }
@@ -1077,10 +1147,11 @@ public final class MdaProjectTemplateCatalog {
 
                     async function remove(item) {
                         const confirmed = await state.confirm.open({
-                            title: "删除@TABLE_CLASS@", message: "删除后记录将不再显示。",
+                            title: text("delete", "删除@TABLE_CLASS@"),
+                            message: text("deleteMessage", "删除后记录将不再显示。"),
                             target: String(item.labelZh || item.labelJa || item.labelEn || item.id),
-                            tone: "danger",
-                            confirmLabel: "确认删除", cancelLabel: "取消"
+                            tone: "danger", confirmLabel: text("confirmDelete", "确认删除"),
+                            cancelLabel: text("cancel", "取消")
                         });
                         if (!confirmed) return;
                         await request(api + "delete.htm", {
@@ -1094,41 +1165,70 @@ public final class MdaProjectTemplateCatalog {
 
                     async function refresh() {
                         state.records = await loadRecords();
+                        await loadPageConfiguration();
                         state.treeItems = loadTree();
                         const nextPayload = payload();
-                        panel.setLocale(panel.get(gridId),
-                                {view: nextPayload});
+                        panel.setLocale(state.panelRoot, {view: nextPayload,
+                            expandLeftLabel: text("expandTree", "展开目录"),
+                            collapseLeftLabel: text("collapseTree", "收起目录"),
+                            sidebarResizeLabel: text("resizeTree", "调整目录宽度"),
+                            toolbar: {columnResize: false}});
+                        state.search.setLocale(nextPayload.search);
+                        state.tree.setLocale(nextPayload.tree);
                         state.grid.setLocale(nextPayload);
                     }
 
                     async function mount() {
+                        const localeResources = await loadLocale(locale);
+                        messages = localeResources.projectMessages;
+                        window.sel.core.setDocument({lang: locale,
+                            title: text("documentTitle", "@PROJECT_CLASS@ · @TABLE_CLASS@")});
                         state.records = await loadRecords();
+                        await loadPageConfiguration();
                         state.treeItems = loadTree();
                         const view = payload();
-                        const panel = panel.create(root, {gridId,
+                        const panelRoot = panel.create(root, {gridId,
                             sourceId: gridId, entity: "@ACTUAL_TABLE@", view: "list",
                             layout: "single", structure: layout,
                             ariaLabel: view.title.ariaLabel});
-                        if (!panel || !panel.mount(panel, {view})) {
+                        if (!panelRoot || !panel.mount(panelRoot, {view,
+                                expandLeftLabel: text("expandTree", "展开目录"),
+                                collapseLeftLabel: text("collapseTree", "收起目录"),
+                                sidebarResizeLabel: text("resizeTree", "调整目录宽度"),
+                                toolbar: {columnResize: false}})) {
                             throw new Error("SEL 公共面板挂载失败。");
                         }
-                        if (!search.mount(panel, view.search)
-                                || !tree.mount(panel, view.tree)) {
+                        state.panelRoot = panelRoot;
+                        state.search = search.mount(panelRoot, view.search);
+                        state.tree = tree.mount(panelRoot, view.tree);
+                        if (!state.search || !state.tree) {
                             throw new Error("SEL 搜索或树控件挂载失败。");
                         }
-                        dropdown.mountAll(panel);
-                        state.grid = grid.mount(panel, view);
-                        const messages = await request(
-                                "/sel/components/window/i18n/zh-CN.json");
+                        dropdown.mountAll(panelRoot);
+                        state.grid = grid.mount(panelRoot, view);
                         state.editor = windowComponent.mount(root,
-                                {messages, ...editorOptions(false)});
+                                {messages: localeResources.windowMessages,
+                                    ...editorOptions(false)});
                         state.confirm = confirmDialog.mount(root,
-                                {id: "@ACTUAL_TABLE@DeleteConfirm"});
+                                {id: "selConfirmDialog@ACTUAL_TABLE@DeleteId"});
                         if (!state.grid || !state.editor || !state.confirm) {
                             throw new Error("SEL 表格或窗口控件挂载失败。");
                         }
-                        panel.addEventListener("selGrid:new", () => openEditor());
-                        panel.addEventListener("selGrid:action", (event) => {
+                        const background = pageBackground.mount(backgroundHost,
+                                {defaults: {theme: "solid-dark", overlay: 0,
+                                    brightness: 100, blur: 0}});
+                        state.personalization = background && personalization.mount(
+                                personalizationHost, {
+                                    backgroundController: background,
+                                    messages: localeResources.personalizationMessages,
+                                    locale: {current: locale,
+                                        onChange: (nextLocale) => localeController?.setLocale(nextLocale) || false}
+                                });
+                        if (!state.personalization) {
+                            throw new Error("SEL 主题个性化控件挂载失败。");
+                        }
+                        panelRoot.addEventListener("selGrid:new", () => openEditor());
+                        panelRoot.addEventListener("selGrid:action", (event) => {
                             const detail = event.detail;
                             if (!detail || detail.instanceKey !== gridId) return;
                             if (detail.action === "edit") openEditor(detail.record);
@@ -1139,21 +1239,254 @@ public final class MdaProjectTemplateCatalog {
                         root.addEventListener("selWindow:submit", (event) => {
                             if (event.detail?.id === editorId) save(event.detail.values);
                         });
+
+                        localeController = localeRuntime.create({
+                            initialLocale: locale, supportedLocales
+                        });
+                        localeController.register({
+                            id: "@PROJECT@.@PAGE@",
+                            load: loadLocale,
+                            apply: async (update) => {
+                                const gridState = state.grid.getState?.() || {};
+                                const searchValues = state.search.getValues?.() || {};
+                                const editorValues = state.editor.getValues?.() || {};
+                                locale = update.locale;
+                                messages = update.resource.projectMessages;
+                                await loadPageConfiguration();
+                                state.treeItems = loadTree();
+                                const nextPayload = payload();
+                                panel.setLocale(state.panelRoot, {view: nextPayload,
+                                    expandLeftLabel: text("expandTree", "展开目录"),
+                                    collapseLeftLabel: text("collapseTree", "收起目录"),
+                                    sidebarResizeLabel: text("resizeTree", "调整目录宽度"),
+                                    toolbar: {columnResize: false}});
+                                state.search.setLocale(nextPayload.search);
+                                state.search.setValues(searchValues);
+                                state.tree.setLocale(nextPayload.tree);
+                                state.grid.setLocale({...nextPayload,
+                                    data: {...nextPayload.data,
+                                        selectedIds: gridState.selectedIds || []},
+                                    pagination: {...nextPayload.pagination,
+                                        currentPage: gridState.currentPage || 1,
+                                        pageSize: gridState.pageSize || 20}});
+                                state.editor.setLocale({locale,
+                                    resource: {messages: update.resource.windowMessages,
+                                        options: editorOptions(Boolean(state.editingId))}});
+                                state.editor.setValues(editorValues);
+                                state.personalization.setLocale({locale,
+                                    resource: update.resource.personalizationMessages});
+                                window.sel.core.preference.set(localePreferenceKey, locale);
+                                window.sel.core.replaceParam("lang", locale);
+                                window.sel.core.setDocument({lang: locale,
+                                    title: text("documentTitle")});
+                                return true;
+                            }
+                        });
                     }
 
                     function showError(error) {
                         console.error("@TABLE_CLASS@ 页面操作失败。", error);
                     }
 
-                    const background = pageBackground.mount(backgroundHost,
-                            {defaults: {theme: "solid-dark", overlay: 0,
-                                brightness: 100, blur: 0}});
-                    if (!background || !personalization.mount(
-                            personalizationHost, {backgroundController: background})) {
-                        throw new Error("SEL 主题个性化控件挂载失败。");
-                    }
                     mount().catch(showError);
                 })();
+                """;
+    }
+
+    /**
+     * 返回新页面的中文应用文案资源。
+     * 真实传参示例：生成 {@code japan/japan.html} 时写入 {@code i18n/japan/zh-CN.json}。
+     * 真实返回示例：资源包含标题、查询、表格、编辑和删除等稳定键。
+     * 异常或副作用示例：方法只返回 JSON 模板，不访问文件系统或数据库。
+     *
+     * @return 中文页面文案 JSON
+     */
+    private static String pageMessagesZh() {
+        return """
+                {
+                  "documentTitle":"@PROJECT_CLASS@ · @TABLE_CLASS@",
+                  "pageAria":"@TABLE_CLASS@ 管理",
+                  "title":"@PROJECT_CLASS@ · @TABLE_CLASS@",
+                  "description":"左侧引用数据树，右侧业务表格",
+                  "search":"搜索记录",
+                  "searchPlaceholder":"ID 或名称…",
+                  "submit":"查询",
+                  "clearSearch":"清空搜索条件",
+                  "searchAction":"搜索",
+                  "reset":"重置",
+                  "all":"全部",
+                  "treeAll":"全部@TABLE_CLASS@",
+                  "treeAria":"@TABLE_CLASS@ 引用数据树",
+                  "treeHeading":"@TABLE_CLASS@ 目录",
+                  "treeSummary":"{count} 条记录",
+                  "expandTree":"展开目录",
+                  "collapseTree":"收起目录",
+                  "resizeTree":"调整目录宽度",
+                  "gridAria":"@TABLE_CLASS@ 表格",
+                  "resizeColumn":"调整 {label} 列宽",
+                  "new":"新增记录",
+                  "edit":"编辑记录",
+                  "delete":"删除记录",
+                  "deleteMessage":"删除后记录将不再显示。",
+                  "confirmDelete":"确认删除",
+                  "empty":"暂无@TABLE_CLASS@记录",
+                  "save":"保存记录",
+                  "cancel":"取消",
+                  "closeEditor":"关闭编辑窗口",
+                  "editorSubtitle":"租户与操作员由服务端写入，页面只维护业务字段",
+                  "validation":"请完成全部必填字段",
+                  "labelZh":"中文标签",
+                  "labelJa":"日文标签",
+                  "labelEn":"英文标签",
+                  "sort":"排序"
+                }
+                """;
+    }
+
+    /**
+     * 返回新页面的日文应用文案资源。
+     * 真实传参示例：生成页面时与中文、英文文件并列输出。
+     * 真实返回示例：查询按钮为 {@code 検索}，新增按钮为 {@code レコードを追加}。
+     * 异常或副作用示例：方法只返回 UTF-8 JSON 模板，不改变运行状态。
+     *
+     * @return 日文页面文案 JSON
+     */
+    private static String pageMessagesJa() {
+        return """
+                {
+                  "documentTitle":"@PROJECT_CLASS@ · @TABLE_CLASS@",
+                  "pageAria":"@TABLE_CLASS@ 管理",
+                  "title":"@PROJECT_CLASS@ · @TABLE_CLASS@",
+                  "description":"左側に参照データツリー、右側に業務テーブルを表示します",
+                  "search":"レコードを検索",
+                  "searchPlaceholder":"ID または名称…",
+                  "submit":"検索",
+                  "clearSearch":"検索条件をクリア",
+                  "searchAction":"検索",
+                  "reset":"リセット",
+                  "all":"すべて",
+                  "treeAll":"すべての@TABLE_CLASS@",
+                  "treeAria":"@TABLE_CLASS@ 参照データツリー",
+                  "treeHeading":"@TABLE_CLASS@ ディレクトリ",
+                  "treeSummary":"{count} 件",
+                  "expandTree":"ディレクトリを展開",
+                  "collapseTree":"ディレクトリを折りたたむ",
+                  "resizeTree":"ディレクトリの幅を変更",
+                  "gridAria":"@TABLE_CLASS@ テーブル",
+                  "resizeColumn":"{label} 列の幅を変更",
+                  "new":"レコードを追加",
+                  "edit":"レコードを編集",
+                  "delete":"レコードを削除",
+                  "deleteMessage":"削除後、このレコードは表示されません。",
+                  "confirmDelete":"削除を確認",
+                  "empty":"@TABLE_CLASS@ のレコードはありません",
+                  "save":"レコードを保存",
+                  "cancel":"キャンセル",
+                  "closeEditor":"編集ウィンドウを閉じる",
+                  "editorSubtitle":"テナントと操作者はサーバー側で設定されます",
+                  "validation":"必須項目を入力してください",
+                  "labelZh":"中国語ラベル",
+                  "labelJa":"日本語ラベル",
+                  "labelEn":"英語ラベル",
+                  "sort":"並び順"
+                }
+                """;
+    }
+
+    /**
+     * 返回新页面的英文应用文案资源。
+     * 真实传参示例：生成页面时写入 {@code en-US.json}。
+     * 真实返回示例：查询按钮为 {@code Search}，空状态为 {@code No @TABLE_CLASS@ records}。
+     * 异常或副作用示例：方法不解析语言或执行回退，浏览器语言运行时负责切换。
+     *
+     * @return 英文页面文案 JSON
+     */
+    private static String pageMessagesEn() {
+        return """
+                {
+                  "documentTitle":"@PROJECT_CLASS@ · @TABLE_CLASS@",
+                  "pageAria":"@TABLE_CLASS@ Management",
+                  "title":"@PROJECT_CLASS@ · @TABLE_CLASS@",
+                  "description":"Reference data tree on the left and business grid on the right",
+                  "search":"Search Records",
+                  "searchPlaceholder":"ID or name…",
+                  "submit":"Search",
+                  "clearSearch":"Clear search",
+                  "searchAction":"Search",
+                  "reset":"Reset",
+                  "all":"All",
+                  "treeAll":"All @TABLE_CLASS@",
+                  "treeAria":"@TABLE_CLASS@ Reference Data Tree",
+                  "treeHeading":"@TABLE_CLASS@ Directory",
+                  "treeSummary":"{count} records",
+                  "expandTree":"Expand directory",
+                  "collapseTree":"Collapse directory",
+                  "resizeTree":"Resize directory",
+                  "gridAria":"@TABLE_CLASS@ Grid",
+                  "resizeColumn":"Resize {label} column",
+                  "new":"New Record",
+                  "edit":"Edit Record",
+                  "delete":"Delete Record",
+                  "deleteMessage":"The record will no longer be shown after deletion.",
+                  "confirmDelete":"Confirm Delete",
+                  "empty":"No @TABLE_CLASS@ records",
+                  "save":"Save Record",
+                  "cancel":"Cancel",
+                  "closeEditor":"Close editor window",
+                  "editorSubtitle":"Tenant and operator are supplied by the server",
+                  "validation":"Complete all required fields",
+                  "labelZh":"Chinese Label",
+                  "labelJa":"Japanese Label",
+                  "labelEn":"English Label",
+                  "sort":"Order"
+                }
+                """;
+    }
+
+    /**
+     * 返回供 Reference Data Host 自动发现的页面默认声明。
+     * 真实传参示例：{@code japan/region} 首页生成 projectCode=japan、pageKey=japan。
+     * 真实返回示例：声明一个 PAGE、一个 Grid、八列、三个查询元素和一个编辑 Window。
+     * 异常或副作用示例：声明只创建缺失配置；管理员已保存的列宽与窗口位置不会被重启覆盖。
+     *
+     * @return 应用 Reference Data 默认配置 JSON
+     */
+    private static String referenceDataDefaults() {
+        return """
+                {
+                  "projectCode":"@PROJECT@",
+                  "pageKey":"@PAGE@",
+                  "page":{"layoutMode":"FLOW","orderNo":0,"breakpoint":"DESKTOP","editable":true,"status":1,"sortnum":10},
+                  "table":{
+                    "sourceTableName":"@ACTUAL_TABLE@",
+                    "gridId":"selGrid@ACTUAL_TABLE@Id",
+                    "nameZh":"@TABLE_CLASS@ 表格","nameJa":"@TABLE_CLASS@ テーブル","nameEn":"@TABLE_CLASS@ Grid",
+                    "selectionMode":"NONE","pageSize":20,"rowHeight":48,"status":1,"sortnum":10,
+                    "columns":[
+                      {"fieldName":"id","labelZh":"ID","labelJa":"ID","labelEn":"ID","width":"90px","cellRenderer":"text","sortnum":10},
+                      {"fieldName":"labelZh","labelZh":"中文","labelJa":"中国語","labelEn":"Chinese","width":"180px","cellRenderer":"text","sortnum":20},
+                      {"fieldName":"labelJa","labelZh":"日文","labelJa":"日本語","labelEn":"Japanese","width":"180px","cellRenderer":"text","sortnum":30},
+                      {"fieldName":"labelEn","labelZh":"英文","labelJa":"英語","labelEn":"English","width":"180px","cellRenderer":"text","sortnum":40},
+                      {"fieldName":"sortnum","labelZh":"排序","labelJa":"並び順","labelEn":"Order","width":"100px","cellRenderer":"text","sortnum":50},
+                      {"fieldName":"status","labelZh":"状态","labelJa":"状態","labelEn":"Status","width":"100px","cellRenderer":"badge","sortnum":60},
+                      {"fieldName":"updatedAt","labelZh":"更新时间","labelJa":"更新日時","labelEn":"Updated At","width":"180px","cellRenderer":"time","sortnum":70},
+                      {"fieldName":"actions","secondaryFieldName":"id","labelZh":"操作","labelJa":"操作","labelEn":"Actions","width":"120px","cellRenderer":"actions","resizable":false,"sortnum":80}
+                    ]
+                  },
+                  "controls":[
+                    {"key":"toolbar","fieldName":"queryToolbar","controlKind":"TOOLBAR","layoutMode":"ABSOLUTE","orderNo":100,"width":"100%","height":"88px","x":0,"y":0,"sortnum":100},
+                    {"key":"keyword","parentKey":"toolbar","fieldName":"keyword","controlKind":"SEARCH","orderNo":10,"width":"300px","height":"42px","x":0,"y":23,"sortnum":10},
+                    {"key":"submit","parentKey":"toolbar","fieldName":"submit","controlKind":"BUTTON","orderNo":20,"width":"88px","height":"42px","x":312,"y":23,"sortnum":20},
+                    {"key":"reset","parentKey":"toolbar","fieldName":"reset","controlKind":"BUTTON","orderNo":30,"width":"90px","height":"42px","x":412,"y":23,"sortnum":30}
+                  ],
+                  "windows":[{
+                    "triggerControlCode":"selWindow@ACTUAL_TABLE@Id",
+                    "nameZh":"@TABLE_CLASS@ 编辑窗口","nameJa":"@TABLE_CLASS@ 編集ウィンドウ","nameEn":"@TABLE_CLASS@ Editor",
+                    "width":"900px","height":"680px","minWidth":"480px","minHeight":"320px",
+                    "positionMode":"CENTER","resizable":true,"draggable":true,"maximizable":true,"minimizable":true,
+                    "breakpoint":"DESKTOP","status":1,"sortnum":10
+                  }]
+                }
                 """;
     }
 

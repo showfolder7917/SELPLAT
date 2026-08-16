@@ -671,11 +671,15 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         self.assertIn("selPersonalizationReflowPageControlGroup", personalization_source)
         self.assertIn("selPersonalizationSharedAction.followControlId", personalization_source)
         self.assertIn("selpersonal-page-direct-edit-frame", personalization_source)
+        self.assertIn("selpersonal-page-direct-move-handle", personalization_source)
         self.assertIn("selpersonal-page-direct-resize-handle", personalization_source)
         self.assertIn("selPersonalizationSyncDirectGeometryFrame", personalization_source)
+        self.assertIn("flowMoveGroup", personalization_source)
+        self.assertIn('"move-x"', personalization_source)
         personalization_style = (PROJECT_ROOT / "shared/frontend/sel-ui/src/components/personalization/selPersonalization.css") \
             .read_text(encoding="utf-8")
         self.assertIn("border: 1px dashed", personalization_style)
+        self.assertIn(".selpersonal-page-direct-move-handle", personalization_style)
         self.assertIn(".selpersonal-page-direct-resize-handle", personalization_style)
         self.assertIn("cursor: ew-resize", personalization_style)
         governance_rule = (PROJECT_ROOT / "apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md") \
@@ -686,6 +690,11 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             "no_business_control_override",
             governance_rule
         )
+        self.assertIn("upgrade_record_20260817_query_group_horizontal_move", governance_rule)
+        self.assertIn("dragend_outside_tbody_keeps_valid_draft", governance_rule)
+        self.assertIn("preview_draft_before_public_confirmation", governance_rule)
+        self.assertIn("confirm_before_atomic_sortnum_batch_save", governance_rule)
+        self.assertIn("cancel_or_failure_restore_previous_order", governance_rule)
 
     def test_real_grid_header_separator_covers_first_column_only_until_last(self) -> None:
         """表头竖线必须从第一列开始，并只排除没有后续列的最后一列。"""

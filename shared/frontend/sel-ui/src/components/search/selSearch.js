@@ -267,7 +267,17 @@
             if (!selSearchNextData || typeof selSearchNextData !== "object") return false;
             selSearchLocaleData = selSearchNextData;
             selSearchForm.setAttribute("aria-label", selSearchLocaleData.label || "搜索");
-            const selSearchNextFields = new Map((selSearchLocaleData.fields || []).map((field) => [String(field.name), field]));
+            // 单字段调用与首次 mount 使用同一份兼容规则；否则切换语言时只有按钮更新，
+            // 由顶层 placeholder/label 创建的 keyword 输入框会继续显示上一种语言。
+            const selSearchNextFieldDefinitions = Array.isArray(selSearchLocaleData.fields) && selSearchLocaleData.fields.length > 0
+                ? selSearchLocaleData.fields
+                : [{
+                    name: "keyword",
+                    label: selSearchLocaleData.label || "搜索",
+                    placeholder: selSearchLocaleData.placeholder || "",
+                    clearLabel: selSearchLocaleData.clearLabel || "清空"
+                }];
+            const selSearchNextFields = new Map(selSearchNextFieldDefinitions.map((field) => [String(field.name), field]));
             selSearchFields.forEach((selSearchEntry, name) => {
                 const nextField = selSearchNextFields.get(name) || selSearchEntry.definition;
                 selSearchEntry.label.textContent = nextField.label || selSearchLocaleData.label || "搜索";

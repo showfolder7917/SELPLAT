@@ -34,5 +34,17 @@ public interface ReferenceDataConfigurationService {
 
     CommonResult getPageConfiguration(String pageCode);
 
+    /**
+     * 通过应用稳定坐标读取页面配置，不要求业务页面预先知道数据库生成的 pageCode。
+     * 真实传参示例：工程 {@code japanese}、页面键 {@code n2-blue-book-question}。
+     * 真实返回示例：返回 {@code {pageCode:"page101100",table:{code:"table101101"},controls:[]}}。
+     * 异常或副作用示例：页面未登记时返回空配置而不是修改数据库；重复登记时抛出业务异常。
+     *
+     * @param projectCode 应用工程编码，例如 {@code japanese}
+     * @param pageKey 应用源码中的稳定页面键，例如 {@code n2-blue-book-question}
+     * @return 页面控件、表格、树节点和 Window 的统一配置
+     */
+    CommonResult getPageConfiguration(String projectCode, String pageKey);
+
     CommonResult savePageConfiguration(String pageCode, Map<String, Object> changeSet);
 }

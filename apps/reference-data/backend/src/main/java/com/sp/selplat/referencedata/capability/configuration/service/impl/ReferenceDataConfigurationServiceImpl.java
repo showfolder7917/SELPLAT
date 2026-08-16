@@ -38,6 +38,8 @@ public class ReferenceDataConfigurationServiceImpl
 
     // CODE_PATTERN 只接受后端生成的对象类型前缀加数字主键，阻止路径和 SQL 标识符注入。
     private static final Pattern CODE_PATTERN = Pattern.compile("^[a-z][A-Za-z0-9]*[0-9]+$");
+    // 应用稳定坐标只允许 URL 安全的小写编码，禁止用动态值拼接数据库字段或路径。
+    private static final Pattern STABLE_KEY_PATTERN = Pattern.compile("^[a-z][a-z0-9-]{0,63}$");
     // CSS_LENGTH_PATTERN 只允许页面布局协议支持的安全长度，不允许任意 CSS 表达式。
     private static final Pattern CSS_LENGTH_PATTERN = Pattern.compile("^(?:auto|[0-9]{1,4}(?:px|%|rem))$");
     // 六张表和实体类型是服务端固定注册表，不接受请求覆盖。
@@ -128,14 +130,20 @@ public class ReferenceDataConfigurationServiceImpl
         if (tableName == null || tableCode == null) {
             return List.of();
         }
-        String viewCode = VIEW_CODES.get(tableName.trim());
-        if (viewCode == null) {
-            return List.of();
-        }
         Map<String, Object> table = singleRecord(tableService, Map.of(
                 "code", tableCode.trim(), "statusIn", List.of(1, 2)));
         if (table.isEmpty()) {
             return List.of();
+        }
+        String normalizedTableName = tableName.trim();
+        String configuredSourceTable = String.valueOf(table.getOrDefault("sourceTableName", ""));
+        String viewCode = VIEW_CODES.get(normalizedTableName);
+        if (viewCode == null) {
+            // 普通业务 Grid 必须与登记的真实表名完全一致，并统一使用 DEFAULT 视图。
+            if (!normalizedTableName.equals(configuredSourceTable)) {
+                return List.of();
+            }
+            viewCode = "DEFAULT";
         }
         List<Map<String, Object>> rows = records(tableElementService, Map.of(
                 "tableId", table.get("id"),
@@ -229,10 +237,52 @@ public class ReferenceDataConfigurationServiceImpl
         Map<String, Object> page = new LinkedHashMap<>();
         page.put("pageCode", requiredPageCode);
         page.put("version", version);
+        page.put("table", table);
         page.put("controls", controls);
         page.put("tableElements", elements);
         page.put("windows", windows);
+        page.put("treeNodes", treeNodes(requiredPageCode));
         return buildSuccessResult(page, "页面配置查询完成。");
+    }
+
+    /**
+     * 通过工程和页面键解析数据库生成的 PAGE code，再复用页面配置主流程。
+     * 真实传参示例：{@code japanese/n2-blue-book-question}。
+     * 真实返回示例：命中 PAGE 后返回 {@code {pageCode:"page101100",table:{...},treeNodes:[...]}}。
+     * 异常或副作用示例：未登记时返回 pageCode 为空的标准空配置；重复 PAGE 时抛出业务异常。
+     *
+     * @param projectCode 应用工程编码
+     * @param pageKey 应用稳定页面键
+     * @return 页面配置标准结果
+     */
+    @Override
+    public CommonResult getPageConfiguration(String projectCode, String pageKey) {
+        String requiredProjectCode = requiredStableKey(projectCode, "工程编码");
+        String requiredPageKey = requiredStableKey(pageKey, "页面键");
+        List<Map<String, Object>> pages = records(this, Map.of(
+                "projectCode", requiredProjectCode,
+                "controlKind", "PAGE",
+                "fieldName", requiredPageKey,
+                "statusIn", List.of(1, 2)));
+        if (pages.isEmpty()) {
+            Map<String, Object> emptyPage = new LinkedHashMap<>();
+            emptyPage.put("projectCode", requiredProjectCode);
+            emptyPage.put("pageKey", requiredPageKey);
+            emptyPage.put("pageCode", "");
+            emptyPage.put("version", 0L);
+            emptyPage.put("table", Map.of());
+            emptyPage.put("controls", List.of());
+            emptyPage.put("tableElements", List.of());
+            emptyPage.put("windows", List.of());
+            emptyPage.put("treeNodes", List.of());
+            return buildSuccessResult(emptyPage, "页面尚未登记，已返回组件默认配置。");
+        }
+        if (pages.size() != 1) {
+            throw new CommonBusinessException(
+                    "REFERENCE_DATA_PAGE_COORDINATE_DUPLICATE",
+                    "同一工程和页面键存在重复 PAGE 登记，已阻止读取。");
+        }
+        return getPageConfiguration(String.valueOf(pages.get(0).get("pageCode")));
     }
 
     /**
@@ -407,6 +457,25 @@ public class ReferenceDataConfigurationServiceImpl
     }
 
     /**
+     * 读取当前页面独立树节点，并保持父节点优先、同级按 sortnum 和 id 的稳定顺序。
+     * 真实传参示例：页面 {@code page101100} 返回 N2 根节点和三种题型节点。
+     * 真实返回示例：返回 {@code [{code:"treeNode101110",parentId:null,nodeValue:"ALL"}] }。
+     * 异常或副作用示例：页面没有树时返回空列表；方法只通过树节点 Service 查询且不修改数据。
+     *
+     * @param pageCode 数据库生成的页面 code
+     * @return 当前页面的全部启用或停用树节点
+     */
+    private List<Map<String, Object>> treeNodes(String pageCode) {
+        List<Map<String, Object>> nodes = records(treeNodeService, Map.of(
+                "pageCode", pageCode,
+                "statusIn", List.of(1, 2)));
+        nodes.sort(Comparator
+                .comparing((Map<String, Object> row) -> row.get("parentId") == null ? 0 : 1)
+                .thenComparing(recordOrder("sortnum")));
+        return nodes;
+    }
+
+    /**
      * 返回按业务排序字段和 id 的稳定比较器。
      * 真实传参示例：{@code sortnum} 把 10、20、20/id=3 排为 10、20/id较小、20/id较大。
      * 真实返回示例：可直接传给 List.sort 的比较器。
@@ -482,6 +551,26 @@ public class ReferenceDataConfigurationServiceImpl
         String normalized = code == null ? "" : code.trim();
         if (!CODE_PATTERN.matcher(normalized).matches()) {
             throw new CommonBusinessException("REFERENCE_DATA_CODE_INVALID", "配置 code 格式不正确。");
+        }
+        return normalized;
+    }
+
+    /**
+     * 校验应用公开使用的工程编码或页面键，确保它只能作为 BaseDao 等值查询值。
+     * 真实传参示例：{@code n2-blue-book-question} 原样返回。
+     * 真实返回示例：合法小写短横线编码返回规范文本。
+     * 异常或副作用示例：空值、空格或大写字符触发 REFERENCE_DATA_STABLE_KEY_INVALID；不访问数据库。
+     *
+     * @param value URL 路径中的工程编码或页面键
+     * @param label 错误信息中的业务字段名
+     * @return 已去除首尾空格的稳定编码
+     */
+    private String requiredStableKey(String value, String label) {
+        String normalized = value == null ? "" : value.trim();
+        if (!STABLE_KEY_PATTERN.matcher(normalized).matches()) {
+            throw new CommonBusinessException(
+                    "REFERENCE_DATA_STABLE_KEY_INVALID",
+                    label + "格式不正确。");
         }
         return normalized;
     }

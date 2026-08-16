@@ -14,6 +14,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 迁移本身不自行发号或拼 code；每一条新记录都复用 BaseService、BaseDao 和 SequenceGenerator。
  */
 @Component
+@Order(100)
 public class ReferenceDataSixTableMigration implements ApplicationRunner {
 
     private static final String[][] MANAGEMENT_WINDOWS = {

@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sp.selplat.common.exception.CommonBusinessException;
 import com.sp.selplat.common.util.CommonParam;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
@@ -166,8 +167,21 @@ class MdaProjectGeneratorServiceImplTest {
                 "backend/src/main/resources/static/japan/japan.js"));
         String generatedStyle = Files.readString(project.resolve(
                 "backend/src/main/resources/static/japan/japan.css"));
+        Process scriptCheck = new ProcessBuilder(
+                "node",
+                "--check",
+                project.resolve("backend/src/main/resources/static/japan/japan.js").toString()
+        ).redirectErrorStream(true).start();
+        String scriptCheckOutput = new String(
+                scriptCheck.getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8
+        );
+        assertThat(scriptCheck.waitFor())
+                .withFailMessage("生成 JavaScript 语法检查失败：%s", scriptCheckOutput)
+                .isZero();
         assertThat(generatedHtml)
                 .contains("/sel/core/selKernel.js")
+                .contains("/sel/core/selLocaleRuntime.js")
                 .contains("/sel/theme/runtime/selThemeManager.js")
                 .contains("/sel/components/panel/selPanel.js")
                 .contains("/sel/components/context-menu/selContextMenu.js")
@@ -196,11 +210,37 @@ class MdaProjectGeneratorServiceImplTest {
                 .contains("const layout = selFreeze({")
                 .contains("return selFreeze({")
                 .contains("function editorOptions(editing)")
+                .contains("locale.runtime")
+                .contains("state.search.setLocale(nextPayload.search)")
+                .contains("state.tree.setLocale(nextPayload.tree)")
+                .contains("state.editor.setLocale({locale")
+                .contains("state.personalization.setLocale({locale")
+                .contains("/api/reference-data/projects/@PROJECT@".replace("@PROJECT@", "japan"))
                 .doesNotContain("top: selFreeze(")
                 .doesNotContain("grid: selFreeze(")
                 .doesNotContain("rows: selFreeze(")
-                .doesNotContain("/api/reference-data/")
                 .doesNotContain("window.confirm");
+        assertThat(project.resolve(
+                "backend/src/main/resources/static/japan/i18n/japan/zh-CN.json"))
+                .isRegularFile();
+        assertThat(project.resolve(
+                "backend/src/main/resources/static/japan/i18n/japan/ja-JP.json"))
+                .isRegularFile();
+        assertThat(project.resolve(
+                "backend/src/main/resources/static/japan/i18n/japan/en-US.json"))
+                .isRegularFile();
+        assertThat(Files.readString(project.resolve(
+                "backend/src/main/resources/static/japan/i18n/japan/en-US.json")))
+                .contains("\"resizeColumn\":\"Resize {label} column\"")
+                .contains("\"treeSummary\":\"{count} records\"")
+                .contains("\"closeEditor\":\"Close editor window\"");
+        String referenceDefaults = Files.readString(project.resolve(
+                "backend/src/main/resources/META-INF/selplat-reference-data-defaults/japan.json"));
+        assertThat(referenceDefaults)
+                .contains("\"projectCode\":\"japan\"")
+                .contains("\"pageKey\":\"japan\"")
+                .contains("\"sourceTableName\":\"JapanRegion\"")
+                .contains("\"gridId\":\"selGridJapanRegionId\"");
         assertThat(generatedStyle)
                 .contains("只分配 SEL 公共面板的页面舞台")
                 .doesNotContain("table {")

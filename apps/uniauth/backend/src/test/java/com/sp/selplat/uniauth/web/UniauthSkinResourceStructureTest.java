@@ -64,6 +64,8 @@ class UniauthSkinResourceStructureTest {
         assertFalse(manifest.contains("assets/themes/crystal-tech"));
         assertTrue(themeCss.contains("border-image: none"));
         assertTrue(themeCss.contains(".selfloating-panel::after"));
+        assertTrue(themeCss.contains(".selpanel-toolbar-shell {\n    border-top: 0;\n    border-bottom: 0;"));
+        assertTrue(themeCss.contains(".selsearch-root:has(> .selsearch-form-independent-layout)"));
         assertTrue(darkCss.contains("data-sel-theme=\"glass-admin\""));
         assertTrue(lightCss.contains("data-sel-theme=\"glass-admin\""));
     }
@@ -473,6 +475,38 @@ class UniauthSkinResourceStructureTest {
         assertTrue(personalizationCss.contains("inset: 10px"));
         assertTrue(personalizationCss.contains(".selpersonal-view::-webkit-scrollbar"));
         assertTrue(personalizationCss.contains("overscroll-behavior: contain"));
+    }
+
+    /**
+     * 验证公共表格编辑器通过 selGrid 组合表头记录，不再维护第二套原生表格。
+     * 真实传参示例：读取公共组件登记、selTableEditor.js 与 selGrid.js。
+     * 真实返回示例：TableEditor 依赖 selGrid 和 selWindow，Grid 提供 switch renderer 与统一动作事件。
+     * 异常或副作用示例：资源缺失时抛出 {@link IOException}；测试过程只读，不修改组件文件。
+     */
+    @Test
+    void tableEditorComposesPublicGrid() throws IOException {
+        String registry = readText("META-INF/resources/sel/components/component-registry.json");
+        String tableEditorScript = readText("META-INF/resources/sel/components/table-editor/selTableEditor.js");
+        String gridScript = readText("META-INF/resources/sel/components/grid/selGrid.js");
+        assertTrue(registry.contains("\"dependencies\": [\"selGrid\", \"selWindow\"]"));
+        assertTrue(tableEditorScript.contains(
+                "window.sel.require([\"core.element\", \"components.grid\", \"components.window\"])"));
+        assertTrue(tableEditorScript.contains("selGrid.create("));
+        assertTrue(tableEditorScript.contains("selGrid.mount("));
+        assertTrue(tableEditorScript.contains("selGrid:action"));
+        assertTrue(tableEditorScript.contains("selGrid:rowReorder"));
+        assertTrue(tableEditorScript.contains("rowReorder: typeof options.reorder === \"function\""));
+        assertTrue(tableEditorScript.contains("options.confirmReorder(records.slice(), previousRecords.slice())"));
+        assertTrue(tableEditorScript.contains("reorderCancelled"));
+        assertTrue(tableEditorScript.contains("pagination.setPageSize(gridPayload.pagination.pageSize)"));
+        assertFalse(tableEditorScript.contains("element(\"table\""));
+        assertFalse(tableEditorScript.contains("seltableeditor-table"));
+        assertTrue(gridScript.contains("selGridRenderer === \"switch\""));
+        assertTrue(gridScript.contains("className = \"selgrid-record-switch\""));
+        assertTrue(gridScript.contains("selGridRenderer === \"dragHandle\""));
+        assertTrue(gridScript.contains("new CustomEvent(\"selGrid:rowReorder\""));
+        assertTrue(gridScript.contains("selGridDragOriginalOrder = selGridReadCurrentRowOrder()"));
+        assertTrue(gridScript.contains("selGridHasRowOrderChanged()"));
     }
 
     /**

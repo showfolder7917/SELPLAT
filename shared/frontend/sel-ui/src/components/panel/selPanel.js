@@ -977,14 +977,24 @@
         selPanelOptions.set(selPanelRoot, {
             expand: selPanelMountOptions.expandLeftLabel || selPanelPreviousOptions.expand || "展开左侧区域",
             collapse: selPanelMountOptions.collapseLeftLabel || selPanelPreviousOptions.collapse || "收起左侧区域",
+            sidebarResize: selPanelMountOptions.sidebarResizeLabel
+                || selPanelPreviousOptions.sidebarResize || "调整左侧区域宽度",
             toolbar: selPanelToolbarResizeOptions
         });
         // 分隔条属于通用布局能力，静态骨架与 create 生成结构都在 mount 时统一补齐。
-        selPanelEnsureSidebarResizer(selPanelRoot);
+        const selPanelSidebarResizer = selPanelEnsureSidebarResizer(selPanelRoot);
+        if (selPanelSidebarResizer) {
+            selPanelSidebarResizer.setAttribute("aria-label", selPanelOptions.get(selPanelRoot).sidebarResize);
+        }
         // 工具栏栏目默认可调整；调用方可通过 toolbar.columnResize=false 或单栏配置显式关闭。
         selPanelEnsureToolbarColumnResizers(selPanelRoot, selPanelToolbarResizeOptions);
         // 已挂载面板只刷新视图和选项，不重复绑定事件。
         if (selPanelRoots.has(selPanelRoot)) {
+            // 语言原位切换后用新标签刷新现有开关；布局收起状态保持不变。
+            selPanelSetLeftCollapsed(
+                selPanelRoot,
+                selPanelRoot.classList.contains("selpanel-layout-left-collapsed")
+            );
             return selPanelRoot;
         }
         // 点击面板动作按钮时只处理通用布局动作。

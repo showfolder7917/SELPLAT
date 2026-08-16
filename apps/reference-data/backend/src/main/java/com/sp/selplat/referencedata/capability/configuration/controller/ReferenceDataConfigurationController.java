@@ -72,6 +72,23 @@ public class ReferenceDataConfigurationController {
     }
 
     /**
+     * 通过工程编码和稳定页面键读取配置，供新应用与修复应用共享同一接入方式。
+     * 真实传参示例：{@code GET /api/reference-data/projects/japanese/pages/n2-blue-book-question/configuration}。
+     * 真实返回示例：返回数据库生成的 pageCode、表格、树节点、控件与 Window 配置。
+     * 异常或副作用示例：未登记页面返回空配置且不写库；坐标重复时返回业务错误。
+     *
+     * @param projectCode 应用工程编码，例如 {@code japanese}
+     * @param pageKey 应用稳定页面键，例如 {@code n2-blue-book-question}
+     * @return 页面配置标准响应
+     */
+    @GetMapping("/projects/{projectCode}/pages/{pageKey}/configuration")
+    public CommonResult getPageConfiguration(
+            @PathVariable("projectCode") String projectCode,
+            @PathVariable("pageKey") String pageKey) {
+        return service.getPageConfiguration(projectCode, pageKey);
+    }
+
+    /**
      * 在一个事务中保存页面编辑器提交的受控布局变更。
      * 真实传参示例：{@code POST /api/reference-data/pages/page101017/configuration}，正文含 baseVersion。
      * 真实返回示例：返回新 version 和 updatedCount。

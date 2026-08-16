@@ -7,13 +7,17 @@ python_ability_refs = none
 <!-- 页面脚本由模板生成并使用现有浏览器与前端语法验证，不登记额外 Node 能力。 -->
 node_ability_refs = none
 <!-- 本版让新生成页面退出租户和操作员编辑提交，并统一继承 BaseServiceImpl 的服务端身份。 -->
-rule_version = 1.14.0
+rule_version = 1.17.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析，未经审查不得提升到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则、生成器、索引和真实隔离文件测试已经形成闭环。 -->
 rule_status = active
+<!-- 本次升级把查询结构和编辑态保存位置纳入新增与修复共用基线。 -->
+upgrade_record_20260816_default_query = 独立字段AND后台分页_统一提交_查询元素逐项登记_共享保存紧跟重置
+<!-- 本次升级把表格保存入口、公共表头编辑器和数据库显隐同步纳入新增与修复共用基线。 -->
+upgrade_record_20260816_default_table_editor = 表格名称和Code完整登记_编辑态保存按钮_公共表头增删改_显隐持久化和刷新一致
 <!-- 本规则来源于用户要求从 uniauth 抽取模板并让后续 AI 可重复接手。 -->
-upgrade_record = 2026-08-09:建立SELPLAT工程与业务表脚手架生成_冲突保护_reference-data扩展和左树右表页面规则;2026-08-09:修正MDA生成器具体类冒充Service接口并增加接口实现目录_Controller依赖和模板输出的自动门禁;2026-08-09:修正独立启动误扫描公共DAO_引用数据接口未装配和纯注释空数据脚本启动失败并增加真实启动门禁;2026-08-09:修正只登记Host依赖却遗漏桌面入口和同源路径白名单_将统一桌面闭环加入原子生成与构建门禁;2026-08-09:修正生成页面只加载单一皮肤并手写树_表格_窗口_改为完整SEL主题运行时和公共控件装配并增加模板输出门禁;2026-08-09:修正MDA自建Request_Result协议_统一复用CommonParam_CommonResult并增加生成门禁;2026-08-10:删除无调用方表Domain模板_统一使用CommonParam_Map_真实数据库元数据;2026-08-10:将生成包结构统一为技术层优先_层内按业务分目录_通用能力进入common;2026-08-10:以Uniauth为准改为数据库业务目录优先_Controller_Service_DAO_Reference聚合到同一业务_common只保存跨业务能力;2026-08-10:抽象SELPLAT数据库应用职责门禁_一业务一Service_common仅config_persistence_util_能力与框架扩展必须有真实需求后创建;2026-08-10:新工程原子写入rule_engine中央数据库应用登记_停止生成无读取方manifest目录;2026-08-10:号段种子由MERGE改为INSERT_WHERE_NOT_EXISTS_禁止重启覆盖游标和版本;2026-08-10:新生成标准业务表统一中日英标签与平台默认字段_生成器测试和快速门禁同步阻断旧name字段;2026-08-11:生成器作为全项目无状态能力进入统一capability分层_取消宿主项目专属结构口径;2026-08-12:生成页面和业务Service退出租户操作员自填并继承公共身份
+upgrade_record = 2026-08-09:建立SELPLAT工程与业务表脚手架生成_冲突保护_reference-data扩展和左树右表页面规则;2026-08-09:修正MDA生成器具体类冒充Service接口并增加接口实现目录_Controller依赖和模板输出的自动门禁;2026-08-09:修正独立启动误扫描公共DAO_引用数据接口未装配和纯注释空数据脚本启动失败并增加真实启动门禁;2026-08-09:修正只登记Host依赖却遗漏桌面入口和同源路径白名单_将统一桌面闭环加入原子生成与构建门禁;2026-08-09:修正生成页面只加载单一皮肤并手写树_表格_窗口_改为完整SEL主题运行时和公共控件装配并增加模板输出门禁;2026-08-09:修正MDA自建Request_Result协议_统一复用CommonParam_CommonResult并增加生成门禁;2026-08-10:删除无调用方表Domain模板_统一使用CommonParam_Map_真实数据库元数据;2026-08-10:将生成包结构统一为技术层优先_层内按业务分目录_通用能力进入common;2026-08-10:以Uniauth为准改为数据库业务目录优先_Controller_Service_DAO_Reference聚合到同一业务_common只保存跨业务能力;2026-08-10:抽象SELPLAT数据库应用职责门禁_一业务一Service_common仅config_persistence_util_能力与框架扩展必须有真实需求后创建;2026-08-10:新工程原子写入rule_engine中央数据库应用登记_停止生成无读取方manifest目录;2026-08-10:号段种子由MERGE改为INSERT_WHERE_NOT_EXISTS_禁止重启覆盖游标和版本;2026-08-10:新生成标准业务表统一中日英标签与平台默认字段_生成器测试和快速门禁同步阻断旧name字段;2026-08-11:生成器作为全项目无状态能力进入统一capability分层_取消宿主项目专属结构口径;2026-08-12:生成页面和业务Service退出租户操作员自填并继承公共身份;2026-08-16:统一新增与既有应用修复的默认基线_三语国际化_引用数据声明_公共页面编辑_缺失配置回退同时接入
 
 <!-- 问题：手工复制既有应用容易遗漏项目数据源、号段、Host 登记、SQL 顺序、默认审计字段或页面资源，也容易无需求预留公共层和框架扩展。 -->
 <!-- 场景：在 SELPLAT apps 下新建业务工程，或向已由脚手架创建的工程追加一张业务表。 -->
@@ -108,6 +112,23 @@ selplat_scaffold_business_seed_policy = empty_by_default
 selplat_scaffold_empty_data_script = explanatory_comment,SELECT_1_statement,no_business_rows
 
 ## 页面与可选扩展
+
+<!-- 新建应用和修复既有应用必须使用同一默认修复基线，禁止新项目继续生成已知旧结构。 -->
+selplat_default_repair_scope = create_new_application,repair_existing_application,same_baseline
+<!-- 每个页面随模块发布三语资源并接入 selLocaleRuntime；URL 语言优先、偏好次之、默认中文。 -->
+selplat_default_i18n_baseline = zh-CN,ja-JP,en-US,selLocaleRuntime,url_lang_then_preference_then_zh-CN,preserve_runtime_state
+<!-- 每个页面必须发布 Reference Data 默认声明；Host 只补缺失记录，管理员已保存的布局不得被重启覆盖。 -->
+selplat_default_reference_data_registration = classpath_manifest,page,grid,columns,query_elements,window,insert_missing_only,preserve_admin_state
+<!-- 业务页面通过工程编码和稳定页面键读取配置，Grid 表头只调用自身业务 Controller 的 getGridColumn；配置不可用时静默使用组件默认值。 -->
+selplat_default_reference_data_consumption = projectCode+pageKey,business_getGridColumn,no_direct_reference_grid_endpoint,silent_component_default_fallback
+<!-- 默认修复必须把每个真实查询条件拆成独立字段，统一点击查询后由后台分页执行 AND，禁止单一 keyword 跨列 OR 或全量前端过滤。 -->
+selplat_default_query_baseline = one_real_condition_one_named_control,one_shared_submit,submit_then_query,BaseDao_AND,backend_page_plus_totalCount,no_cross_column_keyword_OR,no_load_all_for_browser_filter
+<!-- 默认修复必须逐项登记查询输入、下拉、单选、多选、查询和重置；编辑态唯一共享保存入口紧跟重置，不得被外层网格推到工具栏末端。 -->
+selplat_default_query_page_editor_baseline = register_each_input_select_radio_checkbox_submit_reset,independent_geometry,ordered_reflow,shared_save_immediately_after_reset,no_auto_margin_or_grid_end_push
+<!-- 默认修复必须给 Grid 提供 tableTitle 和 tableCode；编辑态同时显示保存表格控件与紧邻 Code 的公共编辑表格入口。 -->
+selplat_default_grid_page_editor_baseline = tableTitle_plus_tableCode,manual_edit_shows_save_table_control,adjacent_accent_edit_table_action,no_business_column_occupation
+<!-- 表头新增、修改、逻辑删除和显隐统一由公共 selTableEditor 完成；visible=false 必须即时隐藏且刷新后仍由数据库结果保持隐藏。 -->
+selplat_default_grid_column_management_baseline = public_selTableEditor,ReferenceDataTableElement_CRUD,visible_switch_persisted,runtime_getGridColumn_visible_true_only,immediate_grid_refresh,no_application_private_table_editor
 
 <!-- 首张表固定生成工程名 html/js/css，后续表固定生成表名 html/js/css。 -->
 selplat_scaffold_page_naming = first_table:<projectName>.*,additional_table:<tableName>.*

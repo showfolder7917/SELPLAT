@@ -31,6 +31,11 @@ body {
     padding: var(--sel-theme-viewport-gap);
 }
 
+/* 编辑态共享保存宿主必须可接受位移，保证保存按钮持续紧跟重置而不滞留在工具栏原网格末端。 */
+.japanese-query-save-host {
+    display: inline-block;
+}
+
 /* AI 媒体区是 Japanese 独有业务内容，继续消费主题令牌并保持截图中的紧凑字号。 */
 .japanese-generation-panel {
     display: grid;

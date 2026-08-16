@@ -152,6 +152,32 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "registry_driven_directory_source_api_theme_dependency_and_application_scan"
         ));
         assertTrue(rule.content().contains(
+            "selplat_glass_admin_toolbar_surface_boundary = "
+                + "full_width_toolbar_has_no_top_or_bottom_border,"
+                + "controls_keep_own_borders,no_drag_or_layout_change"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_shared_theme_cache_delivery = "
+                + "shared_theme_content_change_requires_all_consumer_url_version_bumps,"
+                + "normal_reload_fetches_current_style,no_stale_open_page_cache"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_independent_search_parent_surface = transparent_parent,"
+                + "no_parent_inset_shadow,real_children_keep_own_surfaces,"
+                + "persisted_child_geometry_unchanged"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_table_editor_public_composition = selWindow_outer,"
+                + "selGrid_records_and_switch,selConfirmDialog_from_consumer,"
+                + "grid_action_event,forbid_private_table_button_switch_reimplementation"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_table_editor_drag_reorder = selGrid_public_drag_handle_and_keyboard_arrows,"
+                + "complete_visible_order_event,dragend_outside_tbody_keeps_valid_draft,"
+                + "preview_draft_before_public_confirmation,confirm_before_atomic_sortnum_batch_save,"
+                + "cancel_or_failure_restore_previous_order,success_refresh_business_header"
+        ));
+        assertTrue(rule.content().contains(
             "selplat_page_editor_button_presentation = grid_window_immediately_after_database_code,"
                 + "composite_shared_save_after_last_standard_control,no_auto_margin_push,"
                 + "shared_semantic_warning_accent"
@@ -163,6 +189,8 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "multiple_structural_fields_render_as_independent_inputs_AND_only_no_keyword_OR,"
                 + "missing_record_uses_component_default,independent_width_with_ordered_reflow,"
                 + "shared_first_item_vertical_baseline,"
+                + "first_item_public_horizontal_group_move_handle,"
+                + "group_move_preserves_gap_and_child_widths,anchor_x_single_record_save,"
                 + "one_shared_current_control_save_following_last_standard_control,"
                 + "single_control_payload,no_editor_cards"
         ));
@@ -442,6 +470,35 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat_scaffold_final_runtime = unified_host_required,standalone_application_not_sufficient"
         ));
         assertTrue(rule.content().contains(
+            "selplat_default_repair_scope = create_new_application,repair_existing_application,same_baseline"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_default_i18n_baseline = zh-CN,ja-JP,en-US,selLocaleRuntime"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_default_reference_data_registration = classpath_manifest,page,grid,columns,query_elements,window"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_default_query_baseline = one_real_condition_one_named_control,"
+                + "one_shared_submit,submit_then_query,BaseDao_AND,backend_page_plus_totalCount"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_default_query_page_editor_baseline = "
+                + "register_each_input_select_radio_checkbox_submit_reset,independent_geometry,"
+                + "ordered_reflow,shared_save_immediately_after_reset"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_default_grid_page_editor_baseline = tableTitle_plus_tableCode,"
+                + "manual_edit_shows_save_table_control,adjacent_accent_edit_table_action,"
+                + "no_business_column_occupation"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_default_grid_column_management_baseline = public_selTableEditor,"
+                + "ReferenceDataTableElement_CRUD,visible_switch_persisted,"
+                + "runtime_getGridColumn_visible_true_only,immediate_grid_refresh,"
+                + "no_application_private_table_editor"
+        ));
+        assertTrue(rule.content().contains(
             "selplat_scaffold_http_contract = CommonParam,CommonResult,"
                 + "no_private_Request_Response_Result_Page_Param"
         ));
@@ -521,9 +578,28 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "extract_only_after_multiple_real_consumers"
         ));
         assertTrue(rule.content().contains(
-            "japanese_reference_data_policy = no_pre_reserved_provider,"
-                + "no_reference_data_runtime_import,no_reference_data_dependency,"
-                + "local_fixed_question_type_tree"
+            "japanese_reference_data_policy = classpath_default_manifest,"
+                + "project_and_page_key_lookup,business_getGridColumn,"
+                + "configured_question_type_tree,individual_query_layout,window_geometry,"
+                + "standalone_default_fallback,no_private_provider"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_question_query_and_editor_policy = sourceQuestionNo_exact,"
+                + "questionTextLike,BaseDao_AND,backend_paging,one_shared_submit,"
+                + "individual_query_controls,shared_save_after_reset"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_question_grid_columns = sourceQuestionNo,questionTypeLabel,questionText,"
+                + "optionA,optionB,optionC,optionD,audioState,updatedAt,actions,"
+                + "no_correctOption,no_imageState"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_question_grid_audio_action = one_play_button,existing_audio_play_directly,"
+                + "missing_audio_generate_then_persist_then_auto_play,no_separate_generate_action"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_i18n_policy = zh-CN,ja-JP,en-US,selLocaleRuntime,"
+                + "question_content_unchanged,preserve_search_page_selection_editor_state"
         ));
         assertTrue(rule.content().contains(
             "japanese_scanned_question_ai_review_without_pdf = explicit_user_choice_only,"

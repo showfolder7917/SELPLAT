@@ -1455,6 +1455,43 @@ html[data-sel-page-edit-mode="edit"] .selpersonal-page-flow-geometry.selpersonal
     display: none;
 }
 
+/* 流式查询组只在首项边框提供横向移动手柄；拖动锚点时公共重排会同步移动全部同级控件。 */
+.selpersonal-page-direct-move-handle {
+    position: absolute;
+    z-index: 2;
+    top: -7px;
+    left: 10px;
+    width: 34px;
+    height: 14px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--sel-theme-radius-chip);
+    background: color-mix(in srgb, var(--sel-theme-semantic-warning) 78%, transparent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--sel-theme-semantic-warning) 38%, transparent);
+    pointer-events: auto;
+    cursor: ew-resize;
+    touch-action: none;
+}
+
+.selpersonal-page-direct-move-handle::after {
+    color: var(--sel-theme-text-on-selected-surface);
+    content: "↔";
+    font-size: 11px;
+    line-height: 14px;
+}
+
+.selpersonal-page-direct-move-handle[hidden] {
+    display: none;
+}
+
+.selpersonal-page-direct-move-handle:hover,
+.selpersonal-page-direct-move-handle:focus-visible,
+.selpersonal-page-direct-move-handle.selpersonal-page-geometry-active {
+    outline: 1px solid var(--sel-theme-semantic-warning);
+    outline-offset: 1px;
+    filter: brightness(1.16);
+}
+
 /* 手柄覆盖黄色右边线及其两侧，鼠标落在视觉边界上即可开始横向调宽。 */
 .selpersonal-page-direct-resize-handle {
     position: absolute;
@@ -1536,6 +1573,12 @@ html[data-sel-page-edit-mode="edit"] .selpersonal-page-flow-geometry.selpersonal
 body.selpersonal-page-control-moving,
 body.selpersonal-page-control-moving * {
     cursor: move !important;
+    user-select: none !important;
+}
+
+body.selpersonal-page-control-moving-horizontal,
+body.selpersonal-page-control-moving-horizontal * {
+    cursor: ew-resize !important;
     user-select: none !important;
 }
 

@@ -943,8 +943,13 @@
             selWindowLocaleOptions = { ...selWindowLocaleOptions, ...selWindowNextOptions };
             selWindowLocaleOptions.locale = selWindowNext.locale || selWindowLocaleOptions.locale;
             selWindowLocaleOptions.datePickerMessages = selWindowNextResource.datePickerMessages || selWindowLocaleOptions.datePickerMessages;
+            // 公共窗口文案必须写回当前语言配置；业务应用随后只更新字段配置时，
+            // 不能再从首次挂载配置中恢复上一种语言的最小化、最大化等框架文案。
+            if (selWindowNextResource.messages && typeof selWindowNextResource.messages === "object") {
+                selWindowLocaleOptions.messages = selWindowNextResource.messages;
+            }
             selWindowOptions = selWindowLocaleOptions;
-            selWindowMessages = selWindowNextResource.messages || selWindowLocaleOptions.messages || selWindowMessages;
+            selWindowMessages = selWindowLocaleOptions.messages || selWindowMessages;
             selWindowShell.setAttribute("aria-label", String(selWindowLocaleOptions.title || "业务窗口"));
             selWindowTitle.textContent = String(selWindowLocaleOptions.title || "新建项目");
             selWindowSubtitle.textContent = String(selWindowLocaleOptions.subtitle || "");

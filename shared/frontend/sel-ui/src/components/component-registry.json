@@ -181,6 +181,16 @@
       "themeAware": true
     },
     {
+      "id": "selTableEditor",
+      "directory": "table-editor",
+      "type": "interactive",
+      "scripts": ["selTableEditor.js"],
+      "styles": ["selTableEditor.css"],
+      "publicApi": "sel.components.tableEditor",
+      "dependencies": ["selGrid", "selWindow"],
+      "themeAware": true
+    },
+    {
       "id": "selTooltip",
       "directory": "tooltip",
       "type": "interactive",

@@ -578,7 +578,7 @@
                 referenceDataState.personalizationController.updatePageControl(editor.id, { enabled: false });
             }
         });
-        entries.forEach(({ definition, record }) => {
+        entries.forEach(({ definition, record }, definitionIndex) => {
                 const localizedTitle = definition.targetKey && definition.key !== "submit"
                     ? `${referenceDataText(`fields.${definition.targetKey}`, {}, definition.title)} · ${referenceDataText("search.submit", {}, "查询")}`
                     : definition.key === "submit" ? referenceDataText("search.submit", {}, "查询")
@@ -596,7 +596,12 @@
                 const geometry = {
                     container: toolbar,
                     direct: true,
-                    flow: { key: "referenceDataQueryToolbar", gap: 12, order: definition.orderNo },
+                    flow: {
+                        key: "referenceDataQueryToolbar",
+                        gap: 12,
+                        order: definition.orderNo,
+                        moveGroup: definitionIndex === 0
+                    },
                     boundsHeight: 88,
                     minWidth: definition.minWidth,
                     maxWidth: definition.maxWidth,

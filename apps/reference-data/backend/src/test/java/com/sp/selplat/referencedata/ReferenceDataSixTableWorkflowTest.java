@@ -92,6 +92,7 @@ class ReferenceDataSixTableWorkflowTest {
         // PAGE 与真实下拉控件先建立；类型值创建共享选项组后由控件保存 optionSetCode。
         CommonParam control = params(Map.of(
                 "projectCode", "qa", "pageCode", "bootstrap", "controlKind", "PAGE",
+                "fieldName", "workflow",
                 "sourceTableName", "ReferenceDataControlLayout", "layoutMode", "FLOW", "breakpoint", "DESKTOP"));
         Map<String, Object> savedControl = data(controlLayoutService.insert(control));
         assertAuditAndCode(savedControl, "page");
@@ -176,7 +177,7 @@ class ReferenceDataSixTableWorkflowTest {
         // 表格定义是表格元素的唯一父级，页面公开坐标只保存自动生成的 code。
         CommonParam table = params(Map.of(
                 "projectCode", "qa", "pageCode", pageCode, "gridId", "selGridReferenceDataManagementId",
-                "nameZh", "测试表格"));
+                "sourceTableName", "ReferenceDataType", "nameZh", "测试表格"));
         Map<String, Object> savedTable = data(tableService.insert(table));
         long tableId = number(savedTable.get("id"));
         assertAuditAndCode(savedTable, "table");
@@ -201,6 +202,24 @@ class ReferenceDataSixTableWorkflowTest {
                 "ReferenceDataType", String.valueOf(savedTable.get("code")), null).get(0).get("label"));
         assertEquals("中文名称", configurationService.resolveGridColumns(
                 "ReferenceDataType", String.valueOf(savedTable.get("code")), "zh-CN").get(0).get("label"));
+
+        // 普通业务表不进入六表视图映射，通过 sourceTableName 校验后统一读取 DEFAULT 表头。
+        Map<String, Object> businessPage = data(controlLayoutService.insert(params(Map.of(
+                "projectCode", "japanese", "pageCode", "bootstrap", "controlKind", "PAGE",
+                "fieldName", "n2-blue-book-question", "sourceTableName", "ReferenceDataControlLayout",
+                "layoutMode", "FLOW", "breakpoint", "DESKTOP"))));
+        Map<String, Object> businessTable = data(tableService.insert(params(Map.of(
+                "projectCode", "japanese", "pageCode", businessPage.get("pageCode"),
+                "sourceTableName", "JapaneseN2BlueBookQuestion", "gridId", "selGridJapaneseN2BlueBookQuestionId",
+                "nameZh", "N2 题目表格"))));
+        data(tableElementService.insert(params(Map.of(
+                "projectCode", "japanese", "tableId", businessTable.get("id"), "viewCode", "DEFAULT",
+                "elementType", "COLUMN", "fieldName", "questionText", "labelZh", "题干",
+                "labelJa", "問題文", "labelEn", "Question", "width", "360px"))));
+        assertEquals("問題文", configurationService.resolveGridColumns(
+                "JapaneseN2BlueBookQuestion", String.valueOf(businessTable.get("code")), "ja-JP").get(0).get("label"));
+        assertTrue(configurationService.resolveGridColumns(
+                "AnotherBusinessTable", String.valueOf(businessTable.get("code")), "ja-JP").isEmpty());
 
         CommonParam window = params(Map.of(
                 "projectCode", "qa", "pageCode", pageCode, "nameZh", "测试窗口",
@@ -232,6 +251,11 @@ class ReferenceDataSixTableWorkflowTest {
                 .noneMatch(layoutRecord -> "WINDOW".equals(String.valueOf(layoutRecord.get("parentKind")))));
         assertEquals(2, ((List<?>) page.get("tableElements")).size());
         assertEquals(1, ((List<?>) page.get("windows")).size());
+        assertEquals(2, ((List<?>) page.get("treeNodes")).size());
+        assertEquals(savedTable.get("code"), ((Map<?, ?>) page.get("table")).get("code"));
+        assertEquals(pageCode,
+                data(configurationService.getPageConfiguration("qa", "workflow")).get("pageCode"));
+        assertEquals("", data(configurationService.getPageConfiguration("qa", "not-registered")).get("pageCode"));
         assertEquals(5, ((List<?>) data(navigationService.navigation()).get("modules")).size());
 
         // 直接经过三个专用 Controller 覆盖实际序列化入口，确认六表能力没有只停留在 Service 层。
@@ -240,6 +264,8 @@ class ReferenceDataSixTableWorkflowTest {
         assertEquals("ReferenceDataTableElement",
                 data(configurationController.getByCode(String.valueOf(savedElement.get("code")))).get("sourceTable"));
         assertEquals(pageCode, data(configurationController.getPageConfiguration(pageCode)).get("pageCode"));
+        assertEquals(pageCode,
+                data(configurationController.getPageConfiguration("qa", "workflow")).get("pageCode"));
         assertTrue(configurationController.savePageConfiguration(pageCode, Map.of(
                 "baseVersion", 0,
                 "controls", List.of(Map.of(

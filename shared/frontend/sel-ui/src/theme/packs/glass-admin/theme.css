@@ -179,9 +179,15 @@
 }
 
 :root[data-sel-theme="glass-admin"] .selpanel-toolbar-shell {
-    border-top: 1px solid var(--sel-glass-admin-border-soft);
-    border-bottom: 1px solid var(--sel-glass-admin-border-soft);
+    border-top: 0;
+    border-bottom: 0;
     background: transparent;
+}
+
+/* 独立拖拽查询只由真实字段和动作绘制表面，父级 Search 不得在控件偏移后露出旧组合面板痕迹。 */
+:root[data-sel-theme="glass-admin"] .selsearch-root:has(> .selsearch-form-independent-layout) {
+    background: transparent;
+    box-shadow: none;
 }
 
 :root[data-sel-theme="glass-admin"] .selpanel-body-shell {

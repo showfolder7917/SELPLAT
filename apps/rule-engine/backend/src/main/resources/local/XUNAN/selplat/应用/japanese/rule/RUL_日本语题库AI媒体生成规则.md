@@ -7,13 +7,17 @@ python_ability_refs = apps/rule-engine/backend/src/main/python/com/sp/selplat/lo
 <!-- 页面行为由 Japanese 独立 JavaScript 实现。 -->
 node_ability_refs = apps/japanese/backend/src/main/resources/static/japanese/japanese.js
 <!-- 本版增加扫描题库纠错、范围排除和写库前质量门槛。 -->
-rule_version = 1.12.0
+rule_version = 1.15.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示实现、索引和隔离进程测试已形成闭环。 -->
 rule_status = active
+<!-- 本次升级把 N2 查询和共享保存位置修正为平台默认修复基线。 -->
+upgrade_record_20260816_default_query = 题号与题干独立查询_后台分页AND_编辑态保存紧跟重置
+<!-- 本次升级让列表隐藏正确答案与图片、显示四个选项，并统一为一个可生成保存后播放的语音按钮。 -->
+upgrade_record_20260816_question_grid_audio = 隐藏正确答案和图片_显示ABCD选项_统一播放语音按钮_缺失时生成保存并自动播放
 <!-- 本规则来自用户对日语题库、直接生成和指定 edge-tts 环境的确认。 -->
-upgrade_record = 2026-08-09:建立N2蓝宝书1000题题库_Codex图片解释_NanamiNeural语音_WebP和云存储预留规则;2026-08-09:修正Japanese页面未完整继承SEL主题运行时并手写树_表格_窗口_改用公共控件且保留紧凑字号;2026-08-09:增加扫描PDF题库的官方答案优先_OCR纠错_连续题号_排除范围_未决阻断和幂等导入门槛;2026-08-09:将未参与Japanese构建的Python导入器迁入当前用户rule-engine能力层并清理失败实验源码;2026-08-09:删除Japanese专用生成Request_全部复用CommonParam_CommonResult并接入全应用协议门禁;2026-08-10:删除无调用方Japanese表Domain_继续使用CommonParam_Map_数据库元数据CRUD;2026-08-10:重组Japanese为技术层优先_层内按题库业务分目录_生成媒体和外部进程统一进入common;2026-08-10:纠正为Uniauth式数据库业务目录优先_题库表相关代码聚合_common仅保存跨题库能力;2026-08-10:删除未启用的ReferenceDataProvider和独立reference-data装配_题型树暂由页面固定配置提供;2026-08-10:清理common伪Service和碎片目录_业务生成编排回归题库Service_Codex_语音_图片_媒体_进程拆分为分类共通工具;2026-08-10:删除仅有一个调用方的JapaneseCrudSupport_默认字段_有效查询_稳定排序和更新时间回归N2业务Service;2026-08-10:合并仅服务N2题库的ContentService_一个业务只保留一个Service接口和实现_生成编排直接调用分类共通工具;2026-08-10:增加不查PDF的Codex全题语义审校_锁定官方答案字母_唯一选项_完整朗读拼接_应用API同步门禁
+upgrade_record = 2026-08-09:建立N2蓝宝书1000题题库_Codex图片解释_NanamiNeural语音_WebP和云存储预留规则;2026-08-09:修正Japanese页面未完整继承SEL主题运行时并手写树_表格_窗口_改用公共控件且保留紧凑字号;2026-08-09:增加扫描PDF题库的官方答案优先_OCR纠错_连续题号_排除范围_未决阻断和幂等导入门槛;2026-08-09:将未参与Japanese构建的Python导入器迁入当前用户rule-engine能力层并清理失败实验源码;2026-08-09:删除Japanese专用生成Request_全部复用CommonParam_CommonResult并接入全应用协议门禁;2026-08-10:删除无调用方Japanese表Domain_继续使用CommonParam_Map_数据库元数据CRUD;2026-08-10:重组Japanese为技术层优先_层内按题库业务分目录_生成媒体和外部进程统一进入common;2026-08-10:纠正为Uniauth式数据库业务目录优先_题库表相关代码聚合_common仅保存跨题库能力;2026-08-10:删除未启用的ReferenceDataProvider和独立reference-data装配_题型树暂由页面固定配置提供;2026-08-10:清理common伪Service和碎片目录_业务生成编排回归题库Service_Codex_语音_图片_媒体_进程拆分为分类共通工具;2026-08-10:删除仅有一个调用方的JapaneseCrudSupport_默认字段_有效查询_稳定排序和更新时间回归N2业务Service;2026-08-10:合并仅服务N2题库的ContentService_一个业务只保留一个Service接口和实现_生成编排直接调用分类共通工具;2026-08-10:增加不查PDF的Codex全题语义审校_锁定官方答案字母_唯一选项_完整朗读拼接_应用API同步门禁;2026-08-16:按平台默认修复基线接入三语国际化_引用数据自动登记_Grid表头_题型树_查询元素与Window页面编辑_无配置回退
 
 ## 题库与页面
 
@@ -43,8 +47,16 @@ japanese_business_service_policy = one_business_one_service_contract_and_impl,no
 japanese_common_package_boundary = no_business_service,no_crud_root,no_generation_root,no_media_root,no_runtime_root,util/codex,util/speech,util/image,util/media,util/process
 <!-- 只有一个业务表使用的查询排序、审计默认字段和更新时间逻辑必须留在该业务 Service，至少两个业务产生稳定复用后才允许抽取 common 支撑类。 -->
 japanese_crud_abstraction_policy = single_business_keep_in_business_service,extract_only_after_multiple_real_consumers
-<!-- 尚未启用 reference-data 接口时禁止预留 Provider、启动装配和模块依赖；题型树暂由页面固定配置提供。 -->
-japanese_reference_data_policy = no_pre_reserved_provider,no_reference_data_runtime_import,no_reference_data_dependency,local_fixed_question_type_tree
+<!-- Japanese 随模块发布 Reference Data 默认声明；Host 自动补齐页面、Grid、列、查询元素、题型树和 Window，独立启动时使用页面默认值。 -->
+japanese_reference_data_policy = classpath_default_manifest,project_and_page_key_lookup,business_getGridColumn,configured_question_type_tree,individual_query_layout,window_geometry,standalone_default_fallback,no_private_provider
+<!-- N2 查询固定按来源题号和题干两个真实字段独立提交，后台分页返回 totalCount；编辑态两个输入、查询和重置逐项保存，共享保存按钮紧跟重置。 -->
+japanese_question_query_and_editor_policy = sourceQuestionNo_exact,questionTextLike,BaseDao_AND,backend_paging,one_shared_submit,individual_query_controls,shared_save_after_reset
+<!-- 题库列表不得直接暴露正确答案或图片状态；学习内容展示四个选项，并由公共表头编辑器管理列显隐。 -->
+japanese_question_grid_columns = sourceQuestionNo,questionTypeLabel,questionText,optionA,optionB,optionC,optionD,audioState,updatedAt,actions,no_correctOption,no_imageState
+<!-- 语音列始终只显示同一个播放按钮；没有媒体时先生成、写回当前题目媒体字段，再自动播放。 -->
+japanese_question_grid_audio_action = one_play_button,existing_audio_play_directly,missing_audio_generate_then_persist_then_auto_play,no_separate_generate_action
+<!-- 固定界面使用中日英三语资源和统一语言运行时；题目正文保持原始日文，切换语言不得清空搜索、分页、选中行或编辑表单。 -->
+japanese_i18n_policy = zh-CN,ja-JP,en-US,selLocaleRuntime,question_content_unchanged,preserve_search_page_selection_editor_state
 <!-- AI 与语音生成按钮不得弹二次确认，点击后直接执行并展示进度和结果。 -->
 japanese_generation_confirmation_policy = direct_execution_without_second_confirmation
 

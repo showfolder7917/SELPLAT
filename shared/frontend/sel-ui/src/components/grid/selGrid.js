@@ -385,7 +385,13 @@
                     selGridColumnResizeHandle.dataset.selGridColumnResize = String(selGridColumnIndex);
                     selGridColumnResizeHandle.setAttribute("role", "separator");
                     selGridColumnResizeHandle.setAttribute("aria-orientation", "vertical");
-                    selGridColumnResizeHandle.setAttribute("aria-label", `调整 ${selGridColumnData.label} 列宽`);
+                    const selGridColumnResizeLabelTemplate = String(
+                        selGridInputPayload.column?.resizeLabelTemplate || "调整 {label} 列宽"
+                    );
+                    selGridColumnResizeHandle.setAttribute(
+                        "aria-label",
+                        selGridColumnResizeLabelTemplate.replaceAll("{label}", String(selGridColumnData.label || ""))
+                    );
                     selGridColumnResizeHandle.setAttribute("tabindex", "0");
                     selGridColumnResizeHandle.setAttribute("aria-valuemin", String(Number(selGridInputPayload.grid?.minColumnWidth) || 72));
                     selGridColumnResizeHandle.setAttribute("aria-valuemax", String(Number(selGridInputPayload.grid?.maxColumnWidth) || 960));
@@ -566,7 +572,8 @@
                 keyword: selGridState.search,
                 values: { ...selGridState.searchValues },
                 type: selGridState.type,
-                status: selGridState.status
+                status: selGridState.status,
+                treeFilter: { ...selGridState.treeFilter }
             }
         }));
     }
@@ -980,6 +987,26 @@
             selGridCell.appendChild(selGridSelectionButton);
             return selGridCell;
         }
+        if (selGridRenderer === "dragHandle") {
+            const selGridDragHandle = document.createElement("button");
+            selGridDragHandle.className = "selgrid-row-drag-handle";
+            selGridDragHandle.type = "button";
+            selGridDragHandle.draggable = selGridRecordOptions.rowReorder === true;
+            selGridDragHandle.dataset.selGridRowDragHandle = "true";
+            const selGridDragLabel = selGridResolveRecordActionValue(
+                selGridColumn.dragLabel,
+                selGridRecord,
+                selGridColumn.label || "拖拽调整顺序",
+                "dragLabel"
+            );
+            selGridDragHandle.setAttribute("aria-label", selGridDragLabel);
+            selGridDragHandle.dataset.selTooltip = selGridDragLabel;
+            selGridDragHandle.dataset.selTooltipMode = "always";
+            selGridDragHandle.appendChild(selGridCreateIcon(selGridColumn.icon || "ri-draggable"));
+            selGridCell.className = "selgrid-row-drag-cell";
+            selGridCell.appendChild(selGridDragHandle);
+            return selGridCell;
+        }
         if (selGridRenderer === "stack") {
             selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
             const selGridStack = document.createElement("span");
@@ -1016,6 +1043,29 @@
             selGridCell.appendChild(selGridBooleanBadge);
             return selGridCell;
         }
+        if (selGridRenderer === "switch") {
+            const selGridSwitchChecked = Boolean(selGridRawValue === true
+                || selGridRawValue === 1
+                || String(selGridRawValue).toLocaleLowerCase() === "true");
+            const selGridSwitch = document.createElement("button");
+            selGridSwitch.className = "selgrid-record-switch";
+            selGridSwitch.type = "button";
+            selGridSwitch.dataset.action = String(selGridColumn.action || "toggle");
+            selGridSwitch.setAttribute("role", "switch");
+            selGridSwitch.setAttribute("aria-checked", String(selGridSwitchChecked));
+            const selGridSwitchLabel = selGridResolveRecordActionValue(
+                selGridColumn.switchLabel,
+                selGridRecord,
+                selGridColumn.label || "切换状态",
+                "switchLabel"
+            );
+            selGridSwitch.setAttribute("aria-label", selGridSwitchLabel);
+            selGridSwitch.dataset.selTooltip = selGridSwitchLabel;
+            selGridSwitch.dataset.selTooltipMode = "always";
+            selGridSwitch.appendChild(document.createElement("span"));
+            selGridCell.appendChild(selGridSwitch);
+            return selGridCell;
+        }
         if (selGridRenderer === "actions") {
             const selGridActions = document.createElement("div");
             selGridActions.className = "selgrid-action-group";
@@ -1035,6 +1085,12 @@
                 selGridButton.dataset.selTooltip = selGridActionLabel;
                 selGridButton.dataset.selTooltipMode = "always";
                 selGridButton.appendChild(selGridCreateIcon(selGridActionIcon));
+                if (selGridAction.showLabel === true) {
+                    selGridButton.classList.add("selgrid-action-button-labeled");
+                    const selGridActionText = document.createElement("span");
+                    selGridActionText.textContent = selGridActionLabel;
+                    selGridButton.appendChild(selGridActionText);
+                }
                 selGridActions.appendChild(selGridButton);
             });
             selGridCell.appendChild(selGridActions);
@@ -1510,6 +1566,131 @@
 
     // 非被动监听允许表格在滚动边界取消默认行为，避免浏览器页面跟随移动。
     selGridView.tableScroller?.addEventListener("wheel", selGridHandleWheel, { passive: false });
+
+    let selGridDraggedRecordId = "";
+    let selGridDragOriginalOrder = [];
+
+    /**
+     * 清理当前 Grid 拖拽排序产生的临时视觉状态。
+     * @returns {void} 所有记录行移除拖拽源与目标样式，内部拖拽主键恢复为空。
+     * @example 拖拽完成或取消后调用，表格不再保留高亮行。
+     */
+    function selGridClearRowDragState() {
+        selGridView.tableBody.querySelectorAll(".selgrid-row-dragging,.selgrid-row-drag-target")
+            .forEach((selGridRow) => selGridRow.classList.remove("selgrid-row-dragging", "selgrid-row-drag-target"));
+        selGridDraggedRecordId = "";
+        selGridDragOriginalOrder = [];
+    }
+
+    /**
+     * 读取当前 tbody 中完整记录顺序，供 drop 与拖出边界后的 dragend 统一判断是否发生真实移动。
+     * @returns {string[]} 例如 {@code ["107002","107001","107003"]}，顺序与当前可见行一致。
+     * @example 拖拽开始保存原顺序，结束时与当前顺序比较，仅真实变化才发布排序事件。
+     * @throws 不抛异常；空表返回空数组，不改变 Grid 数据。
+     */
+    function selGridReadCurrentRowOrder() {
+        return Array.from(selGridView.tableBody.querySelectorAll("tr[data-sel-grid-record-id]"))
+            .map((selGridRow) => String(selGridRow.dataset.selGridRecordId || ""));
+    }
+
+    /**
+     * 判断本次记录拖拽是否已经改变完整行顺序。
+     * @returns {boolean} 例如第二行移到第一行时返回 true，原地松手返回 false。
+     * @example drop 或 dragend 调用同一判断，防止一次拖拽重复发布事件。
+     * @throws 不抛异常；行数不完整时返回 false，交由调用方恢复稳定渲染。
+     */
+    function selGridHasRowOrderChanged() {
+        const selGridCurrentOrder = selGridReadCurrentRowOrder();
+        return selGridCurrentOrder.length === selGridDragOriginalOrder.length
+            && selGridCurrentOrder.some((selGridRecordId, index) => selGridRecordId !== selGridDragOriginalOrder[index]);
+    }
+
+    /**
+     * 按 tbody 当前行顺序发布公共记录排序事件。
+     * @returns {boolean} 完整当前页顺序可映射到业务记录时返回 true，否则返回 false。
+     * @example 记录 3 被移动到记录 1 前时发布 records=[record3,record1,...]。
+     */
+    function selGridDispatchRowReorder() {
+        const selGridOrderedRecords = Array.from(selGridView.tableBody.querySelectorAll("tr[data-sel-grid-record-id]"))
+            .map((selGridRow) => selGridProjects.find((selGridRecord) => String(selGridReadSelectionId(selGridRecord)) === selGridRow.dataset.selGridRecordId))
+            .filter(Boolean);
+        if (selGridOrderedRecords.length !== selGridProjects.length) return false;
+        selGridRoot.dispatchEvent(new CustomEvent("selGrid:rowReorder", {
+            bubbles: true,
+            detail: selFreeze({
+                instanceKey: selGridId,
+                entity: selGridEntity,
+                records: selGridOrderedRecords
+            })
+        }));
+        return true;
+    }
+
+    selGridView.tableBody.addEventListener("dragstart", (event) => {
+        const selGridHandle = event.target.closest('[data-sel-grid-row-drag-handle="true"]');
+        const selGridRow = selGridHandle?.closest("tr[data-sel-grid-record-id]");
+        if (!selGridRecordMode || selGridRecordOptions.rowReorder !== true || !selGridRow
+                || selGridUsesRemotePagination() || selGridView.tableBody.rows.length !== selGridProjects.length) {
+            event.preventDefault();
+            return;
+        }
+        selGridDraggedRecordId = selGridRow.dataset.selGridRecordId;
+        selGridDragOriginalOrder = selGridReadCurrentRowOrder();
+        selGridRow.classList.add("selgrid-row-dragging");
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", selGridDraggedRecordId);
+    });
+
+    selGridView.tableBody.addEventListener("dragover", (event) => {
+        if (!selGridDraggedRecordId) return;
+        const selGridTargetRow = event.target.closest("tr[data-sel-grid-record-id]");
+        const selGridDraggedRow = Array.from(selGridView.tableBody.rows)
+            .find((selGridRow) => selGridRow.dataset.selGridRecordId === selGridDraggedRecordId);
+        if (!selGridTargetRow || !selGridDraggedRow || selGridTargetRow === selGridDraggedRow) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        selGridView.tableBody.querySelectorAll(".selgrid-row-drag-target")
+            .forEach((selGridRow) => selGridRow.classList.remove("selgrid-row-drag-target"));
+        selGridTargetRow.classList.add("selgrid-row-drag-target");
+        const selGridInsertAfter = event.clientY >= selGridTargetRow.getBoundingClientRect().top
+            + (selGridTargetRow.getBoundingClientRect().height / 2);
+        selGridView.tableBody.insertBefore(
+            selGridDraggedRow,
+            selGridInsertAfter ? selGridTargetRow.nextSibling : selGridTargetRow
+        );
+    });
+
+    selGridView.tableBody.addEventListener("drop", (event) => {
+        if (!selGridDraggedRecordId) return;
+        event.preventDefault();
+        if (selGridHasRowOrderChanged()) selGridDispatchRowReorder();
+        selGridClearRowDragState();
+    });
+
+    selGridView.tableBody.addEventListener("dragend", () => {
+        // 鼠标在有效行间完成移动后即使松在 tbody 边缘外，也提交当前草稿顺序；从未移动则保持原表格。
+        if (selGridDraggedRecordId && selGridHasRowOrderChanged()) {
+            selGridDispatchRowReorder();
+        } else if (selGridDraggedRecordId) {
+            selGridRenderTable();
+        }
+        selGridClearRowDragState();
+    });
+
+    selGridView.tableBody.addEventListener("keydown", (event) => {
+        const selGridHandle = event.target.closest('[data-sel-grid-row-drag-handle="true"]');
+        if (!selGridHandle || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+        const selGridRow = selGridHandle.closest("tr[data-sel-grid-record-id]");
+        const selGridSibling = event.key === "ArrowUp" ? selGridRow?.previousElementSibling : selGridRow?.nextElementSibling;
+        if (!selGridRow || !selGridSibling || selGridView.tableBody.rows.length !== selGridProjects.length) return;
+        event.preventDefault();
+        selGridView.tableBody.insertBefore(
+            selGridRow,
+            event.key === "ArrowUp" ? selGridSibling : selGridSibling.nextElementSibling
+        );
+        selGridDispatchRowReorder();
+        selGridHandle.focus();
+    });
 
     // 表格事件委托统一处理选择、查看、编辑和更多菜单。
     selGridView.tableBody.addEventListener("click", (event) => {

@@ -918,7 +918,9 @@
                 const selPersonalizationDeltaY = selPersonalizationEvent.clientY - selPersonalizationStartClientY;
                 selPersonalizationPendingState = selPersonalizationActiveAction === "move"
                     ? { ...selPersonalizationStartState, x: selPersonalizationStartState.x + selPersonalizationDeltaX, y: selPersonalizationStartState.y + selPersonalizationDeltaY }
-                    : { ...selPersonalizationStartState, width: selPersonalizationStartState.width + selPersonalizationDeltaX };
+                    : selPersonalizationActiveAction === "move-x"
+                        ? { ...selPersonalizationStartState, x: selPersonalizationStartState.x + selPersonalizationDeltaX }
+                        : { ...selPersonalizationStartState, width: selPersonalizationStartState.width + selPersonalizationDeltaX };
                 if (!selPersonalizationAnimationFrame) {
                     selPersonalizationAnimationFrame = window.requestAnimationFrame(selPersonalizationApplyPendingState);
                 }
@@ -935,7 +937,11 @@
                 window.removeEventListener("blur", selPersonalizationFinish);
                 selPersonalizationPointerId = null;
                 selPersonalizationButton.classList.remove("selpersonal-page-geometry-active");
-                document.body.classList.remove("selpersonal-page-control-moving", "selpersonal-page-control-resizing");
+                document.body.classList.remove(
+                    "selpersonal-page-control-moving",
+                    "selpersonal-page-control-moving-horizontal",
+                    "selpersonal-page-control-resizing"
+                );
             };
             selPersonalizationButton.addEventListener("pointerdown", (selPersonalizationEvent) => {
                 if (selPersonalizationEvent.button !== 0 || selPersonalizationPageMode !== "edit" || !selPersonalizationPageControl.enabled) return;
@@ -956,8 +962,11 @@
                 };
                 selPersonalizationButton.setPointerCapture?.(selPersonalizationPointerId);
                 selPersonalizationButton.classList.add("selpersonal-page-geometry-active");
-                document.body.classList.add(selPersonalizationActiveAction === "move"
-                    ? "selpersonal-page-control-moving" : "selpersonal-page-control-resizing");
+                document.body.classList.add(selPersonalizationActiveAction === "move-x"
+                    ? "selpersonal-page-control-moving-horizontal"
+                    : selPersonalizationActiveAction === "move"
+                        ? "selpersonal-page-control-moving"
+                        : "selpersonal-page-control-resizing");
                 window.addEventListener("pointermove", selPersonalizationHandlePointerMove);
                 window.addEventListener("pointerup", selPersonalizationFinish);
                 window.addEventListener("pointercancel", selPersonalizationFinish);
@@ -1047,6 +1056,7 @@
                     direct: selPersonalizationDefinition.geometry.direct === true,
                     flowKey: String(selPersonalizationDefinition.geometry.flow?.key || "").trim(),
                     flowOrder: Number(selPersonalizationDefinition.geometry.flow?.order) || 0,
+                    flowMoveGroup: selPersonalizationDefinition.geometry.flow?.moveGroup === true,
                     boundsHeight: Math.max(1, Number(selPersonalizationDefinition.geometry.boundsHeight) || 88),
                     minWidth: Math.max(1, Number(selPersonalizationDefinition.geometry.minWidth) || 48),
                     maxWidth: Math.max(1, Number(selPersonalizationDefinition.geometry.maxWidth) || 1200),
@@ -1061,6 +1071,7 @@
                     width: Number.parseFloat(selPersonalizationDefinition.geometry.state?.width) || selPersonalizationRoots[0].getBoundingClientRect().width,
                     height: Number.parseFloat(selPersonalizationDefinition.geometry.state?.height) || selPersonalizationRoots[0].getBoundingClientRect().height,
                     editFrame: null,
+                    moveHandle: null,
                     resizeHandle: null
                 } : null
             };
@@ -1084,7 +1095,33 @@
                 const selPersonalizationEditFrame = document.createElement("span");
                 selPersonalizationEditFrame.className = "selpersonal-page-direct-edit-frame";
                 selPersonalizationEditFrame.hidden = true;
-                selPersonalizationEditFrame.setAttribute("aria-hidden", "true");
+                if (selPersonalizationPageControl.geometry.flowMoveGroup) {
+                    const selPersonalizationMoveHandle = document.createElement("button");
+                    selPersonalizationMoveHandle.type = "button";
+                    selPersonalizationMoveHandle.className = "selpersonal-page-direct-move-handle";
+                    selPersonalizationMoveHandle.setAttribute("aria-label", `左右移动整个${selPersonalizationPageControl.title}组合`);
+                    selPersonalizationEditFrame.appendChild(selPersonalizationMoveHandle);
+                    selPersonalizationPageControl.geometry.moveHandle = selPersonalizationMoveHandle;
+                    selPersonalizationBindPageControlGeometryAction(
+                        selPersonalizationPageControl,
+                        selPersonalizationMoveHandle,
+                        "move-x"
+                    );
+                    selPersonalizationMoveHandle.addEventListener("keydown", (selPersonalizationEvent) => {
+                        if (selPersonalizationPageMode !== "edit"
+                                || !["ArrowLeft", "ArrowRight"].includes(selPersonalizationEvent.key)) return;
+                        selPersonalizationEvent.preventDefault();
+                        selPersonalizationSelectPageControl(selPersonalizationPageControl.id);
+                        const selPersonalizationCurrent = selPersonalizationPageControl.captureState();
+                        selPersonalizationApplyPageControlGeometry(selPersonalizationPageControl, {
+                            ...selPersonalizationCurrent,
+                            x: Number(selPersonalizationCurrent.x)
+                                + (selPersonalizationEvent.key === "ArrowRight" ? 8 : -8)
+                        });
+                    });
+                } else {
+                    selPersonalizationEditFrame.setAttribute("aria-hidden", "true");
+                }
                 const selPersonalizationResizeHandle = document.createElement("span");
                 selPersonalizationResizeHandle.className = "selpersonal-page-direct-resize-handle";
                 selPersonalizationEditFrame.appendChild(selPersonalizationResizeHandle);
