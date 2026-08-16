@@ -26,8 +26,8 @@
     <!-- SEL 核心与主题契约结束。 -->
 
     <!-- SEL 公共组件开始：删除任一可选区域时，其他区域仍保持稳定。 -->
-    <link rel="stylesheet" href="/sel/components/panel/selPanel.css?v=20260811-toolbar-resize-1">
-    <link rel="stylesheet" href="/sel/components/search/selSearch.css?v=20260807-reference-1">
+    <link rel="stylesheet" href="/sel/components/panel/selPanel.css?v=20260815-query-geometry-1">
+    <link rel="stylesheet" href="/sel/components/search/selSearch.css?v=20260816-query-elements-1">
     <link rel="stylesheet" href="/sel/components/context-menu/selContextMenu.css?v=20260811-component-governance-1">
     <link rel="stylesheet" href="/sel/components/tooltip/selTooltip.css?v=20260811-unified-tooltip-1">
     <link rel="stylesheet" href="/sel/components/tree/selTree.css?v=20260811-component-governance-1">
@@ -38,7 +38,7 @@
     <link rel="stylesheet" href="/sel/components/window/selWindow.css?v=20260814-custom-content-2">
     <link rel="stylesheet" href="/sel/components/floating-panel/selFloatingPanel.css?v=20260807-reference-1">
     <!-- 个性化层必须位于所有基础组件之后，统一令牌才能覆盖窗口、浮层和表格的默认材质。 -->
-    <link rel="stylesheet" href="/sel/components/personalization/selPersonalization.css?v=20260812-page-editor-1">
+    <link rel="stylesheet" href="/sel/components/personalization/selPersonalization.css?v=20260815-unified-edit-frame-1">
     <!-- SEL 公共组件结束。 -->
 
     <!-- 可切换主题包开始：主题只提供令牌和所属素材，不包含应用选择器。 -->
@@ -54,7 +54,7 @@
     <!-- 可切换主题包结束。 -->
 
     <!-- 应用样式最后加载，只负责页面舞台，不覆盖公共组件内部结构。 -->
-    <link rel="stylesheet" href="./reference-data.css?v=20260814-six-table-1">
+    <link rel="stylesheet" href="./reference-data.css?v=20260815-query-control-save-2">
 </head>
 <body>
     <!-- 页面背景挂载点：由 selPageBackground 创建独立背景层。 -->
@@ -76,21 +76,21 @@
     <script src="/sel/theme/packs/glass-admin/manifest.js?v=20260807-reference-1"></script>
     <script src="/sel/theme/runtime/selThemeManager.js?v=20260807-reference-1"></script>
     <script src="/sel/components/panel/selPanel.js?v=20260811-toolbar-resize-1"></script>
-    <script src="/sel/components/search/selSearch.js?v=20260807-reference-1"></script>
+    <script src="/sel/components/search/selSearch.js?v=20260816-query-elements-1"></script>
     <script src="/sel/components/context-menu/selContextMenu.js?v=20260811-component-governance-1"></script>
     <script src="/sel/components/tooltip/selTooltip.js?v=20260811-unified-tooltip-2"></script>
     <script src="/sel/components/tree/selTree.js?v=20260811-component-governance-1"></script>
     <script src="/sel/components/dropdown/selDropdownMenu.js?v=20260807-reference-1"></script>
-    <script src="/sel/components/grid/selGrid.js?v=20260812-page-editor-1"></script>
+    <script src="/sel/components/grid/selGrid.js?v=20260816-field-and-query-2"></script>
     <script src="/sel/components/page-background/selPageBackground.js?v=20260807-reference-1"></script>
     <script src="/sel/components/confirm-dialog/selConfirmDialog.js?v=20260812-reference-delete-confirm-1"></script>
     <script src="/sel/components/floating-panel/selFloatingPanel.js?v=20260807-reference-1"></script>
     <script src="/sel/components/personalization/selPersonalizationRegistry.js?v=20260807-reference-1"></script>
-    <script src="/sel/components/personalization/selPersonalization.js?v=20260814-action-editor-1"></script>
+    <script src="/sel/components/personalization/selPersonalization.js?v=20260816-flow-baseline-2"></script>
     <script src="/sel/components/window/selWindow.js?v=20260814-custom-content-1"></script>
     <!-- SEL 公共运行时结束。 -->
 
     <!-- Reference Data 应用装配层最后加载，只传业务接口、布局声明和标准 payload。 -->
-    <script src="./reference-data.js?v=20260814-six-table-1"></script>
+    <script src="./reference-data.js?v=20260816-query-elements-2"></script>
 </body>
 </html>

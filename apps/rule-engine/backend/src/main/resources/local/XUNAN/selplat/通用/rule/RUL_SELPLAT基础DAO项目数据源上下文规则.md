@@ -6,14 +6,18 @@ java_ability_refs = none
 python_ability_refs = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/selplat_source_ownership_guard.py
 <!-- 本规则不涉及 Node 执行代码。 -->
 node_ability_refs = none
-<!-- 1.9.0 将租户和操作员身份写入权统一收口到 BaseServiceImpl，并阻断前端提交同名字段。 -->
-rule_version = 1.9.0
+<!-- 1.10.0 在身份写入边界之外补充数据库表头的单双行字段绑定与稳定排序约束。 -->
+rule_version = 1.12.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已进入当前用户索引并完成 Uniauth 首个接入验证。 -->
 rule_status = active
 <!-- 升级记录说明本规则来自 Uniauth 多项目数据源继承修正。 -->
 upgrade_record = 2026-08-07:公共BaseDAO改为项目数据源上下文并由Uniauth项目基类首个接入;2026-08-07:Uniauth增加数据库元数据默认表格定义及未来reference-data配置优先入口;2026-08-08:Uniauth退出Host全局数据源并建立模块私有永久数据库和隔离测试库;2026-08-08:删除业务Service中无调用方的旧主键重载与只调用super的重复覆盖;2026-08-08:MDA与Uniauth号段DAO改按项目具名数据源注册并由公共发号器按真实seqCode唯一路由;2026-08-11:reference-data建立一行一列的数据库驱动页面表格头并由真实页面消费;2026-08-11:表格头坐标改为tableName_gridId_gridColumnId并补齐数据库字段_单元格渲染_图标_审计职责;2026-08-11:getGridColumn统一本地Provider_远程HTTP_字段名静默降级且返回同一列数组;2026-08-11:受管业务应用统一具名Hikari私有池并由快速门禁阻断DriverManagerDataSource等逐次建连退化;2026-08-12:租户与操作员身份统一由BaseServiceImpl覆盖且前端禁止提交
+<!-- 本次升级明确单行列不得因空第二字段继续使用 stack，页面显示顺序必须由表格头记录明确表达。 -->
+upgrade_record_20260816_grid_single_and_compound_column = 单值列text且secondaryFieldName为空_组合列stack且第二字段真实存在_页面列顺序由sortnum稳定表达
+<!-- 本次升级固定大数据列表查询必须使用独立字段和 BaseDao AND 条件，不再全量加载后前端过滤。 -->
+upgrade_record_20260816_backend_paging_query = 查询字段独立输入_BaseDao字段条件AND组合_后台返回当前页和总数_禁止跨列OR关键字与全量前端过滤
 
 ## 公共 Base 边界
 
@@ -77,6 +81,19 @@ frontend_identity_write_policy = tenantId,lastOperateUserId:read_only_or_hidden,
 <!-- 将来接入 Cookie 或会话登录时只能替换两个当前身份函数的取值来源，Controller 与业务 Service 调用契约保持不变。 -->
 login_identity_migration_boundary = replace_BaseServiceImpl_identity_source_only,no_controller_identity_parameter,no_business_service_identity_parameter
 
+## 后台分页查询
+
+<!-- 可分页管理列表的每个查询字段必须使用独立输入和稳定参数名；业务含义是字段来源与实际 SQL 条件可以一一追踪。 -->
+managed_grid_query_input_contract = one_input_one_real_column,stable_field_name,no_cross_column_keyword_box
+<!-- 多个查询字段统一透传 CommonPageParam，由 BaseDao 按 AND 组合；业务含义是无需为通用管理查询增加 OR SQL 或业务 DAO 包装。 -->
+managed_grid_query_combination = CommonPageParam_dynamic_fields_to_BaseDao_AND,no_cross_column_OR,no_custom_sql
+<!-- 文本模糊条件使用真实字段名加 Like 后缀，枚举和状态使用等值条件；业务含义是 codeLike、parentCodeLike、status 可直接映射公共查询构造器。 -->
+managed_grid_query_operator_mapping = text:fieldNameLike,enum_and_status:fieldName
+<!-- Grid 只能请求当前 pageNo/pageSize 并消费后台 totalCount；禁止先循环读取全部分页再在浏览器过滤。 -->
+managed_grid_pagination_boundary = backend_current_page_plus_totalCount,no_load_all_pages_for_grid_filter,no_current_page_only_local_search
+<!-- 公共 Grid 的 REMOTE 模式只发布页码与独立条件状态，应用负责调用自身业务 Controller；公共控件不得识别接口或数据库字段。 -->
+managed_grid_remote_component_boundary = selGrid_query_event,application_business_request,BaseController_getStore,public_component_no_business_endpoint
+
 ## 动态数据库边界
 
 <!-- 固定业务表可以继承公共 Base CRUD；运行时选择任意外部数据库的元数据和 SQL 不属于固定表 Base CRUD。 -->
@@ -128,6 +145,10 @@ table_definition_deployment_adapter = same_process_direct_provider,separate_proc
 database_grid_header_row_granularity = one_record_per_rendered_column,unique_tableName_gridId_gridColumnId
 <!-- 每条配置必须同时承载租户与操作员、真实字段、第二字段、三语表头、宽度、渲染器、图标及其显示开关、列显示开关、生命周期状态和排序。 -->
 database_grid_header_required_configuration = tenantId,lastOperateUserId,tableFieldName,tableSecondaryFieldName,labelZh,labelJa,labelEn,width,cellRenderer,cellIcon,cellIconVisible,visible,status,sortnum
+<!-- 单值列必须使用 text 并清空第二字段；只有两个真实字段需要同格展示时才使用 stack，禁止用空占位横线伪造第二行。 -->
+database_grid_header_renderer_secondary_field_contract = single:text+secondaryFieldName_null,compound:stack+existing_secondary_field,no_empty_secondary_placeholder
+<!-- ReferenceDataType 页面按业务阅读顺序显示，英文与日文是唯一双行组合列。 -->
+reference_data_type_grid_column_order = code,optionSetCode,valueCode,parentTypeCode,nameZh,nameEn_with_nameJa_secondary,status,sortnum,id_actions
 <!-- 页面只能调用当前业务 Controller 的 getGridColumn；内部本地或远程解析由 Service 决定，前端禁止直接调用 resolve.htm。 -->
 database_grid_header_frontend_source = business_getGridColumn_only,no_frontend_direct_resolve_endpoint,no_parallel_hardcoded_headers
 <!-- 表格头新增、编辑、启停或显示开关保存后必须重新解析并原位刷新当前表格，重启不得覆盖人工配置。 -->

@@ -20,6 +20,7 @@ public enum QueryOperator {
     // LT 表示字段和值做严格小于比较，适合金额、数量和时间上限的排他筛选。
     LT,
     // BETWEEN 表示字段和值区间比较，适合日期范围和数值区间筛选。
-    BETWEEN
+    BETWEEN,
+    // IN 表示字段属于受控非空集合，适合父记录批量解析子记录。
+    IN
 }
-

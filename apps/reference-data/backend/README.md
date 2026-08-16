@@ -6,11 +6,11 @@
 
 | 数据库表 | Java 业务目录 | 职责 |
 |---|---|---|
-| `ReferenceDataType` | `referencedatatype` | 管理项目与资源稳定坐标 |
-| `ReferenceDataTreeNode` | `referencedatatreenode` | 统一组织树、下拉选项和各类菜单节点 |
+| `ReferenceDataType` | `referencedatatype` | 按 `optionSetCode` 管理可复用类型值、`parentTypeCode` 菜单层级及多语言名称 |
+| `ReferenceDataTreeNode` | `referencedatatreenode` | 以 code + parentId 独立组织父子树节点 |
 | `ReferenceDataTable` | `referencedatatable` | 以唯一 code 登记页面 SEL Grid |
 | `ReferenceDataTableElement` | `referencedatatableelement` | 维护列、工具栏动作和行操作 |
-| `ReferenceDataControlLayout` | `referencedatacontrollayout` | 维护页面控件与响应式布局 |
+| `ReferenceDataControlLayout` | `referencedatacontrollayout` | 维护页面与 Window 子控件、响应式布局及可选 `optionSetCode` 绑定 |
 | `ReferenceDataWindow` | `referencedatawindow` | 维护 SEL Window 几何和行为配置 |
 
 每个表业务只包含 `controller`、`service/impl` 和 `dao`。跨表无状态转换进入
@@ -27,11 +27,11 @@
 
 ```text
 GET /api/reference-data/types/{typeCode}
-GET /api/reference-data/types/{typeCode}/nodes
+GET /api/reference-data/trees/{rootNodeCode}
 ```
 
-两个接口只接受 `ReferenceDataType.code`。节点接口从 `ReferenceDataType + ReferenceDataTreeNode` 解析：
-type 决定 TREE、DROPDOWN 或 MENU 输出结构，节点通过同表 `parentId` 组织层级。
+类型接口只接受 `ReferenceDataType.code`；树接口只接受根节点的 `ReferenceDataTreeNode.code`。
+树只通过本表 `parentId` 组织父子层级，不查询或依赖类型目录。
 
 页面配置接口：
 

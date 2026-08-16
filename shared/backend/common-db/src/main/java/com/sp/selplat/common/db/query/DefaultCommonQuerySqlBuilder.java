@@ -7,6 +7,8 @@ import com.sp.selplat.common.db.query.model.QueryCondition;
 import com.sp.selplat.common.db.query.model.QueryOrder;
 import com.sp.selplat.common.db.query.model.QueryOrderDirection;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -244,6 +246,14 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
                 parameters.add(condition.getValue());
                 parameters.add(condition.getSecondValue());
                 return;
+            // 集合条件按实际值数量生成参数占位符，并把值按调用顺序绑定到参数列表。
+            case IN:
+                Collection<?> values = (Collection<?>) condition.getValue();
+                sqlBuilder.append(" IN (")
+                        .append(String.join(",", Collections.nCopies(values.size(), "?")))
+                        .append(")");
+                parameters.addAll(values);
+                return;
             // 未支持的操作符直接拒绝处理，避免构建出不确定 SQL。
             default:
                 throw new IllegalArgumentException("unsupported operator: " + condition.getOperator());
@@ -297,7 +307,6 @@ public class DefaultCommonQuerySqlBuilder implements CommonQuerySqlBuilder {
         return builtQuerySql;
     }
 }
-
 
 
 

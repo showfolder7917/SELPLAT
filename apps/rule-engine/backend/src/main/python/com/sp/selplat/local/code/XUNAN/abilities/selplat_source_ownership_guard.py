@@ -1240,6 +1240,27 @@ def audit_frontend_identity_write_governance(
     return violations
 
 
+def audit_service_direct_jdbc_governance(project_root: Path) -> list[dict[str, str]]:
+    """Reject direct JdbcTemplate access from application business and capability Services."""
+    violations: list[dict[str, str]] = []
+    service_files = sorted((project_root / "apps").glob(
+        "*/backend/src/main/java/**/service/**/*.java"
+    ))
+    for service_file in service_files:
+        source_text = service_file.read_text(encoding="utf-8")
+        if "org.springframework.jdbc.core.JdbcTemplate" not in source_text:
+            continue
+        violations.append({
+            "code": "APPLICATION_SERVICE_DIRECT_JDBC_FORBIDDEN",
+            "path": str(service_file.relative_to(project_root)),
+            "message": (
+                "application Service must query through its table business Service/BaseDao; "
+                "direct JdbcTemplate belongs only to persistence or migration infrastructure"
+            ),
+        })
+    return violations
+
+
 def normalized_identifier(value: str) -> str:
     """Normalize table, project, and package names for stable ownership comparison."""
     return re.sub(r"[^a-z0-9]", "", value.lower())
@@ -1323,6 +1344,8 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
     violations.extend(audit_managed_datasource_pool_governance(
         project_root, central_registrations
     ))
+    # 表业务与 capability Service 只能编排业务 Service/BaseDao，禁止重新手写 JdbcTemplate 查询。
+    violations.extend(audit_service_direct_jdbc_governance(project_root))
     # 租户与操作员只由 BaseServiceImpl 写入；应用页面和生成页面不得重新提交同名身份字段。
     violations.extend(audit_frontend_identity_write_governance(project_root))
     generator_template = project_root / APPLICATION_SCAFFOLD_TEMPLATE_RELATIVE

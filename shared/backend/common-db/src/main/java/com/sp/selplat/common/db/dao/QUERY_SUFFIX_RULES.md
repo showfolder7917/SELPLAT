@@ -23,6 +23,7 @@
 | --- | --- | --- | --- | --- |
 | 无后缀 | 等于查询 | `EQ` | `status` | `status` |
 | `Like` | 模糊查询 | `LIKE` | `nameLike` | `name` |
+| `In` | 集合成员查询 | `IN` | `tableIdIn` | `tableId` |
 | `Ge` | 大于等于 | `GTE` | `priceGe` | `price` |
 | `Gt` | 大于 | `GT` | `priceGt` | `price` |
 | `Le` | 小于等于 | `LTE` | `priceLe` | `price` |
@@ -108,7 +109,6 @@ where status = 'ENABLED'
 当前这套规则暂不支持以下语义：
 
 - `OR` 条件
-- `IN` 条件
 - 同一字段多个同类型条件重复传入
 - 用单个后缀直接表达 `BETWEEN`
 
@@ -132,6 +132,7 @@ condition.setSecondValue("2026-07-31 23:59:59");
 推荐长期固定为以下命名集合：
 
 - `Like`
+- `In`
 - `Ge`
 - `Gt`
 - `Le`

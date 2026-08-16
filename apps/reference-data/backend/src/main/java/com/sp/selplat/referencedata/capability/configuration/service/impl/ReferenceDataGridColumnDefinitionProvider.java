@@ -33,12 +33,12 @@ public class ReferenceDataGridColumnDefinitionProvider implements GridColumnDefi
      * 异常或副作用示例：坐标不匹配时返回空数组并由公共服务回退元数据；方法不修改数据库。
      *
      * @param tableName 当前业务 Service 的真实表名
-     * @param gridId 当前协议中承载的 ReferenceDataTable 唯一 code
+     * @param tableCode ReferenceDataTable 唯一 code
      * @param locale 页面语言
      * @return SEL Grid 标准列数组
      */
     @Override
-    public List<Map<String, Object>> resolve(String tableName, String gridId, String locale) {
-        return configurationService.resolveGridColumns(tableName, gridId, locale);
+    public List<Map<String, Object>> resolve(String tableName, String tableCode, String locale) {
+        return configurationService.resolveGridColumns(tableName, tableCode, locale);
     }
 }

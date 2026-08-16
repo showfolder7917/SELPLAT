@@ -25,6 +25,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.LongStream;
 import java.util.UUID;
 import java.util.function.Consumer;
 import javax.sql.DataSource;
@@ -90,6 +91,35 @@ public final class BaseDaoImplRealDatabaseTestVerifier {
             assertEquals(1, pageResult.getPageNo());
             // 分页回参必须保留页大小。
             assertEquals(3, pageResult.getPageSize());
+        });
+    }
+
+    /**
+     * 验证 BaseDao 的 In 后缀通过真实参数化 SQL 一次返回多个集合成员。
+     *
+     * @param fixturePath 当前 Case 的隔离 H2 fixture，例如
+     *     {@code "fixtures/BaseDaoImplRealDatabaseTest/getPageListInCondition.sql"}
+     * @return 无返回值；实际副作用是创建隔离数据库并验证两条命中记录及三个非法集合分支
+     * @throws AssertionError 当集合查询结果或 SQL 前校验不符合公共契约时抛出
+     */
+    public static void verifyGetPageListInCondition(String fixturePath) {
+        withFixture(fixturePath, context -> {
+            // 两个租户值一次进入参数化 IN → 只返回对应的两条真实记录。
+            CommonPageResult result = context.dao.getPageList(
+                Map.of("tenantIdIn", List.of(1L, 3L)), "id asc", 1, 10
+            );
+            assertEquals(List.of(111L, 113L), result.getRecords().stream()
+                .map(record -> ((Number) record.get("id")).longValue()).toList());
+            assertEquals(2L, result.getTotalCount());
+
+            // 空集合、含空值集合和超过公共批量上限的集合都必须在 SQL 执行前失败。
+            assertThrows(IllegalArgumentException.class,
+                () -> context.dao.getPageList(Map.of("tenantIdIn", List.of()), 1, 10));
+            assertThrows(IllegalArgumentException.class,
+                () -> context.dao.getPageList(Map.of("tenantIdIn", java.util.Arrays.asList(1L, null)), 1, 10));
+            List<Long> tooManyValues = LongStream.rangeClosed(1L, 1001L).boxed().toList();
+            assertThrows(IllegalArgumentException.class,
+                () -> context.dao.getPageList(Map.of("tenantIdIn", tooManyValues), 1, 10));
         });
     }
 

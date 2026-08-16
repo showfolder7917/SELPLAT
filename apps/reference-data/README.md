@@ -1,11 +1,12 @@
 # reference-data
 
-`reference-data` 是 SELPLAT 的引用数据与页面配置服务，统一承载类型、树/选项/菜单、表格元素和页面布局能力。
+`reference-data` 是 SELPLAT 的引用数据与页面配置服务，分别承载类型目录、独立树、表格元素和页面布局能力。
 
 ## 模块职责
 
-- 所有六表记录都使用后端生成的“对象类型前缀 + 全局 ID”唯一 `code` 定位；`projectCode` 独立表达工程归属。
-- 对外提供稳定的树、下拉选项和右键菜单 HTTP 结构。
+- 六张实体表各用自己的主键号段，记录 `code` 固定为“对象类型前缀 + 本表 id”；`ReferenceDataObjectId` 仅发放 `optionSetCode` 等没有实体表的通用逻辑编码。
+- `ReferenceDataType.optionSetCode` 维护可复用选项组；页面和 Window 内多个真实控件可通过 `ReferenceDataControlLayout.optionSetCode` 共享同组选项。
+- 对外分别提供稳定的类型目录和独立树 HTTP 结构。
 - 六张业务表分别由自己的 Controller、Service 和 DAO 维护。
 - 已通过 `/api/reference-data/**` 提供树和类型选项 HTTP API。
 - 已提供独立的类型目录管理后台，并把正式数据永久保存在本模块 `db/reference-data.mv.db`。
@@ -39,24 +40,23 @@ backend  → shared
 
 ```text
 GET /api/reference-data/types/{typeCode}
-GET /api/reference-data/types/{typeCode}/nodes
+GET /api/reference-data/trees/{rootNodeCode}
 ```
 
 公共参数：
 
 - `locale`：本地化语言参数，当前支持 `zh-CN`、`ja-JP`、`en-US`。
 
-当前真实内置资源：
+当前真实树根：
 
 ```text
-typeCode = type101000
+rootNodeCode = treeNode101007
 ```
 
 调用示例：
 
 ```text
-GET /api/reference-data/types/type101000
-GET /api/reference-data/types/type101000/nodes?locale=en-US
+GET /api/reference-data/trees/treeNode101007?locale=en-US
 ```
 
 ## 类型管理后台
@@ -68,8 +68,8 @@ http://127.0.0.1:8080/reference-data/reference-data.html
 ```
 
 当前页面支持五个一级模块按需加载；“表格定义”下钻到 `ReferenceDataTableElement`，提供基本信息、元素配置和效果预览。
-页面编辑通过 `page+全局ID` 格式的 pageCode 一次保存控件、表格元素和 Window 布局；
-控件以 `parentKind + parentCode` 明确表示直属页面、Window 或其他容器。正式数据库文件位于：
+页面编辑通过 `page+本表ID` 格式的 pageCode 一次保存控件、表格元素和 Window 布局；
+控件以 `parentKind + parentCode` 明确表示直属页面、Window 或其他容器，Window 子控件另以 `fieldName` 标识真实字段或动作。正式数据库文件位于：
 
 ```text
 apps/reference-data/db/reference-data.mv.db

@@ -7,7 +7,7 @@ python_ability_refs = none
 <!-- 当前规则不需要 Node 专用能力；Node 只在受影响前端字段同步时使用现有语法检查。 -->
 node_ability_refs = none
 <!-- 首版规则固化 reference-data 重构中已经验证的 SQL 目录和单表文件约束。 -->
-rule_version = 2.6.0
+rule_version = 2.15.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，未经人工提升不得扩大到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记、真实案例核对和索引链验证。 -->
@@ -16,6 +16,24 @@ rule_status = active
 upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责;2026-08-11:固定初始化主键不得超过六位_reference-data统一六位种子保留区并让运行号段从下一完整区间开始;2026-08-15:增加全局code命名空间聚合号段策略_允许无种子业务表省略data文件_类型与树节点通过显式type模型统一承载选择项和菜单节点;2026-08-15:废弃实体表清理由兼容迁移固定白名单执行_先核对全部记录数_任一非空整体阻断_禁止依赖删除建表SQL自动清库
 <!-- 本次升级把不可辨认的项目名前缀改为对象类型前缀，并明确父容器关联不得依靠解析前缀。 -->
 upgrade_record_20260815_object_code = 全局code使用对象类型前缀加聚合主键_中央登记声明object-kind-plus-global-id_页面父容器使用kind与code显式关联
+<!-- 类型和树职责升级记录明确两张表不得混合保存分类与节点明细。 -->
+upgrade_record_20260815_type_tree_boundary = ReferenceDataType只维护类型分类与多语言目录_ReferenceDataTreeNode只允许TREE父子节点_菜单和下拉不得混入树管理
+<!-- 废弃清理升级记录固定用户确认不兼容时的物理清理边界。 -->
+upgrade_record_20260815_type_tree_cleanup = 用户确认废弃即物理删除非TREE节点和无调用字段_恢复按真实表结构通查_禁止长期字段白名单兼容
+<!-- 独立树升级记录固定 code 与 parentId 为唯一建树关系。 -->
+upgrade_record_20260815_independent_tree = ReferenceDataTreeNode以code和parentId独立建树_删除typeId_nodeCode_attributesJson_类型目录与树表禁止建立外键耦合
+<!-- 本次升级把类型目录固定为不依赖项目和资源坐标的全局分类目录。 -->
+upgrade_record_20260816_type_catalog = ReferenceDataType只保存global_code_categoryCode_localized_names_status_sort_audit_删除项目资源坐标和说明字段_categoryCode全局唯一
+<!-- 类型目录顺序升级记录固定物理表与业务阅读顺序一致，禁止后补字段长期堆在时间列之后。 -->
+upgrade_record_20260816_type_column_order = ReferenceDataType按id_code_identity_category_localized_status_sort_time排列_已有库原地保留数据重排
+<!-- 本次升级把重复的控件种类字段替换为真实控件归属和值层级，业务关联直接使用稳定 code。 -->
+upgrade_record_20260816_type_control_binding = ReferenceDataType使用controlCode绑定ReferenceDataControlLayout_code_valueCode保存业务值_parentTypeCode建立同控件菜单层级_ControlLayout删除typeId_categoryCode物理删除
+<!-- 本次升级把 TREE 从类型目录中物理清除，并阻止初始化迁移再次生成。 -->
+upgrade_record_20260816_tree_type_cleanup = ReferenceDataType禁止TREE_valueCode_旧TREE物理删除_有效子类型只解除错误父级_ReferenceDataTreeNode数据不受影响
+<!-- 本次升级为独立树补充只读归属坐标，同时禁止坐标重新进入建树或类型耦合。 -->
+upgrade_record_20260816_tree_ownership = ReferenceDataTreeNode增加projectCode_pageCode用于归属展示查询_code加parentId仍是唯一建树关系_禁止类型外键耦合
+<!-- 本次升级恢复六张实体表一表一号段，并把无实体表的共享选项组交给独立通用逻辑号段。 -->
+upgrade_record_20260816_option_set_sequence = 六张实体表各用TableNameId且code后缀等于本表id_ReferenceDataObjectId只发optionSetCode等无实体逻辑编码_Type删除controlCode并以optionSetCode建立共享层级
 
 <!-- 问题：数据库脚本使用含义模糊的 tables 或 migration 文件名、一个文件创建多张正式表、类型表混入树或选项能力字段时，后续维护者无法从目录和文件名判断真实职责。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 中新建、迁移、拆分、改名或审查 apps/<app> 的应用自有数据库和 SQL。 -->
@@ -70,23 +88,33 @@ selplat_legacy_application_schema_migration_policy = preserve_until_explicit_mig
 
 ## 表与字段职责
 
-<!-- 每张正式表必须表达单一业务职责；选择项、表格菜单、面板菜单和右键菜单属于同一“类型化节点”模型时，由 ReferenceDataType.type 与 ReferenceDataTreeNode.typeId 显式区分，禁止再建立重复专表。 -->
-selplat_database_table_single_business_responsibility = explicit_polymorphic_type_catalog_plus_tree_node_allowed,separate_table_only_for_distinct_lifecycle_or_constraints,no_duplicate_option_or_menu_tables
-<!-- 类型目录表只维护类型坐标、名称、说明、状态、排序和审计信息，不得保存没有真实查询控制链路的输出形态或界面展示字段。 -->
-selplat_type_catalog_forbidden_unenforced_capability_fields = dataShape,tree_or_option_display_only_flags,other_fields_without_runtime_enforcement
-<!-- 树节点表只维护类型归属、父子关系、节点稳定值、多语言标签、扩展属性、状态、排序和审计信息。 -->
-selplat_tree_node_table_required_responsibility = type_reference,parent_reference,node_code,node_value,localized_labels,attributes,status,sort,audit
+<!-- 每张正式表必须表达单一业务职责；ReferenceDataType 保存分类与多语言目录，ReferenceDataTreeNode 仅通过自身 code 与 parentId 保存独立父子树。 -->
+selplat_database_table_single_business_responsibility = type_catalog_classification_and_localized_names,tree_node_independent_code_plus_parent_id,no_type_foreign_key,no_dropdown_or_menu_detail_in_tree_table,separate_table_only_for_distinct_lifecycle_or_constraints
+<!-- 类型目录表通过 optionSetCode 建立可复用选项组，以 valueCode 保存真实业务值，并只允许 parentTypeCode 指向同组选项。 -->
+selplat_type_catalog_required_responsibility = table_record_code,optionSetCode_shared_logical_group,valueCode,parentTypeCode_same_option_set_hierarchy,localized_names,status,sort,audit,no_project_page_duplication,no_controlCode,no_categoryCode,no_ControlLayout_typeId
+<!-- TREE 是独立树表职责，不得作为 Type.valueCode；历史误入记录按明确不兼容策略物理删除。 -->
+selplat_reference_data_type_reserved_values = TREE:forbidden_and_physical_cleanup,tree_data_only_in_ReferenceDataTreeNode
+<!-- 树节点表维护系统 code、展示归属、parentId、节点业务值、多语言标签、状态、排序和审计信息；归属坐标不得参与树关系，且禁止重新加入类型外键、业务别名或无调用扩展桶。 -->
+selplat_tree_node_table_required_responsibility = global_code,projectCode_and_pageCode_attribution_only,parent_id,node_value,localized_labels,status,sort,audit,tree_relation_code_plus_parentId,no_type_reference,no_node_code_alias,no_attributes_bucket
+<!-- 用户明确废弃且不兼容的字段和记录必须从结构、正式库、查询、表单和测试同步物理删除；禁止以 SELECT 字段白名单长期掩盖旧列。 -->
+selplat_confirmed_deprecated_data_and_field_cleanup = physical_delete_records_and_columns,schema_and_runtime_database_sync,restore_real_table_structure_query,no_long_term_projection_compatibility
 <!-- 新增数据库字段前必须识别真实读取、写入和控制调用链；只有保存但不参与业务行为的配置字段不得进入正式表。 -->
 selplat_database_field_requires_real_call_chain = write_path,read_path,business_effect,tests
+<!-- 受管业务表的通用物理字段顺序固定为主键、公开 code、身份、业务字段、状态排序和时间，新增字段不得随意追加到审计时间之后。 -->
+selplat_managed_business_table_physical_column_order = id,code,tenantId,lastOperateUserId,business_fields,status,sortnum,createdAt,updatedAt
+<!-- ReferenceDataType 的业务字段顺序固定为控件归属、类型值、父级和中日英名称，查询台与页面使用同一可读顺序。 -->
+selplat_reference_data_type_physical_column_order = id,code,tenantId,lastOperateUserId,optionSetCode,valueCode,parentTypeCode,nameZh,nameJa,nameEn,status,sortnum,createdAt,updatedAt
 
 ## 主键号段
 
 <!-- 严格数据库业务应用必须提供 CommonSequenceSegment 的独立结构与初始化数据脚本，由 common/persistence 绑定当前应用私有数据源。 -->
 selplat_common_sequence_sql_files = schema-CommonSequenceSegment.sql,data-CommonSequenceSegment.sql,owner_common_persistence
 <!-- 默认应用仍是一表一号段；只有中央登记显式声明全局 code 命名空间的应用，才允许全部业务表共享唯一聚合号段，保证对象类型前缀与全局 id 拼接出的 code 全局不重复且人工可辨认。 -->
-selplat_business_table_sequence_cardinality = default:fully_empty_for_manual_setup_or_one_table_one_row(seqCode=<ActualTableName>Id,no_partial_seed_set),aggregate-global-code-sequence:exactly_one_registered_aggregateSequenceCode(globalCodeNamespace=true)
+selplat_business_table_sequence_cardinality = default:one_table_one_row(seqCode=<ActualTableName>Id,no_partial_seed_set),registered_aggregate_namespace_exception,shared_logical_sequence_allowed_for_no-table-object_only,reference_data_record_code_suffix_equals_own_table_id
 <!-- 聚合全局命名空间必须登记对象类型前缀策略；关联仍依靠字段和外键，禁止解析 code 前缀推导数据库关系。 -->
 selplat_aggregate_global_code_prefix_strategy = codePrefixStrategy=object-kind-plus-global-id,readable_object_kind_prefix,shared_global_id_suffix,no_relationship_inference_from_prefix
+<!-- optionSetCode 等没有独立实体表的共享逻辑坐标允许使用 ReferenceDataObjectId；实体表 id 和 code 禁止调用该号段。 -->
+selplat_shared_logical_object_sequence = ReferenceDataObjectId:optionSetCode_and_future_registered_no-table_logical_codes_only,forbid_business_table_primary_key
 <!-- CommonSequenceSegment 本身可使用 identity 以避免循环发号；其他业务表 id 禁止 identity，必须调用 shared SequenceGenerator。 -->
 selplat_business_table_id_generation = CommonSequenceSegment_identity_exception,other_business_tables_no_identity,shared_SequenceGenerator_required
 <!-- 显式写在 data SQL 中的固定业务主键不得超过六位，禁止重新引入 900000004003 一类脱离应用初始号段的超长编号。 -->
@@ -129,9 +157,9 @@ selplat_database_test_isolation = memory_or_temporary_database_only
 selplat_database_schema_test_matrix = fresh_initialization,repeated_initialization,legacy_upgrade,seed_idempotency_when_seed_exists
 <!-- 删除数据库文件后必须能只靠登记 SQL 重建；已有文件重复启动必须保留业务记录和号段游标。 -->
 selplat_database_rebuild_and_reopen_contract = missing_file_rebuild_from_sql,existing_file_no_reset,preserve_business_rows,preserve_sequence_cursor,compatible_upgrade_only
-<!-- 字段删除必须同步 Repository、Service、Controller、前端表格、筛选、表单、接口示例和测试，禁止留下只展示或只保存的残余引用。 -->
 <!-- 控件状态采用显式保存时，数据库只保留真实读取并控制行为的几何字段；rememberLastState 等不参与决策的记忆开关必须删除。 -->
 selplat_explicit_control_state_schema = explicit_save_only,geometry_fields_have_runtime_reader,no_redundant_remember_flag
+<!-- 字段删除必须同步 Repository、Service、Controller、前端表格、筛选、表单、接口示例和测试，禁止留下只展示或只保存的残余引用。 -->
 selplat_database_field_removal_sync = repository,service,controller,frontend_grid,filter,form,api_examples,tests
 <!-- 完成证据必须包含真实 SQL 执行结果、数据库元数据、业务记录保留数量、受影响测试结果和存在页面变化时的视觉终审。 -->
 selplat_database_change_completion_evidence = sql_execution,database_metadata,preserved_record_count,relevant_test_results,visual_review_when_applicable

@@ -4,7 +4,10 @@ import com.sp.selplat.common.service.BaseService;
 import com.sp.selplat.common.util.CommonBatchParam;
 import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonParam;
+import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,7 +47,7 @@ public abstract class BaseController<S extends BaseService> extends BaseExtendsC
      *     {@code {"success":true,"data":{"source":"DEFAULT_METADATA","viewCode":"user-management"}}}
      */
     @ResponseBody
-    @RequestMapping(value = "getGridColumn.htm", method = RequestMethod.GET,
+    @RequestMapping(value = "getGridColumn.htm", params = "!tableCode", method = RequestMethod.GET,
         produces = MediaType.APPLICATION_JSON_VALUE)
     public String getGridColumn(
         @RequestParam(name = "viewCode", defaultValue = "default") String viewCode,
@@ -52,6 +55,35 @@ public abstract class BaseController<S extends BaseService> extends BaseExtendsC
     ) {
         // Service 负责字段来源和业务异常，公共 Controller 只执行一次 JSON 序列化。
         return JsonUtils.toJsonIgnoreNull(getService().getGridColumn(viewCode, locale));
+    }
+
+    /**
+     * 通过引用数据表格唯一 code 返回当前业务资源的 Grid 列配置。
+     * 真实传参示例：{@code tableCode=table101020&locale=zh-CN}。
+     * 真实返回示例：返回 {@code {"source":"REFERENCE_DATA_TABLE_ELEMENT","columns":[...]}}。
+     * 异常或副作用示例：tableCode 为空时由 BaseService 返回统一业务异常；方法不修改数据库。
+     *
+     * @param tableCode ReferenceDataTable 的后端生成唯一 code，例如 {@code table101020}
+     * @param locale 当前语言，例如 {@code zh-CN}
+     * @return 引用数据配置优先、数据库字段名静默后备的 Grid 列 JSON
+     */
+    @ResponseBody
+    @RequestMapping(value = "getGridColumn.htm", params = "tableCode", method = RequestMethod.GET,
+        produces = MediaType.APPLICATION_JSON_VALUE)
+    public String getGridColumnByTableCode(
+        @RequestParam(name = "tableCode") String tableCode,
+        @RequestParam(name = "locale", defaultValue = "zh-CN") String locale
+    ) {
+        // Reference Data 用 tableCode 定位唯一 Grid，响应也删除旧 viewCode 名称，避免与元素视图混淆。
+        CommonResult result = getService().getGridColumn(tableCode, locale);
+        if (result.getData() instanceof Map<?, ?> original) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            original.forEach((key, value) -> data.put(String.valueOf(key), value));
+            data.remove("viewCode");
+            data.put("tableCode", tableCode);
+            result.setData(data);
+        }
+        return JsonUtils.toJsonIgnoreNull(result);
     }
 
     /**

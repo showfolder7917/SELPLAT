@@ -231,6 +231,29 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
 
             self.assertEqual([], violations)
 
+    def test_application_service_rejects_direct_jdbc_template(self) -> None:
+        """业务与 capability Service 直接注入 JdbcTemplate 时必须阻断。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            service_file = (
+                fixture
+                / "apps/example/backend/src/main/java/com/sp/selplat/example/capability/report/service/impl"
+                / "ReportServiceImpl.java"
+            )
+            service_file.parent.mkdir(parents=True)
+            service_file.write_text(
+                "import org.springframework.jdbc.core.JdbcTemplate;\n"
+                "class ReportServiceImpl { JdbcTemplate jdbcTemplate; }\n",
+                encoding="utf-8",
+            )
+
+            violations = self.guard.audit_service_direct_jdbc_governance(fixture)
+
+            self.assertEqual(
+                ["APPLICATION_SERVICE_DIRECT_JDBC_FORBIDDEN"],
+                [violation["code"] for violation in violations],
+            )
+
     def test_frontend_identity_write_fields_block_delivery(self) -> None:
         """页面重新提供租户或操作员编辑提交时必须由快速门禁阻断。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
@@ -644,6 +667,25 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         self.assertNotIn("data-sel-personal-page-inspector", personalization_source)
         self.assertNotIn("savePage: selPersonalizationSavePageEditing", personalization_source)
         self.assertNotIn("cancelPage: selPersonalizationCancelPageEditing", personalization_source)
+        self.assertIn("selPersonalizationPageControlFlowGroups", personalization_source)
+        self.assertIn("selPersonalizationReflowPageControlGroup", personalization_source)
+        self.assertIn("selPersonalizationSharedAction.followControlId", personalization_source)
+        self.assertIn("selpersonal-page-direct-edit-frame", personalization_source)
+        self.assertIn("selpersonal-page-direct-resize-handle", personalization_source)
+        self.assertIn("selPersonalizationSyncDirectGeometryFrame", personalization_source)
+        personalization_style = (PROJECT_ROOT / "shared/frontend/sel-ui/src/components/personalization/selPersonalization.css") \
+            .read_text(encoding="utf-8")
+        self.assertIn("border: 1px dashed", personalization_style)
+        self.assertIn(".selpersonal-page-direct-resize-handle", personalization_style)
+        self.assertIn("cursor: ew-resize", personalization_style)
+        governance_rule = (PROJECT_ROOT / "apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md") \
+            .read_text(encoding="utf-8")
+        self.assertIn(
+            "upgrade_record_20260815_unified_edit_affordance = "
+            "independent_editor_frame,real_right_edge_resize_handle,uniform_radius_and_line,"
+            "no_business_control_override",
+            governance_rule
+        )
 
     def test_real_grid_header_separator_covers_first_column_only_until_last(self) -> None:
         """表头竖线必须从第一列开始，并只排除没有后续列的最后一列。"""

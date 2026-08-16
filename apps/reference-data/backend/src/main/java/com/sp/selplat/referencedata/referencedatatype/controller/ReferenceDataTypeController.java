@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ModuleDescription(
         code = "reference-data-type",
         name = "引用数据类型",
-        description = "管理项目与引用数据资源的稳定坐标")
+        description = "管理页面控件的类型值、菜单层级及其多语言名称")
 @RequestMapping(value = "/api/reference-data/admin/types/", produces = MediaType.APPLICATION_JSON_VALUE)
 public class ReferenceDataTypeController extends BaseController<ReferenceDataTypeService> {
 }

@@ -9,20 +9,21 @@ DELETE FROM CommonSequenceSegment;
 SET REFERENTIAL_INTEGRITY TRUE;
 INSERT INTO CommonSequenceSegment (
     tenantId, lastOperateUserId, seqCode, seqName, nextStartId, stepSize, versionNo, status
-) VALUES (1, 1, 'ReferenceDataObjectId', '引用数据全局对象主键', 101000, 100, 0, 1);
-INSERT INTO ReferenceDataType (
-    id, code, tenantId, lastOperateUserId, projectCode, resourceCode, type, nameZh, nameJa, nameEn,
-    descriptionZh, descriptionJa, descriptionEn, status, sortnum
 ) VALUES
-    (100001, 'type100001', 1, 1, 'reference-data', 'resource-kind', 'TREE', '引用数据资源类型', '参照データ種別', 'Reference data types',
-     '平台内置类型', 'プラットフォーム組み込み種別', 'Built-in type', 1, 100),
-    (100002, 'cms100002', 1, 1, 'cms', 'article-category', 'DROPDOWN', '文章分类', '記事カテゴリ', 'Article categories',
-     '文章分类说明', '記事カテゴリ説明', 'Article category description', 1, 80),
-    (100003, 'cms100003', 1, 1, 'cms', 'archive-category', 'DROPDOWN', '归档分类', 'アーカイブカテゴリ', 'Archive categories',
-     '归档分类说明', 'アーカイブカテゴリ説明', 'Archive category description', 2, 70),
-    (100004, 'type100004', 1, 1, 'reference-data', 'custom-single', 'GRID_MENU', '自定义单条类型', NULL, NULL,
-     NULL, NULL, NULL, 1, 60),
-    (100005, 'type100005', 1, 1, 'reference-data', 'custom-batch', 'PANEL_MENU', '自定义批量类型', NULL, NULL,
-     NULL, NULL, NULL, 1, 50),
-    (100006, 'empty100006', 1, 1, 'empty', 'without-children', 'CONTEXT_MENU', '无子数据类型', NULL, NULL,
-     NULL, NULL, NULL, 1, 40);
+    (1, 1, 'ReferenceDataObjectId', '引用数据通用逻辑对象', 101000, 100, 0, 1),
+    (1, 1, 'ReferenceDataTypeId', '数据类型主键', 101000, 100, 0, 1);
+INSERT INTO ReferenceDataControlLayout (
+    id, code, tenantId, lastOperateUserId, projectCode, pageCode, parentKind, parentCode,
+    controlKind, optionSetCode, sourceTableName, layoutMode, orderNo, breakpoint, status, sortnum
+) VALUES (
+    100000, 'control100000', 1, 1, 'reference-data', 'page100000', 'PAGE', 'page100000',
+    'DROPDOWN', 'optionSet100000', 'ReferenceDataControlLayout', 'FLOW', 30, 'DESKTOP', 1, 30
+);
+INSERT INTO ReferenceDataType (
+    id, code, tenantId, lastOperateUserId, optionSetCode, valueCode, parentTypeCode,
+    nameZh, nameJa, nameEn, status, sortnum
+) VALUES
+    (100001, 'type100001', 1, 1, 'optionSet100000', 'MENU_GROUP', NULL, '菜单组', 'メニューグループ', 'Menu group', 1, 100),
+    (100002, 'type100002', 1, 1, 'optionSet100000', 'DROPDOWN', NULL, '下拉框', 'ドロップダウン', 'Dropdown', 1, 80),
+    (100003, 'type100003', 1, 1, 'optionSet100000', 'CONTEXT_MENU', 'type100001', '右键菜单', 'コンテキストメニュー', 'Context menu', 2, 70),
+    (100004, 'type100004', 1, 1, 'optionSet100000', 'GRID_MENU', NULL, '表格菜单', 'グリッドメニュー', 'Grid menu', 1, 60);

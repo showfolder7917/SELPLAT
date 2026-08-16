@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTableElement (
     lastOperateUserId BIGINT NOT NULL DEFAULT 1,
     projectCode VARCHAR(64) NOT NULL,
     tableId BIGINT NOT NULL,
+    viewCode VARCHAR(32) NOT NULL,
     elementType VARCHAR(32) NOT NULL DEFAULT 'COLUMN',
     fieldName VARCHAR(100),
     secondaryFieldName VARCHAR(100),
@@ -26,9 +27,15 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTableElement (
     updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_reference_data_table_element_code UNIQUE (code),
     CONSTRAINT fk_reference_data_table_element_table FOREIGN KEY (tableId) REFERENCES ReferenceDataTable(id),
+    CONSTRAINT ck_reference_data_table_element_view CHECK
+        (viewCode IN ('TYPE', 'TREE', 'CONTROL', 'WINDOW', 'TABLE', 'TABLE_ELEMENT')),
     CONSTRAINT ck_reference_data_table_element_type CHECK (elementType IN ('COLUMN', 'TOOLBAR_ACTION', 'ROW_ACTION')),
     CONSTRAINT ck_reference_data_table_element_status CHECK (status IN (0, 1, 2))
 );
+ALTER TABLE ReferenceDataTableElement ADD COLUMN IF NOT EXISTS viewCode VARCHAR(32);
 COMMENT ON TABLE ReferenceDataTableElement IS 'SEL表格列、工具栏动作和行操作统一配置表';
+COMMENT ON COLUMN ReferenceDataTableElement.viewCode IS '同一真实Grid当前使用的数据视图编码';
 CREATE INDEX IF NOT EXISTS idx_reference_data_table_element_table
-    ON ReferenceDataTableElement(tableId, status, visible, sortnum, id);
+    ON ReferenceDataTableElement(tableId, viewCode, status, visible, sortnum, id);
+CREATE INDEX IF NOT EXISTS idx_reference_data_table_element_view
+    ON ReferenceDataTableElement(tableId, viewCode, elementType, status, visible, sortnum, id);

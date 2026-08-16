@@ -27,11 +27,25 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
 
     private static final String[][] MANAGEMENT_WINDOWS = {
         {"selWindowTypeManagementId", "数据类型编辑窗口"},
-        {"selWindowTreeNodeManagementId", "树与选项编辑窗口"},
+        {"selWindowTreeNodeManagementId", "树节点编辑窗口"},
         {"selWindowTableManagementId", "表格定义编辑窗口"},
         {"selWindowTableElementManagementId", "表格列编辑窗口"},
         {"selWindowControlLayoutManagementId", "页面控件编辑窗口"},
         {"selWindowWindowManagementId", "Window 管理窗口"}
+    };
+    // 查询工具栏按字段结构登记全部可见元素；当前模块缺少记录时由前端公共默认布局兜底。
+    private static final Object[][] QUERY_TOOLBAR_CONTROLS = {
+        {"SEARCH", 5, 8, 23, "280px", "42px", "keyword"},
+        {"SEARCH", 10, 8, 23, "190px", "42px", "code"},
+        {"SEARCH", 15, 206, 23, "190px", "42px", "parentCode"},
+        {"SEARCH", 15, 206, 23, "190px", "42px", "parentTypeCode"},
+        {"SEARCH", 17, 404, 23, "190px", "42px", "optionSetCode"},
+        {"BUTTON", 20, 296, 23, "86px", "42px", "submit.default"},
+        {"BUTTON", 20, 404, 23, "86px", "42px", "submit.types"},
+        {"BUTTON", 25, 602, 23, "86px", "42px", "submit.controls"},
+        {"FILTER", 30, 394, 23, "200px", "42px", "controlKind"},
+        {"FILTER", 40, 606, 23, "180px", "42px", "status"},
+        {"BUTTON", 50, 798, 23, "90px", "42px", "reset"}
     };
     private static final String[] DEPRECATED_EMPTY_TABLES = {
         "ReferenceDataContextMenuItem",
@@ -85,7 +99,9 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
         // 已完成旧表迁移的正式库仍需把历史列字段名校正为最终六表字段，并补齐 Window 表头。
         normalizeFinalTableElements();
         normalizeObjectCodesAndParents();
+        normalizeQueryToolbarControls();
         normalizeManagementWindows();
+        removeDeprecatedWindowChildControls();
         dropDeprecatedEmptyTables();
         if (!tableExists("LegacyReferenceDataType")) {
             return;
@@ -94,21 +110,33 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
             throw new IllegalStateException("六表迁移目标不为空，已阻止重复迁移。");
         }
 
-        Map<Long, Map<String, Object>> treeTypeMap = new LinkedHashMap<>();
-        Map<Long, Map<String, Object>> dropdownTypeMap = new LinkedHashMap<>();
-        Map<Long, Map<String, Object>> menuTypeMap = new LinkedHashMap<>();
+        Map<String, Object> page = insert(controlService, params(
+                "projectCode", "reference-data", "pageCode", "bootstrap", "controlKind", "PAGE",
+                "sourceTableName", "ReferenceDataControlLayout", "layoutMode", "FLOW", "orderNo", 0,
+                "breakpoint", "DESKTOP", "editable", true, "status", 1, "sortnum", 0));
+        String pageCode = String.valueOf(page.get("code"));
+        jdbc.update("UPDATE ReferenceDataControlLayout SET pageCode=? WHERE code=?", pageCode, pageCode);
+        normalizeQueryToolbarControls();
+        String typeFilterControlCode = jdbc.queryForObject(
+                "SELECT code FROM ReferenceDataControlLayout WHERE pageCode=? AND controlKind='FILTER' "
+                        + "AND orderNo=30 AND status<>0",
+                String.class, pageCode);
+
+        String typeOptionSetCode = null;
         for (Map<String, Object> legacyType : rows("LegacyReferenceDataType")) {
             long oldId = number(legacyType.get("id"));
-            Map<String, Object> treeType = createType(legacyType, "TREE", String.valueOf(legacyType.get("resourceCode")));
-            treeTypeMap.put(oldId, treeType);
             if (existsByType("LegacyReferenceDataOption", oldId)) {
-                dropdownTypeMap.put(oldId, createType(
-                        legacyType, "DROPDOWN", legacyType.get("resourceCode") + "-dropdown"));
+                Map<String, Object> created = createType(legacyType, typeOptionSetCode, "DROPDOWN");
+                typeOptionSetCode = String.valueOf(created.get("optionSetCode"));
             }
             if (existsByType("LegacyReferenceDataContextMenuItem", oldId)) {
-                menuTypeMap.put(oldId, createType(
-                        legacyType, "CONTEXT_MENU", legacyType.get("resourceCode") + "-context-menu"));
+                Map<String, Object> created = createType(legacyType, typeOptionSetCode, "CONTEXT_MENU");
+                typeOptionSetCode = String.valueOf(created.get("optionSetCode"));
             }
+        }
+        if (typeOptionSetCode != null) {
+            jdbc.update("UPDATE ReferenceDataControlLayout SET optionSetCode=? WHERE code=?",
+                    typeOptionSetCode, typeFilterControlCode);
         }
 
         Map<Long, Long> nodeIds = new LinkedHashMap<>();
@@ -118,68 +146,38 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
             if (parentId != null && !nodeIds.containsKey(parentId)) {
                 throw new IllegalStateException("旧树节点顺序不是父节点优先，已阻止迁移。");
             }
-            long oldTypeId = number(legacyNode.get("typeId"));
-            Map<String, Object> created = createNode(legacyNode, treeTypeMap.get(oldTypeId),
+            Map<String, Object> created = createNode(
+                    legacyNode,
+                    "reference-data",
+                    pageCode,
                     parentId == null ? null : nodeIds.get(parentId),
-                    legacyNode.get("nodeCode"), legacyNode.get("nodeValue"), null, null,
-                    Boolean.FALSE, Boolean.TRUE);
+                    legacyNode.get("nodeValue"));
             nodeIds.put(number(legacyNode.get("id")), number(created.get("id")));
         }
-        for (Map<String, Object> option : rows("LegacyReferenceDataOption")) {
-            createNode(option, dropdownTypeMap.get(number(option.get("typeId"))), null,
-                    option.get("optionValue"), option.get("optionValue"), null, null,
-                    option.get("disabled"), Boolean.TRUE);
-        }
-        Map<Long, Long> menuIds = new LinkedHashMap<>();
-        for (Map<String, Object> menu : rows("LegacyReferenceDataContextMenuItem")) {
-            Long oldParentId = nullableNumber(menu.get("parentId"));
-            Map<String, Object> created = createNode(menu, menuTypeMap.get(number(menu.get("typeId"))),
-                    oldParentId == null ? null : menuIds.get(oldParentId),
-                    menu.get("itemCode"), menu.get("command") == null ? menu.get("itemCode") : menu.get("command"),
-                    menu.get("icon"), menu.get("command"), menu.get("disabled"), Boolean.TRUE);
-            menuIds.put(number(menu.get("id")), number(created.get("id")));
-        }
+        // 旧下拉与菜单数据只用于补建类型目录，不再写入只属于 TREE 的树节点表。
 
-        Map<String, Object> page = insert(controlService, params(
-                "projectCode", "reference-data", "pageCode", "bootstrap", "controlKind", "PAGE",
-                "sourceTableName", "ReferenceDataControlLayout", "layoutMode", "FLOW", "orderNo", 0,
-                "breakpoint", "DESKTOP", "editable", true, "status", 1, "sortnum", 0));
-        String pageCode = String.valueOf(page.get("code"));
-        jdbc.update("UPDATE ReferenceDataControlLayout SET pageCode=? WHERE code=?", pageCode, pageCode);
-
-        Map<String, Long> tableIds = new LinkedHashMap<>();
-        Map<String, String> tableNameMap = Map.of(
-                "ReferenceDataType", "ReferenceDataType",
-                "ReferenceDataTreeNode", "ReferenceDataTreeNode",
-                "ReferenceDataTable", "ReferenceDataTable",
-                "ReferenceDataTableColumn", "ReferenceDataTableElement",
-                "ReferenceDataControlBinding", "ReferenceDataControlLayout");
-        for (Map<String, Object> legacyTable : rows("LegacyReferenceDataTable")) {
-            String oldName = String.valueOf(legacyTable.get("tableName"));
-            String newName = tableNameMap.get(oldName);
-            if (newName == null) {
-                continue;
-            }
-            Map<String, Object> created = insert(tableService, params(
-                    "projectCode", "reference-data", "pageCode", pageCode, "dataTableName", newName,
-                    "nameZh", legacyTable.get("description"), "description", legacyTable.get("description"),
-                    "selectionMode", "NONE", "pageSize", 20, "rowHeight", 48,
-                    "status", legacyTable.get("status"), "sortnum", legacyTable.get("sortnum")));
-            tableIds.put(oldName, number(created.get("id")));
-        }
-        Map<String, Object> windowTable = insert(tableService, params(
-                "projectCode", "reference-data", "pageCode", pageCode, "dataTableName", "ReferenceDataWindow",
-                "nameZh", "Window 配置", "description", "维护 SEL Window 尺寸和位置",
-                "selectionMode", "NONE", "pageSize", 20, "rowHeight", 48, "status", 1, "sortnum", 60));
-        tableIds.put("ReferenceDataWindow", number(windowTable.get("id")));
+        // 页面只有一个真实 Grid；六种业务数据状态通过元素 viewCode 区分，不再创建六条父记录。
+        Map<String, Object> gridTable = insert(tableService, params(
+                "projectCode", "reference-data", "pageCode", pageCode,
+                "gridId", "selGridReferenceDataManagementId",
+                "nameZh", "引用数据工作台表格", "description", "引用数据工作台唯一公共 Grid",
+                "selectionMode", "NONE", "pageSize", 20, "rowHeight", 48, "status", 1, "sortnum", 10));
+        long tableId = number(gridTable.get("id"));
+        Map<String, String> viewCodes = Map.of(
+                "ReferenceDataType", "TYPE",
+                "ReferenceDataTreeNode", "TREE",
+                "ReferenceDataTable", "TABLE",
+                "ReferenceDataTableColumn", "TABLE_ELEMENT",
+                "ReferenceDataControlBinding", "CONTROL");
 
         for (Map<String, Object> column : rows("LegacyReferenceDataTableColumn")) {
-            Long tableId = tableIds.get(String.valueOf(column.get("tableName")));
-            if (tableId == null) {
+            String viewCode = viewCodes.get(String.valueOf(column.get("tableName")));
+            if (viewCode == null) {
                 continue;
             }
             insert(elementService, params(
-                    "projectCode", "reference-data", "tableId", tableId, "elementType", "COLUMN",
+                    "projectCode", "reference-data", "tableId", tableId, "viewCode", viewCode,
+                    "elementType", "COLUMN",
                     "fieldName", column.get("tableFieldName"), "secondaryFieldName", column.get("tableSecondaryFieldName"),
                     "labelZh", column.get("labelZh"), "labelJa", column.get("labelJa"), "labelEn", column.get("labelEn"),
                     "width", column.get("width"), "cellRenderer", column.get("cellRenderer"),
@@ -206,8 +204,78 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
         // 新迁移产生的表格元素同样经过最终字段规范化，保证首次启动就使用六表字段名。
         normalizeFinalTableElements();
         normalizeObjectCodesAndParents();
+        normalizeQueryToolbarControls();
         normalizeManagementWindows();
+        removeDeprecatedWindowChildControls();
         dropDeprecatedEmptyTables();
+    }
+
+    /**
+     * 为 Reference Data 页面建立查询工具栏父坐标，并让每种可见查询元素各自拥有布局记录。
+     * 真实传参示例：页面 {@code page101017} 当前只有 PAGE 根记录。
+     * 真实返回示例：补齐 keyword、独立结构字段、三种提交布局、范围、状态和重置十一条记录。
+     * 异常或副作用示例：曾生成的 search 中间组会被拆回 TOOLBAR 直属元素并物理删除空组。
+     */
+    private void normalizeQueryToolbarControls() {
+        if (!tableExists("ReferenceDataControlLayout")) {
+            return;
+        }
+        // 每个 reference-data 页面独立补齐工具栏，避免把某一机器生成的 code 写死到应用源码。
+        List<Map<String, Object>> pages = jdbc.queryForList(
+                "SELECT code,projectCode,pageCode FROM ReferenceDataControlLayout "
+                        + "WHERE projectCode='reference-data' AND controlKind='PAGE' AND status<>0 ORDER BY id");
+        for (Map<String, Object> page : pages) {
+            String pageCode = String.valueOf(page.get("pageCode"));
+            String projectCode = String.valueOf(page.get("projectCode"));
+            // 页面只登记一个查询工具栏；所有可编辑查询元素都以真实 code 直属该父坐标。
+            List<Map<String, Object>> toolbars = jdbc.queryForList(
+                    "SELECT * FROM ReferenceDataControlLayout WHERE pageCode=? AND parentKind='PAGE' "
+                            + "AND parentCode=? AND controlKind='TOOLBAR' AND status<>0 ORDER BY id",
+                    pageCode, pageCode);
+            Map<String, Object> toolbar = toolbars.isEmpty()
+                    ? insert(controlService, params(
+                            "projectCode", projectCode, "pageCode", pageCode,
+                            "parentKind", "PAGE", "parentCode", pageCode, "controlKind", "TOOLBAR",
+                            "sourceTableName", "ReferenceDataControlLayout", "layoutMode", "ABSOLUTE",
+                            "orderNo", 100, "width", "100%", "height", "88px", "x", 0, "y", 0,
+                            "breakpoint", "DESKTOP", "editable", true, "status", 1, "sortnum", 100))
+                    : toolbars.get(0);
+            String toolbarCode = String.valueOf(toolbar.get("code"));
+            // 中间版本若已建立 search 父组，先把其真实子元素迁回工具栏，避免丢失已发放 code。
+            List<Map<String, Object>> searchGroups = jdbc.queryForList(
+                    "SELECT id,code FROM ReferenceDataControlLayout WHERE pageCode=? AND parentKind='TOOLBAR' "
+                            + "AND parentCode=? AND fieldName='search' ORDER BY id", pageCode, toolbarCode);
+            for (Map<String, Object> searchGroup : searchGroups) {
+                jdbc.update("UPDATE ReferenceDataControlLayout SET parentKind='TOOLBAR',parentCode=?,updatedAt=CURRENT_TIMESTAMP "
+                                + "WHERE pageCode=? AND parentKind='CONTROL' AND parentCode=?",
+                        toolbarCode, pageCode, String.valueOf(searchGroup.get("code")));
+                jdbc.update("DELETE FROM ReferenceDataControlLayout WHERE id=?", searchGroup.get("id"));
+            }
+            // 旧 submit 对应多字段页面控件布局；改名后与普通单字段提交布局互不覆盖。
+            jdbc.update("UPDATE ReferenceDataControlLayout SET fieldName='submit.controls',orderNo=25,updatedAt=CURRENT_TIMESTAMP "
+                            + "WHERE pageCode=? AND parentKind='TOOLBAR' AND parentCode=? AND fieldName='submit'",
+                    pageCode, toolbarCode);
+            // 每条记录只代表一个真实可见元素；缺少记录时补默认值，已有记录保留管理员几何。
+            for (Object[] definition : QUERY_TOOLBAR_CONTROLS) {
+                int orderNo = (Integer) definition[1];
+                Long existing = jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM ReferenceDataControlLayout WHERE pageCode=? AND parentKind='TOOLBAR' "
+                                + "AND parentCode=? AND fieldName=? AND status<>0",
+                        Long.class, pageCode, toolbarCode, definition[6]);
+                if (existing != null && existing > 0L) {
+                    continue;
+                }
+                // 新记录使用统一发号链生成 control<id>，前端随后从页面配置读取真实 code。
+                insert(controlService, params(
+                        "projectCode", projectCode, "pageCode", pageCode,
+                        "parentKind", "TOOLBAR", "parentCode", toolbarCode,
+                        "controlKind", definition[0], "sourceTableName", "ReferenceDataControlLayout",
+                        "layoutMode", "ABSOLUTE", "orderNo", orderNo,
+                        "x", definition[2], "y", definition[3], "width", definition[4], "height", definition[5],
+                        "fieldName", definition[6],
+                        "breakpoint", "DESKTOP", "editable", true, "status", 1, "sortnum", orderNo));
+            }
+        }
     }
 
     /**
@@ -267,6 +335,12 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
                 String triggerControlCode = MANAGEMENT_WINDOWS[index][0];
                 String nameZh = MANAGEMENT_WINDOWS[index][1];
                 if (byTrigger.containsKey(triggerControlCode)) {
+                    // 只修正已经废弃的固定旧名称，保留管理员自行维护的其他名称。
+                    if ("selWindowTreeNodeManagementId".equals(triggerControlCode)) {
+                        jdbc.update("UPDATE ReferenceDataWindow SET nameZh=? "
+                                        + "WHERE pageCode=? AND triggerControlCode=? AND nameZh=?",
+                                nameZh, pageCode, triggerControlCode, "树与选项编辑窗口");
+                    }
                     continue;
                 }
                 if (index == 0 && !byTrigger.containsValue(template)) {
@@ -289,6 +363,24 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
                 byTrigger.put(triggerControlCode, created);
             }
         }
+    }
+
+    /**
+     * 物理删除旧设计登记的 Window 内部字段，并把数据库约束收紧为只允许页面控件父级。
+     * 真实传参示例：存在 {@code parentKind=WINDOW,parentCode=window101064} 的历史输入框记录。
+     * 真实返回示例：删除全部 Window 子记录，保留 ReferenceDataWindow 中独立保存的外框几何。
+     * 异常或副作用示例：约束重建失败时启动事务回滚，禁止带着可复发结构开放 HTTP。
+     */
+    private void removeDeprecatedWindowChildControls() {
+        if (!tableExists("ReferenceDataControlLayout")) {
+            return;
+        }
+        jdbc.update("DELETE FROM ReferenceDataControlLayout WHERE parentKind='WINDOW'");
+        jdbc.execute("ALTER TABLE ReferenceDataControlLayout DROP CONSTRAINT IF EXISTS "
+                + "ck_reference_data_control_layout_parent_kind");
+        jdbc.execute("ALTER TABLE ReferenceDataControlLayout ADD CONSTRAINT "
+                + "ck_reference_data_control_layout_parent_kind CHECK "
+                + "(parentKind IS NULL OR parentKind IN ('PAGE','PANEL','TOOLBAR','CONTROL'))");
     }
 
     /**
@@ -333,7 +425,7 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
         normalizeFixedPrefixCodes("ReferenceDataType", "type");
         normalizeFixedPrefixCodes("ReferenceDataTable", "table");
         normalizeFixedPrefixCodes("ReferenceDataTableElement", "tableElement");
-        normalizeTypedNodeCodes();
+        normalizeFixedPrefixCodes("ReferenceDataTreeNode", "treeNode");
         normalizeParentKinds();
     }
 
@@ -354,44 +446,6 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
             long id = number(row.get("id"));
             updateCode(tableName, id, prefix + id);
         }
-    }
-
-    /**
-     * 根据所属类型把统一节点表编码迁移为树、下拉选项或菜单项前缀。
-     * 真实传参示例：type 为 {@code DROPDOWN}、节点主键为 101012。
-     * 真实返回示例：节点 code 更新为 {@code dropdownOption101012}。
-     * 异常或副作用示例：数据库出现未登记 type 时抛出异常，防止生成含义不明的节点编码。
-     */
-    private void normalizeTypedNodeCodes() {
-        if (!tableExists("ReferenceDataTreeNode") || !tableExists("ReferenceDataType")) {
-            return;
-        }
-        List<Map<String, Object>> nodes = jdbc.queryForList(
-                "SELECT n.id,t.type FROM ReferenceDataTreeNode n JOIN ReferenceDataType t ON t.id=n.typeId ORDER BY n.id");
-        for (Map<String, Object> node : nodes) {
-            long id = number(node.get("id"));
-            updateCode("ReferenceDataTreeNode", id, nodePrefix(String.valueOf(node.get("type"))) + id);
-        }
-    }
-
-    /**
-     * 把数据类型枚举转换为管理员可直接识别的节点 code 前缀。
-     * 真实传参示例：{@code CONTEXT_MENU}。
-     * 真实返回示例：返回 {@code contextMenuItem}。
-     * 异常或副作用示例：未知枚举抛出 IllegalStateException，使不完整迁移无法提交。
-     *
-     * @param type ReferenceDataType.type 数据库值
-     * @return 对应节点对象前缀
-     */
-    private String nodePrefix(String type) {
-        return switch (type) {
-            case "DROPDOWN" -> "dropdownOption";
-            case "TREE" -> "treeNode";
-            case "GRID_MENU" -> "gridMenuItem";
-            case "PANEL_MENU" -> "panelMenuItem";
-            case "CONTEXT_MENU" -> "contextMenuItem";
-            default -> throw new IllegalStateException("未登记的引用数据节点类型：" + type);
-        };
     }
 
     /**
@@ -445,7 +499,7 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
      * 异常或副作用示例：唯一约束冲突时数据库抛错并由启动事务整体回滚。
      *
      * @param tableName 代码内部固定的六表表名
-     * @param id 不变的全局对象主键
+     * @param id 不变的当前表主键
      * @param code 新对象类型编码
      */
     private void updateCode(String tableName, long id, String code) {
@@ -462,53 +516,105 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
         if (!tableExists("ReferenceDataTableElement") || !tableExists("ReferenceDataTable")) {
             return;
         }
-        renameElementField("ReferenceDataTable", "projectName", "projectCode");
-        renameElementField("ReferenceDataTable", "tableName", "dataTableName");
-        renameElementField("ReferenceDataTable", "gridColumnId", "code");
-        renameElementField("ReferenceDataTable", "pagePath", "pageCode");
-        renameElementLabel("ReferenceDataTable", "code", "唯一 Code");
-        renameElementLabel("ReferenceDataTable", "pageCode", "页面 Code");
-        renameElementField("ReferenceDataTableElement", "tableName", "tableId");
-        renameElementField("ReferenceDataTableElement", "gridColumnId", "code");
-        renameElementField("ReferenceDataTableElement", "tableFieldName", "fieldName");
-        renameElementSecondaryField("ReferenceDataTableElement", "gridId", "elementType");
-        renameElementLabel("ReferenceDataTableElement", "tableId", "所属表格 / 元素类型");
-        renameElementLabel("ReferenceDataTableElement", "code", "唯一 Code");
-        renameElementField("ReferenceDataControlLayout", "pageProjectCode", "projectCode");
-        renameElementField("ReferenceDataControlLayout", "pagePath", "pageCode");
-        renameElementField("ReferenceDataControlLayout", "controlId", "code");
-        renameElementField("ReferenceDataControlLayout", "controlType", "controlKind");
-        renameElementField("ReferenceDataControlLayout", "description", "sourceTableName");
-        renameElementSecondaryField("ReferenceDataControlLayout", "pagePath", "pageCode");
-        renameElementLabel("ReferenceDataControlLayout", "projectCode", "所属项目 / 页面 Code");
-        renameElementLabel("ReferenceDataControlLayout", "code", "唯一 Code");
-        renameElementLabel("ReferenceDataControlLayout", "controlKind", "控件类型");
-        renameElementLabel("ReferenceDataControlLayout", "sourceTableName", "来源表");
+        renameElementField("TABLE", "projectName", "projectCode");
+        renameElementField("TABLE", "tableName", "gridId");
+        renameElementField("TABLE", "dataTableName", "gridId");
+        renameElementField("TABLE", "gridColumnId", "code");
+        renameElementField("TABLE", "pagePath", "pageCode");
+        renameElementLabel("TABLE", "code", "唯一 Code");
+        renameElementLabel("TABLE", "gridId", "Grid 实例 ID");
+        renameElementLabel("TABLE", "pageCode", "页面 Code");
+        renameElementField("TABLE_ELEMENT", "tableName", "tableId");
+        renameElementField("TABLE_ELEMENT", "gridColumnId", "code");
+        renameElementField("TABLE_ELEMENT", "tableFieldName", "fieldName");
+        renameElementSecondaryField("TABLE_ELEMENT", "gridId", "viewCode");
+        renameElementSecondaryField("TABLE_ELEMENT", "elementType", "viewCode");
+        renameElementLabel("TABLE_ELEMENT", "tableId", "所属表格 / 视图");
+        renameElementLabel("TABLE_ELEMENT", "viewCode", "视图编码");
+        renameElementLabel("TABLE_ELEMENT", "code", "唯一 Code");
+        renameElementField("CONTROL", "pageProjectCode", "projectCode");
+        renameElementField("CONTROL", "pagePath", "pageCode");
+        renameElementField("CONTROL", "controlId", "code");
+        renameElementField("CONTROL", "controlType", "controlKind");
+        renameElementField("CONTROL", "description", "sourceTableName");
+        renameElementSecondaryField("CONTROL", "pagePath", "pageCode");
+        renameElementLabel("CONTROL", "projectCode", "所属项目 / 页面 Code");
+        renameElementLabel("CONTROL", "code", "唯一 Code");
+        renameElementLabel("CONTROL", "controlKind", "控件类型");
+        renameElementLabel("CONTROL", "sourceTableName", "来源表");
+        // 控件不再反向保存 typeId；需要选项的控件只保存可复用 optionSetCode。
+        jdbc.update("DELETE FROM ReferenceDataTableElement WHERE viewCode='CONTROL' AND fieldName='typeId'");
+        // 类型值列 → 先迁移旧 categoryCode/controlCode，再按选项组、父级和值的业务顺序展示。
+        renameElementField("TYPE", "categoryCode", "valueCode");
+        renameElementField("TYPE", "controlCode", "optionSetCode");
+        List<Map<String, Object>> typeTables = jdbc.queryForList(
+                "SELECT DISTINCT t.id,t.projectCode FROM ReferenceDataTable t "
+                        + "JOIN ReferenceDataTableElement e ON e.tableId=t.id "
+                        + "WHERE e.viewCode='TYPE' AND t.status<>0");
+        for (Map<String, Object> typeTable : typeTables) {
+            long tableId = number(typeTable.get("id"));
+            String projectCode = String.valueOf(typeTable.get("projectCode"));
+            ensureElement(projectCode, tableId, "TYPE", "optionSetCode", "选项组 Code", "180px", "text", 20);
+            ensureElement(projectCode, tableId, "TYPE", "valueCode", "类型值 Code", "150px", "text", 30);
+            ensureElement(projectCode, tableId, "TYPE", "parentTypeCode", "上级类型 Code", "170px", "text", 40);
+        }
+        normalizeTypeElement("code", null, "唯一 Code", "一意 Code", "Unique Code", "text", 10);
+        normalizeTypeElement("optionSetCode", null, "选项组 Code", "選択肢グループ Code", "Option set code", "text", 20);
+        normalizeTypeElement("valueCode", null, "类型值 Code", "型値 Code", "Value code", "text", 30);
+        normalizeTypeElement("parentTypeCode", null, "上级类型 Code", "親型 Code", "Parent type code", "text", 40);
+        normalizeTypeElement("nameZh", null, "中文名称", "中国語名", "Chinese name", "text", 50);
+        normalizeTypeElement("nameEn", "nameJa", "英文 / 日文", "英語 / 日本語", "English / Japanese", "stack", 60);
+        normalizeTypeElement("status", null, "状态", "状態", "Status", "badge", 70);
+        normalizeTypeElement("sortnum", null, "排序", "並び順", "Order", "text", 80);
+        normalizeTypeElement("id", null, "操作", "操作", "Actions", "actions", 90);
+
+        // 树节点归属用一个双行列展示；projectCode/pageCode 不参与 code + parentId 建树。
+        List<Map<String, Object>> treeTables = jdbc.queryForList(
+                "SELECT DISTINCT t.id,t.projectCode FROM ReferenceDataTable t "
+                        + "JOIN ReferenceDataTableElement e ON e.tableId=t.id "
+                        + "WHERE e.viewCode='TREE' AND t.status<>0");
+        for (Map<String, Object> treeTable : treeTables) {
+            long tableId = number(treeTable.get("id"));
+            String projectCode = String.valueOf(treeTable.get("projectCode"));
+            ensureElement(projectCode, tableId, "TREE", "projectCode", "所属项目 / 页面 Code", "210px", "stack", 20);
+        }
+        normalizeTreeElement("code", null, "唯一 Code", "一意 Code", "Unique Code", "text", 10);
+        normalizeTreeElement("projectCode", "pageCode", "所属项目 / 页面 Code",
+                "所属プロジェクト / ページ Code", "Project / page code", "stack", 20);
+        normalizeTreeElement("nodeValue", null, "节点值", "ノード値", "Node value", "text", 30);
+        normalizeTreeElement("parentId", null, "父节点 ID", "親ノード ID", "Parent node ID", "text", 40);
+        normalizeTreeElement("labelZh", null, "中文名称", "中国語名", "Chinese name", "text", 50);
+        normalizeTreeElement("status", null, "状态", "状態", "Status", "badge", 60);
+        normalizeTreeElement("sortnum", null, "排序", "並び順", "Order", "text", 70);
+        normalizeTreeElement("id", null, "操作", "操作", "Actions", "actions", 80);
 
         List<Map<String, Object>> controlTables = jdbc.queryForList(
-                "SELECT id,projectCode FROM ReferenceDataTable "
-                        + "WHERE dataTableName='ReferenceDataControlLayout' AND status<>0");
+                "SELECT DISTINCT t.id,t.projectCode FROM ReferenceDataTable t "
+                        + "JOIN ReferenceDataTableElement e ON e.tableId=t.id "
+                        + "WHERE e.viewCode='CONTROL' AND t.status<>0");
         for (Map<String, Object> controlTable : controlTables) {
             long tableId = number(controlTable.get("id"));
             String projectCode = String.valueOf(controlTable.get("projectCode"));
-            ensureElement(projectCode, tableId, "parentKind", "父容器类型", "120px", "text", 35);
-            ensureElement(projectCode, tableId, "parentCode", "父容器 Code", "180px", "text", 36);
+            ensureElement(projectCode, tableId, "CONTROL", "parentKind", "父容器类型", "120px", "text", 35);
+            ensureElement(projectCode, tableId, "CONTROL", "parentCode", "父容器 Code", "180px", "text", 36);
+            ensureElement(projectCode, tableId, "CONTROL", "fieldName", "字段 / 动作名", "160px", "text", 37);
+            ensureElement(projectCode, tableId, "CONTROL", "optionSetCode", "选项组 Code", "180px", "text", 38);
         }
 
         List<Map<String, Object>> windowTables = jdbc.queryForList(
-                "SELECT id,projectCode FROM ReferenceDataTable WHERE dataTableName='ReferenceDataWindow' AND status<>0");
+                "SELECT id,projectCode FROM ReferenceDataTable WHERE gridId='selGridReferenceDataManagementId' AND status<>0");
         for (Map<String, Object> windowTable : windowTables) {
             long tableId = number(windowTable.get("id"));
             String projectCode = String.valueOf(windowTable.get("projectCode"));
-            ensureElement(projectCode, tableId, "code", "唯一 Code", "160px", "text", 10);
-            ensureElement(projectCode, tableId, "nameZh", "中文名称", "180px", "text", 20);
-            ensureElement(projectCode, tableId, "pageCode", "页面 Code", "180px", "text", 30);
-            ensureElement(projectCode, tableId, "width", "宽度", "90px", "text", 40);
-            ensureElement(projectCode, tableId, "height", "高度", "90px", "text", 50);
-            ensureElement(projectCode, tableId, "positionMode", "定位模式", "110px", "text", 60);
-            ensureElement(projectCode, tableId, "status", "状态", "90px", "badge", 70);
-            ensureElement(projectCode, tableId, "sortnum", "排序", "90px", "text", 80);
-            ensureElement(projectCode, tableId, "id", "操作", "132px", "actions", 90);
+            ensureElement(projectCode, tableId, "WINDOW", "code", "唯一 Code", "160px", "text", 10);
+            ensureElement(projectCode, tableId, "WINDOW", "nameZh", "中文名称", "180px", "text", 20);
+            ensureElement(projectCode, tableId, "WINDOW", "pageCode", "页面 Code", "180px", "text", 30);
+            ensureElement(projectCode, tableId, "WINDOW", "width", "宽度", "90px", "text", 40);
+            ensureElement(projectCode, tableId, "WINDOW", "height", "高度", "90px", "text", 50);
+            ensureElement(projectCode, tableId, "WINDOW", "positionMode", "定位模式", "110px", "text", 60);
+            ensureElement(projectCode, tableId, "WINDOW", "status", "状态", "90px", "badge", 70);
+            ensureElement(projectCode, tableId, "WINDOW", "sortnum", "排序", "90px", "text", 80);
+            ensureElement(projectCode, tableId, "WINDOW", "id", "操作", "132px", "actions", 90);
         }
     }
 
@@ -518,14 +624,13 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
      * 真实返回示例：所属表格为 ReferenceDataTable 的 projectName 元素更新为 projectCode。
      * 异常或副作用示例：没有命中时影响 0 行；数据库失败时由外层启动事务整体回滚。
      *
-     * @param dataTableName 元素所属表格定义的真实业务表名
+     * @param viewCode 元素所属数据视图编码
      * @param oldFieldName 历史字段名
      * @param newFieldName 最终六表字段名
      */
-    private void renameElementField(String dataTableName, String oldFieldName, String newFieldName) {
-        jdbc.update("UPDATE ReferenceDataTableElement e SET fieldName=? WHERE fieldName=? AND EXISTS "
-                        + "(SELECT 1 FROM ReferenceDataTable t WHERE t.id=e.tableId AND t.dataTableName=?)",
-                newFieldName, oldFieldName, dataTableName);
+    private void renameElementField(String viewCode, String oldFieldName, String newFieldName) {
+        jdbc.update("UPDATE ReferenceDataTableElement SET fieldName=? WHERE fieldName=? AND viewCode=?",
+                newFieldName, oldFieldName, viewCode);
     }
 
     /**
@@ -534,14 +639,13 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
      * 真实返回示例：页面控件第一列的第二行改为显示 pageCode。
      * 异常或副作用示例：没有命中时影响 0 行；数据库失败时由外层启动事务整体回滚。
      *
-     * @param dataTableName 元素所属表格定义的真实业务表名
+     * @param viewCode 元素所属数据视图编码
      * @param oldFieldName 历史第二字段名
      * @param newFieldName 最终六表第二字段名
      */
-    private void renameElementSecondaryField(String dataTableName, String oldFieldName, String newFieldName) {
-        jdbc.update("UPDATE ReferenceDataTableElement e SET secondaryFieldName=? WHERE secondaryFieldName=? AND EXISTS "
-                        + "(SELECT 1 FROM ReferenceDataTable t WHERE t.id=e.tableId AND t.dataTableName=?)",
-                newFieldName, oldFieldName, dataTableName);
+    private void renameElementSecondaryField(String viewCode, String oldFieldName, String newFieldName) {
+        jdbc.update("UPDATE ReferenceDataTableElement SET secondaryFieldName=? WHERE secondaryFieldName=? AND viewCode=?",
+                newFieldName, oldFieldName, viewCode);
     }
 
     /**
@@ -550,14 +654,60 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
      * 真实返回示例：原“表格控件 ID”表头显示为“唯一 Code”。
      * 异常或副作用示例：没有命中时影响 0 行；只修改 labelZh，不覆盖宽度、显隐或排序。
      *
-     * @param dataTableName 元素所属表格定义的真实业务表名
+     * @param viewCode 元素所属数据视图编码
      * @param fieldName 最终实体字段名
      * @param labelZh 最终中文表头
      */
-    private void renameElementLabel(String dataTableName, String fieldName, String labelZh) {
-        jdbc.update("UPDATE ReferenceDataTableElement e SET labelZh=? WHERE fieldName=? AND EXISTS "
-                        + "(SELECT 1 FROM ReferenceDataTable t WHERE t.id=e.tableId AND t.dataTableName=?)",
-                labelZh, fieldName, dataTableName);
+    private void renameElementLabel(String viewCode, String fieldName, String labelZh) {
+        jdbc.update("UPDATE ReferenceDataTableElement SET labelZh=? WHERE fieldName=? AND viewCode=?",
+                labelZh, fieldName, viewCode);
+    }
+
+    /**
+     * 规范类型目录一个页面列的绑定、三语表头、渲染器和左右顺序。
+     * 真实传参示例：{@code nameEn/nameJa/英文 / 日文/stack/40}。
+     * 真实返回示例：英文作为第一行、日文作为第二行，列位于中文名称之后、状态之前。
+     * 异常或副作用示例：目标列不存在时影响 0 行；管理员维护的列宽、显隐和图标保持不变。
+     *
+     * @param fieldName ReferenceDataType 真实字段名
+     * @param secondaryFieldName 双行第二字段；单行列传入 null
+     * @param labelZh 中文表头
+     * @param labelJa 日文表头
+     * @param labelEn 英文表头
+     * @param renderer 公共 Grid 渲染器
+     * @param sortnum 页面从左到右顺序
+     */
+    private void normalizeTypeElement(
+            String fieldName, String secondaryFieldName,
+            String labelZh, String labelJa, String labelEn,
+            String renderer, int sortnum) {
+        // 只命中 TYPE 视图 → 其他视图的同名字段配置保持不变。
+        jdbc.update("UPDATE ReferenceDataTableElement e SET secondaryFieldName=?,labelZh=?,labelJa=?,labelEn=?,"
+                        + "cellRenderer=?,sortnum=? WHERE e.fieldName=? AND e.viewCode='TYPE'",
+                secondaryFieldName, labelZh, labelJa, labelEn, renderer, sortnum, fieldName);
+    }
+
+    /**
+     * 规范树节点管理页一个列的字段绑定、多语言表头、渲染器和顺序。
+     * 真实传参示例：{@code projectCode/pageCode/所属项目 / 页面 Code/stack/20}。
+     * 真实返回示例：工程显示在第一行、页面 Code 显示在第二行，父子关系字段不变。
+     * 异常或副作用示例：目标列不存在时影响 0 行；不会修改树节点业务数据。
+     *
+     * @param fieldName ReferenceDataTreeNode 真实字段名
+     * @param secondaryFieldName 双行第二字段；单行列传入 null
+     * @param labelZh 中文表头
+     * @param labelJa 日文表头
+     * @param labelEn 英文表头
+     * @param renderer 公共 Grid 渲染器
+     * @param sortnum 页面从左到右顺序
+     */
+    private void normalizeTreeElement(
+            String fieldName, String secondaryFieldName,
+            String labelZh, String labelJa, String labelEn,
+            String renderer, int sortnum) {
+        jdbc.update("UPDATE ReferenceDataTableElement e SET secondaryFieldName=?,labelZh=?,labelJa=?,labelEn=?,"
+                        + "cellRenderer=?,sortnum=? WHERE e.fieldName=? AND e.viewCode='TREE'",
+                secondaryFieldName, labelZh, labelJa, labelEn, renderer, sortnum, fieldName);
     }
 
     /**
@@ -568,6 +718,7 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
      *
      * @param projectCode 元素 code 的项目来源
      * @param tableId Window 表格定义主键
+     * @param viewCode 元素所属数据视图编码
      * @param fieldName Window 实体字段名
      * @param labelZh 中文表头
      * @param width 默认列宽
@@ -575,39 +726,49 @@ public class ReferenceDataSixTableMigration implements ApplicationRunner {
      * @param sortnum 从左到右排序值
      */
     private void ensureElement(
-            String projectCode, long tableId, String fieldName, String labelZh,
+            String projectCode, long tableId, String viewCode, String fieldName, String labelZh,
             String width, String renderer, int sortnum) {
         Long existing = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM ReferenceDataTableElement WHERE tableId=? AND fieldName=? AND status<>0",
-                Long.class, tableId, fieldName);
+                "SELECT COUNT(*) FROM ReferenceDataTableElement "
+                        + "WHERE tableId=? AND viewCode=? AND fieldName=? AND status<>0",
+                Long.class, tableId, viewCode, fieldName);
         if (existing != null && existing > 0L) {
             return;
         }
         insert(elementService, params(
-                "projectCode", projectCode, "tableId", tableId, "elementType", "COLUMN",
+                "projectCode", projectCode, "tableId", tableId, "viewCode", viewCode,
+                "elementType", "COLUMN",
                 "fieldName", fieldName, "labelZh", labelZh, "width", width,
                 "cellRenderer", renderer, "visible", true, "resizable", true,
                 "status", 1, "sortnum", sortnum));
     }
 
-    private Map<String, Object> createType(Map<String, Object> source, String type, String resourceCode) {
+    private Map<String, Object> createType(
+            Map<String, Object> source, String optionSetCode, String valueCode) {
+        List<Map<String, Object>> existing = optionSetCode == null ? List.of() : jdbc.queryForList(
+                "SELECT * FROM ReferenceDataType WHERE optionSetCode=? AND valueCode=? AND status<>0",
+                optionSetCode, valueCode);
+        if (!existing.isEmpty()) {
+            return existing.get(0);
+        }
+        Map<String, String[]> names = Map.of(
+                "DROPDOWN", new String[] {"下拉框", "ドロップダウン", "Dropdown"},
+                "CONTEXT_MENU", new String[] {"右键菜单", "コンテキストメニュー", "Context menu"});
+        String[] localizedNames = names.get(valueCode);
         return insert(typeService, params(
-                "projectCode", source.get("projectCode"), "resourceCode", resourceCode, "type", type,
-                "nameZh", source.get("nameZh"), "nameJa", source.get("nameJa"), "nameEn", source.get("nameEn"),
-                "descriptionZh", source.get("descriptionZh"), "descriptionJa", source.get("descriptionJa"),
-                "descriptionEn", source.get("descriptionEn"), "status", source.get("status"),
-                "sortnum", source.get("sortnum")));
+                "optionSetCode", optionSetCode, "valueCode", valueCode,
+                "nameZh", localizedNames[0], "nameJa", localizedNames[1], "nameEn", localizedNames[2],
+                "status", source.get("status"), "sortnum", source.get("sortnum")));
     }
 
     private Map<String, Object> createNode(
-            Map<String, Object> source, Map<String, Object> type, Long parentId,
-            Object nodeCode, Object nodeValue, Object icon, Object command,
-            Object disabled, Object selectable) {
+            Map<String, Object> source, String projectCode, String pageCode,
+            Long parentId, Object nodeValue) {
         return insert(nodeService, params(
-                "typeId", type.get("id"), "parentId", parentId, "nodeCode", nodeCode, "nodeValue", nodeValue,
+                "projectCode", projectCode, "pageCode", pageCode,
+                "parentId", parentId, "nodeValue", nodeValue,
                 "labelZh", source.get("labelZh"), "labelJa", source.get("labelJa"), "labelEn", source.get("labelEn"),
-                "icon", icon, "commandCode", command, "disabled", disabled, "selectable", selectable,
-                "attributesJson", source.get("attributesJson"), "status", source.get("status"), "sortnum", source.get("sortnum")));
+                "status", source.get("status"), "sortnum", source.get("sortnum")));
     }
 
     @SuppressWarnings("unchecked")

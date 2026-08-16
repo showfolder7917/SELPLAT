@@ -60,7 +60,7 @@ public final class ReferenceDataQueryUtil {
      * 构建表查询 Controller 使用的统一成功结果。
      *
      * @param data 表 Service 产生的树、选项或菜单列表，例如 {@code [{"value":"TREE"}]}
-     * @param requestPath 当前真实接口路径，例如 {@code "/api/reference-data/types/type101001/nodes"}
+     * @param requestPath 当前真实接口路径，例如 {@code "/api/reference-data/trees/treeNode101007"}
      * @param message 查询完成说明，例如 {@code "引用数据选项查询完成。"}
      * @return 完整成功结果，例如
      *     {@code {"success":true,"moduleCode":"reference-data","data":[{"value":"TREE"}],"msg":"引用数据选项查询完成。"}}

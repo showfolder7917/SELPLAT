@@ -144,6 +144,48 @@ tasks.register('verifySelUiSourceBoundary') {
         if (!pageEditorViolations.isEmpty()) {
             throw new GradleException("sel-ui 页面编辑公共契约门禁失败：\n" + pageEditorViolations.join('\n'))
         }
+        // 多字段查询与后台分页是公共能力：Search 只发布字段值，Grid 只发布分页状态。
+        def searchSource = file('src/components/search/selSearch.js').getText('UTF-8')
+        def searchStyle = file('src/components/search/selSearch.css').getText('UTF-8')
+        def gridQuerySource = file('src/components/grid/selGrid.js').getText('UTF-8')
+        def remoteQueryViolations = []
+        [
+            'Array.isArray(selSearchData.fields)',
+            'values: { ...selSearchValues }',
+            'setValues(values = {})',
+            'getValues: () =>',
+            'setIndependentLayout: selSearchSetIndependentLayout',
+            'getLayoutTargets: selSearchGetLayoutTargets',
+            'remount(selSearchGridRoot, selSearchData)'
+        ].each { contract ->
+            if (!searchSource.contains(contract)) remoteQueryViolations.add("selSearch.js -> 缺少 ${contract}")
+        }
+        [
+            '--selsearch-field-default-width: 280px',
+            '--selsearch-field-min-width: 180px',
+            'justify-content: start'
+        ].each { contract ->
+            if (!searchStyle.contains(contract)) remoteQueryViolations.add("selSearch.css -> 缺少 ${contract}")
+        }
+        if (!file('src/components/panel/selPanel.js').getText('UTF-8').contains(
+                '!selPanelColumnState.initialized || !selPanelColumnResizeEnabled')) {
+            remoteQueryViolations.add('selPanel.js -> 禁用调宽的动态模块栏目没有跟随当前装配宽度')
+        }
+        [
+            'String(selGridPaginationData.mode || "LOCAL").toUpperCase() === "REMOTE"',
+            'new CustomEvent("selGrid:queryChange"',
+            'selGridUsesRemotePagination() ? selGridProjects : selGridGetVisibleProjects()',
+            'values: { ...selGridState.searchValues }',
+            'deferToolbarFiltersUntilSubmit === true',
+            'Object.entries(selGridState.searchValues).every',
+            'selGridState.type = selGridState.draftType',
+            'selGridState.status = selGridState.draftStatus'
+        ].each { contract ->
+            if (!gridQuerySource.contains(contract)) remoteQueryViolations.add("selGrid.js -> 缺少 ${contract}")
+        }
+        if (!remoteQueryViolations.isEmpty()) {
+            throw new GradleException("sel-ui 多字段查询与后台分页门禁失败：\n" + remoteQueryViolations.join('\n'))
+        }
         // 中央登记是公共控件的唯一创建入口；新增目录、脚本或样式未登记时直接阻断。
         def registryFile = file('src/components/component-registry.json')
         if (!registryFile.isFile()) {
@@ -572,6 +614,16 @@ tasks.register('verifySelUiSourceBoundary') {
         def missingGridHeaderSelectionContracts = gridHeaderSelectionRequired.findAll { !gridSource.contains(it) }
         if (!missingGridHeaderSelectionContracts.isEmpty()) {
             throw new GradleException("selGrid 表头字段选择契约不完整：\n" + missingGridHeaderSelectionContracts.join('\n'))
+        }
+        // 行选择由公共 Grid 统一提供 NONE、SINGLE、MULTIPLE 三态，并公开状态与变化事件。
+        def gridRowSelectionRequired = [
+            'function selGridResolveSelectionMode', '["NONE", "SINGLE", "MULTIPLE"]',
+            'selGridRecordMode ? "NONE" : "MULTIPLE"', 'selGridRenderer === "selection"',
+            'selGrid:selectionChange', 'getSelectedIds:', 'getSelectionMode:', 'aria-selected'
+        ]
+        def missingGridRowSelectionContracts = gridRowSelectionRequired.findAll { !gridSource.contains(it) }
+        if (!missingGridRowSelectionContracts.isEmpty()) {
+            throw new GradleException("selGrid 行选择契约不完整：\n" + missingGridRowSelectionContracts.join('\n'))
         }
         // 记录分类既可为标量也可为数组；工具栏和树筛选必须统一按成员匹配，允许一条记录属于多个分类。
         def gridMultiValueTypeRequired = [

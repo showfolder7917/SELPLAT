@@ -150,6 +150,10 @@ public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
         if (rawFieldName.endsWith("Like")) {
             return rawFieldName.substring(0, rawFieldName.length() - "Like".length());
         }
+        // In 后缀统一表示集合成员匹配，字段名还原后继续走真实数据库字段白名单校验。
+        if (rawFieldName.endsWith("In")) {
+            return rawFieldName.substring(0, rawFieldName.length() - "In".length());
+        }
         // Begin 后缀统一表示区间开始边界，字段名还原后继续走受控字段校验。
         if (rawFieldName.endsWith("Begin")) {
             return rawFieldName.substring(0, rawFieldName.length() - "Begin".length());
@@ -189,6 +193,10 @@ public abstract class BasePagingQueryDaoImpl extends BaseDaoSupportImpl {
         // 字段后缀为 Like 时按模糊查询处理，适合名称、编码等关键字检索。
         if (rawFieldName != null && rawFieldName.endsWith("Like")) {
             return QueryOperator.LIKE;
+        }
+        // 字段后缀为 In 时按集合成员查询处理，适合一次读取多个父记录的全部子记录。
+        if (rawFieldName != null && rawFieldName.endsWith("In")) {
+            return QueryOperator.IN;
         }
         // 字段后缀为 Begin 时按大于等于处理，适合时间区间和数值区间的开始边界。
         if (rawFieldName != null && rawFieldName.endsWith("Begin")) {

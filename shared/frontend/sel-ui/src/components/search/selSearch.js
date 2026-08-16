@@ -53,45 +53,49 @@
         // 浏览器不对演示页面执行真实页面跳转。
         selSearchForm.action = "";
 
-        // 输入区域组合搜索图标、隐藏标签、输入框和清空按钮。
-        const selSearchField = document.createElement("label");
-        // 字段类负责输入内容自适应占满剩余宽度。
-        selSearchField.className = "selsearch-field";
-        // 搜索图标来自人工配置，未提供时回退通用搜索图标。
-        selSearchField.appendChild(selSearchCreateIcon(selSearchData.icon || "ri-search-line"));
+        // fields 存在时每个字段都是独立后台查询条件；旧调用方继续得到 keyword 单字段。
+        const selSearchFieldDefinitions = Array.isArray(selSearchData.fields) && selSearchData.fields.length > 0
+            ? selSearchData.fields
+            : [{
+                name: "keyword", label: selSearchData.label || "搜索", placeholder: selSearchData.placeholder || "",
+                icon: selSearchData.icon || "ri-search-line", defaultValue: selSearchData.defaultValue || ""
+            }];
+        // Map 让提交、清空、语言刷新和公开控制器都按稳定字段名读取，不依赖 DOM 顺序。
+        const selSearchFields = new Map();
+        selSearchFieldDefinitions.forEach((selSearchDefinition) => {
+            // 每个字段独立拥有 label、输入和清空按钮，但共享同一个 form 与查询按钮。
+            const selSearchField = document.createElement("label");
+            selSearchField.className = "selsearch-field";
+            selSearchField.dataset.selSearchField = String(selSearchDefinition.name);
+            selSearchField.appendChild(selSearchCreateIcon(selSearchDefinition.icon || selSearchData.icon || "ri-search-line"));
 
-        // 隐藏标签为输入框提供独立业务名称。
-        const selSearchLabel = document.createElement("span");
-        // 搜索组件使用自己的隐藏文字类，不依赖表格内部样式。
-        selSearchLabel.className = "selsearch-accessibility-label";
-        // 标签文字来自当前语言搜索 JSON。
-        selSearchLabel.textContent = selSearchLocaleData.label || "搜索";
+            const selSearchLabel = document.createElement("span");
+            selSearchLabel.className = "selsearch-accessibility-label";
+            selSearchLabel.textContent = selSearchDefinition.label || selSearchLocaleData.label || "搜索";
 
-        // 原生 search 输入保留移动端键盘、清除语义和浏览器自动填充控制。
-        const selSearchInput = document.createElement("input");
-        // 输入框使用组件分组前缀，避免样式泄漏到其他表单。
-        selSearchInput.className = "selsearch-field-input";
-        // 搜索类型表达关键词用途。
-        selSearchInput.type = "search";
-        // 禁用浏览器历史补全，演示数据不会混入旧关键词。
-        selSearchInput.autocomplete = "off";
-        // 当前语言可访问名称与隐藏标签一致。
-        selSearchInput.setAttribute("aria-label", selSearchLocaleData.label || "搜索");
-        // 占位文字解释可搜索字段。
-        selSearchInput.placeholder = selSearchLocaleData.placeholder || "";
-        // 默认关键词由数据显式提供。
-        selSearchInput.value = String(selSearchData.defaultValue || "");
+            const selSearchInput = document.createElement("input");
+            selSearchInput.className = "selsearch-field-input";
+            selSearchInput.type = "search";
+            selSearchInput.autocomplete = "off";
+            selSearchInput.name = String(selSearchDefinition.name);
+            selSearchInput.setAttribute("aria-label", selSearchLabel.textContent);
+            selSearchInput.placeholder = selSearchDefinition.placeholder || "";
+            selSearchInput.value = String(selSearchDefinition.defaultValue || "");
 
-        // 清空按钮只在配置允许且输入非空时显示。
-        const selSearchClearButton = document.createElement("button");
-        // 独立清空按钮使用紧凑圆形视觉。
-        selSearchClearButton.className = "selsearch-field-clear";
-        // 清空操作不得触发表单默认提交。
-        selSearchClearButton.type = "button";
-        // 当前语言完整说明用于鼠标悬停和屏幕阅读器。
-        selSearchClearButton.setAttribute("aria-label", selSearchLocaleData.clearLabel || "清空");
-        // 清空图标允许应用选择视觉，但不改变动作语义。
-        selSearchClearButton.appendChild(selSearchCreateIcon(selSearchData.clearIcon || "ri-close-line"));
+            const selSearchClearButton = document.createElement("button");
+            selSearchClearButton.className = "selsearch-field-clear";
+            selSearchClearButton.type = "button";
+            selSearchClearButton.setAttribute("aria-label", selSearchDefinition.clearLabel || selSearchLocaleData.clearLabel || "清空");
+            selSearchClearButton.appendChild(selSearchCreateIcon(selSearchDefinition.clearIcon || selSearchData.clearIcon || "ri-close-line"));
+
+            selSearchField.append(selSearchLabel, selSearchInput, selSearchClearButton);
+            selSearchFields.set(String(selSearchDefinition.name), {
+                definition: selSearchDefinition, field: selSearchField, label: selSearchLabel,
+                input: selSearchInput, clearButton: selSearchClearButton
+            });
+        });
+        // 旧单值控制器继续把第一个字段作为 primary，避免破坏现有 setValue/getValue/focus 调用。
+        const selSearchPrimaryField = selSearchFields.values().next().value;
 
         // 查询按钮是搜索控件唯一显式提交入口。
         const selSearchSubmitButton = document.createElement("button");
@@ -110,27 +114,28 @@
         // 图标与文字共同加入主按钮。
         selSearchSubmitButton.appendChild(selSearchSubmitLabel);
 
-        // 输入区域按图标、标签、输入框和清空按钮顺序组装。
-        selSearchField.append(selSearchLabel, selSearchInput, selSearchClearButton);
-        // 字段和查询按钮加入原生搜索表单。
-        selSearchForm.append(selSearchField, selSearchSubmitButton);
+        // 所有独立查询字段按声明顺序排列，最后只有一个查询按钮。
+        selSearchForm.append(...Array.from(selSearchFields.values()).map((selSearchEntry) => selSearchEntry.field), selSearchSubmitButton);
+        selSearchForm.classList.toggle("selsearch-form-multiple", selSearchFields.size > 1);
+        selSearchForm.style.setProperty("--selsearch-field-count", String(selSearchFields.size));
         // 当前宿主只保存本组件生成的结构。
         selSearchHost.replaceChildren(selSearchForm);
 
         // 控件状态只保存当前实例值和加载标记。
         const selSearchState = {
-            // value 是最后一次提交或外部设置后的搜索关键词。
-            value: selSearchInput.value,
+            // values 保存最后一次提交的字段快照，后台分页调用不会读取尚未提交的输入草稿。
+            values: Object.fromEntries(Array.from(selSearchFields, ([name, entry]) => [name, entry.input.value])),
             // loading 防止查询进行中重复提交。
             loading: false
         };
 
         // 根据输入内容同步清空按钮，空值时避免显示无效动作。
-        function selSearchSyncClearButton() {
-            // 配置关闭清空能力时按钮始终隐藏。
-            const selSearchCanClear = selSearchLocaleData.clearable !== false && Boolean(selSearchInput.value);
-            // hidden 属性同时控制视觉和辅助技术。
-            selSearchClearButton.hidden = !selSearchCanClear;
+        function selSearchSyncClearButtons() {
+            selSearchFields.forEach((selSearchEntry) => {
+                // 每个字段只根据自身内容显示清空动作，避免清空一个条件时影响其他查询值。
+                const selSearchCanClear = selSearchLocaleData.clearable !== false && Boolean(selSearchEntry.input.value);
+                selSearchEntry.clearButton.hidden = !selSearchCanClear;
+            });
         }
 
         // 向当前业务实例广播查询，不直接接触表格内部状态或接口路径。
@@ -139,17 +144,20 @@
             if (selSearchState.loading) {
                 return false;
             }
-            // 当前输入转为字符串并按配置决定是否去除首尾空格。
-            const selSearchKeyword = selSearchLocaleData.trim === false ? selSearchInput.value : selSearchInput.value.trim();
+            // 每个输入独立规范化，字段之间由业务后台按 AND 组合而不是拼成跨列 OR 关键字。
+            const selSearchValues = Object.fromEntries(Array.from(selSearchFields, ([name, entry]) => {
+                const value = selSearchLocaleData.trim === false ? entry.input.value : entry.input.value.trim();
+                entry.input.value = value;
+                return [name, value];
+            }));
+            const selSearchKeyword = selSearchValues.keyword ?? String(Object.values(selSearchValues)[0] || "");
             // 不允许空查询时保持焦点并停止事件。
-            if (selSearchLocaleData.allowEmpty === false && !selSearchKeyword) {
-                selSearchInput.focus();
+            if (selSearchLocaleData.allowEmpty === false && !Object.values(selSearchValues).some(Boolean)) {
+                selSearchPrimaryField.input.focus();
                 return false;
             }
             // 保存最后提交值，供公开控制器读取。
-            selSearchState.value = selSearchKeyword;
-            // 输入框同步规范化后的关键词。
-            selSearchInput.value = selSearchKeyword;
+            selSearchState.values = { ...selSearchValues };
             // 当前实例根广播稳定查询事件。
             selSearchGridRoot.dispatchEvent(new CustomEvent("selSearch:submit", {
                 // 事件允许页面更高层监听，但 detail 保留完整实例键。
@@ -157,11 +165,12 @@
                 // 事件详情只包含通用实例标识和关键词。
                 detail: {
                     gridId: selSearchGridId,
-                    keyword: selSearchKeyword
+                    keyword: selSearchKeyword,
+                    values: { ...selSearchValues }
                 }
             }));
             // 同步清空按钮可见性。
-            selSearchSyncClearButton();
+            selSearchSyncClearButtons();
             // true 表示查询事件已经成功发出。
             return true;
         }
@@ -169,11 +178,11 @@
         // 设置输入值但不擅自提交，调用方可明确决定刷新时机。
         function selSearchSetValue(selSearchValue) {
             // 可空值统一转换为空字符串。
-            selSearchInput.value = String(selSearchValue ?? "");
-            // 控制器状态同步外部设置值。
-            selSearchState.value = selSearchInput.value;
+            selSearchPrimaryField.input.value = String(selSearchValue ?? "");
+            // 控制器状态同步外部设置值，其他字段保持当前已提交条件。
+            selSearchState.values = { ...selSearchState.values, [selSearchPrimaryField.definition.name]: selSearchPrimaryField.input.value };
             // 清空按钮跟随最新输入状态。
-            selSearchSyncClearButton();
+            selSearchSyncClearButtons();
             // true 表示当前实例输入已更新。
             return true;
         }
@@ -181,7 +190,9 @@
         // 清空当前实例关键词，并按调用选项决定是否立即查询全部结果。
         function selSearchClear(selSearchOptions = {}) {
             // 输入框与控制器状态同时恢复空值。
-            selSearchSetValue("");
+            selSearchFields.forEach((selSearchEntry) => { selSearchEntry.input.value = ""; });
+            selSearchState.values = Object.fromEntries(Array.from(selSearchFields.keys(), (name) => [name, ""]));
+            selSearchSyncClearButtons();
             // 默认遵循 JSON 的 submitOnClear；调用方可用 submit 明确覆盖。
             const selSearchShouldSubmit = selSearchOptions.submit ?? (selSearchLocaleData.submitOnClear !== false);
             // 需要刷新时复用统一提交入口。
@@ -189,7 +200,7 @@
                 selSearchSubmit();
             }
             // 清空后把键盘焦点送回输入框，便于继续输入。
-            selSearchInput.focus();
+            selSearchPrimaryField.input.focus();
             // true 表示清空动作完成。
             return true;
         }
@@ -206,8 +217,40 @@
             return true;
         }
 
+        /** 切换查询元素独立布局；只影响页面编辑几何，不改变统一提交行为。 */
+        function selSearchSetIndependentLayout(selSearchIndependent) {
+            selSearchForm.classList.toggle("selsearch-form-independent-layout", Boolean(selSearchIndependent));
+            return true;
+        }
+
+        /** 返回当前查询组件内每个可编辑元素；提交按钮仍由同一 form 统一提交全部条件。 */
+        function selSearchGetLayoutTargets() {
+            return selFreeze({
+                ...Object.fromEntries(Array.from(selSearchFields, ([name, entry]) => [name, entry.field])),
+                submit: selSearchSubmitButton
+            });
+        }
+
+        /** 返回当前查询条件字段名；结构判断不把提交按钮误认为查询字段。 */
+        function selSearchGetFieldNames() {
+            return selFreeze(Array.from(selSearchFields.keys()));
+        }
+
         // 输入变化只更新清空按钮，不再直接筛选表格。
-        selSearchInput.addEventListener("input", selSearchSyncClearButton);
+        selSearchFields.forEach((selSearchEntry) => {
+            selSearchEntry.input.addEventListener("input", selSearchSyncClearButtons);
+            selSearchEntry.input.addEventListener("keydown", (selSearchEvent) => {
+                if (selSearchEvent.key !== "Enter") return;
+                selSearchEvent.preventDefault();
+                if (selSearchLocaleData.submitOnEnter !== false) selSearchSubmit();
+            });
+            selSearchEntry.clearButton.addEventListener("click", () => {
+                selSearchEntry.input.value = "";
+                selSearchSyncClearButtons();
+                if (selSearchLocaleData.submitOnClear !== false) selSearchSubmit();
+                selSearchEntry.input.focus();
+            });
+        });
         // 表单提交统一承接按钮点击和 Enter。
         selSearchForm.addEventListener("submit", (selSearchEvent) => {
             // 阻止浏览器跳转或刷新页面。
@@ -215,23 +258,8 @@
             // 配置关闭 Enter 时，键盘提交由 keydown 分支阻止；按钮仍可查询。
             selSearchSubmit();
         });
-        // 输入框显式处理 Enter，避免不同浏览器对 search 表单原生提交行为不一致。
-        selSearchInput.addEventListener("keydown", (selSearchEvent) => {
-            // 非 Enter 键保留输入框默认行为。
-            if (selSearchEvent.key !== "Enter") {
-                return;
-            }
-            // Enter 始终阻止页面跳转，查询是否执行由配置决定。
-            selSearchEvent.preventDefault();
-            // 配置允许时复用统一提交入口。
-            if (selSearchLocaleData.submitOnEnter !== false) {
-                selSearchSubmit();
-            }
-        });
-        // 清空按钮只控制当前实例。
-        selSearchClearButton.addEventListener("click", () => selSearchClear());
         // 首次同步清空按钮，默认空关键词时不显示。
-        selSearchSyncClearButton();
+        selSearchSyncClearButtons();
 
         // 运行时切换只替换可见文案与行为配置，不重建输入框，因此关键词、焦点和加载状态保持不变。
         function selSearchSetLocale(selSearchNext = {}) {
@@ -239,12 +267,16 @@
             if (!selSearchNextData || typeof selSearchNextData !== "object") return false;
             selSearchLocaleData = selSearchNextData;
             selSearchForm.setAttribute("aria-label", selSearchLocaleData.label || "搜索");
-            selSearchLabel.textContent = selSearchLocaleData.label || "搜索";
-            selSearchInput.setAttribute("aria-label", selSearchLocaleData.label || "搜索");
-            selSearchInput.placeholder = selSearchLocaleData.placeholder || "";
-            selSearchClearButton.setAttribute("aria-label", selSearchLocaleData.clearLabel || "清空");
+            const selSearchNextFields = new Map((selSearchLocaleData.fields || []).map((field) => [String(field.name), field]));
+            selSearchFields.forEach((selSearchEntry, name) => {
+                const nextField = selSearchNextFields.get(name) || selSearchEntry.definition;
+                selSearchEntry.label.textContent = nextField.label || selSearchLocaleData.label || "搜索";
+                selSearchEntry.input.setAttribute("aria-label", selSearchEntry.label.textContent);
+                selSearchEntry.input.placeholder = nextField.placeholder || "";
+                selSearchEntry.clearButton.setAttribute("aria-label", nextField.clearLabel || selSearchLocaleData.clearLabel || "清空");
+            });
             selSearchSubmitLabel.textContent = selSearchLocaleData.buttonLabel || "查询";
-            selSearchSyncClearButton();
+            selSearchSyncClearButtons();
             return true;
         }
 
@@ -255,17 +287,31 @@
             // root 是当前搜索宿主，便于布局调试。
             root: selSearchHost,
             // input 暴露原生输入供表单集成，但业务逻辑不得修改内部类。
-            input: selSearchInput,
+            input: selSearchPrimaryField.input,
+            // 页面编辑开启后允许每个查询元素独立拖动调宽，业务提交仍保持整组一次执行。
+            setIndependentLayout: selSearchSetIndependentLayout,
+            // 公开真实布局目标，应用无需查询组件私有类名。
+            getLayoutTargets: selSearchGetLayoutTargets,
+            // getFieldNames 只用于识别查询条件结构变化；内部字段和查询按钮不属于页面布局登记坐标。
+            getFieldNames: selSearchGetFieldNames,
             // submit 触发当前关键词查询。
             submit: selSearchSubmit,
             // clear 清空当前关键词并可选提交。
             clear: selSearchClear,
             // focus 把键盘焦点移到当前输入框。
-            focus: () => selSearchInput.focus(),
+            focus: () => selSearchPrimaryField.input.focus(),
             // setValue 更新当前实例输入。
             setValue: selSearchSetValue,
             // getValue 返回当前输入框的实时值。
-            getValue: () => selSearchInput.value,
+            getValue: () => selSearchPrimaryField.input.value,
+            // setValues/getValues 是多字段后台查询的稳定公开入口，字段名来自应用显式配置。
+            setValues(values = {}) {
+                selSearchFields.forEach((entry, name) => { entry.input.value = String(values[name] ?? ""); });
+                selSearchState.values = Object.fromEntries(Array.from(selSearchFields, ([name, entry]) => [name, entry.input.value]));
+                selSearchSyncClearButtons();
+                return true;
+            },
+            getValues: () => Object.fromEntries(Array.from(selSearchFields, ([name, entry]) => [name, entry.input.value])),
             // setLoading 控制重复提交和忙碌语义。
             setLoading: selSearchSetLoading,
             // isLoading 返回当前实例查询状态。
@@ -301,6 +347,15 @@
                 selSearchInstances.set(selSearchInstance.id, selSearchInstance);
             }
             // 调用方通过返回值判断挂载是否成功。
+            return selSearchInstance;
+        },
+        // remount 只用于字段结构变化；旧 DOM 由实例创建边界替换，同名注册表原子指向新控制器。
+        remount(selSearchGridRoot, selSearchData) {
+            if (!(selSearchGridRoot instanceof Element)) return null;
+            const selSearchGridId = selSearchGridRoot.dataset.selGrid;
+            if (selSearchGridId) selSearchInstances.delete(selSearchGridId);
+            const selSearchInstance = selSearchCreateInstance(selSearchGridRoot, selSearchData);
+            if (selSearchInstance) selSearchInstances.set(selSearchInstance.id, selSearchInstance);
             return selSearchInstance;
         },
         // get 按完整业务实例名读取控制器。

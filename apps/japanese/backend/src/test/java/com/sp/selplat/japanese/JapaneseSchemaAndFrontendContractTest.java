@@ -69,6 +69,7 @@ class JapaneseSchemaAndFrontendContractTest {
                 .contains("panel.create")
                 .contains("tree.mount")
                 .contains("grid.mount")
+                .contains("selectionMode: \"SINGLE\"")
                 .contains("windowComponent.mount")
                 .contains("confirmDialog.mount")
                 .contains("addEventListener(\"dblclick\"")

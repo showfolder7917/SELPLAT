@@ -1,19 +1,29 @@
 package com.sp.selplat.referencedata.capability.configuration.service.impl;
 
 import com.sp.selplat.common.exception.CommonBusinessException;
+import com.sp.selplat.common.service.BaseService;
 import com.sp.selplat.common.service.BaseServiceImpl;
+import com.sp.selplat.common.util.CommonBatchParam;
+import com.sp.selplat.common.util.CommonPageParam;
+import com.sp.selplat.common.util.CommonPageResult;
+import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.referencedata.capability.configuration.service.ReferenceDataConfigurationService;
 import com.sp.selplat.referencedata.referencedatacontrollayout.dao.ReferenceDataControlLayoutDao;
+import com.sp.selplat.referencedata.referencedatatable.service.ReferenceDataTableService;
+import com.sp.selplat.referencedata.referencedatatableelement.service.ReferenceDataTableElementService;
+import com.sp.selplat.referencedata.referencedatatreenode.service.ReferenceDataTreeNodeService;
+import com.sp.selplat.referencedata.referencedatatype.service.ReferenceDataTypeService;
+import com.sp.selplat.referencedata.referencedatawindow.service.ReferenceDataWindowService;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,10 +48,19 @@ public class ReferenceDataConfigurationServiceImpl
             "ReferenceDataTableElement", "TABLE_ELEMENT",
             "ReferenceDataControlLayout", "CONTROL_LAYOUT",
             "ReferenceDataWindow", "WINDOW");
+    // 业务表名只负责选择同一真实 Grid 的视图，数据库父子关系仍只使用 tableId。
+    private static final Map<String, String> VIEW_CODES = Map.of(
+            "ReferenceDataType", "TYPE",
+            "ReferenceDataTreeNode", "TREE",
+            "ReferenceDataControlLayout", "CONTROL",
+            "ReferenceDataWindow", "WINDOW",
+            "ReferenceDataTable", "TABLE",
+            "ReferenceDataTableElement", "TABLE_ELEMENT");
+    // 单次公共分页最多读取一千条；超过时按 totalCount 继续逐页读取，不截断业务配置。
+    private static final int SERVICE_PAGE_SIZE = 1000;
     // 控件布局只允许页面编辑协议中明确登记的字段。
     private static final Set<String> CONTROL_FIELDS = Set.of(
-            "orderNo", "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
-            "gapBefore", "gapAfter", "gridColumnSpan", "wrap", "x", "y", "breakpoint");
+            "orderNo", "width", "height", "wrap", "x", "y", "breakpoint");
     // 表格元素页面编辑只维护显示布局，不修改字段绑定和渲染业务。
     private static final Set<String> ELEMENT_FIELDS = Set.of("width", "visible", "sortnum");
     // Window 页面编辑只维护几何状态和受控定位模式。
@@ -49,19 +68,35 @@ public class ReferenceDataConfigurationServiceImpl
             "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight",
             "x", "y", "positionMode", "breakpoint");
 
-    private final JdbcTemplate jdbcTemplate;
+    private final ReferenceDataTypeService typeService;
+    private final ReferenceDataTreeNodeService treeNodeService;
+    private final ReferenceDataTableService tableService;
+    private final ReferenceDataTableElementService tableElementService;
+    private final ReferenceDataWindowService windowService;
 
     /**
-     * 创建只访问 reference-data 私有数据库的配置服务。
-     * 真实传参示例：Spring 注入名为 {@code referenceDataJdbcTemplate} 的模板。
-     * 真实返回示例：服务可查询六张固定配置表并参与同一事务管理器。
-     * 异常或副作用示例：具名模板缺失时应用启动失败，不会回退其他项目数据源。
+     * 创建只通过六张表业务 Service 编排页面配置的能力。
+     * 真实传参示例：Spring 注入 Type、TreeNode、Table、TableElement 和 Window 五个业务 Service。
+     * 真实返回示例：配置能力可调用自身 ControlLayout BaseService 与另外五表 Service 完成跨表编排。
+     * 异常或副作用示例：任一业务 Service 缺失时应用启动失败，不允许回退到直接 JdbcTemplate SQL。
      *
-     * @param jdbcTemplate reference-data 模块私有 JDBC 模板
+     * @param typeService 类型目录业务 Service
+     * @param treeNodeService 树节点业务 Service
+     * @param tableService 真实 Grid 业务 Service
+     * @param tableElementService Grid 元素业务 Service
+     * @param windowService Window 业务 Service
      */
     public ReferenceDataConfigurationServiceImpl(
-            @Qualifier("referenceDataJdbcTemplate") JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+            ReferenceDataTypeService typeService,
+            ReferenceDataTreeNodeService treeNodeService,
+            ReferenceDataTableService tableService,
+            ReferenceDataTableElementService tableElementService,
+            ReferenceDataWindowService windowService) {
+        this.typeService = typeService;
+        this.treeNodeService = treeNodeService;
+        this.tableService = tableService;
+        this.tableElementService = tableElementService;
+        this.windowService = windowService;
     }
 
     /**
@@ -93,11 +128,22 @@ public class ReferenceDataConfigurationServiceImpl
         if (tableName == null || tableCode == null) {
             return List.of();
         }
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT e.* FROM ReferenceDataTableElement e JOIN ReferenceDataTable t ON t.id=e.tableId "
-                        + "WHERE t.dataTableName=? AND t.code=? AND t.status<>0 "
-                        + "AND e.elementType='COLUMN' AND e.status<>0 AND e.visible=TRUE ORDER BY e.sortnum,e.id",
-                tableName.trim(), tableCode.trim());
+        String viewCode = VIEW_CODES.get(tableName.trim());
+        if (viewCode == null) {
+            return List.of();
+        }
+        Map<String, Object> table = singleRecord(tableService, Map.of(
+                "code", tableCode.trim(), "statusIn", List.of(1, 2)));
+        if (table.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> rows = records(tableElementService, Map.of(
+                "tableId", table.get("id"),
+                "viewCode", viewCode,
+                "elementType", "COLUMN",
+                "statusIn", List.of(1, 2),
+                "visible", true));
+        rows.sort(recordOrder("sortnum"));
         String labelField = locale != null && locale.toLowerCase().startsWith("ja")
                 ? "labelJa" : locale != null && locale.toLowerCase().startsWith("en") ? "labelEn" : "labelZh";
         List<Map<String, Object>> columns = new ArrayList<>();
@@ -124,7 +170,7 @@ public class ReferenceDataConfigurationServiceImpl
      * 真实返回示例：返回记录字段以及 {@code entityType=TABLE,sourceTable=ReferenceDataTable}。
      * 异常或副作用示例：格式错误、未命中或跨表重复时抛出明确业务异常；方法不修改数据库。
      *
-     * @param code 后端生成的全局对象 code
+     * @param code 后端按对象前缀与本表 id 生成的公开 code
      * @return 包含配置记录、实体类型和来源表的统一结果
      */
     @Override
@@ -132,9 +178,8 @@ public class ReferenceDataConfigurationServiceImpl
         String requiredCode = requiredCode(code);
         List<Map<String, Object>> matches = new ArrayList<>();
         CONFIG_TABLES.forEach((tableName, entityType) -> {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT * FROM " + tableName + " WHERE code = ? AND status <> 0",
-                    requiredCode);
+            List<Map<String, Object>> rows = records(serviceFor(tableName), Map.of(
+                    "code", requiredCode, "statusIn", List.of(1, 2)));
             for (Map<String, Object> row : rows) {
                 Map<String, Object> result = new LinkedHashMap<>(row);
                 result.put("entityType", entityType);
@@ -163,16 +208,20 @@ public class ReferenceDataConfigurationServiceImpl
     @Override
     public CommonResult getPageConfiguration(String pageCode) {
         String requiredPageCode = requiredCode(pageCode);
-        List<Map<String, Object>> controls = jdbcTemplate.queryForList(
-                "SELECT * FROM ReferenceDataControlLayout WHERE pageCode = ? AND status <> 0 ORDER BY orderNo,id",
-                requiredPageCode);
-        List<Map<String, Object>> elements = jdbcTemplate.queryForList(
-                "SELECT e.* FROM ReferenceDataTableElement e JOIN ReferenceDataTable t ON t.id=e.tableId "
-                        + "WHERE t.pageCode=? AND e.status<>0 ORDER BY e.tableId,e.sortnum,e.id",
-                requiredPageCode);
-        List<Map<String, Object>> windows = jdbcTemplate.queryForList(
-                "SELECT * FROM ReferenceDataWindow WHERE pageCode = ? AND status <> 0 ORDER BY sortnum,id",
-                requiredPageCode);
+        List<Map<String, Object>> controls = records(this, Map.of(
+                "pageCode", requiredPageCode, "statusIn", List.of(1, 2)));
+        controls.sort(recordOrder("orderNo"));
+        Map<String, Object> table = singleRecord(tableService, Map.of(
+                "pageCode", requiredPageCode, "statusIn", List.of(1, 2)));
+        List<Map<String, Object>> elements = table.isEmpty() ? new ArrayList<>()
+                : records(tableElementService, Map.of(
+                        "tableId", table.get("id"), "statusIn", List.of(1, 2)));
+        elements.sort(Comparator
+                .comparing((Map<String, Object> row) -> String.valueOf(row.get("viewCode")))
+                .thenComparing(recordOrder("sortnum")));
+        List<Map<String, Object>> windows = records(windowService, Map.of(
+                "pageCode", requiredPageCode, "statusIn", List.of(1, 2)));
+        windows.sort(recordOrder("sortnum"));
         long version = controls.stream()
                 .mapToLong(row -> longValue(row.get("versionNo"), 0L))
                 .max()
@@ -206,26 +255,35 @@ public class ReferenceDataConfigurationServiceImpl
         String requiredPageCode = requiredCode(pageCode);
         Map<String, Object> requiredChangeSet = changeSet == null ? Map.of() : changeSet;
         long baseVersion = longValue(requiredChangeSet.get("baseVersion"), 0L);
-        long currentVersion = jdbcTemplate.queryForObject(
-                "SELECT COALESCE(MAX(versionNo),0) FROM ReferenceDataControlLayout WHERE pageCode=? AND status<>0",
-                Long.class,
-                requiredPageCode);
+        List<Map<String, Object>> pageControls = records(this, Map.of(
+                "pageCode", requiredPageCode, "statusIn", List.of(1, 2)));
+        long currentVersion = pageControls.stream()
+                .mapToLong(row -> longValue(row.get("versionNo"), 0L))
+                .max()
+                .orElse(0L);
         if (baseVersion != currentVersion) {
             throw new CommonBusinessException("REFERENCE_DATA_PAGE_VERSION_CONFLICT", "页面配置已被其他管理员更新，请刷新后重试。");
         }
         int updatedCount = 0;
-        updatedCount += updateRows("ReferenceDataControlLayout", requiredPageCode,
+        updatedCount += updateRows(this, requiredPageCode,
                 listValue(requiredChangeSet.get("controls")), CONTROL_FIELDS);
-        updatedCount += updateElements(requiredPageCode, listValue(requiredChangeSet.get("tableElements")));
-        updatedCount += updateRows("ReferenceDataWindow", requiredPageCode,
+        Map<String, Object> pageTable = singleRecord(tableService, Map.of(
+                "pageCode", requiredPageCode, "statusIn", List.of(1, 2)));
+        long pageTableId = longValue(pageTable.get("id"), -1L);
+        updatedCount += updateElements(pageTableId, listValue(requiredChangeSet.get("tableElements")));
+        updatedCount += updateRows(windowService, requiredPageCode,
                 listValue(requiredChangeSet.get("windows")), WINDOW_FIELDS);
         long newVersion = currentVersion + 1L;
-        jdbcTemplate.update(
-                "UPDATE ReferenceDataControlLayout SET versionNo=?,lastOperateUserId=?,updatedAt=CURRENT_TIMESTAMP "
-                        + "WHERE pageCode=? AND status<>0",
-                newVersion,
-                getCurrentOperatorId(),
-                requiredPageCode);
+        if (!pageControls.isEmpty()) {
+            CommonBatchParam versionUpdate = new CommonBatchParam();
+            versionUpdate.setItems(pageControls.stream().map(control -> {
+                CommonParam item = new CommonParam();
+                item.putParam("id", control.get("id"));
+                item.putParam("versionNo", newVersion);
+                return item;
+            }).toList());
+            updateBatch(versionUpdate);
+        }
         Map<String, Object> saved = new LinkedHashMap<>();
         saved.put("pageCode", requiredPageCode);
         saved.put("version", newVersion);
@@ -234,7 +292,7 @@ public class ReferenceDataConfigurationServiceImpl
     }
 
     private int updateRows(
-            String tableName,
+            BaseService targetService,
             String pageCode,
             List<Map<String, Object>> changes,
             Set<String> allowedFields) {
@@ -245,24 +303,21 @@ public class ReferenceDataConfigurationServiceImpl
             if (values.isEmpty()) {
                 continue;
             }
-            List<Object> arguments = new ArrayList<>(values.values());
-            arguments.add(getCurrentOperatorId());
-            arguments.add(code);
-            arguments.add(pageCode);
-            String assignments = String.join(",", values.keySet().stream().map(field -> field + "=?").toList());
-            int affected = jdbcTemplate.update(
-                    "UPDATE " + tableName + " SET " + assignments
-                            + ",lastOperateUserId=?,updatedAt=CURRENT_TIMESTAMP WHERE code=? AND pageCode=? AND status<>0",
-                    arguments.toArray());
-            if (affected != 1) {
+            Map<String, Object> record = singleRecord(targetService, Map.of(
+                    "code", code, "statusIn", List.of(1, 2)));
+            if (record.isEmpty() || !pageCode.equals(String.valueOf(record.get("pageCode")))) {
                 throw new CommonBusinessException("REFERENCE_DATA_PAGE_CODE_MISMATCH", "配置 code 不属于当前页面。");
             }
-            count += affected;
+            CommonParam update = new CommonParam();
+            update.putParam("id", record.get("id"));
+            values.forEach(update::putParam);
+            targetService.update(update);
+            count++;
         }
         return count;
     }
 
-    private int updateElements(String pageCode, List<Map<String, Object>> changes) {
+    private int updateElements(long pageTableId, List<Map<String, Object>> changes) {
         int count = 0;
         for (Map<String, Object> change : changes) {
             String code = requiredCode(String.valueOf(change.get("code")));
@@ -270,22 +325,120 @@ public class ReferenceDataConfigurationServiceImpl
             if (values.isEmpty()) {
                 continue;
             }
-            List<Object> arguments = new ArrayList<>(values.values());
-            arguments.add(getCurrentOperatorId());
-            arguments.add(code);
-            arguments.add(pageCode);
-            String assignments = String.join(",", values.keySet().stream().map(field -> "e." + field + "=?").toList());
-            int affected = jdbcTemplate.update(
-                    "UPDATE ReferenceDataTableElement e SET " + assignments
-                            + ",e.lastOperateUserId=?,e.updatedAt=CURRENT_TIMESTAMP WHERE e.code=? AND e.status<>0 "
-                            + "AND EXISTS(SELECT 1 FROM ReferenceDataTable t WHERE t.id=e.tableId AND t.pageCode=?)",
-                    arguments.toArray());
-            if (affected != 1) {
+            Map<String, Object> record = singleRecord(tableElementService, Map.of(
+                    "code", code, "statusIn", List.of(1, 2)));
+            long tableId = longValue(record.get("tableId"), -1L);
+            if (record.isEmpty() || tableId != pageTableId) {
                 throw new CommonBusinessException("REFERENCE_DATA_PAGE_CODE_MISMATCH", "表格元素 code 不属于当前页面。");
             }
-            count += affected;
+            CommonParam update = new CommonParam();
+            update.putParam("id", record.get("id"));
+            values.forEach(update::putParam);
+            tableElementService.update(update);
+            count++;
         }
         return count;
+    }
+
+    /**
+     * 通过固定表名选择对应业务 Service，禁止调用方提交或拼接数据库表名。
+     * 真实传参示例：{@code ReferenceDataWindow} 返回 Window Service。
+     * 真实返回示例：六个固定表名分别返回自身业务 Service；ControlLayout 返回当前配置 Service 的 BaseService 能力。
+     * 异常或副作用示例：未知表名抛出 IllegalArgumentException；方法不访问数据库。
+     *
+     * @param tableName CONFIG_TABLES 中的固定表名
+     * @return 只操作该固定表的业务 Service
+     */
+    private BaseService serviceFor(String tableName) {
+        return switch (tableName) {
+            case "ReferenceDataType" -> typeService;
+            case "ReferenceDataTreeNode" -> treeNodeService;
+            case "ReferenceDataTable" -> tableService;
+            case "ReferenceDataTableElement" -> tableElementService;
+            case "ReferenceDataControlLayout" -> this;
+            case "ReferenceDataWindow" -> windowService;
+            default -> throw new IllegalArgumentException("unsupported configuration table: " + tableName);
+        };
+    }
+
+    /**
+     * 通过业务 Service 分页读取全部匹配记录，避免 capability 直接接触 JdbcTemplate。
+     * 真实传参示例：元素 Service 与 {@code {tableId:101020,viewCode:TYPE,statusIn:[1,2]}}。
+     * 真实返回示例：总数 1201 时依次读取两页并返回完整 1201 条记录。
+     * 异常或副作用示例：任一分页查询失败时直接传播业务异常，不返回残缺列表。
+     *
+     * @param targetService 当前固定表的业务 Service
+     * @param filters 真实字段及受控后缀条件
+     * @return 按数据库分页顺序合并的完整记录列表
+     */
+    private List<Map<String, Object>> records(BaseService targetService, Map<String, Object> filters) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        int pageNo = 1;
+        long totalCount;
+        do {
+            CommonPageParam query = new CommonPageParam();
+            query.setPageNo(pageNo);
+            query.setPageSize(SERVICE_PAGE_SIZE);
+            filters.forEach(query::putParam);
+            CommonPageResult page = targetService.getStore(query);
+            result.addAll(page.getRecords());
+            totalCount = page.getTotalCount();
+            pageNo++;
+        } while (result.size() < totalCount);
+        return result;
+    }
+
+    /**
+     * 查询应唯一命中的业务记录，并在重复时明确阻断配置歧义。
+     * 真实传参示例：表格 Service 与 {@code {code:table101020,statusIn:[1,2]}}。
+     * 真实返回示例：命中时返回表格记录，未命中时返回空 Map。
+     * 异常或副作用示例：命中两条时抛出 REFERENCE_DATA_RECORD_DUPLICATE；方法不修改数据库。
+     *
+     * @param targetService 当前固定表的业务 Service
+     * @param filters 唯一记录查询条件
+     * @return 唯一记录或空 Map
+     */
+    private Map<String, Object> singleRecord(BaseService targetService, Map<String, Object> filters) {
+        List<Map<String, Object>> matches = records(targetService, filters);
+        if (matches.size() > 1) {
+            throw new CommonBusinessException("REFERENCE_DATA_RECORD_DUPLICATE", "配置条件命中多条记录。");
+        }
+        return matches.isEmpty() ? Map.of() : matches.get(0);
+    }
+
+    /**
+     * 返回按业务排序字段和 id 的稳定比较器。
+     * 真实传参示例：{@code sortnum} 把 10、20、20/id=3 排为 10、20/id较小、20/id较大。
+     * 真实返回示例：可直接传给 List.sort 的比较器。
+     * 异常或副作用示例：字段为空或不是数字时按 0 排序；方法不修改记录。
+     *
+     * @param fieldName 当前记录的数字排序字段
+     * @return 先比较目标字段再比较 id 的稳定比较器
+     */
+    private Comparator<Map<String, Object>> recordOrder(String fieldName) {
+        return Comparator
+                .comparing((Map<String, Object> row) -> decimalValue(row.get(fieldName)))
+                .thenComparingLong(row -> longValue(row.get("id"), 0L));
+    }
+
+    /**
+     * 把数据库数字或数字文本转换为可稳定比较的小数值。
+     * 真实传参示例：{@code new BigDecimal("10.00")} 或 {@code "20"} 分别返回 10.00 和 20。
+     * 真实返回示例：空值或非法文本返回 {@link BigDecimal#ZERO}。
+     * 异常或副作用示例：不向调用方传播数字格式异常，也不修改输入记录。
+     *
+     * @param value 数据库读取的排序字段值
+     * @return 用于排序的十进制数值
+     */
+    private BigDecimal decimalValue(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return new BigDecimal(String.valueOf(value));
+        } catch (NumberFormatException exception) {
+            return BigDecimal.ZERO;
+        }
     }
 
     private Map<String, Object> validatedValues(Map<String, Object> change, Set<String> allowedFields) {
@@ -297,10 +450,10 @@ public class ReferenceDataConfigurationServiceImpl
             if (!allowedFields.contains(field)) {
                 throw new CommonBusinessException("REFERENCE_DATA_LAYOUT_FIELD_INVALID", "页面配置包含不允许修改的字段：" + field);
             }
-            if ((field.toLowerCase().contains("width") || field.toLowerCase().contains("height")
-                    || field.toLowerCase().contains("gap")) && value != null
+            // 页面配置只剩宽高类 CSS 长度；间距字段删除后不再保留无法命中的校验分支。
+            if ((field.toLowerCase().contains("width") || field.toLowerCase().contains("height")) && value != null
                     && !CSS_LENGTH_PATTERN.matcher(String.valueOf(value)).matches()) {
-                throw new CommonBusinessException("REFERENCE_DATA_LAYOUT_VALUE_INVALID", "页面尺寸或间距格式不正确。");
+                throw new CommonBusinessException("REFERENCE_DATA_LAYOUT_VALUE_INVALID", "页面尺寸格式不正确。");
             }
             values.put(field, value);
         });

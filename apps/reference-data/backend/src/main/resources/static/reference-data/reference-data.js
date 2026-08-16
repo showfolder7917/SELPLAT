@@ -1,6 +1,6 @@
 /*
  * reference-data.js：引用数据六表管理工作台装配层。
- * 树、下拉选项与菜单统一来自 ReferenceDataTreeNode，页面布局来自 ControlLayout 和 Window。
+ * ReferenceDataType 按 optionSetCode 维护可复用类型值和分级菜单，ReferenceDataTreeNode 只维护真实树节点。
  *
  * SEL UI 组件用法：panel 负责工作台布局，search/tree/dropdown/grid 负责查询与展示，
  * windowComponent 负责编辑表单，confirmDialog 负责危险确认，personalization 负责页面配置。
@@ -78,65 +78,75 @@
      * relation 表示记录具有 parentId 层级；hasBoolean 表示该实体存在布尔业务字段。
      */
     const referenceDataModules = selFreeze({
-        // types 对应引用数据的顶级类型表，其他树、选项和菜单通过 typeId 关联它。
+        // types 对应共享选项值目录，通过 optionSetCode 和 parentTypeCode 表达选项组与菜单层级。
         types: {
             // 第一组属性定义前端键、数据库表、Grid 坐标、接口、图标和编辑窗口实例。
-            key: "types", tableName: "ReferenceDataType", gridId: "selGridTypeManagementId",
+            key: "types", tableName: "ReferenceDataType", viewCode: "TYPE", gridId: "selGridTypeManagementId",
             entity: "ReferenceDataType", api: "/api/reference-data/admin/types/", icon: "ri-database-2-line", windowId: "selWindowTypeManagementId",
             // 第二组属性定义界面名称、单条记录名称以及模块用途说明。
-            name: "数据类型", itemName: "类型", description: "定义跨项目稳定坐标和多语言名称",
-            // searchFields 是 Grid 搜索字段白名单，防止把审计字段等内部值加入模糊搜索。
-            searchFields: ["projectCode", "resourceCode", "nameZh", "nameJa", "nameEn"],
+            name: "数据类型", itemName: "类型", description: "维护页面控件的类型值、菜单层级和多语言名称",
+            // 类型只按自身 code 和上级类型 code 定位，不把名称或类型值混入结构搜索。
+            searchFields: ["code", "parentTypeCode"], searchPlaceholder: "按 Code 和上级类型 Code 查询",
+            queryFields: [
+                { name: "code", label: "Code", placeholder: "Code", icon: "ri-key-2-line" },
+                { name: "parentTypeCode", label: "上级类型 Code", placeholder: "上级类型 Code", icon: "ri-node-tree" }
+            ],
             // previewField 是树节点选中后回填到搜索框的代表字段。
-            previewField: "resourceCode"
+            previewField: "valueCode"
         },
         // tree 对应带 parentId 的层级节点表，所以 relation 明确开启递归树构造。
         tree: {
             // 模块坐标与接口全部集中登记，后续通用函数只接收 module，不再写六套分支地址。
-            key: "tree", tableName: "ReferenceDataTreeNode", gridId: "selGridTreeNodeManagementId",
+            key: "tree", tableName: "ReferenceDataTreeNode", viewCode: "TREE", gridId: "selGridTreeNodeManagementId",
             entity: "ReferenceDataTreeNode", api: "/api/reference-data/admin/tree-nodes/", icon: "ri-node-tree", windowId: "selWindowTreeNodeManagementId",
             // 用户可见名称同时用于标题、按钮、空状态和反馈文案。
-            name: "树与选项", itemName: "节点", description: "按数据类型统一维护树、下拉选项和菜单节点",
-            // 树节点可按编码、值和三种语言名称搜索。
-            searchFields: ["nodeCode", "nodeValue", "labelZh", "labelJa", "labelEn"],
+            name: "树节点", itemName: "树节点", description: "通过 code 与 parentId 维护独立父子树",
+            // 树节点可按系统 code、值和三种语言名称搜索。
+            searchFields: ["code", "parentId"], searchPlaceholder: "搜索 Code 或父节点 ID…",
             // relation=true 告诉左树使用 parentId 递归，而不是平铺记录。
-            previewField: "nodeCode", relation: true
+            previewField: "code", relation: true
         },
         // controls 是页面中全部可编辑控件与响应式布局的事实来源。
         controls: {
-            key: "controls", tableName: "ReferenceDataControlLayout", gridId: "selGridControlLayoutManagementId",
+            key: "controls", tableName: "ReferenceDataControlLayout", viewCode: "CONTROL", gridId: "selGridControlLayoutManagementId",
             entity: "ReferenceDataControlLayout", api: "/api/reference-data/admin/control-layouts/", icon: "ri-layout-grid-line", windowId: "selWindowControlLayoutManagementId",
             name: "页面控件", itemName: "控件", description: "通过唯一 code 维护页面控件和响应式布局",
-            searchFields: ["code", "projectCode", "pageCode", "parentKind", "parentCode", "controlKind", "sourceTableName"],
+            // 页面控件使用独立字段后台分页查询；字段之间由 BaseDao 按 AND 组合。
+            searchFields: [], searchPlaceholder: "按独立字段查询页面控件",
+            queryFields: [
+                { name: "code", label: "控件 Code", placeholder: "控件 Code", icon: "ri-key-2-line" },
+                { name: "parentCode", label: "父控件 Code", placeholder: "父控件 Code", icon: "ri-node-tree" },
+                { name: "optionSetCode", label: "选项组 Code", placeholder: "选项组 Code", icon: "ri-list-settings-line" }
+            ],
             previewField: "code"
         },
         // windows 单独维护 SEL Window 的默认几何状态和行为边界。
         windows: {
-            key: "windows", tableName: "ReferenceDataWindow", gridId: "selGridWindowManagementId",
+            key: "windows", tableName: "ReferenceDataWindow", viewCode: "WINDOW", gridId: "selGridWindowManagementId",
             entity: "ReferenceDataWindow", api: "/api/reference-data/admin/windows/", icon: "ri-window-line", windowId: "selWindowWindowManagementId",
             name: "Window", itemName: "Window", description: "保存 Window 宽高、位置和调整边界",
-            searchFields: ["code", "projectCode", "pageCode", "nameZh", "triggerControlCode"],
+            searchFields: ["code"], searchPlaceholder: "搜索 Code…",
             previewField: "code"
         },
         // tables 登记“哪个页面上的哪个 Grid”存在，是进入表格元素详情的父记录。
         tables: {
-            key: "tables", tableName: "ReferenceDataTable", gridId: "selGridTableManagementId",
+            key: "tables", tableName: "ReferenceDataTable", viewCode: "TABLE", gridId: "selGridTableManagementId",
             entity: "ReferenceDataTable", api: "/api/reference-data/admin/tables/", icon: "ri-table-line", windowId: "selWindowTableManagementId",
             // 该模块的预览动作不是眼睛浮层，而是进入当前表格的列配置详情。
             name: "表格定义", itemName: "表格", description: "登记项目页面表格并进入对应表格头明细",
             // code 是公开定位坐标，项目、页面和真实业务表名用于管理员检索。
-            searchFields: ["code", "projectCode", "pageCode", "dataTableName", "nameZh", "description"],
+            searchFields: ["code"], searchPlaceholder: "搜索 Code…",
             previewField: "code"
         },
         // columns 保存每个 Grid 的真实表头、绑定字段、渲染方式、宽度和显示状态。
         columns: {
             // columns 不显示为一级导航，只能在选中 tables 记录后进入，避免失去父表上下文。
-            key: "columns", tableName: "ReferenceDataTableElement", gridId: "selGridTableElementManagementId",
+            key: "columns", tableName: "ReferenceDataTableElement", viewCode: "TABLE_ELEMENT", gridId: "selGridTableElementManagementId",
             entity: "ReferenceDataTableElement", api: "/api/reference-data/admin/table-elements/", icon: "ri-layout-column-line", windowId: "selWindowTableElementManagementId",
             // 这里的“表格头”是配置管理名称，单条记录文案使用“表格列”。
             name: "表格头", itemName: "表格列", description: "配置每个页面表格的名称、宽度、多语言和显示状态",
             // 列配置既能按父表坐标检索，也能按列 ID、字段名和多语言表头检索。
-            searchFields: ["code", "projectCode", "tableId", "elementType", "fieldName", "labelZh", "labelJa", "labelEn"],
+            searchFields: ["code", "tableId"], searchPlaceholder: "搜索 Code 或所属表 ID…",
             // code 是表格元素的唯一公开坐标，tableId 只负责表内关联。
             previewField: "code", hasBoolean: true
         }
@@ -174,6 +184,10 @@
         // 页面配置 code 与版本来自后台，保存时用于页面归属校验和并发冲突保护。
         pageCode: null,
         pageVersion: 0,
+        // 七个查询控件分别保存数据库记录、真实节点和当前拖拽矩形，禁止合并成一个搜索栏草稿。
+        queryControlEditors: new Map(),
+        // remotePages 保存后台当前页、总数和已提交条件；目前页面控件启用真实后台分页。
+        remotePages: new Map(),
         // 当前选中表格是列配置的逻辑父级；详情页签只允许 info/columns/preview。
         selectedTable: null,
         tableDetailTab: null
@@ -220,22 +234,61 @@
             }
         ]
     });
-    // 参考图中的筛选栏只占左侧工作区：搜索、范围、状态和重置使用稳定起始宽度，面板剩余空间留白。
-    const referenceDataToolbar = selFreeze({
-        // columnResize 开启栏目之间的拖拽分隔条；它只调整工具栏，不是业务 Grid 列宽。
-        columnResize: true,
+    // 普通模块只有一个搜索字段，外层栏目只容纳 280px 输入、8px 间距和 86px 查询按钮。
+    const referenceDataCompactToolbar = selFreeze({
+        // 查询栏改由页面编辑器按五个真实控件分别调宽，关闭外层栏目分隔线避免再次把输入和按钮联动。
+        columnResize: false,
         // columns 的键必须与 Panel 生成的 slot/组件稳定 ID 对应。
         columns: {
-            // 搜索输入需要容纳较长的多语言关键字，因此允许在 320～560px 范围内拖动。
-            "selSearch-1": { width: 408, minWidth: 320, maxWidth: 560, label: "调整搜索栏目宽度" },
+            // 单字段栏目保持紧凑，避免输入缩短后外层旧宽度继续制造整段空白。
+            "selSearch-1": { width: 374, minWidth: 274, maxWidth: 460, label: "查询栏目宽度" },
             // 数据范围下拉展示业务标签和描述，默认宽度大于普通状态下拉。
-            projectType: { width: 320, minWidth: 220, maxWidth: 420, label: "调整数据范围栏目宽度" },
+            projectType: { width: 200, minWidth: 160, maxWidth: 300, label: "调整数据范围栏目宽度" },
             // 状态下拉只有固定三项，使用较窄宽度并保留完整可访问名称。
-            status: { width: 272, minWidth: 200, maxWidth: 360, label: "调整状态栏目宽度" },
+            status: { width: 180, minWidth: 150, maxWidth: 260, label: "调整状态栏目宽度" },
             // 重置按钮只需要容纳短文案，限制最大宽度避免挤压筛选控件。
-            "filterReset-4": { width: 104, minWidth: 88, maxWidth: 136, label: "调整重置栏目宽度" }
+            "filterReset-4": { width: 90, minWidth: 80, maxWidth: 136, label: "调整重置栏目宽度" }
         }
     });
+    // 页面控件模块包含三个独立搜索字段，继续保留足够的外层宽度供数据库几何配置覆盖。
+    const referenceDataControlToolbar = selFreeze({
+        columnResize: false,
+        columns: {
+            "selSearch-1": { width: 798, minWidth: 620, maxWidth: 960, label: "查询栏目宽度" },
+            projectType: { width: 200, minWidth: 160, maxWidth: 300, label: "调整数据范围栏目宽度" },
+            status: { width: 180, minWidth: 150, maxWidth: 260, label: "调整状态栏目宽度" },
+            "filterReset-4": { width: 90, minWidth: 80, maxWidth: 136, label: "调整重置栏目宽度" }
+        }
+    });
+
+    /** 根据当前模块返回匹配字段数量的工具栏栏目配置。 */
+    function referenceDataActiveToolbar() {
+        return referenceDataActiveModule().key === "controls"
+            ? referenceDataControlToolbar
+            : referenceDataCompactToolbar;
+    }
+    // 查询工具栏每个真实元素独立登记；不同字段结构的提交按钮使用不同布局记录，但都提交同一组查询草稿。
+    const referenceDataQueryControlDefinitions = selFreeze([
+        { orderNo: 5, key: "keyword", targetKey: "keyword", title: "查询条件", typeLabel: "查询输入控件", icon: "ri-search-line", minWidth: 150, maxWidth: 460, profile: "default" },
+        { orderNo: 10, key: "codeTypes", targetKey: "code", fieldName: "code", title: "Code 查询", typeLabel: "查询输入控件", icon: "ri-key-2-line", minWidth: 150, maxWidth: 360, profile: "types" },
+        { orderNo: 15, key: "parentTypeCode", targetKey: "parentTypeCode", title: "上级类型 Code 查询", typeLabel: "查询输入控件", icon: "ri-node-tree", minWidth: 150, maxWidth: 360, profile: "types" },
+        { orderNo: 20, key: "submitTypes", targetKey: "submit", fieldName: "submit.types", title: "查询按钮", typeLabel: "查询按钮控件", icon: "ri-search-eye-line", minWidth: 72, maxWidth: 160, profile: "types" },
+        { orderNo: 10, key: "code", targetKey: "code", title: "控件 Code 查询", typeLabel: "查询输入控件", icon: "ri-key-2-line", minWidth: 150, maxWidth: 360, profile: "controls" },
+        { orderNo: 15, key: "parentCode", targetKey: "parentCode", title: "父控件 Code 查询", typeLabel: "查询输入控件", icon: "ri-node-tree", minWidth: 150, maxWidth: 360, profile: "controls" },
+        { orderNo: 17, key: "optionSetCode", targetKey: "optionSetCode", title: "选项组 Code 查询", typeLabel: "查询输入控件", icon: "ri-list-settings-line", minWidth: 150, maxWidth: 360, profile: "controls" },
+        { orderNo: 20, key: "submitDefault", targetKey: "submit", fieldName: "submit.default", title: "查询按钮", typeLabel: "查询按钮控件", icon: "ri-search-eye-line", minWidth: 72, maxWidth: 160, profile: "default" },
+        { orderNo: 25, key: "submitControls", targetKey: "submit", fieldName: "submit.controls", title: "查询按钮", typeLabel: "查询按钮控件", icon: "ri-search-eye-line", minWidth: 72, maxWidth: 160, profile: "controls" },
+        { orderNo: 30, key: "projectType", title: "类型筛选", typeLabel: "类型筛选控件", icon: "ri-apps-2-line", minWidth: 160, maxWidth: 420 },
+        { orderNo: 40, key: "status", title: "状态筛选", typeLabel: "状态筛选控件", icon: "ri-checkbox-circle-line", minWidth: 160, maxWidth: 420 },
+        { orderNo: 50, key: "reset", title: "重置按钮", typeLabel: "重置按钮控件", icon: "ri-reset-left-line", minWidth: 80, maxWidth: 160 }
+    ]);
+
+    /** 返回当前字段结构实际可见的查询元素定义，未显示的结构记录不参与页面编辑。 */
+    function referenceDataActiveQueryControlDefinitions() {
+        const moduleKey = referenceDataActiveModule().key;
+        const profile = moduleKey === "controls" ? "controls" : moduleKey === "types" ? "types" : "default";
+        return referenceDataQueryControlDefinitions.filter((definition) => !definition.profile || definition.profile === profile);
+    }
 
     /**
      * 返回当前模块的只读注册信息。
@@ -249,6 +302,17 @@
     }
 
     /**
+     * 返回当前页面唯一真实 Grid 的数据库定义。
+     *
+     * @returns {object|null} 优先返回启用记录；没有启用记录时返回首条，完全未登记时返回 null。
+     * @sideEffect 无；全部模块视图始终复用同一个 tableId 与 table code。
+     */
+    function referenceDataGridTable() {
+        const tables = referenceDataState.records.get("tables") || [];
+        return tables.find((record) => Number(record.status) === 1) || tables[0] || null;
+    }
+
+    /**
      * 返回页面编辑器展示的当前表格两段数据库定位坐标。
      *
      * @param {object} module 当前模块注册信息，默认使用正在显示的模块。
@@ -257,8 +321,7 @@
      */
     function referenceDataPageEditorCoordinates(module = referenceDataActiveModule()) {
         // 当前物理 Grid 对应的 ReferenceDataTable 记录是页面列宽配置的父级事实来源。
-        const tableRecord = (referenceDataState.records.get("tables") || [])
-            .find((record) => String(record.dataTableName) === String(module.tableName));
+        const tableRecord = referenceDataGridTable();
         // 冻结坐标避免个性化控件意外修改业务缓存中的 code 或来源表信息。
         return selFreeze([
             // code 是所有配置查询和保存的唯一公开坐标；未登记时直接提示，不回退旧 Grid ID。
@@ -293,13 +356,13 @@
     async function referenceDataSavePageGridState(pageGridState = {}) {
         // 先取得当前模块，保证保存坐标与用户正在编辑的业务表一致。
         const module = referenceDataActiveModule();
-        // 当前模块先通过业务表名找到唯一 Grid 定义，页面公开定位不再依赖旧 gridId 组合。
-        const tableRecord = (referenceDataState.records.get("tables") || [])
-            .find((record) => String(record.dataTableName) === String(module.tableName));
+        // 六种业务视图共用唯一 Grid 定义，模块差异只由元素 viewCode 表达。
+        const tableRecord = referenceDataGridTable();
         if (!tableRecord) throw new Error(`未找到 ${module.tableName} 对应的表格定义。`);
         // 表格元素通过 tableId 归属父表，fieldName 与公共 Grid 返回的稳定列 ID 对应。
         const elementByField = new Map((referenceDataState.records.get("columns") || [])
-            .filter((record) => Number(record.tableId) === Number(tableRecord.id))
+            .filter((record) => Number(record.tableId) === Number(tableRecord.id)
+                && String(record.viewCode) === String(module.viewCode))
             .map((record) => [String(record.fieldName || ""), record]));
         // 公共 Grid 返回数字像素；页面配置协议在边界处转换为受校验的 px 字符串。
         const widths = Object.entries(pageGridState.columnWidths || {})
@@ -363,6 +426,146 @@
         return true;
     }
 
+    /** 返回当前字段结构每个可见查询元素的数据库记录；缺失记录时调用方使用组件默认布局。 */
+    function referenceDataQueryControlRecords() {
+        const controls = referenceDataState.records.get("controls") || [];
+        const toolbar = controls.find((record) => String(record.pageCode) === String(referenceDataState.pageCode)
+            && String(record.parentKind) === "PAGE" && String(record.controlKind) === "TOOLBAR"
+            && Number(record.status) === 1);
+        if (!toolbar) throw new Error("查询工具栏尚未登记页面控件父记录。");
+        const children = controls.filter((record) => String(record.parentKind) === "TOOLBAR"
+            && String(record.parentCode) === String(toolbar.code) && Number(record.status) === 1);
+        return referenceDataActiveQueryControlDefinitions().map((definition) => ({
+            definition,
+            record: children.find((candidate) => String(candidate.fieldName) === String(definition.fieldName || definition.key)) || null
+        }));
+    }
+
+    /** 取得当前搜索字段、查询按钮、范围、状态和重置的真实节点。 */
+    function referenceDataResolveQueryControlTargets() {
+        referenceDataState.searchController?.setIndependentLayout(true);
+        const searchTargets = referenceDataState.searchController?.getLayoutTargets?.() || {};
+        const targets = new Map([
+            ...referenceDataActiveQueryControlDefinitions()
+                .filter((definition) => definition.targetKey)
+                .map((definition) => [definition.key, searchTargets[definition.targetKey]]),
+            ["projectType", panel.getComponent(referenceDataGridId, "selDropdownMenu", "projectType")],
+            ["status", panel.getComponent(referenceDataGridId, "selDropdownMenu", "status")],
+            ["reset", panel.getComponent(referenceDataGridId, "filterReset")]
+        ]);
+        if (Array.from(targets.values()).some((target) => !(target instanceof Element))) {
+            throw new Error("当前查询工具栏元素尚未完整挂载。");
+        }
+        return targets;
+    }
+
+    /** 捕获一个查询控件相对于工具栏的矩形；搜索关键字、筛选值等业务状态不会进入布局保存。 */
+    function referenceDataCaptureQueryControlState(editor) {
+        const toolbarRect = editor.toolbar.getBoundingClientRect();
+        const targetRect = editor.target.getBoundingClientRect();
+        return {
+            x: Math.round(targetRect.left - toolbarRect.left),
+            y: Math.round(targetRect.top - toolbarRect.top),
+            width: `${Math.round(targetRect.width)}px`,
+            height: `${Math.round(targetRect.height)}px`
+        };
+    }
+
+    /** 按当前子控件的唯一 code 单独保存矩形，并保留同级其他控件的未保存状态。 */
+    async function referenceDataSaveQueryControlState(editor) {
+        if (!editor.record?.code) throw new Error(`${editor.definition.title}尚未登记布局记录，请先完成页面控件初始化。`);
+        const savedLayout = {
+            code: editor.record.code,
+            ...referenceDataCaptureQueryControlState(editor),
+            breakpoint: editor.record.breakpoint || "DESKTOP"
+        };
+        const result = await selAjax.request({
+            url: `/api/reference-data/pages/${encodeURIComponent(referenceDataState.pageCode)}/configuration`,
+            method: "POST",
+            jsonData: { baseVersion: referenceDataState.pageVersion, controls: [savedLayout] }
+        });
+        referenceDataState.pageVersion = Number(result.data?.version || referenceDataState.pageVersion + 1);
+        Object.assign(editor.record, savedLayout);
+        return true;
+    }
+
+    /** 同步当前字段结构的逐元素编辑器；字段重挂载后更新真实根，不丢失拖拽和调宽能力。 */
+    function referenceDataMountQueryControlEditors() {
+        const toolbar = panel.getComponent(referenceDataGridId, "toolbar");
+        if (!(toolbar instanceof Element)) throw new Error("查询工具栏宿主不存在。");
+        const targets = referenceDataResolveQueryControlTargets();
+        const entries = referenceDataQueryControlRecords();
+        const resetTarget = targets.get("reset");
+        const resetColumn = resetTarget.closest(".selpanel-toolbar-column") || resetTarget.parentElement;
+        if (!(resetColumn instanceof Element)) throw new Error("重置按钮列不存在，无法挂载查询控件保存入口。");
+        const sharedEditHost = toolbar.querySelector(".reference-data-query-save-host") || element("span", {
+            className: "reference-data-query-save-host", attributes: { "aria-label": "当前查询控件保存入口" }
+        });
+        resetColumn.classList.add("reference-data-query-actions-column");
+        if (!sharedEditHost.isConnected) resetTarget.insertAdjacentElement("afterend", sharedEditHost);
+        toolbar.dataset.referenceDataQueryEditorMounted = "true";
+        const activeKeys = new Set(entries.map(({ definition }) => definition.key));
+        referenceDataState.queryControlEditors.forEach((editor, key) => {
+            if (!activeKeys.has(key)) {
+                referenceDataState.personalizationController.updatePageControl(editor.id, { enabled: false });
+            }
+        });
+        entries.forEach(({ definition, record }) => {
+                const target = targets.get(definition.key);
+                const editorId = `selQuery${definition.key.charAt(0).toUpperCase()}${definition.key.slice(1)}ReferenceDataPageEditorId`;
+                const editor = referenceDataState.queryControlEditors.get(definition.key)
+                    || { id: editorId, definition, record, target, toolbar };
+                Object.assign(editor, { definition, record, target, toolbar });
+                const targetRect = target.getBoundingClientRect();
+                const toolbarRect = toolbar.getBoundingClientRect();
+                const geometry = {
+                    container: toolbar,
+                    direct: true,
+                    flow: { key: "referenceDataQueryToolbar", gap: 12, order: definition.orderNo },
+                    boundsHeight: 88,
+                    minWidth: definition.minWidth,
+                    maxWidth: definition.maxWidth,
+                    minHeight: 42,
+                    maxHeight: 42,
+                    state: {
+                        x: record?.x ?? Math.round(targetRect.left - toolbarRect.left),
+                        y: record?.y ?? Math.round(targetRect.top - toolbarRect.top),
+                        width: record?.width || `${Math.round(targetRect.width)}px`,
+                        height: record?.height || `${Math.round(targetRect.height)}px`
+                    }
+                };
+                const coordinates = [
+                    { label: "唯一 Code", value: record?.code || "尚未登记" },
+                    { label: "来源表", value: "ReferenceDataControlLayout" }
+                ];
+                if (referenceDataState.queryControlEditors.has(definition.key)) {
+                    referenceDataState.personalizationController.updatePageControl(editorId, {
+                        enabled: true, root: target, title: definition.title, typeLabel: definition.typeLabel,
+                        icon: definition.icon, coordinates, geometry,
+                        captureState: () => referenceDataCaptureQueryControlState(editor),
+                        saveState: () => referenceDataSaveQueryControlState(editor)
+                    });
+                    return;
+                }
+                referenceDataState.queryControlEditors.set(definition.key, editor);
+                if (!referenceDataState.personalizationController.registerPageControl({
+                    id: editorId,
+                    type: "query-control", typeLabel: definition.typeLabel, title: definition.title, icon: definition.icon,
+                    root: target,
+                    sharedEdit: {
+                        key: "referenceDataQueryToolbar",
+                        host: sharedEditHost,
+                        label: "保存",
+                        follow: definition.key === "reset"
+                    },
+                    geometry,
+                    coordinates,
+                    captureState: () => referenceDataCaptureQueryControlState(editor),
+                    saveState: () => referenceDataSaveQueryControlState(editor)
+                })) throw new Error(`${definition.title}页面编辑登记失败。`);
+        });
+    }
+
     /**
      * 把同一物理 Grid 当前切换到的业务模块坐标同步给公共页面编辑器。
      *
@@ -383,6 +586,8 @@
             captureState: referenceDataCapturePageGridState,
             saveState: referenceDataSavePageGridState
         });
+        // 每次模块切换都同步当前真实元素；公共编辑器会更新重挂载后的根并停用不可见结构。
+        referenceDataMountQueryControlEditors();
     }
 
     /**
@@ -447,6 +652,11 @@
             url: `/api/reference-data/pages/${encodeURIComponent(referenceDataState.pageCode)}/configuration`
         });
         referenceDataState.pageVersion = Number(result.data?.version || 0);
+        // 页面编辑的控件父子关系使用配置接口同一事务视图，避免全表分页在启动迁移更新期间产生跨页重复或遗漏。
+        if (Array.isArray(result.data?.controls)) {
+            referenceDataState.records.set("controls", result.data.controls);
+            referenceDataState.loadedKeys.add("controls");
+        }
         // 使用页面接口返回的表格元素覆盖普通分页缓存，确保页面编辑看到完整且同一事务视图的数据。
         if (Array.isArray(result.data?.tableElements)) {
             referenceDataState.records.set("columns", result.data.tableElements);
@@ -494,6 +704,46 @@
     }
 
     /**
+     * 按独立字段读取页面控件后台分页结果。
+     *
+     * @param {object} module 页面控件模块注册信息。
+     * @param {object} query 已提交的页码、容量和独立字段条件。
+     * @returns {Promise<object>} 当前页 records、totalCount 与规范查询状态。
+     * @sideEffect 只调用 BaseController 分页入口；不在前端加载或过滤其他页。
+     */
+    async function referenceDataLoadRemotePage(module, query = {}) {
+        const current = referenceDataState.remotePages.get(module.key) || {};
+        const normalized = {
+            pageNo: Math.max(1, Number(query.pageNo ?? current.pageNo) || 1),
+            pageSize: Math.max(1, Number(query.pageSize ?? current.pageSize) || 20),
+            code: String(query.code ?? current.code ?? "").trim(),
+            parentCode: String(query.parentCode ?? current.parentCode ?? "").trim(),
+            optionSetCode: String(query.optionSetCode ?? current.optionSetCode ?? "").trim(),
+            controlKind: String(query.controlKind ?? current.controlKind ?? "").trim(),
+            status: String(query.status ?? current.status ?? "").trim()
+        };
+        // 每个查询字段独立映射 BaseDao 后缀条件；参数同时存在时由公共查询构造器使用 AND。
+        const parameters = new URLSearchParams({
+            pageNo: String(normalized.pageNo), pageSize: String(normalized.pageSize)
+        });
+        if (normalized.code) parameters.set("codeLike", normalized.code);
+        if (normalized.parentCode) parameters.set("parentCodeLike", normalized.parentCode);
+        if (normalized.optionSetCode) parameters.set("optionSetCodeLike", normalized.optionSetCode);
+        if (normalized.controlKind) parameters.set("controlKind", normalized.controlKind);
+        if (normalized.status) parameters.set("status", normalized.status);
+        const page = await selAjax.json({ url: `${module.api}getStore.htm?${parameters}` });
+        const result = {
+            ...normalized,
+            records: (Array.isArray(page.records) ? page.records : []).filter((record) => Number(record.status) !== 0),
+            totalCount: Math.max(0, Number(page.totalCount) || 0),
+            pageNo: Math.max(1, Number(page.pageNo) || normalized.pageNo),
+            pageSize: Math.max(1, Number(page.pageSize) || normalized.pageSize)
+        };
+        referenceDataState.remotePages.set(module.key, result);
+        return result;
+    }
+
+    /**
      * 查询当前模块对应 Grid 的数据库表头配置。
      *
      * @param {object} module 提供 api 和 gridId 的模块配置。
@@ -501,13 +751,12 @@
      * @sideEffect 只发起读取请求，真正写入 columns Map 由调用方负责。
      */
     async function referenceDataResolveColumns(module) {
-        // 六表模型通过 ReferenceDataTable.code 唯一定位表格配置，组件 gridId 不再参与数据库定位。
-        const tableRecord = (referenceDataState.records.get("tables") || [])
-            .find((record) => String(record.dataTableName) === String(module.tableName));
+        // 唯一公共 Grid 通过 ReferenceDataTable.code 定位，业务表名由后台映射为元素 viewCode。
+        const tableRecord = referenceDataGridTable();
         // URLSearchParams 负责正确编码表格 code 和语言值，避免手工拼接特殊字符。
         const queryParams = new URLSearchParams({
-            // viewCode 兼容公共 BaseService 参数名，真实值是数据库生成且不可变的表格 code。
-            viewCode: tableRecord?.code || "notConfigured",
+            // tableCode 明确定位唯一 Grid；元素自己的 viewCode 只表达 TYPE、TREE 等业务视图。
+            tableCode: tableRecord?.code || "notConfigured",
             locale: referenceDataLocale
         });
         // 所有业务表格统一调用继承自 BaseController 的 getGridColumn；后台负责配置优先和字段名静默降级。
@@ -604,16 +853,16 @@
      * @sideEffect 无。
      */
     function referenceDataRecordLabel(module, record) {
-        // 数据类型用“项目/资源”组合，避免不同项目存在同名 resourceCode 时无法区分。
-        if (module.key === "types") return `${record.projectCode}/${record.resourceCode}`;
+        // 数据类型先显示实际值，再显示多语言名称和所属控件，避免多个菜单的同名选项混淆。
+        if (module.key === "types") return `${record.valueCode} · ${record.nameZh || record.code} · ${record.optionSetCode}`;
         // 表格定义用“项目 · 表名”组合，删除确认时可以直接识别目标。
-        if (module.key === "tables") return `${record.projectCode} · ${record.dataTableName || record.nameZh}`;
+        if (module.key === "tables") return `${record.projectCode} · ${record.gridId || record.nameZh}`;
         // 页面控件直接展示唯一 code 和控件种类，方便管理员复制后定位数据库记录。
         if (module.key === "controls") return `${record.code} · ${record.controlKind}`;
         // Window 直接展示唯一 code 和中文名称。
         if (module.key === "windows") return `${record.code} · ${record.nameZh}`;
         // 表格列先展示父表，再展示中文表头；中文为空时回退到稳定列 ID。
-        if (module.key === "columns") return `${record.tableId} · ${record.labelZh || record.fieldName || record.code}`;
+        if (module.key === "columns") return `${record.viewCode} · ${record.labelZh || record.fieldName || record.code}`;
         // 其他模块优先中文标签，再使用模块代表字段，最后才显示数据库主键。
         return String(record.labelZh || record[module.previewField] || record.id);
     }
@@ -669,14 +918,14 @@
      * 为一个一级业务模块生成 Tree 子节点。
      *
      * @param {object} module 要展示的模块配置。
-     * @returns {ReadonlyArray<object>} relation 模块返回层级树，普通模块返回平铺叶子，tables 返回空数组。
+     * @returns {ReadonlyArray<object>} 树节点模块返回层级树；其他一级模块不生成记录子节点。
      * @sideEffect 无；只读取 records 缓存。
      */
     function referenceDataBuildTreeChildren(module) {
         // 左树只从已加载缓存读取，不在渲染过程中隐式触发网络请求。
         const records = referenceDataState.records.get(module.key) || [];
-        // 表格定义和 Window 只作为一级业务入口；真实明细统一在右侧 Grid 或管理窗口查看。
-        if (module.key === "tables" || module.key === "windows") return [];
+        // 数据类型、表格定义、页面控件和 Window 只作为一级入口；真实记录统一在右侧 Grid 或管理窗口查看。
+        if (["types", "tables", "controls", "windows"].includes(module.key)) return [];
         // relation 模块使用递归结构；普通模块把每条记录作为一级叶子。
         if (module.relation) return referenceDataBuildHierarchy(module, records);
         // 平铺叶子仍使用与层级节点相同的稳定 ID 和右键动作协议。
@@ -702,11 +951,20 @@
      * @sideEffect 无；不同模块使用不同稳定字段作为筛选 value。
      */
     function referenceDataBuildTypeOptions(module, records) {
+        // 树节点已经与类型目录解耦，范围筛选直接列出当前表中的根节点。
+        if (module.key === "tree") {
+            return records.filter((record) => record.parentId == null).map((record) => ({
+                value: String(record.code),
+                label: String(record.labelZh || record.code),
+                icon: "ri-node-tree",
+                description: String(record.code)
+            }));
+        }
         // 表格元素模块按已登记父表筛选，value 必须与元素记录 tableId 一致。
         if (module.key === "columns") {
             return (referenceDataState.records.get("tables") || []).map((tableRecord) => ({
                 value: String(tableRecord.id),
-                label: String(tableRecord.nameZh || tableRecord.dataTableName),
+                label: String(tableRecord.nameZh || tableRecord.gridId),
                 icon: "ri-table-line",
                 description: String(tableRecord.code)
             }));
@@ -715,28 +973,35 @@
         if (module.key === "tables") {
             return records.map((record) => ({
                 value: String(record.code),
-                label: String(record.nameZh || record.dataTableName),
+                label: String(record.nameZh || record.gridId),
                 icon: module.icon,
                 description: String(record.projectCode || "")
             }));
         }
-        // 数据类型模块按资源编码筛选，描述补充项目编码以消除跨项目歧义。
+        // 数据类型模块按当前控件的业务值筛选，描述补充所属控件 code。
         if (module.key === "types") {
             return records.map((record) => ({
-                value: String(record.resourceCode),
-                label: String(record.nameZh || record.resourceCode),
+                value: String(record.valueCode),
+                label: String(record.nameZh || record.valueCode),
                 icon: "ri-database-2-line",
-                description: String(record.projectCode || "")
+                description: String(record.optionSetCode || "")
             }));
         }
-        // 树、选项以外的关联模块最终按 typeId 筛选，因此选项来自 types 缓存。
-        const types = referenceDataState.records.get("types") || [];
-        return types.map((typeRecord) => ({
-            value: String(typeRecord.id),
-            label: String(typeRecord.nameZh || typeRecord.resourceCode),
-            icon: "ri-database-2-line",
-            description: `${typeRecord.projectCode}/${typeRecord.resourceCode}`
-        }));
+        // 页面控件按自身 controlKind 过滤，不再依赖已删除的 typeId 反向关系。
+        if (module.key === "controls") {
+            // 远程分页不能从当前页推断完整选项，使用保存表单同一稳定白名单。
+            return ["PAGE", "TOOLBAR", "SEARCH", "FILTER", "BUTTON", "TEXT", "SELECT", "NUMBER", "TEXTAREA"]
+                .map((controlKind) => ({
+                value: controlKind, label: controlKind, icon: module.icon, description: "控件类型"
+            }));
+        }
+        // Window 按自身定位模式过滤；其他模块没有额外类型关系。
+        if (module.key === "windows") {
+            return [...new Set(records.map((record) => String(record.positionMode)))].map((positionMode) => ({
+                value: positionMode, label: positionMode, icon: module.icon, description: "定位模式"
+            }));
+        }
+        return [];
     }
 
     /**
@@ -748,60 +1013,94 @@
      */
     function referenceDataTypeField(module) {
         // 每个 return 都必须与上方 BuildTypeOptions 生成的 value 字段完全一致。
-        if (module.key === "types") return "resourceCode";
+        if (module.key === "types") return "valueCode";
+        if (module.key === "tree") return "treeRootCode";
         if (module.key === "tables") return "code";
         if (module.key === "columns") return "tableId";
-        // tree 等关联实体统一使用 typeId。
-        return "typeId";
+        if (module.key === "controls") return "controlKind";
+        if (module.key === "windows") return "positionMode";
+        return "code";
+    }
+
+    /**
+     * 为一条树节点记录解析所属根节点 code，仅生成前端筛选辅助值。
+     *
+     * @param {object[]} records 当前树表全部记录。
+     * @param {object} record 要解析的节点记录。
+     * @returns {string} 根节点 code；关系损坏时返回当前节点 code。
+     * @sideEffect 无；不修改数据库记录或输入数组。
+     */
+    function referenceDataTreeRootCode(records, record) {
+        // parentById 只在本次解析中建立，code 与 parentId 仍是唯一树关系事实。
+        const byId = new Map(records.map((candidate) => [Number(candidate.id), candidate]));
+        const visited = new Set();
+        let current = record;
+        // 沿 parentId 向上查到根；循环或断链时安全停止，避免页面卡死。
+        while (current?.parentId != null && !visited.has(Number(current.id))) {
+            visited.add(Number(current.id));
+            current = byId.get(Number(current.parentId)) || current;
+            if (Number(current.id) === Number(record.id) && visited.size > 1) break;
+        }
+        return String(current?.code || record.code || "");
     }
 
     /** 计算一次 Payload 组装需要的业务上下文，避免各配置段重复读取状态。 */
     function referenceDataBuildPayloadContext() {
         // 当前模块是本次 Payload 中所有标题、字段和动作的共同来源。
         const module = referenceDataActiveModule();
-        // allRecords 保留模块完整缓存，records 可能进一步受表格详情上下文过滤。
+        // allRecords 保留配置与编辑所需完整缓存；远程模块的 Grid records 只取后台当前页。
         const allRecords = referenceDataState.records.get(module.key) || [];
+        const remotePage = referenceDataState.remotePages.get(module.key) || null;
         // 列详情只展示选中表格的配置，其他模块使用完整缓存。
-        const records = module.key === "columns" && referenceDataState.selectedTable
+        let records = module.key === "controls" && remotePage
+            ? remotePage.records
+            : module.key === "columns" && referenceDataState.selectedTable
             ? allRecords.filter((record) => Number(record.tableId) === Number(referenceDataState.selectedTable.id))
             : allRecords;
+        // 树范围筛选使用临时根 code，不把派生字段复制回数据库缓存。
+        if (module.key === "tree") {
+            records = allRecords.map((record) => ({
+                ...record,
+                treeRootCode: referenceDataTreeRootCode(allRecords, record)
+            }));
+        }
         // 导航只采用后台授权并已映射成功的模块顺序。
         const navigationModules = referenceDataNavigationModules();
         // 表格定义记录提供当前模块唯一 code，编辑态表格头和页面编辑数据库坐标共用这一事实来源。
-        const tableRecord = (referenceDataState.records.get("tables") || [])
-            .find((record) => String(record.dataTableName) === String(module.tableName));
-        // 每个一级模块都带当前缓存数量和按需生成的业务子节点。
+        const tableRecord = referenceDataGridTable();
+        // 每个一级模块都显示当前缓存数量；只有树节点模块按需生成业务子节点。
         const treeItems = navigationModules.map((navigationModule) => ({
             id: `module-${navigationModule.key}`,
             label: navigationModule.name,
             icon: navigationModule.icon,
+            // 导航徽标始终表示模块全量，不随当前分页查询条件变化。
             count: (referenceDataState.records.get(navigationModule.key) || []).length,
             filter: {},
             children: referenceDataBuildTreeChildren(navigationModule)
         }));
         // 把一次组装反复使用的派生值集中返回，后续函数不再重复扫描缓存。
         return {
-            module, records, navigationModules, treeItems, tableRecord,
+            module, records, allRecords, remotePage, navigationModules, treeItems, tableRecord,
             // columns 是可直接交给 Grid 的最终只读列；typeOptions 是工具栏下拉输入。
             columns: referenceDataEnrichColumns(module, referenceDataState.columns.get(module.key) || []),
             typeOptions: referenceDataBuildTypeOptions(module, records),
             // 状态数量只计算 1/2，逻辑删除的 0 已在加载边界排除。
-            enabledCount: records.filter((record) => Number(record.status) === 1).length,
-            disabledCount: records.filter((record) => Number(record.status) === 2).length
+            enabledCount: allRecords.filter((record) => Number(record.status) === 1).length,
+            disabledCount: allRecords.filter((record) => Number(record.status) === 2).length
         };
     }
 
     /** 为 Panel 标题区生成当前模块名称、状态数量和操作文案。 */
     function referenceDataBuildTitlePayload(context) {
         // 解构只取标题区需要的数据，避免函数内部反复写 context 前缀。
-        const { module, records, enabledCount, disabledCount } = context;
+        const { module, records, allRecords, remotePage, enabledCount, disabledCount } = context;
         // selectedTable 存在表示用户已经进入某张表的列配置详情。
         const selectedTable = referenceDataState.selectedTable;
         // 返回普通对象，由最外层 BuildPayload 统一深度冻结。
         return {
             // 主标题保持稳定，副标题和描述随模块或选中表格切换。
             title: "引用数据管理工作台",
-            subtitle: selectedTable ? `表格定义 · ${selectedTable.description || selectedTable.nameZh || selectedTable.dataTableName}` : `${module.name} · ${module.tableName}`,
+            subtitle: selectedTable ? `表格定义 · ${selectedTable.description || selectedTable.nameZh || selectedTable.gridId}` : `${module.name} · ${module.tableName}`,
             description: selectedTable ? `${selectedTable.projectCode} / ${selectedTable.code}` : module.description,
             // ariaLabel/ariaLabels 为 Panel 各区域提供可访问名称，不参与视觉文案布局。
             ariaLabel: "引用数据六模块按需加载管理面板",
@@ -812,7 +1111,7 @@
             },
             // 状态标签数量来自当前 records，点击后由公共 Grid 根据 statusField 过滤。
             statusTabs: [
-                { value: "", label: "全部", count: records.length },
+                { value: "", label: "全部", count: module.key === "controls" && remotePage ? remotePage.totalCount : allRecords.length },
                 { value: "1", label: "已启用", count: enabledCount },
                 { value: "2", label: "已停用", count: disabledCount }
             ],
@@ -837,14 +1136,14 @@
         const { module, typeOptions } = context;
         // 三个键必须与 referenceDataLayout 中的 payload 路径一致。
         return {
-            // projectType 名称沿用公共 Grid 协议；树和控件模块按所属数据类型过滤。
+            // projectType 名称沿用公共 Grid 协议；树按根节点、控件按所属数据类型过滤。
             projectType: {
-                gridId: referenceDataGridId, role: "type-filter", label: ["tree", "controls"].includes(module.key) ? "数据类型" : "数据范围",
-                ariaLabel: ["tree", "controls"].includes(module.key) ? "按所属数据类型筛选记录" : "按数据范围筛选",
-                currentTemplate: "{label}，当前：{value}", menuTitle: ["tree", "controls"].includes(module.key) ? "选择引用数据类型" : "选择数据范围",
-                prefix: ["tree", "controls"].includes(module.key) ? "类型：" : "范围：", scrollAfter: 8,
+                gridId: referenceDataGridId, role: "type-filter", label: module.key === "tree" ? "根节点" : module.key === "controls" ? "数据类型" : "数据范围",
+                ariaLabel: module.key === "tree" ? "按根节点筛选树" : module.key === "controls" ? "按所属数据类型筛选记录" : "按数据范围筛选",
+                currentTemplate: "{label}，当前：{value}", menuTitle: module.key === "tree" ? "选择树根节点" : module.key === "controls" ? "选择引用数据类型" : "选择数据范围",
+                prefix: module.key === "tree" ? "根：" : module.key === "controls" ? "类型：" : "范围：", scrollAfter: 8,
                 // 空 value 表示取消类型过滤，后续业务选项保持 BuildTypeOptions 的稳定值。
-                options: [{ value: "", label: ["tree", "controls"].includes(module.key) ? "全部类型" : "全部数据", icon: "ri-apps-2-line", description: "显示当前模块全部记录" }, ...typeOptions]
+                options: [{ value: "", label: module.key === "tree" ? "全部树" : module.key === "controls" ? "全部类型" : "全部数据", icon: "ri-apps-2-line", description: "显示当前模块全部记录" }, ...typeOptions]
             },
             // status 始终使用数据库 status 字段，六表模块共享同一取值契约。
             status: {
@@ -857,7 +1156,7 @@
                     { value: "2", label: "已停用", icon: "ri-forbid-2-line", tone: "muted", description: "当前暂停使用" }
                 ]
             },
-            // pageSize 只控制浏览器端分页，不会重新请求后台分页接口。
+            // pageSize 在 REMOTE 模式下请求后台当前页，其他模块继续使用浏览器端分页。
             pageSize: {
                 gridId: referenceDataGridId, role: "page-size", label: "每页显示条数", ariaLabel: "每页显示条数",
                 currentTemplate: "{label}，当前：{value}", menuTitle: "选择每页显示条数", scrollAfter: 4,
@@ -876,13 +1175,14 @@
         // 先计算共享上下文，再分别委托标题和下拉构建函数，避免一个巨型函数承担全部细节。
         const context = referenceDataBuildPayloadContext();
         // 这里只解构 Grid、Tree 和分页直接使用的字段。
-        const { module, records, navigationModules, treeItems, columns, tableRecord } = context;
+        const { module, records, remotePage, navigationModules, treeItems, columns, tableRecord } = context;
         // selFreeze 让各公共组件只能读取视图，不能改写业务缓存。
         return selFreeze({
             // grid 段定义字段坐标和通用交互能力，不包含任何具体记录。
             grid: {
                 mode: "records", idField: "id", typeField: referenceDataTypeField(module), statusField: "status",
-                searchFields: module.searchFields, wide: true, defaultColumnWidth: 150, columnResize: true
+                searchFields: module.searchFields, wide: true, defaultColumnWidth: 150, columnResize: true,
+                deferToolbarFiltersUntilSubmit: true
             },
             // data.items 复制当前记录数组；selectedIds 为空表示模块切换后不保留旧选择。
             data: { items: [...records], selectedIds: [] },
@@ -898,9 +1198,10 @@
             // search 只声明交互契约；输入监听、清空和回车提交由公共 Search/Grid 完成。
             search: {
                 gridId: referenceDataGridId, label: `${module.name}搜索`,
-                placeholder: `搜索${module.name}编码或多语言名称…`, buttonLabel: "查询", clearLabel: "清空搜索条件",
+                placeholder: module.searchPlaceholder, buttonLabel: "查询", clearLabel: "清空搜索条件",
                 icon: "ri-search-line", buttonIcon: "ri-search-line", clearIcon: "ri-close-line",
-                defaultValue: "", clearable: true, submitOnEnter: true, submitOnClear: true, allowEmpty: true, trim: true
+                defaultValue: "", fields: module.queryFields || undefined,
+                clearable: true, submitOnEnter: true, submitOnClear: true, allowEmpty: true, trim: true
             },
             // tree 既承担一级模块导航，也可展示模块业务记录子节点。
             tree: {
@@ -911,9 +1212,13 @@
             },
             // menu 是 Grid 操作列的可访问上下文，不等同于菜单项目业务模块。
             menu: { gridId: referenceDataGridId, ariaLabel: `${module.name}行操作` },
-            // pagination 的 totalCount 使用当前详情过滤后的 records 数量。
+            // REMOTE 使用后台 totalCount，LOCAL 使用当前详情 records 数量。
             pagination: {
-                gridId: referenceDataGridId, currentPage: 1, pageSize: 20, totalCount: records.length,
+                gridId: referenceDataGridId,
+                mode: module.key === "controls" ? "REMOTE" : "LOCAL",
+                currentPage: remotePage?.pageNo || 1,
+                pageSize: remotePage?.pageSize || 20,
+                totalCount: remotePage?.totalCount ?? records.length,
                 summaryAll: "共 {total} 条", summaryFiltered: "当前 {visible} 条 · 共 {total} 条",
                 previousLabel: "上一页", nextLabel: "下一页", pageChangedMessage: "已切换到第 {page} 页",
                 pageSizeChangedMessage: `每页显示 {size} 条${module.itemName}`
@@ -955,33 +1260,7 @@
     }
 
     /**
-     * 生成树节点、选项和菜单共同使用的“所属数据类型”下拉字段。
-     *
-     * @returns {object} 有类型数据时返回 typeId 选项；没有数据时返回不可选的说明项。
-     * @sideEffect 无；只读取 types 模块缓存，不临时发请求。
-     */
-    function referenceDataTypeSelectField() {
-        // 类型下拉只读取已经加载的 types 缓存，不在打开窗口时突然追加异步请求。
-        const types = referenceDataState.records.get("types") || [];
-        // 有数据时映射真实选项；无数据时生成唯一禁用说明项，避免出现空白控件。
-        const typeOptions = types.length > 0
-            ? types.map((typeRecord) => ({
-                value: String(typeRecord.id), label: String(typeRecord.nameZh || typeRecord.resourceCode),
-                icon: "ri-database-2-line", description: `${typeRecord.projectCode}/${typeRecord.resourceCode}`
-            }))
-            : [{
-                value: "", label: "暂无数据类型", icon: "ri-information-line",
-                description: "请先新增并启用数据类型", disabled: true, selected: true
-            }];
-        // rows 构建函数只关心一个标准字段对象，不需要知道类型缓存来源。
-        return {
-            name: "typeId", label: "所属数据类型", type: "select", required: true,
-            options: typeOptions
-        };
-    }
-
-    /**
-     * 生成树节点或菜单的父级选择字段，并排除正在编辑的记录自身。
+     * 生成树节点的父级选择字段，并排除正在编辑的记录自身。
      *
      * @param {object} module tree 模块配置。
      * @param {object|null} record 正在编辑的记录；新增时为 null。
@@ -1024,43 +1303,42 @@
         return { name: "sortnum", label: "排序值", type: "number", value: "0", icon: "ri-sort-number-asc" };
     }
 
-    /** 生成数据类型编辑字段。 */
-    function referenceDataBuildTypeWindowRows() {
+    /** 生成数据类型编辑字段；留空时创建新选项组，填写已有 code 时复用同一组选项。 */
+    function referenceDataBuildTypeWindowRows(record = null) {
+        const types = (referenceDataState.records.get("types") || [])
+            .filter((type) => String(type.code) !== String(record?.code));
         return [
-            // 第一行维护跨项目稳定坐标，两个字段都是业务主键的一部分。
-            [referenceDataTextField("projectCode", "项目编码", true, "例如 reference-data", 64), referenceDataTextField("resourceCode", "资源编码", true, "例如 resource-kind", 64)],
-            // 类型键明确决定节点由下拉框、树还是菜单消费，不再通过旧子表反推。
-            [{ name: "type", label: "类型键", type: "select", required: true, options: [
-                ["DROPDOWN", "下拉框"], ["TREE", "树"], ["GRID_MENU", "表格菜单"],
-                ["PANEL_MENU", "面板菜单"], ["CONTEXT_MENU", "右键菜单"]
-            ].map(([value, label], index) => ({ value, label, icon: "ri-shapes-line", selected: index === 0 })) }, referenceDataTextField("nameZh", "中文名称", true)],
+            [referenceDataTextField("optionSetCode", "选项组 Code", false, "新增时留空自动发号；复用时填写已有 optionSetCode", 100),
+                referenceDataTextField("valueCode", "类型值 Code", true, "例如 ENABLED", 100)],
+            [{ name: "parentTypeCode", label: "上级类型", type: "select", required: false,
+                options: [
+                    { value: "", label: "无（顶级）", icon: "ri-subtract-line", selected: true },
+                    ...types.map((type) => ({
+                        value: String(type.code),
+                        label: `${type.valueCode} · ${type.nameZh || type.code} · ${type.optionSetCode}`,
+                        icon: "ri-node-tree"
+                    }))
+                ] }, referenceDataTextField("nameZh", "中文名称", true)],
             // 多语言名称使用稳定顺序，便于不同类型快速连续录入。
             [referenceDataTextField("nameJa", "日文名称"), referenceDataTextField("nameEn", "英文名称")],
-            // 第三行补充英文名称并控制当前记录启停状态。
-            [referenceDataBooleanField("multiple", "允许多选"), referenceDataBooleanField("searchable", "允许搜索")],
-            [referenceDataBooleanField("clearable", "允许清空", true), referenceDataStatusField()],
-            // 第四行保存中文与日文的长说明。
-            [referenceDataTextareaField("descriptionZh", "中文说明"), referenceDataTextareaField("descriptionJa", "日文说明")],
-            // 最后一行保存英文说明和业务排序值。
-            [referenceDataTextareaField("descriptionEn", "英文说明"), referenceDataSortField()]
+            // 类型值只保存选项组、父级、多语言名称和公共管理状态。
+            [referenceDataStatusField(), referenceDataSortField()]
         ];
     }
 
     /** 生成树节点编辑字段，并排除当前记录自身作为父级。 */
     function referenceDataBuildTreeWindowRows(module, record) {
         return [
-            // 树节点必须先归属一个数据类型，并可选择同表中的父节点。
-            [referenceDataTypeSelectField(), referenceDataParentSelectField(module, record)],
-            // nodeCode 是类型内业务别名，公开定位始终使用后端生成的 code。
-            [referenceDataTextField("nodeCode", "节点编码", true, "例如 root"), referenceDataTextField("nodeValue", "节点值", true, "例如 ROOT")],
-            // 菜单节点可以设置图标和命令，普通树与下拉选项可以保持为空。
-            [referenceDataTextField("icon", "图标类名", false, "例如 ri-add-line", 100), referenceDataTextField("commandCode", "业务命令", false, "例如 CREATE", 100)],
-            [referenceDataBooleanField("disabled", "禁止选择"), referenceDataBooleanField("selectable", "允许选择", true)],
+            // 工程和页面只说明节点归属，树关系仍只由 code 与 parentId 决定。
+            [referenceDataTextField("projectCode", "所属项目", true, "例如 reference-data", 64),
+                referenceDataTextField("pageCode", "页面 Code", true, "例如 page101017", 100)],
+            // parentId 是树表唯一层级关系；根节点保持为空。
+            [referenceDataParentSelectField(module, record), referenceDataTextField("nodeValue", "节点值", true, "例如 READING")],
             // 三种语言标签按中文必填、日英可选的顺序排列。
             [referenceDataTextField("labelZh", "中文名称", true), referenceDataTextField("labelJa", "日文名称")],
             [referenceDataTextField("labelEn", "英文名称"), referenceDataStatusField()],
-            // 扩展 JSON 承载非固定属性，sortnum 决定同级节点顺序。
-            [referenceDataTextareaField("attributesJson", "扩展属性 JSON", "例如 {\"level\":1}"), referenceDataSortField()]
+            // sortnum 只决定同级节点顺序，不承载额外业务扩展。
+            [referenceDataSortField()]
         ];
     }
 
@@ -1071,17 +1349,19 @@
             [referenceDataTextField("projectCode", "所属项目", true, "例如 reference-data", 64), referenceDataTextField("pageCode", "页面 Code", true, "例如 page101090", 100)],
             [{
                 name: "parentKind", label: "父容器类型", type: "select", required: false,
-                options: ["PAGE", "WINDOW", "PANEL", "TOOLBAR", "CONTROL"]
+                options: ["PAGE", "PANEL", "TOOLBAR", "CONTROL"]
                     .map((value, index) => ({ value, label: value, icon: "ri-node-tree", selected: index === 0 }))
             }, referenceDataTextField("parentCode", "父容器 Code", false, "页面直属控件可留空", 100)],
             [{
                 name: "controlKind", label: "控件类型", type: "select", required: true,
-                options: ["PAGE", "GRID", "SEARCH", "FILTER", "BUTTON", "PANEL", "SPLIT_PANE", "TREE", "DROPDOWN", "WINDOW_TRIGGER"]
+                options: ["PAGE", "TOOLBAR", "GRID", "SEARCH", "FILTER", "BUTTON", "PANEL", "SPLIT_PANE", "TREE", "DROPDOWN", "WINDOW_TRIGGER", "TEXT", "SELECT", "NUMBER", "TEXTAREA"]
                     .map((value, index) => ({ value, label: value, icon: "ri-layout-grid-line", selected: index === 0 }))
             }, { name: "layoutMode", label: "布局模式", type: "select", required: true, options: ["FLOW", "GRID", "ABSOLUTE"].map((value, index) => ({ value, label: value, icon: "ri-layout-line", selected: index === 0 })) }],
+            [referenceDataTextField("fieldName", "字段 / 动作名", false, "页面控件填写稳定字段名", 100),
+                referenceDataTextField("optionSetCode", "选项组 Code", false, "不需要选项时留空", 100)],
             [referenceDataTextField("breakpoint", "布局档位", true, "DESKTOP", 16)],
             [referenceDataTextField("width", "宽度", false, "例如 320px", 32), referenceDataTextField("height", "高度", false, "例如 48px", 32)],
-            [referenceDataTextField("gapBefore", "前间距", false, "例如 8px", 32), referenceDataTextField("gapAfter", "后间距", false, "例如 12px", 32)],
+            [{ name: "x", label: "横向位置", type: "number", required: false }, { name: "y", label: "纵向位置", type: "number", required: false }],
             [referenceDataBooleanField("wrap", "允许换行", true), referenceDataStatusField()],
             [referenceDataSortField()]
         ];
@@ -1107,7 +1387,7 @@
     function referenceDataBuildTableWindowRows() {
         return [
             [referenceDataTextField("projectCode", "所属项目", true, "例如 reference-data", 64), referenceDataTextField("pageCode", "页面 Code", true, "例如 page101090", 100)],
-            [referenceDataTextField("dataTableName", "对应业务数据表", true, "例如 ReferenceDataType", 100), referenceDataTextField("nameZh", "中文名称", true, "例如 数据类型", 200)],
+            [referenceDataTextField("gridId", "Grid 实例 ID", true, "selGridReferenceDataManagementId", 100), referenceDataTextField("nameZh", "中文名称", true, "例如 引用数据管理表格", 200)],
             // 描述说明表格用途，status 控制整张表格定义是否参与配置查询。
             [referenceDataTextareaField("description", "表格描述"), referenceDataStatusField()],
             // 排序值决定“表格定义”模块中的展示顺序。
@@ -1122,18 +1402,28 @@
             [{
                 name: "tableId", label: "所属表格", type: "select", required: true,
                 options: (referenceDataState.records.get("tables") || []).map((tableRecord) => ({
-                    value: String(tableRecord.id), label: tableRecord.nameZh || tableRecord.dataTableName,
+                    value: String(tableRecord.id), label: tableRecord.nameZh || tableRecord.gridId,
                     icon: "ri-table-line", description: tableRecord.code
                 }))
             }, {
+                name: "viewCode", label: "业务视图", type: "select", required: true, options: [
+                    { value: "TYPE", label: "数据类型", icon: "ri-database-2-line" },
+                    { value: "TREE", label: "树节点", icon: "ri-node-tree" },
+                    { value: "CONTROL", label: "页面控件", icon: "ri-layout-grid-line" },
+                    { value: "WINDOW", label: "Window", icon: "ri-window-line" },
+                    { value: "TABLE", label: "表格定义", icon: "ri-table-line" },
+                    { value: "TABLE_ELEMENT", label: "表格元素", icon: "ri-layout-column-line" }
+                ]
+            }],
+            [{
                 name: "elementType", label: "元素类型", type: "select", required: true, options: [
                     { value: "COLUMN", label: "表格列", icon: "ri-layout-column-line", selected: true },
                     { value: "TOOLBAR_ACTION", label: "工具栏操作", icon: "ri-layout-top-line" },
                     { value: "ROW_ACTION", label: "行操作", icon: "ri-more-2-fill" }
                 ]
-            }],
+            }, referenceDataTextField("fieldName", "绑定字段", false, "例如 labelZh", 100)],
             // fieldName 是 Grid 的稳定字段 ID，第二字段只供 stack 等组合渲染使用。
-            [referenceDataTextField("fieldName", "绑定字段", false, "例如 labelZh", 100), referenceDataTextField("secondaryFieldName", "第二绑定字段", false, "仅组合渲染使用", 100)],
+            [referenceDataTextField("secondaryFieldName", "第二绑定字段", false, "仅组合渲染使用", 100)],
             [{
                 name: "cellRenderer", label: "单元格渲染方式", type: "select", required: true, options: [
                     "text", "stack", "badge", "time", "boolean", "actions"
@@ -1166,7 +1456,7 @@
         ];
         // 每个分支只选择业务字段契约，窗口标题和提交逻辑仍然复用统一实现。
         let businessRows;
-        if (module.key === "types") businessRows = referenceDataBuildTypeWindowRows();
+        if (module.key === "types") businessRows = referenceDataBuildTypeWindowRows(record);
         else if (module.key === "tree") businessRows = referenceDataBuildTreeWindowRows(module, record);
         else if (module.key === "controls") businessRows = referenceDataBuildControlWindowRows();
         else if (module.key === "windows") businessRows = referenceDataBuildWindowConfigRows();
@@ -1246,9 +1536,9 @@
             referenceDataEnsureModuleLoaded(module, reloadRecords),
             referenceDataLoadResolvedColumns(module, reloadColumns)
         ];
-        // 具有 typeId 的实体需要类型缓存生成筛选和编辑下拉；直接从深链接进入时也必须完整可用。
-        if (["tree", "controls"].includes(module.key) && module.key !== "types") {
-            dependencies.push(referenceDataEnsureModuleLoaded(referenceDataModules.types));
+        // 页面控件 Grid 额外读取后台当前页；完整 records 只服务页面配置和编辑坐标，不参与列表分页。
+        if (module.key === "controls" && (reloadRecords || !referenceDataState.remotePages.has(module.key))) {
+            dependencies.push(referenceDataLoadRemotePage(module, reloadRecords ? { pageNo: 1 } : {}));
         }
         // 等待业务数据、表头和必要关联数据同时就绪后再允许页面组装。
         await Promise.all(dependencies);
@@ -1378,7 +1668,7 @@
         const fields = [
             ["唯一 Code", tableRecord.code],
             ["所属项目", tableRecord.projectCode],
-            ["业务数据表", tableRecord.dataTableName],
+            ["Grid 实例 ID", tableRecord.gridId],
             ["页面 Code", tableRecord.pageCode],
             ["启停状态", Number(tableRecord.status) === 1 ? "已启用" : "已停用"],
             ["排序值", tableRecord.sortnum ?? 0],
@@ -1472,6 +1762,7 @@
         // 预览只接受当前表格、启用且 visible=true 的列，并按数据库 sortnum 排列。
         const columns = (referenceDataState.records.get("columns") || [])
             .filter((column) => Number(column.tableId) === Number(tableRecord.id)
+                && String(column.viewCode) === "TABLE"
                 && Number(column.status) === 1 && Boolean(column.visible))
             .sort((left, right) => Number(left.sortnum) - Number(right.sortnum));
         // 没有可见列时显示引导；有列时绘制轻量 table。
@@ -1506,7 +1797,7 @@
         referenceDataState.panelRoot.dataset.referenceDataDetailTab = tab;
         // 标题优先使用业务描述，没有描述时显示真实表名。
         detail.querySelector("[data-reference-data-detail-title]").textContent =
-            String(referenceDataState.selectedTable.description || referenceDataState.selectedTable.nameZh || referenceDataState.selectedTable.dataTableName);
+            String(referenceDataState.selectedTable.description || referenceDataState.selectedTable.nameZh || referenceDataState.selectedTable.gridId);
         // 坐标明确显示“所属项目 · 唯一 Code”，便于管理员定位数据库记录。
         detail.querySelector("[data-reference-data-detail-coordinate]").textContent =
             `${referenceDataState.selectedTable.projectCode} · ${referenceDataState.selectedTable.code}`;
@@ -1551,15 +1842,26 @@
      * @sideEffect 更新 Panel 文案、Search/Tree/Grid 配置，重建 Dropdown 选项，重绘详情并同步页面编辑坐标。
      * @remarks setLocale 表示“使用新配置原位刷新”，不是只修改语言；控制器和事件监听不会重复创建。
      */
-    function referenceDataApplyPayload(payload) {
+    function referenceDataApplyPayload(payload, resetGrid = true) {
         // Panel 负责标题、状态、工具栏和五区静态文字。
-        if (referenceDataState.panelRoot) panel.setLocale(referenceDataState.panelRoot, { view: payload });
-        // 三个已挂载控制器分别读取自己负责的标准配置段。
-        referenceDataState.searchController?.setLocale(payload.search);
+        if (referenceDataState.panelRoot) panel.setLocale(referenceDataState.panelRoot, {
+            view: payload,
+            toolbar: referenceDataActiveToolbar()
+        });
+        // 字段名集合变化时重挂载 Search；只换文案时保留当前输入和焦点。
+        const desiredSearchNames = (payload.search.fields || [{ name: "keyword" }]).map((field) => String(field.name));
+        const currentSearchNames = referenceDataState.searchController?.getFieldNames?.() || [];
+        if (desiredSearchNames.join("|") !== currentSearchNames.join("|")) {
+            referenceDataState.searchController = search.remount(referenceDataState.panelRoot, payload.search);
+            if (!referenceDataState.searchController) throw new Error("引用数据搜索控件重挂载失败。");
+        } else {
+            referenceDataState.searchController?.setLocale(payload.search);
+        }
+        // Tree 和 Grid 分别读取自己负责的标准配置段。
         referenceDataState.treeController?.setLocale(payload.tree);
         referenceDataState.gridController?.setLocale(payload);
         // 模块切换后清除上一模块的搜索、状态、类型和分页状态，防止不同字段契约串用。
-        referenceDataState.gridController?.reset();
+        if (resetGrid) referenceDataState.gridController?.reset();
         // Panel 已替换原生 select 选项后，先保证实例存在，再按每个根节点公开契约刷新浮层和当前文案。
         dropdown.mountAll(referenceDataState.panelRoot);
         referenceDataState.panelRoot.querySelectorAll("[data-sel-dropdown-menu]")
@@ -1658,11 +1960,15 @@
      *
      * @param {object} module 决定使用哪个 Window 控制器和表单结构。
      * @param {object|null} record 非空时进入编辑，null 时进入新增。
-     * @param {object} initialValues 新增窗口需要预填的业务值，例如当前下拉框的 typeId。
-     * @returns {void}
-     * @sideEffect 更新 editingId，重置 Window；表格详情新增元素时自动填入 tableId 与 projectCode。
+     * @param {object} initialValues 新增窗口需要预填的业务值，例如当前表格的 tableId。
+     * @returns {Promise<void>} 关联数据准备完成并打开窗口后完成。
+     * @sideEffect 类型窗口按需加载页面控件；随后更新 editingId、重置 Window 并写入初始值。
      */
-    function referenceDataOpenEditor(module, record = null, initialValues = {}) {
+    async function referenceDataOpenEditor(module, record = null, initialValues = {}) {
+        // 类型编辑只有打开窗口时才读取控件列表，首屏仍只加载当前模块和表头。
+        if (module.key === "types") {
+            await referenceDataEnsureModuleLoaded(referenceDataModules.controls);
+        }
         // editingId 是保存时选择 create.htm 或 update.htm 的唯一依据，关闭成功后必须清空。
         referenceDataState.editingId = record ? Number(record.id) : null;
         // 每个模块使用预先挂载的独立控制器；setLocale 原位切换标题和 rows，不重复创建 dialog。
@@ -1949,7 +2255,7 @@
             view: payload,
             expandLeftLabel: payload.title.messages.expandLeftRegion,
             collapseLeftLabel: payload.title.messages.collapseLeftRegion,
-            toolbar: referenceDataToolbar
+            toolbar: referenceDataActiveToolbar()
         })) throw new Error("引用数据公共面板挂载失败。");
 
         // 四个控制器都复用 Panel 内已生成的节点，模块切换时只更新数据而不重建 DOM。
@@ -2035,6 +2341,9 @@
             saveState: referenceDataSavePageGridState
         })) throw new Error("引用数据表格页面编辑登记失败。");
 
+        // 查询条件组、类型、状态和重置是工具栏四个可独立保存的逻辑控件。
+        referenceDataMountQueryControlEditors();
+
         // 每个业务 Window 绑定独立数据库记录，拖拽或缩放后只保存当前实例。
         referenceDataModuleList.forEach((module) => {
             const controller = referenceDataState.editWindowControllers.get(module.key);
@@ -2069,6 +2378,24 @@
     function referenceDataBindGridAndTreeEvents() {
         // 所有语义事件都从 Panel 根节点冒泡，在这里集中监听一次。
         const root = referenceDataState.panelRoot;
+        // 远程分页事件只在页面控件模块生效；每个输入直接映射一个 BaseDao AND 条件。
+        root.addEventListener("selGrid:queryChange", async (event) => {
+            const detail = event.detail;
+            if (!detail || detail.gridId !== referenceDataGridId || referenceDataState.activeKey !== "controls") return;
+            const values = detail.values || {};
+            referenceDataState.searchController?.setLoading(true);
+            try {
+                await referenceDataLoadRemotePage(referenceDataModules.controls, {
+                    pageNo: detail.pageNo, pageSize: detail.pageSize,
+                    code: values.code ?? "", parentCode: values.parentCode ?? "", optionSetCode: values.optionSetCode ?? "",
+                    controlKind: detail.type, status: detail.status
+                });
+                // 查询响应只替换当前页和分页信息，不能 reset 后再次发出远程查询。
+                referenceDataApplyPayload(referenceDataBuildPayload(), false);
+            } finally {
+                referenceDataState.searchController?.setLoading(false);
+            }
+        });
         // Panel 头部“新增”最终以 Grid 语义事件通知，应用只决定打开哪个业务窗口。
         root.addEventListener("selGrid:new", () => referenceDataOpenEditor(referenceDataActiveModule()));
         root.addEventListener("selGrid:action", async (event) => {
@@ -2086,7 +2413,13 @@
             const treeId = String(event.detail?.id || "");
             // module-* 只切换一级业务模块。
             if (treeId.startsWith("module-")) {
-                await referenceDataSwitchModule(treeId.slice(7));
+                try {
+                    await referenceDataSwitchModule(treeId.slice(7));
+                } catch (error) {
+                    // 模块异步请求或公共控件刷新失败时给出可见错误，避免表现为点击无响应。
+                    referenceDataSetFeedback(error.message || "业务模块切换失败。");
+                    console.error("引用数据业务模块切换失败。", error);
+                }
                 return;
             }
             // record-* 先解析成模块 key 和数据库主键。

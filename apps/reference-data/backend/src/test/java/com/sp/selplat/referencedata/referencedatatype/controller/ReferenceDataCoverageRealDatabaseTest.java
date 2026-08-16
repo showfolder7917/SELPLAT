@@ -1,6 +1,7 @@
 package com.sp.selplat.referencedata.referencedatatype.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,7 +62,7 @@ class ReferenceDataCoverageRealDatabaseTest {
     private JdbcTemplate jdbcTemplate;
 
     /**
-     * 验证默认分页、资源分类及类型批量新增、更新、删除均经过真实数据库。
+     * 验证默认分页、分类筛选及类型批量新增、更新、删除均经过真实数据库。
      *
      * 执行结果示例：两条批量记录依次新增、更新和假删除，各阶段影响行数均为 {@code 2}。
      */
@@ -72,7 +73,7 @@ class ReferenceDataCoverageRealDatabaseTest {
     }
 
     /**
-     * 验证空请求、非法主键、字段长度、审计 ID、状态、排序值、重复坐标和内置类型保护。
+     * 验证空请求、非法主键、字段长度、审计 ID、状态、排序值和重复分类。
      *
      * 执行结果示例：非法状态返回 {@code REFERENCE_DATA_TYPE_STATUS_INVALID}，不会进入写入 SQL。
      */
@@ -94,61 +95,70 @@ class ReferenceDataCoverageRealDatabaseTest {
     }
 
     /**
-     * 执行类型批量 CRUD、分页与资源分类分支的完整真实数据库验证。
+     * 执行类型批量 CRUD、分页与分类分支的完整真实数据库验证。
      *
-     * 执行结果示例：默认列表返回六条 fixture，批量新增、更新、删除分别影响两行。
+     * 执行结果示例：默认列表返回三条 fixture，批量新增、更新、删除分别影响两行。
      */
     private void verifyTypeBatchCrudAndQueryBranches() {
         applyFixture("shouldExecuteTypeBatchCrudAndQueryBranches");
 
         CommonPageResult defaultPage = typeService.getStore(null);
-        assertEquals(6, defaultPage.getTotalCount());
+        assertEquals(3, defaultPage.getTotalCount());
         assertEquals(20, defaultPage.getPageSize());
-        // 类型明确保存消费形态，兼容字段 resourceKinds 只回显唯一 type，不再扫描已删除的子表。
+        // 类型目录直接回显选项组和值，不再生成兼容 resourceKinds 字段。
         Map<String, Object> emptyKind = defaultPage.getRecords().stream()
-                .filter(record -> "without-children".equals(record.get("resourceCode")))
+                .filter(record -> "CONTEXT_MENU".equals(record.get("valueCode")))
                 .findFirst()
                 .orElseThrow();
-        assertEquals(List.of("CONTEXT_MENU"), emptyKind.get("resourceKinds"));
+        assertEquals("optionSet100000", emptyKind.get("optionSetCode"));
+        assertEquals("type100001", emptyKind.get("parentTypeCode"));
+        assertFalse(emptyKind.containsKey("resourceKinds"));
 
         CommonPageParam filteredQuery = new CommonPageParam();
-        filteredQuery.putParam("keyword", "cms");
+        filteredQuery.putParam("keyword", "type100002");
         filteredQuery.putParam("status", "1");
         filteredQuery.setPageSize(101);
         CommonPageResult filteredPage = typeService.getStore(filteredQuery);
         assertEquals(1, filteredPage.getTotalCount());
         assertEquals(100, filteredPage.getPageSize());
-        assertEquals(6, typeDao.findPage(" ", null, 1, 10).getTotalCount());
+        // 名称和类型值不再参与结构搜索。
+        assertEquals(0, typeService.getStore(pageParam("keyword", "Dropdown")).getTotalCount());
+        assertEquals(0, typeService.getStore(pageParam("keyword", "CONTEXT_MENU")).getTotalCount());
+        // 同一关键词可同时命中自身 code 和子级的 parentTypeCode。
+        assertEquals(2, typeService.getStore(pageParam("keyword", "type100001")).getTotalCount());
+        // 精确 code 关系查询均走 BaseDao 字段白名单，不做 id 转换或 JOIN。
+        assertEquals(1, typeService.getStore(pageParam("code", "type100001")).getTotalCount());
+        assertEquals(3, typeService.getStore(pageParam("optionSetCode", "optionSet100000")).getTotalCount());
+        assertEquals(1, typeService.getStore(pageParam("valueCode", "DROPDOWN")).getTotalCount());
+        assertEquals(1, typeService.getStore(pageParam("parentTypeCode", "type100001")).getTotalCount());
+        assertEquals(3, typeDao.findPage(" ", null, 1, 10).getTotalCount());
         assertTrue(typeService.getById(idParam(100002)).isSuccess());
 
         CommonBatchParam insertBatch = batch(
-                typeParam("shop", "product-category", "商品分类", 1, "60"),
-                typeParam("shop", "brand-category", "品牌分类", 2, ""));
+                typeParam("GRID_MENU", "表格菜单", 1, "60"),
+                typeParam("PANEL_MENU", "面板菜单", 2, ""));
         insertBatch.getItems().get(0).putParam("tenantId", 2);
         insertBatch.getItems().get(0).putParam("lastOperateUserId", 3);
         insertBatch.getItems().get(1).putParam("nameJa", " ");
         CommonResult insertResult = typeService.insertBatch(insertBatch);
         assertEquals(2, insertResult.getAffectedRows());
         assertEquals(2, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM ReferenceDataType WHERE projectCode = 'shop'",
-                Integer.class));
-        assertEquals(2, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM ReferenceDataType WHERE projectCode = 'shop' "
+                "SELECT COUNT(*) FROM ReferenceDataType WHERE valueCode IN ('GRID_MENU','PANEL_MENU') "
                         + "AND tenantId = 1 AND lastOperateUserId = 1",
                 Integer.class));
         assertEquals(0, typeService.insertBatch(new CommonBatchParam()).getAffectedRows());
 
         CommonBatchParam updateBatch = batch(
-                typeParam("cms", "article-category", "文章栏目", 2, "85"),
-                typeParam("cms", "archive-category", "归档栏目", 1, "75"));
+                typeParam("DROPDOWN", "下拉选项", 2, "85"),
+                typeParam("CONTEXT_MENU", "上下文菜单", 1, "75"));
         updateBatch.getItems().get(0).putParam("id", 100002);
         updateBatch.getItems().get(1).putParam("id", 100003);
         assertEquals(2, typeService.updateBatch(updateBatch).getAffectedRows());
         assertEquals(0, typeService.updateBatch(new CommonBatchParam()).getAffectedRows());
 
-        CommonParam singleUpdate = typeParam("cms", "article-category", "文章分类（单条更新）", 1, "86");
+        CommonParam singleUpdate = typeParam("DROPDOWN", "下拉框（单条更新）", 1, "86");
         singleUpdate.putParam("id", 100002);
-        assertEquals("文章分类（单条更新）", ((Map<?, ?>) typeService.update(singleUpdate).getData()).get("nameZh"));
+        assertEquals("下拉框（单条更新）", ((Map<?, ?>) typeService.update(singleUpdate).getData()).get("nameZh"));
 
         assertEquals(2, typeService.deleteBatch(batch(idParam(100002), idParam(100003))).getAffectedRows());
         assertEquals(0, typeService.deleteBatch(new CommonBatchParam()).getAffectedRows());
@@ -160,7 +170,7 @@ class ReferenceDataCoverageRealDatabaseTest {
     /**
      * 执行所有可由真实请求稳定制造的类型 Service 参数与业务错误验证。
      *
-     * 执行结果示例：缺字段、非法数字、重复坐标和保护记录分别返回稳定错误编码；伪造身份被忽略。
+     * 执行结果示例：缺字段、非法数字和重复分类分别返回稳定错误编码；伪造身份被忽略。
      */
     private void verifyInvalidTypeInputs() {
         applyFixture("shouldRejectInvalidTypeInputs");
@@ -168,7 +178,7 @@ class ReferenceDataCoverageRealDatabaseTest {
         CommonPageParam blankQuery = new CommonPageParam();
         blankQuery.putParam("keyword", " ");
         blankQuery.putParam("status", " ");
-        assertEquals(6, typeService.getStore(blankQuery).getTotalCount());
+        assertEquals(4, typeService.getStore(blankQuery).getTotalCount());
         assertEquals(1, typeService.getStore(pageParam("status", "2")).getTotalCount());
         assertBusiness("REFERENCE_DATA_TYPE_STATUS_INVALID", () -> typeService.getStore(pageParam("status", "3")));
         assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.getStore(pageParam("status", "invalid")));
@@ -180,68 +190,47 @@ class ReferenceDataCoverageRealDatabaseTest {
         assertBusiness("REFERENCE_DATA_TYPE_NOT_FOUND", () -> typeService.getById(idParam(999999)));
 
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.insert(null));
-        CommonParam missingProject = new CommonParam();
-        missingProject.putParam("resourceCode", "missing-project");
-        missingProject.putParam("nameZh", "缺少项目");
-        assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.insert(missingProject));
-        assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.insert(typeParam(" ", "blank-project", "空项目", 1, "1")));
-        assertBusiness("REFERENCE_DATA_TYPE_CODE_INVALID", () -> typeService.insert(typeParam("1bad", "invalid-code", "非法编码", 1, "1")));
-        assertBusiness("REFERENCE_DATA_TYPE_FIELD_TOO_LONG", () -> typeService.insert(typeParam("cms", "long-name", "中".repeat(121), 1, "1")));
-        CommonParam longOptionalText = typeParam("cms", "long-optional", "可选字段过长", 1, "1");
+        CommonParam missingCategory = new CommonParam();
+        missingCategory.putParam("nameZh", "缺少分类");
+        assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.insert(missingCategory));
+        assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.insert(typeParam(" ", "空分类", 1, "1")));
+        assertBusiness("REFERENCE_DATA_TYPE_VALUE_RESERVED", () -> typeService.insert(typeParam("TREE", "树", 1, "1")));
+        assertBusiness("REFERENCE_DATA_TYPE_FIELD_TOO_LONG", () -> typeService.insert(typeParam("PANEL_MENU", "中".repeat(121), 1, "1")));
+        CommonParam longOptionalText = typeParam("PANEL_MENU", "可选字段过长", 1, "1");
         longOptionalText.putParam("nameEn", "e".repeat(121));
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_TOO_LONG", () -> typeService.insert(longOptionalText));
-        assertBusiness("REFERENCE_DATA_TYPE_STATUS_INVALID", () -> typeService.insert(typeParam("cms", "bad-status", "非法状态", 3, "1")));
-        CommonParam invalidTypeKey = typeParam("cms", "bad-type", "非法类型", 1, "1");
-        invalidTypeKey.putParam("type", "UNKNOWN");
-        assertBusiness("REFERENCE_DATA_TYPE_KEY_INVALID", () -> typeService.insert(invalidTypeKey));
-        assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.insert(typeParam("cms", "text-status", "文字状态", "invalid", "1")));
-        assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.insert(typeParam("cms", "bad-sort", "非法排序", 1, "invalid")));
+        assertBusiness("REFERENCE_DATA_TYPE_STATUS_INVALID", () -> typeService.insert(typeParam("PANEL_MENU", "非法状态", 3, "1")));
+        CommonParam invalidOptionSet = typeParam("UNKNOWN", "非法选项组", 1, "1");
+        invalidOptionSet.putParam("optionSetCode", "missing999999");
+        assertBusiness("REFERENCE_DATA_OPTION_SET_CODE_INVALID", () -> typeService.insert(invalidOptionSet));
+        assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.insert(typeParam("PANEL_MENU", "文字状态", "invalid", "1")));
+        assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.insert(typeParam("PANEL_MENU", "非法排序", 1, "invalid")));
 
-        CommonParam invalidTenant = typeParam("cms", "bad-tenant", "非法租户", 1, "1");
-        invalidTenant.putParam("tenantId", 0);
-        assertTrue(typeService.insert(invalidTenant).isSuccess());
-        CommonParam invalidOperator = typeParam("cms", "bad-operator", "非法操作员", 1, "1");
-        invalidOperator.putParam("lastOperateUserId", 0);
-        assertTrue(typeService.insert(invalidOperator).isSuccess());
-        assertEquals(2, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM ReferenceDataType WHERE resourceCode IN "
-                        + "('bad-tenant', 'bad-operator') AND tenantId = 1 AND lastOperateUserId = 1",
+        CommonParam forgedIdentity = typeParam("PANEL_MENU", "面板菜单", null, " ");
+        forgedIdentity.putParam("tenantId", 0);
+        forgedIdentity.putParam("lastOperateUserId", 0);
+        forgedIdentity.putParam("nameEn", " ");
+        assertTrue(typeService.insert(forgedIdentity).isSuccess());
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ReferenceDataType WHERE valueCode='PANEL_MENU' "
+                        + "AND tenantId = 1 AND lastOperateUserId = 1 AND nameEn IS NULL",
                 Integer.class));
-
-        CommonParam blankOptionalValues = typeParam("cms", "blank-optional", "空白可选值", null, " ");
-        blankOptionalValues.putParam("nameEn", " ");
-        assertTrue(typeService.insert(blankOptionalValues).isSuccess());
-        CommonParam booleanWords = typeParam("cms", "boolean-words", "布尔文字", 1, "1");
-        booleanWords.putParam("multiple", "true");
-        booleanWords.putParam("searchable", "1");
-        booleanWords.putParam("clearable", "false");
-        assertTrue(typeService.insert(booleanWords).isSuccess());
-        CommonParam booleanNumbers = typeParam("cms", "boolean-numbers", "布尔数字", 1, "1");
-        booleanNumbers.putParam("multiple", "0");
-        booleanNumbers.putParam("searchable", "false");
-        booleanNumbers.putParam("clearable", "true");
-        assertTrue(typeService.insert(booleanNumbers).isSuccess());
-        CommonParam invalidBoolean = typeParam("cms", "bad-boolean", "非法布尔", 1, "1");
-        invalidBoolean.putParam("multiple", "maybe");
-        assertBusiness("REFERENCE_DATA_BOOLEAN_INVALID", () -> typeService.insert(invalidBoolean));
-
         assertBusiness("REFERENCE_DATA_TYPE_ID_INVALID", () -> typeService.update(null));
-        CommonParam missingUpdate = typeParam("cms", "missing-update", "不存在更新", 1, "1");
+        CommonParam missingUpdate = typeParam("PANEL_MENU", "不存在更新", 1, "1");
         missingUpdate.putParam("id", 999999);
         assertBusiness("REFERENCE_DATA_TYPE_NOT_FOUND", () -> typeService.update(missingUpdate));
-        CommonParam duplicateUpdate = typeParam("cms", "article-category", "重复坐标", 1, "1");
+        CommonParam duplicateUpdate = typeParam("DROPDOWN", "重复分类", 1, "1");
         duplicateUpdate.putParam("id", 100003);
         assertBusiness("REFERENCE_DATA_TYPE_DUPLICATE", () -> typeService.update(duplicateUpdate));
         assertBusiness("REFERENCE_DATA_TYPE_ID_INVALID", () -> typeService.delete(null));
-        assertBusiness("REFERENCE_DATA_BUILTIN_TYPE_PROTECTED", () -> typeService.delete(idParam(100001)));
+        assertTrue(typeService.delete(idParam(100001)).isSuccess());
         assertTrue(typeService.delete(idParam(100002)).isSuccess());
         assertTrue(typeService.delete(idParam(100004)).isSuccess());
-        assertEquals(1, typeService.deleteBatch(batch(idParam(100005))).getAffectedRows());
+        assertEquals(1, typeService.deleteBatch(batch(idParam(100003))).getAffectedRows());
 
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.insertBatch(null));
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.updateBatch(null));
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.deleteBatch(null));
-        assertBusiness("REFERENCE_DATA_BUILTIN_TYPE_PROTECTED", () -> typeService.deleteBatch(batch(idParam(100001))));
     }
 
     /**
@@ -253,7 +242,7 @@ class ReferenceDataCoverageRealDatabaseTest {
         applyFixture("shouldWrapTypeDatabaseFailures");
         jdbcTemplate.execute("DROP TABLE ReferenceDataType CASCADE");
         assertSystem(() -> typeDao.findPage(null, null, 1, 10));
-        assertSystem(() -> typeDao.existsCoordinate("cms", "article-category", null));
+        assertSystem(() -> typeDao.existsOptionSetValue(1L, "optionSet100000", "MENU_GROUP", null));
         assertSystem(() -> typeDao.findEnabledByCode("type100001"));
     }
 
@@ -273,22 +262,20 @@ class ReferenceDataCoverageRealDatabaseTest {
     /**
      * 构造包含类型保存字段的真实公共参数。
      *
-     * @param projectCode 项目编码，例如 {@code cms}
-     * @param resourceCode 资源编码，例如 {@code article-category}
-     * @param nameZh 中文名称，例如 {@code 文章分类}
+     * @param valueCode 类型值编码，例如 {@code MENU_GROUP}
+     * @param nameZh 中文名称，例如 {@code 菜单组}
      * @param status 状态，例如 {@code 1}；省略时由 Service 使用默认启用状态
      * @param sortnum 排序值，例如 {@code 80}
-     * @return 保存参数，例如 {@code {"projectCode":"cms","resourceCode":"article-category","status":1}}
+     * @return 保存参数，例如 {@code {"optionSetCode":"optionSet100000","valueCode":"MENU_GROUP","status":1}}
      */
     private CommonParam typeParam(
-            String projectCode,
-            String resourceCode,
+            String valueCode,
             String nameZh,
             Object status,
             String sortnum) {
         CommonParam param = new CommonParam();
-        param.putParam("projectCode", projectCode);
-        param.putParam("resourceCode", resourceCode);
+        param.putParam("optionSetCode", "optionSet100000");
+        param.putParam("valueCode", valueCode);
         param.putParam("nameZh", nameZh);
         if (status != null) {
             param.putParam("status", status);

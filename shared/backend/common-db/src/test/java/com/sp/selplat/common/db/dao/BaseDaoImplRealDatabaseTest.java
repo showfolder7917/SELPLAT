@@ -29,6 +29,18 @@ class BaseDaoImplRealDatabaseTest {
     }
 
     /**
+     * getPageListInCondition Case 验证受控 In 后缀生成参数化集合条件并阻止非法集合。
+     *
+     * <p>执行结果示例：查询 tenantId 1 和 3 返回两条，空集合和超过一千项集合在 SQL 前失败。</p>
+     */
+    @Test
+    void getPageListInCondition() {
+        BaseDaoImplRealDatabaseTestVerifier.verifyGetPageListInCondition(
+            "fixtures/BaseDaoImplRealDatabaseTest/getPageListInCondition.sql"
+        );
+    }
+
+    /**
      * getByIdFound Case 验证公共主键查询不添加业务状态条件。
      *
      * <p>执行结果示例：当前真实数据库或结构 Case 的全部验证通过。</p>

@@ -1,4 +1,4 @@
--- ReferenceDataTable 一条记录代表页面中的一个 SEL Grid，公开查询只使用 code。
+-- ReferenceDataTable 一条记录只代表页面中的一个真实 SEL Grid，模块视图由子元素 viewCode 区分。
 CREATE TABLE IF NOT EXISTS ReferenceDataTable (
     id BIGINT PRIMARY KEY,
     code VARCHAR(100) NOT NULL,
@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTable (
     lastOperateUserId BIGINT NOT NULL DEFAULT 1,
     projectCode VARCHAR(64) NOT NULL,
     pageCode VARCHAR(100) NOT NULL,
-    dataTableName VARCHAR(100) NOT NULL,
+    gridId VARCHAR(100) NOT NULL,
     nameZh VARCHAR(200) NOT NULL,
     nameJa VARCHAR(200),
     nameEn VARCHAR(200),
@@ -20,9 +20,12 @@ CREATE TABLE IF NOT EXISTS ReferenceDataTable (
     createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_reference_data_table_code UNIQUE (code),
+    CONSTRAINT uk_reference_data_table_page_grid UNIQUE (tenantId, pageCode, gridId),
     CONSTRAINT ck_reference_data_table_selection CHECK (selectionMode IN ('NONE', 'SINGLE', 'MULTIPLE')),
     CONSTRAINT ck_reference_data_table_status CHECK (status IN (0, 1, 2))
 );
-COMMENT ON TABLE ReferenceDataTable IS '页面SEL Grid定义表';
+ALTER TABLE ReferenceDataTable ADD COLUMN IF NOT EXISTS gridId VARCHAR(100);
+COMMENT ON TABLE ReferenceDataTable IS '页面真实SEL Grid定义表';
+COMMENT ON COLUMN ReferenceDataTable.gridId IS '页面真实Grid实例ID；同一物理控件切换模块时保持不变';
 CREATE INDEX IF NOT EXISTS idx_reference_data_table_page
     ON ReferenceDataTable(tenantId, pageCode, status, sortnum, id);

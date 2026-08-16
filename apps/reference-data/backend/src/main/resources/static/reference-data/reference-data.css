@@ -59,6 +59,19 @@ body {
     padding: var(--sel-theme-viewport-gap);
 }
 
+/* 查询栏只在编辑模式于重置后显示一个共享保存入口，不改变工具栏预览高度。 */
+.reference-data-query-save-host {
+    position: absolute;
+    z-index: 72;
+    top: 10px;
+    left: calc(100% + 8px);
+    display: none;
+}
+
+html[data-sel-page-edit-mode="edit"] .reference-data-query-save-host {
+    display: inline-flex;
+}
+
 /* 表格定义详情保留业务上下文，并与公共 selGrid 共用中央工作区。 */
 .reference-data-table-detail {
     display: flex;

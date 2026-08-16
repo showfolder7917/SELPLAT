@@ -7,7 +7,7 @@ import com.sp.selplat.referencedata.referencedatatype.service.ReferenceDataTypeS
 import java.util.Map;
 import org.springframework.stereotype.Service;
 
-/** 只编排两个表业务 Service，不跨表访问 DAO，也不建立第二套持久化逻辑。 */
+/** 分别编排类型目录与独立树 Service，不建立任何跨表依赖。 */
 @Service
 public class ReferenceDataResourceQueryServiceImpl implements ReferenceDataResourceQueryService {
 
@@ -38,7 +38,7 @@ public class ReferenceDataResourceQueryServiceImpl implements ReferenceDataResou
 
     /** {@inheritDoc} */
     @Override
-    public CommonResult getNodes(String typeCode, Map<String, String> parameters) {
-        return treeNodeService.getNodes(typeCode, parameters);
+    public CommonResult getNodes(String rootCode, Map<String, String> parameters) {
+        return treeNodeService.getNodes(rootCode, parameters);
     }
 }

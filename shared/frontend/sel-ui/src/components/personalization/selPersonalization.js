@@ -587,6 +587,10 @@
         const selPersonalizationPageEditorAllowed = selPersonalizationOptions.pageEditor?.canEdit === true;
         // 每个页面控件由应用显式登记根节点、数据库坐标和保存适配器，公共层不扫描业务 DOM。
         const selPersonalizationPageControls = new Map();
+        // 同一组合控件可以共用一个保存入口，但保存请求仍只提交当前选中的单个子控件。
+        const selPersonalizationSharedPageControlActions = new Map();
+        // 流式组合控件按登记顺序共享横向游标，任一项调宽时后续项自动跟随。
+        const selPersonalizationPageControlFlowGroups = new Map();
         let selPersonalizationPageMode = "preview";
         let selPersonalizationSelectedPageControlId = "";
         const selPersonalizationPageAreaButton = selPersonalizationControl.querySelector('[data-sel-personal-area="page"]');
@@ -611,12 +615,68 @@
 
         /** 在实际控件右上角同步编辑入口，预览模式保持业务页面干净。 */
         function selPersonalizationSyncPageControlBadges() {
+            // 先发布模式再显示动作，让应用基于模式声明的公共布局变量在本绘制帧立即生效。
+            document.documentElement.dataset.selPageEditMode = selPersonalizationPageMode;
             selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
                 const selPersonalizationShowBadge = selPersonalizationPageMode === "edit" && selPersonalizationPageControl.enabled;
-                selPersonalizationPageControl.roots.forEach((selPersonalizationRoot) => selPersonalizationRoot.classList.toggle("selpersonal-page-editable", selPersonalizationShowBadge));
+                selPersonalizationPageControl.roots.forEach((selPersonalizationRoot) => {
+                    selPersonalizationRoot.classList.toggle("selpersonal-page-editable", selPersonalizationShowBadge);
+                });
+                if (selPersonalizationPageControl.geometry?.editFrame) {
+                    selPersonalizationPageControl.geometry.editFrame.hidden = !selPersonalizationShowBadge;
+                }
                 selPersonalizationPageControl.editButtons.forEach((selPersonalizationEditButton) => { selPersonalizationEditButton.hidden = !selPersonalizationShowBadge; });
+                selPersonalizationPageControl.geometryButtons.forEach((selPersonalizationGeometryButton) => { selPersonalizationGeometryButton.hidden = !selPersonalizationShowBadge; });
             });
-            document.documentElement.dataset.selPageEditMode = selPersonalizationPageMode;
+            selPersonalizationSyncSharedPageControlActions();
+            // 模式切换可能改变工具栏内边距；下一帧按数据库坐标重算基线，避免只开编辑就让保存坐标漂移。
+            window.requestAnimationFrame(() => {
+                selPersonalizationPageControls.forEach((selPersonalizationPageControl) => {
+                    if (!selPersonalizationPageControl.geometry) return;
+                    selPersonalizationApplyPageControlGeometry(selPersonalizationPageControl, {
+                        x: selPersonalizationPageControl.geometry.x,
+                        y: selPersonalizationPageControl.geometry.y,
+                        width: selPersonalizationPageControl.root.style.width,
+                        height: selPersonalizationPageControl.root.style.height
+                    });
+                });
+            });
+        }
+
+        /** 同步组合控件的唯一保存入口，并用稳定 Code 标识当前实际保存目标。 */
+        function selPersonalizationSyncSharedPageControlActions() {
+            selPersonalizationSharedPageControlActions.forEach((selPersonalizationSharedAction) => {
+                const selPersonalizationSelectedControl = selPersonalizationPageControls.get(selPersonalizationSelectedPageControlId);
+                const selPersonalizationTargetControl = selPersonalizationSharedAction.controlIds.has(selPersonalizationSelectedControl?.id)
+                    ? selPersonalizationSelectedControl
+                    : Array.from(selPersonalizationSharedAction.controlIds)
+                        .map((selPersonalizationControlId) => selPersonalizationPageControls.get(selPersonalizationControlId))
+                        .find((selPersonalizationControl) => selPersonalizationControl?.enabled);
+                const selPersonalizationShowAction = selPersonalizationPageMode === "edit" && Boolean(selPersonalizationTargetControl?.enabled);
+                selPersonalizationSharedAction.button.hidden = !selPersonalizationShowAction;
+                selPersonalizationSharedAction.button.disabled = Boolean(selPersonalizationTargetControl?.saving);
+                selPersonalizationSharedAction.button.dataset.selPersonalPageControl = selPersonalizationTargetControl?.id || "";
+                const selPersonalizationCode = selPersonalizationTargetControl?.coordinates
+                    .find((selPersonalizationCoordinate) => selPersonalizationCoordinate.label.includes("Code"))?.value || "";
+                const selPersonalizationActionLabel = `${selPersonalizationSharedAction.label}：${selPersonalizationTargetControl?.title || "未选择控件"}`;
+                selPersonalizationSharedAction.button.querySelector("span").textContent = selPersonalizationSharedAction.label;
+                selPersonalizationSharedAction.button.setAttribute("aria-label", selPersonalizationCode
+                    ? `${selPersonalizationActionLabel}（${selPersonalizationCode}）` : selPersonalizationActionLabel);
+                if (selPersonalizationShowAction && selPersonalizationSharedAction.followControlId) {
+                    const selPersonalizationFollowControl = selPersonalizationPageControls.get(selPersonalizationSharedAction.followControlId);
+                    if (selPersonalizationFollowControl) {
+                        const selPersonalizationTargetRect = selPersonalizationFollowControl.root.getBoundingClientRect();
+                        const selPersonalizationHost = selPersonalizationSharedAction.host;
+                        const selPersonalizationOriginalTransition = selPersonalizationHost.style.transition;
+                        selPersonalizationHost.style.transition = "none";
+                        selPersonalizationHost.style.transform = "none";
+                        const selPersonalizationHostBaseRect = selPersonalizationHost.getBoundingClientRect();
+                        selPersonalizationHost.style.transform = `translate(${Math.round(selPersonalizationTargetRect.right + 8 - selPersonalizationHostBaseRect.left)}px, ${Math.round(selPersonalizationTargetRect.top - selPersonalizationHostBaseRect.top)}px)`;
+                        void selPersonalizationHost.offsetWidth;
+                        selPersonalizationHost.style.transition = selPersonalizationOriginalTransition;
+                    }
+                }
+            });
         }
 
         /** 绘制当前控件的数据库坐标、修改状态和实时帮助。 */
@@ -685,6 +745,7 @@
             if (!selPersonalizationPageControls.has(selPersonalizationPageControlId)) return false;
             selPersonalizationSelectedPageControlId = selPersonalizationPageControlId;
             selPersonalizationRenderPageControls();
+            selPersonalizationSyncSharedPageControlActions();
             return true;
         }
 
@@ -707,6 +768,237 @@
             if (selPersonalizationPageEditStatus) selPersonalizationPageEditStatus.textContent = selPersonalizationEditing ? "已开启" : "已关闭";
             selPersonalizationSyncPageControlBadges();
             selPersonalizationRenderPageControls();
+        }
+
+        /** 让公共编辑边框始终覆盖真实控件矩形，按钮、输入框和下拉不再各自绘制黄框。 */
+        function selPersonalizationSyncDirectGeometryFrame(selPersonalizationPageControl) {
+            const selPersonalizationGeometry = selPersonalizationPageControl.geometry;
+            const selPersonalizationEditFrame = selPersonalizationGeometry?.editFrame;
+            if (!(selPersonalizationEditFrame instanceof Element)) return false;
+            const selPersonalizationContainerRect = selPersonalizationGeometry.container.getBoundingClientRect();
+            const selPersonalizationRootRect = selPersonalizationPageControl.root.getBoundingClientRect();
+            const selPersonalizationFrameInset = 3;
+            selPersonalizationEditFrame.style.left = `${Math.round(
+                selPersonalizationRootRect.left - selPersonalizationContainerRect.left
+                    + selPersonalizationGeometry.container.scrollLeft - selPersonalizationFrameInset
+            )}px`;
+            selPersonalizationEditFrame.style.top = `${Math.round(
+                selPersonalizationRootRect.top - selPersonalizationContainerRect.top
+                    + selPersonalizationGeometry.container.scrollTop - selPersonalizationFrameInset
+            )}px`;
+            selPersonalizationEditFrame.style.width = `${Math.round(selPersonalizationRootRect.width + selPersonalizationFrameInset * 2)}px`;
+            selPersonalizationEditFrame.style.height = `${Math.round(selPersonalizationRootRect.height + selPersonalizationFrameInset * 2)}px`;
+            return true;
+        }
+
+        /** 把页面控件几何状态夹在调用方声明的父容器边界内，并应用为独立宽高和位移。 */
+        function selPersonalizationApplyPageControlGeometrySingle(selPersonalizationPageControl, selPersonalizationNextState = {}) {
+            const selPersonalizationGeometry = selPersonalizationPageControl.geometry;
+            if (!selPersonalizationGeometry) return false;
+            const selPersonalizationRoot = selPersonalizationPageControl.root;
+            const selPersonalizationContainerRect = selPersonalizationGeometry.container.getBoundingClientRect();
+            const selPersonalizationRequestedWidth = Number.parseFloat(selPersonalizationNextState.width);
+            const selPersonalizationRequestedHeight = Number.parseFloat(selPersonalizationNextState.height);
+            const selPersonalizationWidth = Math.max(
+                selPersonalizationGeometry.minWidth,
+                Math.min(selPersonalizationGeometry.maxWidth, Number.isFinite(selPersonalizationRequestedWidth)
+                    ? selPersonalizationRequestedWidth : selPersonalizationRoot.getBoundingClientRect().width)
+            );
+            const selPersonalizationHeight = Math.max(
+                selPersonalizationGeometry.minHeight,
+                Math.min(selPersonalizationGeometry.maxHeight, Number.isFinite(selPersonalizationRequestedHeight)
+                    ? selPersonalizationRequestedHeight : selPersonalizationRoot.getBoundingClientRect().height)
+            );
+            // 显式几何控件由页面编辑器负责边界，解除父布局默认 max-width 才能真正独立调宽。
+            selPersonalizationRoot.style.maxWidth = "none";
+            selPersonalizationRoot.style.boxSizing = "border-box";
+            selPersonalizationRoot.style.width = `${Math.round(selPersonalizationWidth)}px`;
+            selPersonalizationRoot.style.height = `${Math.round(selPersonalizationHeight)}px`;
+            // 每次先去掉旧位移取得稳定布局基线，避免 CSS transform 过渡中的中间矩形被重复累计。
+            const selPersonalizationOriginalTransition = selPersonalizationRoot.style.transition;
+            selPersonalizationRoot.style.transition = "none";
+            selPersonalizationRoot.style.transform = "none";
+            const selPersonalizationBaseRect = selPersonalizationRoot.getBoundingClientRect();
+            const selPersonalizationBaseX = Math.round(selPersonalizationBaseRect.left - selPersonalizationContainerRect.left);
+            const selPersonalizationBaseY = Math.round(selPersonalizationBaseRect.top - selPersonalizationContainerRect.top);
+            const selPersonalizationRequestedX = Number(selPersonalizationNextState.x);
+            const selPersonalizationRequestedY = Number(selPersonalizationNextState.y);
+            const selPersonalizationX = Math.max(0, Math.min(
+                Number.isFinite(selPersonalizationRequestedX) ? Math.round(selPersonalizationRequestedX) : selPersonalizationBaseX,
+                Math.max(0, selPersonalizationContainerRect.width - selPersonalizationWidth)
+            ));
+            const selPersonalizationY = Math.max(0, Math.min(
+                Number.isFinite(selPersonalizationRequestedY) ? Math.round(selPersonalizationRequestedY) : selPersonalizationBaseY,
+                Math.max(0, selPersonalizationGeometry.boundsHeight - selPersonalizationHeight)
+            ));
+            selPersonalizationGeometry.x = selPersonalizationX;
+            selPersonalizationGeometry.y = selPersonalizationY;
+            selPersonalizationGeometry.width = selPersonalizationWidth;
+            selPersonalizationGeometry.height = selPersonalizationHeight;
+            selPersonalizationGeometry.translateX = selPersonalizationX - selPersonalizationBaseX;
+            selPersonalizationGeometry.translateY = selPersonalizationY - selPersonalizationBaseY;
+            selPersonalizationRoot.style.transform = `translate(${selPersonalizationGeometry.translateX}px, ${selPersonalizationGeometry.translateY}px)`;
+            // 强制提交最终矩形后恢复调用方过渡，不让下一次测量读到动画中间态。
+            void selPersonalizationRoot.offsetWidth;
+            selPersonalizationRoot.style.transition = selPersonalizationOriginalTransition;
+            selPersonalizationSyncDirectGeometryFrame(selPersonalizationPageControl);
+            return true;
+        }
+
+        /** 按登记顺序重新排列一个流式组合；当前项宽度变化后，后续项在同一绘制帧自动让位。 */
+        function selPersonalizationReflowPageControlGroup(selPersonalizationFlowKey) {
+            const selPersonalizationFlowGroup = selPersonalizationPageControlFlowGroups.get(selPersonalizationFlowKey);
+            if (!selPersonalizationFlowGroup) return false;
+            let selPersonalizationNextX = null;
+            const selPersonalizationFlowControls = selPersonalizationFlowGroup.controlIds
+                .map((selPersonalizationControlId) => selPersonalizationPageControls.get(selPersonalizationControlId))
+                .filter((selPersonalizationFlowControl) => selPersonalizationFlowControl?.geometry
+                    && selPersonalizationFlowControl.enabled
+                    && selPersonalizationFlowControl.root.isConnected)
+                .sort((left, right) => left.geometry.flowOrder - right.geometry.flowOrder);
+            // 横向查询组合共享第一项的纵向基线，数据库中的旧 y 不再让单个筛选控件上下错位。
+            const selPersonalizationFlowY = selPersonalizationFlowControls[0]?.geometry.preferredY ?? 0;
+            selPersonalizationFlowControls.forEach((selPersonalizationFlowControl) => {
+                const selPersonalizationFlowGeometry = selPersonalizationFlowControl.geometry;
+                const selPersonalizationFlowX = selPersonalizationNextX === null
+                    ? selPersonalizationFlowGeometry.preferredX
+                    : selPersonalizationNextX;
+                selPersonalizationApplyPageControlGeometrySingle(selPersonalizationFlowControl, {
+                    x: selPersonalizationFlowX,
+                    y: selPersonalizationFlowY,
+                    width: selPersonalizationFlowGeometry.width,
+                    height: selPersonalizationFlowGeometry.height
+                });
+                selPersonalizationNextX = selPersonalizationFlowGeometry.x
+                    + selPersonalizationFlowGeometry.width + selPersonalizationFlowGroup.gap;
+                });
+            selPersonalizationSyncSharedPageControlActions();
+            return true;
+        }
+
+        /** 应用单控件几何；流式组合只更新当前项首选值，再统一重排全部同级控件。 */
+        function selPersonalizationApplyPageControlGeometry(selPersonalizationPageControl, selPersonalizationNextState = {}) {
+            const selPersonalizationGeometry = selPersonalizationPageControl.geometry;
+            if (!selPersonalizationGeometry) return false;
+            const selPersonalizationRequestedX = Number(selPersonalizationNextState.x);
+            const selPersonalizationRequestedY = Number(selPersonalizationNextState.y);
+            const selPersonalizationRequestedWidth = Number.parseFloat(selPersonalizationNextState.width);
+            const selPersonalizationRequestedHeight = Number.parseFloat(selPersonalizationNextState.height);
+            if (Number.isFinite(selPersonalizationRequestedX)) selPersonalizationGeometry.preferredX = selPersonalizationRequestedX;
+            if (Number.isFinite(selPersonalizationRequestedY)) selPersonalizationGeometry.preferredY = selPersonalizationRequestedY;
+            if (Number.isFinite(selPersonalizationRequestedWidth)) selPersonalizationGeometry.width = selPersonalizationRequestedWidth;
+            if (Number.isFinite(selPersonalizationRequestedHeight)) selPersonalizationGeometry.height = selPersonalizationRequestedHeight;
+            return selPersonalizationGeometry.flowKey
+                ? selPersonalizationReflowPageControlGroup(selPersonalizationGeometry.flowKey)
+                : selPersonalizationApplyPageControlGeometrySingle(selPersonalizationPageControl, selPersonalizationNextState);
+        }
+
+        /** 给公共页面控件动作按钮绑定移动或横向调宽，业务应用只提供父容器、范围和保存回调。 */
+        function selPersonalizationBindPageControlGeometryAction(selPersonalizationPageControl, selPersonalizationButton, selPersonalizationAction) {
+            let selPersonalizationPointerId = null;
+            let selPersonalizationActiveAction = "move";
+            let selPersonalizationStartClientX = 0;
+            let selPersonalizationStartClientY = 0;
+            let selPersonalizationStartState = null;
+            let selPersonalizationPendingState = null;
+            let selPersonalizationAnimationFrame = 0;
+            const selPersonalizationApplyPendingState = () => {
+                selPersonalizationAnimationFrame = 0;
+                if (!selPersonalizationPendingState) return;
+                selPersonalizationApplyPageControlGeometry(selPersonalizationPageControl, selPersonalizationPendingState);
+                selPersonalizationPendingState = null;
+            };
+            const selPersonalizationHandlePointerMove = (selPersonalizationEvent) => {
+                if (selPersonalizationPointerId === null || selPersonalizationEvent.pointerId !== selPersonalizationPointerId) return;
+                const selPersonalizationDeltaX = selPersonalizationEvent.clientX - selPersonalizationStartClientX;
+                const selPersonalizationDeltaY = selPersonalizationEvent.clientY - selPersonalizationStartClientY;
+                selPersonalizationPendingState = selPersonalizationActiveAction === "move"
+                    ? { ...selPersonalizationStartState, x: selPersonalizationStartState.x + selPersonalizationDeltaX, y: selPersonalizationStartState.y + selPersonalizationDeltaY }
+                    : { ...selPersonalizationStartState, width: selPersonalizationStartState.width + selPersonalizationDeltaX };
+                if (!selPersonalizationAnimationFrame) {
+                    selPersonalizationAnimationFrame = window.requestAnimationFrame(selPersonalizationApplyPendingState);
+                }
+            };
+            const selPersonalizationFinish = (selPersonalizationEvent) => {
+                if (selPersonalizationPointerId === null || (selPersonalizationEvent?.pointerId !== undefined
+                        && selPersonalizationEvent.pointerId !== selPersonalizationPointerId)) return;
+                if (selPersonalizationAnimationFrame) window.cancelAnimationFrame(selPersonalizationAnimationFrame);
+                selPersonalizationAnimationFrame = 0;
+                selPersonalizationApplyPendingState();
+                window.removeEventListener("pointermove", selPersonalizationHandlePointerMove);
+                window.removeEventListener("pointerup", selPersonalizationFinish);
+                window.removeEventListener("pointercancel", selPersonalizationFinish);
+                window.removeEventListener("blur", selPersonalizationFinish);
+                selPersonalizationPointerId = null;
+                selPersonalizationButton.classList.remove("selpersonal-page-geometry-active");
+                document.body.classList.remove("selpersonal-page-control-moving", "selpersonal-page-control-resizing");
+            };
+            selPersonalizationButton.addEventListener("pointerdown", (selPersonalizationEvent) => {
+                if (selPersonalizationEvent.button !== 0 || selPersonalizationPageMode !== "edit" || !selPersonalizationPageControl.enabled) return;
+                selPersonalizationEvent.preventDefault();
+                selPersonalizationSelectPageControl(selPersonalizationPageControl.id);
+                selPersonalizationActiveAction = typeof selPersonalizationAction === "function"
+                    ? selPersonalizationAction(selPersonalizationEvent) : selPersonalizationAction;
+                if (selPersonalizationActiveAction === "select") return;
+                selPersonalizationPointerId = selPersonalizationEvent.pointerId;
+                selPersonalizationStartClientX = selPersonalizationEvent.clientX;
+                selPersonalizationStartClientY = selPersonalizationEvent.clientY;
+                const selPersonalizationCurrent = selPersonalizationPageControl.captureState();
+                selPersonalizationStartState = {
+                    x: Number(selPersonalizationCurrent.x),
+                    y: Number(selPersonalizationCurrent.y),
+                    width: Number.parseFloat(selPersonalizationCurrent.width),
+                    height: Number.parseFloat(selPersonalizationCurrent.height)
+                };
+                selPersonalizationButton.setPointerCapture?.(selPersonalizationPointerId);
+                selPersonalizationButton.classList.add("selpersonal-page-geometry-active");
+                document.body.classList.add(selPersonalizationActiveAction === "move"
+                    ? "selpersonal-page-control-moving" : "selpersonal-page-control-resizing");
+                window.addEventListener("pointermove", selPersonalizationHandlePointerMove);
+                window.addEventListener("pointerup", selPersonalizationFinish);
+                window.addEventListener("pointercancel", selPersonalizationFinish);
+                window.addEventListener("blur", selPersonalizationFinish);
+            });
+            selPersonalizationButton.addEventListener("lostpointercapture", selPersonalizationFinish);
+            if (selPersonalizationPageControl.geometry?.flowKey) {
+                selPersonalizationButton.addEventListener("keydown", (selPersonalizationEvent) => {
+                    if (selPersonalizationPageMode !== "edit" || !selPersonalizationEvent.altKey
+                            || !["ArrowLeft", "ArrowRight"].includes(selPersonalizationEvent.key)) return;
+                    selPersonalizationEvent.preventDefault();
+                    selPersonalizationSelectPageControl(selPersonalizationPageControl.id);
+                    const selPersonalizationCurrent = selPersonalizationPageControl.captureState();
+                    selPersonalizationApplyPageControlGeometry(selPersonalizationPageControl, {
+                        ...selPersonalizationCurrent,
+                        width: Number.parseFloat(selPersonalizationCurrent.width)
+                            + (selPersonalizationEvent.key === "ArrowRight" ? 8 : -8)
+                    });
+                });
+            }
+        }
+
+        /** 显式保存一个页面控件；共享按钮与独立按钮使用同一条单控件保存链路。 */
+        async function selPersonalizationSavePageControl(selPersonalizationPageControl) {
+            if (!selPersonalizationPageControl || selPersonalizationPageControl.saving) return false;
+            selPersonalizationSelectPageControl(selPersonalizationPageControl.id);
+            if (selPersonalizationPageControl.actionOnly) {
+                await selPersonalizationPageControl.onEdit();
+                return true;
+            }
+            selPersonalizationPageControl.saving = true;
+            selPersonalizationPageControl.editButtons.forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = true; });
+            selPersonalizationSyncSharedPageControlActions();
+            try {
+                await selPersonalizationPageControl.saveState(selPersonalizationClonePageState(selPersonalizationPageControl.captureState()));
+                window.sel.core?.toast?.(`${selPersonalizationPageControl.typeLabel}设置已保存。`, "success");
+                return true;
+            } catch (selPersonalizationError) {
+                window.sel.core?.toast?.(selPersonalizationError.message || `${selPersonalizationPageControl.typeLabel}保存失败。`, "error");
+                return false;
+            } finally {
+                selPersonalizationPageControl.saving = false;
+                selPersonalizationPageControl.editButtons.forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = false; });
+                selPersonalizationSyncSharedPageControlActions();
+            }
         }
 
         /** 登记一个页面可编辑控件及其状态适配器；同 ID 只允许通过 updatePageControl 更新。 */
@@ -745,30 +1037,91 @@
                 onEdit: selPersonalizationPageControlActionOnly ? selPersonalizationDefinition.onEdit : null,
                 captureState: selPersonalizationDefinition.captureState || (() => ({})),
                 saveState: selPersonalizationDefinition.saveState || (() => Promise.resolve(true)),
-                editButtons: [], saving: false
+                editButtons: [], geometryButtons: [], saving: false,
+                geometry: selPersonalizationDefinition.geometry?.container instanceof Element ? {
+                    container: selPersonalizationDefinition.geometry.container,
+                    direct: selPersonalizationDefinition.geometry.direct === true,
+                    flowKey: String(selPersonalizationDefinition.geometry.flow?.key || "").trim(),
+                    flowOrder: Number(selPersonalizationDefinition.geometry.flow?.order) || 0,
+                    boundsHeight: Math.max(1, Number(selPersonalizationDefinition.geometry.boundsHeight) || 88),
+                    minWidth: Math.max(1, Number(selPersonalizationDefinition.geometry.minWidth) || 48),
+                    maxWidth: Math.max(1, Number(selPersonalizationDefinition.geometry.maxWidth) || 1200),
+                    minHeight: Math.max(1, Number(selPersonalizationDefinition.geometry.minHeight) || 32),
+                    maxHeight: Math.max(1, Number(selPersonalizationDefinition.geometry.maxHeight) || 200),
+                    translateX: 0,
+                    translateY: 0,
+                    x: Number(selPersonalizationDefinition.geometry.state?.x) || 0,
+                    y: Number(selPersonalizationDefinition.geometry.state?.y) || 0,
+                    preferredX: Number(selPersonalizationDefinition.geometry.state?.x) || 0,
+                    preferredY: Number(selPersonalizationDefinition.geometry.state?.y) || 0,
+                    width: Number.parseFloat(selPersonalizationDefinition.geometry.state?.width) || selPersonalizationRoots[0].getBoundingClientRect().width,
+                    height: Number.parseFloat(selPersonalizationDefinition.geometry.state?.height) || selPersonalizationRoots[0].getBoundingClientRect().height,
+                    editFrame: null,
+                    resizeHandle: null
+                } : null
             };
+            if (selPersonalizationPageControl.geometry) {
+                window.requestAnimationFrame(() => selPersonalizationApplyPageControlGeometry(
+                    selPersonalizationPageControl,
+                    selPersonalizationDefinition.geometry.state || {}
+                ));
+            }
             const selPersonalizationHandleEdit = async () => {
-                selPersonalizationSelectPageControl(selPersonalizationPageControl.id);
-                if (selPersonalizationPageControl.actionOnly) {
-                    Promise.resolve(selPersonalizationPageControl.onEdit()).catch((selPersonalizationError) => {
-                        console.error(`页面控件“${selPersonalizationPageControl.title}”编辑动作失败。`, selPersonalizationError);
-                    });
-                    return;
-                }
-                if (selPersonalizationPageControl.saving) return;
-                selPersonalizationPageControl.saving = true;
-                selPersonalizationPageControl.editButtons.forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = true; });
                 try {
-                    await selPersonalizationPageControl.saveState(selPersonalizationClonePageState(selPersonalizationPageControl.captureState()));
-                    window.sel.core?.toast?.(`${selPersonalizationPageControl.typeLabel}设置已保存。`, "success");
+                    await selPersonalizationSavePageControl(selPersonalizationPageControl);
                 } catch (selPersonalizationError) {
-                    window.sel.core?.toast?.(selPersonalizationError.message || `${selPersonalizationPageControl.typeLabel}保存失败。`, "error");
-                } finally {
-                    selPersonalizationPageControl.saving = false;
-                    selPersonalizationPageControl.editButtons.forEach((selPersonalizationButton) => { selPersonalizationButton.disabled = false; });
+                    console.error(`页面控件“${selPersonalizationPageControl.title}”编辑动作失败。`, selPersonalizationError);
                 }
             };
-            selPersonalizationPageControl.editButtons = selPersonalizationPageControl.editHosts.map((selPersonalizationEditHost) => {
+            if (selPersonalizationPageControl.geometry?.direct) {
+                selPersonalizationPageControl.root.classList.add("selpersonal-page-direct-geometry");
+                selPersonalizationPageControl.geometry.container.classList.add("selpersonal-page-geometry-container");
+                // 独立边框层不继承按钮、输入框或下拉的阴影和圆角，右边线本身就是可命中的真实手柄。
+                const selPersonalizationEditFrame = document.createElement("span");
+                selPersonalizationEditFrame.className = "selpersonal-page-direct-edit-frame";
+                selPersonalizationEditFrame.hidden = true;
+                selPersonalizationEditFrame.setAttribute("aria-hidden", "true");
+                const selPersonalizationResizeHandle = document.createElement("span");
+                selPersonalizationResizeHandle.className = "selpersonal-page-direct-resize-handle";
+                selPersonalizationEditFrame.appendChild(selPersonalizationResizeHandle);
+                selPersonalizationPageControl.geometry.container.appendChild(selPersonalizationEditFrame);
+                selPersonalizationPageControl.geometry.editFrame = selPersonalizationEditFrame;
+                selPersonalizationPageControl.geometry.resizeHandle = selPersonalizationResizeHandle;
+                selPersonalizationBindPageControlGeometryAction(
+                    selPersonalizationPageControl,
+                    selPersonalizationPageControl.root,
+                    selPersonalizationPageControl.geometry.flowKey ? "select" : "move"
+                );
+                selPersonalizationBindPageControlGeometryAction(
+                    selPersonalizationPageControl,
+                    selPersonalizationResizeHandle,
+                    "resize"
+                );
+            }
+            const selPersonalizationUsesSharedEdit = selPersonalizationDefinition.sharedEdit?.host instanceof Element
+                && String(selPersonalizationDefinition.sharedEdit.key || "").trim();
+            selPersonalizationPageControl.editButtons = selPersonalizationUsesSharedEdit ? [] : selPersonalizationPageControl.editHosts.map((selPersonalizationEditHost) => {
+                if (selPersonalizationPageControl.geometry && !selPersonalizationPageControl.geometry.direct) {
+                    selPersonalizationEditHost.classList.add("selpersonal-page-geometry-host");
+                    [
+                        { action: "move", icon: "ri-drag-move-2-line", label: `拖动${selPersonalizationPageControl.title}` },
+                        { action: "resize", icon: "ri-expand-width-line", label: `调整${selPersonalizationPageControl.title}宽度` }
+                    ].forEach((selPersonalizationGeometryAction) => {
+                        const selPersonalizationGeometryButton = document.createElement("button");
+                        selPersonalizationGeometryButton.type = "button";
+                        selPersonalizationGeometryButton.className = `selpersonal-page-geometry-action selpersonal-page-geometry-${selPersonalizationGeometryAction.action}`;
+                        selPersonalizationGeometryButton.hidden = true;
+                        selPersonalizationGeometryButton.setAttribute("aria-label", selPersonalizationGeometryAction.label);
+                        selPersonalizationGeometryButton.innerHTML = `<i class="${selPersonalizationGeometryAction.icon}" aria-hidden="true"></i><span>${selPersonalizationGeometryAction.label}</span>`;
+                        selPersonalizationEditHost.appendChild(selPersonalizationGeometryButton);
+                        selPersonalizationBindPageControlGeometryAction(
+                            selPersonalizationPageControl,
+                            selPersonalizationGeometryButton,
+                            selPersonalizationGeometryAction.action
+                        );
+                        selPersonalizationPageControl.geometryButtons.push(selPersonalizationGeometryButton);
+                    });
+                }
                 const selPersonalizationEditButton = document.createElement("button");
                 selPersonalizationEditButton.type = "button";
                 selPersonalizationEditButton.className = "selpersonal-page-control-edit";
@@ -779,6 +1132,54 @@
                 return selPersonalizationEditButton;
             });
             selPersonalizationPageControls.set(selPersonalizationPageControl.id, selPersonalizationPageControl);
+            if (selPersonalizationPageControl.geometry?.flowKey) {
+                const selPersonalizationFlowKey = selPersonalizationPageControl.geometry.flowKey;
+                let selPersonalizationFlowGroup = selPersonalizationPageControlFlowGroups.get(selPersonalizationFlowKey);
+                if (!selPersonalizationFlowGroup) {
+                    selPersonalizationFlowGroup = {
+                        controlIds: [],
+                        gap: Math.max(0, Number(selPersonalizationDefinition.geometry.flow?.gap) || 12)
+                    };
+                    selPersonalizationPageControlFlowGroups.set(selPersonalizationFlowKey, selPersonalizationFlowGroup);
+                }
+                selPersonalizationFlowGroup.controlIds.push(selPersonalizationPageControl.id);
+                selPersonalizationPageControl.root.classList.add("selpersonal-page-flow-geometry");
+            }
+            if (selPersonalizationUsesSharedEdit) {
+                const selPersonalizationSharedEditKey = String(selPersonalizationDefinition.sharedEdit.key).trim();
+                let selPersonalizationSharedAction = selPersonalizationSharedPageControlActions.get(selPersonalizationSharedEditKey);
+                if (!selPersonalizationSharedAction) {
+                    const selPersonalizationSharedButton = document.createElement("button");
+                    selPersonalizationSharedButton.type = "button";
+                    selPersonalizationSharedButton.className = "selpersonal-page-control-edit selpersonal-page-shared-control-edit";
+                    selPersonalizationSharedButton.hidden = true;
+                    selPersonalizationSharedButton.innerHTML = '<i class="ri-save-3-line" aria-hidden="true"></i><span>保存当前控件</span>';
+                    selPersonalizationDefinition.sharedEdit.host.classList.add("selpersonal-page-shared-edit-host");
+                    selPersonalizationDefinition.sharedEdit.host.appendChild(selPersonalizationSharedButton);
+                    selPersonalizationSharedAction = {
+                        button: selPersonalizationSharedButton,
+                        controlIds: new Set(),
+                        label: String(selPersonalizationDefinition.sharedEdit.label || "保存当前控件"),
+                        host: selPersonalizationDefinition.sharedEdit.host,
+                        followControlId: ""
+                    };
+                    selPersonalizationSharedButton.addEventListener("click", async () => {
+                        const selPersonalizationTarget = selPersonalizationPageControls.get(
+                            selPersonalizationSharedButton.dataset.selPersonalPageControl || ""
+                        );
+                        try {
+                            await selPersonalizationSavePageControl(selPersonalizationTarget);
+                        } catch (selPersonalizationError) {
+                            console.error("共享页面控件保存动作失败。", selPersonalizationError);
+                        }
+                    });
+                    selPersonalizationSharedPageControlActions.set(selPersonalizationSharedEditKey, selPersonalizationSharedAction);
+                }
+                selPersonalizationSharedAction.controlIds.add(selPersonalizationPageControl.id);
+                if (selPersonalizationDefinition.sharedEdit.follow === true) {
+                    selPersonalizationSharedAction.followControlId = selPersonalizationPageControl.id;
+                }
+            }
             if (!selPersonalizationSelectedPageControlId) selPersonalizationSelectedPageControlId = selPersonalizationPageControl.id;
             selPersonalizationSyncPageMode();
             return true;
@@ -788,6 +1189,24 @@
         function selPersonalizationUpdatePageControl(selPersonalizationPageControlId, selPersonalizationDefinition = {}) {
             const selPersonalizationPageControl = selPersonalizationPageControls.get(String(selPersonalizationPageControlId || ""));
             if (!selPersonalizationPageControl) return false;
+            const selPersonalizationNextRoot = selPersonalizationDefinition.root instanceof Element
+                ? selPersonalizationDefinition.root : null;
+            if (selPersonalizationNextRoot && selPersonalizationNextRoot !== selPersonalizationPageControl.root) {
+                selPersonalizationPageControl.root.classList.remove("selpersonal-page-direct-geometry", "selpersonal-page-flow-geometry");
+                selPersonalizationPageControl.root = selPersonalizationNextRoot;
+                selPersonalizationPageControl.roots = [selPersonalizationNextRoot];
+                if (selPersonalizationPageControl.geometry?.direct) {
+                    selPersonalizationNextRoot.classList.add("selpersonal-page-direct-geometry");
+                    if (selPersonalizationPageControl.geometry.flowKey) {
+                        selPersonalizationNextRoot.classList.add("selpersonal-page-flow-geometry");
+                    }
+                    selPersonalizationBindPageControlGeometryAction(
+                        selPersonalizationPageControl,
+                        selPersonalizationNextRoot,
+                        selPersonalizationPageControl.geometry.flowKey ? "select" : "move"
+                    );
+                }
+            }
             if (selPersonalizationDefinition.title) selPersonalizationPageControl.title = String(selPersonalizationDefinition.title);
             if (selPersonalizationDefinition.typeLabel) selPersonalizationPageControl.typeLabel = String(selPersonalizationDefinition.typeLabel);
             if (selPersonalizationDefinition.icon) selPersonalizationPageControl.icon = String(selPersonalizationDefinition.icon);
@@ -804,6 +1223,25 @@
             }
             if (typeof selPersonalizationDefinition.enabled === "boolean") {
                 selPersonalizationPageControl.enabled = selPersonalizationDefinition.enabled;
+            }
+            if (selPersonalizationPageControl.geometry && selPersonalizationDefinition.geometry) {
+                const selPersonalizationNextGeometry = selPersonalizationDefinition.geometry;
+                if (selPersonalizationNextGeometry.container instanceof Element) {
+                    selPersonalizationPageControl.geometry.container = selPersonalizationNextGeometry.container;
+                }
+                if (Number.isFinite(Number(selPersonalizationNextGeometry.minWidth))) {
+                    selPersonalizationPageControl.geometry.minWidth = Math.max(1, Number(selPersonalizationNextGeometry.minWidth));
+                }
+                if (Number.isFinite(Number(selPersonalizationNextGeometry.maxWidth))) {
+                    selPersonalizationPageControl.geometry.maxWidth = Math.max(1, Number(selPersonalizationNextGeometry.maxWidth));
+                }
+                if (Number.isFinite(Number(selPersonalizationNextGeometry.flow?.order))) {
+                    selPersonalizationPageControl.geometry.flowOrder = Number(selPersonalizationNextGeometry.flow.order);
+                }
+                window.requestAnimationFrame(() => selPersonalizationApplyPageControlGeometry(
+                    selPersonalizationPageControl,
+                    selPersonalizationNextGeometry.state || selPersonalizationPageControl.captureState()
+                ));
             }
             selPersonalizationPageControl.editButtons.forEach((selPersonalizationEditButton) => {
                 selPersonalizationEditButton.querySelector("span").textContent = `保存${selPersonalizationPageControl.typeLabel}`;

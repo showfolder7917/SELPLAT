@@ -112,6 +112,27 @@
         const selGridRecordMode = selGridInputPayload.grid?.mode === "records";
         // 通用记录配置只保存字段名、搜索字段和状态映射，不包含任何具体应用语义。
         let selGridRecordOptions = selGridInputPayload.grid || {};
+        // 选择模式属于公共 Grid 交互契约；旧项目模式保持多选，通用记录模式保持此前默认不可选。
+        function selGridResolveSelectionMode(selGridPayloadValue) {
+            const selGridConfiguredMode = String(selGridPayloadValue.grid?.selectionMode || "").toUpperCase();
+            return ["NONE", "SINGLE", "MULTIPLE"].includes(selGridConfiguredMode)
+                ? selGridConfiguredMode
+                : (selGridRecordMode ? "NONE" : "MULTIPLE");
+        }
+        let selGridSelectionMode = selGridResolveSelectionMode(selGridInputPayload);
+
+        // records 模式保留字符串主键，旧项目模式继续使用数字主键，避免既有选择集合类型变化。
+        function selGridNormalizeSelectionId(selGridValue) {
+            return selGridRecordMode ? String(selGridValue) : Number(selGridValue);
+        }
+
+        // 统一读取两种 Grid 模式的稳定业务主键。
+        function selGridReadSelectionId(selGridRecord) {
+            const selGridRawId = selGridRecordMode
+                ? selGridReadRecordValue(selGridRecord, selGridRecordOptions.idField || "id")
+                : selGridRecord.id;
+            return selGridNormalizeSelectionId(selGridRawId);
+        }
         // 用户调整后的列宽按稳定列键保存在当前实例内，刷新数据和切换语言时继续生效。
         const selGridColumnWidths = new Map();
         // 可筛选表头字段按稳定列键保存选中状态，数据刷新后仍能继续组合当前行条件。
@@ -297,6 +318,11 @@
                 if (selGridColumnData.renderer === "selection") {
                     // 选择列沿用固定对齐视觉类。
                     selGridHeaderCell.className = "selgrid-selection-cell";
+                    // 单选和不可选模式不渲染具有误导性的全选按钮。
+                    if (selGridSelectionMode !== "MULTIPLE") {
+                        selGridHeaderRow.appendChild(selGridHeaderCell);
+                        return;
+                    }
                     // 原生按钮模拟可访问全选复选框。
                     const selGridSelectAll = document.createElement("button");
                     // 基础表格复选框皮肤保持不变。
@@ -497,7 +523,7 @@
     // 页面状态集中保存当前选择、菜单归属和分页位置，保证交互之间不会互相覆盖。
     const selGridState = {
         // 初始选择集合来自 data JSON。
-        selectedIds: new Set(selGridInputPayload.data.selectedIds),
+        selectedIds: new Set((selGridInputPayload.data.selectedIds || []).map(selGridNormalizeSelectionId)),
         // 记录通过数据栏选中的焦点行，重绘后仍把键盘焦点还给该业务记录。
         focusedProjectId: null,
         // 初始页码来自 pagination JSON。
@@ -506,13 +532,61 @@
         pageSize: selGridPaginationData.pageSize,
         // 搜索关键字同时匹配项目名称、负责人和项目类型。
         search: "",
+        // 多字段查询保存稳定字段名到独立值；远程分页由应用原样转换为 BaseDao AND 参数。
+        searchValues: {},
         // 工具栏类型筛选初始展示全部类型。
         type: "",
+        // 查询按钮统一提交模式下，下拉变化先进入草稿，不立即重绘或请求后台。
+        draftType: "",
         // 标题标签和工具栏共享当前状态筛选值。
         status: "",
+        // 状态草稿与已提交状态分离，避免选择选项时提前查询。
+        draftStatus: "",
         // 左侧树筛选独立保存，允许与工具栏条件组合。
         treeFilter: {}
     };
+
+    // 显式开启后，搜索输入和工具栏下拉都只在 selSearch 提交时一次应用。
+    const selGridDefersToolbarFilters = selGridInputPayload.grid?.deferToolbarFiltersUntilSubmit === true;
+
+    // REMOTE 只表示 records 已是后台当前页；默认 LOCAL 继续维持现有前端筛选与分页行为。
+    function selGridUsesRemotePagination() {
+        return String(selGridPaginationData.mode || "LOCAL").toUpperCase() === "REMOTE";
+    }
+
+    // 远程分页只广播条件状态，组件不请求业务接口，也不拼接应用字段或 SQL。
+    function selGridDispatchQueryChange(reason) {
+        selGridRoot.dispatchEvent(new CustomEvent("selGrid:queryChange", {
+            bubbles: true,
+            detail: {
+                gridId: selGridId,
+                reason,
+                pageNo: selGridState.currentPage,
+                pageSize: selGridState.pageSize,
+                keyword: selGridState.search,
+                values: { ...selGridState.searchValues },
+                type: selGridState.type,
+                status: selGridState.status
+            }
+        }));
+    }
+
+    // 本地模式立即重绘，远程模式交给应用加载当前页后通过 setLocale 回填。
+    function selGridApplyQueryChange(reason) {
+        if (selGridUsesRemotePagination()) {
+            selGridDispatchQueryChange(reason);
+            return;
+        }
+        selGridRenderTable();
+    }
+
+    // 初次挂载就收敛不符合选择模式的数据，避免不可选或单选表格携带脏的多选状态。
+    if (selGridSelectionMode === "NONE") selGridState.selectedIds.clear();
+    if (selGridSelectionMode === "SINGLE" && selGridState.selectedIds.size > 1) {
+        const [selGridFirstSelectedId] = selGridState.selectedIds;
+        selGridState.selectedIds.clear();
+        selGridState.selectedIds.add(selGridFirstSelectedId);
+    }
 
     // 缓存表格和浮层固定节点，交互更新时避免重复查找页面结构。
     const selGridView = {
@@ -551,8 +625,11 @@
         dateCommand: selGridRoot.querySelector('[data-sel-grid-role="date-command"]')
     };
 
-    // 当前实例的搜索、树和菜单控制器按相同业务实例名获取。
-    const selGridSearchController = window.sel.components.search ? window.sel.components.search.get(selGridId) : null;
+    // Search 可以随业务模块重挂载字段结构，Grid 每次都取当前实例而不缓存旧控制器。
+    function selGridGetSearchController() {
+        return window.sel.components.search ? window.sel.components.search.get(selGridId) : null;
+    }
+    // 当前实例的树和菜单控制器按相同业务实例名获取。
     const selGridTreeController = window.sel.components.tree ? window.sel.components.tree.get(selGridId) : null;
     const selGridMenuController = window.sel.components.gridMenu ? window.sel.components.gridMenu.get(selGridId) : null;
 
@@ -889,6 +966,20 @@
         const selGridCell = document.createElement("td");
         const selGridRenderer = String(selGridColumn.renderer || "text");
         const selGridRawValue = selGridReadRecordValue(selGridRecord, selGridColumn.field);
+        if (selGridRenderer === "selection") {
+            selGridCell.className = "selgrid-selection-cell";
+            if (selGridSelectionMode === "NONE") return selGridCell;
+            const selGridRecordId = selGridReadSelectionId(selGridRecord);
+            const selGridSelectionButton = document.createElement("button");
+            selGridSelectionButton.className = "selgrid-selection-checkbox";
+            selGridSelectionButton.type = "button";
+            selGridSelectionButton.dataset.action = "select";
+            selGridSelectionButton.setAttribute("role", selGridSelectionMode === "SINGLE" ? "radio" : "checkbox");
+            selGridSelectionButton.setAttribute("aria-checked", String(selGridState.selectedIds.has(selGridRecordId)));
+            selGridSelectionButton.setAttribute("aria-label", String(selGridMessages.selectProject || "选择当前行"));
+            selGridCell.appendChild(selGridSelectionButton);
+            return selGridCell;
+        }
         if (selGridRenderer === "stack") {
             selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
             const selGridStack = document.createElement("span");
@@ -969,9 +1060,15 @@
      */
     function selGridCreateRecordRow(selGridRecord) {
         const selGridRow = document.createElement("tr");
-        const selGridRecordId = selGridReadRecordValue(selGridRecord, selGridRecordOptions.idField || "id");
+        const selGridRecordId = selGridReadSelectionId(selGridRecord);
         selGridRow.dataset.selGridRecordId = String(selGridRecordId);
         selGridRow.tabIndex = -1;
+        if (selGridSelectionMode !== "NONE") {
+            const selGridRecordSelected = selGridState.selectedIds.has(selGridRecordId);
+            selGridRow.setAttribute("aria-selected", String(selGridRecordSelected));
+            selGridRow.classList.toggle("selgrid-row-selected", selGridRecordSelected);
+            selGridRow.classList.toggle("selgrid-row-focused", selGridState.focusedProjectId === selGridRecordId);
+        }
         selGridInputPayload.column.items.forEach((selGridColumn) => selGridRow.appendChild(selGridCreateRecordCell(selGridRecord, selGridColumn)));
         return selGridRow;
     }
@@ -985,7 +1082,7 @@
         // 数据行可接收程序化焦点，使栏目点击后的焦点落在实际被选业务记录上。
         row.tabIndex = -1;
         // 辅助技术通过行选择语义读取当前记录是否已被勾选。
-        row.setAttribute("aria-selected", String(selGridState.selectedIds.has(project.id)));
+        if (selGridSelectionMode !== "NONE") row.setAttribute("aria-selected", String(selGridState.selectedIds.has(project.id)));
         // 当前被选中的项目行获得蓝紫色发光背景。
         row.classList.toggle("selgrid-row-selected", selGridState.selectedIds.has(project.id));
         // 栏目点击后的焦点行额外获得聚焦边框，避免多选时无法辨认最后操作的记录。
@@ -1002,7 +1099,7 @@
         // 防止按钮触发表单提交。
         checkbox.type = "button";
         // 角色明确告诉辅助技术这是复选控件。
-        checkbox.setAttribute("role", "checkbox");
+        checkbox.setAttribute("role", selGridSelectionMode === "SINGLE" ? "radio" : "checkbox");
         // 当前选择状态与页面状态集合保持一致。
         checkbox.setAttribute("aria-checked", String(selGridState.selectedIds.has(project.id)));
         // 可访问名称携带项目名称。
@@ -1011,7 +1108,7 @@
         checkbox.dataset.action = "select";
         checkbox.dataset.projectId = String(project.id);
         // 复选控件加入首列。
-        checkCell.appendChild(checkbox);
+        if (selGridSelectionMode !== "NONE") checkCell.appendChild(checkbox);
 
         // 第二列组合项目彩色符号、名称和星标。
         const projectCell = document.createElement("td");
@@ -1187,6 +1284,12 @@
             return selGridProjects.filter((selGridRecord) => {
                 const selGridSearchableText = selGridSearchFields.map((selGridField) => selGridReadRecordValue(selGridRecord, selGridField)).join(" ").toLocaleLowerCase();
                 const selGridMatchesSearch = !keyword || selGridSearchableText.includes(keyword);
+                // 多字段查询逐项匹配各自真实字段；条件之间使用 AND，禁止把多个输入重新合并成前端 OR 搜索。
+                const selGridMatchesSearchValues = Object.entries(selGridState.searchValues).every(([selGridField, selGridValue]) => {
+                    const selGridNormalizedValue = String(selGridValue ?? "").trim().toLocaleLowerCase();
+                    return !selGridNormalizedValue
+                        || selGridReadRecordValue(selGridRecord, selGridField).toLocaleLowerCase().includes(selGridNormalizedValue);
+                });
                 const selGridTypeValues = selGridNormalizeRecordTypeValues(
                     selGridReadRecordValue(selGridRecord, selGridRecordOptions.typeField)
                 );
@@ -1197,7 +1300,7 @@
                 const selGridMatchesTreeTypeGroup = !Array.isArray(selGridState.treeFilter.typeGroup)
                     || selGridState.treeFilter.typeGroup.some((selGridType) => selGridTypeValues.includes(String(selGridType)));
                 const selGridMatchesTreeStatus = !selGridState.treeFilter.status || selGridStatusValue === String(selGridState.treeFilter.status);
-                return selGridMatchesSearch && selGridMatchesType && selGridMatchesStatus
+                return selGridMatchesSearch && selGridMatchesSearchValues && selGridMatchesType && selGridMatchesStatus
                     && selGridMatchesTreeType && selGridMatchesTreeTypeGroup && selGridMatchesTreeStatus;
             });
         }
@@ -1225,17 +1328,22 @@
     // 根据当前状态重新渲染可见项目记录，并同步全选、统计和空结果视觉。
     function selGridRenderTable() {
         // 先计算本轮组合筛选后的完整项目集合，分页只作用于筛选结果而不丢失匹配记录。
-        const filteredProjects = selGridGetVisibleProjects();
+        const filteredProjects = selGridUsesRemotePagination() ? selGridProjects : selGridGetVisibleProjects();
         // 每页条数始终至少为一，避免异常输入造成除零或无限页数。
         const normalizedPageSize = Math.max(1, Math.floor(Number(selGridState.pageSize) || selGridPaginationData.pageSize));
         // 当前真实总页数由匹配数量和页面容量计算，空结果仍保留第一页导航语义。
-        const totalPages = Math.max(1, Math.ceil(filteredProjects.length / normalizedPageSize));
+        const selGridTotalCount = selGridUsesRemotePagination()
+            ? Math.max(0, Number(selGridPaginationData.totalCount) || 0)
+            : filteredProjects.length;
+        const totalPages = Math.max(1, Math.ceil(selGridTotalCount / normalizedPageSize));
         // 筛选缩短结果或外部传入越界页码时，把当前页收敛到真实页数范围。
         selGridState.currentPage = Math.min(totalPages, Math.max(1, Math.floor(Number(selGridState.currentPage) || 1)));
         // 当前页起始位置按零基下标计算。
         const pageStartIndex = (selGridState.currentPage - 1) * normalizedPageSize;
-        // 当前页只截取页面容量范围内的记录，末页自然保留不足一页的数据。
-        const visibleProjects = filteredProjects.slice(pageStartIndex, pageStartIndex + normalizedPageSize);
+        // 远程模式 records 已是当前页，禁止再次 slice；本地模式继续按当前页截取。
+        const visibleProjects = selGridUsesRemotePagination()
+            ? filteredProjects
+            : filteredProjects.slice(pageStartIndex, pageStartIndex + normalizedPageSize);
         // 文档片段减少逐行插入引起的重复布局计算。
         const fragment = document.createDocumentFragment();
         // 每条可见项目记录生成完整交互行。
@@ -1243,7 +1351,9 @@
         // 一次替换旧表格内容，确保状态与视觉完全同步。
         selGridView.tableBody.replaceChildren(fragment);
         // 当前视图存在记录且全部被选中时才标记表头全选。
-        const allVisibleSelected = !selGridRecordMode && visibleProjects.length > 0 && visibleProjects.every((project) => selGridState.selectedIds.has(project.id));
+        const allVisibleSelected = selGridSelectionMode === "MULTIPLE"
+            && visibleProjects.length > 0
+            && visibleProjects.every((project) => selGridState.selectedIds.has(selGridReadSelectionId(project)));
         // 表头复选框只表达当前筛选视图的选择状态。
         if (selGridView.selectAll) {
             // 表头仍存在时同步当前筛选视图的全选语义。
@@ -1257,11 +1367,12 @@
         // 表格统计同时说明当前匹配数量和本次数据响应的真实总记录数。
         if (selGridView.totalCount) {
             // 全部可见时使用 summaryAll，筛选后使用 summaryFiltered。
-            const selGridSummaryTemplate = filteredProjects.length === selGridProjects.length ? selGridPaginationData.summaryAll : selGridPaginationData.summaryFiltered;
+            const selGridSummaryTemplate = selGridUsesRemotePagination() || filteredProjects.length === selGridProjects.length
+                ? selGridPaginationData.summaryAll : selGridPaginationData.summaryFiltered;
             // 当前数量和总数只替换模板值，不写死任何语言单位。
             selGridView.totalCount.textContent = selGridFormatMessage(selGridSummaryTemplate, {
                 visible: filteredProjects.length,
-                total: selGridProjects.length
+                total: selGridUsesRemotePagination() ? selGridTotalCount : selGridProjects.length
             });
         }
         // 页码结构与真实筛选数量同步更新，容量和条件变化后按钮数量立即正确。
@@ -1274,7 +1385,8 @@
         // 栏目点击触发重绘后，只在目标记录仍可见时把浏览器焦点移动回该行。
         if (selGridState.focusedProjectId !== null) {
             // 当前实例范围内按稳定业务主键定位刚刚渲染出的目标行。
-            const focusedRow = selGridView.tableBody.querySelector(`tr[data-project-id="${selGridState.focusedProjectId}"]`);
+            const focusedRow = Array.from(selGridView.tableBody.querySelectorAll(selGridRecordMode ? "tr[data-sel-grid-record-id]" : "tr[data-project-id]"))
+                .find((selGridRow) => selGridNormalizeSelectionId(selGridRecordMode ? selGridRow.dataset.selGridRecordId : selGridRow.dataset.projectId) === selGridState.focusedProjectId);
             // 筛选或分页隐藏目标行时不强行移动焦点，避免焦点落入不可见内容。
             focusedRow?.focus({ preventScroll: true });
         }
@@ -1285,11 +1397,11 @@
     // 选择状态只原位同步当前页已存在的行，避免点击后重建所有单元格、头像和操作按钮。
     function selGridSyncSelectionVisuals() {
         // 一次读取当前页全部业务行，让行高亮和复选框在同一个点击任务中完成。
-        const selGridVisibleRows = Array.from(selGridView.tableBody.querySelectorAll("tr[data-project-id]"));
+        const selGridVisibleRows = Array.from(selGridView.tableBody.querySelectorAll(selGridRecordMode ? "tr[data-sel-grid-record-id]" : "tr[data-project-id]"));
         // 逐行把内部选择集合映射到无障碍语义、可视类和复选框。
         selGridVisibleRows.forEach((selGridVisibleRow) => {
             // DOM 主键转为与 selectedIds 一致的数字类型。
-            const selGridVisibleProjectId = Number(selGridVisibleRow.dataset.projectId);
+            const selGridVisibleProjectId = selGridNormalizeSelectionId(selGridRecordMode ? selGridVisibleRow.dataset.selGridRecordId : selGridVisibleRow.dataset.projectId);
             // 当前行是否选中只以统一状态集合为准。
             const selGridVisibleSelected = selGridState.selectedIds.has(selGridVisibleProjectId);
             // 行选择语义与视觉类在同一轮同步，读屏和画面不产生时差。
@@ -1302,16 +1414,47 @@
             selGridVisibleCheckbox?.setAttribute("aria-checked", String(selGridVisibleSelected));
         });
         // 当前页有数据且每行都已选中时，表头复选框才显示全选。
-        const selGridAllVisibleSelected = selGridVisibleRows.length > 0 && selGridVisibleRows.every((selGridVisibleRow) => selGridState.selectedIds.has(Number(selGridVisibleRow.dataset.projectId)));
+        const selGridAllVisibleSelected = selGridSelectionMode === "MULTIPLE"
+            && selGridVisibleRows.length > 0
+            && selGridVisibleRows.every((selGridVisibleRow) => selGridState.selectedIds.has(selGridNormalizeSelectionId(selGridRecordMode ? selGridVisibleRow.dataset.selGridRecordId : selGridVisibleRow.dataset.projectId)));
         // 表头控件可选存在，不存在时不影响行内即时同步。
         selGridView.selectAll?.setAttribute("aria-checked", String(selGridAllVisibleSelected));
         // 栏目点击记录了聚焦主键时，仅把焦点放到已存在的对应行。
         if (selGridState.focusedProjectId !== null) {
             // 使用当前页已收集的行查找焦点目标，避免再次扫描整个表格。
-            const selGridFocusedVisibleRow = selGridVisibleRows.find((selGridVisibleRow) => Number(selGridVisibleRow.dataset.projectId) === selGridState.focusedProjectId);
+            const selGridFocusedVisibleRow = selGridVisibleRows.find((selGridVisibleRow) => selGridNormalizeSelectionId(selGridRecordMode ? selGridVisibleRow.dataset.selGridRecordId : selGridVisibleRow.dataset.projectId) === selGridState.focusedProjectId);
             // preventScroll 保证即时选中不改变用户当前的表格滚动位置。
             selGridFocusedVisibleRow?.focus({ preventScroll: true });
         }
+    }
+
+    // 对外统一发布选择变化，让业务页面无需读取 Grid 内部 DOM。
+    function selGridDispatchSelectionChange() {
+        selGridRoot.dispatchEvent(new CustomEvent("selGrid:selectionChange", {
+            bubbles: true,
+            detail: selFreeze({
+                instanceKey: selGridId,
+                entity: selGridEntity,
+                selectionMode: selGridSelectionMode,
+                selectedIds: Array.from(selGridState.selectedIds)
+            })
+        }));
+    }
+
+    // 普通行点击统一为单目标选择；只有 MULTIPLE 的选择按钮采用追加切换语义。
+    function selGridCommitRowSelection(selGridRecordId, selGridAdditiveToggle) {
+        if (selGridSelectionMode === "NONE") return false;
+        if (selGridSelectionMode === "MULTIPLE" && selGridAdditiveToggle) {
+            if (selGridState.selectedIds.has(selGridRecordId)) selGridState.selectedIds.delete(selGridRecordId);
+            else selGridState.selectedIds.add(selGridRecordId);
+        } else {
+            selGridState.selectedIds.clear();
+            selGridState.selectedIds.add(selGridRecordId);
+        }
+        selGridState.focusedProjectId = selGridRecordId;
+        selGridSyncSelectionVisuals();
+        selGridDispatchSelectionChange();
+        return true;
     }
 
     // 独立菜单状态变化后只同步更多按钮，不重绘整个表格。
@@ -1374,10 +1517,19 @@
         if (selGridRecordMode) {
             const selGridRecordRow = event.target.closest("tr[data-sel-grid-record-id]");
             const selGridRecordAction = event.target.closest("button[data-action]");
-            if (!selGridRecordRow || !selGridRecordAction || !selGridView.tableBody.contains(selGridRecordRow)) return;
+            if (!selGridRecordRow || !selGridView.tableBody.contains(selGridRecordRow)) return;
             const selGridRecordId = selGridRecordRow.dataset.selGridRecordId;
             const selGridRecord = selGridProjects.find((selGridItem) => String(selGridReadRecordValue(selGridItem, selGridRecordOptions.idField || "id")) === selGridRecordId);
             if (!selGridRecord) return;
+            const selGridNormalizedRecordId = selGridReadSelectionId(selGridRecord);
+            if (!selGridRecordAction) {
+                selGridCommitRowSelection(selGridNormalizedRecordId, false);
+                return;
+            }
+            if (selGridRecordAction.dataset.action === "select") {
+                selGridCommitRowSelection(selGridNormalizedRecordId, true);
+                return;
+            }
             selGridRoot.dispatchEvent(new CustomEvent("selGrid:action", {
                 bubbles: true,
                 detail: selFreeze({
@@ -1406,15 +1558,7 @@
             if (!project) {
                 return;
             }
-            // 普通单元格点击采用单选语义，先清空当前实例内其他项目的勾选状态。
-            selGridState.selectedIds.clear();
-            // 当前项目在清空后重新加入选择集合，成为唯一勾选且高亮的业务记录。
-            // 栏目点击自动勾选当前业务记录；已勾选记录保持勾选而不是反向取消。
-            selGridState.selectedIds.add(projectId);
-            // 保存最后栏目点击的业务主键，供重绘后的高亮焦点回填。
-            selGridState.focusedProjectId = projectId;
-            // 选择和焦点变化后原位同步行、复选框和高亮，点击当帧即可见。
-            selGridSyncSelectionVisuals();
+            selGridCommitRowSelection(projectId, false);
             return;
         }
         // 把按钮上的项目主键转换成固定数据中的数字标识。
@@ -1427,15 +1571,7 @@
         }
         // 单行选择动作切换集合中的项目主键。
         if (button.dataset.action === "select") {
-            // 已选项目再次点击时取消选择。
-            if (selGridState.selectedIds.has(projectId)) {
-                selGridState.selectedIds.delete(projectId);
-            } else {
-                // 未选项目点击后加入选择集合。
-                selGridState.selectedIds.add(projectId);
-            }
-            // 选择变化后原位同步行背景和复选框，不重建其他业务单元格。
-            selGridSyncSelectionVisuals();
+            selGridCommitRowSelection(projectId, true);
             // 选择动作结束后不继续触发其他按钮逻辑。
             return;
         }
@@ -1499,15 +1635,16 @@
         // 读取当前筛选视图，避免全选影响被隐藏的项目。
         const visibleProjects = selGridGetVisibleProjects();
         // 当前可见项目全部已选择时只取消这些项目。
-        if (visibleProjects.length > 0 && visibleProjects.every((project) => selGridState.selectedIds.has(project.id))) {
+        if (visibleProjects.length > 0 && visibleProjects.every((project) => selGridState.selectedIds.has(selGridReadSelectionId(project)))) {
             // 逐项移除当前可见项目主键。
-            visibleProjects.forEach((project) => selGridState.selectedIds.delete(project.id));
+            visibleProjects.forEach((project) => selGridState.selectedIds.delete(selGridReadSelectionId(project)));
         } else {
             // 否则把当前可见项目全部加入选择集合。
-            visibleProjects.forEach((project) => selGridState.selectedIds.add(project.id));
+            visibleProjects.forEach((project) => selGridState.selectedIds.add(selGridReadSelectionId(project)));
         }
         // 全选状态变化后原位同步所有可见行和表头控件。
             selGridSyncSelectionVisuals();
+            selGridDispatchSelectionChange();
         });
     }
 
@@ -1534,7 +1671,7 @@
             selGridState.currentPage += 1;
         }
         // 翻页后同时重绘当前页数据、页码结构、边界禁用状态和统计。
-        selGridRenderTable();
+        selGridApplyQueryChange("page");
         // 用户得到当前分页位置反馈。
             selGridShowToast(selGridFormatMessage(selGridPaginationData.pageChangedMessage, { page: selGridState.currentPage }));
         });
@@ -1549,7 +1686,7 @@
         // 页面容量变化后回到第一页，避免旧页码在新总页数中越界。
         selGridState.currentPage = 1;
         // 立即按新容量重新截取数据并重建页码。
-        selGridRenderTable();
+        selGridApplyQueryChange("pageSize");
         // 提示当前页面容量设置。
             selGridShowToast(selGridFormatMessage(selGridPaginationData.pageSizeChangedMessage, { size: selGridState.pageSize }));
         });
@@ -1563,10 +1700,16 @@
         }
         // 查询关键词写入当前表格组合筛选状态。
         selGridState.search = String(event.detail.keyword ?? "");
+        // 多字段值保持独立，业务应用可直接映射 codeLike、parentCodeLike 等 BaseDao 参数。
+        selGridState.searchValues = { ...(event.detail.values || {}) };
+        if (selGridDefersToolbarFilters) {
+            selGridState.type = selGridState.draftType;
+            selGridState.status = selGridState.draftStatus;
+        }
         // 每次新查询回到第一页，符合后端分页查询习惯。
         selGridState.currentPage = 1;
         // 查询提交后重绘当前实例数据。
-        selGridRenderTable();
+        selGridApplyQueryChange("search");
     });
 
     // 类型选择变化时只展示精确匹配的项目。
@@ -1574,11 +1717,13 @@
         // 类型下拉存在时才绑定精确筛选。
         selGridView.typeFilter.addEventListener("change", () => {
         // 保存空值或当前选择的项目类型。
-        selGridState.type = selGridView.typeFilter.value;
+        selGridState.draftType = selGridView.typeFilter.value;
+        if (selGridDefersToolbarFilters) return;
+        selGridState.type = selGridState.draftType;
         // 新类型条件从第一页开始展示，避免沿用旧条件的后续页。
         selGridState.currentPage = 1;
         // 类型条件变化后重绘项目表。
-            selGridRenderTable();
+            selGridApplyQueryChange("type");
         });
     }
 
@@ -1587,13 +1732,15 @@
         // 状态下拉存在时才绑定状态同步。
         selGridView.statusFilter.addEventListener("change", () => {
         // 保存空值或当前选择的项目状态。
-        selGridState.status = selGridView.statusFilter.value;
+        selGridState.draftStatus = selGridView.statusFilter.value;
+        if (selGridDefersToolbarFilters) return;
+        selGridState.status = selGridState.draftStatus;
         // 新状态条件从第一页开始展示，避免筛选后出现空白旧页。
         selGridState.currentPage = 1;
         // 顶部标签根据真实状态条件切换高亮。
         selGridRoot.querySelectorAll("[data-status-filter]").forEach((button) => button.classList.toggle("selpanel-status-tab-active", button.dataset.statusFilter === selGridState.status));
         // 状态条件变化后重绘项目表。
-            selGridRenderTable();
+            selGridApplyQueryChange("status");
         });
     }
 
@@ -1619,7 +1766,7 @@
         // 所有标签只保留当前状态高亮。
         selGridRoot.querySelectorAll("[data-status-filter]").forEach((statusButton) => statusButton.classList.toggle("selpanel-status-tab-active", statusButton === button));
         // 状态切换后重绘表格。
-            selGridRenderTable();
+        selGridApplyQueryChange("statusTab");
         });
     }
 
@@ -1627,20 +1774,25 @@
     if (selGridView.filterReset) {
         // 重置按钮存在时才绑定跨区域恢复逻辑。
         selGridView.filterReset.addEventListener("click", () => {
-        // 清空内部搜索状态。
-        selGridState.search = "";
+            // 清空内部搜索状态。
+            selGridState.search = "";
+            selGridState.searchValues = {};
+            // 独立查询字段同时清空，重置后后台不会继续携带旧字段条件。
         // 清空内部类型状态。
         selGridState.type = "";
+        selGridState.draftType = "";
         // 清空内部项目状态。
         selGridState.status = "";
+        selGridState.draftStatus = "";
         // 清空左树附加筛选。
         selGridState.treeFilter = {};
         // 重置筛选同时回到第一页，恢复完整数据集的起始位置。
         selGridState.currentPage = 1;
         // 独立搜索控件恢复空值但不重复提交，当前重置逻辑统一负责重绘。
-        if (selGridSearchController) {
+        const currentSearchController = selGridGetSearchController();
+        if (currentSearchController) {
             // 搜索控制器只清空所属实例。
-            selGridSearchController.clear({ submit: false });
+            currentSearchController.clear({ submit: false });
         }
         // 类型选择器恢复全部。
         if (selGridView.typeFilter && window.sel.components.dropdownMenu) {
@@ -1660,7 +1812,7 @@
         // 顶部全部标签恢复高亮。
         selGridRoot.querySelectorAll("[data-status-filter]").forEach((button) => button.classList.toggle("selpanel-status-tab-active", button.dataset.statusFilter === ""));
         // 重绘完整项目表。
-        selGridRenderTable();
+        selGridApplyQueryChange("reset");
         // 给出明确重置反馈。
             selGridShowToast(selGridMessages.filtersReset);
         });
@@ -1675,7 +1827,7 @@
         // 树节点切换后回到第一页，保证新分类首批记录立即可见。
         selGridState.currentPage = 1;
         // 树节点变化后重绘组合筛选结果。
-        selGridRenderTable();
+        selGridApplyQueryChange("tree");
         // 显示当前分类名称，证明树形导航已真正生效。
         selGridShowToast(`${selGridMessages.treePrefix}：${detail.label || ""}`);
     });
@@ -1693,9 +1845,10 @@
         // 筛选命令把键盘焦点移动到搜索输入框。
         if (button.dataset.panelCommand === "filter") {
             // 聚焦独立搜索控件让用户可立即输入条件。
-            if (selGridSearchController) {
+            const currentSearchController = selGridGetSearchController();
+            if (currentSearchController) {
                 // 搜索控制器只移动当前实例焦点。
-                selGridSearchController.focus();
+                currentSearchController.focus();
             }
             // 反馈提示当前筛选入口已激活。
             selGridShowToast(selGridMessages.filterActivated);
@@ -1762,15 +1915,19 @@
             return true;
         }
         selGridState.search = "";
+        selGridState.searchValues = {};
         selGridState.type = "";
+        selGridState.draftType = "";
         selGridState.status = "";
+        selGridState.draftStatus = "";
         selGridState.treeFilter = {};
         // 无工具栏的降级重置同样回到第一页，保持公开 reset 语义完整。
         selGridState.currentPage = 1;
-        if (selGridSearchController) {
-            selGridSearchController.clear({ submit: false });
+        const currentSearchController = selGridGetSearchController();
+        if (currentSearchController) {
+            currentSearchController.clear({ submit: false });
         }
-        selGridRenderTable();
+        selGridApplyQueryChange("reset");
         return true;
     }
 
@@ -1781,7 +1938,7 @@
         // 只改写当前实例状态，不访问页面级固定节点。
         selGridState.currentPage = normalizedPage;
         // 重绘后当前实例显示目标页数据并同步页码可访问状态。
-        selGridRenderTable();
+        selGridApplyQueryChange("setPage");
         return true;
     }
 
@@ -1791,14 +1948,16 @@
         setSearch(value) {
             // 外部搜索值只写入当前实例状态，避免同页其他表格被同步筛选。
             selGridState.search = String(value ?? "");
+            selGridState.searchValues = { keyword: selGridState.search };
             // 新搜索条件始终从第一页展示，避免旧页码落到新结果范围之外。
             selGridState.currentPage = 1;
-            if (selGridSearchController) {
+            const currentSearchController = selGridGetSearchController();
+            if (currentSearchController) {
                 // 搜索基础控件同步当前实例输入框文字，但不重复提交事件。
-                selGridSearchController.setValue(selGridState.search);
+                currentSearchController.setValue(selGridState.search);
             }
             // 当前实例按新条件重新筛选、分页并渲染。
-            selGridRenderTable();
+            selGridApplyQueryChange("setSearch");
             return true;
         },
         getState: () => selFreeze({
@@ -1825,7 +1984,7 @@
                 window.sel.components.dropdownMenu?.refresh(selGridView.pageSize);
             }
             // 当前实例立即按新容量截取和渲染数据。
-            selGridRenderTable();
+            selGridApplyQueryChange("setPageSize");
             return true;
         },
         getPageSize: () => selGridState.pageSize
@@ -1838,12 +1997,26 @@
         selGridInputPayload = selGridNextPayload;
         // 同一公共表格切换业务模块时同步字段契约，避免沿用上一个模块的搜索和分类字段。
         selGridRecordOptions = selGridInputPayload.grid || {};
+        selGridSelectionMode = selGridResolveSelectionMode(selGridInputPayload);
+        if (selGridSelectionMode === "NONE") {
+            selGridState.selectedIds.clear();
+            selGridState.focusedProjectId = null;
+        } else if (selGridSelectionMode === "SINGLE" && selGridState.selectedIds.size > 1) {
+            const [selGridFirstSelectedId] = selGridState.selectedIds;
+            selGridState.selectedIds.clear();
+            selGridState.selectedIds.add(selGridFirstSelectedId);
+        }
         selGridTooltipController?.setEnabled(selGridInputPayload.grid?.tooltip !== false);
         selGridProjects = selFreeze(selGridInputPayload.data.items);
         selGridTypeLabels = new Map((selGridInputPayload.select?.projectType?.options || []).map((item) => [String(item.value), item.label]));
         selGridStatusLabels = new Map((selGridInputPayload.select?.status?.options || []).map((item) => [String(item.value), item.label]));
         selGridMessages = selGridInputPayload.title.messages;
         selGridPaginationData = selGridInputPayload.pagination;
+        // 远程响应中的页码与容量是后台事实，原位刷新时同步而不是沿用发起请求前的旧值。
+        if (selGridUsesRemotePagination()) {
+            selGridState.currentPage = Math.max(1, Number(selGridPaginationData.currentPage) || 1);
+            selGridState.pageSize = Math.max(1, Number(selGridPaginationData.pageSize) || 20);
+        }
         selGridApplyStandalonePayload(selGridRoot, selGridInputPayload);
         if (selGridView.pageSize) selGridView.pageSize.value = String(selGridState.pageSize);
         selGridRenderColumnHeader();
@@ -1891,16 +2064,20 @@
         setColumnWidths: selGridSetColumnWidths,
         resetColumnWidths: selGridResetColumnWidths,
         getSelectedColumnKeys: () => selFreeze(Array.from(selGridSelectedHeaderColumnKeys)),
+        getSelectedIds: () => selFreeze(Array.from(selGridState.selectedIds)),
+        getSelectionMode: () => selGridSelectionMode,
         destroy: selGridDestroy,
         getState: () => selFreeze({
             currentPage: selGridState.currentPage,
             pageSize: selGridState.pageSize,
             search: selGridState.search,
+            searchValues: { ...selGridState.searchValues },
             type: selGridState.type,
             status: selGridState.status,
             columnResize: selGridIsColumnResizeEnabled(),
             columnWidths: Object.fromEntries(selGridColumnWidths),
             selectedColumnKeys: Array.from(selGridSelectedHeaderColumnKeys),
+            selectionMode: selGridSelectionMode,
             selectedIds: Array.from(selGridState.selectedIds)
         })
     };

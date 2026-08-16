@@ -46,12 +46,52 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "top_level_only_no_record_children_or_expand_menu"
         ));
         assertTrue(rule.content().contains(
+            "reference_data_window_child_control_registration = forbidden,"
+                + "ReferenceDataWindow_outer_geometry_only,no_parentKind_WINDOW,"
+                + "no_inner_field_drag,no_startup_generation,physical_cleanup"
+        ));
+        assertTrue(rule.content().contains(
             "reference_data_table_column_navigation_level = "
-                + "internal_table_definition_drilldown_only_not_top_level"
+                + "ReferenceDataTableElement_internal_table_definition_drilldown_only_not_top_level"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_table_column_binding = ReferenceDataTable_one_record_per_page_gridId,"
+                + "ReferenceDataTableElement.tableId_foreign_key_plus_viewCode,"
+                + "no_business_table_name_parent_rows"
         ));
         assertTrue(rule.content().contains(
             "reference_data_initial_business_request_scope = "
                 + "navigation_plus_active_module_records_plus_active_module_columns_only"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_search_field_whitelist = "
+                + "types:code|parentTypeCode,tree:code|parentId,tables:code,"
+                + "table_elements:code|tableId,controls:code&parentCode&optionSetCode,windows:code"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_control_query_contract = "
+                + "independent_inputs:code|parentCode|optionSetCode,"
+                + "BaseDao_parameters:codeLike|parentCodeLike|optionSetCodeLike,AND_only,no_OR"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_control_pagination_contract = "
+                + "remote_current_page,totalCount,no_load_all_for_grid_search"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_search_placeholder = "
+                + "active_module_code_plus_real_parent_coordinate_only,no_multilingual_name_claim"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_tree_value_ownership = TREE:ReferenceDataTreeNode_and_table_view_only,"
+                + "ReferenceDataType:forbidden,physical_cleanup,no_compatibility_record"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_tree_node_attribution = projectCode_plus_pageCode_for_display_and_query_only,"
+                + "tree_relation_still_code_plus_parentId,no_type_coupling"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_type_navigation_level = "
+                + "top_level_only_no_record_children_or_expand_menu,keep_type_records_in_management_grid"
         ));
         assertTrue(rule.content().contains(
             "reference_data_page_edit_table_heading = switch_off_hidden,"
@@ -96,8 +136,25 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "registry_driven_directory_source_api_theme_dependency_and_application_scan"
         ));
         assertTrue(rule.content().contains(
-            "selplat_page_editor_button_presentation = immediately_after_database_code,"
-                + "no_auto_margin_push,shared_semantic_warning_accent,grid_and_window_same_style"
+            "selplat_page_editor_button_presentation = grid_window_immediately_after_database_code,"
+                + "composite_shared_save_after_last_standard_control,no_auto_margin_push,"
+                + "shared_semantic_warning_accent"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_composite_toolbar_control_editing = toolbar_parent_boundary,"
+                + "unified_query_draft_committed_only_by_submit,"
+                + "one_record_per_real_input_select_radio_checkbox_button_or_filter,"
+                + "multiple_structural_fields_render_as_independent_inputs_AND_only_no_keyword_OR,"
+                + "missing_record_uses_component_default,independent_width_with_ordered_reflow,"
+                + "shared_first_item_vertical_baseline,"
+                + "one_shared_current_control_save_following_last_standard_control,"
+                + "single_control_payload,no_editor_cards"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_reference_dropdown_binding_verification = controlCode_real_and_unique,"
+                + "parentKind_WINDOW_rejected_and_absent,optionSetCode_reusable,"
+                + "disabled_binding_rejected,value_unique_per_tenant_option_set,"
+                + "parent_same_option_set,no_parent_cycle,two_level_menu_query,tree_node_independent"
         ));
         assertTrue(rule.content().contains(
             "selplat_truncated_text_tooltip_behavior = grid_and_tree_default_enabled,"
@@ -115,6 +172,10 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "selplat_grid_state_action_semantics = label_and_icon_describe_next_action,"
                 + "enabled_record_shows_disable,disabled_record_shows_enable"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_row_selection_mode_contract = NONE|SINGLE|MULTIPLE,"
+                + "records_default_NONE,legacy_project_default_MULTIPLE,application_explicit_mode"
         ));
         assertTrue(rule.content().contains(
             "selplat_page_editor_session_lifecycle = single_whole_page_manual_edit_switch,"
@@ -234,7 +295,8 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "selplat_query_representation_controller_boundary = "
                 + "own_table_when_distinct_persistence_model,"
-                + "type_plus_tree_node_when_explicit_polymorphic_node_model,"
+                + "type_catalog_independent,tree_node_code_plus_parentId_independent,"
+                + "no_cross_table_dao,no_type_foreign_key,"
                 + "no_ui_name_driven_duplicate_table_business"
         ));
         assertTrue(rule.content().contains(
@@ -254,7 +316,8 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "selplat_query_representation_controller_boundary = "
                 + "own_table_when_distinct_persistence_model,"
-                + "type_plus_tree_node_when_explicit_polymorphic_node_model,"
+                + "type_catalog_independent,tree_node_code_plus_parentId_independent,"
+                + "no_cross_table_dao,no_type_foreign_key,"
                 + "no_ui_name_driven_duplicate_table_business"
         ));
         assertTrue(rule.content().contains(
@@ -480,14 +543,20 @@ class ActiveUserRuleOverrideIntegrationTest {
         );
         assertTrue(rule.content().contains("selplat_database_field_requires_real_call_chain"));
         assertTrue(rule.content().contains(
+            "selplat_tree_node_table_required_responsibility = global_code,"
+                + "projectCode_and_pageCode_attribution_only,parent_id,node_value,localized_labels,"
+                + "status,sort,audit,tree_relation_code_plus_parentId,no_type_reference,"
+                + "no_node_code_alias,no_attributes_bucket"
+        ));
+        assertTrue(rule.content().contains(
             "selplat_application_authoritative_database_root = apps/<app>/db/<app>.mv.db"
         ));
         assertTrue(rule.content().contains(
             "selplat_business_table_sequence_cardinality = "
-                + "default:fully_empty_for_manual_setup_or_one_table_one_row("
-                + "seqCode=<ActualTableName>Id,no_partial_seed_set),"
-                + "aggregate-global-code-sequence:exactly_one_registered_aggregateSequenceCode("
-                + "globalCodeNamespace=true)"
+                + "default:one_table_one_row(seqCode=<ActualTableName>Id,no_partial_seed_set),"
+                + "registered_aggregate_namespace_exception,"
+                + "shared_logical_sequence_allowed_for_no-table-object_only,"
+                + "reference_data_record_code_suffix_equals_own_table_id"
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_local_database_default_credentials = "

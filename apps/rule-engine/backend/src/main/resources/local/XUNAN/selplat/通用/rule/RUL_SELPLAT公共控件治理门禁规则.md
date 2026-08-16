@@ -2,12 +2,40 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 3.5.0 固定页面编辑仅管理开关，保存由每个真实控件的强调色按钮独立完成。 -->
-rule_version = 3.5.0
+<!-- 5.3.0 固定 Window 只保存外框几何，禁止把内部表单字段登记为页面拖拽控件。 -->
+rule_version = 5.3.0
 <!-- 2026-08-12 依次固定纯图标可发现性、确认控件边界、真实风险文案、页面编辑契约及客户交付审计发现的通用布局与可访问性要求。 -->
-upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存;2026-08-12:hidden控件必须退出布局_树叶子占位禁止空按钮_窄屏动作先收起文字_显式保存无脏标记也保存当前控件;2026-08-13:公共API统一window.sel命名空间_selKernel最先加载_应用顶部集中解构_sel.core.freeze深度冻结_中文组件用途说明;2026-08-14:完整只读边界只调用一次selFreeze_禁止嵌套逐项冻结_运行时控制器保持生命周期_生成模板同步门禁;2026-08-14:应用入口统一app_SEL公共别名使用sel前缀_业务模块使用项目lowerCamelCase前缀;2026-08-14:业务应用动态节点统一由sel.core.element创建_原生节点创建只留在公共实现层;2026-08-14:大型应用装配脚本增加函数契约和关键语句组中文教学式业务注释_禁止机械注释括号标点;2026-08-14:统一入口_SEL公共别名_具名业务函数中文契约扩展到全部应用JavaScript并接入快速门禁;2026-08-14:Grid表头竖向分隔线覆盖第一列并只排除最后一列;2026-08-14:动作型页面编辑入口统一使用onEdit_复合管理内容统一进入selWindow自定义内容_引用型下拉按typeId管理并保持树叶子;2026-08-14:引用型下拉拆分页面控件绑定_类型目录_选项数据并禁止管理筛选器注册为业务页面控件;2026-08-15:页面编辑只保留整页手动编辑总开关_编辑态表格配置头展示名称_code_编辑入口;2026-08-15:Window接入同一总开关_一个逻辑控件支持多个实例标题宿主_显示数据库code与统一编辑动作;2026-08-15:表格编辑按钮紧邻code_Window与表格编辑按钮统一使用琥珀金强调色;2026-08-15:页面面板只负责总开关_控件按钮直接保存_导航不被未保存状态拦截_每个Window独立保存几何
+upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存;2026-08-12:hidden控件必须退出布局_树叶子占位禁止空按钮_窄屏动作先收起文字_显式保存无脏标记也保存当前控件;2026-08-13:公共API统一window.sel命名空间_selKernel最先加载_应用顶部集中解构_sel.core.freeze深度冻结_中文组件用途说明;2026-08-14:完整只读边界只调用一次selFreeze_禁止嵌套逐项冻结_运行时控制器保持生命周期_生成模板同步门禁;2026-08-14:应用入口统一app_SEL公共别名使用sel前缀_业务模块使用项目lowerCamelCase前缀;2026-08-14:业务应用动态节点统一由sel.core.element创建_原生节点创建只留在公共实现层;2026-08-14:大型应用装配脚本增加函数契约和关键语句组中文教学式业务注释_禁止机械注释括号标点;2026-08-14:统一入口_SEL公共别名_具名业务函数中文契约扩展到全部应用JavaScript并接入快速门禁;2026-08-14:Grid表头竖向分隔线覆盖第一列并只排除最后一列;2026-08-14:动作型页面编辑入口统一使用onEdit_复合管理内容统一进入selWindow自定义内容_引用型下拉按typeId管理并保持树叶子;2026-08-14:引用型下拉拆分页面控件绑定_类型目录_选项数据并禁止管理筛选器注册为业务页面控件;2026-08-15:页面编辑只保留整页手动编辑总开关_编辑态表格配置头展示名称_code_编辑入口;2026-08-15:Window接入同一总开关_一个逻辑控件支持多个实例标题宿主_显示数据库code与统一编辑动作;2026-08-15:表格编辑按钮紧邻code_Window与表格编辑按钮统一使用琥珀金强调色;2026-08-15:页面面板只负责总开关_控件按钮直接保存_导航不被未保存状态拦截_每个Window独立保存几何;2026-08-15:查询工具栏保留父容器并把搜索框_查询按钮_类型_状态_重置登记为五个独立子控件_selPersonalization统一拖动调宽和逐项保存;2026-08-15:组合工具栏移除逐项编辑卡_末尾标准控件后只显示一个当前控件保存按钮_实际提交仍为所选子控件单记录;2026-08-15:组合工具栏改为流式联动_当前项调宽后后续同级控件等量跟随_保存按钮持续跟随末项
 <!-- 本次升级以六表最终模型替换已删除 Option/Binding 表描述，并增加 parentKind + parentCode 明确父容器。 -->
 upgrade_record_20260815_reference_model = ControlLayout绑定页面与父容器_Type维护工程和类型_TreeNode仅通过typeId归属_禁止节点复制页面坐标
+<!-- 独立树升级记录说明类型目录和树节点表之间不再保留字段耦合。 -->
+upgrade_record_20260815_independent_tree = ReferenceDataType只维护分类目录_ReferenceDataTreeNode只通过code和parentId建树_删除typeId_nodeCode_attributesJson耦合字段
+<!-- 本次升级固定类型目录的全局分类职责，阻止旧项目资源坐标和说明字段回流。 -->
+upgrade_record_20260816_type_catalog = ReferenceDataType以全局唯一categoryCode登记分类_只保留多语言名称和管理审计字段_禁止项目资源坐标与说明字段
+<!-- 本次升级确认页面控件是归属主体，类型值和多级菜单从 Type 侧通过 code 单向绑定。 -->
+upgrade_record_20260816_type_control_binding = ReferenceDataType_controlCode绑定ControlLayout_code_valueCode表达选项_parentTypeCode同控件建层级_ControlLayout删除typeId_废弃categoryCode
+<!-- 本次升级把控件直属类型改为可复用选项组，并逐个登记 Window 内真实字段与动作。 -->
+upgrade_record_20260816_option_set_binding = ReferenceDataType使用optionSetCode共享分级选项_ControlLayout可选绑定同一optionSetCode_Window子控件以WINDOW父坐标_fieldName和唯一code逐个登记
+<!-- 本次升级废弃上一版 Window 子控件登记：内部表单没有拖拽需求，历史记录物理删除且服务与数据库拒绝复发。 -->
+upgrade_record_20260816_window_child_cleanup = ReferenceDataWindow只保存外框位置大小_ControlLayout禁止parentKind_WINDOW_历史Window子记录物理删除_启动生成器删除
+<!-- 查询条件组件允许由配置组合输入、下拉、单选和多选；页面编辑只绑定稳定组件根。 -->
+upgrade_record_20260816_query_condition_group = 查询工具栏语义统一但真实元素逐条ControlLayout登记_输入下拉单选多选和查询按钮分别保存_字段结构重建不得丢失页面编辑绑定_无记录使用组件默认布局
+<!-- 本次升级把多个结构白名单字段落实为多个真实输入，并统一横向流式组合的纵向基线。 -->
+upgrade_record_20260816_structural_query_fields = 多个结构字段逐字段输入_AND匹配_禁止合并keyword_OR_横向组合共享首项纵向基线
+<!-- 本次升级把独立树边界落实到保存值，TREE 不再允许进入类型目录。 -->
+upgrade_record_20260816_tree_type_cleanup = TREE只属于ReferenceDataTreeNode和表格视图_ReferenceDataType保存入口禁止TREE_历史记录物理删除
+<!-- 本次升级统一所有 selGrid 的行选择模式、可访问状态和公开变化事件，业务页面只声明所需模式。 -->
+upgrade_record_20260816_grid_row_selection = NONE_SINGLE_MULTIPLE三态_records默认NONE_旧项目默认MULTIPLE_日语题库显式SINGLE
+<!-- 本次升级固定同一 Search 实例的运行时字段结构替换边界，防止 Grid 继续操作已脱离 DOM 的旧控制器。 -->
+upgrade_record_20260816_search_runtime_remount = 字段集合变化使用公共remount_Grid实时取当前Search控制器_禁止旧DOM实例回流
+<!-- 本次升级让查询控件支持多字段单按钮，并让 Grid 通过 REMOTE 模式发布后台分页条件。 -->
+upgrade_record_20260816_remote_grid_query = selSearch多字段独立值单查询按钮_selGrid_REMOTE不二次分页并发布queryChange_应用调用业务分页接口
+<!-- 本次升级保证配置尚未登记或线上 JSON 尚未生成时，普通搜索字段仍使用紧凑安全默认值。 -->
+upgrade_record_20260816_search_default_width = selSearch字段默认280px_最小180px_禁止单字段自动占满整行_公开CSS变量允许数据库或JSON覆盖_极窄宿主安全收缩
+<!-- 本次补充修正搜索字段缩短但 Panel 外层栏目仍保留旧宽度造成的中段空洞。 -->
+upgrade_record_20260816_search_column_compaction = 单字段搜索外层栏目按输入加按钮真实宽度收紧_多字段模块保留独立配置宽度_禁用人工调宽时模块切换必须应用新栏目宽度
+<!-- 页面编辑的视觉和拖拽命中统一归 selPersonalization；公共边框层必须与业务控件解耦，黄线本身就是可命中的调宽手柄。 -->
+upgrade_record_20260815_unified_edit_affordance = independent_editor_frame,real_right_edge_resize_handle,uniform_radius_and_line,no_business_control_override
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示登记表、快速门禁、公共构建门禁和回归测试均已接通。 -->
@@ -108,6 +136,25 @@ selplat_grid_record_type_filter_semantics = toolbar_type_membership,tree_type_me
 <!-- 原有标量调用方必须继续可用；无分类记录由应用通过明确占位分类表达，公共 Grid 不猜测业务上的未分类文案。 -->
 selplat_grid_record_type_compatibility = preserve_scalar_consumers,application_explicit_unclassified_value,no_business_label_inference
 
+## 多字段查询与后台分页
+
+<!-- selSearch 的 fields 数组表示多个独立查询字段，所有字段共享一个提交按钮；旧单字段调用保持 keyword 契约。 -->
+selplat_search_multi_field_contract = optional_fields,one_input_one_name,one_shared_submit,detail_values_map,legacy_keyword_default
+<!-- 多字段清空、回车、加载态和语言刷新必须作用于同一实例，禁止应用读取组件内部选择器拼装查询值。 -->
+selplat_search_multi_field_lifecycle = independent_clear,shared_enter_submit,shared_loading,locale_by_field_name,public_getValues_setValues
+<!-- 同一业务实例在模块切换时改变字段集合，必须通过公共 remount 替换实例；Grid 不得缓存旧 Search 控制器。 -->
+selplat_search_runtime_structure_change = public_remount_same_instance_id,grid_resolves_current_search_controller,no_stale_dom_controller
+<!-- 数据库和线上 JSON 只覆盖几何配置；缺少记录时由 selSearch 公共默认值保证紧凑显示，不得依赖业务数据才能正常布局。 -->
+selplat_search_default_width_contract = default:280px,min:180px,no_flex_fill,public_css_variable_override,database_or_json_optional,missing_configuration_safe_fallback,narrow_host_may_shrink
+<!-- 搜索字段与外层 Panel 栏目必须同步收紧；字段数量变化时外层宽度跟随当前装配配置，禁止只缩内部控件留下空轨道。 -->
+selplat_search_outer_column_compaction = single_field_width_equals_input_plus_gap_plus_submit,multi_field_preserves_configured_geometry,column_resize_disabled_reapplies_active_module_width,no_empty_outer_track
+<!-- selGrid pagination.mode=REMOTE 时 data.items 已是后台当前页，组件不得再次 slice 或本地过滤。 -->
+selplat_grid_remote_pagination_contract = data_items_current_page,pagination_totalCount,no_second_slice,no_local_filter
+<!-- 远程模式的搜索、分类、状态、页码、容量与重置统一发布 selGrid:queryChange，公共控件不识别业务接口和字段。 -->
+selplat_grid_remote_query_event = selGrid:queryChange,gridId_reason_pageNo_pageSize_values_type_status,application_fetches_business_page
+<!-- 未声明 REMOTE 的调用方保持本地筛选分页，新增能力不得改变现有 Grid 页面行为。 -->
+selplat_grid_remote_compatibility_boundary = LOCAL_default,preserve_existing_consumers
+
 ## Grid 动态业务契约与 Window 默认项
 
 <!-- 同一 selGrid 通过 setLocale 切换 records 业务模块时必须同步 grid.searchFields、typeField、statusField 等记录契约，禁止沿用旧模块字段。 -->
@@ -116,6 +163,15 @@ selplat_grid_runtime_record_contract_refresh = setLocale_updates_grid_record_opt
 selplat_grid_business_module_filter_reset = application_module_switch_resets_incompatible_filters,locale_switch_preserves_state
 <!-- Grid 表头竖线表达当前列的右边界，因此第一列必须显示，只有没有后续列的最后一列不显示。 -->
 selplat_grid_header_separator_boundary = every_column_except_last,first_column_visible,no_first_column_exclusion
+
+## Grid 行选择
+
+<!-- 所有 selGrid 只能通过标准模式声明行选择；默认值保留既有调用方行为。 -->
+selplat_grid_row_selection_mode_contract = NONE|SINGLE|MULTIPLE,records_default_NONE,legacy_project_default_MULTIPLE,application_explicit_mode
+<!-- 普通行点击选择单个目标，多选模式的复选按钮才执行追加切换，全选只属于多选模式。 -->
+selplat_grid_row_selection_interaction = row_click_single_target,multiple_checkbox_additive_toggle,select_all_multiple_only
+<!-- 公共控件统一维护选中集合、行可访问状态和变化事件，业务应用不得读取内部 DOM 推断选中行。 -->
+selplat_grid_row_selection_public_state = selectedIds,aria_selected,selGrid_selectionChange,getSelectedIds,getSelectionMode,no_application_dom_inference
 <!-- selWindow 选择项的 selected 声明必须同时成为 form.reset 的 defaultSelected，新增窗口不得在 reset 后回到错误的第一项。 -->
 selplat_window_select_default_reset_contract = selected_option_sets_defaultSelected,form_reset_restores_business_default
 <!-- 表单之外的完整管理流程仍使用 selWindow 的标题栏、拖动、缩放和层级；应用只能通过 content 元素注入公共组件组合，并显式隐藏无意义的标准提交栏。 -->
@@ -182,14 +238,18 @@ selplat_page_editor_owner = selPersonalization,application_registers_root_title_
 selplat_page_editor_authorization = backend_capability_controls_visibility,service_isAdmin_rechecks_every_save,no_frontend_only_authorization
 <!-- 页面编辑区只允许一个整页手动编辑滑动开关；它只控制编辑能力显隐，不展示控件卡、检查器、保存或取消，也不得阻断页面导航。 -->
 selplat_page_editor_session_lifecycle = single_whole_page_manual_edit_switch,no_preview_edit_tabs,off_normal_page,on_show_edit_affordances,no_control_cards,no_inspector,no_global_save_cancel,no_navigation_block
-<!-- 每个控件按钮必须直接捕获并保存自身当前状态；没有修改时无需提醒，未点击保存不得自动持久化。 -->
-selplat_page_editor_explicit_save = per_control_adjacent_save_button,capture_current_state_on_click,no_global_dirty_prompt,no_implicit_persistence
+<!-- 每个独立控件或组合工具栏当前选中子控件必须显式保存自身状态；没有修改时无需提醒，未点击保存不得自动持久化。 -->
+selplat_page_editor_explicit_save = per_control_or_shared_current_child_save,capture_current_state_on_click,no_global_dirty_prompt,no_implicit_persistence
+<!-- 组合工具栏只用 TOOLBAR 父记录表达共同查询边界；每个真实条件元素与提交动作逐条登记并独立保存，缺失记录使用公共默认布局。 -->
+selplat_composite_toolbar_control_editing = toolbar_parent_boundary,unified_query_draft_committed_only_by_submit,one_record_per_real_input_select_radio_checkbox_button_or_filter,multiple_structural_fields_render_as_independent_inputs_AND_only_no_keyword_OR,missing_record_uses_component_default,independent_width_with_ordered_reflow,shared_first_item_vertical_baseline,one_shared_current_control_save_following_last_standard_control,single_control_payload,no_editor_cards
+<!-- 业务应用只能通过公共 API 取得允许编辑的真实布局根并提交状态；指针生命周期、绘制帧合并和边界夹取统一归 selPersonalization。 -->
+selplat_page_control_geometry_owner = selPersonalization,component_public_layout_targets,application_host_bounds_state_save_only,request_animation_frame,finish_cancel_blur_lost_capture_cleanup
 <!-- 编辑模式打开后才在已登记控件旁显示统一编辑入口；预览模式必须移除角标和编辑轮廓，保持业务页面干净。 -->
 selplat_page_editor_affordance_visibility = registered_control_badge_in_edit_mode_only,preview_mode_clean
 <!-- 表格配置头默认退出布局；仅整页编辑开启后展示表格名称、数据库 table code 和编辑入口，禁止按钮覆盖业务列头。 -->
 selplat_grid_page_editor_heading = hidden_when_switch_off,visible_when_switch_on,table_title_and_database_table_code,save_action_inside_heading,no_business_column_overlap
-<!-- 页面编辑按钮必须紧跟控件数据库 code，并以统一琥珀金强调色区别于普通标题、坐标和窗口框架按钮。 -->
-selplat_page_editor_button_presentation = immediately_after_database_code,no_auto_margin_push,shared_semantic_warning_accent,grid_and_window_same_style
+<!-- 表格和 Window 编辑按钮紧跟数据库 code；组合工具栏共享保存按钮紧跟末尾标准控件，统一使用琥珀金强调色。 -->
+selplat_page_editor_button_presentation = grid_window_immediately_after_database_code,composite_shared_save_after_last_standard_control,no_auto_margin_push,shared_semantic_warning_accent
 <!-- 每个 Window 实例必须绑定独立配置记录；开启总开关后标题栏显示自身 code 和保存按钮，保存实际宽高与位置作为下次打开默认矩形。 -->
 selplat_window_page_editor_heading = one_window_instance_one_configuration_record,same_whole_page_switch,hidden_when_switch_off,visible_in_open_window_header_when_switch_on,window_title_and_database_code,save_actual_geometry_as_next_default
 <!-- 每个控件必须直观显示足以定位其真实配置记录的稳定坐标；表格使用 tableName+gridId，具体列持久化再增加 gridColumnId。 -->
@@ -200,12 +260,12 @@ selplat_grid_page_editor_persistence = live_memory_resize,one_terminal_change_ev
 selplat_page_editor_extension_boundary = shared_editor_session_per_control_adapter,menu_tree_dropdown_data_type_keep_business_table_and_service,no_monolithic_json_table
 <!-- 只触发业务管理流程、不产生页面草稿的控件使用 action-only onEdit 登记；它不参与脏状态、保存或取消恢复，但仍受管理员权限和编辑模式控制。 -->
 selplat_page_editor_action_control_contract = register_onEdit_action_only,enabled_dynamic_visibility,no_capture_restore_save_requirement,excluded_from_dirty_save_cancel
-<!-- 引用型下拉必须把页面控件布局、类型目录和类型化节点分开保存；ControlLayout 表达使用位置，TreeNode 只通过 typeId 归属类型，禁止复制页面坐标。 -->
-selplat_reference_dropdown_data_model = ReferenceDataControlLayout_pageCode_plus_parentKind_plus_parentCode_plus_typeId,ReferenceDataType_projectCode_plus_resourceCode_plus_type,ReferenceDataTreeNode_typeId_plus_nodeValue,no_coordinate_duplication
+<!-- 引用类型目录与树节点彻底分开保存；TreeNode 只使用自身 code 与 parentId 建树，禁止类型目录、下拉或菜单分类借用树表存储明细。 -->
+selplat_reference_dropdown_data_model = ReferenceDataControlLayout_code_is_real_page_control_no_typeId_and_optional_optionSetCode_and_forbids_WINDOW_parent,ReferenceDataType_optionSetCode_plus_valueCode_plus_parentTypeCode_same_option_set_plus_localized_names_and_forbids_TREE,ReferenceDataTreeNode_code_plus_parentId_independent_tree,no_type_project_or_page_duplication,no_controlCode,no_categoryCode,no_tree_typeId_no_nodeCode_no_attributesJson
 <!-- 管理工作台中的类型筛选器只负责过滤数据，禁止把筛选槽注册为业务页面下拉框或以其当前值冒充控件绑定。 -->
-selplat_reference_dropdown_filter_boundary = management_filter_is_not_business_control,no_page_editor_registration,no_filter_value_as_binding
-<!-- 真实业务下拉框只能由已登记控件的 typeId 查询 DROPDOWN 类型节点；类型导航保持叶子且不把选项记录展开为导航子节点。 -->
-selplat_reference_dropdown_option_management = registered_control_typeId_queries_dropdown_typed_tree_nodes,tree_node_business_crud,type_navigation_leaf,no_option_record_navigation_children
+selplat_reference_dropdown_filter_boundary = only_explicit_ReferenceDataControlLayout_code_can_bind_optionSetCode,registered_page_control_may_share_real_option_set,no_window_inner_form_registration,no_dom_id_or_current_filter_value_as_binding
+<!-- 下拉和菜单当前只登记类型分类及多语言名称；在建立独立且有真实调用链的数据模型前，不得向 TreeNode 写入选项或菜单项。 -->
+selplat_reference_dropdown_option_management = ReferenceDataType_is_shared_option_set_value_and_menu_hierarchy,optionSetCode_direct_query,parentTypeCode_same_option_set,forbid_dropdown_or_menu_records_in_tree_node
 
 ## 验证
 
@@ -225,12 +285,14 @@ selplat_toolbar_column_resize_gate = panel_contract,default_enabled,explicit_dis
 selplat_grid_multi_value_type_gate = normalize_scalar_and_array,toolbar_membership,tree_membership,type_group_any_membership
 <!-- 快速门禁必须阻断第一列表头分隔线被排除或最后列表头残留无意义竖线。 -->
 selplat_grid_header_separator_gate = required_not_last_child_selector,forbidden_not_first_child_selector,real_grid_regression
+<!-- 公共构建必须同时验证三态选择、兼容默认值、records 选择渲染、公开事件与状态 API。 -->
+selplat_grid_row_selection_gate = three_modes,compatibility_defaults,records_selection_renderer,aria_selected,public_event_and_state_api
 <!-- 动态模块调用方回归必须覆盖字段契约切换、旧筛选清理和窗口选择默认项复位。 -->
 selplat_runtime_contract_and_form_default_verification = grid_module_contract_switch,filter_reset,window_select_default_after_reset
 <!-- 页面编辑公共回归必须覆盖纯开关、控件级保存、导航无拦截、表格宽度回读和各 Window 独立几何持久化。 -->
-selplat_page_editor_verification = non_admin_hidden,admin_service_recheck,single_switch_only,no_panel_control_cards_or_global_actions,grid_heading_hidden_off_visible_on,window_heading_hidden_off_visible_on,one_window_one_record,heading_title_code_and_adjacent_accent_save_action,terminal_resize_event,per_control_save,navigation_unblocked,reload_persisted_width_and_window_geometry
+selplat_page_editor_verification = non_admin_hidden,admin_service_recheck,single_switch_only,no_panel_control_cards_or_global_actions,grid_heading_hidden_off_visible_on,window_heading_hidden_off_visible_on,one_window_one_record,heading_title_code_and_adjacent_accent_save_action,independent_uniform_editor_frame,real_right_edge_handle_hover_and_drag,query_reset_dropdown_same_contract,composite_ordered_sibling_reflow_and_one_following_shared_save,terminal_resize_event,per_control_single_record_save,navigation_unblocked,reload_persisted_width_and_window_geometry
 <!-- 引用型下拉回归必须覆盖筛选器不登记、绑定坐标唯一、绑定启停边界、按绑定查询真实选项和选项树保持叶子。 -->
-selplat_reference_dropdown_binding_verification = filter_not_registered,page_control_coordinate_unique,disabled_binding_rejected,binding_queries_real_options,option_tree_leaf
+selplat_reference_dropdown_binding_verification = controlCode_real_and_unique,parentKind_WINDOW_rejected_and_absent,optionSetCode_reusable,disabled_binding_rejected,value_unique_per_tenant_option_set,parent_same_option_set,no_parent_cycle,two_level_menu_query,tree_node_independent
 <!-- 公共控件交付回归同时检查 hidden 退出布局、树叶子非交互占位和 1380 宽度内标题动作不相撞。 -->
 selplat_layout_and_accessibility_verification = hidden_panel_display_none,tree_leaf_no_unnamed_button,compact_header_action_labels_collapsed_before_overlap
 <!-- 应用装配回归必须断言所有显式 SEL 实例 ID 符合统一命名，并阻断 Managent 等错误英文拼写。 -->

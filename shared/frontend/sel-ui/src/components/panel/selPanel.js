@@ -931,8 +931,9 @@
             ));
             selPanelColumnState.resizer.setAttribute("aria-valuemin", String(selPanelBoundsMinimum));
             selPanelColumnState.resizer.setAttribute("aria-valuemax", String(selPanelBoundsMaximum));
-            if (!selPanelColumnState.initialized) {
-                const selPanelConfiguredWidth = Number(selPanelColumnState.config.width);
+            const selPanelConfiguredWidth = Number(selPanelColumnState.config.width);
+            // 禁用人工调宽的栏目完全由当前装配配置控制；模块切换时必须应用新宽度，不能保留上一模块的空轨道。
+            if (!selPanelColumnState.initialized || !selPanelColumnResizeEnabled) {
                 const selPanelInitialWidth = Number.isFinite(selPanelConfiguredWidth)
                     ? Math.min(selPanelBoundsMaximum, Math.max(selPanelBoundsMinimum, Math.round(selPanelConfiguredWidth)))
                     : Math.round(selPanelColumnState.column.getBoundingClientRect().width);

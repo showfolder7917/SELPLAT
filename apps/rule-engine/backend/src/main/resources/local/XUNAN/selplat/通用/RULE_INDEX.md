@@ -24,6 +24,8 @@ load_rule_for_active_user_selplat_immutable_boundary_runtime_controller_or_gener
 <!-- 新增或修改页面编辑模式、控件坐标、实时草稿、取消恢复、显式保存或管理员显示能力时加载。 -->
 load_rule_for_active_user_selplat_page_editor_mode_coordinate_draft_cancel_save_or_authorization = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 load_rule_for_active_user_selplat_page_editor_switch_per_control_save_navigation_or_window_geometry = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES,SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES
+<!-- 修改 Window 外框保存、内部字段登记、parentKind=WINDOW 清理或防复发约束时加载。 -->
+load_rule_for_active_user_selplat_window_outer_geometry_or_inner_control_cleanup = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES,SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES
 <!-- 将表格、菜单、树、下拉或数据类型接入统一页面编辑适配器时加载，禁止应用私造编辑外壳或把管理筛选器冒充业务控件。 -->
 load_rule_for_active_user_selplat_control_page_editor_adapter_registration = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 新增或修改页面控件绑定、引用数据类型与选项关联或按页面坐标查询下拉选项时加载。 -->
@@ -38,6 +40,12 @@ load_rule_for_active_user_selplat_component_instance_id_or_business_grid_id_nami
 load_rule_for_active_user_selplat_component_typography_or_tree_text_hierarchy = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 <!-- 交付前检查未知新控件和业务私造交互时加载，扫描逻辑由中央登记驱动而非逐个控件写死。 -->
 load_rule_for_active_user_selplat_component_governance_delivery_scan = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 新增或修改多字段查询、逐字段 AND、横向组合基线、Grid 后台分页或查询事件时加载。 -->
+load_rule_for_active_user_selplat_search_multi_field_or_grid_remote_pagination = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 修改搜索框默认宽度、配置覆盖或缺少数据库/JSON 配置时的回退布局时加载。 -->
+load_rule_for_active_user_selplat_search_default_width_or_configuration_fallback = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+<!-- 修改统一查询字段数量、提交时机、共同基线或页面编辑登记边界时加载，每个真实元素必须可独立保存。 -->
+load_rule_for_active_user_selplat_query_condition_group_internal_fields_submit_or_page_registration = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 
 <!-- SELPLAT 全部程序统一执行语言登记、源码归属和实验工具隔离门禁。 -->
 SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md
@@ -124,6 +132,8 @@ load_rule_for_active_user_selplat_database_driven_grid_header_column_configurati
 load_rule_for_active_user_selplat_base_service_admin_or_management_authorization = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 <!-- 修改 getGridColumn 本地 Provider、独立 Reference Data HTTP 适配、字段名静默降级或统一 columns 返回结构时加载。 -->
 load_rule_for_active_user_selplat_grid_column_local_remote_provider_and_silent_field_fallback = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
+<!-- 可分页管理列表拆分独立查询字段或改为后台分页时加载，保证使用 BaseDao AND 条件与真实 totalCount。 -->
+load_rule_for_active_user_selplat_managed_grid_backend_paging_or_independent_query_fields = SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES
 
 <!-- SELPLAT 新业务工程和可追加业务表统一由 MDA 脚手架生成，并实行无覆盖冲突保护。 -->
 SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT应用脚手架生成规则.md

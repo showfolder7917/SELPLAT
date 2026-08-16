@@ -4,8 +4,10 @@
  * 全部类使用 selsearch 组件前缀，允许同页多个搜索实例共享样式而不共享状态。
  */
 
-/* 搜索根：填满 selPanel 提供的工具栏宿主，不干预其他工具栏控件列宽。 */
+/* 搜索根：默认字段保持紧凑；页面配置或调用方可通过公开变量覆盖，缺少数据库/JSON 配置时也不会无限撑宽。 */
 .selsearch-root {
+    --selsearch-field-default-width: 280px;
+    --selsearch-field-min-width: 180px;
     min-width: 0;
 }
 
@@ -28,9 +30,34 @@
     width: 100%;
     min-width: 0;
     height: 42px;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(var(--selsearch-field-min-width), var(--selsearch-field-default-width)) auto;
     gap: 8px;
+    justify-content: start;
 }
+
+/* 多字段查询复用同一默认宽度并共享一个提交按钮；每个输入代表一个独立后台 AND 条件。 */
+.selsearch-form-multiple {
+    grid-template-columns: repeat(
+        var(--selsearch-field-count),
+        minmax(var(--selsearch-field-min-width), var(--selsearch-field-default-width))
+    ) auto;
+}
+
+/* 页面编辑独立布局：各查询元素使用自身数据库矩形，查询按钮仍保留在同一个 form 中统一提交。 */
+.selsearch-form-independent-layout {
+    position: relative;
+    display: block;
+    overflow: visible;
+}
+
+.selsearch-form-independent-layout .selsearch-field,
+.selsearch-form-independent-layout .selsearch-submit-button {
+    position: absolute;
+    top: 0;
+}
+
+.selsearch-form-independent-layout .selsearch-field { left: 0; }
+.selsearch-form-independent-layout .selsearch-submit-button { left: 0; }
 
 /* 输入字段组：图标、关键词和清空按钮共享一个水晶内框。 */
 .selsearch-field {
@@ -162,5 +189,13 @@
 
     .selsearch-submit-label {
         display: none;
+    }
+}
+
+/* 极窄宿主允许输入轨道继续收缩，避免默认最小宽度与查询按钮共同造成页面横向溢出。 */
+@media (max-width: 480px) {
+    .selsearch-form,
+    .selsearch-form-multiple {
+        grid-template-columns: repeat(var(--selsearch-field-count, 1), minmax(0, 1fr)) auto;
     }
 }

@@ -4,6 +4,8 @@ import com.sp.selplat.common.db.datasource.CommonDbSource;
 import com.sp.selplat.common.db.query.model.CommonDynamicQuery;
 import com.sp.selplat.common.db.query.model.QueryCondition;
 import com.sp.selplat.common.db.query.model.QueryOperator;
+import java.util.Collection;
+import java.util.Objects;
 import com.sp.selplat.common.db.query.model.QueryOrder;
 import com.sp.selplat.common.db.metadata.DatabaseMetadataReader;
 import java.util.List;
@@ -13,6 +15,9 @@ import java.util.List;
  * 这里先校验表、字段、条件和排序，是为了把动态查询能力约束在业务表结构边界内，避免上层直接拼接任意 SQL。
  */
 public class DefaultCommonQueryValidator implements CommonQueryValidator {
+
+    // 单个 IN 条件最多承接一千个值，与平台公共批量分组上限保持一致。
+    private static final int MAX_IN_VALUES = 1000;
 
     // metadataReader 承接底层表结构读取能力，供校验阶段确认表和字段是否真实存在。
     private final DatabaseMetadataReader metadataReader;
@@ -215,6 +220,16 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
             }
             return;
         }
+        // IN 条件只接受一千项以内的非空集合，避免空括号 SQL 和无界参数列表。
+        if (QueryOperator.IN == condition.getOperator()) {
+            if (!(condition.getValue() instanceof Collection<?> values)
+                    || values.isEmpty() || values.size() > MAX_IN_VALUES
+                    || values.stream().anyMatch(Objects::isNull)) {
+                throw new IllegalArgumentException(
+                        "in condition value must be a non-empty collection with at most 1000 non-null items");
+            }
+            return;
+        }
         // 其余单值条件必须具备首值，否则 where 比较语义不成立。
         if (condition.getValue() == null) {
             throw new IllegalArgumentException("condition.value must not be null");
@@ -259,7 +274,5 @@ public class DefaultCommonQueryValidator implements CommonQueryValidator {
         return value != null && !value.trim().isEmpty();
     }
 }
-
-
 
 

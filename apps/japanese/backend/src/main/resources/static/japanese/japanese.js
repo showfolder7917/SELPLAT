@@ -145,6 +145,7 @@
         return selFreeze({
             grid: {
                 mode: "records",
+                selectionMode: "SINGLE",
                 idField: "id",
                 searchFields: ["sourceQuestionNo", "questionText", "correctOption", "optionA", "optionB", "optionC", "optionD"],
                 horizontalScroll: true

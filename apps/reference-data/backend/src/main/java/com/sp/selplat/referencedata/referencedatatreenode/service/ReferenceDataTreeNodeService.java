@@ -8,15 +8,15 @@ import java.util.Map;
 public interface ReferenceDataTreeNodeService extends BaseService {
 
     /**
-     * 按类型唯一 code 查询节点，并依据类型键输出树、选项或菜单结构。
-     * 真实传参示例：{@code typeCode=type101001, locale=zh-CN}。
-     * 真实返回示例：DROPDOWN 类型返回 {@code {"success":true,"data":[{"value":"TREE"}]}}。
-     * 异常或副作用示例：code 不存在或没有启用节点时抛出
-     *     {@code REFERENCE_DATA_NODES_NOT_FOUND}；方法不修改数据库。
+     * 按根节点唯一 code 查询一棵独立父子树。
+     * 真实传参示例：{@code rootCode=treeNode101007, locale=zh-CN}。
+     * 真实返回示例：返回 {@code {"success":true,"data":{"id":"treeNode101007","children":[]}}}。
+     * 异常或副作用示例：根 code 不存在时抛出
+     *     {@code REFERENCE_DATA_TREE_ROOT_NOT_FOUND}；方法不修改数据库。
      *
-     * @param typeCode ReferenceDataType 的唯一 code
+     * @param rootCode ReferenceDataTreeNode 根节点的唯一 code
      * @param parameters locale 等查询参数
-     * @return 与类型表现形式匹配的节点结果
+     * @return TREE 类型的层级节点结果
      */
-    CommonResult getNodes(String typeCode, Map<String, String> parameters);
+    CommonResult getNodes(String rootCode, Map<String, String> parameters);
 }

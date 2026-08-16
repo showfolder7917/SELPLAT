@@ -226,8 +226,8 @@
 .selpanel-toolbar-shell {
     z-index: 40;
     display: grid;
-    min-height: 88px;
-    flex: 0 0 88px;
+    min-height: var(--selpanel-toolbar-min-height, 88px);
+    flex: 0 0 var(--selpanel-toolbar-flex-basis, 88px);
     grid-template-columns:
         var(--selpanel-toolbar-column-1-width, minmax(230px, 1.25fr))
         var(--selpanel-toolbar-column-2-width, minmax(150px, 0.62fr))
@@ -235,8 +235,8 @@
         var(--selpanel-toolbar-column-4-width, minmax(300px, 1fr))
         var(--selpanel-toolbar-column-5-width, 102px);
     gap: 12px;
-    align-items: center;
-    padding: 0 16px;
+    align-items: var(--selpanel-toolbar-align-items, center);
+    padding: var(--selpanel-toolbar-padding-top, 0) 16px var(--selpanel-toolbar-padding-bottom, 0);
 }
 
 /* 单栏目工具栏只建立一条真实轨道；应用可通过公开 width 配置保留右侧工作空间。 */
@@ -273,7 +273,7 @@
     position: relative;
     min-width: 0;
     height: 42px;
-    align-self: center;
+    align-self: var(--selpanel-toolbar-align-items, center);
     overflow: visible;
 }
 
