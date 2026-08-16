@@ -325,8 +325,12 @@
                 ["aria-label", "title", "placeholder"].forEach((selPersonalizationAttribute) => {
                     const selPersonalizationOriginal = selPersonalizationElement.getAttribute(selPersonalizationAttribute);
                     const selPersonalizationSource = selPersonalizationPreviousValues.get(selPersonalizationOriginal) || selPersonalizationOriginal;
-                    if (selPersonalizationOriginal && selPersonalizationTextMap[selPersonalizationSource]) {
-                        selPersonalizationElement.setAttribute(selPersonalizationAttribute, selPersonalizationTextMap[selPersonalizationSource]);
+                    // 中文包使用空映射表示恢复稳定源文案；属性必须与文本节点一样回退 source，不能残留上一语言。
+                    if (selPersonalizationOriginal && selPersonalizationSource) {
+                        selPersonalizationElement.setAttribute(
+                            selPersonalizationAttribute,
+                            selPersonalizationTextMap[selPersonalizationSource] || selPersonalizationSource
+                        );
                     }
                 });
             });

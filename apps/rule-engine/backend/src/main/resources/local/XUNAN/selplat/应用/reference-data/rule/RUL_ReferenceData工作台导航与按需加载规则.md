@@ -6,8 +6,8 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由应用脚本与契约测试验证。 -->
 node_ability_refs = none
-<!-- 1.27.0 固定全部结构搜索使用真实字段独立输入、BaseDao AND 和一个共享查询按钮。 -->
-rule_version = 1.27.0
+<!-- 1.28.0 固定引用数据管理中日英资源分层、数据库多语言字段回退和无刷新原位切换。 -->
+rule_version = 1.28.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记和应用回归。 -->
@@ -44,6 +44,8 @@ upgrade_record_20260816_control_remote_query = 控件code_父控件code_选项�
 upgrade_record_20260816_type_independent_query = 数据类型code_parentTypeCode两个独立输入_逐字段AND_类型状态重置与输入共享横向基线
 <!-- 本次升级把剩余模块的组合关键词彻底拆开，并物理清理 keyword 与重复查询按钮布局。 -->
 upgrade_record_20260816_all_structural_queries = tree使用code_parentId独立输入_table_elements使用code_tableId独立输入_tables_windows只保留code_BaseDao_AND_一个共享submit_删除keyword和重复submit布局
+<!-- 本次升级把已确认的引用数据国际化方案固化为可回归的应用规则。 -->
+upgrade_record_20260816_runtime_i18n = 应用固定文案使用reference-data_i18n三语同构JSON_公共Window和personalization使用SEL独立语言包_数据库业务名按当前locale回退_原子原位切换保留查询分页详情编辑状态
 
 ## 导航能力边界
 
@@ -90,6 +92,17 @@ reference_data_new_column_naming = labelZh_required_and_visible,gridId_gridColum
 reference_data_table_definition_demo_seed = idempotent_insert_where_not_exists,no_merge_or_update_overwrite,six_digit_ids
 
 ## 请求与缓存
+
+<!-- 引用数据应用固定文案必须提供 zh-CN、ja-JP、en-US 三份同构 JSON，禁止把应用文案混入公共组件语言包。 -->
+reference_data_application_i18n_resources = reference-data/i18n/zh-CN.json|ja-JP.json|en-US.json,isomorphic_leaf_keys,application_messages_only
+<!-- Window 和个性化属于 SEL 公共组件，必须从各自公共 i18n 目录加载，应用语言包不得复制其内部文案。 -->
+reference_data_public_component_i18n_boundary = selWindow_public_pack,selPersonalization_public_pack,no_application_duplication
+<!-- URL lang 优先，其次读取应用语言偏好，非法值回退中文；切换成功后同步 URL、偏好、document.lang 和标题。 -->
+reference_data_locale_resolution = url_lang_then_selplat_reference_data_locale_preference_then_zh_CN,supported:zh_CN|ja_JP|en_US
+<!-- 数据库多语言字段按当前语言优先并回退；表格 description 只作管理说明，不可替代多语言 name 字段成为标题。 -->
+reference_data_business_locale_fallback = zh:Zh_En_Ja,ja:Ja_Zh_En,en:En_Zh_Ja,final:code_or_fieldName,table_title_uses_name_not_description
+<!-- 语言切换必须先完整加载公共与应用资源，再原位更新现有控制器并保留业务状态，禁止刷新或重建业务会话。 -->
+reference_data_runtime_locale_switch = locale_runtime_atomic_load_then_apply,preserve_active_module_query_filters_pagination_selection_detail_page_edit_and_window_form,no_page_reload
 
 <!-- 工作台搜索是结构定位：每个模块只允许 code 和其真实父级坐标，无父级时只保留 code。 -->
 reference_data_search_field_whitelist = types:code|parentTypeCode,tree:code|parentId,tables:code,table_elements:code|tableId,controls:code&parentCode&optionSetCode,windows:code

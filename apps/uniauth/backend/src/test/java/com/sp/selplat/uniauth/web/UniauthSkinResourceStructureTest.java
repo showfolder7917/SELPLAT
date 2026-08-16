@@ -388,6 +388,8 @@ class UniauthSkinResourceStructureTest {
         assertFalse(applicationScript.contains("const uniauthProjectWindowView"));
         assertTrue(personalizationScript.contains("data-sel-personal-language"));
         assertTrue(personalizationScript.contains("selPersonalizationOptions.locale?.onChange"));
+        assertTrue(personalizationScript.contains(
+                "selPersonalizationTextMap[selPersonalizationSource] || selPersonalizationSource"));
         assertFalse(personalizationScript.contains("UniauthUserGrid"));
         assertTrue(windowScript.contains("selWindowLocaleOptions.messages"));
         assertFalse(windowScript.contains("setAttribute(\"aria-label\", \"最小化窗口\")"));

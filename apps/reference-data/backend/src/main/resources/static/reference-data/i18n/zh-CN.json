@@ -1,0 +1,54 @@
+{
+  "documentTitle": "引用数据管理工作台",
+  "pageAria": "引用数据六模块管理工作台",
+  "page": {
+    "title": "引用数据管理工作台",
+    "description": "维护页面控件、表格、树、选项和 Window 配置",
+    "panelAria": "引用数据模块按需加载管理面板",
+    "businessModules": "业务模块",
+    "moduleSummary": "{count} 个一级模块",
+    "all": "全部",
+    "enabled": "已启用",
+    "disabled": "已停用",
+    "operation": "操作",
+    "notRegistered": "尚未登记",
+    "loading": "正在加载{name}…",
+    "empty": "没有符合当前条件的{name}记录",
+    "statusFilter": "{name}状态筛选", "quickActions": "{name}快捷操作", "toolbar": "{name}筛选工具栏", "content": "{name}内容区", "table": "{name}表格", "pagination": "{name}分页", "expandModules": "展开业务模块", "collapseModules": "收起业务模块"
+  },
+  "modules": {
+    "types": {"name": "数据类型", "itemName": "类型", "description": "维护页面控件的类型值、菜单层级和多语言名称", "searchPlaceholder": "按 Code 和上级类型 Code 查询"},
+    "tree": {"name": "树节点", "itemName": "树节点", "description": "通过 Code 与 parentId 维护独立父子树", "searchPlaceholder": "按 Code 和父节点 ID 查询"},
+    "controls": {"name": "页面控件", "itemName": "控件", "description": "通过唯一 Code 维护页面控件和响应式布局", "searchPlaceholder": "按独立字段查询页面控件"},
+    "windows": {"name": "Window", "itemName": "Window", "description": "保存 Window 宽高、位置和调整边界", "searchPlaceholder": "按 Code 查询"},
+    "tables": {"name": "表格定义", "itemName": "表格", "description": "登记项目页面表格并进入对应表格头明细", "searchPlaceholder": "按 Code 查询"},
+    "columns": {"name": "表格头", "itemName": "表格列", "description": "配置每个页面表格的名称、宽度、多语言和显示状态", "searchPlaceholder": "按 Code 和所属表 ID 查询"}
+  },
+  "search": {"label": "{name}搜索", "submit": "查询", "clear": "清空搜索条件"},
+  "filter": {
+    "rootNode": "根节点", "dataType": "数据类型", "dataScope": "数据范围",
+    "allTrees": "全部树", "allTypes": "全部类型", "allData": "全部数据",
+    "status": "数据状态", "allStatuses": "全部状态", "pageSize": "每页显示条数",
+    "reset": "重置", "showAll": "显示当前模块全部记录", "showEnabled": "当前可以使用", "showDisabled": "当前暂停使用",
+    "current": "{label}，当前：{value}", "chooseRoot": "选择树根节点", "chooseType": "选择引用数据类型", "chooseScope": "选择数据范围", "rootPrefix": "根：", "typePrefix": "类型：", "scopePrefix": "范围：", "chooseStatus": "选择数据状态", "statusPrefix": "状态：", "choosePageSize": "选择每页显示条数"
+  },
+  "action": {"new": "新增{name}", "edit": "编辑{name}", "preview": "预览{name}", "enable": "启用{name}", "disable": "停用{name}", "delete": "删除{name}", "cancel": "取消", "save": "保存{name}", "saveChanges": "保存修改"},
+  "pagination": {"all": "共 {total} 条", "filtered": "当前 {visible} 条 · 共 {total} 条", "previous": "上一页", "next": "下一页", "changed": "已切换到第 {page} 页", "sizeChanged": "每页显示 {size} 条{name}", "perPage": "{size} 条/页"},
+  "window": {"close": "关闭{action}{name}窗口", "validation": "请完成全部必填字段", "deleteTitle": "删除引用数据"},
+  "boolean": {"yes": "是", "no": "否", "enable": "启用", "disable": "停用"},
+  "options": {"topLevel": "无（顶级）", "positionMode": {"CENTER": "居中", "CUSTOM": "自定义"}, "viewCode": {"TYPE": "数据类型", "TREE": "树节点", "CONTROL": "页面控件", "WINDOW": "Window", "TABLE": "表格定义", "TABLE_ELEMENT": "表格元素"}, "elementType": {"COLUMN": "表格列", "TOOLBAR_ACTION": "工具栏操作", "ROW_ACTION": "行操作"}},
+  "editor": {"manual": "手动编辑页面", "gridControl": "表格控件", "windowControl": "Window控件", "uniqueCode": "唯一 Code", "sourceTable": "来源表", "notRegistered": "尚未登记"},
+  "detail": {"back": "返回表格定义", "edit": "编辑基本信息", "aria": "表格配置详情", "info": "基本信息", "columns": "表格列配置", "preview": "效果预览", "emptyColumns": "该表格尚未配置显示列", "addFirstColumn": "新增第一列", "noDescription": "暂无表格描述"},
+  "fields": {
+    "code": "唯一 Code", "optionSetCode": "选项组 Code", "valueCode": "类型值 Code", "parentTypeCode": "上级类型 Code",
+    "projectCode": "所属项目", "pageCode": "页面 Code", "parentId": "父节点 ID", "nodeValue": "节点值", "parentCode": "父控件 Code",
+    "controlKind": "控件类型", "fieldName": "字段 / 动作名", "breakpoint": "布局档位", "width": "宽度", "height": "高度",
+    "minWidth": "最小宽度", "maxWidth": "最大宽度", "minHeight": "最小高度", "maxHeight": "最大高度",
+    "nameZh": "中文名称", "nameJa": "日文名称", "nameEn": "英文名称", "labelZh": "中文名称", "labelJa": "日文名称", "labelEn": "英文名称",
+    "status": "状态", "sortnum": "排序值", "description": "描述", "gridId": "Grid 实例 ID", "tableId": "所属表格",
+    "viewCode": "业务视图", "elementType": "元素类型", "secondaryFieldName": "第二绑定字段", "cellRenderer": "单元格渲染方式",
+    "icon": "图标类名", "visible": "页面显示", "resizable": "允许缩放", "draggable": "允许拖动", "attributesJson": "扩展属性 JSON",
+    "positionMode": "定位模式", "triggerControlCode": "触发控件 Code", "sourceTable": "所在表"
+  },
+  "feedback": {"filtersReset": "筛选条件已重置", "newOpened": "已打开新增{name}窗口", "exportPreparing": "正在准备导出", "loadFailed": "引用数据管理初始化失败。"}
+}

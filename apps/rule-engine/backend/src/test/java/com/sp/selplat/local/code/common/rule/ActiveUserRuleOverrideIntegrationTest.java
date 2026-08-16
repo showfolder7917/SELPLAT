@@ -109,6 +109,16 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "bind_by_triggerControlCode,switch_off_hidden,switch_on_code_plus_save_action,"
                 + "save_width_height_x_y_as_custom_next_default"
         ));
+        assertTrue(rule.content().contains(
+            "reference_data_application_i18n_resources = "
+                + "reference-data/i18n/zh-CN.json|ja-JP.json|en-US.json,"
+                + "isomorphic_leaf_keys,application_messages_only"
+        ));
+        assertTrue(rule.content().contains(
+            "reference_data_runtime_locale_switch = locale_runtime_atomic_load_then_apply,"
+                + "preserve_active_module_query_filters_pagination_selection_detail_page_edit_and_window_form,"
+                + "no_page_reload"
+        ));
     }
 
     /**
@@ -182,6 +192,11 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "selplat_grid_row_selection_mode_contract = NONE|SINGLE|MULTIPLE,"
                 + "records_default_NONE,legacy_project_default_MULTIPLE,application_explicit_mode"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_component_locale_source_fallback = text_nodes_and_translatable_attributes,"
+                + "target_mapping_or_original_source,empty_source_locale_map_restores_original,"
+                + "no_stale_previous_locale_attribute"
         ));
         assertTrue(rule.content().contains(
             "selplat_page_editor_session_lifecycle = single_whole_page_manual_edit_switch,"

@@ -2,8 +2,8 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 5.3.0 固定 Window 只保存外框几何，禁止把内部表单字段登记为页面拖拽控件。 -->
-rule_version = 5.3.0
+<!-- 5.4.0 固定公共组件语言切换时正文和可访问属性采用同一源码回退语义。 -->
+rule_version = 5.4.0
 <!-- 2026-08-12 依次固定纯图标可发现性、确认控件边界、真实风险文案、页面编辑契约及客户交付审计发现的通用布局与可访问性要求。 -->
 upgrade_record = 2026-08-12:纯图标表格操作统一使用selTooltip并按记录状态表达下一步动作;2026-08-12:删除等破坏性单步动作统一使用selConfirmDialog禁止selWindow;2026-08-12:删除确认文案必须展示真实关联数量并禁止虚构数据库阻断;2026-08-12:页面编辑统一由selPersonalization管理管理员权限_控件坐标_实时草稿_取消恢复_显式保存;2026-08-12:hidden控件必须退出布局_树叶子占位禁止空按钮_窄屏动作先收起文字_显式保存无脏标记也保存当前控件;2026-08-13:公共API统一window.sel命名空间_selKernel最先加载_应用顶部集中解构_sel.core.freeze深度冻结_中文组件用途说明;2026-08-14:完整只读边界只调用一次selFreeze_禁止嵌套逐项冻结_运行时控制器保持生命周期_生成模板同步门禁;2026-08-14:应用入口统一app_SEL公共别名使用sel前缀_业务模块使用项目lowerCamelCase前缀;2026-08-14:业务应用动态节点统一由sel.core.element创建_原生节点创建只留在公共实现层;2026-08-14:大型应用装配脚本增加函数契约和关键语句组中文教学式业务注释_禁止机械注释括号标点;2026-08-14:统一入口_SEL公共别名_具名业务函数中文契约扩展到全部应用JavaScript并接入快速门禁;2026-08-14:Grid表头竖向分隔线覆盖第一列并只排除最后一列;2026-08-14:动作型页面编辑入口统一使用onEdit_复合管理内容统一进入selWindow自定义内容_引用型下拉按typeId管理并保持树叶子;2026-08-14:引用型下拉拆分页面控件绑定_类型目录_选项数据并禁止管理筛选器注册为业务页面控件;2026-08-15:页面编辑只保留整页手动编辑总开关_编辑态表格配置头展示名称_code_编辑入口;2026-08-15:Window接入同一总开关_一个逻辑控件支持多个实例标题宿主_显示数据库code与统一编辑动作;2026-08-15:表格编辑按钮紧邻code_Window与表格编辑按钮统一使用琥珀金强调色;2026-08-15:页面面板只负责总开关_控件按钮直接保存_导航不被未保存状态拦截_每个Window独立保存几何;2026-08-15:查询工具栏保留父容器并把搜索框_查询按钮_类型_状态_重置登记为五个独立子控件_selPersonalization统一拖动调宽和逐项保存;2026-08-15:组合工具栏移除逐项编辑卡_末尾标准控件后只显示一个当前控件保存按钮_实际提交仍为所选子控件单记录;2026-08-15:组合工具栏改为流式联动_当前项调宽后后续同级控件等量跟随_保存按钮持续跟随末项
 <!-- 本次升级以六表最终模型替换已删除 Option/Binding 表描述，并增加 parentKind + parentCode 明确父容器。 -->
@@ -34,6 +34,8 @@ upgrade_record_20260816_remote_grid_query = selSearch多字段独立值单查询
 upgrade_record_20260816_search_default_width = selSearch字段默认280px_最小180px_禁止单字段自动占满整行_公开CSS变量允许数据库或JSON覆盖_极窄宿主安全收缩
 <!-- 本次补充修正搜索字段缩短但 Panel 外层栏目仍保留旧宽度造成的中段空洞。 -->
 upgrade_record_20260816_search_column_compaction = 单字段搜索外层栏目按输入加按钮真实宽度收紧_多字段模块保留独立配置宽度_禁用人工调宽时模块切换必须应用新栏目宽度
+<!-- 本次升级修复源语言使用空映射时只恢复正文、不恢复 aria-label 等属性的问题。 -->
+upgrade_record_20260816_locale_source_fallback = 公共组件语言切换时正文和可翻译属性统一使用目标映射或源码回退_空映射表示恢复源码_禁止遗留上一语言属性
 <!-- 页面编辑的视觉和拖拽命中统一归 selPersonalization；公共边框层必须与业务控件解耦，黄线本身就是可命中的调宽手柄。 -->
 upgrade_record_20260815_unified_edit_affordance = independent_editor_frame,real_right_edge_resize_handle,uniform_radius_and_line,no_business_control_override
 <!-- 规则所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
@@ -148,6 +150,8 @@ selplat_search_runtime_structure_change = public_remount_same_instance_id,grid_r
 selplat_search_default_width_contract = default:280px,min:180px,no_flex_fill,public_css_variable_override,database_or_json_optional,missing_configuration_safe_fallback,narrow_host_may_shrink
 <!-- 搜索字段与外层 Panel 栏目必须同步收紧；字段数量变化时外层宽度跟随当前装配配置，禁止只缩内部控件留下空轨道。 -->
 selplat_search_outer_column_compaction = single_field_width_equals_input_plus_gap_plus_submit,multi_field_preserves_configured_geometry,column_resize_disabled_reapplies_active_module_width,no_empty_outer_track
+<!-- 公共组件运行时切换语言时，正文节点与 aria-label、title、placeholder 等可翻译属性必须共享同一映射和源码回退规则。 -->
+selplat_component_locale_source_fallback = text_nodes_and_translatable_attributes,target_mapping_or_original_source,empty_source_locale_map_restores_original,no_stale_previous_locale_attribute
 <!-- selGrid pagination.mode=REMOTE 时 data.items 已是后台当前页，组件不得再次 slice 或本地过滤。 -->
 selplat_grid_remote_pagination_contract = data_items_current_page,pagination_totalCount,no_second_slice,no_local_filter
 <!-- 远程模式的搜索、分类、状态、页码、容量与重置统一发布 selGrid:queryChange，公共控件不识别业务接口和字段。 -->

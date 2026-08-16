@@ -1,0 +1,26 @@
+{
+  "documentTitle": "参照データ管理ワークベンチ",
+  "pageAria": "参照データ6モジュール管理ワークベンチ",
+  "page": {
+    "title": "参照データ管理ワークベンチ", "description": "画面コントロール、テーブル、ツリー、選択肢、Window設定を管理します", "panelAria": "参照データモジュール管理パネル", "businessModules": "業務モジュール", "moduleSummary": "第1階層モジュール {count} 件", "all": "すべて", "enabled": "有効", "disabled": "無効", "operation": "操作", "notRegistered": "未登録", "loading": "{name}を読み込み中…", "empty": "条件に一致する{name}はありません", "statusFilter": "{name}の状態フィルター", "quickActions": "{name}のクイック操作", "toolbar": "{name}の検索ツールバー", "content": "{name}の内容", "table": "{name}テーブル", "pagination": "{name}のページ移動", "expandModules": "業務モジュールを展開", "collapseModules": "業務モジュールを折りたたむ"
+  },
+  "modules": {
+    "types": {"name": "データ型", "itemName": "型", "description": "コントロールの型値、メニュー階層、多言語名を管理します", "searchPlaceholder": "Codeと上位型Codeで検索"},
+    "tree": {"name": "ツリーノード", "itemName": "ツリーノード", "description": "CodeとparentIdで親子ツリーを管理します", "searchPlaceholder": "Codeと親ノードIDで検索"},
+    "controls": {"name": "画面コントロール", "itemName": "コントロール", "description": "一意Codeで画面コントロールとレスポンシブ配置を管理します", "searchPlaceholder": "項目別に画面コントロールを検索"},
+    "windows": {"name": "Window", "itemName": "Window", "description": "Windowのサイズ、位置、調整範囲を保存します", "searchPlaceholder": "Codeで検索"},
+    "tables": {"name": "テーブル定義", "itemName": "テーブル", "description": "画面テーブルと対応する列定義を管理します", "searchPlaceholder": "Codeで検索"},
+    "columns": {"name": "テーブル列", "itemName": "列", "description": "列名、幅、多言語表示、表示状態を設定します", "searchPlaceholder": "Codeと所属テーブルIDで検索"}
+  },
+  "search": {"label": "{name}検索", "submit": "検索", "clear": "検索条件をクリア"},
+  "filter": {"rootNode": "ルートノード", "dataType": "データ型", "dataScope": "データ範囲", "allTrees": "すべてのツリー", "allTypes": "すべての型", "allData": "すべてのデータ", "status": "データ状態", "allStatuses": "すべての状態", "pageSize": "1ページの件数", "reset": "リセット", "showAll": "現在のモジュールの全レコードを表示", "showEnabled": "現在使用可能", "showDisabled": "現在使用停止", "current": "{label}、現在：{value}", "chooseRoot": "ルートノードを選択", "chooseType": "参照データ型を選択", "chooseScope": "データ範囲を選択", "rootPrefix": "ルート：", "typePrefix": "型：", "scopePrefix": "範囲：", "chooseStatus": "データ状態を選択", "statusPrefix": "状態：", "choosePageSize": "1ページの件数を選択"},
+  "action": {"new": "{name}を追加", "edit": "{name}を編集", "preview": "{name}をプレビュー", "enable": "{name}を有効化", "disable": "{name}を無効化", "delete": "{name}を削除", "cancel": "キャンセル", "save": "{name}を保存", "saveChanges": "変更を保存"},
+  "pagination": {"all": "全 {total} 件", "filtered": "表示 {visible} 件・全 {total} 件", "previous": "前へ", "next": "次へ", "changed": "{page}ページに移動しました", "sizeChanged": "1ページに{name}を {size} 件表示", "perPage": "{size} 件/ページ"},
+  "window": {"close": "{action}{name}画面を閉じる", "validation": "必須項目をすべて入力してください", "deleteTitle": "参照データを削除"},
+  "boolean": {"yes": "はい", "no": "いいえ", "enable": "有効", "disable": "無効"},
+  "options": {"topLevel": "なし（最上位）", "positionMode": {"CENTER": "中央", "CUSTOM": "カスタム"}, "viewCode": {"TYPE": "データ型", "TREE": "ツリーノード", "CONTROL": "画面コントロール", "WINDOW": "Window", "TABLE": "テーブル定義", "TABLE_ELEMENT": "テーブル要素"}, "elementType": {"COLUMN": "テーブル列", "TOOLBAR_ACTION": "ツールバー操作", "ROW_ACTION": "行操作"}},
+  "editor": {"manual": "画面を手動編集", "gridControl": "テーブルコントロール", "windowControl": "Windowコントロール", "uniqueCode": "一意 Code", "sourceTable": "参照元テーブル", "notRegistered": "未登録"},
+  "detail": {"back": "テーブル定義へ戻る", "edit": "基本情報を編集", "aria": "テーブル設定詳細", "info": "基本情報", "columns": "テーブル列設定", "preview": "プレビュー", "emptyColumns": "表示列が設定されていません", "addFirstColumn": "最初の列を追加", "noDescription": "テーブル説明はありません"},
+  "fields": {"code": "一意 Code", "optionSetCode": "選択肢セット Code", "valueCode": "型値 Code", "parentTypeCode": "上位型 Code", "projectCode": "所属プロジェクト", "pageCode": "ページ Code", "parentId": "親ノード ID", "nodeValue": "ノード値", "parentCode": "親コントロール Code", "controlKind": "コントロール種別", "fieldName": "フィールド / アクション名", "breakpoint": "ブレークポイント", "width": "幅", "height": "高さ", "minWidth": "最小幅", "maxWidth": "最大幅", "minHeight": "最小高さ", "maxHeight": "最大高さ", "nameZh": "中国語名", "nameJa": "日本語名", "nameEn": "英語名", "labelZh": "中国語名", "labelJa": "日本語名", "labelEn": "英語名", "status": "状態", "sortnum": "並び順", "description": "説明", "gridId": "GridインスタンスID", "tableId": "所属テーブル", "viewCode": "業務ビュー", "elementType": "要素種別", "secondaryFieldName": "第2バインド項目", "cellRenderer": "セル表示方式", "icon": "アイコンクラス", "visible": "画面表示", "resizable": "サイズ変更可", "draggable": "ドラッグ可", "attributesJson": "拡張属性 JSON", "positionMode": "配置モード", "triggerControlCode": "トリガーコントロール Code", "sourceTable": "格納テーブル"},
+  "feedback": {"filtersReset": "フィルターをリセットしました", "newOpened": "{name}追加画面を開きました", "exportPreparing": "エクスポートを準備しています", "loadFailed": "参照データ管理の初期化に失敗しました。"}
+}
