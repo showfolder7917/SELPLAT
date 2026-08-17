@@ -66,7 +66,7 @@
         const rendererField = element("label", { className: "seltableeditor-field" });
         rendererField.appendChild(element("span", { text: "渲染方式" }));
         const renderer = element("select", { className: "seltableeditor-input", attributes: { name: "cellRenderer" } });
-        ["text", "stack", "badge", "time", "boolean", "actions"].forEach((value) => {
+        ["text", "stack", "badge", "time", "boolean", "switch", "choice", "actions"].forEach((value) => {
             renderer.appendChild(element("option", { text: value, attributes: { value } }));
         });
         rendererField.appendChild(renderer);

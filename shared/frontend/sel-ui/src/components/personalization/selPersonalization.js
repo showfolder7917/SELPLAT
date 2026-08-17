@@ -1119,11 +1119,14 @@
                                 + (selPersonalizationEvent.key === "ArrowRight" ? 8 : -8)
                         });
                     });
-                } else {
-                    selPersonalizationEditFrame.setAttribute("aria-hidden", "true");
                 }
-                const selPersonalizationResizeHandle = document.createElement("span");
+                const selPersonalizationResizeHandle = document.createElement("button");
+                selPersonalizationResizeHandle.type = "button";
                 selPersonalizationResizeHandle.className = "selpersonal-page-direct-resize-handle";
+                selPersonalizationResizeHandle.setAttribute(
+                    "aria-label",
+                    `调整${selPersonalizationPageControl.title}宽度`
+                );
                 selPersonalizationEditFrame.appendChild(selPersonalizationResizeHandle);
                 selPersonalizationPageControl.geometry.container.appendChild(selPersonalizationEditFrame);
                 selPersonalizationPageControl.geometry.editFrame = selPersonalizationEditFrame;

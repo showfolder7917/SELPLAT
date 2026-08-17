@@ -944,12 +944,23 @@
      * 按列配置给单元格添加可选图标。
      * @param {HTMLTableCellElement} selGridCell - 当前单元格。
      * @param {object} selGridColumn - 标准列定义。
-     * @returns {void} 只有 cellIconVisible 为 true 且 cellIcon 非空时追加图标。
+     * @param {object} selGridRecord - 当前业务记录，供动态图标按本行数值决定是否显示。
+     * @param {HTMLElement} [selGridTarget=selGridCell] - 图标实际插入位置，例如 badge 内部。
+     * @returns {void} 只有 cellIconVisible 为 true 且当前记录解析出的 cellIcon 非空时追加图标。
      */
-    function selGridAppendConfiguredCellIcon(selGridCell, selGridColumn) {
-        if (selGridColumn.cellIconVisible !== true || !String(selGridColumn.cellIcon || "").trim()) return;
+    function selGridAppendConfiguredCellIcon(selGridCell, selGridColumn, selGridRecord, selGridTarget = selGridCell) {
+        if (selGridColumn.cellIconVisible !== true) return;
+        const selGridCellIcon = selGridResolveRecordActionValue(
+            selGridColumn.cellIcon, selGridRecord, "", "cellIcon"
+        ).trim();
+        if (!selGridCellIcon) return;
         selGridCell.classList.add("selgrid-record-cell-with-icon");
-        selGridCell.appendChild(selGridCreateIcon(String(selGridColumn.cellIcon).trim()));
+        const selGridIconElement = selGridCreateIcon(selGridCellIcon);
+        const selGridIconTone = selGridResolveRecordActionValue(
+            selGridColumn.cellIconTone, selGridRecord, "", "cellIconTone"
+        ).trim().replace(/[^a-z0-9_-]/gi, "");
+        if (selGridIconTone) selGridIconElement.classList.add(`selgrid-record-cell-icon-${selGridIconTone}`);
+        selGridTarget.appendChild(selGridIconElement);
     }
 
     // 记录操作允许调用方按当前行状态动态返回标签或图标，同时保证异常配置不会阻断整张表格渲染。
@@ -967,7 +978,7 @@
      * 创建通用记录模式的单元格内容。
      * @param {object} selGridRecord - 当前业务记录。
      * @param {object} selGridColumn - 标准列定义。
-     * @returns {HTMLTableCellElement} 仅使用受控 text、stack、badge、time、actions 渲染器的单元格。
+     * @returns {HTMLTableCellElement} 仅使用受控 text、stack、badge、time、choice、actions 渲染器的单元格。
      */
     function selGridCreateRecordCell(selGridRecord, selGridColumn) {
         const selGridCell = document.createElement("td");
@@ -1008,7 +1019,7 @@
             return selGridCell;
         }
         if (selGridRenderer === "stack") {
-            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
+            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn, selGridRecord);
             const selGridStack = document.createElement("span");
             selGridStack.className = "selgrid-record-stack";
             const selGridPrimary = document.createElement("strong");
@@ -1020,18 +1031,20 @@
             return selGridCell;
         }
         if (selGridRenderer === "badge") {
-            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
             const selGridBadge = document.createElement("span");
             const selGridMappedTone = selGridColumn.toneMap?.[String(selGridRawValue)];
             const selGridTone = String(selGridMappedTone || selGridReadRecordValue(selGridRecord, selGridColumn.toneField) || selGridColumn.tone || "neutral");
             selGridBadge.className = `selgrid-record-badge selgrid-record-badge-${selGridTone.replace(/[^a-z0-9_-]/gi, "")}`;
             const selGridLabelMap = selGridColumn.labelSource === "status" ? selGridStatusLabels : selGridTypeLabels;
-            selGridBadge.textContent = selGridLabelMap.get(String(selGridRawValue)) || String(selGridRawValue ?? "—") || "—";
+            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn, selGridRecord, selGridBadge);
+            selGridBadge.appendChild(document.createTextNode(
+                selGridLabelMap.get(String(selGridRawValue)) || String(selGridRawValue ?? "—") || "—"
+            ));
             selGridCell.appendChild(selGridBadge);
             return selGridCell;
         }
         if (selGridRenderer === "boolean") {
-            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
+            selGridAppendConfiguredCellIcon(selGridCell, selGridColumn, selGridRecord);
             const selGridBoolean = Boolean(selGridRawValue === true
                 || selGridRawValue === 1
                 || String(selGridRawValue).toLocaleLowerCase() === "true");
@@ -1064,6 +1077,36 @@
             selGridSwitch.dataset.selTooltipMode = "always";
             selGridSwitch.appendChild(document.createElement("span"));
             selGridCell.appendChild(selGridSwitch);
+            return selGridCell;
+        }
+        if (selGridRenderer === "choice") {
+            const selGridOptionValue = String(selGridColumn.optionValue || "");
+            const selGridSelectedValue = String(
+                selGridReadRecordValue(selGridRecord, selGridColumn.selectedField || "selectedOption") || ""
+            );
+            const selGridChoiceChecked = selGridSelectedValue === selGridOptionValue;
+            const selGridChoice = document.createElement("button");
+            selGridChoice.className = "selgrid-record-choice";
+            selGridChoice.type = "button";
+            selGridChoice.dataset.action = String(selGridColumn.action || "choose");
+            selGridChoice.setAttribute("role", "radio");
+            selGridChoice.setAttribute("aria-checked", String(selGridChoiceChecked));
+            // 选中项的正确、错误等语义由业务记录声明，公共层只清洗并映射主题色类名。
+            const selGridChoiceTone = selGridResolveRecordActionValue(
+                selGridColumn.selectedTone, selGridRecord, "success", "selectedTone"
+            ).trim().replace(/[^a-z0-9_-]/gi, "");
+            if (selGridChoiceChecked && selGridChoiceTone) {
+                selGridChoice.classList.add(`selgrid-record-choice-${selGridChoiceTone}`);
+            }
+            selGridChoice.disabled = selGridColumn.lockAfterSelection !== false && Boolean(selGridSelectedValue);
+            const selGridChoiceLabel = `${selGridOptionValue} ${String(selGridRawValue ?? "")}`.trim();
+            selGridChoice.setAttribute("aria-label", selGridChoiceLabel);
+            const selGridChoiceIndicator = document.createElement("span");
+            selGridChoiceIndicator.className = "selgrid-record-choice-indicator";
+            const selGridChoiceText = document.createElement("span");
+            selGridChoiceText.textContent = String(selGridRawValue ?? "—") || "—";
+            selGridChoice.append(selGridChoiceIndicator, selGridChoiceText);
+            selGridCell.appendChild(selGridChoice);
             return selGridCell;
         }
         if (selGridRenderer === "actions") {
@@ -1099,7 +1142,7 @@
         const selGridDisplayValue = selGridRenderer === "time" && selGridRawValue
             ? String(selGridRawValue).replace("T", " ").slice(0, 16)
             : String(selGridRawValue ?? "—") || "—";
-        selGridAppendConfiguredCellIcon(selGridCell, selGridColumn);
+        selGridAppendConfiguredCellIcon(selGridCell, selGridColumn, selGridRecord);
         const selGridDisplayText = document.createElement("span");
         selGridDisplayText.textContent = selGridDisplayValue;
         selGridCell.appendChild(selGridDisplayText);
@@ -1448,6 +1491,45 @@
         }
         // 数据刷新完成后按最终表格尺寸重算，所有 selGrid 默认获得一致的横向滚动反馈。
         selGridScheduleHorizontalOverflowSync();
+    }
+
+    /**
+     * 原位合并一条后台记录并只替换对应业务行，避免轻量动作触发整表重绘。
+     * @param {string|number} selGridRecordId - 当前 Grid idField 对应的稳定记录主键。
+     * @param {object} selGridChanges - 需要写回当前记录的字段增量。
+     * @returns {boolean} 找到记录并完成内存更新时返回 true，否则返回 false。
+     */
+    function selGridUpdateRecord(selGridRecordId, selGridChanges = {}) {
+        if (!selGridRecordMode || !selGridChanges || typeof selGridChanges !== "object" || Array.isArray(selGridChanges)) return false;
+        const selGridNormalizedRecordId = selGridNormalizeSelectionId(selGridRecordId);
+        const selGridRecordIndex = selGridProjects.findIndex((selGridRecord) =>
+            selGridReadSelectionId(selGridRecord) === selGridNormalizedRecordId);
+        if (selGridRecordIndex < 0) return false;
+
+        // 公共数据快照仍保持只读，只为目标记录创建一个合并后的新对象。
+        const selGridNextRecord = { ...selGridProjects[selGridRecordIndex], ...selGridChanges };
+        selGridProjects = selFreeze(selGridProjects.map((selGridRecord, selGridIndex) =>
+            selGridIndex === selGridRecordIndex ? selGridNextRecord : selGridRecord));
+        const selGridCurrentRow = Array.from(selGridView.tableBody.querySelectorAll("tr[data-sel-grid-record-id]"))
+            .find((selGridRow) => selGridNormalizeSelectionId(selGridRow.dataset.selGridRecordId) === selGridNormalizedRecordId);
+        if (!selGridCurrentRow) return true;
+
+        // 行替换前保存滚动位置和动作焦点，异步业务结果不得改变用户正在查看的横向区域。
+        const selGridPreviousScrollLeft = selGridView.tableScroller.scrollLeft;
+        const selGridPreviousScrollTop = selGridView.tableScroller.scrollTop;
+        const selGridFocusedAction = selGridCurrentRow.contains(document.activeElement)
+            ? String(document.activeElement?.dataset?.action || "") : "";
+        const selGridNextRow = selGridCreateRecordRow(selGridNextRecord);
+        selGridCurrentRow.replaceWith(selGridNextRow);
+        if (selGridFocusedAction) {
+            Array.from(selGridNextRow.querySelectorAll("button[data-action]"))
+                .find((selGridAction) => selGridAction.dataset.action === selGridFocusedAction)
+                ?.focus({ preventScroll: true });
+        }
+        selGridView.tableScroller.scrollLeft = selGridPreviousScrollLeft;
+        selGridView.tableScroller.scrollTop = selGridPreviousScrollTop;
+        selGridScheduleHorizontalOverflowSync();
+        return true;
     }
 
     // 选择状态只原位同步当前页已存在的行，避免点击后重建所有单元格、头像和操作按钮。
@@ -2042,8 +2124,19 @@
             selGridShowToast(selGridMessages.newOpened);
             return;
         }
-        // 导出动作继续使用现有反馈，不改变其业务边界。
-        selGridShowToast(selGridMessages.exportPreparing);
+        // 其余业务命令只派发稳定事件，不在公共 Grid 猜测应用动作。
+        selGridRoot.dispatchEvent(new CustomEvent("selGrid:command", {
+            bubbles: true,
+            detail: selFreeze({
+                instanceKey: selGridId,
+                entity: selGridEntity,
+                command: String(button.dataset.panelCommand || "")
+            })
+        }));
+        // 只有导出命令使用公共导出反馈；其余业务命令由应用自行反馈。
+        if (button.dataset.panelCommand === "export") {
+            selGridShowToast(selGridMessages.exportPreparing);
+        }
         });
     }
 
@@ -2241,6 +2334,7 @@
         reset: selGridResetInstance,
         setPage: selGridSetPage,
         setLocale: selGridSetLocale,
+        updateRecord: selGridUpdateRecord,
         captureColumnWidths: selGridCaptureColumnWidths,
         setColumnWidths: selGridSetColumnWidths,
         resetColumnWidths: selGridResetColumnWidths,

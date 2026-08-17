@@ -82,6 +82,12 @@
         return Array.isArray(selPanelComponentDefinition?.children) ? selPanelComponentDefinition.children : [];
     }
 
+    // 工具栏业务动作只接受安全标识，避免应用配置进入属性或图标类时产生非预期 DOM。
+    function selPanelSafeToken(selPanelValue, selPanelFallback) {
+        const selPanelToken = String(selPanelValue || "").trim();
+        return /^[a-zA-Z0-9_-]+$/.test(selPanelToken) ? selPanelToken : selPanelFallback;
+    }
+
     // 把受支持的结构组件转换为基础 DOM 字符串；未知组件不会被插入页面。
     function selPanelRenderComponent(selPanelComponentDefinition) {
         // 缺少稳定组件名时不创建匿名结构。
@@ -108,8 +114,11 @@
         // 工具栏组件提供横向容器，实际子控件顺序完全来自布局声明。
         if (selPanelComponentName === "toolbar") {
             const selPanelToolbarChildren = selPanelGetChildren(selPanelComponentDefinition);
+            const selPanelHasBusinessAction = selPanelToolbarChildren.some(
+                (selPanelChild) => String(selPanelChild?.component || "") === "toolbarAction"
+            );
             return `
-                <section class="selpanel-crystal-surface selpanel-toolbar-shell" data-sel-panel-component="toolbar" data-sel-panel-child-count="${selPanelToolbarChildren.length}" aria-label="筛选工具栏">
+                <section class="selpanel-crystal-surface selpanel-toolbar-shell${selPanelHasBusinessAction ? " selpanel-toolbar-has-business-action" : ""}" data-sel-panel-component="toolbar" data-sel-panel-child-count="${selPanelToolbarChildren.length}" aria-label="筛选工具栏">
                     ${selPanelToolbarChildren.map(selPanelRenderComponent).join("")}
                 </section>
             `;
@@ -161,6 +170,20 @@
         // 重置组件创建工具栏统一恢复入口。
         if (selPanelComponentName === "filterReset") {
             return '<button class="selpanel-reset-button" data-sel-panel-component="filterReset" data-sel-grid-role="filter-reset" type="button"></button>';
+        }
+        // 工具栏业务动作建立独立分组；业务名称、当前上下文和点击行为由应用挂载。
+        if (selPanelComponentName === "toolbarAction") {
+            const selPanelCommand = selPanelSafeToken(selPanelComponentDefinition.command, "action");
+            const selPanelIcon = selPanelSafeToken(selPanelComponentDefinition.icon, "ri-flashlight-line");
+            return `
+                <div class="selpanel-toolbar-business-action" data-sel-panel-component="toolbarAction" data-sel-panel-command="${selPanelCommand}">
+                    <span class="selpanel-toolbar-business-context" data-sel-panel-role="toolbar-action-context"></span>
+                    <button class="selpanel-toolbar-business-button" type="button" data-sel-panel-role="toolbar-action-button" data-panel-command="${selPanelCommand}">
+                        <i class="${selPanelIcon}" aria-hidden="true"></i>
+                        <span data-sel-panel-role="toolbar-action-label"></span>
+                    </button>
+                </div>
+            `;
         }
         // 树组件创建标题、树宿主、折叠按钮和统计。
         if (selPanelComponentName === "selTree") {

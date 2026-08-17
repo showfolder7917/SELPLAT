@@ -259,6 +259,14 @@
         var(--selpanel-toolbar-column-3-width, 102px);
 }
 
+/* 查询组 + 重置 + 业务动作采用明确三段宽度，避免业务按钮挤压查询字段。 */
+.selpanel-toolbar-shell.selpanel-toolbar-has-business-action[data-sel-panel-child-count="3"] {
+    grid-template-columns:
+        var(--selpanel-toolbar-column-1-width, minmax(420px, 1fr))
+        var(--selpanel-toolbar-column-2-width, 102px)
+        var(--selpanel-toolbar-column-3-width, minmax(230px, 0.42fr));
+}
+
 /* 四控件工具栏保留双筛选的均衡宽度，最后一列始终是紧凑重置动作。 */
 .selpanel-toolbar-shell[data-sel-panel-child-count="4"] {
     grid-template-columns:
@@ -371,6 +379,66 @@ body.selpanel-toolbar-column-resizing * {
     border-color: #8dc5ff;
     background: rgba(22, 59, 136, 0.76);
     box-shadow: 0 0 12px rgba(73, 137, 255, 0.52);
+}
+
+/* 工具栏业务动作与查询控件分组展示，避免“开始新一轮”等状态动作被误认为筛选条件。 */
+.selpanel-toolbar-business-action {
+    position: relative;
+    display: grid;
+    height: 42px;
+    min-width: 0;
+    grid-template-columns: auto minmax(132px, 1fr);
+    gap: 9px;
+    align-items: center;
+    padding-left: 17px;
+}
+
+.selpanel-toolbar-business-action::before {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    left: 0;
+    width: 1px;
+    background: var(--sel-theme-control-line-soft);
+    box-shadow: 0 0 8px rgb(var(--sel-theme-color-rgb) / 0.32);
+    content: "";
+}
+
+.selpanel-toolbar-business-context {
+    display: inline-flex;
+    min-height: 28px;
+    align-items: center;
+    padding: 0 10px;
+    border: 1px solid var(--sel-theme-control-line-soft);
+    border-radius: var(--sel-theme-radius-chip);
+    color: var(--sel-theme-text-secondary);
+    background: var(--sel-theme-control-surface);
+    font-size: var(--sel-theme-font-size-label);
+    white-space: nowrap;
+}
+
+.selpanel-toolbar-business-button {
+    display: inline-flex;
+    height: 42px;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 1px solid var(--sel-theme-semantic-warning);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-semantic-warning);
+    background: var(--sel-theme-control-surface);
+    box-shadow: 0 0 12px rgb(var(--sel-theme-warning-rgb, 244 184 73) / 0.18);
+    cursor: pointer;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.selpanel-toolbar-business-button:is(:hover, :focus-visible) {
+    outline: 0;
+    background: rgb(var(--sel-theme-warning-rgb, 244 184 73) / 0.12);
+    box-shadow: 0 0 16px rgb(var(--sel-theme-warning-rgb, 244 184 73) / 0.36);
 }
 
 /* 主体区：弹性横排使左树或中央内容任一删除时，仍保留的区域自动占用可用空间。 */

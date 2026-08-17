@@ -31,8 +31,8 @@ body {
     padding: var(--sel-theme-viewport-gap);
 }
 
-/* 编辑态共享保存宿主必须可接受位移，保证保存按钮持续紧跟重置而不滞留在工具栏原网格末端。 */
-.japanese-query-save-host {
+/* 编辑态共享保存宿主必须可接受位移，保证保存按钮持续紧跟最后一个可编辑工具条控件。 */
+.japanese-toolbar-save-host {
     display: inline-block;
 }
 
@@ -116,6 +116,18 @@ body {
 .japanese-generation-actions button.is-running {
     border-color: var(--sel-theme-control-line);
     box-shadow: 0 0 20px var(--sel-theme-glow);
+}
+
+.japanese-generation-actions button.is-running i {
+    color: var(--sel-theme-text-on-accent);
+    background: var(--sel-theme-semantic-progress);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--sel-theme-semantic-progress) 68%, transparent);
+    animation: japanese-generation-pulse .8s ease-in-out infinite alternate;
+}
+
+@keyframes japanese-generation-pulse {
+    from { transform: scale(.88); opacity: .62; }
+    to { transform: scale(1.08); opacity: 1; }
 }
 
 .japanese-generation-actions button:disabled {

@@ -31,6 +31,7 @@
     const japanesePersonalizationHost = query("[data-sel-personalization-host]");
     // CRUD 和生成动作都从统一题库接口根地址派生。
     const japaneseQuestionApi = "/api/japanese/n2-blue-book-question/";
+    const japaneseLearningApi = "/api/japanese/n2-learning-progress/";
     const japaneseGridId = "selGridJapaneseN2BlueBookQuestionId";
     const japaneseEditorId = "selWindowJapaneseN2BlueBookQuestionId";
     const japaneseTableEditorId = "selWindowJapaneseN2TableEditorId";
@@ -53,6 +54,8 @@
         gridController: null,
         editorController: null,
         deleteController: null,
+        explanationController: null,
+        nextRoundController: null,
         tableEditorController: null,
         tableEditorTrigger: null,
         generationView: null,
@@ -65,8 +68,10 @@
         pageConfig: null,
         tableRecord: null,
         configuredColumns: [],
-        queryEditors: new Map(),
+        toolbarEditors: new Map(),
         audioBusyIds: new Set(),
+        answerSelections: new Map(),
+        currentRoundNo: 1,
         typeCounts: { ALL: 0, PRONUNCIATION: 0, KANJI: 0, GRAMMAR: 0 },
         page: { pageNo: 1, pageSize: 20, totalCount: 0 },
         query: { sourceQuestionNo: "", questionText: "", questionType: "" }
@@ -96,7 +101,8 @@
                 component: "toolbar",
                 children: [
                     { component: "selSearch", payload: "search" },
-                    { component: "filterReset", payload: "title" }
+                    { component: "filterReset", payload: "title" },
+                    { component: "toolbarAction", command: "nextRound", icon: "ri-restart-line" }
                 ]
             }
         ],
@@ -130,8 +136,8 @@
         return data;
     }
 
-    /** 按独立字段读取 N2 题库当前页，查询条件由 BaseDao 使用 AND 组合。 */
-    async function japaneseLoadRecords(query = japaneseState.query) {
+    /** 组装题目分页参数，两个输入继续由 BaseDao 使用 AND 组合。 */
+    function japaneseBuildQueryParams(query = japaneseState.query) {
         const params = new URLSearchParams({
             pageNo: String(query.pageNo || japaneseState.page.pageNo || 1),
             pageSize: String(query.pageSize || japaneseState.page.pageSize || 20)
@@ -139,19 +145,33 @@
         if (String(query.sourceQuestionNo || "").trim()) params.set("sourceQuestionNo", String(query.sourceQuestionNo).trim());
         if (String(query.questionText || "").trim()) params.set("questionTextLike", String(query.questionText).trim());
         if (String(query.questionType || "").trim()) params.set("questionType", String(query.questionType).trim());
-        const data = await japaneseRequest(`${japaneseQuestionApi}getStore.htm?${params.toString()}`);
+        return params;
+    }
+
+    /** 一次读取题目分页、当前轮选择和累计正确错误次数。 */
+    async function japaneseLoadRecords(query = japaneseState.query) {
+        const params = japaneseBuildQueryParams(query);
+        const data = await japaneseRequest(`${japaneseLearningApi}getStore.htm?${params.toString()}`);
         return {
             records: Array.isArray(data.records) ? data.records : [],
             pageNo: Number(data.pageNo || params.get("pageNo") || 1),
             pageSize: Number(data.pageSize || params.get("pageSize") || 20),
-            totalCount: Number(data.totalCount || 0)
+            totalCount: Number(data.totalCount || 0),
+            currentRoundNo: Number(data.records?.[0]?.currentRoundNo || 1)
         };
+    }
+
+    /** 题型统计只查询题目表，不重复读取用户作答历史。 */
+    async function japaneseLoadQuestionRecords(query = japaneseState.query) {
+        const params = japaneseBuildQueryParams(query);
+        const data = await japaneseRequest(`${japaneseQuestionApi}getStore.htm?${params.toString()}`);
+        return { totalCount: Number(data.totalCount || 0) };
     }
 
     /** 分别读取全部及三个题型总数，避免为了标题统计把 730 条题目全部加载到浏览器。 */
     async function japaneseLoadTypeCounts() {
         const types = ["ALL", "PRONUNCIATION", "KANJI", "GRAMMAR"];
-        const pages = await Promise.all(types.map((type) => japaneseLoadRecords({
+        const pages = await Promise.all(types.map((type) => japaneseLoadQuestionRecords({
             pageNo: 1, pageSize: 1, questionType: type === "ALL" ? "" : type
         })));
         japaneseState.typeCounts = Object.fromEntries(types.map((type, index) => [type, pages[index].totalCount]));
@@ -162,6 +182,7 @@
     function japaneseApplyPage(page, query = japaneseState.query) {
         japaneseState.records = page.records;
         japaneseState.page = { pageNo: page.pageNo, pageSize: page.pageSize, totalCount: page.totalCount };
+        japaneseState.currentRoundNo = Number(page.currentRoundNo || 1);
         japaneseState.query = {
             sourceQuestionNo: String(query.sourceQuestionNo || ""),
             questionText: String(query.questionText || ""),
@@ -266,6 +287,8 @@
             { id: "optionB", field: "optionB", label: japaneseText("grid.columns.optionB"), renderer: "text", width: "180px" },
             { id: "optionC", field: "optionC", label: japaneseText("grid.columns.optionC"), renderer: "text", width: "180px" },
             { id: "optionD", field: "optionD", label: japaneseText("grid.columns.optionD"), renderer: "text", width: "180px" },
+            { id: "correctCount", field: "correctCount", label: japaneseText("grid.columns.correctCount"), renderer: "badge", width: "88px" },
+            { id: "wrongCount", field: "wrongCount", label: japaneseText("grid.columns.wrongCount"), renderer: "badge", width: "88px" },
             { id: "audioState", field: "id", label: japaneseText("grid.columns.audioState"), renderer: "actions", width: "130px" },
             { id: "updatedAt", field: "updatedAt", label: japaneseText("grid.columns.updatedAt"), renderer: "time", nowrap: true, width: "180px" },
             { id: "actions", field: "id", label: japaneseText("grid.columns.actions"), renderer: "actions", width: "120px" }
@@ -273,9 +296,32 @@
         const source = japaneseState.configuredColumns.length > 0 ? japaneseState.configuredColumns : defaults;
         return source.map((column) => {
             const normalized = { ...column };
+            const optionLetter = /^option([A-D])$/.exec(String(normalized.id || normalized.field || ""))?.[1];
+            if (optionLetter) {
+                normalized.renderer = "choice";
+                normalized.optionValue = optionLetter;
+                normalized.selectedField = "displaySelectedOption";
+                normalized.selectedTone = (record) => record.answerCorrect === false ? "danger" : "success";
+                normalized.action = `answer${optionLetter}`;
+                // 练习允许同题反复作答，每次点击都由后端新增一条正确或错误记录。
+                normalized.lockAfterSelection = false;
+            }
+            if (normalized.id === "correctCount" || normalized.field === "correctCount") {
+                normalized.cellIconVisible = true;
+                normalized.cellIcon = (record) => Number(record.correctCount) > Number(record.wrongCount)
+                    ? "ri-checkbox-circle-fill" : "";
+                normalized.cellIconTone = "success";
+            }
+            if (normalized.id === "wrongCount" || normalized.field === "wrongCount") {
+                normalized.cellIconVisible = true;
+                normalized.cellIcon = (record) => Number(record.wrongCount) > 0
+                    && Number(record.wrongCount) >= Number(record.correctCount) ? "ri-close-circle-fill" : "";
+                normalized.cellIconTone = "danger";
+            }
             if (normalized.id === "actions" || normalized.field === "actions") {
                 normalized.field = "id";
                 normalized.actions = [
+                    { id: "explanation", label: japaneseText("grid.explanation"), icon: "ri-lightbulb-line" },
                     { id: "edit", label: japaneseText("grid.edit"), icon: "ri-edit-line" },
                     { id: "delete", label: japaneseText("grid.delete"), icon: "ri-delete-bin-6-line", tone: "danger" }
                 ];
@@ -283,13 +329,14 @@
             if (normalized.id === "audioState" || normalized.field === "audioState") {
                 normalized.field = "id";
                 normalized.renderer = "actions";
+                normalized.width = "56px";
                 normalized.actions = [{
                     id: "playAudio",
-                    label: (record) => japaneseState.audioBusyIds.has(String(record.id))
+                    label: (record) => record.audioBusy === true
                         ? japaneseText("audio.generating", {}, "正在生成语音")
                         : japaneseText("audio.play", {}, "播放语音"),
-                    icon: (record) => japaneseState.audioBusyIds.has(String(record.id)) ? "ri-loader-4-line" : "ri-play-circle-line",
-                    showLabel: true
+                    icon: (record) => record.audioBusy === true ? "ri-loader-4-line" : "ri-volume-up-line",
+                    showLabel: false
                 }];
             }
             return normalized;
@@ -302,6 +349,7 @@
         // 复制后台记录并补充题型、图片和语音展示字段。
         const displayRecords = japaneseState.records.map((record) => ({
             ...record,
+            displaySelectedOption: japaneseState.answerSelections.get(String(record.id)) || "",
             questionTypeLabel: typeLabels[record.questionType] || record.questionType,
             imageState: record.imageUrl ? japaneseText("state.generated", {}, "已生成") : japaneseText("state.empty", {}, "—"),
             audioState: record.audioUrl ? japaneseText("state.generated", {}, "已生成") : japaneseText("state.empty", {}, "—")
@@ -478,7 +526,7 @@
         section.innerHTML = `
             <header><div><strong>${japaneseText("generation.title")}</strong><span>${japaneseText("generation.hint")}</span></div><small>${japaneseText("generation.storage")}</small></header>
             <div class="japanese-generation-actions">
-                <button type="button" data-generate="explanation"><i class="ri-lightbulb-flash-line" aria-hidden="true"></i><span><strong>${japaneseText("generation.explanation")}</strong><small>${japaneseText("generation.codex")}</small></span></button>
+                <button type="button" data-generate="explanation"><i class="ri-lightbulb-flash-line" aria-hidden="true"></i><span><strong>${japaneseText("generation.explanation")}</strong><small>${japaneseText("generation.translator")}</small></span></button>
                 <button type="button" data-generate="image"><i class="ri-image-ai-line" aria-hidden="true"></i><span><strong>${japaneseText("generation.image")}</strong><small>${japaneseText("generation.imageHint")}</small></span></button>
                 <button type="button" data-generate="audio"><i class="ri-volume-up-line" aria-hidden="true"></i><span><strong>${japaneseText("generation.audio")}</strong><small>${japaneseText("generation.audioHint")}</small></span></button>
             </div>
@@ -522,6 +570,27 @@
         japaneseState.editorController.open();
     }
 
+    /** 统一构造新增、修改和生成结果持久化使用的题目参数。 */
+    function japaneseBuildQuestionSavePayload(values) {
+        const editing = Boolean(japaneseState.editingRecord?.id);
+        const media = japaneseState.editingRecord || {};
+        return {
+            ...values,
+            ...(editing ? { id: japaneseState.editingRecord.id } : {}),
+            name: String(values.name || "").trim() || japaneseText("editor.defaultName", { number: values.sourceQuestionNo }),
+            sortnum: media.sortnum || 0,
+            status: media.status || 1,
+            jlptLevel: "N2",
+            sourceBook: "蓝宝书1000题",
+            imageStorageProvider: media.imageStorageProvider || "",
+            imageStorageKey: media.imageStorageKey || "",
+            imageUrl: media.imageUrl || "",
+            audioStorageProvider: media.audioStorageProvider || "",
+            audioStorageKey: media.audioStorageKey || "",
+            audioUrl: media.audioUrl || ""
+        };
+    }
+
     /** 提交新增或编辑题目并刷新页面。 */
     async function japaneseSaveQuestion(values) {
         // 保存期间锁定窗口并立即反馈，防止重复提交。
@@ -529,23 +598,8 @@
         japaneseState.editorController.setFeedback(japaneseText("editor.saving"));
         try {
             const editing = Boolean(japaneseState.editingRecord?.id);
-            const media = japaneseState.editingRecord || {};
             // 前端只提交题目和媒体业务字段，身份审计由 BaseService 维护。
-            const payload = {
-                ...values,
-                ...(editing ? { id: japaneseState.editingRecord.id } : {}),
-                name: String(values.name || "").trim() || japaneseText("editor.defaultName", { number: values.sourceQuestionNo }),
-                sortnum: media.sortnum || 0,
-                status: media.status || 1,
-                jlptLevel: "N2",
-                sourceBook: "蓝宝书1000题",
-                imageStorageProvider: media.imageStorageProvider || "",
-                imageStorageKey: media.imageStorageKey || "",
-                imageUrl: media.imageUrl || "",
-                audioStorageProvider: media.audioStorageProvider || "",
-                audioStorageKey: media.audioStorageKey || "",
-                audioUrl: media.audioUrl || ""
-            };
+            const payload = japaneseBuildQuestionSavePayload(values);
             await japaneseRequest(japaneseQuestionApi + (editing ? "update.htm" : "create.htm"), {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
@@ -595,6 +649,30 @@
         };
     }
 
+    /** 把新生成解释追加到已有解释末尾，保留人工修订内容并限制在字段最大长度内。 */
+    function japaneseAppendGeneratedExplanation(currentExplanation, generatedExplanation) {
+        const current = String(currentExplanation || "").trimEnd();
+        const generated = String(generatedExplanation || "").trim();
+        const appended = current && generated ? `${current}\n\n${generated}` : current || generated;
+        if (appended.length > 8000) {
+            throw new Error(japaneseText("generation.explanationTooLong", {}, "追加后题目解释超过 8000 字，请先精简原解释。"));
+        }
+        return appended;
+    }
+
+    /** 已有题目生成解释后立即保存追加结果；新增题目仍由标准新增按钮统一建档。 */
+    async function japanesePersistGeneratedExplanation(nextValues) {
+        if (!japaneseState.editingRecord?.id) return false;
+        const payload = japaneseBuildQuestionSavePayload(nextValues);
+        await japaneseRequest(`${japaneseQuestionApi}update.htm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: new URLSearchParams(payload)
+        });
+        japaneseState.editingRecord = { ...japaneseState.editingRecord, ...nextValues };
+        return true;
+    }
+
     /** 执行解释、图片或语音生成并写回结果。 */
     async function japaneseGenerate(kind, activeButton) {
         // 英文 kind 用于接口路径，中文 labels 只用于用户反馈。
@@ -603,10 +681,17 @@
             image: japaneseText("generation.targets.image"),
             audio: japaneseText("generation.targets.audio")
         };
-        japaneseSetGenerating(true, activeButton);
-        japaneseState.editorController.setFeedback(japaneseText("generation.running", {
-            provider: kind === "audio" ? "NanamiNeural" : japaneseText("generation.codex"), target: labels[kind]
-        }));
+        // 翻译、图片和语音分别显示真实提供方，避免把免费翻译误标成 Codex。
+        const providers = {
+            explanation: japaneseText("generation.translator"),
+            image: japaneseText("generation.codex"),
+            audio: "NanamiNeural"
+        };
+        const runningMessage = japaneseText("generation.running", {
+            provider: providers[kind], target: labels[kind]
+        });
+        japaneseSetGenerating(true, activeButton, japaneseText("generation.runningButton", { target: labels[kind] }, `正在生成${labels[kind]}…`));
+        japaneseState.editorController.setFeedback(runningMessage);
         try {
             const result = await japaneseRequest(`${japaneseQuestionApi}generate-${kind}.htm`, {
                 method: "POST",
@@ -614,8 +699,16 @@
                 body: JSON.stringify(japaneseBuildGenerationPayload())
             });
             if (kind === "explanation") {
-                const nextValues = { ...japaneseState.editorController.getValues(), explanation: result.data.explanation };
+                const currentValues = japaneseState.editorController.getValues();
+                const nextValues = {
+                    ...currentValues,
+                    explanation: japaneseAppendGeneratedExplanation(currentValues.explanation, result.data.explanation)
+                };
                 japaneseState.editorController.setValues(nextValues);
+                const persisted = await japanesePersistGeneratedExplanation(nextValues);
+                japaneseState.editorController.setFeedback(persisted
+                    ? japaneseText("generation.explanationAppendedAndSaved", {}, "新解释已追加并保存。")
+                    : japaneseText("generation.explanationAppended", {}, "新解释已追加，请点击保存新增。"));
             } else {
                 const prefix = kind === "image" ? "image" : "audio";
                 japaneseState.editingRecord = {
@@ -626,7 +719,9 @@
                 };
                 japaneseRefreshPreviews();
             }
-            japaneseState.editorController.setFeedback(result.msg || japaneseText("generation.complete", { target: labels[kind] }));
+            if (kind !== "explanation") {
+                japaneseState.editorController.setFeedback(result.msg || japaneseText("generation.complete", { target: labels[kind] }));
+            }
         } catch (error) {
             japaneseState.editorController.setFeedback(error.message || japaneseText("generation.failed", { target: labels[kind] }), true);
         } finally {
@@ -635,10 +730,22 @@
     }
 
     /** 统一切换生成按钮的忙碌状态。 */
-    function japaneseSetGenerating(busy, activeButton) {
-        japaneseState.generationView?.querySelectorAll("[data-generate]").forEach((button) => {
+    function japaneseSetGenerating(busy, activeButton, busyLabel = "") {
+        const buttons = new Set(japaneseState.generationView?.querySelectorAll("[data-generate]") || []);
+        if (activeButton) buttons.add(activeButton);
+        buttons.forEach((button) => {
             button.disabled = busy;
             button.classList.toggle("is-running", busy && button === activeButton);
+            const label = button.querySelector("strong");
+            if (busy && button === activeButton) {
+                button.setAttribute("aria-busy", "true");
+                if (label && !button.dataset.idleLabel) button.dataset.idleLabel = label.textContent;
+                if (label && busyLabel) label.textContent = busyLabel;
+            } else if (!busy) {
+                button.removeAttribute("aria-busy");
+                if (label && button.dataset.idleLabel) label.textContent = button.dataset.idleLabel;
+                delete button.dataset.idleLabel;
+            }
         });
     }
 
@@ -670,6 +777,24 @@
         const panelRoot = panel.get(japaneseGridId);
         panel.setLocale(panelRoot, japanesePanelLocaleOptions(payload));
         japaneseState.gridController.setLocale(payload);
+        japaneseUpdateRoundToolbar();
+    }
+
+    /** 更新工具栏轮次分组，查询动作与做题状态动作保持清晰边界。 */
+    function japaneseUpdateRoundToolbar() {
+        const host = japaneseState.panelRoot?.querySelector('[data-sel-panel-component="toolbarAction"][data-sel-panel-command="nextRound"]');
+        if (!host) return;
+        const context = host.querySelector('[data-sel-panel-role="toolbar-action-context"]');
+        const button = host.querySelector('[data-sel-panel-role="toolbar-action-button"]');
+        const label = host.querySelector('[data-sel-panel-role="toolbar-action-label"]');
+        const roundLabel = japaneseText("round.current", { round: japaneseState.currentRoundNo }, `第 ${japaneseState.currentRoundNo} 轮`);
+        context.textContent = roundLabel;
+        label.textContent = japaneseText("title.nextRound", {}, "新一轮");
+        button.setAttribute("aria-label", `${roundLabel} · ${label.textContent}`);
+        if (button.dataset.bound !== "true") {
+            button.dataset.bound = "true";
+            button.addEventListener("click", japaneseStartNextRound);
+        }
     }
 
     /** 重新读取表格定义与可见列，并让业务 Grid 立即按数据库状态重建表头。 */
@@ -787,50 +912,118 @@
         return japaneseState.tableEditorController;
     }
 
-    /** 播放题目语音；未生成时先生成并把媒体字段写回当前题目，再自动播放。 */
+    /** 完整播放一次音频并等待结束，第二遍必须从头开始而不是并发叠音。 */
+    function japanesePlayAudioOnce(player) {
+        return new Promise((resolve, reject) => {
+            player.onended = resolve;
+            player.onerror = () => reject(new Error(japaneseText("audio.playFailed", {}, "语音播放失败。")));
+            player.currentTime = 0;
+            player.play().catch(reject);
+        });
+    }
+
+    /** 播放题目语音两遍；中间停顿 0.5 秒，缺失媒体时由后端生成并保存。 */
     async function japanesePlayAudio(record) {
         const recordId = String(record.id);
         if (japaneseState.audioBusyIds.has(recordId)) return;
         japaneseState.audioBusyIds.add(recordId);
-        japaneseState.gridController.setLocale(japaneseBuildPayload());
+        // 播放动作只更新当前行的忙碌图标；禁止为一个按钮重建表头、分页和滚动容器。
+        japaneseState.gridController.updateRecord(record.id, { audioBusy: true });
         try {
-            let audioUrl = String(record.audioUrl || "");
-            if (!audioUrl) {
-                const generated = await japaneseRequest(`${japaneseQuestionApi}generate-audio.htm`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        questionType: record.questionType,
-                        questionText: record.questionText,
-                        optionA: record.optionA,
-                        optionB: record.optionB,
-                        optionC: record.optionC,
-                        optionD: record.optionD,
-                        correctOption: record.correctOption,
-                        audioText: record.audioText
-                    })
-                });
-                audioUrl = String(generated.data?.url || "");
-                await japaneseRequest(`${japaneseQuestionApi}update.htm`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-                    body: new URLSearchParams({
-                        id: String(record.id),
-                        audioStorageProvider: String(generated.data?.storageProvider || ""),
-                        audioStorageKey: String(generated.data?.objectKey || ""),
-                        audioUrl
-                    })
-                });
-            }
+            const result = await japaneseRequest(`${japaneseQuestionApi}play-audio.htm`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: record.id })
+            });
+            const audioUrl = String(result.data?.url || "");
             if (!audioUrl) throw new Error(japaneseText("audio.missing", {}, "语音生成后未返回播放地址。"));
+            japaneseState.records = japaneseState.records.map((item) =>
+                String(item.id) === recordId ? { ...item, audioUrl } : item);
+            japaneseState.gridController.updateRecord(record.id, { audioUrl });
             const player = new Audio(`${audioUrl}?v=${Date.now()}`);
-            await player.play();
-            await japaneseRefresh();
+            await japanesePlayAudioOnce(player);
+            await new Promise((resolve) => window.setTimeout(resolve, 500));
+            await japanesePlayAudioOnce(player);
         } catch (error) {
             japaneseShowError(error);
         } finally {
             japaneseState.audioBusyIds.delete(recordId);
-            japaneseState.gridController.setLocale(japaneseBuildPayload());
+            japaneseState.gridController.updateRecord(record.id, { audioBusy: false });
+        }
+    }
+
+    /** 提交当前轮次的一项单选答案，并用短时 Toast 显示正确或错误。 */
+    async function japaneseAnswer(record, option) {
+        try {
+            const result = await japaneseRequest(`${japaneseLearningApi}answer.htm`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ questionId: record.id, selectedOption: option })
+            });
+            selBase.toast(
+                result.data?.correct
+                    ? japaneseText("answer.correct", {}, "回答正确。")
+                    : japaneseText("answer.wrong", {}, "回答错误。"),
+                result.data?.correct ? "success" : "error"
+            );
+            const selectedOption = String(result.data?.selectedOption || option);
+            const answerChanges = {
+                selectedOption,
+                displaySelectedOption: selectedOption,
+                answerCorrect: result.data?.correct === true,
+                correctCount: Number(result.data?.correctCount || 0),
+                wrongCount: Number(result.data?.wrongCount || 0)
+            };
+            japaneseState.answerSelections.set(String(record.id), selectedOption);
+            // 判题只更新当前题目状态与次数，禁止为一行变化重建表头、分页和滚动容器。
+            japaneseState.records = japaneseState.records.map((item) =>
+                String(item.id) === String(record.id) ? { ...item, ...answerChanges } : item);
+            japaneseState.gridController.updateRecord(record.id, answerChanges);
+        } catch (error) {
+            japaneseShowError(error);
+        }
+    }
+
+    /** 通过受控接口查看已作答题目的正确选项与解释。 */
+    async function japaneseShowExplanation(record) {
+        try {
+            const result = await japaneseRequest(`${japaneseLearningApi}explanation.htm`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ questionId: record.id })
+            });
+            await japaneseState.explanationController.open({
+                title: japaneseText("explanation.title", {}, "查看解释"),
+                message: japaneseText("explanation.correctOption", { option: result.data?.correctOption || "—" }, "正确选项：{option}"),
+                target: String(result.data?.explanation || japaneseText("explanation.empty", {}, "暂无解释。")),
+                icon: "ri-lightbulb-line",
+                cancelLabel: japaneseText("explanation.close", {}, "关闭"),
+                confirmLabel: japaneseText("explanation.understood", {}, "知道了")
+            });
+        } catch (error) {
+            japaneseShowError(error);
+            selBase.toast(error.message || japaneseText("errors.app"), "error");
+        }
+    }
+
+    /** 用户确认后结束当前轮并创建下一轮，累计次数不清零。 */
+    async function japaneseStartNextRound() {
+        const confirmed = await japaneseState.nextRoundController.open({
+            title: japaneseText("round.title", {}, "开始新一轮"),
+            message: japaneseText("round.message", {}, "当前轮会结束，历史正确和错误次数继续保留。"),
+            icon: "ri-restart-line",
+            cancelLabel: japaneseText("round.cancel", {}, "继续当前轮"),
+            confirmLabel: japaneseText("round.confirm", {}, "开始新一轮")
+        });
+        if (!confirmed) return;
+        try {
+            const result = await japaneseRequest(`${japaneseLearningApi}next-round.htm`, { method: "POST" });
+            japaneseState.answerSelections.clear();
+            japaneseState.currentRoundNo = Number(result.data?.roundNo || japaneseState.currentRoundNo + 1);
+            selBase.toast(japaneseText("round.started", {}, "新一轮已开始。"), "success");
+            await japaneseRefresh();
+        } catch (error) {
+            japaneseShowError(error);
         }
     }
 
@@ -873,6 +1066,9 @@
         });
         japaneseState.editorController?.setValues?.(editorValues);
         japaneseState.deleteController?.setLocale?.({ title: japaneseText("delete.title") });
+        japaneseState.explanationController?.setLocale?.({ title: japaneseText("explanation.title") });
+        japaneseState.nextRoundController?.setLocale?.({ title: japaneseText("round.title") });
+        japaneseUpdateRoundToolbar();
         japaneseState.tableEditorController?.setLocale?.({ messages: japaneseMessages.tableEditor || {} });
         if (japaneseState.tableEditorTrigger) {
             const tableEditorLabel = japaneseText("tableEditor.open", {}, "编辑表格");
@@ -888,8 +1084,8 @@
         return true;
     }
 
-    /** 捕获查询元素相对工具栏的矩形，业务查询值不进入页面布局配置。 */
-    function japaneseCaptureQueryGeometry(editor) {
+    /** 捕获工具条真实控件相对工具条的矩形，业务值和业务状态不进入页面布局配置。 */
+    function japaneseCaptureToolbarGeometry(editor) {
         const toolbarRect = editor.toolbar.getBoundingClientRect();
         const targetRect = editor.target.getBoundingClientRect();
         return {
@@ -900,10 +1096,10 @@
         };
     }
 
-    /** 保存一个查询元素的独立矩形；未登记时保持页面默认值且不伪造成功。 */
-    async function japaneseSaveQueryGeometry(editor) {
+    /** 保存一个工具条控件的独立矩形；未登记时保持页面默认值且不伪造成功。 */
+    async function japaneseSaveToolbarGeometry(editor) {
         if (!editor.record?.code || !japaneseState.pageCode) throw new Error(japaneseText("pageEditor.notRegistered"));
-        const saved = { code: editor.record.code, ...japaneseCaptureQueryGeometry(editor), breakpoint: editor.record.breakpoint || "DESKTOP" };
+        const saved = { code: editor.record.code, ...japaneseCaptureToolbarGeometry(editor), breakpoint: editor.record.breakpoint || "DESKTOP" };
         const result = await selAjax.request({
             url: `/api/reference-data/pages/${encodeURIComponent(japaneseState.pageCode)}/configuration`,
             method: "POST",
@@ -991,30 +1187,34 @@
         const toolbar = panel.getComponent(japaneseGridId, "toolbar");
         const searchTargets = japaneseState.searchController.getLayoutTargets();
         const resetTarget = panel.getComponent(japaneseGridId, "filterReset");
+        const nextRoundTarget = japaneseState.panelRoot.querySelector(
+            '[data-sel-panel-component="toolbarAction"][data-sel-panel-command="nextRound"]'
+        );
         const records = new Map((japaneseState.pageConfig.controls || []).map((record) => [String(record.fieldName), record]));
         const definitions = [
             { key: "sourceQuestionNo", target: searchTargets.sourceQuestionNo, title: japaneseText("pageEditor.questionNoQuery"), icon: "ri-hashtag", order: 10, min: 150, max: 320 },
             { key: "questionText", target: searchTargets.questionText, title: japaneseText("pageEditor.questionTextQuery"), icon: "ri-text", order: 20, min: 180, max: 480 },
             { key: "submit", target: searchTargets.submit, title: japaneseText("pageEditor.submit"), icon: "ri-search-eye-line", order: 30, min: 72, max: 160 },
-            { key: "reset", target: resetTarget, title: japaneseText("pageEditor.reset"), icon: "ri-reset-left-line", order: 40, min: 80, max: 160 }
-        ];
-        const sharedHost = element("span", { className: "japanese-query-save-host", attributes: { "aria-label": japaneseText("pageEditor.save") } });
-        resetTarget.insertAdjacentElement("afterend", sharedHost);
+            { key: "reset", target: resetTarget, title: japaneseText("pageEditor.reset"), icon: "ri-reset-left-line", order: 40, min: 80, max: 160 },
+            { key: "nextRound", target: nextRoundTarget, title: japaneseText("pageEditor.nextRoundAction"), icon: "ri-restart-line", order: 50, min: 180, max: 420 }
+        ].filter((definition) => definition.target instanceof Element);
+        const sharedHost = element("span", { className: "japanese-toolbar-save-host", attributes: { "aria-label": japaneseText("pageEditor.save") } });
+        definitions.at(-1).target.insertAdjacentElement("afterend", sharedHost);
         definitions.forEach((definition) => {
             const record = records.get(definition.key) || null;
             const editor = { ...definition, record, toolbar };
             const targetRect = definition.target.getBoundingClientRect();
             const toolbarRect = toolbar.getBoundingClientRect();
-            japaneseState.queryEditors.set(definition.key, editor);
+            japaneseState.toolbarEditors.set(definition.key, editor);
             japaneseState.personalizationController.registerPageControl({
                 id: `selQuery${definition.key.charAt(0).toUpperCase()}${definition.key.slice(1)}JapanesePageEditorId`,
                 type: "query-control", typeLabel: definition.title, title: definition.title, icon: definition.icon,
                 root: definition.target,
-                sharedEdit: { key: "japaneseQueryToolbar", host: sharedHost, label: japaneseText("pageEditor.save"), follow: definition.key === "reset" },
+                sharedEdit: { key: "japaneseToolbarControls", host: sharedHost, label: japaneseText("pageEditor.save"), follow: definition === definitions.at(-1) },
                 geometry: {
                     container: toolbar, direct: true,
                     flow: {
-                        key: "japaneseQueryToolbar",
+                        key: "japaneseToolbarControls",
                         gap: 12,
                         order: definition.order,
                         moveGroup: definition.key === "sourceQuestionNo"
@@ -1031,8 +1231,8 @@
                     { label: japaneseText("pageEditor.uniqueCode"), value: record?.code || japaneseText("pageEditor.notRegistered") },
                     { label: japaneseText("pageEditor.sourceTable"), value: "ReferenceDataControlLayout" }
                 ],
-                captureState: () => japaneseCaptureQueryGeometry(editor),
-                saveState: () => japaneseSaveQueryGeometry(editor)
+                captureState: () => japaneseCaptureToolbarGeometry(editor),
+                saveState: () => japaneseSaveToolbarGeometry(editor)
             });
         });
 
@@ -1091,11 +1291,17 @@
         dropdown.mountAll(panelRoot);
         japaneseState.gridController = grid.mount(panelRoot, payload);
         if (!japaneseState.gridController) throw new Error(japaneseText("errors.grid"));
+        japaneseUpdateRoundToolbar();
 
         // 主工作区完成后再挂载编辑、确认和生成控件。
         japaneseState.editorController = windowComponent.mount(japaneseAppHost, { messages: localeResources.windowMessages, ...japaneseBuildEditorOptions(false) });
         japaneseState.deleteController = confirmDialog.mount(japaneseAppHost, { id: "selConfirmDialogJapaneseN2QuestionDeleteId", title: japaneseText("delete.title") });
-        if (!japaneseState.editorController || !japaneseState.deleteController) throw new Error(japaneseText("errors.window"));
+        japaneseState.explanationController = confirmDialog.mount(japaneseAppHost, { id: "selConfirmDialogJapaneseN2ExplanationId", title: japaneseText("explanation.title") });
+        japaneseState.nextRoundController = confirmDialog.mount(japaneseAppHost, { id: "selConfirmDialogJapaneseN2NextRoundId", title: japaneseText("round.title") });
+        if (!japaneseState.editorController || !japaneseState.deleteController
+                || !japaneseState.explanationController || !japaneseState.nextRoundController) {
+            throw new Error(japaneseText("errors.window"));
+        }
         japaneseInstallGenerationControls();
         japaneseMountTableEditor(localeResources.windowMessages);
         japaneseMountPageEditor(capability.data?.canEditPage === true, localeResources.personalizationMessages);
@@ -1130,7 +1336,9 @@
         panelRoot.addEventListener("selGrid:action", (event) => {
             const detail = event.detail;
             if (!detail || detail.instanceKey !== japaneseGridId) return;
+            if (/^answer[A-D]$/.test(detail.action)) japaneseAnswer(detail.record, detail.action.slice(-1));
             if (detail.action === "playAudio") japanesePlayAudio(detail.record);
+            if (detail.action === "explanation") japaneseShowExplanation(detail.record);
             if (detail.action === "edit") japaneseOpenEditor(detail.record);
             if (detail.action === "delete") japaneseRemoveQuestion(detail.record).catch(japaneseShowError);
         });

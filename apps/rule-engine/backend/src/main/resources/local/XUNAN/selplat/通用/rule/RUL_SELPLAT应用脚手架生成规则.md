@@ -6,14 +6,16 @@ java_ability_refs = apps/mda/backend/src/main/java/com/sp/selplat/mda/capability
 python_ability_refs = none
 <!-- 页面脚本由模板生成并使用现有浏览器与前端语法验证，不登记额外 Node 能力。 -->
 node_ability_refs = none
-<!-- 本版让新生成页面退出租户和操作员编辑提交，并统一继承 BaseServiceImpl 的服务端身份。 -->
-rule_version = 1.17.0
+<!-- 本版固定默认修复必须登记工具条全部真实控件，包含稳定复合根上的业务动作。 -->
+rule_version = 1.18.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析，未经审查不得提升到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则、生成器、索引和真实隔离文件测试已经形成闭环。 -->
 rule_status = active
 <!-- 本次升级把查询结构和编辑态保存位置纳入新增与修复共用基线。 -->
 upgrade_record_20260816_default_query = 独立字段AND后台分页_统一提交_查询元素逐项登记_共享保存紧跟重置
+<!-- 工具条后续增加业务状态动作时必须同步进入引用数据与页面编辑，保存入口跟随最后一个可编辑项。 -->
+upgrade_record_20260817_all_toolbar_controls_editable = 输入筛选提交重置业务动作全部登记_复合业务动作整体调整_共享保存跟随最后可编辑项
 <!-- 本次升级把表格保存入口、公共表头编辑器和数据库显隐同步纳入新增与修复共用基线。 -->
 upgrade_record_20260816_default_table_editor = 表格名称和Code完整登记_编辑态保存按钮_公共表头增删改_显隐持久化和刷新一致
 <!-- 本规则来源于用户要求从 uniauth 抽取模板并让后续 AI 可重复接手。 -->
@@ -123,8 +125,8 @@ selplat_default_reference_data_registration = classpath_manifest,page,grid,colum
 selplat_default_reference_data_consumption = projectCode+pageKey,business_getGridColumn,no_direct_reference_grid_endpoint,silent_component_default_fallback
 <!-- 默认修复必须把每个真实查询条件拆成独立字段，统一点击查询后由后台分页执行 AND，禁止单一 keyword 跨列 OR 或全量前端过滤。 -->
 selplat_default_query_baseline = one_real_condition_one_named_control,one_shared_submit,submit_then_query,BaseDao_AND,backend_page_plus_totalCount,no_cross_column_keyword_OR,no_load_all_for_browser_filter
-<!-- 默认修复必须逐项登记查询输入、下拉、单选、多选、查询和重置；编辑态唯一共享保存入口紧跟重置，不得被外层网格推到工具栏末端。 -->
-selplat_default_query_page_editor_baseline = register_each_input_select_radio_checkbox_submit_reset,independent_geometry,ordered_reflow,shared_save_immediately_after_reset,no_auto_margin_or_grid_end_push
+<!-- 默认修复必须逐项登记工具条全部真实控件；复合业务动作按稳定根整体调整，唯一共享保存入口跟随最后可编辑项。 -->
+selplat_default_query_page_editor_baseline = register_each_input_select_radio_checkbox_submit_reset_and_business_action_composite,independent_geometry,ordered_reflow,shared_save_immediately_after_last_editable_toolbar_control,no_auto_margin_or_grid_end_push
 <!-- 默认修复必须给 Grid 提供 tableTitle 和 tableCode；编辑态同时显示保存表格控件与紧邻 Code 的公共编辑表格入口。 -->
 selplat_default_grid_page_editor_baseline = tableTitle_plus_tableCode,manual_edit_shows_save_table_control,adjacent_accent_edit_table_action,no_business_column_occupation
 <!-- 表头新增、修改、逻辑删除和显隐统一由公共 selTableEditor 完成；visible=false 必须即时隐藏且刷新后仍由数据库结果保持隐藏。 -->

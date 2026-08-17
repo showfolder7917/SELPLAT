@@ -26,10 +26,10 @@ public class JapaneseN2BlueBookQuestionController
         extends BaseController<JapaneseN2BlueBookQuestionService> {
 
     /**
-     * 直接调用本机 Codex CLI 生成题目解释。
-     * 真实传参示例：题干、四项选择和正确答案 D。
-     * 真实返回示例：{@code {success:true,data:{explanation:"給与读作きゅうよ"}}}。
-     * 异常或副作用示例：Codex 不可用时返回统一系统异常；不修改题目记录。
+     * 通过后端 deep-translator 插件把朗读文本翻译为简体中文。
+     * 真实传参示例：{@code {audioText:"今年の給与は去年より低い。"}}。
+     * 真实返回示例：{@code {success:true,data:{explanation:"今年的工资比去年低。"}}}。
+     * 异常或副作用示例：朗读文本为空或免费翻译服务不可用时返回统一异常；不修改题目记录。
      *
      * @param request 当前编辑中的完整题目
      * @return 固定公共 JSON
@@ -68,5 +68,19 @@ public class JapaneseN2BlueBookQuestionController
     public String generateAudio(
             @RequestBody CommonParam request) {
         return JsonUtils.toJsonIgnoreNull(getService().generateAudio(request));
+    }
+
+    /**
+     * 播放指定题目语音，缺少媒体时先由服务端生成并保存。
+     * 真实传参示例：{@code {id:100001}}。
+     * 真实返回示例：{@code {success:true,data:{url:"/audio/x.mp3"}}}。
+     * 异常或副作用示例：已有语音只读；缺少时新增 MP3 并更新题表媒体字段。
+     *
+     * @param request 题目主键
+     * @return 固定公共 JSON
+     */
+    @PostMapping("play-audio.htm")
+    public String playAudio(@RequestBody CommonParam request) {
+        return JsonUtils.toJsonIgnoreNull(getService().playAudio(request));
     }
 }

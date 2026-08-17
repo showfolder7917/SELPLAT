@@ -33,6 +33,13 @@ public class DefaultJapaneseExternalProcessRunner implements JapaneseExternalPro
                     .redirectErrorStream(true)
                     .redirectOutput(processLog.toFile())
                     .start();
+            // 所有生成参数都已通过命令列表传入；立即发送 stdin EOF，禁止 Codex 等 CLI 等待附加输入。
+            try {
+                process.getOutputStream().close();
+            } catch (IOException exception) {
+                process.destroyForcibly();
+                throw exception;
+            }
             boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!completed) {
                 process.destroyForcibly();

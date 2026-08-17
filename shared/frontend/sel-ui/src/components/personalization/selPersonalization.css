@@ -1500,6 +1500,10 @@ html[data-sel-page-edit-mode="edit"] .selpersonal-page-flow-geometry.selpersonal
     right: -7px;
     bottom: -2px;
     width: 14px;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
     pointer-events: auto;
     cursor: ew-resize;
     touch-action: none;
@@ -1520,9 +1524,15 @@ html[data-sel-page-edit-mode="edit"] .selpersonal-page-flow-geometry.selpersonal
 }
 
 .selpersonal-page-direct-resize-handle:hover::after,
+.selpersonal-page-direct-resize-handle:focus-visible::after,
 .selpersonal-page-direct-resize-handle.selpersonal-page-geometry-active::after {
     width: 5px;
     opacity: 1;
+}
+
+.selpersonal-page-direct-resize-handle:focus-visible {
+    outline: 1px solid var(--sel-theme-semantic-warning);
+    outline-offset: 1px;
 }
 
 /* 页面几何动作由 personalization 统一生成；应用只提供编辑宿主，不复制移动和调宽的交互样式。 */

@@ -519,6 +519,20 @@
     white-space: nowrap;
 }
 
+.selgrid-record-badge > i:first-child {
+    margin-right: 6px;
+}
+
+.selgrid-record-cell-icon-success {
+    color: var(--sel-theme-semantic-success);
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--sel-theme-semantic-success) 48%, transparent));
+}
+
+.selgrid-record-cell-icon-danger {
+    color: var(--sel-theme-semantic-error);
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--sel-theme-semantic-error) 48%, transparent));
+}
+
 .selgrid-record-badge-enabled {
     border-color: color-mix(in srgb, var(--sel-theme-semantic-success) 54%, transparent);
     color: var(--sel-theme-semantic-success);
@@ -570,6 +584,72 @@
 .selgrid-record-switch:disabled {
     cursor: not-allowed;
     opacity: 0.56;
+}
+
+/* choice 让任意业务表把单元格声明成单选答案，状态仍由记录字段和 Grid 动作事件维护。 */
+.selgrid-record-choice {
+    display: inline-flex;
+    width: 100%;
+    min-width: 0;
+    padding: 5px 7px;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid transparent;
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-body);
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+}
+
+.selgrid-record-choice-indicator {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+    border: 1px solid color-mix(in srgb, var(--sel-theme-text-secondary) 78%, transparent);
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 3px transparent;
+}
+
+.selgrid-record-choice > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selgrid-record-choice:is(:hover, :focus-visible) {
+    border-color: var(--sel-theme-control-line-strong);
+    outline: 0;
+    background: var(--sel-theme-control-surface-hover);
+}
+
+.selgrid-record-choice[aria-checked="true"] {
+    border-color: color-mix(in srgb, var(--sel-theme-semantic-success) 58%, transparent);
+    color: var(--sel-theme-text-title);
+    background: var(--sel-theme-status-success-surface);
+}
+
+.selgrid-record-choice[aria-checked="true"] .selgrid-record-choice-indicator {
+    border-color: var(--sel-theme-semantic-success);
+    background: var(--sel-theme-semantic-success);
+    box-shadow: inset 0 0 0 3px var(--sel-theme-control-surface);
+}
+
+/* 错误选项复用公共 danger 语义，业务页面只声明 selectedTone，不维护私有颜色。 */
+.selgrid-record-choice[aria-checked="true"].selgrid-record-choice-danger {
+    border-color: color-mix(in srgb, var(--sel-theme-semantic-error) 66%, transparent);
+    color: var(--sel-theme-text-title);
+    background: color-mix(in srgb, var(--sel-theme-semantic-error) 18%, rgb(var(--sel-theme-neutral-rgb) / 0.82));
+}
+
+.selgrid-record-choice[aria-checked="true"].selgrid-record-choice-danger .selgrid-record-choice-indicator {
+    border-color: var(--sel-theme-semantic-error);
+    background: var(--sel-theme-semantic-error);
+}
+
+.selgrid-record-choice:disabled {
+    cursor: default;
+    opacity: 0.72;
 }
 
 .selgrid-action-danger:hover,

@@ -178,21 +178,54 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "cancel_or_failure_restore_previous_order,success_refresh_business_header"
         ));
         assertTrue(rule.content().contains(
+            "selplat_management_grid_hidden_column_contract = table_element_registered,"
+                + "visible_false_rendering_only,record_keeps_editor_fields,"
+                + "double_click_record_no_data_loss,no_second_detail_request_for_hidden_field"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_record_in_place_update_contract = public_updateRecord_by_id,"
+                + "immutable_record_snapshot,target_row_only,preserve_scroll_left_and_top,"
+                + "preserve_action_focus,no_header_or_pagination_rebuild,"
+                + "action_event_does_not_refresh,no_view_change_means_zero_render,"
+                + "setLocale_for_dataset_or_structure_change_only"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_record_choice_renderer = role_radio,optionValue,selectedField,selectedTone,"
+                + "aria_checked,visible_unselected_indicator,lock_after_selection_default,"
+                + "optional_repeat_selection,public_action_event,semantic_success_or_danger,"
+                + "theme_tokens_only"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_record_badge_dynamic_icon = static_or_record_function,"
+                + "empty_icon_no_dom,nonzero_semantic_icon_supported,theme_tokens_only"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_panel_toolbar_business_action = toolbarAction_public_host,"
+                + "after_query_and_reset,context_badge,semantic_accent_button,accessible_label,"
+                + "application_owned_command,no_header_action_dependency,"
+                + "composite_root_page_edit_registration"
+        ));
+        assertTrue(rule.content().contains(
             "selplat_page_editor_button_presentation = grid_window_immediately_after_database_code,"
-                + "composite_shared_save_after_last_standard_control,no_auto_margin_push,"
+                + "composite_shared_save_after_last_editable_toolbar_control,no_auto_margin_push,"
                 + "shared_semantic_warning_accent"
         ));
         assertTrue(rule.content().contains(
             "selplat_composite_toolbar_control_editing = toolbar_parent_boundary,"
                 + "unified_query_draft_committed_only_by_submit,"
-                + "one_record_per_real_input_select_radio_checkbox_button_or_filter,"
+                + "one_record_per_real_input_select_radio_checkbox_button_filter_or_business_action_composite,"
                 + "multiple_structural_fields_render_as_independent_inputs_AND_only_no_keyword_OR,"
                 + "missing_record_uses_component_default,independent_width_with_ordered_reflow,"
                 + "shared_first_item_vertical_baseline,"
                 + "first_item_public_horizontal_group_move_handle,"
                 + "group_move_preserves_gap_and_child_widths,anchor_x_single_record_save,"
-                + "one_shared_current_control_save_following_last_standard_control,"
+                + "one_shared_current_control_save_following_last_editable_toolbar_control,"
                 + "single_control_payload,no_editor_cards"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_page_control_resize_accessibility = focusable_named_button,"
+                + "control_title_in_accessible_name,mouse_and_alt_arrow_same_geometry_path,"
+                + "visible_focus"
         ));
         assertTrue(rule.content().contains(
             "selplat_reference_dropdown_binding_verification = controlCode_real_and_unique,"
@@ -267,6 +300,11 @@ class ActiveUserRuleOverrideIntegrationTest {
             "selplat_grid_page_editor_persistence = live_memory_resize,"
                 + "one_terminal_change_event,batch_save_widths,"
                 + "write_then_business_getGridColumn_refresh,no_request_per_pointermove"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_grid_cell_icon_tone_contract = public_cellIconTone,"
+                + "static_or_record_function,safe_class_token,semantic_success_and_danger,"
+                + "theme_token_color,no_business_hardcoded_color"
         ));
     }
 
@@ -484,8 +522,9 @@ class ActiveUserRuleOverrideIntegrationTest {
         ));
         assertTrue(rule.content().contains(
             "selplat_default_query_page_editor_baseline = "
-                + "register_each_input_select_radio_checkbox_submit_reset,independent_geometry,"
-                + "ordered_reflow,shared_save_immediately_after_reset"
+                + "register_each_input_select_radio_checkbox_submit_reset_and_business_action_composite,"
+                + "independent_geometry,ordered_reflow,"
+                + "shared_save_immediately_after_last_editable_toolbar_control"
         ));
         assertTrue(rule.content().contains(
             "selplat_default_grid_page_editor_baseline = tableTitle_plus_tableCode,"
@@ -532,9 +571,9 @@ class ActiveUserRuleOverrideIntegrationTest {
     }
 
     /**
-     * 验证 Japanese 题库生成规则从应用叶子索引命中并固定指定语音环境。
+     * 验证 Japanese 题库生成规则从应用叶子索引命中并固定免费插件环境。
      * 真实传参示例：逻辑 ID 为 {@code JAPANESE_QUESTION_BANK_AI_MEDIA_GENERATION_RULES}。
-     * 真实返回示例：规则正文包含 NanamiNeural、edge-tts venv 和云存储接口边界。
+     * 真实返回示例：规则正文包含语音、翻译插件目录和云存储接口边界。
      * 异常或副作用示例：索引或规则失效时抛出 {@link IOException}，不调用任何外部生成进程。
      */
     @Test
@@ -546,7 +585,10 @@ class ActiveUserRuleOverrideIntegrationTest {
             "japanese_generation_confirmation_policy = direct_execution_without_second_confirmation"
         );
         assertTrue(rule.content().contains(
-            "OPTION/edge-tts-venv/bin/edge-tts"
+            "OPTION/plugin/edge-tts-venv/bin/edge-tts"
+        ));
+        assertTrue(rule.content().contains(
+            "OPTION/plugin/deep-translator-venv/bin/deep-translator"
         ));
         assertTrue(rule.content().contains(
             "japanese_media_cloud_migration_boundary = JapaneseMediaStorage_interface"
@@ -560,9 +602,11 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "no_domain_use_CommonParam_Map_database_metadata"
         ));
         assertTrue(rule.content().contains(
-            "japanese_java_package_structure = n2bluebookquestion/"
-                + "controller|service|service/impl|dao,"
-                + "common/config|persistence|util"
+            "japanese_java_package_structure = n2bluebookquestion|n2questionanswerround|"
+                + "n2questionanswerrecord:controller|service|service/impl|dao,"
+                + "learning_progress_orchestration:n2questionanswerrecord_existing_service,"
+                + "common/config|persistence|util,no_business_directory_without_table,"
+                + "one_service_contract_per_table_business"
         ));
         assertTrue(rule.content().contains(
             "japanese_business_service_policy = one_business_one_service_contract_and_impl,"
@@ -586,12 +630,13 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "japanese_question_query_and_editor_policy = sourceQuestionNo_exact,"
                 + "questionTextLike,BaseDao_AND,backend_paging,one_shared_submit,"
-                + "individual_query_controls,shared_save_after_reset"
+                + "individual_toolbar_controls,nextRound_composite_root,"
+                + "shared_save_after_last_editable_toolbar_control"
         ));
         assertTrue(rule.content().contains(
             "japanese_question_grid_columns = sourceQuestionNo,questionTypeLabel,questionText,"
-                + "optionA,optionB,optionC,optionD,audioState,updatedAt,actions,"
-                + "no_correctOption,no_imageState"
+                + "optionA,optionB,optionC,optionD,correctOption_hidden_by_default,correctCount,"
+                + "wrongCount,audioState,updatedAt,actions,no_imageState"
         ));
         assertTrue(rule.content().contains(
             "japanese_question_grid_audio_action = one_play_button,existing_audio_play_directly,"
@@ -608,6 +653,60 @@ class ActiveUserRuleOverrideIntegrationTest {
         assertTrue(rule.content().contains(
             "japanese_audio_text_completion = locked_correct_option_fills_all_placeholders,"
                 + "paired_answer_segments_supported,no_parenthesis_placeholder_to_tts"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_answer_history_storage = JapaneseN2QuestionAnswerRound,"
+                + "JapaneseN2QuestionAnswerRecord,roundId_to_round_id,questionId_to_question_id,"
+                + "repeated_round_question_records_allowed,one_record_per_click,"
+                + "per_table_sequence,no_question_table_progress_fields"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_learning_progress_query = one_frontend_page_request,"
+                + "question_page_plus_current_round_plus_user_records,service_orchestration,"
+                + "no_join,no_custom_sql,server_identity_only"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_answer_result_rendering = current_record_only,displaySelectedOption,"
+                + "correctCount,wrongCount,selGrid_updateRecord,no_japaneseRefresh,"
+                + "no_table_header_or_pagination_rebuild,preserve_scroll_and_action_focus"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_answer_review = per_attempt_correct_and_wrong_counts,"
+                + "correct_lead_success_green,wrong_lead_or_nonzero_tie_danger_red,"
+                + "zero_zero_plain,explanation_after_answer_only,new_round_preserves_history"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_audio_playback = current_record_only,audioBusy_updateRecord,"
+                + "no_setLocale,no_japaneseRefresh,play_once_then_wait_500ms_then_play_once,"
+                + "no_scroll_container_rebuild"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_external_process_stdin = command_arguments_complete_before_start,"
+                + "close_child_stdin_immediately,close_failure_destroy_forcibly,"
+                + "wait_only_after_eof,no_interactive_confirmation_pipe"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_generation_running_icon = is_running_only_active_button,"
+                + "semantic_progress_color,pulse_and_glow,finally_direct_active_button_restore,"
+                + "current_generation_view_sweep,remove_aria_busy_and_running_class,"
+                + "idle_label_and_style_restored,success_failure_same_cleanup"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_audio_text_translation = deep_translator_google,audioText_only,"
+                + "audioText_required,no_questionText_fallback,"
+                + "no_question_type_options_or_correct_answer_or_user_data,"
+                + "simplified_chinese_translation_only,no_title_original_analysis_or_example"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_next_round_confirmation = public_selConfirmDialog,"
+                + "cancel_keeps_current_round,no_backend_request_before_confirm,"
+                + "confirm_then_next_round_request,refresh_after_success,preserve_history"
+        ));
+        assertTrue(rule.content().contains(
+            "japanese_explanation_generation = immediate_button_busy_feedback,aria_busy,"
+                + "disable_generation_siblings,preserve_existing_explanation,append_double_newline,"
+                + "never_overwrite_manual_text,max_8000_guard,"
+                + "existing_question_update_immediately,new_question_standard_save"
         ));
     }
 
@@ -654,6 +753,11 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "registered_aggregate_namespace_exception,"
                 + "shared_logical_sequence_allowed_for_no-table-object_only,"
                 + "reference_data_record_code_suffix_equals_own_table_id"
+        ));
+        assertTrue(rule.content().contains(
+            "selplat_independent_table_sequence_initial_value = nextStartId=100000,"
+                + "one_sequence_per_table,same_numeric_ids_across_tables_allowed,"
+                + "no_table_kind_numeric_partition,no_restart_cursor_reset"
         ));
         assertTrue(rule.content().contains(
             "selplat_managed_local_database_default_credentials = "

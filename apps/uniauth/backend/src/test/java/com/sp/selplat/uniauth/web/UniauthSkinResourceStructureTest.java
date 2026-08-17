@@ -413,6 +413,8 @@ class UniauthSkinResourceStructureTest {
         assertTrue(personalizationScript.contains("setLocale: selPersonalizationSetLocale"));
         assertTrue(windowScript.contains("setLocale: selWindowSetLocale"));
         assertTrue(gridScript.contains("setLocale: selGridSetLocale"));
+        assertTrue(gridScript.contains("updateRecord: selGridUpdateRecord"));
+        assertTrue(gridScript.contains("selGridColumn.selectedTone"));
         assertTrue(gridScript.contains("columnResize !== false"));
         assertTrue(gridScript.contains("selGridHandleColumnResizeKeydown"));
         assertTrue(searchScript.contains("setLocale: selSearchSetLocale"));

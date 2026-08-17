@@ -101,6 +101,12 @@ sel.components.personalization.mount(personalizationHost, { backgroundController
 
 `selGrid` 默认在每个表头字段的右边界提供列宽调整手柄。鼠标拖动分隔线只改变左侧对应列，并同步扩大表格内部宽度；键盘聚焦手柄后可使用左右方向键调整。只有聚合 payload 显式声明 `grid.columnResize: false` 时才关闭，未声明或传入 `true` 均启用。
 
+后台动作只改变一条记录时，调用实例控制器的 `updateRecord(recordId, changes)`。该 API 只合并内存记录并替换目标业务行，保留表头、分页、滚动位置和当前动作焦点；整页数据、语言或列结构变化才使用 `setLocale(payload)`。
+
+Grid 动作按钮默认只派发 `selGrid:action`，不会自动刷新。播放、弹窗、判题等行内动作必须保持当前 Grid 实例：无视图变化时不调用刷新，有当前行状态变化时只调用 `updateRecord`。`choice` 可用 `selectedTone(record)` 返回 `success` 或 `danger`，统一区分答对和答错的选中状态。
+
+单元格图标可通过 `cellIconTone` 声明静态值或按记录计算的语义色。优先使用 `success`、`danger` 等主题令牌，业务页面不得写死颜色。
+
 ## 新增基础控件
 
 1. 先在 `components/component-registry.json` 登记唯一 ID、目录、源码、公开 API、主题属性和硬依赖，禁止先在业务页面临时实现。

@@ -13,6 +13,7 @@ import com.sp.selplat.japanese.common.util.media.JapaneseMediaStorage;
 import com.sp.selplat.japanese.common.util.media.JapaneseMediaType;
 import com.sp.selplat.japanese.common.util.media.model.JapaneseMediaAsset;
 import com.sp.selplat.japanese.common.util.speech.EdgeTtsSpeechUtil;
+import com.sp.selplat.japanese.common.util.translation.DeepTranslatorUtil;
 import com.sp.selplat.japanese.n2bluebookquestion.dao.JapaneseN2BlueBookQuestionDao;
 import com.sp.selplat.japanese.n2bluebookquestion.service.JapaneseN2BlueBookQuestionService;
 import java.io.IOException;
@@ -40,27 +41,31 @@ public class JapaneseN2BlueBookQuestionServiceImpl
                     + "\\[[\\s\\u3000]*\\]|［[\\s\\u3000]*］)");
 
     private final CodexCliUtil codexCliUtil;
+    private final DeepTranslatorUtil deepTranslatorUtil;
     private final EdgeTtsSpeechUtil edgeTtsSpeechUtil;
     private final FfmpegImageUtil ffmpegImageUtil;
     private final JapaneseMediaStorage mediaStorage;
 
     /**
-     * 注入分类后的 Codex、语音、图片转换和媒体存储共通工具。
-     * 真实传参示例：Spring 注入 {@code CodexCliUtil}、{@code EdgeTtsSpeechUtil} 和本地媒体存储。
+     * 注入分类后的翻译、Codex、语音、图片转换和媒体存储共通工具。
+     * 真实传参示例：Spring 注入 {@code DeepTranslatorUtil}、{@code CodexCliUtil} 和语音工具。
      * 真实返回示例：构造后一个业务 Service 同时提供 CRUD 与三项内容生成能力。
      * 异常或副作用示例：任一工具缺失时 Spring 启动失败；构造不启动外部进程。
      *
-     * @param codexCliUtil Codex 解释和原图生成工具
+     * @param codexCliUtil Codex 原图生成工具
+     * @param deepTranslatorUtil 日语朗读文本免费翻译工具
      * @param edgeTtsSpeechUtil NanamiNeural 语音生成工具
      * @param ffmpegImageUtil WebP 图片转换工具
      * @param mediaStorage 当前本地或未来云存储实现
      */
     public JapaneseN2BlueBookQuestionServiceImpl(
             CodexCliUtil codexCliUtil,
+            DeepTranslatorUtil deepTranslatorUtil,
             EdgeTtsSpeechUtil edgeTtsSpeechUtil,
             FfmpegImageUtil ffmpegImageUtil,
             JapaneseMediaStorage mediaStorage) {
         this.codexCliUtil = codexCliUtil;
+        this.deepTranslatorUtil = deepTranslatorUtil;
         this.edgeTtsSpeechUtil = edgeTtsSpeechUtil;
         this.ffmpegImageUtil = ffmpegImageUtil;
         this.mediaStorage = mediaStorage;
@@ -138,21 +143,25 @@ public class JapaneseN2BlueBookQuestionServiceImpl
     }
 
     /**
-     * 调用 Codex 共通工具生成面向中文学习者的日语题目解释。
-     * 真实传参示例：{@code {questionText:"給与",correctOption:"D"}}。
-     * 真实返回示例：{@code {success:true,data:{explanation:"給与读作きゅうよ"}}}。
-     * 异常或副作用示例：题干或答案缺失时抛出业务异常，不启动 Codex。
+     * 调用 deep-translator 共通工具只把朗读文本翻译为简体中文。
+     * 真实传参示例：{@code {audioText:"今年の給与は去年より低い。"}}。
+     * 真实返回示例：{@code {success:true,data:{explanation:"今年的工资比去年低。"}}}。
+     * 异常或副作用示例：朗读文本缺失时抛出业务异常，不启动翻译进程。
      *
      * @param request SELPLAT 公共单条请求参数
-     * @return Codex 解释的公共结果
+     * @return deep-translator 中文译文的公共结果
      */
     @Override
     public CommonResult generateExplanation(CommonParam request) {
-        validate(request);
+        if (request == null || value(request, "audioText").isEmpty()) {
+            throw new CommonBusinessException(
+                    "JAPANESE_AUDIO_TEXT_REQUIRED", "请先填写朗读文本，再生成中文翻译。");
+        }
         Path work = createWorkDirectory("explanation");
         try {
-            String explanation = codexCliUtil.generateExplanation(request, work);
-            return success(Map.of("explanation", explanation), "解释生成完成。");
+            String explanation = deepTranslatorUtil.translateToSimplifiedChinese(
+                    value(request, "audioText"), work);
+            return success(Map.of("explanation", explanation), "朗读文本中文翻译完成。");
         } finally {
             deleteWorkDirectory(work);
         }
@@ -203,6 +212,38 @@ public class JapaneseN2BlueBookQuestionServiceImpl
         } finally {
             deleteWorkDirectory(work);
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommonResult playAudio(CommonParam request) {
+        Object id = request == null ? null : request.getParam("id");
+        if (id == null || String.valueOf(id).isBlank()) {
+            throw new CommonBusinessException("JAPANESE_QUESTION_ID_REQUIRED", "题目主键不能为空。");
+        }
+        CommonParam query = new CommonParam();
+        query.putParam("id", id);
+        Object source = getById(query).getData();
+        CommonParam question = new CommonParam();
+        if (source instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> question.putParam(String.valueOf(key), value));
+        }
+        String existingUrl = value(question, "audioUrl");
+        if (!existingUrl.isEmpty()) {
+            return success(Map.of("url", existingUrl), "语音读取完成。");
+        }
+        CommonResult generated = generateAudio(question);
+        if (!(generated.getData() instanceof JapaneseMediaAsset asset)) {
+            throw new CommonSystemException(
+                    "JAPANESE_AUDIO_RESULT_INVALID", "语音生成后未返回有效媒体对象。", null);
+        }
+        CommonParam update = new CommonParam();
+        update.putParam("id", id);
+        update.putParam("audioStorageProvider", asset.storageProvider());
+        update.putParam("audioStorageKey", asset.objectKey());
+        update.putParam("audioUrl", asset.url());
+        this.update(update);
+        return success(asset, "语音生成、保存并准备播放完成。");
     }
 
     /**

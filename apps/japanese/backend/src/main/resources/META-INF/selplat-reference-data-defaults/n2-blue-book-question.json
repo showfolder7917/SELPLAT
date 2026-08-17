@@ -27,13 +27,16 @@
       {"fieldName":"sourceQuestionNo","labelZh":"题号","labelJa":"問題番号","labelEn":"Question No.","width":"90px","cellRenderer":"text","sortnum":10},
       {"fieldName":"questionTypeLabel","secondaryFieldName":"questionType","labelZh":"题型","labelJa":"問題形式","labelEn":"Question Type","width":"150px","cellRenderer":"text","sortnum":20},
       {"fieldName":"questionText","labelZh":"题干","labelJa":"問題文","labelEn":"Question","width":"360px","cellRenderer":"text","sortnum":30},
-      {"fieldName":"optionA","labelZh":"A","labelJa":"A","labelEn":"A","width":"180px","cellRenderer":"text","sortnum":40},
-      {"fieldName":"optionB","labelZh":"B","labelJa":"B","labelEn":"B","width":"180px","cellRenderer":"text","sortnum":50},
-      {"fieldName":"optionC","labelZh":"C","labelJa":"C","labelEn":"C","width":"180px","cellRenderer":"text","sortnum":60},
-      {"fieldName":"optionD","labelZh":"D","labelJa":"D","labelEn":"D","width":"180px","cellRenderer":"text","sortnum":70},
-      {"fieldName":"audioState","secondaryFieldName":"audioUrl","labelZh":"语音","labelJa":"音声","labelEn":"Audio","width":"130px","cellRenderer":"actions","sortnum":80},
-      {"fieldName":"updatedAt","labelZh":"更新时间","labelJa":"更新日時","labelEn":"Updated At","width":"180px","cellRenderer":"time","sortnum":90},
-      {"fieldName":"actions","secondaryFieldName":"id","labelZh":"操作","labelJa":"操作","labelEn":"Actions","width":"120px","cellRenderer":"actions","resizable":false,"sortnum":100}
+      {"fieldName":"optionA","labelZh":"A","labelJa":"A","labelEn":"A","width":"180px","cellRenderer":"choice","sortnum":40},
+      {"fieldName":"optionB","labelZh":"B","labelJa":"B","labelEn":"B","width":"180px","cellRenderer":"choice","sortnum":50},
+      {"fieldName":"optionC","labelZh":"C","labelJa":"C","labelEn":"C","width":"180px","cellRenderer":"choice","sortnum":60},
+      {"fieldName":"optionD","labelZh":"D","labelJa":"D","labelEn":"D","width":"180px","cellRenderer":"choice","sortnum":70},
+      {"fieldName":"correctOption","labelZh":"正确答案","labelJa":"正解","labelEn":"Correct Answer","width":"100px","cellRenderer":"badge","visible":false,"sortnum":80},
+      {"fieldName":"correctCount","labelZh":"正确","labelJa":"正解数","labelEn":"Correct","width":"88px","cellRenderer":"badge","sortnum":90},
+      {"fieldName":"wrongCount","labelZh":"错误","labelJa":"不正解数","labelEn":"Wrong","width":"88px","cellRenderer":"badge","sortnum":100},
+      {"fieldName":"audioState","secondaryFieldName":"audioUrl","labelZh":"语音","labelJa":"音声","labelEn":"Audio","width":"56px","cellRenderer":"actions","sortnum":110},
+      {"fieldName":"updatedAt","labelZh":"更新时间","labelJa":"更新日時","labelEn":"Updated At","width":"180px","cellRenderer":"time","sortnum":120},
+      {"fieldName":"actions","secondaryFieldName":"id","labelZh":"操作","labelJa":"操作","labelEn":"Actions","width":"150px","cellRenderer":"actions","resizable":false,"sortnum":130}
     ]
   },
   "controls": [
@@ -41,7 +44,8 @@
     {"key":"sourceQuestionNo","parentKey":"toolbar","fieldName":"sourceQuestionNo","controlKind":"SEARCH","orderNo":10,"width":"220px","height":"42px","x":17,"y":23,"sortnum":10,"legacyGeometry":{"width":"220px","height":"42px","x":0,"y":23}},
     {"key":"questionText","parentKey":"toolbar","fieldName":"questionText","controlKind":"SEARCH","orderNo":20,"width":"320px","height":"42px","x":232,"y":23,"sortnum":20},
     {"key":"submit","parentKey":"toolbar","fieldName":"submit","controlKind":"BUTTON","orderNo":30,"width":"88px","height":"42px","x":564,"y":23,"sortnum":30},
-    {"key":"reset","parentKey":"toolbar","fieldName":"reset","controlKind":"BUTTON","orderNo":40,"width":"90px","height":"42px","x":664,"y":23,"sortnum":40}
+    {"key":"reset","parentKey":"toolbar","fieldName":"reset","controlKind":"BUTTON","orderNo":40,"width":"90px","height":"42px","x":664,"y":23,"sortnum":40},
+    {"key":"nextRound","parentKey":"toolbar","fieldName":"nextRound","controlKind":"BUTTON","orderNo":50,"width":"230px","height":"42px","x":766,"y":23,"sortnum":50}
   ],
   "windows": [
     {

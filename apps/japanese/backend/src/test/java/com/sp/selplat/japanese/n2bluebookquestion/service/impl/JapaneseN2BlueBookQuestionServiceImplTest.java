@@ -12,6 +12,7 @@ import com.sp.selplat.japanese.common.util.media.impl.LocalJapaneseMediaStorage;
 import com.sp.selplat.japanese.common.util.media.model.JapaneseMediaAsset;
 import com.sp.selplat.japanese.common.util.process.JapaneseExternalProcessRunner;
 import com.sp.selplat.japanese.common.util.speech.EdgeTtsSpeechUtil;
+import com.sp.selplat.japanese.common.util.translation.DeepTranslatorUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -24,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** 使用假的外部进程验证 Codex、WebP、NanamiNeural 和媒体存储编排，不触发真实模型。 */
+/** 使用假的外部进程验证翻译、Codex、WebP、NanamiNeural 和媒体编排，不触发在线服务。 */
 class JapaneseN2BlueBookQuestionServiceImplTest {
 
     @TempDir
@@ -39,7 +40,7 @@ class JapaneseN2BlueBookQuestionServiceImplTest {
      * @throws Exception 假进程准备输出文件失败时终止测试
      */
     @Test
-    void shouldGenerateExplanationWebpAndNanamiAudioWithoutRealCodex() throws Exception {
+    void shouldGenerateExplanationWebpAndNanamiAudioWithoutRealOnlineService() throws Exception {
         Files.createDirectories(projectRoot.resolve("apps/japanese"));
         Clock clock = Clock.fixed(Instant.parse("2026-08-09T12:00:00Z"), ZoneOffset.UTC);
         JapaneseExternalProcessRunner runner = fakeProcessRunner();
@@ -53,7 +54,7 @@ class JapaneseN2BlueBookQuestionServiceImplTest {
 
         assertThat(explanation.isSuccess()).isTrue();
         assertThat(((Map<?, ?>) explanation.getData()).get("explanation"))
-                .isEqualTo("給与读作きゅうよ，正确答案是 D。");
+                .isEqualTo("今年的大学应届毕业生平均工资比去年略低。");
         JapaneseMediaAsset imageAsset = (JapaneseMediaAsset) image.getData();
         JapaneseMediaAsset audioAsset = (JapaneseMediaAsset) audio.getData();
         assertThat(imageAsset.url()).startsWith("/pic/").endsWith(".webp");
@@ -67,13 +68,13 @@ class JapaneseN2BlueBookQuestionServiceImplTest {
     }
 
     /**
-     * 验证答案缺失时在启动 Codex 或 edge-tts 前直接返回业务错误。
+     * 验证图片所需答案缺失时在启动 Codex 前直接返回业务错误。
      * 真实传参示例：correctOption 为空的完整题目。
      * 真实返回示例：异常编码 {@code JAPANESE_CORRECT_OPTION_REQUIRED}。
      * 异常或副作用示例：进程计数保持零且临时 static 下没有媒体文件。
      */
     @Test
-    void shouldRejectMissingCorrectOptionBeforeStartingExternalProcess() {
+    void shouldRejectMissingCorrectOptionBeforeStartingImageProcess() {
         AtomicInteger processCount = new AtomicInteger();
         JapaneseExternalProcessRunner runner = (command, work, timeout) -> processCount.incrementAndGet();
         JapaneseN2BlueBookQuestionServiceImpl service = service(
@@ -81,11 +82,50 @@ class JapaneseN2BlueBookQuestionServiceImplTest {
         CommonParam invalid = request(
                 "PRONUNCIATION", "給与", "A", "B", "C", "D", "", "給与");
 
-        assertThatThrownBy(() -> service.generateExplanation(invalid))
+        assertThatThrownBy(() -> service.generateImage(invalid))
                 .isInstanceOf(CommonBusinessException.class)
                 .extracting(error -> ((CommonBusinessException) error).getErrorCode())
                 .isEqualTo("JAPANESE_CORRECT_OPTION_REQUIRED");
         assertThat(processCount).hasValue(0);
+    }
+
+    /**
+     * 验证中文翻译只把朗读文本交给 deep-translator，不泄漏题干、选项或答案。
+     * 真实传参示例：朗读文本为“給与は去年より低い。”，题干为完全不同的“不得进入提示词”。
+     * 真实返回示例：命令只含日语朗读文本和 ja、zh-CN，并返回“工资比去年低。”。
+     * 异常或副作用示例：只由假进程写临时命令输出，不调用真实 Google 翻译。
+     */
+    @Test
+    void shouldTranslateOnlyAudioTextWithoutQuestionContext() {
+        AtomicReference<List<String>> translationCommand = new AtomicReference<>();
+        JapaneseExternalProcessRunner runner = (command, workingDirectory, timeout) -> {
+            try {
+                translationCommand.set(command);
+                Files.writeString(
+                        workingDirectory.resolve("process-output.log"),
+                        "Translation from ja to zh-CN\n"
+                                + "--------------------------------------------------\n"
+                                + "Translation result: 工资比去年低。\n");
+            } catch (Exception exception) {
+                throw new IllegalStateException(exception);
+            }
+        };
+        JapaneseN2BlueBookQuestionServiceImpl service = service(
+                runner, new LocalJapaneseMediaStorage(projectRoot, Clock.systemUTC()));
+        CommonParam request = request(
+                "GRAMMAR", "不得进入提示词", "甲", "乙", "丙", "丁", "D", "給与は去年より低い。");
+
+        CommonResult result = service.generateExplanation(request);
+
+        assertThat(translationCommand.get()).containsExactly(
+                "/fake/deep-translator",
+                "--translator", "google",
+                "--source", "ja",
+                "--target", "zh-CN",
+                "--text", "給与は去年より低い。");
+        assertThat(String.join(" ", translationCommand.get()))
+                .doesNotContain("不得进入提示词", "甲", "乙", "丙", "丁");
+        assertThat(((Map<?, ?>) result.getData()).get("explanation")).isEqualTo("工资比去年低。");
     }
 
     /**
@@ -169,13 +209,23 @@ class JapaneseN2BlueBookQuestionServiceImplTest {
         return (command, workingDirectory, timeout) -> {
             try {
                 String executable = command.get(0);
+                if (executable.endsWith("deep-translator")) {
+                    Files.writeString(
+                            workingDirectory.resolve("process-output.log"),
+                            "Translation from ja to zh-CN\n"
+                                    + "--------------------------------------------------\n"
+                                    + "Translation result: 今年的大学应届毕业生平均工资比去年略低。\n");
+                    return;
+                }
                 if (executable.endsWith("codex")) {
                     int outputIndex = command.indexOf("-o") + 1;
                     if (command.contains("workspace-write")) {
                         Files.write(workingDirectory.resolve("generated-image.png"), new byte[]{1, 2, 3});
                         Files.writeString(Path.of(command.get(outputIndex)), "generated-image.png");
                     } else {
-                        Files.writeString(Path.of(command.get(outputIndex)), "給与读作きゅうよ，正确答案是 D。");
+                        Files.writeString(
+                                Path.of(command.get(outputIndex)),
+                                "今年的大学应届毕业生平均工资比去年略低。");
                     }
                     return;
                 }
@@ -192,9 +242,9 @@ class JapaneseN2BlueBookQuestionServiceImplTest {
     }
 
     /**
-     * 使用同一个假进程边界装配分类后的 Codex、语音和图片共通工具。
+     * 使用同一个假进程边界装配翻译、Codex、语音和图片共通工具。
      * 真实传参示例：假进程执行器和写入 JUnit 临时目录的媒体存储。
-     * 真实返回示例：返回不会启动真实 Codex、edge-tts 或 FFmpeg 的业务生成服务。
+     * 真实返回示例：返回不会启动真实翻译、Codex、edge-tts 或 FFmpeg 的业务服务。
      * 异常或副作用示例：仅调用业务方法时才由假进程写测试文件；装配本身无副作用。
      *
      * @param runner 假外部进程执行器
@@ -206,6 +256,7 @@ class JapaneseN2BlueBookQuestionServiceImplTest {
             LocalJapaneseMediaStorage storage) {
         return new JapaneseN2BlueBookQuestionServiceImpl(
                 new CodexCliUtil(runner, "/fake/codex"),
+                new DeepTranslatorUtil(runner, "/fake/deep-translator"),
                 new EdgeTtsSpeechUtil(runner, "/fake/edge-tts"),
                 new FfmpegImageUtil(runner, "/fake/ffmpeg"),
                 storage);

@@ -17,7 +17,7 @@ public class EdgeTtsSpeechUtil {
 
     /**
      * 装配统一外部进程边界与 edge-tts 路径。
-     * 真实传参示例：假的进程执行器和 {@code OPTION/edge-tts-venv/bin/edge-tts}。
+     * 真实传参示例：假的进程执行器和 {@code OPTION/plugin/edge-tts-venv/bin/edge-tts}。
      * 真实返回示例：构造后固定使用 {@code ja-JP-NanamiNeural}。
      * 异常或副作用示例：路径不可执行时首次生成抛出系统异常；构造不启动进程。
      *

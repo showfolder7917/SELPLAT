@@ -7,7 +7,7 @@ python_ability_refs = none
 <!-- 当前规则不需要 Node 专用能力；Node 只在受影响前端字段同步时使用现有语法检查。 -->
 node_ability_refs = none
 <!-- 首版规则固化 reference-data 重构中已经验证的 SQL 目录和单表文件约束。 -->
-rule_version = 2.15.0
+rule_version = 2.16.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，未经人工提升不得扩大到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记、真实案例核对和索引链验证。 -->
@@ -34,6 +34,8 @@ upgrade_record_20260816_tree_type_cleanup = ReferenceDataType禁止TREE_valueCod
 upgrade_record_20260816_tree_ownership = ReferenceDataTreeNode增加projectCode_pageCode用于归属展示查询_code加parentId仍是唯一建树关系_禁止类型外键耦合
 <!-- 本次升级恢复六张实体表一表一号段，并把无实体表的共享选项组交给独立通用逻辑号段。 -->
 upgrade_record_20260816_option_set_sequence = 六张实体表各用TableNameId且code后缀等于本表id_ReferenceDataObjectId只发optionSetCode等无实体逻辑编码_Type删除controlCode并以optionSetCode建立共享层级
+<!-- 本次升级统一独立表号段初始值；表之间依靠表名隔离，不得再用 200000、300000 等人为区间表达表类型。 -->
+upgrade_record_20260817_table_sequence_start = 新建独立实体表号段统一从100000开始_不同表允许相同主键数值_禁止以首位数字划分表类型_已有游标不得被启动重置
 
 <!-- 问题：数据库脚本使用含义模糊的 tables 或 migration 文件名、一个文件创建多张正式表、类型表混入树或选项能力字段时，后续维护者无法从目录和文件名判断真实职责。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 中新建、迁移、拆分、改名或审查 apps/<app> 的应用自有数据库和 SQL。 -->
@@ -111,6 +113,8 @@ selplat_reference_data_type_physical_column_order = id,code,tenantId,lastOperate
 selplat_common_sequence_sql_files = schema-CommonSequenceSegment.sql,data-CommonSequenceSegment.sql,owner_common_persistence
 <!-- 默认应用仍是一表一号段；只有中央登记显式声明全局 code 命名空间的应用，才允许全部业务表共享唯一聚合号段，保证对象类型前缀与全局 id 拼接出的 code 全局不重复且人工可辨认。 -->
 selplat_business_table_sequence_cardinality = default:one_table_one_row(seqCode=<ActualTableName>Id,no_partial_seed_set),registered_aggregate_namespace_exception,shared_logical_sequence_allowed_for_no-table-object_only,reference_data_record_code_suffix_equals_own_table_id
+<!-- 新建独立实体表的 nextStartId 统一为 100000；每表独立 seqCode 已提供命名空间，禁止再分配 200000、300000 等表类型区间。 -->
+selplat_independent_table_sequence_initial_value = nextStartId=100000,one_sequence_per_table,same_numeric_ids_across_tables_allowed,no_table_kind_numeric_partition,no_restart_cursor_reset
 <!-- 聚合全局命名空间必须登记对象类型前缀策略；关联仍依靠字段和外键，禁止解析 code 前缀推导数据库关系。 -->
 selplat_aggregate_global_code_prefix_strategy = codePrefixStrategy=object-kind-plus-global-id,readable_object_kind_prefix,shared_global_id_suffix,no_relationship_inference_from_prefix
 <!-- optionSetCode 等没有独立实体表的共享逻辑坐标允许使用 ReferenceDataObjectId；实体表 id 和 code 禁止调用该号段。 -->

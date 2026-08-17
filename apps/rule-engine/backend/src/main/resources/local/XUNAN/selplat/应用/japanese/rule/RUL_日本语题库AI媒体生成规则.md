@@ -1,13 +1,13 @@
 # 日本语题库 AI 与媒体生成规则
 
 <!-- 当前能力由 Japanese 后端 Service 实现，页面只调用稳定 HTTP 接口。 -->
-java_ability_refs = apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion/service/JapaneseN2BlueBookQuestionService.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion/service/impl/JapaneseN2BlueBookQuestionServiceImpl.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/codex/CodexCliUtil.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/speech/EdgeTtsSpeechUtil.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/image/FfmpegImageUtil.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/media/JapaneseMediaStorage.java
+java_ability_refs = apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion/service/JapaneseN2BlueBookQuestionService.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion/service/impl/JapaneseN2BlueBookQuestionServiceImpl.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/translation/DeepTranslatorUtil.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/codex/CodexCliUtil.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/speech/EdgeTtsSpeechUtil.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/image/FfmpegImageUtil.java,apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/media/JapaneseMediaStorage.java
 <!-- 扫描题库导入由 Japanese 应用内的可重复 Python 导入器实现。 -->
 python_ability_refs = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/japanese_n2_red_blue_book_importer.py,apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/japanese_n2_ai_question_reviewer.py
 <!-- 页面行为由 Japanese 独立 JavaScript 实现。 -->
 node_ability_refs = apps/japanese/backend/src/main/resources/static/japanese/japanese.js
-<!-- 本版增加扫描题库纠错、范围排除和写库前质量门槛。 -->
-rule_version = 1.15.0
+<!-- 本版固定插件统一目录、免费翻译外发边界与朗读文本单一翻译输入。 -->
+rule_version = 1.28.0
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示实现、索引和隔离进程测试已形成闭环。 -->
@@ -16,6 +16,34 @@ rule_status = active
 upgrade_record_20260816_default_query = 题号与题干独立查询_后台分页AND_编辑态保存紧跟重置
 <!-- 本次升级让列表隐藏正确答案与图片、显示四个选项，并统一为一个可生成保存后播放的语音按钮。 -->
 upgrade_record_20260816_question_grid_audio = 隐藏正确答案和图片_显示ABCD选项_统一播放语音按钮_缺失时生成保存并自动播放
+<!-- 本次升级把练习状态从题目主表拆出，并固定一次页面请求、后端多表 Service 编排的边界。 -->
+upgrade_record_20260817_learning_progress = 独立轮次表与逐题作答表_服务端用户身份_列表恢复当前轮选择_累计正确错误_查看解释_新一轮保留历史
+<!-- 轮次标签与新一轮按钮按一个稳定复合根登记，避免内部元素分裂保存。 -->
+upgrade_record_20260817_toolbar_page_editor = 轮次业务动作ControlLayout登记_复合根整体拖动调宽_共享保存跟随工具条末项
+<!-- 本次升级修复首次答案被重复复用的问题，并固定零次数不显示图标。 -->
+upgrade_record_20260817_answer_attempt = 每次选项点击实时判题并新增明细_同轮同题允许多次作答_每个选项始终显示单选圆圈_非零正确错误次数显示语义图标_零次数纯数字
+<!-- 正确领先才显示绿色图标；错误领先或非零打平均显示红色图标。 -->
+upgrade_record_20260817_count_dominance_icon = 正确较大仅正确显示绿色图标_错误较大或非零相等仅错误显示红色图标_零比零不显示图标_数字始终保留
+<!-- 新一轮是会结束当前轮的业务动作，取消确认时不得请求后台。 -->
+upgrade_record_20260817_next_round_confirmation = 点击新一轮先打开公共selConfirmDialog_取消保持当前轮且零请求_确认后才调用next-round并刷新_历史记录保留
+<!-- 解释生成不得覆盖人工修订，长耗时必须在按钮本体直接反馈。 -->
+upgrade_record_20260817_explanation_append_feedback = 生成按钮立即显示aria_busy与正在生成_返回解释以双换行追加到原解释末尾_禁止覆盖人工内容_超过8000字阻断_已有题目立即持久化_新增题目标准保存
+<!-- 生成期间编辑区可能更新节点引用，完成时必须同时恢复原点击按钮和当前生成区按钮。 -->
+upgrade_record_20260817_generation_button_reset = finally直接恢复activeButton_同步扫描当前generationView_成功失败均移除aria_busy与is_running_恢复默认文案_更新静态资源版本
+<!-- 题目解释生成改为朗读文本单一输入的简体中文翻译，禁止题干回退和选项上下文泄漏。 -->
+upgrade_record_20260817_audio_text_translation = 只读取audioText_空值直接拒绝_禁止questionText回退_禁止选项与正确答案进入提示词_只输出简体中文译文
+<!-- 免费语音和翻译环境统一归档到 OPTION/plugin，翻译只允许外发已确认的朗读文本。 -->
+upgrade_record_20260817_free_plugin_directory_and_translation = OPTION_plugin统一父目录_edge-tts与deep-translator独立venv_后端受控进程调用_Google提供方_仅audioText外发_Codex仅保留图片生成
+<!-- 本次升级纠正“隐藏等于不传”的错误实现，双击编辑必须直接取得当前记录的真实答案和解释。 -->
+upgrade_record_20260817_management_hidden_fields = 管理列表保留correctOption与explanation_正确答案表头登记但visible_false_双击复用当前记录_禁止默认A覆盖真实答案_禁止二次详情请求
+<!-- 本次升级消除单选判题后的滚动条跳动，选择和次数通过公共 Grid 单行 API 原位写回。 -->
+upgrade_record_20260817_answer_in_place_update = 判题成功只更新当前题目_单选状态与正确错误次数原位写回_selGrid_updateRecord_禁止japaneseRefresh整表重绘_保持滚动与焦点
+<!-- 语音按钮只更新当前行忙碌状态；完整播放两遍并在中间停顿半秒。 -->
+upgrade_record_20260817_audio_repeat_in_place = 播放按钮禁止setLocale与japaneseRefresh_当前行updateRecord_完整播放第一遍_停顿500毫秒_从头播放第二遍_不重建滚动容器
+<!-- Codex exec 等非交互进程收到完整参数后必须立即收到 stdin EOF，禁止等待不存在的追加输入。 -->
+upgrade_record_20260817_external_process_stdin_eof = ProcessBuilder启动后立即关闭getOutputStream_关闭失败强制终止子进程_再进入超时等待_回归探针验证EOF
+<!-- 生成按钮执行时图标使用进度语义色和脉冲，结束或失败后由 is-running 移除恢复默认。 -->
+upgrade_record_20260817_generation_icon_running_tone = is_running图标使用semantic_progress_执行中脉冲与光晕_finally移除is_running_恢复默认图标表面
 <!-- 本规则来自用户对日语题库、直接生成和指定 edge-tts 环境的确认。 -->
 upgrade_record = 2026-08-09:建立N2蓝宝书1000题题库_Codex图片解释_NanamiNeural语音_WebP和云存储预留规则;2026-08-09:修正Japanese页面未完整继承SEL主题运行时并手写树_表格_窗口_改用公共控件且保留紧凑字号;2026-08-09:增加扫描PDF题库的官方答案优先_OCR纠错_连续题号_排除范围_未决阻断和幂等导入门槛;2026-08-09:将未参与Japanese构建的Python导入器迁入当前用户rule-engine能力层并清理失败实验源码;2026-08-09:删除Japanese专用生成Request_全部复用CommonParam_CommonResult并接入全应用协议门禁;2026-08-10:删除无调用方Japanese表Domain_继续使用CommonParam_Map_数据库元数据CRUD;2026-08-10:重组Japanese为技术层优先_层内按题库业务分目录_生成媒体和外部进程统一进入common;2026-08-10:纠正为Uniauth式数据库业务目录优先_题库表相关代码聚合_common仅保存跨题库能力;2026-08-10:删除未启用的ReferenceDataProvider和独立reference-data装配_题型树暂由页面固定配置提供;2026-08-10:清理common伪Service和碎片目录_业务生成编排回归题库Service_Codex_语音_图片_媒体_进程拆分为分类共通工具;2026-08-10:删除仅有一个调用方的JapaneseCrudSupport_默认字段_有效查询_稳定排序和更新时间回归N2业务Service;2026-08-10:合并仅服务N2题库的ContentService_一个业务只保留一个Service接口和实现_生成编排直接调用分类共通工具;2026-08-10:增加不查PDF的Codex全题语义审校_锁定官方答案字母_唯一选项_完整朗读拼接_应用API同步门禁;2026-08-16:按平台默认修复基线接入三语国际化_引用数据自动登记_Grid表头_题型树_查询元素与Window页面编辑_无配置回退
 
@@ -40,7 +68,7 @@ japanese_question_http_contract = CommonParam,CommonBatchParam,CommonPageParam,C
 <!-- Japanese 题表不建立无调用方的镜像 Domain，CRUD 字段以数据库元数据为真实来源。 -->
 japanese_question_table_domain_policy = no_domain_use_CommonParam_Map_database_metadata
 <!-- Japanese 按数据库题库业务优先组织，题库生成编排属于唯一业务 Service；common 只保存配置、持久化支撑和分类共通工具。 -->
-japanese_java_package_structure = n2bluebookquestion/controller|service|service/impl|dao,common/config|persistence|util
+japanese_java_package_structure = n2bluebookquestion|n2questionanswerround|n2questionanswerrecord:controller|service|service/impl|dao,learning_progress_orchestration:n2questionanswerrecord_existing_service,common/config|persistence|util,no_business_directory_without_table,one_service_contract_per_table_business
 <!-- 同一业务的 CRUD、解释、图片和语音必须由一个 Service 接口和一个实现承载，禁止为只有一个调用方的内容生成再建中间 Service。 -->
 japanese_business_service_policy = one_business_one_service_contract_and_impl,no_single_consumer_content_service,service_calls_common_util_directly
 <!-- common 禁止建立业务 Service 或笼统 generation、media、runtime 根目录；Codex、语音、图片、媒体和进程能力必须在 util 下分类。 -->
@@ -49,16 +77,32 @@ japanese_common_package_boundary = no_business_service,no_crud_root,no_generatio
 japanese_crud_abstraction_policy = single_business_keep_in_business_service,extract_only_after_multiple_real_consumers
 <!-- Japanese 随模块发布 Reference Data 默认声明；Host 自动补齐页面、Grid、列、查询元素、题型树和 Window，独立启动时使用页面默认值。 -->
 japanese_reference_data_policy = classpath_default_manifest,project_and_page_key_lookup,business_getGridColumn,configured_question_type_tree,individual_query_layout,window_geometry,standalone_default_fallback,no_private_provider
-<!-- N2 查询固定按来源题号和题干两个真实字段独立提交，后台分页返回 totalCount；编辑态两个输入、查询和重置逐项保存，共享保存按钮紧跟重置。 -->
-japanese_question_query_and_editor_policy = sourceQuestionNo_exact,questionTextLike,BaseDao_AND,backend_paging,one_shared_submit,individual_query_controls,shared_save_after_reset
-<!-- 题库列表不得直接暴露正确答案或图片状态；学习内容展示四个选项，并由公共表头编辑器管理列显隐。 -->
-japanese_question_grid_columns = sourceQuestionNo,questionTypeLabel,questionText,optionA,optionB,optionC,optionD,audioState,updatedAt,actions,no_correctOption,no_imageState
+<!-- N2 查询固定按来源题号和题干两个真实字段独立提交，后台分页返回 totalCount；工具条输入、查询、重置和轮次复合动作逐项保存。 -->
+japanese_question_query_and_editor_policy = sourceQuestionNo_exact,questionTextLike,BaseDao_AND,backend_paging,one_shared_submit,individual_toolbar_controls,nextRound_composite_root,shared_save_after_last_editable_toolbar_control
+<!-- 管理列表记录保留正确答案供编辑，但业务 Grid 默认隐藏该已登记表头；图片状态仍不作为表头。 -->
+japanese_question_grid_columns = sourceQuestionNo,questionTypeLabel,questionText,optionA,optionB,optionC,optionD,correctOption_hidden_by_default,correctCount,wrongCount,audioState,updatedAt,actions,no_imageState
 <!-- 语音列始终只显示同一个播放按钮；没有媒体时先生成、写回当前题目媒体字段，再自动播放。 -->
 japanese_question_grid_audio_action = one_play_button,existing_audio_play_directly,missing_audio_generate_then_persist_then_auto_play,no_separate_generate_action
+<!-- 做题状态不得写回题目主表；轮次和逐题记录分别使用独立业务表、Service 与本表独立号段。 -->
+japanese_answer_history_storage = JapaneseN2QuestionAnswerRound,JapaneseN2QuestionAnswerRecord,roundId_to_round_id,questionId_to_question_id,repeated_round_question_records_allowed,one_record_per_click,per_table_sequence,no_question_table_progress_fields
+<!-- 页面只请求一次学习分页；后端通过三个业务 Service 分次查询并编排，禁止 JOIN、自写 SQL 和前端传 userId。 -->
+japanese_learning_progress_query = one_frontend_page_request,question_page_plus_current_round_plus_user_records,service_orchestration,no_join,no_custom_sql,server_identity_only
+<!-- 选项使用公共 Grid choice 单选；服务端判定和落库后 Toast 反馈，管理记录保留编辑字段但 Grid 默认不渲染正确答案。 -->
+japanese_answer_interaction = selGrid_choice_A_B_C_D,visible_radio_every_option,repeated_attempt_per_click,backend_judgement,one_record_per_click,persist_before_toast,selection_visual_resets_after_reload,management_record_keeps_correctOption_and_explanation,correctOption_visible_false
+<!-- 判题响应只修改当前行的单选、正确次数和错误次数，表头、分页与滚动容器保持原实例。 -->
+japanese_answer_result_rendering = current_record_only,displaySelectedOption,correctCount,wrongCount,selGrid_updateRecord,no_japaneseRefresh,no_table_header_or_pagination_rebuild,preserve_scroll_and_action_focus
+<!-- 语音播放属于行内动作，生成结果只合并当前记录，不允许刷新题目分页。 -->
+japanese_audio_playback = current_record_only,audioBusy_updateRecord,no_setLocale,no_japaneseRefresh,play_once_then_wait_500ms_then_play_once,no_scroll_container_rebuild
+<!-- 正确错误次数从用户逐题历史聚合；查看解释必须已作答，新轮次保留全部历史。 -->
+japanese_answer_review = per_attempt_correct_and_wrong_counts,correct_lead_success_green,wrong_lead_or_nonzero_tie_danger_red,zero_zero_plain,explanation_after_answer_only,new_round_preserves_history
+<!-- 新一轮创建必须位于确认结果之后，禁止按钮直接请求后台。 -->
+japanese_next_round_confirmation = public_selConfirmDialog,cancel_keeps_current_round,no_backend_request_before_confirm,confirm_then_next_round_request,refresh_after_success,preserve_history
 <!-- 固定界面使用中日英三语资源和统一语言运行时；题目正文保持原始日文，切换语言不得清空搜索、分页、选中行或编辑表单。 -->
 japanese_i18n_policy = zh-CN,ja-JP,en-US,selLocaleRuntime,question_content_unchanged,preserve_search_page_selection_editor_state
 <!-- AI 与语音生成按钮不得弹二次确认，点击后直接执行并展示进度和结果。 -->
 japanese_generation_confirmation_policy = direct_execution_without_second_confirmation
+<!-- 已有题目的追加解释即时保存；尚无主键的新题仍由标准新增动作统一建档。 -->
+japanese_explanation_generation = immediate_button_busy_feedback,aria_busy,disable_generation_siblings,preserve_existing_explanation,append_double_newline,never_overwrite_manual_text,max_8000_guard,existing_question_update_immediately,new_question_standard_save
 
 ## 扫描题库导入
 
@@ -85,12 +129,18 @@ japanese_scanned_question_database_write_prerequisite = codex_ai_review_applied,
 
 ## 本机生成链路
 
-<!-- 解释和图片必须由程序调用本机 Codex CLI，默认使用桌面应用内置 CLI 且允许环境变量覆盖。 -->
-japanese_codex_cli_boundary = local_codex_exec,configurable_executable,no_shell_command_concatenation
-<!-- Codex 执行使用系统临时隔离目录，解释只读，图片只允许写临时工作区。 -->
-japanese_codex_execution_scope = ephemeral_temp_directory,explanation_read_only,image_workspace_write
+<!-- 图片必须由程序调用本机 Codex CLI，默认使用桌面应用内置 CLI 且允许环境变量覆盖。 -->
+japanese_codex_cli_boundary = image_only,local_codex_exec,configurable_executable,no_shell_command_concatenation
+<!-- Codex 图片执行使用系统临时隔离目录，只允许写临时工作区。 -->
+japanese_codex_execution_scope = ephemeral_temp_directory,image_workspace_write
+<!-- 免费语音与翻译插件统一归档到 OPTION/plugin，并以独立虚拟环境隔离依赖。 -->
+japanese_free_plugin_root = OPTION/plugin,edge-tts-venv,deep-translator-venv,separate_dependencies
 <!-- 语音默认且固定优先使用用户确认的 edge-tts 虚拟环境入口。 -->
-japanese_edge_tts_default_executable = /Users/showfolder/Documents/workSpace/SELF/SELPLAT/OPTION/edge-tts-venv/bin/edge-tts
+japanese_edge_tts_default_executable = /Users/showfolder/Documents/workSpace/SELF/SELPLAT/OPTION/plugin/edge-tts-venv/bin/edge-tts
+<!-- 翻译固定使用 deep-translator Google 提供方，只允许发送用户确认的朗读文本。 -->
+japanese_deep_translator_default_executable = /Users/showfolder/Documents/workSpace/SELF/SELPLAT/OPTION/plugin/deep-translator-venv/bin/deep-translator
+<!-- 外部翻译请求的数据边界只有 audioText，禁止携带题干、选项、答案和用户数据。 -->
+japanese_translation_external_payload = provider:google,allowed:audioText,forbidden:questionText|options|correctOption|userData
 <!-- 日语语音音色固定为 NanamiNeural，输出格式为 MP3。 -->
 japanese_audio_generation = voice:ja-JP-NanamiNeural,format:mp3
 <!-- 朗读文本必须把正确选项填入所有题干占位符；“やら／やら”等成对答案按顺序填入多个空格。 -->
@@ -109,7 +159,13 @@ japanese_media_cloud_migration_boundary = JapaneseMediaStorage_interface,replace
 
 ## 验证门槛
 
-<!-- 自动化测试必须使用假的外部进程，禁止测试期间真实调用 Codex、edge-tts 或 FFmpeg。 -->
-japanese_generation_test_isolation = fake_process_runner,no_real_codex,no_real_edge_tts,no_real_ffmpeg
+<!-- 自动化测试必须使用假的外部进程，禁止测试期间真实调用翻译、Codex、edge-tts 或 FFmpeg。 -->
+japanese_generation_test_isolation = fake_process_runner,no_real_deep_translator,no_real_codex,no_real_edge_tts,no_real_ffmpeg
+<!-- 外部进程输入只允许通过受控参数列表传递，父进程不得保持空 stdin 管道。 -->
+japanese_external_process_stdin = command_arguments_complete_before_start,close_child_stdin_immediately,close_failure_destroy_forcibly,wait_only_after_eof,no_interactive_confirmation_pipe
+<!-- 三种生成动作共享同一运行图标状态，完成和失败都必须恢复默认。 -->
+japanese_generation_running_icon = is_running_only_active_button,semantic_progress_color,pulse_and_glow,finally_direct_active_button_restore,current_generation_view_sweep,remove_aria_busy_and_running_class,idle_label_and_style_restored,success_failure_same_cleanup
+<!-- 中文翻译只使用用户填写的朗读文本，不得将题干或答案作为备选输入。 -->
+japanese_audio_text_translation = deep_translator_google,audioText_only,audioText_required,no_questionText_fallback,no_question_type_options_or_correct_answer_or_user_data,simplified_chinese_translation_only,no_title_original_analysis_or_example
 <!-- 交付必须覆盖 SQL、生成编排、媒体目录、SEL 控件资源与挂载、页面动作、真实启动、CRUD 和引用数据树。 -->
 japanese_question_bank_delivery_gate = schema_test,generation_orchestration_test,media_path_test,sel_theme_and_component_contract_test,javascript_syntax,real_startup,crud_http_check,reference_data_tree_http_check,real_browser_visual_check
