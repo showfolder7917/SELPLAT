@@ -35,6 +35,7 @@ class ReferenceDataSixTableContractTest {
                 .contains("tableName: \"ReferenceDataControlLayout\"")
                 .contains("tableName: \"ReferenceDataWindow\"")
                 .contains("referenceDataLoadPageConfiguration()")
+                .contains("String(record.projectCode) === referenceDataProjectCode")
                 .contains("referenceDataState.records.set(\"controls\", result.data.controls)")
                 .contains("/api/reference-data/page-editor-capability")
                 .contains("tableTitle: module.name, tableCode: tableRecord?.code || referenceDataText")

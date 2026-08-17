@@ -105,6 +105,8 @@ load_rule_for_active_user_selplat_schema_data_sql_creation_split_rename_or_revie
 <!-- 修改应用数据库字段、约束、初始化数据或加载清单时加载，保证调用方和隔离测试同步。 -->
 load_rule_for_active_user_selplat_database_field_constraint_seed_or_loader_change = SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES
 load_rule_for_active_user_selplat_deprecated_table_precheck_migration_or_drop = SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES
+<!-- 修改正式库中需要缺库恢复的连接、Window 等配置时加载，强制同步启动 SQL 和加载契约。 -->
+load_rule_for_active_user_selplat_recovery_configuration_database_mutation_or_startup_sql_sync = SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES
 
 <!-- SELPLAT 多项目使用公共 Base CRUD 与号段时的数据源上下文、继承结构和 Host 聚合约束。 -->
 SELPLAT_BASE_DAO_PROJECT_DATASOURCE_CONTEXT_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT基础DAO项目数据源上下文规则.md

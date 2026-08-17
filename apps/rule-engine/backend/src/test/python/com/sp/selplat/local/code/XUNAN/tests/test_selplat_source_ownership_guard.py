@@ -945,6 +945,42 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             self.assertIn("MANAGED_APPLICATION_SCHEMA_DESTRUCTIVE_REFRESH_FORBIDDEN", codes)
             self.assertIn("MANAGED_APPLICATION_SEED_MERGE_OVERWRITE_FORBIDDEN", codes)
 
+    def test_recovery_configuration_requires_data_sql_and_production_loader(self) -> None:
+        """需要缺库恢复的配置表必须同时登记单表 data SQL 和生产加载清单。"""
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/example"
+            sql_root = project / "db/sql"
+            sql_root.mkdir(parents=True)
+            (sql_root / "schema-ExampleCatalog.sql").write_text(
+                "CREATE TABLE IF NOT EXISTS ExampleCatalog (id BIGINT PRIMARY KEY);\n",
+                encoding="utf-8",
+            )
+            self.register_managed_database_application(
+                fixture,
+                "example",
+                databaseFile="db/example.mv.db",
+                datasourcePrefix="example.datasource",
+                startupRecoveryTables=["ExampleCatalog"],
+            )
+
+            missing_file_result = self.guard.audit_source_ownership(fixture)
+            self.assertIn(
+                "MANAGED_APPLICATION_RECOVERY_DATA_SQL_MISSING",
+                {violation["code"] for violation in missing_file_result["violations"]},
+            )
+
+            (sql_root / "data-ExampleCatalog.sql").write_text(
+                "INSERT INTO ExampleCatalog (id) SELECT 100000 "
+                "WHERE NOT EXISTS (SELECT 1 FROM ExampleCatalog WHERE id=100000);\n",
+                encoding="utf-8",
+            )
+            missing_loader_result = self.guard.audit_source_ownership(fixture)
+            self.assertIn(
+                "MANAGED_APPLICATION_RECOVERY_DATA_SQL_NOT_LOADED",
+                {violation["code"] for violation in missing_loader_result["violations"]},
+            )
+
     def test_root_gitignore_must_not_hide_database_files(self) -> None:
         """根规则不得用通配符隐藏 mv.db，H2 运行副产物仍必须排除。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:

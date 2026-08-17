@@ -33,8 +33,9 @@ public final class MdaControlSchemaTestVerifier {
         assertEquals("NO", identityFlag(jdbc));
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
-        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertEquals(2L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
         assertReferenceDataConnection(jdbc);
+        assertJapaneseQuestionConnection(jdbc);
         assertControlSchema(jdbc);
     }
 
@@ -55,8 +56,9 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT versionNo FROM CommonSequenceSegment WHERE seqCode = 'MdaConnectionProfileId'",
             Integer.class
         ));
-        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertEquals(2L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
         assertReferenceDataConnection(jdbc);
+        assertJapaneseQuestionConnection(jdbc);
         assertControlSchema(jdbc);
     }
 
@@ -75,8 +77,9 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT connectionName FROM MdaConnectionProfile WHERE id = 10003",
             String.class
         ));
-        assertEquals(2L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertEquals(3L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
         assertReferenceDataConnection(jdbc);
+        assertJapaneseQuestionConnection(jdbc);
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
         assertControlSchema(jdbc);
@@ -179,6 +182,25 @@ public final class MdaControlSchemaTestVerifier {
         ));
         assertEquals("123456", jdbc.queryForObject(
             "SELECT password FROM MdaConnectionProfile WHERE connectionName = 'Reference Data 数据库'",
+            String.class
+        ));
+    }
+
+    /**
+     * 验证日语题库连接可以只依靠启动 SQL 在空 MDA 控制库中恢复。
+     * 真实传参示例：传入已执行生产 schema/data 的隔离控制库 JdbcTemplate。
+     * 真实返回示例：连接名唯一，路径为 {@code file:./apps/japanese/db/japanese}。
+     * 异常或副作用示例：记录缺失或重复时断言失败，不修改隔离数据库。
+     *
+     * @param jdbc 当前 Case 的隔离控制库查询模板
+     */
+    private static void assertJapaneseQuestionConnection(JdbcTemplate jdbc) {
+        assertEquals(1L, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM MdaConnectionProfile WHERE connectionName = 'N2 蓝宝书1000题数据库'",
+            Long.class
+        ));
+        assertEquals("file:./apps/japanese/db/japanese", jdbc.queryForObject(
+            "SELECT databaseName FROM MdaConnectionProfile WHERE connectionName = 'N2 蓝宝书1000题数据库'",
             String.class
         ));
     }

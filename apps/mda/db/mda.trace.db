@@ -678,3 +678,6 @@ Caused by: org.h2.mvstore.MVStoreException: The file is locked: /Users/showfolde
 	at org.h2.mvstore.SingleFileStore.open(SingleFileStore.java:81)
 	at org.h2.mvstore.MVStore.<init>(MVStore.java:286)
 	... 19 more
+2026-08-18 07:04:09.873305+09:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLDataException: Data conversion error converting "'' (MdaConnectionProfile: ""port"" INTEGER COMMENT U&'\\76ee\\6807\\6570\\636e\\5e93\\76d1\\542c\\7aef\\53e3')"; SQL statement:
+INSERT INTO MdaConnectionProfile  ( id,  connectionName,  databaseType,  host,  port,  databaseName,  schemaName,  username,  customJdbcUrl,  jdbcParameters,  defaultAutoCommit,  sortnum,  status,  createdAt,  updatedAt,  password )  VALUES  ( ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ? ) [22018-232]

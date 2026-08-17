@@ -10,3 +10,16 @@ INSERT INTO MdaConnectionProfile (
 WHERE NOT EXISTS (
     SELECT 1 FROM MdaConnectionProfile WHERE connectionName = 'Reference Data 数据库'
 );
+
+-- N2 蓝宝书1000题是 SELPLAT 内置的日语题库；只在稳定连接名缺失时恢复，不覆盖工作台中已修改的参数。
+INSERT INTO MdaConnectionProfile (
+    id, connectionName, databaseType, host, port, databaseName, schemaName,
+    username, password, customJdbcUrl, jdbcParameters, defaultAutoCommit, sortnum, status
+) SELECT
+    10005, 'N2 蓝宝书1000题数据库', 'H2', NULL, NULL,
+    'file:./apps/japanese/db/japanese', 'PUBLIC',
+    'sa', '123456', NULL,
+    'MODE=MySQL;AUTO_SERVER=TRUE;DATABASE_TO_UPPER=false', TRUE, 20.00, 1
+WHERE NOT EXISTS (
+    SELECT 1 FROM MdaConnectionProfile WHERE connectionName = 'N2 蓝宝书1000题数据库'
+);

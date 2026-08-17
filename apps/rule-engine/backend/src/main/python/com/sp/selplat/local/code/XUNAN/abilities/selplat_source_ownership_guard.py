@@ -1698,6 +1698,37 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                                         "path": str(common_sequence_data.relative_to(project_root)),
                                         "message": f"configured sequence data must map {table_name} to exactly one {sequence_code} row",
                                     })
+                recovery_tables = registration.get("startupRecoveryTables", [])
+                if not isinstance(recovery_tables, list) or any(
+                        not isinstance(table_name, str)
+                        or not re.fullmatch(r"[A-Z][A-Za-z0-9]*", table_name)
+                        for table_name in recovery_tables):
+                    violations.append({
+                        "code": "MANAGED_APPLICATION_RECOVERY_TABLE_REGISTRATION_INVALID",
+                        "path": str(registry_path.relative_to(project_root)),
+                        "message": "startupRecoveryTables must be a list of safe physical table names",
+                    })
+                    recovery_tables = []
+                production_java_text = "\n".join(
+                    java_file.read_text(encoding="utf-8")
+                    for java_file in sorted(backend_java_root.rglob("*.java"))
+                ) if backend_java_root.is_dir() else ""
+                for table_name in recovery_tables:
+                    recovery_data_file = project_root_path / "db/sql" / f"data-{table_name}.sql"
+                    if not recovery_data_file.is_file():
+                        violations.append({
+                            "code": "MANAGED_APPLICATION_RECOVERY_DATA_SQL_MISSING",
+                            "path": str((project_root_path / "db/sql").relative_to(project_root)),
+                            "message": f"recovery table {table_name} requires data-{table_name}.sql",
+                        })
+                        continue
+                    expected_resource = f"db/{project_root_path.name}/sql/data-{table_name}.sql"
+                    if expected_resource not in production_java_text:
+                        violations.append({
+                            "code": "MANAGED_APPLICATION_RECOVERY_DATA_SQL_NOT_LOADED",
+                            "path": str(recovery_data_file.relative_to(project_root)),
+                            "message": f"production initializer must explicitly load {expected_resource}",
+                        })
                 for table_name in sorted(schema_tables):
                     schema_file = project_root_path / "db/sql" / f"schema-{table_name}.sql"
                     schema_text = schema_file.read_text(encoding="utf-8")

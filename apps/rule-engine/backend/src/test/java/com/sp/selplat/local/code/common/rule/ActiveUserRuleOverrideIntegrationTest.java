@@ -778,6 +778,11 @@ class ActiveUserRuleOverrideIntegrationTest {
                 + "insert_where_not_exists,read_only_noop,no_merge,no_update,no_delete,no_ddl"
         ));
         assertTrue(rule.content().contains(
+            "selplat_database_recovery_configuration_sync_gate = "
+                + "central_registry_startupRecoveryTables,data_<table>_required,"
+                + "production_loader_required,insert_missing_only,contract_test_required"
+        ));
+        assertTrue(rule.content().contains(
             "selplat_h2_gitignore_ownership = SELPLAT_root_only,"
                 + "no_mvdb_ignore_pattern,all_mvdb_visible_and_trackable,trace_ignored,"
                 + "lock_ignored,temp_ignored,before_backup_ignored,"

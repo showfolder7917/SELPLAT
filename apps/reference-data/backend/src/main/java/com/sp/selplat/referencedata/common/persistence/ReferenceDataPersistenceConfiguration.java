@@ -46,6 +46,7 @@ public class ReferenceDataPersistenceConfiguration {
         "db/reference-data/sql/schema-ReferenceDataTreeNode.sql",
         "db/reference-data/sql/schema-ReferenceDataTableElement.sql",
         "db/reference-data/sql/schema-ReferenceDataWindow.sql",
+        "db/reference-data/sql/data-ReferenceDataWindow.sql",
         "db/reference-data/sql/data-CommonSequenceSegment.sql"
     };
     // 旧正式库的业务表曾使用 identity；只按固定白名单迁移，禁止动态拼接外部表名。

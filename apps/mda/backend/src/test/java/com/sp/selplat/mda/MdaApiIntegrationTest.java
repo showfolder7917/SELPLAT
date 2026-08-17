@@ -49,10 +49,13 @@ class MdaApiIntegrationTest {
         assertThat(controlDataSource.getPoolName()).isEqualTo("MdaControlPool");
         mockMvc.perform(get("/api/mda/connections/getStore.htm"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.totalCount").value(2))
                 .andExpect(jsonPath("$.records[0].connectionName").value("Reference Data 数据库"))
                 .andExpect(jsonPath("$.records[0].databaseName")
-                        .value("file:./apps/reference-data/db/reference-data"));
+                        .value("file:./apps/reference-data/db/reference-data"))
+                .andExpect(jsonPath("$.records[1].connectionName").value("N2 蓝宝书1000题数据库"))
+                .andExpect(jsonPath("$.records[1].databaseName")
+                        .value("file:./apps/japanese/db/japanese"));
 
         String body = objectMapper.writeValueAsString(Map.of(
                 "connectionName", "动态目标库",

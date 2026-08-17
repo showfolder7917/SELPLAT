@@ -13,7 +13,10 @@
       "schemaRoot": "db/sql",
       "databaseFile": "db/mda.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
-      "datasourcePrefix": "mda.control.datasource"
+      "datasourcePrefix": "mda.control.datasource",
+      "startupRecoveryTables": [
+        "MdaConnectionProfile"
+      ]
     },
     {
       "projectName": "reference-data",
@@ -21,7 +24,10 @@
       "databaseFile": "db/reference-data.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
       "queryRepresentationModel": "type-plus-tree-node",
-      "datasourcePrefix": "reference-data.datasource"
+      "datasourcePrefix": "reference-data.datasource",
+      "startupRecoveryTables": [
+        "ReferenceDataWindow"
+      ]
     },
     {
       "projectName": "uniauth",

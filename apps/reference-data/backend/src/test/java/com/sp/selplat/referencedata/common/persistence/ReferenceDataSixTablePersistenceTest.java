@@ -53,6 +53,16 @@ class ReferenceDataSixTablePersistenceTest {
                     "id", "code", "tenantId", "lastOperateUserId", "projectCode", "pageCode", "parentId",
                     "nodeValue", "labelZh", "labelJa", "labelEn", "status", "sortnum", "createdAt", "updatedAt"),
                     treeNodeColumnNames(jdbc));
+            assertEquals(7L, jdbc.queryForObject("SELECT COUNT(*) FROM ReferenceDataWindow", Long.class));
+            assertEquals(1L, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM ReferenceDataWindow "
+                            + "WHERE code='window101064' AND status=1 AND triggerControlCode='selWindowTypeManagementId'",
+                    Long.class));
+            assertEquals(1L, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM ReferenceDataWindow "
+                            + "WHERE code='window103013' AND projectCode='japanese' "
+                            + "AND triggerControlCode='selWindowJapaneseN2BlueBookQuestionId'",
+                    Long.class));
         }
     }
 

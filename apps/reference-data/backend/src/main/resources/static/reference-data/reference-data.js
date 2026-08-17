@@ -66,6 +66,8 @@
     const personalizationHost = selBase.query("[data-sel-personalization-host]");
     // 同一物理 Grid 在六个业务模块之间复用，因此事件过滤、搜索和分页都使用这个稳定实例 ID。
     const referenceDataGridId = "selGridReferenceDataManagementId";
+    // PAGE 控件必须属于当前应用；其他项目新增 PAGE 后不能抢占引用数据工作台的页面配置。
+    const referenceDataProjectCode = "reference-data";
     // 引用数据管理与公共个性化组件统一支持三种稳定 BCP-47 语言值。
     const referenceDataSupportedLocales = selFreeze(["zh-CN", "ja-JP", "en-US"]);
     // URL lang 优先于本地偏好，便于分享带语言的页面地址。
@@ -722,9 +724,10 @@
             referenceDataEnsureModuleLoaded(referenceDataModules.tables),
             referenceDataEnsureModuleLoaded(referenceDataModules.columns)
         ]);
-        // PAGE 控件是页面 code 的唯一事实来源，禁止在前端硬编码数据库主键或路径。
+        // PAGE 控件是页面 code 的唯一事实来源，同时必须限定当前项目，禁止误用 Japanese 等其他应用的 PAGE。
         const pageControl = (referenceDataState.records.get("controls") || [])
-            .find((record) => String(record.controlKind) === "PAGE" && Number(record.status) === 1);
+            .find((record) => String(record.projectCode) === referenceDataProjectCode
+                && String(record.controlKind) === "PAGE" && Number(record.status) === 1);
         if (!pageControl?.pageCode) throw new Error("引用数据工作台尚未登记 PAGE 控件，无法加载页面配置。");
         referenceDataState.pageCode = String(pageControl.pageCode);
         // 页面配置接口返回一致性版本；保存成功前任何草稿都必须携带该版本。
