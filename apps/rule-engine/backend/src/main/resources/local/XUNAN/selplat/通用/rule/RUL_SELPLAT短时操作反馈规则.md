@@ -33,9 +33,19 @@ selplat_toast_component_boundary = shared_runtime_api_with_application_message_a
 ## 危险动作确认
 
 <!-- 永久删除、覆盖现有文件、丢弃未保存内容和一次写入多个正式文件都必须在首个副作用前等待用户明确确认。 -->
-selplat_dangerous_action_confirmation_scope = permanent_delete,overwrite_existing_files,discard_unsaved_content,cross_file_write
+selplat_dangerous_action_confirmation_scope = permanent_delete
+<!-- selplat_dangerous_action_confirmation_scope.2 的当前独立事实为 overwrite_existing_files。 -->
+selplat_dangerous_action_confirmation_scope.2 = overwrite_existing_files
+<!-- selplat_dangerous_action_confirmation_scope.3 的当前独立事实为 discard_unsaved_content。 -->
+selplat_dangerous_action_confirmation_scope.3 = discard_unsaved_content
+<!-- selplat_dangerous_action_confirmation_scope.4 的当前独立事实为 cross_file_write。 -->
+selplat_dangerous_action_confirmation_scope.4 = cross_file_write
 <!-- 确认框必须展示真实业务目标和将发生的副作用，确认按钮使用动作名称，禁止只写含义不明的“确定”。 -->
-selplat_dangerous_confirmation_content = real_target,side_effect_summary,explicit_action_confirm_label
+selplat_dangerous_confirmation_content = real_target
+<!-- selplat_dangerous_confirmation_content.2 的当前独立事实为 side_effect_summary。 -->
+selplat_dangerous_confirmation_content.2 = side_effect_summary
+<!-- selplat_dangerous_confirmation_content.3 的当前独立事实为 explicit_action_confirm_label。 -->
+selplat_dangerous_confirmation_content.3 = explicit_action_confirm_label
 <!-- 同一次操作同时命中覆盖和跨文件写入等多个风险时合并为一个确认框，禁止连续弹出重复确认。 -->
 selplat_multiple_risk_confirmation_policy = one_combined_dialog_per_user_action_no_stacked_confirmations
 <!-- 用户取消或关闭确认框后不得发送写请求、执行删除、替换文件或销毁未保存状态。 -->
@@ -68,7 +78,13 @@ selplat_toast_reduced_motion_behavior = disable_transition_keep_readability_and_
 ## 验证
 
 <!-- 回归必须证明提示执行后可见、超时后节点删除、常驻状态栏无完成文字且浏览器控制台无错误。 -->
-verification_required = toast_visible_after_action,toast_removed_after_timeout,no_persistent_completion_status,no_browser_console_error
+verification_required = toast_visible_after_action
+<!-- verification_required.2 的当前独立事实为 toast_removed_after_timeout。 -->
+verification_required.2 = toast_removed_after_timeout
+<!-- verification_required.3 的当前独立事实为 no_persistent_completion_status。 -->
+verification_required.3 = no_persistent_completion_status
+<!-- verification_required.4 的当前独立事实为 no_browser_console_error。 -->
+verification_required.4 = no_browser_console_error
 <!-- 涉及编辑器和结果区时还必须验证公共分隔器比例可继续调整，避免反馈改造破坏上下工作区。 -->
 workspace_regression_required = shared_split_pane_ratio_remains_adjustable
 <!-- 公共运行时实现就是唯一复用成品，不再生成重复模板或应用私有示例。 -->

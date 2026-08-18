@@ -1,8 +1,8 @@
 """规则引擎 Python 分层加载能力。
 
-按 core、跨工程 common、当前 common 作用域、当前用户的顺序加载规则，
-并提供依赖闭包、加载回执和分级索引完整性校验。该模块是分层规则加载的
-唯一生产实现，不需要启动 JVM。
+当前按 core、空预留 common、当前用户的顺序加载规则；未来 common 经审查
+恢复实体后，仍兼容跨工程 common 与单一 common 作用域。该模块同时提供
+依赖闭包、加载回执和分级索引完整性校验，是无需启动 JVM 的唯一生产实现。
 """
 
 from __future__ import annotations
@@ -39,6 +39,10 @@ ROOT_INDEX = "RULE_INDEX.md"
 COMMON_INDEX_KEY = "COMMON_RULE_INDEX"
 # common 汇总索引必须通过稳定键进入跨工程规则基线。
 CROSS_PROJECT_INDEX_KEY = "CROSS_PROJECT_COMMON_RULE_INDEX"
+# common 汇总索引使用状态键声明是否只有预留入口。
+COMMON_INDEX_STATUS_KEY = "common_index_status"
+# common 实体全部迁回当前用户后，reserved_empty 表示跳过公共子树。
+RESERVED_EMPTY_COMMON_STATUS = "reserved_empty"
 # 根索引只允许登记一个动态用户索引模式。
 USER_INDEX_PATTERN_KEY = "USER_RULE_INDEX_PATTERN"
 # 当前用户只能替换索引模式中的这个稳定占位符。
@@ -183,21 +187,27 @@ def load_rule_stack(
     common_entries = _parse_index(
         common_index_path, _read_resource(common_index_path)
     )
-    # 显式作用域只递归命中的一棵 common 工程树。
+    # common 迁空后仍保留稳定根入口；加载器跳过公共子树并继续进入当前用户层。
+    common_is_reserved_empty = _is_reserved_empty_common(common_entries)
+    if common_is_reserved_empty:
+        _validate_reserved_empty_common_index(common_index_path, common_entries)
+    # 显式作用域只递归命中的一棵非空 common 工程树。
     scope_rule: LoadedRule | None = None
-    if active_scope:
+    if active_scope and not common_is_reserved_empty:
         scope_index_path = _find_scope_index(
             common_index_path, common_entries, active_scope
         )
         scope_rule = _load_from_index_tree(scope_index_path, logical_id, "common")
 
-    # 跨工程 common 基线始终按逻辑 ID 命中，不批量读取规则正文。
-    cross_project_index_path = _required_index_reference(
-        common_index_path, common_entries, CROSS_PROJECT_INDEX_KEY
-    )
-    cross_project_rule = _load_from_index_tree(
-        cross_project_index_path, logical_id, "common"
-    )
+    # 非空 common 才加载跨工程基线；预留空层不得制造失效子索引。
+    cross_project_rule: LoadedRule | None = None
+    if not common_is_reserved_empty:
+        cross_project_index_path = _required_index_reference(
+            common_index_path, common_entries, CROSS_PROJECT_INDEX_KEY
+        )
+        cross_project_rule = _load_from_index_tree(
+            cross_project_index_path, logical_id, "common"
+        )
     # 兼容迁移期根索引的 `<ID>@common`，但不再新增这种登记。
     legacy_common_rule = _load_registered(
         root_entries, f"{logical_id}@common", logical_id, "common"
@@ -288,18 +298,23 @@ def _load_rule_with_dependencies(
 
 
 def _parse_required_rule_ids(effective_values: dict[str, str]) -> tuple[str, ...]:
-    """解析、校验并去重有效的 requires_rule_ids。"""
+    """解析、校验并去重单事实拆分后的 requires_rule_ids。"""
 
-    required_ids = effective_values.get("requires_rule_ids", "").strip()
-    if not required_ids:
+    required_values = [
+        value.strip()
+        for key, value in effective_values.items()
+        if key == "requires_rule_ids" or key.startswith("requires_rule_ids.")
+    ]
+    if not required_values:
         return ()
     ordered_ids: list[str] = []
-    for logical_id in re.split(r"[,\s]+", required_ids):
-        if not logical_id:
-            continue
-        _validate_logical_id(logical_id)
-        if logical_id not in ordered_ids:
-            ordered_ids.append(logical_id)
+    for required_ids in required_values:
+        for logical_id in re.split(r"[,\s]+", required_ids):
+            if not logical_id:
+                continue
+            _validate_logical_id(logical_id)
+            if logical_id not in ordered_ids:
+                ordered_ids.append(logical_id)
     return tuple(ordered_ids)
 
 
@@ -421,6 +436,10 @@ def validate_index_tree(
     all_index_paths = {root_index_path, common_index_path}
     rule_count = len(root_rules)
     scope_index_paths = _child_index_references(common_index_path, common_entries)
+    # common 只剩预留入口时，不要求虚构作用域索引；根和预留索引本身仍接受完整校验。
+    if _is_reserved_empty_common(common_entries):
+        _validate_reserved_empty_common_index(common_index_path, common_entries)
+        return IndexValidation(len(all_index_paths), rule_count)
     if not scope_index_paths:
         raise RuleLoadingError(
             f"Common aggregate index has no child scope indexes: {common_index_path}"
@@ -604,6 +623,29 @@ def _required_index_reference(
         )
     _validate_index_resource_path(index_path)
     return index_path
+
+
+def _is_reserved_empty_common(entries: dict[str, str]) -> bool:
+    """判断 common 是否已迁空并只保留未来提升入口。"""
+
+    return entries.get(COMMON_INDEX_STATUS_KEY) == RESERVED_EMPTY_COMMON_STATUS
+
+
+def _validate_reserved_empty_common_index(
+    index_path: str, entries: dict[str, str]
+) -> None:
+    """阻断预留空 common 继续登记任何规则或子索引。"""
+
+    if _direct_rule_entries(index_path, entries):
+        raise RuleLoadingError(
+            f"Reserved empty common index must not register rules: {index_path}"
+        )
+    child_indexes = _child_index_references(index_path, entries)
+    if child_indexes:
+        raise RuleLoadingError(
+            "Reserved empty common index must not register child indexes: "
+            f"{index_path}, children={child_indexes}"
+        )
 
 
 def _optional_user_index_reference(

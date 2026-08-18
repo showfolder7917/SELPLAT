@@ -1,0 +1,12 @@
+# PPT 生成、解析与可编辑对象写入。
+python-pptx>=1.0,<2
+# Excel 规则工具读写。
+openpyxl>=3.1,<4
+# 中文教材和拼音 DOCX 读写。
+python-docx>=1.1,<2
+# 教学图片渲染与 PPT 图片处理。
+Pillow>=10,<13
+# PPTX 音频关系与 OOXML 处理。
+lxml>=5,<7
+# 中文逐字拼音与声调生成。
+pypinyin>=0.53,<1

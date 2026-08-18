@@ -44,8 +44,8 @@ repeated_or_cross_project_reusable_task_must_create_or_extend_ability = true
 sync_abilities_registry_after_ability_change = true
 verify_minimally_after_ability_change = true
 
-<!-- 执行完成后必须把可复用步骤写入经验或记账，作为能力成长依据 -->
-record_reusable_steps_to_experience_or_ledger_after_execution = true
+<!-- 执行完成后把稳定且可复用的步骤沉淀为 ability 或规则，不再依赖已退役的远程记账地址。 -->
+record_reusable_steps_to_ability_or_rule_after_execution = true
 
 <!-- 执行文档内务统一通过 execution_doc_manager 能力维护；任务前检查未完成任务，任务后归档完成记录 -->
 execution_doc_management_ability = execution_doc_manager
@@ -101,12 +101,18 @@ path_root_is_project_root = true
 <!-- core、common 与用户能力在 Java、Python、Node 下使用相同层名 -->
 core_code_root=apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/core/
 common_code_root=apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/common/
+<!-- common Java 实体已迁入当前稳定用户层，原根只保留未来人工提升模式。 -->
+common_code_root_status=reserved_empty
 user_code_root_pattern=apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/<stable-user-id>/
 core_python_code_root=apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/
 common_python_code_root=apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/common/
+<!-- common Python 实体已迁入当前稳定用户层，原根只保留未来人工提升模式。 -->
+common_python_code_root_status=reserved_empty
 user_python_code_root_pattern=apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/<stable-user-id>/
 core_node_code_root=apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/core/
 common_node_code_root=apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/common/
+<!-- common Node 实体已迁入当前稳定用户层，原根只保留未来人工提升模式。 -->
+common_node_code_root_status=reserved_empty
 user_node_code_root_pattern=apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/<stable-user-id>/
 
 <!-- 机器索引作为已退役记忆库的初始迁移快照保存在 core；实体迁入 Python/Node core 后必须同步其登记路径。 -->

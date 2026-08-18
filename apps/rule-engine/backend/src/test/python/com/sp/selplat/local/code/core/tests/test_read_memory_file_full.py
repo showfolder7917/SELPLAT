@@ -21,7 +21,7 @@ import unittest
 
 CODE_ROOT = MAIN_CODE_ROOT
 WORKSPACE_ROOT = PROJECT_ROOT
-SKILL_PATH = CODE_ROOT / "skill" / "read_memory_file_full.py"
+UTIL_PATH = CODE_ROOT / "util" / "full_file_reader.py"
 # 固定完整读取夹具保存在 Python test source set，运行时不修改源码。
 MEMORY_READER_FIXTURE = (
     Path(__file__).resolve().parent
@@ -31,10 +31,10 @@ MEMORY_READER_FIXTURE = (
 OPTION_TEMP_ROOT = WORKSPACE_ROOT / "OPTION" / "temp"
 
 
-def load_skill_module():
-    """加载被测技能模块。"""
+def load_util_module():
+    """加载被测 util 模块。"""
 
-    spec = importlib.util.spec_from_file_location("read_memory_file_full", SKILL_PATH)
+    spec = importlib.util.spec_from_file_location("full_file_reader", UTIL_PATH)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -46,7 +46,7 @@ class ReadMemoryFileFullTests(unittest.TestCase):
     """完整原文读取规则测试。"""
 
     def setUp(self) -> None:
-        self.module = load_skill_module()
+        self.module = load_util_module()
 
     def test_run_keeps_comments_chinese_and_blank_lines(self) -> None:
         """应保留中文、注释和空行，不做清洗。"""

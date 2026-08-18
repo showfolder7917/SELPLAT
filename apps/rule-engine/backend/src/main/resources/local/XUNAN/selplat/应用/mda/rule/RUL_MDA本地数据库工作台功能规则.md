@@ -32,9 +32,19 @@ mda_control_database_path = apps/mda/db/mda.mv.db
 <!-- 控制表只记录目标数据库连接属性，不复制目标数据库业务表或数据。 -->
 mda_control_table_responsibility = persist_dynamic_target_connection_profiles_only
 <!-- MDA 控制库只保留连接配置和其主键号段，禁止加入认证、租户、角色、权限或操作人表。 -->
-mda_control_database_forbidden_business_tables = authentication,tenant,role,permission,operator
+mda_control_database_forbidden_business_tables = authentication
+<!-- mda_control_database_forbidden_business_tables.2 的当前独立事实为 tenant。 -->
+mda_control_database_forbidden_business_tables.2 = tenant
+<!-- mda_control_database_forbidden_business_tables.3 的当前独立事实为 role。 -->
+mda_control_database_forbidden_business_tables.3 = role
+<!-- mda_control_database_forbidden_business_tables.4 的当前独立事实为 permission。 -->
+mda_control_database_forbidden_business_tables.4 = permission
+<!-- mda_control_database_forbidden_business_tables.5 的当前独立事实为 operator。 -->
+mda_control_database_forbidden_business_tables.5 = operator
 <!-- MDA 固定表不得保存租户和操作人标识，防止通用业务表字段重新把身份边界带入本地工具。 -->
-mda_control_database_forbidden_identity_columns = tenantId,lastOperateUserId
+mda_control_database_forbidden_identity_columns = tenantId
+<!-- mda_control_database_forbidden_identity_columns.2 的当前独立事实为 lastOperateUserId。 -->
+mda_control_database_forbidden_identity_columns.2 = lastOperateUserId
 <!-- 旧库升级只保留 MDA 连接配置和号段数据，禁止在生产脚本或测试 fixture 中重建其他应用的表来执行清理。 -->
 mda_legacy_identity_artifact_policy = remove_from_mda_without_recreating_foreign_application_tables_or_fixtures
 <!-- 页面没有连接配置时必须呈现可新增的空状态，禁止偷偷插入演示连接。 -->
@@ -86,7 +96,9 @@ mda_source_structure_owner = SELPLAT_uniform_managed_application_gate_no_mda_exc
 <!-- 所有访问控制库固定表的 DAO 必须继承 MdaBaseDao；不得由业务 DAO 重复选择控制数据源。 -->
 mda_control_dao_inheritance = all_fixed_control_table_daos_extend_mda_base_dao
 <!-- 每张固定表只有一个业务 Service 接口和一个实现；表专属默认值和事务留在该表 ServiceImpl，禁止项目级 BaseService 特例。 -->
-mda_control_service_boundary = one_table_one_service_contract_and_impl,no_project_base_service_exception
+mda_control_service_boundary = one_table_one_service_contract_and_impl
+<!-- mda_control_service_boundary.2 的当前独立事实为 no_project_base_service_exception。 -->
+mda_control_service_boundary.2 = no_project_base_service_exception
 <!-- 连接配置 CRUD 接口只继承 BaseService，禁止声明目标连接测试、定义解析或连接池管理方法。 -->
 mda_connection_profile_service_boundary = control_table_base_crud_only
 <!-- 已保存或临时连接字段统一由 common/util/jdbc 解析器转换，metadata 与 sql 能力禁止反向借用连接配置 CRUD Service。 -->
@@ -111,9 +123,17 @@ mda_empty_state_action_policy = show_create_only_until_connection_exists
 <!-- 新增、更新或删除连接后必须刷新连接下拉、当前值、元数据树和统计数字。 -->
 mda_connection_change_refresh_scope = dropdown_selection_metadata_tree_and_counts
 <!-- 数据库连接栏的横向宽度调整必须使用公共 selPanel 工具栏栏目能力，禁止 MDA 自建分隔线、样式或 pointer 事件。 -->
-mda_connection_toolbar_resize_owner = shared_selPanel_toolbar_column_resize,no_private_dom_css_pointer_logic
+mda_connection_toolbar_resize_owner = shared_selPanel_toolbar_column_resize
+<!-- mda_connection_toolbar_resize_owner.2 的当前独立事实为 no_private_dom_css_pointer_logic。 -->
+mda_connection_toolbar_resize_owner.2 = no_private_dom_css_pointer_logic
 <!-- MDA 初始宽度保持紧凑，人工拖拽只能在公共安全边界内变化，双击回到初始宽度。 -->
-mda_connection_toolbar_resize_widths = default:360,min:240,max:720,double_click_restore_default
+mda_connection_toolbar_resize_widths = default:360
+<!-- mda_connection_toolbar_resize_widths.2 的当前独立事实为 min:240。 -->
+mda_connection_toolbar_resize_widths.2 = min:240
+<!-- mda_connection_toolbar_resize_widths.3 的当前独立事实为 max:720。 -->
+mda_connection_toolbar_resize_widths.3 = max:720
+<!-- mda_connection_toolbar_resize_widths.4 的当前独立事实为 double_click_restore_default。 -->
+mda_connection_toolbar_resize_widths.4 = double_click_restore_default
 <!-- 页面骨架和公共组件必须先完成挂载，再异步读取连接配置；控制库响应慢时不得阻塞整个工作台首屏。 -->
 mda_initial_render_policy = mount_shared_shell_before_async_connection_profile_loading
 <!-- 动态数据库字段数量不固定；MDA 必须通过 payload 显式启用 selGrid 宽表模式，由表格中央视口独立水平滚动。 -->
@@ -121,7 +141,11 @@ mda_dynamic_result_grid_layout = shared_selgrid_opt_in_horizontal_scroll
 <!-- 默认表查询的每个真实字段必须把 JDBC 元数据 COMMENT 作为公共表格头 tooltip 输入，禁止前端写死字段说明。 -->
 mda_dynamic_result_header_comment_source = jdbc_metadata_column_remarks_to_selgrid_column_tooltip
 <!-- 字段 COMMENT 为空或查询表达式无法匹配真实表字段时不得生成空提示；有 COMMENT 时不以表头是否截断作为显示条件。 -->
-mda_dynamic_result_header_comment_behavior = all_real_columns_mouse_hover,show_nonblank_comment_without_truncation_requirement,no_empty_tooltip
+mda_dynamic_result_header_comment_behavior = all_real_columns_mouse_hover
+<!-- mda_dynamic_result_header_comment_behavior.2 的当前独立事实为 show_nonblank_comment_without_truncation_requirement。 -->
+mda_dynamic_result_header_comment_behavior.2 = show_nonblank_comment_without_truncation_requirement
+<!-- mda_dynamic_result_header_comment_behavior.3 的当前独立事实为 no_empty_tooltip。 -->
+mda_dynamic_result_header_comment_behavior.3 = no_empty_tooltip
 <!-- 宽表列宽由公共契约和应用 payload 声明，禁止在 MDA 页面覆盖 selGrid 内部选择器制造私有滚动实现。 -->
 mda_dynamic_result_column_width_owner = selgrid_payload_default_and_per_column_width
 <!-- 宽表不得扩张外层面板或文档，长值需要截断并保留查看完整值的可访问入口。 -->
@@ -177,29 +201,77 @@ mda_connection_switch_query_policy = destroy_all_query_tabs_before_loading_selec
 <!-- 页签、右键菜单、分隔器、SQL 编辑区和查询结果统一复用公共 selTabs、selContextMenu、selSplitPane、selCodeEditor 和 selGrid。 -->
 mda_query_workspace_shared_components = selTabs_selContextMenu_selSplitPane_selCodeEditor_selGrid
 <!-- SQL 编辑器只允许执行非空选区；没有有效选区时提示先选中 SQL 且不发送请求，按钮和 Ctrl/Command+Enter 必须共用同一动作入口。 -->
-mda_query_execute_selection_policy = selection_required,empty_or_whitespace_selection_warns_and_sends_no_request,button_and_ctrl_or_command_enter_same_action
+mda_query_execute_selection_policy = selection_required
+<!-- mda_query_execute_selection_policy.2 的当前独立事实为 empty_or_whitespace_selection_warns_and_sends_no_request。 -->
+mda_query_execute_selection_policy.2 = empty_or_whitespace_selection_warns_and_sends_no_request
+<!-- mda_query_execute_selection_policy.3 的当前独立事实为 button_and_ctrl_or_command_enter_same_action。 -->
+mda_query_execute_selection_policy.3 = button_and_ctrl_or_command_enter_same_action
 <!-- 选区只能通过 selCodeEditor 公开 API 读取；只执行选区时未执行的其余编辑内容继续保持未保存状态。 -->
-mda_query_selection_editor_boundary = shared_selCodeEditor_getSelectedValue,no_internal_textarea_access,unexecuted_remainder_stays_dirty
+mda_query_selection_editor_boundary = shared_selCodeEditor_getSelectedValue
+<!-- mda_query_selection_editor_boundary.2 的当前独立事实为 no_internal_textarea_access。 -->
+mda_query_selection_editor_boundary.2 = no_internal_textarea_access
+<!-- mda_query_selection_editor_boundary.3 的当前独立事实为 unexecuted_remainder_stays_dirty。 -->
+mda_query_selection_editor_boundary.3 = unexecuted_remainder_stays_dirty
 <!-- 工具栏动作必须在焦点变化前保存选区；选中 SQL 无论成功或失败都恢复原选区并保持可见高亮。 -->
-mda_query_execute_selection_visual_lifecycle = capture_before_toolbar_focus_change,restore_after_success_or_failure,selected_highlight_remains_visible
+mda_query_execute_selection_visual_lifecycle = capture_before_toolbar_focus_change
+<!-- mda_query_execute_selection_visual_lifecycle.2 的当前独立事实为 restore_after_success_or_failure。 -->
+mda_query_execute_selection_visual_lifecycle.2 = restore_after_success_or_failure
+<!-- mda_query_execute_selection_visual_lifecycle.3 的当前独立事实为 selected_highlight_remains_visible。 -->
+mda_query_execute_selection_visual_lifecycle.3 = selected_highlight_remains_visible
 <!-- 查询 Tab 右键操作固定提供关闭右侧、关闭其他和全部关闭，当前 Tab 由已有关闭按钮处理；无目标时显示禁用状态。 -->
-mda_query_tab_context_actions = close_right,close_others,close_all,current_uses_existing_close_button,disabled_when_unavailable
+mda_query_tab_context_actions = close_right
+<!-- mda_query_tab_context_actions.2 的当前独立事实为 close_others。 -->
+mda_query_tab_context_actions.2 = close_others
+<!-- mda_query_tab_context_actions.3 的当前独立事实为 close_all。 -->
+mda_query_tab_context_actions.3 = close_all
+<!-- mda_query_tab_context_actions.4 的当前独立事实为 current_uses_existing_close_button。 -->
+mda_query_tab_context_actions.4 = current_uses_existing_close_button
+<!-- mda_query_tab_context_actions.5 的当前独立事实为 disabled_when_unavailable。 -->
+mda_query_tab_context_actions.5 = disabled_when_unavailable
 <!-- 查询结果真实字段单元格右键固定提供 Select From Where，并把完整查询作为两行新语句追加到当前 SQL 编辑框。 -->
-mda_result_cell_select_from_where_action = shared_context_menu,SELECT_all_from_current_table_then_WHERE_real_column_equals_clicked_value,append_as_two_lines
+mda_result_cell_select_from_where_action = shared_context_menu
+<!-- mda_result_cell_select_from_where_action.2 的当前独立事实为 SELECT_all_from_current_table_then_WHERE_real_column_equals_clicked_value。 -->
+mda_result_cell_select_from_where_action.2 = SELECT_all_from_current_table_then_WHERE_real_column_equals_clicked_value
+<!-- mda_result_cell_select_from_where_action.3 的当前独立事实为 append_as_two_lines。 -->
+mda_result_cell_select_from_where_action.3 = append_as_two_lines
 <!-- 查询结果只给真实数据库字段显示公共表头复选框；业务层只能通过 selGrid 公开 API 读取已选字段。 -->
-mda_result_header_field_selection = real_database_columns_only,shared_selGrid_headerSelectable,read_via_getSelectedColumnKeys,no_application_header_dom_access
+mda_result_header_field_selection = real_database_columns_only
+<!-- mda_result_header_field_selection.2 的当前独立事实为 shared_selGrid_headerSelectable。 -->
+mda_result_header_field_selection.2 = shared_selGrid_headerSelectable
+<!-- mda_result_header_field_selection.3 的当前独立事实为 read_via_getSelectedColumnKeys。 -->
+mda_result_header_field_selection.3 = read_via_getSelectedColumnKeys
+<!-- mda_result_header_field_selection.4 的当前独立事实为 no_application_header_dom_access。 -->
+mda_result_header_field_selection.4 = no_application_header_dom_access
 <!-- 勾选字段时取右键当前行的对应值并用 AND 连接；没有勾选字段时保持右键单元格单字段条件。 -->
-mda_result_cell_multi_field_where_policy = selected_header_fields_use_context_row_values_joined_by_AND,no_selected_header_field_falls_back_to_clicked_cell
+mda_result_cell_multi_field_where_policy = selected_header_fields_use_context_row_values_joined_by_AND
+<!-- mda_result_cell_multi_field_where_policy.2 的当前独立事实为 no_selected_header_field_falls_back_to_clicked_cell。 -->
+mda_result_cell_multi_field_where_policy.2 = no_selected_header_field_falls_back_to_clicked_cell
 <!-- SQL 字面量必须按 JDBC 类型生成；数值和布尔不加单引号，其他非空值单引号包裹并把内部单引号翻倍，NULL 使用 IS NULL。 -->
-mda_result_cell_where_literal_policy = jdbc_numeric_and_boolean_unquoted,other_non_null_single_quoted_with_escape,null_uses_IS_NULL
+mda_result_cell_where_literal_policy = jdbc_numeric_and_boolean_unquoted
+<!-- mda_result_cell_where_literal_policy.2 的当前独立事实为 other_non_null_single_quoted_with_escape。 -->
+mda_result_cell_where_literal_policy.2 = other_non_null_single_quoted_with_escape
+<!-- mda_result_cell_where_literal_policy.3 的当前独立事实为 null_uses_IS_NULL。 -->
+mda_result_cell_where_literal_policy.3 = null_uses_IS_NULL
 <!-- 应用只能调用 selCodeEditor appendValue 追加 SQL，由公共控件统一更新行号、光标、焦点和变更事件。 -->
-mda_result_cell_sql_editor_boundary = shared_selCodeEditor_appendValue,no_application_textarea_mutation
+mda_result_cell_sql_editor_boundary = shared_selCodeEditor_appendValue
+<!-- mda_result_cell_sql_editor_boundary.2 的当前独立事实为 no_application_textarea_mutation。 -->
+mda_result_cell_sql_editor_boundary.2 = no_application_textarea_mutation
 <!-- SQL 相对页签初始值或最近一次成功执行值发生变化即为未保存；关闭、批量关闭和切换连接前合并确认。 -->
-mda_query_tab_unsaved_close_policy = compare_initial_or_last_successful_execution,single_and_batch_and_connection_switch_confirm,one_dialog_for_all_dirty_tabs
+mda_query_tab_unsaved_close_policy = compare_initial_or_last_successful_execution
+<!-- mda_query_tab_unsaved_close_policy.2 的当前独立事实为 single_and_batch_and_connection_switch_confirm。 -->
+mda_query_tab_unsaved_close_policy.2 = single_and_batch_and_connection_switch_confirm
+<!-- mda_query_tab_unsaved_close_policy.3 的当前独立事实为 one_dialog_for_all_dirty_tabs。 -->
+mda_query_tab_unsaved_close_policy.3 = one_dialog_for_all_dirty_tabs
 <!-- MDA 工作区颜色、边框、焦点和活动状态只消费公共主题语义令牌，禁止页面内建立第二套颜色值。 -->
 mda_query_workspace_visual_tokens = unified_shared_theme_semantic_tokens_only
 <!-- 数据库目录节点右键菜单固定提供编辑连接、删除连接和复制名称；删除只影响 MDA 连接配置。 -->
-mda_catalog_context_actions = edit_connection,delete_connection_profile,copy_display_label,export_registered_application_database_last
+mda_catalog_context_actions = edit_connection
+<!-- mda_catalog_context_actions.2 的当前独立事实为 delete_connection_profile。 -->
+mda_catalog_context_actions.2 = delete_connection_profile
+<!-- mda_catalog_context_actions.3 的当前独立事实为 copy_display_label。 -->
+mda_catalog_context_actions.3 = copy_display_label
+<!-- mda_catalog_context_actions.4 的当前独立事实为 export_registered_application_database_last。 -->
+mda_catalog_context_actions.4 = export_registered_application_database_last
 <!-- 表或视图节点右键菜单首项固定为查看结构，其后提供结构编辑、真实删除和复制显示名称，并保持物理表导出在末尾。 -->
 mda_table_context_actions = inspect_structure_first_edit_structure_delete_real_target_object_copy_display_label_with_table_type_physical_table_export_last
 <!-- 查看结构必须使用连接、Schema 和表名形成稳定 ID，在右侧打开或复用可关闭的只读独立 Tab。 -->
@@ -252,4 +324,10 @@ example_not_applicable_reason = verified_integration_and_browser_flow_are_the_au
 <!-- 当前动作跨 Spring、H2 和浏览器公共组件，暂不适合抽成单一独立程序。 -->
 program_not_applicable_reason = verification_spans_application_runtime_database_and_browser_components
 <!-- 后端必须通过 MDA 离线测试，前端必须通过语法检查和真实 8080 页面 CRUD 回归。 -->
-verification_required = mda_offline_tests,javascript_syntax_check,host_build,browser_connection_crud_and_query_tab_lifecycle_regression
+verification_required = mda_offline_tests
+<!-- verification_required.2 的当前独立事实为 javascript_syntax_check。 -->
+verification_required.2 = javascript_syntax_check
+<!-- verification_required.3 的当前独立事实为 host_build。 -->
+verification_required.3 = host_build
+<!-- verification_required.4 的当前独立事实为 browser_connection_crud_and_query_tab_lifecycle_regression。 -->
+verification_required.4 = browser_connection_crud_and_query_tab_lifecycle_regression

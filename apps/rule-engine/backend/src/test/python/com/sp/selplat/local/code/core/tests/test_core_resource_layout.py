@@ -54,7 +54,7 @@ class CoreResourceLayoutTests(unittest.TestCase):
 
         index_text = ROOT_RULE_INDEX.read_text(encoding="utf-8")
         paths = re.findall(r"=\s*(local/core/rule/\S+\.md)\s*$", index_text, re.MULTILINE)
-        self.assertGreaterEqual(len(paths), 12)
+        self.assertGreaterEqual(len(paths), 11)
         for relative_path in paths:
             self.assertTrue((RESOURCE_ROOT / relative_path).is_file(), relative_path)
 
@@ -90,14 +90,12 @@ class CoreResourceLayoutTests(unittest.TestCase):
         self.assertFalse((CORE_ROOT / "rule/PROJECT_EXECUTION_RULES.md").exists())
 
     def test_registered_python_core_has_no_placeholder_or_orphan_entry(self) -> None:
-        """core 注册能力必须可执行，注册依赖必须真实且不存在已知孤立入口。"""
+        """core 只允许 abilities 注册，util 不得成为独立执行入口。"""
 
         registry_root = CORE_ROOT / "registry"
         abilities = json.loads((registry_root / "abilities.json").read_text(encoding="utf-8"))
-        skills = json.loads((registry_root / "skills.json").read_text(encoding="utf-8"))
-        apps = json.loads((registry_root / "apps.json").read_text(encoding="utf-8"))
-        referenced_skills: set[str] = set()
-        referenced_apps: set[str] = set()
+        self.assertFalse((registry_root / "skills.json").exists())
+        self.assertFalse((registry_root / "apps.json").exists())
         registered_ability_paths: set[Path] = set()
         for ability_id, definition in abilities.items():
             ability_path = PYTHON_CORE_ROOT / definition["path"].removeprefix("./")
@@ -109,20 +107,15 @@ class CoreResourceLayoutTests(unittest.TestCase):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
             }
             self.assertIn("execute", function_names, ability_id)
-            referenced_skills.update(definition.get("skills", []))
-            referenced_apps.update(definition.get("apps", []))
-        self.assertEqual(referenced_skills, set(skills))
-        self.assertEqual(referenced_apps, set(apps))
-        for skill_id, definition in skills.items():
-            skill_path = PYTHON_CORE_ROOT / definition["path"].removeprefix("./")
-            self.assertTrue(skill_path.is_file(), skill_id)
-        for app_id, definition in apps.items():
-            app_path = PYTHON_CORE_ROOT / definition["path"].removeprefix("./")
-            self.assertTrue(app_path.is_file(), app_id)
+            self.assertNotIn("skills", definition)
+            self.assertNotIn("apps", definition)
         production_ability_paths = {
             path.resolve() for path in (PYTHON_CORE_ROOT / "abilities").glob("*.py")
         }
         self.assertEqual(production_ability_paths, registered_ability_paths)
+        self.assertTrue((PYTHON_CORE_ROOT / "util").is_dir())
+        self.assertFalse((PYTHON_CORE_ROOT / "skill").exists())
+        self.assertFalse((PYTHON_CORE_ROOT / "app").exists())
         self.assertFalse((PYTHON_CORE_ROOT / "router.py").exists())
         self.assertFalse((PYTHON_CORE_ROOT / "tools/cleanup_lancedb_storage.py").exists())
 

@@ -1,7 +1,7 @@
 """执行器基础执行链测试。
 
 功能：
-验证 executor 会在不经过确认门的前提下直接加载 ability 和 skill。
+验证 executor 会在不经过确认门的前提下直接加载 ability。
 
 作用：
 保证执行器只承担依赖解析与执行调度职责，不再内置额外限制逻辑。
@@ -45,7 +45,6 @@ class ExecutorBasicExecutionTests(unittest.TestCase):
         self.module = load_executor_module()
 
     def test_execute_ability_directly_runs_execute_without_confirmation_gate(self) -> None:
-        skill_module = SimpleNamespace(name="helper_skill")
         ability_module = SimpleNamespace(
             execute=lambda context, skills, apps: {
                 "status": "completed",
@@ -63,23 +62,16 @@ class ExecutorBasicExecutionTests(unittest.TestCase):
                 "status": "ready_ability",
                 "ability": "demo_ability",
                 "ability_path": "/tmp/demo_ability.py",
-                "required_skills": ["helper_skill"],
-                "required_apps": [],
-                "skill_paths": {"helper_skill": "/tmp/helper_skill.py"},
-                "app_paths": {},
             }
 
-        def fake_load(module_path: str, module_name: str):
+        def fake_load(module_path: Path, module_name: str):
             _ = module_name
-            if module_path == "/tmp/demo_ability.py":
+            if module_path == Path("/tmp/demo_ability.py"):
                 return ability_module
-            if module_path == "/tmp/helper_skill.py":
-                return skill_module
             raise AssertionError(module_path)
 
-        self.module.resolve_ability_dependencies = fake_resolve
+        self.module.resolve_ability = fake_resolve
         self.module.load_python_module = fake_load
-        self.module.build_app_configs = lambda required_apps, app_paths: {}
 
         result = self.module.execute_ability(
             "demo_ability",
@@ -88,21 +80,19 @@ class ExecutorBasicExecutionTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["task_text"], "直接执行，不再经过确认门")
-        self.assertEqual(result["skills_loaded"], ["helper_skill"])
+        self.assertEqual(result["skills_loaded"], [])
         self.assertEqual(result["apps_loaded"], [])
 
-    def test_execute_ability_returns_missing_dependency_without_running_ability(self) -> None:
-        self.module.resolve_ability_dependencies = lambda name: {
-            "status": "missing_dependency",
+    def test_execute_ability_returns_missing_ability_without_running_module(self) -> None:
+        self.module.resolve_ability = lambda name: {
+            "status": "missing_ability",
             "ability": name,
-            "missing_skills": ["helper_skill"],
-            "missing_apps": [],
+            "message": "未找到对应 ability。",
         }
 
-        result = self.module.execute_ability("demo_ability", {"task_text": "检查缺失依赖"})
+        result = self.module.execute_ability("demo_ability", {"task_text": "检查缺失能力"})
 
-        self.assertEqual(result["status"], "missing_dependency")
-        self.assertEqual(result["missing_skills"], ["helper_skill"])
+        self.assertEqual(result["status"], "missing_ability")
 
     def test_main_returns_ability_declared_blocking_exit_code(self) -> None:
         self.module.execute_ability = lambda ability_name, context=None: {

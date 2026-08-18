@@ -19,8 +19,18 @@ ABILITY_NAME = "工程完整文件读取"
 # 能力说明，描述当前能力负责的任务范围。
 ABILITY_DESC = "读取工程目录文件，并返回完整原文。"
 
-# 记录当前能力依赖的单技能列表。
-REQUIRED_SKILLS = ["read_memory_file_full"]
+# util 是 core 内部公共实现，不再通过 skill 注册表二次注入。
+REQUIRED_SKILLS: list[str] = []
+
+# 能力脚本需要兼容 executor 动态加载和文件直跑两种入口，统一把 core 根加入模块路径。
+from pathlib import Path
+import sys
+
+CORE_CODE_ROOT = Path(__file__).resolve().parents[1]
+if str(CORE_CODE_ROOT) not in sys.path:
+    sys.path.insert(0, str(CORE_CODE_ROOT))
+
+from util import full_file_reader
 
 
 # 定义能力执行入口，接收上下文并真正调用依赖技能。
@@ -36,7 +46,7 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
         }
     # 调用完整读取技能，保留原文。
     try:
-        read_result = skills["read_memory_file_full"].run(file_path=file_path)
+        read_result = full_file_reader.run(file_path=file_path)
     # 读取器拒绝或读取失败时，返回结构化错误。
     except (FileNotFoundError, ValueError) as error:
         return {

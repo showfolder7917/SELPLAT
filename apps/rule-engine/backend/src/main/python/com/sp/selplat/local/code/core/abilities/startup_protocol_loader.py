@@ -33,9 +33,6 @@ sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)
 # 子进程继承相同缓存根，避免能力继续启动 Python 时回写源码。
 os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)
 
-# 导入 importlib.util，用于在缓存策略生效后加载默认读取技能。
-import importlib.util
-
 # 能力唯一标识，用于在注册表中定位当前能力。
 ABILITY_ID = "startup_protocol_loader"
 # 能力名称，便于人类和 AI 理解用途。
@@ -43,8 +40,8 @@ ABILITY_NAME = "启动协议链加载"
 # 能力说明，描述当前能力负责的任务范围。
 ABILITY_DESC = "按 STARTER_PROTOCOL.md 声明顺序装载 STARTER/USER/CODE/COMMAND 协议，并装载 RULE_INDEX 后置入口。"
 
-# 记录当前能力依赖的单技能列表。
-REQUIRED_SKILLS = ["read_ai_memory_file"]
+# 启动加载器直接调用 core util，不再依赖 skill 注册和二次动态注入。
+REQUIRED_SKILLS: list[str] = []
 
 # 定义 code 根目录，统一基于当前代码树反推协议位置。
 CODE_ROOT = Path(__file__).resolve().parents[1]
@@ -61,8 +58,11 @@ PROTOCOL_DIR = (
 ROOT_RULE_INDEX_PATH = RESOURCE_ROOT / "RULE_INDEX.md"
 # 定义默认启动协议路径，便于外部省略上下文时直接复用。
 DEFAULT_STARTER_PATH = str(PROTOCOL_DIR / "STARTER_PROTOCOL.md")
-# 定义默认 AI 记忆读取技能路径，供脚本直接运行时自举使用。
-DEFAULT_READER_SKILL_PATH = CODE_ROOT / "skill" / "read_ai_memory_file.py"
+# 文件直跑时 abilities 目录是默认模块根，显式加入 core 后才能稳定导入同层 util。
+if str(CODE_ROOT) not in sys.path:
+    sys.path.insert(0, str(CODE_ROOT))
+
+from util import ai_memory_reader
 
 
 # 定义键值配置解析函数，把清洗后的文本还原为简单配置字典。
@@ -116,20 +116,6 @@ def is_true_flag(value: str) -> bool:
     normalized = value.strip().lower()
     # 仅在明确为 true 时返回真。
     return normalized == "true"
-
-
-def load_default_reader_skill():
-    """加载默认 AI 记忆读取技能，供 CLI 核验入口使用。"""
-
-    spec = importlib.util.spec_from_file_location(
-        "startup_protocol_loader_read_ai_memory_file",
-        DEFAULT_READER_SKILL_PATH,
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"无法加载读取技能：{DEFAULT_READER_SKILL_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def build_verification_checklist(execute_result: dict) -> list[str]:
@@ -198,10 +184,12 @@ def build_verification_checklist(execute_result: dict) -> list[str]:
 def execute(context: dict, skills: dict, apps: dict) -> dict:
     # 读取传入的启动协议路径，未提供时使用默认值。
     starter_path = context.get("starter_path", DEFAULT_STARTER_PATH)
+    # 一个迁移阶段内仍接受测试注入 reader；生产执行固定使用 util 实现。
+    reader = skills.get("read_ai_memory_file", ai_memory_reader)
 
     # 先读取 STARTER_PROTOCOL.md，自身也属于启动链一部分。
     try:
-        starter_result = skills["read_ai_memory_file"].run(file_path=starter_path)
+        starter_result = reader.run(file_path=starter_path)
     # 启动协议读取失败时，直接阻断后续流程。
     except (FileNotFoundError, ValueError) as error:
         return {
@@ -264,7 +252,7 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
         protocol_path = build_protocol_path(protocol_file_name)
         # 调用 AI 记忆读取技能继续装载下一个协议。
         try:
-            protocol_result = skills["read_ai_memory_file"].run(file_path=protocol_path)
+            protocol_result = reader.run(file_path=protocol_path)
         # 任何一个后续协议失败，都应整体阻断。
         except (FileNotFoundError, ValueError) as error:
             return {
@@ -302,7 +290,7 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
         if rule_index_reference:
             rule_index_path = resolve_protocol_reference(rule_index_reference)
             try:
-                rule_index_result = skills["read_ai_memory_file"].run(file_path=rule_index_path)
+                rule_index_result = reader.run(file_path=rule_index_path)
             except (FileNotFoundError, ValueError) as error:
                 return {
                     "status": "blocked",
@@ -357,8 +345,7 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
 def main() -> int:
     """直接运行时打印启动协议链核验清单。"""
 
-    reader_skill = load_default_reader_skill()
-    execute_result = execute({}, {"read_ai_memory_file": reader_skill}, {})
+    execute_result = execute({}, {}, {})
     print("\n".join(build_verification_checklist(execute_result)))
     if execute_result.get("status") == "completed":
         return 0

@@ -3,63 +3,12 @@
   "configurations": [
     {
       "type": "java",
-      "name": "GenericSqlSpecDocCorrector",
-      "request": "launch",
-      "mainClass": "com.sp.selplat.code.fujitsu.sql.GenericSqlSpecDocCorrector",
-      "projectName": "rule-engine-backend"
-    },
-    {
-      "type": "java",
-      "name": "DBデータ生成ツール",
-      "request": "launch",
-      "mainClass": "com.sp.selplat.code.fujitsu.db.DBデータ生成ツール",
-      "projectName": "rule-engine-backend"
-    },
-    {
-      "type": "java",
-      "name": "DBデータ生成ツール",
-      "request": "launch",
-      "mainClass": "com.sp.selplat.ruleengine.fujitsu.db.DBデータ生成ツール",
-      "projectName": "rule-engine-backend",
-      "cwd": "${workspaceFolder}/apps/rule-engine/backend",
-      "vmArgs": "-Dfile.encoding=UTF-8 -Dlog4j2.loggerContextFactory=org.apache.logging.log4j.simple.SimpleLoggerContextFactory",
-      "classPaths": [
-        "${workspaceFolder}/build/apps/rule-engine/backend/classes/java/main",
-        "${workspaceFolder}/cache/cache-jars/*"
-      ],
-      "preLaunchTask": "acode-java: compile"
-    },
-    {
-      "type": "java",
-      "name": "CPMAB081_DBデータ生成ツール",
-      "request": "launch",
-      "mainClass": "com.sp.selplat.ruleengine.fujitsu.CPMAB081_DBデータ生成ツール",
-      "projectName": "rule-engine-backend",
-      "cwd": "${workspaceFolder}/apps/rule-engine/backend",
-      "vmArgs": "-Dfile.encoding=UTF-8 -Dlog4j2.loggerContextFactory=org.apache.logging.log4j.simple.SimpleLoggerContextFactory",
-      "classPaths": [
-        "${workspaceFolder}/build/apps/rule-engine/backend/classes/java/main",
-        "${workspaceFolder}/cache/cache-jars/*"
-      ],
-      "preLaunchTask": "acode-java: compile"
-    },
-    {
-      "type": "java",
       "name": "UniauthBackendApplication",
       "request": "launch",
       "mainClass": "com.sp.selplat.uniauth.UniauthBackendApplication",
       "projectName": "uniauth-backend",
       "preLaunchTask": "uniauth:classes",
       "cwd": "${workspaceFolder}/apps/uniauth/backend"
-    },
-    {
-      "type": "java",
-      "name": "RuleEngineBackendApplication",
-      "request": "launch",
-      "mainClass": "com.sp.selplat.ruleengine.RuleEngineBackendApplication",
-      "projectName": "rule-engine-backend",
-      "preLaunchTask": "rule-engine:classes",
-      "cwd": "${workspaceFolder}/apps/rule-engine/backend"
     }
   ]
 }

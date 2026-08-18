@@ -1,0 +1,1002 @@
+{
+  "version": 1,
+  "active_user": "XUNAN",
+  "common_runtime_status": "reserved_empty",
+  "conflict_winner": "XUNAN",
+  "active_migrated_rules": [
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082测试数据覆盖规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082项目风格规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuJSON单行格式门禁规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuJava规则工具约束规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuSQL规格书Excel生成规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu不可达分支规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu基本设计Excel生成规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu工程风格规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu数据库集成覆盖规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu文件测试数据一致性规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/uniauth/rule/RUL_静态页面前端命名规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_Controller仅序列化Service返回结构规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程构建规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程路径规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT水晶界面材质规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT真实数据集成测试规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT规则适配审查与阻断规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_基础DAO复用与通用参数透传规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_基础Service统一DAO访问规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演下册PPT完整制作规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演中册PPT重制补图与音频规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演全册通用制作规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/rule/RUL_小学成语典故国风连续绘本图片生成规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/rule/RUL_成语典故绘本PPT制作规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/拼音生成/rule/RUL_拼音生成目录分类与工作流程规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_三字经教学PPT批量生成工作流程规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗教学图片PPT文字排版工作流程规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗教学图片生成全流程规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_少儿古诗三页整张底图PPT严格套版通用规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_横版教学PPT通用排版与检查规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/rule/RUL_中文教学公共品牌素材使用规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_AI视觉审美终审规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_UTF8文件与命令规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_工具运行数据归属规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_执行文档任务生命周期门禁规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页上下文菜单设计规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页业务控件后端聚合JSON与国际化规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页业务控件多实例注册与后端实体映射规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页个性化面板设置规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页基础控件与应用装配层结构规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页搜索查询基础控件设计规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页日期选择控件设计规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页稳定面板布局规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页背景主题模块设计规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页自定义鼠标指针设计规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页运行时素材目录与压缩规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页选择下拉控件设计规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_规则生命周期治理规则.md",
+    "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_静态网站本地相对路径迁移规则.md"
+  ],
+  "actions": [
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/common/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/fujitsu/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/fujitsu/应用/CPMAB082/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082测试数据覆盖规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082测试数据覆盖规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082项目风格规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082项目风格规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/fujitsu/应用/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/fujitsu/通用/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuJSON单行格式门禁规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuJSON单行格式门禁规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuJava规则工具约束规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuJava规则工具约束规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuSQL规格书Excel生成规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuSQL规格书Excel生成规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu不可达分支规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu不可达分支规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu基本设计Excel生成规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu基本设计Excel生成规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu工程风格规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu工程风格规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu数据库集成覆盖规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu数据库集成覆盖规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu文件测试数据一致性规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu文件测试数据一致性规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/SQL仕様書生成ツール/SQL仕様書生成ツール新規.json",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/SQL仕様書生成ツール/SQL仕様書生成ツール新規.json"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/SQL仕様書生成ツール/reference/SQL仕様書_アラート情報一括登録.xlsx",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/SQL仕様書生成ツール/reference/SQL仕様書_アラート情報一括登録.xlsx"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/SQL仕様書生成ツール/reference/SQL仕様書_格付全量情報更新.xlsx",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/SQL仕様書生成ツール/reference/SQL仕様書_格付全量情報更新.xlsx"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/SQL仕様書生成ツール/reference/SQL仕様書_格付全量情報登録.xlsx",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/SQL仕様書生成ツール/reference/SQL仕様書_格付全量情報登録.xlsx"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/docs/CP振替_テーブル定義書.xlsx",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/docs/CP振替_テーブル定義書.xlsx"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/docs/README.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/docs/README.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/docs/SQL仕様書修正ツール说明.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/docs/SQL仕様書修正ツール说明.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/docs/SQL仕様書生成ツール使用说明.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/template/RUL_FujitsuSQL规格书Excel生成规则/docs/SQL仕様書生成ツール使用说明.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/selplat/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/selplat/应用/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/rule-engine/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/selplat/应用/rule-engine/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/rule-engine/rule/RUL_本地规则引擎CoreCommon用户分层治理规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/conflicts/selplat/应用/rule-engine/rule/RUL_本地规则引擎CoreCommon用户分层治理规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/uniauth/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/selplat/应用/uniauth/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/uniauth/rule/RUL_静态页面前端命名规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/uniauth/rule/RUL_静态页面前端命名规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/selplat/通用/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_Controller仅序列化Service返回结构规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_Controller仅序列化Service返回结构规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程构建规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程构建规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程路径规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程路径规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT水晶界面材质规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT水晶界面材质规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT真实数据集成测试规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT真实数据集成测试规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT规则适配审查与阻断规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT规则适配审查与阻断规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_基础DAO复用与通用参数透传规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_基础DAO复用与通用参数透传规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_基础Service统一DAO访问规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_基础Service统一DAO访问规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/template/RUL_Java业务注释与返回示例规则/README.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/template/RUL_Java业务注释与返回示例规则/README.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/template/RUL_Java业务注释与返回示例规则/examples/BaseDaoSupportImpl注释示例.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/template/RUL_Java业务注释与返回示例规则/examples/BaseDaoSupportImpl注释示例.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/template/RUL_Java业务注释与返回示例规则/template/Java业务注释模板.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/template/RUL_Java业务注释与返回示例规则/template/Java业务注释模板.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/中文教学/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/中文教学/应用/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/中文教学/应用/口才与表演/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演下册PPT完整制作规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演下册PPT完整制作规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演中册PPT重制补图与音频规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演中册PPT重制补图与音频规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演全册通用制作规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演全册通用制作规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/第01课视觉计划.json",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/第01课视觉计划.json"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/课程内容索引.json",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演下册PPT完整制作规则/课程内容索引.json"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/README.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/README.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/图片安全区映射.json",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/图片安全区映射.json"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/第02课美观语义检测清单.json",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/第02课美观语义检测清单.json"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/缓存资源清单.json",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/缓存资源清单.json"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/课程内容索引.json",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/template/RUL_少儿口才与表演中册PPT重制补图与音频规则/课程内容索引.json"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/中文教学/应用/成语典故/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/rule/RUL_小学成语典故国风连续绘本图片生成规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/rule/RUL_小学成语典故国风连续绘本图片生成规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/rule/RUL_成语典故绘本PPT制作规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/rule/RUL_成语典故绘本PPT制作规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/拼音生成/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/中文教学/应用/拼音生成/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/拼音生成/rule/RUL_拼音标注与朗读版校正规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/conflicts/中文教学/应用/拼音生成/rule/RUL_拼音标注与朗读版校正规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/拼音生成/rule/RUL_拼音生成目录分类与工作流程规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/拼音生成/rule/RUL_拼音生成目录分类与工作流程规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/中文教学/应用/教学图片与PPT生成/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_三字经教学PPT批量生成工作流程规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_三字经教学PPT批量生成工作流程规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗教学图片PPT文字排版工作流程规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗教学图片PPT文字排版工作流程规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗教学图片生成全流程规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗教学图片生成全流程规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗无文字底图生成工作流程规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/conflicts/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗无文字底图生成工作流程规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_少儿古诗三页整张底图PPT严格套版通用规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_少儿古诗三页整张底图PPT严格套版通用规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_横版教学PPT通用排版与检查规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_横版教学PPT通用排版与检查规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/中文教学/通用/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/rule/RUL_中文教学公共品牌素材使用规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/rule/RUL_中文教学公共品牌素材使用规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/template/RUL_中文教学公共品牌素材使用规则/README.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/template/RUL_中文教学公共品牌素材使用规则/README.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/template/RUL_中文教学公共品牌素材使用规则/新思度华文学堂.png",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/template/RUL_中文教学公共品牌素材使用规则/新思度华文学堂.png"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RULE_INDEX.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/indexes/跨工程通用规则/RULE_INDEX.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_AI视觉审美终审规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_AI视觉审美终审规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_UTF8文件与命令规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/archive/common_consolidation_20260818/resources/conflicts/跨工程通用规则/RUL_UTF8文件与命令规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_工具运行数据归属规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_工具运行数据归属规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_执行文档任务生命周期门禁规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_执行文档任务生命周期门禁规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页上下文菜单设计规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页上下文菜单设计规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页业务控件后端聚合JSON与国际化规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页业务控件后端聚合JSON与国际化规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页业务控件多实例注册与后端实体映射规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页业务控件多实例注册与后端实体映射规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页个性化面板设置规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页个性化面板设置规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页基础控件与应用装配层结构规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页基础控件与应用装配层结构规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页搜索查询基础控件设计规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页搜索查询基础控件设计规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页日期选择控件设计规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页日期选择控件设计规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页稳定面板布局规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页稳定面板布局规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页背景主题模块设计规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页背景主题模块设计规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页自定义鼠标指针设计规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页自定义鼠标指针设计规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页运行时素材目录与压缩规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页运行时素材目录与压缩规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页选择下拉控件设计规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页选择下拉控件设计规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_规则生命周期治理规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_规则生命周期治理规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_规则生命周期治理规则/README.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_规则生命周期治理规则/README.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_静态网站本地相对路径迁移规则.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_静态网站本地相对路径迁移规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/docs/Git批量推送工具说明.md",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/docs/Git批量推送工具说明.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/uniauth/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/rule-engine/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/拼音生成/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/RULE_INDEX.md"
+    },
+    {
+      "action": "merge_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/RULE_INDEX.md"
+    },
+    {
+      "action": "create_reserved_common_index",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/common/RULE_INDEX.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082测试数据覆盖规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082项目风格规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuJSON单行格式门禁规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuJava规则工具约束规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_FujitsuSQL规格书Excel生成规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu不可达分支规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu基本设计Excel生成规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu工程风格规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu数据库集成覆盖规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu文件测试数据一致性规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/uniauth/rule/RUL_静态页面前端命名规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_Controller仅序列化Service返回结构规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_Java业务注释与返回示例规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程构建规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程路径规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT水晶界面材质规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT真实数据集成测试规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_SELPLAT规则适配审查与阻断规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_基础DAO复用与通用参数透传规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/selplat/通用/rule/RUL_基础Service统一DAO访问规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演下册PPT完整制作规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演中册PPT重制补图与音频规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/口才与表演/rule/RUL_少儿口才与表演全册通用制作规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/rule/RUL_小学成语典故国风连续绘本图片生成规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/成语典故/rule/RUL_成语典故绘本PPT制作规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/拼音生成/rule/RUL_拼音生成目录分类与工作流程规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_三字经教学PPT批量生成工作流程规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗教学图片PPT文字排版工作流程规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗教学图片生成全流程规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_少儿古诗三页整张底图PPT严格套版通用规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_横版教学PPT通用排版与检查规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/中文教学/通用/rule/RUL_中文教学公共品牌素材使用规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_AI视觉审美终审规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_UTF8文件与命令规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_工具运行数据归属规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_执行文档任务生命周期门禁规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页上下文菜单设计规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页业务控件后端聚合JSON与国际化规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页业务控件多实例注册与后端实体映射规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页个性化面板设置规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页基础控件与应用装配层结构规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页搜索查询基础控件设计规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页日期选择控件设计规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页稳定面板布局规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页背景主题模块设计规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页自定义鼠标指针设计规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页运行时素材目录与压缩规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_网页选择下拉控件设计规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_规则生命周期治理规则.md"
+    },
+    {
+      "action": "rewrite_rule_dsl",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/resources/local/XUNAN/跨工程通用规则/RUL_静态网站本地相对路径迁移规则.md"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/RuleEngineBackendApplication.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/RuleEngineBackendApplication.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/db/DBデータ生成ツール.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/db/DBデータ生成ツール.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/design/SbmaaApiOverviewGenerator.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/design/SbmaaApiOverviewGenerator.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/design/SbmaaInterfaceSpecificationGenerator.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/design/SbmaaInterfaceSpecificationGenerator.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/sql/GenericSqlSpecDocCorrector.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/sql/GenericSqlSpecDocCorrector.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/sql/SQL仕様書生成ツール.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/sql/SQL仕様書生成ツール.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/ClassicalChineseDocumentParser.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/ClassicalChineseDocumentParser.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/DaoDeJingPinyinRepairTool.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/DaoDeJingPinyinRepairTool.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinDocxGenerationTool.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinDocxGenerationTool.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinDocxRenderer.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinDocxRenderer.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinGenerationConfig.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinGenerationConfig.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinTextConverter.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinTextConverter.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PoetryDocumentParser.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PoetryDocumentParser.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PoetryDocxRenderer.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PoetryDocxRenderer.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicBatchGenerationTool.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicBatchGenerationTool.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicContentRepository.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicContentRepository.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicImageRenderer.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicImageRenderer.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicManifestExportTool.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicManifestExportTool.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicPoem.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicPoem.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/PinyinPoetryDocxParser.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/PinyinPoetryDocxParser.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/跨工程/文件系统/DirectoryAclRepairTool.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/跨工程/文件系统/DirectoryAclRepairTool.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/跨工程/版本控制/GitPush.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/XUNAN/跨工程/版本控制/GitPush.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/中文教学/成语典故/成语绘本PPT导航修复器.py",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/中文教学/成语典故/成语绘本PPT导航修复器.py"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/古诗教学图片Pillow样板渲染器.py",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/古诗教学图片Pillow样板渲染器.py"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/古诗教学图片通用Pillow排版器.py",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/古诗教学图片通用Pillow排版器.py"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/成语典故/成语典故绘本PPT生成器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/成语典故/成语典故绘本PPT生成器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册PPT生成器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册PPT生成器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册原始资料分析器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册原始资料分析器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册质量检测器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册质量检测器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册音频嵌入器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/下册/口才与表演下册音频嵌入器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/中册/口才与表演中册PPT生成器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/中册/口才与表演中册PPT生成器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/中册/口才与表演中册质量检测器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/中册/口才与表演中册质量检测器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/中册/口才与表演中册音频嵌入器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/中册/口才与表演中册音频嵌入器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/通用/口才与表演通用生成核心.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/通用/口才与表演通用生成核心.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/通用/口才与表演通用质量检测核心.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/口才与表演/通用/口才与表演通用质量检测核心.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/通用/横版教学PPT美观质量检测器.mjs",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/main/node/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/通用/横版教学PPT美观质量检测器.mjs"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/FujitsuAppEntryPointTest.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/fujitsu/app/FujitsuAppEntryPointTest.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/rule/RuleResourceStructureTest.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/rule/RuleResourceStructureTest.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinDocxGenerationRegressionTest.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinDocxGenerationRegressionTest.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinDocxGenerationToolTest.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/中文教学/拼音生成/PinyinDocxGenerationToolTest.java"
+    },
+    {
+      "action": "move",
+      "source": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicBatchGenerationToolTest.java",
+      "target": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/rule-engine/backend/src/test/java/com/sp/selplat/local/code/XUNAN/中文教学/教学图片与PPT生成/DocTopicBatchGenerationToolTest.java"
+    }
+  ]
+}

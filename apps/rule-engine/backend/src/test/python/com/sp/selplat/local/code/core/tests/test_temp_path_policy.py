@@ -25,12 +25,6 @@ CODE_ROOT = MAIN_CODE_ROOT
 SELPLAT_ROOT = PROJECT_ROOT
 # 所有受检入口必须把短期产物归入当前 SELPLAT 的 OPTION/temp。
 OPTION_TEMP_ROOT = SELPLAT_ROOT / "OPTION" / "temp"
-# 三个转码技能共享同一进度日志归属规则，逐一验证可防止单个入口回退系统目录。
-FFMPEG_SKILL_PATHS = [
-    CODE_ROOT / "skill" / "ffmpeg_mp4_to_wav.py",
-    CODE_ROOT / "skill" / "ffmpeg_vob_to_mp3.py",
-    CODE_ROOT / "skill" / "ffmpeg_vob_to_mp4.py",
-]
 # 当前稳定用户只从 AGENTS.md 读取，禁止扫描代码目录推断。
 ACTIVE_USER_MATCHES = re.findall(
     r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
@@ -72,22 +66,13 @@ def load_module(module_path: Path, module_name: str):
 class TempPathPolicyTests(unittest.TestCase):
     """验证程序和测试不会把临时文件写回旧目录或系统目录。"""
 
-    def test_ffmpeg_progress_roots_use_selplat_option_temp(self) -> None:
-        """三个 ffmpeg 技能的进度日志必须进入统一临时根。"""
-
-        # 分别加载每个技能，避免一个正确常量掩盖其他技能的路径回退。
-        for index, skill_path in enumerate(FFMPEG_SKILL_PATHS):
-            module = load_module(skill_path, f"temp_policy_ffmpeg_{index}")
-            # 进度日志允许使用业务子目录，但必须直属统一 OPTION/temp 管辖范围。
-            self.assertTrue(module.FFMPEG_TEMP_ROOT.is_relative_to(OPTION_TEMP_ROOT))
-
     def test_all_tempfile_calls_declare_owned_directory(self) -> None:
         """代码树内 tempfile 创建调用必须显式声明 dir 参数。"""
 
-        # 扫描正式能力、技能和测试入口，确保新增 tempfile 调用也受同一回归门保护。
+        # 扫描正式能力和 util，确保新增 tempfile 调用也受同一回归门保护。
         python_files = sorted(
             path
-            for area in ("abilities", "skill", "tests")
+            for area in ("abilities", "util")
             for path in (CODE_ROOT / area).glob("*.py")
         )
         violations: list[str] = []

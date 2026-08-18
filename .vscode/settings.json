@@ -1,5 +1,5 @@
 {
-  "java.import.gradle.user.home": "C:/opt/workspace/SELPLAT/cache/gradle-user-home",
+  "java.import.gradle.user.home": "${workspaceFolder}/cache/gradle-user-home",
   "java.autobuild.enabled": false, 
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.import.gradle.wrapper.enabled": true,

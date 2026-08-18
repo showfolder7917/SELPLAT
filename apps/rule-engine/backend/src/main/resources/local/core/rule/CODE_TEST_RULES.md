@@ -35,14 +35,11 @@ fallback_to_real_browser_or_playwright_screenshot_when_builtin_browser_unavailab
 <!-- 标准页面测试工具卡住或不可用时 必须记录阻塞原因 并使用真实 Chrome 或 Playwright fallback 完成验证 -->
 fallback_to_real_chrome_or_playwright_when_standard_page_tester_blocks = true
 
-<!--网页页面测试标准能力-->
-standard_web_page_visual_test_ability = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/abilities/page_visual_tester.py
+<!-- 页面可视化验证使用当前环境已安装并经过完整说明加载的浏览器控制能力。 -->
+web_page_visual_test.entry = available_browser_control_capability
 
-<!-- 网页页面可视化测试必须调用标准能力形成统一证据格式 -->
-web_page_visual_test_must_call_standard_ability = true
-
-<!-- 标准页面测试能力必须输出 JSON 结果和截图路径 便于复核 -->
-standard_ability_must_output_json_and_screenshot_paths = true
+<!-- 页面可视化验证必须保留真实 URL、视口、截图或等价可复核证据。 -->
+web_page_visual_test.evidence = url_viewport_and_visual_artifact
 
 <!-- 自动纠错、自愈、自我修复或能力升级任务在测试闭环缺失时不得宣称稳定；业务含义是把“先补测再纠错”提升为通用硬约束 -->
 auto_correction_must_not_claim_stable_without_minimal_test_closure = true
@@ -58,28 +55,13 @@ auto_correction_must_fill_validation_gap_before_repair_claim = true
 1. 页面测试必须真实启动或连接目标页面，打开实际 URL 后再判断结果。
 2. 只要任务涉及页面布局、视觉效果、首屏呈现、元素位置、遮挡、重叠、滚动区域或响应式表现，必须查看真实页面布局。
 3. 真实页面布局验证必须使用截图或等价的可视化检查；仅凭构建通过、接口返回、DOM 存在、样式代码阅读或文本快照，不得宣称页面布局已验证。
-4. 网页页面测试必须优先调用标准能力 `apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/abilities/page_visual_tester.py`；调用时应提供真实 URL、必要视口条件，以及与当前验证目标对应的滚动、选择器计数或文本检查参数，并输出 JSON 结果。
-5. 如果内置 Browser 可用，可同时使用内置 Browser 查看截图或交互状态；若内置 Browser 不可用，必须说明原因，并继续使用标准能力完成真实页面渲染与截图验证。
-6. 标准能力调用结果必须写明检查过的页面 URL、视口尺寸或设备条件、`result.json` 路径、截图文件路径、选择器/文本检查结果，以及发现的问题或确认结果。
-7. 页面存在内部滚动容器时，必须通过标准能力的 `scrolls` 参数滚动目标容器后截图；不得只截首屏就宣称下方布局已验证。
+4. 网页页面测试必须使用当前环境可用的浏览器控制能力，并记录真实 URL、必要视口条件及与验证目标对应的滚动、选择器或文本检查结果。
+5. 当前首选浏览器能力不可用时必须说明原因，再选择其他真实浏览器能力完成渲染和截图验证。
+6. 页面验证结果必须写明 URL、视口或设备条件、截图或等价证据，以及发现的问题或确认结果。
+7. 页面存在内部滚动容器时，必须滚动目标容器后再次检查；不得只看首屏就宣称下方布局已验证。
 8. 涉及页面交互、弹窗、进度条、滚动条、流式输出或可视状态变化时，必须使用真实 Chrome 或 Playwright 验证实际交互状态，并留下截图、`result.json`、日志或等价证据路径。
 9. 标准页面测试工具卡住、超时或不可用时，必须记录阻塞原因，再使用真实 Chrome 或 Playwright fallback 完成页面验证；不得把工具卡住当作页面已验证。
 
-## 标准能力调用格式
-
-```bash
-python3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/abilities/page_visual_tester.py \
-  --url "http://127.0.0.1:5174/?view=governance" \
-  --viewport 1600x900 \
-  --scroll ".governance-layout:640" \
-  --count "facts=.fact-field-row:8:8" \
-  --must-contain "body=事实字段"
-```
-
-返回 JSON 中至少应关注：
-
-- `status`：必须为 `completed` 才能作为通过结果。
-- `result_path`：记录本次标准能力输出的 JSON 文件路径。
 - `screenshots`：必须包含可查看的截图路径。
 - `selector_results` / `text_results`：用于说明 DOM 数量或页面文本检查是否通过。
 

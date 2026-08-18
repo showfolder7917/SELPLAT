@@ -2,18 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "acode-java: compile",
-      "type": "shell",
-      "command": "./gradlew --offline --console plain :apps:rule-engine:backend:classes",
-      "windows": {
-        "command": ".\\gradlew.bat --offline --console plain :apps:rule-engine:backend:classes"
-      },
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": "$javac"
-    },
-    {
       "label": "uniauth:classes",
       "type": "shell",
       "command": "./gradlew --offline --console plain :apps:uniauth:backend:classes",
@@ -44,29 +32,19 @@
       "problemMatcher": []
     },
     {
-      "label": "rule-engine:classes",
-      "type": "shell",
-      "command": "./gradlew --offline --console plain :apps:rule-engine:backend:classes",
-      "windows": {
-        "command": ".\\gradlew.bat --offline --console plain :apps:rule-engine:backend:classes"
-      },
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [
-        "$javac"
-      ],
-      "group": "build"
-    },
-    {
       "label": "rule-engine:run",
       "type": "shell",
-      "command": "./gradlew --offline --console plain :apps:rule-engine:backend:run",
+      "command": "python3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/rule_engine_backend.py",
       "windows": {
-        "command": ".\\gradlew.bat --offline --console plain :apps:rule-engine:backend:run"
+        "command": "py -3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/rule_engine_backend.py"
       },
       "options": {
-        "cwd": "${workspaceFolder}"
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONUTF8": "1",
+          "PYTHONIOENCODING": "utf-8",
+          "PYTHONPYCACHEPREFIX": "${workspaceFolder}/cache/python-pycache"
+        }
       },
       "problemMatcher": []
     }

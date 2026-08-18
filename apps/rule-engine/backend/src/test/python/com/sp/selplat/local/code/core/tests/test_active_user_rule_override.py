@@ -51,7 +51,7 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "REFERENCE_DATA_WORKBENCH_NAVIGATION_AND_LAZY_LOADING_RULES",
             "selplat",
             "selplat/应用/reference-data/rule/RUL_ReferenceData工作台导航与按需加载规则.md",
-            "reference_data_top_level_modules = types,tree,tables,controls,windows",
+            "reference_data_top_level_modules = types",
         ),
         (
             "SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES",
@@ -75,7 +75,7 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES",
             "selplat",
             "selplat/通用/rule/RUL_SELPLAT应用脚手架生成规则.md",
-            "selplat_scaffold_required_inputs = projectName,tableName",
+            "selplat_scaffold_required_inputs = projectName",
         ),
         (
             "JAPANESE_QUESTION_BANK_AI_MEDIA_GENERATION_RULES",
@@ -123,7 +123,7 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "MDA_LOCAL_DATABASE_WORKBENCH_FUNCTIONAL_RULES",
             "selplat",
             "selplat/应用/mda/rule/RUL_MDA本地数据库工作台功能规则.md",
-            "mda_control_database_forbidden_business_tables = authentication,tenant,role,permission,operator",
+            "mda_control_database_forbidden_business_tables = authentication",
         ),
         (
             "CHINESE_PINYIN_CORRECTION_RULES",
@@ -158,10 +158,10 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
     )
 
     def test_validates_complete_active_user_index_tree(self) -> None:
-        """当前用户十一层索引完整登记十九个逻辑 ID。"""
+        """当前用户二十一层索引完整登记七十二个逻辑 ID。"""
 
         self.assertEqual(
-            loader.IndexValidation(11, 19),
+            loader.IndexValidation(21, 72),
             loader.validate_current_user_index_tree(),
         )
 
@@ -178,18 +178,18 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
                 )
                 self.assertIn(expected_content, rule.content)
 
-    def test_utf8_user_rule_extends_common_without_losing_lower_values(self) -> None:
-        """UTF-8 用户扩展保留 common 文件规则并覆盖 HTTP 写入安全语义。"""
+    def test_utf8_user_rule_is_complete_without_common_layer(self) -> None:
+        """common 迁空后，UTF-8 规则仅由当前用户层提供完整语义。"""
 
         active_user = loader.current_stable_user_id()
         stack = loader.load_rule_stack(
             "UTF8_FILE_AND_COMMAND_RULES", "selplat", active_user
         )
-        self.assertEqual(("common", active_user), tuple(item.layer for item in stack.layers))
+        self.assertEqual((active_user,), tuple(item.layer for item in stack.layers))
         self.assertEqual("extend", stack.override_mode)
         self.assertEqual(
-            "true",
-            stack.effective_values["text_files_must_be_read_and_written_as_utf8"],
+            "strict_utf8_round_trip",
+            stack.effective_values["unicode_text_prewrite_integrity_gate"],
         )
         self.assertEqual(
             "forbidden_for_unicode_read_or_mutation_input",

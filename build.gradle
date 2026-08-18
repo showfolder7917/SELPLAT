@@ -20,11 +20,12 @@ allprojects {
     }
 }
 
-// 多级 Gradle 路径会隐式创建 apps、shared 等聚合节点，这些节点只组织子模块，不应进入 Java 项目模型。
-def javaLeafProjects = subprojects.findAll { currentProject ->
-    // 只有没有下级项目的叶子模块才承载源码、依赖和实际构建生命周期。
+// 多级 Gradle 路径会隐式创建 apps、shared 等聚合节点，只有叶子模块承载实际构建生命周期。
+def leafProjects = subprojects.findAll { currentProject ->
     currentProject.childProjects.isEmpty()
 }
+// Gradle 项目模型只登记 Java/前端构建模块；独立 Python 应用不进入子项目集合。
+def javaLeafProjects = leafProjects
 
 configure(javaLeafProjects) {
     // 所有叶子模块统一成 Java 工程，后续按模块职责再叠加 library 或 application 插件。
@@ -216,16 +217,19 @@ tasks.register('selplatAllRuleTests', Exec) {
     }
 }
 
-// Gradle 已登记的 apps/<项目>/backend 叶子模块 → 专项门禁的动态项目事实来源。
-def selplatApplicationGateProjects = javaLeafProjects.findAll { currentProject ->
+// Gradle 已登记的 apps/<项目>/backend 叶子模块 → Java 应用专项门禁的动态项目事实来源。
+def selplatApplicationGateProjects = leafProjects.findAll { currentProject ->
     List<String> pathParts = currentProject.path.tokenize(':')
     return pathParts.size() == 3 && pathParts[0] == 'apps' && pathParts[2] == 'backend'
 }.collectEntries { currentProject ->
     List<String> pathParts = currentProject.path.tokenize(':')
     return [(pathParts[1]): currentProject]
 }
-// shared 使用聚合回归入口；apps 范围完全来自 settings.gradle 当前项目模型，不再维护静态应用名称。
+// rule-engine 不属于 Gradle 项目，但根门禁仍直接调用它的 Python 测试。
+def selplatNonGradleApplicationScopes = ['rule-engine'] as Set
+// shared 使用聚合回归入口；Python 应用以明确的非 Gradle 范围补入门禁，不伪装成子项目。
 def selplatKnownGateScopes = new LinkedHashSet<>(selplatApplicationGateProjects.keySet())
+selplatKnownGateScopes.addAll(selplatNonGradleApplicationScopes)
 selplatKnownGateScopes.add('shared')
 
 // 专项门禁支持显式 scope，也支持从调用方提供的工程相对变更文件推导；没有范围时安全回退为全部模块。
@@ -264,14 +268,12 @@ def selplatRequestedGateScopes = {
     return scopes
 }
 
-// 每个已登记应用自动映射自己的 test；新增 settings 模块后下一次 Gradle 启动即进入专项门禁。
+// 每个已登记 Java 应用自动映射自己的 test；新增 settings 模块后下一次 Gradle 启动即进入专项门禁。
 def selplatSpecialGateTaskPaths = selplatApplicationGateProjects.collectEntries { scope, currentProject ->
     return [(scope): ["${currentProject.path}:test"]]
 }
-// rule-engine 除 Java 测试外还必须执行当前稳定用户 Python 规则测试。
-if (selplatSpecialGateTaskPaths.containsKey('rule-engine')) {
-    selplatSpecialGateTaskPaths['rule-engine'].add('selplatActiveUserRuleTests')
-}
+// rule-engine 只执行当前稳定用户 Python 规则测试，不依赖任何 Gradle 子项目任务。
+selplatSpecialGateTaskPaths['rule-engine'] = ['selplatActiveUserRuleTests']
 // shared 保持后端聚合回归和公共前端边界检查，不伪装成 apps 项目。
 selplatSpecialGateTaskPaths['shared'] = [
         'sharedRegression', ':shared:frontend:sel-ui:verifySelUiSourceBoundary'

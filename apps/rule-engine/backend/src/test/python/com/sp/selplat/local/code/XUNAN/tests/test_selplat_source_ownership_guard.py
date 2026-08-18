@@ -64,14 +64,16 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         """路径治理必须固定 Windows/macOS 目标，并禁止分隔符字符串断言。"""
         # 读取当前用户层规则正本 → 防止跨平台约束只修测试而没有进入后续任务加载链。
         rule_text = RULE_PATH.read_text(encoding="utf-8")
+        self.assertIn("selplat_supported_desktop_path_platforms = windows", rule_text)
+        self.assertIn("selplat_supported_desktop_path_platforms.2 = macos", rule_text)
+        self.assertIn("selplat_cross_platform_path_comparison = java.nio.file.Path", rule_text)
+        self.assertIn("selplat_cross_platform_path_comparison.2 = python.pathlib.Path", rule_text)
         self.assertIn(
-            "selplat_supported_desktop_path_platforms = windows,macos",
+            "selplat_cross_platform_path_comparison.3 = component_or_relative_suffix",
             rule_text,
         )
         self.assertIn(
-            "selplat_cross_platform_path_comparison = "
-            "java.nio.file.Path,python.pathlib.Path,component_or_relative_suffix,"
-            "no_fixed_separator_string_assertion",
+            "selplat_cross_platform_path_comparison.4 = no_fixed_separator_string_assertion",
             rule_text,
         )
 

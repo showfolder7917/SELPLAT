@@ -1,22 +1,26 @@
 # rule-engine backend
 
-这里保存按规则运行所需的分层加载、语言原生能力、规则包资产和离线验证入口。
+这里保存按规则运行所需的分层加载、Python 能力、规则包资产和离线验证入口。
 
 当前主线：
 
 - 启动协议只建立执行边界和唯一规则索引入口，不批量加载全部规则。
 - AI 根据任务、当前工程作用域和当前用户命中最少必要规则。
 - 规则通过模板、案例、程序和验证资产约束执行结果，重复偏差推动规则包持续升级。
-- Java、Python、Node 业务程序保持原语言实现；分层规则加载统一由 Python ability 执行，不再启动 Java 加载链。
+- XUNAN 的正式能力程序统一使用 Python；`abilities` 保存完整业务能力，`util` 只保存共享实现。
+- Java 与 Node 旧能力完成 Python 等价迁移后删除，不再参与构建或运行。
 
-当前状态：规则分层和索引治理已经运行；规则包资产与程序引用仍在持续补全。Java 21 健康服务只用于离线容器验证，不代表传统规则执行链。
+当前状态：规则分层、索引治理和 Python 能力入口已经运行。
+
+Python 运行时依赖登记在 `requirements-python.txt`。本机或 CI 使用已经准备好依赖的
+Python 解释器直接启动；rule-engine 不再注册为 Gradle 子项目，工程也不保存机器绝对路径。
 
 运行方式：
 
-- 编译：`.\gradlew.bat --offline --console plain :apps:rule-engine:backend:classes`
-- 启动：`.\gradlew.bat --offline --console plain :apps:rule-engine:backend:run`
-- 启动验证：`.\gradlew.bat --offline --console plain :apps:rule-engine:backend:run --args=--verify`
-- 健康检查：`http://localhost:8081/rule-engine/health`
+- macOS/Linux 启动：`python3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/rule_engine_backend.py`
+- Windows 启动：`py -3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/rule_engine_backend.py`
+- 启动验证：在上述命令末尾追加 `--verify`
+- 健康检查：`http://localhost:8080/health`
 
 Python 验证：
 

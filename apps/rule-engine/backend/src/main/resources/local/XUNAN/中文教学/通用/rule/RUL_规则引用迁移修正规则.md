@@ -1,6 +1,6 @@
 # 规则引用迁移修正
 
-<!-- Java 当前没有独立修正程序，实际 Java 工具路径由本规则映射。 -->
+<!-- 当前中文教学修正程序统一使用 Python，旧语言路径不得继续登记。 -->
 java_ability_refs = none
 <!-- Python 智慧整合能力负责验证旧引用和当前路径。 -->
 python_ability_refs = ai_rule_package_integrator
@@ -30,21 +30,21 @@ example_path = local/<active-stable-user-id>/selplat/应用/rule-engine/template
 <!-- 失效路径扫描和修正后验证统一使用已登记的智慧整合能力。 -->
 verification_program = ai_rule_package_integrator
 
-<!-- 拼音规则的原业务语义继续从 common 权威规则读取。 -->
-CHINESE_PINYIN_CORRECTION_RULES.base_rule = local/common/中文教学/应用/拼音生成/rule/RUL_拼音标注与朗读版校正规则.md
-<!-- 拼音 Java 程序已迁入 rule-engine 的语言原生 common 目录。 -->
-CHINESE_PINYIN_CORRECTION_RULES.java_program_root = apps/rule-engine/backend/src/main/java/com/sp/selplat/local/code/common/中文教学/拼音生成/
-<!-- PinyinDocxGenerationTool 是拼音规则的当前统一命令入口。 -->
-CHINESE_PINYIN_CORRECTION_RULES.entry = PinyinDocxGenerationTool.java
+<!-- 拼音规则的原业务语义从迁入后的当前用户权威规则读取。 -->
+CHINESE_PINYIN_CORRECTION_RULES.base_rule = local/XUNAN/中文教学/应用/拼音生成/rule/RUL_拼音标注与朗读版校正规则.md
+<!-- 拼音能力已收敛到 rule-engine 当前用户 Python abilities。 -->
+CHINESE_PINYIN_CORRECTION_RULES.python_program = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/pinyin_docx_tools.py
+<!-- pinyin_docx_tools.py 是拼音规则的当前统一命令入口。 -->
+CHINESE_PINYIN_CORRECTION_RULES.entry = pinyin_docx_tools.py
 <!-- 纠音词典由调用方显式提供，程序不再依赖仓库中的固定项目词典。 -->
 CHINESE_PINYIN_CORRECTION_RULES.dictionary_policy = caller_supplied_utf8_tsv_via_dictionaryPath
 <!-- 迁移前 shared/common-core 下的固定词典路径已经退役，命中时必须阻断使用。 -->
 CHINESE_PINYIN_CORRECTION_RULES.retired_dictionary_paths_must_not_be_used = shared/backend/common-core/src/main/resources/pinyin/
 
-<!-- 古诗底图规则的原业务语义继续从中文教学 common 规则读取。 -->
-ANCIENT_POEM_BACKGROUND_RULES.base_rule = local/common/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗无文字底图生成工作流程规则.md
-<!-- 古诗底图验证程序已迁入 rule-engine 的 Python common 目录。 -->
-ANCIENT_POEM_BACKGROUND_RULES.python_program = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/common/中文教学/教学图片与PPT生成/古诗教学图片通用Pillow排版器.py
+<!-- 古诗底图规则的原业务语义从迁入后的当前用户中文教学规则读取。 -->
+ANCIENT_POEM_BACKGROUND_RULES.base_rule = local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗无文字底图生成工作流程规则.md
+<!-- 古诗教学图解析、渲染和清单能力统一进入当前用户 abilities。 -->
+ANCIENT_POEM_BACKGROUND_RULES.python_program = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/teaching_image_tools.py
 
 
 <!-- 每个替换目标必须先验证存在，禁止用另一个猜测路径覆盖旧路径。 -->

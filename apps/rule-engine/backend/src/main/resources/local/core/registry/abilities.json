@@ -1,99 +1,30 @@
 {
   "ai_memory_file_reader": {
     "path": "./abilities/ai_memory_file_reader.py",
-    "summary": "读取 rule-engine local/core 资源或唯一根规则索引，并返回去注释去空行后的稳定文本",
-    "skills": ["read_ai_memory_file"]
+    "summary": "读取 rule-engine local/core 资源或唯一根规则索引，并返回去注释去空行后的稳定文本"
   },
   "startup_protocol_loader": {
     "path": "./abilities/startup_protocol_loader.py",
-    "summary": "按 STARTER_PROTOCOL.md 声明顺序装载启动协议链",
-    "skills": ["read_ai_memory_file"]
+    "summary": "按 STARTER_PROTOCOL.md 声明顺序装载启动协议链"
   },
   "layered_rule_loader": {
     "path": "./abilities/layered_rule_loader.py",
-    "summary": "仅使用 Python 按 core、common 当前作用域和当前用户加载规则、依赖闭包与回执",
-    "skills": [],
-    "apps": []
+    "summary": "仅使用 Python 按 core、common 当前作用域和当前用户加载规则、依赖闭包与回执"
   },
   "memory_file_full_reader": {
     "path": "./abilities/memory_file_full_reader.py",
-    "summary": "读取工程目录文件，并返回完整原文",
-    "skills": ["read_memory_file_full"]
-  },
-  "h2_query_workbench_delivery": {
-    "path": "./abilities/h2_query_workbench_delivery.py",
-    "summary": "启动 H2 数据库查询台本地后端，并按需打开浏览器",
-    "apps": ["h2_query_workbench"]
-  },
-  "gradle_offline_test_restorer": {
-    "path": "./abilities/gradle_offline_test_restorer.py",
-    "summary": "在离线约束下规划、恢复并验证 Gradle 测试依赖闭包",
-    "skills": [],
-    "apps": []
-  },
-  "gui_human_like_delivery": {
-    "path": "./abilities/gui_human_like_delivery.py",
-    "summary": "按统一协议打开已登记 GUI 应用，并执行可视化自动化计划",
-    "skills": ["launch_gui_app_with_plan"]
-  },
-  "vob_to_mp4_delivery": {
-    "path": "./abilities/vob_to_mp4_delivery.py",
-    "summary": "完成 VOB/MP4 媒体文件到目标格式的转码或音频提取交付",
-    "skills": ["ffmpeg_vob_to_mp4", "ffmpeg_vob_to_mp3", "ffmpeg_mp4_to_wav", "launch_gui_app_with_plan"],
-    "apps": ["vob_to_mp4_gui_pyside6"]
-  },
-  "mp4_to_transparent_png_sequence_delivery": {
-    "path": "./abilities/mp4_to_transparent_png_sequence_delivery.py",
-    "summary": "将白底 MP4 拆为透明 PNG 序列",
-    "skills": [],
-    "apps": []
-  },
-  "ledger_http_submitter": {
-    "path": "./abilities/ledger_http_submitter.py",
-    "summary": "通过 INIT_PROTOCOL 与 natural-run 执行统一账本 HTTP 提交",
-    "skills": [],
-    "apps": []
-  },
-  "ledger_utf8_submitter": {
-    "path": "./abilities/ledger_utf8_submitter.py",
-    "summary": "统一从 UTF-8 上下文或 UTF-8 JSON 文件读取 payload，再调用账本 HTTP 提交",
-    "skills": [],
-    "apps": []
-  },
-  "experience_query_bridge": {
-    "path": "./abilities/experience_query_bridge.py",
-    "summary": "通过 experience/query 执行统一经验查询，并返回查询条数与查询参数",
-    "skills": [],
-    "apps": []
+    "summary": "读取工程目录文件，并返回完整原文"
   },
   "execution_doc_manager": {
     "path": "./abilities/execution_doc_manager.py",
-    "summary": "统一维护执行文档：任务前检查未完成、创建新任务、步骤回写和任务后归档",
-    "skills": [],
-    "apps": []
+    "summary": "统一维护执行文档：任务前检查未完成、创建新任务、步骤回写和任务后归档"
   },
   "test_doc_manager": {
     "path": "./abilities/test_doc_manager.py",
-    "summary": "维护同线程测试文档：修改后登记待测项、统一测试时回写结果并归档",
-    "skills": [],
-    "apps": []
-  },
-  "project_text_replace_unifier": {
-    "path": "./abilities/project_text_replace_unifier.py",
-    "summary": "统一扫描工程文本文件并执行批量替换，同时返回残留结果",
-    "skills": [],
-    "apps": []
+    "summary": "维护同线程测试文档：修改后登记待测项、统一测试时回写结果并归档"
   },
   "rule_package_generator": {
     "path": "./abilities/rule_package_generator.py",
-    "summary": "在项目或子项目的 rule 目录生成主规则并更新叶子索引，不自动创建模板材料",
-    "skills": [],
-    "apps": []
-  },
-  "page_visual_tester": {
-    "path": "./abilities/page_visual_tester.py",
-    "summary": "使用 Python/Playwright 打开真实页面并输出截图、布局检查和 JSON 结果",
-    "skills": [],
-    "apps": []
+    "summary": "在项目或子项目的 rule 目录生成主规则并更新叶子索引，不自动创建模板材料"
   }
 }

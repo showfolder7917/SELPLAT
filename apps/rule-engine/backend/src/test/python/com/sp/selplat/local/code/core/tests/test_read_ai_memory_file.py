@@ -19,7 +19,7 @@ import unittest
 
 
 CODE_ROOT = MAIN_CODE_ROOT
-SKILL_PATH = CODE_ROOT / "skill" / "read_ai_memory_file.py"
+UTIL_PATH = CODE_ROOT / "util" / "ai_memory_reader.py"
 # 直接使用真实 STARTER 协议验证读取能力，避免在生产 core 中保留测试专用样本。
 AI_READER_FIXTURE = (
     PROJECT_ROOT
@@ -32,10 +32,10 @@ ROOT_RULE_INDEX = (
 )
 
 
-def load_skill_module():
-    """加载被测技能模块。"""
+def load_util_module():
+    """加载被测 util 模块。"""
 
-    spec = importlib.util.spec_from_file_location("read_ai_memory_file", SKILL_PATH)
+    spec = importlib.util.spec_from_file_location("ai_memory_reader", UTIL_PATH)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -47,7 +47,7 @@ class ReadAiMemoryFileTests(unittest.TestCase):
     """机器可读清洗规则测试。"""
 
     def setUp(self) -> None:
-        self.module = load_skill_module()
+        self.module = load_util_module()
 
     def test_clean_content_filters_human_readable_lines(self) -> None:
         """应过滤标题、中文说明和列表说明。"""

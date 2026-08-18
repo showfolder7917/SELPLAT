@@ -1,5 +1,20 @@
 # rule-engine Python core 重构方案
 
+## 0. 第一版实施状态（2026-08-18）
+
+第一版已采用“`executor.py + abilities + util`”结构：
+
+- active core 从 26 个 Python 文件、约 1.1 万行收敛为 11 个 Python 文件、2916 行。
+- `executor.py` 只读取 `abilities.json`，不再加载 `skills.json` 或 `apps.json`。
+- 两个 reader skill 已转为 `util/ai_memory_reader.py` 与 `util/full_file_reader.py`。
+- GUI、H2、媒体、页面视觉测试和批量文本替换实现已进入当前用户封存镜像。
+- `GUI_VIDEO_TASK_RULES` 已退出根索引并与代码一同封存。
+- 记账地址退役后，`ledger_http_submitter.py` 与 `ledger_utf8_submitter.py` 已退出注册并封存。
+- `experience_query_bridge.py` 已退出 active 注册并进入当前用户封存镜像。
+- `gradle_offline_test_restorer.py` 已迁为当前用户 `fujitsu_gradle_offline_test_restorer.py`，关联规则和模板同步进入 XUNAN Fujitsu 作用域。
+
+封存内容不注册、不索引、不从 active 代码导入。恢复或重构前必须重新核对调用方、依赖、规则归属和测试。
+
 ## 1. 方案目标
 
 目标目录：
@@ -10,7 +25,7 @@
 
 预期结果：
 
-- `core` 从当前 26 个 Python 文件、约 1.1 万行，收敛到约 8–11 个主要模块、3000–4000 行。
+- `core` 第一版先收敛到 `executor.py + abilities + util`，后续再按调用证据继续缩减大模块。
 - 删除 `core/app` 和 `core/skill` 两套不再必要的运行时分层。
 - `executor.py` 只调度核心 ability，不再承担 GUI、媒体和领域工具依赖注入。
 - 启动协议、规则分层加载、执行/测试文档生命周期保持稳定逻辑 ID 和外部入口。
@@ -50,7 +65,7 @@
 存在专项测试或文档，但职责不应属于 core 的入口：
 
 - `gradle_offline_test_restorer.py`：只由 Fujitsu 离线恢复说明和专项测试使用。
-- `experience_query_bridge.py`、`ledger_http_submitter.py`、`ledger_utf8_submitter.py`：职责相近，均访问经验/记账 HTTP 网关。
+- `experience_query_bridge.py`：无 active 生产调用方，已经停用并封存。
 
 ## 3. core 的目标边界
 
@@ -64,7 +79,6 @@ core 只保留以下职责：
 4. 受控文件读取。
 5. 执行文档和测试文档线程生命周期。
 6. 规则包生成与索引维护。
-7. 启动协议明确要求的经验查询与记账网关。
 
 ### 3.2 必须迁出
 
@@ -77,26 +91,25 @@ core 只保留以下职责：
 - 通用文本批量替换工具。
 - 可替换的网页视觉测试实现。
 
-### 3.3 目标目录建议
+### 3.3 第一版目标目录
 
 ```text
 core/
 ├─ executor.py
-├─ runtime/
-│  ├─ registry_loader.py
-│  ├─ safe_path.py
-│  └─ thread_document_store.py
-└─ abilities/
+├─ abilities/
    ├─ startup_protocol_loader.py
    ├─ layered_rule_loader.py
-   ├─ controlled_file_reader.py
+   ├─ ai_memory_file_reader.py
+   ├─ memory_file_full_reader.py
    ├─ execution_doc_manager.py
    ├─ test_doc_manager.py
-   ├─ rule_package_generator.py
-   └─ experience_gateway.py
+   └─ rule_package_generator.py
+└─ util/
+   ├─ ai_memory_reader.py
+   └─ full_file_reader.py
 ```
 
-`page_visual_tester.py` 是否保留在 core，取决于第三阶段是否完成规则实现解耦；未解耦前不得先移动。
+`page_visual_tester.py` 已与专项测试封存；active 页面验证规则改为使用当前环境可用的浏览器控制能力。
 
 ## 4. 文件分类与替代关系
 
@@ -119,9 +132,6 @@ core/
 | `memory_file_full_reader.py` | `controlled_file_reader.py` | 合并为 `mode=full`，同步 `ai_rule_package_integrator` 调用方 |
 | `skill/read_ai_memory_file.py` | `controlled_file_reader.py` | 读取和安全路径校验进入单一实现，删除 skill 二次包装 |
 | `skill/read_memory_file_full.py` | `controlled_file_reader.py` | 同上 |
-| `experience_query_bridge.py` | `experience_gateway.py` | 合并为 `action=query` |
-| `ledger_http_submitter.py` | `experience_gateway.py` | 合并为 `action=submit` |
-| `ledger_utf8_submitter.py` | `experience_gateway.py` | 合并 UTF-8 文件读取、失败队列和 `action=retry` |
 
 兼容原则：别名只保留一个迁移阶段。调用方和测试全部切换后，注册表必须删除旧 ID，禁止永久保留空壳兼容文件。
 
@@ -129,9 +139,9 @@ core/
 
 | 当前内容 | 目标层 | 建议目标 | 原因 |
 |---|---|---|---|
-| `gradle_offline_test_restorer.py` | common/Fujitsu | `local/code/common/fujitsu/gradle/` | 唯一规则和文档调用方属于 Fujitsu |
-| `page_visual_tester.py` | common/跨工程 | `local/code/common/跨工程/网页测试/` | 是跨工程测试工具，不是启动内核；迁移前先解除 core 规则中的物理路径 |
-| `h2_query_workbench_delivery.py` | common/SELPLAT | `local/code/common/selplat/h2工作台/` | 服务 SELPLAT 数据库开发，不是所有规则任务必需 |
+| `gradle_offline_test_restorer.py` | 当前用户/Fujitsu | `local/code/XUNAN/abilities/fujitsu_gradle_offline_test_restorer.py` | 只服务当前用户 Fujitsu 离线恢复，不属于启动内核 |
+| `page_visual_tester.py` | XUNAN/封存 | `local/code/XUNAN/archive/python_core_20260818/abilities/` | 已断开生产入口并封存，不再作为启动内核或活动用户能力加载 |
+| `h2_query_workbench_delivery.py` | XUNAN/封存 | `local/code/XUNAN/archive/python_core_20260818/abilities/` | 已断开生产入口并封存，后续需要时先重新审查职责和调用地址 |
 | `app/h2_query_workbench/` | common/SELPLAT | 与 H2 delivery 同包 | 应用与交付入口保持同一职责归属 |
 | `vob_to_mp4_delivery.py` | 当前用户/跨工程 | `local/code/XUNAN/跨工程/媒体转换/` | 当前没有公共生产调用证据，且依赖特定媒体工作流 |
 | `mp4_to_transparent_png_sequence_delivery.py` | 当前用户/跨工程 | 同上 | 特定媒体处理能力，不应冻结到 core |
@@ -191,8 +201,6 @@ core/
 
 - 提取 `runtime/thread_document_store.py`，统一线程 ID、安全文件名、锁、revision、UTF-8 原子写入和历史归档。
 - execution/test 两个 manager 只维护各自状态机。
-- 合并经验查询、记账提交、UTF-8 失败队列为 `experience_gateway.py`。
-- 把重复的 HTTP JSON/error/host/identity 解析收敛到单一实现。
 
 完成条件：文档并发测试、失败重试测试和 HTTP 错误契约全部保持一致。
 
@@ -221,7 +229,6 @@ core/
 | core 规则引用迁出的 common 实现形成反向依赖 | core 只声明能力契约，具体实现路径由 common 规则登记 |
 | executor 精简后动态能力加载失败 | 先建立单 registry 测试，再删除 skills/apps 代码 |
 | 文档管理器合并后并发丢写 | 保留并扩展当前并发 complete/result 测试 |
-| ledger 合并改变失败队列格式 | 先冻结现有 JSON 契约，用 fixture 做双实现结果比较 |
 | 移动 GUI/媒体后依赖路径失效 | 应用、skills、ability 和资源作为一个原子包迁移 |
 | 一次改动过大导致回归定位困难 | 每阶段单独授权、单独测试文档、单独迁移回执，禁止跨阶段混改 |
 
@@ -230,7 +237,7 @@ core/
 第一批建议只处理低耦合、高收益项：
 
 1. 删除 `project_text_replace_unifier.py`，前提是再次确认仓库外无调用。
-2. 把 `gradle_offline_test_restorer.py` 迁入 common/Fujitsu 并同步唯一说明文档。
+2. 把 `gradle_offline_test_restorer.py` 迁入当前用户 Fujitsu，并同步唯一说明文档。（已完成迁移，待统一测试）
 3. 把 H2 工作台 ability 与 app 整包迁入 common/SELPLAT。
 4. 把媒体 ability、skill、GUI 整包迁入当前用户跨工程媒体目录。
 5. 清理对应 core registry 项，但暂不重构 executor。
@@ -240,11 +247,11 @@ core/
 ## 8. 暂不建议的操作
 
 - 不建议第一批直接重写 `layered_rule_loader.py`。
-- 不建议同时合并文档管理器和 ledger HTTP 链。
+- 不再恢复没有有效地址的 ledger HTTP 链。
 - 不建议通过 core 注册表相对路径逃逸引用 common 或用户层。
 - 不建议保留长期 deprecated wrapper；兼容入口必须有明确删除阶段。
 - 不建议因为“没有 Java/Python 仓内调用”就立即删除 GUI、媒体或 H2，人工入口也属于调用契约。
 
 ## 9. 后续授权建议
 
-实际实施时按阶段分别提交独立任务。建议下一次只授权“阶段 0 + 阶段 1”，完成迁移回执和统一测试后，再决定是否进入 executor、文档基础设施与 ledger 合并。
+实际实施继续按阶段提交独立任务。记账能力已经退役，后续只评估 executor、文档基础设施和只读经验查询的进一步瘦身。

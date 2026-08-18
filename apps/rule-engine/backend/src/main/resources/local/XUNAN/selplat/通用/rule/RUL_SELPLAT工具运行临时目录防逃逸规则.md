@@ -25,17 +25,39 @@ selplat_project_rule_overrides_generic_skill_temp_default = true
 <!-- 工具必须从工程根推导 OPTION/temp，禁止使用机器固定绝对路径或当前工作目录猜测工程。 -->
 selplat_temp_root_resolution = locate_settings_gradle_then_resolve_OPTION_temp
 <!-- 所有运行数据输入输出参数必须在读写前解析规范路径并验证属于 OPTION/temp 子目录。 -->
-selplat_temp_path_preflight = resolve_before_io,descendant_of_OPTION_temp,root_itself_forbidden
+selplat_temp_path_preflight = resolve_before_io
+<!-- selplat_temp_path_preflight.2 的当前独立事实为 descendant_of_OPTION_temp。 -->
+selplat_temp_path_preflight.2 = descendant_of_OPTION_temp
+<!-- selplat_temp_path_preflight.3 的当前独立事实为 root_itself_forbidden。 -->
+selplat_temp_path_preflight.3 = root_itself_forbidden
 <!-- 相对路径、绝对路径和符号链接解析后发生目录逃逸时必须立即失败。 -->
-selplat_temp_path_escape_policy = reject_relative_escape,reject_absolute_escape,reject_symlink_escape
+selplat_temp_path_escape_policy = reject_relative_escape
+<!-- selplat_temp_path_escape_policy.2 的当前独立事实为 reject_absolute_escape。 -->
+selplat_temp_path_escape_policy.2 = reject_absolute_escape
+<!-- selplat_temp_path_escape_policy.3 的当前独立事实为 reject_symlink_escape。 -->
+selplat_temp_path_escape_policy.3 = reject_symlink_escape
 <!-- 工具必须提供位于应用任务目录的安全默认值，不能要求调用者每次手工拼接临时根。 -->
 selplat_temp_safe_default_policy = required_for_runtime_tools
 
 ## 迁移与完成门槛
 
 <!-- 发现工程根 tmp 或其他误放运行目录时，先核对目标不存在，再整体迁移到 OPTION/temp 对应任务目录。 -->
-selplat_legacy_temp_migration = verify_source,verify_target_absent,move_to_owned_task_root,remove_empty_legacy_root
+selplat_legacy_temp_migration = verify_source
+<!-- selplat_legacy_temp_migration.2 的当前独立事实为 verify_target_absent。 -->
+selplat_legacy_temp_migration.2 = verify_target_absent
+<!-- selplat_legacy_temp_migration.3 的当前独立事实为 move_to_owned_task_root。 -->
+selplat_legacy_temp_migration.3 = move_to_owned_task_root
+<!-- selplat_legacy_temp_migration.4 的当前独立事实为 remove_empty_legacy_root。 -->
+selplat_legacy_temp_migration.4 = remove_empty_legacy_root
 <!-- 任务交付前必须扫描工程根新增的 tmp、runtime、普通日志和临时副本，存在污染则不得完成。 -->
-selplat_root_pollution_delivery_gate = scan_tmp_runtime_logs_and_temporary_copies,block_on_violation
+selplat_root_pollution_delivery_gate = scan_tmp_runtime_logs_and_temporary_copies
+<!-- selplat_root_pollution_delivery_gate.2 的当前独立事实为 block_on_violation。 -->
+selplat_root_pollution_delivery_gate.2 = block_on_violation
 <!-- 回归测试必须覆盖安全子目录、工程根 tmp 逃逸、OPTION/temp 根滥用和命令行错误路径。 -->
-selplat_temp_path_guard_test_gate = accept_owned_descendant,reject_project_tmp,reject_broad_OPTION_temp,reject_cli_escape
+selplat_temp_path_guard_test_gate = accept_owned_descendant
+<!-- selplat_temp_path_guard_test_gate.2 的当前独立事实为 reject_project_tmp。 -->
+selplat_temp_path_guard_test_gate.2 = reject_project_tmp
+<!-- selplat_temp_path_guard_test_gate.3 的当前独立事实为 reject_broad_OPTION_temp。 -->
+selplat_temp_path_guard_test_gate.3 = reject_broad_OPTION_temp
+<!-- selplat_temp_path_guard_test_gate.4 的当前独立事实为 reject_cli_escape。 -->
+selplat_temp_path_guard_test_gate.4 = reject_cli_escape

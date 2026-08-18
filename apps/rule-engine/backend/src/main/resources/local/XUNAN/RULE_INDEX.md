@@ -9,5 +9,8 @@ ACTIVE_USER_CROSS_PROJECT_RULE_INDEX = local/XUNAN/跨工程通用规则/RULE_IN
 <!-- SELPLAT 用户规则按平台应用继续分层。 -->
 ACTIVE_USER_SELPLAT_RULE_INDEX = local/XUNAN/selplat/RULE_INDEX.md
 
+<!-- Fujitsu 用户专项规则按通用和应用继续分层。 -->
+ACTIVE_USER_FUJITSU_RULE_INDEX = local/XUNAN/fujitsu/RULE_INDEX.md
+
 <!-- 中文教学用户修正规则按业务大项目分层。 -->
 ACTIVE_USER_CHINESE_TEACHING_RULE_INDEX = local/XUNAN/中文教学/RULE_INDEX.md

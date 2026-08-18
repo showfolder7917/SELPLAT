@@ -225,6 +225,22 @@ def _is_project_reference(line: str, raw_reference: str) -> bool:
     return normalized.startswith(PROJECT_REFERENCE_PREFIXES)
 
 
+def _collect_reference_fields(assignments: dict[str, str]) -> dict[str, str | None]:
+    """合并一条事实一个键的 ability 引用，同时兼容未拆分旧规则。"""
+
+    reference_fields: dict[str, str | None] = {}
+    for field in REFERENCE_FIELDS:
+        # 基础键是第一条事实，点号数字后缀按声明顺序承载其余独立引用。
+        matching_values = [
+            value
+            for key, value in assignments.items()
+            if key == field or key.startswith(f"{field}.")
+        ]
+        # 审查结果继续提供单一字符串契约，内部规则文件则保持单事实 DSL。
+        reference_fields[field] = ",".join(matching_values) if matching_values else None
+    return reference_fields
+
+
 def _audit_rule(rule: dict[str, Any], core_executor: Any) -> dict[str, Any]:
     """形成单条规则的规则包事实和缺口，不自动决定删除或合并。"""
 
@@ -232,7 +248,7 @@ def _audit_rule(rule: dict[str, Any], core_executor: Any) -> dict[str, Any]:
     assignments = {key: value for key, value, _ in _parse_assignments(text)}
     absolute_rule_path = RESOURCE_ROOT / rule["path"]
     assets = _asset_facts(absolute_rule_path)
-    reference_fields = {field: assignments.get(field) for field in REFERENCE_FIELDS}
+    reference_fields = _collect_reference_fields(assignments)
     program_refs = {
         field: value for field, value in reference_fields.items()
         if value and value.lower() not in NOT_APPLICABLE_VALUES

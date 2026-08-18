@@ -1,0 +1,25 @@
+# 中文教学成语典故子项目索引
+
+<!-- chinese_teaching_idiom_story_rule_root 的当前独立事实为 local/XUNAN/中文教学/应用/成语典故/rule/。 -->
+chinese_teaching_idiom_story_rule_root = local/XUNAN/中文教学/应用/成语典故/rule/
+
+<!-- IDIOM_FABLE_PICTURE_BOOK_PPT_RULES 的当前独立事实为 local/XUNAN/中文教学/应用/成语典故/rule/RUL_成语典故绘本PPT制作规则.md。 -->
+IDIOM_FABLE_PICTURE_BOOK_PPT_RULES = local/XUNAN/中文教学/应用/成语典故/rule/RUL_成语典故绘本PPT制作规则.md
+
+<!-- load_rule_for_idiom_fable_picture_book_ppt_generation 的当前独立事实为 IDIOM_FABLE_PICTURE_BOOK_PPT_RULES。 -->
+load_rule_for_idiom_fable_picture_book_ppt_generation = IDIOM_FABLE_PICTURE_BOOK_PPT_RULES
+
+<!-- PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES 的当前独立事实为 local/XUNAN/中文教学/应用/成语典故/rule/RUL_小学成语典故国风连续绘本图片生成规则.md。 -->
+PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES = local/XUNAN/中文教学/应用/成语典故/rule/RUL_小学成语典故国风连续绘本图片生成规则.md
+
+<!-- load_rule_for_primary_school_idiom_story_picture_book_generation 的当前独立事实为 PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES。 -->
+load_rule_for_primary_school_idiom_story_picture_book_generation = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
+
+<!-- load_rule_for_idiom_story_grading_and_storyboard_planning 的当前独立事实为 PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES。 -->
+load_rule_for_idiom_story_grading_and_storyboard_planning = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
+
+<!-- load_rule_for_primary_school_idiom_story_ppt_generation 的当前独立事实为 PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES。 -->
+load_rule_for_primary_school_idiom_story_ppt_generation = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES
+
+<!-- load_rule_for_idiom_story_ppt_layout_and_text_avoidance 的当前独立事实为 PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES。 -->
+load_rule_for_idiom_story_ppt_layout_and_text_avoidance = PRIMARY_SCHOOL_IDIOM_STORY_PICTURE_BOOK_RULES

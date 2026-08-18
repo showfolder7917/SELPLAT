@@ -14,3 +14,9 @@ ACTIVE_USER_SELPLAT_JAPANESE_RULE_INDEX = local/XUNAN/selplat/应用/japanese/RU
 
 <!-- reference-data 保存当前用户对工作台导航、按需加载和表格字段下钻的专项约束。 -->
 ACTIVE_USER_SELPLAT_REFERENCE_DATA_RULE_INDEX = local/XUNAN/selplat/应用/reference-data/RULE_INDEX.md
+
+<!-- 应用索引只汇总真实二级项目，不复制叶子规则逻辑 ID。 -->
+selplat_application_index_child_reference_only = true
+
+<!-- uniauth 维护统一认证应用专项规则。 -->
+SELPLAT_UNIAUTH_RULE_INDEX = local/XUNAN/selplat/应用/uniauth/RULE_INDEX.md

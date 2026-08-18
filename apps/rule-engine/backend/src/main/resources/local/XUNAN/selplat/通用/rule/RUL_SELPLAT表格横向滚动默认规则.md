@@ -68,8 +68,24 @@ selgrid_horizontal_scrollbar_discoverability = visible_track_and_thumb_at_rest_w
 <!-- 公共 selGrid 实现就是唯一可复用成品，不再生成重复 CSS 或页面模板。 -->
 template_not_applicable_reason = shared_selgrid_component_is_the_single_reusable_implementation
 <!-- MDA 动态宽表与 reference-data 普通表格共同构成显式宽表和默认表格的已核验案例。 -->
-verified_example_refs = apps/mda/backend/src/main/resources/static/mda,apps/reference-data/backend/src/main/resources/static/reference-data
+verified_example_refs = apps/mda/backend/src/main/resources/static/mda
+<!-- verified_example_refs.2 的当前独立事实为 apps/reference-data/backend/src/main/resources/static/reference-data。 -->
+verified_example_refs.2 = apps/reference-data/backend/src/main/resources/static/reference-data
 <!-- 现有语法检查、组件检查、规则加载测试和真实浏览器测量已经提供可重复验证。 -->
 program_not_applicable_reason = existing_javascript_component_rule_loader_and_browser_visual_tests_cover_the_behavior
 <!-- 交付必须同时验证显式宽表与普通 selGrid，并确认真实溢出、状态类、内部滚动和文档宽度边界一致。 -->
-verification_scope = javascript_syntax,shared_frontend_checks,rule_index_loading,mda_wide_grid_browser,reference_data_default_grid_browser,column_resize_pointer_and_keyboard,document_overflow_boundary,visual_review
+verification_scope = javascript_syntax
+<!-- verification_scope.2 的当前独立事实为 shared_frontend_checks。 -->
+verification_scope.2 = shared_frontend_checks
+<!-- verification_scope.3 的当前独立事实为 rule_index_loading。 -->
+verification_scope.3 = rule_index_loading
+<!-- verification_scope.4 的当前独立事实为 mda_wide_grid_browser。 -->
+verification_scope.4 = mda_wide_grid_browser
+<!-- verification_scope.5 的当前独立事实为 reference_data_default_grid_browser。 -->
+verification_scope.5 = reference_data_default_grid_browser
+<!-- verification_scope.6 的当前独立事实为 column_resize_pointer_and_keyboard。 -->
+verification_scope.6 = column_resize_pointer_and_keyboard
+<!-- verification_scope.7 的当前独立事实为 document_overflow_boundary。 -->
+verification_scope.7 = document_overflow_boundary
+<!-- verification_scope.8 的当前独立事实为 visual_review。 -->
+verification_scope.8 = visual_review

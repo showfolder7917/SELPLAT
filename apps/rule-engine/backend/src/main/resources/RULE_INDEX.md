@@ -1,30 +1,40 @@
 # rule-engine 全局规则索引
 
-<!-- 问题：core、跨工程规则和多个工程作用域需要从一个稳定入口按层定位，禁止根索引复制所有 common 规则。 -->
-<!-- 场景：启动后按任务命中逻辑 ID，并根据当前工程作用域和用户身份加载最少规则。 -->
-<!-- 业务含义：冻结 core 由根索引直接登记，common 通过唯一汇总索引递归进入，用户覆盖保持最高优先级。 -->
+<!-- 问题：core 与当前用户多个工程作用域需要从一个稳定入口按层定位。 -->
+<!-- 场景：启动后按任务命中逻辑 ID，并根据当前用户身份加载最少规则。 -->
+<!-- 业务含义：冻结 core 由根索引直接登记，common 保留空提升入口，实际业务规则由当前用户索引递归进入。 -->
 
 project_resource_index_scope = apps/rule-engine
-rule_engine_layer_migration_status = migration_complete_core_frozen
+rule_engine_layer_migration_status = common_consolidated_to_active_user_core_frozen
 rule_engine_hierarchical_index_status = active_core_refrozen
 rule_engine_core_resource_root = local/core/
 rule_engine_common_resource_root = local/common/
+<!-- common 资源层只保留空索引，实际规则全部由当前稳定用户索引承载。 -->
+rule_engine_common_resource_status = reserved_empty
 rule_engine_user_resource_root_pattern = local/<stable-user-id>/
 rule_engine_core_java_root = ../java/com/sp/selplat/local/code/core/
 rule_engine_common_java_root = ../java/com/sp/selplat/local/code/common/
+<!-- common Java 根只保留未来人工提升模式，当前没有生产实体。 -->
+rule_engine_common_java_status = reserved_empty
 rule_engine_user_java_root_pattern = ../java/com/sp/selplat/local/code/<stable-user-id>/
 rule_engine_core_python_root = ../python/com/sp/selplat/local/code/core/
 rule_engine_common_python_root = ../python/com/sp/selplat/local/code/common/
+<!-- common Python 根只保留未来人工提升模式，当前没有生产实体。 -->
+rule_engine_common_python_status = reserved_empty
 rule_engine_user_python_root_pattern = ../python/com/sp/selplat/local/code/<stable-user-id>/
 rule_engine_core_node_root = ../node/com/sp/selplat/local/code/core/
 rule_engine_common_node_root = ../node/com/sp/selplat/local/code/common/
+<!-- common Node 根只保留未来人工提升模式，当前没有生产实体。 -->
+rule_engine_common_node_status = reserved_empty
 rule_engine_user_node_root_pattern = ../node/com/sp/selplat/local/code/<stable-user-id>/
 core_startup_protocol_loader = ../python/com/sp/selplat/local/code/core/abilities/startup_protocol_loader.py
 core_layered_rule_loader = ../python/com/sp/selplat/local/code/core/abilities/layered_rule_loader.py
+<!-- CODE 协议的可复用成果沉淀目标已经收敛为 ability 或规则。 -->
+core_code_protocol_recording_target = ability_or_rule
 
-project_rule_loading_order = root_RULE_INDEX -> common_aggregate_index -> matched_scope_index
-target_layered_rule_loading_order = local/core -> local/common/跨工程通用规则 -> local/common/matched_scope -> local/active_user
-target_layered_rule_conflict_priority = local/active_user > local/common/matched_scope > local/common/跨工程通用规则 > local/core
+project_rule_loading_order = root_RULE_INDEX -> reserved_common_index -> active_user_index
+target_layered_rule_loading_order = local/core -> local/common_reserved_empty -> local/active_user
+target_layered_rule_conflict_priority = local/active_user > local/core
 <!-- 一次任务以相关逻辑 ID 集合为加载单位，并递归补全显式依赖。 -->
 task_rule_loading_unit = matched_logical_id_set_plus_requires_rule_ids_dependency_closure
 <!-- 同一逻辑 ID 先读取所有相关层，再生成唯一有效 DSL 值。 -->
@@ -49,7 +59,7 @@ rule_main_file_pattern = RUL_<主题>规则.md
 rule_template_directory_pattern = <project-or-subproject>/template/RUL_<主题>规则/
 rule_file_name_policy = main_rule_in_rule_directory_and_optional_verified_materials_in_same_name_template_directory
 
-<!-- common 只通过一个汇总入口进入；其规则逻辑 ID 由所属叶子索引唯一维护。 -->
+<!-- common 保留唯一空入口供未来人工提升；当前不得登记规则或子索引。 -->
 COMMON_RULE_INDEX = local/common/RULE_INDEX.md
 
 <!-- 已退役记忆库迁入后冻结的 core 规则基线；根索引直接登记但不移动实体文件。 -->
@@ -64,7 +74,6 @@ CODE_VUE_FRONTEND_PROJECT_RULES = local/core/rule/CODE_VUE_FRONTEND_PROJECT_RULE
 <!-- 旧 CODE_VUE_RULES 逻辑 ID 直接复用现行 Vue 编码规则，不再保留单独兼容文件。 -->
 CODE_VUE_RULES = local/core/rule/CODE_VUE_CODING_RULES.md
 CODE_VUE_TEST_RULES = local/core/rule/CODE_VUE_TEST_RULES.md
-GUI_VIDEO_TASK_RULES = local/core/rule/GUI_VIDEO_TASK_RULES.md
 MEMORY_FILE_EDIT_RULES = local/core/rule/MEMORY_FILE_EDIT_RULES.md
 
 <!-- 当前稳定用户只从工程根 AGENTS.md 读取；加载器把安全校验后的值代入该唯一模式。 -->
@@ -72,3 +81,7 @@ USER_RULE_INDEX_PATTERN = local/<stable-user-id>/RULE_INDEX.md
 load_rule_for_active_user_rule_cleanup_package_completion_or_continuous_upgrade = AI_RULE_PACKAGE_INTELLIGENCE_RULES
 load_rule_for_active_user_explicit_ai_managed_core_or_common_change = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
 load_rule_for_active_user_same_task_followup_after_standalone_1 = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
+<!-- common 规则、关联代码或冲突迁回当前用户时加载当前用户归属规则。 -->
+load_rule_for_active_user_common_rule_or_related_code_migration = ACTIVE_USER_RULE_AND_CODE_OWNERSHIP_RULES
+<!-- 规则采用一条注释和一条单事实 DSL 时加载当前用户归属规则。 -->
+load_rule_for_active_user_single_fact_rule_dsl_authoring = ACTIVE_USER_RULE_AND_CODE_OWNERSHIP_RULES

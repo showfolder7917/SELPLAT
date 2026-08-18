@@ -45,8 +45,8 @@ loader = load_module()
 class PythonLayeredRuleLoaderTest(unittest.TestCase):
     """覆盖原 Java 加载器全部生产边界和迁移后的 Python 入口。"""
 
-    def test_loads_core_cross_project_and_explicit_scope_rules(self) -> None:
-        """core、跨工程 common 和显式 SELPLAT 作用域按登记路径加载。"""
+    def test_loads_core_and_current_user_scope_rules(self) -> None:
+        """core 与当前用户跨工程、SELPLAT 规则按登记路径加载。"""
 
         core_rule = loader.load("CODE_JAVA_CODING_RULES")
         self.assertEqual("core", core_rule.layer)
@@ -56,22 +56,26 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         )
         self.assertIn("Java", core_rule.content)
 
-        cross_rule = loader.load("RULE_LIFECYCLE_GOVERNANCE_RULES")
-        self.assertEqual("common", cross_rule.layer)
+        cross_rule = loader.load_for_current_user(
+            "RULE_LIFECYCLE_GOVERNANCE_RULES", None
+        )
+        self.assertEqual(loader.current_stable_user_id(), cross_rule.layer)
         self.assertEqual(
-            "local/common/跨工程通用规则/RUL_规则生命周期治理规则.md",
+            "local/XUNAN/跨工程通用规则/RUL_规则生命周期治理规则.md",
             cross_rule.resource_path,
         )
 
-        scope_rule = loader.load("SELPLAT_PROJECT_BUILD_RULES", "selplat")
-        self.assertEqual("common", scope_rule.layer)
+        scope_rule = loader.load_for_current_user(
+            "SELPLAT_PROJECT_BUILD_RULES", "selplat"
+        )
+        self.assertEqual(loader.current_stable_user_id(), scope_rule.layer)
         self.assertEqual(
-            "local/common/selplat/通用/rule/RUL_SELPLAT工程构建规则.md",
+            "local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程构建规则.md",
             scope_rule.resource_path,
         )
 
-    def test_loads_current_user_and_common_rules_in_one_bundle(self) -> None:
-        """同一任务集合同时保留用户规则和未覆盖的 common 规则。"""
+    def test_loads_current_user_rules_in_one_bundle(self) -> None:
+        """common 迁空后，同一任务集合的业务规则全部由当前用户层承载。"""
 
         bundle = loader.load_bundle_for_current_user(
             [
@@ -88,36 +92,36 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
             ].effective_rule.layer,
         )
         self.assertEqual(
-            "common",
+            active_user,
             bundle.rules[
                 "SELPLAT_REAL_DATABASE_INTEGRATION_TEST_RULES"
             ].effective_rule.layer,
         )
         self.assertTrue(
             any(
-                "local/common/selplat/通用/rule/RUL_SELPLAT真实数据集成测试规则.md"
+                "local/XUNAN/selplat/通用/rule/RUL_SELPLAT真实数据集成测试规则.md"
                 in line
                 for line in bundle.receipt
             )
         )
 
-    def test_extends_common_with_current_user_priority(self) -> None:
-        """用户层覆盖冲突键，同时保留 common 未冲突值和完整已读证据。"""
+    def test_current_user_governance_is_single_active_layer(self) -> None:
+        """common 迁空后，治理规则只保留当前用户这一条活跃业务层。"""
 
         active_user = loader.current_stable_user_id()
         stack = loader.load_rule_stack(
-            "RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES",
+            "ACTIVE_USER_RULE_AND_CODE_OWNERSHIP_RULES",
             "selplat",
             active_user,
         )
-        self.assertEqual(("common", active_user), tuple(item.layer for item in stack.layers))
+        self.assertEqual((active_user,), tuple(item.layer for item in stack.layers))
         self.assertEqual(
-            "apps/rule-engine/backend",
-            stack.effective_values["rule_engine_layer_governance_scope"],
+            "active_user",
+            stack.effective_values["rule_conflict_winner"],
         )
         self.assertEqual(
-            "explicit_user_delegation_with_standalone_1_only",
-            stack.effective_values["rule_engine_core_after_freeze_write_policy"],
+            "reserved_empty",
+            stack.effective_values["common_resource_status"],
         )
         self.assertEqual("extend", stack.override_mode)
 
@@ -172,14 +176,14 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         with self.assertRaises(loader.RuleLoadingError):
             loader.assemble_bundle(["TEST_A_RULE"], cyclic_rules.get)
 
-    def test_isolates_common_scope_and_rejects_unsafe_inputs(self) -> None:
-        """已选作用域不能读取其他工程，身份和作用域路径逃逸在读取前阻断。"""
+    def test_reserved_common_loads_user_rule_and_rejects_unsafe_inputs(self) -> None:
+        """预留空 common 不阻断用户规则，身份和作用域路径逃逸仍在读取前阻断。"""
 
-        fujitsu_rule = loader.load(
+        fujitsu_rule = loader.load_for_current_user(
             "FUJITSU_CPMAB082_PROJECT_STYLE_RULES", "fujitsu"
         )
         self.assertEqual(
-            "local/common/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082项目风格规则.md",
+            "local/XUNAN/fujitsu/应用/CPMAB082/rule/RUL_CPMAB082项目风格规则.md",
             fujitsu_rule.resource_path,
         )
         with self.assertRaises(loader.RuleLoadingError):
@@ -199,22 +203,21 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         """生产根/common 和当前用户索引全部可达且计数稳定。"""
 
         common_validation = loader.validate_index_tree()
-        self.assertEqual(loader.IndexValidation(19, 67), common_validation)
+        self.assertEqual(loader.IndexValidation(2, 11), common_validation)
         user_validation = loader.validate_current_user_index_tree()
-        self.assertEqual(loader.IndexValidation(11, 19), user_validation)
+        self.assertEqual(loader.IndexValidation(21, 72), user_validation)
 
     def test_loads_fujitsu_json_single_line_format_gate(self) -> None:
-        """Fujitsu JSON 变更必须从 common 层命中单行格式交付门禁。"""
+        """Fujitsu JSON 变更必须从当前用户层命中单行格式交付门禁。"""
 
         rule = loader.load(
             "FUJITSU_JSON_SINGLE_LINE_FORMAT_GATE_RULES",
             "fujitsu",
             loader.current_stable_user_id(),
         )
-        self.assertEqual("common", rule.layer)
+        self.assertEqual(loader.current_stable_user_id(), rule.layer)
         self.assertIn(
-            "fujitsu_json_single_line_delivery_gate = valid_utf8_json AND "
-            "physical_line_count_equals_1 AND no_cr_or_lf",
+            "fujitsu_json_single_line_delivery_gate = valid_utf8_json AND physical_line_count_equals_1 AND no_cr_or_lf",
             rule.content,
         )
 
@@ -272,12 +275,13 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
                 "action": "load",
                 "logical_id": "SELPLAT_PROJECT_BUILD_RULES",
                 "active_scope": "selplat",
+                "active_user": loader.current_stable_user_id(),
             },
             {},
             {},
         )
         self.assertEqual("completed", result["status"])
-        self.assertEqual("common", result["result"]["layer"])
+        self.assertEqual(loader.current_stable_user_id(), result["result"]["layer"])
         blocked = loader.execute(
             {"action": "load", "logical_id": "../invalid"}, {}, {}
         )
@@ -288,9 +292,9 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         """同一 Python 进程重复加载未变化资源时命中缓存，减少磁盘读取。"""
 
         loader._read_resource_snapshot.cache_clear()
-        loader.load("SELPLAT_PROJECT_BUILD_RULES", "selplat")
+        loader.load_for_current_user("SELPLAT_PROJECT_BUILD_RULES", "selplat")
         first = loader._read_resource_snapshot.cache_info()
-        loader.load("SELPLAT_PROJECT_BUILD_RULES", "selplat")
+        loader.load_for_current_user("SELPLAT_PROJECT_BUILD_RULES", "selplat")
         second = loader._read_resource_snapshot.cache_info()
         self.assertGreater(second.hits, first.hits)
 
