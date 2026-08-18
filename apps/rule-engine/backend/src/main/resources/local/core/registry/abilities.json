@@ -9,6 +9,12 @@
     "summary": "按 STARTER_PROTOCOL.md 声明顺序装载启动协议链",
     "skills": ["read_ai_memory_file"]
   },
+  "layered_rule_loader": {
+    "path": "./abilities/layered_rule_loader.py",
+    "summary": "仅使用 Python 按 core、common 当前作用域和当前用户加载规则、依赖闭包与回执",
+    "skills": [],
+    "apps": []
+  },
   "memory_file_full_reader": {
     "path": "./abilities/memory_file_full_reader.py",
     "summary": "读取工程目录文件，并返回完整原文",
@@ -63,6 +69,12 @@
   "execution_doc_manager": {
     "path": "./abilities/execution_doc_manager.py",
     "summary": "统一维护执行文档：任务前检查未完成、创建新任务、步骤回写和任务后归档",
+    "skills": [],
+    "apps": []
+  },
+  "test_doc_manager": {
+    "path": "./abilities/test_doc_manager.py",
+    "summary": "维护同线程测试文档：修改后登记待测项、统一测试时回写结果并归档",
     "skills": [],
     "apps": []
   },

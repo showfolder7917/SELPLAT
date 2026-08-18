@@ -34,7 +34,11 @@ execution_doc_manager_migration_status = language_native_core_entry
 run_execution_doc_check_before_formal_task = true
 <!-- 独立 1 后由 begin 写入授权，开发门禁执行 active，步骤用 step 回写，根 check 以 ready 和 finish 收口。 -->
 execution_doc_manager_command_actions = check,begin,step,active,ready,finish
-execution_doc_manager_build_integration = quick_special_full_require_active,root_check_requires_ready_then_finish
+execution_doc_manager_build_integration = quick_special_require_active,task_finish_requires_ready_and_recorded_test_plan
+<!-- Python test_doc_manager 与执行文档使用相同线程来源；修改后 record，统一测试逐项 result，全部通过后 ready 和 finish。 -->
+test_doc_manager_entry = src/main/python/com/sp/selplat/local/code/core/executor.py test_doc_manager
+test_doc_manager_command_actions = check,record,result,pending,ready,finish
+test_doc_manager_build_integration = task_finish_requires_pending_test_item,root_check_is_manual_unified_test_entry
 restricted_runtime_must_use_verified_python_override_without_repeating_failed_default = true
 
 <!-- 读完本启动协议后，后续 AI 记忆命名空间内正式 .md 文件统一通过该能力读取 -->

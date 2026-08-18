@@ -28,10 +28,21 @@ execution_task_step_gate = action_step_requires_existing_step_number_and_actual_
 execution_task_active_gate = quick_special_full_gate_depend_on_action_active
 
 <!-- 最终交付前必须执行 ready，任一步骤尚未回写时禁止进入归档。 -->
-execution_task_ready_gate = root_delivery_requires_all_steps_completed_before_full_gate
+execution_task_ready_gate = task_close_requires_all_steps_completed
 
-<!-- 完整门禁成功后由 finish 再次核验并归档；验证失败时必须保留当前文档供继续修正。 -->
-execution_task_finish_gate = root_check_runs_ready_then_full_gate_then_finish_archive
+<!-- 修改任务完成时只在测试文档登记验证责任，不自动重复运行测试；用户明确触发统一测试后再逐项回写。 -->
+test_document_filename = 测试文档.<CURRENT_THREAD_ID>.md
+test_history_filename = 测试文档.history_YYYY-MM-DD.<CURRENT_THREAD_ID>.md
+test_document_thread_id_source = same_as_execution_document
+change_close_requires_test_document_record = title,change,command,expected_result
+test_execution_timing = defer_until_user_requests_unified_testing
+test_result_status = 待测试,通过,失败
+test_document_finish_requires = no_pending_item + no_failed_item
+
+<!-- 执行文档与测试文档生命周期解耦：执行步骤和待测内容登记完成即可关闭修改任务，测试文档持续保留。 -->
+execution_task_finish_gate = ready_then_test_document_pending_then_finish_archive
+root_check_role = manual_unified_full_test_entry
+unverified_change_handoff_requires = explicit_pending_test_document_path_and_items
 
 <!-- 正式生命周期只允许 check、begin、step、active、ready、finish，旧写动作不得继续作为生产入口。 -->
 execution_task_public_actions = check,begin,step,active,ready,finish
@@ -47,4 +58,4 @@ legacy_execution_document_must_migrate_once = true
 legacy_execution_document_requires_reauthorization_before_gate = true
 
 <!-- 统一能力、执行器退出码、构建依赖顺序、线程隔离和归档行为必须同时有自动化测试。 -->
-execution_task_gate_verification = manager_unit_tests,executor_exit_code_test,gradle_task_dependency_test,thread_isolation_and_archive_regression
+execution_task_gate_verification = execution_and_test_manager_unit_tests,executor_exit_code_test,gradle_task_dependency_test,thread_isolation_and_archive_regression

@@ -65,9 +65,9 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertEqual(result["indexed_rules"], 66)
         self.assertEqual(result["active_user_id"], ACTIVE_STABLE_USER_ID)
         self.assertEqual(result["active_user_indexes"], 11)
-        # 用户层新增 Reference Data 导航规则后，逻辑 ID、规则文件和索引统计必须同步增长。
-        self.assertEqual(result["active_user_overrides"], 17)
-        self.assertEqual(result["active_user_rule_files"], 16)
+        # 既有测试隔离规则与本次 UTF-8 门禁均进入当前用户层 → 覆盖与规则文件统计必须同步增长。
+        self.assertEqual(result["active_user_overrides"], 19)
+        self.assertEqual(result["active_user_rule_files"], 18)
         self.assertEqual(result["active_user_standard_asset_packages"], 1)
         # 数据源规则复用源码门禁能力后，具备真实程序引用的用户规则同步增加为 7 条。
         self.assertEqual(result["active_user_rules_with_program_references"], 7)
@@ -104,8 +104,8 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             / ACTIVE_STABLE_USER_ID
         )
         rule_paths = sorted(user_root.rglob("RUL_*.md"))
-        # 当前用户全部规则（含 Reference Data 导航规则）必须逐项接受紧邻中文业务注释检查。
-        self.assertEqual(len(rule_paths), 16)
+        # 当前用户全部规则（含测试隔离与 UTF-8 写入门禁）必须逐项接受紧邻中文业务注释检查。
+        self.assertEqual(len(rule_paths), 18)
         for rule_path in rule_paths:
             previous_nonempty = ""
             for line_number, raw_line in enumerate(
@@ -260,11 +260,12 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         """三级门禁必须由根 Gradle 稳定暴露，并支持跨平台 Python 与变更范围选择。"""
 
         build_text = (PROJECT_ROOT / "build.gradle").read_text(encoding="utf-8")
-        # 三个稳定入口与根 check → 开发、专项和提交前验证均可从同一个构建系统启动。
+        # 修改任务、待测登记、统一测试和两类文档归档均从同一个构建系统启动。
         for task_name in (
-                "selplatTaskDocumentActiveGate", "selplatQuickGate", "selplatSpecialGate",
+                "selplatTaskDocumentActiveGate", "selplatQuickGateCore", "selplatQuickGate", "selplatSpecialGate",
                 "selplatTaskDocumentReadyGate", "selplatFullGate",
-                "selplatTaskDocumentFinishGate", "check"):
+                "selplatTestDocumentPendingGate", "selplatTaskDocumentFinishGate",
+                "selplatTestDocumentReadyGate", "selplatTestDocumentFinishGate", "check"):
             self.assertRegex(
                 build_text,
                 rf"tasks\.register\('{re.escape(task_name)}'(?:,\s*Exec)?\)",
@@ -273,13 +274,17 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertIn("providers.gradleProperty('selplatPython')", build_text)
         self.assertIn("providers.environmentVariable('SELPLAT_PYTHON')", build_text)
         self.assertNotIn("/Users/showfolder", build_text)
-        # 所有开发门禁先核验当前任务，根 check 只能在步骤就绪和全量验证后执行 finish 归档。
-        self.assertIn("dependsOn 'selplatTaskDocumentActiveGate'", build_text)
+        # 开发快速门禁核验当前任务；修改任务关闭只要求步骤完成和待测项已登记。
+        self.assertIn("dependsOn 'selplatTaskDocumentActiveGate', 'selplatQuickGateCore'", build_text)
         self.assertIn("selplatExecutionDocumentCommand('active')", build_text)
         self.assertIn("selplatExecutionDocumentCommand('ready')", build_text)
         self.assertIn("selplatExecutionDocumentCommand('finish')", build_text)
-        self.assertIn("dependsOn 'selplatTaskDocumentReadyGate', 'selplatFullGate'", build_text)
-        self.assertIn("dependsOn 'selplatTaskDocumentFinishGate'", build_text)
+        self.assertIn("selplatTestDocumentCommand('pending')", build_text)
+        self.assertIn("selplatTestDocumentCommand('ready')", build_text)
+        self.assertIn("selplatTestDocumentCommand('finish')", build_text)
+        self.assertIn("dependsOn 'selplatTaskDocumentReadyGate', 'selplatTestDocumentPendingGate'", build_text)
+        self.assertIn("dependsOn 'selplatFullGate'", build_text)
+        self.assertNotIn("dependsOn 'selplatTaskDocumentReadyGate', 'selplatFullGate'", build_text)
         # 专项范围既可由调用方直接声明，也可由工程相对变更文件推导。
         self.assertIn("providers.gradleProperty('selplatGateScope')", build_text)
         self.assertIn("providers.gradleProperty('selplatGateFiles')", build_text)

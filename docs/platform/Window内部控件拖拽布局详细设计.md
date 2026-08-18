@@ -1,3 +1,164 @@
+采用“一条注释 + 一条规则”，并保持一条规则只表达一个事实：
+# 协议版本。
+2
+protocol.version = 1
+3
+ 
+4
+# “最近明确任务”指用户最近一次清楚提出且尚未被替换的任务。
+5
+term.latest_task = latest_clearly_stated_unreplaced_task
+6
+ 
+7
+# 执行窗口只授权当前任务，不自动授权其他任务。
+8
+window.scope = current_task_only
+9
+ 
+10
+# 启动链和规则索引加载仅属于初始化，不构成任务执行。
+11
+startup.action = initialize_only
+12
+ 
+13
+# 初始化不得打开任务执行窗口。
+14
+startup.opens_window = false
+15
+ 
+16
+# 用户单独回复 1 时，执行最近明确任务。
+17
+reply_1.action = execute_latest_task
+18
+ 
+19
+# 执行依据是用户当前已经明确陈述的要求。
+20
+reply_1.basis = currently_stated_requirements
+21
+ 
+22
+# 用户单独回复 1 时，打开当前任务的执行窗口。
+23
+reply_1.opens_window = true
+24
+ 
+25
+# 验证和交付全部完成后，关闭执行窗口。
+26
+window.close_when_all = verification_completed,delivery_completed
+27
+ 
+28
+# 执行窗口内收到同一任务补充时，将其纳入当前任务并继续执行。
+29
+supplement.action = incorporate_and_continue
+30
+ 
+31
+# 以下任意一种内容属于可直接纳入的任务补充。
+32
+supplement.types_any = file,material,parameter,same_goal_requirement
+33
+ 
+34
+# 同一任务补充不要求用户再次回复 1。
+35
+supplement.requires_reply_1 = false
+36
+ 
+37
+# 以下任意一种变化均视为超出当前授权范围。
+38
+scope_change.types_any = overall_goal_changed,new_project,new_system,new_core_layer,new_common_layer,destructive_scope_expanded,independent_new_task
+39
+ 
+40
+# 出现范围变化时，只暂停新增范围，不撤销当前任务已经获得的授权。
+41
+scope_change.action = pause_new_scope_and_request_confirmation
+42
+ 
+43
+# 范围变化规则优先于同一任务补充规则。
+44
+scope_change.overrides = supplement
+45
+ 
+46
+# 用户单独回复 2 时，仅将最近明确任务加入执行池。
+47
+reply_2.action = enqueue_latest_task
+48
+ 
+49
+# 回复 2 不会立即执行任务。
+50
+reply_2.executes_task = false
+51
+ 
+52
+# 回复 2 不会把更早陈述的其他任务加入执行池。
+53
+reply_2.includes_earlier_tasks = false
+54
+ 
+55
+# 执行池是 USER 层的会话级临时状态。
+56
+pool.scope = user_session
+57
+ 
+58
+# 执行池不是任务执行状态。
+59
+pool.is_execution = false
+60
+ 
+61
+# 执行池不是长期记忆。
+62
+pool.is_memory = false
+63
+ 
+64
+# 安全规则具有最高优先级。
+65
+priority.1 = safety
+66
+ 
+67
+# 范围变化和重新确认规则优先于已有执行授权。
+68
+priority.2 = scope_change
+69
+ 
+70
+# 已有执行授权优先于普通补充规则。
+71
+priority.3 = execution_authorization
+72
+ 
+73
+# 普通补充规则优先于默认处理。
+74
+priority.4 = supplement
+75
+ 
+76
+# 无法确定是否属于当前任务时，不扩大授权范围。
+77
+ambiguity.action = do_not_expand_scope
+78
+ 
+79
+# 多条规则同时命中时，执行优先级最高的规则。
+80
+conflict.action = apply_highest_priority_rule
+
 # Window 内部控件拖拽布局详细设计
 
 ## 1. 文档目标

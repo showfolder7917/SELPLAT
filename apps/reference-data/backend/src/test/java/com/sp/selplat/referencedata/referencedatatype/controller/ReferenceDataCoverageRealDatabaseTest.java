@@ -14,6 +14,8 @@ import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
+import com.sp.selplat.referencedata.capability.configuration.service.ReferenceDataConfigurationService;
+import com.sp.selplat.referencedata.referencedatacontrollayout.service.ReferenceDataControlLayoutService;
 import com.sp.selplat.referencedata.referencedatatype.dao.ReferenceDataTypeDao;
 import com.sp.selplat.referencedata.referencedatatype.service.ReferenceDataTypeService;
 import java.util.Arrays;
@@ -52,6 +54,14 @@ class ReferenceDataCoverageRealDatabaseTest {
     @Autowired
     private ReferenceDataTypeService typeService;
 
+    // configurationService 通过正式查询链解析工程与页面稳定坐标。
+    @Autowired
+    private ReferenceDataConfigurationService configurationService;
+
+    // controlLayoutService 通过正式公共 DAO 链验证单条和批量更新保护。
+    @Autowired
+    private ReferenceDataControlLayoutService controlLayoutService;
+
     // typeDao 只验证 Service 不会自然传入的底层筛选和数据库故障边界。
     @Autowired
     private ReferenceDataTypeDao typeDao;
@@ -84,12 +94,37 @@ class ReferenceDataCoverageRealDatabaseTest {
     }
 
     /**
-     * 验证真实类型表不可用时两个 DAO 扩展入口统一包装为系统异常。
-     *
-     * 执行结果示例：删除测试表后分页和坐标判断均返回 {@code REFERENCE_DATA_DATABASE_FAILED}。
+     * 验证页面稳定坐标拒绝空键、非法键及真实数据库中的重复 PAGE 登记。
+     * 真实传参示例：{@code projectCode=null}、{@code pageKey="Bad Key"} 及 {@code qa/duplicate-page}。
+     * 真实返回示例：三种输入分别返回稳定键非法或页面坐标重复错误编码。
+     * 异常或副作用示例：仅查询本用例隔离 H2 数据，不修改任何生产或测试记录。
+     */
+    @Test
+    @Order(3)
+    void shouldRejectInvalidAndDuplicatePageCoordinates() {
+        verifyInvalidAndDuplicatePageCoordinates();
+    }
+
+    /**
+     * 验证页面控件单条与批量更新均执行 Window 子控件保护和正式 Mapper SQL。
+     * 真实传参示例：更新 {@code control120001} 的父级为 PAGE、TOOLBAR、WINDOW 或传入空批量项。
+     * 真实返回示例：合法更新影响真实 H2 记录，WINDOW 父级返回固定业务错误。
+     * 异常或副作用示例：空请求沿公共更新链抛出空指针异常；所有写入局限于当前隔离 fixture。
      */
     @Test
     @Order(4)
+    void shouldExecuteControlLayoutUpdateGuards() {
+        verifyControlLayoutUpdateGuards();
+    }
+
+    /**
+     * 验证真实类型表不可用时两个 DAO 扩展入口统一包装为系统异常。
+     * 真实传参示例：删除隔离类型表后查询选项值坐标和启用类型 code。
+     * 真实返回示例：两个入口均返回 {@code REFERENCE_DATA_DATABASE_FAILED}。
+     * 异常或副作用示例：当前用例会删除自身 H2 类型表，后续用例不得复用该数据库状态。
+     */
+    @Test
+    @Order(6)
     void shouldWrapTypeDatabaseFailures() {
         verifyTypeDatabaseFailures();
     }
@@ -196,6 +231,21 @@ class ReferenceDataCoverageRealDatabaseTest {
         assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.insert(typeParam("PANEL_MENU", "文字状态", "invalid", "1")));
         assertBusiness("REFERENCE_DATA_TYPE_NUMBER_INVALID", () -> typeService.insert(typeParam("PANEL_MENU", "非法排序", 1, "invalid")));
 
+        CommonParam generatedOptionSet = new CommonParam();
+        generatedOptionSet.putParam("valueCode", "AUTO_OPTION");
+        generatedOptionSet.putParam("nameZh", "自动选项组");
+        Map<?, ?> generatedData = (Map<?, ?>) typeService.insert(generatedOptionSet).getData();
+        assertTrue(String.valueOf(generatedData.get("optionSetCode")).matches("^optionSet[1-9][0-9]{5,}$"));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ReferenceDataType WHERE valueCode='AUTO_OPTION' AND optionSetCode=?",
+                Integer.class, generatedData.get("optionSetCode")));
+
+        CommonParam missingUpdateOptionSet = new CommonParam();
+        missingUpdateOptionSet.putParam("id", 100004);
+        missingUpdateOptionSet.putParam("valueCode", "GRID_MENU");
+        missingUpdateOptionSet.putParam("nameZh", "更新缺少选项组");
+        assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.update(missingUpdateOptionSet));
+
         CommonParam forgedIdentity = typeParam("PANEL_MENU", "面板菜单", null, " ");
         forgedIdentity.putParam("tenantId", 0);
         forgedIdentity.putParam("lastOperateUserId", 0);
@@ -221,6 +271,56 @@ class ReferenceDataCoverageRealDatabaseTest {
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.insertBatch(null));
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.updateBatch(null));
         assertBusiness("REFERENCE_DATA_TYPE_FIELD_REQUIRED", () -> typeService.deleteBatch(null));
+    }
+
+    /**
+     * 通过真实配置 Service 验证稳定键和重复 PAGE 坐标保护。
+     * 真实传参示例：空工程编码、含大写和空格的页面键，以及 fixture 中两条 {@code qa/duplicate-page}。
+     * 真实返回示例：分别得到 {@code REFERENCE_DATA_STABLE_KEY_INVALID} 和
+     *     {@code REFERENCE_DATA_PAGE_COORDINATE_DUPLICATE}。
+     * 异常或副作用示例：只读取隔离 H2 的两条 PAGE 记录，不执行保存操作。
+     */
+    private void verifyInvalidAndDuplicatePageCoordinates() {
+        applyFixture("shouldRejectInvalidAndDuplicatePageCoordinates");
+        assertBusiness("REFERENCE_DATA_STABLE_KEY_INVALID",
+                () -> configurationService.getPageConfiguration(null, "duplicate-page"));
+        assertBusiness("REFERENCE_DATA_STABLE_KEY_INVALID",
+                () -> configurationService.getPageConfiguration("qa", "Bad Key"));
+        assertBusiness("REFERENCE_DATA_PAGE_COORDINATE_DUPLICATE",
+                () -> configurationService.getPageConfiguration("qa", "duplicate-page"));
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ReferenceDataControlLayout "
+                        + "WHERE projectCode='qa' AND controlKind='PAGE' AND fieldName='duplicate-page'",
+                Integer.class));
+    }
+
+    /**
+     * 通过真实控件 Service 与公共 Mapper SQL 验证单条、批量和空请求保护分支。
+     * 真实传参示例：主键 {@code 120001} 依次提交 PAGE、TOOLBAR、WINDOW 父级及空批量请求。
+     * 真实返回示例：合法单条和批量更新写入 {@code fieldName=updated-single/updated-batch}。
+     * 异常或副作用示例：WINDOW 返回固定业务异常，空请求返回空指针异常且不写数据库。
+     */
+    private void verifyControlLayoutUpdateGuards() {
+        applyFixture("shouldExecuteControlLayoutUpdateGuards");
+
+        CommonParam singleUpdate = controlUpdate("PAGE", "page120000", "updated-single");
+        assertTrue(controlLayoutService.update(singleUpdate).isSuccess());
+        assertEquals("updated-single", jdbcTemplate.queryForObject(
+                "SELECT fieldName FROM ReferenceDataControlLayout WHERE id=120001", String.class));
+
+        CommonParam batchItem = controlUpdate("TOOLBAR", "control120000", "updated-batch");
+        assertEquals(1, controlLayoutService.updateBatch(batch(batchItem)).getAffectedRows());
+        assertEquals("updated-batch", jdbcTemplate.queryForObject(
+                "SELECT fieldName FROM ReferenceDataControlLayout WHERE id=120001", String.class));
+
+        assertBusiness("REFERENCE_DATA_WINDOW_CHILD_FORBIDDEN",
+                () -> controlLayoutService.update(controlUpdate("WINDOW", "window120000", "invalid-single")));
+        assertBusiness("REFERENCE_DATA_WINDOW_CHILD_FORBIDDEN",
+                () -> controlLayoutService.updateBatch(batch(
+                        controlUpdate("WINDOW", "window120000", "invalid-batch"))));
+        assertThrows(NullPointerException.class,
+                () -> controlLayoutService.updateBatch(batch((CommonParam) null)));
+        assertThrows(NullPointerException.class, () -> controlLayoutService.updateBatch(null));
     }
 
     /**
@@ -282,6 +382,25 @@ class ReferenceDataCoverageRealDatabaseTest {
     private CommonParam idParam(Object id) {
         CommonParam param = new CommonParam();
         param.putParam("id", id);
+        return param;
+    }
+
+    /**
+     * 构造页面控件正式更新链使用的动态参数。
+     * 真实传参示例：{@code parentKind=TOOLBAR,parentCode=control120000,fieldName=updated-batch}。
+     * 真实返回示例：返回含固定主键 {@code 120001} 与同一父级字段的 CommonParam。
+     * 异常或副作用示例：本方法只构造参数，不访问数据库；WINDOW 值由生产 Service 拒绝。
+     *
+     * @param parentKind 父容器类别，例如 {@code PAGE} 或 {@code WINDOW}
+     * @param parentCode 父容器 code，例如 {@code page120000}
+     * @param fieldName 更新后的字段语义名，例如 {@code updated-single}
+     * @return 可直接交给控件更新 Service 的公共参数
+     */
+    private CommonParam controlUpdate(String parentKind, String parentCode, String fieldName) {
+        CommonParam param = idParam(120001);
+        param.putParam("parentKind", parentKind);
+        param.putParam("parentCode", parentCode);
+        param.putParam("fieldName", fieldName);
         return param;
     }
 

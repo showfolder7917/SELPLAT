@@ -55,8 +55,16 @@ execution_doc_manager_archives_completed_doc_after_task = true
 <!-- 正式任务统一使用生命周期动作，禁止只读取规则后依靠人工记忆维护执行文档。 -->
 execution_doc_manager_required_lifecycle = begin,step,active,ready,finish
 formal_task_must_enter_unified_execution_document_gate = true
-delivery_must_fail_when_execution_document_is_missing_unauthorized_pending_or_unarchived = true
+delivery_must_fail_when_execution_document_is_missing_unauthorized_pending_unarchived_or_test_plan_unrecorded = true
 fallback_to_manual_execution_doc_rules_only_when_ability_unavailable = true
+
+<!-- 修改任务把待验证内容登记到与执行文档同线程的测试文档；用户触发统一测试前禁止重复自动运行完整测试。 -->
+test_doc_management_ability = test_doc_manager
+test_doc_manager_required_lifecycle = record,result,ready,finish
+test_document_filename = 测试文档.<CURRENT_THREAD_ID>.md
+record_required_tests_after_each_change_before_execution_finish = true
+defer_test_execution_until_user_requests_unified_testing = true
+unverified_delivery_must_report_pending_test_document = true
 
 <!-- 新增能力前必须按语言从根索引加载对应编码、测试与注释规则。 -->
 load_language_specific_rules_before_new_ability = true

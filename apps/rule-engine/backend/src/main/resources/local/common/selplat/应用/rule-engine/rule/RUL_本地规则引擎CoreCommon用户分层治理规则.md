@@ -1,7 +1,7 @@
 # 本地规则引擎 Core、Common 与用户分层治理规则
 
 java_ability_refs = none
-python_ability_refs = none
+python_ability_refs = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/abilities/layered_rule_loader.py
 node_ability_refs = none
 
 ## 适用范围
@@ -130,7 +130,7 @@ rule_engine_current_migration_defect_repair_result = all_close_conditions_satisf
 
 ## 分级索引切换的一次性加载器适配
 
-<!-- 问题：迁移期 core LayeredRuleLoader 只解析根索引简单赋值，无法执行已经确认的 common 分级索引结构。 -->
+<!-- 问题：迁移期旧分层加载实现只解析根索引简单赋值，无法执行已经确认的 common 分级索引结构。 -->
 <!-- 场景：建立 common 汇总索引、一级作用域索引和叶子项目索引，并保持 core 规则由根索引直接登记。 -->
 <!-- 业务含义：允许在两阶段人工确认后仅扩展索引递归解析与安全闭锁，不得借机改变规则正文或扩大 core 其他能力。 -->
 rule_engine_core_hierarchical_index_loader_exception = explicit_user_confirmed_one_time_structural_cutover
@@ -141,13 +141,30 @@ rule_engine_hierarchical_loader_required_guards = cycle,duplicate_logical_id,pat
 
 <!-- 本次切换已依次取得治理确认和实施确认；该确认序列仅作为审计记录，不再保持写入窗口。 -->
 rule_engine_hierarchical_index_cutover_confirmation_sequence = governance_change_standalone_1 -> implementation_standalone_1
-rule_engine_hierarchical_index_cutover_components = LayeredRuleLoader,rule_package_generator,index_structure_tests
+rule_engine_hierarchical_index_cutover_components = python_layered_rule_loader,rule_package_generator,index_structure_tests
 rule_engine_current_hierarchical_index_cutover_case = completed_common_scope_index_aggregation_and_recursive_loader
 rule_engine_current_hierarchical_index_cutover_gate = closed_core_refrozen
 rule_engine_current_hierarchical_index_cutover_result = nine_indexes_seventy_one_rules_all_guards_verified
 
 <!-- 实施验证全部通过后必须关闭切换例外并恢复 core 永久冻结。 -->
 rule_engine_hierarchical_index_cutover_close_condition = child_indexes_created,root_common_entries_removed,recursive_loader_tests_passed,all_index_targets_valid,core_refrozen
+
+## Python 唯一分层加载入口
+
+<!-- 问题：Java 分层加载器要求启动 JVM，并与已统一使用 Python 的协议、能力和门禁入口形成跨语言切换成本。 -->
+<!-- 场景：根索引、common 作用域、当前用户、依赖闭包和加载回执需要在同一任务进程中多次读取。 -->
+<!-- 业务含义：分层加载统一由 Python 完成，复用未变化的 UTF-8 资源快照并消除 Java 加载链。 -->
+rule_engine_layered_loader_authority = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/abilities/layered_rule_loader.py
+<!-- 生产加载、索引验证和依赖闭包都必须使用同一个 Python ability，禁止恢复 Java fallback。 -->
+rule_engine_layered_loading_runtime_language = python_only
+<!-- 原 Java 加载器已被 Python 完整替代并清理源码、测试、索引和调用引用。 -->
+rule_engine_java_layered_loader_status = retired_fully_superseded_no_fallback
+<!-- Python 实现必须保持既有分层顺序、覆盖模式、用户隔离、依赖闭包、回执和全部安全闭锁。 -->
+rule_engine_python_layered_loader_compatibility = loading_order,extend_replace,user_isolation,dependency_closure,receipts,cycle_duplicate_escape_missing_depth_guards
+<!-- 同一进程按文件修改时间与大小复用 UTF-8 资源快照，文件变化后自动读取新版本。 -->
+rule_engine_python_layered_loader_cache_policy = resource_path_plus_mtime_ns_plus_size,refresh_after_change
+<!-- 切换必须同步根索引、ability 注册、说明文档、Python 测试并验证 Java 引用为零。 -->
+rule_engine_python_only_layered_loader_cutover = root_index,ability_registry,readme,python_tests,zero_java_loader_runtime_references
 
 ## 合并、删除与过渡
 

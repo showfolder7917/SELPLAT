@@ -20,7 +20,7 @@ rule_engine_core_node_root = ../node/com/sp/selplat/local/code/core/
 rule_engine_common_node_root = ../node/com/sp/selplat/local/code/common/
 rule_engine_user_node_root_pattern = ../node/com/sp/selplat/local/code/<stable-user-id>/
 core_startup_protocol_loader = ../python/com/sp/selplat/local/code/core/abilities/startup_protocol_loader.py
-core_layered_rule_loader = ../java/com/sp/selplat/local/code/core/rule/LayeredRuleLoader.java
+core_layered_rule_loader = ../python/com/sp/selplat/local/code/core/abilities/layered_rule_loader.py
 
 project_rule_loading_order = root_RULE_INDEX -> common_aggregate_index -> matched_scope_index
 target_layered_rule_loading_order = local/core -> local/common/跨工程通用规则 -> local/common/matched_scope -> local/active_user

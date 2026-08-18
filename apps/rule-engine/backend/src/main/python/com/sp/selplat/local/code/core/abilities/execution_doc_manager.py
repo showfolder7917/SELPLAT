@@ -495,7 +495,7 @@ def gate_ready(context: dict[str, Any]) -> dict[str, Any]:
 
 
 def finish_task(context: dict[str, Any]) -> dict[str, Any]:
-    # 根 check 全部通过后才执行归档；任何缺失或未完成状态都以非零退出码阻断交付。
+    # 修改步骤全部完成且测试计划已经由外部门禁登记后归档；测试结果由独立测试文档持续维护。
     ready_state = gate_ready(context)
     if ready_state.get("status") != "completed":
         return ready_state
@@ -503,7 +503,7 @@ def finish_task(context: dict[str, Any]) -> dict[str, Any]:
     return {
         **archived,
         "action": "finish",
-        "message": "执行文档已通过最终门禁并归档。",
+        "message": "执行步骤已完成并归档；待测内容继续由同线程测试文档维护。",
     }
 
 

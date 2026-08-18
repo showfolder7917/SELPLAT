@@ -149,6 +149,19 @@ def selplatExecutionDocumentCommand = { String action ->
     ]
 }
 
+// 测试文档与执行文档使用同一线程来源，但生命周期独立，待测清单可以跨多次修改持续保留。
+def selplatTestDocumentCommand = { String action ->
+    String contextJson = JsonOutput.toJson([action: action])
+    String contextArgument = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')
+            ? contextJson.replace('"', '\\"')
+            : contextJson
+    return selplatPythonCommand() + [
+        selplatAbilityExecutorScript.absolutePath,
+        'test_doc_manager',
+        contextArgument
+    ]
+}
+
 tasks.register('selplatTaskDocumentActiveGate', Exec) {
     group = 'verification'
     description = '阻断没有独立 1、真实目标和执行步骤的当前线程任务。'
@@ -161,17 +174,22 @@ tasks.register('selplatTaskDocumentActiveGate', Exec) {
     }
 }
 
-tasks.register('selplatQuickGate', Exec) {
+tasks.register('selplatQuickGateCore', Exec) {
     group = 'verification'
-    description = '快速检查 SELPLAT 源码归属、数据库结构、SQL 幂等和工程目录门禁。'
+    description = '执行不依赖任务授权状态的 SELPLAT 快速静态门禁。'
     workingDir rootProject.projectDir
     environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
     environment 'PYTHONIOENCODING', 'utf-8'
-    dependsOn 'selplatTaskDocumentActiveGate'
     doFirst {
         // 当前机器 Python 启动器 + 唯一生产门禁程序 → 零违规时任务成功，任一违规立即阻断。
         commandLine(selplatPythonCommand() + [selplatQuickGateScript.absolutePath])
     }
+}
+
+tasks.register('selplatQuickGate') {
+    group = 'verification'
+    description = '开发过程中主动运行快速门禁；开始前核验当前执行文档授权。'
+    dependsOn 'selplatTaskDocumentActiveGate', 'selplatQuickGateCore'
 }
 
 tasks.register('selplatActiveUserRuleTests', Exec) {
@@ -283,33 +301,66 @@ tasks.register('selplatTaskDocumentReadyGate', Exec) {
     }
 }
 
+tasks.register('selplatTestDocumentPendingGate', Exec) {
+    group = 'verification'
+    description = '确认当前线程已经登记至少一个待统一测试项。'
+    workingDir rootProject.projectDir
+    environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
+    doFirst {
+        commandLine(selplatTestDocumentCommand('pending'))
+    }
+}
+
 tasks.register('selplatFullGate') {
     group = 'verification'
-    description = '提交或重大重构前运行全部 Java 检查、前端边界检查和规则测试。'
-    dependsOn 'selplatQuickGate', 'selplatAllRuleTests'
+    description = '用户触发统一测试时运行全部 Java 检查、前端边界检查和规则测试。'
+    dependsOn 'selplatTestDocumentPendingGate', 'selplatQuickGateCore', 'selplatAllRuleTests'
     // 所有 Java 叶子模块进入 check；后续 settings 新增叶子模块会自动纳入，无需维护静态清单。
     dependsOn javaLeafProjects.collect { currentProject -> "${currentProject.path}:check" }
     dependsOn ':shared:frontend:sel-ui:verifySelUiSourceBoundary'
-    // 根 check 同时调度 ready 与 full 时先检查执行记录，避免跑完整套测试后才发现步骤从未回写。
-    mustRunAfter 'selplatTaskDocumentReadyGate'
 }
 
 tasks.register('selplatTaskDocumentFinishGate', Exec) {
     group = 'verification'
-    description = '完整门禁成功后归档当前线程执行文档，作为统一任务交付终点。'
+    description = '执行步骤完成且待测项已登记后归档执行文档，不自动启动测试。'
     workingDir rootProject.projectDir
     environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
     environment 'PYTHONIOENCODING', 'utf-8'
-    dependsOn 'selplatTaskDocumentReadyGate', 'selplatFullGate'
+    dependsOn 'selplatTaskDocumentReadyGate', 'selplatTestDocumentPendingGate'
     doFirst {
         // finish 再次核验 ready 后归档；中途失败不会清空当前任务记录。
         commandLine(selplatExecutionDocumentCommand('finish'))
     }
 }
 
-// 根 check 是统一交付入口，默认执行全量门禁；快速和专项任务仍可在开发过程中单独调用。
+
+tasks.register('selplatTestDocumentReadyGate', Exec) {
+    group = 'verification'
+    description = '统一测试完成后确认测试文档没有待测试或失败项。'
+    workingDir rootProject.projectDir
+    environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
+    doFirst {
+        commandLine(selplatTestDocumentCommand('ready'))
+    }
+}
+
+tasks.register('selplatTestDocumentFinishGate', Exec) {
+    group = 'verification'
+    description = '全部统一测试结果通过后归档当前线程测试文档。'
+    workingDir rootProject.projectDir
+    environment 'PYTHONPYCACHEPREFIX', selplatPythonCacheRoot
+    environment 'PYTHONIOENCODING', 'utf-8'
+    dependsOn 'selplatTestDocumentReadyGate'
+    doFirst {
+        commandLine(selplatTestDocumentCommand('finish'))
+    }
+}
+
+// 根 check 只在用户明确触发统一测试时运行，不再负责每次修改后的执行文档归档。
 tasks.register('check') {
     group = 'verification'
-    description = 'SELPLAT 根工程统一交付检查：执行文档就绪、全量门禁通过并完成归档。'
-    dependsOn 'selplatTaskDocumentFinishGate'
+    description = 'SELPLAT 手动统一测试入口：执行当前测试文档对应的全量工程门禁。'
+    dependsOn 'selplatFullGate'
 }

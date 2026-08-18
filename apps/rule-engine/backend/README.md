@@ -7,7 +7,7 @@
 - 启动协议只建立执行边界和唯一规则索引入口，不批量加载全部规则。
 - AI 根据任务、当前工程作用域和当前用户命中最少必要规则。
 - 规则通过模板、案例、程序和验证资产约束执行结果，重复偏差推动规则包持续升级。
-- Java、Python、Node 程序保持原语言实现，并通过 ability 入口复用。
+- Java、Python、Node 业务程序保持原语言实现；分层规则加载统一由 Python ability 执行，不再启动 Java 加载链。
 
 当前状态：规则分层和索引治理已经运行；规则包资产与程序引用仍在持续补全。Java 21 健康服务只用于离线容器验证，不代表传统规则执行链。
 
@@ -24,6 +24,20 @@ Python 验证：
 - core：`python3 apps/rule-engine/backend/src/test/python/run_tests.py core`
 - XUNAN：`python3 apps/rule-engine/backend/src/test/python/run_tests.py XUNAN`
 - 统一入口会把 `.pyc` 写入工程 `cache/python-pycache`，不得直接使用会在源码旁生成 `__pycache__` 的裸测试命令。
+
+分层规则加载：
+
+- 唯一实现：`src/main/python/com/sp/selplat/local/code/core/abilities/layered_rule_loader.py`
+- 注册入口：`layered_rule_loader`
+- 加载顺序：`core → 跨工程 common → 当前 common 作用域 → 当前用户`
+- 同一 Python 进程会复用未变化的 UTF-8 资源快照，避免 JVM 启动和重复磁盘读取。
+
+测试文档与统一测试：
+
+- 每次修改后通过 `test_doc_manager record` 把验证内容写入 `OPTION/测试文档.<线程ID>.md`。
+- 每项必须记录变更内容、测试命令和预期结果；相同标题与命令不会重复登记。
+- 用户提出“统一测试”后按文档逐项执行，并通过 `result` 回写通过或失败；全部通过后调用 `finish` 归档。
+- 根 `check` 是手动全量测试入口，不再负责每次修改后的执行文档归档。
 
 规则智慧整合入口：
 

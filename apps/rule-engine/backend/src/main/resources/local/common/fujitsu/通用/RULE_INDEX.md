@@ -49,3 +49,8 @@ load_rule_for_fujitsu_database_integration_coverage = FUJITSU_DATABASE_INTEGRATI
 <!-- Fujitsu 文件测试数据一致性。 -->
 FUJITSU_FILE_TEST_DATA_CONSISTENCY_RULES = local/common/fujitsu/通用/rule/RUL_Fujitsu文件测试数据一致性规则.md
 load_rule_for_fujitsu_file_test_data_consistency = FUJITSU_FILE_TEST_DATA_CONSISTENCY_RULES
+
+<!-- Fujitsu 新增或修改 JSON 的单行格式与交付门禁。 -->
+FUJITSU_JSON_SINGLE_LINE_FORMAT_GATE_RULES = local/common/fujitsu/通用/rule/RUL_FujitsuJSON单行格式门禁规则.md
+load_rule_for_fujitsu_json_creation_or_modification = FUJITSU_JSON_SINGLE_LINE_FORMAT_GATE_RULES
+load_rule_for_fujitsu_json_delivery_validation = FUJITSU_JSON_SINGLE_LINE_FORMAT_GATE_RULES
