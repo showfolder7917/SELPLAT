@@ -1,7 +1,25 @@
 # Python 核心能力与 Util 结构规则
 
+<!-- active-user 物理目录的真实规则层始终从 AGENTS.md 当前稳定用户解析。 -->
+rule_resource_layer_source = AGENTS.md.current_stable_user_id
+
 <!-- 本规则从第一版 Python core 结构收敛开始生效。 -->
-rule_version = 1.0.0
+rule_version = 1.1.0
+
+<!-- 同线程重复加载同一规则集合时必须复用精简快照，减少完整正文重复进入 AI 上下文。 -->
+python_core.rule_loading_same_thread_policy = compact_snapshot_reuse
+
+<!-- 规则、索引或身份资源变化后旧快照必须自动失效。 -->
+python_core.rule_snapshot_invalidation = resource_revision_change
+
+<!-- 多个能力动作应优先通过执行器批量模式在同一 Python 进程内完成。 -->
+python_core.executor_multi_action_policy = single_process_batch
+
+<!-- 测试成功只返回数量摘要，失败时才返回完整用例详情。 -->
+python_core.test_output_policy = success_summary_failure_details
+
+<!-- 验证顺序先运行受影响专项，再运行完整交付门禁。 -->
+python_core.verification_order = affected_scope_then_full_delivery_gate
 
 <!-- 规则所有者从工程根当前稳定用户声明动态解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
@@ -30,10 +48,28 @@ active_user_node_ability_status = retired_empty
 <!-- 当前用户旧能力封存区不再保留可执行代码。 -->
 active_user_executable_archive_status = empty
 
-<!-- Python core 的活跃代码只允许执行器、能力目录和 util 目录。 -->
-python_core.active_structure = executor_abilities_and_util_only
+<!-- rule-engine 新运行包只允许中文执行器、能力目录和 util 目录。 -->
+python_core.active_structure = chinese_executor_abilities_and_util_only
 
-<!-- 执行器只读取唯一 ability 注册表。 -->
+<!-- rule-engine 新运行包固定进入不带旧分层前缀的 Python 命名空间。 -->
+python_core.runtime_package = src/main/python/com/sp/selplat/ruleengine
+
+<!-- 尚未迁移的其他 core 能力在本阶段继续保留旧能力根，不复制第二个执行器。 -->
+python_core.legacy_ability_root_policy = retain_unmigrated_abilities_without_executor
+
+<!-- Python 源码文件使用中文职责名，标准 __init__.py 除外。 -->
+python_core.source_filename_language = chinese_except_python_standard_files
+
+<!-- 每个能力模块只通过 execute 对外开放调用。 -->
+python_core.public_ability_entry = execute
+
+<!-- 能力内部方法统一使用下划线前缀。 -->
+python_core.internal_method_prefix = _
+
+<!-- 工程路径只从公共 TOML 配置解析。 -->
+python_core.path_config = src/main/resources/ruleengine/config/路径配置.toml
+
+<!-- 中文执行器只读取唯一 ability 注册表。 -->
 python_core.executor.registry = abilities_only
 
 <!-- 执行器不得解析 skill 注册表。 -->

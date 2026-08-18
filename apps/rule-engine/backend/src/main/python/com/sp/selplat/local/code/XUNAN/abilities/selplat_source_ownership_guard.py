@@ -1436,14 +1436,27 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                     owned_root = (
                         language_root / "com/sp/selplat/local/code"
                     )
+                    infrastructure_root = (
+                        language_root / "com/sp/selplat/ruleengine"
+                        if language == "python"
+                        else None
+                    )
                     allowed_layers = {"core", "common", stable_user_id}
                     for source_file in sorted(path for path in language_root.rglob("*") if path.is_file()):
                         relative_source = source_file.relative_to(project_root)
+                        if infrastructure_root is not None and source_file.is_relative_to(infrastructure_root):
+                            if source_file.suffix not in LANGUAGE_EXTENSIONS["python"]:
+                                violations.append({
+                                    "code": "LANGUAGE_ROOT_FOREIGN_FILE",
+                                    "path": str(relative_source),
+                                    "message": "unexpected file in ruleengine Python package",
+                                })
+                            continue
                         if not source_file.is_relative_to(owned_root):
                             violations.append({
                                 "code": "RULE_ENGINE_SOURCE_OUTSIDE_LAYER_ROOT",
                                 "path": str(relative_source),
-                                "message": "rule-engine source must be below local/code/<layer>",
+                                "message": "rule-engine source must be below ruleengine or local/code/<layer>",
                             })
                             continue
                         layer_relative = source_file.relative_to(owned_root)

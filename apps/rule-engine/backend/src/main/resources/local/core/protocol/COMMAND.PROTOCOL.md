@@ -27,18 +27,27 @@ python_source_tree_pycache_policy = forbidden
 <!-- rule-engine Python 测试统一通过自带入口运行，入口负责当前进程和子进程的缓存归属。 -->
 rule_engine_python_test_entry = apps/rule-engine/backend/src/test/python/run_tests.py
 rule_engine_python_test_command = python3 apps/rule-engine/backend/src/test/python/run_tests.py all
+<!-- 成功测试默认只回传摘要，失败时保留完整定位输出。 -->
+rule_engine_python_test_summary_flag = --summary
+<!-- 同线程重复规则加载使用资源版本控制的精简快照。 -->
+same_thread_rule_snapshot_ability = rule_snapshot_manager
+<!-- 多个无交互能力动作允许通过唯一执行器的 --batch 单进程执行。 -->
+ability_executor_batch_mode = --batch
 
-<!-- Python execution_doc_manager 保持原语言迁入 core，并作为执行文档统一内务入口。 -->
-execution_doc_manager_entry = src/main/python/com/sp/selplat/local/code/core/executor.py execution_doc_manager
-execution_doc_manager_migration_status = language_native_core_entry
+<!-- 执行文档能力通过 ruleengine 唯一执行器开放，文件名使用中文，路径由公共配置解析。 -->
+execution_doc_manager_entry = src/main/python/com/sp/selplat/ruleengine/执行器.py execution_doc_manager
+execution_doc_manager_migration_status = ruleengine_chinese_named_entry
 run_execution_doc_check_before_formal_task = true
-<!-- 独立 1 后由 begin 写入授权，开发门禁执行 active，步骤用 step 回写，根 check 以 ready 和 finish 收口。 -->
-execution_doc_manager_command_actions = check,begin,step,active,ready,finish
+<!-- 独立 1 后由 begin 写入授权；步骤既可单项 step，也可用 complete_steps 一次回写。 -->
+execution_doc_manager_command_actions = check,begin,step,complete_steps,active,ready,finish
 execution_doc_manager_build_integration = quick_special_require_active,task_finish_requires_ready_and_recorded_test_plan
-<!-- Python test_doc_manager 与执行文档使用相同线程来源；修改后 record，统一测试逐项 result，全部通过后 ready 和 finish。 -->
-test_doc_manager_entry = src/main/python/com/sp/selplat/local/code/core/executor.py test_doc_manager
-test_doc_manager_command_actions = check,record,result,pending,ready,finish
+<!-- 测试文档能力使用相同执行器和线程来源；结果既可单项 result，也可用 complete_tests 一次回写。 -->
+test_doc_manager_entry = src/main/python/com/sp/selplat/ruleengine/执行器.py test_doc_manager
+test_doc_manager_command_actions = check,record,result,complete_tests,pending,ready,finish
 test_doc_manager_build_integration = task_finish_requires_pending_test_item,root_check_is_manual_unified_test_entry
+<!-- 两份文档均 ready 后由 finish_all 一次完成联合归档。 -->
+task_lifecycle_manager_entry = src/main/python/com/sp/selplat/ruleengine/执行器.py task_lifecycle_manager
+task_lifecycle_manager_command_actions = finish_all
 restricted_runtime_must_use_verified_python_override_without_repeating_failed_default = true
 
 <!-- 读完本启动协议后，后续 AI 记忆命名空间内正式 .md 文件统一通过该能力读取 -->

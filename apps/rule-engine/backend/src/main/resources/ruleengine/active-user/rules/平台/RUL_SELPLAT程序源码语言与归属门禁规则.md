@@ -1,5 +1,8 @@
 # SELPLAT 程序源码语言与归属门禁规则
 
+<!-- active-user 物理目录的真实规则层始终从 AGENTS.md 当前稳定用户解析。 -->
+rule_resource_layer_source = AGENTS.md.current_stable_user_id
+
 <!-- 本规则覆盖 SELPLAT 的 apps、shared 和 rule-engine 全部正式程序源码。 -->
 rule_scope = active_user_selplat_all_program_source_ownership
 <!-- 3.10.0 把应用、shared 和生成模板的嵌套 selFreeze 纳入统一源码交付扫描。 -->
@@ -75,6 +78,9 @@ selplat_rule_engine_source_layers.2 = common
 selplat_rule_engine_source_layers.3 = <active-stable-user-id>
 <!-- 当前用户可复用程序必须进入当前用户 abilities，禁止散落到业务应用的未登记语言目录。 -->
 selplat_active_user_reusable_program_root = apps/rule-engine/backend/src/main/<language>/com/sp/selplat/local/code/<active-stable-user-id>/abilities/
+
+<!-- rule-engine 自身运行基础设施允许进入新的独立 Python 包。 -->
+selplat_rule_engine_infrastructure_source_root = apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine/
 
 ## 自动门禁
 

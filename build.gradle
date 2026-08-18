@@ -133,9 +133,9 @@ def selplatQuickGateScript = file(
                 + 'selplat_source_ownership_guard.py')
 // Python 规则测试使用唯一统一入口，scope 参数决定当前用户专项或全部规则回归。
 def selplatRuleTestScript = file('apps/rule-engine/backend/src/test/python/run_tests.py')
-// 执行文档统一通过 core executor 调用登记能力，Gradle 不直接导入或复制 Python 内务实现。
+// 执行文档统一通过 ruleengine 中文执行器调用登记能力，Gradle 不直接复制 Python 内务实现。
 def selplatAbilityExecutorScript = file(
-        'apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/executor.py')
+        'apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine/执行器.py')
 // 每个任务生命周期动作都保留结构化 JSON，便于执行器和测试稳定识别 begin、step、active、ready、finish。
 def selplatExecutionDocumentCommand = { String action ->
     String contextJson = JsonOutput.toJson([action: action])
@@ -201,7 +201,7 @@ tasks.register('selplatActiveUserRuleTests', Exec) {
     environment 'PYTHONIOENCODING', 'utf-8'
     doFirst {
         // 当前用户测试范围从 AGENTS.md 动态解析，禁止在 Gradle 中写死用户目录。
-        commandLine(selplatPythonCommand() + [selplatRuleTestScript.absolutePath, 'active-user'])
+        commandLine(selplatPythonCommand() + [selplatRuleTestScript.absolutePath, 'active-user', '--summary'])
     }
 }
 
@@ -213,7 +213,7 @@ tasks.register('selplatAllRuleTests', Exec) {
     environment 'PYTHONIOENCODING', 'utf-8'
     doFirst {
         // all 范围由统一测试入口组合 core 与当前用户，避免 Gradle 扫描用户目录自行推断身份。
-        commandLine(selplatPythonCommand() + [selplatRuleTestScript.absolutePath, 'all'])
+        commandLine(selplatPythonCommand() + [selplatRuleTestScript.absolutePath, 'all', '--summary'])
     }
 }
 

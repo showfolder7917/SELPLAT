@@ -22,6 +22,9 @@ import unittest
 
 # 测试从真实代码树推导 SELPLAT 根，禁止用机器相关绝对路径替代工程结构。
 CODE_ROOT = MAIN_CODE_ROOT
+RULEENGINE_ROOT = (
+    PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine"
+)
 SELPLAT_ROOT = PROJECT_ROOT
 # 所有受检入口必须把短期产物归入当前 SELPLAT 的 OPTION/temp。
 OPTION_TEMP_ROOT = SELPLAT_ROOT / "OPTION" / "temp"
@@ -37,7 +40,7 @@ ACTIVE_STABLE_USER_ID = ACTIVE_USER_MATCHES[0].strip()
 # 不能只依赖 VS Code 环境变量或统一测试入口。
 PYTHON_ENTRY_PATHS = [
     CODE_ROOT / "abilities" / "startup_protocol_loader.py",
-    CODE_ROOT / "executor.py",
+    RULEENGINE_ROOT / "执行器.py",
     PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code"
     / ACTIVE_STABLE_USER_ID / "abilities/ai_rule_package_integrator.py",
     PROJECT_ROOT / "apps/rule-engine/backend/src/test/python/com/sp/selplat/local/code"
@@ -70,11 +73,12 @@ class TempPathPolicyTests(unittest.TestCase):
         """代码树内 tempfile 创建调用必须显式声明 dir 参数。"""
 
         # 扫描正式能力和 util，确保新增 tempfile 调用也受同一回归门保护。
-        python_files = sorted(
+        python_files = sorted({
             path
+            for root in (CODE_ROOT, RULEENGINE_ROOT)
             for area in ("abilities", "util")
-            for path in (CODE_ROOT / area).glob("*.py")
-        )
+            for path in (root / area).glob("*.py")
+        })
         violations: list[str] = []
         # AST 检查不依赖文本换行格式，可稳定识别多行调用和关键字参数。
         for python_file in python_files:
@@ -107,8 +111,11 @@ class TempPathPolicyTests(unittest.TestCase):
                 'os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)',
                 source,
             )
-            # 稳定缓存目录必须由工程根派生，禁止机器绝对路径。
-            self.assertIn('PROJECT_ROOT / "cache/python-pycache"', source)
+            # 稳定缓存目录必须来自工程根派生或公共路径配置，禁止机器绝对路径。
+            self.assertTrue(
+                'PROJECT_ROOT / "cache/python-pycache"' in source
+                or '_路径.取得("python_cache")' in source
+            )
 
 
 if __name__ == "__main__":

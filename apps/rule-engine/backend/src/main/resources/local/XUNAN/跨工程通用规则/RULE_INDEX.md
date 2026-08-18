@@ -61,7 +61,7 @@ load_rule_for_rule_creation_move_delete_or_classification = RULE_LIFECYCLE_GOVER
 load_rule_for_rule_index_maintenance = RULE_LIFECYCLE_GOVERNANCE_RULES
 
 <!-- 执行文档按当前任务页面隔离，并接入 begin、step、active、ready、finish 统一任务门禁。 -->
-EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES = local/XUNAN/跨工程通用规则/RUL_执行文档任务生命周期门禁规则.md
+EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES = ruleengine/active-user/rules/跨工程/RUL_执行文档任务生命周期门禁规则.md
 
 <!-- load_rule_for_execution_document_thread_isolation 的当前独立事实为 EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES。 -->
 load_rule_for_execution_document_thread_isolation = EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES

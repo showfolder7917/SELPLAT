@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
@@ -14,10 +15,10 @@ PROJECT_ROOT = next(
     for candidate in Path(__file__).resolve().parents
     if (candidate / "settings.gradle").is_file()
 )
-ABILITY_PATH = (
-    PROJECT_ROOT
-    / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/abilities/test_doc_manager.py"
-)
+PYTHON_SOURCE_ROOT = PROJECT_ROOT / "apps/rule-engine/backend/src/main/python"
+if str(PYTHON_SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PYTHON_SOURCE_ROOT))
+ABILITY_PATH = PYTHON_SOURCE_ROOT / "com/sp/selplat/ruleengine/abilities/测试文档管理器.py"
 OPTION_TEMP_ROOT = PROJECT_ROOT / "OPTION" / "temp"
 
 
@@ -38,15 +39,15 @@ class TestDocManagerTests(unittest.TestCase):
         self.module.OPTION_ROOT = Path(self.temp_dir.name) / "OPTION"
         self.module.HISTORY_ROOT = self.module.OPTION_ROOT / "temp"
         self.thread_id = "test-thread"
-        self.previous_thread_id = os.environ.get(self.module.THREAD_ID_ENV_KEY)
-        os.environ[self.module.THREAD_ID_ENV_KEY] = self.thread_id
+        self.previous_thread_id = os.environ.get("CODEX_THREAD_ID")
+        os.environ["CODEX_THREAD_ID"] = self.thread_id
         self.doc_path = self.module._test_doc_path(self.thread_id)
 
     def tearDown(self) -> None:
         if self.previous_thread_id is None:
-            os.environ.pop(self.module.THREAD_ID_ENV_KEY, None)
+            os.environ.pop("CODEX_THREAD_ID", None)
         else:
-            os.environ[self.module.THREAD_ID_ENV_KEY] = self.previous_thread_id
+            os.environ["CODEX_THREAD_ID"] = self.previous_thread_id
         self.temp_dir.cleanup()
 
     def test_record_creates_same_thread_pending_document(self) -> None:
@@ -115,6 +116,29 @@ class TestDocManagerTests(unittest.TestCase):
             "action": "result", "item_number": 2, "status": "通过", "actual_result": "零违规"
         }, {}, {})
         self.assertTrue(repaired["all_completed"])
+
+    def test_complete_tests_writes_multiple_results_once(self) -> None:
+        """complete_tests 应一次回写多个测试结果。"""
+
+        self.module.execute({
+            "action": "record",
+            "items": [
+                {"title": "单测", "change": "能力", "command": "test core", "expected": "通过"},
+                {"title": "门禁", "change": "结构", "command": "test gate", "expected": "零违规"},
+            ],
+        }, {}, {})
+
+        result = self.module.execute({
+            "action": "complete_tests",
+            "results": {
+                "1": {"status": "passed", "result": "单测通过"},
+                "2": {"status": "通过", "result": "零违规"},
+            },
+        }, {}, {})
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["completed_items"], [1, 2])
+        self.assertTrue(result["all_completed"])
 
     def test_pending_gate_requires_recorded_work(self) -> None:
         empty = self.module.execute({"action": "pending"}, {}, {})

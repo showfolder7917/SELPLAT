@@ -271,6 +271,14 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             / ACTIVE_STABLE_USER_ID
             / "executor.py"
         ).exists())
+        self.assertFalse((
+            PROJECT_ROOT
+            / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/executor.py"
+        ).exists())
+        self.assertTrue((
+            PROJECT_ROOT
+            / "apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine/执行器.py"
+        ).is_file())
         self.assertTrue(callable(self.program.main))
 
     def test_gradle_gate_entries_are_portable_and_scope_aware(self) -> None:

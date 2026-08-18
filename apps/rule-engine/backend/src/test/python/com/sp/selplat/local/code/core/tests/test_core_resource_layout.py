@@ -19,6 +19,9 @@ ROOT_RULE_INDEX = RESOURCE_ROOT / "RULE_INDEX.md"
 PYTHON_CORE_ROOT = (
     PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core"
 )
+RULEENGINE_ROOT = (
+    PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine"
+)
 
 
 class CoreResourceLayoutTests(unittest.TestCase):
@@ -96,9 +99,14 @@ class CoreResourceLayoutTests(unittest.TestCase):
         abilities = json.loads((registry_root / "abilities.json").read_text(encoding="utf-8"))
         self.assertFalse((registry_root / "skills.json").exists())
         self.assertFalse((registry_root / "apps.json").exists())
+        ability_roots = {
+            "legacy_core_python": PYTHON_CORE_ROOT,
+            "ruleengine_python": RULEENGINE_ROOT,
+        }
         registered_ability_paths: set[Path] = set()
         for ability_id, definition in abilities.items():
-            ability_path = PYTHON_CORE_ROOT / definition["path"].removeprefix("./")
+            ability_root = ability_roots[definition.get("root", "legacy_core_python")]
+            ability_path = ability_root / definition["path"].removeprefix("./")
             self.assertTrue(ability_path.is_file(), ability_id)
             registered_ability_paths.add(ability_path.resolve())
             function_names = {
@@ -110,10 +118,15 @@ class CoreResourceLayoutTests(unittest.TestCase):
             self.assertNotIn("skills", definition)
             self.assertNotIn("apps", definition)
         production_ability_paths = {
-            path.resolve() for path in (PYTHON_CORE_ROOT / "abilities").glob("*.py")
+            path.resolve()
+            for ability_root in (PYTHON_CORE_ROOT / "abilities", RULEENGINE_ROOT / "abilities")
+            for path in ability_root.glob("*.py")
         }
         self.assertEqual(production_ability_paths, registered_ability_paths)
         self.assertTrue((PYTHON_CORE_ROOT / "util").is_dir())
+        self.assertTrue((RULEENGINE_ROOT / "util").is_dir())
+        self.assertTrue((RULEENGINE_ROOT / "执行器.py").is_file())
+        self.assertFalse((PYTHON_CORE_ROOT / "executor.py").exists())
         self.assertFalse((PYTHON_CORE_ROOT / "skill").exists())
         self.assertFalse((PYTHON_CORE_ROOT / "app").exists())
         self.assertFalse((PYTHON_CORE_ROOT / "router.py").exists())

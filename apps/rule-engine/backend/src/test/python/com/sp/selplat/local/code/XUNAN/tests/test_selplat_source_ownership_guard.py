@@ -29,9 +29,8 @@ PROGRAM_PATH = (
 )
 RULE_PATH = (
     PROJECT_ROOT
-    / "apps/rule-engine/backend/src/main/resources/local"
-    / ACTIVE_STABLE_USER_ID
-    / "selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md"
+    / "apps/rule-engine/backend/src/main/resources/ruleengine/active-user/rules/平台"
+    / "RUL_SELPLAT程序源码语言与归属门禁规则.md"
 )
 PUBLIC_COMPONENT_RULE_PATH = (
     PROJECT_ROOT
@@ -1044,6 +1043,24 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
 
             self.assertNotIn("RULE_ENGINE_SOURCE_UNKNOWN_LAYER", codes)
             self.assertIn("SOURCE_TREE_GENERATED_OR_OS_FILE", codes)
+
+    def test_rule_engine_accepts_new_python_infrastructure_package(self) -> None:
+        """rule-engine 新基础设施包允许中文 Python 文件且不绕过扩展名检查。"""
+
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            package_root = (
+                fixture
+                / "apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine/abilities"
+            )
+            package_root.mkdir(parents=True)
+            (package_root / "执行文档管理器.py").write_text("pass\n", encoding="utf-8")
+
+            result = self.guard.audit_source_ownership(fixture)
+            codes = {violation["code"] for violation in result["violations"]}
+
+            self.assertNotIn("RULE_ENGINE_SOURCE_OUTSIDE_LAYER_ROOT", codes)
+            self.assertNotIn("RULE_ENGINE_SOURCE_UNKNOWN_LAYER", codes)
 
     def test_application_rejects_private_request_and_result_protocol_types(self) -> None:
         """业务应用自建 Request 或 Result 时必须阻断交付。"""

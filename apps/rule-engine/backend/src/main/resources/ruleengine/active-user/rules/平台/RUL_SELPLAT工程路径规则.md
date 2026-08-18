@@ -1,5 +1,8 @@
 # SELPLAT 工程路径规则
 
+<!-- active-user 物理目录的真实规则层始终从 AGENTS.md 当前稳定用户解析。 -->
+rule_resource_layer_source = AGENTS.md.current_stable_user_id
+
 <!-- 当前工程根由用户明确路径或最近项目标记识别；适用于源码命令和执行内务；业务含义是不得根据 MEMORIES 位置反推工程 -->
 current_project_root_must_be_resolved_independently = true
 
@@ -49,8 +52,14 @@ selplat_legacy_runtime_root_is_forbidden = true
 <!-- Python 字节码缓存进入 cache；适用于能力和测试执行；业务含义是源码目录不得产生 __pycache__ -->
 selplat_python_pycache_prefix = cache/python-pycache
 
-<!-- 规则引擎模块只承载 Python 规则能力，并在 code 包下按 core、common或稳定用户标识分层。 -->
-selplat_rule_python_root = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code
+<!-- rule-engine 新运行基础设施统一进入独立 Python 包。 -->
+selplat_rule_python_root = apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine
+
+<!-- 尚未迁移的旧 core 和当前用户能力在本阶段继续从原分层根读取。 -->
+selplat_rule_python_legacy_root = apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code
+
+<!-- 全部派生路径统一从公共路径配置文件解析。 -->
+selplat_rule_engine_path_config = apps/rule-engine/backend/src/main/resources/ruleengine/config/路径配置.toml
 
 <!-- rule-engine 的 Java 正式源码根不得重新建立。 -->
 selplat_rule_engine_forbidden_source_root = apps/rule-engine/backend/src/main/java
@@ -59,6 +68,8 @@ selplat_rule_engine_forbidden_source_root.2 = apps/rule-engine/backend/src/main/
 
 <!-- 规则、协议、注册信息、文档和模板统一由标准 resources 承载，并由 Python 加载器按索引直接读取。 -->
 selplat_rule_resource_root = apps/rule-engine/backend/src/main/resources
+<!-- 新增或调整后的 rule-engine 专项规则进入新的资源命名空间。 -->
+selplat_rule_engine_new_rule_root = apps/rule-engine/backend/src/main/resources/ruleengine/active-user/rules
 <!-- selplat_rule_resource_layer_pattern 的当前独立事实为 apps/rule-engine/backend/src/main/resources/local/<layer>/。 -->
 selplat_rule_resource_layer_pattern = apps/rule-engine/backend/src/main/resources/local/<layer>/
 <!-- selplat_rule_resource_layer_values 的当前独立事实为 core。 -->

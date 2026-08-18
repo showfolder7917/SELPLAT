@@ -691,7 +691,11 @@ def _load_rule(
     path_parts = resource_path.split("/", 2)
     if len(path_parts) < 3:
         raise RuleLoadingError(f"Invalid layered rule path: {resource_path}")
-    actual_layer = path_parts[1]
+    actual_layer = (
+        expected_layer
+        if path_parts[:2] == ["ruleengine", "active-user"]
+        else path_parts[1]
+    )
     if expected_layer and actual_layer != expected_layer:
         raise RuleLoadingError(
             f"Rule layer mismatch: expected={expected_layer}, path={resource_path}"
@@ -764,16 +768,33 @@ def _validate_index_resource_path(resource_path: str) -> None:
 
 
 def _validate_rule_resource_path(resource_path: str) -> None:
-    """校验规则正文位于 local 分层且不是索引文件。"""
+    """校验规则正文位于旧分层或新 ruleengine 规则根且不是索引。"""
 
     if (
-        not _is_safe_local_resource_path(resource_path)
+        not (
+            _is_safe_local_resource_path(resource_path)
+            or _is_safe_ruleengine_rule_path(resource_path)
+        )
         or not resource_path.endswith(".md")
         or _is_index_reference(resource_path)
     ):
         raise RuleLoadingError(
             f"Invalid or escaping layered rule path: {resource_path}"
         )
+
+
+def _is_safe_ruleengine_rule_path(resource_path: str | None) -> bool:
+    """允许新规则根中的相对 Markdown 路径并阻断路径逃逸。"""
+
+    if (
+        not resource_path
+        or not resource_path.startswith("ruleengine/active-user/rules/")
+        or resource_path.startswith("/")
+        or "\\" in resource_path
+    ):
+        return False
+    segments = resource_path.split("/")
+    return all(segment and segment not in {".", ".."} for segment in segments)
 
 
 def _is_safe_local_resource_path(resource_path: str | None) -> bool:

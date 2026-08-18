@@ -19,16 +19,13 @@ PROJECT_ROOT = next(
     if (candidate / "settings.gradle").is_file()
 )
 # 生产 Python core 的唯一位置与测试 source set 分离，测试统一通过该路径加载真实能力。
-MAIN_CODE_ROOT = (
-    PROJECT_ROOT
-    / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core"
-)
+MAIN_CODE_ROOT = PROJECT_ROOT / "apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine"
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 
-EXECUTOR_PATH = MAIN_CODE_ROOT / "executor.py"
+EXECUTOR_PATH = MAIN_CODE_ROOT / "执行器.py"
 
 
 def load_executor_module():
@@ -70,10 +67,10 @@ class ExecutorBasicExecutionTests(unittest.TestCase):
                 return ability_module
             raise AssertionError(module_path)
 
-        self.module.resolve_ability = fake_resolve
-        self.module.load_python_module = fake_load
+        self.module._解析能力 = fake_resolve
+        self.module._加载模块 = fake_load
 
-        result = self.module.execute_ability(
+        result = self.module.execute(
             "demo_ability",
             {"task_text": "直接执行，不再经过确认门"},
         )
@@ -84,18 +81,18 @@ class ExecutorBasicExecutionTests(unittest.TestCase):
         self.assertEqual(result["apps_loaded"], [])
 
     def test_execute_ability_returns_missing_ability_without_running_module(self) -> None:
-        self.module.resolve_ability = lambda name: {
+        self.module._解析能力 = lambda name: {
             "status": "missing_ability",
             "ability": name,
             "message": "未找到对应 ability。",
         }
 
-        result = self.module.execute_ability("demo_ability", {"task_text": "检查缺失能力"})
+        result = self.module.execute("demo_ability", {"task_text": "检查缺失能力"})
 
         self.assertEqual(result["status"], "missing_ability")
 
     def test_main_returns_ability_declared_blocking_exit_code(self) -> None:
-        self.module.execute_ability = lambda ability_name, context=None: {
+        self.module.execute = lambda ability_name, context=None: {
             "status": "blocked_task_document_not_active",
             "exit_code": 1,
             "ability": ability_name,

@@ -28,20 +28,26 @@ import json
 import re
 from typing import Any
 
+PYTHON_SOURCE_ROOT = next(
+    candidate for candidate in Path(__file__).resolve().parents if candidate.name == "python"
+)
+if str(PYTHON_SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PYTHON_SOURCE_ROOT))
+
+from com.sp.selplat.ruleengine.util.路径配置 import 加载路径配置
+
 
 ABILITY_ID = "ai_rule_package_integrator"
 ABILITY_NAME = "AI 规则包智慧整合"
 REQUIRED_SKILLS: list[str] = []
 REQUIRED_APPS: list[str] = []
 
-RESOURCE_RELATIVE_ROOT = Path("apps/rule-engine/backend/src/main/resources")
-RESOURCE_ROOT = PROJECT_ROOT / RESOURCE_RELATIVE_ROOT
-CORE_EXECUTOR_PATH = (
-    PROJECT_ROOT
-    / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core/executor.py"
-)
-OPTION_ROOT = PROJECT_ROOT / "OPTION"
-AGENTS_PATH = PROJECT_ROOT / "AGENTS.md"
+_PATHS = 加载路径配置()
+RESOURCE_ROOT = _PATHS.取得("resource_root")
+RESOURCE_RELATIVE_ROOT = RESOURCE_ROOT.relative_to(PROJECT_ROOT)
+CORE_EXECUTOR_PATH = _PATHS.取得("ruleengine_python") / "执行器.py"
+OPTION_ROOT = _PATHS.取得("option_root")
+AGENTS_PATH = _PATHS.取得("agents_file")
 LOGICAL_ID_PATTERN = re.compile(r"[A-Z][A-Z0-9_]{1,127}")
 ACTIVE_USER_PATTERN = re.compile(r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$")
 SAFE_USER_ID_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}")
@@ -69,7 +75,7 @@ def _load_core_executor():
 def _read_markdown(relative_path: str, core_executor: Any) -> str:
     """通过已登记 ability 完整读取工程 Markdown。"""
 
-    result = core_executor.execute_ability(
+    result = core_executor.execute(
         "memory_file_full_reader",
         {"file_path": str(RESOURCE_RELATIVE_ROOT / relative_path)},
     )

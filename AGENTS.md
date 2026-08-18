@@ -19,6 +19,9 @@
 - Java 核心代码根：`CORE_JAVA_ROOT=${MEMORY_ROOT}/../../../java/com/sp/selplat/local/code/core`
 - Python 核心代码根：`CORE_PYTHON_ROOT=${MEMORY_ROOT}/../../../python/com/sp/selplat/local/code/core`
 - Node 核心代码根：`CORE_NODE_ROOT=${MEMORY_ROOT}/../../../node/com/sp/selplat/local/code/core`
+- rule-engine 新 Python 能力根：`RULE_ENGINE_PYTHON_ROOT=${SELPLAT_ROOT}/apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine`
+- rule-engine 公共路径配置：`RULE_ENGINE_PATH_CONFIG=${SELPLAT_ROOT}/apps/rule-engine/backend/src/main/resources/ruleengine/config/路径配置.toml`
+- rule-engine 调整后规则根：`RULE_ENGINE_RULE_RESOURCE_ROOT=${SELPLAT_ROOT}/apps/rule-engine/backend/src/main/resources/ruleengine`
 
 ## 必须阅读链路
 
@@ -44,7 +47,7 @@
 - `local/core` 与 `local/common` 默认保持冻结；没有用户明确点名修改目标时，自动修正只能写入当前已验证用户层。
 - 当用户明确提出 `local/core` 或 `local/common` 的具体修改需求，并以独立 `1` 启动后，视为把该次指定范围托管给 AI；AI 可以直接完成分析、修改、引用同步和验证，但不得扩大目标范围。
 - 用户明确托管的修改必须在执行前核对索引、调用方、注册表和测试；删除或合并必须记录保留方与替代关系，执行后必须完成相关回归。
-- Java、Python、Node 执行代码分别位于 `src/main/<java|python|node>/com/sp/selplat/local/code/<layer>/`；禁止跨语言源目录混放；规则与协议仅位于 `src/main/resources/local/<layer>/`。
+- 旧分层 Java、Python、Node 执行代码分别位于 `src/main/<java|python|node>/com/sp/selplat/local/code/<layer>/`；本次已迁移的 rule-engine Python 能力位于 `${RULE_ENGINE_PYTHON_ROOT}`。禁止跨语言源目录混放；新调整的 rule-engine 规则可位于 `${RULE_ENGINE_RULE_RESOURCE_ROOT}`，其余规则与协议仍位于 `src/main/resources/local/<layer>/`。
 
 ## 失败阻断
 

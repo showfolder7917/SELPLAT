@@ -70,7 +70,7 @@ load_rule_for_active_user_selplat_search_default_width_or_configuration_fallback
 load_rule_for_active_user_selplat_query_condition_group_internal_fields_submit_or_page_registration = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 
 <!-- SELPLAT 全部程序统一执行语言登记、源码归属和实验工具隔离门禁。 -->
-SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md
+SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES = ruleengine/active-user/rules/平台/RUL_SELPLAT程序源码语言与归属门禁规则.md
 
 <!-- 新建、移动或删除任一应用、shared 或 rule-engine 程序源码时加载。 -->
 load_rule_for_active_user_selplat_program_source_create_move_or_delete = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES
@@ -232,7 +232,7 @@ load_rule_for_selplat_crystal_content_safe_area_popup_boundary_or_alpha_shaped_e
 load_rule_for_selplat_crystal_default_resize_maximize_restore_visual_qa = SELPLAT_CRYSTAL_UI_MATERIAL_RULES
 
 <!-- SELPLAT 工程目录、构建产物、项目 JDK、运行数据与缓存。 -->
-SELPLAT_PROJECT_PATH_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程路径规则.md
+SELPLAT_PROJECT_PATH_RULES = ruleengine/active-user/rules/平台/RUL_SELPLAT工程路径规则.md
 
 <!-- load_rule_for_selplat_project_path_or_runtime_output 的当前独立事实为 SELPLAT_PROJECT_PATH_RULES。 -->
 load_rule_for_selplat_project_path_or_runtime_output = SELPLAT_PROJECT_PATH_RULES

@@ -12,6 +12,7 @@ import os
 import re
 # 导入 sys，在测试模块加载前设置当前解释器的字节码缓存根并返回退出码。
 import sys
+import io
 # 导入 Path，从当前测试入口稳定识别 SELPLAT 工程根。
 from pathlib import Path
 
@@ -49,13 +50,20 @@ TEST_SCOPES = {
     "core": TEST_ROOT / "core/tests",
     "active-user": TEST_ROOT / ACTIVE_STABLE_USER_ID / "tests",
 }
+TEST_PATTERNS = {
+    "core": "test_*.py",
+    "active-user": "test_*.py",
+    "performance": "test_performance_*.py",
+}
 
 
 def main(arguments: list[str] | None = None) -> int:
     """按 all、core 或当前稳定用户运行 unittest，并返回标准进程退出码。"""
 
     # 默认执行全部 Python 测试；显式参数只允许稳定作用域名称。
-    raw_scope = (arguments or sys.argv[1:] or ["all"])[0]
+    raw_arguments = list(arguments or sys.argv[1:] or ["all"])
+    summary_only = "--summary" in raw_arguments
+    raw_scope = next((item for item in raw_arguments if not item.startswith("--")), "all")
     # 当前用户既允许使用稳定别名 active-user，也允许传入 AGENTS.md 的实际用户 ID。
     scope = (
         "active-user"
@@ -63,10 +71,10 @@ def main(arguments: list[str] | None = None) -> int:
         else raw_scope.lower()
     )
     # 未登记作用域立即返回用法错误，禁止悄悄漏跑测试。
-    if scope != "all" and scope not in TEST_SCOPES:
+    if scope != "all" and scope not in {*TEST_SCOPES, "performance"}:
         print(
             "Usage: python3 apps/rule-engine/backend/src/test/python/run_tests.py "
-            "[all|core|active-user|<current-stable-user-id>]"
+            "[all|core|active-user|performance|<current-stable-user-id>] [--summary]"
         )
         return 2
     # all 按 core、当前稳定用户的稳定顺序组合两个发现结果。
@@ -74,11 +82,20 @@ def main(arguments: list[str] | None = None) -> int:
     # 每个作用域使用独立加载器，避免 unittest 复用首个目录为 top_level_dir 后拒绝相邻作用域。
     # 多个作用域组合为一个套件，最终只输出一份总结果。
     suite = unittest.TestSuite(
-        unittest.TestLoader().discover(str(TEST_SCOPES[selected]), pattern="test_*.py")
+        unittest.TestLoader().discover(
+            str(TEST_SCOPES["core"] if selected == "performance" else TEST_SCOPES[selected]),
+            pattern=TEST_PATTERNS[selected],
+        )
         for selected in selected_scopes
     )
-    # 与现有验证保持详细输出，失败时可直接定位测试方法。
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    # 摘要模式缓存详细输出；成功只显示统计，失败仍完整返回定位信息。
+    details = io.StringIO() if summary_only else sys.stderr
+    result = unittest.TextTestRunner(stream=details, verbosity=2).run(suite)
+    if summary_only:
+        if result.wasSuccessful():
+            print(f"OK: scope={scope}, tests={result.testsRun}, failures=0, errors=0")
+        else:
+            print(details.getvalue(), file=sys.stderr, end="")
     # 全部通过返回 0，否则返回 1 供 CI 和命令调用方阻断。
     return 0 if result.wasSuccessful() else 1
 

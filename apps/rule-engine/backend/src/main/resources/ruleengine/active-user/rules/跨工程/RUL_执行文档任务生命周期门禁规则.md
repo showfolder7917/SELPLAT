@@ -1,5 +1,8 @@
 # 执行文档任务生命周期门禁规则
 
+<!-- active-user 物理目录的真实规则层始终从 AGENTS.md 当前稳定用户解析。 -->
+rule_resource_layer_source = AGENTS.md.current_stable_user_id
+
 <!-- 问题：执行文档能力只登记不接入任务与构建生命周期时，AI 可能遗漏创建、步骤回写或归档，规则存在却没有技术阻断。 -->
 <!-- 场景：Codex 或本地开发者在任意工程开始正式修改、执行阶段验证并完成最终交付。 -->
 <!-- 业务含义：独立 1、当前线程文档、真实步骤、构建门禁和历史归档形成一条不可跳过的任务链。 -->
@@ -80,6 +83,18 @@ execution_task_public_actions.4 = active
 execution_task_public_actions.5 = ready
 <!-- execution_task_public_actions.6 的当前独立事实为 finish。 -->
 execution_task_public_actions.6 = finish
+
+<!-- execution_task_public_actions.7 的当前独立事实为一次写入多个步骤结果。 -->
+execution_task_public_actions.7 = complete_steps
+
+<!-- 测试文档通过一次写入接收多个测试结果。 -->
+test_document_batch_result_action = complete_tests
+
+<!-- 两份文档均就绪后通过一次能力调用完成统一归档。 -->
+task_document_unified_archive_action = finish_all
+
+<!-- 批量动作必须在同一文件锁中只写入一次目标文档。 -->
+task_document_batch_write_contract = one_lock_and_one_write_per_document
 
 <!-- Gradle 或其他外部门禁必须接收能力的非零退出码，禁止把业务阻断 JSON 当作命令成功。 -->
 execution_task_process_exit_contract = blocked_or_unknown_action_returns_nonzero

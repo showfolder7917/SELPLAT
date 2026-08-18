@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import os
 from pathlib import Path
+import sys
 # 从迁移后的测试包向上识别工程根，测试数据和输出必须继续归属当前工程。
 PROJECT_ROOT = next(
     candidate
@@ -13,15 +14,15 @@ PROJECT_ROOT = next(
     if (candidate / "settings.gradle").is_file()
 )
 # 生产 Python core 的唯一位置与测试 source set 分离，测试统一通过该路径加载真实能力。
-MAIN_CODE_ROOT = (
-    PROJECT_ROOT
-    / "apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/core"
-)
+PYTHON_SOURCE_ROOT = PROJECT_ROOT / "apps/rule-engine/backend/src/main/python"
+if str(PYTHON_SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PYTHON_SOURCE_ROOT))
+MAIN_CODE_ROOT = PYTHON_SOURCE_ROOT / "com/sp/selplat/ruleengine"
 import tempfile
 import unittest
 
 
-ABILITY_PATH = MAIN_CODE_ROOT / "abilities" / "execution_doc_manager.py"
+ABILITY_PATH = MAIN_CODE_ROOT / "abilities" / "执行文档管理器.py"
 # 执行文档测试的模拟工程统一位于当前工程 OPTION/temp。
 OPTION_TEMP_ROOT = PROJECT_ROOT / "OPTION" / "temp"
 
@@ -45,8 +46,8 @@ class ExecutionDocManagerTests(unittest.TestCase):
         option_root = Path(self.temp_dir.name) / "OPTION"
         # 每个测试固定使用专属线程，验证能力不会回退到共享无线程执行文档。
         self.thread_id = "test-thread"
-        self.previous_thread_id = os.environ.get(self.module.THREAD_ID_ENV_KEY)
-        os.environ[self.module.THREAD_ID_ENV_KEY] = self.thread_id
+        self.previous_thread_id = os.environ.get("CODEX_THREAD_ID")
+        os.environ["CODEX_THREAD_ID"] = self.thread_id
         self.module.OPTION_ROOT = option_root
         self.module.LEGACY_EXECUTION_DOC_PATH = option_root / "执行文档.md"
         self.doc_path = self.module._execution_doc_path(self.thread_id)
@@ -56,9 +57,9 @@ class ExecutionDocManagerTests(unittest.TestCase):
     def tearDown(self) -> None:
         # 还原测试前的页面线程环境，避免影响同一进程中的其他能力测试。
         if self.previous_thread_id is None:
-            os.environ.pop(self.module.THREAD_ID_ENV_KEY, None)
+            os.environ.pop("CODEX_THREAD_ID", None)
         else:
-            os.environ[self.module.THREAD_ID_ENV_KEY] = self.previous_thread_id
+            os.environ["CODEX_THREAD_ID"] = self.previous_thread_id
         self.temp_dir.cleanup()
 
     def test_start_task_writes_formatted_pending_steps(self) -> None:
@@ -208,6 +209,28 @@ class ExecutionDocManagerTests(unittest.TestCase):
         text = self.doc_path.read_text(encoding="utf-8")
         self.assertIn("1. **完成**：检查旧文档", text)
         self.assertIn("   - 实际结果：已确认旧文档存在。", text)
+
+    def test_complete_steps_writes_multiple_results_once(self) -> None:
+        """complete_steps 应一次完成多个步骤并返回统一最终状态。"""
+
+        self.module.execute({
+            "action": "begin",
+            "confirmation": "1",
+            "goal": "批量回写",
+            "steps": ["第一步", "第二步", "第三步"],
+        }, {}, {})
+
+        result = self.module.execute({
+            "action": "complete_steps",
+            "results": {"1": "第一步完成。", "2": "第二步完成。"},
+        }, {}, {})
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["completed_steps"], [1, 2])
+        self.assertEqual(result["pending_steps"], [3])
+        text = self.doc_path.read_text(encoding="utf-8")
+        self.assertIn("第一步完成。", text)
+        self.assertIn("第二步完成。", text)
 
     def test_complete_step_keeps_document_consistent_under_parallel_updates(self) -> None:
         self.module.execute(
