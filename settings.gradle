@@ -36,3 +36,6 @@ project(':apps:mda:backend').projectDir = file('apps/mda/backend')
 // SELPLAT-GENERATED-MODULES
 include('apps:japanese:backend')
 project(':apps:japanese:backend').projectDir = file('apps/japanese/backend')
+// AI 工厂是可独立部署的 Java 控制面；本地 Agent 仍只由 apps/memory 驱动。
+include('apps:ai-factiory:backend')
+project(':apps:ai-factiory:backend').projectDir = file('apps/ai-factiory/backend')

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 工厂进度</title>
+  <link rel="stylesheet" href="/sel/core/selBaseReset.css">
+  <link rel="stylesheet" href="/sel/core/selBaseAccessibility.css">
+  <link rel="stylesheet" href="/sel/theme/contract/selThemeContract.css">
+  <link rel="stylesheet" href="/sel/theme/contract/selThemeTypography.css">
+  <link rel="stylesheet" href="./aifactory.css">
+</head>
+<body>
+  <main class="aifactory-shell">
+    <header class="aifactory-header">
+      <div><p class="aifactory-eyebrow">AI FACTORY</p><h1>任务进度</h1></div>
+      <span id="connectionState" class="aifactory-status">等待任务</span>
+    </header>
+    <section class="aifactory-query" aria-label="任务查询">
+      <label for="taskId">任务 ID</label>
+      <input id="taskId" autocomplete="off" placeholder="例如 TASK-10001">
+      <button id="watchTask" type="button">查看进度</button>
+    </section>
+    <section id="summary" class="aifactory-summary" aria-live="polite"></section>
+    <section><h2>阶段</h2><div id="stages" class="aifactory-grid"></div></section>
+    <section><h2>最近事件</h2><ol id="events" class="aifactory-timeline"></ol></section>
+  </main>
+  <script src="/sel/core/selKernel.js"></script>
+  <script src="/sel/core/selBaseRuntime.js"></script>
+  <script src="./aifactory.js"></script>
+</body>
+</html>

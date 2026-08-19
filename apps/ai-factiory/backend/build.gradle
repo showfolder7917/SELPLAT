@@ -1,0 +1,35 @@
+plugins {
+    id 'application'
+}
+
+group = 'com.sp.selplat.aifactory'
+
+dependencies {
+    runtimeOnly project(':shared:frontend:sel-ui')
+    implementation project(':shared:backend:common-core')
+    implementation project(':shared:backend:common-web')
+    implementation project(':shared:backend:common-service')
+    implementation project(':shared:backend:common-db')
+    implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+    implementation "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
+    implementation "org.mybatis.spring.boot:mybatis-spring-boot-starter:${mybatisSpringBootVersion}"
+    runtimeOnly "com.h2database:h2:${h2Version}"
+    testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
+}
+
+application {
+    mainClass = 'com.sp.selplat.aifactory.AiFactoryBackendApplication'
+}
+
+tasks.named('processResources') {
+    from('../db/sql') {
+        include '*.sql'
+        include 'load-order.txt'
+        into 'db/aifactory/sql'
+    }
+}
+
+tasks.named('jar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+

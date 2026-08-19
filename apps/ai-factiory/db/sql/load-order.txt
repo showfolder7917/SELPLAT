@@ -1,0 +1,3 @@
+db/aifactory/sql/schema-aifactory.sql
+db/aifactory/sql/data-agent-registry.sql
+

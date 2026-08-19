@@ -3,7 +3,7 @@
 <!-- 应用索引只汇总真实二级项目，不复制叶子规则逻辑 ID。 -->
 active_user_selplat_application_index_child_reference_only = true
 
-<!-- rule-engine 保存当前用户对规则引擎应用的专项智慧整合规则包。 -->
+<!-- rule-engine 保存当前用户对规则智慧整合以及 AI 工厂双端职责、Agent 和任务运行目录的专项规则包。 -->
 ACTIVE_USER_SELPLAT_RULE_ENGINE_RULE_INDEX = local/XUNAN/selplat/应用/rule-engine/RULE_INDEX.md
 
 <!-- mda 只保存本地多数据库工作台的业务行为；源码结构不得覆盖通用架构门禁。 -->

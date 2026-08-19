@@ -1,0 +1,33 @@
+server:
+  port: 8091
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: ai-factory
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+ai-factory:
+  lease:
+    seconds: 120
+  sse:
+    retention-days: 30
+  request:
+    max-bytes: 1048576
+  audit:
+    manifest-cron: "0 0 * * * *"
+  security:
+    token-ttl: PT15M
+  datasource:
+    pool-name: AiFactoryPool
+    maximum-pool-size: 4
+    minimum-idle: 1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver

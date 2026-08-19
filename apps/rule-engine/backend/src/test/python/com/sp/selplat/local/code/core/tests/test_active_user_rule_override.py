@@ -90,6 +90,12 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "ai_rule_driven_execution_and_continuous_rule_package_growth",
         ),
         (
+            "AI_FACTORY_LOCAL_DRIVER_AND_TASK_RUNTIME_RULES",
+            "selplat",
+            "selplat/应用/rule-engine/rule/RUL_AI工厂本地驱动与任务目录规则.md",
+            "ai_factory_only_active_workflow_driver = local_memory_python_daemon",
+        ),
+        (
             "SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES",
             "selplat",
             "selplat/通用/rule/RUL_SELPLAT数据库SQL文件结构与命名规则.md",
@@ -158,10 +164,10 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
     )
 
     def test_validates_complete_active_user_index_tree(self) -> None:
-        """当前用户二十一层索引完整登记七十二个逻辑 ID。"""
+        """当前用户二十一层索引完整登记七十三个规则逻辑 ID。"""
 
         self.assertEqual(
-            loader.IndexValidation(21, 72),
+            loader.IndexValidation(21, 73),
             loader.validate_current_user_index_tree(),
         )
 
