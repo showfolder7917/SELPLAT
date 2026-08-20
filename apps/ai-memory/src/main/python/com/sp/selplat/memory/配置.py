@@ -9,10 +9,10 @@ from .model.接口模型 import MemoryConfig
 
 
 def locate_project_root(start: Path | None = None) -> Path:
-    """向上定位同时包含 settings.gradle 与 apps/memory 的 SELPLAT 根。"""
+    """向上定位同时包含 settings.gradle 与 apps/ai-memory 的 SELPLAT 根。"""
     current = (start or Path.cwd()).resolve()
     for candidate in (current, *current.parents):
-        if (candidate / "settings.gradle").is_file() and (candidate / "apps/memory").is_dir():
+        if (candidate / "settings.gradle").is_file() and (candidate / "apps/ai-memory").is_dir():
             return candidate
     raise RuntimeError("无法定位 SELPLAT 工程根")
 
@@ -20,7 +20,7 @@ def locate_project_root(start: Path | None = None) -> Path:
 def load_config(path: Path | None = None) -> MemoryConfig:
     """读取 TOML；令牌不进入配置文件，只允许由调用请求临时传递。"""
     root = locate_project_root(path.parent if path else None)
-    config_path = path or root / "apps/memory/config/memory.toml"
+    config_path = path or root / "apps/ai-memory/config/memory.toml"
     # 配置属于受管文本，必须通过统一读取入口加载后再交给 TOML 解析器。
     document = tomllib.loads(FileReader((root,)).read_text(config_path))
     runtime = document["runtime"]

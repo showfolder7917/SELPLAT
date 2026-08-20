@@ -59,11 +59,11 @@ ai_factory_task_owned_content = 当前任务_智能体_产物_门禁_证据_审�
 <!-- 源码目录只允许程序和固定资源，禁止出现任务运行生成物。 -->
 ai_factory_source_tree_runtime_output_policy = forbidden
 <!-- memory 的入口、规则、智能体和门禁四类正式资源必须统一归入 memory 资源父目录，禁止重新散落到 resources 根。 -->
-memory_formal_resource_root = apps/memory/src/main/resources/memory
+memory_formal_resource_root = apps/ai-memory/src/main/resources/memory
 <!-- memory 正式资源根下只按入口、规则、智能体和门禁四类目录保存对应资源。 -->
 memory_formal_resource_categories = 入口_规则_智能体_门禁
 <!-- memory 的需求分析核心资源统一从独立 core 根进入，避免与普通 Agent 资源混放。 -->
-memory_requirement_core_resource_root = apps/memory/src/main/resources/core
+memory_requirement_core_resource_root = apps/ai-memory/src/main/resources/core
 <!-- 需求分析师启动时依次加载用户协议、核心规则、Agent 定义和用户材料，再生成需求文档与需求要件。 -->
 memory_requirement_agent_startup_chain = USER_PROTOCOL_then_core_rules_then_requirement_agent_then_user_materials
 <!-- 同一个需求分析师负责需求文档与需求要件，禁止重新建立独立需求要件分析师角色。 -->
@@ -75,7 +75,7 @@ memory_requirement_item_entry_boundary = one_button_action_or_one_batch_invocati
 <!-- 同一功能涉及的页面、接口、业务逻辑和数据库处理不得按技术层重复拆成多个要件。 -->
 memory_requirement_item_technical_layer_split_policy = forbidden_for_same_business_action
 <!-- memory 所有受管文件读取必须经过统一文件读取器，文档新类型等待专用 Reader 登记。 -->
-memory_managed_file_read_entry = apps/memory/src/main/python/com/sp/selplat/core/文件读取器.py
+memory_managed_file_read_entry = apps/ai-memory/src/main/python/com/sp/selplat/core/文件读取器.py
 <!-- memory Python 业务源文件使用中文文件名，程序内部类函数参数变量和稳定标识保持英文。 -->
 memory_python_business_filename_and_identifier_policy = chinese_filename_english_internal_identifiers
 <!-- Python 包初始化等解释器约定文件继续保留标准名称，不受中文业务文件名要求影响。 -->

@@ -96,6 +96,51 @@ class ExecutionDocManagerTests(unittest.TestCase):
         self.assertEqual(result["exit_code"], 1)
         self.assertFalse(self.doc_path.exists())
 
+    def test_begin_with_three_requires_valid_latest_turn_receipt(self) -> None:
+        missing = self.module.execute(
+            {"action": "begin", "confirmation": "3", "goal": "执行记录问答", "steps": ["执行"]},
+            {},
+            {},
+        )
+        self.module.验证记录回执 = lambda thread, receipt: (
+            thread == self.thread_id and receipt == "valid-receipt"
+        )
+        valid = self.module.execute(
+            {
+                "action": "begin",
+                "confirmation": "3",
+                "session_record_receipt": "valid-receipt",
+                "goal": "执行记录问答",
+                "steps": ["执行"],
+            },
+            {},
+            {},
+        )
+
+        self.assertEqual(missing["status"], "blocked_invalid_session_record_receipt")
+        self.assertEqual(valid["status"], "completed")
+        self.assertTrue(valid["authorized"])
+        text = self.doc_path.read_text(encoding="utf-8")
+        self.assertIn("独立确认：3", text)
+        self.assertIn("会话记录回执：valid-receipt", text)
+
+    def test_begin_with_three_blocks_reused_receipt(self) -> None:
+        self.module.验证记录回执 = lambda thread, receipt: True
+        context = {
+            "action": "begin",
+            "confirmation": "3",
+            "session_record_receipt": "same-receipt",
+            "goal": "执行记录问答",
+            "steps": ["执行"],
+        }
+        first = self.module.execute(context, {}, {})
+        self.module.execute({"action": "step", "step": 1, "result": "完成。"}, {}, {})
+        self.module.execute({"action": "finish"}, {}, {})
+        second = self.module.execute(context, {}, {})
+
+        self.assertEqual(first["status"], "completed")
+        self.assertEqual(second["status"], "blocked_reused_session_record_receipt")
+
     def test_active_and_ready_gates_follow_document_lifecycle(self) -> None:
         self.module.execute(
             {

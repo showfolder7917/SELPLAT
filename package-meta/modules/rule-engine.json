@@ -2,7 +2,6 @@
   "module_id": "rule-engine",
   "enabled": true,
   "app_path": "apps/rule-engine",
-  "manifest_path": "apps/rule-engine/manifest/module.json",
   "dependencies": [
     "host"
   ]

@@ -2,7 +2,6 @@
   "module_id": "reference-data",
   "enabled": true,
   "app_path": "apps/reference-data",
-  "manifest_path": "apps/reference-data/manifest/module.json",
   "dependencies": [
     "host"
   ]

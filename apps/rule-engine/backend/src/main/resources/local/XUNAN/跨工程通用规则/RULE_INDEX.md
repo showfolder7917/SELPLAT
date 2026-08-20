@@ -314,3 +314,6 @@ load_rule_for_static_site_original_domain_or_root_path_migration = STATIC_SITE_L
 
 <!-- load_rule_for_legacy_encoded_html_local_opening 的当前独立事实为 STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES。 -->
 load_rule_for_legacy_encoded_html_local_opening = STATIC_SITE_LOCAL_RELATIVE_PATH_MIGRATION_RULES
+
+<!-- 独立 3 记录最新一轮完整问答并在落盘后执行该轮明确任务。 -->
+SESSION_LATEST_TURN_RECORD_AND_EXECUTE_RULES = local/XUNAN/跨工程通用规则/RUL_会话最新问答记录与执行规则.md

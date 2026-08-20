@@ -2,7 +2,6 @@
   "module_id": "crm",
   "enabled": false,
   "app_path": "apps/crm",
-  "manifest_path": "apps/crm/manifest/module.json",
   "dependencies": [
     "host",
     "uniauth",

@@ -5,9 +5,9 @@
 运行生成根固定为 `OPTION/temp/ai-factory`。源码目录只保存程序与正式资源。
 
 ```bash
-PYTHONPATH=apps/memory/src/main/python python3 -m com.sp.selplat.memory.启动入口 create --title "生成代码"
-PYTHONPATH=apps/memory/src/main/python python3 -m com.sp.selplat.memory.启动入口 once
-PYTHONPATH=apps/memory/src/main/python python3 -m com.sp.selplat.memory.启动入口 daemon
+PYTHONPATH=apps/ai-memory/src/main/python python3 -m com.sp.selplat.memory.启动入口 create --title "生成代码"
+PYTHONPATH=apps/ai-memory/src/main/python python3 -m com.sp.selplat.memory.启动入口 once
+PYTHONPATH=apps/ai-memory/src/main/python python3 -m com.sp.selplat.memory.启动入口 daemon
 ```
 
 服务地址、连接池和轮询间隔在 `config/memory.toml` 配置。长期令牌不得写入该文件。

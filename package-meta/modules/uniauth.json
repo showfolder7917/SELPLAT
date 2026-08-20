@@ -2,7 +2,6 @@
   "module_id": "uniauth",
   "enabled": true,
   "app_path": "apps/uniauth",
-  "manifest_path": "apps/uniauth/manifest/module.json",
   "dependencies": [
     "host"
   ]

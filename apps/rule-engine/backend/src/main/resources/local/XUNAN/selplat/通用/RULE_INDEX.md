@@ -197,6 +197,8 @@ load_rule_for_active_user_selplat_managed_grid_backend_paging_or_independent_que
 
 <!-- SELPLAT 新业务工程和可追加业务表统一由 MDA 脚手架生成，并实行无覆盖冲突保护。 -->
 SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT应用脚手架生成规则.md
+<!-- SELPLAT 运行时、模块登记或页面修改完成后立即执行目标启动冒烟测试，避免未启动状态继续跑偏。 -->
+SELPLAT_RUNTIME_CHANGE_IMMEDIATE_STARTUP_TEST_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT运行时修改后即时启动测试规则.md
 
 <!-- 使用工程名和表名创建 apps 下的新应用时加载，保证完整分层、默认字段和 Host 登记同步生成。 -->
 load_rule_for_active_user_selplat_application_scaffold_creation = SELPLAT_APPLICATION_SCAFFOLD_GENERATOR_RULES

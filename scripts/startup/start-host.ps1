@@ -34,19 +34,14 @@ foreach ($moduleFile in $moduleFiles) {
     $allModules += [string]$moduleMeta.module_id
     $moduleEnabled = [bool]$moduleMeta.enabled
 
-    $manifestRelativePath = [string]$moduleMeta.manifest_path
-    $manifestFullPath = Join-Path $platformRoot $manifestRelativePath
-    if (-not (Test-Path -Path $manifestFullPath -PathType Leaf)) {
+    $appRelativePath = [string]$moduleMeta.app_path
+    $appFullPath = Join-Path $platformRoot $appRelativePath
+    if (-not (Test-Path -Path $appFullPath -PathType Container)) {
         if ($moduleEnabled) {
-            Write-Error ("Enabled module [" + $moduleMeta.module_id + "] is missing manifest file: " + $manifestRelativePath)
+            Write-Error ("Enabled module [" + $moduleMeta.module_id + "] is missing application directory: " + $appRelativePath)
         }
-        Write-Warning ("Disabled module [" + $moduleMeta.module_id + "] has no manifest and will be skipped: " + $manifestRelativePath)
+        Write-Warning ("Disabled module [" + $moduleMeta.module_id + "] has no application directory and will be skipped: " + $appRelativePath)
         continue
-    }
-
-    $manifestData = Get-Content -Path $manifestFullPath -Encoding UTF8 | ConvertFrom-Json
-    if ([string]$manifestData.module_id -ne [string]$moduleMeta.module_id) {
-        Write-Error ("Module [" + $moduleMeta.module_id + "] has mismatched manifest.module_id.")
     }
 
     if ($moduleEnabled) {

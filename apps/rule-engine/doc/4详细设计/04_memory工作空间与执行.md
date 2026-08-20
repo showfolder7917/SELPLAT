@@ -36,4 +36,4 @@
 
 ## 4. 生成物归属
 
-任务文档使用 `当前任务/<阶段>/中文名称_VNNN.<ext>` 保存且不原地覆盖；Agent 会话、上下文、连接状态和心跳进入 `智能体/`；Gate 结果进入 `门禁/`；所有审计进入 `审计日志/`。交付前扫描 `apps/memory`、`apps/ai-factiory` 与 `OPTION/temp/ai-factory` 根，发现散落生成物即失败。
+任务文档使用 `当前任务/<阶段>/中文名称_VNNN.<ext>` 保存且不原地覆盖；Agent 会话、上下文、连接状态和心跳进入 `智能体/`；Gate 结果进入 `门禁/`；所有审计进入 `审计日志/`。交付前扫描 `apps/ai-memory`、`apps/ai-factiory` 与 `OPTION/temp/ai-factory` 根，发现散落生成物即失败。

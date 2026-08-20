@@ -39,6 +39,34 @@ standalone_reply_2_means_append_current_item_to_execution_pool = true
 
 <!-- 用户单独回复 2 只把最近一次明确陈述的任务加入执行池 -->
 standalone_reply_2_only_appends_latest_stated_task_to_execution_pool = true
+<!-- 独立 3 先记录其前一轮完整可见问答，再执行该轮已经明确的任务。 -->
+standalone_reply_3_means_record_latest_completed_qa_then_execute = true
+<!-- 独立 3 必须通过统一会话能力写入，禁止只在回复中声称已经记录。 -->
+standalone_3_record_ability = session_turn_recorder
+<!-- 会话写入成功是打开该轮执行授权的前置条件。 -->
+standalone_3_record_must_complete_before_execution = true
+<!-- 独立 3 完成记录后，任务固定留在当前 Luna Max 主线程继续执行。 -->
+standalone_3_execution_thread = current_luna_max_main_thread
+<!-- 独立 3 禁止派生 Agent 子线程或把任务委派给子 Agent。 -->
+standalone_3_agent_subthread_policy = forbidden
+<!-- 每次独立 3 只处理紧邻命令之前最新一轮完整用户问题和助手回答。 -->
+standalone_3_record_scope = immediately_previous_completed_visible_user_assistant_pair
+<!-- 独立 3 禁止扫描、回填或合并整个会话历史。 -->
+standalone_3_forbid_whole_session_backfill = true
+<!-- 记录文件按当前线程固定为一个会话一个文档。 -->
+standalone_3_record_file = local/<active-stable-user-id>/会话/会话_<CURRENT_THREAD_ID>.md
+<!-- 同一轮问答已经记录时不得重复写入或再次执行。 -->
+standalone_3_duplicate_policy = no_duplicate_record_and_no_repeat_execution
+<!-- 执行授权只覆盖已记录问答中明确可执行的目标。 -->
+standalone_3_execution_authorization_scope = actionable_requirements_in_latest_recorded_pair_only
+<!-- 已记录内容只有询问或没有可执行目标时只完成记录，不制造修改。 -->
+standalone_3_no_actionable_requirement_policy = record_only_and_report_no_executable_change
+<!-- 问答内部出现冲突时以用户原始问题和后续明确纠正为准。 -->
+standalone_3_conflict_priority = user_question_and_later_explicit_correction
+<!-- 会话记录失败时必须保留原任务未执行状态并报告原因。 -->
+standalone_3_record_failure_policy = block_execution_and_report
+<!-- core/common、删除和跨工程范围仍必须在被记录问答中明确出现，独立 3 不得扩大范围。 -->
+standalone_3_never_expands_protected_or_destructive_scope = true
 
 <!-- 会话执行池：USER 协议层的会话级临时状态，不构成执行、不写入记忆 -->
 execution_pool_session_state = true

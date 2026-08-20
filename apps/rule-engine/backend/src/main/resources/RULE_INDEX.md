@@ -81,6 +81,8 @@ USER_RULE_INDEX_PATTERN = local/<stable-user-id>/RULE_INDEX.md
 load_rule_for_active_user_rule_cleanup_package_completion_or_continuous_upgrade = AI_RULE_PACKAGE_INTELLIGENCE_RULES
 load_rule_for_active_user_explicit_ai_managed_core_or_common_change = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
 load_rule_for_active_user_same_task_followup_after_standalone_1 = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
+<!-- 独立 3 必须加载当前用户的最新问答记录与执行规则。 -->
+load_rule_for_active_user_standalone_3_record_and_execute = SESSION_LATEST_TURN_RECORD_AND_EXECUTE_RULES
 <!-- common 规则、关联代码或冲突迁回当前用户时加载当前用户归属规则。 -->
 load_rule_for_active_user_common_rule_or_related_code_migration = ACTIVE_USER_RULE_AND_CODE_OWNERSHIP_RULES
 <!-- 规则采用一条注释和一条单事实 DSL 时加载当前用户归属规则。 -->

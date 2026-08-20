@@ -25,6 +25,11 @@
     "path": "./abilities/测试文档管理器.py",
     "summary": "维护同线程测试文档：登记待测项、批量回写结果并归档"
   },
+  "session_turn_recorder": {
+    "root": "ruleengine_python",
+    "path": "./abilities/会话记录执行器.py",
+    "summary": "独立 3 先记录当前线程最新一轮问答，再为该轮明确任务生成一次性执行授权"
+  },
   "task_lifecycle_manager": {
     "root": "ruleengine_python",
     "path": "./abilities/任务生命周期管理器.py",

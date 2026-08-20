@@ -9,6 +9,7 @@ from typing import Any
 
 from com.sp.selplat.ruleengine.util.文档存储 import 文档存储
 from com.sp.selplat.ruleengine.util.路径配置 import 加载路径配置
+from com.sp.selplat.ruleengine.abilities.会话记录执行器 import 验证记录回执
 
 
 __all__ = ["execute"]
@@ -17,6 +18,7 @@ __all__ = ["execute"]
 完成状态 = "完成"
 未完成状态 = "未完成"
 必要确认 = "1"
+会话执行确认 = "3"
 _路径 = 加载路径配置()
 OPTION_ROOT = _路径.取得("option_root")
 HISTORY_ROOT = _路径.取得("history_root")
@@ -97,6 +99,13 @@ def _task_confirmation(正文: str) -> str:
     return _规范文本(匹配.group(1)) if 匹配 else ""
 
 
+def _task_session_receipt(正文: str) -> str:
+    """读取独立 3 在写入最新问答后生成的授权回执。"""
+
+    匹配 = re.search(r"(?m)^会话记录回执：(.+?)\s*$", 正文)
+    return _规范文本(匹配.group(1)) if 匹配 else ""
+
+
 def _is_all_completed(正文: str) -> bool:
     """判断真实步骤是否全部处于完成状态。"""
 
@@ -110,7 +119,13 @@ def _state_payload(正文: str) -> dict[str, Any]:
 
     return {
         "exists": bool(正文),
-        "authorized": _task_confirmation(正文) == 必要确认,
+        "authorized": (
+            _task_confirmation(正文) == 必要确认
+            or (
+                _task_confirmation(正文) == 会话执行确认
+                and bool(_task_session_receipt(正文))
+            )
+        ),
         "goal": _task_goal(正文),
         "step_count": len(_all_steps(正文)),
         "all_completed": _is_all_completed(正文),
@@ -119,18 +134,27 @@ def _state_payload(正文: str) -> dict[str, Any]:
     }
 
 
-def _format_document(目标: str, 步骤: list[str], 线程: str, 确认: str) -> str:
+def _format_document(
+    目标: str,
+    步骤: list[str],
+    线程: str,
+    确认: str,
+    会话回执: str = "",
+) -> str:
     """生成一份带授权和待完成步骤的新执行文档。"""
 
     步骤正文 = "\n".join(
         f"{序号}. **{未完成状态}**：{内容}" for 序号, 内容 in enumerate(步骤, start=1)
     )
+    授权行 = [f"独立确认：{确认}"]
+    if 确认 == 会话执行确认:
+        授权行.append(f"会话记录回执：{会话回执}")
     return "\n".join([
         "# 本次执行文档",
         "",
         "## 执行授权",
         "",
-        f"独立确认：{确认}",
+        *授权行,
         f"任务线程：{线程}",
         "",
         "## 总体任务目标",
@@ -194,15 +218,26 @@ def _begin(上下文: dict[str, Any]) -> dict[str, Any]:
 
     目标 = _规范文本(上下文.get("goal") or 上下文.get("task_goal"))
     确认 = _规范文本(上下文.get("confirmation") or 上下文.get("authorization"))
+    会话回执 = _规范文本(上下文.get("session_record_receipt"))
     原始步骤 = 上下文.get("steps") or []
     步骤 = [_规范文本(值) for 值 in 原始步骤 if _规范文本(值)]
-    if 确认 != 必要确认:
+    线程 = _线程标识(上下文)
+    if 确认 not in {必要确认, 会话执行确认}:
         return {
             "status": "blocked_missing_confirmation",
             "exit_code": 1,
             "ability": 能力标识,
             "action": "begin",
-            "message": "正式任务必须先取得独立 1。",
+            "message": "正式任务必须先取得独立 1，或由独立 3 成功记录最新问答。",
+        }
+    if 确认 == 会话执行确认 and not 验证记录回执(线程, 会话回执):
+        return {
+            "status": "blocked_invalid_session_record_receipt",
+            "exit_code": 1,
+            "ability": 能力标识,
+            "action": "begin",
+            "thread_id": 线程,
+            "message": "独立 3 缺少当前线程最新问答的有效记录回执。",
         }
     if not 目标 or not 步骤:
         return {
@@ -212,13 +247,24 @@ def _begin(上下文: dict[str, Any]) -> dict[str, Any]:
             "action": "begin",
             "message": "缺少 goal 或 steps。",
         }
-    线程 = _线程标识(上下文)
     文档路径 = _execution_doc_path(线程)
     锁路径 = _lock_path(线程)
     已归档路径 = ""
     with 文档存储.加锁(锁路径):
         _migrate_legacy_doc_if_needed(文档路径)
         当前正文 = 文档存储.读取(文档路径)
+        if 确认 == 会话执行确认:
+            历史正文 = 文档存储.读取(_history_path(线程))
+            回执标记 = f"会话记录回执：{会话回执}"
+            if 回执标记 in 当前正文 or 回执标记 in 历史正文:
+                return {
+                    "status": "blocked_reused_session_record_receipt",
+                    "exit_code": 1,
+                    "ability": 能力标识,
+                    "action": "begin",
+                    "thread_id": 线程,
+                    "message": "该轮问答已经开启过执行任务，不允许重复执行。",
+                }
         待完成 = _pending_steps(当前正文)
         if 待完成 and not 上下文.get("force"):
             return {
@@ -232,7 +278,7 @@ def _begin(上下文: dict[str, Any]) -> dict[str, Any]:
             }
         if _is_all_completed(当前正文):
             已归档路径 = str(_append_history(当前正文, 线程))
-        新正文 = _format_document(目标, 步骤, 线程, 确认)
+        新正文 = _format_document(目标, 步骤, 线程, 确认, 会话回执)
         文档存储.写入(文档路径, 新正文)
     return {
         "status": "completed",

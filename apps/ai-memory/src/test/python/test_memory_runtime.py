@@ -25,7 +25,7 @@ class MemoryRuntimeTest(unittest.TestCase):
             allowed_root = Path(directory) / "允许目录"
             allowed_root.mkdir()
             markdown = allowed_root / "需求.md"
-            markdown.write_text("# 需求\n", encoding="utf-8")
+            markdown.write_bytes("# 需求\n".encode("utf-8"))
             excel = allowed_root / "需求.xlsx"
             excel.write_bytes(b"not-an-excel-file")
             outside = Path(directory) / "外部.md"
@@ -44,13 +44,13 @@ class MemoryRuntimeTest(unittest.TestCase):
         """需求分析启动链中的协议、索引、规则和 Agent 定义都能由统一入口读取。"""
         reader = FileReader((PROJECT_ROOT,))
         relative_paths = (
-            "apps/memory/src/main/resources/core/IDX_核心总索引.md",
-            "apps/memory/src/main/resources/core/启动链/IDX_需求分析启动链.md",
-            "apps/memory/src/main/resources/core/启动链/USER.PROTOCOL.md",
-            "apps/memory/src/main/resources/core/规则/IDX_核心规则总索引.md",
-            "apps/memory/src/main/resources/core/规则/RUL_文件统一读取规则.md",
-            "apps/memory/src/main/resources/core/规则/RUL_需求文档与需求要件拆分规则.md",
-            "apps/memory/src/main/resources/memory/智能体/AGENT_需求分析师.md",
+            "apps/ai-memory/src/main/resources/core/IDX_核心总索引.md",
+            "apps/ai-memory/src/main/resources/core/启动链/IDX_需求分析启动链.md",
+            "apps/ai-memory/src/main/resources/core/启动链/USER.PROTOCOL.md",
+            "apps/ai-memory/src/main/resources/core/规则/IDX_核心规则总索引.md",
+            "apps/ai-memory/src/main/resources/core/规则/RUL_文件统一读取规则.md",
+            "apps/ai-memory/src/main/resources/core/规则/RUL_需求文档与需求要件拆分规则.md",
+            "apps/ai-memory/src/main/resources/memory/智能体/AGENT_需求分析师.md",
         )
         contents = tuple(reader.read_markdown(PROJECT_ROOT / path) for path in relative_paths)
         self.assertTrue(all(content.strip() for content in contents))
