@@ -33,9 +33,10 @@ public final class MdaControlSchemaTestVerifier {
         assertEquals("NO", identityFlag(jdbc));
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
-        assertEquals(2L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertEquals(3L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
         assertReferenceDataConnection(jdbc);
         assertJapaneseQuestionConnection(jdbc);
+        assertAiFactoryConnection(jdbc);
         assertControlSchema(jdbc);
     }
 
@@ -56,9 +57,10 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT versionNo FROM CommonSequenceSegment WHERE seqCode = 'MdaConnectionProfileId'",
             Integer.class
         ));
-        assertEquals(2L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertEquals(3L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
         assertReferenceDataConnection(jdbc);
         assertJapaneseQuestionConnection(jdbc);
+        assertAiFactoryConnection(jdbc);
         assertControlSchema(jdbc);
     }
 
@@ -77,9 +79,10 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT connectionName FROM MdaConnectionProfile WHERE id = 10003",
             String.class
         ));
-        assertEquals(3L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
+        assertEquals(4L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
         assertReferenceDataConnection(jdbc);
         assertJapaneseQuestionConnection(jdbc);
+        assertAiFactoryConnection(jdbc);
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
         assertControlSchema(jdbc);
@@ -201,6 +204,34 @@ public final class MdaControlSchemaTestVerifier {
         ));
         assertEquals("file:./apps/japanese/db/japanese", jdbc.queryForObject(
             "SELECT databaseName FROM MdaConnectionProfile WHERE connectionName = 'N2 蓝宝书1000题数据库'",
+            String.class
+        ));
+    }
+
+    /**
+     * 验证 AI 工厂连接可以只依靠启动 SQL 在空 MDA 控制库中恢复。
+     * 真实传参示例：传入已执行生产 schema/data 的隔离控制库 JdbcTemplate。
+     * 真实返回示例：连接名为“AI 工厂数据库”，路径为
+     *     {@code file:./apps/ai-factiory/db/aifactory}，账号为 sa 且密码为空。
+     * 异常或副作用示例：记录缺失、重复或口令与目标库不一致时断言失败，不修改隔离数据库。
+     *
+     * @param jdbc 当前 Case 的隔离控制库查询模板
+     */
+    private static void assertAiFactoryConnection(JdbcTemplate jdbc) {
+        assertEquals(1L, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
+            Long.class
+        ));
+        assertEquals("file:./apps/ai-factiory/db/aifactory", jdbc.queryForObject(
+            "SELECT databaseName FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
+            String.class
+        ));
+        assertEquals("sa", jdbc.queryForObject(
+            "SELECT username FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
+            String.class
+        ));
+        assertEquals("", jdbc.queryForObject(
+            "SELECT password FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
             String.class
         ));
     }

@@ -1,11 +1,21 @@
 package com.sp.selplat.aifactory.common.persistence;
 
+import com.sp.selplat.common.db.datasource.BaseDataSourceContext;
+import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDao;
+import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
+import com.sp.selplat.common.db.template.BaseTemplateDao;
+import com.sp.selplat.common.db.template.BaseTemplateMapper;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.sql.DataSource;
+import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -15,7 +25,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.PlatformTransactionManager;
 
-/** 创建 AI 工厂唯一私有数据源，并把本地开发数据放入 OPTION/temp。 */
+/** 创建 AI 工厂唯一私有数据源，并把正式运行库固定在应用 db 目录。 */
 @Configuration
 public class AiFactoryPersistenceConfiguration {
 
@@ -35,8 +45,8 @@ public class AiFactoryPersistenceConfiguration {
 
     /**
      * 创建并初始化私有 H2 数据源。
-     * 真实传参示例：未配置 jdbcUrl 时使用唯一运行根的开发数据库。
-     * 真实返回示例：{@code jdbc:h2:file:.../OPTION/temp/ai-factory/服务端开发数据/数据库/aifactory}。
+     * 真实传参示例：未配置 jdbcUrl 时使用 AI 工厂应用目录中的正式运行数据库。
+     * 真实返回示例：{@code jdbc:h2:file:.../apps/ai-factiory/db/aifactory}。
      * 异常或副作用示例：创建目录或执行 SQL 失败时启动中止；不会读取任务正文。
      *
      * @param config 已绑定的连接池参数
@@ -46,7 +56,7 @@ public class AiFactoryPersistenceConfiguration {
     @Bean(name = "aiFactoryDataSource", destroyMethod = "close")
     public HikariDataSource dataSource(@Qualifier("aiFactoryHikariConfig") HikariConfig config)
             throws Exception {
-        Path databaseDirectory = locateRoot().resolve("OPTION/temp/ai-factory/服务端开发数据/数据库");
+        Path databaseDirectory = locateRoot().resolve("apps/ai-factiory/db");
         Files.createDirectories(databaseDirectory);
         if (config.getJdbcUrl() == null || config.getJdbcUrl().isBlank()) {
             config.setJdbcUrl("jdbc:h2:file:" + databaseDirectory.resolve("aifactory").toAbsolutePath()
@@ -72,6 +82,44 @@ public class AiFactoryPersistenceConfiguration {
     public PlatformTransactionManager transactionManager(
             @Qualifier("aiFactoryDataSource") DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
+    }
+
+    /**
+     * 创建 AI 工厂独立号段 DAO。
+     * 真实传参示例：Spring 注入 {@code aiFactoryDataSource}。
+     * 真实返回示例：返回只访问 AI 工厂 CommonSequenceSegment 的 DAO。
+     * 异常或副作用示例：构造不访问数据库；实际发号失败时由调用方收到数据库异常。
+     *
+     * @param dataSource AI 工厂私有数据源
+     * @return AI 工厂号段 DAO
+     */
+    @Bean("aiFactoryCommonSequenceSegmentDao")
+    public CommonSequenceSegmentDao sequenceDao(
+            @Qualifier("aiFactoryDataSource") DataSource dataSource) {
+        return new CommonSequenceSegmentDaoImpl(dataSource);
+    }
+
+    /**
+     * 创建固定表 DAO 使用的 MyBatis 模板上下文。
+     * 真实传参示例：Spring 注入已初始化的 AI 工厂数据源。
+     * 真实返回示例：上下文同时包含数据源与 BaseTemplateDao。
+     * 异常或副作用示例：Mapper 构建失败时应用启动中止；不修改业务数据。
+     *
+     * @param dataSource AI 工厂私有数据源
+     * @return 固定表 DAO 上下文
+     */
+    @Bean("aiFactoryBaseDataSourceContext")
+    public BaseDataSourceContext context(
+            @Qualifier("aiFactoryDataSource") DataSource dataSource) {
+        org.apache.ibatis.session.Configuration configuration =
+                new org.apache.ibatis.session.Configuration();
+        configuration.setEnvironment(new Environment(
+                "aifactory", new SpringManagedTransactionFactory(), dataSource));
+        configuration.addMapper(BaseTemplateMapper.class);
+        SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(configuration);
+        BaseTemplateMapper mapper = new SqlSessionTemplate(factory)
+                .getMapper(BaseTemplateMapper.class);
+        return new BaseDataSourceContext(dataSource, new BaseTemplateDao(mapper, dataSource));
     }
 
     private void initialize(DataSource dataSource) throws Exception {

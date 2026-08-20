@@ -3,13 +3,13 @@
 <!-- 当前规则用于约束 SELPLAT AI 工厂的 memory、ai-factory、Agent、Gate、生成物和可视化职责。 -->
 rule_scope = active_user_selplat_ai_factory_architecture_and_runtime_ownership
 <!-- 规则版本从用户确认的首个稳定双端职责模型开始。 -->
-rule_version = 1.4.0
+rule_version = 1.7.0
 <!-- 规则所有者从工程根 AGENTS.md 动态获取，不在正文固定用户名。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经进入用户层索引并完成文档追踪检查。 -->
 rule_status = active
 <!-- 升级记录说明本轮将多次用户修正统一沉淀为可复用架构约束。 -->
-upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口
+upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口;2026-08-20:AI工厂默认白底黑字普通极简主题_恢复统一个性化入口和用户主动主题切换_样式只消费统一令牌;2026-08-20:AI工厂正式运行数据库归位应用db目录_临时根只保存测试审计备份和任务生成物
 
 ## 双端职责
 
@@ -60,7 +60,7 @@ server_verified_must_not_impersonate_local_execution = true
 
 <!-- 本规则复用 SELPLAT 既有 OPTION/temp 防逃逸规则，不建立第二个临时根。 -->
 ai_factory_runtime_path_parent_rule = SELPLAT_TOOL_RUNTIME_TEMP_PATH_ESCAPE_GUARD_RULES
-<!-- AI 工厂所有可生成内容统一进入工程相对运行根。 -->
+<!-- AI 工厂任务、审计、测试、备份等可丢弃或可重建内容统一进入工程相对运行根，正式运行数据库除外。 -->
 ai_factory_runtime_generated_root = <SELPLAT_ROOT>/OPTION/temp/ai-factory
 <!-- 一个 task_id 必须唯一对应一个中文任务根目录。 -->
 ai_factory_task_root_pattern = <SELPLAT_ROOT>/OPTION/temp/ai-factory/任务/<task_id>/
@@ -90,8 +90,10 @@ memory_managed_file_read_entry = apps/ai-memory/src/main/python/com/sp/selplat/c
 memory_python_business_filename_and_identifier_policy = chinese_filename_english_internal_identifiers
 <!-- Python 包初始化等解释器约定文件继续保留标准名称，不受中文业务文件名要求影响。 -->
 memory_python_standard_filename_exceptions = __init__.py
-<!-- 本地开发服务器的数据库、日志和备份也必须进入统一运行根，生产服务器改用受控外部数据根。 -->
-ai_factory_local_dev_server_generated_root = <SELPLAT_ROOT>/OPTION/temp/ai-factory/服务端开发数据
+<!-- AI 工厂本地正式运行 H2 主库属于应用持久数据，必须与同类应用一致归入应用 db 目录。 -->
+ai_factory_local_persistent_database_root = <SELPLAT_ROOT>/apps/ai-factiory/db
+<!-- 本地开发服务器的测试库、日志、备份和一次性运行数据进入统一临时根；生产服务器可改用受控外部数据根。 -->
+ai_factory_local_dev_server_generated_root = <SELPLAT_ROOT>/OPTION/temp/ai-factory
 <!-- 中文规则资源使用 RUL_ 前缀，便于索引和人工识别。 -->
 ai_factory_chinese_resource_filename_patterns = RUL_中文
 <!-- 中文 Agent 定义使用 AGENT_ 前缀，禁止视觉相似字符。 -->
@@ -111,6 +113,16 @@ ai_factory_java_reference_architecture = apps/japanese_backend_feature_first_con
 ai_factory_management_table_set = AiRole_AiGate_AiRule_AiProject_AiStageExecution
 <!-- AI 工厂管理页默认使用普通白底黑字主题，并由公共 Panel、Tree、Grid 组成。 -->
 ai_factory_management_ui_structure = plain-minimal_selPanel_selTree_selGrid
+<!-- AI 工厂每次打开默认使用 plain-minimal 浅色基础皮肤，不得把晶透、水晶、糖果或其他醒目主题设为默认。 -->
+ai_factory_management_default_theme = plain-minimal_light_base
+<!-- AI 工厂必须挂载统一个性化入口，用户可主动切换已登记主题，但页面刷新后仍回到普通极简默认值。 -->
+ai_factory_management_theme_switching = personalization_available_user_initiated
+<!-- AI 工厂主题库统一登记普通极简、水晶科技、糖果冒险和晶透管理四套公共主题。 -->
+ai_factory_management_theme_pack_set = plain-minimal_crystal-tech_candy-adventure_glass-admin
+<!-- AI 工厂应用 CSS 仍必须消费 SEL 统一语义令牌，禁止用固定色值模拟白底黑字。 -->
+ai_factory_management_theme_token_policy = sel_theme_tokens_only_no_application_hardcoded_color
+<!-- AI 工厂默认极简视觉禁止发光、玻璃、水晶、动画背景和高辨识度装饰；该限制不覆盖用户主动切换后的主题。 -->
+ai_factory_management_default_visual_attention_policy = no_glow_no_glass_no_crystal_no_animated_background_low_attention
 <!-- AI 工厂树表公共定义必须在 reference-data 默认清单中登记。 -->
 ai_factory_reference_data_registration = required_for_role_gate_rule_project_stage_execution
 <!-- 阶段执行审计必须记录起止时间、耗时、当前工作、本地日志路径和超时原因。 -->

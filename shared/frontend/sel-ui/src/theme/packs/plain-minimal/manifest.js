@@ -14,9 +14,9 @@
         icon: "ri-file-text-line",
         defaults: { mode: "light", accent: null, density: "compact" },
         styles: [
-            "/sel/theme/packs/plain-minimal/theme.css?v=20260820-1",
-            "/sel/theme/packs/plain-minimal/modes/dark.css?v=20260820-1",
-            "/sel/theme/packs/plain-minimal/modes/light.css?v=20260820-1"
+            "/sel/theme/packs/plain-minimal/theme.css?v=20260820-2",
+            "/sel/theme/packs/plain-minimal/modes/dark.css?v=20260820-2",
+            "/sel/theme/packs/plain-minimal/modes/light.css?v=20260820-2"
         ],
         modes: [
             {

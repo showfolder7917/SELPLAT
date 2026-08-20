@@ -93,7 +93,7 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "AI_FACTORY_LOCAL_DRIVER_AND_TASK_RUNTIME_RULES",
             "selplat",
             "selplat/应用/rule-engine/rule/RUL_AI工厂本地驱动与任务目录规则.md",
-            "ai_factory_only_active_workflow_driver = local_memory_python_daemon",
+            "ai_factory_only_active_workflow_driver = local_ai_memory_python_polling_client",
         ),
         (
             "SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES",
@@ -164,10 +164,10 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
     )
 
     def test_validates_complete_active_user_index_tree(self) -> None:
-        """当前用户二十一层索引完整登记七十三个规则逻辑 ID。"""
+        """当前用户二十一层索引完整登记七十五个规则逻辑 ID。"""
 
         self.assertEqual(
-            loader.IndexValidation(21, 73),
+            loader.IndexValidation(21, 75),
             loader.validate_current_user_index_tree(),
         )
 

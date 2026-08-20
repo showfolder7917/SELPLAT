@@ -1,18 +1,21 @@
 /*
- * AI 工厂管理页：使用 SEL UI 公共 Panel、Tree、Grid 展示角色、门禁、规则、项目和阶段执行审计。
+ * AI 工厂管理页：使用 SEL UI 公共 Panel、Tree、Grid，并默认以普通极简主题展示管理数据。
  * 页面只消费 Java 聚合接口，不自行维护数据库结构或复制公共控件。
  */
-(function aiFactoryManagementApp() {
+(function app() {
     "use strict";
 
     window.sel.require([
-        "core.query", "core.freeze", "net.ajax", "components.panel", "components.tree", "components.grid"
+        "core.query", "core.freeze", "net.ajax", "components.panel", "components.tree", "components.grid",
+        "components.pageBackground", "components.personalization"
     ]);
     const selBase = window.sel.core;
     const { freeze: selFreeze, query } = selBase;
     const { ajax: selAjax } = window.sel.net;
-    const { panel, tree, grid } = window.sel.components;
+    const { panel, tree, grid, pageBackground, personalization } = window.sel.components;
     const aiFactoryHost = query("[data-aifactory-app]");
+    const aiFactoryBackgroundHost = query("[data-sel-page-background-host]");
+    const aiFactoryPersonalizationHost = query("[data-sel-personalization-host]");
     const aiFactoryGridId = "selGridAiFactoryManagementId";
     const aiFactoryState = {
         dashboard: { roles: [], gates: [], rules: [], projects: [], stages: [] },
@@ -155,6 +158,8 @@
         return selFreeze({
             grid: { mode: "records", selectionMode: "NONE", idField: "id", searchFields: [], horizontalScroll: true },
             data: { items: rows, selectedIds: [] },
+            // 当前管理页不显示筛选下拉，但公共 Panel 仍要求标准 select 容器存在后才能挂载视图。
+            select: { projectType: null, status: null, pageSize: null },
             column: {
                 gridId: aiFactoryGridId,
                 tableTitle: `${definition.label}表格`,
@@ -168,12 +173,18 @@
                 description: `${definition.label} · 树表管理与执行审计`,
                 ariaLabel: "AI 工厂角色、门禁、规则、项目和执行进度管理",
                 ariaLabels: { statusTabs: "管理统计", headerActions: "页面操作", toolbar: "管理工具", sidebar: "管理树", content: "管理表格", board: "数据表格", pagination: "记录统计" },
-                statusTabs: Object.entries(aiFactorySectionDefinitions).map(([key, item]) => ({ value: key, label: item.label, count: aiFactoryState.dashboard[key].length })),
-                actions: [], resetLabel: "重置", messages: { expandLeftRegion: "展开管理树", collapseLeftRegion: "收起管理树" }
+                statusTabs: Object.entries(aiFactorySectionDefinitions).map(([key, item]) => ({
+                    value: key,
+                    label: item.label,
+                    count: aiFactoryState.dashboard[key].length
+                })),
+                actions: [],
+                resetLabel: "重置", messages: { expandLeftRegion: "展开管理树", collapseLeftRegion: "收起管理树" }
             },
             tree: {
                 gridId: aiFactoryGridId, ariaLabel: "AI 工厂管理树", heading: "管理树",
-                summary: "角色、门禁、规则、项目、执行进度", selectedId: aiFactoryState.section,
+                summary: "角色、门禁、规则、项目、执行进度",
+                selectedId: aiFactoryState.recordId ? `${aiFactoryState.section}-${aiFactoryState.recordId}` : aiFactoryState.section,
                 expandLabelTemplate: "展开{label}", collapseLabelTemplate: "收起{label}",
                 items: aiFactoryBuildTreeItems()
             },
@@ -194,6 +205,27 @@
         };
     }
 
+    /** 切换管理分类或树记录，并同步刷新公共 Panel 与 Grid 的业务契约。 */
+    function aiFactorySelectSection(section, recordId = "") {
+        if (!aiFactorySectionDefinitions[section]) return false;
+        aiFactoryState.section = section;
+        aiFactoryState.recordId = String(recordId || "");
+        const nextPayload = aiFactoryBuildPayload();
+        panel.setLocale(aiFactoryState.panelRoot, {
+            view: nextPayload,
+            expandLeftLabel: "展开管理树",
+            collapseLeftLabel: "收起管理树"
+        });
+        aiFactoryState.gridController.setLocale(nextPayload);
+        aiFactoryState.panelRoot.querySelectorAll("[data-status-filter]").forEach((button) => {
+            const active = button.dataset.statusFilter === aiFactoryState.section;
+            button.classList.toggle("selpanel-status-tab-active", active);
+            if (active) button.setAttribute("aria-current", "page");
+            else button.removeAttribute("aria-current");
+        });
+        return true;
+    }
+
     /** 按 Japanese 工作台方式依次创建 Panel、Tree 和 Grid。 */
     async function aiFactoryMount() {
         await aiFactoryLoadDashboard();
@@ -212,6 +244,14 @@
         if (!panel.mount(panelRoot, { view: payload, expandLeftLabel: "展开管理树", collapseLeftLabel: "收起管理树" })) {
             throw new Error("AI 工厂公共面板挂载失败。");
         }
+        // 五个顶部标签表示不同业务表，不允许公共 Grid 把它们当作同一数据集的状态值筛选。
+        panelRoot.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-status-filter]");
+            if (!button) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            aiFactorySelectSection(button.dataset.statusFilter);
+        }, true);
         aiFactoryState.treeController = tree.mount(panelRoot, payload.tree);
         aiFactoryState.gridController = grid.mount(panelRoot, payload);
         if (!aiFactoryState.treeController || !aiFactoryState.gridController) {
@@ -219,17 +259,21 @@
         }
         panelRoot.addEventListener("selTree:select", (event) => {
             const filter = event.detail?.filter || {};
-            if (!aiFactorySectionDefinitions[filter.section]) return;
-            aiFactoryState.section = filter.section;
-            aiFactoryState.recordId = String(filter.recordId || "");
-            const nextPayload = aiFactoryBuildPayload();
-            panel.setLocale(panelRoot, { view: nextPayload, expandLeftLabel: "展开管理树", collapseLeftLabel: "收起管理树" });
-            aiFactoryState.gridController.setLocale(nextPayload);
+            aiFactorySelectSection(filter.section, filter.recordId);
         });
     }
+
+    // 背景与主题管理统一使用 SEL 公共组件；刷新页面时仍从普通极简浅色默认值启动。
+    const aiFactoryBackgroundController = pageBackground.mount(aiFactoryBackgroundHost, {
+        defaults: { theme: "solid-light", overlay: 0, brightness: 100, blur: 0 }
+    });
+    if (!aiFactoryBackgroundController) throw new Error("AI 工厂页面背景挂载失败。");
+    if (!personalization.mount(aiFactoryPersonalizationHost, {
+        backgroundController: aiFactoryBackgroundController
+    })) throw new Error("AI 工厂主题管理挂载失败。");
 
     aiFactoryMount().catch((error) => {
         console.error("AI 工厂管理页启动失败。", error);
         selBase.toast(error.message || "AI 工厂管理页启动失败。", "error");
     });
-})();
+}());

@@ -1,4 +1,11 @@
+db/aifactory/sql/schema-ai_task.sql
+db/aifactory/sql/schema-ai_agent_registration.sql
 db/aifactory/sql/schema-aifactory.sql
+db/aifactory/sql/schema-ai_stage_run.sql
+db/aifactory/sql/schema-ai_artifact.sql
+db/aifactory/sql/schema-ai_gate_result.sql
+db/aifactory/sql/schema-ai_progress_event.sql
+db/aifactory/sql/schema-ai_audit_event.sql
 db/aifactory/sql/data-agent-registry.sql
 db/aifactory/sql/schema-AiRole.sql
 db/aifactory/sql/schema-AiGate.sql

@@ -1,9 +1,11 @@
 package com.sp.selplat.mda;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,19 +45,42 @@ class MdaApiIntegrationTest {
     @Autowired private JdbcConnectionFactory connectionFactory;
     private static long targetConnectionId;
 
+    /**
+     * 验证 MDA 页面登记普通极简主题，同时保持晶透管理为当前默认主题。
+     * 真实传参示例：通过 MockMvc 请求 {@code /mda/mda.html}。
+     * 真实返回示例：HTML 同时包含 plain-minimal 样式、manifest 和
+     *     {@code data-sel-theme="glass-admin"}。
+     * 异常或副作用示例：主题资源遗漏或默认主题被意外改变时断言失败；测试不写正式数据库。
+     */
+    @Test
+    @Order(0)
+    void shouldExposePlainMinimalThemeWithoutChangingDefaultTheme() throws Exception {
+        mockMvc.perform(get("/mda/mda.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-sel-theme=\"glass-admin\"")))
+                .andExpect(content().string(containsString(
+                        "/sel/theme/packs/plain-minimal/theme.css")))
+                .andExpect(content().string(containsString(
+                        "/sel/theme/packs/plain-minimal/manifest.js")));
+    }
+
     @Test
     @Order(1)
     void shouldStartWithReferenceDataAndCreateDynamicConnection() throws Exception {
         assertThat(controlDataSource.getPoolName()).isEqualTo("MdaControlPool");
         mockMvc.perform(get("/api/mda/connections/getStore.htm"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalCount").value(2))
+                .andExpect(jsonPath("$.totalCount").value(3))
                 .andExpect(jsonPath("$.records[0].connectionName").value("Reference Data 数据库"))
                 .andExpect(jsonPath("$.records[0].databaseName")
                         .value("file:./apps/reference-data/db/reference-data"))
                 .andExpect(jsonPath("$.records[1].connectionName").value("N2 蓝宝书1000题数据库"))
                 .andExpect(jsonPath("$.records[1].databaseName")
-                        .value("file:./apps/japanese/db/japanese"));
+                        .value("file:./apps/japanese/db/japanese"))
+                .andExpect(jsonPath("$.records[2].connectionName").value("AI 工厂数据库"))
+                .andExpect(jsonPath("$.records[2].databaseName")
+                        .value("file:./apps/ai-factiory/db/aifactory"))
+                .andExpect(jsonPath("$.records[2].password").value(""));
 
         String body = objectMapper.writeValueAsString(Map.of(
                 "connectionName", "动态目标库",

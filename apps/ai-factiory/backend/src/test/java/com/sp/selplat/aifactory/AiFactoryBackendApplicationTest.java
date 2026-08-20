@@ -16,7 +16,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** 验证 Java 控制面主链路和无横线静态页面。 */
-@SpringBootTest
+@SpringBootTest(properties = {
+        "ai-factory.datasource.jdbc-url=jdbc:h2:mem:aifactory-test;DB_CLOSE_DELAY=-1",
+        "ai-factory.datasource.username=sa",
+        "ai-factory.datasource.password="
+})
 @AutoConfigureMockMvc
 class AiFactoryBackendApplicationTest {
 

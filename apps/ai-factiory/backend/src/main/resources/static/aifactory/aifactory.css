@@ -1,32 +1,29 @@
-/* AI 工厂只声明应用工作区尺寸；颜色、表格和树外观全部来自 plain-minimal 与 SEL 公共组件。 */
-html,
-body {
+/* AI 工厂只声明应用工作区尺寸；颜色、文字、滚动条和组件外观全部消费 SEL 统一主题令牌。 */
+html {
+    min-width: 1080px;
     min-height: 100%;
-    background: #ffffff;
+    background: var(--sel-theme-page-background);
+    scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track);
+    scrollbar-width: thin;
 }
 
 body {
+    min-height: 100vh;
     margin: 0;
-    color: #111111;
-    font-family: Arial, "Microsoft YaHei", sans-serif;
+    overflow: auto;
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-page-background);
+    font-family: var(--sel-theme-font-family);
+    -webkit-font-smoothing: antialiased;
+    isolation: isolate;
 }
 
 .aifactory-page-stage {
+    display: grid;
     width: 100%;
     min-height: 100vh;
-    padding: 12px;
-}
-
-.aifactory-page-stage .selpanel-root {
-    min-height: calc(100vh - 24px);
-}
-
-@media (max-width: 760px) {
-    .aifactory-page-stage {
-        padding: 0;
-    }
-
-    .aifactory-page-stage .selpanel-root {
-        min-height: 100vh;
-    }
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr);
+    place-items: center;
+    padding: var(--sel-theme-viewport-gap);
 }
