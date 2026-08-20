@@ -6,8 +6,8 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由 MDA 应用脚本和浏览器回归承载。 -->
 node_ability_refs = none
-<!-- 3.12.0 固定 MDA 同时登记普通极简与既有三套主题，默认主题继续使用晶透管理。 -->
-rule_version = 3.12.0
+<!-- 3.13.0 固定连接切换的原子提交与失败回滚，避免选择标签和元数据树指向不同数据库。 -->
+rule_version = 3.13.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已经进入当前用户索引并完成实现回归。 -->
@@ -20,6 +20,8 @@ selected_sql_selection_lifecycle_upgrade_record = 2026-08-11:capture_selection_b
 selected_sql_required_upgrade_record = 2026-08-11:require_nonblank_selection_warn_and_send_no_request_when_missing
 <!-- 本次升级把多字段选择固定为公共 selGrid 表头能力，并保留未勾选时的单字段兼容行为。 -->
 multi_field_where_upgrade_record = 2026-08-11:shared_grid_header_field_selection_current_row_values_joined_by_AND
+<!-- 本次升级把异步目标库切换失败纳入一致性边界，禁止保留新选择与旧树并存的假联动状态。 -->
+connection_switch_atomic_upgrade_record = 2026-08-21:commit_selected_connection_dropdown_tree_and_counts_only_after_metadata_success_restore_previous_view_and_show_shared_error_toast_on_failure
 <!-- 升级记录说明本规则来自用户对双数据库和连接配置职责的纠正。 -->
 upgrade_record = 2026-08-07:固定MDA单控制库与动态目标数据库连接架构;2026-08-08:控制库与动态目标库升级为隔离连接池并增加闲置回收和元数据短缓存;2026-08-08:控制库统一继承MdaBaseDao并将动态目标数据库能力归并到targetdatabase;2026-08-08:控制库改为直接绑定HikariConfig并删除重复属性类和connectionprofile/common层;2026-08-08:控制库配置提升到MDA项目common/persistence与Uniauth结构统一;2026-08-08:动态查询结果启用公共selGrid可选宽表模式;2026-08-08:宽表横向滚动条升级为静止可发现的主题化反馈;2026-08-08:横向与纵向滚动条统一静止亮度和主题反馈;2026-08-08:滚动条反馈提升为所有selGrid真实溢出时的通用默认行为;2026-08-08:连接配置CRUD改为空实现并将定义解析连接测试和连接池生命周期拆入独立职责;2026-08-08:数据库页面升级为左树右查询页签且页签内上方SQL下方结果表格;2026-08-09:数据库连接与表视图节点增加编辑删除复制右键菜单并固定删除确认边界;2026-08-09:删除确认迁移为紧凑公共确认框并默认聚焦取消;2026-08-09:控制库删除认证租户操作人表字段与迁移残留;2026-08-09:默认查询改为裸表名且结构编辑按真实数据库生成原注释模板;2026-08-09:双击查询结果行按真实主键标色并通过共享窗口安全更新单行;2026-08-09:编辑窗口仅显示字段名并保留字符长文本多行输入且标色聚焦双击字段;2026-08-10:SELPLAT应用H2相对路径固定从工程根解析_阻止Host子目录误建同名空库;2026-08-10:MDA查询Tab接入selContextMenu_增加关闭右侧_关闭其他_全部关闭并保留未保存检查;2026-08-11:MDA数据库树默认展开数据库目录与PUBLIC_Schema_系统Schema与表保持折叠;2026-08-11:修正异步元数据替换保留空展开集合_首次加载与切换连接重新挂载树;2026-08-11:表与数据库右键增加中央登记H2启动SQL全量导出_原子替换并失败回滚;2026-08-11:删除_覆盖导出_未保存SQL关闭_跨文件工程生成统一使用公共确认框_表导出移到菜单末尾;2026-08-11:删除MDA专属架构门禁_固定表业务_无状态能力_common全部服从SELPLAT全项目通用结构;2026-08-11:表右键首项增加A5风格只读结构页签_展示属性字段含义索引外键且复用公共Tab与Grid;2026-08-11:数据库连接栏接入公共selPanel栏目拖拽_默认360_最小240_最大720;2026-08-11:全部默认表查询字段表头悬停显示数据库COMMENT_无注释不显示提示;2026-08-11:查询结果单元格增加Select_From_Where_按JDBC类型生成字面量并通过公共编辑器API追加;2026-08-20:MDA接入普通极简主题并保留晶透管理默认主题
 
@@ -122,6 +124,12 @@ mda_window_capabilities = movable_resizable_minimizable_maximizable
 mda_empty_state_action_policy = show_create_only_until_connection_exists
 <!-- 新增、更新或删除连接后必须刷新连接下拉、当前值、元数据树和统计数字。 -->
 mda_connection_change_refresh_scope = dropdown_selection_metadata_tree_and_counts
+<!-- 目标库切换必须等元数据成功后再整体提交选择、树和统计；失败恢复原连接视图并使用公共错误 Toast。 -->
+mda_connection_switch_atomic_state = commit_after_metadata_success
+<!-- mda_connection_switch_atomic_state.2 的当前独立事实为 rollback_previous_selection_tree_and_counts_on_failure。 -->
+mda_connection_switch_atomic_state.2 = rollback_previous_selection_tree_and_counts_on_failure
+<!-- mda_connection_switch_atomic_state.3 的当前独立事实为 shared_error_toast_without_unhandled_error。 -->
+mda_connection_switch_atomic_state.3 = shared_error_toast_without_unhandled_error
 <!-- 数据库连接栏的横向宽度调整必须使用公共 selPanel 工具栏栏目能力，禁止 MDA 自建分隔线、样式或 pointer 事件。 -->
 mda_connection_toolbar_resize_owner = shared_selPanel_toolbar_column_resize
 <!-- mda_connection_toolbar_resize_owner.2 的当前独立事实为 no_private_dom_css_pointer_logic。 -->

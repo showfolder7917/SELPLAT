@@ -5,22 +5,27 @@ import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDao;
 import com.sp.selplat.common.db.sequence.CommonSequenceSegmentDaoImpl;
 import com.sp.selplat.common.db.template.BaseTemplateDao;
 import com.sp.selplat.common.db.template.BaseTemplateMapper;
+import com.sp.selplat.common.service.sequence.SequenceGenerator;
+import com.sp.selplat.common.service.sequence.SequenceGeneratorImpl;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import javax.sql.DataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -28,6 +33,41 @@ import org.springframework.transaction.PlatformTransactionManager;
 /** 创建 AI 工厂唯一私有数据源，并把正式运行库固定在应用 db 目录。 */
 @Configuration
 public class AiFactoryPersistenceConfiguration {
+
+    // SEQUENCE_TARGETS 固定每张业务表与独立号段的对应关系，启动迁移不会接受外部表名或列名。
+    private static final List<SequenceTarget> SEQUENCE_TARGETS = List.of(
+            new SequenceTarget("AiRoleId", "AiRole", "id"),
+            new SequenceTarget("AiGateId", "AiGate", "id"),
+            new SequenceTarget("AiRuleId", "AiRule", "id"),
+            new SequenceTarget("AiProjectId", "AiProject", "id"),
+            new SequenceTarget("AiWorkflowDefinitionId", "AiWorkflowDefinition", "id"),
+            new SequenceTarget("AiWorkflowVersionId", "AiWorkflowVersion", "id"),
+            new SequenceTarget("AiWorkflowNodeId", "AiWorkflowNode", "id"),
+            new SequenceTarget("AiWorkflowEdgeId", "AiWorkflowEdge", "id"),
+            new SequenceTarget("AiWorkflowRunId", "AiWorkflowRun", "id"),
+            new SequenceTarget("AiWorkflowNodeRunId", "AiWorkflowNodeRun", "id"),
+            new SequenceTarget("AiAgentRegistrationId", "ai_agent_registration", "id"),
+            new SequenceTarget("AiRoleVersionId", "ai_role_version", "id"),
+            new SequenceTarget("AiRoleAgentBindingId", "ai_role_agent_binding", "id"),
+            new SequenceTarget("AiTaskId", "ai_task", "id"),
+            new SequenceTarget("AiTaskStageId", "ai_task_stage", "id"),
+            new SequenceTarget("AiStageRunId", "ai_stage_run", "id"),
+            new SequenceTarget("AiProgressEventSequence", "ai_progress_event", "sequence"),
+            new SequenceTarget("AiAgentStateEventId", "ai_agent_state_event", "id"),
+            new SequenceTarget("AiArtifactId", "ai_artifact", "id"),
+            new SequenceTarget("AiGateResultId", "ai_gate_result", "id"),
+            new SequenceTarget("AiAuditEventId", "ai_audit_event", "id"),
+            new SequenceTarget("AiClientDeviceId", "ai_client_device", "id"),
+            new SequenceTarget("AiRequirementItemId", "ai_requirement_item", "id"),
+            new SequenceTarget("AiTraceLinkId", "ai_trace_link", "id"),
+            new SequenceTarget("AiGovernancePackageId", "ai_governance_package", "id"),
+            new SequenceTarget("AiGateDefinitionVersionId", "ai_gate_definition_version", "id"),
+            new SequenceTarget("AiApprovalId", "ai_approval", "id"),
+            new SequenceTarget("AiErrorLogId", "ai_error_log", "id"),
+            new SequenceTarget("AiRetrospectiveId", "ai_retrospective", "id"),
+            new SequenceTarget("AiImprovementProposalId", "ai_improvement_proposal", "id"),
+            new SequenceTarget("AiIdempotencyRecordId", "ai_idempotency_record", "id"),
+            new SequenceTarget("AiTaskAgentBindingId", "ai_task_agent_binding", "id"));
 
     /**
      * 创建连接池配置。
@@ -100,6 +140,22 @@ public class AiFactoryPersistenceConfiguration {
     }
 
     /**
+     * 在未装配平台聚合发号器的单模块运行环境中提供同一公共实现。
+     * 真实传参示例：AI 工厂隔离测试只有 {@code aiFactoryCommonSequenceSegmentDao}。
+     * 真实返回示例：单模块使用 SequenceGeneratorImpl；Host 已有聚合发号器时不创建本 Bean。
+     * 异常或副作用示例：号段缺失时首次发号失败；构造过程不领取或修改号段。
+     *
+     * @param sequenceDao AI 工厂私有号段 DAO
+     * @return 单模块运行所需的公共发号器
+     */
+    @Bean("aiFactoryStandaloneSequenceGenerator")
+    @ConditionalOnMissingBean(SequenceGenerator.class)
+    public SequenceGenerator standaloneSequenceGenerator(
+            @Qualifier("aiFactoryCommonSequenceSegmentDao") CommonSequenceSegmentDao sequenceDao) {
+        return new SequenceGeneratorImpl(sequenceDao);
+    }
+
+    /**
      * 创建固定表 DAO 使用的 MyBatis 模板上下文。
      * 真实传参示例：Spring 注入已初始化的 AI 工厂数据源。
      * 真实返回示例：上下文同时包含数据源与 BaseTemplateDao。
@@ -131,6 +187,60 @@ public class AiFactoryPersistenceConfiguration {
             populator.addScript(new ClassPathResource(line));
         }
         populator.execute(dataSource);
+        migrateLegacyIdentityColumns(dataSource);
+        synchronizeSequenceCursors(dataSource);
+    }
+
+    /**
+     * 把旧数据库中的业务表自增列原位迁移为普通 BIGINT 主键。
+     * 真实传参示例：包含旧版 {@code ai_task.id IDENTITY} 及既有任务记录的数据源。
+     * 真实返回示例：方法完成后既有任务记录不变，{@code ai_task.id} 不再自动生成。
+     * 异常或副作用示例：任一列迁移失败时启动中止，不继续提供可能重复发号的服务。
+     *
+     * @param dataSource 已完成建表和种子数据初始化的 AI 工厂数据源
+     */
+    private void migrateLegacyIdentityColumns(DataSource dataSource) {
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        for (SequenceTarget target : SEQUENCE_TARGETS) {
+            // 只迁移常量清单中经确认的表列，避免外部输入改变数据库结构。
+            Integer identityCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                            + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME = ? "
+                            + "AND COLUMN_NAME = ? AND IS_IDENTITY = 'YES'",
+                    Integer.class,
+                    target.tableName(),
+                    target.columnName());
+            if (identityCount != null && identityCount > 0) {
+                jdbcTemplate.execute("ALTER TABLE " + target.tableName()
+                        + " ALTER COLUMN " + target.columnName() + " DROP IDENTITY");
+            }
+        }
+    }
+
+    /**
+     * 按每张表的现有最大主键向前校准独立号段游标。
+     * 真实传参示例：{@code ai_audit_event} 最大 id 为 158，种子游标为 100000。
+     * 真实返回示例：游标保持 100000；若最大 id 为 100120，则提升到 100121。
+     * 异常或副作用示例：查询或更新失败时启动中止；游标永远不会向后更新。
+     *
+     * @param dataSource 已完成旧自增列迁移的 AI 工厂数据源
+     */
+    private void synchronizeSequenceCursors(DataSource dataSource) {
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        for (SequenceTarget target : SEQUENCE_TARGETS) {
+            // 表名和列名来自类内固定清单，不接收请求参数或配置文件动态拼接。
+            Long maximumId = jdbcTemplate.queryForObject(
+                    "SELECT COALESCE(MAX(" + target.columnName() + "), 0) FROM "
+                            + target.tableName(),
+                    Long.class);
+            long requiredNextStartId = maximumId == null ? 1L : maximumId + 1L;
+            jdbcTemplate.update(
+                    "UPDATE CommonSequenceSegment SET nextStartId=?, updatedAt=CURRENT_TIMESTAMP "
+                            + "WHERE seqCode=? AND nextStartId<?",
+                    requiredNextStartId,
+                    target.sequenceCode(),
+                    requiredNextStartId);
+        }
     }
 
     private Path locateRoot() {
@@ -143,5 +253,15 @@ public class AiFactoryPersistenceConfiguration {
             current = current.getParent();
         }
         throw new IllegalStateException("无法定位 SELPLAT 工程根");
+    }
+
+    /**
+     * 描述一个业务主键列与其唯一号段编码的固定迁移关系。
+     *
+     * @param sequenceCode 号段编码，例如 {@code AiTaskId}
+     * @param tableName 固定业务表名，例如 {@code ai_task}
+     * @param columnName 固定主键列名，例如 {@code id}
+     */
+    private record SequenceTarget(String sequenceCode, String tableName, String columnName) {
     }
 }

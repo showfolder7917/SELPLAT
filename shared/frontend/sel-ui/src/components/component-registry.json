@@ -220,6 +220,16 @@
       "publicApi": "sel.components.window",
       "dependencies": [],
       "themeAware": true
+    },
+    {
+      "id": "selWorkflowCanvas",
+      "directory": "workflow-canvas",
+      "type": "interactive",
+      "scripts": ["selWorkflowCanvas.js"],
+      "styles": ["selWorkflowCanvas.css"],
+      "publicApi": "sel.components.workflowCanvas",
+      "dependencies": [],
+      "themeAware": true
     }
   ]
 }

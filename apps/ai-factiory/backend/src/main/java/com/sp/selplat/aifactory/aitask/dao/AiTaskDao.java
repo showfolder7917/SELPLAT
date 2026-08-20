@@ -16,9 +16,12 @@ public interface AiTaskDao extends BaseDao {
      * 异常或副作用示例：写入任务、阶段与首个进度事件，事务失败整体回滚。
      *
      * @param command 任务创建参数
+     * @param taskId AiTaskId 号段生成的任务主键，例如 {@code 100000}
+     * @param stageId AiTaskStageId 号段生成的首阶段主键，例如 {@code 100000}
+     * @param progressSequence AiProgressEventSequence 号段生成的首事件游标，例如 {@code 100000}
      * @return 新任务摘要
      */
-    Map<String, Object> createTask(CommonParam command);
+    Map<String, Object> createTask(CommonParam command, long taskId, long stageId, long progressSequence);
 
     /**
      * 查询任务快照。
@@ -77,10 +80,12 @@ public interface AiTaskDao extends BaseDao {
      * @param leaseToken 返回给本次领取的随机令牌
      * @param leaseDigest 只在服务端保存的令牌摘要
      * @param expiresAt 租约到期时间
+     * @param runId AiStageRunId 号段生成的运行主键，例如 {@code 100000}
+     * @param progressSequence AiProgressEventSequence 号段生成的领取事件游标，例如 {@code 100001}
      * @return 领取结果或空 Map
      */
     Map<String, Object> claimStage(String stageCode, String clientId, String leaseToken,
-                                  String leaseDigest, Instant expiresAt);
+                                  String leaseDigest, Instant expiresAt, long runId, long progressSequence);
 
     /**
      * 登记 Python 观察到的 Agent 状态。
@@ -93,9 +98,11 @@ public interface AiTaskDao extends BaseDao {
      * @param sequence 本运行内严格递增序号
      * @param state STARTED、HEARTBEAT 或 STOPPED
      * @param digest 上报事实摘要
+     * @param eventId AiAgentStateEventId 号段生成的状态事件主键，例如 {@code 100000}
      * @return 影响行数
      */
-    int appendAgentState(String runCode, String agentId, long sequence, String state, String digest);
+    int appendAgentState(String runCode, String agentId, long sequence, String state,
+                         String digest, long eventId);
 
     /**
      * 请求把运行转入等待文件门禁。
@@ -106,9 +113,11 @@ public interface AiTaskDao extends BaseDao {
      * @param runCode 运行编码
      * @param exitCode 本地 Agent 进程退出码
      * @param artifactDigests 本地已登记产物摘要
+     * @param progressSequence AiProgressEventSequence 号段生成的完成事件游标，例如 {@code 100002}
      * @return 新状态摘要或空 Map
      */
-    Map<String, Object> completeRun(String runCode, int exitCode, List<String> artifactDigests);
+    Map<String, Object> completeRun(String runCode, int exitCode, List<String> artifactDigests,
+                                    long progressSequence);
 
     /**
      * 登记本地产物摘要。
@@ -117,9 +126,11 @@ public interface AiTaskDao extends BaseDao {
      * 异常或副作用示例：绝对路径由 Service 拒绝；成功后写 artifact 与进度事件。
      *
      * @param command 产物登记参数
+     * @param artifactId AiArtifactId 号段生成的产物主键，例如 {@code 100000}
+     * @param progressSequence AiProgressEventSequence 号段生成的登记事件游标，例如 {@code 100003}
      * @return 产物登记结果
      */
-    Map<String, Object> registerArtifact(CommonParam command);
+    Map<String, Object> registerArtifact(CommonParam command, long artifactId, long progressSequence);
 
     /**
      * 登记本地 Gate 证据。
@@ -128,7 +139,9 @@ public interface AiTaskDao extends BaseDao {
      * 异常或副作用示例：只保存结果和摘要，不在 Java 执行 Gate。
      *
      * @param command Gate 证据参数
+     * @param gateResultId AiGateResultId 号段生成的门禁结果主键，例如 {@code 100000}
+     * @param progressSequence AiProgressEventSequence 号段生成的门禁事件游标，例如 {@code 100004}
      * @return Gate 结果登记摘要
      */
-    Map<String, Object> registerGateEvidence(CommonParam command);
+    Map<String, Object> registerGateEvidence(CommonParam command, long gateResultId, long progressSequence);
 }

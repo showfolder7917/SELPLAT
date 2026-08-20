@@ -11,7 +11,8 @@ public interface AiAuditEventDao extends BaseDao {
      * 真实返回示例：影响一行并返回 {@code 1}。
      * 异常或副作用示例：写入失败抛数据库异常；不保存请求正文或令牌。
      * @param event 已脱敏的服务端可观察事实
+     * @param eventId AiAuditEventId 号段生成的审计主键，例如 {@code 100000}
      * @return 影响行数
      */
-    int append(Map<String, Object> event);
+    int append(Map<String, Object> event, long eventId);
 }

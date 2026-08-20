@@ -1,5 +1,16 @@
 # 分包 11：进度页面与 SSE 详细设计
 
+> 2026-08-21 实施修订：当前页面先采用流程快照轮询，SSE 属于后续增强；进度不再读取 `AiStageExecution`。
+
+## 0. 当前页面实现
+
+- 顶部提供当前项目选择和统一主题入口；默认普通白底黑字极简主题。
+- 导航为项目管理、规则登记、AI 门禁、流程设计、执行进度、角色管理。
+- 项目管理提供增删改查；规则与门禁按当前项目过滤。
+- 流程设计从左侧拖入需求分析师、软件工程师、测试工程师，节点可移动并可连线。
+- 执行进度按画布角色节点逐行显示，数据来源是最新 `AiWorkflowRun/AiWorkflowNodeRun`；没有运行记录时显示 `NOT_STARTED`。
+- 本地完整审计日志由 Python 写入 `OPTION/temp/ai-factory/任务/<task_id>/审计日志/`，Java 页面只展示上报的逻辑路径和摘要。
+
 ## 1. 计划文件
 
 - Java：`progress/service/AiProgressService.java`、`progress/controller/AiProgressController.java`

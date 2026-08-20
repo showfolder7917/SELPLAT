@@ -212,7 +212,7 @@ public final class MdaControlSchemaTestVerifier {
      * 验证 AI 工厂连接可以只依靠启动 SQL 在空 MDA 控制库中恢复。
      * 真实传参示例：传入已执行生产 schema/data 的隔离控制库 JdbcTemplate。
      * 真实返回示例：连接名为“AI 工厂数据库”，路径为
-     *     {@code file:./apps/ai-factiory/db/aifactory}，账号为 sa 且密码为空。
+     *     {@code file:./apps/ai-factiory/db/aifactory}，账号为 sa 且密码为 123456。
      * 异常或副作用示例：记录缺失、重复或口令与目标库不一致时断言失败，不修改隔离数据库。
      *
      * @param jdbc 当前 Case 的隔离控制库查询模板
@@ -230,7 +230,7 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT username FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
             String.class
         ));
-        assertEquals("", jdbc.queryForObject(
+        assertEquals("123456", jdbc.queryForObject(
             "SELECT password FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
             String.class
         ));

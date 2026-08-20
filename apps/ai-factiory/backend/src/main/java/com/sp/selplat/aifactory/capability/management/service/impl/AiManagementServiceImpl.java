@@ -4,15 +4,11 @@ import com.sp.selplat.aifactory.aigate.service.AiGateService;
 import com.sp.selplat.aifactory.aiproject.service.AiProjectService;
 import com.sp.selplat.aifactory.airole.service.AiRoleService;
 import com.sp.selplat.aifactory.airule.service.AiRuleService;
-import com.sp.selplat.aifactory.aistageexecution.service.AiStageExecutionService;
 import com.sp.selplat.aifactory.capability.management.service.AiManagementService;
 import com.sp.selplat.aifactory.common.util.AiFactoryResults;
 import com.sp.selplat.common.service.BaseService;
 import com.sp.selplat.common.util.CommonPageParam;
 import com.sp.selplat.common.util.CommonResult;
-import java.sql.Timestamp;
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,22 +23,19 @@ public class AiManagementServiceImpl implements AiManagementService {
     private final AiGateService gateService;
     private final AiRuleService ruleService;
     private final AiProjectService projectService;
-    private final AiStageExecutionService stageService;
 
     /**
      * 注入五张管理表各自的业务服务。
-     * 真实传参示例：Spring 注入 AiRoleServiceImpl 至 AiStageExecutionServiceImpl。
-     * 真实返回示例：构造后可读取五类管理数据。
+     * 真实传参示例：Spring 注入角色、门禁、规则和项目四个服务。
+     * 真实返回示例：构造后可读取四类管理数据，执行进度由流程接口独立提供。
      * 异常或副作用示例：任一服务缺失时启动失败；构造不查询数据库。
      */
     public AiManagementServiceImpl(AiRoleService roleService, AiGateService gateService,
-                                   AiRuleService ruleService, AiProjectService projectService,
-                                   AiStageExecutionService stageService) {
+                                   AiRuleService ruleService, AiProjectService projectService) {
         this.roleService = roleService;
         this.gateService = gateService;
         this.ruleService = ruleService;
         this.projectService = projectService;
-        this.stageService = stageService;
     }
 
     /** {@inheritDoc} */
@@ -53,9 +46,6 @@ public class AiManagementServiceImpl implements AiManagementService {
         dashboard.put("gates", records(gateService));
         dashboard.put("rules", records(ruleService));
         dashboard.put("projects", records(projectService));
-        List<Map<String, Object>> stages = records(stageService);
-        stages.forEach(this::refreshRunningElapsed);
-        dashboard.put("stages", stages);
         return AiFactoryResults.success(dashboard, "AI 工厂管理数据查询完成。");
     }
 
@@ -100,22 +90,4 @@ public class AiManagementServiceImpl implements AiManagementService {
         return value instanceof Number number ? number.doubleValue() : 0D;
     }
 
-    /**
-     * 为正在运行的阶段计算当前实时耗时。
-     * 真实传参示例：status=RUNNING、startedAt 为十秒前。
-     * 真实返回示例：elapsedMillis 更新为约 10000。
-     * 异常或副作用示例：时间为空或类型未知时保留数据库值；只修改响应映射。
-     */
-    private void refreshRunningElapsed(Map<String, Object> stage) {
-        if (!"RUNNING".equals(String.valueOf(stage.get("status")))) {
-            return;
-        }
-        Object startedAt = stage.get("startedAt");
-        LocalDateTime started = startedAt instanceof Timestamp timestamp
-                ? timestamp.toLocalDateTime()
-                : startedAt instanceof LocalDateTime localDateTime ? localDateTime : null;
-        if (started != null) {
-            stage.put("elapsedMillis", Math.max(0, Duration.between(started, LocalDateTime.now()).toMillis()));
-        }
-    }
 }

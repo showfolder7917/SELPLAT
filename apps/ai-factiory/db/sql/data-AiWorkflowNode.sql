@@ -1,0 +1,4 @@
+-- 快速开发默认流程只展示需求、软件与测试三个角色；同类角色重复拖入能力由画布继续提供。
+INSERT INTO AiWorkflowNode(id,workflowVersionId,nodeCode,nodeName,nodeType,roleId,positionX,positionY,sortnum) SELECT 170001,160000,'REQUIREMENT','需求分析师','ROLE',100010,190,220,20 WHERE NOT EXISTS(SELECT 1 FROM AiWorkflowNode WHERE workflowVersionId=160000 AND nodeCode='REQUIREMENT');
+INSERT INTO AiWorkflowNode(id,workflowVersionId,nodeCode,nodeName,nodeType,roleId,positionX,positionY,sortnum) SELECT 170002,160000,'SOFTWARE','软件工程师','ROLE',100015,430,220,20 WHERE NOT EXISTS(SELECT 1 FROM AiWorkflowNode WHERE workflowVersionId=160000 AND nodeCode='SOFTWARE');
+INSERT INTO AiWorkflowNode(id,workflowVersionId,nodeCode,nodeName,nodeType,roleId,positionX,positionY,sortnum) SELECT 170003,160000,'TEST','测试工程师','ROLE',100016,670,220,30 WHERE NOT EXISTS(SELECT 1 FROM AiWorkflowNode WHERE workflowVersionId=160000 AND nodeCode='TEST');

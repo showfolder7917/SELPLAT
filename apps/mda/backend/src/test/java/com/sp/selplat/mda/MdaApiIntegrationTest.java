@@ -80,7 +80,7 @@ class MdaApiIntegrationTest {
                 .andExpect(jsonPath("$.records[2].connectionName").value("AI 工厂数据库"))
                 .andExpect(jsonPath("$.records[2].databaseName")
                         .value("file:./apps/ai-factiory/db/aifactory"))
-                .andExpect(jsonPath("$.records[2].password").value(""));
+                .andExpect(jsonPath("$.records[2].password").value("123456"));
 
         String body = objectMapper.writeValueAsString(Map.of(
                 "connectionName", "动态目标库",

@@ -42,14 +42,14 @@ SET connectionName = 'AI 工厂数据库', updatedAt = CURRENT_TIMESTAMP
 WHERE databaseName LIKE '%apps/ai-factiory/db/aifactory%'
   AND connectionName <> 'AI 工厂数据库';
 
--- AI 工厂是 SELPLAT 内置管理目标；MDA 只保存连接定义，不复制或修改 AI 工厂业务数据。
+-- AI 工厂是 SELPLAT 内置管理目标；MDA 只保存统一的 sa/123456 连接定义，不复制或修改 AI 工厂业务数据。
 INSERT INTO MdaConnectionProfile (
     id, connectionName, databaseType, host, port, databaseName, schemaName,
     username, password, customJdbcUrl, jdbcParameters, defaultAutoCommit, sortnum, status
 ) SELECT
     10006, 'AI 工厂数据库', 'H2', NULL, NULL,
     'file:./apps/ai-factiory/db/aifactory', 'PUBLIC',
-    'sa', '', NULL,
+    'sa', '123456', NULL,
     'MODE=MySQL;AUTO_SERVER=TRUE;DATABASE_TO_UPPER=false', TRUE, 30.00, 1
 WHERE NOT EXISTS (
     SELECT 1 FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'

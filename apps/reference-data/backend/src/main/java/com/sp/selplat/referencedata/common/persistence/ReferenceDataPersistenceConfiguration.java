@@ -235,20 +235,24 @@ public class ReferenceDataPersistenceConfiguration {
      *     六个表主键号段和 ReferenceDataObjectId 通用号段；再次执行不会覆盖管理员维护的数据。
      */
     private void initializeDatabase(DataSource dataSource) {
-        // 固定结构和数据资源清单 → 可重复执行的数据库初始化器。
-        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-        for (String databaseResource : DATABASE_RESOURCES) {
-            // 每个职责脚本按数组顺序加入，禁止把多张表重新合并到同一个 SQL 文件。
-            populator.addScript(new ClassPathResource(databaseResource));
+        // 先执行七个结构脚本，让旧类型表获得迁移所需的新列，同时保证其他被引用表已经存在。
+        ResourceDatabasePopulator schemaPopulator = new ResourceDatabasePopulator();
+        for (int index = 0; index < 7; index++) {
+            schemaPopulator.addScript(new ClassPathResource(DATABASE_RESOURCES[index]));
         }
-        // 当前数据源执行完整脚本；任一 SQL 失败都会阻止模块以半初始化状态启动。
-        populator.execute(dataSource);
+        schemaPopulator.execute(dataSource);
+        // 旧 categoryCode/controlCode 在插入新选项前迁移，否则旧非空列会拒绝 AI 工厂选项种子。
+        migrateReferenceDataTypeOptionSet(dataSource);
+        // 结构统一后再补充类型、Window 和号段数据，既兼容旧库也保持新库幂等初始化。
+        ResourceDatabasePopulator dataPopulator = new ResourceDatabasePopulator();
+        for (int index = 7; index < DATABASE_RESOURCES.length; index++) {
+            dataPopulator.addScript(new ClassPathResource(DATABASE_RESOURCES[index]));
+        }
+        dataPopulator.execute(dataSource);
         // 旧通用号段只改职责说明，不重置游标、步长或版本。
         normalizeSharedSequenceMetadata(dataSource);
         // 已有正式库可能仍保留旧 identity 元数据 → 数据保留不变，只移除业务表自增属性。
         migrateLegacyIdentityColumns(dataSource);
-        // 旧控件直属分类 → 可复用 optionSetCode，并物理删除 categoryCode/controlCode。
-        migrateReferenceDataTypeOptionSet(dataSource);
         // TREE 只属于树节点表 → 清除历史误入类型表的记录，避免每次启动重新展示。
         removeMisclassifiedTreeTypes(dataSource);
         // 树节点补充只用于展示的工程和页面归属，code + parentId 建树逻辑保持不变。

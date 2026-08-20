@@ -110,7 +110,7 @@ public interface AiTaskService {
 
     /**
      * 登记本地门禁执行证据。
-     * 真实传参示例：{@code {taskId:"TASK-ABC",gateId:"CODE_GATE",result:"PASS"}}。
+     * 真实传参示例：{@code {taskId:"TASK-ABC",gateId:"AI_GATE",result:"PASS"}}。
      * 真实返回示例：{@code {gateResultId:"GR-ABC",aggregateStatus:"PASS"}}。
      * 异常或副作用示例：必填摘要缺失时拒绝；Java 不执行门禁程序。
      * @param command 门禁事实

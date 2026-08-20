@@ -3,6 +3,7 @@ package com.sp.selplat.aifactory.aiauditevent.service.impl;
 import com.sp.selplat.aifactory.aiauditevent.dao.AiAuditEventDao;
 import com.sp.selplat.aifactory.aiauditevent.service.AiAuditEventService;
 import com.sp.selplat.common.util.JsonUtils;
+import com.sp.selplat.common.service.sequence.SequenceGenerator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,16 +18,21 @@ import org.springframework.stereotype.Service;
 @Service
 public class AiAuditEventServiceImpl implements AiAuditEventService {
     private final AiAuditEventDao dao;
+    private final SequenceGenerator sequenceGenerator;
     private final AtomicReference<String> previousHash = new AtomicReference<>("SERVER-GENESIS");
 
     /**
      * 注入审计 DAO。
-     * 真实传参示例：Spring 注入 AiAuditEventDaoImpl。
+     * 真实传参示例：Spring 注入 AiAuditEventDaoImpl 与平台公共 SequenceGenerator。
      * 真实返回示例：Service 可以追加服务端审计。
      * 异常或副作用示例：DAO 缺失时启动失败；构造过程不写审计。
      * @param dao 审计 DAO
+     * @param sequenceGenerator 平台聚合公共发号器；单模块运行时使用同实现后备 Bean
      */
-    public AiAuditEventServiceImpl(AiAuditEventDao dao) { this.dao = dao; }
+    public AiAuditEventServiceImpl(AiAuditEventDao dao, SequenceGenerator sequenceGenerator) {
+        this.dao = dao;
+        this.sequenceGenerator = sequenceGenerator;
+    }
 
     /** {@inheritDoc} */
     @Override
@@ -46,7 +52,8 @@ public class AiAuditEventServiceImpl implements AiAuditEventService {
         event.put("previousHash", prior);
         event.put("eventHash", eventHash);
         event.put("payloadJson", JsonUtils.toJsonIgnoreNull(payload));
-        dao.append(event);
+        // 服务端审计事件使用独立号段主键 → 哈希链业务编码仍保持原有 UUID 语义。
+        dao.append(event, sequenceGenerator.nextId("AiAuditEventId"));
         previousHash.set(eventHash);
     }
 

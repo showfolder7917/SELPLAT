@@ -40,22 +40,23 @@ public class AiTaskDaoImpl extends AiFactoryBaseDao implements AiTaskDao {
     /** {@inheritDoc} */
     @Override
     @Transactional(transactionManager = "aiFactoryTransactionManager")
-    public Map<String, Object> createTask(CommonParam command) {
+    public Map<String, Object> createTask(
+            CommonParam command, long taskId, long stageId, long progressSequence) {
         String taskCode = "TASK-" + compactId();
         String rootThreadId = compactId();
         String stageCode = "STAGE-" + taskCode + "-1";
         String title = required(command, "title");
         String project = required(command, "project");
         String owner = value(command, "owner", "XUNAN");
-        jdbc.update("INSERT INTO ai_task(task_code,root_thread_id,title,project,status,workflow_version,state_version,owner,created_at,updated_at) VALUES(?,?,?,?, 'READY','1.0.0',1,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
-                taskCode, rootThreadId, title, project, owner);
-        Long taskId = jdbc.queryForObject("SELECT id FROM ai_task WHERE task_code=?", Long.class, taskCode);
+        // 任务号段主键与稳定业务编码同时写入 → 不再依赖数据库 identity 回填。
+        jdbc.update("INSERT INTO ai_task(id,task_code,root_thread_id,title,project,status,workflow_version,state_version,owner,created_at,updated_at) VALUES(?,?,?,?,?, 'READY','1.0.0',1,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+                taskId, taskCode, rootThreadId, title, project, owner);
         Long roleVersionId = jdbc.queryForObject(
                 "SELECT id FROM ai_role_version WHERE role_id='IMPLEMENTATION_ROLE' AND status='APPROVED' ORDER BY id DESC LIMIT 1",
                 Long.class);
-        jdbc.update("INSERT INTO ai_task_stage(task_id,stage_code,stage_type,status,role_version_id,sequence_no,state_version) VALUES(?,?, 'IMPLEMENTATION','READY',?,1,1)",
-                taskId, stageCode, roleVersionId);
-        appendProgress(taskId, null, "stage.ready", 0, "实现阶段等待本地 Python 领取",
+        jdbc.update("INSERT INTO ai_task_stage(id,task_id,stage_code,stage_type,status,role_version_id,sequence_no,state_version) VALUES(?,?,?, 'IMPLEMENTATION','READY',?,1,1)",
+                stageId, taskId, stageCode, roleVersionId);
+        appendProgress(progressSequence, taskId, null, "stage.ready", 0, "实现阶段等待本地 Python 领取",
                 Map.of("taskId", taskCode, "stageId", stageCode, "instruction", title));
         return map("taskId", taskCode, "rootThreadId", rootThreadId, "stateVersion", 1,
                 "stageId", stageCode);
@@ -121,7 +122,8 @@ public class AiTaskDaoImpl extends AiFactoryBaseDao implements AiTaskDao {
     @Override
     @Transactional(transactionManager = "aiFactoryTransactionManager")
     public Map<String, Object> claimStage(String stageCode, String clientId, String leaseToken,
-                                          String leaseDigest, Instant expiresAt) {
+                                          String leaseDigest, Instant expiresAt,
+                                          long runId, long progressSequence) {
         int updated = jdbc.update("UPDATE ai_task_stage SET status='RUNNING',state_version=state_version+1 WHERE stage_code=? AND status='READY'",
                 stageCode);
         if (updated != 1) {
@@ -130,11 +132,11 @@ public class AiTaskDaoImpl extends AiFactoryBaseDao implements AiTaskDao {
         Map<String, Object> stage = jdbc.queryForMap("SELECT id,task_id,state_version FROM ai_task_stage WHERE stage_code=?", stageCode);
         String runCode = "RUN-" + compactId();
         String stageThreadId = compactId();
-        jdbc.update("INSERT INTO ai_stage_run(stage_id,run_code,stage_thread_id,client_id,attempt,status,lease_token_digest,lease_expires_at,last_sequence,created_at,updated_at) "
-                        + "VALUES(?,?,?, ?,1,'RUNNING',?,?,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
-                stage.get("id"), runCode, stageThreadId, clientId, leaseDigest, expiresAt);
-        Long runId = jdbc.queryForObject("SELECT id FROM ai_stage_run WHERE run_code=?", Long.class, runCode);
-        appendProgress(number(stage.get("task_id")), runId, "stage.claimed", 0, "本地 Python 已领取阶段",
+        jdbc.update("INSERT INTO ai_stage_run(id,stage_id,run_code,stage_thread_id,client_id,attempt,status,lease_token_digest,lease_expires_at,last_sequence,created_at,updated_at) "
+                        + "VALUES(?,?,?,?,?,1,'RUNNING',?,?,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+                runId, stage.get("id"), runCode, stageThreadId, clientId, leaseDigest, expiresAt);
+        appendProgress(progressSequence, number(stage.get("task_id")), runId,
+                "stage.claimed", 0, "本地 Python 已领取阶段",
                 Map.of("runId", runCode, "clientId", clientId));
         return map("runId", runCode, "stageThreadId", stageThreadId, "leaseToken", leaseToken,
                 "expiresAt", expiresAt.toString(), "stateVersion", stage.get("state_version"));
@@ -142,11 +144,12 @@ public class AiTaskDaoImpl extends AiFactoryBaseDao implements AiTaskDao {
 
     /** {@inheritDoc} */
     @Override
-    public int appendAgentState(String runCode, String agentId, long sequence, String state, String digest) {
+    public int appendAgentState(String runCode, String agentId, long sequence, String state,
+                                String digest, long eventId) {
         Map<String, Object> run = jdbc.queryForMap(
                 "SELECT r.id,s.task_id FROM ai_stage_run r JOIN ai_task_stage s ON s.id=r.stage_id WHERE r.run_code=?", runCode);
-        int affected = jdbc.update("INSERT INTO ai_agent_state_event(task_id,run_id,agent_id,sequence,state,facts_digest,created_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)",
-                run.get("task_id"), run.get("id"), agentId, sequence, state, digest);
+        int affected = jdbc.update("INSERT INTO ai_agent_state_event(id,task_id,run_id,agent_id,sequence,state,facts_digest,created_at) VALUES(?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
+                eventId, run.get("task_id"), run.get("id"), agentId, sequence, state, digest);
         jdbc.update("UPDATE ai_stage_run SET agent_id=?,last_sequence=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND last_sequence<?",
                 agentId, sequence, run.get("id"), sequence);
         return affected;
@@ -155,14 +158,16 @@ public class AiTaskDaoImpl extends AiFactoryBaseDao implements AiTaskDao {
     /** {@inheritDoc} */
     @Override
     @Transactional(transactionManager = "aiFactoryTransactionManager")
-    public Map<String, Object> completeRun(String runCode, int exitCode, List<String> artifactDigests) {
+    public Map<String, Object> completeRun(String runCode, int exitCode,
+                                           List<String> artifactDigests, long progressSequence) {
         Map<String, Object> run = jdbc.queryForMap(
                 "SELECT r.id,r.stage_id,s.task_id FROM ai_stage_run r JOIN ai_task_stage s ON s.id=r.stage_id WHERE r.run_code=?", runCode);
         String status = exitCode == 0 ? "WAITING_FILE_GATE" : "FAILED";
         jdbc.update("UPDATE ai_stage_run SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", status, run.get("id"));
         jdbc.update("UPDATE ai_task_stage SET status=?,state_version=state_version+1 WHERE id=?",
                 status, run.get("stage_id"));
-        appendProgress(number(run.get("task_id")), number(run.get("id")), "stage.execution.finished",
+        appendProgress(progressSequence, number(run.get("task_id")), number(run.get("id")),
+                "stage.execution.finished",
                 exitCode == 0 ? 90 : 100, status, Map.of("artifactDigests", artifactDigests));
         return map("status", status);
     }
@@ -170,42 +175,46 @@ public class AiTaskDaoImpl extends AiFactoryBaseDao implements AiTaskDao {
     /** {@inheritDoc} */
     @Override
     @Transactional(transactionManager = "aiFactoryTransactionManager")
-    public Map<String, Object> registerArtifact(CommonParam command) {
+    public Map<String, Object> registerArtifact(
+            CommonParam command, long artifactId, long progressSequence) {
         String artifactCode = "ART-" + compactId();
         Long taskId = jdbc.queryForObject("SELECT id FROM ai_task WHERE task_code=?", Long.class,
                 required(command, "taskId"));
         Integer version = jdbc.queryForObject("SELECT COALESCE(MAX(version),0)+1 FROM ai_artifact WHERE task_id=? AND standard_name=?",
                 Integer.class, taskId, required(command, "standardName"));
-        jdbc.update("INSERT INTO ai_artifact(task_id,artifact_code,type,standard_name,logical_path,version,digest,size_bytes,gate_status,created_at) VALUES(?,?,?,?,?,?,?,?, 'PENDING',CURRENT_TIMESTAMP)",
-                taskId, artifactCode, required(command, "type"), required(command, "standardName"),
+        jdbc.update("INSERT INTO ai_artifact(id,task_id,artifact_code,type,standard_name,logical_path,version,digest,size_bytes,gate_status,created_at) VALUES(?,?,?,?,?,?,?,?,?, 'PENDING',CURRENT_TIMESTAMP)",
+                artifactId, taskId, artifactCode, required(command, "type"), required(command, "standardName"),
                 required(command, "logicalPath"), version, required(command, "sha256"),
                 Long.parseLong(value(command, "size", "0")));
-        appendProgress(taskId, null, "artifact.registered", 80, "产物摘要已登记", Map.of("artifactId", artifactCode));
+        appendProgress(progressSequence, taskId, null, "artifact.registered", 80,
+                "产物摘要已登记", Map.of("artifactId", artifactCode));
         return map("artifactId", artifactCode, "version", version, "gateStatus", "PENDING");
     }
 
     /** {@inheritDoc} */
     @Override
     @Transactional(transactionManager = "aiFactoryTransactionManager")
-    public Map<String, Object> registerGateEvidence(CommonParam command) {
+    public Map<String, Object> registerGateEvidence(
+            CommonParam command, long gateResultId, long progressSequence) {
         String resultCode = "GR-" + compactId();
         Long taskId = jdbc.queryForObject("SELECT id FROM ai_task WHERE task_code=?", Long.class,
                 required(command, "taskId"));
         String result = required(command, "result");
-        jdbc.update("INSERT INTO ai_gate_result(task_id,result_code,gate_id,definition_version,runner_digest,artifact_digest,result,violations_json,evidence_digest,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,'ACTIVE',CURRENT_TIMESTAMP)",
-                taskId, resultCode, required(command, "gateId"), required(command, "definitionVersion"),
+        jdbc.update("INSERT INTO ai_gate_result(id,task_id,result_code,gate_id,definition_version,runner_digest,artifact_digest,result,violations_json,evidence_digest,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,'ACTIVE',CURRENT_TIMESTAMP)",
+                gateResultId, taskId, resultCode, required(command, "gateId"), required(command, "definitionVersion"),
                 required(command, "runnerDigest"), required(command, "artifactDigest"), result,
                 JsonUtils.toJsonIgnoreNull(command.getParam("violations")), required(command, "evidenceDigest"));
-        appendProgress(taskId, null, "gate.result.registered", 95, "本地门禁证据已登记",
+        appendProgress(progressSequence, taskId, null, "gate.result.registered", 95,
+                "本地门禁证据已登记",
                 Map.of("gateResultId", resultCode, "result", result));
         return map("gateResultId", resultCode, "aggregateStatus", result);
     }
 
-    private void appendProgress(long taskId, Long runId, String eventType, int percent,
+    private void appendProgress(long progressSequence, long taskId, Long runId, String eventType, int percent,
                                 String message, Map<String, Object> payload) {
         String payloadJson = JsonUtils.toJsonIgnoreNull(payload);
-        jdbc.update("INSERT INTO ai_progress_event(task_id,run_id,event_type,percent,message,payload_digest,payload_json,created_at) VALUES(?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
-                taskId, runId, eventType, percent, message, sha256(payloadJson), payloadJson);
+        jdbc.update("INSERT INTO ai_progress_event(sequence,task_id,run_id,event_type,percent,message,payload_digest,payload_json,created_at) VALUES(?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
+                progressSequence, taskId, runId, eventType, percent, message, sha256(payloadJson), payloadJson);
     }
 
     private static String required(CommonParam command, String key) {

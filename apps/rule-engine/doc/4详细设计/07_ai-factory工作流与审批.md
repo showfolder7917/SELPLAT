@@ -1,5 +1,17 @@
 # 分包 07：ai-factory 工作流与审批详细设计
 
+> 2026-08-21 实施修订：本节以下“任务/阶段状态机”保留为远期模型；当前快速开发控制面以本修订为准，不再使用 `AiStageExecution`。
+
+## 0. 当前快速流程
+
+- 默认流程固定为 `需求分析师 → 软件工程师 → 测试工程师`，只展示这三类可拖拽角色。
+- 画布允许重复加入同一角色；同类节点数量表示该角色可同时工作的实例数。
+- 流程定义使用 `AiWorkflowDefinition / Version / Node / Edge`，运行事实使用 `AiWorkflowRun / NodeRun`。
+- 门禁类型只有引用数据 `AI_GATE`；职责只保留需求检测员、代码检测员、项目经理总控。
+- “代码检测员”是 AI 门禁职责名称；代码质量执行仍属于测试范围，不建立 `CODE_GATE` 类型。
+- Java 只保存流程、节点位置、连线和 Python 上报事实；不得主动启动 Agent 或推进节点。
+- 当前接口为 `GET /api/v1/ai-factory/workflows/snapshot`、`POST /nodes/create.htm`、`POST /nodes/move.htm`、`POST /edges/create.htm`。
+
 ## 1. 计划文件
 
 - `.../task/service/AiTaskService.java`、`impl/AiTaskServiceImpl.java`

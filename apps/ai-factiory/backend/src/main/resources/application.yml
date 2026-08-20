@@ -29,5 +29,5 @@ ai-factory:
     maximum-pool-size: 4
     minimum-idle: 1
     username: sa
-    password: ""
+    password: "123456"
     driver-class-name: org.h2.Driver

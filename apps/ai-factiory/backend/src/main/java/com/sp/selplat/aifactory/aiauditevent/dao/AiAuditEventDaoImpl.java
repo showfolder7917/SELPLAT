@@ -25,9 +25,9 @@ public class AiAuditEventDaoImpl extends AiFactoryBaseDao implements AiAuditEven
 
     /** {@inheritDoc} */
     @Override
-    public synchronized int append(Map<String, Object> event) {
-        return jdbc.update("INSERT INTO ai_audit_event(event_code,actor_type,actor_id,action,target_type,target_id,attempt_status,previous_hash,event_hash,payload_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
-                event.get("eventCode"), event.get("actorType"), event.get("actorId"), event.get("action"),
+    public synchronized int append(Map<String, Object> event, long eventId) {
+        return jdbc.update("INSERT INTO ai_audit_event(id,event_code,actor_type,actor_id,action,target_type,target_id,attempt_status,previous_hash,event_hash,payload_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
+                eventId, event.get("eventCode"), event.get("actorType"), event.get("actorId"), event.get("action"),
                 event.get("targetType"), event.get("targetId"), event.get("attemptStatus"),
                 event.get("previousHash"), event.get("eventHash"), event.get("payloadJson"));
     }

@@ -1071,10 +1071,13 @@
     }
 
     // 同一连接结构刷新默认保留用户展开状态；首次加载或切换连接时重新挂载树以应用新连接的默认展开节点。
-    async function mdaRefreshSelectedMetadata(resetTreeExpansion = false) {
-        if (!mdaState.selectedConnection) return false;
-        const response = await selAjax.request({ url: mdaApi.metadata, method: "POST", data: { connectionId: mdaState.selectedConnection.id } });
-        mdaState.metadata = response.data?.nodes || [];
+    async function mdaRefreshSelectedMetadata(resetTreeExpansion = false, connection = mdaState.selectedConnection) {
+        if (!connection) return false;
+        const response = await selAjax.request({ url: mdaApi.metadata, method: "POST", data: { connectionId: connection.id } });
+        const metadata = response.data?.nodes || [];
+        // 新连接元数据成功返回后再整体提交连接和树，避免失败时下拉框与旧树处于不同数据库。
+        mdaState.selectedConnection = connection;
+        mdaState.metadata = metadata;
         const payload = mdaBuildPayload();
         if (resetTreeExpansion) {
             mdaState.treeController?.destroy();
@@ -1091,8 +1094,7 @@
     async function mdaLoadMetadata(connection, forceCloseTabs = false) {
         const closed = await mdaCloseQuerySessions(mdaState.tabsController?.list() || [], { force: forceCloseTabs });
         if (!closed) return false;
-        mdaState.selectedConnection = connection;
-        await mdaRefreshSelectedMetadata(true);
+        await mdaRefreshSelectedMetadata(true, connection);
         return true;
     }
 
@@ -1279,9 +1281,13 @@
         connectionSelect?.addEventListener("change", async () => {
             const connection = mdaState.connections.find((item) => String(item.id) === connectionSelect.value);
             if (!connection) return;
-            const loaded = await mdaLoadMetadata(connection);
-            if (!loaded && mdaState.selectedConnection) {
-                dropdown.setValue(connectionSelect, String(mdaState.selectedConnection.id));
+            const previousConnection = mdaState.selectedConnection;
+            try {
+                const loaded = await mdaLoadMetadata(connection);
+                if (!loaded) dropdown.setValue(connectionSelect, String(previousConnection?.id || ""));
+            } catch (error) {
+                dropdown.setValue(connectionSelect, String(previousConnection?.id || ""));
+                selBase.toast(error.message || "数据库连接切换失败。", "error");
             }
         });
         // 公共工作区已经可操作后再异步读取控制库配置与目标库元数据。

@@ -202,11 +202,35 @@ class MdaFrontendSqlContractTest {
                 .contains("node.type === \"schema\" && schemaName === \"PUBLIC\"")
                 .contains("type: node.type")
                 .contains("expanded: defaultExpanded")
-                .contains("async function mdaRefreshSelectedMetadata(resetTreeExpansion = false)")
+                .contains("async function mdaRefreshSelectedMetadata(resetTreeExpansion = false, connection = mdaState.selectedConnection)")
                 .contains("mdaState.treeController?.destroy()")
                 .contains("mdaState.treeController = tree.mount(mdaState.panelRoot, payload.tree)")
-                .contains("await mdaRefreshSelectedMetadata(true)")
+                .contains("await mdaRefreshSelectedMetadata(true, connection)")
                 .doesNotContain("const defaultExpanded = mdaNode.type === \"schema\"");
+    }
+
+    /**
+     * 验证目标库切换只有在元数据成功返回后才整体提交，并在失败时恢复原选择与显示错误提示。
+     * 真实传参示例：当前连接为 japanese，用户选择口令错误的 AI 工厂连接。
+     * 真实返回示例：下拉框和左树继续显示 japanese，并通过公共 Toast 告知连接失败。
+     * 异常或副作用示例：失败请求不得留下 AI 工厂下拉标签与 japanese 元数据树并存的混合状态。
+     *
+     * @throws Exception 页面脚本资源无法读取时抛出
+     */
+    @Test
+    void shouldCommitConnectionSwitchAtomicallyAndRollbackOnFailure() throws Exception {
+        String script = new ClassPathResource("static/mda/mda.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("async function mdaRefreshSelectedMetadata(resetTreeExpansion = false, connection = mdaState.selectedConnection)")
+                .contains("const metadata = response.data?.nodes || []")
+                .contains("mdaState.selectedConnection = connection")
+                .contains("await mdaRefreshSelectedMetadata(true, connection)")
+                .contains("const previousConnection = mdaState.selectedConnection")
+                .contains("dropdown.setValue(connectionSelect, String(previousConnection?.id || \"\"))")
+                .contains("selBase.toast(error.message || \"数据库连接切换失败。\", \"error\")")
+                .doesNotContain("mdaState.selectedConnection = connection;\n        await mdaRefreshSelectedMetadata(true);");
     }
 
     /**

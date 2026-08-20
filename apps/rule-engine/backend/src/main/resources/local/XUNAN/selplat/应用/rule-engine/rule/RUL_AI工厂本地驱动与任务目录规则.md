@@ -3,13 +3,13 @@
 <!-- 当前规则用于约束 SELPLAT AI 工厂的 memory、ai-factory、Agent、Gate、生成物和可视化职责。 -->
 rule_scope = active_user_selplat_ai_factory_architecture_and_runtime_ownership
 <!-- 规则版本从用户确认的首个稳定双端职责模型开始。 -->
-rule_version = 2.4.0
+rule_version = 2.7.0
 <!-- 规则所有者从工程根 AGENTS.md 动态获取，不在正文固定用户名。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经进入用户层索引并完成文档追踪检查。 -->
 rule_status = active
 <!-- 升级记录说明本轮将多次用户修正统一沉淀为可复用架构约束。 -->
-upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口;2026-08-20:AI工厂默认白底黑字普通极简主题_恢复统一个性化入口和用户主动主题切换_样式只消费统一令牌;2026-08-20:AI工厂正式运行数据库归位应用db目录_临时根只保存测试审计备份和任务生成物;2026-08-20:AiRole角色类型统一使用引用数据选项组_页面禁止硬编码工程师审核员名称;2026-08-20:角色管理接入公共Grid上下拖拽和公共Window编辑_受控维护元数据但仍禁止启动Agent或推进流程;2026-08-20:AI工厂全部Remix图标改由SEL同源vendor资源交付_禁止外部CDN或空白图标;2026-08-20:角色删除使用公共确认框和服务端引用门禁_公共Window禁用按钮必须保持文字可读
+upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口;2026-08-20:AI工厂默认白底黑字普通极简主题_恢复统一个性化入口和用户主动主题切换_样式只消费统一令牌;2026-08-20:AI工厂正式运行数据库归位应用db目录_临时根只保存测试审计备份和任务生成物;2026-08-20:AiRole角色类型统一使用引用数据选项组_页面禁止硬编码工程师审核员名称;2026-08-20:角色管理接入公共Grid上下拖拽和公共Window编辑_受控维护元数据但仍禁止启动Agent或推进流程;2026-08-20:AI工厂全部Remix图标改由SEL同源vendor资源交付_禁止外部CDN或空白图标;2026-08-20:角色删除使用公共确认框和服务端引用门禁_公共Window禁用按钮必须保持文字可读;2026-08-21:按用户确认将AI工厂Remix图标切换为固定版本jsDelivr在线加载_公共本地字体保留供其他页面使用;2026-08-21:AI工厂登记公共号段DAO_每张业务表独立CommonSequenceSegment号段_兼容迁移旧自增列和现有数据_统一Host8080作为正常启动入口;2026-08-21:快速流程固定三类开发角色_同类角色允许多实例_门禁类型只保留AI_GATE_代码检查归测试范围_项目规则门禁和流程运行分表_所有KeyValue进入引用数据
 
 ## 双端职责
 
@@ -21,10 +21,10 @@ ai_factory_java_responsibility = registry_http_validation_authoritative_persiste
 ai_factory_java_forbidden_capabilities = start_agent_connect_codex_run_local_gate_read_local_task_root_schedule_stage
 <!-- 所有工作流动作必须由 Python 调用 HTTP API 发起，Java仅在请求内校验并落库。 -->
 ai_factory_workflow_change_trigger = python_initiated_http_api_only
-<!-- ai-factiory 只允许从应用根 Gradle run 任务作为人工统一入口启动 Java HTTP 控制面和页面。 -->
-ai_factory_unified_human_start_entry = gradle_:apps:ai-factiory:run
-<!-- backend run 是根级入口的内部委托任务，不作为 README 或人工操作中的独立入口。 -->
-ai_factory_backend_run_visibility = internal_delegate_only
+<!-- AI 工厂正常运行只通过平台 Host 聚合入口启动，统一提供 8080 HTTP 控制面和页面。 -->
+ai_factory_unified_human_start_entry = gradle_:apps:host:backend:run
+<!-- AI 工厂独立 backend 启动只用于显式调试，不得作为正常入口或与 Host 同时启动。 -->
+ai_factory_backend_run_visibility = standalone_debug_only_not_normal_entry
 <!-- ai-memory 必须通过独立 BAT 运行，不得由 ai-factiory 启动或纳入其进程生命周期。 -->
 ai_memory_process_ownership = independent_apps/ai-memory/ai-memory.bat
 <!-- ai-memory 只作为 HTTP 请求客户端，禁止创建、绑定或监听 HTTP 服务端端口。 -->
@@ -55,6 +55,12 @@ ai_factory_java_gate_scope = register_validate_persist_and_visualize_only
 ai_factory_audit_fact_boundary = python_local_execution_facts_java_server_observed_api_facts
 <!-- Java验证上报摘要不得被表述为Java亲自执行或直接观察了本地动作。 -->
 server_verified_must_not_impersonate_local_execution = true
+<!-- AI 工厂门禁类型只允许引用数据稳定 Key AI_GATE，禁止重新建立规则门禁或代码门禁类型。 -->
+ai_factory_gate_type_set = AI_GATE_only
+<!-- 快速开发只登记需求检测员、代码检测员和项目经理总控三个 AI 门禁职责。 -->
+ai_factory_gate_responsibility_set = REQUIREMENT_CHECKER_CODE_CHECKER_PROJECT_MANAGER_CONTROL
+<!-- 代码质量检查属于测试工程师的测试范围，不得作为独立代码门禁类型或门禁树节点。 -->
+ai_factory_code_quality_scope = testing_responsibility_not_gate_type
 
 ## 生成目录与命名
 
@@ -92,6 +98,10 @@ memory_python_business_filename_and_identifier_policy = chinese_filename_english
 memory_python_standard_filename_exceptions = __init__.py
 <!-- AI 工厂本地正式运行 H2 主库属于应用持久数据，必须与同类应用一致归入应用 db 目录。 -->
 ai_factory_local_persistent_database_root = <SELPLAT_ROOT>/apps/ai-factiory/db
+<!-- AI 工厂每张业务表必须登记独立 CommonSequenceSegment 号段并通过公共 SequenceGenerator 发号，业务列禁止 H2 identity。 -->
+ai_factory_primary_key_strategy = one_table_one_CommonSequenceSegment_shared_SequenceGenerator_no_business_identity
+<!-- 旧库迁移必须原位保留数据、解除业务列自增，并把游标单向提升到现有最大主键之后。 -->
+ai_factory_legacy_primary_key_migration = preserve_rows_drop_business_identity_advance_cursor_only
 <!-- 本地开发服务器的测试库、日志、备份和一次性运行数据进入统一临时根；生产服务器可改用受控外部数据根。 -->
 ai_factory_local_dev_server_generated_root = <SELPLAT_ROOT>/OPTION/temp/ai-factory
 <!-- 中文规则资源使用 RUL_ 前缀，便于索引和人工识别。 -->
@@ -109,10 +119,20 @@ ai_factory_name_encoding_and_identifier_policy = utf8_nfc_chinese_resources_asci
 
 <!-- ai-factory Java 工程必须参照 apps/japanese，以 backend 为实际 Gradle 子项目并采用业务模块优先分层。 -->
 ai_factory_java_reference_architecture = apps/japanese_backend_feature_first_controller_service_impl_dao
-<!-- AI 工厂管理表使用 Ai 前缀并按角色、门禁、规则、项目和阶段执行拆分。 -->
-ai_factory_management_table_set = AiRole_AiGate_AiRule_AiProject_AiStageExecution
+<!-- AI 工厂管理登记与流程定义、流程运行分表；旧 AiStageExecution 模型永久废止。 -->
+ai_factory_management_table_set = AiRole_AiProject_AiGate_AiRule_AiWorkflowDefinition_AiWorkflowVersion_AiWorkflowNode_AiWorkflowEdge_AiWorkflowRun_AiWorkflowNodeRun
+<!-- 项目表只保存项目登记，当前阶段和完成百分比必须由最新流程节点运行事实计算。 -->
+ai_factory_project_progress_source = latest_AiWorkflowRun_and_AiWorkflowNodeRun_no_project_fake_progress_columns
+<!-- 默认快速流程只显示需求分析师、软件工程师和测试工程师，并按该顺序连接。 -->
+ai_factory_default_quick_workflow_roles = REQUIREMENT_ANALYST_then_SOFTWARE_ENGINEER_then_TEST_ENGINEER
+<!-- 流程画布允许重复添加同一开发角色实例，用节点数量表达同类角色并行工作数量。 -->
+ai_factory_repeated_role_node_policy = allowed_same_role_multiple_node_instances
 <!-- AI 工厂管理页默认使用普通白底黑字主题，并由公共 Panel、Tree、Grid 组成。 -->
 ai_factory_management_ui_structure = plain-minimal_selPanel_selTree_selGrid
+<!-- AI 工厂管理树必须以项目为作用域，项目节点下固定承载规则管理、AI门禁、流程设计和执行进度，角色管理保持根级独立叶子；禁止退化为平铺功能菜单。 -->
+ai_factory_project_scoped_management_tree = 项目管理_then_当前项目_then_规则管理|AI门禁|流程设计|执行进度_plus_root_角色管理_no_flat_navigation
+<!-- 项目管理树的业务叶子不得显示无效下拉箭头，右侧表格必须限制合理内容宽度，禁止在宽屏上无限拉伸字段间距。 -->
+ai_factory_management_tree_leaf_and_workspace_width = leaf_no_expand_control_workspace_content_width_bounded_no_viewport_stretch
 <!-- AI 工厂每次打开默认使用 plain-minimal 浅色基础皮肤，不得把晶透、水晶、糖果或其他醒目主题设为默认。 -->
 ai_factory_management_default_theme = plain-minimal_light_base
 <!-- AI 工厂必须挂载统一个性化入口，用户可主动切换已登记主题，但页面刷新后仍回到普通极简默认值。 -->
@@ -123,18 +143,18 @@ ai_factory_header_visibility_control = persistent_next_to_theme_toggle_title_and
 ai_factory_management_theme_pack_set = plain-minimal_crystal-tech_candy-adventure_glass-admin
 <!-- AI 工厂应用 CSS 仍必须消费 SEL 统一语义令牌，禁止用固定色值模拟白底黑字。 -->
 ai_factory_management_theme_token_policy = sel_theme_tokens_only_no_application_hardcoded_color
-<!-- AI 工厂全部 Remix 图标必须由 SEL 同源 vendor 资源提供，外部 CDN 不得成为页面启动依赖。 -->
-ai_factory_same_origin_icon_resource = /sel/vendor/remixicon/remixicon.css_and_local_fonts
+<!-- AI 工厂 Remix 图标使用与既有管理页面一致的固定版本 jsDelivr 地址；SEL 公共本地图标资源不因本应用切换而删除。 -->
+ai_factory_icon_resource = jsdelivr_remixicon_4_6_0_keep_shared_local_vendor_assets
 <!-- AI 工厂默认极简视觉禁止发光、玻璃、水晶、动画背景和高辨识度装饰；该限制不覆盖用户主动切换后的主题。 -->
 ai_factory_management_default_visual_attention_policy = no_glow_no_glass_no_crystal_no_animated_background_low_attention
-<!-- AI 工厂树表公共定义必须在 reference-data 默认清单中登记。 -->
-ai_factory_reference_data_registration = required_for_role_gate_rule_project_stage_execution
+<!-- AI 工厂所有业务 Key/Value 必须在 reference-data 选项组登记，业务表和页面只保存稳定 Key。 -->
+ai_factory_reference_data_registration = required_for_role_type_gate_type_rule_type_workflow_node_edge_version_run_join_policy
 <!-- AiRole.roleType 的稳定值统一登记在引用数据共享选项组，当前只包含工程师和审核员。 -->
 ai_factory_role_type_reference_option_set = optionSet103006:ENGINEER|REVIEWER
 <!-- AI 工厂运行时必须查询引用数据名称，禁止在页面复制工程师和审核员中文。 -->
 ai_factory_role_type_display_source = reference_data_runtime_query_no_hardcoded_label
-<!-- 阶段执行审计必须记录起止时间、耗时、当前工作、本地日志路径和超时原因。 -->
-ai_factory_stage_audit_fields = startedAt_endedAt_elapsedMillis_currentWork_localLogPath_slowReason
+<!-- 节点运行审计必须记录起止时间、耗时、当前工作、本地日志路径和超时原因。 -->
+ai_factory_node_run_audit_fields = startedAt_endedAt_elapsedMillis_currentWork_localLogPath_slowReason
 <!-- 统一工作桌面必须通过显式模块配置把 AI 工厂控制面、API 和静态页面装配到8080。 -->
 ai_factory_desktop_host_integration = required_on_platform_runtime_8080
 <!-- Host 只导入 AI 工厂模块配置，不扫描或启动 AI 工厂独立 Spring Boot 入口。 -->

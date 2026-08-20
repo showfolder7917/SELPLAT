@@ -8,7 +8,7 @@ public interface AiManagementService {
     /**
      * 返回五张管理表的页面快照。
      * 真实传参示例：本方法无参数，由 {@code GET /management/dashboard} 调用。
-     * 真实返回示例：data 含 roles、gates、rules、projects、stages。
+     * 真实返回示例：data 含 roles、gates、rules、projects；执行节点进度由流程快照返回。
      * 异常或副作用示例：任一表查询失败时沿用统一异常；不写数据库。
      * @return 管理页聚合结果
      */

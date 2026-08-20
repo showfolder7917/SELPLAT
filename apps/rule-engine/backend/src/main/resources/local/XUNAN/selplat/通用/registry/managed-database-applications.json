@@ -35,6 +35,13 @@
       "databaseFile": "db/uniauth.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
       "datasourcePrefix": "uniauth.datasource"
+    },
+    {
+      "projectName": "ai-factiory",
+      "schemaRoot": "db/sql",
+      "databaseFile": "db/aifactory.mv.db",
+      "primaryKeyStrategy": "one-table-one-sequence",
+      "datasourcePrefix": "ai-factory.datasource"
     }
   ]
 }
