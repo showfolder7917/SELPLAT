@@ -54,6 +54,10 @@ tasks.named('processResources') {
 }
 
 tasks.register('syncVsCodeResources', Copy) {
+    // 旧版本曾把SEL公共资源复制到应用输出；每次同步前清除这一精确构建残留，避免覆盖公共sel-ui JAR。
+    doFirst {
+        delete(layout.buildDirectory.dir('classes/java/main/static/sel'))
+    }
     // VS Code 的 Gradle Java 启动器只稳定装载编译类输出，因此同步标准资源到同一统一 build 类目录。
     from(sourceSets.main.resources)
     // VS Code 直接读取 classes/java/main 时也必须获得与 Gradle 运行相同的六个具名 SQL 资源。
@@ -83,6 +87,8 @@ tasks.named('classes') {
 tasks.named('jar') {
     // VS Code 资源同步目录与标准 resources 都进入 JAR 时保留第一份，避免配置和静态页面重复。
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    // /sel/** 只能由shared:frontend:sel-ui发布，历史输出即使残留也不得重新进入Uniauth JAR。
+    exclude 'static/sel/**'
 }
 
 tasks.named('installDist') {
