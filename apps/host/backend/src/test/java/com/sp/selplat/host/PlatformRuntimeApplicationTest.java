@@ -29,7 +29,9 @@ import org.springframework.test.web.servlet.MockMvc;
     "mda.control.datasource.jdbc-url=jdbc:h2:mem:selplat_mda_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
     "mda.control.datasource.password=",
     "japanese.datasource.jdbc-url=jdbc:h2:mem:selplat_japanese_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
-    "japanese.datasource.password="
+    "japanese.datasource.password=",
+    "ai-factory.datasource.jdbc-url=jdbc:h2:mem:selplat_ai_factory_host_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+    "ai-factory.datasource.password="
 })
 @AutoConfigureMockMvc
 class PlatformRuntimeApplicationTest {
@@ -45,6 +47,12 @@ class PlatformRuntimeApplicationTest {
     @Qualifier("uniauthDataSource")
     private DataSource uniauthDataSource;
 
+    /**
+     * 方法作用：验证统一宿主健康接口包含桌面清单中的全部已装配业务模块。
+     * 真实传参示例：{@code GET /api/platform/runtime/health}。
+     * 真实返回示例：模块顺序为 host、mda、reference-data、uniauth、japanese、ai-factory。
+     * 异常或副作用示例：清单或模块装配缺失时断言失败，不访问文件数据库。
+     */
     @Test
     void shouldExposeHostAndReferenceDataModuleHealth() throws Exception {
         mockMvc.perform(get("/api/platform/runtime/health"))
@@ -56,14 +64,15 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(jsonPath("$.data.modules[2]").value("reference-data"))
                 .andExpect(jsonPath("$.data.modules[3]").value("uniauth"))
                 .andExpect(jsonPath("$.data.modules[4]").value("japanese"))
+                .andExpect(jsonPath("$.data.modules[5]").value("ai-factory"))
                 .andExpect(jsonPath("$.data.referenceDataModuleReady").value(true));
     }
 
     /**
-     * 验证统一端口同时发布公共组件、业务页面和完整桌面清单。
-     *
-     * 执行结果示例：{@code /sel/core/selKernel.js}、{@code /sel/core/selBaseRuntime.js} 与
-     * {@code /uniauth/uniauth.html} 均返回 HTTP 200。
+     * 方法作用：验证统一端口同时发布公共组件、业务页面和完整桌面清单。
+     * 真实传参示例：访问公共 SEL UI、desktop 清单以及五个业务应用页面。
+     * 真实返回示例：{@code /aifactory/aifactory.html} 与管理接口均返回 HTTP 200。
+     * 异常或副作用示例：资源、清单或模块装配缺失时断言失败，只使用隔离内存数据库。
      */
     @Test
     void shouldExposeSharedUiAndUniauthPageFromOneRuntime() throws Exception {
@@ -113,6 +122,14 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("/sel/components/tooltip/selTooltip.js")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("/sel/components/grid/selGrid.js")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("/sel/components/window/selWindow.js")));
+        // AI 工厂由统一 Host 发布同源页面和管理接口，不要求桌面再访问独立8091端口。
+        mockMvc.perform(get("/aifactory/aifactory.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("plain-minimal")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("data-aifactory-app")));
+        mockMvc.perform(get("/api/v1/ai-factory/management/dashboard"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.roles.length()").value(20));
         // MDA 由应用 payload 主动启用宽表和默认列宽，字段较多时允许在结果区内水平滚动。
         mockMvc.perform(get("/mda/mda.js"))
                 .andExpect(status().isOk())
@@ -130,7 +147,7 @@ class PlatformRuntimeApplicationTest {
         // 静态入口清单预留 permissionCode，后续后端权限接口可保持相同 JSON 结构。
         mockMvc.perform(get("/desktop/applications.json"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.applications.length()").value(4))
+                .andExpect(jsonPath("$.applications.length()").value(5))
                 .andExpect(jsonPath("$.applications[0].url").value("/mda/mda.html"))
                 .andExpect(jsonPath("$.applications[1].url").value("/reference-data/reference-data.html"))
                 .andExpect(jsonPath("$.applications[2].url").value("/uniauth/uniauth.html"))
@@ -138,11 +155,50 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(jsonPath("$.applications[2].enabled").value(false))
                 .andExpect(jsonPath("$.applications[2].releaseStatus").value("internal-remediation"))
                 .andExpect(jsonPath("$.applications[3].name").value("N2 红蓝宝书1000题"))
-                .andExpect(jsonPath("$.applications[3].url").value("/japanese/japanese.html"));
-        // 桌面同源白名单必须包含 Japanese，否则图标虽显示但会被渲染成禁用入口。
+                .andExpect(jsonPath("$.applications[3].url").value("/japanese/japanese.html"))
+                .andExpect(jsonPath("$.applications[4].name").value("AI 工厂"))
+                .andExpect(jsonPath("$.applications[4].url").value("/aifactory/aifactory.html"));
+        // 桌面同源白名单必须包含 Japanese 与 AI 工厂，否则图标虽显示但会被渲染成禁用入口。
         mockMvc.perform(get("/desktop/desktop.js"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"/japanese/\"")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"/japanese/\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"/aifactory/\"")));
+    }
+
+    /**
+     * 方法作用：定向验证 desktop 清单、同源白名单、AI 工厂页面和管理接口在统一 Host 内完整闭环。
+     * 真实传参示例：依次访问 applications.json、desktop.js、aifactory.html 和 management/dashboard。
+     * 真实返回示例：第五个应用为 AI 工厂，页面与接口 HTTP 200，角色记录为20条。
+     * 异常或副作用示例：模块未导入、静态资源缺失或清单未登记时断言失败，只使用隔离内存数据库。
+     */
+    @Test
+    void shouldExposeAiFactoryFromUnifiedDesktop() throws Exception {
+        mockMvc.perform(get("/desktop/desktop.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "20260820-desktop-registry-2")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("cdn.jsdelivr.net"))));
+        mockMvc.perform(get("/desktop/applications.json"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applications.length()").value(5))
+                .andExpect(jsonPath("$.applications[4].code").value("ai-factory"))
+                .andExpect(jsonPath("$.applications[4].url").value("/aifactory/aifactory.html"))
+                .andExpect(jsonPath("$.applications[4].visible").value(true))
+                .andExpect(jsonPath("$.applications[4].enabled").value(true));
+        mockMvc.perform(get("/desktop/desktop.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"/aifactory/\"")));
+        mockMvc.perform(get("/aifactory/aifactory.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("plain-minimal")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("data-aifactory-app")));
+        mockMvc.perform(get("/api/v1/ai-factory/management/dashboard"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.roles.length()").value(20));
+        mockMvc.perform(get("/api/platform/runtime/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.modules[5]").value("ai-factory"));
     }
 
     /**

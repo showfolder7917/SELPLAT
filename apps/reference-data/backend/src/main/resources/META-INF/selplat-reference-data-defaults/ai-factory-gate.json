@@ -1,0 +1,17 @@
+{
+  "projectCode":"ai-factory","pageKey":"gate-management",
+  "page":{"layoutMode":"FLOW","orderNo":0,"breakpoint":"DESKTOP","editable":true,"status":1,"sortnum":20},
+  "table":{"sourceTableName":"AiGate","gridId":"selGridAiGateId","nameZh":"AI门禁表格","nameJa":"AIゲート表","nameEn":"AI Gate Grid","description":"项目门、AI门禁和代码门禁","selectionMode":"SINGLE","pageSize":20,"rowHeight":40,"status":1,"sortnum":20,
+    "columns":[
+      {"fieldName":"gateName","labelZh":"门禁名称","labelJa":"ゲート名","labelEn":"Gate","width":"200px","cellRenderer":"text","sortnum":10},
+      {"fieldName":"gateType","labelZh":"门禁类型","labelJa":"ゲート種類","labelEn":"Type","width":"120px","cellRenderer":"text","sortnum":20},
+      {"fieldName":"projectCode","labelZh":"项目","labelJa":"プロジェクト","labelEn":"Project","width":"120px","cellRenderer":"text","sortnum":30},
+      {"fieldName":"description","labelZh":"说明","labelJa":"説明","labelEn":"Description","width":"360px","cellRenderer":"text","sortnum":40}
+    ]},
+  "treeNodes":[
+    {"key":"root","nodeValue":"ALL","labelZh":"门禁管理","labelJa":"ゲート管理","labelEn":"Gate Management","status":1,"sortnum":10},
+    {"key":"project","parentKey":"root","nodeValue":"PROJECT","labelZh":"项目门名称","labelJa":"プロジェクトゲート","labelEn":"Project Gates","status":1,"sortnum":20},
+    {"key":"ai","parentKey":"project","nodeValue":"AI","labelZh":"AI门禁","labelJa":"AIゲート","labelEn":"AI Gates","status":1,"sortnum":30},
+    {"key":"code","parentKey":"project","nodeValue":"CODE","labelZh":"代码门禁","labelJa":"コードゲート","labelEn":"Code Gates","status":1,"sortnum":40}
+  ]
+}

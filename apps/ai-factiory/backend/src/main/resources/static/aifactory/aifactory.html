@@ -1,32 +1,43 @@
 <!doctype html>
-<html lang="zh-CN">
+<!-- AI 工厂使用 Japanese 同款 SEL 公共 Panel、Tree、Grid 布局，默认启用普通极简主题。 -->
+<html lang="zh-CN" data-sel-theme="plain-minimal" data-sel-mode="light" data-sel-accent="base" data-sel-density="compact">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI 工厂进度</title>
-  <link rel="stylesheet" href="/sel/core/selBaseReset.css">
-  <link rel="stylesheet" href="/sel/core/selBaseAccessibility.css">
-  <link rel="stylesheet" href="/sel/theme/contract/selThemeContract.css">
-  <link rel="stylesheet" href="/sel/theme/contract/selThemeTypography.css">
-  <link rel="stylesheet" href="./aifactory.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>AI 工厂进度</title>
+    <link rel="icon" href="data:,">
+
+    <link rel="stylesheet" href="/sel/core/selBaseReset.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/core/selBaseAccessibility.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/core/selBaseToast.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeContract.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeStates.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/theme/contract/selThemeTypography.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/components/panel/selPanel.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/components/context-menu/selContextMenu.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/components/tooltip/selTooltip.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/components/tree/selTree.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/components/grid/selGrid.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/theme/packs/plain-minimal/theme.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/theme/packs/plain-minimal/modes/light.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="/sel/theme/packs/plain-minimal/modes/dark.css?v=20260820-ai-factory-1">
+    <link rel="stylesheet" href="./aifactory.css?v=20260820-management-1">
 </head>
 <body>
-  <main class="aifactory-shell">
-    <header class="aifactory-header">
-      <div><p class="aifactory-eyebrow">AI FACTORY</p><h1>任务进度</h1></div>
-      <span id="connectionState" class="aifactory-status">等待任务</span>
-    </header>
-    <section class="aifactory-query" aria-label="任务查询">
-      <label for="taskId">任务 ID</label>
-      <input id="taskId" autocomplete="off" placeholder="例如 TASK-10001">
-      <button id="watchTask" type="button">查看进度</button>
-    </section>
-    <section id="summary" class="aifactory-summary" aria-live="polite"></section>
-    <section><h2>阶段</h2><div id="stages" class="aifactory-grid"></div></section>
-    <section><h2>最近事件</h2><ol id="events" class="aifactory-timeline"></ol></section>
-  </main>
-  <script src="/sel/core/selKernel.js"></script>
-  <script src="/sel/core/selBaseRuntime.js"></script>
-  <script src="./aifactory.js"></script>
+    <main class="aifactory-page-stage" data-aifactory-app aria-label="AI 工厂管理"></main>
+
+    <script src="/sel/core/selKernel.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/core/selBaseRuntime.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/core/selAjax.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/theme/runtime/selThemeRegistry.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/theme/packs/plain-minimal/manifest.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/theme/runtime/selThemeManager.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/components/panel/selPanel.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/components/context-menu/selContextMenu.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/components/tooltip/selTooltip.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/components/tree/selTree.js?v=20260820-ai-factory-1"></script>
+    <script src="/sel/components/grid/selGrid.js?v=20260820-ai-factory-1"></script>
+    <script src="./aifactory.js?v=20260820-management-1"></script>
 </body>
 </html>

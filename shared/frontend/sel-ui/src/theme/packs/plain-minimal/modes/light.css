@@ -1,0 +1,35 @@
+/* 普通极简浅色模式：白底黑字，不使用品牌色、渐变或装饰性阴影。 */
+:root[data-sel-theme="plain-minimal"][data-sel-mode="light"] {
+    color-scheme: light;
+    --sel-theme-neutral-rgb: 255 255 255;
+    --sel-theme-tint-soft: 3%;
+    --sel-theme-tint-base: 5%;
+    --sel-theme-tint-raised: 8%;
+    --sel-theme-tint-accent: 12%;
+    --sel-theme-page-background: #ffffff;
+    --sel-theme-background-overlay-rgb: 255 255 255;
+    --sel-theme-text-main: #111111;
+    --sel-theme-text-muted: #666666;
+    --sel-theme-text-on-accent: #ffffff;
+    --sel-theme-text-on-selected-surface: #111111;
+    --sel-theme-text-on-soft-accent: #111111;
+    --sel-theme-text-shadow-rgb: 255 255 255;
+    --sel-theme-text-contrast-alpha: 0;
+    --sel-theme-panel-surface: #ffffff;
+    --sel-theme-control-surface: #ffffff;
+    --sel-theme-semantic-success: #176b36;
+    --sel-theme-semantic-warning: #765500;
+    --sel-theme-semantic-error: #9d2020;
+    --sel-theme-semantic-progress: #244f7a;
+    --sel-theme-semantic-review: #5b3b72;
+    --sel-theme-semantic-archived: #606060;
+    --sel-theme-line: #bdbdbd;
+    --sel-theme-line-soft: #e1e1e1;
+    --sel-theme-glow: transparent;
+    --sel-theme-inset: none;
+    --sel-theme-scrollbar-track: #f2f2f2;
+    --sel-theme-scrollbar-thumb: #a8a8a8;
+    --sel-theme-scrollbar-thumb-hover: #888888;
+    --sel-theme-scrollbar-thumb-active: #666666;
+    --sel-theme-scrollbar-glow: none;
+}

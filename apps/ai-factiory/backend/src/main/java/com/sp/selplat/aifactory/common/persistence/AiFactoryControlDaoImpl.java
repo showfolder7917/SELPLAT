@@ -102,9 +102,12 @@ public class AiFactoryControlDaoImpl implements AiFactoryControlDao {
     public Map<String, Object> resolveAgent(String roleId, String version) {
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT a.agent_id AS agentId,a.version,a.endpoint_type AS endpointType,a.endpoint," 
-                        + "a.protocol_version AS protocolVersion,a.capabilities_json AS capabilitiesJson,a.config_digest AS digest "
+                        + "a.protocol_version AS protocolVersion,a.capabilities_json AS capabilitiesJson,a.config_digest AS digest,"
+                        + "COALESCE(m.experienceLevel,'INEXPERIENCED') AS experienceLevel,"
+                        + "COALESCE(m.codexPoolType,'DISPOSABLE') AS codexPoolType "
                         + "FROM ai_role_version r JOIN ai_role_agent_binding b ON b.role_version_id=r.id "
                         + "JOIN ai_agent_registration a ON a.id=b.agent_registration_id "
+                        + "LEFT JOIN AiRole m ON m.roleCode=r.role_id AND m.status=1 "
                         + "WHERE r.role_id=? AND r.version=? AND r.status='APPROVED' AND b.status='ACTIVE' AND a.status='ACTIVE' "
                         + "ORDER BY b.priority LIMIT 2", roleId, version);
         if (rows.size() != 1) {
@@ -242,4 +245,3 @@ public class AiFactoryControlDaoImpl implements AiFactoryControlDao {
         return result;
     }
 }
-

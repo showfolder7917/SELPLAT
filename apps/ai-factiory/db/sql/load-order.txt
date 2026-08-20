@@ -1,3 +1,12 @@
 db/aifactory/sql/schema-aifactory.sql
 db/aifactory/sql/data-agent-registry.sql
-
+db/aifactory/sql/schema-AiRole.sql
+db/aifactory/sql/schema-AiGate.sql
+db/aifactory/sql/schema-AiRule.sql
+db/aifactory/sql/schema-AiProject.sql
+db/aifactory/sql/schema-AiStageExecution.sql
+db/aifactory/sql/data-AiRole.sql
+db/aifactory/sql/data-AiGate.sql
+db/aifactory/sql/data-AiRule.sql
+db/aifactory/sql/data-AiProject.sql
+db/aifactory/sql/data-AiStageExecution.sql

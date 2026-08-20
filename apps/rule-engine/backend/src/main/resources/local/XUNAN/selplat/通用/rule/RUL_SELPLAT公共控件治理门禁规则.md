@@ -3,7 +3,9 @@
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
 <!-- 5.19.0 增加 Grid 单选结果语义色，并固定行内动作禁止整表刷新。 -->
-rule_version = 5.19.0
+rule_version = 5.20.0
+<!-- 2026-08-20 固定浏览器关键资源同源交付，并要求SEL内核与能力脚本同步提升缓存版本。 -->
+upgrade_record_20260820_browser_bootstrap = same_origin_critical_assets,sel_kernel_and_capability_cache_version_sync,no_external_icon_cdn
 <!-- 页面直接编辑统一使用独立边框、真实右侧调宽手柄、统一圆角线条且业务控件不得覆盖。 -->
 upgrade_record_20260815_unified_edit_affordance = independent_editor_frame,real_right_edge_resize_handle,uniform_radius_and_line,no_business_control_override
 <!-- 2026-08-12 依次固定纯图标可发现性、确认控件边界、真实风险文案、页面编辑契约及客户交付审计发现的通用布局与可访问性要求。 -->
@@ -322,6 +324,14 @@ selplat_shared_theme_cache_delivery = shared_theme_content_change_requires_all_c
 selplat_shared_theme_cache_delivery.2 = normal_reload_fetches_current_style
 <!-- selplat_shared_theme_cache_delivery.3 的当前独立事实为 no_stale_open_page_cache。 -->
 selplat_shared_theme_cache_delivery.3 = no_stale_open_page_cache
+<!-- SEL内核或公共JavaScript能力变化时，消费页面必须同步提升内核、依赖能力和应用装配脚本的URL版本。 -->
+selplat_shared_script_cache_delivery = kernel_dependency_and_application_url_versions_bump_together
+<!-- 新内核不得与旧缓存能力脚本混载，普通刷新后所有require能力必须来自同一发布批次。 -->
+selplat_shared_script_cache_delivery.2 = no_new_kernel_with_stale_capability_scripts
+<!-- 页面启动关键CSS、字体和图标必须由SELPLAT同源资源交付，禁止依赖可能被浏览器隐私策略阻断的外部CDN。 -->
+selplat_browser_critical_asset_origin = repository_managed_same_origin_only
+<!-- 外部图标字体不可用时不得导致入口空白；桌面图标必须拥有同源文本或本地素材。 -->
+selplat_browser_critical_asset_origin.2 = no_external_icon_cdn_and_local_fallback_required
 <!-- 独立拖拽查询的父级只负责布局，不得绘制组合背景或内阴影；子控件位置变化后也只能看到真实控件。 -->
 selplat_independent_search_parent_surface = transparent_parent
 <!-- selplat_independent_search_parent_surface.2 的当前独立事实为 no_parent_inset_shadow。 -->

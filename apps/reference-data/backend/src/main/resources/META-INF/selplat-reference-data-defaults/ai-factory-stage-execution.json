@@ -1,0 +1,25 @@
+{
+  "projectCode":"ai-factory","pageKey":"stage-execution",
+  "page":{"layoutMode":"FLOW","orderNo":0,"breakpoint":"DESKTOP","editable":true,"status":1,"sortnum":50},
+  "table":{"sourceTableName":"AiStageExecution","gridId":"selGridAiStageExecutionId","nameZh":"AI执行进度表格","nameJa":"AI実行進捗表","nameEn":"AI Stage Execution Grid","description":"阶段起止时间、耗时、当前工作与本地日志审计","selectionMode":"SINGLE","pageSize":50,"rowHeight":40,"status":1,"sortnum":50,
+    "columns":[
+      {"fieldName":"stageName","labelZh":"阶段","labelJa":"段階","labelEn":"Stage","width":"150px","cellRenderer":"text","sortnum":10},
+      {"fieldName":"status","labelZh":"状态","labelJa":"状態","labelEn":"Status","width":"100px","cellRenderer":"text","sortnum":20},
+      {"fieldName":"startedAt","labelZh":"启动时间","labelJa":"開始時刻","labelEn":"Started","width":"180px","cellRenderer":"time","sortnum":30},
+      {"fieldName":"endedAt","labelZh":"结束时间","labelJa":"終了時刻","labelEn":"Ended","width":"180px","cellRenderer":"time","sortnum":40},
+      {"fieldName":"elapsedMillis","labelZh":"使用时间","labelJa":"使用時間","labelEn":"Elapsed","width":"120px","cellRenderer":"text","sortnum":50},
+      {"fieldName":"currentWork","labelZh":"当前工作","labelJa":"現在作業","labelEn":"Current Work","width":"260px","cellRenderer":"text","sortnum":60},
+      {"fieldName":"localLogPath","labelZh":"本地日志审计","labelJa":"ローカル監査ログ","labelEn":"Local Audit Log","width":"420px","cellRenderer":"text","sortnum":70},
+      {"fieldName":"slowReason","labelZh":"耗时说明","labelJa":"遅延理由","labelEn":"Slow Reason","width":"260px","cellRenderer":"text","sortnum":80}
+    ]},
+  "treeNodes":[
+    {"key":"root","nodeValue":"ALL","labelZh":"执行进度","labelJa":"実行進捗","labelEn":"Execution Progress","status":1,"sortnum":10},
+    {"key":"requirement","parentKey":"root","nodeValue":"REQUIREMENT","labelZh":"需求分析","labelJa":"要件分析","labelEn":"Requirements","status":1,"sortnum":20},
+    {"key":"architecture","parentKey":"root","nodeValue":"ARCHITECTURE","labelZh":"架构设计","labelJa":"アーキテクチャ","labelEn":"Architecture","status":1,"sortnum":30},
+    {"key":"requirementDefinition","parentKey":"root","nodeValue":"REQUIREMENT_DEFINITION","labelZh":"要件定义","labelJa":"要件定義","labelEn":"Requirement Definition","status":1,"sortnum":40},
+    {"key":"database","parentKey":"root","nodeValue":"DATABASE","labelZh":"数据库设计","labelJa":"データベース","labelEn":"Database","status":1,"sortnum":50},
+    {"key":"detailDesign","parentKey":"root","nodeValue":"DETAIL_DESIGN","labelZh":"详细设计","labelJa":"詳細設計","labelEn":"Detailed Design","status":1,"sortnum":60},
+    {"key":"code","parentKey":"root","nodeValue":"CODE","labelZh":"代码实现","labelJa":"コード実装","labelEn":"Code","status":1,"sortnum":70},
+    {"key":"test","parentKey":"root","nodeValue":"TEST","labelZh":"测试","labelJa":"テスト","labelEn":"Test","status":1,"sortnum":80}
+  ]
+}

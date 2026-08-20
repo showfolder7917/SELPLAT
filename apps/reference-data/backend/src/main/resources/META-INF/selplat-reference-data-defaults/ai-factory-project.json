@@ -1,0 +1,16 @@
+{
+  "projectCode":"ai-factory","pageKey":"project-management",
+  "page":{"layoutMode":"FLOW","orderNo":0,"breakpoint":"DESKTOP","editable":true,"status":1,"sortnum":40},
+  "table":{"sourceTableName":"AiProject","gridId":"selGridAiProjectId","nameZh":"AI项目表格","nameJa":"AIプロジェクト表","nameEn":"AI Project Grid","description":"当前项目列表和当前进度","selectionMode":"SINGLE","pageSize":20,"rowHeight":40,"status":1,"sortnum":40,
+    "columns":[
+      {"fieldName":"projectName","labelZh":"项目名称","labelJa":"プロジェクト名","labelEn":"Project","width":"180px","cellRenderer":"text","sortnum":10},
+      {"fieldName":"status","labelZh":"状态","labelJa":"状態","labelEn":"Status","width":"100px","cellRenderer":"text","sortnum":20},
+      {"fieldName":"currentStage","labelZh":"当前阶段","labelJa":"現在段階","labelEn":"Current Stage","width":"140px","cellRenderer":"text","sortnum":30},
+      {"fieldName":"currentWork","labelZh":"当前工作","labelJa":"現在作業","labelEn":"Current Work","width":"300px","cellRenderer":"text","sortnum":40},
+      {"fieldName":"progressPercent","labelZh":"进度","labelJa":"進捗","labelEn":"Progress","width":"90px","cellRenderer":"text","sortnum":50}
+    ]},
+  "treeNodes":[
+    {"key":"root","nodeValue":"ALL","labelZh":"项目管理","labelJa":"プロジェクト管理","labelEn":"Project Management","status":1,"sortnum":10},
+    {"key":"selplat","parentKey":"root","nodeValue":"SELPLAT","labelZh":"SELPLAT","labelJa":"SELPLAT","labelEn":"SELPLAT","status":1,"sortnum":20}
+  ]
+}

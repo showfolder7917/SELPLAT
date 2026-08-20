@@ -4,7 +4,7 @@ from threading import Event
 
 from ..agent.智能体启动器 import AgentLauncher
 from ..audit.审计日志记录器 import AuditLogger
-from ..codex.Codex连接池 import CodexConnectionPool
+from ..codex.Codex连接池 import CodexConnectionPools
 from ..sync.AI工厂客户端 import AiFactoryClient
 from ..sync.待上报队列存储 import OutboxStore
 from ..workspace.工作空间管理器 import WorkspaceManager
@@ -12,7 +12,7 @@ from ..workspace.工作空间管理器 import WorkspaceManager
 
 class MemoryDaemon:
     def __init__(self, client: AiFactoryClient, workspace: WorkspaceManager,
-                 pool: CodexConnectionPool, launcher: AgentLauncher, outbox: OutboxStore,
+                 pool: CodexConnectionPools, launcher: AgentLauncher, outbox: OutboxStore,
                  poll_interval: float) -> None:
         self.client = client
         self.workspace = workspace

@@ -1,3 +1,9 @@
+-- 历史环境可能曾以错误字符集写入显示名；数据库稳定路径是可靠身份，插入默认记录前先纠正名称以避免重复。
+UPDATE MdaConnectionProfile
+SET connectionName = 'Reference Data 数据库', updatedAt = CURRENT_TIMESTAMP
+WHERE databaseName LIKE '%apps/reference-data/db/reference-data%'
+  AND connectionName <> 'Reference Data 数据库';
+
 -- reference-data 是 SELPLAT 内置数据库管理目标；只在稳定连接名缺失时初始化，重启不覆盖页面修改。
 INSERT INTO MdaConnectionProfile (
     id, connectionName, databaseType, host, port, databaseName, schemaName,
@@ -10,6 +16,12 @@ INSERT INTO MdaConnectionProfile (
 WHERE NOT EXISTS (
     SELECT 1 FROM MdaConnectionProfile WHERE connectionName = 'Reference Data 数据库'
 );
+
+-- 历史环境可能曾以错误字符集写入显示名；数据库稳定路径是可靠身份，插入默认记录前先纠正名称以避免重复。
+UPDATE MdaConnectionProfile
+SET connectionName = 'N2 蓝宝书1000题数据库', updatedAt = CURRENT_TIMESTAMP
+WHERE databaseName LIKE '%apps/japanese/db/japanese%'
+  AND connectionName <> 'N2 蓝宝书1000题数据库';
 
 -- N2 蓝宝书1000题是 SELPLAT 内置的日语题库；只在稳定连接名缺失时恢复，不覆盖工作台中已修改的参数。
 INSERT INTO MdaConnectionProfile (

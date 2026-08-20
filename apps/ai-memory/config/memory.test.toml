@@ -20,6 +20,6 @@ retry_max_seconds = 1
 upload_policy = "DIGEST_ONLY"
 
 [codex]
-max_connections = 1
+persistent_max_connections = 1
+disposable_max_connections = 1
 command = "/usr/bin/true"
-

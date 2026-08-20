@@ -8,7 +8,7 @@ from com.sp.selplat.core.文件读取器 import (
     FileReader,
     UnsupportedFileTypeError,
 )
-from com.sp.selplat.memory.codex.Codex连接池 import CodexConnectionPool
+from com.sp.selplat.memory.codex.Codex连接池 import CodexConnectionPool, CodexConnectionPools
 from com.sp.selplat.memory.model.接口模型 import AgentRegistration
 from com.sp.selplat.memory.workspace.工作空间管理器 import WorkspaceManager
 
@@ -18,6 +18,17 @@ TEST_TEMP_ROOT = PROJECT_ROOT / "OPTION/temp/ai-factory/测试"
 
 
 class MemoryRuntimeTest(unittest.TestCase):
+    def test_batch_entry_is_http_client_without_server_binding(self) -> None:
+        batch_entry = (PROJECT_ROOT / "apps/ai-memory/ai-memory.bat").read_text(encoding="utf-8")
+        python_sources = "\n".join(
+            source.read_text(encoding="utf-8")
+            for source in (PROJECT_ROOT / "apps/ai-memory/src/main/python").rglob("*.py"))
+
+        self.assertIn("ai_memory_entry.py", batch_entry)
+        self.assertIn("SELPLAT_PYTHON", batch_entry)
+        self.assertNotIn("HTTPServer", python_sources)
+        self.assertNotIn("uvicorn.run", python_sources)
+
     def test_managed_file_reader_supports_markdown_and_blocks_invalid_targets(self) -> None:
         """统一入口正常读取 Markdown，并阻断未知类型、越界路径和缺失文件。"""
         TEST_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
@@ -71,6 +82,27 @@ class MemoryRuntimeTest(unittest.TestCase):
         with self.assertRaises(TimeoutError):
             pool.acquire(registration, "RUN-2", timeout=0.01)
         pool.release(connection)
+
+    def test_role_experience_selects_persistent_or_disposable_pool(self) -> None:
+        pools = CodexConnectionPools(1, 1)
+        experienced = AgentRegistration(
+            "EXPERIENCED", "1", "LOCAL_CODEX", "codex://agents/experienced", "1", (), "d",
+            experience_level="EXPERIENCED", codex_pool_type="PERSISTENT")
+        inexperienced = AgentRegistration(
+            "INEXPERIENCED", "1", "LOCAL_CODEX", "codex://agents/inexperienced", "1", (), "d",
+            experience_level="INEXPERIENCED", codex_pool_type="DISPOSABLE")
+
+        persistent_first = pools.acquire(experienced, "RUN-PERSISTENT-1", timeout=0.01)
+        pools.release(persistent_first)
+        persistent_second = pools.acquire(experienced, "RUN-PERSISTENT-2", timeout=0.01)
+        pools.release(persistent_second)
+        self.assertEqual(persistent_first.connection_id, persistent_second.connection_id)
+
+        disposable_first = pools.acquire(inexperienced, "RUN-DISPOSABLE-1", timeout=0.01)
+        pools.release(disposable_first)
+        disposable_second = pools.acquire(inexperienced, "RUN-DISPOSABLE-2", timeout=0.01)
+        pools.release(disposable_second)
+        self.assertNotEqual(disposable_first.connection_id, disposable_second.connection_id)
 
 
 if __name__ == "__main__":

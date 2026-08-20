@@ -45,6 +45,7 @@ def load_config(path: Path | None = None) -> MemoryConfig:
         client_id=str(client["client_id"]),
         request_timeout_seconds=int(sync["connect_timeout_seconds"]),
         poll_interval_seconds=float(runtime["poll_interval_seconds"]),
-        max_connections=int(codex["max_connections"]),
+        persistent_max_connections=int(codex["persistent_max_connections"]),
+        disposable_max_connections=int(codex["disposable_max_connections"]),
         codex_command=str(codex["command"]),
     )

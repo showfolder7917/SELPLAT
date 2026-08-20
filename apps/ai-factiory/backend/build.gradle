@@ -33,3 +33,17 @@ tasks.named('jar') {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
+tasks.named('installDist') {
+    // 独立控制面分发目录中的共享 Spring 依赖只保留一份，保证正式启动脚本可以生成。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('distZip') {
+    // 压缩分发包与 installDist 使用同一依赖去重策略，便于隔离目录启动验证。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('distTar') {
+    // Linux/macOS 分发包同样只保留一份共享依赖，避免不同打包入口行为漂移。
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

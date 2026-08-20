@@ -7,6 +7,7 @@
       "shortName": "MDA",
       "description": "管理数据库连接、结构与数据",
       "icon": "ri-database-2-line",
+      "iconText": "DB",
       "tone": "blue",
       "url": "/mda/mda.html",
       "openMode": "new-tab",
@@ -21,6 +22,7 @@
       "shortName": "引用数据",
       "description": "维护共通类型、树与选项数据",
       "icon": "ri-node-tree",
+      "iconText": "树",
       "tone": "cyan",
       "url": "/reference-data/reference-data.html",
       "openMode": "new-tab",
@@ -35,6 +37,7 @@
       "shortName": "身份权限",
       "description": "管理用户、身份与访问权限",
       "icon": "ri-shield-user-line",
+      "iconText": "权",
       "tone": "violet",
       "url": "/uniauth/uniauth.html",
       "openMode": "new-tab",
@@ -51,6 +54,7 @@
       "shortName": "N2 红蓝宝书",
       "description": "管理 N2 读音、汉字与语法选择题",
       "icon": "ri-book-open-line",
+      "iconText": "N2",
       "tone": "cyan",
       "url": "/japanese/japanese.html",
       "openMode": "new-tab",
@@ -58,6 +62,21 @@
       "visible": true,
       "enabled": true,
       "sortnum": 40
+    },
+    {
+      "code": "ai-factory",
+      "name": "AI 工厂",
+      "shortName": "AI 工厂",
+      "description": "管理角色、门禁、规则、项目与执行进度",
+      "icon": "ri-robot-2-line",
+      "iconText": "AI",
+      "tone": "blue",
+      "url": "/aifactory/aifactory.html",
+      "openMode": "new-tab",
+      "permissionCode": "ai-factory:access",
+      "visible": true,
+      "enabled": true,
+      "sortnum": 50
     }
   ]
 }

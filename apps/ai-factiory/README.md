@@ -4,10 +4,12 @@
 
 服务端不会启动 Agent、连接 Codex、执行本地 Gate 或读取本地任务正文。开发数据库生成到 `OPTION/temp/ai-factory/服务端开发数据/数据库`。
 
-待统一测试通过后，可从工程根启动：
+AI 工厂只暴露应用根级统一启动入口；不要把 backend 当作人工启动入口。`ai-memory` 是独立应用，仍由它自己的入口单独启动，不随 AI 工厂启动。
+
+待统一测试通过后，从 SELPLAT 工程根启动：
 
 ```bash
-./gradlew :apps:ai-factiory:backend:run
+./gradlew :apps:ai-factiory:run
 ```
 
-只读页面地址为 `/aifactory/aifactory.html`。
+该入口统一启动 8091 Java 控制面和 `/aifactory/aifactory.html` 页面。

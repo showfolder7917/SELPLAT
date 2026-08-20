@@ -3,24 +3,32 @@
 <!-- 当前规则用于约束 SELPLAT AI 工厂的 memory、ai-factory、Agent、Gate、生成物和可视化职责。 -->
 rule_scope = active_user_selplat_ai_factory_architecture_and_runtime_ownership
 <!-- 规则版本从用户确认的首个稳定双端职责模型开始。 -->
-rule_version = 1.2.0
+rule_version = 1.4.0
 <!-- 规则所有者从工程根 AGENTS.md 动态获取，不在正文固定用户名。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经进入用户层索引并完成文档追踪检查。 -->
 rule_status = active
 <!-- 升级记录说明本轮将多次用户修正统一沉淀为可复用架构约束。 -->
-upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件
+upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口
 
 ## 双端职责
 
-<!-- memory 的 Python 常驻进程负责监听、调度、连接和启动，是工作流唯一主动驱动者。 -->
-ai_factory_only_active_workflow_driver = local_memory_python_daemon
+<!-- ai-memory 的 Python 常驻客户端负责轮询、调度、连接和启动，是工作流唯一主动驱动者。 -->
+ai_factory_only_active_workflow_driver = local_ai_memory_python_polling_client
 <!-- Java 服务端只提供登记、校验、权威持久化、服务端审计和只读可视化。 -->
 ai_factory_java_responsibility = registry_http_validation_authoritative_persistence_server_audit_read_only_visualization
 <!-- Java 不得启动 Agent、连接 Codex、执行本地 Gate、读取本地任务目录或主动调度阶段。 -->
 ai_factory_java_forbidden_capabilities = start_agent_connect_codex_run_local_gate_read_local_task_root_schedule_stage
 <!-- 所有工作流动作必须由 Python 调用 HTTP API 发起，Java仅在请求内校验并落库。 -->
 ai_factory_workflow_change_trigger = python_initiated_http_api_only
+<!-- ai-factiory 只允许从应用根 Gradle run 任务作为人工统一入口启动 Java HTTP 控制面和页面。 -->
+ai_factory_unified_human_start_entry = gradle_:apps:ai-factiory:run
+<!-- backend run 是根级入口的内部委托任务，不作为 README 或人工操作中的独立入口。 -->
+ai_factory_backend_run_visibility = internal_delegate_only
+<!-- ai-memory 必须通过独立 BAT 运行，不得由 ai-factiory 启动或纳入其进程生命周期。 -->
+ai_memory_process_ownership = independent_apps/ai-memory/ai-memory.bat
+<!-- ai-memory 只作为 HTTP 请求客户端，禁止创建、绑定或监听 HTTP 服务端端口。 -->
+ai_memory_http_boundary = outbound_client_only_no_http_listener
 
 ## 角色与 Agent
 
@@ -32,6 +40,8 @@ memory_agent_start_sequence = fetch_stage_role_resolve_approved_agent_acquire_co
 memory_single_run_binding = one_role_one_agent_one_frozen_registration
 <!-- 本地 Codex 连接由 Python 连接池管理，连接必须按 run 独占并隔离异常会话。 -->
 memory_codex_connection_policy = python_pool_run_exclusive_quarantine_uncertain_session
+<!-- 有经验角色使用常驻 Codex 池，无经验角色使用释放即废弃连接的临时池。 -->
+memory_role_experience_pool_mapping = EXPERIENCED:PERSISTENT_INEXPERIENCED:DISPOSABLE
 <!-- 服务端不得返回长期凭据，只能返回短期授权或凭据引用。 -->
 agent_credential_delivery_policy = short_lived_grant_or_secret_reference_only
 
@@ -97,6 +107,22 @@ ai_factory_name_encoding_and_identifier_policy = utf8_nfc_chinese_resources_asci
 
 <!-- ai-factory Java 工程必须参照 apps/japanese，以 backend 为实际 Gradle 子项目并采用业务模块优先分层。 -->
 ai_factory_java_reference_architecture = apps/japanese_backend_feature_first_controller_service_impl_dao
+<!-- AI 工厂管理表使用 Ai 前缀并按角色、门禁、规则、项目和阶段执行拆分。 -->
+ai_factory_management_table_set = AiRole_AiGate_AiRule_AiProject_AiStageExecution
+<!-- AI 工厂管理页默认使用普通白底黑字主题，并由公共 Panel、Tree、Grid 组成。 -->
+ai_factory_management_ui_structure = plain-minimal_selPanel_selTree_selGrid
+<!-- AI 工厂树表公共定义必须在 reference-data 默认清单中登记。 -->
+ai_factory_reference_data_registration = required_for_role_gate_rule_project_stage_execution
+<!-- 阶段执行审计必须记录起止时间、耗时、当前工作、本地日志路径和超时原因。 -->
+ai_factory_stage_audit_fields = startedAt_endedAt_elapsedMillis_currentWork_localLogPath_slowReason
+<!-- 统一工作桌面必须通过显式模块配置把 AI 工厂控制面、API 和静态页面装配到8080。 -->
+ai_factory_desktop_host_integration = required_on_platform_runtime_8080
+<!-- Host 只导入 AI 工厂模块配置，不扫描或启动 AI 工厂独立 Spring Boot 入口。 -->
+ai_factory_host_module_configuration = AiFactoryModuleConfiguration_excluding_AiFactoryBackendApplication
+<!-- desktop 应用清单必须登记可见可用的 AI 工厂同源入口。 -->
+ai_factory_desktop_manifest_entry = ai-factory_/aifactory/aifactory.html_visible_enabled
+<!-- desktop 安全白名单必须显式允许 /aifactory/，禁止因清单登记而绕过同源路径校验。 -->
+ai_factory_desktop_same_origin_allowlist = /aifactory/
 <!-- ai-factory 静态资源目录固定无横线，文件名也使用 aifactory。 -->
 ai_factory_static_resource_root = backend/src/main/resources/static/aifactory
 <!-- 可视化页面只能查询任务、角色、Agent、进度、Gate、审计和审批，不得启动或推进工作流。 -->

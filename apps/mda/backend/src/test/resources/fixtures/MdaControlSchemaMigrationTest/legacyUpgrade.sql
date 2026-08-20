@@ -35,3 +35,10 @@ CREATE TABLE MdaConnectionProfile (
 INSERT INTO MdaConnectionProfile (
     id, connectionName, databaseType, databaseName, username, password, status)
 VALUES (10003, '旧库连接', 'H2', 'mem:legacy_mda', 'sa', 'legacy-password', 1);
+
+-- 模拟历史字符集错误：稳定数据库路径正确，但页面显示名已乱码。
+INSERT INTO MdaConnectionProfile (
+    id, connectionName, databaseType, databaseName, username, password, status)
+VALUES
+    (10004, 'Reference Data ?????', 'H2', 'file:./apps/reference-data/db/reference-data', 'sa', '123456', 1),
+    (10005, 'N2 ?????1000?????', 'H2', 'file:./apps/japanese/db/japanese', 'sa', '123456', 1);

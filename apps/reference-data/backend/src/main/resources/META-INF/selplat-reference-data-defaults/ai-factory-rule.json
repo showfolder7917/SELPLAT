@@ -1,0 +1,16 @@
+{
+  "projectCode":"ai-factory","pageKey":"rule-management",
+  "page":{"layoutMode":"FLOW","orderNo":0,"breakpoint":"DESKTOP","editable":true,"status":1,"sortnum":30},
+  "table":{"sourceTableName":"AiRule","gridId":"selGridAiRuleId","nameZh":"AI规则表格","nameJa":"AIルール表","nameEn":"AI Rule Grid","description":"通用规则和项目规则","selectionMode":"SINGLE","pageSize":20,"rowHeight":40,"status":1,"sortnum":30,
+    "columns":[
+      {"fieldName":"ruleName","labelZh":"规则名称","labelJa":"ルール名","labelEn":"Rule","width":"200px","cellRenderer":"text","sortnum":10},
+      {"fieldName":"ruleScope","labelZh":"范围","labelJa":"範囲","labelEn":"Scope","width":"100px","cellRenderer":"text","sortnum":20},
+      {"fieldName":"projectCode","labelZh":"项目","labelJa":"プロジェクト","labelEn":"Project","width":"120px","cellRenderer":"text","sortnum":30},
+      {"fieldName":"logicalPath","labelZh":"逻辑路径","labelJa":"論理パス","labelEn":"Logical Path","width":"420px","cellRenderer":"text","sortnum":40}
+    ]},
+  "treeNodes":[
+    {"key":"root","nodeValue":"ALL","labelZh":"规则管理","labelJa":"ルール管理","labelEn":"Rule Management","status":1,"sortnum":10},
+    {"key":"common","parentKey":"root","nodeValue":"COMMON","labelZh":"通用规则","labelJa":"共通ルール","labelEn":"Common Rules","status":1,"sortnum":20},
+    {"key":"project","parentKey":"root","nodeValue":"PROJECT","labelZh":"项目规则","labelJa":"プロジェクトルール","labelEn":"Project Rules","status":1,"sortnum":30}
+  ]
+}

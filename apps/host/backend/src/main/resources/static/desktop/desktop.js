@@ -27,7 +27,8 @@
         "/reference-data/",
         "/uniauth/",
         // SELPLAT-GENERATED-APPLICATION-PATHS
-        "/japanese/"
+        "/japanese/",
+        "/aifactory/"
     ]);
 
     /** 验证入口仅指向当前 Host 已装配的内部应用，避免配置被改成外部跳转。 */
@@ -58,8 +59,11 @@
             }
         });
         // 图标、名称和说明分别创建，避免把清单文字拼接为 innerHTML。
-        const icon = element("span", { className: "hostdesktop-application-icon", attributes: { "aria-hidden": "true" } });
-        icon.appendChild(element("i", { className: application.icon || "ri-apps-2-line" }));
+        const icon = element("span", {
+            className: "hostdesktop-application-icon",
+            text: application.iconText || "APP",
+            attributes: { "aria-hidden": "true" }
+        });
         const name = element("strong", { className: "hostdesktop-application-name", text: application.shortName || application.name });
         const description = element("span", { className: "hostdesktop-application-description", text: application.description });
         link.append(icon, name, description);

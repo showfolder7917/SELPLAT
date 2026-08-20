@@ -6,7 +6,7 @@ from pathlib import Path
 from threading import Event
 
 from .agent.智能体启动器 import AgentLauncher
-from .codex.Codex连接池 import CodexConnectionPool
+from .codex.Codex连接池 import CodexConnectionPools
 from .daemon.常驻驱动器 import MemoryDaemon
 from .sync.AI工厂客户端 import AiFactoryClient
 from .sync.HTTP客户端 import HttpClient
@@ -19,7 +19,9 @@ def build_daemon(config_path: Path | None = None) -> MemoryDaemon:
     config = load_config(config_path)
     http = HttpClient(config.base_url, config.client_id, config.request_timeout_seconds)
     return MemoryDaemon(AiFactoryClient(http), WorkspaceManager(config.runtime_root),
-                        CodexConnectionPool(config.max_connections), AgentLauncher(config.codex_command),
+                        CodexConnectionPools(config.persistent_max_connections,
+                                             config.disposable_max_connections),
+                        AgentLauncher(config.codex_command),
                         OutboxStore(config.sqlite_path),
                         config.poll_interval_seconds)
 

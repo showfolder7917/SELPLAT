@@ -17,6 +17,8 @@ dependencies {
     implementation project(':apps:reference-data:backend')
     // MDA 通过模块自持数据库上下文接入统一端口，不占用宿主主数据源。
     implementation project(':apps:mda:backend')
+    // AI 工厂控制面、管理接口和极简页面统一装配到8080，不要求桌面跨端口访问8091。
+    implementation project(':apps:ai-factiory:backend')
     // SELPLAT-GENERATED-MODULES
     implementation project(':apps:japanese:backend')
     // Web Starter 提供唯一内嵌 HTTP 容器和平台级 Controller。
@@ -62,6 +64,7 @@ tasks.named('classes') {
     dependsOn ':shared:backend:common-core:jar'
     dependsOn ':apps:reference-data:backend:jar'
     dependsOn ':apps:mda:backend:jar'
+    dependsOn ':apps:ai-factiory:backend:jar'
     // 公共前端和 Uniauth 资源必须在 Host 启动前生成可依赖 JAR。
     dependsOn ':shared:frontend:sel-ui:jar'
     dependsOn ':apps:uniauth:backend:jar'

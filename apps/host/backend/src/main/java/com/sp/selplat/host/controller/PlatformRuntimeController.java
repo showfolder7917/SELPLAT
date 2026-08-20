@@ -41,7 +41,7 @@ public class PlatformRuntimeController {
      *
      * @return 固定成功结构，例如
      *     {@code {"success":true,"data":{"status":"READY","runtime":"platform-runtime",}}
-     *     {@code "modules":["host","mda","reference-data","uniauth","japanese"],}
+     *     {@code "modules":["host","mda","reference-data","uniauth","japanese","ai-factory"],}
      *     {@code "msg":"平台宿主已启动。"}}
      */
     @GetMapping(value = "/health", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -63,8 +63,8 @@ public class PlatformRuntimeController {
 
     /**
      * 从桌面唯一应用清单构建统一运行时模块列表。
-     * 真实传参示例：applications.json 含 mda、reference-data、uniauth、japanese。
-     * 真实返回示例：{@code [host,mda,reference-data,uniauth,japanese]}。
+     * 真实传参示例：applications.json 含 mda、reference-data、uniauth、japanese、ai-factory。
+     * 真实返回示例：{@code [host,mda,reference-data,uniauth,japanese,ai-factory]}。
      * 异常或副作用示例：清单缺失、JSON 无效或 code 为空时阻断 Host 启动，不修改文件。
      *
      * @param objectMapper Spring JSON 读取器

@@ -49,4 +49,20 @@ class AiFactoryBackendApplicationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("AI 工厂进度")));
     }
+
+    /**
+     * 方法作用：验证 AI 前缀管理表能以树和表格需要的字段对外提供角色、门禁及执行审计数据。
+     * 真实传参示例：{@code GET /api/v1/ai-factory/management/dashboard}。
+     * 真实返回示例：{@code {success:true,data:{roles:[{codexPoolType:"PERSISTENT"}],stages:[{localLogPath:"..."}]}}}。
+     * 异常或副作用示例：管理表未初始化时请求失败，测试不会写入生产数据库。
+     */
+    @Test
+    void exposesAiPrefixedManagementTreesAndExecutionAuditFields() throws Exception {
+        mockMvc.perform(get("/api/v1/ai-factory/management/dashboard"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("需求分析师")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("PERSISTENT")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("localLogPath")));
+    }
 }

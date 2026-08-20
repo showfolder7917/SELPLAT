@@ -34,7 +34,9 @@ class AiFactoryClient:
         return AgentRegistration(str(data["agentId"]), str(data["version"]), str(data["endpointType"]),
                                  str(data["endpoint"]), str(data["protocolVersion"]),
                                  tuple(data.get("capabilities", [])), str(data["digest"]),
-                                 str(data.get("shortLivedGrant", "")))
+                                 str(data.get("shortLivedGrant", "")),
+                                 str(data.get("experienceLevel", "INEXPERIENCED")),
+                                 str(data.get("codexPoolType", "DISPOSABLE")))
 
     def claim_stage(self, stage_id: str) -> StageLease:
         data = self._post_data("/api/v1/ai-factory/stage-runs/claim.htm", {

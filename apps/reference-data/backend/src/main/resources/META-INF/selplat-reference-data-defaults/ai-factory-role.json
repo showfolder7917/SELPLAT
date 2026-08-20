@@ -1,0 +1,21 @@
+{
+  "projectCode": "ai-factory",
+  "pageKey": "role-management",
+  "page": {"layoutMode":"FLOW","orderNo":0,"breakpoint":"DESKTOP","editable":true,"status":1,"sortnum":10},
+  "table": {
+    "sourceTableName":"AiRole","gridId":"selGridAiRoleId","nameZh":"AI角色表格","nameJa":"AIロール表","nameEn":"AI Role Grid",
+    "description":"工程师、审核员、经验和Codex连接池策略","selectionMode":"SINGLE","pageSize":50,"rowHeight":40,"status":1,"sortnum":10,
+    "columns":[
+      {"fieldName":"roleName","labelZh":"角色名称","labelJa":"ロール名","labelEn":"Role","width":"180px","cellRenderer":"text","sortnum":10},
+      {"fieldName":"roleType","labelZh":"类型","labelJa":"種類","labelEn":"Type","width":"100px","cellRenderer":"text","sortnum":20},
+      {"fieldName":"experienceLevel","labelZh":"经验","labelJa":"経験","labelEn":"Experience","width":"100px","cellRenderer":"text","sortnum":30},
+      {"fieldName":"codexPoolType","labelZh":"Codex连接池","labelJa":"Codexプール","labelEn":"Codex Pool","width":"140px","cellRenderer":"text","sortnum":40},
+      {"fieldName":"specialty","labelZh":"专业范围","labelJa":"専門範囲","labelEn":"Specialty","width":"240px","cellRenderer":"text","sortnum":50}
+    ]
+  },
+  "treeNodes":[
+    {"key":"root","nodeValue":"ALL","labelZh":"角色管理","labelJa":"ロール管理","labelEn":"Role Management","status":1,"sortnum":10},
+    {"key":"engineer","parentKey":"root","nodeValue":"ENGINEER","labelZh":"工程师","labelJa":"エンジニア","labelEn":"Engineers","status":1,"sortnum":20},
+    {"key":"reviewer","parentKey":"root","nodeValue":"REVIEWER","labelZh":"审核员","labelJa":"レビュー担当","labelEn":"Reviewers","status":1,"sortnum":30}
+  ]
+}

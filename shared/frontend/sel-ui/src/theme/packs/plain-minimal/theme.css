@@ -1,0 +1,38 @@
+/* 普通极简主题：移除装饰材质，保留公共组件结构、焦点和可访问性语义。 */
+:root[data-sel-theme="plain-minimal"] {
+    --sel-theme-font-family: Arial, "Microsoft YaHei", sans-serif;
+    --sel-theme-radius-panel-base: 0px;
+    --sel-theme-radius-popup-base: 2px;
+    --sel-theme-radius-inner-base: 0px;
+    --sel-theme-radius-control: 2px;
+    --sel-theme-radius-action: 2px;
+    --sel-theme-radius-icon: 2px;
+    --sel-theme-grid-radius-row: 0px;
+    --sel-theme-grid-row-gap: 0px;
+    --sel-theme-crystal-surface-overflow: hidden;
+}
+
+:root[data-sel-theme="plain-minimal"] :is(.selpanel-crystal-surface, .selwindow-window-shell, .selfloating-panel) {
+    border: 1px solid var(--sel-theme-line);
+    border-image: none;
+    border-radius: 0;
+    background: var(--sel-theme-panel-surface);
+    box-shadow: none;
+    filter: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+:root[data-sel-theme="plain-minimal"] :is(button, input, select, textarea, .seldropdown-trigger) {
+    box-shadow: none;
+}
+
+:root[data-sel-theme="plain-minimal"] :is(.selpanel-title-shell, .selpanel-toolbar-shell, .selpanel-footer-shell) {
+    background: var(--sel-theme-panel-surface);
+    box-shadow: none;
+}
+
+:root[data-sel-theme="plain-minimal"] .selpanel-crystal-surface::after,
+:root[data-sel-theme="plain-minimal"] .selfloating-panel::after {
+    display: none;
+}

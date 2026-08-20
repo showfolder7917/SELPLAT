@@ -15,7 +15,8 @@ class MemoryConfig:
     client_id: str
     request_timeout_seconds: int
     poll_interval_seconds: float
-    max_connections: int
+    persistent_max_connections: int
+    disposable_max_connections: int
     codex_command: str
 
 
@@ -46,6 +47,8 @@ class AgentRegistration:
     capabilities: tuple[str, ...]
     digest: str
     short_lived_grant: str = ""
+    experience_level: str = "INEXPERIENCED"
+    codex_pool_type: str = "DISPOSABLE"
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,7 @@ class AgentConnection:
     connection_id: str
     endpoint: str
     run_id: str
+    pool_type: str = "PERSISTENT"
 
 
 @dataclass(frozen=True)
