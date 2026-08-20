@@ -3,20 +3,20 @@
 <!-- 当前规则用于约束 SELPLAT AI 工厂的 memory、ai-factory、Agent、Gate、生成物和可视化职责。 -->
 rule_scope = active_user_selplat_ai_factory_architecture_and_runtime_ownership
 <!-- 规则版本从用户确认的首个稳定双端职责模型开始。 -->
-rule_version = 1.7.0
+rule_version = 2.4.0
 <!-- 规则所有者从工程根 AGENTS.md 动态获取，不在正文固定用户名。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经进入用户层索引并完成文档追踪检查。 -->
 rule_status = active
 <!-- 升级记录说明本轮将多次用户修正统一沉淀为可复用架构约束。 -->
-upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口;2026-08-20:AI工厂默认白底黑字普通极简主题_恢复统一个性化入口和用户主动主题切换_样式只消费统一令牌;2026-08-20:AI工厂正式运行数据库归位应用db目录_临时根只保存测试审计备份和任务生成物
+upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口;2026-08-20:AI工厂默认白底黑字普通极简主题_恢复统一个性化入口和用户主动主题切换_样式只消费统一令牌;2026-08-20:AI工厂正式运行数据库归位应用db目录_临时根只保存测试审计备份和任务生成物;2026-08-20:AiRole角色类型统一使用引用数据选项组_页面禁止硬编码工程师审核员名称;2026-08-20:角色管理接入公共Grid上下拖拽和公共Window编辑_受控维护元数据但仍禁止启动Agent或推进流程;2026-08-20:AI工厂全部Remix图标改由SEL同源vendor资源交付_禁止外部CDN或空白图标;2026-08-20:角色删除使用公共确认框和服务端引用门禁_公共Window禁用按钮必须保持文字可读
 
 ## 双端职责
 
 <!-- ai-memory 的 Python 常驻客户端负责轮询、调度、连接和启动，是工作流唯一主动驱动者。 -->
 ai_factory_only_active_workflow_driver = local_ai_memory_python_polling_client
-<!-- Java 服务端只提供登记、校验、权威持久化、服务端审计和只读可视化。 -->
-ai_factory_java_responsibility = registry_http_validation_authoritative_persistence_server_audit_read_only_visualization
+<!-- Java 服务端只提供登记、校验、权威持久化、服务端审计和受控管理可视化。 -->
+ai_factory_java_responsibility = registry_http_validation_authoritative_persistence_server_audit_controlled_management_visualization
 <!-- Java 不得启动 Agent、连接 Codex、执行本地 Gate、读取本地任务目录或主动调度阶段。 -->
 ai_factory_java_forbidden_capabilities = start_agent_connect_codex_run_local_gate_read_local_task_root_schedule_stage
 <!-- 所有工作流动作必须由 Python 调用 HTTP API 发起，Java仅在请求内校验并落库。 -->
@@ -117,14 +117,22 @@ ai_factory_management_ui_structure = plain-minimal_selPanel_selTree_selGrid
 ai_factory_management_default_theme = plain-minimal_light_base
 <!-- AI 工厂必须挂载统一个性化入口，用户可主动切换已登记主题，但页面刷新后仍回到普通极简默认值。 -->
 ai_factory_management_theme_switching = personalization_available_user_initiated
+<!-- AI 工厂主题入口旁必须保留顶部区域显示隐藏按钮，标题折叠后该按钮不得随之消失。 -->
+ai_factory_header_visibility_control = persistent_next_to_theme_toggle_title_and_statistics_only
 <!-- AI 工厂主题库统一登记普通极简、水晶科技、糖果冒险和晶透管理四套公共主题。 -->
 ai_factory_management_theme_pack_set = plain-minimal_crystal-tech_candy-adventure_glass-admin
 <!-- AI 工厂应用 CSS 仍必须消费 SEL 统一语义令牌，禁止用固定色值模拟白底黑字。 -->
 ai_factory_management_theme_token_policy = sel_theme_tokens_only_no_application_hardcoded_color
+<!-- AI 工厂全部 Remix 图标必须由 SEL 同源 vendor 资源提供，外部 CDN 不得成为页面启动依赖。 -->
+ai_factory_same_origin_icon_resource = /sel/vendor/remixicon/remixicon.css_and_local_fonts
 <!-- AI 工厂默认极简视觉禁止发光、玻璃、水晶、动画背景和高辨识度装饰；该限制不覆盖用户主动切换后的主题。 -->
 ai_factory_management_default_visual_attention_policy = no_glow_no_glass_no_crystal_no_animated_background_low_attention
 <!-- AI 工厂树表公共定义必须在 reference-data 默认清单中登记。 -->
 ai_factory_reference_data_registration = required_for_role_gate_rule_project_stage_execution
+<!-- AiRole.roleType 的稳定值统一登记在引用数据共享选项组，当前只包含工程师和审核员。 -->
+ai_factory_role_type_reference_option_set = optionSet103006:ENGINEER|REVIEWER
+<!-- AI 工厂运行时必须查询引用数据名称，禁止在页面复制工程师和审核员中文。 -->
+ai_factory_role_type_display_source = reference_data_runtime_query_no_hardcoded_label
 <!-- 阶段执行审计必须记录起止时间、耗时、当前工作、本地日志路径和超时原因。 -->
 ai_factory_stage_audit_fields = startedAt_endedAt_elapsedMillis_currentWork_localLogPath_slowReason
 <!-- 统一工作桌面必须通过显式模块配置把 AI 工厂控制面、API 和静态页面装配到8080。 -->
@@ -137,13 +145,31 @@ ai_factory_desktop_manifest_entry = ai-factory_/aifactory/aifactory.html_visible
 ai_factory_desktop_same_origin_allowlist = /aifactory/
 <!-- ai-factory 静态资源目录固定无横线，文件名也使用 aifactory。 -->
 ai_factory_static_resource_root = backend/src/main/resources/static/aifactory
-<!-- 可视化页面只能查询任务、角色、Agent、进度、Gate、审计和审批，不得启动或推进工作流。 -->
-ai_factory_visualization_mode = read_only_no_agent_start_no_workflow_transition
+<!-- 管理页面允许编辑和排序登记元数据，但不得启动 Agent、执行 Gate、审批或推进工作流。 -->
+ai_factory_visualization_mode = controlled_registry_metadata_edit_no_agent_start_no_gate_execution_no_approval_no_workflow_transition
+<!-- 角色表上下排序必须使用公共 Grid dragHandle 与 rowReorder，并一次提交完整主键顺序持久化 sortnum。 -->
+ai_factory_role_reorder_contract = selGrid_dragHandle_rowReorder_complete_id_order_server_generated_sortnum
+<!-- 角色类型、工程师和审核员三个节点只用于构造固定树，不得进入普通角色编辑、删除或排序。 -->
+ai_factory_role_tree_structure = 角色类型_then_工程师|审核员_immutable_structure_nodes
+<!-- 角色树到工程师和审核员分类为止，不继续展开具体角色；点击分类后由右表展示该类全部角色。 -->
+ai_factory_role_tree_filter_behavior = category_leaf_without_dropdown_filters_grid_by_roleType
+<!-- 分类筛选表继续保留排序和操作列，排序必须提交当前类型的全部角色主键才能保存。 -->
+ai_factory_role_category_reorder = complete_current_roleType_id_order_required
+<!-- 普通角色表的排序列必须位于操作列紧前方，保持编辑删除在最右侧。 -->
+ai_factory_role_grid_column_order = role_fields_then_rowOrder_then_actions
+<!-- 角色编辑必须使用公共 Window，只开放名称、引用数据角色类型、经验级别和专业范围。 -->
+ai_factory_role_edit_contract = selWindow_roleName_reference_roleType_experienceLevel_specialty_only
+<!-- Codex 连接池禁止由角色编辑窗口任意组合，必须继续从经验级别自动派生。 -->
+ai_factory_role_edit_pool_derivation = EXPERIENCED:PERSISTENT_INEXPERIENCED:DISPOSABLE
+<!-- 角色删除必须使用公共二次确认框，服务端执行根节点、子节点和Agent版本引用门禁后才能逻辑删除。 -->
+ai_factory_role_delete_contract = selConfirmDialog_server_root_child_registered_version_guards_soft_delete
+<!-- 公共Window主按钮禁用时必须使用统一禁用文字与底板令牌，禁止在浅色背景上保留白字。 -->
+sel_window_disabled_primary_readability = semantic_disabled_text_and_control_surface_required
 
 ## 验证
 
-<!-- 交付前必须验证双端禁止依赖、Agent登记解析顺序、每角色Agent绑定和页面只读性。 -->
-ai_factory_architecture_delivery_gate = dependency_scan_agent_resolution_contract_single_role_agent_binding_read_only_ui
+<!-- 交付前必须验证双端禁止依赖、Agent登记解析顺序、每角色Agent绑定和受控管理边界。 -->
+ai_factory_architecture_delivery_gate = dependency_scan_agent_resolution_contract_single_role_agent_binding_controlled_management_ui
 <!-- 交付前必须扫描源码污染、跨 task_id 文件、非法中文名、绝对路径和符号链接逃逸。 -->
 ai_factory_runtime_directory_delivery_gate = source_pollution_cross_task_invalid_name_absolute_path_symlink_escape_scan
 <!-- 当前规则为架构与文档约束，尚无独立稳定程序入口，禁止调用方猜测执行器。 -->

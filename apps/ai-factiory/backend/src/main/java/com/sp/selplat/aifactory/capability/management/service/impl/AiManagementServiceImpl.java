@@ -49,7 +49,7 @@ public class AiManagementServiceImpl implements AiManagementService {
     @Override
     public CommonResult getDashboard() {
         Map<String, Object> dashboard = new LinkedHashMap<>();
-        dashboard.put("roles", records(roleService));
+        dashboard.put("roles", records(roleService, true));
         dashboard.put("gates", records(gateService));
         dashboard.put("rules", records(ruleService));
         dashboard.put("projects", records(projectService));
@@ -66,8 +66,23 @@ public class AiManagementServiceImpl implements AiManagementService {
      * 异常或副作用示例：数据库失败时向上抛出；只读当前服务对应表。
      */
     private List<Map<String, Object>> records(BaseService service) {
+        return records(service, false);
+    }
+
+    /**
+     * 按固定大页读取管理表，并按调用方要求排除逻辑删除记录。
+     * 真实传参示例：传入 AiRoleService 且 {@code activeOnly=true}。
+     * 真实返回示例：返回 status=1 的角色并按 sortnum、id 排序。
+     * 异常或副作用示例：表的 status 不是数字状态时调用方必须传 false；方法只读数据库。
+     *
+     * @param service 当前管理表业务服务
+     * @param activeOnly 是否只查询启用记录
+     * @return 已按业务顺序排列的管理记录
+     */
+    private List<Map<String, Object>> records(BaseService service, boolean activeOnly) {
         CommonPageParam query = new CommonPageParam();
         query.setPageSize(1000);
+        if (activeOnly) query.putParam("status", 1);
         List<Map<String, Object>> records = service.getStore(query).getRecords();
         records.sort(Comparator
                 .comparingDouble((Map<String, Object> row) -> number(row.get("sortnum")))

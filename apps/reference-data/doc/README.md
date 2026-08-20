@@ -19,8 +19,12 @@ reference-data 使用“对象类型前缀 + 本表 ID”的唯一 `code` 管理
 
 ```text
 GET /api/reference-data/types/{typeCode}
+GET /api/reference-data/options/{optionSetCode}?locale=zh-CN
 GET /api/reference-data/trees/{rootNodeCode}?locale=zh-CN
 ```
+
+共享选项接口只返回启用记录的稳定 `value`、当前语言 `label`、记录 `code` 和可选
+`parentCode`。业务表保存稳定值，页面显示名称由引用数据工作台统一维护。
 
 管理页面通过 `/reference-data/reference-data.html` 访问，正式数据写入
 `apps/reference-data/db/reference-data.mv.db`。

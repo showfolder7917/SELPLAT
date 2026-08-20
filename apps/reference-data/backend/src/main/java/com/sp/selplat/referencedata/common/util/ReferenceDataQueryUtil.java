@@ -44,6 +44,31 @@ public final class ReferenceDataQueryUtil {
     }
 
     /**
+     * 按引用数据语言回退顺序选择三语名称，最终回退稳定 valueCode。
+     * 真实传参示例：{@code {nameZh:"工程师",nameJa:"エンジニア",valueCode:"ENGINEER"}} 与 {@code ja-JP}。
+     * 真实返回示例：返回 {@code エンジニア}。
+     * 异常或副作用示例：三语名称均为空时返回 {@code ENGINEER}；不修改原记录。
+     *
+     * @param row DAO 返回的类型记录
+     * @param locale 已规范化为 zh-CN、ja-JP 或 en-US 的语言
+     * @return 当前语言可显示名称
+     */
+    public static String name(Map<String, Object> row, String locale) {
+        String[] fields = "ja-JP".equals(locale)
+                ? new String[] {"nameJa", "nameZh", "nameEn"}
+                : "en-US".equals(locale)
+                        ? new String[] {"nameEn", "nameZh", "nameJa"}
+                        : new String[] {"nameZh", "nameEn", "nameJa"};
+        for (String field : fields) {
+            Object value = row.get(field);
+            if (value != null && !String.valueOf(value).isBlank()) {
+                return String.valueOf(value);
+            }
+        }
+        return String.valueOf(row.get("valueCode"));
+    }
+
+    /**
      * 将数据库 JSON 扩展字段解析为公共不可变映射输入。
      *
      * @param value DAO 返回的 JSON 字段，例如 {@code {"resourceKind":"TREE"}}

@@ -9,9 +9,11 @@ import com.sp.selplat.common.util.CommonPageResult;
 import com.sp.selplat.common.util.CommonParam;
 import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.referencedata.common.persistence.ReferenceDataBaseDao;
+import com.sp.selplat.referencedata.common.util.ReferenceDataQueryUtil;
 import com.sp.selplat.referencedata.referencedatatype.dao.ReferenceDataTypeDao;
 import com.sp.selplat.referencedata.referencedatatype.service.ReferenceDataTypeService;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +85,42 @@ public class ReferenceDataTypeServiceImpl
         }
         return buildSuccessResult(record, "类型详情查询完成。");
     }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommonResult getOptionsByOptionSetCode(
+            String optionSetCode, Map<String, String> parameters) {
+        String requiredCode = String.valueOf(optionSetCode == null ? "" : optionSetCode).trim();
+        if (!requiredCode.matches("^optionSet[1-9][0-9]{5,}$")) {
+            // 空值、业务名或任意 SQL 片段 → 稳定业务错误，不进入数据库条件。
+            throw new CommonBusinessException(
+                    "REFERENCE_DATA_OPTION_SET_CODE_INVALID",
+                    "选项组 Code 必须是 optionSet 加至少六位正整数。");
+        }
+        String locale = ReferenceDataQueryUtil.locale(parameters);
+        CommonPageParam query = new CommonPageParam();
+        query.setPageNo(1);
+        query.setPageSize(1000);
+        query.putParam("optionSetCode", requiredCode);
+        query.putParam("status", 1);
+        List<Map<String, Object>> records = super.getStore(query).getRecords();
+        List<Map<String, Object>> options = new ArrayList<>(records.size());
+        for (Map<String, Object> record : records) {
+            // 类型记录 → 页面只消费稳定值、当前语言名称和同组选项父级，不暴露内部主键。
+            Map<String, Object> option = new LinkedHashMap<>();
+            option.put("code", record.get("code"));
+            option.put("value", record.get("valueCode"));
+            option.put("label", ReferenceDataQueryUtil.name(record, locale));
+            option.put("parentCode", record.get("parentTypeCode"));
+            options.add(option);
+        }
+        // 精确 optionSetCode 查询结果 → 同源页面可直接构造只读显示映射或下拉选项。
+        return ReferenceDataQueryUtil.success(
+                options,
+                "/api/reference-data/options/" + requiredCode,
+                "引用数据选项查询完成。");
+    }
+
     /**
      * {@inheritDoc}
      */

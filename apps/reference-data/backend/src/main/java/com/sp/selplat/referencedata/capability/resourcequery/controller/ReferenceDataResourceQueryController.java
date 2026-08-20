@@ -46,6 +46,24 @@ public class ReferenceDataResourceQueryController {
     }
 
     /**
+     * 按共享选项组 code 查询启用选项，供业务页面显示数据库稳定编码。
+     * 真实传参示例：{@code GET /api/reference-data/options/optionSet103006?locale=zh-CN}。
+     * 真实返回示例：{@code {"success":true,"data":[{"value":"ENGINEER","label":"工程师"},{"value":"REVIEWER","label":"审核员"}]}}。
+     * 异常或副作用示例：非法选项组 code 返回统一业务错误；接口只读 ReferenceDataType。
+     *
+     * @param optionSetCode 共享选项组稳定 code
+     * @param parameters locale 等查询参数
+     * @return 选项列表 JSON
+     */
+    @GetMapping(value = "/options/{optionSetCode}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String getOptions(
+            @PathVariable("optionSetCode") String optionSetCode,
+            @RequestParam Map<String, String> parameters) {
+        // 路径稳定坐标与语言参数 → Service 返回统一公共结果，Controller 只负责 JSON 表达。
+        return JsonUtils.toJsonIgnoreNull(service.getOptions(optionSetCode, parameters));
+    }
+
+    /**
      * 按唯一根节点 code 查询独立树。
      * 真实传参示例：{@code GET /api/reference-data/trees/treeNode101007?locale=zh-CN}。
      * 真实返回示例：返回 {@code {"success":true,"data":{"id":"treeNode101007"}}}。

@@ -28,6 +28,13 @@
     box-shadow: none;
 }
 
+/* 普通极简的 Window 主按钮保持白底黑字；公共个性化层不得留下强调主题使用的白色按钮文字。 */
+:root[data-sel-theme="plain-minimal"] .selwindow-action-primary:not(:disabled) {
+    border-color: var(--sel-theme-line);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+}
+
 /* 普通极简仍保留可发现的主题入口，但入口只使用普通文字、细边框和统一灰阶令牌。 */
 :root[data-sel-theme="plain-minimal"] .selpersonal-trigger {
     width: auto;

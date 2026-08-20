@@ -166,6 +166,14 @@
 .selwindow-action-button:hover,
 .selwindow-action-button:focus-visible { border-color: #8dc5ff; outline: none; box-shadow: 0 0 12px rgba(73, 137, 255, 0.48), inset 0 0 12px rgba(70, 112, 220, 0.28); }
 .selwindow-action-primary { border-color: #9abfff; color: var(--sel-theme-text-on-accent); background: #4e65e8; box-shadow: 0 0 16px rgba(67, 132, 255, 0.58), 0 0 10px rgba(126, 72, 255, 0.36), inset 0 0 12px rgba(255, 255, 255, 0.18); }
+.selwindow-action-button:disabled {
+    border-color: var(--sel-theme-line);
+    color: var(--sel-theme-text-disabled);
+    background: var(--sel-theme-control-surface);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 1;
+}
 
 /* 八方向透明手柄扩大命中区，视觉边框始终来自真实九宫格素材。 */
 .selwindow-resize-handle { position: absolute; z-index: 12; display: block; touch-action: none; }

@@ -18,6 +18,18 @@ public interface ReferenceDataResourceQueryService {
     CommonResult getType(String typeCode);
 
     /**
+     * 按共享选项组 code 查询可显示的启用选项。
+     * 真实传参示例：{@code optionSet103006} 与 {@code {"locale":"zh-CN"}}。
+     * 真实返回示例：{@code {"success":true,"data":[{"value":"ENGINEER","label":"工程师"}]}}。
+     * 异常或副作用示例：非法选项组 code 抛出稳定业务异常；不写数据库。
+     *
+     * @param optionSetCode 共享选项组稳定 code
+     * @param parameters locale 等查询参数
+     * @return 选项列表公共结果
+     */
+    CommonResult getOptions(String optionSetCode, Map<String, String> parameters);
+
+    /**
      * 按根节点唯一 code 查询一棵启用树。
      * 真实传参示例：{@code treeNode101007} 与 {@code {"locale":"zh-CN"}}。
      * 真实返回示例：返回 {@code {"success":true,"data":{"value":"ROOT","children":[]}}}。

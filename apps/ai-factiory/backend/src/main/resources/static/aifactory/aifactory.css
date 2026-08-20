@@ -27,3 +27,37 @@ body {
     place-items: center;
     padding: var(--sel-theme-viewport-gap);
 }
+
+/* 顶部显示隐藏按钮与公共主题入口共用固定控制区，折叠标题后仍可恢复。 */
+.aifactory-header-toggle {
+    display: inline-flex;
+    min-width: 72px;
+    height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-right: 8px;
+    padding: 0 10px;
+    border: 1px solid var(--sel-theme-line);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    cursor: pointer;
+    font: inherit;
+    vertical-align: top;
+}
+
+.aifactory-header-toggle:is(:hover, :focus-visible) {
+    border-color: var(--sel-theme-text-secondary);
+    outline: none;
+    background: var(--sel-theme-control-hover);
+}
+
+:root[data-sel-theme="plain-minimal"] .aifactory-header-toggle {
+    height: 32px;
+    box-shadow: none;
+}
+
+.aifactory-header-hidden .selpanel-header-shell {
+    display: none;
+}

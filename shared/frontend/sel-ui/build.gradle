@@ -13,6 +13,7 @@ tasks.named('processResources') {
         include 'components/**'
         include 'theme/**'
         include 'assets/**'
+        include 'vendor/**'
         into 'META-INF/resources/sel'
     }
 }

@@ -97,7 +97,7 @@
             return `
                 <header class="selpanel-crystal-surface selpanel-header-shell" data-sel-panel-component="title">
                     <div class="selpanel-brand-group">
-                        <span class="selpanel-brand-icon" aria-hidden="true"><i class="ri-gem-line"></i></span>
+                        <span class="selpanel-brand-icon" aria-hidden="true"><i class="ri-diamond-line"></i></span>
                         <div class="selpanel-brand-copy">
                             <div class="selpanel-title-line">
                                 <h1 data-sel-grid-role="panel-title"></h1>

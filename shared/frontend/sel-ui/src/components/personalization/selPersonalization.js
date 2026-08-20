@@ -65,7 +65,7 @@
             dark: { mainColor: null, mutedColor: null, contrast: 60, fontScale: 50 },
             light: { mainColor: null, mutedColor: null, contrast: 72, fontScale: 50 }
         } },
-        { id: "soft", label: "柔和", icon: "ri-feather-line", values: {
+        { id: "soft", label: "柔和", icon: "ri-quill-pen-line", values: {
             dark: { mainColor: "#DCE6FA", mutedColor: "#9BAAC4", contrast: 42, fontScale: 50 },
             light: { mainColor: "#33445E", mutedColor: "#728096", contrast: 46, fontScale: 50 }
         } },

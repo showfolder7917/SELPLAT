@@ -63,6 +63,14 @@ class ReferenceDataSixTablePersistenceTest {
                             + "WHERE code='window103013' AND projectCode='japanese' "
                             + "AND triggerControlCode='selWindowJapaneseN2BlueBookQuestionId'",
                     Long.class));
+            assertEquals(2L, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM ReferenceDataType "
+                            + "WHERE optionSetCode='optionSet103006' AND status=1",
+                    Long.class));
+            assertEquals(List.of("REVIEWER", "ENGINEER"), jdbc.queryForList(
+                    "SELECT valueCode FROM ReferenceDataType "
+                            + "WHERE optionSetCode='optionSet103006' ORDER BY sortnum,id",
+                    String.class));
         }
     }
 

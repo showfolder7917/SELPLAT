@@ -38,6 +38,13 @@ public class ReferenceDataResourceQueryServiceImpl implements ReferenceDataResou
 
     /** {@inheritDoc} */
     @Override
+    public CommonResult getOptions(String optionSetCode, Map<String, String> parameters) {
+        // 稳定选项组坐标 → 由类型表业务服务统一完成精确查询、状态过滤和多语言回退。
+        return typeService.getOptionsByOptionSetCode(optionSetCode, parameters);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public CommonResult getNodes(String rootCode, Map<String, String> parameters) {
         return treeNodeService.getNodes(rootCode, parameters);
     }

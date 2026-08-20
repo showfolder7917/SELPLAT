@@ -7,7 +7,7 @@ python_ability_refs = none
 <!-- 本规则没有独立 Node 程序，前端行为由应用脚本与契约测试验证。 -->
 node_ability_refs = none
 <!-- 1.28.0 固定引用数据管理中日英资源分层、数据库多语言字段回退和无刷新原位切换。 -->
-rule_version = 1.28.0
+rule_version = 1.29.0
 <!-- 所有者只能从工程根 AGENTS.md 的当前稳定用户声明动态取得。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记和应用回归。 -->
@@ -46,6 +46,15 @@ upgrade_record_20260816_type_independent_query = 数据类型code_parentTypeCode
 upgrade_record_20260816_all_structural_queries = tree使用code_parentId独立输入_table_elements使用code_tableId独立输入_tables_windows只保留code_BaseDao_AND_一个共享submit_删除keyword和重复submit布局
 <!-- 本次升级把已确认的引用数据国际化方案固化为可回归的应用规则。 -->
 upgrade_record_20260816_runtime_i18n = 应用固定文案使用reference-data_i18n三语同构JSON_公共Window和personalization使用SEL独立语言包_数据库业务名按当前locale回退_原子原位切换保留查询分页详情编辑状态
+<!-- 本次升级为跨应用共享选项组建立稳定只读查询入口，业务表仍只保存稳定值。 -->
+upgrade_record_20260820_public_option_set_query = optionSetCode精确查询_只返回启用选项_按locale名称回退_业务页面禁止复制显示名称
+
+## 公共选项查询
+
+<!-- 业务页面按稳定选项组 code 和页面语言查询共享选项，不得提交表名或 SQL。 -->
+reference_data_option_set_public_query = GET_/api/reference-data/options/<optionSetCode>?locale=<locale>
+<!-- 公共结果只公开稳定 code、value、当前语言 label 和可选 parentCode。 -->
+reference_data_option_set_public_result = enabled_only_code_value_localized_label_optional_parentCode
 
 ## 导航能力边界
 

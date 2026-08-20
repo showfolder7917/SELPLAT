@@ -46,6 +46,7 @@ public class ReferenceDataPersistenceConfiguration {
         "db/reference-data/sql/schema-ReferenceDataTreeNode.sql",
         "db/reference-data/sql/schema-ReferenceDataTableElement.sql",
         "db/reference-data/sql/schema-ReferenceDataWindow.sql",
+        "db/reference-data/sql/data-ReferenceDataType.sql",
         "db/reference-data/sql/data-ReferenceDataWindow.sql",
         "db/reference-data/sql/data-CommonSequenceSegment.sql"
     };
@@ -96,7 +97,7 @@ public class ReferenceDataPersistenceConfiguration {
             config.setJdbcUrl(resolveDatabaseUrl(config.getJdbcUrl()));
             // HikariConfig → 模块私有连接池；具名 Bean 保证 Host 不按类型误选其他项目数据源。
             dataSource = new HikariDataSource(config);
-            // 固定 SQL 清单依次执行 → 创建缺失六表结构并幂等补充唯一全局号段。
+            // 固定 SQL 清单依次执行 → 创建缺失六表结构，并幂等补充角色类型、Window 与号段种子。
             initializeDatabase(dataSource);
             // 初始化完成的连接池 → DAO、全局号段和 BaseDataSourceContext 共用同一数据库。
             return dataSource;
@@ -230,8 +231,8 @@ public class ReferenceDataPersistenceConfiguration {
      * 按固定顺序执行 reference-data 建表、号段和表格定义演示数据脚本。
      *
      * @param dataSource 当前独立文件库或隔离测试库
-     * 执行结果示例：数据库包含六张业务表、一张公共号段表、六个表主键号段和 ReferenceDataObjectId 通用号段；
-     *     再次执行不会覆盖管理员维护的数据。
+     * 执行结果示例：数据库包含六张业务表、一张公共号段表、AI 工厂角色类型选项组、
+     *     六个表主键号段和 ReferenceDataObjectId 通用号段；再次执行不会覆盖管理员维护的数据。
      */
     private void initializeDatabase(DataSource dataSource) {
         // 固定结构和数据资源清单 → 可重复执行的数据库初始化器。

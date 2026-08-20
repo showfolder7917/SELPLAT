@@ -64,7 +64,7 @@
         name: "水晶科技",
         category: "科技",
         description: "透明水晶边框、深海玻璃与蓝紫光效",
-        icon: "ri-gem-line",
+        icon: "ri-diamond-line",
         defaults: { mode: "dark", accent: null, density: "comfortable" },
         backgrounds: selCrystalTechBackgrounds(),
         modes: [

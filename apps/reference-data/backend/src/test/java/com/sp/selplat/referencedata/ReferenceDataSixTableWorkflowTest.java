@@ -283,6 +283,16 @@ class ReferenceDataSixTableWorkflowTest {
                 "missing999999", Map.of("tableElements", List.of(Map.of(
                         "code", savedElement.get("code"), "width", "200px")))));
         assertTrue(resourceQueryController.getType(typeCode).contains("DROPDOWN"));
+        String roleTypesZh = resourceQueryController.getOptions(
+                "optionSet103006", Map.of("locale", "zh-CN"));
+        assertTrue(roleTypesZh.contains("ENGINEER"));
+        assertTrue(roleTypesZh.contains("工程师"));
+        assertTrue(roleTypesZh.contains("REVIEWER"));
+        assertTrue(roleTypesZh.contains("审核员"));
+        assertTrue(resourceQueryController.getOptions(
+                "optionSet103006", Map.of("locale", "ja-JP")).contains("エンジニア"));
+        assertTrue(resourceQueryController.getOptions(
+                "optionSet103006", Map.of("locale", "en-US")).contains("Reviewer"));
         assertTrue(resourceQueryController.getNodes(String.valueOf(savedNode.get("code")), Map.of("locale", "zh-CN"))
                 .contains("ENABLED_CHILD"));
         assertTrue(treeNodeController.getStore(new CommonPageParam()).contains("ENABLED"));
@@ -368,6 +378,10 @@ class ReferenceDataSixTableWorkflowTest {
                 () -> typeService.getTypeByCode("missing999999"));
         assertBusiness("REFERENCE_DATA_TYPE_CODE_NOT_FOUND",
                 () -> typeService.getTypeByCode(null));
+        assertBusiness("REFERENCE_DATA_OPTION_SET_CODE_INVALID",
+                () -> typeService.getOptionsByOptionSetCode("ROLE_TYPE", Map.of()));
+        assertTrue(resourceQueryController.getOptions(
+                "optionSet999999", Map.of("locale", "zh-CN")).contains("\"data\":[]"));
         Map<String, Object> negativePage = data(controlLayoutService.insert(params(Map.of(
                 "projectCode", "qa", "pageCode", "bootstrap", "controlKind", "PAGE",
                 "sourceTableName", "ReferenceDataControlLayout", "layoutMode", "FLOW", "breakpoint", "DESKTOP"))));
