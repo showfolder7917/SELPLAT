@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS AiWorkflowNodeRun (
  CONSTRAINT fk_ai_workflow_node_run_workflow FOREIGN KEY(workflowRunId) REFERENCES AiWorkflowRun(id),
  CONSTRAINT fk_ai_workflow_node_run_node FOREIGN KEY(nodeId) REFERENCES AiWorkflowNode(id),
  CONSTRAINT fk_ai_workflow_node_run_role FOREIGN KEY(roleId) REFERENCES AiRole(id),
- CONSTRAINT fk_ai_workflow_node_run_agent FOREIGN KEY(agentRegistrationId) REFERENCES ai_agent_registration(id),
  CONSTRAINT uk_ai_workflow_node_run UNIQUE(workflowRunId,nodeId)
 );
 COMMENT ON TABLE AiWorkflowNodeRun IS 'AI工厂流程角色节点执行事实';
@@ -16,7 +15,7 @@ COMMENT ON COLUMN AiWorkflowNodeRun.id IS '节点运行主键';
 COMMENT ON COLUMN AiWorkflowNodeRun.workflowRunId IS '所属流程运行主键';
 COMMENT ON COLUMN AiWorkflowNodeRun.nodeId IS '对应画布节点实例主键';
 COMMENT ON COLUMN AiWorkflowNodeRun.roleId IS '节点使用的角色主键';
-COMMENT ON COLUMN AiWorkflowNodeRun.agentRegistrationId IS 'Python启动的Agent登记主键';
+COMMENT ON COLUMN AiWorkflowNodeRun.agentRegistrationId IS 'Python启动时上报的外部Agent登记标识，不依赖本地旧登记表';
 COMMENT ON COLUMN AiWorkflowNodeRun.status IS '引用数据节点运行状态稳定Key';
 COMMENT ON COLUMN AiWorkflowNodeRun.currentWork IS '节点当前工作摘要';
 COMMENT ON COLUMN AiWorkflowNodeRun.startedAt IS '节点启动时间';

@@ -7,13 +7,13 @@ python_ability_refs = ai_rule_package_integrator
 <!-- Node 当前没有承载本规则的自动化程序，显式写 none 防止误调用生成器。 -->
 node_ability_refs = none
 <!-- 规则版本从 1.0.0 起步，后续语义变化必须递增并记录升级原因。 -->
-rule_version = 1.2.0
+rule_version = 1.3.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，公共合并前不得扩大作用域。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已由根索引登记并通过当前回归验证。 -->
 rule_status = active
 <!-- 升级记录同时保存首次整合和用户发现的逐行注释缺口，防止修正规范被口头带过。 -->
-upgrade_record = 2026-08-03:清理废弃传统链并建立AI规则包持续整合入口;2026-08-03:补齐新增规则逐行中文业务注释并增加自动检查;2026-08-03:增加用户明确委托后的AI托管修正边界;2026-08-07:程序_规则路径和所有者统一改为AGENTS动态当前用户
+upgrade_record = 2026-08-03:清理废弃传统链并建立AI规则包持续整合入口;2026-08-03:补齐新增规则逐行中文业务注释并增加自动检查;2026-08-03:增加用户明确委托后的AI托管修正边界;2026-08-07:程序_规则路径和所有者统一改为AGENTS动态当前用户;2026-08-21:每次变更交付前强制评估规则与门禁升级_用户确认的可复用约束必须同任务沉淀_测试登记不得替代规则升级
 
 <!-- 问题：历史规则、模板、案例和程序分别增长，迁移后仍存在旧路径、缺失关联和只修成品不升级规则包的问题。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 中新增、审查、执行、修正、合并或退役规则。 -->
@@ -107,6 +107,15 @@ ai_must_classify_each_gap.7 = stale_reference
 ai_must_classify_each_gap.8 = duplicate_or_conflict
 <!-- 可复发问题必须优先修正规则包，禁止只修改当前成品后结束。 -->
 ai_must_prefer_repairing_the_rule_package_over_repairing_one_output = true
+
+<!-- 每次代码、配置、文档或可复用成品发生变更时，交付前必须显式评估现有规则和门禁是否需要升级；业务含义是不能依赖用户再次提醒才检查防复发闭环。 -->
+every_change_handoff_requires_rule_and_gate_upgrade_evaluation = true
+<!-- 用户确认的约束可复用且业务语义已经明确时，必须在同一已授权任务内升级当前用户层规则与门禁；业务含义是当前修正和以后自动执行必须同时落地。 -->
+reusable_user_correction_requires_same_task_rule_and_gate_upgrade = true
+<!-- 评估后没有适用升级时必须记录已检查的近义规则和不升级原因；业务含义是“无需升级”也必须有可复核依据，禁止静默跳过。 -->
+no_upgrade_decision_requires_near_rule_and_reason_evidence = true
+<!-- 测试文档只承载待测责任，不能替代规则语义、索引登记或门禁接线升级；业务含义是测试清单存在不代表防复发规则已经完成。 -->
+test_document_must_not_substitute_rule_or_gate_upgrade = true
 
 ## 按规则运行
 

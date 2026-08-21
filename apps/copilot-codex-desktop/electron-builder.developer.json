@@ -1,8 +1,0 @@
-{
-  "appId": "com.selplat.codexdeveloper",
-  "productName": "Codex Developer",
-  "directories": { "output": "release/developer" },
-  "files": ["dist/client/**/*", "dist/developer/**/*", "dist-electron/**/*", "package.json"],
-  "win": { "target": "nsis", "artifactName": "Codex-Developer-${version}-Setup.${ext}" },
-  "mac": { "target": "dmg", "artifactName": "Codex-Developer-${version}.${ext}", "category": "public.app-category.developer-tools" }
-}

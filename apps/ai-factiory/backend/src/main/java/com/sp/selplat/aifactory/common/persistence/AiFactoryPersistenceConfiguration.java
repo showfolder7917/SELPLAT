@@ -45,29 +45,7 @@ public class AiFactoryPersistenceConfiguration {
             new SequenceTarget("AiWorkflowNodeId", "AiWorkflowNode", "id"),
             new SequenceTarget("AiWorkflowEdgeId", "AiWorkflowEdge", "id"),
             new SequenceTarget("AiWorkflowRunId", "AiWorkflowRun", "id"),
-            new SequenceTarget("AiWorkflowNodeRunId", "AiWorkflowNodeRun", "id"),
-            new SequenceTarget("AiAgentRegistrationId", "ai_agent_registration", "id"),
-            new SequenceTarget("AiRoleVersionId", "ai_role_version", "id"),
-            new SequenceTarget("AiRoleAgentBindingId", "ai_role_agent_binding", "id"),
-            new SequenceTarget("AiTaskId", "ai_task", "id"),
-            new SequenceTarget("AiTaskStageId", "ai_task_stage", "id"),
-            new SequenceTarget("AiStageRunId", "ai_stage_run", "id"),
-            new SequenceTarget("AiProgressEventSequence", "ai_progress_event", "sequence"),
-            new SequenceTarget("AiAgentStateEventId", "ai_agent_state_event", "id"),
-            new SequenceTarget("AiArtifactId", "ai_artifact", "id"),
-            new SequenceTarget("AiGateResultId", "ai_gate_result", "id"),
-            new SequenceTarget("AiAuditEventId", "ai_audit_event", "id"),
-            new SequenceTarget("AiClientDeviceId", "ai_client_device", "id"),
-            new SequenceTarget("AiRequirementItemId", "ai_requirement_item", "id"),
-            new SequenceTarget("AiTraceLinkId", "ai_trace_link", "id"),
-            new SequenceTarget("AiGovernancePackageId", "ai_governance_package", "id"),
-            new SequenceTarget("AiGateDefinitionVersionId", "ai_gate_definition_version", "id"),
-            new SequenceTarget("AiApprovalId", "ai_approval", "id"),
-            new SequenceTarget("AiErrorLogId", "ai_error_log", "id"),
-            new SequenceTarget("AiRetrospectiveId", "ai_retrospective", "id"),
-            new SequenceTarget("AiImprovementProposalId", "ai_improvement_proposal", "id"),
-            new SequenceTarget("AiIdempotencyRecordId", "ai_idempotency_record", "id"),
-            new SequenceTarget("AiTaskAgentBindingId", "ai_task_agent_binding", "id"));
+            new SequenceTarget("AiWorkflowNodeRunId", "AiWorkflowNodeRun", "id"));
 
     /**
      * 创建连接池配置。
@@ -192,9 +170,9 @@ public class AiFactoryPersistenceConfiguration {
     }
 
     /**
-     * 把旧数据库中的业务表自增列原位迁移为普通 BIGINT 主键。
-     * 真实传参示例：包含旧版 {@code ai_task.id IDENTITY} 及既有任务记录的数据源。
-     * 真实返回示例：方法完成后既有任务记录不变，{@code ai_task.id} 不再自动生成。
+     * 把仍在使用的新版业务表自增列原位迁移为普通 BIGINT 主键。
+     * 真实传参示例：包含旧版 {@code AiRole.id IDENTITY} 及既有角色记录的数据源。
+     * 真实返回示例：方法完成后既有角色记录不变，{@code AiRole.id} 不再自动生成。
      * 异常或副作用示例：任一列迁移失败时启动中止，不继续提供可能重复发号的服务。
      *
      * @param dataSource 已完成建表和种子数据初始化的 AI 工厂数据源
@@ -219,7 +197,7 @@ public class AiFactoryPersistenceConfiguration {
 
     /**
      * 按每张表的现有最大主键向前校准独立号段游标。
-     * 真实传参示例：{@code ai_audit_event} 最大 id 为 158，种子游标为 100000。
+     * 真实传参示例：{@code AiRole} 最大 id 为 100016，种子游标为 101000。
      * 真实返回示例：游标保持 100000；若最大 id 为 100120，则提升到 100121。
      * 异常或副作用示例：查询或更新失败时启动中止；游标永远不会向后更新。
      *
@@ -258,8 +236,8 @@ public class AiFactoryPersistenceConfiguration {
     /**
      * 描述一个业务主键列与其唯一号段编码的固定迁移关系。
      *
-     * @param sequenceCode 号段编码，例如 {@code AiTaskId}
-     * @param tableName 固定业务表名，例如 {@code ai_task}
+     * @param sequenceCode 号段编码，例如 {@code AiRoleId}
+     * @param tableName 固定业务表名，例如 {@code AiRole}
      * @param columnName 固定主键列名，例如 {@code id}
      */
     private record SequenceTarget(String sequenceCode, String tableName, String columnName) {

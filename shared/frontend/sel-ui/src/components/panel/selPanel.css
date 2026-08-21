@@ -529,6 +529,8 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
 
 .selpanel-sidebar-shell {
     display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
     /* 外层只承载连续水晶材质，树形列表在自身滚动层裁切内容。 */
     overflow: var(--sel-theme-crystal-surface-overflow);
     grid-template-rows: 44px minmax(0, 1fr) 42px;
@@ -537,6 +539,8 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
 
 .selpanel-region-heading {
     display: flex;
+    width: 100%;
+    min-width: 0;
     align-items: center;
     justify-content: space-between;
     padding: 0 5px 0 8px;
@@ -550,6 +554,7 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
 
 .selpanel-region-heading span {
     display: flex;
+    min-width: 0;
     align-items: center;
     gap: 8px;
 }
@@ -558,6 +563,7 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
     display: grid;
     width: 31px;
     height: 31px;
+    flex: 0 0 31px;
     place-items: center;
     border-radius: var(--sel-theme-radius-icon);
     color: var(--sel-theme-text-secondary);
@@ -616,11 +622,11 @@ body.selpanel-sidebar-resizing .selpanel-sidebar-resizer {
 .selpanel-footer-shell {
     z-index: 40;
     display: flex;
-    min-height: 104px;
-    flex: 0 0 104px;
+    min-height: 64px;
+    flex: 0 0 64px;
     align-items: center;
     justify-content: space-between;
-    padding: 0 30px;
+    padding: 0 20px;
 }
 
 @media (max-width: 1380px) {

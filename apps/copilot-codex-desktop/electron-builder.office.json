@@ -1,8 +1,0 @@
-{
-  "appId": "com.selplat.copilotoffice",
-  "productName": "Copilot Office",
-  "directories": { "output": "release/office" },
-  "files": ["dist/client/**/*", "dist/developer/**/*", "dist-electron/**/*", "package.json"],
-  "win": { "target": "nsis", "artifactName": "Copilot-Office-${version}-Setup.${ext}" },
-  "mac": { "target": "dmg", "artifactName": "Copilot-Office-${version}.${ext}", "category": "public.app-category.productivity" }
-}

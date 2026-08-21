@@ -16,14 +16,4 @@ public interface AiRoleDao extends BaseDao {
      */
     boolean hasActiveChildren(long roleId);
 
-    /**
-     * 判断角色编码是否已经进入版本化 Agent 登记链路。
-     * 真实传参示例：传入 {@code IMPLEMENTATION_ROLE}。
-     * 真实返回示例：ai_role_version 已登记该编码时返回 {@code true}。
-     * 异常或副作用示例：数据库不可用时抛出数据访问异常；不会修改登记数据。
-     *
-     * @param roleCode 角色稳定编码
-     * @return 是否存在角色版本登记
-     */
-    boolean hasRegisteredVersion(String roleCode);
 }

@@ -82,15 +82,11 @@ public class AiRoleServiceImpl extends BaseServiceImpl<AiRoleDao> implements AiR
         if (role == null || role.isEmpty() || "0".equals(String.valueOf(role.get("status")))) {
             throw new CommonBusinessException("AI_ROLE_NOT_FOUND", "角色不存在或已经删除。");
         }
-        String roleCode = String.valueOf(role.get("roleCode"));
         if (isStructureRole(role)) {
             throw new CommonBusinessException("AI_ROLE_DELETE_ROOT_FORBIDDEN", "角色根节点和分类节点不能删除。");
         }
         if (getDao().hasActiveChildren(id)) {
             throw new CommonBusinessException("AI_ROLE_DELETE_HAS_CHILDREN", "该角色仍有子角色，请先处理子角色。");
-        }
-        if (getDao().hasRegisteredVersion(roleCode)) {
-            throw new CommonBusinessException("AI_ROLE_DELETE_IN_USE", "该角色已登记 Agent 或被任务使用，不能删除。");
         }
         return super.delete(normalized);
     }

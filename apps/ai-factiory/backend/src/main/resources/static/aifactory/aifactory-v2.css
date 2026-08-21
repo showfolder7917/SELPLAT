@@ -1,6 +1,359 @@
-.aifactory-page-stage{min-height:100vh;padding:12px;background:var(--sel-theme-surface-base);color:var(--sel-theme-text-body);font:14px/1.5 system-ui,sans-serif}.aifactory-shell{border:1px solid var(--sel-theme-border-subtle);background:var(--sel-theme-surface-base)}
-.aifactory-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--sel-theme-border-subtle)}.aifactory-header.is-collapsed{justify-content:flex-end;padding-block:8px}.aifactory-header.is-collapsed .aifactory-brand,.aifactory-header.is-collapsed .aifactory-project-controls{display:none}.aifactory-brand h1{margin:0;font-size:24px}.aifactory-brand p{margin:3px 0 0;color:var(--sel-theme-text-muted)}.aifactory-controls,.aifactory-project-controls{display:flex;gap:8px;align-items:center}.aifactory-controls select,.aifactory-button{min-height:34px;padding:0 10px;border:1px solid var(--sel-theme-border-subtle);background:var(--sel-theme-surface-raised);color:inherit}
-.aifactory-main{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:680px}.aifactory-sidebar{border-right:1px solid var(--sel-theme-border-subtle);background:var(--sel-theme-surface-base)}.aifactory-sidebar-heading{padding:13px 16px;border-bottom:1px solid var(--sel-theme-border-subtle)}.aifactory-sidebar-heading h2{margin:0;font-size:16px}.aifactory-tree{padding:8px}.aifactory-tree-row{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center}.aifactory-tree-row.is-active,.aifactory-tree-leaf.is-active{background:var(--sel-theme-surface-selected)}.aifactory-tree-toggle{width:30px;height:38px}.aifactory-tree-select,.aifactory-tree-leaf{display:flex;align-items:center;gap:9px;width:100%;min-height:38px;padding:0 9px;border:0;background:transparent;color:inherit;text-align:left}.aifactory-tree-select small,.aifactory-tree-leaf small{margin-left:auto;color:var(--sel-theme-text-muted)}.aifactory-tree-children.level-1{margin-left:15px;border-left:1px solid var(--sel-theme-border-subtle)}.aifactory-tree-children.level-2{margin-left:30px;border-left:1px solid var(--sel-theme-border-subtle)}.aifactory-tree-leaf.level-2{padding-left:10px}.aifactory-tree-spacer{width:12px;flex:0 0 12px}.aifactory-workspace{min-width:0;overflow:auto;background:var(--sel-theme-surface-base)}
-.aifactory-card,.aifactory-canvas{width:min(1180px,calc(100% - 24px));margin:12px;border:1px solid var(--sel-theme-border-subtle);overflow:auto}.aifactory-heading{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid var(--sel-theme-border-subtle)}.aifactory-heading h2{margin:0;font-size:16px}.aifactory-icon{width:34px;height:34px;border:0;background:transparent;color:inherit}.aifactory-table{width:100%;min-width:760px;border-collapse:collapse}.aifactory-table th,.aifactory-table td{padding:12px;text-align:left;border-bottom:1px solid var(--sel-theme-border-subtle);white-space:nowrap}.aifactory-actions{display:flex;gap:4px}.aifactory-empty{padding:30px;text-align:center;color:var(--sel-theme-text-muted)}
-.aifactory-dialog-backdrop{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;background:rgb(0 0 0/.25)}.aifactory-dialog{width:min(520px,calc(100vw - 30px));padding:20px;border:1px solid var(--sel-theme-border-subtle);background:var(--sel-theme-surface-base);color:inherit}.aifactory-dialog h2{margin-top:0}.aifactory-dialog label{display:grid;grid-template-columns:100px 1fr;align-items:center;margin:12px 0}.aifactory-dialog input,.aifactory-dialog textarea{padding:8px;border:1px solid var(--sel-theme-border-subtle);background:var(--sel-theme-surface-raised);color:inherit}.aifactory-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.aifactory-button.is-primary{background:var(--sel-theme-action-primary);color:var(--sel-theme-text-on-accent)}
-@media(max-width:800px){.aifactory-header{align-items:flex-start;gap:14px;flex-direction:column}.aifactory-controls{flex-wrap:wrap}.aifactory-main{grid-template-columns:1fr}.aifactory-sidebar{border-right:0;border-bottom:1px solid var(--sel-theme-border-subtle)}.aifactory-tree{max-height:320px;overflow:auto}.aifactory-card,.aifactory-canvas{width:calc(100% - 24px)}}
+/* AI 工厂页面保持内容宽度有界，并在宽屏中把标题、导航和工作区收拢为一个完整管理台。 */
+[data-sel-personalization-host] .selpersonal-control {
+    top: 31px;
+    right: max(24px, calc(50vw - 736px));
+}
+
+.aifactory-page-stage,
+.aifactory-page-stage * {
+    box-sizing: border-box;
+}
+
+.aifactory-page-stage {
+    min-height: 100vh;
+    padding: 24px;
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-surface-raised);
+    font-family: var(--sel-theme-font-family);
+    font-size: var(--sel-theme-font-size-body);
+    font-weight: var(--sel-theme-font-weight-regular);
+    line-height: var(--sel-theme-line-height-body);
+}
+
+.aifactory-shell {
+    width: 100%;
+    max-width: 1520px;
+    min-height: calc(100vh - 48px);
+    margin: 0 auto;
+    border: 1px solid var(--sel-theme-line);
+    background: var(--sel-theme-panel-surface);
+}
+
+.aifactory-header {
+    display: flex;
+    min-height: 88px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 18px 86px 18px 24px;
+    border-bottom: 1px solid var(--sel-theme-line);
+    background: var(--sel-theme-panel-surface);
+}
+
+.aifactory-header.is-collapsed {
+    min-height: 52px;
+    justify-content: flex-end;
+    padding-block: 8px;
+}
+
+.aifactory-header.is-collapsed .aifactory-brand,
+.aifactory-header.is-collapsed .aifactory-project-controls {
+    display: none;
+}
+
+.aifactory-brand h1 {
+    margin: 0;
+    color: var(--sel-theme-text-title);
+    font-size: var(--sel-theme-font-size-title);
+    font-weight: var(--sel-theme-font-weight-bold);
+    line-height: var(--sel-theme-line-height-title);
+}
+
+.aifactory-brand p {
+    margin: 4px 0 0;
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-caption);
+    line-height: var(--sel-theme-line-height-caption);
+}
+
+.aifactory-controls,
+.aifactory-project-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.aifactory-project-controls > span {
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-label);
+    font-weight: var(--sel-theme-font-weight-medium);
+}
+
+.aifactory-controls select,
+.aifactory-button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--sel-theme-control-line);
+    border-radius: var(--sel-theme-radius-control);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+    font: inherit;
+}
+
+.aifactory-controls select:hover,
+.aifactory-button:hover {
+    border-color: var(--sel-theme-text-secondary);
+    background: var(--sel-theme-control-hover);
+}
+
+.aifactory-main {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    min-height: calc(100vh - 137px);
+}
+
+.aifactory-sidebar {
+    border-right: 1px solid var(--sel-theme-line);
+    background: var(--sel-theme-panel-surface);
+}
+
+.aifactory-sidebar-heading {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--sel-theme-line-soft);
+}
+
+.aifactory-sidebar-heading h2,
+.aifactory-heading h2 {
+    margin: 0;
+    color: var(--sel-theme-text-title);
+    font-size: var(--sel-theme-font-size-heading);
+    font-weight: var(--sel-theme-font-weight-semibold);
+    line-height: var(--sel-theme-line-height-heading);
+}
+
+.aifactory-tree {
+    padding: 10px;
+}
+
+.aifactory-tree-row {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+}
+
+.aifactory-tree-row.is-active,
+.aifactory-tree-leaf.is-active {
+    color: var(--sel-theme-text-on-selected-surface);
+    background: var(--sel-theme-selected-surface);
+}
+
+.aifactory-tree-toggle {
+    width: 30px;
+    height: 38px;
+}
+
+.aifactory-tree-select,
+.aifactory-tree-leaf {
+    display: flex;
+    width: 100%;
+    min-height: 38px;
+    align-items: center;
+    gap: 9px;
+    padding: 0 9px;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+}
+
+.aifactory-tree-select small,
+.aifactory-tree-leaf small {
+    margin-left: auto;
+    color: var(--sel-theme-text-secondary);
+    font-size: var(--sel-theme-font-size-micro);
+    line-height: var(--sel-theme-line-height-micro);
+}
+
+.aifactory-tree-children.level-1 {
+    margin-left: 15px;
+    border-left: 1px solid var(--sel-theme-line-soft);
+}
+
+.aifactory-tree-children.level-2 {
+    margin-left: 30px;
+    border-left: 1px solid var(--sel-theme-line-soft);
+}
+
+.aifactory-tree-leaf.level-2 {
+    padding-left: 10px;
+}
+
+.aifactory-tree-spacer {
+    width: 12px;
+    flex: 0 0 12px;
+}
+
+.aifactory-workspace {
+    min-width: 0;
+    padding: 20px;
+    overflow: auto;
+    background: var(--sel-theme-surface-base);
+}
+
+.aifactory-card,
+.aifactory-canvas {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0;
+    border: 1px solid var(--sel-theme-line);
+    background: var(--sel-theme-panel-surface);
+    overflow: auto;
+}
+
+.aifactory-heading {
+    display: flex;
+    min-height: 52px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--sel-theme-line-soft);
+}
+
+.aifactory-icon {
+    display: inline-grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: var(--sel-theme-radius-icon);
+    color: var(--sel-theme-text-icon);
+    background: transparent;
+}
+
+.aifactory-icon:hover,
+.aifactory-icon:focus-visible {
+    border-color: var(--sel-theme-control-line);
+    background: var(--sel-theme-control-hover);
+}
+
+.aifactory-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+}
+
+.aifactory-table th,
+.aifactory-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--sel-theme-line-soft);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.aifactory-table th {
+    color: var(--sel-theme-text-title);
+    background: var(--sel-theme-surface-raised);
+    font-weight: var(--sel-theme-font-weight-semibold);
+}
+
+.aifactory-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.aifactory-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.aifactory-empty {
+    padding: 30px;
+    color: var(--sel-theme-text-secondary);
+    text-align: center;
+}
+
+.aifactory-dialog-backdrop {
+    position: fixed;
+    z-index: 1200;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgb(0 0 0 / 0.25);
+}
+
+.aifactory-dialog {
+    width: min(520px, calc(100vw - 30px));
+    padding: 20px;
+    border: 1px solid var(--sel-theme-line);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-panel-surface);
+}
+
+.aifactory-dialog h2 {
+    margin-top: 0;
+    font-size: var(--sel-theme-font-size-heading);
+    line-height: var(--sel-theme-line-height-heading);
+}
+
+.aifactory-dialog label {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    align-items: center;
+    margin: 12px 0;
+}
+
+.aifactory-dialog input,
+.aifactory-dialog textarea {
+    padding: 8px;
+    border: 1px solid var(--sel-theme-control-line);
+    color: var(--sel-theme-text-body);
+    background: var(--sel-theme-control-surface);
+}
+
+.aifactory-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.aifactory-button.is-primary {
+    color: var(--sel-theme-text-on-selected-surface);
+    background: var(--sel-theme-control-surface-primary);
+}
+
+@media (max-width: 800px) {
+    [data-sel-personalization-host] .selpersonal-control {
+        top: 29px;
+        right: 24px;
+    }
+
+    .aifactory-page-stage {
+        padding: 12px;
+    }
+
+    .aifactory-shell {
+        min-height: calc(100vh - 24px);
+    }
+
+    .aifactory-header {
+        min-height: 112px;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px 76px 16px 16px;
+    }
+
+    .aifactory-controls {
+        flex-wrap: wrap;
+    }
+
+    .aifactory-main {
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .aifactory-sidebar {
+        border-right: 0;
+        border-bottom: 1px solid var(--sel-theme-line);
+    }
+
+    .aifactory-tree {
+        max-height: 320px;
+        overflow: auto;
+    }
+
+    .aifactory-workspace {
+        padding: 12px;
+    }
+}

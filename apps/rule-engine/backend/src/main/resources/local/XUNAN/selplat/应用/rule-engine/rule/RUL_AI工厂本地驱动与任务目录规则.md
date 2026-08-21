@@ -3,13 +3,13 @@
 <!-- 当前规则用于约束 SELPLAT AI 工厂的 memory、ai-factory、Agent、Gate、生成物和可视化职责。 -->
 rule_scope = active_user_selplat_ai_factory_architecture_and_runtime_ownership
 <!-- 规则版本从用户确认的首个稳定双端职责模型开始。 -->
-rule_version = 2.7.0
+rule_version = 2.8.0
 <!-- 规则所有者从工程根 AGENTS.md 动态获取，不在正文固定用户名。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经进入用户层索引并完成文档追踪检查。 -->
 rule_status = active
 <!-- 升级记录说明本轮将多次用户修正统一沉淀为可复用架构约束。 -->
-upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口;2026-08-20:AI工厂默认白底黑字普通极简主题_恢复统一个性化入口和用户主动主题切换_样式只消费统一令牌;2026-08-20:AI工厂正式运行数据库归位应用db目录_临时根只保存测试审计备份和任务生成物;2026-08-20:AiRole角色类型统一使用引用数据选项组_页面禁止硬编码工程师审核员名称;2026-08-20:角色管理接入公共Grid上下拖拽和公共Window编辑_受控维护元数据但仍禁止启动Agent或推进流程;2026-08-20:AI工厂全部Remix图标改由SEL同源vendor资源交付_禁止外部CDN或空白图标;2026-08-20:角色删除使用公共确认框和服务端引用门禁_公共Window禁用按钮必须保持文字可读;2026-08-21:按用户确认将AI工厂Remix图标切换为固定版本jsDelivr在线加载_公共本地字体保留供其他页面使用;2026-08-21:AI工厂登记公共号段DAO_每张业务表独立CommonSequenceSegment号段_兼容迁移旧自增列和现有数据_统一Host8080作为正常启动入口;2026-08-21:快速流程固定三类开发角色_同类角色允许多实例_门禁类型只保留AI_GATE_代码检查归测试范围_项目规则门禁和流程运行分表_所有KeyValue进入引用数据
+upgrade_record = 2026-08-19:确立Python唯一驱动_Agent服务端登记_memory本地启动_中文任务目录和japanese式Java结构;2026-08-19:统一memory正式资源父目录;2026-08-20:建立需求分析启动链_统一文件读取器_中文Python业务文件名_按独立功能拆分要件;2026-08-20:固定ai-factiory根级统一入口_ai-memory独立BAT请求客户端_双Codex池_极简管理页面和执行审计;2026-08-20:AI工厂显式装配到8080统一Host并登记desktop入口;2026-08-20:AI工厂默认白底黑字普通极简主题_恢复统一个性化入口和用户主动主题切换_样式只消费统一令牌;2026-08-20:AI工厂正式运行数据库归位应用db目录_临时根只保存测试审计备份和任务生成物;2026-08-20:AiRole角色类型统一使用引用数据选项组_页面禁止硬编码工程师审核员名称;2026-08-20:角色管理接入公共Grid上下拖拽和公共Window编辑_受控维护元数据但仍禁止启动Agent或推进流程;2026-08-20:AI工厂全部Remix图标改由SEL同源vendor资源交付_禁止外部CDN或空白图标;2026-08-20:角色删除使用公共确认框和服务端引用门禁_公共Window禁用按钮必须保持文字可读;2026-08-21:按用户确认将AI工厂Remix图标切换为固定版本jsDelivr在线加载_公共本地字体保留供其他页面使用;2026-08-21:AI工厂登记公共号段DAO_每张业务表独立CommonSequenceSegment号段_兼容迁移旧自增列和现有数据_统一Host8080作为正常启动入口;2026-08-21:快速流程固定三类开发角色_同类角色允许多实例_门禁类型只保留AI_GATE_代码检查归测试范围_项目规则门禁和流程运行分表_所有KeyValue进入引用数据;2026-08-21:角色管理固定七个业务角色_三个工程师_三个审核员_一个项目经理_历史普通角色逻辑停用
 
 ## 双端职责
 
@@ -125,6 +125,10 @@ ai_factory_management_table_set = AiRole_AiProject_AiGate_AiRule_AiWorkflowDefin
 ai_factory_project_progress_source = latest_AiWorkflowRun_and_AiWorkflowNodeRun_no_project_fake_progress_columns
 <!-- 默认快速流程只显示需求分析师、软件工程师和测试工程师，并按该顺序连接。 -->
 ai_factory_default_quick_workflow_roles = REQUIREMENT_ANALYST_then_SOFTWARE_ENGINEER_then_TEST_ENGINEER
+<!-- AI 工厂角色管理只允许三个工程角色、三个对应审核员和一个项目经理共七个业务角色。 -->
+ai_factory_managed_business_role_set = REQUIREMENT_ANALYST|SOFTWARE_ENGINEER|TEST_ENGINEER|REQUIREMENT_REVIEWER|SOFTWARE_REVIEWER|TEST_QUALITY_REVIEWER|PROJECT_MANAGER
+<!-- 固定角色树的三个结构节点不计入七个业务角色；集合外历史普通角色必须逻辑停用并保留历史引用含义。 -->
+ai_factory_legacy_role_convergence = keep_ROLE_ROOT|ENGINEER_ROOT|REVIEWER_ROOT_soft_delete_other_business_roles_no_id_repurpose
 <!-- 流程画布允许重复添加同一开发角色实例，用节点数量表达同类角色并行工作数量。 -->
 ai_factory_repeated_role_node_policy = allowed_same_role_multiple_node_instances
 <!-- AI 工厂管理页默认使用普通白底黑字主题，并由公共 Panel、Tree、Grid 组成。 -->

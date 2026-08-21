@@ -3,7 +3,7 @@
 <!-- AI 规则包智慧整合由当前用户层优先加载。 -->
 AI_RULE_PACKAGE_INTELLIGENCE_RULES = local/XUNAN/selplat/应用/rule-engine/rule/RUL_AI规则包智慧整合规则.md
 
-<!-- AI 工厂的 Python 驱动、Agent 登记发现、任务生成根、中文资源和 Java 展示边界由当前用户层固定。 -->
+<!-- AI 工厂的 Python 驱动、Agent 登记发现、七角色体系、任务生成根、中文资源和 Java 展示边界由当前用户层固定。 -->
 AI_FACTORY_LOCAL_DRIVER_AND_TASK_RUNTIME_RULES = local/XUNAN/selplat/应用/rule-engine/rule/RUL_AI工厂本地驱动与任务目录规则.md
 
 <!-- 修改 AI 工厂双端职责、Agent/Gate/审计边界、任务目录、资源命名或 Java 页面结构时加载该规则。 -->
