@@ -3,16 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/electron/main.js",
   "scripts": {
-    "dev": "vite",
-    "desktop:dev": "npm run build:electron && concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "dev": "npm run dev:office",
+    "dev:office": "cross-env VITE_APP_VARIANT=office vite",
+    "dev:developer": "cross-env VITE_APP_VARIANT=developer vite",
+    "desktop:dev": "npm run desktop:dev:office",
+    "desktop:dev:office": "npm run build:electron && concurrently -k \"cross-env VITE_APP_VARIANT=office vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && cross-env COPILOT_VARIANT=office VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "desktop:dev:developer": "npm run build:electron && concurrently -k \"cross-env VITE_APP_VARIANT=developer vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && cross-env COPILOT_VARIANT=developer VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build:electron": "tsc -p tsconfig.electron.json",
-    "build:renderer": "vite build && node scripts/prepare-sites-build.mjs",
+    "build:renderer:office": "cross-env VITE_APP_VARIANT=office vite build && node scripts/prepare-sites-build.mjs",
+    "build:renderer:developer": "cross-env VITE_APP_VARIANT=developer vite build",
+    "build:renderer": "npm run build:renderer:office && npm run build:renderer:developer",
+    "build:office": "npm run typecheck && npm run build:electron && npm run build:renderer:office",
+    "build:developer": "npm run typecheck && npm run build:electron && npm run build:renderer:developer",
     "build": "npm run typecheck && npm run build:electron && npm run build:renderer",
-    "start": "npm run build && electron .",
-    "dist:win": "npm run build && electron-builder --win nsis",
+    "start": "npm run start:office",
+    "start:office": "npm run build:office && cross-env COPILOT_VARIANT=office electron .",
+    "start:developer": "npm run build:developer && cross-env COPILOT_VARIANT=developer electron .",
+    "dist:win": "npm run dist:win:office",
+    "dist:win:office": "npm run build && electron-builder --config electron-builder.office.json --win nsis",
+    "dist:win:developer": "npm run build && electron-builder --config electron-builder.developer.json --win nsis",
+    "dist:mac:office": "npm run build && electron-builder --config electron-builder.office.json --mac dmg",
+    "dist:mac:developer": "npm run build && electron-builder --config electron-builder.developer.json --mac dmg",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs"
   },
@@ -35,20 +49,5 @@
     "typescript": "6.0.3",
     "wait-on": "^8.0.0"
   },
-  "build": {
-    "appId": "com.selplat.copilotcodexdesktop",
-    "productName": "Copilot Local",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/client/**/*",
-      "dist-electron/**/*",
-      "package.json"
-    ],
-    "win": {
-      "target": "nsis",
-      "artifactName": "Copilot-Local-${version}-Setup.${ext}"
-    }
-  }
+  "build": {}
 }

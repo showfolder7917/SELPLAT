@@ -1,19 +1,47 @@
 # Copilot Local Desktop / 本地 Copilot 桌面应用
 
-独立的 Windows Electron 桌面应用。界面按 `OPTION/copilot` 中的参考截图实现，消息通过 Electron 安全 IPC 直接交给本机 Codex TypeScript SDK，不启动 HTTP/HTTPS 服务。
+Electron + React + TypeScript 双版本桌面应用。办公版保持 Copilot 风格，开发版面向个人工程开发；二者通过安全 IPC 共用本机 Codex SDK，不启动 HTTP/HTTPS 服务。
 
-Windows の独立 Electron デスクトップアプリです。`OPTION/copilot` の参照画像に合わせた UI から、安全な IPC 経由でローカル Codex TypeScript SDK を呼び出します。HTTP/HTTPS サーバーは使用しません。
+## 目录 / Structure
 
-## 启动 / 起動
+- `src/variants/office`：办公版界面与样式。
+- `src/variants/developer`：开发版界面与样式。
+- `shared/contracts`：渲染进程和 Electron 共用的 IPC 类型。
+- `electron/services`：Codex 会话与设置存储。
+- `electron/ipc`：IPC 白名单、参数校验和服务编排。
+- `electron/config`：版本和工程路径解析。
+- `electron/window`：安全 BrowserWindow 配置。
 
-双击 / ダブルクリック：
+渲染进程不直接导入或调用 Codex SDK。
 
-```text
-启动本地Copilot.bat
+## 启动 / Start
+
+办公版：双击 `启动办公版.bat`，或执行：
+
+```powershell
+npm run start:office
 ```
 
-首次启动会安装依赖并编译。左下角齿轮菜单的“设置/設定”可以切换简体中文、日本語以及只读/工作区写入模式。
+开发版：双击 `启动开发版.bat`，或执行：
 
-初回起動時に依存関係をインストールしてビルドします。左下の歯車メニューにある「设置/設定」から、簡体字中国語、日本語、読み取り専用、ワークスペース書き込みを切り替えられます。
+```powershell
+npm run start:developer
+```
 
-应用 UI 使用 Copilot 作为视觉参考，但本地安装包、发布者和签名不会声明为 Microsoft 官方产品。
+原来的 `启动本地Copilot.bat` 保留为办公版兼容入口。
+
+## 打包 / Package
+
+```powershell
+npm run dist:win:office
+npm run dist:win:developer
+```
+
+Windows 产物分别进入 `release/office` 和 `release/developer`。
+
+macOS 应在 macOS 机器上构建并签名：
+
+```bash
+npm run dist:mac:office
+npm run dist:mac:developer
+```

@@ -32,8 +32,9 @@ import {
   ThumbLike24Regular,
 } from "@fluentui/react-icons";
 
-type Locale = "ja" | "zh-CN";
-type SandboxMode = "read-only" | "workspace-write";
+import type { Locale, SandboxMode } from "../../../shared/contracts/desktop";
+import "./office.css";
+
 type Message = { id: number; role: "user" | "assistant"; text: string };
 
 const copy = {
@@ -233,7 +234,7 @@ function Conversation({ locale, messages, loading }: { locale: Locale; messages:
   );
 }
 
-export function App() {
+export function OfficeApp() {
   const [locale, setLocale] = useState<Locale>(() => (localStorage.getItem("copilot-locale") as Locale) || "ja");
   const [sandboxMode, setSandboxMode] = useState<SandboxMode>(() => (localStorage.getItem("copilot-sandbox") as SandboxMode) || "read-only");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -245,9 +246,21 @@ export function App() {
   const hasConversation = messages.length > 0 || loading;
   const nextId = useMemo(() => messages.reduce((max, item) => Math.max(max, item.id), 0) + 1, [messages]);
 
-  useEffect(() => { window.desktop?.getEnvironment().then((environment) => setProjectRoot(environment.projectRoot)); }, []);
-  useEffect(() => { localStorage.setItem("copilot-locale", locale); }, [locale]);
-  useEffect(() => { localStorage.setItem("copilot-sandbox", sandboxMode); }, [sandboxMode]);
+  useEffect(() => {
+    window.desktop?.getEnvironment().then((environment) => setProjectRoot(environment.projectRoot));
+    window.desktop?.getSettings().then((settings) => {
+      setLocale(settings.locale);
+      setSandboxMode(settings.sandboxMode);
+    });
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("copilot-locale", locale);
+    void window.desktop?.updateSettings({ locale });
+  }, [locale]);
+  useEffect(() => {
+    localStorage.setItem("copilot-sandbox", sandboxMode);
+    void window.desktop?.updateSettings({ sandboxMode });
+  }, [sandboxMode]);
 
   const newChat = async () => {
     if (loading) await window.desktop?.cancel();
