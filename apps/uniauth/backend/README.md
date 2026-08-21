@@ -19,7 +19,7 @@
 
 ## 数据库边界
 
-- Uniauth 使用模块私有永久数据库 `apps/uniauth/db/uniauth.mv.db`。
+- Uniauth 使用模块私有永久数据库 `apps/uniauth/db/uniauth.mv.db`；该活跃文件只在本地持久化且不提交 Git，版本交付以 `apps/uniauth/db/sql/**` 为准。
 - 本地数据库账号为 `sa`，默认密码为 `123456`。
 - `apps/uniauth/db/sql` 按“一表一个 schema 文件、一表一个 data 文件”保存唯一权威 SQL。
 - `UniauthPersistenceConfiguration` 创建 `UniauthPool`，并按依赖顺序执行构建后的 `db/uniauth/sql` 脚本。

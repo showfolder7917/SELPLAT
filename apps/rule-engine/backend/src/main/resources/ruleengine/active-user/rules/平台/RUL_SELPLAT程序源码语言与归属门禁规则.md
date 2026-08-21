@@ -5,8 +5,10 @@ rule_resource_layer_source = AGENTS.md.current_stable_user_id
 
 <!-- 本规则覆盖 SELPLAT 的 apps、shared 和 rule-engine 全部正式程序源码。 -->
 rule_scope = active_user_selplat_all_program_source_ownership
-<!-- 3.10.0 把应用、shared 和生成模板的嵌套 selFreeze 纳入统一源码交付扫描。 -->
-rule_version = 3.12.0
+<!-- 3.13.0 改为精确忽略应用活跃 H2 库，Git 只交付可重建的数据库 SQL。 -->
+rule_version = 3.13.0
+<!-- 本次升级阻断运行数据库因启动写入反复进入提交，同时保留SQL和说明材料的版本治理。 -->
+upgrade_record_20260821_runtime_database_git_boundary = ignore_apps_db_mvdb_exactly,track_db_sql_and_docs,no_broad_mvdb_ignore
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示生产扫描能力、索引和测试已经形成闭环。 -->
@@ -267,16 +269,18 @@ selplat_nested_gitignore_policy = apps_and_shared_forbidden
 selplat_nested_gitignore_policy.2 = use_SELPLAT_root_gitignore
 <!-- selplat_nested_gitignore_policy.3 的当前独立事实为 scan_all_modules。 -->
 selplat_nested_gitignore_policy.3 = scan_all_modules
-<!-- 根忽略规则不得包含 mv.db 通配模式，保证编辑器显示全部正式数据库；只排除 H2 运行副产物。 -->
-selplat_authoritative_database_git_tracking_gate = no_mvdb_ignore_pattern
-<!-- selplat_authoritative_database_git_tracking_gate.2 的当前独立事实为 all_mvdb_visible_and_trackable。 -->
-selplat_authoritative_database_git_tracking_gate.2 = all_mvdb_visible_and_trackable
+<!-- 根忽略规则必须精确排除 apps/*/db/*.mv.db，避免活跃运行库因启动写入反复进入提交。 -->
+selplat_authoritative_database_git_tracking_gate = ignore_apps_db_runtime_mvdb_exactly
+<!-- selplat_authoritative_database_git_tracking_gate.2 的当前独立事实为 db_sql_and_docs_trackable。 -->
+selplat_authoritative_database_git_tracking_gate.2 = db_sql_and_docs_trackable
 <!-- selplat_authoritative_database_git_tracking_gate.3 的当前独立事实为 ignore_trace。 -->
 selplat_authoritative_database_git_tracking_gate.3 = ignore_trace
 <!-- selplat_authoritative_database_git_tracking_gate.4 的当前独立事实为 ignore_lock。 -->
 selplat_authoritative_database_git_tracking_gate.4 = ignore_lock
 <!-- selplat_authoritative_database_git_tracking_gate.5 的当前独立事实为 ignore_temp。 -->
 selplat_authoritative_database_git_tracking_gate.5 = ignore_temp
+<!-- 禁止使用 *.mv.db 或 **/*.mv.db 宽泛规则，避免隐藏应用db根之外的受审数据库材料。 -->
+selplat_authoritative_database_git_tracking_gate.6 = no_broad_mvdb_ignore_pattern
 <!-- 启动 SQL 必须支持缺库重建和已有库幂等升级；禁止 DROP/TRUNCATE/DELETE、非幂等建表索引、MERGE 和覆盖式种子写入。 -->
 selplat_managed_database_rebuild_sql_gate = schema_create_if_not_exists
 <!-- selplat_managed_database_rebuild_sql_gate.2 的当前独立事实为 index_create_if_not_exists。 -->

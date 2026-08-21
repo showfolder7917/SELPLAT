@@ -7,7 +7,7 @@ python_ability_refs = none
 <!-- 当前规则不需要 Node 专用能力；Node 只在受影响前端字段同步时使用现有语法检查。 -->
 node_ability_refs = none
 <!-- 首版规则固化 reference-data 重构中已经验证的 SQL 目录和单表文件约束。 -->
-rule_version = 2.17.0
+rule_version = 2.18.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，未经人工提升不得扩大到 common。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示规则已完成索引登记、真实案例核对和索引链验证。 -->
@@ -16,6 +16,8 @@ rule_status = active
 upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责;2026-08-11:固定初始化主键不得超过六位_reference-data统一六位种子保留区并让运行号段从下一完整区间开始;2026-08-15:增加全局code命名空间聚合号段策略_允许无种子业务表省略data文件_类型与树节点通过显式type模型统一承载选择项和菜单节点;2026-08-15:废弃实体表清理由兼容迁移固定白名单执行_先核对全部记录数_任一非空整体阻断_禁止依赖删除建表SQL自动清库
 <!-- 配置数据恢复门禁把正式库和启动 SQL 绑成同一个可恢复交付，但不将用户产生的运行记录回灌为种子数据。 -->
 upgrade_record_20260818_database_recovery_sync = 修改连接_Window等可恢复配置时同步dataSQL_中央登记startupRecoveryTables_门禁检查单表data文件和生产加载清单_运行业务记录不进启动SQL
+<!-- 2026-08-21 将活跃H2文件改为本地持久化且不纳入Git，数据库交付以db/sql和说明为准。 -->
+upgrade_record_20260821_runtime_database_git_boundary = Git只提交db_sql和说明_apps_db_mvdb精确忽略_本地运行数据通过备份恢复
 <!-- 本次升级把不可辨认的项目名前缀改为对象类型前缀，并明确父容器关联不得依靠解析前缀。 -->
 upgrade_record_20260815_object_code = 全局code使用对象类型前缀加聚合主键_中央登记声明object-kind-plus-global-id_页面父容器使用kind与code显式关联
 <!-- 类型和树职责升级记录明确两张表不得混合保存分类与节点明细。 -->
@@ -88,12 +90,12 @@ selplat_application_database_directory_allowed_content.2 = sql
 selplat_application_database_directory_allowed_content.3 = README.md
 <!-- selplat_application_database_directory_allowed_content.4 的当前独立事实为 no_nested_gitignore。 -->
 selplat_application_database_directory_allowed_content.4 = no_nested_gitignore
-<!-- SELPLAT 根不得使用 mv.db 通配忽略规则，保证正式数据库在工程视图显示并可提交；只排除 trace、lock、temp。 -->
+<!-- SELPLAT 根统一精确忽略 apps/*/db/*.mv.db；活跃运行库保留在本地，但不得因启动写入进入Git提交。 -->
 selplat_h2_gitignore_ownership = SELPLAT_root_only
-<!-- selplat_h2_gitignore_ownership.2 的当前独立事实为 no_mvdb_ignore_pattern。 -->
-selplat_h2_gitignore_ownership.2 = no_mvdb_ignore_pattern
-<!-- selplat_h2_gitignore_ownership.3 的当前独立事实为 all_mvdb_visible_and_trackable。 -->
-selplat_h2_gitignore_ownership.3 = all_mvdb_visible_and_trackable
+<!-- selplat_h2_gitignore_ownership.2 的当前独立事实为 ignore_apps_db_runtime_mvdb_exactly。 -->
+selplat_h2_gitignore_ownership.2 = ignore_apps_db_runtime_mvdb_exactly
+<!-- selplat_h2_gitignore_ownership.3 的当前独立事实为 track_db_sql_and_readme_only。 -->
+selplat_h2_gitignore_ownership.3 = track_db_sql_and_readme_only
 <!-- selplat_h2_gitignore_ownership.4 的当前独立事实为 trace_ignored。 -->
 selplat_h2_gitignore_ownership.4 = trace_ignored
 <!-- selplat_h2_gitignore_ownership.5 的当前独立事实为 lock_ignored。 -->
@@ -104,6 +106,8 @@ selplat_h2_gitignore_ownership.6 = temp_ignored
 selplat_h2_gitignore_ownership.7 = before_backup_ignored
 <!-- selplat_h2_gitignore_ownership.8 的当前独立事实为 no_nested_gitignore_any_module。 -->
 selplat_h2_gitignore_ownership.8 = no_nested_gitignore_any_module
+<!-- 禁止使用 *.mv.db 或 **/*.mv.db 宽泛规则，避免隐藏应用db根之外的数据库材料。 -->
+selplat_h2_gitignore_ownership.9 = no_broad_mvdb_ignore_pattern
 <!-- 严格本地数据库应用必须在当前用户中央登记中声明 datasourcePrefix，正式模块属性按该前缀唯一登记 sa 与 123456。 -->
 selplat_managed_local_database_default_credentials = datasourcePrefix_required
 <!-- selplat_managed_local_database_default_credentials.2 的当前独立事实为 username=sa。 -->

@@ -1,6 +1,6 @@
 # reference-data database
 
-本目录是 reference-data 自己的权威本地数据库根，只保存可追踪的结构与初始化 SQL 和正式运行数据。
+本目录是 reference-data 自己的权威本地数据库根；Git 只跟踪结构、初始化 SQL 和说明，正式运行数据只在本地持久化。
 
 ## 目录约定
 

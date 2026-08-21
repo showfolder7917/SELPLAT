@@ -84,7 +84,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             encoding="utf-8",
         )
         (temp_root / ".gitignore").write_text(
-            "*.trace.db\n*.lock.db\n*.temp.db\n*.before-*.db\n",
+            "apps/*/db/*.mv.db\n*.trace.db\n*.lock.db\n*.temp.db\n*.before-*.db\n",
             encoding="utf-8",
         )
         registry = (
@@ -982,8 +982,8 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                 {violation["code"] for violation in missing_loader_result["violations"]},
             )
 
-    def test_root_gitignore_must_not_hide_database_files(self) -> None:
-        """根规则不得用通配符隐藏 mv.db，H2 运行副产物仍必须排除。"""
+    def test_root_gitignore_requires_precise_runtime_database_pattern(self) -> None:
+        """根规则必须精确忽略应用活跃库，禁止用宽泛模式隐藏其他数据库材料。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
             fixture = self.create_fixture(Path(directory))
             (fixture / ".gitignore").write_text(
@@ -996,6 +996,16 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             self.assertIn(
                 "ROOT_H2_GITIGNORE_POLICY_INVALID",
                 {violation["code"] for violation in result["violations"]},
+            )
+
+            (fixture / ".gitignore").write_text(
+                "*.trace.db\n*.lock.db\n*.temp.db\n*.before-*.db\n",
+                encoding="utf-8",
+            )
+            missing_runtime_pattern_result = self.guard.audit_source_ownership(fixture)
+            self.assertIn(
+                "ROOT_H2_GITIGNORE_POLICY_INVALID",
+                {violation["code"] for violation in missing_runtime_pattern_result["violations"]},
             )
 
     def test_current_selplat_source_tree_has_zero_violations(self) -> None:

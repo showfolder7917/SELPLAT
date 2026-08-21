@@ -1380,23 +1380,25 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
         if line.strip() and not line.lstrip().startswith("#")
     } if root_gitignore.is_file() else set()
     required_h2_ignore_rules = {
+        "apps/*/db/*.mv.db",
         "*.trace.db",
         "*.lock.db",
         "*.temp.db",
         "*.before-*.db",
     }
-    forbidden_mvdb_ignore_rules = {
+    # 只允许精确忽略应用db根中的活跃运行库，避免宽泛规则隐藏测试材料或其他数据库快照。
+    overly_broad_mvdb_ignore_rules = {
         "*.mv.db",
         "**/*.mv.db",
-        "apps/*/db/*.mv.db",
     }
     if not required_h2_ignore_rules.issubset(root_gitignore_lines) \
-            or forbidden_mvdb_ignore_rules.intersection(root_gitignore_lines):
+            or overly_broad_mvdb_ignore_rules.intersection(root_gitignore_lines):
         violations.append({
             "code": "ROOT_H2_GITIGNORE_POLICY_INVALID",
             "path": ".gitignore",
             "message": (
-                "root .gitignore must not hide mv.db files and must exclude H2 trace, lock, temp, and before-backup files"
+                "root .gitignore must ignore apps/*/db/*.mv.db exactly and must also exclude "
+                "H2 trace, lock, temp, and before-backup files without broad mv.db patterns"
             ),
         })
     checked_language_roots = 0

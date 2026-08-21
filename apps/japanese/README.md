@@ -7,7 +7,7 @@
 - 首表：`JapaneseN2BlueBookQuestion`，预留 `PRONUNCIATION`、`KANJI`、`GRAMMAR` 三种题型。
 - N1 后续使用独立题表，避免不同等级的数据和约束互相影响。
 - 默认字段包括 `id`、`tenantId`、`lastOperateUserId`、`name`、`sortnum`、`status`、`createdAt`、`updatedAt`。
-- 数据库脚本位于 `db/sql`，按 `load-order.txt` 的显式顺序加载；默认不灌入业务题目。
+- 数据库脚本位于 `db/sql`，按 `load-order.txt` 的显式顺序加载；默认不灌入业务题目。活跃 `db/japanese.mv.db` 只在本地持久化且不提交 Git。
 
 ## AI 与媒体生成
 
