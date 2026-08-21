@@ -1,0 +1,54 @@
+{
+  "name": "copilot-codex-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "desktop:dev": "npm run build:electron && concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:renderer": "vite build && node scripts/prepare-sites-build.mjs",
+    "build": "npm run typecheck && npm run build:electron && npm run build:renderer",
+    "start": "npm run build && electron .",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "preview": "vite preview",
+    "test:sites": "node --test tests/sites-worker.test.mjs"
+  },
+  "dependencies": {
+    "@fluentui/react-icons": "^2.0.0",
+    "@openai/codex-sdk": "0.146.0",
+    "@vitejs/plugin-react": "5.0.4",
+    "vite": "6.4.2",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "concurrently": "^9.0.0",
+    "cross-env": "^10.0.0",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "6.0.3",
+    "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "com.selplat.copilotcodexdesktop",
+    "productName": "Copilot Local",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/client/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "Copilot-Local-${version}-Setup.${ext}"
+    }
+  }
+}

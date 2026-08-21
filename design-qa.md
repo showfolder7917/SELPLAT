@@ -1,3 +1,12 @@
+检测是否完成 中 日 英国际化
+检测树是否完成 reference-data 中的登记
+检测表格是否完成登记
+检测window是否完成登记
+检测其他空间是否完成登记
+拆解工程中的所有按钮点击 
+每个按钮功能是否完整
+
+
 # Reference Data Workbench Design QA
 
 final result: passed
