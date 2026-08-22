@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.37.0 固化空闲集成器立即冻结当前就绪集合，删除人为收集窗口。 -->
-rule_version = 5.37.0
+<!-- 5.38.0 固化刷新对话图标及悬停、键盘聚焦时的会话重建提示。 -->
+rule_version = 5.38.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -118,6 +118,8 @@ upgrade_record_5_35 = 2026-08-23:协同阶段墙上时间与单调耗时_等待�
 upgrade_record_5_36 = 2026-08-23:默认人物韩立_南宫婉_紫灵_元瑶_宋玉_冰魄仙子_墨彩环_墨大夫_厉飞雨_张铁_令狐老祖_李化元
 <!-- 5.37.0 固化最新讨论结论：集成器空闲即取当前就绪任务，不等待固定窗口、比例或最小批量。 -->
 upgrade_record_5_37 = 2026-08-23:集成器空闲即原子冻结当前全部可集成任务_允许单任务一代_运行中完成者进入下一代_原子组和依赖链仅保留显式屏障_结构化阶段只用于容量和瓶颈分析不延迟空闲集成器
+<!-- 5.38.0 将原加号入口改为刷新对话图标，同时保留官方线程删除与本地清理链路。 -->
+upgrade_record_5_38 = 2026-08-23:新建任务入口改为刷新对话图标_悬停与键盘聚焦Tip表达重新建立Codex会话_原thread_delete与本地清理不变
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -204,8 +206,8 @@ developer_sidebar_section_disclosure_contract = explorer_workspace_and_tasks_tit
 developer_sidebar_section_disclosure_contract.2 = aria_expanded_state
 <!-- 工作区与任务只允许一个活动分区。 -->
 developer_sidebar_section_disclosure_contract.3 = workspace_tasks_single_active
-<!-- 新建任务加号固定在 Codex Chat 标签内且位于关闭图标左侧，任务标题不得保留重复入口。 -->
-developer_sidebar_section_disclosure_contract.4 = new_task_action_in_codex_chat_tab_before_close
+<!-- 新建任务入口固定为 Codex Chat 标签内关闭图标左侧的刷新对话图标，悬停与键盘聚焦必须显示本地化的“重新建立一个 Codex 会话”Tip，任务标题不得保留重复入口。 -->
+developer_sidebar_section_disclosure_contract.4 = refresh_conversation_action_in_codex_chat_tab_before_close_with_localized_rebuild_session_tip
 <!-- 新建任务动作禁止额外单独占用一行。 -->
 developer_sidebar_section_disclosure_contract.5 = no_separate_full_width_new_task_row
 <!-- 资源管理器总开关必须收起整个网格列并释放聊天宽度；活动栏文件图标始终保留恢复入口，内部工作区展开状态不得被重置。 -->
