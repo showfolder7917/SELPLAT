@@ -2,9 +2,11 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-const appRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+// 协同 worktree 路径可能包含空格，必须先解码 file URL，避免把 `%20` 当成真实目录名。
+const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoot = path.join(appRoot, "temp", "interaction");
 mkdirSync(temporaryRoot, { recursive: true });
 
