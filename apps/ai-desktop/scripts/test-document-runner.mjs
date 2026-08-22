@@ -9,6 +9,19 @@ const documentPath = path.join(appRoot, "测试文档.md");
 const lockPath = path.join(appRoot, ".测试文档.lock.json");
 const archiveRoot = path.join(appRoot, "测试文档归档");
 const staleAfterMs = 10 * 60 * 1_000;
+const allowedStandaloneScripts = new Set(["typecheck", "build:developer", "verify:mac:developer"]);
+const allowedTestScripts = new Set([
+  "test:sites",
+  "test:screenshot",
+  "test:stream",
+  "test:workspace",
+  "test:audit",
+  "test:dispatch",
+  "test:explorer",
+  "test:interaction",
+  "test:managed",
+  "test:trust",
+]);
 const argumentsMap = readArguments(process.argv.slice(2));
 const executor = argumentsMap.executor || `${process.env.USER || "unknown"}@${os.hostname()}`;
 const task = argumentsMap.task || "AI Desktop 统一测试";
@@ -37,6 +50,10 @@ try {
     return match ? [{ index, script: match[1], expectation: match[2], source: line }] : [];
   });
   if (testItems.length === 0) throw new Error("测试文档中没有可执行的待测项。请使用：- [ ] `npm run 脚本名` — 预期：说明");
+  const blockedItems = testItems.filter((item) => !isAllowedTestScript(item.script));
+  if (blockedItems.length > 0) {
+    throw new Error(`共享测试文档包含未授权脚本：${blockedItems.map((item) => item.script).join("、")}。自动测试只允许已登记的静态检查、开发构建、应用验证和测试脚本。`);
+  }
 
   let failed = 0;
   for (const item of testItems) {
@@ -128,4 +145,9 @@ function readArguments(values) {
     if (match) result[match[1]] = match[2];
   }
   return result;
+}
+
+/** 共享文档是自动执行控制面，只允许验证类脚本，禁止借固定入口启动、发布或递归调用自身。 */
+function isAllowedTestScript(script) {
+  return allowedStandaloneScripts.has(script) || allowedTestScripts.has(script);
 }

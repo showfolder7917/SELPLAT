@@ -36,6 +36,7 @@
     "test:stream": "npm run build:electron && node --test tests/codex-stream.test.mjs",
     "test:workspace": "npm run build:electron && node --test tests/workspace-store.test.mjs",
     "test:audit": "npm run build:electron && node --test tests/business-audit-log.test.mjs",
+    "test:dispatch": "npm run build:electron && node --test tests/conversation-dispatch-store.test.mjs",
     "test:explorer": "node --test tests/developer-explorer-collapse.test.mjs",
     "test:interaction": "node scripts/run-interaction-tests.mjs",
     "test:managed": "node --test tests/managed-task-executor-contract.test.mjs tests/user-input-and-screenshot-contract.test.mjs tests/test-document-and-mac-launcher-contract.test.mjs",

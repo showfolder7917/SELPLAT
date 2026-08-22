@@ -2,6 +2,7 @@ import { ClipboardEvent, CSSProperties, FormEvent, KeyboardEvent, PointerEvent a
 import {
   Add24Regular,
   ArrowClockwise24Regular,
+  ArrowReply24Regular,
   Beaker24Regular,
   Branch24Regular,
   Bug24Regular,
@@ -34,6 +35,7 @@ import {
 } from "@fluentui/react-icons";
 
 import type {
+  AutomaticTestPreflightResult,
   CodexAccount,
   CodexApproval,
   CodexHarnessStatus,
@@ -41,6 +43,8 @@ import type {
   CodexStreamEvent,
   CodexStreamPlanStep,
   CodexUserInputRequest,
+  ConversationDispatchState,
+  ConversationQueueItem,
   Locale,
   ManagedExecutionMode,
   ManagedExecutionUpdate,
@@ -58,13 +62,6 @@ import { MarkdownMessage } from "./MarkdownMessage";
 import "./developer.css";
 
 type ComposerAttachment = ScreenshotAttachment & { dataUrl: string };
-type PendingSend = {
-  message: string;
-  displayText: string;
-  mode: ManagedExecutionMode;
-  attachments: ComposerAttachment[];
-  sourceMessageId?: number;
-};
 type Message = {
   id: number;
   role: "user" | "assistant";
@@ -80,15 +77,14 @@ type Message = {
   managedExecution?: ManagedExecutionUpdate;
   managedMode?: ManagedExecutionMode;
   actionTriggered?: boolean;
-  turnTextStart?: number;
   turnOrder?: string[];
   turnSegments?: Record<string, string>;
   streamTerminal?: boolean;
 };
 
 const labels = {
-  ja: { title: "Developer", placeholder: "コード、調査、変更内容を入力（画像を貼り付け可能）", ready: "Codex harness 接続済み", signIn: "ChatGPT でログイン", signOut: "ログアウト", signedOut: "ChatGPT にログインしてください", browserOpened: "ブラウザーでログインを完了してください", files: "EXPLORER", workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定", remove: "削除", removeConfirm: "ワークスペース一覧から「{name}」を削除しますか？ディスク上のフォルダーは削除されません。", minimumWorkspace: "ワークスペースを1つ以上残してください", tasks: "TASKS", newTask: "新しいタスク", expand: "展開", collapse: "折りたたむ", settings: "接続と実行設定", account: "ChatGPT アカウント", readOnly: "読み取り専用", write: "ワークスペース書き込み", readOnlyTip: "現在は読み取り専用", writeTip: "現在は書き込み可能", thinking: "Codex が処理中...", approve: "許可", approveAndTrust: "許可して信頼", trustHint: "同じプロジェクトとコマンドは次回から自動的に許可されます。", decline: "拒否", screenshot: "現在の画面をキャプチャ", hiddenScreenshot: "AI Desktop を隠してキャプチャ", screenPermissionRequired: "システム設定で AI Desktop の画面収録を許可し、アプリを再起動してください。", screenSourceUnavailable: "画面ソースを読み取れません。画面収録の権限を確認してから再試行してください。", openScreenRecordingSettings: "システム設定を開く", tempFiles: "一時ファイル", openTemp: "一時フォルダーを開く", clearTemp: "すべて消去", clearConfirm: "AI Desktop の一時ファイルをすべて削除しますか？", trustedCommands: "信頼済みコマンド", clearTrustedCommands: "信頼をすべて解除", clearTrustedConfirm: "登録済みの信頼コマンドをすべて解除しますか？", auditLogs: "業務ログ", openAuditLogs: "ログフォルダーを開く", noAuditTask: "タスク履歴はまだありません", conversationManaged: "会話管理", requirementManaged: "要件管理", taskManaged: "タスク管理", testManaged: "テスト管理", attachment: "画像添付" },
-  "zh-CN": { title: "Developer", placeholder: "输入代码、调查或修改任务（可粘贴截图）", ready: "Codex harness 已连接", signIn: "使用 ChatGPT 登录", signOut: "退出登录", signedOut: "请先登录 ChatGPT", browserOpened: "请在浏览器中完成登录", files: "资源管理器", workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除", removeConfirm: "确定从工作区列表移除“{name}”吗？不会删除磁盘中的真实目录。", minimumWorkspace: "至少保留一个工作区", tasks: "任务", newTask: "新建任务", expand: "展开", collapse: "折叠", settings: "连接与执行设置", account: "ChatGPT 账号", readOnly: "只读", write: "工作区写入", readOnlyTip: "当前只读", writeTip: "当前可写入", thinking: "Codex 正在处理...", approve: "允许", approveAndTrust: "允许并信任", trustHint: "相同项目和命令下次将自动允许。", decline: "拒绝", screenshot: "截取当前屏幕", hiddenScreenshot: "隐藏 AI Desktop 后截图", screenPermissionRequired: "请在系统设置中允许 AI Desktop 使用屏幕录制权限，然后重新启动应用。", screenSourceUnavailable: "无法读取屏幕来源，请检查屏幕录制权限后重试。", openScreenRecordingSettings: "打开系统设置", tempFiles: "临时文件", openTemp: "临时目录", clearTemp: "一键清理", clearConfirm: "确定清理 AI Desktop temp 中的全部临时文件吗？", trustedCommands: "可信命令", clearTrustedCommands: "清除全部信任", clearTrustedConfirm: "确定清除全部项目可信命令吗？", auditLogs: "业务日志", openAuditLogs: "打开日志目录", noAuditTask: "暂无任务记录", conversationManaged: "会话托管", requirementManaged: "需求托管", taskManaged: "任务托管", testManaged: "测试托管", attachment: "图片附件" },
+  ja: { title: "Developer", placeholder: "コード、調査、変更内容を入力（画像を貼り付け可能）", ready: "Codex harness 接続済み", signIn: "ChatGPT でログイン", signOut: "ログアウト", signedOut: "ChatGPT にログインしてください", browserOpened: "ブラウザーでログインを完了してください", files: "EXPLORER", workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定", remove: "削除", removeConfirm: "ワークスペース一覧から「{name}」を削除しますか？ディスク上のフォルダーは削除されません。", minimumWorkspace: "ワークスペースを1つ以上残してください", tasks: "TASKS", newTask: "新しいタスク", expand: "展開", collapse: "折りたたむ", settings: "接続と実行設定", account: "ChatGPT アカウント", readOnly: "読み取り専用", write: "ワークスペース書き込み", readOnlyTip: "現在は読み取り専用", writeTip: "現在は書き込み可能", thinking: "Codex が処理中...", approve: "許可", approveAndTrust: "許可して信頼", trustHint: "同じプロジェクトとコマンドは次回から自動的に許可されます。", decline: "拒否", screenshot: "現在の画面をキャプチャ", hiddenScreenshot: "AI Desktop を隠してキャプチャ", screenPermissionRequired: "システム設定で AI Desktop の画面収録を許可し、アプリを再起動してください。", screenSourceUnavailable: "画面ソースを読み取れません。画面収録の権限を確認してから再試行してください。", openScreenRecordingSettings: "システム設定を開く", tempFiles: "一時ファイル", openTemp: "一時フォルダーを開く", clearTemp: "すべて消去", clearConfirm: "AI Desktop の一時ファイルをすべて削除しますか？", trustedCommands: "信頼済みコマンド", clearTrustedCommands: "信頼をすべて解除", clearTrustedConfirm: "登録済みの信頼コマンドをすべて解除しますか？", auditLogs: "業務ログ", openAuditLogs: "ログフォルダーを開く", noAuditTask: "タスク履歴はまだありません", conversationManaged: "会話管理", requirementManaged: "要件管理", taskManaged: "タスク管理", testManaged: "テスト管理", attachment: "画像添付", automaticTest: "自動テスト", automaticTestChecking: "自動テスト環境を確認中…", automaticTestReady: "自動テスト環境の準備ができました", automaticTestBlocked: "自動テストを開始できません", automaticTestTriggered: "自動テスト", close: "閉じる" },
+  "zh-CN": { title: "Developer", placeholder: "输入代码、调查或修改任务（可粘贴截图）", ready: "Codex harness 已连接", signIn: "使用 ChatGPT 登录", signOut: "退出登录", signedOut: "请先登录 ChatGPT", browserOpened: "请在浏览器中完成登录", files: "资源管理器", workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除", removeConfirm: "确定从工作区列表移除“{name}”吗？不会删除磁盘中的真实目录。", minimumWorkspace: "至少保留一个工作区", tasks: "任务", newTask: "新建任务", expand: "展开", collapse: "折叠", settings: "连接与执行设置", account: "ChatGPT 账号", readOnly: "只读", write: "工作区写入", readOnlyTip: "当前只读", writeTip: "当前可写入", thinking: "Codex 正在处理...", approve: "允许", approveAndTrust: "允许并信任", trustHint: "相同项目和命令下次将自动允许。", decline: "拒绝", screenshot: "截取当前屏幕", hiddenScreenshot: "隐藏 AI Desktop 后截图", screenPermissionRequired: "请在系统设置中允许 AI Desktop 使用屏幕录制权限，然后重新启动应用。", screenSourceUnavailable: "无法读取屏幕来源，请检查屏幕录制权限后重试。", openScreenRecordingSettings: "打开系统设置", tempFiles: "临时文件", openTemp: "临时目录", clearTemp: "一键清理", clearConfirm: "确定清理 AI Desktop temp 中的全部临时文件吗？", trustedCommands: "可信命令", clearTrustedCommands: "清除全部信任", clearTrustedConfirm: "确定清除全部项目可信命令吗？", auditLogs: "业务日志", openAuditLogs: "打开日志目录", noAuditTask: "暂无任务记录", conversationManaged: "会话托管", requirementManaged: "需求托管", taskManaged: "任务托管", testManaged: "测试托管", attachment: "图片附件", automaticTest: "自动测试", automaticTestChecking: "正在检查自动测试环境…", automaticTestReady: "自动测试环境已就绪", automaticTestBlocked: "自动测试开启失败", automaticTestTriggered: "自动测试", close: "知道了" },
 } as const;
 
 const EMPTY_ACCOUNT: CodexAccount = { authenticated: false, authMode: null, email: null, planType: null, requiresOpenaiAuth: true };
@@ -96,13 +92,28 @@ const EMPTY_STATUS: CodexHarnessStatus = { connected: false, account: EMPTY_ACCO
 const DEFAULT_EXPLORER_WIDTH = 260;
 const MINIMUM_EXPLORER_WIDTH = 200;
 const MAXIMUM_EXPLORER_WIDTH = 520;
-const MINIMUM_WORKSPACE_PANE_HEIGHT = 120;
-const MINIMUM_TASKS_PANE_HEIGHT = 38;
 const ACTIVE_CHAT_STORAGE_KEY = "ai-desktop.active-chat.v1";
+const EMPTY_DISPATCH_STATE: ConversationDispatchState = { activeTask: null, queue: [] };
+type ActiveExplorerSection = "workspace" | "tasks";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
+}
+
+/** 每个真实 Harness 回合使用一张独立回复卡，禁止后续回合复用并覆盖已有文字。 */
+function createAssistantMessage(id: number, managedMode: ManagedExecutionMode): Message {
+  return {
+    id,
+    role: "assistant",
+    text: "",
+    streaming: true,
+    streamStatus: "starting",
+    activities: [],
+    plan: [],
+    changedFiles: [],
+    managedMode,
+  };
 }
 
 function WindowControls() {
@@ -126,19 +137,22 @@ export function DeveloperApp() {
   const [screenshotMode, setScreenshotMode] = useState<"current" | "hidden" | null>(null);
   const [screenshotError, setScreenshotError] = useState("");
   const [screenRecordingSettingsAvailable, setScreenRecordingSettingsAvailable] = useState(false);
+  const [screenRecordingRestartRequired, setScreenRecordingRestartRequired] = useState(false);
+  const [screenRecordingRestarting, setScreenRecordingRestarting] = useState(false);
   const [tempInfo, setTempInfo] = useState<TempDirectoryInfo | null>(null);
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
   const [trustedCommandInfo, setTrustedCommandInfo] = useState<TrustedCommandInfo>({ count: 0 });
   const [loading, setLoading] = useState(false);
-  const [queuedSends, setQueuedSends] = useState<PendingSend[]>([]);
+  const [dispatchState, setDispatchState] = useState<ConversationDispatchState>(EMPTY_DISPATCH_STATE);
+  const [dispatchError, setDispatchError] = useState("");
+  const [automaticTestEnabled, setAutomaticTestEnabled] = useState(false);
+  const [automaticTestChecking, setAutomaticTestChecking] = useState(false);
+  const [automaticTestDialog, setAutomaticTestDialog] = useState<AutomaticTestPreflightResult | "checking" | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // 资源管理器控制整栏宽度，工作区分区独立保存展开状态；折叠整栏后由活动栏图标恢复。
+  // 资源管理器控制整栏宽度；工作区和任务使用单一活动分区，确保切换后当前内容置顶并独占可用高度。
   const [explorerExpanded, setExplorerExpanded] = useState(true);
-  const [workspaceSectionExpanded, setWorkspaceSectionExpanded] = useState(true);
-  const [tasksSectionExpanded, setTasksSectionExpanded] = useState(false);
+  const [activeExplorerSection, setActiveExplorerSection] = useState<ActiveExplorerSection | null>("workspace");
   const [explorerWidth, setExplorerWidth] = useState(DEFAULT_EXPLORER_WIDTH);
-  // null 表示默认由工作区占满任务标题之上的全部空间；用户拖拽后才固定当前高度。
-  const [workspacePaneHeight, setWorkspacePaneHeight] = useState<number | null>(null);
   const [projectRoot, setProjectRoot] = useState("C:\\opt\\workspace\\SELPLAT");
   const [workspaces, setWorkspaces] = useState<WorkspaceState | null>(null);
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(new Set());
@@ -156,15 +170,34 @@ export function DeveloperApp() {
   const settingsPanelRef = useRef<HTMLElement>(null);
   const chatRef = useRef<HTMLElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const explorerSectionsRef = useRef<HTMLDivElement>(null);
   const activeAssistantIdRef = useRef<number | null>(null);
+  const activeTurnIdRef = useRef<string | null>(null);
+  const completedTurnIdsRef = useRef<Set<string>>(new Set());
+  const turnMessageIdsRef = useRef<Map<string, number>>(new Map());
+  const messageIdSequenceRef = useRef(0);
+  const activeManagedModeRef = useRef<ManagedExecutionMode>("conversation-managed");
   const flushStreamEventsRef = useRef<() => void>(() => undefined);
   const screenCapturePreparedRef = useRef(false);
+  const screenRecordingSettingsOpenedRef = useRef(false);
+  const screenRecordingRecheckBusyRef = useRef(false);
+  const automaticTestEnabledRef = useRef(false);
   const text = labels[locale];
+  const screenPermissionRecoveryMessage = locale === "ja"
+    ? "システム設定で AI Desktop の画面収録を許可してください。AI Desktop に戻ると自動的に再確認します。"
+    : "请在系统设置中允许 AI Desktop 使用屏幕录制权限；返回 AI Desktop 后会自动重新检测。";
+  const screenPermissionRestartMessage = locale === "ja"
+    ? "現在のプロセスでは変更後の権限をまだ認識できません。権限が有効なら AI Desktop を再起動してください。"
+    : "当前进程仍未识别更改后的权限；若系统开关已经开启，请重启 AI Desktop 使权限生效。";
+  const queuedSends = dispatchState.queue;
   const nextId = useMemo(() => messages.reduce((maximum, item) => Math.max(maximum, item.id), 0) + 1, [messages]);
   const latestManagedAssistantId = useMemo(() => messages.reduce((latest, message) => (
     message.role === "assistant" && message.managedMode !== undefined ? message.id : latest
   ), null as number | null), [messages]);
+
+  useEffect(() => {
+    // 恢复历史记录后把运行期序号推进到现有最大值，保证后续每个 Harness 回合都能取得独立 React key。
+    messageIdSequenceRef.current = Math.max(messageIdSequenceRef.current, ...messages.map((message) => message.id), 0);
+  }, [messages]);
 
   const clampExplorerWidth = (width: number) => Math.min(MAXIMUM_EXPLORER_WIDTH, Math.max(MINIMUM_EXPLORER_WIDTH, width));
 
@@ -189,34 +222,9 @@ export function DeveloperApp() {
     handle.addEventListener("pointercancel", stopResize);
   };
 
-  const resizeWorkspacePane = (clientY: number) => {
-    const sections = explorerSectionsRef.current;
-    if (!sections) return;
-    const bounds = sections.getBoundingClientRect();
-    const titleHeight = 38;
-    const splitterHeight = 5;
-    const maximumHeight = Math.max(
-      MINIMUM_WORKSPACE_PANE_HEIGHT,
-      bounds.height - titleHeight - splitterHeight - MINIMUM_TASKS_PANE_HEIGHT,
-    );
-    setWorkspacePaneHeight(Math.min(maximumHeight, Math.max(MINIMUM_WORKSPACE_PANE_HEIGHT, clientY - bounds.top - titleHeight)));
-  };
-
-  const startWorkspaceResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const handle = event.currentTarget;
-    const pointerId = event.pointerId;
-    handle.setPointerCapture(pointerId);
-
-    // 水平分隔器只分配工作区和任务区域高度，工作区内部 Accordion 状态始终保留。
-    const onPointerMove = (moveEvent: globalThis.PointerEvent) => resizeWorkspacePane(moveEvent.clientY);
-    const stopResize = () => {
-      handle.removeEventListener("pointermove", onPointerMove);
-      handle.removeEventListener("pointerup", stopResize);
-      handle.removeEventListener("pointercancel", stopResize);
-    };
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", stopResize);
-    handle.addEventListener("pointercancel", stopResize);
+  const toggleExplorerSection = (section: ActiveExplorerSection) => {
+    // 再次点击当前分区可全部收起；打开另一分区时会原子性替换活动值，禁止两块内容同时挤占侧栏。
+    setActiveExplorerSection((current) => current === section ? null : section);
   };
 
   useEffect(() => {
@@ -249,6 +257,13 @@ export function DeveloperApp() {
     const approvalTimer = window.setInterval(refreshApprovals, 700);
     const userInputTimer = window.setInterval(refreshUserInputs, 350);
     return () => { window.clearInterval(statusTimer); window.clearInterval(approvalTimer); window.clearInterval(userInputTimer); };
+  }, []);
+
+  useEffect(() => {
+    const desktop = window.desktop;
+    if (!desktop) return;
+    void desktop.getConversationDispatchState().then(setDispatchState);
+    return desktop.onConversationDispatchState(setDispatchState);
   }, []);
 
   useEffect(() => {
@@ -351,10 +366,82 @@ export function DeveloperApp() {
   }, [settingsOpen]);
 
   useEffect(() => {
+    automaticTestEnabledRef.current = automaticTestEnabled;
+  }, [automaticTestEnabled]);
+
+  const refreshDispatchState = async () => {
+    const state = await window.desktop?.getConversationDispatchState();
+    if (state) setDispatchState(state);
+  };
+
+  const discardAutomaticQueued = async () => {
+    const automaticItems = dispatchState.queue.filter((item) => item.automatic);
+    for (const item of automaticItems) {
+      const state = await window.desktop?.discardQueuedMessage(item.id);
+      if (state) setDispatchState(state);
+    }
+  };
+
+  useEffect(() => {
+    if (!approval || !automaticTestEnabledRef.current) return;
+    // 自动阶段出现任何未预检审批都立即退回关闭态，避免无人值守流程悬停在授权弹窗。
+    automaticTestEnabledRef.current = false;
+    setAutomaticTestEnabled(false);
+    void discardAutomaticQueued();
+    setAutomaticTestDialog({
+      status: "blocked",
+      checkedAt: new Date().toISOString(),
+      checks: [{
+        id: "command",
+        status: "failed",
+        label: locale === "ja" ? "予期しない承認" : "出现额外授权",
+        detail: locale === "ja" ? "未確認の承認要求を検出したため、自動テストを停止しました。" : "检测到预检之外的授权请求，自动测试已关闭，请人工确认。",
+      }],
+    });
+  }, [approval, locale]);
+
+  useEffect(() => {
     const desktop = window.desktop;
     if (!desktop) return;
     const queued: Array<{ messageId: number; event: CodexStreamEvent }> = [];
     let animationFrame = 0;
+    const appendAssistantCard = () => {
+      const previousAssistantId = activeAssistantIdRef.current;
+      const messageId = messageIdSequenceRef.current + 1;
+      messageIdSequenceRef.current = messageId;
+      activeAssistantIdRef.current = messageId;
+      setMessages((current) => [
+        ...current.map((message) => message.id === previousAssistantId
+          ? { ...message, streaming: false, streamTerminal: true }
+          : message),
+        createAssistantMessage(messageId, activeManagedModeRef.current),
+      ]);
+      return messageId;
+    };
+    const routeMessageId = (event: CodexStreamEvent) => {
+      const currentMessageId = activeAssistantIdRef.current;
+      if (currentMessageId === null) return null;
+      if (event.type === "managed-execution" && event.managedExecution) {
+        const beginsNextTurn = (event.managedExecution.status === "started" || event.managedExecution.status === "continuing")
+          && activeTurnIdRef.current !== null
+          && completedTurnIdsRef.current.has(activeTurnIdRef.current);
+        if (beginsNextTurn) {
+          // 先提交上一轮尚在动画帧队列中的最终文字，再冻结旧卡并创建下一张卡。
+          flush();
+          activeTurnIdRef.current = null;
+          return appendAssistantCard();
+        }
+        return currentMessageId;
+      }
+      const existingMessageId = turnMessageIdsRef.current.get(event.turnId);
+      if (existingMessageId !== undefined) return existingMessageId;
+      if (event.type !== "turn-started") return currentMessageId;
+      if (activeTurnIdRef.current !== null) flush();
+      const messageId = activeTurnIdRef.current === null ? currentMessageId : appendAssistantCard();
+      activeTurnIdRef.current = event.turnId;
+      turnMessageIdsRef.current.set(event.turnId, messageId);
+      return messageId;
+    };
     const flush = () => {
       animationFrame = 0;
       const events = queued.splice(0);
@@ -365,10 +452,11 @@ export function DeveloperApp() {
     };
     flushStreamEventsRef.current = flush;
     const unsubscribe = desktop.onCodexStreamEvent((event) => {
-      const messageId = activeAssistantIdRef.current;
+      const messageId = routeMessageId(event);
       if (messageId === null) return;
-      // Harness 的高频文字 delta 按动画帧合并，既保持实时感，也避免每个 token 都触发一次完整渲染。
+      // 每个真实 turnId 固定路由到独立回复卡；高频 delta 仍按动画帧批量落盘，避免 token 级重绘。
       queued.push({ messageId, event });
+      if (event.type === "turn-completed") completedTurnIdsRef.current.add(event.turnId);
       if (!animationFrame) animationFrame = window.requestAnimationFrame(flush);
     });
     return () => {
@@ -450,20 +538,38 @@ export function DeveloperApp() {
     }
   };
 
+  const enqueueAutomaticTest = async (sourceMessageId?: number) => {
+    if (dispatchState.queue.some((item) => item.automatic)) return;
+    if (sourceMessageId !== undefined) {
+      setMessages((current) => current.map((item) => item.id === sourceMessageId ? { ...item, actionTriggered: true } : item));
+    }
+    const state = await window.desktop?.enqueueMessage({
+      request: { message: "测试一下", locale, sandboxMode, attachmentIds: [], executionMode: "test-managed" },
+      displayText: text.automaticTestTriggered,
+      automatic: true,
+    });
+    if (state) setDispatchState(state);
+  };
+
   const send = async (
     override?: { message: string; displayText: string; mode: ManagedExecutionMode; sourceMessageId?: number },
-    queued?: PendingSend,
+    queued?: ConversationQueueItem,
   ) => {
     const typedMessage = input.trim();
     const commandMode = override ? null : managedModeForCommand(typedMessage, executionMode);
-    const mode = queued?.mode || override?.mode || commandMode || executionMode;
-    const message = queued?.message ?? override?.message ?? typedMessage;
+    const mode = queued?.request.executionMode || override?.mode || commandMode || executionMode;
+    const message = queued?.request.message ?? override?.message ?? typedMessage;
     const displayText = queued?.displayText ?? override?.displayText ?? typedMessage;
-    const sentAttachments = queued?.attachments || attachments;
-    const sourceMessageId = queued?.sourceMessageId ?? override?.sourceMessageId;
-    if (!message && sentAttachments.length === 0) return;
-    if (loading && !queued) {
-      setQueuedSends((current) => [...current, { message, displayText, mode, attachments: sentAttachments, sourceMessageId }]);
+    const sentAttachments = queued ? [] : attachments;
+    const attachmentIds = queued?.request.attachmentIds || sentAttachments.map((attachment) => attachment.id);
+    const sourceMessageId = override?.sourceMessageId;
+    if (!message && attachmentIds.length === 0) return;
+    if ((loading || dispatchState.activeTask) && !queued) {
+      const state = await window.desktop?.enqueueMessage({
+        request: { message, locale, sandboxMode, attachmentIds, executionMode: mode },
+        displayText,
+      });
+      if (state) setDispatchState(state);
       setInput("");
       setAttachments([]);
       return;
@@ -478,36 +584,47 @@ export function DeveloperApp() {
       setMessages((current) => current.map((item) => item.id === sourceMessageId ? { ...item, actionTriggered: true } : item));
     }
     setExecutionMode(mode);
-    const assistantId = nextId + 1;
-    const userMessage = { id: nextId, role: "user" as const, text: displayText || text.attachment, attachments: sentAttachments };
+    const userId = Math.max(nextId, messageIdSequenceRef.current + 1);
+    const assistantId = userId + 1;
+    messageIdSequenceRef.current = assistantId;
+    const userMessage = { id: userId, role: "user" as const, text: displayText || text.attachment, attachments: sentAttachments };
+    activeTurnIdRef.current = null;
+    completedTurnIdsRef.current = new Set();
+    turnMessageIdsRef.current = new Map();
+    activeManagedModeRef.current = mode;
     activeAssistantIdRef.current = assistantId;
     // 发送后立即创建回复卡，随后只使用官方 app-server 实时事件更新内容和执行阶段。
-    setMessages((current) => [...current, userMessage, {
-      id: assistantId,
-      role: "assistant",
-      text: "",
-      streaming: true,
-      streamStatus: "starting",
-      activities: [],
-      plan: [],
-      changedFiles: [],
-      managedMode: mode,
-    }]);
+    setMessages((current) => [...current, userMessage, createAssistantMessage(assistantId, mode)]);
     setInput("");
     setAttachments([]);
     setLoading(true);
     try {
       const response = window.desktop
-        ? await window.desktop.sendMessage({ message, locale, sandboxMode, attachmentIds: sentAttachments.map((attachment) => attachment.id), executionMode: mode })
+        ? await window.desktop.sendMessage({ message, locale, sandboxMode, attachmentIds, executionMode: mode, queueItemId: queued?.id })
         : { text: locale === "ja" ? "デスクトップ版でローカル Codex に接続します。" : "桌面版本会在这里返回本地 Codex 的结果。", itemCount: 0 };
+      if (response.disposition === "queued") {
+        setMessages((current) => current.map((item) => item.id === assistantId
+          ? { ...item, text: "消息已进入等待队列。", streaming: false, streamTerminal: true, streamStatus: "queued" }
+          : item));
+        return;
+      }
       if (response.threadId) setActiveThreadId(response.threadId);
       flushStreamEventsRef.current();
-      setMessages((current) => current.map((item) => item.id === assistantId
+      const completedAssistantId = activeAssistantIdRef.current || assistantId;
+      setMessages((current) => current.map((item) => item.id === completedAssistantId
         ? { ...item, text: item.text || response.text, streaming: false, streamTerminal: true, streamStatus: "completed" }
         : item));
+      if (automaticTestEnabledRef.current
+        && mode === "task-managed"
+        && "managedStatus" in response
+        && response.managedStatus === "code-verified") {
+        // 代码级验证完成后只排入一条固定测试托管消息，交给现有串行队列在当前回合收尾后执行。
+        void enqueueAutomaticTest(completedAssistantId);
+      }
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : "Codex unavailable";
-      setMessages((current) => current.map((item) => item.id === assistantId
+      const messageText = readableDesktopError(error, "Codex unavailable");
+      const failedAssistantId = activeAssistantIdRef.current || assistantId;
+      setMessages((current) => current.map((item) => item.id === failedAssistantId
         ? { ...item, text: item.text || messageText, streaming: false, streamTerminal: true, streamStatus: "failed", streamError: messageText }
         : item));
     } finally {
@@ -515,15 +632,44 @@ export function DeveloperApp() {
       activeAssistantIdRef.current = null;
       setLoading(false);
       void window.desktop?.getAuditLogInfo().then(setAuditInfo);
+      void refreshDispatchState();
     }
   };
 
   useEffect(() => {
-    if (loading || queuedSends.length === 0) return;
-    const [next, ...remaining] = queuedSends;
-    setQueuedSends(remaining);
-    void send(undefined, next);
-  }, [loading, queuedSends]);
+    if (loading || dispatchState.activeTask || queuedSends.length === 0 || !codexStatus.account.authenticated) return;
+    void send(undefined, queuedSends[0]);
+  }, [loading, dispatchState.activeTask, queuedSends, codexStatus.account.authenticated]);
+
+  const supplementQueuedMessage = async (itemId: string) => {
+    setDispatchError("");
+    try {
+      const state = await window.desktop?.supplementQueuedMessage(itemId);
+      if (state) setDispatchState(state);
+    } catch (error) {
+      setDispatchError(readableDesktopError(error, "无法补充到当前任务。"));
+    }
+  };
+
+  const discardQueuedMessage = async (itemId: string) => {
+    const state = await window.desktop?.discardQueuedMessage(itemId);
+    if (state) setDispatchState(state);
+  };
+
+  const recoverConversationTask = async () => {
+    setDispatchError("");
+    try {
+      const state = await window.desktop?.recoverConversationTask();
+      if (state) setDispatchState(state);
+    } catch (error) {
+      setDispatchError(readableDesktopError(error, "无法继续未完成任务。"));
+    }
+  };
+
+  const discardConversationRecovery = async () => {
+    const state = await window.desktop?.discardConversationRecovery();
+    if (state) setDispatchState(state);
+  };
 
   const startNewTask = async () => {
     try {
@@ -533,6 +679,10 @@ export function DeveloperApp() {
       setExecutionMode("conversation-managed");
       setActiveThreadId(null);
       setMessages([]);
+      automaticTestEnabledRef.current = false;
+      setAutomaticTestEnabled(false);
+      setAutomaticTestDialog(null);
+      void discardAutomaticQueued();
       window.localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
       setScreenshotError("");
     } catch (error) {
@@ -576,6 +726,7 @@ export function DeveloperApp() {
     setScreenshotMode(hideOwnerWindow ? "hidden" : "current");
     setScreenshotError("");
     setScreenRecordingSettingsAvailable(false);
+    setScreenRecordingRestartRequired(false);
     setSettingsOpen(false);
     try {
       if (window.desktop) {
@@ -585,7 +736,7 @@ export function DeveloperApp() {
           const startedAt = performance.now();
           const preparation = await window.desktop.prepareScreenCapture();
           if (preparation.status === "blocked") {
-            setScreenshotError(preparation.reason === "permission-required" ? text.screenPermissionRequired : text.screenSourceUnavailable);
+            setScreenshotError(preparation.reason === "permission-required" ? screenPermissionRecoveryMessage : text.screenSourceUnavailable);
             setScreenRecordingSettingsAvailable(preparation.canOpenSettings);
             return;
           }
@@ -604,11 +755,58 @@ export function DeveloperApp() {
   };
 
   const openScreenRecordingSettings = async () => {
+    screenRecordingSettingsOpenedRef.current = true;
     try {
       await window.desktop?.openScreenRecordingSettings();
     } catch (error) {
+      screenRecordingSettingsOpenedRef.current = false;
       setScreenshotError(readableDesktopError(error, text.screenSourceUnavailable));
       setScreenRecordingSettingsAvailable(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!screenRecordingSettingsAvailable) return;
+    const desktop = window.desktop;
+    if (!desktop) return;
+    const recheckScreenRecordingPermission = () => {
+      if (!screenRecordingSettingsOpenedRef.current || screenRecordingRecheckBusyRef.current || document.visibilityState !== "visible") return;
+      screenRecordingRecheckBusyRef.current = true;
+      void desktop.prepareScreenCapture().then((preparation) => {
+        if (preparation.status === "ready") {
+          screenCapturePreparedRef.current = true;
+          screenRecordingSettingsOpenedRef.current = false;
+          setScreenshotError("");
+          setScreenRecordingSettingsAvailable(false);
+          setScreenRecordingRestartRequired(false);
+          return;
+        }
+        setScreenshotError(preparation.reason === "permission-required" ? screenPermissionRestartMessage : text.screenSourceUnavailable);
+        setScreenRecordingSettingsAvailable(preparation.canOpenSettings);
+        setScreenRecordingRestartRequired(preparation.reason === "permission-required");
+      }).catch((error) => {
+        setScreenshotError(readableDesktopError(error, text.screenSourceUnavailable));
+      }).finally(() => {
+        screenRecordingRecheckBusyRef.current = false;
+      });
+    };
+    window.addEventListener("focus", recheckScreenRecordingPermission);
+    document.addEventListener("visibilitychange", recheckScreenRecordingPermission);
+    return () => {
+      window.removeEventListener("focus", recheckScreenRecordingPermission);
+      document.removeEventListener("visibilitychange", recheckScreenRecordingPermission);
+    };
+  }, [screenPermissionRestartMessage, screenRecordingSettingsAvailable, text.screenSourceUnavailable]);
+
+  const restartForScreenRecordingPermission = async () => {
+    if (screenRecordingRestarting) return;
+    setScreenRecordingRestarting(true);
+    setScreenshotError(locale === "ja" ? "AI Desktop を再起動しています…" : "正在重启 AI Desktop 以应用屏幕录制权限…");
+    try {
+      await window.desktop?.restartForScreenRecordingPermission();
+    } catch (error) {
+      setScreenRecordingRestarting(false);
+      setScreenshotError(readableDesktopError(error, text.screenSourceUnavailable));
     }
   };
 
@@ -663,6 +861,50 @@ export function DeveloperApp() {
     if (info) setTrustedCommandInfo(info);
   };
 
+  const toggleAutomaticTesting = async () => {
+    if (automaticTestEnabledRef.current) {
+      automaticTestEnabledRef.current = false;
+      setAutomaticTestEnabled(false);
+      setAutomaticTestDialog(null);
+      void discardAutomaticQueued();
+      return;
+    }
+    if (automaticTestChecking || loading) return;
+    setAutomaticTestChecking(true);
+    setAutomaticTestDialog("checking");
+    try {
+      const result = await window.desktop?.prepareAutomaticTesting();
+      if (!result) throw new Error("Automatic test preflight is unavailable.");
+      setAutomaticTestDialog(result);
+      if (result.status !== "ready") return;
+      automaticTestEnabledRef.current = true;
+      setAutomaticTestEnabled(true);
+      const latestCompletedTask = [...messages].reverse().find((message) =>
+        message.role === "assistant"
+        && message.managedMode === "task-managed"
+        && message.streamTerminal
+        && message.streamStatus !== "failed"
+        && message.managedExecution?.stage === "completed"
+        && message.managedExecution.status === "completed",
+      );
+      // 用户在代码验证已经结束后再开启开关时，立即把该任务送入自动测试，不要求再次点击“测试一下”。
+      if (latestCompletedTask) enqueueAutomaticTest(latestCompletedTask.id);
+    } catch (error) {
+      setAutomaticTestDialog({
+        status: "blocked",
+        checkedAt: new Date().toISOString(),
+        checks: [{
+          id: "runner",
+          status: "failed",
+          label: locale === "ja" ? "事前確認" : "环境预检",
+          detail: readableDesktopError(error, locale === "ja" ? "自動テスト環境を確認できません。" : "无法检查自动测试环境。"),
+        }],
+      });
+    } finally {
+      setAutomaticTestChecking(false);
+    }
+  };
+
   const cancelActiveTurn = () => {
     void window.desktop?.cancel();
     flushStreamEventsRef.current();
@@ -708,9 +950,8 @@ export function DeveloperApp() {
   };
 
   const shellStyle = { "--explorer-width": `${explorerWidth}px` } as CSSProperties;
-  const explorerSectionStyle = workspacePaneHeight === null
-    ? undefined
-    : { "--workspace-pane-height": `${workspacePaneHeight}px` } as CSSProperties;
+  const workspaceSectionExpanded = activeExplorerSection === "workspace";
+  const tasksSectionExpanded = activeExplorerSection === "tasks";
 
   return <div className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
     <header className="dev-titlebar">
@@ -728,60 +969,44 @@ export function DeveloperApp() {
       <div className="dev-section-title explorer-title">
         <button className="section-toggle" aria-expanded={explorerExpanded} aria-controls="developer-explorer-sections" aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} onClick={() => setExplorerExpanded((value) => !value)}>{explorerExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.files}</span></button>
       </div>
-      <div ref={explorerSectionsRef} id="developer-explorer-sections" className={`dev-explorer-sections ${workspacePaneHeight === null ? "" : "workspace-pane-resized"}`} style={explorerSectionStyle}>
-      <div className="dev-section-title workspace-title">
-        <button className="section-toggle" aria-expanded={workspaceSectionExpanded} aria-controls="developer-workspace-list" aria-label={`${workspaceSectionExpanded ? text.collapse : text.expand}${text.workspaces}`} onClick={() => setWorkspaceSectionExpanded((value) => !value)}>{workspaceSectionExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.workspaces}</span></button>
-        <button className="section-action" title={text.addWorkspace} aria-label={text.addWorkspace} onClick={() => void addWorkspace()}><Add24Regular /></button>
-      </div>
-      {workspaceSectionExpanded && <div id="developer-workspace-list" className="workspace-list">
-        {workspaces?.roots.map((root) => {
-          const expanded = expandedWorkspaces.has(root.id);
-          const primary = root.id === workspaces.primaryId;
-          const readOnly = root.permission === "read-only";
-          return <section className={`workspace-accordion ${expanded ? "expanded" : ""}`} key={root.id}>
-            <div className="workspace-header">
-              <button className="workspace-toggle" onClick={() => void toggleWorkspace(root.id)} aria-expanded={expanded} title={root.path}>
-                {expanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}
-                <Folder24Regular />
-                <strong>{root.name}</strong>
-              </button>
-              <div className="workspace-actions">
-                <button className={`workspace-permission-action ${readOnly ? "read-only" : "workspace-write"}`} data-tooltip={readOnly ? text.readOnlyTip : text.writeTip} aria-label={readOnly ? text.readOnlyTip : text.writeTip} aria-pressed={readOnly} onClick={() => void updateWorkspacePermission(root.id, readOnly ? "workspace-write" : "read-only")}>{readOnly ? <ShieldLock16Filled /> : <ShieldLock16Regular />}</button>
-                <button className={`workspace-primary-action ${primary ? "primary-root" : ""}`} data-tooltip={primary ? text.primary : text.makePrimary} aria-label={primary ? text.primary : text.makePrimary} disabled={primary} onClick={() => void setPrimaryWorkspace(root.id)}>{primary ? <Star16Filled /> : <Star16Regular />}</button>
-                <button className="workspace-remove-action" data-tooltip={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} aria-label={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} disabled={workspaces.roots.length === 1} onClick={() => void removeWorkspace(root.id, root.name)}><Delete16Regular /></button>
+      <div id="developer-explorer-sections" className={`dev-explorer-sections active-${activeExplorerSection ?? "none"}`}>
+      <section className={`explorer-pane workspace-pane ${workspaceSectionExpanded ? "expanded" : "collapsed"}`}>
+        <div className="dev-section-title workspace-title">
+          <button className="section-toggle" aria-expanded={workspaceSectionExpanded} aria-controls="developer-workspace-list" aria-label={`${workspaceSectionExpanded ? text.collapse : text.expand}${text.workspaces}`} onClick={() => toggleExplorerSection("workspace")}>{workspaceSectionExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.workspaces}</span></button>
+          <button className="section-action" title={text.addWorkspace} aria-label={text.addWorkspace} onClick={() => void addWorkspace()}><Add24Regular /></button>
+        </div>
+        {workspaceSectionExpanded && <div id="developer-workspace-list" className="workspace-list">
+          {workspaces?.roots.map((root) => {
+            const expanded = expandedWorkspaces.has(root.id);
+            const primary = root.id === workspaces.primaryId;
+            const readOnly = root.permission === "read-only";
+            return <section className={`workspace-accordion ${expanded ? "expanded" : ""}`} key={root.id}>
+              <div className="workspace-header">
+                <button className="workspace-toggle" onClick={() => void toggleWorkspace(root.id)} aria-expanded={expanded} title={root.path}>
+                  {expanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}
+                  <Folder24Regular />
+                  <strong>{root.name}</strong>
+                </button>
+                <div className="workspace-actions">
+                  <button className={`workspace-permission-action ${readOnly ? "read-only" : "workspace-write"}`} data-tooltip={readOnly ? text.readOnlyTip : text.writeTip} aria-label={readOnly ? text.readOnlyTip : text.writeTip} aria-pressed={readOnly} onClick={() => void updateWorkspacePermission(root.id, readOnly ? "workspace-write" : "read-only")}>{readOnly ? <ShieldLock16Filled /> : <ShieldLock16Regular />}</button>
+                  <button className={`workspace-primary-action ${primary ? "primary-root" : ""}`} data-tooltip={primary ? text.primary : text.makePrimary} aria-label={primary ? text.primary : text.makePrimary} disabled={primary} onClick={() => void setPrimaryWorkspace(root.id)}>{primary ? <Star16Filled /> : <Star16Regular />}</button>
+                  <button className="workspace-remove-action" data-tooltip={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} aria-label={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} disabled={workspaces.roots.length === 1} onClick={() => void removeWorkspace(root.id, root.name)}><Delete16Regular /></button>
+                </div>
               </div>
-            </div>
-            {expanded && <div className="workspace-panel">
-              <div className="workspace-meta" title={root.path}><span>{root.path}</span></div>
-              <div className="workspace-tree">
-                {(workspaceEntries[root.id] || []).map((entry) => <div className="dev-file indent" key={`${entry.kind}:${entry.name}`}>{entry.kind === "directory" ? <Folder24Regular /> : <Document24Regular />}{entry.name}</div>)}
-              </div>
-            </div>}
-          </section>;
-        })}
-        {workspaceError && <div className="workspace-error">{workspaceError}</div>}
-      </div>}
-      {workspaceSectionExpanded && <div
-        className="workspace-pane-resizer"
-        role="separator"
-        aria-label={locale === "ja" ? "ワークスペースとタスクの高さを変更" : "调整工作区与任务区域高度"}
-        aria-orientation="horizontal"
-        aria-valuemin={MINIMUM_WORKSPACE_PANE_HEIGHT}
-        aria-valuenow={workspacePaneHeight ?? undefined}
-        tabIndex={0}
-        onDoubleClick={() => setWorkspacePaneHeight(null)}
-        onPointerDown={startWorkspaceResize}
-        onKeyDown={(event) => {
-          if (event.key === "Home") { event.preventDefault(); setWorkspacePaneHeight(null); return; }
-          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-          event.preventDefault();
-          const currentHeight = workspacePaneHeight ?? explorerSectionsRef.current?.querySelector<HTMLElement>(".workspace-list")?.offsetHeight ?? MINIMUM_WORKSPACE_PANE_HEIGHT;
-          resizeWorkspacePane((explorerSectionsRef.current?.getBoundingClientRect().top ?? 0) + 38 + currentHeight + (event.key === "ArrowUp" ? -16 : 16));
-        }}
-      />}
-      <div className={`tasks-pane ${tasksSectionExpanded ? "expanded" : ""}`}>
+              {expanded && <div className="workspace-panel">
+                <div className="workspace-meta" title={root.path}><span>{root.path}</span></div>
+                <div className="workspace-tree">
+                  {(workspaceEntries[root.id] || []).map((entry) => <div className="dev-file indent" key={`${entry.kind}:${entry.name}`}>{entry.kind === "directory" ? <Folder24Regular /> : <Document24Regular />}{entry.name}</div>)}
+                </div>
+              </div>}
+            </section>;
+          })}
+          {workspaceError && <div className="workspace-error">{workspaceError}</div>}
+        </div>}
+      </section>
+      <section className={`explorer-pane tasks-pane ${tasksSectionExpanded ? "expanded" : "collapsed"}`}>
         <div className="dev-section-title tasks">
-          <button className="section-toggle" aria-expanded={tasksSectionExpanded} aria-controls="developer-task-list" aria-label={`${tasksSectionExpanded ? text.collapse : text.expand}${text.tasks}`} onClick={() => setTasksSectionExpanded((value) => !value)}>{tasksSectionExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.tasks}</span></button>
+          <button className="section-toggle" aria-expanded={tasksSectionExpanded} aria-controls="developer-task-list" aria-label={`${tasksSectionExpanded ? text.collapse : text.expand}${text.tasks}`} onClick={() => toggleExplorerSection("tasks")}>{tasksSectionExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.tasks}</span></button>
           <button className="section-action new-task" title={text.newTask} aria-label={text.newTask} onClick={() => void startNewTask()}><Add24Regular /></button>
         </div>
         {tasksSectionExpanded && <div id="developer-task-list" className="task-list">
@@ -789,7 +1014,7 @@ export function DeveloperApp() {
             ? <div className="task-summary" title={auditInfo.latestTask.request}><strong>{auditInfo.latestTask.request || text.newTask}</strong><span>{auditStatusText(auditInfo.latestTask.status, locale)}</span></div>
             : <span className="task-empty">{text.noAuditTask}</span>}
         </div>}
-      </div>
+      </section>
       </div>
     </aside>
 
@@ -816,13 +1041,17 @@ export function DeveloperApp() {
       <div className="dev-tab"><Prompt24Regular /><span>Codex Chat</span><Dismiss20Regular /></div>
       <section ref={chatRef} className="dev-chat">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p></div>}
-        {messages.map((message) => <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && message.managedMode !== "test-managed" && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} onAdvance={(mode, label) => void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>)}
+        {messages.map((message) => <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} activeMode={executionMode} onReturn={setExecutionMode} onAdvance={(mode, label) => void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>)}
       </section>
       <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
+        {dispatchState.activeTask?.status === "recoverable" && <div className="dispatch-recovery" role="status"><span>发现上次未完成的任务</span><div><button type="button" onClick={() => void recoverConversationTask()}>继续执行</button><button type="button" onClick={() => void discardConversationRecovery()}>放弃任务</button></div></div>}
+        {dispatchState.activeTask?.status === "running" && !loading && <div className="dispatch-background" role="status">任务正在后台执行，完成后将继续处理等待队列。</div>}
+        {queuedSends.length > 0 && <div className="dispatch-queue" aria-label="等待队列">{queuedSends.map((item, index) => <div key={item.id} className="dispatch-queue-item"><span><b>{index + 1}</b>{item.displayText}</span><div>{dispatchState.activeTask?.status === "running" && <button type="button" onClick={() => void supplementQueuedMessage(item.id)}>补充到当前任务</button>}<button type="button" onClick={() => void discardQueuedMessage(item.id)}>移除</button></div></div>)}</div>}
         <textarea ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} placeholder={text.placeholder} />
-        {screenshotError && <div className="composer-error" role="alert"><span>{screenshotError}</span>{screenRecordingSettingsAvailable && <button type="button" onClick={() => void openScreenRecordingSettings()}>{text.openScreenRecordingSettings}</button>}</div>}
-        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}<button type="button" className="screenshot-button" title={text.screenshot} aria-label={text.screenshot} data-tooltip={text.screenshot} disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" title={text.hiddenScreenshot} aria-label={text.hiddenScreenshot} data-tooltip={text.hiddenScreenshot} disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
+        {dispatchError && <div className="composer-error" role="alert"><span>{dispatchError}</span></div>}
+        {screenshotError && <div className="composer-error" role="alert"><span>{screenshotError}</span>{(screenRecordingSettingsAvailable || screenRecordingRestartRequired) && <div className="composer-error-actions">{screenRecordingSettingsAvailable && <button type="button" onClick={() => void openScreenRecordingSettings()}>{text.openScreenRecordingSettings}</button>}{screenRecordingRestartRequired && <button type="button" className="primary" disabled={screenRecordingRestarting} onClick={() => void restartForScreenRecordingPermission()}>{locale === "ja" ? "AI Desktop を再起動" : "重启 AI Desktop"}</button>}</div>}</div>}
+        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span><button type="button" role="switch" aria-checked={automaticTestEnabled} className={`automatic-test-toggle ${automaticTestEnabled ? "enabled" : ""}`} disabled={automaticTestChecking || (loading && !automaticTestEnabled)} onClick={() => void toggleAutomaticTesting()}><span>{text.automaticTest}</span><i /></button>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}<button type="button" className="screenshot-button" title={text.screenshot} aria-label={text.screenshot} data-tooltip={text.screenshot} disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" title={text.hiddenScreenshot} aria-label={text.hiddenScreenshot} data-tooltip={text.hiddenScreenshot} disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
       </form>
     </main>
 
@@ -846,6 +1075,17 @@ export function DeveloperApp() {
 
     {approval && <section className="dev-approval" role="dialog" aria-modal="true" aria-label={approval.title}>
       <div className="approval-card"><span className="approval-kicker">CODEX APPROVAL</span><h2>{approval.title}</h2>{approval.reason && <p>{approval.reason}</p>}{approval.command && <pre>{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p>{text.trustHint}</p>}{approval.details && <details><summary>Details</summary><pre>{approval.details}</pre></details>}<div className="approval-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button className="primary" onClick={() => void resolveApproval("accept")}>{approval.kind === "command" && approval.trustEligible ? text.approveAndTrust : text.approve}</button></div></div>
+    </section>}
+
+    {automaticTestDialog && <section className="dev-approval automatic-test-dialog" role="dialog" aria-modal="true" aria-label={text.automaticTest}>
+      <div className="approval-card automatic-test-card">
+        <span className="approval-kicker">AUTOMATIC TEST</span>
+        <h2>{automaticTestDialog === "checking" ? text.automaticTestChecking : automaticTestDialog.status === "ready" ? text.automaticTestReady : text.automaticTestBlocked}</h2>
+        {automaticTestDialog === "checking"
+          ? <div className="automatic-test-checking"><i /><span>{text.automaticTestChecking}</span></div>
+          : <ul className="automatic-test-checks">{automaticTestDialog.checks.map((check) => <li className={check.status} key={check.id}><i /><span><strong>{check.label}</strong><small>{check.detail}</small></span></li>)}</ul>}
+        {automaticTestDialog !== "checking" && <div className="approval-actions"><button className="primary" onClick={() => setAutomaticTestDialog(null)}>{text.close}</button></div>}
+      </div>
     </section>}
   </div>;
 }
@@ -888,9 +1128,9 @@ async function imageFileToPngDataUrl(file: File): Promise<string> {
 
 function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Message {
   if (message.streamTerminal && event.type !== "error") return message;
-  if (event.type === "message-delta") return updateTurnSegment(message, event.turnId, (current) => `${current}${event.delta || ""}`, "responding");
+  if (event.type === "message-delta") return updateTurnSegment(message, event.segmentId || event.turnId, (current) => `${current}${event.delta || ""}`, "responding");
   if (event.type === "message-completed") {
-    return updateTurnSegment(message, event.turnId, (current) => event.text ?? current, "responding");
+    return updateTurnSegment(message, event.segmentId || event.turnId, (current) => event.text ?? current, "responding");
   }
   if (event.type === "reasoning-summary-delta") {
     return { ...message, reasoningSummary: `${message.reasoningSummary || ""}${event.delta || ""}`, streamStatus: "reasoning" };
@@ -925,7 +1165,7 @@ function updateTurnSegment(
   const order = message.turnOrder?.includes(turnId) ? message.turnOrder : [...(message.turnOrder || []), turnId];
   const segments = { ...(message.turnSegments || {}), [turnId]: update(message.turnSegments?.[turnId] || "") };
   const text = order.map((id) => segments[id] || "").filter((segment, index) => segment.length > 0 || index === order.length - 1).join("\n\n");
-  return { ...message, text, turnOrder: order, turnSegments: segments, turnTextStart: text.length, streaming, streamStatus };
+  return { ...message, text, turnOrder: order, turnSegments: segments, streaming, streamStatus };
 }
 
 function readStoredChat(threadId: string): { executionMode: ManagedExecutionMode; messages: Message[] } | null {
@@ -1015,10 +1255,9 @@ function CodexUserInputPanel({
   </section>;
 }
 
-function ManagedStageAction({ message, locale, actionable, onAdvance }: { message: Message; locale: Locale; actionable: boolean; onAdvance(mode: ManagedExecutionMode, label: string): void }) {
+function ManagedStageAction({ message, locale, actionable, activeMode, onReturn, onAdvance }: { message: Message; locale: Locale; actionable: boolean; activeMode: ManagedExecutionMode; onReturn(mode: ManagedExecutionMode): void; onAdvance(mode: ManagedExecutionMode, label: string): void }) {
   const current = message.managedMode;
-  if (!current || current === "test-managed") return null;
-  const target = nextManagedMode(current);
+  if (!current) return null;
   const firstLabels: Record<ManagedExecutionMode, { ja: string; "zh-CN": string }> = {
     "conversation-managed": { ja: "この意図で合っています", "zh-CN": "就是这意思" },
     "requirement-managed": { ja: "この案で実行", "zh-CN": "按这个方案执行" },
@@ -1031,9 +1270,22 @@ function ManagedStageAction({ message, locale, actionable, onAdvance }: { messag
     "task-managed": { ja: "再テスト", "zh-CN": "重新测试" },
     "test-managed": { ja: "再テスト", "zh-CN": "重新测试" },
   };
+  const returnLabels: Record<"conversation-managed" | "task-managed", { ja: string; "zh-CN": string }> = {
+    "conversation-managed": { ja: "会話管理に戻る", "zh-CN": "回到会话托管" },
+    "task-managed": { ja: "タスク管理に戻る", "zh-CN": "回到任务托管" },
+  };
+  const returnTargets: Array<"conversation-managed" | "task-managed"> = current === "requirement-managed"
+    ? ["conversation-managed"]
+    : current === "task-managed" || current === "test-managed"
+      ? ["conversation-managed", "task-managed"]
+      : [];
+  const target = current === "test-managed" ? null : nextManagedMode(current);
   const label = (message.actionTriggered ? repeatLabels : firstLabels)[current][locale];
   const Icon = message.actionTriggered ? ArrowClockwise24Regular : target === "requirement-managed" ? CheckmarkCircle24Regular : target === "task-managed" ? Play24Regular : Beaker24Regular;
-  return <div className="managed-stage-action"><button type="button" className={message.actionTriggered ? "triggered" : ""} disabled={!actionable || message.streaming} onClick={() => onAdvance(target, label)}><Icon /><span>{label}</span></button></div>;
+  return <div className="managed-stage-action">
+    {returnTargets.map((returnTarget) => <button type="button" className="stage-return" aria-pressed={activeMode === returnTarget} disabled={!actionable || message.streaming || activeMode === returnTarget} key={returnTarget} onClick={() => onReturn(returnTarget)}><ArrowReply24Regular /><span>{returnLabels[returnTarget][locale]}</span></button>)}
+    {target && <button type="button" className={`stage-advance ${message.actionTriggered ? "triggered" : ""}`} disabled={!actionable || message.streaming} onClick={() => onAdvance(target, label)}><Icon /><span>{label}</span></button>}
+  </div>;
 }
 
 function upsertStreamActivity(current: CodexStreamActivity[], incoming: CodexStreamActivity): CodexStreamActivity[] {

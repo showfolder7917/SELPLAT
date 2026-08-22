@@ -9,7 +9,10 @@ const codexSessionStore = readFileSync(new URL("../electron/services/codex-sessi
 const ipc = readFileSync(new URL("../electron/ipc/register-desktop-ipc.ts", import.meta.url), "utf8");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const markdownMessage = readFileSync(new URL("../src/variants/developer/MarkdownMessage.tsx", import.meta.url), "utf8");
+const interactionPreload = readFileSync(new URL("./interaction/isolated-preload.cjs", import.meta.url), "utf8");
+const interactionSpec = readFileSync(new URL("./interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
 const audit = readFileSync(new URL("../electron/services/business-audit-log.ts", import.meta.url), "utf8");
+const dispatchStore = readFileSync(new URL("../electron/services/conversation-dispatch-store.ts", import.meta.url), "utf8");
 
 test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.match(executor, /task-managed/);
@@ -18,6 +21,10 @@ test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.doesNotMatch(executor, /likelySourceChangeRequest/);
   assert.match(executor, /必须产生可追踪的源码变更/);
   assert.match(executor, /this\.#lastChange = this\.#sequence/);
+  assert.match(executor, /diff-updated 是当前工作树的完整路径快照/);
+  assert.match(executor, /isManagedValidationArtifact/);
+  assert.match(executor, /if \(sourceFiles\.length > 0\) this\.#lastChange = this\.#sequence/);
+  assert.match(executor, /测试文档\\\.md\|\\\.测试文档\\\.lock/);
   assert.match(executor, /静态检查已通过/);
   assert.match(executor, /禁止构建、启动或重启/);
   assert.match(codexService, /activeExecutionMode === "task-managed"/);
@@ -42,13 +49,28 @@ test("会话与需求托管只读运行并由确认动作逐级推进", () => {
   assert.match(ipc, /mode === "conversation-managed" \|\| mode === "requirement-managed" \? "read-only"/);
 });
 
-test("测试托管独立执行构建、构建后测试和至多一次受控重启", () => {
+test("测试托管只在完成门禁明确要求时执行自身的单次受控重启", () => {
   assert.match(executor, /buildValidationGate/);
   assert.match(executor, /唯一共享的 apps\/ai-desktop\/测试文档\.md/);
   assert.match(executor, /npm run test:document/);
+  assert.match(executor, /isUnifiedTestDocumentCommand/);
+  assert.match(executor, /unifiedDocumentCompleted/);
+  assert.match(executor, /this\.#targetedTest < this\.#build/);
   assert.doesNotMatch(ipc, /function isTestManagedRequest/);
-  assert.match(ipc, /app\.relaunch\(\); app\.exit\(0\)/);
-  assert.equal((ipc.match(/app\.relaunch\(\)/g) || []).length, 1);
+  const testManagedRestartBlock = ipc.match(/if \(response\.restartRequired\) \{[\s\S]*?\n      \}/)?.[0] || "";
+  assert.match(testManagedRestartBlock, /test_managed_completed/);
+  assert.match(testManagedRestartBlock, /app\.relaunch\(\); app\.exit\(0\)/);
+  assert.equal((testManagedRestartBlock.match(/app\.relaunch\(\)/g) || []).length, 1);
+});
+
+test("屏幕录制权限恢复只允许用户通过 macOS 专用无参数 IPC 重启", () => {
+  const permissionRestartHandler = ipc.match(/ipcMain\.handle\("desktop:restart-for-screen-recording-permission"[\s\S]*?\n  \}\);/)?.[0] || "";
+  assert.match(permissionRestartHandler, /process\.platform !== "darwin"/);
+  assert.match(permissionRestartHandler, /main-permission-restart-requested/);
+  assert.match(permissionRestartHandler, /app\.relaunch\(\);[\s\S]*app\.exit\(0\)/);
+  assert.equal((permissionRestartHandler.match(/app\.relaunch\(\)/g) || []).length, 1);
+  // 主进程只允许上述两条目的明确、互不混用的重启路径。
+  assert.equal((ipc.match(/app\.relaunch\(\)/g) || []).length, 2);
 });
 
 test("界面按四阶段确认推进，日志记录阶段结果而不强制构建", () => {
@@ -59,10 +81,15 @@ test("界面按四阶段确认推进，日志记录阶段结果而不强制构�
   assert.match(developerApp, /重新分析需求/);
   assert.match(developerApp, /重新执行/);
   assert.match(developerApp, /重新测试/);
+  assert.match(developerApp, /回到会话托管/);
+  assert.match(developerApp, /回到任务托管/);
   assert.match(developerApp, /normalized === "1"/);
   assert.match(developerApp, /current === "conversation-managed" && normalized === "就是这意思"/);
   assert.match(developerApp, /current === "requirement-managed" && normalized === "按这个方案执行"/);
   assert.match(developerApp, /managed-stage-action/);
+  assert.match(developerApp, /onReturn=\{setExecutionMode\}/);
+  assert.match(developerApp, /activeMode === returnTarget/);
+  assert.match(developerApp, /current === "task-managed" \|\| current === "test-managed"/);
   assert.match(developerApp, /latestManagedAssistantId/);
   assert.match(developerApp, /disabled=\{!actionable \|\| message\.streaming\}/);
   assert.match(developerApp, /managed-execution-status/);
@@ -72,13 +99,22 @@ test("界面按四阶段确认推进，日志记录阶段结果而不强制构�
   assert.doesNotMatch(audit, /running_bundle_older_than_source/);
 });
 
-test("多轮托管保留上一轮回答并只校准当前轮完成文本", () => {
+test("多轮托管按真实 turnId 向下新增回复卡并冻结上一轮", () => {
   assert.match(developerApp, /turnSegments\?: Record<string, string>/);
-  assert.match(developerApp, /updateTurnSegment\(message, event\.turnId/);
+  assert.match(developerApp, /turnMessageIdsRef = useRef<Map<string, number>>/);
+  assert.match(developerApp, /createAssistantMessage\(messageId, activeManagedModeRef\.current\)/);
+  assert.match(developerApp, /turnMessageIdsRef\.current\.set\(event\.turnId, messageId\)/);
+  assert.match(developerApp, /streaming: false, streamTerminal: true/);
+  assert.match(developerApp, /updateTurnSegment\(message, event\.segmentId \|\| event\.turnId/);
   assert.match(developerApp, /message\.streamTerminal && event\.type !== "error"/);
   assert.match(codexService, /segmentId: `\$\{turnId\}:\$\{itemId\}`/);
+  assert.match(developerApp, /completedAssistantId = activeAssistantIdRef\.current \|\| assistantId/);
   assert.match(developerApp, /text: item\.text \|\| response\.text/);
   assert.doesNotMatch(developerApp, /text: response\.text \|\| item\.text/);
+  assert.match(interactionPreload, /turnId: "isolated-turn-1"/);
+  assert.match(interactionPreload, /turnId: "isolated-turn-2"/);
+  assert.match(interactionSpec, /托管内部新回合向下新增回复卡且不覆盖上一轮文字/);
+  assert.match(interactionSpec, /expect\(positions\)\.toHaveLength\(2\)/);
 });
 
 test("允许项目命令默认建立信任且危险命令不进入持久信任", () => {
@@ -102,6 +138,21 @@ test("AI Desktop 重建后恢复当前线程且用户新建任务时明确删除
   assert.match(developerApp, /ACTIVE_CHAT_STORAGE_KEY/);
   assert.match(developerApp, /只有官方确认删除后才清空页面/);
   assert.doesNotMatch(codexService, /text: `\$\{this\.#responseLanguage\(locale\)\}/);
+});
+
+test("会话发送统一排队、显式补充并在重建后显示恢复操作", () => {
+  assert.match(dispatchStore, /status === "running"/);
+  assert.match(dispatchStore, /"recoverable"/);
+  assert.match(dispatchStore, /dispatch\.queued/);
+  assert.match(dispatchStore, /dispatch\.recovery_queued/);
+  assert.match(codexService, /"turn\/steer"/);
+  assert.match(codexService, /expectedTurnId: this\.#activeTurnId/);
+  assert.match(ipc, /desktop:enqueue-message/);
+  assert.match(ipc, /desktop:supplement-queued-message/);
+  assert.match(ipc, /if \(dispatch\.state\(\)\.activeTask\)/);
+  assert.match(developerApp, /补充到当前任务/);
+  assert.match(developerApp, /继续执行/);
+  assert.match(developerApp, /放弃任务/);
 });
 
 test("每次连接选择与本机缓存协议匹配的 Codex 并公开实际来源", () => {

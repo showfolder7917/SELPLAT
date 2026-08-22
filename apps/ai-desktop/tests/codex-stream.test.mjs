@@ -13,6 +13,7 @@ test("官方文字、计划和文件差异通知转换为稳定的渲染事件",
   }, turnId), {
     type: "message-delta",
     turnId,
+    segmentId: `${turnId}:message-1`,
     itemId: "message-1",
     delta: "正在处理",
   });
@@ -77,6 +78,7 @@ test("最终消息和失败状态覆盖增量期间的临时状态", () => {
   }, turnId), {
     type: "message-completed",
     turnId,
+    segmentId: `${turnId}:message-1`,
     itemId: "message-1",
     text: "最终回答",
   });
@@ -87,6 +89,7 @@ test("最终消息和失败状态覆盖增量期间的临时状态", () => {
   }, turnId), {
     type: "turn-completed",
     turnId,
+    segmentId: `${turnId}:turn`,
     status: "failed",
     error: "测试失败",
   });

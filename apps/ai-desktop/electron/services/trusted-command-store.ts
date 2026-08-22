@@ -11,6 +11,7 @@ interface TrustedCommandEntry {
   command: string;
   scriptSignature: string;
   createdAt: string;
+  scope?: "exact-command" | "automatic-test-document";
 }
 
 export interface TrustedCommandResult {
@@ -32,8 +33,9 @@ export class TrustedCommandStore {
     const trusted = this.#read().some((entry) =>
       entry.projectRoot === identity.projectRoot
       && entry.cwd === identity.cwd
-      && entry.command === identity.command
-      && entry.scriptSignature === identity.scriptSignature,
+      && entry.scriptSignature === identity.scriptSignature
+      && (entry.command === identity.command
+        || (entry.scope === "automatic-test-document" && isAutomaticTestDocumentCommand(identity.command)))
     );
     return { trusted, projectRoot: identity.projectRoot };
   }
@@ -42,7 +44,20 @@ export class TrustedCommandStore {
     const identity = this.#identity(command, cwd, workspaces);
     if (!identity) return { trusted: false, projectRoot: null };
     const entries = this.#read().filter((entry) => entry.id !== identity.id);
-    this.#write([...entries, { ...identity, createdAt: new Date().toISOString() }]);
+    this.#write([...entries, { ...identity, scope: "exact-command", createdAt: new Date().toISOString() }]);
+    return { trusted: true, projectRoot: identity.projectRoot };
+  }
+
+  /** 用户开启自动测试时只登记无附加参数的共享测试入口，其他命令仍继续走官方逐次审批。 */
+  trustAutomaticTestDocument(cwd: string, workspaces: WorkspaceState | null): TrustedCommandResult {
+    const identity = this.#identity("npm run test:document", cwd, workspaces);
+    if (!identity || identity.scriptSignature === "missing-package-script" || identity.scriptSignature === "invalid-package-script") {
+      return { trusted: false, projectRoot: null };
+    }
+    const entries = this.#read().filter((entry) => !(entry.scope === "automatic-test-document"
+      && entry.projectRoot === identity.projectRoot
+      && entry.cwd === identity.cwd));
+    this.#write([...entries, { ...identity, scope: "automatic-test-document", createdAt: new Date().toISOString() }]);
     return { trusted: true, projectRoot: identity.projectRoot };
   }
 
@@ -147,5 +162,16 @@ function isStoredEntry(value: unknown): value is TrustedCommandEntry {
     && typeof entry.cwd === "string"
     && typeof entry.command === "string"
     && typeof entry.scriptSignature === "string"
-    && typeof entry.createdAt === "string";
+    && typeof entry.createdAt === "string"
+    && (entry.scope === undefined || entry.scope === "exact-command" || entry.scope === "automatic-test-document");
+}
+
+/** 自动测试授权只接受一条无参数 npm 脚本，Shell 拼接、重定向或附加参数都会失去信任。 */
+export function isAutomaticTestDocumentCommand(command: string): boolean {
+  const normalized = command.trim();
+  if (/^npm(?:\.cmd)?\s+run\s+test:document$/i.test(normalized)) return true;
+  const macShell = normalized.match(/^\/bin\/(?:zsh|bash)\s+-lc\s+(["'])(.+)\1$/i);
+  if (macShell) return /^npm(?:\.cmd)?\s+run\s+test:document$/i.test(macShell[2].trim());
+  const windowsShell = normalized.match(/^cmd(?:\.exe)?\s+\/c\s+(["'])(.+)\1$/i);
+  return Boolean(windowsShell && /^npm(?:\.cmd)?\s+run\s+test:document$/i.test(windowsShell[2].trim()));
 }

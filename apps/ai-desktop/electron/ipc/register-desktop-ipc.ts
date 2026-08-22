@@ -1,30 +1,36 @@
+import { execFile } from "node:child_process";
+import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, nativeImage, screen, shell, systemPreferences } from "electron";
 
 import { LOCALES, SANDBOX_MODES, WORKSPACE_PERMISSIONS } from "../../shared/contracts/desktop.js";
 import type {
   AppVariant,
   DesktopSettings,
+  EnqueueMessageRequest,
   ManagedExecutionMode,
   ResolveCodexUserInputRequest,
+  ScreenCaptureFrameRequest,
   ScreenCaptureFrameResult,
   ScreenCapturePreparationResult,
   ScreenCaptureRequest,
-  ScreenCaptureStreamSource,
   ScreenshotAnnotationWindowRequest,
   ScreenshotSaveRequest,
   SendMessageRequest,
   WorkspacePermission,
   WindowAction,
 } from "../../shared/contracts/desktop.js";
-import { CodexService } from "../services/codex-service.js";
+import { prepareAutomaticTesting } from "../services/automatic-test-preflight.js";
 import { BusinessAuditLog } from "../services/business-audit-log.js";
+import { CodexService } from "../services/codex-service.js";
+import { ConversationDispatchStore } from "../services/conversation-dispatch-store.js";
 import { ManagedTaskExecutor } from "../services/managed-task-executor.js";
 import { ScreenshotStore } from "../services/screenshot-store.js";
 import { SettingsStore } from "../services/settings-store.js";
-import { WorkspaceStore } from "../services/workspace-store.js";
 import { TrustedCommandStore } from "../services/trusted-command-store.js";
+import { WorkspaceStore } from "../services/workspace-store.js";
 
 interface DesktopIpcDependencies {
   codex: CodexService;
@@ -32,6 +38,7 @@ interface DesktopIpcDependencies {
   settings: SettingsStore;
   workspaces: WorkspaceStore;
   trustedCommands: TrustedCommandStore;
+  dispatch: ConversationDispatchStore;
   audit: BusinessAuditLog;
   projectRoot: string;
   variant: AppVariant;
@@ -41,7 +48,9 @@ interface DesktopIpcDependencies {
 
 interface ScreenshotWindowSession {
   active: boolean;
+  attemptId: number;
   captureReady: boolean;
+  displayId: string;
   frameRequestId: number;
   rejectFrameReady?(error: Error): void;
   resolveFrameReady?(): void;
@@ -50,30 +59,59 @@ interface ScreenshotWindowSession {
   resolveRendererReady(): void;
   selectionBounds: { x: number; y: number; width: number; height: number };
   restoreOwnerOnClose: boolean;
-  streamReady: Promise<void>;
-  streamSource: ScreenCaptureStreamSource;
-  resolveStreamReady(): void;
 }
 
 const screenshotWindowSessions = new Map<number, ScreenshotWindowSession>();
-const screenCaptureSources = new Map<string, ScreenCaptureStreamSource>();
+const execFileAsync = promisify(execFile);
 
 type ScreenCaptureFailureReason = Extract<ScreenCapturePreparationResult, { status: "blocked" }>["reason"];
 
 class ScreenCapturePreparationError extends Error {
   constructor(readonly reason: ScreenCaptureFailureReason) {
     super(reason === "permission-required"
-      ? "无法截取屏幕，请先允许 AI Desktop 使用屏幕录制权限并重新启动应用。"
+      ? "无法截取屏幕，请先允许 AI Desktop 使用屏幕录制权限，返回应用后重试。"
       : "无法读取屏幕来源，请检查屏幕录制权限后重试。");
   }
 }
 
+/** 为原生截图、隐藏渲染器和视频流握手提供硬退出，避免渲染层按钮永久停在执行状态。 */
+async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    operation,
+    new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { codex, screenshots, settings, workspaces, trustedCommands, audit, projectRoot, variant, preloadPath, rendererRoot } = dependencies;
+  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, audit, projectRoot, variant, preloadPath, rendererRoot } = dependencies;
   const activeAuditTasks = new Map<number, string>();
   const seenApprovalRequests = new Set<number>();
   const approvalAuditTasks = new Map<number, string>();
   const managedExecutor = new ManagedTaskExecutor();
+  let screenCaptureAttemptId = 0;
+
+  const publishDispatchState = () => {
+    const state = dispatch.state();
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send("desktop:conversation-dispatch-state", state);
+    }
+    return state;
+  };
+
+  const recordScreenCaptureStage = (
+    stage: string,
+    screenshotSession?: ScreenshotWindowSession,
+    details: Record<string, unknown> = {},
+  ) => audit.recordEvent("screen_capture.stage", {
+    attemptId: screenshotSession?.attemptId ?? null,
+    stage,
+    ...details,
+  });
 
   const getScreenCaptureAccessStatus = () => process.platform === "darwin"
     ? systemPreferences.getMediaAccessStatus("screen")
@@ -85,20 +123,15 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     canOpenSettings: process.platform === "darwin",
   });
 
-  const resolveScreenCaptureSource = async (display: Electron.Display): Promise<ScreenCaptureStreamSource> => {
+  const resolveScreenCaptureSource = async (display: Electron.Display): Promise<Electron.DesktopCapturerSource> => {
     const displayKey = String(display.id);
-    const cached = screenCaptureSources.get(displayKey);
-    if (cached) return cached;
-    const accessStatus = getScreenCaptureAccessStatus();
-    // macOS 已明确拒绝或限制权限时不再调用原生枚举，避免把 Electron 内部错误直接回显到输入框。
-    if (accessStatus === "denied" || accessStatus === "restricted") {
-      throw new ScreenCapturePreparationError("permission-required");
-    }
-    // 只枚举桌面流 ID，不生成缩略图；真实像素由隔离截图窗口中的长期 MediaStream 读取。
+    // 系统权限状态可能在用户刚从设置页返回时仍是旧值；始终以一次真实源枚举作为最终判断，
+    // 枚举失败后再读取权限状态并转换为业务错误，既避免假阴性，也不向渲染层泄露 Electron 原始异常。
     let sources: Electron.DesktopCapturerSource[];
     try {
       sources = await desktopCapturer.getSources({
         types: ["screen"],
+        // 预检只确认目标显示器可枚举；真实 PNG 固定由 macOS screencapture 生成。
         thumbnailSize: { width: 0, height: 0 },
         fetchWindowIcons: false,
       });
@@ -111,18 +144,37 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       throw new ScreenCapturePreparationError("source-unavailable");
     }
     if (sources.length === 0) throw new ScreenCapturePreparationError("source-unavailable");
-    const source = sources.find((item) => item.display_id === displayKey) || sources[0];
-    const streamSource = {
-      sourceId: source.id,
-      width: Math.max(1, Math.round(display.size.width * display.scaleFactor)),
-      height: Math.max(1, Math.round(display.size.height * display.scaleFactor)),
-    };
-    screenCaptureSources.set(displayKey, streamSource);
-    return streamSource;
+    return sources.find((item) => item.display_id === displayKey) || sources[0];
+  };
+
+  /** 调用 macOS 自带非交互截图；不传 -C，因此系统鼠标指针不会写入 PNG。 */
+  const captureNativeMacScreen = async (
+    display: Electron.Display,
+    attemptId: number,
+  ): Promise<ScreenCaptureFrameRequest["capture"]> => {
+    if (process.platform !== "darwin") throw new Error("当前无光标截图后端仅支持 macOS。");
+    const tempRoot = await screenshots.ensure();
+    // screencapture 会拒绝点号开头的目标文件且仍可能返回退出码 0，因此必须使用普通文件名并随后真实读取校验。
+    const scratchPath = path.join(tempRoot, `native-screen-${process.pid}-${attemptId}.png`);
+    const displays = screen.getAllDisplays();
+    const displayNumber = Math.max(1, displays.findIndex((candidate) => candidate.id === display.id) + 1);
+    try {
+      await execFileAsync("/usr/sbin/screencapture", ["-x", "-t", "png", "-D", String(displayNumber), scratchPath], {
+        timeout: 8_000,
+        maxBuffer: 1024 * 1024,
+      });
+      const png = await readFile(scratchPath);
+      const image = nativeImage.createFromBuffer(png);
+      const size = image.getSize();
+      if (image.isEmpty() || size.width < 1 || size.height < 1) throw new Error("macOS 返回了空截图。");
+      return { dataUrl: `data:image/png;base64,${png.toString("base64")}`, width: size.width, height: size.height };
+    } finally {
+      await unlink(scratchPath).catch(() => {});
+    }
   };
 
   const parkScreenshotWindow = (screenshotWindow: BrowserWindow, session: ScreenshotWindowSession): void => {
-    // 空闲截图窗口保持可见以维持 MediaStream，但收缩到 1×1；即使 macOS 延迟应用透明度也不会留下黑色编辑窗。
+    // 空闲截图窗口收缩为 1×1 且鼠标穿透，避免残留编辑窗或抢占焦点。
     screenshotWindow.setOpacity(0);
     screenshotWindow.setIgnoreMouseEvents(true);
     if (process.platform === "darwin" && screenshotWindow.isSimpleFullScreen()) screenshotWindow.setSimpleFullScreen(false);
@@ -210,13 +262,39 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     audit.recordEvent("trusted_commands.cleared");
     return { count: 0 };
   });
+  ipcMain.handle("desktop:prepare-automatic-testing", async () => {
+    const result = await prepareAutomaticTesting({
+      appRoot: path.join(projectRoot, "apps", "ai-desktop"),
+      codexStatus: await codex.getStatus(),
+      locale: settings.read().locale,
+      screenAccessStatus: getScreenCaptureAccessStatus(),
+      trustedCommands,
+      workspaces: workspaces.read(),
+    });
+    audit.recordEvent("automatic_test.preflight", {
+      status: result.status,
+      failedChecks: result.checks.filter((check) => check.status === "failed").map((check) => check.id),
+    });
+    if (result.status === "ready") {
+      audit.recordEvent("trusted_command.decision", {
+        action: "automatic-test-authorized",
+        command: "npm run test:document",
+        cwd: path.join(projectRoot, "apps", "ai-desktop"),
+      });
+    }
+    return result;
+  });
   ipcMain.handle("desktop:get-codex-user-inputs", () => codex.pendingUserInputs());
   ipcMain.handle("desktop:resolve-codex-user-input", (_event, request: ResolveCodexUserInputRequest) => {
     codex.resolveUserInput(request);
     // 业务日志只记录协议生命周期，不记录可能包含敏感内容的答案正文。
     audit.recordEvent("user_input.resolved", { requestId: request.requestId, answerCount: Object.keys(request.answers || {}).length });
   });
-  ipcMain.handle("desktop:new-chat", () => codex.newChat());
+  ipcMain.handle("desktop:new-chat", async () => {
+    await codex.newChat();
+    dispatch.clear();
+    return publishDispatchState();
+  });
   ipcMain.handle("desktop:open-external-url", async (_event, value: string) => {
     if (typeof value !== "string" || value.length > 2_048) throw new Error("Invalid external URL.");
     const url = new URL(value);
@@ -228,9 +306,15 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();
     // 两个截图入口统一预热同一个显示器源；本次进程内再次调用直接命中缓存。
     try {
-      await resolveScreenCaptureSource(display);
+      recordScreenCaptureStage("main-source-preflight-started", undefined, { displayId: String(display.id) });
+      await waitForScreenCaptureStage(resolveScreenCaptureSource(display), 8_000, "读取屏幕来源超时，请重试。");
+      recordScreenCaptureStage("main-source-preflight-ready", undefined, { displayId: String(display.id) });
       return { status: "ready" } satisfies ScreenCapturePreparationResult;
     } catch (error) {
+      recordScreenCaptureStage("main-source-preflight-failed", undefined, {
+        displayId: String(display.id),
+        error: error instanceof Error ? error.message : "source-unavailable",
+      });
       return toScreenCapturePreparationResult(error);
     }
   });
@@ -238,6 +322,15 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (process.platform !== "darwin") throw new Error("Screen recording settings are only available on macOS.");
     // 固定打开 macOS 屏幕录制隐私页，不接受渲染层提供的任意系统设置地址。
     await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
+  });
+  ipcMain.handle("desktop:restart-for-screen-recording-permission", async () => {
+    if (process.platform !== "darwin") throw new Error("Screen recording permission restart is only available on macOS.");
+    recordScreenCaptureStage("main-permission-restart-requested");
+    // 只响应渲染层明确的权限恢复按钮；先让 IPC 正常返回，再由 Electron 使用同一应用身份重建进程。
+    setTimeout(() => {
+      app.relaunch();
+      app.exit(0);
+    }, 120);
   });
   ipcMain.handle("desktop:capture-screen", async (event, request?: ScreenCaptureRequest) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
@@ -247,12 +340,13 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();
     const hideOwnerWindow = request?.hideOwnerWindow === true;
     if (!parent) throw new Error("无法识别截图发起窗口。");
-    const streamSource = await resolveScreenCaptureSource(display);
+    const attemptId = ++screenCaptureAttemptId;
     let screenshotWindow = BrowserWindow.getAllWindows().find((window) =>
       screenshotWindowSessions.get(window.webContents.id)?.ownerWebContentsId === parent.webContents.id,
     );
     let session = screenshotWindow && screenshotWindowSessions.get(screenshotWindow.webContents.id);
     if (session?.active) {
+      recordScreenCaptureStage("main-capture-already-active", session);
       screenshotWindow?.show();
       screenshotWindow?.focus();
       return null;
@@ -287,22 +381,20 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       const screenshotWebContentsId = screenshotWindow.webContents.id;
       let resolveRendererReady: () => void = () => {};
       const rendererReady = new Promise<void>((resolve) => { resolveRendererReady = resolve; });
-      let resolveStreamReady: () => void = () => {};
-      const streamReady = new Promise<void>((resolve) => { resolveStreamReady = resolve; });
       session = {
         active: true,
+        attemptId,
         captureReady: false,
+        displayId: String(display.id),
         frameRequestId: 0,
         ownerWebContentsId: parent.webContents.id,
         rendererReady,
         resolveRendererReady,
         selectionBounds: { ...display.bounds },
         restoreOwnerOnClose: hideOwnerWindow,
-        streamReady,
-        streamSource,
-        resolveStreamReady,
       };
       screenshotWindowSessions.set(screenshotWebContentsId, session);
+      recordScreenCaptureStage("main-screenshot-shell-created", session, { screenshotWebContentsId, displayId: String(display.id) });
       screenshotWindow.once("closed", () => {
         const closingSession = screenshotWindowSessions.get(screenshotWebContentsId);
         screenshotWindowSessions.delete(screenshotWebContentsId);
@@ -320,17 +412,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     } else {
       // 复用已加载截图壳时只重置本轮状态，禁止把上一轮选区或红色标注带入新截图。
       session.active = true;
+      session.attemptId = attemptId;
       session.captureReady = false;
       session.selectionBounds = { ...display.bounds };
       session.restoreOwnerOnClose = hideOwnerWindow;
       screenshotWindow.webContents.send("desktop:screen-capture-reset");
-      if (session.streamSource.sourceId !== streamSource.sourceId) {
-        let resolveStreamReady: () => void = () => {};
-        session.streamReady = new Promise<void>((resolve) => { resolveStreamReady = resolve; });
-        session.resolveStreamReady = resolveStreamReady;
-        session.streamSource = streamSource;
-        screenshotWindow.webContents.send("desktop:screen-capture-stream-configured", streamSource);
-      }
+      session.displayId = String(display.id);
     }
     if (screenshotWindow.isMaximized()) screenshotWindow.unmaximize();
     if (process.platform === "darwin" && screenshotWindow.isSimpleFullScreen()) screenshotWindow.setSimpleFullScreen(false);
@@ -344,14 +431,26 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.setBounds(display.bounds, false);
     screenshotWindow.setAlwaysOnTop(true, "screen-saver");
     screenshotWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    await session.rendererReady;
-    // Electron 会暂停完全隐藏窗口中的桌面视频帧；保持零透明且鼠标穿透的后台可见窗口，流才能跨轮次持续更新。
-    screenshotWindow.setOpacity(0);
-    screenshotWindow.setIgnoreMouseEvents(true);
-    if (!screenshotWindow.isVisible()) screenshotWindow.showInactive();
-    await session.streamReady;
+    try {
+      await waitForScreenCaptureStage(session.rendererReady, 5_000, "截图窗口初始化超时，请重试。");
+      recordScreenCaptureStage("main-renderer-ready", session);
+      screenshotWindow.setOpacity(0);
+      screenshotWindow.setIgnoreMouseEvents(true);
+      if (!screenshotWindow.isVisible()) screenshotWindow.showInactive();
+    } catch (error) {
+      recordScreenCaptureStage("main-renderer-failed", session, {
+        error: error instanceof Error ? error.message : "renderer-unavailable",
+      });
+      // 初始化失败的截图壳不可复用；立即关闭并让下一次点击建立全新窗口。
+      session.active = false;
+      session.restoreOwnerOnClose = false;
+      if (!screenshotWindow.isDestroyed()) screenshotWindow.close();
+      if (hideOwnerWindow && !parent.isDestroyed()) parent.show();
+      if (!parent.isDestroyed()) { parent.moveTop(); parent.focus(); }
+      throw error;
+    }
     if (hideOwnerWindow) {
-      // 截图流和蒙版资源全部就绪后才隐藏主窗口；截图渲染器会等待隐藏后的新视频帧，不使用固定延时猜测合成器状态。
+      // 截图壳和蒙版资源全部就绪后才隐藏主窗口。
       parent.hide();
     }
     const requestId = ++session.frameRequestId;
@@ -359,8 +458,24 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       session.resolveFrameReady = resolve;
       session.rejectFrameReady = reject;
     });
-    screenshotWindow.webContents.send("desktop:screen-capture-frame-requested", { requestId, waitForOwnerHidden: hideOwnerWindow });
     try {
+      // Computer Use 等自动化工具会把点击指针实现为普通置顶窗口，而不是 macOS 系统 cursor；
+      // screencapture 无法通过省略 -C 排除普通窗口，因此等待其短暂点击覆盖层消退后再冻结桌面。
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      recordScreenCaptureStage("main-automation-pointer-overlay-settled", session, { waitMs: 1_200 });
+      recordScreenCaptureStage("main-native-screencapture-requested", session, { requestId, hideOwnerWindow });
+      const capture = await waitForScreenCaptureStage(
+        captureNativeMacScreen(display, attemptId),
+        10_000,
+        "macOS 原生截图超时，请重试。",
+      );
+      recordScreenCaptureStage("main-native-screencapture-ready", session, {
+        requestId,
+        width: capture.width,
+        height: capture.height,
+      });
+      screenshotWindow.webContents.send("desktop:screen-capture-frame-requested", { requestId, capture } satisfies ScreenCaptureFrameRequest);
+      recordScreenCaptureStage("main-native-frame-sent", session, { requestId });
       let timeout: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
         frameReady,
@@ -371,12 +486,16 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         if (timeout) clearTimeout(timeout);
       });
     } catch (error) {
+      recordScreenCaptureStage("main-frame-failed", session, {
+        requestId,
+        error: error instanceof Error ? error.message : "frame-unavailable",
+      });
       session.active = false;
       session.restoreOwnerOnClose = false;
-      parkScreenshotWindow(screenshotWindow, session);
-      if (hideOwnerWindow) parent.show();
-      parent.moveTop();
-      parent.focus();
+      // 原生截图或帧确认失败时丢弃缓存壳，避免下一次复用坏会话。
+      if (!screenshotWindow.isDestroyed()) screenshotWindow.close();
+      if (hideOwnerWindow && !parent.isDestroyed()) parent.show();
+      if (!parent.isDestroyed()) { parent.moveTop(); parent.focus(); }
       throw error;
     } finally {
       session.resolveFrameReady = undefined;
@@ -384,15 +503,15 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     return null;
   });
-  ipcMain.handle("desktop:get-screen-capture-stream-source", (event) => {
-    return screenshotWindowSessions.get(event.sender.id)?.streamSource || null;
-  });
-  ipcMain.handle("desktop:screen-capture-stream-ready", (event, sourceId: string) => {
+  ipcMain.handle("desktop:screen-capture-stage", (event, stage: string, detail?: string) => {
     const session = screenshotWindowSessions.get(event.sender.id);
-    if (!session || typeof sourceId !== "string" || session.streamSource.sourceId !== sourceId) {
-      throw new Error("Invalid screenshot stream source.");
+    if (!session || typeof stage !== "string" || !/^renderer-[a-z-]{1,80}$/.test(stage)) {
+      throw new Error("Invalid screenshot diagnostic stage.");
     }
-    session.resolveStreamReady();
+    if (typeof detail !== "undefined" && (typeof detail !== "string" || detail.length > 256)) {
+      throw new Error("Invalid screenshot diagnostic detail.");
+    }
+    recordScreenCaptureStage(stage, session, typeof detail === "string" ? { detail } : {});
   });
   ipcMain.handle("desktop:screen-capture-frame-result", (event, result: ScreenCaptureFrameResult) => {
     const session = screenshotWindowSessions.get(event.sender.id);
@@ -400,6 +519,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       throw new Error("Invalid screenshot frame result.");
     }
     if (result.error) {
+      recordScreenCaptureStage("renderer-frame-result-failed", session, { requestId: result.requestId, error: result.error });
       session.rejectFrameReady?.(new Error(result.error));
       return;
     }
@@ -408,6 +528,11 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       return;
     }
     session.captureReady = true;
+    recordScreenCaptureStage("renderer-frame-result-ready", session, {
+      requestId: result.requestId,
+      width: result.width,
+      height: result.height,
+    });
     session.resolveFrameReady?.();
   });
   ipcMain.handle("desktop:show-screenshot-window", (event) => {
@@ -537,6 +662,38 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const error = await shell.openPath(audit.ensure());
     if (error) throw new Error(error);
   });
+  ipcMain.handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
+  ipcMain.handle("desktop:enqueue-message", (_event, value: EnqueueMessageRequest) => {
+    if (!value?.request || typeof value.request.message !== "string") throw new Error("Invalid queued message request.");
+    dispatch.enqueue(value.request, value.displayText, value.automatic === true);
+    return publishDispatchState();
+  });
+  ipcMain.handle("desktop:supplement-queued-message", async (_event, itemId: string) => {
+    const item = dispatch.queueItem(itemId);
+    if (!item) throw new Error("排队消息已被处理或不存在。");
+    const active = dispatch.state().activeTask;
+    if (!active || active.status !== "running") throw new Error("当前没有正在执行、可以接收补充的任务。");
+    const attachmentPaths = await screenshots.resolveAttachmentPaths(item.request.attachmentIds || []);
+    await codex.steer(item.request.message, attachmentPaths);
+    dispatch.removeQueued(itemId, "supplemented");
+    audit.recordEvent("task.supplement_delivered", {
+      dispatchId: item.id,
+      attachmentCount: attachmentPaths.length,
+    }, activeAuditTasks.values().next().value);
+    return publishDispatchState();
+  });
+  ipcMain.handle("desktop:discard-queued-message", (_event, itemId: string) => {
+    dispatch.removeQueued(itemId, "discarded");
+    return publishDispatchState();
+  });
+  ipcMain.handle("desktop:recover-conversation-task", () => {
+    dispatch.recover();
+    return publishDispatchState();
+  });
+  ipcMain.handle("desktop:discard-conversation-recovery", () => {
+    dispatch.discardRecovery();
+    return publishDispatchState();
+  });
   ipcMain.handle("desktop:cancel", async (event) => {
     const taskId = activeAuditTasks.get(event.sender.id);
     audit.recordEvent("task.cancel_requested", {}, taskId);
@@ -546,51 +703,66 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (!request || typeof request.message !== "string") throw new Error("Invalid message request.");
     if (!LOCALES.includes(request.locale)) throw new Error("Invalid locale.");
     if (!SANDBOX_MODES.includes(request.sandboxMode)) throw new Error("Invalid sandbox mode.");
-    const executionMode: ManagedExecutionMode = isManagedExecutionMode(request.executionMode)
-      ? request.executionMode
-      : "conversation-managed";
-    const attachmentPaths = await screenshots.resolveAttachmentPaths(request.attachmentIds || []);
-    const workspaceState = workspaces.read();
-    const previousTask = audit.info().latestTask;
-    const restartRequired = executionMode === "test-managed" && Boolean(previousTask?.changedFiles.some((file) =>
-      /(^|\/)apps\/ai-desktop\/(src|electron|shared|package\.json|vite\.config)/.test(file),
-    ));
-    const taskId = audit.startTask({
-      message: request.message,
-      locale: request.locale,
-      sandboxMode: request.sandboxMode,
-      workspaces: workspaceState,
-      attachmentCount: attachmentPaths.length,
-      managedMode: executionMode,
-    });
-    activeAuditTasks.set(ipcEvent.sender.id, taskId);
+    if (dispatch.state().activeTask) {
+      const queued = dispatch.enqueue(request, request.message);
+      publishDispatchState();
+      return { text: "消息已进入等待队列。", itemCount: 0, disposition: "queued" as const, queueItemId: queued.id };
+    }
+    let effectiveRequest = request;
+    let dispatchId = request.queueItemId;
+    if (dispatchId) effectiveRequest = dispatch.takeQueued(dispatchId).request;
+    dispatchId = dispatch.begin(effectiveRequest, dispatchId);
+    publishDispatchState();
+    let taskId: string | undefined;
     try {
+      const executionMode: ManagedExecutionMode = isManagedExecutionMode(effectiveRequest.executionMode)
+        ? effectiveRequest.executionMode
+        : "conversation-managed";
+      const attachmentPaths = await screenshots.resolveAttachmentPaths(effectiveRequest.attachmentIds || []);
+      const workspaceState = workspaces.read();
+      const previousTask = audit.info().latestTask;
+      const restartRequired = executionMode === "test-managed" && Boolean(previousTask?.changedFiles.some((file) =>
+        /(^|\/)apps\/ai-desktop\/(src|electron|shared|package\.json|vite\.config)/.test(file),
+      ));
+      taskId = audit.startTask({
+        message: effectiveRequest.message,
+        locale: effectiveRequest.locale,
+        sandboxMode: effectiveRequest.sandboxMode,
+        workspaces: workspaceState,
+        attachmentCount: attachmentPaths.length,
+        managedMode: executionMode,
+      });
+      activeAuditTasks.set(ipcEvent.sender.id, taskId);
       let firstTurn = true;
       const emit = (streamEvent: Parameters<typeof audit.recordStreamEvent>[1]) => {
-        audit.recordStreamEvent(taskId, streamEvent);
+        audit.recordStreamEvent(taskId!, streamEvent);
         // 进度只回送给发起本轮任务的窗口，避免多窗口之间串流或泄露任务上下文。
         if (!ipcEvent.sender.isDestroyed()) ipcEvent.sender.send("desktop:codex-stream-event", streamEvent);
       };
       const response = await managedExecutor.run({
         mode: executionMode,
-        message: request.message,
+        message: effectiveRequest.message,
         restartRequired,
         emit,
         runTurn: async (message, onEvent, mode) => {
           const currentAttachments = firstTurn ? attachmentPaths : [];
           firstTurn = false;
-          const effectiveSandbox = mode === "conversation-managed" || mode === "requirement-managed" ? "read-only" : request.sandboxMode;
-          return codex.send(message, request.locale, effectiveSandbox, workspaceState, currentAttachments, onEvent, mode);
+          const effectiveSandbox = mode === "conversation-managed" || mode === "requirement-managed" ? "read-only" : effectiveRequest.sandboxMode;
+          return codex.send(message, effectiveRequest.locale, effectiveSandbox, workspaceState, currentAttachments, onEvent, mode);
         },
       });
       audit.finishTask(taskId, "completed", undefined, response.managedStatus, response.pendingActions);
+      dispatch.finish(dispatchId, "completed");
+      publishDispatchState();
       if (response.restartRequired) {
         audit.recordEvent("application.controlled_restart_scheduled", { reason: "test_managed_completed" }, taskId);
         setTimeout(() => { app.relaunch(); app.exit(0); }, 1_200);
       }
-      return response;
+      return { ...response, disposition: "completed" as const };
     } catch (error) {
-      audit.finishTask(taskId, "failed", error instanceof Error ? error.message : "Codex task failed.");
+      if (taskId) audit.finishTask(taskId, "failed", error instanceof Error ? error.message : "Codex task failed.");
+      dispatch.finish(dispatchId, "failed");
+      publishDispatchState();
       throw error;
     } finally {
       activeAuditTasks.delete(ipcEvent.sender.id);

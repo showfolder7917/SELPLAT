@@ -24,6 +24,15 @@ test("允许项目命令后自动信任，脚本变化或高风险命令仍要�
     assert.equal(store.isTrusted(command, appRoot, workspace).trusted, true);
     assert.equal(store.count(), 1);
 
+    assert.equal(store.trustAutomaticTestDocument(appRoot, workspace).trusted, false);
+    assert.equal(store.isTrusted("npm run test:document", appRoot, workspace).trusted, false);
+    writeFileSync(manifestPath, JSON.stringify({ scripts: { test: "node --test", "test:document": "node scripts/test-document-runner.mjs" } }), "utf8");
+    assert.equal(store.trustAutomaticTestDocument(appRoot, workspace).trusted, true);
+    assert.equal(store.isTrusted("npm run test:document", appRoot, workspace).trusted, true);
+    assert.equal(store.isTrusted("/bin/zsh -lc 'npm run test:document'", appRoot, workspace).trusted, true);
+    assert.equal(store.isTrusted("/bin/zsh -lc 'npm run test:document -- --task=dynamic'", appRoot, workspace).trusted, false);
+    assert.equal(store.isTrusted("/bin/zsh -lc 'npm run test:document && npm run start'", appRoot, workspace).trusted, false);
+
     writeFileSync(manifestPath, JSON.stringify({ scripts: { test: "node --test --test-reporter=spec" } }), "utf8");
     assert.equal(store.isTrusted(command, appRoot, workspace).trusted, false);
     assert.equal(store.canTrust("sudo npm run test", appRoot, workspace), false);

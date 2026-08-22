@@ -8,6 +8,7 @@ import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import { BusinessAuditLog } from "./services/business-audit-log.js";
 import { CodexService } from "./services/codex-service.js";
 import { CodexSessionStore } from "./services/codex-session-store.js";
+import { ConversationDispatchStore } from "./services/conversation-dispatch-store.js";
 import { ScreenshotStore } from "./services/screenshot-store.js";
 import { SettingsStore } from "./services/settings-store.js";
 import { WorkspaceStore } from "./services/workspace-store.js";
@@ -28,6 +29,10 @@ app.whenReady().then(() => {
   audit.recordApplicationStart({ variant, projectRoot, rendererRoot });
   const trustedCommands = new TrustedCommandStore(path.join(app.getPath("userData"), "trusted-project-commands.json"));
   const codexSessions = new CodexSessionStore(path.join(app.getPath("userData"), "active-codex-session.json"));
+  const dispatch = new ConversationDispatchStore(
+    path.join(app.getPath("userData"), "conversation-dispatch.json"),
+    (type, details, taskId) => audit.recordEvent(type, details, taskId),
+  );
   codex = new CodexService(
     projectRoot,
     trustedCommands,
@@ -42,6 +47,7 @@ app.whenReady().then(() => {
     settings: new SettingsStore(path.join(app.getPath("userData"), "desktop-settings.json")),
     workspaces: new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), projectRoot),
     trustedCommands,
+    dispatch,
     audit,
     projectRoot,
     variant,

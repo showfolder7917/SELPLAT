@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.14.0 以固定签名外壳加载最新外部构建，避免每次开发启动令 TCC 授权失效。 -->
-rule_version = 5.14.0
+<!-- 5.31.0 将托管内部真实回合改为逐卡向下追加，并以真实双回合交互测试阻断文字覆盖复发。 -->
+rule_version = 5.31.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -60,6 +60,52 @@ upgrade_record_5_12 = 2026-08-22:macOS截图权限状态预检_结构化错误�
 upgrade_record_5_13 = 2026-08-22:执行期截图粘贴与排队发送_卡片边界收缩_终态防晚到覆盖_亮点生命周期_逐回合分段_共享测试锁与即时归档_固定AI_Desktop应用身份
 <!-- 5.14.0 修复同名 AI Desktop 开关开启但临时签名每次变化导致系统仍判定未授权。 -->
 upgrade_record_5_14 = 2026-08-22:固定签名Bootstrap外壳_普通源码构建只加载仓库最新外部产物_身份输入变化才重新打包签名_重新签名后明确提示刷新权限
+<!-- 5.15.0 把无人值守测试前的环境确认收敛成可见开关和一次性集中预检。 -->
+upgrade_record_5_15 = 2026-08-22:输入框工具栏自动测试开关_每次启动默认关闭_开启前集中预检_固定无参数测试入口窄授权_代码验证后自动排队测试_未知审批立即关闭并报错
+<!-- 5.16.0 防止截图后台窗口或屏幕流失联时输入区永久转圈。 -->
+upgrade_record_5_16 = 2026-08-22:截图来源_隐藏渲染器_桌面流_新视频帧全部限时_隐藏窗口错误回传_失败停止转圈并恢复主窗_失效截图壳下次重建
+<!-- 5.17.0 修复完全隐藏窗口提前等待首个视频帧导致的 macOS 偶发永久等待。 -->
+upgrade_record_5_17 = 2026-08-22:截图壳先完成渲染握手_showInactive透明参与渲染_主进程随后下发流配置_渲染器禁止隐藏期自行启动MediaStream
+<!-- 5.18.0 删除打包应用中会触发 Could_not_start_video_source 的旧式 source ID 透传方案。 -->
+upgrade_record_5_18 = 2026-08-22:主进程setDisplayMediaRequestHandler限定活动截图壳_渲染器getDisplayMedia_删除getUserMedia_chromeMediaSourceId_sourceId_IPC与缓存
+<!-- 5.19.0 让真实 macOS 截图失败能够按同一 attemptId 定位到来源、授权、播放和首帧阶段。 -->
+upgrade_record_5_19 = 2026-08-22:screen_capture_stage业务日志_attemptId_来源预检_授权回调_流取得_视频播放_首帧_冻结结果_失败原因
+<!-- 5.20.0 修复 open -n 每次新增进程且 macOS 关窗不退出导致旧代码和长期屏幕流残留。 -->
+upgrade_record_5_20 = 2026-08-22:启动前按已解析App可执行路径精确关闭全部旧实例_等待正常退出_残留则阻断新启动_禁止多版本并行
+<!-- 5.21.0 把执行中消息、显式补充和关闭恢复收敛为主进程统一调度。 -->
+upgrade_record_5_21 = 2026-08-22:发送默认持久FIFO排队_显式补充使用turn_steer_主进程单活动任务互斥_进程重建显示继续或放弃_状态变化进入统一业务日志
+<!-- 5.22.0 防止屏幕流默认把系统鼠标指针作为白色轮廓写入截图。 -->
+upgrade_record_5_22 = 2026-08-22:桌面流显式cursor_never_原图和标注图均不含系统鼠标指针
+<!-- 5.23.0 修复临时签名默认以 CDHash 作为指定要求，导致外壳重打包后系统开关仍开启但 TCC 拒绝。 -->
+upgrade_record_5_23 = 2026-08-22:开发外壳固定designated_requirement_禁止cdhash身份_验证器阻断回退_统一测试白名单覆盖调度脚本
+<!-- 5.24.0 修复 macOS Chromium 轨道设置仍为 always 且静默忽略 cursor=never 的真实回退。 -->
+upgrade_record_5_24 = 2026-08-22:光标轨道真实能力与设置日志_真透明全屏截图壳使用极低非零窗口透明度接管鼠标_cursor_none后跨两帧冻结
+<!-- 5.25.0 依据真实 macOS 复测，废弃无法覆盖系统 cursor=always 的视频流与透明光标遮罩。 -->
+upgrade_record_5_25 = 2026-08-22:主进程desktopCapturer静态PNG按显示器物理像素抓取_不捕获系统光标_删除MediaStream_cursor约束_透明遮罩_跨帧等待与流握手
+<!-- 5.26.0 经 Git 三版对照和真实 macOS 图像复测，恢复唯一可靠的 legacy desktop source 流并禁止以权限错误替换截图后端。 -->
+upgrade_record_5_26 = 2026-08-22:恢复desktopCapturer_sourceId_getUserMedia_chromeMediaSourceId_Canvas链路_每轮重新枚举sourceId_固定应用身份处理TCC_删除getDisplayMedia_静态thumbnail_透明光标遮罩及双路径回退_真实图像门禁
+<!-- 5.27.0 真实原图证明 legacy 流仍合成指针，最终收敛为 macOS 自带 screencapture 唯一后端。 -->
+upgrade_record_5_27 = 2026-08-22:macOS_usr_sbin_screencapture_x_png_D唯一冻结后端_禁止C参数_立即删除暂存原图_删除legacy_MediaStream_getDisplayMedia_thumbnail_光标遮罩与双路径_当前和隐藏入口真实原图验证
+<!-- 5.28.0 文件级原图证明自动化工具点击指针是普通覆盖窗口，增加固定消退窗口后再执行原生截图。 -->
+upgrade_record_5_28 = 2026-08-22:原生截图前等待1200ms自动化指针覆盖窗口消退_记录overlay_settled阶段_人工系统cursor仍由禁止C参数排除_文件级original_png验证
+<!-- 5.29.0 依据用户确认，工作区与任务收敛为单活动分区。 -->
+upgrade_record_5_29 = 2026-08-22:工作区与任务单活动分区
+<!-- 打开当前分区时自动收起另一分区。 -->
+upgrade_record_5_29.2 = 2026-08-22:打开当前区自动收起其他区
+<!-- 当前活动分区在侧栏内置顶并占满。 -->
+upgrade_record_5_29.3 = 2026-08-22:当前区置顶占满
+<!-- 非活动分区的标题保留在底部作为切换入口。 -->
+upgrade_record_5_29.4 = 2026-08-22:非活动标题留在底部切换
+<!-- 工作区与任务不再使用高度分隔器。 -->
+upgrade_record_5_29.5 = 2026-08-22:删除工作区任务高度分隔器
+<!-- 5.30.0 依据用户确认，最新托管回复增加返回会话托管入口。 -->
+upgrade_record_5_30 = 2026-08-22:最新托管回复增加回到会话托管按钮
+<!-- 任务托管已到达后，最新托管回复增加返回任务托管入口。 -->
+upgrade_record_5_30.2 = 2026-08-22:任务阶段到达后增加回到任务托管按钮
+<!-- 返回按钮只切换本地执行模式，不自动发起新的 Harness 回合。 -->
+upgrade_record_5_30.3 = 2026-08-22:返回按钮只切换执行模式不自动发送回合
+<!-- 5.31.0 废止 5.1.0 的同卡拼接方式；每个真实 turnId 必须拥有独立回复卡。 -->
+upgrade_record_5_31 = 2026-08-22:托管内部每个真实turnId向下新增独立回复卡_turnId到messageId稳定映射_上一轮完成后冻结_最终IPC只收口最新卡_双回合真实交互测试禁止源码正则误判
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -140,14 +186,28 @@ workspace_permission_change_thread_policy = workspace_signature_change_requires_
 developer_typography_readability_contract = critical_text_13_to_15_css_px + matching_row_height + no_critical_10_to_11_px
 <!-- Windows 开发版启动器必须进入热开发链路：React/CSS 由 Vite HMR 即时更新，Electron 主进程、preload 和 shared 编译变化由监视器自动重启；正式构建与静态启动命令保持独立。 -->
 developer_hot_start_contract = developer_bat_uses_vite_hmr_plus_typescript_watch_plus_electron_process_monitor + renderer_change_without_app_restart + main_preload_shared_change_auto_restarts_electron + formal_build_and_static_start_unchanged
-<!-- 开发版资源管理器、工作区和任务分区标题必须提供真实折叠交互和可读展开状态；新建任务作为标题级动作固定在任务标题右侧，禁止再单独占用一行。 -->
-developer_sidebar_section_disclosure_contract = explorer_workspace_and_tasks_titles_toggle_visible_content + aria_expanded_state + new_task_action_in_tasks_title_right + no_separate_full_width_new_task_row
+<!-- 开发版工作区和任务标题必须保持真实折叠状态，且打开其中一个时只允许该分区展开。 -->
+developer_sidebar_section_disclosure_contract = explorer_workspace_and_tasks_titles_toggle_visible_content
+<!-- 工作区与任务标题必须回显真实的无障碍展开状态。 -->
+developer_sidebar_section_disclosure_contract.2 = aria_expanded_state
+<!-- 工作区与任务只允许一个活动分区。 -->
+developer_sidebar_section_disclosure_contract.3 = workspace_tasks_single_active
+<!-- 新建任务动作固定在任务标题右侧。 -->
+developer_sidebar_section_disclosure_contract.4 = new_task_action_in_tasks_title_right
+<!-- 新建任务动作禁止额外单独占用一行。 -->
+developer_sidebar_section_disclosure_contract.5 = no_separate_full_width_new_task_row
 <!-- 资源管理器总开关必须收起整个网格列并释放聊天宽度；活动栏文件图标始终保留恢复入口，内部工作区展开状态不得被重置。 -->
 developer_explorer_full_column_collapse_contract = title_or_activity_icon_toggle + explorer_grid_column_zero_when_collapsed + hide_entire_explorer + chat_and_composer_expand + activity_icon_restores + preserve_workspace_disclosure_state
-<!-- 资源管理器右边界和工作区任务分隔线必须可拖拽且可用键盘调整；默认让工作区占满任务标题上方的剩余高度。 -->
-developer_sidebar_dual_resizer_contract = explorer_right_edge_pointer_and_keyboard_width_resize + workspace_tasks_divider_pointer_and_keyboard_height_resize + reset_to_standard_explorer_width + default_workspace_fills_remaining_height_above_tasks
-<!-- 工作区与任务区边界只允许一个分隔器负责视觉线；业务含义是保留易拖拽热区但禁止边框叠加成粗线。 -->
-developer_sidebar_single_divider_contract = one_workspace_tasks_separator + five_css_px_pointer_hit_area + one_css_px_visual_line + no_neighbor_duplicate_border
+<!-- 侧栏只保留资源管理器右边界的宽度调节，工作区和任务不再通过分隔器分配高度。 -->
+developer_sidebar_resizer_contract = explorer_right_edge_pointer_and_keyboard_width_resize
+<!-- 资源管理器宽度调节支持恢复标准宽度。 -->
+developer_sidebar_resizer_contract.2 = reset_to_standard_explorer_width
+<!-- 工作区和任务之间禁止继续显示高度分隔器。 -->
+developer_sidebar_resizer_contract.3 = no_workspace_tasks_height_divider
+<!-- 活动侧栏分区必须排在顶部并占满扣除其他标题后的高度，非活动分区只在底部保留标题入口。 -->
+developer_sidebar_active_section_layout_contract = active_section_top_and_fill_available_height
+<!-- 非活动侧栏分区只在底部保留标题入口。 -->
+developer_sidebar_active_section_layout_contract.2 = inactive_section_heading_only_at_bottom
 <!-- 业务日志只落到应用 log 目录；原始事件时间线追加写，任务摘要原子覆盖，完整关联回合、审批、命令、文件和完成状态，但禁止保存认证秘密或原始推理。 -->
 business_audit_log_contract = apps_ai_desktop_log_only + append_only_jsonl_timeline + atomic_per_task_summary + request_workspace_sandbox_turn_approval_command_changed_files_completion_correlation + no_auth_secret_or_raw_reasoning
 <!-- 部分完成诊断必须根据真实 Harness 状态、命令开始完成与退出码、文件变更、构建测试观察和源码产物时间自动生成可检索原因码。 -->
@@ -167,9 +227,11 @@ managed_command_policy_contract = task_mode_blocks_build_start_restart + test_mo
 <!-- 任务托管完成代码级验证后，尚未执行构建只登记为后续动作，不得作为部分完成或失败原因。 -->
 audit_build_pending_contract = code_verified_without_build_is_completed + build_recorded_as_pending_action + never_partial_only_because_bundle_is_stale
 <!-- 托管执行每轮回答必须按顺序保留；新回合建立独立文本起点，完成事件只能替换当前轮片段，最终 IPC 返回不得覆盖累计内容。 -->
-managed_multiturn_text_preservation_contract = append_each_turn_with_visible_separator + turn_id_and_segment_id_boundary + completed_message_reconciles_current_turn_only + final_response_never_overwrites_accumulated_rounds + terminal_state_rejects_late_non_error_events
+managed_multiturn_text_preservation_contract = first_real_turn_reuses_pending_card + every_later_real_turn_id_appends_new_assistant_card_below + explicit_turn_id_to_message_id_routing + previous_card_frozen_before_next_turn + completed_message_reconciles_own_segment_id_only + final_response_updates_latest_card_only + terminal_state_rejects_late_non_error_events + real_two_turn_interaction_asserts_two_cards_and_immutable_first_text + prohibit_source_regex_only_completion
 <!-- Harness 执行期间输入区保持可编辑，截图、图片粘贴和后续消息进入有序队列，不得由全局 loading 一并锁死。 -->
 managed_running_composer_availability_contract = screenshot_and_image_paste_available_while_running + composer_editable + next_message_fifo_queue + cancel_scoped_to_active_turn
+<!-- 执行中普通发送只能持久排队；用户明确点击补充后才通过官方 turn/steer 注入当前回合，进程重建后必须先让用户继续或放弃，全部状态变化复用统一业务日志。 -->
+managed_conversation_dispatch_contract = electron_main_single_active_dispatch + default_persistent_fifo_queue + explicit_supplement_button_uses_official_turn_steer + no_second_turn_start_while_active + renderer_close_keeps_background_task + process_reconstruction_marks_recoverable + visible_continue_or_discard + idempotent_dispatch_id + unified_business_audit_events
 <!-- 执行状态亮点仅在运行中高亮闪烁，终态变暗静止，并按阶段显示准确结果语义。 -->
 managed_status_indicator_lifecycle_contract = running_bright_pulsing + terminal_dim_static + analysis_execution_validation_test_completed_labels + failed_and_interrupted_labels
 <!-- 回复卡和全部内部执行面板必须允许收缩，长路径不得建立超出卡片的固有宽度。 -->
@@ -190,6 +252,16 @@ managed_stage_action_button_contract.3 = latest_action_visible_disabled_while_ru
 managed_stage_action_button_contract.4 = historical_clicked_action_highlighted_but_not_actionable
 <!-- 独立 1 或完全匹配的配置短语才与按钮等价，包含关键词的长句不构成授权。 -->
 managed_stage_action_button_contract.5 = standalone_1_or_exact_configured_phrase_only
+<!-- 从需求、任务或测试阶段可以通过最新回复右下角显式返回会话托管。 -->
+managed_stage_return_button_contract = latest_response_can_return_to_conversation_managed
+<!-- 任务阶段已经到达时，最新回复右下角必须显示返回任务托管入口。 -->
+managed_stage_return_button_contract.2 = task_or_test_response_can_return_to_task_managed
+<!-- 返回按钮只更新本地执行模式，禁止仅因点击返回就发起 Harness 回合。 -->
+managed_stage_return_button_contract.3 = switch_local_execution_mode_without_new_harness_turn
+<!-- 当前已选模式对应的返回按钮必须禁用。 -->
+managed_stage_return_button_contract.4 = selected_mode_return_button_disabled
+<!-- 历史回复中的返回入口不得切换当前执行模式。 -->
+managed_stage_return_button_contract.5 = historical_response_return_buttons_not_actionable
 <!-- 默认协作模式必须显式启用官方实验性 requestUserInput 能力。 -->
 harness_user_input_confirmation_contract = default_mode_experimental_request_user_input_enabled
 <!-- 会话托管每次只询问一个最高优先级疑问。 -->
@@ -216,8 +288,10 @@ harness_streaming_ui_contract = official_notifications_only + agent_message_delt
 harness_streaming_activity_disclosure_contract = collapsed_by_default + visible_item_count_and_latest_step + user_expandable_details
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events
-<!-- 主进程只枚举受控桌面源 ID；屏幕像素由隔离截图窗口的 MediaStream 本地冻结，选区、红色标注和 PNG 校验继续保持既有安全边界。 -->
-screenshot_capture_and_annotation_boundary = capture_click_state + separate_borderless_screenshot_window + main_window_bounds_unchanged + hide_cached_screenshot_window_on_done_or_cancel + electron_main_enumerates_desktop_source_id + isolated_screenshot_renderer_owns_media_stream_and_freeze_frame + renderer_region_crop_red_pen_rectangle + validated_png_only
+<!-- 主进程预检目标显示器后调用 macOS 自带 screencapture 生成单轮 PNG；隔离截图窗口只接收该帧做选区与标注。 -->
+screenshot_capture_and_annotation_boundary = capture_click_state + separate_borderless_screenshot_window + main_window_bounds_unchanged + hide_cached_screenshot_window_on_done_or_cancel + electron_main_preflights_bound_display + macos_usr_sbin_screencapture_x_t_png_D + isolated_screenshot_renderer_receives_one_validated_png_per_round + renderer_region_crop_red_pen_rectangle + validated_png_only
+<!-- 唯一冻结后端禁止传 -C，禁止 Electron 视频流、缩略图、透明遮罩或像素修补；原图和标注图均不得出现系统指针。 -->
+screenshot_cursor_exclusion_contract = macos_native_screencapture_without_C_only + explicit_noninteractive_x_png_display_selection + wait_1200ms_for_automation_pointer_overlay_window_to_expire_before_capture + prohibit_getDisplayMedia_getUserMedia_media_stream_and_desktop_thumbnail_png + prohibit_transparent_cursor_overlay_and_pixel_repair + scratch_png_deleted_immediately_after_read + original_and_annotated_png_without_cursor_artifact
 <!-- macOS 截图预热必须先识别系统权限，原生枚举失败转换为结构化结果；界面只显示本地化业务提示并提供固定权限设置入口。 -->
 screenshot_permission_recovery_contract = macos_systemPreferences_screen_preflight + denied_or_restricted_skips_native_enumeration + getSources_failure_rechecks_permission + structured_permission_required_or_source_unavailable_result + no_raw_remote_method_error_in_composer + localized_recovery_message + fixed_screen_recording_settings_action + restart_guidance
 <!-- 截图交互固定为两阶段：同一图片可连续标注；最新标注旁跟随完成和取消，完成保存全部标注到对话框，取消只撤销最新一笔并保留更早标注。 -->
@@ -236,8 +310,14 @@ screenshot_overlay_first_paint_and_theme_contract = hidden_until_frozen_capture_
 screenshot_annotation_window_contract = full_screen_selection_only + annotation_window_matches_capture_native_pixels_plus_chrome + annotation_canvas_no_padding_border_or_shadow + preserve_aspect_ratio + scale_only_when_exceeding_work_area + small_capture_operable_minimum + draggable_resizable_maximizable + main_window_unchanged
 <!-- 标注阶段底部必须始终提供完成按钮；无标注时只回填图片并聚焦输入框，有标注时才追加红色部分提示。 -->
 screenshot_completion_prompt_contract = fixed_footer_cancel_done_back + done_without_annotation + signed_attachment_to_composer + focus_composer + append_red_part_prompt_only_when_has_annotations + preserve_existing_composer_text + never_auto_send
-<!-- 两个截图按钮必须共用同一控制器、长期桌面流和冻结帧管线，只允许“是否隐藏主窗体”这一参数不同；每轮冻结新帧，禁止复用上一轮静态像素。 -->
-screenshot_capture_mode_contract = current_screen_button + hidden_capture_button_renders_spinner_before_hide + one_shared_capture_controller_with_hide_owner_parameter_only + first_successful_source_preflight_cached_for_process_lifetime + first_click_only_minimum_spinner_time + reusable_hidden_screenshot_shell_window + one_persistent_desktop_media_stream_per_display + reuse_loaded_react_css_and_mask + cached_shell_background_throttling_disabled + restore_owner_before_hiding_cached_shell + reset_selection_annotation_history_between_rounds + renderer_and_stream_ready_ack_before_owner_hide + owner_hide_is_last_preparation_step + hidden_mode_waits_for_post_hide_video_frames + one_fresh_stream_frame_per_round + never_reuse_frozen_pixels_across_rounds + source_preflight_failure_keeps_owner_visible + no_full_screen_pixels_over_ipc + hover_tooltip_for_each_mode + restore_hidden_owner_on_overlay_end + same_selection_annotation_pipeline
+<!-- 两个截图按钮共用同一原生控制器，只允许“是否隐藏主窗体”参数不同；每轮执行一次新的原生截图，禁止缓存静态像素。 -->
+screenshot_capture_mode_contract = current_screen_button + hidden_capture_button_renders_spinner_before_hide + one_shared_native_capture_controller_with_hide_owner_parameter_only + first_click_only_minimum_spinner_time + reusable_hidden_screenshot_shell_window + reuse_loaded_react_css_and_mask + cached_shell_background_throttling_disabled + restore_owner_before_hiding_cached_shell + reset_selection_annotation_history_between_rounds + renderer_ready_ack_before_owner_hide + owner_hide_is_last_preparation_step + one_fresh_native_png_per_round + never_reuse_frozen_pixels_across_rounds + source_preflight_failure_keeps_owner_visible + bounded_main_to_isolated_renderer_png_ipc + hover_tooltip_for_each_mode + restore_hidden_owner_on_overlay_end + same_selection_annotation_pipeline
+<!-- 截图任一后台阶段失败都必须回到可操作状态；隐藏渲染器不得只在自身显示错误并让主界面无限等待。 -->
+screenshot_failure_recovery_contract = bounded_source_enumeration_wait + bounded_hidden_renderer_ready_wait + bounded_native_screencapture_wait + validated_frame_ack + scratch_file_finally_unlink + composer_spinner_always_clears + owner_window_restored_on_failure + stale_screenshot_shell_destroyed + next_click_recreates_shell + tcc_failure_must_be_fixed_by_stable_app_identity_and_permission_recovery_not_unreviewed_backend_fallback
+<!-- 截图诊断必须按一次尝试关联关键阶段，同时只记录尺寸、状态和业务错误，不记录屏幕像素。 -->
+screenshot_diagnostic_log_contract = shared_attempt_id + source_preflight_stage + native_screencapture_requested_and_ready_stage + frame_result_stage + capture_dimensions_only + bounded_error_detail + prohibit_command_output_and_screen_pixels_in_log
+<!-- 防复发门禁：截图后端改动必须同时通过源码唯一链路契约和真实 macOS 两入口图像检查，不能仅凭 API 返回、类型检查或单元测试宣称无光标。 -->
+screenshot_backend_regression_gate = exactly_one_capture_backend + git_last_known_good_comparison + contract_rejects_getDisplayMedia_getUserMedia_thumbnail_cursor_overlay_and_dual_fallback + contract_requires_screencapture_without_C_automation_overlay_settle_and_scratch_cleanup + real_macos_current_and_hidden_capture_saved_original_png_assert_no_system_or_automation_cursor + tcc_identity_verification + no_completion_on_code_only_tests
 <!-- 清空全部红色绘画标注属于可逆编辑动作，但必须先显示确认，只有确认后才恢复无标注底图。 -->
 screenshot_clear_annotation_contract = clear_drawing_button + explicit_confirmation_before_clear + decline_preserves_annotations + accept_restores_cropped_base_image
 <!-- 截图原图、标注图和元数据统一进入应用自身 temp；渲染层发送主进程签发的 ID，主进程解析后按官方协议传 localImage 路径。 -->
@@ -250,9 +330,17 @@ screenshot_temp_management_contract = system_file_manager_open + confirmed_clear
 <!-- 启动器必须从自身目录解析应用和 SELPLAT 根，检查 Node/npm 与官方 Codex 依赖后进入开发热启动链路；正式构建由独立命令执行。 -->
 windows_developer_launcher_contract = self_relative_path + dependency_check + developer_hot_start + formal_build_is_separate
 <!-- macOS 开发版双击启动器必须从自身目录解析工程，检查 Node、npm、Electron 和官方 Codex 依赖，每次先正式构建最新开发版，构建失败时禁止启动 Electron。 -->
-macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_official_codex_dependency_check + mandatory_fresh_developer_build_before_launch + build_failure_blocks_launch + package_fixed_bundle_id_ai_desktop_app + stable_signed_bootstrap_shell_loads_external_latest_runtime + ordinary_source_build_never_repackages_or_resigns_shell + repackage_only_when_bootstrap_builder_or_dependency_manifest_changes + permission_refresh_after_identity_change + launchservices_register + open_packaged_app_never_raw_dependency_electron
+macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_official_codex_dependency_check + mandatory_fresh_developer_build_before_launch + build_failure_blocks_launch + package_fixed_bundle_id_ai_desktop_app + stable_signed_bootstrap_shell_loads_external_latest_runtime + stable_designated_requirement_uses_bundle_identifier_not_cdhash + verifier_rejects_cdhash_designated_requirement + ordinary_source_build_never_repackages_or_resigns_shell + repackage_only_when_bootstrap_builder_or_dependency_manifest_changes + permission_refresh_after_identity_change + exact_resolved_app_executable_process_match + gracefully_terminate_all_existing_same_app_instances + abort_when_old_instance_remains + launchservices_register + open_packaged_app_never_raw_dependency_electron + prohibit_parallel_old_and_new_ai_desktop_processes
 <!-- AI Desktop 测试只维护一个共享测试文档；执行者取得独占锁，其他读取者看到占用身份，完成后立即归档。 -->
 shared_test_document_lifecycle_contract = one_apps_ai_desktop_test_document_md + no_thread_scoped_document + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_recovery + completed_run_immediate_archive + next_run_new_document + legacy_thread_documents_archived_not_deleted
+<!-- 自动测试属于当前应用会话的显式模式；默认关闭，只有已知环境与窄命令授权全部通过才允许开启。 -->
+automatic_test_activation_contract = composer_toolbar_after_managed_mode_before_screenshot_actions + labeled_switch + default_off_after_every_application_start + visible_preflight_dialog + all_checks_must_pass_before_on
+<!-- 预检必须覆盖已知的无人值守阻断面，并且不得通过预检自动点击系统或未知 Harness 授权。 -->
+automatic_test_preflight_contract = codex_connected_and_authenticated + writable_registered_workspace + runner_and_dependencies_ready + shared_lock_available_or_stale_recoverable + local_interaction_port_available + screen_recording_granted + never_click_unknown_approval
+<!-- 自动测试只授权无参数共享执行器，文档内脚本受验证白名单约束，任何额外参数或运行期新审批都退回人工处理。 -->
+automatic_test_command_safety_contract = explicit_switch_authorizes_exact_no_argument_npm_run_test_document + explicit_fixed_allowlist_for_existing_typecheck_build_developer_verify_mac_and_named_test_scripts_only + prohibit_wildcard_test_prefix_recursive_test_document_start_publish_or_arbitrary_script + script_signature_change_invalidates_trust + unexpected_approval_disables_auto_mode_and_removes_queued_test
+<!-- 开启后只在任务托管已完成代码级验证时排入一轮测试托管，继续复用既有串行发送队列。 -->
+automatic_test_transition_contract = task_code_verified_then_enqueue_exactly_one_test_managed_turn + existing_fifo_queue + no_stage_skip_before_code_verified + test_failure_never_auto_approves_more_permissions
 <!-- Electron 打包必须把官方 Codex JavaScript 入口和当前平台原生二进制解包到可执行文件系统，禁止从 asar 内直接拉起。 -->
 packaged_harness_binary_contract = asar_unpack_@openai_codex_and_platform_package
 <!-- macOS 跨平台生成 Windows 包时 npm 只自动选择宿主可选依赖，因此 Windows x64 平台别名包必须作为直接锁定依赖随安装包携带。 -->

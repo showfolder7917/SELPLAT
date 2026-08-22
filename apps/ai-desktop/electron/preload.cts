@@ -20,21 +20,17 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.invoke("desktop:resolve-codex-approval", requestId, decision),
   getTrustedCommandInfo: () => ipcRenderer.invoke("desktop:get-trusted-command-info"),
   clearTrustedCommands: () => ipcRenderer.invoke("desktop:clear-trusted-commands"),
+  prepareAutomaticTesting: () => ipcRenderer.invoke("desktop:prepare-automatic-testing"),
   getCodexUserInputs: () => ipcRenderer.invoke("desktop:get-codex-user-inputs"),
   resolveCodexUserInput: (request: unknown) => ipcRenderer.invoke("desktop:resolve-codex-user-input", request),
   newChat: () => ipcRenderer.invoke("desktop:new-chat"),
   openExternalUrl: (url: string) => ipcRenderer.invoke("desktop:open-external-url", url),
   prepareScreenCapture: () => ipcRenderer.invoke("desktop:prepare-screen-capture"),
   openScreenRecordingSettings: () => ipcRenderer.invoke("desktop:open-screen-recording-settings"),
+  restartForScreenRecordingPermission: () => ipcRenderer.invoke("desktop:restart-for-screen-recording-permission"),
   captureScreen: (request?: unknown) => ipcRenderer.invoke("desktop:capture-screen", request),
-  getScreenCaptureStreamSource: () => ipcRenderer.invoke("desktop:get-screen-capture-stream-source"),
-  notifyScreenCaptureStreamReady: (sourceId: string) => ipcRenderer.invoke("desktop:screen-capture-stream-ready", sourceId),
-  onScreenCaptureStreamConfigured: (listener: (source: unknown) => void) => {
-    // 主进程只向绑定的截图壳下发已校验的显示器源，两个截图入口统一复用同一条屏幕流。
-    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
-    ipcRenderer.on("desktop:screen-capture-stream-configured", handler);
-    return () => ipcRenderer.removeListener("desktop:screen-capture-stream-configured", handler);
-  },
+  notifyScreenCaptureStage: (stage: string, detail?: string) =>
+    ipcRenderer.invoke("desktop:screen-capture-stage", stage, detail),
   onScreenCaptureFrameRequested: (listener: (request: unknown) => void) => {
     // 每轮只接收冻结帧命令，真实屏幕像素始终留在隔离截图窗口内处理。
     const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
@@ -64,6 +60,17 @@ contextBridge.exposeInMainWorld("desktop", {
   clearTempFiles: () => ipcRenderer.invoke("desktop:clear-temp-files"),
   getAuditLogInfo: () => ipcRenderer.invoke("desktop:get-audit-log-info"),
   openAuditLogDirectory: () => ipcRenderer.invoke("desktop:open-audit-log-directory"),
+  getConversationDispatchState: () => ipcRenderer.invoke("desktop:get-conversation-dispatch-state"),
+  enqueueMessage: (request: unknown) => ipcRenderer.invoke("desktop:enqueue-message", request),
+  supplementQueuedMessage: (itemId: string) => ipcRenderer.invoke("desktop:supplement-queued-message", itemId),
+  discardQueuedMessage: (itemId: string) => ipcRenderer.invoke("desktop:discard-queued-message", itemId),
+  recoverConversationTask: () => ipcRenderer.invoke("desktop:recover-conversation-task"),
+  discardConversationRecovery: () => ipcRenderer.invoke("desktop:discard-conversation-recovery"),
+  onConversationDispatchState: (listener: (state: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:conversation-dispatch-state", handler);
+    return () => ipcRenderer.removeListener("desktop:conversation-dispatch-state", handler);
+  },
   sendMessage: (request: unknown) => ipcRenderer.invoke("desktop:send-message", request),
   onCodexStreamEvent: (listener: (event: unknown) => void) => {
     // 只向渲染层转发主进程筛选后的进度对象，禁止暴露原始 Electron 事件或 Harness 管道。

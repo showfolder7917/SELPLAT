@@ -11,7 +11,19 @@ import {
 import type { Locale, ScreenCapture } from "../../../shared/contracts/desktop";
 
 type Tool = "pen" | "rectangle";
+type Point = { x: number; y: number };
 type Rectangle = { x: number; y: number; width: number; height: number };
+type PenAnnotation = { id: string; type: "pen"; points: Point[] };
+type RectangleAnnotation = { id: string; type: "rectangle"; rectangle: Rectangle };
+type Annotation = PenAnnotation | RectangleAnnotation;
+type ResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
+type CanvasViewport = Rectangle;
+type PointerTarget = HTMLElement | SVGElement;
+type ActiveInteraction =
+  | { kind: "draw-pen"; pointerId: number; annotation: PenAnnotation }
+  | { kind: "draw-rectangle"; pointerId: number; annotation: RectangleAnnotation; origin: Point }
+  | { kind: "move"; pointerId: number; annotationId: string; origin: Point; original: Rectangle; current: Rectangle }
+  | { kind: "resize"; pointerId: number; annotationId: string; origin: Point; original: Rectangle; current: Rectangle; handle: ResizeHandle };
 
 interface ScreenshotEditorProps {
   capture: ScreenCapture;
@@ -25,42 +37,103 @@ const editorLabels = {
   "zh-CN": { select: "选择截图区域", selectHint: "拖动鼠标框选需要截取的区域", annotate: "红色标注", done: "完成", pen: "画笔", rectangle: "方框", undo: "撤销", clear: "清空绘画框", clearConfirm: "确定清空全部红色绘画标注吗？", cancel: "取消", back: "返回", saving: "正在保存..." },
 } as const;
 
-/** 在渲染层完成选区和画布标注，只把最终 PNG 数据交给主进程落盘。 */
+const resizeHandles: ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+/** 在渲染层保存可编辑标注并合成最终 PNG，只把完成结果交给主进程落盘。 */
 export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: ScreenshotEditorProps) {
   const [phase, setPhase] = useState<"select" | "annotate">("select");
   const [selection, setSelection] = useState<Rectangle | null>(null);
   const [croppedDataUrl, setCroppedDataUrl] = useState("");
   const [croppedSize, setCroppedSize] = useState({ width: 0, height: 0 });
   const [tool, setTool] = useState<Tool>("rectangle");
-  const [history, setHistory] = useState<string[]>([]);
-  const [annotationConfirmPosition, setAnnotationConfirmPosition] = useState<{ left: number; top: number } | null>(null);
-  const [rectanglePreview, setRectanglePreview] = useState<Rectangle | null>(null);
+  const [annotationHistory, setAnnotationHistory] = useState<Annotation[][]>([[]]);
+  const [draftAnnotation, setDraftAnnotation] = useState<Annotation | null>(null);
+  const [selectedRectangleId, setSelectedRectangleId] = useState<string | null>(null);
+  const [rectangleTransformPreview, setRectangleTransformPreview] = useState<Rectangle | null>(null);
+  const [canvasViewport, setCanvasViewport] = useState<CanvasViewport>({ x: 0, y: 0, width: 0, height: 0 });
+  const [baseImageReady, setBaseImageReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const annotationActionFrameRef = useRef(0);
-  const annotationActionsAvailableAtRef = useRef(0);
-  const selectionOriginRef = useRef<{ x: number; y: number } | null>(null);
-  const drawingRef = useRef<{ tool: Tool; startX: number; startY: number; lastX: number; lastY: number } | null>(null);
+  const baseImageRef = useRef<HTMLImageElement | null>(null);
+  const selectionOriginRef = useRef<Point | null>(null);
+  const interactionRef = useRef<ActiveInteraction | null>(null);
+  const annotationIdRef = useRef(0);
   const text = editorLabels[locale];
+  const annotations = annotationHistory[annotationHistory.length - 1] ?? [];
+  const selectedRectangle = selectedRectangleId
+    ? annotations.find((annotation): annotation is RectangleAnnotation => annotation.type === "rectangle" && annotation.id === selectedRectangleId)
+    : undefined;
+  const effectiveSelectedRectangle = selectedRectangle
+    ? rectangleTransformPreview ?? selectedRectangle.rectangle
+    : null;
+  const selectedViewportRectangle = effectiveSelectedRectangle
+    ? rectangleToViewport(effectiveSelectedRectangle, canvasViewport, croppedSize)
+    : null;
+  const annotationActionPosition = selectedViewportRectangle
+    ? selectionConfirmPosition(selectedViewportRectangle, window.innerWidth, window.innerHeight, 152)
+    : null;
 
   useEffect(() => {
     if (phase !== "annotate" || !croppedDataUrl) return;
-    void drawDataUrl(croppedDataUrl, canvasRef.current).then(() => setHistory([croppedDataUrl]));
+    let disposed = false;
+    setBaseImageReady(false);
+    setAnnotationHistory([[]]);
+    setDraftAnnotation(null);
+    setSelectedRectangleId(null);
+    setRectangleTransformPreview(null);
+    void loadDataUrl(croppedDataUrl).then((image) => {
+      if (disposed) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      baseImageRef.current = image;
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      drawAnnotations(image, [], null, null, null, canvas);
+      setBaseImageReady(true);
+      window.requestAnimationFrame(() => syncCanvasViewport(canvas, setCanvasViewport));
+    }).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to load screenshot image."));
+    return () => { disposed = true; };
   }, [croppedDataUrl, phase]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const image = baseImageRef.current;
+    if (!baseImageReady || !canvas || !image) return;
+    drawAnnotations(image, annotations, draftAnnotation, selectedRectangleId, rectangleTransformPreview, canvas);
+  }, [annotationHistory, baseImageReady, draftAnnotation, rectangleTransformPreview, selectedRectangleId]);
+
+  useEffect(() => {
+    if (phase !== "annotate") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const updateViewport = () => syncCanvasViewport(canvas, setCanvasViewport);
+    const observer = new ResizeObserver(updateViewport);
+    observer.observe(canvas);
+    window.addEventListener("resize", updateViewport);
+    updateViewport();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, [baseImageReady, phase]);
 
   useEffect(() => {
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") onCancel();
     };
+    const clearSelectionOnWindowBlur = () => {
+      setSelectedRectangleId(null);
+      setRectangleTransformPreview(null);
+    };
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    window.addEventListener("blur", clearSelectionOnWindowBlur);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("blur", clearSelectionOnWindowBlur);
+    };
   }, [onCancel]);
-
-  useEffect(() => () => {
-    if (annotationActionFrameRef.current) window.cancelAnimationFrame(annotationActionFrameRef.current);
-  }, []);
 
   const selectionPoint = (event: PointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -120,144 +193,209 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
     setSelection(null);
     setCroppedDataUrl("");
     setCroppedSize({ width: 0, height: 0 });
-    setHistory([]);
-    setAnnotationConfirmPosition(null);
-    setRectanglePreview(null);
+    setAnnotationHistory([[]]);
+    setDraftAnnotation(null);
+    setSelectedRectangleId(null);
+    setRectangleTransformPreview(null);
     setSaving(false);
     setError("");
     setPhase("select");
+    baseImageRef.current = null;
     // 先让冻结蒙版完成两帧绘制，再由主进程把普通标注窗恢复为全屏框选窗，避免闪现旧画布。
     await nextPaint();
     await window.desktop?.returnScreenshotSelection();
   };
 
-  const canvasPoint = (event: PointerEvent<HTMLCanvasElement>) => {
-    const canvas = event.currentTarget;
-    const bounds = canvas.getBoundingClientRect();
-    return {
-      x: (event.clientX - bounds.left) * canvas.width / bounds.width,
-      y: (event.clientY - bounds.top) * canvas.height / bounds.height,
-    };
+  const createAnnotationId = () => {
+    annotationIdRef.current += 1;
+    return `annotation-${annotationIdRef.current}`;
   };
 
-  const beginDrawing = (event: PointerEvent<HTMLCanvasElement>) => {
+  const beginCanvasInteraction = (event: PointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget;
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    const point = canvasPointFromClient(event.clientX, event.clientY, canvas);
+    const hitRectangle = findTopRectangleAtPoint(annotations, point, canvas.width);
     event.currentTarget.setPointerCapture(event.pointerId);
-    const point = canvasPoint(event);
-    if (annotationActionFrameRef.current) window.cancelAnimationFrame(annotationActionFrameRef.current);
-    annotationActionsAvailableAtRef.current = Number.POSITIVE_INFINITY;
-    setAnnotationConfirmPosition(null);
-    setRectanglePreview(null);
-    drawingRef.current = {
-      tool,
-      startX: point.x,
-      startY: point.y,
-      lastX: point.x,
-      lastY: point.y,
-    };
-    configureRedStroke(context, canvas.width);
+    setError("");
+    setDraftAnnotation(null);
+    setRectangleTransformPreview(null);
+    if (hitRectangle) {
+      setSelectedRectangleId(hitRectangle.id);
+      interactionRef.current = {
+        kind: "move",
+        pointerId: event.pointerId,
+        annotationId: hitRectangle.id,
+        origin: point,
+        original: hitRectangle.rectangle,
+        current: hitRectangle.rectangle,
+      };
+      return;
+    }
+    setSelectedRectangleId(null);
     if (tool === "pen") {
-      context.beginPath();
-      context.moveTo(point.x, point.y);
+      const annotation: PenAnnotation = { id: createAnnotationId(), type: "pen", points: [point] };
+      interactionRef.current = { kind: "draw-pen", pointerId: event.pointerId, annotation };
+      setDraftAnnotation(annotation);
+      return;
     }
+    const annotation: RectangleAnnotation = {
+      id: createAnnotationId(),
+      type: "rectangle",
+      rectangle: { x: point.x, y: point.y, width: 0, height: 0 },
+    };
+    interactionRef.current = { kind: "draw-rectangle", pointerId: event.pointerId, annotation, origin: point };
+    setDraftAnnotation(annotation);
   };
 
-  const moveDrawing = (event: PointerEvent<HTMLCanvasElement>) => {
-    const drawing = drawingRef.current;
-    const context = event.currentTarget.getContext("2d");
-    if (!drawing || !context) return;
-    const point = canvasPoint(event);
-    configureRedStroke(context, event.currentTarget.width);
-    if (drawing.tool === "pen") {
-      context.lineTo(point.x, point.y);
-      context.stroke();
-    } else {
-      const canvasBounds = event.currentTarget.getBoundingClientRect();
-      const preview = normalizeRectangle(drawing.startX, drawing.startY, point.x, point.y);
-      setRectanglePreview({
-        x: canvasBounds.left + preview.x * canvasBounds.width / event.currentTarget.width,
-        y: canvasBounds.top + preview.y * canvasBounds.height / event.currentTarget.height,
-        width: preview.width * canvasBounds.width / event.currentTarget.width,
-        height: preview.height * canvasBounds.height / event.currentTarget.height,
-      });
-    }
-    drawing.lastX = point.x;
-    drawing.lastY = point.y;
+  const moveCanvasInteraction = (event: PointerEvent<HTMLCanvasElement>) => {
+    updateInteraction(event.clientX, event.clientY);
   };
 
-  const finishDrawing = (event: PointerEvent<HTMLCanvasElement>) => {
-    const drawing = drawingRef.current;
-    if (!drawing) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    const context = event.currentTarget.getContext("2d");
-    if (context && drawing.tool === "pen") context.closePath();
-    if (context && drawing.tool === "rectangle") {
-      configureRedStroke(context, event.currentTarget.width);
-      context.strokeRect(drawing.startX, drawing.startY, drawing.lastX - drawing.startX, drawing.lastY - drawing.startY);
-    }
-    setRectanglePreview(null);
-    const canvasBounds = event.currentTarget.getBoundingClientRect();
-    const scaleX = canvasBounds.width / event.currentTarget.width;
-    const scaleY = canvasBounds.height / event.currentTarget.height;
-    const annotationBounds = normalizeRectangle(
-      canvasBounds.left + drawing.startX * scaleX,
-      canvasBounds.top + drawing.startY * scaleY,
-      canvasBounds.left + drawing.lastX * scaleX,
-      canvasBounds.top + drawing.lastY * scaleY,
-    );
-    // React 结束 pointer 事件后会清空 currentTarget；必须在同步事件周期内生成快照，
-    // 禁止在状态更新回调中继续读取 event.currentTarget，否则会导致编辑器渲染崩溃并黑屏。
-    const annotatedDataUrl = event.currentTarget.toDataURL("image/png");
-    drawingRef.current = null;
-    setHistory((current) => [...current, annotatedDataUrl]);
-    // 第二个完成按钮跟随刚绘制的标注框，边缘场景使用同一翻转算法避免超出屏幕。
-    const nextActionPosition = drawing.tool === "rectangle" && (annotationBounds.width < 8 || annotationBounds.height < 8)
-      ? null
-      : selectionConfirmPosition(annotationBounds, window.innerWidth, window.innerHeight, 152);
-    // 跟随按钮延迟到当前 pointerup/click 手势完全结束后出现，避免连续画第二框时误触刚挂载的“完成”。
-    annotationActionFrameRef.current = window.requestAnimationFrame(() => {
-      annotationActionFrameRef.current = 0;
-      annotationActionsAvailableAtRef.current = performance.now() + 180;
-      setAnnotationConfirmPosition(nextActionPosition);
-    });
+  const finishCanvasInteraction = (event: PointerEvent<HTMLCanvasElement>) => {
+    updateInteraction(event.clientX, event.clientY);
+    finishInteraction(event.currentTarget, event.pointerId);
   };
 
-  const restorePreviousAnnotation = async () => {
-    if (history.length <= 1) return;
-    const next = history.slice(0, -1);
-    await drawDataUrl(next[next.length - 1], canvasRef.current);
-    setHistory(next);
-    setAnnotationConfirmPosition(null);
-    setRectanglePreview(null);
+  const cancelCanvasInteraction = (event: PointerEvent<HTMLCanvasElement>) => {
+    cancelInteraction(event.currentTarget, event.pointerId);
   };
 
-  const undo = async () => {
-    await restorePreviousAnnotation();
-  };
-
-  const cancelLatestAnnotation = async () => {
-    if (performance.now() < annotationActionsAvailableAtRef.current) return;
-    await restorePreviousAnnotation();
-  };
-
-  const clear = async () => {
-    if (!window.confirm(text.clearConfirm)) return;
-    await drawDataUrl(croppedDataUrl, canvasRef.current);
-    setHistory([croppedDataUrl]);
-    setAnnotationConfirmPosition(null);
-    setRectanglePreview(null);
-  };
-
-  const complete = async (respectFloatingActionDelay = false) => {
+  const beginResize = (event: PointerEvent<HTMLButtonElement>, handle: ResizeHandle) => {
+    if (!selectedRectangle) return;
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
     const canvas = canvasRef.current;
-    if (!canvas || saving || (respectFloatingActionDelay && performance.now() < annotationActionsAvailableAtRef.current)) return;
+    if (!canvas) return;
+    const point = canvasPointFromClient(event.clientX, event.clientY, canvas);
+    interactionRef.current = {
+      kind: "resize",
+      pointerId: event.pointerId,
+      annotationId: selectedRectangle.id,
+      origin: point,
+      original: selectedRectangle.rectangle,
+      current: selectedRectangle.rectangle,
+      handle,
+    };
+    setRectangleTransformPreview(selectedRectangle.rectangle);
+  };
+
+  const moveResize = (event: PointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    updateInteraction(event.clientX, event.clientY);
+  };
+
+  const finishResize = (event: PointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    updateInteraction(event.clientX, event.clientY);
+    finishInteraction(event.currentTarget, event.pointerId);
+  };
+
+  const cancelResize = (event: PointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    cancelInteraction(event.currentTarget, event.pointerId);
+  };
+
+  const updateInteraction = (clientX: number, clientY: number) => {
+    const interaction = interactionRef.current;
+    const canvas = canvasRef.current;
+    if (!interaction || !canvas) return;
+    const point = canvasPointFromClient(clientX, clientY, canvas);
+    if (interaction.kind === "draw-pen") {
+      interaction.annotation = { ...interaction.annotation, points: [...interaction.annotation.points, point] };
+      setDraftAnnotation(interaction.annotation);
+      return;
+    }
+    if (interaction.kind === "draw-rectangle") {
+      interaction.annotation = {
+        ...interaction.annotation,
+        rectangle: normalizeRectangle(interaction.origin.x, interaction.origin.y, point.x, point.y),
+      };
+      setDraftAnnotation(interaction.annotation);
+      return;
+    }
+    const deltaX = point.x - interaction.origin.x;
+    const deltaY = point.y - interaction.origin.y;
+    const nextRectangle = interaction.kind === "move"
+      ? moveRectangle(interaction.original, deltaX, deltaY, canvas.width, canvas.height)
+      : resizeRectangle(interaction.original, interaction.handle, deltaX, deltaY, canvas.width, canvas.height);
+    interaction.current = nextRectangle;
+    setRectangleTransformPreview(nextRectangle);
+  };
+
+  const finishInteraction = (captureTarget: PointerTarget, pointerId: number) => {
+    const interaction = interactionRef.current;
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    if (captureTarget.hasPointerCapture(pointerId)) captureTarget.releasePointerCapture(pointerId);
+    interactionRef.current = null;
+    if (interaction.kind === "draw-pen") {
+      if (interaction.annotation.points.length > 1) commitAnnotations([...annotations, interaction.annotation]);
+      setDraftAnnotation(null);
+      return;
+    }
+    if (interaction.kind === "draw-rectangle") {
+      const rectangle = interaction.annotation.rectangle;
+      if (rectangle.width >= 8 && rectangle.height >= 8) {
+        commitAnnotations([...annotations, interaction.annotation]);
+        setSelectedRectangleId(interaction.annotation.id);
+      }
+      setDraftAnnotation(null);
+      return;
+    }
+    const nextRectangle = interaction.current;
+    if (!sameRectangle(interaction.original, nextRectangle)) {
+      commitAnnotations(annotations.map((annotation) => annotation.id === interaction.annotationId && annotation.type === "rectangle"
+        ? { ...annotation, rectangle: nextRectangle }
+        : annotation));
+    }
+    setRectangleTransformPreview(null);
+  };
+
+  const cancelInteraction = (captureTarget: PointerTarget, pointerId: number) => {
+    const interaction = interactionRef.current;
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    if (captureTarget.hasPointerCapture(pointerId)) captureTarget.releasePointerCapture(pointerId);
+    interactionRef.current = null;
+    setDraftAnnotation(null);
+    setRectangleTransformPreview(null);
+  };
+
+  const commitAnnotations = (nextAnnotations: Annotation[]) => {
+    setAnnotationHistory((current) => [...current, nextAnnotations]);
+  };
+
+  const undo = () => {
+    if (annotationHistory.length <= 1) return;
+    setAnnotationHistory((current) => current.slice(0, -1));
+    setSelectedRectangleId(null);
+    setRectangleTransformPreview(null);
+    setDraftAnnotation(null);
+  };
+
+  const cancelSelectedRectangle = () => {
+    if (!selectedRectangleId) return;
+    commitAnnotations(annotations.filter((annotation) => annotation.id !== selectedRectangleId));
+    setSelectedRectangleId(null);
+    setRectangleTransformPreview(null);
+  };
+
+  const clear = () => {
+    if (!window.confirm(text.clearConfirm)) return;
+    setAnnotationHistory([[]]);
+    setSelectedRectangleId(null);
+    setRectangleTransformPreview(null);
+    setDraftAnnotation(null);
+  };
+
+  const complete = async () => {
+    const canvas = canvasRef.current;
+    const image = baseImageRef.current;
+    if (!canvas || !image || saving) return;
     setSaving(true);
     setError("");
     try {
-      // 历史首项永远是未标注裁剪图；只有存在后续快照时才向对话框追加“红色部分”提示。
-      await onComplete(croppedDataUrl, canvas.toDataURL("image/png"), history.length > 1);
+      // 完成前同步按当前结构化状态重绘，避免最后一次移动或缩放尚未进入浏览器绘制帧。
+      drawAnnotations(image, annotations, null, null, null, canvas);
+      await onComplete(croppedDataUrl, canvas.toDataURL("image/png"), annotations.length > 0);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save screenshot");
       setSaving(false);
@@ -265,7 +403,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
   };
 
   return <section className={`screenshot-overlay ${phase === "select" ? `select-only ${selection ? "has-selection" : ""}` : ""}`} role="dialog" aria-modal="true" aria-label={phase === "select" ? text.select : text.annotate}>
-    {phase === "annotate" && <header className="screenshot-header">
+    {phase === "annotate" && <header className="screenshot-header" onPointerDown={() => setSelectedRectangleId(null)}>
       <div><strong>{text.annotate}</strong><span>{croppedSize.width} × {croppedSize.height}</span></div>
       <div className="screenshot-window-controls">
         <button type="button" title="最大化/还原" onClick={() => window.desktop?.windowControl("maximize")}><Square20Regular /></button>
@@ -278,26 +416,47 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
         <img ref={imageRef} src={capture.dataUrl} draggable={false} alt="Captured screen" />
         {selection && <div className="screenshot-selection" style={{ left: selection.x, top: selection.y, width: selection.width, height: selection.height }}><span>{Math.round(selection.width)} × {Math.round(selection.height)}</span></div>}
       </div>
-    </div> : <div className="screenshot-annotate-stage">
-      <canvas ref={canvasRef} onPointerDown={beginDrawing} onPointerMove={moveDrawing} onPointerUp={finishDrawing} />
-      {rectanglePreview && <div className="screenshot-rectangle-preview" style={{ left: rectanglePreview.x, top: rectanglePreview.y, width: rectanglePreview.width, height: rectanglePreview.height }} />}
-      {annotationConfirmPosition && <div className="screenshot-annotation-actions" style={annotationConfirmPosition}>
-        <button type="button" className="primary" disabled={saving} onClick={() => void complete(true)}>{saving ? text.saving : text.done}</button>
-        <button type="button" disabled={saving} onClick={() => void cancelLatestAnnotation()}>{text.cancel}</button>
+    </div> : <div className="screenshot-annotate-stage" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) setSelectedRectangleId(null);
+    }}>
+      <canvas
+        ref={canvasRef}
+        aria-label={text.annotate}
+        onPointerDown={beginCanvasInteraction}
+        onPointerMove={moveCanvasInteraction}
+        onPointerUp={finishCanvasInteraction}
+        onPointerCancel={cancelCanvasInteraction}
+      />
+      {selectedViewportRectangle && <div
+        className="screenshot-rectangle-selection"
+        style={{ left: selectedViewportRectangle.x, top: selectedViewportRectangle.y, width: selectedViewportRectangle.width, height: selectedViewportRectangle.height }}
+      >
+        {resizeHandles.map((handle) => <button
+          key={handle}
+          type="button"
+          className={`screenshot-resize-handle handle-${handle}`}
+          aria-label={`调整红框-${handle}`}
+          onPointerDown={(event) => beginResize(event, handle)}
+          onPointerMove={moveResize}
+          onPointerUp={finishResize}
+          onPointerCancel={cancelResize}
+        />)}
+      </div>}
+      {annotationActionPosition && <div className="screenshot-annotation-actions" style={annotationActionPosition} onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" className="primary" disabled={saving} onClick={() => void complete()}>{saving ? text.saving : text.done}</button>
+        <button type="button" disabled={saving} onClick={cancelSelectedRectangle}>{text.cancel}</button>
       </div>}
     </div>}
 
-    {phase === "annotate" && <footer className="screenshot-toolbar">
+    {phase === "annotate" && <footer className="screenshot-toolbar" onPointerDown={() => setSelectedRectangleId(null)}>
       <div className="screenshot-tools">
         <button type="button" className={tool === "pen" ? "active" : ""} onClick={() => setTool("pen")}><Pen24Regular />{text.pen}</button>
         <button type="button" className={tool === "rectangle" ? "active" : ""} onClick={() => setTool("rectangle")}><DrawShape24Regular />{text.rectangle}</button>
-        <button type="button" disabled={history.length <= 1} onClick={() => void undo()}><ArrowUndo24Regular />{text.undo}</button>
-        <button type="button" onClick={() => void clear()}><Eraser24Regular />{text.clear}</button>
+        <button type="button" disabled={annotationHistory.length <= 1} onClick={undo}><ArrowUndo24Regular />{text.undo}</button>
+        <button type="button" onClick={clear}><Eraser24Regular />{text.clear}</button>
       </div>
       <div className="screenshot-actions">
         {error && <span>{error}</span>}
-        <button type="button" disabled={saving} onClick={onCancel}>{text.cancel}</button>
-        <button type="button" className="primary" disabled={saving} onClick={() => void complete()}>{saving ? text.saving : text.done}</button>
         <button type="button" disabled={saving} onClick={() => void returnToSelection()}>{text.back}</button>
       </div>
     </footer>}
@@ -308,7 +467,7 @@ function normalizeRectangle(startX: number, startY: number, endX: number, endY: 
   return { x: Math.min(startX, endX), y: Math.min(startY, endY), width: Math.abs(endX - startX), height: Math.abs(endY - startY) };
 }
 
-/** 选区确定按钮优先跟随右下角，靠近底部工具栏时自动收到选区内或翻到上方。 */
+/** 红框操作按钮优先跟随右下角，靠近底部工具栏时自动收到框内或翻到上方。 */
 function selectionConfirmPosition(selection: Rectangle, sourceWidth: number, sourceHeight: number, controlWidth = 72): { left: number; top: number } {
   const gap = 8;
   const buttonHeight = 36;
@@ -318,6 +477,70 @@ function selectionConfirmPosition(selection: Rectangle, sourceWidth: number, sou
   if (below + buttonHeight <= sourceHeight - toolbarHeight) return { left, top: below };
   if (selection.height >= buttonHeight + gap * 2) return { left, top: selection.y + selection.height - buttonHeight - gap };
   return { left, top: Math.max(gap, selection.y - buttonHeight - gap) };
+}
+
+function canvasPointFromClient(clientX: number, clientY: number, canvas: HTMLCanvasElement): Point {
+  const bounds = canvas.getBoundingClientRect();
+  return {
+    x: clamp((clientX - bounds.left) * canvas.width / bounds.width, 0, canvas.width),
+    y: clamp((clientY - bounds.top) * canvas.height / bounds.height, 0, canvas.height),
+  };
+}
+
+function rectangleToViewport(rectangle: Rectangle, viewport: CanvasViewport, sourceSize: { width: number; height: number }): Rectangle {
+  if (sourceSize.width < 1 || sourceSize.height < 1) return { x: 0, y: 0, width: 0, height: 0 };
+  const scaleX = viewport.width / sourceSize.width;
+  const scaleY = viewport.height / sourceSize.height;
+  return {
+    x: viewport.x + rectangle.x * scaleX,
+    y: viewport.y + rectangle.y * scaleY,
+    width: rectangle.width * scaleX,
+    height: rectangle.height * scaleY,
+  };
+}
+
+function findTopRectangleAtPoint(annotations: Annotation[], point: Point, canvasWidth: number): RectangleAnnotation | undefined {
+  const tolerance = Math.max(8, canvasWidth / 180);
+  return [...annotations].reverse().find((annotation): annotation is RectangleAnnotation => {
+    if (annotation.type !== "rectangle") return false;
+    const { x, y, width, height } = annotation.rectangle;
+    const insideExpanded = point.x >= x - tolerance && point.x <= x + width + tolerance
+      && point.y >= y - tolerance && point.y <= y + height + tolerance;
+    const insideContracted = width > tolerance * 2 && height > tolerance * 2
+      && point.x > x + tolerance && point.x < x + width - tolerance
+      && point.y > y + tolerance && point.y < y + height - tolerance;
+    return insideExpanded && !insideContracted;
+  });
+}
+
+function moveRectangle(rectangle: Rectangle, deltaX: number, deltaY: number, canvasWidth: number, canvasHeight: number): Rectangle {
+  return {
+    ...rectangle,
+    x: clamp(rectangle.x + deltaX, 0, Math.max(0, canvasWidth - rectangle.width)),
+    y: clamp(rectangle.y + deltaY, 0, Math.max(0, canvasHeight - rectangle.height)),
+  };
+}
+
+function resizeRectangle(rectangle: Rectangle, handle: ResizeHandle, deltaX: number, deltaY: number, canvasWidth: number, canvasHeight: number): Rectangle {
+  const minimumSize = Math.max(8, canvasWidth / 120);
+  let left = rectangle.x;
+  let top = rectangle.y;
+  let right = rectangle.x + rectangle.width;
+  let bottom = rectangle.y + rectangle.height;
+  if (handle.includes("w")) left = clamp(rectangle.x + deltaX, 0, right - minimumSize);
+  if (handle.includes("e")) right = clamp(rectangle.x + rectangle.width + deltaX, left + minimumSize, canvasWidth);
+  if (handle.includes("n")) top = clamp(rectangle.y + deltaY, 0, bottom - minimumSize);
+  if (handle.includes("s")) bottom = clamp(rectangle.y + rectangle.height + deltaY, top + minimumSize, canvasHeight);
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+function sameRectangle(first: Rectangle, second: Rectangle): boolean {
+  return first.x === second.x && first.y === second.y && first.width === second.width && first.height === second.height;
+}
+
+function syncCanvasViewport(canvas: HTMLCanvasElement, update: (viewport: CanvasViewport) => void): void {
+  const bounds = canvas.getBoundingClientRect();
+  update({ x: bounds.left, y: bounds.top, width: bounds.width, height: bounds.height });
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -335,16 +558,41 @@ function configureRedStroke(context: CanvasRenderingContext2D, canvasWidth: numb
   context.lineJoin = "round";
 }
 
-function drawDataUrl(dataUrl: string, canvas: HTMLCanvasElement | null): Promise<void> {
-  if (!canvas) return Promise.resolve();
+function drawAnnotations(
+  baseImage: HTMLImageElement,
+  annotations: Annotation[],
+  draftAnnotation: Annotation | null,
+  selectedRectangleId: string | null,
+  rectangleTransformPreview: Rectangle | null,
+  canvas: HTMLCanvasElement,
+): void {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+  const visibleAnnotations = draftAnnotation ? [...annotations, draftAnnotation] : annotations;
+  visibleAnnotations.forEach((annotation) => {
+    configureRedStroke(context, canvas.width);
+    if (annotation.type === "rectangle") {
+      const rectangle = annotation.id === selectedRectangleId && rectangleTransformPreview
+        ? rectangleTransformPreview
+        : annotation.rectangle;
+      context.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+      return;
+    }
+    if (annotation.points.length < 2) return;
+    context.beginPath();
+    context.moveTo(annotation.points[0].x, annotation.points[0].y);
+    annotation.points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+    context.stroke();
+    context.closePath();
+  });
+}
+
+function loadDataUrl(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    image.onload = () => {
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      canvas.getContext("2d")?.drawImage(image, 0, 0);
-      resolve();
-    };
+    image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Unable to load screenshot image."));
     image.src = dataUrl;
   });

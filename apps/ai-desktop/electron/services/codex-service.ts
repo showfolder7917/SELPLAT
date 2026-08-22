@@ -198,6 +198,23 @@ export class CodexService {
     return true;
   }
 
+  /** 把用户明确选择的排队消息注入当前官方回合；没有活动回合时拒绝，绝不退化成第二个 turn/start。 */
+  async steer(message: string, attachmentPaths: string[] = []): Promise<void> {
+    const normalizedMessage = message.trim();
+    if ((!normalizedMessage && attachmentPaths.length === 0) || normalizedMessage.length > 20_000) {
+      throw new Error("补充内容或截图不能为空，文字最多 20000 个字符。");
+    }
+    await this.#ensureReady();
+    if (!this.#threadId || !this.#activeTurnId) throw new Error("当前没有可接收补充的 Codex 回合。");
+    const input: JsonObject[] = normalizedMessage ? [{ type: "text", text: normalizedMessage }] : [];
+    input.push(...attachmentPaths.map((filePath) => ({ type: "localImage", path: filePath })));
+    await this.#request("turn/steer", {
+      threadId: this.#threadId,
+      expectedTurnId: this.#activeTurnId,
+      input,
+    });
+  }
+
   async send(
     message: string,
     locale: Locale,

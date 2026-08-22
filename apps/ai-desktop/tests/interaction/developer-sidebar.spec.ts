@@ -22,8 +22,10 @@ test.afterAll(async () => {
   await application?.close();
 });
 
-test("任务分区可以程序化展开和折叠", async () => {
+test("切换工作区与任务时只展开当前分区并置顶占满", async () => {
   await expect(page.getByText("local Codex 0.149.0")).toBeVisible();
+  await expect(page.getByRole("button", { name: "折叠工作区" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#developer-workspace-list")).toBeVisible();
   const taskToggle = page.getByRole("button", { name: "展开任务" });
   await expect(taskToggle).toBeVisible();
   await expect(taskToggle).toHaveAttribute("aria-expanded", "false");
@@ -31,10 +33,26 @@ test("任务分区可以程序化展开和折叠", async () => {
 
   await taskToggle.click();
   await expect(page.getByRole("button", { name: "折叠任务" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "展开工作区" })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#developer-workspace-list")).toHaveCount(0);
   await expect(page.locator("#developer-task-list")).toBeVisible();
   await expect(page.getByText("暂无任务记录")).toBeVisible();
 
-  await page.getByRole("button", { name: "折叠任务" }).click();
+  const sections = page.locator("#developer-explorer-sections");
+  const tasksPane = page.locator(".tasks-pane");
+  const workspacePane = page.locator(".workspace-pane");
+  const [sectionsBounds, tasksBounds, workspaceBounds] = await Promise.all([
+    sections.boundingBox(),
+    tasksPane.boundingBox(),
+    workspacePane.boundingBox(),
+  ]);
+  if (!sectionsBounds || !tasksBounds || !workspaceBounds) throw new Error("侧栏分区缺少可视边界。");
+  expect(tasksBounds.y).toBeLessThan(workspaceBounds.y);
+  expect(Math.abs(tasksBounds.height - (sectionsBounds.height - workspaceBounds.height))).toBeLessThanOrEqual(1);
+
+  await page.getByRole("button", { name: "展开工作区" }).click();
+  await expect(page.getByRole("button", { name: "折叠工作区" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#developer-workspace-list")).toBeVisible();
   await expect(page.getByRole("button", { name: "展开任务" })).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#developer-task-list")).toHaveCount(0);
 });
@@ -54,32 +72,38 @@ test("资源管理器整栏与工作区分区均可折叠恢复", async () => {
   await expect(page.locator("#developer-workspace-list")).toBeVisible();
 });
 
-test("工作区和任务区只有一条细分隔线", async () => {
-  const resizer = page.locator(".workspace-pane-resizer");
-  await expect(resizer).toHaveCount(1);
-  const metrics = await resizer.evaluate((element) => ({
-    hitAreaHeight: element.getBoundingClientRect().height,
-    lineHeight: getComputedStyle(element, "::after").height,
-  }));
-  expect(metrics.hitAreaHeight).toBe(5);
-  expect(metrics.lineHeight).toBe("1px");
+test("工作区目录末行完整显示且不被内层固定高度裁切", async () => {
+  const lastEntry = page.locator(".workspace-tree .dev-file").filter({ hasText: "shared" });
+  await expect(lastEntry).toBeVisible();
+  const metrics = await lastEntry.evaluate((element) => {
+    const rowBounds = element.getBoundingClientRect();
+    const tree = element.closest(".workspace-tree");
+    if (!tree) throw new Error("工作区目录树不存在。");
+    const treeBounds = tree.getBoundingClientRect();
+    const treeStyle = getComputedStyle(tree);
+    return {
+      rowHeight: rowBounds.height,
+      rowBottom: rowBounds.bottom,
+      treeBottom: treeBounds.bottom,
+      treeMaxHeight: treeStyle.maxHeight,
+      treeOverflow: treeStyle.overflow,
+    };
+  });
+  expect(metrics.rowHeight).toBeGreaterThanOrEqual(31);
+  expect(metrics.rowBottom).toBeLessThanOrEqual(metrics.treeBottom + 1);
+  expect(metrics.treeMaxHeight).toBe("none");
+  expect(metrics.treeOverflow).toBe("visible");
 });
 
-test("窄窗口和常规窗口支持键盘调节与重置且没有横向溢出", async () => {
+test("窄窗口和常规窗口支持资源管理器键盘调节且没有横向溢出", async () => {
   const explorerResizer = page.getByRole("separator", { name: "调整资源管理器宽度" });
-  const workspaceResizer = page.getByRole("separator", { name: "调整工作区与任务区域高度" });
 
   await explorerResizer.focus();
   await page.keyboard.press("ArrowRight");
   await expect(explorerResizer).toHaveAttribute("aria-valuenow", "276");
   await page.keyboard.press("Home");
   await expect(explorerResizer).toHaveAttribute("aria-valuenow", "260");
-
-  await workspaceResizer.focus();
-  await page.keyboard.press("ArrowUp");
-  await expect(workspaceResizer).toHaveAttribute("aria-valuenow", /\d+/);
-  await page.keyboard.press("Home");
-  await expect(workspaceResizer).not.toHaveAttribute("aria-valuenow", /\d+/);
+  await expect(page.getByRole("separator", { name: "调整工作区与任务区域高度" })).toHaveCount(0);
 
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(900, 700));
   await expect(page.locator(".developer-shell")).toBeVisible();
@@ -90,6 +114,35 @@ test("窄窗口和常规窗口支持键盘调节与重置且没有横向溢出",
   await expect(page.locator(".developer-shell")).toBeVisible();
 });
 
+test("自动测试默认关闭，预检成功后才进入开启态", async () => {
+  const automaticTest = page.getByRole("switch", { name: "自动测试" });
+  const modeBadge = page.locator(".execution-mode-badge");
+  const screenshotButton = page.getByRole("button", { name: "截取当前屏幕" });
+  await expect(automaticTest).toHaveAttribute("aria-checked", "false");
+  const [modeBounds, automaticBounds, screenshotBounds] = await Promise.all([
+    modeBadge.boundingBox(),
+    automaticTest.boundingBox(),
+    screenshotButton.boundingBox(),
+  ]);
+  if (!modeBounds || !automaticBounds || !screenshotBounds) throw new Error("自动测试工具栏控件缺少可见边界。");
+  expect(modeBounds.x).toBeLessThan(automaticBounds.x);
+  expect(automaticBounds.x).toBeLessThan(screenshotBounds.x);
+  await automaticTest.click();
+
+  const dialog = page.getByRole("dialog", { name: "自动测试" });
+  await expect(dialog.getByRole("heading", { name: "自动测试环境已就绪" })).toBeVisible();
+  await expect(dialog.locator(".automatic-test-checks li.passed")).toHaveCount(7);
+  const dialogBounds = await dialog.locator(".automatic-test-card").boundingBox();
+  if (!dialogBounds) throw new Error("自动测试结果弹窗缺少可见边界。");
+  expect(dialogBounds.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBounds.x + dialogBounds.width).toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
+  await dialog.getByRole("button", { name: "知道了" }).click();
+  await expect(automaticTest).toHaveAttribute("aria-checked", "true");
+
+  await automaticTest.click();
+  await expect(automaticTest).toHaveAttribute("aria-checked", "false");
+});
+
 test("多个结构化疑问逐题确认后继续原回合并重新展示完整意图", async () => {
   const composer = page.locator(".dev-composer");
   await composer.locator("textarea").fill("需要确认的截图交互");
@@ -97,6 +150,12 @@ test("多个结构化疑问逐题确认后继续原回合并重新展示完整�
 
   const panel = page.locator(".codex-user-input");
   await expect(panel).toBeVisible();
+  await composer.locator("textarea").fill("这是执行中的补充说明");
+  await composer.getByRole("button", { name: "排队发送" }).click();
+  const queued = composer.locator(".dispatch-queue-item").filter({ hasText: "这是执行中的补充说明" });
+  await expect(queued).toBeVisible();
+  await queued.getByRole("button", { name: "补充到当前任务" }).click();
+  await expect(queued).toHaveCount(0);
   const firstQuestion = panel.locator("fieldset");
   const firstConfirm = firstQuestion.getByRole("button", { name: "确认" });
   await expect(firstConfirm).toBeDisabled();
@@ -115,6 +174,25 @@ test("多个结构化疑问逐题确认后继续原回合并重新展示完整�
   await expect(page.getByRole("button", { name: "就是这意思" })).toBeVisible();
 });
 
+test("托管内部新回合向下新增回复卡且不覆盖上一轮文字", async () => {
+  await page.getByRole("button", { name: "新建任务" }).click();
+  const composer = page.locator(".dev-composer");
+  await composer.locator("textarea").fill("multi-turn-test");
+  await composer.getByRole("button", { name: "发送" }).click();
+
+  const firstRound = page.locator(".dev-message.assistant").filter({ hasText: "第一轮必须保留的文字" });
+  const secondRound = page.locator(".dev-message.assistant").filter({ hasText: "第二轮向下新增的文字" });
+  await expect(firstRound).toHaveCount(1);
+  await expect(secondRound).toHaveCount(1);
+  const positions = await page.locator(".dev-message.assistant").evaluateAll((cards) => cards
+    .filter((card) => card.textContent?.includes("第一轮必须保留的文字") || card.textContent?.includes("第二轮向下新增的文字"))
+    .map((card) => ({ text: card.textContent || "", top: card.getBoundingClientRect().top })));
+  expect(positions).toHaveLength(2);
+  expect(positions[0].text).toContain("第一轮必须保留的文字");
+  expect(positions[1].text).toContain("第二轮向下新增的文字");
+  expect(positions[1].top).toBeGreaterThan(positions[0].top);
+});
+
 test("最新阶段按钮在回复运行中保持可见禁用并在完成后启用", async () => {
   await page.getByRole("button", { name: "就是这意思" }).click();
   const execute = page.getByRole("button", { name: "按这个方案执行" });
@@ -129,6 +207,34 @@ test("最新阶段按钮在回复运行中保持可见禁用并在完成后启�
   await panel.getByRole("button", { name: "确认" }).click();
 
   await expect(execute).toBeEnabled();
+  await execute.click();
+
+  const latestManagedCard = page.locator(".dev-message.assistant").last();
+  const returnConversation = latestManagedCard.getByRole("button", { name: "回到会话托管" });
+  const returnTask = latestManagedCard.getByRole("button", { name: "回到任务托管" });
+  const testAction = latestManagedCard.getByRole("button", { name: "测试一下" });
+  await expect(returnConversation).toBeVisible();
+  await expect(returnTask).toBeVisible();
+  await expect(testAction).toBeVisible();
+  await expect(returnConversation).toBeDisabled();
+  await expect(returnTask).toBeDisabled();
+
+  await panel.getByRole("radio", { name: /原对话框/ }).click();
+  await panel.getByRole("button", { name: "确认" }).click();
+  await expect(panel.getByText("无红色标注时使用什么提示？")).toBeVisible();
+  await panel.getByRole("radio", { name: /不追加提示/ }).click();
+  await panel.getByRole("button", { name: "确认" }).click();
+
+  await expect(returnConversation).toBeEnabled();
+  await expect(returnTask).toBeDisabled();
+  await expect(testAction).toBeEnabled();
+  await returnConversation.click();
+  await expect(page.locator(".execution-mode-badge")).toHaveText("会话托管");
+  await expect(returnConversation).toBeDisabled();
+  await expect(returnTask).toBeEnabled();
+  await returnTask.click();
+  await expect(page.locator(".execution-mode-badge")).toHaveText("任务托管");
+  await expect(returnTask).toBeDisabled();
 });
 
 test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清空", async () => {
@@ -151,7 +257,7 @@ test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清�
   await expect(page.getByRole("heading", { level: 1, name: "今天要构建什么？" })).toBeVisible();
 });
 
-test("屏幕录制权限阻断只显示业务提示并提供系统设置入口", async () => {
+test("屏幕录制权限已开启但当前进程仍拒绝时提供受控重启入口", async () => {
   await page.getByRole("button", { name: "截取当前屏幕" }).click();
 
   const alert = page.getByRole("alert");
@@ -160,5 +266,82 @@ test("屏幕录制权限阻断只显示业务提示并提供系统设置入口",
   const openSettings = alert.getByRole("button", { name: "打开系统设置" });
   await expect(openSettings).toBeVisible();
   await openSettings.click();
-  await expect(alert).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(alert).toContainText("当前进程仍未识别更改后的权限");
+  const restart = alert.getByRole("button", { name: "重启 AI Desktop" });
+  await expect(restart).toBeVisible();
+  await restart.click();
+  await expect(alert).toContainText("正在重启 AI Desktop");
+});
+
+test("红框选中后可以移动缩放且操作按钮随焦点显示", async () => {
+  await page.goto("http://127.0.0.1:4197/?mode=screenshot-interaction");
+  const source = page.locator(".screenshot-source");
+  await expect(source).toBeVisible();
+  const sourceBounds = await source.boundingBox();
+  if (!sourceBounds) throw new Error("截图选择区域没有可交互边界。");
+  await page.mouse.move(sourceBounds.x + 70, sourceBounds.y + 55);
+  await page.mouse.down();
+  await page.mouse.move(sourceBounds.x + 650, sourceBounds.y + 405, { steps: 8 });
+  await page.mouse.up();
+
+  const canvas = page.locator('canvas[aria-label="红色标注"]');
+  await expect(canvas).toBeVisible();
+  const canvasBounds = await canvas.boundingBox();
+  if (!canvasBounds) throw new Error("截图标注画布没有可交互边界。");
+  await page.mouse.move(canvasBounds.x + 90, canvasBounds.y + 75);
+  await page.mouse.down();
+  await page.mouse.move(canvasBounds.x + 280, canvasBounds.y + 190, { steps: 8 });
+  await page.mouse.up();
+
+  const selection = page.locator(".screenshot-rectangle-selection");
+  const floatingActions = page.locator(".screenshot-annotation-actions");
+  await expect(selection).toBeVisible();
+  await expect(floatingActions.getByRole("button", { name: "完成" })).toBeVisible();
+  await expect(floatingActions.getByRole("button", { name: "取消" })).toBeVisible();
+  const footerActions = page.locator(".screenshot-toolbar .screenshot-actions");
+  await expect(footerActions.getByRole("button")).toHaveCount(1);
+  await expect(footerActions.getByRole("button", { name: "返回" })).toBeVisible();
+
+  await page.getByRole("button", { name: "方框" }).click();
+  await expect(selection).toHaveCount(0);
+  await expect(floatingActions).toHaveCount(0);
+
+  await page.mouse.click(canvasBounds.x + 92, canvasBounds.y + 76);
+  await expect(selection).toBeVisible();
+  const beforeMove = await selection.boundingBox();
+  if (!beforeMove) throw new Error("选中红框没有移动前边界。");
+  await page.mouse.move(beforeMove.x + beforeMove.width * .25, beforeMove.y + 1);
+  await page.mouse.down();
+  await page.mouse.move(beforeMove.x + beforeMove.width * .25 + 48, beforeMove.y + 36, { steps: 6 });
+  await page.mouse.up();
+  const afterMove = await selection.boundingBox();
+  if (!afterMove) throw new Error("选中红框没有移动后边界。");
+  expect(afterMove.x).toBeGreaterThan(beforeMove.x + 35);
+  expect(afterMove.y).toBeGreaterThan(beforeMove.y + 25);
+
+  const southeastHandle = page.getByRole("button", { name: "调整红框-se" });
+  const handleBounds = await southeastHandle.boundingBox();
+  if (!handleBounds) throw new Error("红框缩放控制点没有可交互边界。");
+  await page.mouse.move(handleBounds.x + handleBounds.width / 2, handleBounds.y + handleBounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBounds.x + handleBounds.width / 2 + 55, handleBounds.y + handleBounds.height / 2 + 35, { steps: 6 });
+  await page.mouse.up();
+  const afterResize = await selection.boundingBox();
+  if (!afterResize) throw new Error("选中红框没有缩放后边界。");
+  expect(afterResize.width).toBeGreaterThan(afterMove.width + 40);
+  expect(afterResize.height).toBeGreaterThan(afterMove.height + 25);
+
+  await floatingActions.getByRole("button", { name: "取消" }).click();
+  await expect(selection).toHaveCount(0);
+  await expect(floatingActions).toHaveCount(0);
+
+  await page.mouse.move(canvasBounds.x + 110, canvasBounds.y + 90);
+  await page.mouse.down();
+  await page.mouse.move(canvasBounds.x + 260, canvasBounds.y + 180, { steps: 6 });
+  await page.mouse.up();
+  await floatingActions.getByRole("button", { name: "完成" }).click();
+  const result = page.locator(".screenshot-interaction-result");
+  await expect(result).toHaveAttribute("data-completed", "true");
+  await expect(result).toHaveAttribute("data-has-annotations", "true");
 });

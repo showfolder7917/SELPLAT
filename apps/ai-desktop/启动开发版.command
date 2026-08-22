@@ -68,10 +68,57 @@ if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
+EXPECTED_DESIGNATED_REQUIREMENT='designated => identifier "com.selplat.aidesktop.developer"'
 if ! codesign --verify --deep --strict "$APP_PATH" >/dev/null 2>&1; then
   echo "[签名] 正在为固定应用外壳生成本机开发签名..."
   if ! codesign --force --deep --sign - "$APP_PATH"; then
     echo "[错误] AI Desktop.app 本机签名失败，已取消启动。"
+    read "?按回车键关闭窗口..."
+    exit 1
+  fi
+fi
+
+# 默认临时签名会把 designated requirement 写成当前 CDHash，外壳一次重打包就会让已有 TCC 授权失配。
+if ! codesign -d --requirements - "$APP_PATH" 2>&1 | grep -Fq "$EXPECTED_DESIGNATED_REQUIREMENT"; then
+  echo "[签名] 正在写入稳定屏幕录制身份..."
+  if ! codesign --force --sign - --requirements "=$EXPECTED_DESIGNATED_REQUIREMENT" "$APP_PATH"; then
+    echo "[错误] AI Desktop.app 稳定指定要求签名失败，已取消启动。"
+    read "?按回车键关闭窗口..."
+    exit 1
+  fi
+fi
+
+if ! codesign --verify --deep --strict "$APP_PATH" >/dev/null 2>&1; then
+  echo "[错误] AI Desktop.app 稳定签名校验失败，已取消启动。"
+  read "?按回车键关闭窗口..."
+  exit 1
+fi
+
+APP_EXECUTABLE="$APP_PATH/Contents/MacOS/AI Desktop"
+EXISTING_PIDS=()
+while IFS= read -r EXISTING_PID; do
+  [[ -n "$EXISTING_PID" ]] && EXISTING_PIDS+=("$EXISTING_PID")
+done < <(ps -axo pid=,command= | awk -v target="$APP_EXECUTABLE" '
+  {
+    pid = $1
+    sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", $0)
+    if ($0 == target || index($0, target " ") == 1) print pid
+  }
+')
+
+if (( ${#EXISTING_PIDS[@]} > 0 )); then
+  echo "[切换] 正在关闭 ${#EXISTING_PIDS[@]} 个旧 AI Desktop 实例，防止旧代码和屏幕流继续占用..."
+  kill "${EXISTING_PIDS[@]}" 2>/dev/null || true
+  for _ in {1..50}; do
+    REMAINING=false
+    for EXISTING_PID in "${EXISTING_PIDS[@]}"; do
+      if kill -0 "$EXISTING_PID" 2>/dev/null; then REMAINING=true; break; fi
+    done
+    [[ "$REMAINING" == false ]] && break
+    sleep 0.1
+  done
+  if [[ "$REMAINING" == true ]]; then
+    echo "[错误] 旧 AI Desktop 实例未能正常退出，已取消启动，避免多个版本并行。"
     read "?按回车键关闭窗口..."
     exit 1
   fi

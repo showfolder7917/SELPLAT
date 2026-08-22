@@ -16,6 +16,7 @@ export interface SendMessageRequest {
   sandboxMode: SandboxMode;
   attachmentIds: string[];
   executionMode: ManagedExecutionMode;
+  queueItemId?: string;
 }
 
 export interface SendMessageResponse {
@@ -24,6 +25,32 @@ export interface SendMessageResponse {
   threadId?: string;
   managedStatus?: "conversation-ready" | "requirement-ready" | "code-verified" | "test-verified" | "incomplete";
   pendingActions?: string[];
+  disposition?: "completed" | "queued";
+  queueItemId?: string;
+}
+
+export interface ConversationQueueItem {
+  id: string;
+  request: SendMessageRequest;
+  displayText: string;
+  createdAt: string;
+  automatic: boolean;
+}
+
+export interface ConversationDispatchState {
+  activeTask: {
+    id: string;
+    request: SendMessageRequest;
+    startedAt: string;
+    status: "running" | "recoverable";
+  } | null;
+  queue: ConversationQueueItem[];
+}
+
+export interface EnqueueMessageRequest {
+  request: SendMessageRequest;
+  displayText?: string;
+  automatic?: boolean;
 }
 
 export interface CodexSessionInfo {
@@ -110,6 +137,19 @@ export interface TrustedCommandInfo {
   count: number;
 }
 
+export interface AutomaticTestPreflightCheck {
+  id: "harness" | "workspace" | "runner" | "lock" | "port" | "screen" | "command";
+  status: "passed" | "failed";
+  label: string;
+  detail: string;
+}
+
+export interface AutomaticTestPreflightResult {
+  status: "ready" | "blocked";
+  checkedAt: string;
+  checks: AutomaticTestPreflightCheck[];
+}
+
 export interface CodexUserInputOption {
   label: string;
   description: string;
@@ -178,15 +218,9 @@ export type ScreenCapturePreparationResult =
       canOpenSettings: boolean;
     };
 
-export interface ScreenCaptureStreamSource {
-  sourceId: string;
-  width: number;
-  height: number;
-}
-
 export interface ScreenCaptureFrameRequest {
+  capture: ScreenCapture;
   requestId: number;
-  waitForOwnerHidden: boolean;
 }
 
 export interface ScreenCaptureFrameResult {
@@ -276,16 +310,16 @@ export interface DesktopApi {
   resolveCodexApproval(requestId: number, decision: "accept" | "decline"): Promise<void>;
   getTrustedCommandInfo(): Promise<TrustedCommandInfo>;
   clearTrustedCommands(): Promise<TrustedCommandInfo>;
+  prepareAutomaticTesting(): Promise<AutomaticTestPreflightResult>;
   getCodexUserInputs(): Promise<CodexUserInputRequest[]>;
   resolveCodexUserInput(request: ResolveCodexUserInputRequest): Promise<void>;
   newChat(): Promise<void>;
   openExternalUrl(url: string): Promise<void>;
   prepareScreenCapture(): Promise<ScreenCapturePreparationResult>;
   openScreenRecordingSettings(): Promise<void>;
+  restartForScreenRecordingPermission(): Promise<void>;
   captureScreen(request?: ScreenCaptureRequest): Promise<ScreenCapture | null>;
-  getScreenCaptureStreamSource(): Promise<ScreenCaptureStreamSource | null>;
-  notifyScreenCaptureStreamReady(sourceId: string): Promise<void>;
-  onScreenCaptureStreamConfigured(listener: (source: ScreenCaptureStreamSource) => void): () => void;
+  notifyScreenCaptureStage(stage: string, detail?: string): Promise<void>;
   onScreenCaptureFrameRequested(listener: (request: ScreenCaptureFrameRequest) => void): () => void;
   submitScreenCaptureFrameResult(result: ScreenCaptureFrameResult): Promise<void>;
   showScreenshotWindow(): Promise<void>;
@@ -300,6 +334,13 @@ export interface DesktopApi {
   clearTempFiles(): Promise<TempDirectoryInfo>;
   getAuditLogInfo(): Promise<AuditLogInfo>;
   openAuditLogDirectory(): Promise<void>;
+  getConversationDispatchState(): Promise<ConversationDispatchState>;
+  enqueueMessage(request: EnqueueMessageRequest): Promise<ConversationDispatchState>;
+  supplementQueuedMessage(itemId: string): Promise<ConversationDispatchState>;
+  discardQueuedMessage(itemId: string): Promise<ConversationDispatchState>;
+  recoverConversationTask(): Promise<ConversationDispatchState>;
+  discardConversationRecovery(): Promise<ConversationDispatchState>;
+  onConversationDispatchState(listener: (state: ConversationDispatchState) => void): () => void;
   sendMessage(request: SendMessageRequest): Promise<SendMessageResponse>;
   onCodexStreamEvent(listener: (event: CodexStreamEvent) => void): () => void;
   cancel(): Promise<boolean>;

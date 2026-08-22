@@ -151,6 +151,7 @@ class ExecutionEvidence {
   #targetedTest = 0;
   #isolatedInteractionTest = 0;
   #build = 0;
+  #unifiedDocumentValidation = 0;
   #roundFailures: string[] = [];
 
   get roundFailed(): boolean { return this.#roundFailures.length > 0; }
@@ -160,14 +161,15 @@ class ExecutionEvidence {
   record(event: CodexStreamEvent): void {
     this.#sequence += 1;
     if (event.type === "diff-updated") {
-      for (const file of event.changedFiles || []) this.changedFiles.add(file);
-      if ((event.changedFiles || []).length > 0) this.#lastChange = this.#sequence;
+      // diff-updated 是当前工作树的完整路径快照，会在测试结束后重复上报；这里只汇总真实源码路径，不能刷新修改时间。
+      for (const file of event.changedFiles || []) if (!isManagedValidationArtifact(file)) this.changedFiles.add(file);
     }
     const activity = event.activity;
     if (event.type !== "activity" || !activity) return;
     if (activity.itemType === "fileChange" && activity.phase === "completed") {
-      for (const file of activity.summary?.split("\n") || []) if (file) this.changedFiles.add(file);
-      this.#lastChange = this.#sequence;
+      const sourceFiles = (activity.summary?.split("\n") || []).filter((file) => file && !isManagedValidationArtifact(file));
+      for (const file of sourceFiles) this.changedFiles.add(file);
+      if (sourceFiles.length > 0) this.#lastChange = this.#sequence;
       return;
     }
     if (activity.itemType !== "commandExecution" || activity.phase !== "completed") return;
@@ -181,6 +183,9 @@ class ExecutionEvidence {
     if (isTargetedTestCommand(command)) this.#targetedTest = this.#sequence;
     if (isIsolatedInteractionTestCommand(command)) this.#isolatedInteractionTest = this.#sequence;
     if (isBuildCommand(command)) this.#build = this.#sequence;
+    // 固定统一入口会在一个外层命令事件中按共享文档顺序执行构建和后续测试；
+    // 只有该入口成功时，才允许构建与测试证据使用同一事件序号。
+    if (isUnifiedTestDocumentCommand(command)) this.#unifiedDocumentValidation = this.#sequence;
   }
 
   failedCommandSummaries(): string[] { return [...this.#roundFailures]; }
@@ -197,10 +202,21 @@ class ExecutionEvidence {
   buildValidationGate(): { passed: boolean; missing: string[] } {
     const missing: string[] = [];
     if (this.#build <= this.#lastChange) missing.push("尚未在最后一次源码修改后完成构建");
-    if (this.#targetedTest <= this.#build) missing.push("尚未在最新构建后通过测试");
+    const unifiedDocumentCompleted = this.#unifiedDocumentValidation === this.#build
+      && this.#targetedTest === this.#build;
+    if (this.#targetedTest < this.#build || (this.#targetedTest === this.#build && !unifiedDocumentCompleted)) {
+      missing.push("尚未在最新构建后通过测试");
+    }
     if (this.roundFailed) missing.push("当前构建验证轮次仍有失败命令");
     return { passed: missing.length === 0, missing };
   }
+}
+
+/** 共享测试文档、归档和 Playwright 临时证据属于验证产物，不得冒充源码修改或让刚通过的验证失效。 */
+export function isManagedValidationArtifact(filePath: string): boolean {
+  const normalized = filePath.replaceAll("\\", "/").replace(/^\.\//, "");
+  return /(?:^|\/)apps\/ai-desktop\/(?:测试文档\.md|\.测试文档\.lock\.json|测试文档归档\/|temp\/interaction\/)/.test(normalized)
+    || /^(?:测试文档\.md|\.测试文档\.lock\.json|测试文档归档\/|temp\/interaction\/)/.test(normalized);
 }
 
 function commandSucceeded(activity: CodexStreamActivity): boolean {
@@ -210,6 +226,10 @@ function commandSucceeded(activity: CodexStreamActivity): boolean {
 
 export function isBuildCommand(command: string): boolean {
   return /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:build|start|dev|serve|preview|test:document)\b|vite\s+build|electron-builder|\belectron\s+\.|gradle(?:w)?\s+(?:build|assemble|bootRun)\b|cargo\s+(?:build|run)\b/i.test(command);
+}
+
+function isUnifiedTestDocumentCommand(command: string): boolean {
+  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?test:document\b/i.test(command);
 }
 
 export function isStaticCheckCommand(command: string): boolean {
@@ -245,7 +265,7 @@ function taskRepairPrompt(failures: string[]): string {
 }
 
 function codeValidationPrompt(files: string[]): string {
-  return `[任务托管执行：代码验证阶段]\n接手本任务已经修改的文件：\n${files.join("\n")}\n确认唯一共享测试文档 apps/ai-desktop/测试文档.md 已登记 npm run typecheck 与 npm run test:interaction，然后只通过 npm run test:document 取得独占锁并统一执行。占用时必须报告锁中的执行者、任务、线程和当前项；完成后运行器会立即归档测试文档。test:interaction 会在后台启动隔离 Electron，通过 Playwright 定位器执行真实程序化交互。禁止正式构建、启动或重启当前 AI Desktop；失败时创建新一轮共享测试文档再修复复测，最多 ${VALIDATION_ROUNDS} 轮。`;
+  return `[任务托管执行：代码验证阶段]\n接手本任务已经修改的文件：\n${files.join("\n")}\n确认唯一共享测试文档 apps/ai-desktop/测试文档.md 已登记 npm run typecheck 与 npm run test:interaction，然后只通过固定命令 npm run test:document 取得独占锁并统一执行；命令不得追加 executor、task、thread 或其他动态参数。占用时必须报告锁中的执行者、任务、线程和当前项；完成后运行器会立即归档测试文档。test:interaction 会在后台启动隔离 Electron，通过 Playwright 定位器执行真实程序化交互。禁止正式构建、启动或重启当前 AI Desktop；失败时创建新一轮共享测试文档再修复复测，最多 ${VALIDATION_ROUNDS} 轮。`;
 }
 
 function codeValidationRepairPrompt(missing: string[], failures: string[]): string {
@@ -253,7 +273,7 @@ function codeValidationRepairPrompt(missing: string[], failures: string[]): stri
 }
 
 function buildValidationPrompt(message: string, restartRequired: boolean): string {
-  return `[测试托管执行]\n${message}\n\n把构建与构建后针对性测试登记到唯一共享的 apps/ai-desktop/测试文档.md，然后只通过 npm run test:document 取得独占锁并统一执行；读取到占用锁时报告正在执行的人、任务、线程和当前项。每轮执行完成后测试文档必须立即归档；失败修复时创建新的共享测试文档再复测。${restartRequired ? "完成后由桌面主进程受控重启一次，不要在命令中自行启动或重启 AI Desktop。" : "只有确有运行时验证需要时才说明重启要求。"}`;
+  return `[测试托管执行]\n${message}\n\n把构建与构建后针对性测试登记到唯一共享的 apps/ai-desktop/测试文档.md，然后只通过固定命令 npm run test:document 取得独占锁并统一执行；命令不得追加 executor、task、thread 或其他动态参数。读取到占用锁时报告正在执行的人、任务、线程和当前项。每轮执行完成后测试文档必须立即归档；失败修复时创建新的共享测试文档再复测。${restartRequired ? "完成后由桌面主进程受控重启一次，不要在命令中自行启动或重启 AI Desktop。" : "只有确有运行时验证需要时才说明重启要求。"}`;
 }
 
 function buildValidationRepairPrompt(missing: string[], failures: string[]): string {

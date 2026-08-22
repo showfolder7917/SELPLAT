@@ -2,8 +2,12 @@ import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 
 const variant = import.meta.env.VITE_APP_VARIANT === "developer" ? "developer" : "office";
-const screenshotMode = variant === "developer" && new URLSearchParams(window.location.search).get("mode") === "screenshot";
-const Application = lazy(() => screenshotMode
+const requestedMode = new URLSearchParams(window.location.search).get("mode");
+const screenshotMode = variant === "developer" && requestedMode === "screenshot";
+const screenshotInteractionMode = import.meta.env.DEV && variant === "developer" && requestedMode === "screenshot-interaction";
+const Application = lazy(() => screenshotInteractionMode
+  ? import("../tests/interaction/ScreenshotEditorHarness").then(({ ScreenshotEditorHarness }) => ({ default: ScreenshotEditorHarness }))
+  : screenshotMode
   ? import("./variants/developer/ScreenshotWindowApp").then(({ ScreenshotWindowApp }) => ({ default: ScreenshotWindowApp }))
   : variant === "developer"
   ? import("./variants/developer/DeveloperApp").then(({ DeveloperApp }) => ({ default: DeveloperApp }))
