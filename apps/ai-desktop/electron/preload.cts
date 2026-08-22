@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("desktop", {
   newChat: () => ipcRenderer.invoke("desktop:new-chat"),
   openExternalUrl: (url: string) => ipcRenderer.invoke("desktop:open-external-url", url),
   prepareScreenCapture: () => ipcRenderer.invoke("desktop:prepare-screen-capture"),
+  openScreenRecordingSettings: () => ipcRenderer.invoke("desktop:open-screen-recording-settings"),
   captureScreen: (request?: unknown) => ipcRenderer.invoke("desktop:capture-screen", request),
   getScreenCaptureStreamSource: () => ipcRenderer.invoke("desktop:get-screen-capture-stream-source"),
   notifyScreenCaptureStreamReady: (sourceId: string) => ipcRenderer.invoke("desktop:screen-capture-stream-ready", sourceId),

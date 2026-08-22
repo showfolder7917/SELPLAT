@@ -1,5 +1,4 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
 
 import type {
@@ -19,6 +18,7 @@ import type {
   WorkspaceState,
 } from "../../shared/contracts/desktop.js";
 import { CodexSessionStore } from "./codex-session-store.js";
+import { resolveCodexRuntime, type CodexRuntime } from "./codex-runtime.js";
 import { TrustedCommandStore } from "./trusted-command-store.js";
 
 type JsonObject = Record<string, unknown>;
@@ -74,6 +74,7 @@ export class CodexService {
   #threadAttached = false;
   #activeTurnId: string | undefined;
   #lastError: string | null = null;
+  #runtime: CodexRuntime | null = null;
   #activeExecutionMode: ManagedExecutionMode | null = null;
   #activeWorkspaces: WorkspaceState | null = null;
   readonly #trustedCommands: TrustedCommandStore;
@@ -121,10 +122,10 @@ export class CodexService {
     try {
       await this.#ensureReady();
       const result = asObject(await this.#request("account/read", { refreshToken: false }));
-      return { connected: true, account: normalizeAccount(result), error: null };
+      return { connected: true, account: normalizeAccount(result), error: null, runtime: runtimeInfo(this.#runtime) };
     } catch (error) {
       this.#lastError = errorMessage(error);
-      return { connected: false, account: { ...EMPTY_ACCOUNT }, error: this.#lastError };
+      return { connected: false, account: { ...EMPTY_ACCOUNT }, error: this.#lastError, runtime: runtimeInfo(this.#runtime) };
     }
   }
 
@@ -323,14 +324,19 @@ export class CodexService {
   }
 
   async #start(): Promise<void> {
-    const require = createRequire(import.meta.url);
-    const codexEntry = require.resolve("@openai/codex/bin/codex.js");
-    // Electron 自带的 Node 运行时启动官方 CLI，开发机不需要另外维护全局 codex 命令。
-    const child = spawn(process.execPath, [codexEntry, "app-server", "--stdio"], {
+    // 本机 Codex 与共享 ~/.codex 缓存使用同一协议版本；只有本机命令不可用时才回退应用锁定包。
+    const runtime = await resolveCodexRuntime();
+    this.#runtime = runtime;
+    this.#onThreadLifecycle({ action: "harness_runtime_selected", source: runtime.source, path: runtime.displayPath, version: runtime.version });
+    const childEnvironment = { ...process.env };
+    if (runtime.electronRunAsNode) childEnvironment.ELECTRON_RUN_AS_NODE = "1";
+    else delete childEnvironment.ELECTRON_RUN_AS_NODE;
+    const child = spawn(runtime.command, [...runtime.argsPrefix, "app-server", "--stdio", "--enable", "default_mode_request_user_input"], {
       cwd: this.#workingDirectory,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      env: childEnvironment,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
+      shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(runtime.command),
     });
     this.#process = child;
     createInterface({ input: child.stdout }).on("line", (line) => this.#handleLine(line));
@@ -347,6 +353,8 @@ export class CodexService {
         title: "SELPLAT AI Desktop",
         version: "0.1.0",
       },
+      // 会话托管在默认协作模式中使用官方结构化提问，客户端必须显式接收实验性请求协议。
+      capabilities: { experimentalApi: true },
     });
     this.#notify("initialized", {});
   }
@@ -576,14 +584,20 @@ export class CodexService {
   }
 }
 
+function runtimeInfo(runtime: CodexRuntime | null): CodexHarnessStatus["runtime"] {
+  return runtime ? { source: runtime.source, path: runtime.displayPath, version: runtime.version } : null;
+}
+
 /** 把官方 app-server 通知收敛成渲染层允许消费的稳定、最小化实时事件。 */
 export function toCodexStreamEvent(method: string, params: JsonObject, turnId: string): CodexStreamEvent | null {
-  if (method === "turn/started") return { type: "turn-started", turnId, status: "inProgress" };
+  if (method === "turn/started") return { type: "turn-started", turnId, segmentId: `${turnId}:turn`, status: "inProgress" };
   if (method === "item/agentMessage/delta") {
+    const itemId = stringValue(params.itemId) || "agent";
     return {
       type: "message-delta",
       turnId,
-      itemId: stringValue(params.itemId) || undefined,
+      segmentId: `${turnId}:${itemId}`,
+      itemId,
       delta: stringValue(params.delta) || "",
     };
   }
@@ -628,7 +642,7 @@ export function toCodexStreamEvent(method: string, params: JsonObject, turnId: s
     const itemId = stringValue(item.id) || "unknown-item";
     if (item.type === "userMessage") return null;
     if (method === "item/completed" && item.type === "agentMessage") {
-      return { type: "message-completed", turnId, itemId, text: stringValue(item.text) || "" };
+      return { type: "message-completed", turnId, segmentId: `${turnId}:${itemId}`, itemId, text: stringValue(item.text) || "" };
     }
     return {
       type: "activity",
@@ -639,7 +653,7 @@ export function toCodexStreamEvent(method: string, params: JsonObject, turnId: s
   if (method === "turn/completed") {
     const turn = asObject(params.turn);
     const error = stringValue(asObject(turn.error).message) || undefined;
-    return { type: "turn-completed", turnId, status: stringValue(turn.status) || "completed", error };
+    return { type: "turn-completed", turnId, segmentId: `${turnId}:turn`, status: stringValue(turn.status) || "completed", error };
   }
   if (method === "error") {
     return { type: "error", turnId, error: stringValue(asObject(params.error).message) || "Codex stream failed." };

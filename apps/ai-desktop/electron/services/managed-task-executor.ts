@@ -209,11 +209,11 @@ function commandSucceeded(activity: CodexStreamActivity): boolean {
 }
 
 export function isBuildCommand(command: string): boolean {
-  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:build|start|dev|serve|preview)\b|vite\s+build|electron-builder|\belectron\s+\.|gradle(?:w)?\s+(?:build|assemble|bootRun)\b|cargo\s+(?:build|run)\b/i.test(command);
+  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:build|start|dev|serve|preview|test:document)\b|vite\s+build|electron-builder|\belectron\s+\.|gradle(?:w)?\s+(?:build|assemble|bootRun)\b|cargo\s+(?:build|run)\b/i.test(command);
 }
 
 export function isStaticCheckCommand(command: string): boolean {
-  return /\btypecheck\b|\btsc\b[^\n]*--noEmit|\beslint\b|\blint\b|\bpyright\b|\bmypy\b|\bruff\s+check\b|\bcheckstyle\b/i.test(command) && !isBuildCommand(command);
+  return /\btest:document\b/i.test(command) || (/\btypecheck\b|\btsc\b[^\n]*--noEmit|\beslint\b|\blint\b|\bpyright\b|\bmypy\b|\bruff\s+check\b|\bcheckstyle\b/i.test(command) && !isBuildCommand(command));
 }
 
 export function isTargetedTestCommand(command: string): boolean {
@@ -221,19 +221,19 @@ export function isTargetedTestCommand(command: string): boolean {
 }
 
 export function isIsolatedInteractionTestCommand(command: string): boolean {
-  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?test:interaction\b|\bplaywright\s+test\b/i.test(command);
+  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?test:(?:interaction|document)\b|\bplaywright\s+test\b/i.test(command);
 }
 
 function emitManaged(request: ManagedExecutionRequest, stage: ManagedExecutionUpdate["stage"], status: ManagedExecutionUpdate["status"], round: number, maximumRounds: number, message: string): void {
-  request.emit({ type: "managed-execution", turnId: "managed", managedExecution: { mode: request.mode, stage, status, round, maximumRounds, message } });
+  request.emit({ type: "managed-execution", turnId: "managed", segmentId: `managed:${request.mode}:${stage}:${round}`, managedExecution: { mode: request.mode, stage, status, round, maximumRounds, message } });
 }
 
 function taskExecutionPrompt(message: string): string {
-  return `[任务托管执行：源码任务阶段]\n${message}\n\n用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。本阶段禁止构建、启动或重启程序。完成源码修改后简要报告。`;
+  return `[任务托管执行：源码任务阶段]\n${message}\n\n用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。本阶段禁止构建、启动或重启程序。把待验证命令登记到应用唯一共享的 apps/ai-desktop/测试文档.md，不得创建会话级测试文档。完成源码修改后简要报告。`;
 }
 
 function conversationPrompt(message: string): string {
-  return `[会话托管]\n${message}\n\n只负责理解并复述用户意图。禁止调查源码、执行命令、修改文件、提出已经执行的结果。若存在一个或多个仍需确认的含义，必须调用结构化 request_user_input：每个疑问单独成题并提供互斥选项；收到全部答案后，必须重新输出一份完整意图理解，不得只复述答案。只有没有剩余疑问时才等待用户点击“就是这意思”或单独回复 1。`;
+  return `[会话托管]\n${message}\n\n只负责理解并复述用户意图。禁止调查源码、执行命令、修改文件、提出已经执行的结果。若仍有需要确认的含义，每次必须只选择一个最高优先级疑问并调用结构化 request_user_input，提供互斥选项；用户确认该点后必须重新理解完整会话，仍有歧义时再提出下一个结构化疑问。只有全部疑问消除后，才重新输出一份完整意图理解并等待用户点击“就是这意思”或单独回复 1，不得只复述最后一个答案。`;
 }
 
 function requirementPrompt(message: string): string {
@@ -245,7 +245,7 @@ function taskRepairPrompt(failures: string[]): string {
 }
 
 function codeValidationPrompt(files: string[]): string {
-  return `[任务托管执行：代码验证阶段]\n接手本任务已经修改的文件：\n${files.join("\n")}\n按“静态检查 → npm run test:interaction”执行代码级验证。test:interaction 会在后台启动隔离 Electron，通过 Playwright 定位器执行真实程序化交互，成功不截图，失败自动把截图和结果写入应用 temp 后关闭隔离实例。禁止正式构建、启动或重启当前 AI Desktop；若任一步失败，根据错误和截图修复源码后重新执行，两类检查最多共同复测 ${VALIDATION_ROUNDS} 轮。`;
+  return `[任务托管执行：代码验证阶段]\n接手本任务已经修改的文件：\n${files.join("\n")}\n确认唯一共享测试文档 apps/ai-desktop/测试文档.md 已登记 npm run typecheck 与 npm run test:interaction，然后只通过 npm run test:document 取得独占锁并统一执行。占用时必须报告锁中的执行者、任务、线程和当前项；完成后运行器会立即归档测试文档。test:interaction 会在后台启动隔离 Electron，通过 Playwright 定位器执行真实程序化交互。禁止正式构建、启动或重启当前 AI Desktop；失败时创建新一轮共享测试文档再修复复测，最多 ${VALIDATION_ROUNDS} 轮。`;
 }
 
 function codeValidationRepairPrompt(missing: string[], failures: string[]): string {
@@ -253,7 +253,7 @@ function codeValidationRepairPrompt(missing: string[], failures: string[]): stri
 }
 
 function buildValidationPrompt(message: string, restartRequired: boolean): string {
-  return `[测试托管执行]\n${message}\n\n按“构建 → 构建后的针对性测试”执行；失败时修复并重新构建、复测。${restartRequired ? "完成后由桌面主进程受控重启一次，不要在命令中自行启动或重启 AI Desktop。" : "只有确有运行时验证需要时才说明重启要求。"}`;
+  return `[测试托管执行]\n${message}\n\n把构建与构建后针对性测试登记到唯一共享的 apps/ai-desktop/测试文档.md，然后只通过 npm run test:document 取得独占锁并统一执行；读取到占用锁时报告正在执行的人、任务、线程和当前项。每轮执行完成后测试文档必须立即归档；失败修复时创建新的共享测试文档再复测。${restartRequired ? "完成后由桌面主进程受控重启一次，不要在命令中自行启动或重启 AI Desktop。" : "只有确有运行时验证需要时才说明重启要求。"}`;
 }
 
 function buildValidationRepairPrompt(missing: string[], failures: string[]): string {

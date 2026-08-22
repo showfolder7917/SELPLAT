@@ -57,6 +57,7 @@ export interface CodexStreamActivity {
 export interface CodexStreamEvent {
   type: "turn-started" | "message-delta" | "message-completed" | "reasoning-summary-delta" | "activity" | "plan-updated" | "diff-updated" | "turn-completed" | "managed-execution" | "error";
   turnId: string;
+  segmentId?: string;
   itemId?: string;
   delta?: string;
   text?: string;
@@ -80,6 +81,13 @@ export interface CodexHarnessStatus {
   connected: boolean;
   account: CodexAccount;
   error: string | null;
+  runtime: CodexRuntimeInfo | null;
+}
+
+export interface CodexRuntimeInfo {
+  source: "system" | "bundled";
+  path: string;
+  version: string;
 }
 
 export interface CodexLoginResponse {
@@ -161,6 +169,14 @@ export interface ScreenCapture {
 export interface ScreenCaptureRequest {
   hideOwnerWindow?: boolean;
 }
+
+export type ScreenCapturePreparationResult =
+  | { status: "ready" }
+  | {
+      status: "blocked";
+      reason: "permission-required" | "source-unavailable";
+      canOpenSettings: boolean;
+    };
 
 export interface ScreenCaptureStreamSource {
   sourceId: string;
@@ -264,7 +280,8 @@ export interface DesktopApi {
   resolveCodexUserInput(request: ResolveCodexUserInputRequest): Promise<void>;
   newChat(): Promise<void>;
   openExternalUrl(url: string): Promise<void>;
-  prepareScreenCapture(): Promise<void>;
+  prepareScreenCapture(): Promise<ScreenCapturePreparationResult>;
+  openScreenRecordingSettings(): Promise<void>;
   captureScreen(request?: ScreenCaptureRequest): Promise<ScreenCapture | null>;
   getScreenCaptureStreamSource(): Promise<ScreenCaptureStreamSource | null>;
   notifyScreenCaptureStreamReady(sourceId: string): Promise<void>;

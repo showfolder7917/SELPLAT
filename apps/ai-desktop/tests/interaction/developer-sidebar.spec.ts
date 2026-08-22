@@ -23,6 +23,7 @@ test.afterAll(async () => {
 });
 
 test("任务分区可以程序化展开和折叠", async () => {
+  await expect(page.getByText("local Codex 0.149.0")).toBeVisible();
   const taskToggle = page.getByRole("button", { name: "展开任务" });
   await expect(taskToggle).toBeVisible();
   await expect(taskToggle).toHaveAttribute("aria-expanded", "false");
@@ -92,29 +93,49 @@ test("窄窗口和常规窗口支持键盘调节与重置且没有横向溢出",
 test("多个结构化疑问逐题确认后继续原回合并重新展示完整意图", async () => {
   const composer = page.locator(".dev-composer");
   await composer.locator("textarea").fill("需要确认的截图交互");
-  await composer.locator(".composer-footer > button").click();
+  await composer.getByRole("button", { name: "发送" }).click();
 
   const panel = page.locator(".codex-user-input");
   await expect(panel).toBeVisible();
-  const confirm = panel.getByRole("button", { name: "确认" });
-  const questions = panel.locator("fieldset");
-  await expect(confirm).toBeDisabled();
-  await questions.nth(0).getByRole("radio", { name: /原对话框/ }).click();
-  await questions.nth(1).getByRole("radio", { name: "其他" }).click();
-  await questions.nth(1).getByPlaceholder("请输入答案").fill("只保留附件，不追加提示");
-  await expect(confirm).toBeEnabled();
-  await confirm.click();
+  const firstQuestion = panel.locator("fieldset");
+  const firstConfirm = firstQuestion.getByRole("button", { name: "确认" });
+  await expect(firstConfirm).toBeDisabled();
+  await firstQuestion.getByRole("radio", { name: /原对话框/ }).click();
+  await expect(firstConfirm).toBeEnabled();
+  await firstConfirm.click();
+
+  await expect(panel.getByText("无红色标注时使用什么提示？")).toBeVisible();
+  const secondQuestion = panel.locator("fieldset");
+  await secondQuestion.getByRole("radio", { name: "其他" }).click();
+  await secondQuestion.getByPlaceholder("请输入答案").fill("只保留附件，不追加提示");
+  await secondQuestion.getByRole("button", { name: "确认" }).click();
 
   await expect(panel).toHaveCount(0);
   await expect(page.getByText("完整意图已根据两个答案重新整理。")).toBeVisible();
   await expect(page.getByRole("button", { name: "就是这意思" })).toBeVisible();
 });
 
+test("最新阶段按钮在回复运行中保持可见禁用并在完成后启用", async () => {
+  await page.getByRole("button", { name: "就是这意思" }).click();
+  const execute = page.getByRole("button", { name: "按这个方案执行" });
+  await expect(execute).toBeVisible();
+  await expect(execute).toBeDisabled();
+
+  const panel = page.locator(".codex-user-input");
+  await panel.getByRole("radio", { name: /原对话框/ }).click();
+  await panel.getByRole("button", { name: "确认" }).click();
+  await expect(panel.getByText("无红色标注时使用什么提示？")).toBeVisible();
+  await panel.getByRole("radio", { name: /不追加提示/ }).click();
+  await panel.getByRole("button", { name: "确认" }).click();
+
+  await expect(execute).toBeEnabled();
+});
+
 test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清空", async () => {
   await page.getByRole("button", { name: "新建任务" }).click();
   const composer = page.locator(".dev-composer");
   await composer.locator("textarea").fill("markdown-test");
-  await composer.locator(".composer-footer > button").click();
+  await composer.getByRole("button", { name: "发送" }).click();
 
   await expect(page.getByRole("heading", { level: 2, name: "清晰结论" })).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
@@ -128,4 +149,16 @@ test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清�
   await page.getByRole("button", { name: "新建任务" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "清晰结论" })).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 1, name: "今天要构建什么？" })).toBeVisible();
+});
+
+test("屏幕录制权限阻断只显示业务提示并提供系统设置入口", async () => {
+  await page.getByRole("button", { name: "截取当前屏幕" }).click();
+
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("请在系统设置中允许 AI Desktop 使用屏幕录制权限");
+  await expect(alert).not.toContainText("Error invoking remote method");
+  const openSettings = alert.getByRole("button", { name: "打开系统设置" });
+  await expect(openSettings).toBeVisible();
+  await openSettings.click();
+  await expect(alert).toBeVisible();
 });

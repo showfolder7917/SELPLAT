@@ -58,6 +58,13 @@ import { MarkdownMessage } from "./MarkdownMessage";
 import "./developer.css";
 
 type ComposerAttachment = ScreenshotAttachment & { dataUrl: string };
+type PendingSend = {
+  message: string;
+  displayText: string;
+  mode: ManagedExecutionMode;
+  attachments: ComposerAttachment[];
+  sourceMessageId?: number;
+};
 type Message = {
   id: number;
   role: "user" | "assistant";
@@ -74,21 +81,29 @@ type Message = {
   managedMode?: ManagedExecutionMode;
   actionTriggered?: boolean;
   turnTextStart?: number;
+  turnOrder?: string[];
+  turnSegments?: Record<string, string>;
+  streamTerminal?: boolean;
 };
 
 const labels = {
-  ja: { title: "Developer", placeholder: "コード、調査、変更内容を入力（画像を貼り付け可能）", ready: "Codex harness 接続済み", signIn: "ChatGPT でログイン", signOut: "ログアウト", signedOut: "ChatGPT にログインしてください", browserOpened: "ブラウザーでログインを完了してください", files: "EXPLORER", workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定", remove: "削除", removeConfirm: "ワークスペース一覧から「{name}」を削除しますか？ディスク上のフォルダーは削除されません。", minimumWorkspace: "ワークスペースを1つ以上残してください", tasks: "TASKS", newTask: "新しいタスク", expand: "展開", collapse: "折りたたむ", settings: "接続と実行設定", account: "ChatGPT アカウント", readOnly: "読み取り専用", write: "ワークスペース書き込み", readOnlyTip: "現在は読み取り専用", writeTip: "現在は書き込み可能", thinking: "Codex が処理中...", approve: "許可", approveAndTrust: "許可して信頼", trustHint: "同じプロジェクトとコマンドは次回から自動的に許可されます。", decline: "拒否", screenshot: "現在の画面をキャプチャ", hiddenScreenshot: "AI Desktop を隠してキャプチャ", tempFiles: "一時ファイル", openTemp: "一時フォルダーを開く", clearTemp: "すべて消去", clearConfirm: "AI Desktop の一時ファイルをすべて削除しますか？", trustedCommands: "信頼済みコマンド", clearTrustedCommands: "信頼をすべて解除", clearTrustedConfirm: "登録済みの信頼コマンドをすべて解除しますか？", auditLogs: "業務ログ", openAuditLogs: "ログフォルダーを開く", noAuditTask: "タスク履歴はまだありません", conversationManaged: "会話管理", requirementManaged: "要件管理", taskManaged: "タスク管理", testManaged: "テスト管理", attachment: "画像添付" },
-  "zh-CN": { title: "Developer", placeholder: "输入代码、调查或修改任务（可粘贴截图）", ready: "Codex harness 已连接", signIn: "使用 ChatGPT 登录", signOut: "退出登录", signedOut: "请先登录 ChatGPT", browserOpened: "请在浏览器中完成登录", files: "资源管理器", workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除", removeConfirm: "确定从工作区列表移除“{name}”吗？不会删除磁盘中的真实目录。", minimumWorkspace: "至少保留一个工作区", tasks: "任务", newTask: "新建任务", expand: "展开", collapse: "折叠", settings: "连接与执行设置", account: "ChatGPT 账号", readOnly: "只读", write: "工作区写入", readOnlyTip: "当前只读", writeTip: "当前可写入", thinking: "Codex 正在处理...", approve: "允许", approveAndTrust: "允许并信任", trustHint: "相同项目和命令下次将自动允许。", decline: "拒绝", screenshot: "截取当前屏幕", hiddenScreenshot: "隐藏 AI Desktop 后截图", tempFiles: "临时文件", openTemp: "临时目录", clearTemp: "一键清理", clearConfirm: "确定清理 AI Desktop temp 中的全部临时文件吗？", trustedCommands: "可信命令", clearTrustedCommands: "清除全部信任", clearTrustedConfirm: "确定清除全部项目可信命令吗？", auditLogs: "业务日志", openAuditLogs: "打开日志目录", noAuditTask: "暂无任务记录", conversationManaged: "会话托管", requirementManaged: "需求托管", taskManaged: "任务托管", testManaged: "测试托管", attachment: "图片附件" },
+  ja: { title: "Developer", placeholder: "コード、調査、変更内容を入力（画像を貼り付け可能）", ready: "Codex harness 接続済み", signIn: "ChatGPT でログイン", signOut: "ログアウト", signedOut: "ChatGPT にログインしてください", browserOpened: "ブラウザーでログインを完了してください", files: "EXPLORER", workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定", remove: "削除", removeConfirm: "ワークスペース一覧から「{name}」を削除しますか？ディスク上のフォルダーは削除されません。", minimumWorkspace: "ワークスペースを1つ以上残してください", tasks: "TASKS", newTask: "新しいタスク", expand: "展開", collapse: "折りたたむ", settings: "接続と実行設定", account: "ChatGPT アカウント", readOnly: "読み取り専用", write: "ワークスペース書き込み", readOnlyTip: "現在は読み取り専用", writeTip: "現在は書き込み可能", thinking: "Codex が処理中...", approve: "許可", approveAndTrust: "許可して信頼", trustHint: "同じプロジェクトとコマンドは次回から自動的に許可されます。", decline: "拒否", screenshot: "現在の画面をキャプチャ", hiddenScreenshot: "AI Desktop を隠してキャプチャ", screenPermissionRequired: "システム設定で AI Desktop の画面収録を許可し、アプリを再起動してください。", screenSourceUnavailable: "画面ソースを読み取れません。画面収録の権限を確認してから再試行してください。", openScreenRecordingSettings: "システム設定を開く", tempFiles: "一時ファイル", openTemp: "一時フォルダーを開く", clearTemp: "すべて消去", clearConfirm: "AI Desktop の一時ファイルをすべて削除しますか？", trustedCommands: "信頼済みコマンド", clearTrustedCommands: "信頼をすべて解除", clearTrustedConfirm: "登録済みの信頼コマンドをすべて解除しますか？", auditLogs: "業務ログ", openAuditLogs: "ログフォルダーを開く", noAuditTask: "タスク履歴はまだありません", conversationManaged: "会話管理", requirementManaged: "要件管理", taskManaged: "タスク管理", testManaged: "テスト管理", attachment: "画像添付" },
+  "zh-CN": { title: "Developer", placeholder: "输入代码、调查或修改任务（可粘贴截图）", ready: "Codex harness 已连接", signIn: "使用 ChatGPT 登录", signOut: "退出登录", signedOut: "请先登录 ChatGPT", browserOpened: "请在浏览器中完成登录", files: "资源管理器", workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除", removeConfirm: "确定从工作区列表移除“{name}”吗？不会删除磁盘中的真实目录。", minimumWorkspace: "至少保留一个工作区", tasks: "任务", newTask: "新建任务", expand: "展开", collapse: "折叠", settings: "连接与执行设置", account: "ChatGPT 账号", readOnly: "只读", write: "工作区写入", readOnlyTip: "当前只读", writeTip: "当前可写入", thinking: "Codex 正在处理...", approve: "允许", approveAndTrust: "允许并信任", trustHint: "相同项目和命令下次将自动允许。", decline: "拒绝", screenshot: "截取当前屏幕", hiddenScreenshot: "隐藏 AI Desktop 后截图", screenPermissionRequired: "请在系统设置中允许 AI Desktop 使用屏幕录制权限，然后重新启动应用。", screenSourceUnavailable: "无法读取屏幕来源，请检查屏幕录制权限后重试。", openScreenRecordingSettings: "打开系统设置", tempFiles: "临时文件", openTemp: "临时目录", clearTemp: "一键清理", clearConfirm: "确定清理 AI Desktop temp 中的全部临时文件吗？", trustedCommands: "可信命令", clearTrustedCommands: "清除全部信任", clearTrustedConfirm: "确定清除全部项目可信命令吗？", auditLogs: "业务日志", openAuditLogs: "打开日志目录", noAuditTask: "暂无任务记录", conversationManaged: "会话托管", requirementManaged: "需求托管", taskManaged: "任务托管", testManaged: "测试托管", attachment: "图片附件" },
 } as const;
 
 const EMPTY_ACCOUNT: CodexAccount = { authenticated: false, authMode: null, email: null, planType: null, requiresOpenaiAuth: true };
-const EMPTY_STATUS: CodexHarnessStatus = { connected: false, account: EMPTY_ACCOUNT, error: null };
+const EMPTY_STATUS: CodexHarnessStatus = { connected: false, account: EMPTY_ACCOUNT, error: null, runtime: null };
 const DEFAULT_EXPLORER_WIDTH = 260;
 const MINIMUM_EXPLORER_WIDTH = 200;
 const MAXIMUM_EXPLORER_WIDTH = 520;
 const MINIMUM_WORKSPACE_PANE_HEIGHT = 120;
 const MINIMUM_TASKS_PANE_HEIGHT = 38;
 const ACTIVE_CHAT_STORAGE_KEY = "ai-desktop.active-chat.v1";
+
+function readableDesktopError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : fallback;
+  return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
+}
 
 function WindowControls() {
   return <div className="dev-window-controls">
@@ -110,10 +125,12 @@ export function DeveloperApp() {
   const [screenshotBusy, setScreenshotBusy] = useState(false);
   const [screenshotMode, setScreenshotMode] = useState<"current" | "hidden" | null>(null);
   const [screenshotError, setScreenshotError] = useState("");
+  const [screenRecordingSettingsAvailable, setScreenRecordingSettingsAvailable] = useState(false);
   const [tempInfo, setTempInfo] = useState<TempDirectoryInfo | null>(null);
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
   const [trustedCommandInfo, setTrustedCommandInfo] = useState<TrustedCommandInfo>({ count: 0 });
   const [loading, setLoading] = useState(false);
+  const [queuedSends, setQueuedSends] = useState<PendingSend[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 资源管理器控制整栏宽度，工作区分区独立保存展开状态；折叠整栏后由活动栏图标恢复。
   const [explorerExpanded, setExplorerExpanded] = useState(true);
@@ -132,6 +149,7 @@ export function DeveloperApp() {
   const [userInputRequest, setUserInputRequest] = useState<CodexUserInputRequest | null>(null);
   const [userInputAnswers, setUserInputAnswers] = useState<Record<string, string>>({});
   const [customAnswerIds, setCustomAnswerIds] = useState<Set<string>>(new Set());
+  const [confirmedQuestionIds, setConfirmedQuestionIds] = useState<Set<string>>(new Set());
   const [userInputSubmitting, setUserInputSubmitting] = useState(false);
   const [loginHint, setLoginHint] = useState("");
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -140,9 +158,13 @@ export function DeveloperApp() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const explorerSectionsRef = useRef<HTMLDivElement>(null);
   const activeAssistantIdRef = useRef<number | null>(null);
+  const flushStreamEventsRef = useRef<() => void>(() => undefined);
   const screenCapturePreparedRef = useRef(false);
   const text = labels[locale];
   const nextId = useMemo(() => messages.reduce((maximum, item) => Math.max(maximum, item.id), 0) + 1, [messages]);
+  const latestManagedAssistantId = useMemo(() => messages.reduce((latest, message) => (
+    message.role === "assistant" && message.managedMode !== undefined ? message.id : latest
+  ), null as number | null), [messages]);
 
   const clampExplorerWidth = (width: number) => Math.min(MAXIMUM_EXPLORER_WIDTH, Math.max(MINIMUM_EXPLORER_WIDTH, width));
 
@@ -271,12 +293,14 @@ export function DeveloperApp() {
     if (!userInputRequest) {
       setUserInputAnswers({});
       setCustomAnswerIds(new Set());
+      setConfirmedQuestionIds(new Set());
       setUserInputSubmitting(false);
       return;
     }
     // 无预设选项的问题直接进入文本回答；有选项的问题必须由用户明确点击，禁止代选推荐项。
     setUserInputAnswers({});
     setCustomAnswerIds(new Set(userInputRequest.questions.filter((question) => question.options.length === 0).map((question) => question.id)));
+    setConfirmedQuestionIds(new Set());
     setUserInputSubmitting(false);
   }, [userInputRequest?.requestId]);
 
@@ -339,6 +363,7 @@ export function DeveloperApp() {
         current,
       ));
     };
+    flushStreamEventsRef.current = flush;
     const unsubscribe = desktop.onCodexStreamEvent((event) => {
       const messageId = activeAssistantIdRef.current;
       if (messageId === null) return;
@@ -349,6 +374,7 @@ export function DeveloperApp() {
     return () => {
       unsubscribe();
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      flushStreamEventsRef.current = () => undefined;
     };
   }, []);
 
@@ -424,23 +450,34 @@ export function DeveloperApp() {
     }
   };
 
-  const send = async (override?: { message: string; displayText: string; mode: ManagedExecutionMode; sourceMessageId?: number }) => {
+  const send = async (
+    override?: { message: string; displayText: string; mode: ManagedExecutionMode; sourceMessageId?: number },
+    queued?: PendingSend,
+  ) => {
     const typedMessage = input.trim();
     const commandMode = override ? null : managedModeForCommand(typedMessage, executionMode);
-    const mode = override?.mode || commandMode || executionMode;
-    const message = override?.message || typedMessage;
-    const displayText = override?.displayText || typedMessage;
-    if ((!message && attachments.length === 0) || loading) return;
+    const mode = queued?.mode || override?.mode || commandMode || executionMode;
+    const message = queued?.message ?? override?.message ?? typedMessage;
+    const displayText = queued?.displayText ?? override?.displayText ?? typedMessage;
+    const sentAttachments = queued?.attachments || attachments;
+    const sourceMessageId = queued?.sourceMessageId ?? override?.sourceMessageId;
+    if (!message && sentAttachments.length === 0) return;
+    if (loading && !queued) {
+      setQueuedSends((current) => [...current, { message, displayText, mode, attachments: sentAttachments, sourceMessageId }]);
+      setInput("");
+      setAttachments([]);
+      return;
+    }
+    if (loading) return;
     if (!codexStatus.account.authenticated) {
       setSettingsOpen(true);
       setLoginHint(text.signedOut);
       return;
     }
-    if (override?.sourceMessageId !== undefined) {
-      setMessages((current) => current.map((item) => item.id === override.sourceMessageId ? { ...item, actionTriggered: true } : item));
+    if (sourceMessageId !== undefined) {
+      setMessages((current) => current.map((item) => item.id === sourceMessageId ? { ...item, actionTriggered: true } : item));
     }
     setExecutionMode(mode);
-    const sentAttachments = attachments;
     const assistantId = nextId + 1;
     const userMessage = { id: nextId, role: "user" as const, text: displayText || text.attachment, attachments: sentAttachments };
     activeAssistantIdRef.current = assistantId;
@@ -464,20 +501,29 @@ export function DeveloperApp() {
         ? await window.desktop.sendMessage({ message, locale, sandboxMode, attachmentIds: sentAttachments.map((attachment) => attachment.id), executionMode: mode })
         : { text: locale === "ja" ? "デスクトップ版でローカル Codex に接続します。" : "桌面版本会在这里返回本地 Codex 的结果。", itemCount: 0 };
       if (response.threadId) setActiveThreadId(response.threadId);
+      flushStreamEventsRef.current();
       setMessages((current) => current.map((item) => item.id === assistantId
-        ? { ...item, text: item.text || response.text, streaming: false, streamStatus: "completed" }
+        ? { ...item, text: item.text || response.text, streaming: false, streamTerminal: true, streamStatus: "completed" }
         : item));
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Codex unavailable";
       setMessages((current) => current.map((item) => item.id === assistantId
-        ? { ...item, text: item.text || messageText, streaming: false, streamStatus: "failed", streamError: messageText }
+        ? { ...item, text: item.text || messageText, streaming: false, streamTerminal: true, streamStatus: "failed", streamError: messageText }
         : item));
     } finally {
+      flushStreamEventsRef.current();
       activeAssistantIdRef.current = null;
       setLoading(false);
       void window.desktop?.getAuditLogInfo().then(setAuditInfo);
     }
   };
+
+  useEffect(() => {
+    if (loading || queuedSends.length === 0) return;
+    const [next, ...remaining] = queuedSends;
+    setQueuedSends(remaining);
+    void send(undefined, next);
+  }, [loading, queuedSends]);
 
   const startNewTask = async () => {
     try {
@@ -495,8 +541,14 @@ export function DeveloperApp() {
     }
   };
 
-  const submitUserInput = async () => {
+  const submitUserInput = async (questionId: string) => {
     if (!userInputRequest || userInputSubmitting) return;
+    const answer = userInputAnswers[questionId]?.trim() || "";
+    if (!answer) return;
+    const nextConfirmedQuestionIds = new Set(confirmedQuestionIds).add(questionId);
+    setConfirmedQuestionIds(nextConfirmedQuestionIds);
+    // 官方请求仍按原 requestId 一次回传完整答案；正常会话每次只有一题，多题仅作为协议容错逐题锁定。
+    if (nextConfirmedQuestionIds.size < userInputRequest.questions.length) return;
     const answers: Record<string, string[]> = Object.fromEntries(userInputRequest.questions.map((question) => [question.id, [userInputAnswers[question.id]?.trim() || ""]]));
     if (Object.values(answers).some((values) => !values[0])) return;
     setUserInputSubmitting(true);
@@ -505,12 +557,17 @@ export function DeveloperApp() {
       setUserInputRequest(null);
     } catch (error) {
       setScreenshotError(error instanceof Error ? error.message : "Unable to submit clarification answers.");
+      setConfirmedQuestionIds((current) => {
+        const next = new Set(current);
+        next.delete(questionId);
+        return next;
+      });
       setUserInputSubmitting(false);
     }
   };
 
   const startScreenshot = async (hideOwnerWindow = false) => {
-    if (screenshotBusy || loading) return;
+    if (screenshotBusy) return;
     if (attachments.length >= 5) {
       setScreenshotError("最多可以同时发送 5 张截图。");
       return;
@@ -518,6 +575,7 @@ export function DeveloperApp() {
     setScreenshotBusy(true);
     setScreenshotMode(hideOwnerWindow ? "hidden" : "current");
     setScreenshotError("");
+    setScreenRecordingSettingsAvailable(false);
     setSettingsOpen(false);
     try {
       if (window.desktop) {
@@ -525,7 +583,12 @@ export function DeveloperApp() {
         await nextRenderedFrame();
         if (!screenCapturePreparedRef.current) {
           const startedAt = performance.now();
-          await window.desktop.prepareScreenCapture();
+          const preparation = await window.desktop.prepareScreenCapture();
+          if (preparation.status === "blocked") {
+            setScreenshotError(preparation.reason === "permission-required" ? text.screenPermissionRequired : text.screenSourceUnavailable);
+            setScreenRecordingSettingsAvailable(preparation.canOpenSettings);
+            return;
+          }
           const remainingIndicatorTime = Math.max(0, 320 - (performance.now() - startedAt));
           if (remainingIndicatorTime > 0) await delay(remainingIndicatorTime);
           screenCapturePreparedRef.current = true;
@@ -533,15 +596,24 @@ export function DeveloperApp() {
       }
       await window.desktop?.captureScreen({ hideOwnerWindow });
     } catch (error) {
-      setScreenshotError(error instanceof Error ? error.message : "Unable to capture screen");
+      setScreenshotError(readableDesktopError(error, "Unable to capture screen"));
     } finally {
       setScreenshotBusy(false);
       setScreenshotMode(null);
     }
   };
 
+  const openScreenRecordingSettings = async () => {
+    try {
+      await window.desktop?.openScreenRecordingSettings();
+    } catch (error) {
+      setScreenshotError(readableDesktopError(error, text.screenSourceUnavailable));
+      setScreenRecordingSettingsAvailable(false);
+    }
+  };
+
   const pasteClipboardImages = async (files: File[]) => {
-    if (screenshotBusy || loading || files.length === 0) return;
+    if (screenshotBusy || files.length === 0) return;
     if (attachments.length + files.length > 5) {
       setScreenshotError("最多可以同时发送 5 张图片。");
       return;
@@ -589,6 +661,19 @@ export function DeveloperApp() {
     if (!window.confirm(text.clearTrustedConfirm)) return;
     const info = await window.desktop?.clearTrustedCommands();
     if (info) setTrustedCommandInfo(info);
+  };
+
+  const cancelActiveTurn = () => {
+    void window.desktop?.cancel();
+    flushStreamEventsRef.current();
+    const assistantId = activeAssistantIdRef.current;
+    if (assistantId !== null) {
+      setMessages((current) => current.map((item) => item.id === assistantId
+        ? { ...item, streaming: false, streamTerminal: true, streamStatus: "interrupted" }
+        : item));
+    }
+    activeAssistantIdRef.current = null;
+    setLoading(false);
   };
 
   const login = async () => {
@@ -731,19 +816,19 @@ export function DeveloperApp() {
       <div className="dev-tab"><Prompt24Regular /><span>Codex Chat</span><Dismiss20Regular /></div>
       <section ref={chatRef} className="dev-chat">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p></div>}
-        {messages.map((message) => <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onSubmit={() => void submitUserInput()} />}{message.role === "assistant" && !message.streaming && !message.streamError && message.managedMode !== "test-managed" && <ManagedStageAction message={message} locale={locale} loading={loading} onAdvance={(mode, label) => void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>)}
+        {messages.map((message) => <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && message.managedMode !== "test-managed" && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} onAdvance={(mode, label) => void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>)}
       </section>
       <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
         <textarea ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} placeholder={text.placeholder} />
-        {screenshotError && <div className="composer-error">{screenshotError}</div>}
-        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span><button type="button" className="screenshot-button" title={text.screenshot} aria-label={text.screenshot} data-tooltip={text.screenshot} disabled={screenshotBusy || loading} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" title={text.hiddenScreenshot} aria-label={text.hiddenScreenshot} data-tooltip={text.hiddenScreenshot} disabled={screenshotBusy || loading} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><button type="button" onClick={loading ? () => { void window.desktop?.cancel(); setLoading(false); } : () => void send()}>{loading ? <Stop24Filled /> : <Send24Filled />}</button></div>
+        {screenshotError && <div className="composer-error" role="alert"><span>{screenshotError}</span>{screenRecordingSettingsAvailable && <button type="button" onClick={() => void openScreenRecordingSettings()}>{text.openScreenRecordingSettings}</button>}</div>}
+        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}<button type="button" className="screenshot-button" title={text.screenshot} aria-label={text.screenshot} data-tooltip={text.screenshot} disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" title={text.hiddenScreenshot} aria-label={text.hiddenScreenshot} data-tooltip={text.hiddenScreenshot} disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
       </form>
     </main>
 
     <aside className="dev-context">
       <div className="context-title"><WindowDevTools24Regular /><span>CONTEXT</span></div>
-      <dl><dt>PROJECT</dt><dd>{projectRoot}</dd><dt>MODE</dt><dd>{sandboxMode}</dd><dt>HARNESS</dt><dd>openai/codex app-server</dd><dt>ACCOUNT</dt><dd>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</dd></dl>
+      <dl><dt>PROJECT</dt><dd>{projectRoot}</dd><dt>MODE</dt><dd>{sandboxMode}</dd><dt>HARNESS</dt><dd>{codexStatus.runtime ? `${codexStatus.runtime.source === "system" ? "local" : "bundled"} Codex ${codexStatus.runtime.version}` : "openai/codex app-server"}</dd><dt>ACCOUNT</dt><dd>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</dd></dl>
       <div className={`status-card ${codexStatus.connected ? "online" : "offline"}`}><i />{codexStatus.account.authenticated ? text.ready : text.signedOut}</div>
     </aside>
 
@@ -751,7 +836,7 @@ export function DeveloperApp() {
 
     {settingsOpen && <section ref={settingsPanelRef} className="dev-settings">
       <h2>{text.settings}</h2>
-      <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button onClick={() => void logout()}>{text.signOut}</button> : <button className="primary" onClick={() => void login()}>{text.signIn}</button>}{loginHint && <em>{loginHint}</em>}</div>
+      <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "system" ? "本机" : "内置"} Codex ${codexStatus.runtime.version} · ${codexStatus.runtime.path}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button onClick={() => void logout()}>{text.signOut}</button> : <button className="primary" onClick={() => void login()}>{text.signIn}</button>}{loginHint && <em>{loginHint}</em>}</div>
       <label>Language<select value={locale} onChange={(event) => updateSettings(event.target.value as Locale, sandboxMode)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
       <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings(locale, event.target.value as SandboxMode)}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
       <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><small>{tempInfo?.path}</small><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
@@ -802,11 +887,10 @@ async function imageFileToPngDataUrl(file: File): Promise<string> {
 }
 
 function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Message {
-  if (event.type === "message-delta") return { ...message, text: `${message.text}${event.delta || ""}`, streamStatus: "responding" };
+  if (message.streamTerminal && event.type !== "error") return message;
+  if (event.type === "message-delta") return updateTurnSegment(message, event.turnId, (current) => `${current}${event.delta || ""}`, "responding");
   if (event.type === "message-completed") {
-    const turnTextStart = message.turnTextStart ?? 0;
-    const completedTurnText = event.text ?? message.text.slice(turnTextStart);
-    return { ...message, text: `${message.text.slice(0, turnTextStart)}${completedTurnText}`, streamStatus: "responding" };
+    return updateTurnSegment(message, event.turnId, (current) => event.text ?? current, "responding");
   }
   if (event.type === "reasoning-summary-delta") {
     return { ...message, reasoningSummary: `${message.reasoningSummary || ""}${event.delta || ""}`, streamStatus: "reasoning" };
@@ -821,14 +905,27 @@ function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Messa
     return { ...message, streaming: false, streamStatus: event.status || "completed", streamError: event.error };
   }
   if (event.type === "managed-execution" && event.managedExecution) {
-    return { ...message, streaming: event.managedExecution.stage !== "completed", streamStatus: event.managedExecution.stage, managedExecution: event.managedExecution };
+    const terminal = event.managedExecution.stage === "completed" || event.managedExecution.status === "blocked";
+    return { ...message, streaming: !terminal, streamTerminal: terminal, streamStatus: terminal ? (event.managedExecution.status === "blocked" ? "failed" : "completed") : event.managedExecution.stage, managedExecution: event.managedExecution };
   }
-  if (event.type === "error") return { ...message, streaming: false, streamStatus: "failed", streamError: event.error };
+  if (event.type === "error") return { ...message, streaming: false, streamTerminal: true, streamStatus: "failed", streamError: event.error };
   if (event.type === "turn-started") {
-    const text = message.text.length > 0 ? `${message.text}\n\n` : message.text;
-    return { ...message, text, turnTextStart: text.length, streaming: true, streamStatus: "inProgress" };
+    return updateTurnSegment(message, event.turnId, (current) => current, "inProgress", true);
   }
   return message;
+}
+
+function updateTurnSegment(
+  message: Message,
+  turnId: string,
+  update: (current: string) => string,
+  streamStatus: string,
+  streaming = message.streaming,
+): Message {
+  const order = message.turnOrder?.includes(turnId) ? message.turnOrder : [...(message.turnOrder || []), turnId];
+  const segments = { ...(message.turnSegments || {}), [turnId]: update(message.turnSegments?.[turnId] || "") };
+  const text = order.map((id) => segments[id] || "").filter((segment, index) => segment.length > 0 || index === order.length - 1).join("\n\n");
+  return { ...message, text, turnOrder: order, turnSegments: segments, turnTextStart: text.length, streaming, streamStatus };
 }
 
 function readStoredChat(threadId: string): { executionMode: ManagedExecutionMode; messages: Message[] } | null {
@@ -885,36 +982,40 @@ function CodexUserInputPanel({
   request,
   answers,
   customAnswerIds,
+  confirmedQuestionIds,
   locale,
   submitting,
   onChoose,
   onChooseCustom,
   onCustomChange,
-  onSubmit,
+  onConfirm,
 }: {
   request: CodexUserInputRequest;
   answers: Record<string, string>;
   customAnswerIds: Set<string>;
+  confirmedQuestionIds: Set<string>;
   locale: Locale;
   submitting: boolean;
   onChoose(questionId: string, value: string): void;
   onChooseCustom(questionId: string): void;
   onCustomChange(questionId: string, value: string): void;
-  onSubmit(): void;
+  onConfirm(questionId: string): void;
 }) {
-  const complete = request.questions.every((question) => Boolean(answers[question.id]?.trim()));
   const otherLabel = locale === "ja" ? "その他" : "其他";
   return <section className="codex-user-input" aria-label={locale === "ja" ? "確認事項" : "待确认问题"}>
-    {request.questions.map((question) => <fieldset key={question.id}>
+    {request.questions.map((question) => {
+      const confirmed = confirmedQuestionIds.has(question.id);
+      const hasAnswer = Boolean(answers[question.id]?.trim());
+      return <fieldset key={question.id} className={confirmed ? "confirmed" : ""}>
       <legend><strong>{question.header}</strong><span>{question.question}</span></legend>
-      {question.options.length > 0 && <div className="codex-user-input-options">{question.options.map((option) => <button type="button" role="radio" aria-checked={!customAnswerIds.has(question.id) && answers[question.id] === option.label} className={!customAnswerIds.has(question.id) && answers[question.id] === option.label ? "selected" : ""} key={option.label} onClick={() => onChoose(question.id, option.label)}><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</button>)}<button type="button" role="radio" aria-checked={customAnswerIds.has(question.id)} className={customAnswerIds.has(question.id) ? "selected" : ""} onClick={() => onChooseCustom(question.id)}><strong>{otherLabel}</strong></button></div>}
-      {customAnswerIds.has(question.id) && <input value={answers[question.id] || ""} maxLength={2_000} autoFocus={request.questions.length === 1} placeholder={locale === "ja" ? "回答を入力" : "请输入答案"} onChange={(event) => onCustomChange(question.id, event.target.value)} />}
-    </fieldset>)}
-    <div className="codex-user-input-actions"><button type="button" className="primary" disabled={!complete || submitting} onClick={onSubmit}>{submitting ? (locale === "ja" ? "送信中…" : "正在确认…") : (locale === "ja" ? "確認" : "确认")}</button></div>
+      {question.options.length > 0 && <div className="codex-user-input-options">{question.options.map((option) => <button type="button" role="radio" disabled={confirmed} aria-checked={!customAnswerIds.has(question.id) && answers[question.id] === option.label} className={!customAnswerIds.has(question.id) && answers[question.id] === option.label ? "selected" : ""} key={option.label} onClick={() => onChoose(question.id, option.label)}><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</button>)}<button type="button" role="radio" disabled={confirmed} aria-checked={customAnswerIds.has(question.id)} className={customAnswerIds.has(question.id) ? "selected" : ""} onClick={() => onChooseCustom(question.id)}><strong>{otherLabel}</strong></button></div>}
+      {customAnswerIds.has(question.id) && <input value={answers[question.id] || ""} disabled={confirmed} maxLength={2_000} autoFocus={request.questions.length === 1} placeholder={locale === "ja" ? "回答を入力" : "请输入答案"} onChange={(event) => onCustomChange(question.id, event.target.value)} />}
+      <div className="codex-user-input-actions"><button type="button" className="primary" disabled={!hasAnswer || confirmed || submitting} onClick={() => onConfirm(question.id)}>{confirmed ? (locale === "ja" ? "確認済み" : "已确认") : submitting ? (locale === "ja" ? "送信中…" : "正在确认…") : (locale === "ja" ? "確認" : "确认")}</button></div>
+    </fieldset>})}
   </section>;
 }
 
-function ManagedStageAction({ message, locale, loading, onAdvance }: { message: Message; locale: Locale; loading: boolean; onAdvance(mode: ManagedExecutionMode, label: string): void }) {
+function ManagedStageAction({ message, locale, actionable, onAdvance }: { message: Message; locale: Locale; actionable: boolean; onAdvance(mode: ManagedExecutionMode, label: string): void }) {
   const current = message.managedMode;
   if (!current || current === "test-managed") return null;
   const target = nextManagedMode(current);
@@ -932,7 +1033,7 @@ function ManagedStageAction({ message, locale, loading, onAdvance }: { message: 
   };
   const label = (message.actionTriggered ? repeatLabels : firstLabels)[current][locale];
   const Icon = message.actionTriggered ? ArrowClockwise24Regular : target === "requirement-managed" ? CheckmarkCircle24Regular : target === "task-managed" ? Play24Regular : Beaker24Regular;
-  return <div className="managed-stage-action"><button type="button" className={message.actionTriggered ? "triggered" : ""} disabled={loading} onClick={() => onAdvance(target, label)}><Icon /><span>{label}</span></button></div>;
+  return <div className="managed-stage-action"><button type="button" className={message.actionTriggered ? "triggered" : ""} disabled={!actionable || message.streaming} onClick={() => onAdvance(target, label)}><Icon /><span>{label}</span></button></div>;
 }
 
 function upsertStreamActivity(current: CodexStreamActivity[], incoming: CodexStreamActivity): CodexStreamActivity[] {
@@ -965,7 +1066,7 @@ function StreamDetails({ message, locale }: { message: Message; locale: Locale }
       <div className="stream-activities">{activities.map((activity) => <div className={activity.phase} key={activity.id}><i /><span><strong>{activityLabel(activity.itemType, locale)}</strong>{activity.summary && <small>{activity.summary}</small>}</span></div>)}</div>
     </details>}
     {changedFiles.length > 0 && <details className="stream-files" open><summary>{locale === "ja" ? `変更ファイル ${changedFiles.length}` : `已涉及 ${changedFiles.length} 个文件`}</summary>{changedFiles.map((file) => <code key={file}>{file}</code>)}</details>}
-    {(message.streaming || message.streamError) && <div className={`stream-current ${message.streamError ? "failed" : ""}`}><i /><span>{message.streamError || streamStatusLabel(message.streamStatus, locale)}</span></div>}
+    {(message.streaming || message.streamTerminal || message.streamError || message.managedExecution) && <div className={`stream-current ${message.streamError || message.streamStatus === "failed" ? "failed" : message.streaming ? "running" : "completed"}`}><i /><span>{message.streamError || (message.streaming ? streamStatusLabel(message.streamStatus, locale) : completedStatusLabel(message, locale))}</span></div>}
   </div>;
 }
 
@@ -982,4 +1083,22 @@ function streamStatusLabel(status: string | undefined, locale: Locale): string {
   }
   const labelsByStatus: Record<string, string> = { starting: "正在启动 Codex…", inProgress: "Codex 正在处理…", planning: "正在更新计划…", reasoning: "正在分析…", responding: "正在生成回答…", commandExecution: "正在执行命令…", fileChange: "正在修改文件…" };
   return labelsByStatus[status || ""] || "Codex 正在处理…";
+}
+
+function completedStatusLabel(message: Message, locale: Locale): string {
+  if (message.streamStatus === "interrupted") return locale === "ja" ? "中断しました" : "已中断";
+  if (message.streamStatus === "failed") return locale === "ja" ? "失敗しました" : "执行失败";
+  const mode = message.managedExecution?.mode || message.managedMode;
+  if (locale === "ja") {
+    if (mode === "conversation-managed") return "意図の分析が完了しました";
+    if (mode === "requirement-managed") return "要件分析が完了しました";
+    if (mode === "task-managed") return "実行とコード検証が完了しました";
+    if (mode === "test-managed") return "テストが完了しました";
+    return "完了しました";
+  }
+  if (mode === "conversation-managed") return "意图分析完成";
+  if (mode === "requirement-managed") return "需求分析完成";
+  if (mode === "task-managed") return "执行与代码验证完成";
+  if (mode === "test-managed") return "测试完成";
+  return "已完成";
 }

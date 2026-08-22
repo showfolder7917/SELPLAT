@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, shell } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, shell, systemPreferences } from "electron";
 
 import { LOCALES, SANDBOX_MODES, WORKSPACE_PERMISSIONS } from "../../shared/contracts/desktop.js";
 import type {
@@ -9,6 +9,7 @@ import type {
   ManagedExecutionMode,
   ResolveCodexUserInputRequest,
   ScreenCaptureFrameResult,
+  ScreenCapturePreparationResult,
   ScreenCaptureRequest,
   ScreenCaptureStreamSource,
   ScreenshotAnnotationWindowRequest,
@@ -57,6 +58,16 @@ interface ScreenshotWindowSession {
 const screenshotWindowSessions = new Map<number, ScreenshotWindowSession>();
 const screenCaptureSources = new Map<string, ScreenCaptureStreamSource>();
 
+type ScreenCaptureFailureReason = Extract<ScreenCapturePreparationResult, { status: "blocked" }>["reason"];
+
+class ScreenCapturePreparationError extends Error {
+  constructor(readonly reason: ScreenCaptureFailureReason) {
+    super(reason === "permission-required"
+      ? "无法截取屏幕，请先允许 AI Desktop 使用屏幕录制权限并重新启动应用。"
+      : "无法读取屏幕来源，请检查屏幕录制权限后重试。");
+  }
+}
+
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const { codex, screenshots, settings, workspaces, trustedCommands, audit, projectRoot, variant, preloadPath, rendererRoot } = dependencies;
   const activeAuditTasks = new Map<number, string>();
@@ -64,17 +75,42 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const approvalAuditTasks = new Map<number, string>();
   const managedExecutor = new ManagedTaskExecutor();
 
+  const getScreenCaptureAccessStatus = () => process.platform === "darwin"
+    ? systemPreferences.getMediaAccessStatus("screen")
+    : "granted";
+
+  const toScreenCapturePreparationResult = (error: unknown): ScreenCapturePreparationResult => ({
+    status: "blocked",
+    reason: error instanceof ScreenCapturePreparationError ? error.reason : "source-unavailable",
+    canOpenSettings: process.platform === "darwin",
+  });
+
   const resolveScreenCaptureSource = async (display: Electron.Display): Promise<ScreenCaptureStreamSource> => {
     const displayKey = String(display.id);
     const cached = screenCaptureSources.get(displayKey);
     if (cached) return cached;
+    const accessStatus = getScreenCaptureAccessStatus();
+    // macOS 已明确拒绝或限制权限时不再调用原生枚举，避免把 Electron 内部错误直接回显到输入框。
+    if (accessStatus === "denied" || accessStatus === "restricted") {
+      throw new ScreenCapturePreparationError("permission-required");
+    }
     // 只枚举桌面流 ID，不生成缩略图；真实像素由隔离截图窗口中的长期 MediaStream 读取。
-    const sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: { width: 0, height: 0 },
-      fetchWindowIcons: false,
-    });
-    if (sources.length === 0) throw new Error("无法准备屏幕截图，请检查屏幕录制权限。");
+    let sources: Electron.DesktopCapturerSource[];
+    try {
+      sources = await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 0, height: 0 },
+        fetchWindowIcons: false,
+      });
+    } catch {
+      // 首次请求可能在系统提示后被拒绝；再次读取状态才能给出准确且可恢复的业务提示。
+      const currentAccessStatus = getScreenCaptureAccessStatus();
+      if (currentAccessStatus === "denied" || currentAccessStatus === "restricted" || currentAccessStatus === "not-determined") {
+        throw new ScreenCapturePreparationError("permission-required");
+      }
+      throw new ScreenCapturePreparationError("source-unavailable");
+    }
+    if (sources.length === 0) throw new ScreenCapturePreparationError("source-unavailable");
     const source = sources.find((item) => item.display_id === displayKey) || sources[0];
     const streamSource = {
       sourceId: source.id,
@@ -191,7 +227,17 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();
     // 两个截图入口统一预热同一个显示器源；本次进程内再次调用直接命中缓存。
-    await resolveScreenCaptureSource(display);
+    try {
+      await resolveScreenCaptureSource(display);
+      return { status: "ready" } satisfies ScreenCapturePreparationResult;
+    } catch (error) {
+      return toScreenCapturePreparationResult(error);
+    }
+  });
+  ipcMain.handle("desktop:open-screen-recording-settings", async () => {
+    if (process.platform !== "darwin") throw new Error("Screen recording settings are only available on macOS.");
+    // 固定打开 macOS 屏幕录制隐私页，不接受渲染层提供的任意系统设置地址。
+    await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
   });
   ipcMain.handle("desktop:capture-screen", async (event, request?: ScreenCaptureRequest) => {
     const parent = BrowserWindow.fromWebContents(event.sender);

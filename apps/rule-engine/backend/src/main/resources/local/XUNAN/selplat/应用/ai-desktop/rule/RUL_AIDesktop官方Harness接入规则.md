@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.8.0 增加单一活动线程恢复、显式删除、Markdown 与自然表达闭环。 -->
-rule_version = 5.8.0
+<!-- 5.14.0 以固定签名外壳加载最新外部构建，避免每次开发启动令 TCC 授权失效。 -->
+rule_version = 5.14.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -48,6 +48,18 @@ upgrade_record_5_6 = 2026-08-22:允许并信任当前项目精确命令_危险�
 upgrade_record_5_7 = 2026-08-22:thread_start_ephemeral不落盘_语言约束进入developerInstructions_用户正文只保留工作区上下文和真实任务_同进程按配置复用
 <!-- 5.8.0 依据用户确认，以跨重建恢复当前任务和显式新建即丢弃替代临时线程。 -->
 upgrade_record_5_8 = 2026-08-22:单一活动持久线程_thread_resume跨重建恢复_新建任务thread_delete丢弃_本地正文同步恢复_安全GFM渲染_自然协作表达
+<!-- 5.9.0 依据用户确认，让每个疑问单独确认并保持最新阶段按钮在运行期间可见但不可操作。 -->
+upgrade_record_5_9 = 2026-08-22:默认模式requestUserInput_单次一个最高优先级疑问_疑问旁确认_多题容错完整回传_最新阶段按钮运行中可见禁用_历史按钮不可推进
+<!-- 5.10.0 防止旧二进制读取新模型缓存时因协议字段不一致而退出。 -->
+upgrade_record_5_10 = 2026-08-22:每次Harness连接重新探测本机Codex_优先匹配models_cache_client_version_无精确匹配时选最高有效本机版本_仅无本机可用时回退应用锁定包_界面与审计显示实际来源路径版本
+<!-- 5.11.0 依据用户确认，阻断 macOS 双击开发版时继续使用过期构建产物。 -->
+upgrade_record_5_11 = 2026-08-22:macOS开发版command双击启动_依赖检查_先正式构建最新开发版_构建失败禁止启动
+<!-- 5.12.0 防止 macOS 屏幕录制权限异常泄露 Electron 原始 IPC 错误。 -->
+upgrade_record_5_12 = 2026-08-22:macOS截图权限状态预检_结构化错误码_中日文恢复提示_固定系统设置入口
+<!-- 5.13.0 依据用户确认，把本轮七项返工收敛为可复用的统一执行契约。 -->
+upgrade_record_5_13 = 2026-08-22:执行期截图粘贴与排队发送_卡片边界收缩_终态防晚到覆盖_亮点生命周期_逐回合分段_共享测试锁与即时归档_固定AI_Desktop应用身份
+<!-- 5.14.0 修复同名 AI Desktop 开关开启但临时签名每次变化导致系统仍判定未授权。 -->
+upgrade_record_5_14 = 2026-08-22:固定签名Bootstrap外壳_普通源码构建只加载仓库最新外部产物_身份输入变化才重新打包签名_重新签名后明确提示刷新权限
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -155,17 +167,47 @@ managed_command_policy_contract = task_mode_blocks_build_start_restart + test_mo
 <!-- 任务托管完成代码级验证后，尚未执行构建只登记为后续动作，不得作为部分完成或失败原因。 -->
 audit_build_pending_contract = code_verified_without_build_is_completed + build_recorded_as_pending_action + never_partial_only_because_bundle_is_stale
 <!-- 托管执行每轮回答必须按顺序保留；新回合建立独立文本起点，完成事件只能替换当前轮片段，最终 IPC 返回不得覆盖累计内容。 -->
-managed_multiturn_text_preservation_contract = append_each_turn_with_visible_separator + per_turn_text_start_boundary + completed_message_reconciles_current_turn_only + final_response_never_overwrites_accumulated_rounds
+managed_multiturn_text_preservation_contract = append_each_turn_with_visible_separator + turn_id_and_segment_id_boundary + completed_message_reconciles_current_turn_only + final_response_never_overwrites_accumulated_rounds + terminal_state_rejects_late_non_error_events
+<!-- Harness 执行期间输入区保持可编辑，截图、图片粘贴和后续消息进入有序队列，不得由全局 loading 一并锁死。 -->
+managed_running_composer_availability_contract = screenshot_and_image_paste_available_while_running + composer_editable + next_message_fifo_queue + cancel_scoped_to_active_turn
+<!-- 执行状态亮点仅在运行中高亮闪烁，终态变暗静止，并按阶段显示准确结果语义。 -->
+managed_status_indicator_lifecycle_contract = running_bright_pulsing + terminal_dim_static + analysis_execution_validation_test_completed_labels + failed_and_interrupted_labels
+<!-- 回复卡和全部内部执行面板必须允许收缩，长路径不得建立超出卡片的固有宽度。 -->
+managed_response_boundary_contract = card_width_100_percent_with_maximum + all_flex_grid_children_min_width_zero + internal_panels_max_width_100_percent + long_path_wrap_or_ellipsis + no_horizontal_boundary_escape
+<!-- Harness 连接时必须重新识别运行时；优先使用与共享模型缓存客户端版本一致的本机 Codex，避免旧二进制读取新缓存字段失败。 -->
+harness_runtime_version_alignment_contract = reconnect_time_candidate_probe + models_cache_client_version_match_first + highest_valid_local_version_fallback + bundled_official_package_only_when_no_local_runtime + no_hot_swap_during_active_turn + visible_source_path_and_version + audit_selected_runtime
 <!-- 会话托管只理解和复述意图，需求托管只读调查并给出方案；两阶段必须强制只读沙箱并拒绝文件修改及命令提权。 -->
 managed_analysis_stage_write_guard_contract = conversation_intent_only + requirement_read_only_investigation_and_plan + force_read_only_sandbox + decline_file_change_and_privileged_command
 <!-- 每次确认只推进一个阶段；独立 1 和配置短语与按钮等价，关键词不得替代授权，任务阶段必须观察到真实源码变更。 -->
 managed_stage_advance_authorization_contract = conversation_to_requirement_to_task_to_test + one_confirmation_one_stage + standalone_1_or_matching_phrase_equivalent + no_keyword_inferred_authorization + task_requires_observed_source_change
-<!-- 每个阶段成果右下角必须显示图标加文字按钮；点击后高亮并改为重新操作，运行中禁用，重复点击只重跑对应目标阶段。 -->
-managed_stage_action_button_contract = lower_right_icon_and_text + confirm_intent_execute_plan_test_actions + clicked_highlight + rename_to_reanalyze_reexecute_retest + disabled_while_running + repeat_same_target_stage
-<!-- 会话托管有歧义时必须保留官方 requestUserInput 请求，按问题显示互斥选项和其他输入，全部确认后继续原回合。 -->
-harness_user_input_confirmation_contract = official_item_tool_requestUserInput + never_auto_empty_answers + one_question_one_choice_group + multiple_questions_independent_answers + other_text_input + all_required_before_confirm + respond_to_original_request_id + continue_same_turn
-<!-- 疑问答案只是补充意图的中间状态；Harness 必须重新输出完整理解，在此之前不得显示阶段推进按钮。 -->
-managed_clarification_restatement_contract = structured_answers_are_intermediate + regenerate_complete_intent_after_answers + no_stage_advance_action_while_request_or_turn_pending + clear_pending_on_interrupt_new_chat_or_harness_exit
+<!-- 最新托管回复右下角必须显示与当前阶段匹配的图标文字动作。 -->
+managed_stage_action_button_contract = latest_managed_response_lower_right_icon_and_text
+<!-- 会话、需求和任务阶段动作分别使用确认意图、执行方案和测试。 -->
+managed_stage_action_button_contract.2 = confirm_intent_execute_plan_test_actions
+<!-- 最新回复运行期间动作保持可见但必须禁用，完成后才启用。 -->
+managed_stage_action_button_contract.3 = latest_action_visible_disabled_while_running_then_enabled_on_completion
+<!-- 已点击的历史动作保留高亮状态但不得再次推进或回退阶段。 -->
+managed_stage_action_button_contract.4 = historical_clicked_action_highlighted_but_not_actionable
+<!-- 独立 1 或完全匹配的配置短语才与按钮等价，包含关键词的长句不构成授权。 -->
+managed_stage_action_button_contract.5 = standalone_1_or_exact_configured_phrase_only
+<!-- 默认协作模式必须显式启用官方实验性 requestUserInput 能力。 -->
+harness_user_input_confirmation_contract = default_mode_experimental_request_user_input_enabled
+<!-- 会话托管每次只询问一个最高优先级疑问。 -->
+harness_user_input_confirmation_contract.2 = one_highest_priority_question_per_request
+<!-- 每个问题独立显示互斥选项、其他输入和紧邻的确认动作。 -->
+harness_user_input_confirmation_contract.3 = one_question_one_choice_group_other_input_and_adjacent_confirm
+<!-- 正常单题确认必须响应原 requestId 并继续同一 Harness 回合。 -->
+harness_user_input_confirmation_contract.4 = respond_original_request_id_and_continue_same_turn
+<!-- 异常多题请求必须逐题本地锁定，并在全部确认后一次回传完整答案集合。 -->
+harness_user_input_confirmation_contract.5 = multi_question_fallback_local_lock_then_complete_answer_map
+<!-- 疑问答案只是重新理解完整会话的中间状态。 -->
+managed_clarification_restatement_contract = structured_answer_is_intermediate
+<!-- 每次确认后必须重新理解完整会话，有剩余歧义时再提出下一个问题。 -->
+managed_clarification_restatement_contract.2 = reunderstand_full_conversation_then_ask_next_remaining_ambiguity
+<!-- 完整意图重述完成前，阶段动作只允许显示为禁用占位。 -->
+managed_clarification_restatement_contract.3 = stage_action_visible_but_disabled_until_complete_intent_restatement
+<!-- 中断、新建任务或 Harness 退出时必须清理全部待确认状态。 -->
+managed_clarification_restatement_contract.4 = clear_pending_on_interrupt_new_chat_or_harness_exit
 <!-- 聊天历史必须在受高度约束的独立区域滚动，输入框固定，滚动条可见，新消息自动定位到最新内容。 -->
 developer_chat_scroll_contract = constrained_independent_vertical_scroll + visible_scrollbar + fixed_composer + append_scrolls_to_latest
 <!-- 流式进度只能来自官方 app-server 通知，必须增量显示回答、可读推理摘要、计划、命令、文件和工具生命周期，完成项为最终权威状态。 -->
@@ -176,6 +218,8 @@ harness_streaming_activity_disclosure_contract = collapsed_by_default + visible_
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events
 <!-- 主进程只枚举受控桌面源 ID；屏幕像素由隔离截图窗口的 MediaStream 本地冻结，选区、红色标注和 PNG 校验继续保持既有安全边界。 -->
 screenshot_capture_and_annotation_boundary = capture_click_state + separate_borderless_screenshot_window + main_window_bounds_unchanged + hide_cached_screenshot_window_on_done_or_cancel + electron_main_enumerates_desktop_source_id + isolated_screenshot_renderer_owns_media_stream_and_freeze_frame + renderer_region_crop_red_pen_rectangle + validated_png_only
+<!-- macOS 截图预热必须先识别系统权限，原生枚举失败转换为结构化结果；界面只显示本地化业务提示并提供固定权限设置入口。 -->
+screenshot_permission_recovery_contract = macos_systemPreferences_screen_preflight + denied_or_restricted_skips_native_enumeration + getSources_failure_rechecks_permission + structured_permission_required_or_source_unavailable_result + no_raw_remote_method_error_in_composer + localized_recovery_message + fixed_screen_recording_settings_action + restart_guidance
 <!-- 截图交互固定为两阶段：同一图片可连续标注；最新标注旁跟随完成和取消，完成保存全部标注到对话框，取消只撤销最新一笔并保留更早标注。 -->
 screenshot_two_step_confirmation_contract = selection_release_auto_enters_annotation + no_selection_confirm_or_cancel_actions + rectangle_default + multiple_annotations_on_same_image + latest_annotation_follow_done_and_cancel_with_edge_flip + follow_cancel_removes_latest_annotation_only + preserve_earlier_annotations_after_follow_cancel + follow_done_saves_all_annotations_to_composer + never_auto_send
 <!-- 截图按钮点击后必须直接进入框选；选择阶段冻结点击瞬间画面，只显示蒙版和选区，不显示顶部、底部工具栏或选择操作按钮。 -->
@@ -205,6 +249,10 @@ screenshot_temp_management_contract = system_file_manager_open + confirmed_clear
 
 <!-- 启动器必须从自身目录解析应用和 SELPLAT 根，检查 Node/npm 与官方 Codex 依赖后进入开发热启动链路；正式构建由独立命令执行。 -->
 windows_developer_launcher_contract = self_relative_path + dependency_check + developer_hot_start + formal_build_is_separate
+<!-- macOS 开发版双击启动器必须从自身目录解析工程，检查 Node、npm、Electron 和官方 Codex 依赖，每次先正式构建最新开发版，构建失败时禁止启动 Electron。 -->
+macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_official_codex_dependency_check + mandatory_fresh_developer_build_before_launch + build_failure_blocks_launch + package_fixed_bundle_id_ai_desktop_app + stable_signed_bootstrap_shell_loads_external_latest_runtime + ordinary_source_build_never_repackages_or_resigns_shell + repackage_only_when_bootstrap_builder_or_dependency_manifest_changes + permission_refresh_after_identity_change + launchservices_register + open_packaged_app_never_raw_dependency_electron
+<!-- AI Desktop 测试只维护一个共享测试文档；执行者取得独占锁，其他读取者看到占用身份，完成后立即归档。 -->
+shared_test_document_lifecycle_contract = one_apps_ai_desktop_test_document_md + no_thread_scoped_document + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_recovery + completed_run_immediate_archive + next_run_new_document + legacy_thread_documents_archived_not_deleted
 <!-- Electron 打包必须把官方 Codex JavaScript 入口和当前平台原生二进制解包到可执行文件系统，禁止从 asar 内直接拉起。 -->
 packaged_harness_binary_contract = asar_unpack_@openai_codex_and_platform_package
 <!-- macOS 跨平台生成 Windows 包时 npm 只自动选择宿主可选依赖，因此 Windows x64 平台别名包必须作为直接锁定依赖随安装包携带。 -->

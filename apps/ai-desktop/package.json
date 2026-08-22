@@ -27,6 +27,9 @@
     "dist:win:developer": "npm run build && electron-builder --config electron-builder.developer.json --win nsis --x64",
     "dist:mac:office": "npm run build && electron-builder --config electron-builder.office.json --mac dmg",
     "dist:mac:developer": "npm run build && electron-builder --config electron-builder.developer.json --mac dmg",
+    "package:mac:developer": "electron-builder --config electron-builder.developer.json --mac dir",
+    "verify:mac:developer": "node scripts/verify-mac-developer-app.mjs",
+    "test:document": "node scripts/test-document-runner.mjs",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "test:screenshot": "npm run build:electron && node --test tests/screenshot-store.test.mjs",
@@ -35,7 +38,7 @@
     "test:audit": "npm run build:electron && node --test tests/business-audit-log.test.mjs",
     "test:explorer": "node --test tests/developer-explorer-collapse.test.mjs",
     "test:interaction": "node scripts/run-interaction-tests.mjs",
-    "test:managed": "node --test tests/managed-task-executor-contract.test.mjs tests/user-input-and-screenshot-contract.test.mjs",
+    "test:managed": "node --test tests/managed-task-executor-contract.test.mjs tests/user-input-and-screenshot-contract.test.mjs tests/test-document-and-mac-launcher-contract.test.mjs",
     "test:trust": "node --test tests/trusted-command-store.test.mjs tests/developer-hot-reload.test.mjs"
   },
   "dependencies": {
