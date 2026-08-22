@@ -95,3 +95,22 @@ Passed. No open P0, P1, or P2 visual issues remain.
 - Automated DOM regression selected `databaseType` and `connectionName` and verified the public grid API returned both stable column keys in header order.
 - MDA consumes only that public selection snapshot and builds predicates from the right-clicked row as `WHERE databaseType = 'H2'` followed by `AND connectionName = 'MDA 控制库'`.
 - With no checked header field, `Select From Where` retains the existing single clicked-cell behavior.
+
+# AI Desktop Developer Sidebar Unified QA
+
+final result: passed
+
+## Evidence
+
+- Narrow viewport: `/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/temp/interaction/unified/narrow.png`
+- Regular viewport: `/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/temp/interaction/unified/regular.png`
+- Tasks expanded: `/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/temp/interaction/unified/tasks-expanded.png`
+- Tasks collapsed: `/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/temp/interaction/unified/tasks-collapsed.png`
+
+## Result
+
+- The real Electron renderer passed resource-explorer, workspace, and tasks disclosure interactions using semantic Playwright locators.
+- Explorer width and workspace/tasks height respond to keyboard adjustment; Home restores defaults.
+- The workspace/tasks boundary keeps a 5 px hit target while drawing one 1 px line, with no duplicate border.
+- The 900×700 and 1280×900 views have no horizontal workspace overflow, content overlap, or open P0/P1/P2 visual issue.
+- The formally built developer app was restarted once and the official Codex app-server remains connected.

@@ -17,7 +17,7 @@ interface ScreenshotEditorProps {
   capture: ScreenCapture;
   locale: Locale;
   onCancel(): void;
-  onComplete(originalDataUrl: string, annotatedDataUrl: string): Promise<void>;
+  onComplete(originalDataUrl: string, annotatedDataUrl: string, hasAnnotations: boolean): Promise<void>;
 }
 
 const editorLabels = {
@@ -40,7 +40,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const annotationActionFrameRef = useRef(0);
-  const annotationActionsAvailableAtRef = useRef(Number.POSITIVE_INFINITY);
+  const annotationActionsAvailableAtRef = useRef(0);
   const selectionOriginRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef<{ tool: Tool; startX: number; startY: number; lastX: number; lastY: number } | null>(null);
   const text = editorLabels[locale];
@@ -250,13 +250,14 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
     setRectanglePreview(null);
   };
 
-  const complete = async () => {
+  const complete = async (respectFloatingActionDelay = false) => {
     const canvas = canvasRef.current;
-    if (!canvas || saving || performance.now() < annotationActionsAvailableAtRef.current) return;
+    if (!canvas || saving || (respectFloatingActionDelay && performance.now() < annotationActionsAvailableAtRef.current)) return;
     setSaving(true);
     setError("");
     try {
-      await onComplete(croppedDataUrl, canvas.toDataURL("image/png"));
+      // 历史首项永远是未标注裁剪图；只有存在后续快照时才向对话框追加“红色部分”提示。
+      await onComplete(croppedDataUrl, canvas.toDataURL("image/png"), history.length > 1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save screenshot");
       setSaving(false);
@@ -281,7 +282,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
       <canvas ref={canvasRef} onPointerDown={beginDrawing} onPointerMove={moveDrawing} onPointerUp={finishDrawing} />
       {rectanglePreview && <div className="screenshot-rectangle-preview" style={{ left: rectanglePreview.x, top: rectanglePreview.y, width: rectanglePreview.width, height: rectanglePreview.height }} />}
       {annotationConfirmPosition && <div className="screenshot-annotation-actions" style={annotationConfirmPosition}>
-        <button type="button" className="primary" disabled={saving} onClick={() => void complete()}>{saving ? text.saving : text.done}</button>
+        <button type="button" className="primary" disabled={saving} onClick={() => void complete(true)}>{saving ? text.saving : text.done}</button>
         <button type="button" disabled={saving} onClick={() => void cancelLatestAnnotation()}>{text.cancel}</button>
       </div>}
     </div>}
@@ -295,8 +296,9 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
       </div>
       <div className="screenshot-actions">
         {error && <span>{error}</span>}
-        <button type="button" onClick={onCancel}>{text.cancel}</button>
-        <button type="button" onClick={() => void returnToSelection()}>{text.back}</button>
+        <button type="button" disabled={saving} onClick={onCancel}>{text.cancel}</button>
+        <button type="button" className="primary" disabled={saving} onClick={() => void complete()}>{saving ? text.saving : text.done}</button>
+        <button type="button" disabled={saving} onClick={() => void returnToSelection()}>{text.back}</button>
       </div>
     </footer>}
   </section>;

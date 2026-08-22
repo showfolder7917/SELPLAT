@@ -25,8 +25,10 @@ npm run start:office
 开发版：双击 `启动开发版.bat`，或执行：
 
 ```powershell
-npm run start:developer
+npm run desktop:dev:developer
 ```
+
+开发启动器使用 Vite HMR：React、CSS 和渲染逻辑保存后立即更新；Electron 主进程、preload 或共享契约编译后由 `electronmon` 自动重启。正式编译和无热更新启动仍可使用 `npm run build:developer` 与 `npm run start:developer`。
 
 首次打开开发版后，从左下角设置进入“ChatGPT 账号”，选择“使用 ChatGPT 登录”。登录页由 Codex harness 在系统浏览器中打开，令牌由 Codex 自己保存和刷新；桌面渲染进程不会读取账号密码或令牌。工作区写入和命令执行按官方审批协议显示确认界面。
 

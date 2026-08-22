@@ -68,7 +68,7 @@ export class ScreenshotStore {
     await Promise.all([
       writeFile(originalPath, original),
       writeFile(annotatedPath, annotated),
-      writeFile(metadataPath, `${JSON.stringify({ ...attachment, originalPath }, null, 2)}\n`, "utf8"),
+      writeFile(metadataPath, `${JSON.stringify({ ...attachment, originalPath, hasAnnotations: request.hasAnnotations === true }, null, 2)}\n`, "utf8"),
     ]);
     const index = await this.#readIndex();
     index.items[id] = attachment;

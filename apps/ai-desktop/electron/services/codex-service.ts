@@ -11,10 +11,15 @@ import type {
   CodexStreamEvent,
   CodexStreamPlanStep,
   Locale,
+  ManagedExecutionMode,
+  CodexUserInputRequest,
+  ResolveCodexUserInputRequest,
   SandboxMode,
   SendMessageResponse,
   WorkspaceState,
 } from "../../shared/contracts/desktop.js";
+import { CodexSessionStore } from "./codex-session-store.js";
+import { TrustedCommandStore } from "./trusted-command-store.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -57,6 +62,7 @@ export class CodexService {
   readonly #workingDirectory: string;
   readonly #pending = new Map<number, PendingRequest>();
   readonly #approvals = new Map<number, CodexApproval>();
+  readonly #userInputs = new Map<number, CodexUserInputRequest>();
   readonly #turnWaiters = new Map<string, TurnWaiter>();
   readonly #notificationBacklog = new Map<string, BufferedNotification[]>();
   readonly #items = new Map<string, JsonObject>();
@@ -64,20 +70,51 @@ export class CodexService {
   #ready: Promise<void> | undefined;
   #requestId = 0;
   #threadId: string | undefined;
-  #threadSandbox: SandboxMode | undefined;
   #threadWorkspaceSignature: string | undefined;
+  #threadAttached = false;
   #activeTurnId: string | undefined;
   #lastError: string | null = null;
+  #activeExecutionMode: ManagedExecutionMode | null = null;
+  #activeWorkspaces: WorkspaceState | null = null;
+  readonly #trustedCommands: TrustedCommandStore;
+  readonly #sessions: CodexSessionStore;
+  readonly #onTrustedCommandDecision: (details: Record<string, unknown>) => void;
+  readonly #onThreadLifecycle: (details: Record<string, unknown>) => void;
 
-  constructor(workingDirectory: string) {
+  constructor(
+    workingDirectory: string,
+    trustedCommands: TrustedCommandStore,
+    sessions: CodexSessionStore,
+    onTrustedCommandDecision: (details: Record<string, unknown>) => void = () => undefined,
+    onThreadLifecycle: (details: Record<string, unknown>) => void = () => undefined,
+  ) {
     this.#workingDirectory = workingDirectory;
+    this.#trustedCommands = trustedCommands;
+    this.#sessions = sessions;
+    this.#onTrustedCommandDecision = onTrustedCommandDecision;
+    this.#onThreadLifecycle = onThreadLifecycle;
   }
 
-  newChat(): void {
-    void this.cancel();
-    this.#threadId = undefined;
-    this.#threadSandbox = undefined;
-    this.#threadWorkspaceSignature = undefined;
+  async newChat(): Promise<void> {
+    await this.cancel();
+    const stored = this.#sessions.read();
+    const threadId = this.#threadId || stored?.threadId;
+    if (threadId) {
+      try {
+        await this.#ensureReady();
+        await this.#request("thread/delete", { threadId });
+        this.#onThreadLifecycle({ action: "deleted", threadId, reason: "user_new_chat" });
+      } catch (error) {
+        this.#onThreadLifecycle({ action: "delete_failed", threadId, reason: errorMessage(error) });
+        // 官方硬删除未确认成功时保留本地恢复凭据，避免界面清空但任务仍留在官方存储。
+        throw new Error(`无法丢弃当前 Codex 任务：${errorMessage(error)}`);
+      }
+    }
+    this.#forgetThread();
+  }
+
+  activeSession(): { threadId: string | null } {
+    return { threadId: this.#threadId || this.#sessions.read()?.threadId || null };
   }
 
   async getStatus(): Promise<CodexHarnessStatus> {
@@ -109,7 +146,7 @@ export class CodexService {
   async logout(): Promise<CodexHarnessStatus> {
     await this.#ensureReady();
     await this.#request("account/logout", {});
-    this.newChat();
+    await this.newChat();
     return this.getStatus();
   }
 
@@ -117,15 +154,44 @@ export class CodexService {
     return [...this.#approvals.values()];
   }
 
-  resolveApproval(requestId: number, decision: "accept" | "decline"): void {
-    if (!Number.isSafeInteger(requestId) || !this.#approvals.has(requestId)) {
+  resolveApproval(requestId: number, decision: "accept" | "decline", trustProjectCommand = false): { trusted: boolean; projectRoot: string | null } {
+    const approval = this.#approvals.get(requestId);
+    if (!Number.isSafeInteger(requestId) || !approval) {
       throw new Error("Codex approval request is no longer active.");
     }
+    const trustResult = decision === "accept" && trustProjectCommand && approval.kind === "command" && approval.command
+      ? this.#trustedCommands.trust(approval.command, approval.cwd, this.#activeWorkspaces)
+      : { trusted: false, projectRoot: null };
     this.#approvals.delete(requestId);
     this.#respond(requestId, { decision });
+    if (trustResult.trusted) {
+      this.#onTrustedCommandDecision({ action: "trusted", requestId, command: approval.command, cwd: approval.cwd, projectRoot: trustResult.projectRoot });
+    }
+    return trustResult;
+  }
+
+  pendingUserInputs(): CodexUserInputRequest[] {
+    return [...this.#userInputs.values()];
+  }
+
+  resolveUserInput(request: ResolveCodexUserInputRequest): void {
+    if (!request || !Number.isSafeInteger(request.requestId)) throw new Error("Invalid Codex user input request.");
+    const pending = this.#userInputs.get(request.requestId);
+    if (!pending) throw new Error("Codex user input request is no longer active.");
+    const answers: Record<string, { answers: string[] }> = {};
+    for (const question of pending.questions) {
+      const values = request.answers?.[question.id];
+      if (!Array.isArray(values) || values.length !== 1 || typeof values[0] !== "string" || !values[0].trim()) {
+        throw new Error(`An answer is required for ${question.id}.`);
+      }
+      answers[question.id] = { answers: [values[0].trim().slice(0, 2_000)] };
+    }
+    this.#userInputs.delete(request.requestId);
+    this.#respond(request.requestId, { answers });
   }
 
   async cancel(): Promise<boolean> {
+    this.#clearUserInputs();
     if (!this.#threadId || !this.#activeTurnId) return false;
     await this.#request("turn/interrupt", { threadId: this.#threadId, turnId: this.#activeTurnId });
     return true;
@@ -138,6 +204,7 @@ export class CodexService {
     workspaces: WorkspaceState,
     attachmentPaths: string[] = [],
     onStreamEvent: (event: CodexStreamEvent) => void = () => undefined,
+    executionMode: ManagedExecutionMode | null = null,
   ): Promise<SendMessageResponse> {
     const normalizedMessage = message.trim();
     if ((!normalizedMessage && attachmentPaths.length === 0) || normalizedMessage.length > 20_000) {
@@ -148,54 +215,106 @@ export class CodexService {
     await this.cancel();
     const primaryRoot = workspaces.roots.find((root) => root.id === workspaces.primaryId) || workspaces.roots[0];
     if (!primaryRoot) throw new Error("At least one registered workspace is required.");
-    const threadId = await this.#getThread(sandboxMode, workspaces, primaryRoot.path);
+    const threadId = await this.#getThread(sandboxMode, workspaces, primaryRoot.path, locale);
     const userTask = normalizedMessage || (locale === "ja" ? "添付画像を確認してください。" : "请阅读并分析附加截图。");
     const input: JsonObject[] = [{
       type: "text",
-      text: `${this.#responseLanguage(locale)}\n\n${workspaceContext(workspaces)}\n\n${userTask}`,
+      text: `${workspaceContext(workspaces)}\n\n${userTask}`,
     }];
     // 官方 app-server 0.146.0 的 turn/start 使用 localImage 路径读取本地主进程已校验的 PNG。
     input.push(...attachmentPaths.map((filePath) => ({ type: "localImage", path: filePath })));
-    const result = asObject(await this.#request("turn/start", {
-      threadId,
-      cwd: primaryRoot.path,
-      approvalPolicy: "on-request",
-      approvalsReviewer: "user",
-      sandboxPolicy: createSandboxPolicy(sandboxMode, workspaces),
-      input,
-    }));
-    const turnId = stringValue(asObject(result.turn).id);
-    if (!turnId) throw new Error("Codex harness did not return a turn id.");
-    this.#activeTurnId = turnId;
-    return this.#waitForTurn(turnId, onStreamEvent);
+    this.#activeExecutionMode = executionMode;
+    this.#activeWorkspaces = workspaces;
+    try {
+      const result = asObject(await this.#request("turn/start", {
+        threadId,
+        cwd: primaryRoot.path,
+        approvalPolicy: "on-request",
+        approvalsReviewer: "user",
+        sandboxPolicy: createSandboxPolicy(sandboxMode, workspaces),
+        input,
+      }));
+      const turnId = stringValue(asObject(result.turn).id);
+      if (!turnId) throw new Error("Codex harness did not return a turn id.");
+      this.#activeTurnId = turnId;
+      return { ...await this.#waitForTurn(turnId, onStreamEvent), threadId };
+    } finally {
+      this.#activeExecutionMode = null;
+      this.#activeWorkspaces = null;
+    }
   }
 
   dispose(): void {
+    this.#clearUserInputs();
     this.#process?.kill();
     this.#process = undefined;
     this.#ready = undefined;
   }
 
-  async #getThread(sandboxMode: SandboxMode, workspaces: WorkspaceState, cwd: string): Promise<string> {
-    const workspaceSignature = JSON.stringify(workspaces);
-    if (
-      this.#threadId
-      && this.#threadSandbox === sandboxMode
-      && this.#threadWorkspaceSignature === workspaceSignature
-    ) return this.#threadId;
+  async #getThread(sandboxMode: SandboxMode, workspaces: WorkspaceState, cwd: string, locale: Locale): Promise<string> {
+    const developerInstructions = this.#developerInstructions(locale);
+    const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
+    if (this.#threadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return this.#threadId;
+
+    const stored = this.#sessions.read();
+    const resumableThreadId = this.#threadId && this.#threadWorkspaceSignature === workspaceSignature
+      ? this.#threadId
+      : stored?.workspaceSignature === workspaceSignature ? stored.threadId : null;
+    if (resumableThreadId) {
+      try {
+        const resumed = asObject(await this.#request("thread/resume", { threadId: resumableThreadId }));
+        const threadId = stringValue(asObject(resumed.thread).id) || resumableThreadId;
+        this.#rememberThread(threadId, workspaceSignature);
+        this.#onThreadLifecycle({ action: "resumed", threadId });
+        return threadId;
+      } catch (error) {
+        // 恢复失败可能只是临时连接故障；保留凭据并让用户重试，禁止静默删除仍可恢复的任务。
+        this.#onThreadLifecycle({ action: "resume_failed", threadId: resumableThreadId, reason: errorMessage(error) });
+        throw new Error(`无法恢复当前 Codex 任务：${errorMessage(error)}`);
+      }
+    }
+
+    const previousThreadId = this.#threadId || stored?.threadId;
+    if (previousThreadId) {
+      try {
+        await this.#request("thread/delete", { threadId: previousThreadId });
+        this.#onThreadLifecycle({ action: "deleted", threadId: previousThreadId, reason: "workspace_signature_changed" });
+      } catch (error) {
+        this.#onThreadLifecycle({ action: "delete_failed", threadId: previousThreadId, reason: errorMessage(error) });
+        throw new Error(`工作区已变化，但无法丢弃旧 Codex 任务：${errorMessage(error)}`);
+      }
+      this.#forgetThread();
+    }
     const result = asObject(await this.#request("thread/start", {
       cwd,
       approvalPolicy: "on-request",
       // 桌面 UI 必须由当前用户审查审批；不能继承全局 auto_review 后静默代审。
       approvalsReviewer: "user",
       sandbox: sandboxMode,
+      // 当前活动线程需要跨 Electron 重建恢复；用户点击新建任务时再通过 thread/delete 明确丢弃。
+      ephemeral: false,
+      // 风格与语言属于客户端开发约束，不混入用户正文或污染任务标题。
+      developerInstructions,
     }));
     const threadId = stringValue(asObject(result.thread).id);
     if (!threadId) throw new Error("Codex harness did not return a thread id.");
-    this.#threadId = threadId;
-    this.#threadSandbox = sandboxMode;
-    this.#threadWorkspaceSignature = workspaceSignature;
+    this.#rememberThread(threadId, workspaceSignature);
+    this.#onThreadLifecycle({ action: "started", threadId });
     return threadId;
+  }
+
+  #rememberThread(threadId: string, workspaceSignature: string): void {
+    this.#threadId = threadId;
+    this.#threadWorkspaceSignature = workspaceSignature;
+    this.#threadAttached = true;
+    this.#sessions.write(threadId, workspaceSignature);
+  }
+
+  #forgetThread(): void {
+    this.#threadId = undefined;
+    this.#threadWorkspaceSignature = undefined;
+    this.#threadAttached = false;
+    this.#sessions.clear();
   }
 
   #ensureReady(): Promise<void> {
@@ -292,7 +411,13 @@ export class CodexService {
       return;
     }
     if (method === "item/tool/requestUserInput") {
-      this.#respond(id, { answers: {} });
+      const request = normalizeUserInputRequest(id, params);
+      if (!request) {
+        this.#respond(id, { answers: {} });
+        return;
+      }
+      // 官方请求保持悬而未决，直到渲染层通过白名单 IPC 提交答案；禁止用空答案跳过真实疑问。
+      this.#userInputs.set(id, request);
       return;
     }
     if (method !== "item/commandExecution/requestApproval" && method !== "item/fileChange/requestApproval") {
@@ -303,14 +428,47 @@ export class CodexService {
     const itemId = stringValue(params.itemId) || "";
     const item = this.#items.get(itemId) || {};
     const isCommand = method === "item/commandExecution/requestApproval";
+    const command = displayValue(params.command || item.command);
+    const cwd = stringValue(params.cwd || item.cwd);
+    const analysisOnly = this.#activeExecutionMode === "conversation-managed" || this.#activeExecutionMode === "requirement-managed";
+    if (analysisOnly) {
+      this.#respond(id, { decision: "decline" });
+      this.#emitCommandPolicy(id, command || displayValue(item.changes), "会话托管和需求托管只允许只读分析，不能申请命令提权或修改文件。");
+      return;
+    }
+    if (isCommand && this.#activeExecutionMode === "task-managed" && command && isManagedBuildOrStartCommand(command)) {
+      this.#respond(id, { decision: "decline" });
+      this.#emitCommandPolicy(id, command, "任务托管只允许代码级验证；构建、启动和重启需单独使用测试托管执行。");
+      return;
+    }
+    if (isCommand && command) {
+      const trusted = this.#trustedCommands.isTrusted(command, cwd, this.#activeWorkspaces);
+      if (trusted.trusted) {
+        this.#respond(id, { decision: "accept" });
+        this.#onTrustedCommandDecision({ action: "auto-approved", requestId: id, command, cwd, projectRoot: trusted.projectRoot });
+        this.#emitCommandPolicy(id, command, "已按当前项目登记的可信命令自动允许。", "completed");
+        return;
+      }
+    }
     this.#approvals.set(id, {
       requestId: id,
       kind: isCommand ? "command" : "fileChange",
       title: isCommand ? "Codex requests command execution" : "Codex requests file changes",
       reason: stringValue(params.reason),
-      command: displayValue(params.command || item.command),
-      cwd: stringValue(params.cwd || item.cwd),
+      command,
+      cwd,
       details: isCommand ? displayValue(params.commandActions) : displayValue(item.changes),
+      trustEligible: isCommand && this.#trustedCommands.canTrust(command, cwd, this.#activeWorkspaces),
+    });
+  }
+
+  #emitCommandPolicy(id: number, detail: string | null, summary: string, status = "blocked"): void {
+    const turnId = this.#activeTurnId;
+    const waiter = turnId ? this.#turnWaiters.get(turnId) : undefined;
+    waiter?.emit({
+      type: "activity",
+      turnId: turnId || "managed",
+      activity: { id: `policy-${id}`, itemType: "commandPolicy", phase: "completed", status, summary, detail },
     });
   }
 
@@ -371,6 +529,7 @@ export class CodexService {
   #finishTurn(turnId: string, turn: JsonObject, waiter: TurnWaiter): void {
     this.#turnWaiters.delete(turnId);
     this.#notificationBacklog.delete(turnId);
+    this.#userInputs.clear();
     if (this.#activeTurnId === turnId) this.#activeTurnId = undefined;
     const status = stringValue(turn.status);
     if (status === "failed") {
@@ -399,14 +558,21 @@ export class CodexService {
     this.#turnWaiters.clear();
     this.#notificationBacklog.clear();
     this.#approvals.clear();
+    this.#userInputs.clear();
     this.#process = undefined;
     this.#ready = undefined;
+    this.#threadAttached = false;
   }
 
-  #responseLanguage(locale: Locale): string {
+  #clearUserInputs(): void {
+    for (const requestId of this.#userInputs.keys()) this.#respond(requestId, { answers: {} });
+    this.#userInputs.clear();
+  }
+
+  #developerInstructions(locale: Locale): string {
     return locale === "ja"
-      ? "Reply in natural Japanese unless the user explicitly requests another language."
-      : "除非用户明确要求其他语言，否则请使用自然、清晰的简体中文回答。";
+      ? "Reply in natural Japanese unless the user explicitly requests another language. Lead with the outcome, speak like a thoughtful collaborator, and use Markdown only when it makes the answer easier to scan. Keep execution constraints internal instead of repeating mechanical stage language."
+      : "除非用户明确要求其他语言，否则请使用自然、清晰的简体中文回答。先给结论，像体贴、可靠的协作伙伴一样结合上下文交流；短问题直接回答，复杂内容才使用必要的 Markdown 结构。执行门禁属于内部约束，不要机械复述阶段名称、规则或固定模板。";
   }
 }
 
@@ -492,6 +658,7 @@ function createStreamActivity(item: JsonObject, itemId: string, phase: "started"
     detail: phase === "completed" && itemType === "commandExecution"
       ? truncate(stringValue(item.aggregatedOutput), 2_000)
       : null,
+    exitCode: numberValue(item.exitCode) ?? undefined,
   };
 }
 
@@ -542,6 +709,34 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function numberValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeUserInputRequest(requestId: number, params: JsonObject): CodexUserInputRequest | null {
+  if (!Array.isArray(params.questions)) return null;
+  const seenIds = new Set<string>();
+  const questions = params.questions.map(asObject).map((question) => {
+    const id = stringValue(question.id)?.trim().slice(0, 80) || "";
+    const prompt = stringValue(question.question)?.trim().slice(0, 2_000) || "";
+    if (!id || !prompt || seenIds.has(id)) return null;
+    seenIds.add(id);
+    const options = Array.isArray(question.options)
+      ? question.options.map(asObject).map((option) => ({
+        label: stringValue(option.label)?.trim().slice(0, 200) || "",
+        description: stringValue(option.description)?.trim().slice(0, 500) || "",
+      })).filter((option) => option.label)
+      : [];
+    return {
+      id,
+      header: stringValue(question.header)?.trim().slice(0, 80) || id,
+      question: prompt,
+      options,
+    };
+  }).filter((question): question is NonNullable<typeof question> => question !== null);
+  return questions.length > 0 ? { requestId, questions } : null;
+}
+
 function displayValue(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (value === undefined || value === null) return null;
@@ -571,6 +766,10 @@ function isTrustedLoginUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isManagedBuildOrStartCommand(command: string): boolean {
+  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:build|start|dev|serve|preview)\b|vite\s+build|electron-builder|\belectron\s+\.|gradle(?:w)?\s+(?:build|assemble|bootRun)\b|cargo\s+(?:build|run)\b/i.test(command);
 }
 
 /** 把全局只读开关和逐目录权限合成为官方 app-server 的精确沙箱策略。 */

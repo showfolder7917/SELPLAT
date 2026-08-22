@@ -10,7 +10,7 @@
     "dev:developer": "cross-env VITE_APP_VARIANT=developer vite",
     "desktop:dev": "npm run desktop:dev:office",
     "desktop:dev:office": "npm run build:electron && concurrently -k \"cross-env VITE_APP_VARIANT=office vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && cross-env AI_DESKTOP_VARIANT=office VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
-    "desktop:dev:developer": "npm run build:electron && concurrently -k \"cross-env VITE_APP_VARIANT=developer vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && cross-env AI_DESKTOP_VARIANT=developer VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "desktop:dev:developer": "npm run build:electron && concurrently -k -n renderer,main,desktop \"cross-env VITE_APP_VARIANT=developer vite --host 127.0.0.1 --port 5173\" \"tsc -p tsconfig.electron.json --watch --preserveWatchOutput\" \"wait-on http://127.0.0.1:5173 && cross-env AI_DESKTOP_VARIANT=developer VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electronmon .\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build:electron": "tsc -p tsconfig.electron.json",
     "build:renderer:office": "cross-env VITE_APP_VARIANT=office vite build && node scripts/prepare-sites-build.mjs",
@@ -31,7 +31,12 @@
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "test:screenshot": "npm run build:electron && node --test tests/screenshot-store.test.mjs",
     "test:stream": "npm run build:electron && node --test tests/codex-stream.test.mjs",
-    "test:workspace": "npm run build:electron && node --test tests/workspace-store.test.mjs"
+    "test:workspace": "npm run build:electron && node --test tests/workspace-store.test.mjs",
+    "test:audit": "npm run build:electron && node --test tests/business-audit-log.test.mjs",
+    "test:explorer": "node --test tests/developer-explorer-collapse.test.mjs",
+    "test:interaction": "node scripts/run-interaction-tests.mjs",
+    "test:managed": "node --test tests/managed-task-executor-contract.test.mjs tests/user-input-and-screenshot-contract.test.mjs",
+    "test:trust": "node --test tests/trusted-command-store.test.mjs tests/developer-hot-reload.test.mjs"
   },
   "dependencies": {
     "@fluentui/react-icons": "^2.0.0",
@@ -40,9 +45,12 @@
     "@vitejs/plugin-react": "5.0.4",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "vite": "6.4.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -50,8 +58,19 @@
     "cross-env": "^10.0.0",
     "electron": "^38.0.0",
     "electron-builder": "^26.0.0",
+    "electronmon": "^2.0.4",
     "typescript": "6.0.3",
     "wait-on": "^8.0.0"
   },
-  "build": {}
+  "build": {},
+  "electronmon": {
+    "patterns": [
+      "!src/**",
+      "!electron/**",
+      "!shared/**",
+      "!tests/**",
+      "!temp/**",
+      "!log/**"
+    ]
+  }
 }

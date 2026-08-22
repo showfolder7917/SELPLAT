@@ -1,11 +1,13 @@
 import path from "node:path";
 
-import { BrowserWindow, desktopCapturer, dialog, ipcMain, screen, shell } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, shell } from "electron";
 
 import { LOCALES, SANDBOX_MODES, WORKSPACE_PERMISSIONS } from "../../shared/contracts/desktop.js";
 import type {
   AppVariant,
   DesktopSettings,
+  ManagedExecutionMode,
+  ResolveCodexUserInputRequest,
   ScreenCaptureFrameResult,
   ScreenCaptureRequest,
   ScreenCaptureStreamSource,
@@ -16,15 +18,20 @@ import type {
   WindowAction,
 } from "../../shared/contracts/desktop.js";
 import { CodexService } from "../services/codex-service.js";
+import { BusinessAuditLog } from "../services/business-audit-log.js";
+import { ManagedTaskExecutor } from "../services/managed-task-executor.js";
 import { ScreenshotStore } from "../services/screenshot-store.js";
 import { SettingsStore } from "../services/settings-store.js";
 import { WorkspaceStore } from "../services/workspace-store.js";
+import { TrustedCommandStore } from "../services/trusted-command-store.js";
 
 interface DesktopIpcDependencies {
   codex: CodexService;
   screenshots: ScreenshotStore;
   settings: SettingsStore;
   workspaces: WorkspaceStore;
+  trustedCommands: TrustedCommandStore;
+  audit: BusinessAuditLog;
   projectRoot: string;
   variant: AppVariant;
   preloadPath: string;
@@ -51,7 +58,11 @@ const screenshotWindowSessions = new Map<number, ScreenshotWindowSession>();
 const screenCaptureSources = new Map<string, ScreenCaptureStreamSource>();
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { codex, screenshots, settings, workspaces, projectRoot, variant, preloadPath, rendererRoot } = dependencies;
+  const { codex, screenshots, settings, workspaces, trustedCommands, audit, projectRoot, variant, preloadPath, rendererRoot } = dependencies;
+  const activeAuditTasks = new Map<number, string>();
+  const seenApprovalRequests = new Set<number>();
+  const approvalAuditTasks = new Map<number, string>();
+  const managedExecutor = new ManagedTaskExecutor();
 
   const resolveScreenCaptureSource = async (display: Electron.Display): Promise<ScreenCaptureStreamSource> => {
     const displayKey = String(display.id);
@@ -90,36 +101,92 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
 
   ipcMain.handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
   ipcMain.handle("desktop:get-settings", () => settings.read());
-  ipcMain.handle("desktop:update-settings", (_event, patch: Partial<DesktopSettings>) => settings.update(patch));
+  ipcMain.handle("desktop:update-settings", (_event, patch: Partial<DesktopSettings>) => {
+    const result = settings.update(patch);
+    audit.recordEvent("settings.updated", { locale: result.locale, sandboxMode: result.sandboxMode });
+    return result;
+  });
   ipcMain.handle("desktop:get-workspaces", () => workspaces.read());
   ipcMain.handle("desktop:add-workspace", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const options = { properties: ["openDirectory", "createDirectory"] as ("openDirectory" | "createDirectory")[] };
     const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options);
-    return result.canceled || !result.filePaths[0] ? workspaces.read() : workspaces.add(result.filePaths[0]);
+    if (result.canceled || !result.filePaths[0]) return workspaces.read();
+    const state = workspaces.add(result.filePaths[0]);
+    audit.recordEvent("workspace.added", { path: result.filePaths[0] });
+    return state;
   });
   ipcMain.handle("desktop:update-workspace-permission", (_event, id: string, permission: WorkspacePermission) => {
     if (!WORKSPACE_PERMISSIONS.includes(permission)) throw new Error("Invalid workspace permission.");
-    return workspaces.updatePermission(id, permission);
+    const state = workspaces.updatePermission(id, permission);
+    audit.recordEvent("workspace.permission_updated", { id, permission });
+    return state;
   });
-  ipcMain.handle("desktop:set-primary-workspace", (_event, id: string) => workspaces.setPrimary(id));
-  ipcMain.handle("desktop:remove-workspace", (_event, id: string) => workspaces.remove(id));
+  ipcMain.handle("desktop:set-primary-workspace", (_event, id: string) => {
+    const state = workspaces.setPrimary(id);
+    audit.recordEvent("workspace.primary_updated", { id });
+    return state;
+  });
+  ipcMain.handle("desktop:remove-workspace", (_event, id: string) => {
+    const state = workspaces.remove(id);
+    audit.recordEvent("workspace.removed", { id });
+    return state;
+  });
   ipcMain.handle("desktop:list-workspace-entries", (_event, id: string) => workspaces.listEntries(id));
   ipcMain.handle("desktop:get-codex-status", () => codex.getStatus());
+  ipcMain.handle("desktop:get-active-codex-session", () => codex.activeSession());
   ipcMain.handle("desktop:login-with-chatgpt", async () => {
     const login = await codex.loginWithChatGPT();
     await shell.openExternal(login.authUrl);
     return login;
   });
   ipcMain.handle("desktop:logout-codex", () => codex.logout());
-  ipcMain.handle("desktop:get-codex-approvals", () => codex.pendingApprovals());
+  ipcMain.handle("desktop:get-codex-approvals", () => {
+    const approvals = codex.pendingApprovals();
+    for (const approval of approvals) {
+      if (seenApprovalRequests.has(approval.requestId)) continue;
+      seenApprovalRequests.add(approval.requestId);
+      const taskId = [...activeAuditTasks.values()].at(-1);
+      if (taskId) approvalAuditTasks.set(approval.requestId, taskId);
+      audit.recordEvent("approval.requested", {
+        requestId: approval.requestId,
+        kind: approval.kind,
+        title: approval.title,
+        command: approval.command,
+        cwd: approval.cwd,
+      }, taskId);
+    }
+    return approvals;
+  });
   ipcMain.handle("desktop:resolve-codex-approval", (_event, requestId: number, decision: "accept" | "decline") => {
     if (!Number.isSafeInteger(requestId) || (decision !== "accept" && decision !== "decline")) {
       throw new Error("Invalid Codex approval response.");
     }
-    codex.resolveApproval(requestId, decision);
+    // “允许”对满足安全边界的项目内固定命令默认同时建立信任；文件修改和高风险命令不会进入持久信任。
+    const trustResult = codex.resolveApproval(requestId, decision, decision === "accept");
+    audit.recordApproval(approvalAuditTasks.get(requestId), requestId, decision, trustResult.trusted);
+    seenApprovalRequests.delete(requestId);
+    approvalAuditTasks.delete(requestId);
+  });
+  ipcMain.handle("desktop:get-trusted-command-info", () => ({ count: trustedCommands.count() }));
+  ipcMain.handle("desktop:clear-trusted-commands", () => {
+    trustedCommands.clear();
+    audit.recordEvent("trusted_commands.cleared");
+    return { count: 0 };
+  });
+  ipcMain.handle("desktop:get-codex-user-inputs", () => codex.pendingUserInputs());
+  ipcMain.handle("desktop:resolve-codex-user-input", (_event, request: ResolveCodexUserInputRequest) => {
+    codex.resolveUserInput(request);
+    // 业务日志只记录协议生命周期，不记录可能包含敏感内容的答案正文。
+    audit.recordEvent("user_input.resolved", { requestId: request.requestId, answerCount: Object.keys(request.answers || {}).length });
   });
   ipcMain.handle("desktop:new-chat", () => codex.newChat());
+  ipcMain.handle("desktop:open-external-url", async (_event, value: string) => {
+    if (typeof value !== "string" || value.length > 2_048) throw new Error("Invalid external URL.");
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Only HTTP(S) links can be opened.");
+    await shell.openExternal(url.toString());
+  });
   ipcMain.handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();
@@ -403,7 +470,11 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (session) {
       const owner = BrowserWindow.getAllWindows().find((window) => window.webContents.id === session.ownerWebContentsId);
       if (owner && !owner.isDestroyed()) {
-        owner.webContents.send("desktop:screenshot-completed", { attachment: saved, dataUrl: request.annotatedDataUrl });
+        owner.webContents.send("desktop:screenshot-completed", {
+          attachment: saved,
+          dataUrl: request.annotatedDataUrl,
+          hasAnnotations: request.hasAnnotations === true,
+        });
       }
     }
     return saved;
@@ -415,23 +486,69 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (error) throw new Error(error);
   });
   ipcMain.handle("desktop:clear-temp-files", () => screenshots.clear());
-  ipcMain.handle("desktop:cancel", () => codex.cancel());
+  ipcMain.handle("desktop:get-audit-log-info", () => audit.info());
+  ipcMain.handle("desktop:open-audit-log-directory", async () => {
+    const error = await shell.openPath(audit.ensure());
+    if (error) throw new Error(error);
+  });
+  ipcMain.handle("desktop:cancel", async (event) => {
+    const taskId = activeAuditTasks.get(event.sender.id);
+    audit.recordEvent("task.cancel_requested", {}, taskId);
+    return codex.cancel();
+  });
   ipcMain.handle("desktop:send-message", async (ipcEvent, request: SendMessageRequest) => {
     if (!request || typeof request.message !== "string") throw new Error("Invalid message request.");
     if (!LOCALES.includes(request.locale)) throw new Error("Invalid locale.");
     if (!SANDBOX_MODES.includes(request.sandboxMode)) throw new Error("Invalid sandbox mode.");
+    const executionMode: ManagedExecutionMode = isManagedExecutionMode(request.executionMode)
+      ? request.executionMode
+      : "conversation-managed";
     const attachmentPaths = await screenshots.resolveAttachmentPaths(request.attachmentIds || []);
-    return codex.send(
-      request.message,
-      request.locale,
-      request.sandboxMode,
-      workspaces.read(),
-      attachmentPaths,
-      (streamEvent) => {
+    const workspaceState = workspaces.read();
+    const previousTask = audit.info().latestTask;
+    const restartRequired = executionMode === "test-managed" && Boolean(previousTask?.changedFiles.some((file) =>
+      /(^|\/)apps\/ai-desktop\/(src|electron|shared|package\.json|vite\.config)/.test(file),
+    ));
+    const taskId = audit.startTask({
+      message: request.message,
+      locale: request.locale,
+      sandboxMode: request.sandboxMode,
+      workspaces: workspaceState,
+      attachmentCount: attachmentPaths.length,
+      managedMode: executionMode,
+    });
+    activeAuditTasks.set(ipcEvent.sender.id, taskId);
+    try {
+      let firstTurn = true;
+      const emit = (streamEvent: Parameters<typeof audit.recordStreamEvent>[1]) => {
+        audit.recordStreamEvent(taskId, streamEvent);
         // 进度只回送给发起本轮任务的窗口，避免多窗口之间串流或泄露任务上下文。
         if (!ipcEvent.sender.isDestroyed()) ipcEvent.sender.send("desktop:codex-stream-event", streamEvent);
-      },
-    );
+      };
+      const response = await managedExecutor.run({
+        mode: executionMode,
+        message: request.message,
+        restartRequired,
+        emit,
+        runTurn: async (message, onEvent, mode) => {
+          const currentAttachments = firstTurn ? attachmentPaths : [];
+          firstTurn = false;
+          const effectiveSandbox = mode === "conversation-managed" || mode === "requirement-managed" ? "read-only" : request.sandboxMode;
+          return codex.send(message, request.locale, effectiveSandbox, workspaceState, currentAttachments, onEvent, mode);
+        },
+      });
+      audit.finishTask(taskId, "completed", undefined, response.managedStatus, response.pendingActions);
+      if (response.restartRequired) {
+        audit.recordEvent("application.controlled_restart_scheduled", { reason: "test_managed_completed" }, taskId);
+        setTimeout(() => { app.relaunch(); app.exit(0); }, 1_200);
+      }
+      return response;
+    } catch (error) {
+      audit.finishTask(taskId, "failed", error instanceof Error ? error.message : "Codex task failed.");
+      throw error;
+    } finally {
+      activeAuditTasks.delete(ipcEvent.sender.id);
+    }
   });
 
   ipcMain.on("window:control", (event, action: WindowAction) => {
@@ -441,4 +558,8 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (action === "maximize") window.isMaximized() ? window.unmaximize() : window.maximize();
     if (action === "close") window.close();
   });
+}
+
+function isManagedExecutionMode(value: unknown): value is ManagedExecutionMode {
+  return value === "conversation-managed" || value === "requirement-managed" || value === "task-managed" || value === "test-managed";
 }

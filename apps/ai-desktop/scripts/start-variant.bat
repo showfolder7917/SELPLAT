@@ -40,6 +40,13 @@ if errorlevel 1 (
 
 :dependencies_ready
 
+if /i "%DESKTOP_VARIANT%"=="developer" (
+  echo [DEV] Starting Developer with renderer hot reload and automatic Electron restart...
+  call npm run desktop:dev:developer
+  set "APP_EXIT_CODE=%ERRORLEVEL%"
+  goto app_finished
+)
+
 echo [BUILD] Compiling %DESKTOP_VARIANT% desktop application...
 call npm run build:%DESKTOP_VARIANT%
 if errorlevel 1 (
@@ -52,6 +59,8 @@ echo [START] %DESKTOP_VARIANT%
 set "AI_DESKTOP_VARIANT=%DESKTOP_VARIANT%"
 call "%CD%\node_modules\.bin\electron.cmd" .
 set "APP_EXIT_CODE=%ERRORLEVEL%"
+
+:app_finished
 echo.
 echo [EXIT] Application stopped with code %APP_EXIT_CODE%.
 pause

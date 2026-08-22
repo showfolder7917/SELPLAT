@@ -1,11 +1,13 @@
-import { ClipboardEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ClipboardEvent, CSSProperties, FormEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Add24Regular,
   ArrowClockwise24Regular,
+  Beaker24Regular,
   Branch24Regular,
   Bug24Regular,
   ChevronDown16Regular,
   ChevronRight16Regular,
+  CheckmarkCircle24Regular,
   Code24Regular,
   Delete16Regular,
   Delete24Regular,
@@ -14,12 +16,14 @@ import {
   EyeOff24Regular,
   Folder24Regular,
   FolderOpen24Regular,
-  MoreHorizontal24Regular,
   Prompt24Regular,
+  Play24Regular,
   Search24Regular,
   Screenshot24Regular,
   Send24Filled,
   Settings24Regular,
+  ShieldLock16Filled,
+  ShieldLock16Regular,
   ShieldCheckmark24Regular,
   Square20Regular,
   Star16Filled,
@@ -36,14 +40,21 @@ import type {
   CodexStreamActivity,
   CodexStreamEvent,
   CodexStreamPlanStep,
+  CodexUserInputRequest,
   Locale,
+  ManagedExecutionMode,
+  ManagedExecutionUpdate,
   SandboxMode,
   ScreenshotAttachment,
   TempDirectoryInfo,
+  TrustedCommandInfo,
+  AuditLogInfo,
+  AuditTaskSummary,
   WorkspaceEntry,
   WorkspacePermission,
   WorkspaceState,
 } from "../../../shared/contracts/desktop";
+import { MarkdownMessage } from "./MarkdownMessage";
 import "./developer.css";
 
 type ComposerAttachment = ScreenshotAttachment & { dataUrl: string };
@@ -59,15 +70,25 @@ type Message = {
   activities?: CodexStreamActivity[];
   plan?: CodexStreamPlanStep[];
   changedFiles?: string[];
+  managedExecution?: ManagedExecutionUpdate;
+  managedMode?: ManagedExecutionMode;
+  actionTriggered?: boolean;
+  turnTextStart?: number;
 };
 
 const labels = {
-  ja: { title: "Developer", placeholder: "コード、調査、変更内容を入力（画像を貼り付け可能）", ready: "Codex harness 接続済み", signIn: "ChatGPT でログイン", signOut: "ログアウト", signedOut: "ChatGPT にログインしてください", browserOpened: "ブラウザーでログインを完了してください", files: "EXPLORER", workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定", remove: "削除", tasks: "TASKS", newTask: "新しいタスク", settings: "接続と実行設定", account: "ChatGPT アカウント", readOnly: "読み取り専用", write: "ワークスペース書き込み", thinking: "Codex が処理中...", approve: "許可", decline: "拒否", screenshot: "現在の画面をキャプチャ", hiddenScreenshot: "AI Desktop を隠してキャプチャ", tempFiles: "一時ファイル", openTemp: "一時フォルダーを開く", clearTemp: "すべて消去", clearConfirm: "AI Desktop の一時ファイルをすべて削除しますか？", attachment: "画像添付" },
-  "zh-CN": { title: "Developer", placeholder: "输入代码、调查或修改任务（可粘贴截图）", ready: "Codex harness 已连接", signIn: "使用 ChatGPT 登录", signOut: "退出登录", signedOut: "请先登录 ChatGPT", browserOpened: "请在浏览器中完成登录", files: "资源管理器", workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除", tasks: "任务", newTask: "新建任务", settings: "连接与执行设置", account: "ChatGPT 账号", readOnly: "只读", write: "工作区写入", thinking: "Codex 正在处理...", approve: "允许", decline: "拒绝", screenshot: "截取当前屏幕", hiddenScreenshot: "隐藏 AI Desktop 后截图", tempFiles: "临时文件", openTemp: "临时目录", clearTemp: "一键清理", clearConfirm: "确定清理 AI Desktop temp 中的全部临时文件吗？", attachment: "图片附件" },
+  ja: { title: "Developer", placeholder: "コード、調査、変更内容を入力（画像を貼り付け可能）", ready: "Codex harness 接続済み", signIn: "ChatGPT でログイン", signOut: "ログアウト", signedOut: "ChatGPT にログインしてください", browserOpened: "ブラウザーでログインを完了してください", files: "EXPLORER", workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定", remove: "削除", removeConfirm: "ワークスペース一覧から「{name}」を削除しますか？ディスク上のフォルダーは削除されません。", minimumWorkspace: "ワークスペースを1つ以上残してください", tasks: "TASKS", newTask: "新しいタスク", expand: "展開", collapse: "折りたたむ", settings: "接続と実行設定", account: "ChatGPT アカウント", readOnly: "読み取り専用", write: "ワークスペース書き込み", readOnlyTip: "現在は読み取り専用", writeTip: "現在は書き込み可能", thinking: "Codex が処理中...", approve: "許可", approveAndTrust: "許可して信頼", trustHint: "同じプロジェクトとコマンドは次回から自動的に許可されます。", decline: "拒否", screenshot: "現在の画面をキャプチャ", hiddenScreenshot: "AI Desktop を隠してキャプチャ", tempFiles: "一時ファイル", openTemp: "一時フォルダーを開く", clearTemp: "すべて消去", clearConfirm: "AI Desktop の一時ファイルをすべて削除しますか？", trustedCommands: "信頼済みコマンド", clearTrustedCommands: "信頼をすべて解除", clearTrustedConfirm: "登録済みの信頼コマンドをすべて解除しますか？", auditLogs: "業務ログ", openAuditLogs: "ログフォルダーを開く", noAuditTask: "タスク履歴はまだありません", conversationManaged: "会話管理", requirementManaged: "要件管理", taskManaged: "タスク管理", testManaged: "テスト管理", attachment: "画像添付" },
+  "zh-CN": { title: "Developer", placeholder: "输入代码、调查或修改任务（可粘贴截图）", ready: "Codex harness 已连接", signIn: "使用 ChatGPT 登录", signOut: "退出登录", signedOut: "请先登录 ChatGPT", browserOpened: "请在浏览器中完成登录", files: "资源管理器", workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除", removeConfirm: "确定从工作区列表移除“{name}”吗？不会删除磁盘中的真实目录。", minimumWorkspace: "至少保留一个工作区", tasks: "任务", newTask: "新建任务", expand: "展开", collapse: "折叠", settings: "连接与执行设置", account: "ChatGPT 账号", readOnly: "只读", write: "工作区写入", readOnlyTip: "当前只读", writeTip: "当前可写入", thinking: "Codex 正在处理...", approve: "允许", approveAndTrust: "允许并信任", trustHint: "相同项目和命令下次将自动允许。", decline: "拒绝", screenshot: "截取当前屏幕", hiddenScreenshot: "隐藏 AI Desktop 后截图", tempFiles: "临时文件", openTemp: "临时目录", clearTemp: "一键清理", clearConfirm: "确定清理 AI Desktop temp 中的全部临时文件吗？", trustedCommands: "可信命令", clearTrustedCommands: "清除全部信任", clearTrustedConfirm: "确定清除全部项目可信命令吗？", auditLogs: "业务日志", openAuditLogs: "打开日志目录", noAuditTask: "暂无任务记录", conversationManaged: "会话托管", requirementManaged: "需求托管", taskManaged: "任务托管", testManaged: "测试托管", attachment: "图片附件" },
 } as const;
 
 const EMPTY_ACCOUNT: CodexAccount = { authenticated: false, authMode: null, email: null, planType: null, requiresOpenaiAuth: true };
 const EMPTY_STATUS: CodexHarnessStatus = { connected: false, account: EMPTY_ACCOUNT, error: null };
+const DEFAULT_EXPLORER_WIDTH = 260;
+const MINIMUM_EXPLORER_WIDTH = 200;
+const MAXIMUM_EXPLORER_WIDTH = 520;
+const MINIMUM_WORKSPACE_PANE_HEIGHT = 120;
+const MINIMUM_TASKS_PANE_HEIGHT = 38;
+const ACTIVE_CHAT_STORAGE_KEY = "ai-desktop.active-chat.v1";
 
 function WindowControls() {
   return <div className="dev-window-controls">
@@ -80,15 +101,27 @@ function WindowControls() {
 export function DeveloperApp() {
   const [locale, setLocale] = useState<Locale>("zh-CN");
   const [sandboxMode, setSandboxMode] = useState<SandboxMode>("workspace-write");
+  const [executionMode, setExecutionMode] = useState<ManagedExecutionMode>("conversation-managed");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [chatHydrated, setChatHydrated] = useState(false);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [screenshotBusy, setScreenshotBusy] = useState(false);
   const [screenshotMode, setScreenshotMode] = useState<"current" | "hidden" | null>(null);
   const [screenshotError, setScreenshotError] = useState("");
   const [tempInfo, setTempInfo] = useState<TempDirectoryInfo | null>(null);
+  const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
+  const [trustedCommandInfo, setTrustedCommandInfo] = useState<TrustedCommandInfo>({ count: 0 });
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 资源管理器控制整栏宽度，工作区分区独立保存展开状态；折叠整栏后由活动栏图标恢复。
+  const [explorerExpanded, setExplorerExpanded] = useState(true);
+  const [workspaceSectionExpanded, setWorkspaceSectionExpanded] = useState(true);
+  const [tasksSectionExpanded, setTasksSectionExpanded] = useState(false);
+  const [explorerWidth, setExplorerWidth] = useState(DEFAULT_EXPLORER_WIDTH);
+  // null 表示默认由工作区占满任务标题之上的全部空间；用户拖拽后才固定当前高度。
+  const [workspacePaneHeight, setWorkspacePaneHeight] = useState<number | null>(null);
   const [projectRoot, setProjectRoot] = useState("C:\\opt\\workspace\\SELPLAT");
   const [workspaces, setWorkspaces] = useState<WorkspaceState | null>(null);
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(new Set());
@@ -96,14 +129,73 @@ export function DeveloperApp() {
   const [workspaceError, setWorkspaceError] = useState("");
   const [codexStatus, setCodexStatus] = useState<CodexHarnessStatus>(EMPTY_STATUS);
   const [approval, setApproval] = useState<CodexApproval | null>(null);
+  const [userInputRequest, setUserInputRequest] = useState<CodexUserInputRequest | null>(null);
+  const [userInputAnswers, setUserInputAnswers] = useState<Record<string, string>>({});
+  const [customAnswerIds, setCustomAnswerIds] = useState<Set<string>>(new Set());
+  const [userInputSubmitting, setUserInputSubmitting] = useState(false);
   const [loginHint, setLoginHint] = useState("");
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsPanelRef = useRef<HTMLElement>(null);
   const chatRef = useRef<HTMLElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const explorerSectionsRef = useRef<HTMLDivElement>(null);
   const activeAssistantIdRef = useRef<number | null>(null);
   const screenCapturePreparedRef = useRef(false);
   const text = labels[locale];
   const nextId = useMemo(() => messages.reduce((maximum, item) => Math.max(maximum, item.id), 0) + 1, [messages]);
+
+  const clampExplorerWidth = (width: number) => Math.min(MAXIMUM_EXPLORER_WIDTH, Math.max(MINIMUM_EXPLORER_WIDTH, width));
+
+  const startExplorerResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startWidth = explorerWidth;
+    handle.setPointerCapture(pointerId);
+
+    // 拖拽过程只改变开发版网格变量，不触发工作区重载或会话状态变化。
+    const onPointerMove = (moveEvent: globalThis.PointerEvent) => {
+      setExplorerWidth(clampExplorerWidth(startWidth + moveEvent.clientX - startX));
+    };
+    const stopResize = () => {
+      handle.removeEventListener("pointermove", onPointerMove);
+      handle.removeEventListener("pointerup", stopResize);
+      handle.removeEventListener("pointercancel", stopResize);
+    };
+    handle.addEventListener("pointermove", onPointerMove);
+    handle.addEventListener("pointerup", stopResize);
+    handle.addEventListener("pointercancel", stopResize);
+  };
+
+  const resizeWorkspacePane = (clientY: number) => {
+    const sections = explorerSectionsRef.current;
+    if (!sections) return;
+    const bounds = sections.getBoundingClientRect();
+    const titleHeight = 38;
+    const splitterHeight = 5;
+    const maximumHeight = Math.max(
+      MINIMUM_WORKSPACE_PANE_HEIGHT,
+      bounds.height - titleHeight - splitterHeight - MINIMUM_TASKS_PANE_HEIGHT,
+    );
+    setWorkspacePaneHeight(Math.min(maximumHeight, Math.max(MINIMUM_WORKSPACE_PANE_HEIGHT, clientY - bounds.top - titleHeight)));
+  };
+
+  const startWorkspaceResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    handle.setPointerCapture(pointerId);
+
+    // 水平分隔器只分配工作区和任务区域高度，工作区内部 Accordion 状态始终保留。
+    const onPointerMove = (moveEvent: globalThis.PointerEvent) => resizeWorkspacePane(moveEvent.clientY);
+    const stopResize = () => {
+      handle.removeEventListener("pointermove", onPointerMove);
+      handle.removeEventListener("pointerup", stopResize);
+      handle.removeEventListener("pointercancel", stopResize);
+    };
+    handle.addEventListener("pointermove", onPointerMove);
+    handle.addEventListener("pointerup", stopResize);
+    handle.addEventListener("pointercancel", stopResize);
+  };
 
   useEffect(() => {
     window.desktop?.getEnvironment().then((environment) => setProjectRoot(environment.projectRoot));
@@ -122,29 +214,87 @@ export function DeveloperApp() {
       setLocale(settings.locale);
       setSandboxMode(settings.sandboxMode);
     });
+    // 任务分区只展示业务日志中的最新任务摘要，不在渲染层复制或猜测 Harness 会话状态。
+    window.desktop?.getAuditLogInfo().then(setAuditInfo);
+    window.desktop?.getTrustedCommandInfo().then(setTrustedCommandInfo);
     const refresh = () => window.desktop?.getCodexStatus().then(setCodexStatus);
     const refreshApprovals = () => window.desktop?.getCodexApprovals().then((items) => setApproval(items[0] || null));
+    const refreshUserInputs = () => window.desktop?.getCodexUserInputs().then((items) => setUserInputRequest(items[0] || null));
     void refresh();
     void refreshApprovals();
+    void refreshUserInputs();
     const statusTimer = window.setInterval(refresh, 2500);
     const approvalTimer = window.setInterval(refreshApprovals, 700);
-    return () => { window.clearInterval(statusTimer); window.clearInterval(approvalTimer); };
+    const userInputTimer = window.setInterval(refreshUserInputs, 350);
+    return () => { window.clearInterval(statusTimer); window.clearInterval(approvalTimer); window.clearInterval(userInputTimer); };
   }, []);
 
   useEffect(() => {
     const desktop = window.desktop;
+    if (!desktop) {
+      setChatHydrated(true);
+      return;
+    }
+    // 渲染热更新或 Electron 重建后，以主进程仍登记的活动 thread 为准恢复本应用显示状态。
+    void desktop.getActiveCodexSession().then((session) => {
+      setActiveThreadId(session.threadId);
+      if (!session.threadId) {
+        window.localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+        return;
+      }
+      const stored = readStoredChat(session.threadId);
+      if (!stored) return;
+      setMessages(stored.messages);
+      setExecutionMode(stored.executionMode);
+    }).finally(() => setChatHydrated(true));
+  }, []);
+
+  useEffect(() => {
+    if (!chatHydrated || !activeThreadId) return;
+    const timer = window.setTimeout(() => {
+      // 图片像素已经安全落在应用 temp，不复制进 localStorage；恢复时保留文字、阶段和执行事实。
+      const persistentMessages = messages.map(({ attachments: _attachments, ...message }) => ({
+        ...message,
+        streaming: false,
+      }));
+      window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, JSON.stringify({
+        version: 1,
+        threadId: activeThreadId,
+        executionMode,
+        messages: persistentMessages,
+      }));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [activeThreadId, chatHydrated, executionMode, messages]);
+
+  useEffect(() => {
+    if (!userInputRequest) {
+      setUserInputAnswers({});
+      setCustomAnswerIds(new Set());
+      setUserInputSubmitting(false);
+      return;
+    }
+    // 无预设选项的问题直接进入文本回答；有选项的问题必须由用户明确点击，禁止代选推荐项。
+    setUserInputAnswers({});
+    setCustomAnswerIds(new Set(userInputRequest.questions.filter((question) => question.options.length === 0).map((question) => question.id)));
+    setUserInputSubmitting(false);
+  }, [userInputRequest?.requestId]);
+
+  useEffect(() => {
+    const desktop = window.desktop;
     if (!desktop) return;
-    return desktop.onScreenshotCompleted(({ attachment, dataUrl }) => {
-      // 独立截图窗口完成后把签发附件与红框调查提示一起放回输入框，但不替用户自动发送。
+    return desktop.onScreenshotCompleted(({ attachment, dataUrl, hasAnnotations }) => {
+      // 独立截图窗口完成后把签发附件放回输入框；只有真实画过红色标注才追加定向调查提示。
       setAttachments((current) => current.some((item) => item.id === attachment.id) || current.length >= 5
         ? current
         : [...current, { ...attachment, dataUrl }]);
-      setInput((current) => {
+      if (hasAnnotations) setInput((current) => {
         const prompt = "调查图片红色部分是什么问题";
         if (current.includes(prompt)) return current;
         const existing = current.trimEnd();
         return existing ? `${existing}\n${prompt}` : prompt;
       });
+      void nextRenderedFrame().then(() => composerRef.current?.focus());
       void desktop.getTempDirectoryInfo().then(setTempInfo);
     });
   }, []);
@@ -169,7 +319,11 @@ export function DeveloperApp() {
   }, [settingsOpen]);
 
   useEffect(() => {
-    if (settingsOpen) void window.desktop?.getTempDirectoryInfo().then(setTempInfo);
+    if (settingsOpen) {
+      void window.desktop?.getTempDirectoryInfo().then(setTempInfo);
+      void window.desktop?.getAuditLogInfo().then(setAuditInfo);
+      void window.desktop?.getTrustedCommandInfo().then(setTrustedCommandInfo);
+    }
   }, [settingsOpen]);
 
   useEffect(() => {
@@ -255,7 +409,8 @@ export function DeveloperApp() {
     if (state) applyWorkspaceState(state);
   };
 
-  const removeWorkspace = async (id: string) => {
+  const removeWorkspace = async (id: string, name: string) => {
+    if (!window.confirm(text.removeConfirm.replace("{name}", name))) return;
     try {
       const state = await window.desktop?.removeWorkspace(id);
       if (state) applyWorkspaceState(state);
@@ -269,17 +424,25 @@ export function DeveloperApp() {
     }
   };
 
-  const send = async () => {
-    const message = input.trim();
+  const send = async (override?: { message: string; displayText: string; mode: ManagedExecutionMode; sourceMessageId?: number }) => {
+    const typedMessage = input.trim();
+    const commandMode = override ? null : managedModeForCommand(typedMessage, executionMode);
+    const mode = override?.mode || commandMode || executionMode;
+    const message = override?.message || typedMessage;
+    const displayText = override?.displayText || typedMessage;
     if ((!message && attachments.length === 0) || loading) return;
     if (!codexStatus.account.authenticated) {
       setSettingsOpen(true);
       setLoginHint(text.signedOut);
       return;
     }
+    if (override?.sourceMessageId !== undefined) {
+      setMessages((current) => current.map((item) => item.id === override.sourceMessageId ? { ...item, actionTriggered: true } : item));
+    }
+    setExecutionMode(mode);
     const sentAttachments = attachments;
     const assistantId = nextId + 1;
-    const userMessage = { id: nextId, role: "user" as const, text: message || text.attachment, attachments: sentAttachments };
+    const userMessage = { id: nextId, role: "user" as const, text: displayText || text.attachment, attachments: sentAttachments };
     activeAssistantIdRef.current = assistantId;
     // 发送后立即创建回复卡，随后只使用官方 app-server 实时事件更新内容和执行阶段。
     setMessages((current) => [...current, userMessage, {
@@ -291,16 +454,18 @@ export function DeveloperApp() {
       activities: [],
       plan: [],
       changedFiles: [],
+      managedMode: mode,
     }]);
     setInput("");
     setAttachments([]);
     setLoading(true);
     try {
       const response = window.desktop
-        ? await window.desktop.sendMessage({ message, locale, sandboxMode, attachmentIds: sentAttachments.map((attachment) => attachment.id) })
+        ? await window.desktop.sendMessage({ message, locale, sandboxMode, attachmentIds: sentAttachments.map((attachment) => attachment.id), executionMode: mode })
         : { text: locale === "ja" ? "デスクトップ版でローカル Codex に接続します。" : "桌面版本会在这里返回本地 Codex 的结果。", itemCount: 0 };
+      if (response.threadId) setActiveThreadId(response.threadId);
       setMessages((current) => current.map((item) => item.id === assistantId
-        ? { ...item, text: response.text || item.text, streaming: false, streamStatus: "completed" }
+        ? { ...item, text: item.text || response.text, streaming: false, streamStatus: "completed" }
         : item));
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Codex unavailable";
@@ -310,6 +475,37 @@ export function DeveloperApp() {
     } finally {
       activeAssistantIdRef.current = null;
       setLoading(false);
+      void window.desktop?.getAuditLogInfo().then(setAuditInfo);
+    }
+  };
+
+  const startNewTask = async () => {
+    try {
+      await window.desktop?.newChat();
+      activeAssistantIdRef.current = null;
+      setUserInputRequest(null);
+      setExecutionMode("conversation-managed");
+      setActiveThreadId(null);
+      setMessages([]);
+      window.localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+      setScreenshotError("");
+    } catch (error) {
+      // 只有官方确认删除后才清空页面；失败时把当前任务完整留在界面供用户重试。
+      setScreenshotError(error instanceof Error ? error.message : "无法丢弃当前 Codex 任务。");
+    }
+  };
+
+  const submitUserInput = async () => {
+    if (!userInputRequest || userInputSubmitting) return;
+    const answers: Record<string, string[]> = Object.fromEntries(userInputRequest.questions.map((question) => [question.id, [userInputAnswers[question.id]?.trim() || ""]]));
+    if (Object.values(answers).some((values) => !values[0])) return;
+    setUserInputSubmitting(true);
+    try {
+      await window.desktop?.resolveCodexUserInput({ requestId: userInputRequest.requestId, answers });
+      setUserInputRequest(null);
+    } catch (error) {
+      setScreenshotError(error instanceof Error ? error.message : "Unable to submit clarification answers.");
+      setUserInputSubmitting(false);
     }
   };
 
@@ -357,7 +553,7 @@ export function DeveloperApp() {
       const dataUrls = await Promise.all(files.map(imageFileToPngDataUrl));
       const savedAttachments: ComposerAttachment[] = [];
       for (const dataUrl of dataUrls) {
-        const saved = await window.desktop?.saveScreenshot({ originalDataUrl: dataUrl, annotatedDataUrl: dataUrl });
+        const saved = await window.desktop?.saveScreenshot({ originalDataUrl: dataUrl, annotatedDataUrl: dataUrl, hasAnnotations: false });
         if (!saved) throw new Error("AI Desktop clipboard image service is unavailable.");
         savedAttachments.push({ ...saved, dataUrl });
       }
@@ -389,6 +585,12 @@ export function DeveloperApp() {
     setAttachments([]);
   };
 
+  const clearTrustedCommands = async () => {
+    if (!window.confirm(text.clearTrustedConfirm)) return;
+    const info = await window.desktop?.clearTrustedCommands();
+    if (info) setTrustedCommandInfo(info);
+  };
+
   const login = async () => {
     setLoginHint("");
     try {
@@ -409,6 +611,10 @@ export function DeveloperApp() {
   const resolveApproval = async (decision: "accept" | "decline") => {
     if (!approval) return;
     await window.desktop?.resolveCodexApproval(approval.requestId, decision);
+    if (decision === "accept" && approval.kind === "command" && approval.trustEligible) {
+      const info = await window.desktop?.getTrustedCommandInfo();
+      if (info) setTrustedCommandInfo(info);
+    }
     setApproval(null);
   };
 
@@ -416,25 +622,37 @@ export function DeveloperApp() {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); }
   };
 
-  return <div className="developer-shell" lang={locale}>
+  const shellStyle = { "--explorer-width": `${explorerWidth}px` } as CSSProperties;
+  const explorerSectionStyle = workspacePaneHeight === null
+    ? undefined
+    : { "--workspace-pane-height": `${workspacePaneHeight}px` } as CSSProperties;
+
+  return <div className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
     <header className="dev-titlebar">
-      <div className="dev-brand"><Code24Regular /><strong>AI DESKTOP</strong><span>{text.title}</span></div>
+      <div className="dev-brand"><Code24Regular /><strong>Copilot</strong><span>{text.title}</span></div>
       <div className="dev-command"><Search24Regular /><span>{projectRoot}</span></div>
       <WindowControls />
     </header>
 
     <aside className="dev-activitybar">
-      <button className="active"><Folder24Regular /></button><button><Search24Regular /></button><button><Branch24Regular /></button><button><Bug24Regular /></button>
+      <button className="active" title={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-pressed={explorerExpanded} onClick={() => setExplorerExpanded((value) => !value)}><Folder24Regular /></button><button><Search24Regular /></button><button><Branch24Regular /></button><button><Bug24Regular /></button>
       <button ref={settingsButtonRef} className="activity-settings" onClick={() => setSettingsOpen((value) => !value)}><Settings24Regular /></button>
     </aside>
 
     <aside className="dev-explorer">
-      <div className="dev-section-title"><span>{text.files}</span><MoreHorizontal24Regular /></div>
-      <div className="dev-section-title workspace-title"><span>{text.workspaces}</span><button title={text.addWorkspace} aria-label={text.addWorkspace} onClick={() => void addWorkspace()}><Add24Regular /></button></div>
-      <div className="workspace-list">
+      <div className="dev-section-title explorer-title">
+        <button className="section-toggle" aria-expanded={explorerExpanded} aria-controls="developer-explorer-sections" aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} onClick={() => setExplorerExpanded((value) => !value)}>{explorerExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.files}</span></button>
+      </div>
+      <div ref={explorerSectionsRef} id="developer-explorer-sections" className={`dev-explorer-sections ${workspacePaneHeight === null ? "" : "workspace-pane-resized"}`} style={explorerSectionStyle}>
+      <div className="dev-section-title workspace-title">
+        <button className="section-toggle" aria-expanded={workspaceSectionExpanded} aria-controls="developer-workspace-list" aria-label={`${workspaceSectionExpanded ? text.collapse : text.expand}${text.workspaces}`} onClick={() => setWorkspaceSectionExpanded((value) => !value)}>{workspaceSectionExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.workspaces}</span></button>
+        <button className="section-action" title={text.addWorkspace} aria-label={text.addWorkspace} onClick={() => void addWorkspace()}><Add24Regular /></button>
+      </div>
+      {workspaceSectionExpanded && <div id="developer-workspace-list" className="workspace-list">
         {workspaces?.roots.map((root) => {
           const expanded = expandedWorkspaces.has(root.id);
           const primary = root.id === workspaces.primaryId;
+          const readOnly = root.permission === "read-only";
           return <section className={`workspace-accordion ${expanded ? "expanded" : ""}`} key={root.id}>
             <div className="workspace-header">
               <button className="workspace-toggle" onClick={() => void toggleWorkspace(root.id)} aria-expanded={expanded} title={root.path}>
@@ -443,12 +661,13 @@ export function DeveloperApp() {
                 <strong>{root.name}</strong>
               </button>
               <div className="workspace-actions">
-                <button className={primary ? "primary-root" : ""} title={primary ? text.primary : text.makePrimary} onClick={() => void setPrimaryWorkspace(root.id)}>{primary ? <Star16Filled /> : <Star16Regular />}</button>
-                <button title={text.remove} disabled={workspaces.roots.length === 1} onClick={() => void removeWorkspace(root.id)}><Delete16Regular /></button>
+                <button className={`workspace-permission-action ${readOnly ? "read-only" : "workspace-write"}`} data-tooltip={readOnly ? text.readOnlyTip : text.writeTip} aria-label={readOnly ? text.readOnlyTip : text.writeTip} aria-pressed={readOnly} onClick={() => void updateWorkspacePermission(root.id, readOnly ? "workspace-write" : "read-only")}>{readOnly ? <ShieldLock16Filled /> : <ShieldLock16Regular />}</button>
+                <button className={`workspace-primary-action ${primary ? "primary-root" : ""}`} data-tooltip={primary ? text.primary : text.makePrimary} aria-label={primary ? text.primary : text.makePrimary} disabled={primary} onClick={() => void setPrimaryWorkspace(root.id)}>{primary ? <Star16Filled /> : <Star16Regular />}</button>
+                <button className="workspace-remove-action" data-tooltip={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} aria-label={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} disabled={workspaces.roots.length === 1} onClick={() => void removeWorkspace(root.id, root.name)}><Delete16Regular /></button>
               </div>
             </div>
             {expanded && <div className="workspace-panel">
-              <div className="workspace-meta" title={root.path}><span>{root.path}</span><select aria-label={`${root.name} permission`} value={root.permission} onChange={(event) => void updateWorkspacePermission(root.id, event.target.value as WorkspacePermission)}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></div>
+              <div className="workspace-meta" title={root.path}><span>{root.path}</span></div>
               <div className="workspace-tree">
                 {(workspaceEntries[root.id] || []).map((entry) => <div className="dev-file indent" key={`${entry.kind}:${entry.name}`}>{entry.kind === "directory" ? <Folder24Regular /> : <Document24Regular />}{entry.name}</div>)}
               </div>
@@ -456,22 +675,69 @@ export function DeveloperApp() {
           </section>;
         })}
         {workspaceError && <div className="workspace-error">{workspaceError}</div>}
+      </div>}
+      {workspaceSectionExpanded && <div
+        className="workspace-pane-resizer"
+        role="separator"
+        aria-label={locale === "ja" ? "ワークスペースとタスクの高さを変更" : "调整工作区与任务区域高度"}
+        aria-orientation="horizontal"
+        aria-valuemin={MINIMUM_WORKSPACE_PANE_HEIGHT}
+        aria-valuenow={workspacePaneHeight ?? undefined}
+        tabIndex={0}
+        onDoubleClick={() => setWorkspacePaneHeight(null)}
+        onPointerDown={startWorkspaceResize}
+        onKeyDown={(event) => {
+          if (event.key === "Home") { event.preventDefault(); setWorkspacePaneHeight(null); return; }
+          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+          event.preventDefault();
+          const currentHeight = workspacePaneHeight ?? explorerSectionsRef.current?.querySelector<HTMLElement>(".workspace-list")?.offsetHeight ?? MINIMUM_WORKSPACE_PANE_HEIGHT;
+          resizeWorkspacePane((explorerSectionsRef.current?.getBoundingClientRect().top ?? 0) + 38 + currentHeight + (event.key === "ArrowUp" ? -16 : 16));
+        }}
+      />}
+      <div className={`tasks-pane ${tasksSectionExpanded ? "expanded" : ""}`}>
+        <div className="dev-section-title tasks">
+          <button className="section-toggle" aria-expanded={tasksSectionExpanded} aria-controls="developer-task-list" aria-label={`${tasksSectionExpanded ? text.collapse : text.expand}${text.tasks}`} onClick={() => setTasksSectionExpanded((value) => !value)}>{tasksSectionExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.tasks}</span></button>
+          <button className="section-action new-task" title={text.newTask} aria-label={text.newTask} onClick={() => void startNewTask()}><Add24Regular /></button>
+        </div>
+        {tasksSectionExpanded && <div id="developer-task-list" className="task-list">
+          {auditInfo?.latestTask
+            ? <div className="task-summary" title={auditInfo.latestTask.request}><strong>{auditInfo.latestTask.request || text.newTask}</strong><span>{auditStatusText(auditInfo.latestTask.status, locale)}</span></div>
+            : <span className="task-empty">{text.noAuditTask}</span>}
+        </div>}
       </div>
-      <div className="dev-section-title tasks"><span>{text.tasks}</span><Add24Regular /></div>
-      <button className="new-task" onClick={() => { activeAssistantIdRef.current = null; void window.desktop?.newChat(); setMessages([]); }}><Add24Regular />{text.newTask}</button>
+      </div>
     </aside>
+
+    {explorerExpanded && <div
+      className="explorer-resizer"
+      role="separator"
+      aria-label={locale === "ja" ? "エクスプローラーの幅を変更" : "调整资源管理器宽度"}
+      aria-orientation="vertical"
+      aria-valuemin={MINIMUM_EXPLORER_WIDTH}
+      aria-valuemax={MAXIMUM_EXPLORER_WIDTH}
+      aria-valuenow={explorerWidth}
+      tabIndex={0}
+      onDoubleClick={() => setExplorerWidth(DEFAULT_EXPLORER_WIDTH)}
+      onPointerDown={startExplorerResize}
+      onKeyDown={(event) => {
+        if (event.key === "Home") { event.preventDefault(); setExplorerWidth(DEFAULT_EXPLORER_WIDTH); return; }
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        setExplorerWidth((width) => clampExplorerWidth(width + (event.key === "ArrowLeft" ? -16 : 16)));
+      }}
+    />}
 
     <main className="dev-main">
       <div className="dev-tab"><Prompt24Regular /><span>Codex Chat</span><Dismiss20Regular /></div>
       <section ref={chatRef} className="dev-chat">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p></div>}
-        {messages.map((message) => <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && <div className="message-text">{message.text}</div>}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}</div></article>)}
+        {messages.map((message) => <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onSubmit={() => void submitUserInput()} />}{message.role === "assistant" && !message.streaming && !message.streamError && message.managedMode !== "test-managed" && <ManagedStageAction message={message} locale={locale} loading={loading} onAdvance={(mode, label) => void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>)}
       </section>
       <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
-        <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} placeholder={text.placeholder} />
+        <textarea ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} placeholder={text.placeholder} />
         {screenshotError && <div className="composer-error">{screenshotError}</div>}
-        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><button type="button" className="screenshot-button" title={text.screenshot} aria-label={text.screenshot} data-tooltip={text.screenshot} disabled={screenshotBusy || loading} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" title={text.hiddenScreenshot} aria-label={text.hiddenScreenshot} data-tooltip={text.hiddenScreenshot} disabled={screenshotBusy || loading} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><button type="button" onClick={loading ? () => { void window.desktop?.cancel(); setLoading(false); } : () => void send()}>{loading ? <Stop24Filled /> : <Send24Filled />}</button></div>
+        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span><button type="button" className="screenshot-button" title={text.screenshot} aria-label={text.screenshot} data-tooltip={text.screenshot} disabled={screenshotBusy || loading} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" title={text.hiddenScreenshot} aria-label={text.hiddenScreenshot} data-tooltip={text.hiddenScreenshot} disabled={screenshotBusy || loading} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><button type="button" onClick={loading ? () => { void window.desktop?.cancel(); setLoading(false); } : () => void send()}>{loading ? <Stop24Filled /> : <Send24Filled />}</button></div>
       </form>
     </main>
 
@@ -489,10 +755,12 @@ export function DeveloperApp() {
       <label>Language<select value={locale} onChange={(event) => updateSettings(event.target.value as Locale, sandboxMode)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
       <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings(locale, event.target.value as SandboxMode)}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
       <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><small>{tempInfo?.path}</small><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
+      <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void clearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
+      <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong><small>{auditInfo?.path}</small>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
     </section>}
 
     {approval && <section className="dev-approval" role="dialog" aria-modal="true" aria-label={approval.title}>
-      <div className="approval-card"><span className="approval-kicker">CODEX APPROVAL</span><h2>{approval.title}</h2>{approval.reason && <p>{approval.reason}</p>}{approval.command && <pre>{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.details && <details><summary>Details</summary><pre>{approval.details}</pre></details>}<div className="approval-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button className="primary" onClick={() => void resolveApproval("accept")}>{text.approve}</button></div></div>
+      <div className="approval-card"><span className="approval-kicker">CODEX APPROVAL</span><h2>{approval.title}</h2>{approval.reason && <p>{approval.reason}</p>}{approval.command && <pre>{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p>{text.trustHint}</p>}{approval.details && <details><summary>Details</summary><pre>{approval.details}</pre></details>}<div className="approval-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button className="primary" onClick={() => void resolveApproval("accept")}>{approval.kind === "command" && approval.trustEligible ? text.approveAndTrust : text.approve}</button></div></div>
     </section>}
   </div>;
 }
@@ -501,6 +769,12 @@ function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function auditStatusText(status: AuditTaskSummary["status"], locale: Locale): string {
+  const chinese = { running: "运行中", completed: "已完成", partial: "部分完成", failed: "失败", interrupted: "已中断" } as const;
+  const japanese = { running: "実行中", completed: "完了", partial: "一部完了", failed: "失敗", interrupted: "中断" } as const;
+  return (locale === "ja" ? japanese : chinese)[status];
 }
 
 function nextRenderedFrame(): Promise<void> {
@@ -529,7 +803,11 @@ async function imageFileToPngDataUrl(file: File): Promise<string> {
 
 function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Message {
   if (event.type === "message-delta") return { ...message, text: `${message.text}${event.delta || ""}`, streamStatus: "responding" };
-  if (event.type === "message-completed") return { ...message, text: event.text ?? message.text, streamStatus: "responding" };
+  if (event.type === "message-completed") {
+    const turnTextStart = message.turnTextStart ?? 0;
+    const completedTurnText = event.text ?? message.text.slice(turnTextStart);
+    return { ...message, text: `${message.text.slice(0, turnTextStart)}${completedTurnText}`, streamStatus: "responding" };
+  }
   if (event.type === "reasoning-summary-delta") {
     return { ...message, reasoningSummary: `${message.reasoningSummary || ""}${event.delta || ""}`, streamStatus: "reasoning" };
   }
@@ -542,9 +820,119 @@ function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Messa
   if (event.type === "turn-completed") {
     return { ...message, streaming: false, streamStatus: event.status || "completed", streamError: event.error };
   }
+  if (event.type === "managed-execution" && event.managedExecution) {
+    return { ...message, streaming: event.managedExecution.stage !== "completed", streamStatus: event.managedExecution.stage, managedExecution: event.managedExecution };
+  }
   if (event.type === "error") return { ...message, streaming: false, streamStatus: "failed", streamError: event.error };
-  if (event.type === "turn-started") return { ...message, streaming: true, streamStatus: "inProgress" };
+  if (event.type === "turn-started") {
+    const text = message.text.length > 0 ? `${message.text}\n\n` : message.text;
+    return { ...message, text, turnTextStart: text.length, streaming: true, streamStatus: "inProgress" };
+  }
   return message;
+}
+
+function readStoredChat(threadId: string): { executionMode: ManagedExecutionMode; messages: Message[] } | null {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY) || "null") as {
+      version?: number;
+      threadId?: string;
+      executionMode?: ManagedExecutionMode;
+      messages?: unknown[];
+    } | null;
+    if (!value || value.version !== 1 || value.threadId !== threadId || !isManagedExecutionModeValue(value.executionMode)) return null;
+    const messages = (value.messages || []).flatMap((entry) => {
+      if (!entry || typeof entry !== "object") return [];
+      const candidate = entry as Partial<Message>;
+      if (!Number.isSafeInteger(candidate.id) || (candidate.role !== "user" && candidate.role !== "assistant") || typeof candidate.text !== "string") return [];
+      return [{ ...candidate, id: candidate.id as number, role: candidate.role, text: candidate.text, streaming: false } as Message];
+    }).slice(-200);
+    return { executionMode: value.executionMode, messages };
+  } catch {
+    return null;
+  }
+}
+
+function isManagedExecutionModeValue(value: unknown): value is ManagedExecutionMode {
+  return value === "conversation-managed" || value === "requirement-managed" || value === "task-managed" || value === "test-managed";
+}
+
+function managedModeForCommand(command: string, current: ManagedExecutionMode): ManagedExecutionMode | null {
+  const normalized = command.trim();
+  if (normalized === "1") return nextManagedMode(current);
+  if (current === "conversation-managed" && normalized === "就是这意思") return "requirement-managed";
+  if (current === "requirement-managed" && normalized === "按这个方案执行") return "task-managed";
+  if ((current === "task-managed" || current === "test-managed") && normalized === "测试一下") return "test-managed";
+  return null;
+}
+
+function nextManagedMode(current: ManagedExecutionMode): ManagedExecutionMode {
+  if (current === "conversation-managed") return "requirement-managed";
+  if (current === "requirement-managed") return "task-managed";
+  return "test-managed";
+}
+
+function managedModeLabel(mode: ManagedExecutionMode, locale: Locale): string {
+  const labelsByMode: Record<ManagedExecutionMode, { ja: string; "zh-CN": string }> = {
+    "conversation-managed": { ja: "会話管理", "zh-CN": "会话托管" },
+    "requirement-managed": { ja: "要件管理", "zh-CN": "需求托管" },
+    "task-managed": { ja: "タスク管理", "zh-CN": "任务托管" },
+    "test-managed": { ja: "テスト管理", "zh-CN": "测试托管" },
+  };
+  return labelsByMode[mode][locale];
+}
+
+function CodexUserInputPanel({
+  request,
+  answers,
+  customAnswerIds,
+  locale,
+  submitting,
+  onChoose,
+  onChooseCustom,
+  onCustomChange,
+  onSubmit,
+}: {
+  request: CodexUserInputRequest;
+  answers: Record<string, string>;
+  customAnswerIds: Set<string>;
+  locale: Locale;
+  submitting: boolean;
+  onChoose(questionId: string, value: string): void;
+  onChooseCustom(questionId: string): void;
+  onCustomChange(questionId: string, value: string): void;
+  onSubmit(): void;
+}) {
+  const complete = request.questions.every((question) => Boolean(answers[question.id]?.trim()));
+  const otherLabel = locale === "ja" ? "その他" : "其他";
+  return <section className="codex-user-input" aria-label={locale === "ja" ? "確認事項" : "待确认问题"}>
+    {request.questions.map((question) => <fieldset key={question.id}>
+      <legend><strong>{question.header}</strong><span>{question.question}</span></legend>
+      {question.options.length > 0 && <div className="codex-user-input-options">{question.options.map((option) => <button type="button" role="radio" aria-checked={!customAnswerIds.has(question.id) && answers[question.id] === option.label} className={!customAnswerIds.has(question.id) && answers[question.id] === option.label ? "selected" : ""} key={option.label} onClick={() => onChoose(question.id, option.label)}><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</button>)}<button type="button" role="radio" aria-checked={customAnswerIds.has(question.id)} className={customAnswerIds.has(question.id) ? "selected" : ""} onClick={() => onChooseCustom(question.id)}><strong>{otherLabel}</strong></button></div>}
+      {customAnswerIds.has(question.id) && <input value={answers[question.id] || ""} maxLength={2_000} autoFocus={request.questions.length === 1} placeholder={locale === "ja" ? "回答を入力" : "请输入答案"} onChange={(event) => onCustomChange(question.id, event.target.value)} />}
+    </fieldset>)}
+    <div className="codex-user-input-actions"><button type="button" className="primary" disabled={!complete || submitting} onClick={onSubmit}>{submitting ? (locale === "ja" ? "送信中…" : "正在确认…") : (locale === "ja" ? "確認" : "确认")}</button></div>
+  </section>;
+}
+
+function ManagedStageAction({ message, locale, loading, onAdvance }: { message: Message; locale: Locale; loading: boolean; onAdvance(mode: ManagedExecutionMode, label: string): void }) {
+  const current = message.managedMode;
+  if (!current || current === "test-managed") return null;
+  const target = nextManagedMode(current);
+  const firstLabels: Record<ManagedExecutionMode, { ja: string; "zh-CN": string }> = {
+    "conversation-managed": { ja: "この意図で合っています", "zh-CN": "就是这意思" },
+    "requirement-managed": { ja: "この案で実行", "zh-CN": "按这个方案执行" },
+    "task-managed": { ja: "テストする", "zh-CN": "测试一下" },
+    "test-managed": { ja: "再テスト", "zh-CN": "重新测试" },
+  };
+  const repeatLabels: Record<ManagedExecutionMode, { ja: string; "zh-CN": string }> = {
+    "conversation-managed": { ja: "要件を再分析", "zh-CN": "重新分析需求" },
+    "requirement-managed": { ja: "再実行", "zh-CN": "重新执行" },
+    "task-managed": { ja: "再テスト", "zh-CN": "重新测试" },
+    "test-managed": { ja: "再テスト", "zh-CN": "重新测试" },
+  };
+  const label = (message.actionTriggered ? repeatLabels : firstLabels)[current][locale];
+  const Icon = message.actionTriggered ? ArrowClockwise24Regular : target === "requirement-managed" ? CheckmarkCircle24Regular : target === "task-managed" ? Play24Regular : Beaker24Regular;
+  return <div className="managed-stage-action"><button type="button" className={message.actionTriggered ? "triggered" : ""} disabled={loading} onClick={() => onAdvance(target, label)}><Icon /><span>{label}</span></button></div>;
 }
 
 function upsertStreamActivity(current: CodexStreamActivity[], incoming: CodexStreamActivity): CodexStreamActivity[] {
@@ -570,6 +958,7 @@ function StreamDetails({ message, locale }: { message: Message; locale: Locale }
   if (!message.streaming && !message.streamError && plan.length === 0 && activities.length === 0 && changedFiles.length === 0) return null;
   return <div className="stream-details">
     {message.reasoningSummary && <p className="stream-reasoning">{message.reasoningSummary}</p>}
+    {message.managedExecution && <div className={`managed-execution-status ${message.managedExecution.status}`}><strong>{managedModeLabel(message.managedExecution.mode, locale)}</strong><span>{message.managedExecution.message}</span><small>{message.managedExecution.round}/{message.managedExecution.maximumRounds}</small></div>}
     {plan.length > 0 && <ol className="stream-plan">{plan.map((entry, index) => <li className={entry.status} key={`${index}:${entry.step}`}><i />{entry.step}</li>)}</ol>}
     {activities.length > 0 && <details className="stream-activity-details">
       <summary><span>{locale === "ja" ? "実行プロセス" : "执行过程"}</span><small>{activities.length} {locale === "ja" ? "件" : "项"} · {activityLabel(activities.at(-1)?.itemType || "", locale)}</small></summary>
@@ -581,8 +970,8 @@ function StreamDetails({ message, locale }: { message: Message; locale: Locale }
 }
 
 function activityLabel(itemType: string, locale: Locale): string {
-  const japanese: Record<string, string> = { reasoning: "分析中", commandExecution: "コマンド実行", fileChange: "ファイル変更", mcpToolCall: "ツール呼び出し", dynamicToolCall: "ツール実行", collabToolCall: "エージェント連携", webSearch: "Web 検索", imageView: "画像確認", contextCompaction: "会話整理", agentMessage: "回答作成" };
-  const chinese: Record<string, string> = { reasoning: "正在分析", commandExecution: "执行命令", fileChange: "修改文件", mcpToolCall: "调用工具", dynamicToolCall: "执行工具", collabToolCall: "协作处理", webSearch: "搜索网页", imageView: "查看图片", contextCompaction: "整理会话", agentMessage: "生成回答" };
+  const japanese: Record<string, string> = { reasoning: "分析中", commandExecution: "コマンド実行", commandPolicy: "実行ポリシー", fileChange: "ファイル変更", mcpToolCall: "ツール呼び出し", dynamicToolCall: "ツール実行", collabToolCall: "エージェント連携", webSearch: "Web 検索", imageView: "画像確認", contextCompaction: "会話整理", agentMessage: "回答作成" };
+  const chinese: Record<string, string> = { reasoning: "正在分析", commandExecution: "执行命令", commandPolicy: "执行策略", fileChange: "修改文件", mcpToolCall: "调用工具", dynamicToolCall: "执行工具", collabToolCall: "协作处理", webSearch: "搜索网页", imageView: "查看图片", contextCompaction: "整理会话", agentMessage: "生成回答" };
   return (locale === "ja" ? japanese : chinese)[itemType] || itemType;
 }
 

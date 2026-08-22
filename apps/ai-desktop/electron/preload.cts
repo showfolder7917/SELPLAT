@@ -12,12 +12,18 @@ contextBridge.exposeInMainWorld("desktop", {
   removeWorkspace: (id: string) => ipcRenderer.invoke("desktop:remove-workspace", id),
   listWorkspaceEntries: (id: string) => ipcRenderer.invoke("desktop:list-workspace-entries", id),
   getCodexStatus: () => ipcRenderer.invoke("desktop:get-codex-status"),
+  getActiveCodexSession: () => ipcRenderer.invoke("desktop:get-active-codex-session"),
   loginWithChatGPT: () => ipcRenderer.invoke("desktop:login-with-chatgpt"),
   logoutCodex: () => ipcRenderer.invoke("desktop:logout-codex"),
   getCodexApprovals: () => ipcRenderer.invoke("desktop:get-codex-approvals"),
   resolveCodexApproval: (requestId: number, decision: "accept" | "decline") =>
     ipcRenderer.invoke("desktop:resolve-codex-approval", requestId, decision),
+  getTrustedCommandInfo: () => ipcRenderer.invoke("desktop:get-trusted-command-info"),
+  clearTrustedCommands: () => ipcRenderer.invoke("desktop:clear-trusted-commands"),
+  getCodexUserInputs: () => ipcRenderer.invoke("desktop:get-codex-user-inputs"),
+  resolveCodexUserInput: (request: unknown) => ipcRenderer.invoke("desktop:resolve-codex-user-input", request),
   newChat: () => ipcRenderer.invoke("desktop:new-chat"),
+  openExternalUrl: (url: string) => ipcRenderer.invoke("desktop:open-external-url", url),
   prepareScreenCapture: () => ipcRenderer.invoke("desktop:prepare-screen-capture"),
   captureScreen: (request?: unknown) => ipcRenderer.invoke("desktop:capture-screen", request),
   getScreenCaptureStreamSource: () => ipcRenderer.invoke("desktop:get-screen-capture-stream-source"),
@@ -55,6 +61,8 @@ contextBridge.exposeInMainWorld("desktop", {
   getTempDirectoryInfo: () => ipcRenderer.invoke("desktop:get-temp-directory-info"),
   openTempDirectory: () => ipcRenderer.invoke("desktop:open-temp-directory"),
   clearTempFiles: () => ipcRenderer.invoke("desktop:clear-temp-files"),
+  getAuditLogInfo: () => ipcRenderer.invoke("desktop:get-audit-log-info"),
+  openAuditLogDirectory: () => ipcRenderer.invoke("desktop:open-audit-log-directory"),
   sendMessage: (request: unknown) => ipcRenderer.invoke("desktop:send-message", request),
   onCodexStreamEvent: (listener: (event: unknown) => void) => {
     // 只向渲染层转发主进程筛选后的进度对象，禁止暴露原始 Electron 事件或 Harness 管道。

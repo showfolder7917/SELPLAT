@@ -12,6 +12,11 @@ import type {
 
 const MAX_ROOTS = 24;
 const MAX_ENTRIES = 80;
+const CURRENT_PERMISSION_DEFAULTS_VERSION = 1;
+
+type StoredWorkspaceState = Partial<WorkspaceState> & {
+  permissionDefaultsVersion?: number;
+};
 
 /** 在 Electron 主进程维护可信目录清单，渲染层只能使用 ID，不能自行提交任意文件路径。 */
 export class WorkspaceStore {
@@ -24,18 +29,22 @@ export class WorkspaceStore {
   }
 
   read(): WorkspaceState {
-    const fallbackRoot = createRoot(this.#defaultRoot, "read-only");
+    const fallbackRoot = createRoot(this.#defaultRoot, "workspace-write");
     try {
-      const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as Partial<WorkspaceState>;
+      const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as StoredWorkspaceState;
+      const migrateLegacyPermissions = value.permissionDefaultsVersion !== CURRENT_PERMISSION_DEFAULTS_VERSION;
       const roots = Array.isArray(value.roots)
         ? value.roots.flatMap((root) => normalizeStoredRoot(root)).slice(0, MAX_ROOTS)
         : [];
-      const uniqueRoots = deduplicateRoots(roots);
+      const uniqueRoots = deduplicateRoots(roots).map((root) => migrateLegacyPermissions
+        ? { ...root, permission: "workspace-write" as const }
+        : root);
       if (!uniqueRoots.some((root) => samePath(root.path, fallbackRoot.path))) uniqueRoots.unshift(fallbackRoot);
       const primaryId = uniqueRoots.some((root) => root.id === value.primaryId)
         ? String(value.primaryId)
         : uniqueRoots[0].id;
-      return { primaryId, roots: uniqueRoots };
+      const state = { primaryId, roots: uniqueRoots };
+      return migrateLegacyPermissions ? this.#write(state) : state;
     } catch {
       return { primaryId: fallbackRoot.id, roots: [fallbackRoot] };
     }
@@ -46,7 +55,7 @@ export class WorkspaceStore {
     const directory = validateDirectory(directoryPath);
     if (state.roots.some((root) => samePath(root.path, directory))) return state;
     if (state.roots.length >= MAX_ROOTS) throw new Error(`Workspace limit is ${MAX_ROOTS}.`);
-    return this.#write({ ...state, roots: [...state.roots, createRoot(directory, "read-only")] });
+    return this.#write({ ...state, roots: [...state.roots, createRoot(directory, "workspace-write")] });
   }
 
   updatePermission(id: string, permission: WorkspacePermission): WorkspaceState {
@@ -93,7 +102,7 @@ export class WorkspaceStore {
 
   #write(state: WorkspaceState): WorkspaceState {
     const temporaryPath = `${this.#filePath}.tmp`;
-    writeFileSync(temporaryPath, JSON.stringify(state, null, 2), "utf8");
+    writeFileSync(temporaryPath, JSON.stringify({ permissionDefaultsVersion: CURRENT_PERMISSION_DEFAULTS_VERSION, ...state }, null, 2), "utf8");
     renameSync(temporaryPath, this.#filePath);
     return state;
   }

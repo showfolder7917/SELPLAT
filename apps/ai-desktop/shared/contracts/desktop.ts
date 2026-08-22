@@ -7,6 +7,7 @@ export type AppVariant = (typeof APP_VARIANTS)[number];
 export type Locale = (typeof LOCALES)[number];
 export type SandboxMode = (typeof SANDBOX_MODES)[number];
 export type WorkspacePermission = (typeof WORKSPACE_PERMISSIONS)[number];
+export type ManagedExecutionMode = "conversation-managed" | "requirement-managed" | "task-managed" | "test-managed";
 export type WindowAction = "minimize" | "maximize" | "close";
 
 export interface SendMessageRequest {
@@ -14,11 +15,28 @@ export interface SendMessageRequest {
   locale: Locale;
   sandboxMode: SandboxMode;
   attachmentIds: string[];
+  executionMode: ManagedExecutionMode;
 }
 
 export interface SendMessageResponse {
   text: string;
   itemCount: number;
+  threadId?: string;
+  managedStatus?: "conversation-ready" | "requirement-ready" | "code-verified" | "test-verified" | "incomplete";
+  pendingActions?: string[];
+}
+
+export interface CodexSessionInfo {
+  threadId: string | null;
+}
+
+export interface ManagedExecutionUpdate {
+  mode: ManagedExecutionMode;
+  stage: "conversation" | "requirement-analysis" | "task-execution" | "code-validation" | "interaction-validation" | "build-validation" | "runtime-restart" | "completed";
+  status: "started" | "continuing" | "completed" | "blocked";
+  round: number;
+  maximumRounds: number;
+  message: string;
 }
 
 export interface CodexStreamPlanStep {
@@ -33,10 +51,11 @@ export interface CodexStreamActivity {
   status: string | null;
   summary: string | null;
   detail: string | null;
+  exitCode?: number;
 }
 
 export interface CodexStreamEvent {
-  type: "turn-started" | "message-delta" | "message-completed" | "reasoning-summary-delta" | "activity" | "plan-updated" | "diff-updated" | "turn-completed" | "error";
+  type: "turn-started" | "message-delta" | "message-completed" | "reasoning-summary-delta" | "activity" | "plan-updated" | "diff-updated" | "turn-completed" | "managed-execution" | "error";
   turnId: string;
   itemId?: string;
   delta?: string;
@@ -46,6 +65,7 @@ export interface CodexStreamEvent {
   changedFiles?: string[];
   status?: string;
   error?: string;
+  managedExecution?: ManagedExecutionUpdate;
 }
 
 export interface CodexAccount {
@@ -75,6 +95,33 @@ export interface CodexApproval {
   command: string | null;
   cwd: string | null;
   details: string | null;
+  trustEligible: boolean;
+}
+
+export interface TrustedCommandInfo {
+  count: number;
+}
+
+export interface CodexUserInputOption {
+  label: string;
+  description: string;
+}
+
+export interface CodexUserInputQuestion {
+  id: string;
+  header: string;
+  question: string;
+  options: CodexUserInputOption[];
+}
+
+export interface CodexUserInputRequest {
+  requestId: number;
+  questions: CodexUserInputQuestion[];
+}
+
+export interface ResolveCodexUserInputRequest {
+  requestId: number;
+  answers: Record<string, string[]>;
 }
 
 export interface DesktopEnvironment {
@@ -136,6 +183,7 @@ export interface ScreenCaptureFrameResult {
 export interface ScreenshotSaveRequest {
   originalDataUrl: string;
   annotatedDataUrl: string;
+  hasAnnotations: boolean;
 }
 
 export interface ScreenshotAnnotationWindowRequest {
@@ -154,12 +202,44 @@ export interface ScreenshotAttachment {
 export interface ScreenshotCompletedEvent {
   attachment: ScreenshotAttachment;
   dataUrl: string;
+  hasAnnotations: boolean;
 }
 
 export interface TempDirectoryInfo {
   path: string;
   fileCount: number;
   totalBytes: number;
+}
+
+export interface AuditReason {
+  code: string;
+  message: string;
+}
+
+export interface AuditTaskSummary {
+  taskId: string;
+  startedAt: string;
+  completedAt: string | null;
+  status: "running" | "completed" | "partial" | "failed" | "interrupted";
+  request: string;
+  locale: Locale;
+  sandboxMode: SandboxMode;
+  workspaces: { path: string; permission: WorkspacePermission }[];
+  attachmentCount: number;
+  turnId: string | null;
+  changedFiles: string[];
+  commands: { id: string; command: string; phase: string; status: string | null; exitCode: number | null }[];
+  reasons: AuditReason[];
+  managedMode?: ManagedExecutionMode;
+  managedStatus?: "conversation-ready" | "requirement-ready" | "code-verified" | "test-verified" | "incomplete";
+  pendingActions?: string[];
+  bundleState: { sourceMtimeMs: number; bundleMtimeMs: number; stale: boolean };
+}
+
+export interface AuditLogInfo {
+  path: string;
+  taskCount: number;
+  latestTask: AuditTaskSummary | null;
 }
 
 export interface DesktopApi {
@@ -173,11 +253,17 @@ export interface DesktopApi {
   removeWorkspace(id: string): Promise<WorkspaceState>;
   listWorkspaceEntries(id: string): Promise<WorkspaceEntry[]>;
   getCodexStatus(): Promise<CodexHarnessStatus>;
+  getActiveCodexSession(): Promise<CodexSessionInfo>;
   loginWithChatGPT(): Promise<CodexLoginResponse>;
   logoutCodex(): Promise<CodexHarnessStatus>;
   getCodexApprovals(): Promise<CodexApproval[]>;
   resolveCodexApproval(requestId: number, decision: "accept" | "decline"): Promise<void>;
+  getTrustedCommandInfo(): Promise<TrustedCommandInfo>;
+  clearTrustedCommands(): Promise<TrustedCommandInfo>;
+  getCodexUserInputs(): Promise<CodexUserInputRequest[]>;
+  resolveCodexUserInput(request: ResolveCodexUserInputRequest): Promise<void>;
   newChat(): Promise<void>;
+  openExternalUrl(url: string): Promise<void>;
   prepareScreenCapture(): Promise<void>;
   captureScreen(request?: ScreenCaptureRequest): Promise<ScreenCapture | null>;
   getScreenCaptureStreamSource(): Promise<ScreenCaptureStreamSource | null>;
@@ -195,6 +281,8 @@ export interface DesktopApi {
   getTempDirectoryInfo(): Promise<TempDirectoryInfo>;
   openTempDirectory(): Promise<void>;
   clearTempFiles(): Promise<TempDirectoryInfo>;
+  getAuditLogInfo(): Promise<AuditLogInfo>;
+  openAuditLogDirectory(): Promise<void>;
   sendMessage(request: SendMessageRequest): Promise<SendMessageResponse>;
   onCodexStreamEvent(listener: (event: CodexStreamEvent) => void): () => void;
   cancel(): Promise<boolean>;

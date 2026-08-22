@@ -131,8 +131,8 @@ export function ScreenshotWindowApp() {
     await window.desktop?.endScreenshotEditing();
   };
 
-  const complete = async (originalDataUrl: string, annotatedDataUrl: string) => {
-    const saved = await window.desktop?.saveScreenshot({ originalDataUrl, annotatedDataUrl });
+  const complete = async (originalDataUrl: string, annotatedDataUrl: string, hasAnnotations: boolean) => {
+    const saved = await window.desktop?.saveScreenshot({ originalDataUrl, annotatedDataUrl, hasAnnotations });
     if (!saved) throw new Error("AI Desktop screenshot service is unavailable.");
     await window.desktop?.endScreenshotEditing();
   };
