@@ -13,11 +13,39 @@ export interface SendMessageRequest {
   message: string;
   locale: Locale;
   sandboxMode: SandboxMode;
+  attachmentIds: string[];
 }
 
 export interface SendMessageResponse {
   text: string;
   itemCount: number;
+}
+
+export interface CodexStreamPlanStep {
+  step: string;
+  status: "pending" | "inProgress" | "completed";
+}
+
+export interface CodexStreamActivity {
+  id: string;
+  itemType: string;
+  phase: "started" | "completed" | "output";
+  status: string | null;
+  summary: string | null;
+  detail: string | null;
+}
+
+export interface CodexStreamEvent {
+  type: "turn-started" | "message-delta" | "message-completed" | "reasoning-summary-delta" | "activity" | "plan-updated" | "diff-updated" | "turn-completed" | "error";
+  turnId: string;
+  itemId?: string;
+  delta?: string;
+  text?: string;
+  activity?: CodexStreamActivity;
+  plan?: CodexStreamPlanStep[];
+  changedFiles?: string[];
+  status?: string;
+  error?: string;
 }
 
 export interface CodexAccount {
@@ -77,6 +105,63 @@ export interface WorkspaceEntry {
   kind: "directory" | "file";
 }
 
+export interface ScreenCapture {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+export interface ScreenCaptureRequest {
+  hideOwnerWindow?: boolean;
+}
+
+export interface ScreenCaptureStreamSource {
+  sourceId: string;
+  width: number;
+  height: number;
+}
+
+export interface ScreenCaptureFrameRequest {
+  requestId: number;
+  waitForOwnerHidden: boolean;
+}
+
+export interface ScreenCaptureFrameResult {
+  requestId: number;
+  width: number;
+  height: number;
+  error?: string;
+}
+
+export interface ScreenshotSaveRequest {
+  originalDataUrl: string;
+  annotatedDataUrl: string;
+}
+
+export interface ScreenshotAnnotationWindowRequest {
+  width: number;
+  height: number;
+}
+
+export interface ScreenshotAttachment {
+  id: string;
+  name: string;
+  filePath: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface ScreenshotCompletedEvent {
+  attachment: ScreenshotAttachment;
+  dataUrl: string;
+}
+
+export interface TempDirectoryInfo {
+  path: string;
+  fileCount: number;
+  totalBytes: number;
+}
+
 export interface DesktopApi {
   getEnvironment(): Promise<DesktopEnvironment>;
   getSettings(): Promise<DesktopSettings>;
@@ -93,7 +178,25 @@ export interface DesktopApi {
   getCodexApprovals(): Promise<CodexApproval[]>;
   resolveCodexApproval(requestId: number, decision: "accept" | "decline"): Promise<void>;
   newChat(): Promise<void>;
+  prepareScreenCapture(): Promise<void>;
+  captureScreen(request?: ScreenCaptureRequest): Promise<ScreenCapture | null>;
+  getScreenCaptureStreamSource(): Promise<ScreenCaptureStreamSource | null>;
+  notifyScreenCaptureStreamReady(sourceId: string): Promise<void>;
+  onScreenCaptureStreamConfigured(listener: (source: ScreenCaptureStreamSource) => void): () => void;
+  onScreenCaptureFrameRequested(listener: (request: ScreenCaptureFrameRequest) => void): () => void;
+  submitScreenCaptureFrameResult(result: ScreenCaptureFrameResult): Promise<void>;
+  showScreenshotWindow(): Promise<void>;
+  onScreenCaptureReset(listener: () => void): () => void;
+  enterScreenshotAnnotation(request: ScreenshotAnnotationWindowRequest): Promise<void>;
+  returnScreenshotSelection(): Promise<void>;
+  endScreenshotEditing(): Promise<void>;
+  saveScreenshot(request: ScreenshotSaveRequest): Promise<ScreenshotAttachment>;
+  onScreenshotCompleted(listener: (event: ScreenshotCompletedEvent) => void): () => void;
+  getTempDirectoryInfo(): Promise<TempDirectoryInfo>;
+  openTempDirectory(): Promise<void>;
+  clearTempFiles(): Promise<TempDirectoryInfo>;
   sendMessage(request: SendMessageRequest): Promise<SendMessageResponse>;
+  onCodexStreamEvent(listener: (event: CodexStreamEvent) => void): () => void;
   cancel(): Promise<boolean>;
   windowControl(action: WindowAction): void;
 }

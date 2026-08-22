@@ -30,6 +30,12 @@ load_rule_for_active_user_single_case_and_full_suite_divergence = TEST_CASE_ISOL
 <!-- load_rule_for_active_user_test_data_conflict_or_coverage_repair 的当前独立事实为 TEST_CASE_ISOLATION_AND_SUITE_CONSISTENCY_RULES。 -->
 load_rule_for_active_user_test_data_conflict_or_coverage_repair = TEST_CASE_ISOLATION_AND_SUITE_CONSISTENCY_RULES
 
+<!-- 界面组件、图片产物或 IPC 修改需要选择快速自动测试与真实系统点击边界时加载。 -->
+load_rule_for_active_user_fast_feedback_or_real_ui_test_selection = TEST_CASE_ISOLATION_AND_SUITE_CONSISTENCY_RULES
+
+<!-- 用户触发统一测试并要求合并执行自动测试与必要真实界面回归时加载。 -->
+load_rule_for_active_user_unified_automated_and_system_ui_testing = TEST_CASE_ISOLATION_AND_SUITE_CONSISTENCY_RULES
+
 <!-- PowerShell 5.1、原生命令管道或 HTTP JSON 涉及中日文时，在写入前扩展 common UTF-8 规则。 -->
 UTF8_FILE_AND_COMMAND_RULES = local/XUNAN/跨工程通用规则/RUL_UTF8文件与命令规则.md
 

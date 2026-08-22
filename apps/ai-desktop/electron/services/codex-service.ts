@@ -7,6 +7,9 @@ import type {
   CodexApproval,
   CodexHarnessStatus,
   CodexLoginResponse,
+  CodexStreamActivity,
+  CodexStreamEvent,
+  CodexStreamPlanStep,
   Locale,
   SandboxMode,
   SendMessageResponse,
@@ -31,8 +34,14 @@ interface PendingRequest {
 interface TurnWaiter {
   itemCount: number;
   messageParts: Map<string, string>;
+  emit(event: CodexStreamEvent): void;
   resolve(value: SendMessageResponse): void;
   reject(error: Error): void;
+}
+
+interface BufferedNotification {
+  method: string;
+  params: JsonObject;
 }
 
 const EMPTY_ACCOUNT: CodexAccount = {
@@ -49,7 +58,7 @@ export class CodexService {
   readonly #pending = new Map<number, PendingRequest>();
   readonly #approvals = new Map<number, CodexApproval>();
   readonly #turnWaiters = new Map<string, TurnWaiter>();
-  readonly #completedTurns = new Map<string, JsonObject>();
+  readonly #notificationBacklog = new Map<string, BufferedNotification[]>();
   readonly #items = new Map<string, JsonObject>();
   #process: ChildProcessWithoutNullStreams | undefined;
   #ready: Promise<void> | undefined;
@@ -127,10 +136,12 @@ export class CodexService {
     locale: Locale,
     sandboxMode: SandboxMode,
     workspaces: WorkspaceState,
+    attachmentPaths: string[] = [],
+    onStreamEvent: (event: CodexStreamEvent) => void = () => undefined,
   ): Promise<SendMessageResponse> {
     const normalizedMessage = message.trim();
-    if (!normalizedMessage || normalizedMessage.length > 20_000) {
-      throw new Error("Message must contain 1-20000 characters.");
+    if ((!normalizedMessage && attachmentPaths.length === 0) || normalizedMessage.length > 20_000) {
+      throw new Error("Message or screenshot attachment is required, with at most 20000 text characters.");
     }
 
     await this.#ensureReady();
@@ -138,21 +149,25 @@ export class CodexService {
     const primaryRoot = workspaces.roots.find((root) => root.id === workspaces.primaryId) || workspaces.roots[0];
     if (!primaryRoot) throw new Error("At least one registered workspace is required.");
     const threadId = await this.#getThread(sandboxMode, workspaces, primaryRoot.path);
+    const userTask = normalizedMessage || (locale === "ja" ? "添付画像を確認してください。" : "请阅读并分析附加截图。");
+    const input: JsonObject[] = [{
+      type: "text",
+      text: `${this.#responseLanguage(locale)}\n\n${workspaceContext(workspaces)}\n\n${userTask}`,
+    }];
+    // 官方 app-server 0.146.0 的 turn/start 使用 localImage 路径读取本地主进程已校验的 PNG。
+    input.push(...attachmentPaths.map((filePath) => ({ type: "localImage", path: filePath })));
     const result = asObject(await this.#request("turn/start", {
       threadId,
       cwd: primaryRoot.path,
       approvalPolicy: "on-request",
       approvalsReviewer: "user",
       sandboxPolicy: createSandboxPolicy(sandboxMode, workspaces),
-      input: [{
-        type: "text",
-        text: `${this.#responseLanguage(locale)}\n\n${workspaceContext(workspaces)}\n\n${normalizedMessage}`,
-      }],
+      input,
     }));
     const turnId = stringValue(asObject(result.turn).id);
     if (!turnId) throw new Error("Codex harness did not return a turn id.");
     this.#activeTurnId = turnId;
-    return this.#waitForTurn(turnId);
+    return this.#waitForTurn(turnId, onStreamEvent);
   }
 
   dispose(): void {
@@ -308,12 +323,25 @@ export class CodexService {
     }
     if (!turnId) return;
     const waiter = this.#turnWaiters.get(turnId);
-    if (method === "item/agentMessage/delta" && waiter) {
+    if (!waiter) {
+      // turn/start 的响应可能晚于首批通知；先按 turnId 有界缓存，绑定等待器后再按原顺序重放。
+      const backlog = this.#notificationBacklog.get(turnId) || [];
+      if (backlog.length < 2_000) backlog.push({ method, params });
+      this.#notificationBacklog.set(turnId, backlog);
+      return;
+    }
+    this.#processTurnNotification(turnId, method, params, waiter);
+  }
+
+  #processTurnNotification(turnId: string, method: string, params: JsonObject, waiter: TurnWaiter): void {
+    const streamEvent = toCodexStreamEvent(method, params, turnId);
+    if (streamEvent) waiter.emit(streamEvent);
+    if (method === "item/agentMessage/delta") {
       const itemId = stringValue(params.itemId) || "agent";
       waiter.messageParts.set(itemId, `${waiter.messageParts.get(itemId) || ""}${stringValue(params.delta) || ""}`);
       return;
     }
-    if (method === "item/completed" && waiter) {
+    if (method === "item/completed") {
       waiter.itemCount += 1;
       const item = asObject(params.item);
       if (item.type === "agentMessage" && typeof item.text === "string") {
@@ -323,28 +351,26 @@ export class CodexService {
     }
     if (method !== "turn/completed") return;
     const turn = asObject(params.turn);
-    if (!waiter) {
-      this.#completedTurns.set(turnId, turn);
-      return;
-    }
     this.#finishTurn(turnId, turn, waiter);
   }
 
-  #waitForTurn(turnId: string): Promise<SendMessageResponse> {
+  #waitForTurn(turnId: string, emit: (event: CodexStreamEvent) => void): Promise<SendMessageResponse> {
     return new Promise((resolve, reject) => {
-      const waiter: TurnWaiter = { itemCount: 0, messageParts: new Map(), resolve, reject };
-      const completed = this.#completedTurns.get(turnId);
-      if (completed) {
-        this.#completedTurns.delete(turnId);
-        this.#finishTurn(turnId, completed, waiter);
-      } else {
-        this.#turnWaiters.set(turnId, waiter);
+      const waiter: TurnWaiter = { itemCount: 0, messageParts: new Map(), emit, resolve, reject };
+      this.#turnWaiters.set(turnId, waiter);
+      const backlog = this.#notificationBacklog.get(turnId) || [];
+      this.#notificationBacklog.delete(turnId);
+      // 重放过程中 turn/completed 可能结束并移除等待器；完成后不再处理异常的尾随事件。
+      for (const notification of backlog) {
+        if (!this.#turnWaiters.has(turnId)) break;
+        this.#processTurnNotification(turnId, notification.method, notification.params, waiter);
       }
     });
   }
 
   #finishTurn(turnId: string, turn: JsonObject, waiter: TurnWaiter): void {
     this.#turnWaiters.delete(turnId);
+    this.#notificationBacklog.delete(turnId);
     if (this.#activeTurnId === turnId) this.#activeTurnId = undefined;
     const status = stringValue(turn.status);
     if (status === "failed") {
@@ -365,9 +391,13 @@ export class CodexService {
     const detail = this.#lastError || `Codex harness exited (${code ?? signal ?? "unknown"}).`;
     const error = new Error(detail);
     for (const pending of this.#pending.values()) pending.reject(error);
-    for (const waiter of this.#turnWaiters.values()) waiter.reject(error);
+    for (const [turnId, waiter] of this.#turnWaiters) {
+      waiter.emit({ type: "error", turnId, error: detail });
+      waiter.reject(error);
+    }
     this.#pending.clear();
     this.#turnWaiters.clear();
+    this.#notificationBacklog.clear();
     this.#approvals.clear();
     this.#process = undefined;
     this.#ready = undefined;
@@ -378,6 +408,130 @@ export class CodexService {
       ? "Reply in natural Japanese unless the user explicitly requests another language."
       : "除非用户明确要求其他语言，否则请使用自然、清晰的简体中文回答。";
   }
+}
+
+/** 把官方 app-server 通知收敛成渲染层允许消费的稳定、最小化实时事件。 */
+export function toCodexStreamEvent(method: string, params: JsonObject, turnId: string): CodexStreamEvent | null {
+  if (method === "turn/started") return { type: "turn-started", turnId, status: "inProgress" };
+  if (method === "item/agentMessage/delta") {
+    return {
+      type: "message-delta",
+      turnId,
+      itemId: stringValue(params.itemId) || undefined,
+      delta: stringValue(params.delta) || "",
+    };
+  }
+  if (method === "item/reasoning/summaryTextDelta") {
+    return {
+      type: "reasoning-summary-delta",
+      turnId,
+      itemId: stringValue(params.itemId) || undefined,
+      delta: stringValue(params.delta) || "",
+    };
+  }
+  // 原始 reasoning textDelta 不进入 UI，只显示官方单独提供的可读 summaryTextDelta。
+  if (method === "item/reasoning/textDelta") return null;
+  if (method === "item/commandExecution/outputDelta") {
+    return {
+      type: "activity",
+      turnId,
+      activity: {
+        id: stringValue(params.itemId) || "command-output",
+        itemType: "commandExecution",
+        phase: "output",
+        status: "inProgress",
+        summary: null,
+        detail: truncate(stringValue(params.delta), 2_000),
+      },
+    };
+  }
+  if (method === "turn/plan/updated") {
+    const plan = Array.isArray(params.plan)
+      ? params.plan.map(asObject).map((entry): CodexStreamPlanStep => ({
+        step: stringValue(entry.step) || "",
+        status: normalizePlanStatus(entry.status),
+      })).filter((entry) => entry.step)
+      : [];
+    return { type: "plan-updated", turnId, plan };
+  }
+  if (method === "turn/diff/updated") {
+    return { type: "diff-updated", turnId, changedFiles: changedFilesFromDiff(stringValue(params.diff) || "") };
+  }
+  if (method === "item/started" || method === "item/completed") {
+    const item = asObject(params.item);
+    const itemId = stringValue(item.id) || "unknown-item";
+    if (item.type === "userMessage") return null;
+    if (method === "item/completed" && item.type === "agentMessage") {
+      return { type: "message-completed", turnId, itemId, text: stringValue(item.text) || "" };
+    }
+    return {
+      type: "activity",
+      turnId,
+      activity: createStreamActivity(item, itemId, method === "item/started" ? "started" : "completed"),
+    };
+  }
+  if (method === "turn/completed") {
+    const turn = asObject(params.turn);
+    const error = stringValue(asObject(turn.error).message) || undefined;
+    return { type: "turn-completed", turnId, status: stringValue(turn.status) || "completed", error };
+  }
+  if (method === "error") {
+    return { type: "error", turnId, error: stringValue(asObject(params.error).message) || "Codex stream failed." };
+  }
+  return null;
+}
+
+function createStreamActivity(item: JsonObject, itemId: string, phase: "started" | "completed"): CodexStreamActivity {
+  const itemType = stringValue(item.type) || "unknown";
+  return {
+    id: itemId,
+    itemType,
+    phase,
+    status: stringValue(item.status),
+    summary: summarizeStreamItem(itemType, item),
+    detail: phase === "completed" && itemType === "commandExecution"
+      ? truncate(stringValue(item.aggregatedOutput), 2_000)
+      : null,
+  };
+}
+
+function summarizeStreamItem(itemType: string, item: JsonObject): string | null {
+  if (itemType === "commandExecution") return truncate(displayValue(item.command), 800);
+  if (itemType === "fileChange") {
+    const paths = Array.isArray(item.changes)
+      ? item.changes.map(asObject).map((change) => stringValue(change.path)).filter((path): path is string => Boolean(path))
+      : [];
+    return paths.join("\n") || null;
+  }
+  if (itemType === "mcpToolCall") {
+    return [stringValue(item.server), stringValue(item.tool)].filter(Boolean).join(" / ") || null;
+  }
+  if (itemType === "dynamicToolCall" || itemType === "collabToolCall") return stringValue(item.tool);
+  if (itemType === "webSearch") return stringValue(item.query);
+  if (itemType === "imageView") return stringValue(item.path);
+  if (itemType === "enteredReviewMode" || itemType === "exitedReviewMode") return stringValue(item.review);
+  return null;
+}
+
+function normalizePlanStatus(value: unknown): CodexStreamPlanStep["status"] {
+  if (value === "inProgress" || value === "completed") return value;
+  return "pending";
+}
+
+function changedFilesFromDiff(diff: string): string[] {
+  const paths = new Set<string>();
+  for (const line of diff.split("\n")) {
+    const header = /^diff --git a\/.+ b\/(.+)$/.exec(line);
+    const added = /^\+\+\+ b\/(.+)$/.exec(line);
+    const path = header?.[1] || added?.[1];
+    if (path && path !== "/dev/null") paths.add(path);
+  }
+  return [...paths];
+}
+
+function truncate(value: string | null, maximum: number): string | null {
+  if (!value) return null;
+  return value.length <= maximum ? value : `${value.slice(0, maximum)}…`;
 }
 
 function asObject(value: unknown): JsonObject {
@@ -420,13 +574,16 @@ function isTrustedLoginUrl(value: string): boolean {
 }
 
 /** 把全局只读开关和逐目录权限合成为官方 app-server 的精确沙箱策略。 */
-function createSandboxPolicy(sandboxMode: SandboxMode, workspaces: WorkspaceState): JsonObject {
+export function createSandboxPolicy(sandboxMode: SandboxMode, workspaces: WorkspaceState): JsonObject {
   if (sandboxMode === "read-only") return { type: "readOnly", networkAccess: false };
+  const writableRoots = workspaces.roots
+    .filter((root) => root.permission === "workspace-write")
+    .map((root) => root.path);
+  // 官方 legacy workspaceWrite 在空根集合时可能把 cwd 当默认可写根；这里显式降级，确保逐根只读不会被绕过。
+  if (writableRoots.length === 0) return { type: "readOnly", networkAccess: false };
   return {
     type: "workspaceWrite",
-    writableRoots: workspaces.roots
-      .filter((root) => root.permission === "workspace-write")
-      .map((root) => root.path),
+    writableRoots,
     networkAccess: false,
     excludeTmpdirEnvVar: false,
     excludeSlashTmp: false,

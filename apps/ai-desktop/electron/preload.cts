@@ -18,7 +18,50 @@ contextBridge.exposeInMainWorld("desktop", {
   resolveCodexApproval: (requestId: number, decision: "accept" | "decline") =>
     ipcRenderer.invoke("desktop:resolve-codex-approval", requestId, decision),
   newChat: () => ipcRenderer.invoke("desktop:new-chat"),
+  prepareScreenCapture: () => ipcRenderer.invoke("desktop:prepare-screen-capture"),
+  captureScreen: (request?: unknown) => ipcRenderer.invoke("desktop:capture-screen", request),
+  getScreenCaptureStreamSource: () => ipcRenderer.invoke("desktop:get-screen-capture-stream-source"),
+  notifyScreenCaptureStreamReady: (sourceId: string) => ipcRenderer.invoke("desktop:screen-capture-stream-ready", sourceId),
+  onScreenCaptureStreamConfigured: (listener: (source: unknown) => void) => {
+    // 主进程只向绑定的截图壳下发已校验的显示器源，两个截图入口统一复用同一条屏幕流。
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:screen-capture-stream-configured", handler);
+    return () => ipcRenderer.removeListener("desktop:screen-capture-stream-configured", handler);
+  },
+  onScreenCaptureFrameRequested: (listener: (request: unknown) => void) => {
+    // 每轮只接收冻结帧命令，真实屏幕像素始终留在隔离截图窗口内处理。
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:screen-capture-frame-requested", handler);
+    return () => ipcRenderer.removeListener("desktop:screen-capture-frame-requested", handler);
+  },
+  submitScreenCaptureFrameResult: (result: unknown) => ipcRenderer.invoke("desktop:screen-capture-frame-result", result),
+  showScreenshotWindow: () => ipcRenderer.invoke("desktop:show-screenshot-window"),
+  onScreenCaptureReset: (listener: () => void) => {
+    // 常驻截图壳进入空闲状态时通知渲染层销毁上一轮编辑器状态，防止复用旧选区和标注。
+    const handler = () => listener();
+    ipcRenderer.on("desktop:screen-capture-reset", handler);
+    return () => ipcRenderer.removeListener("desktop:screen-capture-reset", handler);
+  },
+  enterScreenshotAnnotation: (request: unknown) => ipcRenderer.invoke("desktop:enter-screenshot-annotation", request),
+  returnScreenshotSelection: () => ipcRenderer.invoke("desktop:return-screenshot-selection"),
+  endScreenshotEditing: () => ipcRenderer.invoke("desktop:end-screenshot-editing"),
+  saveScreenshot: (request: unknown) => ipcRenderer.invoke("desktop:save-screenshot", request),
+  onScreenshotCompleted: (listener: (event: unknown) => void) => {
+    // 独立截图窗口只回传主进程签发的附件与预览图，不向主窗口暴露窗口对象。
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:screenshot-completed", handler);
+    return () => ipcRenderer.removeListener("desktop:screenshot-completed", handler);
+  },
+  getTempDirectoryInfo: () => ipcRenderer.invoke("desktop:get-temp-directory-info"),
+  openTempDirectory: () => ipcRenderer.invoke("desktop:open-temp-directory"),
+  clearTempFiles: () => ipcRenderer.invoke("desktop:clear-temp-files"),
   sendMessage: (request: unknown) => ipcRenderer.invoke("desktop:send-message", request),
+  onCodexStreamEvent: (listener: (event: unknown) => void) => {
+    // 只向渲染层转发主进程筛选后的进度对象，禁止暴露原始 Electron 事件或 Harness 管道。
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:codex-stream-event", handler);
+    return () => ipcRenderer.removeListener("desktop:codex-stream-event", handler);
+  },
   cancel: () => ipcRenderer.invoke("desktop:cancel"),
   windowControl: (action: "minimize" | "maximize" | "close") => ipcRenderer.send("window:control", action),
 });

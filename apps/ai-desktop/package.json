@@ -29,6 +29,8 @@
     "dist:mac:developer": "npm run build && electron-builder --config electron-builder.developer.json --mac dmg",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
+    "test:screenshot": "npm run build:electron && node --test tests/screenshot-store.test.mjs",
+    "test:stream": "npm run build:electron && node --test tests/codex-stream.test.mjs",
     "test:workspace": "npm run build:electron && node --test tests/workspace-store.test.mjs"
   },
   "dependencies": {

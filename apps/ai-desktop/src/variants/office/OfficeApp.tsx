@@ -276,7 +276,7 @@ export function OfficeApp() {
     setInput(""); setLoading(true);
     try {
       const result = window.desktop
-        ? await window.desktop.sendMessage({ message, locale, sandboxMode })
+          ? await window.desktop.sendMessage({ message, locale, sandboxMode, attachmentIds: [] })
         : await new Promise<{ text: string; itemCount: number }>((resolve) => setTimeout(() => resolve({ text: locale === "ja" ? "ローカルの Codex 応答はデスクトップアプリで表示されます。" : "本地 Codex 的回复将在桌面应用中显示。", itemCount: 1 }), 700));
       setMessages((current) => [...current, { id: userMessage.id + 1, role: "assistant", text: result.text || text.unavailable }]);
     } catch (error) {

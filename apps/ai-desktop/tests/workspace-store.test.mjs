@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { WorkspaceStore } from "../dist-electron/electron/services/workspace-store.js";
+import { createSandboxPolicy } from "../dist-electron/electron/services/codex-service.js";
 
 test("workspace profiles validate, deduplicate, persist, and enforce lifecycle constraints", () => {
   const managedTempRoot = path.resolve(process.cwd(), "../../OPTION/temp/ai-desktop");
@@ -43,4 +44,23 @@ test("workspace profiles validate, deduplicate, persist, and enforce lifecycle c
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
+});
+
+test("sandbox policy never turns an empty writable-root set into implicit cwd write access", () => {
+  const state = {
+    primaryId: "primary",
+    roots: [
+      { id: "primary", name: "primary", path: "/workspace/primary", permission: "read-only" },
+      { id: "extra", name: "extra", path: "/workspace/extra", permission: "read-only" },
+    ],
+  };
+  assert.deepEqual(createSandboxPolicy("workspace-write", state), { type: "readOnly", networkAccess: false });
+  state.roots[1].permission = "workspace-write";
+  assert.deepEqual(createSandboxPolicy("workspace-write", state), {
+    type: "workspaceWrite",
+    writableRoots: ["/workspace/extra"],
+    networkAccess: false,
+    excludeTmpdirEnvVar: false,
+    excludeSlashTmp: false,
+  });
 });
