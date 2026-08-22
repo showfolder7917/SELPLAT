@@ -60,10 +60,13 @@ test("切换工作区与任务时只展开当前分区并置顶占满", async ()
 test("新建任务入口位于聊天标签且不再占用任务标题", async () => {
   const tab = page.locator(".dev-tab");
   const title = tab.getByText("Codex Chat", { exact: true });
-  const newTask = tab.getByRole("button", { name: "新建任务" });
+  const newTask = tab.getByRole("button", { name: "重新建立一个 Codex 会话" });
   const closeIcon = tab.locator(":scope > svg:last-child");
   await expect(newTask).toBeVisible();
-  await expect(page.locator(".dev-section-title.tasks").getByRole("button", { name: "新建任务" })).toHaveCount(0);
+  await expect(newTask).toHaveAttribute("data-tooltip", "重新建立一个 Codex 会话");
+  await expect(newTask).not.toHaveAttribute("title", /.+/);
+  await expect(newTask.locator("svg")).toBeVisible();
+  await expect(page.locator(".dev-section-title.tasks").getByRole("button", { name: "重新建立一个 Codex 会话" })).toHaveCount(0);
 
   const [titleBounds, newTaskBounds, closeBounds] = await Promise.all([
     title.boundingBox(),
@@ -73,6 +76,47 @@ test("新建任务入口位于聊天标签且不再占用任务标题", async ()
   if (!titleBounds || !newTaskBounds || !closeBounds) throw new Error("聊天标签的新建任务入口缺少可视边界。");
   expect(newTaskBounds.x).toBeGreaterThanOrEqual(titleBounds.x + titleBounds.width);
   expect(newTaskBounds.x + newTaskBounds.width).toBeLessThanOrEqual(closeBounds.x);
+
+  await newTask.hover();
+  await expect.poll(() => newTask.evaluate((element) => Number.parseFloat(window.getComputedStyle(element, "::after").opacity))).toBe(1);
+  const hoverTip = await newTask.evaluate((element) => {
+    const button = element as HTMLElement;
+    const main = button.closest<HTMLElement>(".dev-main");
+    if (!main) throw new Error("刷新对话按钮不在主内容区域内。");
+    const style = window.getComputedStyle(button, "::after");
+    const buttonBounds = button.getBoundingClientRect();
+    const mainBounds = main.getBoundingClientRect();
+    const width = Number.parseFloat(style.width);
+    const height = Number.parseFloat(style.height);
+    const left = buttonBounds.left + buttonBounds.width / 2 - width / 2;
+    const top = buttonBounds.bottom + 6;
+    return {
+      content: style.content.replace(/^['"]|['"]$/g, ""),
+      opacity: Number.parseFloat(style.opacity),
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      mainLeft: mainBounds.left,
+      mainTop: mainBounds.top,
+      mainRight: mainBounds.right,
+      mainBottom: mainBounds.bottom,
+    };
+  });
+  expect(hoverTip.content).toBe("重新建立一个 Codex 会话");
+  expect(hoverTip.opacity).toBe(1);
+  expect(hoverTip.left).toBeGreaterThanOrEqual(hoverTip.mainLeft - 0.5);
+  expect(hoverTip.top).toBeGreaterThanOrEqual(hoverTip.mainTop - 0.5);
+  expect(hoverTip.right).toBeLessThanOrEqual(hoverTip.mainRight + 0.5);
+  expect(hoverTip.bottom).toBeLessThanOrEqual(hoverTip.mainBottom + 0.5);
+
+  await page.locator(".dev-chat").hover({ position: { x: 12, y: 120 } });
+  await newTask.focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(newTask).toBeFocused();
+  await expect.poll(() => newTask.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+  await expect.poll(() => newTask.evaluate((element) => Number.parseFloat(window.getComputedStyle(element, "::after").opacity))).toBe(1);
 });
 
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
@@ -216,7 +260,7 @@ test("多个结构化疑问逐题确认后继续原回合并重新展示完整�
 });
 
 test("托管内部新回合向下新增回复卡且不覆盖上一轮文字", async () => {
-  await page.getByRole("button", { name: "新建任务" }).click();
+  await page.getByRole("button", { name: "重新建立一个 Codex 会话" }).click();
   const composer = page.locator(".dev-composer");
   await composer.locator("textarea").fill("multi-turn-test");
   await composer.getByRole("button", { name: "发送" }).click();
@@ -232,6 +276,10 @@ test("托管内部新回合向下新增回复卡且不覆盖上一轮文字", as
   expect(positions[0].text).toContain("第一轮必须保留的文字");
   expect(positions[1].text).toContain("第二轮向下新增的文字");
   expect(positions[1].top).toBeGreaterThan(positions[0].top);
+  // 回复文字可能早于任务清理完成；必须等待回合终态，避免下一用例的阶段操作被误排入等待队列。
+  await expect(page.locator(".dev-message.assistant.streaming")).toHaveCount(0);
+  await expect(composer.getByRole("button", { name: "发送" })).toBeVisible();
+  await expect(composer.locator(".dispatch-queue-item")).toHaveCount(0);
 });
 
 test("最新阶段按钮在回复运行中保持可见禁用并在完成后启用", async () => {
@@ -247,6 +295,8 @@ test("最新阶段按钮在回复运行中保持可见禁用并在完成后启�
   await panel.getByRole("radio", { name: /不追加提示/ }).click();
   await panel.getByRole("button", { name: "确认" }).click();
 
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByText("完整意图已根据两个答案重新整理。").last()).toBeVisible();
   await expect(execute).toBeEnabled();
   await execute.click();
 
@@ -279,7 +329,7 @@ test("最新阶段按钮在回复运行中保持可见禁用并在完成后启�
 });
 
 test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清空", async () => {
-  await page.getByRole("button", { name: "新建任务" }).click();
+  await page.getByRole("button", { name: "重新建立一个 Codex 会话" }).click();
   const composer = page.locator(".dev-composer");
   await composer.locator("textarea").fill("markdown-test");
   await composer.getByRole("button", { name: "发送" }).click();
@@ -293,7 +343,7 @@ test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清�
   await expect(page.getByRole("heading", { level: 2, name: "清晰结论" })).toBeVisible();
   await expect(page.getByText("自然回答")).toBeVisible();
 
-  await page.getByRole("button", { name: "新建任务" }).click();
+  await page.getByRole("button", { name: "重新建立一个 Codex 会话" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "清晰结论" })).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 1, name: "今天要构建什么？" })).toBeVisible();
 });
