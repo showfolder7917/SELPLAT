@@ -118,6 +118,11 @@ export class CodexService {
     return { threadId: this.#threadId || this.#sessions.read()?.threadId || null };
   }
 
+  /** 只报告本地 app-server 子进程是否仍存活，不发起账号或网络请求。 */
+  isAlive(): boolean {
+    return Boolean(this.#process && this.#process.exitCode === null && !this.#process.killed);
+  }
+
   async getStatus(): Promise<CodexHarnessStatus> {
     try {
       await this.#ensureReady();

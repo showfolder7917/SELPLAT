@@ -21,6 +21,41 @@ let screenRecordingSettingsOpened = false;
 let dispatchState = { activeTask: null, queue: [] };
 const dispatchListeners = new Set();
 const streamListeners = new Set();
+const collaborationStateListeners = new Set();
+const collaborationStreamListeners = new Set();
+const collaborationNames = ["韩立", "南宫婉", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "令狐老祖", "李化元"];
+let collaborationState = {
+  version: 1,
+  mode: "single-conversation",
+  selectedMemberId: "han-li",
+  members: collaborationNames.map((displayName, index) => ({
+    memberId: index === 0 ? "han-li" : `isolated-member-${index}`,
+    displayName,
+    kind: index === 0 ? "conversation-owner" : "worker",
+    protected: index === 0,
+    enabled: true,
+    state: index === 0 ? "conversation" : "idle",
+    role: index === 0 ? "conversation" : null,
+    phase: null,
+    generation: index === 0 ? 1 : 0,
+    currentTaskId: null,
+    blockingReason: null,
+    lastHeartbeatAt: null,
+    lastProtocolProgressAt: null,
+    lastAssignedAt: null,
+    createdAt: "2026-08-23T00:00:00.000Z",
+    updatedAt: "2026-08-23T00:00:00.000Z",
+  })),
+  tasks: [],
+  integrationBatches: [],
+  nextIntegrationGeneration: 1,
+  updatedAt: "2026-08-23T00:00:00.000Z",
+};
+const publishCollaborationState = (reason) => {
+  const copy = structuredClone(collaborationState);
+  for (const listener of collaborationStateListeners) listener({ state: copy, reason });
+  return copy;
+};
 const publishDispatchState = () => {
   const copy = structuredClone(dispatchState);
   for (const listener of dispatchListeners) listener(copy);
@@ -110,6 +145,24 @@ contextBridge.exposeInMainWorld("desktop", {
   clearTempFiles: async () => ({ path: path.join(projectRoot, "apps", "ai-desktop", "temp"), fileCount: 0, totalBytes: 0 }),
   getAuditLogInfo: async () => ({ path: path.join(projectRoot, "apps", "ai-desktop", "log"), taskCount: 0, latestTask: null }),
   openAuditLogDirectory: async () => undefined,
+  getCollaborationState: async () => structuredClone(collaborationState),
+  setDesktopOperatingMode: async (mode) => { collaborationState.mode = mode; return publishCollaborationState("mode.changed"); },
+  selectCollaborationMember: async (memberId) => { collaborationState.selectedMemberId = memberId; return publishCollaborationState("member.selected"); },
+  createCollaborationMember: async ({ displayName }) => {
+    collaborationState.members.push({ ...collaborationState.members[1], memberId: `isolated-member-${Date.now()}`, displayName, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    return publishCollaborationState("member.created");
+  },
+  updateCollaborationMember: async (memberId, request) => {
+    const member = collaborationState.members.find((item) => item.memberId === memberId);
+    if (member && request.displayName) member.displayName = request.displayName;
+    return publishCollaborationState("member.updated");
+  },
+  deleteCollaborationMember: async (memberId) => { collaborationState.members = collaborationState.members.filter((item) => item.memberId !== memberId); return publishCollaborationState("member.deleted"); },
+  submitCollaborationTask: async () => publishCollaborationState("task.submitted"),
+  continueCollaborationTask: async () => publishCollaborationState("task.recovery_requested"),
+  cancelCollaborationTask: async () => publishCollaborationState("task.cancelled"),
+  onCollaborationState: (listener) => { collaborationStateListeners.add(listener); return () => collaborationStateListeners.delete(listener); },
+  onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
   getConversationDispatchState: async () => structuredClone(dispatchState),
   enqueueMessage: async ({ request, displayText, automatic }) => {
     dispatchState.queue.push({ id: `queue-${Date.now()}`, request, displayText: displayText || request.message, createdAt: new Date().toISOString(), automatic: automatic === true });

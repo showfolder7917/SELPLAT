@@ -57,6 +57,47 @@ test("切换工作区与任务时只展开当前分区并置顶占满", async ()
   await expect(page.locator("#developer-task-list")).toHaveCount(0);
 });
 
+test("新建任务入口位于聊天标签且不再占用任务标题", async () => {
+  const tab = page.locator(".dev-tab");
+  const title = tab.getByText("Codex Chat", { exact: true });
+  const newTask = tab.getByRole("button", { name: "新建任务" });
+  const closeIcon = tab.locator(":scope > svg:last-child");
+  await expect(newTask).toBeVisible();
+  await expect(page.locator(".dev-section-title.tasks").getByRole("button", { name: "新建任务" })).toHaveCount(0);
+
+  const [titleBounds, newTaskBounds, closeBounds] = await Promise.all([
+    title.boundingBox(),
+    newTask.boundingBox(),
+    closeIcon.boundingBox(),
+  ]);
+  if (!titleBounds || !newTaskBounds || !closeBounds) throw new Error("聊天标签的新建任务入口缺少可视边界。");
+  expect(newTaskBounds.x).toBeGreaterThanOrEqual(titleBounds.x + titleBounds.width);
+  expect(newTaskBounds.x + newTaskBounds.width).toBeLessThanOrEqual(closeBounds.x);
+});
+
+test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
+  await page.getByRole("button", { name: "展开任务" }).click();
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式" }).click();
+  await expect(taskList.locator(".collaboration-member")).toHaveCount(12);
+  await expect(taskList.getByRole("button", { name: /韩立/ })).toBeVisible();
+  await expect(taskList.getByRole("button", { name: /李化元/ })).toBeVisible();
+
+  await taskList.getByRole("button", { name: /宋玉/ }).click();
+  await expect(page.locator(".dev-tab").getByText("宋玉", { exact: true })).toBeVisible();
+  const memberPage = page.locator(".collaboration-member-page");
+  await expect(memberPage.getByText("当前空闲", { exact: true })).toBeVisible();
+  await expect(memberPage.getByText("收到任务时才会创建新的 Codex。", { exact: true })).toBeVisible();
+  const overflow = await memberPage.evaluate((element) => element.scrollWidth - element.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+
+  await taskList.getByRole("button", { name: /韩立/ }).click();
+  await expect(page.locator(".dev-tab").getByText("韩立", { exact: true })).toBeVisible();
+  await expect(page.locator(".dev-composer")).toBeVisible();
+  await taskList.getByRole("button", { name: "单会话" }).click();
+  await page.getByRole("button", { name: "展开工作区" }).click();
+});
+
 test("资源管理器整栏与工作区分区均可折叠恢复", async () => {
   const explorerTitleToggle = page.locator(".explorer-title").getByRole("button", { name: "折叠资源管理器" });
   await explorerTitleToggle.click();

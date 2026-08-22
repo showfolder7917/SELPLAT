@@ -43,6 +43,10 @@ import type {
   CodexStreamEvent,
   CodexStreamPlanStep,
   CodexUserInputRequest,
+  CollaborationMember,
+  CollaborationState,
+  CollaborationStateEvent,
+  CollaborationStreamEnvelope,
   ConversationDispatchState,
   ConversationQueueItem,
   Locale,
@@ -141,6 +145,8 @@ export function DeveloperApp() {
   const [screenRecordingRestarting, setScreenRecordingRestarting] = useState(false);
   const [tempInfo, setTempInfo] = useState<TempDirectoryInfo | null>(null);
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
+  const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
+  const [collaborationStreams, setCollaborationStreams] = useState<Record<string, Message>>({});
   const [trustedCommandInfo, setTrustedCommandInfo] = useState<TrustedCommandInfo>({ count: 0 });
   const [loading, setLoading] = useState(false);
   const [dispatchState, setDispatchState] = useState<ConversationDispatchState>(EMPTY_DISPATCH_STATE);
@@ -257,6 +263,21 @@ export function DeveloperApp() {
     const approvalTimer = window.setInterval(refreshApprovals, 700);
     const userInputTimer = window.setInterval(refreshUserInputs, 350);
     return () => { window.clearInterval(statusTimer); window.clearInterval(approvalTimer); window.clearInterval(userInputTimer); };
+  }, []);
+
+  useEffect(() => {
+    const desktop = window.desktop;
+    if (!desktop) return;
+    void desktop.getCollaborationState().then(setCollaborationState);
+    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => setCollaborationState(event.state));
+    const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
+      // 人物工作页只保留当前任务的实时结果，不把阶段时间线或瓶颈明细渲染到界面。
+      setCollaborationStreams((current) => {
+        const existing = current[envelope.taskId] || createAssistantMessage(Date.now(), "task-managed");
+        return { ...current, [envelope.taskId]: applyCodexStreamEvent(existing, envelope.event) };
+      });
+    });
+    return () => { removeStateListener(); removeStreamListener(); };
   }, []);
 
   useEffect(() => {
@@ -691,6 +712,63 @@ export function DeveloperApp() {
     }
   };
 
+  const setOperatingMode = async (mode: "single-conversation" | "collaboration") => {
+    const state = await window.desktop?.setDesktopOperatingMode(mode);
+    if (state) {
+      setCollaborationState(state);
+      setActiveExplorerSection("tasks");
+    }
+  };
+
+  const selectCollaborationMember = async (memberId: string) => {
+    const state = await window.desktop?.selectCollaborationMember(memberId);
+    if (state) setCollaborationState(state);
+  };
+
+  const createCollaborationMember = async () => {
+    const displayName = window.prompt(locale === "ja" ? "メンバー名" : "人物名称")?.trim();
+    if (!displayName) return;
+    try {
+      const state = await window.desktop?.createCollaborationMember({ displayName });
+      if (state) setCollaborationState(state);
+    } catch (error) {
+      setDispatchError(readableDesktopError(error, "无法新增人物。"));
+    }
+  };
+
+  const renameCollaborationMember = async (member: CollaborationMember) => {
+    const displayName = window.prompt(locale === "ja" ? "新しいメンバー名" : "新的人物名称", member.displayName)?.trim();
+    if (!displayName || displayName === member.displayName) return;
+    const state = await window.desktop?.updateCollaborationMember(member.memberId, { displayName });
+    if (state) setCollaborationState(state);
+  };
+
+  const deleteCollaborationMember = async (member: CollaborationMember) => {
+    if (member.protected || !window.confirm(locale === "ja" ? `${member.displayName}を削除しますか？` : `确定删除“${member.displayName}”吗？`)) return;
+    const state = await window.desktop?.deleteCollaborationMember(member.memberId);
+    if (state) setCollaborationState(state);
+  };
+
+  const submitConfirmedCollaborationTask = async (message: Message) => {
+    if (!workspaces) throw new Error("协同任务缺少工作区。");
+    const latestUser = [...messages].reverse().find((item) => item.role === "user");
+    const attachmentIds = messages.flatMap((item) => item.attachments || []).map((attachment) => attachment.id);
+    const state = await window.desktop?.submitCollaborationTask({
+      title: (latestUser?.text || message.text).slice(0, 80),
+      problemStatement: latestUser?.text || message.text,
+      confirmedIntent: message.text,
+      constraints: ["协同执行停在任务托管代码验证，不自动进入测试托管"],
+      acceptanceCriteria: [],
+      sourceMessageIds: messages.map((item) => item.id),
+      attachmentIds,
+      workspaceState: workspaces,
+      locale,
+      mergeStrategy: "INDEPENDENT",
+    });
+    if (state) setCollaborationState(state);
+    setMessages((current) => current.map((item) => item.id === message.id ? { ...item, actionTriggered: true } : item));
+  };
+
   const submitUserInput = async (questionId: string) => {
     if (!userInputRequest || userInputSubmitting) return;
     const answer = userInputAnswers[questionId]?.trim() || "";
@@ -952,6 +1030,10 @@ export function DeveloperApp() {
   const shellStyle = { "--explorer-width": `${explorerWidth}px` } as CSSProperties;
   const workspaceSectionExpanded = activeExplorerSection === "workspace";
   const tasksSectionExpanded = activeExplorerSection === "tasks";
+  const collaborationMode = collaborationState?.mode === "collaboration";
+  const selectedCollaborationMember = collaborationState?.members.find((member) => member.memberId === collaborationState.selectedMemberId) || null;
+  const selectedMemberTasks = collaborationState?.tasks.filter((task) => task.executorMemberId === selectedCollaborationMember?.memberId || task.currentReviewerMemberId === selectedCollaborationMember?.memberId || task.reviews.some((review) => review.reviewerMemberId === selectedCollaborationMember?.memberId)) || [];
+  const showConversationWorkspace = !collaborationMode || selectedCollaborationMember?.kind === "conversation-owner";
 
   return <div className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
     <header className="dev-titlebar">
@@ -1007,12 +1089,17 @@ export function DeveloperApp() {
       <section className={`explorer-pane tasks-pane ${tasksSectionExpanded ? "expanded" : "collapsed"}`}>
         <div className="dev-section-title tasks">
           <button className="section-toggle" aria-expanded={tasksSectionExpanded} aria-controls="developer-task-list" aria-label={`${tasksSectionExpanded ? text.collapse : text.expand}${text.tasks}`} onClick={() => toggleExplorerSection("tasks")}>{tasksSectionExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.tasks}</span></button>
-          <button className="section-action new-task" title={text.newTask} aria-label={text.newTask} onClick={() => void startNewTask()}><Add24Regular /></button>
         </div>
         {tasksSectionExpanded && <div id="developer-task-list" className="task-list">
-          {auditInfo?.latestTask
-            ? <div className="task-summary" title={auditInfo.latestTask.request}><strong>{auditInfo.latestTask.request || text.newTask}</strong><span>{auditStatusText(auditInfo.latestTask.status, locale)}</span></div>
-            : <span className="task-empty">{text.noAuditTask}</span>}
+          <div className="operating-mode-switch" role="group" aria-label={locale === "ja" ? "実行モード" : "运行模式"}>
+            <button type="button" className={!collaborationMode ? "active" : ""} aria-pressed={!collaborationMode} onClick={() => void setOperatingMode("single-conversation")}>{locale === "ja" ? "単一会話" : "单会话"}</button>
+            <button type="button" className={collaborationMode ? "active" : ""} aria-pressed={collaborationMode} onClick={() => void setOperatingMode("collaboration")}>{locale === "ja" ? "協同" : "协同模式"}</button>
+          </div>
+          {collaborationMode
+            ? <><div className="collaboration-member-list">{collaborationState?.members.map((member) => <button type="button" key={member.memberId} className={`collaboration-member ${member.memberId === collaborationState.selectedMemberId ? "selected" : ""}`} aria-pressed={member.memberId === collaborationState.selectedMemberId} onClick={() => void selectCollaborationMember(member.memberId)}><span><i className={member.state} />{member.displayName}</span><small>{collaborationMemberStateLabel(member, locale)}</small></button>)}</div><button type="button" className="add-collaboration-member" onClick={() => void createCollaborationMember()}><Add24Regular />{locale === "ja" ? "メンバー追加" : "新增人物"}</button></>
+            : auditInfo?.latestTask
+              ? <div className="task-summary" title={auditInfo.latestTask.request}><strong>{auditInfo.latestTask.request || text.newTask}</strong><span>{auditStatusText(auditInfo.latestTask.status, locale)}</span></div>
+              : <span className="task-empty">{text.noAuditTask}</span>}
         </div>}
       </section>
       </div>
@@ -1038,12 +1125,12 @@ export function DeveloperApp() {
     />}
 
     <main className="dev-main">
-      <div className="dev-tab"><Prompt24Regular /><span>Codex Chat</span><Dismiss20Regular /></div>
-      <section ref={chatRef} className="dev-chat">
+      <div className="dev-tab"><Prompt24Regular /><span>{collaborationMode ? selectedCollaborationMember?.displayName || "协同模式" : "Codex Chat"}</span>{showConversationWorkspace && <button type="button" className="tab-new-task" title={text.newTask} aria-label={text.newTask} onClick={() => void startNewTask()}><Add24Regular /></button>}<Dismiss20Regular /></div>
+      {showConversationWorkspace ? <section ref={chatRef} className="dev-chat">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p></div>}
-        {messages.map((message) => <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} activeMode={executionMode} onReturn={setExecutionMode} onAdvance={(mode, label) => void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>)}
-      </section>
-      <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
+        {messages.map((message) => <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} activeMode={executionMode} onReturn={setExecutionMode} onAdvance={(mode, label) => collaborationMode && message.managedMode === "conversation-managed" ? void submitConfirmedCollaborationTask(message).catch((error) => setDispatchError(readableDesktopError(error, "无法提交协同任务。"))) : void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>)}
+      </section> : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} />}
+      {showConversationWorkspace && <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
         {dispatchState.activeTask?.status === "recoverable" && <div className="dispatch-recovery" role="status"><span>发现上次未完成的任务</span><div><button type="button" onClick={() => void recoverConversationTask()}>继续执行</button><button type="button" onClick={() => void discardConversationRecovery()}>放弃任务</button></div></div>}
         {dispatchState.activeTask?.status === "running" && !loading && <div className="dispatch-background" role="status">任务正在后台执行，完成后将继续处理等待队列。</div>}
@@ -1052,7 +1139,7 @@ export function DeveloperApp() {
         {dispatchError && <div className="composer-error" role="alert"><span>{dispatchError}</span></div>}
         {screenshotError && <div className="composer-error" role="alert"><span>{screenshotError}</span>{(screenRecordingSettingsAvailable || screenRecordingRestartRequired) && <div className="composer-error-actions">{screenRecordingSettingsAvailable && <button type="button" onClick={() => void openScreenRecordingSettings()}>{text.openScreenRecordingSettings}</button>}{screenRecordingRestartRequired && <button type="button" className="primary" disabled={screenRecordingRestarting} onClick={() => void restartForScreenRecordingPermission()}>{locale === "ja" ? "AI Desktop を再起動" : "重启 AI Desktop"}</button>}</div>}</div>}
         <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span><button type="button" role="switch" aria-checked={automaticTestEnabled} className={`automatic-test-toggle ${automaticTestEnabled ? "enabled" : ""}`} disabled={automaticTestChecking || (loading && !automaticTestEnabled)} onClick={() => void toggleAutomaticTesting()}><span>{text.automaticTest}</span><i /></button>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}<button type="button" className="screenshot-button" title={text.screenshot} aria-label={text.screenshot} data-tooltip={text.screenshot} disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" title={text.hiddenScreenshot} aria-label={text.hiddenScreenshot} data-tooltip={text.hiddenScreenshot} disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
-      </form>
+      </form>}
     </main>
 
     <aside className="dev-context">
@@ -1094,6 +1181,50 @@ function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function CollaborationMemberPage({ member, tasks, streams, locale, onRename, onDelete, onContinue, onCancel }: {
+  member: CollaborationMember | null;
+  tasks: CollaborationState["tasks"];
+  streams: Record<string, Message>;
+  locale: Locale;
+  onRename(member: CollaborationMember): void;
+  onDelete(member: CollaborationMember): void;
+  onContinue(taskId: string): void;
+  onCancel(taskId: string): void;
+}) {
+  if (!member) return <section className="collaboration-member-page"><p>{locale === "ja" ? "メンバーを選択してください。" : "请选择人物。"}</p></section>;
+  const orderedTasks = [...tasks].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const currentTask = orderedTasks.find((task) => !["integrated", "cancelled"].includes(task.state)) || orderedTasks[0] || null;
+  const liveMessage = currentTask ? streams[currentTask.taskId] : null;
+  const currentPlan = currentTask?.plans.find((plan) => plan.version === currentTask.currentPlanVersion);
+  const latestReview = currentTask?.reviews.at(-1);
+  return <section className="collaboration-member-page" aria-label={member.displayName}>
+    <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
+    {member.blockingReason && <div className="member-blocking-reason" role="status">{member.blockingReason}</div>}
+    {currentTask ? <article className="member-current-task">
+      <div className="member-task-heading"><span>{locale === "ja" ? "現在のタスク" : "当前任务"}</span><strong>{currentTask.snapshot.title}</strong><small>{collaborationTaskStateLabel(currentTask.state, locale)}</small></div>
+      <p>{currentTask.snapshot.confirmedIntent}</p>
+      {currentPlan && <details open><summary>{locale === "ja" ? `要件案 v${currentPlan.version}` : `分析方案 v${currentPlan.version}`}</summary><MarkdownMessage text={currentPlan.text} /></details>}
+      {latestReview && <details><summary>{latestReview.decision === "passed" ? (locale === "ja" ? "レビュー通過" : "审核通过") : (locale === "ja" ? "要改善" : "审核未通过")}</summary><MarkdownMessage text={latestReview.feedback} /></details>}
+      {liveMessage && <div className="member-live-result"><MarkdownMessage text={liveMessage.text} /><StreamDetails message={liveMessage} locale={locale} /></div>}
+      {currentTask.finalResult && !liveMessage?.streaming && <details open><summary>{locale === "ja" ? "実行結果" : "执行结果"}</summary><MarkdownMessage text={currentTask.finalResult} /></details>}
+      <div className="member-task-actions">{currentTask.state === "recovering" && <button type="button" onClick={() => onContinue(currentTask.taskId)}>{locale === "ja" ? "続行" : "继续执行"}</button>}{!["integrated", "cancelled"].includes(currentTask.state) && <button type="button" className="danger" onClick={() => onCancel(currentTask.taskId)}>{locale === "ja" ? "キャンセル" : "取消任务"}</button>}</div>
+    </article> : <div className="member-empty-task"><Code24Regular /><strong>{locale === "ja" ? "待機中" : "当前空闲"}</strong><span>{locale === "ja" ? "割り当て時に新しい Codex を作成します。" : "收到任务时才会创建新的 Codex。"}</span></div>}
+    {orderedTasks.length > 1 && <section className="member-task-history"><h2>{locale === "ja" ? "過去のタスク" : "历史任务"}</h2>{orderedTasks.slice(1).map((task) => <div key={task.taskId}><strong>{task.snapshot.title}</strong><span>{collaborationTaskStateLabel(task.state, locale)}</span></div>)}</section>}
+  </section>;
+}
+
+function collaborationMemberStateLabel(member: CollaborationMember, locale: Locale): string {
+  const chinese: Record<CollaborationMember["state"], string> = { idle: "空闲", conversation: "会话中", assigned: "已分配", working: member.phase === "verifying" ? "正在验证" : member.phase === "finalizing" ? "正在收尾" : "正在执行", "waiting-review": "等待审核", reviewing: "正在审核", retiring: "正在关闭连接", recovering: "等待恢复", draining: "等待退出", offline: "离线" };
+  const japanese: Record<CollaborationMember["state"], string> = { idle: "待機", conversation: "会話中", assigned: "割当済み", working: "実行中", "waiting-review": "レビュー待ち", reviewing: "レビュー中", retiring: "接続終了中", recovering: "復旧待ち", draining: "終了待ち", offline: "オフライン" };
+  return (locale === "ja" ? japanese : chinese)[member.state];
+}
+
+function collaborationTaskStateLabel(state: CollaborationState["tasks"][number]["state"], locale: Locale): string {
+  const chinese: Record<CollaborationState["tasks"][number]["state"], string> = { "queued-executor": "等待执行人", "preparing-worktree": "准备独立版本", analyzing: "分析需求", "queued-reviewer": "等待审核员", reviewing: "审核方案", optimizing: "优化方案", approved: "审核通过", "forced-after-review-limit": "达到审核上限后执行", executing: "执行修改", "ready-for-integration": "等待集成", "queued-integration": "已进入集成批次", integrating: "正在集成", integrated: "已集成", blocked: "已阻塞", recovering: "等待恢复", cancelled: "已取消" };
+  const japanese: Record<CollaborationState["tasks"][number]["state"], string> = { "queued-executor": "実行者待ち", "preparing-worktree": "独立版を準備", analyzing: "要件分析", "queued-reviewer": "レビュー担当待ち", reviewing: "レビュー中", optimizing: "案を改善中", approved: "承認済み", "forced-after-review-limit": "上限後に実行", executing: "変更実行中", "ready-for-integration": "統合待ち", "queued-integration": "統合キュー", integrating: "統合中", integrated: "統合済み", blocked: "ブロック", recovering: "復旧待ち", cancelled: "キャンセル" };
+  return (locale === "ja" ? japanese : chinese)[state];
 }
 
 function auditStatusText(status: AuditTaskSummary["status"], locale: Locale): string {

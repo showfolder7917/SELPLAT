@@ -60,6 +60,25 @@ contextBridge.exposeInMainWorld("desktop", {
   clearTempFiles: () => ipcRenderer.invoke("desktop:clear-temp-files"),
   getAuditLogInfo: () => ipcRenderer.invoke("desktop:get-audit-log-info"),
   openAuditLogDirectory: () => ipcRenderer.invoke("desktop:open-audit-log-directory"),
+  getCollaborationState: () => ipcRenderer.invoke("desktop:get-collaboration-state"),
+  setDesktopOperatingMode: (mode: string) => ipcRenderer.invoke("desktop:set-operating-mode", mode),
+  selectCollaborationMember: (memberId: string) => ipcRenderer.invoke("desktop:select-collaboration-member", memberId),
+  createCollaborationMember: (request: unknown) => ipcRenderer.invoke("desktop:create-collaboration-member", request),
+  updateCollaborationMember: (memberId: string, request: unknown) => ipcRenderer.invoke("desktop:update-collaboration-member", memberId, request),
+  deleteCollaborationMember: (memberId: string) => ipcRenderer.invoke("desktop:delete-collaboration-member", memberId),
+  submitCollaborationTask: (request: unknown) => ipcRenderer.invoke("desktop:submit-collaboration-task", request),
+  continueCollaborationTask: (taskId: string) => ipcRenderer.invoke("desktop:continue-collaboration-task", taskId),
+  cancelCollaborationTask: (taskId: string) => ipcRenderer.invoke("desktop:cancel-collaboration-task", taskId),
+  onCollaborationState: (listener: (event: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:collaboration-state", handler);
+    return () => ipcRenderer.removeListener("desktop:collaboration-state", handler);
+  },
+  onCollaborationStream: (listener: (event: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:collaboration-stream", handler);
+    return () => ipcRenderer.removeListener("desktop:collaboration-stream", handler);
+  },
   getConversationDispatchState: () => ipcRenderer.invoke("desktop:get-conversation-dispatch-state"),
   enqueueMessage: (request: unknown) => ipcRenderer.invoke("desktop:enqueue-message", request),
   supplementQueuedMessage: (itemId: string) => ipcRenderer.invoke("desktop:supplement-queued-message", itemId),

@@ -8,7 +8,9 @@ import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, nativeImage, scre
 import { LOCALES, SANDBOX_MODES, WORKSPACE_PERMISSIONS } from "../../shared/contracts/desktop.js";
 import type {
   AppVariant,
+  CreateCollaborationMemberRequest,
   DesktopSettings,
+  DesktopOperatingMode,
   EnqueueMessageRequest,
   ManagedExecutionMode,
   ResolveCodexUserInputRequest,
@@ -19,6 +21,8 @@ import type {
   ScreenshotAnnotationWindowRequest,
   ScreenshotSaveRequest,
   SendMessageRequest,
+  SubmitCollaborationTaskRequest,
+  UpdateCollaborationMemberRequest,
   WorkspacePermission,
   WindowAction,
 } from "../../shared/contracts/desktop.js";
@@ -26,6 +30,8 @@ import { prepareAutomaticTesting } from "../services/automatic-test-preflight.js
 import { BusinessAuditLog } from "../services/business-audit-log.js";
 import { CodexService } from "../services/codex-service.js";
 import { ConversationDispatchStore } from "../services/conversation-dispatch-store.js";
+import { CollaborationCodexRegistry } from "../services/collaboration/collaboration-codex-sessions.js";
+import { CollaborationCoordinator } from "../services/collaboration/collaboration-coordinator.js";
 import { ManagedTaskExecutor } from "../services/managed-task-executor.js";
 import { ScreenshotStore } from "../services/screenshot-store.js";
 import { SettingsStore } from "../services/settings-store.js";
@@ -39,6 +45,8 @@ interface DesktopIpcDependencies {
   workspaces: WorkspaceStore;
   trustedCommands: TrustedCommandStore;
   dispatch: ConversationDispatchStore;
+  collaboration: CollaborationCoordinator;
+  collaborationRegistry: CollaborationCodexRegistry;
   audit: BusinessAuditLog;
   projectRoot: string;
   variant: AppVariant;
@@ -88,7 +96,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, audit, projectRoot, variant, preloadPath, rendererRoot } = dependencies;
+  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, collaborationRegistry, audit, projectRoot, variant, preloadPath, rendererRoot } = dependencies;
   const activeAuditTasks = new Map<number, string>();
   const seenApprovalRequests = new Set<number>();
   const approvalAuditTasks = new Map<number, string>();
@@ -230,7 +238,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   ipcMain.handle("desktop:logout-codex", () => codex.logout());
   ipcMain.handle("desktop:get-codex-approvals", () => {
-    const approvals = codex.pendingApprovals();
+    const approvals = [...codex.pendingApprovals(), ...collaborationRegistry.pendingApprovals()];
     for (const approval of approvals) {
       if (seenApprovalRequests.has(approval.requestId)) continue;
       seenApprovalRequests.add(approval.requestId);
@@ -251,7 +259,9 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       throw new Error("Invalid Codex approval response.");
     }
     // “允许”对满足安全边界的项目内固定命令默认同时建立信任；文件修改和高风险命令不会进入持久信任。
-    const trustResult = codex.resolveApproval(requestId, decision, decision === "accept");
+    const trustResult = requestId >= 1_000_000
+      ? collaborationRegistry.resolveApproval(requestId, decision, decision === "accept")
+      : codex.resolveApproval(requestId, decision, decision === "accept");
     audit.recordApproval(approvalAuditTasks.get(requestId), requestId, decision, trustResult.trusted);
     seenApprovalRequests.delete(requestId);
     approvalAuditTasks.delete(requestId);
@@ -284,9 +294,10 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     return result;
   });
-  ipcMain.handle("desktop:get-codex-user-inputs", () => codex.pendingUserInputs());
+  ipcMain.handle("desktop:get-codex-user-inputs", () => [...codex.pendingUserInputs(), ...collaborationRegistry.pendingUserInputs()]);
   ipcMain.handle("desktop:resolve-codex-user-input", (_event, request: ResolveCodexUserInputRequest) => {
-    codex.resolveUserInput(request);
+    if (request.requestId >= 1_000_000) collaborationRegistry.resolveUserInput(request);
+    else codex.resolveUserInput(request);
     // 业务日志只记录协议生命周期，不记录可能包含敏感内容的答案正文。
     audit.recordEvent("user_input.resolved", { requestId: request.requestId, answerCount: Object.keys(request.answers || {}).length });
   });
@@ -662,6 +673,15 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const error = await shell.openPath(audit.ensure());
     if (error) throw new Error(error);
   });
+  ipcMain.handle("desktop:get-collaboration-state", () => collaboration.state());
+  ipcMain.handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
+  ipcMain.handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
+  ipcMain.handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberRequest) => collaboration.createMember(request));
+  ipcMain.handle("desktop:update-collaboration-member", (_event, memberId: string, request: UpdateCollaborationMemberRequest) => collaboration.updateMember(memberId, request));
+  ipcMain.handle("desktop:delete-collaboration-member", (_event, memberId: string) => collaboration.deleteMember(memberId));
+  ipcMain.handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskRequest) => collaboration.submitTask(request));
+  ipcMain.handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
+  ipcMain.handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
   ipcMain.handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
   ipcMain.handle("desktop:enqueue-message", (_event, value: EnqueueMessageRequest) => {
     if (!value?.request || typeof value.request.message !== "string") throw new Error("Invalid queued message request.");

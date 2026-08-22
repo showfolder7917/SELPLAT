@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.31.0 将托管内部真实回合改为逐卡向下追加，并以真实双回合交互测试阻断文字覆盖复发。 -->
-rule_version = 5.31.0
+<!-- 5.37.0 固化空闲集成器立即冻结当前就绪集合，删除人为收集窗口。 -->
+rule_version = 5.37.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -106,6 +106,18 @@ upgrade_record_5_30.2 = 2026-08-22:任务阶段到达后增加回到任务托管
 upgrade_record_5_30.3 = 2026-08-22:返回按钮只切换执行模式不自动发送回合
 <!-- 5.31.0 废止 5.1.0 的同卡拼接方式；每个真实 turnId 必须拥有独立回复卡。 -->
 upgrade_record_5_31 = 2026-08-22:托管内部每个真实turnId向下新增独立回复卡_turnId到messageId稳定映射_上一轮完成后冻结_最终IPC只收口最新卡_双回合真实交互测试禁止源码正则误判
+<!-- 5.32.0 固化已确认的协同模式设计，实施前仍须按详细设计分阶段完成源码与测试。 -->
+upgrade_record_5_32 = 2026-08-23:协同模式与单会话协调器解耦_韩立长期会话_其他人物任务区独立保留_按任务创建销毁全新Codex管道_异人审核_最多三次明确拒绝_完成停在任务托管_心跳与无输出分离_审核容量保留防死锁_结果持久化后退休连接
+<!-- 5.33.0 固化每项执行独立版本、可集成门禁和长任务微批次机制。 -->
+upgrade_record_5_33 = 2026-08-23:执行任务独立Git分支与worktree_需求协同Git三层版本校验_可集成门禁_独立任务不等待未完成成员_原子组与依赖链保留屏障_结构化verifying_finalizing判定接近完成_心跳仅表示存活_冻结集成代际_组合测试通过后安全同步本地分支
+<!-- 5.34.0 固化用户确认的新建任务入口位置，避免后续实现再次回到侧栏。 -->
+upgrade_record_5_34 = 2026-08-23:新建任务加号迁入Codex_Chat标签并位于关闭图标左侧_任务标题删除旧入口_复用原官方线程删除与本地清理逻辑
+<!-- 5.35.0 固化协同耗时、等待占用链和瓶颈报告只进入日志，不进入人物页面。 -->
+upgrade_record_5_35 = 2026-08-23:协同阶段墙上时间与单调耗时_等待类型原因资源占用者解除事件归因_集成代际瓶颈报告_跨代际趋势_人物页面只显示当前状态阻塞原因结果入口_禁止展示阶段时间线与耗时明细
+<!-- 5.36.0 固化用户确认的默认人物集合，后续仍允许通过成员管理增删改查。 -->
+upgrade_record_5_36 = 2026-08-23:默认人物韩立_南宫婉_紫灵_元瑶_宋玉_冰魄仙子_墨彩环_墨大夫_厉飞雨_张铁_令狐老祖_李化元
+<!-- 5.37.0 固化最新讨论结论：集成器空闲即取当前就绪任务，不等待固定窗口、比例或最小批量。 -->
+upgrade_record_5_37 = 2026-08-23:集成器空闲即原子冻结当前全部可集成任务_允许单任务一代_运行中完成者进入下一代_原子组和依赖链仅保留显式屏障_结构化阶段只用于容量和瓶颈分析不延迟空闲集成器
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -192,8 +204,8 @@ developer_sidebar_section_disclosure_contract = explorer_workspace_and_tasks_tit
 developer_sidebar_section_disclosure_contract.2 = aria_expanded_state
 <!-- 工作区与任务只允许一个活动分区。 -->
 developer_sidebar_section_disclosure_contract.3 = workspace_tasks_single_active
-<!-- 新建任务动作固定在任务标题右侧。 -->
-developer_sidebar_section_disclosure_contract.4 = new_task_action_in_tasks_title_right
+<!-- 新建任务加号固定在 Codex Chat 标签内且位于关闭图标左侧，任务标题不得保留重复入口。 -->
+developer_sidebar_section_disclosure_contract.4 = new_task_action_in_codex_chat_tab_before_close
 <!-- 新建任务动作禁止额外单独占用一行。 -->
 developer_sidebar_section_disclosure_contract.5 = no_separate_full_width_new_task_row
 <!-- 资源管理器总开关必须收起整个网格列并释放聊天宽度；活动栏文件图标始终保留恢复入口，内部工作区展开状态不得被重置。 -->
@@ -210,6 +222,8 @@ developer_sidebar_active_section_layout_contract = active_section_top_and_fill_a
 developer_sidebar_active_section_layout_contract.2 = inactive_section_heading_only_at_bottom
 <!-- 业务日志只落到应用 log 目录；原始事件时间线追加写，任务摘要原子覆盖，完整关联回合、审批、命令、文件和完成状态，但禁止保存认证秘密或原始推理。 -->
 business_audit_log_contract = apps_ai_desktop_log_only + append_only_jsonl_timeline + atomic_per_task_summary + request_workspace_sandbox_turn_approval_command_changed_files_completion_correlation + no_auth_secret_or_raw_reasoning
+<!-- 协同耗时分析必须由结构化事件计算并只写日志；人物页面禁止展示时间线、耗时分解和瓶颈占用链。 -->
+collaboration_duration_diagnosis_contract = wall_clock_timestamp_plus_monotonic_duration + analysis_review_wait_review_rework_codex_worktree_change_validation_integration_conflict_approval_user_dependency_recovery_segments + wait_type_reason_resource_owner_and_release_event_attribution + per_integration_generation_bottleneck_report + cross_generation_trend_report + structured_event_evidence_only + member_ui_current_state_block_reason_and_result_only + no_member_timeline_duration_breakdown_or_bottleneck_chain
 <!-- 部分完成诊断必须根据真实 Harness 状态、命令开始完成与退出码、文件变更、构建测试观察和源码产物时间自动生成可检索原因码。 -->
 partial_completion_diagnosis_contract = harness_failed_or_interrupted + command_completion_and_exit_code + changed_files + build_or_validation_observation + source_vs_bundle_mtime + explicit_reason_codes
 <!-- 设置面板必须显示最近任务状态和原因数量，并提供直接打开日志目录的入口。 -->
@@ -228,6 +242,10 @@ managed_command_policy_contract = task_mode_blocks_build_start_restart + test_mo
 audit_build_pending_contract = code_verified_without_build_is_completed + build_recorded_as_pending_action + never_partial_only_because_bundle_is_stale
 <!-- 托管执行每轮回答必须按顺序保留；新回合建立独立文本起点，完成事件只能替换当前轮片段，最终 IPC 返回不得覆盖累计内容。 -->
 managed_multiturn_text_preservation_contract = first_real_turn_reuses_pending_card + every_later_real_turn_id_appends_new_assistant_card_below + explicit_turn_id_to_message_id_routing + previous_card_frozen_before_next_turn + completed_message_reconciles_own_segment_id_only + final_response_updates_latest_card_only + terminal_state_rejects_late_non_error_events + real_two_turn_interaction_asserts_two_cards_and_immutable_first_text + prohibit_source_regex_only_completion
+<!-- 协同模式未来实施时必须使用独立编排器，人物条目长期存在而非韩立 Codex 只在分配工作期间临时存在。 -->
+collaboration_mode_architecture_contract = orchestration_isolated_from_single_conversation + protected_hanli_persistent_conversation_connection + stable_crud_worker_members_individually_listed_under_tasks + member_named_tabs_not_generic_codex_chat + idle_worker_has_no_codex_process_pipe_or_thread + assignment_creates_fresh_lease_generation_process_pipe_and_thread + executor_owns_analysis_review_optimization_execution_chain + different_idle_reviewer_per_review + maximum_three_explicit_rejections_then_latest_plan_execution + infrastructure_failure_does_not_consume_rejection + executor_completion_stops_at_code_verified_without_test_managed + persist_result_before_connection_retirement + member_page_and_audit_history_survive_codex_retirement + full_member_history_never_injected_into_fresh_codex + lease_pipe_and_protocol_progress_liveness + silent_healthy_reasoning_not_timeout + reviewer_capacity_reserved_to_prevent_deadlock + executor_task_specific_git_branch_and_worktree + immutable_task_plan_assignment_worker_base_and_result_versions + reject_stale_generation_results + integration_ready_gate + independent_tasks_do_not_wait_for_unfinished_workers + atomic_group_and_dependency_chain_barriers + idle_integrator_immediately_freezes_all_currently_eligible_results_without_artificial_window_minimum_batch_or_ratio + post_freeze_results_enter_next_generation + evidence_backed_verifying_or_finalizing_for_capacity_and_bottleneck_only + heartbeat_means_liveness_not_progress + batch_combination_tests_before_safe_local_branch_sync
+<!-- 默认成员名单由用户确认；韩立保持保护身份，其余十一人为可调度 worker，成员管理仍可增删改查。 -->
+collaboration_default_member_roster_contract = 韩立_conversation_owner_protected + 南宫婉_worker + 紫灵_worker + 元瑶_worker + 宋玉_worker + 冰魄仙子_worker + 墨彩环_worker + 墨大夫_worker + 厉飞雨_worker + 张铁_worker + 令狐老祖_worker + 李化元_worker + roster_crud_enabled_for_non_hanli
 <!-- Harness 执行期间输入区保持可编辑，截图、图片粘贴和后续消息进入有序队列，不得由全局 loading 一并锁死。 -->
 managed_running_composer_availability_contract = screenshot_and_image_paste_available_while_running + composer_editable + next_message_fifo_queue + cancel_scoped_to_active_turn
 <!-- 执行中普通发送只能持久排队；用户明确点击补充后才通过官方 turn/steer 注入当前回合，进程重建后必须先让用户继续或放弃，全部状态变化复用统一业务日志。 -->

@@ -3,6 +3,36 @@ export const LOCALES = ["ja", "zh-CN"] as const;
 export const SANDBOX_MODES = ["read-only", "workspace-write"] as const;
 export const WORKSPACE_PERMISSIONS = ["read-only", "workspace-write"] as const;
 
+export type {
+  CollaborationIntegrationBatch,
+  CollaborationMember,
+  CollaborationMemberRole,
+  CollaborationMemberState,
+  CollaborationMergeStrategy,
+  CollaborationRequirementPlan,
+  CollaborationReview,
+  CollaborationState,
+  CollaborationStateEvent,
+  CollaborationStreamEnvelope,
+  CollaborationTask,
+  CollaborationTaskSnapshot,
+  CollaborationTaskState,
+  CollaborationVersionWorkspace,
+  CollaborationWorkerPhase,
+  CreateCollaborationMemberRequest,
+  DesktopOperatingMode,
+  SubmitCollaborationTaskRequest,
+  UpdateCollaborationMemberRequest,
+} from "./collaboration.js";
+
+import type {
+  CollaborationState,
+  CreateCollaborationMemberRequest,
+  DesktopOperatingMode,
+  SubmitCollaborationTaskRequest,
+  UpdateCollaborationMemberRequest,
+} from "./collaboration.js";
+
 export type AppVariant = (typeof APP_VARIANTS)[number];
 export type Locale = (typeof LOCALES)[number];
 export type SandboxMode = (typeof SANDBOX_MODES)[number];
@@ -334,6 +364,17 @@ export interface DesktopApi {
   clearTempFiles(): Promise<TempDirectoryInfo>;
   getAuditLogInfo(): Promise<AuditLogInfo>;
   openAuditLogDirectory(): Promise<void>;
+  getCollaborationState(): Promise<CollaborationState>;
+  setDesktopOperatingMode(mode: DesktopOperatingMode): Promise<CollaborationState>;
+  selectCollaborationMember(memberId: string): Promise<CollaborationState>;
+  createCollaborationMember(request: CreateCollaborationMemberRequest): Promise<CollaborationState>;
+  updateCollaborationMember(memberId: string, request: UpdateCollaborationMemberRequest): Promise<CollaborationState>;
+  deleteCollaborationMember(memberId: string): Promise<CollaborationState>;
+  submitCollaborationTask(request: SubmitCollaborationTaskRequest): Promise<CollaborationState>;
+  continueCollaborationTask(taskId: string): Promise<CollaborationState>;
+  cancelCollaborationTask(taskId: string): Promise<CollaborationState>;
+  onCollaborationState(listener: (event: import("./collaboration.js").CollaborationStateEvent) => void): () => void;
+  onCollaborationStream(listener: (event: import("./collaboration.js").CollaborationStreamEnvelope) => void): () => void;
   getConversationDispatchState(): Promise<ConversationDispatchState>;
   enqueueMessage(request: EnqueueMessageRequest): Promise<ConversationDispatchState>;
   supplementQueuedMessage(itemId: string): Promise<ConversationDispatchState>;
