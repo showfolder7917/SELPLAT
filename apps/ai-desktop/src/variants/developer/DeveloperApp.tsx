@@ -73,6 +73,7 @@ import type {
   WorkspaceState,
 } from "../../../shared/contracts/desktop";
 import { MarkdownMessage } from "./MarkdownMessage";
+import { deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "./collaboration-task-progress";
 import "@selplat/sel-ui/core/kernel";
 import "@selplat/sel-ui/components/floating-panel";
 import "@selplat/sel-ui/components/floating-panel/styles";
@@ -1202,6 +1203,11 @@ export function DeveloperApp() {
   const selectedCollaborationTask = collaborationState?.tasks.find((task) => task.taskId === selectedCollaborationTaskId) || null;
   const latestConversationTaskId = [...messages].reverse().find((message) => message.collaborationTaskId)?.collaborationTaskId;
   const activeConversationTask = collaborationState?.tasks.find((task) => task.taskId === latestConversationTaskId) || null;
+  const selectedCollaborationTaskMember = selectedCollaborationTask
+    ? collaborationState?.members.find((member) => member.memberId === selectedCollaborationTask.executorMemberId)
+      || collaborationState?.members.find((member) => member.memberId === selectedCollaborationTask.initiator?.memberId)
+      || selectedCollaborationMember
+    : null;
   const showConversationWorkspace = !collaborationMode || (collaborationPanel === "member" && selectedCollaborationMember?.kind === "conversation-owner");
   const collaborationTabTitle = collaborationPanel === "execution-list"
     ? (locale === "ja" ? "実行一覧" : "执行列表")
@@ -1321,8 +1327,8 @@ export function DeveloperApp() {
         {activeConversationTask && <CollaborationStatusChain task={activeConversationTask} locale={locale} onRetry={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} />}
       </section> : collaborationPanel === "execution-list"
         ? <CollaborationExecutionList tasks={completedCollaborationTasks} locale={locale} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />
-        : collaborationPanel === "task-detail" && selectedCollaborationTask
-          ? <CollaborationTaskDetail task={selectedCollaborationTask} locale={locale} onBack={() => { setSelectedCollaborationTaskId(null); setCollaborationPanel(terminalCollaborationStates.has(selectedCollaborationTask.state) ? "execution-list" : "member"); }} />
+        : collaborationPanel === "task-detail" && selectedCollaborationTask && selectedCollaborationTaskMember
+          ? <CollaborationTaskDetail task={selectedCollaborationTask} member={selectedCollaborationTaskMember} liveMessage={collaborationStreams[selectedCollaborationTask.taskId] || null} automation={linghuAutomationState} locale={locale} onBack={() => { setSelectedCollaborationTaskId(null); setCollaborationPanel(terminalCollaborationStates.has(selectedCollaborationTask.state) ? "execution-list" : "member"); }} />
           : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} linghuAutomation={linghuAutomationState} onLinghuState={setLinghuAutomationState} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
       {showConversationWorkspace && <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
@@ -1385,10 +1391,8 @@ function CollaborationExecutionList({ tasks, locale, onOpen }: { tasks: Collabor
   </section>;
 }
 
-function CollaborationTaskDetail({ task, locale, onBack }: { task: CollaborationTask; locale: Locale; onBack(): void }) {
+function CollaborationTaskDetail({ task, member, liveMessage, automation, locale, onBack }: { task: CollaborationTask; member: CollaborationMember; liveMessage: Message | null; automation: LinghuAutomationState | null; locale: Locale; onBack(): void }) {
   const summary = task.resultSummary;
-  const errorEvents = task.flowEvents.filter((event) => event.error);
-  const unresolvedReviews = task.reviewAttempts.filter((attempt) => attempt.outcome !== "decided");
   return <section className="collaboration-task-detail" aria-label={task.snapshot.title}>
     <header><button type="button" onClick={onBack}><ArrowReply24Regular />{locale === "ja" ? "戻る" : "返回"}</button><div><h1>{task.snapshot.title}</h1><p>{collaborationTaskStateLabel(task.state, locale)}</p></div></header>
     {task.historyCompleteness === "legacy-partial" && <div className="history-incomplete-note">{locale === "ja" ? "旧版の記録には完全な参加者・引継ぎ履歴がありません。" : "历史版本未记录完整参与者与转交流程，以下仅展示可确认事实。"}</div>}
@@ -1397,14 +1401,7 @@ function CollaborationTaskDetail({ task, locale, onBack }: { task: Collaboration
       <dl><div><dt>{locale === "ja" ? "最終結果" : "最终执行结果"}</dt><dd>{summary?.finalResult || task.finalResult || "—"}</dd></div><div><dt>{locale === "ja" ? "元の問題" : "原来存在的问题"}</dt><dd>{summary?.originalProblem || task.snapshot.problemStatement}</dd></div><div><dt>{locale === "ja" ? "解決した問題" : "本次解决的问题"}</dt><dd>{summary?.solvedProblem || "—"}</dd></div><div><dt>{locale === "ja" ? "変更内容" : "具体修正或改变"}</dt><dd>{summary?.changes || "—"}</dd></div><div><dt>{locale === "ja" ? "残件" : "失败或遗留内容"}</dt><dd>{summary?.remaining || (summary?.success ? (locale === "ja" ? "なし" : "无") : task.blockingReason || "—")}</dd></div></dl>
     </section>
     <section className="task-fact-strip"><span>{locale === "ja" ? "起案者" : "发起人"}<strong>{task.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录")}</strong></span><span>{locale === "ja" ? "実行者" : "执行人"}<strong>{collaborationExecutorNames(task).join("、") || "—"}</strong></span><span>{locale === "ja" ? "開始" : "开始"}<strong>{formatCollaborationTime(task.startedAt, locale)}</strong></span><span>{locale === "ja" ? "完了" : "完成"}<strong>{formatCollaborationTime(task.completedAt, locale)}</strong></span><span>{locale === "ja" ? "所要時間" : "总耗时"}<strong>{formatCollaborationDuration(task.startedAt, task.completedAt, locale)}</strong></span></section>
-    <div className="task-detail-sections">
-      <details><summary>{locale === "ja" ? "タスク全体" : "整个任务"}<small>{task.snapshot.confirmedIntent.length} chars</small></summary><div className="task-detail-content"><MarkdownMessage text={task.snapshot.confirmedIntent} /></div></details>
-      <details><summary>{locale === "ja" ? "分析案" : "分析人员与方案"}<small>{task.plans.length}</small></summary><div className="task-detail-content task-detail-cards">{task.plans.map((plan) => <article key={plan.version}><header><strong>{plan.ownerDisplayName}</strong><span>v{plan.version} · {collaborationPlanStatusLabel(plan.status, locale)}</span></header><MarkdownMessage text={plan.text} /></article>)}</div></details>
-      <details><summary>{locale === "ja" ? "レビュー" : "审核人员、意见与结果"}<small>{task.reviewAttempts.length}</small></summary><div className="task-detail-content task-detail-cards">{task.reviewAttempts.map((attempt) => { const review = task.reviews.find((item) => item.planVersion === attempt.planVersion && item.reviewerMemberId === attempt.reviewerMemberId && item.reviewerGeneration === attempt.reviewerGeneration); return <article key={attempt.attemptId}><header><strong>{attempt.reviewerDisplayName}</strong><span>{review ? (review.decision === "passed" ? (locale === "ja" ? "通過" : "通过") : (locale === "ja" ? "差戻し" : "未通过")) : collaborationReviewOutcomeLabel(attempt.outcome, locale)}</span></header>{review?.feedback && <MarkdownMessage text={review.feedback} />}{!review && attempt.rawOutput && <MarkdownMessage text={attempt.rawOutput} />}{attempt.error && <p className="task-detail-error">{attempt.error}</p>}</article>; })}</div></details>
-      <details><summary>{locale === "ja" ? "実行・引継ぎ" : "执行人员与转交流程"}<small>{task.executionRecords.length}</small></summary><div className="task-detail-content task-detail-cards">{task.executionRecords.map((record, index) => <article key={record.assignmentId}><header><strong>{index + 1}. {record.executor.displayName}</strong><span>{collaborationExecutionStatusLabel(record.status, locale)}</span></header><p>{formatCollaborationTime(record.assignedAt, locale)} → {formatCollaborationTime(record.completedAt, locale)}</p>{record.handoffType === "transfer" && <p>{locale === "ja" ? "前の担当者から実際に引継ぎ" : "由上一执行人实际转交"}</p>}{record.handoffType === "resume" && <p>{locale === "ja" ? "同じ担当者が新しい接続で再開" : "同一执行人通过新连接恢复"}</p>}{record.changedFiles?.length ? <ChangedFileList files={record.changedFiles} locale={locale} /> : null}{record.result && <MarkdownMessage text={record.result} />}{record.blockingReason && <p className="task-detail-error">{record.blockingReason}</p>}</article>)}</div></details>
-      <details><summary>{locale === "ja" ? "プロセスログ" : "流程日志"}<small>{task.flowEvents.length}</small></summary><ol className="task-flow-log">{task.flowEvents.map((event) => <li key={event.eventId} className={event.error ? "error" : ""}><time>{formatCollaborationTime(event.occurredAt, locale)}</time><strong>{event.actor?.displayName || (locale === "ja" ? "システム" : "系统")}</strong><span>{event.summary}</span></li>)}</ol></details>
-      <details><summary>{locale === "ja" ? "エラーログ" : "错误日志"}<small>{errorEvents.length + unresolvedReviews.length}</small></summary><div className="task-detail-content task-error-log">{errorEvents.length === 0 && unresolvedReviews.length === 0 ? <p>{locale === "ja" ? "エラーは記録されていません。" : "没有关联错误。"}</p> : <>{errorEvents.map((event) => <p key={event.eventId}><time>{formatCollaborationTime(event.occurredAt, locale)}</time>{event.summary}</p>)}{unresolvedReviews.map((attempt) => <p key={attempt.attemptId}><time>{formatCollaborationTime(attempt.completedAt, locale)}</time>{attempt.error || collaborationReviewOutcomeLabel(attempt.outcome, locale)}</p>)}</>}</div></details>
-    </div>
+    <CollaborationTaskProgressView task={task} member={member} liveMessage={liveMessage} automation={automation} locale={locale} />
   </section>;
 }
 
@@ -1425,31 +1422,108 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
   const orderedTasks = [...tasks].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const currentTask = orderedTasks.find((task) => !["integrated", "cancelled"].includes(task.state)) || orderedTasks[0] || null;
   const liveMessage = currentTask ? streams[currentTask.taskId] : null;
-  const currentPlan = currentTask?.plans.find((plan) => plan.version === currentTask.currentPlanVersion);
-  const latestReview = currentTask?.reviews.at(-1);
-  const latestReviewAttempt = currentTask?.reviewAttempts.at(-1);
-  const latestUnresolvedReview = latestReviewAttempt?.outcome === "decided" ? null : latestReviewAttempt;
-  const latestExecution = currentTask?.executionRecords.at(-1);
   return <section className="collaboration-member-page" aria-label={member.displayName}>
     <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
     {member.memberId === "linghu-ancestor" && linghuAutomation && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}
     {(currentTask?.blockingReason || member.blockingReason) && <div className="member-blocking-reason" role="status">{currentTask?.blockingReason || member.blockingReason}</div>}
     {currentTask ? <article className="member-current-task">
-      <div className="member-task-heading"><span>{locale === "ja" ? "現在のタスク" : "当前任务"}</span><strong>{currentTask.snapshot.title}</strong><small>{collaborationTaskStateLabel(currentTask.state, locale)}</small></div>
-      <div className="member-task-actors"><span>{locale === "ja" ? "起案者" : "发起人"}<strong>{currentTask.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录")}</strong></span><span>{locale === "ja" ? "分析" : "方案分析"}<strong>{currentPlan?.ownerDisplayName || "—"}</strong></span><span>{locale === "ja" ? "レビュー" : "审核"}<strong>{latestReview?.reviewerDisplayName || latestUnresolvedReview?.reviewerDisplayName || "—"}</strong></span><span>{locale === "ja" ? "実行" : "执行"}<strong>{latestExecution?.executor.displayName || "—"}</strong></span></div>
-      <details key={currentTask.taskId} className="member-task-detail">
-        <summary>{locale === "ja" ? `タスク詳細 · ${currentTask.initiator?.displayName || "履歴なし"}` : `任务详细 · ${currentTask.initiator?.displayName || "历史未记录"}`}</summary>
-        <div><MarkdownMessage text={currentTask.snapshot.confirmedIntent} /></div>
-      </details>
-      {currentPlan && <details open><summary>{locale === "ja" ? `要件案 v${currentPlan.version} · ${currentPlan.ownerDisplayName}` : `分析方案 v${currentPlan.version} · ${currentPlan.ownerDisplayName}`}</summary><MarkdownMessage text={currentPlan.text} /></details>}
-      {latestReview && <details><summary>{latestReview.decision === "passed" ? (locale === "ja" ? `レビュー通過 · ${latestReview.reviewerDisplayName}` : `审核通过 · ${latestReview.reviewerDisplayName}`) : (locale === "ja" ? `要改善 · ${latestReview.reviewerDisplayName}` : `审核未通过 · ${latestReview.reviewerDisplayName}`)}</summary><MarkdownMessage text={latestReview.feedback} /></details>}
-      {latestUnresolvedReview && <details><summary>{latestUnresolvedReview.outcome === "decision-unrecognized" ? (locale === "ja" ? `レビュー本文を保存・結論未確認 · ${latestUnresolvedReview.reviewerDisplayName}` : `审核正文已保存，结论未确认 · ${latestUnresolvedReview.reviewerDisplayName}`) : (locale === "ja" ? `レビュー接続エラー · ${latestUnresolvedReview.reviewerDisplayName}` : `审核连接异常 · ${latestUnresolvedReview.reviewerDisplayName}`)}</summary>{latestUnresolvedReview.rawOutput && <MarkdownMessage text={latestUnresolvedReview.rawOutput} />}{latestUnresolvedReview.error && <p>{latestUnresolvedReview.error}</p>}</details>}
-      {latestExecution && <details open={["executing", "blocked"].includes(currentTask.state)}><summary>{locale === "ja" ? `実行 · ${latestExecution.executor.displayName}` : `执行 · ${latestExecution.executor.displayName}`}</summary><div className="member-execution-detail"><p>{collaborationExecutionStatusLabel(latestExecution.status, locale)}</p>{latestExecution.changedFiles?.length ? <ChangedFileList files={latestExecution.changedFiles} locale={locale} /> : <p>{locale === "ja" ? "保存済みの変更ファイルはまだありません。" : "暂未保存源码变化记录。"}</p>}{latestExecution.result && <MarkdownMessage text={latestExecution.result} />}{latestExecution.blockingReason && <p className="task-detail-error">{latestExecution.blockingReason}</p>}</div></details>}
-      {liveMessage && <div className="member-live-result"><MarkdownMessage text={liveMessage.text} /><StreamDetails message={liveMessage} locale={locale} /></div>}
+      <CollaborationTaskProgressView task={currentTask} member={member} liveMessage={liveMessage} automation={linghuAutomation} locale={locale} />
       <div className="member-task-actions"><button type="button" onClick={() => onOpen(currentTask.taskId)}>{locale === "ja" ? "詳細を見る" : "查看任务详情"}</button>{["recovering", "blocked", "review-failed", "test-failed"].includes(currentTask.state) && <button type="button" onClick={() => onContinue(currentTask.taskId)}>{currentTask.state === "review-failed" ? (locale === "ja" ? "再審査" : "重新审批") : currentTask.state === "test-failed" ? (locale === "ja" ? "再テスト" : "重新测试") : (locale === "ja" ? "続行" : "继续执行")}</button>}{!["integrated", "cancelled"].includes(currentTask.state) && <button type="button" className="danger" onClick={() => onCancel(currentTask.taskId)}>{locale === "ja" ? "キャンセル" : "取消任务"}</button>}</div>
     </article> : <div className="member-empty-task"><Code24Regular /><strong>{locale === "ja" ? "待機中" : "当前空闲"}</strong><span>{locale === "ja" ? "割り当て時に新しい Codex を作成します。" : "收到任务时才会创建新的 Codex。"}</span></div>}
     {orderedTasks.length > 1 && <section className="member-task-history"><h2>{locale === "ja" ? "過去のタスク" : "历史任务"}</h2>{orderedTasks.slice(1).map((task) => <div key={task.taskId}><strong>{task.snapshot.title}</strong><span>{collaborationTaskStateLabel(task.state, locale)}</span></div>)}</section>}
   </section>;
+}
+
+/** 当前任务只展开真实卡点，报告、证据和评分留在所属流程环节内。 */
+function CollaborationTaskProgressView({ task, member, liveMessage, automation, locale }: {
+  task: CollaborationTask;
+  member: CollaborationMember;
+  liveMessage: Message | null;
+  automation: LinghuAutomationState | null;
+  locale: Locale;
+}) {
+  const progress = useMemo(() => deriveCollaborationTaskProgress(task, member, automation, locale), [task, member, automation, locale]);
+  const [openStages, setOpenStages] = useState<Set<CollaborationProgressStageId>>(() => new Set([progress.currentStageId]));
+  const currentStageRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    setOpenStages(new Set([progress.currentStageId]));
+    window.requestAnimationFrame(() => currentStageRef.current?.scrollIntoView({ block: "nearest" }));
+  }, [task.taskId, progress.currentStageId]);
+
+  const toggleStage = (stageId: CollaborationProgressStageId, open: boolean) => {
+    setOpenStages((current) => {
+      const next = new Set(current);
+      if (open) next.add(stageId); else next.delete(stageId);
+      return next;
+    });
+  };
+
+  return <>
+    <section className="task-progress-card" aria-label={locale === "ja" ? "現在の進捗" : "当前进度"}>
+      <div className="task-progress-primary"><span>{progress.currentOwner}</span><strong>{progress.currentAction}</strong></div>
+      <div className="task-progress-facts">
+        <span>{locale === "ja" ? "現在の手順" : "当前步骤"}<strong>{locale === "ja" ? `${progress.currentStep}/${progress.totalSteps}` : `第 ${progress.currentStep}/${progress.totalSteps} 步`}</strong></span>
+        <span>{locale === "ja" ? "更新" : "最近更新"}<strong>{formatCollaborationTime(progress.updatedAt, locale)}</strong></span>
+        <span>{locale === "ja" ? "次の担当" : "下一步去向"}<strong>{progress.nextOwner} · {progress.nextAction}</strong></span>
+      </div>
+    </section>
+    <div className="task-progress-stages">
+      {progress.stages.map((stage) => <details
+        key={stage.id}
+        ref={stage.id === progress.currentStageId ? currentStageRef : undefined}
+        className={`task-progress-stage ${stage.status}`}
+        open={openStages.has(stage.id)}
+        onToggle={(event) => toggleStage(stage.id, event.currentTarget.open)}
+      >
+        <summary><span><strong>{stage.label}</strong><b>{stage.owner}</b></span><small>{stage.statusLabel}</small></summary>
+        <div className="task-progress-stage-content">
+          {stage.waitingFor && stage.status !== "current" && <p className="task-stage-waiting">{stage.waitingFor}</p>}
+          <CollaborationStageContent stageId={stage.id} task={task} liveMessage={stage.id === progress.currentStageId ? liveMessage : null} automation={automation} locale={locale} />
+        </div>
+      </details>)}
+    </div>
+  </>;
+}
+
+function CollaborationStageContent({ stageId, task, liveMessage, automation, locale }: {
+  stageId: CollaborationProgressStageId;
+  task: CollaborationTask;
+  liveMessage: Message | null;
+  automation: LinghuAutomationState | null;
+  locale: Locale;
+}) {
+  const relevantEvents = task.flowEvents.filter((event) => stageId === "repair"
+    ? event.stage === "recovery" || event.error
+    : stageId === "unified-test"
+      ? /test|测试|restart|重启|verif/i.test(`${event.type} ${event.summary}`)
+      : false);
+  return <>
+    {stageId === "intent" && <>
+      <MarkdownMessage text={task.snapshot.confirmedIntent} />
+      {task.plans.map((plan) => <article key={plan.version} className="task-stage-record"><header><strong>{plan.ownerDisplayName}</strong><span>v{plan.version} · {collaborationPlanStatusLabel(plan.status, locale)}</span></header><MarkdownMessage text={plan.text} /></article>)}
+    </>}
+    {stageId === "approval" && <>
+      {task.reviewAttempts.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "レビュー記録はまだありません。" : "暂时没有审批记录。"}</p>}
+      {task.reviewAttempts.map((attempt) => { const review = task.reviews.find((item) => item.planVersion === attempt.planVersion && item.reviewerMemberId === attempt.reviewerMemberId && item.reviewerGeneration === attempt.reviewerGeneration); return <article key={attempt.attemptId} className="task-stage-record"><header><strong>{attempt.reviewerDisplayName}</strong><span>{review ? (review.decision === "passed" ? (locale === "ja" ? "通過" : "审批通过") : (locale === "ja" ? "差戻し" : "审批未通过")) : collaborationReviewOutcomeLabel(attempt.outcome, locale)}</span></header>{review?.feedback && <MarkdownMessage text={review.feedback} />}{!review && attempt.rawOutput && <MarkdownMessage text={attempt.rawOutput} />}{attempt.error && <p className="task-detail-error">{attempt.error}</p>}</article>; })}
+    </>}
+    {stageId === "execution" && <>
+      {task.executionRecords.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "実行記録はまだありません。" : "暂时没有执行记录。"}</p>}
+      {task.executionRecords.map((record) => <article key={record.assignmentId} className="task-stage-record"><header><strong>{record.executor.displayName}</strong><span>{collaborationExecutionStatusLabel(record.status, locale)}</span></header>{record.changedFiles?.length ? <ChangedFileList files={record.changedFiles} locale={locale} /> : null}{record.result && <MarkdownMessage text={record.result} />}{record.blockingReason && <p className="task-detail-error">{record.blockingReason}</p>}</article>)}
+    </>}
+    {stageId === "repair" && <>
+      {task.blockingReason && <p className="task-detail-error">{task.blockingReason}</p>}
+      {relevantEvents.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "修正が必要な問題はまだ記録されていません。" : "暂未记录需要修复的问题。"}</p>}
+      {relevantEvents.map((event) => <article key={event.eventId} className="task-stage-record"><header><strong>{event.actor?.displayName || (locale === "ja" ? "システム" : "系统")}</strong><span>{formatCollaborationTime(event.occurredAt, locale)}</span></header><p className={event.error ? "task-detail-error" : ""}>{event.summary}</p></article>)}
+    </>}
+    {stageId === "unified-test" && <>
+      {automation?.activeTaskId === task.taskId && automation.currentModule === "unified-test-restart" && <p>{locale === "ja" ? "統合テスト、再起動、タスク復元を確認しています。" : "正在检查统一测试、受控重启与任务恢复。"}</p>}
+      {relevantEvents.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "統合テスト結果はまだありません。" : "暂时没有统一测试结果。"}</p>}
+      {relevantEvents.map((event) => <article key={event.eventId} className="task-stage-record"><header><strong>{event.actor?.displayName || (locale === "ja" ? "システム" : "系统")}</strong><span>{formatCollaborationTime(event.occurredAt, locale)}</span></header><p className={event.error ? "task-detail-error" : ""}>{event.summary}</p></article>)}
+      {automation?.lastFeedback?.taskId === task.taskId && <article className="task-stage-record"><MarkdownMessage text={automation.lastFeedback.summary} /></article>}
+    </>}
+    {liveMessage && <div className="member-live-result"><MarkdownMessage text={liveMessage.text} /><StreamDetails message={liveMessage} locale={locale} /></div>}
+  </>;
 }
 
 function LinghuAutomationPanel({ state, locale, onState }: { state: LinghuAutomationState; locale: Locale; onState(state: LinghuAutomationState): void }) {
