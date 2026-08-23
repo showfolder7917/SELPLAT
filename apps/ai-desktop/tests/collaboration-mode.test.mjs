@@ -17,6 +17,23 @@ const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
 const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const coordinatorSource = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
+const collaborationContractSource = readFileSync(new URL("../shared/contracts/collaboration.ts", import.meta.url), "utf8");
+
+test("会话卡片绑定真实协作任务并完整显示修复回流与统一测试状态", () => {
+  assert.match(developerSource, /collaborationTaskId/);
+  assert.match(developerSource, /CollaborationStatusChain/);
+  assert.match(developerSource, /任务详细.*initiator\?\.displayName/s);
+  assert.match(developerSource, /review-failed[\s\S]*重新审批/);
+  assert.match(developerSource, /test-failed[\s\S]*重新测试/);
+  assert.match(collaborationContractSource, /repairing-review/);
+  assert.match(collaborationContractSource, /repairing-execution/);
+  assert.match(collaborationContractSource, /unified-testing/);
+  assert.match(coordinatorSource, /review\.repair_completed[\s\S]*preferredReviewerMemberId/);
+  assert.match(coordinatorSource, /execution\.repair_completed[\s\S]*preferredExecutorMemberId/);
+  assert.match(coordinatorSource, /令狐老祖正在统一测试/);
+  assert.match(coordinatorSource, /unified_test\.passed/);
+  assert.match(coordinatorSource, /unified_test\.failed/);
+});
 
 const workspaceState = {
   primaryId: "root",

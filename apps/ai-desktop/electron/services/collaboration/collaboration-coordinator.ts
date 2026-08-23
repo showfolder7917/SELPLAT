@@ -18,6 +18,8 @@ import { CollaborationDurationLog } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
 import { VersionWorkspaceManager } from "./version-workspace-manager.js";
 
+const LINGHU_MEMBER_ID = "linghu-ancestor";
+
 export interface CollaborationExecutionResult {
   status: "code-verified" | "incomplete";
   text: string;
@@ -118,6 +120,7 @@ export class CollaborationCoordinator {
     if (previousWait) this.#durations.finish(previousWait, "interrupted", { releaseEvent: "task.recovery_requested" });
     this.#waitSpans.delete(taskId);
     const task = state.tasks.find((candidate) => candidate.taskId === taskId);
+    if (task?.state === "repairing-review") void this.#repairRejectedReview(taskId);
     if (task?.state === "queued-executor") {
       this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "recovery", "recovery-wait", "task-resume-queued", "executor-capacity", task.executorMemberId));
     } else if (task?.state === "ready-for-integration") {
@@ -125,6 +128,62 @@ export class CollaborationCoordinator {
     }
     this.#schedule();
     return state;
+  }
+
+  async #repairRejectedReview(taskId: string): Promise<void> {
+    let repairSession: CollaborationExecutorSession | null = null;
+    try {
+      const task = this.#store.task(taskId);
+      const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
+      if (linghu.state !== "idle") throw new Error("令狐老祖当前正在处理其他任务。");
+      this.#store.updateTask(taskId, "review.repair_started", (current, state) => {
+        const handler = requireMember(state, LINGHU_MEMBER_ID);
+        handler.generation += 1;
+        handler.state = "working";
+        handler.role = "executor";
+        handler.phase = "planning";
+        handler.currentTaskId = taskId;
+        handler.updatedAt = new Date().toISOString();
+        current.currentHandler = participantSnapshot(handler);
+        current.blockingReason = `${handler.displayName}正在处理审核未通过的问题`;
+        appendFlow(current, "review.repair_started", "recovery", "started", current.blockingReason, handler);
+      });
+      repairSession = await this.#sessions.createExecutor(this.#store.task(taskId), requireMember(this.state(), LINGHU_MEMBER_ID));
+      const feedback = task.repairFailureReason || task.reviews.at(-1)?.feedback || "处理最近一次审核未通过的问题。";
+      const text = await repairSession.optimize(this.#store.task(taskId), feedback, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const plan: CollaborationRequirementPlan = {
+        version: task.currentPlanVersion + 1,
+        ownerMemberId: LINGHU_MEMBER_ID,
+        ownerDisplayName: requireMember(this.state(), LINGHU_MEMBER_ID).displayName,
+        status: "awaiting-review",
+        text,
+        contentHash: sha256(text),
+        createdAt: new Date().toISOString(),
+      };
+      this.#store.updateTask(taskId, "review.repair_completed", (current, state) => {
+        current.plans.push(plan);
+        current.currentPlanVersion = plan.version;
+        current.state = "queued-reviewer";
+        current.preferredReviewerMemberId = current.originalReviewer?.memberId || null;
+        current.currentHandler = current.originalReviewer || null;
+        current.repairKind = null;
+        current.blockingReason = current.originalReviewer ? `令狐老祖处理完成，等待${current.originalReviewer.displayName}重新审批` : "令狐老祖处理完成，等待重新审批";
+        appendFlow(current, "review.repair_completed", "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID));
+        releaseMember(state, LINGHU_MEMBER_ID);
+      });
+      this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "reviewer-wait", "recovery-wait", "original-reviewer-return", task.originalReviewer?.memberId || "reviewer-capacity", task.originalReviewer?.memberId || null));
+    } catch (error) {
+      this.#store.updateTask(taskId, "review.repair_failed", (current, state) => {
+        current.state = "review-failed";
+        current.blockingReason = `令狐老祖处理审核问题失败：${errorMessage(error)}`;
+        current.repairFailureReason = current.blockingReason;
+        appendFlow(current, "review.repair_failed", "recovery", "failed", current.blockingReason, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), true);
+        releaseMember(state, LINGHU_MEMBER_ID);
+      });
+    } finally {
+      await repairSession?.dispose();
+      this.#schedule();
+    }
   }
 
   async cancelTask(taskId: string): Promise<CollaborationState> {
@@ -218,6 +277,8 @@ export class CollaborationCoordinator {
         task.assignmentId = randomUUID();
         task.workerGeneration = member.generation;
         task.executorMemberId = memberId;
+        task.originalExecutor ??= participantSnapshot(member);
+        task.currentHandler = participantSnapshot(member);
         task.state = "preparing-worktree";
         task.phase = "planning";
         task.executionRecords.push({
@@ -377,7 +438,9 @@ export class CollaborationCoordinator {
     const queued = state.tasks.filter((task) => task.state === "queued-reviewer" && !task.currentReviewerMemberId);
     const idle = fairIdleMembers(state.members.filter((member) => member.kind === "worker" && member.enabled && member.state === "idle"));
     for (const task of queued) {
-      const reviewerIndex = idle.findIndex((member) => member.memberId !== task.executorMemberId);
+      const reviewerIndex = task.preferredReviewerMemberId
+        ? idle.findIndex((member) => member.memberId === task.preferredReviewerMemberId && member.memberId !== task.executorMemberId)
+        : idle.findIndex((member) => member.memberId !== task.executorMemberId);
       if (reviewerIndex < 0) break;
       const [reviewer] = idle.splice(reviewerIndex, 1);
       void this.#beginReview(task.taskId, reviewer.memberId);
@@ -408,6 +471,8 @@ export class CollaborationCoordinator {
         reviewer.lastAssignedAt = new Date().toISOString();
         reviewer.updatedAt = reviewer.lastAssignedAt;
         current.currentReviewerMemberId = reviewerId;
+        current.originalReviewer ??= participantSnapshot(reviewer);
+        current.currentHandler = participantSnapshot(reviewer);
         current.state = "reviewing";
         current.blockingReason = null;
         const executor = current.executorMemberId ? requireMember(state, current.executorMemberId) : null;
@@ -503,6 +568,17 @@ export class CollaborationCoordinator {
       await this.#retireReviewer(reviewerId, reviewerSession);
       reviewerSession = null;
       const reviewAction = nextReviewAction(result.decision, this.#store.task(taskId).explicitRejectionCount);
+      if (result.decision === "rejected") {
+        this.#store.updateTask(taskId, "review.failed_waiting_repair", (current) => {
+          current.state = "review-failed";
+          current.repairKind = "review";
+          current.repairFailureReason = result.feedback;
+          current.blockingReason = result.feedback || `${currentReviewer.displayName}审批未通过`;
+          current.currentHandler = null;
+          appendFlow(current, "review.failed_waiting_repair", "review", "failed", current.blockingReason, currentReviewer, true);
+        });
+        return;
+      }
       if (reviewAction === "execute") {
         this.#store.updateTask(taskId, "review.passed", (current) => { current.state = "approved"; });
         await this.#execute(taskId);
@@ -610,7 +686,7 @@ export class CollaborationCoordinator {
       if (result.status !== "code-verified") {
         if (changeSpan) this.#durations.finish(changeSpan, "failed", { pendingActions: result.pendingActions.join("；") });
         if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { pendingActions: result.pendingActions.join("；") });
-        return this.#blockTask(taskId, result.pendingActions.join("；") || "任务托管未完成代码验证");
+        return this.#repairFailedExecution(taskId, result.pendingActions.join("；") || "任务托管未完成代码验证");
       }
       if (changeSpan) this.#durations.finish(changeSpan, "completed", { releaseEvent: "task.code_verified" });
       if (verificationSpan) this.#durations.finish(verificationSpan, "completed", { releaseEvent: "task.code_verified" });
@@ -646,7 +722,59 @@ export class CollaborationCoordinator {
       if (changeSpan) this.#durations.finish(changeSpan, "failed", { error: errorMessage(error) });
       if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { error: errorMessage(error) });
       if (this.#store.task(taskId).state === "cancelled") return;
-      await this.#blockTask(taskId, `执行失败：${errorMessage(error)}`);
+      await this.#repairFailedExecution(taskId, `执行失败：${errorMessage(error)}`);
+    }
+  }
+
+  async #repairFailedExecution(taskId: string, reason: string): Promise<void> {
+    const failedTask = this.#store.task(taskId);
+    const originalId = failedTask.executorMemberId;
+    const originalSession = this.#executorSessions.get(taskId);
+    this.#executorSessions.delete(taskId);
+    await originalSession?.dispose();
+    let repairSession: CollaborationExecutorSession | null = null;
+    try {
+      this.#store.updateTask(taskId, "execution.repair_started", (current, state) => {
+        if (originalId) current.originalExecutor ??= participantSnapshot(requireMember(state, originalId));
+        if (originalId) releaseMember(state, originalId);
+        const linghu = requireMember(state, LINGHU_MEMBER_ID);
+        if (linghu.state !== "idle") throw new Error("令狐老祖当前正在处理其他任务。");
+        linghu.generation += 1;
+        linghu.state = "working";
+        linghu.role = "executor";
+        linghu.phase = "implementing";
+        linghu.currentTaskId = taskId;
+        current.state = "repairing-execution";
+        current.repairKind = "execution";
+        current.repairFailureReason = reason;
+        current.currentHandler = participantSnapshot(linghu);
+        current.blockingReason = `执行失败：${reason}；令狐老祖正在修复`;
+        appendFlow(current, "execution.repair_started", "recovery", "started", current.blockingReason, linghu);
+      });
+      const task = this.#store.task(taskId);
+      const plan = task.plans.find((candidate) => candidate.version === task.currentPlanVersion);
+      if (!plan) throw new Error("令狐老祖修复时找不到当前执行方案。");
+      repairSession = await this.#sessions.createExecutor(task, requireMember(this.state(), LINGHU_MEMBER_ID));
+      const repaired = await repairSession.execute(task, plan, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "修复未完成代码验证");
+      this.#store.updateTask(taskId, "execution.repair_completed", (current, state) => {
+        const original = current.originalExecutor;
+        current.state = "queued-executor";
+        current.executorMemberId = original?.memberId || originalId;
+        current.preferredExecutorMemberId = original?.memberId || originalId;
+        current.assignmentId = null;
+        current.recoveryTargetState = "approved";
+        current.repairKind = null;
+        current.currentHandler = original || null;
+        current.blockingReason = original ? `令狐老祖修复完成，等待${original.displayName}重新执行` : "令狐老祖修复完成，等待原执行人重新执行";
+        appendFlow(current, "execution.repair_completed", "recovery", "completed", current.blockingReason, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)));
+        releaseMember(state, LINGHU_MEMBER_ID);
+      });
+    } catch (error) {
+      await this.#blockTask(taskId, `令狐老祖修复执行问题失败：${errorMessage(error)}`);
+    } finally {
+      await repairSession?.dispose();
+      this.#schedule();
     }
   }
 
@@ -687,8 +815,11 @@ export class CollaborationCoordinator {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
         if (batch) batch.state = "integrating";
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = "integrating";
-          appendFlow(task, "integration.started", "integration", "started", `集成批次 ${generation} 开始组合验证`, null);
+          const linghu = requireMember(mutable, LINGHU_MEMBER_ID);
+          task.state = "unified-testing";
+          task.currentHandler = participantSnapshot(linghu);
+          task.unifiedTest = { status: "running", owner: participantSnapshot(linghu), failureReason: null, startedAt: new Date().toISOString(), completedAt: null };
+          appendFlow(task, "unified_test.started", "integration", "started", `令狐老祖正在统一测试（集成批次 ${generation}）`, linghu);
         }
       });
       verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
@@ -708,6 +839,12 @@ export class CollaborationCoordinator {
         const completedAt = new Date().toISOString();
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
           task.state = "integrated";
+          task.currentHandler = participantSnapshot(requireMember(mutable, LINGHU_MEMBER_ID));
+          if (task.unifiedTest) {
+            task.unifiedTest.status = "passed";
+            task.unifiedTest.failureReason = null;
+            task.unifiedTest.completedAt = completedAt;
+          }
           task.completedAt = completedAt;
           task.blockingReason = null;
           task.resultSummary ||= createResultSummary(task, task.finalResult || "任务已完成协同集成。", []);
@@ -717,7 +854,7 @@ export class CollaborationCoordinator {
             task.resultSummary.remaining = "无已知遗留内容。";
           }
           task.resultSummary.generatedAt = completedAt;
-          appendFlow(task, "integration.completed", "integration", "completed", `任务已通过集成并归档到执行列表`, null);
+          appendFlow(task, "unified_test.passed", "integration", "completed", "令狐老祖统一测试通过，任务已归档到执行列表", task.currentHandler);
         }
       });
       const retirements = await Promise.allSettled(tasks.map((task) => task.versionWorkspace ? this.#workspaces.retireWorkspace(task.versionWorkspace) : Promise.resolve()));
@@ -737,11 +874,13 @@ export class CollaborationCoordinator {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
         if (batch) { batch.state = "failed"; batch.failureReason = errorMessage(error); batch.completedAt = new Date().toISOString(); }
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = "recovering";
+          task.state = "test-failed";
           task.phase = null;
-          task.blockingReason = `集成失败：${errorMessage(error)}`;
+          task.blockingReason = `令狐老祖统一测试失败：${errorMessage(error)}`;
           task.recoveryTargetState = "ready-for-integration";
-          appendFlow(task, "integration.failed", "integration", "failed", task.blockingReason, null, true);
+          task.currentHandler = participantSnapshot(requireMember(mutable, LINGHU_MEMBER_ID));
+          task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
+          appendFlow(task, "unified_test.failed", "integration", "failed", task.blockingReason, task.currentHandler, true);
         }
       });
       this.#durations.writeGenerationReport(generation, taskIds);

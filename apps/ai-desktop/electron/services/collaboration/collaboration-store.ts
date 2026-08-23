@@ -145,6 +145,13 @@ export class CollaborationStore {
       executorMemberId: preferredExecutor?.memberId || null,
       preferredExecutorMemberId: preferredExecutor?.memberId || null,
       currentReviewerMemberId: null,
+      preferredReviewerMemberId: null,
+      originalReviewer: null,
+      originalExecutor: null,
+      currentHandler: participantSnapshot(initiatorMember),
+      repairKind: null,
+      repairFailureReason: null,
+      unifiedTest: null,
       currentPlanVersion: 0,
       explicitRejectionCount: 0,
       infrastructureFailureCount: 0,
@@ -241,7 +248,20 @@ export class CollaborationStore {
 
   continueTask(taskId: string): CollaborationState {
     return this.updateTask(taskId, "task.recovery_requested", (task, state) => {
-      if (task.state !== "recovering" && task.state !== "blocked") throw new Error("当前任务不需要恢复。");
+      if (!["recovering", "blocked", "review-failed", "test-failed"].includes(task.state)) throw new Error("当前任务不需要恢复。");
+      if (task.state === "review-failed") {
+        task.state = "repairing-review";
+        task.repairKind = "review";
+        task.blockingReason = task.repairFailureReason;
+        task.flowEvents.push({ eventId: randomUUID(), type: "review.repair_requested", stage: "recovery", status: "started", actor: task.initiator, summary: "已请求令狐老祖处理审核问题，完成后退回原审核人", occurredAt: new Date().toISOString(), error: false });
+        return;
+      }
+      if (task.state === "test-failed") {
+        task.state = "ready-for-integration";
+        task.blockingReason = null;
+        task.flowEvents.push({ eventId: randomUUID(), type: "unified_test.retry_requested", stage: "recovery", status: "started", actor: task.initiator, summary: "已请求令狐老祖重新统一测试", occurredAt: new Date().toISOString(), error: false });
+        return;
+      }
       releaseTaskMembers(state, taskId);
       if (task.versionWorkspace?.resultSha) {
         task.state = "ready-for-integration";
@@ -456,6 +476,13 @@ function migrateTaskHistory(task: CollaborationTask, state: CollaborationState):
   task.initiator ??= null;
   task.startedAt ??= task.createdAt;
   task.codeVerifiedAt ??= task.finalResult ? task.completedAt : null;
+  task.preferredReviewerMemberId ??= null;
+  task.originalReviewer ??= null;
+  task.originalExecutor ??= task.executionRecords?.[0]?.executor || null;
+  task.currentHandler ??= null;
+  task.repairKind ??= null;
+  task.repairFailureReason ??= null;
+  task.unifiedTest ??= null;
   if (task.state === "integrated" && task.integrationGeneration !== null) {
     task.completedAt = state.integrationBatches.find((batch) => batch.generation === task.integrationGeneration)?.completedAt || task.completedAt;
   }
