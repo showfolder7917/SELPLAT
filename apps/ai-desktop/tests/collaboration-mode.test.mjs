@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
 import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
 import { createCollaborationResultSummary, nextReviewAction } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
 import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-codex-sessions.js";
-import { ensureIntegrationDependencies } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
+import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
 import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-facade.js";
 import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-store.js";
@@ -614,7 +614,7 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.66\.0/);
+  assert.match(rule, /rule_version = 5\.67\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);
@@ -786,7 +786,7 @@ test("审核满足最低需求即通过且第三次驳回先最终修正再强�
 
 test("集成工作区锁文件一致时自动复用主工作区依赖", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-dependencies-"));
-  const candidate = path.join(directory, "candidate");
+  const candidate = path.join(directory, "candidate-project", "apps", "ai-desktop");
   const source = path.join(directory, "source");
   try {
     mkdirSync(path.join(candidate), { recursive: true });
@@ -796,6 +796,11 @@ test("集成工作区锁文件一致时自动复用主工作区依赖", async ()
     writeFileSync(path.join(source, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
     assert.equal(await ensureIntegrationDependencies(candidate, path.join(source, "node_modules"), path.join(source, "package-lock.json")), "linked");
     assert.equal(readFileSync(path.join(candidate, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "utf8"), "ready");
+    const buildModules = path.join(directory, "candidate-project", "build", "ai-desktop", "node_modules");
+    assert.equal(readFileSync(path.join(buildModules, ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "utf8"), "ready");
+    cleanupIntegrationDependencyLinks(candidate);
+    assert.equal(existsSync(path.join(candidate, "node_modules")), false);
+    assert.equal(existsSync(buildModules), false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -852,7 +857,7 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
   assert.match(runner, /test-cache|PLAYWRIGHT_BROWSERS_PATH/);
   assert.match(runner, /AI_DESKTOP_TEST_TASK_ID/);
   assert.match(runner, /npm run/);
-  assert.match(runner, /dependencyMode === "linked" && existsSync\(dependencyLink\)/);
+  assert.match(runner, /cleanupIntegrationDependencyLinks\(desktopRoot\)/);
   assert.equal(manifest.scripts["test:interaction"], "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs");
   assert.match(runner, /expected: "npm run build:developer && node scripts\/run-with-dependencies\.mjs node scripts\/run-interaction-tests\.mjs"/);
   assert.match(sessions, /runCodeValidation/);
@@ -903,8 +908,8 @@ test("协同编排保持独立连接、异人审核、三次上限、心跳和�
   assert.match(workspaces, /codex\/collab\/integration-g\$\{generation\}/);
   assert.doesNotMatch(workspaces, /codex\/collab\/integration\/g\$\{generation\}/);
   assert.match(workspaces, /resultSha/);
-  assert.match(integrationVerifier, /dependencyMode === "linked"/);
-  assert.match(integrationVerifier, /existsSync\(dependencyLink\).*unlinkSync\(dependencyLink\)/);
+  assert.match(integrationVerifier, /ensureBuildDependencyLink\(candidateDesktopRoot, sourceModules\)/);
+  assert.match(integrationVerifier, /cleanupIntegrationDependencyLinks\(desktopRoot\)/);
   assert.match(ui, /reviewAttempts\.some/);
   assert.match(ui, /"decision-unrecognized": "结论未识别"/);
   const memberPageSource = ui.slice(ui.indexOf("function CollaborationMemberPage"), ui.indexOf("function collaborationMemberStateLabel"));

@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
 
 import type { CodexStreamEvent } from "../../../shared/contracts/desktop.js";
-import { ensureIntegrationDependencies } from "./integration-verifier.js";
+import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "./integration-verifier.js";
 import { TestResourceCoordinatorFacade } from "./test-resource-coordinator-facade.js";
 
 interface TaskWorktreeTestRequest {
@@ -99,9 +99,7 @@ export class TaskWorktreeTestRunner {
       this.#recordEvent("collaboration.task_test.completed", { worktreeRoot: request.worktreeRoot }, request.taskId);
     } finally {
       // 锁文件一致时只临时复用主工程依赖，任务验证结束立即移除链接，避免进入分支提交。
-      const dependencyLink = path.join(desktopRoot, "node_modules");
-      // 子脚本的依赖包装器可能已经完成相同清理；链接不存在代表目标状态已经达成，不应把它升级为测试失败。
-      if (dependencyMode === "linked" && existsSync(dependencyLink)) unlinkSync(dependencyLink);
+      cleanupIntegrationDependencyLinks(desktopRoot);
     }
   }
 }

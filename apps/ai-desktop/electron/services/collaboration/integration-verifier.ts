@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync, symlinkSync, unlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
@@ -16,16 +16,14 @@ export async function verifyCollaborationIntegration(rootPath: string, taskIds: 
     const sourceDesktopRoot = path.join(dependencySourceRoot, "apps", applicationName);
     const dataPaths = resolveApplicationDataPaths({ selplatRoot: dependencySourceRoot, applicationName });
     const sourceModules = resolveLockSpecificDependencyPaths(dataPaths.dependencyCacheRoot, readFileSync(path.join(sourceDesktopRoot, "package-lock.json"))).nodeModulesRoot;
-    const dependencyMode = await ensureIntegrationDependencies(desktopRoot, sourceModules, path.join(sourceDesktopRoot, "package-lock.json"));
+    await ensureIntegrationDependencies(desktopRoot, sourceModules, path.join(sourceDesktopRoot, "package-lock.json"));
     try {
       await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "typecheck"], desktopRoot, 180_000, {
         // 组合检查与后续统一测试共享外层已核验的候选依赖链接，禁止内层命令把它当作待迁移源码依赖。
         AI_DESKTOP_TEST_TASK_ID: `integration-${taskIds.join("-")}`,
       });
     } finally {
-      // 复用依赖的目录链接只服务本轮组合检查；提升候选前删除，避免被 Git 误判为待集成源码。
-      const dependencyLink = path.join(desktopRoot, "node_modules");
-      if (dependencyMode === "linked" && existsSync(dependencyLink)) unlinkSync(dependencyLink);
+      cleanupIntegrationDependencyLinks(desktopRoot);
     }
   }
 }
@@ -44,7 +42,10 @@ export async function ensureIntegrationDependencies(
 ): Promise<"ready" | "linked" | "installed"> {
   const candidateModules = path.join(candidateDesktopRoot, "node_modules");
   const candidateTsc = executablePath(candidateModules, "tsc");
-  if (existsSync(candidateTsc)) return "ready";
+  if (existsSync(candidateTsc)) {
+    ensureBuildDependencyLink(candidateDesktopRoot, candidateModules);
+    return lstatSync(candidateModules).isSymbolicLink() ? "linked" : "ready";
+  }
 
   const sourceTsc = executablePath(sourceModules, "tsc");
   const locksMatch = sameFile(
@@ -53,6 +54,7 @@ export async function ensureIntegrationDependencies(
   );
   if (!existsSync(candidateModules) && locksMatch && existsSync(sourceTsc)) {
     symlinkSync(sourceModules, candidateModules, process.platform === "win32" ? "junction" : "dir");
+    ensureBuildDependencyLink(candidateDesktopRoot, sourceModules);
     return "linked";
   }
 
@@ -68,7 +70,36 @@ export async function ensureIntegrationDependencies(
     throw new Error(`集成依赖自愈失败：${error instanceof Error ? error.message : String(error)}`);
   }
   if (!existsSync(candidateTsc)) throw new Error("集成依赖自愈失败：补齐依赖后仍找不到 TypeScript 编译器。");
+  ensureBuildDependencyLink(candidateDesktopRoot, candidateModules);
   return "installed";
+}
+
+/** 同时回收应用目录和构建目录的受控链接；真实依赖目录永不删除。 */
+export function cleanupIntegrationDependencyLinks(candidateDesktopRoot: string): void {
+  for (const linkPath of integrationDependencyLinkPaths(candidateDesktopRoot)) {
+    const current = lstatSync(linkPath, { throwIfNoEntry: false });
+    if (current?.isSymbolicLink()) unlinkSync(linkPath);
+  }
+}
+
+function ensureBuildDependencyLink(candidateDesktopRoot: string, dependencyRoot: string): void {
+  const buildLink = integrationDependencyLinkPaths(candidateDesktopRoot)[1];
+  const current = lstatSync(buildLink, { throwIfNoEntry: false });
+  if (current) {
+    if (current.isSymbolicLink() && realpathSync(buildLink) === realpathSync(dependencyRoot)) return;
+    throw new Error(`候选构建依赖路径不是当前签发链接：${buildLink}`);
+  }
+  mkdirSync(path.dirname(buildLink), { recursive: true });
+  symlinkSync(dependencyRoot, buildLink, process.platform === "win32" ? "junction" : "dir");
+}
+
+function integrationDependencyLinkPaths(candidateDesktopRoot: string): [string, string] {
+  const applicationName = path.basename(candidateDesktopRoot);
+  const candidateProjectRoot = path.resolve(candidateDesktopRoot, "../..");
+  return [
+    path.join(candidateDesktopRoot, "node_modules"),
+    path.join(candidateProjectRoot, "build", applicationName, "node_modules"),
+  ];
 }
 
 function executablePath(modulesRoot: string, name: string): string {

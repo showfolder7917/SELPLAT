@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
-import { ensureIntegrationDependencies } from "./integration-verifier.js";
+import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "./integration-verifier.js";
 import { TestResourceCoordinatorFacade } from "./test-resource-coordinator-facade.js";
 import { resolveVerifiedDeveloperExecutable } from "./verified-package-release.js";
 
@@ -33,7 +33,7 @@ export class LinghuUnifiedTestRunner {
     const buildRoot = resolvedProjectRoot === this.#sourceProjectRoot
       ? this.#buildRoot
       : resolveApplicationDataPaths({ selplatRoot: resolvedProjectRoot, applicationName: this.#applicationName }).buildRoot;
-    const dependencyMode = await this.#ensureCandidateDependencies(desktopRoot, resolvedProjectRoot);
+    await this.#ensureCandidateDependencies(desktopRoot, resolvedProjectRoot);
     const runId = `linghu-unified-${Date.now()}`;
     const environment: NodeJS.ProcessEnv = {
       ...process.env,
@@ -65,10 +65,7 @@ export class LinghuUnifiedTestRunner {
     }
       return resolveVerifiedDeveloperExecutable(buildRoot);
     }).finally(() => {
-      if (dependencyMode === "linked") {
-        const dependencyLink = path.join(desktopRoot, "node_modules");
-        if (existsSync(dependencyLink)) unlinkSync(dependencyLink);
-      }
+      if (resolvedProjectRoot !== this.#sourceProjectRoot) cleanupIntegrationDependencyLinks(desktopRoot);
     });
   }
 
