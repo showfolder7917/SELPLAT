@@ -69,9 +69,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /codesign --force --deep --sign -/);
   assert.match(launcher, /EXPECTED_DESIGNATED_REQUIREMENT='designated => identifier/);
   assert.match(launcher, /codesign --force --sign - --requirements "=\$EXPECTED_DESIGNATED_REQUIREMENT"/);
-  assert.match(launcher, /REPACKAGE_REQUIRED=false/);
-  assert.match(launcher, /固定 AI Desktop\.app 身份未变化/);
-  assert.match(launcher, /--ai-desktop-runtime-root=\$BUILD_ROOT/);
+  assert.match(launcher, /与工程构建隔离的自包含 AI Desktop\.app/);
+  assert.doesNotMatch(launcher, /--ai-desktop-runtime-root=/);
   assert.match(launcher, /lsregister/);
   assert.match(launcher, /APP_EXECUTABLE="\$APP_PATH\/Contents\/MacOS\/AI Desktop"/);
   assert.match(launcher, /正在关闭.*旧 AI Desktop 实例/);
@@ -84,8 +83,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(macVerifier, /codesign.*--verify/s);
   assert.match(macVerifier, /expectedRequirement/);
   assert.match(macVerifier, /requirementOutput\.includes\(expectedRequirement\)/);
-  assert.match(packagedBootstrap, /runtimeRoot.*electron.*electron.*main\.js/s);
-  assert.match(packagedBootstrap, /pathToFileURL\(externalMain\)/);
+  assert.match(packagedBootstrap, /await import\("\.\/main\.js"\)/);
+  assert.doesNotMatch(packagedBootstrap, /external runtime|runtimeRoot|pathToFileURL/);
 });
 
 test("执行亮点只在运行中闪烁，结束后变暗并显示完成语义", () => {

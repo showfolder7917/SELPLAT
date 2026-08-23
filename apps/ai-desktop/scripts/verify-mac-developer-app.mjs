@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
@@ -39,4 +39,24 @@ const expectedRequirement = `designated => identifier "${bundleId}"`;
 if (!requirementOutput.includes(expectedRequirement)) {
   throw new Error(`AI Desktop.app 屏幕录制身份不稳定：期望 ${expectedRequirement}`);
 }
-console.log(`AI Desktop.app 身份、稳定指定要求、内置 Codex ${targetCodexVersion} 与 OpenAI 签名验证通过：${bundleId}`);
+const healthRoot = path.join(projectPaths.temporaryMaterialsRoot, "候选包健康检查");
+mkdirSync(healthRoot, { recursive: true });
+const healthRun = mkdtempSync(path.join(healthRoot, "run-"));
+try {
+  const healthFile = path.join(healthRun, "ready.json");
+  const executable = path.join(applicationPath, "Contents", "MacOS", "AI Desktop");
+  const health = spawnSync(executable, [
+    `--selplat-root=${projectRoot}`,
+    "--ai-desktop-variant=developer",
+    `--ai-desktop-user-data-dir=${path.join(healthRun, "user-data")}`,
+    `--ai-desktop-health-check-file=${healthFile}`,
+  ], { encoding: "utf8", timeout: 30_000 });
+  if (health.error || health.status !== 0 || !existsSync(healthFile)) {
+    throw new Error(`候选包隔离启动失败：${health.error?.message || health.stderr || `退出码 ${health.status}`}`);
+  }
+  const healthResult = JSON.parse(readFileSync(healthFile, "utf8"));
+  if (healthResult.status !== "ready") throw new Error("候选包未报告 ready 状态。");
+} finally {
+  rmSync(healthRun, { recursive: true, force: true });
+}
+console.log(`AI Desktop.app 身份、稳定指定要求、内置 Codex ${targetCodexVersion}、OpenAI 签名与隔离启动验证通过：${bundleId}`);

@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,6 +21,8 @@ import { LinghuUnifiedTestRunner } from "./services/collaboration/linghu-unified
 import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
 import { VersionWorkspaceManager } from "./services/collaboration/version-workspace-manager.js";
 import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-test-runner.js";
+import { TestExecutionGate } from "./services/collaboration/test-execution-gate.js";
+import { resolveVerifiedDeveloperExecutable } from "./services/collaboration/verified-package-release.js";
 import { ScreenshotStore } from "./services/screenshot-store.js";
 import { SettingsStore } from "./services/settings-store.js";
 import { WorkspaceStore } from "./services/workspace-store.js";
@@ -33,6 +35,11 @@ const preloadPath = path.join(currentDirectory, "preload.cjs");
 let codex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
+
+// 开发启动、正式包与重启交接共用同一数据域，确保所有人物任务在版本切换后继续执行。
+const healthCheckFile = process.argv.find((argument) => argument.startsWith("--ai-desktop-health-check-file="))?.slice("--ai-desktop-health-check-file=".length) || null;
+const isolatedUserData = process.argv.find((argument) => argument.startsWith("--ai-desktop-user-data-dir="))?.slice("--ai-desktop-user-data-dir=".length) || null;
+app.setPath("userData", isolatedUserData ? path.resolve(isolatedUserData) : path.join(app.getPath("appData"), resolveApplicationName()));
 
 app.whenReady().then(() => {
   const variant = resolveAppVariant();
@@ -78,11 +85,13 @@ app.whenReady().then(() => {
   const collaborationDurations = new CollaborationDurationLog(projectPaths.collaborationArchiveRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
   const versionWorkspaces = new VersionWorkspaceManager(projectRoot, path.join(collaborationRoot, "worktrees"));
+  const testExecutionGate = new TestExecutionGate();
   const taskTests = new TaskWorktreeTestRunner(
     projectRoot,
     applicationName,
     path.join(projectPaths.cacheRoot, "test-runtime"),
     (type, details, taskId) => audit.recordEvent(type, details, taskId),
+    testExecutionGate,
   );
   const collaborationSessions = new CodexCollaborationSessionFactory({
     projectRoot,
@@ -112,20 +121,22 @@ app.whenReady().then(() => {
       audit.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
     },
-    verifyIntegration: (rootPath, taskIds) => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName),
+    verifyIntegration: (rootPath, taskIds) => testExecutionGate.run(() => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName)),
   });
   const linghuStore = new LinghuAutomationStore(path.join(collaborationRoot, "linghu-automation.json"));
-  const linghuUnifiedTests = new LinghuUnifiedTestRunner(projectRoot, applicationName, (type, details) => audit.recordEvent(type, details));
+  const linghuUnifiedTests = new LinghuUnifiedTestRunner(projectRoot, applicationName, (type, details) => audit.recordEvent(type, details), testExecutionGate);
   linghuAutomation = new LinghuAutomationFacade({
     store: linghuStore,
     collaboration,
     readWorkspaceState: () => workspaces.read(),
     locale: () => settings.read().locale,
     recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
-    runUnifiedTestAndRestart: async () => {
+    runUnifiedTestAndRestart: async (onVerified) => {
       await linghuUnifiedTests.run();
-      audit.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed" });
-      app.relaunch();
+      onVerified();
+      const executable = resolveVerifiedDeveloperExecutable(projectPaths.buildRoot);
+      audit.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed", executable });
+      app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
       app.exit(0);
     },
   });
@@ -152,7 +163,18 @@ app.whenReady().then(() => {
     rendererRoot,
   });
 
-  createMainWindow({ preloadPath, rendererRoot, variant });
+  const mainWindow = createMainWindow({ preloadPath, rendererRoot, variant });
+  if (healthCheckFile) {
+    const safeHealthRoot = path.join(projectPaths.temporaryMaterialsRoot, "候选包健康检查");
+    const resolvedHealthFile = path.resolve(healthCheckFile);
+    if (!resolvedHealthFile.startsWith(`${path.resolve(safeHealthRoot)}${path.sep}`)) throw new Error("候选包健康检查文件超出工程临时目录。");
+    mainWindow.webContents.once("did-finish-load", () => {
+      mkdirSync(path.dirname(resolvedHealthFile), { recursive: true });
+      writeFileSync(resolvedHealthFile, `${JSON.stringify({ status: "ready", variant, recordedAt: new Date().toISOString() })}\n`, "utf8");
+      app.quit();
+    });
+    return;
+  }
   collaboration.resumePendingWork();
   linghuAutomation.start();
   app.on("activate", () => {

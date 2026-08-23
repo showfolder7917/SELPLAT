@@ -5,7 +5,6 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 let application: ElectronApplication;
 let page: Page;
 const productionRendererFile = path.resolve("../../build/ai-desktop/renderer/developer/index.html");
-
 test.beforeAll(async () => {
   // 冷缓存首次转换生产资源时 Electron 建连可能超过单项交互的 15 秒时限；只放宽一次性启动钩子。
   test.setTimeout(45_000);
@@ -13,6 +12,10 @@ test.beforeAll(async () => {
   const isolatedEnvironment = { ...process.env };
   // 当前 AI Desktop 主进程可能以 Node 模式拉起 Codex；隔离 Electron 必须移除该继承值才能按桌面运行时接受 Playwright 调试参数。
   delete isolatedEnvironment.ELECTRON_RUN_AS_NODE;
+  // 宿主调试器的暂停和注入配置会阻断 Playwright 自己建立的 --inspect/远程调试握手。
+  delete isolatedEnvironment.NODE_OPTIONS;
+  delete isolatedEnvironment.NODE_INSPECT_RESUME_ON_START;
+  delete isolatedEnvironment.VSCODE_INSPECTOR_OPTIONS;
   application = await electron.launch({
     args: [path.resolve("tests/interaction/isolated-main.cjs")],
     env: { ...isolatedEnvironment, AI_DESKTOP_INTERACTION_FILE: productionRendererFile },
@@ -329,21 +332,19 @@ test("审核正文已生成但结论无法识别时保留正文并显示准确�
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await taskList.getByRole("button", { name: /墨大夫/ }).click();
   const memberPage = page.locator(".collaboration-member-page");
-  const taskDetail = memberPage.locator(".member-task-detail");
-  await expect(taskDetail).not.toHaveAttribute("open", "");
-  await expect(taskDetail.getByText("任务详细 · 南宫婉", { exact: true })).toBeVisible();
-  await expect(taskDetail.getByText("保存审核正文并补取结论。", { exact: true })).not.toBeVisible();
-  await taskDetail.locator("summary").click();
-  await expect(taskDetail.getByText("保存审核正文并补取结论。", { exact: true })).toBeVisible();
-  await taskDetail.locator("summary").click();
-  await expect(taskDetail.getByText("保存审核正文并补取结论。", { exact: true })).not.toBeVisible();
-  await expect(memberPage.getByText("分析方案 v1 · 张铁", { exact: true })).toBeVisible();
-  await expect(memberPage.getByText("审核正文已保存，结论未确认 · 墨大夫", { exact: true })).toBeVisible();
-  await memberPage.getByText("审核正文已保存，结论未确认 · 墨大夫", { exact: true }).click();
+  await expect(memberPage.getByText("正在检查任务中断原因", { exact: true })).toBeVisible();
+  const intentStage = memberPage.locator(".task-progress-stage").filter({ hasText: /^意图分析/ });
+  await intentStage.locator("summary").click();
+  await expect(intentStage.getByText("保存审核正文并补取结论。", { exact: true })).toBeVisible();
+  await expect(intentStage.locator(".task-stage-record header strong").filter({ hasText: /^张铁$/ })).toBeVisible();
+  const approvalStage = memberPage.locator(".task-progress-stage").filter({ hasText: /^审批/ });
+  await approvalStage.locator("summary").click();
+  await expect(approvalStage.locator(".task-stage-record header strong").filter({ hasText: /^墨大夫$/ })).toBeVisible();
   await expect(memberPage.getByText("审核内容已经完整生成，但旧格式没有首行标记。", { exact: true })).toBeVisible();
   await expect(memberPage.getByText("审核正文已生成，但结论无法识别。", { exact: true })).toBeVisible();
-  await expect(memberPage.getByText("执行 · 张铁", { exact: true })).toBeVisible();
-  await expect(memberPage.getByText("apps/ai-desktop/src/variants/developer/DeveloperApp.tsx", { exact: true })).toBeVisible();
+  const executionStage = memberPage.locator(".task-progress-stage").filter({ hasText: /^执行/ });
+  await executionStage.locator("summary").click();
+  await expect(executionStage.getByText("apps/ai-desktop/src/variants/developer/DeveloperApp.tsx", { exact: true })).toBeVisible();
   await expect(memberPage.getByRole("button", { name: "继续执行" })).toBeVisible();
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationReviewFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationReviewFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
@@ -368,9 +369,11 @@ test("协同执行列表归档完成任务并优先展示结构化结果摘要",
   const detail = page.locator(".collaboration-task-detail");
   await expect(detail.getByText("任务结果", { exact: true })).toBeVisible();
   await expect(detail.getByText("执行列表与结果摘要已完成。", { exact: true })).toBeVisible();
-  await detail.locator("summary").filter({ hasText: /^执行人员与转交流程/ }).click();
-  await expect(detail.getByText("1. 宋玉", { exact: true })).toBeVisible();
-  await expect(detail.getByText("2. 冰魄仙子", { exact: true })).toBeVisible();
+  await expect(detail.locator(".task-fact-strip").getByText("宋玉、冰魄仙子", { exact: true })).toBeVisible();
+  const executionStage = detail.locator(".task-progress-stage").filter({ hasText: /^执行/ });
+  await executionStage.locator("summary").click();
+  await expect(executionStage.locator(".task-stage-record header strong").filter({ hasText: /^宋玉$/ })).toBeVisible();
+  await expect(executionStage.locator(".task-stage-record header strong").filter({ hasText: /^冰魄仙子$/ })).toBeVisible();
 
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();

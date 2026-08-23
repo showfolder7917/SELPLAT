@@ -39,30 +39,13 @@ if ! npm run build:developer; then
   exit 1
 fi
 
+echo "[打包] 正在生成与工程构建隔离的自包含 AI Desktop.app..."
+if ! npm run package:mac:developer; then
+  echo "[错误] AI Desktop.app 生成失败，已取消启动。"
+  read "?按回车键关闭窗口..."
+  exit 1
+fi
 APP_PATH="$(find "$PACKAGE_ROOT" -type d -name 'AI Desktop.app' -print -quit 2>/dev/null)"
-REPACKAGE_REQUIRED=false
-if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
-  REPACKAGE_REQUIRED=true
-else
-  for IDENTITY_INPUT in "$SCRIPT_DIR/electron/packaged-bootstrap.ts" "$SCRIPT_DIR/electron-builder.developer.json" "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/package-lock.json"; do
-    if [[ -e "$IDENTITY_INPUT" && "$IDENTITY_INPUT" -nt "$APP_PATH" ]]; then
-      REPACKAGE_REQUIRED=true
-      break
-    fi
-  done
-fi
-
-if [[ "$REPACKAGE_REQUIRED" == true ]]; then
-  echo "[打包] 固定应用外壳发生变化，正在重新生成 AI Desktop.app..."
-  if ! npm run package:mac:developer; then
-    echo "[错误] AI Desktop.app 生成失败，已取消启动。"
-    read "?按回车键关闭窗口..."
-    exit 1
-  fi
-  APP_PATH="$(find "$PACKAGE_ROOT" -type d -name 'AI Desktop.app' -print -quit 2>/dev/null)"
-else
-  echo "[复用] 固定 AI Desktop.app 身份未变化，本轮只加载最新外部构建。"
-fi
 
 if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
   echo "[错误] 未找到 AI Desktop.app。"
@@ -133,7 +116,7 @@ if [[ -x "$LSREGISTER" ]]; then
 fi
 
 echo "[启动] 正在打开最新 AI Desktop.app..."
-open -n "$APP_PATH" --args "--selplat-root=$SELPLAT_ROOT" "--ai-desktop-runtime-root=$BUILD_ROOT" "--ai-desktop-variant=developer"
+open -n "$APP_PATH" --args "--selplat-root=$SELPLAT_ROOT" "--ai-desktop-variant=developer"
 if [[ $? -ne 0 ]]; then
   echo "[错误] AI Desktop.app 启动失败。"
   read "?按回车键关闭窗口..."

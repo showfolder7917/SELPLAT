@@ -6,6 +6,7 @@ import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/li
 
 import type { CodexStreamEvent } from "../../../shared/contracts/desktop.js";
 import { ensureIntegrationDependencies } from "./integration-verifier.js";
+import { TestExecutionGate } from "./test-execution-gate.js";
 
 interface TaskWorktreeTestRequest {
   taskId: string;
@@ -15,7 +16,7 @@ interface TaskWorktreeTestRequest {
 
 const TEST_SCRIPTS = [
   { name: "typecheck", expected: "node scripts/run-with-dependencies.mjs tsc -p tsconfig.json --noEmit", timeout: 180_000 },
-  { name: "test:interaction", expected: "node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs", timeout: 360_000 },
+  { name: "test:interaction", expected: "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs", timeout: 360_000 },
 ] as const;
 
 /** 在 AI Desktop 主进程中串行验证各任务签发的 worktree，不把 Playwright 权限交给 Codex。 */
@@ -24,25 +25,25 @@ export class TaskWorktreeTestRunner {
   readonly #applicationName: string;
   readonly #cacheRoot: string;
   readonly #recordEvent: (type: string, details: Record<string, unknown>, taskId: string) => void;
-  #queue: Promise<void> = Promise.resolve();
+  readonly #gate: TestExecutionGate;
 
   constructor(
     sourceProjectRoot: string,
     applicationName: string,
     cacheRoot: string,
     recordEvent: (type: string, details: Record<string, unknown>, taskId: string) => void,
+    gate = new TestExecutionGate(),
   ) {
     this.#sourceProjectRoot = path.resolve(sourceProjectRoot);
     this.#applicationName = safeSegment(applicationName);
     this.#cacheRoot = path.resolve(cacheRoot);
     this.#recordEvent = recordEvent;
+    this.#gate = gate;
     mkdirSync(this.#cacheRoot, { recursive: true });
   }
 
   run(request: TaskWorktreeTestRequest): Promise<void> {
-    const operation = this.#queue.then(() => this.#runIsolated(request));
-    this.#queue = operation.catch(() => undefined);
-    return operation;
+    return this.#gate.run(() => this.#runIsolated(request));
   }
 
   async #runIsolated(request: TaskWorktreeTestRequest): Promise<void> {
@@ -64,7 +65,14 @@ export class TaskWorktreeTestRunner {
       PLAYWRIGHT_BROWSERS_PATH: path.join(this.#cacheRoot, "playwright"),
       npm_config_cache: path.join(this.#cacheRoot, "npm"),
       GIT_TERMINAL_PROMPT: "0",
+      // 隔离 Electron 若未建立调试端点，必须把真实启动命令和子进程 stderr 带回签发测试证据，不能只留下外层 hook 超时。
+      DEBUG: "pw:browser",
     };
+    // 签发验证由 Electron 主进程派生，禁止把宿主的 Node 模式或调试暂停控制带入 npm、Playwright 和隔离 Electron。
+    delete environment.ELECTRON_RUN_AS_NODE;
+    delete environment.NODE_OPTIONS;
+    delete environment.NODE_INSPECT_RESUME_ON_START;
+    delete environment.VSCODE_INSPECTOR_OPTIONS;
     this.#recordEvent("collaboration.task_test.started", { worktreeRoot: request.worktreeRoot, dependencyMode }, request.taskId);
     try {
       for (const script of TEST_SCRIPTS) {

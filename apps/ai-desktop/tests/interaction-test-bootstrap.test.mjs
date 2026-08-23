@@ -9,6 +9,7 @@ const packageJson = readFileSync(new URL("../package.json", import.meta.url), "u
 const isolatedMain = readFileSync(new URL("./interaction/isolated-main.cjs", import.meta.url), "utf8");
 const sidebarSpec = readFileSync(new URL("./interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
 const viteConfig = readFileSync(new URL("../vite.config.mjs", import.meta.url), "utf8");
+const taskTestRunner = readFileSync(new URL("../electron/services/collaboration/task-worktree-test-runner.ts", import.meta.url), "utf8");
 
 test("交互测试引导不依赖尚未编译的本地公共包", () => {
   assert.doesNotMatch(runner, /@selplat\/node-common-core/);
@@ -21,7 +22,7 @@ test("交互测试引导不依赖尚未编译的本地公共包", () => {
 });
 
 test("桌面交互测试使用固定隔离入口并加载生产文件与正式窗口尺寸", () => {
-  assert.match(packageJson, /"test:interaction": "node scripts\/run-with-dependencies\.mjs node scripts\/run-interaction-tests\.mjs"/);
+  assert.match(packageJson, /"test:interaction": "npm run build:developer && node scripts\/run-with-dependencies\.mjs node scripts\/run-interaction-tests\.mjs"/);
   assert.match(isolatedMain, /main-window-layout\.cjs/);
   assert.match(isolatedMain, /AI_DESKTOP_INTERACTION_FILE/);
   assert.doesNotMatch(isolatedMain, /AI_DESKTOP_INTERACTION_URL/);
@@ -32,4 +33,8 @@ test("桌面交互测试使用固定隔离入口并加载生产文件与正式�
   assert.match(sidebarSpec, /设置按钮必须锚定左下/);
   assert.match(sidebarSpec, /设置标题不能竖排/);
   assert.match(viteConfig, /cssCodeSplit: false/);
+  assert.match(taskTestRunner, /delete environment\.ELECTRON_RUN_AS_NODE/);
+  assert.match(taskTestRunner, /delete environment\.NODE_INSPECT_RESUME_ON_START/);
+  assert.match(taskTestRunner, /DEBUG: "pw:browser"/);
+  assert.match(sidebarSpec, /delete isolatedEnvironment\.VSCODE_INSPECTOR_OPTIONS/);
 });

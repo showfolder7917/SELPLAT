@@ -1557,6 +1557,7 @@ function LinghuAutomationPanel({ state, locale, onState }: { state: LinghuAutoma
 
   const apply = async (operation: Promise<LinghuAutomationState> | undefined) => {
     try {
+      if (!operation) throw new Error(locale === "ja" ? "Webプレビューは読み取り専用です。デスクトップアプリで変更してください。" : "网页预览为只读，请在桌面程序中修改。" );
       const next = await operation;
       if (next) onState(next);
       setError("");

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type {
@@ -21,9 +21,9 @@ export const LINGHU_AUTOMATION_MODULES: readonly LinghuAutomationModule[] = [
 
 export const DEFAULT_LINGHU_STARTUP_PROMPT_TITLE = "自动流程最后保障";
 
-export const DEFAULT_LINGHU_STARTUP_PROMPT = `你是令狐老祖，是保障自动流程完成的最后一道屏障。只要自动执行开关保持开启，检测永远不能停止。
+export const DEFAULT_LINGHU_STARTUP_PROMPT = `你是令狐老祖，是保障所有人物完成最后流程的最后一道屏障。只要自动执行开关保持开启，检测永远不能停止。
 
-首要职责是让已经开始的自动流程安全完成。发现流程停住、代码错误、测试失败、重启丢失或数据不足时，必须找出原因，拆分修正任务，组织执行、统一测试并恢复原流程。明确阻塞或需要人工业务选择时可以等待处理，但仍要持续检测并保留恢复点，不能关闭自动检测。
+一级最高职责是逐项检查所有人物已经开始但尚未完成的任务，推动其完成审核、执行、集成、统一测试和最终完成。发现流程停住、异常状态、代码错误、测试失败、重启丢失或数据不足时，必须找出原因，拆分修正任务，组织执行、统一测试并恢复原流程。明确阻塞或需要人工业务选择时可以等待处理，但仍要持续检测并保留恢复点，不能关闭自动检测。
 
 页面审核以客户易用为第一目标：排版合理、操作方便、一看就懂、重点信息第一眼可见、详细信息顺序清楚、分类整齐，管理员能够有效看到状态和结果。修改前后按信息重点、阅读顺序、操作理解、任务便利、状态恢复和管理视角评分；只有新评分高于原评分、总分不低于 60、无功能回退且测试通过，才允许继续该演化方向。
 
@@ -119,24 +119,21 @@ export class LinghuAutomationStore {
   }
 
   #load(): LinghuAutomationState {
-    try {
-      const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as LinghuAutomationState;
-      if (value.version === 1 && Array.isArray(value.prompts)) {
-        value.pollIntervalMs = 30_000;
-        value.currentModule = LINGHU_AUTOMATION_MODULES.includes(value.currentModule) ? value.currentModule : "flow-completion";
-        value.recoveryAttemptCount ??= 0;
-        value.lastCheckedAt ??= null;
-        value.blockingReason ??= null;
-        if (!value.prompts.some((prompt) => prompt.promptId === value.activePromptId && prompt.enabled)) {
-          value.activePromptId = value.prompts.find((prompt) => prompt.enabled)?.promptId || null;
-        }
+    const primaryExisted = existsSync(this.#filePath);
+    for (const candidate of [this.#filePath, `${this.#filePath}.bak`]) {
+      const value = readState(candidate);
+      if (value) {
+        migrateState(value);
         this.#write(value);
         return value;
       }
-    } catch {
-      // 首次启动或损坏状态恢复为默认关闭；自动保障只能由用户按钮明确开启。
     }
     const state = createInitialState();
+    if (primaryExisted) {
+      // 自动状态无法证明用户最后一次选择时必须安全关闭，禁止因损坏自行恢复为开启。
+      state.enabled = false;
+      state.blockingReason = "自动状态损坏，已安全关闭；请由用户重新开启";
+    }
     this.#write(state);
     return state;
   }
@@ -146,6 +143,7 @@ export class LinghuAutomationStore {
     const temporary = `${this.#filePath}.tmp`;
     writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
     renameSync(temporary, this.#filePath);
+    copyFileSync(this.#filePath, `${this.#filePath}.bak`);
   }
 }
 
@@ -161,14 +159,46 @@ function createInitialState(): LinghuAutomationState {
     activePromptId: promptId,
     activeTaskId: null,
     recoveryAttemptCount: 0,
+    currentFaultFingerprint: null,
+    recoveryAttemptsByFingerprint: {},
+    detectionCursor: null,
+    flowSnapshots: [],
+    recoveryCheckpoint: null,
     lastDispatchAt: null,
     lastCompletedAt: null,
     lastCheckedAt: null,
     blockingReason: "自动执行已关闭",
     lastFeedback: null,
+    lastModuleReport: null,
     prompts: [{ promptId, title: DEFAULT_LINGHU_STARTUP_PROMPT_TITLE, content: DEFAULT_LINGHU_STARTUP_PROMPT, enabled: true, createdAt: now, updatedAt: now }],
     updatedAt: now,
   };
+}
+
+function readState(filePath: string): LinghuAutomationState | null {
+  try {
+    const value = JSON.parse(readFileSync(filePath, "utf8")) as LinghuAutomationState;
+    return value.version === 1 && Array.isArray(value.prompts) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function migrateState(value: LinghuAutomationState): void {
+  value.pollIntervalMs = 30_000;
+  value.currentModule = LINGHU_AUTOMATION_MODULES.includes(value.currentModule) ? value.currentModule : "flow-completion";
+  value.recoveryAttemptCount ??= 0;
+  value.currentFaultFingerprint ??= null;
+  value.recoveryAttemptsByFingerprint ??= {};
+  value.detectionCursor ??= null;
+  value.flowSnapshots ??= [];
+  value.recoveryCheckpoint ??= null;
+  value.lastCheckedAt ??= null;
+  value.blockingReason ??= null;
+  value.lastModuleReport ??= null;
+  if (!value.prompts.some((prompt) => prompt.promptId === value.activePromptId && prompt.enabled)) {
+    value.activePromptId = value.prompts.find((prompt) => prompt.enabled)?.promptId || null;
+  }
 }
 
 function requirePrompt(state: LinghuAutomationState, promptId: string) {

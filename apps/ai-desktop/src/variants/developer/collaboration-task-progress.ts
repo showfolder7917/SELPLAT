@@ -44,12 +44,16 @@ export function deriveCollaborationTaskProgress(
     ? latestReviewAttempt?.reviewerMemberId === task.currentReviewerMemberId ? latestReviewAttempt.reviewerDisplayName : isJapanese ? "レビュー担当" : "当前审核人"
     : latestReview?.reviewerDisplayName || latestReviewAttempt?.reviewerDisplayName || (isJapanese ? "空きレビュー担当" : "空闲审核员");
   const automationOwnsTask = member.memberId === "linghu-ancestor" && automation?.activeTaskId === task.taskId;
-  const unifiedTestActive = automationOwnsTask && automation?.currentModule === "unified-test-restart";
+  const unifiedTestActive = ["ready-for-integration", "queued-integration", "integrating", "unified-testing", "test-failed"].includes(task.state)
+    || (automationOwnsTask && automation?.currentModule === "unified-test-restart");
   const repairEvents = task.flowEvents.filter((event) => event.stage === "recovery" || event.error);
   const repairActive = !unifiedTestActive && (
     task.state === "optimizing"
     || task.state === "blocked"
     || task.state === "recovering"
+    || task.state === "review-failed"
+    || task.state === "repairing-review"
+    || task.state === "repairing-execution"
     || (automationOwnsTask && Boolean(automation?.recoveryAttemptCount))
   );
 
@@ -57,7 +61,8 @@ export function deriveCollaborationTaskProgress(
   if (unifiedTestActive) currentStageId = "unified-test";
   else if (repairActive) currentStageId = "repair";
   else if (["queued-reviewer", "reviewing"].includes(task.state)) currentStageId = "approval";
-  else if (["approved", "forced-after-review-limit", "executing", "ready-for-integration", "queued-integration", "integrating", "integrated"].includes(task.state)) currentStageId = "execution";
+  else if (task.state === "integrated") currentStageId = "unified-test";
+  else if (["approved", "forced-after-review-limit", "executing"].includes(task.state)) currentStageId = "execution";
   else currentStageId = "intent";
 
   const terminal = task.state === "integrated" || task.state === "cancelled";
@@ -65,14 +70,15 @@ export function deriveCollaborationTaskProgress(
   const approvalCompleted = task.plans.some((plan) => plan.status === "approved" || plan.status === "forced");
   const executionCompleted = task.state === "integrated" || latestExecution?.status === "code-verified";
   const repairCompleted = repairEvents.some((event) => event.stage === "recovery" && event.status === "completed") && !repairActive;
-  const unifiedTestCompleted = automationOwnsTask && automation?.currentModule !== "unified-test-restart" && automation.lastFeedback?.taskId === task.taskId;
+  const unifiedTestCompleted = task.state === "integrated"
+    || (automationOwnsTask && automation?.currentModule !== "unified-test-restart" && automation.lastFeedback?.taskId === task.taskId);
 
   const stageFacts: Array<Omit<CollaborationProgressStage, "statusLabel"> & { completed: boolean }> = [
     { id: "intent", label: isJapanese ? "意図分析" : "意图分析", owner: currentPlan?.ownerDisplayName || executorName, status: "not-started", waitingFor: null, updatedAt: currentPlan?.createdAt || null, completed: analysisCompleted },
     { id: "approval", label: isJapanese ? "承認" : "审批", owner: reviewerName, status: "not-started", waitingFor: analysisCompleted ? null : isJapanese ? `${executorName}の分析完了待ち` : `等待${executorName}完成意图分析`, updatedAt: latestReview?.createdAt || latestReviewAttempt?.completedAt || null, completed: approvalCompleted },
     { id: "execution", label: isJapanese ? "実行" : "执行", owner: executorName, status: "not-started", waitingFor: approvalCompleted ? null : isJapanese ? `${reviewerName}の承認待ち` : `等待${reviewerName}完成审批`, updatedAt: latestExecution?.completedAt || latestExecution?.executionStartedAt || latestExecution?.assignedAt || null, completed: executionCompleted },
     { id: "repair", label: isJapanese ? "問題修正" : "问题修复", owner: repairEvents.at(-1)?.actor?.displayName || (repairActive ? member.displayName : executorName), status: "not-started", waitingFor: repairEvents.length ? null : isJapanese ? "失敗または中断の検出待ち" : "等待发现失败或流程中断", updatedAt: repairEvents.at(-1)?.occurredAt || null, completed: repairCompleted },
-    { id: "unified-test", label: isJapanese ? "統合テスト" : "统一测试", owner: member.memberId === "linghu-ancestor" ? member.displayName : executorName, status: "not-started", waitingFor: executionCompleted ? null : isJapanese ? `${executorName}の実行完了待ち` : `等待${executorName}完成执行`, updatedAt: unifiedTestActive ? automation?.lastCheckedAt || automation?.updatedAt || null : unifiedTestCompleted ? automation?.lastFeedback?.recordedAt || null : null, completed: Boolean(unifiedTestCompleted) },
+    { id: "unified-test", label: isJapanese ? "統合テスト" : "统一测试", owner: "令狐老祖", status: "not-started", waitingFor: executionCompleted ? null : isJapanese ? `${executorName}の実行完了待ち` : `等待${executorName}完成执行`, updatedAt: unifiedTestActive ? automation?.lastCheckedAt || automation?.updatedAt || task.updatedAt : unifiedTestCompleted ? automation?.lastFeedback?.recordedAt || task.completedAt : null, completed: Boolean(unifiedTestCompleted) },
   ];
 
   const statusLabels = isJapanese
@@ -103,7 +109,11 @@ export function deriveCollaborationTaskProgress(
 }
 
 function currentAction(task: CollaborationTask, stage: CollaborationProgressStageId, automation: LinghuAutomationState | null, ja: boolean): string {
-  if (stage === "unified-test") return ja ? "統合テストと再起動復元を確認中" : "正在执行统一测试与恢复检查";
+  if (stage === "unified-test") {
+    if (task.state === "integrated") return ja ? "統合テスト完了" : "统一测试已通过";
+    if (task.state === "test-failed") return ja ? "統合テスト失敗を修正中" : "正在修复统一测试失败";
+    return ja ? "統合テストと再起動復元を確認中" : "正在执行统一测试与恢复检查";
+  }
   if (stage === "repair") {
     if (task.state === "blocked") return ja ? "中断原因を確認中" : "正在检查任务中断原因";
     const count = automation?.recoveryAttemptCount || 0;

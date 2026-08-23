@@ -21,7 +21,8 @@ export async function verifyCollaborationIntegration(rootPath: string, taskIds: 
       await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "typecheck"], desktopRoot);
     } finally {
       // 复用依赖的目录链接只服务本轮组合检查；提升候选前删除，避免被 Git 误判为待集成源码。
-      if (dependencyMode === "linked") unlinkSync(path.join(desktopRoot, "node_modules"));
+      const dependencyLink = path.join(desktopRoot, "node_modules");
+      if (dependencyMode === "linked" && existsSync(dependencyLink)) unlinkSync(dependencyLink);
     }
   }
 }

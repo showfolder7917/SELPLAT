@@ -160,6 +160,7 @@ export class CollaborationStore {
       dependencyTaskIds: [...new Set(request.dependencyTaskIds || [])],
       integrationGeneration: null,
       initiator: participantSnapshot(initiatorMember),
+      automationSource: request.automationSource || null,
       historyCompleteness: "complete",
       snapshot: {
         title: request.title.trim().slice(0, 160) || normalizedIntent.slice(0, 80),
@@ -252,7 +253,7 @@ export class CollaborationStore {
       if (task.state === "review-failed") {
         task.state = "repairing-review";
         task.repairKind = "review";
-        task.blockingReason = task.repairFailureReason;
+        task.blockingReason = task.repairFailureReason || null;
         task.flowEvents.push({ eventId: randomUUID(), type: "review.repair_requested", stage: "recovery", status: "started", actor: task.initiator, summary: "已请求令狐老祖处理审核问题，完成后退回原审核人", occurredAt: new Date().toISOString(), error: false });
         return;
       }
@@ -474,6 +475,7 @@ function migrateTaskHistory(task: CollaborationTask, state: CollaborationState):
   const legacy = !Array.isArray(task.flowEvents) || !Array.isArray(task.executionRecords);
   task.historyCompleteness ??= legacy ? "legacy-partial" : "complete";
   task.initiator ??= null;
+  task.automationSource ??= null;
   task.startedAt ??= task.createdAt;
   task.codeVerifiedAt ??= task.finalResult ? task.completedAt : null;
   task.preferredReviewerMemberId ??= null;

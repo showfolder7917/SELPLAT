@@ -1,16 +1,24 @@
 import type { Locale, WorkspaceState } from "../../../shared/contracts/desktop.js";
-import type { LinghuAutomationModule, LinghuAutomationState } from "../../../shared/contracts/linghu-automation.js";
+import type { CollaborationState, CollaborationTask } from "../../../shared/contracts/collaboration.js";
+import type {
+  LinghuAutomaticFlowSnapshot,
+  LinghuAutomationModule,
+  LinghuAutomationState,
+  LinghuBlockingKind,
+  LinghuFlowHealth,
+} from "../../../shared/contracts/linghu-automation.js";
 import { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./linghu-automation-store.js";
 
 const LINGHU_MEMBER_ID = "linghu-ancestor";
+const FLOW_STALE_AFTER_MS = 120_000;
 export interface LinghuAutomationFacadeOptions {
   store: LinghuAutomationStore;
   collaboration: CollaborationCoordinator;
   readWorkspaceState(): WorkspaceState;
   locale(): Locale;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
-  runUnifiedTestAndRestart(): Promise<void>;
+  runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
 }
 
 /** 令狐老祖自动保障的唯一入口；界面和定时器只调用本 Facade，不直接依赖调度、恢复与持久化实现。 */
@@ -20,7 +28,7 @@ export class LinghuAutomationFacade {
   readonly #readWorkspaceState: () => WorkspaceState;
   readonly #locale: () => Locale;
   readonly #recordEvent: LinghuAutomationFacadeOptions["recordEvent"];
-  readonly #runUnifiedTestAndRestart: () => Promise<void>;
+  readonly #runUnifiedTestAndRestart: LinghuAutomationFacadeOptions["runUnifiedTestAndRestart"];
   #timer: ReturnType<typeof setInterval> | null = null;
   #checking = false;
 
@@ -67,29 +75,54 @@ export class LinghuAutomationFacade {
     this.#checking = true;
     try {
       if (!this.#store.state().enabled) return;
-      let automation = this.#store.updateRuntime("automation.checked", (state) => { state.lastCheckedAt = new Date().toISOString(); });
+      const collaborationState = this.#collaboration.state();
+      const checkedAt = new Date().toISOString();
+      const snapshots = automaticFlowSnapshots(collaborationState, this.#store.state().activeTaskId, checkedAt);
+      let automation = this.#store.updateRuntime("automation.checked", (state) => {
+        state.lastCheckedAt = checkedAt;
+        state.detectionCursor = checkedAt;
+        state.flowSnapshots = snapshots;
+      });
       if (this.#collaboration.state().mode !== "collaboration") this.#collaboration.setMode("collaboration");
+
+      // 一级职责先于令狐老祖自己的演化循环：任何人物的未完成任务都必须先进入最后流程。
+      const guarded = await this.#recoverOtherFlows(collaborationState, automation.activeTaskId, snapshots);
+      if (guarded) return;
 
       if (automation.activeTaskId) {
         const task = this.#collaboration.state().tasks.find((candidate) => candidate.taskId === automation.activeTaskId);
         if (!task) {
-          this.#store.updateRuntime("automation.task_missing", (state) => {
-            state.blockingReason = "关联任务记录缺失，持续检测并等待人工确认";
+          automation = this.#store.updateRuntime("automation.task_missing", (state) => {
+            state.recoveryCheckpoint = `missing-task:${state.activeTaskId || "unknown"}:${state.currentModule}`;
+            state.activeTaskId = null;
+            state.currentFaultFingerprint = null;
+            state.recoveryAttemptCount = 0;
+            state.blockingReason = "关联任务记录缺失，已保存恢复点并准备派发同模块替代任务";
           });
-          return;
-        }
-        if (task.state === "integrated") {
+        } else if (task.state === "integrated") {
           const completedModule = automation.currentModule;
-          automation = this.#completeModule(task.taskId, task.state, task.resultSummary?.finalResult || task.finalResult || "模块已完成。", task.completedAt);
+          automation = this.#completeModule(task, task.resultSummary?.finalResult || task.finalResult || "模块已完成。");
           if (completedModule === "unified-test-restart") {
             try {
-              await this.#runUnifiedTestAndRestart();
+              await this.#runUnifiedTestAndRestart(() => this.#store.updateRuntime("automation.unified_test_completed", (state) => {
+                if (!state.lastModuleReport || state.lastModuleReport.module !== completedModule) return;
+                state.lastModuleReport.tests = { status: "passed", summary: "固定统一测试全部通过。" };
+                state.lastModuleReport.restartRecovery = {
+                  status: "passed",
+                  checkpoint: state.recoveryCheckpoint,
+                  summary: "下一循环恢复点已持久化，受控重启已安排。",
+                };
+              }));
             } catch (error) {
               const detail = error instanceof Error ? error.message : String(error);
               this.#store.updateRuntime("automation.unified_test_failed", (state) => {
                 state.currentModule = "flow-completion";
                 state.blockingReason = `统一测试失败，检测继续运行并进入修复循环：${detail}`.slice(0, 2_000);
                 state.lastFeedback = { cycle: state.cycle, module: completedModule, taskId: task.taskId, taskState: task.state, summary: state.blockingReason, recordedAt: new Date().toISOString() };
+                if (state.lastModuleReport?.module === completedModule) {
+                  state.lastModuleReport.tests = { status: "failed", summary: detail.slice(0, 2_000) };
+                  state.lastModuleReport.blocking = { blocked: true, reason: state.blockingReason, resumeCondition: "修正失败测试并重新执行固定统一测试" };
+                }
               });
               this.#recordEvent("linghu.automation.unified_test_failed", { detail }, task.taskId);
               return;
@@ -97,20 +130,48 @@ export class LinghuAutomationFacade {
           }
         } else if (task.state === "cancelled") {
           this.#store.updateRuntime("automation.task_cancelled", (state) => {
-            state.blockingReason = "当前保障任务已取消；自动检测保持开启，等待选择继续或新建文案";
+            state.recoveryCheckpoint = `cancelled-task:${task.taskId}:${state.currentModule}`;
+            state.blockingReason = "当前保障任务由用户明确取消；自动检测保持开启，等待新的人工选择";
             state.lastFeedback = { cycle: state.cycle, module: state.currentModule, taskId: task.taskId, taskState: task.state, summary: task.blockingReason || "任务已取消", recordedAt: new Date().toISOString() };
           });
           return;
         } else if (task.state === "blocked" || task.state === "recovering") {
-          if (automation.recoveryAttemptCount < 3) {
+          const snapshot = snapshots.find((candidate) => candidate.sourceTaskId === task.taskId);
+          const fingerprint = faultFingerprint(task, snapshot);
+          const attempts = automation.currentFaultFingerprint === fingerprint ? automation.recoveryAttemptCount : 0;
+          if (attempts < 3) {
             this.#collaboration.continueTask(task.taskId);
             this.#store.updateRuntime("automation.recovery_requested", (state) => {
-              state.recoveryAttemptCount += 1;
+              state.currentFaultFingerprint = fingerprint;
+              state.recoveryAttemptCount = attempts + 1;
+              state.recoveryCheckpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
               state.blockingReason = `检测到流程中断，正在执行第 ${state.recoveryAttemptCount} 次自动恢复`;
             });
           } else {
             this.#store.updateRuntime("automation.recovery_waiting", (state) => {
               state.blockingReason = `连续恢复未成功：${task.blockingReason || "原因未知"}。检测仍保持运行，等待安全恢复条件或人工业务选择。`;
+              state.currentFaultFingerprint = fingerprint;
+              state.recoveryCheckpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
+            });
+          }
+          return;
+        } else if (snapshots.find((snapshot) => snapshot.sourceTaskId === task.taskId)?.health === "stalled") {
+          const snapshot = snapshots.find((candidate) => candidate.sourceTaskId === task.taskId);
+          const fingerprint = faultFingerprint(task, snapshot);
+          const attempts = automation.currentFaultFingerprint === fingerprint ? automation.recoveryAttemptCount : 0;
+          if (attempts < 3) {
+            await this.#collaboration.recoverTask(task.taskId, "自动保障检测到心跳、协议进展和任务状态均已超过安全阈值");
+            this.#store.updateRuntime("automation.stalled_task_recovered", (state) => {
+              state.currentFaultFingerprint = fingerprint;
+              state.recoveryAttemptCount = attempts + 1;
+              state.recoveryCheckpoint = `${task.taskId}:${task.state}:${task.workerGeneration}`;
+              state.blockingReason = `停点已转入第 ${state.recoveryAttemptCount} 次安全恢复`;
+            });
+          } else {
+            this.#store.updateRuntime("automation.stalled_recovery_waiting", (state) => {
+              state.currentFaultFingerprint = fingerprint;
+              state.recoveryCheckpoint = `${task.taskId}:${task.state}:${task.workerGeneration}`;
+              state.blockingReason = "同一停点已完成三次安全恢复尝试；检测继续运行，等待心跳、协议、数据或依赖产生新事实";
             });
           }
           return;
@@ -127,6 +188,55 @@ export class LinghuAutomationFacade {
     } finally {
       this.#checking = false;
     }
+  }
+
+  async #recoverOtherFlows(
+    collaborationState: CollaborationState,
+    activeAutomationTaskId: string | null,
+    snapshots: LinghuAutomaticFlowSnapshot[],
+  ): Promise<boolean> {
+    // 已签发的保障任务先走到可审计终点；完成后才切回其他人物，避免占用者互相等待。
+    if (activeAutomationTaskId) return false;
+    const pending = collaborationState.tasks
+      .filter((task) => task.taskId !== activeAutomationTaskId && task.state !== "integrated" && task.state !== "cancelled")
+      .sort((left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
+    if (pending.length === 0) return false;
+
+    const task = pending.find((candidate) => ["review-failed", "test-failed", "blocked", "recovering"].includes(candidate.state))
+      || pending.find((candidate) => snapshots.find((snapshot) => snapshot.sourceTaskId === candidate.taskId)?.health === "stalled");
+    if (!task) {
+      this.#store.updateRuntime("automation.guarding_all_flows", (state) => {
+        state.blockingReason = `正在保障 ${pending.length} 个其他人物任务完成最后流程，完成前不派发令狐老祖自己的演化任务`;
+      });
+      return true;
+    }
+
+    const snapshot = snapshots.find((candidate) => candidate.sourceTaskId === task.taskId);
+    const fingerprint = faultFingerprint(task, snapshot);
+    const attempts = this.#store.state().recoveryAttemptsByFingerprint[fingerprint] || 0;
+    if (snapshot?.blockingKind === "business") {
+      this.#store.updateRuntime("automation.business_choice_required", (state) => {
+        state.recoveryCheckpoint = `${task.taskId}:${task.state}:${task.workerGeneration}`;
+        state.blockingReason = `任务 ${task.taskId} 需要人工业务选择：${task.blockingReason || "未记录具体选择"}；检测继续运行`;
+      });
+      return true;
+    }
+    if (attempts >= 3) {
+      this.#store.updateRuntime("automation.flow_recovery_waiting", (state) => {
+        state.recoveryCheckpoint = `${task.taskId}:${task.state}:${task.workerGeneration}`;
+        state.blockingReason = `任务 ${task.taskId} 的同一停点已安全恢复三次；检测继续运行，等待新的心跳、数据或依赖事实`;
+      });
+      return true;
+    }
+
+    if (["review-failed", "test-failed", "blocked", "recovering"].includes(task.state)) this.#collaboration.continueTask(task.taskId);
+    else await this.#collaboration.recoverTask(task.taskId, "令狐老祖检测到其他人物任务超过安全进展阈值");
+    this.#store.updateRuntime("automation.flow_recovery_requested", (state) => {
+      state.recoveryAttemptsByFingerprint[fingerprint] = attempts + 1;
+      state.recoveryCheckpoint = `${task.taskId}:${task.state}:${task.workerGeneration}`;
+      state.blockingReason = `正在保障任务 ${task.taskId} 完成最后流程，本停点第 ${attempts + 1} 次安全恢复`;
+    });
+    return true;
   }
 
   #dispatchCurrentModule(state: LinghuAutomationState): void {
@@ -161,33 +271,154 @@ export class LinghuAutomationFacade {
       mergeStrategy: "INDEPENDENT",
       initiatorMemberId: LINGHU_MEMBER_ID,
       preferredExecutorMemberId: LINGHU_MEMBER_ID,
+      automationSource: "linghu-safeguard",
     });
     const task = next.tasks.at(-1);
     if (!task) throw new Error("自动保障任务创建后没有返回任务记录。");
     this.#store.updateRuntime("automation.module_dispatched", (current) => {
+      const previousCheckpoint = current.recoveryCheckpoint;
       current.activePromptId = prompt.promptId;
       current.activeTaskId = task.taskId;
       current.lastDispatchAt = new Date().toISOString();
       current.recoveryAttemptCount = 0;
+      current.currentFaultFingerprint = null;
+      current.recoveryCheckpoint = previousCheckpoint?.startsWith("missing-task:")
+        ? `replacement-task:${previousCheckpoint}:${task.taskId}`
+        : `active-task:${task.taskId}:${current.currentModule}`;
       current.blockingReason = null;
     });
     this.#recordEvent("linghu.automation.module_dispatched", { cycle: state.cycle, module: state.currentModule, promptId: prompt.promptId }, task.taskId);
   }
 
-  #completeModule(taskId: string, taskState: "integrated", summary: string, completedAt: string | null): LinghuAutomationState {
+  #completeModule(task: CollaborationTask, summary: string): LinghuAutomationState {
     return this.#store.updateRuntime("automation.module_completed", (state) => {
       const completedModule = state.currentModule;
+      const completedCycle = state.cycle;
       const currentIndex = LINGHU_AUTOMATION_MODULES.indexOf(completedModule);
       const nextIndex = (currentIndex + 1) % LINGHU_AUTOMATION_MODULES.length;
-      state.lastFeedback = { cycle: state.cycle, module: completedModule, taskId, taskState, summary: summary.slice(0, 2_000), recordedAt: new Date().toISOString() };
+      const completedAt = task.completedAt || new Date().toISOString();
+      state.lastFeedback = { cycle: completedCycle, module: completedModule, taskId: task.taskId, taskState: task.state, summary: summary.slice(0, 2_000), recordedAt: new Date().toISOString() };
+      state.lastModuleReport = moduleCompletionReport(completedCycle, completedModule, task, summary, state.flowSnapshots, completedAt);
       state.currentModule = LINGHU_AUTOMATION_MODULES[nextIndex];
       if (nextIndex === 0) state.cycle += 1;
       state.activeTaskId = null;
       state.recoveryAttemptCount = 0;
-      state.lastCompletedAt = completedAt || new Date().toISOString();
+      state.currentFaultFingerprint = null;
+      state.recoveryCheckpoint = `next-module:${state.cycle}:${state.currentModule}`;
+      state.lastCompletedAt = completedAt;
       state.blockingReason = null;
     });
   }
+}
+
+function automaticFlowSnapshots(state: CollaborationState, activeTaskId: string | null, checkedAt: string): LinghuAutomaticFlowSnapshot[] {
+  // 令狐老祖保障所有人物的未完成任务；automationSource 只用于审计，不能限制保障范围。
+  return state.tasks.filter((task) => task.taskId === activeTaskId
+      || (task.state !== "integrated" && task.state !== "cancelled"))
+    .map((task) => automaticFlowSnapshot(state, task, checkedAt));
+}
+
+function automaticFlowSnapshot(state: CollaborationState, task: CollaborationTask, checkedAt: string): LinghuAutomaticFlowSnapshot {
+  const member = state.members.find((candidate) => candidate.memberId === task.executorMemberId && candidate.currentTaskId === task.taskId);
+  const progressAt = latestTime(member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt);
+  const stale = Date.parse(checkedAt) - Date.parse(progressAt) > FLOW_STALE_AFTER_MS;
+  const health = flowHealth(task, stale);
+  const completedConditions = task.state === "integrated" ? ["源码已集成", "任务已进入完成终态"] : [];
+  return {
+    flowId: `automatic:${task.taskId}`,
+    sourceTaskId: task.taskId,
+    health,
+    state: task.state,
+    phase: task.phase,
+    executorMemberId: task.executorMemberId,
+    workerGeneration: task.workerGeneration,
+    lastHeartbeatAt: member?.lastHeartbeatAt || null,
+    lastProtocolProgressAt: member?.lastProtocolProgressAt || null,
+    lastStateChangedAt: task.updatedAt,
+    waitingPoint: waitingPoint(task, health),
+    completionConditions: ["任务完成代码级验证", "集成候选验证通过", "结果进入 integrated 终态"],
+    completedConditions,
+    recoveryCheckpoint: task.recoveryTargetState ? `${task.taskId}:${task.recoveryTargetState}:${task.workerGeneration}` : null,
+    blockingReason: task.blockingReason,
+    blockingKind: blockingKind(task),
+  };
+}
+
+function flowHealth(task: CollaborationTask, stale: boolean): LinghuFlowHealth {
+  if (task.state === "integrated") return "completed";
+  if (task.state === "cancelled") return "human-blocked";
+  if (task.state === "blocked") return "stalled";
+  if (task.state === "recovering") return "recovering";
+  if (task.state === "review-failed" || task.state === "test-failed") return "stalled";
+  if (task.state === "unified-testing") return "testing";
+  if (task.state === "repairing-review" || task.state === "repairing-execution") return "repairing";
+  // 有明确队列释放条件的等待不是停点，不能仅凭排队时长触发具有副作用的恢复。
+  if (["queued-executor", "queued-reviewer", "queued-integration", "ready-for-integration"].includes(task.state)) return "waiting";
+  if (stale) return "stalled";
+  if (["executing", "integrating"].includes(task.state)) return "repairing";
+  return "healthy";
+}
+
+function waitingPoint(task: CollaborationTask, health: LinghuFlowHealth): string | null {
+  if (health === "human-blocked") return "等待人工重新选择是否继续";
+  if (health === "stalled" || health === "recovering") return task.blockingReason || "等待安全恢复条件";
+  if (task.state === "queued-executor") return "等待执行者容量";
+  if (task.state === "queued-reviewer") return "等待审核者容量";
+  if (task.state === "ready-for-integration" || task.state === "queued-integration") return "等待集成器";
+  return null;
+}
+
+function blockingKind(task: CollaborationTask): LinghuBlockingKind {
+  if (!task.blockingReason) return "none";
+  const reason = task.blockingReason;
+  if (/用户|人工|选择/.test(reason)) return "business";
+  if (/测试|test/i.test(reason)) return "test";
+  if (/数据|缺失|记录/.test(reason)) return "data";
+  if (/代码|编译|类型/.test(reason)) return "code";
+  return "infrastructure";
+}
+
+function latestTime(...values: Array<string | null | undefined>): string {
+  return values.filter((value): value is string => Boolean(value))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0] || new Date(0).toISOString();
+}
+
+function faultFingerprint(task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshot | undefined): string {
+  // 任务恢复动作本身会更新 updatedAt，不能把它作为新事实，否则三次上限会被每次副作用自行清零。
+  const lastProgressVersion = latestTime(snapshot?.lastHeartbeatAt, snapshot?.lastProtocolProgressAt, task.codeVerifiedAt);
+  return [task.taskId, task.state, task.workerGeneration, blockingKind(task), task.blockingReason || "none", lastProgressVersion].join("|");
+}
+
+function moduleCompletionReport(
+  cycle: number,
+  module: LinghuAutomationModule,
+  task: CollaborationTask,
+  summary: string,
+  snapshots: LinghuAutomaticFlowSnapshot[],
+  completedAt: string,
+) {
+  const snapshot = snapshots.find((candidate) => candidate.sourceTaskId === task.taskId);
+  return {
+    cycle,
+    module,
+    evidence: [snapshot ? `流程 ${task.taskId} 检测状态为 ${snapshot.health}` : `流程 ${task.taskId} 已进入 integrated`, summary.slice(0, 2_000)],
+    tasks: [{ taskId: task.taskId, type: "自动流程保障", action: task.snapshot.problemStatement, executorMemberId: task.executorMemberId || LINGHU_MEMBER_ID, result: summary.slice(0, 2_000) }],
+    scores: { before: null, after: null, reason: "本模块未产生可确认的页面演化时评分不适用。" },
+    tests: module === "unified-test-restart"
+      ? { status: "not-run" as const, summary: "等待执行固定统一测试。" }
+      : { status: "passed" as const, summary: "协同任务已通过代码级验证和集成门禁。" },
+    restartRecovery: module === "unified-test-restart"
+      ? { status: "not-run" as const, checkpoint: `next-module:${cycle + 1}:flow-completion`, summary: "等待固定统一测试通过后执行受控重启。" }
+      : { status: "not-applicable" as const, checkpoint: null, summary: "本模块不要求重启。" },
+    blocking: { blocked: false, reason: null, resumeCondition: null },
+    nextSuggestion: `继续检测下一独立模块：${moduleLabel(nextModule(module))}`,
+    completedAt,
+  };
+}
+
+function nextModule(module: LinghuAutomationModule): LinghuAutomationModule {
+  const index = LINGHU_AUTOMATION_MODULES.indexOf(module);
+  return LINGHU_AUTOMATION_MODULES[(index + 1) % LINGHU_AUTOMATION_MODULES.length] || "flow-completion";
 }
 
 function moduleLabel(module: LinghuAutomationModule): string {

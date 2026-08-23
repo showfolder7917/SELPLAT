@@ -1,14 +1,2 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-
-const runtimeRoot = process.argv.find((argument) => argument.startsWith("--ai-desktop-runtime-root="))
-  ?.slice("--ai-desktop-runtime-root=".length);
-
-if (runtimeRoot) {
-  const externalMain = path.join(runtimeRoot, "electron", "electron", "main.js");
-  if (!existsSync(externalMain)) throw new Error(`AI Desktop external runtime is unavailable: ${externalMain}`);
-  await import(pathToFileURL(externalMain).href);
-} else {
-  await import("./main.js");
-}
+// 发布包只加载自身已验证运行时，禁止兼容工程外部构建，避免源码或 build 损坏拖垮稳定程序。
+await import("./main.js");

@@ -169,7 +169,7 @@ export class CollaborationCoordinator {
         current.repairKind = null;
         current.blockingReason = current.originalReviewer ? `令狐老祖处理完成，等待${current.originalReviewer.displayName}重新审批` : "令狐老祖处理完成，等待重新审批";
         appendFlow(current, "review.repair_completed", "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID));
-        releaseMember(state, LINGHU_MEMBER_ID);
+        releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
       this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "reviewer-wait", "recovery-wait", "original-reviewer-return", task.originalReviewer?.memberId || "reviewer-capacity", task.originalReviewer?.memberId || null));
     } catch (error) {
@@ -178,12 +178,19 @@ export class CollaborationCoordinator {
         current.blockingReason = `令狐老祖处理审核问题失败：${errorMessage(error)}`;
         current.repairFailureReason = current.blockingReason;
         appendFlow(current, "review.repair_failed", "recovery", "failed", current.blockingReason, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), true);
-        releaseMember(state, LINGHU_MEMBER_ID);
+        releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
     } finally {
       await repairSession?.dispose();
       this.#schedule();
     }
+  }
+
+  /** 把已由自动保障确认的停点转换为可审计恢复态，并立即建立新的执行或集成租约。 */
+  async recoverTask(taskId: string, reason: string): Promise<CollaborationState> {
+    const task = this.#store.task(taskId);
+    if (task.state !== "blocked" && task.state !== "recovering") await this.#blockTask(taskId, reason);
+    return this.continueTask(taskId);
   }
 
   async cancelTask(taskId: string): Promise<CollaborationState> {
@@ -736,7 +743,7 @@ export class CollaborationCoordinator {
     try {
       this.#store.updateTask(taskId, "execution.repair_started", (current, state) => {
         if (originalId) current.originalExecutor ??= participantSnapshot(requireMember(state, originalId));
-        if (originalId) releaseMember(state, originalId);
+        if (originalId) releaseMemberFromState(state, originalId);
         const linghu = requireMember(state, LINGHU_MEMBER_ID);
         if (linghu.state !== "idle") throw new Error("令狐老祖当前正在处理其他任务。");
         linghu.generation += 1;
@@ -768,7 +775,7 @@ export class CollaborationCoordinator {
         current.currentHandler = original || null;
         current.blockingReason = original ? `令狐老祖修复完成，等待${original.displayName}重新执行` : "令狐老祖修复完成，等待原执行人重新执行";
         appendFlow(current, "execution.repair_completed", "recovery", "completed", current.blockingReason, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)));
-        releaseMember(state, LINGHU_MEMBER_ID);
+        releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
     } catch (error) {
       await this.#blockTask(taskId, `令狐老祖修复执行问题失败：${errorMessage(error)}`);
@@ -1156,6 +1163,24 @@ function releaseMember(store: CollaborationStore, memberId: string): void {
     target.blockingReason = null;
     target.updatedAt = new Date().toISOString();
   });
+}
+
+/** 同一原子状态变更内释放人物，避免嵌套提交覆盖当前任务刚写入的恢复事实。 */
+function releaseMemberFromState(state: CollaborationState, memberId: string): void {
+  const target = state.members.find((candidate) => candidate.memberId === memberId);
+  if (!target) return;
+  const shouldDelete = target.state === "draining" || !target.enabled;
+  if (shouldDelete && !target.protected) {
+    state.members = state.members.filter((candidate) => candidate.memberId !== memberId);
+    if (state.selectedMemberId === memberId) state.selectedMemberId = "han-li";
+    return;
+  }
+  target.state = "idle";
+  target.role = null;
+  target.phase = null;
+  target.currentTaskId = null;
+  target.blockingReason = null;
+  target.updatedAt = new Date().toISOString();
 }
 
 function phaseFromStreamEvent(event: CodexStreamEvent): Exclude<CollaborationWorkerPhase, null> | null {
