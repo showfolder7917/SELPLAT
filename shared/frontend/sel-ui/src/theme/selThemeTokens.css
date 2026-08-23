@@ -130,6 +130,9 @@
     --sel-theme-radius-action: 9px;
     --sel-theme-radius-icon: 8px;
     --sel-theme-radius-chip: 999px;
+    /* 紧凑主操作统一使用稳定点击高度和横向留白，业务应用不得再次写死按钮几何。 */
+    --sel-theme-action-height: 32px;
+    --sel-theme-action-padding-inline: 13px;
     --sel-theme-grid-radius-board: var(--sel-theme-radius-panel);
     --sel-theme-grid-radius-content: var(--sel-theme-radius-inner);
     --sel-theme-grid-radius-header: var(--sel-theme-radius-inner);

@@ -43,14 +43,14 @@ test("工作区与任务使用单一活动分区并让当前分区置顶占满",
   assert.match(component, /id="developer-task-list"/);
   assert.match(styles, /\.explorer-pane\.expanded\s*\{[^}]*flex:\s*1 1 auto;[^}]*order:\s*0/);
   assert.match(styles, /\.explorer-pane\.collapsed\s*\{[^}]*order:\s*1/);
-  assert.match(styles, /\.explorer-pane\.collapsed > \.dev-section-title\s*\{[^}]*border-top:\s*1px solid var\(--line\)/);
+  assert.match(styles, /\.explorer-pane\.collapsed > \.dev-section-title\s*\{[^}]*border-top:\s*1px solid var\(--sel-theme-line\)/);
   assert.doesNotMatch(styles, /\.tasks-pane\.expanded\s*\{[^}]*flex-basis:\s*180px/);
   assert.match(styles, /\.dev-section-title\.tasks\s*\{\s*border-top:\s*0/);
 });
 
 test("当前用户 AI Desktop 规则已登记侧栏单区独占与标签新建入口契约", () => {
   assert.match(aiDesktopRuleIndex, new RegExp(`AI_DESKTOP_OFFICIAL_HARNESS_RULES\\s*=\\s*local/${activeUser}/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则\\.md`));
-  assert.match(aiDesktopRule, /rule_version\s*=\s*5\.46\.0/);
+  assert.match(aiDesktopRule, /rule_version\s*=\s*5\.47\.0/);
   assert.match(aiDesktopRule, /developer_sidebar_section_disclosure_contract\.3\s*=\s*workspace_tasks_single_active/);
   assert.match(aiDesktopRule, /developer_sidebar_section_disclosure_contract\.4\s*=\s*refresh_conversation_action_in_codex_chat_tab_before_close_with_localized_rebuild_session_tip/);
   assert.match(aiDesktopRule, /developer_sidebar_resizer_contract\.3\s*=\s*no_workspace_tasks_height_divider/);

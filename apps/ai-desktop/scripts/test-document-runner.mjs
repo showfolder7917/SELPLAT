@@ -16,6 +16,7 @@ const archiveRoot = projectPaths.testArchiveRoot;
 const staleAfterMs = 10 * 60 * 1_000;
 const allowedStandaloneScripts = new Set([
   "typecheck",
+  "build",
   "build:developer",
   "migrate:data-layout",
   "package:mac:developer",
@@ -25,6 +26,8 @@ const allowedStandaloneScripts = new Set([
 const allowedTestScripts = new Set([
   "test:common",
   "test:sites",
+  "test:sel-ui",
+  "test:sel-ui-shared",
   "test:screenshot",
   "test:stream",
   "test:workspace",

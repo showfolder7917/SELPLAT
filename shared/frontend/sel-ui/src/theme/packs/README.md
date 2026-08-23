@@ -76,5 +76,6 @@ window.sel.theme.registry.register({
 - `glass-admin`（晶透管理）：CSS 玻璃描边、柔和圆角和轻量管理后台；暂无独占位图，深浅模式使用纯色页面背景。
 - `plain-minimal`（普通极简）：白底黑字、直角细边框和系统字体；适合不需要突出视觉识别的普通办公页面。
 - `candy-adventure`（糖果冒险）：卡通图片边框、独立背景和圆润组件造型；独占素材位于 `assets/themes/candy-adventure/`。
+- `developer-workbench`（开发工作台）：从 AI Desktop 稳定开发界面提炼的紧凑蓝灰工作台，提供深浅模式与青色焦点，不包含应用布局或业务状态。
 
 应用只需在注册表与管理器之间加载主题 manifest。默认主题可通过根节点的 `data-sel-theme` 指定；公共个性化组件会自动读取主题库、模式和皮肤，不需要为新主题增加业务按钮。

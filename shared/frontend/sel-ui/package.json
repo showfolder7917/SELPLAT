@@ -1,0 +1,21 @@
+{
+  "name": "@selplat/sel-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./theme/tokens": { "types": "./src/theme/css.d.ts", "default": "./src/theme/selThemeTokens.css" },
+    "./theme/contract": { "types": "./src/theme/css.d.ts", "default": "./src/theme/contract/selThemeContract.css" },
+    "./theme/states": { "types": "./src/theme/css.d.ts", "default": "./src/theme/contract/selThemeStates.css" },
+    "./theme/typography": { "types": "./src/theme/css.d.ts", "default": "./src/theme/contract/selThemeTypography.css" },
+    "./theme/developer-workbench": { "types": "./src/theme/css.d.ts", "default": "./src/theme/packs/developer-workbench/theme.css" },
+    "./theme/developer-workbench/dark": { "types": "./src/theme/css.d.ts", "default": "./src/theme/packs/developer-workbench/modes/dark.css" },
+    "./theme/developer-workbench/light": { "types": "./src/theme/css.d.ts", "default": "./src/theme/packs/developer-workbench/modes/light.css" },
+    "./theme/plain-minimal": { "types": "./src/theme/css.d.ts", "default": "./src/theme/packs/plain-minimal/theme.css" },
+    "./theme/plain-minimal/dark": { "types": "./src/theme/css.d.ts", "default": "./src/theme/packs/plain-minimal/modes/dark.css" },
+    "./theme/plain-minimal/light": { "types": "./src/theme/css.d.ts", "default": "./src/theme/packs/plain-minimal/modes/light.css" }
+  },
+  "files": [
+    "src/theme"
+  ]
+}

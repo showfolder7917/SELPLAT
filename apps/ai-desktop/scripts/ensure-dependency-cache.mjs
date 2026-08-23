@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { resolveDependencyCache } from "./dependency-cache.mjs";
+import { repairLocalPackageLinks, resolveDependencyCache } from "./dependency-cache.mjs";
 
 let details = resolveDependencyCache();
 if (!existsSync(details.dependencyRoot)) {
@@ -14,4 +14,5 @@ if (!existsSync(details.dependencyRoot)) {
   details = resolveDependencyCache();
 }
 if (!existsSync(details.dependencyRoot)) throw new Error(`Dependency cache preparation failed: ${details.cacheRoot}`);
+repairLocalPackageLinks(details);
 console.log(`Dependency cache ready: ${details.lockHash}`);

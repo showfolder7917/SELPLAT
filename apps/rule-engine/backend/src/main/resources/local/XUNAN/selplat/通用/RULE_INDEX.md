@@ -45,6 +45,15 @@ load_rule_for_active_user_selplat_application_reusable_interaction_or_private_co
 <!-- 修改控件 API、主题令牌、ARIA 角色、硬依赖或应用资源顺序时加载，保证登记与调用方同步。 -->
 load_rule_for_active_user_selplat_component_api_theme_accessibility_dependency_or_resource_order = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 
+<!-- 新建或既有工程接入 SEL UI，选择现有主题或把稳定自有 UI 沉淀为新主题包时加载。 -->
+load_rule_for_active_user_selplat_application_sel_ui_adoption_or_new_theme_pack = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+
+<!-- Java 通过资源 JAR、Node Vite Electron 通过模块出口或 React 通过生命周期适配使用 SEL UI 时加载。 -->
+load_rule_for_active_user_selplat_java_node_electron_or_react_sel_ui_host_adoption = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+
+<!-- 既有 UI 硬编码视觉迁移到统一令牌并要求保持原外观时加载。 -->
+load_rule_for_active_user_selplat_existing_ui_token_migration_with_visual_preservation = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+
 <!-- 修改 window.sel 命名空间、selKernel、sel.core.freeze、应用组件解构或 JavaScript 组件说明时加载。 -->
 load_rule_for_active_user_selplat_namespace_kernel_freeze_dependency_declaration_or_js_component_documentation = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 

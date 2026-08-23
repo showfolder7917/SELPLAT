@@ -1068,7 +1068,7 @@ export function DeveloperApp() {
 
     <aside className="dev-activitybar">
       <button className="active" title={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-pressed={explorerExpanded} onClick={() => setExplorerExpanded((value) => !value)}><Folder24Regular /></button><button><Search24Regular /></button><button><Branch24Regular /></button><button><Bug24Regular /></button>
-      <button ref={settingsButtonRef} className="activity-settings" onClick={() => setSettingsOpen((value) => !value)}><Settings24Regular /></button>
+      <button ref={settingsButtonRef} className="activity-settings" title={text.settings} aria-label={text.settings} aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)}><Settings24Regular /></button>
     </aside>
 
     <aside className="dev-explorer">
@@ -1180,7 +1180,7 @@ export function DeveloperApp() {
 
     {settingsOpen && <section ref={settingsPanelRef} className="dev-settings">
       <h2>{text.settings}</h2>
-      <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version} · ${codexStatus.runtime.path}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button onClick={() => void logout()}>{text.signOut}</button> : <button className="primary" onClick={() => void login()}>{text.signIn}</button>}{loginHint && <em>{loginHint}</em>}</div>
+      <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version} · ${codexStatus.runtime.path}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button type="button" onClick={() => void logout()}><span>{text.signOut}</span></button> : <button type="button" className="primary" onClick={() => void login()}><span>{text.signIn}</span></button>}{loginHint && <em>{loginHint}</em>}</div>
       <label>Language<select value={locale} onChange={(event) => updateSettings(event.target.value as Locale, sandboxMode)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
       <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings(locale, event.target.value as SandboxMode)}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
       <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><small>{tempInfo?.path}</small><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>

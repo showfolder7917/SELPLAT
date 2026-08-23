@@ -34,7 +34,8 @@ for (const entry of required) if (!entries.includes(entry)) throw new Error(`Pac
 const forbidden = entries.filter((entry) =>
   /(?:^|\/)(?:shared\/backend|rule-engine|__pycache__|OPTION\/temp)(?:\/|$)|\.(?:java|class|jar|py|pyc)$|(?:^|\/)build\.gradle$/.test(entry)
   || /\/node_modules\/@selplat\/node-common-core\/(?:src|tests)(?:\/|$)/.test(entry)
-  || /\/node_modules\/@selplat\/node-common-core\/.*(?:\.map|\.d\.ts)$/.test(entry),
+  || /\/node_modules\/@selplat\/node-common-core\/.*(?:\.map|\.d\.ts)$/.test(entry)
+  || /\/node_modules\/@selplat\/sel-ui(?:\/|$)/.test(entry)
 );
 if (forbidden.length > 0) throw new Error(`Forbidden source, temporary, or non-runtime content entered Electron package:\n${forbidden.slice(0, 20).join("\n")}`);
 console.log(`Electron package content verified: ${entries.length} runtime entries, no source, temporary, or cross-language leakage.`);
