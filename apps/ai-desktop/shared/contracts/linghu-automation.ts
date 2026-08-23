@@ -1,6 +1,7 @@
 import type { CollaborationTaskState } from "./collaboration.js";
+import type { TestResourceCoordinatorState } from "./test-resource.js";
 
-export type LinghuAutomationModule = "flow-completion" | "log-diagnosis" | "architecture-recovery" | "unified-test-restart";
+export type LinghuAutomationModule = "flow-completion" | "test-coverage" | "audit-completeness";
 
 export interface LinghuStartupPrompt {
   promptId: string;
@@ -48,7 +49,6 @@ export interface LinghuModuleCompletionReport {
   module: LinghuAutomationModule;
   evidence: string[];
   tasks: Array<{ taskId: string; type: string; action: string; executorMemberId: string; result: string }>;
-  scores: { before: number | null; after: number | null; reason: string };
   tests: { status: "passed" | "failed" | "not-run" | "not-applicable"; summary: string };
   restartRecovery: { status: "passed" | "failed" | "not-run" | "not-applicable"; checkpoint: string | null; summary: string };
   blocking: { blocked: boolean; reason: string | null; resumeCondition: string | null };
@@ -57,7 +57,7 @@ export interface LinghuModuleCompletionReport {
 }
 
 export interface LinghuAutomationState {
-  version: 1;
+  version: 2;
   enabled: boolean;
   pollIntervalMs: 30_000;
   cycle: number;
@@ -69,6 +69,7 @@ export interface LinghuAutomationState {
   recoveryAttemptsByFingerprint: Record<string, number>;
   detectionCursor: string | null;
   flowSnapshots: LinghuAutomaticFlowSnapshot[];
+  testResourceState: TestResourceCoordinatorState | null;
   recoveryCheckpoint: string | null;
   lastDispatchAt: string | null;
   lastCompletedAt: string | null;

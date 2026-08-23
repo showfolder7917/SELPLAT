@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -10,6 +11,8 @@ import { ensureIntegrationDependencies } from "../../../build/ai-desktop/electro
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
 import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-facade.js";
 import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-store.js";
+import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js";
+import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js";
 import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/managed-task-executor.js";
 import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
@@ -18,6 +21,43 @@ mkdirSync(controlledTempRoot, { recursive: true });
 const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const coordinatorSource = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
 const collaborationContractSource = readFileSync(new URL("../shared/contracts/collaboration.ts", import.meta.url), "utf8");
+const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
+
+function runCoordinatorWorker(coordinationRoot, runId, buildRoot, holdMilliseconds) {
+  const worker = new URL("./fixtures/test-resource-coordinator-worker.mjs", import.meta.url);
+  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js", import.meta.url).href;
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [worker.pathname, moduleUrl, coordinationRoot, runId, buildRoot, String(holdMilliseconds)], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code !== 0) return reject(new Error(`测试资源子进程失败：${stderr || stdout}`));
+      try { resolve(JSON.parse(stdout.trim())); } catch (error) { reject(error); }
+    });
+  });
+}
+
+function runReleaseWorker(coordinationRoot, releaseBatchId, holdMilliseconds) {
+  const worker = new URL("./fixtures/integration-release-coordinator-worker.mjs", import.meta.url);
+  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js", import.meta.url).href;
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [worker.pathname, moduleUrl, coordinationRoot, releaseBatchId, String(holdMilliseconds)], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code !== 0) return reject(new Error(`发布资源子进程失败：${stderr || stdout}`));
+      try { resolve(JSON.parse(stdout.trim())); } catch (error) { reject(error); }
+    });
+  });
+}
 
 test("会话卡片绑定真实协作任务并完整显示修复回流与统一测试状态", () => {
   assert.match(developerSource, /collaborationTaskId/);
@@ -84,6 +124,7 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
       readWorkspaceState: () => workspaceState,
       locale: () => "zh-CN",
       recordEvent: () => undefined,
+      readTestResourceState: idleTestResourceState,
       runUnifiedTestAndRestart: async (onVerified) => { restartCount += 1; onVerified(); },
     });
     automationStore.setEnabled(true);
@@ -94,6 +135,10 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
     assert.equal(submitted[0].automationSource, "linghu-safeguard");
     assert.match(submitted[0].confirmedIntent, /最后一道屏障/);
     assert.match(submitted[0].confirmedIntent, /当前独立模块/);
+    assert.match(submitted[0].confirmedIntent, /测试漏点/);
+    assert.match(submitted[0].confirmedIntent, /日志审计/);
+    assert.match(submitted[0].confirmedIntent, /测试资源结构化事实/);
+    assert.doesNotMatch(submitted[0].confirmedIntent, /页面审核以客户易用为第一目标/);
     assert.equal(facade.state().activeTaskId, collaborationStore.state().tasks[0].taskId);
     await facade.checkNow();
     assert.equal(submitted.length, 1, "活动模块尚未完成时30秒检测不得重复派发");
@@ -114,7 +159,7 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
     facade.deletePrompt(prompt.promptId);
     assert.equal(facade.state().prompts.some((candidate) => candidate.promptId === prompt.promptId), false);
 
-    const expectedModules = ["log-diagnosis", "architecture-recovery", "unified-test-restart", "flow-completion"];
+    const expectedModules = ["test-coverage", "audit-completeness", "flow-completion"];
     for (const expectedModule of expectedModules) {
       const activeTaskId = facade.state().activeTaskId;
       collaborationStore.updateTask(activeTaskId, "test.integrated", (task) => {
@@ -124,14 +169,41 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
       });
       await facade.checkNow();
       assert.equal(facade.state().currentModule, expectedModule);
+      if (expectedModule === "audit-completeness") {
+        assert.equal(facade.state().lastModuleReport.module, "test-coverage");
+        assert.equal(facade.state().lastModuleReport.tests.status, "passed");
+        assert.equal(facade.state().lastModuleReport.restartRecovery.status, "passed");
+      }
     }
     assert.equal(facade.state().cycle, 2);
     assert.equal(restartCount, 1);
-    assert.equal(submitted.length, 5, "每个模块完成后只派发一个下一模块任务");
-    assert.equal(facade.state().lastModuleReport.module, "unified-test-restart");
-    assert.equal(facade.state().lastModuleReport.tests.status, "passed");
-    assert.equal(facade.state().lastModuleReport.restartRecovery.status, "passed");
+    assert.equal(submitted.length, 4, "每个模块完成后只派发一个下一模块任务");
+    assert.equal(facade.state().lastModuleReport.module, "audit-completeness");
     assert.equal(facade.state().lastModuleReport.tasks[0].executorMemberId, "linghu-ancestor");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐旧四模块默认文案升级后收敛为三项职责且不覆盖用户自建文案", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-prompt-v2-migration-"));
+  const storePath = path.join(directory, "linghu.json");
+  try {
+    const original = new LinghuAutomationStore(storePath);
+    original.createPrompt({ title: "用户自建", content: "保留用户自己维护的具体执行约束。" });
+    const legacy = JSON.parse(readFileSync(storePath, "utf8"));
+    legacy.version = 1;
+    legacy.currentModule = "architecture-recovery";
+    legacy.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian").content = "页面审核以客户易用为第一目标，执行四个模块。";
+    writeFileSync(storePath, JSON.stringify(legacy), "utf8");
+    rmSync(`${storePath}.bak`, { force: true });
+
+    const migrated = new LinghuAutomationStore(storePath).state();
+    assert.equal(migrated.version, 2);
+    assert.equal(migrated.currentModule, "flow-completion");
+    assert.match(migrated.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian").content, /第二职责是检查测试漏点/);
+    assert.match(migrated.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian").content, /第三职责是检查日志审计完整性/);
+    assert.equal(migrated.prompts.find((prompt) => prompt.title === "用户自建").content, "保留用户自己维护的具体执行约束。");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -197,6 +269,7 @@ test("令狐对同一故障指纹最多执行三次恢复副作用但继续检�
       readWorkspaceState: () => workspaceState,
       locale: () => "zh-CN",
       recordEvent: () => undefined,
+      readTestResourceState: idleTestResourceState,
       runUnifiedTestAndRestart: async () => undefined,
     });
     automationStore.setEnabled(true);
@@ -244,6 +317,7 @@ test("令狐活动任务记录缺失时保留恢复点并派发同模块替代�
       readWorkspaceState: () => workspaceState,
       locale: () => "zh-CN",
       recordEvent: () => undefined,
+      readTestResourceState: idleTestResourceState,
       runUnifiedTestAndRestart: async () => undefined,
     });
     automationStore.setEnabled(true);
@@ -258,7 +332,7 @@ test("令狐活动任务记录缺失时保留恢复点并派发同模块替代�
   }
 });
 
-test("令狐第四模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
+test("令狐测试漏点模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
   const runner = readFileSync(new URL("../electron/services/collaboration/linghu-unified-test-runner.ts", import.meta.url), "utf8");
   const facade = readFileSync(new URL("../electron/services/collaboration/linghu-automation-facade.ts", import.meta.url), "utf8");
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
@@ -267,12 +341,195 @@ test("令狐第四模块只运行固定统一测试并在恢复点持久化后�
   assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\(\) =>/);
   assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
   assert.match(main, /await linghuUnifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*resolveVerifiedDeveloperExecutable[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
+  assert.match(main, /IntegrationReleaseCoordinatorFacade[\s\S]*ReleaseBatchStore[\s\S]*acquireIntegrationRelease[\s\S]*publishIntegration/);
+  assert.match(coordinatorSource, /createReleaseCandidate[\s\S]*releaseDocument\.state = "testing"[\s\S]*releaseDocument\.state = "published"/);
   assert.match(facade, /automaticFlowSnapshots[\s\S]*faultFingerprint[\s\S]*moduleCompletionReport/);
+  assert.match(main, /const testResources = new TestResourceCoordinatorFacade[\s\S]*new LinghuUnifiedTestRunner\([\s\S]*new TaskWorktreeTestRunner\([\s\S]*verifyIntegration:[\s\S]*testResources\.run[\s\S]*linghuUnifiedTests\.run\(rootPath\)/);
+  assert.doesNotMatch(main, /TestExecutionGate|test-execution-gate/);
+});
+
+test("多个真实进程同时集成或发布时全局并发始终为一", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "integration-release-cross-process-"));
+  try {
+    const events = (await Promise.all([
+      runReleaseWorker(directory, "release-1", 150),
+      runReleaseWorker(directory, "release-2", 150),
+      runReleaseWorker(directory, "release-3", 150),
+    ])).flat();
+    assert.equal(events.filter((event) => event.type === "integration.release.acquired").length, 3);
+    assert.equal(events.filter((event) => event.type === "integration.release.released").length, 3);
+    assert.ok(events.some((event) => event.type === "integration.release.contended"));
+    const lifecycle = events.filter((event) => /\.(?:acquired|released)$/.test(event.type)).sort((left, right) => Date.parse(left.occurredAt) - Date.parse(right.occurredAt) || (left.type.endsWith("released") ? -1 : 1));
+    let active = 0;
+    let maximum = 0;
+    for (const event of lifecycle) {
+      active += event.type.endsWith("acquired") ? 1 : -1;
+      maximum = Math.max(maximum, active);
+      assert.ok(active >= 0);
+    }
+    assert.equal(active, 0);
+    assert.equal(maximum, 1);
+    assert.equal(new IntegrationReleaseCoordinatorFacade({ coordinationRoot: directory, recordEvent: () => undefined }).holder(), null);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("三个真实进程同时申请测试资源时全局并发始终为一并留下结构化事件", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "test-resource-cross-process-"));
+  const coordinationRoot = path.join(directory, "运行中", "测试", "_资源协调");
+  const buildRoot = path.join(directory, "build", "ai-desktop");
+  try {
+    const batches = await Promise.all([
+      runCoordinatorWorker(coordinationRoot, "RUN-A", buildRoot, 160),
+      runCoordinatorWorker(coordinationRoot, "RUN-B", buildRoot, 160),
+      runCoordinatorWorker(coordinationRoot, "RUN-C", buildRoot, 160),
+    ]);
+    const events = batches.flat();
+    assert.equal(events.filter((event) => event.type === "test.resource.queued").length, 3);
+    assert.equal(events.filter((event) => event.type === "test.resource.acquired").length, 3);
+    assert.equal(events.filter((event) => event.type === "test.resource.released").length, 3);
+    assert.ok(events.some((event) => event.type === "test.resource.contended"), "并发申请必须记录真实冲突");
+
+    const lifecycle = events
+      .filter((event) => event.type === "test.resource.acquired" || event.type === "test.resource.released")
+      .sort((left, right) => Date.parse(left.occurredAt) - Date.parse(right.occurredAt)
+        || (left.type === "test.resource.released" ? -1 : 1));
+    let active = 0;
+    let maximumActive = 0;
+    for (const event of lifecycle) {
+      active += event.type === "test.resource.acquired" ? 1 : -1;
+      maximumActive = Math.max(maximumActive, active);
+      assert.ok(active >= 0, "释放事件不能早于对应占用事件");
+    }
+    assert.equal(active, 0);
+    assert.equal(maximumActive, 1);
+    assert.ok(events.every((event) => event.buildRoot === buildRoot && event.port === 4197));
+    assert.ok(events.filter((event) => event.type === "test.resource.released").every((event) => event.executionDurationMs >= 150));
+    const observer = new TestResourceCoordinatorFacade({ coordinationRoot, recordEvent: () => undefined });
+    assert.equal(observer.state().holder, null);
+    assert.equal(observer.state().waiters.length, 0);
+    assert.equal(observer.state().lastEvent.type, "released");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("持有测试资源期间持续更新进程心跳并在释放事件记录性能", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "test-resource-heartbeat-"));
+  const events = [];
+  try {
+    const coordinator = new TestResourceCoordinatorFacade({
+      coordinationRoot: path.join(directory, "_资源协调"),
+      recordEvent: (type, details) => events.push({ type, ...details }),
+      heartbeatIntervalMs: 10,
+      pollIntervalMs: 5,
+    });
+    let acquiredHeartbeat = "";
+    let updatedHeartbeat = "";
+    await coordinator.run({
+      runId: "RUN-HEARTBEAT",
+      taskId: "TASK-HEARTBEAT",
+      initiatorMemberId: "test-heartbeat",
+      kind: "task-validation",
+      port: 4197,
+      buildRoot: path.join(directory, "build"),
+    }, async () => {
+      acquiredHeartbeat = coordinator.state().holder.heartbeatAt;
+      await new Promise((resolve) => setTimeout(resolve, 45));
+      updatedHeartbeat = coordinator.state().holder.heartbeatAt;
+    });
+    assert.ok(Date.parse(updatedHeartbeat) > Date.parse(acquiredHeartbeat));
+    const released = events.find((event) => event.type === "test.resource.released");
+    assert.ok(released.executionDurationMs >= 40);
+    assert.equal(coordinator.state().holder, null);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("活跃跨进程占用超过等待上限时记录超时而不破坏持有者锁", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "test-resource-timeout-"));
+  const coordinationRoot = path.join(directory, "_资源协调");
+  const lockRoot = path.join(coordinationRoot, "全局测试资源.lock");
+  const events = [];
+  try {
+    mkdirSync(lockRoot, { recursive: true });
+    const now = new Date().toISOString();
+    writeFileSync(path.join(lockRoot, "owner.json"), JSON.stringify({
+      leaseId: "LIVE-HOLDER",
+      runId: "RUN-HOLDER",
+      taskId: "TASK-HOLDER",
+      initiatorMemberId: "test-holder",
+      kind: "task-validation",
+      port: 4197,
+      buildRoot: path.join(directory, "build", "holder"),
+      processId: process.pid,
+      queuedAt: now,
+      acquiredAt: now,
+      heartbeatAt: now,
+    }), "utf8");
+    const coordinator = new TestResourceCoordinatorFacade({
+      coordinationRoot,
+      recordEvent: (type, details) => events.push({ type, ...details }),
+      acquireTimeoutMs: 80,
+      staleHeartbeatMs: 20,
+      heartbeatIntervalMs: 10,
+      pollIntervalMs: 10,
+    });
+    await assert.rejects(() => coordinator.run({
+      runId: "RUN-WAITER",
+      taskId: "TASK-WAITER",
+      initiatorMemberId: "test-waiter",
+      kind: "integration-validation",
+      port: 4197,
+      buildRoot: path.join(directory, "build", "waiter"),
+    }, async () => undefined), /等待全局测试资源超时/);
+    assert.ok(events.some((event) => event.type === "test.resource.contended"));
+    assert.ok(events.some((event) => event.type === "test.resource.timeout"));
+    assert.equal(JSON.parse(readFileSync(path.join(lockRoot, "owner.json"), "utf8")).leaseId, "LIVE-HOLDER");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("进程在写入持有者记录前退出时能够恢复孤儿锁", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "test-resource-orphan-"));
+  const coordinationRoot = path.join(directory, "_资源协调");
+  const lockRoot = path.join(coordinationRoot, "全局测试资源.lock");
+  const events = [];
+  try {
+    mkdirSync(lockRoot, { recursive: true });
+    await new Promise((resolve) => setTimeout(resolve, 35));
+    const coordinator = new TestResourceCoordinatorFacade({
+      coordinationRoot,
+      recordEvent: (type, details) => events.push({ type, ...details }),
+      acquireTimeoutMs: 1_000,
+      staleHeartbeatMs: 20,
+      heartbeatIntervalMs: 10,
+      pollIntervalMs: 5,
+    });
+    let executed = false;
+    await coordinator.run({
+      runId: "RUN-ORPHAN-RECOVERY",
+      taskId: "TASK-ORPHAN-RECOVERY",
+      initiatorMemberId: "test-recovery",
+      kind: "task-validation",
+      port: 4197,
+      buildRoot: path.join(directory, "build"),
+    }, async () => { executed = true; });
+    assert.equal(executed, true);
+    assert.ok(events.some((event) => event.type === "test.resource.stale-recovered" && event.reason === "owner_record_missing"));
+    assert.equal(coordinator.state().holder, null);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.59\.0/);
+  assert.match(rule, /rule_version = 5\.62\.0/);
+  assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
+  assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);
+  assert.match(rule, /linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry/);
   assert.match(rule, /linghu_automation_flow_snapshot_contract/);
   assert.match(rule, /linghu_automation_recovery_fingerprint_contract/);
   assert.match(rule, /linghu_automation_state_recovery_contract/);

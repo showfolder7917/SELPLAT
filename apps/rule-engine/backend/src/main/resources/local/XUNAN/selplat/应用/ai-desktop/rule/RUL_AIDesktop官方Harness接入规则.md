@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.59.0 将全人物最终流程保障、测试互斥和自包含候选发布纳入正式入口。 -->
-rule_version = 5.59.0
+<!-- 5.62.0 将协同集成、候选测试、打包和发布收敛为同一跨进程发布批次。 -->
+rule_version = 5.62.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -40,6 +40,12 @@ upgrade_record_5_57 = 2026-08-23:全人物非终态流程快照_心跳协议与�
 upgrade_record_5_58 = 2026-08-23:新增paths_resolve受控命令_从锁哈希缓存加载node_common_path_输出权威应用名与全部数据域_命令结束撤销临时源码依赖链接_独立依赖缓存回归测试
 <!-- 5.59.0 防止令狐只巡检自己的任务、网页假保存开关、并发测试抢占，以及发布包继续依赖工程 build。 -->
 upgrade_record_5_59 = 2026-08-23:令狐一级职责保障所有人物非终态任务进入最终完成_自动状态双损坏安全关闭_网页预览只读不伪造保存_任务签发集成与统一测试共用单一互斥入口_发布包禁止外部runtime兼容_每次生成自包含候选包_身份签名内置Codex与隔离启动全部验证后才切换_稳定userData恢复全部任务
+<!-- 5.60.0 删除无关演化职责，只保留最终流程、测试漏点和审计完整性，并让测试互斥具备跨进程事实。 -->
+upgrade_record_5_60 = 2026-08-23:令狐仅保留全人物最终流程保障_测试漏点补充与能力升级_日志审计完整性_跨进程测试资源Facade_任务进程端口构建目录心跳_排队占用冲突释放超时结构化事件_真实三进程并发恒为1回归_等待执行性能指标
+<!-- 5.61.0 让新安装和旧版空设置直接进入 Terra，且不覆盖已有非空模型与迁移后的用户选择。 -->
+upgrade_record_5_61 = 2026-08-23:新安装默认gpt_5_6_terra_旧版空默认值一次迁移_页面主会话协同执行和审核逐轮共用全局模型设置_保留用户后续显式选择
+<!-- 5.62.0 防止普通任务合并与令狐发布互相抢占，或主工作区测试结果冒充候选提交验证。 -->
+upgrade_record_5_62 = 2026-08-23:跨进程集成发布锁_编码任务可继续但合并发布全局串行_release版本rc候选分支_任务分支与resultSHA冻结_统一测试打包验证绑定候选提交_批次文档运行中单点维护_终态进入发布归档并清理临时材料_验证后受控切换并恢复任务
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -332,16 +338,18 @@ linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_plus_a
 linghu_automation_recovery_fingerprint_contract = task_state_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
 <!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
 linghu_automation_state_recovery_contract = atomic_primary_plus_latest_valid_backup + restore_enabled_cycle_module_cursor_active_task_fault_and_checkpoint + primary_and_backup_both_corrupt_safely_disable_until_human_reenables + first_install_default_off
-<!-- 四个模块严格串行，模块反馈落盘后才进入下一模块；一轮完成后继续下一轮，不为维持循环制造无价值修改。 -->
-linghu_automation_module_cycle_contract = flow_completion -> log_and_bug_diagnosis -> interruption_data_and_facade_recovery -> unified_test_restart_and_task_recovery -> next_cycle
+<!-- 三个职责模块严格串行；最终流程保障始终先于令狐自己的测试与审计循环。 -->
+linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness -> next_cycle
 <!-- 自动保障任务的真实发起人和严格首选执行人都是令狐老祖；其他人物仍可作为异人审核员，禁止首选人物忙碌时悄悄转派顶层保障职责。 -->
 linghu_automation_actor_contract = initiator_linghu_ancestor + protected_strict_preferred_executor_linghu_ancestor + different_idle_reviewer + persist_real_actor_snapshots
 <!-- 启动文案属于用户数据并通过令狐人物页进行完整管理，页面必须在人类可读布局下直接说明循环、模块、检测和阻塞状态。 -->
 linghu_startup_prompt_management_contract = electron_userData_persistence + list_create_update_delete_enable_disable_select_active + linghu_member_page_human_readable_layout + cycle_module_execution_last_check_block_and_feedback_visible
-<!-- 第四模块只运行代码内固定的生产交互、协同和托管测试；全部通过并先落盘下一恢复点后才允许受控重启，失败则回到修复循环。 -->
-linghu_unified_test_restart_contract = single_shared_test_execution_gate + fixed_test_interaction_then_test_collaboration_then_test_managed_then_package_and_verify + no_dynamic_prompt_command + persist_next_cycle_before_relaunch + test_failure_returns_flow_completion_repair_cycle + verified_self_contained_package_only + stable_userData_reconstruction_resumes_all_interrupted_collaboration_and_automation
+<!-- 测试能力模块通过跨进程 Facade 统一调度固定测试，补漏与性能优化不得破坏隔离和审计。 -->
+linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry + atomic_cross_process_lease + task_process_port_build_root_and_heartbeat + queued_acquired_contended_released_timeout_failed_and_stale_recovered_events + fixed_test_interaction_then_test_collaboration_then_test_managed_then_package_and_verify + real_multi_process_max_concurrency_one_regression + wait_execution_and_contention_metrics + no_dynamic_prompt_command + persist_next_cycle_before_relaunch + test_failure_returns_flow_completion_repair_cycle
+<!-- 发布只冻结当前已经完成的任务，冻结后完成的任务进入下一批；发布批次独占维护汇总证据。 -->
+linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry + atomic_cross_process_release_lease + coding_continues_while_merge_and_release_are_serial + freeze_task_branch_result_sha_and_test_evidence + release_semver_rc_candidate_branch + unified_tests_package_and_verification_run_on_candidate_root + release_batch_document_single_writer + terminal_archive_and_running_material_cleanup + verified_executable_controlled_restart + stable_userData_task_recovery
 <!-- 模块终态必须持久保存固定报告；统一测试通过事实必须在退出进程前写入，字段缺失不得推进为可归档完成。 -->
-linghu_module_completion_report_contract = cycle_module_evidence_tasks_real_executors_before_after_score_tests_restart_recovery_blocking_and_next_suggestion + explicit_not_applicable_reason + unified_test_verified_callback_persists_before_relaunch + report_reused_as_next_module_feedback
+linghu_module_completion_report_contract = cycle_module_evidence_tasks_real_executors_tests_restart_recovery_blocking_and_next_suggestion + explicit_not_applicable_reason + unified_test_verified_callback_persists_before_relaunch + report_reused_as_next_module_feedback
 <!-- 审核正文生成完成与机器结论解析属于两个独立事实；格式偏差不得伪装成 Codex 连接失败。 -->
 collaboration_review_decision_contract = preserve_raw_review_before_retirement + prefer_unique_review_decision_tag + accept_legacy_exact_marker_and_explicit_chinese_decision + never_infer_from_ordinary_prose + same_reviewer_one_clarification_turn + persist_every_attempt_and_parse_failure + unrecognized_decision_does_not_increment_infrastructure_failure + infrastructure_failure_only_for_connection_process_or_transport_failure
 <!-- Harness 执行期间输入区保持可编辑，截图、图片粘贴和后续消息进入有序队列，不得由全局 loading 一并锁死。 -->
@@ -355,6 +363,8 @@ managed_response_boundary_contract = card_width_100_percent_with_maximum + all_f
 <!-- Harness 连接时必须重新识别运行时；优先使用与当前 AI Desktop 专属模型缓存客户端版本一致的本机 Codex，避免旧二进制读取新缓存字段失败。 -->
 <!-- 模型配置必须来自固定 app-server 的真实模型能力并由所有连接逐轮读取同一全局设置，禁止渲染层固定列表或会话级覆盖。 -->
 harness_global_model_settings_contract = settings_panel_default_model_reasoning_effort_and_service_tier + model_list_and_supported_efforts_from_pinned_app_server + electron_userData_persistence + main_conversation_collaboration_executor_and_reviewer_read_latest_each_turn + no_conversation_level_override
+<!-- AI Desktop 初始安装和旧版空模型设置统一迁移到 Terra，迁移后仍以用户显式选择为最高优先级。 -->
+harness_default_model_contract = initialize_and_migrate_legacy_empty_default_to_gpt_5_6_terra + preserve_later_explicit_user_selection
 <!-- Harness 运行时版本是应用发布事实，只允许安装包内置目标版或下载校验后的同一目标版。 -->
 harness_runtime_version_alignment_contract = exact_target_0_149_0 + packaged_native_runtime_first + verified_same_version_private_download_only_when_packaged_missing_or_invalid + no_hot_swap_during_active_turn + visible_packaged_or_verified_download_source_path_and_version + audit_selected_runtime
 <!-- 旧的兼容探测会造成 AI 误认和不受控切换，因此源码与规则都不得保留任何外部候选入口。 -->

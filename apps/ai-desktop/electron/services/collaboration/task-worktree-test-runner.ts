@@ -6,7 +6,7 @@ import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/li
 
 import type { CodexStreamEvent } from "../../../shared/contracts/desktop.js";
 import { ensureIntegrationDependencies } from "./integration-verifier.js";
-import { TestExecutionGate } from "./test-execution-gate.js";
+import { TestResourceCoordinatorFacade } from "./test-resource-coordinator-facade.js";
 
 interface TaskWorktreeTestRequest {
   taskId: string;
@@ -25,25 +25,32 @@ export class TaskWorktreeTestRunner {
   readonly #applicationName: string;
   readonly #cacheRoot: string;
   readonly #recordEvent: (type: string, details: Record<string, unknown>, taskId: string) => void;
-  readonly #gate: TestExecutionGate;
+  readonly #testResources: TestResourceCoordinatorFacade;
 
   constructor(
     sourceProjectRoot: string,
     applicationName: string,
     cacheRoot: string,
     recordEvent: (type: string, details: Record<string, unknown>, taskId: string) => void,
-    gate = new TestExecutionGate(),
+    testResources: TestResourceCoordinatorFacade,
   ) {
     this.#sourceProjectRoot = path.resolve(sourceProjectRoot);
     this.#applicationName = safeSegment(applicationName);
     this.#cacheRoot = path.resolve(cacheRoot);
     this.#recordEvent = recordEvent;
-    this.#gate = gate;
+    this.#testResources = testResources;
     mkdirSync(this.#cacheRoot, { recursive: true });
   }
 
   run(request: TaskWorktreeTestRequest): Promise<void> {
-    return this.#gate.run(() => this.#runIsolated(request));
+    return this.#testResources.run({
+      runId: `task-${request.taskId}`,
+      taskId: request.taskId,
+      initiatorMemberId: "collaboration-task-runner",
+      kind: "task-validation",
+      port: 4197,
+      buildRoot: path.join(path.resolve(request.worktreeRoot), "build", this.#applicationName),
+    }, () => this.#runIsolated(request));
   }
 
   async #runIsolated(request: TaskWorktreeTestRequest): Promise<void> {

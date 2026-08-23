@@ -17,6 +17,8 @@ import type { CodexStreamEvent } from "../../../shared/contracts/desktop.js";
 import { CollaborationDurationLog } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
 import { VersionWorkspaceManager } from "./version-workspace-manager.js";
+import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../shared/contracts/integration-release.js";
+import { ReleaseBatchStore } from "./release-batch-store.js";
 
 const LINGHU_MEMBER_ID = "linghu-ancestor";
 
@@ -68,7 +70,11 @@ export interface CollaborationCoordinatorOptions {
   sessions: CollaborationSessionFactory;
   emitState(state: CollaborationState, reason: string, taskIds: string[]): void;
   emitStream(taskId: string, memberId: string, event: CodexStreamEvent): void;
-  verifyIntegration(rootPath: string, taskIds: string[]): Promise<void>;
+  verifyIntegration(rootPath: string, taskIds: string[]): Promise<string>;
+  acquireIntegrationRelease(request: IntegrationReleaseRequest): Promise<() => void>;
+  releaseVersion: string;
+  releaseBatches: ReleaseBatchStore;
+  publishIntegration(executable: string, releaseBatchId: string): void;
 }
 
 /** 编排对等人物之间的分析、异人审核、执行和集成，单会话发送链路不依赖本类。 */
@@ -79,6 +85,10 @@ export class CollaborationCoordinator {
   readonly #sessions: CollaborationSessionFactory;
   readonly #emitStream: CollaborationCoordinatorOptions["emitStream"];
   readonly #verifyIntegration: CollaborationCoordinatorOptions["verifyIntegration"];
+  readonly #acquireIntegrationRelease: CollaborationCoordinatorOptions["acquireIntegrationRelease"];
+  readonly #releaseVersion: string;
+  readonly #releaseBatches: ReleaseBatchStore;
+  readonly #publishIntegration: CollaborationCoordinatorOptions["publishIntegration"];
   readonly #executorSessions = new Map<string, CollaborationExecutorSession>();
   readonly #reviewerSessions = new Map<string, CollaborationReviewerSession>();
   readonly #activeTaskRuns = new Set<string>();
@@ -95,6 +105,10 @@ export class CollaborationCoordinator {
     this.#sessions = options.sessions;
     this.#emitStream = options.emitStream;
     this.#verifyIntegration = options.verifyIntegration;
+    this.#acquireIntegrationRelease = options.acquireIntegrationRelease;
+    this.#releaseVersion = options.releaseVersion;
+    this.#releaseBatches = options.releaseBatches;
+    this.#publishIntegration = options.publishIntegration;
     this.#store.subscribe(options.emitState);
   }
 
@@ -794,11 +808,17 @@ export class CollaborationCoordinator {
     this.#integrationRunning = true;
     const generation = state.nextIntegrationGeneration;
     const taskIds = eligible.map((task) => task.taskId);
+    const releaseBatchId = `release-${this.#releaseVersion}-g${generation}`;
+    let releaseLease: (() => void) | null = null;
+    let releaseDocument: ReleaseBatchDocument | null = null;
+    let publishedExecutable: string | null = null;
     let candidate: Awaited<ReturnType<VersionWorkspaceManager["createIntegrationCandidate"]>> | null = null;
     let verifySpan: string | null = null;
     let reconcileSpan: string | null = null;
     const integrationSpan = this.#durations.start(taskIds[0], "integration", { generation, taskCount: taskIds.length });
     try {
+      releaseLease = await this.#acquireIntegrationRelease({ releaseBatchId, version: this.#releaseVersion, generation, taskIds, initiatorMemberId: LINGHU_MEMBER_ID });
+      releaseDocument = this.#releaseBatches.create(releaseBatchId, this.#releaseVersion, generation, eligible);
       this.#store.updateTask(taskIds[0], "integration.batch_frozen", (_first, mutable) => {
         mutable.nextIntegrationGeneration += 1;
         mutable.integrationBatches.push({ generation, taskIds, state: "frozen", createdAt: new Date().toISOString(), completedAt: null, integrationSha: null, failureReason: null });
@@ -815,7 +835,11 @@ export class CollaborationCoordinator {
       }
       const tasks = taskIds.map((taskId) => this.#store.task(taskId));
       reconcileSpan = this.#durations.start(taskIds[0], "conflict-resolution", { generation, taskCount: taskIds.length });
-      candidate = await this.#workspaces.createIntegrationCandidate(generation, tasks);
+      candidate = await this.#workspaces.createReleaseCandidate(releaseBatchId, this.#releaseVersion, generation, tasks);
+      releaseDocument.state = "candidate-ready";
+      releaseDocument.candidateBranch = candidate.branchName;
+      releaseDocument.candidateSha = candidate.candidateSha;
+      this.#releaseBatches.write(releaseDocument);
       this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
       reconcileSpan = null;
       this.#store.updateTask(taskIds[0], "integration.started", (_first, mutable) => {
@@ -830,11 +854,19 @@ export class CollaborationCoordinator {
         }
       });
       verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
-      await this.#verifyIntegration(candidate.rootPath, taskIds);
+      releaseDocument.state = "testing";
+      this.#releaseBatches.write(releaseDocument);
+      publishedExecutable = await this.#verifyIntegration(candidate.rootPath, taskIds);
+      releaseDocument.state = "verified";
+      releaseDocument.executable = publishedExecutable;
+      this.#releaseBatches.write(releaseDocument);
       this.#durations.finish(verifySpan, "completed", { releaseEvent: "integration.verified" });
       verifySpan = null;
       const integrationSha = await this.#workspaces.promoteIntegrationCandidate(candidate);
-      await this.#workspaces.mergeIntoLocalBranch(integrationSha);
+      const localMergeSha = await this.#workspaces.mergeIntoLocalBranch(integrationSha);
+      releaseDocument.state = "integrated";
+      releaseDocument.localMergeSha = localMergeSha;
+      this.#releaseBatches.write(releaseDocument);
       this.#durations.finish(integrationSpan, "completed", { releaseEvent: "integration.local_branch_updated", integrationSha });
       this.#store.updateTask(taskIds[0], "integration.completed", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
@@ -873,6 +905,9 @@ export class CollaborationCoordinator {
         }
       });
       this.#durations.writeGenerationReport(generation, taskIds);
+      releaseDocument.state = "published";
+      releaseDocument.completedAt = new Date().toISOString();
+      this.#releaseBatches.write(releaseDocument);
     } catch (error) {
       if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
       if (verifySpan) this.#durations.finish(verifySpan, "failed", { error: errorMessage(error) });
@@ -891,13 +926,21 @@ export class CollaborationCoordinator {
         }
       });
       this.#durations.writeGenerationReport(generation, taskIds);
+      if (releaseDocument) {
+        releaseDocument.state = "failed";
+        releaseDocument.failureReason = errorMessage(error);
+        releaseDocument.completedAt = new Date().toISOString();
+        this.#releaseBatches.write(releaseDocument);
+      }
     } finally {
       if (candidate) await this.#workspaces.retireCandidate(candidate).catch((error) => {
         this.#durations.instant(taskIds[0], "integration.candidate_retirement_failed", { generation, error: errorMessage(error) });
       });
+      releaseLease?.();
       this.#integrationRunning = false;
       this.#schedule();
     }
+    if (publishedExecutable && releaseDocument?.state === "published") this.#publishIntegration(publishedExecutable, releaseBatchId);
   }
 
   #setTaskAndMemberPhase(taskId: string, stateValue: CollaborationTask["state"], phase: Exclude<CollaborationWorkerPhase, null>): void {

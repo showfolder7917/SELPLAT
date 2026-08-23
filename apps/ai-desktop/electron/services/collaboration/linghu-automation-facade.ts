@@ -7,6 +7,7 @@ import type {
   LinghuBlockingKind,
   LinghuFlowHealth,
 } from "../../../shared/contracts/linghu-automation.js";
+import type { TestResourceCoordinatorState } from "../../../shared/contracts/test-resource.js";
 import { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./linghu-automation-store.js";
 
@@ -18,6 +19,7 @@ export interface LinghuAutomationFacadeOptions {
   readWorkspaceState(): WorkspaceState;
   locale(): Locale;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
+  readTestResourceState(): TestResourceCoordinatorState;
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
 }
 
@@ -28,6 +30,7 @@ export class LinghuAutomationFacade {
   readonly #readWorkspaceState: () => WorkspaceState;
   readonly #locale: () => Locale;
   readonly #recordEvent: LinghuAutomationFacadeOptions["recordEvent"];
+  readonly #readTestResourceState: LinghuAutomationFacadeOptions["readTestResourceState"];
   readonly #runUnifiedTestAndRestart: LinghuAutomationFacadeOptions["runUnifiedTestAndRestart"];
   #timer: ReturnType<typeof setInterval> | null = null;
   #checking = false;
@@ -38,6 +41,7 @@ export class LinghuAutomationFacade {
     this.#readWorkspaceState = options.readWorkspaceState;
     this.#locale = options.locale;
     this.#recordEvent = options.recordEvent;
+    this.#readTestResourceState = options.readTestResourceState;
     this.#runUnifiedTestAndRestart = options.runUnifiedTestAndRestart;
   }
 
@@ -78,10 +82,12 @@ export class LinghuAutomationFacade {
       const collaborationState = this.#collaboration.state();
       const checkedAt = new Date().toISOString();
       const snapshots = automaticFlowSnapshots(collaborationState, this.#store.state().activeTaskId, checkedAt);
+      const testResourceState = this.#readTestResourceState();
       let automation = this.#store.updateRuntime("automation.checked", (state) => {
         state.lastCheckedAt = checkedAt;
         state.detectionCursor = checkedAt;
         state.flowSnapshots = snapshots;
+        state.testResourceState = testResourceState;
       });
       if (this.#collaboration.state().mode !== "collaboration") this.#collaboration.setMode("collaboration");
 
@@ -102,7 +108,7 @@ export class LinghuAutomationFacade {
         } else if (task.state === "integrated") {
           const completedModule = automation.currentModule;
           automation = this.#completeModule(task, task.resultSummary?.finalResult || task.finalResult || "模块已完成。");
-          if (completedModule === "unified-test-restart") {
+          if (completedModule === "test-coverage") {
             try {
               await this.#runUnifiedTestAndRestart(() => this.#store.updateRuntime("automation.unified_test_completed", (state) => {
                 if (!state.lastModuleReport || state.lastModuleReport.module !== completedModule) return;
@@ -257,7 +263,9 @@ export class LinghuAutomationFacade {
       moduleText,
       state.blockingReason ? `上一轮持续检测到的阻塞：${state.blockingReason}` : "当前没有已知阻塞。",
       state.lastFeedback ? `上一模块反馈：${state.lastFeedback.summary}` : "当前没有上一模块反馈。",
-      "本轮只处理当前独立模块。需要多个修正时按模块和类型拆分，记录实际执行者；不要把其他三个模块混入同一任务。",
+      testResourceContext(state.testResourceState),
+      "职责范围固定为：保障所有人物最终完成、补测试漏点与升级测试能力、完善日志审计。启动文案不能扩大为页面演化、主动改版或无关架构优化。",
+      "本轮只处理当前独立模块。需要多个修正时按模块和类型拆分，记录实际执行者；不要把其他模块混入同一任务。",
       "自动执行开启后检测永远不能停止。明确阻塞或需要人工业务选择时保留恢复点并反馈，但不得自行关闭自动执行。",
     ].join("\n\n");
     const next = this.#collaboration.submitTask({
@@ -403,11 +411,10 @@ function moduleCompletionReport(
     module,
     evidence: [snapshot ? `流程 ${task.taskId} 检测状态为 ${snapshot.health}` : `流程 ${task.taskId} 已进入 integrated`, summary.slice(0, 2_000)],
     tasks: [{ taskId: task.taskId, type: "自动流程保障", action: task.snapshot.problemStatement, executorMemberId: task.executorMemberId || LINGHU_MEMBER_ID, result: summary.slice(0, 2_000) }],
-    scores: { before: null, after: null, reason: "本模块未产生可确认的页面演化时评分不适用。" },
-    tests: module === "unified-test-restart"
+    tests: module === "test-coverage"
       ? { status: "not-run" as const, summary: "等待执行固定统一测试。" }
       : { status: "passed" as const, summary: "协同任务已通过代码级验证和集成门禁。" },
-    restartRecovery: module === "unified-test-restart"
+    restartRecovery: module === "test-coverage"
       ? { status: "not-run" as const, checkpoint: `next-module:${cycle + 1}:flow-completion`, summary: "等待固定统一测试通过后执行受控重启。" }
       : { status: "not-applicable" as const, checkpoint: null, summary: "本模块不要求重启。" },
     blocking: { blocked: false, reason: null, resumeCondition: null },
@@ -424,17 +431,29 @@ function nextModule(module: LinghuAutomationModule): LinghuAutomationModule {
 function moduleLabel(module: LinghuAutomationModule): string {
   return {
     "flow-completion": "自动流程完成保障",
-    "log-diagnosis": "日志与 Bug 诊断",
-    "architecture-recovery": "中断、数据与 Facade 架构修复",
-    "unified-test-restart": "统一测试、重启与任务恢复",
+    "test-coverage": "测试漏点补充与能力升级",
+    "audit-completeness": "日志审计完整性",
   }[module];
 }
 
 function moduleInstruction(module: LinghuAutomationModule): string {
   return {
-    "flow-completion": "检查所有自动流程的当前状态、等待点和完成条件。发现停点不能只报告，必须提出最小修正方案并推动原流程恢复。",
-    "log-diagnosis": "分析业务日志、错误日志、任务日志和测试记录，关联真实页面与流程，修正已证实的 Bug；没有 Bug 时选择一个最有客户价值的易用性问题。",
-    "architecture-recovery": "检查数据是否足够、流程为何中断、各独立模块是否通过单一入口 + Facade 解耦。发现调用方直接依赖具体实现时完成架构调整和回归。",
-    "unified-test-restart": "执行已登记统一测试并在真实桌面页面验证功能与易用性；失败则修正并复测。需要重启时保留恢复点，重启后自动恢复停掉的任务并确认流程继续。",
+    "flow-completion": "最高优先级检查所有人物任务的当前状态、等待点和完成条件。发现停点不能只报告，必须提出最小修正方案并推动审核、执行、集成、统一测试和最终完成。",
+    "test-coverage": "根据真实改动和失败证据检查主路径、边界、异常、相邻回归与并发漏点；先补缺失测试再修正复测，并优化排队等待、重复构建和资源占用。",
+    "audit-completeness": "检查任务、人物、测试批次、进程、端口、构建目录及排队、占用、冲突、释放、超时、结果是否结构化关联；缺失时补齐审计事实。",
   }[module];
+}
+
+function testResourceContext(state: TestResourceCoordinatorState | null): string {
+  if (!state) return "当前没有测试资源协调快照。";
+  const holder = state.holder
+    ? `当前占用者：${state.holder.runId}，任务 ${state.holder.taskId || "全局统一测试"}，进程 ${state.holder.processId}，端口 ${state.holder.port ?? "无"}，构建目录 ${state.holder.buildRoot}，心跳 ${state.holder.heartbeatAt}`
+    : "当前没有测试资源占用者";
+  const waiters = state.waiters.length > 0
+    ? `等待队列：${state.waiters.map((waiter) => `${waiter.runId}(进程${waiter.processId})`).join("、")}`
+    : "等待队列为空";
+  const lastEvent = state.lastEvent
+    ? `最近资源事件：${state.lastEvent.type}，等待 ${state.lastEvent.waitDurationMs}ms，执行 ${state.lastEvent.executionDurationMs ?? "未完成"}ms，冲突 ${state.lastEvent.contentionCount} 次`
+    : "当前没有资源事件";
+  return `测试资源结构化事实：${holder}；${waiters}；${lastEvent}。`;
 }

@@ -14,22 +14,23 @@ type StateListener = (event: LinghuAutomationStateEvent) => void;
 
 export const LINGHU_AUTOMATION_MODULES: readonly LinghuAutomationModule[] = [
   "flow-completion",
-  "log-diagnosis",
-  "architecture-recovery",
-  "unified-test-restart",
+  "test-coverage",
+  "audit-completeness",
 ];
 
 export const DEFAULT_LINGHU_STARTUP_PROMPT_TITLE = "自动流程最后保障";
 
 export const DEFAULT_LINGHU_STARTUP_PROMPT = `你是令狐老祖，是保障所有人物完成最后流程的最后一道屏障。只要自动执行开关保持开启，检测永远不能停止。
 
-一级最高职责是逐项检查所有人物已经开始但尚未完成的任务，推动其完成审核、执行、集成、统一测试和最终完成。发现流程停住、异常状态、代码错误、测试失败、重启丢失或数据不足时，必须找出原因，拆分修正任务，组织执行、统一测试并恢复原流程。明确阻塞或需要人工业务选择时可以等待处理，但仍要持续检测并保留恢复点，不能关闭自动检测。
+一级最高职责是逐项检查所有人物已经开始但尚未完成的任务，推动其完成审核、执行、集成、统一测试和最终完成。发现流程停住、异常状态、代码错误、测试失败或重启丢失时，必须找出原因，拆分最小修正任务并恢复原流程。明确需要人工业务选择时可以等待处理，但仍要持续检测并保留恢复点，不能关闭自动检测。
 
-页面审核以客户易用为第一目标：排版合理、操作方便、一看就懂、重点信息第一眼可见、详细信息顺序清楚、分类整齐，管理员能够有效看到状态和结果。修改前后按信息重点、阅读顺序、操作理解、任务便利、状态恢复和管理视角评分；只有新评分高于原评分、总分不低于 60、无功能回退且测试通过，才允许继续该演化方向。
+第二职责是检查测试漏点。结合任务改动、失败证据和相邻功能判断主路径、边界路径、异常路径与并发路径是否缺少验证；缺失时先补最小回归测试，再执行修正和复测。持续升级自身测试能力，优化排队等待、重复构建和资源占用，但不得牺牲隔离性、审计性或可靠性。
 
-程序结构采用单一入口 + Facade。调用方不得直接依赖具体实现；发现独立模块入口分散、数据不足或职责耦合时，必须提出并执行结构调整。方案按模块和类型拆分，分发给合适执行者，禁止把大量不同职责塞给一个执行者。
+第三职责是检查日志审计完整性。每项关键动作必须能够关联任务、人物、测试批次、进程、端口、构建目录、排队、占用、冲突、释放、超时和最终结果；发现只有错误文字而缺少结构化事实时，必须补齐审计入口和关联字段。
 
-每个模块结束后输出：循环编号、模块、问题证据、执行任务、执行者、修改前后评分、测试结果、重启恢复结果、阻塞和下一步建议。`;
+仅执行以上三项职责，暂不进行页面演化评分、主动页面改版或无关架构优化。所有测试资源必须通过单一跨进程 Facade 申请，禁止调用方直接竞争 Playwright、Electron、端口或构建目录。
+
+每个模块结束后输出：循环编号、模块、问题证据、执行任务、执行者、测试结果、审计完整性、资源等待与执行性能、阻塞和下一步建议。`;
 
 /** 原子持久化令狐老祖自动保障开关、循环恢复点和用户可维护的启动文案。 */
 export class LinghuAutomationStore {
@@ -151,7 +152,7 @@ function createInitialState(): LinghuAutomationState {
   const now = new Date().toISOString();
   const promptId = "linghu-default-flow-guardian";
   return {
-    version: 1,
+    version: 2,
     enabled: false,
     pollIntervalMs: 30_000,
     cycle: 1,
@@ -163,6 +164,7 @@ function createInitialState(): LinghuAutomationState {
     recoveryAttemptsByFingerprint: {},
     detectionCursor: null,
     flowSnapshots: [],
+    testResourceState: null,
     recoveryCheckpoint: null,
     lastDispatchAt: null,
     lastCompletedAt: null,
@@ -178,13 +180,23 @@ function createInitialState(): LinghuAutomationState {
 function readState(filePath: string): LinghuAutomationState | null {
   try {
     const value = JSON.parse(readFileSync(filePath, "utf8")) as LinghuAutomationState;
-    return value.version === 1 && Array.isArray(value.prompts) ? value : null;
+    return [1, 2].includes(Number(value.version)) && Array.isArray(value.prompts) ? value : null;
   } catch {
     return null;
   }
 }
 
 function migrateState(value: LinghuAutomationState): void {
+  if (Number(value.version) === 1) {
+    // 旧默认文案包含页面演化和四模块职责；升级时只迁移受保护默认入口，不覆盖用户另建文案。
+    const defaultPrompt = value.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian");
+    if (defaultPrompt) {
+      defaultPrompt.title = DEFAULT_LINGHU_STARTUP_PROMPT_TITLE;
+      defaultPrompt.content = DEFAULT_LINGHU_STARTUP_PROMPT;
+      defaultPrompt.updatedAt = new Date().toISOString();
+    }
+    value.version = 2;
+  }
   value.pollIntervalMs = 30_000;
   value.currentModule = LINGHU_AUTOMATION_MODULES.includes(value.currentModule) ? value.currentModule : "flow-completion";
   value.recoveryAttemptCount ??= 0;
@@ -192,6 +204,7 @@ function migrateState(value: LinghuAutomationState): void {
   value.recoveryAttemptsByFingerprint ??= {};
   value.detectionCursor ??= null;
   value.flowSnapshots ??= [];
+  value.testResourceState ??= null;
   value.recoveryCheckpoint ??= null;
   value.lastCheckedAt ??= null;
   value.blockingReason ??= null;

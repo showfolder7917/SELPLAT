@@ -3,6 +3,8 @@ const path = require("node:path");
 const { contextBridge } = require("electron");
 
 const projectRoot = path.resolve(__dirname, "../../../..");
+const linghuDefault = JSON.parse(process.env.AI_DESKTOP_INTERACTION_LINGHU_DEFAULT || "null");
+if (!linghuDefault?.title || !linghuDefault?.content) throw new Error("交互测试缺少生产令狐默认文案。 ");
 const workspace = {
   primaryId: "interaction-root",
   roots: [{ id: "interaction-root", name: "SELPLAT", path: projectRoot, permission: "workspace-write" }],
@@ -13,7 +15,7 @@ let harnessStatus = {
   error: null,
   runtime: { source: "bundled", version: "0.149.0" },
 };
-let desktopSettings = { locale: "zh-CN", sandboxMode: "workspace-write", defaultModel: "gpt-5.6-sol", reasoningEffort: "medium", serviceTier: "default" };
+let desktopSettings = { locale: "zh-CN", sandboxMode: "workspace-write", defaultModel: "gpt-5.6-terra", reasoningEffort: "medium", serviceTier: "default" };
 let pendingUserInput = null;
 let finishManagedTurn = null;
 let clarificationAnswers = {};
@@ -54,7 +56,7 @@ let collaborationState = {
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
 let linghuAutomationState = {
-  version: 1,
+  version: 2,
   enabled: false,
   pollIntervalMs: 30000,
   cycle: 1,
@@ -62,12 +64,19 @@ let linghuAutomationState = {
   activePromptId: "linghu-default-flow-guardian",
   activeTaskId: null,
   recoveryAttemptCount: 0,
+  currentFaultFingerprint: null,
+  recoveryAttemptsByFingerprint: {},
+  detectionCursor: null,
+  flowSnapshots: [],
+  testResourceState: null,
+  recoveryCheckpoint: null,
   lastDispatchAt: null,
   lastCompletedAt: null,
   lastCheckedAt: "2026-08-23T00:00:00.000Z",
   blockingReason: "自动执行已关闭",
   lastFeedback: null,
-  prompts: [{ promptId: "linghu-default-flow-guardian", title: "自动流程最后保障", content: "你是令狐老祖，是保障自动流程完成的最后一道屏障。只要自动执行开关保持开启，检测永远不能停止。", enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
+  lastModuleReport: null,
+  prompts: [{ promptId: "linghu-default-flow-guardian", title: linghuDefault.title, content: linghuDefault.content, enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
 const publishLinghuAutomation = (reason) => {
@@ -97,7 +106,10 @@ contextBridge.exposeInMainWorld("desktop", {
   getEnvironment: async () => ({ projectRoot, platform: process.platform, variant: "developer" }),
   getSettings: async () => ({ ...desktopSettings }),
   updateSettings: async (settings) => { desktopSettings = { ...desktopSettings, ...settings }; return { ...desktopSettings }; },
-  getCodexModels: async () => ({ models: [{ id: "gpt-5.6-sol", displayName: "5.6 Sol", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "medium", isDefault: true }] }),
+  getCodexModels: async () => ({ models: [
+    { id: "gpt-5.6-sol", displayName: "5.6 Sol", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "medium", isDefault: false },
+    { id: "gpt-5.6-terra", displayName: "5.6 Terra", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "medium", isDefault: true },
+  ] }),
   getWorkspaces: async () => workspace,
   addWorkspace: async () => workspace,
   updateWorkspacePermission: async () => workspace,

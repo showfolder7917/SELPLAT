@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,7 +21,9 @@ import { LinghuUnifiedTestRunner } from "./services/collaboration/linghu-unified
 import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
 import { VersionWorkspaceManager } from "./services/collaboration/version-workspace-manager.js";
 import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-test-runner.js";
-import { TestExecutionGate } from "./services/collaboration/test-execution-gate.js";
+import { TestResourceCoordinatorFacade } from "./services/collaboration/test-resource-coordinator-facade.js";
+import { IntegrationReleaseCoordinatorFacade } from "./services/collaboration/integration-release-coordinator-facade.js";
+import { ReleaseBatchStore } from "./services/collaboration/release-batch-store.js";
 import { resolveVerifiedDeveloperExecutable } from "./services/collaboration/verified-package-release.js";
 import { ScreenshotStore } from "./services/screenshot-store.js";
 import { SettingsStore } from "./services/settings-store.js";
@@ -50,6 +52,7 @@ app.whenReady().then(() => {
     ? path.join(projectPaths.buildRoot, "sites", "client")
     : path.join(projectPaths.buildRoot, "renderer", "developer");
   const appRoot = projectPaths.sourceRoot;
+  const releaseVersion = (JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8")) as { version: string }).version;
   const audit = new BusinessAuditLog(projectPaths.sourceRoot, projectPaths.buildRoot, projectPaths.archiveLogRoot);
   audit.recordApplicationStart({ variant, projectRoot, rendererRoot });
   const trustedCommands = new TrustedCommandStore(path.join(app.getPath("userData"), "trusted-project-commands.json"));
@@ -85,13 +88,22 @@ app.whenReady().then(() => {
   const collaborationDurations = new CollaborationDurationLog(projectPaths.collaborationArchiveRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
   const versionWorkspaces = new VersionWorkspaceManager(projectRoot, path.join(collaborationRoot, "worktrees"));
-  const testExecutionGate = new TestExecutionGate();
+  const testResources = new TestResourceCoordinatorFacade({
+    coordinationRoot: path.join(projectPaths.runningTestRoot, "_资源协调"),
+    recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
+  });
+  const integrationReleases = new IntegrationReleaseCoordinatorFacade({
+    coordinationRoot: path.join(projectPaths.runningExecutionRoot, "_集成与发布协调"),
+    recordEvent: (type, details) => audit.recordEvent(type, details),
+  });
+  const releaseBatches = new ReleaseBatchStore(projectPaths.runningExecutionRoot, projectPaths.archiveLogRoot);
+  const linghuUnifiedTests = new LinghuUnifiedTestRunner(projectRoot, applicationName, projectPaths.buildRoot, (type, details) => audit.recordEvent(type, details), testResources);
   const taskTests = new TaskWorktreeTestRunner(
     projectRoot,
     applicationName,
     path.join(projectPaths.cacheRoot, "test-runtime"),
     (type, details, taskId) => audit.recordEvent(type, details, taskId),
-    testExecutionGate,
+    testResources,
   );
   const collaborationSessions = new CodexCollaborationSessionFactory({
     projectRoot,
@@ -121,16 +133,34 @@ app.whenReady().then(() => {
       audit.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
     },
-    verifyIntegration: (rootPath, taskIds) => testExecutionGate.run(() => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName)),
+    verifyIntegration: async (rootPath, taskIds) => {
+      await testResources.run({
+      runId: `integration-${taskIds.join("-")}`,
+      taskId: taskIds.length === 1 ? taskIds[0] : null,
+      initiatorMemberId: "collaboration-integrator",
+      kind: "integration-validation",
+      port: 4197,
+      buildRoot: path.join(path.resolve(rootPath), "build", applicationName),
+      }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName));
+      return linghuUnifiedTests.run(rootPath);
+    },
+    acquireIntegrationRelease: (request) => integrationReleases.acquire(request),
+    releaseVersion,
+    releaseBatches,
+    publishIntegration: (executable, releaseBatchId) => {
+      audit.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId });
+      app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
+      app.exit(0);
+    },
   });
   const linghuStore = new LinghuAutomationStore(path.join(collaborationRoot, "linghu-automation.json"));
-  const linghuUnifiedTests = new LinghuUnifiedTestRunner(projectRoot, applicationName, (type, details) => audit.recordEvent(type, details), testExecutionGate);
   linghuAutomation = new LinghuAutomationFacade({
     store: linghuStore,
     collaboration,
     readWorkspaceState: () => workspaces.read(),
     locale: () => settings.read().locale,
     recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
+    readTestResourceState: () => testResources.state(),
     runUnifiedTestAndRestart: async (onVerified) => {
       await linghuUnifiedTests.run();
       onVerified();

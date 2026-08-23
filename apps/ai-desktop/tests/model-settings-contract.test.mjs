@@ -20,6 +20,8 @@ test("全局设置持久化模型、推理强度和速度且不提供会话覆�
   assert.match(contracts, /reasoningEffort: ReasoningEffort \| null/);
   assert.match(contracts, /serviceTier: ModelServiceTier/);
   assert.match(store, /defaultModel: patch\.defaultModel/);
+  assert.match(store, /DEFAULT_AI_DESKTOP_MODEL = "gpt-5\.6-terra"/);
+  assert.match(store, /validModel\(value\.defaultModel\) \|\| DEFAULT_AI_DESKTOP_MODEL/);
   assert.doesNotMatch(contracts, /sessionModel|conversationModel/);
 });
 
@@ -39,5 +41,6 @@ test("每轮主会话与协同连接读取同一份全局模型设置", () => {
 test("已确认的全局模型行为进入应用约束和当前用户规则索引链", () => {
   assert.match(agents, /default model, reasoning effort, and processing speed/);
   assert.match(harnessRule, /harness_global_model_settings_contract/);
+  assert.match(harnessRule, /harness_default_model_contract = initialize_and_migrate_legacy_empty_default_to_gpt_5_6_terra/);
   assert.match(ruleIndex, /RUL_AIDesktop官方Harness接入规则\.md/);
 });

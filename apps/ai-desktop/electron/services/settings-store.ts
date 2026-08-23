@@ -8,13 +8,20 @@ import {
   type ReasoningEffort,
 } from "../../shared/contracts/desktop.js";
 
+export const DEFAULT_AI_DESKTOP_MODEL = "gpt-5.6-terra";
+const SETTINGS_SCHEMA_VERSION = 1;
+
 const DEFAULT_SETTINGS: DesktopSettings = {
   locale: "ja",
   sandboxMode: "read-only",
-  defaultModel: null,
+  defaultModel: DEFAULT_AI_DESKTOP_MODEL,
   reasoningEffort: null,
   serviceTier: "default",
 };
+
+interface StoredDesktopSettings extends Partial<DesktopSettings> {
+  settingsSchemaVersion?: number;
+}
 
 export class SettingsStore {
   readonly #filePath: string;
@@ -25,11 +32,15 @@ export class SettingsStore {
 
   read(): DesktopSettings {
     try {
-      const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as Partial<DesktopSettings>;
+      const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as StoredDesktopSettings;
+      // 旧版本没有模型迁移标记；仅把旧的空默认值升级为 Terra，之后仍允许用户主动选择 Codex 默认。
+      const defaultModel = value.settingsSchemaVersion === SETTINGS_SCHEMA_VERSION
+        ? validModel(value.defaultModel)
+        : validModel(value.defaultModel) || DEFAULT_AI_DESKTOP_MODEL;
       return {
         locale: value.locale === "zh-CN" ? "zh-CN" : "ja",
         sandboxMode: value.sandboxMode === "workspace-write" ? "workspace-write" : "read-only",
-        defaultModel: validModel(value.defaultModel),
+        defaultModel,
         reasoningEffort: validReasoningEffort(value.reasoningEffort),
         serviceTier: validServiceTier(value.serviceTier) || "default",
       };
@@ -51,7 +62,7 @@ export class SettingsStore {
         : validReasoningEffort(patch.reasoningEffort),
       serviceTier: validServiceTier(patch.serviceTier) || current.serviceTier,
     };
-    writeFileSync(this.#filePath, JSON.stringify(next, null, 2), "utf8");
+    writeFileSync(this.#filePath, JSON.stringify({ settingsSchemaVersion: SETTINGS_SCHEMA_VERSION, ...next }, null, 2), "utf8");
     return next;
   }
 }

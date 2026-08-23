@@ -9,6 +9,8 @@ const execFileAsync = promisify(execFile);
 
 export interface IntegrationCandidate {
   generation: number;
+  releaseBatchId: string;
+  version: string;
   branchName: string;
   rootPath: string;
   baseSha: string;
@@ -99,11 +101,16 @@ export class VersionWorkspaceManager {
   }
 
   async createIntegrationCandidate(generation: number, tasks: CollaborationTask[]): Promise<IntegrationCandidate> {
+    return this.createReleaseCandidate(`integration-g${generation}`, "0.0.0", generation, tasks, true);
+  }
+
+  /** 从固定基线创建可追溯的 release/<version>-rc 候选；只有发布锁持有者可以调用。 */
+  async createReleaseCandidate(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTask[], legacyIntegrationBranch = false): Promise<IntegrationCandidate> {
     if (tasks.length === 0) throw new Error("集成批次不能为空。");
     const baseSha = await this.#integrationBaseSha();
-    // 临时候选与稳定分支必须是同级名称；Git 不允许 integration 与 integration/gN 两种引用同时存在。
-    const branchName = `codex/collab/integration-g${generation}`;
-    const rootPath = this.#managedPath("integration", `g${generation}`);
+    const safeVersion = safeVersionSegment(version);
+    const branchName = legacyIntegrationBranch ? `codex/collab/integration-g${generation}` : `release/${safeVersion}-rc`;
+    const rootPath = this.#managedPath(legacyIntegrationBranch ? "integration" : "release", legacyIntegrationBranch ? `g${generation}` : safeSegment(releaseBatchId));
     await this.#git(this.#repositoryRoot, ["worktree", "add", "-b", branchName, rootPath, baseSha]);
     try {
       for (const task of tasks) {
@@ -118,6 +125,8 @@ export class VersionWorkspaceManager {
       }
       return {
         generation,
+        releaseBatchId,
+        version,
         branchName,
         rootPath,
         baseSha,
@@ -153,9 +162,10 @@ export class VersionWorkspaceManager {
   }
 
   async retireCandidate(candidate: IntegrationCandidate): Promise<void> {
-    this.#validateManagedBranch(candidate.branchName);
+    this.#validateCandidateBranch(candidate.branchName);
     await this.#git(this.#repositoryRoot, ["worktree", "remove", this.#validateManagedPath(candidate.rootPath)]);
-    await this.#git(this.#repositoryRoot, ["branch", "-D", candidate.branchName]);
+    // 正式 release 候选分支是发布证据，移除 worktree 后继续保留；旧临时候选仍按原规则清理。
+    if (candidate.branchName.startsWith("codex/collab/")) await this.#git(this.#repositoryRoot, ["branch", "-D", candidate.branchName]);
   }
 
   async #integrationBaseSha(): Promise<string> {
@@ -181,6 +191,11 @@ export class VersionWorkspaceManager {
     if (!/^codex\/collab\/[a-zA-Z0-9._/-]+$/.test(branchName) || branchName.includes("..")) throw new Error("协同分支名称超出应用签发范围。");
   }
 
+  #validateCandidateBranch(branchName: string): void {
+    if (/^release\/[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?-rc$/.test(branchName)) return;
+    this.#validateManagedBranch(branchName);
+  }
+
   async #git(cwd: string, args: string[]): Promise<string> {
     const result = await execFileAsync("git", args, {
       cwd,
@@ -196,6 +211,11 @@ function safeSegment(value: string): string {
   const normalized = value.toLowerCase().replaceAll(/[^a-z0-9._-]+/g, "-").replaceAll(/^-+|-+$/g, "").slice(0, 80);
   if (!normalized) throw new Error("无法生成安全的协同版本名称。");
   return normalized;
+}
+
+function safeVersionSegment(value: string): string {
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?$/.test(value)) throw new Error("发布版本号不符合语义化版本格式。");
+  return value;
 }
 
 function errorMessage(error: unknown): string {

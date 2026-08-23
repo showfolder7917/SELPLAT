@@ -1434,7 +1434,7 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
   </section>;
 }
 
-/** 当前任务只展开真实卡点，报告、证据和评分留在所属流程环节内。 */
+/** 当前任务只展开真实卡点，报告和证据留在所属流程环节内。 */
 function CollaborationTaskProgressView({ task, member, liveMessage, automation, locale }: {
   task: CollaborationTask;
   member: CollaborationMember;
@@ -1517,7 +1517,7 @@ function CollaborationStageContent({ stageId, task, liveMessage, automation, loc
       {relevantEvents.map((event) => <article key={event.eventId} className="task-stage-record"><header><strong>{event.actor?.displayName || (locale === "ja" ? "システム" : "系统")}</strong><span>{formatCollaborationTime(event.occurredAt, locale)}</span></header><p className={event.error ? "task-detail-error" : ""}>{event.summary}</p></article>)}
     </>}
     {stageId === "unified-test" && <>
-      {automation?.activeTaskId === task.taskId && automation.currentModule === "unified-test-restart" && <p>{locale === "ja" ? "統合テスト、再起動、タスク復元を確認しています。" : "正在检查统一测试、受控重启与任务恢复。"}</p>}
+      {automation?.activeTaskId === task.taskId && automation.currentModule === "test-coverage" && <p>{locale === "ja" ? "テスト漏れ、競合、実行性能を確認しています。" : "正在检查测试漏点、资源竞争与执行性能。"}</p>}
       {relevantEvents.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "統合テスト結果はまだありません。" : "暂时没有统一测试结果。"}</p>}
       {relevantEvents.map((event) => <article key={event.eventId} className="task-stage-record"><header><strong>{event.actor?.displayName || (locale === "ja" ? "システム" : "系统")}</strong><span>{formatCollaborationTime(event.occurredAt, locale)}</span></header><p className={event.error ? "task-detail-error" : ""}>{event.summary}</p></article>)}
       {automation?.lastFeedback?.taskId === task.taskId && <article className="task-stage-record"><MarkdownMessage text={automation.lastFeedback.summary} /></article>}
@@ -1601,9 +1601,8 @@ function LinghuAutomationPanel({ state, locale, onState }: { state: LinghuAutoma
 function linghuModuleLabel(module: LinghuAutomationState["currentModule"], locale: Locale): string {
   const labels = {
     "flow-completion": { ja: "自動フロー完遂", "zh-CN": "自动流程完成保障" },
-    "log-diagnosis": { ja: "ログ・バグ診断", "zh-CN": "日志与 Bug 诊断" },
-    "architecture-recovery": { ja: "中断・Facade修復", "zh-CN": "中断、数据与 Facade 修复" },
-    "unified-test-restart": { ja: "統合テスト・再起動復元", "zh-CN": "统一测试、重启与恢复" },
+    "test-coverage": { ja: "テスト漏れと能力改善", "zh-CN": "测试漏点与能力升级" },
+    "audit-completeness": { ja: "監査ログ完全性", "zh-CN": "日志审计完整性" },
   } as const;
   return labels[module][locale];
 }

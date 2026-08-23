@@ -186,8 +186,8 @@ test("全局模型设置复用 Harness 模型能力并同时保存强度与速�
   const model = page.getByRole("combobox", { name: "默认模型" });
   const effort = page.getByRole("combobox", { name: "推理强度" });
   const speed = page.getByRole("combobox", { name: "推理速度" });
-  await expect(model).toHaveValue("gpt-5.6-sol");
-  await expect(model.locator("option")).toContainText(["Codex 默认", "5.6 Sol · OpenAI"]);
+  await expect(model).toHaveValue("gpt-5.6-terra");
+  await expect(model.locator("option")).toContainText(["Codex 默认", "5.6 Sol · OpenAI", "5.6 Terra · OpenAI"]);
   await expect(effort.locator("option")).toContainText(["模型默认", "低", "中", "高", "超高", "最大"]);
   await effort.selectOption("high");
   await speed.selectOption("fast");
@@ -298,20 +298,24 @@ test("令狐老祖位于南宫婉下方并可管理持续自动保障启动文�
   await automation.click();
   await expect(automation).toHaveAttribute("aria-checked", "true");
   await expect(panel.getByText("开启后每30秒持续检测，永远不会自行停止。", { exact: true })).toBeVisible();
+  await expect(panel.getByText("自动流程完成保障", { exact: true })).toBeVisible();
+  await expect(panel).toContainText("第二职责是检查测试漏点");
+  await expect(panel).toContainText("第三职责是检查日志审计完整性");
+  await expect(panel).not.toContainText("页面审核以客户易用为第一目标");
 
   await panel.getByRole("button", { name: "新增启动文案" }).click();
-  await panel.getByLabel("文案名称").fill("客户易用性巡检");
-  await panel.getByLabel("启动内容").fill("检查页面是否一看就懂，发现问题后拆分并修正。");
+  await panel.getByLabel("文案名称").fill("测试漏点巡检");
+  await panel.getByLabel("启动内容").fill("检查主路径、异常路径和并发路径的测试漏点，并补充审计证据。");
   await panel.getByRole("button", { name: "保存文案" }).click();
-  const prompt = panel.locator(".linghu-prompt-list article").filter({ hasText: "客户易用性巡检" });
+  const prompt = panel.locator(".linghu-prompt-list article").filter({ hasText: "测试漏点巡检" });
   await expect(prompt).toContainText("当前使用");
   await prompt.getByRole("button", { name: "停用" }).click();
   await expect(prompt).toContainText("已停用");
   await prompt.getByRole("button", { name: "启用" }).click();
   await prompt.getByRole("button", { name: "修改" }).click();
-  await panel.getByLabel("文案名称").fill("客户页面易用性巡检");
+  await panel.getByLabel("文案名称").fill("测试与审计巡检");
   await panel.getByRole("button", { name: "保存文案" }).click();
-  const renamed = panel.locator(".linghu-prompt-list article").filter({ hasText: "客户页面易用性巡检" });
+  const renamed = panel.locator(".linghu-prompt-list article").filter({ hasText: "测试与审计巡检" });
   await expect(renamed).toBeVisible();
 
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));

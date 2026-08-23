@@ -45,7 +45,7 @@ export function deriveCollaborationTaskProgress(
     : latestReview?.reviewerDisplayName || latestReviewAttempt?.reviewerDisplayName || (isJapanese ? "空きレビュー担当" : "空闲审核员");
   const automationOwnsTask = member.memberId === "linghu-ancestor" && automation?.activeTaskId === task.taskId;
   const unifiedTestActive = ["ready-for-integration", "queued-integration", "integrating", "unified-testing", "test-failed"].includes(task.state)
-    || (automationOwnsTask && automation?.currentModule === "unified-test-restart");
+    || (automationOwnsTask && automation?.currentModule === "test-coverage");
   const repairEvents = task.flowEvents.filter((event) => event.stage === "recovery" || event.error);
   const repairActive = !unifiedTestActive && (
     task.state === "optimizing"
@@ -71,7 +71,7 @@ export function deriveCollaborationTaskProgress(
   const executionCompleted = task.state === "integrated" || latestExecution?.status === "code-verified";
   const repairCompleted = repairEvents.some((event) => event.stage === "recovery" && event.status === "completed") && !repairActive;
   const unifiedTestCompleted = task.state === "integrated"
-    || (automationOwnsTask && automation?.currentModule !== "unified-test-restart" && automation.lastFeedback?.taskId === task.taskId);
+    || (automationOwnsTask && automation?.currentModule !== "test-coverage" && automation.lastFeedback?.taskId === task.taskId);
 
   const stageFacts: Array<Omit<CollaborationProgressStage, "statusLabel"> & { completed: boolean }> = [
     { id: "intent", label: isJapanese ? "意図分析" : "意图分析", owner: currentPlan?.ownerDisplayName || executorName, status: "not-started", waitingFor: null, updatedAt: currentPlan?.createdAt || null, completed: analysisCompleted },
