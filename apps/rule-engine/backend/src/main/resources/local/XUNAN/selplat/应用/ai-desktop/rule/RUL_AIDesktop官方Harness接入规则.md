@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.70.0 保证发布重启只引用候选回收后仍存在的稳定已验证应用。 -->
-rule_version = 5.70.0
+<!-- 5.72.0 保证令狐自身有活动任务时仍能恢复其他人物，并让阶段变化形成新的可审计恢复事实。 -->
+rule_version = 5.72.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -60,6 +60,10 @@ upgrade_record_5_67 = 2026-08-24:ensureIntegrationDependencies单一入口同时
 upgrade_record_5_68 = 2026-08-24:测试夹具URL必须通过fileURLToPath转换_禁止直接传递pathname_覆盖Application_Support等含空格候选路径_测试资源锁与发布锁真实子进程统一适用
 upgrade_record_5_69 = 2026-08-24:托管契约必须验证共通依赖清理Facade_禁止继续绑定已删除的单链接局部变量_应用与构建双出口由cleanupIntegrationDependencyLinks统一回收
 upgrade_record_5_70 = 2026-08-24:候选统一测试通过后先复制到build应用package_published发布批次目录_稳定启动程序存在后才允许回收候选worktree_发布重启禁止引用Application_Support临时候选路径_新版必须携带工程根和developer参数恢复全部任务
+<!-- 5.71.0 防止稳定应用中的相对框架链接被复制成指向已回收候选工作树的绝对链接。 -->
+upgrade_record_5_71 = 2026-08-24:稳定应用复制必须逐字保留相对符号链接_候选回收后Electron_Framework仍从稳定应用内部解析_真实相对链接回归
+<!-- 5.72.0 防止令狐自身任务遮蔽其他人物停点，并避免任务阶段变化沿用旧恢复预算。 -->
+upgrade_record_5_72 = 2026-08-24:自身活动任务不阻断其他人物停点扫描_每轮最多一个恢复动作_全部人物非终态任务持续覆盖_故障指纹纳入任务阶段_每个指纹独立三次恢复预算
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -346,10 +350,10 @@ collaboration_default_member_roster_contract = 韩立_conversation_owner_protect
 linghu_automation_single_entry_contract = LinghuAutomationFacade + collaboration_coordinator_reuse + persistent_automation_store + caller_decoupled_from_dispatch_recovery_test_and_restart_implementation
 <!-- 自动执行按钮是唯一启停边界；开启后即使阻塞或等待人工业务选择也只进入等待与持续检测，禁止系统自行关闭检测。 -->
 linghu_automation_liveness_contract = explicit_human_switch + default_off + poll_every_30_seconds + enabled_monitor_never_self_disables + one_active_module_task_only + no_duplicate_dispatch_while_task_active + blocked_or_business_choice_keeps_monitoring_and_recovery_point
-<!-- 每轮检测必须从协同权威状态生成全部令狐自动任务快照，联合心跳、协议进展和状态时间判断停点，禁止只看活动任务或单一耗时。 -->
+<!-- 每轮检测必须从协同权威状态生成全部人物非终态任务快照，联合心跳、协议进展和状态时间判断停点，禁止只看活动任务、自动来源或单一耗时。 -->
 linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_plus_active_task + state_phase_executor_generation + heartbeat_protocol_and_state_progress + waiting_point + completion_conditions_and_completed_conditions + blocking_kind + recovery_checkpoint + persisted_detection_cursor
-<!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
-linghu_automation_recovery_fingerprint_contract = task_state_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
+<!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，状态阶段、代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
+linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
 <!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
 linghu_automation_state_recovery_contract = atomic_primary_plus_latest_valid_backup + restore_enabled_cycle_module_cursor_active_task_fault_and_checkpoint + primary_and_backup_both_corrupt_safely_disable_until_human_reenables + first_install_default_off
 <!-- 三个职责模块严格串行；最终流程保障始终先于令狐自己的测试与审计循环。 -->

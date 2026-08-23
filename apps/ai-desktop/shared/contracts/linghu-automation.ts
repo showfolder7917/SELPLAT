@@ -66,6 +66,7 @@ export interface LinghuAutomationState {
   activeTaskId: string | null;
   recoveryAttemptCount: number;
   currentFaultFingerprint: string | null;
+  /** 每个故障指纹独立计数，避免一条流程的恢复次数阻塞其他人物。 */
   recoveryAttemptsByFingerprint: Record<string, number>;
   detectionCursor: string | null;
   flowSnapshots: LinghuAutomaticFlowSnapshot[];

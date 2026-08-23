@@ -295,6 +295,11 @@ test("令狐对同一故障指纹最多执行三次恢复副作用但继续检�
     assert.equal(recoveryRequests, 3);
     assert.equal(facade.state().enabled, true);
     assert.match(facade.state().blockingReason, /检测仍保持运行/);
+    collaborationStore.updateTask(facade.state().activeTaskId, "test.phase_changed", (task) => {
+      task.phase = "reviewing";
+    });
+    await facade.checkNow();
+    assert.equal(recoveryRequests, 4);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -337,6 +342,103 @@ test("令狐活动任务记录缺失时保留恢复点并派发同模块替代�
     assert.notEqual(facade.state().activeTaskId, hiddenTaskId);
     assert.match(facade.state().recoveryCheckpoint, /replacement-task:missing-task:/);
     assert.equal(collaborationStore.state().tasks.length, 2);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐持续检测所有自动流程，并为非活动停点执行独立恢复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-all-flows-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const recovered = [];
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+      continueTask: (taskId) => { recovered.push(taskId); return collaborationStore.continueTask(taskId); },
+      recoverTask: async (taskId) => { recovered.push(taskId); },
+    };
+    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const facade = new LinghuAutomationFacade({
+      store,
+      collaboration,
+      readWorkspaceState: () => workspaceState,
+      locale: () => "zh-CN",
+      recordEvent: () => undefined,
+      readTestResourceState: idleTestResourceState,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+    store.setEnabled(true);
+    await facade.checkNow();
+    const activeTaskId = facade.state().activeTaskId;
+    const secondary = collaborationStore.submitTask({
+      title: "另一条自动流程",
+      problemStatement: "验证全量自动流程检测。",
+      confirmedIntent: "流程停住时应由令狐自动恢复。",
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "linghu-ancestor",
+      preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard",
+    });
+    collaborationStore.updateTask(secondary.taskId, "test.blocked", (task) => {
+      task.state = "blocked";
+      task.blockingReason = "基础设施连接中断";
+    });
+    await facade.checkNow();
+    assert.deepEqual(recovered, [secondary.taskId]);
+    assert.equal(facade.state().activeTaskId, activeTaskId);
+    assert.equal(facade.state().flowSnapshots.length, 2);
+    assert.equal(facade.state().recoveryAttemptsByFingerprint[facade.state().currentFaultFingerprint], 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐将依赖自动流程的修正任务纳入同一停点检测闭环", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-dependent-repair-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const recovered = [];
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+      continueTask: (taskId) => { recovered.push(taskId); return collaborationStore.continueTask(taskId); },
+      recoverTask: async (taskId) => { recovered.push(taskId); },
+    };
+    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const facade = new LinghuAutomationFacade({
+      store,
+      collaboration,
+      readWorkspaceState: () => workspaceState,
+      locale: () => "zh-CN",
+      recordEvent: () => undefined,
+      readTestResourceState: idleTestResourceState,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+    store.setEnabled(true);
+    await facade.checkNow();
+    const sourceTaskId = facade.state().activeTaskId;
+    const repair = collaborationStore.submitTask({
+      title: "自动流程修正任务",
+      problemStatement: "修正自动流程的已证实停点。",
+      confirmedIntent: "本任务依赖令狐自动流程完成后恢复。",
+      workspaceState,
+      locale: "zh-CN",
+      dependencyTaskIds: [sourceTaskId],
+    });
+    collaborationStore.updateTask(repair.taskId, "test.repair_blocked", (task) => {
+      task.state = "blocked";
+      task.phase = "implementing";
+      task.blockingReason = "代码类型检查失败";
+    });
+    await facade.checkNow();
+    assert.deepEqual(recovered, [repair.taskId]);
+    assert.ok(facade.state().flowSnapshots.some((snapshot) => snapshot.sourceTaskId === repair.taskId));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -646,13 +748,13 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.70\.0/);
+  assert.match(rule, /rule_version = 5\.72\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);
   assert.match(rule, /linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry/);
-  assert.match(rule, /linghu_automation_flow_snapshot_contract/);
-  assert.match(rule, /linghu_automation_recovery_fingerprint_contract/);
+  assert.match(rule, /linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_plus_active_task/);
+  assert.match(rule, /linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint/);
   assert.match(rule, /linghu_automation_state_recovery_contract/);
   assert.match(rule, /linghu_module_completion_report_contract/);
 });

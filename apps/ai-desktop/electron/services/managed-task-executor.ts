@@ -300,7 +300,7 @@ function managedPrompt(message: string, responsibility: string): string {
 }
 
 function taskExecutionPrompt(message: string): string {
-  return managedPrompt(message, "用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。当前只允许完成源码修改和代码级验证，禁止构建、启动或重启程序。通过 @selplat/node-common-core/path 解析真实工程名，把待验证命令登记到“执行日志/待执行/测试/<runId>/测试文档.<threadId>.md”，不得在源码目录创建测试控制文档。完成后用自然语言说明结果、关键改动和仍待验证的内容。");
+  return managedPrompt(message, "用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。当前只允许完成源码修改和代码级验证，禁止构建、启动或重启程序。必须从 SELPLAT 工程根通过固定受控入口 npm --prefix apps/ai-desktop run paths:resolve 调用 @selplat/node-common-core/path 解析真实工程名；禁止用裸 node 直接导入该包，因为隔离工作树的依赖只在锁文件专属缓存中按需挂载。后续源码检查也必须保持工程根相对路径，禁止混用应用目录与 apps/ai-desktop 前缀。把待验证命令登记到“执行日志/待执行/测试/<runId>/测试文档.<threadId>.md”，不得在源码目录创建测试控制文档。完成后用自然语言说明结果、关键改动和仍待验证的内容。");
 }
 
 function conversationPrompt(message: string): string {
