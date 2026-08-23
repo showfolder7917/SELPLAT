@@ -8,6 +8,8 @@ import { createCollaborationResultSummary, nextReviewAction } from "../../../bui
 import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-codex-sessions.js";
 import { ensureIntegrationDependencies } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
+import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-facade.js";
+import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-store.js";
 import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/managed-task-executor.js";
 import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
@@ -26,9 +28,10 @@ test("默认人物稳定列出且韩立不能被删除", () => {
   try {
     const store = new CollaborationStore(path.join(directory, "state.json"));
     assert.deepEqual(store.state().members.map((member) => member.displayName), [
-      "韩立", "南宫婉", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "令狐老祖", "李化元",
+      "韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元",
     ]);
     assert.throws(() => store.deleteMember("han-li"), /不能删除/);
+    assert.throws(() => store.deleteMember("linghu-ancestor"), /不能删除/);
     const created = store.createMember({ displayName: "银月" });
     const member = created.members.find((candidate) => candidate.displayName === "银月");
     assert.ok(member);
@@ -37,6 +40,86 @@ test("默认人物稳定列出且韩立不能被删除", () => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启动文案", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-automation-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const submitted = [];
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => {
+        submitted.push(request);
+        collaborationStore.submitTask(request);
+        return collaborationStore.state();
+      },
+      continueTask: (taskId) => collaborationStore.continueTask(taskId),
+    };
+    const storePath = path.join(directory, "linghu.json");
+    const automationStore = new LinghuAutomationStore(storePath);
+    let restartCount = 0;
+    const facade = new LinghuAutomationFacade({
+      store: automationStore,
+      collaboration,
+      readWorkspaceState: () => workspaceState,
+      locale: () => "zh-CN",
+      recordEvent: () => undefined,
+      runUnifiedTestAndRestart: async () => { restartCount += 1; },
+    });
+    automationStore.setEnabled(true);
+    await facade.checkNow();
+    assert.equal(submitted.length, 1);
+    assert.equal(submitted[0].initiatorMemberId, "linghu-ancestor");
+    assert.equal(submitted[0].preferredExecutorMemberId, "linghu-ancestor");
+    assert.match(submitted[0].confirmedIntent, /最后一道屏障/);
+    assert.match(submitted[0].confirmedIntent, /当前独立模块/);
+    assert.equal(facade.state().activeTaskId, collaborationStore.state().tasks[0].taskId);
+    await facade.checkNow();
+    assert.equal(submitted.length, 1, "活动模块尚未完成时30秒检测不得重复派发");
+
+    const created = facade.createPrompt({ title: "客户易用性巡检", content: "从客户一看就懂的角度持续检查页面。" });
+    const prompt = created.prompts.find((candidate) => candidate.title === "客户易用性巡检");
+    assert.ok(prompt);
+    facade.updatePrompt(prompt.promptId, { enabled: false });
+    assert.equal(facade.state().prompts.find((candidate) => candidate.promptId === prompt.promptId).enabled, false);
+    const restored = new LinghuAutomationStore(storePath).state();
+    assert.equal(restored.enabled, true);
+    assert.equal(restored.activeTaskId, facade.state().activeTaskId);
+    assert.equal(restored.pollIntervalMs, 30_000);
+    facade.deletePrompt(prompt.promptId);
+    assert.equal(facade.state().prompts.some((candidate) => candidate.promptId === prompt.promptId), false);
+
+    const expectedModules = ["log-diagnosis", "architecture-recovery", "unified-test-restart", "flow-completion"];
+    for (const expectedModule of expectedModules) {
+      const activeTaskId = facade.state().activeTaskId;
+      collaborationStore.updateTask(activeTaskId, "test.integrated", (task) => {
+        task.state = "integrated";
+        task.completedAt = new Date().toISOString();
+        task.finalResult = "模块完成反馈";
+      });
+      await facade.checkNow();
+      assert.equal(facade.state().currentModule, expectedModule);
+    }
+    assert.equal(facade.state().cycle, 2);
+    assert.equal(restartCount, 1);
+    assert.equal(submitted.length, 5, "每个模块完成后只派发一个下一模块任务");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐第四模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
+  const runner = readFileSync(new URL("../electron/services/collaboration/linghu-unified-test-runner.ts", import.meta.url), "utf8");
+  const facade = readFileSync(new URL("../electron/services/collaboration/linghu-automation-facade.ts", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(runner, /\["test:interaction", "test:collaboration", "test:managed"\]/);
+  assert.doesNotMatch(runner, /confirmedIntent|prompt\.content/);
+  assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\)/);
+  assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
+  assert.match(main, /await linghuUnifiedTests\.run\(\)[\s\S]*app\.relaunch\(\)[\s\S]*app\.exit\(0\)/);
 });
 
 test("进程中断后任务显式进入恢复态，继续时重新排队且不沿用旧连接租约", () => {

@@ -53,6 +53,9 @@ import type {
   ConversationDispatchState,
   ConversationQueueItem,
   Locale,
+  LinghuAutomationState,
+  LinghuAutomationStateEvent,
+  LinghuStartupPrompt,
   ManagedExecutionMode,
   ManagedExecutionUpdate,
   SandboxMode,
@@ -265,6 +268,7 @@ export function DeveloperApp() {
   const [tempInfo, setTempInfo] = useState<TempDirectoryInfo | null>(null);
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
   const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
+  const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationState | null>(null);
   const [collaborationStreams, setCollaborationStreams] = useState<Record<string, Message>>({});
   const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-detail">("member");
   const [selectedCollaborationTaskId, setSelectedCollaborationTaskId] = useState<string | null>(null);
@@ -388,7 +392,9 @@ export function DeveloperApp() {
     const desktop = window.desktop;
     if (!desktop) return;
     void desktop.getCollaborationState().then(setCollaborationState);
+    void desktop.getLinghuAutomationState().then(setLinghuAutomationState);
     const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => setCollaborationState(event.state));
+    const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEvent) => setLinghuAutomationState(event.state));
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
       // 人物工作页只保留当前任务的实时结果，不把阶段时间线或瓶颈明细渲染到界面。
       setCollaborationStreams((current) => {
@@ -396,7 +402,7 @@ export function DeveloperApp() {
         return { ...current, [envelope.taskId]: applyCodexStreamEvent(existing, envelope.event) };
       });
     });
-    return () => { removeStateListener(); removeStreamListener(); };
+    return () => { removeStateListener(); removeLinghuListener(); removeStreamListener(); };
   }, []);
 
   useEffect(() => {
@@ -1261,7 +1267,7 @@ export function DeveloperApp() {
         ? <CollaborationExecutionList tasks={completedCollaborationTasks} locale={locale} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />
         : collaborationPanel === "task-detail" && selectedCollaborationTask
           ? <CollaborationTaskDetail task={selectedCollaborationTask} locale={locale} onBack={() => { setSelectedCollaborationTaskId(null); setCollaborationPanel(terminalCollaborationStates.has(selectedCollaborationTask.state) ? "execution-list" : "member"); }} />
-          : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
+          : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} linghuAutomation={linghuAutomationState} onLinghuState={setLinghuAutomationState} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
       {showConversationWorkspace && <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
         {dispatchState.activeTask?.status === "recoverable" && <div className="dispatch-recovery" role="status"><span>发现上次未完成的任务</span><div><button type="button" onClick={() => void recoverConversationTask()}>继续执行</button><button type="button" onClick={() => void discardConversationRecovery()}>放弃任务</button></div></div>}
@@ -1346,11 +1352,13 @@ function CollaborationTaskDetail({ task, locale, onBack }: { task: Collaboration
   </section>;
 }
 
-function CollaborationMemberPage({ member, tasks, streams, locale, onRename, onDelete, onContinue, onCancel, onOpen }: {
+function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomation, onLinghuState, onRename, onDelete, onContinue, onCancel, onOpen }: {
   member: CollaborationMember | null;
   tasks: CollaborationState["tasks"];
   streams: Record<string, Message>;
   locale: Locale;
+  linghuAutomation: LinghuAutomationState | null;
+  onLinghuState(state: LinghuAutomationState): void;
   onRename(member: CollaborationMember): void;
   onDelete(member: CollaborationMember): void;
   onContinue(taskId: string): void;
@@ -1368,6 +1376,7 @@ function CollaborationMemberPage({ member, tasks, streams, locale, onRename, onD
   const latestExecution = currentTask?.executionRecords.at(-1);
   return <section className="collaboration-member-page" aria-label={member.displayName}>
     <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
+    {member.memberId === "linghu-ancestor" && linghuAutomation && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}
     {(currentTask?.blockingReason || member.blockingReason) && <div className="member-blocking-reason" role="status">{currentTask?.blockingReason || member.blockingReason}</div>}
     {currentTask ? <article className="member-current-task">
       <div className="member-task-heading"><span>{locale === "ja" ? "現在のタスク" : "当前任务"}</span><strong>{currentTask.snapshot.title}</strong><small>{collaborationTaskStateLabel(currentTask.state, locale)}</small></div>
@@ -1382,6 +1391,87 @@ function CollaborationMemberPage({ member, tasks, streams, locale, onRename, onD
     </article> : <div className="member-empty-task"><Code24Regular /><strong>{locale === "ja" ? "待機中" : "当前空闲"}</strong><span>{locale === "ja" ? "割り当て時に新しい Codex を作成します。" : "收到任务时才会创建新的 Codex。"}</span></div>}
     {orderedTasks.length > 1 && <section className="member-task-history"><h2>{locale === "ja" ? "過去のタスク" : "历史任务"}</h2>{orderedTasks.slice(1).map((task) => <div key={task.taskId}><strong>{task.snapshot.title}</strong><span>{collaborationTaskStateLabel(task.state, locale)}</span></div>)}</section>}
   </section>;
+}
+
+function LinghuAutomationPanel({ state, locale, onState }: { state: LinghuAutomationState; locale: Locale; onState(state: LinghuAutomationState): void }) {
+  const [editingPromptId, setEditingPromptId] = useState<string | "new" | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftContent, setDraftContent] = useState("");
+  const [error, setError] = useState("");
+  const busyTask = state.activeTaskId !== null;
+
+  const beginEdit = (prompt?: LinghuStartupPrompt) => {
+    setEditingPromptId(prompt?.promptId || "new");
+    setDraftTitle(prompt?.title || "");
+    setDraftContent(prompt?.content || "");
+    setError("");
+  };
+
+  const savePrompt = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingPromptId) return;
+    try {
+      const next = editingPromptId === "new"
+        ? await window.desktop?.createLinghuStartupPrompt({ title: draftTitle, content: draftContent })
+        : await window.desktop?.updateLinghuStartupPrompt(editingPromptId, { title: draftTitle, content: draftContent });
+      if (next) onState(next);
+      setEditingPromptId(null);
+      setError("");
+    } catch (reason) {
+      setError(readableDesktopError(reason, locale === "ja" ? "起動文を保存できません。" : "无法保存启动文案。"));
+    }
+  };
+
+  const apply = async (operation: Promise<LinghuAutomationState> | undefined) => {
+    try {
+      const next = await operation;
+      if (next) onState(next);
+      setError("");
+    } catch (reason) {
+      setError(readableDesktopError(reason, locale === "ja" ? "自動保障設定を更新できません。" : "无法更新自动保障设置。"));
+    }
+  };
+
+  return <section className="linghu-automation" aria-label={locale === "ja" ? "自動運行の最終保障" : "自动运行最后保障"}>
+    <header>
+      <div><ShieldCheckmark24Regular /><div><h2>{locale === "ja" ? "自動運行の最終保障" : "自动运行最后保障"}</h2><p>{locale === "ja" ? "有効中は30秒ごとの検査を停止しません。" : "开启后每30秒持续检测，永远不会自行停止。"}</p></div></div>
+      <button type="button" className={`linghu-automation-toggle ${state.enabled ? "enabled" : ""}`} role="switch" aria-checked={state.enabled} onClick={() => void apply(window.desktop?.setLinghuAutomationEnabled(!state.enabled))}><span />{state.enabled ? (locale === "ja" ? "自動実行中" : "自动执行中") : (locale === "ja" ? "自動実行を開始" : "开启自动执行")}</button>
+    </header>
+    <div className="linghu-automation-facts">
+      <span>{locale === "ja" ? "サイクル" : "循环"}<strong>{state.cycle}</strong></span>
+      <span>{locale === "ja" ? "現在のモジュール" : "当前模块"}<strong>{linghuModuleLabel(state.currentModule, locale)}</strong></span>
+      <span>{locale === "ja" ? "実行状態" : "执行状态"}<strong>{busyTask ? (locale === "ja" ? "処理中" : "执行中") : state.enabled ? (locale === "ja" ? "次回検査待ち" : "等待下一次检测") : (locale === "ja" ? "停止" : "未开启")}</strong></span>
+      <span>{locale === "ja" ? "最終検査" : "最后检测"}<strong>{formatCollaborationTime(state.lastCheckedAt, locale)}</strong></span>
+    </div>
+    {state.blockingReason && <p className="linghu-automation-notice" role="status">{state.blockingReason}</p>}
+    {state.lastFeedback && <details className="linghu-last-feedback"><summary>{locale === "ja" ? "前回のフィードバック" : "上一模块反馈"}</summary><div><strong>{linghuModuleLabel(state.lastFeedback.module, locale)}</strong><p>{state.lastFeedback.summary}</p></div></details>}
+    <div className="linghu-prompt-heading"><div><h3>{locale === "ja" ? "起動文一覧" : "启动文案列表"}</h3><p>{locale === "ja" ? "追加・編集・削除・有効化ができます。" : "可新增、修改、删除、启停并选择当前文案。"}</p></div><button type="button" onClick={() => beginEdit()}><Add24Regular />{locale === "ja" ? "追加" : "新增启动文案"}</button></div>
+    {editingPromptId && <form className="linghu-prompt-form" onSubmit={(event) => void savePrompt(event)}>
+      <label>{locale === "ja" ? "名称" : "文案名称"}<input value={draftTitle} maxLength={80} onChange={(event) => setDraftTitle(event.target.value)} autoFocus /></label>
+      <label>{locale === "ja" ? "内容" : "启动内容"}<textarea value={draftContent} maxLength={20_000} rows={12} onChange={(event) => setDraftContent(event.target.value)} /></label>
+      <div><button type="button" onClick={() => setEditingPromptId(null)}>{locale === "ja" ? "キャンセル" : "取消"}</button><button type="submit" className="primary">{locale === "ja" ? "保存" : "保存文案"}</button></div>
+    </form>}
+    <div className="linghu-prompt-list">{state.prompts.length === 0 ? <p className="linghu-prompt-empty">{locale === "ja" ? "起動文がありません。検査は継続し、追加を待ちます。" : "暂无启动文案；检测仍保持运行，等待新增。"}</p> : state.prompts.map((prompt) => <article key={prompt.promptId} className={`${state.activePromptId === prompt.promptId ? "active" : ""} ${prompt.enabled ? "" : "disabled"}`}>
+      <div className="linghu-prompt-summary"><div><strong>{prompt.title}</strong><span>{state.activePromptId === prompt.promptId ? (locale === "ja" ? "現在使用中" : "当前使用") : prompt.enabled ? (locale === "ja" ? "有効" : "已启用") : (locale === "ja" ? "無効" : "已停用")}</span></div><p>{prompt.content}</p></div>
+      <nav>
+        {prompt.enabled && state.activePromptId !== prompt.promptId && <button type="button" onClick={() => void apply(window.desktop?.selectLinghuStartupPrompt(prompt.promptId))}>{locale === "ja" ? "使用" : "设为当前"}</button>}
+        <button type="button" onClick={() => void apply(window.desktop?.updateLinghuStartupPrompt(prompt.promptId, { enabled: !prompt.enabled }))}>{prompt.enabled ? (locale === "ja" ? "無効化" : "停用") : (locale === "ja" ? "有効化" : "启用")}</button>
+        <button type="button" onClick={() => beginEdit(prompt)}>{locale === "ja" ? "編集" : "修改"}</button>
+        <button type="button" className="danger" onClick={() => { if (window.confirm(locale === "ja" ? `「${prompt.title}」を削除しますか？` : `确定删除启动文案“${prompt.title}”吗？`)) void apply(window.desktop?.deleteLinghuStartupPrompt(prompt.promptId)); }}>{locale === "ja" ? "削除" : "删除"}</button>
+      </nav>
+    </article>)}</div>
+    {error && <p className="task-detail-error" role="alert">{error}</p>}
+  </section>;
+}
+
+function linghuModuleLabel(module: LinghuAutomationState["currentModule"], locale: Locale): string {
+  const labels = {
+    "flow-completion": { ja: "自動フロー完遂", "zh-CN": "自动流程完成保障" },
+    "log-diagnosis": { ja: "ログ・バグ診断", "zh-CN": "日志与 Bug 诊断" },
+    "architecture-recovery": { ja: "中断・Facade修復", "zh-CN": "中断、数据与 Facade 修复" },
+    "unified-test-restart": { ja: "統合テスト・再起動復元", "zh-CN": "统一测试、重启与恢复" },
+  } as const;
+  return labels[module][locale];
 }
 
 function ChangedFileList({ files, locale }: { files: string[]; locale: Locale }) {

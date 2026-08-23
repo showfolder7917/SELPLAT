@@ -15,6 +15,9 @@ import { CodexCollaborationSessionFactory, CollaborationCodexRegistry } from "./
 import { CollaborationCoordinator } from "./services/collaboration/collaboration-coordinator.js";
 import { CollaborationDurationLog } from "./services/collaboration/collaboration-duration-log.js";
 import { CollaborationStore } from "./services/collaboration/collaboration-store.js";
+import { LinghuAutomationFacade } from "./services/collaboration/linghu-automation-facade.js";
+import { LinghuAutomationStore } from "./services/collaboration/linghu-automation-store.js";
+import { LinghuUnifiedTestRunner } from "./services/collaboration/linghu-unified-test-runner.js";
 import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
 import { VersionWorkspaceManager } from "./services/collaboration/version-workspace-manager.js";
 import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-test-runner.js";
@@ -29,6 +32,7 @@ const preloadPath = path.join(currentDirectory, "preload.cjs");
 
 let codex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
+let linghuAutomation: LinghuAutomationFacade | undefined;
 
 app.whenReady().then(() => {
   const variant = resolveAppVariant();
@@ -67,6 +71,8 @@ app.whenReady().then(() => {
   );
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
+  const settings = new SettingsStore(path.join(app.getPath("userData"), "desktop-settings.json"));
+  const workspaces = new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), projectRoot);
   const collaborationStore = new CollaborationStore(path.join(collaborationRoot, "collaboration-state.json"));
   const collaborationDurations = new CollaborationDurationLog(projectPaths.collaborationArchiveRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
@@ -106,15 +112,35 @@ app.whenReady().then(() => {
     },
     verifyIntegration: (rootPath, taskIds) => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName),
   });
+  const linghuStore = new LinghuAutomationStore(path.join(collaborationRoot, "linghu-automation.json"));
+  const linghuUnifiedTests = new LinghuUnifiedTestRunner(projectRoot, applicationName, (type, details) => audit.recordEvent(type, details));
+  linghuAutomation = new LinghuAutomationFacade({
+    store: linghuStore,
+    collaboration,
+    readWorkspaceState: () => workspaces.read(),
+    locale: () => settings.read().locale,
+    recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
+    runUnifiedTestAndRestart: async () => {
+      await linghuUnifiedTests.run();
+      audit.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed" });
+      app.relaunch();
+      app.exit(0);
+    },
+  });
+  linghuAutomation.subscribe((event) => {
+    audit.recordEvent("linghu.automation.state_changed", { reason: event.reason, enabled: event.state.enabled, cycle: event.state.cycle, module: event.state.currentModule }, event.state.activeTaskId || undefined);
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:linghu-automation-state", event);
+  });
 
   registerDesktopIpc({
     codex,
     screenshots,
-    settings: new SettingsStore(path.join(app.getPath("userData"), "desktop-settings.json")),
-    workspaces: new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), projectRoot),
+    settings,
+    workspaces,
     trustedCommands,
     dispatch,
     collaboration,
+    linghuAutomation,
     collaborationRegistry,
     audit,
     projectRoot,
@@ -126,12 +152,14 @@ app.whenReady().then(() => {
 
   createMainWindow({ preloadPath, rendererRoot, variant });
   collaboration.resumePendingWork();
+  linghuAutomation.start();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow({ preloadPath, rendererRoot, variant });
   });
 });
 
 app.on("before-quit", () => {
+  linghuAutomation?.stop();
   void collaboration?.dispose();
   codex?.dispose();
 });

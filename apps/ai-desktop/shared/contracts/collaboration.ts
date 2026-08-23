@@ -157,6 +157,7 @@ export interface CollaborationTask {
   state: CollaborationTaskState;
   phase: CollaborationWorkerPhase;
   executorMemberId: string | null;
+  preferredExecutorMemberId?: string | null;
   currentReviewerMemberId: string | null;
   currentPlanVersion: number;
   explicitRejectionCount: number;
@@ -229,6 +230,7 @@ export interface SubmitCollaborationTaskRequest {
   atomicGroupId?: string;
   dependencyTaskIds?: string[];
   initiatorMemberId?: string;
+  preferredExecutorMemberId?: string;
 }
 
 export interface CollaborationStateEvent {

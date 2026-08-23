@@ -24,6 +24,15 @@ export type {
   SubmitCollaborationTaskRequest,
   UpdateCollaborationMemberRequest,
 } from "./collaboration.js";
+export type {
+  CreateLinghuStartupPromptRequest,
+  LinghuAutomationFeedback,
+  LinghuAutomationModule,
+  LinghuAutomationState,
+  LinghuAutomationStateEvent,
+  LinghuStartupPrompt,
+  UpdateLinghuStartupPromptRequest,
+} from "./linghu-automation.js";
 
 import type {
   CollaborationState,
@@ -32,6 +41,12 @@ import type {
   SubmitCollaborationTaskRequest,
   UpdateCollaborationMemberRequest,
 } from "./collaboration.js";
+import type {
+  CreateLinghuStartupPromptRequest,
+  LinghuAutomationState,
+  LinghuAutomationStateEvent,
+  UpdateLinghuStartupPromptRequest,
+} from "./linghu-automation.js";
 
 export type AppVariant = (typeof APP_VARIANTS)[number];
 export type Locale = (typeof LOCALES)[number];
@@ -374,6 +389,13 @@ export interface DesktopApi {
   cancelCollaborationTask(taskId: string): Promise<CollaborationState>;
   onCollaborationState(listener: (event: import("./collaboration.js").CollaborationStateEvent) => void): () => void;
   onCollaborationStream(listener: (event: import("./collaboration.js").CollaborationStreamEnvelope) => void): () => void;
+  getLinghuAutomationState(): Promise<LinghuAutomationState>;
+  setLinghuAutomationEnabled(enabled: boolean): Promise<LinghuAutomationState>;
+  createLinghuStartupPrompt(request: CreateLinghuStartupPromptRequest): Promise<LinghuAutomationState>;
+  updateLinghuStartupPrompt(promptId: string, request: UpdateLinghuStartupPromptRequest): Promise<LinghuAutomationState>;
+  deleteLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationState>;
+  selectLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationState>;
+  onLinghuAutomationState(listener: (event: LinghuAutomationStateEvent) => void): () => void;
   getConversationDispatchState(): Promise<ConversationDispatchState>;
   enqueueMessage(request: EnqueueMessageRequest): Promise<ConversationDispatchState>;
   supplementQueuedMessage(itemId: string): Promise<ConversationDispatchState>;

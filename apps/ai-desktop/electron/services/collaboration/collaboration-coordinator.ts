@@ -181,7 +181,9 @@ export class CollaborationCoordinator {
     const queued = state.tasks.filter((task) => task.state === "queued-executor").slice(0, executorCapacity);
     const idle = fairIdleMembers(workers);
     for (const task of queued) {
+      const strictPreferredId = task.preferredExecutorMemberId || null;
       const preferredIndex = task.executorMemberId ? idle.findIndex((member) => member.memberId === task.executorMemberId) : -1;
+      if (strictPreferredId && preferredIndex < 0) continue;
       const [executor] = preferredIndex >= 0 ? idle.splice(preferredIndex, 1) : idle.splice(0, 1);
       if (!executor) break;
       void this.#beginExecutor(task.taskId, executor.memberId);

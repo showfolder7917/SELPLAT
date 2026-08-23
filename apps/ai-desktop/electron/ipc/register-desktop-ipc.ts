@@ -32,6 +32,7 @@ import { CodexService } from "../services/codex-service.js";
 import { ConversationDispatchStore } from "../services/conversation-dispatch-store.js";
 import { CollaborationCodexRegistry } from "../services/collaboration/collaboration-codex-sessions.js";
 import { CollaborationCoordinator } from "../services/collaboration/collaboration-coordinator.js";
+import { LinghuAutomationFacade } from "../services/collaboration/linghu-automation-facade.js";
 import { ManagedTaskExecutor } from "../services/managed-task-executor.js";
 import { ScreenshotStore } from "../services/screenshot-store.js";
 import { SettingsStore } from "../services/settings-store.js";
@@ -46,6 +47,7 @@ interface DesktopIpcDependencies {
   trustedCommands: TrustedCommandStore;
   dispatch: ConversationDispatchStore;
   collaboration: CollaborationCoordinator;
+  linghuAutomation: LinghuAutomationFacade;
   collaborationRegistry: CollaborationCodexRegistry;
   audit: BusinessAuditLog;
   projectRoot: string;
@@ -97,7 +99,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, collaborationRegistry, audit, projectRoot, appRoot, variant, preloadPath, rendererRoot } = dependencies;
+  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, collaborationRegistry, audit, projectRoot, appRoot, variant, preloadPath, rendererRoot } = dependencies;
   const activeAuditTasks = new Map<number, string>();
   const seenApprovalRequests = new Set<number>();
   const approvalAuditTasks = new Map<number, string>();
@@ -682,6 +684,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   ipcMain.handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskRequest) => collaboration.submitTask(request));
   ipcMain.handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
   ipcMain.handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
+  ipcMain.handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
+  ipcMain.handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
+  ipcMain.handle("desktop:create-linghu-startup-prompt", (_event, request) => linghuAutomation.createPrompt(request));
+  ipcMain.handle("desktop:update-linghu-startup-prompt", (_event, promptId: string, request) => linghuAutomation.updatePrompt(promptId, request));
+  ipcMain.handle("desktop:delete-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.deletePrompt(promptId));
+  ipcMain.handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
   ipcMain.handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
   ipcMain.handle("desktop:enqueue-message", (_event, value: EnqueueMessageRequest) => {
     if (!value?.request || typeof value.request.message !== "string") throw new Error("Invalid queued message request.");

@@ -261,6 +261,48 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
+test("令狐老祖位于南宫婉下方并可管理持续自动保障启动文案", async () => {
+  await page.getByRole("button", { name: "展开任务" }).click();
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式" }).click();
+  const names = await taskList.locator(".collaboration-member > span").allTextContents();
+  expect(names.slice(0, 3).map((name) => name.trim())).toEqual(["韩立", "南宫婉", "令狐老祖"]);
+
+  await taskList.getByRole("button", { name: /令狐老祖/ }).click();
+  const panel = page.locator(".linghu-automation");
+  await expect(panel.getByText("自动运行最后保障", { exact: true })).toBeVisible();
+  const automation = panel.getByRole("switch");
+  await expect(automation).toHaveAttribute("aria-checked", "false");
+  await automation.click();
+  await expect(automation).toHaveAttribute("aria-checked", "true");
+  await expect(panel.getByText("开启后每30秒持续检测，永远不会自行停止。", { exact: true })).toBeVisible();
+
+  await panel.getByRole("button", { name: "新增启动文案" }).click();
+  await panel.getByLabel("文案名称").fill("客户易用性巡检");
+  await panel.getByLabel("启动内容").fill("检查页面是否一看就懂，发现问题后拆分并修正。");
+  await panel.getByRole("button", { name: "保存文案" }).click();
+  const prompt = panel.locator(".linghu-prompt-list article").filter({ hasText: "客户易用性巡检" });
+  await expect(prompt).toContainText("当前使用");
+  await prompt.getByRole("button", { name: "停用" }).click();
+  await expect(prompt).toContainText("已停用");
+  await prompt.getByRole("button", { name: "启用" }).click();
+  await prompt.getByRole("button", { name: "修改" }).click();
+  await panel.getByLabel("文案名称").fill("客户页面易用性巡检");
+  await panel.getByRole("button", { name: "保存文案" }).click();
+  const renamed = panel.locator(".linghu-prompt-list article").filter({ hasText: "客户页面易用性巡检" });
+  await expect(renamed).toBeVisible();
+
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
+  const overflow = await page.locator(".collaboration-member-page").evaluate((element) => element.scrollWidth - element.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  page.once("dialog", (dialog) => dialog.accept());
+  await renamed.getByRole("button", { name: "删除" }).click();
+  await expect(renamed).toHaveCount(0);
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
+  await taskList.getByRole("button", { name: "单会话" }).click();
+  await page.getByRole("button", { name: "展开工作区" }).click();
+});
+
 test("审核正文已生成但结论无法识别时保留正文并显示准确状态", async () => {
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationReviewFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationReviewFixture(true));
   await page.getByRole("button", { name: "展开任务" }).click();

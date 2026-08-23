@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.52.0 将 Developer 生产桌面、正式窗口尺寸和单一 CSS 纳入统一交互验证。 -->
-rule_version = 5.52.0
+<!-- 5.53.0 将令狐老祖自动流程最后保障、启动文案管理和持续恢复纳入协同正式入口。 -->
+rule_version = 5.53.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -26,6 +26,8 @@ upgrade_record_5_50 = 2026-08-23:分析审核执行分别显示真实操作者_�
 upgrade_record_5_51 = 2026-08-23:删除CodexRuntimeInfo路径字段_删除runtimeInfo路径映射_删除生命周期路径记录_删除冗余displayPath_只在主进程内部command保留启动所需路径_契约测试禁止重新暴露
 <!-- 5.52.0 防止开发服务器通过但生产 CSS 分块顺序覆盖设置按钮定位。 -->
 upgrade_record_5_52 = 2026-08-23:交互测试先构建Developer_主桌面直接加载生产index文件_复用正式BrowserWindow默认1560x980和最小1000x700_补实际复现1224x768_设置入口左下锚点_面板边界_标题横排断言_Developer生产样式统一输出单一CSS_开发服务仅保留截图编辑器测试
+<!-- 5.53.0 固化令狐老祖作为自动运行最后屏障以及人类可维护启动文案的持续循环。 -->
+upgrade_record_5_53 = 2026-08-23:令狐老祖固定排在南宫婉下方并受保护_单一LinghuAutomationFacade_自动执行按钮显式开启_30秒检测永不自行停止_四独立模块串行_阻塞保留恢复点_真实发起人与首选执行人均为令狐老祖_启动文案新增修改删除启停选择_第四模块固定统一测试通过后受控重启_重建恢复关联任务和下一循环
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -299,7 +301,19 @@ developer_production_css_contract = single_css_output + selui_base_before_host_o
 <!-- 主桌面交互必须在生产文件和正式 BrowserWindow 尺寸下执行，开发服务器通过不能替代生产桌面通过。 -->
 developer_desktop_interaction_contract = build_before_interaction + load_production_file + reuse_formal_window_layout + default_1560x980 + minimum_1000x700 + reported_reproduction_size_when_available + assert_settings_bottom_left_panel_bounds_and_horizontal_title
 <!-- 默认成员名单由用户确认；韩立保持保护身份，其余十一人为可调度 worker，成员管理仍可增删改查。 -->
-collaboration_default_member_roster_contract = 韩立_conversation_owner_protected + 南宫婉_worker + 紫灵_worker + 元瑶_worker + 宋玉_worker + 冰魄仙子_worker + 墨彩环_worker + 墨大夫_worker + 厉飞雨_worker + 张铁_worker + 令狐老祖_worker + 李化元_worker + roster_crud_enabled_for_non_hanli
+collaboration_default_member_roster_contract = 韩立_conversation_owner_protected + 南宫婉_worker + 令狐老祖_protected_automatic_flow_last_safeguard + 紫灵_worker + 元瑶_worker + 宋玉_worker + 冰魄仙子_worker + 墨彩环_worker + 墨大夫_worker + 厉飞雨_worker + 张铁_worker + 李化元_worker + roster_crud_enabled_for_unprotected_members
+<!-- 令狐老祖自动保障必须只有一个 Facade 入口，调用方不得直接拼接协同任务、恢复命令或重启实现。 -->
+linghu_automation_single_entry_contract = LinghuAutomationFacade + collaboration_coordinator_reuse + persistent_automation_store + caller_decoupled_from_dispatch_recovery_test_and_restart_implementation
+<!-- 自动执行按钮是唯一启停边界；开启后即使阻塞或等待人工业务选择也只进入等待与持续检测，禁止系统自行关闭检测。 -->
+linghu_automation_liveness_contract = explicit_human_switch + default_off + poll_every_30_seconds + enabled_monitor_never_self_disables + one_active_module_task_only + no_duplicate_dispatch_while_task_active + blocked_or_business_choice_keeps_monitoring_and_recovery_point
+<!-- 四个模块严格串行，模块反馈落盘后才进入下一模块；一轮完成后继续下一轮，不为维持循环制造无价值修改。 -->
+linghu_automation_module_cycle_contract = flow_completion -> log_and_bug_diagnosis -> interruption_data_and_facade_recovery -> unified_test_restart_and_task_recovery -> next_cycle
+<!-- 自动保障任务的真实发起人和严格首选执行人都是令狐老祖；其他人物仍可作为异人审核员，禁止首选人物忙碌时悄悄转派顶层保障职责。 -->
+linghu_automation_actor_contract = initiator_linghu_ancestor + protected_strict_preferred_executor_linghu_ancestor + different_idle_reviewer + persist_real_actor_snapshots
+<!-- 启动文案属于用户数据并通过令狐人物页进行完整管理，页面必须在人类可读布局下直接说明循环、模块、检测和阻塞状态。 -->
+linghu_startup_prompt_management_contract = electron_userData_persistence + list_create_update_delete_enable_disable_select_active + linghu_member_page_human_readable_layout + cycle_module_execution_last_check_block_and_feedback_visible
+<!-- 第四模块只运行代码内固定的生产交互、协同和托管测试；全部通过并先落盘下一恢复点后才允许受控重启，失败则回到修复循环。 -->
+linghu_unified_test_restart_contract = fixed_test_interaction_then_test_collaboration_then_test_managed + no_dynamic_prompt_command + persist_next_cycle_before_relaunch + test_failure_returns_flow_completion_repair_cycle + reconstruction_resumes_interrupted_collaboration_and_automation
 <!-- 审核正文生成完成与机器结论解析属于两个独立事实；格式偏差不得伪装成 Codex 连接失败。 -->
 collaboration_review_decision_contract = preserve_raw_review_before_retirement + prefer_unique_review_decision_tag + accept_legacy_exact_marker_and_explicit_chinese_decision + never_infer_from_ordinary_prose + same_reviewer_one_clarification_turn + persist_every_attempt_and_parse_failure + unrecognized_decision_does_not_increment_infrastructure_failure + infrastructure_failure_only_for_connection_process_or_transport_failure
 <!-- Harness 执行期间输入区保持可编辑，截图、图片粘贴和后续消息进入有序队列，不得由全局 loading 一并锁死。 -->

@@ -356,6 +356,58 @@ button { color: inherit; }
 .collaboration-member-page button { min-height: 32px; padding: 0 11px; border: 1px solid var(--sel-theme-line); border-radius: 7px; color: var(--sel-theme-workbench-text); background: var(--sel-theme-workbench-surface); cursor: pointer; }
 .collaboration-member-page button:hover { border-color: color-mix(in srgb, var(--sel-theme-workbench-accent) 53.33%, transparent); color: var(--sel-theme-workbench-accent); }
 .collaboration-member-page button.danger { border-color: var(--sel-theme-semantic-error); color: var(--sel-theme-semantic-error); background: var(--sel-theme-workbench-surface); }
+.linghu-automation { min-width: 0; display: grid; gap: 16px; margin-top: 20px; padding: 18px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: 12px; background: color-mix(in srgb, var(--sel-theme-workbench-surface) 88%, transparent); }
+.linghu-automation > header { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.linghu-automation > header > div { min-width: 0; display: flex; align-items: center; gap: 11px; }
+.linghu-automation > header svg { flex: 0 0 auto; width: 24px; color: var(--sel-theme-workbench-accent); }
+.linghu-automation h2, .linghu-automation h3 { margin: 0; color: var(--sel-theme-workbench-text-strong); }
+.linghu-automation h2 { font-size: var(--sel-theme-font-size-title); }
+.linghu-automation h3 { font-size: var(--sel-theme-font-size-body); }
+.linghu-automation header p, .linghu-prompt-heading p { margin: 4px 0 0; color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-caption); }
+.linghu-automation-toggle { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; min-height: 36px !important; border-color: var(--sel-theme-workbench-accent-line) !important; }
+.linghu-automation-toggle > span { width: 28px; height: 16px; padding: 2px; border-radius: 999px; background: var(--sel-theme-workbench-control); }
+.linghu-automation-toggle > span::after { content: ""; display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--sel-theme-workbench-text-muted); transition: transform .15s ease, background .15s ease; }
+.linghu-automation-toggle.enabled { color: var(--sel-theme-workbench-accent) !important; background: color-mix(in srgb, var(--sel-theme-workbench-accent) 9%, var(--sel-theme-workbench-surface)) !important; }
+.linghu-automation-toggle.enabled > span { background: color-mix(in srgb, var(--sel-theme-workbench-accent) 35%, var(--sel-theme-workbench-control)); }
+.linghu-automation-toggle.enabled > span::after { transform: translateX(12px); background: var(--sel-theme-workbench-accent); }
+.linghu-automation-facts { min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.linghu-automation-facts > span { min-width: 0; display: grid; gap: 5px; padding: 10px; border-radius: 8px; color: var(--sel-theme-workbench-text-subtle); background: var(--sel-theme-workbench-code); font-size: var(--sel-theme-font-size-caption); }
+.linghu-automation-facts strong { overflow: hidden; color: var(--sel-theme-workbench-text); text-overflow: ellipsis; white-space: nowrap; }
+.linghu-automation-notice { margin: 0; padding: 9px 11px; border-left: 3px solid var(--sel-theme-semantic-warning); border-radius: 5px; color: var(--sel-theme-workbench-text); background: color-mix(in srgb, var(--sel-theme-semantic-warning) 9%, transparent); overflow-wrap: anywhere; }
+.linghu-last-feedback { border: 1px solid var(--sel-theme-line); border-radius: 8px; }
+.linghu-last-feedback summary { padding: 9px 11px; cursor: pointer; color: var(--sel-theme-workbench-text); }
+.linghu-last-feedback > div { padding: 0 11px 10px; color: var(--sel-theme-workbench-text-muted); }
+.linghu-last-feedback p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.linghu-prompt-heading { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 2px; }
+.linghu-prompt-heading > button { display: inline-flex; align-items: center; gap: 6px; }
+.linghu-prompt-heading > button svg { width: 16px; }
+.linghu-prompt-form { min-width: 0; display: grid; gap: 11px; padding: 13px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: 9px; background: var(--sel-theme-workbench-code); }
+.linghu-prompt-form label { min-width: 0; display: grid; gap: 6px; color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-label); }
+.linghu-prompt-form input, .linghu-prompt-form textarea { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--sel-theme-line); border-radius: 7px; color: var(--sel-theme-workbench-text); background: var(--sel-theme-workbench-control); font: inherit; }
+.linghu-prompt-form input { height: 36px; padding: 0 10px; }
+.linghu-prompt-form textarea { resize: vertical; min-height: 180px; padding: 9px 10px; line-height: 1.55; }
+.linghu-prompt-form input:focus, .linghu-prompt-form textarea:focus { outline: 2px solid var(--sel-theme-workbench-focus); outline-offset: 1px; }
+.linghu-prompt-form > div { display: flex; justify-content: flex-end; gap: 8px; }
+.linghu-prompt-form button.primary { border-color: var(--sel-theme-workbench-accent-line); color: var(--sel-theme-workbench-accent); }
+.linghu-prompt-list { min-width: 0; display: grid; gap: 9px; }
+.linghu-prompt-list article { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--sel-theme-line); border-radius: 9px; background: var(--sel-theme-workbench-code); }
+.linghu-prompt-list article.active { border-color: var(--sel-theme-workbench-accent-line); box-shadow: inset 3px 0 var(--sel-theme-workbench-accent); }
+.linghu-prompt-list article.disabled { opacity: .64; }
+.linghu-prompt-summary { min-width: 0; }
+.linghu-prompt-summary > div { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.linghu-prompt-summary strong { min-width: 0; overflow: hidden; color: var(--sel-theme-workbench-text); text-overflow: ellipsis; white-space: nowrap; }
+.linghu-prompt-summary span { flex: 0 0 auto; padding: 2px 7px; border-radius: 999px; color: var(--sel-theme-workbench-accent); background: color-mix(in srgb, var(--sel-theme-workbench-accent) 11%, transparent); font-size: var(--sel-theme-font-size-caption); }
+.linghu-prompt-summary p { display: -webkit-box; margin: 7px 0 0; overflow: hidden; color: var(--sel-theme-workbench-text-muted); line-height: 1.55; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.linghu-prompt-list nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.linghu-prompt-list nav button { min-height: 30px; }
+.linghu-prompt-empty { margin: 0; padding: 18px; border: 1px dashed var(--sel-theme-line); border-radius: 8px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
+@media (max-width: 1180px) {
+  .linghu-automation > header, .linghu-prompt-heading { align-items: stretch; flex-direction: column; }
+  .linghu-automation-toggle, .linghu-prompt-heading > button { align-self: flex-start; }
+  .linghu-automation-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .linghu-prompt-list article { grid-template-columns: minmax(0, 1fr); }
+  .linghu-prompt-list nav { justify-content: flex-start; }
+}
 .member-blocking-reason { margin-top: 15px; padding: 10px 12px; border: 1px solid var(--sel-theme-semantic-error); border-radius: 8px; color: var(--sel-theme-semantic-error); background: var(--sel-theme-workbench-error-surface); font-size: var(--sel-theme-font-size-label); }
 .member-current-task { display: grid; gap: 14px; margin-top: 18px; padding: 18px; border: 1px solid var(--sel-theme-line); border-radius: 10px; background: var(--sel-theme-workbench-surface); }
 .member-current-task > p { margin: 0; color: var(--sel-theme-workbench-text-muted); line-height: 1.65; overflow-wrap: anywhere; }

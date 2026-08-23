@@ -17,6 +17,7 @@ type StateListener = (state: CollaborationState, reason: string, taskIds: string
 const DEFAULT_MEMBERS: ReadonlyArray<{ memberId: string; displayName: string; kind: CollaborationMember["kind"] }> = [
   { memberId: "han-li", displayName: "韩立", kind: "conversation-owner" },
   { memberId: "nangong-wan", displayName: "南宫婉", kind: "worker" },
+  { memberId: "linghu-ancestor", displayName: "令狐老祖", kind: "worker" },
   { memberId: "zi-ling", displayName: "紫灵", kind: "worker" },
   { memberId: "yuan-yao", displayName: "元瑶", kind: "worker" },
   { memberId: "song-yu", displayName: "宋玉", kind: "worker" },
@@ -25,7 +26,6 @@ const DEFAULT_MEMBERS: ReadonlyArray<{ memberId: string; displayName: string; ki
   { memberId: "doctor-mo", displayName: "墨大夫", kind: "worker" },
   { memberId: "li-feiyu", displayName: "厉飞雨", kind: "worker" },
   { memberId: "zhang-tie", displayName: "张铁", kind: "worker" },
-  { memberId: "linghu-ancestor", displayName: "令狐老祖", kind: "worker" },
   { memberId: "li-huayuan", displayName: "李化元", kind: "worker" },
 ];
 
@@ -92,7 +92,7 @@ export class CollaborationStore {
     if (this.#state.members.some((candidate) => candidate.memberId !== memberId && candidate.displayName === displayName)) {
       throw new Error("协同人物名称已存在。");
     }
-    if (member.protected && request.enabled === false) throw new Error("韩立是受保护的会话负责人，不能停用。");
+    if (member.protected && (request.enabled === false || (request.displayName !== undefined && request.displayName !== member.displayName))) throw new Error("受保护的系统人物不能停用或重命名。");
     return this.#commit("member.updated", (state) => {
       const target = requireMember(state, memberId);
       target.displayName = displayName;
@@ -103,7 +103,7 @@ export class CollaborationStore {
 
   deleteMember(memberId: string): CollaborationState {
     const member = this.#member(memberId);
-    if (member.protected) throw new Error("韩立是受保护的会话负责人，不能删除。");
+    if (member.protected) throw new Error("受保护的系统人物不能删除。");
     if (member.currentTaskId || !["idle", "offline"].includes(member.state)) {
       return this.#commit("member.draining", (state) => {
         const target = requireMember(state, memberId);
@@ -131,6 +131,10 @@ export class CollaborationStore {
       ? this.#member(request.initiatorMemberId)
       : this.#state.members.find((member) => member.kind === "conversation-owner");
     if (!initiatorMember) throw new Error("协同任务缺少真实发起人。");
+    const preferredExecutor = request.preferredExecutorMemberId ? this.#member(request.preferredExecutorMemberId) : null;
+    if (preferredExecutor && (preferredExecutor.kind !== "worker" || !preferredExecutor.enabled)) {
+      throw new Error("指定执行人必须是已启用的协同执行人物。");
+    }
     const task: CollaborationTask = {
       taskId,
       taskRevision: 1,
@@ -138,7 +142,8 @@ export class CollaborationStore {
       workerGeneration: 0,
       state: "queued-executor",
       phase: null,
-      executorMemberId: null,
+      executorMemberId: preferredExecutor?.memberId || null,
+      preferredExecutorMemberId: preferredExecutor?.memberId || null,
       currentReviewerMemberId: null,
       currentPlanVersion: 0,
       explicitRejectionCount: 0,
@@ -308,9 +313,10 @@ function createInitialState(): CollaborationState {
 
 function createDefaultMember(member: (typeof DEFAULT_MEMBERS)[number], now: string): CollaborationMember {
   const owner = member.kind === "conversation-owner";
+  const protectedMember = owner || member.memberId === "linghu-ancestor";
   return {
     ...member,
-    protected: owner,
+    protected: protectedMember,
     enabled: true,
     state: owner ? "conversation" : "idle",
     role: owner ? "conversation" : null,
@@ -331,11 +337,23 @@ function mergeDefaultMembers(state: CollaborationState): void {
   for (const item of DEFAULT_MEMBERS) {
     if (!state.members.some((member) => member.memberId === item.memberId)) state.members.push(createDefaultMember(item, now));
   }
+  // 稳定人物始终按产品定义排序；用户新增人物保持原相对顺序并排在稳定人物之后。
+  const stableOrder = new Map(DEFAULT_MEMBERS.map((member, index) => [member.memberId, index]));
+  state.members = state.members.map((member, originalIndex) => ({ member, originalIndex })).sort((left, right) => {
+    const leftOrder = stableOrder.get(left.member.memberId);
+    const rightOrder = stableOrder.get(right.member.memberId);
+    if (leftOrder !== undefined && rightOrder !== undefined) return leftOrder - rightOrder;
+    if (leftOrder !== undefined) return -1;
+    if (rightOrder !== undefined) return 1;
+    return left.originalIndex - right.originalIndex;
+  }).map((entry) => entry.member);
   for (const member of state.members) {
+    if (member.memberId === "linghu-ancestor") member.protected = true;
     member.lastHeartbeatAt ??= null;
     member.lastProtocolProgressAt ??= null;
   }
   for (const task of state.tasks) {
+    task.preferredExecutorMemberId ??= null;
     task.recoveryTargetState ??= null;
     task.reviewAttempts ??= [];
     migrateTaskHistory(task, state);

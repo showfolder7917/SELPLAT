@@ -69,6 +69,17 @@ contextBridge.exposeInMainWorld("desktop", {
   submitCollaborationTask: (request: unknown) => ipcRenderer.invoke("desktop:submit-collaboration-task", request),
   continueCollaborationTask: (taskId: string) => ipcRenderer.invoke("desktop:continue-collaboration-task", taskId),
   cancelCollaborationTask: (taskId: string) => ipcRenderer.invoke("desktop:cancel-collaboration-task", taskId),
+  getLinghuAutomationState: () => ipcRenderer.invoke("desktop:get-linghu-automation-state"),
+  setLinghuAutomationEnabled: (enabled: boolean) => ipcRenderer.invoke("desktop:set-linghu-automation-enabled", enabled),
+  createLinghuStartupPrompt: (request: unknown) => ipcRenderer.invoke("desktop:create-linghu-startup-prompt", request),
+  updateLinghuStartupPrompt: (promptId: string, request: unknown) => ipcRenderer.invoke("desktop:update-linghu-startup-prompt", promptId, request),
+  deleteLinghuStartupPrompt: (promptId: string) => ipcRenderer.invoke("desktop:delete-linghu-startup-prompt", promptId),
+  selectLinghuStartupPrompt: (promptId: string) => ipcRenderer.invoke("desktop:select-linghu-startup-prompt", promptId),
+  onLinghuAutomationState: (listener: (event: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:linghu-automation-state", handler);
+    return () => ipcRenderer.removeListener("desktop:linghu-automation-state", handler);
+  },
   onCollaborationState: (listener: (event: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
     ipcRenderer.on("desktop:collaboration-state", handler);

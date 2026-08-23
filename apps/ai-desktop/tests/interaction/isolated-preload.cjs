@@ -23,16 +23,17 @@ const dispatchListeners = new Set();
 const streamListeners = new Set();
 const collaborationStateListeners = new Set();
 const collaborationStreamListeners = new Set();
-const collaborationNames = ["韩立", "南宫婉", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "令狐老祖", "李化元"];
+const linghuAutomationListeners = new Set();
+const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
   version: 1,
   mode: "single-conversation",
   selectedMemberId: "han-li",
   members: collaborationNames.map((displayName, index) => ({
-    memberId: index === 0 ? "han-li" : `isolated-member-${index}`,
+    memberId: index === 0 ? "han-li" : displayName === "令狐老祖" ? "linghu-ancestor" : `isolated-member-${index}`,
     displayName,
     kind: index === 0 ? "conversation-owner" : "worker",
-    protected: index === 0,
+    protected: index === 0 || displayName === "令狐老祖",
     enabled: true,
     state: index === 0 ? "conversation" : "idle",
     role: index === 0 ? "conversation" : null,
@@ -50,6 +51,29 @@ let collaborationState = {
   integrationBatches: [],
   nextIntegrationGeneration: 1,
   updatedAt: "2026-08-23T00:00:00.000Z",
+};
+let linghuAutomationState = {
+  version: 1,
+  enabled: false,
+  pollIntervalMs: 30000,
+  cycle: 1,
+  currentModule: "flow-completion",
+  activePromptId: "linghu-default-flow-guardian",
+  activeTaskId: null,
+  recoveryAttemptCount: 0,
+  lastDispatchAt: null,
+  lastCompletedAt: null,
+  lastCheckedAt: "2026-08-23T00:00:00.000Z",
+  blockingReason: "自动执行已关闭",
+  lastFeedback: null,
+  prompts: [{ promptId: "linghu-default-flow-guardian", title: "自动流程最后保障", content: "你是令狐老祖，是保障自动流程完成的最后一道屏障。只要自动执行开关保持开启，检测永远不能停止。", enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
+  updatedAt: "2026-08-23T00:00:00.000Z",
+};
+const publishLinghuAutomation = (reason) => {
+  linghuAutomationState.updatedAt = new Date().toISOString();
+  const event = { state: structuredClone(linghuAutomationState), reason };
+  for (const listener of linghuAutomationListeners) listener(event);
+  return event.state;
 };
 const publishCollaborationState = (reason) => {
   const copy = structuredClone(collaborationState);
@@ -171,6 +195,25 @@ contextBridge.exposeInMainWorld("desktop", {
   submitCollaborationTask: async () => publishCollaborationState("task.submitted"),
   continueCollaborationTask: async () => publishCollaborationState("task.recovery_requested"),
   cancelCollaborationTask: async () => publishCollaborationState("task.cancelled"),
+  getLinghuAutomationState: async () => structuredClone(linghuAutomationState),
+  setLinghuAutomationEnabled: async (enabled) => { linghuAutomationState.enabled = enabled === true; linghuAutomationState.blockingReason = enabled ? null : "自动执行已关闭"; return publishLinghuAutomation(enabled ? "automation.enabled" : "automation.disabled"); },
+  createLinghuStartupPrompt: async ({ title, content }) => {
+    const now = new Date().toISOString();
+    const promptId = `interaction-prompt-${Date.now()}`;
+    linghuAutomationState.prompts.push({ promptId, title, content, enabled: true, createdAt: now, updatedAt: now });
+    linghuAutomationState.activePromptId = promptId;
+    return publishLinghuAutomation("prompt.created");
+  },
+  updateLinghuStartupPrompt: async (promptId, request) => {
+    const prompt = linghuAutomationState.prompts.find((item) => item.promptId === promptId);
+    if (!prompt) throw new Error("启动文案不存在。");
+    Object.assign(prompt, request, { updatedAt: new Date().toISOString() });
+    if (!prompt.enabled && linghuAutomationState.activePromptId === promptId) linghuAutomationState.activePromptId = linghuAutomationState.prompts.find((item) => item.enabled)?.promptId || null;
+    return publishLinghuAutomation("prompt.updated");
+  },
+  deleteLinghuStartupPrompt: async (promptId) => { linghuAutomationState.prompts = linghuAutomationState.prompts.filter((item) => item.promptId !== promptId); if (linghuAutomationState.activePromptId === promptId) linghuAutomationState.activePromptId = linghuAutomationState.prompts.find((item) => item.enabled)?.promptId || null; return publishLinghuAutomation("prompt.deleted"); },
+  selectLinghuStartupPrompt: async (promptId) => { linghuAutomationState.activePromptId = promptId; return publishLinghuAutomation("prompt.selected"); },
+  onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
   onCollaborationState: (listener) => { collaborationStateListeners.add(listener); return () => collaborationStateListeners.delete(listener); },
   onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
   setInteractionCollaborationReviewFixture: async (active) => {
@@ -195,7 +238,7 @@ contextBridge.exposeInMainWorld("desktop", {
       snapshot: { title: "审核格式兼容", problemStatement: "审核正文不能丢失", confirmedIntent: "保存审核正文并补取结论。", constraints: [], acceptanceCriteria: [], sourceMessageIds: [], attachmentIds: [], workspaceState: workspace, locale: "zh-CN", contentHash: "interaction" },
       plans: [{ version: 1, ownerMemberId: "isolated-member-10", ownerDisplayName: "张铁", status: "awaiting-review", text: "修正审核解析和状态持久化。", contentHash: "plan", createdAt: "2026-08-23T00:00:00.000Z" }],
       reviews: [],
-      reviewAttempts: [{ attemptId: "attempt-1", planVersion: 1, reviewerMemberId: "isolated-member-7", reviewerDisplayName: "墨大夫", reviewerGeneration: 1, outcome: "decision-unrecognized", decision: null, decisionSource: null, rawOutput: "审核内容已经完整生成，但旧格式没有首行标记。", clarificationOutput: "仍未返回唯一标记", error: "审核正文已生成，但结论无法识别。", startedAt: "2026-08-23T00:00:00.000Z", completedAt: "2026-08-23T00:01:00.000Z" }],
+      reviewAttempts: [{ attemptId: "attempt-1", planVersion: 1, reviewerMemberId: "isolated-member-8", reviewerDisplayName: "墨大夫", reviewerGeneration: 1, outcome: "decision-unrecognized", decision: null, decisionSource: null, rawOutput: "审核内容已经完整生成，但旧格式没有首行标记。", clarificationOutput: "仍未返回唯一标记", error: "审核正文已生成，但结论无法识别。", startedAt: "2026-08-23T00:00:00.000Z", completedAt: "2026-08-23T00:01:00.000Z" }],
       executionRecords: [{ assignmentId: "interaction-assignment", executor: { memberId: "isolated-member-10", displayName: "张铁" }, workerGeneration: 1, status: "blocked", assignedAt: "2026-08-23T00:00:00.000Z", executionStartedAt: "2026-08-23T00:00:30.000Z", completedAt: "2026-08-23T00:01:00.000Z", transferFromAssignmentId: null, handoffType: "initial", result: null, blockingReason: "审核正文已保存但结论未确认", changedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"] }],
       flowEvents: [{ eventId: "flow-1", type: "task.submitted", stage: "task", status: "started", actor: { memberId: "han-li", displayName: "韩立" }, summary: "任务已提交", occurredAt: "2026-08-23T00:00:00.000Z", error: false }],
       versionWorkspace: null,
