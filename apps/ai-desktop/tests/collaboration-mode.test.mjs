@@ -176,6 +176,9 @@ test("协同编排保持独立连接、异人审核、三次上限、心跳和�
   const integrationVerifier = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
   const ui = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
   assert.match(sessions, /new CodexService/);
+  assert.match(sessions, /codexHome: this\.#options\.codexHome/);
+  assert.match(sessions, /serviceName: "selplat_ai_desktop_collaboration"/);
+  assert.match(sessions, /migrateLegacySession: true/);
   assert.match(sessions, /role: "executor" \| "reviewer"/);
   assert.match(coordinator, /member\.memberId !== task\.executorMemberId/);
   assert.match(coordinator, /optimize-and-execute/);
