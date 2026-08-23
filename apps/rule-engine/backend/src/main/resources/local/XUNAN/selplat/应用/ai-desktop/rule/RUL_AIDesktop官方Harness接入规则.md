@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.53.0 将令狐老祖自动流程最后保障、启动文案管理和持续恢复纳入协同正式入口。 -->
-rule_version = 5.53.0
+<!-- 5.54.0 将人物页长报告收回所属流程环节，并用真实状态生成唯一当前进度。 -->
+rule_version = 5.54.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -28,6 +28,8 @@ upgrade_record_5_51 = 2026-08-23:删除CodexRuntimeInfo路径字段_删除runtim
 upgrade_record_5_52 = 2026-08-23:交互测试先构建Developer_主桌面直接加载生产index文件_复用正式BrowserWindow默认1560x980和最小1000x700_补实际复现1224x768_设置入口左下锚点_面板边界_标题横排断言_Developer生产样式统一输出单一CSS_开发服务仅保留截图编辑器测试
 <!-- 5.53.0 固化令狐老祖作为自动运行最后屏障以及人类可维护启动文案的持续循环。 -->
 upgrade_record_5_53 = 2026-08-23:令狐老祖固定排在南宫婉下方并受保护_单一LinghuAutomationFacade_自动执行按钮显式开启_30秒检测永不自行停止_四独立模块串行_阻塞保留恢复点_真实发起人与首选执行人均为令狐老祖_启动文案新增修改删除启停选择_第四模块固定统一测试通过后受控重启_重建恢复关联任务和下一循环
+<!-- 5.54.0 防止分析报告、证据和评分继续冒充人物当前任务进度。 -->
+upgrade_record_5_54 = 2026-08-23:人物当前任务固定状态卡_真实负责人事项步骤更新时间和下一去向_意图分析审批执行问题修复统一测试五折叠条_当前环节自动展开定位_长内容按所属环节收纳_状态变化禁止停留旧分析页
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -385,6 +387,14 @@ developer_chat_scroll_contract = constrained_independent_vertical_scroll + visib
 harness_streaming_ui_contract = official_notifications_only + agent_message_delta + readable_reasoning_summary + plan_and_item_lifecycle + turn_diff_changed_files + completed_item_authoritative
 <!-- 详细执行清单默认折叠，折叠栏显示事件项数和最新步骤，用户仍可手动展开查看命令与文件细节。 -->
 harness_streaming_activity_disclosure_contract = collapsed_by_default + visible_item_count_and_latest_step + user_expandable_details
+<!-- 人物当前任务和独立任务详情必须共用真实任务事实推导的唯一进度模型，禁止各卡片自行翻译状态。 -->
+collaboration_task_progress_view_contract = shared_fact_derived_progress_model + current_owner_action_step_latest_update_and_next_handoff
+<!-- 当前任务正文只按五个业务环节组织，长内容和实时输出必须进入所属环节。 -->
+collaboration_task_progress_view_contract.2 = intent_analysis_approval_execution_problem_repair_unified_test_disclosures + plans_evidence_scores_live_output_repair_and_test_results_inside_owning_stage
+<!-- 页面进入或真实状态变化后只自动展开并定位当前环节，完成和未来环节保持折叠且标题显示负责人和结果或等待条件。 -->
+collaboration_task_progress_view_contract.3 = current_stage_auto_open_and_scroll_nearest + completed_and_future_default_collapsed + summary_owner_and_result_or_wait_condition
+<!-- 当前进度禁止退化为笼统执行标签，也禁止分析完成后继续让展开的分析报告占据当前卡点。 -->
+collaboration_task_progress_view_contract.4 = prohibit_generic_executing_as_progress + prohibit_stale_expanded_analysis_after_state_transition
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events
 <!-- 主进程预检目标显示器后调用 macOS 自带 screencapture 生成单轮 PNG；隔离截图窗口只接收该帧做选区与标注。 -->
