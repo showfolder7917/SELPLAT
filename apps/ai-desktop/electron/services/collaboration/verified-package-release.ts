@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readlinkSync, readdirSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
 
 /** 只解析已经由固定打包与签名验证门禁生成的应用，不回退到源码、外部 build 或旧安装。 */
@@ -26,6 +26,32 @@ export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stabl
   // macOS 应用包大量使用相对符号链接；禁止 cpSync 把它们改写为候选 worktree 的绝对路径，
   // 否则候选回收后 Electron Framework 会变成断链，已发布应用无法启动。
   cpSync(sourceApp, destinationApp, { recursive: true, preserveTimestamps: true, verbatimSymlinks: true });
+  rewriteBundleSymlinks(sourceApp, destinationApp);
   if (!existsSync(destinationExecutable)) throw new Error("稳定发布目录缺少启动程序。");
   return destinationExecutable;
+}
+
+/** 将打包器生成的候选绝对链接转换为稳定应用内的相对链接，拒绝任何指向应用包外部的依赖。 */
+function rewriteBundleSymlinks(sourceApp: string, destinationApp: string): void {
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const linkPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(linkPath);
+        continue;
+      }
+      if (!entry.isSymbolicLink()) continue;
+      const target = readlinkSync(linkPath);
+      if (!path.isAbsolute(target)) continue;
+      const sourceRelativeTarget = path.relative(sourceApp, target);
+      if (sourceRelativeTarget === "" || sourceRelativeTarget.startsWith(`..${path.sep}`) || path.isAbsolute(sourceRelativeTarget)) {
+        throw new Error(`候选应用包含指向包外的绝对符号链接，禁止发布：${linkPath}`);
+      }
+      const stableTarget = path.join(destinationApp, sourceRelativeTarget);
+      const relativeTarget = path.relative(path.dirname(linkPath), stableTarget) || ".";
+      unlinkSync(linkPath);
+      symlinkSync(relativeTarget, linkPath);
+    }
+  };
+  visit(destinationApp);
 }
