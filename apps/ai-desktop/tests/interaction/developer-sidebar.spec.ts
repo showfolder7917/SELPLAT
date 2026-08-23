@@ -7,6 +7,8 @@ let page: Page;
 const productionRendererFile = path.resolve("../../build/ai-desktop/renderer/developer/index.html");
 
 test.beforeAll(async () => {
+  // 冷缓存首次转换生产资源时 Electron 建连可能超过单项交互的 15 秒时限；只放宽一次性启动钩子。
+  test.setTimeout(45_000);
   // 每组测试只启动一次后台隔离 Electron，多个交互共用窗口以缩短任务托管耗时。
   const isolatedEnvironment = { ...process.env };
   // 当前 AI Desktop 主进程可能以 Node 模式拉起 Codex；隔离 Electron 必须移除该继承值才能按桌面运行时接受 Playwright 调试参数。
@@ -310,6 +312,14 @@ test("审核正文已生成但结论无法识别时保留正文并显示准确�
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await taskList.getByRole("button", { name: /墨大夫/ }).click();
   const memberPage = page.locator(".collaboration-member-page");
+  const taskDetail = memberPage.locator(".member-task-detail");
+  await expect(taskDetail).not.toHaveAttribute("open", "");
+  await expect(taskDetail.getByText("任务详细 · 南宫婉", { exact: true })).toBeVisible();
+  await expect(taskDetail.getByText("保存审核正文并补取结论。", { exact: true })).not.toBeVisible();
+  await taskDetail.locator("summary").click();
+  await expect(taskDetail.getByText("保存审核正文并补取结论。", { exact: true })).toBeVisible();
+  await taskDetail.locator("summary").click();
+  await expect(taskDetail.getByText("保存审核正文并补取结论。", { exact: true })).not.toBeVisible();
   await expect(memberPage.getByText("分析方案 v1 · 张铁", { exact: true })).toBeVisible();
   await expect(memberPage.getByText("审核正文已保存，结论未确认 · 墨大夫", { exact: true })).toBeVisible();
   await memberPage.getByText("审核正文已保存，结论未确认 · 墨大夫", { exact: true }).click();
