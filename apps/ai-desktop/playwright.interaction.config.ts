@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { defineConfig } from "@playwright/test";
-import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
+import { resolveInteractionTestPaths } from "./scripts/interaction-test-paths.mjs";
 
 const taskSegment = (process.env.AI_DESKTOP_TEST_TASK_ID || "standalone")
   .toLowerCase()
@@ -10,7 +10,7 @@ const taskSegment = (process.env.AI_DESKTOP_TEST_TASK_ID || "standalone")
   .replaceAll(/^-+|-+$/g, "")
   .slice(0, 100) || "standalone";
 const appRoot = path.resolve(".");
-const projectPaths = resolveApplicationDataPaths({ selplatRoot: path.resolve(appRoot, "../.."), applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
+const projectPaths = resolveInteractionTestPaths();
 const interactionRoot = path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "interaction", taskSegment);
 mkdirSync(interactionRoot, { recursive: true });
 

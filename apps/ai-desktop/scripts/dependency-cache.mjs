@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,8 +50,14 @@ export function attachDependencyCache() {
   if (!existsSync(details.dependencyRoot)) throw new Error(`Dependency cache is missing for current package-lock.json: ${details.cacheRoot}`);
   repairLocalPackageLinks(details);
   if (existsSync(details.linkPath)) {
-    if (lstatSync(details.linkPath).isSymbolicLink()) return { ...details, ownsLink: false };
-    throw new Error(`Generated dependency directory must be migrated out of source first: ${details.linkPath}`);
+    if (lstatSync(details.linkPath).isSymbolicLink()) {
+      // 只复用真实指向当前锁哈希缓存的链接；旧哈希链接必须先回收再挂载当前缓存。
+      if (realpathSync(details.linkPath) === realpathSync(details.dependencyRoot)) return { ...details, ownsLink: false };
+      rmSync(details.linkPath, { force: true });
+    } else {
+      // 当前哈希缓存已经完整存在时，源码目录中的实体 node_modules 只是中断迁移留下的可再生产物。
+      rmSync(details.linkPath, { recursive: true, force: true });
+    }
   }
   mkdirSync(path.dirname(details.linkPath), { recursive: true });
   symlinkSync(details.dependencyRoot, details.linkPath, process.platform === "win32" ? "junction" : "dir");

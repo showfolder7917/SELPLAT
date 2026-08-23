@@ -2,14 +2,11 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
+import { resolveInteractionTestPaths } from "./interaction-test-paths.mjs";
 
 const require = createRequire(import.meta.url);
-// 协同 worktree 路径可能包含空格，必须先解码 file URL，避免把 `%20` 当成真实目录名。
-const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const projectRoot = path.resolve(appRoot, "../..");
-const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
+const appRoot = path.resolve(".");
+const projectPaths = resolveInteractionTestPaths();
 const taskSegment = (process.env.AI_DESKTOP_TEST_TASK_ID || "standalone")
   .toLowerCase()
   .replaceAll(/[^a-z0-9._-]+/g, "-")

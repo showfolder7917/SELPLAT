@@ -1,10 +1,22 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { attachDependencyCache, detachOwnedDependencyCache } from "./dependency-cache.mjs";
+import { attachDependencyCache, detachOwnedDependencyCache, resolveDependencyCache } from "./dependency-cache.mjs";
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error("A command is required.");
+
+// 锁文件变化后先复用统一准备入口补齐新哈希缓存，避免所有受控命令在挂载阶段直接失败。
+const unresolvedCache = resolveDependencyCache();
+if (!existsSync(unresolvedCache.dependencyRoot)) {
+  const prepared = spawnSync(process.execPath, ["scripts/ensure-dependency-cache.mjs"], {
+    cwd: unresolvedCache.appRoot,
+    stdio: "inherit",
+  });
+  if (prepared.error) throw prepared.error;
+  if (prepared.status !== 0) process.exit(prepared.status ?? 1);
+}
+
 const cache = attachDependencyCache();
 try {
   const nodeCommonRuntime = path.join(cache.dependencyRoot, "@selplat", "node-common-core", "dist", "index.js");

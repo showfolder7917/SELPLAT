@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./core/kernel": { "types": "./src/runtime.d.ts", "default": "./src/core/selKernel.js" },
+    "./components/floating-panel": { "types": "./src/runtime.d.ts", "default": "./src/components/floating-panel/selFloatingPanel.js" },
+    "./components/floating-panel/styles": { "types": "./src/theme/css.d.ts", "default": "./src/components/floating-panel/selFloatingPanel.css" },
     "./theme/tokens": { "types": "./src/theme/css.d.ts", "default": "./src/theme/selThemeTokens.css" },
     "./theme/contract": { "types": "./src/theme/css.d.ts", "default": "./src/theme/contract/selThemeContract.css" },
     "./theme/states": { "types": "./src/theme/css.d.ts", "default": "./src/theme/contract/selThemeStates.css" },
@@ -16,6 +19,8 @@
     "./theme/plain-minimal/light": { "types": "./src/theme/css.d.ts", "default": "./src/theme/packs/plain-minimal/modes/light.css" }
   },
   "files": [
+    "src/core",
+    "src/components",
     "src/theme"
   ]
 }
