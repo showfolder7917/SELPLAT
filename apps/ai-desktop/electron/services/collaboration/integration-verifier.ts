@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, symlinkSync, unlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
@@ -41,18 +41,17 @@ export async function ensureIntegrationDependencies(
   npmCacheRoot?: string,
 ): Promise<"ready" | "linked" | "installed"> {
   const candidateModules = path.join(candidateDesktopRoot, "node_modules");
-  const candidateTsc = executablePath(candidateModules, "tsc");
-  if (existsSync(candidateTsc)) {
+  if (hasUsableDesktopDependencies(candidateModules)) {
     ensureBuildDependencyLink(candidateDesktopRoot, candidateModules);
     return lstatSync(candidateModules).isSymbolicLink() ? "linked" : "ready";
   }
 
-  const sourceTsc = executablePath(sourceModules, "tsc");
   const locksMatch = sameFile(
     path.join(candidateDesktopRoot, "package-lock.json"),
     sourceLockPath,
   );
-  if (!existsSync(candidateModules) && locksMatch && existsSync(sourceTsc)) {
+  if (existsSync(candidateModules)) rmSync(candidateModules, { recursive: true, force: true });
+  if (locksMatch && hasUsableDesktopDependencies(sourceModules)) {
     symlinkSync(sourceModules, candidateModules, process.platform === "win32" ? "junction" : "dir");
     ensureBuildDependencyLink(candidateDesktopRoot, sourceModules);
     return "linked";
@@ -61,7 +60,7 @@ export async function ensureIntegrationDependencies(
   try {
     await run(
       process.platform === "win32" ? "npm.cmd" : "npm",
-      ["ci", "--ignore-scripts", "--prefer-offline", "--no-audit", "--no-fund"],
+      ["ci", "--prefer-offline", "--no-audit", "--no-fund"],
       candidateDesktopRoot,
       600_000,
       npmCacheRoot ? { npm_config_cache: npmCacheRoot } : undefined,
@@ -69,7 +68,7 @@ export async function ensureIntegrationDependencies(
   } catch (error) {
     throw new Error(`集成依赖自愈失败：${error instanceof Error ? error.message : String(error)}`);
   }
-  if (!existsSync(candidateTsc)) throw new Error("集成依赖自愈失败：补齐依赖后仍找不到 TypeScript 编译器。");
+  if (!hasUsableDesktopDependencies(candidateModules)) throw new Error("集成依赖自愈失败：补齐依赖后仍缺少 TypeScript 或 Electron 运行时。");
   ensureBuildDependencyLink(candidateDesktopRoot, candidateModules);
   return "installed";
 }
@@ -100,6 +99,24 @@ function integrationDependencyLinkPaths(candidateDesktopRoot: string): [string, 
     path.join(candidateDesktopRoot, "node_modules"),
     path.join(candidateProjectRoot, "build", applicationName, "node_modules"),
   ];
+}
+
+/** 验证隔离桌面测试所需的编译器和 Electron 已由安装脚本完整落盘。 */
+function hasUsableDesktopDependencies(modulesRoot: string): boolean {
+  return existsSync(executablePath(modulesRoot, "tsc")) && hasElectronRuntime(modulesRoot);
+}
+
+/** Electron 的 path.txt 仅由安装脚本写入，存在且指向实际文件才允许复用依赖。 */
+function hasElectronRuntime(modulesRoot: string): boolean {
+  const electronRoot = path.join(modulesRoot, "electron");
+  const pathFile = path.join(electronRoot, "path.txt");
+  if (!existsSync(pathFile)) return false;
+  const relativeExecutable = readFileSync(pathFile, "utf8").trim();
+  const executable = path.resolve(electronRoot, "dist", relativeExecutable);
+  return Boolean(relativeExecutable)
+    && !path.isAbsolute(relativeExecutable)
+    && executable.startsWith(`${path.resolve(electronRoot, "dist")}${path.sep}`)
+    && existsSync(executable);
 }
 
 function executablePath(modulesRoot: string, name: string): string {
