@@ -18,7 +18,10 @@ export async function verifyCollaborationIntegration(rootPath: string, taskIds: 
     const sourceModules = resolveLockSpecificDependencyPaths(dataPaths.dependencyCacheRoot, readFileSync(path.join(sourceDesktopRoot, "package-lock.json"))).nodeModulesRoot;
     const dependencyMode = await ensureIntegrationDependencies(desktopRoot, sourceModules, path.join(sourceDesktopRoot, "package-lock.json"));
     try {
-      await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "typecheck"], desktopRoot);
+      await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "typecheck"], desktopRoot, 180_000, {
+        // 组合检查与后续统一测试共享外层已核验的候选依赖链接，禁止内层命令把它当作待迁移源码依赖。
+        AI_DESKTOP_TEST_TASK_ID: `integration-${taskIds.join("-")}`,
+      });
     } finally {
       // 复用依赖的目录链接只服务本轮组合检查；提升候选前删除，避免被 Git 误判为待集成源码。
       const dependencyLink = path.join(desktopRoot, "node_modules");

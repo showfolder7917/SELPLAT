@@ -23,6 +23,7 @@ const developerSource = readFileSync(new URL("../src/variants/developer/Develope
 const coordinatorSource = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
 const collaborationContractSource = readFileSync(new URL("../shared/contracts/collaboration.ts", import.meta.url), "utf8");
 const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/collaboration/linghu-unified-test-runner.ts", import.meta.url), "utf8");
+const integrationVerifierSource = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
 
 function runCoordinatorWorker(coordinationRoot, runId, buildRoot, holdMilliseconds) {
@@ -613,7 +614,7 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.65\.0/);
+  assert.match(rule, /rule_version = 5\.66\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);
@@ -804,6 +805,7 @@ test("令狐候选统一测试把外层受控依赖链接传给全部固定脚�
   assert.match(unifiedTestRunnerSource, /AI_DESKTOP_TEST_TASK_ID: runId/);
   assert.match(unifiedTestRunnerSource, /runNpmScript\(desktopRoot, script, environment\)/);
   assert.match(unifiedTestRunnerSource, /delete environment\.ELECTRON_RUN_AS_NODE/);
+  assert.match(integrationVerifierSource, /AI_DESKTOP_TEST_TASK_ID: `integration-/);
 });
 
 test("协同执行人修改源码后由桌面内部验证分支而不再发起 Codex Playwright 回合", async () => {
