@@ -200,9 +200,16 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
 
   ipcMain.handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
   ipcMain.handle("desktop:get-settings", () => settings.read());
+  ipcMain.handle("desktop:get-codex-models", () => codex.getModels());
   ipcMain.handle("desktop:update-settings", (_event, patch: Partial<DesktopSettings>) => {
     const result = settings.update(patch);
-    audit.recordEvent("settings.updated", { locale: result.locale, sandboxMode: result.sandboxMode });
+    audit.recordEvent("settings.updated", {
+      locale: result.locale,
+      sandboxMode: result.sandboxMode,
+      defaultModel: result.defaultModel,
+      reasoningEffort: result.reasoningEffort,
+      serviceTier: result.serviceTier,
+    });
     return result;
   });
   ipcMain.handle("desktop:get-workspaces", () => workspaces.read());

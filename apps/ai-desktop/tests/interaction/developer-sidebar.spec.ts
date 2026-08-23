@@ -176,6 +176,23 @@ test("未登录时设置面板的登录主操作文字可见并使用主题对�
   await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
 });
 
+test("全局模型设置复用 Harness 模型能力并同时保存强度与速度", async () => {
+  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
+  const model = page.getByRole("combobox", { name: "默认模型" });
+  const effort = page.getByRole("combobox", { name: "推理强度" });
+  const speed = page.getByRole("combobox", { name: "推理速度" });
+  await expect(model).toHaveValue("gpt-5.6-sol");
+  await expect(model.locator("option")).toContainText(["Codex 默认", "5.6 Sol · OpenAI"]);
+  await expect(effort.locator("option")).toContainText(["模型默认", "低", "中", "高", "超高", "最大"]);
+  await effort.selectOption("high");
+  await speed.selectOption("fast");
+  await expect(effort).toHaveValue("high");
+  await expect(speed).toHaveValue("fast");
+  await expect(page.getByText("对所有会话与协同任务生效", { exact: true })).toBeVisible();
+  await expect(page.locator(".model-settings-card")).not.toHaveCSS("overflow-x", "scroll");
+  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
+});
+
 test("生产构建在正式默认、实际复现和最小窗口中保持设置入口与面板定位", async () => {
   const sizes = [
     { name: "正式默认", width: 1560, height: 980 },

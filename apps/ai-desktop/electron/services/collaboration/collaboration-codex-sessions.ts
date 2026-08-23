@@ -13,7 +13,7 @@ import type {
   ResolveCodexUserInputRequest,
   WorkspaceState,
 } from "../../../shared/contracts/desktop.js";
-import { CodexService } from "../codex-service.js";
+import { CodexService, type CodexServiceOptions } from "../codex-service.js";
 import { CodexSessionStore } from "../codex-session-store.js";
 import { ManagedTaskExecutor } from "../managed-task-executor.js";
 import { TrustedCommandStore } from "../trusted-command-store.js";
@@ -137,6 +137,7 @@ export interface CodexCollaborationSessionFactoryOptions {
   registry: CollaborationCodexRegistry;
   resolveAttachmentPaths(attachmentIds: string[]): Promise<string[]>;
   runCodeValidation(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<void>;
+  readSettings: CodexServiceOptions["readSettings"];
   recordEvent(type: string, details: Record<string, unknown>, taskId: string): void;
 }
 
@@ -179,6 +180,7 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
         migrateLegacySession: true,
         sessionStorage: "ai-desktop",
         validationOwner: "desktop",
+        readSettings: this.#options.readSettings,
       },
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),

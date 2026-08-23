@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("desktop", {
   removeWorkspace: (id: string) => ipcRenderer.invoke("desktop:remove-workspace", id),
   listWorkspaceEntries: (id: string) => ipcRenderer.invoke("desktop:list-workspace-entries", id),
   getCodexStatus: () => ipcRenderer.invoke("desktop:get-codex-status"),
+  getCodexModels: () => ipcRenderer.invoke("desktop:get-codex-models"),
   getActiveCodexSession: () => ipcRenderer.invoke("desktop:get-active-codex-session"),
   loginWithChatGPT: () => ipcRenderer.invoke("desktop:login-with-chatgpt"),
   logoutCodex: () => ipcRenderer.invoke("desktop:logout-codex"),

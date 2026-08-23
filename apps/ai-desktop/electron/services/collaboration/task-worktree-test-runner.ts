@@ -84,7 +84,9 @@ export class TaskWorktreeTestRunner {
       this.#recordEvent("collaboration.task_test.completed", { worktreeRoot: request.worktreeRoot }, request.taskId);
     } finally {
       // 锁文件一致时只临时复用主工程依赖，任务验证结束立即移除链接，避免进入分支提交。
-      if (dependencyMode === "linked") unlinkSync(path.join(desktopRoot, "node_modules"));
+      const dependencyLink = path.join(desktopRoot, "node_modules");
+      // 子脚本的依赖包装器可能已经完成相同清理；链接不存在代表目标状态已经达成，不应把它升级为测试失败。
+      if (dependencyMode === "linked" && existsSync(dependencyLink)) unlinkSync(dependencyLink);
     }
   }
 }
