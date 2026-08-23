@@ -34,8 +34,19 @@ export class LinghuUnifiedTestRunner {
       ? this.#buildRoot
       : resolveApplicationDataPaths({ selplatRoot: resolvedProjectRoot, applicationName: this.#applicationName }).buildRoot;
     const dependencyMode = await this.#ensureCandidateDependencies(desktopRoot, resolvedProjectRoot);
+    const runId = `linghu-unified-${Date.now()}`;
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      // 候选 worktree 的依赖链接已由外层按锁文件核验；内层所有 npm 脚本只能借用，不能再次迁移或接管。
+      AI_DESKTOP_TEST_TASK_ID: runId,
+      GIT_TERMINAL_PROMPT: "0",
+    };
+    delete environment.ELECTRON_RUN_AS_NODE;
+    delete environment.NODE_OPTIONS;
+    delete environment.NODE_INSPECT_RESUME_ON_START;
+    delete environment.VSCODE_INSPECTOR_OPTIONS;
     return this.#testResources.run({
-      runId: `linghu-unified-${Date.now()}`,
+      runId,
       taskId: null,
       initiatorMemberId: "linghu-ancestor",
       kind: "linghu-unified-test",
@@ -44,7 +55,7 @@ export class LinghuUnifiedTestRunner {
     }, async () => { for (const script of FIXED_UNIFIED_SCRIPTS) {
       this.#recordEvent("linghu.unified_test.started", { script, candidateProjectRoot: resolvedProjectRoot });
       try {
-        await runNpmScript(desktopRoot, script);
+        await runNpmScript(desktopRoot, script, environment);
         this.#recordEvent("linghu.unified_test.completed", { script, candidateProjectRoot: resolvedProjectRoot });
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
@@ -70,11 +81,11 @@ export class LinghuUnifiedTestRunner {
   }
 }
 
-function runNpmScript(cwd: string, script: string): Promise<void> {
+function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEnv): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", script], {
       cwd,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      env: environment,
       shell: false,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
