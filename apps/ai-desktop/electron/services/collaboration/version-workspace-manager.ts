@@ -88,7 +88,8 @@ export class VersionWorkspaceManager {
   async createIntegrationCandidate(generation: number, tasks: CollaborationTask[]): Promise<IntegrationCandidate> {
     if (tasks.length === 0) throw new Error("集成批次不能为空。");
     const baseSha = await this.#integrationBaseSha();
-    const branchName = `codex/collab/integration/g${generation}`;
+    // 临时候选与稳定分支必须是同级名称；Git 不允许 integration 与 integration/gN 两种引用同时存在。
+    const branchName = `codex/collab/integration-g${generation}`;
     const rootPath = this.#managedPath("integration", `g${generation}`);
     await this.#git(this.#repositoryRoot, ["worktree", "add", "-b", branchName, rootPath, baseSha]);
     try {

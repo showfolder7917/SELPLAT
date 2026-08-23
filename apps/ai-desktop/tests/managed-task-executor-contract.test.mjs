@@ -6,6 +6,7 @@ const executor = readFileSync(new URL("../electron/services/managed-task-executo
 const codexService = readFileSync(new URL("../electron/services/codex-service.ts", import.meta.url), "utf8");
 const codexRuntime = readFileSync(new URL("../electron/services/codex-runtime.ts", import.meta.url), "utf8");
 const codexSessionStore = readFileSync(new URL("../electron/services/codex-session-store.ts", import.meta.url), "utf8");
+const electronMain = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
 const ipc = readFileSync(new URL("../electron/ipc/register-desktop-ipc.ts", import.meta.url), "utf8");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const markdownMessage = readFileSync(new URL("../src/variants/developer/MarkdownMessage.tsx", import.meta.url), "utf8");
@@ -140,6 +141,23 @@ test("AI Desktop 重建后恢复当前线程且用户新建任务时明确删除
   assert.doesNotMatch(codexService, /text: `\$\{this\.#responseLanguage\(locale\)\}/);
 });
 
+test("AI Desktop 使用专属 Codex 数据域且只精准迁移已保存的旧活动线程", () => {
+  assert.match(electronMain, /path\.join\(app\.getPath\("userData"\), "codex-home"\)/);
+  assert.match(electronMain, /mkdirSync\(codexHome, \{ recursive: true \}\)/);
+  assert.match(codexService, /childEnvironment\.CODEX_HOME = codexHome/);
+  assert.match(codexService, /delete childEnvironment\.CODEX_INTERNAL_ORIGINATOR_OVERRIDE/);
+  assert.match(codexService, /resolveCodexRuntime\(childEnvironment\)/);
+  assert.match(codexService, /serviceName: this\.#options\.serviceName/);
+  assert.match(codexService, /threadSource: this\.#options\.threadSource/);
+  assert.match(codexService, /stored\.version !== 1/);
+  assert.match(codexService, /#deleteStoredThread\("storage_domain_migration"\)/);
+  assert.match(codexService, /不枚举默认 Codex 数据域/);
+  assert.match(codexSessionStore, /version: 2/);
+  assert.match(codexSessionStore, /storageDomain: "ai-desktop"/);
+  assert.match(codexService, /text: `\$\{userTask\}\\n\\n\$\{workspaceContext\(workspaces\)\}`/);
+  assert.doesNotMatch(codexService, /text: `\$\{workspaceContext\(workspaces\)\}\\n\\n\$\{userTask\}`/);
+});
+
 test("会话发送统一排队、显式补充并在重建后显示恢复操作", () => {
   assert.match(dispatchStore, /status === "running"/);
   assert.match(dispatchStore, /"recoverable"/);
@@ -163,7 +181,7 @@ test("每次连接选择与本机缓存协议匹配的 Codex 并公开实际来�
   assert.match(codexRuntime, /AI_DESKTOP_CODEX_PATH/);
   assert.match(codexRuntime, /isSameCodexRelease/);
   assert.match(codexRuntime, /source: "bundled"/);
-  assert.match(codexService, /resolveCodexRuntime\(\)/);
+  assert.match(codexService, /resolveCodexRuntime\(childEnvironment\)/);
   assert.match(codexService, /harness_runtime_selected/);
   assert.match(developerApp, /codexStatus\.runtime\.version/);
   assert.match(developerApp, /codexStatus\.runtime\.path/);

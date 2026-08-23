@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,6 +37,9 @@ app.whenReady().then(() => {
   audit.recordApplicationStart({ variant, projectRoot, rendererRoot });
   const trustedCommands = new TrustedCommandStore(path.join(app.getPath("userData"), "trusted-project-commands.json"));
   const codexSessions = new CodexSessionStore(path.join(app.getPath("userData"), "active-codex-session.json"));
+  // 主会话与所有协同成员共用 AI Desktop 自己的数据域，和 Codex App 的默认 ~/.codex 完全隔离。
+  const codexHome = path.join(app.getPath("userData"), "codex-home");
+  mkdirSync(codexHome, { recursive: true });
   const dispatch = new ConversationDispatchStore(
     path.join(app.getPath("userData"), "conversation-dispatch.json"),
     (type, details, taskId) => audit.recordEvent(type, details, taskId),
@@ -44,6 +48,13 @@ app.whenReady().then(() => {
     projectRoot,
     trustedCommands,
     codexSessions,
+    {
+      codexHome,
+      serviceName: "selplat_ai_desktop",
+      threadSource: "ai-desktop",
+      migrateLegacySession: true,
+      sessionStorage: "ai-desktop",
+    },
     (details) => audit.recordEvent("trusted_command.decision", details),
     (details) => audit.recordEvent("thread.lifecycle", details),
   );
@@ -55,6 +66,7 @@ app.whenReady().then(() => {
   const collaborationSessions = new CodexCollaborationSessionFactory({
     projectRoot,
     sessionRoot: path.join(collaborationRoot, "sessions"),
+    codexHome,
     trustedCommands,
     registry: collaborationRegistry,
     resolveAttachmentPaths: (attachmentIds) => screenshots.resolveAttachmentPaths(attachmentIds),
@@ -73,7 +85,7 @@ app.whenReady().then(() => {
       audit.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
     },
-    verifyIntegration: verifyCollaborationIntegration,
+    verifyIntegration: (rootPath, taskIds) => verifyCollaborationIntegration(rootPath, taskIds, projectRoot),
   });
 
   registerDesktopIpc({

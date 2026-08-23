@@ -17,6 +17,7 @@ const allowedTestScripts = new Set([
   "test:workspace",
   "test:audit",
   "test:dispatch",
+  "test:collaboration",
   "test:explorer",
   "test:interaction",
   "test:managed",

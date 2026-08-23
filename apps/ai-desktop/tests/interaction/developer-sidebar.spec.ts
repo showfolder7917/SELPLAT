@@ -142,6 +142,22 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
+test("审核正文已生成但结论无法识别时保留正文并显示准确状态", async () => {
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationReviewFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationReviewFixture(true));
+  await page.getByRole("button", { name: "展开任务" }).click();
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式" }).click();
+  await taskList.getByRole("button", { name: /墨大夫/ }).click();
+  const memberPage = page.locator(".collaboration-member-page");
+  await expect(memberPage.getByText("审核正文已保存，结论未确认", { exact: true })).toBeVisible();
+  await memberPage.getByText("审核正文已保存，结论未确认", { exact: true }).click();
+  await expect(memberPage.getByText("审核内容已经完整生成，但旧格式没有首行标记。", { exact: true })).toBeVisible();
+  await expect(memberPage.getByText("审核正文已生成，但结论无法识别。", { exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationReviewFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationReviewFixture(false));
+  await taskList.getByRole("button", { name: "单会话" }).click();
+  await page.getByRole("button", { name: "展开工作区" }).click();
+});
+
 test("资源管理器整栏与工作区分区均可折叠恢复", async () => {
   const explorerTitleToggle = page.locator(".explorer-title").getByRole("button", { name: "折叠资源管理器" });
   await explorerTitleToggle.click();

@@ -49,6 +49,14 @@ interface BufferedNotification {
   params: JsonObject;
 }
 
+export interface CodexServiceOptions {
+  codexHome: string | null;
+  serviceName: string;
+  threadSource: string;
+  migrateLegacySession: boolean;
+  sessionStorage: "ai-desktop" | "legacy-default";
+}
+
 const EMPTY_ACCOUNT: CodexAccount = {
   authenticated: false,
   authMode: null,
@@ -75,10 +83,12 @@ export class CodexService {
   #activeTurnId: string | undefined;
   #lastError: string | null = null;
   #runtime: CodexRuntime | null = null;
+  #storageReady: Promise<void> | undefined;
   #activeExecutionMode: ManagedExecutionMode | null = null;
   #activeWorkspaces: WorkspaceState | null = null;
   readonly #trustedCommands: TrustedCommandStore;
   readonly #sessions: CodexSessionStore;
+  readonly #options: CodexServiceOptions;
   readonly #onTrustedCommandDecision: (details: Record<string, unknown>) => void;
   readonly #onThreadLifecycle: (details: Record<string, unknown>) => void;
 
@@ -86,19 +96,22 @@ export class CodexService {
     workingDirectory: string,
     trustedCommands: TrustedCommandStore,
     sessions: CodexSessionStore,
+    options: CodexServiceOptions,
     onTrustedCommandDecision: (details: Record<string, unknown>) => void = () => undefined,
     onThreadLifecycle: (details: Record<string, unknown>) => void = () => undefined,
   ) {
     this.#workingDirectory = workingDirectory;
     this.#trustedCommands = trustedCommands;
     this.#sessions = sessions;
+    this.#options = options;
     this.#onTrustedCommandDecision = onTrustedCommandDecision;
     this.#onThreadLifecycle = onThreadLifecycle;
   }
 
   async newChat(): Promise<void> {
+    await this.#ensureStorageReady();
     await this.cancel();
-    const stored = this.#sessions.read();
+    const stored = this.#readStoredSession();
     const threadId = this.#threadId || stored?.threadId;
     if (threadId) {
       try {
@@ -115,6 +128,7 @@ export class CodexService {
   }
 
   activeSession(): { threadId: string | null } {
+    // 迁移完成前仍回显旧线程 ID，确保用户可以看到并明确处理待迁移的活动任务。
     return { threadId: this.#threadId || this.#sessions.read()?.threadId || null };
   }
 
@@ -242,7 +256,8 @@ export class CodexService {
     const userTask = normalizedMessage || (locale === "ja" ? "添付画像を確認してください。" : "请阅读并分析附加截图。");
     const input: JsonObject[] = [{
       type: "text",
-      text: `${workspaceContext(workspaces)}\n\n${userTask}`,
+      // 真实任务放在第一段；工作区仍是同一条用户输入的授权上下文，但不再抢占官方线程标题。
+      text: `${userTask}\n\n${workspaceContext(workspaces)}`,
     }];
     // 官方 app-server 0.146.0 的 turn/start 使用 localImage 路径读取本地主进程已校验的 PNG。
     input.push(...attachmentPaths.map((filePath) => ({ type: "localImage", path: filePath })));
@@ -279,7 +294,7 @@ export class CodexService {
     const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
     if (this.#threadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return this.#threadId;
 
-    const stored = this.#sessions.read();
+    const stored = this.#readStoredSession();
     const resumableThreadId = this.#threadId && this.#threadWorkspaceSignature === workspaceSignature
       ? this.#threadId
       : stored?.workspaceSignature === workspaceSignature ? stored.threadId : null;
@@ -316,6 +331,9 @@ export class CodexService {
       sandbox: sandboxMode,
       // 当前活动线程需要跨 Electron 重建恢复；用户点击新建任务时再通过 thread/delete 明确丢弃。
       ephemeral: false,
+      // 这两个字段只用于官方事件审计；会话隔离由专属 CODEX_HOME 保证。
+      serviceName: this.#options.serviceName,
+      threadSource: this.#options.threadSource,
       // 风格与语言属于客户端开发约束，不混入用户正文或污染任务标题。
       developerInstructions,
     }));
@@ -341,16 +359,80 @@ export class CodexService {
   }
 
   #ensureReady(): Promise<void> {
-    if (!this.#ready) this.#ready = this.#start();
+    if (!this.#ready) {
+      this.#ready = this.#ensureStorageReady()
+        .then(() => this.#start())
+        .catch((error) => {
+          this.#ready = undefined;
+          throw error;
+        });
+    }
     return this.#ready;
   }
 
+  #ensureStorageReady(): Promise<void> {
+    if (!this.#storageReady) {
+      this.#storageReady = this.#migrateLegacySession().catch((error) => {
+        this.#storageReady = undefined;
+        throw error;
+      });
+    }
+    return this.#storageReady;
+  }
+
+  /** 仅删除当前会话文件保存的旧线程；不枚举默认 Codex 数据域，也不触碰用户的其他会话。 */
+  async #migrateLegacySession(): Promise<void> {
+    const stored = this.#sessions.read();
+    if (!this.#options.migrateLegacySession || !stored || stored.version !== 1) return;
+    const legacyService = new CodexService(
+      this.#workingDirectory,
+      this.#trustedCommands,
+      this.#sessions,
+      {
+        codexHome: null,
+        serviceName: `${this.#options.serviceName}_legacy_migration`,
+        threadSource: this.#options.threadSource,
+        migrateLegacySession: false,
+        sessionStorage: "legacy-default",
+      },
+      this.#onTrustedCommandDecision,
+      this.#onThreadLifecycle,
+    );
+    try {
+      await legacyService.#deleteStoredThread("storage_domain_migration");
+    } finally {
+      legacyService.dispose();
+    }
+  }
+
+  async #deleteStoredThread(reason: string): Promise<void> {
+    const stored = this.#readStoredSession();
+    if (!stored) return;
+    try {
+      await this.#ensureReady();
+      await this.#request("thread/delete", { threadId: stored.threadId });
+      this.#onThreadLifecycle({ action: "deleted", threadId: stored.threadId, reason });
+      this.#forgetThread();
+    } catch (error) {
+      this.#onThreadLifecycle({ action: "delete_failed", threadId: stored.threadId, reason: errorMessage(error) });
+      // 删除未确认时必须保留旧恢复凭据，禁止在专属数据域中覆盖后失去精确清理目标。
+      throw new Error(`无法迁移旧 Codex 任务：${errorMessage(error)}`);
+    }
+  }
+
+  #readStoredSession() {
+    const stored = this.#sessions.read();
+    if (!stored) return null;
+    if (this.#options.sessionStorage === "legacy-default") return stored.version === 1 ? stored : null;
+    return stored.version === 2 && stored.storageDomain === "ai-desktop" ? stored : null;
+  }
+
   async #start(): Promise<void> {
-    // 本机 Codex 与共享 ~/.codex 缓存使用同一协议版本；只有本机命令不可用时才回退应用锁定包。
-    const runtime = await resolveCodexRuntime();
+    // 运行时探测与 app-server 使用完全相同的数据域，避免读取另一个 App 的模型缓存和认证状态。
+    const childEnvironment = createCodexChildEnvironment(process.env, this.#options.codexHome);
+    const runtime = await resolveCodexRuntime(childEnvironment);
     this.#runtime = runtime;
     this.#onThreadLifecycle({ action: "harness_runtime_selected", source: runtime.source, path: runtime.displayPath, version: runtime.version });
-    const childEnvironment = { ...process.env };
     if (runtime.electronRunAsNode) childEnvironment.ELECTRON_RUN_AS_NODE = "1";
     else delete childEnvironment.ELECTRON_RUN_AS_NODE;
     const child = spawn(runtime.command, [...runtime.argsPrefix, "app-server", "--stdio", "--enable", "default_mode_request_user_input"], {
@@ -604,6 +686,15 @@ export class CodexService {
       ? "Reply in natural Japanese unless the user explicitly requests another language. Lead with the outcome, speak like a thoughtful collaborator, and use Markdown only when it makes the answer easier to scan. Keep execution constraints internal instead of repeating mechanical stage language."
       : "除非用户明确要求其他语言，否则请使用自然、清晰的简体中文回答。先给结论，像体贴、可靠的协作伙伴一样结合上下文交流；短问题直接回答，复杂内容才使用必要的 Markdown 结构。执行门禁属于内部约束，不要机械复述阶段名称、规则或固定模板。";
   }
+}
+
+/** 为 AI Desktop Harness 建立明确的数据域，并移除宿主 App 注入的来源冒充标记。 */
+export function createCodexChildEnvironment(environment: NodeJS.ProcessEnv, codexHome: string | null): NodeJS.ProcessEnv {
+  const childEnvironment = { ...environment };
+  if (codexHome) childEnvironment.CODEX_HOME = codexHome;
+  else delete childEnvironment.CODEX_HOME;
+  delete childEnvironment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE;
+  return childEnvironment;
 }
 
 function runtimeInfo(runtime: CodexRuntime | null): CodexHarnessStatus["runtime"] {

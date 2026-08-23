@@ -1,9 +1,49 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
-import { toCodexStreamEvent } from "../dist-electron/electron/services/codex-service.js";
+import { createCodexChildEnvironment, toCodexStreamEvent } from "../dist-electron/electron/services/codex-service.js";
+import { CodexSessionStore } from "../dist-electron/electron/services/codex-session-store.js";
 
 const turnId = "turn-stream-test";
+
+test("Codex 子进程使用 AI Desktop 专属数据域且不继承宿主来源覆盖", () => {
+  const environment = createCodexChildEnvironment({
+    PATH: "/runtime/bin",
+    CODEX_HOME: "/shared/codex-home",
+    CODEX_INTERNAL_ORIGINATOR_OVERRIDE: "Codex Desktop",
+  }, "/ai-desktop/codex-home");
+  assert.equal(environment.CODEX_HOME, "/ai-desktop/codex-home");
+  assert.equal(environment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE, undefined);
+  assert.equal(environment.PATH, "/runtime/bin");
+
+  const legacyEnvironment = createCodexChildEnvironment(environment, null);
+  assert.equal(legacyEnvironment.CODEX_HOME, undefined);
+  assert.equal(legacyEnvironment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE, undefined);
+});
+
+test("活动线程存储识别旧默认域记录并只写 AI Desktop 域版本", () => {
+  const controlledTempRoot = path.resolve(process.cwd(), "temp", "tests");
+  mkdirSync(controlledTempRoot, { recursive: true });
+  const fixture = mkdtempSync(path.join(controlledTempRoot, "codex-session-isolation-"));
+  const filePath = path.join(fixture, "active-codex-session.json");
+  try {
+    writeFileSync(filePath, JSON.stringify({ version: 1, threadId: "legacy-thread", workspaceSignature: "legacy-signature" }), "utf8");
+    const store = new CodexSessionStore(filePath);
+    assert.deepEqual(store.read(), { version: 1, threadId: "legacy-thread", workspaceSignature: "legacy-signature" });
+
+    store.write("isolated-thread", "isolated-signature");
+    assert.deepEqual(JSON.parse(readFileSync(filePath, "utf8")), {
+      version: 2,
+      storageDomain: "ai-desktop",
+      threadId: "isolated-thread",
+      workspaceSignature: "isolated-signature",
+    });
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
 
 test("官方文字、计划和文件差异通知转换为稳定的渲染事件", () => {
   assert.deepEqual(toCodexStreamEvent("item/agentMessage/delta", {

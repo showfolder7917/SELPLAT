@@ -132,6 +132,7 @@ export class CollaborationCodexRegistry {
 export interface CodexCollaborationSessionFactoryOptions {
   projectRoot: string;
   sessionRoot: string;
+  codexHome: string;
   trustedCommands: TrustedCommandStore;
   registry: CollaborationCodexRegistry;
   resolveAttachmentPaths(attachmentIds: string[]): Promise<string[]>;
@@ -165,6 +166,13 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
       task.versionWorkspace?.rootPath || this.#options.projectRoot,
       this.#options.trustedCommands,
       sessions,
+      {
+        codexHome: this.#options.codexHome,
+        serviceName: "selplat_ai_desktop_collaboration",
+        threadSource: "ai-desktop-collaboration",
+        migrateLegacySession: true,
+        sessionStorage: "ai-desktop",
+      },
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
     );
@@ -242,28 +250,143 @@ class CodexReviewerSession implements CollaborationReviewerSession {
 
   isAlive(): boolean { return this.#connection.service.isAlive(); }
 
-  async review(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<{ decision: "passed" | "rejected"; feedback: string }> {
+  async review(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<CollaborationReviewSessionResult> {
     const prompt = [
       "[协同方案质量审核]",
-      "只读审核下面的方案能否完整解决已确认任务，并检查是否有更安全、更简单或更可靠的方案。禁止修改文件和执行构建。",
+      "只读审核下面的方案是否已经满足客户已确认任务的最低必要需求。满足最低需求必须通过；更安全、更简单、更可靠或更完整的做法只能作为非阻断优化建议，禁止据此扩大问题或驳回。禁止修改文件和执行构建。",
       `任务版本：${task.taskRevision}`,
       `方案版本：${plan.version}`,
       `已确认任务：\n${task.snapshot.confirmedIntent}`,
       `待审核方案：\n${plan.text}`,
-      "第一行必须且只能写 DECISION: PASSED 或 DECISION: REJECTED，随后给出具体依据和改进意见。",
+      "只有明确指出未满足的原始客户需求及其证据时才允许驳回；否则应一次通过。请先给出具体依据和必要改进意见，并在正文任意独立位置输出且只输出一个结构化结论标记：<review_decision>PASSED</review_decision> 或 <review_decision>REJECTED</review_decision>。",
     ].join("\n\n");
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const response = await this.#connection.service.send(prompt, task.snapshot.locale, "read-only", collaborationWorkspaceState(task), attachmentPaths, emit, "requirement-managed");
     const normalized = response.text.trim();
-    const firstLine = normalized.split(/\r?\n/, 1)[0]?.trim().toUpperCase();
-    if (firstLine === "DECISION: PASSED") return { decision: "passed", feedback: normalized };
-    if (firstLine === "DECISION: REJECTED") return { decision: "rejected", feedback: normalized };
-    throw new Error("审核结果缺少合法的结构化决定。");
+    try {
+      return await resolveCollaborationReviewDecision(normalized, async () => {
+        // 审核正文已经完成时只向原审核员补取机器结论，避免丢弃有效分析并重新消耗另一名审核员。
+        const clarification = await this.#connection.service.send(
+          "你的审核正文已收到，但没有识别到唯一结论。请仅返回 <review_decision>PASSED</review_decision> 或 <review_decision>REJECTED</review_decision>，不要添加其他文字。",
+          task.snapshot.locale,
+          "read-only",
+          collaborationWorkspaceState(task),
+          [],
+          emit,
+          "requirement-managed",
+        );
+        return clarification.text.trim();
+      });
+    } catch (error) {
+      // 补取期间的连接异常仍属于基础设施失败，但必须把已经完成的原审核正文带回协调器持久化。
+      throw new CollaborationReviewTransportError(normalized, error);
+    }
   }
 
   async dispose(): Promise<void> {
     await retireConnection(this.#connection, this.#registry);
   }
+}
+
+export type CollaborationReviewDecisionSource = "tag" | "legacy-marker" | "explicit-chinese" | "clarification";
+
+export type CollaborationReviewSessionResult =
+  | {
+    outcome: "decided";
+    decision: "passed" | "rejected";
+    decisionSource: CollaborationReviewDecisionSource;
+    feedback: string;
+    rawOutput: string;
+    clarificationOutput: string | null;
+  }
+  | {
+    outcome: "decision-unrecognized";
+    feedback: string;
+    rawOutput: string;
+    clarificationOutput: string;
+    error: string;
+  };
+
+export class CollaborationReviewTransportError extends Error {
+  readonly rawOutput: string;
+  readonly clarificationOutput: string | null = null;
+
+  constructor(rawOutput: string, cause: unknown) {
+    super(`补取审核结论时连接异常：${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+    this.name = "CollaborationReviewTransportError";
+    this.rawOutput = rawOutput;
+  }
+}
+
+/** 原审核输出无法机器识别时只补取一次结论；无论补取成败都保留原始审核正文。 */
+export async function resolveCollaborationReviewDecision(rawOutput: string, requestClarification: () => Promise<string>): Promise<CollaborationReviewSessionResult> {
+  const normalized = rawOutput.trim();
+  const parsed = parseCollaborationReviewDecision(normalized);
+  if (parsed) return { outcome: "decided", ...parsed, feedback: normalized, rawOutput: normalized, clarificationOutput: null };
+
+  const clarificationOutput = (await requestClarification()).trim();
+  const clarified = parseCollaborationReviewDecision(clarificationOutput);
+  if (clarified) {
+    return {
+      outcome: "decided",
+      decision: clarified.decision,
+      decisionSource: "clarification",
+      feedback: normalized || clarificationOutput,
+      rawOutput: normalized,
+      clarificationOutput,
+    };
+  }
+  return {
+    outcome: "decision-unrecognized",
+    feedback: normalized,
+    rawOutput: normalized,
+    clarificationOutput,
+    error: "审核正文已生成，但原始输出和一次结论补取都没有包含唯一、明确的审核决定。",
+  };
+}
+
+/** 只接受唯一且明确的审核结论，兼容结构化标签、旧协议和明确中文结论，不从普通正文猜测。 */
+export function parseCollaborationReviewDecision(text: string): { decision: "passed" | "rejected"; decisionSource: Exclude<CollaborationReviewDecisionSource, "clarification"> } | null {
+  const normalized = text.replace(/^\uFEFF/, "").trim();
+  if (!normalized) return null;
+
+  const taggedValues = [...normalized.matchAll(/<review_decision>\s*(PASSED|REJECTED)\s*<\/review_decision>/gi)].map((match) => match[1]);
+  if (taggedValues.length > 0) {
+    const tagged = uniqueDecision(taggedValues);
+    return tagged ? { decision: tagged, decisionSource: "tag" } : null;
+  }
+
+  const semanticLines = normalized.split(/\r?\n/).map(normalizeDecisionLine).filter(Boolean);
+  const legacyValues = semanticLines.flatMap((line) => {
+    const match = line.match(/^DECISION\s*[:：]\s*(PASSED|REJECTED)\s*[.!。！]?$/i);
+    return match ? [match[1]] : [];
+  });
+  if (legacyValues.length > 0) {
+    const legacy = uniqueDecision(legacyValues);
+    return legacy ? { decision: legacy, decisionSource: "legacy-marker" } : null;
+  }
+
+  const chineseValues = semanticLines.flatMap((line) => {
+    const match = line.match(/^(?:审核)?结论\s*[:：]\s*(通过|不通过|驳回|拒绝)\s*[。！!]?$/);
+    if (!match) return [];
+    return [match[1] === "通过" ? "PASSED" : "REJECTED"];
+  });
+  const chinese = uniqueDecision(chineseValues);
+  return chinese ? { decision: chinese, decisionSource: "explicit-chinese" } : null;
+}
+
+function normalizeDecisionLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^```\w*\s*$/i, "")
+    .replace(/^(?:[-*+>#]|\d+[.)])\s*/, "")
+    .replace(/[*_`]/g, "")
+    .trim();
+}
+
+function uniqueDecision(values: Array<string | undefined>): "passed" | "rejected" | null {
+  const decisions = new Set(values.filter((value): value is string => Boolean(value)).map((value) => value.toUpperCase() === "PASSED" ? "passed" : "rejected"));
+  return decisions.size === 1 ? [...decisions][0] : null;
 }
 
 function collaborationWorkspaceState(task: CollaborationTask): WorkspaceState {

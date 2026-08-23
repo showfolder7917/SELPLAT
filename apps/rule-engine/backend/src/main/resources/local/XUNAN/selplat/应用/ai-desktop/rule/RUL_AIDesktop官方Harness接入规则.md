@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.38.0 固化刷新对话图标及悬停、键盘聚焦时的会话重建提示。 -->
-rule_version = 5.38.0
+<!-- 5.41.0 隔离 AI Desktop 与 Codex App 的官方会话数据域，并精准迁移旧活动线程。 -->
+rule_version = 5.41.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -120,6 +120,12 @@ upgrade_record_5_36 = 2026-08-23:默认人物韩立_南宫婉_紫灵_元瑶_宋�
 upgrade_record_5_37 = 2026-08-23:集成器空闲即原子冻结当前全部可集成任务_允许单任务一代_运行中完成者进入下一代_原子组和依赖链仅保留显式屏障_结构化阶段只用于容量和瓶颈分析不延迟空闲集成器
 <!-- 5.38.0 将原加号入口改为刷新对话图标，同时保留官方线程删除与本地清理链路。 -->
 upgrade_record_5_38 = 2026-08-23:新建任务入口改为刷新对话图标_悬停与键盘聚焦Tip表达重新建立Codex会话_原thread_delete与本地清理不变
+<!-- 5.39.0 防止完整审核正文仅因首行或 Markdown 格式不同而被误判为基础设施失败。 -->
+upgrade_record_5_39 = 2026-08-23:审核正文与机器结论分离_结构化标签兼容旧标记和明确中文结论_原审核员单次补取结论_无法识别时保留正文和原因_仅连接进程异常计基础设施失败
+<!-- 5.40.0 防止审核扩大问题，并修通独立集成工作区从依赖准备、候选提升到本地合入的完整链路。 -->
+upgrade_record_5_40 = 2026-08-23:审核只判断客户最低需求_满足即通过_第三次明确驳回后再做一次最终必要修正并强制执行_禁止第四轮审核_锁文件一致时复用主工作区依赖_不一致时离线优先按锁文件补齐_依赖链接提升前清理_临时候选与稳定集成分支同级命名_依赖故障不计审核次数
+<!-- 5.41.0 防止 AI Desktop 创建的持久线程进入 Codex App 会话列表，同时保留官方恢复能力。 -->
+upgrade_record_5_41 = 2026-08-23:Electron_userData专属CODEX_HOME_主会话与协同连接统一隔离_删除宿主originator覆盖_旧版已保存活动线程按ID精准删除后迁移_真实任务置于工作区上下文之前_serviceName与threadSource仅作审计
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -157,10 +163,16 @@ unsupported_harness_server_request_policy = deny_or_cancel_without_permission_ex
 
 <!-- 新会话、发送任务、中止任务、账号读取、登录和退出必须由同一长期运行 app-server 连接完成。 -->
 harness_required_lifecycle = initialize + account + thread + turn + interrupt + logout
-<!-- AI Desktop 只保留一个当前官方持久线程；渲染刷新或 Electron 重建后必须从 userData 读取线程 ID 并 thread/resume，同一工作区下托管阶段造成的沙箱变化继续复用；用户点新建任务时必须 thread/delete 并清除本地正文，不提供历史列表。当前活动线程在删除前可能出现在官方 Codex 任务存储中。 -->
-harness_active_thread_lifecycle_contract = one_current_official_persistent_thread + electron_userData_active_thread_id + renderer_local_transcript + thread_resume_after_renderer_or_electron_reconstruction + reuse_across_managed_stage_sandbox_changes + explicit_new_task_thread_delete_confirmed_before_clear_local_transcript + delete_or_resume_failure_preserves_recovery_state + lazy_start_on_next_send + no_application_history_list + active_thread_may_exist_in_official_task_storage_until_deleted
-<!-- 回复语言属于线程级开发约束，必须通过 developerInstructions 传递；用户正文只能包含工作区上下文、真实任务和附件，禁止把语言模板放在首段形成重复自动标题。 -->
-harness_user_input_purity_contract = response_language_in_developerInstructions + user_text_contains_workspace_context_and_real_task_only + no_language_template_in_first_user_message_or_thread_preview
+<!-- AI Desktop 只保留一个当前官方持久线程；渲染刷新或 Electron 重建后必须从 userData 读取线程 ID 并 thread/resume，同一工作区下托管阶段造成的沙箱变化继续复用；用户点新建任务时必须 thread/delete 并清除本地正文，不提供历史列表。 -->
+harness_active_thread_lifecycle_contract = one_current_official_persistent_thread + electron_userData_active_thread_id + renderer_local_transcript + thread_resume_after_renderer_or_electron_reconstruction + reuse_across_managed_stage_sandbox_changes + explicit_new_task_thread_delete_confirmed_before_clear_local_transcript + delete_or_resume_failure_preserves_recovery_state + lazy_start_on_next_send + no_application_history_list
+<!-- 主会话和全部协同连接必须共用 Electron userData 下的应用专属 CODEX_HOME；运行时探测与 app-server 启动使用同一环境，并删除宿主注入的 Codex Desktop 来源覆盖，禁止再读写默认 ~/.codex。 -->
+harness_storage_domain_isolation_contract = electron_userData_ai_desktop_codex_home + main_and_collaboration_share_same_isolated_domain + runtime_probe_and_app_server_use_same_environment + remove_inherited_CODEX_INTERNAL_ORIGINATOR_OVERRIDE + never_use_default_codex_home_for_new_threads
+<!-- 旧版会话凭据只允许按当前会话文件中保存的单个线程 ID 回到旧默认数据域删除；成功后才清空并写入带 ai-desktop 数据域标记的新版本，禁止扫描或批量删除 Codex App 其他会话。 -->
+harness_legacy_session_migration_contract = version_1_saved_active_thread_only + old_default_domain_thread_delete_by_exact_id + clear_only_after_confirmed_delete + preserve_credential_on_failure + version_2_ai_desktop_storage_domain_marker + no_scan_or_bulk_delete
+<!-- serviceName 和 threadSource 只用于事件审计与分析分类，不得替代 CODEX_HOME 的物理存储隔离。 -->
+harness_thread_metadata_contract = explicit_ai_desktop_serviceName_and_threadSource + audit_only_never_storage_isolation
+<!-- 回复语言属于线程级开发约束，必须通过 developerInstructions 传递；用户正文只能包含真实任务、工作区上下文和附件，且真实任务必须位于首段，禁止内部上下文形成重复自动标题。 -->
+harness_user_input_purity_contract = response_language_in_developerInstructions + user_text_contains_real_task_workspace_context_and_attachments_only + real_task_before_workspace_context + no_language_or_internal_context_template_in_first_user_message_or_thread_preview
 <!-- developerInstructions 必须要求结论先行、自然协作、按复杂度组织 Markdown，禁止机械复述阶段名、规则和固定模板。 -->
 harness_natural_response_style_contract = locale_aware_natural_clear_language + outcome_first + thoughtful_collaborator_tone + concise_for_simple_tasks + structured_markdown_for_complex_tasks + no_mechanical_stage_rule_or_template_repetition
 <!-- 助手回复使用安全 GFM；禁止原始 HTML，外部链接只允许经主进程校验的 HTTP 或 HTTPS，用户原文继续按纯文本显示。 -->
@@ -245,9 +257,11 @@ audit_build_pending_contract = code_verified_without_build_is_completed + build_
 <!-- 托管执行每轮回答必须按顺序保留；新回合建立独立文本起点，完成事件只能替换当前轮片段，最终 IPC 返回不得覆盖累计内容。 -->
 managed_multiturn_text_preservation_contract = first_real_turn_reuses_pending_card + every_later_real_turn_id_appends_new_assistant_card_below + explicit_turn_id_to_message_id_routing + previous_card_frozen_before_next_turn + completed_message_reconciles_own_segment_id_only + final_response_updates_latest_card_only + terminal_state_rejects_late_non_error_events + real_two_turn_interaction_asserts_two_cards_and_immutable_first_text + prohibit_source_regex_only_completion
 <!-- 协同模式未来实施时必须使用独立编排器，人物条目长期存在而非韩立 Codex 只在分配工作期间临时存在。 -->
-collaboration_mode_architecture_contract = orchestration_isolated_from_single_conversation + protected_hanli_persistent_conversation_connection + stable_crud_worker_members_individually_listed_under_tasks + member_named_tabs_not_generic_codex_chat + idle_worker_has_no_codex_process_pipe_or_thread + assignment_creates_fresh_lease_generation_process_pipe_and_thread + executor_owns_analysis_review_optimization_execution_chain + different_idle_reviewer_per_review + maximum_three_explicit_rejections_then_latest_plan_execution + infrastructure_failure_does_not_consume_rejection + executor_completion_stops_at_code_verified_without_test_managed + persist_result_before_connection_retirement + member_page_and_audit_history_survive_codex_retirement + full_member_history_never_injected_into_fresh_codex + lease_pipe_and_protocol_progress_liveness + silent_healthy_reasoning_not_timeout + reviewer_capacity_reserved_to_prevent_deadlock + executor_task_specific_git_branch_and_worktree + immutable_task_plan_assignment_worker_base_and_result_versions + reject_stale_generation_results + integration_ready_gate + independent_tasks_do_not_wait_for_unfinished_workers + atomic_group_and_dependency_chain_barriers + idle_integrator_immediately_freezes_all_currently_eligible_results_without_artificial_window_minimum_batch_or_ratio + post_freeze_results_enter_next_generation + evidence_backed_verifying_or_finalizing_for_capacity_and_bottleneck_only + heartbeat_means_liveness_not_progress + batch_combination_tests_before_safe_local_branch_sync
+collaboration_mode_architecture_contract = orchestration_isolated_from_single_conversation + protected_hanli_persistent_conversation_connection + stable_crud_worker_members_individually_listed_under_tasks + member_named_tabs_not_generic_codex_chat + idle_worker_has_no_codex_process_pipe_or_thread + assignment_creates_fresh_lease_generation_process_pipe_and_thread + executor_owns_analysis_review_optimization_execution_chain + different_idle_reviewer_per_review + minimum_confirmed_customer_requirement_is_only_blocking_review_scope + broader_improvements_are_nonblocking + first_two_explicit_rejections_optimize_then_review + third_explicit_rejection_final_necessary_optimization_then_execute_without_fourth_review + infrastructure_failure_does_not_consume_rejection + executor_completion_stops_at_code_verified_without_test_managed + persist_result_before_connection_retirement + member_page_and_audit_history_survive_codex_retirement + full_member_history_never_injected_into_fresh_codex + lease_pipe_and_protocol_progress_liveness + silent_healthy_reasoning_not_timeout + reviewer_capacity_reserved_to_prevent_deadlock + executor_task_specific_git_branch_and_worktree + immutable_task_plan_assignment_worker_base_and_result_versions + reject_stale_generation_results + integration_ready_gate + independent_tasks_do_not_wait_for_unfinished_workers + atomic_group_and_dependency_chain_barriers + idle_integrator_immediately_freezes_all_currently_eligible_results_without_artificial_window_minimum_batch_or_ratio + post_freeze_results_enter_next_generation + evidence_backed_verifying_or_finalizing_for_capacity_and_bottleneck_only + heartbeat_means_liveness_not_progress + integration_worktree_dependency_preflight_and_self_heal + lockfile_identical_verified_dependency_reuse + lockfile_install_offline_first_fallback + reused_dependency_link_removed_before_candidate_promotion + temporary_candidate_branch_is_peer_of_stable_integration_branch + dependency_failure_is_infrastructure_not_review_rejection + batch_combination_tests_before_safe_local_branch_sync
 <!-- 默认成员名单由用户确认；韩立保持保护身份，其余十一人为可调度 worker，成员管理仍可增删改查。 -->
 collaboration_default_member_roster_contract = 韩立_conversation_owner_protected + 南宫婉_worker + 紫灵_worker + 元瑶_worker + 宋玉_worker + 冰魄仙子_worker + 墨彩环_worker + 墨大夫_worker + 厉飞雨_worker + 张铁_worker + 令狐老祖_worker + 李化元_worker + roster_crud_enabled_for_non_hanli
+<!-- 审核正文生成完成与机器结论解析属于两个独立事实；格式偏差不得伪装成 Codex 连接失败。 -->
+collaboration_review_decision_contract = preserve_raw_review_before_retirement + prefer_unique_review_decision_tag + accept_legacy_exact_marker_and_explicit_chinese_decision + never_infer_from_ordinary_prose + same_reviewer_one_clarification_turn + persist_every_attempt_and_parse_failure + unrecognized_decision_does_not_increment_infrastructure_failure + infrastructure_failure_only_for_connection_process_or_transport_failure
 <!-- Harness 执行期间输入区保持可编辑，截图、图片粘贴和后续消息进入有序队列，不得由全局 loading 一并锁死。 -->
 managed_running_composer_availability_contract = screenshot_and_image_paste_available_while_running + composer_editable + next_message_fifo_queue + cancel_scoped_to_active_turn
 <!-- 执行中普通发送只能持久排队；用户明确点击补充后才通过官方 turn/steer 注入当前回合，进程重建后必须先让用户继续或放弃，全部状态变化复用统一业务日志。 -->
@@ -256,8 +270,8 @@ managed_conversation_dispatch_contract = electron_main_single_active_dispatch + 
 managed_status_indicator_lifecycle_contract = running_bright_pulsing + terminal_dim_static + analysis_execution_validation_test_completed_labels + failed_and_interrupted_labels
 <!-- 回复卡和全部内部执行面板必须允许收缩，长路径不得建立超出卡片的固有宽度。 -->
 managed_response_boundary_contract = card_width_100_percent_with_maximum + all_flex_grid_children_min_width_zero + internal_panels_max_width_100_percent + long_path_wrap_or_ellipsis + no_horizontal_boundary_escape
-<!-- Harness 连接时必须重新识别运行时；优先使用与共享模型缓存客户端版本一致的本机 Codex，避免旧二进制读取新缓存字段失败。 -->
-harness_runtime_version_alignment_contract = reconnect_time_candidate_probe + models_cache_client_version_match_first + highest_valid_local_version_fallback + bundled_official_package_only_when_no_local_runtime + no_hot_swap_during_active_turn + visible_source_path_and_version + audit_selected_runtime
+<!-- Harness 连接时必须重新识别运行时；优先使用与当前 AI Desktop 专属模型缓存客户端版本一致的本机 Codex，避免旧二进制读取新缓存字段失败。 -->
+harness_runtime_version_alignment_contract = reconnect_time_candidate_probe + active_ai_desktop_CODEX_HOME_models_cache_client_version_match_first + highest_valid_local_version_fallback + bundled_official_package_only_when_no_local_runtime + no_hot_swap_during_active_turn + visible_source_path_and_version + audit_selected_runtime
 <!-- 会话托管只理解和复述意图，需求托管只读调查并给出方案；两阶段必须强制只读沙箱并拒绝文件修改及命令提权。 -->
 managed_analysis_stage_write_guard_contract = conversation_intent_only + requirement_read_only_investigation_and_plan + force_read_only_sandbox + decline_file_change_and_privileged_command
 <!-- 每次确认只推进一个阶段；独立 1 和配置短语与按钮等价，关键词不得替代授权，任务阶段必须观察到真实源码变更。 -->
