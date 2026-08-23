@@ -132,6 +132,7 @@ export class CollaborationCodexRegistry {
 export interface CodexCollaborationSessionFactoryOptions {
   projectRoot: string;
   sessionRoot: string;
+  codexHome: string;
   trustedCommands: TrustedCommandStore;
   registry: CollaborationCodexRegistry;
   resolveAttachmentPaths(attachmentIds: string[]): Promise<string[]>;
@@ -165,6 +166,13 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
       task.versionWorkspace?.rootPath || this.#options.projectRoot,
       this.#options.trustedCommands,
       sessions,
+      {
+        codexHome: this.#options.codexHome,
+        serviceName: "selplat_ai_desktop_collaboration",
+        threadSource: "ai-desktop-collaboration",
+        migrateLegacySession: true,
+        sessionStorage: "ai-desktop",
+      },
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
     );
