@@ -67,18 +67,23 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
       readWorkspaceState: () => workspaceState,
       locale: () => "zh-CN",
       recordEvent: () => undefined,
-      runUnifiedTestAndRestart: async () => { restartCount += 1; },
+      runUnifiedTestAndRestart: async (onVerified) => { restartCount += 1; onVerified(); },
     });
     automationStore.setEnabled(true);
     await facade.checkNow();
     assert.equal(submitted.length, 1);
     assert.equal(submitted[0].initiatorMemberId, "linghu-ancestor");
     assert.equal(submitted[0].preferredExecutorMemberId, "linghu-ancestor");
+    assert.equal(submitted[0].automationSource, "linghu-safeguard");
     assert.match(submitted[0].confirmedIntent, /最后一道屏障/);
     assert.match(submitted[0].confirmedIntent, /当前独立模块/);
     assert.equal(facade.state().activeTaskId, collaborationStore.state().tasks[0].taskId);
     await facade.checkNow();
     assert.equal(submitted.length, 1, "活动模块尚未完成时30秒检测不得重复派发");
+    assert.equal(facade.state().flowSnapshots.length, 1);
+    assert.equal(facade.state().flowSnapshots[0].sourceTaskId, facade.state().activeTaskId);
+    assert.deepEqual(facade.state().flowSnapshots[0].completionConditions, ["任务完成代码级验证", "集成候选验证通过", "结果进入 integrated 终态"]);
+    assert.ok(facade.state().detectionCursor);
 
     const created = facade.createPrompt({ title: "客户易用性巡检", content: "从客户一看就懂的角度持续检查页面。" });
     const prompt = created.prompts.find((candidate) => candidate.title === "客户易用性巡检");
@@ -106,6 +111,131 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
     assert.equal(facade.state().cycle, 2);
     assert.equal(restartCount, 1);
     assert.equal(submitted.length, 5, "每个模块完成后只派发一个下一模块任务");
+    assert.equal(facade.state().lastModuleReport.module, "unified-test-restart");
+    assert.equal(facade.state().lastModuleReport.tests.status, "passed");
+    assert.equal(facade.state().lastModuleReport.restartRecovery.status, "passed");
+    assert.equal(facade.state().lastModuleReport.tasks[0].executorMemberId, "linghu-ancestor");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐自动状态损坏时从最近有效备份恢复开启开关和检测恢复点", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-backup-recovery-"));
+  const storePath = path.join(directory, "linghu.json");
+  try {
+    const store = new LinghuAutomationStore(storePath);
+    store.setEnabled(true);
+    store.updateRuntime("test.checkpoint", (state) => {
+      state.detectionCursor = "2026-08-23T10:00:00.000Z";
+      state.recoveryCheckpoint = "active-task:TASK-1:flow-completion";
+    });
+    writeFileSync(storePath, "{损坏状态", "utf8");
+    const restored = new LinghuAutomationStore(storePath).state();
+    assert.equal(restored.enabled, true);
+    assert.equal(restored.detectionCursor, "2026-08-23T10:00:00.000Z");
+    assert.equal(restored.recoveryCheckpoint, "active-task:TASK-1:flow-completion");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐自动状态主文件和备份均损坏时保持检测开启并进入事实重建", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-state-rebuild-"));
+  const storePath = path.join(directory, "linghu.json");
+  try {
+    const store = new LinghuAutomationStore(storePath);
+    store.setEnabled(true);
+    writeFileSync(storePath, "{主文件损坏", "utf8");
+    writeFileSync(`${storePath}.bak`, "{备份损坏", "utf8");
+    const rebuilt = new LinghuAutomationStore(storePath).state();
+    assert.equal(rebuilt.enabled, true);
+    assert.match(rebuilt.blockingReason, /协同任务事实重建恢复点/);
+    assert.equal(rebuilt.currentModule, "flow-completion");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐对同一故障指纹最多执行三次恢复副作用但继续检测", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-recovery-limit-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    let recoveryRequests = 0;
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => {
+        collaborationStore.submitTask(request);
+        return collaborationStore.state();
+      },
+      continueTask: () => { recoveryRequests += 1; },
+      recoverTask: () => { throw new Error("阻塞任务应走 continueTask 恢复入口"); },
+    };
+    const automationStore = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const facade = new LinghuAutomationFacade({
+      store: automationStore,
+      collaboration,
+      readWorkspaceState: () => workspaceState,
+      locale: () => "zh-CN",
+      recordEvent: () => undefined,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+    automationStore.setEnabled(true);
+    await facade.checkNow();
+    collaborationStore.updateTask(facade.state().activeTaskId, "test.blocked", (task) => {
+      task.state = "blocked";
+      task.blockingReason = "固定基础设施故障";
+    });
+    await facade.checkNow();
+    await facade.checkNow();
+    await facade.checkNow();
+    await facade.checkNow();
+    assert.equal(recoveryRequests, 3);
+    assert.equal(facade.state().enabled, true);
+    assert.match(facade.state().blockingReason, /检测仍保持运行/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐活动任务记录缺失时保留恢复点并派发同模块替代任务", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-missing-task-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    let hiddenTaskId = null;
+    const collaboration = {
+      state: () => {
+        const state = collaborationStore.state();
+        state.tasks = state.tasks.filter((task) => task.taskId !== hiddenTaskId);
+        return state;
+      },
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => {
+        collaborationStore.submitTask(request);
+        return collaboration.state();
+      },
+      continueTask: (taskId) => collaborationStore.continueTask(taskId),
+      recoverTask: () => { throw new Error("本场景不应进入停点恢复"); },
+    };
+    const automationStore = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const facade = new LinghuAutomationFacade({
+      store: automationStore,
+      collaboration,
+      readWorkspaceState: () => workspaceState,
+      locale: () => "zh-CN",
+      recordEvent: () => undefined,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+    automationStore.setEnabled(true);
+    await facade.checkNow();
+    hiddenTaskId = facade.state().activeTaskId;
+    await facade.checkNow();
+    assert.notEqual(facade.state().activeTaskId, hiddenTaskId);
+    assert.match(facade.state().recoveryCheckpoint, /replacement-task:missing-task:/);
+    assert.equal(collaborationStore.state().tasks.length, 2);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -117,9 +247,19 @@ test("令狐第四模块只运行固定统一测试并在恢复点持久化后�
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
   assert.match(runner, /\["test:interaction", "test:collaboration", "test:managed"\]/);
   assert.doesNotMatch(runner, /confirmedIntent|prompt\.content/);
-  assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\)/);
+  assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\(\) =>/);
   assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
-  assert.match(main, /await linghuUnifiedTests\.run\(\)[\s\S]*app\.relaunch\(\)[\s\S]*app\.exit\(0\)/);
+  assert.match(main, /await linghuUnifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*app\.relaunch\(\)[\s\S]*app\.exit\(0\)/);
+  assert.match(facade, /automaticFlowSnapshots[\s\S]*faultFingerprint[\s\S]*moduleCompletionReport/);
+});
+
+test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
+  const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
+  assert.match(rule, /rule_version = 5\.55\.0/);
+  assert.match(rule, /linghu_automation_flow_snapshot_contract/);
+  assert.match(rule, /linghu_automation_recovery_fingerprint_contract/);
+  assert.match(rule, /linghu_automation_state_recovery_contract/);
+  assert.match(rule, /linghu_module_completion_report_contract/);
 });
 
 test("进程中断后任务显式进入恢复态，继续时重新排队且不沿用旧连接租约", () => {
@@ -334,6 +474,7 @@ test("协同执行人修改源码后由桌面内部验证分支而不再发起 C
 
 test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出", () => {
   const runner = readFileSync(new URL("../electron/services/collaboration/task-worktree-test-runner.ts", import.meta.url), "utf8");
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
   const codex = readFileSync(new URL("../electron/services/codex-service.ts", import.meta.url), "utf8");
   const config = readFileSync(new URL("../playwright.interaction.config.ts", import.meta.url), "utf8");
@@ -341,6 +482,9 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
   assert.match(runner, /test-cache|PLAYWRIGHT_BROWSERS_PATH/);
   assert.match(runner, /AI_DESKTOP_TEST_TASK_ID/);
   assert.match(runner, /npm run/);
+  assert.match(runner, /dependencyMode === "linked" && existsSync\(dependencyLink\)/);
+  assert.equal(manifest.scripts["test:interaction"], "node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs");
+  assert.match(runner, /expected: "node scripts\/run-with-dependencies\.mjs node scripts\/run-interaction-tests\.mjs"/);
   assert.match(sessions, /runCodeValidation/);
   assert.match(sessions, /validationOwner: "desktop"/);
   assert.match(codex, /isDesktopOwnedValidationCommand/);

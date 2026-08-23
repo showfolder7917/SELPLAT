@@ -17,7 +17,7 @@ if (!existsSync(unresolvedCache.dependencyRoot)) {
   if (prepared.status !== 0) process.exit(prepared.status ?? 1);
 }
 
-const cache = attachDependencyCache();
+const cache = attachDependencyCache({ preserveExistingLink: Boolean(process.env.AI_DESKTOP_TEST_TASK_ID) });
 try {
   const nodeCommonRuntime = path.join(cache.dependencyRoot, "@selplat", "node-common-core", "dist", "index.js");
   if (!existsSync(nodeCommonRuntime)) {

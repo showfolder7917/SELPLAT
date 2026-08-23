@@ -153,6 +153,7 @@ export class CollaborationStore {
       dependencyTaskIds: [...new Set(request.dependencyTaskIds || [])],
       integrationGeneration: null,
       initiator: participantSnapshot(initiatorMember),
+      automationSource: request.automationSource || null,
       historyCompleteness: "complete",
       snapshot: {
         title: request.title.trim().slice(0, 160) || normalizedIntent.slice(0, 80),
@@ -454,6 +455,7 @@ function migrateTaskHistory(task: CollaborationTask, state: CollaborationState):
   const legacy = !Array.isArray(task.flowEvents) || !Array.isArray(task.executionRecords);
   task.historyCompleteness ??= legacy ? "legacy-partial" : "complete";
   task.initiator ??= null;
+  task.automationSource ??= null;
   task.startedAt ??= task.createdAt;
   task.codeVerifiedAt ??= task.finalResult ? task.completedAt : null;
   if (task.state === "integrated" && task.integrationGeneration !== null) {

@@ -51,6 +51,13 @@ USER_ID_PLACEHOLDER = "<stable-user-id>"
 MAX_INDEX_DEPTH = 16
 # ability 注册标识供 core executor 统一调用。
 ABILITY_ID = "layered_rule_loader"
+# CLI 帮助保持简短且不改变 executor 的 JSON 输入协议。
+CLI_USAGE = (
+    "usage: layered_rule_loader.py '<json-context>'\n"
+    "\n"
+    "从唯一规则索引加载规则；上下文 action 支持 load、load_bundle、"
+    "validate_index 和 validate_user_index。"
+)
 
 # 用户标识只允许路径安全的 ASCII 稳定字符。
 USER_ID_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}")
@@ -922,7 +929,12 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
 def main(arguments: list[str] | None = None) -> int:
     """接受一个 UTF-8 JSON 上下文并输出结构化加载结果。"""
 
-    raw_context = (arguments or sys.argv[1:] or ["{}"])[0]
+    command_arguments = arguments if arguments is not None else sys.argv[1:]
+    # 常规命令行探查必须成功返回帮助，避免把 --help 误报为规则 JSON 损坏。
+    if command_arguments and command_arguments[0] in {"-h", "--help"}:
+        print(CLI_USAGE)
+        return 0
+    raw_context = (command_arguments or ["{}"])[0]
     try:
         context = json.loads(raw_context)
     except json.JSONDecodeError as error:

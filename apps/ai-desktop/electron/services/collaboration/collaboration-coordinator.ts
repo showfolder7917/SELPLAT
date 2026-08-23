@@ -127,6 +127,13 @@ export class CollaborationCoordinator {
     return state;
   }
 
+  /** 把已由自动保障确认的停点转换为可审计恢复态，并立即建立新的执行或集成租约。 */
+  async recoverTask(taskId: string, reason: string): Promise<CollaborationState> {
+    const task = this.#store.task(taskId);
+    if (task.state !== "blocked" && task.state !== "recovering") await this.#blockTask(taskId, reason);
+    return this.continueTask(taskId);
+  }
+
   async cancelTask(taskId: string): Promise<CollaborationState> {
     const task = this.#store.task(taskId);
     const session = this.#executorSessions.get(taskId);

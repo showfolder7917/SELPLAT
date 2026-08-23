@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.53.0 将令狐老祖自动流程最后保障、启动文案管理和持续恢复纳入协同正式入口。 -->
-rule_version = 5.53.0
+<!-- 5.55.0 为只读路径诊断提供锁文件缓存受控入口，避免裸 Node 因源码目录无持久依赖而失败。 -->
+rule_version = 5.55.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -28,6 +28,10 @@ upgrade_record_5_51 = 2026-08-23:删除CodexRuntimeInfo路径字段_删除runtim
 upgrade_record_5_52 = 2026-08-23:交互测试先构建Developer_主桌面直接加载生产index文件_复用正式BrowserWindow默认1560x980和最小1000x700_补实际复现1224x768_设置入口左下锚点_面板边界_标题横排断言_Developer生产样式统一输出单一CSS_开发服务仅保留截图编辑器测试
 <!-- 5.53.0 固化令狐老祖作为自动运行最后屏障以及人类可维护启动文案的持续循环。 -->
 upgrade_record_5_53 = 2026-08-23:令狐老祖固定排在南宫婉下方并受保护_单一LinghuAutomationFacade_自动执行按钮显式开启_30秒检测永不自行停止_四独立模块串行_阻塞保留恢复点_真实发起人与首选执行人均为令狐老祖_启动文案新增修改删除启停选择_第四模块固定统一测试通过后受控重启_重建恢复关联任务和下一循环
+<!-- 5.54.0 固化全部自动任务状态、等待点、完成条件、故障指纹、恢复游标和完成报告的单入口持久闭环。 -->
+upgrade_record_5_54 = 2026-08-23:全量自动流程快照_心跳协议与状态联合停点判断_故障指纹三次副作用上限_新事实重新开放恢复_任务丢失同模块替代_人工取消保留恢复点_主状态损坏从有效备份恢复_双损坏保持检测开启并从协同事实重建_统一测试通过事实先持久化再受控重启_固定模块完成报告
+<!-- 5.55.0 固化公共路径诊断必须经受控依赖缓存入口执行，禁止依赖源码目录长期存在 node_modules。 -->
+upgrade_record_5_55 = 2026-08-23:新增paths_resolve受控命令_从锁哈希缓存加载node_common_path_输出权威应用名与全部数据域_命令结束撤销临时源码依赖链接_独立依赖缓存回归测试
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -306,6 +310,12 @@ collaboration_default_member_roster_contract = 韩立_conversation_owner_protect
 linghu_automation_single_entry_contract = LinghuAutomationFacade + collaboration_coordinator_reuse + persistent_automation_store + caller_decoupled_from_dispatch_recovery_test_and_restart_implementation
 <!-- 自动执行按钮是唯一启停边界；开启后即使阻塞或等待人工业务选择也只进入等待与持续检测，禁止系统自行关闭检测。 -->
 linghu_automation_liveness_contract = explicit_human_switch + default_off + poll_every_30_seconds + enabled_monitor_never_self_disables + one_active_module_task_only + no_duplicate_dispatch_while_task_active + blocked_or_business_choice_keeps_monitoring_and_recovery_point
+<!-- 每轮检测必须从协同权威状态生成全部令狐自动任务快照，联合心跳、协议进展和状态时间判断停点，禁止只看活动任务或单一耗时。 -->
+linghu_automation_flow_snapshot_contract = all_linghu_initiated_tasks_plus_active_task + state_phase_executor_generation + heartbeat_protocol_and_state_progress + waiting_point + completion_conditions_and_completed_conditions + blocking_kind + recovery_checkpoint + persisted_detection_cursor
+<!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
+linghu_automation_recovery_fingerprint_contract = task_state_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
+<!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
+linghu_automation_state_recovery_contract = atomic_primary_plus_latest_valid_backup + restore_enabled_cycle_module_cursor_active_task_fault_and_checkpoint + existing_corrupt_state_keeps_enabled_and_rebuilds_from_collaboration + first_install_default_off
 <!-- 四个模块严格串行，模块反馈落盘后才进入下一模块；一轮完成后继续下一轮，不为维持循环制造无价值修改。 -->
 linghu_automation_module_cycle_contract = flow_completion -> log_and_bug_diagnosis -> interruption_data_and_facade_recovery -> unified_test_restart_and_task_recovery -> next_cycle
 <!-- 自动保障任务的真实发起人和严格首选执行人都是令狐老祖；其他人物仍可作为异人审核员，禁止首选人物忙碌时悄悄转派顶层保障职责。 -->
@@ -314,6 +324,8 @@ linghu_automation_actor_contract = initiator_linghu_ancestor + protected_strict_
 linghu_startup_prompt_management_contract = electron_userData_persistence + list_create_update_delete_enable_disable_select_active + linghu_member_page_human_readable_layout + cycle_module_execution_last_check_block_and_feedback_visible
 <!-- 第四模块只运行代码内固定的生产交互、协同和托管测试；全部通过并先落盘下一恢复点后才允许受控重启，失败则回到修复循环。 -->
 linghu_unified_test_restart_contract = fixed_test_interaction_then_test_collaboration_then_test_managed + no_dynamic_prompt_command + persist_next_cycle_before_relaunch + test_failure_returns_flow_completion_repair_cycle + reconstruction_resumes_interrupted_collaboration_and_automation
+<!-- 模块终态必须持久保存固定报告；统一测试通过事实必须在退出进程前写入，字段缺失不得推进为可归档完成。 -->
+linghu_module_completion_report_contract = cycle_module_evidence_tasks_real_executors_before_after_score_tests_restart_recovery_blocking_and_next_suggestion + explicit_not_applicable_reason + unified_test_verified_callback_persists_before_relaunch + report_reused_as_next_module_feedback
 <!-- 审核正文生成完成与机器结论解析属于两个独立事实；格式偏差不得伪装成 Codex 连接失败。 -->
 collaboration_review_decision_contract = preserve_raw_review_before_retirement + prefer_unique_review_decision_tag + accept_legacy_exact_marker_and_explicit_chinese_decision + never_infer_from_ordinary_prose + same_reviewer_one_clarification_turn + persist_every_attempt_and_parse_failure + unrecognized_decision_does_not_increment_infrastructure_failure + infrastructure_failure_only_for_connection_process_or_transport_failure
 <!-- Harness 执行期间输入区保持可编辑，截图、图片粘贴和后续消息进入有序队列，不得由全局 loading 一并锁死。 -->
@@ -434,6 +446,8 @@ macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_o
 shared_test_document_lifecycle_contract = manifest_application_name_plus_common_path_resolution + pending_test_runId_directory_with_thread_document + exactly_one_selectable_run + atomic_whole_batch_pending_to_running_transition + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_and_interrupted_running_batch_recovery + every_terminal_result_immediate_month_and_runId_archive + next_run_new_runId + legacy_documents_migrated_not_deleted
 <!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->
 ai_desktop_project_data_domain_contract = manifest_name_driven_node_common_path_api + apps_application_source_config_permanent_tests_and_scripts_only + no_node_modules_runtime_or_build_data_under_source + cache_application_lockHash_dependencies_and_regenerable_only + controlled_temporary_dependency_links_removed_after_command + build_application_compile_package_sites_and_reports_only + OPTION_temp_application_exactly_execution_log_and_temporary_materials + log_application_archive_log_kind_month_identifier_hierarchy + private_user_settings_sessions_and_secrets_remain_electron_userData
+<!-- 应用路径诊断必须通过正式包脚本挂载当前锁哈希缓存后导入公共路径出口，禁止要求调用者直接在无依赖源码目录执行裸包导入。 -->
+ai_desktop_path_diagnostic_contract = npm_run_paths_resolve + run_with_dependencies_lock_hash_cache + import_@selplat_node_common_core_path + canonical_application_name_and_all_data_domains_json + detach_source_node_modules_after_command
 <!-- 自动测试属于当前应用会话的显式模式；默认关闭，只有已知环境与窄命令授权全部通过才允许开启。 -->
 automatic_test_activation_contract = composer_toolbar_after_managed_mode_before_screenshot_actions + labeled_switch + default_off_after_every_application_start + visible_preflight_dialog + all_checks_must_pass_before_on
 <!-- 预检必须覆盖已知的无人值守阻断面，并且不得通过预检自动点击系统或未知 Harness 授权。 -->

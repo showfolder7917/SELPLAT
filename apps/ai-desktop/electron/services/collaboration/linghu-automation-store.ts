@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type {
@@ -119,24 +119,21 @@ export class LinghuAutomationStore {
   }
 
   #load(): LinghuAutomationState {
-    try {
-      const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as LinghuAutomationState;
-      if (value.version === 1 && Array.isArray(value.prompts)) {
-        value.pollIntervalMs = 30_000;
-        value.currentModule = LINGHU_AUTOMATION_MODULES.includes(value.currentModule) ? value.currentModule : "flow-completion";
-        value.recoveryAttemptCount ??= 0;
-        value.lastCheckedAt ??= null;
-        value.blockingReason ??= null;
-        if (!value.prompts.some((prompt) => prompt.promptId === value.activePromptId && prompt.enabled)) {
-          value.activePromptId = value.prompts.find((prompt) => prompt.enabled)?.promptId || null;
-        }
+    const primaryExisted = existsSync(this.#filePath);
+    for (const candidate of [this.#filePath, `${this.#filePath}.bak`]) {
+      const value = readState(candidate);
+      if (value) {
+        migrateState(value);
         this.#write(value);
         return value;
       }
-    } catch {
-      // 首次启动或损坏状态恢复为默认关闭；自动保障只能由用户按钮明确开启。
     }
     const state = createInitialState();
+    if (primaryExisted) {
+      // 已存在的自动状态全部损坏时保持保障开启，让 Facade 从协同任务事实重建检测游标。
+      state.enabled = true;
+      state.blockingReason = "自动状态损坏，正在从协同任务事实重建恢复点";
+    }
     this.#write(state);
     return state;
   }
@@ -146,6 +143,7 @@ export class LinghuAutomationStore {
     const temporary = `${this.#filePath}.tmp`;
     writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
     renameSync(temporary, this.#filePath);
+    copyFileSync(this.#filePath, `${this.#filePath}.bak`);
   }
 }
 
@@ -161,14 +159,44 @@ function createInitialState(): LinghuAutomationState {
     activePromptId: promptId,
     activeTaskId: null,
     recoveryAttemptCount: 0,
+    currentFaultFingerprint: null,
+    detectionCursor: null,
+    flowSnapshots: [],
+    recoveryCheckpoint: null,
     lastDispatchAt: null,
     lastCompletedAt: null,
     lastCheckedAt: null,
     blockingReason: "自动执行已关闭",
     lastFeedback: null,
+    lastModuleReport: null,
     prompts: [{ promptId, title: DEFAULT_LINGHU_STARTUP_PROMPT_TITLE, content: DEFAULT_LINGHU_STARTUP_PROMPT, enabled: true, createdAt: now, updatedAt: now }],
     updatedAt: now,
   };
+}
+
+function readState(filePath: string): LinghuAutomationState | null {
+  try {
+    const value = JSON.parse(readFileSync(filePath, "utf8")) as LinghuAutomationState;
+    return value.version === 1 && Array.isArray(value.prompts) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function migrateState(value: LinghuAutomationState): void {
+  value.pollIntervalMs = 30_000;
+  value.currentModule = LINGHU_AUTOMATION_MODULES.includes(value.currentModule) ? value.currentModule : "flow-completion";
+  value.recoveryAttemptCount ??= 0;
+  value.currentFaultFingerprint ??= null;
+  value.detectionCursor ??= null;
+  value.flowSnapshots ??= [];
+  value.recoveryCheckpoint ??= null;
+  value.lastCheckedAt ??= null;
+  value.blockingReason ??= null;
+  value.lastModuleReport ??= null;
+  if (!value.prompts.some((prompt) => prompt.promptId === value.activePromptId && prompt.enabled)) {
+    value.activePromptId = value.prompts.find((prompt) => prompt.enabled)?.promptId || null;
+  }
 }
 
 function requirePrompt(state: LinghuAutomationState, promptId: string) {

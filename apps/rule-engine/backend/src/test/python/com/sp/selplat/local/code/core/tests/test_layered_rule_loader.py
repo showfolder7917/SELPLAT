@@ -4,10 +4,14 @@ from __future__ import annotations
 
 # 导入 importlib，从生产文件路径加载唯一 Python 分层加载能力。
 import importlib.util
+# 导入 io，捕获 CLI 帮助文本以验证命令行探查不会进入 JSON 错误分支。
+import io
 # 导入 sys，满足 dataclass 在模块初始化阶段的真实模块回查。
 import sys
 # 导入 unittest，复用工程统一 Python 测试入口。
 import unittest
+# 导入 redirect_stdout，仅在进程内核对 main 的公开输出和退出码。
+from contextlib import redirect_stdout
 # 导入 Path，从测试位置向上识别工程根。
 from pathlib import Path
 
@@ -44,6 +48,17 @@ loader = load_module()
 
 class PythonLayeredRuleLoaderTest(unittest.TestCase):
     """覆盖原 Java 加载器全部生产边界和迁移后的 Python 入口。"""
+
+    def test_cli_help_does_not_parse_help_flag_as_json(self) -> None:
+        """--help 应成功说明 JSON 用法，不得返回误导性的解析失败。"""
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = loader.main(["--help"])
+        self.assertEqual(0, exit_code)
+        self.assertIn("usage: layered_rule_loader.py", output.getvalue())
+        self.assertIn("load_bundle", output.getvalue())
+        self.assertNotIn("blocked", output.getvalue())
 
     def test_loads_core_and_current_user_scope_rules(self) -> None:
         """core 与当前用户跨工程、SELPLAT 规则按登记路径加载。"""
@@ -205,7 +220,7 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         common_validation = loader.validate_index_tree()
         self.assertEqual(loader.IndexValidation(2, 11), common_validation)
         user_validation = loader.validate_current_user_index_tree()
-        self.assertEqual(loader.IndexValidation(21, 72), user_validation)
+        self.assertEqual(loader.IndexValidation(22, 78), user_validation)
 
     def test_loads_fujitsu_json_single_line_format_gate(self) -> None:
         """Fujitsu JSON 变更必须从当前用户层命中单行格式交付门禁。"""

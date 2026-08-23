@@ -64,7 +64,14 @@ export class TaskWorktreeTestRunner {
       PLAYWRIGHT_BROWSERS_PATH: path.join(this.#cacheRoot, "playwright"),
       npm_config_cache: path.join(this.#cacheRoot, "npm"),
       GIT_TERMINAL_PROMPT: "0",
+      // 隔离 Electron 若未建立调试端点，必须把真实启动命令和子进程 stderr 带回签发测试证据，不能只留下外层 hook 超时。
+      DEBUG: "pw:browser",
     };
+    // 签发验证由 Electron 主进程派生，禁止把宿主的 Node 模式或调试暂停控制带入 npm、Playwright 和隔离 Electron。
+    delete environment.ELECTRON_RUN_AS_NODE;
+    delete environment.NODE_OPTIONS;
+    delete environment.NODE_INSPECT_RESUME_ON_START;
+    delete environment.VSCODE_INSPECTOR_OPTIONS;
     this.#recordEvent("collaboration.task_test.started", { worktreeRoot: request.worktreeRoot, dependencyMode }, request.taskId);
     try {
       for (const script of TEST_SCRIPTS) {
@@ -84,7 +91,8 @@ export class TaskWorktreeTestRunner {
       this.#recordEvent("collaboration.task_test.completed", { worktreeRoot: request.worktreeRoot }, request.taskId);
     } finally {
       // 锁文件一致时只临时复用主工程依赖，任务验证结束立即移除链接，避免进入分支提交。
-      if (dependencyMode === "linked") unlinkSync(path.join(desktopRoot, "node_modules"));
+      const dependencyLink = path.join(desktopRoot, "node_modules");
+      if (dependencyMode === "linked" && existsSync(dependencyLink)) unlinkSync(dependencyLink);
     }
   }
 }

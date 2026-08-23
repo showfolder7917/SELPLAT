@@ -10,6 +10,7 @@ export type CollaborationMergeStrategy = "INDEPENDENT" | "ATOMIC_GROUP" | "DEPEN
 export type CollaborationPlanStatus = "awaiting-review" | "approved" | "rejected" | "forced";
 export type CollaborationExecutionStatus = "assigned" | "analyzing" | "waiting-review" | "executing" | "code-verified" | "transferred" | "blocked" | "cancelled";
 export type CollaborationResultOutcome = "pending-integration" | "succeeded" | "incomplete" | "cancelled";
+export type CollaborationAutomationSource = "linghu-safeguard";
 export type CollaborationTaskState =
   | "queued-executor"
   | "preparing-worktree"
@@ -167,6 +168,7 @@ export interface CollaborationTask {
   dependencyTaskIds: string[];
   integrationGeneration: number | null;
   initiator: CollaborationParticipantSnapshot | null;
+  automationSource: CollaborationAutomationSource | null;
   historyCompleteness: "complete" | "legacy-partial";
   snapshot: CollaborationTaskSnapshot;
   plans: CollaborationRequirementPlan[];
@@ -231,6 +233,7 @@ export interface SubmitCollaborationTaskRequest {
   dependencyTaskIds?: string[];
   initiatorMemberId?: string;
   preferredExecutorMemberId?: string;
+  automationSource?: CollaborationAutomationSource;
 }
 
 export interface CollaborationStateEvent {

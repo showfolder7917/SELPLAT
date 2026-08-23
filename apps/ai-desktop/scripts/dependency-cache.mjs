@@ -45,14 +45,19 @@ export function repairLocalPackageLinks(details = resolveDependencyCache()) {
   }
 }
 
-export function attachDependencyCache() {
+export function attachDependencyCache(options = {}) {
   const details = resolveDependencyCache();
   if (!existsSync(details.dependencyRoot)) throw new Error(`Dependency cache is missing for current package-lock.json: ${details.cacheRoot}`);
   repairLocalPackageLinks(details);
   if (existsSync(details.linkPath)) {
     if (lstatSync(details.linkPath).isSymbolicLink()) {
+      const linkedDependencyRoot = realpathSync(details.linkPath);
       // 只复用真实指向当前锁哈希缓存的链接；旧哈希链接必须先回收再挂载当前缓存。
-      if (realpathSync(details.linkPath) === realpathSync(details.dependencyRoot)) return { ...details, ownsLink: false };
+      if (linkedDependencyRoot === realpathSync(details.dependencyRoot)) return { ...details, ownsLink: false };
+      // 签发 worktree 的外层验证器已核对锁文件并挂载主工程缓存；内层命令只借用该链接，所有权仍由外层回收。
+      if (options.preserveExistingLink === true) {
+        return { ...details, dependencyRoot: linkedDependencyRoot, ownsLink: false, ownsBuildLink: false };
+      }
       rmSync(details.linkPath, { force: true });
     } else {
       // 当前哈希缓存已经完整存在时，源码目录中的实体 node_modules 只是中断迁移留下的可再生产物。

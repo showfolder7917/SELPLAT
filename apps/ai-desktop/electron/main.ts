@@ -120,8 +120,9 @@ app.whenReady().then(() => {
     readWorkspaceState: () => workspaces.read(),
     locale: () => settings.read().locale,
     recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
-    runUnifiedTestAndRestart: async () => {
+    runUnifiedTestAndRestart: async (onVerified) => {
       await linghuUnifiedTests.run();
+      onVerified();
       audit.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed" });
       app.relaunch();
       app.exit(0);

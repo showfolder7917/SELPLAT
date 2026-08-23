@@ -5,12 +5,19 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 let application: ElectronApplication;
 let page: Page;
 const productionRendererFile = path.resolve("../../build/ai-desktop/renderer/developer/index.html");
+const isolatedElectronStartupTimeoutMs = 30_000;
 
 test.beforeAll(async () => {
+  // 启动钩子独立覆盖冷启动，但仍保持有界；调试握手异常必须在 30 秒内失败并留下证据。
+  test.setTimeout(isolatedElectronStartupTimeoutMs);
   // 每组测试只启动一次后台隔离 Electron，多个交互共用窗口以缩短任务托管耗时。
   const isolatedEnvironment = { ...process.env };
   // 当前 AI Desktop 主进程可能以 Node 模式拉起 Codex；隔离 Electron 必须移除该继承值才能按桌面运行时接受 Playwright 调试参数。
   delete isolatedEnvironment.ELECTRON_RUN_AS_NODE;
+  // 宿主调试器的暂停和注入配置会阻断 Playwright 自己建立的 --inspect/远程调试握手。
+  delete isolatedEnvironment.NODE_OPTIONS;
+  delete isolatedEnvironment.NODE_INSPECT_RESUME_ON_START;
+  delete isolatedEnvironment.VSCODE_INSPECTOR_OPTIONS;
   application = await electron.launch({
     args: [path.resolve("tests/interaction/isolated-main.cjs")],
     env: { ...isolatedEnvironment, AI_DESKTOP_INTERACTION_FILE: productionRendererFile },
