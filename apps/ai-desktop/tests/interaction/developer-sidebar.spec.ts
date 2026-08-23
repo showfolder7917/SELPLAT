@@ -4,6 +4,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 
 let application: ElectronApplication;
 let page: Page;
+const productionRendererFile = path.resolve("../../build/ai-desktop/renderer/developer/index.html");
 
 test.beforeAll(async () => {
   // 每组测试只启动一次后台隔离 Electron，多个交互共用窗口以缩短任务托管耗时。
@@ -12,7 +13,7 @@ test.beforeAll(async () => {
   delete isolatedEnvironment.ELECTRON_RUN_AS_NODE;
   application = await electron.launch({
     args: [path.resolve("tests/interaction/isolated-main.cjs")],
-    env: { ...isolatedEnvironment, AI_DESKTOP_INTERACTION_URL: "http://127.0.0.1:4197" },
+    env: { ...isolatedEnvironment, AI_DESKTOP_INTERACTION_FILE: productionRendererFile },
   });
   page = await application.firstWindow();
   await page.locator(".dev-section-title").getByRole("button", { name: "折叠资源管理器" }).waitFor();
@@ -175,6 +176,68 @@ test("未登录时设置面板的登录主操作文字可见并使用主题对�
   await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
 });
 
+test("生产构建在正式默认、实际复现和最小窗口中保持设置入口与面板定位", async () => {
+  const sizes = [
+    { name: "正式默认", width: 1560, height: 980 },
+    { name: "实际复现", width: 1224, height: 768 },
+    { name: "正式最小", width: 1000, height: 700 },
+  ];
+  for (const size of sizes) {
+    await application.evaluate(({ BrowserWindow }, nextSize) => BrowserWindow.getAllWindows()[0]?.setSize(nextSize.width, nextSize.height), size);
+    await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getSize())).toEqual([size.width, size.height]);
+    const contentSize = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getContentSize());
+    if (!contentSize) throw new Error(`${size.name}窗口无法读取真实内容尺寸。`);
+    await expect.poll(() => page.evaluate(() => [window.innerWidth, window.innerHeight])).toEqual(contentSize);
+    const trigger = page.getByRole("button", { name: "打开连接与执行设置" });
+    await trigger.click();
+    const metrics = await page.locator(".dev-settings").evaluate((panel, expectedName) => {
+      const triggerElement = document.querySelector<HTMLElement>(".dev-settings-control > .activity-settings");
+      const title = panel.querySelector<HTMLElement>(".selfloating-heading-copy strong");
+      if (!triggerElement || !title) throw new Error(`${expectedName}窗口缺少设置入口或标题。`);
+      const triggerBounds = triggerElement.getBoundingClientRect();
+      const panelBounds = panel.getBoundingClientRect();
+      const titleBounds = title.getBoundingClientRect();
+      const actionButtons = [...panel.querySelectorAll<HTMLElement>(".temp-card button")].map((button) => {
+        const bounds = button.getBoundingClientRect();
+        return {
+          inside: bounds.left >= panelBounds.left - 0.5 && bounds.right <= panelBounds.right + 0.5,
+          overflow: button.scrollWidth - button.clientWidth,
+        };
+      });
+      return {
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        triggerLeft: triggerBounds.left,
+        triggerTop: triggerBounds.top,
+        triggerBottom: triggerBounds.bottom,
+        panelLeft: panelBounds.left,
+        panelRight: panelBounds.right,
+        panelBottom: panelBounds.bottom,
+        panelClientWidth: panel.clientWidth,
+        panelScrollWidth: panel.scrollWidth,
+        titleWidth: titleBounds.width,
+        titleHeight: titleBounds.height,
+        titleWritingMode: window.getComputedStyle(title).writingMode,
+        actionButtonsInside: actionButtons.every((button) => button.inside),
+        maximumActionButtonOverflow: Math.max(0, ...actionButtons.map((button) => button.overflow)),
+      };
+    }, size.name);
+    expect(metrics.triggerLeft, `${size.name}窗口的设置按钮必须锚定左侧`).toBeLessThanOrEqual(1);
+    expect(metrics.triggerTop, `${size.name}窗口的设置按钮不能跑到上半区`).toBeGreaterThan(metrics.viewportHeight / 2);
+    expect(Math.abs(metrics.viewportHeight - metrics.triggerBottom - 22), `${size.name}窗口的设置按钮必须锚定左下`).toBeLessThanOrEqual(1);
+    expect(metrics.panelLeft, `${size.name}窗口的设置面板必须从活动栏右侧开始`).toBeGreaterThanOrEqual(57);
+    expect(metrics.panelRight, `${size.name}窗口的设置面板不能超出桌面`).toBeLessThanOrEqual(metrics.viewportWidth + 1);
+    expect(Math.abs(metrics.viewportHeight - metrics.panelBottom), `${size.name}窗口的设置面板必须贴合底部`).toBeLessThanOrEqual(1);
+    expect(metrics.panelScrollWidth, `${size.name}窗口的设置面板不能横向溢出`).toBeLessThanOrEqual(metrics.panelClientWidth + 1);
+    expect(metrics.titleWritingMode).toBe("horizontal-tb");
+    expect(metrics.titleWidth, `${size.name}窗口的设置标题不能竖排`).toBeGreaterThan(metrics.titleHeight * 3);
+    expect(metrics.actionButtonsInside, `${size.name}窗口的设置操作不能跑出面板`).toBe(true);
+    expect(metrics.maximumActionButtonOverflow, `${size.name}窗口的设置操作文字不能溢出`).toBeLessThanOrEqual(1);
+    await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
+  }
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
+});
+
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
@@ -283,7 +346,7 @@ test("工作区目录末行完整显示且不被内层固定高度裁切", async
   expect(metrics.treeOverflow).toBe("visible");
 });
 
-test("窄窗口和常规窗口支持资源管理器键盘调节且没有横向溢出", async () => {
+test("正式最小窗口和默认窗口支持资源管理器键盘调节且没有横向溢出", async () => {
   const explorerResizer = page.getByRole("separator", { name: "调整资源管理器宽度" });
 
   await explorerResizer.focus();
@@ -293,12 +356,14 @@ test("窄窗口和常规窗口支持资源管理器键盘调节且没有横向�
   await expect(explorerResizer).toHaveAttribute("aria-valuenow", "260");
   await expect(page.getByRole("separator", { name: "调整工作区与任务区域高度" })).toHaveCount(0);
 
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(900, 700));
+  const minimumSize = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getMinimumSize());
+  expect(minimumSize).toEqual([1000, 700]);
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
   await expect(page.locator(".developer-shell")).toBeVisible();
   const narrowOverflow = await page.locator(".workspace-list").evaluate((element) => element.scrollWidth - element.clientWidth);
   expect(narrowOverflow).toBeLessThanOrEqual(1);
 
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1280, 900));
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
   await expect(page.locator(".developer-shell")).toBeVisible();
 });
 

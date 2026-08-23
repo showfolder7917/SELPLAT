@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.51.0 从渲染契约和生命周期数据中删除 Codex 本地路径，禁止以隐藏方式保留无用暴露字段。 -->
-rule_version = 5.51.0
+<!-- 5.52.0 将 Developer 生产桌面、正式窗口尺寸和单一 CSS 纳入统一交互验证。 -->
+rule_version = 5.52.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -24,6 +24,8 @@ upgrade_record_5_49 = 2026-08-23:真实用户消息首段_托管职责仅作后�
 upgrade_record_5_50 = 2026-08-23:分析审核执行分别显示真实操作者_执行下拉持久显示源码变化结果和阻塞原因_blocked与recovering均可继续_发起人由调用方显式选择并冻结快照_韩立当前人工发起_南宫婉未来自动执行发起_令狐老祖未来自动错误修复发起_禁止按任务类型在展示层猜测姓名
 <!-- 5.51.0 防止界面暂时隐藏路径但公共状态仍长期携带，后续重构再次意外显示。 -->
 upgrade_record_5_51 = 2026-08-23:删除CodexRuntimeInfo路径字段_删除runtimeInfo路径映射_删除生命周期路径记录_删除冗余displayPath_只在主进程内部command保留启动所需路径_契约测试禁止重新暴露
+<!-- 5.52.0 防止开发服务器通过但生产 CSS 分块顺序覆盖设置按钮定位。 -->
+upgrade_record_5_52 = 2026-08-23:交互测试先构建Developer_主桌面直接加载生产index文件_复用正式BrowserWindow默认1560x980和最小1000x700_补实际复现1224x768_设置入口左下锚点_面板边界_标题横排断言_Developer生产样式统一输出单一CSS_开发服务仅保留截图编辑器测试
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -292,6 +294,10 @@ collaboration_mode_architecture_contract = orchestration_isolated_from_single_co
 collaboration_execution_archive_contract = collaboration_mode_only_global_execution_list + single_conversation_never_uses_entry + terminal_task_removed_from_member_current_area + persisted_real_initiator_snapshot_selected_by_submitter + current_human_conversation_submission_uses_hanli + future_automatic_execution_submission_uses_nangong_wan + future_automatic_error_repair_submission_uses_linghu_ancestor + display_never_guesses_initiator_from_task_type + all_executor_assignment_and_transfer_snapshots + analysis_plan_disclosure_labels_real_owner + review_disclosure_labels_real_reviewer + execution_disclosure_labels_real_executor + execution_diff_snapshot_persisted_per_assignment + blocked_execution_prominently_shows_reason_changed_files_and_continue_action + recovering_execution_shows_continue_action + code_verified_at_separate_from_terminal_completed_at + list_title_initiator_all_executors_start_finish_total_wall_clock_duration + prominent_final_result_original_problem_solved_problem_concrete_changes_success_or_remaining_summary + expandable_whole_task_analysis_review_execution_flow_and_error_logs + every_flow_and_error_correlated_by_task_id + never_change_scheduler_or_infer_unrecorded_participant
 <!-- Codex 启动路径只属于主进程内部执行参数，渲染状态、生命周期日志和界面不得保留可被重新展示的路径副本。 -->
 codex_runtime_path_exposure_contract = main_process_command_only + no_renderer_contract_field + no_runtime_status_mapping + no_thread_lifecycle_path + no_hidden_compatibility_field
+<!-- Developer 桌面样式必须由一个生产 CSS 承载，SELUI 基础样式先于宿主覆盖，禁止异步 CSS 分块重新决定级联顺序。 -->
+developer_production_css_contract = single_css_output + selui_base_before_host_override + no_lazy_css_chunk_order_dependency
+<!-- 主桌面交互必须在生产文件和正式 BrowserWindow 尺寸下执行，开发服务器通过不能替代生产桌面通过。 -->
+developer_desktop_interaction_contract = build_before_interaction + load_production_file + reuse_formal_window_layout + default_1560x980 + minimum_1000x700 + reported_reproduction_size_when_available + assert_settings_bottom_left_panel_bounds_and_horizontal_title
 <!-- 默认成员名单由用户确认；韩立保持保护身份，其余十一人为可调度 worker，成员管理仍可增删改查。 -->
 collaboration_default_member_roster_contract = 韩立_conversation_owner_protected + 南宫婉_worker + 紫灵_worker + 元瑶_worker + 宋玉_worker + 冰魄仙子_worker + 墨彩环_worker + 墨大夫_worker + 厉飞雨_worker + 张铁_worker + 令狐老祖_worker + 李化元_worker + roster_crud_enabled_for_non_hanli
 <!-- 审核正文生成完成与机器结论解析属于两个独立事实；格式偏差不得伪装成 Codex 连接失败。 -->

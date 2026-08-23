@@ -33,7 +33,7 @@ load_rule_for_active_user_test_data_conflict_or_coverage_repair = TEST_CASE_ISOL
 <!-- 界面组件、图片产物或 IPC 修改需要选择快速自动测试与真实系统点击边界时加载。 -->
 load_rule_for_active_user_fast_feedback_or_real_ui_test_selection = TEST_CASE_ISOLATION_AND_SUITE_CONSISTENCY_RULES
 
-<!-- 用户触发统一测试时加载；统一测试包含全部登记门禁、失败修正和循环复测，不得停在失败报告。 -->
+<!-- 用户触发统一测试时加载；统一测试包含全部登记门禁、失败修正、循环复测，以及桌面应用的生产构建和正式窗口尺寸验证。 -->
 load_rule_for_active_user_unified_automated_and_system_ui_testing = TEST_CASE_ISOLATION_AND_SUITE_CONSISTENCY_RULES
 
 <!-- PowerShell 5.1、原生命令管道或 HTTP JSON 涉及中日文时，在写入前扩展 common UTF-8 规则。 -->

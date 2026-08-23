@@ -14,6 +14,8 @@ export default defineConfig({
   build: {
     outDir: variant === "developer" ? path.join(projectPaths.buildRoot, "renderer", "developer") : path.join(projectPaths.buildRoot, "sites", "client"),
     emptyOutDir: true,
+    // 桌面应用统一输出一个 CSS，保证 SELUI 基础样式与宿主覆盖在开发、构建和安装包中保持同一顺序。
+    cssCodeSplit: false,
   },
   cacheDir: path.join(projectPaths.cacheRoot, "transforms", "vite", variant),
   optimizeDeps: {

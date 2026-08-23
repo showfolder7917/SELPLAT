@@ -29,6 +29,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
+  // 主桌面用例直接加载生产文件；本地服务仅供独立截图编辑器测试入口使用。
   webServer: {
     command: "cross-env VITE_APP_VARIANT=developer vite --host 127.0.0.1 --port 4197 --strictPort",
     url: "http://127.0.0.1:4197",

@@ -2,12 +2,12 @@
 
 <!-- 当前规则所有者由工程根 AGENTS.md 的稳定用户身份动态解析，禁止在规则正文固定具体用户。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 1.2.0 将统一测试升级为发现问题后修正并循环复测的完整闭环。 -->
-rule_version = 1.2.0
+<!-- 1.3.0 要求桌面应用使用真实生产构建和正式窗口尺寸执行交互验证。 -->
+rule_version = 1.3.0
 <!-- 当前规则已经登记到当前用户跨工程规则索引并保持生效。 -->
 rule_status = active
 <!-- 本次升级把用户确认的快速测试口径固定为跨工程可复用约束。 -->
-upgrade_record = 2026-08-22:组件_产物_IPC_构建快速反馈优先_系统交互变化才做真实点击_统一测试执行全部登记项;2026-08-23:统一测试发现问题后必须修正并循环复测_全部登记门禁通过或确认真实阻塞才结束_禁止停在失败报告
+upgrade_record = 2026-08-22:组件_产物_IPC_构建快速反馈优先_系统交互变化才做真实点击_统一测试执行全部登记项;2026-08-23:统一测试发现问题后必须修正并循环复测_全部登记门禁通过或确认真实阻塞才结束_禁止停在失败报告;2026-08-23:桌面应用交互必须加载生产构建_复用正式默认与最小窗口尺寸_开发服务器或任意浏览器尺寸不得替代
 
 <!-- 问题：同一测试 case 在全量运行与单独运行时可能因共享日志、静态状态、数据库残留或执行顺序而得到不同结果。 -->
 <!-- 场景：修正测试数据、恢复覆盖率、处理单 case 与全量套件结果不一致。 -->
@@ -77,3 +77,10 @@ unified_test_failure_action = diagnose + repair_in_original_task_scope + rerun_a
 unified_test_terminal_condition = all_registered_gates_passed_or_evidence_backed_external_blocker
 <!-- 失败报告属于修复循环的中间证据，禁止把“已经报告失败”当作统一测试完成。 -->
 unified_test_failure_report_is_terminal = false
+
+<!-- 桌面应用的布局、层叠、焦点与窗口交互只能由生产构建和正式窗口配置证明，开发服务器页面不构成最终证据。 -->
+desktop_application_interaction_evidence = production_renderer_or_packaged_app + formal_default_window_size + formal_minimum_window_size + reported_reproduction_size
+<!-- 测试窗口尺寸必须复用生产窗口的单一配置来源，禁止在测试入口复制另一组宽高。 -->
+desktop_test_window_size_source = production_window_configuration
+<!-- 构建后 CSS 分块、资源顺序和文件协议属于真实桌面结果，统一测试必须在生产资源上重新执行可见布局断言。 -->
+desktop_production_asset_gate = build_first + load_file_or_packaged_resource + assert_visible_layout_after_final_asset_order

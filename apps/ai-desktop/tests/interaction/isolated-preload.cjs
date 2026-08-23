@@ -11,7 +11,7 @@ let harnessStatus = {
   connected: true,
   account: { authenticated: true, authMode: "test", email: "interaction@test.invalid", planType: "test", requiresOpenaiAuth: false },
   error: null,
-  runtime: { source: "bundled", path: "/Applications/AI Desktop.app/Contents/Resources/app.asar.unpacked/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex", version: "0.149.0" },
+  runtime: { source: "bundled", version: "0.149.0" },
 };
 let pendingUserInput = null;
 let finishManagedTurn = null;
