@@ -759,6 +759,14 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /linghu_module_completion_report_contract/);
 });
 
+test("自动恢复保留令狐老祖负责人和回流说明", () => {
+  const store = readFileSync(new URL("../electron/services/collaboration/collaboration-store.ts", import.meta.url), "utf8");
+  const facade = readFileSync(new URL("../electron/services/collaboration/linghu-automation-facade.ts", import.meta.url), "utf8");
+  assert.match(store, /continueTask\(taskId: string, recoveryActor\?: Pick<CollaborationMember/);
+  assert.match(store, /正在处理流程中断，随后将任务退回原负责人重试/);
+  assert.match(facade, /continueTask\(task\.taskId, linghu\)/);
+});
+
 test("进程中断后任务显式进入恢复态，继续时重新排队且不沿用旧连接租约", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-recovery-"));
   const filePath = path.join(directory, "state.json");

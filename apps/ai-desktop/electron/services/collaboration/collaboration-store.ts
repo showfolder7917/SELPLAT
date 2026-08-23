@@ -247,7 +247,7 @@ export class CollaborationStore {
     });
   }
 
-  continueTask(taskId: string): CollaborationState {
+  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMember, "memberId" | "displayName">): CollaborationState {
     return this.updateTask(taskId, "task.recovery_requested", (task, state) => {
       if (!["recovering", "blocked", "review-failed", "test-failed"].includes(task.state)) throw new Error("当前任务不需要恢复。");
       if (task.state === "review-failed") {
@@ -274,7 +274,9 @@ export class CollaborationStore {
       }
       task.phase = null;
       task.blockingReason = null;
-      task.flowEvents.push({ eventId: randomUUID(), type: "task.recovery_requested", stage: "recovery", status: "started", actor: task.initiator, summary: "用户请求继续执行任务", occurredAt: new Date().toISOString(), error: false });
+      const actor = recoveryActor ? participantSnapshot(recoveryActor) : task.initiator;
+      const summary = recoveryActor ? `${recoveryActor.displayName}正在处理流程中断，随后将任务退回原负责人重试` : "用户请求继续执行任务";
+      task.flowEvents.push({ eventId: randomUUID(), type: "task.recovery_requested", stage: "recovery", status: "started", actor, summary, occurredAt: new Date().toISOString(), error: false });
     });
   }
 

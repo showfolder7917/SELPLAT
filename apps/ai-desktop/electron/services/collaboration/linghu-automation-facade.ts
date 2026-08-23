@@ -207,7 +207,11 @@ export class LinghuAutomationFacade {
       return;
     }
 
-    if (["review-failed", "test-failed", "blocked", "recovering"].includes(task.state)) this.#collaboration.continueTask(task.taskId);
+    if (["review-failed", "test-failed", "blocked", "recovering"].includes(task.state)) {
+      const linghu = this.#collaboration.state().members.find((member) => member.memberId === LINGHU_MEMBER_ID);
+      if (!linghu) throw new Error("令狐老祖成员记录缺失，无法记录自动恢复负责人。");
+      this.#collaboration.continueTask(task.taskId, linghu);
+    }
     else await this.#collaboration.recoverTask(task.taskId, "令狐老祖检测到其他人物任务超过安全进展阈值");
     this.#store.updateRuntime("automation.flow_recovery_requested", (state) => {
       state.recoveryAttemptsByFingerprint[fingerprint] = attempts + 1;

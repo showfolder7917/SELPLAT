@@ -128,8 +128,8 @@ export class CollaborationCoordinator {
     return this.state();
   }
 
-  continueTask(taskId: string): CollaborationState {
-    const state = this.#store.continueTask(taskId);
+  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMember, "memberId" | "displayName">): CollaborationState {
+    const state = this.#store.continueTask(taskId, recoveryActor);
     const previousWait = this.#waitSpans.get(taskId);
     if (previousWait) this.#durations.finish(previousWait, "interrupted", { releaseEvent: "task.recovery_requested" });
     this.#waitSpans.delete(taskId);

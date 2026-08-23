@@ -15,7 +15,10 @@ test("人物页以真实五环节进度替代整页报告", () => {
   assert.match(developerApp, /下一步去向/);
   assert.match(developerApp, /setOpenStages\(new Set\(\[progress\.currentStageId\]\)\)/);
   assert.match(developerApp, /scrollIntoView\(\{ block: "nearest" \}\)/);
-  assert.match(developerApp, /stage\.id === progress\.currentStageId \? liveMessage : null/);
+  assert.match(developerApp, /stage\.id === liveOutput\?\.stageId \? liveOutput\.message : null/);
+  assert.match(developerApp, /deriveCollaborationTaskCurrentStage\(task, linghuAutomationStateRef\.current\)/);
+  assert.match(developerApp, /existing\?\.turnId === envelope\.event\.turnId/);
+  assert.match(progressModel, /automation\.lastFeedback\?\.taskId === task\.taskId/);
   assert.doesNotMatch(developerApp, /<p>\{currentTask\.snapshot\.confirmedIntent\}<\/p>/);
 });
 
