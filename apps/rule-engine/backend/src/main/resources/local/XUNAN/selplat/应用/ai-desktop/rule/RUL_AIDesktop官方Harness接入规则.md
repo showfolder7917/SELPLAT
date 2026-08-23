@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.62.0 将协同集成、候选测试、打包和发布收敛为同一跨进程发布批次。 -->
-rule_version = 5.62.0
+<!-- 5.63.0 固化合并源分支的唯一最终提交，以及目标分支脏修改的可证明归属转交。 -->
+rule_version = 5.63.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -46,6 +46,8 @@ upgrade_record_5_60 = 2026-08-23:令狐仅保留全人物最终流程保障_测�
 upgrade_record_5_61 = 2026-08-23:新安装默认gpt_5_6_terra_旧版空默认值一次迁移_页面主会话协同执行和审核逐轮共用全局模型设置_保留用户后续显式选择
 <!-- 5.62.0 防止普通任务合并与令狐发布互相抢占，或主工作区测试结果冒充候选提交验证。 -->
 upgrade_record_5_62 = 2026-08-23:跨进程集成发布锁_编码任务可继续但合并发布全局串行_release版本rc候选分支_任务分支与resultSHA冻结_统一测试打包验证绑定候选提交_批次文档运行中单点维护_终态进入发布归档并清理临时材料_验证后受控切换并恢复任务
+<!-- 5.63.0 防止脏目标分支被笼统提交，或来源不明的文件混入某个人物任务。 -->
+upgrade_record_5_63 = 2026-08-23:任务分支有变化只生成一个最终本地提交_无变化禁止空提交_提交后再次验证干净并冻结resultSHA_目标分支脏时按执行记录changedFiles唯一归属_先建立可恢复stash再转交任务worktree_转交只生成一个提交_无归属多归属多任务或任务分支不干净立即阻塞_禁止猜测提交删除或静默覆盖
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -348,6 +350,8 @@ linghu_startup_prompt_management_contract = electron_userData_persistence + list
 linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry + atomic_cross_process_lease + task_process_port_build_root_and_heartbeat + queued_acquired_contended_released_timeout_failed_and_stale_recovered_events + fixed_test_interaction_then_test_collaboration_then_test_managed_then_package_and_verify + real_multi_process_max_concurrency_one_regression + wait_execution_and_contention_metrics + no_dynamic_prompt_command + persist_next_cycle_before_relaunch + test_failure_returns_flow_completion_repair_cycle
 <!-- 发布只冻结当前已经完成的任务，冻结后完成的任务进入下一批；发布批次独占维护汇总证据。 -->
 linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry + atomic_cross_process_release_lease + coding_continues_while_merge_and_release_are_serial + freeze_task_branch_result_sha_and_test_evidence + release_semver_rc_candidate_branch + unified_tests_package_and_verification_run_on_candidate_root + release_batch_document_single_writer + terminal_archive_and_running_material_cleanup + verified_executable_controlled_restart + stable_userData_task_recovery
+<!-- 合并源与目标的干净门禁必须分别处理：任务分支可提交已登记修改，目标分支只允许转交唯一可证明的任务归属。 -->
+collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit + unchanged_task_worktree_creates_no_empty_commit + verify_task_worktree_clean_after_commit + freeze_result_sha + dirty_target_matches_every_changed_file_to_exactly_one_ready_task_changedFiles_record + all_dirty_files_share_one_task_owner + create_recoverable_stash_before_transfer + apply_to_signed_task_worktree + transfer_creates_exactly_one_commit + verify_source_and_target_clean + unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing
 <!-- 模块终态必须持久保存固定报告；统一测试通过事实必须在退出进程前写入，字段缺失不得推进为可归档完成。 -->
 linghu_module_completion_report_contract = cycle_module_evidence_tasks_real_executors_tests_restart_recovery_blocking_and_next_suggestion + explicit_not_applicable_reason + unified_test_verified_callback_persists_before_relaunch + report_reused_as_next_module_feedback
 <!-- 审核正文生成完成与机器结论解析属于两个独立事实；格式偏差不得伪装成 Codex 连接失败。 -->

@@ -18,6 +18,24 @@ export interface IntegrationCandidate {
   taskIds: string[];
 }
 
+export interface LocalChangeOwnershipCandidate {
+  taskId: string;
+  memberName: string;
+  workspace: CollaborationVersionWorkspace;
+  changedFiles: string[];
+}
+
+export interface LocalChangeTransferResult {
+  taskId: string;
+  resultSha: string;
+  changedFiles: string[];
+  recoveryStashSha: string;
+}
+
+export class LocalChangeOwnershipError extends Error {
+  constructor(message: string) { super(message); this.name = "LocalChangeOwnershipError"; }
+}
+
 /** 只在应用签发的目录中建立 Git worktree，执行人永不直接修改用户当前工作目录。 */
 export class VersionWorkspaceManager {
   readonly #repositoryRoot: string;
@@ -90,14 +108,64 @@ export class VersionWorkspaceManager {
     if (!workspace) throw new Error("任务尚未建立独立版本工作区。");
     const rootPath = this.#validateManagedPath(workspace.rootPath);
     const status = await this.#git(rootPath, ["status", "--porcelain"]);
+    const beforeSha = await this.#git(rootPath, ["rev-parse", "HEAD"]);
     if (status) {
       await this.#git(rootPath, ["add", "-A"]);
       await this.#git(rootPath, ["commit", "-m", `协同任务 ${task.taskId}：${memberName} 完成 r${task.taskRevision}`]);
     }
     const resultSha = await this.#git(rootPath, ["rev-parse", "HEAD"]);
+    if (status) {
+      const finalCommitCount = await this.#git(rootPath, ["rev-list", "--count", `${beforeSha}..${resultSha}`]);
+      if (finalCommitCount !== "1") throw new Error("任务最终整理必须且只能生成一个本地提交。");
+    }
     const remaining = await this.#git(rootPath, ["status", "--porcelain"]);
     if (remaining) throw new Error("任务 worktree 仍有未提交修改，不能进入集成队列。");
     return resultSha;
+  }
+
+  /**
+   * 目标分支脏时只转移唯一可证明属于一个待集成任务的修改；
+   * 原修改先进入 Git stash 作为恢复证据，任务分支提交成功后才删除该恢复引用。
+   */
+  async transferOwnedLocalChanges(candidates: LocalChangeOwnershipCandidate[]): Promise<LocalChangeTransferResult | null> {
+    const changedFiles = await this.#localChangedFiles();
+    if (changedFiles.length === 0) return null;
+    const owners = new Map<string, LocalChangeOwnershipCandidate>();
+    for (const changedFile of changedFiles) {
+      const matching = candidates.filter((candidate) => normalizedFiles(candidate.changedFiles).has(changedFile));
+      if (matching.length !== 1) {
+        throw new LocalChangeOwnershipError(matching.length === 0
+          ? `本地修改 ${changedFile} 未登记到任何待集成任务，禁止自动提交或合并。`
+          : `本地修改 ${changedFile} 同时属于多个待集成任务，禁止猜测归属。`);
+      }
+      owners.set(matching[0].taskId, matching[0]);
+    }
+    if (owners.size !== 1) throw new LocalChangeOwnershipError("本地修改分属多个任务，必须分别回到各自任务分支后再集成。");
+    const owner = [...owners.values()][0];
+    const taskRoot = this.#validateManagedPath(owner.workspace.rootPath);
+    this.#validateManagedBranch(owner.workspace.branchName);
+    if (await this.#git(taskRoot, ["branch", "--show-current"]) !== owner.workspace.branchName) throw new LocalChangeOwnershipError("任务工作区分支与签发记录不一致。");
+    if (await this.#git(taskRoot, ["status", "--porcelain"])) throw new LocalChangeOwnershipError("任务工作区已有未提交内容，禁止叠加本地修改。");
+
+    const previousStash = await this.#git(this.#repositoryRoot, ["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
+    await this.#git(this.#repositoryRoot, ["stash", "push", "--include-untracked", "--message", `AI Desktop 转交 ${owner.taskId}`]);
+    const recoveryStashSha = await this.#git(this.#repositoryRoot, ["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
+    if (!recoveryStashSha || recoveryStashSha === previousStash) throw new LocalChangeOwnershipError("本地修改恢复快照创建失败，未执行转交。");
+    try {
+      await this.#git(taskRoot, ["stash", "apply", "--index", recoveryStashSha]);
+      await this.#git(taskRoot, ["add", "-A"]);
+      const beforeSha = await this.#git(taskRoot, ["rev-parse", "HEAD"]);
+      await this.#git(taskRoot, ["commit", "-m", `协同任务 ${owner.taskId}：接收本地归属修改（${owner.memberName}）`]);
+      const resultSha = await this.#git(taskRoot, ["rev-parse", "HEAD"]);
+      if (await this.#git(taskRoot, ["rev-list", "--count", `${beforeSha}..${resultSha}`]) !== "1") throw new Error("本地归属修改转交必须且只能生成一个提交。");
+      if (await this.#git(taskRoot, ["status", "--porcelain"])) throw new Error("任务分支接收本地修改后仍不干净。");
+      if (await this.#git(this.#repositoryRoot, ["status", "--porcelain"])) throw new Error("本地修改转交后目标分支仍不干净。");
+      const topStash = await this.#git(this.#repositoryRoot, ["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
+      if (topStash === recoveryStashSha) await this.#git(this.#repositoryRoot, ["stash", "drop", "stash@{0}"]);
+      return { taskId: owner.taskId, resultSha, changedFiles, recoveryStashSha };
+    } catch (error) {
+      throw new LocalChangeOwnershipError(`本地修改已保存为恢复快照 ${recoveryStashSha}，但转交任务分支失败：${errorMessage(error)}`);
+    }
   }
 
   async createIntegrationCandidate(generation: number, tasks: CollaborationTask[]): Promise<IntegrationCandidate> {
@@ -176,6 +244,12 @@ export class VersionWorkspaceManager {
     }
   }
 
+  async #localChangedFiles(): Promise<string[]> {
+    const tracked = splitZero(await this.#gitRaw(this.#repositoryRoot, ["diff", "--name-only", "-z", "HEAD"]));
+    const untracked = splitZero(await this.#gitRaw(this.#repositoryRoot, ["ls-files", "--others", "--exclude-standard", "-z"]));
+    return [...new Set([...tracked, ...untracked].map(normalizeFile).filter(Boolean))].sort();
+  }
+
   #managedPath(...segments: string[]): string {
     return this.#validateManagedPath(path.join(this.#managedRoot, ...segments));
   }
@@ -205,6 +279,16 @@ export class VersionWorkspaceManager {
     });
     return result.stdout.trim();
   }
+
+  async #gitRaw(cwd: string, args: string[]): Promise<string> {
+    const result = await execFileAsync("git", args, {
+      cwd,
+      timeout: 120_000,
+      maxBuffer: 8 * 1024 * 1024,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
+    return result.stdout;
+  }
 }
 
 function safeSegment(value: string): string {
@@ -217,6 +301,10 @@ function safeVersionSegment(value: string): string {
   if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?$/.test(value)) throw new Error("发布版本号不符合语义化版本格式。");
   return value;
 }
+
+function normalizedFiles(files: string[]): Set<string> { return new Set(files.map(normalizeFile).filter(Boolean)); }
+function normalizeFile(value: string): string { return value.trim().replaceAll("\\", "/").replace(/^\.\//, ""); }
+function splitZero(value: string): string[] { return value.split("\0").filter(Boolean); }
 
 function errorMessage(error: unknown): string {
   if (error && typeof error === "object" && "stderr" in error && typeof error.stderr === "string") return error.stderr.trim().slice(-2_000);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -13,6 +13,7 @@ import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/elect
 import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-store.js";
 import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js";
+import { LocalChangeOwnershipError, VersionWorkspaceManager } from "../../../build/ai-desktop/electron/electron/services/collaboration/version-workspace-manager.js";
 import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/managed-task-executor.js";
 import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
@@ -57,6 +58,10 @@ function runReleaseWorker(coordinationRoot, releaseBatchId, holdMilliseconds) {
       try { resolve(JSON.parse(stdout.trim())); } catch (error) { reject(error); }
     });
   });
+}
+
+function git(cwd, ...args) {
+  return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }).trim();
 }
 
 test("会话卡片绑定真实协作任务并完整显示修复回流与统一测试状态", () => {
@@ -373,6 +378,57 @@ test("多个真实进程同时集成或发布时全局并发始终为一", async
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("目标分支修改唯一属于待集成任务时转入任务分支并只生成一个提交", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "owned-local-change-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  const taskRoot = path.join(managedRoot, "task-1");
+  try {
+    mkdirSync(path.join(repositoryRoot, "apps", "ai-desktop"), { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "apps", "ai-desktop", "owned.ts"), "export const value = 1;\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    mkdirSync(managedRoot, { recursive: true });
+    git(repositoryRoot, "worktree", "add", "-b", "codex/collab/task-1/worker/r1", taskRoot, "HEAD");
+    writeFileSync(path.join(repositoryRoot, "apps", "ai-desktop", "owned.ts"), "export const value = 2;\n");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    const beforeSha = git(taskRoot, "rev-parse", "HEAD");
+    const result = await manager.transferOwnedLocalChanges([{
+      taskId: "TASK-1",
+      memberName: "紫灵",
+      workspace: { workspaceId: "worktree:TASK-1:r1", rootPath: taskRoot, branchName: "codex/collab/task-1/worker/r1", baseSha: beforeSha, resultSha: beforeSha, createdAt: new Date().toISOString(), retiredAt: null },
+      changedFiles: ["apps/ai-desktop/owned.ts"],
+    }]);
+    assert.equal(result.taskId, "TASK-1");
+    assert.equal(git(taskRoot, "rev-list", "--count", `${beforeSha}..${result.resultSha}`), "1");
+    assert.equal(git(repositoryRoot, "status", "--porcelain"), "");
+    assert.equal(git(taskRoot, "status", "--porcelain"), "");
+    assert.equal(readFileSync(path.join(taskRoot, "apps", "ai-desktop", "owned.ts"), "utf8"), "export const value = 2;\n");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("目标分支修改无归属或多任务重叠时保持原状并阻止合并", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "unknown-local-change-"));
+  const repositoryRoot = path.join(directory, "repository");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "unknown.txt"), "base\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    writeFileSync(path.join(repositoryRoot, "unknown.txt"), "dirty\n");
+    const manager = new VersionWorkspaceManager(repositoryRoot, path.join(directory, "managed-worktrees"));
+    await assert.rejects(() => manager.transferOwnedLocalChanges([]), LocalChangeOwnershipError);
+    assert.match(git(repositoryRoot, "status", "--porcelain"), /unknown\.txt/);
+    assert.equal(readFileSync(path.join(repositoryRoot, "unknown.txt"), "utf8"), "dirty\n");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("三个真实进程同时申请测试资源时全局并发始终为一并留下结构化事件", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "test-resource-cross-process-"));
   const coordinationRoot = path.join(directory, "运行中", "测试", "_资源协调");
@@ -526,8 +582,9 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.62\.0/);
+  assert.match(rule, /rule_version = 5\.63\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
+  assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);
   assert.match(rule, /linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry/);
   assert.match(rule, /linghu_automation_flow_snapshot_contract/);
