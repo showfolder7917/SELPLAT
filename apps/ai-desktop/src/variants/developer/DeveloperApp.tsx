@@ -1374,15 +1374,16 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
   const latestReviewAttempt = currentTask?.reviewAttempts.at(-1);
   const latestUnresolvedReview = latestReviewAttempt?.outcome === "decided" ? null : latestReviewAttempt;
   const latestExecution = currentTask?.executionRecords.at(-1);
+  const taskInitiatorName = currentTask?.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录");
   return <section className="collaboration-member-page" aria-label={member.displayName}>
     <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
     {member.memberId === "linghu-ancestor" && linghuAutomation && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}
     {(currentTask?.blockingReason || member.blockingReason) && <div className="member-blocking-reason" role="status">{currentTask?.blockingReason || member.blockingReason}</div>}
     {currentTask ? <article className="member-current-task">
       <div className="member-task-heading"><span>{locale === "ja" ? "現在のタスク" : "当前任务"}</span><strong>{currentTask.snapshot.title}</strong><small>{collaborationTaskStateLabel(currentTask.state, locale)}</small></div>
-      <div className="member-task-actors"><span>{locale === "ja" ? "起案者" : "发起人"}<strong>{currentTask.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录")}</strong></span><span>{locale === "ja" ? "分析" : "方案分析"}<strong>{currentPlan?.ownerDisplayName || "—"}</strong></span><span>{locale === "ja" ? "レビュー" : "审核"}<strong>{latestReview?.reviewerDisplayName || latestUnresolvedReview?.reviewerDisplayName || "—"}</strong></span><span>{locale === "ja" ? "実行" : "执行"}<strong>{latestExecution?.executor.displayName || "—"}</strong></span></div>
+      <div className="member-task-actors"><span>{locale === "ja" ? "起案者" : "发起人"}<strong>{taskInitiatorName}</strong></span><span>{locale === "ja" ? "分析" : "方案分析"}<strong>{currentPlan?.ownerDisplayName || "—"}</strong></span><span>{locale === "ja" ? "レビュー" : "审核"}<strong>{latestReview?.reviewerDisplayName || latestUnresolvedReview?.reviewerDisplayName || "—"}</strong></span><span>{locale === "ja" ? "実行" : "执行"}<strong>{latestExecution?.executor.displayName || "—"}</strong></span></div>
       <details key={currentTask.taskId} className="member-task-detail">
-        <summary>{locale === "ja" ? `タスク詳細 · ${currentTask.initiator?.displayName || "履歴なし"}` : `任务详细 · ${currentTask.initiator?.displayName || "历史未记录"}`}</summary>
+        <summary>{locale === "ja" ? `タスク詳細 · ${taskInitiatorName}` : `任务详细 · ${taskInitiatorName}`}</summary>
         <div><MarkdownMessage text={currentTask.snapshot.confirmedIntent} /></div>
       </details>
       {currentPlan && <details open><summary>{locale === "ja" ? `要件案 v${currentPlan.version} · ${currentPlan.ownerDisplayName}` : `分析方案 v${currentPlan.version} · ${currentPlan.ownerDisplayName}`}</summary><MarkdownMessage text={currentPlan.text} /></details>}

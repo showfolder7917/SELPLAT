@@ -13,6 +13,13 @@ test("受控命令在锁文件哈希缓存缺失时先调用统一依赖准备�
   assert.ok(runner.indexOf("ensure-dependency-cache.mjs") < runner.indexOf("attachDependencyCache()"));
 });
 
+test("隔离 Playwright 不复用缺少 Electron 安装产物的临时依赖链接", () => {
+  assert.match(runner, /hasElectronRuntime\(linkedDependencies\)/);
+  assert.match(runner, /rmSync\(unresolvedCache\.linkPath, \{ force: true \}\)/);
+  assert.match(runner, /rmSync\(unresolvedCache\.dependencyRoot, \{ recursive: true, force: true \}\)/);
+  assert.match(runner, /if \(!process\.env\.AI_DESKTOP_TEST_TASK_ID\) detachOwnedDependencyCache\(cache\)/);
+});
+
 test("当前哈希缓存存在时收敛实体目录和旧哈希链接", () => {
   assert.match(cache, /realpathSync\(details\.linkPath\) === realpathSync\(details\.dependencyRoot\)/);
   assert.match(cache, /rmSync\(details\.linkPath, \{ recursive: true, force: true \}\)/);

@@ -32,6 +32,7 @@
     "verify:mac:developer": "node scripts/run-with-dependencies.mjs node scripts/verify-mac-developer-app.mjs",
     "verify:package-content": "node scripts/run-with-dependencies.mjs node scripts/verify-package-content.mjs",
     "migrate:data-layout": "node scripts/run-with-dependencies.mjs node scripts/migrate-project-data-layout.mjs",
+    "paths:resolve": "node scripts/run-with-dependencies.mjs node scripts/resolve-application-paths.mjs",
     "migrate:dependencies": "node scripts/migrate-dependencies-to-cache.mjs",
     "dependencies:ensure": "node scripts/ensure-dependency-cache.mjs",
     "test:document": "node scripts/run-with-dependencies.mjs node scripts/test-document-runner.mjs",
@@ -47,7 +48,7 @@
     "test:dispatch": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/conversation-dispatch-store.test.mjs",
     "test:collaboration": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/collaboration-mode.test.mjs",
     "test:explorer": "node --test tests/developer-explorer-collapse.test.mjs",
-    "test:interaction": "node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs",
+    "test:interaction": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs",
     "test:managed": "node scripts/run-with-dependencies.mjs node --test tests/managed-task-executor-contract.test.mjs tests/user-input-and-screenshot-contract.test.mjs tests/test-document-and-mac-launcher-contract.test.mjs",
     "test:trust": "node scripts/run-with-dependencies.mjs node --test tests/trusted-command-store.test.mjs tests/developer-hot-reload.test.mjs",
     "test:codex-runtime": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/codex-runtime.test.mjs"

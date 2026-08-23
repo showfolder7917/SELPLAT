@@ -194,6 +194,9 @@ test("人物页按阶段标注真实操作者并在阻塞后保留执行证据�
   assert.match(developerSource, /审核通过.*reviewerDisplayName/);
   assert.match(developerSource, /执行.*latestExecution\.executor\.displayName/);
   assert.match(developerSource, /currentTask\.initiator\?\.displayName/);
+  assert.match(developerSource, /<details key=\{currentTask\.taskId\} className="member-task-detail">/);
+  assert.match(developerSource, /任务详细 · \$\{taskInitiatorName\}/);
+  assert.doesNotMatch(developerSource, /<details[^>]*className="member-task-detail"[^>]*\sopen(?:\s|=|>)/);
   assert.match(developerSource, /\["recovering", "blocked"\]\.includes\(currentTask\.state\)/);
   assert.match(developerSource, /latestExecution\.changedFiles/);
   assert.match(coordinatorSource, /execution\.diff_updated/);
@@ -288,9 +291,13 @@ test("集成工作区锁文件一致时自动复用主工作区依赖", async ()
   try {
     mkdirSync(path.join(candidate), { recursive: true });
     mkdirSync(path.join(source, "node_modules", ".bin"), { recursive: true });
+    mkdirSync(path.join(source, "node_modules", "electron", "dist"), { recursive: true });
     writeFileSync(path.join(candidate, "package-lock.json"), "same-lock", "utf8");
     writeFileSync(path.join(source, "package-lock.json"), "same-lock", "utf8");
     writeFileSync(path.join(source, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
+    const electronExecutable = process.platform === "win32" ? "electron.exe" : "Electron";
+    writeFileSync(path.join(source, "node_modules", "electron", "path.txt"), electronExecutable, "utf8");
+    writeFileSync(path.join(source, "node_modules", "electron", "dist", electronExecutable), "ready", "utf8");
     assert.equal(await ensureIntegrationDependencies(candidate, path.join(source, "node_modules"), path.join(source, "package-lock.json")), "linked");
     assert.equal(readFileSync(path.join(candidate, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "utf8"), "ready");
   } finally {
@@ -334,6 +341,7 @@ test("协同执行人修改源码后由桌面内部验证分支而不再发起 C
 
 test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出", () => {
   const runner = readFileSync(new URL("../electron/services/collaboration/task-worktree-test-runner.ts", import.meta.url), "utf8");
+  const dependencyVerifier = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
   const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
   const codex = readFileSync(new URL("../electron/services/codex-service.ts", import.meta.url), "utf8");
   const config = readFileSync(new URL("../playwright.interaction.config.ts", import.meta.url), "utf8");
@@ -341,6 +349,8 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
   assert.match(runner, /test-cache|PLAYWRIGHT_BROWSERS_PATH/);
   assert.match(runner, /AI_DESKTOP_TEST_TASK_ID/);
   assert.match(runner, /npm run/);
+  assert.match(dependencyVerifier, /hasElectronRuntime/);
+  assert.doesNotMatch(dependencyVerifier, /"ci", "--ignore-scripts"/);
   assert.match(sessions, /runCodeValidation/);
   assert.match(sessions, /validationOwner: "desktop"/);
   assert.match(codex, /isDesktopOwnedValidationCommand/);

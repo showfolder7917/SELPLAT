@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import path from "node:path";
 import { attachDependencyCache, detachOwnedDependencyCache, resolveDependencyCache } from "./dependency-cache.mjs";
 
@@ -7,10 +7,17 @@ const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error("A command is required.");
 
 const unresolvedCache = resolveDependencyCache();
-// 签发 worktree 的验证器已按相同锁文件建立受控依赖链接；直接使用该链接，避免把外层临时挂载误判为待迁移的源码依赖。
+// 签发 worktree 的验证器已按相同锁文件建立受控依赖链接；仅在 Electron 安装产物完整时复用，避免隔离 Playwright 到启动时才发现损坏缓存。
 if (process.env.AI_DESKTOP_TEST_TASK_ID && existsSync(unresolvedCache.linkPath) && lstatSync(unresolvedCache.linkPath).isSymbolicLink()) {
-  runCommand(realpathSync(unresolvedCache.linkPath), unresolvedCache.appRoot);
-  process.exit();
+  const linkedDependencies = realpathSync(unresolvedCache.linkPath);
+  if (hasElectronRuntime(linkedDependencies)) {
+    runCommand(linkedDependencies, unresolvedCache.appRoot);
+    process.exit();
+  }
+  rmSync(unresolvedCache.linkPath, { force: true });
+}
+if (process.env.AI_DESKTOP_TEST_TASK_ID && existsSync(unresolvedCache.dependencyRoot) && !hasElectronRuntime(unresolvedCache.dependencyRoot)) {
+  rmSync(unresolvedCache.dependencyRoot, { recursive: true, force: true });
 }
 
 // 锁文件变化后先复用统一准备入口补齐新哈希缓存，避免所有受控命令在挂载阶段直接失败。
@@ -40,7 +47,20 @@ try {
   }
   runCommand(cache.dependencyRoot, cache.appRoot);
 } finally {
-  detachOwnedDependencyCache(cache);
+  // 同一隔离任务会连续执行 typecheck、构建和 Playwright；保留本任务链接交给任务验证器统一回收，避免再次回退到已知损坏的来源依赖。
+  if (!process.env.AI_DESKTOP_TEST_TASK_ID) detachOwnedDependencyCache(cache);
+}
+
+function hasElectronRuntime(dependencyRoot) {
+  const electronRoot = path.join(dependencyRoot, "electron");
+  const pathFile = path.join(electronRoot, "path.txt");
+  if (!existsSync(pathFile)) return false;
+  const relativeExecutable = readFileSync(pathFile, "utf8").trim();
+  const executable = path.resolve(electronRoot, "dist", relativeExecutable);
+  return Boolean(relativeExecutable)
+    && !path.isAbsolute(relativeExecutable)
+    && executable.startsWith(`${path.resolve(electronRoot, "dist")}${path.sep}`)
+    && existsSync(executable);
 }
 
 function runCommand(dependencyRoot, appRoot) {

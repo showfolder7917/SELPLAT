@@ -21,7 +21,7 @@ test("交互测试引导不依赖尚未编译的本地公共包", () => {
 });
 
 test("桌面交互测试先构建并加载生产文件且复用正式窗口尺寸", () => {
-  assert.match(packageJson, /"test:interaction": "npm run build:developer/);
+  assert.match(packageJson, /"test:interaction": "npm run build:developer && node scripts\/run-with-dependencies\.mjs node scripts\/run-interaction-tests\.mjs"/);
   assert.match(isolatedMain, /main-window-layout\.cjs/);
   assert.match(isolatedMain, /AI_DESKTOP_INTERACTION_FILE/);
   assert.doesNotMatch(isolatedMain, /AI_DESKTOP_INTERACTION_URL/);
