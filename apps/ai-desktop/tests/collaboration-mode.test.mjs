@@ -241,6 +241,101 @@ test("令狐活动任务记录缺失时保留恢复点并派发同模块替代�
   }
 });
 
+test("令狐持续检测所有自动流程，并为非活动停点执行独立恢复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-all-flows-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const recovered = [];
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+      continueTask: (taskId) => { recovered.push(taskId); return collaborationStore.continueTask(taskId); },
+      recoverTask: async (taskId) => { recovered.push(taskId); },
+    };
+    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const facade = new LinghuAutomationFacade({
+      store,
+      collaboration,
+      readWorkspaceState: () => workspaceState,
+      locale: () => "zh-CN",
+      recordEvent: () => undefined,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+    store.setEnabled(true);
+    await facade.checkNow();
+    const activeTaskId = facade.state().activeTaskId;
+    const secondary = collaborationStore.submitTask({
+      title: "另一条自动流程",
+      problemStatement: "验证全量自动流程检测。",
+      confirmedIntent: "流程停住时应由令狐自动恢复。",
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "linghu-ancestor",
+      preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard",
+    });
+    collaborationStore.updateTask(secondary.taskId, "test.blocked", (task) => {
+      task.state = "blocked";
+      task.blockingReason = "基础设施连接中断";
+    });
+    await facade.checkNow();
+    assert.deepEqual(recovered, [secondary.taskId]);
+    assert.equal(facade.state().activeTaskId, activeTaskId);
+    assert.equal(facade.state().flowSnapshots.length, 2);
+    assert.equal(facade.state().recoveryAttempts[facade.state().currentFaultFingerprint], 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("令狐将依赖自动流程的修正任务纳入同一停点检测闭环", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-dependent-repair-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const recovered = [];
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+      continueTask: (taskId) => { recovered.push(taskId); return collaborationStore.continueTask(taskId); },
+      recoverTask: async (taskId) => { recovered.push(taskId); },
+    };
+    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const facade = new LinghuAutomationFacade({
+      store,
+      collaboration,
+      readWorkspaceState: () => workspaceState,
+      locale: () => "zh-CN",
+      recordEvent: () => undefined,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+    store.setEnabled(true);
+    await facade.checkNow();
+    const sourceTaskId = facade.state().activeTaskId;
+    const repair = collaborationStore.submitTask({
+      title: "自动流程修正任务",
+      problemStatement: "修正自动流程的已证实停点。",
+      confirmedIntent: "本任务依赖令狐自动流程完成后恢复。",
+      workspaceState,
+      locale: "zh-CN",
+      dependencyTaskIds: [sourceTaskId],
+    });
+    collaborationStore.updateTask(repair.taskId, "test.repair_blocked", (task) => {
+      task.state = "blocked";
+      task.phase = "implementing";
+      task.blockingReason = "代码类型检查失败";
+    });
+    await facade.checkNow();
+    assert.deepEqual(recovered, [repair.taskId]);
+    assert.ok(facade.state().flowSnapshots.some((snapshot) => snapshot.sourceTaskId === repair.taskId));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("令狐第四模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
   const runner = readFileSync(new URL("../electron/services/collaboration/linghu-unified-test-runner.ts", import.meta.url), "utf8");
   const facade = readFileSync(new URL("../electron/services/collaboration/linghu-automation-facade.ts", import.meta.url), "utf8");

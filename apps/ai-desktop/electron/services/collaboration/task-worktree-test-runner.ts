@@ -15,7 +15,7 @@ interface TaskWorktreeTestRequest {
 
 const TEST_SCRIPTS = [
   { name: "typecheck", expected: "node scripts/run-with-dependencies.mjs tsc -p tsconfig.json --noEmit", timeout: 180_000 },
-  { name: "test:interaction", expected: "node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs", timeout: 360_000 },
+  { name: "test:interaction", expected: "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs", timeout: 360_000 },
 ] as const;
 
 /** 在 AI Desktop 主进程中串行验证各任务签发的 worktree，不把 Playwright 权限交给 Codex。 */

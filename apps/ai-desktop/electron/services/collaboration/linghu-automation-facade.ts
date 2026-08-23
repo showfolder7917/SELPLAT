@@ -130,48 +130,23 @@ export class LinghuAutomationFacade {
             state.blockingReason = "当前保障任务由用户明确取消；自动检测保持开启，等待新的人工选择";
             state.lastFeedback = { cycle: state.cycle, module: state.currentModule, taskId: task.taskId, taskState: task.state, summary: task.blockingReason || "任务已取消", recordedAt: new Date().toISOString() };
           });
-          return;
         } else if (task.state === "blocked" || task.state === "recovering") {
-          const snapshot = snapshots.find((candidate) => candidate.sourceTaskId === task.taskId);
-          const fingerprint = faultFingerprint(task, snapshot);
-          const attempts = automation.currentFaultFingerprint === fingerprint ? automation.recoveryAttemptCount : 0;
-          if (attempts < 3) {
-            this.#collaboration.continueTask(task.taskId);
-            this.#store.updateRuntime("automation.recovery_requested", (state) => {
-              state.currentFaultFingerprint = fingerprint;
-              state.recoveryAttemptCount = attempts + 1;
-              state.recoveryCheckpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
-              state.blockingReason = `检测到流程中断，正在执行第 ${state.recoveryAttemptCount} 次自动恢复`;
-            });
-          } else {
-            this.#store.updateRuntime("automation.recovery_waiting", (state) => {
-              state.blockingReason = `连续恢复未成功：${task.blockingReason || "原因未知"}。检测仍保持运行，等待安全恢复条件或人工业务选择。`;
-              state.currentFaultFingerprint = fingerprint;
-              state.recoveryCheckpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
-            });
-          }
+          await this.#recoverFlow(task, snapshots.find((candidate) => candidate.sourceTaskId === task.taskId));
           return;
         } else if (snapshots.find((snapshot) => snapshot.sourceTaskId === task.taskId)?.health === "stalled") {
-          const snapshot = snapshots.find((candidate) => candidate.sourceTaskId === task.taskId);
-          const fingerprint = faultFingerprint(task, snapshot);
-          const attempts = automation.currentFaultFingerprint === fingerprint ? automation.recoveryAttemptCount : 0;
-          if (attempts < 3) {
-            await this.#collaboration.recoverTask(task.taskId, "自动保障检测到心跳、协议进展和任务状态均已超过安全阈值");
-            this.#store.updateRuntime("automation.stalled_task_recovered", (state) => {
-              state.currentFaultFingerprint = fingerprint;
-              state.recoveryAttemptCount = attempts + 1;
-              state.recoveryCheckpoint = `${task.taskId}:${task.state}:${task.workerGeneration}`;
-              state.blockingReason = `停点已转入第 ${state.recoveryAttemptCount} 次安全恢复`;
-            });
-          } else {
-            this.#store.updateRuntime("automation.stalled_recovery_waiting", (state) => {
-              state.currentFaultFingerprint = fingerprint;
-              state.recoveryCheckpoint = `${task.taskId}:${task.state}:${task.workerGeneration}`;
-              state.blockingReason = "同一停点已完成三次安全恢复尝试；检测继续运行，等待心跳、协议、数据或依赖产生新事实";
-            });
-          }
+          await this.#recoverFlow(task, snapshots.find((candidate) => candidate.sourceTaskId === task.taskId));
           return;
-        } else {
+        }
+      }
+
+      // 每轮至多推进一个恢复动作，但不能因当前保障任务健康而遗漏其它仍在运行的自动流程。
+      const recoverable = snapshots.find((snapshot) => snapshot.sourceTaskId !== automation.activeTaskId
+        && snapshot.health !== "human-blocked"
+        && (snapshot.health === "stalled" || snapshot.health === "recovering"));
+      if (recoverable) {
+        const task = this.#collaboration.state().tasks.find((candidate) => candidate.taskId === recoverable.sourceTaskId);
+        if (task) {
+          await this.#recoverFlow(task, recoverable);
           return;
         }
       }
@@ -184,6 +159,39 @@ export class LinghuAutomationFacade {
     } finally {
       this.#checking = false;
     }
+  }
+
+  /** 对单条流程执行受故障指纹约束的最小恢复；人工业务阻塞只保留恢复点，绝不自动越权续接。 */
+  async #recoverFlow(task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshot | undefined): Promise<void> {
+    const fingerprint = faultFingerprint(task, snapshot);
+    const attempts = this.#store.state().recoveryAttempts[fingerprint] || 0;
+    const checkpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
+    if (snapshot?.blockingKind === "business") {
+      this.#store.updateRuntime("automation.business_blocked", (state) => {
+        state.recoveryCheckpoint = checkpoint;
+        state.blockingReason = `流程等待人工业务选择：${task.blockingReason || "未提供选择说明"}。自动检测继续运行。`;
+      });
+      return;
+    }
+    if (attempts >= 3) {
+      this.#store.updateRuntime("automation.recovery_waiting", (state) => {
+        state.currentFaultFingerprint = fingerprint;
+        state.recoveryAttemptCount = attempts;
+        state.recoveryCheckpoint = checkpoint;
+        state.blockingReason = "同一停点已完成三次安全恢复尝试；检测继续运行，等待心跳、协议、数据或依赖产生新事实";
+      });
+      return;
+    }
+    if (task.state === "blocked" || task.state === "recovering") this.#collaboration.continueTask(task.taskId);
+    else await this.#collaboration.recoverTask(task.taskId, "自动保障检测到心跳、协议进展和任务状态均已超过安全阈值");
+    this.#store.updateRuntime("automation.recovery_requested", (state) => {
+      const nextAttempts = attempts + 1;
+      state.recoveryAttempts[fingerprint] = nextAttempts;
+      state.currentFaultFingerprint = fingerprint;
+      state.recoveryAttemptCount = nextAttempts;
+      state.recoveryCheckpoint = checkpoint;
+      state.blockingReason = `检测到流程中断，正在执行第 ${nextAttempts} 次自动恢复`;
+    });
   }
 
   #dispatchCurrentModule(state: LinghuAutomationState): void {
@@ -260,8 +268,26 @@ export class LinghuAutomationFacade {
 
 function automaticFlowSnapshots(state: CollaborationState, activeTaskId: string | null, checkedAt: string): LinghuAutomaticFlowSnapshot[] {
   // 自动来源是可持久化事实；发起人只用于展示和审计，不能再被当作自动任务的隐式替代标记。
-  return state.tasks.filter((task) => task.taskId === activeTaskId
+  // 修正任务可能由其它执行者建立而没有重复来源标记。只要它依赖某条自动流程，
+  // 就必须随原流程进入同一检测闭环，避免“原流程健康、修正任务停住”的漏检。
+  const flowTaskIds = new Set(state.tasks
+    .filter((task) => task.taskId === activeTaskId
       || (task.automationSource !== null && task.state !== "integrated" && task.state !== "cancelled"))
+    .map((task) => task.taskId));
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    for (const task of state.tasks) {
+      if (flowTaskIds.has(task.taskId) || task.state === "integrated" || task.state === "cancelled") continue;
+      const linkedToFlow = task.dependencyTaskIds.some((dependencyTaskId) => flowTaskIds.has(dependencyTaskId))
+        || state.tasks.some((candidate) => flowTaskIds.has(candidate.taskId)
+          && candidate.dependencyTaskIds.includes(task.taskId));
+      if (!linkedToFlow) continue;
+      flowTaskIds.add(task.taskId);
+      expanded = true;
+    }
+  }
+  return state.tasks.filter((task) => flowTaskIds.has(task.taskId))
     .map((task) => automaticFlowSnapshot(state, task, checkedAt));
 }
 
@@ -330,7 +356,8 @@ function latestTime(...values: Array<string | null | undefined>): string {
 function faultFingerprint(task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshot | undefined): string {
   // 任务恢复动作本身会更新 updatedAt，不能把它作为新事实，否则三次上限会被每次副作用自行清零。
   const lastProgressVersion = latestTime(snapshot?.lastHeartbeatAt, snapshot?.lastProtocolProgressAt, task.codeVerifiedAt);
-  return [task.taskId, task.state, task.workerGeneration, blockingKind(task), task.blockingReason || "none", lastProgressVersion].join("|");
+  // 同一状态下的阶段推进同样是新事实，例如失败测试转入修正或验证阶段后应获得新的恢复预算。
+  return [task.taskId, task.state, task.phase || "none", task.workerGeneration, blockingKind(task), task.blockingReason || "none", lastProgressVersion].join("|");
 }
 
 function moduleCompletionReport(

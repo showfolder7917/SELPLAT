@@ -160,6 +160,7 @@ function createInitialState(): LinghuAutomationState {
     activeTaskId: null,
     recoveryAttemptCount: 0,
     currentFaultFingerprint: null,
+    recoveryAttempts: {},
     detectionCursor: null,
     flowSnapshots: [],
     recoveryCheckpoint: null,
@@ -188,6 +189,7 @@ function migrateState(value: LinghuAutomationState): void {
   value.currentModule = LINGHU_AUTOMATION_MODULES.includes(value.currentModule) ? value.currentModule : "flow-completion";
   value.recoveryAttemptCount ??= 0;
   value.currentFaultFingerprint ??= null;
+  value.recoveryAttempts ??= {};
   value.detectionCursor ??= null;
   value.flowSnapshots ??= [];
   value.recoveryCheckpoint ??= null;

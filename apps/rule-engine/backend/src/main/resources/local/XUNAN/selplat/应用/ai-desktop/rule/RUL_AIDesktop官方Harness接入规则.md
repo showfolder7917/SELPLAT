@@ -310,10 +310,10 @@ collaboration_default_member_roster_contract = 韩立_conversation_owner_protect
 linghu_automation_single_entry_contract = LinghuAutomationFacade + collaboration_coordinator_reuse + persistent_automation_store + caller_decoupled_from_dispatch_recovery_test_and_restart_implementation
 <!-- 自动执行按钮是唯一启停边界；开启后即使阻塞或等待人工业务选择也只进入等待与持续检测，禁止系统自行关闭检测。 -->
 linghu_automation_liveness_contract = explicit_human_switch + default_off + poll_every_30_seconds + enabled_monitor_never_self_disables + one_active_module_task_only + no_duplicate_dispatch_while_task_active + blocked_or_business_choice_keeps_monitoring_and_recovery_point
-<!-- 每轮检测必须从协同权威状态生成全部令狐自动任务快照，联合心跳、协议进展和状态时间判断停点，禁止只看活动任务或单一耗时。 -->
-linghu_automation_flow_snapshot_contract = all_linghu_initiated_tasks_plus_active_task + state_phase_executor_generation + heartbeat_protocol_and_state_progress + waiting_point + completion_conditions_and_completed_conditions + blocking_kind + recovery_checkpoint + persisted_detection_cursor
-<!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
-linghu_automation_recovery_fingerprint_contract = task_state_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
+<!-- 每轮检测必须从协同权威状态生成全部自动任务及其依赖修正任务快照，联合心跳、协议进展和状态时间判断停点，禁止只看活动任务或单一耗时。 -->
+linghu_automation_flow_snapshot_contract = all_automatic_non_terminal_tasks_plus_active_task_plus_transitive_dependent_repair_tasks + state_phase_executor_generation + heartbeat_protocol_and_state_progress + waiting_point + completion_conditions_and_completed_conditions + blocking_kind + recovery_checkpoint + persisted_detection_cursor
+<!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，状态阶段、代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
+linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
 <!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
 linghu_automation_state_recovery_contract = atomic_primary_plus_latest_valid_backup + restore_enabled_cycle_module_cursor_active_task_fault_and_checkpoint + existing_corrupt_state_keeps_enabled_and_rebuilds_from_collaboration + first_install_default_off
 <!-- 四个模块严格串行，模块反馈落盘后才进入下一模块；一轮完成后继续下一轮，不为维持循环制造无价值修改。 -->

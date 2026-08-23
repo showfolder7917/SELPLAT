@@ -33,6 +33,13 @@ test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.match(codexService, /isManagedBuildOrStartCommand/);
 });
 
+test("任务托管通过受控路径入口解析隔离依赖缓存中的公共包", () => {
+  assert.match(executor, /npm --prefix apps\/ai-desktop run paths:resolve/);
+  assert.match(executor, /禁止用裸 node 直接导入该包/);
+  assert.match(executor, /锁文件专属缓存中按需挂载/);
+  assert.match(executor, /禁止混用应用目录与 apps\/ai-desktop 前缀/);
+});
+
 test("任务托管使用后台隔离 Electron 交互测试并最多自动修复五轮", () => {
   assert.match(executor, /const VALIDATION_ROUNDS = 5/);
   assert.match(executor, /interaction-validation/);
