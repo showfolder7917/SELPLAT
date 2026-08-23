@@ -37,6 +37,7 @@ const allowedTestScripts = new Set([
   "test:explorer",
   "test:interaction",
   "test:managed",
+  "test:model-settings",
   "test:trust",
   "test:codex-runtime",
 ]);

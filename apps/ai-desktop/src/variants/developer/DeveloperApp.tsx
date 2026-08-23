@@ -621,7 +621,9 @@ export function DeveloperApp() {
     const nextEffort = model && reasoningEffort && model.supportedReasoningEfforts.includes(reasoningEffort)
       ? reasoningEffort
       : model?.defaultReasoningEffort || model?.supportedReasoningEfforts[0] || null;
-    updateSettings({ defaultModel: modelId || null, reasoningEffort: nextEffort });
+    // 切换模型时同时消除旧模型遗留的快速档位，保证设置页与发送前校验的能力判断一致。
+    const nextServiceTier = model?.supportedServiceTiers?.includes(serviceTier) ? serviceTier : "default";
+    updateSettings({ defaultModel: modelId || null, reasoningEffort: nextEffort, serviceTier: nextServiceTier });
   };
 
   const applyWorkspaceState = (state: WorkspaceState) => {
@@ -1167,6 +1169,9 @@ export function DeveloperApp() {
   const selectedModel = defaultModel ? configuredModel : modelCatalog.models.find((model) => model.isDefault) || null;
   const configuredModelUnavailable = Boolean(defaultModel && !modelCatalogLoading && modelCatalog.models.length > 0 && !configuredModel);
   const supportedEfforts = selectedModel?.supportedReasoningEfforts || [];
+  // 固定 app-server 已提供该字段；对仍在刷新中的旧目录安全降级为仅支持标准速度，不能让设置页崩溃。
+  const fastServiceTierSupported = selectedModel?.supportedServiceTiers?.includes("fast") === true;
+  const configuredSpeedUnavailable = serviceTier === "fast" && !modelCatalogLoading && !fastServiceTierSupported;
   const workspaceSectionExpanded = activeExplorerSection === "workspace";
   const tasksSectionExpanded = activeExplorerSection === "tasks";
   const collaborationMode = collaborationState?.mode === "collaboration";
@@ -1209,8 +1214,9 @@ export function DeveloperApp() {
           <header><div><span id="global-model-settings-title">{locale === "ja" ? "グローバルモデル設定" : "全局模型配置"}</span><small>{locale === "ja" ? "すべての会話と協同タスクに適用" : "对所有会话与协同任务生效"}</small></div><strong>{selectedModel?.displayName || (locale === "ja" ? "Codex の既定値" : "Codex 默认")}</strong></header>
           <label><span>{locale === "ja" ? "既定モデル" : "默认模型"}</span><select aria-label={locale === "ja" ? "既定モデル" : "默认模型"} value={defaultModel || ""} disabled={modelCatalogLoading} onChange={(event) => selectDefaultModel(event.target.value)}><option value="">{modelCatalogLoading ? (locale === "ja" ? "モデルを読み込み中…" : "正在读取模型…") : (locale === "ja" ? "Codex の既定値" : "Codex 默认")}</option>{defaultModel && !modelCatalog.models.some((model) => model.id === defaultModel) && <option value={defaultModel}>{defaultModel}</option>}{modelCatalog.models.map((model) => <option key={model.id} value={model.id}>{model.displayName}{model.provider ? ` · ${model.provider}` : ""}</option>)}</select></label>
           <label><span>{locale === "ja" ? "推論の強度" : "推理强度"}</span><select aria-label={locale === "ja" ? "推論の強度" : "推理强度"} value={reasoningEffort || ""} disabled={modelCatalogLoading || supportedEfforts.length === 0} onChange={(event) => updateSettings({ reasoningEffort: (event.target.value || null) as ReasoningEffort | null })}><option value="">{locale === "ja" ? "モデルの既定値" : "模型默认"}</option>{supportedEfforts.map((effort) => <option key={effort} value={effort}>{reasoningEffortLabel(effort, locale)}</option>)}</select></label>
-          <label><span>{locale === "ja" ? "推論速度" : "推理速度"}</span><select aria-label={locale === "ja" ? "推論速度" : "推理速度"} value={serviceTier} onChange={(event) => updateSettings({ serviceTier: event.target.value as ModelServiceTier })}><option value="default">{locale === "ja" ? "標準" : "标准"}</option><option value="fast">{locale === "ja" ? "高速" : "快速"}</option></select></label>
+          <label><span>{locale === "ja" ? "推論速度" : "推理速度"}</span><select aria-label={locale === "ja" ? "推論速度" : "推理速度"} value={serviceTier} onChange={(event) => updateSettings({ serviceTier: event.target.value as ModelServiceTier })}><option value="default">{locale === "ja" ? "標準" : "标准"}</option><option value="fast" disabled={!fastServiceTierSupported}>{locale === "ja" ? "高速" : "快速"}</option></select></label>
           {configuredModelUnavailable && <em role="alert">{locale === "ja" ? "保存済みモデルは現在利用できません。別のモデルを選択してください。" : "已保存的模型当前不可用，请重新选择。"}</em>}
+          {configuredSpeedUnavailable && <em role="alert">{locale === "ja" ? "選択中のモデルは高速処理に対応していません。標準速度へ変更してください。" : "当前模型不支持快速处理，请切换为标准速度。"}</em>}
           {modelSettingsError && <em role="alert">{modelSettingsError}</em>}
         </section>
         <label>Language<select value={locale} onChange={(event) => updateSettings({ locale: event.target.value as Locale })}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>

@@ -107,8 +107,8 @@ contextBridge.exposeInMainWorld("desktop", {
   getSettings: async () => ({ ...desktopSettings }),
   updateSettings: async (settings) => { desktopSettings = { ...desktopSettings, ...settings }; return { ...desktopSettings }; },
   getCodexModels: async () => ({ models: [
-    { id: "gpt-5.6-sol", displayName: "5.6 Sol", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "medium", isDefault: false },
-    { id: "gpt-5.6-terra", displayName: "5.6 Terra", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "medium", isDefault: true },
+    { id: "gpt-5.6-sol", displayName: "5.6 Sol", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: false },
+    { id: "gpt-5.6-terra", displayName: "5.6 Terra", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: true },
   ] }),
   getWorkspaces: async () => workspace,
   addWorkspace: async () => workspace,
