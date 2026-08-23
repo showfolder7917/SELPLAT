@@ -13,6 +13,8 @@ import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
 const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
+const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const coordinatorSource = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
 
 const workspaceState = {
   primaryId: "root",
@@ -73,6 +75,46 @@ test("进程中断后任务显式进入恢复态，继续时重新排队且不�
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("协同任务冻结真实发起人快照，两类自动发起都不回退成韩立", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-initiator-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const task = store.submitTask({
+      title: "自动发起任务",
+      problemStatement: "自动流程需要显示真实发起人物",
+      confirmedIntent: "由南宫婉发起并保留发起人快照。",
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "nangong-wan",
+    });
+    assert.deepEqual(task.initiator, { memberId: "nangong-wan", displayName: "南宫婉" });
+    assert.deepEqual(task.flowEvents[0].actor, task.initiator);
+    const repairTask = store.submitTask({
+      title: "自动错误修复任务",
+      problemStatement: "自动修复流程需要显示真实发起人物",
+      confirmedIntent: "由令狐老祖发起并保留发起人快照。",
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "linghu-ancestor",
+    });
+    assert.deepEqual(repairTask.initiator, { memberId: "linghu-ancestor", displayName: "令狐老祖" });
+    assert.deepEqual(repairTask.flowEvents[0].actor, repairTask.initiator);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("人物页按阶段标注真实操作者并在阻塞后保留执行证据与恢复入口", () => {
+  assert.match(developerSource, /分析方案 v.*ownerDisplayName/);
+  assert.match(developerSource, /审核通过.*reviewerDisplayName/);
+  assert.match(developerSource, /执行.*latestExecution\.executor\.displayName/);
+  assert.match(developerSource, /currentTask\.initiator\?\.displayName/);
+  assert.match(developerSource, /\["recovering", "blocked"\]\.includes\(currentTask\.state\)/);
+  assert.match(developerSource, /latestExecution\.changedFiles/);
+  assert.match(coordinatorSource, /execution\.diff_updated/);
+  assert.match(coordinatorSource, /execution\.changedFiles = changedFiles/);
 });
 
 test("执行结果标题被转换为可直接归档的结构化摘要", () => {

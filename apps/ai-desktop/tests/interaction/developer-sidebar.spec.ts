@@ -203,10 +203,14 @@ test("审核正文已生成但结论无法识别时保留正文并显示准确�
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await taskList.getByRole("button", { name: /墨大夫/ }).click();
   const memberPage = page.locator(".collaboration-member-page");
-  await expect(memberPage.getByText("审核正文已保存，结论未确认", { exact: true })).toBeVisible();
-  await memberPage.getByText("审核正文已保存，结论未确认", { exact: true }).click();
+  await expect(memberPage.getByText("分析方案 v1 · 张铁", { exact: true })).toBeVisible();
+  await expect(memberPage.getByText("审核正文已保存，结论未确认 · 墨大夫", { exact: true })).toBeVisible();
+  await memberPage.getByText("审核正文已保存，结论未确认 · 墨大夫", { exact: true }).click();
   await expect(memberPage.getByText("审核内容已经完整生成，但旧格式没有首行标记。", { exact: true })).toBeVisible();
   await expect(memberPage.getByText("审核正文已生成，但结论无法识别。", { exact: true })).toBeVisible();
+  await expect(memberPage.getByText("执行 · 张铁", { exact: true })).toBeVisible();
+  await expect(memberPage.getByText("apps/ai-desktop/src/variants/developer/DeveloperApp.tsx", { exact: true })).toBeVisible();
+  await expect(memberPage.getByRole("button", { name: "继续执行" })).toBeVisible();
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationReviewFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationReviewFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();

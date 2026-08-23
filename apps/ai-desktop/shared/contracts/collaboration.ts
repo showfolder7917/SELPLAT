@@ -114,6 +114,7 @@ export interface CollaborationExecutionRecord {
   handoffType: "initial" | "resume" | "transfer";
   result: string | null;
   blockingReason: string | null;
+  changedFiles?: string[];
 }
 
 export interface CollaborationFlowEvent {

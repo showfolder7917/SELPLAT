@@ -456,6 +456,7 @@ function migrateTaskHistory(task: CollaborationTask, state: CollaborationState):
   }] : [];
   for (const [index, record] of task.executionRecords.entries()) {
     record.handoffType ??= index === 0 ? "initial" : task.executionRecords[index - 1]?.executor.memberId === record.executor.memberId ? "resume" : "transfer";
+    record.changedFiles ??= [];
   }
   task.flowEvents ??= [{
     eventId: randomUUID(),

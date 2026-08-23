@@ -230,6 +230,7 @@ export class CollaborationCoordinator {
           handoffType: !previousAssignment ? "initial" : previousAssignment.executor.memberId === memberId ? "resume" : "transfer",
           result: null,
           blockingReason: null,
+          changedFiles: [],
         });
         const assignmentSummary = !previousAssignment
           ? `${member.displayName}已接收任务并准备独立版本`
@@ -283,6 +284,13 @@ export class CollaborationCoordinator {
         try { this.#assertExecutorLease(taskId, memberId, assignmentId, workerGeneration); }
         catch { return; }
         this.#touchProtocolProgress(taskId, memberId);
+        if (event.type === "diff-updated") {
+          const changedFiles = normalizeChangedFiles(event.changedFiles || []);
+          this.#store.updateTask(taskId, "execution.diff_updated", (current) => {
+            const execution = current.executionRecords.find((item) => item.assignmentId === assignmentId);
+            if (execution) execution.changedFiles = changedFiles;
+          });
+        }
         this.#emitStream(taskId, memberId, event);
       };
       const text = optimization ? await session.optimize(task, feedback, emit) : await session.analyze(task, emit);
@@ -578,6 +586,13 @@ export class CollaborationCoordinator {
         try { this.#assertExecutorLease(taskId, memberId, assignmentId, workerGeneration); }
         catch { return; }
         this.#touchProtocolProgress(taskId, memberId);
+        if (event.type === "diff-updated") {
+          const changedFiles = normalizeChangedFiles(event.changedFiles || []);
+          this.#store.updateTask(taskId, "execution.diff_updated", (current) => {
+            const execution = current.executionRecords.find((item) => item.assignmentId === assignmentId);
+            if (execution) execution.changedFiles = changedFiles;
+          });
+        }
         this.#emitStream(taskId, memberId, event);
         const phase = phaseFromStreamEvent(event);
         if (phase) {
@@ -883,6 +898,15 @@ function requireMember(state: CollaborationState, memberId: string): Collaborati
 
 function participantSnapshot(member: Pick<CollaborationMember, "memberId" | "displayName">): { memberId: string; displayName: string } {
   return { memberId: member.memberId, displayName: member.displayName };
+}
+
+/** 执行记录只保留可展示的源码相对路径快照，缓存、构建、归档和依赖目录不进入长期业务记录。 */
+function normalizeChangedFiles(files: string[]): string[] {
+  const excluded = /^(?:node_modules|cache|build|log|OPTION\/temp)(?:\/|$)/i;
+  return [...new Set(files
+    .map((file) => String(file).trim().replaceAll("\\", "/").replace(/^\.\//, ""))
+    .filter((file) => file && file.length <= 500 && !file.includes("../") && !excluded.test(file)))]
+    .slice(0, 500);
 }
 
 /** 流程事件只记录可审计业务事实，不复制原始推理或认证信息。 */
