@@ -252,7 +252,7 @@ export class CollaborationStore {
       if (task.state === "review-failed") {
         task.state = "repairing-review";
         task.repairKind = "review";
-        task.blockingReason = task.repairFailureReason;
+        task.blockingReason = task.repairFailureReason || null;
         task.flowEvents.push({ eventId: randomUUID(), type: "review.repair_requested", stage: "recovery", status: "started", actor: task.initiator, summary: "已请求令狐老祖处理审核问题，完成后退回原审核人", occurredAt: new Date().toISOString(), error: false });
         return;
       }

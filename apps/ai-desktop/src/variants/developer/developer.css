@@ -211,6 +211,9 @@ button { color: inherit; }
 .collaboration-status-chain li span { display: grid; gap: 3px; min-width: 0; }
 .collaboration-status-chain li small { color: var(--sel-theme-workbench-text-muted); overflow-wrap: anywhere; }
 .collaboration-status-chain > p { display: grid; gap: 4px; margin: 0; padding: 10px; border-radius: 7px; color: var(--sel-theme-semantic-error); background: var(--sel-theme-workbench-error-surface); }
+.collaboration-status-task-details { min-width: 0; border: 1px solid var(--sel-theme-line); border-radius: 7px; background: var(--sel-theme-workbench-surface-raised); }
+.collaboration-status-task-details > summary { padding: 10px 12px; color: var(--sel-theme-workbench-text); cursor: pointer; }
+.collaboration-status-task-details > div { min-width: 0; padding: 0 12px 12px; color: var(--sel-theme-workbench-text-muted); }
 .collaboration-status-chain button { min-height: 34px; display: inline-flex; align-items: center; gap: 7px; padding: 0 13px; border: 1px solid var(--sel-theme-workbench-accent); border-radius: 8px; color: var(--sel-theme-workbench-accent); background: transparent; cursor: pointer; }
 .collaboration-status-chain button svg { width: 18px; height: 18px; }
 .codex-user-input { display: grid; gap: 12px; margin-top: 14px; padding: 14px; border: 1px solid var(--sel-theme-line); border-radius: 9px; background: var(--sel-theme-workbench-surface); white-space: normal; }
