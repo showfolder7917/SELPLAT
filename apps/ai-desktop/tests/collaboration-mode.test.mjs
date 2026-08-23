@@ -3,6 +3,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
 import { createCollaborationResultSummary, nextReviewAction } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
@@ -30,7 +31,7 @@ function runCoordinatorWorker(coordinationRoot, runId, buildRoot, holdMillisecon
   const worker = new URL("./fixtures/test-resource-coordinator-worker.mjs", import.meta.url);
   const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js", import.meta.url).href;
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [worker.pathname, moduleUrl, coordinationRoot, runId, buildRoot, String(holdMilliseconds)], {
+    const child = spawn(process.execPath, [fileURLToPath(worker), moduleUrl, coordinationRoot, runId, buildRoot, String(holdMilliseconds)], {
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -49,7 +50,7 @@ function runReleaseWorker(coordinationRoot, releaseBatchId, holdMilliseconds) {
   const worker = new URL("./fixtures/integration-release-coordinator-worker.mjs", import.meta.url);
   const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js", import.meta.url).href;
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [worker.pathname, moduleUrl, coordinationRoot, releaseBatchId, String(holdMilliseconds)], { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [fileURLToPath(worker), moduleUrl, coordinationRoot, releaseBatchId, String(holdMilliseconds)], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
@@ -614,7 +615,7 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.67\.0/);
+  assert.match(rule, /rule_version = 5\.68\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);
