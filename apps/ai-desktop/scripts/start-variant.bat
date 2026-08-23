@@ -25,20 +25,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "%CD%\node_modules\electron" goto install_dependencies
-if not exist "%CD%\node_modules\@openai\codex" goto install_dependencies
-goto dependencies_ready
-
-:install_dependencies
-echo [SETUP] Installing desktop and official Codex harness dependencies...
-call npm install --no-audit --no-fund
+echo [SETUP] Checking the package-lock-specific dependency cache...
+call npm run dependencies:ensure
 if errorlevel 1 (
-  echo [ERROR] npm install failed.
+  echo [ERROR] Dependency cache preparation failed.
   pause
   exit /b 1
 )
-
-:dependencies_ready
 
 if /i "%DESKTOP_VARIANT%"=="developer" (
   echo [DEV] Starting Developer with renderer hot reload and automatic Electron restart...
@@ -57,7 +50,7 @@ if errorlevel 1 (
 
 echo [START] %DESKTOP_VARIANT%
 set "AI_DESKTOP_VARIANT=%DESKTOP_VARIANT%"
-call "%CD%\node_modules\.bin\electron.cmd" .
+call npm run start:%DESKTOP_VARIANT%
 set "APP_EXIT_CODE=%ERRORLEVEL%"
 
 :app_finished

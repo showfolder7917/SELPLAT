@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.42.0 增加协同任务真实流转留痕、独立执行列表和价值优先结果归档。 -->
-rule_version = 5.42.0
+<!-- 5.46.0 接入统一工程临时目录与 Node 共通能力，删除应用私有路径拼接和源码依赖产物。 -->
+rule_version = 5.46.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -51,7 +51,7 @@ upgrade_record_5_8 = 2026-08-22:单一活动持久线程_thread_resume跨重建�
 <!-- 5.9.0 依据用户确认，让每个疑问单独确认并保持最新阶段按钮在运行期间可见但不可操作。 -->
 upgrade_record_5_9 = 2026-08-22:默认模式requestUserInput_单次一个最高优先级疑问_疑问旁确认_多题容错完整回传_最新阶段按钮运行中可见禁用_历史按钮不可推进
 <!-- 5.10.0 防止旧二进制读取新模型缓存时因协议字段不一致而退出。 -->
-upgrade_record_5_10 = 2026-08-22:每次Harness连接重新探测本机Codex_优先匹配models_cache_client_version_无精确匹配时选最高有效本机版本_仅无本机可用时回退应用锁定包_界面与审计显示实际来源路径版本
+upgrade_record_5_10 = 2026-08-22:历史策略曾探测本机Codex_该策略已由5_43完整删除_不得作为现行实现或兼容依据
 <!-- 5.11.0 依据用户确认，阻断 macOS 双击开发版时继续使用过期构建产物。 -->
 upgrade_record_5_11 = 2026-08-22:macOS开发版command双击启动_依赖检查_先正式构建最新开发版_构建失败禁止启动
 <!-- 5.12.0 防止 macOS 屏幕录制权限异常泄露 Electron 原始 IPC 错误。 -->
@@ -128,6 +128,14 @@ upgrade_record_5_40 = 2026-08-23:审核只判断客户最低需求_满足即通�
 upgrade_record_5_41 = 2026-08-23:Electron_userData专属CODEX_HOME_主会话与协同连接统一隔离_删除宿主originator覆盖_旧版已保存活动线程按ID精准删除后迁移_真实任务置于工作区上下文之前_serviceName与threadSource仅作审计
 <!-- 5.42.0 固化协同完成任务从人物当前区域移出并进入全局执行列表的展示和留痕边界。 -->
 upgrade_record_5_42 = 2026-08-23:协同模式独立执行列表_真实发起人与全部执行转交快照_分析审核执行流程可折叠_代码验证与终态完成时间分离_结果价值摘要优先_流程错误按任务关联_单会话不使用
+<!-- 5.43.0 禁止外部 Codex 兼容和版本择优，只允许内置目标版或同版本安全修复。 -->
+upgrade_record_5_43 = 2026-08-23:固定Codex_0_149_0_安装包内置优先_缺失损坏仅下载指定平台同版本_校验SHA512平台架构精确版本_macOS_OpenAI签名_禁止PATH_Homebrew_ChatGPT_Codex_模型缓存_用户路径兼容
+<!-- 5.44.0 消除每个协同 worktree 执行 Playwright 时重复出现的 Harness 与屏幕权限审批。 -->
+upgrade_record_5_44 = 2026-08-23:每个执行人仍在自己的签发worktree测试_AI_Desktop主进程执行固定typecheck与隔离Playwright_Agent直接测试请求自动拒绝不弹审批_依赖缓存应用私有共享_测试输出按taskId隔离_隔离Playwright不要求屏幕录制_真实屏幕仍限稳定签名应用
+<!-- 5.45.0 防止生成数据散落在应用源码目录，并固定待执行、运行中和终态归档生命周期。 -->
+upgrade_record_5_45 = 2026-08-23:源码目录只保留永久源码配置测试代码_缓存固定cache_ai_desktop_构建打包固定build_ai_desktop_待执行运行中临时证据固定OPTION_temp_ai_desktop_全部终态审计固定log_ai_desktop_测试文档待执行转运行中再按月归档_历史归档迁移不删除
+<!-- 5.46.0 以真实清单工程名解析所有数据域，并让锁文件依赖、批次测试和终态归档完整遵守统一规范。 -->
+upgrade_record_5_46 = 2026-08-23:公共Node路径包唯一解析_锁文件哈希依赖缓存_受控临时链接执行后清理_临时根只保留执行日志与临时材料_测试按runId原子流转_归档按类型年月任务隔离_真实安装包阻断Java_Python_Gradle泄漏
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -179,7 +187,7 @@ harness_user_input_purity_contract = response_language_in_developerInstructions 
 harness_natural_response_style_contract = locale_aware_natural_clear_language + outcome_first + thoughtful_collaborator_tone + concise_for_simple_tasks + structured_markdown_for_complex_tasks + no_mechanical_stage_rule_or_template_repetition
 <!-- 助手回复使用安全 GFM；禁止原始 HTML，外部链接只允许经主进程校验的 HTTP 或 HTTPS，用户原文继续按纯文本显示。 -->
 harness_markdown_rendering_contract = react_markdown_plus_gfm + raw_html_disabled + main_process_validated_http_https_external_links + readable_dark_theme_headings_lists_quotes_code_tables + user_messages_plain_text
-<!-- 0.146.0 的 thread/start sandbox 使用短横线枚举；共享白名单值可以原样传递，禁止改写为旧驼峰值。 -->
+<!-- 0.149.0 的 thread/start sandbox 使用短横线枚举；共享白名单值可以原样传递，禁止改写为旧驼峰值。 -->
 harness_sandbox_mapping = read-only_to_read-only + workspace-write_to_workspace-write
 <!-- 设置面板属于临时浮层；外部点击和 Escape 必须关闭，内部操作保持打开，且不得替用户处理审批弹窗。 -->
 settings_panel_dismissal_contract = outside_pointer_or_escape_closes + inside_interaction_stays_open + approval_dialog_isolated
@@ -237,7 +245,7 @@ developer_sidebar_active_section_layout_contract = active_section_top_and_fill_a
 <!-- 非活动侧栏分区只在底部保留标题入口。 -->
 developer_sidebar_active_section_layout_contract.2 = inactive_section_heading_only_at_bottom
 <!-- 业务日志只落到应用 log 目录；原始事件时间线追加写，任务摘要原子覆盖，完整关联回合、审批、命令、文件和完成状态，但禁止保存认证秘密或原始推理。 -->
-business_audit_log_contract = apps_ai_desktop_log_only + append_only_jsonl_timeline + atomic_per_task_summary + request_workspace_sandbox_turn_approval_command_changed_files_completion_correlation + no_auth_secret_or_raw_reasoning
+business_audit_log_contract = selplat_log_ai_desktop_only + append_only_jsonl_timeline + atomic_per_task_summary + request_workspace_sandbox_turn_approval_command_changed_files_completion_correlation + no_auth_secret_or_raw_reasoning
 <!-- 协同耗时分析必须由结构化事件计算并只写日志；人物页面禁止展示时间线、耗时分解和瓶颈占用链。 -->
 collaboration_duration_diagnosis_contract = wall_clock_timestamp_plus_monotonic_duration + analysis_review_wait_review_rework_codex_worktree_change_validation_integration_conflict_approval_user_dependency_recovery_segments + wait_type_reason_resource_owner_and_release_event_attribution + per_integration_generation_bottleneck_report + cross_generation_trend_report + structured_event_evidence_only + member_ui_current_state_block_reason_and_result_only + no_member_timeline_duration_breakdown_or_bottleneck_chain
 <!-- 部分完成诊断必须根据真实 Harness 状态、命令开始完成与退出码、文件变更、构建测试观察和源码产物时间自动生成可检索原因码。 -->
@@ -275,7 +283,18 @@ managed_status_indicator_lifecycle_contract = running_bright_pulsing + terminal_
 <!-- 回复卡和全部内部执行面板必须允许收缩，长路径不得建立超出卡片的固有宽度。 -->
 managed_response_boundary_contract = card_width_100_percent_with_maximum + all_flex_grid_children_min_width_zero + internal_panels_max_width_100_percent + long_path_wrap_or_ellipsis + no_horizontal_boundary_escape
 <!-- Harness 连接时必须重新识别运行时；优先使用与当前 AI Desktop 专属模型缓存客户端版本一致的本机 Codex，避免旧二进制读取新缓存字段失败。 -->
-harness_runtime_version_alignment_contract = reconnect_time_candidate_probe + active_ai_desktop_CODEX_HOME_models_cache_client_version_match_first + highest_valid_local_version_fallback + bundled_official_package_only_when_no_local_runtime + no_hot_swap_during_active_turn + visible_source_path_and_version + audit_selected_runtime
+<!-- Harness 运行时版本是应用发布事实，只允许安装包内置目标版或下载校验后的同一目标版。 -->
+harness_runtime_version_alignment_contract = exact_target_0_149_0 + packaged_native_runtime_first + verified_same_version_private_download_only_when_packaged_missing_or_invalid + no_hot_swap_during_active_turn + visible_packaged_or_verified_download_source_path_and_version + audit_selected_runtime
+<!-- 旧的兼容探测会造成 AI 误认和不受控切换，因此源码与规则都不得保留任何外部候选入口。 -->
+harness_external_runtime_prohibition = no_PATH_scan + no_Homebrew + no_ChatGPT_app_runtime + no_Codex_app_runtime + no_models_cache_version_selection + no_user_configured_executable + no_highest_version_fallback
+<!-- 下载修复只接受已固化清单，归档、包元数据和原生程序必须在执行前逐项验证。 -->
+harness_runtime_recovery_verification = exact_registry_https_url + pinned_sha512_integrity + exact_platform_and_architecture + exact_package_and_cli_version + macos_codesign_strict + macos_OpenAI_team_2DC432GLL2 + atomic_private_install + offline_failure_requires_retry_or_reinstall
+<!-- 协同执行人只修改和修复源码；固定代码验证由桌面主进程在任务签发 worktree 内完成，避免 Harness 反复申请 Playwright 权限。 -->
+collaboration_task_worktree_validation_owner = ai_desktop_main_process + validate_task_id_workspace_id_managed_root_branch_and_base_sha + run_inside_each_executor_worktree + fixed_typecheck_then_isolated_playwright + codex_direct_validation_request_declined_without_user_approval
+<!-- 多任务可以复用应用私有依赖下载缓存，但源码、执行目录、报告、截图和结果必须保持任务隔离。 -->
+collaboration_task_test_cache_and_artifact_scope = shared_private_npm_and_playwright_dependency_cache + lockfile_identical_node_modules_temporary_reuse + per_task_worktree_execution + per_task_temp_interaction_task_id + remove_dependency_link_before_commit + serialized_local_interaction_port
+<!-- 隔离 Playwright 使用确定性测试画面，不得借此申请真实屏幕录制；真实屏幕只能由稳定签名的 AI Desktop 能力验证。 -->
+isolated_playwright_permission_boundary = no_harness_command_approval + no_macos_screen_recording_requirement + localhost_only + stable_ai_desktop_identity_for_separate_real_screen_validation
 <!-- 会话托管只理解和复述意图，需求托管只读调查并给出方案；两阶段必须强制只读沙箱并拒绝文件修改及命令提权。 -->
 managed_analysis_stage_write_guard_contract = conversation_intent_only + requirement_read_only_investigation_and_plan + force_read_only_sandbox + decline_file_change_and_privileged_command
 <!-- 每次确认只推进一个阶段；独立 1 和配置短语与按钮等价，关键词不得替代授权，任务阶段必须观察到真实源码变更。 -->
@@ -359,7 +378,7 @@ screenshot_backend_regression_gate = exactly_one_capture_backend + git_last_know
 <!-- 清空全部红色绘画标注属于可逆编辑动作，但必须先显示确认，只有确认后才恢复无标注底图。 -->
 screenshot_clear_annotation_contract = clear_drawing_button + explicit_confirmation_before_clear + decline_preserves_annotations + accept_restores_cropped_base_image
 <!-- 截图原图、标注图和元数据统一进入应用自身 temp；渲染层发送主进程签发的 ID，主进程解析后按官方协议传 localImage 路径。 -->
-screenshot_temp_and_local_image_contract = apps_ai_desktop_temp_only + main_process_signed_attachment_id + official_turn_start_localImage_path
+screenshot_temp_and_local_image_contract = selplat_OPTION_temp_ai_desktop_only + main_process_signed_attachment_id + official_turn_start_localImage_path
 <!-- 系统剪贴板中的图片必须能从输入框直接粘贴，普通文字粘贴不受影响；图片统一转 PNG 后复用现有安全附件链路。 -->
 clipboard_image_paste_contract = ctrl_or_command_v_in_composer + preserve_plain_text_paste + normalize_to_png + reuse_temp_signed_attachment_and_localImage + max_five_images
 <!-- 设置必须能够用系统文件管理器打开 temp，并在用户确认后清空全部内容但立即恢复空 temp 根目录。 -->
@@ -369,12 +388,14 @@ screenshot_temp_management_contract = system_file_manager_open + confirmed_clear
 windows_developer_launcher_contract = self_relative_path + dependency_check + developer_hot_start + formal_build_is_separate
 <!-- macOS 开发版双击启动器必须从自身目录解析工程，检查 Node、npm、Electron 和官方 Codex 依赖，每次先正式构建最新开发版，构建失败时禁止启动 Electron。 -->
 macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_official_codex_dependency_check + mandatory_fresh_developer_build_before_launch + build_failure_blocks_launch + package_fixed_bundle_id_ai_desktop_app + stable_signed_bootstrap_shell_loads_external_latest_runtime + stable_designated_requirement_uses_bundle_identifier_not_cdhash + verifier_rejects_cdhash_designated_requirement + ordinary_source_build_never_repackages_or_resigns_shell + repackage_only_when_bootstrap_builder_or_dependency_manifest_changes + permission_refresh_after_identity_change + exact_resolved_app_executable_process_match + gracefully_terminate_all_existing_same_app_instances + abort_when_old_instance_remains + launchservices_register + open_packaged_app_never_raw_dependency_electron + prohibit_parallel_old_and_new_ai_desktop_processes
-<!-- AI Desktop 测试只维护一个共享测试文档；执行者取得独占锁，其他读取者看到占用身份，完成后立即归档。 -->
-shared_test_document_lifecycle_contract = one_apps_ai_desktop_test_document_md + no_thread_scoped_document + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_recovery + completed_run_immediate_archive + next_run_new_document + legacy_thread_documents_archived_not_deleted
+<!-- 测试以唯一 runId 批次流转；执行者取得独占锁，其他读取者看到占用身份，完整批次结束后立即归档。 -->
+shared_test_document_lifecycle_contract = manifest_application_name_plus_common_path_resolution + pending_test_runId_directory_with_thread_document + exactly_one_selectable_run + atomic_whole_batch_pending_to_running_transition + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_and_interrupted_running_batch_recovery + every_terminal_result_immediate_month_and_runId_archive + next_run_new_runId + legacy_documents_migrated_not_deleted
+<!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->
+ai_desktop_project_data_domain_contract = manifest_name_driven_node_common_path_api + apps_application_source_config_permanent_tests_and_scripts_only + no_node_modules_runtime_or_build_data_under_source + cache_application_lockHash_dependencies_and_regenerable_only + controlled_temporary_dependency_links_removed_after_command + build_application_compile_package_sites_and_reports_only + OPTION_temp_application_exactly_execution_log_and_temporary_materials + log_application_archive_log_kind_month_identifier_hierarchy + private_user_settings_sessions_and_secrets_remain_electron_userData
 <!-- 自动测试属于当前应用会话的显式模式；默认关闭，只有已知环境与窄命令授权全部通过才允许开启。 -->
 automatic_test_activation_contract = composer_toolbar_after_managed_mode_before_screenshot_actions + labeled_switch + default_off_after_every_application_start + visible_preflight_dialog + all_checks_must_pass_before_on
 <!-- 预检必须覆盖已知的无人值守阻断面，并且不得通过预检自动点击系统或未知 Harness 授权。 -->
-automatic_test_preflight_contract = codex_connected_and_authenticated + writable_registered_workspace + runner_and_dependencies_ready + shared_lock_available_or_stale_recoverable + local_interaction_port_available + screen_recording_granted + never_click_unknown_approval
+automatic_test_preflight_contract = codex_connected_and_authenticated + writable_registered_workspace + runner_and_dependencies_ready + shared_lock_available_or_stale_recoverable + local_interaction_port_available + isolated_playwright_does_not_require_screen_recording + never_click_unknown_approval
 <!-- 自动测试只授权无参数共享执行器，文档内脚本受验证白名单约束，任何额外参数或运行期新审批都退回人工处理。 -->
 automatic_test_command_safety_contract = explicit_switch_authorizes_exact_no_argument_npm_run_test_document + explicit_fixed_allowlist_for_existing_typecheck_build_developer_verify_mac_and_named_test_scripts_only + prohibit_wildcard_test_prefix_recursive_test_document_start_publish_or_arbitrary_script + script_signature_change_invalidates_trust + unexpected_approval_disables_auto_mode_and_removes_queued_test
 <!-- 开启后只在任务托管已完成代码级验证时排入一轮测试托管，继续复用既有串行发送队列。 -->
@@ -382,7 +403,7 @@ automatic_test_transition_contract = task_code_verified_then_enqueue_exactly_one
 <!-- Electron 打包必须把官方 Codex JavaScript 入口和当前平台原生二进制解包到可执行文件系统，禁止从 asar 内直接拉起。 -->
 packaged_harness_binary_contract = asar_unpack_@openai_codex_and_platform_package
 <!-- macOS 跨平台生成 Windows 包时 npm 只自动选择宿主可选依赖，因此 Windows x64 平台别名包必须作为直接锁定依赖随安装包携带。 -->
-windows_harness_platform_dependency = direct_alias_@openai/codex-win32-x64_to_@openai/codex@0.146.0-win32-x64
+windows_harness_platform_dependency = direct_alias_@openai/codex-win32-x64_to_@openai/codex@0.149.0-win32-x64
 <!-- 规则没有重复文档结构，不创建虚假模板或案例；官方协议 README 和应用真实源码构成可核对依据。 -->
 template_and_example_policy = not_applicable_because_protocol_and_existing_application_source_are_authoritative
 <!-- 验证责任按托管模式登记：任务托管只完成类型检查和针对性快速测试；Electron 与渲染构建、运行验证只属于显式测试托管。 -->

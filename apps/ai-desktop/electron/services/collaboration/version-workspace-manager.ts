@@ -70,6 +70,19 @@ export class VersionWorkspaceManager {
     return { ...workspace, rootPath };
   }
 
+  /** 验证测试目标仍是本任务由应用签发的 worktree 与分支，返回可供内部测试器使用的真实根路径。 */
+  async validateTaskWorkspace(task: CollaborationTask): Promise<string> {
+    const workspace = task.versionWorkspace;
+    if (!workspace) throw new Error("任务尚未建立独立版本工作区。");
+    const rootPath = this.#validateManagedPath(workspace.rootPath);
+    this.#validateManagedBranch(workspace.branchName);
+    const branchName = await this.#git(rootPath, ["branch", "--show-current"]);
+    if (branchName !== workspace.branchName) throw new Error("任务测试目标分支与应用签发记录不一致。");
+    const baseSha = await this.#git(rootPath, ["merge-base", workspace.baseSha, "HEAD"]);
+    if (baseSha !== workspace.baseSha) throw new Error("任务测试分支不再继承签发时的固定基线。");
+    return rootPath;
+  }
+
   async commitTaskResult(task: CollaborationTask, memberName: string): Promise<string> {
     const workspace = task.versionWorkspace;
     if (!workspace) throw new Error("任务尚未建立独立版本工作区。");

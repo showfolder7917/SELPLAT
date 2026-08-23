@@ -24,9 +24,13 @@ test("共享测试文档使用独占锁、占用身份、心跳和过期恢复",
 });
 
 test("统一测试执行后立即归档共享测试文档", () => {
-  assert.match(runner, /const documentPath = path\.join\(appRoot, "测试文档\.md"\)/);
-  assert.match(runner, /renameSync\(documentPath, archivePath\)/);
-  assert.match(runner, /测试文档已归档/);
+  assert.match(runner, /pendingRoot = projectPaths\.pendingTestRoot/);
+  assert.match(runner, /runningRoot = projectPaths\.runningTestRoot/);
+  assert.match(runner, /renameSync\(path\.join\(pendingRoot, runId\), path\.join\(runningRoot, runId\)\)/);
+  assert.match(runner, /renameSync\(documentPath, path\.join\(runRoot, "测试结果\.md"\)\)/);
+  assert.match(runner, /archiveRoot = projectPaths\.testArchiveRoot/);
+  assert.match(runner, /renameSync\(runRoot, archivePath\)/);
+  assert.match(runner, /测试运行已归档/);
 });
 
 test("自动测试入口只执行验证白名单并拒绝递归或启动脚本", () => {
@@ -46,7 +50,8 @@ test("自动测试开启前集中预检并只授权无参数固定入口", () =>
   assert.match(automaticPreflight, /checkRunner/);
   assert.match(automaticPreflight, /checkLock/);
   assert.match(automaticPreflight, /checkPort/);
-  assert.match(automaticPreflight, /checkScreenAccess/);
+  assert.doesNotMatch(automaticPreflight, /checkScreenAccess/);
+  assert.doesNotMatch(automaticPreflight, /screenAccessStatus/);
   assert.match(trustedCommands, /trustAutomaticTestDocument/);
   assert.match(trustedCommands, /isAutomaticTestDocumentCommand/);
   assert.match(trustedCommands, /npm run test:document/);
@@ -66,7 +71,7 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /codesign --force --sign - --requirements "=\$EXPECTED_DESIGNATED_REQUIREMENT"/);
   assert.match(launcher, /REPACKAGE_REQUIRED=false/);
   assert.match(launcher, /固定 AI Desktop\.app 身份未变化/);
-  assert.match(launcher, /--ai-desktop-runtime-root=\$SCRIPT_DIR/);
+  assert.match(launcher, /--ai-desktop-runtime-root=\$BUILD_ROOT/);
   assert.match(launcher, /lsregister/);
   assert.match(launcher, /APP_EXECUTABLE="\$APP_PATH\/Contents\/MacOS\/AI Desktop"/);
   assert.match(launcher, /正在关闭.*旧 AI Desktop 实例/);
@@ -79,7 +84,7 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(macVerifier, /codesign.*--verify/s);
   assert.match(macVerifier, /expectedRequirement/);
   assert.match(macVerifier, /requirementOutput\.includes\(expectedRequirement\)/);
-  assert.match(packagedBootstrap, /dist-electron.*electron.*main\.js/s);
+  assert.match(packagedBootstrap, /runtimeRoot.*electron.*electron.*main\.js/s);
   assert.match(packagedBootstrap, /pathToFileURL\(externalMain\)/);
 });
 

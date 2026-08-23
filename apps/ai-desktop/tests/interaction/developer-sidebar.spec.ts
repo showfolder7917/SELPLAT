@@ -23,7 +23,7 @@ test.afterAll(async () => {
 });
 
 test("切换工作区与任务时只展开当前分区并置顶占满", async () => {
-  await expect(page.getByText("local Codex 0.149.0")).toBeVisible();
+  await expect(page.getByText("bundled Codex 0.149.0")).toBeVisible();
   await expect(page.getByRole("button", { name: "折叠工作区" })).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("#developer-workspace-list")).toBeVisible();
   const taskToggle = page.getByRole("button", { name: "展开任务" });

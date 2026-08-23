@@ -2,8 +2,16 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { defineConfig } from "@playwright/test";
+import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 
-const interactionRoot = path.resolve("temp", "interaction");
+const taskSegment = (process.env.AI_DESKTOP_TEST_TASK_ID || "standalone")
+  .toLowerCase()
+  .replaceAll(/[^a-z0-9._-]+/g, "-")
+  .replaceAll(/^-+|-+$/g, "")
+  .slice(0, 100) || "standalone";
+const appRoot = path.resolve(".");
+const projectPaths = resolveApplicationDataPaths({ selplatRoot: path.resolve(appRoot, "../.."), applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
+const interactionRoot = path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "interaction", taskSegment);
 mkdirSync(interactionRoot, { recursive: true });
 
 export default defineConfig({

@@ -1,7 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { app } from "electron";
+import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
 import type { AppVariant } from "../../shared/contracts/desktop.js";
 
@@ -21,4 +22,12 @@ export function resolveProjectRoot(): string {
     throw new Error(`SELPLAT project root is unavailable: ${projectRoot}`);
   }
   return projectRoot;
+}
+
+/** 从当前应用清单读取真实工程名，禁止把示例应用名固化到公共路径解析逻辑。 */
+export function resolveApplicationName(): string {
+  const manifestPath = path.join(app.getAppPath(), "package.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { name?: unknown };
+  if (typeof manifest.name !== "string") throw new Error(`Application manifest name is unavailable: ${manifestPath}`);
+  return validateSafeIdentifier(manifest.name, "applicationName");
 }

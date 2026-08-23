@@ -47,7 +47,7 @@ npm run dist:win:office
 npm run dist:win:developer
 ```
 
-Windows 产物分别进入 `release/office` 和 `release/developer`。
+Windows 产物分别进入工程根 `build/ai-desktop/package/office` 和 `build/ai-desktop/package/developer`。
 
 macOS 应在 macOS 机器上构建并签名：
 

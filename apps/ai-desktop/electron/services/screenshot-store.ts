@@ -22,14 +22,13 @@ const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const MAX_PNG_BYTES = 25 * 1024 * 1024;
 const SCREENSHOT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** 把截图临时数据限制在 ai-desktop/temp，渲染层只能使用主进程签发的附件 ID。 */
+/** 把截图数据限制在调用方经公共路径能力解析的“临时材料/截图”，渲染层只能使用主进程签发的附件 ID。 */
 export class ScreenshotStore {
   readonly #tempRoot: string;
   readonly #indexPath: string;
 
-  constructor(appRoot: string) {
-    const resolvedAppRoot = path.resolve(appRoot);
-    this.#tempRoot = path.join(resolvedAppRoot, "temp");
+  constructor(tempEvidenceRoot: string) {
+    this.#tempRoot = path.resolve(tempEvidenceRoot);
     this.#indexPath = path.join(this.#tempRoot, "screenshot-index.json");
   }
 
@@ -48,7 +47,7 @@ export class ScreenshotStore {
     const id = randomUUID();
     const createdAt = new Date().toISOString();
     const day = createdAt.slice(0, 10);
-    const relativeDirectory = path.join("screenshots", day, id);
+    const relativeDirectory = path.join(day, id);
     const directory = this.#resolveInsideTemp(relativeDirectory);
     const originalPath = path.join(directory, "original.png");
     const annotatedPath = path.join(directory, "annotated.png");

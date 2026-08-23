@@ -3,18 +3,20 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import path from "node:path";
 import test from "node:test";
 
-import { CollaborationDurationLog } from "../dist-electron/electron/services/collaboration/collaboration-duration-log.js";
-import { createCollaborationResultSummary, nextReviewAction } from "../dist-electron/electron/services/collaboration/collaboration-coordinator.js";
-import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../dist-electron/electron/services/collaboration/collaboration-codex-sessions.js";
-import { ensureIntegrationDependencies } from "../dist-electron/electron/services/collaboration/integration-verifier.js";
-import { CollaborationStore } from "../dist-electron/electron/services/collaboration/collaboration-store.js";
+import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
+import { createCollaborationResultSummary, nextReviewAction } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
+import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-codex-sessions.js";
+import { ensureIntegrationDependencies } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
+import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
+import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/managed-task-executor.js";
+import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
-const controlledTempRoot = path.resolve("temp");
+const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
 
 const workspaceState = {
   primaryId: "root",
-  roots: [{ id: "root", name: "SELPLAT", path: path.resolve("../.."), permission: "workspace-write" }],
+  roots: [{ id: "root", name: "SELPLAT", path: projectRoot, permission: "workspace-write" }],
 };
 
 test("默认人物稳定列出且韩立不能被删除", () => {
@@ -103,7 +105,7 @@ test("耗时日志按等待原因生成集成批次瓶颈报告", () => {
     assert.equal(report.generation, 1);
     assert.equal(report.taskIds[0], "task-a");
     assert.equal(typeof report.waitDurationMs["system-wait"], "number");
-    assert.match(readFileSync(path.join(directory, "collaboration", "reports", "integration-generation-1.json"), "utf8"), /no-idle-executor/);
+    assert.match(readFileSync(path.join(directory, new Date().toISOString().slice(0, 7), "system", "集成报告", "integration-generation-1.json"), "utf8"), /no-idle-executor/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -164,11 +166,61 @@ test("集成工作区锁文件一致时自动复用主工作区依赖", async ()
     writeFileSync(path.join(candidate, "package-lock.json"), "same-lock", "utf8");
     writeFileSync(path.join(source, "package-lock.json"), "same-lock", "utf8");
     writeFileSync(path.join(source, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
-    assert.equal(await ensureIntegrationDependencies(candidate, source), "linked");
+    assert.equal(await ensureIntegrationDependencies(candidate, path.join(source, "node_modules"), path.join(source, "package-lock.json")), "linked");
     assert.equal(readFileSync(path.join(candidate, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "utf8"), "ready");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("协同执行人修改源码后由桌面内部验证分支而不再发起 Codex Playwright 回合", async () => {
+  const executor = new ManagedTaskExecutor();
+  let turnCount = 0;
+  let desktopValidationCount = 0;
+  const events = [];
+  const result = await executor.run({
+    mode: "task-managed",
+    message: "修改当前任务分支",
+    restartRequired: false,
+    emit: (event) => events.push(event),
+    runTurn: async (_message, emit) => {
+      turnCount += 1;
+      emit({
+        type: "activity",
+        turnId: "task-turn",
+        activity: {
+          id: "change-1",
+          itemType: "fileChange",
+          phase: "completed",
+          status: "completed",
+          summary: "apps/ai-desktop/src/example.ts",
+          detail: null,
+        },
+      });
+      return { text: "源码修改完成", itemCount: 1 };
+    },
+    runCodeValidation: async () => { desktopValidationCount += 1; },
+  });
+  assert.equal(turnCount, 1);
+  assert.equal(desktopValidationCount, 1);
+  assert.equal(result.managedStatus, "code-verified");
+  assert.equal(events.some((event) => event.managedExecution?.message.includes("当前任务分支隔离 Playwright 已通过")), true);
+});
+
+test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出", () => {
+  const runner = readFileSync(new URL("../electron/services/collaboration/task-worktree-test-runner.ts", import.meta.url), "utf8");
+  const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  const codex = readFileSync(new URL("../electron/services/codex-service.ts", import.meta.url), "utf8");
+  const config = readFileSync(new URL("../playwright.interaction.config.ts", import.meta.url), "utf8");
+  assert.match(runner, /worktreeRoot/);
+  assert.match(runner, /test-cache|PLAYWRIGHT_BROWSERS_PATH/);
+  assert.match(runner, /AI_DESKTOP_TEST_TASK_ID/);
+  assert.match(runner, /npm run/);
+  assert.match(sessions, /runCodeValidation/);
+  assert.match(sessions, /validationOwner: "desktop"/);
+  assert.match(codex, /isDesktopOwnedValidationCommand/);
+  assert.match(codex, /无需 Agent 申请 Playwright 权限/);
+  assert.match(config, /AI_DESKTOP_TEST_TASK_ID/);
 });
 
 test("旧协同状态加载时补齐审核尝试历史", () => {

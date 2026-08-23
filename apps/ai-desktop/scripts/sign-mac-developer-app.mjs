@@ -1,0 +1,21 @@
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
+
+if (process.platform !== "darwin") throw new Error("macOS developer signing can only run on macOS.");
+const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const projectRoot = path.resolve(appRoot, "../..");
+const paths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
+const builder = JSON.parse(readFileSync(path.join(appRoot, "electron-builder.developer.json"), "utf8"));
+const packageRoot = path.join(paths.buildRoot, "package", "developer");
+const macDirectory = readdirSync(packageRoot, { withFileTypes: true }).find((entry) => entry.isDirectory() && entry.name.startsWith("mac"));
+if (!macDirectory) throw new Error(`Packaged macOS application is unavailable: ${packageRoot}`);
+const applicationPath = path.join(packageRoot, macDirectory.name, `${builder.productName}.app`);
+if (!existsSync(applicationPath)) throw new Error(`Packaged application is unavailable: ${applicationPath}`);
+const designatedRequirement = `designated => identifier "${builder.appId}"`;
+execFileSync("codesign", ["--force", "--deep", "--sign", "-", applicationPath], { stdio: "inherit" });
+execFileSync("codesign", ["--force", "--sign", "-", "--requirements", `=${designatedRequirement}`, applicationPath], { stdio: "inherit" });
+execFileSync("codesign", ["--verify", "--deep", "--strict", applicationPath], { stdio: "inherit" });
+console.log(`Signed macOS developer application with stable requirement: ${designatedRequirement}`);

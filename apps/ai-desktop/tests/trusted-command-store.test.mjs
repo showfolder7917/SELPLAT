@@ -4,8 +4,9 @@ import path from "node:path";
 import test from "node:test";
 
 import { TrustedCommandStore } from "../electron/services/trusted-command-store.ts";
+import { controlledTestRoot } from "./test-paths.mjs";
 
-const controlledTempRoot = path.resolve("temp");
+const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
 
 test("允许项目命令后自动信任，脚本变化或高风险命令仍要求审批", () => {

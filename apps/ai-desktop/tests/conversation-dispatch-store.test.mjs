@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { ConversationDispatchStore } from "../dist-electron/electron/services/conversation-dispatch-store.js";
+import { ConversationDispatchStore } from "../../../build/ai-desktop/electron/electron/services/conversation-dispatch-store.js";
+import { controlledTestRoot } from "./test-paths.mjs";
 
-const controlledTempRoot = path.resolve("temp");
+const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
 
 const request = {

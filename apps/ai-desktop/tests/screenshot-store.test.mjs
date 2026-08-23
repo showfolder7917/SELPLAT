@@ -3,10 +3,10 @@ import { access, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { ScreenshotStore } from "../dist-electron/electron/services/screenshot-store.js";
+import { ScreenshotStore } from "../../../build/ai-desktop/electron/electron/services/screenshot-store.js";
+import { controlledTestRoot } from "./test-paths.mjs";
 
-const projectRoot = path.resolve(import.meta.dirname, "../../..");
-const fixtureRoot = path.join(projectRoot, "OPTION", "temp", "ai-desktop", `screenshot-store-test-${process.pid}`);
+const fixtureRoot = path.join(controlledTestRoot, `screenshot-store-test-${process.pid}`);
 const onePixelPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
 test("截图只落入应用 temp 并可通过附件 ID 安全解析", async () => {

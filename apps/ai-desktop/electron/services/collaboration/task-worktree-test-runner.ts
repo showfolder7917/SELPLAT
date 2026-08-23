@@ -1,0 +1,158 @@
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import path from "node:path";
+import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
+import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
+
+import type { CodexStreamEvent } from "../../../shared/contracts/desktop.js";
+import { ensureIntegrationDependencies } from "./integration-verifier.js";
+
+interface TaskWorktreeTestRequest {
+  taskId: string;
+  worktreeRoot: string;
+  emit(event: CodexStreamEvent): void;
+}
+
+const TEST_SCRIPTS = [
+  { name: "typecheck", expected: "node scripts/run-with-dependencies.mjs tsc -p tsconfig.json --noEmit", timeout: 180_000 },
+  { name: "test:interaction", expected: "node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs", timeout: 360_000 },
+] as const;
+
+/** 在 AI Desktop 主进程中串行验证各任务签发的 worktree，不把 Playwright 权限交给 Codex。 */
+export class TaskWorktreeTestRunner {
+  readonly #sourceProjectRoot: string;
+  readonly #applicationName: string;
+  readonly #cacheRoot: string;
+  readonly #recordEvent: (type: string, details: Record<string, unknown>, taskId: string) => void;
+  #queue: Promise<void> = Promise.resolve();
+
+  constructor(
+    sourceProjectRoot: string,
+    applicationName: string,
+    cacheRoot: string,
+    recordEvent: (type: string, details: Record<string, unknown>, taskId: string) => void,
+  ) {
+    this.#sourceProjectRoot = path.resolve(sourceProjectRoot);
+    this.#applicationName = safeSegment(applicationName);
+    this.#cacheRoot = path.resolve(cacheRoot);
+    this.#recordEvent = recordEvent;
+    mkdirSync(this.#cacheRoot, { recursive: true });
+  }
+
+  run(request: TaskWorktreeTestRequest): Promise<void> {
+    const operation = this.#queue.then(() => this.#runIsolated(request));
+    this.#queue = operation.catch(() => undefined);
+    return operation;
+  }
+
+  async #runIsolated(request: TaskWorktreeTestRequest): Promise<void> {
+    const safeTaskId = safeSegment(request.taskId);
+    const desktopRoot = path.join(path.resolve(request.worktreeRoot), "apps", this.#applicationName);
+    const sourceDesktopRoot = path.join(this.#sourceProjectRoot, "apps", this.#applicationName);
+    const sourceDataPaths = resolveApplicationDataPaths({ selplatRoot: this.#sourceProjectRoot, applicationName: this.#applicationName });
+    const sourceModules = resolveLockSpecificDependencyPaths(sourceDataPaths.dependencyCacheRoot, readFileSync(path.join(sourceDesktopRoot, "package-lock.json"))).nodeModulesRoot;
+    validateFixedScripts(desktopRoot);
+    const dependencyMode = await ensureIntegrationDependencies(
+      desktopRoot,
+      sourceModules,
+      path.join(sourceDesktopRoot, "package-lock.json"),
+      path.join(this.#cacheRoot, "npm"),
+    );
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      AI_DESKTOP_TEST_TASK_ID: safeTaskId,
+      PLAYWRIGHT_BROWSERS_PATH: path.join(this.#cacheRoot, "playwright"),
+      npm_config_cache: path.join(this.#cacheRoot, "npm"),
+      GIT_TERMINAL_PROMPT: "0",
+    };
+    this.#recordEvent("collaboration.task_test.started", { worktreeRoot: request.worktreeRoot, dependencyMode }, request.taskId);
+    try {
+      for (const script of TEST_SCRIPTS) {
+        const command = `npm run ${script.name}`;
+        emitActivity(request.emit, request.taskId, script.name, "started", command, null);
+        try {
+          const output = await runNpmScript(script.name, desktopRoot, environment, script.timeout);
+          emitActivity(request.emit, request.taskId, script.name, "completed", command, output, 0);
+          this.#recordEvent("collaboration.task_test.command_completed", { command, worktreeRoot: request.worktreeRoot }, request.taskId);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          emitActivity(request.emit, request.taskId, script.name, "completed", command, detail, 1);
+          this.#recordEvent("collaboration.task_test.command_failed", { command, worktreeRoot: request.worktreeRoot, detail }, request.taskId);
+          throw error;
+        }
+      }
+      this.#recordEvent("collaboration.task_test.completed", { worktreeRoot: request.worktreeRoot }, request.taskId);
+    } finally {
+      // 锁文件一致时只临时复用主工程依赖，任务验证结束立即移除链接，避免进入分支提交。
+      if (dependencyMode === "linked") unlinkSync(path.join(desktopRoot, "node_modules"));
+    }
+  }
+}
+
+function validateFixedScripts(desktopRoot: string): void {
+  const manifestPath = path.join(desktopRoot, "package.json");
+  if (!existsSync(manifestPath)) throw new Error(`任务 worktree 缺少应用 package.json：${manifestPath}`);
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { scripts?: Record<string, unknown> };
+  for (const script of TEST_SCRIPTS) {
+    if (manifest.scripts?.[script.name] !== script.expected) {
+      throw new Error(`固定测试脚本 ${script.name} 已变化，禁止免审执行；需要人工审核新的脚本定义。`);
+    }
+  }
+}
+
+function runNpmScript(name: string, cwd: string, environment: NodeJS.ProcessEnv, timeout: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", name], {
+      cwd,
+      env: environment,
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    const append = (chunk: Buffer) => { output = `${output}${chunk.toString("utf8")}`.slice(-12_000); };
+    child.stdout.on("data", append);
+    child.stderr.on("data", append);
+    const timer = setTimeout(() => child.kill(), timeout);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("exit", (code, signal) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(output.trim().slice(-4_000));
+      else reject(new Error(`${name} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：${output.trim().slice(-4_000)}`));
+    });
+  });
+}
+
+function emitActivity(
+  emit: (event: CodexStreamEvent) => void,
+  taskId: string,
+  scriptName: string,
+  phase: "started" | "completed",
+  summary: string,
+  detail: string | null,
+  exitCode?: number,
+): void {
+  emit({
+    type: "activity",
+    turnId: `desktop-test:${taskId}`,
+    segmentId: `desktop-test:${taskId}:${scriptName}`,
+    activity: {
+      id: `desktop-test:${taskId}:${scriptName}`,
+      itemType: "commandExecution",
+      phase,
+      status: phase === "started" ? "running" : exitCode === 0 ? "completed" : "failed",
+      summary,
+      detail,
+      ...(exitCode === undefined ? {} : { exitCode }),
+    },
+  });
+}
+
+function safeSegment(value: string): string {
+  const normalized = value.toLowerCase().replaceAll(/[^a-z0-9._-]+/g, "-").replaceAll(/^-+|-+$/g, "").slice(0, 100);
+  if (!normalized) throw new Error("任务 ID 无法用于隔离测试输出。");
+  return normalized;
+}

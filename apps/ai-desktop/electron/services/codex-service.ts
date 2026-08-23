@@ -55,6 +55,7 @@ export interface CodexServiceOptions {
   threadSource: string;
   migrateLegacySession: boolean;
   sessionStorage: "ai-desktop" | "legacy-default";
+  validationOwner: "codex" | "desktop";
 }
 
 const EMPTY_ACCOUNT: CodexAccount = {
@@ -259,7 +260,7 @@ export class CodexService {
       // 真实任务放在第一段；工作区仍是同一条用户输入的授权上下文，但不再抢占官方线程标题。
       text: `${userTask}\n\n${workspaceContext(workspaces)}`,
     }];
-    // 官方 app-server 0.146.0 的 turn/start 使用 localImage 路径读取本地主进程已校验的 PNG。
+    // 官方 app-server 0.149.0 的 turn/start 使用 localImage 路径读取本地主进程已校验的 PNG。
     input.push(...attachmentPaths.map((filePath) => ({ type: "localImage", path: filePath })));
     this.#activeExecutionMode = executionMode;
     this.#activeWorkspaces = workspaces;
@@ -394,6 +395,7 @@ export class CodexService {
         threadSource: this.#options.threadSource,
         migrateLegacySession: false,
         sessionStorage: "legacy-default",
+        validationOwner: this.#options.validationOwner,
       },
       this.#onTrustedCommandDecision,
       this.#onThreadLifecycle,
@@ -551,6 +553,12 @@ export class CodexService {
     if (isCommand && this.#activeExecutionMode === "task-managed" && command && isManagedBuildOrStartCommand(command)) {
       this.#respond(id, { decision: "decline" });
       this.#emitCommandPolicy(id, command, "任务托管只允许代码级验证；构建、启动和重启需单独使用测试托管执行。");
+      return;
+    }
+    if (isCommand && this.#activeExecutionMode === "task-managed" && this.#options.validationOwner === "desktop"
+      && command && isDesktopOwnedValidationCommand(command)) {
+      this.#respond(id, { decision: "decline" });
+      this.#emitCommandPolicy(id, command, "当前协同任务的固定测试由 AI Desktop 在签发 worktree 内执行，无需 Agent 申请 Playwright 权限。", "completed");
       return;
     }
     if (isCommand && command) {
@@ -897,6 +905,11 @@ function isTrustedLoginUrl(value: string): boolean {
 
 function isManagedBuildOrStartCommand(command: string): boolean {
   return /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:build|start|dev|serve|preview)\b|vite\s+build|electron-builder|\belectron\s+\.|gradle(?:w)?\s+(?:build|assemble|bootRun)\b|cargo\s+(?:build|run)\b/i.test(command);
+}
+
+/** 协同任务只允许桌面主进程触发这些固定验证，Agent 的重复请求直接返回策略结果而不进入审批队列。 */
+function isDesktopOwnedValidationCommand(command: string): boolean {
+  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:typecheck|test:(?:interaction|document))\b|\bplaywright\s+test\b/i.test(command);
 }
 
 /** 把全局只读开关和逐目录权限合成为官方 app-server 的精确沙箱策略。 */

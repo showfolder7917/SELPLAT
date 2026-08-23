@@ -21,13 +21,15 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -d "$SCRIPT_DIR/node_modules/electron" || ! -d "$SCRIPT_DIR/node_modules/@openai/codex" ]]; then
-  echo "[安装] 正在安装开发版与官方 Codex Harness 依赖..."
-  npm install --no-audit --no-fund || {
+APP_NAME="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).name")"
+BUILD_ROOT="$SELPLAT_ROOT/build/$APP_NAME"
+PACKAGE_ROOT="$BUILD_ROOT/package/developer"
+
+echo "[依赖] 正在核对当前锁文件专属缓存..."
+if ! npm run dependencies:ensure; then
     echo "[错误] 依赖安装失败。"
     read "?按回车键关闭窗口..."
     exit 1
-  }
 fi
 
 echo "[构建] 正在生成最新开发版..."
@@ -37,7 +39,7 @@ if ! npm run build:developer; then
   exit 1
 fi
 
-APP_PATH="$(find "$SCRIPT_DIR/release/developer" -type d -name 'AI Desktop.app' -print -quit)"
+APP_PATH="$(find "$PACKAGE_ROOT" -type d -name 'AI Desktop.app' -print -quit 2>/dev/null)"
 REPACKAGE_REQUIRED=false
 if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
   REPACKAGE_REQUIRED=true
@@ -57,7 +59,7 @@ if [[ "$REPACKAGE_REQUIRED" == true ]]; then
     read "?按回车键关闭窗口..."
     exit 1
   fi
-  APP_PATH="$(find "$SCRIPT_DIR/release/developer" -type d -name 'AI Desktop.app' -print -quit)"
+  APP_PATH="$(find "$PACKAGE_ROOT" -type d -name 'AI Desktop.app' -print -quit 2>/dev/null)"
 else
   echo "[复用] 固定 AI Desktop.app 身份未变化，本轮只加载最新外部构建。"
 fi
@@ -131,7 +133,7 @@ if [[ -x "$LSREGISTER" ]]; then
 fi
 
 echo "[启动] 正在打开最新 AI Desktop.app..."
-open -n "$APP_PATH" --args "--selplat-root=$SELPLAT_ROOT" "--ai-desktop-runtime-root=$SCRIPT_DIR" "--ai-desktop-variant=developer"
+open -n "$APP_PATH" --args "--selplat-root=$SELPLAT_ROOT" "--ai-desktop-runtime-root=$BUILD_ROOT" "--ai-desktop-variant=developer"
 if [[ $? -ne 0 ]]; then
   echo "[错误] AI Desktop.app 启动失败。"
   read "?按回车键关闭窗口..."

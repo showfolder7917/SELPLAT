@@ -17,6 +17,7 @@ export interface ManagedExecutionRequest {
   message: string;
   restartRequired: boolean;
   runTurn: RunTurn;
+  runCodeValidation?: (emit: (event: CodexStreamEvent) => void) => Promise<void>;
   emit(event: CodexStreamEvent): void;
 }
 
@@ -83,6 +84,10 @@ export class ManagedTaskExecutor {
     }
     emitManaged(request, "task-execution", "completed", Math.min(taskRound, TASK_ROUNDS), TASK_ROUNDS, "源码任务阶段完成");
 
+    if (request.runCodeValidation) {
+      return this.#runDesktopOwnedCodeValidation(request, evidence, response);
+    }
+
     let validationMessage = codeValidationPrompt([...evidence.changedFiles]);
     for (let round = 1; round <= VALIDATION_ROUNDS; round += 1) {
       emitManaged(request, "code-validation", round === 1 ? "started" : "continuing", round, VALIDATION_ROUNDS,
@@ -115,6 +120,47 @@ export class ManagedTaskExecutor {
     const gate = evidence.codeValidationGate();
     emitManaged(request, "code-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, gate.missing.join("；"));
     return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false };
+  }
+
+  /** 协同 worktree 的固定测试由桌面主进程执行，Codex 只在失败后接收事实并修复源码。 */
+  async #runDesktopOwnedCodeValidation(
+    request: ManagedExecutionRequest,
+    evidence: ExecutionEvidence,
+    initialResponse: SendMessageResponse,
+  ): Promise<ManagedExecutionResult> {
+    const runCodeValidation = request.runCodeValidation;
+    if (!runCodeValidation) throw new Error("AI Desktop 内部验证入口未配置。");
+    let response = initialResponse;
+    let lastFailure = "";
+    for (let round = 1; round <= VALIDATION_ROUNDS; round += 1) {
+      emitManaged(request, "code-validation", round === 1 ? "started" : "continuing", round, VALIDATION_ROUNDS,
+        round === 1 ? "AI Desktop 正在当前任务分支执行静态检查" : "源码修复后正在当前任务分支重新检查");
+      emitManaged(request, "interaction-validation", "started", round, VALIDATION_ROUNDS, "AI Desktop 正在当前任务分支执行隔离 Playwright");
+      try {
+        await runCodeValidation(request.emit);
+        emitManaged(request, "code-validation", "completed", round, VALIDATION_ROUNDS, "当前任务分支静态检查已通过");
+        emitManaged(request, "interaction-validation", "completed", round, VALIDATION_ROUNDS, "当前任务分支隔离 Playwright 已通过");
+        emitManaged(request, "completed", "completed", 1, 1, "代码级验证完成；构建与启动等待单独触发测试托管");
+        return {
+          ...response,
+          managedStatus: "code-verified",
+          pendingActions: ["按需单独执行测试托管：构建、构建后测试和必要重启"],
+          restartRequired: false,
+        };
+      } catch (error) {
+        lastFailure = error instanceof Error ? error.message : String(error);
+        if (round === VALIDATION_ROUNDS) break;
+        evidence.beginRound();
+        response = await request.runTurn(desktopValidationRepairPrompt(lastFailure), (event) => {
+          evidence.record(event);
+          request.emit(event);
+        }, "task-managed");
+        if (evidence.roundFailed) lastFailure = `${lastFailure}；修复阶段仍有失败命令：${evidence.failedCommandSummaries().join("；")}`;
+      }
+    }
+    emitManaged(request, "code-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, lastFailure || "当前任务分支验证失败");
+    emitManaged(request, "interaction-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, "Playwright 未通过，未进入集成队列");
+    return { ...response, managedStatus: "incomplete", pendingActions: [lastFailure || "当前任务分支验证失败"], restartRequired: false };
   }
 
   async #runBuildValidation(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -215,8 +261,8 @@ class ExecutionEvidence {
 /** 共享测试文档、归档和 Playwright 临时证据属于验证产物，不得冒充源码修改或让刚通过的验证失效。 */
 export function isManagedValidationArtifact(filePath: string): boolean {
   const normalized = filePath.replaceAll("\\", "/").replace(/^\.\//, "");
-  return /(?:^|\/)apps\/ai-desktop\/(?:测试文档\.md|\.测试文档\.lock\.json|测试文档归档\/|temp\/interaction\/)/.test(normalized)
-    || /^(?:测试文档\.md|\.测试文档\.lock\.json|测试文档归档\/|temp\/interaction\/)/.test(normalized);
+  return /(?:^|\/)OPTION\/temp\/[a-zA-Z0-9_-]+\/(?:执行日志\/(?:待执行|运行中)\/测试\/|临时材料\/测试证据\/)/.test(normalized)
+    || /(?:^|\/)log\/[a-zA-Z0-9_-]+\/归档日志\/(?:测试归档\/|执行归档\/|协同归档\/|审批归档\/|诊断归档\/)/.test(normalized);
 }
 
 function commandSucceeded(activity: CodexStreamActivity): boolean {
@@ -249,7 +295,7 @@ function emitManaged(request: ManagedExecutionRequest, stage: ManagedExecutionUp
 }
 
 function taskExecutionPrompt(message: string): string {
-  return `[任务托管执行：源码任务阶段]\n${message}\n\n用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。本阶段禁止构建、启动或重启程序。把待验证命令登记到应用唯一共享的 apps/ai-desktop/测试文档.md，不得创建会话级测试文档。完成源码修改后简要报告。`;
+  return `[任务托管执行：源码任务阶段]\n${message}\n\n用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。本阶段禁止构建、启动或重启程序。通过 @selplat/node-common-core/path 解析真实工程名，把待验证命令登记到“执行日志/待执行/测试/<runId>/测试文档.<threadId>.md”，不得在源码目录创建测试控制文档。完成源码修改后简要报告。`;
 }
 
 function conversationPrompt(message: string): string {
@@ -265,15 +311,19 @@ function taskRepairPrompt(failures: string[]): string {
 }
 
 function codeValidationPrompt(files: string[]): string {
-  return `[任务托管执行：代码验证阶段]\n接手本任务已经修改的文件：\n${files.join("\n")}\n确认唯一共享测试文档 apps/ai-desktop/测试文档.md 已登记 npm run typecheck 与 npm run test:interaction，然后只通过固定命令 npm run test:document 取得独占锁并统一执行；命令不得追加 executor、task、thread 或其他动态参数。占用时必须报告锁中的执行者、任务、线程和当前项；完成后运行器会立即归档测试文档。test:interaction 会在后台启动隔离 Electron，通过 Playwright 定位器执行真实程序化交互。禁止正式构建、启动或重启当前 AI Desktop；失败时创建新一轮共享测试文档再修复复测，最多 ${VALIDATION_ROUNDS} 轮。`;
+  return `[任务托管执行：代码验证阶段]\n接手本任务已经修改的文件：\n${files.join("\n")}\n确认当前 runId 的测试文档已登记 npm run typecheck 与 npm run test:interaction，然后只通过固定命令 npm run test:document 取得独占锁并统一执行；命令不得追加 executor、task、thread 或其他动态参数。运行器会把完整批次原子移入运行中目录，完成后立即按年月和 runId 归档。占用时必须报告锁中的执行者、任务、线程和当前项。test:interaction 会在后台启动隔离 Electron，通过 Playwright 定位器执行真实程序化交互。禁止正式构建、启动或重启当前应用；失败时创建新 runId 的待执行测试批次再修复复测，最多 ${VALIDATION_ROUNDS} 轮。`;
 }
 
 function codeValidationRepairPrompt(missing: string[], failures: string[]): string {
-  return `[任务托管执行：代码验证修复]\n继续同一任务并完成代码级验证。\n未满足：${missing.join("；")}\n失败命令：${failures.join("；") || "无"}\n读取 temp/interaction 中的失败截图和结果，修复后重新执行静态检查与 npm run test:interaction。最多复测 ${VALIDATION_ROUNDS} 轮；禁止正式构建、启动或重启当前 AI Desktop。`;
+  return `[任务托管执行：代码验证修复]\n继续同一任务并完成代码级验证。\n未满足：${missing.join("；")}\n失败命令：${failures.join("；") || "无"}\n读取当前工程“临时材料/测试证据”中的失败截图和结果，修复后重新执行静态检查与 npm run test:interaction。最多复测 ${VALIDATION_ROUNDS} 轮；禁止正式构建、启动或重启当前应用。`;
+}
+
+function desktopValidationRepairPrompt(failure: string): string {
+  return `[任务托管执行：桌面内部验证失败修复]\nAI Desktop 已在本任务签发的独立 worktree 中执行固定静态检查与隔离 Playwright，失败事实如下：\n${failure}\n\n只修复导致失败的源码或测试；不要自行运行 npm、Playwright、Electron、构建、启动或重启命令。修复完成后直接报告，AI Desktop 将在同一 worktree 自动复测。`;
 }
 
 function buildValidationPrompt(message: string, restartRequired: boolean): string {
-  return `[测试托管执行]\n${message}\n\n把构建与构建后针对性测试登记到唯一共享的 apps/ai-desktop/测试文档.md，然后只通过固定命令 npm run test:document 取得独占锁并统一执行；命令不得追加 executor、task、thread 或其他动态参数。读取到占用锁时报告正在执行的人、任务、线程和当前项。每轮执行完成后测试文档必须立即归档；失败修复时创建新的共享测试文档再复测。${restartRequired ? "完成后由桌面主进程受控重启一次，不要在命令中自行启动或重启 AI Desktop。" : "只有确有运行时验证需要时才说明重启要求。"}`;
+  return `[测试托管执行]\n${message}\n\n通过公共路径能力解析当前工程目录，把构建与构建后针对性测试登记到唯一 runId 的待执行测试文档，然后只通过固定命令 npm run test:document 取得独占锁并统一执行；命令不得追加 executor、task、thread 或其他动态参数。读取到占用锁时报告正在执行的人、任务、线程和当前项。运行时完整批次进入“执行日志/运行中/测试”，每轮终态立即进入“归档日志/测试归档/<年月>/<runId>”；失败修复时创建新的 runId 再复测。${restartRequired ? "完成后由桌面主进程受控重启一次，不要在命令中自行启动或重启当前应用。" : "只有确有运行时验证需要时才说明重启要求。"}`;
 }
 
 function buildValidationRepairPrompt(missing: string[], failures: string[]): string {

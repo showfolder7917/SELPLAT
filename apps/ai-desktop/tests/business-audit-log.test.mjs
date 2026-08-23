@@ -3,16 +3,19 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync
 import path from "node:path";
 import test from "node:test";
 
-import { BusinessAuditLog } from "../dist-electron/electron/services/business-audit-log.js";
+import { BusinessAuditLog } from "../../../build/ai-desktop/electron/electron/services/business-audit-log.js";
+import { controlledTestRoot } from "./test-paths.mjs";
 
-const controlledTempRoot = path.resolve("temp");
+const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
 
 test("业务日志把代码级验证缺失标记为部分完成，而不把待构建误判为失败", () => {
   const appRoot = mkdtempSync(path.join(controlledTempRoot, "audit-log-test-"));
   try {
     const sourceFile = path.join(appRoot, "src", "example.tsx");
-    const bundleFile = path.join(appRoot, "dist", "developer", "index.html");
+    const buildRoot = path.join(appRoot, "build-output");
+    const logRoot = path.join(appRoot, "audit-output");
+    const bundleFile = path.join(buildRoot, "renderer", "developer", "index.html");
     mkdirSync(path.dirname(sourceFile), { recursive: true });
     mkdirSync(path.dirname(bundleFile), { recursive: true });
     writeFileSync(bundleFile, "old bundle", "utf8");
@@ -20,7 +23,7 @@ test("业务日志把代码级验证缺失标记为部分完成，而不把待�
     const oldTime = new Date(Date.now() - 60_000);
     utimesSync(bundleFile, oldTime, oldTime);
 
-    const audit = new BusinessAuditLog(appRoot);
+    const audit = new BusinessAuditLog(appRoot, buildRoot, logRoot);
     const taskId = audit.startTask({
       message: "修改资源管理区折叠",
       locale: "zh-CN",
@@ -43,7 +46,7 @@ test("业务日志把代码级验证缺失标记为部分完成，而不把待�
     assert.ok(codes.includes("static_check_not_observed"));
     assert.ok(codes.includes("targeted_test_not_observed"));
     assert.ok(!codes.includes("ai_desktop_source_changed_without_build"));
-    const timeline = readFileSync(path.join(info.path, `business-audit-${new Date().toISOString().slice(0, 10)}.jsonl`), "utf8");
+    const timeline = readFileSync(path.join(info.path, "诊断归档", new Date().toISOString().slice(0, 7), "运行诊断.jsonl"), "utf8");
     assert.match(timeline, /"type":"task\.started"/);
     assert.match(timeline, /"type":"task\.finished"/);
   } finally {

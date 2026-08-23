@@ -6,7 +6,7 @@ const runtimeRoot = process.argv.find((argument) => argument.startsWith("--ai-de
   ?.slice("--ai-desktop-runtime-root=".length);
 
 if (runtimeRoot) {
-  const externalMain = path.join(runtimeRoot, "dist-electron", "electron", "main.js");
+  const externalMain = path.join(runtimeRoot, "electron", "electron", "main.js");
   if (!existsSync(externalMain)) throw new Error(`AI Desktop external runtime is unavailable: ${externalMain}`);
   await import(pathToFileURL(externalMain).href);
 } else {

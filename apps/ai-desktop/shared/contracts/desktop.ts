@@ -142,7 +142,7 @@ export interface CodexHarnessStatus {
 }
 
 export interface CodexRuntimeInfo {
-  source: "system" | "bundled";
+  source: "bundled" | "downloaded";
   path: string;
   version: string;
 }

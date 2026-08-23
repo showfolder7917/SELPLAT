@@ -3,11 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import path from "node:path";
 import test from "node:test";
 
-import { WorkspaceStore } from "../dist-electron/electron/services/workspace-store.js";
-import { createSandboxPolicy } from "../dist-electron/electron/services/codex-service.js";
+import { WorkspaceStore } from "../../../build/ai-desktop/electron/electron/services/workspace-store.js";
+import { createSandboxPolicy } from "../../../build/ai-desktop/electron/electron/services/codex-service.js";
+import { controlledTestRoot } from "./test-paths.mjs";
 
 test("workspace profiles validate, deduplicate, persist, and enforce lifecycle constraints", () => {
-  const managedTempRoot = path.resolve(process.cwd(), "../../OPTION/temp/ai-desktop");
+  const managedTempRoot = controlledTestRoot;
   mkdirSync(managedTempRoot, { recursive: true });
   const fixture = mkdtempSync(path.join(managedTempRoot, "workspace-store-test-"));
   try {
@@ -69,7 +70,7 @@ test("sandbox policy never turns an empty writable-root set into implicit cwd wr
 });
 
 test("legacy read-only workspace profiles migrate once to the writable default", () => {
-  const managedTempRoot = path.resolve(process.cwd(), "../../OPTION/temp/ai-desktop");
+  const managedTempRoot = controlledTestRoot;
   mkdirSync(managedTempRoot, { recursive: true });
   const fixture = mkdtempSync(path.join(managedTempRoot, "workspace-migration-test-"));
   try {

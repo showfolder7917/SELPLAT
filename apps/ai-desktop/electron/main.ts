@@ -3,8 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { app, BrowserWindow } from "electron";
+import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
-import { resolveAppVariant, resolveProjectRoot } from "./config/app-config.js";
+import { resolveApplicationName, resolveAppVariant, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import { BusinessAuditLog } from "./services/business-audit-log.js";
 import { CodexService } from "./services/codex-service.js";
@@ -16,6 +17,7 @@ import { CollaborationDurationLog } from "./services/collaboration/collaboration
 import { CollaborationStore } from "./services/collaboration/collaboration-store.js";
 import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
 import { VersionWorkspaceManager } from "./services/collaboration/version-workspace-manager.js";
+import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-test-runner.js";
 import { ScreenshotStore } from "./services/screenshot-store.js";
 import { SettingsStore } from "./services/settings-store.js";
 import { WorkspaceStore } from "./services/workspace-store.js";
@@ -31,9 +33,13 @@ let collaboration: CollaborationCoordinator | undefined;
 app.whenReady().then(() => {
   const variant = resolveAppVariant();
   const projectRoot = resolveProjectRoot();
-  const rendererRoot = path.resolve(currentDirectory, `../../dist/${variant === "office" ? "client" : "developer"}`);
-  const appRoot = path.join(projectRoot, "apps", "ai-desktop");
-  const audit = new BusinessAuditLog(appRoot);
+  const applicationName = resolveApplicationName();
+  const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName });
+  const rendererRoot = variant === "office"
+    ? path.join(projectPaths.buildRoot, "sites", "client")
+    : path.join(projectPaths.buildRoot, "renderer", "developer");
+  const appRoot = projectPaths.sourceRoot;
+  const audit = new BusinessAuditLog(projectPaths.sourceRoot, projectPaths.buildRoot, projectPaths.archiveLogRoot);
   audit.recordApplicationStart({ variant, projectRoot, rendererRoot });
   const trustedCommands = new TrustedCommandStore(path.join(app.getPath("userData"), "trusted-project-commands.json"));
   const codexSessions = new CodexSessionStore(path.join(app.getPath("userData"), "active-codex-session.json"));
@@ -54,15 +60,23 @@ app.whenReady().then(() => {
       threadSource: "ai-desktop",
       migrateLegacySession: true,
       sessionStorage: "ai-desktop",
+      validationOwner: "codex",
     },
     (details) => audit.recordEvent("trusted_command.decision", details),
     (details) => audit.recordEvent("thread.lifecycle", details),
   );
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
-  const screenshots = new ScreenshotStore(appRoot);
+  const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
   const collaborationStore = new CollaborationStore(path.join(collaborationRoot, "collaboration-state.json"));
-  const collaborationDurations = new CollaborationDurationLog(audit.ensure());
+  const collaborationDurations = new CollaborationDurationLog(projectPaths.collaborationArchiveRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
+  const versionWorkspaces = new VersionWorkspaceManager(projectRoot, path.join(collaborationRoot, "worktrees"));
+  const taskTests = new TaskWorktreeTestRunner(
+    projectRoot,
+    applicationName,
+    path.join(projectPaths.cacheRoot, "test-runtime"),
+    (type, details, taskId) => audit.recordEvent(type, details, taskId),
+  );
   const collaborationSessions = new CodexCollaborationSessionFactory({
     projectRoot,
     sessionRoot: path.join(collaborationRoot, "sessions"),
@@ -70,12 +84,16 @@ app.whenReady().then(() => {
     trustedCommands,
     registry: collaborationRegistry,
     resolveAttachmentPaths: (attachmentIds) => screenshots.resolveAttachmentPaths(attachmentIds),
+    runCodeValidation: async (task, emit) => {
+      const worktreeRoot = await versionWorkspaces.validateTaskWorkspace(task);
+      await taskTests.run({ taskId: task.taskId, worktreeRoot, emit });
+    },
     recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
   });
   collaboration = new CollaborationCoordinator({
     store: collaborationStore,
     durations: collaborationDurations,
-    workspaces: new VersionWorkspaceManager(projectRoot, path.join(collaborationRoot, "worktrees")),
+    workspaces: versionWorkspaces,
     sessions: collaborationSessions,
     emitState: (state, reason, taskIds) => {
       // 单任务事件写入顶层 taskId；批量集成同时保留 taskIds，确保每条流程和错误都能反查所属任务。
@@ -86,7 +104,7 @@ app.whenReady().then(() => {
       audit.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
     },
-    verifyIntegration: (rootPath, taskIds) => verifyCollaborationIntegration(rootPath, taskIds, projectRoot),
+    verifyIntegration: (rootPath, taskIds) => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName),
   });
 
   registerDesktopIpc({
@@ -100,6 +118,7 @@ app.whenReady().then(() => {
     collaborationRegistry,
     audit,
     projectRoot,
+    appRoot,
     variant,
     preloadPath,
     rendererRoot,

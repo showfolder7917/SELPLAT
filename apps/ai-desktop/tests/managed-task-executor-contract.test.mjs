@@ -25,7 +25,8 @@ test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.match(executor, /diff-updated 是当前工作树的完整路径快照/);
   assert.match(executor, /isManagedValidationArtifact/);
   assert.match(executor, /if \(sourceFiles\.length > 0\) this\.#lastChange = this\.#sequence/);
-  assert.match(executor, /测试文档\\\.md\|\\\.测试文档\\\.lock/);
+  assert.match(executor, /执行日志\\\/\(\?:待执行\|运行中\)\\\/测试/);
+  assert.match(executor, /归档日志\\\/\(\?:测试归档/);
   assert.match(executor, /静态检查已通过/);
   assert.match(executor, /禁止构建、启动或重启/);
   assert.match(codexService, /activeExecutionMode === "task-managed"/);
@@ -52,7 +53,8 @@ test("会话与需求托管只读运行并由确认动作逐级推进", () => {
 
 test("测试托管只在完成门禁明确要求时执行自身的单次受控重启", () => {
   assert.match(executor, /buildValidationGate/);
-  assert.match(executor, /唯一共享的 apps\/ai-desktop\/测试文档\.md/);
+  assert.match(executor, /公共路径能力解析当前工程目录/);
+  assert.match(executor, /归档日志\/测试归档\/<年月>\/<runId>/);
   assert.match(executor, /npm run test:document/);
   assert.match(executor, /isUnifiedTestDocumentCommand/);
   assert.match(executor, /unifiedDocumentCompleted/);
@@ -173,14 +175,14 @@ test("会话发送统一排队、显式补充并在重建后显示恢复操作",
   assert.match(developerApp, /放弃任务/);
 });
 
-test("每次连接选择与本机缓存协议匹配的 Codex 并公开实际来源", () => {
-  assert.match(codexRuntime, /models_cache\.json/);
-  assert.match(codexRuntime, /client_version/);
-  assert.match(codexRuntime, /ChatGPT\.app\/Contents\/Resources\/codex/);
-  assert.match(codexRuntime, /LOCALAPPDATA/);
-  assert.match(codexRuntime, /AI_DESKTOP_CODEX_PATH/);
-  assert.match(codexRuntime, /isSameCodexRelease/);
-  assert.match(codexRuntime, /source: "bundled"/);
+test("Harness 只使用指定版本的内置或校验下载 Codex 并公开实际来源", () => {
+  assert.match(codexRuntime, /CODEX_TARGET_VERSION = "0\.149\.0"/);
+  assert.match(codexRuntime, /source: "bundled" \| "downloaded"/);
+  assert.match(codexRuntime, /registry\.npmjs\.org/);
+  assert.match(codexRuntime, /archiveIntegrity/);
+  assert.match(codexRuntime, /TeamIdentifier=/);
+  assert.match(codexRuntime, /resolveBundledExecutable/);
+  assert.match(codexRuntime, /installVerifiedRuntime/);
   assert.match(codexService, /resolveCodexRuntime\(childEnvironment\)/);
   assert.match(codexService, /harness_runtime_selected/);
   assert.match(developerApp, /codexStatus\.runtime\.version/);

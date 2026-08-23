@@ -1172,7 +1172,7 @@ export function DeveloperApp() {
 
     <aside className="dev-context">
       <div className="context-title"><WindowDevTools24Regular /><span>CONTEXT</span></div>
-      <dl><dt>PROJECT</dt><dd>{projectRoot}</dd><dt>MODE</dt><dd>{sandboxMode}</dd><dt>HARNESS</dt><dd>{codexStatus.runtime ? `${codexStatus.runtime.source === "system" ? "local" : "bundled"} Codex ${codexStatus.runtime.version}` : "openai/codex app-server"}</dd><dt>ACCOUNT</dt><dd>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</dd></dl>
+      <dl><dt>PROJECT</dt><dd>{projectRoot}</dd><dt>MODE</dt><dd>{sandboxMode}</dd><dt>HARNESS</dt><dd>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "verified download" : "bundled"} Codex ${codexStatus.runtime.version}` : "openai/codex app-server"}</dd><dt>ACCOUNT</dt><dd>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</dd></dl>
       <div className={`status-card ${codexStatus.connected ? "online" : "offline"}`}><i />{codexStatus.account.authenticated ? text.ready : text.signedOut}</div>
     </aside>
 
@@ -1180,7 +1180,7 @@ export function DeveloperApp() {
 
     {settingsOpen && <section ref={settingsPanelRef} className="dev-settings">
       <h2>{text.settings}</h2>
-      <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "system" ? "本机" : "内置"} Codex ${codexStatus.runtime.version} · ${codexStatus.runtime.path}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button onClick={() => void logout()}>{text.signOut}</button> : <button className="primary" onClick={() => void login()}>{text.signIn}</button>}{loginHint && <em>{loginHint}</em>}</div>
+      <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version} · ${codexStatus.runtime.path}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button onClick={() => void logout()}>{text.signOut}</button> : <button className="primary" onClick={() => void login()}>{text.signIn}</button>}{loginHint && <em>{loginHint}</em>}</div>
       <label>Language<select value={locale} onChange={(event) => updateSettings(event.target.value as Locale, sandboxMode)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
       <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings(locale, event.target.value as SandboxMode)}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
       <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><small>{tempInfo?.path}</small><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>

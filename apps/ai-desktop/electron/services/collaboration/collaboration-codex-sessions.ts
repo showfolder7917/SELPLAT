@@ -136,6 +136,7 @@ export interface CodexCollaborationSessionFactoryOptions {
   trustedCommands: TrustedCommandStore;
   registry: CollaborationCodexRegistry;
   resolveAttachmentPaths(attachmentIds: string[]): Promise<string[]>;
+  runCodeValidation(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<void>;
   recordEvent(type: string, details: Record<string, unknown>, taskId: string): void;
 }
 
@@ -150,7 +151,12 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
 
   async createExecutor(task: CollaborationTask, member: CollaborationMember): Promise<CollaborationExecutorSession> {
     const connection = this.#createConnection(task, member, "executor");
-    return new CodexExecutorSession(connection, this.#options.registry, this.#options.resolveAttachmentPaths);
+    return new CodexExecutorSession(
+      connection,
+      this.#options.registry,
+      this.#options.resolveAttachmentPaths,
+      this.#options.runCodeValidation,
+    );
   }
 
   async createReviewer(task: CollaborationTask, member: CollaborationMember): Promise<CollaborationReviewerSession> {
@@ -172,6 +178,7 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
         threadSource: "ai-desktop-collaboration",
         migrateLegacySession: true,
         sessionStorage: "ai-desktop",
+        validationOwner: "desktop",
       },
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
@@ -186,12 +193,19 @@ class CodexExecutorSession implements CollaborationExecutorSession {
   readonly #connection: RegisteredConnection;
   readonly #registry: CollaborationCodexRegistry;
   readonly #resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"];
+  readonly #runCodeValidation: CodexCollaborationSessionFactoryOptions["runCodeValidation"];
   readonly #managed = new ManagedTaskExecutor();
 
-  constructor(connection: RegisteredConnection, registry: CollaborationCodexRegistry, resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"]) {
+  constructor(
+    connection: RegisteredConnection,
+    registry: CollaborationCodexRegistry,
+    resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"],
+    runCodeValidation: CodexCollaborationSessionFactoryOptions["runCodeValidation"],
+  ) {
     this.#connection = connection;
     this.#registry = registry;
     this.#resolveAttachmentPaths = resolveAttachmentPaths;
+    this.#runCodeValidation = runCodeValidation;
   }
 
   async analyze(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<string> {
@@ -217,6 +231,7 @@ class CodexExecutorSession implements CollaborationExecutorSession {
       ].join("\n\n"),
       restartRequired: false,
       emit,
+      runCodeValidation: (onEvent) => this.#runCodeValidation(task, onEvent),
       runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, "workspace-write", workspaceState, attachmentPaths, onEvent, mode),
     });
     return { status: result.managedStatus === "code-verified" ? "code-verified" : "incomplete", text: result.text, pendingActions: result.pendingActions };

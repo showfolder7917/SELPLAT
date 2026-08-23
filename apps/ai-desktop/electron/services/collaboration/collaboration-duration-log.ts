@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
+import { resolveArchiveMonth } from "@selplat/node-common-core/path";
+import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
 export type CollaborationDurationSegment =
   | "executor-queue"
@@ -60,12 +62,10 @@ export interface CollaborationBottleneckReport {
 /** 把协同阶段耗时和等待归因写入日志文件，人物页面不读取或展示这些明细。 */
 export class CollaborationDurationLog {
   readonly #root: string;
-  readonly #reportRoot: string;
   readonly #active = new Map<string, ActiveSpan>();
 
-  constructor(logRoot: string) {
-    this.#root = path.join(logRoot, "collaboration");
-    this.#reportRoot = path.join(this.#root, "reports");
+  constructor(collaborationArchiveRoot: string) {
+    this.#root = path.resolve(collaborationArchiveRoot);
   }
 
   start(taskId: string, segment: CollaborationDurationSegment, details: Record<string, unknown> = {}): string {
@@ -166,7 +166,8 @@ export class CollaborationDurationLog {
       primaryBottleneck,
       evidence: ranked.slice(0, 3).map(([segment, durationMs]) => `${segment}:${durationMs}ms`),
     };
-    this.#writeJson(path.join(this.#reportRoot, `integration-generation-${generation}.json`), report);
+    const reportRoot = this.#reportRoot(report.generatedAt);
+    this.#writeJson(path.join(reportRoot, `integration-generation-${generation}.json`), report);
     this.#writeTrend();
     return report;
   }
@@ -176,16 +177,17 @@ export class CollaborationDurationLog {
   }
 
   #writeTrend(): void {
-    this.#ensure();
-    const reports = readdirSync(this.#reportRoot)
+    const reportRoot = this.#reportRoot(new Date().toISOString());
+    this.#ensure(reportRoot);
+    const reports = readdirSync(reportRoot)
       .filter((name) => /^integration-generation-\d+\.json$/.test(name))
       .flatMap((name) => {
-        try { return [JSON.parse(readFileSync(path.join(this.#reportRoot, name), "utf8")) as CollaborationBottleneckReport]; }
+        try { return [JSON.parse(readFileSync(path.join(reportRoot, name), "utf8")) as CollaborationBottleneckReport]; }
         catch { return []; }
       });
     const bottleneckCounts: Record<string, number> = {};
     for (const report of reports) if (report.primaryBottleneck) bottleneckCounts[report.primaryBottleneck] = (bottleneckCounts[report.primaryBottleneck] || 0) + 1;
-    this.#writeJson(path.join(this.#reportRoot, "trend.json"), {
+    this.#writeJson(path.join(reportRoot, "trend.json"), {
       generatedAt: new Date().toISOString(),
       generationCount: reports.length,
       bottleneckCounts,
@@ -194,30 +196,46 @@ export class CollaborationDurationLog {
   }
 
   #readEvents(): Array<Record<string, unknown>> {
-    this.#ensure();
-    return readdirSync(this.#root)
-      .filter((name) => /^duration-\d{4}-\d{2}-\d{2}\.jsonl$/.test(name))
-      .flatMap((name) => readFileSync(path.join(this.#root, name), "utf8").split("\n").filter(Boolean).flatMap((line) => {
+    this.#ensure(this.#root);
+    return listFilesRecursively(this.#root, "流程事件.jsonl")
+      .flatMap((filePath) => readFileSync(filePath, "utf8").split("\n").filter(Boolean).flatMap((line) => {
         try { return [JSON.parse(line) as Record<string, unknown>]; }
         catch { return []; }
       }));
   }
 
   #append(event: object): void {
-    this.#ensure();
-    appendFileSync(path.join(this.#root, `duration-${new Date().toISOString().slice(0, 10)}.jsonl`), `${JSON.stringify(event)}\n`, "utf8");
+    const value = event as { taskId?: unknown; startedAt?: unknown; occurredAt?: unknown };
+    const taskId = validateSafeIdentifier(String(value.taskId || "system"), "taskId");
+    const occurredAt = typeof value.startedAt === "string" ? value.startedAt : typeof value.occurredAt === "string" ? value.occurredAt : new Date().toISOString();
+    const taskRoot = path.join(this.#root, resolveArchiveMonth(occurredAt), taskId);
+    this.#ensure(taskRoot);
+    appendFileSync(path.join(taskRoot, "流程事件.jsonl"), `${JSON.stringify(event)}\n`, "utf8");
   }
 
   #writeJson(filePath: string, value: unknown): void {
-    this.#ensure();
+    this.#ensure(path.dirname(filePath));
     const temporary = `${filePath}.tmp`;
     writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
     renameSync(temporary, filePath);
   }
 
-  #ensure(): void {
-    mkdirSync(this.#reportRoot, { recursive: true });
+  #ensure(target: string): void {
+    mkdirSync(target, { recursive: true });
   }
+
+  #reportRoot(occurredAt: string): string {
+    return path.join(this.#root, resolveArchiveMonth(occurredAt), "system", "集成报告");
+  }
+}
+
+function listFilesRecursively(root: string, fileName: string): string[] {
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) return listFilesRecursively(target, fileName);
+    return entry.isFile() && entry.name === fileName ? [target] : [];
+  });
 }
 
 function parseCompletedSpanEvent(value: Record<string, unknown>): CompletedSpanEvent | null {

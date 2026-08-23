@@ -14,3 +14,7 @@ apps/*/db/*.mv.db
 *.lock.db
 *.temp.db
 *.before-*.db
+/cache/ai-desktop/
+/build/ai-desktop/
+/OPTION/temp/ai-desktop/
+/log/ai-desktop/

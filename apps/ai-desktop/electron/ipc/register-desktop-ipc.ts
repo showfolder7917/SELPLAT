@@ -49,6 +49,7 @@ interface DesktopIpcDependencies {
   collaborationRegistry: CollaborationCodexRegistry;
   audit: BusinessAuditLog;
   projectRoot: string;
+  appRoot: string;
   variant: AppVariant;
   preloadPath: string;
   rendererRoot: string;
@@ -96,7 +97,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, collaborationRegistry, audit, projectRoot, variant, preloadPath, rendererRoot } = dependencies;
+  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, collaborationRegistry, audit, projectRoot, appRoot, variant, preloadPath, rendererRoot } = dependencies;
   const activeAuditTasks = new Map<number, string>();
   const seenApprovalRequests = new Set<number>();
   const approvalAuditTasks = new Map<number, string>();
@@ -274,10 +275,9 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   ipcMain.handle("desktop:prepare-automatic-testing", async () => {
     const result = await prepareAutomaticTesting({
-      appRoot: path.join(projectRoot, "apps", "ai-desktop"),
+      appRoot,
       codexStatus: await codex.getStatus(),
       locale: settings.read().locale,
-      screenAccessStatus: getScreenCaptureAccessStatus(),
       trustedCommands,
       workspaces: workspaces.read(),
     });
@@ -289,7 +289,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       audit.recordEvent("trusted_command.decision", {
         action: "automatic-test-authorized",
         command: "npm run test:document",
-        cwd: path.join(projectRoot, "apps", "ai-desktop"),
+        cwd: appRoot,
       });
     }
     return result;
@@ -741,9 +741,15 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       const attachmentPaths = await screenshots.resolveAttachmentPaths(effectiveRequest.attachmentIds || []);
       const workspaceState = workspaces.read();
       const previousTask = audit.info().latestTask;
-      const restartRequired = executionMode === "test-managed" && Boolean(previousTask?.changedFiles.some((file) =>
-        /(^|\/)apps\/ai-desktop\/(src|electron|shared|package\.json|vite\.config)/.test(file),
-      ));
+      const appRelativeRoot = path.relative(projectRoot, appRoot).replaceAll(path.sep, "/");
+      const restartRequired = executionMode === "test-managed" && Boolean(previousTask?.changedFiles.some((file) => {
+        const normalized = file.replaceAll("\\", "/").replace(/^\.\//, "");
+        return normalized.startsWith(`${appRelativeRoot}/src/`)
+          || normalized.startsWith(`${appRelativeRoot}/electron/`)
+          || normalized.startsWith(`${appRelativeRoot}/shared/`)
+          || normalized === `${appRelativeRoot}/package.json`
+          || normalized === `${appRelativeRoot}/vite.config.mjs`;
+      }));
       taskId = audit.startTask({
         message: effectiveRequest.message,
         locale: effectiveRequest.locale,

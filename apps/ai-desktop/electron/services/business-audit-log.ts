@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { resolveArchiveMonth } from "@selplat/node-common-core/path";
 
 import type {
   AuditLogInfo,
@@ -38,21 +39,26 @@ interface StartAuditTaskRequest {
   managedMode: ManagedExecutionMode;
 }
 
-/** 把每轮任务事实写入应用自己的 log 目录，供用户追查“改到哪一步、为什么未完整生效”。 */
+/** 把每轮任务事实写入工程统一归档目录，供用户追查“改到哪一步、为什么未完整生效”。 */
 export class BusinessAuditLog {
-  readonly #appRoot: string;
+  readonly #sourceRoot: string;
+  readonly #buildRoot: string;
   readonly #logRoot: string;
   readonly #taskRoot: string;
+  readonly #diagnosticRoot: string;
   readonly #activeTasks = new Map<string, ActiveAuditTask>();
 
-  constructor(appRoot: string) {
-    this.#appRoot = path.resolve(appRoot);
-    this.#logRoot = path.join(this.#appRoot, "log");
-    this.#taskRoot = path.join(this.#logRoot, "tasks");
+  constructor(sourceRoot: string, buildRoot: string, logRoot: string) {
+    this.#sourceRoot = path.resolve(sourceRoot);
+    this.#buildRoot = path.resolve(buildRoot);
+    this.#logRoot = path.resolve(logRoot);
+    this.#taskRoot = path.join(this.#logRoot, "执行归档");
+    this.#diagnosticRoot = path.join(this.#logRoot, "诊断归档");
   }
 
   ensure(): string {
     mkdirSync(this.#taskRoot, { recursive: true });
+    mkdirSync(this.#diagnosticRoot, { recursive: true });
     return this.#logRoot;
   }
 
@@ -146,6 +152,10 @@ export class BusinessAuditLog {
 
   recordApproval(taskId: string | undefined, requestId: number, decision: "accept" | "decline", trusted = false): void {
     this.recordEvent("approval.resolved", { requestId, decision, trusted }, taskId);
+    const approvalRoot = path.join(this.#logRoot, "审批归档", resolveArchiveMonth(new Date().toISOString()));
+    mkdirSync(approvalRoot, { recursive: true });
+    const target = path.join(approvalRoot, `${taskId || "system"}-${requestId}.json`);
+    writeFileSync(target, `${JSON.stringify({ taskId: taskId || null, requestId, decision, trusted, resolvedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
   }
 
   finishTask(
@@ -182,11 +192,11 @@ export class BusinessAuditLog {
 
   info(): AuditLogInfo {
     this.ensure();
-    const files = readdirSync(this.#taskRoot).filter((name) => name.endsWith(".json")).sort().reverse();
+    const files = listFilesRecursively(this.#taskRoot, "摘要.json").sort().reverse();
     let latestTask: AuditTaskSummary | null = null;
     for (const name of files) {
       try {
-        latestTask = JSON.parse(readFileSync(path.join(this.#taskRoot, name), "utf8")) as AuditTaskSummary;
+        latestTask = JSON.parse(readFileSync(name, "utf8")) as AuditTaskSummary;
         break;
       } catch {
         // 单个损坏摘要不阻断其余日志查询，原始 JSONL 仍保留完整事件。
@@ -228,8 +238,8 @@ export class BusinessAuditLog {
   }
 
   #bundleState(): AuditTaskSummary["bundleState"] {
-    const sourceMtimeMs = latestMtime(path.join(this.#appRoot, "src"), path.join(this.#appRoot, "electron"), path.join(this.#appRoot, "shared"), path.join(this.#appRoot, "package.json"));
-    const bundleMtimeMs = latestMtime(path.join(this.#appRoot, "dist", "developer"), path.join(this.#appRoot, "dist-electron"));
+    const sourceMtimeMs = latestMtime(path.join(this.#sourceRoot, "src"), path.join(this.#sourceRoot, "electron"), path.join(this.#sourceRoot, "shared"), path.join(this.#sourceRoot, "package.json"));
+    const bundleMtimeMs = latestMtime(path.join(this.#buildRoot, "renderer", "developer"), path.join(this.#buildRoot, "electron"));
     return { sourceMtimeMs, bundleMtimeMs, stale: sourceMtimeMs > bundleMtimeMs };
   }
 
@@ -254,15 +264,28 @@ export class BusinessAuditLog {
       pendingActions: task.pendingActions,
       bundleState: task.bundleState,
     };
-    const target = path.join(this.#taskRoot, `${task.taskId}.json`);
+    const taskDirectory = path.join(this.#taskRoot, resolveArchiveMonth(task.startedAt), task.taskId);
+    mkdirSync(taskDirectory, { recursive: true });
+    const target = path.join(taskDirectory, "摘要.json");
     const temporary = `${target}.tmp`;
     writeFileSync(temporary, `${JSON.stringify(serializable, null, 2)}\n`, "utf8");
     renameSync(temporary, target);
   }
 
   #dailyLogPath(): string {
-    return path.join(this.#logRoot, `business-audit-${new Date().toISOString().slice(0, 10)}.jsonl`);
+    const monthlyRoot = path.join(this.#diagnosticRoot, resolveArchiveMonth(new Date().toISOString()));
+    mkdirSync(monthlyRoot, { recursive: true });
+    return path.join(monthlyRoot, "运行诊断.jsonl");
   }
+}
+
+function listFilesRecursively(root: string, fileName: string): string[] {
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) return listFilesRecursively(target, fileName);
+    return entry.isFile() && entry.name === fileName ? [target] : [];
+  });
 }
 
 function latestMtime(...targets: string[]): number {

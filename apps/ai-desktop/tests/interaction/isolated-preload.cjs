@@ -11,7 +11,7 @@ const harnessStatus = {
   connected: true,
   account: { authenticated: true, authMode: "test", email: "interaction@test.invalid", planType: "test", requiresOpenaiAuth: false },
   error: null,
-  runtime: { source: "system", path: "/usr/local/bin/codex", version: "0.149.0" },
+  runtime: { source: "bundled", path: "/Applications/AI Desktop.app/Contents/Resources/app.asar.unpacked/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex", version: "0.149.0" },
 };
 let pendingUserInput = null;
 let finishManagedTurn = null;
@@ -141,10 +141,10 @@ contextBridge.exposeInMainWorld("desktop", {
   returnScreenshotSelection: async () => undefined,
   saveScreenshot: async () => { throw new Error("Screenshot persistence is disabled in interaction tests."); },
   onScreenshotCompleted: () => () => undefined,
-  getTempDirectoryInfo: async () => ({ path: path.join(projectRoot, "apps", "ai-desktop", "temp"), fileCount: 0, totalBytes: 0 }),
+  getTempDirectoryInfo: async () => ({ path: process.env.AI_DESKTOP_TEMP_MATERIALS_ROOT, fileCount: 0, totalBytes: 0 }),
   openTempDirectory: async () => undefined,
-  clearTempFiles: async () => ({ path: path.join(projectRoot, "apps", "ai-desktop", "temp"), fileCount: 0, totalBytes: 0 }),
-  getAuditLogInfo: async () => ({ path: path.join(projectRoot, "apps", "ai-desktop", "log"), taskCount: 0, latestTask: null }),
+  clearTempFiles: async () => ({ path: process.env.AI_DESKTOP_TEMP_MATERIALS_ROOT, fileCount: 0, totalBytes: 0 }),
+  getAuditLogInfo: async () => ({ path: process.env.AI_DESKTOP_ARCHIVE_LOG_ROOT, taskCount: 0, latestTask: null }),
   openAuditLogDirectory: async () => undefined,
   getCollaborationState: async () => structuredClone(collaborationState),
   setDesktopOperatingMode: async (mode) => { collaborationState.mode = mode; return publishCollaborationState("mode.changed"); },

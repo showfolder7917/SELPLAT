@@ -1,16 +1,29 @@
 import { spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot, resolveArchiveMonth } from "@selplat/node-common-core/path";
+import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const documentPath = path.join(appRoot, "测试文档.md");
-const lockPath = path.join(appRoot, ".测试文档.lock.json");
-const archiveRoot = path.join(appRoot, "测试文档归档");
+const projectRoot = path.resolve(appRoot, "../..");
+const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
+const pendingRoot = projectPaths.pendingTestRoot;
+const runningRoot = projectPaths.runningTestRoot;
+const lockPath = path.join(runningRoot, "执行锁.json");
+const archiveRoot = projectPaths.testArchiveRoot;
 const staleAfterMs = 10 * 60 * 1_000;
-const allowedStandaloneScripts = new Set(["typecheck", "build:developer", "verify:mac:developer"]);
+const allowedStandaloneScripts = new Set([
+  "typecheck",
+  "build:developer",
+  "migrate:data-layout",
+  "package:mac:developer",
+  "verify:mac:developer",
+  "verify:package-content",
+]);
 const allowedTestScripts = new Set([
+  "test:common",
   "test:sites",
   "test:screenshot",
   "test:stream",
@@ -22,6 +35,7 @@ const allowedTestScripts = new Set([
   "test:interaction",
   "test:managed",
   "test:trust",
+  "test:codex-runtime",
 ]);
 const argumentsMap = readArguments(process.argv.slice(2));
 const executor = argumentsMap.executor || `${process.env.USER || "unknown"}@${os.hostname()}`;
@@ -33,17 +47,15 @@ if (argumentsMap.command === "status") {
   process.exit(0);
 }
 
-if (!existsSync(documentPath)) {
-  console.error("未找到共享测试文档：测试文档.md");
-  process.exit(1);
-}
-
 const token = `${process.pid}-${Date.now()}`;
 let currentItem = "准备读取共享测试文档";
+mkdirSync(pendingRoot, { recursive: true });
+mkdirSync(runningRoot, { recursive: true });
 acquireLock({ executor, task, thread, token });
 const heartbeat = setInterval(() => writeLock({ executor, task, thread, token, currentItem }), 5_000);
 
 try {
+  const { runId, runRoot, documentPath } = selectRun();
   const original = readFileSync(documentPath, "utf8");
   const lines = original.split("\n");
   const testItems = lines.flatMap((line, index) => {
@@ -56,30 +68,68 @@ try {
     throw new Error(`共享测试文档包含未授权脚本：${blockedItems.map((item) => item.script).join("、")}。自动测试只允许已登记的静态检查、开发构建、应用验证和测试脚本。`);
   }
 
+  const eventPath = path.join(runRoot, "测试事件.jsonl");
   let failed = 0;
   for (const item of testItems) {
     currentItem = `npm run ${item.script}`;
     writeLock({ executor, task, thread, token, currentItem });
     const startedAt = new Date().toISOString();
+    appendFileSync(eventPath, `${JSON.stringify({ type: "test.started", runId, script: item.script, startedAt, executor })}\n`, "utf8");
     const result = spawnSync("npm", ["run", item.script], { cwd: appRoot, encoding: "utf8", stdio: "inherit" });
+    const completedAt = new Date().toISOString();
     const passed = result.status === 0;
     if (!passed) failed += 1;
-    lines[item.index] = `${item.source.replace("- [ ]", passed ? "- [x]" : "- [!] ")} — 结果：${passed ? "通过" : `失败（退出码 ${result.status ?? "unknown"}）`}；执行者：${executor}；开始：${startedAt}；结束：${new Date().toISOString()}`;
+    appendFileSync(eventPath, `${JSON.stringify({ type: "test.finished", runId, script: item.script, completedAt, passed, exitCode: result.status })}\n`, "utf8");
+    lines[item.index] = `${item.source.replace("- [ ]", passed ? "- [x]" : "- [!] ")} — 结果：${passed ? "通过" : `失败（退出码 ${result.status ?? "unknown"}）`}；执行者：${executor}；开始：${startedAt}；结束：${completedAt}`;
     writeFileSync(documentPath, lines.join("\n"), "utf8");
   }
 
   currentItem = "归档测试文档";
   writeLock({ executor, task, thread, token, currentItem });
-  mkdirSync(archiveRoot, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const now = new Date();
+  const monthlyArchiveRoot = path.join(archiveRoot, resolveArchiveMonth(now.toISOString()));
   const resultLabel = failed === 0 ? "通过" : "失败";
-  const archivePath = path.join(archiveRoot, `测试文档.${timestamp}.${resultLabel}.md`);
-  renameSync(documentPath, archivePath);
-  console.log(`统一测试${resultLabel}，测试文档已归档：${archivePath}`);
+  renameSync(documentPath, path.join(runRoot, "测试结果.md"));
+  writeFileSync(path.join(runRoot, "失败证据清单.json"), `${JSON.stringify({ runId, result: resultLabel, evidence: [] }, null, 2)}\n`, "utf8");
+  const archivePath = path.join(monthlyArchiveRoot, runId);
+  if (existsSync(archivePath)) throw new Error(`测试归档已存在，运行中材料已保留：${archivePath}`);
+  mkdirSync(monthlyArchiveRoot, { recursive: true });
+  renameSync(runRoot, archivePath);
+  if (!existsSync(path.join(archivePath, "测试结果.md"))) throw new Error(`测试归档完整性检查失败：${archivePath}`);
+  console.log(`统一测试${resultLabel}，测试运行已归档：${archivePath}`);
   process.exitCode = failed === 0 ? 0 : 1;
 } finally {
   clearInterval(heartbeat);
   releaseOwnLock(token);
+}
+
+function selectRun() {
+  const runningIds = listRunIds(runningRoot);
+  if (runningIds.length > 1) throw new Error(`运行中存在多个测试批次，无法确定唯一批次：${runningIds.join("、")}`);
+  let runId = runningIds[0];
+  if (!runId) {
+    const pendingIds = listRunIds(pendingRoot);
+    if (pendingIds.length !== 1) {
+      throw new Error(pendingIds.length === 0
+        ? `没有待执行测试批次：${pendingRoot}`
+        : `待执行目录存在多个测试批次，请先保留唯一批次：${pendingIds.join("、")}`);
+    }
+    runId = pendingIds[0];
+    renameSync(path.join(pendingRoot, runId), path.join(runningRoot, runId));
+  }
+  const runRoot = path.join(runningRoot, runId);
+  const documentPath = path.join(runRoot, `测试文档.${thread}.md`);
+  if (!existsSync(documentPath)) throw new Error(`测试批次缺少当前线程测试文档：${documentPath}`);
+  return { runId, runRoot, documentPath };
+}
+
+function listRunIds(root) {
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => validateSafeIdentifier(entry.name, "runId"))
+    .filter((runId) => readdirSync(path.join(root, runId)).some((name) => name.startsWith("测试文档.") && name.endsWith(".md")))
+    .sort();
 }
 
 function acquireLock(details) {
@@ -134,7 +184,13 @@ function releaseOwnLock(expectedToken) {
 
 function printStatus() {
   const lock = readLock();
-  if (!lock) return console.log("共享测试文档当前无人执行。");
+  if (!lock) {
+    const runningIds = listRunIds(runningRoot);
+    if (runningIds.length > 0) return console.log(`共享测试当前无人执行，发现可恢复的运行中批次：${runningIds.join("、")}`);
+    const pendingIds = listRunIds(pendingRoot);
+    if (pendingIds.length > 0) return console.log(`共享测试等待执行：${pendingIds.join("、")}`);
+    return console.log("共享测试当前无人执行，也没有待执行文档。");
+  }
   if (isStale(lock)) return console.log(`发现可恢复的过期测试锁，原执行者：${lock.executor || "未知"}。`);
   console.log(`共享测试正在被 ${lock.executor} 执行；任务：${lock.task}；线程：${lock.thread}；当前项：${lock.currentItem}；心跳：${lock.heartbeatAt}`);
 }

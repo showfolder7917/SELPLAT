@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
+import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
 
 import type {
   AutomaticTestPreflightCheck,
@@ -19,7 +21,6 @@ interface AutomaticTestPreflightRequest {
   appRoot: string;
   codexStatus: CodexHarnessStatus;
   locale: Locale;
-  screenAccessStatus: string;
   trustedCommands: TrustedCommandStore;
   workspaces: WorkspaceState;
 }
@@ -32,7 +33,6 @@ export async function prepareAutomaticTesting(request: AutomaticTestPreflightReq
   checks.push(checkRunner(request.appRoot, request.locale));
   checks.push(checkLock(request.appRoot, request.locale));
   checks.push(await checkPort(request.locale));
-  checks.push(checkScreenAccess(request.screenAccessStatus, request.locale));
 
   const canAuthorize = checks.every((check) => check.status === "passed");
   const authorization = canAuthorize
@@ -82,15 +82,14 @@ function checkWorkspace(appRoot: string, workspaces: WorkspaceState, locale: Loc
 function checkRunner(appRoot: string, locale: Locale): AutomaticTestPreflightCheck {
   const runnerPath = path.join(appRoot, "scripts", "test-document-runner.mjs");
   const manifestPath = path.join(appRoot, "package.json");
-  const requiredDependencies = [
-    path.join(appRoot, "node_modules", "electron"),
-    path.join(appRoot, "node_modules", "@openai", "codex"),
-    path.join(appRoot, "node_modules", "@playwright", "test"),
-  ];
+  const projectRoot = path.resolve(appRoot, "../..");
+  const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
+  const dependencyRoot = resolveLockSpecificDependencyPaths(projectPaths.dependencyCacheRoot, readFileSync(path.join(appRoot, "package-lock.json"))).nodeModulesRoot;
+  const requiredDependencies = [path.join(dependencyRoot, "electron"), path.join(dependencyRoot, "@openai", "codex"), path.join(dependencyRoot, "@playwright", "test")];
   let scriptReady = false;
   try {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { scripts?: Record<string, unknown> };
-    scriptReady = manifest.scripts?.["test:document"] === "node scripts/test-document-runner.mjs";
+    scriptReady = manifest.scripts?.["test:document"] === "node scripts/run-with-dependencies.mjs node scripts/test-document-runner.mjs";
   } catch {
     scriptReady = false;
   }
@@ -106,7 +105,9 @@ function checkRunner(appRoot: string, locale: Locale): AutomaticTestPreflightChe
 }
 
 function checkLock(appRoot: string, locale: Locale): AutomaticTestPreflightCheck {
-  const lockPath = path.join(appRoot, ".测试文档.lock.json");
+  const projectRoot = path.resolve(appRoot, "../..");
+  const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
+  const lockPath = path.join(projectPaths.runningTestRoot, "执行锁.json");
   if (!existsSync(lockPath)) {
     return { id: "lock", status: "passed", label: copy(locale, "测试执行锁", "テスト実行ロック"), detail: copy(locale, "当前没有其他测试进程占用共享测试。", "共有テストを使用中の別プロセスはありません。") };
   }
@@ -142,18 +143,6 @@ async function checkPort(locale: Locale): Promise<AutomaticTestPreflightCheck> {
     detail: available
       ? copy(locale, `127.0.0.1:${interactionPort} 可以用于隔离交互测试。`, `127.0.0.1:${interactionPort} は隔離インタラクションテストに使用できます。`)
       : copy(locale, `127.0.0.1:${interactionPort} 已被占用或禁止监听。`, `127.0.0.1:${interactionPort} は使用中、または待受が許可されていません。`),
-  };
-}
-
-function checkScreenAccess(status: string, locale: Locale): AutomaticTestPreflightCheck {
-  const passed = status === "granted";
-  return {
-    id: "screen",
-    status: passed ? "passed" : "failed",
-    label: copy(locale, "屏幕录制权限", "画面収録権限"),
-    detail: passed
-      ? copy(locale, "AI Desktop 已取得屏幕录制权限。", "AI Desktop に画面収録権限があります。")
-      : copy(locale, "AI Desktop 尚未取得屏幕录制权限，自动测试保持关闭。", "AI Desktop に画面収録権限がないため、自動テストはオフのままです。"),
   };
 }
 

@@ -2,8 +2,15 @@
   "appId": "com.selplat.aidesktop.developer",
   "productName": "AI Desktop",
   "extraMetadata": { "aiDesktopVariant": "developer", "main": "dist-electron/electron/packaged-bootstrap.js" },
-  "directories": { "output": "release/developer" },
-  "files": ["dist/client/**/*", "dist/developer/**/*", "dist-electron/**/*", "package.json"],
+  "directories": { "output": "../../build/ai-desktop/package/developer" },
+  "files": [
+    { "from": "../../build/ai-desktop/renderer/developer", "to": "dist/developer", "filter": ["**/*"] },
+    { "from": "../../build/ai-desktop/electron", "to": "dist-electron", "filter": ["**/*"] },
+    "package.json",
+    "!node_modules/@selplat/node-common-core/**/*.map",
+    "!node_modules/@selplat/node-common-core/**/*.d.ts",
+    "!node_modules/@selplat/node-common-core/{src,tests}/**/*"
+  ],
   "asarUnpack": ["node_modules/@openai/codex/**/*", "node_modules/@openai/codex-*/**/*"],
   "win": { "target": "nsis", "artifactName": "AI-Desktop-${version}-Setup.${ext}" },
   "mac": { "target": "dmg", "artifactName": "AI-Desktop-${version}.${ext}", "category": "public.app-category.developer-tools" }

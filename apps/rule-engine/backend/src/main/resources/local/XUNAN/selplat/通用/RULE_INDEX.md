@@ -3,6 +3,30 @@
 <!-- 本索引只登记当前用户在 SELPLAT 各应用之间复用的个人工程规则。 -->
 active_user_selplat_general_rule_root = local/XUNAN/selplat/通用/rule/
 
+<!-- SELPLAT 跨应用 Node.js 与 TypeScript 公共运行能力统一执行唯一源码根、包依赖和安装包白名单。 -->
+SELPLAT_NODE_COMMON_CAPABILITY_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLATNode共通能力规则.md
+
+<!-- 新建、迁移或修改 shared/node/common-core 及其公共 API 时加载。 -->
+load_rule_for_active_user_selplat_node_common_create_migrate_or_api_change = SELPLAT_NODE_COMMON_CAPABILITY_RULES
+
+<!-- 应用把重复 Node 工具、路径解析或平台基础能力提升到公共层时加载。 -->
+load_rule_for_active_user_selplat_application_node_utility_or_path_resolver_promotion = SELPLAT_NODE_COMMON_CAPABILITY_RULES
+
+<!-- Electron 应用新增公共 Node 依赖、调整打包文件或验证安装包内容时加载。 -->
+load_rule_for_active_user_selplat_electron_node_common_dependency_packaging_or_artifact_inspection = SELPLAT_NODE_COMMON_CAPABILITY_RULES
+
+<!-- SELPLAT 当前和未来应用统一按真实工程名隔离源码、缓存、构建、临时控制面与长期归档。 -->
+SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT应用工程数据目录结构规则.md
+
+<!-- 新建、整理、迁移或检查任一应用的 cache、build、OPTION/temp、log 或源码目录时加载。 -->
+load_rule_for_active_user_selplat_application_cache_build_temp_log_or_source_layout = SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES
+
+<!-- 新增或修改任务、测试、审批、诊断和协同材料的待执行、运行中、归档或清理流程时加载。 -->
+load_rule_for_active_user_selplat_application_execution_archive_or_temp_cleanup_lifecycle = SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES
+
+<!-- 交付前检查应用临时数据散落、工程名写死、跨工程缓存冲突或源码树污染时加载。 -->
+load_rule_for_active_user_selplat_application_data_layout_delivery_scan = SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES
+
 <!-- SELPLAT 全部现有和未来公共控件统一执行先登记后实现、应用禁止私造和硬依赖自动检查。 -->
 SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md
 
