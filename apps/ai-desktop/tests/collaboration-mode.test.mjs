@@ -429,6 +429,35 @@ test("目标分支修改无归属或多任务重叠时保持原状并阻止合�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("同一版本已有首个发布候选时后续批次使用唯一代次分支", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "repeated-release-branch-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "source.txt"), "base\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    const oldIntegrationSha = git(repositoryRoot, "rev-parse", "HEAD");
+    git(repositoryRoot, "branch", "codex/collab/integration", oldIntegrationSha);
+    git(repositoryRoot, "branch", "release/0.1.1-rc");
+    writeFileSync(path.join(repositoryRoot, "current.txt"), "current local head\n");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "current local head");
+    const resultSha = git(repositoryRoot, "rev-parse", "HEAD");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    const candidate = await manager.createReleaseCandidate("release-0.1.1-g7", "0.1.1", 7, [{ taskId: "TASK-7", versionWorkspace: { resultSha } }]);
+    assert.equal(candidate.branchName, "release/0.1.1-rc-g7");
+    assert.equal(candidate.baseSha, resultSha, "发布候选必须从当前干净本地分支开始，不能回退到旧集成指针");
+    assert.equal(git(repositoryRoot, "rev-parse", candidate.branchName), candidate.candidateSha);
+    await manager.retireCandidate(candidate);
+    assert.equal(git(repositoryRoot, "rev-parse", "release/0.1.1-rc-g7"), candidate.candidateSha);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("三个真实进程同时申请测试资源时全局并发始终为一并留下结构化事件", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "test-resource-cross-process-"));
   const coordinationRoot = path.join(directory, "运行中", "测试", "_资源协调");
@@ -582,7 +611,7 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.63\.0/);
+  assert.match(rule, /rule_version = 5\.64\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);

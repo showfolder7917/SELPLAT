@@ -177,7 +177,7 @@ export class VersionWorkspaceManager {
     if (tasks.length === 0) throw new Error("集成批次不能为空。");
     const baseSha = await this.#integrationBaseSha();
     const safeVersion = safeVersionSegment(version);
-    const branchName = legacyIntegrationBranch ? `codex/collab/integration-g${generation}` : `release/${safeVersion}-rc`;
+    const branchName = legacyIntegrationBranch ? `codex/collab/integration-g${generation}` : await this.#availableReleaseBranch(safeVersion, generation);
     const rootPath = this.#managedPath(legacyIntegrationBranch ? "integration" : "release", legacyIntegrationBranch ? `g${generation}` : safeSegment(releaseBatchId));
     await this.#git(this.#repositoryRoot, ["worktree", "add", "-b", branchName, rootPath, baseSha]);
     try {
@@ -237,11 +237,19 @@ export class VersionWorkspaceManager {
   }
 
   async #integrationBaseSha(): Promise<string> {
-    try {
-      return await this.#git(this.#repositoryRoot, ["rev-parse", "codex/collab/integration"]);
-    } catch {
-      return this.currentBaseSha();
-    }
+    // 发布锁与本地干净门禁已经在调用前完成；候选必须包含当前本地最新提交，旧集成指针只保留为历史证据。
+    return this.currentBaseSha();
+  }
+
+  /** 首批保留 release/<version>-rc；同一版本的后续批次追加代次，既不覆盖历史发布证据也不会永久阻塞。 */
+  async #availableReleaseBranch(version: string, generation: number): Promise<string> {
+    const primary = `release/${version}-rc`;
+    const primaryExists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${primary}`]).then(() => true, () => false);
+    if (!primaryExists) return primary;
+    const generated = `${primary}-g${generation}`;
+    const generatedExists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${generated}`]).then(() => true, () => false);
+    if (generatedExists) throw new Error(`发布候选分支 ${generated} 已存在，禁止覆盖同一批次证据。`);
+    return generated;
   }
 
   async #localChangedFiles(): Promise<string[]> {
@@ -266,7 +274,7 @@ export class VersionWorkspaceManager {
   }
 
   #validateCandidateBranch(branchName: string): void {
-    if (/^release\/[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?-rc$/.test(branchName)) return;
+    if (/^release\/[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?-rc(?:-g[1-9][0-9]*)?$/.test(branchName)) return;
     this.#validateManagedBranch(branchName);
   }
 
