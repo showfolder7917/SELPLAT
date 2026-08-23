@@ -75,6 +75,21 @@ export interface CollaborationReview {
   createdAt: string;
 }
 
+export interface CollaborationReviewAttempt {
+  attemptId: string;
+  planVersion: number;
+  reviewerMemberId: string;
+  reviewerGeneration: number;
+  outcome: "decided" | "decision-unrecognized" | "infrastructure-failed";
+  decision: "passed" | "rejected" | null;
+  decisionSource: "tag" | "legacy-marker" | "explicit-chinese" | "clarification" | null;
+  rawOutput: string | null;
+  clarificationOutput: string | null;
+  error: string | null;
+  startedAt: string;
+  completedAt: string;
+}
+
 export interface CollaborationVersionWorkspace {
   workspaceId: string;
   rootPath: string;
@@ -104,6 +119,7 @@ export interface CollaborationTask {
   snapshot: CollaborationTaskSnapshot;
   plans: CollaborationRequirementPlan[];
   reviews: CollaborationReview[];
+  reviewAttempts: CollaborationReviewAttempt[];
   versionWorkspace: CollaborationVersionWorkspace | null;
   finalResult: string | null;
   blockingReason: string | null;

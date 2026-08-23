@@ -73,7 +73,7 @@ app.whenReady().then(() => {
       audit.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
     },
-    verifyIntegration: verifyCollaborationIntegration,
+    verifyIntegration: (rootPath, taskIds) => verifyCollaborationIntegration(rootPath, taskIds, projectRoot),
   });
 
   registerDesktopIpc({

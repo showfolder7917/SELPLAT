@@ -157,6 +157,7 @@ export class CollaborationStore {
       },
       plans: [],
       reviews: [],
+      reviewAttempts: [],
       versionWorkspace: null,
       finalResult: null,
       blockingReason: null,
@@ -294,7 +295,10 @@ function mergeDefaultMembers(state: CollaborationState): void {
     member.lastHeartbeatAt ??= null;
     member.lastProtocolProgressAt ??= null;
   }
-  for (const task of state.tasks) task.recoveryTargetState ??= null;
+  for (const task of state.tasks) {
+    task.recoveryTargetState ??= null;
+    task.reviewAttempts ??= [];
+  }
   if (!state.members.some((member) => member.memberId === state.selectedMemberId)) state.selectedMemberId = "han-li";
 }
 

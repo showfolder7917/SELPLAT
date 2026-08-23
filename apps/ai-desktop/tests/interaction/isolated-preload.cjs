@@ -163,6 +163,37 @@ contextBridge.exposeInMainWorld("desktop", {
   cancelCollaborationTask: async () => publishCollaborationState("task.cancelled"),
   onCollaborationState: (listener) => { collaborationStateListeners.add(listener); return () => collaborationStateListeners.delete(listener); },
   onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
+  setInteractionCollaborationReviewFixture: async (active) => {
+    collaborationState.tasks = active ? [{
+      taskId: "interaction-review-task",
+      taskRevision: 1,
+      assignmentId: "interaction-assignment",
+      workerGeneration: 1,
+      state: "queued-reviewer",
+      phase: null,
+      executorMemberId: "isolated-member-10",
+      currentReviewerMemberId: null,
+      currentPlanVersion: 1,
+      explicitRejectionCount: 0,
+      infrastructureFailureCount: 0,
+      mergeStrategy: "INDEPENDENT",
+      atomicGroupId: null,
+      dependencyTaskIds: [],
+      integrationGeneration: null,
+      snapshot: { title: "审核格式兼容", problemStatement: "审核正文不能丢失", confirmedIntent: "保存审核正文并补取结论。", constraints: [], acceptanceCriteria: [], sourceMessageIds: [], attachmentIds: [], workspaceState: workspace, locale: "zh-CN", contentHash: "interaction" },
+      plans: [{ version: 1, ownerMemberId: "isolated-member-10", text: "修正审核解析和状态持久化。", contentHash: "plan", createdAt: "2026-08-23T00:00:00.000Z" }],
+      reviews: [],
+      reviewAttempts: [{ attemptId: "attempt-1", planVersion: 1, reviewerMemberId: "isolated-member-7", reviewerGeneration: 1, outcome: "decision-unrecognized", decision: null, decisionSource: null, rawOutput: "审核内容已经完整生成，但旧格式没有首行标记。", clarificationOutput: "仍未返回唯一标记", error: "审核正文已生成，但结论无法识别。", startedAt: "2026-08-23T00:00:00.000Z", completedAt: "2026-08-23T00:01:00.000Z" }],
+      versionWorkspace: null,
+      finalResult: null,
+      blockingReason: "墨大夫审核正文已保存，但结论无法识别，等待其他审核员确认",
+      recoveryTargetState: null,
+      createdAt: "2026-08-23T00:00:00.000Z",
+      updatedAt: "2026-08-23T00:01:00.000Z",
+      completedAt: null,
+    }] : [];
+    return publishCollaborationState("interaction.review_fixture");
+  },
   getConversationDispatchState: async () => structuredClone(dispatchState),
   enqueueMessage: async ({ request, displayText, automatic }) => {
     dispatchState.queue.push({ id: `queue-${Date.now()}`, request, displayText: displayText || request.message, createdAt: new Date().toISOString(), automatic: automatic === true });

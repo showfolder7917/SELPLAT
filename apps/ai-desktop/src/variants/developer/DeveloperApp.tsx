@@ -1032,7 +1032,7 @@ export function DeveloperApp() {
   const tasksSectionExpanded = activeExplorerSection === "tasks";
   const collaborationMode = collaborationState?.mode === "collaboration";
   const selectedCollaborationMember = collaborationState?.members.find((member) => member.memberId === collaborationState.selectedMemberId) || null;
-  const selectedMemberTasks = collaborationState?.tasks.filter((task) => task.executorMemberId === selectedCollaborationMember?.memberId || task.currentReviewerMemberId === selectedCollaborationMember?.memberId || task.reviews.some((review) => review.reviewerMemberId === selectedCollaborationMember?.memberId)) || [];
+  const selectedMemberTasks = collaborationState?.tasks.filter((task) => task.executorMemberId === selectedCollaborationMember?.memberId || task.currentReviewerMemberId === selectedCollaborationMember?.memberId || task.reviews.some((review) => review.reviewerMemberId === selectedCollaborationMember?.memberId) || task.reviewAttempts.some((attempt) => attempt.reviewerMemberId === selectedCollaborationMember?.memberId)) || [];
   const showConversationWorkspace = !collaborationMode || selectedCollaborationMember?.kind === "conversation-owner";
 
   return <div className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
@@ -1199,6 +1199,8 @@ function CollaborationMemberPage({ member, tasks, streams, locale, onRename, onD
   const liveMessage = currentTask ? streams[currentTask.taskId] : null;
   const currentPlan = currentTask?.plans.find((plan) => plan.version === currentTask.currentPlanVersion);
   const latestReview = currentTask?.reviews.at(-1);
+  const latestReviewAttempt = currentTask?.reviewAttempts.at(-1);
+  const latestUnresolvedReview = latestReviewAttempt?.outcome === "decided" ? null : latestReviewAttempt;
   return <section className="collaboration-member-page" aria-label={member.displayName}>
     <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
     {member.blockingReason && <div className="member-blocking-reason" role="status">{member.blockingReason}</div>}
@@ -1207,6 +1209,7 @@ function CollaborationMemberPage({ member, tasks, streams, locale, onRename, onD
       <p>{currentTask.snapshot.confirmedIntent}</p>
       {currentPlan && <details open><summary>{locale === "ja" ? `要件案 v${currentPlan.version}` : `分析方案 v${currentPlan.version}`}</summary><MarkdownMessage text={currentPlan.text} /></details>}
       {latestReview && <details><summary>{latestReview.decision === "passed" ? (locale === "ja" ? "レビュー通過" : "审核通过") : (locale === "ja" ? "要改善" : "审核未通过")}</summary><MarkdownMessage text={latestReview.feedback} /></details>}
+      {latestUnresolvedReview && <details><summary>{latestUnresolvedReview.outcome === "decision-unrecognized" ? (locale === "ja" ? "レビュー本文を保存・結論未確認" : "审核正文已保存，结论未确认") : (locale === "ja" ? "レビュー接続エラー" : "审核连接异常")}</summary>{latestUnresolvedReview.rawOutput && <MarkdownMessage text={latestUnresolvedReview.rawOutput} />}{latestUnresolvedReview.error && <p>{latestUnresolvedReview.error}</p>}</details>}
       {liveMessage && <div className="member-live-result"><MarkdownMessage text={liveMessage.text} /><StreamDetails message={liveMessage} locale={locale} /></div>}
       {currentTask.finalResult && !liveMessage?.streaming && <details open><summary>{locale === "ja" ? "実行結果" : "执行结果"}</summary><MarkdownMessage text={currentTask.finalResult} /></details>}
       <div className="member-task-actions">{currentTask.state === "recovering" && <button type="button" onClick={() => onContinue(currentTask.taskId)}>{locale === "ja" ? "続行" : "继续执行"}</button>}{!["integrated", "cancelled"].includes(currentTask.state) && <button type="button" className="danger" onClick={() => onCancel(currentTask.taskId)}>{locale === "ja" ? "キャンセル" : "取消任务"}</button>}</div>

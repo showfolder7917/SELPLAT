@@ -4,6 +4,7 @@ import type {
   CollaborationMember,
   CollaborationRequirementPlan,
   CollaborationReview,
+  CollaborationReviewAttempt,
   CollaborationState,
   CollaborationTask,
   CollaborationWorkerPhase,
@@ -33,7 +34,23 @@ export interface CollaborationExecutorSession {
 
 export interface CollaborationReviewerSession {
   isAlive(): boolean;
-  review(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<{ decision: "passed" | "rejected"; feedback: string }>;
+  review(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<
+    | {
+      outcome: "decided";
+      decision: "passed" | "rejected";
+      decisionSource: "tag" | "legacy-marker" | "explicit-chinese" | "clarification";
+      feedback: string;
+      rawOutput: string;
+      clarificationOutput: string | null;
+    }
+    | {
+      outcome: "decision-unrecognized";
+      feedback: string;
+      rawOutput: string;
+      clarificationOutput: string;
+      error: string;
+    }
+  >;
   dispose(): Promise<void> | void;
 }
 
@@ -226,7 +243,7 @@ export class CollaborationCoordinator {
     }
   }
 
-  async #analyze(taskId: string, session: CollaborationExecutorSession, optimization: boolean, feedback = ""): Promise<void> {
+  async #analyze(taskId: string, session: CollaborationExecutorSession, optimization: boolean, feedback = "", executeAfterOptimization = false): Promise<void> {
     const task = this.#store.task(taskId);
     const memberId = task.executorMemberId;
     if (!memberId) throw new Error("任务缺少执行人。");
@@ -251,19 +268,26 @@ export class CollaborationCoordinator {
         contentHash: sha256(text),
         createdAt: new Date().toISOString(),
       };
-      this.#store.updateTask(taskId, "plan.ready", (current, state) => {
+      this.#store.updateTask(taskId, executeAfterOptimization ? "plan.final_after_review_limit" : "plan.ready", (current, state) => {
         current.plans.push(plan);
         current.currentPlanVersion = plan.version;
-        current.state = "queued-reviewer";
+        current.state = executeAfterOptimization ? "forced-after-review-limit" : "queued-reviewer";
         current.phase = null;
         const executor = requireMember(state, memberId);
-        executor.state = "waiting-review";
+        executor.state = executeAfterOptimization ? "working" : "waiting-review";
         executor.phase = null;
-        executor.blockingReason = "等待空闲审核员";
+        executor.blockingReason = executeAfterOptimization ? "第三次驳回后的最终必要修正已完成，强制执行" : "等待空闲审核员";
         executor.updatedAt = new Date().toISOString();
       });
-      this.#durations.finish(span, "completed", { releaseEvent: "plan.ready", planVersion: plan.version });
-      this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "reviewer-wait", "system-wait", "no-idle-reviewer", "reviewer-capacity", null));
+      this.#durations.finish(span, "completed", {
+        releaseEvent: executeAfterOptimization ? "plan.final_after_review_limit" : "plan.ready",
+        planVersion: plan.version,
+      });
+      if (executeAfterOptimization) {
+        await this.#execute(taskId);
+      } else {
+        this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "reviewer-wait", "system-wait", "no-idle-reviewer", "reviewer-capacity", null));
+      }
     } catch (error) {
       this.#durations.finish(span, "failed", { error: errorMessage(error) });
       throw error;
@@ -300,7 +324,7 @@ export class CollaborationCoordinator {
     if (target === "optimizing" && task.currentPlanVersion > 0) {
       const feedback = [...task.reviews].reverse().find((review) => review.decision === "rejected")?.feedback || "恢复后继续优化最近方案。";
       this.#store.updateTask(taskId, "task.optimization_recovered", (current) => { current.recoveryTargetState = null; });
-      await this.#analyze(taskId, session, true, feedback);
+      await this.#analyze(taskId, session, true, feedback, task.explicitRejectionCount >= 3);
       return;
     }
     this.#store.updateTask(taskId, "task.analysis_recovered", (current) => { current.recoveryTargetState = null; });
@@ -327,6 +351,9 @@ export class CollaborationCoordinator {
     if (waitSpan) this.#durations.finish(waitSpan, "completed", { releaseEvent: "reviewer.assigned", reviewerId });
     this.#waitSpans.delete(taskId);
     let reviewerSession: CollaborationReviewerSession | null = null;
+    let reviewerGeneration = 0;
+    let reviewPersisted = false;
+    const reviewStartedAt = new Date().toISOString();
     const reviewSpan = this.#durations.start(taskId, "review", { reviewerId, planVersion: plan.version });
     try {
       this.#store.updateTask(taskId, "reviewer.assigned", (current, state) => {
@@ -341,16 +368,54 @@ export class CollaborationCoordinator {
         reviewer.updatedAt = reviewer.lastAssignedAt;
         current.currentReviewerMemberId = reviewerId;
         current.state = "reviewing";
+        current.blockingReason = null;
+        const executor = current.executorMemberId ? requireMember(state, current.executorMemberId) : null;
+        if (executor) executor.blockingReason = `${reviewer.displayName}正在审核`;
       });
+      reviewerGeneration = requireMember(this.state(), reviewerId).generation;
       reviewerSession = await this.#sessions.createReviewer(this.#store.task(taskId), requireMember(this.state(), reviewerId));
       this.#reviewerSessions.set(taskId, reviewerSession);
       this.#startHeartbeat(`reviewer:${taskId}`, taskId, reviewerId, reviewerSession);
-      const reviewerGeneration = requireMember(this.state(), reviewerId).generation;
       const result = await reviewerSession.review(this.#store.task(taskId), plan, () => this.#touchProtocolProgress(taskId, reviewerId));
       const currentTask = this.#store.task(taskId);
       const currentReviewer = requireMember(this.state(), reviewerId);
       if (currentTask.currentReviewerMemberId !== reviewerId || currentTask.currentPlanVersion !== plan.version || currentReviewer.generation !== reviewerGeneration || currentReviewer.currentTaskId !== taskId) {
         throw new Error("审核结果来自已经过期的审核租约，已拒绝写入。");
+      }
+      const completedAt = new Date().toISOString();
+      if (result.outcome === "decision-unrecognized") {
+        const attempt: CollaborationReviewAttempt = {
+          attemptId: randomUUID(),
+          planVersion: plan.version,
+          reviewerMemberId: reviewerId,
+          reviewerGeneration,
+          outcome: result.outcome,
+          decision: null,
+          decisionSource: null,
+          rawOutput: result.rawOutput,
+          clarificationOutput: result.clarificationOutput,
+          error: result.error,
+          startedAt: reviewStartedAt,
+          completedAt,
+        };
+        this.#store.updateTask(taskId, "review.decision_unrecognized", (current, state) => {
+          current.reviewAttempts.push(attempt);
+          current.currentReviewerMemberId = null;
+          current.state = "queued-reviewer";
+          current.blockingReason = `${currentReviewer.displayName}审核正文已保存，但结论无法识别，等待其他审核员确认`;
+          const executor = current.executorMemberId ? requireMember(state, current.executorMemberId) : null;
+          if (executor) executor.blockingReason = current.blockingReason;
+        });
+        this.#durations.finish(reviewSpan, "completed", {
+          outcome: result.outcome,
+          reviewerId,
+          releaseEvent: "review-output.persisted",
+          error: result.error,
+        });
+        await this.#retireReviewer(reviewerId, reviewerSession);
+        reviewerSession = null;
+        this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "reviewer-wait", "recovery-wait", "review-decision-unrecognized", "reviewer-capacity", null));
+        return;
       }
       const review: CollaborationReview = {
         reviewId: randomUUID(),
@@ -361,36 +426,83 @@ export class CollaborationCoordinator {
         feedback: result.feedback,
         createdAt: new Date().toISOString(),
       };
+      const attempt: CollaborationReviewAttempt = {
+        attemptId: randomUUID(),
+        planVersion: plan.version,
+        reviewerMemberId: reviewerId,
+        reviewerGeneration,
+        outcome: result.outcome,
+        decision: result.decision,
+        decisionSource: result.decisionSource,
+        rawOutput: result.rawOutput,
+        clarificationOutput: result.clarificationOutput,
+        error: null,
+        startedAt: reviewStartedAt,
+        completedAt,
+      };
       this.#store.updateTask(taskId, "review.completed", (current) => {
         if (current.currentPlanVersion !== review.planVersion) throw new Error("审核结果对应的方案版本已经过期。");
+        current.reviewAttempts.push(attempt);
         current.reviews.push(review);
         current.currentReviewerMemberId = null;
         current.infrastructureFailureCount = 0;
+        current.blockingReason = null;
         if (review.decision === "rejected") current.explicitRejectionCount += 1;
       });
+      reviewPersisted = true;
       this.#durations.finish(reviewSpan, "completed", { decision: result.decision, releaseEvent: "review.persisted" });
       await this.#retireReviewer(reviewerId, reviewerSession);
       reviewerSession = null;
-      if (result.decision === "passed" || this.#store.task(taskId).explicitRejectionCount >= 3) {
-        this.#store.updateTask(taskId, result.decision === "passed" ? "review.passed" : "review.limit_reached", (current) => {
-          current.state = result.decision === "passed" ? "approved" : "forced-after-review-limit";
-        });
+      const reviewAction = nextReviewAction(result.decision, this.#store.task(taskId).explicitRejectionCount);
+      if (reviewAction === "execute") {
+        this.#store.updateTask(taskId, "review.passed", (current) => { current.state = "approved"; });
         await this.#execute(taskId);
+      } else if (reviewAction === "optimize-and-execute") {
+        const executorSession = this.#executorSessions.get(taskId);
+        if (!executorSession) throw new Error("执行人 Codex 已失联，无法完成第三次驳回后的最终必要修正。");
+        this.#store.updateTask(taskId, "review.limit_reached", (current) => {
+          current.state = "optimizing";
+          current.blockingReason = "第三次驳回，正在完成最后一次必要修正，修正后不再复审";
+        });
+        await this.#analyze(taskId, executorSession, true, result.feedback, true);
       } else {
         const executorSession = this.#executorSessions.get(taskId);
         if (!executorSession) throw new Error("执行人 Codex 已失联，无法依据审核意见优化。");
         await this.#analyze(taskId, executorSession, true, result.feedback);
       }
     } catch (error) {
+      const failureEvidence = reviewFailureEvidence(error);
       this.#durations.finish(reviewSpan, "failed", { error: errorMessage(error) });
       if (reviewerSession) await this.#retireReviewer(reviewerId, reviewerSession);
       if (this.#store.task(taskId).state === "cancelled") return;
-      this.#store.updateTask(taskId, "review.infrastructure_failed", (current) => {
+      if (reviewPersisted) {
+        await this.#blockTask(taskId, `审核结果已保存，但后续处理失败：${errorMessage(error)}`);
+        return;
+      }
+      this.#store.updateTask(taskId, "review.infrastructure_failed", (current, state) => {
+        current.reviewAttempts.push({
+          attemptId: randomUUID(),
+          planVersion: plan.version,
+          reviewerMemberId: reviewerId,
+          reviewerGeneration,
+          outcome: "infrastructure-failed",
+          decision: null,
+          decisionSource: null,
+          rawOutput: failureEvidence.rawOutput,
+          clarificationOutput: failureEvidence.clarificationOutput,
+          error: errorMessage(error),
+          startedAt: reviewStartedAt,
+          completedAt: new Date().toISOString(),
+        });
         current.infrastructureFailureCount += 1;
         current.currentReviewerMemberId = null;
         current.state = current.infrastructureFailureCount >= 3 ? "recovering" : "queued-reviewer";
-        current.blockingReason = current.infrastructureFailureCount >= 3 ? "审核基础设施连续失败，等待恢复" : null;
+        current.blockingReason = current.infrastructureFailureCount >= 3
+          ? "审核基础设施连续失败，等待恢复"
+          : `${requireMember(state, reviewerId).displayName}连接异常，等待其他审核员`;
         current.recoveryTargetState = current.infrastructureFailureCount >= 3 ? "queued-reviewer" : null;
+        const executor = current.executorMemberId ? requireMember(state, current.executorMemberId) : null;
+        if (executor) executor.blockingReason = current.blockingReason;
       });
       if (this.#store.task(taskId).state === "queued-reviewer") {
         this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "reviewer-wait", "recovery-wait", "reviewer-infrastructure-retry", "reviewer-capacity", null));
@@ -653,6 +765,15 @@ export class CollaborationCoordinator {
   }
 }
 
+/** 审核只允许两轮普通返工；第三次明确驳回必须先做最终必要修正，再跳过第四轮审核进入执行。 */
+export function nextReviewAction(
+  decision: "passed" | "rejected",
+  explicitRejectionCount: number,
+): "execute" | "optimize-and-review" | "optimize-and-execute" {
+  if (decision === "passed") return "execute";
+  return explicitRejectionCount >= 3 ? "optimize-and-execute" : "optimize-and-review";
+}
+
 function fairIdleMembers(members: CollaborationMember[]): CollaborationMember[] {
   return members.map((member) => ({ member, tieBreaker: Math.random() })).sort((left, right) => {
     const leftTime = left.member.lastAssignedAt ? Date.parse(left.member.lastAssignedAt) : 0;
@@ -722,4 +843,14 @@ function sha256(value: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** 连接在结论补取阶段失败时，仍从受控错误对象取回已经完成的审核正文。 */
+function reviewFailureEvidence(error: unknown): { rawOutput: string | null; clarificationOutput: string | null } {
+  if (!error || typeof error !== "object") return { rawOutput: null, clarificationOutput: null };
+  const value = error as { rawOutput?: unknown; clarificationOutput?: unknown };
+  return {
+    rawOutput: typeof value.rawOutput === "string" ? value.rawOutput : null,
+    clarificationOutput: typeof value.clarificationOutput === "string" ? value.clarificationOutput : null,
+  };
 }

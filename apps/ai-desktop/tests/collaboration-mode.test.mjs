@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
 import { CollaborationDurationLog } from "../dist-electron/electron/services/collaboration/collaboration-duration-log.js";
+import { nextReviewAction } from "../dist-electron/electron/services/collaboration/collaboration-coordinator.js";
+import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../dist-electron/electron/services/collaboration/collaboration-codex-sessions.js";
+import { ensureIntegrationDependencies } from "../dist-electron/electron/services/collaboration/integration-verifier.js";
 import { CollaborationStore } from "../dist-electron/electron/services/collaboration/collaboration-store.js";
 
 const controlledTempRoot = path.resolve("temp");
@@ -83,19 +86,109 @@ test("耗时日志按等待原因生成集成批次瓶颈报告", () => {
   }
 });
 
+test("审核结论兼容标签、Markdown 旧格式和明确中文表达，但拒绝冲突或正文猜测", () => {
+  assert.deepEqual(parseCollaborationReviewDecision("审核完成。\n<review_decision>PASSED</review_decision>"), {
+    decision: "passed",
+    decisionSource: "tag",
+  });
+  assert.deepEqual(parseCollaborationReviewDecision("```text\n**DECISION: REJECTED**\n```"), {
+    decision: "rejected",
+    decisionSource: "legacy-marker",
+  });
+  assert.deepEqual(parseCollaborationReviewDecision("### 审核意见\n审核结论：通过"), {
+    decision: "passed",
+    decisionSource: "explicit-chinese",
+  });
+  assert.equal(parseCollaborationReviewDecision("方案通过类型检查，但仍需补测试。"), null);
+  assert.equal(parseCollaborationReviewDecision("<review_decision>PASSED</review_decision>\n<review_decision>REJECTED</review_decision>"), null);
+});
+
+test("审核正文无法识别时只补取一次结论并保留原正文", async () => {
+  let clarificationCount = 0;
+  const clarified = await resolveCollaborationReviewDecision("方案覆盖完整，建议通过。", async () => {
+    clarificationCount += 1;
+    return "<review_decision>PASSED</review_decision>";
+  });
+  assert.equal(clarificationCount, 1);
+  assert.equal(clarified.outcome, "decided");
+  assert.equal(clarified.decision, "passed");
+  assert.equal(clarified.decisionSource, "clarification");
+  assert.equal(clarified.feedback, "方案覆盖完整，建议通过。");
+
+  const unresolved = await resolveCollaborationReviewDecision("已有完整审核正文。", async () => "仍然没有结构化结论");
+  assert.equal(unresolved.outcome, "decision-unrecognized");
+  assert.equal(unresolved.rawOutput, "已有完整审核正文。");
+  assert.match(unresolved.error, /正文已生成/);
+});
+
+test("审核满足最低需求即通过且第三次驳回先最终修正再强制执行", () => {
+  assert.equal(nextReviewAction("passed", 0), "execute");
+  assert.equal(nextReviewAction("rejected", 1), "optimize-and-review");
+  assert.equal(nextReviewAction("rejected", 2), "optimize-and-review");
+  assert.equal(nextReviewAction("rejected", 3), "optimize-and-execute");
+  const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  assert.match(sessions, /满足最低需求必须通过/);
+  assert.match(sessions, /禁止据此扩大问题或驳回/);
+});
+
+test("集成工作区锁文件一致时自动复用主工作区依赖", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-dependencies-"));
+  const candidate = path.join(directory, "candidate");
+  const source = path.join(directory, "source");
+  try {
+    mkdirSync(path.join(candidate), { recursive: true });
+    mkdirSync(path.join(source, "node_modules", ".bin"), { recursive: true });
+    writeFileSync(path.join(candidate, "package-lock.json"), "same-lock", "utf8");
+    writeFileSync(path.join(source, "package-lock.json"), "same-lock", "utf8");
+    writeFileSync(path.join(source, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
+    assert.equal(await ensureIntegrationDependencies(candidate, source), "linked");
+    assert.equal(readFileSync(path.join(candidate, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "utf8"), "ready");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("旧协同状态加载时补齐审核尝试历史", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-review-migration-"));
+  const filePath = path.join(directory, "state.json");
+  try {
+    const store = new CollaborationStore(filePath);
+    const task = store.submitTask({
+      title: "审核迁移",
+      problemStatement: "旧任务没有审核尝试字段",
+      confirmedIntent: "旧任务重启后应自动补齐审核尝试历史。",
+      workspaceState,
+      locale: "zh-CN",
+    });
+    const persisted = JSON.parse(readFileSync(filePath, "utf8"));
+    delete persisted.tasks.find((candidate) => candidate.taskId === task.taskId).reviewAttempts;
+    writeFileSync(filePath, `${JSON.stringify(persisted, null, 2)}\n`, "utf8");
+    assert.deepEqual(new CollaborationStore(filePath).task(task.taskId).reviewAttempts, []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("协同编排保持独立连接、异人审核、三次上限、心跳和即时就绪集成契约", () => {
   const coordinator = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
   const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
   const workspaces = readFileSync(new URL("../electron/services/collaboration/version-workspace-manager.ts", import.meta.url), "utf8");
+  const integrationVerifier = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
   const ui = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
   assert.match(sessions, /new CodexService/);
   assert.match(sessions, /role: "executor" \| "reviewer"/);
   assert.match(coordinator, /member\.memberId !== task\.executorMemberId/);
-  assert.match(coordinator, /explicitRejectionCount >= 3/);
+  assert.match(coordinator, /optimize-and-execute/);
   assert.match(coordinator, /member\.heartbeat/);
   assert.match(coordinator, /state === "ready-for-integration"/);
   assert.doesNotMatch(coordinator, /setTimeout\([^)]*integration/i);
   assert.match(workspaces, /codex\/collab/);
+  assert.match(workspaces, /codex\/collab\/integration-g\$\{generation\}/);
+  assert.doesNotMatch(workspaces, /codex\/collab\/integration\/g\$\{generation\}/);
   assert.match(workspaces, /resultSha/);
+  assert.match(integrationVerifier, /dependencyMode === "linked"/);
+  assert.match(integrationVerifier, /unlinkSync\(path\.join\(desktopRoot, "node_modules"\)\)/);
+  assert.match(ui, /reviewAttempts\.some/);
+  assert.match(ui, /审核正文已保存，结论未确认/);
   assert.doesNotMatch(ui, /CollaborationMemberPage[\s\S]*durationMs/);
 });
