@@ -89,11 +89,11 @@ const DEFAULT_SETTINGS_WIDTH = 390;
 const MINIMUM_SETTINGS_WIDTH = 320;
 const MAXIMUM_SETTINGS_WIDTH = 720;
 
-/** 使用 SELUI 浮动面板承载设置内容，并在右边缘提供符合当前左下锚点的宽度调整交互。 */
+/** 使用 SELUI 浮动面板承载设置内容，并由控件统一处理面板宽度调整。 */
 function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { locale: Locale; open: boolean; onOpenChange: (open: boolean) => void; children: ReactNode }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const openRef = useRef(open);
-  const [portalTargets, setPortalTargets] = useState<{ body: HTMLElement; panel: HTMLElement } | null>(null);
+  const [portalBody, setPortalBody] = useState<HTMLElement | null>(null);
   openRef.current = open;
 
   useEffect(() => {
@@ -111,6 +111,13 @@ function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { local
       closeLabel: locale === "ja" ? "接続と実行設定を閉じる" : "关闭连接与执行设置",
       content,
       classes: { control: "dev-settings-control", trigger: "activity-settings", panel: "dev-settings" },
+      // 设置面板固定左下入口，SELUI 左侧手柄向左拖拽时会把新增宽度展开到右侧。
+      resizable: {
+        minWidth: MINIMUM_SETTINGS_WIDTH,
+        maxWidth: MAXIMUM_SETTINGS_WIDTH,
+        labels: { left: locale === "ja" ? "設定パネルの幅を調整" : "调整设置面板宽度" },
+        resetLabel: locale === "ja" ? "ダブルクリックで既定の幅に戻す" : "双击恢复默认宽度",
+      },
       onOpenChange,
     });
     if (!controller) return;
@@ -123,11 +130,11 @@ function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { local
     closeIconRoot?.render(<Dismiss20Regular />);
 
     controller.panel.style.width = `${DEFAULT_SETTINGS_WIDTH}px`;
-    setPortalTargets({ body: controller.body, panel: controller.panel });
+    setPortalBody(controller.body);
     // 语言切换会按新文案重建 SELUI 外壳，原先已打开的设置面板应立即恢复打开状态。
     if (openRef.current) controller.open();
     return () => {
-      setPortalTargets(null);
+      setPortalBody(null);
       triggerIconRoot.unmount();
       closeIconRoot?.unmount();
       controller.destroy();
@@ -135,55 +142,9 @@ function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { local
   }, [locale, onOpenChange]);
 
   return <div ref={hostRef} className="dev-settings-host">
-    {portalTargets && createPortal(children, portalTargets.body)}
-    {portalTargets && createPortal(<SettingsWidthResizer panel={portalTargets.panel} locale={locale} />, portalTargets.panel)}
+    {/* 关闭时不保留业务内容，避免隐藏设置卡与工作区中的同名状态文本同时进入辅助查询树。 */}
+    {portalBody && open && createPortal(children, portalBody)}
   </div>;
-}
-
-/** 右边缘拖拽只改变设置面板宽度，不触发设置刷新或其他业务动作。 */
-function SettingsWidthResizer({ panel, locale }: { panel: HTMLElement; locale: Locale }) {
-  const applyWidth = (width: number) => {
-    const panelLeft = panel.getBoundingClientRect().left;
-    const viewportMaximum = Math.max(MINIMUM_SETTINGS_WIDTH, window.innerWidth - panelLeft - 12);
-    const nextWidth = Math.min(MAXIMUM_SETTINGS_WIDTH, viewportMaximum, Math.max(MINIMUM_SETTINGS_WIDTH, width));
-    panel.style.width = `${Math.round(nextWidth)}px`;
-  };
-
-  const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return;
-    const handle = event.currentTarget;
-    const pointerId = event.pointerId;
-    const startX = event.clientX;
-    const startWidth = panel.getBoundingClientRect().width;
-    handle.setPointerCapture(pointerId);
-    panel.dataset.settingsResizing = "true";
-    const move = (moveEvent: globalThis.PointerEvent) => applyWidth(startWidth + moveEvent.clientX - startX);
-    const finish = () => {
-      delete panel.dataset.settingsResizing;
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", finish);
-      handle.removeEventListener("pointercancel", finish);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", finish);
-    handle.addEventListener("pointercancel", finish);
-    event.preventDefault();
-  };
-
-  return <button
-    type="button"
-    className="selfloating-resize-handle dev-settings-resize-right"
-    aria-label={locale === "ja" ? "設定パネルの幅を調整" : "调整设置面板宽度"}
-    aria-orientation="vertical"
-    onPointerDown={startResize}
-    onDoubleClick={() => applyWidth(DEFAULT_SETTINGS_WIDTH)}
-    onKeyDown={(event) => {
-      if (event.key === "Home") { event.preventDefault(); applyWidth(DEFAULT_SETTINGS_WIDTH); return; }
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      applyWidth(panel.getBoundingClientRect().width + (event.key === "ArrowLeft" ? -16 : 16));
-    }}
-  />;
 }
 type Message = {
   id: number;

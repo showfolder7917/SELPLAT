@@ -171,6 +171,9 @@ test("未登录时设置面板的登录主操作文字可见并使用主题对�
   expect(presentation.labelRight).toBeLessThanOrEqual(presentation.buttonRight + 0.5);
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionAuthenticated(authenticated: boolean): Promise<void> } }).desktop.setInteractionAuthenticated(true));
   await expect(page.locator(".dev-empty").getByText("Codex harness 已连接", { exact: true })).toBeVisible({ timeout: 5_000 });
+  // 用例自行关闭打开的浮层，避免它覆盖下一条用例中的侧栏操作。
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "连接与执行设置" })).toBeHidden();
 });
 
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
