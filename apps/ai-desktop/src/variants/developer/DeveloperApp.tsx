@@ -69,7 +69,7 @@ import type {
   WorkspaceState,
 } from "../../../shared/contracts/desktop";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "./collaboration-task-progress";
+import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "./collaboration-task-progress";
 import "@selplat/sel-ui/core/kernel";
 import "@selplat/sel-ui/components/floating-panel";
 import "@selplat/sel-ui/components/floating-panel/styles";
@@ -209,6 +209,13 @@ type Message = {
   streamTerminal?: boolean;
 };
 
+/** 每个协同流式回合保留收到时的环节，避免状态推进后把旧报告错放到新环节。 */
+type CollaborationLiveOutput = {
+  message: Message;
+  stageId: CollaborationProgressStageId;
+  turnId: string;
+};
+
 const labels = {
   ja: { title: "Developer", placeholder: "コード、調査、変更内容を入力（画像を貼り付け可能）", ready: "Codex harness 接続済み", signIn: "ChatGPT でログイン", signOut: "ログアウト", signedOut: "ChatGPT にログインしてください", browserOpened: "ブラウザーでログインを完了してください", files: "EXPLORER", workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定", remove: "削除", removeConfirm: "ワークスペース一覧から「{name}」を削除しますか？ディスク上のフォルダーは削除されません。", minimumWorkspace: "ワークスペースを1つ以上残してください", tasks: "TASKS", newTask: "新しいタスク", newCodexSession: "Codex セッションを新しく作り直す", expand: "展開", collapse: "折りたたむ", settings: "接続と実行設定", account: "ChatGPT アカウント", readOnly: "読み取り専用", write: "ワークスペース書き込み", readOnlyTip: "現在は読み取り専用", writeTip: "現在は書き込み可能", thinking: "Codex が処理中...", approve: "許可", approveAndTrust: "許可して信頼", trustHint: "同じプロジェクトとコマンドは次回から自動的に許可されます。", decline: "拒否", screenshot: "現在の画面をキャプチャ", hiddenScreenshot: "AI Desktop を隠してキャプチャ", screenPermissionRequired: "システム設定で AI Desktop の画面収録を許可し、アプリを再起動してください。", screenSourceUnavailable: "画面ソースを読み取れません。画面収録の権限を確認してから再試行してください。", openScreenRecordingSettings: "システム設定を開く", tempFiles: "一時ファイル", openTemp: "一時フォルダーを開く", clearTemp: "すべて消去", clearConfirm: "AI Desktop の一時ファイルをすべて削除しますか？", trustedCommands: "信頼済みコマンド", clearTrustedCommands: "信頼をすべて解除", clearTrustedConfirm: "登録済みの信頼コマンドをすべて解除しますか？", auditLogs: "業務ログ", openAuditLogs: "ログフォルダーを開く", noAuditTask: "タスク履歴はまだありません", conversationManaged: "会話管理", requirementManaged: "要件管理", taskManaged: "タスク管理", testManaged: "テスト管理", attachment: "画像添付", automaticTest: "自動テスト", automaticTestChecking: "自動テスト環境を確認中…", automaticTestReady: "自動テスト環境の準備ができました", automaticTestBlocked: "自動テストを開始できません", automaticTestTriggered: "自動テスト", close: "閉じる" },
   "zh-CN": { title: "Developer", placeholder: "输入代码、调查或修改任务（可粘贴截图）", ready: "Codex harness 已连接", signIn: "使用 ChatGPT 登录", signOut: "退出登录", signedOut: "请先登录 ChatGPT", browserOpened: "请在浏览器中完成登录", files: "资源管理器", workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除", removeConfirm: "确定从工作区列表移除“{name}”吗？不会删除磁盘中的真实目录。", minimumWorkspace: "至少保留一个工作区", tasks: "任务", newTask: "新建任务", newCodexSession: "重新建立一个 Codex 会话", expand: "展开", collapse: "折叠", settings: "连接与执行设置", account: "ChatGPT 账号", readOnly: "只读", write: "工作区写入", readOnlyTip: "当前只读", writeTip: "当前可写入", thinking: "Codex 正在处理...", approve: "允许", approveAndTrust: "允许并信任", trustHint: "相同项目和命令下次将自动允许。", decline: "拒绝", screenshot: "截取当前屏幕", hiddenScreenshot: "隐藏 AI Desktop 后截图", screenPermissionRequired: "请在系统设置中允许 AI Desktop 使用屏幕录制权限，然后重新启动应用。", screenSourceUnavailable: "无法读取屏幕来源，请检查屏幕录制权限后重试。", openScreenRecordingSettings: "打开系统设置", tempFiles: "临时文件", openTemp: "临时目录", clearTemp: "一键清理", clearConfirm: "确定清理 AI Desktop temp 中的全部临时文件吗？", trustedCommands: "可信命令", clearTrustedCommands: "清除全部信任", clearTrustedConfirm: "确定清除全部项目可信命令吗？", auditLogs: "业务日志", openAuditLogs: "打开日志目录", noAuditTask: "暂无任务记录", conversationManaged: "会话托管", requirementManaged: "需求托管", taskManaged: "任务托管", testManaged: "测试托管", attachment: "图片附件", automaticTest: "自动测试", automaticTestChecking: "正在检查自动测试环境…", automaticTestReady: "自动测试环境已就绪", automaticTestBlocked: "自动测试开启失败", automaticTestTriggered: "自动测试", close: "知道了" },
@@ -270,7 +277,7 @@ export function DeveloperApp() {
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
   const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
   const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationState | null>(null);
-  const [collaborationStreams, setCollaborationStreams] = useState<Record<string, Message>>({});
+  const [collaborationStreams, setCollaborationStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-detail">("member");
   const [selectedCollaborationTaskId, setSelectedCollaborationTaskId] = useState<string | null>(null);
   const [trustedCommandInfo, setTrustedCommandInfo] = useState<TrustedCommandInfo>({ count: 0 });
@@ -311,6 +318,8 @@ export function DeveloperApp() {
   const screenRecordingSettingsOpenedRef = useRef(false);
   const screenRecordingRecheckBusyRef = useRef(false);
   const automaticTestEnabledRef = useRef(false);
+  const collaborationStateRef = useRef<CollaborationState | null>(null);
+  const linghuAutomationStateRef = useRef<LinghuAutomationState | null>(null);
   const text = labels[locale];
   const screenPermissionRecoveryMessage = locale === "ja"
     ? "システム設定で AI Desktop の画面収録を許可してください。AI Desktop に戻ると自動的に再確認します。"
@@ -328,6 +337,9 @@ export function DeveloperApp() {
     // 恢复历史记录后把运行期序号推进到现有最大值，保证后续每个 Harness 回合都能取得独立 React key。
     messageIdSequenceRef.current = Math.max(messageIdSequenceRef.current, ...messages.map((message) => message.id), 0);
   }, [messages]);
+
+  useEffect(() => { collaborationStateRef.current = collaborationState; }, [collaborationState]);
+  useEffect(() => { linghuAutomationStateRef.current = linghuAutomationState; }, [linghuAutomationState]);
 
   const clampExplorerWidth = (width: number) => Math.min(MAXIMUM_EXPLORER_WIDTH, Math.max(MINIMUM_EXPLORER_WIDTH, width));
 
@@ -392,15 +404,23 @@ export function DeveloperApp() {
   useEffect(() => {
     const desktop = window.desktop;
     if (!desktop) return;
-    void desktop.getCollaborationState().then(setCollaborationState);
-    void desktop.getLinghuAutomationState().then(setLinghuAutomationState);
-    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => setCollaborationState(event.state));
-    const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEvent) => setLinghuAutomationState(event.state));
+    void desktop.getCollaborationState().then((state) => { collaborationStateRef.current = state; setCollaborationState(state); });
+    void desktop.getLinghuAutomationState().then((state) => { linghuAutomationStateRef.current = state; setLinghuAutomationState(state); });
+    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
+    const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEvent) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
-      // 人物工作页只保留当前任务的实时结果，不把阶段时间线或瓶颈明细渲染到界面。
+      // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
       setCollaborationStreams((current) => {
-        const existing = current[envelope.taskId] || createAssistantMessage(Date.now(), "task-managed");
-        return { ...current, [envelope.taskId]: applyCodexStreamEvent(existing, envelope.event) };
+        const existing = current[envelope.taskId];
+        const task = collaborationStateRef.current?.tasks.find((candidate) => candidate.taskId === envelope.taskId);
+        const next = existing?.turnId === envelope.event.turnId
+          ? existing
+          : {
+            message: createAssistantMessage(Date.now(), "task-managed"),
+            stageId: task ? deriveCollaborationTaskCurrentStage(task, linghuAutomationStateRef.current) : "intent",
+            turnId: envelope.event.turnId,
+          };
+        return { ...current, [envelope.taskId]: { ...next, message: applyCodexStreamEvent(next.message, envelope.event) } };
       });
     });
     return () => { removeStateListener(); removeLinghuListener(); removeStreamListener(); };
@@ -1272,7 +1292,7 @@ export function DeveloperApp() {
       </section> : collaborationPanel === "execution-list"
         ? <CollaborationExecutionList tasks={completedCollaborationTasks} locale={locale} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />
         : collaborationPanel === "task-detail" && selectedCollaborationTask && selectedCollaborationTaskMember
-          ? <CollaborationTaskDetail task={selectedCollaborationTask} member={selectedCollaborationTaskMember} liveMessage={collaborationStreams[selectedCollaborationTask.taskId] || null} automation={linghuAutomationState} locale={locale} onBack={() => { setSelectedCollaborationTaskId(null); setCollaborationPanel(terminalCollaborationStates.has(selectedCollaborationTask.state) ? "execution-list" : "member"); }} />
+          ? <CollaborationTaskDetail task={selectedCollaborationTask} member={selectedCollaborationTaskMember} liveOutput={collaborationStreams[selectedCollaborationTask.taskId] || null} automation={linghuAutomationState} locale={locale} onBack={() => { setSelectedCollaborationTaskId(null); setCollaborationPanel(terminalCollaborationStates.has(selectedCollaborationTask.state) ? "execution-list" : "member"); }} />
           : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} linghuAutomation={linghuAutomationState} onLinghuState={setLinghuAutomationState} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
       {showConversationWorkspace && <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
@@ -1335,7 +1355,7 @@ function CollaborationExecutionList({ tasks, locale, onOpen }: { tasks: Collabor
   </section>;
 }
 
-function CollaborationTaskDetail({ task, member, liveMessage, automation, locale, onBack }: { task: CollaborationTask; member: CollaborationMember; liveMessage: Message | null; automation: LinghuAutomationState | null; locale: Locale; onBack(): void }) {
+function CollaborationTaskDetail({ task, member, liveOutput, automation, locale, onBack }: { task: CollaborationTask; member: CollaborationMember; liveOutput: CollaborationLiveOutput | null; automation: LinghuAutomationState | null; locale: Locale; onBack(): void }) {
   const summary = task.resultSummary;
   return <section className="collaboration-task-detail" aria-label={task.snapshot.title}>
     <header><button type="button" onClick={onBack}><ArrowReply24Regular />{locale === "ja" ? "戻る" : "返回"}</button><div><h1>{task.snapshot.title}</h1><p>{collaborationTaskStateLabel(task.state, locale)}</p></div></header>
@@ -1345,14 +1365,14 @@ function CollaborationTaskDetail({ task, member, liveMessage, automation, locale
       <dl><div><dt>{locale === "ja" ? "最終結果" : "最终执行结果"}</dt><dd>{summary?.finalResult || task.finalResult || "—"}</dd></div><div><dt>{locale === "ja" ? "元の問題" : "原来存在的问题"}</dt><dd>{summary?.originalProblem || task.snapshot.problemStatement}</dd></div><div><dt>{locale === "ja" ? "解決した問題" : "本次解决的问题"}</dt><dd>{summary?.solvedProblem || "—"}</dd></div><div><dt>{locale === "ja" ? "変更内容" : "具体修正或改变"}</dt><dd>{summary?.changes || "—"}</dd></div><div><dt>{locale === "ja" ? "残件" : "失败或遗留内容"}</dt><dd>{summary?.remaining || (summary?.success ? (locale === "ja" ? "なし" : "无") : task.blockingReason || "—")}</dd></div></dl>
     </section>
     <section className="task-fact-strip"><span>{locale === "ja" ? "起案者" : "发起人"}<strong>{task.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录")}</strong></span><span>{locale === "ja" ? "実行者" : "执行人"}<strong>{collaborationExecutorNames(task).join("、") || "—"}</strong></span><span>{locale === "ja" ? "開始" : "开始"}<strong>{formatCollaborationTime(task.startedAt, locale)}</strong></span><span>{locale === "ja" ? "完了" : "完成"}<strong>{formatCollaborationTime(task.completedAt, locale)}</strong></span><span>{locale === "ja" ? "所要時間" : "总耗时"}<strong>{formatCollaborationDuration(task.startedAt, task.completedAt, locale)}</strong></span></section>
-    <CollaborationTaskProgressView task={task} member={member} liveMessage={liveMessage} automation={automation} locale={locale} />
+    <CollaborationTaskProgressView task={task} member={member} liveOutput={liveOutput} automation={automation} locale={locale} />
   </section>;
 }
 
 function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomation, onLinghuState, onRename, onDelete, onContinue, onCancel, onOpen }: {
   member: CollaborationMember | null;
   tasks: CollaborationState["tasks"];
-  streams: Record<string, Message>;
+  streams: Record<string, CollaborationLiveOutput>;
   locale: Locale;
   linghuAutomation: LinghuAutomationState | null;
   onLinghuState(state: LinghuAutomationState): void;
@@ -1365,13 +1385,13 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
   if (!member) return <section className="collaboration-member-page"><p>{locale === "ja" ? "メンバーを選択してください。" : "请选择人物。"}</p></section>;
   const orderedTasks = [...tasks].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const currentTask = orderedTasks.find((task) => !["integrated", "cancelled"].includes(task.state)) || orderedTasks[0] || null;
-  const liveMessage = currentTask ? streams[currentTask.taskId] : null;
+  const liveOutput = currentTask ? streams[currentTask.taskId] : null;
   return <section className="collaboration-member-page" aria-label={member.displayName}>
     <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
     {member.memberId === "linghu-ancestor" && linghuAutomation && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}
     {(currentTask?.blockingReason || member.blockingReason) && <div className="member-blocking-reason" role="status">{currentTask?.blockingReason || member.blockingReason}</div>}
     {currentTask ? <article className="member-current-task">
-      <CollaborationTaskProgressView task={currentTask} member={member} liveMessage={liveMessage} automation={linghuAutomation} locale={locale} />
+      <CollaborationTaskProgressView task={currentTask} member={member} liveOutput={liveOutput} automation={linghuAutomation} locale={locale} />
       <div className="member-task-actions"><button type="button" onClick={() => onOpen(currentTask.taskId)}>{locale === "ja" ? "詳細を見る" : "查看任务详情"}</button>{["recovering", "blocked"].includes(currentTask.state) && <button type="button" onClick={() => onContinue(currentTask.taskId)}>{locale === "ja" ? "続行" : "继续执行"}</button>}{!["integrated", "cancelled"].includes(currentTask.state) && <button type="button" className="danger" onClick={() => onCancel(currentTask.taskId)}>{locale === "ja" ? "キャンセル" : "取消任务"}</button>}</div>
     </article> : <div className="member-empty-task"><Code24Regular /><strong>{locale === "ja" ? "待機中" : "当前空闲"}</strong><span>{locale === "ja" ? "割り当て時に新しい Codex を作成します。" : "收到任务时才会创建新的 Codex。"}</span></div>}
     {orderedTasks.length > 1 && <section className="member-task-history"><h2>{locale === "ja" ? "過去のタスク" : "历史任务"}</h2>{orderedTasks.slice(1).map((task) => <div key={task.taskId}><strong>{task.snapshot.title}</strong><span>{collaborationTaskStateLabel(task.state, locale)}</span></div>)}</section>}
@@ -1379,10 +1399,10 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
 }
 
 /** 当前任务只展开真实卡点，报告、证据和评分留在所属流程环节内。 */
-function CollaborationTaskProgressView({ task, member, liveMessage, automation, locale }: {
+function CollaborationTaskProgressView({ task, member, liveOutput, automation, locale }: {
   task: CollaborationTask;
   member: CollaborationMember;
-  liveMessage: Message | null;
+  liveOutput: CollaborationLiveOutput | null;
   automation: LinghuAutomationState | null;
   locale: Locale;
 }) {
@@ -1423,7 +1443,7 @@ function CollaborationTaskProgressView({ task, member, liveMessage, automation, 
         <summary><span><strong>{stage.label}</strong><b>{stage.owner}</b></span><small>{stage.statusLabel}</small></summary>
         <div className="task-progress-stage-content">
           {stage.waitingFor && stage.status !== "current" && <p className="task-stage-waiting">{stage.waitingFor}</p>}
-          <CollaborationStageContent stageId={stage.id} task={task} liveMessage={stage.id === progress.currentStageId ? liveMessage : null} automation={automation} locale={locale} />
+          <CollaborationStageContent stageId={stage.id} task={task} liveMessage={stage.id === liveOutput?.stageId ? liveOutput.message : null} automation={automation} locale={locale} />
         </div>
       </details>)}
     </div>

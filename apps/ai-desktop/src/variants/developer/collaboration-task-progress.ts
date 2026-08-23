@@ -27,6 +27,27 @@ export interface CollaborationTaskProgress {
 
 const STAGE_IDS: CollaborationProgressStageId[] = ["intent", "approval", "execution", "repair", "unified-test"];
 
+/** 流式内容到达时先冻结所属环节，后续状态推进不能把旧报告迁移到新的当前卡点。 */
+export function deriveCollaborationTaskCurrentStage(
+  task: CollaborationTask,
+  automation: LinghuAutomationState | null,
+): CollaborationProgressStageId {
+  const automationOwnsTask = automation?.activeTaskId === task.taskId;
+  const unifiedTestActive = automationOwnsTask && automation?.currentModule === "unified-test-restart";
+  const repairActive = !unifiedTestActive && (
+    task.state === "optimizing"
+    || task.state === "blocked"
+    || task.state === "recovering"
+    || (automationOwnsTask && Boolean(automation?.recoveryAttemptCount))
+  );
+
+  if (unifiedTestActive) return "unified-test";
+  if (repairActive) return "repair";
+  if (["queued-reviewer", "reviewing"].includes(task.state)) return "approval";
+  if (["approved", "forced-after-review-limit", "executing", "ready-for-integration", "queued-integration", "integrating", "integrated"].includes(task.state)) return "execution";
+  return "intent";
+}
+
 /** 把持久化的任务事实收敛成唯一页面进度，避免各卡片分别猜测当前负责人和流程位置。 */
 export function deriveCollaborationTaskProgress(
   task: CollaborationTask,
@@ -43,7 +64,7 @@ export function deriveCollaborationTaskProgress(
   const reviewerName = task.currentReviewerMemberId
     ? latestReviewAttempt?.reviewerMemberId === task.currentReviewerMemberId ? latestReviewAttempt.reviewerDisplayName : isJapanese ? "レビュー担当" : "当前审核人"
     : latestReview?.reviewerDisplayName || latestReviewAttempt?.reviewerDisplayName || (isJapanese ? "空きレビュー担当" : "空闲审核员");
-  const automationOwnsTask = member.memberId === "linghu-ancestor" && automation?.activeTaskId === task.taskId;
+  const automationOwnsTask = automation?.activeTaskId === task.taskId;
   const unifiedTestActive = automationOwnsTask && automation?.currentModule === "unified-test-restart";
   const repairEvents = task.flowEvents.filter((event) => event.stage === "recovery" || event.error);
   const repairActive = !unifiedTestActive && (
@@ -53,19 +74,14 @@ export function deriveCollaborationTaskProgress(
     || (automationOwnsTask && Boolean(automation?.recoveryAttemptCount))
   );
 
-  let currentStageId: CollaborationProgressStageId;
-  if (unifiedTestActive) currentStageId = "unified-test";
-  else if (repairActive) currentStageId = "repair";
-  else if (["queued-reviewer", "reviewing"].includes(task.state)) currentStageId = "approval";
-  else if (["approved", "forced-after-review-limit", "executing", "ready-for-integration", "queued-integration", "integrating", "integrated"].includes(task.state)) currentStageId = "execution";
-  else currentStageId = "intent";
+  const currentStageId = deriveCollaborationTaskCurrentStage(task, automation);
 
   const terminal = task.state === "integrated" || task.state === "cancelled";
   const analysisCompleted = task.plans.length > 0;
   const approvalCompleted = task.plans.some((plan) => plan.status === "approved" || plan.status === "forced");
   const executionCompleted = task.state === "integrated" || latestExecution?.status === "code-verified";
   const repairCompleted = repairEvents.some((event) => event.stage === "recovery" && event.status === "completed") && !repairActive;
-  const unifiedTestCompleted = automationOwnsTask && automation?.currentModule !== "unified-test-restart" && automation.lastFeedback?.taskId === task.taskId;
+  const unifiedTestCompleted = automation?.lastFeedback?.taskId === task.taskId && automation.lastFeedback.module === "unified-test-restart";
 
   const stageFacts: Array<Omit<CollaborationProgressStage, "statusLabel"> & { completed: boolean }> = [
     { id: "intent", label: isJapanese ? "意図分析" : "意图分析", owner: currentPlan?.ownerDisplayName || executorName, status: "not-started", waitingFor: null, updatedAt: currentPlan?.createdAt || null, completed: analysisCompleted },

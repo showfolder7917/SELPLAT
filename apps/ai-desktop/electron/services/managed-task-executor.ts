@@ -300,7 +300,7 @@ function managedPrompt(message: string, responsibility: string): string {
 }
 
 function taskExecutionPrompt(message: string): string {
-  return managedPrompt(message, "用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。当前只允许完成源码修改和代码级验证，禁止构建、启动或重启程序。通过 @selplat/node-common-core/path 解析真实工程名，把待验证命令登记到“执行日志/待执行/测试/<runId>/测试文档.<threadId>.md”，不得在源码目录创建测试控制文档。完成后用自然语言说明结果、关键改动和仍待验证的内容。");
+  return managedPrompt(message, "用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。当前只允许完成源码修改和代码级验证，禁止构建、启动或重启程序。通过 @selplat/node-common-core/path 解析真实工程名；解析或验证命令必须以目标应用根为 cwd，并通过该应用的 node scripts/run-with-dependencies.mjs node 包装器加载正式依赖，禁止在 SELPLAT 工程根直接用裸 node 导入该包，也禁止把不存在的工程根 package.json 作为 rg 目标。若当前代码级阶段会因依赖准备触发构建，只登记该命令等待统一测试，不能为解析路径越过构建禁令。把待验证命令登记到“执行日志/待执行/测试/<runId>/测试文档.<threadId>.md”，不得在源码目录创建测试控制文档。完成后用自然语言说明结果、关键改动和仍待验证的内容。");
 }
 
 function conversationPrompt(message: string): string {

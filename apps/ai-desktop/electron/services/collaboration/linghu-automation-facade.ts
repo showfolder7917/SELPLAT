@@ -103,7 +103,9 @@ export class LinghuAutomationFacade {
           return;
         } else if (task.state === "blocked" || task.state === "recovering") {
           if (automation.recoveryAttemptCount < 3) {
-            this.#collaboration.continueTask(task.taskId);
+            const linghu = this.#collaboration.state().members.find((member) => member.memberId === LINGHU_MEMBER_ID);
+            if (!linghu) throw new Error("令狐老祖成员记录缺失，无法记录自动恢复负责人。");
+            this.#collaboration.continueTask(task.taskId, linghu);
             this.#store.updateRuntime("automation.recovery_requested", (state) => {
               state.recoveryAttemptCount += 1;
               state.blockingReason = `检测到流程中断，正在执行第 ${state.recoveryAttemptCount} 次自动恢复`;

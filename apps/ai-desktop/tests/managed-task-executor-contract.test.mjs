@@ -21,6 +21,10 @@ test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.match(executor, /任务要求修改源码，但未观察到文件变更/);
   assert.doesNotMatch(executor, /likelySourceChangeRequest/);
   assert.match(executor, /必须产生可追踪的源码变更/);
+  assert.match(executor, /目标应用根为 cwd/);
+  assert.match(executor, /node scripts\/run-with-dependencies\.mjs node/);
+  assert.match(executor, /禁止在 SELPLAT 工程根直接用裸 node 导入该包/);
+  assert.match(executor, /不能为解析路径越过构建禁令/);
   assert.match(executor, /this\.#lastChange = this\.#sequence/);
   assert.match(executor, /diff-updated 是当前工作树的完整路径快照/);
   assert.match(executor, /isManagedValidationArtifact/);
