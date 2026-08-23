@@ -198,6 +198,21 @@ button { color: inherit; }
 .managed-stage-action button.triggered { border-color: var(--sel-theme-workbench-accent); color: var(--sel-theme-workbench-accent); background: var(--sel-theme-workbench-surface); }
 .managed-stage-action button:disabled { cursor: wait; opacity: .55; }
 .managed-stage-action svg { width: 18px; height: 18px; }
+.collaboration-status-chain { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid var(--sel-theme-line); border-radius: 9px; background: var(--sel-theme-workbench-surface); }
+.collaboration-status-chain.has-blocker { border-color: var(--sel-theme-semantic-error); }
+.collaboration-status-chain > header, .collaboration-status-chain > footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.collaboration-status-chain > header span, .collaboration-status-chain > footer span { color: var(--sel-theme-workbench-text-muted); }
+.collaboration-status-chain ol { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.collaboration-status-chain li { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 9px; align-items: start; }
+.collaboration-status-chain li i { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--sel-theme-workbench-text-subtle); }
+.collaboration-status-chain li.active i { background: var(--sel-theme-workbench-accent); box-shadow: 0 0 8px var(--sel-theme-workbench-accent); }
+.collaboration-status-chain li.completed i { background: var(--sel-theme-semantic-success); }
+.collaboration-status-chain li.failed i { background: var(--sel-theme-semantic-error); }
+.collaboration-status-chain li span { display: grid; gap: 3px; min-width: 0; }
+.collaboration-status-chain li small { color: var(--sel-theme-workbench-text-muted); overflow-wrap: anywhere; }
+.collaboration-status-chain > p { display: grid; gap: 4px; margin: 0; padding: 10px; border-radius: 7px; color: var(--sel-theme-semantic-error); background: var(--sel-theme-workbench-error-surface); }
+.collaboration-status-chain button { min-height: 34px; display: inline-flex; align-items: center; gap: 7px; padding: 0 13px; border: 1px solid var(--sel-theme-workbench-accent); border-radius: 8px; color: var(--sel-theme-workbench-accent); background: transparent; cursor: pointer; }
+.collaboration-status-chain button svg { width: 18px; height: 18px; }
 .codex-user-input { display: grid; gap: 12px; margin-top: 14px; padding: 14px; border: 1px solid var(--sel-theme-line); border-radius: 9px; background: var(--sel-theme-workbench-surface); white-space: normal; }
 .codex-user-input fieldset { display: grid; gap: 9px; margin: 0; padding: 0; border: 0; }
 .codex-user-input fieldset + fieldset { padding-top: 12px; border-top: 1px solid var(--sel-theme-line); }

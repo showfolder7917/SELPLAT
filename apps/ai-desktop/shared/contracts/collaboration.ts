@@ -16,13 +16,18 @@ export type CollaborationTaskState =
   | "analyzing"
   | "queued-reviewer"
   | "reviewing"
+  | "review-failed"
+  | "repairing-review"
   | "optimizing"
   | "approved"
   | "forced-after-review-limit"
   | "executing"
+  | "repairing-execution"
   | "ready-for-integration"
   | "queued-integration"
   | "integrating"
+  | "unified-testing"
+  | "test-failed"
   | "integrated"
   | "blocked"
   | "recovering"
@@ -159,6 +164,19 @@ export interface CollaborationTask {
   executorMemberId: string | null;
   preferredExecutorMemberId?: string | null;
   currentReviewerMemberId: string | null;
+  preferredReviewerMemberId?: string | null;
+  originalReviewer?: CollaborationParticipantSnapshot | null;
+  originalExecutor?: CollaborationParticipantSnapshot | null;
+  currentHandler?: CollaborationParticipantSnapshot | null;
+  repairKind?: "review" | "execution" | null;
+  repairFailureReason?: string | null;
+  unifiedTest?: {
+    status: "pending" | "running" | "passed" | "failed";
+    owner: CollaborationParticipantSnapshot;
+    failureReason: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+  } | null;
   currentPlanVersion: number;
   explicitRejectionCount: number;
   infrastructureFailureCount: number;
