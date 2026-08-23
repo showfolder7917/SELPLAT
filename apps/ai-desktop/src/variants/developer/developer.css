@@ -47,8 +47,8 @@ button { color: inherit; }
 .dev-settings .selfloating-close svg { width: 20px; }
 .dev-settings .selfloating-body { overflow: hidden; }
 .dev-settings-content { min-width: 0; padding: 14px 18px 18px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--sel-theme-scrollbar-thumb) transparent; }
-.dev-settings-resize-right { top: 22px; right: -11px; bottom: 22px; width: 18px; height: auto; cursor: ew-resize; }
-.dev-settings-resize-right::before { position: absolute; top: 50%; right: 7px; width: 2px; height: 36px; border-radius: 999px; background: var(--sel-theme-workbench-accent-line); content: ""; transform: translateY(-50%); }
+.dev-settings-resize-right { top: 22px; right: 0; bottom: 22px; width: 12px; height: auto; cursor: ew-resize; }
+.dev-settings-resize-right::before { position: absolute; top: 50%; right: 5px; width: 2px; height: 36px; border-radius: 999px; background: var(--sel-theme-workbench-accent-line); content: ""; transform: translateY(-50%); }
 .dev-settings-resize-right:hover::before, .dev-settings-resize-right:focus-visible::before { background: var(--sel-theme-workbench-accent); box-shadow: 0 0 8px var(--sel-theme-workbench-accent-line); }
 .dev-settings[data-settings-resizing="true"] { user-select: none; }
 /* 运行路径可能很长；所有账号项必须收敛在面板网格内，避免按钮中心和文字被推到可视区之外。 */

@@ -191,7 +191,10 @@ test("Harness 只使用指定版本的内置或校验下载 Codex 并公开实�
   assert.match(codexService, /resolveCodexRuntime\(childEnvironment\)/);
   assert.match(codexService, /harness_runtime_selected/);
   assert.match(developerApp, /codexStatus\.runtime\.version/);
-  assert.match(developerApp, /codexStatus\.runtime\.path/);
+  assert.match(developerApp, /codexStatus\.runtime\.source/);
+  assert.doesNotMatch(developerApp, /codexStatus\.runtime\.path/);
+  assert.doesNotMatch(codexRuntime, /displayPath/);
+  assert.doesNotMatch(codexService, /path: runtime\.displayPath/);
 });
 
 test("开发版用安全 GFM Markdown 显示回答并通过主进程打开外链", () => {

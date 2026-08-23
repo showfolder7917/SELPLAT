@@ -36,7 +36,7 @@ test("切换工作区与任务时只展开当前分区并置顶占满", async ()
   await expect(page.getByRole("button", { name: "展开工作区" })).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#developer-workspace-list")).toHaveCount(0);
   await expect(page.locator("#developer-task-list")).toBeVisible();
-  await expect(page.getByText("暂无任务记录")).toBeVisible();
+  await expect(page.locator("#developer-task-list").getByText("暂无任务记录", { exact: true })).toBeVisible();
 
   const sections = page.locator("#developer-explorer-sections");
   const tasksPane = page.locator(".tasks-pane");
@@ -171,6 +171,8 @@ test("未登录时设置面板的登录主操作文字可见并使用主题对�
   expect(presentation.labelRight).toBeLessThanOrEqual(presentation.buttonRight + 0.5);
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionAuthenticated(authenticated: boolean): Promise<void> } }).desktop.setInteractionAuthenticated(true));
   await expect(page.locator(".dev-empty").getByText("Codex harness 已连接", { exact: true })).toBeVisible({ timeout: 5_000 });
+  // 每条交互用例必须恢复自己的浮层状态，避免设置面板遮挡后续任务区操作。
+  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
 });
 
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {

@@ -2,12 +2,12 @@
 
 <!-- 当前规则所有者由工程根 AGENTS.md 的稳定用户身份动态解析，禁止在规则正文固定具体用户。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 1.1.0 增加快速自动测试优先、真实系统交互按边界触发的分层测试策略。 -->
-rule_version = 1.1.0
+<!-- 1.2.0 将统一测试升级为发现问题后修正并循环复测的完整闭环。 -->
+rule_version = 1.2.0
 <!-- 当前规则已经登记到当前用户跨工程规则索引并保持生效。 -->
 rule_status = active
 <!-- 本次升级把用户确认的快速测试口径固定为跨工程可复用约束。 -->
-upgrade_record = 2026-08-22:组件_产物_IPC_构建快速反馈优先_系统交互变化才做真实点击_统一测试执行全部登记项
+upgrade_record = 2026-08-22:组件_产物_IPC_构建快速反馈优先_系统交互变化才做真实点击_统一测试执行全部登记项;2026-08-23:统一测试发现问题后必须修正并循环复测_全部登记门禁通过或确认真实阻塞才结束_禁止停在失败报告
 
 <!-- 问题：同一测试 case 在全量运行与单独运行时可能因共享日志、静态状态、数据库残留或执行顺序而得到不同结果。 -->
 <!-- 场景：修正测试数据、恢复覆盖率、处理单 case 与全量套件结果不一致。 -->
@@ -70,3 +70,10 @@ fast_test_result_reporting = targeted_fast_pass_not_full_unified_pass
 
 <!-- 用户明确触发统一测试后，必须执行测试文档中登记的全部自动测试以及确有系统边界变化的真实界面项目。 -->
 unified_test_execution_scope = all_registered_automated_tests + required_real_ui_system_boundary_tests
+
+<!-- 用户明确“统一测试”即授权在原任务范围内修复测试发现的源码、测试契约和配置问题，不得只报告失败后停止。 -->
+unified_test_failure_action = diagnose + repair_in_original_task_scope + rerun_affected_test + rerun_all_registered_gates
+<!-- 统一测试只有全部登记门禁通过，或已经穷尽原范围内安全修复并确认真实外部阻塞时才能结束。 -->
+unified_test_terminal_condition = all_registered_gates_passed_or_evidence_backed_external_blocker
+<!-- 失败报告属于修复循环的中间证据，禁止把“已经报告失败”当作统一测试完成。 -->
+unified_test_failure_report_is_terminal = false

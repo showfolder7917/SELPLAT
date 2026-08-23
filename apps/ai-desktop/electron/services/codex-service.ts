@@ -434,7 +434,7 @@ export class CodexService {
     const childEnvironment = createCodexChildEnvironment(process.env, this.#options.codexHome);
     const runtime = await resolveCodexRuntime(childEnvironment);
     this.#runtime = runtime;
-    this.#onThreadLifecycle({ action: "harness_runtime_selected", source: runtime.source, path: runtime.displayPath, version: runtime.version });
+    this.#onThreadLifecycle({ action: "harness_runtime_selected", source: runtime.source, version: runtime.version });
     if (runtime.electronRunAsNode) childEnvironment.ELECTRON_RUN_AS_NODE = "1";
     else delete childEnvironment.ELECTRON_RUN_AS_NODE;
     const child = spawn(runtime.command, [...runtime.argsPrefix, "app-server", "--stdio", "--enable", "default_mode_request_user_input"], {
@@ -706,7 +706,7 @@ export function createCodexChildEnvironment(environment: NodeJS.ProcessEnv, code
 }
 
 function runtimeInfo(runtime: CodexRuntime | null): CodexHarnessStatus["runtime"] {
-  return runtime ? { source: runtime.source, path: runtime.displayPath, version: runtime.version } : null;
+  return runtime ? { source: runtime.source, version: runtime.version } : null;
 }
 
 /** 把官方 app-server 通知收敛成渲染层允许消费的稳定、最小化实时事件。 */

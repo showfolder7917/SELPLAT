@@ -36,7 +36,6 @@ export interface CodexRuntime {
   source: "bundled" | "downloaded";
   command: string;
   argsPrefix: string[];
-  displayPath: string;
   version: string;
   electronRunAsNode: false;
 }
@@ -125,7 +124,7 @@ async function validateRuntime(
     throw new Error(`Codex 版本不一致：需要 ${CODEX_TARGET_VERSION}，实际 ${version}。`);
   }
   const command = realpathSync(executablePath);
-  return { source, command, argsPrefix: [], displayPath: command, version, electronRunAsNode: false };
+  return { source, command, argsPrefix: [], version, electronRunAsNode: false };
 }
 
 async function validatePackageMetadata(executablePath: string, manifest: PlatformRuntimeManifest): Promise<void> {

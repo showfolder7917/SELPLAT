@@ -143,7 +143,6 @@ export interface CodexHarnessStatus {
 
 export interface CodexRuntimeInfo {
   source: "bundled" | "downloaded";
-  path: string;
   version: string;
 }
 

@@ -100,9 +100,9 @@ test("官方 requestUserInput 保持原回合等待逐题答案并通过白名�
   assert.match(developerApp, /onConfirm\(question\.id\)/);
 });
 
-test("会话托管要求结构化澄清并在回答后重新输出完整意图", () => {
+test("会话托管只在真实歧义时结构化澄清并在回答后重新理解完整意图", () => {
   assert.match(executor, /调用结构化 request_user_input/);
-  assert.match(executor, /每次必须只选择一个最高优先级疑问/);
-  assert.match(executor, /用户确认该点后必须重新理解完整会话/);
-  assert.match(executor, /只有全部疑问消除后/);
+  assert.match(executor, /每次只选择一个最高优先级疑问/);
+  assert.match(executor, /用户确认后重新理解完整会话/);
+  assert.match(executor, /全部消除后自然地总结完整意图/);
 });
