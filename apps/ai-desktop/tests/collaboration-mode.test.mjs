@@ -68,6 +68,7 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(developerSource, /collaborationTaskId/);
   assert.match(developerSource, /CollaborationStatusChain/);
   assert.match(developerSource, /task-fact-strip.*task\.initiator\?\.displayName/s);
+  assert.match(developerSource, /message\.collaborationTaskId[\s\S]*messageTask[\s\S]*CollaborationStatusChain/);
   assert.match(developerSource, /review-failed[\s\S]*重新审批/);
   assert.match(developerSource, /test-failed[\s\S]*重新测试/);
   assert.match(collaborationContractSource, /repairing-review/);
