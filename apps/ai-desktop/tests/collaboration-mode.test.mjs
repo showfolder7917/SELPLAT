@@ -9,6 +9,7 @@ import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/ele
 import { createCollaborationResultSummary, nextReviewAction } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
 import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-codex-sessions.js";
 import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
+import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/collaboration/verified-package-release.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
 import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-facade.js";
 import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-store.js";
@@ -351,6 +352,8 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
   assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
   assert.match(main, /await linghuUnifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*resolveVerifiedDeveloperExecutable[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
   assert.match(main, /IntegrationReleaseCoordinatorFacade[\s\S]*ReleaseBatchStore[\s\S]*acquireIntegrationRelease[\s\S]*publishIntegration/);
+  assert.match(main, /linghuUnifiedTests\.run\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId\)/);
+  assert.match(coordinatorSource, /#verifyIntegration\(candidate\.rootPath, taskIds, releaseBatchId\)[\s\S]*retireCandidate[\s\S]*#publishIntegration\(publishedExecutable, releaseBatchId\)/);
   assert.match(coordinatorSource, /createReleaseCandidate[\s\S]*releaseDocument\.state = "testing"[\s\S]*releaseDocument\.state = "published"/);
   assert.match(facade, /automaticFlowSnapshots[\s\S]*faultFingerprint[\s\S]*moduleCompletionReport/);
   assert.match(main, /const testResources = new TestResourceCoordinatorFacade[\s\S]*new LinghuUnifiedTestRunner\([\s\S]*new TaskWorktreeTestRunner\([\s\S]*verifyIntegration:[\s\S]*testResources\.run[\s\S]*linghuUnifiedTests\.run\(rootPath\)/);
@@ -459,6 +462,24 @@ test("同一版本已有首个发布候选时后续批次使用唯一代次分�
     assert.equal(git(repositoryRoot, "rev-parse", candidate.branchName), candidate.candidateSha);
     await manager.retireCandidate(candidate);
     assert.equal(git(repositoryRoot, "rev-parse", "release/0.1.1-rc-g7"), candidate.candidateSha);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("已验证候选应用先提升到稳定批次目录再允许回收候选", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "verified-package-stage-"));
+  const candidateRoot = path.join(directory, "candidate");
+  const sourceExecutable = path.join(candidateRoot, "build", "ai-desktop", "package", "developer", "mac-arm64", "AI Desktop.app", "Contents", "MacOS", "AI Desktop");
+  const stableBuildRoot = path.join(directory, "stable-build");
+  try {
+    mkdirSync(path.dirname(sourceExecutable), { recursive: true });
+    writeFileSync(sourceExecutable, "verified candidate");
+    const stagedExecutable = stageVerifiedDeveloperExecutable(sourceExecutable, stableBuildRoot, "release-0.1.1-g14");
+    assert.equal(readFileSync(stagedExecutable, "utf8"), "verified candidate");
+    assert.match(stagedExecutable, /package\/published\/release-0\.1\.1-g14\/AI Desktop\.app\/Contents\/MacOS\/AI Desktop$/);
+    rmSync(candidateRoot, { recursive: true, force: true });
+    assert.equal(existsSync(sourceExecutable), false);
+    assert.equal(readFileSync(stagedExecutable, "utf8"), "verified candidate", "候选回收后稳定发布程序必须继续存在");
+    assert.throws(() => stageVerifiedDeveloperExecutable(stagedExecutable, stableBuildRoot, "release-0.1.1-g14"), /禁止覆盖/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -615,7 +636,7 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.69\.0/);
+  assert.match(rule, /rule_version = 5\.70\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);

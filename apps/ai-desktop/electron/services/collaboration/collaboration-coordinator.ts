@@ -70,7 +70,7 @@ export interface CollaborationCoordinatorOptions {
   sessions: CollaborationSessionFactory;
   emitState(state: CollaborationState, reason: string, taskIds: string[]): void;
   emitStream(taskId: string, memberId: string, event: CodexStreamEvent): void;
-  verifyIntegration(rootPath: string, taskIds: string[]): Promise<string>;
+  verifyIntegration(rootPath: string, taskIds: string[], releaseBatchId: string): Promise<string>;
   acquireIntegrationRelease(request: IntegrationReleaseRequest): Promise<() => void>;
   releaseVersion: string;
   releaseBatches: ReleaseBatchStore;
@@ -869,7 +869,7 @@ export class CollaborationCoordinator {
       verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
       releaseDocument.state = "testing";
       this.#releaseBatches.write(releaseDocument);
-      publishedExecutable = await this.#verifyIntegration(candidate.rootPath, taskIds);
+      publishedExecutable = await this.#verifyIntegration(candidate.rootPath, taskIds, releaseBatchId);
       releaseDocument.state = "verified";
       releaseDocument.executable = publishedExecutable;
       this.#releaseBatches.write(releaseDocument);

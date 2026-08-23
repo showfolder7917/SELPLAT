@@ -24,7 +24,7 @@ import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-t
 import { TestResourceCoordinatorFacade } from "./services/collaboration/test-resource-coordinator-facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "./services/collaboration/integration-release-coordinator-facade.js";
 import { ReleaseBatchStore } from "./services/collaboration/release-batch-store.js";
-import { resolveVerifiedDeveloperExecutable } from "./services/collaboration/verified-package-release.js";
+import { resolveVerifiedDeveloperExecutable, stageVerifiedDeveloperExecutable } from "./services/collaboration/verified-package-release.js";
 import { ScreenshotStore } from "./services/screenshot-store.js";
 import { SettingsStore } from "./services/settings-store.js";
 import { WorkspaceStore } from "./services/workspace-store.js";
@@ -133,7 +133,7 @@ app.whenReady().then(() => {
       audit.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
     },
-    verifyIntegration: async (rootPath, taskIds) => {
+    verifyIntegration: async (rootPath, taskIds, releaseBatchId) => {
       await testResources.run({
       runId: `integration-${taskIds.join("-")}`,
       taskId: taskIds.length === 1 ? taskIds[0] : null,
@@ -142,7 +142,8 @@ app.whenReady().then(() => {
       port: 4197,
       buildRoot: path.join(path.resolve(rootPath), "build", applicationName),
       }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName));
-      return linghuUnifiedTests.run(rootPath);
+      const candidateExecutable = await linghuUnifiedTests.run(rootPath);
+      return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId);
     },
     acquireIntegrationRelease: (request) => integrationReleases.acquire(request),
     releaseVersion,
