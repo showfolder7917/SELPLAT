@@ -41,6 +41,7 @@ import type {
   CodexAccount,
   CodexApproval,
   CodexHarnessStatus,
+  CodexModelCatalog,
   CodexStreamActivity,
   CodexStreamEvent,
   CodexStreamPlanStep,
@@ -52,12 +53,15 @@ import type {
   CollaborationTask,
   ConversationDispatchState,
   ConversationQueueItem,
+  DesktopSettings,
   Locale,
   LinghuAutomationState,
   LinghuAutomationStateEvent,
   LinghuStartupPrompt,
   ManagedExecutionMode,
   ManagedExecutionUpdate,
+  ModelServiceTier,
+  ReasoningEffort,
   SandboxMode,
   ScreenshotAttachment,
   TempDirectoryInfo,
@@ -253,6 +257,12 @@ function WindowControls() {
 export function DeveloperApp() {
   const [locale, setLocale] = useState<Locale>("zh-CN");
   const [sandboxMode, setSandboxMode] = useState<SandboxMode>("workspace-write");
+  const [defaultModel, setDefaultModel] = useState<string | null>(null);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
+  const [serviceTier, setServiceTier] = useState<ModelServiceTier>("default");
+  const [modelCatalog, setModelCatalog] = useState<CodexModelCatalog>({ models: [] });
+  const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
+  const [modelSettingsError, setModelSettingsError] = useState("");
   const [executionMode, setExecutionMode] = useState<ManagedExecutionMode>("conversation-managed");
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -372,6 +382,9 @@ export function DeveloperApp() {
     window.desktop?.getSettings().then((settings) => {
       setLocale(settings.locale);
       setSandboxMode(settings.sandboxMode);
+      setDefaultModel(settings.defaultModel);
+      setReasoningEffort(settings.reasoningEffort);
+      setServiceTier(settings.serviceTier);
     });
     // 任务分区只展示业务日志中的最新任务摘要，不在渲染层复制或猜测 Harness 会话状态。
     window.desktop?.getAuditLogInfo().then(setAuditInfo);
@@ -489,8 +502,14 @@ export function DeveloperApp() {
       void window.desktop?.getTempDirectoryInfo().then(setTempInfo);
       void window.desktop?.getAuditLogInfo().then(setAuditInfo);
       void window.desktop?.getTrustedCommandInfo().then(setTrustedCommandInfo);
+      setModelCatalogLoading(true);
+      setModelSettingsError("");
+      void window.desktop?.getCodexModels()
+        .then(setModelCatalog)
+        .catch((error) => setModelSettingsError(readableDesktopError(error, locale === "ja" ? "モデル一覧を取得できません。" : "无法读取模型列表。")))
+        .finally(() => setModelCatalogLoading(false));
     }
-  }, [settingsOpen]);
+  }, [locale, settingsOpen]);
 
   useEffect(() => {
     automaticTestEnabledRef.current = automaticTestEnabled;
@@ -598,10 +617,28 @@ export function DeveloperApp() {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  const updateSettings = (nextLocale: Locale, nextSandbox: SandboxMode) => {
-    setLocale(nextLocale);
-    setSandboxMode(nextSandbox);
-    void window.desktop?.updateSettings({ locale: nextLocale, sandboxMode: nextSandbox });
+  const applySettings = (settings: DesktopSettings) => {
+    setLocale(settings.locale);
+    setSandboxMode(settings.sandboxMode);
+    setDefaultModel(settings.defaultModel);
+    setReasoningEffort(settings.reasoningEffort);
+    setServiceTier(settings.serviceTier);
+  };
+
+  /** 所有模型选择都写入同一主进程设置，渲染层不建立会话级副本或覆盖入口。 */
+  const updateSettings = (patch: Partial<DesktopSettings>) => {
+    setModelSettingsError("");
+    void window.desktop?.updateSettings(patch)
+      .then(applySettings)
+      .catch((error) => setModelSettingsError(readableDesktopError(error, locale === "ja" ? "設定を保存できません。" : "无法保存全局设置。")));
+  };
+
+  const selectDefaultModel = (modelId: string) => {
+    const model = modelCatalog.models.find((item) => item.id === modelId);
+    const nextEffort = model && reasoningEffort && model.supportedReasoningEfforts.includes(reasoningEffort)
+      ? reasoningEffort
+      : model?.defaultReasoningEffort || model?.supportedReasoningEfforts[0] || null;
+    updateSettings({ defaultModel: modelId || null, reasoningEffort: nextEffort });
   };
 
   const applyWorkspaceState = (state: WorkspaceState) => {
@@ -1140,6 +1177,10 @@ export function DeveloperApp() {
   };
 
   const shellStyle = { "--explorer-width": `${explorerWidth}px` } as CSSProperties;
+  const configuredModel = modelCatalog.models.find((model) => model.id === defaultModel) || null;
+  const selectedModel = defaultModel ? configuredModel : modelCatalog.models.find((model) => model.isDefault) || null;
+  const configuredModelUnavailable = Boolean(defaultModel && !modelCatalogLoading && modelCatalog.models.length > 0 && !configuredModel);
+  const supportedEfforts = selectedModel?.supportedReasoningEfforts || [];
   const workspaceSectionExpanded = activeExplorerSection === "workspace";
   const tasksSectionExpanded = activeExplorerSection === "tasks";
   const collaborationMode = collaborationState?.mode === "collaboration";
@@ -1173,8 +1214,16 @@ export function DeveloperApp() {
       <button className="active" title={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-pressed={explorerExpanded} onClick={() => setExplorerExpanded((value) => !value)}><Folder24Regular /></button><button><Search24Regular /></button><button><Branch24Regular /></button><button><Bug24Regular /></button>
       <SettingsFloatingPanel locale={locale} open={settingsOpen} onOpenChange={setSettingsOpen}>
         <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button type="button" onClick={() => void logout()}><span>{text.signOut}</span></button> : <button type="button" className="primary" onClick={() => void login()}><span>{text.signIn}</span></button>}{loginHint && <em>{loginHint}</em>}</div>
-        <label>Language<select value={locale} onChange={(event) => updateSettings(event.target.value as Locale, sandboxMode)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
-        <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings(locale, event.target.value as SandboxMode)}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
+        <section className="model-settings-card" aria-labelledby="global-model-settings-title">
+          <header><div><span id="global-model-settings-title">{locale === "ja" ? "グローバルモデル設定" : "全局模型配置"}</span><small>{locale === "ja" ? "すべての会話と協同タスクに適用" : "对所有会话与协同任务生效"}</small></div><strong>{selectedModel?.displayName || (locale === "ja" ? "Codex の既定値" : "Codex 默认")}</strong></header>
+          <label><span>{locale === "ja" ? "既定モデル" : "默认模型"}</span><select aria-label={locale === "ja" ? "既定モデル" : "默认模型"} value={defaultModel || ""} disabled={modelCatalogLoading} onChange={(event) => selectDefaultModel(event.target.value)}><option value="">{modelCatalogLoading ? (locale === "ja" ? "モデルを読み込み中…" : "正在读取模型…") : (locale === "ja" ? "Codex の既定値" : "Codex 默认")}</option>{defaultModel && !modelCatalog.models.some((model) => model.id === defaultModel) && <option value={defaultModel}>{defaultModel}</option>}{modelCatalog.models.map((model) => <option key={model.id} value={model.id}>{model.displayName}{model.provider ? ` · ${model.provider}` : ""}</option>)}</select></label>
+          <label><span>{locale === "ja" ? "推論の強度" : "推理强度"}</span><select aria-label={locale === "ja" ? "推論の強度" : "推理强度"} value={reasoningEffort || ""} disabled={modelCatalogLoading || supportedEfforts.length === 0} onChange={(event) => updateSettings({ reasoningEffort: (event.target.value || null) as ReasoningEffort | null })}><option value="">{locale === "ja" ? "モデルの既定値" : "模型默认"}</option>{supportedEfforts.map((effort) => <option key={effort} value={effort}>{reasoningEffortLabel(effort, locale)}</option>)}</select></label>
+          <label><span>{locale === "ja" ? "推論速度" : "推理速度"}</span><select aria-label={locale === "ja" ? "推論速度" : "推理速度"} value={serviceTier} onChange={(event) => updateSettings({ serviceTier: event.target.value as ModelServiceTier })}><option value="default">{locale === "ja" ? "標準" : "标准"}</option><option value="fast">{locale === "ja" ? "高速" : "快速"}</option></select></label>
+          {configuredModelUnavailable && <em role="alert">{locale === "ja" ? "保存済みモデルは現在利用できません。別のモデルを選択してください。" : "已保存的模型当前不可用，请重新选择。"}</em>}
+          {modelSettingsError && <em role="alert">{modelSettingsError}</em>}
+        </section>
+        <label>Language<select value={locale} onChange={(event) => updateSettings({ locale: event.target.value as Locale })}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
+        <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings({ sandboxMode: event.target.value as SandboxMode })}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
         <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
         <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void clearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
         <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
@@ -1652,6 +1701,12 @@ function managedModeLabel(mode: ManagedExecutionMode, locale: Locale): string {
     "test-managed": { ja: "テスト管理", "zh-CN": "测试托管" },
   };
   return labelsByMode[mode][locale];
+}
+
+function reasoningEffortLabel(effort: ReasoningEffort, locale: Locale): string {
+  const chinese: Record<ReasoningEffort, string> = { none: "无", minimal: "最小", low: "低", medium: "中", high: "高", xhigh: "超高", max: "最大" };
+  const japanese: Record<ReasoningEffort, string> = { none: "なし", minimal: "最小", low: "低", medium: "中", high: "高", xhigh: "最高", max: "最大" };
+  return locale === "ja" ? japanese[effort] : chinese[effort];
 }
 
 function CodexUserInputPanel({

@@ -5,12 +5,16 @@ import type {
   CodexAccount,
   CodexApproval,
   CodexHarnessStatus,
+  CodexModelCatalog,
+  CodexModelOption,
   CodexLoginResponse,
   CodexStreamActivity,
   CodexStreamEvent,
   CodexStreamPlanStep,
   Locale,
   ManagedExecutionMode,
+  DesktopSettings,
+  ReasoningEffort,
   CodexUserInputRequest,
   ResolveCodexUserInputRequest,
   SandboxMode,
@@ -56,6 +60,7 @@ export interface CodexServiceOptions {
   migrateLegacySession: boolean;
   sessionStorage: "ai-desktop" | "legacy-default";
   validationOwner: "codex" | "desktop";
+  readSettings: () => DesktopSettings;
 }
 
 const EMPTY_ACCOUNT: CodexAccount = {
@@ -147,6 +152,14 @@ export class CodexService {
       this.#lastError = errorMessage(error);
       return { connected: false, account: { ...EMPTY_ACCOUNT }, error: this.#lastError, runtime: runtimeInfo(this.#runtime) };
     }
+  }
+
+  /** 模型和能力始终来自当前固定 app-server，避免前端维护会过期的提供商或模型常量。 */
+  async getModels(): Promise<CodexModelCatalog> {
+    await this.#ensureReady();
+    const result = asObject(await this.#request("model/list", { includeHidden: false }));
+    const source = Array.isArray(result.data) ? result.data : Array.isArray(result.models) ? result.models : [];
+    return { models: source.map(normalizeModelOption).filter((model): model is CodexModelOption => Boolean(model)) };
   }
 
   async loginWithChatGPT(): Promise<CodexLoginResponse> {
@@ -265,12 +278,17 @@ export class CodexService {
     this.#activeExecutionMode = executionMode;
     this.#activeWorkspaces = workspaces;
     try {
+      // 每轮读取最新全局值，让持久会话与临时协同连接同时生效且没有会话级覆盖分支。
+      const modelSettings = this.#options.readSettings();
       const result = asObject(await this.#request("turn/start", {
         threadId,
         cwd: primaryRoot.path,
         approvalPolicy: "on-request",
         approvalsReviewer: "user",
         sandboxPolicy: createSandboxPolicy(sandboxMode, workspaces),
+        ...(modelSettings.defaultModel ? { model: modelSettings.defaultModel } : {}),
+        ...(modelSettings.reasoningEffort ? { effort: modelSettings.reasoningEffort } : {}),
+        serviceTier: modelSettings.serviceTier,
         input,
       }));
       const turnId = stringValue(asObject(result.turn).id);
@@ -396,6 +414,7 @@ export class CodexService {
         migrateLegacySession: false,
         sessionStorage: "legacy-default",
         validationOwner: this.#options.validationOwner,
+        readSettings: this.#options.readSettings,
       },
       this.#onTrustedCommandDecision,
       this.#onThreadLifecycle,
@@ -707,6 +726,32 @@ export function createCodexChildEnvironment(environment: NodeJS.ProcessEnv, code
 
 function runtimeInfo(runtime: CodexRuntime | null): CodexHarnessStatus["runtime"] {
   return runtime ? { source: runtime.source, version: runtime.version } : null;
+}
+
+/** 兼容 app-server 模型目录的稳定字段和旧版别名，同时只向渲染层暴露选择器需要的信息。 */
+function normalizeModelOption(value: unknown): CodexModelOption | null {
+  const model = asObject(value);
+  const id = stringValue(model.id) || stringValue(model.model);
+  if (!id) return null;
+  const effortSource = Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts : [];
+  const supportedReasoningEfforts = effortSource
+    .map((entry) => typeof entry === "string"
+      ? normalizeReasoningEffort(entry)
+      : normalizeReasoningEffort(stringValue(asObject(entry).reasoningEffort) || stringValue(asObject(entry).effort)))
+    .filter((effort): effort is ReasoningEffort => Boolean(effort));
+  return {
+    id,
+    displayName: stringValue(model.displayName) || id,
+    provider: stringValue(model.provider) || stringValue(model.modelProvider),
+    supportedReasoningEfforts,
+    defaultReasoningEffort: normalizeReasoningEffort(stringValue(model.defaultReasoningEffort)),
+    isDefault: model.isDefault === true,
+  };
+}
+
+function normalizeReasoningEffort(value: string | null): ReasoningEffort | null {
+  return value === "none" || value === "minimal" || value === "low" || value === "medium"
+    || value === "high" || value === "xhigh" || value === "max" ? value : null;
 }
 
 /** 把官方 app-server 通知收敛成渲染层允许消费的稳定、最小化实时事件。 */

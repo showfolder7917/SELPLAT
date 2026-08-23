@@ -13,6 +13,7 @@ let harnessStatus = {
   error: null,
   runtime: { source: "bundled", version: "0.149.0" },
 };
+let desktopSettings = { locale: "zh-CN", sandboxMode: "workspace-write", defaultModel: "gpt-5.6-sol", reasoningEffort: "medium", serviceTier: "default" };
 let pendingUserInput = null;
 let finishManagedTurn = null;
 let clarificationAnswers = {};
@@ -94,8 +95,9 @@ const emitStreamEvent = async (event) => {
 // 隔离测试只提供界面渲染需要的确定性数据，不连接真实 Harness、账号、文件选择器或屏幕权限。
 contextBridge.exposeInMainWorld("desktop", {
   getEnvironment: async () => ({ projectRoot, platform: process.platform, variant: "developer" }),
-  getSettings: async () => ({ locale: "zh-CN", sandboxMode: "workspace-write" }),
-  updateSettings: async (settings) => ({ locale: settings.locale || "zh-CN", sandboxMode: settings.sandboxMode || "workspace-write" }),
+  getSettings: async () => ({ ...desktopSettings }),
+  updateSettings: async (settings) => { desktopSettings = { ...desktopSettings, ...settings }; return { ...desktopSettings }; },
+  getCodexModels: async () => ({ models: [{ id: "gpt-5.6-sol", displayName: "5.6 Sol", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "medium", isDefault: true }] }),
   getWorkspaces: async () => workspace,
   addWorkspace: async () => workspace,
   updateWorkspacePermission: async () => workspace,

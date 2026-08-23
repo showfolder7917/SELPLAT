@@ -55,6 +55,7 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Treat `OPTION/copilot/image.png`, `image1.png`, and `image3.png` as the source of truth for the desktop shell, chat states, and settings menu.
 - Keep the main experience visually faithful to the supplied Microsoft 365 Copilot screenshots; do not expose Codex-specific labels in the chat chrome.
 - Put locale switching, SELPLAT project selection, Codex connection details, and execution safety controls behind the lower-left settings gear.
+- Put the default model, reasoning effort, and processing speed in the global settings panel. Populate models and their supported effort values from the pinned Codex app-server instead of a renderer-owned list, persist one global selection under Electron user data, and apply it to every main-conversation, collaboration-executor, and collaboration-reviewer turn without a conversation-level override.
 - Support Japanese and Simplified Chinese without changing the core layout or control geometry.
 - Do not present the binary publisher, signature, installer metadata, or About information as an official Microsoft product.
 - Keep `启动办公版.bat` as the Windows office launcher and `启动办公版.command` as the macOS double-click office launcher; the macOS launcher must resolve the repository root from its own location and install missing desktop dependencies before starting.

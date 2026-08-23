@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.53.0 将令狐老祖自动流程最后保障、启动文案管理和持续恢复纳入协同正式入口。 -->
-rule_version = 5.53.0
+<!-- 5.54.0 将动态模型、推理强度和速度固定为所有主会话与协同连接共享的全局设置。 -->
+rule_version = 5.54.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -28,6 +28,8 @@ upgrade_record_5_51 = 2026-08-23:删除CodexRuntimeInfo路径字段_删除runtim
 upgrade_record_5_52 = 2026-08-23:交互测试先构建Developer_主桌面直接加载生产index文件_复用正式BrowserWindow默认1560x980和最小1000x700_补实际复现1224x768_设置入口左下锚点_面板边界_标题横排断言_Developer生产样式统一输出单一CSS_开发服务仅保留截图编辑器测试
 <!-- 5.53.0 固化令狐老祖作为自动运行最后屏障以及人类可维护启动文案的持续循环。 -->
 upgrade_record_5_53 = 2026-08-23:令狐老祖固定排在南宫婉下方并受保护_单一LinghuAutomationFacade_自动执行按钮显式开启_30秒检测永不自行停止_四独立模块串行_阻塞保留恢复点_真实发起人与首选执行人均为令狐老祖_启动文案新增修改删除启停选择_第四模块固定统一测试通过后受控重启_重建恢复关联任务和下一循环
+<!-- 5.54.0 防止前端硬编码模型目录、主会话与协同会话使用不同默认值或重新出现会话级覆盖。 -->
+upgrade_record_5_54 = 2026-08-23:全局设置页模型配置区_模型及推理能力来自固定Codex_app_server_默认模型_推理强度_处理速度持久化到Electron_userData_主会话协同执行与审核每轮统一读取_禁止会话级临时覆盖
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -325,6 +327,8 @@ managed_status_indicator_lifecycle_contract = running_bright_pulsing + terminal_
 <!-- 回复卡和全部内部执行面板必须允许收缩，长路径不得建立超出卡片的固有宽度。 -->
 managed_response_boundary_contract = card_width_100_percent_with_maximum + all_flex_grid_children_min_width_zero + internal_panels_max_width_100_percent + long_path_wrap_or_ellipsis + no_horizontal_boundary_escape
 <!-- Harness 连接时必须重新识别运行时；优先使用与当前 AI Desktop 专属模型缓存客户端版本一致的本机 Codex，避免旧二进制读取新缓存字段失败。 -->
+<!-- 模型配置必须来自固定 app-server 的真实模型能力并由所有连接逐轮读取同一全局设置，禁止渲染层固定列表或会话级覆盖。 -->
+harness_global_model_settings_contract = settings_panel_default_model_reasoning_effort_and_service_tier + model_list_and_supported_efforts_from_pinned_app_server + electron_userData_persistence + main_conversation_collaboration_executor_and_reviewer_read_latest_each_turn + no_conversation_level_override
 <!-- Harness 运行时版本是应用发布事实，只允许安装包内置目标版或下载校验后的同一目标版。 -->
 harness_runtime_version_alignment_contract = exact_target_0_149_0 + packaged_native_runtime_first + verified_same_version_private_download_only_when_packaged_missing_or_invalid + no_hot_swap_during_active_turn + visible_packaged_or_verified_download_source_path_and_version + audit_selected_runtime
 <!-- 旧的兼容探测会造成 AI 误认和不受控切换，因此源码与规则都不得保留任何外部候选入口。 -->

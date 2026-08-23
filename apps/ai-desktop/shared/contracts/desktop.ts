@@ -2,6 +2,8 @@ export const APP_VARIANTS = ["office", "developer"] as const;
 export const LOCALES = ["ja", "zh-CN"] as const;
 export const SANDBOX_MODES = ["read-only", "workspace-write"] as const;
 export const WORKSPACE_PERMISSIONS = ["read-only", "workspace-write"] as const;
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export const MODEL_SERVICE_TIERS = ["default", "fast"] as const;
 
 export type {
   CollaborationIntegrationBatch,
@@ -52,6 +54,8 @@ export type AppVariant = (typeof APP_VARIANTS)[number];
 export type Locale = (typeof LOCALES)[number];
 export type SandboxMode = (typeof SANDBOX_MODES)[number];
 export type WorkspacePermission = (typeof WORKSPACE_PERMISSIONS)[number];
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+export type ModelServiceTier = (typeof MODEL_SERVICE_TIERS)[number];
 export type ManagedExecutionMode = "conversation-managed" | "requirement-managed" | "task-managed" | "test-managed";
 export type WindowAction = "minimize" | "maximize" | "close";
 
@@ -225,6 +229,22 @@ export interface DesktopEnvironment {
 export interface DesktopSettings {
   locale: Locale;
   sandboxMode: SandboxMode;
+  defaultModel: string | null;
+  reasoningEffort: ReasoningEffort | null;
+  serviceTier: ModelServiceTier;
+}
+
+export interface CodexModelOption {
+  id: string;
+  displayName: string;
+  provider: string | null;
+  supportedReasoningEfforts: ReasoningEffort[];
+  defaultReasoningEffort: ReasoningEffort | null;
+  isDefault: boolean;
+}
+
+export interface CodexModelCatalog {
+  models: CodexModelOption[];
 }
 
 export interface WorkspaceRoot {
@@ -347,6 +367,7 @@ export interface DesktopApi {
   removeWorkspace(id: string): Promise<WorkspaceState>;
   listWorkspaceEntries(id: string): Promise<WorkspaceEntry[]>;
   getCodexStatus(): Promise<CodexHarnessStatus>;
+  getCodexModels(): Promise<CodexModelCatalog>;
   getActiveCodexSession(): Promise<CodexSessionInfo>;
   loginWithChatGPT(): Promise<CodexLoginResponse>;
   logoutCodex(): Promise<CodexHarnessStatus>;

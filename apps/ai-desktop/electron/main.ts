@@ -47,6 +47,7 @@ app.whenReady().then(() => {
   audit.recordApplicationStart({ variant, projectRoot, rendererRoot });
   const trustedCommands = new TrustedCommandStore(path.join(app.getPath("userData"), "trusted-project-commands.json"));
   const codexSessions = new CodexSessionStore(path.join(app.getPath("userData"), "active-codex-session.json"));
+  const settings = new SettingsStore(path.join(app.getPath("userData"), "desktop-settings.json"));
   // 主会话与所有协同成员共用 AI Desktop 自己的数据域，和 Codex App 的默认 ~/.codex 完全隔离。
   const codexHome = path.join(app.getPath("userData"), "codex-home");
   mkdirSync(codexHome, { recursive: true });
@@ -65,13 +66,13 @@ app.whenReady().then(() => {
       migrateLegacySession: true,
       sessionStorage: "ai-desktop",
       validationOwner: "codex",
+      readSettings: () => settings.read(),
     },
     (details) => audit.recordEvent("trusted_command.decision", details),
     (details) => audit.recordEvent("thread.lifecycle", details),
   );
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
-  const settings = new SettingsStore(path.join(app.getPath("userData"), "desktop-settings.json"));
   const workspaces = new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), projectRoot);
   const collaborationStore = new CollaborationStore(path.join(collaborationRoot, "collaboration-state.json"));
   const collaborationDurations = new CollaborationDurationLog(projectPaths.collaborationArchiveRoot);
@@ -94,6 +95,7 @@ app.whenReady().then(() => {
       const worktreeRoot = await versionWorkspaces.validateTaskWorkspace(task);
       await taskTests.run({ taskId: task.taskId, worktreeRoot, emit });
     },
+    readSettings: () => settings.read(),
     recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
   });
   collaboration = new CollaborationCoordinator({

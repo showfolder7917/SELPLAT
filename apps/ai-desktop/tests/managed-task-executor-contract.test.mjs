@@ -2,13 +2,22 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+// 全局模型配置沿用既有托管契约入口，避免为新增覆盖改变固定 npm 测试脚本签名。
+import "./model-settings-contract.test.mjs";
+
 const executor = readFileSync(new URL("../electron/services/managed-task-executor.ts", import.meta.url), "utf8");
 const codexService = readFileSync(new URL("../electron/services/codex-service.ts", import.meta.url), "utf8");
 const codexRuntime = readFileSync(new URL("../electron/services/codex-runtime.ts", import.meta.url), "utf8");
 const codexSessionStore = readFileSync(new URL("../electron/services/codex-session-store.ts", import.meta.url), "utf8");
+const taskWorktreeTestRunner = readFileSync(new URL("../electron/services/collaboration/task-worktree-test-runner.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
 const ipc = readFileSync(new URL("../electron/ipc/register-desktop-ipc.ts", import.meta.url), "utf8");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+
+test("任务依赖链接清理允许包装器已经先行移除", () => {
+  assert.match(taskWorktreeTestRunner, /dependencyMode === "linked" && existsSync\(dependencyLink\)/);
+});
+
 const markdownMessage = readFileSync(new URL("../src/variants/developer/MarkdownMessage.tsx", import.meta.url), "utf8");
 const interactionPreload = readFileSync(new URL("./interaction/isolated-preload.cjs", import.meta.url), "utf8");
 const interactionSpec = readFileSync(new URL("./interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");

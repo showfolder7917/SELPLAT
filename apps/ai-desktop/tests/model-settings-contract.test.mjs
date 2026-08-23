@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const read = (relativePath) => readFileSync(path.join(appRoot, relativePath), "utf8");
+const contracts = read("shared/contracts/desktop.ts");
+const store = read("electron/services/settings-store.ts");
+const service = read("electron/services/codex-service.ts");
+const collaboration = read("electron/services/collaboration/collaboration-codex-sessions.ts");
+const developer = read("src/variants/developer/DeveloperApp.tsx");
+const agents = read("AGENTS.md");
+const ruleIndex = read("../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/RULE_INDEX.md");
+const harnessRule = read("../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md");
+
+test("全局设置持久化模型、推理强度和速度且不提供会话覆盖字段", () => {
+  assert.match(contracts, /defaultModel: string \| null/);
+  assert.match(contracts, /reasoningEffort: ReasoningEffort \| null/);
+  assert.match(contracts, /serviceTier: ModelServiceTier/);
+  assert.match(store, /defaultModel: patch\.defaultModel/);
+  assert.doesNotMatch(contracts, /sessionModel|conversationModel/);
+});
+
+test("模型目录来自官方 app-server 并按模型能力渲染推理强度", () => {
+  assert.match(service, /#request\("model\/list", \{ includeHidden: false \}\)/);
+  assert.match(service, /supportedReasoningEfforts/);
+  assert.match(developer, /modelCatalog\.models\.map/);
+  assert.match(developer, /supportedEfforts\.map/);
+});
+
+test("每轮主会话与协同连接读取同一份全局模型设置", () => {
+  assert.match(service, /const modelSettings = this\.#options\.readSettings\(\)/);
+  assert.match(service, /serviceTier: modelSettings\.serviceTier/);
+  assert.match(collaboration, /readSettings: this\.#options\.readSettings/);
+});
+
+test("已确认的全局模型行为进入应用约束和当前用户规则索引链", () => {
+  assert.match(agents, /default model, reasoning effort, and processing speed/);
+  assert.match(harnessRule, /harness_global_model_settings_contract/);
+  assert.match(ruleIndex, /RUL_AIDesktop官方Harness接入规则\.md/);
+});
