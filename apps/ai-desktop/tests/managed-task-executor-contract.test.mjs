@@ -15,7 +15,8 @@ const ipc = readFileSync(new URL("../electron/ipc/register-desktop-ipc.ts", impo
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 
 test("任务依赖链接清理允许包装器已经先行移除", () => {
-  assert.match(taskWorktreeTestRunner, /dependencyMode === "linked" && existsSync\(dependencyLink\)/);
+  assert.match(taskWorktreeTestRunner, /cleanupIntegrationDependencyLinks\(desktopRoot\)/);
+  assert.doesNotMatch(taskWorktreeTestRunner, /existsSync\(dependencyLink\)/);
 });
 
 const markdownMessage = readFileSync(new URL("../src/variants/developer/MarkdownMessage.tsx", import.meta.url), "utf8");
