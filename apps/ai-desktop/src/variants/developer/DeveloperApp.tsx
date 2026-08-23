@@ -1,4 +1,6 @@
-import { ClipboardEvent, CSSProperties, FormEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ClipboardEvent, CSSProperties, FormEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { createRoot, type Root } from "react-dom/client";
 import {
   Add24Regular,
   ArrowClockwise24Regular,
@@ -64,9 +66,125 @@ import type {
   WorkspaceState,
 } from "../../../shared/contracts/desktop";
 import { MarkdownMessage } from "./MarkdownMessage";
+import "../../../../../shared/frontend/sel-ui/src/core/selKernel.js";
+import "../../../../../shared/frontend/sel-ui/src/components/floating-panel/selFloatingPanel.js";
+import "../../../../../shared/frontend/sel-ui/src/components/floating-panel/selFloatingPanel.css";
 import "./developer.css";
 
 type ComposerAttachment = ScreenshotAttachment & { dataUrl: string };
+
+type SelFloatingPanelController = {
+  body: HTMLElement;
+  panel: HTMLElement;
+  trigger: HTMLButtonElement;
+  open: () => boolean;
+  destroy: () => void;
+};
+
+type SelFloatingPanelApi = {
+  mount: (host: HTMLElement, options: Record<string, unknown>) => SelFloatingPanelController | null;
+};
+
+const DEFAULT_SETTINGS_WIDTH = 390;
+const MINIMUM_SETTINGS_WIDTH = 320;
+const MAXIMUM_SETTINGS_WIDTH = 720;
+
+/** 使用 SELUI 浮动面板承载设置内容，并在右边缘提供符合当前左下锚点的宽度调整交互。 */
+function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { locale: Locale; open: boolean; onOpenChange: (open: boolean) => void; children: ReactNode }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const openRef = useRef(open);
+  const [portalTargets, setPortalTargets] = useState<{ body: HTMLElement; panel: HTMLElement } | null>(null);
+  openRef.current = open;
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const floatingPanel = (window as typeof window & { sel?: { components?: { floatingPanel?: SelFloatingPanelApi } } }).sel?.components?.floatingPanel;
+    if (!host || !floatingPanel) return;
+
+    const content = document.createElement("div");
+    content.className = "dev-settings-content";
+    const controller = floatingPanel.mount(host, {
+      id: "developer-settings",
+      title: locale === "ja" ? "接続と実行設定" : "连接与执行设置",
+      label: locale === "ja" ? "接続と実行設定" : "连接与执行设置",
+      openLabel: locale === "ja" ? "接続と実行設定を開く" : "打开连接与执行设置",
+      closeLabel: locale === "ja" ? "接続と実行設定を閉じる" : "关闭连接与执行设置",
+      content,
+      classes: { control: "dev-settings-control", trigger: "activity-settings", panel: "dev-settings" },
+      onOpenChange,
+    });
+    if (!controller) return;
+
+    // SELUI 提供浮层生命周期；入口和关闭动作继续渲染项目既有 Fluent 图标，避免引入第二套图标字体。
+    const triggerIconRoot: Root = createRoot(controller.trigger);
+    triggerIconRoot.render(<Settings24Regular />);
+    const closeButton = controller.panel.querySelector<HTMLButtonElement>(".selfloating-close");
+    const closeIconRoot = closeButton ? createRoot(closeButton) : null;
+    closeIconRoot?.render(<Dismiss20Regular />);
+
+    controller.panel.style.width = `${DEFAULT_SETTINGS_WIDTH}px`;
+    setPortalTargets({ body: controller.body, panel: controller.panel });
+    // 语言切换会按新文案重建 SELUI 外壳，原先已打开的设置面板应立即恢复打开状态。
+    if (openRef.current) controller.open();
+    return () => {
+      setPortalTargets(null);
+      triggerIconRoot.unmount();
+      closeIconRoot?.unmount();
+      controller.destroy();
+    };
+  }, [locale, onOpenChange]);
+
+  return <div ref={hostRef} className="dev-settings-host">
+    {portalTargets && createPortal(children, portalTargets.body)}
+    {portalTargets && createPortal(<SettingsWidthResizer panel={portalTargets.panel} locale={locale} />, portalTargets.panel)}
+  </div>;
+}
+
+/** 右边缘拖拽只改变设置面板宽度，不触发设置刷新或其他业务动作。 */
+function SettingsWidthResizer({ panel, locale }: { panel: HTMLElement; locale: Locale }) {
+  const applyWidth = (width: number) => {
+    const panelLeft = panel.getBoundingClientRect().left;
+    const viewportMaximum = Math.max(MINIMUM_SETTINGS_WIDTH, window.innerWidth - panelLeft - 12);
+    const nextWidth = Math.min(MAXIMUM_SETTINGS_WIDTH, viewportMaximum, Math.max(MINIMUM_SETTINGS_WIDTH, width));
+    panel.style.width = `${Math.round(nextWidth)}px`;
+  };
+
+  const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startWidth = panel.getBoundingClientRect().width;
+    handle.setPointerCapture(pointerId);
+    panel.dataset.settingsResizing = "true";
+    const move = (moveEvent: globalThis.PointerEvent) => applyWidth(startWidth + moveEvent.clientX - startX);
+    const finish = () => {
+      delete panel.dataset.settingsResizing;
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+    event.preventDefault();
+  };
+
+  return <button
+    type="button"
+    className="selfloating-resize-handle dev-settings-resize-right"
+    aria-label={locale === "ja" ? "設定パネルの幅を調整" : "调整设置面板宽度"}
+    aria-orientation="vertical"
+    onPointerDown={startResize}
+    onDoubleClick={() => applyWidth(DEFAULT_SETTINGS_WIDTH)}
+    onKeyDown={(event) => {
+      if (event.key === "Home") { event.preventDefault(); applyWidth(DEFAULT_SETTINGS_WIDTH); return; }
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      applyWidth(panel.getBoundingClientRect().width + (event.key === "ArrowLeft" ? -16 : 16));
+    }}
+  />;
+}
 type Message = {
   id: number;
   role: "user" | "assistant";
@@ -175,8 +293,6 @@ export function DeveloperApp() {
   const [confirmedQuestionIds, setConfirmedQuestionIds] = useState<Set<string>>(new Set());
   const [userInputSubmitting, setUserInputSubmitting] = useState(false);
   const [loginHint, setLoginHint] = useState("");
-  const settingsButtonRef = useRef<HTMLButtonElement>(null);
-  const settingsPanelRef = useRef<HTMLElement>(null);
   const chatRef = useRef<HTMLElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const activeAssistantIdRef = useRef<number | null>(null);
@@ -361,25 +477,6 @@ export function DeveloperApp() {
       void desktop.getTempDirectoryInfo().then(setTempInfo);
     });
   }, []);
-
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (settingsPanelRef.current?.contains(target) || settingsButtonRef.current?.contains(target)) return;
-      setSettingsOpen(false);
-    };
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setSettingsOpen(false);
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [settingsOpen]);
 
   useEffect(() => {
     if (settingsOpen) {
@@ -1068,7 +1165,14 @@ export function DeveloperApp() {
 
     <aside className="dev-activitybar">
       <button className="active" title={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-pressed={explorerExpanded} onClick={() => setExplorerExpanded((value) => !value)}><Folder24Regular /></button><button><Search24Regular /></button><button><Branch24Regular /></button><button><Bug24Regular /></button>
-      <button ref={settingsButtonRef} className="activity-settings" onClick={() => setSettingsOpen((value) => !value)}><Settings24Regular /></button>
+      <SettingsFloatingPanel locale={locale} open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button onClick={() => void logout()}>{text.signOut}</button> : <button className="primary" onClick={() => void login()}>{text.signIn}</button>}{loginHint && <em>{loginHint}</em>}</div>
+        <label>Language<select value={locale} onChange={(event) => updateSettings(event.target.value as Locale, sandboxMode)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
+        <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings(locale, event.target.value as SandboxMode)}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
+        <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
+        <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void clearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
+        <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
+      </SettingsFloatingPanel>
     </aside>
 
     <aside className="dev-explorer">
@@ -1177,16 +1281,6 @@ export function DeveloperApp() {
     </aside>
 
     <footer className="dev-statusbar"><span><Branch24Regular /> main*</span><span>0 errors</span><span>{sandboxMode}</span><span>UTF-8</span></footer>
-
-    {settingsOpen && <section ref={settingsPanelRef} className="dev-settings">
-      <h2>{text.settings}</h2>
-      <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version} · ${codexStatus.runtime.path}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button onClick={() => void logout()}>{text.signOut}</button> : <button className="primary" onClick={() => void login()}>{text.signIn}</button>}{loginHint && <em>{loginHint}</em>}</div>
-      <label>Language<select value={locale} onChange={(event) => updateSettings(event.target.value as Locale, sandboxMode)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
-      <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings(locale, event.target.value as SandboxMode)}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
-      <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><small>{tempInfo?.path}</small><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
-      <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void clearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
-      <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong><small>{auditInfo?.path}</small>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
-    </section>}
 
     {approval && <section className="dev-approval" role="dialog" aria-modal="true" aria-label={approval.title}>
       <div className="approval-card"><span className="approval-kicker">CODEX APPROVAL</span><h2>{approval.title}</h2>{approval.reason && <p>{approval.reason}</p>}{approval.command && <pre>{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p>{text.trustHint}</p>}{approval.details && <details><summary>Details</summary><pre>{approval.details}</pre></details>}<div className="approval-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button className="primary" onClick={() => void resolveApproval("accept")}>{approval.kind === "command" && approval.trustEligible ? text.approveAndTrust : text.approve}</button></div></div>
