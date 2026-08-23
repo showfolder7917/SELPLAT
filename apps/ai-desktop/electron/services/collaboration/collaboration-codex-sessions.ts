@@ -210,7 +210,11 @@ class CodexExecutorSession implements CollaborationExecutorSession {
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const result = await this.#managed.run({
       mode: "task-managed",
-      message: `已确认任务：\n${task.snapshot.confirmedIntent}\n\n已通过质量门禁的方案：\n${plan.text}`,
+      message: [
+        `已确认任务：\n${task.snapshot.confirmedIntent}`,
+        `已通过质量门禁的方案：\n${plan.text}`,
+        "完成源码修改与代码级验证后，最终回答必须在最前面依次使用以下独立 Markdown 标题，并在每个标题下给出简短、可直接归档的事实：最终执行结果、原来存在的问题、本次解决的问题、具体修正或改变、完成状态、遗留内容。之后可以再补充详细说明。禁止省略标题；没有遗留内容时明确写“无”。",
+      ].join("\n\n"),
       restartRequired: false,
       emit,
       runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, "workspace-write", workspaceState, attachmentPaths, onEvent, mode),

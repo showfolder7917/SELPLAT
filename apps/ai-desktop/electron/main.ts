@@ -77,9 +77,10 @@ app.whenReady().then(() => {
     durations: collaborationDurations,
     workspaces: new VersionWorkspaceManager(projectRoot, path.join(collaborationRoot, "worktrees")),
     sessions: collaborationSessions,
-    emitState: (state, reason) => {
-      audit.recordEvent("collaboration.state.changed", { reason, mode: state.mode });
-      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-state", { state, reason });
+    emitState: (state, reason, taskIds) => {
+      // 单任务事件写入顶层 taskId；批量集成同时保留 taskIds，确保每条流程和错误都能反查所属任务。
+      audit.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
     },
     emitStream: (taskId, memberId, event) => {
       audit.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);

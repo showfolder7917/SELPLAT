@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.41.0 隔离 AI Desktop 与 Codex App 的官方会话数据域，并精准迁移旧活动线程。 -->
-rule_version = 5.41.0
+<!-- 5.42.0 增加协同任务真实流转留痕、独立执行列表和价值优先结果归档。 -->
+rule_version = 5.42.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -126,6 +126,8 @@ upgrade_record_5_39 = 2026-08-23:审核正文与机器结论分离_结构化标�
 upgrade_record_5_40 = 2026-08-23:审核只判断客户最低需求_满足即通过_第三次明确驳回后再做一次最终必要修正并强制执行_禁止第四轮审核_锁文件一致时复用主工作区依赖_不一致时离线优先按锁文件补齐_依赖链接提升前清理_临时候选与稳定集成分支同级命名_依赖故障不计审核次数
 <!-- 5.41.0 防止 AI Desktop 创建的持久线程进入 Codex App 会话列表，同时保留官方恢复能力。 -->
 upgrade_record_5_41 = 2026-08-23:Electron_userData专属CODEX_HOME_主会话与协同连接统一隔离_删除宿主originator覆盖_旧版已保存活动线程按ID精准删除后迁移_真实任务置于工作区上下文之前_serviceName与threadSource仅作审计
+<!-- 5.42.0 固化协同完成任务从人物当前区域移出并进入全局执行列表的展示和留痕边界。 -->
+upgrade_record_5_42 = 2026-08-23:协同模式独立执行列表_真实发起人与全部执行转交快照_分析审核执行流程可折叠_代码验证与终态完成时间分离_结果价值摘要优先_流程错误按任务关联_单会话不使用
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -258,6 +260,8 @@ audit_build_pending_contract = code_verified_without_build_is_completed + build_
 managed_multiturn_text_preservation_contract = first_real_turn_reuses_pending_card + every_later_real_turn_id_appends_new_assistant_card_below + explicit_turn_id_to_message_id_routing + previous_card_frozen_before_next_turn + completed_message_reconciles_own_segment_id_only + final_response_updates_latest_card_only + terminal_state_rejects_late_non_error_events + real_two_turn_interaction_asserts_two_cards_and_immutable_first_text + prohibit_source_regex_only_completion
 <!-- 协同模式未来实施时必须使用独立编排器，人物条目长期存在而非韩立 Codex 只在分配工作期间临时存在。 -->
 collaboration_mode_architecture_contract = orchestration_isolated_from_single_conversation + protected_hanli_persistent_conversation_connection + stable_crud_worker_members_individually_listed_under_tasks + member_named_tabs_not_generic_codex_chat + idle_worker_has_no_codex_process_pipe_or_thread + assignment_creates_fresh_lease_generation_process_pipe_and_thread + executor_owns_analysis_review_optimization_execution_chain + different_idle_reviewer_per_review + minimum_confirmed_customer_requirement_is_only_blocking_review_scope + broader_improvements_are_nonblocking + first_two_explicit_rejections_optimize_then_review + third_explicit_rejection_final_necessary_optimization_then_execute_without_fourth_review + infrastructure_failure_does_not_consume_rejection + executor_completion_stops_at_code_verified_without_test_managed + persist_result_before_connection_retirement + member_page_and_audit_history_survive_codex_retirement + full_member_history_never_injected_into_fresh_codex + lease_pipe_and_protocol_progress_liveness + silent_healthy_reasoning_not_timeout + reviewer_capacity_reserved_to_prevent_deadlock + executor_task_specific_git_branch_and_worktree + immutable_task_plan_assignment_worker_base_and_result_versions + reject_stale_generation_results + integration_ready_gate + independent_tasks_do_not_wait_for_unfinished_workers + atomic_group_and_dependency_chain_barriers + idle_integrator_immediately_freezes_all_currently_eligible_results_without_artificial_window_minimum_batch_or_ratio + post_freeze_results_enter_next_generation + evidence_backed_verifying_or_finalizing_for_capacity_and_bottleneck_only + heartbeat_means_liveness_not_progress + integration_worktree_dependency_preflight_and_self_heal + lockfile_identical_verified_dependency_reuse + lockfile_install_offline_first_fallback + reused_dependency_link_removed_before_candidate_promotion + temporary_candidate_branch_is_peer_of_stable_integration_branch + dependency_failure_is_infrastructure_not_review_rejection + batch_combination_tests_before_safe_local_branch_sync
+<!-- 完成任务统一进入协同专用执行列表，人物页只保留当前状态入口；归档必须优先显示任务价值并保留可折叠事实链。 -->
+collaboration_execution_archive_contract = collaboration_mode_only_global_execution_list + single_conversation_never_uses_entry + terminal_task_removed_from_member_current_area + persisted_real_initiator_snapshot + all_executor_assignment_and_transfer_snapshots + analysis_owner_plan_and_status + reviewer_feedback_and_decision + code_verified_at_separate_from_terminal_completed_at + list_title_initiator_all_executors_start_finish_total_wall_clock_duration + prominent_final_result_original_problem_solved_problem_concrete_changes_success_or_remaining_summary + expandable_whole_task_analysis_review_execution_flow_and_error_logs + every_flow_and_error_correlated_by_task_id + never_change_scheduler_or_infer_unrecorded_participant
 <!-- 默认成员名单由用户确认；韩立保持保护身份，其余十一人为可调度 worker，成员管理仍可增删改查。 -->
 collaboration_default_member_roster_contract = 韩立_conversation_owner_protected + 南宫婉_worker + 紫灵_worker + 元瑶_worker + 宋玉_worker + 冰魄仙子_worker + 墨彩环_worker + 墨大夫_worker + 厉飞雨_worker + 张铁_worker + 令狐老祖_worker + 李化元_worker + roster_crud_enabled_for_non_hanli
 <!-- 审核正文生成完成与机器结论解析属于两个独立事实；格式偏差不得伪装成 Codex 连接失败。 -->

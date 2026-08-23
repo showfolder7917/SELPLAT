@@ -64,7 +64,7 @@ export interface CollaborationCoordinatorOptions {
   durations: CollaborationDurationLog;
   workspaces: VersionWorkspaceManager;
   sessions: CollaborationSessionFactory;
-  emitState(state: CollaborationState, reason: string): void;
+  emitState(state: CollaborationState, reason: string, taskIds: string[]): void;
   emitStream(taskId: string, memberId: string, event: CodexStreamEvent): void;
   verifyIntegration(rootPath: string, taskIds: string[]): Promise<void>;
 }
@@ -206,11 +206,37 @@ export class CollaborationCoordinator {
         member.currentTaskId = taskId;
         member.lastAssignedAt = new Date().toISOString();
         member.updatedAt = member.lastAssignedAt;
+        const now = new Date().toISOString();
+        const previousAssignment = task.executionRecords.at(-1);
+        if (previousAssignment && previousAssignment.completedAt === null) {
+          previousAssignment.status = previousAssignment.executor.memberId === memberId ? "blocked" : "transferred";
+          previousAssignment.completedAt = now;
+          previousAssignment.blockingReason = previousAssignment.executor.memberId === memberId ? "恢复后重新建立执行租约" : `任务转交给${member.displayName}`;
+        }
         task.assignmentId = randomUUID();
         task.workerGeneration = member.generation;
         task.executorMemberId = memberId;
         task.state = "preparing-worktree";
         task.phase = "planning";
+        task.executionRecords.push({
+          assignmentId: task.assignmentId,
+          executor: participantSnapshot(member),
+          workerGeneration: member.generation,
+          status: "assigned",
+          assignedAt: now,
+          executionStartedAt: null,
+          completedAt: null,
+          transferFromAssignmentId: previousAssignment?.assignmentId || null,
+          handoffType: !previousAssignment ? "initial" : previousAssignment.executor.memberId === memberId ? "resume" : "transfer",
+          result: null,
+          blockingReason: null,
+        });
+        const assignmentSummary = !previousAssignment
+          ? `${member.displayName}已接收任务并准备独立版本`
+          : previousAssignment.executor.memberId === memberId
+            ? `${member.displayName}通过新的执行租约恢复同一任务`
+            : `任务由${previousAssignment.executor.displayName}转交给${member.displayName}`;
+        appendFlow(task, previousAssignment ? "executor.reassigned" : "executor.assigned", "analysis", "started", assignmentSummary, member);
       });
       const assignedTask = this.#store.task(taskId);
       const worktreeSpan = this.#durations.start(taskId, "worktree-prepare", { memberId });
@@ -264,6 +290,8 @@ export class CollaborationCoordinator {
       const plan: CollaborationRequirementPlan = {
         version: task.currentPlanVersion + 1,
         ownerMemberId: memberId,
+        ownerDisplayName: requireMember(this.state(), memberId).displayName,
+        status: executeAfterOptimization ? "forced" : "awaiting-review",
         text,
         contentHash: sha256(text),
         createdAt: new Date().toISOString(),
@@ -278,6 +306,9 @@ export class CollaborationCoordinator {
         executor.phase = null;
         executor.blockingReason = executeAfterOptimization ? "第三次驳回后的最终必要修正已完成，强制执行" : "等待空闲审核员";
         executor.updatedAt = new Date().toISOString();
+        const execution = current.executionRecords.find((item) => item.assignmentId === current.assignmentId);
+        if (execution) execution.status = executeAfterOptimization ? "executing" : "waiting-review";
+        appendFlow(current, optimization ? "plan.optimized" : "plan.ready", "analysis", "completed", `${executor.displayName}已完成分析方案 v${plan.version}`, executor);
       });
       this.#durations.finish(span, "completed", {
         releaseEvent: executeAfterOptimization ? "plan.final_after_review_limit" : "plan.ready",
@@ -371,6 +402,7 @@ export class CollaborationCoordinator {
         current.blockingReason = null;
         const executor = current.executorMemberId ? requireMember(state, current.executorMemberId) : null;
         if (executor) executor.blockingReason = `${reviewer.displayName}正在审核`;
+        appendFlow(current, "reviewer.assigned", "review", "started", `${reviewer.displayName}开始审核方案 v${plan.version}`, reviewer);
       });
       reviewerGeneration = requireMember(this.state(), reviewerId).generation;
       reviewerSession = await this.#sessions.createReviewer(this.#store.task(taskId), requireMember(this.state(), reviewerId));
@@ -388,6 +420,7 @@ export class CollaborationCoordinator {
           attemptId: randomUUID(),
           planVersion: plan.version,
           reviewerMemberId: reviewerId,
+          reviewerDisplayName: currentReviewer.displayName,
           reviewerGeneration,
           outcome: result.outcome,
           decision: null,
@@ -405,6 +438,7 @@ export class CollaborationCoordinator {
           current.blockingReason = `${currentReviewer.displayName}审核正文已保存，但结论无法识别，等待其他审核员确认`;
           const executor = current.executorMemberId ? requireMember(state, current.executorMemberId) : null;
           if (executor) executor.blockingReason = current.blockingReason;
+          appendFlow(current, "review.decision_unrecognized", "review", "failed", `${currentReviewer.displayName}的审核正文已保存，但结论无法识别`, currentReviewer, true);
         });
         this.#durations.finish(reviewSpan, "completed", {
           outcome: result.outcome,
@@ -421,6 +455,7 @@ export class CollaborationCoordinator {
         reviewId: randomUUID(),
         planVersion: plan.version,
         reviewerMemberId: reviewerId,
+        reviewerDisplayName: currentReviewer.displayName,
         reviewerGeneration,
         decision: result.decision,
         feedback: result.feedback,
@@ -430,6 +465,7 @@ export class CollaborationCoordinator {
         attemptId: randomUUID(),
         planVersion: plan.version,
         reviewerMemberId: reviewerId,
+        reviewerDisplayName: currentReviewer.displayName,
         reviewerGeneration,
         outcome: result.outcome,
         decision: result.decision,
@@ -448,6 +484,9 @@ export class CollaborationCoordinator {
         current.infrastructureFailureCount = 0;
         current.blockingReason = null;
         if (review.decision === "rejected") current.explicitRejectionCount += 1;
+        const reviewedPlan = current.plans.find((candidate) => candidate.version === review.planVersion);
+        if (reviewedPlan) reviewedPlan.status = review.decision === "passed" ? "approved" : "rejected";
+        appendFlow(current, "review.completed", "review", "completed", `${currentReviewer.displayName}审核${review.decision === "passed" ? "通过" : "未通过"}方案 v${plan.version}`, currentReviewer);
       });
       reviewPersisted = true;
       this.#durations.finish(reviewSpan, "completed", { decision: result.decision, releaseEvent: "review.persisted" });
@@ -484,6 +523,7 @@ export class CollaborationCoordinator {
           attemptId: randomUUID(),
           planVersion: plan.version,
           reviewerMemberId: reviewerId,
+          reviewerDisplayName: requireMember(state, reviewerId).displayName,
           reviewerGeneration,
           outcome: "infrastructure-failed",
           decision: null,
@@ -503,6 +543,7 @@ export class CollaborationCoordinator {
         current.recoveryTargetState = current.infrastructureFailureCount >= 3 ? "queued-reviewer" : null;
         const executor = current.executorMemberId ? requireMember(state, current.executorMemberId) : null;
         if (executor) executor.blockingReason = current.blockingReason;
+        appendFlow(current, "review.infrastructure_failed", "review", "failed", current.blockingReason || "审核连接异常", requireMember(state, reviewerId), true);
       });
       if (this.#store.task(taskId).state === "queued-reviewer") {
         this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "reviewer-wait", "recovery-wait", "reviewer-infrastructure-retry", "reviewer-capacity", null));
@@ -523,6 +564,15 @@ export class CollaborationCoordinator {
     let changeSpan: string | null = this.#durations.start(taskId, "source-change", { memberId, planVersion: plan.version });
     let verificationSpan: string | null = null;
     this.#setTaskAndMemberPhase(taskId, "executing", "implementing");
+    this.#store.updateTask(taskId, "execution.started", (current, state) => {
+      const executor = requireMember(state, memberId);
+      const execution = current.executionRecords.find((item) => item.assignmentId === assignmentId);
+      if (execution) {
+        execution.status = "executing";
+        execution.executionStartedAt ??= new Date().toISOString();
+      }
+      appendFlow(current, "execution.started", "execution", "started", `${executor.displayName}开始执行已审核方案`, executor);
+    });
     try {
       const result = await session.execute(task, plan, (event) => {
         try { this.#assertExecutorLease(taskId, memberId, assignmentId, workerGeneration); }
@@ -557,7 +607,16 @@ export class CollaborationCoordinator {
         current.state = "ready-for-integration";
         current.phase = "ready";
         current.finalResult = result.text;
-        current.completedAt = new Date().toISOString();
+        current.codeVerifiedAt = new Date().toISOString();
+        current.completedAt = null;
+        current.resultSummary = createResultSummary(current, result.text, result.pendingActions);
+        const execution = current.executionRecords.find((item) => item.assignmentId === assignmentId);
+        if (execution) {
+          execution.status = "code-verified";
+          execution.completedAt = current.codeVerifiedAt;
+          execution.result = result.text;
+        }
+        appendFlow(current, "task.code_verified", "execution", "completed", "执行修改已完成代码级验证，等待集成", execution?.executor || null);
       });
       this.#durations.instant(taskId, "task.integration_ready", { memberId, resultSha });
       await this.#retireExecutor(taskId, memberId, session);
@@ -594,6 +653,7 @@ export class CollaborationCoordinator {
         for (const task of mutable.tasks.filter((candidate) => taskIds.includes(candidate.taskId))) {
           task.state = "queued-integration";
           task.integrationGeneration = generation;
+          appendFlow(task, "integration.batch_frozen", "integration", "waiting", `任务已进入集成批次 ${generation}`, null);
         }
       });
       for (const taskId of taskIds) {
@@ -609,7 +669,10 @@ export class CollaborationCoordinator {
       this.#store.updateTask(taskIds[0], "integration.started", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
         if (batch) batch.state = "integrating";
-        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) task.state = "integrating";
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "integrating";
+          appendFlow(task, "integration.started", "integration", "started", `集成批次 ${generation} 开始组合验证`, null);
+        }
       });
       verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
       await this.#verifyIntegration(candidate.rootPath, taskIds);
@@ -625,7 +688,20 @@ export class CollaborationCoordinator {
           batch.completedAt = new Date().toISOString();
           batch.integrationSha = integrationSha;
         }
-        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) task.state = "integrated";
+        const completedAt = new Date().toISOString();
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "integrated";
+          task.completedAt = completedAt;
+          task.blockingReason = null;
+          task.resultSummary ||= createResultSummary(task, task.finalResult || "任务已完成协同集成。", []);
+          task.resultSummary.outcome = "succeeded";
+          task.resultSummary.success = true;
+          if (task.resultSummary.remaining === "等待协同集成完成。" || /^无[。.]?$/.test(task.resultSummary.remaining.trim())) {
+            task.resultSummary.remaining = "无已知遗留内容。";
+          }
+          task.resultSummary.generatedAt = completedAt;
+          appendFlow(task, "integration.completed", "integration", "completed", `任务已通过集成并归档到执行列表`, null);
+        }
       });
       const retirements = await Promise.allSettled(tasks.map((task) => task.versionWorkspace ? this.#workspaces.retireWorkspace(task.versionWorkspace) : Promise.resolve()));
       this.#store.updateTask(taskIds[0], "integration.worktrees_retired", (_first, mutable) => {
@@ -648,6 +724,7 @@ export class CollaborationCoordinator {
           task.phase = null;
           task.blockingReason = `集成失败：${errorMessage(error)}`;
           task.recoveryTargetState = "ready-for-integration";
+          appendFlow(task, "integration.failed", "integration", "failed", task.blockingReason, null, true);
         }
       });
       this.#durations.writeGenerationReport(generation, taskIds);
@@ -662,6 +739,7 @@ export class CollaborationCoordinator {
 
   #setTaskAndMemberPhase(taskId: string, stateValue: CollaborationTask["state"], phase: Exclude<CollaborationWorkerPhase, null>): void {
     this.#store.updateTask(taskId, "worker.phase_changed", (task, state) => {
+      const phaseChanged = task.phase !== phase;
       task.state = stateValue;
       task.phase = phase;
       if (task.executorMemberId) {
@@ -670,6 +748,9 @@ export class CollaborationCoordinator {
         member.phase = phase;
         member.blockingReason = null;
         member.updatedAt = new Date().toISOString();
+        const execution = task.executionRecords.find((item) => item.assignmentId === task.assignmentId);
+        if (execution) execution.status = phase === "analyzing" || phase === "planning" ? "analyzing" : "executing";
+        if (phaseChanged) appendFlow(task, `worker.phase.${phase}`, phase === "analyzing" || phase === "planning" ? "analysis" : "execution", "started", `${member.displayName}${phaseLabel(phase)}`, member);
       }
     });
   }
@@ -718,6 +799,17 @@ export class CollaborationCoordinator {
         member.currentTaskId = null;
         member.blockingReason = null;
       }
+      const execution = current.executionRecords.find((item) => item.assignmentId === current.assignmentId);
+      if (execution) {
+        execution.status = "blocked";
+        execution.completedAt = new Date().toISOString();
+        execution.blockingReason = current.blockingReason;
+      }
+      current.resultSummary = current.resultSummary || createResultSummary(current, current.finalResult || "任务尚未完成。", [current.blockingReason]);
+      current.resultSummary.outcome = "incomplete";
+      current.resultSummary.success = false;
+      current.resultSummary.remaining = current.blockingReason;
+      appendFlow(current, "task.blocked", "recovery", "failed", current.blockingReason, execution?.executor || null, true);
     });
     this.#durations.instant(taskId, "task.blocked", { reason, executorMemberId: task.executorMemberId });
   }
@@ -787,6 +879,87 @@ function requireMember(state: CollaborationState, memberId: string): Collaborati
   const member = state.members.find((candidate) => candidate.memberId === memberId);
   if (!member) throw new Error("协同人物不存在。");
   return member;
+}
+
+function participantSnapshot(member: Pick<CollaborationMember, "memberId" | "displayName">): { memberId: string; displayName: string } {
+  return { memberId: member.memberId, displayName: member.displayName };
+}
+
+/** 流程事件只记录可审计业务事实，不复制原始推理或认证信息。 */
+function appendFlow(
+  task: CollaborationTask,
+  type: string,
+  stage: CollaborationTask["flowEvents"][number]["stage"],
+  status: CollaborationTask["flowEvents"][number]["status"],
+  summary: string,
+  actor: Pick<CollaborationMember, "memberId" | "displayName"> | { memberId: string; displayName: string } | null,
+  error = false,
+): void {
+  task.flowEvents.push({
+    eventId: randomUUID(),
+    type,
+    stage,
+    status,
+    actor: actor ? participantSnapshot(actor) : null,
+    summary: summary.slice(0, 2_000),
+    occurredAt: new Date().toISOString(),
+    error,
+  });
+}
+
+/** 把执行人的结构化标题转换为首页短摘要；缺少标题时使用已确认任务事实兜底，禁止让归档记录为空。 */
+export function createCollaborationResultSummary(task: CollaborationTask, text: string, pendingActions: string[] = []): CollaborationTask["resultSummary"] {
+  const sections = parseResultSections(text);
+  const fallback = compactResultText(text);
+  return {
+    outcome: pendingActions.length > 0 ? "incomplete" : "pending-integration",
+    finalResult: sections.get("最终执行结果") || fallback || "执行人未提供最终结果摘要。",
+    originalProblem: sections.get("原来存在的问题") || task.snapshot.problemStatement,
+    solvedProblem: sections.get("本次解决的问题") || fallback || "执行人未提供解决内容摘要。",
+    changes: sections.get("具体修正或改变") || fallback || "执行人未提供改动摘要。",
+    remaining: sections.get("遗留内容") || pendingActions.join("；") || "等待协同集成完成。",
+    success: false,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function createResultSummary(task: CollaborationTask, text: string, pendingActions: string[] = []): NonNullable<CollaborationTask["resultSummary"]> {
+  return createCollaborationResultSummary(task, text, pendingActions) as NonNullable<CollaborationTask["resultSummary"]>;
+}
+
+function parseResultSections(text: string): Map<string, string> {
+  const headings = ["最终执行结果", "原来存在的问题", "本次解决的问题", "具体修正或改变", "完成状态", "遗留内容"];
+  const sections = new Map<string, string>();
+  let current: string | null = null;
+  for (const line of text.split("\n")) {
+    const normalized = line.trim().replace(/^#{1,6}\s*/, "").replace(/^\*\*(.+)\*\*$/, "$1").replace(/[：:]$/, "").trim();
+    if (headings.includes(normalized)) {
+      current = normalized;
+      sections.set(current, "");
+      continue;
+    }
+    if (!current) continue;
+    sections.set(current, `${sections.get(current) || ""}${sections.get(current) ? "\n" : ""}${line}`.trim());
+  }
+  return sections;
+}
+
+function compactResultText(text: string): string {
+  return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 800);
+}
+
+function phaseLabel(phase: Exclude<CollaborationWorkerPhase, null>): string {
+  const labels: Record<Exclude<CollaborationWorkerPhase, null>, string> = {
+    analyzing: "正在分析需求",
+    planning: "正在整理方案",
+    implementing: "正在执行修改",
+    verifying: "正在验证修改",
+    finalizing: "正在整理结果",
+    ready: "已准备集成",
+    blocked: "执行被阻塞",
+    failed: "执行失败",
+  };
+  return labels[phase];
 }
 
 function markMemberRetiring(store: CollaborationStore, memberId: string): void {
