@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -473,12 +473,22 @@ test("已验证候选应用先提升到稳定批次目录再允许回收候选",
   try {
     mkdirSync(path.dirname(sourceExecutable), { recursive: true });
     writeFileSync(sourceExecutable, "verified candidate");
+    const sourceFrameworkRoot = path.join(candidateRoot, "build", "ai-desktop", "package", "developer", "mac-arm64", "AI Desktop.app", "Contents", "Frameworks", "Electron Framework.framework");
+    const sourceFrameworkBinary = path.join(sourceFrameworkRoot, "Versions", "A", "Electron Framework");
+    mkdirSync(path.dirname(sourceFrameworkBinary), { recursive: true });
+    writeFileSync(sourceFrameworkBinary, "verified framework");
+    symlinkSync("A", path.join(sourceFrameworkRoot, "Versions", "Current"));
+    symlinkSync("Versions/Current/Electron Framework", path.join(sourceFrameworkRoot, "Electron Framework"));
     const stagedExecutable = stageVerifiedDeveloperExecutable(sourceExecutable, stableBuildRoot, "release-0.1.1-g14");
+    const stagedApp = path.resolve(path.dirname(stagedExecutable), "../..");
+    const stagedFrameworkLink = path.join(stagedApp, "Contents", "Frameworks", "Electron Framework.framework", "Electron Framework");
     assert.equal(readFileSync(stagedExecutable, "utf8"), "verified candidate");
+    assert.equal(readlinkSync(stagedFrameworkLink), "Versions/Current/Electron Framework", "稳定应用必须保留应用包内相对符号链接");
     assert.match(stagedExecutable, /package\/published\/release-0\.1\.1-g14\/AI Desktop\.app\/Contents\/MacOS\/AI Desktop$/);
     rmSync(candidateRoot, { recursive: true, force: true });
     assert.equal(existsSync(sourceExecutable), false);
     assert.equal(readFileSync(stagedExecutable, "utf8"), "verified candidate", "候选回收后稳定发布程序必须继续存在");
+    assert.equal(readFileSync(stagedFrameworkLink, "utf8"), "verified framework", "候选回收后稳定应用的框架链接必须仍可解析");
     assert.throws(() => stageVerifiedDeveloperExecutable(stagedExecutable, stableBuildRoot, "release-0.1.1-g14"), /禁止覆盖/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

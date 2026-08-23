@@ -23,7 +23,9 @@ export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stabl
   if (!existsSync(sourceExecutable)) throw new Error("候选工作区内的已验证启动程序不存在。");
   if (existsSync(destinationApp)) throw new Error(`发布批次稳定应用已存在，禁止覆盖：${destinationApp}`);
   mkdirSync(destinationRoot, { recursive: true });
-  cpSync(sourceApp, destinationApp, { recursive: true, preserveTimestamps: true });
+  // macOS 应用包大量使用相对符号链接；禁止 cpSync 把它们改写为候选 worktree 的绝对路径，
+  // 否则候选回收后 Electron Framework 会变成断链，已发布应用无法启动。
+  cpSync(sourceApp, destinationApp, { recursive: true, preserveTimestamps: true, verbatimSymlinks: true });
   if (!existsSync(destinationExecutable)) throw new Error("稳定发布目录缺少启动程序。");
   return destinationExecutable;
 }
