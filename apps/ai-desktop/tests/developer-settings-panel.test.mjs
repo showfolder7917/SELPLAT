@@ -15,7 +15,8 @@ test("连接与执行设置不再把本机路径渲染为文本", () => {
 });
 
 test("连接与执行设置复用 SELUI 浮动面板并支持调整宽度", () => {
-  assert.match(component, /selFloatingPanel\.js/);
+  assert.match(component, /@selplat\/sel-ui\/components\/floating-panel/);
+  assert.doesNotMatch(component, /shared\/frontend\/sel-ui/);
   assert.match(component, /floatingPanel\.mount/);
   assert.match(component, /SettingsWidthResizer/);
   assert.match(component, /onPointerDown=\{startResize\}/);

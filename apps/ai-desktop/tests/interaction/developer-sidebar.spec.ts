@@ -119,6 +119,60 @@ test("新建任务入口位于聊天标签且不再占用任务标题", async ()
   await expect.poll(() => newTask.evaluate((element) => Number.parseFloat(window.getComputedStyle(element, "::after").opacity))).toBe(1);
 });
 
+test("未登录时设置面板的登录主操作文字可见并使用主题对比色", async () => {
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionAuthenticated(authenticated: boolean): Promise<void> } }).desktop.setInteractionAuthenticated(false));
+  // 生产界面按固定周期读取官方账号状态；测试等待同一刷新链路生效，不通过重载伪造状态。
+  await expect(page.locator(".dev-empty").getByText("请先登录 ChatGPT", { exact: true })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "连接与执行设置" }).click();
+  const loginButton = page.getByRole("button", { name: "使用 ChatGPT 登录" });
+  await expect(loginButton).toBeVisible();
+  await expect(loginButton.locator("span")).toHaveText("使用 ChatGPT 登录");
+  const presentation = await loginButton.evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    const label = element.querySelector("span");
+    const panel = element.closest(".dev-settings");
+    const account = element.closest(".dev-account");
+    const runtime = account?.querySelector("small");
+    const panelBounds = panel?.getBoundingClientRect();
+    const accountBounds = account?.getBoundingClientRect();
+    const buttonBounds = element.getBoundingClientRect();
+    const labelBounds = label?.getBoundingClientRect();
+    return {
+      color: style.color,
+      backgroundColor: style.backgroundColor,
+      labelColor: label ? window.getComputedStyle(label).color : "",
+      width: buttonBounds.width,
+      height: buttonBounds.height,
+      panelClientWidth: panel?.clientWidth ?? 0,
+      panelScrollWidth: panel?.scrollWidth ?? 0,
+      runtimeClientWidth: runtime?.clientWidth ?? 0,
+      runtimeScrollWidth: runtime?.scrollWidth ?? 0,
+      accountLeft: accountBounds?.left ?? 0,
+      accountRight: accountBounds?.right ?? 0,
+      buttonLeft: buttonBounds.left,
+      buttonRight: buttonBounds.right,
+      labelLeft: labelBounds?.left ?? 0,
+      labelRight: labelBounds?.right ?? 0,
+      panelLeft: panelBounds?.left ?? 0,
+      panelRight: panelBounds?.right ?? 0,
+    };
+  });
+  expect(presentation.labelColor).toBe(presentation.color);
+  expect(presentation.color).not.toBe(presentation.backgroundColor);
+  expect(presentation.width).toBeGreaterThan(120);
+  expect(presentation.height).toBeGreaterThanOrEqual(32);
+  expect(presentation.panelScrollWidth).toBeLessThanOrEqual(presentation.panelClientWidth + 1);
+  expect(presentation.runtimeScrollWidth).toBeLessThanOrEqual(presentation.runtimeClientWidth + 1);
+  expect(presentation.accountLeft).toBeGreaterThanOrEqual(presentation.panelLeft - 0.5);
+  expect(presentation.accountRight).toBeLessThanOrEqual(presentation.panelRight + 0.5);
+  expect(presentation.buttonLeft).toBeGreaterThanOrEqual(presentation.accountLeft - 0.5);
+  expect(presentation.buttonRight).toBeLessThanOrEqual(presentation.accountRight + 0.5);
+  expect(presentation.labelLeft).toBeGreaterThanOrEqual(presentation.buttonLeft - 0.5);
+  expect(presentation.labelRight).toBeLessThanOrEqual(presentation.buttonRight + 0.5);
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionAuthenticated(authenticated: boolean): Promise<void> } }).desktop.setInteractionAuthenticated(true));
+  await expect(page.locator(".dev-empty").getByText("Codex harness 已连接", { exact: true })).toBeVisible({ timeout: 5_000 });
+});
+
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");

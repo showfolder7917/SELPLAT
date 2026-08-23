@@ -32,4 +32,6 @@
     --sel-theme-scrollbar-thumb-hover: #888888;
     --sel-theme-scrollbar-thumb-active: #666666;
     --sel-theme-scrollbar-glow: none;
+    --sel-theme-workbench-shadow: 0 8px 28px rgb(0 0 0 / 0.16);
+    --sel-theme-workbench-shadow-modal: 0 18px 48px rgb(0 0 0 / 0.18);
 }

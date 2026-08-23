@@ -7,7 +7,7 @@ const workspace = {
   primaryId: "interaction-root",
   roots: [{ id: "interaction-root", name: "SELPLAT", path: projectRoot, permission: "workspace-write" }],
 };
-const harnessStatus = {
+let harnessStatus = {
   connected: true,
   account: { authenticated: true, authMode: "test", email: "interaction@test.invalid", planType: "test", requiresOpenaiAuth: false },
   error: null,
@@ -87,6 +87,15 @@ contextBridge.exposeInMainWorld("desktop", {
     { name: "shared", kind: "directory" },
   ],
   getCodexStatus: async () => harnessStatus,
+  setInteractionAuthenticated: async (authenticated) => {
+    harnessStatus = {
+      ...harnessStatus,
+      account: authenticated
+        ? { authenticated: true, authMode: "test", email: "interaction@test.invalid", planType: "test", requiresOpenaiAuth: false }
+        : { authenticated: false, authMode: null, email: null, planType: null, requiresOpenaiAuth: true },
+    };
+    return harnessStatus;
+  },
   getActiveCodexSession: async () => ({ threadId: activeThreadId }),
   loginWithChatGPT: async () => ({ loginId: "test", authUrl: "https://chatgpt.com" }),
   logoutCodex: async () => harnessStatus,

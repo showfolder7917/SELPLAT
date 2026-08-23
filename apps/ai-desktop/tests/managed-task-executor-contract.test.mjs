@@ -45,9 +45,14 @@ test("任务托管使用后台隔离 Electron 交互测试并最多自动修复�
 test("会话与需求托管只读运行并由确认动作逐级推进", () => {
   assert.match(executor, /conversation-managed/);
   assert.match(executor, /requirement-managed/);
-  assert.match(executor, /只负责理解并复述用户意图/);
-  assert.match(executor, /只负责只读调查原因、定位问题点并给出具体修正方案/);
+  assert.match(executor, /当前只负责交流、理解和确认意图/);
+  assert.match(executor, /只允许只读调查原因、定位问题点并给出具体修正方案/);
+  assert.match(executor, /这是后台工作边界，仅供内部遵守/);
+  assert.match(executor, /不要把用户每句话都改写成正式需求/);
+  assert.doesNotMatch(executor, /\[会话托管\]|\[需求托管\]|\[任务托管执行|\[测试托管执行/);
   assert.match(codexService, /analysisOnly/);
+  assert.match(codexService, /普通问题直接回答/);
+  assert.match(codexService, /不要机械复述阶段名称、规则、标签或固定模板/);
   assert.match(ipc, /mode === "conversation-managed" \|\| mode === "requirement-managed" \? "read-only"/);
 });
 

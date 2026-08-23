@@ -2,8 +2,10 @@
 
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
-<!-- 5.19.0 增加 Grid 单选结果语义色，并固定行内动作禁止整表刷新。 -->
-rule_version = 5.20.0
+<!-- 5.21.0 固定 SEL UI 唯一源码、新主题判断、Java 与 Node 分语言接入及 React 生命周期边界。 -->
+rule_version = 5.21.0
+<!-- 2026-08-23 将新工程稳定 UI 先匹配现有主题，确需沉淀时进入 SEL UI 新主题，并保持令牌迁移前后视觉一致。 -->
+upgrade_record_20260823_sel_ui_cross_language_adoption = one_sel_ui_source,existing_theme_first,new_reusable_ui_as_theme_pack,java_resource_jar,node_module_export,react_mount_destroy_adapter,visual_baseline_preserved
 <!-- 2026-08-20 固定浏览器关键资源同源交付，并要求SEL内核与能力脚本同步提升缓存版本。 -->
 upgrade_record_20260820_browser_bootstrap = same_origin_critical_assets,sel_kernel_and_capability_cache_version_sync,no_external_icon_cdn
 <!-- 页面直接编辑统一使用独立边框、真实右侧调宽手柄、统一圆角线条且业务控件不得覆盖。 -->
@@ -195,6 +197,49 @@ selplat_panel_toolbar_business_action.7 = no_header_action_dependency
 selplat_panel_toolbar_business_action.8 = composite_root_page_edit_registration
 
 ## API、主题与依赖
+
+<!-- SEL UI 的主题、运行时、公共控件和素材只能来自 shared/frontend/sel-ui，Java 与 Node 允许不同交付方式但不得形成第二份源码。 -->
+selplat_ui_authoritative_source = shared/frontend/sel-ui
+<!-- selplat_ui_authoritative_source.2 的当前独立事实为 one_theme_contract_and_component_registry。 -->
+selplat_ui_authoritative_source.2 = one_theme_contract_and_component_registry
+<!-- selplat_ui_authoritative_source.3 的当前独立事实为 no_application_sel_ui_copy。 -->
+selplat_ui_authoritative_source.3 = no_application_sel_ui_copy
+<!-- 新工程 UI 必须先匹配现有 theme、mode、accent、density；只有稳定且可跨页面或跨工程复用的完整视觉体系才能建立新主题包。 -->
+selplat_new_application_theme_adoption = existing_theme_mode_accent_density_first
+<!-- selplat_new_application_theme_adoption.2 的当前独立事实为 reusable_stable_visual_system_creates_theme_pack。 -->
+selplat_new_application_theme_adoption.2 = reusable_stable_visual_system_creates_theme_pack
+<!-- selplat_new_application_theme_adoption.3 的当前独立事实为 layout_or_business_difference_stays_in_application。 -->
+selplat_new_application_theme_adoption.3 = layout_or_business_difference_stays_in_application
+<!-- 既有 UI 令牌化第一阶段只替换视觉值来源，必须以相同真实值和截图基线证明主题接入没有擅自改变外观。 -->
+selplat_existing_ui_token_migration = exact_visual_values_to_sel_semantic_tokens
+<!-- selplat_existing_ui_token_migration.2 的当前独立事实为 before_after_same_environment_visual_baseline。 -->
+selplat_existing_ui_token_migration.2 = before_after_same_environment_visual_baseline
+<!-- selplat_existing_ui_token_migration.3 的当前独立事实为 redesign_is_separate_task。 -->
+selplat_existing_ui_token_migration.3 = redesign_is_separate_task
+<!-- Java 工程通过 Gradle 公共资源 JAR 和 /sel 路径加载 SEL UI，禁止复制公共静态文件或借 Node 安装 Java 页面资源。 -->
+selplat_java_sel_ui_adoption = gradle_resource_jar_to_META_INF_resources_sel
+<!-- selplat_java_sel_ui_adoption.2 的当前独立事实为 browser_loads_registered_sel_url_resources。 -->
+selplat_java_sel_ui_adoption.2 = browser_loads_registered_sel_url_resources
+<!-- selplat_java_sel_ui_adoption.3 的当前独立事实为 no_static_copy_and_no_node_install。 -->
+selplat_java_sel_ui_adoption.3 = no_static_copy_and_no_node_install
+<!-- Node、Vite 与 Electron 通过正式模块发布出口收集同一 SEL UI 的 CSS、JavaScript 和素材，不得深层相对引用或打入整个 shared。 -->
+selplat_node_sel_ui_adoption = registered_module_exports_from_same_sel_ui_source
+<!-- selplat_node_sel_ui_adoption.2 的当前独立事实为 build_collects_used_browser_runtime_only。 -->
+selplat_node_sel_ui_adoption.2 = build_collects_used_browser_runtime_only
+<!-- selplat_node_sel_ui_adoption.3 的当前独立事实为 no_deep_relative_import_and_no_whole_shared_packaging。 -->
+selplat_node_sel_ui_adoption.3 = no_deep_relative_import_and_no_whole_shared_packaging
+<!-- React 优先使用正式包装组件；尚无包装时只允许 ref 与 effect 接入公开 API，并在卸载阶段调用真实销毁入口。 -->
+selplat_react_sel_ui_adapter = registered_wrapper_or_ref_effect_public_api
+<!-- selplat_react_sel_ui_adapter.2 的当前独立事实为 one_mount_and_real_destroy。 -->
+selplat_react_sel_ui_adapter.2 = one_mount_and_real_destroy
+<!-- selplat_react_sel_ui_adapter.3 的当前独立事实为 no_component_dom_css_or_keyboard_copy。 -->
+selplat_react_sel_ui_adapter.3 = no_component_dom_css_or_keyboard_copy
+<!-- 接入后允许直接使用已登记公共控件，但调用方必须满足硬依赖、公开 API、主题感知和销毁生命周期。 -->
+selplat_registered_component_cross_host_consumption = java_or_native_window_sel_api
+<!-- selplat_registered_component_cross_host_consumption.2 的当前独立事实为 node_renderer_registered_module_runtime。 -->
+selplat_registered_component_cross_host_consumption.2 = node_renderer_registered_module_runtime
+<!-- selplat_registered_component_cross_host_consumption.3 的当前独立事实为 react_lifecycle_adapter。 -->
+selplat_registered_component_cross_host_consumption.3 = react_lifecycle_adapter
 
 <!-- 浏览器只允许 window.sel 一个 SEL 公共根；selGrid 等名称继续作为稳定控件 ID、文件名、CSS 前缀和内部标识，禁止重新发布平铺全局变量。 -->
 selplat_public_api_namespace = window.sel

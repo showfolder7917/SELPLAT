@@ -8,12 +8,18 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.46.0 接入统一工程临时目录与 Node 共通能力，删除应用私有路径拼接和源码依赖产物。 -->
-rule_version = 5.46.0
+<!-- 5.49.0 将托管职责保留为后台硬边界，并把用户可见回答恢复为自然协作表达。 -->
+rule_version = 5.49.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
 rule_status = active
+<!-- 5.47.0 固定 AI Desktop 通过构建期 Node 正式出口接入 SEL UI，安装包只携带编译后的实际主题资源。 -->
+upgrade_record_5_47 = 2026-08-23:developer_workbench公共主题_Node正式模块出口_React首次渲染前应用主题状态_Office与Developer样式删除私有颜色和像素文字字号_安装包禁止携带SEL_UI源码
+<!-- 5.48.0 修复登录主操作只有颜色令牌生效、尺寸令牌缺失导致文字挤出的问题。 -->
+upgrade_record_5_48 = 2026-08-23:SEL_UI基础令牌独立正式出口_宿主先加载tokens再加载contract和主题包_主操作尺寸文字焦点态完整令牌化_真实未登录Electron交互验证
+<!-- 5.49.0 防止阶段提示把自然表达重新压成固定模板，同时保持状态机、只读、写入、构建和测试职责不变。 -->
+upgrade_record_5_49 = 2026-08-23:真实用户消息首段_托管职责仅作后台内部约束_普通问题直接回答_禁止阶段标签进入回复正文_流程状态单独显示_权限与阶段门禁保持不变
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -141,6 +147,14 @@ upgrade_record_5_46 = 2026-08-23:公共Node路径包唯一解析_锁文件哈希
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
 <!-- 业务含义：桌面 UI 只作为可信客户端，真正的 Codex 会话、认证和执行协议由官方 harness 承担。 -->
 rule_scope = selplat/application/ai-desktop/official_harness
+<!-- AI Desktop 的 Developer 变体使用已沉淀的公共开发工作台主题，Office 变体使用普通极简浅色主题；应用 CSS 只维护布局和应用独有几何。 -->
+sel_ui_theme_variant_contract = developer_uses_developer_workbench_dark + office_uses_plain_minimal_light + application_css_layout_only
+<!-- React 必须在首次渲染前完成主题属性装配，避免首帧闪烁和组件读取到错误主题。 -->
+sel_ui_react_host_contract = apply_theme_state_before_createRoot + root_theme_mode_accent_density_attributes
+<!-- Node/Electron 只从正式包出口导入公共主题，SEL UI 为构建期依赖，安装包不得携带其源码目录。 -->
+sel_ui_node_delivery_contract = formal_package_exports_only + build_time_dependency + bundled_used_css_only + prohibit_sel_ui_source_in_installer
+<!-- 基础令牌必须由宿主通过正式 Node 出口直接加载并位于合同和主题包之前，嵌套 CSS import 不得成为唯一生产加载链。 -->
+sel_ui_base_token_loading_contract = formal_theme_tokens_export + host_loads_tokens_before_contract_and_theme_packs + nested_css_import_not_only_runtime_path + runtime_computed_token_visual_verification
 
 <!-- 唯一上游实现固定为 OpenAI 官方 Codex 仓库；业务含义是禁止接入来源不明的二次封装替代核心 harness。 -->
 official_codex_upstream_repository = https://github.com/openai/codex.git
@@ -185,6 +199,8 @@ harness_thread_metadata_contract = explicit_ai_desktop_serviceName_and_threadSou
 harness_user_input_purity_contract = response_language_in_developerInstructions + user_text_contains_real_task_workspace_context_and_attachments_only + real_task_before_workspace_context + no_language_or_internal_context_template_in_first_user_message_or_thread_preview
 <!-- developerInstructions 必须要求结论先行、自然协作、按复杂度组织 Markdown，禁止机械复述阶段名、规则和固定模板。 -->
 harness_natural_response_style_contract = locale_aware_natural_clear_language + outcome_first + thoughtful_collaborator_tone + concise_for_simple_tasks + structured_markdown_for_complex_tasks + no_mechanical_stage_rule_or_template_repetition
+<!-- 托管阶段仍由程序状态机和命令门禁强制执行；提示中的职责必须位于真实用户消息之后并标记为内部边界，禁止变成回答标题、开场白或固定复述。 -->
+managed_responsibility_and_response_separation_contract = real_user_message_first + internal_responsibility_after_user_message + never_echo_internal_contract_or_stage_label + ordinary_question_direct_answer + natural_complete_intent_summary_only_when_confirmation_is_needed + managed_status_rendered_separately + state_machine_sandbox_command_and_test_gates_unchanged
 <!-- 助手回复使用安全 GFM；禁止原始 HTML，外部链接只允许经主进程校验的 HTTP 或 HTTPS，用户原文继续按纯文本显示。 -->
 harness_markdown_rendering_contract = react_markdown_plus_gfm + raw_html_disabled + main_process_validated_http_https_external_links + readable_dark_theme_headings_lists_quotes_code_tables + user_messages_plain_text
 <!-- 0.149.0 的 thread/start sandbox 使用短横线枚举；共享白名单值可以原样传递，禁止改写为旧驼峰值。 -->
