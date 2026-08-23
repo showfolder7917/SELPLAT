@@ -53,7 +53,8 @@ let collaborationState = {
 };
 const publishCollaborationState = (reason) => {
   const copy = structuredClone(collaborationState);
-  for (const listener of collaborationStateListeners) listener({ state: copy, reason });
+  const taskIds = copy.tasks.map((task) => task.taskId);
+  for (const listener of collaborationStateListeners) listener({ state: copy, reason, taskIds });
   return copy;
 };
 const publishDispatchState = () => {
@@ -180,19 +181,40 @@ contextBridge.exposeInMainWorld("desktop", {
       atomicGroupId: null,
       dependencyTaskIds: [],
       integrationGeneration: null,
+      initiator: { memberId: "han-li", displayName: "韩立" },
+      historyCompleteness: "complete",
       snapshot: { title: "审核格式兼容", problemStatement: "审核正文不能丢失", confirmedIntent: "保存审核正文并补取结论。", constraints: [], acceptanceCriteria: [], sourceMessageIds: [], attachmentIds: [], workspaceState: workspace, locale: "zh-CN", contentHash: "interaction" },
-      plans: [{ version: 1, ownerMemberId: "isolated-member-10", text: "修正审核解析和状态持久化。", contentHash: "plan", createdAt: "2026-08-23T00:00:00.000Z" }],
+      plans: [{ version: 1, ownerMemberId: "isolated-member-10", ownerDisplayName: "张铁", status: "awaiting-review", text: "修正审核解析和状态持久化。", contentHash: "plan", createdAt: "2026-08-23T00:00:00.000Z" }],
       reviews: [],
-      reviewAttempts: [{ attemptId: "attempt-1", planVersion: 1, reviewerMemberId: "isolated-member-7", reviewerGeneration: 1, outcome: "decision-unrecognized", decision: null, decisionSource: null, rawOutput: "审核内容已经完整生成，但旧格式没有首行标记。", clarificationOutput: "仍未返回唯一标记", error: "审核正文已生成，但结论无法识别。", startedAt: "2026-08-23T00:00:00.000Z", completedAt: "2026-08-23T00:01:00.000Z" }],
+      reviewAttempts: [{ attemptId: "attempt-1", planVersion: 1, reviewerMemberId: "isolated-member-7", reviewerDisplayName: "墨大夫", reviewerGeneration: 1, outcome: "decision-unrecognized", decision: null, decisionSource: null, rawOutput: "审核内容已经完整生成，但旧格式没有首行标记。", clarificationOutput: "仍未返回唯一标记", error: "审核正文已生成，但结论无法识别。", startedAt: "2026-08-23T00:00:00.000Z", completedAt: "2026-08-23T00:01:00.000Z" }],
+      executionRecords: [{ assignmentId: "interaction-assignment", executor: { memberId: "isolated-member-10", displayName: "张铁" }, workerGeneration: 1, status: "waiting-review", assignedAt: "2026-08-23T00:00:00.000Z", executionStartedAt: null, completedAt: null, transferFromAssignmentId: null, handoffType: "initial", result: null, blockingReason: null }],
+      flowEvents: [{ eventId: "flow-1", type: "task.submitted", stage: "task", status: "started", actor: { memberId: "han-li", displayName: "韩立" }, summary: "任务已提交", occurredAt: "2026-08-23T00:00:00.000Z", error: false }],
       versionWorkspace: null,
       finalResult: null,
+      resultSummary: null,
       blockingReason: "墨大夫审核正文已保存，但结论无法识别，等待其他审核员确认",
       recoveryTargetState: null,
+      startedAt: "2026-08-23T00:00:00.000Z",
+      codeVerifiedAt: null,
       createdAt: "2026-08-23T00:00:00.000Z",
       updatedAt: "2026-08-23T00:01:00.000Z",
       completedAt: null,
     }] : [];
     return publishCollaborationState("interaction.review_fixture");
+  },
+  setInteractionCollaborationExecutionFixture: async (active) => {
+    collaborationState.tasks = active ? [{
+      taskId: "interaction-execution-task", taskRevision: 1, assignmentId: "assignment-2", workerGeneration: 2, state: "integrated", phase: "ready", executorMemberId: "isolated-member-5", currentReviewerMemberId: null, currentPlanVersion: 1, explicitRejectionCount: 0, infrastructureFailureCount: 0, mergeStrategy: "INDEPENDENT", atomicGroupId: null, dependencyTaskIds: [], integrationGeneration: 2,
+      initiator: { memberId: "han-li", displayName: "韩立" }, historyCompleteness: "complete",
+      snapshot: { title: "修复协同归档展示", problemStatement: "完成任务仍混在人物历史中。", confirmedIntent: "完成任务进入全局执行列表并显示结果摘要。", constraints: [], acceptanceCriteria: [], sourceMessageIds: [], attachmentIds: [], workspaceState: workspace, locale: "zh-CN", contentHash: "execution" },
+      plans: [{ version: 1, ownerMemberId: "isolated-member-4", ownerDisplayName: "宋玉", status: "approved", text: "增加任务归档入口和结构化摘要。", contentHash: "plan", createdAt: "2026-08-23T00:01:00.000Z" }],
+      reviews: [{ reviewId: "review-2", planVersion: 1, reviewerMemberId: "isolated-member-5", reviewerDisplayName: "冰魄仙子", reviewerGeneration: 1, decision: "passed", feedback: "满足已确认需求。", createdAt: "2026-08-23T00:02:00.000Z" }],
+      reviewAttempts: [{ attemptId: "attempt-2", planVersion: 1, reviewerMemberId: "isolated-member-5", reviewerDisplayName: "冰魄仙子", reviewerGeneration: 1, outcome: "decided", decision: "passed", decisionSource: "tag", rawOutput: "审核通过", clarificationOutput: null, error: null, startedAt: "2026-08-23T00:01:30.000Z", completedAt: "2026-08-23T00:02:00.000Z" }],
+      executionRecords: [{ assignmentId: "assignment-1", executor: { memberId: "isolated-member-4", displayName: "宋玉" }, workerGeneration: 1, status: "transferred", assignedAt: "2026-08-23T00:00:00.000Z", executionStartedAt: null, completedAt: "2026-08-23T00:03:00.000Z", transferFromAssignmentId: null, handoffType: "initial", result: null, blockingReason: "恢复后转交" }, { assignmentId: "assignment-2", executor: { memberId: "isolated-member-5", displayName: "冰魄仙子" }, workerGeneration: 2, status: "code-verified", assignedAt: "2026-08-23T00:03:00.000Z", executionStartedAt: "2026-08-23T00:03:30.000Z", completedAt: "2026-08-23T00:08:00.000Z", transferFromAssignmentId: "assignment-1", handoffType: "transfer", result: "归档入口已完成", blockingReason: null }],
+      flowEvents: [{ eventId: "flow-2", type: "task.submitted", stage: "task", status: "started", actor: { memberId: "han-li", displayName: "韩立" }, summary: "任务已提交", occurredAt: "2026-08-23T00:00:00.000Z", error: false }, { eventId: "flow-3", type: "integration.completed", stage: "integration", status: "completed", actor: null, summary: "任务已通过集成并归档到执行列表", occurredAt: "2026-08-23T00:10:00.000Z", error: false }],
+      versionWorkspace: null, finalResult: "执行列表与结果摘要已完成。", resultSummary: { outcome: "succeeded", finalResult: "执行列表与结果摘要已完成。", originalProblem: "完成任务仍混在人物历史中。", solvedProblem: "完成任务现已独立归档。", changes: "新增执行列表、多人执行记录与折叠详情。", remaining: "无已知遗留内容。", success: true, generatedAt: "2026-08-23T00:10:00.000Z" }, blockingReason: null, recoveryTargetState: null, startedAt: "2026-08-23T00:00:00.000Z", codeVerifiedAt: "2026-08-23T00:08:00.000Z", createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:10:00.000Z", completedAt: "2026-08-23T00:10:00.000Z",
+    }] : [];
+    return publishCollaborationState("interaction.execution_fixture");
   },
   getConversationDispatchState: async () => structuredClone(dispatchState),
   enqueueMessage: async ({ request, displayText, automatic }) => {

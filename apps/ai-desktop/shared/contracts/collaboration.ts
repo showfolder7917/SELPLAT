@@ -7,6 +7,9 @@ export type CollaborationMemberRole = "conversation" | "executor" | "reviewer" |
 export type CollaborationMemberState = "idle" | "conversation" | "assigned" | "working" | "waiting-review" | "reviewing" | "retiring" | "recovering" | "draining" | "offline";
 export type CollaborationWorkerPhase = "analyzing" | "planning" | "implementing" | "verifying" | "finalizing" | "ready" | "blocked" | "failed" | null;
 export type CollaborationMergeStrategy = "INDEPENDENT" | "ATOMIC_GROUP" | "DEPENDENCY_CHAIN";
+export type CollaborationPlanStatus = "awaiting-review" | "approved" | "rejected" | "forced";
+export type CollaborationExecutionStatus = "assigned" | "analyzing" | "waiting-review" | "executing" | "code-verified" | "transferred" | "blocked" | "cancelled";
+export type CollaborationResultOutcome = "pending-integration" | "succeeded" | "incomplete" | "cancelled";
 export type CollaborationTaskState =
   | "queued-executor"
   | "preparing-worktree"
@@ -44,6 +47,11 @@ export interface CollaborationMember {
   updatedAt: string;
 }
 
+export interface CollaborationParticipantSnapshot {
+  memberId: string;
+  displayName: string;
+}
+
 export interface CollaborationTaskSnapshot {
   title: string;
   problemStatement: string;
@@ -60,6 +68,8 @@ export interface CollaborationTaskSnapshot {
 export interface CollaborationRequirementPlan {
   version: number;
   ownerMemberId: string;
+  ownerDisplayName: string;
+  status: CollaborationPlanStatus;
   text: string;
   contentHash: string;
   createdAt: string;
@@ -69,6 +79,7 @@ export interface CollaborationReview {
   reviewId: string;
   planVersion: number;
   reviewerMemberId: string;
+  reviewerDisplayName: string;
   reviewerGeneration: number;
   decision: "passed" | "rejected";
   feedback: string;
@@ -79,6 +90,7 @@ export interface CollaborationReviewAttempt {
   attemptId: string;
   planVersion: number;
   reviewerMemberId: string;
+  reviewerDisplayName: string;
   reviewerGeneration: number;
   outcome: "decided" | "decision-unrecognized" | "infrastructure-failed";
   decision: "passed" | "rejected" | null;
@@ -88,6 +100,42 @@ export interface CollaborationReviewAttempt {
   error: string | null;
   startedAt: string;
   completedAt: string;
+}
+
+export interface CollaborationExecutionRecord {
+  assignmentId: string;
+  executor: CollaborationParticipantSnapshot;
+  workerGeneration: number;
+  status: CollaborationExecutionStatus;
+  assignedAt: string;
+  executionStartedAt: string | null;
+  completedAt: string | null;
+  transferFromAssignmentId: string | null;
+  handoffType: "initial" | "resume" | "transfer";
+  result: string | null;
+  blockingReason: string | null;
+}
+
+export interface CollaborationFlowEvent {
+  eventId: string;
+  type: string;
+  stage: "task" | "analysis" | "review" | "execution" | "integration" | "recovery";
+  status: "started" | "completed" | "failed" | "waiting" | "cancelled";
+  actor: CollaborationParticipantSnapshot | null;
+  summary: string;
+  occurredAt: string;
+  error: boolean;
+}
+
+export interface CollaborationResultSummary {
+  outcome: CollaborationResultOutcome;
+  finalResult: string;
+  originalProblem: string;
+  solvedProblem: string;
+  changes: string;
+  remaining: string;
+  success: boolean;
+  generatedAt: string;
 }
 
 export interface CollaborationVersionWorkspace {
@@ -116,14 +164,21 @@ export interface CollaborationTask {
   atomicGroupId: string | null;
   dependencyTaskIds: string[];
   integrationGeneration: number | null;
+  initiator: CollaborationParticipantSnapshot | null;
+  historyCompleteness: "complete" | "legacy-partial";
   snapshot: CollaborationTaskSnapshot;
   plans: CollaborationRequirementPlan[];
   reviews: CollaborationReview[];
   reviewAttempts: CollaborationReviewAttempt[];
+  executionRecords: CollaborationExecutionRecord[];
+  flowEvents: CollaborationFlowEvent[];
   versionWorkspace: CollaborationVersionWorkspace | null;
   finalResult: string | null;
+  resultSummary: CollaborationResultSummary | null;
   blockingReason: string | null;
   recoveryTargetState: CollaborationTaskState | null;
+  startedAt: string;
+  codeVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -172,11 +227,13 @@ export interface SubmitCollaborationTaskRequest {
   mergeStrategy?: CollaborationMergeStrategy;
   atomicGroupId?: string;
   dependencyTaskIds?: string[];
+  initiatorMemberId?: string;
 }
 
 export interface CollaborationStateEvent {
   state: CollaborationState;
   reason: string;
+  taskIds: string[];
 }
 
 export interface CollaborationStreamEnvelope {

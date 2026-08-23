@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { CollaborationDurationLog } from "../dist-electron/electron/services/collaboration/collaboration-duration-log.js";
-import { nextReviewAction } from "../dist-electron/electron/services/collaboration/collaboration-coordinator.js";
+import { createCollaborationResultSummary, nextReviewAction } from "../dist-electron/electron/services/collaboration/collaboration-coordinator.js";
 import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../dist-electron/electron/services/collaboration/collaboration-codex-sessions.js";
 import { ensureIntegrationDependencies } from "../dist-electron/electron/services/collaboration/integration-verifier.js";
 import { CollaborationStore } from "../dist-electron/electron/services/collaboration/collaboration-store.js";
@@ -47,6 +47,9 @@ test("进程中断后任务显式进入恢复态，继续时重新排队且不�
       workspaceState,
       locale: "zh-CN",
     });
+    assert.equal(task.initiator.displayName, "韩立");
+    assert.equal(task.startedAt, task.createdAt);
+    assert.equal(task.flowEvents[0].type, "task.submitted");
     first.updateTask(task.taskId, "test.executing", (current, state) => {
       const member = state.members.find((candidate) => candidate.memberId === "song-yu");
       member.state = "working";
@@ -65,6 +68,26 @@ test("进程中断后任务显式进入恢复态，继续时重新排队且不�
     assert.equal(continuedTask.executorMemberId, "song-yu");
     assert.equal(continuedTask.assignmentId, null);
     assert.equal(continued.members.find((candidate) => candidate.memberId === "song-yu").state, "idle");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("执行结果标题被转换为可直接归档的结构化摘要", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-summary-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const task = store.submitTask({ title: "结果摘要", problemStatement: "旧结果只能翻日志查看", confirmedIntent: "执行列表首先展示任务价值。", workspaceState, locale: "zh-CN" });
+    const summary = createCollaborationResultSummary(task, [
+      "## 最终执行结果", "新增独立执行列表。", "## 原来存在的问题", "完成记录散落在人物页。",
+      "## 本次解决的问题", "完成任务统一归档。", "## 具体修正或改变", "增加结构化结果与流转记录。",
+      "## 完成状态", "代码级验证完成。", "## 遗留内容", "无",
+    ].join("\n"));
+    assert.equal(summary.finalResult, "新增独立执行列表。");
+    assert.equal(summary.originalProblem, "完成记录散落在人物页。");
+    assert.equal(summary.solvedProblem, "完成任务统一归档。");
+    assert.equal(summary.changes, "增加结构化结果与流转记录。");
+    assert.equal(summary.remaining, "无");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -193,5 +216,8 @@ test("协同编排保持独立连接、异人审核、三次上限、心跳和�
   assert.match(integrationVerifier, /unlinkSync\(path\.join\(desktopRoot, "node_modules"\)\)/);
   assert.match(ui, /reviewAttempts\.some/);
   assert.match(ui, /审核正文已保存，结论未确认/);
-  assert.doesNotMatch(ui, /CollaborationMemberPage[\s\S]*durationMs/);
+  const memberPageSource = ui.slice(ui.indexOf("function CollaborationMemberPage"), ui.indexOf("function collaborationMemberStateLabel"));
+  assert.doesNotMatch(memberPageSource, /durationMs|总耗时/);
+  assert.match(ui, /CollaborationExecutionList/);
+  assert.match(ui, /任务结果摘要/);
 });

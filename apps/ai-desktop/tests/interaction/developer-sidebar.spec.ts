@@ -158,6 +158,33 @@ test("审核正文已生成但结论无法识别时保留正文并显示准确�
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
+test("协同执行列表归档完成任务并优先展示结构化结果摘要", async () => {
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(true));
+  await page.getByRole("button", { name: "展开任务" }).click();
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式" }).click();
+  await taskList.getByRole("button", { name: /执行列表/ }).click();
+
+  const record = page.locator(".execution-record");
+  await expect(record.getByText("修复协同归档展示", { exact: true })).toBeVisible();
+  await expect(record.getByText("韩立", { exact: true })).toBeVisible();
+  await expect(record.getByText("宋玉、冰魄仙子", { exact: true })).toBeVisible();
+  await expect(record.getByText("10分钟 0秒", { exact: true })).toBeVisible();
+
+  await record.locator("summary").click();
+  await record.getByRole("button", { name: "打开完整记录" }).click();
+  const detail = page.locator(".collaboration-task-detail");
+  await expect(detail.getByText("任务结果", { exact: true })).toBeVisible();
+  await expect(detail.getByText("执行列表与结果摘要已完成。", { exact: true })).toBeVisible();
+  await detail.locator("summary").filter({ hasText: /^执行人员与转交流程/ }).click();
+  await expect(detail.getByText("1. 宋玉", { exact: true })).toBeVisible();
+  await expect(detail.getByText("2. 冰魄仙子", { exact: true })).toBeVisible();
+
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(false));
+  await taskList.getByRole("button", { name: "单会话" }).click();
+  await page.getByRole("button", { name: "展开工作区" }).click();
+});
+
 test("资源管理器整栏与工作区分区均可折叠恢复", async () => {
   const explorerTitleToggle = page.locator(".explorer-title").getByRole("button", { name: "折叠资源管理器" });
   await explorerTitleToggle.click();
