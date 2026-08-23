@@ -14,6 +14,7 @@ import type {
   Locale,
   ManagedExecutionMode,
   DesktopSettings,
+  ModelServiceTier,
   ReasoningEffort,
   CodexUserInputRequest,
   ResolveCodexUserInputRequest,
@@ -280,6 +281,7 @@ export class CodexService {
     try {
       // 每轮读取最新全局值，让持久会话与临时协同连接同时生效且没有会话级覆盖分支。
       const modelSettings = this.#options.readSettings();
+      await this.#assertModelSettingsSupported(modelSettings);
       const result = asObject(await this.#request("turn/start", {
         threadId,
         cwd: primaryRoot.path,
@@ -298,6 +300,28 @@ export class CodexService {
     } finally {
       this.#activeExecutionMode = null;
       this.#activeWorkspaces = null;
+    }
+  }
+
+  /**
+   * app-server 已明确列出模型能力时，禁止把不支持的全局选择静默降级为默认值。
+   * 这同时覆盖主会话、协同执行和协同审核，因为三者共用 send 调用路径。
+   */
+  async #assertModelSettingsSupported(settings: DesktopSettings): Promise<void> {
+    if (!settings.defaultModel && !settings.reasoningEffort && settings.serviceTier === "default") return;
+    const catalog = await this.getModels();
+    const model = settings.defaultModel
+      ? catalog.models.find((entry) => entry.id === settings.defaultModel)
+      : catalog.models.find((entry) => entry.isDefault);
+    if (!model) {
+      if (settings.defaultModel) throw new Error(`全局默认模型“${settings.defaultModel}”当前不可用，请在设置中重新选择。`);
+      return;
+    }
+    if (settings.reasoningEffort && model.supportedReasoningEfforts.length > 0 && !model.supportedReasoningEfforts.includes(settings.reasoningEffort)) {
+      throw new Error(`模型“${model.displayName}”不支持推理强度“${settings.reasoningEffort}”，请在设置中重新选择。`);
+    }
+    if (settings.serviceTier !== "default" && !model.supportedServiceTiers.includes(settings.serviceTier)) {
+      throw new Error(`模型“${model.displayName}”不支持快速处理，请在设置中切换为标准速度或选择支持该速度的模型。`);
     }
   }
 
@@ -739,11 +763,23 @@ function normalizeModelOption(value: unknown): CodexModelOption | null {
       ? normalizeReasoningEffort(entry)
       : normalizeReasoningEffort(stringValue(asObject(entry).reasoningEffort) || stringValue(asObject(entry).effort)))
     .filter((effort): effort is ReasoningEffort => Boolean(effort));
+  const serviceTierSource = [
+    // 新版目录直接给出受支持服务层级；其他字段保留给固定旧版 app-server 的兼容读取。
+    ...(Array.isArray(model.supportedServiceTiers) ? model.supportedServiceTiers : []),
+    ...(Array.isArray(model.serviceTiers) ? model.serviceTiers : []),
+    ...(Array.isArray(model.additionalSpeedTiers) ? model.additionalSpeedTiers : []),
+    ...(model.supportsFastMode === true ? ["fast"] : []),
+  ];
+  const supportedServiceTiers = [...new Set([
+    "default" as ModelServiceTier,
+    ...serviceTierSource.map((entry) => normalizeServiceTier(typeof entry === "string" ? entry : stringValue(asObject(entry).serviceTier))).filter((tier): tier is ModelServiceTier => Boolean(tier)),
+  ])];
   return {
     id,
     displayName: stringValue(model.displayName) || id,
     provider: stringValue(model.provider) || stringValue(model.modelProvider),
     supportedReasoningEfforts,
+    supportedServiceTiers,
     defaultReasoningEffort: normalizeReasoningEffort(stringValue(model.defaultReasoningEffort)),
     isDefault: model.isDefault === true,
   };
@@ -752,6 +788,10 @@ function normalizeModelOption(value: unknown): CodexModelOption | null {
 function normalizeReasoningEffort(value: string | null): ReasoningEffort | null {
   return value === "none" || value === "minimal" || value === "low" || value === "medium"
     || value === "high" || value === "xhigh" || value === "max" ? value : null;
+}
+
+function normalizeServiceTier(value: string | null): ModelServiceTier | null {
+  return value === "default" || value === "fast" ? value : null;
 }
 
 /** 把官方 app-server 通知收敛成渲染层允许消费的稳定、最小化实时事件。 */

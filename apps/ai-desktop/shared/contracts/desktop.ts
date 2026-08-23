@@ -239,6 +239,7 @@ export interface CodexModelOption {
   displayName: string;
   provider: string | null;
   supportedReasoningEfforts: ReasoningEffort[];
+  supportedServiceTiers: ModelServiceTier[];
   defaultReasoningEffort: ReasoningEffort | null;
   isDefault: boolean;
 }
