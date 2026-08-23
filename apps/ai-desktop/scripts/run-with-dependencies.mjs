@@ -1,13 +1,19 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { attachDependencyCache, detachOwnedDependencyCache, resolveDependencyCache } from "./dependency-cache.mjs";
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error("A command is required.");
 
-// 锁文件变化后先复用统一准备入口补齐新哈希缓存，避免所有受控命令在挂载阶段直接失败。
 const unresolvedCache = resolveDependencyCache();
+// 签发 worktree 的验证器已按相同锁文件建立受控依赖链接；直接使用该链接，避免把外层临时挂载误判为待迁移的源码依赖。
+if (process.env.AI_DESKTOP_TEST_TASK_ID && existsSync(unresolvedCache.linkPath) && lstatSync(unresolvedCache.linkPath).isSymbolicLink()) {
+  runCommand(realpathSync(unresolvedCache.linkPath), unresolvedCache.appRoot);
+  process.exit();
+}
+
+// 锁文件变化后先复用统一准备入口补齐新哈希缓存，避免所有受控命令在挂载阶段直接失败。
 if (!existsSync(unresolvedCache.dependencyRoot)) {
   const prepared = spawnSync(process.execPath, ["scripts/ensure-dependency-cache.mjs"], {
     cwd: unresolvedCache.appRoot,
@@ -32,17 +38,21 @@ try {
       if (prepared.status !== 0) throw new Error(`Node common runtime preparation failed: ${script} (${prepared.status ?? 1})`);
     }
   }
+  runCommand(cache.dependencyRoot, cache.appRoot);
+} finally {
+  detachOwnedDependencyCache(cache);
+}
+
+function runCommand(dependencyRoot, appRoot) {
   const executable = command === "node"
     ? process.execPath
-    : path.join(cache.dependencyRoot, ".bin", process.platform === "win32" ? `${command}.cmd` : command);
+    : path.join(dependencyRoot, ".bin", process.platform === "win32" ? `${command}.cmd` : command);
   const result = spawnSync(executable, args, {
-    cwd: cache.appRoot,
+    cwd: appRoot,
     stdio: "inherit",
     shell: process.platform === "win32",
-    env: { ...process.env, PATH: `${path.join(cache.dependencyRoot, ".bin")}${path.delimiter}${process.env.PATH || ""}` },
+    env: { ...process.env, PATH: `${path.join(dependencyRoot, ".bin")}${path.delimiter}${process.env.PATH || ""}` },
   });
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;
-} finally {
-  detachOwnedDependencyCache(cache);
 }
