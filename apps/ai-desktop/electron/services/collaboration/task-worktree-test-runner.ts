@@ -16,6 +16,7 @@ interface TaskWorktreeTestRequest {
 
 const TEST_SCRIPTS = [
   { name: "typecheck", expected: "node scripts/run-with-dependencies.mjs tsc -p tsconfig.json --noEmit", timeout: 180_000 },
+  // 与签发验证器的精确脚本签名保持一致：先生成隔离渲染与主进程产物，再从锁定依赖缓存运行交互检查。
   { name: "test:interaction", expected: "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs", timeout: 360_000 },
 ] as const;
 
