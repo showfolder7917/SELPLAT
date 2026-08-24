@@ -44,7 +44,6 @@ import type {
   CodexModelCatalog,
   CodexStreamActivity,
   CodexStreamEvent,
-  CodexStreamPlanStep,
   CodexUserInputRequest,
   CollaborationMember,
   CollaborationState,
@@ -59,11 +58,9 @@ import type {
   LinghuAutomationStateEvent,
   LinghuStartupPrompt,
   ManagedExecutionMode,
-  ManagedExecutionUpdate,
   ModelServiceTier,
   ReasoningEffort,
   SandboxMode,
-  ScreenshotAttachment,
   TempDirectoryInfo,
   TrustedCommandInfo,
   AuditLogInfo,
@@ -71,15 +68,14 @@ import type {
   WorkspaceEntry,
   WorkspacePermission,
   WorkspaceState,
-} from "../../../shared/contracts/desktop";
+} from "../../../contracts/desktop";
+import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, managedModeForCommand, nextManagedMode, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "../../features/conversation/model/chat-message";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "./collaboration-task-progress";
 import "@selplat/sel-ui/core/kernel";
 import "@selplat/sel-ui/components/floating-panel";
 import "@selplat/sel-ui/components/floating-panel/styles";
 import "./developer.css";
-
-type ComposerAttachment = ScreenshotAttachment & { dataUrl: string };
 
 type SelFloatingPanelController = {
   body: HTMLElement;
@@ -154,27 +150,6 @@ function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { local
     {portalBody && open && createPortal(children, portalBody)}
   </div>;
 }
-type Message = {
-  id: number;
-  role: "user" | "assistant";
-  text: string;
-  attachments?: ComposerAttachment[];
-  streaming?: boolean;
-  streamStatus?: string;
-  streamError?: string;
-  reasoningSummary?: string;
-  activities?: CodexStreamActivity[];
-  plan?: CodexStreamPlanStep[];
-  changedFiles?: string[];
-  managedExecution?: ManagedExecutionUpdate;
-  managedMode?: ManagedExecutionMode;
-  actionTriggered?: boolean;
-  turnOrder?: string[];
-  turnSegments?: Record<string, string>;
-  streamTerminal?: boolean;
-  collaborationTaskId?: string;
-};
-
 /** 每个协同流式回合保留收到时的环节，避免状态推进后把旧报告错放到新环节。 */
 type CollaborationLiveOutput = {
   message: Message;
@@ -192,28 +167,12 @@ const EMPTY_STATUS: CodexHarnessStatus = { connected: false, account: EMPTY_ACCO
 const DEFAULT_EXPLORER_WIDTH = 260;
 const MINIMUM_EXPLORER_WIDTH = 200;
 const MAXIMUM_EXPLORER_WIDTH = 520;
-const ACTIVE_CHAT_STORAGE_KEY = "ai-desktop.active-chat.v1";
 const EMPTY_DISPATCH_STATE: ConversationDispatchState = { activeTask: null, queue: [] };
 type ActiveExplorerSection = "workspace" | "tasks";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
-}
-
-/** 每个真实 Harness 回合使用一张独立回复卡，禁止后续回合复用并覆盖已有文字。 */
-function createAssistantMessage(id: number, managedMode: ManagedExecutionMode): Message {
-  return {
-    id,
-    role: "assistant",
-    text: "",
-    streaming: true,
-    streamStatus: "starting",
-    activities: [],
-    plan: [],
-    changedFiles: [],
-    managedMode,
-  };
 }
 
 function WindowControls() {
@@ -423,7 +382,7 @@ export function DeveloperApp() {
     void desktop.getActiveCodexSession().then((session) => {
       setActiveThreadId(session.threadId);
       if (!session.threadId) {
-        window.localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+        clearStoredChat();
         return;
       }
       const stored = readStoredChat(session.threadId);
@@ -441,12 +400,7 @@ export function DeveloperApp() {
         ...message,
         streaming: false,
       }));
-      window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, JSON.stringify({
-        version: 1,
-        threadId: activeThreadId,
-        executionMode,
-        messages: persistentMessages,
-      }));
+      writeStoredChat(activeThreadId, executionMode, persistentMessages);
     }, 250);
     return () => window.clearTimeout(timer);
   }, [activeThreadId, chatHydrated, executionMode, messages]);
@@ -837,7 +791,7 @@ export function DeveloperApp() {
       setAutomaticTestEnabled(false);
       setAutomaticTestDialog(null);
       void discardAutomaticQueued();
-      window.localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+      clearStoredChat();
       setScreenshotError("");
     } catch (error) {
       // 只有官方确认删除后才清空页面；失败时把当前任务完整留在界面供用户重试。
@@ -1694,88 +1648,6 @@ async function imageFileToPngDataUrl(file: File): Promise<string> {
   }
 }
 
-function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Message {
-  if (message.streamTerminal && event.type !== "error") return message;
-  if (event.type === "message-delta") return updateTurnSegment(message, event.segmentId || event.turnId, (current) => `${current}${event.delta || ""}`, "responding");
-  if (event.type === "message-completed") {
-    return updateTurnSegment(message, event.segmentId || event.turnId, (current) => event.text ?? current, "responding");
-  }
-  if (event.type === "reasoning-summary-delta") {
-    return { ...message, reasoningSummary: `${message.reasoningSummary || ""}${event.delta || ""}`, streamStatus: "reasoning" };
-  }
-  if (event.type === "activity" && event.activity) {
-    const activities = upsertStreamActivity(message.activities || [], event.activity);
-    return { ...message, activities, streamStatus: event.activity.itemType };
-  }
-  if (event.type === "plan-updated") return { ...message, plan: event.plan || [], streamStatus: "planning" };
-  if (event.type === "diff-updated") return { ...message, changedFiles: event.changedFiles || [], streamStatus: "fileChange" };
-  if (event.type === "turn-completed") {
-    return { ...message, streaming: false, streamStatus: event.status || "completed", streamError: event.error };
-  }
-  if (event.type === "managed-execution" && event.managedExecution) {
-    const terminal = event.managedExecution.stage === "completed" || event.managedExecution.status === "blocked";
-    return { ...message, streaming: !terminal, streamTerminal: terminal, streamStatus: terminal ? (event.managedExecution.status === "blocked" ? "failed" : "completed") : event.managedExecution.stage, managedExecution: event.managedExecution };
-  }
-  if (event.type === "error") return { ...message, streaming: false, streamTerminal: true, streamStatus: "failed", streamError: event.error };
-  if (event.type === "turn-started") {
-    return updateTurnSegment(message, event.turnId, (current) => current, "inProgress", true);
-  }
-  return message;
-}
-
-function updateTurnSegment(
-  message: Message,
-  turnId: string,
-  update: (current: string) => string,
-  streamStatus: string,
-  streaming = message.streaming,
-): Message {
-  const order = message.turnOrder?.includes(turnId) ? message.turnOrder : [...(message.turnOrder || []), turnId];
-  const segments = { ...(message.turnSegments || {}), [turnId]: update(message.turnSegments?.[turnId] || "") };
-  const text = order.map((id) => segments[id] || "").filter((segment, index) => segment.length > 0 || index === order.length - 1).join("\n\n");
-  return { ...message, text, turnOrder: order, turnSegments: segments, streaming, streamStatus };
-}
-
-function readStoredChat(threadId: string): { executionMode: ManagedExecutionMode; messages: Message[] } | null {
-  try {
-    const value = JSON.parse(window.localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY) || "null") as {
-      version?: number;
-      threadId?: string;
-      executionMode?: ManagedExecutionMode;
-      messages?: unknown[];
-    } | null;
-    if (!value || value.version !== 1 || value.threadId !== threadId || !isManagedExecutionModeValue(value.executionMode)) return null;
-    const messages = (value.messages || []).flatMap((entry) => {
-      if (!entry || typeof entry !== "object") return [];
-      const candidate = entry as Partial<Message>;
-      if (!Number.isSafeInteger(candidate.id) || (candidate.role !== "user" && candidate.role !== "assistant") || typeof candidate.text !== "string") return [];
-      return [{ ...candidate, id: candidate.id as number, role: candidate.role, text: candidate.text, streaming: false } as Message];
-    }).slice(-200);
-    return { executionMode: value.executionMode, messages };
-  } catch {
-    return null;
-  }
-}
-
-function isManagedExecutionModeValue(value: unknown): value is ManagedExecutionMode {
-  return value === "conversation-managed" || value === "requirement-managed" || value === "task-managed" || value === "test-managed";
-}
-
-function managedModeForCommand(command: string, current: ManagedExecutionMode): ManagedExecutionMode | null {
-  const normalized = command.trim();
-  if (normalized === "1") return nextManagedMode(current);
-  if (current === "conversation-managed" && normalized === "就是这意思") return "requirement-managed";
-  if (current === "requirement-managed" && normalized === "按这个方案执行") return "task-managed";
-  if ((current === "task-managed" || current === "test-managed") && normalized === "测试一下") return "test-managed";
-  return null;
-}
-
-function nextManagedMode(current: ManagedExecutionMode): ManagedExecutionMode {
-  if (current === "conversation-managed") return "requirement-managed";
-  if (current === "requirement-managed") return "task-managed";
-  return "test-managed";
-}
-
 function managedModeLabel(mode: ManagedExecutionMode, locale: Locale): string {
   const labelsByMode: Record<ManagedExecutionMode, { ja: string; "zh-CN": string }> = {
     "conversation-managed": { ja: "会話管理", "zh-CN": "会话托管" },
@@ -1879,22 +1751,6 @@ function CollaborationStatusChain({ task, locale, onRetry }: { task: Collaborati
     <details className="collaboration-status-task-details"><summary>{locale === "ja" ? `タスク詳細 · ${task.initiator?.displayName || "システム"}` : `任务详细 · ${task.initiator?.displayName || "系统"}`}</summary><div><MarkdownMessage text={task.snapshot.confirmedIntent} /></div></details>
     <footer><span>{locale === "ja" ? "現在の担当" : "当前负责人"}：<strong>{handler}</strong></span>{retryable && <button type="button" onClick={() => void onRetry(task.taskId)}><ArrowClockwise24Regular />{retryLabel}</button>}</footer>
   </section>;
-}
-
-function upsertStreamActivity(current: CodexStreamActivity[], incoming: CodexStreamActivity): CodexStreamActivity[] {
-  const index = current.findIndex((activity) => activity.id === incoming.id);
-  if (index < 0) return [...current, incoming].slice(-12);
-  const next = [...current];
-  const previous = next[index];
-  next[index] = {
-    ...previous,
-    ...incoming,
-    summary: incoming.summary || previous.summary,
-    detail: incoming.phase === "output"
-      ? `${previous.detail || ""}${incoming.detail || ""}`.slice(-2_000)
-      : incoming.detail || previous.detail,
-  };
-  return next;
 }
 
 function StreamDetails({ message, locale }: { message: Message; locale: Locale }) {

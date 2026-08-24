@@ -8,22 +8,10 @@ import {
   Square20Regular,
 } from "@fluentui/react-icons";
 
-import type { Locale, ScreenCapture } from "../../../shared/contracts/desktop";
-
-type Tool = "pen" | "rectangle";
-type Point = { x: number; y: number };
-type Rectangle = { x: number; y: number; width: number; height: number };
-type PenAnnotation = { id: string; type: "pen"; points: Point[] };
-type RectangleAnnotation = { id: string; type: "rectangle"; rectangle: Rectangle };
-type Annotation = PenAnnotation | RectangleAnnotation;
-type ResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
-type CanvasViewport = Rectangle;
-type PointerTarget = HTMLElement | SVGElement;
-type ActiveInteraction =
-  | { kind: "draw-pen"; pointerId: number; annotation: PenAnnotation }
-  | { kind: "draw-rectangle"; pointerId: number; annotation: RectangleAnnotation; origin: Point }
-  | { kind: "move"; pointerId: number; annotationId: string; origin: Point; original: Rectangle; current: Rectangle }
-  | { kind: "resize"; pointerId: number; annotationId: string; origin: Point; original: Rectangle; current: Rectangle; handle: ResizeHandle };
+import type { Locale, ScreenCapture } from "../../../../contracts/desktop";
+import { drawAnnotations, loadDataUrl, nextPaint, syncCanvasViewport } from "../canvas/annotation-renderer";
+import { canvasPointFromClient, clamp, findTopRectangleAtPoint, moveRectangle, normalizeRectangle, rectangleToViewport, resizeRectangle, sameRectangle, selectionConfirmPosition } from "../geometry/annotation-geometry";
+import type { ActiveInteraction, Annotation, CanvasViewport, PenAnnotation, Point, PointerTarget, Rectangle, RectangleAnnotation, ResizeHandle, ScreenshotTool } from "../model/annotations";
 
 interface ScreenshotEditorProps {
   capture: ScreenCapture;
@@ -45,7 +33,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
   const [selection, setSelection] = useState<Rectangle | null>(null);
   const [croppedDataUrl, setCroppedDataUrl] = useState("");
   const [croppedSize, setCroppedSize] = useState({ width: 0, height: 0 });
-  const [tool, setTool] = useState<Tool>("rectangle");
+  const [tool, setTool] = useState<ScreenshotTool>("rectangle");
   const [annotationHistory, setAnnotationHistory] = useState<Annotation[][]>([[]]);
   const [draftAnnotation, setDraftAnnotation] = useState<Annotation | null>(null);
   const [selectedRectangleId, setSelectedRectangleId] = useState<string | null>(null);
@@ -461,139 +449,4 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
       </div>
     </footer>}
   </section>;
-}
-
-function normalizeRectangle(startX: number, startY: number, endX: number, endY: number): Rectangle {
-  return { x: Math.min(startX, endX), y: Math.min(startY, endY), width: Math.abs(endX - startX), height: Math.abs(endY - startY) };
-}
-
-/** 红框操作按钮优先跟随右下角，靠近底部工具栏时自动收到框内或翻到上方。 */
-function selectionConfirmPosition(selection: Rectangle, sourceWidth: number, sourceHeight: number, controlWidth = 72): { left: number; top: number } {
-  const gap = 8;
-  const buttonHeight = 36;
-  const toolbarHeight = 80;
-  const left = clamp(selection.x + selection.width - controlWidth, gap, Math.max(gap, sourceWidth - controlWidth - gap));
-  const below = selection.y + selection.height + gap;
-  if (below + buttonHeight <= sourceHeight - toolbarHeight) return { left, top: below };
-  if (selection.height >= buttonHeight + gap * 2) return { left, top: selection.y + selection.height - buttonHeight - gap };
-  return { left, top: Math.max(gap, selection.y - buttonHeight - gap) };
-}
-
-function canvasPointFromClient(clientX: number, clientY: number, canvas: HTMLCanvasElement): Point {
-  const bounds = canvas.getBoundingClientRect();
-  return {
-    x: clamp((clientX - bounds.left) * canvas.width / bounds.width, 0, canvas.width),
-    y: clamp((clientY - bounds.top) * canvas.height / bounds.height, 0, canvas.height),
-  };
-}
-
-function rectangleToViewport(rectangle: Rectangle, viewport: CanvasViewport, sourceSize: { width: number; height: number }): Rectangle {
-  if (sourceSize.width < 1 || sourceSize.height < 1) return { x: 0, y: 0, width: 0, height: 0 };
-  const scaleX = viewport.width / sourceSize.width;
-  const scaleY = viewport.height / sourceSize.height;
-  return {
-    x: viewport.x + rectangle.x * scaleX,
-    y: viewport.y + rectangle.y * scaleY,
-    width: rectangle.width * scaleX,
-    height: rectangle.height * scaleY,
-  };
-}
-
-function findTopRectangleAtPoint(annotations: Annotation[], point: Point, canvasWidth: number): RectangleAnnotation | undefined {
-  const tolerance = Math.max(8, canvasWidth / 180);
-  return [...annotations].reverse().find((annotation): annotation is RectangleAnnotation => {
-    if (annotation.type !== "rectangle") return false;
-    const { x, y, width, height } = annotation.rectangle;
-    const insideExpanded = point.x >= x - tolerance && point.x <= x + width + tolerance
-      && point.y >= y - tolerance && point.y <= y + height + tolerance;
-    const insideContracted = width > tolerance * 2 && height > tolerance * 2
-      && point.x > x + tolerance && point.x < x + width - tolerance
-      && point.y > y + tolerance && point.y < y + height - tolerance;
-    return insideExpanded && !insideContracted;
-  });
-}
-
-function moveRectangle(rectangle: Rectangle, deltaX: number, deltaY: number, canvasWidth: number, canvasHeight: number): Rectangle {
-  return {
-    ...rectangle,
-    x: clamp(rectangle.x + deltaX, 0, Math.max(0, canvasWidth - rectangle.width)),
-    y: clamp(rectangle.y + deltaY, 0, Math.max(0, canvasHeight - rectangle.height)),
-  };
-}
-
-function resizeRectangle(rectangle: Rectangle, handle: ResizeHandle, deltaX: number, deltaY: number, canvasWidth: number, canvasHeight: number): Rectangle {
-  const minimumSize = Math.max(8, canvasWidth / 120);
-  let left = rectangle.x;
-  let top = rectangle.y;
-  let right = rectangle.x + rectangle.width;
-  let bottom = rectangle.y + rectangle.height;
-  if (handle.includes("w")) left = clamp(rectangle.x + deltaX, 0, right - minimumSize);
-  if (handle.includes("e")) right = clamp(rectangle.x + rectangle.width + deltaX, left + minimumSize, canvasWidth);
-  if (handle.includes("n")) top = clamp(rectangle.y + deltaY, 0, bottom - minimumSize);
-  if (handle.includes("s")) bottom = clamp(rectangle.y + rectangle.height + deltaY, top + minimumSize, canvasHeight);
-  return { x: left, y: top, width: right - left, height: bottom - top };
-}
-
-function sameRectangle(first: Rectangle, second: Rectangle): boolean {
-  return first.x === second.x && first.y === second.y && first.width === second.width && first.height === second.height;
-}
-
-function syncCanvasViewport(canvas: HTMLCanvasElement, update: (viewport: CanvasViewport) => void): void {
-  const bounds = canvas.getBoundingClientRect();
-  update({ x: bounds.left, y: bounds.top, width: bounds.width, height: bounds.height });
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-function nextPaint(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-}
-
-function configureRedStroke(context: CanvasRenderingContext2D, canvasWidth: number): void {
-  context.strokeStyle = "#ff3030";
-  context.lineWidth = Math.max(4, Math.round(canvasWidth / 420));
-  context.lineCap = "round";
-  context.lineJoin = "round";
-}
-
-function drawAnnotations(
-  baseImage: HTMLImageElement,
-  annotations: Annotation[],
-  draftAnnotation: Annotation | null,
-  selectedRectangleId: string | null,
-  rectangleTransformPreview: Rectangle | null,
-  canvas: HTMLCanvasElement,
-): void {
-  const context = canvas.getContext("2d");
-  if (!context) return;
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
-  const visibleAnnotations = draftAnnotation ? [...annotations, draftAnnotation] : annotations;
-  visibleAnnotations.forEach((annotation) => {
-    configureRedStroke(context, canvas.width);
-    if (annotation.type === "rectangle") {
-      const rectangle = annotation.id === selectedRectangleId && rectangleTransformPreview
-        ? rectangleTransformPreview
-        : annotation.rectangle;
-      context.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-      return;
-    }
-    if (annotation.points.length < 2) return;
-    context.beginPath();
-    context.moveTo(annotation.points[0].x, annotation.points[0].y);
-    annotation.points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
-    context.stroke();
-    context.closePath();
-  });
-}
-
-function loadDataUrl(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Unable to load screenshot image."));
-    image.src = dataUrl;
-  });
 }

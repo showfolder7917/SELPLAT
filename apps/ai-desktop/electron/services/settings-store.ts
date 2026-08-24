@@ -6,7 +6,7 @@ import {
   type DesktopSettings,
   type ModelServiceTier,
   type ReasoningEffort,
-} from "../../shared/contracts/desktop.js";
+} from "../../contracts/desktop.js";
 
 export const DEFAULT_AI_DESKTOP_MODEL = "gpt-5.6-terra";
 const SETTINGS_SCHEMA_VERSION = 1;

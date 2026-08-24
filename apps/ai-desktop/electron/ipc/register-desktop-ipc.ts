@@ -3,14 +3,11 @@ import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, nativeImage, screen, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, screen, shell, systemPreferences } from "electron";
 
-import { LOCALES, SANDBOX_MODES, WORKSPACE_PERMISSIONS } from "../../shared/contracts/desktop.js";
+import { LOCALES, SANDBOX_MODES } from "../../contracts/desktop.js";
 import type {
   AppVariant,
-  CreateCollaborationMemberRequest,
-  DesktopSettings,
-  DesktopOperatingMode,
   EnqueueMessageRequest,
   ManagedExecutionMode,
   ResolveCodexUserInputRequest,
@@ -21,11 +18,11 @@ import type {
   ScreenshotAnnotationWindowRequest,
   ScreenshotSaveRequest,
   SendMessageRequest,
-  SubmitCollaborationTaskRequest,
-  UpdateCollaborationMemberRequest,
-  WorkspacePermission,
   WindowAction,
-} from "../../shared/contracts/desktop.js";
+} from "../../contracts/desktop.js";
+import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
+import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
+import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
 import { prepareAutomaticTesting } from "../services/automatic-test-preflight.js";
 import { BusinessAuditLog } from "../services/business-audit-log.js";
 import { CodexService } from "../services/codex-service.js";
@@ -228,46 +225,10 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   };
 
   ipcMain.handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
-  ipcMain.handle("desktop:get-settings", () => settings.read());
+  registerSettingsIpc(settings, audit);
+  registerWorkspaceIpc(workspaces, audit);
+  registerCollaborationIpc(collaboration, linghuAutomation);
   ipcMain.handle("desktop:get-codex-models", () => codex.getModels());
-  ipcMain.handle("desktop:update-settings", (_event, patch: Partial<DesktopSettings>) => {
-    const result = settings.update(patch);
-    audit.recordEvent("settings.updated", {
-      locale: result.locale,
-      sandboxMode: result.sandboxMode,
-      defaultModel: result.defaultModel,
-      reasoningEffort: result.reasoningEffort,
-      serviceTier: result.serviceTier,
-    });
-    return result;
-  });
-  ipcMain.handle("desktop:get-workspaces", () => workspaces.read());
-  ipcMain.handle("desktop:add-workspace", async (event) => {
-    const parent = BrowserWindow.fromWebContents(event.sender);
-    const options = { properties: ["openDirectory", "createDirectory"] as ("openDirectory" | "createDirectory")[] };
-    const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options);
-    if (result.canceled || !result.filePaths[0]) return workspaces.read();
-    const state = workspaces.add(result.filePaths[0]);
-    audit.recordEvent("workspace.added", { path: result.filePaths[0] });
-    return state;
-  });
-  ipcMain.handle("desktop:update-workspace-permission", (_event, id: string, permission: WorkspacePermission) => {
-    if (!WORKSPACE_PERMISSIONS.includes(permission)) throw new Error("Invalid workspace permission.");
-    const state = workspaces.updatePermission(id, permission);
-    audit.recordEvent("workspace.permission_updated", { id, permission });
-    return state;
-  });
-  ipcMain.handle("desktop:set-primary-workspace", (_event, id: string) => {
-    const state = workspaces.setPrimary(id);
-    audit.recordEvent("workspace.primary_updated", { id });
-    return state;
-  });
-  ipcMain.handle("desktop:remove-workspace", (_event, id: string) => {
-    const state = workspaces.remove(id);
-    audit.recordEvent("workspace.removed", { id });
-    return state;
-  });
-  ipcMain.handle("desktop:list-workspace-entries", (_event, id: string) => workspaces.listEntries(id));
   ipcMain.handle("desktop:get-codex-status", () => codex.getStatus());
   ipcMain.handle("desktop:get-active-codex-session", () => codex.activeSession());
   ipcMain.handle("desktop:login-with-chatgpt", async () => {
@@ -712,21 +673,6 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const error = await shell.openPath(audit.ensure());
     if (error) throw new Error(error);
   });
-  ipcMain.handle("desktop:get-collaboration-state", () => collaboration.state());
-  ipcMain.handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
-  ipcMain.handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
-  ipcMain.handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberRequest) => collaboration.createMember(request));
-  ipcMain.handle("desktop:update-collaboration-member", (_event, memberId: string, request: UpdateCollaborationMemberRequest) => collaboration.updateMember(memberId, request));
-  ipcMain.handle("desktop:delete-collaboration-member", (_event, memberId: string) => collaboration.deleteMember(memberId));
-  ipcMain.handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskRequest) => collaboration.submitTask(request));
-  ipcMain.handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
-  ipcMain.handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
-  ipcMain.handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
-  ipcMain.handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
-  ipcMain.handle("desktop:create-linghu-startup-prompt", (_event, request) => linghuAutomation.createPrompt(request));
-  ipcMain.handle("desktop:update-linghu-startup-prompt", (_event, promptId: string, request) => linghuAutomation.updatePrompt(promptId, request));
-  ipcMain.handle("desktop:delete-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.deletePrompt(promptId));
-  ipcMain.handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
   ipcMain.handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
   ipcMain.handle("desktop:enqueue-message", (_event, value: EnqueueMessageRequest) => {
     if (!value?.request || typeof value.request.message !== "string") throw new Error("Invalid queued message request.");
@@ -791,7 +737,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         const normalized = file.replaceAll("\\", "/").replace(/^\.\//, "");
         return normalized.startsWith(`${appRelativeRoot}/src/`)
           || normalized.startsWith(`${appRelativeRoot}/electron/`)
-          || normalized.startsWith(`${appRelativeRoot}/shared/`)
+          || normalized.startsWith(`${appRelativeRoot}/contracts/`)
           || normalized === `${appRelativeRoot}/package.json`
           || normalized === `${appRelativeRoot}/vite.config.mjs`;
       }));

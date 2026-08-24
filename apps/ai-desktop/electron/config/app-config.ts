@@ -4,7 +4,7 @@ import path from "node:path";
 import { app } from "electron";
 import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
-import type { AppVariant } from "../../shared/contracts/desktop.js";
+import type { AppVariant } from "../../contracts/desktop.js";
 
 type ApplicationMetadata = {
   name?: unknown;

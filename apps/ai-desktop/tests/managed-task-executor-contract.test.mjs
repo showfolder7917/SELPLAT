@@ -7,12 +7,14 @@ import "./model-settings-contract.test.mjs";
 
 const executor = readFileSync(new URL("../electron/services/managed-task-executor.ts", import.meta.url), "utf8");
 const codexService = readFileSync(new URL("../electron/services/codex-service.ts", import.meta.url), "utf8");
+const codexStreamMapper = readFileSync(new URL("../electron/services/codex/stream-event-mapper.ts", import.meta.url), "utf8");
 const codexRuntime = readFileSync(new URL("../electron/services/codex-runtime.ts", import.meta.url), "utf8");
 const codexSessionStore = readFileSync(new URL("../electron/services/codex-session-store.ts", import.meta.url), "utf8");
 const taskWorktreeTestRunner = readFileSync(new URL("../electron/services/collaboration/task-worktree-test-runner.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
 const ipc = readFileSync(new URL("../electron/ipc/register-desktop-ipc.ts", import.meta.url), "utf8");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const chatMessageModel = readFileSync(new URL("../src/features/conversation/model/chat-message.ts", import.meta.url), "utf8");
 
 test("任务依赖链接清理允许包装器已经先行移除", () => {
   assert.match(taskWorktreeTestRunner, /cleanupIntegrationDependencyLinks\(desktopRoot\)/);
@@ -112,13 +114,13 @@ test("界面按四阶段确认推进，日志记录阶段结果而不强制构�
   assert.match(developerApp, /重新测试/);
   assert.match(developerApp, /回到会话托管/);
   assert.match(developerApp, /回到任务托管/);
-  assert.match(developerApp, /normalized === "1"/);
-  assert.match(developerApp, /current === "conversation-managed" && normalized === "就是这意思"/);
-  assert.match(developerApp, /current === "requirement-managed" && normalized === "按这个方案执行"/);
+  assert.match(chatMessageModel, /normalized === "1"/);
+  assert.match(chatMessageModel, /current === "conversation-managed" && normalized === "就是这意思"/);
+  assert.match(chatMessageModel, /current === "requirement-managed" && normalized === "按这个方案执行"/);
   assert.match(developerApp, /managed-stage-action/);
   assert.match(developerApp, /onReturn=\{setExecutionMode\}/);
   assert.match(developerApp, /activeMode === returnTarget/);
-  assert.match(developerApp, /current === "task-managed" \|\| current === "test-managed"/);
+  assert.match(chatMessageModel, /current === "task-managed" \|\| current === "test-managed"/);
   assert.match(developerApp, /latestManagedAssistantId/);
   assert.match(developerApp, /disabled=\{!actionable \|\| message\.streaming\}/);
   assert.match(developerApp, /managed-execution-status/);
@@ -129,14 +131,14 @@ test("界面按四阶段确认推进，日志记录阶段结果而不强制构�
 });
 
 test("多轮托管按真实 turnId 向下新增回复卡并冻结上一轮", () => {
-  assert.match(developerApp, /turnSegments\?: Record<string, string>/);
+  assert.match(chatMessageModel, /turnSegments\?: Record<string, string>/);
   assert.match(developerApp, /turnMessageIdsRef = useRef<Map<string, number>>/);
   assert.match(developerApp, /createAssistantMessage\(messageId, activeManagedModeRef\.current\)/);
   assert.match(developerApp, /turnMessageIdsRef\.current\.set\(event\.turnId, messageId\)/);
-  assert.match(developerApp, /streaming: false, streamTerminal: true/);
-  assert.match(developerApp, /updateTurnSegment\(message, event\.segmentId \|\| event\.turnId/);
-  assert.match(developerApp, /message\.streamTerminal && event\.type !== "error"/);
-  assert.match(codexService, /segmentId: `\$\{turnId\}:\$\{itemId\}`/);
+  assert.match(chatMessageModel, /streaming: false, streamTerminal: true/);
+  assert.match(chatMessageModel, /updateTurnSegment\(message, event\.segmentId \|\| event\.turnId/);
+  assert.match(chatMessageModel, /message\.streamTerminal && event\.type !== "error"/);
+  assert.match(codexStreamMapper, /segmentId: `\$\{turnId\}:\$\{itemId\}`/);
   assert.match(developerApp, /completedAssistantId = activeAssistantIdRef\.current \|\| assistantId/);
   assert.match(developerApp, /text: item\.text \|\| response\.text/);
   assert.doesNotMatch(developerApp, /text: response\.text \|\| item\.text/);
@@ -164,7 +166,7 @@ test("AI Desktop 重建后恢复当前线程且用户新建任务时明确删除
   assert.match(codexService, /恢复失败可能只是临时连接故障/);
   assert.match(codexSessionStore, /active thread|当前活动线程/);
   assert.match(developerApp, /getActiveCodexSession/);
-  assert.match(developerApp, /ACTIVE_CHAT_STORAGE_KEY/);
+  assert.match(chatMessageModel, /ACTIVE_CHAT_STORAGE_KEY/);
   assert.match(developerApp, /只有官方确认删除后才清空页面/);
   assert.doesNotMatch(codexService, /text: `\$\{this\.#responseLanguage\(locale\)\}/);
 });

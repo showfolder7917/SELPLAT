@@ -15,7 +15,7 @@ load_rule_for_active_user_selplat_application_node_utility_or_path_resolver_prom
 <!-- Electron 应用新增公共 Node 依赖、调整打包文件或验证安装包内容时加载。 -->
 load_rule_for_active_user_selplat_electron_node_common_dependency_packaging_or_artifact_inspection = SELPLAT_NODE_COMMON_CAPABILITY_RULES
 
-<!-- SELPLAT Node.js、TypeScript 和 Electron 应用统一执行源码、配置、依赖、脚本、测试与交付目录边界。 -->
+<!-- SELPLAT Node.js、TypeScript 和 Electron 应用统一执行源码、配置、依赖、脚本、测试与交付目录边界；单应用协议进入 contracts，根 shared 只承载跨工程共通。 -->
 SELPLAT_NODE_APPLICATION_PROJECT_STRUCTURE_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLATNode工程结构规则.md
 
 <!-- 新建、整理、迁移或审查任一 SELPLAT Node.js、TypeScript 或 Electron 应用工程结构时加载。 -->

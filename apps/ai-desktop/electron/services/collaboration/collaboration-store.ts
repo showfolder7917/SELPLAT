@@ -10,7 +10,7 @@ import type {
   DesktopOperatingMode,
   SubmitCollaborationTaskRequest,
   UpdateCollaborationMemberRequest,
-} from "../../../shared/contracts/collaboration.js";
+} from "../../../contracts/collaboration.js";
 
 type StateListener = (state: CollaborationState, reason: string, taskIds: string[]) => void;
 

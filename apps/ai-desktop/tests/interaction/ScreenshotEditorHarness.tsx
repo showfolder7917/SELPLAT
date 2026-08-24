@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ScreenshotEditor } from "../../src/variants/developer/ScreenshotEditor";
+import { ScreenshotEditor } from "../../src/features/screenshot/components/ScreenshotEditor";
 import "../../src/variants/developer/developer.css";
 
 const captureSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="460"><rect width="720" height="460" fill="#f5f7fb"/><path d="M0 80h720M0 230h720M240 0v460M520 0v460" stroke="#d5dce8" stroke-width="2"/><text x="32" y="48" fill="#334155" font-family="sans-serif" font-size="24">Screenshot interaction fixture</text></svg>`;

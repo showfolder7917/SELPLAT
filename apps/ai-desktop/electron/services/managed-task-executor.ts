@@ -4,7 +4,7 @@ import type {
   ManagedExecutionMode,
   ManagedExecutionUpdate,
   SendMessageResponse,
-} from "../../shared/contracts/desktop.js";
+} from "../../contracts/desktop.js";
 
 type RunTurn = (
   message: string,

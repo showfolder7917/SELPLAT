@@ -12,13 +12,14 @@ import type {
   DesktopOperatingMode,
   SubmitCollaborationTaskRequest,
   UpdateCollaborationMemberRequest,
-} from "../../../shared/contracts/collaboration.js";
-import type { CodexStreamEvent } from "../../../shared/contracts/desktop.js";
+} from "../../../contracts/collaboration.js";
+import type { CodexStreamEvent } from "../../../contracts/desktop.js";
 import { CollaborationDurationLog } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
 import { LocalChangeOwnershipError, VersionWorkspaceManager } from "./version-workspace-manager.js";
-import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../shared/contracts/integration-release.js";
+import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../contracts/integration-release.js";
 import { ReleaseBatchStore } from "./release-batch-store.js";
+import { createCollaborationResultSummary } from "./result/result-summary.js";
 
 const LINGHU_MEMBER_ID = "linghu-ancestor";
 
@@ -723,7 +724,7 @@ export class CollaborationCoordinator {
         current.finalResult = result.text;
         current.codeVerifiedAt = new Date().toISOString();
         current.completedAt = null;
-        current.resultSummary = createResultSummary(current, result.text, result.pendingActions);
+        current.resultSummary = createCollaborationResultSummary(current, result.text, result.pendingActions);
         const execution = current.executionRecords.find((item) => item.assignmentId === assignmentId);
         if (execution) {
           execution.status = "code-verified";
@@ -899,7 +900,7 @@ export class CollaborationCoordinator {
           }
           task.completedAt = completedAt;
           task.blockingReason = null;
-          task.resultSummary ||= createResultSummary(task, task.finalResult || "任务已完成协同集成。", []);
+          task.resultSummary ||= createCollaborationResultSummary(task, task.finalResult || "任务已完成协同集成。", []);
           task.resultSummary.outcome = "succeeded";
           task.resultSummary.success = true;
           if (task.resultSummary.remaining === "等待协同集成完成。" || /^无[。.]?$/.test(task.resultSummary.remaining.trim())) {
@@ -1025,7 +1026,7 @@ export class CollaborationCoordinator {
         execution.completedAt = new Date().toISOString();
         execution.blockingReason = current.blockingReason;
       }
-      current.resultSummary = current.resultSummary || createResultSummary(current, current.finalResult || "任务尚未完成。", [current.blockingReason]);
+      current.resultSummary = current.resultSummary || createCollaborationResultSummary(current, current.finalResult || "任务尚未完成。", [current.blockingReason]);
       current.resultSummary.outcome = "incomplete";
       current.resultSummary.success = false;
       current.resultSummary.remaining = current.blockingReason;
@@ -1134,47 +1135,6 @@ function appendFlow(
     occurredAt: new Date().toISOString(),
     error,
   });
-}
-
-/** 把执行人的结构化标题转换为首页短摘要；缺少标题时使用已确认任务事实兜底，禁止让归档记录为空。 */
-export function createCollaborationResultSummary(task: CollaborationTask, text: string, pendingActions: string[] = []): CollaborationTask["resultSummary"] {
-  const sections = parseResultSections(text);
-  const fallback = compactResultText(text);
-  return {
-    outcome: pendingActions.length > 0 ? "incomplete" : "pending-integration",
-    finalResult: sections.get("最终执行结果") || fallback || "执行人未提供最终结果摘要。",
-    originalProblem: sections.get("原来存在的问题") || task.snapshot.problemStatement,
-    solvedProblem: sections.get("本次解决的问题") || fallback || "执行人未提供解决内容摘要。",
-    changes: sections.get("具体修正或改变") || fallback || "执行人未提供改动摘要。",
-    remaining: sections.get("遗留内容") || pendingActions.join("；") || "等待协同集成完成。",
-    success: false,
-    generatedAt: new Date().toISOString(),
-  };
-}
-
-function createResultSummary(task: CollaborationTask, text: string, pendingActions: string[] = []): NonNullable<CollaborationTask["resultSummary"]> {
-  return createCollaborationResultSummary(task, text, pendingActions) as NonNullable<CollaborationTask["resultSummary"]>;
-}
-
-function parseResultSections(text: string): Map<string, string> {
-  const headings = ["最终执行结果", "原来存在的问题", "本次解决的问题", "具体修正或改变", "完成状态", "遗留内容"];
-  const sections = new Map<string, string>();
-  let current: string | null = null;
-  for (const line of text.split("\n")) {
-    const normalized = line.trim().replace(/^#{1,6}\s*/, "").replace(/^\*\*(.+)\*\*$/, "$1").replace(/[：:]$/, "").trim();
-    if (headings.includes(normalized)) {
-      current = normalized;
-      sections.set(current, "");
-      continue;
-    }
-    if (!current) continue;
-    sections.set(current, `${sections.get(current) || ""}${sections.get(current) ? "\n" : ""}${line}`.trim());
-  }
-  return sections;
-}
-
-function compactResultText(text: string): string {
-  return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 800);
 }
 
 function phaseLabel(phase: Exclude<CollaborationWorkerPhase, null>): string {

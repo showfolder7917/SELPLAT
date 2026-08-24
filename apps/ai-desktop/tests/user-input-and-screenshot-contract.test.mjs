@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const screenshotEditor = readFileSync(new URL("../src/variants/developer/ScreenshotEditor.tsx", import.meta.url), "utf8");
+const screenshotEditor = readFileSync(new URL("../src/features/screenshot/components/ScreenshotEditor.tsx", import.meta.url), "utf8");
 const screenshotWindow = readFileSync(new URL("../src/variants/developer/ScreenshotWindowApp.tsx", import.meta.url), "utf8");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const codexService = readFileSync(new URL("../electron/services/codex-service.ts", import.meta.url), "utf8");

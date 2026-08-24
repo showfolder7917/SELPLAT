@@ -50,8 +50,7 @@ apps/<工程名>/
 │   ├── ipc/                   # IPC 白名单、校验和编排
 │   ├── services/              # 主进程业务能力
 │   └── window/                # BrowserWindow 生命周期
-├── shared/
-│   └── contracts/             # 主进程与渲染层共享的纯类型/协议
+├── contracts/                 # 当前应用主进程、preload 与渲染层共享的纯类型/协议
 ├── worker/                    # 有真实独立 Worker 或托管入口时才建立
 ├── scripts/
 ├── tests/
@@ -65,7 +64,7 @@ apps/<工程名>/
 └── AGENTS.md
 ```
 
-没有对应运行时或调用方时，不得为了补齐示例创建 `electron`、`shared`、`worker`、`config` 或 `fixtures`。
+没有对应运行时或调用方时，不得为了补齐示例创建 `electron`、`contracts`、`worker`、`config` 或 `fixtures`。SELPLAT 根 `shared/` 专用于跨工程共通能力，应用目录内禁止建立同名 `shared/`。
 
 ## 4. 根目录文件边界
 
@@ -96,9 +95,9 @@ apps/<工程名>/
 
 只属于 Electron 主进程侧：窗口、系统能力、文件访问、官方进程连接、IPC 注册和安全配置。渲染组件不得放入这里。
 
-### `shared/contracts/`
+### `contracts/`
 
-只保存跨运行边界的纯类型、事件和消息协议，不保存文件系统访问、Electron 对象、React 组件或业务服务实现。
+只保存当前应用跨运行边界的纯类型、事件和消息协议，不保存文件系统访问、Electron 对象、React 组件或业务服务实现。只有两个以上工程真实消费且完成公共 API 审查后，契约才允许提升到 SELPLAT 根 `shared/contracts/`。
 
 ### `scripts/`
 
@@ -226,7 +225,7 @@ log/
 
 - `src` 保存 React 渲染层。
 - `electron` 保存主进程、preload、IPC、服务和窗口。
-- `shared/contracts` 保存 IPC 协议。
+- `contracts` 保存 AI Desktop 应用私有 IPC 协议；根 `shared` 不承载单应用协议。
 - `scripts` 和 `tests` 均有 package 或测试调用关系。
 - Electron Builder 配置存在真实继承、脚本和测试引用，因此保留在根目录。
 - Windows/macOS 启动器属于用户可发现入口，因此保留在根目录。

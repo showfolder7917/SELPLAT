@@ -6,7 +6,7 @@ active_user_index_child_reference_only = true
 <!-- 用户跨工程规则不依赖某个具体大项目，并统一承载测试隔离及统一测试失败修正闭环。 -->
 ACTIVE_USER_CROSS_PROJECT_RULE_INDEX = local/XUNAN/跨工程通用规则/RULE_INDEX.md
 
-<!-- SELPLAT 用户规则（包括应用开发与发布打包边界）按平台应用继续分层。 -->
+<!-- SELPLAT 用户规则（包括应用私有 contracts、根 shared 共通边界、应用开发与发布打包边界）按平台应用继续分层。 -->
 ACTIVE_USER_SELPLAT_RULE_INDEX = local/XUNAN/selplat/RULE_INDEX.md
 
 <!-- Fujitsu 用户专项规则按通用和应用继续分层。 -->

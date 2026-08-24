@@ -10,10 +10,11 @@ Build app UI in `src/`. AI Desktop maintains one Developer renderer and must not
 
 ## Project data layout
 
+- Keep AI Desktop-only main/preload/renderer protocols under `contracts/`. SELPLAT root `shared/` is reserved for capabilities or contracts with verified cross-application consumers; do not create an application-local `shared/` directory.
 - Keep `apps/<manifest-name>/` limited to source, configuration, permanent test code, launchers, dependency manifests, and permanent scripts. Generated `node_modules`, runtime data, reports, and build artifacts are forbidden there.
 - Resolve the real application name through `@selplat/node-common-core/path`. Put lock-specific dependencies and regenerable cache under `cache/<application>/`, compile/Sites/package output under `build/<application>/`, pending/running/disposable material under `OPTION/temp/<application>/`, and every terminal auditable record under `log/<application>/归档日志/`.
 - Keep private user settings, authentication, active Harness sessions, and user-owned collaboration state in Electron `userData`; they are not project cache or project audit data.
-- A test batch starts at `执行日志/待执行/测试/<runId>/测试文档.<threadId>.md`, moves atomically as a whole to `执行日志/运行中/测试/<runId>/` while locked, and enters `归档日志/测试归档/<YYYY-MM>/<runId>/` on every terminal result. Preserve migrated history instead of deleting it.
+- An AI Desktop runtime-managed test batch starts at `执行日志/待执行/测试/<runId>/测试文档.<threadId>.md`, moves atomically as a whole to `执行日志/运行中/测试/<runId>/` while locked, and enters `归档日志/测试归档/<YYYY-MM>/<runId>/` on every terminal result. External SELPLAT engineering tasks keep their execution and test documents in the project-root `OPTION/` lifecycle managed by rule-engine. Preserve migrated history instead of deleting it.
 
 ## Product-specific visual contract
 

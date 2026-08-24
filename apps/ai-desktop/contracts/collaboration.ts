@@ -1,5 +1,6 @@
-import type { Locale, WorkspaceState } from "./desktop.js";
-import type { CodexStreamEvent } from "./desktop.js";
+import type { Locale } from "./base.js";
+import type { CodexStreamEvent } from "./codex-stream.js";
+import type { WorkspaceState } from "./workspace.js";
 
 export type DesktopOperatingMode = "single-conversation" | "collaboration";
 export type CollaborationMemberKind = "conversation-owner" | "worker";

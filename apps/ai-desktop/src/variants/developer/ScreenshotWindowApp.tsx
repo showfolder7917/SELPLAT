@@ -4,8 +4,8 @@ import type {
   Locale,
   ScreenCapture,
   ScreenCaptureFrameRequest,
-} from "../../../shared/contracts/desktop";
-import { ScreenshotEditor } from "./ScreenshotEditor";
+} from "../../../contracts/desktop";
+import { ScreenshotEditor } from "../../features/screenshot/components/ScreenshotEditor";
 import "./developer.css";
 
 /** 独立截图窗口只负责选择、标注和保存主进程取得的 macOS 原生无光标 PNG。 */

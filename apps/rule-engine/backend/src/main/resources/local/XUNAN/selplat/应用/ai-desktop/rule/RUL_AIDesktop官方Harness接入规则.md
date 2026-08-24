@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.77.0 删除未使用的 Vite HTTP 热更新运行链，桌面启动只允许本地文件或归档协议。 -->
-rule_version = 5.77.0
+<!-- 5.78.0 澄清运行时测试批次与外部工程任务文档边界。 -->
+rule_version = 5.78.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -198,6 +198,8 @@ upgrade_record_5_44 = 2026-08-23:每个执行人仍在自己的签发worktree测
 upgrade_record_5_45 = 2026-08-23:源码目录只保留永久源码配置测试代码_缓存固定cache_ai_desktop_构建打包固定build_ai_desktop_待执行运行中临时证据固定OPTION_temp_ai_desktop_全部终态审计固定log_ai_desktop_测试文档待执行转运行中再按月归档_历史归档迁移不删除
 <!-- 5.46.0 以真实清单工程名解析所有数据域，并让锁文件依赖、批次测试和终态归档完整遵守统一规范。 -->
 upgrade_record_5_46 = 2026-08-23:公共Node路径包唯一解析_锁文件哈希依赖缓存_受控临时链接执行后清理_临时根只保留执行日志与临时材料_测试按runId原子流转_归档按类型年月任务隔离_真实安装包阻断Java_Python_Gradle泄漏
+<!-- 5.78.0 澄清 AI Desktop 运行时批次与外部工程任务文档边界，避免应用规则覆盖 rule-engine 工程生命周期门禁。 -->
+upgrade_record_5_78 = 2026-08-24:AI_Desktop运行时测试批次继续按runId流转_外部SELPLAT工程任务执行与测试文档继续由工程根OPTION和rule_engine生命周期管理器控制_两类文档不得互相替代
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -513,7 +515,9 @@ windows_developer_launcher_contract = self_relative_path + dependency_check + ma
 <!-- macOS 开发版双击启动器必须从自身目录解析工程，检查 Node、npm、Electron 和官方 Codex 依赖，每次先正式构建最新开发版，构建失败时禁止启动 Electron。 -->
 macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_official_codex_dependency_check + mandatory_fresh_developer_build_before_launch + build_failure_blocks_launch + package_fixed_bundle_id_ai_desktop_app + bootstrap_loads_packaged_main_only + prohibit_external_runtime_compatibility + always_repackage_self_contained_latest_build + stable_designated_requirement_uses_bundle_identifier_not_cdhash + verifier_rejects_cdhash_designated_requirement + verify_packaged_codex_official_signature_and_isolated_real_start + permission_refresh_after_identity_change + exact_resolved_app_executable_process_match + gracefully_terminate_all_existing_same_app_instances + abort_when_old_instance_remains + launchservices_register + open_packaged_app_never_raw_dependency_electron + prohibit_parallel_old_and_new_ai_desktop_processes
 <!-- 测试以唯一 runId 批次流转；执行者取得独占锁，其他读取者看到占用身份，完整批次结束后立即归档。 -->
-shared_test_document_lifecycle_contract = manifest_application_name_plus_common_path_resolution + pending_test_runId_directory_with_thread_document + exactly_one_selectable_run + atomic_whole_batch_pending_to_running_transition + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_and_interrupted_running_batch_recovery + every_terminal_result_immediate_month_and_runId_archive + next_run_new_runId + legacy_documents_migrated_not_deleted
+shared_test_document_lifecycle_contract = ai_desktop_runtime_managed_batch_only + manifest_application_name_plus_common_path_resolution + pending_test_runId_directory_with_thread_document + exactly_one_selectable_run + atomic_whole_batch_pending_to_running_transition + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_and_interrupted_running_batch_recovery + every_terminal_result_immediate_month_and_runId_archive + next_run_new_runId + legacy_documents_migrated_not_deleted
+<!-- 外部 Codex 对 SELPLAT 源码执行工程任务时，必须继续使用 rule-engine 的工程根执行文档与测试文档生命周期；应用运行时批次不能替代该门禁。 -->
+external_engineering_test_document_contract = selplat_project_root_OPTION_execution_and_test_documents + rule_engine_execution_doc_manager_and_test_doc_manager + runtime_batch_never_replaces_engineering_task_gate
 <!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->
 ai_desktop_project_data_domain_contract = manifest_name_driven_node_common_path_api + apps_application_source_config_permanent_tests_and_scripts_only + no_node_modules_runtime_or_build_data_under_source + cache_application_lockHash_dependencies_and_regenerable_only + controlled_temporary_dependency_links_removed_after_command + build_application_compile_package_sites_and_reports_only + OPTION_temp_application_exactly_execution_log_and_temporary_materials + log_application_archive_log_kind_month_identifier_hierarchy + private_user_settings_sessions_and_secrets_remain_electron_userData
 <!-- 开发包必须在构建时携带持续存在的源工程根，使安装后日志仍进入原工程；发布包不得包含该开发机路径。 -->

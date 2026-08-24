@@ -1,4 +1,4 @@
-import type { DesktopApi } from "../shared/contracts/desktop";
+import type { DesktopApi } from "../contracts/desktop";
 
 export {};
 

@@ -11,5 +11,5 @@
     "types": ["node"],
     "sourceMap": true
   },
-  "include": ["electron/**/*.ts", "electron/**/*.cts", "shared/**/*.ts"]
+  "include": ["electron/**/*.ts", "electron/**/*.cts", "contracts/**/*.ts"]
 }

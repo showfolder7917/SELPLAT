@@ -1,13 +1,13 @@
-import type { Locale, WorkspaceState } from "../../../shared/contracts/desktop.js";
-import type { CollaborationState, CollaborationTask } from "../../../shared/contracts/collaboration.js";
+import type { Locale, WorkspaceState } from "../../../contracts/desktop.js";
+import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration.js";
 import type {
   LinghuAutomaticFlowSnapshot,
   LinghuAutomationModule,
   LinghuAutomationState,
   LinghuBlockingKind,
   LinghuFlowHealth,
-} from "../../../shared/contracts/linghu-automation.js";
-import type { TestResourceCoordinatorState } from "../../../shared/contracts/test-resource.js";
+} from "../../../contracts/linghu-automation.js";
+import type { TestResourceCoordinatorState } from "../../../contracts/test-resource.js";
 import { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./linghu-automation-store.js";
 

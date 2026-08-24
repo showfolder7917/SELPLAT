@@ -1,4 +1,4 @@
-import type { CollaborationMember, CollaborationTask, LinghuAutomationState, Locale } from "../../../shared/contracts/desktop";
+import type { CollaborationMember, CollaborationTask, LinghuAutomationState, Locale } from "../../../contracts/desktop";
 
 export type CollaborationProgressStageId = "intent" | "approval" | "execution" | "repair" | "unified-test";
 export type CollaborationProgressStageStatus = "completed" | "current" | "waiting" | "not-started" | "failed";

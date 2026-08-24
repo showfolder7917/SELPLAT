@@ -1,8 +1,8 @@
 import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { CollaborationTask } from "../../../shared/contracts/collaboration.js";
-import type { ReleaseBatchDocument } from "../../../shared/contracts/integration-release.js";
+import type { CollaborationTask } from "../../../contracts/collaboration.js";
+import type { ReleaseBatchDocument } from "../../../contracts/integration-release.js";
 
 /** 发布批次文档由发布协调器单点维护，运行中可追踪，结束后进入长期发布归档。 */
 export class ReleaseBatchStore {

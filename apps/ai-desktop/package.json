@@ -32,6 +32,7 @@
     "test:document": "node scripts/run-with-dependencies.mjs node scripts/test-document-runner.mjs",
     "test:developer-settings": "node scripts/run-with-dependencies.mjs node --test tests/developer-settings-panel.test.mjs",
     "test:model-settings": "node --test tests/model-settings-contract.test.mjs",
+    "test:boundaries": "node --test tests/module-boundaries.test.mjs",
     "preview": "node scripts/run-with-dependencies.mjs vite preview",
     "test:common": "npm run build:common && node scripts/run-with-dependencies.mjs node --test ../../shared/node/common-core/tests/application-paths.test.mjs",
     "test:dependencies": "node --test tests/dependency-cache-self-heal.test.mjs",

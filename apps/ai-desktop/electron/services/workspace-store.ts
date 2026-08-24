@@ -8,7 +8,7 @@ import type {
   WorkspacePermission,
   WorkspaceRoot,
   WorkspaceState,
-} from "../../shared/contracts/desktop.js";
+} from "../../contracts/desktop.js";
 
 const MAX_ROOTS = 24;
 const MAX_ENTRIES = 80;

@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import path from "node:path";
 import test from "node:test";
 
-import { createCodexChildEnvironment, toCodexStreamEvent } from "../../../build/ai-desktop/electron/electron/services/codex-service.js";
+import { createCodexChildEnvironment } from "../../../build/ai-desktop/electron/electron/services/codex-service.js";
+import { toCodexStreamEvent } from "../../../build/ai-desktop/electron/electron/services/codex/stream-event-mapper.js";
 import { CodexSessionStore } from "../../../build/ai-desktop/electron/electron/services/codex-session-store.js";
 
 const turnId = "turn-stream-test";

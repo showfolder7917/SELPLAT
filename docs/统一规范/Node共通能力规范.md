@@ -34,12 +34,14 @@ SELPLAT/shared/node/common-core/
 
 ```text
 shared/node/common-core   Node.js/TypeScript 公共运行能力
-shared/contracts          跨模块契约，不放运行实现
+shared/contracts          两个以上工程真实复用的跨工程契约，不放单应用 IPC 协议或运行实现
 shared/frontend/sel-ui    浏览器公共组件，不放 Node 主进程能力
 shared/backend            Java 后端公共能力
 rule-engine Python 根     Python 规则和能力
 apps/<工程名>             应用私有业务实现
 ```
+
+Electron 主进程、preload 和 renderer 之间仅由单个应用使用的协议进入 `apps/<工程名>/contracts/`；禁止仅因跨进程使用就提升到根 `shared/`，也禁止在应用目录内建立同名 `shared/`。
 
 禁止在 `shared/` 下建立第二个平行 Node 公共根，例如：
 

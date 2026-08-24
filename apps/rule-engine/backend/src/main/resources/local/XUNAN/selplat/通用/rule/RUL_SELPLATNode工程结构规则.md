@@ -9,7 +9,9 @@ requires_rule_ids = SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES,SELPLAT_NODE_C
 <!-- 规则所有者始终通过工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 首版固化 Node 应用源码根、入口、依赖、脚本、测试、打包和清理判断。 -->
-rule_version = 1.0.0
+rule_version = 1.1.0
+<!-- 1.1.0 固定根 shared 只承载跨工程共通，单应用 Electron 协议进入应用 contracts。 -->
+upgrade_record = 2026-08-24:应用私有Electron协议由应用内shared/contracts迁入contracts_根shared只保留跨工程共通
 <!-- active 表示规则正文、权威文档和叶子索引已形成可加载入口。 -->
 rule_status = active
 
@@ -18,7 +20,9 @@ node_application_root_contract = source_configuration_permanent_scripts_permanen
 <!-- 根级文件必须是工具默认入口或用户可发现入口，其他配置按真实职责进入稳定子目录。 -->
 node_application_root_file_contract = package_and_lock_manifest + tool_default_configs + user_launchers + README_and_AGENTS + no_unreferenced_root_clutter
 <!-- 源码目录必须按运行边界分离，单运行时使用 src，Electron 额外分离 main、preload、renderer 和共享契约。 -->
-node_application_source_boundary_contract = single_runtime_src_or_electron_main_preload_renderer_shared_contracts + no_generated_output_in_source
+node_application_source_boundary_contract = single_runtime_src_or_electron_main_preload_renderer_app_private_contracts + root_shared_reserved_for_cross_application_common + no_generated_output_in_source
+<!-- 单应用跨进程协议仍是应用私有代码，统一进入应用根 contracts，禁止创建应用内 shared 混淆公共层语义。 -->
+node_application_private_contract_root_contract = app_root_contracts_only + main_preload_renderer_pure_protocols + prohibit_app_local_shared_directory + promote_to_root_shared_only_after_cross_application_review
 <!-- 应用私有实现留在应用内，跨应用公共 Node 能力只能通过已登记公共包出口消费。 -->
 node_application_reuse_contract = private_implementation_in_application + cross_application_capability_via_registered_package_exports + no_cross_directory_internal_source_import
 <!-- 每个 Node 工程只能提交一个权威包清单和对应锁文件，禁止提交 node_modules。 -->
@@ -36,7 +40,7 @@ node_application_runtime_data_contract = pending_running_and_disposable_to_OPTIO
 <!-- 永久测试按单元、契约、集成和交互职责组织，fixture 只能服务自动测试且不得成为生产数据入口。 -->
 node_application_test_contract = unit_contract_integration_and_interaction_by_real_risk + fixture_test_only + no_runtime_report_or_screenshot_in_tests
 <!-- Electron 工程必须显式分离主进程、preload、渲染层和共享 IPC 契约，并使用打包白名单验证真实产物。 -->
-node_application_electron_contract = main_preload_renderer_and_ipc_contract_separation + context_isolation + explicit_packaging_allowlist + real_artifact_inspection
+node_application_electron_contract = main_preload_renderer_and_app_private_contracts_separation + context_isolation + explicit_packaging_allowlist + real_artifact_inspection
 <!-- 用户双击启动器可以保留在根目录，但必须从自身位置解析工程并只调用登记的 package 或永久脚本入口。 -->
 node_application_launcher_contract = discoverable_root_launcher + self_relative_project_resolution + delegates_to_registered_script + no_business_logic_duplication
 <!-- 文件移动或删除前必须核对 package scripts、模块导入、生成后入口、测试夹具、打包清单和平台启动器。 -->
