@@ -22,6 +22,7 @@ test("application-private contracts are domain modules outside shared", () => {
     "screenshot.ts",
     "audit.ts",
     "desktop-api.ts",
+    "nangong-evolution.ts",
   ]) {
     assert.equal(existsSync(path.join(appRoot, "contracts", contract)), true, contract);
   }
@@ -46,4 +47,6 @@ test("main-process orchestration delegates IPC and pure collaboration parsing", 
   assert.match(source("electron/services/codex-service.ts"), /codex\/stream-event-mapper/);
   assert.match(source("electron/services/collaboration/collaboration-codex-sessions.ts"), /review\/review-decision-parser/);
   assert.match(source("electron/services/collaboration/collaboration-coordinator.ts"), /result\/result-summary/);
+  assert.match(source("electron/ipc/domains/register-collaboration-ipc.ts"), /NangongEvolutionFacade/);
+  assert.match(source("electron/services/collaboration/nangong-evolution-facade.ts"), /evolutionProposalId/);
 });

@@ -10,6 +10,7 @@ export * from "./collaboration.js";
 export * from "./conversation.js";
 export * from "./desktop-api.js";
 export * from "./linghu-automation.js";
+export * from "./nangong-evolution.js";
 export * from "./screenshot.js";
 export * from "./settings.js";
 export * from "./workspace.js";

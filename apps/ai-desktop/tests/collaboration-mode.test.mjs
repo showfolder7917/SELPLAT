@@ -196,6 +196,39 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
   }
 });
 
+test("令狐生产修正先提交韩立审批并在返还任务后恢复持续执行", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-evolution-approval-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+    };
+    const automationStore = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    automationStore.setEnabled(true);
+    let proposalState = { proposals: [] };
+    const facade = new LinghuAutomationFacade({
+      store: automationStore, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN",
+      recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined,
+      submitRepairProposal: (request) => {
+        proposalState = { proposals: [{ proposalId: "linghu-proposal-1", status: "pending-approval", ...request }] };
+        return proposalState;
+      },
+      readEvolutionState: () => proposalState,
+    });
+    await facade.checkNow();
+    assert.equal(facade.state().pendingRepairProposalId, "linghu-proposal-1");
+    assert.equal(collaborationStore.state().tasks.length, 0, "审批前不得创建修正执行任务");
+    proposalState.proposals[0].status = "approved";
+    collaborationStore.submitTask({ title: "令狐审批后修正", problemStatement: "修正持续运行 Bug", confirmedIntent: "按审批方向修正", constraints: [], acceptanceCriteria: ["稳定运行"], workspaceState, locale: "zh-CN", mergeStrategy: "INDEPENDENT", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor", evolutionProposalId: "linghu-proposal-1" });
+    await facade.checkNow();
+    assert.equal(facade.state().pendingRepairProposalId, null);
+    assert.equal(facade.state().activeTaskId, collaborationStore.state().tasks[0].taskId);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("令狐旧四模块默认文案升级后收敛为三项职责且不覆盖用户自建文案", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-prompt-v2-migration-"));
   const storePath = path.join(directory, "linghu.json");
@@ -749,7 +782,7 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.78\.0/);
+  assert.match(rule, /rule_version = 5\.80\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);

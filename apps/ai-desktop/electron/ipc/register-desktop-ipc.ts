@@ -30,6 +30,7 @@ import { ConversationDispatchStore } from "../services/conversation-dispatch-sto
 import { CollaborationCodexRegistry } from "../services/collaboration/collaboration-codex-sessions.js";
 import { CollaborationCoordinator } from "../services/collaboration/collaboration-coordinator.js";
 import { LinghuAutomationFacade } from "../services/collaboration/linghu-automation-facade.js";
+import { NangongEvolutionFacade } from "../services/collaboration/nangong-evolution-facade.js";
 import { ManagedTaskExecutor } from "../services/managed-task-executor.js";
 import { ScreenshotStore } from "../services/screenshot-store.js";
 import { SettingsStore } from "../services/settings-store.js";
@@ -45,6 +46,7 @@ interface DesktopIpcDependencies {
   dispatch: ConversationDispatchStore;
   collaboration: CollaborationCoordinator;
   linghuAutomation: LinghuAutomationFacade;
+  nangongEvolution: NangongEvolutionFacade;
   collaborationRegistry: CollaborationCodexRegistry;
   audit: BusinessAuditLog;
   projectRoot: string;
@@ -96,7 +98,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, collaborationRegistry, audit, projectRoot, appRoot, variant, preloadPath, rendererRoot } = dependencies;
+  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, audit, projectRoot, appRoot, variant, preloadPath, rendererRoot } = dependencies;
   const activeAuditTasks = new Map<number, string>();
   const seenApprovalRequests = new Set<number>();
   const approvalAuditTasks = new Map<number, string>();
@@ -227,7 +229,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   ipcMain.handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
   registerSettingsIpc(settings, audit);
   registerWorkspaceIpc(workspaces, audit);
-  registerCollaborationIpc(collaboration, linghuAutomation);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution);
   ipcMain.handle("desktop:get-codex-models", () => codex.getModels());
   ipcMain.handle("desktop:get-codex-status", () => codex.getStatus());
   ipcMain.handle("desktop:get-active-codex-session", () => codex.activeSession());

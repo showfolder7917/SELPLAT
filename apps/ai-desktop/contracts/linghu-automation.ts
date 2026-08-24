@@ -64,6 +64,7 @@ export interface LinghuAutomationState {
   currentModule: LinghuAutomationModule;
   activePromptId: string | null;
   activeTaskId: string | null;
+  pendingRepairProposalId: string | null;
   recoveryAttemptCount: number;
   currentFaultFingerprint: string | null;
   /** 每个故障指纹独立计数，避免一条流程的恢复次数阻塞其他人物。 */

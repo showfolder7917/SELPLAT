@@ -291,6 +291,41 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
+test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审批", async () => {
+  await page.getByRole("button", { name: "展开任务" }).click();
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式" }).click();
+  await taskList.getByRole("button", { name: /南宫婉/ }).click();
+  const panel = page.locator(".nangong-evolution-panel");
+  await expect(panel.getByText("专项演化", { exact: true })).toBeVisible();
+  const evolution = panel.getByRole("checkbox", { name: "自动演化" });
+  const approval = panel.getByRole("checkbox", { name: "南宫提案自动审批" });
+  const execution = panel.getByRole("checkbox", { name: "审批后自动分发" });
+  await evolution.check();
+  await expect(evolution).toBeChecked();
+  await expect(approval).not.toBeChecked();
+  await expect(execution).not.toBeChecked();
+  await approval.check();
+  await expect(approval).toBeChecked();
+  await expect(execution).not.toBeChecked();
+  await panel.getByLabel("给南宫婉发送消息").fill("先调查令狐持续修正 Bug 如何接入审批");
+  await panel.getByRole("button", { name: "发送" }).click();
+  await expect(panel.getByText(/已确认事实：令狐持续修正需要先形成可审批方案/)).toBeVisible();
+  await expect(panel.getByRole("button", { name: "转为演化课题" })).toBeEnabled();
+  await expect(panel.getByText("统一演化审批表", { exact: true })).toBeVisible();
+  await taskList.getByRole("button", { name: /韩立/ }).click();
+  const approvalPanel = page.locator(".hanli-evolution-approval");
+  const nangongApproval = approvalPanel.getByRole("checkbox", { name: "自动审批南宫婉提案" });
+  const linghuApproval = approvalPanel.getByRole("checkbox", { name: "自动审批令狐修正" });
+  await expect(nangongApproval).toBeChecked();
+  await expect(linghuApproval).not.toBeChecked();
+  await linghuApproval.check();
+  await expect(nangongApproval).toBeChecked();
+  await expect(linghuApproval).toBeChecked();
+  await taskList.getByRole("button", { name: "单会话" }).click();
+  await page.getByRole("button", { name: "展开工作区" }).click();
+});
+
 test("令狐老祖位于南宫婉下方并可管理持续自动保障启动文案", async () => {
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,10 @@ if (existsSync(packageRoot)) {
     }
   }
 }
-const asarPath = candidates.find((candidate) => existsSync(candidate));
+// Windows 与 macOS 产物可能同时保留；验证最近生成的包，避免旧平台残留遮蔽本轮真实产物。
+const asarPath = candidates
+  .filter((candidate) => existsSync(candidate))
+  .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs)[0];
 if (!asarPath) throw new Error(`Packaged developer application is unavailable: ${packageRoot}`);
 
 // 读取真实打包产物而不是源码配置，确保 electron-builder 已把开发根合并进最终应用清单。

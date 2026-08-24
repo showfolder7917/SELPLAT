@@ -29,6 +29,7 @@ test("全部开发版打包入口自动注入稳定 SELPLAT 工程根", () => {
   }
   assert.match(unifiedRunnerSource, /SELPLAT_ROOT: this\.#sourceProjectRoot/);
   assert.match(packageManifest.scripts["verify:developer-package-root"], /verify-developer-package-root\.mjs/);
+  assert.match(packagedVerifierSource, /mtimeMs/, "多平台产物并存时必须验证最新生成的真实包");
   assert.match(packagedVerifierSource, /extractFile\(asarPath, "package\.json"\)/);
   assert.match(packagedVerifierSource, /packagedManifest\.selplatDevelopmentRoot/);
 });

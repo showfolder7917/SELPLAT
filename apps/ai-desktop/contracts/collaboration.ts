@@ -188,6 +188,7 @@ export interface CollaborationTask {
   integrationGeneration: number | null;
   initiator: CollaborationParticipantSnapshot | null;
   automationSource: CollaborationAutomationSource | null;
+  evolutionProposalId: string | null;
   historyCompleteness: "complete" | "legacy-partial";
   snapshot: CollaborationTaskSnapshot;
   plans: CollaborationRequirementPlan[];
@@ -253,6 +254,7 @@ export interface SubmitCollaborationTaskRequest {
   initiatorMemberId?: string;
   preferredExecutorMemberId?: string;
   automationSource?: CollaborationAutomationSource;
+  evolutionProposalId?: string;
 }
 
 export interface CollaborationStateEvent {

@@ -7,6 +7,7 @@ AI Desktop 是 Electron、React 与 TypeScript 构建的 Developer 桌面应用�
 - `src/variants/developer`：Developer 界面与应用样式。
 - `contracts`：AI Desktop 主进程、preload 与渲染进程共用的应用私有 IPC 协议；跨工程共通才进入 SELPLAT 根 `shared`。
 - `electron/services`：Codex Harness、ChatGPT OAuth、设置、日志、截图及协同服务。
+- `electron/services/collaboration/nangong-evolution-*`：南宫婉只读对话转专项课题、双来源版本化提案、韩立独立审批、恢复点及审批后协同分发。
 - `electron/ipc`：IPC 白名单、参数校验与服务编排。
 - `electron/config`：应用和工程路径解析。
 - `electron/window`：安全 BrowserWindow 配置。

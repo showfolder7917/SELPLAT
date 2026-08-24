@@ -159,6 +159,7 @@ function createInitialState(): LinghuAutomationState {
     currentModule: "flow-completion",
     activePromptId: promptId,
     activeTaskId: null,
+    pendingRepairProposalId: null,
     recoveryAttemptCount: 0,
     currentFaultFingerprint: null,
     recoveryAttemptsByFingerprint: {},
@@ -187,6 +188,7 @@ function readState(filePath: string): LinghuAutomationState | null {
 }
 
 function migrateState(value: LinghuAutomationState): void {
+  value.pendingRepairProposalId ??= null;
   if (Number(value.version) === 1) {
     // 旧默认文案包含页面演化和四模块职责；升级时只迁移受保护默认入口，不覆盖用户另建文案。
     const defaultPrompt = value.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian");

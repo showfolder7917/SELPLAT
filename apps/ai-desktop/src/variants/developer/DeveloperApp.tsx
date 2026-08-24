@@ -58,6 +58,8 @@ import type {
   LinghuAutomationStateEvent,
   LinghuStartupPrompt,
   ManagedExecutionMode,
+  NangongEvolutionState,
+  NangongEvolutionStateEvent,
   ModelServiceTier,
   ReasoningEffort,
   SandboxMode,
@@ -213,6 +215,7 @@ export function DeveloperApp() {
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
   const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
   const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationState | null>(null);
+  const [nangongEvolutionState, setNangongEvolutionState] = useState<NangongEvolutionState | null>(null);
   const [collaborationStreams, setCollaborationStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-detail">("member");
   const [selectedCollaborationTaskId, setSelectedCollaborationTaskId] = useState<string | null>(null);
@@ -345,8 +348,10 @@ export function DeveloperApp() {
     if (!desktop) return;
     void desktop.getCollaborationState().then((state) => { collaborationStateRef.current = state; setCollaborationState(state); });
     void desktop.getLinghuAutomationState().then((state) => { linghuAutomationStateRef.current = state; setLinghuAutomationState(state); });
+    void desktop.getNangongEvolutionState().then(setNangongEvolutionState);
     const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
     const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEvent) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
+    const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => setNangongEvolutionState(event.state));
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
       // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
       setCollaborationStreams((current) => {
@@ -362,7 +367,7 @@ export function DeveloperApp() {
         return { ...current, [envelope.taskId]: { ...next, message: applyCodexStreamEvent(next.message, envelope.event) } };
       });
     });
-    return () => { removeStateListener(); removeLinghuListener(); removeStreamListener(); };
+    return () => { removeStateListener(); removeLinghuListener(); removeNangongListener(); removeStreamListener(); };
   }, []);
 
   useEffect(() => {
@@ -1265,6 +1270,7 @@ export function DeveloperApp() {
 
     <main className="dev-main">
       <div className="dev-tab"><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{showConversationWorkspace && <button type="button" className="tab-new-task" data-tooltip={text.newCodexSession} aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}<Dismiss20Regular /></div>
+      {collaborationMode && selectedCollaborationMember?.memberId === "han-li" && nangongEvolutionState && <HanLiEvolutionApprovalPanel state={nangongEvolutionState} locale={locale} onState={setNangongEvolutionState} onError={setDispatchError} />}
       {showConversationWorkspace ? <section ref={chatRef} className="dev-chat">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p>{!codexStatus.account.authenticated && <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{!codexStatus.account.authenticated && loginHint && <em className="dev-login-hint">{loginHint}</em>}</div>}
         {messages.map((message) => {
@@ -1277,7 +1283,7 @@ export function DeveloperApp() {
         ? <CollaborationExecutionList tasks={completedCollaborationTasks} locale={locale} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />
         : collaborationPanel === "task-detail" && selectedCollaborationTask && selectedCollaborationTaskMember
           ? <CollaborationTaskDetail task={selectedCollaborationTask} member={selectedCollaborationTaskMember} liveOutput={collaborationStreams[selectedCollaborationTask.taskId] || null} automation={linghuAutomationState} locale={locale} onBack={() => { setSelectedCollaborationTaskId(null); setCollaborationPanel(terminalCollaborationStates.has(selectedCollaborationTask.state) ? "execution-list" : "member"); }} />
-          : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} linghuAutomation={linghuAutomationState} onLinghuState={setLinghuAutomationState} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
+          : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} linghuAutomation={linghuAutomationState} nangongEvolution={nangongEvolutionState} workspaces={workspaces} onLinghuState={setLinghuAutomationState} onNangongState={setNangongEvolutionState} onError={setDispatchError} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
       {showConversationWorkspace && <form className="dev-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
         {dispatchState.activeTask?.status === "recoverable" && <div className="dispatch-recovery" role="status"><span>发现上次未完成的任务</span><div><button type="button" onClick={() => void recoverConversationTask()}>继续执行</button><button type="button" onClick={() => void discardConversationRecovery()}>放弃任务</button></div></div>}
@@ -1353,13 +1359,17 @@ function CollaborationTaskDetail({ task, member, liveOutput, automation, locale,
   </section>;
 }
 
-function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomation, onLinghuState, onRename, onDelete, onContinue, onCancel, onOpen }: {
+function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomation, nangongEvolution, workspaces, onLinghuState, onNangongState, onError, onRename, onDelete, onContinue, onCancel, onOpen }: {
   member: CollaborationMember | null;
   tasks: CollaborationState["tasks"];
   streams: Record<string, CollaborationLiveOutput>;
   locale: Locale;
   linghuAutomation: LinghuAutomationState | null;
+  nangongEvolution: NangongEvolutionState | null;
+  workspaces: WorkspaceState | null;
   onLinghuState(state: LinghuAutomationState): void;
+  onNangongState(state: NangongEvolutionState): void;
+  onError(message: string): void;
   onRename(member: CollaborationMember): void;
   onDelete(member: CollaborationMember): void;
   onContinue(taskId: string): void;
@@ -1373,7 +1383,9 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
   const taskInitiatorName = currentTask?.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录");
   return <section className="collaboration-member-page" aria-label={member.displayName}>
     <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
+    {member.memberId === "nangong-wan" && nangongEvolution && <NangongEvolutionPanel state={nangongEvolution} workspaces={workspaces} locale={locale} onState={onNangongState} onError={onError} />}
     {member.memberId === "linghu-ancestor" && linghuAutomation && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}
+    {member.memberId === "linghu-ancestor" && nangongEvolution && <LinghuRepairProposalPanel state={nangongEvolution} workspaces={workspaces} locale={locale} onState={onNangongState} onError={onError} />}
     {(currentTask?.blockingReason || member.blockingReason) && <div className="member-blocking-reason" role="status">{currentTask?.blockingReason || member.blockingReason}</div>}
     {currentTask ? <article className="member-current-task">
       <details key={currentTask.taskId} className="member-task-detail">
@@ -1385,6 +1397,113 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
     </article> : <div className="member-empty-task"><Code24Regular /><strong>{locale === "ja" ? "待機中" : "当前空闲"}</strong><span>{locale === "ja" ? "割り当て時に新しい Codex を作成します。" : "收到任务时才会创建新的 Codex。"}</span></div>}
     {orderedTasks.length > 1 && <section className="member-task-history"><h2>{locale === "ja" ? "過去のタスク" : "历史任务"}</h2>{orderedTasks.slice(1).map((task) => <div key={task.taskId}><strong>{task.snapshot.title}</strong><span>{collaborationTaskStateLabel(task.state, locale)}</span></div>)}</section>}
   </section>;
+}
+
+/** 南宫婉人物页只展示课题、提案和审批事实；完整执行过程仍由全局执行列表承载。 */
+function NangongEvolutionPanel({ state, workspaces, locale, onState, onError }: { state: NangongEvolutionState; workspaces: WorkspaceState | null; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
+  const [chatText, setChatText] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const nangongTopics = state.topics.filter((item) => item.origin === "nangong");
+  const topic = nangongTopics.find((item) => item.topicId === state.activeTopicId) || nangongTopics.at(-1) || null;
+  const proposals = state.proposals.filter((item) => item.origin === "nangong").sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const update = async (operation: () => Promise<NangongEvolutionState> | undefined) => {
+    try { const pending = operation(); if (!pending) return; const next = await pending; onState(next); } catch (error) { onError(readableDesktopError(error, "专项演化操作失败。")); }
+  };
+  const createTopic = () => {
+    if (!workspaces) return onError("专项课题缺少已登记工作区。");
+    const title = window.prompt("专项课题标题")?.trim();
+    if (!title) return;
+    const goal = window.prompt("课题目标与期望结果")?.trim();
+    const scope = window.prompt("影响范围（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const evidence = window.prompt("已确认事实或证据")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const acceptanceCriteria = window.prompt("验收条件")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    if (!goal || !scope.length || !evidence.length || !acceptanceCriteria.length) return onError("目标、范围、证据和验收条件必须完整填写。");
+    void update(() => window.desktop?.createEvolutionTopic({ title, goal, scope, evidence, acceptanceCriteria, workspaceState: workspaces, locale }));
+  };
+  const createProposal = () => {
+    if (!topic) return;
+    const content = window.prompt("演化提案详细内容", `课题：${topic.title}\n\n目标：${topic.goal}\n\n推荐方向：`)?.trim();
+    if (!content) return;
+    const risks = window.prompt("风险（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const rollbackPlan = window.prompt("回退方案")?.trim();
+    if (!risks.length || !rollbackPlan) return onError("风险和回退方案必须完整填写。");
+    void update(() => window.desktop?.createEvolutionProposal(topic.topicId, { type: "代码修正", content, risks, rollbackPlan }));
+  };
+  const sendChat = async () => {
+    const message = chatText.trim();
+    if (!message || !workspaces || chatBusy) return;
+    setChatBusy(true); setChatText("");
+    try { await update(() => window.desktop?.sendNangongConversationMessage({ message, workspaceState: workspaces, locale })); } finally { setChatBusy(false); }
+  };
+  const convertChat = () => {
+    if (!workspaces || !state.conversation.messages.length) return;
+    const title = window.prompt("把当前讨论转换成演化课题：请指定标题")?.trim();
+    const goal = window.prompt("课题目标", state.conversation.messages.filter((item) => item.role === "user").at(-1)?.content || "")?.trim();
+    const scope = window.prompt("影响范围（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const acceptanceCriteria = window.prompt("验收条件（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    if (!title || !goal || !scope.length || !acceptanceCriteria.length) return onError("标题、目标、范围和验收条件必须完整填写。");
+    void update(() => window.desktop?.convertNangongConversationToTopic({ title, goal, scope, acceptanceCriteria, workspaceState: workspaces, locale }));
+  };
+  const toggle = (kind: "evolution" | "nangong-approval" | "execution", enabled: boolean) => void update(() => window.desktop?.setNangongAutomation(kind, enabled));
+  return <section className="nangong-evolution-panel" aria-label="南宫婉专项演化">
+    <header><div><strong>专项演化</strong><span>{topic ? topic.title : "尚未登记课题"}</span></div><button type="button" onClick={createTopic}>新建课题</button></header>
+    <section className="nangong-conversation" aria-label="与南宫婉讨论演化课题">
+      <header><div><strong>与南宫婉讨论</strong><span>充分调查后再转成正式课题</span></div><button type="button" onClick={() => void update(() => window.desktop?.newNangongConversation())}>新对话</button></header>
+      <div className="nangong-conversation-messages">{state.conversation.messages.length ? state.conversation.messages.map((message) => <article key={message.messageId} className={message.role}><strong>{message.role === "user" ? "我" : "南宫婉"}</strong><MarkdownMessage text={message.content} /></article>) : <p>先描述想演化的问题、现状和不可改变的约束。</p>}</div>
+      <div className="nangong-conversation-composer"><textarea aria-label="给南宫婉发送消息" value={chatText} onChange={(event) => setChatText(event.currentTarget.value)} /><button type="button" disabled={!chatText.trim() || chatBusy} onClick={() => void sendChat()}>{chatBusy ? "调查中…" : "发送"}</button><button type="button" disabled={!state.conversation.messages.length} onClick={convertChat}>转为演化课题</button></div>
+    </section>
+    <div className="nangong-automation-switches">
+      <label><input type="checkbox" checked={state.automaticEvolutionEnabled} onChange={(event) => toggle("evolution", event.currentTarget.checked)} />自动演化</label>
+      <label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => toggle("nangong-approval", event.currentTarget.checked)} />南宫提案自动审批</label>
+      <label><input type="checkbox" checked={state.automaticExecutionEnabled} onChange={(event) => toggle("execution", event.currentTarget.checked)} />审批后自动分发</label>
+    </div>
+    {topic && <article className="evolution-topic-card"><span>{topic.status}</span><h3>{topic.title}</h3><p>{topic.goal}</p><small>恢复点：{topic.recoveryPoint}</small><button type="button" onClick={createProposal}>形成新版本提案</button></article>}
+    <section className="evolution-approval-table"><h3>统一演化审批表</h3>{proposals.length === 0 ? <p>暂无提案。</p> : proposals.map((proposal) => <details key={proposal.proposalId}>
+      <summary><strong>{proposal.title}</strong><span>{proposal.type}</span><span>{proposal.submitterDisplayName}</span><span>{proposal.status}</span><time>{formatCollaborationTime(proposal.createdAt, locale)}</time></summary>
+      <div><MarkdownMessage text={proposal.content} /><p>事实证据：{proposal.evidence.join("；")}</p><p>风险：{proposal.risks.join("；")}</p><p>回退：{proposal.rollbackPlan}</p>{proposal.approvals.map((approval) => <p key={approval.approvalId}>{approval.approverDisplayName} · {approval.decision} · {approval.advice}</p>)}
+        <nav>{proposal.status === "approved" && <button type="button" onClick={() => void update(() => window.desktop?.dispatchEvolutionProposal(proposal.proposalId))}>审批已通过，返还南宫婉并分发</button>}</nav>
+      </div>
+    </details>)}</section>
+  </section>;
+}
+
+/** 韩立只在统一入口审批两个来源的演化方向；两个自动审批开关分别持久化。 */
+function HanLiEvolutionApprovalPanel({ state, locale, onState, onError }: { state: NangongEvolutionState; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
+  const proposals = [...state.proposals].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const update = async (operation: () => Promise<NangongEvolutionState> | undefined) => {
+    try { const pending = operation(); if (!pending) return; onState(await pending); } catch (error) { onError(readableDesktopError(error, "演化审批操作失败。")); }
+  };
+  const decide = (proposalId: string, decision: "approved" | "rejected" | "supplement-required") => void update(() => window.desktop?.decideEvolutionProposal(proposalId, { decision, advice: window.prompt("审批建议、新想法或方向修正") || "" }));
+  return <section className="hanli-evolution-approval" aria-label="韩立统一演化审批">
+    <header><div><strong>统一演化审批</strong><span>依据充分调查事实和你的人工审批习惯判断方向</span></div></header>
+    <div className="nangong-automation-switches">
+      <label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => void update(() => window.desktop?.setNangongAutomation("nangong-approval", event.currentTarget.checked))} />自动审批南宫婉提案</label>
+      <label><input type="checkbox" checked={state.automaticLinghuApprovalEnabled} onChange={(event) => void update(() => window.desktop?.setNangongAutomation("linghu-approval", event.currentTarget.checked))} />自动审批令狐修正</label>
+    </div>
+    <div className="hanli-approval-table"><div className="approval-table-head"><span>标题</span><span>类型</span><span>提交人</span><span>审批人</span><span>创建时间</span><span>审批时间</span></div>{proposals.length === 0 ? <p>暂无待审批方案。</p> : proposals.map((proposal) => {
+      const latest = proposal.approvals.at(-1);
+      const canDecide = ["pending-approval", "supplement-required"].includes(proposal.status) || (latest?.source === "automatic-han-li" && proposal.distributedTaskIds.length === 0);
+      return <details key={proposal.proposalId}><summary><span>{proposal.title}</span><span>{proposal.type}</span><span>{proposal.submitterDisplayName}</span><span>{latest?.approverDisplayName || "待审批"}</span><time>{formatCollaborationTime(proposal.createdAt, locale)}</time><time>{latest ? formatCollaborationTime(latest.createdAt, locale) : "—"}</time></summary><div><MarkdownMessage text={proposal.content} /><p>事实：{proposal.evidence.join("；")}</p><p>方向范围：{proposal.impactScope.join("；")}</p><p>风险：{proposal.risks.join("；")}</p><p>回退：{proposal.rollbackPlan}</p><nav>{canDecide && <><button type="button" onClick={() => decide(proposal.proposalId, "approved")}>用户通过</button><button type="button" onClick={() => decide(proposal.proposalId, "supplement-required")}>退回补充</button><button type="button" onClick={() => decide(proposal.proposalId, "rejected")}>驳回</button></>}{["pending-approval", "supplement-required"].includes(proposal.status) && <button type="button" onClick={() => void update(() => window.desktop?.autoApproveEvolutionProposal(proposal.proposalId))}>韩立立即审批</button>}{proposal.status === "approved" && <button type="button" onClick={() => void update(() => window.desktop?.dispatchEvolutionProposal(proposal.proposalId))}>返还{proposal.submitterDisplayName}并执行</button>}</nav></div></details>;
+    })}</div>
+  </section>;
+}
+
+/** 令狐老祖把持续运行中发现的修正方向先提交韩立，不再以修正名义绕过演化审批。 */
+function LinghuRepairProposalPanel({ state, workspaces, locale, onState, onError }: { state: NangongEvolutionState; workspaces: WorkspaceState | null; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
+  const submit = async () => {
+    if (!workspaces) return onError("令狐修正方案缺少已登记工作区。");
+    const title = window.prompt("修正方案标题")?.trim();
+    const content = window.prompt("详细修正方向")?.trim();
+    const evidence = window.prompt("充分调查事实（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const impactScope = window.prompt("影响范围（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const risks = window.prompt("风险（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const rollbackPlan = window.prompt("回退方案")?.trim();
+    const acceptanceCriteria = window.prompt("验收条件（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    if (!title || !content || !evidence.length || !impactScope.length || !risks.length || !rollbackPlan || !acceptanceCriteria.length) return onError("令狐修正方案的标题、内容、事实、范围、风险、回退和验收必须完整。");
+    try { onState(await window.desktop!.createLinghuRepairProposal({ title, content, evidence, impactScope, risks, rollbackPlan, acceptanceCriteria, workspaceState: workspaces, locale })); } catch (error) { onError(readableDesktopError(error, "令狐修正方案提交失败。")); }
+  };
+  const pending = state.proposals.filter((proposal) => proposal.origin === "linghu" && ["pending-approval", "supplement-required", "approved"].includes(proposal.status));
+  return <section className="linghu-repair-proposals"><header><div><strong>修正方案审批</strong><span>持续修正 Bug 前先提交韩立审批</span></div><button type="button" onClick={() => void submit()}>提交修正方案</button></header><p>{pending.length ? `${pending.length} 个方案正在审批或等待返还执行。` : "当前没有待处理修正方案。"}</p></section>;
 }
 
 /** 当前任务只展开真实卡点，报告、证据和评分留在所属流程环节内。 */

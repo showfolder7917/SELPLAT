@@ -18,6 +18,8 @@ import { CollaborationStore } from "./services/collaboration/collaboration-store
 import { LinghuAutomationFacade } from "./services/collaboration/linghu-automation-facade.js";
 import { LinghuAutomationStore } from "./services/collaboration/linghu-automation-store.js";
 import { LinghuUnifiedTestRunner } from "./services/collaboration/linghu-unified-test-runner.js";
+import { NangongEvolutionFacade } from "./services/collaboration/nangong-evolution-facade.js";
+import { NangongEvolutionStore } from "./services/collaboration/nangong-evolution-store.js";
 import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
 import { VersionWorkspaceManager } from "./services/collaboration/version-workspace-manager.js";
 import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-test-runner.js";
@@ -43,8 +45,10 @@ if (resolveDistributionMode() === "archive") {
 }
 
 let codex: CodexService | undefined;
+let nangongCodex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
+let nangongEvolution: NangongEvolutionFacade | undefined;
 
 // 开发启动、正式包与重启交接共用同一数据域，确保所有人物任务在版本切换后继续执行。
 const healthCheckFile = process.argv.find((argument) => argument.startsWith("--ai-desktop-health-check-file="))?.slice("--ai-desktop-health-check-file=".length)
@@ -115,6 +119,23 @@ app.whenReady().then(async () => {
     },
     (details) => audit.recordEvent("trusted_command.decision", details),
     (details) => audit.recordEvent("thread.lifecycle", details),
+  );
+  const nangongSessions = new CodexSessionStore(path.join(app.getPath("userData"), "nangong-conversation-session.json"));
+  nangongCodex = new CodexService(
+    projectRoot,
+    trustedCommands,
+    nangongSessions,
+    {
+      codexHome,
+      serviceName: "selplat_ai_desktop_nangong",
+      threadSource: "ai-desktop-nangong-evolution",
+      migrateLegacySession: false,
+      sessionStorage: "ai-desktop",
+      validationOwner: "desktop",
+      readSettings: () => settings.read(),
+    },
+    (details) => audit.recordEvent("nangong.conversation.trusted_command.decision", details),
+    (details) => audit.recordEvent("nangong.conversation.thread.lifecycle", details),
   );
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
@@ -189,6 +210,25 @@ app.whenReady().then(async () => {
       app.exit(0);
     },
   });
+  const nangongStore = new NangongEvolutionStore(path.join(collaborationRoot, "nangong-evolution.json"));
+  nangongEvolution = new NangongEvolutionFacade({
+    store: nangongStore,
+    collaboration,
+    conversation: {
+      send: (request, context) => nangongCodex!.send([
+        "你现在以南宫婉的专项演化调查者身份与用户讨论。只读调查和分析，不修改源码、不执行构建、不越过审批。",
+        "回答应区分已确认事实、基于事实的推断、仍需验证内容，并给出可继续讨论的演化方向。不要擅自把聊天变成正式课题，只有用户在界面明确转换后才成立。",
+        `最近对话：\n${context}`,
+        `用户最新消息：\n${request.message}`,
+      ].join("\n\n"), request.locale, "read-only", request.workspaceState, [], () => undefined, "conversation-managed"),
+      newChat: () => nangongCodex!.newChat(),
+    },
+    recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
+  });
+  nangongEvolution.subscribe((state, reason, topicId, proposalId) => {
+    audit.recordEvent("nangong.evolution.state_changed", { reason, topicId, proposalId, activeTopicId: state.activeTopicId });
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:nangong-evolution-state", { state, reason, topicId, proposalId });
+  });
   const linghuStore = new LinghuAutomationStore(path.join(collaborationRoot, "linghu-automation.json"));
   linghuAutomation = new LinghuAutomationFacade({
     store: linghuStore,
@@ -205,6 +245,8 @@ app.whenReady().then(async () => {
       app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
       app.exit(0);
     },
+    submitRepairProposal: (request) => nangongEvolution!.createLinghuRepairProposal(request),
+    readEvolutionState: () => nangongEvolution!.state(),
   });
   linghuAutomation.subscribe((event) => {
     audit.recordEvent("linghu.automation.state_changed", { reason: event.reason, enabled: event.state.enabled, cycle: event.state.cycle, module: event.state.currentModule }, event.state.activeTaskId || undefined);
@@ -220,6 +262,7 @@ app.whenReady().then(async () => {
     dispatch,
     collaboration,
     linghuAutomation,
+    nangongEvolution,
     collaborationRegistry,
     audit,
     projectRoot,
@@ -254,6 +297,7 @@ app.whenReady().then(async () => {
   }
   collaboration.resumePendingWork();
   linghuAutomation.start();
+  nangongEvolution.start();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow({ preloadPath, rendererRoot, variant, distributionMode });
   });
@@ -261,8 +305,10 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   linghuAutomation?.stop();
+  nangongEvolution?.stop();
   void collaboration?.dispose();
   codex?.dispose();
+  nangongCodex?.dispose();
 });
 
 app.on("window-all-closed", () => {

@@ -27,13 +27,14 @@ const streamListeners = new Set();
 const collaborationStateListeners = new Set();
 const collaborationStreamListeners = new Set();
 const linghuAutomationListeners = new Set();
+const nangongEvolutionListeners = new Set();
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
   version: 1,
   mode: "single-conversation",
   selectedMemberId: "han-li",
   members: collaborationNames.map((displayName, index) => ({
-    memberId: index === 0 ? "han-li" : displayName === "令狐老祖" ? "linghu-ancestor" : `isolated-member-${index}`,
+    memberId: index === 0 ? "han-li" : displayName === "南宫婉" ? "nangong-wan" : displayName === "令狐老祖" ? "linghu-ancestor" : `isolated-member-${index}`,
     displayName,
     kind: index === 0 ? "conversation-owner" : "worker",
     protected: index === 0 || displayName === "令狐老祖",
@@ -63,6 +64,7 @@ let linghuAutomationState = {
   currentModule: "flow-completion",
   activePromptId: "linghu-default-flow-guardian",
   activeTaskId: null,
+  pendingRepairProposalId: null,
   recoveryAttemptCount: 0,
   currentFaultFingerprint: null,
   recoveryAttemptsByFingerprint: {},
@@ -78,6 +80,13 @@ let linghuAutomationState = {
   lastModuleReport: null,
   prompts: [{ promptId: "linghu-default-flow-guardian", title: linghuDefault.title, content: linghuDefault.content, enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
   updatedAt: "2026-08-23T00:00:00.000Z",
+};
+let nangongEvolutionState = { version: 2, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
+const publishNangongEvolution = (reason) => {
+  nangongEvolutionState.updatedAt = new Date().toISOString();
+  const event = { state: structuredClone(nangongEvolutionState), reason, topicId: nangongEvolutionState.activeTopicId, proposalId: null };
+  for (const listener of nangongEvolutionListeners) listener(event);
+  return event.state;
 };
 const publishLinghuAutomation = (reason) => {
   linghuAutomationState.updatedAt = new Date().toISOString();
@@ -228,6 +237,29 @@ contextBridge.exposeInMainWorld("desktop", {
   deleteLinghuStartupPrompt: async (promptId) => { linghuAutomationState.prompts = linghuAutomationState.prompts.filter((item) => item.promptId !== promptId); if (linghuAutomationState.activePromptId === promptId) linghuAutomationState.activePromptId = linghuAutomationState.prompts.find((item) => item.enabled)?.promptId || null; return publishLinghuAutomation("prompt.deleted"); },
   selectLinghuStartupPrompt: async (promptId) => { linghuAutomationState.activePromptId = promptId; return publishLinghuAutomation("prompt.selected"); },
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
+  getNangongEvolutionState: async () => structuredClone(nangongEvolutionState),
+  sendNangongConversationMessage: async (request) => {
+    const now = new Date().toISOString();
+    nangongEvolutionState.conversation.messages.push({ messageId: `user-${now}`, role: "user", content: request.message, createdAt: now });
+    nangongEvolutionState.conversation.messages.push({ messageId: `nangong-${now}`, role: "nangong", content: "已确认事实：令狐持续修正需要先形成可审批方案。建议方向：把修正方案接入韩立统一审批。", createdAt: now });
+    return publishNangongEvolution("conversation.replied");
+  },
+  newNangongConversation: async () => { nangongEvolutionState.conversation = { conversationId: `nangong-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() }; return publishNangongEvolution("conversation.created"); },
+  convertNangongConversationToTopic: async () => publishNangongEvolution("conversation.converted"),
+  createEvolutionTopic: async () => publishNangongEvolution("topic.created"),
+  setNangongAutomation: async (kind, enabled) => {
+    if (kind === "evolution") nangongEvolutionState.automaticEvolutionEnabled = enabled === true;
+    if (kind === "nangong-approval") nangongEvolutionState.automaticNangongApprovalEnabled = enabled === true;
+    if (kind === "linghu-approval") nangongEvolutionState.automaticLinghuApprovalEnabled = enabled === true;
+    if (kind === "execution") nangongEvolutionState.automaticExecutionEnabled = enabled === true;
+    return publishNangongEvolution(`automation.${kind}`);
+  },
+  createEvolutionProposal: async () => publishNangongEvolution("proposal.created"),
+  createLinghuRepairProposal: async () => publishNangongEvolution("linghu.proposal.created"),
+  decideEvolutionProposal: async () => publishNangongEvolution("proposal.decided"),
+  autoApproveEvolutionProposal: async () => publishNangongEvolution("proposal.auto-decided"),
+  dispatchEvolutionProposal: async () => publishNangongEvolution("proposal.distributed"),
+  onNangongEvolutionState: (listener) => { nangongEvolutionListeners.add(listener); return () => nangongEvolutionListeners.delete(listener); },
   onCollaborationState: (listener) => { collaborationStateListeners.add(listener); return () => collaborationStateListeners.delete(listener); },
   onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
   setInteractionCollaborationReviewFixture: async (active) => {

@@ -549,3 +549,31 @@ button { color: inherit; }
   .task-result-hero dl > div:first-child { grid-column: auto; }
   .task-flow-log li { grid-template-columns: 1fr; gap: 3px; }
 }
+.nangong-evolution-panel { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; background: var(--colorNeutralBackground2); }
+.nangong-evolution-panel > header, .nangong-evolution-panel > header > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.nangong-evolution-panel > header > div { align-items: flex-start; flex-direction: column; }
+.nangong-automation-switches { display: flex; flex-wrap: wrap; gap: 12px; }
+.nangong-automation-switches label { display: inline-flex; align-items: center; gap: 6px; }
+.nangong-conversation, .hanli-evolution-approval, .linghu-repair-proposals { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; background: var(--colorNeutralBackground1); }
+.nangong-conversation > header, .hanli-evolution-approval > header, .linghu-repair-proposals > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.nangong-conversation > header > div, .hanli-evolution-approval > header > div, .linghu-repair-proposals > header > div { display: grid; gap: 3px; }
+.nangong-conversation-messages { display: grid; gap: 8px; max-height: 360px; overflow: auto; }
+.nangong-conversation-messages article { display: grid; gap: 5px; max-width: 92%; padding: 9px 11px; border-radius: 8px; background: var(--colorNeutralBackground3); }
+.nangong-conversation-messages article.user { justify-self: end; background: var(--colorBrandBackground2); }
+.nangong-conversation-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
+.nangong-conversation-composer textarea { min-height: 72px; resize: vertical; }
+.hanli-approval-table { display: grid; gap: 6px; min-width: 0; }
+.approval-table-head, .hanli-approval-table details > summary { display: grid; grid-template-columns: minmax(140px, 2fr) repeat(3, minmax(80px, 1fr)) repeat(2, minmax(120px, 1fr)); gap: 8px; align-items: center; }
+.approval-table-head { padding: 7px 10px; color: var(--colorNeutralForeground3); font-size: 12px; }
+.hanli-approval-table details { min-width: 0; border-top: 1px solid var(--colorNeutralStroke2); }
+.hanli-approval-table details > summary { padding: 9px 10px; cursor: pointer; }
+.hanli-approval-table details > div { display: grid; gap: 8px; padding: 10px; }
+.hanli-approval-table nav { display: flex; flex-wrap: wrap; gap: 7px; }
+@media (max-width: 900px) { .approval-table-head { display: none; } .hanli-approval-table details > summary { grid-template-columns: 1fr 1fr; } .nangong-conversation-composer { grid-template-columns: 1fr auto; } .nangong-conversation-composer textarea { grid-column: 1 / -1; } }
+.evolution-topic-card, .evolution-approval-table details { padding: 12px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
+.evolution-topic-card { display: grid; gap: 8px; }
+.evolution-topic-card h3, .evolution-topic-card p { margin: 0; }
+.evolution-approval-table { display: grid; gap: 8px; }
+.evolution-approval-table details summary { display: grid; grid-template-columns: minmax(180px, 1fr) auto auto auto auto; gap: 10px; align-items: center; cursor: pointer; }
+.evolution-approval-table details > div { display: grid; gap: 8px; padding-top: 10px; }
+.evolution-approval-table nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

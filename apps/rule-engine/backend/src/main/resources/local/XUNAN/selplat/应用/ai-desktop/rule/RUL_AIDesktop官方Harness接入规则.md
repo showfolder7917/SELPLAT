@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.78.0 澄清运行时测试批次与外部工程任务文档边界。 -->
-rule_version = 5.78.0
+<!-- 5.80.0 建立南宫婉对话转课题、韩立双来源审批和令狐修正返还闭环。 -->
+rule_version = 5.80.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -200,6 +200,10 @@ upgrade_record_5_45 = 2026-08-23:源码目录只保留永久源码配置测试�
 upgrade_record_5_46 = 2026-08-23:公共Node路径包唯一解析_锁文件哈希依赖缓存_受控临时链接执行后清理_临时根只保留执行日志与临时材料_测试按runId原子流转_归档按类型年月任务隔离_真实安装包阻断Java_Python_Gradle泄漏
 <!-- 5.78.0 澄清 AI Desktop 运行时批次与外部工程任务文档边界，避免应用规则覆盖 rule-engine 工程生命周期门禁。 -->
 upgrade_record_5_78 = 2026-08-24:AI_Desktop运行时测试批次继续按runId流转_外部SELPLAT工程任务执行与测试文档继续由工程根OPTION和rule_engine生命周期管理器控制_两类文档不得互相替代
+<!-- 5.79.0 固化南宫婉专项调查、提案、审批、分发和自动演化的持久产品边界。 -->
+upgrade_record_5_79 = 2026-08-24:南宫婉单课题调查_版本化提案_演化审批独立于随机执行审核和命令审批_人工决定形成偏好快照_韩立自动审批事实不足退回补充_自动演化自动审批自动分发三开关独立_审批通过先返还南宫婉再关联proposalId分发_重启恢复点_执行继续复用协同工作树集成统一测试
+<!-- 5.80.0 把灵活讨论冻结为正式课题，并让两个提交来源共享审批事实但保持独立自动开关。 -->
+upgrade_record_5_80 = 2026-08-24:南宫婉独立只读Codex对话_聊天快照显式转正式演化课题_韩立统一审批南宫婉和令狐方案_两个来源自动审批开关独立_审批表完整时间和人物字段_令狐Bug修正先审批后返还持续修正链
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -518,6 +522,24 @@ macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_o
 shared_test_document_lifecycle_contract = ai_desktop_runtime_managed_batch_only + manifest_application_name_plus_common_path_resolution + pending_test_runId_directory_with_thread_document + exactly_one_selectable_run + atomic_whole_batch_pending_to_running_transition + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_and_interrupted_running_batch_recovery + every_terminal_result_immediate_month_and_runId_archive + next_run_new_runId + legacy_documents_migrated_not_deleted
 <!-- 外部 Codex 对 SELPLAT 源码执行工程任务时，必须继续使用 rule-engine 的工程根执行文档与测试文档生命周期；应用运行时批次不能替代该门禁。 -->
 external_engineering_test_document_contract = selplat_project_root_OPTION_execution_and_test_documents + rule_engine_execution_doc_manager_and_test_doc_manager + runtime_batch_never_replaces_engineering_task_gate
+<!-- 南宫婉只负责单一登记课题的调查、版本化提案和审批后组织，不得在审批前直接修改源码。 -->
+nangong_special_evolution_role_contract = one_registered_topic_per_cycle + evidence_first_investigation + versioned_immutable_proposal + no_source_change_before_evolution_approval + approved_proposal_returns_to_nangong_before_distribution
+<!-- 演化方向审批必须与随机执行方案审核、Codex 命令审批分离，并保留真实审批人与引用事实。 -->
+nangong_evolution_approval_contract = dedicated_evolution_approval_records + manual_user_or_automatic_han_li + approve_reject_or_supplement_only + separate_from_execution_review_and_command_approval + real_approver_timestamps_evidence_and_advice
+<!-- 韩立自动审批只引用同类型人工决定；事实或人工偏好不足时必须退回补充，自动决定不得成为最高可信偏好事实。 -->
+nangong_automatic_approval_contract = complete_goal_scope_evidence_risk_rollback_and_acceptance_gate + similar_manual_approval_reference + insufficient_fact_or_preference_returns_supplement + automatic_decision_not_highest_trust_training_fact + later_manual_correction_wins
+<!-- 自动演化、自动审批和审批后自动分发是三个独立开关；关闭后保留历史和恢复点。 -->
+nangong_three_automation_switch_contract = automatic_evolution_independent_from_automatic_approval_independent_from_automatic_execution + all_default_off + disabling_preserves_history_and_recovery_point + no_unregistered_topic_scan
+<!-- 审批后的任务必须由南宫婉作为真实发起人并携带 proposalId 进入既有协同执行、验证、集成和统一测试链。 -->
+nangong_distribution_contract = approved_only + initiator_nangong_wan + stable_proposalId_bidirectional_link + existing_collaboration_worktree_review_validation_integration_and_unified_test_pipeline
+<!-- 南宫婉讨论使用独立只读 Codex 线程；聊天本身不是正式课题，只有用户显式转换时冻结消息标识和调查结论。 -->
+nangong_conversation_to_topic_contract = dedicated_persistent_read_only_codex_thread + flexible_user_dialogue_and_fact_investigation + conversation_is_not_topic + explicit_user_conversion_freezes_message_ids_goal_scope_and_acceptance + no_source_change_or_distribution_from_chat
+<!-- 韩立统一审批表必须同时接收南宫婉演化提案和令狐修正方案，并完整显示用户指定字段。 -->
+han_li_unified_evolution_approval_contract = source_nangong_or_linghu + title_type_submitter_approver_createdAt_approvedAt_status + detailed_free_form_content_with_clear_direction + manual_user_advice_or_automatic_han_li_fact_decision
+<!-- 南宫与令狐自动审批必须分别设置；人工记录只按同来源同类型形成偏好，自动结论不能反向成为最高可信事实。 -->
+han_li_source_specific_automatic_approval_contract = independent_nangong_and_linghu_switches_default_off + complete_fact_gate + same_origin_and_type_manual_history + insufficient_fact_or_history_returns_supplement + later_manual_correction_wins
+<!-- 令狐持续修正发现的 Bug 方向必须先形成方案；审批通过后返还令狐并携带 proposalId 进入既有持续恢复和测试链。 -->
+linghu_repair_approval_and_return_contract = detected_bug_to_versioned_repair_proposal + no_repair_execution_before_evolution_approval + approved_return_to_linghu_ancestor + initiator_and_preferred_executor_linghu_ancestor + stable_proposalId + existing_recovery_validation_and_unified_test_pipeline
 <!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->
 ai_desktop_project_data_domain_contract = manifest_name_driven_node_common_path_api + apps_application_source_config_permanent_tests_and_scripts_only + no_node_modules_runtime_or_build_data_under_source + cache_application_lockHash_dependencies_and_regenerable_only + controlled_temporary_dependency_links_removed_after_command + build_application_compile_package_sites_and_reports_only + OPTION_temp_application_exactly_execution_log_and_temporary_materials + log_application_archive_log_kind_month_identifier_hierarchy + private_user_settings_sessions_and_secrets_remain_electron_userData
 <!-- 开发包必须在构建时携带持续存在的源工程根，使安装后日志仍进入原工程；发布包不得包含该开发机路径。 -->

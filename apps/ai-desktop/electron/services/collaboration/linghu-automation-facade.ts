@@ -8,6 +8,7 @@ import type {
   LinghuFlowHealth,
 } from "../../../contracts/linghu-automation.js";
 import type { TestResourceCoordinatorState } from "../../../contracts/test-resource.js";
+import type { CreateLinghuRepairProposalRequest, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
 import { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./linghu-automation-store.js";
 
@@ -21,6 +22,8 @@ export interface LinghuAutomationFacadeOptions {
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   readTestResourceState(): TestResourceCoordinatorState;
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
+  submitRepairProposal?(request: CreateLinghuRepairProposalRequest): NangongEvolutionState;
+  readEvolutionState?(): NangongEvolutionState;
 }
 
 /** 令狐老祖自动保障的唯一入口；界面和定时器只调用本 Facade，不直接依赖调度、恢复与持久化实现。 */
@@ -32,6 +35,8 @@ export class LinghuAutomationFacade {
   readonly #recordEvent: LinghuAutomationFacadeOptions["recordEvent"];
   readonly #readTestResourceState: LinghuAutomationFacadeOptions["readTestResourceState"];
   readonly #runUnifiedTestAndRestart: LinghuAutomationFacadeOptions["runUnifiedTestAndRestart"];
+  readonly #submitRepairProposal: LinghuAutomationFacadeOptions["submitRepairProposal"];
+  readonly #readEvolutionState: LinghuAutomationFacadeOptions["readEvolutionState"];
   #timer: ReturnType<typeof setInterval> | null = null;
   #checking = false;
 
@@ -43,6 +48,8 @@ export class LinghuAutomationFacade {
     this.#recordEvent = options.recordEvent;
     this.#readTestResourceState = options.readTestResourceState;
     this.#runUnifiedTestAndRestart = options.runUnifiedTestAndRestart;
+    this.#submitRepairProposal = options.submitRepairProposal;
+    this.#readEvolutionState = options.readEvolutionState;
   }
 
   state(): LinghuAutomationState { return this.#store.state(); }
@@ -92,7 +99,7 @@ export class LinghuAutomationFacade {
       if (this.#collaboration.state().mode !== "collaboration") this.#collaboration.setMode("collaboration");
 
       // 一级职责先于令狐老祖自己的演化循环：任何人物的未完成任务都必须先进入最后流程。
-      const guarded = await this.#recoverOtherFlows(collaborationState, automation.activeTaskId, snapshots);
+      const guarded = await this.#recoverOtherFlows(collaborationState, automation.activeTaskId, automation.pendingRepairProposalId, snapshots);
       if (guarded) return;
 
       if (automation.activeTaskId) {
@@ -162,11 +169,12 @@ export class LinghuAutomationFacade {
   async #recoverOtherFlows(
     collaborationState: CollaborationState,
     activeAutomationTaskId: string | null,
+    pendingRepairProposalId: string | null,
     snapshots: LinghuAutomaticFlowSnapshot[],
   ): Promise<boolean> {
     // 自身保障任务不能遮蔽其他人物的停点；每轮仍只恢复一条流程，避免恢复动作互相抢占。
     const pending = collaborationState.tasks
-      .filter((task) => task.taskId !== activeAutomationTaskId && task.state !== "integrated" && task.state !== "cancelled")
+      .filter((task) => task.taskId !== activeAutomationTaskId && (!pendingRepairProposalId || task.evolutionProposalId !== pendingRepairProposalId) && task.state !== "integrated" && task.state !== "cancelled")
       .sort((left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
     if (pending.length === 0) return false;
 
@@ -223,6 +231,52 @@ export class LinghuAutomationFacade {
   }
 
   #dispatchCurrentModule(state: LinghuAutomationState): void {
+    if (this.#submitRepairProposal && this.#readEvolutionState) {
+      if (state.pendingRepairProposalId) {
+        const evolution = this.#readEvolutionState();
+        const proposal = evolution.proposals.find((candidate) => candidate.proposalId === state.pendingRepairProposalId);
+        const task = this.#collaboration.state().tasks.find((candidate) => candidate.evolutionProposalId === state.pendingRepairProposalId);
+        if (task) {
+          this.#store.updateRuntime("automation.approved_repair_received", (current) => {
+            current.activeTaskId = task.taskId;
+            current.pendingRepairProposalId = null;
+            current.lastDispatchAt = new Date().toISOString();
+            current.recoveryCheckpoint = `approved-repair-task:${task.taskId}:${current.currentModule}`;
+            current.blockingReason = null;
+          });
+          return;
+        }
+        if (proposal && ["pending-approval", "approved"].includes(proposal.status)) {
+          this.#store.updateRuntime("automation.repair_awaiting_approval", (current) => { current.blockingReason = `令狐修正方案 ${proposal.proposalId} 正在等待韩立审批或审批后返还执行`; });
+          return;
+        }
+        if (proposal?.status === "supplement-required" || proposal?.status === "rejected") {
+          this.#store.updateRuntime("automation.repair_requires_revision", (current) => { current.blockingReason = `令狐修正方案 ${proposal.proposalId} 状态为 ${proposal.status}，等待补充事实或人工新方向`; });
+          return;
+        }
+        this.#store.updateRuntime("automation.repair_proposal_missing", (current) => { current.pendingRepairProposalId = null; current.blockingReason = "令狐修正方案记录缺失，已保留恢复点并准备重新提交"; });
+        return;
+      }
+      const moduleText = moduleInstruction(state.currentModule);
+      const proposalState = this.#submitRepairProposal({
+        title: `令狐老祖 · 第${state.cycle}轮 · ${moduleLabel(state.currentModule)}`,
+        content: `${moduleText}\n\n当前阻塞：${state.blockingReason || "无已知阻塞"}\n\n建议先依据真实运行事实完成最小修正，再进入既有协同验证与统一测试。`,
+        evidence: [state.lastFeedback?.summary || "持续检测已进入当前独立模块", `当前模块：${moduleLabel(state.currentModule)}`, `检测恢复点：${state.recoveryCheckpoint || "首次检测"}`],
+        impactScope: [moduleLabel(state.currentModule)],
+        risks: ["错误恢复可能重复触发任务或影响持续运行"],
+        rollbackPlan: "保留当前恢复点；失败时撤销修正任务分支并继续只读检测。",
+        acceptanceCriteria: ["修正方案有事实依据", "任务恢复且不重复触发", "通过既有代码验证和统一测试"],
+        workspaceState: this.#readWorkspaceState(), locale: this.#locale(),
+      });
+      const proposal = proposalState.proposals.at(-1)!;
+      this.#store.updateRuntime("automation.repair_submitted_for_approval", (current) => {
+        current.pendingRepairProposalId = proposal.proposalId;
+        current.recoveryCheckpoint = `repair-proposal:${proposal.proposalId}:${current.currentModule}`;
+        current.blockingReason = `修正方案已提交韩立审批：${proposal.proposalId}`;
+      });
+      this.#recordEvent("linghu.automation.repair_submitted_for_approval", { proposalId: proposal.proposalId, cycle: state.cycle, module: state.currentModule });
+      return;
+    }
     const prompt = state.prompts.find((candidate) => candidate.promptId === state.activePromptId && candidate.enabled)
       || state.prompts.find((candidate) => candidate.enabled);
     if (!prompt) {

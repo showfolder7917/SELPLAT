@@ -81,6 +81,22 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.on("desktop:linghu-automation-state", handler);
     return () => ipcRenderer.removeListener("desktop:linghu-automation-state", handler);
   },
+  getNangongEvolutionState: () => ipcRenderer.invoke("desktop:get-nangong-evolution-state"),
+  sendNangongConversationMessage: (request: unknown) => ipcRenderer.invoke("desktop:send-nangong-conversation-message", request),
+  newNangongConversation: () => ipcRenderer.invoke("desktop:new-nangong-conversation"),
+  convertNangongConversationToTopic: (request: unknown) => ipcRenderer.invoke("desktop:convert-nangong-conversation-to-topic", request),
+  createEvolutionTopic: (request: unknown) => ipcRenderer.invoke("desktop:create-evolution-topic", request),
+  setNangongAutomation: (kind: string, enabled: boolean) => ipcRenderer.invoke("desktop:set-nangong-automation", kind, enabled),
+  createEvolutionProposal: (topicId: string, request: unknown) => ipcRenderer.invoke("desktop:create-evolution-proposal", topicId, request),
+  createLinghuRepairProposal: (request: unknown) => ipcRenderer.invoke("desktop:create-linghu-repair-proposal", request),
+  decideEvolutionProposal: (proposalId: string, request: unknown) => ipcRenderer.invoke("desktop:decide-evolution-proposal", proposalId, request),
+  autoApproveEvolutionProposal: (proposalId: string) => ipcRenderer.invoke("desktop:auto-approve-evolution-proposal", proposalId),
+  dispatchEvolutionProposal: (proposalId: string) => ipcRenderer.invoke("desktop:dispatch-evolution-proposal", proposalId),
+  onNangongEvolutionState: (listener: (event: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
+    ipcRenderer.on("desktop:nangong-evolution-state", handler);
+    return () => ipcRenderer.removeListener("desktop:nangong-evolution-state", handler);
+  },
   onCollaborationState: (listener: (event: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, value: unknown) => listener(value);
     ipcRenderer.on("desktop:collaboration-state", handler);
