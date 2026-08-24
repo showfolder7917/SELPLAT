@@ -4,6 +4,7 @@ import test from "node:test";
 
 const runner = readFileSync(new URL("../scripts/run-with-dependencies.mjs", import.meta.url), "utf8");
 const cache = readFileSync(new URL("../scripts/dependency-cache.mjs", import.meta.url), "utf8");
+const ensure = readFileSync(new URL("../scripts/ensure-dependency-cache.mjs", import.meta.url), "utf8");
 const pathResolver = readFileSync(new URL("../scripts/resolve-application-paths.mjs", import.meta.url), "utf8");
 const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
@@ -13,6 +14,14 @@ test("受控命令在锁文件哈希缓存缺失时先调用统一依赖准备�
   assert.match(runner, /scripts\/ensure-dependency-cache\.mjs/);
   assert.match(runner, /if \(prepared\.status !== 0\) process\.exit/);
   assert.ok(runner.indexOf("ensure-dependency-cache.mjs") < runner.indexOf("attachDependencyCache("));
+});
+
+test("首次安装和中断恢复都使用应用工程内 npm 缓存", () => {
+  assert.match(ensure, /sourceDependenciesAreReusableLink/);
+  assert.match(ensure, /lstatSync\(details\.linkPath\)\.isSymbolicLink\(\)/);
+  assert.match(ensure, /path\.join\(details\.projectRoot, "cache", details\.applicationName, "npm"\)/);
+  assert.match(ensure, /NPM_CONFIG_CACHE: npmCacheRoot/);
+  assert.ok(ensure.indexOf("NPM_CONFIG_CACHE") < ensure.indexOf("migrate-dependencies-to-cache.mjs"));
 });
 
 test("应用路径诊断通过受控依赖入口加载公共路径包且不要求持久源码依赖目录", () => {

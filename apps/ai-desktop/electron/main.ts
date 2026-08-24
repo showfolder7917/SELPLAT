@@ -2,10 +2,10 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, protocol } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
-import { resolveApplicationName, resolveAppVariant, resolveProjectRoot } from "./config/app-config.js";
+import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import { BusinessAuditLog } from "./services/business-audit-log.js";
 import { CodexService } from "./services/codex-service.js";
@@ -33,25 +33,60 @@ import { createMainWindow } from "./window/create-main-window.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const preloadPath = path.join(currentDirectory, "preload.cjs");
+const archiveScheme = "selplat-archive";
+
+if (resolveDistributionMode() === "archive") {
+  protocol.registerSchemesAsPrivileged([{
+    scheme: archiveScheme,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+  }]);
+}
 
 let codex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
 
 // 开发启动、正式包与重启交接共用同一数据域，确保所有人物任务在版本切换后继续执行。
-const healthCheckFile = process.argv.find((argument) => argument.startsWith("--ai-desktop-health-check-file="))?.slice("--ai-desktop-health-check-file=".length) || null;
+const healthCheckFile = process.argv.find((argument) => argument.startsWith("--ai-desktop-health-check-file="))?.slice("--ai-desktop-health-check-file=".length)
+  || process.env.AI_DESKTOP_HEALTH_CHECK_FILE
+  || null;
 const isolatedUserData = process.argv.find((argument) => argument.startsWith("--ai-desktop-user-data-dir="))?.slice("--ai-desktop-user-data-dir=".length) || null;
 app.setPath("userData", isolatedUserData ? path.resolve(isolatedUserData) : path.join(app.getPath("appData"), resolveApplicationName()));
+// 压缩包版必须在远程桌面、虚拟机和无可用 GPU 环境中保持可启动。
+if (resolveDistributionMode() === "archive") app.disableHardwareAcceleration();
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const variant = resolveAppVariant();
+  const distributionMode = resolveDistributionMode();
   const projectRoot = resolveProjectRoot();
   const applicationName = resolveApplicationName();
   const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName });
-  const rendererRoot = variant === "office"
-    ? path.join(projectPaths.buildRoot, "sites", "client")
+  const archiveRuntime = distributionMode === "archive";
+  const rendererRoot = archiveRuntime
+    ? path.join(path.dirname(process.execPath), "dist", "developer")
     : path.join(projectPaths.buildRoot, "renderer", "developer");
-  const appRoot = projectPaths.sourceRoot;
+  if (archiveRuntime) {
+    await protocol.handle(archiveScheme, (request) => {
+      const relativePath = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, "");
+      const resourcePath = path.resolve(rendererRoot, relativePath || "index.html");
+      const safeRendererRoot = `${path.resolve(rendererRoot)}${path.sep}`;
+      if (!resourcePath.startsWith(safeRendererRoot)) return new Response("Not found", { status: 404 });
+      try {
+        const extension = path.extname(resourcePath).toLowerCase();
+        const contentType = extension === ".html"
+          ? "text/html; charset=utf-8"
+          : extension === ".js"
+            ? "text/javascript; charset=utf-8"
+            : extension === ".css"
+              ? "text/css; charset=utf-8"
+              : "application/octet-stream";
+        return new Response(new Uint8Array(readFileSync(resourcePath)), { headers: { "content-type": contentType } });
+      } catch {
+        return new Response("Not found", { status: 404 });
+      }
+    });
+  }
+  const appRoot = archiveRuntime ? app.getAppPath() : projectPaths.sourceRoot;
   const releaseVersion = (JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8")) as { version: string }).version;
   const audit = new BusinessAuditLog(projectPaths.sourceRoot, projectPaths.buildRoot, projectPaths.archiveLogRoot);
   audit.recordApplicationStart({ variant, projectRoot, rendererRoot });
@@ -194,22 +229,33 @@ app.whenReady().then(() => {
     rendererRoot,
   });
 
-  const mainWindow = createMainWindow({ preloadPath, rendererRoot, variant });
+  let onRendererReady: (() => void) | undefined;
+  let onRendererFailed: ((details: { errorCode: number; errorDescription: string; validatedURL: string }) => void) | undefined;
   if (healthCheckFile) {
     const safeHealthRoot = path.join(projectPaths.temporaryMaterialsRoot, "候选包健康检查");
     const resolvedHealthFile = path.resolve(healthCheckFile);
     if (!resolvedHealthFile.startsWith(`${path.resolve(safeHealthRoot)}${path.sep}`)) throw new Error("候选包健康检查文件超出工程临时目录。");
-    mainWindow.webContents.once("did-finish-load", () => {
+    let healthTimeout: NodeJS.Timeout;
+    const finishHealthCheck = (payload: Record<string, unknown>) => {
+      clearTimeout(healthTimeout);
       mkdirSync(path.dirname(resolvedHealthFile), { recursive: true });
-      writeFileSync(resolvedHealthFile, `${JSON.stringify({ status: "ready", variant, recordedAt: new Date().toISOString() })}\n`, "utf8");
+      writeFileSync(resolvedHealthFile, `${JSON.stringify({ ...payload, variant, recordedAt: new Date().toISOString() })}\n`, "utf8");
       app.quit();
-    });
+    };
+    onRendererReady = () => {
+      finishHealthCheck({ status: "ready" });
+    };
+    onRendererFailed = (details) => finishHealthCheck({ status: "failed", ...details });
+    healthTimeout = setTimeout(() => finishHealthCheck({ status: "failed", errorDescription: "renderer-timeout" }), 15_000);
+  }
+  createMainWindow({ preloadPath, rendererRoot, variant, distributionMode, onRendererReady, onRendererFailed });
+  if (healthCheckFile) {
     return;
   }
   collaboration.resumePendingWork();
   linghuAutomation.start();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow({ preloadPath, rendererRoot, variant });
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow({ preloadPath, rendererRoot, variant, distributionMode });
   });
 });
 

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "applications": [
+    {
+      "projectName": "ai-memory",
+      "languages": ["python"],
+      "buildEntry": "apps/ai-memory/requirements-python.txt",
+      "runtimeEntry": "apps/ai-memory/src/main/python/ai_memory_entry.py",
+      "testEntry": "apps/ai-memory/src/test/python/test_memory_runtime.py",
+      "lifecycleOwner": "apps/ai-memory/ai-memory.bat"
+    }
+  ]
+}

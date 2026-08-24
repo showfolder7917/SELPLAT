@@ -224,7 +224,12 @@ function WindowControls() {
   </div>;
 }
 
+function ChatGPTLoginAction({ label, onLogin }: { label: string; onLogin: () => void }) {
+  return <button type="button" className="chatgpt-login-action primary" onClick={onLogin}><span>{label}</span></button>;
+}
+
 export function DeveloperApp() {
+  const archiveDistribution = new URLSearchParams(window.location.search).get("distribution") === "archive";
   const [locale, setLocale] = useState<Locale>("zh-CN");
   const [sandboxMode, setSandboxMode] = useState<SandboxMode>("workspace-write");
   const [defaultModel, setDefaultModel] = useState<string | null>(null);
@@ -1201,7 +1206,7 @@ export function DeveloperApp() {
 
   return <div className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
     <header className="dev-titlebar">
-      <div className="dev-brand"><Code24Regular /><strong>Copilot</strong><span>{text.title}</span></div>
+      <div className="dev-brand"><Code24Regular /><strong>AI Desktop</strong><span>{text.title}</span>{archiveDistribution && <span>压缩包版</span>}</div>
       <div className="dev-command"><Search24Regular /><span>{projectRoot}</span></div>
       <WindowControls />
     </header>
@@ -1209,7 +1214,7 @@ export function DeveloperApp() {
     <aside className="dev-activitybar">
       <button className="active" title={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-pressed={explorerExpanded} onClick={() => setExplorerExpanded((value) => !value)}><Folder24Regular /></button><button><Search24Regular /></button><button><Branch24Regular /></button><button><Bug24Regular /></button>
       <SettingsFloatingPanel locale={locale} open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button type="button" onClick={() => void logout()}><span>{text.signOut}</span></button> : <button type="button" className="primary" onClick={() => void login()}><span>{text.signIn}</span></button>}{loginHint && <em>{loginHint}</em>}</div>
+        <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button type="button" onClick={() => void logout()}><span>{text.signOut}</span></button> : <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{loginHint && <em>{loginHint}</em>}</div>
         <section className="model-settings-card" aria-labelledby="global-model-settings-title">
           <header><div><span id="global-model-settings-title">{locale === "ja" ? "グローバルモデル設定" : "全局模型配置"}</span><small>{locale === "ja" ? "すべての会話と協同タスクに適用" : "对所有会话与协同任务生效"}</small></div><strong>{selectedModel?.displayName || (locale === "ja" ? "Codex の既定値" : "Codex 默认")}</strong></header>
           <label><span>{locale === "ja" ? "既定モデル" : "默认模型"}</span><select aria-label={locale === "ja" ? "既定モデル" : "默认模型"} value={defaultModel || ""} disabled={modelCatalogLoading} onChange={(event) => selectDefaultModel(event.target.value)}><option value="">{modelCatalogLoading ? (locale === "ja" ? "モデルを読み込み中…" : "正在读取模型…") : (locale === "ja" ? "Codex の既定値" : "Codex 默认")}</option>{defaultModel && !modelCatalog.models.some((model) => model.id === defaultModel) && <option value={defaultModel}>{defaultModel}</option>}{modelCatalog.models.map((model) => <option key={model.id} value={model.id}>{model.displayName}{model.provider ? ` · ${model.provider}` : ""}</option>)}</select></label>
@@ -1307,7 +1312,7 @@ export function DeveloperApp() {
     <main className="dev-main">
       <div className="dev-tab"><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{showConversationWorkspace && <button type="button" className="tab-new-task" data-tooltip={text.newCodexSession} aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}<Dismiss20Regular /></div>
       {showConversationWorkspace ? <section ref={chatRef} className="dev-chat">
-        {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p></div>}
+        {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p>{!codexStatus.account.authenticated && <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{!codexStatus.account.authenticated && loginHint && <em className="dev-login-hint">{loginHint}</em>}</div>}
         {messages.map((message) => {
           const messageTask = message.collaborationTaskId
             ? collaborationState?.tasks.find((task) => task.taskId === message.collaborationTaskId) || null

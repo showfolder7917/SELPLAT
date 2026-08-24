@@ -25,7 +25,6 @@ const allowedStandaloneScripts = new Set([
 ]);
 const allowedTestScripts = new Set([
   "test:common",
-  "test:sites",
   "test:sel-ui",
   "test:sel-ui-shared",
   "test:screenshot",

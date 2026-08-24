@@ -80,8 +80,16 @@ public final class MdaControlSchemaTestVerifier {
             String.class
         ));
         assertEquals(4L, jdbc.queryForObject("SELECT COUNT(*) FROM MdaConnectionProfile", Long.class));
-        assertReferenceDataConnection(jdbc);
-        assertJapaneseQuestionConnection(jdbc);
+        assertLegacyConnectionPreserved(
+            jdbc,
+            "file:./apps/reference-data/db/reference-data",
+            "Reference Data ?????"
+        );
+        assertLegacyConnectionPreserved(
+            jdbc,
+            "file:./apps/japanese/db/japanese",
+            "N2 ?????1000?????"
+        );
         assertAiFactoryConnection(jdbc);
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
@@ -212,7 +220,7 @@ public final class MdaControlSchemaTestVerifier {
      * 验证 AI 工厂连接可以只依靠启动 SQL 在空 MDA 控制库中恢复。
      * 真实传参示例：传入已执行生产 schema/data 的隔离控制库 JdbcTemplate。
      * 真实返回示例：连接名为“AI 工厂数据库”，路径为
-     *     {@code file:./apps/ai-factiory/db/aifactory}，账号为 sa 且密码为 123456。
+     *     {@code file:./apps/ai-factiory/db/ai-factiory}，账号为 sa 且密码为 123456。
      * 异常或副作用示例：记录缺失、重复或口令与目标库不一致时断言失败，不修改隔离数据库。
      *
      * @param jdbc 当前 Case 的隔离控制库查询模板
@@ -222,7 +230,7 @@ public final class MdaControlSchemaTestVerifier {
             "SELECT COUNT(*) FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
             Long.class
         ));
-        assertEquals("file:./apps/ai-factiory/db/aifactory", jdbc.queryForObject(
+        assertEquals("file:./apps/ai-factiory/db/ai-factiory", jdbc.queryForObject(
             "SELECT databaseName FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
             String.class
         ));
@@ -233,6 +241,33 @@ public final class MdaControlSchemaTestVerifier {
         assertEquals("123456", jdbc.queryForObject(
             "SELECT password FROM MdaConnectionProfile WHERE connectionName = 'AI 工厂数据库'",
             String.class
+        ));
+    }
+
+    /**
+     * 验证启动种子只依据稳定数据库路径判重，不覆盖历史库的显示名。
+     * 真实传参示例：传入迁移后的 JdbcTemplate、reference-data 路径和历史显示名。
+     * 真实返回示例：稳定路径只对应一条记录，且显示名保持为迁移前的值。
+     * 异常或副作用示例：重复插入或启动时改写历史显示名时断言失败，不修改数据库。
+     *
+     * @param jdbc 已完成生产 SQL 迁移的隔离数据库查询模板
+     * @param databaseName 历史记录的稳定数据库路径
+     * @param connectionName 迁移前已存在的显示名
+     */
+    private static void assertLegacyConnectionPreserved(
+        JdbcTemplate jdbc,
+        String databaseName,
+        String connectionName
+    ) {
+        assertEquals(1L, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM MdaConnectionProfile WHERE databaseName = ?",
+            Long.class,
+            databaseName
+        ));
+        assertEquals(connectionName, jdbc.queryForObject(
+            "SELECT connectionName FROM MdaConnectionProfile WHERE databaseName = ?",
+            String.class,
+            databaseName
         ));
     }
 

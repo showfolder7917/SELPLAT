@@ -15,6 +15,15 @@ load_rule_for_active_user_selplat_application_node_utility_or_path_resolver_prom
 <!-- Electron 应用新增公共 Node 依赖、调整打包文件或验证安装包内容时加载。 -->
 load_rule_for_active_user_selplat_electron_node_common_dependency_packaging_or_artifact_inspection = SELPLAT_NODE_COMMON_CAPABILITY_RULES
 
+<!-- SELPLAT Node.js、TypeScript 和 Electron 应用统一执行源码、配置、依赖、脚本、测试与交付目录边界。 -->
+SELPLAT_NODE_APPLICATION_PROJECT_STRUCTURE_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLATNode工程结构规则.md
+
+<!-- 新建、整理、迁移或审查任一 SELPLAT Node.js、TypeScript 或 Electron 应用工程结构时加载。 -->
+load_rule_for_active_user_selplat_node_application_create_organize_migrate_or_structure_review = SELPLAT_NODE_APPLICATION_PROJECT_STRUCTURE_RULES
+
+<!-- 移动或删除 Node 应用文件、清理源码树生成物或调整 package 脚本和配置入口时加载。 -->
+load_rule_for_active_user_selplat_node_application_file_move_delete_generated_cleanup_or_package_entry_change = SELPLAT_NODE_APPLICATION_PROJECT_STRUCTURE_RULES
+
 <!-- SELPLAT 当前和未来应用统一按真实工程名隔离源码、缓存、构建、临时控制面与长期归档。 -->
 SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT应用工程数据目录结构规则.md
 
@@ -102,7 +111,7 @@ load_rule_for_active_user_selplat_search_default_width_or_configuration_fallback
 <!-- 修改统一查询字段数量、提交时机、共同基线或页面编辑登记边界时加载，每个真实元素必须可独立保存。 -->
 load_rule_for_active_user_selplat_query_condition_group_internal_fields_submit_or_page_registration = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 
-<!-- SELPLAT 全部程序统一执行语言登记、源码归属和实验工具隔离门禁。 -->
+<!-- SELPLAT 全部程序统一执行语言登记、源码归属和实验工具隔离门禁；非 Gradle 应用由当前用户中央登记提供完整证据。 -->
 SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES = ruleengine/active-user/rules/平台/RUL_SELPLAT程序源码语言与归属门禁规则.md
 
 <!-- 新建、移动或删除任一应用、shared 或 rule-engine 程序源码时加载。 -->
@@ -280,6 +289,15 @@ load_rule_for_python_bytecode_cache_location = SELPLAT_PROJECT_PATH_RULES
 
 <!-- load_rule_for_selplat_project_jdk_cache_or_legacy_runtime_migration 的当前独立事实为 SELPLAT_PROJECT_PATH_RULES。 -->
 load_rule_for_selplat_project_jdk_cache_or_legacy_runtime_migration = SELPLAT_PROJECT_PATH_RULES
+
+<!-- 发布安装版、发布压缩包版的平台数据、缓存、日志、会话和诊断目录统一加载 SELPLAT 工程路径规则。 -->
+load_rule_for_selplat_installed_application_data_cache_log_session_or_diagnostics_path = SELPLAT_PROJECT_PATH_RULES
+
+<!-- 开发版源码、编译桌面、安装包或压缩包的工程内缓存与日志目录统一加载 SELPLAT 工程路径规则。 -->
+load_rule_for_selplat_developer_application_package_cache_runtime_log_or_diagnostics_path = SELPLAT_PROJECT_PATH_RULES
+
+<!-- AI 通过运行路径清单或桌面接口定位日志时统一加载 SELPLAT 工程路径规则。 -->
+load_rule_for_selplat_ai_runtime_path_manifest_or_log_discovery = SELPLAT_PROJECT_PATH_RULES
 
 <!-- SELPLAT 根 Gradle、离线坐标、Wrapper 与 VS Code 导入。 -->
 SELPLAT_PROJECT_BUILD_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程构建规则.md

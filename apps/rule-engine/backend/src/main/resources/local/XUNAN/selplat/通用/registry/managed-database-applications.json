@@ -39,7 +39,7 @@
     {
       "projectName": "ai-factiory",
       "schemaRoot": "db/sql",
-      "databaseFile": "db/aifactory.mv.db",
+      "databaseFile": "db/ai-factiory.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
       "datasourcePrefix": "ai-factory.datasource"
     }

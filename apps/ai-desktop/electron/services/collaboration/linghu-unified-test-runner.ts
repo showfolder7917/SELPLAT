@@ -39,6 +39,8 @@ export class LinghuUnifiedTestRunner {
       ...process.env,
       // 候选 worktree 的依赖链接已由外层按锁文件核验；内层所有 npm 脚本只能借用，不能再次迁移或接管。
       AI_DESKTOP_TEST_TASK_ID: runId,
+      // 候选包最终会提升并脱离临时 worktree，开发版元数据必须指回持续存在的源工程和归档日志根。
+      SELPLAT_ROOT: this.#sourceProjectRoot,
       GIT_TERMINAL_PROMPT: "0",
     };
     delete environment.ELECTRON_RUN_AS_NODE;

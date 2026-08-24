@@ -82,9 +82,11 @@
         return (state.dashboard.projects || []).filter((row) =>
             row.projectCode !== "PROJECT_ROOT" && String(row.status) !== "0");
     }
+    /** 返回当前选中的项目；未选中时回退到第一个可用项目。 */
     function currentProject() {
         return projects().find((row) => String(row.id) === String(state.projectId)) || projects()[0];
     }
+    /** 返回允许加入开发流程画布的三类工程角色。 */
     function workflowRoles() {
         const visible = new Set(["REQUIREMENT_ANALYST", "SOFTWARE_ENGINEER", "TEST_ENGINEER"]);
         return (state.dashboard.roles || []).filter((row) => visible.has(String(row.roleCode)));
@@ -332,6 +334,7 @@
         state.roleEditorController.setFeedback("");
         state.roleEditorController.open();
     }
+    /** 保存项目表单并刷新当前管理视图。 */
     async function saveProject(values) {
         state.projectEditorController.setLoading(true);
         state.projectEditorController.setFeedback("正在保存项目…");

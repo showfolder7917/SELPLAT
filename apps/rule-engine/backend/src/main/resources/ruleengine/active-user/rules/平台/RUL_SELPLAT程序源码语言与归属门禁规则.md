@@ -5,8 +5,12 @@ rule_resource_layer_source = AGENTS.md.current_stable_user_id
 
 <!-- 本规则覆盖 SELPLAT 的 apps、shared 和 rule-engine 全部正式程序源码。 -->
 rule_scope = active_user_selplat_all_program_source_ownership
-<!-- 3.13.0 改为精确忽略应用活跃 H2 库，Git 只交付可重建的数据库 SQL。 -->
-rule_version = 3.13.0
+<!-- 3.14.0 为非 Gradle 应用增加语言、构建、运行、测试和生命周期所有者的中央登记。 -->
+rule_version = 3.14.0
+<!-- 非 Gradle 应用的语言所有权只能来自当前用户中央登记，禁止在扫描器中按项目名放行。 -->
+program_language_application_registry = local/<active-stable-user-id>/selplat/通用/registry/program-language-applications.json
+<!-- 每项登记必须同时指向真实构建材料、运行入口、测试入口和生命周期所有者。 -->
+program_language_registration_required_evidence = languages,buildEntry,runtimeEntry,testEntry,lifecycleOwner
 <!-- 本次升级阻断运行数据库因启动写入反复进入提交，同时保留SQL和说明材料的版本治理。 -->
 upgrade_record_20260821_runtime_database_git_boundary = ignore_apps_db_mvdb_exactly,track_db_sql_and_docs,no_broad_mvdb_ignore
 <!-- 规则所有者始终由 AGENTS.md 当前稳定用户动态解析。 -->
@@ -67,6 +71,8 @@ selplat_new_language_registration_gate.3 = ownership_rule
 selplat_new_language_registration_gate.4 = automated_test
 <!-- 未登记的 src/main/python、src/main/node、src/main/swift 等语言根即使为空也属于结构污染。 -->
 selplat_unregistered_language_root_policy = forbidden_even_when_empty
+<!-- 有真实非 Gradle 生命周期的应用可经中央登记取得语言所有权，但任一证据缺失时不得生效。 -->
+selplat_non_gradle_application_language_registration = central_registry_with_all_existing_evidence
 
 ## rule-engine 分层
 

@@ -45,18 +45,28 @@ test("macOS 截图预热返回结构化权限结果并提供可恢复入口", ()
   assert.match(developerApp, /restartForScreenRecordingPermission/);
 });
 
-test("截图固定使用 macOS 原生无光标 PNG 且失败后重建后台窗口", () => {
+test("截图使用统一控制器选择 macOS 或 Windows 取帧适配器且失败后重建后台窗口", () => {
   assert.match(ipc, /waitForScreenCaptureStage\(resolveScreenCaptureSource\(display\), 8_000/);
   assert.match(ipc, /waitForScreenCaptureStage\(session\.rendererReady, 5_000/);
+  assert.match(ipc, /captureNativeScreen/);
   assert.match(ipc, /captureNativeMacScreen/);
+  assert.match(ipc, /captureNativeWindowsScreen/);
+  assert.match(ipc, /process\.platform === "darwin"[\s\S]*captureNativeMacScreen/);
+  assert.match(ipc, /process\.platform === "win32"[\s\S]*captureNativeWindowsScreen/);
   assert.match(ipc, /"\/usr\/sbin\/screencapture"/);
   assert.match(ipc, /\["-x", "-t", "png", "-D"/);
   assert.doesNotMatch(ipc, /"-C"/);
   assert.match(ipc, /`native-screen-\$\{process\.pid\}-\$\{attemptId\}\.png`/);
   assert.doesNotMatch(ipc, /`\.native-screen-/);
   assert.match(ipc, /unlink\(scratchPath\)/);
-  assert.match(ipc, /main-native-screencapture-requested/);
-  assert.match(ipc, /main-native-screencapture-ready/);
+  assert.match(ipc, /thumbnailSize: Electron\.Size = \{ width: 0, height: 0 \}/);
+  assert.match(ipc, /display\.size\.width \* display\.scaleFactor/);
+  assert.match(ipc, /display\.size\.height \* display\.scaleFactor/);
+  assert.match(ipc, /const image = source\.thumbnail/);
+  assert.match(ipc, /dataUrl: image\.toDataURL\(\)/);
+  assert.match(ipc, /main-native-screen-capture-requested/);
+  assert.match(ipc, /main-native-screen-capture-ready/);
+  assert.match(ipc, /windows-desktop-capturer/);
   assert.match(ipc, /setTimeout\(resolve, 1_200\)/);
   assert.match(ipc, /main-automation-pointer-overlay-settled/);
   assert.match(ipc, /desktop:screen-capture-frame-requested[\s\S]*capture/);
@@ -67,7 +77,6 @@ test("截图固定使用 macOS 原生无光标 PNG 且失败后重建后台窗�
   assert.doesNotMatch(screenshotWindow, /getUserMedia/);
   assert.doesNotMatch(screenshotWindow, /requestVideoFrameCallback/);
   assert.doesNotMatch(ipc, /setDisplayMediaRequestHandler/);
-  assert.doesNotMatch(ipc, /thumbnail\.toDataURL/);
   assert.doesNotMatch(ipc, /getCursorScreenPoint/);
   assert.doesNotMatch(ipc, /sendInputEvent/);
   assert.doesNotMatch(developerCss, /screenshot-window-root/);

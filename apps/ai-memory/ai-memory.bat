@@ -13,6 +13,7 @@ if errorlevel 1 (
 )
 
 set "PYTHONPATH=%SELPLAT_ROOT%\apps\ai-memory\src\main\python;%SELPLAT_ROOT%\apps\rule-engine\backend\src\main\python;%PYTHONPATH%"
+set "PYTHONPYCACHEPREFIX=%SELPLAT_ROOT%\cache\python-pycache"
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
 cd /d "%SELPLAT_ROOT%"

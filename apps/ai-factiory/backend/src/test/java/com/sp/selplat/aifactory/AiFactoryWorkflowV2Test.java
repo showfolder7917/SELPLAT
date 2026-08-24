@@ -95,8 +95,8 @@ class AiFactoryWorkflowV2Test {
 
     /**
      * 验证页面接入公共流程画布、主题管理和三个角色白名单。
-     * 真实传参示例：读取 aifactory.html、aifactory-v2.js 与公共画布脚本。
-     * 真实返回示例：页面加载 workflowCanvas，脚本含三个角色编码且不含旧代码门禁。
+     * 真实传参示例：读取 aifactory.html、aifactory-japanese-layout.js 与公共画布脚本。
+     * 真实返回示例：页面加载 workflowCanvas，当前装配脚本含三个角色编码、项目树和规则管理入口。
      * 异常或副作用示例：资源缺失或回退旧页面时断言失败；不请求互联网图标文件。
      */
     @Test
@@ -104,13 +104,12 @@ class AiFactoryWorkflowV2Test {
         mockMvc.perform(get("/aifactory/aifactory.html")).andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("AI 工厂管理")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("selWorkflowCanvas.js")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("aifactory-v2.js")));
-        mockMvc.perform(get("/aifactory/aifactory-v2.js")).andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("aifactory-japanese-layout.js")));
+        mockMvc.perform(get("/aifactory/aifactory-japanese-layout.js")).andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("SOFTWARE_ENGINEER")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("PROJECT_MANAGER_CONTROL")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("projectSections")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("aifactory-tree")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("currentProjectExpanded")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("managedRoleCodes")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("treeSelectionId")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("规则管理")));
         mockMvc.perform(get("/sel/components/workflow-canvas/selWorkflowCanvas.js"))
                 .andExpect(status().isOk())
@@ -120,20 +119,20 @@ class AiFactoryWorkflowV2Test {
     /**
      * 验证每张新增流程业务表都使用独立号段且没有业务 identity。
      * 真实传参示例：读取隔离库 CommonSequenceSegment 与 INFORMATION_SCHEMA。
-     * 真实返回示例：32 个唯一活动号段，六张流程表各一段，业务 identity 为零。
+     * 真实返回示例：10 张业务表各一段，其中六张流程表各一段，业务 identity 为零。
      * 异常或副作用示例：漏号段或业务自增时断言失败；测试不访问正式数据库。
      */
     @Test
     void registersIndependentWorkflowSequences() {
         JdbcTemplate jdbc=new JdbcTemplate(dataSource);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM CommonSequenceSegment",Integer.class)).isEqualTo(32);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM CommonSequenceSegment",Integer.class)).isEqualTo(10);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM CommonSequenceSegment WHERE seqCode LIKE 'AiWorkflow%Id'",Integer.class)).isEqualTo(6);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='PUBLIC' AND IS_IDENTITY='YES' AND TABLE_NAME<>'CommonSequenceSegment'",Integer.class)).isZero();
     }
 
     /**
      * 验证画布可重复加入三类开发角色，但拒绝架构师等旧角色。
-     * 真实传参示例：向版本 160000 两次加入软件工程师 100030，再尝试架构师 100011。
+     * 真实传参示例：向版本 160000 两次加入软件工程师 100027，再尝试额外角色 199999。
      * 真实返回示例：两次返回不同节点主键；旧角色请求失败且不新增节点。
      * 异常或副作用示例：测试只写隔离数据库，不会启动 Agent 或 Python。
      */
@@ -141,11 +140,11 @@ class AiFactoryWorkflowV2Test {
     void allowsRepeatedDevelopmentRoleInstancesAndRejectsExtraRoles() throws Exception {
         String first=mockMvc.perform(post("/api/v1/ai-factory/workflows/nodes/create.htm")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .content("workflowVersionId=160000&roleId=100015&positionX=100&positionY=100"))
+                        .content("workflowVersionId=160000&roleId=100027&positionX=100&positionY=100"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String second=mockMvc.perform(post("/api/v1/ai-factory/workflows/nodes/create.htm")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .content("workflowVersionId=160000&roleId=100015&positionX=200&positionY=200"))
+                        .content("workflowVersionId=160000&roleId=100027&positionX=200&positionY=200"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(objectMapper.readTree(first).path("data").path("id").asLong())
                 .isNotEqualTo(objectMapper.readTree(second).path("data").path("id").asLong());

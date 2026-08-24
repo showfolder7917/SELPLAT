@@ -6,19 +6,38 @@ import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
 import type { AppVariant } from "../../shared/contracts/desktop.js";
 
+type ApplicationMetadata = {
+  name?: unknown;
+  selplatDevelopmentRoot?: unknown;
+};
+
+function readApplicationMetadata(): ApplicationMetadata {
+  const manifestPath = path.join(app.getAppPath(), "package.json");
+  return JSON.parse(readFileSync(manifestPath, "utf8")) as ApplicationMetadata;
+}
+
 export function resolveAppVariant(): AppVariant {
-  const variantArgument = process.argv.find((argument) => argument.startsWith("--ai-desktop-variant="))?.split("=", 2)[1];
-  if (variantArgument === "developer" || variantArgument === "office") return variantArgument;
-  if (process.env.AI_DESKTOP_VARIANT === "developer") return "developer";
-  if (process.env.AI_DESKTOP_VARIANT === "office") return "office";
-  return app.getName().toLowerCase().includes("office") ? "office" : "developer";
+  return "developer";
+}
+
+/** 只在已打包进程显式带入 archive 参数时开启免工程压缩包运行边界。 */
+export function resolveDistributionMode(): "standard" | "archive" {
+  const distributionArgument = process.argv.find((argument) => argument.startsWith("--ai-desktop-distribution="))?.split("=", 2)[1];
+  return distributionArgument === "archive" && resolveAppVariant() === "developer" ? "archive" : "standard";
 }
 
 export function resolveProjectRoot(): string {
-  const configuredRoot = process.argv.find((argument) => argument.startsWith("--selplat-root="))?.slice("--selplat-root=".length)
-    || process.env.SELPLAT_ROOT;
+  const argumentRoot = process.argv.find((argument) => argument.startsWith("--selplat-root="))?.slice("--selplat-root=".length);
+  const packagedDevelopmentRoot = app.isPackaged
+    ? readApplicationMetadata().selplatDevelopmentRoot
+    : undefined;
+  // 显式启动参数和环境变量始终可以覆盖包内开发根；发布变体不读取开发版专属元数据。
+  const configuredRoot = argumentRoot
+    || process.env.SELPLAT_ROOT
+    || (typeof packagedDevelopmentRoot === "string" ? packagedDevelopmentRoot : undefined);
   const projectRoot = path.resolve(configuredRoot || path.join(app.getAppPath(), "../.."));
-  if (!existsSync(projectRoot) || !existsSync(path.join(projectRoot, ".git"))) {
+  const archiveDataRoot = resolveDistributionMode() === "archive";
+  if (!existsSync(projectRoot) || (!archiveDataRoot && !existsSync(path.join(projectRoot, ".git")))) {
     throw new Error(`SELPLAT project root is unavailable: ${projectRoot}`);
   }
   return projectRoot;
@@ -26,8 +45,7 @@ export function resolveProjectRoot(): string {
 
 /** 从当前应用清单读取真实工程名，禁止把示例应用名固化到公共路径解析逻辑。 */
 export function resolveApplicationName(): string {
-  const manifestPath = path.join(app.getAppPath(), "package.json");
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { name?: unknown };
-  if (typeof manifest.name !== "string") throw new Error(`Application manifest name is unavailable: ${manifestPath}`);
+  const manifest = readApplicationMetadata();
+  if (typeof manifest.name !== "string") throw new Error(`Application manifest name is unavailable: ${path.join(app.getAppPath(), "package.json")}`);
   return validateSafeIdentifier(manifest.name, "applicationName");
 }

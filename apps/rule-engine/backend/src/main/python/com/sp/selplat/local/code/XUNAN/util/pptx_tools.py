@@ -14,7 +14,11 @@ import subprocess
 import tempfile
 from typing import Iterable
 
-from PIL import Image, ImageDraw
+try:
+    from PIL import Image, ImageDraw
+except ModuleNotFoundError:
+    Image = None
+    ImageDraw = None
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE
@@ -24,6 +28,13 @@ from pptx.util import Inches, Pt
 
 
 PIXELS_PER_INCH = 96
+
+
+def _require_pillow() -> None:
+    """仅在图片裁切或预览拼图时要求 Pillow，纯 PPTX 文本能力不受影响。"""
+
+    if Image is None or ImageDraw is None:
+        raise RuntimeError("处理 PPTX 图片需要安装 requirements-python.txt 中的 Pillow")
 
 
 def px(value: float) -> int:
@@ -146,6 +157,7 @@ def _set_fill_transparency(shape, transparency: int) -> None:
 def add_cover_image(slide, image_path: Path, box: tuple[float, float, float, float]) -> None:
     """按 cover 语义裁切图片，避免拉伸并铺满目标区域。"""
 
+    _require_pillow()
     left, top, width, height = box
     with Image.open(image_path) as image:
         source_ratio = image.width / image.height
@@ -217,6 +229,7 @@ def render_preview(pptx_path: Path, output_dir: Path) -> PreviewResult:
 def _write_montage(page_paths: Iterable[Path], target: Path) -> None:
     """把全部页面缩略图排成稳定网格，供人工快速检查。"""
 
+    _require_pillow()
     thumbnails: list[Image.Image] = []
     for path in page_paths:
         with Image.open(path) as image:

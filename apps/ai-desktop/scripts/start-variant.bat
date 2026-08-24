@@ -1,16 +1,22 @@
 @echo off
-setlocal EnableExtensions
-cd /d "%~dp0.."
+setlocal EnableExtensions DisableDelayedExpansion
+chcp 65001 >nul
 
-set "DESKTOP_VARIANT=%~1"
-if not defined DESKTOP_VARIANT set "DESKTOP_VARIANT=office"
-if /i not "%DESKTOP_VARIANT%"=="office" if /i not "%DESKTOP_VARIANT%"=="developer" (
-  echo [ERROR] Unknown desktop variant: %DESKTOP_VARIANT%
+for %%I in ("%~dp0..") do set "AI_DESKTOP_ROOT=%%~fI"
+cd /d "%AI_DESKTOP_ROOT%"
+
+if /i not "%~1"=="developer" (
+  echo [ERROR] AI Desktop only supports the developer variant.
   pause
   exit /b 1
 )
 
-if not defined SELPLAT_ROOT set "SELPLAT_ROOT=%CD%\..\.."
+if not defined SELPLAT_ROOT for %%I in ("%AI_DESKTOP_ROOT%\..\..") do set "SELPLAT_ROOT=%%~fI"
+if not exist "%SELPLAT_ROOT%\settings.gradle" (
+  echo [ERROR] Invalid SELPLAT root: %SELPLAT_ROOT%
+  pause
+  exit /b 1
+)
 
 where node >nul 2>nul
 if errorlevel 1 (
@@ -33,24 +39,8 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if /i "%DESKTOP_VARIANT%"=="developer" (
-  echo [DEV] Starting Developer with renderer hot reload and automatic Electron restart...
-  call npm run desktop:dev:developer
-  set "APP_EXIT_CODE=%ERRORLEVEL%"
-  goto app_finished
-)
-
-echo [BUILD] Compiling %DESKTOP_VARIANT% desktop application...
-call npm run build:%DESKTOP_VARIANT%
-if errorlevel 1 (
-  echo [ERROR] Build failed.
-  pause
-  exit /b 1
-)
-
-echo [START] %DESKTOP_VARIANT%
-set "AI_DESKTOP_VARIANT=%DESKTOP_VARIANT%"
-call npm run start:%DESKTOP_VARIANT%
+echo [BUILD] Compiling Developer desktop application...
+call npm run start:developer
 set "APP_EXIT_CODE=%ERRORLEVEL%"
 
 :app_finished

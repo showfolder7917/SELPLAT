@@ -128,19 +128,27 @@ test("新建任务入口位于聊天标签且不再占用任务标题", async ()
 test("未登录时设置面板的登录主操作文字可见并使用主题对比色", async () => {
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionAuthenticated(authenticated: boolean): Promise<void> } }).desktop.setInteractionAuthenticated(false));
   // 生产界面按固定周期读取官方账号状态；测试等待同一刷新链路生效，不通过重载伪造状态。
-  await expect(page.locator(".dev-empty").getByText("请先登录 ChatGPT", { exact: true })).toBeVisible({ timeout: 5_000 });
+  const emptyState = page.locator(".dev-empty");
+  await expect(emptyState.getByText("请先登录 ChatGPT", { exact: true })).toBeVisible({ timeout: 5_000 });
+  const primaryLoginButton = emptyState.getByRole("button", { name: "使用 ChatGPT 登录" });
+  await expect(primaryLoginButton).toBeVisible();
+  await expect(primaryLoginButton).toBeEnabled();
+  await primaryLoginButton.click();
+  await expect(emptyState.getByText("请在浏览器中完成登录", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "连接与执行设置" }).click();
-  const loginButton = page.getByRole("button", { name: "使用 ChatGPT 登录" });
+  const account = page.locator(".dev-account");
+  const loginButton = account.getByRole("button", { name: "使用 ChatGPT 登录" });
+  await expect(account.locator("small")).toBeVisible();
   await expect(loginButton).toBeVisible();
   await expect(loginButton.locator("span")).toHaveText("使用 ChatGPT 登录");
   const presentation = await loginButton.evaluate((element) => {
     const style = window.getComputedStyle(element);
     const label = element.querySelector("span");
     const panel = element.closest(".dev-settings");
-    const account = element.closest(".dev-account");
-    const runtime = account?.querySelector("small");
+    const accountElement = element.closest(".dev-account");
+    const runtime = accountElement?.querySelector("small");
     const panelBounds = panel?.getBoundingClientRect();
-    const accountBounds = account?.getBoundingClientRect();
+    const accountBounds = accountElement?.getBoundingClientRect();
     const buttonBounds = element.getBoundingClientRect();
     const labelBounds = label?.getBoundingClientRect();
     return {

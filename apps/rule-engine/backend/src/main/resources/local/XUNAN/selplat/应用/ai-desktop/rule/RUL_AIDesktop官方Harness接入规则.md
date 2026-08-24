@@ -8,14 +8,14 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.73.0 保证稳定发布应用不保留指向候选工作树的绝对包内链接。 -->
-rule_version = 5.73.0
+<!-- 5.77.0 删除未使用的 Vite HTTP 热更新运行链，桌面启动只允许本地文件或归档协议。 -->
+rule_version = 5.77.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
 rule_status = active
 <!-- 5.47.0 固定 AI Desktop 通过构建期 Node 正式出口接入 SEL UI，安装包只携带编译后的实际主题资源。 -->
-upgrade_record_5_47 = 2026-08-23:developer_workbench公共主题_Node正式模块出口_React首次渲染前应用主题状态_Office与Developer样式删除私有颜色和像素文字字号_安装包禁止携带SEL_UI源码
+upgrade_record_5_47 = 2026-08-23:developer_workbench公共主题_Node正式模块出口_React首次渲染前应用主题状态_Developer样式删除私有颜色和像素文字字号_安装包禁止携带SEL_UI源码
 <!-- 5.48.0 修复登录主操作只有颜色令牌生效、尺寸令牌缺失导致文字挤出的问题。 -->
 upgrade_record_5_48 = 2026-08-23:SEL_UI基础令牌独立正式出口_宿主先加载tokens再加载contract和主题包_主操作尺寸文字焦点态完整令牌化_真实未登录Electron交互验证
 <!-- 5.49.0 防止阶段提示把自然表达重新压成固定模板，同时保持状态机、只读、写入、构建和测试职责不变。 -->
@@ -58,7 +58,9 @@ upgrade_record_5_66 = 2026-08-24:组合检查typecheck继承候选任务标识_�
 upgrade_record_5_67 = 2026-08-24:ensureIntegrationDependencies单一入口同时签发apps应用node_modules和build应用node_modules_两处必须指向同一核验依赖根_组合检查任务验证统一测试共用cleanupIntegrationDependencyLinks_仅删除符号链接绝不删除实体依赖
 <!-- 5.68.0 防止 URL pathname 中的百分号编码被当作文件系统字符传给 Node 子进程。 -->
 upgrade_record_5_68 = 2026-08-24:测试夹具URL必须通过fileURLToPath转换_禁止直接传递pathname_覆盖Application_Support等含空格候选路径_测试资源锁与发布锁真实子进程统一适用
+<!-- 5.69.0 固化共通依赖清理入口，避免应用与构建目录使用不同的回收路径。 -->
 upgrade_record_5_69 = 2026-08-24:托管契约必须验证共通依赖清理Facade_禁止继续绑定已删除的单链接局部变量_应用与构建双出口由cleanupIntegrationDependencyLinks统一回收
+<!-- 5.70.0 固化候选包提升、稳定启动与候选工作树回收的发布顺序。 -->
 upgrade_record_5_70 = 2026-08-24:候选统一测试通过后先复制到build应用package_published发布批次目录_稳定启动程序存在后才允许回收候选worktree_发布重启禁止引用Application_Support临时候选路径_新版必须携带工程根和developer参数恢复全部任务
 <!-- 5.71.0 防止稳定应用中的相对框架链接被复制成指向已回收候选工作树的绝对链接。 -->
 upgrade_record_5_71 = 2026-08-24:稳定应用复制必须逐字保留相对符号链接_候选回收后Electron_Framework仍从稳定应用内部解析_真实相对链接回归
@@ -66,6 +68,14 @@ upgrade_record_5_71 = 2026-08-24:稳定应用复制必须逐字保留相对符�
 upgrade_record_5_72 = 2026-08-24:自身活动任务不阻断其他人物停点扫描_每轮最多一个恢复动作_全部人物非终态任务持续覆盖_故障指纹纳入任务阶段_每个指纹独立三次恢复预算
 <!-- 5.73.0 修复打包器自身已经生成绝对框架链接时，逐字复制仍会在候选回收后断链的问题。 -->
 upgrade_record_5_73 = 2026-08-24:稳定提升递归检查应用包链接_指向候选包内的绝对链接转换为稳定包内相对链接_指向应用包外的绝对链接阻断发布_候选删除后真实解析回归
+<!-- 5.74.0 固化开发版根路径注入、显式覆盖优先级以及发布版零携带边界。 -->
+upgrade_record_5_74 = 2026-08-24:Windows与macOS全部开发打包入口动态注入稳定SELPLAT根_命令行高于环境变量高于包内元数据_候选worktree统一指回源工程_其他发布配置禁止携带开发机绝对路径
+<!-- 5.75.0 修复 Windows 已展示截图入口但底层仍强制调用 macOS screencapture 的跨平台断链。 -->
+upgrade_record_5_75 = 2026-08-24:单一截图控制器_单一截图窗口与标注保存流程_macOS继续使用原生screencapture_Windows使用目标显示器物理像素DesktopCapturerSource_thumbnail_两个入口共用平台适配器_结构化后端日志_禁止把平台差异扩散到React界面
+<!-- 5.76.0 防止已停止维护的次要产品变体继续污染默认命令、构建输出、样式、文档和测试。 -->
+upgrade_record_5_76 = 2026-08-24:仅保留Developer产品线_删除次要变体页面样式启动器构建配置和Sites托管链_默认开发构建启动打包全部指向Developer_共享契约主进程渲染器主题窗口尺寸不再分支_文档规则测试同步清理
+<!-- 5.77.0 防止旧 HMR 约束让桌面应用再次启动 localhost 服务或保留两套开发运行链。 -->
+upgrade_record_5_77 = 2026-08-24:删除desktop_dev与Vite_HTTP热更新入口_删除VITE_DEV_SERVER_URL加载分支_删除concurrently_electronmon_wait_on专用依赖_Windows桌面只加载本地构建文件_隔离交互测试端口不扩散到应用启动
 <!-- 升级记录同时保留首次接入与真实统一测试发现的协议修复。 -->
 upgrade_record = 2026-08-21:接入openai_codex_app_server与ChatGPT浏览器OAuth并逐次审批;2026-08-21:按0.146.0使用短横线sandbox枚举并固定approvalsReviewer为user防止全局auto_review静默代审;2026-08-21:Windows开发包固定x64并显式携带0.146.0_win32_x64平台别名包;2026-08-21:旧应用名整体迁移为ai-desktop并同步规则逻辑ID与路径;2026-08-22:设置浮层增加外部点击与Escape关闭且内部交互和审批弹窗隔离;2026-08-22:新增真实多工作区Accordion_用户数据持久化_逐根权限_turn_start_writableRoots;2026-08-22:开发版关键文字统一提升至桌面IDE可读密度;2026-08-22:新增区域截图_红色标注_应用temp统一清理_官方localImage发送;2026-08-22:截图编辑层改为临时全屏并在完成取消后恢复主窗口;2026-08-22:长会话增加独立滚动区_可见滚动条_新消息自动定位;2026-08-22:官方app_server文字delta_计划_命令_文件变更真实流式回显;2026-08-22:详细执行过程默认折叠_折叠栏保留项数与当前步骤;2026-08-22:支持Ctrl_Command_V粘贴系统截图_temp统一落盘_localImage发送;2026-08-22:截图选区确定_默认方框_标注确定入对话框;2026-08-22:截图按钮点击即框选_冻结画面蒙版_选择阶段无工具栏;2026-08-22:截图层无动画覆盖屏幕_选区确定旁取消_Escape恢复窗口;2026-08-22:独立无边框截图窗口_主窗口尺寸不变_安全附件回传;2026-08-22:截图窗口绘制完成后再显示_独立主题变量保证操作按钮可读;2026-08-22:标注窗口按截图尺寸自适应_可拖动缩放最大化;2026-08-22:截图一比一无边框_松开自动标注_返回重选_完成回填调查提示_隐藏主窗截图_清空标注确认;2026-08-22:隐藏截图先转圈预热_准备成功后隐藏;2026-08-22:修复macOS微型缩略图空值造成的预热权限误判;2026-08-22:截图窗体后台就绪后最后隐藏主窗口并替换真实背景;2026-08-22:常驻复用截图壳_一次权限预热_每轮单次最新真实抓屏;2026-08-22:双截图入口统一长期桌面流_隐藏后按新视频帧冻结;2026-08-22:macOS简单全屏蒙版覆盖菜单栏与Dock_透明缓存不抢焦点
 <!-- 4.3.0 补充同图多标注及跟随完成、取消的稳定交互升级记录。 -->
@@ -193,8 +203,10 @@ upgrade_record_5_46 = 2026-08-23:公共Node路径包唯一解析_锁文件哈希
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
 <!-- 业务含义：桌面 UI 只作为可信客户端，真正的 Codex 会话、认证和执行协议由官方 harness 承担。 -->
 rule_scope = selplat/application/ai-desktop/official_harness
-<!-- AI Desktop 的 Developer 变体使用已沉淀的公共开发工作台主题，Office 变体使用普通极简浅色主题；应用 CSS 只维护布局和应用独有几何。 -->
-sel_ui_theme_variant_contract = developer_uses_developer_workbench_dark + office_uses_plain_minimal_light + application_css_layout_only
+<!-- AI Desktop 只维护 Developer 产品线；启动、构建、打包、运行时契约、样式、文档和测试不得重新引入第二产品变体。 -->
+desktop_product_variant_contract = developer_only + no_secondary_variant_entry_or_artifact
+<!-- AI Desktop 只维护 Developer 产品线并使用公共开发工作台深色主题；应用 CSS 只维护布局和应用独有几何。 -->
+sel_ui_theme_variant_contract = developer_uses_developer_workbench_dark + application_css_layout_only
 <!-- React 必须在首次渲染前完成主题属性装配，避免首帧闪烁和组件读取到错误主题。 -->
 sel_ui_react_host_contract = apply_theme_state_before_createRoot + root_theme_mode_accent_density_attributes
 <!-- Node/Electron 只从正式包出口导入公共主题，SEL UI 为构建期依赖，安装包不得携带其源码目录。 -->
@@ -282,8 +294,8 @@ workspace_empty_writable_roots_policy = force_readOnly_never_implicit_cwd_write
 workspace_permission_change_thread_policy = workspace_signature_change_requires_new_thread
 <!-- 开发版关键导航、工作区树、控件、聊天正文和上下文值使用桌面 IDE 可读字号，禁止关键内容落入 10 至 11 像素微缩文字。 -->
 developer_typography_readability_contract = critical_text_13_to_15_css_px + matching_row_height + no_critical_10_to_11_px
-<!-- Windows 开发版启动器必须进入热开发链路：React/CSS 由 Vite HMR 即时更新，Electron 主进程、preload 和 shared 编译变化由监视器自动重启；正式构建与静态启动命令保持独立。 -->
-developer_hot_start_contract = developer_bat_uses_vite_hmr_plus_typescript_watch_plus_electron_process_monitor + renderer_change_without_app_restart + main_preload_shared_change_auto_restarts_electron + formal_build_and_static_start_unchanged
+<!-- Windows 开发版启动器必须先正式构建，再由 Electron 加载本地 renderer 文件；禁止 Vite HTTP、localhost 开发端口、环境 URL 注入和热重启监视器进入桌面启动链。 -->
+developer_local_file_start_contract = developer_bat_builds_current_runtime_then_electron_loads_local_renderer_file + no_vite_http_server + no_localhost_development_port + no_VITE_DEV_SERVER_URL + no_hot_restart_monitor
 <!-- 开发版工作区和任务标题必须保持真实折叠状态，且打开其中一个时只允许该分区展开。 -->
 developer_sidebar_section_disclosure_contract = explorer_workspace_and_tasks_titles_toggle_visible_content
 <!-- 工作区与任务标题必须回显真实的无障碍展开状态。 -->
@@ -457,10 +469,10 @@ collaboration_task_progress_view_contract.3 = current_stage_auto_open_and_scroll
 collaboration_task_progress_view_contract.4 = prohibit_generic_executing_as_progress + prohibit_stale_expanded_analysis_after_state_transition
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events
-<!-- 主进程预检目标显示器后调用 macOS 自带 screencapture 生成单轮 PNG；隔离截图窗口只接收该帧做选区与标注。 -->
-screenshot_capture_and_annotation_boundary = capture_click_state + separate_borderless_screenshot_window + main_window_bounds_unchanged + hide_cached_screenshot_window_on_done_or_cancel + electron_main_preflights_bound_display + macos_usr_sbin_screencapture_x_t_png_D + isolated_screenshot_renderer_receives_one_validated_png_per_round + renderer_region_crop_red_pen_rectangle + validated_png_only
-<!-- 唯一冻结后端禁止传 -C，禁止 Electron 视频流、缩略图、透明遮罩或像素修补；原图和标注图均不得出现系统指针。 -->
-screenshot_cursor_exclusion_contract = macos_native_screencapture_without_C_only + explicit_noninteractive_x_png_display_selection + wait_1200ms_for_automation_pointer_overlay_window_to_expire_before_capture + prohibit_getDisplayMedia_getUserMedia_media_stream_and_desktop_thumbnail_png + prohibit_transparent_cursor_overlay_and_pixel_repair + scratch_png_deleted_immediately_after_read + original_and_annotated_png_without_cursor_artifact
+<!-- 主进程预检目标显示器后由唯一平台适配入口生成单轮 PNG；隔离截图窗口只接收统一帧做选区与标注。 -->
+screenshot_capture_and_annotation_boundary = capture_click_state + separate_borderless_screenshot_window + main_window_bounds_unchanged + hide_cached_screenshot_window_on_done_or_cancel + electron_main_preflights_bound_display + one_platform_capture_adapter_entry + macos_usr_sbin_screencapture_x_t_png_D + windows_target_display_physical_pixel_desktopCapturerSource_thumbnail + isolated_screenshot_renderer_receives_one_validated_png_per_round + renderer_region_crop_red_pen_rectangle + validated_png_only
+<!-- macOS 原生截图不传 -C；Windows 只读取目标显示器一次性缩略帧；两个平台均禁止视频流、透明指针遮罩和像素修补。 -->
+screenshot_cursor_exclusion_contract = macos_native_screencapture_without_C + windows_one_shot_target_display_thumbnail + wait_1200ms_for_automation_pointer_overlay_window_to_expire_before_capture + prohibit_getDisplayMedia_getUserMedia_media_stream + prohibit_getCursorScreenPoint_transparent_cursor_overlay_and_pixel_repair + macos_scratch_png_deleted_immediately_after_read + original_and_annotated_png_without_cursor_artifact
 <!-- macOS 截图预热必须先识别系统权限，原生枚举失败转换为结构化结果；界面只显示本地化业务提示并提供固定权限设置入口。 -->
 screenshot_permission_recovery_contract = macos_systemPreferences_screen_preflight + denied_or_restricted_skips_native_enumeration + getSources_failure_rechecks_permission + structured_permission_required_or_source_unavailable_result + no_raw_remote_method_error_in_composer + localized_recovery_message + fixed_screen_recording_settings_action + restart_guidance
 <!-- 截图交互固定为两阶段：同一图片可连续标注；最新标注旁跟随完成和取消，完成保存全部标注到对话框，取消只撤销最新一笔并保留更早标注。 -->
@@ -485,8 +497,8 @@ screenshot_capture_mode_contract = current_screen_button + hidden_capture_button
 screenshot_failure_recovery_contract = bounded_source_enumeration_wait + bounded_hidden_renderer_ready_wait + bounded_native_screencapture_wait + validated_frame_ack + scratch_file_finally_unlink + composer_spinner_always_clears + owner_window_restored_on_failure + stale_screenshot_shell_destroyed + next_click_recreates_shell + tcc_failure_must_be_fixed_by_stable_app_identity_and_permission_recovery_not_unreviewed_backend_fallback
 <!-- 截图诊断必须按一次尝试关联关键阶段，同时只记录尺寸、状态和业务错误，不记录屏幕像素。 -->
 screenshot_diagnostic_log_contract = shared_attempt_id + source_preflight_stage + native_screencapture_requested_and_ready_stage + frame_result_stage + capture_dimensions_only + bounded_error_detail + prohibit_command_output_and_screen_pixels_in_log
-<!-- 防复发门禁：截图后端改动必须同时通过源码唯一链路契约和真实 macOS 两入口图像检查，不能仅凭 API 返回、类型检查或单元测试宣称无光标。 -->
-screenshot_backend_regression_gate = exactly_one_capture_backend + git_last_known_good_comparison + contract_rejects_getDisplayMedia_getUserMedia_thumbnail_cursor_overlay_and_dual_fallback + contract_requires_screencapture_without_C_automation_overlay_settle_and_scratch_cleanup + real_macos_current_and_hidden_capture_saved_original_png_assert_no_system_or_automation_cursor + tcc_identity_verification + no_completion_on_code_only_tests
+<!-- 防复发门禁：截图后端改动必须通过统一入口契约，并分别完成真实 macOS 与 Windows 两入口检查；代码检查不能冒充系统截图通过。 -->
+screenshot_backend_regression_gate = exactly_one_platform_dispatch_entry + exactly_one_adapter_per_supported_platform + git_last_known_good_comparison + contract_rejects_getDisplayMedia_getUserMedia_cursor_overlay_and_uncontrolled_fallback + contract_requires_macos_screencapture_without_C_and_windows_target_display_physical_thumbnail + automation_overlay_settle + macos_scratch_cleanup + real_macos_current_and_hidden_capture_saved_original_png_assert_no_system_or_automation_cursor + real_windows_current_and_hidden_capture_saved_original_png_assert_valid_target_display_and_no_automation_cursor + macos_tcc_identity_verification + no_completion_on_code_only_tests
 <!-- 清空全部红色绘画标注属于可逆编辑动作，但必须先显示确认，只有确认后才恢复无标注底图。 -->
 screenshot_clear_annotation_contract = clear_drawing_button + explicit_confirmation_before_clear + decline_preserves_annotations + accept_restores_cropped_base_image
 <!-- 截图原图、标注图和元数据统一进入应用自身 temp；渲染层发送主进程签发的 ID，主进程解析后按官方协议传 localImage 路径。 -->
@@ -496,14 +508,16 @@ clipboard_image_paste_contract = ctrl_or_command_v_in_composer + preserve_plain_
 <!-- 设置必须能够用系统文件管理器打开 temp，并在用户确认后清空全部内容但立即恢复空 temp 根目录。 -->
 screenshot_temp_management_contract = system_file_manager_open + confirmed_clear_all_contents + keep_empty_temp_root
 
-<!-- 启动器必须从自身目录解析应用和 SELPLAT 根，检查 Node/npm 与官方 Codex 依赖后进入开发热启动链路；正式构建由独立命令执行。 -->
-windows_developer_launcher_contract = self_relative_path + dependency_check + developer_hot_start + formal_build_is_separate
+<!-- Windows 启动器必须从自身目录解析应用和 SELPLAT 根，检查依赖、正式构建当前 Developer 运行时并启动本地文件桌面链；测试服务器不得成为启动依赖。 -->
+windows_developer_launcher_contract = self_relative_path + dependency_check + mandatory_current_developer_build + electron_local_file_start + prohibit_application_http_dev_server + isolated_test_server_not_runtime_dependency
 <!-- macOS 开发版双击启动器必须从自身目录解析工程，检查 Node、npm、Electron 和官方 Codex 依赖，每次先正式构建最新开发版，构建失败时禁止启动 Electron。 -->
 macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_official_codex_dependency_check + mandatory_fresh_developer_build_before_launch + build_failure_blocks_launch + package_fixed_bundle_id_ai_desktop_app + bootstrap_loads_packaged_main_only + prohibit_external_runtime_compatibility + always_repackage_self_contained_latest_build + stable_designated_requirement_uses_bundle_identifier_not_cdhash + verifier_rejects_cdhash_designated_requirement + verify_packaged_codex_official_signature_and_isolated_real_start + permission_refresh_after_identity_change + exact_resolved_app_executable_process_match + gracefully_terminate_all_existing_same_app_instances + abort_when_old_instance_remains + launchservices_register + open_packaged_app_never_raw_dependency_electron + prohibit_parallel_old_and_new_ai_desktop_processes
 <!-- 测试以唯一 runId 批次流转；执行者取得独占锁，其他读取者看到占用身份，完整批次结束后立即归档。 -->
 shared_test_document_lifecycle_contract = manifest_application_name_plus_common_path_resolution + pending_test_runId_directory_with_thread_document + exactly_one_selectable_run + atomic_whole_batch_pending_to_running_transition + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_and_interrupted_running_batch_recovery + every_terminal_result_immediate_month_and_runId_archive + next_run_new_runId + legacy_documents_migrated_not_deleted
 <!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->
 ai_desktop_project_data_domain_contract = manifest_name_driven_node_common_path_api + apps_application_source_config_permanent_tests_and_scripts_only + no_node_modules_runtime_or_build_data_under_source + cache_application_lockHash_dependencies_and_regenerable_only + controlled_temporary_dependency_links_removed_after_command + build_application_compile_package_sites_and_reports_only + OPTION_temp_application_exactly_execution_log_and_temporary_materials + log_application_archive_log_kind_month_identifier_hierarchy + private_user_settings_sessions_and_secrets_remain_electron_userData
+<!-- 开发包必须在构建时携带持续存在的源工程根，使安装后日志仍进入原工程；发布包不得包含该开发机路径。 -->
+developer_package_project_root_contract = all_windows_and_macos_developer_package_entries_use_dynamic_config + build_time_validated_selplat_root_metadata + command_line_override_then_environment_override_then_packaged_development_root + candidate_worktree_package_uses_stable_source_project_root + release_package_prohibit_development_machine_root
 <!-- 应用路径诊断必须通过正式包脚本挂载当前锁哈希缓存后导入公共路径出口，禁止要求调用者直接在无依赖源码目录执行裸包导入。 -->
 ai_desktop_path_diagnostic_contract = npm_run_paths_resolve + run_with_dependencies_lock_hash_cache + import_@selplat_node_common_core_path + canonical_application_name_and_all_data_domains_json + detach_source_node_modules_after_command
 <!-- 自动测试属于当前应用会话的显式模式；默认关闭，只有已知环境与窄命令授权全部通过才允许开启。 -->

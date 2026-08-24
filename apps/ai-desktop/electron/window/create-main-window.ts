@@ -1,5 +1,4 @@
 import path from "node:path";
-
 import { BrowserWindow } from "electron";
 
 import type { AppVariant } from "../../shared/contracts/desktop.js";
@@ -9,10 +8,12 @@ interface MainWindowOptions {
   preloadPath: string;
   rendererRoot: string;
   variant: AppVariant;
+  distributionMode: "standard" | "archive";
+  onRendererReady?: () => void;
+  onRendererFailed?: (details: { errorCode: number; errorDescription: string; validatedURL: string }) => void;
 }
 
 export function createMainWindow(options: MainWindowOptions): BrowserWindow {
-  const isDeveloper = options.variant === "developer";
   const initialSize = mainWindowInitialSize(options.variant);
   const window = new BrowserWindow({
     width: initialSize.width,
@@ -21,7 +22,8 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     minHeight: MAIN_WINDOW_LAYOUT.minimum.height,
     frame: false,
     show: false,
-    backgroundColor: isDeveloper ? "#080b12" : "#ffffff",
+    backgroundColor: "#080b12",
+    title: options.distributionMode === "archive" ? "AI Desktop - 压缩包版" : "AI Desktop",
     webPreferences: {
       preload: options.preloadPath,
       contextIsolation: true,
@@ -31,8 +33,16 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
   });
 
   window.once("ready-to-show", () => window.show());
-  const developmentUrl = process.env.VITE_DEV_SERVER_URL;
-  if (developmentUrl) void window.loadURL(developmentUrl);
-  else void window.loadFile(path.join(options.rendererRoot, "index.html"));
+  if (options.onRendererReady) window.webContents.once("did-finish-load", options.onRendererReady);
+  if (options.onRendererFailed) {
+    window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (isMainFrame) options.onRendererFailed?.({ errorCode, errorDescription, validatedURL });
+    });
+  }
+  const rendererTarget = path.join(options.rendererRoot, "index.html");
+  const rendererLoad = options.distributionMode === "archive"
+    ? window.loadURL("selplat-archive://bundle/index.html?distribution=archive")
+    : window.loadFile(rendererTarget);
+  void rendererLoad.catch(() => undefined);
   return window;
 }

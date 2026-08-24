@@ -1,12 +1,8 @@
 # docs
 
-这里放平台级文档，不放某个单模块的私有详细设计。
+这里保存当前仍生效的工程文档。
 
 当前子目录：
 
-- `platform`
-- `architecture`
-- `plugin-spec`
-- `development`
-- `deployment`
-- `operations`
+- `ai-desktop`
+- `统一规范`

@@ -64,7 +64,7 @@ public class AiFactoryPersistenceConfiguration {
     /**
      * 创建并初始化私有 H2 数据源。
      * 真实传参示例：未配置 jdbcUrl 时使用 AI 工厂应用目录中的正式运行数据库。
-     * 真实返回示例：{@code jdbc:h2:file:.../apps/ai-factiory/db/aifactory}。
+     * 真实返回示例：{@code jdbc:h2:file:.../apps/ai-factiory/db/ai-factiory}。
      * 异常或副作用示例：创建目录或执行 SQL 失败时启动中止；不会读取任务正文。
      *
      * @param config 已绑定的连接池参数
@@ -77,7 +77,7 @@ public class AiFactoryPersistenceConfiguration {
         Path databaseDirectory = locateRoot().resolve("apps/ai-factiory/db");
         Files.createDirectories(databaseDirectory);
         if (config.getJdbcUrl() == null || config.getJdbcUrl().isBlank()) {
-            config.setJdbcUrl("jdbc:h2:file:" + databaseDirectory.resolve("aifactory").toAbsolutePath()
+            config.setJdbcUrl("jdbc:h2:file:" + databaseDirectory.resolve("ai-factiory").toAbsolutePath()
                     + ";MODE=MySQL;DATABASE_TO_UPPER=false");
         } else if (!config.getJdbcUrl().contains("DATABASE_TO_UPPER=")) {
             config.setJdbcUrl(config.getJdbcUrl() + ";MODE=MySQL;DATABASE_TO_UPPER=false");

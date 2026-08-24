@@ -10,11 +10,33 @@ import json
 from pathlib import Path
 import re
 
-from docx import Document
-from PIL import Image, ImageDraw, ImageFont
+try:
+    from docx import Document
+except ModuleNotFoundError:
+    Document = None
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ModuleNotFoundError:
+    Image = None
+    ImageDraw = None
+    ImageFont = None
 
 
 INVALID_FILE_CHARACTERS = re.compile(r"[<>:\"/\\|?*\x00-\x1f]")
+
+
+def _require_docx() -> None:
+    """仅在真实解析 DOCX 时要求 python-docx，避免无关能力加载被可选依赖阻断。"""
+
+    if Document is None:
+        raise RuntimeError("解析教学 DOCX 需要安装 requirements-python.txt 中的 python-docx")
+
+
+def _require_pillow() -> None:
+    """仅在真实渲染图片时要求 Pillow，其他纯文本能力仍可独立加载。"""
+
+    if Image is None or ImageDraw is None or ImageFont is None:
+        raise RuntimeError("渲染教学图片需要安装 requirements-python.txt 中的 Pillow")
 
 
 @dataclass(frozen=True)
@@ -66,6 +88,7 @@ def base_name(path: Path) -> str:
 def parse_annotated_docx(source_path: Path) -> list[TopicPoem]:
     """解析“第一段拼音、第二段汉字”的单行表格并组装诗词。"""
 
+    _require_docx()
     document = Document(source_path)
     lines: list[AnnotatedLine] = []
     for table in document.tables:
@@ -135,6 +158,7 @@ def resolve_asset(content_path: Path, relative_path: str) -> Path:
 def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """优先选择系统中文字体，缺失时退回 Pillow 默认字体并保持程序可运行。"""
 
+    _require_pillow()
     candidates = [
         Path("/System/Library/Fonts/PingFang.ttc"),
         Path("/System/Library/Fonts/STHeiti Light.ttc"),
@@ -167,6 +191,7 @@ def render_topic_image(
 ) -> None:
     """生成 16:9 教学主题图，插画和文字区域保持稳定分栏。"""
 
+    _require_pillow()
     if target.exists() and not overwrite:
         raise FileExistsError(f"目标已存在：{target}")
     canvas = Image.new("RGB", (1600, 900), "#F7F0E2")

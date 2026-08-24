@@ -86,3 +86,54 @@ selplat_project_common_rule_root = apps/rule-engine/backend/src/main/resources/l
 selplat_legacy_unlayered_rule_engine_path_policy = read_for_migration_only
 <!-- selplat_legacy_unlayered_rule_engine_path_policy.2 的当前独立事实为 no_new_authoring。 -->
 selplat_legacy_unlayered_rule_engine_path_policy.2 = no_new_authoring
+
+<!-- 安装版和免安装压缩包版的程序目录只保存不可变程序文件；业务含义是日志、配置、会话、诊断、生成文件和缓存不得因打包方式变化而写入安装目录。 -->
+selplat_packaged_application_install_root_is_immutable = true
+
+<!-- 应用运行目录只按开发版或发布版分流；业务含义是是否安装、是否压缩包和可执行文件所在位置都不得改变版本对应的路径策略。 -->
+selplat_application_runtime_path_branch_key = application_variant
+
+<!-- Windows 发布应用的默认数据根使用当前用户 LOCALAPPDATA；业务含义是应用无需管理员权限且移动安装目录后仍能找到运行数据。 -->
+selplat_release_application_windows_data_root = %LOCALAPPDATA%/SELPLAT/<applicationId>
+
+<!-- macOS 发布应用的持久数据进入 Application Support；业务含义是不得向签名的 app 包或 DMG 挂载目录写入可变数据。 -->
+selplat_release_application_macos_data_root = ~/Library/Application Support/SELPLAT/<applicationId>
+
+<!-- macOS 发布应用日志使用系统标准 Logs 目录；业务含义是日志可以被应用和诊断工具稳定定位且不污染安装资源。 -->
+selplat_release_application_macos_log_root = ~/Library/Logs/SELPLAT/<applicationId>
+
+<!-- macOS 发布应用缓存使用系统标准 Caches 目录；业务含义是缓存可独立清理且不会删除用户配置、会话或日志。 -->
+selplat_release_application_macos_cache_root = ~/Library/Caches/SELPLAT/<applicationId>
+
+<!-- Linux 发布应用遵守 XDG Base Directory；业务含义是数据、配置、缓存和状态目录分别使用 XDG_DATA_HOME、XDG_CONFIG_HOME、XDG_CACHE_HOME 与 XDG_STATE_HOME。 -->
+selplat_release_application_linux_path_policy = xdg_base_directory
+
+<!-- 所有开发版入口都必须携带明确 SELPLAT_ROOT 并遵守工程临时目录规范；业务含义是源码热更新、编译桌面版、开发安装包和开发压缩包都把日志与运行数据归入同一个工程根。 -->
+selplat_developer_application_runtime_root_policy = explicit_selplat_root_plus_engineering_temporary_directory_spec
+
+<!-- 开发版缓存进入工程 cache/<applicationId>；业务含义是可重建数据集中在工程缓存根，便于开发调试和统一清理。 -->
+selplat_developer_application_cache_root = <SELPLAT_ROOT>/cache/<applicationId>
+
+<!-- 开发版运行日志和临时材料进入工程 OPTION/temp/<applicationId>；业务含义是执行中证据继续遵守工程临时目录规范。 -->
+selplat_developer_application_runtime_output_root = <SELPLAT_ROOT>/OPTION/temp/<applicationId>
+
+<!-- 开发版终态日志进入工程 log/<applicationId>/归档日志；业务含义是调试结束后的日志可以按现有工程归档入口统一分析。 -->
+selplat_developer_application_archive_log_root = <SELPLAT_ROOT>/log/<applicationId>/归档日志
+
+<!-- 发布版默认使用操作系统标准用户目录；业务含义是发布包不得依赖、内置或推断开发机工程绝对路径。 -->
+selplat_release_application_runtime_root_policy = operating_system_standard_user_directory
+
+<!-- --selplat-root 只允许开发版、测试和明确内部协作使用；业务含义是发布版不得携带、读取或推断开发工程根。 -->
+selplat_root_argument_scope = all_developer_variants_only
+
+<!-- 开发版路径清单进入工程 OPTION/temp；业务含义是 AI 与开发工具可以从工程统一临时入口定位当前日志。 -->
+selplat_developer_application_runtime_path_manifest = <SELPLAT_ROOT>/OPTION/temp/<applicationId>/运行路径/runtime-paths.json
+
+<!-- 发布版路径清单进入平台数据根；业务含义是应用移动或升级后仍能从操作系统标准目录定位日志。 -->
+selplat_release_application_runtime_path_manifest = <dataRoot>/runtime-paths.json
+
+<!-- AI 的日志定位顺序区分开发版工程清单和发布版平台清单；业务含义是入口均不可用时报告路径不可用，禁止扫描用户磁盘。 -->
+selplat_ai_log_discovery_order = desktop_ipc -> SELPLAT_RUNTIME_PATHS_FILE -> developer_selplat_root_manifest_or_release_platform_manifest -> unavailable_without_disk_scan
+
+<!-- 随包 _data 模式只能由用户明确启用并先验证目录可写；业务含义是免安装默认不等于把运行数据写在解压目录旁边。 -->
+selplat_release_application_portable_data_mode = explicit_opt_in_and_writable_executable_root_only

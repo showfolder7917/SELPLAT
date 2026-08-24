@@ -134,7 +134,10 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     canOpenSettings: process.platform === "darwin",
   });
 
-  const resolveScreenCaptureSource = async (display: Electron.Display): Promise<Electron.DesktopCapturerSource> => {
+  const resolveScreenCaptureSource = async (
+    display: Electron.Display,
+    thumbnailSize: Electron.Size = { width: 0, height: 0 },
+  ): Promise<Electron.DesktopCapturerSource> => {
     const displayKey = String(display.id);
     // 系统权限状态可能在用户刚从设置页返回时仍是旧值；始终以一次真实源枚举作为最终判断，
     // 枚举失败后再读取权限状态并转换为业务错误，既避免假阴性，也不向渲染层泄露 Electron 原始异常。
@@ -142,8 +145,8 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     try {
       sources = await desktopCapturer.getSources({
         types: ["screen"],
-        // 预检只确认目标显示器可枚举；真实 PNG 固定由 macOS screencapture 生成。
-        thumbnailSize: { width: 0, height: 0 },
+        // 预检传入 0×0 只确认目标显示器可枚举；Windows 正式取帧传入显示器物理像素尺寸。
+        thumbnailSize,
         fetchWindowIcons: false,
       });
     } catch {
@@ -182,6 +185,32 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     } finally {
       await unlink(scratchPath).catch(() => {});
     }
+  };
+
+  /** Windows 通过 Electron 的显示器源取得一次 PNG；后续框选、标注和保存继续复用统一截图窗口。 */
+  const captureNativeWindowsScreen = async (
+    display: Electron.Display,
+  ): Promise<ScreenCaptureFrameRequest["capture"]> => {
+    if (process.platform !== "win32") throw new Error("Windows 截图后端只能在 Windows 使用。");
+    const thumbnailSize = {
+      width: Math.max(1, Math.round(display.size.width * display.scaleFactor)),
+      height: Math.max(1, Math.round(display.size.height * display.scaleFactor)),
+    };
+    const source = await resolveScreenCaptureSource(display, thumbnailSize);
+    const image = source.thumbnail;
+    const size = image.getSize();
+    if (image.isEmpty() || size.width < 1 || size.height < 1) throw new Error("Windows 返回了空截图。");
+    return { dataUrl: image.toDataURL(), width: size.width, height: size.height };
+  };
+
+  /** 平台差异只收敛在取帧适配器；渲染层和截图编辑流程不建立操作系统分支。 */
+  const captureNativeScreen = async (
+    display: Electron.Display,
+    attemptId: number,
+  ): Promise<ScreenCaptureFrameRequest["capture"]> => {
+    if (process.platform === "darwin") return captureNativeMacScreen(display, attemptId);
+    if (process.platform === "win32") return captureNativeWindowsScreen(display);
+    throw new Error(`当前平台暂不支持截图：${process.platform}`);
   };
 
   const parkScreenshotWindow = (screenshotWindow: BrowserWindow, session: ScreenshotWindowSession): void => {
@@ -479,18 +508,19 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       session.rejectFrameReady = reject;
     });
     try {
-      // Computer Use 等自动化工具会把点击指针实现为普通置顶窗口，而不是 macOS 系统 cursor；
-      // screencapture 无法通过省略 -C 排除普通窗口，因此等待其短暂点击覆盖层消退后再冻结桌面。
+      // Computer Use 等自动化工具会把点击指针实现为普通置顶窗口；两个平台都等待短暂覆盖层消退后再冻结桌面。
       await new Promise((resolve) => setTimeout(resolve, 1_200));
       recordScreenCaptureStage("main-automation-pointer-overlay-settled", session, { waitMs: 1_200 });
-      recordScreenCaptureStage("main-native-screencapture-requested", session, { requestId, hideOwnerWindow });
+      const captureBackend = process.platform === "darwin" ? "macos-screencapture" : process.platform === "win32" ? "windows-desktop-capturer" : "unsupported";
+      recordScreenCaptureStage("main-native-screen-capture-requested", session, { requestId, hideOwnerWindow, captureBackend });
       const capture = await waitForScreenCaptureStage(
-        captureNativeMacScreen(display, attemptId),
+        captureNativeScreen(display, attemptId),
         10_000,
-        "macOS 原生截图超时，请重试。",
+        "系统截图超时，请重试。",
       );
-      recordScreenCaptureStage("main-native-screencapture-ready", session, {
+      recordScreenCaptureStage("main-native-screen-capture-ready", session, {
         requestId,
+        captureBackend,
         width: capture.width,
         height: capture.height,
       });

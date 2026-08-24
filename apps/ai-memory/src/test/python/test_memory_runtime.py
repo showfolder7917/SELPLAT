@@ -1,6 +1,12 @@
 from pathlib import Path
+import sys
 import tempfile
 import unittest
+
+PROJECT_ROOT = next(candidate for candidate in Path(__file__).resolve().parents
+                    if (candidate / "settings.gradle").is_file())
+AI_MEMORY_PYTHON_ROOT = PROJECT_ROOT / "apps/ai-memory/src/main/python"
+sys.path.insert(0, str(AI_MEMORY_PYTHON_ROOT))
 
 from com.sp.selplat.core.文件读取器 import (
     FileAccessError,
@@ -12,8 +18,6 @@ from com.sp.selplat.memory.codex.Codex连接池 import CodexConnectionPool, Code
 from com.sp.selplat.memory.model.接口模型 import AgentRegistration
 from com.sp.selplat.memory.workspace.工作空间管理器 import WorkspaceManager
 
-PROJECT_ROOT = next(candidate for candidate in Path(__file__).resolve().parents
-                    if (candidate / "settings.gradle").is_file())
 TEST_TEMP_ROOT = PROJECT_ROOT / "OPTION/temp/ai-factory/测试"
 
 

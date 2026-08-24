@@ -1014,6 +1014,15 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         self.assertEqual(result["violations"], [])
         self.assertEqual(result["status"], "completed")
 
+    def test_ai_memory_python_language_has_complete_central_registration(self) -> None:
+        """非 Gradle Python 应用必须以真实运行和测试入口取得明确语言所有权。"""
+
+        application_root = PROJECT_ROOT / "apps/ai-memory"
+        self.assertEqual(
+            {"python"},
+            self.guard.registered_languages(PROJECT_ROOT, application_root),
+        )
+
     def test_standard_gradle_backend_rejects_unregistered_python(self) -> None:
         """普通 Gradle 后端只登记 Java，误建 Python 根必须阻断。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:

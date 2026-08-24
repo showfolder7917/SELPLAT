@@ -24,10 +24,3 @@ ai-factory:
     manifest-cron: "0 0 * * * *"
   security:
     token-ttl: PT15M
-  datasource:
-    pool-name: AiFactoryPool
-    maximum-pool-size: 4
-    minimum-idle: 1
-    username: sa
-    password: "123456"
-    driver-class-name: org.h2.Driver

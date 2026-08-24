@@ -1,4 +1,4 @@
-export const APP_VARIANTS = ["office", "developer"] as const;
+export const APP_VARIANTS = ["developer"] as const;
 export const LOCALES = ["ja", "zh-CN"] as const;
 export const SANDBOX_MODES = ["read-only", "workspace-write"] as const;
 export const WORKSPACE_PERMISSIONS = ["read-only", "workspace-write"] as const;

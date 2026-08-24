@@ -15,9 +15,15 @@ from pathlib import Path
 import re
 import unicodedata
 
-from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm, Pt
+try:
+    from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Cm, Pt
+except ImportError:  # 非 DOCX 子能力仍应允许加载，实际读写时再报告缺失依赖。
+    Document = None
+    WD_ALIGN_PARAGRAPH = None
+    Cm = None
+    Pt = None
 
 try:
     from pypinyin import Style, lazy_pinyin
@@ -30,6 +36,13 @@ CJK_PATTERN = re.compile(r"[\u3400-\u9fff]")
 ATTRIBUTION_PATTERN = re.compile(r"(?:【([^】]+)】\s*([^★]+)|([^【】]+)【([^】]+)】)$")
 VOLUME_PATTERN = re.compile(r"^[一二三四五六七八九]年级[上下]册[：:]?$")
 DIRECTORY_PATTERN = re.compile(r"目录$")
+
+
+def _require_docx() -> None:
+    """在真正读写 DOCX 前确认可选依赖，避免其他拼音逻辑被环境缺包连带阻断。"""
+
+    if Document is None or WD_ALIGN_PARAGRAPH is None or Cm is None or Pt is None:
+        raise RuntimeError("缺少 python-docx；请使用项目 Python 运行时安装 requirements-python.txt。")
 
 
 @dataclass(frozen=True)
@@ -164,6 +177,7 @@ class PinyinConverter:
 def _document_lines(source_path: Path) -> list[str]:
     """按文档顺序读取段落和表格文字。"""
 
+    _require_docx()
     document = Document(source_path)
     lines = [paragraph.text.strip() for paragraph in document.paragraphs]
     for table in document.tables:
@@ -258,12 +272,14 @@ def _looks_like_body(line: str) -> bool:
 
 
 def _configure_document(document: Document) -> None:
+    _require_docx()
     section = document.sections[0]
     section.top_margin = section.bottom_margin = Cm(1.4)
     section.left_margin = section.right_margin = Cm(1.6)
 
 
 def _add_annotated_line(document: Document, text: str, converter: PinyinConverter, font_size: int = 22) -> int:
+    _require_docx()
     cells = converter.convert(text)
     table = document.add_table(rows=1, cols=max(1, len(cells)))
     table.autofit = True
@@ -290,6 +306,7 @@ def render_annotated_paragraphs(
     if target_path.exists() and not overwrite:
         raise FileExistsError(f"目标已存在：{target_path}")
     target_path.parent.mkdir(parents=True, exist_ok=True)
+    _require_docx()
     document = Document()
     _configure_document(document)
     hanzi_count = 0
@@ -308,6 +325,7 @@ def render_poetry(
     if target_path.exists() and not overwrite:
         raise FileExistsError(f"目标已存在：{target_path}")
     target_path.parent.mkdir(parents=True, exist_ok=True)
+    _require_docx()
     document = Document()
     _configure_document(document)
     hanzi_count = 0

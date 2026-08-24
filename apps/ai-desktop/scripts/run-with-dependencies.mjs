@@ -67,10 +67,16 @@ function runCommand(dependencyRoot, appRoot) {
   const executable = command === "node"
     ? process.execPath
     : path.join(dependencyRoot, ".bin", process.platform === "win32" ? `${command}.cmd` : command);
-  const result = spawnSync(executable, args, {
+  const usesWindowsCommandInterpreter = process.platform === "win32" && command !== "node";
+  const quoteWindowsArgument = (value) => `"${String(value).replaceAll('"', '""')}"`;
+  const windowsCommandLine = `"${[quoteWindowsArgument(executable), ...args.map(quoteWindowsArgument)].join(" ")}"`;
+  const launchExecutable = usesWindowsCommandInterpreter ? process.env.ComSpec || "cmd.exe" : executable;
+  const launchArguments = usesWindowsCommandInterpreter ? ["/d", "/s", "/c", windowsCommandLine] : args;
+  const result = spawnSync(launchExecutable, launchArguments, {
     cwd: appRoot,
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: false,
+    windowsVerbatimArguments: usesWindowsCommandInterpreter,
     env: { ...process.env, PATH: `${path.join(dependencyRoot, ".bin")}${path.delimiter}${process.env.PATH || ""}` },
   });
   if (result.error) throw result.error;

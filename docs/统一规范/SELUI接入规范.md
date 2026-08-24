@@ -321,7 +321,6 @@ shared/frontend/sel-ui/src/theme/packs/developer-workbench/
 - Fluent 图标继续作为应用图标来源，不归入主题。
 - 第一轮使用当前真实 CSS 数值建立主题，保证视觉不变。
 - 令牌化后不得保留平行硬编码颜色作为兼容路径。
-- Office 页面先检查 `plain-minimal` 等现有主题，禁止无证据复制浅色主题。
 
 ## 14. 测试和验收
 

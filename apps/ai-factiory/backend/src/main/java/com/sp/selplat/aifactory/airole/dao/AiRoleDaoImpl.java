@@ -1,6 +1,7 @@
 package com.sp.selplat.aifactory.airole.dao;
 
 import com.sp.selplat.aifactory.common.persistence.AiFactoryBaseDao;
+import java.util.Map;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -30,5 +31,13 @@ public class AiRoleDaoImpl extends AiFactoryBaseDao implements AiRoleDao {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM AiRole WHERE parentId=? AND status<>0", Integer.class, roleId);
         return count != null && count > 0;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Map<String, Object> findActiveById(long roleId) {
+        return jdbc.queryForMap(
+                "SELECT id,roleCode,roleName,roleType FROM AiRole WHERE id=? AND status=1",
+                roleId);
     }
 }
