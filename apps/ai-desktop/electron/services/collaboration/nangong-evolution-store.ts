@@ -75,11 +75,11 @@ export class NangongEvolutionStore {
     });
   }
 
-  appendConversation(role: "user" | "nangong", content: string): NangongEvolutionState {
+  appendConversation(role: "user" | "nangong", content: string, attachmentIds: string[] = []): NangongEvolutionState {
     const messageId = `evolution-message-${randomUUID()}`;
     const now = new Date().toISOString();
     return this.#commit("conversation.message_added", null, null, (state) => {
-      state.conversation.messages.push({ messageId, role, content: required(content, "对话内容", 30_000), createdAt: now });
+      state.conversation.messages.push({ messageId, role, content: required(content, "对话内容", 30_000), attachmentIds: [...new Set(attachmentIds)].slice(0, 5), createdAt: now });
       state.conversation.updatedAt = now;
     });
   }

@@ -55,13 +55,42 @@ test("审批通过后才由南宫婉分发并固定 proposalId", () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("南宫婉提案从人工审批、任务分发推进到完成记录", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-completed-flow-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    let distributedTaskId = null;
+    const collaboration = {
+      submitTask(request) { distributedTaskId = "collab-evolution-completed"; return { tasks: [{ taskId: distributedTaskId, evolutionProposalId: request.evolutionProposalId, state: "integrated" }] }; },
+      state() { return { tasks: distributedTaskId ? [{ taskId: distributedTaskId, state: "integrated" }] : [] }; },
+    };
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    let state = facade.createTopic(topicRequest("完整演化闭环"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    state = facade.decideProposal(proposalId, { decision: "supplement-required", advice: "补充完成记录验收依据" });
+    assert.equal(state.proposals[0].approvals.at(-1).source, "manual-user");
+    state = facade.decideProposal(proposalId, { decision: "approved", advice: "事实完整，批准执行" });
+    state = facade.dispatch(proposalId);
+    assert.deepEqual(state.proposals[0].distributedTaskIds, [distributedTaskId]);
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+    state = facade.state();
+    assert.equal(state.proposals[0].status, "completed");
+    assert.equal(state.proposals[0].resultSummary, "全部关联任务通过统一测试，原演化目标已完成。");
+    assert.equal(state.topics[0].recoveryPoint, "evolution-goal-completed");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("南宫婉对话持久化并冻结为正式课题快照", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-conversation-"));
   try {
     const store = new NangongEvolutionStore(path.join(directory, "state.json"));
     const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
-    let state = await facade.sendConversationMessage({ message: "调查令狐持续修正 Bug", workspaceState, locale: "zh-CN" });
+    let state = await facade.sendConversationMessage({ message: "调查令狐持续修正 Bug", attachmentIds: ["screenshot-1"], workspaceState, locale: "zh-CN" });
     assert.equal(state.conversation.messages.length, 2);
+    assert.deepEqual(state.conversation.messages[0].attachmentIds, ["screenshot-1"]);
     state = facade.convertConversationToTopic({ title: "令狐持续修正演化", goal: "修正 Bug 并维持稳定运行", scope: ["AI Desktop"], acceptanceCriteria: ["修正方案先审批"], workspaceState, locale: "zh-CN" });
     assert.equal(state.topics.at(-1).sourceConversationMessageIds.length, 2);
     assert.match(state.topics.at(-1).evidence[0], /南宫婉调查结论/);

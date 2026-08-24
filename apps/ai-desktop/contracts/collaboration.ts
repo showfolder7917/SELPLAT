@@ -156,6 +156,18 @@ export interface CollaborationVersionWorkspace {
   retiredAt: string | null;
 }
 
+export type CollaborationIntegrationFailureKind = "merge-conflict" | "local-change-ownership" | "verification";
+
+export interface CollaborationIntegrationFailure {
+  kind: CollaborationIntegrationFailureKind;
+  detail: string;
+  conflictFiles: string[];
+  baseSha: string | null;
+  resultSha: string | null;
+  generation: number | null;
+  occurredAt: string;
+}
+
 export interface CollaborationTask {
   taskId: string;
   taskRevision: number;
@@ -197,6 +209,7 @@ export interface CollaborationTask {
   executionRecords: CollaborationExecutionRecord[];
   flowEvents: CollaborationFlowEvent[];
   versionWorkspace: CollaborationVersionWorkspace | null;
+  integrationFailure?: CollaborationIntegrationFailure | null;
   finalResult: string | null;
   resultSummary: CollaborationResultSummary | null;
   blockingReason: string | null;
@@ -216,6 +229,8 @@ export interface CollaborationIntegrationBatch {
   completedAt: string | null;
   integrationSha: string | null;
   failureReason: string | null;
+  failureKind?: CollaborationIntegrationFailureKind | null;
+  conflictFiles?: string[];
 }
 
 export interface CollaborationState {

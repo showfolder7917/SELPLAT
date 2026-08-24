@@ -36,6 +36,23 @@ export class LocalChangeOwnershipError extends Error {
   constructor(message: string) { super(message); this.name = "LocalChangeOwnershipError"; }
 }
 
+export class MergeConflictError extends Error {
+  readonly taskId: string;
+  readonly conflictFiles: string[];
+  readonly baseSha: string;
+  readonly resultSha: string;
+
+  constructor(taskId: string, conflictFiles: string[], baseSha: string, resultSha: string, detail: string) {
+    const files = conflictFiles.length > 0 ? conflictFiles.join("、") : "Git 未返回冲突文件名";
+    super(`任务 ${taskId} 与当前集成候选发生冲突（${files}）：${detail || "Git 未返回详细信息"}`);
+    this.name = "MergeConflictError";
+    this.taskId = taskId;
+    this.conflictFiles = conflictFiles;
+    this.baseSha = baseSha;
+    this.resultSha = resultSha;
+  }
+}
+
 /** 只在应用签发的目录中建立 Git worktree，执行人永不直接修改用户当前工作目录。 */
 export class VersionWorkspaceManager {
   readonly #repositoryRoot: string;
@@ -187,8 +204,11 @@ export class VersionWorkspaceManager {
         try {
           await this.#git(rootPath, ["merge", "--no-ff", "--no-edit", resultSha]);
         } catch (error) {
+          const conflictFiles = splitLines(await this.#git(rootPath, ["diff", "--name-only", "--diff-filter=U"]).catch(() => ""));
+          const status = await this.#git(rootPath, ["status", "--porcelain"]).catch(() => "");
+          const detail = [errorMessage(error), status].filter(Boolean).join("；").slice(-2_000);
           await this.#git(rootPath, ["merge", "--abort"]).catch(() => undefined);
-          throw new Error(`任务 ${task.taskId} 与当前集成候选发生冲突：${errorMessage(error)}`);
+          throw new MergeConflictError(task.taskId, conflictFiles, baseSha, resultSha, detail);
         }
       }
       return {
@@ -313,8 +333,12 @@ function safeVersionSegment(value: string): string {
 function normalizedFiles(files: string[]): Set<string> { return new Set(files.map(normalizeFile).filter(Boolean)); }
 function normalizeFile(value: string): string { return value.trim().replaceAll("\\", "/").replace(/^\.\//, ""); }
 function splitZero(value: string): string[] { return value.split("\0").filter(Boolean); }
+function splitLines(value: string): string[] { return [...new Set(value.split(/\r?\n/).map(normalizeFile).filter(Boolean))].sort(); }
 
 function errorMessage(error: unknown): string {
-  if (error && typeof error === "object" && "stderr" in error && typeof error.stderr === "string") return error.stderr.trim().slice(-2_000);
+  if (error && typeof error === "object") {
+    if ("stderr" in error && typeof error.stderr === "string" && error.stderr.trim()) return error.stderr.trim().slice(-2_000);
+    if ("stdout" in error && typeof error.stdout === "string" && error.stdout.trim()) return error.stdout.trim().slice(-2_000);
+  }
   return error instanceof Error ? error.message : String(error);
 }

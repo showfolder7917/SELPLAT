@@ -142,9 +142,12 @@ export class LinghuAutomationFacade {
             }
           }
         } else if (task.state === "cancelled") {
-          this.#store.updateRuntime("automation.task_cancelled", (state) => {
+          automation = this.#store.updateRuntime("automation.task_cancelled", (state) => {
             state.recoveryCheckpoint = `cancelled-task:${task.taskId}:${state.currentModule}`;
-            state.blockingReason = "当前保障任务由用户明确取消；自动检测保持开启，等待新的人工选择";
+            state.activeTaskId = null;
+            state.currentFaultFingerprint = null;
+            state.recoveryAttemptCount = 0;
+            state.blockingReason = "当前保障任务由用户明确取消；已释放失效任务并准备提交下一份修正方案";
             state.lastFeedback = { cycle: state.cycle, module: state.currentModule, taskId: task.taskId, taskState: task.state, summary: task.blockingReason || "任务已取消", recordedAt: new Date().toISOString() };
           });
         } else if (task.state === "blocked" || task.state === "recovering") {
@@ -352,8 +355,7 @@ export class LinghuAutomationFacade {
 
 function automaticFlowSnapshots(state: CollaborationState, activeTaskId: string | null, checkedAt: string): LinghuAutomaticFlowSnapshot[] {
   // 令狐老祖保障所有人物的未完成任务；automationSource 只用于审计，不能限制保障范围。
-  return state.tasks.filter((task) => task.taskId === activeTaskId
-      || (task.state !== "integrated" && task.state !== "cancelled"))
+  return state.tasks.filter((task) => task.state !== "integrated" && task.state !== "cancelled")
     .map((task) => automaticFlowSnapshot(state, task, checkedAt));
 }
 

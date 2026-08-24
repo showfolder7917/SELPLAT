@@ -82,6 +82,7 @@ export interface NangongConversationMessage {
   messageId: string;
   role: "user" | "nangong";
   content: string;
+  attachmentIds?: string[];
   createdAt: string;
 }
 
@@ -104,6 +105,7 @@ export interface CreateEvolutionTopicRequest {
 
 export interface SendNangongConversationMessageRequest {
   message: string;
+  attachmentIds?: string[];
   workspaceState: WorkspaceState;
   locale: Locale;
 }

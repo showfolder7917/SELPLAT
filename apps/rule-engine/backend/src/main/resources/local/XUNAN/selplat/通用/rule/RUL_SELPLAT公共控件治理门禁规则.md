@@ -3,7 +3,9 @@
 <!-- 本规则约束 SELPLAT 现有和未来全部原生前端控件，不依赖控件名称逐项追加规则。 -->
 rule_scope = active_user_selplat_shared_ui_component_governance
 <!-- 5.21.0 固定 SEL UI 唯一源码、新主题判断、Java 与 Node 分语言接入及 React 生命周期边界。 -->
-rule_version = 5.21.0
+rule_version = 5.22.0
+<!-- 2026-08-24 固定中央登记到 Node 正式出口的自动同步；适用于 SELUI 新增或调整控件；业务含义是应用无需访问内部文件，也不会因人工漏改 package.json 而私造替代控件。 -->
+upgrade_record_20260824_component_exports = component_registry_single_source + generated_node_script_and_style_exports + package_prepare_sync + shared_build_consistency_gate
 <!-- 2026-08-23 将新工程稳定 UI 先匹配现有主题，确需沉淀时进入 SEL UI 新主题，并保持令牌迁移前后视觉一致。 -->
 upgrade_record_20260823_sel_ui_cross_language_adoption = one_sel_ui_source,existing_theme_first,new_reusable_ui_as_theme_pack,java_resource_jar,node_module_export,react_mount_destroy_adapter,visual_baseline_preserved
 <!-- 2026-08-20 固定浏览器关键资源同源交付，并要求SEL内核与能力脚本同步提升缓存版本。 -->
@@ -109,6 +111,12 @@ selplat_component_gate_auto_creation_policy = block_and_report
 selplat_component_gate_auto_creation_policy.2 = no_silent_component_generation
 <!-- 公共控件唯一登记位于 sel-ui 组件根，版本、策略和控件数组缺一不可。 -->
 selplat_component_registry = shared/frontend/sel-ui/src/components/component-registry.json
+<!-- 全部已登记控件必须从中央登记生成 Node 脚本与样式正式出口；适用于 Node、TypeScript、Electron 和 React 应用消费 SELUI；业务含义是登记即具备稳定包入口。 -->
+selplat_component_registry_generates_node_exports = all_registered_component_scripts_and_styles
+<!-- 新控件登记后的包生命周期必须自动同步正式出口；适用于本地 file 依赖安装、prepare 和人工同步；业务含义是后续新增控件不再依赖人工重复编辑 exports。 -->
+selplat_component_export_sync = package_prepare + explicit_sync_command
+<!-- 公共构建必须核对登记表与已提交正式出口完全一致；适用于共享回归和应用 SELUI 门禁；业务含义是漏接、过期出口或内部路径绕行都会在交付前阻断。 -->
+selplat_component_export_gate = registry_and_package_exports_exact_match
 <!-- selplat_component_registry.2 的当前独立事实为 version=2。 -->
 selplat_component_registry.2 = version=2
 <!-- selplat_component_registry.3 的当前独立事实为 one_authoritative_source。 -->

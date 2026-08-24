@@ -60,6 +60,12 @@ load_rule_for_active_user_selplat_application_sel_ui_adoption_or_new_theme_pack 
 <!-- Java 通过资源 JAR、Node Vite Electron 通过模块出口或 React 通过生命周期适配使用 SEL UI 时加载。 -->
 load_rule_for_active_user_selplat_java_node_electron_or_react_sel_ui_host_adoption = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 
+<!-- SELUI 中央登记新增控件、同步 Node 正式出口或检查 package exports 一致性时加载，登记必须自动形成稳定脚本和样式入口。 -->
+load_rule_for_active_user_selplat_component_registry_node_export_sync_or_gate = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+
+<!-- 应用需要消费尚未公开导出的 SELUI 控件时加载，必须先补共通正式出口，禁止引用 shared 内部文件。 -->
+load_rule_for_active_user_selplat_application_requires_unexported_sel_ui_component = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
+
 <!-- 既有 UI 硬编码视觉迁移到统一令牌并要求保持原外观时加载。 -->
 load_rule_for_active_user_selplat_existing_ui_token_migration_with_visual_preservation = SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES
 

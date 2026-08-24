@@ -16,7 +16,7 @@ import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/elect
 import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-store.js";
 import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js";
-import { LocalChangeOwnershipError, VersionWorkspaceManager } from "../../../build/ai-desktop/electron/electron/services/collaboration/version-workspace-manager.js";
+import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../build/ai-desktop/electron/electron/services/collaboration/version-workspace-manager.js";
 import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/managed-task-executor.js";
 import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
@@ -381,6 +381,32 @@ test("令狐活动任务记录缺失时保留恢复点并派发同模块替代�
   }
 });
 
+test("令狐活动任务被取消后释放失效指针并继续派发同模块替代任务", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-cancelled-task-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+      continueTask: (taskId) => collaborationStore.continueTask(taskId),
+      recoverTask: () => { throw new Error("本场景不应进入停点恢复"); },
+    };
+    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const facade = new LinghuAutomationFacade({ store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined });
+    store.setEnabled(true);
+    await facade.checkNow();
+    const cancelledTaskId = facade.state().activeTaskId;
+    collaborationStore.cancelTask(cancelledTaskId);
+    await facade.checkNow();
+    assert.notEqual(facade.state().activeTaskId, cancelledTaskId);
+    assert.equal(facade.state().enabled, true);
+    assert.equal(facade.state().flowSnapshots.some((snapshot) => snapshot.sourceTaskId === cancelledTaskId), false);
+    assert.match(facade.state().recoveryCheckpoint, /active-task:|replacement-task:/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("令狐持续检测所有自动流程，并为非活动停点执行独立恢复", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-all-flows-"));
   try {
@@ -601,6 +627,67 @@ test("同一版本已有首个发布候选时后续批次使用唯一代次分�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("发布候选冲突在中止合并前保留冲突文件和非空诊断", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "merge-conflict-evidence-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "shared.txt"), "base\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    const baseSha = git(repositoryRoot, "rev-parse", "HEAD");
+    git(repositoryRoot, "checkout", "-b", "task-result");
+    writeFileSync(path.join(repositoryRoot, "shared.txt"), "task\n");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "task result");
+    const resultSha = git(repositoryRoot, "rev-parse", "HEAD");
+    git(repositoryRoot, "checkout", "-");
+    writeFileSync(path.join(repositoryRoot, "shared.txt"), "main\n");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "main change");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    await assert.rejects(
+      () => manager.createReleaseCandidate("release-0.1.2-g8", "0.1.2", 8, [{ taskId: "TASK-CONFLICT", versionWorkspace: { resultSha } }]),
+      (error) => {
+        assert.ok(error instanceof MergeConflictError);
+        assert.deepEqual(error.conflictFiles, ["shared.txt"]);
+        assert.equal(error.baseSha, git(repositoryRoot, "rev-parse", "HEAD"));
+        assert.equal(error.resultSha, resultSha);
+        assert.match(error.message, /shared\.txt/);
+        return true;
+      },
+    );
+    assert.equal(git(repositoryRoot, "status", "--porcelain"), "");
+    assert.notEqual(baseSha, resultSha);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("版本冲突恢复签发新修订而不重复集成旧 resultSha", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "merge-conflict-correction-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const task = store.submitTask({ title: "冲突修正", problemStatement: "主线与任务同时修改文件", confirmedIntent: "必须以当前主线重新修正。", workspaceState, locale: "zh-CN" });
+    store.updateTask(task.taskId, "test.merge_conflict", (current) => {
+      current.state = "blocked";
+      current.taskRevision = 1;
+      current.workerGeneration = 2;
+      current.versionWorkspace = { workspaceId: "old", rootPath: "/old", branchName: "codex/collab/old", baseSha: "base", resultSha: "old-result", createdAt: new Date().toISOString(), retiredAt: null };
+      current.integrationFailure = { kind: "merge-conflict", detail: "conflict", conflictFiles: ["apps/ai-desktop/a.ts"], baseSha: "base", resultSha: "old-result", generation: 7, occurredAt: new Date().toISOString() };
+    });
+    const next = store.continueTask(task.taskId).tasks.find((candidate) => candidate.taskId === task.taskId);
+    assert.equal(next.state, "queued-executor");
+    assert.equal(next.taskRevision, 2);
+    assert.equal(next.workerGeneration, 3);
+    assert.equal(next.versionWorkspace, null);
+    assert.equal(next.recoveryTargetState, "approved");
+    assert.match(next.flowEvents.at(-1).summary, /禁止重复集成旧 resultSha/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("已验证候选应用先提升到稳定批次目录再允许回收候选", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "verified-package-stage-"));
   const candidateRoot = path.join(directory, "candidate");
@@ -782,12 +869,14 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.80\.0/);
+  assert.match(rule, /rule_version = 5\.81\.0/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);
   assert.match(rule, /linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry/);
-  assert.match(rule, /linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_plus_active_task/);
+  assert.match(rule, /linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_only/);
+  assert.match(rule, /collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort/);
+  assert.match(rule, /evolution_person_workspace_ui_contract = selui_formal_exports_and_theme_tokens_only/);
   assert.match(rule, /linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint/);
   assert.match(rule, /linghu_automation_state_recovery_contract/);
   assert.match(rule, /linghu_module_completion_report_contract/);

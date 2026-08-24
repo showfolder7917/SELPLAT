@@ -30,7 +30,7 @@ export class NangongEvolutionFacade {
   createTopic(request: CreateEvolutionTopicRequest): NangongEvolutionState { return this.#store.createTopic(request); }
   setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): NangongEvolutionState { return this.#store.setAutomation(kind, enabled); }
   async sendConversationMessage(request: SendNangongConversationMessageRequest): Promise<NangongEvolutionState> {
-    let state = this.#store.appendConversation("user", request.message);
+    let state = this.#store.appendConversation("user", request.message, request.attachmentIds || []);
     const context = state.conversation.messages.slice(-12).map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
     const response = await this.#conversation.send(request, context);
     state = this.#store.appendConversation("nangong", response.text);

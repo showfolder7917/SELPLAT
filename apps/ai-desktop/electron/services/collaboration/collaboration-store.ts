@@ -265,6 +265,21 @@ export class CollaborationStore {
         return;
       }
       releaseTaskMembers(state, taskId);
+      if (task.integrationFailure?.kind === "merge-conflict") {
+        const files = task.integrationFailure.conflictFiles.join("、") || "未识别文件";
+        task.taskRevision += 1;
+        task.workerGeneration += 1;
+        task.state = "queued-executor";
+        task.currentReviewerMemberId = null;
+        task.assignmentId = null;
+        task.versionWorkspace = null;
+        task.recoveryTargetState = "approved";
+        task.phase = null;
+        task.blockingReason = `基于当前主线重新修正冲突文件：${files}`;
+        const actor = recoveryActor ? participantSnapshot(recoveryActor) : task.initiator;
+        task.flowEvents.push({ eventId: randomUUID(), type: "integration.conflict_correction_requested", stage: "recovery", status: "started", actor, summary: `禁止重复集成旧 resultSha；已签发 r${task.taskRevision} 新修正版处理：${files}`, occurredAt: new Date().toISOString(), error: false });
+        return;
+      }
       if (task.versionWorkspace?.resultSha) {
         task.state = "ready-for-integration";
         task.recoveryTargetState = null;

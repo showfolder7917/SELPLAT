@@ -5,6 +5,7 @@ import test from "node:test";
 const read = (url) => readFileSync(new URL(url, import.meta.url), "utf8");
 const packageManifest = JSON.parse(read("../package.json"));
 const selUiManifest = JSON.parse(read("../../../shared/frontend/sel-ui/package.json"));
+const selUiRegistry = JSON.parse(read("../../../shared/frontend/sel-ui/src/components/component-registry.json"));
 const themeAdapter = read("../src/theme/selUiTheme.ts");
 const entry = read("../src/main.tsx");
 const developerStyles = read("../src/variants/developer/developer.css");
@@ -38,6 +39,30 @@ test("AI Desktop 通过正式 Node 出口接入同一 SEL UI 源码", () => {
   assert.match(themeAdapter, /@selplat\/sel-ui\/theme\/developer-workbench/);
   assert.ok(themeAdapter.indexOf('@selplat/sel-ui/theme/tokens') < themeAdapter.indexOf('@selplat/sel-ui/theme/contract'));
   assert.doesNotMatch(themeAdapter, /shared\/frontend\/sel-ui|\.\.\/\.\.\/\.\.\/shared/);
+});
+
+test("SELUI 中央登记的全部控件自动发布正式脚本和样式出口", () => {
+  for (const component of selUiRegistry.components) {
+    const exportName = component.id.replace(/^sel/, "").replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+    if (component.scripts.length) assert.ok(selUiManifest.exports[`./components/${exportName}`], `${component.id} 缺少脚本出口`);
+    if (component.styles.length) assert.ok(selUiManifest.exports[`./components/${exportName}/styles`], `${component.id} 缺少样式出口`);
+  }
+  assert.equal(selUiManifest.scripts.prepare, "npm run sync:component-exports");
+});
+
+test("人物工作台通过 SELUI Grid 与 SplitPane 正式出口装配", () => {
+  for (const exportedPath of [
+    "@selplat/sel-ui/components/tooltip",
+    "@selplat/sel-ui/components/grid",
+    "@selplat/sel-ui/components/split-pane",
+  ]) assert.match(developerApp, new RegExp(exportedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(developerApp, /splitPane\.mount/);
+  assert.match(developerApp, /grid\.create/);
+  assert.match(developerApp, /grid\.mount/);
+  assert.match(developerApp, /selGrid:selectionChange/);
+  assert.match(developerStyles, /\.person-workspace-split-host/);
+  assert.match(developerStyles, /\.evolution-proposal-grid-host/);
+  assert.doesNotMatch(developerApp, /<aside className="dev-context">/);
 });
 
 test("锁文件依赖缓存迁移后重建本地公共包链接", () => {

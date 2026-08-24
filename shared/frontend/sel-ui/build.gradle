@@ -5,6 +5,16 @@ plugins {
     id 'java-library'
 }
 
+tasks.register('syncSelUiComponentExports', Exec) {
+    // 中央登记变化后统一重建 Node 正式出口；新增控件不再要求人工编辑 package.json。
+    commandLine 'node', 'scripts/sync-component-exports.mjs'
+}
+
+tasks.register('verifySelUiComponentExports', Exec) {
+    // 公共门禁只检查已提交产物，发现漏同步时阻断而不静默改写源码。
+    commandLine 'node', 'scripts/sync-component-exports.mjs', '--check'
+}
+
 tasks.named('processResources') {
     // 公共源码按 Spring Boot 依赖 JAR 的标准静态资源位置发布，运行时 URL 固定为 /sel/**。
     from('src') {
@@ -19,6 +29,7 @@ tasks.named('processResources') {
 }
 
 tasks.register('verifySelUiSourceBoundary') {
+    dependsOn 'verifySelUiComponentExports'
     // 边界检查直接读取权威源码，不检查 build 中可以删除和重建的资源副本。
     inputs.files(fileTree('src') {
         include '**/*.js'

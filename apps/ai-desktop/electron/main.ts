@@ -215,12 +215,12 @@ app.whenReady().then(async () => {
     store: nangongStore,
     collaboration,
     conversation: {
-      send: (request, context) => nangongCodex!.send([
+      send: async (request, context) => nangongCodex!.send([
         "你现在以南宫婉的专项演化调查者身份与用户讨论。只读调查和分析，不修改源码、不执行构建、不越过审批。",
         "回答应区分已确认事实、基于事实的推断、仍需验证内容，并给出可继续讨论的演化方向。不要擅自把聊天变成正式课题，只有用户在界面明确转换后才成立。",
         `最近对话：\n${context}`,
         `用户最新消息：\n${request.message}`,
-      ].join("\n\n"), request.locale, "read-only", request.workspaceState, [], () => undefined, "conversation-managed"),
+      ].join("\n\n"), request.locale, "read-only", request.workspaceState, await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
       newChat: () => nangongCodex!.newChat(),
     },
     recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),

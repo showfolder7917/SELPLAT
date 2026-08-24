@@ -16,7 +16,7 @@ import type {
 import type { CodexStreamEvent } from "../../../contracts/desktop.js";
 import { CollaborationDurationLog } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
-import { LocalChangeOwnershipError, VersionWorkspaceManager } from "./version-workspace-manager.js";
+import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "./version-workspace-manager.js";
 import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../contracts/integration-release.js";
 import { ReleaseBatchStore } from "./release-batch-store.js";
 import { createCollaborationResultSummary } from "./result/result-summary.js";
@@ -835,7 +835,7 @@ export class CollaborationCoordinator {
       releaseDocument = this.#releaseBatches.create(releaseBatchId, this.#releaseVersion, generation, taskIds.map((taskId) => this.#store.task(taskId)));
       this.#store.updateTask(taskIds[0], "integration.batch_frozen", (_first, mutable) => {
         mutable.nextIntegrationGeneration += 1;
-        mutable.integrationBatches.push({ generation, taskIds, state: "frozen", createdAt: new Date().toISOString(), completedAt: null, integrationSha: null, failureReason: null });
+        mutable.integrationBatches.push({ generation, taskIds, state: "frozen", createdAt: new Date().toISOString(), completedAt: null, integrationSha: null, failureReason: null, failureKind: null, conflictFiles: [] });
         for (const task of mutable.tasks.filter((candidate) => taskIds.includes(candidate.taskId))) {
           task.state = "queued-integration";
           task.integrationGeneration = generation;
@@ -924,20 +924,24 @@ export class CollaborationCoordinator {
       this.#releaseBatches.write(releaseDocument);
     } catch (error) {
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;
+      const mergeConflict = error instanceof MergeConflictError;
+      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : "verification";
+      const conflictFiles = mergeConflict ? error.conflictFiles : [];
       if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
       if (verifySpan) this.#durations.finish(verifySpan, "failed", { error: errorMessage(error) });
       this.#durations.finish(integrationSpan, "failed", { error: errorMessage(error) });
       this.#store.updateTask(taskIds[0], "integration.failed", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
-        if (batch) { batch.state = "failed"; batch.failureReason = errorMessage(error); batch.completedAt = new Date().toISOString(); }
+        if (batch) { batch.state = "failed"; batch.failureReason = errorMessage(error); batch.failureKind = failureKind; batch.conflictFiles = conflictFiles; batch.completedAt = new Date().toISOString(); }
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = ownershipBlocked ? "blocked" : "test-failed";
+          task.state = ownershipBlocked || mergeConflict ? "blocked" : "test-failed";
           task.phase = null;
-          task.blockingReason = ownershipBlocked ? `合并前本地修改归属门禁阻塞：${errorMessage(error)}` : `令狐老祖统一测试失败：${errorMessage(error)}`;
+          task.blockingReason = ownershipBlocked ? `合并前本地修改归属门禁阻塞：${errorMessage(error)}` : mergeConflict ? `版本冲突需要基于当前主线重新修正：${errorMessage(error)}` : `令狐老祖统一测试失败：${errorMessage(error)}`;
           task.recoveryTargetState = "ready-for-integration";
+          task.integrationFailure = { kind: failureKind, detail: errorMessage(error), conflictFiles, baseSha: mergeConflict ? error.baseSha : task.versionWorkspace?.baseSha || null, resultSha: mergeConflict ? error.resultSha : task.versionWorkspace?.resultSha || null, generation, occurredAt: new Date().toISOString() };
           task.currentHandler = participantSnapshot(requireMember(mutable, LINGHU_MEMBER_ID));
-          if (!ownershipBlocked) task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
-          appendFlow(task, ownershipBlocked ? "integration.local_change_ownership_blocked" : "unified_test.failed", "integration", ownershipBlocked ? "waiting" : "failed", task.blockingReason, task.currentHandler, !ownershipBlocked);
+          if (!ownershipBlocked && !mergeConflict) task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
+          appendFlow(task, ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : "unified_test.failed", "integration", ownershipBlocked || mergeConflict ? "waiting" : "failed", task.blockingReason, task.currentHandler, !ownershipBlocked && !mergeConflict);
         }
       });
       this.#durations.writeGenerationReport(generation, taskIds);

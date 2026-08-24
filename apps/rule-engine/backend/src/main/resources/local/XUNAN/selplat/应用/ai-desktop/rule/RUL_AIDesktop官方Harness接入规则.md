@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.80.0 建立南宫婉对话转课题、韩立双来源审批和令狐修正返还闭环。 -->
-rule_version = 5.80.0
+<!-- 5.82.0 固定 Electron 人物业务动作禁止依赖系统 prompt，并让审批与课题输入在当前工作栏就地提交和反馈。 -->
+rule_version = 5.82.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -204,6 +204,10 @@ upgrade_record_5_78 = 2026-08-24:AI_Desktop运行时测试批次继续按runId�
 upgrade_record_5_79 = 2026-08-24:南宫婉单课题调查_版本化提案_演化审批独立于随机执行审核和命令审批_人工决定形成偏好快照_韩立自动审批事实不足退回补充_自动演化自动审批自动分发三开关独立_审批通过先返还南宫婉再关联proposalId分发_重启恢复点_执行继续复用协同工作树集成统一测试
 <!-- 5.80.0 把灵活讨论冻结为正式课题，并让两个提交来源共享审批事实但保持独立自动开关。 -->
 upgrade_record_5_80 = 2026-08-24:南宫婉独立只读Codex对话_聊天快照显式转正式演化课题_韩立统一审批南宫婉和令狐方案_两个来源自动审批开关独立_审批表完整时间和人物字段_令狐Bug修正先审批后返还持续修正链
+<!-- 5.81.0 禁止取消任务残留活动指针、空冲突诊断和同一提交盲目重试；人物工作区统一使用 SELUI。 -->
+upgrade_record_5_81 = 2026-08-24:取消终态立即释放令狐活动指针并继续同模块审批派发_终态任务不进入活动快照_合并中止前记录冲突文件stdout_stderr基线和resultSHA_冲突恢复必须签发当前主线新修订_禁止旧resultSHA重复集成_韩立审批中心与会话分离_南宫婉连续聊天截图附件课题侧栏_SELUI正式出口和主题令牌
+<!-- 5.82.0 防止 Electron 不支持 window.prompt 时韩立和南宫婉按钮在 IPC 发送前静默失效。 -->
+upgrade_record_5_82 = 2026-08-24:韩立人工审批使用右栏审批建议编辑器_通过退回补充驳回直接发送IPC_提交中禁用和错误就地显示_南宫婉讨论转课题新建课题形成提案全部使用可见内嵌表单_禁止人物业务动作依赖window_prompt_完整点击到分发和完成记录回归
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -371,7 +375,9 @@ linghu_automation_single_entry_contract = LinghuAutomationFacade + collaboration
 <!-- 自动执行按钮是唯一启停边界；开启后即使阻塞或等待人工业务选择也只进入等待与持续检测，禁止系统自行关闭检测。 -->
 linghu_automation_liveness_contract = explicit_human_switch + default_off + poll_every_30_seconds + enabled_monitor_never_self_disables + one_active_module_task_only + no_duplicate_dispatch_while_task_active + blocked_or_business_choice_keeps_monitoring_and_recovery_point
 <!-- 每轮检测必须从协同权威状态生成全部人物非终态任务快照，联合心跳、协议进展和状态时间判断停点，禁止只看活动任务、自动来源或单一耗时。 -->
-linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_plus_active_task + state_phase_executor_generation + heartbeat_protocol_and_state_progress + waiting_point + completion_conditions_and_completed_conditions + blocking_kind + recovery_checkpoint + persisted_detection_cursor
+linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_only + cancelled_or_integrated_active_pointer_released_before_dispatch + state_phase_executor_generation + heartbeat_protocol_and_state_progress + waiting_point + completion_conditions_and_completed_conditions + blocking_kind + recovery_checkpoint + persisted_detection_cursor
+<!-- 合并冲突是代码修正事实，不得伪装成统一测试失败或对同一提交盲目重试。 -->
+collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort + persist_structured_failure_kind + blocked_requires_current_mainline_correction + continue_increments_task_revision_and_worker_generation + fresh_signed_worktree + reuse_approved_plan + old_resultSHA_never_retried
 <!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，状态阶段、代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
 linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
 <!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
@@ -534,10 +540,14 @@ nangong_three_automation_switch_contract = automatic_evolution_independent_from_
 nangong_distribution_contract = approved_only + initiator_nangong_wan + stable_proposalId_bidirectional_link + existing_collaboration_worktree_review_validation_integration_and_unified_test_pipeline
 <!-- 南宫婉讨论使用独立只读 Codex 线程；聊天本身不是正式课题，只有用户显式转换时冻结消息标识和调查结论。 -->
 nangong_conversation_to_topic_contract = dedicated_persistent_read_only_codex_thread + flexible_user_dialogue_and_fact_investigation + conversation_is_not_topic + explicit_user_conversion_freezes_message_ids_goal_scope_and_acceptance + no_source_change_or_distribution_from_chat
+<!-- 三个人物页复用 SELUI 公共能力与主题，业务布局留在 AI Desktop；韩立审批不得占用主会话。 -->
+evolution_person_workspace_ui_contract = selui_formal_exports_and_theme_tokens_only + no_shared_source_change + hanli_conversation_keeps_chat_timeline + hanli_approval_center_is_independent_selui_floating_panel + nangong_continuous_chat_and_localImage_screenshot_attachments + topic_and_automation_sidebar + linghu_human_readable_runtime_recovery_and_proposal_status
 <!-- 韩立统一审批表必须同时接收南宫婉演化提案和令狐修正方案，并完整显示用户指定字段。 -->
 han_li_unified_evolution_approval_contract = source_nangong_or_linghu + title_type_submitter_approver_createdAt_approvedAt_status + detailed_free_form_content_with_clear_direction + manual_user_advice_or_automatic_han_li_fact_decision
 <!-- 南宫与令狐自动审批必须分别设置；人工记录只按同来源同类型形成偏好，自动结论不能反向成为最高可信事实。 -->
 han_li_source_specific_automatic_approval_contract = independent_nangong_and_linghu_switches_default_off + complete_fact_gate + same_origin_and_type_manual_history + insufficient_fact_or_history_returns_supplement + later_manual_correction_wins
+<!-- Electron 人物工作区的审批、课题和提案输入必须使用当前页面可见编辑器；系统 prompt 不得成为发送 IPC 的前置条件。 -->
+evolution_person_action_input_contract = visible_inline_editor_in_owning_workspace + no_window_prompt_before_ipc + direct_approve_supplement_reject_dispatch_actions + pending_disables_duplicate_submission + local_error_feedback + interaction_test_covers_topic_proposal_manual_decisions_distribution_and_completed_record
 <!-- 令狐持续修正发现的 Bug 方向必须先形成方案；审批通过后返还令狐并携带 proposalId 进入既有持续恢复和测试链。 -->
 linghu_repair_approval_and_return_contract = detected_bug_to_versioned_repair_proposal + no_repair_execution_before_evolution_approval + approved_return_to_linghu_ancestor + initiator_and_preferred_executor_linghu_ancestor + stable_proposalId + existing_recovery_validation_and_unified_test_pipeline
 <!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->
