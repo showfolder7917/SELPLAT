@@ -1,4 +1,4 @@
-import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, EvolutionProposal, NangongEvolutionState, SendNangongConversationMessageRequest } from "../../../contracts/nangong-evolution.js";
+import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, EvolutionProposal, NangongEvolutionState, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest } from "../../../contracts/nangong-evolution.js";
 import type { SendMessageResponse } from "../../../contracts/conversation.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
@@ -41,7 +41,35 @@ export class NangongEvolutionFacade {
   convertConversationToTopic(request: ConvertNangongConversationToTopicRequest): NangongEvolutionState { return this.#store.convertConversationToTopic(request); }
   createProposal(topicId: string, request: CreateEvolutionProposalRequest): NangongEvolutionState { return this.#store.createProposal(topicId, request); }
   createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): NangongEvolutionState { return this.#store.createLinghuRepairProposal(request); }
-  decideProposal(proposalId: string, request: DecideEvolutionProposalRequest): NangongEvolutionState { return this.#store.decide(proposalId, request.decision, request.advice || "", "manual-user", []); }
+  decideProposal(proposalId: string, request: DecideEvolutionProposalRequest): NangongEvolutionState {
+    return this.#store.decide(proposalId, request.decision, request.advice || "", "manual-user", [], request.feedbackTarget || "proposal-content", request.capabilityScope || "");
+  }
+  reviseProposal(proposalId: string, request: ReviseEvolutionProposalRequest): NangongEvolutionState {
+    const member = this.#collaboration.state().members.find((item) => item.memberId === request.submitterMemberId && item.enabled);
+    if (!member) throw new Error("重新提交人不是当前已启用的协同人物。");
+    return this.#store.revise(proposalId, request, member.displayName);
+  }
+  /** 自动职责只复用通用修订合同；已有子版本时返回现状，避免定时检测重复提交。 */
+  reviseReturnedProposalAutomatically(proposalId: string): NangongEvolutionState {
+    const state = this.state();
+    const proposal = requireProposal(state, proposalId);
+    if (state.proposals.some((item) => item.supersedesProposalId === proposal.proposalId)) return state;
+    const feedback = proposal.approvals.at(-1);
+    if (!feedback?.advice.trim()) throw new Error("自动修订缺少明确的人工审批意见。");
+    const capabilityInstruction = feedback.feedbackTarget === "submitter-capability"
+      ? `\n\n自身能力升级：修改${proposal.submitterDisplayName}自身使用的规则、提示、工作流或实现，能力范围为“${feedback.capabilityScope}”。`
+      : "";
+    const revised = this.reviseProposal(proposal.proposalId, {
+      submitterMemberId: proposal.submitterMemberId,
+      content: `${proposal.content}\n\n根据审批意见修订：${feedback.advice}${capabilityInstruction}`,
+      evidence: [...proposal.evidence, `人工审批事实：${feedback.advice}`],
+      impactScope: feedback.feedbackTarget === "submitter-capability" ? [...proposal.impactScope, `${proposal.submitterDisplayName}自身能力配置`] : proposal.impactScope,
+      risks: [...proposal.risks], rollbackPlan: proposal.rollbackPlan,
+      acceptanceCriteria: [...proposal.acceptanceCriteria, "修订版本逐项回应人工审批意见并保留版本与审批追溯"],
+    });
+    this.#recordEvent("member.evolution.proposal_revised", { proposalId: proposal.proposalId, submitterMemberId: proposal.submitterMemberId, feedbackApprovalId: feedback.approvalId });
+    return revised;
+  }
 
   autoApprove(proposalId: string): NangongEvolutionState {
     const state = this.state();
@@ -64,14 +92,27 @@ export class NangongEvolutionFacade {
     if (proposal.status !== "approved") throw new Error("只有审批通过并返还提交人的提案才能分发。");
     let result = state;
     const distributedTaskIds = [...proposal.distributedTaskIds];
+    const latestApproval = proposal.approvals.at(-1);
+    const revisionFeedback = proposal.revisionFeedbackApprovalId
+      ? state.proposals.flatMap((item) => item.approvals).find((approval) => approval.approvalId === proposal.revisionFeedbackApprovalId)
+      : null;
+    const targetMember = proposal.targetMemberId ? this.#collaboration.state().members.find((member) => member.memberId === proposal.targetMemberId) : null;
     for (const [index, unit] of proposal.distributionUnits.entries()) {
+      const selfUpgradeContext = proposal.purpose === "self-capability-upgrade"
+        ? `\n\n自身能力升级目标：${proposal.targetMemberDisplayName}（${proposal.targetMemberId}）\n能力范围：${proposal.capabilityScope}\n原人工反馈：${revisionFeedback?.advice || "—"}\n必须修改该人物自身使用的规则、提示、工作流或实现，并用回归测试证明以后同类提交会更具体。`
+        : "";
       const next = this.#collaboration.submitTask({
         title: unit.title, problemStatement: topic.goal,
-        confirmedIntent: `${proposal.content}\n\n本任务范围：${unit.scope}\n\n回退方案：${proposal.rollbackPlan}`,
+        confirmedIntent: `${proposal.content}\n\n本任务范围：${unit.scope}\n\n回退方案：${proposal.rollbackPlan}${selfUpgradeContext}`,
         constraints: [...proposal.exclusions.map((item) => `不涉及：${item}`), ...proposal.risks.map((item) => `风险：${item}`)],
         acceptanceCriteria: unit.acceptanceCriteria, workspaceState: topic.workspaceState, locale: topic.locale,
         mergeStrategy: index === 0 ? "INDEPENDENT" : "DEPENDENCY_CHAIN", dependencyTaskIds: index === 0 ? [] : [distributedTaskIds[index - 1]],
-        initiatorMemberId: proposal.submitterMemberId, preferredExecutorMemberId: proposal.origin === "linghu" ? "linghu-ancestor" : undefined, evolutionProposalId: proposal.proposalId,
+        initiatorMemberId: proposal.submitterMemberId,
+        preferredExecutorMemberId: proposal.purpose === "self-capability-upgrade" && targetMember?.kind === "worker" ? targetMember.memberId : proposal.origin === "linghu" ? "linghu-ancestor" : undefined,
+        evolutionProposalId: proposal.proposalId,
+        selfUpgradeTargetMemberId: proposal.targetMemberId || undefined,
+        selfUpgradeCapabilityScope: proposal.capabilityScope || undefined,
+        sourceEvolutionApprovalId: latestApproval?.approvalId,
       });
       const taskId = next.tasks.find((task) => task.evolutionProposalId === proposal.proposalId && !distributedTaskIds.includes(task.taskId))?.taskId;
       if (!taskId) throw new Error("协同任务已经创建，但未能建立提案关联。");
@@ -87,6 +128,13 @@ export class NangongEvolutionFacade {
     this.#running = true;
     try {
       let state = this.state();
+      if (state.automaticEvolutionEnabled) {
+        for (const proposal of state.proposals.filter((item) => ["supplement-required", "rejected"].includes(item.status))) {
+          if (state.proposals.some((item) => item.supersedesProposalId === proposal.proposalId)) continue;
+          if (!proposal.approvals.at(-1)?.advice.trim()) continue;
+          state = this.reviseReturnedProposalAutomatically(proposal.proposalId);
+        }
+      }
       for (const proposal of state.proposals.filter((item) => item.distributedTaskIds.length && ["executing", "verifying"].includes(item.status))) {
         const tasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
         if (tasks.length !== proposal.distributedTaskIds.length) continue;

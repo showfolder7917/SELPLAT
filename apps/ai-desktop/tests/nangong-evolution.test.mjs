@@ -112,3 +112,70 @@ test("令狐修正与南宫提案使用独立自动审批开关并返还原提�
     assert.equal(submitted.initiatorMemberId, "linghu-ancestor"); assert.equal(submitted.preferredExecutorMemberId, "linghu-ancestor");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+test("所有人物共用自身能力升级修订链并在任务中固定审批依据", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "member-self-upgrade-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted;
+    const members = [
+      { memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" },
+      { memberId: "custom-member", displayName: "自定义人物", enabled: true, kind: "worker" },
+    ];
+    const collaboration = {
+      submitTask(request) { submitted = request; return { tasks: [{ taskId: "self-upgrade-task", evolutionProposalId: request.evolutionProposalId }] }; },
+      state() { return { members, tasks: [] }; },
+    };
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    let state = facade.createTopic(topicRequest("人物提交能力升级"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const original = state.proposals[0];
+    state = facade.decideProposal(original.proposalId, {
+      decision: "supplement-required",
+      advice: "提交内容不具体：写明问题位置、修正动作和预期结果。",
+      feedbackTarget: "submitter-capability",
+      capabilityScope: "事实调查与具体提案表达",
+    });
+    const feedbackApprovalId = state.proposals[0].approvals.at(-1).approvalId;
+    state = facade.reviseProposal(original.proposalId, {
+      submitterMemberId: "nangong-wan",
+      content: "升级南宫婉自身提案模板，强制列出问题位置、修正动作和预期结果。",
+      evidence: ["原提案未说明修改位置"], impactScope: ["南宫婉提案生成规则"], risks: ["旧提案兼容"],
+      rollbackPlan: "保留旧模板并允许按版本回退。", acceptanceCriteria: ["新提案包含问题位置、修正动作和预期结果"],
+    });
+    const revised = state.proposals.at(-1);
+    assert.equal(revised.version, 2); assert.equal(revised.purpose, "self-capability-upgrade");
+    assert.equal(revised.targetMemberId, "nangong-wan"); assert.equal(revised.supersedesProposalId, original.proposalId);
+    assert.equal(revised.revisionFeedbackApprovalId, feedbackApprovalId);
+    assert.throws(() => facade.reviseProposal(original.proposalId, { submitterMemberId: "custom-member" }), /原提交人/);
+    state = facade.decideProposal(revised.proposalId, { decision: "approved", advice: "方案具体，批准升级自身逻辑。" });
+    const approvedRevision = state.proposals.find((proposal) => proposal.proposalId === revised.proposalId);
+    state = facade.dispatch(revised.proposalId);
+    assert.equal(submitted.preferredExecutorMemberId, "nangong-wan");
+    assert.equal(submitted.selfUpgradeTargetMemberId, "nangong-wan");
+    assert.equal(submitted.selfUpgradeCapabilityScope, "事实调查与具体提案表达");
+    assert.equal(submitted.sourceEvolutionApprovalId, approvedRevision.approvals.at(-1).approvalId);
+    assert.match(submitted.confirmedIntent, /必须修改该人物自身使用的规则、提示、工作流或实现/);
+    assert.deepEqual(state.proposals.at(-1).distributedTaskIds, ["self-upgrade-task"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("自动演化开启后原人物依据退回意见只重新提交一个自身升级版本", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "automatic-self-revision-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const members = [{ memberId: "linghu-ancestor", displayName: "令狐老祖", enabled: true, kind: "worker" }];
+    const collaboration = { state() { return { members, tasks: [] }; } };
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    store.setAutomation("evolution", true);
+    let state = facade.createLinghuRepairProposal({ title: "令狐提交具体性修正", content: "修正持续任务提交内容", evidence: ["提交内容缺少位置"], impactScope: ["令狐提案流程"], risks: ["模板兼容"], rollbackPlan: "保留旧模板", acceptanceCriteria: ["内容可审批"], workspaceState, locale: "zh-CN" });
+    const original = state.proposals.at(-1);
+    facade.decideProposal(original.proposalId, { decision: "supplement-required", advice: "写明哪里有问题、修改哪里和预期结果。", feedbackTarget: "submitter-capability", capabilityScope: "修正方案具体性" });
+    facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
+    state = facade.state();
+    const revisions = state.proposals.filter((proposal) => proposal.supersedesProposalId === original.proposalId);
+    assert.equal(revisions.length, 1); assert.equal(revisions[0].submitterMemberId, "linghu-ancestor");
+    assert.equal(revisions[0].purpose, "self-capability-upgrade"); assert.match(revisions[0].content, /写明哪里有问题/);
+    facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
+    assert.equal(facade.state().proposals.filter((proposal) => proposal.supersedesProposalId === original.proposalId).length, 1);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

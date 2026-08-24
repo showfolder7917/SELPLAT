@@ -31,6 +31,7 @@ export function registerCollaborationIpc(collaboration: CollaborationCoordinator
   ipcMain.handle("desktop:create-evolution-proposal", (_event, topicId: string, request) => nangongEvolution.createProposal(topicId, request));
   ipcMain.handle("desktop:create-linghu-repair-proposal", (_event, request) => nangongEvolution.createLinghuRepairProposal(request));
   ipcMain.handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request) => nangongEvolution.decideProposal(proposalId, request));
+  ipcMain.handle("desktop:revise-evolution-proposal", (_event, proposalId: string, request) => nangongEvolution.reviseProposal(proposalId, request));
   ipcMain.handle("desktop:auto-approve-evolution-proposal", (_event, proposalId: string) => nangongEvolution.autoApprove(proposalId));
   ipcMain.handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string) => nangongEvolution.dispatch(proposalId));
 }

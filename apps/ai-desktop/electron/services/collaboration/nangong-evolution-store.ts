@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionProposal, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
+import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionFeedbackTarget, EvolutionProposal, NangongEvolutionState, ReviseEvolutionProposalRequest } from "../../../contracts/nangong-evolution.js";
 
 type StateListener = (state: NangongEvolutionState, reason: string, topicId: string | null, proposalId: string | null) => void;
 
@@ -65,6 +65,8 @@ export class NangongEvolutionStore {
       state.proposals.push({
         proposalId, topicId, version, title: mutableTopic.title, type: request.type, origin: mutableTopic.origin,
         submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉",
+        purpose: "work-proposal", targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null,
+        supersedesProposalId: null, revisionFeedbackApprovalId: null,
         content: required(request.content, "提案内容", 30_000), evidence: [...mutableTopic.evidence],
         impactScope: [...mutableTopic.scope], exclusions: [...mutableTopic.exclusions],
         risks: normalizedList(request.risks, "风险"), rollbackPlan: required(request.rollbackPlan, "回退方案", 8_000),
@@ -114,6 +116,8 @@ export class NangongEvolutionStore {
       state.proposals.push({
         proposalId, topicId, version: 1, title: required(request.title, "修正标题", 160), type: "Bug修复", origin: "linghu",
         submitterMemberId: "linghu-ancestor", submitterDisplayName: "令狐老祖", content: required(request.content, "修正内容", 30_000),
+        purpose: "work-proposal", targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null,
+        supersedesProposalId: null, revisionFeedbackApprovalId: null,
         evidence: normalizedList(request.evidence, "调查证据"), impactScope: normalizedList(request.impactScope, "影响范围"), exclusions: [],
         risks: normalizedList(request.risks, "风险"), rollbackPlan: required(request.rollbackPlan, "回退方案", 8_000),
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "验收条件"),
@@ -124,7 +128,7 @@ export class NangongEvolutionStore {
     });
   }
 
-  decide(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource, referencedApprovalIds: string[]): NangongEvolutionState {
+  decide(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource, referencedApprovalIds: string[], feedbackTarget: EvolutionFeedbackTarget = "proposal-content", capabilityScope = ""): NangongEvolutionState {
     const proposal = requireProposal(this.#state, proposalId);
     const latestApproval = proposal.approvals.at(-1);
     const correctsAutomaticDecision = source === "manual-user"
@@ -140,6 +144,8 @@ export class NangongEvolutionStore {
         approverMemberId: source === "manual-user" ? "user" : "han-li",
         approverDisplayName: source === "manual-user" ? "用户" : "韩立",
         advice: advice.trim().slice(0, 8_000), referencedApprovalIds,
+        feedbackTarget,
+        capabilityScope: feedbackTarget === "submitter-capability" ? required(capabilityScope, "自身能力升级范围", 2_000) : null,
         preferenceSnapshotVersion: state.preferenceSnapshotVersion, createdAt: now,
       };
       mutable.approvals.push(approval);
@@ -149,6 +155,52 @@ export class NangongEvolutionStore {
       topic.status = decision;
       topic.recoveryPoint = decision === "approved" ? `approved-returned-to-${mutable.origin}` : decision;
       topic.updatedAt = now;
+    });
+  }
+
+  /** 原提交人只能修订退回的本人提案；新版本保留原审批、反馈目标和完整替代链。 */
+  revise(proposalId: string, request: ReviseEvolutionProposalRequest, submitterDisplayName: string): NangongEvolutionState {
+    const previous = requireProposal(this.#state, proposalId);
+    if (!['supplement-required', 'rejected'].includes(previous.status)) throw new Error("只有退回补充或驳回的提案可以重新提交。");
+    if (previous.submitterMemberId !== request.submitterMemberId) throw new Error("只能由原提交人重新提交该提案。");
+    const feedback = previous.approvals.at(-1);
+    if (!feedback) throw new Error("重新提交缺少可追溯的审批意见。");
+    const topic = requireTopic(this.#state, previous.topicId);
+    const now = new Date().toISOString();
+    const nextProposalId = `evolution-proposal-${randomUUID()}`;
+    const version = topic.currentProposalVersion + 1;
+    return this.#commit("proposal.revised", topic.topicId, nextProposalId, (state) => {
+      const mutableTopic = requireTopic(state, topic.topicId);
+      mutableTopic.status = "pending-approval";
+      mutableTopic.currentProposalVersion = version;
+      mutableTopic.recoveryPoint = `revised-from:${previous.proposalId}`;
+      mutableTopic.updatedAt = now;
+      state.proposals.push({
+        proposalId: nextProposalId,
+        topicId: previous.topicId,
+        version,
+        title: previous.title,
+        type: feedback.feedbackTarget === "submitter-capability" ? "规则优化" : previous.type,
+        origin: previous.origin,
+        submitterMemberId: previous.submitterMemberId,
+        submitterDisplayName,
+        purpose: feedback.feedbackTarget === "submitter-capability" ? "self-capability-upgrade" : previous.purpose,
+        targetMemberId: feedback.feedbackTarget === "submitter-capability" ? previous.submitterMemberId : previous.targetMemberId,
+        targetMemberDisplayName: feedback.feedbackTarget === "submitter-capability" ? submitterDisplayName : previous.targetMemberDisplayName,
+        capabilityScope: feedback.capabilityScope || previous.capabilityScope,
+        supersedesProposalId: previous.proposalId,
+        revisionFeedbackApprovalId: feedback.approvalId,
+        content: required(request.content, "修订方案", 30_000),
+        evidence: normalizedList(request.evidence, "补充调查证据"),
+        impactScope: normalizedList(request.impactScope, "修订影响范围"),
+        exclusions: [...previous.exclusions],
+        risks: normalizedList(request.risks, "修订风险"),
+        rollbackPlan: required(request.rollbackPlan, "修订回退方案", 8_000),
+        acceptanceCriteria: normalizedList(request.acceptanceCriteria, "修订验收条件"),
+        distributionUnits: normalizeRevisedDistributionUnits(previous, request),
+        status: "pending-approval",
+        approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
+      });
     });
   }
 
@@ -194,10 +246,10 @@ export class NangongEvolutionStore {
   #load(): NangongEvolutionState {
     try {
       const raw = JSON.parse(readFileSync(this.#filePath, "utf8")) as Omit<Partial<NangongEvolutionState>, "version"> & { version?: number; automaticApprovalEnabled?: boolean };
-      if ((raw.version === 1 || raw.version === 2) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
+      if ((raw.version === 1 || raw.version === 2 || raw.version === 3) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
         const value = raw as NangongEvolutionState;
         const legacy = raw;
-        value.version = 2;
+        value.version = 3;
         value.automaticNangongApprovalEnabled ??= legacy.automaticApprovalEnabled === true;
         value.automaticLinghuApprovalEnabled ??= false;
         value.conversation ??= createConversation();
@@ -208,11 +260,21 @@ export class NangongEvolutionStore {
           proposal.origin ??= topic?.origin || "nangong";
           proposal.distributionUnits ??= topic ? topic.scope.map((scope) => ({ title: `${topic.title} · ${scope}`, scope, acceptanceCriteria: [...topic.acceptanceCriteria] })) : [];
           proposal.resultSummary ??= null;
+          proposal.purpose ??= "work-proposal";
+          proposal.targetMemberId ??= null;
+          proposal.targetMemberDisplayName ??= null;
+          proposal.capabilityScope ??= null;
+          proposal.supersedesProposalId ??= null;
+          proposal.revisionFeedbackApprovalId ??= null;
+          for (const approval of proposal.approvals) {
+            approval.feedbackTarget ??= "proposal-content";
+            approval.capabilityScope ??= null;
+          }
         }
         return value;
       }
     } catch { /* 首次启动或损坏状态使用安全关闭的空状态，历史文件不会被扫描猜测。 */ }
-    return { version: 2, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+    return { version: 3, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
   }
 
   #write(state: NangongEvolutionState): void {
@@ -233,6 +295,9 @@ function normalizedOptionalList(values: unknown): string[] { return Array.isArra
 function normalizeDistributionUnits(values: CreateEvolutionProposalRequest["distributionUnits"], topic: NangongEvolutionState["topics"][number]): EvolutionProposal["distributionUnits"] {
   const units = Array.isArray(values) ? values.map((item) => ({ title: item.title?.trim(), scope: item.scope?.trim(), acceptanceCriteria: normalizedOptionalList(item.acceptanceCriteria) })).filter((item) => item.title && item.scope && item.acceptanceCriteria.length) : [];
   return units.length ? units : topic.scope.map((scope) => ({ title: `${topic.title} · ${scope}`, scope, acceptanceCriteria: [...topic.acceptanceCriteria] }));
+}
+function normalizeRevisedDistributionUnits(previous: EvolutionProposal, request: ReviseEvolutionProposalRequest): EvolutionProposal["distributionUnits"] {
+  return normalizedList(request.impactScope, "修订影响范围").map((scope) => ({ title: `${previous.title} · v${previous.version + 1} · ${scope}`, scope, acceptanceCriteria: normalizedList(request.acceptanceCriteria, "修订验收条件") }));
 }
 function requireTopic(state: NangongEvolutionState, topicId: string) { const topic = state.topics.find((item) => item.topicId === topicId); if (!topic) throw new Error("专项课题不存在。"); return topic; }
 function requireProposal(state: NangongEvolutionState, proposalId: string) { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }

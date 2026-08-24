@@ -5,7 +5,7 @@ import type { CodexStreamEvent } from "./codex-stream.js";
 import type { CollaborationState, CollaborationStreamEnvelope, CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "./collaboration.js";
 import type { CodexSessionInfo, ConversationDispatchState, EnqueueMessageRequest, SendMessageRequest, SendMessageResponse } from "./conversation.js";
 import type { CreateLinghuStartupPromptRequest, LinghuAutomationState, LinghuAutomationStateEvent, UpdateLinghuStartupPromptRequest } from "./linghu-automation.js";
-import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, NangongEvolutionState, NangongEvolutionStateEvent, SendNangongConversationMessageRequest } from "./nangong-evolution.js";
+import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, NangongEvolutionState, NangongEvolutionStateEvent, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest } from "./nangong-evolution.js";
 import type { DesktopSettings } from "./settings.js";
 import type { ScreenCapture, ScreenCaptureFrameRequest, ScreenCaptureFrameResult, ScreenCapturePreparationResult, ScreenCaptureRequest, ScreenshotAnnotationWindowRequest, ScreenshotAttachment, ScreenshotCompletedEvent, ScreenshotSaveRequest, TempDirectoryInfo } from "./screenshot.js";
 import type { WorkspaceEntry, WorkspaceState } from "./workspace.js";
@@ -81,6 +81,7 @@ export interface DesktopApi {
   createEvolutionProposal(topicId: string, request: CreateEvolutionProposalRequest): Promise<NangongEvolutionState>;
   createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): Promise<NangongEvolutionState>;
   decideEvolutionProposal(proposalId: string, request: DecideEvolutionProposalRequest): Promise<NangongEvolutionState>;
+  reviseEvolutionProposal(proposalId: string, request: ReviseEvolutionProposalRequest): Promise<NangongEvolutionState>;
   autoApproveEvolutionProposal(proposalId: string): Promise<NangongEvolutionState>;
   dispatchEvolutionProposal(proposalId: string): Promise<NangongEvolutionState>;
   onNangongEvolutionState(listener: (event: NangongEvolutionStateEvent) => void): () => void;

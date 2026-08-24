@@ -247,6 +247,7 @@ app.whenReady().then(async () => {
     },
     submitRepairProposal: (request) => nangongEvolution!.createLinghuRepairProposal(request),
     readEvolutionState: () => nangongEvolution!.state(),
+    reviseReturnedProposal: (proposalId) => nangongEvolution!.reviseReturnedProposalAutomatically(proposalId),
   });
   linghuAutomation.subscribe((event) => {
     audit.recordEvent("linghu.automation.state_changed", { reason: event.reason, enabled: event.state.enabled, cycle: event.state.cycle, module: event.state.currentModule }, event.state.activeTaskId || undefined);

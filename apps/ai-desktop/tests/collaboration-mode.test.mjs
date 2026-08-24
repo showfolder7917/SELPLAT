@@ -217,12 +217,22 @@ test("令狐生产修正先提交韩立审批并在返还任务后恢复持续�
         return proposalState;
       },
       readEvolutionState: () => proposalState,
+      reviseReturnedProposal: (proposalId) => {
+        const original = proposalState.proposals.find((proposal) => proposal.proposalId === proposalId);
+        proposalState.proposals.push({ ...original, proposalId: "linghu-proposal-2", version: 2, status: "pending-approval", supersedesProposalId: proposalId, approvals: [] });
+        return proposalState;
+      },
     });
     await facade.checkNow();
     assert.equal(facade.state().pendingRepairProposalId, "linghu-proposal-1");
     assert.equal(collaborationStore.state().tasks.length, 0, "审批前不得创建修正执行任务");
-    proposalState.proposals[0].status = "approved";
-    collaborationStore.submitTask({ title: "令狐审批后修正", problemStatement: "修正持续运行 Bug", confirmedIntent: "按审批方向修正", constraints: [], acceptanceCriteria: ["稳定运行"], workspaceState, locale: "zh-CN", mergeStrategy: "INDEPENDENT", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor", evolutionProposalId: "linghu-proposal-1" });
+    proposalState.proposals[0].status = "supplement-required";
+    proposalState.proposals[0].approvals = [{ advice: "补充修改位置和预期结果" }];
+    await facade.checkNow();
+    assert.equal(facade.state().pendingRepairProposalId, "linghu-proposal-2");
+    assert.match(facade.state().blockingReason, /已依据审批意见提交 v2/);
+    proposalState.proposals[1].status = "approved";
+    collaborationStore.submitTask({ title: "令狐审批后修正", problemStatement: "修正持续运行 Bug", confirmedIntent: "按审批方向修正", constraints: [], acceptanceCriteria: ["稳定运行"], workspaceState, locale: "zh-CN", mergeStrategy: "INDEPENDENT", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor", evolutionProposalId: "linghu-proposal-2" });
     await facade.checkNow();
     assert.equal(facade.state().pendingRepairProposalId, null);
     assert.equal(facade.state().activeTaskId, collaborationStore.state().tasks[0].taskId);
@@ -869,7 +879,9 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.81\.0/);
+  assert.match(rule, /rule_version = 5\.83\.0/);
+  assert.match(rule, /upgrade_record_5_83 = [^\n]*所有登记人物共用原提交人校验和不可覆盖修订版本/);
+  assert.match(rule, /collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow[\s\S]*no_display_name_business_branch/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
   assert.match(rule, /linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness/);

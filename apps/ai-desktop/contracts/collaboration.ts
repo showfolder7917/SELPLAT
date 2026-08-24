@@ -201,6 +201,9 @@ export interface CollaborationTask {
   initiator: CollaborationParticipantSnapshot | null;
   automationSource: CollaborationAutomationSource | null;
   evolutionProposalId: string | null;
+  selfUpgradeTargetMemberId: string | null;
+  selfUpgradeCapabilityScope: string | null;
+  sourceEvolutionApprovalId: string | null;
   historyCompleteness: "complete" | "legacy-partial";
   snapshot: CollaborationTaskSnapshot;
   plans: CollaborationRequirementPlan[];
@@ -270,6 +273,9 @@ export interface SubmitCollaborationTaskRequest {
   preferredExecutorMemberId?: string;
   automationSource?: CollaborationAutomationSource;
   evolutionProposalId?: string;
+  selfUpgradeTargetMemberId?: string;
+  selfUpgradeCapabilityScope?: string;
+  sourceEvolutionApprovalId?: string;
 }
 
 export interface CollaborationStateEvent {

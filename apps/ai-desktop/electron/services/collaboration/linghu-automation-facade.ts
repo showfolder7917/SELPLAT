@@ -24,6 +24,7 @@ export interface LinghuAutomationFacadeOptions {
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
   submitRepairProposal?(request: CreateLinghuRepairProposalRequest): NangongEvolutionState;
   readEvolutionState?(): NangongEvolutionState;
+  reviseReturnedProposal?(proposalId: string): NangongEvolutionState;
 }
 
 /** 令狐老祖自动保障的唯一入口；界面和定时器只调用本 Facade，不直接依赖调度、恢复与持久化实现。 */
@@ -37,6 +38,7 @@ export class LinghuAutomationFacade {
   readonly #runUnifiedTestAndRestart: LinghuAutomationFacadeOptions["runUnifiedTestAndRestart"];
   readonly #submitRepairProposal: LinghuAutomationFacadeOptions["submitRepairProposal"];
   readonly #readEvolutionState: LinghuAutomationFacadeOptions["readEvolutionState"];
+  readonly #reviseReturnedProposal: LinghuAutomationFacadeOptions["reviseReturnedProposal"];
   #timer: ReturnType<typeof setInterval> | null = null;
   #checking = false;
 
@@ -50,6 +52,7 @@ export class LinghuAutomationFacade {
     this.#runUnifiedTestAndRestart = options.runUnifiedTestAndRestart;
     this.#submitRepairProposal = options.submitRepairProposal;
     this.#readEvolutionState = options.readEvolutionState;
+    this.#reviseReturnedProposal = options.reviseReturnedProposal;
   }
 
   state(): LinghuAutomationState { return this.#store.state(); }
@@ -254,7 +257,19 @@ export class LinghuAutomationFacade {
           return;
         }
         if (proposal?.status === "supplement-required" || proposal?.status === "rejected") {
-          this.#store.updateRuntime("automation.repair_requires_revision", (current) => { current.blockingReason = `令狐修正方案 ${proposal.proposalId} 状态为 ${proposal.status}，等待补充事实或人工新方向`; });
+          if (this.#reviseReturnedProposal && proposal.approvals.at(-1)?.advice.trim()) {
+            const revisedState = this.#reviseReturnedProposal(proposal.proposalId);
+            const revised = revisedState.proposals.find((candidate) => candidate.supersedesProposalId === proposal.proposalId);
+            if (revised) {
+              this.#store.updateRuntime("automation.repair_revised", (current) => {
+                current.pendingRepairProposalId = revised.proposalId;
+                current.recoveryCheckpoint = `repair-revised:${proposal.proposalId}:${revised.proposalId}`;
+                current.blockingReason = `令狐已依据审批意见提交 v${revised.version}，等待韩立再次审批`;
+              });
+              return;
+            }
+          }
+          this.#store.updateRuntime("automation.repair_requires_revision", (current) => { current.blockingReason = `令狐修正方案 ${proposal.proposalId} 状态为 ${proposal.status}，缺少明确审批意见，等待人工补充`; });
           return;
         }
         this.#store.updateRuntime("automation.repair_proposal_missing", (current) => { current.pendingRepairProposalId = null; current.blockingReason = "令狐修正方案记录缺失，已保留恢复点并准备重新提交"; });

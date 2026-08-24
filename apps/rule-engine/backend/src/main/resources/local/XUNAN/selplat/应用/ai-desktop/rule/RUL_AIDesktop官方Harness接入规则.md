@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.82.0 固定 Electron 人物业务动作禁止依赖系统 prompt，并让审批与课题输入在当前工作栏就地提交和反馈。 -->
-rule_version = 5.82.0
+<!-- 5.83.0 固定所有协同人物使用同一套可追溯的自身能力升级闭环，不再按人物姓名复制退回和修订逻辑。 -->
+rule_version = 5.83.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -208,6 +208,8 @@ upgrade_record_5_80 = 2026-08-24:南宫婉独立只读Codex对话_聊天快照�
 upgrade_record_5_81 = 2026-08-24:取消终态立即释放令狐活动指针并继续同模块审批派发_终态任务不进入活动快照_合并中止前记录冲突文件stdout_stderr基线和resultSHA_冲突恢复必须签发当前主线新修订_禁止旧resultSHA重复集成_韩立审批中心与会话分离_南宫婉连续聊天截图附件课题侧栏_SELUI正式出口和主题令牌
 <!-- 5.82.0 防止 Electron 不支持 window.prompt 时韩立和南宫婉按钮在 IPC 发送前静默失效。 -->
 upgrade_record_5_82 = 2026-08-24:韩立人工审批使用右栏审批建议编辑器_通过退回补充驳回直接发送IPC_提交中禁用和错误就地显示_南宫婉讨论转课题新建课题形成提案全部使用可见内嵌表单_禁止人物业务动作依赖window_prompt_完整点击到分发和完成记录回归
+<!-- 5.83.0 防止退回意见只改变状态而无人修订，或不同人物各自复制一套升级分支。 -->
+upgrade_record_5_83 = 2026-08-25:审批意见区分补当前方案与升级提交人自身能力_所有登记人物共用原提交人校验和不可覆盖修订版本_修订保留替代提案与反馈审批链_令狐保障开启时退回方案直接调用同一通用修订能力且不依赖南宫自动演化开关_再次批准后任务固定升级对象能力范围和审批依据_自身规则提示工作流或实现必须真实修改并回归验证
 
 <!-- 问题：直接调用模型 API、一次性 SDK 或自制认证会丢失 Codex 会话事件、ChatGPT 账号能力和官方审批边界。 -->
 <!-- 场景：SELPLAT 的 ai-desktop 开发版接入、升级或调用 Codex。 -->
@@ -548,6 +550,8 @@ han_li_unified_evolution_approval_contract = source_nangong_or_linghu + title_ty
 han_li_source_specific_automatic_approval_contract = independent_nangong_and_linghu_switches_default_off + complete_fact_gate + same_origin_and_type_manual_history + insufficient_fact_or_history_returns_supplement + later_manual_correction_wins
 <!-- Electron 人物工作区的审批、课题和提案输入必须使用当前页面可见编辑器；系统 prompt 不得成为发送 IPC 的前置条件。 -->
 evolution_person_action_input_contract = visible_inline_editor_in_owning_workspace + no_window_prompt_before_ipc + direct_approve_supplement_reject_dispatch_actions + pending_disables_duplicate_submission + local_error_feedback + interaction_test_covers_topic_proposal_manual_decisions_distribution_and_completed_record
+<!-- 所有人物的自身能力升级只依赖登记人物身份和提案归属，禁止按南宫婉、令狐或未来人物姓名分支实现。 -->
+collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow + approval_feedback_target_proposal_or_submitter_capability + explicit_capability_scope + original_submitter_only_revision + immutable_version_and_supersedes_chain + revision_feedback_approval_link + approved_task_target_member_scope_and_approval_audit + modify_own_rule_prompt_workflow_or_implementation + regression_and_integration_completion_record + no_display_name_business_branch
 <!-- 令狐持续修正发现的 Bug 方向必须先形成方案；审批通过后返还令狐并携带 proposalId 进入既有持续恢复和测试链。 -->
 linghu_repair_approval_and_return_contract = detected_bug_to_versioned_repair_proposal + no_repair_execution_before_evolution_approval + approved_return_to_linghu_ancestor + initiator_and_preferred_executor_linghu_ancestor + stable_proposalId + existing_recovery_validation_and_unified_test_pipeline
 <!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->

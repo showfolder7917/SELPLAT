@@ -81,7 +81,7 @@ let linghuAutomationState = {
   prompts: [{ promptId: "linghu-default-flow-guardian", title: linghuDefault.title, content: linghuDefault.content, enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
-let nangongEvolutionState = { version: 2, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
+let nangongEvolutionState = { version: 3, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
 const publishNangongEvolution = (reason) => {
   nangongEvolutionState.updatedAt = new Date().toISOString();
   const event = { state: structuredClone(nangongEvolutionState), reason, topicId: nangongEvolutionState.activeTopicId, proposalId: null };
@@ -278,7 +278,7 @@ contextBridge.exposeInMainWorld("desktop", {
     const now = new Date().toISOString();
     const proposalId = `interaction-proposal-${Date.now()}`;
     topic.status = "pending-approval"; topic.currentProposalVersion += 1; topic.recoveryPoint = "proposal-awaiting-approval"; topic.updatedAt = now;
-    nangongEvolutionState.proposals.push({ proposalId, topicId, version: topic.currentProposalVersion, title: topic.title, type: request.type, origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: request.content, evidence: topic.evidence, impactScope: topic.scope, exclusions: topic.exclusions, risks: request.risks, rollbackPlan: request.rollbackPlan, acceptanceCriteria: topic.acceptanceCriteria, distributionUnits: [{ title: topic.title, scope: topic.scope[0], acceptanceCriteria: topic.acceptanceCriteria }], status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now });
+    nangongEvolutionState.proposals.push({ proposalId, topicId, version: topic.currentProposalVersion, title: topic.title, type: request.type, origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", purpose: "work-proposal", targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null, supersedesProposalId: null, revisionFeedbackApprovalId: null, content: request.content, evidence: topic.evidence, impactScope: topic.scope, exclusions: topic.exclusions, risks: request.risks, rollbackPlan: request.rollbackPlan, acceptanceCriteria: topic.acceptanceCriteria, distributionUnits: [{ title: topic.title, scope: topic.scope[0], acceptanceCriteria: topic.acceptanceCriteria }], status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now });
     return publishNangongEvolution("proposal.created");
   },
   createLinghuRepairProposal: async () => publishNangongEvolution("linghu.proposal.created"),
@@ -287,10 +287,20 @@ contextBridge.exposeInMainWorld("desktop", {
     if (!proposal) throw new Error("演化提案不存在。");
     const now = new Date().toISOString();
     proposal.status = request.decision; proposal.updatedAt = now;
-    proposal.approvals.push({ approvalId: `interaction-approval-${Date.now()}`, proposalId, decision: request.decision, source: "manual-user", approverMemberId: "user", approverDisplayName: "用户", advice: request.advice || "", referencedApprovalIds: [], preferenceSnapshotVersion: ++nangongEvolutionState.preferenceSnapshotVersion, createdAt: now });
+    proposal.approvals.push({ approvalId: `interaction-approval-${Date.now()}`, proposalId, decision: request.decision, source: "manual-user", approverMemberId: "user", approverDisplayName: "用户", advice: request.advice || "", feedbackTarget: request.feedbackTarget || "proposal-content", capabilityScope: request.feedbackTarget === "submitter-capability" ? request.capabilityScope : null, referencedApprovalIds: [], preferenceSnapshotVersion: ++nangongEvolutionState.preferenceSnapshotVersion, createdAt: now });
     const topic = nangongEvolutionState.topics.find((item) => item.topicId === proposal.topicId);
     if (topic) { topic.status = request.decision; topic.recoveryPoint = request.decision === "approved" ? "approved-returned-to-nangong" : request.decision; topic.updatedAt = now; }
     return publishNangongEvolution("proposal.decided");
+  },
+  reviseEvolutionProposal: async (proposalId, request) => {
+    const previous = nangongEvolutionState.proposals.find((item) => item.proposalId === proposalId);
+    if (!previous || !["supplement-required", "rejected"].includes(previous.status)) throw new Error("提案不在可修订状态。");
+    if (previous.submitterMemberId !== request.submitterMemberId) throw new Error("只能由原提交人重新提交该提案。");
+    const feedback = previous.approvals.at(-1); const topic = nangongEvolutionState.topics.find((item) => item.topicId === previous.topicId); const now = new Date().toISOString();
+    topic.currentProposalVersion += 1; topic.status = "pending-approval"; topic.recoveryPoint = `revised-from:${previous.proposalId}`; topic.updatedAt = now;
+    const revised = { ...structuredClone(previous), proposalId: `interaction-revised-${Date.now()}`, version: topic.currentProposalVersion, type: feedback.feedbackTarget === "submitter-capability" ? "规则优化" : previous.type, purpose: feedback.feedbackTarget === "submitter-capability" ? "self-capability-upgrade" : previous.purpose, targetMemberId: feedback.feedbackTarget === "submitter-capability" ? previous.submitterMemberId : previous.targetMemberId, targetMemberDisplayName: feedback.feedbackTarget === "submitter-capability" ? previous.submitterDisplayName : previous.targetMemberDisplayName, capabilityScope: feedback.capabilityScope || previous.capabilityScope, supersedesProposalId: previous.proposalId, revisionFeedbackApprovalId: feedback.approvalId, content: request.content, evidence: request.evidence, impactScope: request.impactScope, risks: request.risks, rollbackPlan: request.rollbackPlan, acceptanceCriteria: request.acceptanceCriteria, distributionUnits: request.impactScope.map((scope) => ({ title: `${previous.title} · ${scope}`, scope, acceptanceCriteria: request.acceptanceCriteria })), status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now };
+    nangongEvolutionState.proposals.push(revised);
+    return publishNangongEvolution("proposal.revised");
   },
   autoApproveEvolutionProposal: async () => publishNangongEvolution("proposal.auto-decided"),
   dispatchEvolutionProposal: async (proposalId) => {

@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld("desktop", {
   createEvolutionProposal: (topicId: string, request: unknown) => ipcRenderer.invoke("desktop:create-evolution-proposal", topicId, request),
   createLinghuRepairProposal: (request: unknown) => ipcRenderer.invoke("desktop:create-linghu-repair-proposal", request),
   decideEvolutionProposal: (proposalId: string, request: unknown) => ipcRenderer.invoke("desktop:decide-evolution-proposal", proposalId, request),
+  reviseEvolutionProposal: (proposalId: string, request: unknown) => ipcRenderer.invoke("desktop:revise-evolution-proposal", proposalId, request),
   autoApproveEvolutionProposal: (proposalId: string) => ipcRenderer.invoke("desktop:auto-approve-evolution-proposal", proposalId),
   dispatchEvolutionProposal: (proposalId: string) => ipcRenderer.invoke("desktop:dispatch-evolution-proposal", proposalId),
   onNangongEvolutionState: (listener: (event: unknown) => void) => {

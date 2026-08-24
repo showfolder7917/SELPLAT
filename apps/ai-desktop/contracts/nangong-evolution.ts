@@ -6,6 +6,8 @@ export type EvolutionProposalOrigin = "nangong" | "linghu";
 export type EvolutionTopicStatus = "registered" | "investigating" | "pending-approval" | "supplement-required" | "rejected" | "approved" | "executing" | "verifying" | "completed" | "blocked";
 export type EvolutionApprovalDecision = "approved" | "rejected" | "supplement-required";
 export type EvolutionApprovalSource = "manual-user" | "automatic-han-li";
+export type EvolutionFeedbackTarget = "proposal-content" | "submitter-capability";
+export type EvolutionProposalPurpose = "work-proposal" | "self-capability-upgrade";
 
 export interface EvolutionTopic {
   topicId: string;
@@ -34,6 +36,8 @@ export interface EvolutionApproval {
   approverMemberId: "han-li" | "user";
   approverDisplayName: "韩立" | "用户";
   advice: string;
+  feedbackTarget: EvolutionFeedbackTarget;
+  capabilityScope: string | null;
   referencedApprovalIds: string[];
   preferenceSnapshotVersion: number;
   createdAt: string;
@@ -46,8 +50,14 @@ export interface EvolutionProposal {
   title: string;
   type: EvolutionProposalType;
   origin: EvolutionProposalOrigin;
-  submitterMemberId: "nangong-wan" | "linghu-ancestor";
-  submitterDisplayName: "南宫婉" | "令狐老祖";
+  submitterMemberId: string;
+  submitterDisplayName: string;
+  purpose: EvolutionProposalPurpose;
+  targetMemberId: string | null;
+  targetMemberDisplayName: string | null;
+  capabilityScope: string | null;
+  supersedesProposalId: string | null;
+  revisionFeedbackApprovalId: string | null;
   content: string;
   evidence: string[];
   impactScope: string[];
@@ -65,7 +75,7 @@ export interface EvolutionProposal {
 }
 
 export interface NangongEvolutionState {
-  version: 2;
+  version: 3;
   automaticEvolutionEnabled: boolean;
   automaticNangongApprovalEnabled: boolean;
   automaticLinghuApprovalEnabled: boolean;
@@ -143,6 +153,19 @@ export interface CreateEvolutionProposalRequest {
 export interface DecideEvolutionProposalRequest {
   decision: EvolutionApprovalDecision;
   advice?: string;
+  feedbackTarget?: EvolutionFeedbackTarget;
+  capabilityScope?: string;
+}
+
+/** 原提交人依据人工意见补充调查，并以不可覆盖的新版本重新提交。 */
+export interface ReviseEvolutionProposalRequest {
+  submitterMemberId: string;
+  content: string;
+  evidence: string[];
+  impactScope: string[];
+  risks: string[];
+  rollbackPlan: string;
+  acceptanceCriteria: string[];
 }
 
 export interface NangongEvolutionStateEvent {

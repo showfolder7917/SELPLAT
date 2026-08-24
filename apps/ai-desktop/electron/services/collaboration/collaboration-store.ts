@@ -162,6 +162,9 @@ export class CollaborationStore {
       initiator: participantSnapshot(initiatorMember),
       automationSource: request.automationSource || null,
       evolutionProposalId: request.evolutionProposalId?.trim() || null,
+      selfUpgradeTargetMemberId: request.selfUpgradeTargetMemberId?.trim() || null,
+      selfUpgradeCapabilityScope: request.selfUpgradeCapabilityScope?.trim() || null,
+      sourceEvolutionApprovalId: request.sourceEvolutionApprovalId?.trim() || null,
       historyCompleteness: "complete",
       snapshot: {
         title: request.title.trim().slice(0, 160) || normalizedIntent.slice(0, 80),
@@ -394,6 +397,9 @@ function mergeDefaultMembers(state: CollaborationState): void {
   for (const task of state.tasks) {
     task.preferredExecutorMemberId ??= null;
     task.evolutionProposalId ??= null;
+    task.selfUpgradeTargetMemberId ??= null;
+    task.selfUpgradeCapabilityScope ??= null;
+    task.sourceEvolutionApprovalId ??= null;
     task.recoveryTargetState ??= null;
     task.reviewAttempts ??= [];
     migrateTaskHistory(task, state);
