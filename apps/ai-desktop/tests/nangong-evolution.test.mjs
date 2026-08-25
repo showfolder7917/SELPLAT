@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
@@ -9,9 +9,18 @@ import { controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });
 const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: "/workspace", permission: "workspace-write" }] };
+const nangongPromptSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
 function topicRequest(title = "协同审批分层") { return { title, goal: "把演化方向审批从执行审核中独立出来", scope: ["AI Desktop"], exclusions: ["其他应用"], evidence: ["现有审核只覆盖执行方案"], acceptanceCriteria: ["提案审批与执行审核具有独立记录"], workspaceState, locale: "zh-CN" }; }
 function proposalRequest() { return { type: "代码修正", content: "建立独立演化审批入口，审批通过后返还南宫婉分发。", risks: ["历史记录迁移"], rollbackPlan: "保留旧记录并关闭三项自动开关。" }; }
 const conversation = { async send(_request, context) { return { text: `南宫婉调查结论：${context}`, itemCount: 1 }; }, async newChat() {} };
+
+test("南宫婉会话提示固定自然表达与只读调查边界", () => {
+  assert.match(nangongPromptSource, /语气克制、温和、有判断/);
+  assert.match(nangongPromptSource, /短问题直接短答/);
+  assert.match(nangongPromptSource, /不使用“结论：”“建议：”“1、2、3”/);
+  assert.match(nangongPromptSource, /不把推断或用户陈述说成既定事实/);
+  assert.match(nangongPromptSource, /不得声称已形成正式课题、已提交审批或将开始修改/);
+});
 
 test("自动演化、两个来源审批和自动分发四项开关独立持久化", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-switches-"));
@@ -91,9 +100,11 @@ test("南宫婉对话持久化并冻结为正式课题快照", async () => {
     let state = await facade.sendConversationMessage({ message: "调查令狐持续修正 Bug", attachmentIds: ["screenshot-1"], workspaceState, locale: "zh-CN" });
     assert.equal(state.conversation.messages.length, 2);
     assert.deepEqual(state.conversation.messages[0].attachmentIds, ["screenshot-1"]);
-    state = facade.convertConversationToTopic({ title: "令狐持续修正演化", goal: "修正 Bug 并维持稳定运行", scope: ["AI Desktop"], acceptanceCriteria: ["修正方案先审批"], workspaceState, locale: "zh-CN" });
+    assert.throws(() => facade.convertConversationToTopic({ title: "未确认转换", goal: "不能自动变成正式课题", scope: ["AI Desktop"], acceptanceCriteria: ["用户明确确认"], workspaceState, locale: "zh-CN" }), /用户明确确认/);
+    state = facade.convertConversationToTopic({ confirmedByUser: true, title: "令狐持续修正演化", goal: "修正 Bug 并维持稳定运行", scope: ["AI Desktop"], acceptanceCriteria: ["修正方案先审批"], workspaceState, locale: "zh-CN" });
     assert.equal(state.topics.at(-1).sourceConversationMessageIds.length, 2);
-    assert.match(state.topics.at(-1).evidence[0], /南宫婉调查结论/);
+    assert.match(state.topics.at(-1).evidence[0], /用户提供的材料/);
+    assert.match(state.topics.at(-1).evidence[1], /南宫婉调查记录（含待验证判断）/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
