@@ -20,16 +20,17 @@
 启动关系：
 
 ```text
-scripts/startup/start-host.ps1
+启动SELPLAT.ps1 / 启动SELPLAT.bat
               │
+              ├── 结束占用 8080 的旧进程
               ▼
 apps/host/backend
               │
-              ├── 显式装配 reference-data、uniauth 等业务模块
+              ├── 显式装配服务端业务模块
               └── 统一发布 shared/frontend/sel-ui 公共资源
 ```
 
-当前 Host 已显式装配 `reference-data` 与 `uniauth`，并通过一个 `8080` 端口发布 Uniauth 页面和 `/sel/**` 公共资源。Uniauth 仍保留独立启动入口，但业务模块配置已经与启动类分离，Host 不会启动第二个 Web 容器。
+当前 Host 已显式装配 `reference-data`、`uniauth`、`mda`、`ai-factiory` 与 `japanese`，并通过一个 `8080` 端口发布业务页面和 `/sel/**` 公共资源。服务端业务模块不提供面向用户的独立启动入口；`apps/ai-desktop` 是独立桌面应用，不参与本入口。
 
 统一桌面入口：
 

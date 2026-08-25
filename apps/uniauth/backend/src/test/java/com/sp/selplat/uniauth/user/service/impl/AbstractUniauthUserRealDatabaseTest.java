@@ -1,6 +1,6 @@
 package com.sp.selplat.uniauth.user.service.impl;
 
-import com.sp.selplat.uniauth.UniauthBackendApplication;
+import com.sp.selplat.testsupport.UniauthTestApplication;
 import com.sp.selplat.uniauth.user.service.UniauthUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -8,7 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 // 用户真实数据库测试基类只提供完整 Spring 上下文、事务隔离和真实业务依赖，具体 Case 仍按生产方法拆到独立测试类。
-@SpringBootTest(classes = UniauthBackendApplication.class)
+@SpringBootTest(classes = UniauthTestApplication.class)
 @Transactional
 abstract class AbstractUniauthUserRealDatabaseTest {
 

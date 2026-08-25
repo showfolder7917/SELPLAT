@@ -112,14 +112,17 @@ class MdaProjectGeneratorServiceImplTest {
         assertThat(project.resolve(
                 "backend/src/main/java/com/sp/selplat/japan/controller"))
                 .doesNotExist();
-        assertThat(Files.readString(project.resolve(
-                "backend/src/main/java/com/sp/selplat/japan/JapanBackendApplication.java")))
-                .contains("\"com.sp.selplat.common.service\"")
-                .doesNotContain("ReferenceDataController.class")
-                .doesNotContain("ReferenceDataProviderRegistry.class")
-                .doesNotContain("\"com.sp.selplat.common.db\"");
+        assertThat(project.resolve(
+                "backend/src/main/java/com/sp/selplat/japan/JapanBackendApplication.java"))
+                .doesNotExist();
         assertThat(Files.readString(project.resolve("backend/build.gradle")))
+                .doesNotContain("id 'application'")
+                .doesNotContain("mainClass")
                 .doesNotContain("apps:reference-data:backend");
+        assertThat(Files.readString(project.resolve(
+                "backend/src/main/java/com/sp/selplat/japan/common/config/JapanModuleConfiguration.java")))
+                .contains("@ComponentScan(basePackages = \"com.sp.selplat.japan\")")
+                .doesNotContain("BackendApplication");
         assertThat(project.resolve(
                 "backend/src/main/java/com/sp/selplat/japan/common/service"))
                 .doesNotExist();

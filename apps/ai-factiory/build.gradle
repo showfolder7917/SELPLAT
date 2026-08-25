@@ -1,6 +1,0 @@
-// AI 工厂根项目提供唯一人工启动入口；Java 构建和运行实现仍由 backend 子项目承担。
-tasks.register('run') {
-    group = 'application'
-    description = '从 apps/ai-factiory 统一启动 AI 工厂 Java 后端和静态页面'
-    dependsOn ':apps:ai-factiory:backend:run'
-}

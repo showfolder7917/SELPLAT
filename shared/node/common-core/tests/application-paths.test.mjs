@@ -6,10 +6,10 @@ import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot, reso
 
 test("不同应用取得互不冲突的标准数据根", () => {
   const desktop = resolveApplicationDataPaths({ selplatRoot: "/workspace/SELPLAT", applicationName: "ai-desktop", pathApi: path.posix });
-  const memory = resolveApplicationDataPaths({ selplatRoot: "/workspace/SELPLAT", applicationName: "ai-memory", pathApi: path.posix });
+  const sample = resolveApplicationDataPaths({ selplatRoot: "/workspace/SELPLAT", applicationName: "sample-app", pathApi: path.posix });
   assert.equal(desktop.pendingTestRoot, "/workspace/SELPLAT/OPTION/temp/ai-desktop/执行日志/待执行/测试");
   assert.equal(desktop.archiveLogRoot, "/workspace/SELPLAT/log/ai-desktop/归档日志");
-  assert.notEqual(desktop.cacheRoot, memory.cacheRoot);
+  assert.notEqual(desktop.cacheRoot, sample.cacheRoot);
 });
 
 test("Windows 路径使用同一目录语义", () => {
@@ -24,7 +24,7 @@ test("工程名和动态标识拒绝路径逃逸", () => {
 });
 
 test("应用名从真实源码根解析且年月分区稳定", () => {
-  assert.equal(resolveApplicationNameFromSourceRoot("/workspace/SELPLAT/apps/ai-memory", path.posix), "ai-memory");
+  assert.equal(resolveApplicationNameFromSourceRoot("/workspace/SELPLAT/apps/sample-app", path.posix), "sample-app");
   assert.equal(resolveArchiveMonth("2026-08-23T01:02:03.000Z"), "2026-08");
   assert.throws(() => resolveArchiveMonth("invalid"));
 });

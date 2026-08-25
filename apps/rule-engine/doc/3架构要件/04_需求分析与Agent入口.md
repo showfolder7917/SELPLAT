@@ -7,7 +7,7 @@
 ## 2. 入口结构
 
 ```text
-apps/ai-memory/
+已退役本地驱动应用/
 ├─ AGENTS_AI产出工厂总入口.md
 ├─ IDX_AI产出工厂总索引.md
 ├─ 需求文档/AGENTS_需求文档入口.md

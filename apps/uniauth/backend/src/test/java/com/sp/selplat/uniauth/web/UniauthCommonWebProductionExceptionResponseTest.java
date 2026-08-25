@@ -1,6 +1,6 @@
 package com.sp.selplat.uniauth.web;
 
-import com.sp.selplat.uniauth.UniauthBackendApplication;
+import com.sp.selplat.testsupport.UniauthTestApplication;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * 测试通过随机端口访问真实应用，确保下沉后的异常处理和请求追踪实际协作。
  */
 @SpringBootTest(
-    classes = UniauthBackendApplication.class,
+    classes = UniauthTestApplication.class,
     properties = "selplat.error.include-stacktrace=false",
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )

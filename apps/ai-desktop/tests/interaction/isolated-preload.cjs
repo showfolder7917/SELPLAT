@@ -147,7 +147,6 @@ contextBridge.exposeInMainWorld("desktop", {
     { name: "gradle", kind: "directory" },
     { name: "log", kind: "directory" },
     { name: "OPTION", kind: "directory" },
-    { name: "package-meta", kind: "directory" },
     { name: "scripts", kind: "directory" },
     { name: "shared", kind: "directory" },
   ],

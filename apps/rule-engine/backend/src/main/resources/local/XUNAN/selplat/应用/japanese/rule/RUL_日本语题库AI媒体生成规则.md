@@ -165,7 +165,7 @@ japanese_common_package_boundary.10 = util/process
 japanese_crud_abstraction_policy = single_business_keep_in_business_service
 <!-- japanese_crud_abstraction_policy.2 的当前独立事实为 extract_only_after_multiple_real_consumers。 -->
 japanese_crud_abstraction_policy.2 = extract_only_after_multiple_real_consumers
-<!-- Japanese 随模块发布 Reference Data 默认声明；Host 自动补齐页面、Grid、列、查询元素、题型树和 Window，独立启动时使用页面默认值。 -->
+<!-- Japanese 随模块发布 Reference Data 默认声明；Host 自动补齐页面、Grid、列、查询元素、题型树和 Window，声明尚未登记时使用页面默认值。 -->
 japanese_reference_data_policy = classpath_default_manifest
 <!-- japanese_reference_data_policy.2 的当前独立事实为 project_and_page_key_lookup。 -->
 japanese_reference_data_policy.2 = project_and_page_key_lookup

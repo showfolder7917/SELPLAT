@@ -59,10 +59,9 @@ class PythonAbilityMigrationTests(unittest.TestCase):
         cls.pptx_tools = sys.modules["selplat_xunan_pptx_tools"]
 
     def test_expected_python_abilities_exist(self) -> None:
-        """旧 Java 和 Node 的每类职责都必须有正式 Python 替代入口。"""
+        """迁移后仍有效的旧 Java 和 Node 职责必须有正式 Python 替代入口。"""
 
         expected = {
-            "rule_engine_backend.py",
             "cross_platform_tools.py",
             "pinyin_docx_tools.py",
             "teaching_image_tools.py",
@@ -96,10 +95,11 @@ class PythonAbilityMigrationTests(unittest.TestCase):
         ]
         self.assertEqual([], misplaced)
 
-    def test_rule_engine_is_direct_python_without_gradle_subproject(self) -> None:
-        """rule-engine 必须直接运行 Python，不能保留模块 Gradle 构建入口。"""
+    def test_rule_engine_is_on_demand_python_without_gradle_or_http(self) -> None:
+        """rule-engine 只保留按需 Python 能力，不得恢复 Gradle 子项目或常驻 HTTP 入口。"""
 
         self.assertFalse((BACKEND_ROOT / "build.gradle").exists())
+        self.assertFalse((XUNAN_CODE_ROOT / "abilities/rule_engine_backend.py").exists())
         settings_text = (PROJECT_ROOT / "settings.gradle").read_text(encoding="utf-8")
         self.assertNotIn("include('apps:rule-engine:backend')", settings_text)
         self.assertNotIn("project(':apps:rule-engine:backend')", settings_text)
@@ -108,19 +108,18 @@ class PythonAbilityMigrationTests(unittest.TestCase):
         self.assertIn("selplatSpecialGateTaskPaths['rule-engine']", root_build_text)
         self.assertNotIn("nonJavaLeafProjectPaths", root_build_text)
 
-    def test_vscode_has_no_rule_engine_java_configuration(self) -> None:
-        """VS Code 不得把 Python-only rule-engine 继续导入为 Java 启动项目。"""
+    def test_vscode_has_no_rule_engine_runtime_configuration(self) -> None:
+        """VS Code 不得把按需 Python 能力重新暴露为独立 Java 或 HTTP 服务。"""
 
         tasks = json.loads((PROJECT_ROOT / ".vscode/tasks.json").read_text(encoding="utf-8"))
         labels = {task["label"] for task in tasks["tasks"]}
         self.assertNotIn("acode-java: compile", labels)
         self.assertNotIn("rule-engine:classes", labels)
-        self.assertIn("rule-engine:run", labels)
-        rule_engine_run = next(task for task in tasks["tasks"] if task["label"] == "rule-engine:run")
-        self.assertIn("rule_engine_backend.py", rule_engine_run["command"])
-        self.assertNotIn("gradlew", rule_engine_run["command"])
-        self.assertIn("py -3", rule_engine_run["windows"]["command"])
-        self.assertNotIn("gradlew", rule_engine_run["windows"]["command"])
+        self.assertNotIn("rule-engine:run", labels)
+        self.assertNotIn(
+            "rule_engine_backend.py",
+            json.dumps(tasks, ensure_ascii=False),
+        )
 
         launch = json.loads((PROJECT_ROOT / ".vscode/launch.json").read_text(encoding="utf-8"))
         self.assertNotIn(

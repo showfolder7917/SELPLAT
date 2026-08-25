@@ -115,7 +115,7 @@ class PlatformRuntimeApplicationTest {
                 // 删除动作必须加载紧凑确认控件，不得用完整业务窗口承载二次确认。
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "/sel/components/confirm-dialog/selConfirmDialog.js")));
-        // Japanese 必须由统一 Host 发布，禁止只在业务模块独立启动时可访问。
+        // Japanese 必须由统一 Host 发布，禁止只在模块隔离测试上下文中可访问。
         mockMvc.perform(get("/japanese/japanese.html"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("data-japanese-app")))

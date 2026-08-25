@@ -489,10 +489,12 @@ selplat_scaffold_ui_result = project_or_table_created
 selplat_scaffold_ui_result.2 = restart_required
 <!-- selplat_scaffold_ui_result.3 的当前独立事实为 page_url。 -->
 selplat_scaffold_ui_result.3 = page_url
-<!-- 最终验收必须启动统一 PlatformRuntimeApplication；业务独立启动只能用于局部开发，不能作为完成证据。 -->
+<!-- 最终验收必须启动统一 PlatformRuntimeApplication；生成的服务端业务模块不得提供任何独立启动能力。 -->
 selplat_scaffold_final_runtime = unified_host_required
-<!-- selplat_scaffold_final_runtime.2 的当前独立事实为 standalone_application_not_sufficient。 -->
-selplat_scaffold_final_runtime.2 = standalone_application_not_sufficient
+<!-- 脚手架只生成供 Host 导入的 ModuleConfiguration，不生成 BackendApplication。 -->
+selplat_scaffold_final_runtime.2 = module_configuration_only
+<!-- 生成模块的 Gradle 禁止 application、mainClass 和 run，避免新应用恢复第二套进程生命周期。 -->
+selplat_scaffold_final_runtime.3 = standalone_application_forbidden
 <!-- 交付前必须编译 MDA、执行生成器测试、启动统一 Host 并核对桌面、业务页面、列表和当前真实存在的扩展接口。 -->
 selplat_scaffold_delivery_gate = mda_compile
 <!-- selplat_scaffold_delivery_gate.2 的当前独立事实为 generator_tests。 -->

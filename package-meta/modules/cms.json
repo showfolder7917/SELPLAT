@@ -1,9 +1,0 @@
-{
-  "module_id": "cms",
-  "enabled": false,
-  "app_path": "apps/cms",
-  "dependencies": [
-    "host",
-    "uniauth"
-  ]
-}

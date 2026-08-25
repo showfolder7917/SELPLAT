@@ -3,9 +3,7 @@
 MDA 是只在本地开发环境使用的多数据库管理工具：它在自己的控制库中维护连接配置，再按当前选中的配置动态连接目标数据库，浏览元数据并执行查询或修改 SQL。
 
 - 统一页面：`http://127.0.0.1:8080/mda/mda.html`
-- 独立页面：`http://127.0.0.1:8082/mda/mda.html`
-- 统一启动：`./gradlew --offline :apps:host:backend:run`
-- 独立启动：`./gradlew --offline :apps:mda:backend:run`
+- 工程启动：在 SELPLAT 根目录执行 `启动SELPLAT.ps1` 或 `启动SELPLAT.bat`
 - 离线测试：`./gradlew --offline :apps:mda:backend:test`
 
 ## 数据边界

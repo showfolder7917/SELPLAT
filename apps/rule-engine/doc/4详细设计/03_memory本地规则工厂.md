@@ -2,7 +2,7 @@
 
 ## 1. 计划文件
 
-- `apps/ai-memory/src/main/python/com/sp/selplat/memory/rulefactory/规则编写器.py`
+- `已退役本地驱动应用/src/main/python/com/sp/selplat/memory/rulefactory/规则编写器.py`
 - `.../规则索引器.py`
 - `.../门禁定义器.py`
 - `.../门禁执行器.py`
@@ -10,7 +10,7 @@
 - `.../治理包构建器.py`
 - `.../快照存储器.py`
 
-固定模板与正式只读资源统一放在 `apps/ai-memory/src/main/resources/memory/` 下的 `规则/`、`门禁/`、`入口/`、`智能体/`；任务运行生成的 `RUL_中文`、`GATE_中文`、`IDX_中文`、候选包、样例和证据只能写入 `OPTION/temp/ai-factory/任务/<task_id>/治理候选/` 或同任务的 `门禁/`。顶层 `治理/` 只缓存服务端已批准快照和登记信息。
+固定模板与正式只读资源统一放在 `已退役本地驱动应用/src/main/resources/memory/` 下的 `规则/`、`门禁/`、`入口/`、`智能体/`；任务运行生成的 `RUL_中文`、`GATE_中文`、`IDX_中文`、候选包、样例和证据只能写入 `OPTION/temp/ai-factory/任务/<task_id>/治理候选/` 或同任务的 `门禁/`。顶层 `治理/` 只缓存服务端已批准快照和登记信息。
 
 ## 2. 方法合同
 

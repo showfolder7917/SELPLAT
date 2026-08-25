@@ -24,7 +24,7 @@ load_rule_for_active_user_selplat_node_application_create_organize_migrate_or_st
 <!-- 移动或删除 Node 应用文件、清理源码树生成物或调整 package 脚本和配置入口时加载。 -->
 load_rule_for_active_user_selplat_node_application_file_move_delete_generated_cleanup_or_package_entry_change = SELPLAT_NODE_APPLICATION_PROJECT_STRUCTURE_RULES
 
-<!-- SELPLAT 当前和未来应用统一按真实工程名隔离源码、缓存、构建、临时控制面与长期归档。 -->
+<!-- SELPLAT 当前和未来应用统一按真实工程名隔离源码、缓存、构建、临时控制面与长期归档，并阻止 build、cache 与 OPTION/temp 合并或越过清理门槛。 -->
 SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT应用工程数据目录结构规则.md
 
 <!-- 新建、整理、迁移或检查任一应用的 cache、build、OPTION/temp、log 或源码目录时加载。 -->

@@ -12,15 +12,15 @@
 
 当前状态：规则分层、索引治理和 Python 能力入口已经运行。
 
-Python 运行时依赖登记在 `requirements-python.txt`。本机或 CI 使用已经准备好依赖的
-Python 解释器直接启动；rule-engine 不再注册为 Gradle 子项目，工程也不保存机器绝对路径。
+Python 运行时依赖登记在 `requirements-python.txt`。rule-engine 不注册为 Gradle 子项目，
+也不启动常驻 HTTP 服务；规则加载器、执行器和 abilities 由 Codex、根门禁或明确的 Python
+命令按任务调用，工程不保存机器绝对路径。
 
-运行方式：
+运行边界：
 
-- macOS/Linux 启动：`python3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/rule_engine_backend.py`
-- Windows 启动：`py -3 apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/rule_engine_backend.py`
-- 启动验证：在上述命令末尾追加 `--verify`
-- 健康检查：`http://localhost:8080/health`
+- 唯一服务端 HTTP 入口是 Host 的 `8080`。
+- rule-engine 不提供健康检查、静态页面转发或桌面代理端口。
+- Python 解释器只按任务运行规则加载、执行和可重复能力，命令结束后进程退出。
 
 Python 验证：
 

@@ -2,7 +2,7 @@
 
 ## 1. 计划文件
 
-- `apps/ai-factiory/backend/src/main/java/com/sp/selplat/aifactory/AiFactoryBackendApplication.java`
+- `apps/ai-factiory/backend/src/main/java/com/sp/selplat/aifactory/common/config/AiFactoryModuleConfiguration.java`
 - `.../task/controller/AiTaskController.java`
 - `.../stagerun/controller/AiStageRunController.java`
 - `.../artifact/controller/AiArtifactController.java`

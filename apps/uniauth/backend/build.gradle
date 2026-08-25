@@ -1,12 +1,10 @@
 plugins {
-    // Uniauth 后端需要独立启动，因此使用 application 插件提供 run 入口。
-    id 'application'
     // JaCoCo 为真实业务测试生成覆盖率报告和覆盖门禁。
     id 'jacoco'
 }
 
 dependencies {
-    // Uniauth 独立启动时也从唯一公共模块发布 /sel/**，不再保存应用内源码副本。
+    // Host 运行时从唯一公共模块发布 /sel/**，Uniauth 不保存应用内源码副本。
     runtimeOnly project(':shared:frontend:sel-ui')
     // 复用通用结果、参数和基础工具。
     implementation project(':shared:backend:common-core')
@@ -38,11 +36,6 @@ dependencies {
     testCompileOnly files(rootProject.file("cache/cache-jars/lombok-${lombokVersion}.jar"))
     // 测试注解处理阶段使用同一个离线 Lombok JAR。
     testAnnotationProcessor files(rootProject.file("cache/cache-jars/lombok-${lombokVersion}.jar"))
-}
-
-application {
-    // run 任务固定启动 Uniauth HTTP 服务。
-    mainClass = 'com.sp.selplat.uniauth.UniauthBackendApplication'
 }
 
 tasks.named('processResources') {
@@ -80,7 +73,7 @@ tasks.named('classes') {
     dependsOn ':shared:backend:common-service:jar'
     // 先生成公共 Web JAR，保证 Controller 基类和参数解析器可用。
     dependsOn ':shared:backend:common-web:jar'
-    // 页面启动前生成公共前端资源 JAR，保证独立运行和统一 Host 使用相同组件版本。
+    // Host 装配页面前生成公共前端资源 JAR，保证模块使用统一组件版本。
     dependsOn ':shared:frontend:sel-ui:jar'
 }
 
@@ -89,11 +82,6 @@ tasks.named('jar') {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     // /sel/** 只能由shared:frontend:sel-ui发布，历史输出即使残留也不得重新进入Uniauth JAR。
     exclude 'static/sel/**'
-}
-
-tasks.named('installDist') {
-    // 公共依赖可能同时由模块坐标和离线兜底提供，分发目录只保留一份同名 JAR。
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 jacoco {

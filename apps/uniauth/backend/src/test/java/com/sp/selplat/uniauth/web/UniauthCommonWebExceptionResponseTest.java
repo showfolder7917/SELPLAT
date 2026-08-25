@@ -6,7 +6,7 @@ import com.sp.selplat.common.util.CommonResult;
 import com.sp.selplat.common.util.JsonUtils;
 import com.sp.selplat.common.web.exception.CommonGlobalExceptionHandler;
 import com.sp.selplat.common.web.trace.CommonRequestTraceInterceptor;
-import com.sp.selplat.uniauth.UniauthBackendApplication;
+import com.sp.selplat.testsupport.UniauthTestApplication;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 测试启动随机端口服务器，通过真实 HTTP 调用生产 MVC 链路，不创建业务替身。
  */
 @SpringBootTest(
-    classes = UniauthBackendApplication.class,
+    classes = UniauthTestApplication.class,
     properties = "selplat.error.include-stacktrace=true",
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )

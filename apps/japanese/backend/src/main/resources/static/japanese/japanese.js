@@ -277,7 +277,7 @@
         });
     }
 
-    /** 使用数据库表头；尚未登记或独立启动时回退到页面内同结构默认列。 */
+    /** 使用数据库表头；Reference Data 尚未登记时回退到页面内同结构默认列。 */
     function japaneseBuildColumns() {
         const defaults = [
             { id: "sourceQuestionNo", field: "sourceQuestionNo", label: japaneseText("grid.columns.sourceQuestionNo"), renderer: "text", nowrap: true, width: "90px" },

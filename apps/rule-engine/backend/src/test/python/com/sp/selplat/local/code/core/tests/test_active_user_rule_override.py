@@ -90,10 +90,10 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "ai_rule_driven_execution_and_continuous_rule_package_growth",
         ),
         (
-            "AI_FACTORY_LOCAL_DRIVER_AND_TASK_RUNTIME_RULES",
+            "AI_FACTORY_SERVER_MANAGEMENT_AND_TASK_RUNTIME_RULES",
             "selplat",
-            "selplat/应用/rule-engine/rule/RUL_AI工厂本地驱动与任务目录规则.md",
-            "ai_factory_only_active_workflow_driver = local_ai_memory_python_polling_client",
+            "selplat/应用/rule-engine/rule/RUL_AI工厂服务端管理与任务目录规则.md",
+            "ai_factory_local_workflow_driver = none_external_clients_use_registered_http_api",
         ),
         (
             "SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES",

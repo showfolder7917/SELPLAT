@@ -1,9 +1,0 @@
-{
-  "module_id": "fujitsu",
-  "enabled": false,
-  "app_path": "apps/fujitsu",
-  "dependencies": [
-    "host",
-    "uniauth"
-  ]
-}

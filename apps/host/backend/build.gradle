@@ -9,7 +9,7 @@ group = 'com.sp.selplat.host'
 dependencies {
     // 统一宿主从唯一公共模块发布 /sel/** 主题、组件和素材。
     runtimeOnly project(':shared:frontend:sel-ui')
-    // Uniauth 作为显式业务模块装配到统一端口，同时继续保留自己的独立启动入口。
+    // Uniauth 作为显式业务模块装配到统一端口，对用户只暴露 SELPLAT 工程根启动入口。
     implementation project(':apps:uniauth:backend')
     // 公共结果和 JSON 工具用于平台健康响应保持 SELPLAT 统一结构。
     implementation project(':shared:backend:common-core')

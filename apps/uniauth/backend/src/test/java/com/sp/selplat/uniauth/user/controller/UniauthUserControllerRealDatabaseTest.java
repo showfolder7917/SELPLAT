@@ -1,6 +1,6 @@
 package com.sp.selplat.uniauth.user.controller;
 
-import com.sp.selplat.uniauth.UniauthBackendApplication;
+import com.sp.selplat.testsupport.UniauthTestApplication;
 import com.sp.selplat.uniauth.user.controller.support.UniauthUserControllerTestVerifier;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +11,7 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.annotation.Transactional;
 
 // 用户控制器真实数据库测试启动完整应用上下文，验证 Controller、Service、DAO、SQL 与数据库完整生产链路。
-@SpringBootTest(classes = UniauthBackendApplication.class)
+@SpringBootTest(classes = UniauthTestApplication.class)
 @Transactional
 class UniauthUserControllerRealDatabaseTest {
 

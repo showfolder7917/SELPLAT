@@ -1,6 +1,6 @@
 package com.sp.selplat.mda.connectionprofile.service.impl;
 
-import com.sp.selplat.mda.MdaBackendApplication;
+import com.sp.selplat.testsupport.MdaTestApplication;
 import com.sp.selplat.mda.connectionprofile.service.MdaConnectionProfileService;
 import com.sp.selplat.mda.connectionprofile.service.impl.support.MdaConnectionProfileSequenceTestVerifier;
 import org.junit.jupiter.api.Test;
@@ -18,7 +18,7 @@ import org.springframework.test.context.jdbc.SqlConfig;
  * 本测试不读取或写入 {@code apps/mda/db/mda.mv.db} 正式开发库。
  */
 @SpringBootTest(
-    classes = MdaBackendApplication.class,
+    classes = MdaTestApplication.class,
     properties = {
         "mda.control.datasource.jdbc-url=jdbc:h2:mem:mda_sequence_real_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
         "mda.control.datasource.password="

@@ -1,8 +1,0 @@
-{
-  "module_id": "rule-engine",
-  "enabled": true,
-  "app_path": "apps/rule-engine",
-  "dependencies": [
-    "host"
-  ]
-}

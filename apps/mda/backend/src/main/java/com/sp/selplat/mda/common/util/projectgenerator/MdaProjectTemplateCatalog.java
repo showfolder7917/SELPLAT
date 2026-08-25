@@ -15,7 +15,11 @@ public final class MdaProjectTemplateCatalog {
     }
 
     /**
-     * 构建完整新工程的固定文件。
+     * 构建只由 Host 装配的新业务工程固定文件，不生成独立 Spring Boot 启动类。
+     * 真实传参示例：{@code names} 表示 {@code japan/Japan/JapanRegion}。
+     * 真实返回示例：结果包含 {@code backend/build.gradle} 和
+     * {@code JapanModuleConfiguration.java}，不包含 {@code JapanBackendApplication.java}。
+     * 异常或副作用示例：本方法只构造有序模板 Map，不读写文件系统；命名占位符不合法时由上游校验阻断。
      *
      * @param names 已验证命名，例如 {@code japan/Japan/JapanRegion}
      * @return 相对 apps/japan 的有序文件模板
@@ -46,8 +50,6 @@ public final class MdaProjectTemplateCatalog {
         files.put("build.gradle", fill(
                 "// apps/@PROJECT@ 是聚合目录；实际 Java 构建位于 backend。", names));
         files.put("backend/build.gradle", fill(backendBuild(), names));
-        files.put(javaRoot + names.projectClass() + "BackendApplication.java",
-                fill(applicationJava(), names));
         files.put(javaRoot + "common/config/"
                         + names.projectClass() + "ModuleConfiguration.java",
                 fill(moduleConfigurationJava(), names));
@@ -178,13 +180,17 @@ public final class MdaProjectTemplateCatalog {
                         + names.tableCode().replace("-", ""));
     }
 
-    /** @return 生成模块的 Gradle 构建模板。 */
+    /**
+     * 生成业务模块的 Gradle 编译与测试模板。
+     * 真实传参示例：本方法无参，由 {@link #projectFiles(MdaProjectNames)} 调用后再替换命名占位符。
+     * 真实返回示例：返回含 {@code dependencies}、{@code processResources} 和 {@code jar} 的脚本，
+     * 不含 {@code application} 或 {@code mainClass}。
+     * 异常或副作用示例：只返回字符串，不注册当前工程任务，也不启动进程。
+     *
+     * @return 生成模块的 Gradle 构建模板
+     */
     private static String backendBuild() {
         return """
-                plugins {
-                    id 'application'
-                }
-
                 group = 'com.sp.selplat.@PROJECT@'
 
                 dependencies {
@@ -200,10 +206,6 @@ public final class MdaProjectTemplateCatalog {
                     testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
                 }
 
-                application {
-                    mainClass = '@PACKAGE@.@PROJECT_CLASS@BackendApplication'
-                }
-
                 tasks.named('processResources') {
                     from('../db/sql') {
                         include '*.sql'
@@ -217,58 +219,26 @@ public final class MdaProjectTemplateCatalog {
                 """;
     }
 
-    /** @return 独立 Spring Boot 启动类模板。 */
-    private static String applicationJava() {
-        return """
-                package @PACKAGE@;
-
-                import org.springframework.boot.SpringApplication;
-                import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-                /** 独立启动 @PROJECT_CLASS@ 后端并装配本工程私有数据源。 */
-                @SpringBootApplication(scanBasePackages = {
-                    "@PACKAGE@",
-                    "com.sp.selplat.common.service",
-                    "com.sp.selplat.common.web"
-                })
-                public class @PROJECT_CLASS@BackendApplication {
-
-                    /**
-                     * 启动本工程独立 HTTP 进程。
-                     *
-                     * @param args 启动参数，例如 {@code ["--server.port=8090"]}
-                     *     <p>执行后无返回值；副作用是创建 Spring 容器和 H2 连接池。
-                     */
-                    public static void main(String[] args) {
-                        SpringApplication.run(
-                                @PROJECT_CLASS@BackendApplication.class,
-                                args);
-                    }
-                }
-                """;
-    }
-
-    /** @return Host 自动发现模块的配置模板。 */
+    /**
+     * 生成供 Host 自动发现并导入业务组件的模块配置模板。
+     * 真实传参示例：本方法无参，后续把 {@code @PACKAGE@} 替换为 {@code com.sp.selplat.japan}。
+     * 真实返回示例：返回声明 {@code JapanModuleConfiguration} 的 AutoConfiguration 源码。
+     * 异常或副作用示例：只返回源码字符串，不创建 Web 容器或 Java 文件。
+     *
+     * @return Host 自动发现模块的配置模板
+     */
     private static String moduleConfigurationJava() {
         return """
                 package @PACKAGE@.common.config;
 
-                import @PACKAGE@.@PROJECT_CLASS@BackendApplication;
                 import org.springframework.boot.autoconfigure.AutoConfiguration;
                 import org.springframework.context.annotation.ComponentScan;
-                import org.springframework.context.annotation.FilterType;
                 import org.springframework.context.annotation.PropertySource;
 
                 /** 让统一 Host 自动发现并装配 @PROJECT_CLASS@ 业务组件。 */
                 @AutoConfiguration
                 @PropertySource("classpath:@PROJECT@-module.properties")
-                @ComponentScan(
-                    basePackages = "@PACKAGE@",
-                    excludeFilters = @ComponentScan.Filter(
-                        type = FilterType.ASSIGNABLE_TYPE,
-                        classes = @PROJECT_CLASS@BackendApplication.class
-                    )
-                )
+                @ComponentScan(basePackages = "@PACKAGE@")
                 public class @PROJECT_CLASS@ModuleConfiguration {
                 }
                 """;

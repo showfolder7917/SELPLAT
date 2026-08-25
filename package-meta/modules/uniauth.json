@@ -1,8 +1,0 @@
-{
-  "module_id": "uniauth",
-  "enabled": true,
-  "app_path": "apps/uniauth",
-  "dependencies": [
-    "host"
-  ]
-}
