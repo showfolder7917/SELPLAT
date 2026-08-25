@@ -22,6 +22,8 @@ export interface EvolutionTopic {
   origin: EvolutionProposalOrigin;
   sourceConversationMessageIds: string[];
   status: EvolutionTopicStatus;
+  /** 课题保存修订号用于拒绝基于过期界面的覆盖写入。 */
+  topicRevision: number;
   currentProposalVersion: number;
   recoveryPoint: string;
   createdAt: string;
@@ -75,7 +77,7 @@ export interface EvolutionProposal {
 }
 
 export interface NangongEvolutionState {
-  version: 3;
+  version: 4;
   automaticEvolutionEnabled: boolean;
   automaticNangongApprovalEnabled: boolean;
   automaticLinghuApprovalEnabled: boolean;
@@ -130,6 +132,30 @@ export interface ConvertNangongConversationToTopicRequest {
   acceptanceCriteria: string[];
   workspaceState: WorkspaceState;
   locale: Locale;
+}
+
+/** 南宫婉仅从当前会话归纳、尚未保存的课题表单初值。 */
+export interface NangongTopicDraft {
+  title: string;
+  goal: string;
+  scope: string[];
+  acceptanceCriteria: string[];
+}
+
+export interface GenerateNangongTopicDraftRequest {
+  workspaceState: WorkspaceState;
+  locale: Locale;
+}
+
+/** 只允许在首个提案提交前更新已保存课题，并要求携带读取时的修订号。 */
+export interface UpdateEvolutionTopicRequest {
+  expectedTopicRevision: number;
+  title: string;
+  goal: string;
+  scope: string[];
+  exclusions?: string[];
+  evidence: string[];
+  acceptanceCriteria: string[];
 }
 
 export interface CreateLinghuRepairProposalRequest {
