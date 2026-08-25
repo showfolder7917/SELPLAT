@@ -132,6 +132,15 @@
     --sel-theme-radius-chip: 999px;
     /* 紧凑主操作统一使用稳定点击高度和横向留白，业务应用不得再次写死按钮几何。 */
     --sel-theme-action-height: 32px;
+    --sel-theme-dialog-inline-size: 620px;
+    --sel-theme-dialog-block-size-max: 78vh;
+    --sel-theme-dialog-backdrop: rgb(var(--sel-theme-background-overlay-rgb) / 0.72);
+    --sel-theme-dialog-shadow: 0 28px 100px rgb(var(--sel-theme-text-shadow-rgb) / 0.72);
+    --sel-theme-switch-inline-size: 29px;
+    --sel-theme-switch-block-size: 17px;
+    --sel-theme-switch-thumb-size: 11px;
+    --sel-theme-switch-thumb-offset: 3px;
+    --sel-theme-switch-thumb-travel: 12px;
     --sel-theme-action-padding-inline: 13px;
     --sel-theme-grid-radius-board: var(--sel-theme-radius-panel);
     --sel-theme-grid-radius-content: var(--sel-theme-radius-inner);

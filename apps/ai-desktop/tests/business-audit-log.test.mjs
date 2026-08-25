@@ -53,3 +53,18 @@ test("业务日志把代码级验证缺失标记为部分完成，而不把待�
     rmSync(appRoot, { recursive: true, force: true });
   }
 });
+
+test("SQLite 事件投影失败不会吞掉 JSONL 原始事实并留下统一持久化失败事件", () => {
+  const appRoot = mkdtempSync(path.join(controlledTempRoot, "audit-sink-failure-"));
+  try {
+    const audit = new BusinessAuditLog(appRoot, path.join(appRoot, "build"), path.join(appRoot, "audit"));
+    audit.setEventSink(() => { throw new Error("sqlite unavailable"); });
+    assert.doesNotThrow(() => audit.recordEvent("nangong.intent.recorded", { messageId: "message-1" }));
+    const timeline = readFileSync(path.join(audit.info().path, "诊断归档", new Date().toISOString().slice(0, 7), "运行诊断.jsonl"), "utf8");
+    assert.match(timeline, /"type":"nangong\.intent\.recorded"/);
+    assert.match(timeline, /"type":"event-center\.persistence_failed"/);
+    assert.match(timeline, /sqlite unavailable/);
+  } finally {
+    rmSync(appRoot, { recursive: true, force: true });
+  }
+});

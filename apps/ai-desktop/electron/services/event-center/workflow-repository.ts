@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration.js";
 import type { LinghuAutomationState } from "../../../contracts/linghu-automation.js";
 import type { EvolutionProposal, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
-import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus } from "../../../contracts/workflow.js";
+import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../contracts/workflow.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
 const STALE_AFTER_MS = 120_000;
@@ -23,6 +23,7 @@ export class WorkflowRepository {
     return this.#database.transaction((connection) => {
       const interrupted = connection.prepare("SELECT sessionId FROM AiDesktopRuntimeSession WHERE state = 'running'").all() as Array<{ sessionId: string }>;
       connection.prepare("UPDATE AiDesktopRuntimeSession SET state = 'interrupted', stoppedAt = $now WHERE state = 'running'").run({ $now: now });
+      connection.prepare("UPDATE AiDesktopEvent SET status = 'open', handlingOwnerId = NULL, handlingStartedAt = NULL WHERE status = 'processing'").run();
       connection.prepare("INSERT INTO AiDesktopRuntimeSession (sessionId, processId, state, startedAt, heartbeatAt, stoppedAt) VALUES ($sessionId, $processId, 'running', $now, $now, NULL)").run({
         $sessionId: this.#sessionId,
         $processId: processId,
@@ -59,8 +60,9 @@ export class WorkflowRepository {
 
   recordAuditEvent(type: string, details: Record<string, unknown>, taskId?: string, occurredAt = new Date().toISOString()): string {
     const classified = classifyAuditEvent(type);
-    return this.recordEvent({
-      correlationId: taskId || stringValue(details.proposalId) || stringValue(details.topicId),
+    const correlationId = taskId || stringValue(details.correlationId) || stringValue(details.proposalId) || stringValue(details.topicId);
+    const eventId = this.recordEvent({
+      correlationId,
       sourceType: taskId ? "task" : classified.sourceType,
       sourceId: classified.sourceId,
       eventType: type,
@@ -69,8 +71,66 @@ export class WorkflowRepository {
       status: classified.status,
       message: stringValue(details.message) || stringValue(details.reason) || type,
       payload: details,
+      fingerprint: stringValue(details.fingerprint),
       occurredAt,
     });
+    if (correlationId && !["technical-error", "business-exception", "stalled"].includes(classified.category)) {
+      this.resolveCorrelatedExceptions(correlationId, `后续事件 ${type} 已证明流程继续推进。`, occurredAt);
+    }
+    return eventId;
+  }
+
+  listUnhandledExceptions(limit = 50): WorkflowExceptionRecord[] {
+    return this.#database.withConnection((connection) => {
+      const rows = connection.prepare(`
+        SELECT eventId, correlationId, sourceType, sourceId, eventType, category, severity, status,
+          message, payloadJson, fingerprint, occurredAt, handlingOwnerId, handlingStartedAt
+        FROM AiDesktopEvent
+        WHERE category IN ('technical-error', 'business-exception', 'stalled') AND status IN ('open', 'processing')
+        ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, occurredAt ASC
+        LIMIT $limit
+      `).all({ $limit: Math.max(1, Math.min(200, limit)) }) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
+        eventId: String(row.eventId), correlationId: nullableString(row.correlationId),
+        sourceType: row.sourceType as WorkflowExceptionRecord["sourceType"], sourceId: String(row.sourceId),
+        eventType: String(row.eventType), category: row.category as WorkflowExceptionRecord["category"],
+        severity: row.severity as WorkflowExceptionRecord["severity"], status: row.status as WorkflowExceptionRecord["status"],
+        message: String(row.message), payload: parsePayload(row.payloadJson), fingerprint: nullableString(row.fingerprint),
+        occurredAt: String(row.occurredAt), handlingOwnerId: nullableString(row.handlingOwnerId),
+        handlingStartedAt: nullableString(row.handlingStartedAt),
+      }));
+    });
+  }
+
+  claimExceptions(eventIds: string[], ownerId: string, now = new Date().toISOString()): string[] {
+    if (!eventIds.length) return [];
+    return this.#database.transaction((connection) => {
+      const claim = connection.prepare(`
+        UPDATE AiDesktopEvent SET status = 'processing', handlingOwnerId = $ownerId, handlingStartedAt = COALESCE(handlingStartedAt, $now)
+        WHERE eventId = $eventId AND status = 'open'
+      `);
+      const claimed: string[] = [];
+      for (const eventId of eventIds) {
+        const result = claim.run({ $ownerId: ownerId, $now: now, $eventId: eventId });
+        if (Number(result.changes) > 0) claimed.push(eventId);
+      }
+      return claimed;
+    });
+  }
+
+  resolveException(eventId: string, resolutionSummary: string, now = new Date().toISOString()): void {
+    this.#database.withConnection((connection) => connection.prepare(`
+      UPDATE AiDesktopEvent SET status = 'resolved', resolvedAt = $now, resolutionSummary = $summary
+      WHERE eventId = $eventId AND status IN ('open', 'processing')
+    `).run({ $now: now, $summary: resolutionSummary.slice(0, 2_000), $eventId: eventId }));
+  }
+
+  resolveCorrelatedExceptions(correlationId: string, resolutionSummary: string, now = new Date().toISOString()): void {
+    this.#database.withConnection((connection) => connection.prepare(`
+      UPDATE AiDesktopEvent SET status = 'resolved', resolvedAt = $now, resolutionSummary = $summary
+      WHERE correlationId = $correlationId AND category IN ('technical-error', 'business-exception', 'stalled')
+        AND status IN ('open', 'processing')
+    `).run({ $now: now, $summary: resolutionSummary.slice(0, 2_000), $correlationId: correlationId }));
   }
 
   syncCollaborationState(state: CollaborationState): void {
@@ -159,7 +219,7 @@ export class WorkflowRepository {
     });
   }
 
-  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession"): number {
+  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink"): number {
     return this.#database.withConnection((connection) => Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count));
   }
 
@@ -253,6 +313,8 @@ function classifyAuditEvent(type: string): { category: WorkflowEventCategory; se
 function defaultSeverity(category: WorkflowEventCategory): WorkflowEventSeverity { return category === "technical-error" || category === "stalled" ? "error" : category === "business-exception" ? "warning" : "info"; }
 function defaultStatus(category: WorkflowEventCategory): WorkflowEventStatus { return ["technical-error", "business-exception", "stalled"].includes(category) ? "open" : "observed"; }
 function stringValue(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : null; }
+function nullableString(value: unknown): string | null { return typeof value === "string" && value ? value : null; }
+function parsePayload(value: unknown): Record<string, unknown> { try { const parsed = JSON.parse(String(value)); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; } }
 function latestTime(...values: Array<string | null | undefined>): string { return values.filter((value): value is string => Boolean(value)).sort((left, right) => Date.parse(right) - Date.parse(left))[0] || new Date().toISOString(); }
 function taskRuntimeStatus(state: CollaborationTask["state"]): string {
   if (state === "integrated") return "completed";

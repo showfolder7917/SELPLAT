@@ -8,19 +8,39 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.88.0 把全部人物、系统、启动器和任务的异常、审批、心跳及恢复事实接入统一 SQLite 事件中心。 -->
-rule_version = 5.88.0
+<!-- 5.91.0 增加 Codex 页面历史对话的安全压缩回填。 -->
+rule_version = 5.91.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
 rule_status = active
 <!-- 5.88.0 固定统一事件入口、业务异常边界、独立监督器、卡住去重、运行会话中断识别与令狐恢复交接。 -->
 upgrade_record_5_88 = 2026-08-26:BusinessAuditLog唯一事件入口_全部人物系统启动器任务投影SQLite_AiDesktopEvent_WorkflowRun_TaskExecution_ApprovalRecord_MemberRuntime_RuntimeSession_技术异常业务异常卡住分类_协同IPC业务异常拦截_30秒独立监督器_心跳超时单事实去重_卡住交令狐Facade_启动识别非正常退出_正常退出先停会话再checkpoint_南宫完成后按自动演化开关建立唯一下一轮并保存双向课题关系
+<!-- 5.89.0 把所有边界异常归入单一门面，保存用户与南宫婉完整原文、自由主题类型和逐句意图，并把缺失控件合并到 SELUI。 -->
+upgrade_record_5_89 = 2026-08-26:EventCenterFacade唯一应用入口_全IPC主进程渲染进程后台边界统一登记_异常open_processing_resolved闭环_令狐只消费统一异常队列_用户和南宫婉完整原文持久化_AI读取南宫回答只用前80字预览_每轮AI自由登记主题类型_问题中心变化关闭旧主题_每条用户原话登记可见意图摘要_南宫回答先用自然措辞复述理解并允许纠正_韩立和南宫读取同一记忆门面_页面可复用视觉全部归SELUI_SELUI缺失控件先中央登记扩展再由页面消费_developer_css只保留业务布局
+<!-- 5.90.0 把温和复述、允许纠偏和不擅自扩大意图固定为南宫婉性格，而不是孤立格式要求。 -->
+upgrade_record_5_90 = 2026-08-26:南宫婉性格包含尊重倾听和允许纠偏_回答先自然表达我了解到您的想法是_邀请用户直接纠正偏差_复述贴合本轮真实关注_禁止机械复制和扩大用户意图_可见理解与数据库意图一致
+<!-- 5.91.0 让重要 Codex 页面全过程进入独立历史归档，不污染南宫婉身份和业务记忆。 -->
+upgrade_record_5_91 = 2026-08-26:Codex页面独立归档_真实用户原话完整保存_可见Codex过程更新和最终回答只存前80个Unicode字符_逐条用户消息登记自由主题类型意图_系统开发环境工具输出内部推理全部排除_稳定任务消息ID幂等回填_禁止把Codex伪装成南宫婉
+<!-- 应用业务只能调用 EventCenterFacade；JSONL、SQLite 和令狐消费均为门面后的可替换实现。 -->
+workflow_event_center_facade_contract = all_application_events_and_exceptions_via_EventCenterFacade + archive_and_SQLite_behind_facade + no_direct_business_sink_coupling
+<!-- 主进程早期、IPC、渲染器、后台服务和退出边界必须统一登记，异常按状态受理直至有事实证明恢复。 -->
+workflow_exception_lifecycle_contract = process_startup_plus_IPC_plus_renderer_plus_background_plus_shutdown_boundaries + open_to_processing_by_linghu + resolved_only_by_recovery_fact
+<!-- 完整对话原文与读取预览分离；用户原话不可截断，AI 长回答在后续上下文中只取前八十个 Unicode 字符。 -->
+nangong_conversation_memory_contract = full_user_and_nangong_source_text_in_SQLite + user_exact_context + nangong_80_unicode_preview_context + preview_never_replaces_source
+<!-- 每轮由 AI 自由生成主题、类型和用户意图；问题中心改变时关闭旧主题并新建，禁止枚举限制。 -->
+nangong_round_semantics_contract = free_form_topic_plus_type_plus_user_intent_each_round + AI_detected_topic_switch_closes_previous + no_fixed_enum
+<!-- 南宫婉可见回答先以自然措辞复述理解，数据库只保存简洁意图本身，用户可据此判断并纠正偏差。 -->
+nangong_visible_intent_contract = respectful_listening_and_correction_are_nangong_personality + answer_starts_我了解到您的想法是 + invite_direct_correction + reflect_current_concern_not_mechanical_template + never_expand_user_intent + database_intent_without_polite_wrapper + intent_visible_below_source_user_message
+<!-- Codex 历史任务页与南宫婉会话分表保存，保证来源真实且控制 AI 内容长度。 -->
+codex_conversation_backfill_contract = separate_archive_not_nangong_memory + exact_real_user_messages + visible_codex_commentary_and_final_answer_80_unicode_preview_only + free_topic_type_and_intent_per_user_message + exclude_system_developer_environment_tool_and_hidden_reasoning + stable_thread_message_idempotency
+<!-- AI Desktop 页面不得维护可复用控件皮肤；缺失能力必须先进入 SELUI 中央登记、正式出口和统一 Token，再由页面消费。 -->
+ai_desktop_selui_ownership_contract = page_uses_SELUI_for_all_reusable_visual_controls + missing_control_register_and_extend_SELUI_first + developer_css_business_layout_only + no_private_tooltip_confirm_prompt_dialog_switch_skin
 <!-- 5.87.0 依据阶段0实施结果，禁止业务绕过 Persistence，也禁止恢复场景伪造新库。 -->
 upgrade_record_5_87 = 2026-08-25:Electron内置node_sqlite_主进程唯一连接_load_order唯一清单_AiDesktopSchemaVersion版本与SHA256校验_立即事务同步SQL和版本记录_首次创建与已初始化丢库分离_userData只存路径哈希标记_恢复状态只读IPC_渲染层禁止连接与SQL_before_quit_checkpoint关闭
 
 <!-- 所有人物和模块必须经既有审计入口进入统一事件中心，禁止再增加旁路日志入口。 -->
-workflow_event_center_single_entry_contract = BusinessAuditLog_to_main_process_SQLite
+workflow_event_center_single_entry_contract = EventCenterFacade_to_archive_and_main_process_SQLite
 <!-- 技术异常、业务异常和卡住必须分类保存，令狐只监听统一入口和既有协同状态。 -->
 workflow_event_center_exception_contract = technical_error_business_exception_stalled_separate_and_queryable
 <!-- 卡住检测独立于执行人物，并以任务心跳事实去重后交给令狐现有恢复 Facade。 -->

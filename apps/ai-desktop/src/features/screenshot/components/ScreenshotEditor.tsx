@@ -9,6 +9,7 @@ import {
 } from "@fluentui/react-icons";
 
 import type { Locale, ScreenCapture } from "../../../../contracts/desktop";
+import { useSelUi } from "../../../theme/SelUiProvider";
 import { drawAnnotations, loadDataUrl, nextPaint, syncCanvasViewport } from "../canvas/annotation-renderer";
 import { canvasPointFromClient, clamp, findTopRectangleAtPoint, moveRectangle, normalizeRectangle, rectangleToViewport, resizeRectangle, sameRectangle, selectionConfirmPosition } from "../geometry/annotation-geometry";
 import type { ActiveInteraction, Annotation, CanvasViewport, PenAnnotation, Point, PointerTarget, Rectangle, RectangleAnnotation, ResizeHandle, ScreenshotTool } from "../model/annotations";
@@ -29,6 +30,7 @@ const resizeHandles: ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w
 
 /** 在渲染层保存可编辑标注并合成最终 PNG，只把完成结果交给主进程落盘。 */
 export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: ScreenshotEditorProps) {
+  const selUi = useSelUi();
   const [phase, setPhase] = useState<"select" | "annotate">("select");
   const [selection, setSelection] = useState<Rectangle | null>(null);
   const [croppedDataUrl, setCroppedDataUrl] = useState("");
@@ -366,8 +368,8 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
     setRectangleTransformPreview(null);
   };
 
-  const clear = () => {
-    if (!window.confirm(text.clearConfirm)) return;
+  const clear = async () => {
+    if (!await selUi.confirm({ title: text.clear, message: text.clearConfirm, tone: "danger" })) return;
     setAnnotationHistory([[]]);
     setSelectedRectangleId(null);
     setRectangleTransformPreview(null);
@@ -441,7 +443,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
         <button type="button" className={tool === "pen" ? "active" : ""} onClick={() => setTool("pen")}><Pen24Regular />{text.pen}</button>
         <button type="button" className={tool === "rectangle" ? "active" : ""} onClick={() => setTool("rectangle")}><DrawShape24Regular />{text.rectangle}</button>
         <button type="button" disabled={annotationHistory.length <= 1} onClick={undo}><ArrowUndo24Regular />{text.undo}</button>
-        <button type="button" onClick={clear}><Eraser24Regular />{text.clear}</button>
+        <button type="button" onClick={() => void clear()}><Eraser24Regular />{text.clear}</button>
       </div>
       <div className="screenshot-actions">
         {error && <span>{error}</span>}

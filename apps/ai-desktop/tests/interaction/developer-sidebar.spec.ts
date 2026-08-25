@@ -76,7 +76,7 @@ test("AI Memory 恢复状态显示明确提示且不暴露数据库路径", asyn
 
   await page.goto(pathToFileURL(productionRendererFile).href);
   await expect(page.locator(".ai-memory-recovery")).toHaveCount(0);
-  await expect(page.locator(".dev-statusbar")).toContainText("AI Memory v0002 · 统一事件中心");
+  await expect(page.locator(".dev-statusbar")).toContainText("AI Memory v0004 · 统一事件中心");
 });
 
 test("新建任务入口位于聊天标签且不再占用任务标题", async () => {
@@ -85,7 +85,7 @@ test("新建任务入口位于聊天标签且不再占用任务标题", async ()
   const newTask = tab.getByRole("button", { name: "重新建立一个 Codex 会话" });
   const closeIcon = tab.locator(":scope > svg:last-child");
   await expect(newTask).toBeVisible();
-  await expect(newTask).toHaveAttribute("data-tooltip", "重新建立一个 Codex 会话");
+  await expect(newTask).toHaveAttribute("data-sel-tooltip", "重新建立一个 Codex 会话");
   await expect(newTask).not.toHaveAttribute("title", /.+/);
   await expect(newTask.locator("svg")).toBeVisible();
   await expect(page.locator(".dev-section-title.tasks").getByRole("button", { name: "重新建立一个 Codex 会话" })).toHaveCount(0);
@@ -100,37 +100,9 @@ test("新建任务入口位于聊天标签且不再占用任务标题", async ()
   expect(newTaskBounds.x + newTaskBounds.width).toBeLessThanOrEqual(closeBounds.x);
 
   await newTask.hover();
-  await expect.poll(() => newTask.evaluate((element) => Number.parseFloat(window.getComputedStyle(element, "::after").opacity))).toBe(1);
-  const hoverTip = await newTask.evaluate((element) => {
-    const button = element as HTMLElement;
-    const main = button.closest<HTMLElement>(".dev-main");
-    if (!main) throw new Error("刷新对话按钮不在主内容区域内。");
-    const style = window.getComputedStyle(button, "::after");
-    const buttonBounds = button.getBoundingClientRect();
-    const mainBounds = main.getBoundingClientRect();
-    const width = Number.parseFloat(style.width);
-    const height = Number.parseFloat(style.height);
-    const left = buttonBounds.left + buttonBounds.width / 2 - width / 2;
-    const top = buttonBounds.bottom + 6;
-    return {
-      content: style.content.replace(/^['"]|['"]$/g, ""),
-      opacity: Number.parseFloat(style.opacity),
-      left,
-      top,
-      right: left + width,
-      bottom: top + height,
-      mainLeft: mainBounds.left,
-      mainTop: mainBounds.top,
-      mainRight: mainBounds.right,
-      mainBottom: mainBounds.bottom,
-    };
-  });
-  expect(hoverTip.content).toBe("重新建立一个 Codex 会话");
-  expect(hoverTip.opacity).toBe(1);
-  expect(hoverTip.left).toBeGreaterThanOrEqual(hoverTip.mainLeft - 0.5);
-  expect(hoverTip.top).toBeGreaterThanOrEqual(hoverTip.mainTop - 0.5);
-  expect(hoverTip.right).toBeLessThanOrEqual(hoverTip.mainRight + 0.5);
-  expect(hoverTip.bottom).toBeLessThanOrEqual(hoverTip.mainBottom + 0.5);
+  const hoverTip = page.locator("#seltooltip-shared-portal");
+  await expect(hoverTip).toBeVisible();
+  await expect(hoverTip).toHaveText("重新建立一个 Codex 会话");
 
   await page.locator(".dev-chat").hover({ position: { x: 12, y: 120 } });
   await newTask.focus();
@@ -138,7 +110,7 @@ test("新建任务入口位于聊天标签且不再占用任务标题", async ()
   await page.keyboard.press("Tab");
   await expect(newTask).toBeFocused();
   await expect.poll(() => newTask.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
-  await expect.poll(() => newTask.evaluate((element) => Number.parseFloat(window.getComputedStyle(element, "::after").opacity))).toBe(1);
+  await expect(hoverTip).toBeVisible();
 });
 
 test("未登录时设置面板的登录主操作文字可见并使用主题对比色", async () => {

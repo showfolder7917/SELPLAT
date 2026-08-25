@@ -1,3 +1,5 @@
 # versionCode|SQL file|description
 0001|schema-AiDesktopSchemaVersion.sql|建立 AI Desktop 数据库版本表
 0002|migration-0002-unified-workflow.sql|建立统一事件、流程、任务、审批、成员和运行会话表
+0003|migration-0003-event-handling-and-collaboration-memory.sql|建立异常受理闭环和用户与南宫婉完整对话记忆
+0004|migration-0004-codex-conversation-archive.sql|建立 Codex 页面历史对话压缩归档

@@ -71,6 +71,17 @@
       "themeAware": true
     },
     {
+      "id": "selDialog",
+      "directory": "dialog",
+      "type": "interactive",
+      "scripts": ["selDialog.js"],
+      "styles": ["selDialog.css"],
+      "publicApi": "sel.components.dialog",
+      "dependencies": [],
+      "themeAware": true,
+      "ownedAriaRoles": ["dialog"]
+    },
+    {
       "id": "selDropdownMenu",
       "directory": "dropdown",
       "type": "interactive",
@@ -169,6 +180,17 @@
       "publicApi": "sel.components.splitPane",
       "dependencies": [],
       "themeAware": true
+    },
+    {
+      "id": "selSwitch",
+      "directory": "switch",
+      "type": "presentation",
+      "scripts": [],
+      "styles": ["selSwitch.css"],
+      "publicApi": null,
+      "dependencies": [],
+      "themeAware": true,
+      "ownedAriaRoles": ["switch"]
     },
     {
       "id": "selTabs",

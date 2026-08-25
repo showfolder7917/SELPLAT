@@ -24,8 +24,8 @@ import type {
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
+import { registerEventCenterIpcHandler } from "./event-center-ipc.js";
 import { prepareAutomaticTesting } from "../services/automatic-test-preflight.js";
-import { BusinessAuditLog } from "../services/business-audit-log.js";
 import { CodexService } from "../services/codex-service.js";
 import { ConversationDispatchStore } from "../services/conversation-dispatch-store.js";
 import { CollaborationCodexRegistry } from "../services/collaboration/collaboration-codex-sessions.js";
@@ -36,6 +36,7 @@ import { ManagedTaskExecutor } from "../services/managed-task-executor.js";
 import { ScreenshotStore } from "../services/screenshot-store.js";
 import { SettingsStore } from "../services/settings-store.js";
 import { TrustedCommandStore } from "../services/trusted-command-store.js";
+import { EventCenterFacade } from "../services/event-center/event-center-facade.js";
 import { WorkspaceStore } from "../services/workspace-store.js";
 
 interface DesktopIpcDependencies {
@@ -50,7 +51,7 @@ interface DesktopIpcDependencies {
   linghuAutomation: LinghuAutomationFacade;
   nangongEvolution: NangongEvolutionFacade;
   collaborationRegistry: CollaborationCodexRegistry;
-  audit: BusinessAuditLog;
+  eventCenter: EventCenterFacade;
   projectRoot: string;
   appRoot: string;
   variant: AppVariant;
@@ -101,7 +102,9 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, audit, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, eventCenter, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot } = dependencies;
+  const audit = eventCenter;
+  const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
   const seenApprovalRequests = new Set<number>();
   const approvalAuditTasks = new Map<number, string>();
@@ -229,23 +232,21 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.showInactive();
   };
 
-  ipcMain.handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
-  ipcMain.handle("desktop:get-ai-memory-database-status", () => aiMemoryDatabaseStatus);
-  registerSettingsIpc(settings, audit);
-  registerWorkspaceIpc(workspaces, audit);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, (channel, message) => {
-    audit.recordEvent("business.exception", { channel, message });
-  });
-  ipcMain.handle("desktop:get-codex-models", () => codex.getModels());
-  ipcMain.handle("desktop:get-codex-status", () => codex.getStatus());
-  ipcMain.handle("desktop:get-active-codex-session", () => codex.activeSession());
-  ipcMain.handle("desktop:login-with-chatgpt", async () => {
+  handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
+  handle("desktop:get-ai-memory-database-status", () => aiMemoryDatabaseStatus);
+  registerSettingsIpc(settings, eventCenter);
+  registerWorkspaceIpc(workspaces, eventCenter);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter);
+  handle("desktop:get-codex-models", () => codex.getModels());
+  handle("desktop:get-codex-status", () => codex.getStatus());
+  handle("desktop:get-active-codex-session", () => codex.activeSession());
+  handle("desktop:login-with-chatgpt", async () => {
     const login = await codex.loginWithChatGPT();
     await shell.openExternal(login.authUrl);
     return login;
   });
-  ipcMain.handle("desktop:logout-codex", () => codex.logout());
-  ipcMain.handle("desktop:get-codex-approvals", () => {
+  handle("desktop:logout-codex", () => codex.logout());
+  handle("desktop:get-codex-approvals", () => {
     const approvals = [...codex.pendingApprovals(), ...collaborationRegistry.pendingApprovals()];
     for (const approval of approvals) {
       if (seenApprovalRequests.has(approval.requestId)) continue;
@@ -262,7 +263,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     return approvals;
   });
-  ipcMain.handle("desktop:resolve-codex-approval", (_event, requestId: number, decision: "accept" | "decline") => {
+  handle("desktop:resolve-codex-approval", (_event, requestId: number, decision: "accept" | "decline") => {
     if (!Number.isSafeInteger(requestId) || (decision !== "accept" && decision !== "decline")) {
       throw new Error("Invalid Codex approval response.");
     }
@@ -274,13 +275,13 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     seenApprovalRequests.delete(requestId);
     approvalAuditTasks.delete(requestId);
   });
-  ipcMain.handle("desktop:get-trusted-command-info", () => ({ count: trustedCommands.count() }));
-  ipcMain.handle("desktop:clear-trusted-commands", () => {
+  handle("desktop:get-trusted-command-info", () => ({ count: trustedCommands.count() }));
+  handle("desktop:clear-trusted-commands", () => {
     trustedCommands.clear();
     audit.recordEvent("trusted_commands.cleared");
     return { count: 0 };
   });
-  ipcMain.handle("desktop:prepare-automatic-testing", async () => {
+  handle("desktop:prepare-automatic-testing", async () => {
     const result = await prepareAutomaticTesting({
       appRoot,
       codexStatus: await codex.getStatus(),
@@ -301,25 +302,25 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     return result;
   });
-  ipcMain.handle("desktop:get-codex-user-inputs", () => [...codex.pendingUserInputs(), ...collaborationRegistry.pendingUserInputs()]);
-  ipcMain.handle("desktop:resolve-codex-user-input", (_event, request: ResolveCodexUserInputRequest) => {
+  handle("desktop:get-codex-user-inputs", () => [...codex.pendingUserInputs(), ...collaborationRegistry.pendingUserInputs()]);
+  handle("desktop:resolve-codex-user-input", (_event, request: ResolveCodexUserInputRequest) => {
     if (request.requestId >= 1_000_000) collaborationRegistry.resolveUserInput(request);
     else codex.resolveUserInput(request);
     // 业务日志只记录协议生命周期，不记录可能包含敏感内容的答案正文。
     audit.recordEvent("user_input.resolved", { requestId: request.requestId, answerCount: Object.keys(request.answers || {}).length });
   });
-  ipcMain.handle("desktop:new-chat", async () => {
+  handle("desktop:new-chat", async () => {
     await codex.newChat();
     dispatch.clear();
     return publishDispatchState();
   });
-  ipcMain.handle("desktop:open-external-url", async (_event, value: string) => {
+  handle("desktop:open-external-url", async (_event, value: string) => {
     if (typeof value !== "string" || value.length > 2_048) throw new Error("Invalid external URL.");
     const url = new URL(value);
     if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Only HTTP(S) links can be opened.");
     await shell.openExternal(url.toString());
   });
-  ipcMain.handle("desktop:prepare-screen-capture", async (event) => {
+  handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();
     // 两个截图入口统一预热同一个显示器源；本次进程内再次调用直接命中缓存。
@@ -336,12 +337,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       return toScreenCapturePreparationResult(error);
     }
   });
-  ipcMain.handle("desktop:open-screen-recording-settings", async () => {
+  handle("desktop:open-screen-recording-settings", async () => {
     if (process.platform !== "darwin") throw new Error("Screen recording settings are only available on macOS.");
     // 固定打开 macOS 屏幕录制隐私页，不接受渲染层提供的任意系统设置地址。
     await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
   });
-  ipcMain.handle("desktop:restart-for-screen-recording-permission", async () => {
+  handle("desktop:restart-for-screen-recording-permission", async () => {
     if (process.platform !== "darwin") throw new Error("Screen recording permission restart is only available on macOS.");
     recordScreenCaptureStage("main-permission-restart-requested");
     // 只响应渲染层明确的权限恢复按钮；先让 IPC 正常返回，再由 Electron 使用同一应用身份重建进程。
@@ -351,7 +352,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       app.exit(0);
     }, 120);
   });
-  ipcMain.handle("desktop:capture-screen", async (event, request?: ScreenCaptureRequest) => {
+  handle("desktop:capture-screen", async (event, request?: ScreenCaptureRequest) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     if (request && typeof request.hideOwnerWindow !== "undefined" && typeof request.hideOwnerWindow !== "boolean") {
       throw new Error("Invalid screenshot capture mode.");
@@ -523,7 +524,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     return null;
   });
-  ipcMain.handle("desktop:screen-capture-stage", (event, stage: string, detail?: string) => {
+  handle("desktop:screen-capture-stage", (event, stage: string, detail?: string) => {
     const session = screenshotWindowSessions.get(event.sender.id);
     if (!session || typeof stage !== "string" || !/^renderer-[a-z-]{1,80}$/.test(stage)) {
       throw new Error("Invalid screenshot diagnostic stage.");
@@ -533,7 +534,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     recordScreenCaptureStage(stage, session, typeof detail === "string" ? { detail } : {});
   });
-  ipcMain.handle("desktop:screen-capture-frame-result", (event, result: ScreenCaptureFrameResult) => {
+  handle("desktop:screen-capture-frame-result", (event, result: ScreenCaptureFrameResult) => {
     const session = screenshotWindowSessions.get(event.sender.id);
     if (!session || !result || !Number.isSafeInteger(result.requestId) || result.requestId !== session.frameRequestId) {
       throw new Error("Invalid screenshot frame result.");
@@ -555,7 +556,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     });
     session.resolveFrameReady?.();
   });
-  ipcMain.handle("desktop:show-screenshot-window", (event) => {
+  handle("desktop:show-screenshot-window", (event) => {
     const session = screenshotWindowSessions.get(event.sender.id);
     if (!session) throw new Error("Invalid screenshot window.");
     const screenshotWindow = BrowserWindow.fromWebContents(event.sender);
@@ -574,7 +575,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.show();
     screenshotWindow.focus();
   });
-  ipcMain.handle("desktop:enter-screenshot-annotation", (event, request: ScreenshotAnnotationWindowRequest) => {
+  handle("desktop:enter-screenshot-annotation", (event, request: ScreenshotAnnotationWindowRequest) => {
     if (!screenshotWindowSessions.has(event.sender.id)) throw new Error("Invalid screenshot window.");
     const screenshotWindow = BrowserWindow.fromWebContents(event.sender);
     if (!screenshotWindow) throw new Error("Screenshot window is unavailable.");
@@ -611,7 +612,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.setOpacity(1);
     screenshotWindow.focus();
   });
-  ipcMain.handle("desktop:return-screenshot-selection", (event) => {
+  handle("desktop:return-screenshot-selection", (event) => {
     const session = screenshotWindowSessions.get(event.sender.id);
     const screenshotWindow = BrowserWindow.fromWebContents(event.sender);
     if (!session || !screenshotWindow) throw new Error("Invalid screenshot window.");
@@ -638,7 +639,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.show();
     screenshotWindow.focus();
   });
-  ipcMain.handle("desktop:end-screenshot-editing", (event) => {
+  handle("desktop:end-screenshot-editing", (event) => {
     const session = screenshotWindowSessions.get(event.sender.id);
     const screenshotWindow = BrowserWindow.fromWebContents(event.sender);
     if (!session || !screenshotWindow) return;
@@ -655,7 +656,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     session.restoreOwnerOnClose = false;
     screenshotWindow.webContents.send("desktop:screen-capture-reset");
   });
-  ipcMain.handle("desktop:save-screenshot", async (event, request: ScreenshotSaveRequest) => {
+  handle("desktop:save-screenshot", async (event, request: ScreenshotSaveRequest) => {
     const saved = await screenshots.save(request);
     const session = screenshotWindowSessions.get(event.sender.id);
     if (session) {
@@ -670,25 +671,25 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     return saved;
   });
-  ipcMain.handle("desktop:get-temp-directory-info", () => screenshots.info());
-  ipcMain.handle("desktop:open-temp-directory", async () => {
+  handle("desktop:get-temp-directory-info", () => screenshots.info());
+  handle("desktop:open-temp-directory", async () => {
     const directory = await screenshots.ensure();
     const error = await shell.openPath(directory);
     if (error) throw new Error(error);
   });
-  ipcMain.handle("desktop:clear-temp-files", () => screenshots.clear());
-  ipcMain.handle("desktop:get-audit-log-info", () => audit.info());
-  ipcMain.handle("desktop:open-audit-log-directory", async () => {
+  handle("desktop:clear-temp-files", () => screenshots.clear());
+  handle("desktop:get-audit-log-info", () => audit.info());
+  handle("desktop:open-audit-log-directory", async () => {
     const error = await shell.openPath(audit.ensure());
     if (error) throw new Error(error);
   });
-  ipcMain.handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
-  ipcMain.handle("desktop:enqueue-message", (_event, value: EnqueueMessageRequest) => {
+  handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
+  handle("desktop:enqueue-message", (_event, value: EnqueueMessageRequest) => {
     if (!value?.request || typeof value.request.message !== "string") throw new Error("Invalid queued message request.");
     dispatch.enqueue(value.request, value.displayText, value.automatic === true);
     return publishDispatchState();
   });
-  ipcMain.handle("desktop:supplement-queued-message", async (_event, itemId: string) => {
+  handle("desktop:supplement-queued-message", async (_event, itemId: string) => {
     const item = dispatch.queueItem(itemId);
     if (!item) throw new Error("排队消息已被处理或不存在。");
     const active = dispatch.state().activeTask;
@@ -702,24 +703,24 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }, activeAuditTasks.values().next().value);
     return publishDispatchState();
   });
-  ipcMain.handle("desktop:discard-queued-message", (_event, itemId: string) => {
+  handle("desktop:discard-queued-message", (_event, itemId: string) => {
     dispatch.removeQueued(itemId, "discarded");
     return publishDispatchState();
   });
-  ipcMain.handle("desktop:recover-conversation-task", () => {
+  handle("desktop:recover-conversation-task", () => {
     dispatch.recover();
     return publishDispatchState();
   });
-  ipcMain.handle("desktop:discard-conversation-recovery", () => {
+  handle("desktop:discard-conversation-recovery", () => {
     dispatch.discardRecovery();
     return publishDispatchState();
   });
-  ipcMain.handle("desktop:cancel", async (event) => {
+  handle("desktop:cancel", async (event) => {
     const taskId = activeAuditTasks.get(event.sender.id);
     audit.recordEvent("task.cancel_requested", {}, taskId);
     return codex.cancel();
   });
-  ipcMain.handle("desktop:send-message", async (ipcEvent, request: SendMessageRequest) => {
+  handle("desktop:send-message", async (ipcEvent, request: SendMessageRequest) => {
     if (!request || typeof request.message !== "string") throw new Error("Invalid message request.");
     if (!LOCALES.includes(request.locale)) throw new Error("Invalid locale.");
     if (!SANDBOX_MODES.includes(request.sandboxMode)) throw new Error("Invalid sandbox mode.");
@@ -801,6 +802,20 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (action === "minimize") window.minimize();
     if (action === "maximize") window.isMaximized() ? window.unmaximize() : window.maximize();
     if (action === "close") window.close();
+  });
+  ipcMain.on("desktop:renderer-exception", (_event, report: unknown) => {
+    if (!report || typeof report !== "object") {
+      eventCenter.recordIpcException("desktop:renderer-exception", new Error("Invalid renderer exception report."), "business");
+      return;
+    }
+    const value = report as Record<string, unknown>;
+    eventCenter.recordRendererException({
+      operation: typeof value.operation === "string" ? value.operation : "window.error",
+      message: typeof value.message === "string" ? value.message : "Unknown renderer exception.",
+      stack: typeof value.stack === "string" ? value.stack : null,
+      componentStack: typeof value.componentStack === "string" ? value.componentStack : null,
+      url: typeof value.url === "string" ? value.url : null,
+    });
   });
 }
 

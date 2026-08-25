@@ -758,6 +758,8 @@
             selWindowMinimizedButton.hidden = true;
             // 若没有其他最小化实例则回收全局停靠区。
             selWindowSyncMinimizedRail();
+            // React/Electron 等宿主只监听公共关闭事件即可结束待处理业务，不读取组件内部节点。
+            selWindowShell.dispatchEvent(new CustomEvent("selWindow:close", { bubbles: true, detail: { id: selWindowId } }));
         }
 
         // 重置清空表单、反馈和所有自定义下拉显示值。
@@ -881,7 +883,7 @@
         // 页面失焦可能收不到 pointerup，主动结束交互避免方向指针永久锁定。
         window.addEventListener("blur", selWindowEndPointerInteraction);
         // 浏览器视口变化时最大化窗口重新铺满，普通窗口保持在安全区内。
-        window.addEventListener("resize", () => {
+        function selWindowHandleViewportResize() {
             // 隐藏窗口无需重复写入几何。
             if (!selWindowState.open) return;
             // 最大化窗口按新视口刷新尺寸。
@@ -895,7 +897,8 @@
             }
             // 普通窗口只夹取现有矩形，不擅自改变用户设置的相对尺寸。
             selWindowApplyGeometry(selWindowState.geometry || selWindowCreateDefaultGeometry());
-        });
+        }
+        window.addEventListener("resize", selWindowHandleViewportResize);
         // Escape 提供模态窗口的标准键盘退出路径。
         selWindowShell.addEventListener("keydown", (selWindowEvent) => {
             // 内部下拉、日期等控件已消费 Escape 时只关闭其自身浮层，不连带关闭业务窗口。
@@ -1024,6 +1027,20 @@
             // minimize 供应用或自动化显式把窗口收起到停靠区。
             minimize: selWindowMinimizeWindow,
             setLocale: selWindowSetLocale,
+            // React 等生命周期宿主卸载时必须释放全局监听、DOM 与中央实例登记。
+            destroy: () => {
+                selWindowCloseWindow();
+                window.removeEventListener("pointermove", selWindowHandlePointerMove);
+                window.removeEventListener("pointerup", selWindowEndPointerInteraction);
+                window.removeEventListener("pointercancel", selWindowEndPointerInteraction);
+                window.removeEventListener("blur", selWindowEndPointerInteraction);
+                window.removeEventListener("resize", selWindowHandleViewportResize);
+                selWindowMinimizedButton.remove();
+                selWindowOverlay.remove();
+                selWindowInstances.delete(selWindowId);
+                selWindowSyncMinimizedRail();
+                return true;
+            },
             // setPageEditMetadata 只写入数据库可查询名称和 code，不拥有页面编辑开关或权限判断。
             setPageEditMetadata(selWindowPageEditMetadata = {}) {
                 const selWindowPageEditTitleText = String(selWindowPageEditMetadata.title || "").trim();

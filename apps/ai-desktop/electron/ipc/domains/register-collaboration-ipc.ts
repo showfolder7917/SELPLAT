@@ -1,5 +1,3 @@
-import { ipcMain, type IpcMainInvokeEvent } from "electron";
-
 import type { CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../../../contracts/collaboration.js";
 import type { CreateLinghuStartupPromptRequest, UpdateLinghuStartupPromptRequest } from "../../../contracts/linghu-automation.js";
 import type {
@@ -16,24 +14,17 @@ import type {
 import type { CollaborationCoordinator } from "../../services/collaboration/collaboration-coordinator.js";
 import type { LinghuAutomationFacade } from "../../services/collaboration/linghu-automation-facade.js";
 import type { NangongEvolutionFacade } from "../../services/collaboration/nangong-evolution-facade.js";
+import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
+import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
 export function registerCollaborationIpc(
   collaboration: CollaborationCoordinator,
   linghuAutomation: LinghuAutomationFacade,
   nangongEvolution: NangongEvolutionFacade,
-  recordBusinessException: (channel: string, message: string) => void,
+  eventCenter: EventCenterFacade,
 ): void {
-  const handle = <Arguments extends unknown[]>(channel: string, handler: (event: IpcMainInvokeEvent, ...args: Arguments) => unknown): void => {
-    ipcMain.handle(channel, async (event, ...args) => {
-      try {
-        return await handler(event, ...(args as Arguments));
-      } catch (error) {
-        recordBusinessException(channel, error instanceof Error ? error.message : String(error));
-        throw error;
-      }
-    });
-  };
+  const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-collaboration-state", () => collaboration.state());
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
   handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));

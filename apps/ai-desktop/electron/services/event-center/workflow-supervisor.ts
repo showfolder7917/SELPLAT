@@ -1,10 +1,11 @@
-import type { WorkflowStateReaders } from "../../../contracts/workflow.js";
+import type { WorkflowExceptionRecord, WorkflowStateReaders } from "../../../contracts/workflow.js";
 import type { WorkflowRepository } from "./workflow-repository.js";
 
 export interface WorkflowSupervisorOptions {
   repository: WorkflowRepository;
   readers: WorkflowStateReaders;
   onStalledTasks(taskIds: string[]): void | Promise<void>;
+  onUnhandledExceptions?(events: WorkflowExceptionRecord[]): void | Promise<void>;
   intervalMs?: number;
   now?: () => Date;
 }
@@ -14,6 +15,7 @@ export class WorkflowSupervisor {
   readonly #repository: WorkflowRepository;
   readonly #readers: WorkflowStateReaders;
   readonly #onStalledTasks: WorkflowSupervisorOptions["onStalledTasks"];
+  readonly #onUnhandledExceptions: WorkflowSupervisorOptions["onUnhandledExceptions"];
   readonly #intervalMs: number;
   readonly #now: () => Date;
   #timer: ReturnType<typeof setInterval> | null = null;
@@ -23,6 +25,7 @@ export class WorkflowSupervisor {
     this.#repository = options.repository;
     this.#readers = options.readers;
     this.#onStalledTasks = options.onStalledTasks;
+    this.#onUnhandledExceptions = options.onUnhandledExceptions;
     this.#intervalMs = options.intervalMs || 30_000;
     this.#now = options.now || (() => new Date());
   }
@@ -51,6 +54,14 @@ export class WorkflowSupervisor {
       this.#repository.syncLinghuState(this.#readers.linghu());
       const stalled = this.#repository.detectStalledTasks(now);
       if (stalled.length > 0) await this.#onStalledTasks(stalled.map((item) => item.taskId));
+      if (this.#onUnhandledExceptions) {
+        const open = this.#repository.listUnhandledExceptions().filter((event) => event.status === "open");
+        const claimedIds = this.#repository.claimExceptions(open.map((event) => event.eventId), "linghu-ancestor", now);
+        const claimed = open.filter((event) => claimedIds.includes(event.eventId)).map((event) => ({
+          ...event, status: "processing" as const, handlingOwnerId: "linghu-ancestor", handlingStartedAt: now,
+        }));
+        if (claimed.length) await this.#onUnhandledExceptions(claimed);
+      }
     } catch (error) {
       try {
         this.#repository.recordEvent({

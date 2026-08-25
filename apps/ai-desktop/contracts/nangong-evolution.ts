@@ -96,6 +96,7 @@ export interface NangongConversationMessage {
   messageId: string;
   role: "user" | "nangong";
   content: string;
+  inferredIntent?: string;
   attachmentIds?: string[];
   createdAt: string;
 }

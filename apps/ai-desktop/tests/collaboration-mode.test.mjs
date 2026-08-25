@@ -879,8 +879,12 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.88\.0/);
-  assert.match(rule, /workflow_event_center_single_entry_contract = BusinessAuditLog_to_main_process_SQLite/);
+  assert.match(rule, /rule_version = 5\.91\.0/);
+  assert.match(rule, /respectful_listening_and_correction_are_nangong_personality/);
+  assert.match(rule, /reflect_current_concern_not_mechanical_template/);
+  assert.match(rule, /never_expand_user_intent/);
+  assert.match(rule, /codex_conversation_backfill_contract = separate_archive_not_nangong_memory/);
+  assert.match(rule, /workflow_event_center_single_entry_contract = EventCenterFacade_to_archive_and_main_process_SQLite/);
   assert.match(rule, /workflow_event_center_stall_contract = independent_30_second_supervisor_plus_120_second_timeout_plus_fault_fact_dedup_plus_linghu_handoff/);
   assert.match(rule, /nangong_next_evolution_launcher_contract = completed_and_accepted_plus_automatic_evolution_enabled_plus_reciprocal_topic_ids_plus_idempotent_restart/);
   assert.match(rule, /upgrade_record_5_83 = [^\n]*所有登记人物共用原提交人校验和不可覆盖修订版本/);

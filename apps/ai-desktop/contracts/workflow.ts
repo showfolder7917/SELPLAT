@@ -21,6 +21,44 @@ export interface WorkflowEventInput {
   occurredAt?: string;
 }
 
+/** 统一事件中心交给监督器和令狐的可查询异常事实。 */
+export interface WorkflowExceptionRecord {
+  eventId: string;
+  correlationId: string | null;
+  sourceType: "member" | "system" | "launcher" | "task";
+  sourceId: string;
+  eventType: string;
+  category: Extract<WorkflowEventCategory, "technical-error" | "business-exception" | "stalled">;
+  severity: WorkflowEventSeverity;
+  status: Extract<WorkflowEventStatus, "open" | "processing">;
+  message: string;
+  payload: Record<string, unknown>;
+  fingerprint: string | null;
+  occurredAt: string;
+  handlingOwnerId: string | null;
+  handlingStartedAt: string | null;
+}
+
+export interface EventCenterExceptionInput {
+  kind: "technical" | "business" | "stalled";
+  sourceType?: "member" | "system" | "launcher" | "task";
+  sourceId: string;
+  operation: string;
+  error: unknown;
+  correlationId?: string | null;
+  details?: Record<string, unknown>;
+  severity?: WorkflowEventSeverity;
+  fingerprint?: string | null;
+}
+
+export interface RendererExceptionReport {
+  operation: "window.error" | "window.unhandledrejection" | "react.error-boundary";
+  message: string;
+  stack?: string | null;
+  componentStack?: string | null;
+  url?: string | null;
+}
+
 export interface StalledTaskDetection {
   taskId: string;
   workflowId: string | null;

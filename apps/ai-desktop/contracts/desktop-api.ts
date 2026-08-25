@@ -10,6 +10,7 @@ import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalR
 import type { DesktopSettings } from "./settings.js";
 import type { ScreenCapture, ScreenCaptureFrameRequest, ScreenCaptureFrameResult, ScreenCapturePreparationResult, ScreenCaptureRequest, ScreenshotAnnotationWindowRequest, ScreenshotAttachment, ScreenshotCompletedEvent, ScreenshotSaveRequest, TempDirectoryInfo } from "./screenshot.js";
 import type { WorkspaceEntry, WorkspaceState } from "./workspace.js";
+import type { RendererExceptionReport } from "./workflow.js";
 
 /** 定义 preload 向渲染层公开的完整白名单；各领域数据结构保留在独立契约文件。 */
 export interface DesktopApi {
@@ -99,5 +100,6 @@ export interface DesktopApi {
   sendMessage(request: SendMessageRequest): Promise<SendMessageResponse>;
   onCodexStreamEvent(listener: (event: CodexStreamEvent) => void): () => void;
   cancel(): Promise<boolean>;
+  reportRendererException(report: RendererExceptionReport): void;
   windowControl(action: WindowAction): void;
 }

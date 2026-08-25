@@ -79,21 +79,37 @@ export class BusinessAuditLog {
   }
 
   recordEvent(type: string, details: Record<string, unknown> = {}, taskId?: string): void {
-    this.ensure();
     const occurredAt = new Date().toISOString();
     const event = { occurredAt, type, taskId: taskId || null, ...details };
-    const dailyLogPath = this.#dailyLogPath();
-    appendFileSync(dailyLogPath, `${JSON.stringify(event)}\n`, "utf8");
+    let dailyLogPath: string | null = null;
+    let archiveError: unknown = null;
+    try {
+      this.ensure();
+      dailyLogPath = this.#dailyLogPath();
+      appendFileSync(dailyLogPath, `${JSON.stringify(event)}\n`, "utf8");
+    } catch (error) {
+      archiveError = error;
+    }
     try {
       this.#eventSink?.({ occurredAt, type, taskId: taskId || null, details });
     } catch (error) {
-      appendFileSync(dailyLogPath, `${JSON.stringify({
+      const persistenceFailure = `${JSON.stringify({
         occurredAt: new Date().toISOString(),
         type: "event-center.persistence_failed",
         taskId: taskId || null,
         sourceEventType: type,
         message: error instanceof Error ? error.message : String(error),
-      })}\n`, "utf8");
+      })}\n`;
+      if (dailyLogPath) appendFileSync(dailyLogPath, persistenceFailure, "utf8");
+      else process.stderr.write(persistenceFailure);
+    }
+    if (archiveError) {
+      const failureDetails = { sourceEventType: type, message: archiveError instanceof Error ? archiveError.message : String(archiveError) };
+      try {
+        this.#eventSink?.({ occurredAt: new Date().toISOString(), type: "event-center.archive_failed", taskId: taskId || null, details: failureDetails });
+      } catch {
+        process.stderr.write(`${JSON.stringify({ occurredAt: new Date().toISOString(), type: "event-center.total_persistence_failed", ...failureDetails })}\n`);
+      }
     }
   }
 

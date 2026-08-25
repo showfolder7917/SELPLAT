@@ -4,19 +4,97 @@ import path from "node:path";
 import test from "node:test";
 
 import { SqliteDatabase } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/sqlite-database.js";
+import { CollaborationMemoryService } from "../../../build/ai-desktop/electron/electron/services/event-center/collaboration-memory-service.js";
 import { WorkflowRepository } from "../../../build/ai-desktop/electron/electron/services/event-center/workflow-repository.js";
 import { WorkflowSupervisor } from "../../../build/ai-desktop/electron/electron/services/event-center/workflow-supervisor.js";
 import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });
 
-test("统一迁移建立事件、流程、任务、审批、成员和运行会话表", () => {
+test("统一迁移建立事件、流程、任务、审批、成员、运行会话和对话记忆表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopConversationArchiveMessage"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "0002");
+    assert.equal(fixture.database.latestSchemaVersion, "0004");
+  } finally {
+    fixture.close();
+  }
+});
+
+test("异常从统一队列受理并在相关流程恢复后进入已解决终态", () => {
+  const fixture = createFixture("exception-lifecycle");
+  try {
+    fixture.repository.recordAuditEvent("technical.exception", { message: "渲染失败", correlationId: "round-1" });
+    const open = fixture.repository.listUnhandledExceptions();
+    assert.equal(open.length, 1);
+    assert.equal(open[0].status, "open");
+    assert.deepEqual(fixture.repository.claimExceptions([open[0].eventId], "linghu-ancestor", "2026-08-26T00:00:00.000Z"), [open[0].eventId]);
+    assert.equal(fixture.repository.listUnhandledExceptions()[0].status, "processing");
+    fixture.repository.recordAuditEvent("conversation.round.completed", { correlationId: "round-1" });
+    assert.equal(fixture.repository.listUnhandledExceptions().length, 0);
+    const resolved = fixture.database.withConnection((connection) => connection.prepare("SELECT status, handlingOwnerId, resolutionSummary FROM AiDesktopEvent WHERE eventId = $eventId").get({ $eventId: open[0].eventId }));
+    assert.equal(resolved.status, "resolved");
+    assert.equal(resolved.handlingOwnerId, "linghu-ancestor");
+    assert.match(resolved.resolutionSummary, /流程继续推进/);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("用户与南宫婉完整原文独立保存预览且每轮自由登记主题类型", () => {
+  const fixture = createFixture("conversation-memory");
+  const memory = new CollaborationMemoryService(fixture.database);
+  try {
+    const firstConversation = {
+      conversationId: "conversation-old",
+      messages: [
+        { messageId: "user-old", role: "user", content: "我的原话必须逐字保留，包括空格  和换行\n不能拿摘要替代。", attachmentIds: [], createdAt: "2026-08-25T00:00:00.000Z" },
+        { messageId: "nangong-old", role: "nangong", content: `南宫婉完整回答：${"详细调查内容".repeat(20)}`, attachmentIds: [], createdAt: "2026-08-25T00:00:01.000Z" },
+      ],
+      updatedAt: "2026-08-25T00:00:01.000Z",
+    };
+    firstConversation.messages[0].inferredIntent = "完整保存用户原话，不得由摘要替代。";
+    memory.registerRound(firstConversation, "user-old", "nangong-old", { title: "统一日志入口", type: "架构治理", switchTopic: false, userIntent: firstConversation.messages[0].inferredIntent });
+    const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT content, contentPreview, conversationTopicId FROM AiDesktopConversationMemory WHERE messageId='nangong-old'").get());
+    const storedUser = fixture.database.withConnection((connection) => connection.prepare("SELECT content, inferredIntent FROM AiDesktopConversationMemory WHERE messageId='user-old'").get());
+    assert.equal(storedUser.inferredIntent, "完整保存用户原话，不得由摘要替代。");
+    assert.equal(stored.content, firstConversation.messages[1].content);
+    assert.ok(Array.from(stored.contentPreview).length <= 81);
+    assert.ok(stored.conversationTopicId);
+    const firstContext = memory.buildNangongContext(firstConversation);
+    assert.match(firstContext, /我的原话必须逐字保留，包括空格  和换行/);
+    assert.doesNotMatch(firstContext, new RegExp(firstConversation.messages[1].content.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+    const continued = {
+      ...firstConversation,
+      messages: [...firstConversation.messages,
+        { messageId: "user-next", role: "user", content: "继续处理这个统一入口。", attachmentIds: [], createdAt: "2026-08-25T00:01:00.000Z" },
+        { messageId: "nangong-next", role: "nangong", content: "继续调查并给出证据。", attachmentIds: [], createdAt: "2026-08-25T00:01:01.000Z" },
+      ],
+      updatedAt: "2026-08-25T00:01:01.000Z",
+    };
+    continued.messages[2].inferredIntent = "继续完成统一入口。";
+    memory.registerRound(continued, "user-next", "nangong-next", { title: "标题可由 AI 调整", type: "自由类型", switchTopic: false, userIntent: continued.messages[2].inferredIntent });
+    assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopConversationTopic").get()).count, 1);
+
+    const switched = {
+      conversationId: "conversation-old",
+      messages: [...continued.messages,
+        { messageId: "user-new", role: "user", content: "现在切换到审批习惯分析。", attachmentIds: [], createdAt: "2026-08-26T00:00:00.000Z" },
+        { messageId: "nangong-new", role: "nangong", content: "已识别为新的话题中心。", attachmentIds: [], createdAt: "2026-08-26T00:00:01.000Z" },
+      ],
+      updatedAt: "2026-08-26T00:00:01.000Z",
+    };
+    switched.messages.at(-2).inferredIntent = "切换问题中心并分析审批习惯。";
+    memory.registerRound(switched, "user-new", "nangong-new", { title: "审批习惯分析", type: "审批偏好", switchTopic: true, userIntent: switched.messages.at(-2).inferredIntent });
+    const context = memory.buildNangongContext({ conversationId: "conversation-current", messages: [], updatedAt: "2026-08-26T00:02:00.000Z" });
+    assert.match(context, /我的原话必须逐字保留，包括空格  和换行/);
+    assert.match(context, /审批习惯分析|现在切换到审批习惯分析/);
+    const topics = fixture.database.withConnection((connection) => connection.prepare("SELECT title, topicType, state FROM AiDesktopConversationTopic ORDER BY startedAt").all());
+    assert.deepEqual(topics.map((item) => [item.title, item.topicType]), [["统一日志入口", "架构治理"], ["审批习惯分析", "审批偏好"]]);
+    assert.deepEqual(topics.map((item) => item.state), ["closed", "active"]);
   } finally {
     fixture.close();
   }
@@ -121,6 +199,7 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
   const now = new Date("2026-08-26T00:10:00.000Z");
   const heartbeat = new Date(now.getTime() - 180_000).toISOString();
   const handedOff = [];
+  const handedOffExceptions = [];
   const supervisor = new WorkflowSupervisor({
     repository: fixture.repository,
     intervalMs: 60_000,
@@ -131,11 +210,13 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
       linghu: () => ({ version: 2, enabled: true, pollIntervalMs: 30_000, cycle: 1, currentModule: "flow-completion", activePromptId: null, activeTaskId: null, pendingRepairProposalId: null, recoveryAttemptCount: 0, currentFaultFingerprint: null, recoveryAttemptsByFingerprint: {}, detectionCursor: null, flowSnapshots: [], testResourceState: null, recoveryCheckpoint: null, lastDispatchAt: null, lastCompletedAt: null, lastCheckedAt: null, blockingReason: null, lastFeedback: null, lastModuleReport: null, prompts: [], updatedAt: now.toISOString() }),
     },
     onStalledTasks: (taskIds) => handedOff.push(...taskIds),
+    onUnhandledExceptions: (events) => handedOffExceptions.push(...events),
   });
   try {
     supervisor.start();
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.deepEqual(handedOff, ["task-1"]);
+    assert.ok(handedOffExceptions.some((event) => event.category === "stalled" && event.handlingOwnerId === "linghu-ancestor"));
   } finally {
     supervisor.stop();
     fixture.close();

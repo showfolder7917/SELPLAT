@@ -108,6 +108,16 @@ export class NangongEvolutionStore {
     });
   }
 
+  recordConversationIntent(messageId: string, inferredIntent: string): NangongEvolutionState {
+    const now = new Date().toISOString();
+    return this.#commit("conversation.intent_recorded", null, null, (state) => {
+      const message = state.conversation.messages.find((item) => item.messageId === messageId && item.role === "user");
+      if (!message) throw new Error("需要登记意图的用户消息不存在。");
+      message.inferredIntent = required(inferredIntent, "用户意图摘要", 2_000);
+      state.conversation.updatedAt = now;
+    });
+  }
+
   newConversation(): NangongEvolutionState {
     return this.#commit("conversation.created", null, null, (state) => {
       state.conversation = createConversation();

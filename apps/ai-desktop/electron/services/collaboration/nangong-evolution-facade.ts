@@ -1,3 +1,4 @@
+import type { CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration-memory.js";
 import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, EvolutionProposal, GenerateNangongTopicDraftRequest, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
 import type { SendMessageResponse } from "../../../contracts/conversation.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
@@ -11,6 +12,7 @@ export interface NangongEvolutionFacadeOptions {
     newChat(): Promise<void>;
   };
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
+  memory?: CollaborationMemoryPort | null;
   newConversationRetryDelaysMs?: number[];
 }
 
@@ -20,11 +22,12 @@ export class NangongEvolutionFacade {
   readonly #collaboration: CollaborationCoordinator;
   readonly #conversation: NangongEvolutionFacadeOptions["conversation"];
   readonly #recordEvent: NangongEvolutionFacadeOptions["recordEvent"];
+  readonly #memory: CollaborationMemoryPort | null;
   readonly #newConversationRetryDelaysMs: number[];
   #timer: ReturnType<typeof setInterval> | null = null;
   #running = false;
 
-  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#recordEvent = options.recordEvent; this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
+  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
   state(): NangongEvolutionState { return this.#store.state(); }
   subscribe(listener: Parameters<NangongEvolutionStore["subscribe"]>[0]) { return this.#store.subscribe(listener); }
   start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
@@ -33,10 +36,22 @@ export class NangongEvolutionFacade {
   setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): NangongEvolutionState { return this.#store.setAutomation(kind, enabled); }
   async sendConversationMessage(request: SendNangongConversationMessageRequest): Promise<NangongEvolutionState> {
     let state = this.#store.appendConversation("user", request.message, request.attachmentIds || []);
-    const context = state.conversation.messages.slice(-12).map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+    const userMessage = state.conversation.messages.at(-1)!;
+    const context = this.#memory?.buildNangongContext(state.conversation)
+      || state.conversation.messages.slice(-12).map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
     const response = await this.#conversation.send(request, context);
-    state = this.#store.appendConversation("nangong", response.text);
-    this.#recordEvent("nangong.evolution.conversation_replied", { conversationId: state.conversation.conversationId, messageCount: state.conversation.messages.length });
+    const parsed = parseConversationResponse(response.text);
+    state = this.#store.appendConversation("nangong", parsed.reply);
+    state = this.#store.recordConversationIntent(userMessage.messageId, parsed.topic.userIntent);
+    const nangongMessage = state.conversation.messages.at(-1)!;
+    this.#memory?.registerRound(state.conversation, userMessage.messageId, nangongMessage.messageId, parsed.topic);
+    this.#recordEvent("nangong.evolution.conversation_replied", {
+      conversationId: state.conversation.conversationId,
+      messageCount: state.conversation.messages.length,
+      conversationTopicTitle: parsed.topic.title,
+      conversationTopicType: parsed.topic.type,
+      switchedTopic: parsed.topic.switchTopic,
+    });
     return state;
   }
   async newConversation(): Promise<NangongEvolutionState> {
@@ -55,7 +70,8 @@ export class NangongEvolutionFacade {
   async generateTopicDraft(request: GenerateNangongTopicDraftRequest): Promise<NangongTopicDraft> {
     const messages = this.state().conversation.messages.slice(-20);
     if (!messages.length) throw new Error("当前没有可整理为课题的南宫婉对话。");
-    const context = messages.map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+    const context = this.#memory?.buildNangongContext(this.state().conversation)
+      || messages.map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
     // 草稿仅供用户编辑，不写入对话或课题持久化状态，避免绕过显式保存确认。
     const response = await this.#conversation.send({
       message: "请根据上述对话生成课题草稿。仅返回 JSON：{\"title\":\"\",\"goal\":\"\",\"scope\":[\"\"],\"evidence\":[\"\"],\"acceptanceCriteria\":[\"\"]}。事实证据必须说明来自用户陈述或南宫婉调查，不要把推断写成已证实事实；每个数组至少一项。",
@@ -106,10 +122,16 @@ export class NangongEvolutionFacade {
     if (!proposal.content || !proposal.evidence.length || !proposal.impactScope.length || !proposal.risks.length || !proposal.rollbackPlan || !proposal.acceptanceCriteria.length) {
       return this.#store.decide(proposalId, "supplement-required", `事实、范围、风险、回退或验收条件不完整，请${proposal.submitterDisplayName}补充调查。`, "automatic-han-li", []);
     }
-    if (!manualHistory.length) return this.#store.decide(proposalId, "supplement-required", "没有同类型人工审批记录，不能以低置信度猜测通过。", "automatic-han-li", []);
-    const latest = manualHistory.at(-1)!;
-    const decision = latest.approval.decision === "approved" ? "approved" : latest.approval.decision;
-    return this.#store.decide(proposalId, decision, `参考同类型人工审批 ${latest.approval.approvalId}，按偏好快照作出决定。`, "automatic-han-li", [latest.approval.approvalId]);
+    const databaseHistory = this.#memory?.approvalEvidence(proposal.type, proposal.origin) || [];
+    if (!manualHistory.length && !databaseHistory.length) return this.#store.decide(proposalId, "supplement-required", "没有同类型人工审批记录，不能以低置信度猜测通过。", "automatic-han-li", []);
+    const latestState = manualHistory.at(-1);
+    const latestDatabase = databaseHistory[0];
+    const latest = latestState && (!latestDatabase || Date.parse(latestState.approval.createdAt) >= Date.parse(latestDatabase.approvedAt))
+      ? { approvalId: latestState.approval.approvalId, decision: latestState.approval.decision, advice: latestState.approval.advice }
+      : latestDatabase!;
+    const decision = latest.decision === "approved" ? "approved" : latest.decision;
+    const adviceContext = latest.advice.trim() ? `；历史建议：${latest.advice.trim().slice(0, 300)}` : "";
+    return this.#store.decide(proposalId, decision, `参考同类型人工审批 ${latest.approvalId}，按用户历史关注点和审批习惯作出决定${adviceContext}。`, "automatic-han-li", [latest.approvalId]);
   }
 
   dispatch(proposalId: string): NangongEvolutionState {
@@ -215,6 +237,30 @@ function parseTopicDraft(text: string): NangongTopicDraft {
     return { title, goal, scope, evidence, acceptanceCriteria };
   } catch {
     throw new Error("南宫婉生成的课题草稿不完整，请重试。");
+  }
+}
+
+const CONVERSATION_TOPIC_META_PREFIX = "NANGONG_TOPIC_META=";
+
+/** 南宫婉正文保持自然语言；最后一行只提供机器可读主题坐标，解析失败也不丢失正文。 */
+function parseConversationResponse(text: string): { reply: string; topic: ConversationRoundTopicDecision } {
+  const lines = text.trim().split(/\r?\n/);
+  let markerIndex = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (lines[index].trim().startsWith(CONVERSATION_TOPIC_META_PREFIX)) { markerIndex = index; break; }
+  }
+  if (markerIndex < 0) return { reply: text.trim(), topic: { title: "待分类主题", type: "待分类", switchTopic: false, userIntent: "待确认用户意图" } };
+  const marker = lines[markerIndex].trim().slice(CONVERSATION_TOPIC_META_PREFIX.length);
+  try {
+    const value = JSON.parse(marker) as Partial<ConversationRoundTopicDecision>;
+    const title = typeof value.title === "string" ? value.title.trim().slice(0, 120) : "";
+    const type = typeof value.type === "string" ? value.type.trim().slice(0, 120) : "";
+    const userIntent = typeof value.userIntent === "string" ? value.userIntent.trim().slice(0, 2_000) : "";
+    const reply = lines.filter((_line, index) => index !== markerIndex).join("\n").trim();
+    if (!reply || !title || !type || !userIntent) throw new Error("incomplete conversation topic metadata");
+    return { reply, topic: { title, type, switchTopic: value.switchTopic === true, userIntent } };
+  } catch {
+    return { reply: lines.filter((_line, index) => index !== markerIndex).join("\n").trim() || text.trim(), topic: { title: "待分类主题", type: "待分类", switchTopic: false, userIntent: "待确认用户意图" } };
   }
 }
 

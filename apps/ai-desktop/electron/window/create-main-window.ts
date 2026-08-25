@@ -43,6 +43,10 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
   const rendererLoad = options.distributionMode === "archive"
     ? window.loadURL("selplat-archive://bundle/index.html?distribution=archive")
     : window.loadFile(rendererTarget);
-  void rendererLoad.catch(() => undefined);
+  void rendererLoad.catch((error) => options.onRendererFailed?.({
+    errorCode: -1,
+    errorDescription: error instanceof Error ? error.message : String(error),
+    validatedURL: options.distributionMode === "archive" ? "selplat-archive://bundle/index.html" : rendererTarget,
+  }));
   return window;
 }

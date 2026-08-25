@@ -17,7 +17,7 @@ test("资源管理器折叠整栏并由活动栏图标恢复", () => {
   assert.match(component, /setExplorerExpanded\(\(value\) => !value\)/);
   assert.match(styles, /\.developer-shell\.explorer-collapsed\s*\{[^}]*grid-template-columns:\s*52px 0/);
   assert.match(styles, /\.developer-shell\.explorer-collapsed \.dev-explorer\s*\{\s*display:\s*none/);
-  assert.match(styles, /\.developer-shell\.explorer-collapsed \.dev-composer\s*\{[^}]*left:/);
+  assert.doesNotMatch(styles, /\.developer-shell\.explorer-collapsed \.dev-composer\s*\{/);
 });
 
 test("资源管理器宽度支持拖拽和键盘调整", () => {
@@ -50,7 +50,7 @@ test("工作区与任务使用单一活动分区并让当前分区置顶占满",
 
 test("当前用户 AI Desktop 规则已登记侧栏单区独占与标签新建入口契约", () => {
   assert.match(aiDesktopRuleIndex, new RegExp(`AI_DESKTOP_OFFICIAL_HARNESS_RULES\\s*=\\s*local/${activeUser}/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则\\.md`));
-  assert.match(aiDesktopRule, /rule_version\s*=\s*5\.47\.0/);
+  assert.match(aiDesktopRule, /rule_version\s*=\s*5\.89\.0/);
   assert.match(aiDesktopRule, /developer_sidebar_section_disclosure_contract\.3\s*=\s*workspace_tasks_single_active/);
   assert.match(aiDesktopRule, /developer_sidebar_section_disclosure_contract\.4\s*=\s*refresh_conversation_action_in_codex_chat_tab_before_close_with_localized_rebuild_session_tip/);
   assert.match(aiDesktopRule, /developer_sidebar_resizer_contract\.3\s*=\s*no_workspace_tasks_height_divider/);
@@ -58,11 +58,11 @@ test("当前用户 AI Desktop 规则已登记侧栏单区独占与标签新建�
   assert.match(aiDesktopRule, /developer_sidebar_active_section_layout_contract\.2\s*=\s*inactive_section_heading_only_at_bottom/);
   assert.match(component, /<div className="dev-tab"><Prompt24Regular \/><span>\{collaborationMode \? collaborationTabTitle : "Codex Chat"\}<\/span>/);
   assert.match(component, /newCodexSession:\s*"重新建立一个 Codex 会话"/);
-  assert.match(component, /className="tab-new-task"[^>]*data-tooltip=\{text\.newCodexSession\}[^>]*aria-label=\{text\.newCodexSession\}[^>]*onClick=\{\(\) => void startNewTask\(\)\}[^>]*><ArrowClockwise24Regular \/><\/button>/);
+  assert.match(component, /className="tab-new-task"[^>]*data-sel-tooltip=\{text\.newCodexSession\}[^>]*data-sel-tooltip-mode="always"[^>]*aria-label=\{text\.newCodexSession\}[^>]*onClick=\{\(\) => void startNewTask\(\)\}[^>]*><ArrowClockwise24Regular \/><\/button>/);
   assert.doesNotMatch(component, /className="tab-new-task"[^>]*\stitle=/);
   assert.doesNotMatch(component, /className="section-action new-task"/);
   assert.match(styles, /\.dev-tab \.tab-new-task\s*\{/);
-  assert.match(styles, /\.dev-tab \.tab-new-task\[data-tooltip\]::after\s*\{/);
-  assert.match(styles, /\.dev-tab \.tab-new-task\[data-tooltip\]:hover::after, \.dev-tab \.tab-new-task\[data-tooltip\]:focus-visible::after\s*\{/);
+  assert.match(component, /tooltip\.attach\(host/);
+  assert.doesNotMatch(styles, /data-tooltip|content:\s*attr\(/);
   assert.doesNotMatch(styles, /\.dev-section-title \.new-task\s*\{/);
 });

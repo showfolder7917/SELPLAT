@@ -130,5 +130,6 @@ contextBridge.exposeInMainWorld("desktop", {
     return () => ipcRenderer.removeListener("desktop:codex-stream-event", handler);
   },
   cancel: () => ipcRenderer.invoke("desktop:cancel"),
+  reportRendererException: (report: unknown) => ipcRenderer.send("desktop:renderer-exception", report),
   windowControl: (action: "minimize" | "maximize" | "close") => ipcRenderer.send("window:control", action),
 });

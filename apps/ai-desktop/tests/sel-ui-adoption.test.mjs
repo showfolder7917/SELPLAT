@@ -10,6 +10,9 @@ const themeAdapter = read("../src/theme/selUiTheme.ts");
 const entry = read("../src/main.tsx");
 const developerStyles = read("../src/variants/developer/developer.css");
 const developerApp = read("../src/variants/developer/DeveloperApp.tsx");
+const screenshotEditor = read("../src/features/screenshot/components/ScreenshotEditor.tsx");
+const selUiProvider = read("../src/theme/SelUiProvider.tsx");
+const selWindow = read("../../../shared/frontend/sel-ui/src/components/window/selWindow.js");
 const themeContract = read("../../../shared/frontend/sel-ui/src/theme/contract/selThemeContract.css");
 const sharedTokens = read("../../../shared/frontend/sel-ui/src/theme/selThemeTokens.css");
 const dependencyCache = read("../scripts/dependency-cache.mjs");
@@ -65,6 +68,20 @@ test("人物工作台通过 SELUI Grid 与 SplitPane 正式出口装配", () => 
   assert.doesNotMatch(developerApp, /<aside className="dev-context">/);
 });
 
+test("确认、输入和提示交互只通过 SELUI 公共组件", () => {
+  assert.match(entry, /<SelUiProvider>/);
+  assert.match(selUiProvider, /@selplat\/sel-ui\/components\/confirm-dialog/);
+  assert.match(selUiProvider, /@selplat\/sel-ui\/components\/window/);
+  assert.match(developerApp, /tooltip\.attach/);
+  assert.match(developerApp, /data-sel-tooltip/);
+  assert.match(screenshotEditor, /useSelUi/);
+  for (const source of [developerApp, screenshotEditor]) assert.doesNotMatch(source, /window\.(?:confirm|prompt)\(/);
+  assert.doesNotMatch(developerApp, /data-tooltip/);
+  assert.doesNotMatch(developerStyles, /content:\s*attr\(data-tooltip\)|\[data-tooltip\]/);
+  assert.match(selWindow, /selWindow:close/);
+  assert.match(selWindow, /destroy:\s*\(\)\s*=>/);
+});
+
 test("锁文件依赖缓存迁移后重建本地公共包链接", () => {
   assert.match(dependencyCache, /export function repairLocalPackageLinks/);
   assert.match(dependencyCache, /metadata\?\.link !== true/);
@@ -109,7 +126,7 @@ test("登录主操作完整消费 SEL UI 令牌并保留可读文字节点", () 
   assert.match(themeContract, /selThemeTokens\.css\?v=20260823-action-control-1/);
   assert.match(sharedTokens, /--sel-theme-action-height:\s*32px/);
   assert.match(sharedTokens, /--sel-theme-action-padding-inline:\s*13px/);
-  const accountRule = developerStyles.match(/\.dev-account button,[\s\S]*?\.status-card\.offline/)?.[0] || "";
+  const accountRule = developerStyles.match(/\.chatgpt-login-action, \.dev-account button[\s\S]*?\.status-card\.offline/)?.[0] || "";
   for (const token of [
     "--sel-theme-action-height",
     "--sel-theme-action-padding-inline",

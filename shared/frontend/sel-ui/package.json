@@ -90,6 +90,14 @@
       "types": "./src/theme/css.d.ts",
       "default": "./src/components/date-picker/selDatePicker.css"
     },
+    "./components/dialog": {
+      "types": "./src/runtime.d.ts",
+      "default": "./src/components/dialog/selDialog.js"
+    },
+    "./components/dialog/styles": {
+      "types": "./src/theme/css.d.ts",
+      "default": "./src/components/dialog/selDialog.css"
+    },
     "./components/dropdown-menu": {
       "types": "./src/runtime.d.ts",
       "default": "./src/components/dropdown/selDropdownMenu.js"
@@ -165,6 +173,10 @@
     "./components/split-pane/styles": {
       "types": "./src/theme/css.d.ts",
       "default": "./src/components/split-pane/selSplitPane.css"
+    },
+    "./components/switch/styles": {
+      "types": "./src/theme/css.d.ts",
+      "default": "./src/components/switch/selSwitch.css"
     },
     "./components/table-editor": {
       "types": "./src/runtime.d.ts",

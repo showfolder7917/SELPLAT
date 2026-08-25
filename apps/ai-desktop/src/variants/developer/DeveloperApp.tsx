@@ -74,6 +74,7 @@ import type {
 import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, managedModeForCommand, nextManagedMode, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "../../features/conversation/model/chat-message";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "./collaboration-task-progress";
+import { SelUiDialog, useSelUi } from "../../theme/SelUiProvider";
 import "@selplat/sel-ui/core/kernel";
 import "@selplat/sel-ui/components/floating-panel";
 import "@selplat/sel-ui/components/floating-panel/styles";
@@ -83,6 +84,7 @@ import "@selplat/sel-ui/components/grid";
 import "@selplat/sel-ui/components/grid/styles";
 import "@selplat/sel-ui/components/split-pane";
 import "@selplat/sel-ui/components/split-pane/styles";
+import "@selplat/sel-ui/components/switch/styles";
 import "./developer.css";
 
 type SelFloatingPanelController = {
@@ -111,6 +113,11 @@ type SelGridController = { destroy: () => boolean };
 type SelGridApi = {
   create: (host: HTMLElement, definition: Record<string, unknown>) => HTMLElement | null;
   mount: (root: HTMLElement, payload: Record<string, unknown>) => SelGridController | null;
+};
+
+type SelTooltipController = { destroy: () => boolean };
+type SelTooltipApi = {
+  attach: (host: Element, options: Record<string, unknown>) => SelTooltipController | null;
 };
 
 const DEFAULT_SETTINGS_WIDTH = 390;
@@ -254,6 +261,8 @@ function ChatGPTLoginAction({ label, onLogin }: { label: string; onLogin: () => 
 }
 
 export function DeveloperApp() {
+  const selUi = useSelUi();
+  const shellRef = useRef<HTMLDivElement>(null);
   const archiveDistribution = new URLSearchParams(window.location.search).get("distribution") === "archive";
   const [locale, setLocale] = useState<Locale>("zh-CN");
   const [sandboxMode, setSandboxMode] = useState<SandboxMode>("workspace-write");
@@ -348,6 +357,14 @@ export function DeveloperApp() {
 
   useEffect(() => { collaborationStateRef.current = collaborationState; }, [collaborationState]);
   useEffect(() => { linghuAutomationStateRef.current = linghuAutomationState; }, [linghuAutomationState]);
+
+  useEffect(() => {
+    const host = shellRef.current;
+    const tooltip = (window as typeof window & { sel?: { components?: { tooltip?: SelTooltipApi } } }).sel?.components?.tooltip;
+    if (!host || !tooltip) return;
+    const controller = tooltip.attach(host, { id: "ai-desktop:developer-tooltip", selector: "[data-sel-tooltip]", delay: 260 });
+    return () => { controller?.destroy(); };
+  }, []);
 
   const clampExplorerWidth = (width: number) => Math.min(MAXIMUM_EXPLORER_WIDTH, Math.max(MINIMUM_EXPLORER_WIDTH, width));
 
@@ -706,7 +723,7 @@ export function DeveloperApp() {
   };
 
   const removeWorkspace = async (id: string, name: string) => {
-    if (!window.confirm(text.removeConfirm.replace("{name}", name))) return;
+    if (!await selUi.confirm({ title: text.remove, message: text.removeConfirm.replace("{name}", name), target: name, tone: "danger" })) return;
     try {
       const state = await window.desktop?.removeWorkspace(id);
       if (state) applyWorkspaceState(state);
@@ -908,7 +925,7 @@ export function DeveloperApp() {
   };
 
   const createCollaborationMember = async () => {
-    const displayName = window.prompt(locale === "ja" ? "メンバー名" : "人物名称")?.trim();
+    const displayName = (await selUi.prompt({ title: locale === "ja" ? "メンバーを追加" : "新增人物", label: locale === "ja" ? "メンバー名" : "人物名称" }))?.trim();
     if (!displayName) return;
     try {
       const state = await window.desktop?.createCollaborationMember({ displayName });
@@ -919,14 +936,14 @@ export function DeveloperApp() {
   };
 
   const renameCollaborationMember = async (member: CollaborationMember) => {
-    const displayName = window.prompt(locale === "ja" ? "新しいメンバー名" : "新的人物名称", member.displayName)?.trim();
+    const displayName = (await selUi.prompt({ title: locale === "ja" ? "メンバー名を変更" : "修改人物名称", label: locale === "ja" ? "新しいメンバー名" : "新的人物名称", defaultValue: member.displayName }))?.trim();
     if (!displayName || displayName === member.displayName) return;
     const state = await window.desktop?.updateCollaborationMember(member.memberId, { displayName });
     if (state) setCollaborationState(state);
   };
 
   const deleteCollaborationMember = async (member: CollaborationMember) => {
-    if (member.protected || !window.confirm(locale === "ja" ? `${member.displayName}を削除しますか？` : `确定删除“${member.displayName}”吗？`)) return;
+    if (member.protected || !await selUi.confirm({ title: locale === "ja" ? "メンバーを削除" : "删除人物", message: locale === "ja" ? `${member.displayName}を削除しますか？` : `确定删除“${member.displayName}”吗？`, target: member.displayName, tone: "danger" })) return;
     const state = await window.desktop?.deleteCollaborationMember(member.memberId);
     if (state) setCollaborationState(state);
   };
@@ -1117,14 +1134,14 @@ export function DeveloperApp() {
   };
 
   const clearTempFiles = async () => {
-    if (!window.confirm(text.clearConfirm)) return;
+    if (!await selUi.confirm({ title: text.clearTemp, message: text.clearConfirm, tone: "danger" })) return;
     const info = await window.desktop?.clearTempFiles();
     if (info) setTempInfo(info);
     setAttachments([]);
   };
 
   const clearTrustedCommands = async () => {
-    if (!window.confirm(text.clearTrustedConfirm)) return;
+    if (!await selUi.confirm({ title: text.clearTrustedCommands, message: text.clearTrustedConfirm, tone: "danger" })) return;
     const info = await window.desktop?.clearTrustedCommands();
     if (info) setTrustedCommandInfo(info);
   };
@@ -1260,7 +1277,7 @@ export function DeveloperApp() {
       : selectedCollaborationMember?.displayName || (locale === "ja" ? "協同" : "协同模式");
   const nangongNewConversationLabel = locale === "ja" ? "南宮婉の会話を新しく作り直す" : "重新建立南宫婉对话";
 
-  return <div className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
+  return <div ref={shellRef} className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
     <header className="dev-titlebar">
       <div className="dev-brand"><Code24Regular /><strong>AI Desktop</strong><span>{text.title}</span>{archiveDistribution && <span>压缩包版</span>}</div>
       <div className="dev-command"><Search24Regular /><span>{projectRoot}</span></div>
@@ -1311,9 +1328,9 @@ export function DeveloperApp() {
                   <strong>{root.name}</strong>
                 </button>
                 <div className="workspace-actions">
-                  <button className={`workspace-permission-action ${readOnly ? "read-only" : "workspace-write"}`} data-tooltip={readOnly ? text.readOnlyTip : text.writeTip} aria-label={readOnly ? text.readOnlyTip : text.writeTip} aria-pressed={readOnly} onClick={() => void updateWorkspacePermission(root.id, readOnly ? "workspace-write" : "read-only")}>{readOnly ? <ShieldLock16Filled /> : <ShieldLock16Regular />}</button>
-                  <button className={`workspace-primary-action ${primary ? "primary-root" : ""}`} data-tooltip={primary ? text.primary : text.makePrimary} aria-label={primary ? text.primary : text.makePrimary} disabled={primary} onClick={() => void setPrimaryWorkspace(root.id)}>{primary ? <Star16Filled /> : <Star16Regular />}</button>
-                  <button className="workspace-remove-action" data-tooltip={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} aria-label={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} disabled={workspaces.roots.length === 1} onClick={() => void removeWorkspace(root.id, root.name)}><Delete16Regular /></button>
+                  <button className={`workspace-permission-action ${readOnly ? "read-only" : "workspace-write"}`} data-sel-tooltip={readOnly ? text.readOnlyTip : text.writeTip} data-sel-tooltip-mode="always" aria-label={readOnly ? text.readOnlyTip : text.writeTip} aria-pressed={readOnly} onClick={() => void updateWorkspacePermission(root.id, readOnly ? "workspace-write" : "read-only")}>{readOnly ? <ShieldLock16Filled /> : <ShieldLock16Regular />}</button>
+                  <button className={`workspace-primary-action ${primary ? "primary-root" : ""}`} data-sel-tooltip={primary ? text.primary : text.makePrimary} data-sel-tooltip-mode="always" aria-label={primary ? text.primary : text.makePrimary} disabled={primary} onClick={() => void setPrimaryWorkspace(root.id)}>{primary ? <Star16Filled /> : <Star16Regular />}</button>
+                  <button className="workspace-remove-action" data-sel-tooltip={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} data-sel-tooltip-mode="always" aria-label={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} disabled={workspaces.roots.length === 1} onClick={() => void removeWorkspace(root.id, root.name)}><Delete16Regular /></button>
                 </div>
               </div>
               {expanded && <div className="workspace-panel">
@@ -1367,7 +1384,7 @@ export function DeveloperApp() {
 
     <PersonWorkspaceSplitPane id={personWorkspaceId} locale={locale} side={personWorkspaceRail}>
     <main className="dev-main">
-      <div className="dev-tab"><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-tooltip={text.newCodexSession} aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}{showNangongConversationWorkspace && <button type="button" className="tab-new-task" data-tooltip={nangongNewConversationLabel} aria-label={nangongNewConversationLabel} disabled={nangongNewConversationBusy} onClick={() => void startNewNangongConversation()}><ArrowClockwise24Regular className={nangongNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}<Dismiss20Regular /></div>
+      <div className="dev-tab"><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={text.newCodexSession} data-sel-tooltip-mode="always" aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}{showNangongConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={nangongNewConversationLabel} data-sel-tooltip-mode="always" aria-label={nangongNewConversationLabel} disabled={nangongNewConversationBusy} onClick={() => void startNewNangongConversation()}><ArrowClockwise24Regular className={nangongNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}<Dismiss20Regular /></div>
       {aiMemoryDatabaseStatus && aiMemoryDatabaseStatus.state !== "ready" && <div className={`ai-memory-recovery ${aiMemoryDatabaseStatus.state}`} role="alert"><strong>{locale === "ja" ? "AI Memory データベースは停止中です" : "AI Memory 数据库已停用"}</strong><span>{locale === "ja" ? "設定、移行、または整合性の問題を確認し、元のデータベースを復旧してから再起動してください。" : aiMemoryDatabaseStatus.message || "请恢复数据库后重新启动。"}</span></div>}
       {showHanLiConversationWorkspace ? <section ref={chatRef} className="dev-chat">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p>{!codexStatus.account.authenticated && <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{!codexStatus.account.authenticated && loginHint && <em className="dev-login-hint">{loginHint}</em>}</div>}
@@ -1392,27 +1409,22 @@ export function DeveloperApp() {
         <textarea ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} placeholder={text.placeholder} />
         {dispatchError && <div className="composer-error" role="alert"><span>{dispatchError}</span></div>}
         {screenshotError && <div className="composer-error" role="alert"><span>{screenshotError}</span>{(screenRecordingSettingsAvailable || screenRecordingRestartRequired) && <div className="composer-error-actions">{screenRecordingSettingsAvailable && <button type="button" onClick={() => void openScreenRecordingSettings()}>{text.openScreenRecordingSettings}</button>}{screenRecordingRestartRequired && <button type="button" className="primary" disabled={screenRecordingRestarting} onClick={() => void restartForScreenRecordingPermission()}>{locale === "ja" ? "AI Desktop を再起動" : "重启 AI Desktop"}</button>}</div>}</div>}
-        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span><button type="button" role="switch" aria-checked={automaticTestEnabled} className={`automatic-test-toggle ${automaticTestEnabled ? "enabled" : ""}`} disabled={automaticTestChecking || (loading && !automaticTestEnabled)} onClick={() => void toggleAutomaticTesting()}><span>{text.automaticTest}</span><i /></button>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}<button type="button" className="screenshot-button" title={text.screenshot} aria-label={text.screenshot} data-tooltip={text.screenshot} disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" title={text.hiddenScreenshot} aria-label={text.hiddenScreenshot} data-tooltip={text.hiddenScreenshot} disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
+        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span><button type="button" role="switch" aria-checked={automaticTestEnabled} className="selswitch composer-automatic-test-switch" disabled={automaticTestChecking || (loading && !automaticTestEnabled)} onClick={() => void toggleAutomaticTesting()}><span>{text.automaticTest}</span><i className="selswitch-track" aria-hidden="true"><i className="selswitch-thumb" /></i></button>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}<button type="button" className="screenshot-button" aria-label={text.screenshot} data-sel-tooltip={text.screenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" aria-label={text.hiddenScreenshot} data-sel-tooltip={text.hiddenScreenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
       </form>}
     </main>
     </PersonWorkspaceSplitPane>
 
     <footer className="dev-statusbar"><span><Branch24Regular /> main*</span><span>0 errors</span><span>{sandboxMode}</span><span>AI Memory {aiMemoryDatabaseStatus?.state === "ready" ? `v${aiMemoryDatabaseStatus.schemaVersion || "-"} · ${locale === "ja" ? "統合イベントセンター" : "统一事件中心"}` : (locale === "ja" ? "要復旧" : "待恢复")}</span><span>UTF-8</span></footer>
 
-    {approval && <section className="dev-approval" role="dialog" aria-modal="true" aria-label={approval.title}>
-      <div className="approval-card"><span className="approval-kicker">CODEX APPROVAL</span><h2>{approval.title}</h2>{approval.reason && <p>{approval.reason}</p>}{approval.command && <pre>{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p>{text.trustHint}</p>}{approval.details && <details><summary>Details</summary><pre>{approval.details}</pre></details>}<div className="approval-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button className="primary" onClick={() => void resolveApproval("accept")}>{approval.kind === "command" && approval.trustEligible ? text.approveAndTrust : text.approve}</button></div></div>
-    </section>}
+    <SelUiDialog id="ai-desktop-codex-approval" open={Boolean(approval)} title={approval?.title || "Codex Approval"} kicker="CODEX APPROVAL" dismissible={false} onRequestClose={() => undefined}>
+      {approval && <>{approval.reason && <p className="seldialog-copy">{approval.reason}</p>}{approval.command && <pre className="seldialog-code">{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p className="seldialog-copy">{text.trustHint}</p>}{approval.details && <details className="seldialog-detail"><summary>Details</summary><pre className="seldialog-code">{approval.details}</pre></details>}<div className="seldialog-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button data-sel-action="primary" onClick={() => void resolveApproval("accept")}>{approval.kind === "command" && approval.trustEligible ? text.approveAndTrust : text.approve}</button></div></>}
+    </SelUiDialog>
 
-    {automaticTestDialog && <section className="dev-approval automatic-test-dialog" role="dialog" aria-modal="true" aria-label={text.automaticTest}>
-      <div className="approval-card automatic-test-card">
-        <span className="approval-kicker">AUTOMATIC TEST</span>
-        <h2>{automaticTestDialog === "checking" ? text.automaticTestChecking : automaticTestDialog.status === "ready" ? text.automaticTestReady : text.automaticTestBlocked}</h2>
-        {automaticTestDialog === "checking"
-          ? <div className="automatic-test-checking"><i /><span>{text.automaticTestChecking}</span></div>
-          : <ul className="automatic-test-checks">{automaticTestDialog.checks.map((check) => <li className={check.status} key={check.id}><i /><span><strong>{check.label}</strong><small>{check.detail}</small></span></li>)}</ul>}
-        {automaticTestDialog !== "checking" && <div className="approval-actions"><button className="primary" onClick={() => setAutomaticTestDialog(null)}>{text.close}</button></div>}
-      </div>
-    </section>}
+    <SelUiDialog id="ai-desktop-automatic-test" open={Boolean(automaticTestDialog)} title={automaticTestDialog === "checking" ? text.automaticTestChecking : automaticTestDialog?.status === "ready" ? text.automaticTestReady : text.automaticTestBlocked} kicker="AUTOMATIC TEST" dismissible={automaticTestDialog !== "checking"} size="compact" onRequestClose={() => { if (automaticTestDialog !== "checking") setAutomaticTestDialog(null); }}>
+      {automaticTestDialog === "checking"
+        ? <div className="seldialog-status"><span className="screenshot-spinner">◌</span><span>{text.automaticTestChecking}</span></div>
+        : automaticTestDialog && <><ul className="seldialog-checks">{automaticTestDialog.checks.map((check) => <li className={check.status} key={check.id}><i /><span><strong>{check.label}</strong><small>{check.detail}</small></span></li>)}</ul><div className="seldialog-actions"><button data-sel-action="primary" onClick={() => setAutomaticTestDialog(null)}>{text.close}</button></div></>}
+    </SelUiDialog>
   </div>;
 }
 
@@ -1546,7 +1558,7 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
   return <>
     <section className="dev-chat nangong-person-chat" aria-label="与南宫婉讨论演化课题">
       {state.conversation.messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
-      {state.conversation.messages.map((message) => <article key={message.messageId} className={`dev-message ${message.role}`}><span>{message.role === "user" ? "我" : "南宫婉"}</span><div>{message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
+      {state.conversation.messages.map((message) => <article key={message.messageId} className={`dev-message ${message.role}`}><span>{message.role === "user" ? "我" : "南宫婉"}</span><div>{message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} />{message.role === "user" && message.inferredIntent && <aside className="nangong-intent-summary"><strong>我了解到您的想法是</strong><span>{message.inferredIntent}</span><small>如果我理解有偏差，您可以直接纠正我。</small></aside>}</div></article>)}
     </section>
     <form className="dev-composer nangong-person-composer" onSubmit={(event) => { event.preventDefault(); void sendChat(); }}>
       {topicDraftOpen && <section className="evolution-inline-editor" aria-label="整理演化课题">
@@ -1565,7 +1577,7 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
       {newConversationBusy && <div className="nangong-conversation-refresh-status" role="status">正在关闭当前南宫婉线程并建立新对话…</div>}
       {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
       <textarea aria-label="给南宫婉发送消息" placeholder="描述演化问题、现状和不可改变的约束…（可粘贴截图）" value={chatText} onChange={(event) => setChatText(event.currentTarget.value)} onPaste={(event) => { const files = Array.from(event.clipboardData.items).filter((item) => item.kind === "file" && item.type.startsWith("image/")).map((item) => item.getAsFile()).filter((file): file is File => file !== null); if (files.length) { event.preventDefault(); onPaste(files); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendChat(); } }} />
-      <div className="composer-footer"><div className="composer-tools"><button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-tooltip="截取当前屏幕" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button><button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" data-tooltip="隐藏窗口后截图" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button><button type="button" className="nangong-convert-action" disabled={!state.conversation.messages.length || newConversationBusy} onClick={() => setTopicDraftOpen(true)}>整理为演化课题</button></div><div className="composer-actions"><button type="submit" disabled={newConversationBusy || (!chatText.trim() && !attachments.length) || chatBusy} aria-label={chatBusy ? "调查中" : "发送给南宫婉"}><Send24Filled /></button></div></div>
+      <div className="composer-footer"><div className="composer-tools"><button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-sel-tooltip="截取当前屏幕" data-sel-tooltip-mode="always" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button><button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" data-sel-tooltip="隐藏窗口后截图" data-sel-tooltip-mode="always" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button><button type="button" className="nangong-convert-action" disabled={!state.conversation.messages.length || newConversationBusy} onClick={() => setTopicDraftOpen(true)}>整理为演化课题</button></div><div className="composer-actions"><button type="submit" disabled={newConversationBusy || (!chatText.trim() && !attachments.length) || chatBusy} aria-label={chatBusy ? "调查中" : "发送给南宫婉"}><Send24Filled /></button></div></div>
     </form>
   </>;
 }
@@ -1789,15 +1801,16 @@ function MemberSelfUpgradePanel({ member, state, onState, onError }: { member: C
 
 /** 令狐老祖把持续运行中发现的修正方向先提交韩立，不再以修正名义绕过演化审批。 */
 function LinghuRepairProposalPanel({ state, workspaces, locale, onState, onError }: { state: NangongEvolutionState; workspaces: WorkspaceState | null; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
+  const selUi = useSelUi();
   const submit = async () => {
     if (!workspaces) return onError("令狐修正方案缺少已登记工作区。");
-    const title = window.prompt("修正方案标题")?.trim();
-    const content = window.prompt("详细修正方向")?.trim();
-    const evidence = window.prompt("充分调查事实（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
-    const impactScope = window.prompt("影响范围（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
-    const risks = window.prompt("风险（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
-    const rollbackPlan = window.prompt("回退方案")?.trim();
-    const acceptanceCriteria = window.prompt("验收条件（可用逗号分隔）")?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const title = (await selUi.prompt({ title: "令狐修正方案", label: "修正方案标题" }))?.trim();
+    const content = (await selUi.prompt({ title: "令狐修正方案", label: "详细修正方向", multiline: true }))?.trim();
+    const evidence = (await selUi.prompt({ title: "令狐修正方案", label: "充分调查事实（可用逗号分隔）" }))?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const impactScope = (await selUi.prompt({ title: "令狐修正方案", label: "影响范围（可用逗号分隔）" }))?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const risks = (await selUi.prompt({ title: "令狐修正方案", label: "风险（可用逗号分隔）" }))?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
+    const rollbackPlan = (await selUi.prompt({ title: "令狐修正方案", label: "回退方案", multiline: true }))?.trim();
+    const acceptanceCriteria = (await selUi.prompt({ title: "令狐修正方案", label: "验收条件（可用逗号分隔）" }))?.split(/[,，]/).map((item) => item.trim()).filter(Boolean) || [];
     if (!title || !content || !evidence.length || !impactScope.length || !risks.length || !rollbackPlan || !acceptanceCriteria.length) return onError("令狐修正方案的标题、内容、事实、范围、风险、回退和验收必须完整。");
     try { onState(await window.desktop!.createLinghuRepairProposal({ title, content, evidence, impactScope, risks, rollbackPlan, acceptanceCriteria, workspaceState: workspaces, locale })); } catch (error) { onError(readableDesktopError(error, "令狐修正方案提交失败。")); }
   };
@@ -1898,6 +1911,7 @@ function CollaborationStageContent({ stageId, task, liveMessage, automation, loc
 }
 
 function LinghuAutomationPanel({ state, locale, onState }: { state: LinghuAutomationState; locale: Locale; onState(state: LinghuAutomationState): void }) {
+  const selUi = useSelUi();
   const [editingPromptId, setEditingPromptId] = useState<string | "new" | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftContent, setDraftContent] = useState("");
@@ -1936,11 +1950,15 @@ function LinghuAutomationPanel({ state, locale, onState }: { state: LinghuAutoma
       setError(readableDesktopError(reason, locale === "ja" ? "自動保障設定を更新できません。" : "无法更新自动保障设置。"));
     }
   };
+  const deletePrompt = async (prompt: LinghuStartupPrompt) => {
+    const confirmed = await selUi.confirm({ title: locale === "ja" ? "起動文を削除" : "删除启动文案", message: locale === "ja" ? `「${prompt.title}」を削除しますか？` : `确定删除启动文案“${prompt.title}”吗？`, target: prompt.title, tone: "danger" });
+    if (confirmed) await apply(window.desktop?.deleteLinghuStartupPrompt(prompt.promptId));
+  };
 
   return <section className="linghu-automation" aria-label={locale === "ja" ? "自動運行の最終保障" : "自动运行最后保障"}>
     <header>
       <div><ShieldCheckmark24Regular /><div><h2>{locale === "ja" ? "自動運行の最終保障" : "自动运行最后保障"}</h2><p>{locale === "ja" ? "有効中は30秒ごとの検査を停止しません。" : "开启后每30秒持续检测，永远不会自行停止。"}</p></div></div>
-      <button type="button" className={`linghu-automation-toggle ${state.enabled ? "enabled" : ""}`} role="switch" aria-checked={state.enabled} onClick={() => void apply(window.desktop?.setLinghuAutomationEnabled(!state.enabled))}><span />{state.enabled ? (locale === "ja" ? "自動実行中" : "自动执行中") : (locale === "ja" ? "自動実行を開始" : "开启自动执行")}</button>
+      <button type="button" className="selswitch linghu-automation-toggle" role="switch" aria-checked={state.enabled} onClick={() => void apply(window.desktop?.setLinghuAutomationEnabled(!state.enabled))}><span className="selswitch-track" aria-hidden="true"><i className="selswitch-thumb" /></span>{state.enabled ? (locale === "ja" ? "自動実行中" : "自动执行中") : (locale === "ja" ? "自動実行を開始" : "开启自动执行")}</button>
     </header>
     <div className="linghu-automation-facts">
       <span>{locale === "ja" ? "サイクル" : "循环"}<strong>{state.cycle}</strong></span>
@@ -1962,7 +1980,7 @@ function LinghuAutomationPanel({ state, locale, onState }: { state: LinghuAutoma
         {prompt.enabled && state.activePromptId !== prompt.promptId && <button type="button" onClick={() => void apply(window.desktop?.selectLinghuStartupPrompt(prompt.promptId))}>{locale === "ja" ? "使用" : "设为当前"}</button>}
         <button type="button" onClick={() => void apply(window.desktop?.updateLinghuStartupPrompt(prompt.promptId, { enabled: !prompt.enabled }))}>{prompt.enabled ? (locale === "ja" ? "無効化" : "停用") : (locale === "ja" ? "有効化" : "启用")}</button>
         <button type="button" onClick={() => beginEdit(prompt)}>{locale === "ja" ? "編集" : "修改"}</button>
-        <button type="button" className="danger" onClick={() => { if (window.confirm(locale === "ja" ? `「${prompt.title}」を削除しますか？` : `确定删除启动文案“${prompt.title}”吗？`)) void apply(window.desktop?.deleteLinghuStartupPrompt(prompt.promptId)); }}>{locale === "ja" ? "削除" : "删除"}</button>
+        <button type="button" className="danger" onClick={() => void deletePrompt(prompt)}>{locale === "ja" ? "削除" : "删除"}</button>
       </nav>
     </article>)}</div>
     {error && <p className="task-detail-error" role="alert">{error}</p>}
