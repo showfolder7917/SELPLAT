@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionFeedbackTarget, EvolutionProposal, NangongEvolutionState, ReviseEvolutionProposalRequest } from "../../../contracts/nangong-evolution.js";
+import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionFeedbackTarget, EvolutionProposal, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
 
 type StateListener = (state: NangongEvolutionState, reason: string, topicId: string | null, proposalId: string | null) => void;
 
@@ -44,7 +44,7 @@ export class NangongEvolutionStore {
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "验收条件"),
         workspaceState: structuredClone(request.workspaceState), locale: request.locale,
         origin: "nangong", sourceConversationMessageIds: [...sourceConversationMessageIds],
-        status: "registered", currentProposalVersion: 0, recoveryPoint: "topic-registered",
+        status: "registered", topicRevision: 1, currentProposalVersion: 0, recoveryPoint: "topic-registered",
         createdAt: now, updatedAt: now,
       });
       state.activeTopicId = topicId;
@@ -53,6 +53,7 @@ export class NangongEvolutionStore {
 
   createProposal(topicId: string, request: CreateEvolutionProposalRequest): NangongEvolutionState {
     const topic = requireTopic(this.#state, topicId);
+    assertTopicEditableBeforeProposal(this.#state, topic);
     const now = new Date().toISOString();
     const proposalId = `evolution-proposal-${randomUUID()}`;
     const version = topic.currentProposalVersion + 1;
@@ -74,6 +75,26 @@ export class NangongEvolutionStore {
         distributionUnits: normalizeDistributionUnits(request.distributionUnits, mutableTopic), status: "pending-approval",
         approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
       });
+    });
+  }
+
+  updateTopic(topicId: string, request: UpdateEvolutionTopicRequest): NangongEvolutionState {
+    const topic = requireTopic(this.#state, topicId);
+    assertTopicEditableBeforeProposal(this.#state, topic);
+    if (request.expectedTopicRevision !== topic.topicRevision) throw new Error("课题已被其他保存操作更新，请刷新后重新编辑。");
+    const now = new Date().toISOString();
+    return this.#commit("topic.updated", topicId, null, (state) => {
+      const mutable = requireTopic(state, topicId);
+      // 用户确认保存前允许纠正课题事实；提案形成后该快照不得再被覆盖。
+      mutable.title = required(request.title, "专项标题", 160);
+      mutable.goal = required(request.goal, "专项目标", 8_000);
+      mutable.scope = normalizedList(request.scope, "影响范围");
+      mutable.exclusions = normalizedOptionalList(request.exclusions);
+      mutable.evidence = normalizedList(request.evidence, "调查证据");
+      mutable.acceptanceCriteria = normalizedList(request.acceptanceCriteria, "验收条件");
+      mutable.topicRevision += 1;
+      mutable.recoveryPoint = "topic-updated-before-proposal";
+      mutable.updatedAt = now;
     });
   }
 
@@ -112,7 +133,7 @@ export class NangongEvolutionStore {
         topicId, title: required(request.title, "修正标题", 160), goal: required(request.content, "修正内容", 30_000),
         scope: normalizedList(request.impactScope, "影响范围"), exclusions: [], evidence: normalizedList(request.evidence, "调查证据"),
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "验收条件"), workspaceState: structuredClone(request.workspaceState), locale: request.locale,
-        origin: "linghu", sourceConversationMessageIds: [], status: "pending-approval", currentProposalVersion: 1,
+        origin: "linghu", sourceConversationMessageIds: [], status: "pending-approval", topicRevision: 1, currentProposalVersion: 1,
         recoveryPoint: "linghu-proposal-awaiting-approval", createdAt: now, updatedAt: now,
       });
       state.proposals.push({
@@ -248,13 +269,15 @@ export class NangongEvolutionStore {
   #load(): NangongEvolutionState {
     try {
       const raw = JSON.parse(readFileSync(this.#filePath, "utf8")) as Omit<Partial<NangongEvolutionState>, "version"> & { version?: number; automaticApprovalEnabled?: boolean };
-      if ((raw.version === 1 || raw.version === 2 || raw.version === 3) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
+      if ((raw.version === 1 || raw.version === 2 || raw.version === 3 || raw.version === 4) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
         const value = raw as NangongEvolutionState;
         const legacy = raw;
-        value.version = 3;
+        value.version = 4;
         value.automaticNangongApprovalEnabled ??= legacy.automaticApprovalEnabled === true;
         value.automaticLinghuApprovalEnabled ??= false;
         value.conversation ??= createConversation();
+        // 旧状态即使尚未生成提案，也必须获得首个课题修订号才能安全编辑。
+        for (const topic of value.topics) topic.topicRevision ??= 1;
         for (const proposal of value.proposals) {
           const topic = value.topics.find((item) => item.topicId === proposal.topicId);
           topic && (topic.origin ??= "nangong");
@@ -276,7 +299,7 @@ export class NangongEvolutionStore {
         return value;
       }
     } catch { /* 首次启动或损坏状态使用安全关闭的空状态，历史文件不会被扫描猜测。 */ }
-    return { version: 3, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+    return { version: 4, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
   }
 
   #write(state: NangongEvolutionState): void {
@@ -303,4 +326,9 @@ function normalizeRevisedDistributionUnits(previous: EvolutionProposal, request:
 }
 function requireTopic(state: NangongEvolutionState, topicId: string) { const topic = state.topics.find((item) => item.topicId === topicId); if (!topic) throw new Error("专项课题不存在。"); return topic; }
 function requireProposal(state: NangongEvolutionState, proposalId: string) { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+function assertTopicEditableBeforeProposal(state: NangongEvolutionState, topic: NangongEvolutionState["topics"][number]): void {
+  if (!["registered", "investigating"].includes(topic.status) || topic.currentProposalVersion !== 0 || state.proposals.some((item) => item.topicId === topic.topicId)) {
+    throw new Error("课题已进入提案流程，不能再修改或重复提交提案。");
+  }
+}
 function createConversation(): NangongEvolutionState["conversation"] { const now = new Date().toISOString(); return { conversationId: `nangong-conversation-${randomUUID()}`, messages: [], updatedAt: now }; }

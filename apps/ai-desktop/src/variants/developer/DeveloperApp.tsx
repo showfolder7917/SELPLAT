@@ -1479,6 +1479,7 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
   const [chatText, setChatText] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [topicDraftOpen, setTopicDraftOpen] = useState(false);
+  const [topicDraftBusy, setTopicDraftBusy] = useState(false);
   const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", acceptanceCriteria: "" });
   const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
   const update = async (operation: () => Promise<NangongEvolutionState> | undefined) => {
@@ -1501,6 +1502,16 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
     setTopicDraftOpen(false);
     setTopicDraft({ title: "", goal: "", scope: "", acceptanceCriteria: "" });
   };
+  const generateTopicDraft = async () => {
+    if (!workspaces || !state.conversation.messages.length || topicDraftBusy) return;
+    setTopicDraftOpen(true);
+    setTopicDraftBusy(true);
+    try {
+      // 生成结果只作为当前可编辑表单的初值，用户点击保存前不会冻结对话或创建课题。
+      const draft = await window.desktop?.generateNangongTopicDraft({ workspaceState: workspaces, locale });
+      if (draft) setTopicDraft({ title: draft.title, goal: draft.goal, scope: draft.scope.join("，"), acceptanceCriteria: draft.acceptanceCriteria.join("，") });
+    } catch (error) { onError(readableDesktopError(error, "课题草稿生成失败。")); } finally { setTopicDraftBusy(false); }
+  };
   return <>
     <section className="dev-chat nangong-person-chat" aria-label="与南宫婉讨论演化课题">
       {state.conversation.messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
@@ -1509,15 +1520,16 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
     <form className="dev-composer nangong-person-composer" onSubmit={(event) => { event.preventDefault(); void sendChat(); }}>
       {topicDraftOpen && <section className="evolution-inline-editor" aria-label="整理演化课题">
         <header><strong>整理为演化课题</strong><button type="button" onClick={() => setTopicDraftOpen(false)}>取消</button></header>
+        {topicDraftBusy && <p role="status">南宫婉正在根据当前对话整理课题草稿…</p>}
         <label>课题标题<input aria-label="课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label>
         <label>课题目标<textarea aria-label="课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label>
         <label>影响范围<input aria-label="课题影响范围" placeholder="多项用逗号分隔" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label>
         <label>验收条件<input aria-label="课题验收条件" placeholder="多项用逗号分隔" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label>
-        <button type="button" className="primary" onClick={() => void convertChat()}>确认形成课题</button>
+        <button type="button" className="primary" disabled={topicDraftBusy} onClick={() => void convertChat()}>确认保存课题</button>
       </section>}
       {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>调查截图</figcaption><button type="button" aria-label="移除截图" onClick={() => onAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
       <textarea aria-label="给南宫婉发送消息" placeholder="描述演化问题、现状和不可改变的约束…（可粘贴截图）" value={chatText} onChange={(event) => setChatText(event.currentTarget.value)} onPaste={(event) => { const files = Array.from(event.clipboardData.items).filter((item) => item.kind === "file" && item.type.startsWith("image/")).map((item) => item.getAsFile()).filter((file): file is File => file !== null); if (files.length) { event.preventDefault(); onPaste(files); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendChat(); } }} />
-      <div className="composer-footer"><div className="composer-tools"><button type="button" className="screenshot-button" aria-label="新建南宫婉对话" data-tooltip="新建南宫婉对话" onClick={() => void update(() => window.desktop?.newNangongConversation())}><ArrowClockwise24Regular /></button><button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-tooltip="截取当前屏幕" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button><button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" data-tooltip="隐藏窗口后截图" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button><button type="button" className="nangong-convert-action" disabled={!state.conversation.messages.length} onClick={() => { setTopicDraft((current) => ({ ...current, goal: current.goal || state.conversation.messages.filter((item) => item.role === "user").at(-1)?.content || "" })); setTopicDraftOpen(true); }}>整理为演化课题</button></div><div className="composer-actions"><button type="submit" disabled={(!chatText.trim() && !attachments.length) || chatBusy} aria-label={chatBusy ? "调查中" : "发送给南宫婉"}><Send24Filled /></button></div></div>
+      <div className="composer-footer"><div className="composer-tools"><button type="button" className="screenshot-button" aria-label="新建南宫婉对话" data-tooltip="新建南宫婉对话" onClick={() => void update(() => window.desktop?.newNangongConversation())}><ArrowClockwise24Regular /></button><button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-tooltip="截取当前屏幕" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button><button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" data-tooltip="隐藏窗口后截图" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button><button type="button" className="nangong-convert-action" disabled={!state.conversation.messages.length || topicDraftBusy} onClick={() => void generateTopicDraft()}>整理为演化课题</button></div><div className="composer-actions"><button type="submit" disabled={(!chatText.trim() && !attachments.length) || chatBusy} aria-label={chatBusy ? "调查中" : "发送给南宫婉"}><Send24Filled /></button></div></div>
     </form>
   </>;
 }
@@ -1595,12 +1607,14 @@ function EvolutionProposalGrid({ id, proposals, selectedId, locale, mode, onSele
 /** 南宫婉右栏集中课题、自动化和提案进度，不再挤压连续对话。 */
 function NangongEvolutionRail({ member, state, workspaces, locale, onState, onError }: { member: CollaborationMember; state: NangongEvolutionState; workspaces: WorkspaceState | null; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
   const nangongTopics = state.topics.filter((item) => item.origin === "nangong");
-  const topic = nangongTopics.find((item) => item.topicId === state.activeTopicId) || nangongTopics.at(-1) || null;
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(state.activeTopicId);
+  const topic = nangongTopics.find((item) => item.topicId === selectedTopicId) || nangongTopics.find((item) => item.topicId === state.activeTopicId) || nangongTopics.at(-1) || null;
   const proposals = state.proposals.filter((item) => item.origin === "nangong").sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   const [selectedId, setSelectedId] = useState<string | null>(proposals[0]?.proposalId || null);
   const [topicEditorOpen, setTopicEditorOpen] = useState(false);
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [proposalEditorOpen, setProposalEditorOpen] = useState(false);
-  const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
+  const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" });
   const [proposalDraft, setProposalDraft] = useState({ content: "", risks: "", rollbackPlan: "" });
   const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
   const updateProposalDraft = (field: keyof typeof proposalDraft, value: string) => setProposalDraft((current) => ({ ...current, [field]: value }));
@@ -1617,9 +1631,29 @@ function NangongEvolutionRail({ member, state, workspaces, locale, onState, onEr
     const acceptanceCriteria = splitEvolutionList(topicDraft.acceptanceCriteria);
     if (!goal || !scope.length || !evidence.length || !acceptanceCriteria.length) return onError("目标、范围、证据和验收条件必须完整填写。");
     if (!title) return onError("课题标题不能为空。");
-    await update(() => window.desktop?.createEvolutionTopic({ title, goal, scope, evidence, acceptanceCriteria, workspaceState: workspaces, locale }));
-    setTopicDraft({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
+    await update(() => window.desktop?.createEvolutionTopic({ title, goal, scope, exclusions: splitEvolutionList(topicDraft.exclusions), evidence, acceptanceCriteria, workspaceState: workspaces, locale }));
+    setTopicDraft({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" });
     setTopicEditorOpen(false);
+  };
+  const startEditingTopic = (target: NonNullable<typeof topic>) => {
+    setSelectedTopicId(target.topicId);
+    setEditingTopicId(target.topicId);
+    setTopicDraft({ title: target.title, goal: target.goal, scope: target.scope.join("，"), exclusions: target.exclusions.join("，"), evidence: target.evidence.join("，"), acceptanceCriteria: target.acceptanceCriteria.join("，") });
+  };
+  const saveTopic = async () => {
+    const target = nangongTopics.find((item) => item.topicId === editingTopicId);
+    if (!target) return;
+    const title = topicDraft.title.trim();
+    const goal = topicDraft.goal.trim();
+    const scope = splitEvolutionList(topicDraft.scope);
+    const exclusions = splitEvolutionList(topicDraft.exclusions);
+    const evidence = splitEvolutionList(topicDraft.evidence);
+    const acceptanceCriteria = splitEvolutionList(topicDraft.acceptanceCriteria);
+    if (!title || !goal || !scope.length || !evidence.length || !acceptanceCriteria.length) return onError("标题、目标、范围、证据和验收条件必须完整填写。");
+    // 读取时的修订号随保存一起提交，避免两个界面把彼此的课题修正静默覆盖。
+    await update(() => window.desktop?.updateEvolutionTopic(target.topicId, { expectedTopicRevision: target.topicRevision, title, goal, scope, exclusions, evidence, acceptanceCriteria }));
+    setEditingTopicId(null);
+    setTopicDraft({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" });
   };
   const createProposal = async () => {
     if (!topic) return;
@@ -1634,10 +1668,12 @@ function NangongEvolutionRail({ member, state, workspaces, locale, onState, onEr
   };
   const toggle = (kind: "evolution" | "nangong-approval" | "execution", enabled: boolean) => void update(() => window.desktop?.setNangongAutomation(kind, enabled));
   return <aside className="person-workspace-rail nangong-workspace-rail" aria-label="南宫婉课题和提案工作栏">
-    <header><div><span>专项演化</span><h2>课题与提案</h2><p>{topic ? topic.title : "先讨论，再把成熟方向整理成课题。"}</p></div><button type="button" onClick={() => setTopicEditorOpen((current) => !current)}>新建课题</button></header>
-    {topicEditorOpen && <section className="evolution-inline-editor" aria-label="新建演化课题"><label>课题标题<input aria-label="新课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label><label>课题目标<textarea aria-label="新课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label><label>影响范围<input aria-label="新课题影响范围" placeholder="多项用逗号分隔" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label><label>事实证据<input aria-label="新课题事实证据" placeholder="多项用逗号分隔" value={topicDraft.evidence} onChange={(event) => updateTopicDraft("evidence", event.currentTarget.value)} /></label><label>验收条件<input aria-label="新课题验收条件" placeholder="多项用逗号分隔" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label><nav><button type="button" onClick={() => setTopicEditorOpen(false)}>取消</button><button type="button" className="primary" onClick={() => void createTopic()}>保存课题</button></nav></section>}
+    <header><div><span>专项演化</span><h2>课题与提案</h2><p>{topic ? topic.title : "先讨论，再把成熟方向整理成课题。"}</p></div><button type="button" onClick={() => { setEditingTopicId(null); setTopicDraft({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" }); setTopicEditorOpen((current) => !current); }}>新建课题</button></header>
+    {topicEditorOpen && <section className="evolution-inline-editor" aria-label="新建演化课题"><label>课题标题<input aria-label="新课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label><label>课题目标<textarea aria-label="新课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label><label>影响范围<input aria-label="新课题影响范围" placeholder="多项用逗号分隔" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label><label>排除范围<input aria-label="新课题排除范围" placeholder="多项用逗号分隔" value={topicDraft.exclusions} onChange={(event) => updateTopicDraft("exclusions", event.currentTarget.value)} /></label><label>事实证据<input aria-label="新课题事实证据" placeholder="多项用逗号分隔" value={topicDraft.evidence} onChange={(event) => updateTopicDraft("evidence", event.currentTarget.value)} /></label><label>验收条件<input aria-label="新课题验收条件" placeholder="多项用逗号分隔" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label><nav><button type="button" onClick={() => setTopicEditorOpen(false)}>取消</button><button type="button" className="primary" onClick={() => void createTopic()}>保存课题</button></nav></section>}
     <section className="person-rail-section"><h3>自动化</h3><div className="nangong-automation-switches"><label><input type="checkbox" checked={state.automaticEvolutionEnabled} onChange={(event) => toggle("evolution", event.currentTarget.checked)} />自动演化</label><label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => toggle("nangong-approval", event.currentTarget.checked)} />提案自动审批</label><label><input type="checkbox" checked={state.automaticExecutionEnabled} onChange={(event) => toggle("execution", event.currentTarget.checked)} />通过后自动分发</label></div></section>
-    {topic && <article className="evolution-topic-card"><span>{topic.status}</span><h3>{topic.title}</h3><p>{topic.goal}</p><small>恢复点：{topic.recoveryPoint}</small><button type="button" onClick={() => { setProposalDraft((current) => ({ ...current, content: current.content || `课题：${topic.title}\n\n目标：${topic.goal}\n\n推荐方向：` })); setProposalEditorOpen((current) => !current); }}>形成新版本提案</button></article>}
+    {nangongTopics.length > 1 && <section className="person-rail-section"><h3>已保存课题</h3><div className="evolution-topic-list">{nangongTopics.map((item) => <button key={item.topicId} type="button" className={item.topicId === topic?.topicId ? "selected" : ""} onClick={() => setSelectedTopicId(item.topicId)}>{item.title}</button>)}</div></section>}
+    {topic && <article className="evolution-topic-card"><span>{topic.status}</span><h3>{topic.title}</h3><p>{topic.goal}</p><small>课题修订：v{topic.topicRevision} · 恢复点：{topic.recoveryPoint}</small>{topic.currentProposalVersion === 0 && ["registered", "investigating"].includes(topic.status) && <><button type="button" onClick={() => startEditingTopic(topic)}>编辑课题</button><button type="button" onClick={() => { setProposalDraft((current) => ({ ...current, content: current.content || `课题：${topic.title}\n\n目标：${topic.goal}\n\n推荐方向：` })); setProposalEditorOpen((current) => !current); }}>形成新版本提案</button></>}</article>}
+    {editingTopicId && <section className="evolution-inline-editor" aria-label="编辑已保存课题"><label>课题标题<input aria-label="编辑课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label><label>课题目标<textarea aria-label="编辑课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label><label>影响范围<input aria-label="编辑课题影响范围" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label><label>排除范围<input aria-label="编辑课题排除范围" value={topicDraft.exclusions} onChange={(event) => updateTopicDraft("exclusions", event.currentTarget.value)} /></label><label>事实证据<input aria-label="编辑课题事实证据" value={topicDraft.evidence} onChange={(event) => updateTopicDraft("evidence", event.currentTarget.value)} /></label><label>验收条件<input aria-label="编辑课题验收条件" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label><nav><button type="button" onClick={() => setEditingTopicId(null)}>取消</button><button type="button" className="primary" onClick={() => void saveTopic()}>确认保存修改</button></nav></section>}
     {topic && proposalEditorOpen && <section className="evolution-inline-editor" aria-label="形成演化提案"><label>详细方案<textarea aria-label="提案详细方案" value={proposalDraft.content} onChange={(event) => updateProposalDraft("content", event.currentTarget.value)} /></label><label>风险<input aria-label="提案风险" placeholder="多项用逗号分隔" value={proposalDraft.risks} onChange={(event) => updateProposalDraft("risks", event.currentTarget.value)} /></label><label>回退方案<textarea aria-label="提案回退方案" value={proposalDraft.rollbackPlan} onChange={(event) => updateProposalDraft("rollbackPlan", event.currentTarget.value)} /></label><nav><button type="button" onClick={() => setProposalEditorOpen(false)}>取消</button><button type="button" className="primary" onClick={() => void createProposal()}>提交韩立审批</button></nav></section>}
     <section className="person-rail-section proposal-progress-section"><div className="person-rail-heading"><h3>提案进度</h3><span>{proposals.length}</span></div><EvolutionProposalGrid id="nangong-proposal-progress" proposals={proposals} selectedId={selected?.proposalId || null} locale={locale} mode="progress" onSelect={setSelectedId} /></section>
     {selected && <EvolutionProposalDetail proposal={selected} compact>{selected.status === "approved" && <button type="button" onClick={() => void update(() => window.desktop?.dispatchEvolutionProposal(selected.proposalId))}>返还南宫婉并分发</button>}</EvolutionProposalDetail>}
