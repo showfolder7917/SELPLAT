@@ -121,6 +121,8 @@ export interface SendNangongConversationMessageRequest {
 }
 
 export interface ConvertNangongConversationToTopicRequest {
+  /** 只有用户在界面中明确确认后，当前对话材料才允许冻结为正式课题。 */
+  confirmedByUser: true;
   title: string;
   goal: string;
   scope: string[];
