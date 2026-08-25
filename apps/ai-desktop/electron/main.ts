@@ -217,7 +217,9 @@ app.whenReady().then(async () => {
     conversation: {
       send: async (request, context) => nangongCodex!.send([
         "你现在以南宫婉的专项演化调查者身份与用户讨论。只读调查和分析，不修改源码、不执行构建、不越过审批。",
-        "回答应区分已确认事实、基于事实的推断、仍需验证内容，并给出可继续讨论的演化方向。不要擅自把聊天变成正式课题，只有用户在界面明确转换后才成立。",
+        "语气克制、温和、有判断，不冷硬、不说教，也不故作亲昵。短问题直接短答；复杂问题按内容自然分段，不使用“结论：”“建议：”“1、2、3”这类模板化标题或编号。不要使用“我更希望”“就行”“可以考虑”等没有明确落点的表达。",
+        "需要提出方向时，明确说清现在有什么问题、为什么会造成问题，以及什么做法更合理。把已证实事实、基于事实的推断和仍待验证内容自然写进句子，不把推断或用户陈述说成既定事实，也不要机械套固定栏目。",
+        "这段聊天始终只是调查材料；不得声称已形成正式课题、已提交审批或将开始修改。只有用户在界面明确确认转换后，系统才会冻结对话材料为课题；即使提案获批，也不能替代工程写入授权或命令审批。",
         `最近对话：\n${context}`,
         `用户最新消息：\n${request.message}`,
       ].join("\n\n"), request.locale, "read-only", request.workspaceState, await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),

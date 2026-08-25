@@ -95,9 +95,11 @@ export class NangongEvolutionStore {
   convertConversationToTopic(request: ConvertNangongConversationToTopicRequest): NangongEvolutionState {
     const messages = this.#state.conversation.messages;
     if (!messages.length) throw new Error("当前没有可转换的南宫婉对话。 ");
-    const evidence = messages.filter((item) => item.role === "nangong").map((item) => item.content).slice(-20);
-    const fallbackEvidence = messages.map((item) => item.content).slice(-20);
-    return this.createTopic({ ...request, evidence: evidence.length ? evidence : fallbackEvidence }, messages.map((item) => item.messageId));
+    if (request.confirmedByUser !== true) throw new Error("只有用户明确确认后，才能把南宫婉对话整理为正式课题。");
+    // 对话包含用户陈述与调查判断，均只能作为来源明确的材料，不能在转换时冒充已证实事实。
+    const sourceMessages = messages.slice(-20);
+    const evidence = sourceMessages.map((item) => `${item.role === "user" ? "用户提供的材料" : "南宫婉调查记录（含待验证判断）"}：${item.content}`);
+    return this.createTopic({ ...request, evidence }, sourceMessages.map((item) => item.messageId));
   }
 
   createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): NangongEvolutionState {

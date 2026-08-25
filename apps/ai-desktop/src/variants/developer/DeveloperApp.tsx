@@ -1497,7 +1497,7 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
     const scope = splitEvolutionList(topicDraft.scope);
     const acceptanceCriteria = splitEvolutionList(topicDraft.acceptanceCriteria);
     if (!title || !goal || !scope.length || !acceptanceCriteria.length) return onError("标题、目标、范围和验收条件必须完整填写。");
-    await update(() => window.desktop?.convertNangongConversationToTopic({ title, goal, scope, acceptanceCriteria, workspaceState: workspaces, locale }));
+    await update(() => window.desktop?.convertNangongConversationToTopic({ confirmedByUser: true, title, goal, scope, acceptanceCriteria, workspaceState: workspaces, locale }));
     setTopicDraftOpen(false);
     setTopicDraft({ title: "", goal: "", scope: "", acceptanceCriteria: "" });
   };
