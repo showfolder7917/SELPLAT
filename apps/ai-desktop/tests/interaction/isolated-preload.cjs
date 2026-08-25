@@ -81,7 +81,7 @@ let linghuAutomationState = {
   prompts: [{ promptId: "linghu-default-flow-guardian", title: linghuDefault.title, content: linghuDefault.content, enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
-let nangongEvolutionState = { version: 3, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
+let nangongEvolutionState = { version: 4, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
 const publishNangongEvolution = (reason) => {
   nangongEvolutionState.updatedAt = new Date().toISOString();
   const event = { state: structuredClone(nangongEvolutionState), reason, topicId: nangongEvolutionState.activeTopicId, proposalId: null };
@@ -91,7 +91,7 @@ const publishNangongEvolution = (reason) => {
 const createInteractionTopic = (request, evidence) => {
   const now = new Date().toISOString();
   const topicId = `interaction-topic-${Date.now()}`;
-  nangongEvolutionState.topics.push({ topicId, title: request.title, goal: request.goal, scope: request.scope, exclusions: request.exclusions || [], evidence, acceptanceCriteria: request.acceptanceCriteria, workspaceState: request.workspaceState, locale: request.locale, origin: "nangong", sourceConversationMessageIds: nangongEvolutionState.conversation.messages.map((item) => item.messageId), status: "registered", currentProposalVersion: 0, recoveryPoint: "topic-registered", createdAt: now, updatedAt: now });
+  nangongEvolutionState.topics.push({ topicId, title: request.title, goal: request.goal, scope: request.scope, exclusions: request.exclusions || [], evidence, acceptanceCriteria: request.acceptanceCriteria, workspaceState: request.workspaceState, locale: request.locale, origin: "nangong", sourceConversationMessageIds: nangongEvolutionState.conversation.messages.map((item) => item.messageId), status: "registered", topicRevision: 1, currentProposalVersion: 0, recoveryPoint: "topic-registered", createdAt: now, updatedAt: now });
   nangongEvolutionState.activeTopicId = topicId;
   return publishNangongEvolution("topic.created");
 };
@@ -262,8 +262,16 @@ contextBridge.exposeInMainWorld("desktop", {
     return publishNangongEvolution("conversation.replied");
   },
   newNangongConversation: async () => { nangongEvolutionState.conversation = { conversationId: `nangong-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() }; return publishNangongEvolution("conversation.created"); },
+  generateNangongTopicDraft: async () => ({ title: "南宫婉完整审批链路", goal: "让令狐持续修正先形成可审批方案，再进入统一审批。", scope: ["AI Desktop", "审批链路"], acceptanceCriteria: ["生成内容可编辑", "保存后进入课题卡片"] }),
   convertNangongConversationToTopic: async (request) => createInteractionTopic(request, nangongEvolutionState.conversation.messages.filter((item) => item.role === "nangong").map((item) => item.content)),
   createEvolutionTopic: async (request) => createInteractionTopic(request, request.evidence),
+  updateEvolutionTopic: async (topicId, request) => {
+    const topic = nangongEvolutionState.topics.find((item) => item.topicId === topicId);
+    if (!topic || topic.currentProposalVersion !== 0 || topic.status !== "registered") throw new Error("课题已进入提案流程，不能再修改。");
+    if (topic.topicRevision !== request.expectedTopicRevision) throw new Error("课题已被其他保存操作更新，请刷新后重新编辑。");
+    Object.assign(topic, { title: request.title, goal: request.goal, scope: request.scope, exclusions: request.exclusions || [], evidence: request.evidence, acceptanceCriteria: request.acceptanceCriteria, topicRevision: topic.topicRevision + 1, recoveryPoint: "topic-updated-before-proposal", updatedAt: new Date().toISOString() });
+    return publishNangongEvolution("topic.updated");
+  },
   setNangongAutomation: async (kind, enabled) => {
     if (kind === "evolution") nangongEvolutionState.automaticEvolutionEnabled = enabled === true;
     if (kind === "nangong-approval") nangongEvolutionState.automaticNangongApprovalEnabled = enabled === true;

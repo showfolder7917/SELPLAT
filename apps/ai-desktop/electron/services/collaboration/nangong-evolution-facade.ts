@@ -1,4 +1,4 @@
-import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, EvolutionProposal, NangongEvolutionState, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest } from "../../../contracts/nangong-evolution.js";
+import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, EvolutionProposal, GenerateNangongTopicDraftRequest, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
 import type { SendMessageResponse } from "../../../contracts/conversation.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
@@ -38,8 +38,21 @@ export class NangongEvolutionFacade {
     return state;
   }
   async newConversation(): Promise<NangongEvolutionState> { await this.#conversation.newChat(); return this.#store.newConversation(); }
+  async generateTopicDraft(request: GenerateNangongTopicDraftRequest): Promise<NangongTopicDraft> {
+    const messages = this.state().conversation.messages.slice(-20);
+    if (!messages.length) throw new Error("当前没有可整理为课题的南宫婉对话。");
+    const context = messages.map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+    // 草稿仅供用户编辑，不写入对话或课题持久化状态，避免绕过显式保存确认。
+    const response = await this.#conversation.send({
+      message: "请根据上述对话生成课题草稿。仅返回 JSON：{\"title\":\"\",\"goal\":\"\",\"scope\":[\"\"],\"acceptanceCriteria\":[\"\"]}。不要把推断写成已证实事实；每个数组至少一项。",
+      workspaceState: request.workspaceState,
+      locale: request.locale,
+    }, context);
+    return parseTopicDraft(response.text);
+  }
   convertConversationToTopic(request: ConvertNangongConversationToTopicRequest): NangongEvolutionState { return this.#store.convertConversationToTopic(request); }
   createProposal(topicId: string, request: CreateEvolutionProposalRequest): NangongEvolutionState { return this.#store.createProposal(topicId, request); }
+  updateTopic(topicId: string, request: UpdateEvolutionTopicRequest): NangongEvolutionState { return this.#store.updateTopic(topicId, request); }
   createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): NangongEvolutionState { return this.#store.createLinghuRepairProposal(request); }
   decideProposal(proposalId: string, request: DecideEvolutionProposalRequest): NangongEvolutionState {
     return this.#store.decide(proposalId, request.decision, request.advice || "", "manual-user", [], request.feedbackTarget || "proposal-content", request.capabilityScope || "");
@@ -152,7 +165,7 @@ export class NangongEvolutionFacade {
         if (proposal.origin === "linghu" || state.automaticExecutionEnabled) state = this.dispatch(proposal.proposalId);
       }
       if (!state.automaticEvolutionEnabled) return;
-      const topic = state.topics.find((item) => ["registered", "investigating", "supplement-required"].includes(item.status));
+      const topic = state.topics.find((item) => ["registered", "investigating"].includes(item.status));
       if (!topic || state.proposals.some((item) => item.topicId === topic.topicId && item.status === "pending-approval")) return;
       const content = `课题：${topic.title}\n\n目标：${topic.goal}\n\n调查事实：\n${topic.evidence.map((item) => `- ${item}`).join("\n")}\n\n推荐方向：在已登记范围内实施，并保持排除项不变。`;
       let next = this.createProposal(topic.topicId, { type: "代码修正", content, risks: ["实施结果可能与既有调用方产生兼容影响"], rollbackPlan: "保留提案版本和关联任务，失败时撤销任务分支且不覆盖历史提案。" });
@@ -165,3 +178,21 @@ export class NangongEvolutionFacade {
 }
 
 function requireProposal(state: NangongEvolutionState, proposalId: string): EvolutionProposal { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+
+function parseTopicDraft(text: string): NangongTopicDraft {
+  const candidate = text.match(/\{[\s\S]*\}/)?.[0];
+  if (!candidate) throw new Error("南宫婉未返回可编辑的课题草稿，请重试。");
+  try {
+    const value = JSON.parse(candidate) as Partial<NangongTopicDraft>;
+    const title = typeof value.title === "string" ? value.title.trim() : "";
+    const goal = typeof value.goal === "string" ? value.goal.trim() : "";
+    const scope = normalizeDraftList(value.scope);
+    const acceptanceCriteria = normalizeDraftList(value.acceptanceCriteria);
+    if (!title || !goal || !scope.length || !acceptanceCriteria.length) throw new Error();
+    return { title, goal, scope, acceptanceCriteria };
+  } catch {
+    throw new Error("南宫婉生成的课题草稿不完整，请重试。");
+  }
+}
+
+function normalizeDraftList(value: unknown): string[] { return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : []; }

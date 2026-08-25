@@ -25,8 +25,10 @@ export function registerCollaborationIpc(collaboration: CollaborationCoordinator
   ipcMain.handle("desktop:get-nangong-evolution-state", () => nangongEvolution.state());
   ipcMain.handle("desktop:send-nangong-conversation-message", (_event, request) => nangongEvolution.sendConversationMessage(request));
   ipcMain.handle("desktop:new-nangong-conversation", () => nangongEvolution.newConversation());
+  ipcMain.handle("desktop:generate-nangong-topic-draft", (_event, request) => nangongEvolution.generateTopicDraft(request));
   ipcMain.handle("desktop:convert-nangong-conversation-to-topic", (_event, request) => nangongEvolution.convertConversationToTopic(request));
   ipcMain.handle("desktop:create-evolution-topic", (_event, request) => nangongEvolution.createTopic(request));
+  ipcMain.handle("desktop:update-evolution-topic", (_event, topicId: string, request) => nangongEvolution.updateTopic(topicId, request));
   ipcMain.handle("desktop:set-nangong-automation", (_event, kind, enabled) => nangongEvolution.setAutomation(kind, enabled === true));
   ipcMain.handle("desktop:create-evolution-proposal", (_event, topicId: string, request) => nangongEvolution.createProposal(topicId, request));
   ipcMain.handle("desktop:create-linghu-repair-proposal", (_event, request) => nangongEvolution.createLinghuRepairProposal(request));
