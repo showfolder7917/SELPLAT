@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, protocol } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
+import type { AiMemoryDatabaseStatus } from "../contracts/database.js";
 import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import { BusinessAuditLog } from "./services/business-audit-log.js";
@@ -31,6 +32,9 @@ import { ScreenshotStore } from "./services/screenshot-store.js";
 import { SettingsStore } from "./services/settings-store.js";
 import { WorkspaceStore } from "./services/workspace-store.js";
 import { TrustedCommandStore } from "./services/trusted-command-store.js";
+import { initializeAiMemoryDatabase, type SqliteDatabase } from "./services/event-center/persistence/sqlite-database.js";
+import { WorkflowRepository } from "./services/event-center/workflow-repository.js";
+import { WorkflowSupervisor } from "./services/event-center/workflow-supervisor.js";
 import { createMainWindow } from "./window/create-main-window.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -49,6 +53,35 @@ let nangongCodex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
 let nangongEvolution: NangongEvolutionFacade | undefined;
+let aiMemoryDatabase: SqliteDatabase | null = null;
+let workflowRepository: WorkflowRepository | null = null;
+let workflowSupervisor: WorkflowSupervisor | null = null;
+let aiMemoryDatabaseStatus: AiMemoryDatabaseStatus = {
+  state: "unavailable",
+  schemaVersion: null,
+  message: "AI Memory 数据库尚未初始化。",
+};
+
+function closeAiMemoryDatabase(): void {
+  try {
+    aiMemoryDatabase?.close();
+  } catch (error) {
+    process.stderr.write(`AI Memory SQLite checkpoint 或关闭失败：${error instanceof Error ? error.message : String(error)}\n`);
+  } finally {
+    aiMemoryDatabase = null;
+  }
+}
+
+function prepareAiMemoryShutdown(): void {
+  try {
+    workflowSupervisor?.stop();
+  } catch (error) {
+    process.stderr.write(`AI Desktop 工作流会话停止失败：${error instanceof Error ? error.message : String(error)}\n`);
+  } finally {
+    workflowSupervisor = null;
+  }
+  closeAiMemoryDatabase();
+}
 
 // 开发启动、正式包与重启交接共用同一数据域，确保所有人物任务在版本切换后继续执行。
 const healthCheckFile = process.argv.find((argument) => argument.startsWith("--ai-desktop-health-check-file="))?.slice("--ai-desktop-health-check-file=".length)
@@ -63,6 +96,12 @@ app.whenReady().then(async () => {
   const variant = resolveAppVariant();
   const distributionMode = resolveDistributionMode();
   const projectRoot = resolveProjectRoot();
+  const aiMemoryInitialization = initializeAiMemoryDatabase({
+    projectRoot,
+    runtimeMarkerPath: path.join(app.getPath("userData"), "ai-memory-database-state.json"),
+  });
+  aiMemoryDatabase = aiMemoryInitialization.database;
+  aiMemoryDatabaseStatus = aiMemoryInitialization.status;
   const applicationName = resolveApplicationName();
   const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName });
   const archiveRuntime = distributionMode === "archive";
@@ -93,7 +132,13 @@ app.whenReady().then(async () => {
   const appRoot = archiveRuntime ? app.getAppPath() : projectPaths.sourceRoot;
   const releaseVersion = (JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8")) as { version: string }).version;
   const audit = new BusinessAuditLog(projectPaths.sourceRoot, projectPaths.buildRoot, projectPaths.archiveLogRoot);
+  workflowRepository = aiMemoryDatabase ? new WorkflowRepository(aiMemoryDatabase) : null;
+  audit.setEventSink(workflowRepository
+    ? ({ occurredAt, type, taskId, details }) => workflowRepository!.recordAuditEvent(type, details, taskId || undefined, occurredAt)
+    : null);
   audit.recordApplicationStart({ variant, projectRoot, rendererRoot });
+  process.on("uncaughtExceptionMonitor", (error) => audit.recordEvent("application.uncaught_exception", { message: error.message }));
+  process.on("unhandledRejection", (reason) => audit.recordEvent("application.unhandled_rejection", { message: reason instanceof Error ? reason.message : String(reason) }));
   const trustedCommands = new TrustedCommandStore(path.join(app.getPath("userData"), "trusted-project-commands.json"));
   const codexSessions = new CodexSessionStore(path.join(app.getPath("userData"), "active-codex-session.json"));
   const settings = new SettingsStore(path.join(app.getPath("userData"), "desktop-settings.json"));
@@ -182,6 +227,7 @@ app.whenReady().then(async () => {
     sessions: collaborationSessions,
     emitState: (state, reason, taskIds) => {
       // 单任务事件写入顶层 taskId；批量集成同时保留 taskIds，确保每条流程和错误都能反查所属任务。
+      workflowRepository?.syncCollaborationState(state);
       audit.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
     },
@@ -207,6 +253,7 @@ app.whenReady().then(async () => {
     publishIntegration: (executable, releaseBatchId) => {
       audit.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId });
       app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
+      prepareAiMemoryShutdown();
       app.exit(0);
     },
   });
@@ -228,6 +275,7 @@ app.whenReady().then(async () => {
     recordEvent: (type, details, taskId) => audit.recordEvent(type, details, taskId),
   });
   nangongEvolution.subscribe((state, reason, topicId, proposalId) => {
+    workflowRepository?.syncEvolutionState(state);
     audit.recordEvent("nangong.evolution.state_changed", { reason, topicId, proposalId, activeTopicId: state.activeTopicId });
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:nangong-evolution-state", { state, reason, topicId, proposalId });
   });
@@ -245,6 +293,7 @@ app.whenReady().then(async () => {
       const executable = resolveVerifiedDeveloperExecutable(projectPaths.buildRoot);
       audit.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed", executable });
       app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
+      prepareAiMemoryShutdown();
       app.exit(0);
     },
     submitRepairProposal: (request) => nangongEvolution!.createLinghuRepairProposal(request),
@@ -252,9 +301,25 @@ app.whenReady().then(async () => {
     reviseReturnedProposal: (proposalId) => nangongEvolution!.reviseReturnedProposalAutomatically(proposalId),
   });
   linghuAutomation.subscribe((event) => {
+    workflowRepository?.syncLinghuState(event.state);
     audit.recordEvent("linghu.automation.state_changed", { reason: event.reason, enabled: event.state.enabled, cycle: event.state.cycle, module: event.state.currentModule }, event.state.activeTaskId || undefined);
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:linghu-automation-state", event);
   });
+
+  if (workflowRepository) {
+    workflowSupervisor = new WorkflowSupervisor({
+      repository: workflowRepository,
+      readers: {
+        collaboration: () => collaboration!.state(),
+        evolution: () => nangongEvolution!.state(),
+        linghu: () => linghuAutomation!.state(),
+      },
+      onStalledTasks: async (taskIds) => {
+        audit.recordEvent("workflow.stalled_tasks_detected", { taskIds, count: taskIds.length });
+        await linghuAutomation!.checkNow();
+      },
+    });
+  }
 
   registerDesktopIpc({
     codex,
@@ -268,11 +333,13 @@ app.whenReady().then(async () => {
     nangongEvolution,
     collaborationRegistry,
     audit,
+    aiMemoryDatabaseStatus,
     projectRoot,
     appRoot,
     variant,
     preloadPath,
     rendererRoot,
+    prepareForApplicationExit: prepareAiMemoryShutdown,
   });
 
   let onRendererReady: (() => void) | undefined;
@@ -301,6 +368,7 @@ app.whenReady().then(async () => {
   collaboration.resumePendingWork();
   linghuAutomation.start();
   nangongEvolution.start();
+  workflowSupervisor?.start();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow({ preloadPath, rendererRoot, variant, distributionMode });
   });
@@ -312,6 +380,7 @@ app.on("before-quit", () => {
   void collaboration?.dispose();
   codex?.dispose();
   nangongCodex?.dispose();
+  prepareAiMemoryShutdown();
 });
 
 app.on("window-all-closed", () => {

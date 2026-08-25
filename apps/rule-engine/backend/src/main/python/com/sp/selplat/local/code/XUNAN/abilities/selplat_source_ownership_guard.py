@@ -82,6 +82,8 @@ MANAGED_DATABASE_REGISTRY_RELATIVE = Path(
     "apps/rule-engine/backend/src/main/resources/local"
 )
 PROGRAM_LANGUAGE_REGISTRY_NAME = "program-language-applications.json"
+DATABASE_RUNTIME_TYPES = {"java-gradle", "electron"}
+DATABASE_ENGINES = {"h2", "sqlite"}
 
 
 def _strip_javascript_literals_and_comments(source_text: str) -> str:
@@ -1055,6 +1057,27 @@ def load_managed_database_registry(
             })
             continue
         registrations[project_name] = application
+        runtime_type = application.get("runtimeType")
+        database_engine = application.get("databaseEngine")
+        if runtime_type not in DATABASE_RUNTIME_TYPES or database_engine not in DATABASE_ENGINES:
+            violations.append({
+                "code": "MANAGED_DATABASE_REGISTRY_RUNTIME_INVALID",
+                "path": relative_registry,
+                "message": (
+                    f"{project_name} requires runtimeType in {sorted(DATABASE_RUNTIME_TYPES)} "
+                    f"and databaseEngine in {sorted(DATABASE_ENGINES)}"
+                ),
+            })
+            continue
+        expected_runtime_type = "java-gradle" if database_engine == "h2" else "electron"
+        if runtime_type != expected_runtime_type:
+            violations.append({
+                "code": "MANAGED_DATABASE_REGISTRY_RUNTIME_ENGINE_MISMATCH",
+                "path": relative_registry,
+                "message": (
+                    f"{project_name}.{database_engine} requires runtimeType={expected_runtime_type}"
+                ),
+            })
         if "structure" in application:
             violations.append({
                 "code": "MANAGED_DATABASE_REGISTRY_SPECIAL_STRUCTURE_FORBIDDEN",
@@ -1072,6 +1095,31 @@ def load_managed_database_registry(
                     "path": relative_registry,
                     "message": f"{project_name}.{field_name} must be {expected_value}",
                 })
+        if database_engine == "sqlite":
+            database_file = application.get("databaseFile")
+            path_config = application.get("pathConfig")
+            if not isinstance(database_file, str) or not re.fullmatch(
+                    r"db/[a-z][a-z0-9._-]*\.sqlite3", database_file):
+                violations.append({
+                    "code": "MANAGED_DATABASE_SQLITE_FILE_INVALID",
+                    "path": relative_registry,
+                    "message": f"{project_name}.databaseFile must be a safe db/*.sqlite3 path",
+                })
+            if not isinstance(path_config, str) or not re.fullmatch(
+                    r"db/[a-z][a-z0-9._-]*\.json", path_config):
+                violations.append({
+                    "code": "MANAGED_DATABASE_SQLITE_PATH_CONFIG_INVALID",
+                    "path": relative_registry,
+                    "message": f"{project_name}.pathConfig must be a safe db/*.json path",
+                })
+            for forbidden_field in ("datasourcePrefix", "primaryKeyStrategy"):
+                if forbidden_field in application:
+                    violations.append({
+                        "code": "MANAGED_DATABASE_SQLITE_H2_FIELD_FORBIDDEN",
+                        "path": relative_registry,
+                        "message": f"{project_name}.{forbidden_field} belongs only to H2 governance",
+                    })
+            continue
         primary_key_strategy = application.get("primaryKeyStrategy")
         if primary_key_strategy not in {
                 "one-table-one-sequence", "aggregate-global-code-sequence"}:
@@ -1132,6 +1180,9 @@ def audit_managed_datasource_pool_governance(
         "DataSourceBuilder.create": "untyped DataSourceBuilder creation",
     }
     for project_name, registration in sorted(registrations.items()):
+        # Hikari 是 Java/H2 合同；Electron/SQLite 使用主进程单连接，不进入 Java 连接池门禁。
+        if registration.get("databaseEngine") != "h2":
+            continue
         application_root = project_root / "apps" / project_name
         java_root = application_root / "backend/src/main/java"
         if not java_root.is_dir():
@@ -1209,6 +1260,93 @@ def audit_managed_datasource_pool_governance(
                         f"{project_name} datasource pool properties are incomplete: "
                         + ", ".join(missing_properties)
                     ),
+                })
+    return violations
+
+
+def audit_registered_sqlite_database(
+        project_root: Path,
+        application_root: Path,
+        registration: dict[str, Any],
+        registry_path: Path) -> list[dict[str, str]]:
+    """验证一个已中央登记的 Electron/SQLite 路径与迁移合同。"""
+
+    violations: list[dict[str, str]] = []
+    project_name = application_root.name
+    schema_root = application_root / str(registration.get("schemaRoot", ""))
+    path_config = application_root / str(registration.get("pathConfig", ""))
+    if not schema_root.is_dir():
+        violations.append({
+            "code": "MANAGED_DATABASE_SQLITE_SCHEMA_ROOT_MISSING",
+            "path": str(registry_path.relative_to(project_root)),
+            "message": f"{project_name} registered SQLite schemaRoot is missing",
+        })
+    if not path_config.is_file():
+        violations.append({
+            "code": "MANAGED_DATABASE_SQLITE_PATH_CONFIG_MISSING",
+            "path": str(registry_path.relative_to(project_root)),
+            "message": f"{project_name} registered SQLite pathConfig is missing",
+        })
+        return violations
+    try:
+        path_document = json.loads(path_config.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exception:
+        violations.append({
+            "code": "MANAGED_DATABASE_SQLITE_PATH_CONFIG_UNREADABLE",
+            "path": str(path_config.relative_to(project_root)),
+            "message": f"SQLite pathConfig is unreadable: {exception}",
+        })
+        return violations
+    expected_database_root = (application_root / "db").resolve()
+    if path_document.get("schemaVersion") != 1:
+        violations.append({
+            "code": "MANAGED_DATABASE_SQLITE_PATH_CONFIG_VERSION_INVALID",
+            "path": str(path_config.relative_to(project_root)),
+            "message": "SQLite pathConfig requires schemaVersion=1",
+        })
+    configured_database_root = path_document.get("databaseRoot")
+    configured_database_file = path_document.get("databaseFile")
+    registered_database_file = Path(str(registration.get("databaseFile", "")))
+    if not isinstance(configured_database_root, str) \
+            or not Path(configured_database_root).is_absolute() \
+            or Path(configured_database_root).resolve() != expected_database_root:
+        violations.append({
+            "code": "MANAGED_DATABASE_SQLITE_ROOT_MISMATCH",
+            "path": str(path_config.relative_to(project_root)),
+            "message": f"SQLite databaseRoot must resolve to {expected_database_root}",
+        })
+    if configured_database_file != registered_database_file.name:
+        violations.append({
+            "code": "MANAGED_DATABASE_SQLITE_FILE_MISMATCH",
+            "path": str(path_config.relative_to(project_root)),
+            "message": "SQLite pathConfig databaseFile must match the central registration",
+        })
+    load_order = schema_root / "load-order.txt"
+    if not load_order.is_file():
+        violations.append({
+            "code": "MANAGED_DATABASE_SQLITE_LOAD_ORDER_MISSING",
+            "path": str(schema_root.relative_to(project_root)),
+            "message": "registered SQLite schemaRoot requires load-order.txt",
+        })
+    else:
+        manifest_entries = [
+            line.strip()
+            for line in load_order.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        for manifest_entry in manifest_entries:
+            fields = [field.strip() for field in manifest_entry.split("|")]
+            version_code = fields[0] if len(fields) == 3 else ""
+            migration_file = fields[1] if len(fields) == 3 else ""
+            description = fields[2] if len(fields) == 3 else ""
+            if not re.fullmatch(r"\d{4}", version_code) \
+                    or not description \
+                    or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*\.sql", migration_file) \
+                    or not (schema_root / migration_file).is_file():
+                violations.append({
+                    "code": "MANAGED_DATABASE_SQLITE_LOAD_ORDER_ENTRY_INVALID",
+                    "path": str(load_order.relative_to(project_root)),
+                    "message": f"SQLite load-order entry is unsafe or missing: {manifest_entry}",
                 })
     return violations
 
@@ -1584,6 +1722,14 @@ def audit_source_ownership(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                         "centrally before the uniform architecture gate can pass"
                     ),
                 })
+            if registered_database and registration.get("databaseEngine") == "sqlite":
+                violations.extend(audit_registered_sqlite_database(
+                    project_root,
+                    project_root_path,
+                    registration,
+                    managed_database_registry_path(project_root, stable_user_id),
+                ))
+                continue
             if registered_database:
                 for root_entry in sorted(project_root_path.iterdir()):
                     if root_entry.name not in MANAGED_APPLICATION_ROOT_ALLOWLIST:

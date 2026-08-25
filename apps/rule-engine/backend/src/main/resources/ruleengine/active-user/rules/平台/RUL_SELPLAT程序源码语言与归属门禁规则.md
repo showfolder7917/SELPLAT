@@ -5,8 +5,8 @@ rule_resource_layer_source = AGENTS.md.current_stable_user_id
 
 <!-- 本规则覆盖 SELPLAT 的 apps、shared 和 rule-engine 全部正式程序源码。 -->
 rule_scope = active_user_selplat_all_program_source_ownership
-<!-- 3.14.0 为非 Gradle 应用增加语言、构建、运行、测试和生命周期所有者的中央登记。 -->
-rule_version = 3.14.0
+<!-- 3.15.0 在现有数据库应用中央登记中增加运行类型与数据库引擎，分流 Java/H2 和 Electron/SQLite 门禁。 -->
+rule_version = 3.15.0
 <!-- 非 Gradle 应用的语言所有权只能来自当前用户中央登记，禁止在扫描器中按项目名放行。 -->
 program_language_application_registry = local/<active-stable-user-id>/selplat/通用/registry/program-language-applications.json
 <!-- 每项登记必须同时指向真实构建材料、运行入口、测试入口和生命周期所有者。 -->
@@ -233,10 +233,20 @@ selplat_table_business_structure_exempt_module_kinds.4 = contract
 selplat_table_business_structure_exempt_module_kinds.5 = frontend
 <!-- selplat_table_business_structure_exempt_module_kinds.6 的当前独立事实为 disposable-tool。 -->
 selplat_table_business_structure_exempt_module_kinds.6 = disposable-tool
-<!-- 任何拥有 db/sql、生成器所有权标记或中央登记的应用都属于受管范围，并且最终必须进入中央登记；删除标记或漏登记不得绕过。 -->
+<!-- 任何拥有 db/sql、生成器所有权标记或中央登记的应用都必须进入同一中央登记；删除标记或漏登记不得绕过。 -->
 selplat_managed_database_application_detection = db_sql_directory|generated_project_ownership_marker|active_user_central_registry
 <!-- selplat_managed_database_application_detection.2 的当前独立事实为 central_registration_required_for_all。 -->
 selplat_managed_database_application_detection.2 = central_registration_required_for_all
+<!-- 中央登记必须显式声明应用运行类型，禁止扫描器依据目录名称推断。 -->
+selplat_managed_database_runtime_type = java-gradle|electron
+<!-- 中央登记必须显式声明数据库引擎，禁止把所有 db/sql 自动解释为 H2。 -->
+selplat_managed_database_engine = h2|sqlite
+<!-- Java Gradle 与 H2 组合继续执行 Hikari、号段、DAO、Service 和业务表结构门禁。 -->
+selplat_managed_database_governance_route = java-gradle+h2:java_h2_uniform_architecture
+<!-- Electron 与 SQLite 组合执行固定路径配置、迁移清单、单连接和恢复合同，不套用 Java 业务分层。 -->
+selplat_managed_database_governance_route.2 = electron+sqlite:electron_sqlite_persistence_contract
+<!-- 未登记的 db/sql 无论属于何种运行时都必须阻断，禁止靠非 Gradle 身份跳过数据库治理。 -->
+selplat_unregistered_database_runtime_policy = block_and_require_central_registration
 <!-- 中央登记按 AGENTS 当前稳定用户动态定位，每个项目名只能出现一次，登记项目不存在也必须阻断。 -->
 selplat_managed_database_application_registry = local/<active-stable-user-id>/selplat/通用/registry/managed-database-applications.json
 <!-- selplat_managed_database_application_registry.2 的当前独立事实为 version=1。 -->

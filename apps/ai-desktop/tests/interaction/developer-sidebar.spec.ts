@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
 
@@ -63,6 +64,19 @@ test("切换工作区与任务时只展开当前分区并置顶占满", async ()
   await expect(page.locator("#developer-workspace-list")).toBeVisible();
   await expect(page.getByRole("button", { name: "展开任务" })).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#developer-task-list")).toHaveCount(0);
+});
+
+test("AI Memory 恢复状态显示明确提示且不暴露数据库路径", async () => {
+  await page.goto(`${pathToFileURL(productionRendererFile).href}?interactionAiMemoryState=recovery-required`);
+  const recovery = page.getByRole("alert").filter({ hasText: "AI Memory 数据库已停用" });
+  await expect(recovery).toBeVisible();
+  await expect(recovery).toContainText("数据库丢失");
+  await expect(recovery).not.toContainText("/Users/");
+  await expect(page.locator(".dev-statusbar")).toContainText("AI Memory 待恢复");
+
+  await page.goto(pathToFileURL(productionRendererFile).href);
+  await expect(page.locator(".ai-memory-recovery")).toHaveCount(0);
+  await expect(page.locator(".dev-statusbar")).toContainText("AI Memory v0002 · 统一事件中心");
 });
 
 test("新建任务入口位于聊天标签且不再占用任务标题", async () => {
@@ -330,12 +344,28 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(conversation.getByText(/已确认事实：令狐持续修正需要先形成可审批方案/)).toBeVisible();
   await expect(page.getByRole("button", { name: "整理为演化课题" })).toBeEnabled();
   await page.getByRole("button", { name: "整理为演化课题" }).click();
+  const topicEditor = page.getByRole("region", { name: "整理演化课题" });
+  await expect(topicEditor.getByRole("button", { name: "根据当前对话生成草稿" })).toBeVisible();
+  await expect(topicEditor.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByLabel("课题标题")).toHaveValue("");
+  await topicEditor.getByRole("button", { name: "根据当前对话生成草稿" }).click();
+  await expect(topicEditor.getByText("已根据当前对话填充草稿", { exact: true })).toBeVisible();
   await expect(page.getByLabel("课题标题")).toHaveValue("南宫婉完整审批链路");
+  await expect(page.getByLabel("课题事实证据")).toHaveValue(/用户要求草稿由当前对话生成/);
   await page.getByLabel("课题标题").fill("南宫婉完整审批链路");
   await page.getByLabel("课题影响范围").fill("AI Desktop");
   await page.getByLabel("课题验收条件").fill("审批后生成任务,任务完成后形成记录");
   await page.getByRole("button", { name: "确认保存课题" }).click();
   await expect(rail.getByRole("heading", { name: "南宫婉完整审批链路", exact: true })).toBeVisible();
+  const nangongTab = page.locator(".dev-tab");
+  const newNangongConversation = nangongTab.getByRole("button", { name: "重新建立南宫婉对话" });
+  await expect(newNangongConversation).toBeVisible();
+  await expect(newNangongConversation).toHaveClass(/tab-new-task/);
+  await expect(page.locator(".nangong-person-composer").getByRole("button", { name: "新建南宫婉对话" })).toHaveCount(0);
+  await newNangongConversation.click();
+  await expect(page.getByRole("status").filter({ hasText: "正在关闭当前南宫婉线程并建立新对话" })).toBeVisible();
+  await expect(conversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "整理为演化课题" })).toBeDisabled();
   await rail.getByRole("button", { name: "编辑课题" }).click();
   await rail.getByLabel("编辑课题目标").fill("用户可以在提案提交前修正已保存课题。" );
   await rail.getByRole("button", { name: "确认保存修改" }).click();
@@ -391,6 +421,9 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await completedRecord.locator("summary").click();
   await expect(completedRecord.getByText("南宫婉提案已经审批、分发并完成。", { exact: true })).toBeVisible();
   await testInfo.attach("hanli-approval-workspace", { body: await page.screenshot(), contentType: "image/png" });
+  await taskList.getByRole("button", { name: /南宫婉/ }).click();
+  await page.getByRole("button", { name: "重新建立南宫婉对话" }).click();
+  await expect(page.locator(".nangong-person-composer").getByRole("alert")).toContainText("active writer");
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();
 });

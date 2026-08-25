@@ -1,39 +1,66 @@
-import { ipcMain } from "electron";
+import { ipcMain, type IpcMainInvokeEvent } from "electron";
 
 import type { CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../../../contracts/collaboration.js";
+import type { CreateLinghuStartupPromptRequest, UpdateLinghuStartupPromptRequest } from "../../../contracts/linghu-automation.js";
+import type {
+  ConvertNangongConversationToTopicRequest,
+  CreateEvolutionProposalRequest,
+  CreateEvolutionTopicRequest,
+  CreateLinghuRepairProposalRequest,
+  DecideEvolutionProposalRequest,
+  GenerateNangongTopicDraftRequest,
+  ReviseEvolutionProposalRequest,
+  SendNangongConversationMessageRequest,
+  UpdateEvolutionTopicRequest,
+} from "../../../contracts/nangong-evolution.js";
 import type { CollaborationCoordinator } from "../../services/collaboration/collaboration-coordinator.js";
 import type { LinghuAutomationFacade } from "../../services/collaboration/linghu-automation-facade.js";
 import type { NangongEvolutionFacade } from "../../services/collaboration/nangong-evolution-facade.js";
 
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
-export function registerCollaborationIpc(collaboration: CollaborationCoordinator, linghuAutomation: LinghuAutomationFacade, nangongEvolution: NangongEvolutionFacade): void {
-  ipcMain.handle("desktop:get-collaboration-state", () => collaboration.state());
-  ipcMain.handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
-  ipcMain.handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
-  ipcMain.handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberRequest) => collaboration.createMember(request));
-  ipcMain.handle("desktop:update-collaboration-member", (_event, memberId: string, request: UpdateCollaborationMemberRequest) => collaboration.updateMember(memberId, request));
-  ipcMain.handle("desktop:delete-collaboration-member", (_event, memberId: string) => collaboration.deleteMember(memberId));
-  ipcMain.handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskRequest) => collaboration.submitTask(request));
-  ipcMain.handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
-  ipcMain.handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
-  ipcMain.handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
-  ipcMain.handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
-  ipcMain.handle("desktop:create-linghu-startup-prompt", (_event, request) => linghuAutomation.createPrompt(request));
-  ipcMain.handle("desktop:update-linghu-startup-prompt", (_event, promptId: string, request) => linghuAutomation.updatePrompt(promptId, request));
-  ipcMain.handle("desktop:delete-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.deletePrompt(promptId));
-  ipcMain.handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
-  ipcMain.handle("desktop:get-nangong-evolution-state", () => nangongEvolution.state());
-  ipcMain.handle("desktop:send-nangong-conversation-message", (_event, request) => nangongEvolution.sendConversationMessage(request));
-  ipcMain.handle("desktop:new-nangong-conversation", () => nangongEvolution.newConversation());
-  ipcMain.handle("desktop:generate-nangong-topic-draft", (_event, request) => nangongEvolution.generateTopicDraft(request));
-  ipcMain.handle("desktop:convert-nangong-conversation-to-topic", (_event, request) => nangongEvolution.convertConversationToTopic(request));
-  ipcMain.handle("desktop:create-evolution-topic", (_event, request) => nangongEvolution.createTopic(request));
-  ipcMain.handle("desktop:update-evolution-topic", (_event, topicId: string, request) => nangongEvolution.updateTopic(topicId, request));
-  ipcMain.handle("desktop:set-nangong-automation", (_event, kind, enabled) => nangongEvolution.setAutomation(kind, enabled === true));
-  ipcMain.handle("desktop:create-evolution-proposal", (_event, topicId: string, request) => nangongEvolution.createProposal(topicId, request));
-  ipcMain.handle("desktop:create-linghu-repair-proposal", (_event, request) => nangongEvolution.createLinghuRepairProposal(request));
-  ipcMain.handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request) => nangongEvolution.decideProposal(proposalId, request));
-  ipcMain.handle("desktop:revise-evolution-proposal", (_event, proposalId: string, request) => nangongEvolution.reviseProposal(proposalId, request));
-  ipcMain.handle("desktop:auto-approve-evolution-proposal", (_event, proposalId: string) => nangongEvolution.autoApprove(proposalId));
-  ipcMain.handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string) => nangongEvolution.dispatch(proposalId));
+export function registerCollaborationIpc(
+  collaboration: CollaborationCoordinator,
+  linghuAutomation: LinghuAutomationFacade,
+  nangongEvolution: NangongEvolutionFacade,
+  recordBusinessException: (channel: string, message: string) => void,
+): void {
+  const handle = <Arguments extends unknown[]>(channel: string, handler: (event: IpcMainInvokeEvent, ...args: Arguments) => unknown): void => {
+    ipcMain.handle(channel, async (event, ...args) => {
+      try {
+        return await handler(event, ...(args as Arguments));
+      } catch (error) {
+        recordBusinessException(channel, error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+    });
+  };
+  handle("desktop:get-collaboration-state", () => collaboration.state());
+  handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
+  handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
+  handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberRequest) => collaboration.createMember(request));
+  handle("desktop:update-collaboration-member", (_event, memberId: string, request: UpdateCollaborationMemberRequest) => collaboration.updateMember(memberId, request));
+  handle("desktop:delete-collaboration-member", (_event, memberId: string) => collaboration.deleteMember(memberId));
+  handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskRequest) => collaboration.submitTask(request));
+  handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
+  handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
+  handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
+  handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
+  handle("desktop:create-linghu-startup-prompt", (_event, request: CreateLinghuStartupPromptRequest) => linghuAutomation.createPrompt(request));
+  handle("desktop:update-linghu-startup-prompt", (_event, promptId: string, request: UpdateLinghuStartupPromptRequest) => linghuAutomation.updatePrompt(promptId, request));
+  handle("desktop:delete-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.deletePrompt(promptId));
+  handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
+  handle("desktop:get-nangong-evolution-state", () => nangongEvolution.state());
+  handle("desktop:send-nangong-conversation-message", (_event, request: SendNangongConversationMessageRequest) => nangongEvolution.sendConversationMessage(request));
+  handle("desktop:new-nangong-conversation", () => nangongEvolution.newConversation());
+  handle("desktop:generate-nangong-topic-draft", (_event, request: GenerateNangongTopicDraftRequest) => nangongEvolution.generateTopicDraft(request));
+  handle("desktop:convert-nangong-conversation-to-topic", (_event, request: ConvertNangongConversationToTopicRequest) => nangongEvolution.convertConversationToTopic(request));
+  handle("desktop:create-evolution-topic", (_event, request: CreateEvolutionTopicRequest) => nangongEvolution.createTopic(request));
+  handle("desktop:update-evolution-topic", (_event, topicId: string, request: UpdateEvolutionTopicRequest) => nangongEvolution.updateTopic(topicId, request));
+  handle("desktop:set-nangong-automation", (_event, kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean) => nangongEvolution.setAutomation(kind, enabled === true));
+  handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateEvolutionProposalRequest) => nangongEvolution.createProposal(topicId, request));
+  handle("desktop:create-linghu-repair-proposal", (_event, request: CreateLinghuRepairProposalRequest) => nangongEvolution.createLinghuRepairProposal(request));
+  handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideEvolutionProposalRequest) => nangongEvolution.decideProposal(proposalId, request));
+  handle("desktop:revise-evolution-proposal", (_event, proposalId: string, request: ReviseEvolutionProposalRequest) => nangongEvolution.reviseProposal(proposalId, request));
+  handle("desktop:auto-approve-evolution-proposal", (_event, proposalId: string) => nangongEvolution.autoApprove(proposalId));
+  handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string) => nangongEvolution.dispatch(proposalId));
 }

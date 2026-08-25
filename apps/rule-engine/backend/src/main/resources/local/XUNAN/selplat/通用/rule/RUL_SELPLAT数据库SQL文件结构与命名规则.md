@@ -1,5 +1,10 @@
 # SELPLAT 数据库 SQL 文件结构与命名规则
 
+<!-- 本规则的 Hikari、H2 文件、号段、DAO/Service 与单表 SQL 约束只作用于中央登记的 java-gradle+h2 条目。 -->
+selplat_database_sql_rule_h2_scope = central_registration(runtimeType=java-gradle,databaseEngine=h2)
+<!-- 中央登记的 electron+sqlite 条目复用 db/sql 归属，但迁移、连接和恢复合同由对应 Electron 应用规则治理。 -->
+selplat_database_sql_rule_sqlite_scope = central_registration(runtimeType=electron,databaseEngine=sqlite)+application_persistence_rule
+
 <!-- 当前规则不需要 Java 专用能力；应用现有数据库初始化器和测试任务直接承担执行验证。 -->
 java_ability_refs = none
 <!-- 当前规则不需要 Python 专用能力；目录、文件名和 SQL 引用可由现有检索与构建入口验证。 -->

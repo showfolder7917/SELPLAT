@@ -20,6 +20,15 @@ selplat_platform_runtime_user_entry.2 = <SELPLAT_ROOT>/启动SELPLAT.bat
 <!-- 统一入口编译并启动 Host 及其全部显式 Gradle 依赖；业务含义是服务端业务模块不再提供面向用户的单独启动入口。 -->
 selplat_platform_runtime_scope = host_and_all_explicit_gradle_dependencies
 
+<!-- 服务端正式工程范围只由 settings.gradle 的 projectDir 显式登记产生；业务含义是目录存在本身不能让参考材料进入构建、运行或自动治理。 -->
+selplat_formal_server_module_authority = settings_gradle_explicit_project_dir
+<!-- 未登记应用目录只作为人工参考材料；业务含义是自动门禁不得读取、修改、运行或把它当作架构违规修复目标。 -->
+selplat_unregistered_application_directory_policy = human_reference_only
+<!-- 未登记参考目录不得成为其他正式模块的源码、依赖、运行入口、测试夹具或规则事实来源；业务含义是参考材料不会反向污染生产实现。 -->
+selplat_unregistered_application_cross_module_reference_policy = forbidden
+<!-- 自动门禁通过正式登记集合确定范围，禁止为某个参考目录写项目名特例；业务含义是以后增加参考材料也不会要求其他代码认识其名称。 -->
+selplat_runtime_gate_scope_resolution = registered_module_set_without_reference_name_exception
+
 <!-- 非桌面服务端业务模块只能提供模块配置供 Host 导入；业务含义是模块自身没有第二套进程生命周期。 -->
 selplat_server_module_runtime_shape = host_imported_module_configuration_only
 <!-- 服务端业务模块不得应用 application 插件或声明 mainClass；业务含义是 Gradle 不生成模块级 run 与分发任务。 -->

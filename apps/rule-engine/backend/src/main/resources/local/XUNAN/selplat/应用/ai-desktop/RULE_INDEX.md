@@ -6,5 +6,11 @@ AI_DESKTOP_OFFICIAL_HARNESS_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/R
 <!-- 修改桌面端 Codex 进程、开发或发布打包路径、生产 CSS、正式窗口交互、跨平台截图、运行时路径暴露、认证、会话表达、托管职责、令狐自动保障与启动文案、重启恢复、新建任务入口、最低需求审核、协同阶段操作者与真实发起人、执行源码留痕、集成依赖自愈、审批或启动器时加载本规则。 -->
 load_rule_for_ai_desktop_harness_auth_session_or_launcher_change = AI_DESKTOP_OFFICIAL_HARNESS_RULES
 
+<!-- 新增或修改 AI Desktop SQLite 路径配置、唯一解析器、数据库文件Git边界、连接、版本迁移、恢复状态或开发包数据库根时加载。 -->
+load_rule_for_ai_desktop_sqlite_path_configuration_or_runtime_database_change = AI_DESKTOP_OFFICIAL_HARNESS_RULES
+
+<!-- 新增或修改统一事件入口、业务异常、任务心跳、卡住检测、运行会话恢复或令狐异常交接时加载。 -->
+load_rule_for_ai_desktop_workflow_event_business_exception_stall_or_runtime_recovery_change = AI_DESKTOP_OFFICIAL_HARNESS_RULES
+
 <!-- AI Desktop 接入 SEL UI、切换主题或调整应用主题适配时加载。 -->
 load_rule_for_ai_desktop_sel_ui_theme_or_react_host_adoption = AI_DESKTOP_OFFICIAL_HARNESS_RULES

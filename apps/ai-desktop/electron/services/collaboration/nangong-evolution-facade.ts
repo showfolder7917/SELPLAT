@@ -11,6 +11,7 @@ export interface NangongEvolutionFacadeOptions {
     newChat(): Promise<void>;
   };
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
+  newConversationRetryDelaysMs?: number[];
 }
 
 /** 保持自动演化、自动审批和自动执行三道独立开关，并只在审批通过后调用协同分发。 */
@@ -19,10 +20,11 @@ export class NangongEvolutionFacade {
   readonly #collaboration: CollaborationCoordinator;
   readonly #conversation: NangongEvolutionFacadeOptions["conversation"];
   readonly #recordEvent: NangongEvolutionFacadeOptions["recordEvent"];
+  readonly #newConversationRetryDelaysMs: number[];
   #timer: ReturnType<typeof setInterval> | null = null;
   #running = false;
 
-  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#recordEvent = options.recordEvent; }
+  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#recordEvent = options.recordEvent; this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
   state(): NangongEvolutionState { return this.#store.state(); }
   subscribe(listener: Parameters<NangongEvolutionStore["subscribe"]>[0]) { return this.#store.subscribe(listener); }
   start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
@@ -37,14 +39,26 @@ export class NangongEvolutionFacade {
     this.#recordEvent("nangong.evolution.conversation_replied", { conversationId: state.conversation.conversationId, messageCount: state.conversation.messages.length });
     return state;
   }
-  async newConversation(): Promise<NangongEvolutionState> { await this.#conversation.newChat(); return this.#store.newConversation(); }
+  async newConversation(): Promise<NangongEvolutionState> {
+    for (const [index, retryDelay] of this.#newConversationRetryDelaysMs.entries()) {
+      if (retryDelay) await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      try {
+        await this.#conversation.newChat();
+        return this.#store.newConversation();
+      } catch (error) {
+        // Codex 取消当前回合后可能短暂保留写入租约；只对该明确竞争做有限等待，其他删除错误立即回显。
+        if (!String(error).toLowerCase().includes("active writer") || index === this.#newConversationRetryDelaysMs.length - 1) throw error;
+      }
+    }
+    throw new Error("无法重新建立南宫婉对话。");
+  }
   async generateTopicDraft(request: GenerateNangongTopicDraftRequest): Promise<NangongTopicDraft> {
     const messages = this.state().conversation.messages.slice(-20);
     if (!messages.length) throw new Error("当前没有可整理为课题的南宫婉对话。");
     const context = messages.map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
     // 草稿仅供用户编辑，不写入对话或课题持久化状态，避免绕过显式保存确认。
     const response = await this.#conversation.send({
-      message: "请根据上述对话生成课题草稿。仅返回 JSON：{\"title\":\"\",\"goal\":\"\",\"scope\":[\"\"],\"acceptanceCriteria\":[\"\"]}。不要把推断写成已证实事实；每个数组至少一项。",
+      message: "请根据上述对话生成课题草稿。仅返回 JSON：{\"title\":\"\",\"goal\":\"\",\"scope\":[\"\"],\"evidence\":[\"\"],\"acceptanceCriteria\":[\"\"]}。事实证据必须说明来自用户陈述或南宫婉调查，不要把推断写成已证实事实；每个数组至少一项。",
       workspaceState: request.workspaceState,
       locale: request.locale,
     }, context);
@@ -157,6 +171,14 @@ export class NangongEvolutionFacade {
         const status = blocked ? "blocked" : completed ? "completed" : verifying ? "verifying" : "executing";
         if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务通过统一测试，原演化目标已完成。" : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
       }
+      if (state.automaticEvolutionEnabled) {
+        for (const completedTopic of state.topics.filter((item) => item.status === "completed" && !item.nextTopicId)) {
+          const completedProposal = state.proposals.filter((item) => item.topicId === completedTopic.topicId && item.status === "completed").at(-1);
+          if (!completedProposal?.resultSummary) continue;
+          state = this.#store.createNextRound(completedTopic.topicId, completedProposal.resultSummary);
+          this.#recordEvent("nangong.evolution.next_round_started", { previousTopicId: completedTopic.topicId, nextTopicId: state.activeTopicId });
+        }
+      }
       for (const proposal of state.proposals.filter((item) => item.status === "pending-approval")) {
         const enabled = proposal.origin === "nangong" ? state.automaticNangongApprovalEnabled : state.automaticLinghuApprovalEnabled;
         if (enabled) state = this.autoApprove(proposal.proposalId);
@@ -187,9 +209,10 @@ function parseTopicDraft(text: string): NangongTopicDraft {
     const title = typeof value.title === "string" ? value.title.trim() : "";
     const goal = typeof value.goal === "string" ? value.goal.trim() : "";
     const scope = normalizeDraftList(value.scope);
+    const evidence = normalizeDraftList(value.evidence);
     const acceptanceCriteria = normalizeDraftList(value.acceptanceCriteria);
-    if (!title || !goal || !scope.length || !acceptanceCriteria.length) throw new Error();
-    return { title, goal, scope, acceptanceCriteria };
+    if (!title || !goal || !scope.length || !evidence.length || !acceptanceCriteria.length) throw new Error();
+    return { title, goal, scope, evidence, acceptanceCriteria };
   } catch {
     throw new Error("南宫婉生成的课题草稿不完整，请重试。");
   }

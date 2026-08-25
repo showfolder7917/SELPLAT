@@ -4,6 +4,7 @@ import type { AutomaticTestPreflightResult, CodexApproval, CodexHarnessStatus, C
 import type { CodexStreamEvent } from "./codex-stream.js";
 import type { CollaborationState, CollaborationStreamEnvelope, CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "./collaboration.js";
 import type { CodexSessionInfo, ConversationDispatchState, EnqueueMessageRequest, SendMessageRequest, SendMessageResponse } from "./conversation.js";
+import type { AiMemoryDatabaseStatus } from "./database.js";
 import type { CreateLinghuStartupPromptRequest, LinghuAutomationState, LinghuAutomationStateEvent, UpdateLinghuStartupPromptRequest } from "./linghu-automation.js";
 import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, GenerateNangongTopicDraftRequest, NangongEvolutionState, NangongEvolutionStateEvent, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "./nangong-evolution.js";
 import type { DesktopSettings } from "./settings.js";
@@ -13,6 +14,7 @@ import type { WorkspaceEntry, WorkspaceState } from "./workspace.js";
 /** 定义 preload 向渲染层公开的完整白名单；各领域数据结构保留在独立契约文件。 */
 export interface DesktopApi {
   getEnvironment(): Promise<DesktopEnvironment>;
+  getAiMemoryDatabaseStatus(): Promise<AiMemoryDatabaseStatus>;
   getSettings(): Promise<DesktopSettings>;
   updateSettings(settings: Partial<DesktopSettings>): Promise<DesktopSettings>;
   getWorkspaces(): Promise<WorkspaceState>;

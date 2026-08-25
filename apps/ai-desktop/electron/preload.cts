@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("desktop", {
   getEnvironment: () => ipcRenderer.invoke("desktop:get-environment"),
+  getAiMemoryDatabaseStatus: () => ipcRenderer.invoke("desktop:get-ai-memory-database-status"),
   getSettings: () => ipcRenderer.invoke("desktop:get-settings"),
   updateSettings: (settings: unknown) => ipcRenderer.invoke("desktop:update-settings", settings),
   getWorkspaces: () => ipcRenderer.invoke("desktop:get-workspaces"),

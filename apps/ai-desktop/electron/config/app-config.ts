@@ -5,6 +5,7 @@ import { app } from "electron";
 import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
 import type { AppVariant } from "../../contracts/desktop.js";
+import { resolveAiMemoryPaths as resolveConfiguredAiMemoryPaths, type ResolvedAiMemoryPaths } from "./ai-memory-path-resolver.js";
 
 type ApplicationMetadata = {
   name?: unknown;
@@ -48,4 +49,9 @@ export function resolveApplicationName(): string {
   const manifest = readApplicationMetadata();
   if (typeof manifest.name !== "string") throw new Error(`Application manifest name is unavailable: ${path.join(app.getAppPath(), "package.json")}`);
   return validateSafeIdentifier(manifest.name, "applicationName");
+}
+
+/** 开发启动与 Developer 打包版都经稳定 SELPLAT 根读取同一份 AI Memory 路径配置。 */
+export function resolveAiMemoryPaths(): ResolvedAiMemoryPaths {
+  return resolveConfiguredAiMemoryPaths(resolveProjectRoot());
 }

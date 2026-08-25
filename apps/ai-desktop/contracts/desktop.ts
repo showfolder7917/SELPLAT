@@ -8,6 +8,7 @@ export * from "./codex.js";
 export * from "./codex-stream.js";
 export * from "./collaboration.js";
 export * from "./conversation.js";
+export * from "./database.js";
 export * from "./desktop-api.js";
 export * from "./linghu-automation.js";
 export * from "./nangong-evolution.js";

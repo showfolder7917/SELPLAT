@@ -39,6 +39,8 @@ interface StartAuditTaskRequest {
   managedMode: ManagedExecutionMode;
 }
 
+type BusinessEventSink = (event: { occurredAt: string; type: string; taskId: string | null; details: Record<string, unknown> }) => void;
+
 /** 把每轮任务事实写入工程统一归档目录，供用户追查“改到哪一步、为什么未完整生效”。 */
 export class BusinessAuditLog {
   readonly #sourceRoot: string;
@@ -47,6 +49,7 @@ export class BusinessAuditLog {
   readonly #taskRoot: string;
   readonly #diagnosticRoot: string;
   readonly #activeTasks = new Map<string, ActiveAuditTask>();
+  #eventSink: BusinessEventSink | null = null;
 
   constructor(sourceRoot: string, buildRoot: string, logRoot: string) {
     this.#sourceRoot = path.resolve(sourceRoot);
@@ -62,6 +65,11 @@ export class BusinessAuditLog {
     return this.#logRoot;
   }
 
+  /** 将既有文件审计入口同时投影到统一数据库；数据库失败不会吞掉原始 JSONL 事实。 */
+  setEventSink(eventSink: BusinessEventSink | null): void {
+    this.#eventSink = eventSink;
+  }
+
   recordApplicationStart(details: Record<string, unknown>): void {
     this.recordEvent("application.started", {
       ...details,
@@ -72,8 +80,21 @@ export class BusinessAuditLog {
 
   recordEvent(type: string, details: Record<string, unknown> = {}, taskId?: string): void {
     this.ensure();
-    const event = { occurredAt: new Date().toISOString(), type, taskId: taskId || null, ...details };
-    appendFileSync(this.#dailyLogPath(), `${JSON.stringify(event)}\n`, "utf8");
+    const occurredAt = new Date().toISOString();
+    const event = { occurredAt, type, taskId: taskId || null, ...details };
+    const dailyLogPath = this.#dailyLogPath();
+    appendFileSync(dailyLogPath, `${JSON.stringify(event)}\n`, "utf8");
+    try {
+      this.#eventSink?.({ occurredAt, type, taskId: taskId || null, details });
+    } catch (error) {
+      appendFileSync(dailyLogPath, `${JSON.stringify({
+        occurredAt: new Date().toISOString(),
+        type: "event-center.persistence_failed",
+        taskId: taskId || null,
+        sourceEventType: type,
+        message: error instanceof Error ? error.message : String(error),
+      })}\n`, "utf8");
+    }
   }
 
   startTask(request: StartAuditTaskRequest): string {

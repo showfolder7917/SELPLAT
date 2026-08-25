@@ -44,6 +44,7 @@ export class NangongEvolutionStore {
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "验收条件"),
         workspaceState: structuredClone(request.workspaceState), locale: request.locale,
         origin: "nangong", sourceConversationMessageIds: [...sourceConversationMessageIds],
+        continuationOfTopicId: null, nextTopicId: null,
         status: "registered", topicRevision: 1, currentProposalVersion: 0, recoveryPoint: "topic-registered",
         createdAt: now, updatedAt: now,
       });
@@ -117,9 +118,11 @@ export class NangongEvolutionStore {
     const messages = this.#state.conversation.messages;
     if (!messages.length) throw new Error("当前没有可转换的南宫婉对话。 ");
     if (request.confirmedByUser !== true) throw new Error("只有用户明确确认后，才能把南宫婉对话整理为正式课题。");
-    // 对话包含用户陈述与调查判断，均只能作为来源明确的材料，不能在转换时冒充已证实事实。
+    // 用户确认过表单中的事实证据后优先保存该版本；旧调用方缺少该字段时仍保留来源明确的对话材料。
     const sourceMessages = messages.slice(-20);
-    const evidence = sourceMessages.map((item) => `${item.role === "user" ? "用户提供的材料" : "南宫婉调查记录（含待验证判断）"}：${item.content}`);
+    const evidence = request.evidence?.length
+      ? request.evidence
+      : sourceMessages.map((item) => `${item.role === "user" ? "用户提供的材料" : "南宫婉调查记录（含待验证判断）"}：${item.content}`);
     return this.createTopic({ ...request, evidence }, sourceMessages.map((item) => item.messageId));
   }
 
@@ -134,6 +137,7 @@ export class NangongEvolutionStore {
         scope: normalizedList(request.impactScope, "影响范围"), exclusions: [], evidence: normalizedList(request.evidence, "调查证据"),
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "验收条件"), workspaceState: structuredClone(request.workspaceState), locale: request.locale,
         origin: "linghu", sourceConversationMessageIds: [], status: "pending-approval", topicRevision: 1, currentProposalVersion: 1,
+        continuationOfTopicId: null, nextTopicId: null,
         recoveryPoint: "linghu-proposal-awaiting-approval", createdAt: now, updatedAt: now,
       });
       state.proposals.push({
@@ -255,6 +259,44 @@ export class NangongEvolutionStore {
     });
   }
 
+  /** 演化启动器只从已完成课题建立一条可追溯的下一轮，重复启动不会重复创建。 */
+  createNextRound(previousTopicId: string, resultSummary: string): NangongEvolutionState {
+    const previous = requireTopic(this.#state, previousTopicId);
+    if (previous.status !== "completed") throw new Error("只有完成验收的课题才能启动下一轮演化。");
+    if (previous.nextTopicId) return this.state();
+    const nextTopicId = `evolution-topic-${randomUUID()}`;
+    const now = new Date().toISOString();
+    return this.#commit("launcher.next_evolution_started", nextTopicId, null, (state) => {
+      const source = requireTopic(state, previousTopicId);
+      if (source.nextTopicId) return;
+      source.nextTopicId = nextTopicId;
+      source.recoveryPoint = `next-evolution:${nextTopicId}`;
+      source.updatedAt = now;
+      state.topics.push({
+        topicId: nextTopicId,
+        title: `${source.title} · 下一轮`,
+        goal: `依据上一轮验收结果继续调查可验证的后续演进方向：${resultSummary}`.slice(0, 8_000),
+        scope: [...source.scope],
+        exclusions: [...source.exclusions],
+        evidence: [...source.evidence, `上一轮完成事实：${resultSummary}`],
+        acceptanceCriteria: [...source.acceptanceCriteria],
+        workspaceState: structuredClone(source.workspaceState),
+        locale: source.locale,
+        origin: "nangong",
+        sourceConversationMessageIds: [],
+        continuationOfTopicId: source.topicId,
+        nextTopicId: null,
+        status: "registered",
+        topicRevision: 1,
+        currentProposalVersion: 0,
+        recoveryPoint: `continued-from:${source.topicId}`,
+        createdAt: now,
+        updatedAt: now,
+      });
+      state.activeTopicId = nextTopicId;
+    });
+  }
+
   #commit(reason: string, topicId: string | null, proposalId: string | null, mutate: (state: NangongEvolutionState) => void): NangongEvolutionState {
     const next = structuredClone(this.#state);
     mutate(next);
@@ -269,15 +311,19 @@ export class NangongEvolutionStore {
   #load(): NangongEvolutionState {
     try {
       const raw = JSON.parse(readFileSync(this.#filePath, "utf8")) as Omit<Partial<NangongEvolutionState>, "version"> & { version?: number; automaticApprovalEnabled?: boolean };
-      if ((raw.version === 1 || raw.version === 2 || raw.version === 3 || raw.version === 4) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
+      if ((raw.version === 1 || raw.version === 2 || raw.version === 3 || raw.version === 4 || raw.version === 5) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
         const value = raw as NangongEvolutionState;
         const legacy = raw;
-        value.version = 4;
+        value.version = 5;
         value.automaticNangongApprovalEnabled ??= legacy.automaticApprovalEnabled === true;
         value.automaticLinghuApprovalEnabled ??= false;
         value.conversation ??= createConversation();
         // 旧状态即使尚未生成提案，也必须获得首个课题修订号才能安全编辑。
-        for (const topic of value.topics) topic.topicRevision ??= 1;
+        for (const topic of value.topics) {
+          topic.topicRevision ??= 1;
+          topic.continuationOfTopicId ??= null;
+          topic.nextTopicId ??= null;
+        }
         for (const proposal of value.proposals) {
           const topic = value.topics.find((item) => item.topicId === proposal.topicId);
           topic && (topic.origin ??= "nangong");
@@ -299,7 +345,7 @@ export class NangongEvolutionStore {
         return value;
       }
     } catch { /* 首次启动或损坏状态使用安全关闭的空状态，历史文件不会被扫描猜测。 */ }
-    return { version: 4, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+    return { version: 5, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
   }
 
   #write(state: NangongEvolutionState): void {

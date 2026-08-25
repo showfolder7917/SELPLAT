@@ -10,6 +10,10 @@ trs/
 
 # 应用正式运行数据库只在本地持久化；Git提交db/sql定义，不提交活跃H2二进制文件。
 apps/*/db/*.mv.db
+# AI Desktop SQLite 固定在应用 db 根；只精确忽略活跃主库和同名 WAL/SHM，配置与 SQL 继续进入 Git。
+/apps/ai-desktop/db/events.sqlite3
+/apps/ai-desktop/db/events.sqlite3-wal
+/apps/ai-desktop/db/events.sqlite3-shm
 *.trace.db
 *.lock.db
 *.temp.db

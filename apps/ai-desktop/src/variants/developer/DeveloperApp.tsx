@@ -37,6 +37,7 @@ import {
 
 import type {
   AutomaticTestPreflightResult,
+  AiMemoryDatabaseStatus,
   CodexAccount,
   CodexApproval,
   CodexHarnessStatus,
@@ -278,6 +279,7 @@ export function DeveloperApp() {
   const [screenRecordingRestarting, setScreenRecordingRestarting] = useState(false);
   const [tempInfo, setTempInfo] = useState<TempDirectoryInfo | null>(null);
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
+  const [aiMemoryDatabaseStatus, setAiMemoryDatabaseStatus] = useState<AiMemoryDatabaseStatus | null>(null);
   const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
   const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationState | null>(null);
   const [nangongEvolutionState, setNangongEvolutionState] = useState<NangongEvolutionState | null>(null);
@@ -288,6 +290,8 @@ export function DeveloperApp() {
   const [loading, setLoading] = useState(false);
   const [dispatchState, setDispatchState] = useState<ConversationDispatchState>(EMPTY_DISPATCH_STATE);
   const [dispatchError, setDispatchError] = useState("");
+  const [nangongNewConversationBusy, setNangongNewConversationBusy] = useState(false);
+  const [nangongError, setNangongError] = useState("");
   const [automaticTestEnabled, setAutomaticTestEnabled] = useState(false);
   const [automaticTestChecking, setAutomaticTestChecking] = useState(false);
   const [automaticTestDialog, setAutomaticTestDialog] = useState<AutomaticTestPreflightResult | "checking" | null>(null);
@@ -375,6 +379,7 @@ export function DeveloperApp() {
 
   useEffect(() => {
     window.desktop?.getEnvironment().then((environment) => setProjectRoot(environment.projectRoot));
+    window.desktop?.getAiMemoryDatabaseStatus().then(setAiMemoryDatabaseStatus);
     window.desktop?.getWorkspaces().then((state) => {
       setWorkspaces(state);
       const primary = state.roots.find((root) => root.id === state.primaryId);
@@ -868,6 +873,23 @@ export function DeveloperApp() {
     }
   };
 
+  const startNewNangongConversation = async () => {
+    if (nangongNewConversationBusy) return;
+    setNangongNewConversationBusy(true);
+    setNangongError("");
+    try {
+      const state = await window.desktop?.newNangongConversation();
+      if (!state) throw new Error("南宫婉新建对话服务没有返回状态。");
+      setNangongEvolutionState(state);
+      setNangongAttachments([]);
+    } catch (error) {
+      // 南宫婉必须在自己的页面看到线程删除失败，不能把错误留在只属于韩立的输入区。
+      setNangongError(readableDesktopError(error, "无法重新建立南宫婉对话。"));
+    } finally {
+      setNangongNewConversationBusy(false);
+    }
+  };
+
   const setOperatingMode = async (mode: "single-conversation" | "collaboration") => {
     const state = await window.desktop?.setDesktopOperatingMode(mode);
     if (state) {
@@ -1229,13 +1251,14 @@ export function DeveloperApp() {
   const personWorkspaceRail = collaborationMode && nangongEvolutionState && showHanLiConversationWorkspace
     ? <HanLiEvolutionApprovalPanel state={nangongEvolutionState} locale={locale} onState={setNangongEvolutionState} onError={setDispatchError} />
     : showNangongConversationWorkspace && nangongEvolutionState
-      ? <NangongEvolutionRail member={selectedCollaborationMember!} state={nangongEvolutionState} workspaces={workspaces} locale={locale} onState={setNangongEvolutionState} onError={setDispatchError} />
+      ? <NangongEvolutionRail member={selectedCollaborationMember!} state={nangongEvolutionState} workspaces={workspaces} locale={locale} onState={setNangongEvolutionState} onError={setNangongError} />
       : null;
   const collaborationTabTitle = collaborationPanel === "execution-list"
     ? (locale === "ja" ? "実行一覧" : "执行列表")
     : collaborationPanel === "task-detail"
       ? selectedCollaborationTask?.snapshot.title || (locale === "ja" ? "タスク詳細" : "任务详情")
       : selectedCollaborationMember?.displayName || (locale === "ja" ? "協同" : "协同模式");
+  const nangongNewConversationLabel = locale === "ja" ? "南宮婉の会話を新しく作り直す" : "重新建立南宫婉对话";
 
   return <div className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
     <header className="dev-titlebar">
@@ -1344,7 +1367,8 @@ export function DeveloperApp() {
 
     <PersonWorkspaceSplitPane id={personWorkspaceId} locale={locale} side={personWorkspaceRail}>
     <main className="dev-main">
-      <div className="dev-tab"><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-tooltip={text.newCodexSession} aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}<Dismiss20Regular /></div>
+      <div className="dev-tab"><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-tooltip={text.newCodexSession} aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}{showNangongConversationWorkspace && <button type="button" className="tab-new-task" data-tooltip={nangongNewConversationLabel} aria-label={nangongNewConversationLabel} disabled={nangongNewConversationBusy} onClick={() => void startNewNangongConversation()}><ArrowClockwise24Regular className={nangongNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}<Dismiss20Regular /></div>
+      {aiMemoryDatabaseStatus && aiMemoryDatabaseStatus.state !== "ready" && <div className={`ai-memory-recovery ${aiMemoryDatabaseStatus.state}`} role="alert"><strong>{locale === "ja" ? "AI Memory データベースは停止中です" : "AI Memory 数据库已停用"}</strong><span>{locale === "ja" ? "設定、移行、または整合性の問題を確認し、元のデータベースを復旧してから再起動してください。" : aiMemoryDatabaseStatus.message || "请恢复数据库后重新启动。"}</span></div>}
       {showHanLiConversationWorkspace ? <section ref={chatRef} className="dev-chat">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p>{!codexStatus.account.authenticated && <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{!codexStatus.account.authenticated && loginHint && <em className="dev-login-hint">{loginHint}</em>}</div>}
         {messages.map((message) => {
@@ -1354,7 +1378,7 @@ export function DeveloperApp() {
           return <article key={message.id} className={`dev-message ${message.role} ${message.streaming ? "streaming" : ""}`}><span>{message.role === "user" ? "YOU" : "CODEX"}</span><div>{message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && messageTask && <CollaborationStatusChain task={messageTask} locale={locale} onRetry={async (taskId) => { const state = await window.desktop?.continueCollaborationTask(taskId); if (state) setCollaborationState(state); }} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} activeMode={executionMode} onReturn={setExecutionMode} onAdvance={(mode, label) => collaborationMode && message.managedMode === "conversation-managed" ? void submitConfirmedCollaborationTask(message).catch((error) => setDispatchError(readableDesktopError(error, "无法提交协同任务。"))) : void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>;
         })}
       </section> : showNangongConversationWorkspace && nangongEvolutionState
-        ? <NangongConversationWorkspace state={nangongEvolutionState} attachments={nangongAttachments} workspaces={workspaces} locale={locale} onState={setNangongEvolutionState} onAttachments={setNangongAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setDispatchError} />
+        ? <NangongConversationWorkspace key={nangongEvolutionState.conversation.conversationId} state={nangongEvolutionState} attachments={nangongAttachments} workspaces={workspaces} locale={locale} newConversationBusy={nangongNewConversationBusy} error={nangongError} onState={setNangongEvolutionState} onAttachments={setNangongAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setNangongError} />
         : collaborationPanel === "execution-list"
         ? <CollaborationExecutionList tasks={completedCollaborationTasks} locale={locale} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />
         : collaborationPanel === "task-detail" && selectedCollaborationTask && selectedCollaborationTaskMember
@@ -1373,7 +1397,7 @@ export function DeveloperApp() {
     </main>
     </PersonWorkspaceSplitPane>
 
-    <footer className="dev-statusbar"><span><Branch24Regular /> main*</span><span>0 errors</span><span>{sandboxMode}</span><span>UTF-8</span></footer>
+    <footer className="dev-statusbar"><span><Branch24Regular /> main*</span><span>0 errors</span><span>{sandboxMode}</span><span>AI Memory {aiMemoryDatabaseStatus?.state === "ready" ? `v${aiMemoryDatabaseStatus.schemaVersion || "-"} · ${locale === "ja" ? "統合イベントセンター" : "统一事件中心"}` : (locale === "ja" ? "要復旧" : "待恢复")}</span><span>UTF-8</span></footer>
 
     {approval && <section className="dev-approval" role="dialog" aria-modal="true" aria-label={approval.title}>
       <div className="approval-card"><span className="approval-kicker">CODEX APPROVAL</span><h2>{approval.title}</h2>{approval.reason && <p>{approval.reason}</p>}{approval.command && <pre>{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p>{text.trustHint}</p>}{approval.details && <details><summary>Details</summary><pre>{approval.details}</pre></details>}<div className="approval-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button className="primary" onClick={() => void resolveApproval("accept")}>{approval.kind === "command" && approval.trustEligible ? text.approveAndTrust : text.approve}</button></div></div>
@@ -1475,14 +1499,16 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
 }
 
 /** 南宫婉沿用韩立主会话的消息区和输入区，只替换人物文案与专项演化发送链路。 */
-function NangongConversationWorkspace({ state, attachments, workspaces, locale, onState, onAttachments, onScreenshot, onPaste, onError }: { state: NangongEvolutionState; attachments: ComposerAttachment[]; workspaces: WorkspaceState | null; locale: Locale; onState(state: NangongEvolutionState): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
+function NangongConversationWorkspace({ state, attachments, workspaces, locale, newConversationBusy, error, onState, onAttachments, onScreenshot, onPaste, onError }: { state: NangongEvolutionState; attachments: ComposerAttachment[]; workspaces: WorkspaceState | null; locale: Locale; newConversationBusy: boolean; error: string; onState(state: NangongEvolutionState): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
   const [chatText, setChatText] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [topicDraftOpen, setTopicDraftOpen] = useState(false);
   const [topicDraftBusy, setTopicDraftBusy] = useState(false);
-  const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", acceptanceCriteria: "" });
+  const [topicDraftFeedback, setTopicDraftFeedback] = useState("");
+  const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
   const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
   const update = async (operation: () => Promise<NangongEvolutionState> | undefined) => {
+    onError("");
     try { const pending = operation(); if (!pending) return; const next = await pending; onState(next); } catch (error) { onError(readableDesktopError(error, "专项演化操作失败。")); }
   };
   const sendChat = async () => {
@@ -1496,20 +1522,25 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
     const title = topicDraft.title.trim();
     const goal = topicDraft.goal.trim();
     const scope = splitEvolutionList(topicDraft.scope);
+    const evidence = splitEvolutionList(topicDraft.evidence);
     const acceptanceCriteria = splitEvolutionList(topicDraft.acceptanceCriteria);
-    if (!title || !goal || !scope.length || !acceptanceCriteria.length) return onError("标题、目标、范围和验收条件必须完整填写。");
-    await update(() => window.desktop?.convertNangongConversationToTopic({ confirmedByUser: true, title, goal, scope, acceptanceCriteria, workspaceState: workspaces, locale }));
+    if (!title || !goal || !scope.length || !evidence.length || !acceptanceCriteria.length) return onError("标题、目标、影响范围、事实证据和验收条件必须完整填写。");
+    await update(() => window.desktop?.convertNangongConversationToTopic({ confirmedByUser: true, title, goal, scope, evidence, acceptanceCriteria, workspaceState: workspaces, locale }));
     setTopicDraftOpen(false);
-    setTopicDraft({ title: "", goal: "", scope: "", acceptanceCriteria: "" });
+    setTopicDraftFeedback("");
+    setTopicDraft({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
   };
   const generateTopicDraft = async () => {
     if (!workspaces || !state.conversation.messages.length || topicDraftBusy) return;
-    setTopicDraftOpen(true);
+    setTopicDraftFeedback("");
     setTopicDraftBusy(true);
     try {
       // 生成结果只作为当前可编辑表单的初值，用户点击保存前不会冻结对话或创建课题。
       const draft = await window.desktop?.generateNangongTopicDraft({ workspaceState: workspaces, locale });
-      if (draft) setTopicDraft({ title: draft.title, goal: draft.goal, scope: draft.scope.join("，"), acceptanceCriteria: draft.acceptanceCriteria.join("，") });
+      if (draft) {
+        setTopicDraft({ title: draft.title, goal: draft.goal, scope: draft.scope.join("，"), evidence: draft.evidence.join("，"), acceptanceCriteria: draft.acceptanceCriteria.join("，") });
+        setTopicDraftFeedback("已根据当前对话填充草稿");
+      }
     } catch (error) { onError(readableDesktopError(error, "课题草稿生成失败。")); } finally { setTopicDraftBusy(false); }
   };
   return <>
@@ -1519,17 +1550,22 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
     </section>
     <form className="dev-composer nangong-person-composer" onSubmit={(event) => { event.preventDefault(); void sendChat(); }}>
       {topicDraftOpen && <section className="evolution-inline-editor" aria-label="整理演化课题">
-        <header><strong>整理为演化课题</strong><button type="button" onClick={() => setTopicDraftOpen(false)}>取消</button></header>
+        <header><strong>整理为演化课题</strong><button type="button" disabled={topicDraftBusy} onClick={() => setTopicDraftOpen(false)}>取消</button></header>
         {topicDraftBusy && <p role="status">南宫婉正在根据当前对话整理课题草稿…</p>}
+        {!topicDraftBusy && topicDraftFeedback && <p role="status" className="nangong-topic-draft-feedback">{topicDraftFeedback}</p>}
+        <button type="button" className="nangong-topic-draft-action" disabled={topicDraftBusy} onClick={() => void generateTopicDraft()}>根据当前对话生成草稿</button>
         <label>课题标题<input aria-label="课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label>
         <label>课题目标<textarea aria-label="课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label>
         <label>影响范围<input aria-label="课题影响范围" placeholder="多项用逗号分隔" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label>
+        <label>事实证据<input aria-label="课题事实证据" placeholder="多项用逗号分隔" value={topicDraft.evidence} onChange={(event) => updateTopicDraft("evidence", event.currentTarget.value)} /></label>
         <label>验收条件<input aria-label="课题验收条件" placeholder="多项用逗号分隔" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label>
         <button type="button" className="primary" disabled={topicDraftBusy} onClick={() => void convertChat()}>确认保存课题</button>
       </section>}
       {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>调查截图</figcaption><button type="button" aria-label="移除截图" onClick={() => onAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
+      {newConversationBusy && <div className="nangong-conversation-refresh-status" role="status">正在关闭当前南宫婉线程并建立新对话…</div>}
+      {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
       <textarea aria-label="给南宫婉发送消息" placeholder="描述演化问题、现状和不可改变的约束…（可粘贴截图）" value={chatText} onChange={(event) => setChatText(event.currentTarget.value)} onPaste={(event) => { const files = Array.from(event.clipboardData.items).filter((item) => item.kind === "file" && item.type.startsWith("image/")).map((item) => item.getAsFile()).filter((file): file is File => file !== null); if (files.length) { event.preventDefault(); onPaste(files); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendChat(); } }} />
-      <div className="composer-footer"><div className="composer-tools"><button type="button" className="screenshot-button" aria-label="新建南宫婉对话" data-tooltip="新建南宫婉对话" onClick={() => void update(() => window.desktop?.newNangongConversation())}><ArrowClockwise24Regular /></button><button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-tooltip="截取当前屏幕" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button><button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" data-tooltip="隐藏窗口后截图" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button><button type="button" className="nangong-convert-action" disabled={!state.conversation.messages.length || topicDraftBusy} onClick={() => void generateTopicDraft()}>整理为演化课题</button></div><div className="composer-actions"><button type="submit" disabled={(!chatText.trim() && !attachments.length) || chatBusy} aria-label={chatBusy ? "调查中" : "发送给南宫婉"}><Send24Filled /></button></div></div>
+      <div className="composer-footer"><div className="composer-tools"><button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-tooltip="截取当前屏幕" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button><button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" data-tooltip="隐藏窗口后截图" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button><button type="button" className="nangong-convert-action" disabled={!state.conversation.messages.length || newConversationBusy} onClick={() => setTopicDraftOpen(true)}>整理为演化课题</button></div><div className="composer-actions"><button type="submit" disabled={newConversationBusy || (!chatText.trim() && !attachments.length) || chatBusy} aria-label={chatBusy ? "调查中" : "发送给南宫婉"}><Send24Filled /></button></div></div>
     </form>
   </>;
 }

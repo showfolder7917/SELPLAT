@@ -7,6 +7,7 @@ import { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, screen, shel
 
 import { LOCALES, SANDBOX_MODES } from "../../contracts/desktop.js";
 import type {
+  AiMemoryDatabaseStatus,
   AppVariant,
   EnqueueMessageRequest,
   ManagedExecutionMode,
@@ -38,6 +39,7 @@ import { TrustedCommandStore } from "../services/trusted-command-store.js";
 import { WorkspaceStore } from "../services/workspace-store.js";
 
 interface DesktopIpcDependencies {
+  aiMemoryDatabaseStatus: AiMemoryDatabaseStatus;
   codex: CodexService;
   screenshots: ScreenshotStore;
   settings: SettingsStore;
@@ -53,6 +55,7 @@ interface DesktopIpcDependencies {
   appRoot: string;
   variant: AppVariant;
   preloadPath: string;
+  prepareForApplicationExit: () => void;
   rendererRoot: string;
 }
 
@@ -98,7 +101,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, audit, projectRoot, appRoot, variant, preloadPath, rendererRoot } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, audit, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot } = dependencies;
   const activeAuditTasks = new Map<number, string>();
   const seenApprovalRequests = new Set<number>();
   const approvalAuditTasks = new Map<number, string>();
@@ -227,9 +230,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   };
 
   ipcMain.handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
+  ipcMain.handle("desktop:get-ai-memory-database-status", () => aiMemoryDatabaseStatus);
   registerSettingsIpc(settings, audit);
   registerWorkspaceIpc(workspaces, audit);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, (channel, message) => {
+    audit.recordEvent("business.exception", { channel, message });
+  });
   ipcMain.handle("desktop:get-codex-models", () => codex.getModels());
   ipcMain.handle("desktop:get-codex-status", () => codex.getStatus());
   ipcMain.handle("desktop:get-active-codex-session", () => codex.activeSession());
@@ -341,6 +347,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     // 只响应渲染层明确的权限恢复按钮；先让 IPC 正常返回，再由 Electron 使用同一应用身份重建进程。
     setTimeout(() => {
       app.relaunch();
+      prepareForApplicationExit();
       app.exit(0);
     }, 120);
   });
@@ -775,7 +782,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       publishDispatchState();
       if (response.restartRequired) {
         audit.recordEvent("application.controlled_restart_scheduled", { reason: "test_managed_completed" }, taskId);
-        setTimeout(() => { app.relaunch(); app.exit(0); }, 1_200);
+        setTimeout(() => { app.relaunch(); prepareForApplicationExit(); app.exit(0); }, 1_200);
       }
       return { ...response, disposition: "completed" as const };
     } catch (error) {

@@ -28,6 +28,7 @@ const collaborationStateListeners = new Set();
 const collaborationStreamListeners = new Set();
 const linghuAutomationListeners = new Set();
 const nangongEvolutionListeners = new Set();
+let nangongNewConversationCalls = 0;
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
   version: 1,
@@ -127,10 +128,17 @@ const emitStreamEvent = async (event) => {
   for (const listener of streamListeners) listener(structuredClone(event));
   await new Promise((resolve) => setTimeout(resolve, 20));
 };
+const readInteractionAiMemoryDatabaseStatus = () => {
+  const state = new URLSearchParams(globalThis.location.search).get("interactionAiMemoryState");
+  return state === "recovery-required"
+    ? { state, schemaVersion: null, message: "已初始化的 AI Memory 数据库丢失，请先恢复原文件。" }
+    : { state: "ready", schemaVersion: "0002", message: null };
+};
 
 // 隔离测试只提供界面渲染需要的确定性数据，不连接真实 Harness、账号、文件选择器或屏幕权限。
 contextBridge.exposeInMainWorld("desktop", {
   getEnvironment: async () => ({ projectRoot, platform: process.platform, variant: "developer" }),
+  getAiMemoryDatabaseStatus: async () => ({ ...readInteractionAiMemoryDatabaseStatus() }),
   getSettings: async () => ({ ...desktopSettings }),
   updateSettings: async (settings) => { desktopSettings = { ...desktopSettings, ...settings }; return { ...desktopSettings }; },
   getCodexModels: async () => ({ models: [
@@ -261,9 +269,15 @@ contextBridge.exposeInMainWorld("desktop", {
     nangongEvolutionState.conversation.messages.push({ messageId: `nangong-${now}`, role: "nangong", content: "已确认事实：令狐持续修正需要先形成可审批方案。建议方向：把修正方案接入韩立统一审批。", createdAt: now });
     return publishNangongEvolution("conversation.replied");
   },
-  newNangongConversation: async () => { nangongEvolutionState.conversation = { conversationId: `nangong-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() }; return publishNangongEvolution("conversation.created"); },
-  generateNangongTopicDraft: async () => ({ title: "南宫婉完整审批链路", goal: "让令狐持续修正先形成可审批方案，再进入统一审批。", scope: ["AI Desktop", "审批链路"], acceptanceCriteria: ["生成内容可编辑", "保存后进入课题卡片"] }),
-  convertNangongConversationToTopic: async (request) => createInteractionTopic(request, nangongEvolutionState.conversation.messages.filter((item) => item.role === "nangong").map((item) => item.content)),
+  newNangongConversation: async () => {
+    nangongNewConversationCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    if (nangongNewConversationCalls > 1) throw new Error("thread already has an active writer");
+    nangongEvolutionState.conversation = { conversationId: `nangong-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() };
+    return publishNangongEvolution("conversation.created");
+  },
+  generateNangongTopicDraft: async () => ({ title: "南宫婉完整审批链路", goal: "让令狐持续修正先形成可审批方案，再进入统一审批。", scope: ["AI Desktop", "审批链路"], evidence: ["用户要求草稿由当前对话生成", "南宫婉调查确认修正方案需先审批"], acceptanceCriteria: ["生成内容可编辑", "保存后进入课题卡片"] }),
+  convertNangongConversationToTopic: async (request) => createInteractionTopic(request, request.evidence),
   createEvolutionTopic: async (request) => createInteractionTopic(request, request.evidence),
   updateEvolutionTopic: async (topicId, request) => {
     const topic = nangongEvolutionState.topics.find((item) => item.topicId === topicId);

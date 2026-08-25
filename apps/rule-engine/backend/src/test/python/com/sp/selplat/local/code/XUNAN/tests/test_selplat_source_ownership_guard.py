@@ -76,6 +76,30 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             rule_text,
         )
 
+    def test_real_database_registry_declares_runtime_and_engine_for_every_application(self) -> None:
+        """真实中央登记必须为每个数据库应用声明运行类型和数据库引擎。"""
+
+        registry_path = self.guard.managed_database_registry_path(
+            PROJECT_ROOT, ACTIVE_STABLE_USER_ID
+        )
+        document = json.loads(registry_path.read_text(encoding="utf-8"))
+        registrations = {
+            application["projectName"]: application
+            for application in document["applications"]
+        }
+
+        self.assertTrue(registrations)
+        self.assertTrue(all(
+            application.get("runtimeType") in self.guard.DATABASE_RUNTIME_TYPES
+            and application.get("databaseEngine") in self.guard.DATABASE_ENGINES
+            for application in registrations.values()
+        ))
+        self.assertTrue(any(
+            application.get("runtimeType") == "electron"
+            and application.get("databaseEngine") == "sqlite"
+            for application in registrations.values()
+        ))
+
     def create_fixture(self, temp_root: Path) -> Path:
         """创建最小 SELPLAT 工程事实，仅用于隔离扫描。"""
         (temp_root / "settings.gradle").write_text("rootProject.name = 'fixture'\n", encoding="utf-8")
@@ -103,7 +127,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             self,
             fixture: Path,
             project_name: str,
-            **registration_values: str) -> None:
+            **registration_values: object) -> None:
         """在隔离工程的当前用户中央登记中注册一个数据库应用。"""
         registry = (
             fixture / "apps/rule-engine/backend/src/main/resources/local"
@@ -113,10 +137,13 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         registry.parent.mkdir(parents=True, exist_ok=True)
         registration = {
             "projectName": project_name,
+            "runtimeType": "java-gradle",
+            "databaseEngine": "h2",
             "schemaRoot": "db/sql",
-            "primaryKeyStrategy": "one-table-one-sequence",
-            **registration_values,
         }
+        registration.update(registration_values)
+        if registration["databaseEngine"] == "h2":
+            registration.setdefault("primaryKeyStrategy", "one-table-one-sequence")
         registry.write_text(
             json.dumps({"version": 1, "applications": [registration]}, ensure_ascii=False),
             encoding="utf-8",
@@ -771,6 +798,65 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                 {violation["code"] for violation in result["violations"]},
             )
 
+    def test_registered_electron_sqlite_uses_its_own_database_contract(self) -> None:
+        """Electron/SQLite 登记只验证路径与迁移合同，不套用 Java/H2 业务分层。"""
+
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            project = fixture / "apps/desktop-example"
+            sql_root = project / "db/sql"
+            sql_root.mkdir(parents=True)
+            (sql_root / "schema-DesktopSchemaVersion.sql").write_text(
+                "CREATE TABLE DesktopSchemaVersion (id INTEGER PRIMARY KEY);\n",
+                encoding="utf-8",
+            )
+            (sql_root / "load-order.txt").write_text(
+                "schema-DesktopSchemaVersion.sql\n",
+                encoding="utf-8",
+            )
+            (project / "db/desktop-paths.json").write_text(
+                json.dumps({
+                    "schemaVersion": 1,
+                    "databaseRoot": str((project / "db").resolve()),
+                    "databaseFile": "events.sqlite3",
+                }),
+                encoding="utf-8",
+            )
+            self.register_managed_database_application(
+                fixture,
+                "desktop-example",
+                runtimeType="electron",
+                databaseEngine="sqlite",
+                databaseFile="db/events.sqlite3",
+                pathConfig="db/desktop-paths.json",
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+            codes = {violation["code"] for violation in result["violations"]}
+
+            self.assertNotIn("MANAGED_APPLICATION_TABLE_WITHOUT_BUSINESS", codes)
+            self.assertNotIn("MANAGED_APPLICATION_HIKARI_POOL_CONFIGURATION_MISSING", codes)
+            self.assertNotIn("MANAGED_APPLICATION_COMMON_SEQUENCE_SQL_MISSING", codes)
+
+    def test_unregistered_sqlite_schema_still_requires_central_registration(self) -> None:
+        """SQLite 目录没有中央运行类型登记时仍必须阻断，不能靠非 Gradle 身份绕过。"""
+
+        with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
+            fixture = self.create_fixture(Path(directory))
+            sql_root = fixture / "apps/desktop-example/db/sql"
+            sql_root.mkdir(parents=True)
+            (sql_root / "schema-DesktopSchemaVersion.sql").write_text(
+                "CREATE TABLE DesktopSchemaVersion (id INTEGER PRIMARY KEY);\n",
+                encoding="utf-8",
+            )
+
+            result = self.guard.audit_source_ownership(fixture)
+
+            self.assertIn(
+                "MANAGED_DATABASE_APPLICATION_CENTRAL_REGISTRATION_MISSING",
+                {violation["code"] for violation in result["violations"]},
+            )
+
     def test_application_local_managed_registry_is_forbidden(self) -> None:
         """旧式应用内受管隐藏文件不能重新成为第二事实来源。"""
         with tempfile.TemporaryDirectory(prefix="source_guard_", dir=OPTION_TEMP_ROOT) as directory:
@@ -800,6 +886,8 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
                     "version": 1,
                     "applications": [{
                         "projectName": "example",
+                        "runtimeType": "java-gradle",
+                        "databaseEngine": "h2",
                         "structure": "control-table-and-dynamic-target-runtime",
                         "schemaRoot": "db/sql",
                         "databaseFile": "db/example.mv.db",

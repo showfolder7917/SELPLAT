@@ -132,6 +132,9 @@ load_rule_for_active_user_selplat_source_language_root_build_entry_or_ability_ch
 <!-- 交付前检查未登记语言、错误能力归属、实验代码和源码缓存时加载。 -->
 load_rule_for_active_user_selplat_all_program_source_ownership_delivery_scan = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES
 
+<!-- 新增数据库运行类型、登记 H2/SQLite 应用或调整跨运行时数据库门禁分流时加载。 -->
+load_rule_for_active_user_selplat_database_runtime_registration_or_engine_governance_route = SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES,SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES
+
 <!-- SELPLAT 工具运行数据统一进入 OPTION/temp，并由程序路径守卫阻止通用技能默认目录逃逸。 -->
 SELPLAT_TOOL_RUNTIME_TEMP_PATH_ESCAPE_GUARD_RULES = local/XUNAN/selplat/通用/rule/RUL_SELPLAT工具运行临时目录防逃逸规则.md
 
@@ -313,6 +316,9 @@ load_rule_for_selplat_gradle_dependency_or_build_output = SELPLAT_PROJECT_BUILD_
 
 <!-- load_rule_for_selplat_vscode_gradle_import_or_cache 的当前独立事实为 SELPLAT_PROJECT_BUILD_RULES。 -->
 load_rule_for_selplat_vscode_gradle_import_or_cache = SELPLAT_PROJECT_BUILD_RULES
+
+<!-- 调整正式工程扫描范围、隔离未登记参考目录或检查跨模块引用时加载当前构建规则。 -->
+load_rule_for_active_user_selplat_formal_module_scope_or_reference_directory_isolation = SELPLAT_PROJECT_BUILD_RULES
 
 <!-- SELPLAT 基础 DAO 复用和通用参数透传。 -->
 SELPLAT_BASE_DAO_REUSE_RULES = local/XUNAN/selplat/通用/rule/RUL_基础DAO复用与通用参数透传规则.md

@@ -3,6 +3,8 @@
   "applications": [
     {
       "projectName": "japanese",
+      "runtimeType": "java-gradle",
+      "databaseEngine": "h2",
       "schemaRoot": "db/sql",
       "databaseFile": "db/japanese.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
@@ -10,6 +12,8 @@
     },
     {
       "projectName": "mda",
+      "runtimeType": "java-gradle",
+      "databaseEngine": "h2",
       "schemaRoot": "db/sql",
       "databaseFile": "db/mda.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
@@ -20,6 +24,8 @@
     },
     {
       "projectName": "reference-data",
+      "runtimeType": "java-gradle",
+      "databaseEngine": "h2",
       "schemaRoot": "db/sql",
       "databaseFile": "db/reference-data.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
@@ -31,6 +37,8 @@
     },
     {
       "projectName": "uniauth",
+      "runtimeType": "java-gradle",
+      "databaseEngine": "h2",
       "schemaRoot": "db/sql",
       "databaseFile": "db/uniauth.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
@@ -38,10 +46,20 @@
     },
     {
       "projectName": "ai-factiory",
+      "runtimeType": "java-gradle",
+      "databaseEngine": "h2",
       "schemaRoot": "db/sql",
       "databaseFile": "db/ai-factiory.mv.db",
       "primaryKeyStrategy": "one-table-one-sequence",
       "datasourcePrefix": "ai-factory.datasource"
+    },
+    {
+      "projectName": "ai-desktop",
+      "runtimeType": "electron",
+      "databaseEngine": "sqlite",
+      "schemaRoot": "db/sql",
+      "databaseFile": "db/events.sqlite3",
+      "pathConfig": "db/ai-memory-paths.json"
     }
   ]
 }

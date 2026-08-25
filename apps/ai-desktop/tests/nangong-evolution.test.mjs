@@ -74,6 +74,7 @@ test("南宫婉提案从人工审批、任务分发推进到完成记录", async
       state() { return { tasks: distributedTaskId ? [{ taskId: distributedTaskId, state: "integrated" }] : [] }; },
     };
     const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    store.setAutomation("evolution", true);
     let state = facade.createTopic(topicRequest("完整演化闭环"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
@@ -88,7 +89,12 @@ test("南宫婉提案从人工审批、任务分发推进到完成记录", async
     state = facade.state();
     assert.equal(state.proposals[0].status, "completed");
     assert.equal(state.proposals[0].resultSummary, "全部关联任务通过统一测试，原演化目标已完成。");
-    assert.equal(state.topics[0].recoveryPoint, "evolution-goal-completed");
+    assert.match(state.topics[0].recoveryPoint, /^next-evolution:/);
+    assert.equal(state.topics.length, 2);
+    assert.equal(state.topics[1].continuationOfTopicId, state.topics[0].topicId);
+    assert.equal(state.topics[0].nextTopicId, state.topics[1].topicId);
+    assert.equal(state.proposals.at(-1).topicId, state.topics[1].topicId);
+    assert.equal(state.proposals.at(-1).status, "pending-approval");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -101,10 +107,61 @@ test("南宫婉对话持久化并冻结为正式课题快照", async () => {
     assert.equal(state.conversation.messages.length, 2);
     assert.deepEqual(state.conversation.messages[0].attachmentIds, ["screenshot-1"]);
     assert.throws(() => facade.convertConversationToTopic({ title: "未确认转换", goal: "不能自动变成正式课题", scope: ["AI Desktop"], acceptanceCriteria: ["用户明确确认"], workspaceState, locale: "zh-CN" }), /用户明确确认/);
-    state = facade.convertConversationToTopic({ confirmedByUser: true, title: "令狐持续修正演化", goal: "修正 Bug 并维持稳定运行", scope: ["AI Desktop"], acceptanceCriteria: ["修正方案先审批"], workspaceState, locale: "zh-CN" });
+    state = facade.convertConversationToTopic({ confirmedByUser: true, title: "令狐持续修正演化", goal: "修正 Bug 并维持稳定运行", scope: ["AI Desktop"], evidence: ["用户确认：令狐持续修正需要先审批", "南宫婉调查：现有修正方案尚未进入统一审批"], acceptanceCriteria: ["修正方案先审批"], workspaceState, locale: "zh-CN" });
     assert.equal(state.topics.at(-1).sourceConversationMessageIds.length, 2);
-    assert.match(state.topics.at(-1).evidence[0], /用户提供的材料/);
-    assert.match(state.topics.at(-1).evidence[1], /南宫婉调查记录（含待验证判断）/);
+    assert.deepEqual(state.topics.at(-1).evidence, ["用户确认：令狐持续修正需要先审批", "南宫婉调查：现有修正方案尚未进入统一审批"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("南宫婉根据当前对话生成五项可编辑草稿但不直接保存课题", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-topic-draft-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const draftConversation = {
+      async send(request) {
+        if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "令狐持续修正演化", goal: "保持 Bug 修复链稳定运行", scope: ["AI Desktop"], evidence: ["用户陈述：草稿需要从当前对话生成", "南宫婉调查：修正方案需要审批"], acceptanceCriteria: ["五项内容可编辑后再保存"] }), itemCount: 1 };
+        return { text: "南宫婉调查：修正方案需要先进入审批。", itemCount: 1 };
+      },
+      async newChat() {},
+    };
+    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: draftConversation, recordEvent: () => undefined });
+    await facade.sendConversationMessage({ message: "根据当前对话生成草稿", workspaceState, locale: "zh-CN" });
+    const draft = await facade.generateTopicDraft({ workspaceState, locale: "zh-CN" });
+    assert.deepEqual(draft, { title: "令狐持续修正演化", goal: "保持 Bug 修复链稳定运行", scope: ["AI Desktop"], evidence: ["用户陈述：草稿需要从当前对话生成", "南宫婉调查：修正方案需要审批"], acceptanceCriteria: ["五项内容可编辑后再保存"] });
+    assert.equal(facade.state().topics.length, 0);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("南宫婉新建对话等待活动写入者释放后才清空持久消息", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-new-conversation-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    store.appendConversation("user", "必须在旧线程删除成功后再清空");
+    let attempts = 0;
+    const retryingConversation = {
+      async send() { return { text: "unused", itemCount: 1 }; },
+      async newChat() {
+        attempts += 1;
+        if (attempts < 3) throw new Error("thread already has an active writer");
+      },
+    };
+    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: retryingConversation, recordEvent: () => undefined, newConversationRetryDelaysMs: [0, 1, 1] });
+    const state = await facade.newConversation();
+    assert.equal(attempts, 3);
+    assert.equal(state.conversation.messages.length, 0);
+    assert.equal(new NangongEvolutionStore(path.join(directory, "state.json")).state().conversation.messages.length, 0);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("南宫婉线程删除最终失败时保留原页面消息", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-new-conversation-failed-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    store.appendConversation("user", "删除失败时必须保留");
+    const failingConversation = { async send() { return { text: "unused", itemCount: 1 }; }, async newChat() { throw new Error("thread already has an active writer"); } };
+    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: failingConversation, recordEvent: () => undefined, newConversationRetryDelaysMs: [0, 1, 1] });
+    await assert.rejects(() => facade.newConversation(), /active writer/);
+    assert.equal(facade.state().conversation.messages[0].content, "删除失败时必须保留");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

@@ -21,6 +21,8 @@ export interface EvolutionTopic {
   locale: Locale;
   origin: EvolutionProposalOrigin;
   sourceConversationMessageIds: string[];
+  continuationOfTopicId: string | null;
+  nextTopicId: string | null;
   status: EvolutionTopicStatus;
   /** 课题保存修订号用于拒绝基于过期界面的覆盖写入。 */
   topicRevision: number;
@@ -77,7 +79,7 @@ export interface EvolutionProposal {
 }
 
 export interface NangongEvolutionState {
-  version: 4;
+  version: 5;
   automaticEvolutionEnabled: boolean;
   automaticNangongApprovalEnabled: boolean;
   automaticLinghuApprovalEnabled: boolean;
@@ -129,6 +131,7 @@ export interface ConvertNangongConversationToTopicRequest {
   goal: string;
   scope: string[];
   exclusions?: string[];
+  evidence: string[];
   acceptanceCriteria: string[];
   workspaceState: WorkspaceState;
   locale: Locale;
@@ -139,6 +142,7 @@ export interface NangongTopicDraft {
   title: string;
   goal: string;
   scope: string[];
+  evidence: string[];
   acceptanceCriteria: string[];
 }
 
