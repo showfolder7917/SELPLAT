@@ -3,6 +3,7 @@
  * 新代码优先从所属领域文件导入，本文件只保持既有调用方的稳定迁移入口。
  */
 export * from "./audit.js";
+export * from "./approval-governance.js";
 export * from "./base.js";
 export * from "./codex.js";
 export * from "./codex-stream.js";

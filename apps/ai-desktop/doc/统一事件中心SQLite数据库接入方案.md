@@ -145,42 +145,41 @@ apps/ai-desktop/
 
 ### 5.1 运行文件
 
-第一阶段先把配置文件位置固定为：
+配置文件位置固定为当前工程内的相对位置：
 
 ```text
-/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/db/ai-memory-paths.json
+<current-SELPLAT-root>/apps/ai-desktop/db/ai-memory-paths.json
 ```
 
-配置文件默认把数据库根固定为：
+数据库根由本次运行已验证的 SELPLAT 工程根派生为：
 
 ```text
-/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/db
+<current-SELPLAT-root>/apps/ai-desktop/db
 ```
 
-因此当前 macOS 开发环境的唯一运行数据库为：
+因此 Windows、macOS 与其他受支持环境的唯一运行数据库均为各自当前工程内的：
 
 ```text
-/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/db/events.sqlite3
+<current-SELPLAT-root>/apps/ai-desktop/db/events.sqlite3
 ```
 
 配置文件初始内容：
 
 ```json
 {
-  "schemaVersion": 1,
-  "databaseRoot": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/db",
+  "schemaVersion": 2,
   "databaseFile": "events.sqlite3"
 }
 ```
 
-开发启动和 macOS Developer 打包版必须通过同一个 `AiMemoryPathResolver` 读取该配置，禁止再根据各自 `userData` 建立不同数据库。配置允许以后显式修改，但调用方不得自行覆盖、拼接或回退到另一位置。
+开发启动和 Developer 打包版必须先通过 `resolveProjectRoot` 识别当前工程，再由同一个 `AiMemoryPathResolver` 读取配置；配置不得声明 `databaseRoot`，调用方也不得用用户名、盘符、宿主目录或 `userData` 覆盖数据库根。
 
 如果配置文件、数据库根或已登记的数据库文件缺失：
 
 - 真正首次初始化时，只有阶段0初始化器可以创建 `events.sqlite3`。
 - 已经初始化过但文件缺失时，必须阻断数据库业务并进入恢复，禁止静默创建空数据库。
 - 配置无法读取时必须明确报错，禁止回退到 `cache` 或 `Application Support` 生成第二份数据库。
-- 其他操作系统接入前必须先提供对应的显式配置值，不能使用这条 macOS 绝对路径猜测位置。
+- 切换操作系统或工程位置时重新使用当前工程根派生路径，禁止复用另一台机器的绝对路径。
 
 运行期间允许同目录出现：
 
@@ -352,9 +351,9 @@ interface AiDesktopEventInput {
 #### 实施内容
 
 1. 在 `apps/ai-desktop/db` 建立 `ai-memory-paths.json`、`sql`、README 和加载清单。
-2. 配置文件默认固定 `databaseRoot=/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/db`、`databaseFile=events.sqlite3`。
-3. 实现唯一 `AiMemoryPathResolver`；开发启动、macOS Developer 打包版和后续数据库组件只能通过它获取路径。
-4. 解析器必须验证配置版本、绝对路径、文件名安全性和最终路径仍位于已配置数据库根内。
+2. 数据库根固定由当前 `SELPLAT_ROOT` 派生为 `apps/ai-desktop/db`，配置只登记 `databaseFile=events.sqlite3`，禁止机器绝对路径。
+3. 实现唯一 `AiMemoryPathResolver`；开发启动、各平台 Developer 打包版和后续数据库组件只能通过它获取路径。
+4. 解析器必须验证配置版本、禁止额外路径字段、检查文件名安全性，并保证最终路径仍位于当前工程的应用数据库根内。
 5. 配置缺失、损坏或路径逃逸时立即阻断数据库初始化，禁止回退到 `userData`、`cache` 或其他默认目录。
 6. 在 SELPLAT 根 `.gitignore` 精确忽略 `apps/ai-desktop/db/events.sqlite3`、`events.sqlite3-wal` 和 `events.sqlite3-shm`；配置、SQL、README 继续进入 Git。
 7. 实现 `SqliteDatabase`、迁移执行器和事务包装。
@@ -364,9 +363,9 @@ interface AiDesktopEventInput {
 #### 验收条件
 
 - 全新目录可以自动建立数据库。
-- 配置解析结果严格等于 `/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/db/events.sqlite3`。
-- 开发启动和 macOS Developer 打包版解析为同一个数据库文件。
-- 配置缺失、损坏、相对路径和路径逃逸均被阻断，不产生备用空数据库。
+- 配置解析结果严格等于 `<current-SELPLAT-root>/apps/ai-desktop/db/events.sqlite3`。
+- 开发启动和当前平台 Developer 打包版解析为同一个数据库文件。
+- 配置缺失、损坏、机器路径字段和路径逃逸均被阻断，不产生备用空数据库。
 - 运行数据库、WAL 和 SHM 不进入 Git，配置和 SQL 可以进入 Git。
 - 重复启动不重复执行迁移。
 - 修改已发布迁移文件后能由校验和门禁阻断。

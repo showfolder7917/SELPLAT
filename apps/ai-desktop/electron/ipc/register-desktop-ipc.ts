@@ -37,6 +37,7 @@ import { ScreenshotStore } from "../services/screenshot-store.js";
 import { SettingsStore } from "../services/settings-store.js";
 import { TrustedCommandStore } from "../services/trusted-command-store.js";
 import { EventCenterFacade } from "../services/event-center/event-center-facade.js";
+import type { WorkflowRepository } from "../services/event-center/workflow-repository.js";
 import { WorkspaceStore } from "../services/workspace-store.js";
 
 interface DesktopIpcDependencies {
@@ -52,6 +53,7 @@ interface DesktopIpcDependencies {
   nangongEvolution: NangongEvolutionFacade;
   collaborationRegistry: CollaborationCodexRegistry;
   eventCenter: EventCenterFacade;
+  workflowRepository: WorkflowRepository | null;
   projectRoot: string;
   appRoot: string;
   variant: AppVariant;
@@ -102,7 +104,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, eventCenter, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, eventCenter, workflowRepository, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
@@ -234,6 +236,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
 
   handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
   handle("desktop:get-ai-memory-database-status", () => aiMemoryDatabaseStatus);
+  handle("desktop:get-approval-governance", () => workflowRepository?.listApprovalGovernance() || []);
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
   registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter);
@@ -268,9 +271,20 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       throw new Error("Invalid Codex approval response.");
     }
     // “允许”对满足安全边界的项目内固定命令默认同时建立信任；文件修改和高风险命令不会进入持久信任。
+    const pendingApproval = [...codex.pendingApprovals(), ...collaborationRegistry.pendingApprovals()].find((item) => item.requestId === requestId);
     const trustResult = requestId >= 1_000_000
       ? collaborationRegistry.resolveApproval(requestId, decision, decision === "accept")
       : codex.resolveApproval(requestId, decision, decision === "accept");
+    if (pendingApproval) workflowRepository?.recordCodexApprovalDecision({
+      requestId,
+      title: pendingApproval.title,
+      kind: pendingApproval.kind,
+      decision,
+      command: pendingApproval.command ?? undefined,
+      cwd: pendingApproval.cwd ?? undefined,
+      trusted: trustResult.trusted,
+      correlationId: approvalAuditTasks.get(requestId) || null,
+    });
     audit.recordApproval(approvalAuditTasks.get(requestId), requestId, decision, trustResult.trusted);
     seenApprovalRequests.delete(requestId);
     approvalAuditTasks.delete(requestId);

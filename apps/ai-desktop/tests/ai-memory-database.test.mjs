@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
@@ -15,7 +15,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "0004");
+    assert.equal(first.status.schemaVersion, "0006");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -28,9 +28,9 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 4);
+      assert.equal(Number(row.count), 6);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "0004", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "0006", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
     } finally {
       inspection.close();
@@ -159,15 +159,16 @@ test("主进程与渲染层只公开数据库状态，不公开连接或 SQL", (
 
 function createFixture(suffix) {
   const projectRoot = mkdtempSync(path.join(controlledTestRoot, `ai-memory-database-${suffix}-`));
-  const dbRoot = path.join(projectRoot, "database");
-  const configRoot = path.join(projectRoot, "apps", "ai-desktop", "db");
+  const dbRoot = path.join(projectRoot, "apps", "ai-desktop", "db");
   const sqlRoot = path.join(dbRoot, "sql");
-  mkdirSync(configRoot, { recursive: true });
-  mkdirSync(dbRoot, { recursive: true });
-  cpSync(path.join(appRoot, "db", "sql"), sqlRoot, { recursive: true });
-  writeFileSync(path.join(configRoot, "ai-memory-paths.json"), `${JSON.stringify({
-    schemaVersion: 1,
-    databaseRoot: dbRoot,
+  mkdirSync(sqlRoot, { recursive: true });
+  // Windows 含中文受控测试路径下的目录级 cpSync 可能不落盘，逐个复制正式清单文件以保证夹具证据完整。
+  const sourceSqlRoot = path.join(appRoot, "db", "sql");
+  for (const sqlFile of readdirSync(sourceSqlRoot)) {
+    copyFileSync(path.join(sourceSqlRoot, sqlFile), path.join(sqlRoot, sqlFile));
+  }
+  writeFileSync(path.join(dbRoot, "ai-memory-paths.json"), `${JSON.stringify({
+    schemaVersion: 2,
     databaseFile: "events.sqlite3",
   }, null, 2)}\n`, "utf8");
   const markerPath = path.join(projectRoot, "user-data", "ai-memory-database-state.json");

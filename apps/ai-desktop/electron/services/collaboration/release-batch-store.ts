@@ -14,9 +14,9 @@ export class ReleaseBatchStore {
     this.#archiveRoot = path.join(path.resolve(archiveLogRoot), "发布归档");
   }
 
-  create(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTask[]): ReleaseBatchDocument {
+  create(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTask[], initiatorMemberId: string): ReleaseBatchDocument {
     const document: ReleaseBatchDocument = {
-      releaseBatchId, version, generation, state: "frozen", initiatorMemberId: "linghu-ancestor",
+      releaseBatchId, version, generation, state: "frozen", initiatorMemberId,
       candidateBranch: null, candidateSha: null, localMergeSha: null, executable: null,
       tasks: tasks.map((task) => ({ taskId: task.taskId, title: task.snapshot.title, branchName: task.versionWorkspace?.branchName || null, resultSha: task.versionWorkspace?.resultSha || null })),
       startedAt: new Date().toISOString(), completedAt: null, failureReason: null,

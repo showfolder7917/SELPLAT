@@ -11,13 +11,13 @@ import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });
 
-test("统一迁移建立事件、流程、任务、审批、成员、运行会话和对话记忆表", () => {
+test("统一迁移建立事件、流程、任务、审批、对话记忆和专题全生命周期档案表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopConversationArchiveMessage"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopConversationArchiveMessage", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "0004");
+    assert.equal(fixture.database.latestSchemaVersion, "0006");
   } finally {
     fixture.close();
   }
@@ -95,6 +95,14 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
     const topics = fixture.database.withConnection((connection) => connection.prepare("SELECT title, topicType, state FROM AiDesktopConversationTopic ORDER BY startedAt").all());
     assert.deepEqual(topics.map((item) => [item.title, item.topicType]), [["统一日志入口", "架构治理"], ["审批习惯分析", "审批偏好"]]);
     assert.deepEqual(topics.map((item) => item.state), ["closed", "active"]);
+    fixture.database.withConnection((connection) => connection.prepare(`
+      INSERT INTO AiDesktopConversationArchiveMessage
+        (messageId, threadId, sequenceNumber, sourceRole, responsePhase, content, contentRetention, inferredIntent, topicTitle, topicType, createdAt, recordedAt)
+      VALUES ('codex-source-1', 'codex-thread-1', 0, 'codex', 'final_answer', 'Codex 执行原始记录必须进入专题案卷。', 'preview-80', NULL, '专题档案', '执行记录', '2026-08-26T00:03:00.000Z', '2026-08-26T00:03:00.000Z')
+    `).run());
+    const corpus = memory.readHanLiEvolutionCorpus("deliberation-1");
+    assert.ok(corpus.some((item) => item.source === "nangong" && item.content === firstConversation.messages[1].content));
+    assert.ok(corpus.some((item) => item.source === "codex" && item.content === "Codex 执行原始记录必须进入专题案卷。"));
   } finally {
     fixture.close();
   }
@@ -121,13 +129,21 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
   try {
     const now = new Date().toISOString();
     fixture.repository.syncEvolutionState({
-      version: 4, automaticEvolutionEnabled: true, automaticNangongApprovalEnabled: false,
-      automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 1,
+      version: 7, automaticEvolutionEnabled: true, automaticNangongApprovalEnabled: false,
+      automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "running", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: now, pausedAt: null }, automationContext: { workspaceState: { roots: [{ path: appRoot, permission: "workspace-write" }] }, locale: "zh-CN" }, preferenceSnapshotVersion: 1,
       activeTopicId: "topic-1", updatedAt: now, conversation: { conversationId: "conversation-1", messages: [], updatedAt: now },
+      deliberations: [{
+        deliberationId: "deliberation-1", topicId: "topic-1", status: "established",
+        sourceSnapshots: [{ snapshotId: "snapshot-1", deliberationId: "deliberation-1", source: "codex", conversationId: "thread-1", sourceMessageId: "source-1", sequenceNumber: 0, role: "codex", responsePhase: "final_answer", content: "原始执行记录", originalCreatedAt: now, capturedAt: now }],
+        rounds: [{ roundId: "round-1", roundNumber: 1, question: "异常记录缺在哪里？", questionReason: "需要确定边界", answer: "缺少专题关联。", assessment: "可以确立专项。", decision: "establish-topic", createdAt: now, answeredAt: now, assessedAt: now }],
+        candidate: { title: "统一异常", goal: "让所有成员异常可追踪", scope: ["AI Desktop"], exclusions: [], evidence: ["用户要求统一入口"], acceptanceCriteria: ["异常可查询"], establishmentReason: "问题和验收边界已经明确" },
+        createdAt: now, updatedAt: now,
+      }],
+      archiveRecords: [{ recordId: "archive-1", deliberationId: "deliberation-1", topicId: "topic-1", proposalId: null, taskId: null, sequenceNumber: 1, category: "topic", eventType: "topic.established_from_deliberation", actor: "han-li", title: "南宫婉按韩立通知登记专题池", payload: { original: true }, occurredAt: now }],
       topics: [{
         topicId: "topic-1", title: "统一异常", goal: "让所有成员异常可追踪", scope: ["AI Desktop"], exclusions: [],
         evidence: ["用户要求统一入口"], acceptanceCriteria: ["异常可查询"], workspaceState: { roots: [{ path: appRoot, permission: "workspace-write" }] },
-        locale: "zh-CN", origin: "nangong", sourceConversationMessageIds: [], status: "approved", topicRevision: 1,
+        locale: "zh-CN", origin: "nangong", sourceConversationMessageIds: [], deliberationId: "deliberation-1", continuationOfTopicId: null, nextTopicId: null, seriesId: "topic-1", roundNumber: 1, status: "approved", topicRevision: 1,
         currentProposalVersion: 1, recoveryPoint: "approved-returned-to-nangong", createdAt: now, updatedAt: now,
       }],
       proposals: [{
@@ -138,22 +154,33 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
         rollbackPlan: "保留原状态", acceptanceCriteria: ["异常可查询"], distributionUnits: [], status: "approved", distributedTaskIds: [],
         resultSummary: null, createdAt: now, updatedAt: now,
         approvals: [{
-          approvalId: "approval-1", proposalId: "proposal-1", decision: "approved", source: "manual-user", approverMemberId: "user",
-          approverDisplayName: "用户", advice: "保留事实证据", feedbackTarget: "proposal-content", capabilityScope: null,
+          approvalId: "approval-1", proposalId: "proposal-1", decision: "approved", source: "manual-user", stage: "direction", approverMemberId: "han-li",
+          approverDisplayName: "韩立", advice: "保留事实证据", feedbackTarget: "proposal-content", capabilityScope: null,
           referencedApprovalIds: [], preferenceSnapshotVersion: 1, createdAt: now,
         }],
       }],
     });
     const approval = fixture.database.withConnection((connection) => connection.prepare("SELECT title, proposalType, submitterDisplayName, approverDisplayName, decision, evidenceJson FROM AiDesktopApprovalRecord WHERE approvalId='approval-1'").get());
     assert.deepEqual({ title: approval.title, type: approval.proposalType, submitter: approval.submitterDisplayName, approver: approval.approverDisplayName, decision: approval.decision }, {
-      title: "统一异常", type: "规则演进", submitter: "南宫婉", approver: "用户", decision: "approved",
+      title: "统一异常", type: "规则演进", submitter: "南宫婉", approver: "韩立", decision: "approved",
     });
     assert.deepEqual(JSON.parse(approval.evidenceJson), ["用户要求统一入口"]);
+    const governance = fixture.database.withConnection((connection) => connection.prepare("SELECT domain, decision, approverDisplayName FROM AiDesktopApprovalGovernance WHERE governanceId='evolution-approval:approval-1'").get());
+    assert.deepEqual({ domain: governance.domain, decision: governance.decision, approver: governance.approverDisplayName }, { domain: "evolution", decision: "approved", approver: "韩立" });
+    assert.equal(fixture.repository.tableCount("AiDesktopEvolutionDeliberation"), 1);
+    assert.equal(fixture.repository.tableCount("AiDesktopEvolutionSourceSnapshot"), 1);
+    assert.equal(fixture.repository.tableCount("AiDesktopEvolutionArchiveRecord"), 1);
     const collaboration = collaborationState(now);
     collaboration.tasks[0].evolutionProposalId = "proposal-1";
     fixture.repository.syncCollaborationState(collaboration);
     const task = fixture.database.withConnection((connection) => connection.prepare("SELECT workflowId, proposalId FROM AiDesktopTaskExecution WHERE taskId='task-1'").get());
     assert.deepEqual({ ...task }, { workflowId: "evolution:proposal-1", proposalId: "proposal-1" });
+    const dossier = fixture.repository.getEvolutionTopicDossier("topic-1", {
+      version: 7, topics: [{ topicId: "topic-1", deliberationId: "deliberation-1" }], proposals: [{ proposalId: "proposal-1", topicId: "topic-1" }],
+      deliberations: [{ deliberationId: "deliberation-1", sourceSnapshots: [{ content: "原始执行记录" }] }], archiveRecords: [{ topicId: "topic-1", eventType: "topic.established_from_deliberation" }],
+    });
+    assert.equal(dossier.deliberation.sourceSnapshots[0].content, "原始执行记录");
+    assert.ok(dossier.executionRecords.some((item) => item.taskId === "task-1"));
   } finally {
     fixture.close();
   }

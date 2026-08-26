@@ -51,6 +51,12 @@ load_rule_for_active_user_unicode_non_target_field_preservation = UTF8_FILE_AND_
 <!-- 本索引只维护不依赖具体组织或工程语义、可被所有工程按任务命中的规则。 -->
 cross_project_common_rule_root = local/XUNAN/跨工程通用规则/
 
+<!-- 系统实现评估必须以当前源码和真实接线为主要证据，并区分设计、实现、构建、测试与运行状态。 -->
+SYSTEM_IMPLEMENTATION_SOURCE_EVIDENCE_ASSESSMENT_RULES = local/XUNAN/跨工程通用规则/RUL_系统实现评估源码证据规则.md
+
+<!-- 评估系统、应用、自动化流程或 AI 能力是否已经实现、可运行或达到能力门槛时加载。 -->
+load_rule_for_system_application_automation_or_ai_capability_assessment = SYSTEM_IMPLEMENTATION_SOURCE_EVIDENCE_ASSESSMENT_RULES
+
 <!-- cross_project_filesystem_code_root 的当前独立事实为 ../java/com/sp/selplat/local/code/XUNAN/跨工程/文件系统/。 -->
 cross_project_filesystem_code_root = ../java/com/sp/selplat/local/code/XUNAN/跨工程/文件系统/
 

@@ -3,11 +3,89 @@ import type { WorkspaceState } from "./workspace.js";
 
 export type EvolutionProposalType = "规则演进" | "规则优化" | "规则重构" | "目录演进" | "代码修正" | "Bug修复";
 export type EvolutionProposalOrigin = "nangong" | "linghu";
-export type EvolutionTopicStatus = "registered" | "investigating" | "pending-approval" | "supplement-required" | "rejected" | "approved" | "executing" | "verifying" | "completed" | "blocked";
+export type EvolutionTopicStatus = "registered" | "investigating" | "pending-approval" | "supplement-required" | "rejected" | "approved" | "executing" | "verifying" | "pending-acceptance" | "completed" | "blocked";
 export type EvolutionApprovalDecision = "approved" | "rejected" | "supplement-required";
 export type EvolutionApprovalSource = "manual-user" | "automatic-han-li";
+export type EvolutionApprovalStage = "direction" | "result";
 export type EvolutionFeedbackTarget = "proposal-content" | "submitter-capability";
 export type EvolutionProposalPurpose = "work-proposal" | "self-capability-upgrade";
+export type EvolutionArchiveActor = "han-li" | "nangong-wan" | "codex" | "linghu-ancestor" | "system" | "user";
+export type EvolutionArchiveCategory = "source" | "deliberation" | "topic" | "proposal" | "approval" | "distribution" | "execution" | "test" | "release" | "acceptance" | "recovery";
+export type HanLiDeliberationStatus = "questioning" | "ready-to-establish" | "established" | "blocked";
+
+/** 对话库原文在研讨开始时冻结；来源表以后迁移或清理也不能破坏专题证据。 */
+export interface EvolutionSourceMessageSnapshot {
+  snapshotId: string;
+  deliberationId: string;
+  source: "nangong" | "codex";
+  conversationId: string;
+  sourceMessageId: string;
+  sequenceNumber: number;
+  role: string;
+  responsePhase: string | null;
+  content: string;
+  originalCreatedAt: string;
+  capturedAt: string;
+}
+
+/** 每轮同时保存韩立原问题、南宫婉原回答和韩立判断，禁止只保留最终摘要。 */
+export interface HanLiDeliberationRound {
+  roundId: string;
+  roundNumber: number;
+  question: string;
+  questionReason: string;
+  answer: string | null;
+  assessment: string | null;
+  decision: "continue" | "establish-topic" | "blocked" | null;
+  createdAt: string;
+  answeredAt: string | null;
+  assessedAt: string | null;
+}
+
+export interface HanLiTopicCandidate {
+  title: string;
+  goal: string;
+  scope: string[];
+  exclusions: string[];
+  evidence: string[];
+  acceptanceCriteria: string[];
+  establishmentReason: string;
+}
+
+export interface HanLiEvolutionDeliberation {
+  deliberationId: string;
+  topicId: string | null;
+  status: HanLiDeliberationStatus;
+  sourceSnapshots: EvolutionSourceMessageSnapshot[];
+  rounds: HanLiDeliberationRound[];
+  candidate: HanLiTopicCandidate | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 原始档案事件只追加；页面概览和当前状态均由这些记录与业务投影组合得到。 */
+export interface EvolutionArchiveRecord {
+  recordId: string;
+  deliberationId: string | null;
+  topicId: string | null;
+  proposalId: string | null;
+  taskId: string | null;
+  sequenceNumber: number;
+  category: EvolutionArchiveCategory;
+  eventType: string;
+  actor: EvolutionArchiveActor;
+  title: string;
+  payload: Record<string, unknown>;
+  occurredAt: string;
+}
+
+export interface EvolutionTopicDossier {
+  topic: EvolutionTopic;
+  deliberation: HanLiEvolutionDeliberation | null;
+  proposals: EvolutionProposal[];
+  archiveRecords: EvolutionArchiveRecord[];
+  executionRecords: EvolutionArchiveRecord[];
+}
 
 export interface EvolutionTopic {
   topicId: string;
@@ -21,8 +99,11 @@ export interface EvolutionTopic {
   locale: Locale;
   origin: EvolutionProposalOrigin;
   sourceConversationMessageIds: string[];
+  deliberationId: string | null;
   continuationOfTopicId: string | null;
   nextTopicId: string | null;
+  seriesId: string;
+  roundNumber: number;
   status: EvolutionTopicStatus;
   /** 课题保存修订号用于拒绝基于过期界面的覆盖写入。 */
   topicRevision: number;
@@ -37,6 +118,7 @@ export interface EvolutionApproval {
   proposalId: string;
   decision: EvolutionApprovalDecision;
   source: EvolutionApprovalSource;
+  stage: EvolutionApprovalStage;
   approverMemberId: "han-li" | "user";
   approverDisplayName: "韩立" | "用户";
   advice: string;
@@ -79,18 +161,47 @@ export interface EvolutionProposal {
 }
 
 export interface NangongEvolutionState {
-  version: 5;
+  version: 7;
   automaticEvolutionEnabled: boolean;
   automaticNangongApprovalEnabled: boolean;
   automaticLinghuApprovalEnabled: boolean;
   automaticExecutionEnabled: boolean;
+  automationSettings: EvolutionAutomationSettings;
+  automationRuntime: EvolutionAutomationRuntime;
+  automationContext: { workspaceState: WorkspaceState | null; locale: Locale };
   preferenceSnapshotVersion: number;
   activeTopicId: string | null;
   topics: EvolutionTopic[];
   proposals: EvolutionProposal[];
+  deliberations: HanLiEvolutionDeliberation[];
+  archiveRecords: EvolutionArchiveRecord[];
   conversation: NangongConversation;
   updatedAt: string;
 }
+
+export interface EvolutionAutomationSettings {
+  /** null 表示研讨无限模式；轮次数只控制韩立发问过程，不能代替专题确立判断。 */
+  maxRoundsPerTopic: number | null;
+  maxCorrectionRounds: number;
+}
+
+export interface EvolutionAutomationRuntime {
+  status: "idle" | "running" | "paused" | "stopped" | "blocked";
+  completedRounds: number;
+  correctionRounds: number;
+  stopReason: string | null;
+  startedAt: string | null;
+  pausedAt: string | null;
+}
+
+export interface ConfigureEvolutionAutomationRequest {
+  maxRoundsPerTopic: number | null;
+  maxCorrectionRounds: number;
+  workspaceState?: WorkspaceState;
+  locale?: Locale;
+}
+
+export type EvolutionAutomationAction = "start" | "pause" | "resume" | "stop";
 
 export interface NangongConversationMessage {
   messageId: string;
@@ -188,6 +299,11 @@ export interface DecideEvolutionProposalRequest {
   advice?: string;
   feedbackTarget?: EvolutionFeedbackTarget;
   capabilityScope?: string;
+}
+
+export interface DecideEvolutionResultRequest {
+  decision: EvolutionApprovalDecision;
+  advice?: string;
 }
 
 /** 原提交人依据人工意见补充调查，并以不可覆盖的新版本重新提交。 */

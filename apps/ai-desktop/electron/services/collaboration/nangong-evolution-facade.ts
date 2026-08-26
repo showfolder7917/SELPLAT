@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
+
 import type { CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration-memory.js";
-import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, EvolutionProposal, GenerateNangongTopicDraftRequest, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
 import type { SendMessageResponse } from "../../../contracts/conversation.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
@@ -11,8 +13,15 @@ export interface NangongEvolutionFacadeOptions {
     send(request: SendNangongConversationMessageRequest, context: string): Promise<SendMessageResponse>;
     newChat(): Promise<void>;
   };
+  hanLi?: {
+    send(prompt: string, state: NangongEvolutionState): Promise<string>;
+  };
+  nangongDeliberation?: {
+    send(question: string, context: string, state: NangongEvolutionState): Promise<string>;
+  };
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   memory?: CollaborationMemoryPort | null;
+  readDossier?: (topicId: string, state: NangongEvolutionState) => EvolutionTopicDossier;
   newConversationRetryDelaysMs?: number[];
 }
 
@@ -21,19 +30,32 @@ export class NangongEvolutionFacade {
   readonly #store: NangongEvolutionStore;
   readonly #collaboration: CollaborationCoordinator;
   readonly #conversation: NangongEvolutionFacadeOptions["conversation"];
+  readonly #hanLi: NonNullable<NangongEvolutionFacadeOptions["hanLi"]>;
+  readonly #nangongDeliberation: NonNullable<NangongEvolutionFacadeOptions["nangongDeliberation"]>;
   readonly #recordEvent: NangongEvolutionFacadeOptions["recordEvent"];
   readonly #memory: CollaborationMemoryPort | null;
+  readonly #readDossier: NangongEvolutionFacadeOptions["readDossier"];
   readonly #newConversationRetryDelaysMs: number[];
   #timer: ReturnType<typeof setInterval> | null = null;
   #running = false;
 
-  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
+  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
   state(): NangongEvolutionState { return this.#store.state(); }
+  dossier(topicId: string): EvolutionTopicDossier {
+    const state = this.state();
+    if (this.#readDossier) return this.#readDossier(topicId, state);
+    const topic = state.topics.find((item) => item.topicId === topicId);
+    if (!topic) throw new Error("专题池中不存在该专题。 ");
+    const deliberation = topic.deliberationId ? state.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
+    return { topic, deliberation, proposals: state.proposals.filter((item) => item.topicId === topicId), archiveRecords: state.archiveRecords.filter((item) => item.topicId === topicId || item.deliberationId === topic.deliberationId), executionRecords: [] };
+  }
   subscribe(listener: Parameters<NangongEvolutionStore["subscribe"]>[0]) { return this.#store.subscribe(listener); }
   start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
   stop(): void { if (this.#timer) clearInterval(this.#timer); this.#timer = null; }
   createTopic(request: CreateEvolutionTopicRequest): NangongEvolutionState { return this.#store.createTopic(request); }
   setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): NangongEvolutionState { return this.#store.setAutomation(kind, enabled); }
+  configureAutomation(request: ConfigureEvolutionAutomationRequest): NangongEvolutionState { return this.#store.configureAutomation(request); }
+  controlAutomation(action: EvolutionAutomationAction): NangongEvolutionState { return this.#store.controlAutomation(action); }
   async sendConversationMessage(request: SendNangongConversationMessageRequest): Promise<NangongEvolutionState> {
     let state = this.#store.appendConversation("user", request.message, request.attachmentIds || []);
     const userMessage = state.conversation.messages.at(-1)!;
@@ -86,6 +108,9 @@ export class NangongEvolutionFacade {
   createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): NangongEvolutionState { return this.#store.createLinghuRepairProposal(request); }
   decideProposal(proposalId: string, request: DecideEvolutionProposalRequest): NangongEvolutionState {
     return this.#store.decide(proposalId, request.decision, request.advice || "", "manual-user", [], request.feedbackTarget || "proposal-content", request.capabilityScope || "");
+  }
+  decideResult(proposalId: string, request: DecideEvolutionResultRequest): NangongEvolutionState {
+    return this.#store.decideResult(proposalId, request.decision, request.advice || "");
   }
   reviseProposal(proposalId: string, request: ReviseEvolutionProposalRequest): NangongEvolutionState {
     const member = this.#collaboration.state().members.find((item) => item.memberId === request.submitterMemberId && item.enabled);
@@ -172,6 +197,63 @@ export class NangongEvolutionFacade {
     return result;
   }
 
+  /** 每次只推进一轮真实研讨，确保页面能看到韩立问题、南宫婉回答和韩立判断的原记录。 */
+  async advanceHanLiDeliberation(): Promise<NangongEvolutionState> {
+    let state = this.state();
+    if (!state.automationContext.workspaceState?.roots?.length) throw new Error("请先为自动演化保存实施工作区。 ");
+    let deliberation = [...state.deliberations].reverse().find((item) => ["questioning", "ready-to-establish"].includes(item.status));
+    if (!deliberation) {
+      if (!this.#memory) throw new Error("AI Memory 数据库不可用，韩立不能读取对话库。 ");
+      const deliberationId = `han-li-deliberation-${randomUUID()}`;
+      const snapshots = this.#memory.readHanLiEvolutionCorpus(deliberationId);
+      const corpus = formatEvolutionCorpus(snapshots);
+      const first = parseHanLiQuestion(await this.#hanLi.send([
+        "你是韩立，是自动演化专题研讨的发问方和最终确立者。",
+        "请综合下面按完整会话分组保存的南宫婉与 Codex 原始对话。现在不能直接生成专题，也不能替南宫婉拆任务。",
+        "找出最值得进一步问清、又不能仅靠原记录下结论的一个问题。返回 JSON：{\"question\":\"向南宫婉提出的具体问题\",\"reason\":\"为什么必须先问清\"}。",
+        corpus,
+      ].join("\n\n"), state));
+      state = this.#store.beginDeliberation(deliberationId, snapshots, first.question, first.reason);
+      deliberation = state.deliberations.find((item) => item.deliberationId === deliberationId)!;
+      this.#recordEvent("han-li.evolution.deliberation_started", { deliberationId, sourceMessageCount: snapshots.length, sourceConversationCount: new Set(snapshots.map((item) => `${item.source}:${item.conversationId}`)).size, question: first.question });
+    }
+    if (deliberation.status === "ready-to-establish") return this.#store.establishDeliberationTopic(deliberation.deliberationId);
+    const round = deliberation.rounds.at(-1)!;
+    const context = formatDeliberationContext(deliberation);
+    if (!round.answer) {
+      const answer = await this.#nangongDeliberation.send(round.question, context, state);
+      state = this.#store.recordDeliberationAnswer(deliberation.deliberationId, round.roundId, answer);
+      this.#recordEvent("nangong.evolution.deliberation_answered", { deliberationId: deliberation.deliberationId, roundId: round.roundId, roundNumber: round.roundNumber, question: round.question, answer });
+    }
+    const refreshed = state.deliberations.find((item) => item.deliberationId === deliberation!.deliberationId)!;
+    const answeredRound = refreshed.rounds.find((item) => item.roundId === round.roundId)!;
+    if (!answeredRound.assessment) {
+      const maximum = state.automationSettings.maxRoundsPerTopic;
+      const mustConclude = maximum !== null && answeredRound.roundNumber >= maximum;
+      const judgment = parseHanLiJudgment(await this.#hanLi.send([
+        "你是韩立。请根据对话库证据和本次与南宫婉的逐轮交流判断是否足以确立一个可实施、可验收的演进专项。",
+        "不能按固定分数判断；必须指出事实、未确认内容和本轮回答对方向的影响。",
+        mustConclude ? `当前已到配置的第 ${maximum} 轮。证据足够时确立专题；仍不足时返回继续追问，但必须明确唯一缺口。` : "证据不足就继续追问，不能为了自动化而提前确立专题。",
+        "继续时返回 JSON：{\"decision\":\"continue\",\"assessment\":\"判断\",\"nextQuestion\":\"下一问\",\"questionReason\":\"下一问依据\"}。",
+        "确立时返回 JSON：{\"decision\":\"establish-topic\",\"assessment\":\"判断\",\"topic\":{\"title\":\"\",\"goal\":\"\",\"scope\":[\"\"],\"exclusions\":[\"\"],\"evidence\":[\"\"],\"acceptanceCriteria\":[\"\"],\"establishmentReason\":\"\"}}。",
+        formatDeliberationContext(refreshed),
+      ].join("\n\n"), state));
+      if (mustConclude && !judgment.candidate) {
+        state = this.#store.blockDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, `韩立完成 ${maximum} 轮研讨后仍确认存在证据缺口：${judgment.nextQuestion?.reason || judgment.assessment}`);
+        this.#recordEvent("han-li.evolution.deliberation_blocked", { deliberationId: refreshed.deliberationId, roundId: answeredRound.roundId, roundNumber: answeredRound.roundNumber, assessment: judgment.assessment, missingEvidence: judgment.nextQuestion?.reason || null });
+        return state;
+      }
+      state = this.#store.assessDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, judgment.nextQuestion, judgment.candidate);
+      this.#recordEvent("han-li.evolution.deliberation_assessed", { deliberationId: refreshed.deliberationId, roundId: answeredRound.roundId, roundNumber: answeredRound.roundNumber, decision: judgment.candidate ? "establish-topic" : "continue", assessment: judgment.assessment, nextQuestion: judgment.nextQuestion?.question || null });
+    }
+    const assessed = state.deliberations.find((item) => item.deliberationId === refreshed.deliberationId)!;
+    if (assessed.status === "ready-to-establish") {
+      state = this.#store.establishDeliberationTopic(assessed.deliberationId);
+      this.#recordEvent("han-li.evolution.topic_established", { deliberationId: assessed.deliberationId, topicId: state.activeTopicId, candidate: assessed.candidate });
+    }
+    return state;
+  }
+
   async #tick(): Promise<void> {
     if (this.#running) return;
     this.#running = true;
@@ -190,17 +272,10 @@ export class NangongEvolutionFacade {
         const blocked = tasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
         const completed = tasks.every((task) => task.state === "integrated");
         const verifying = tasks.some((task) => ["ready-for-integration", "queued-integration", "integrating", "unified-testing"].includes(task.state));
-        const status = blocked ? "blocked" : completed ? "completed" : verifying ? "verifying" : "executing";
-        if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务通过统一测试，原演化目标已完成。" : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
+        const status = blocked ? "blocked" : completed ? "pending-acceptance" : verifying ? "verifying" : "executing";
+        if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务已经完成，等待韩立按真实用户路径验收结果。" : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
       }
-      if (state.automaticEvolutionEnabled) {
-        for (const completedTopic of state.topics.filter((item) => item.status === "completed" && !item.nextTopicId)) {
-          const completedProposal = state.proposals.filter((item) => item.topicId === completedTopic.topicId && item.status === "completed").at(-1);
-          if (!completedProposal?.resultSummary) continue;
-          state = this.#store.createNextRound(completedTopic.topicId, completedProposal.resultSummary);
-          this.#recordEvent("nangong.evolution.next_round_started", { previousTopicId: completedTopic.topicId, nextTopicId: state.activeTopicId });
-        }
-      }
+      // 一个专题完成后重新进入韩立读库与发问流程；禁止复制旧专题标题伪造下一专题。
       for (const proposal of state.proposals.filter((item) => item.status === "pending-approval")) {
         const enabled = proposal.origin === "nangong" ? state.automaticNangongApprovalEnabled : state.automaticLinghuApprovalEnabled;
         if (enabled) state = this.autoApprove(proposal.proposalId);
@@ -209,6 +284,8 @@ export class NangongEvolutionFacade {
         if (proposal.origin === "linghu" || state.automaticExecutionEnabled) state = this.dispatch(proposal.proposalId);
       }
       if (!state.automaticEvolutionEnabled) return;
+      const hasOpenTopicFlow = state.topics.some((item) => !["completed", "rejected"].includes(item.status));
+      if (!hasOpenTopicFlow) state = await this.advanceHanLiDeliberation();
       const topic = state.topics.find((item) => ["registered", "investigating"].includes(item.status));
       if (!topic || state.proposals.some((item) => item.topicId === topic.topicId && item.status === "pending-approval")) return;
       const content = `课题：${topic.title}\n\n目标：${topic.goal}\n\n调查事实：\n${topic.evidence.map((item) => `- ${item}`).join("\n")}\n\n推荐方向：在已登记范围内实施，并保持排除项不变。`;
@@ -265,3 +342,61 @@ function parseConversationResponse(text: string): { reply: string; topic: Conver
 }
 
 function normalizeDraftList(value: unknown): string[] { return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : []; }
+
+function parseJsonObject(text: string): Record<string, unknown> {
+  const candidate = text.match(/\{[\s\S]*\}/)?.[0];
+  if (!candidate) throw new Error("韩立没有返回可解析的研讨判断。 ");
+  try { return JSON.parse(candidate) as Record<string, unknown>; } catch { throw new Error("韩立返回的研讨判断不是有效 JSON。 "); }
+}
+
+function parseHanLiQuestion(text: string): { question: string; reason: string } {
+  const value = parseJsonObject(text);
+  const question = typeof value.question === "string" ? value.question.trim() : "";
+  const reason = typeof value.reason === "string" ? value.reason.trim() : "";
+  if (!question || !reason) throw new Error("韩立首轮问题缺少问题正文或发问依据。 ");
+  return { question, reason };
+}
+
+function parseHanLiJudgment(text: string): { assessment: string; nextQuestion: { question: string; reason: string } | null; candidate: HanLiTopicCandidate | null } {
+  const value = parseJsonObject(text);
+  const assessment = typeof value.assessment === "string" ? value.assessment.trim() : "";
+  if (!assessment) throw new Error("韩立研讨判断缺少事实说明。 ");
+  if (value.decision === "establish-topic") {
+    const topic = value.topic as Partial<HanLiTopicCandidate> | undefined;
+    const candidate = topic && {
+      title: typeof topic.title === "string" ? topic.title : "", goal: typeof topic.goal === "string" ? topic.goal : "",
+      scope: normalizeDraftList(topic.scope), exclusions: normalizeDraftList(topic.exclusions), evidence: normalizeDraftList(topic.evidence),
+      acceptanceCriteria: normalizeDraftList(topic.acceptanceCriteria), establishmentReason: typeof topic.establishmentReason === "string" ? topic.establishmentReason : assessment,
+    };
+    if (!candidate?.title || !candidate.goal || !candidate.scope.length || !candidate.evidence.length || !candidate.acceptanceCriteria.length) throw new Error("韩立确立的专题缺少范围、证据或验收条件。 ");
+    return { assessment, nextQuestion: null, candidate };
+  }
+  const question = typeof value.nextQuestion === "string" ? value.nextQuestion.trim() : "";
+  const reason = typeof value.questionReason === "string" ? value.questionReason.trim() : "";
+  if (!question || !reason) throw new Error("韩立决定继续研讨，但没有给出下一问和依据。 ");
+  return { assessment, nextQuestion: { question, reason }, candidate: null };
+}
+
+function formatEvolutionCorpus(snapshots: EvolutionSourceMessageSnapshot[]): string {
+  const groups = new Map<string, EvolutionSourceMessageSnapshot[]>();
+  for (const snapshot of snapshots) {
+    const key = `${snapshot.source}:${snapshot.conversationId}`;
+    groups.set(key, [...(groups.get(key) || []), snapshot]);
+  }
+  return [...groups.entries()].map(([key, messages]) => [
+    `完整会话组 ${key}`,
+    ...messages.sort((left, right) => left.sequenceNumber - right.sequenceNumber).map((item) => `[${item.originalCreatedAt}] ${item.role}${item.responsePhase ? `/${item.responsePhase}` : ""}：${item.content}`),
+  ].join("\n")).join("\n\n---\n\n");
+}
+
+function formatDeliberationContext(deliberation: HanLiEvolutionDeliberation): string {
+  return [
+    `研讨编号：${deliberation.deliberationId}`,
+    ...deliberation.rounds.map((round) => [
+      `第 ${round.roundNumber} 轮韩立问题：${round.question}`,
+      `发问依据：${round.questionReason}`,
+      round.answer ? `南宫婉原回答：${round.answer}` : "南宫婉尚未回答",
+      round.assessment ? `韩立判断：${round.assessment}` : "",
+    ].filter(Boolean).join("\n")),
+  ].join("\n\n");
+}

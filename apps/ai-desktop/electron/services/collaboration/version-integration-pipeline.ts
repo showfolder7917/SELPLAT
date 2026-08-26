@@ -1,0 +1,337 @@
+import { randomUUID } from "node:crypto";
+
+import type { CollaborationMember, CollaborationState, CollaborationTask } from "../../../contracts/collaboration.js";
+import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../contracts/integration-release.js";
+import { CollaborationDurationLog, type CollaborationDurationSegment, type CollaborationWaitType } from "./collaboration-duration-log.js";
+import { CollaborationStore } from "./collaboration-store.js";
+import { ReleaseBatchStore } from "./release-batch-store.js";
+import { createCollaborationResultSummary } from "./result/result-summary.js";
+import {
+  LocalChangeOwnershipError,
+  MergeConflictError,
+  type IntegrationCandidate,
+  VersionWorkspaceManager,
+} from "./version-workspace-manager.js";
+
+export interface VersionIntegrationPipelineOptions {
+  store: CollaborationStore;
+  durations: CollaborationDurationLog;
+  workspaces: VersionWorkspaceManager;
+  actorMemberId: string;
+  verifyCandidate(rootPath: string, taskIds: string[], releaseBatchId: string): Promise<string>;
+  acquireRelease(request: IntegrationReleaseRequest): Promise<() => void>;
+  releaseVersion: string;
+  releaseBatches: ReleaseBatchStore;
+  publishRelease(executable: string, releaseBatchId: string): void;
+}
+
+export interface IntegrationWaitRegistration {
+  segment: CollaborationDurationSegment;
+  waitType: CollaborationWaitType;
+  reasonCode: string;
+  resource: string;
+  resourceOwner: string | null;
+}
+
+/** 独立编排版本候选、组合验证、本地合并和发布；人物协调器只提交已满足业务条件的任务。 */
+export class VersionIntegrationPipeline {
+  readonly #store: CollaborationStore;
+  readonly #durations: CollaborationDurationLog;
+  readonly #workspaces: VersionWorkspaceManager;
+  readonly #actorMemberId: string;
+  readonly #verifyCandidate: VersionIntegrationPipelineOptions["verifyCandidate"];
+  readonly #acquireRelease: VersionIntegrationPipelineOptions["acquireRelease"];
+  readonly #releaseVersion: string;
+  readonly #releaseBatches: ReleaseBatchStore;
+  readonly #publishRelease: VersionIntegrationPipelineOptions["publishRelease"];
+  readonly #waitSpans = new Map<string, string>();
+  #running = false;
+  #disposed = false;
+
+  constructor(options: VersionIntegrationPipelineOptions) {
+    this.#store = options.store;
+    this.#durations = options.durations;
+    this.#workspaces = options.workspaces;
+    this.#actorMemberId = options.actorMemberId;
+    this.#verifyCandidate = options.verifyCandidate;
+    this.#acquireRelease = options.acquireRelease;
+    this.#releaseVersion = options.releaseVersion;
+    this.#releaseBatches = options.releaseBatches;
+    this.#publishRelease = options.publishRelease;
+  }
+
+  /** 记录任务进入版本集成前的真实等待原因，由流水线在冻结批次时统一结束等待。 */
+  trackWaitingTask(taskId: string, registration: IntegrationWaitRegistration): void {
+    this.finishWaitingTask(taskId, "interrupted", { releaseEvent: "integration.wait_replaced" });
+    this.#waitSpans.set(taskId, this.#durations.startWait(
+      taskId,
+      registration.segment,
+      registration.waitType,
+      registration.reasonCode,
+      registration.resource,
+      registration.resourceOwner,
+    ));
+  }
+
+  finishWaitingTask(taskId: string, outcome: "completed" | "failed" | "interrupted", details: Record<string, unknown>): void {
+    const spanId = this.#waitSpans.get(taskId);
+    if (!spanId) return;
+    this.#durations.finish(spanId, outcome, details);
+    this.#waitSpans.delete(taskId);
+  }
+
+  /** 合并工作串行自调度；重复通知只会复用当前运行中的批次。 */
+  schedule(): void {
+    if (this.#disposed || this.#running || this.#store.state().mode !== "collaboration") return;
+    queueMicrotask(() => void this.#runNextBatch());
+  }
+
+  dispose(): void {
+    this.#disposed = true;
+    this.#waitSpans.clear();
+  }
+
+  async #runNextBatch(): Promise<void> {
+    if (this.#disposed || this.#running) return;
+    // 只冻结当前已经满足依赖和原子组屏障的任务，后到结果自然进入下一代。
+    const state = this.#store.state();
+    const ready = state.tasks.filter((task) => task.state === "ready-for-integration" && integrationDependenciesSatisfied(task, state));
+    const eligible = ready.filter((task) => task.mergeStrategy !== "ATOMIC_GROUP" || atomicGroupReady(task, ready, state));
+    if (eligible.length === 0) return;
+
+    this.#running = true;
+    const generation = state.nextIntegrationGeneration;
+    const taskIds = eligible.map((task) => task.taskId);
+    const releaseBatchId = `release-${this.#releaseVersion}-g${generation}`;
+    let releaseLease: (() => void) | null = null;
+    let releaseDocument: ReleaseBatchDocument | null = null;
+    let publishedExecutable: string | null = null;
+    let candidate: IntegrationCandidate | null = null;
+    let verifySpan: string | null = null;
+    let reconcileSpan: string | null = null;
+    const integrationSpan = this.#durations.start(taskIds[0], "integration", { generation, taskCount: taskIds.length });
+
+    try {
+      // 组装层注入的真实操作者取得跨进程发布租约，流水线本身不认识任何固定人物。
+      const actor = requireActor(this.#store.state(), this.#actorMemberId);
+      releaseLease = await this.#acquireRelease({
+        releaseBatchId,
+        version: this.#releaseVersion,
+        generation,
+        taskIds,
+        initiatorMemberId: actor.memberId,
+      });
+      const transferred = await this.#workspaces.transferOwnedLocalChanges(eligible.flatMap((task) => {
+        const workspace = task.versionWorkspace;
+        const execution = task.executionRecords.at(-1);
+        if (!workspace || !execution?.changedFiles?.length) return [];
+        return [{ taskId: task.taskId, memberName: execution.executor.displayName, workspace, changedFiles: execution.changedFiles }];
+      }));
+      if (transferred) {
+        this.#store.updateTask(transferred.taskId, "integration.local_changes_transferred", (task) => {
+          if (!task.versionWorkspace) throw new Error("本地修改归属任务缺少版本工作区。");
+          task.versionWorkspace.resultSha = transferred.resultSha;
+          appendFlow(task, "integration.local_changes_transferred", "integration", "completed", `已把 ${transferred.changedFiles.length} 个本地修改转入任务分支并生成唯一最终提交`, task.currentHandler || task.initiator);
+        });
+      }
+
+      // 发布批次先固化任务与结果提交，再推进协同任务的集成代次状态。
+      releaseDocument = this.#releaseBatches.create(
+        releaseBatchId,
+        this.#releaseVersion,
+        generation,
+        taskIds.map((taskId) => this.#store.task(taskId)),
+        actor.memberId,
+      );
+      this.#store.updateTask(taskIds[0], "integration.batch_frozen", (_first, mutable) => {
+        mutable.nextIntegrationGeneration += 1;
+        mutable.integrationBatches.push({ generation, taskIds, state: "frozen", createdAt: new Date().toISOString(), completedAt: null, integrationSha: null, failureReason: null, failureKind: null, conflictFiles: [] });
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "queued-integration";
+          task.integrationGeneration = generation;
+          appendFlow(task, "integration.batch_frozen", "integration", "waiting", `任务已进入集成批次 ${generation}`, null);
+        }
+      });
+      for (const taskId of taskIds) this.finishWaitingTask(taskId, "completed", { releaseEvent: "integration.batch_frozen", generation });
+
+      // 候选工作树只合并冻结后的 resultSha，冲突由版本工作区管理器保留结构化证据。
+      const tasks = taskIds.map((taskId) => this.#store.task(taskId));
+      reconcileSpan = this.#durations.start(taskIds[0], "conflict-resolution", { generation, taskCount: taskIds.length });
+      candidate = await this.#workspaces.createReleaseCandidate(releaseBatchId, this.#releaseVersion, generation, tasks);
+      releaseDocument.state = "candidate-ready";
+      releaseDocument.candidateBranch = candidate.branchName;
+      releaseDocument.candidateSha = candidate.candidateSha;
+      this.#releaseBatches.write(releaseDocument);
+      this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
+      reconcileSpan = null;
+
+      // 组合验证期间由真实操作者持有当前处理权，页面和审计记录使用同一人物快照。
+      this.#store.updateTask(taskIds[0], "integration.started", (_first, mutable) => {
+        const batch = mutable.integrationBatches.find((item) => item.generation === generation);
+        if (batch) batch.state = "integrating";
+        const currentActor = requireActor(mutable, this.#actorMemberId);
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "unified-testing";
+          task.currentHandler = participantSnapshot(currentActor);
+          task.unifiedTest = { status: "running", owner: participantSnapshot(currentActor), failureReason: null, startedAt: new Date().toISOString(), completedAt: null };
+          appendFlow(task, "unified_test.started", "integration", "started", `${currentActor.displayName}正在统一测试（集成批次 ${generation}）`, currentActor);
+        }
+      });
+      verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
+      releaseDocument.state = "testing";
+      this.#releaseBatches.write(releaseDocument);
+      publishedExecutable = await this.#verifyCandidate(candidate.rootPath, taskIds, releaseBatchId);
+      releaseDocument.state = "verified";
+      releaseDocument.executable = publishedExecutable;
+      this.#releaseBatches.write(releaseDocument);
+      this.#durations.finish(verifySpan, "completed", { releaseEvent: "integration.verified" });
+      verifySpan = null;
+
+      // 只有候选验证完成后才能提升稳定集成指针并更新用户本地分支。
+      const integrationSha = await this.#workspaces.promoteIntegrationCandidate(candidate);
+      const localMergeSha = await this.#workspaces.mergeIntoLocalBranch(integrationSha);
+      releaseDocument.state = "integrated";
+      releaseDocument.localMergeSha = localMergeSha;
+      this.#releaseBatches.write(releaseDocument);
+      this.#durations.finish(integrationSpan, "completed", { releaseEvent: "integration.local_branch_updated", integrationSha });
+      // 成功结果在一个状态提交中同步批次、统一测试、任务终态和可展示结果摘要。
+      this.#store.updateTask(taskIds[0], "integration.completed", (_first, mutable) => {
+        const batch = mutable.integrationBatches.find((item) => item.generation === generation);
+        if (batch) {
+          batch.state = "completed";
+          batch.completedAt = new Date().toISOString();
+          batch.integrationSha = integrationSha;
+        }
+        const completedAt = new Date().toISOString();
+        const currentActor = requireActor(mutable, this.#actorMemberId);
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "integrated";
+          task.currentHandler = participantSnapshot(currentActor);
+          if (task.unifiedTest) {
+            task.unifiedTest.status = "passed";
+            task.unifiedTest.failureReason = null;
+            task.unifiedTest.completedAt = completedAt;
+          }
+          task.completedAt = completedAt;
+          task.blockingReason = null;
+          task.resultSummary ||= createCollaborationResultSummary(task, task.finalResult || "任务已完成协同集成。", []);
+          task.resultSummary.outcome = "succeeded";
+          task.resultSummary.success = true;
+          if (task.resultSummary.remaining === "等待协同集成完成。" || /^无[。.]?$/.test(task.resultSummary.remaining.trim())) task.resultSummary.remaining = "无已知遗留内容。";
+          task.resultSummary.generatedAt = completedAt;
+          appendFlow(task, "unified_test.passed", "integration", "completed", `${currentActor.displayName}统一测试通过，任务已归档到执行列表`, currentActor);
+        }
+      });
+
+      const retirements = await Promise.allSettled(tasks.map((task) => task.versionWorkspace ? this.#workspaces.retireWorkspace(task.versionWorkspace) : Promise.resolve()));
+      this.#store.updateTask(taskIds[0], "integration.worktrees_retired", (_first, mutable) => {
+        const retiredAt = new Date().toISOString();
+        for (const [index, taskId] of taskIds.entries()) {
+          const task = mutable.tasks.find((item) => item.taskId === taskId);
+          if (task?.versionWorkspace && retirements[index]?.status === "fulfilled") task.versionWorkspace.retiredAt = retiredAt;
+        }
+      });
+      this.#durations.writeGenerationReport(generation, taskIds);
+      releaseDocument.state = "published";
+      releaseDocument.completedAt = new Date().toISOString();
+      this.#releaseBatches.write(releaseDocument);
+    } catch (error) {
+      // 本地归属、Git 冲突与候选验证失败分别进入不同恢复路径，禁止统一伪装成测试失败。
+      const ownershipBlocked = error instanceof LocalChangeOwnershipError;
+      const mergeConflict = error instanceof MergeConflictError;
+      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : "verification";
+      const conflictFiles = mergeConflict ? error.conflictFiles : [];
+      if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
+      if (verifySpan) this.#durations.finish(verifySpan, "failed", { error: errorMessage(error) });
+      this.#durations.finish(integrationSpan, "failed", { error: errorMessage(error) });
+      this.#store.updateTask(taskIds[0], "integration.failed", (_first, mutable) => {
+        const batch = mutable.integrationBatches.find((item) => item.generation === generation);
+        if (batch) {
+          batch.state = "failed";
+          batch.failureReason = errorMessage(error);
+          batch.failureKind = failureKind;
+          batch.conflictFiles = conflictFiles;
+          batch.completedAt = new Date().toISOString();
+        }
+        const currentActor = requireActor(mutable, this.#actorMemberId);
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = ownershipBlocked || mergeConflict ? "blocked" : "test-failed";
+          task.phase = null;
+          task.blockingReason = ownershipBlocked
+            ? `合并前本地修改归属门禁阻塞：${errorMessage(error)}`
+            : mergeConflict
+              ? `版本冲突需要基于当前主线重新修正：${errorMessage(error)}`
+              : `${currentActor.displayName}统一测试失败：${errorMessage(error)}`;
+          task.recoveryTargetState = "ready-for-integration";
+          task.integrationFailure = { kind: failureKind, detail: errorMessage(error), conflictFiles, baseSha: mergeConflict ? error.baseSha : task.versionWorkspace?.baseSha || null, resultSha: mergeConflict ? error.resultSha : task.versionWorkspace?.resultSha || null, generation, occurredAt: new Date().toISOString() };
+          task.currentHandler = participantSnapshot(currentActor);
+          if (!ownershipBlocked && !mergeConflict) task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
+          appendFlow(task, ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : "unified_test.failed", "integration", ownershipBlocked || mergeConflict ? "waiting" : "failed", task.blockingReason, currentActor, !ownershipBlocked && !mergeConflict);
+        }
+      });
+      this.#durations.writeGenerationReport(generation, taskIds);
+      if (releaseDocument) {
+        releaseDocument.state = "failed";
+        releaseDocument.failureReason = errorMessage(error);
+        releaseDocument.completedAt = new Date().toISOString();
+        this.#releaseBatches.write(releaseDocument);
+      }
+    } finally {
+      // 无论成功失败都回收临时候选并释放发布租约；流水线随后继续检查下一代就绪任务。
+      if (candidate) await this.#workspaces.retireCandidate(candidate).catch((error) => {
+        this.#durations.instant(taskIds[0], "integration.candidate_retirement_failed", { generation, error: errorMessage(error) });
+      });
+      releaseLease?.();
+      this.#running = false;
+      this.schedule();
+    }
+    // 发布只消费已经归档为 published 的稳定可执行文件，失败批次不会触发受控重启。
+    if (publishedExecutable && releaseDocument?.state === "published") this.#publishRelease(publishedExecutable, releaseBatchId);
+  }
+}
+
+function requireActor(state: CollaborationState, memberId: string): CollaborationMember {
+  const actor = state.members.find((member) => member.memberId === memberId);
+  if (!actor) throw new Error("版本集成操作者不存在。");
+  return actor;
+}
+
+function participantSnapshot(member: Pick<CollaborationMember, "memberId" | "displayName">): { memberId: string; displayName: string } {
+  return { memberId: member.memberId, displayName: member.displayName };
+}
+
+/** 流水线只登记可审计的版本集成事实，不保存执行过程中的推理正文。 */
+function appendFlow(
+  task: CollaborationTask,
+  type: string,
+  stage: CollaborationTask["flowEvents"][number]["stage"],
+  status: CollaborationTask["flowEvents"][number]["status"],
+  summary: string,
+  actor: Pick<CollaborationMember, "memberId" | "displayName"> | null,
+  error = false,
+): void {
+  task.flowEvents.push({
+    eventId: randomUUID(),
+    type,
+    stage,
+    status,
+    actor: actor ? participantSnapshot(actor) : null,
+    summary: summary.slice(0, 2_000),
+    occurredAt: new Date().toISOString(),
+    error,
+  });
+}
+
+function integrationDependenciesSatisfied(task: CollaborationTask, state: CollaborationState): boolean {
+  return task.dependencyTaskIds.every((dependencyId) => state.tasks.find((candidate) => candidate.taskId === dependencyId)?.state === "integrated");
+}
+
+function atomicGroupReady(task: CollaborationTask, ready: CollaborationTask[], state: CollaborationState): boolean {
+  if (!task.atomicGroupId) return false;
+  const group = state.tasks.filter((candidate) => candidate.atomicGroupId === task.atomicGroupId);
+  return group.length > 0 && group.every((candidate) => ready.some((item) => item.taskId === candidate.taskId));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

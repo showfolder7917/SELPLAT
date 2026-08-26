@@ -69,7 +69,7 @@ test("审批通过后才由南宫婉分发并固定 proposalId", () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("南宫婉提案从人工审批、任务分发推进到完成记录", async () => {
+test("南宫婉提案从人工审批、任务分发推进到韩立验收后才完成且不复制旧专题", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-completed-flow-"));
   try {
     const store = new NangongEvolutionStore(path.join(directory, "state.json"));
@@ -92,14 +92,77 @@ test("南宫婉提案从人工审批、任务分发推进到完成记录", async
     await new Promise((resolve) => setTimeout(resolve, 20));
     facade.stop();
     state = facade.state();
+    assert.equal(state.proposals[0].status, "pending-acceptance");
+    assert.equal(state.proposals[0].resultSummary, "全部关联任务已经完成，等待韩立按真实用户路径验收结果。");
+    assert.equal(state.topics.length, 1);
+    state = facade.decideResult(proposalId, { decision: "approved", advice: "真实操作和视觉检查符合目标。" });
     assert.equal(state.proposals[0].status, "completed");
-    assert.equal(state.proposals[0].resultSummary, "全部关联任务通过统一测试，原演化目标已完成。");
-    assert.match(state.topics[0].recoveryPoint, /^next-evolution:/);
-    assert.equal(state.topics.length, 2);
-    assert.equal(state.topics[1].continuationOfTopicId, state.topics[0].topicId);
-    assert.equal(state.topics[0].nextTopicId, state.topics[1].topicId);
-    assert.equal(state.proposals.at(-1).topicId, state.topics[1].topicId);
-    assert.equal(state.proposals.at(-1).status, "pending-approval");
+    assert.equal(state.proposals[0].approvals.at(-1).stage, "result");
+    state = facade.state();
+    assert.equal(state.topics.length, 1);
+    assert.equal(state.topics[0].nextTopicId, null);
+    assert.equal(state.topics[0].recoveryPoint, "han-li-result-accepted");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("韩立综合南宫婉和 Codex 完整会话后逐轮发问，确立后才通知南宫婉登记专题池", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "han-li-deliberation-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: 5, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
+    const hanLiReplies = [
+      '{"question":"现有审批记录在哪一步丢失原始执行证据？","reason":"必须先确认断点才能确定专项边界"}',
+      '{"decision":"continue","assessment":"已经确认执行记录不完整，但还不知道验收如何关联。","nextQuestion":"验收记录应怎样关联到执行任务？","questionReason":"需要补齐从执行到验收的追溯关系"}',
+      '{"decision":"establish-topic","assessment":"来源、断点和验收链已经明确。","topic":{"title":"专题全生命周期原始档案","goal":"从来源对话到验收保留完整原始记录","scope":["AI Desktop"],"exclusions":["其他应用"],"evidence":["南宫婉与 Codex 原始会话均显示执行证据缺少专题关联"],"acceptanceCriteria":["专题页面可从头查看全部原始记录"],"establishmentReason":"两轮研讨已经确认问题边界和验收方法"}}',
+    ];
+    const memory = {
+      readHanLiEvolutionCorpus(deliberationId) {
+        const capturedAt = "2026-08-26T00:00:00.000Z";
+        return [
+          { snapshotId: `${deliberationId}:nangong:1`, deliberationId, source: "nangong", conversationId: "nangong-1", sourceMessageId: "n-1", sequenceNumber: 0, role: "user", responsePhase: null, content: "专题要保留完整过程。", originalCreatedAt: capturedAt, capturedAt },
+          { snapshotId: `${deliberationId}:codex:1`, deliberationId, source: "codex", conversationId: "codex-1", sourceMessageId: "c-1", sequenceNumber: 0, role: "codex", responsePhase: "final_answer", content: "执行日志已经生成。", originalCreatedAt: capturedAt, capturedAt },
+        ];
+      },
+    };
+    const facade = new NangongEvolutionFacade({
+      store, collaboration: {}, conversation, memory, recordEvent: () => undefined,
+      hanLi: { async send() { return hanLiReplies.shift(); } },
+      nangongDeliberation: { async send(question) { return `南宫婉针对韩立问题回答：${question}`; } },
+    });
+    let state = await facade.advanceHanLiDeliberation();
+    assert.equal(state.topics.length, 0);
+    assert.equal(state.deliberations[0].rounds.length, 2);
+    assert.equal(state.deliberations[0].rounds[0].decision, "continue");
+    state = await facade.advanceHanLiDeliberation();
+    assert.equal(state.deliberations[0].status, "established");
+    assert.equal(state.topics.length, 1);
+    assert.equal(state.topics[0].deliberationId, state.deliberations[0].deliberationId);
+    assert.equal(state.deliberations[0].sourceSnapshots[0].content, "专题要保留完整过程。");
+    assert.ok(state.archiveRecords.some((item) => item.eventType === "topic.established_from_deliberation"));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("研讨达到配置上限但证据仍不足时保留缺口并阻断，不机械生成专题", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "han-li-deliberation-limit-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: 1, maxCorrectionRounds: 3, workspaceState, locale: "zh-CN" });
+    const replies = [
+      '{"question":"还缺少哪项执行事实？","reason":"现有原文没有证明发布结果"}',
+      '{"decision":"continue","assessment":"发布结果仍没有事实证据。","nextQuestion":"发布后实际页面状态是什么？","questionReason":"缺少发布后用户可见结果"}',
+    ];
+    const facade = new NangongEvolutionFacade({
+      store, collaboration: {}, conversation, recordEvent: () => undefined,
+      memory: { readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "limit-source", deliberationId, source: "codex", conversationId: "thread", sourceMessageId: "message", sequenceNumber: 0, role: "codex", responsePhase: "final_answer", content: "只完成了代码修改。", originalCreatedAt: "2026-08-26T00:00:00.000Z", capturedAt: "2026-08-26T00:00:00.000Z" }]; } },
+      hanLi: { async send() { return replies.shift(); } },
+      nangongDeliberation: { async send() { return "目前没有发布后的页面证据。"; } },
+    });
+    const state = await facade.advanceHanLiDeliberation();
+    assert.equal(state.topics.length, 0);
+    assert.equal(state.deliberations[0].status, "blocked");
+    assert.equal(state.deliberations[0].rounds[0].decision, "blocked");
+    assert.equal(state.automationRuntime.status, "blocked");
+    assert.match(state.automationRuntime.stopReason, /缺少发布后用户可见结果/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

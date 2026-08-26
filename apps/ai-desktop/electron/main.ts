@@ -23,6 +23,7 @@ import { NangongEvolutionFacade } from "./services/collaboration/nangong-evoluti
 import { NangongEvolutionStore } from "./services/collaboration/nangong-evolution-store.js";
 import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
 import { VersionWorkspaceManager } from "./services/collaboration/version-workspace-manager.js";
+import { VersionIntegrationPipeline } from "./services/collaboration/version-integration-pipeline.js";
 import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-test-runner.js";
 import { TestResourceCoordinatorFacade } from "./services/collaboration/test-resource-coordinator-facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "./services/collaboration/integration-release-coordinator-facade.js";
@@ -52,6 +53,8 @@ if (resolveDistributionMode() === "archive") {
 
 let codex: CodexService | undefined;
 let nangongCodex: CodexService | undefined;
+let hanLiCodex: CodexService | undefined;
+let nangongDeliberationCodex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
 let nangongEvolution: NangongEvolutionFacade | undefined;
@@ -187,6 +190,26 @@ app.whenReady().then(async () => {
     (details) => eventCenter.recordEvent("nangong.conversation.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.conversation.thread.lifecycle", details),
   );
+  const hanLiSessions = new CodexSessionStore(path.join(app.getPath("userData"), "han-li-evolution-session.json"));
+  hanLiCodex = new CodexService(
+    projectRoot, trustedCommands, hanLiSessions,
+    {
+      codexHome, serviceName: "selplat_ai_desktop_han_li_evolution", threadSource: "ai-desktop-han-li-evolution",
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(),
+    },
+    (details) => eventCenter.recordEvent("han-li.evolution.trusted_command.decision", details),
+    (details) => eventCenter.recordEvent("han-li.evolution.thread.lifecycle", details),
+  );
+  const nangongDeliberationSessions = new CodexSessionStore(path.join(app.getPath("userData"), "nangong-deliberation-session.json"));
+  nangongDeliberationCodex = new CodexService(
+    projectRoot, trustedCommands, nangongDeliberationSessions,
+    {
+      codexHome, serviceName: "selplat_ai_desktop_nangong_deliberation", threadSource: "ai-desktop-nangong-deliberation",
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(),
+    },
+    (details) => eventCenter.recordEvent("nangong.deliberation.trusted_command.decision", details),
+    (details) => eventCenter.recordEvent("nangong.deliberation.thread.lifecycle", details),
+  );
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
   const workspaces = new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), projectRoot);
@@ -225,11 +248,39 @@ app.whenReady().then(async () => {
     readSettings: () => settings.read(),
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
   });
+  const versionIntegration = new VersionIntegrationPipeline({
+    store: collaborationStore,
+    durations: collaborationDurations,
+    workspaces: versionWorkspaces,
+    actorMemberId: "linghu-ancestor",
+    verifyCandidate: async (rootPath, taskIds, releaseBatchId) => {
+      await testResources.run({
+        runId: `integration-${taskIds.join("-")}`,
+        taskId: taskIds.length === 1 ? taskIds[0] : null,
+        initiatorMemberId: "collaboration-integrator",
+        kind: "integration-validation",
+        port: 4197,
+        buildRoot: path.join(path.resolve(rootPath), "build", applicationName),
+      }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName));
+      const candidateExecutable = await linghuUnifiedTests.run(rootPath);
+      return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId);
+    },
+    acquireRelease: (request) => integrationReleases.acquire(request),
+    releaseVersion,
+    releaseBatches,
+    publishRelease: (executable, releaseBatchId) => {
+      eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId });
+      app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
+      prepareAiMemoryShutdown();
+      app.exit(0);
+    },
+  });
   collaboration = new CollaborationCoordinator({
     store: collaborationStore,
     durations: collaborationDurations,
     workspaces: versionWorkspaces,
     sessions: collaborationSessions,
+    integrationPipeline: versionIntegration,
     emitState: (state, reason, taskIds) => {
       // 单任务事件写入顶层 taskId；批量集成同时保留 taskIds，确保每条流程和错误都能反查所属任务。
       workflowRepository?.syncCollaborationState(state);
@@ -239,27 +290,6 @@ app.whenReady().then(async () => {
     emitStream: (taskId, memberId, event) => {
       eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
-    },
-    verifyIntegration: async (rootPath, taskIds, releaseBatchId) => {
-      await testResources.run({
-      runId: `integration-${taskIds.join("-")}`,
-      taskId: taskIds.length === 1 ? taskIds[0] : null,
-      initiatorMemberId: "collaboration-integrator",
-      kind: "integration-validation",
-      port: 4197,
-      buildRoot: path.join(path.resolve(rootPath), "build", applicationName),
-      }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName));
-      const candidateExecutable = await linghuUnifiedTests.run(rootPath);
-      return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId);
-    },
-    acquireIntegrationRelease: (request) => integrationReleases.acquire(request),
-    releaseVersion,
-    releaseBatches,
-    publishIntegration: (executable, releaseBatchId) => {
-      eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId });
-      app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
-      prepareAiMemoryShutdown();
-      app.exit(0);
     },
   });
   const nangongStore = new NangongEvolutionStore(path.join(collaborationRoot, "nangong-evolution.json"));
@@ -278,8 +308,20 @@ app.whenReady().then(async () => {
       ].join("\n\n"), request.locale, "read-only", request.workspaceState, await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
       newChat: () => nangongCodex!.newChat(),
     },
+    hanLi: {
+      send: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", state.automationContext.workspaceState!, [], () => undefined, "conversation-managed")).text,
+    },
+    nangongDeliberation: {
+      send: async (question, context, state) => (await nangongDeliberationCodex!.send([
+        "你是南宫婉，正在参加由韩立发起的自动演化专题研讨。韩立是发问方，你只回答他当前提出的问题。",
+        "回答必须区分已知事实、基于记录的判断和仍需调查的内容；不得自行确立专题、拆解任务或开始修改。",
+        `研讨原记录：\n${context}`,
+        `韩立当前问题：\n${question}`,
+      ].join("\n\n"), state.automationContext.locale, "read-only", state.automationContext.workspaceState!, [], () => undefined, "conversation-managed")).text,
+    },
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     memory: collaborationMemory,
+    readDossier: workflowRepository ? (topicId, state) => workflowRepository!.getEvolutionTopicDossier(topicId, state) : undefined,
   });
   nangongEvolution.subscribe((state, reason, topicId, proposalId) => {
     workflowRepository?.syncEvolutionState(state);
@@ -343,6 +385,7 @@ app.whenReady().then(async () => {
     nangongEvolution,
     collaborationRegistry,
     eventCenter,
+    workflowRepository,
     aiMemoryDatabaseStatus,
     projectRoot,
     appRoot,
@@ -398,6 +441,8 @@ app.on("before-quit", () => {
   void collaboration?.dispose().catch((error) => eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "collaboration", operation: "dispose", error }));
   codex?.dispose();
   nangongCodex?.dispose();
+  hanLiCodex?.dispose();
+  nangongDeliberationCodex?.dispose();
   prepareAiMemoryShutdown();
 });
 

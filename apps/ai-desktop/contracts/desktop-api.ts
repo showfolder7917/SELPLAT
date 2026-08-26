@@ -1,4 +1,5 @@
 import type { AuditLogInfo } from "./audit.js";
+import type { ApprovalGovernanceRecord } from "./approval-governance.js";
 import type { DesktopEnvironment, WindowAction, WorkspacePermission } from "./base.js";
 import type { AutomaticTestPreflightResult, CodexApproval, CodexHarnessStatus, CodexLoginResponse, CodexModelCatalog, CodexUserInputRequest, ResolveCodexUserInputRequest, TrustedCommandInfo } from "./codex.js";
 import type { CodexStreamEvent } from "./codex-stream.js";
@@ -6,7 +7,7 @@ import type { CollaborationState, CollaborationStreamEnvelope, CreateCollaborati
 import type { CodexSessionInfo, ConversationDispatchState, EnqueueMessageRequest, SendMessageRequest, SendMessageResponse } from "./conversation.js";
 import type { AiMemoryDatabaseStatus } from "./database.js";
 import type { CreateLinghuStartupPromptRequest, LinghuAutomationState, LinghuAutomationStateEvent, UpdateLinghuStartupPromptRequest } from "./linghu-automation.js";
-import type { ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, GenerateNangongTopicDraftRequest, NangongEvolutionState, NangongEvolutionStateEvent, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "./nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, NangongEvolutionState, NangongEvolutionStateEvent, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "./nangong-evolution.js";
 import type { DesktopSettings } from "./settings.js";
 import type { ScreenCapture, ScreenCaptureFrameRequest, ScreenCaptureFrameResult, ScreenCapturePreparationResult, ScreenCaptureRequest, ScreenshotAnnotationWindowRequest, ScreenshotAttachment, ScreenshotCompletedEvent, ScreenshotSaveRequest, TempDirectoryInfo } from "./screenshot.js";
 import type { WorkspaceEntry, WorkspaceState } from "./workspace.js";
@@ -30,6 +31,7 @@ export interface DesktopApi {
   loginWithChatGPT(): Promise<CodexLoginResponse>;
   logoutCodex(): Promise<CodexHarnessStatus>;
   getCodexApprovals(): Promise<CodexApproval[]>;
+  getApprovalGovernance(): Promise<ApprovalGovernanceRecord[]>;
   resolveCodexApproval(requestId: number, decision: "accept" | "decline"): Promise<void>;
   getTrustedCommandInfo(): Promise<TrustedCommandInfo>;
   clearTrustedCommands(): Promise<TrustedCommandInfo>;
@@ -76,8 +78,12 @@ export interface DesktopApi {
   selectLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationState>;
   onLinghuAutomationState(listener: (event: LinghuAutomationStateEvent) => void): () => void;
   getNangongEvolutionState(): Promise<NangongEvolutionState>;
+  getEvolutionTopicDossier(topicId: string): Promise<EvolutionTopicDossier>;
+  advanceHanLiDeliberation(): Promise<NangongEvolutionState>;
   createEvolutionTopic(request: CreateEvolutionTopicRequest): Promise<NangongEvolutionState>;
   setNangongAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): Promise<NangongEvolutionState>;
+  configureEvolutionAutomation(request: ConfigureEvolutionAutomationRequest): Promise<NangongEvolutionState>;
+  controlEvolutionAutomation(action: EvolutionAutomationAction): Promise<NangongEvolutionState>;
   sendNangongConversationMessage(request: SendNangongConversationMessageRequest): Promise<NangongEvolutionState>;
   newNangongConversation(): Promise<NangongEvolutionState>;
   generateNangongTopicDraft(request: GenerateNangongTopicDraftRequest): Promise<NangongTopicDraft>;
@@ -86,6 +92,7 @@ export interface DesktopApi {
   updateEvolutionTopic(topicId: string, request: UpdateEvolutionTopicRequest): Promise<NangongEvolutionState>;
   createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): Promise<NangongEvolutionState>;
   decideEvolutionProposal(proposalId: string, request: DecideEvolutionProposalRequest): Promise<NangongEvolutionState>;
+  decideEvolutionResult(proposalId: string, request: DecideEvolutionResultRequest): Promise<NangongEvolutionState>;
   reviseEvolutionProposal(proposalId: string, request: ReviseEvolutionProposalRequest): Promise<NangongEvolutionState>;
   autoApproveEvolutionProposal(proposalId: string): Promise<NangongEvolutionState>;
   dispatchEvolutionProposal(proposalId: string): Promise<NangongEvolutionState>;

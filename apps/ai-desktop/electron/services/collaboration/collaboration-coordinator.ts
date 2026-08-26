@@ -16,9 +16,8 @@ import type {
 import type { CodexStreamEvent } from "../../../contracts/desktop.js";
 import { CollaborationDurationLog } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
-import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "./version-workspace-manager.js";
-import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../contracts/integration-release.js";
-import { ReleaseBatchStore } from "./release-batch-store.js";
+import { VersionWorkspaceManager } from "./version-workspace-manager.js";
+import { VersionIntegrationPipeline } from "./version-integration-pipeline.js";
 import { createCollaborationResultSummary } from "./result/result-summary.js";
 
 const LINGHU_MEMBER_ID = "linghu-ancestor";
@@ -69,13 +68,9 @@ export interface CollaborationCoordinatorOptions {
   durations: CollaborationDurationLog;
   workspaces: VersionWorkspaceManager;
   sessions: CollaborationSessionFactory;
+  integrationPipeline: VersionIntegrationPipeline;
   emitState(state: CollaborationState, reason: string, taskIds: string[]): void;
   emitStream(taskId: string, memberId: string, event: CodexStreamEvent): void;
-  verifyIntegration(rootPath: string, taskIds: string[], releaseBatchId: string): Promise<string>;
-  acquireIntegrationRelease(request: IntegrationReleaseRequest): Promise<() => void>;
-  releaseVersion: string;
-  releaseBatches: ReleaseBatchStore;
-  publishIntegration(executable: string, releaseBatchId: string): void;
 }
 
 /** 编排对等人物之间的分析、异人审核、执行和集成，单会话发送链路不依赖本类。 */
@@ -84,19 +79,14 @@ export class CollaborationCoordinator {
   readonly #durations: CollaborationDurationLog;
   readonly #workspaces: VersionWorkspaceManager;
   readonly #sessions: CollaborationSessionFactory;
+  readonly #integrationPipeline: VersionIntegrationPipeline;
   readonly #emitStream: CollaborationCoordinatorOptions["emitStream"];
-  readonly #verifyIntegration: CollaborationCoordinatorOptions["verifyIntegration"];
-  readonly #acquireIntegrationRelease: CollaborationCoordinatorOptions["acquireIntegrationRelease"];
-  readonly #releaseVersion: string;
-  readonly #releaseBatches: ReleaseBatchStore;
-  readonly #publishIntegration: CollaborationCoordinatorOptions["publishIntegration"];
   readonly #executorSessions = new Map<string, CollaborationExecutorSession>();
   readonly #reviewerSessions = new Map<string, CollaborationReviewerSession>();
   readonly #activeTaskRuns = new Set<string>();
   readonly #waitSpans = new Map<string, string>();
   readonly #heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
   readonly #lastProgressWriteMs = new Map<string, number>();
-  #integrationRunning = false;
   #disposed = false;
 
   constructor(options: CollaborationCoordinatorOptions) {
@@ -104,12 +94,8 @@ export class CollaborationCoordinator {
     this.#durations = options.durations;
     this.#workspaces = options.workspaces;
     this.#sessions = options.sessions;
+    this.#integrationPipeline = options.integrationPipeline;
     this.#emitStream = options.emitStream;
-    this.#verifyIntegration = options.verifyIntegration;
-    this.#acquireIntegrationRelease = options.acquireIntegrationRelease;
-    this.#releaseVersion = options.releaseVersion;
-    this.#releaseBatches = options.releaseBatches;
-    this.#publishIntegration = options.publishIntegration;
     this.#store.subscribe(options.emitState);
   }
 
@@ -134,12 +120,19 @@ export class CollaborationCoordinator {
     const previousWait = this.#waitSpans.get(taskId);
     if (previousWait) this.#durations.finish(previousWait, "interrupted", { releaseEvent: "task.recovery_requested" });
     this.#waitSpans.delete(taskId);
+    this.#integrationPipeline.finishWaitingTask(taskId, "interrupted", { releaseEvent: "task.recovery_requested" });
     const task = state.tasks.find((candidate) => candidate.taskId === taskId);
     if (task?.state === "repairing-review") void this.#repairRejectedReview(taskId);
     if (task?.state === "queued-executor") {
       this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "recovery", "recovery-wait", "task-resume-queued", "executor-capacity", task.executorMemberId));
     } else if (task?.state === "ready-for-integration") {
-      this.#waitSpans.set(taskId, this.#durations.startWait(taskId, "integration-wait", "recovery-wait", "integration-resume-queued", "integration-coordinator", null));
+      this.#integrationPipeline.trackWaitingTask(taskId, {
+        segment: "integration-wait",
+        waitType: "recovery-wait",
+        reasonCode: "integration-resume-queued",
+        resource: "integration-coordinator",
+        resourceOwner: null,
+      });
     }
     this.#schedule();
     return state;
@@ -223,6 +216,7 @@ export class CollaborationCoordinator {
     const waitSpan = this.#waitSpans.get(taskId);
     if (waitSpan) this.#durations.finish(waitSpan, "interrupted", { releaseEvent: "task.cancelled" });
     this.#waitSpans.delete(taskId);
+    this.#integrationPipeline.finishWaitingTask(taskId, "interrupted", { releaseEvent: "task.cancelled" });
     return state;
   }
 
@@ -232,6 +226,7 @@ export class CollaborationCoordinator {
 
   async dispose(): Promise<void> {
     this.#disposed = true;
+    this.#integrationPipeline.dispose();
     this.#durations.interruptOpenSpans("application.before-quit");
     await Promise.allSettled([...this.#executorSessions.values()].map((session) => session.dispose()));
     await Promise.allSettled([...this.#reviewerSessions.values()].map((session) => session.dispose()));
@@ -247,7 +242,7 @@ export class CollaborationCoordinator {
       if (this.#disposed) return;
       this.#scheduleReviewers();
       this.#scheduleExecutors();
-      void this.#scheduleIntegration();
+      this.#integrationPipeline.schedule();
     });
   }
 
@@ -737,9 +732,21 @@ export class CollaborationCoordinator {
       await this.#retireExecutor(taskId, memberId, session);
       const readyTask = this.#store.task(taskId);
       const unsatisfiedDependencies = readyTask.dependencyTaskIds.filter((dependencyId) => this.state().tasks.find((candidate) => candidate.taskId === dependencyId)?.state !== "integrated");
-      this.#waitSpans.set(taskId, unsatisfiedDependencies.length > 0
-        ? this.#durations.startWait(taskId, "dependency-wait", "dependency-wait", "integration-dependencies", unsatisfiedDependencies.join(","), null)
-        : this.#durations.startWait(taskId, "integration-wait", "system-wait", readyTask.mergeStrategy === "ATOMIC_GROUP" ? "atomic-group-members" : "integration-batch", "integration-coordinator", null));
+      this.#integrationPipeline.trackWaitingTask(taskId, unsatisfiedDependencies.length > 0
+        ? {
+          segment: "dependency-wait",
+          waitType: "dependency-wait",
+          reasonCode: "integration-dependencies",
+          resource: unsatisfiedDependencies.join(","),
+          resourceOwner: null,
+        }
+        : {
+          segment: "integration-wait",
+          waitType: "system-wait",
+          reasonCode: readyTask.mergeStrategy === "ATOMIC_GROUP" ? "atomic-group-members" : "integration-batch",
+          resource: "integration-coordinator",
+          resourceOwner: null,
+        });
     } catch (error) {
       if (changeSpan) this.#durations.finish(changeSpan, "failed", { error: errorMessage(error) });
       if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { error: errorMessage(error) });
@@ -798,168 +805,6 @@ export class CollaborationCoordinator {
       await repairSession?.dispose();
       this.#schedule();
     }
-  }
-
-  async #scheduleIntegration(): Promise<void> {
-    if (this.#integrationRunning || this.#disposed) return;
-    const state = this.state();
-    const ready = state.tasks.filter((task) => task.state === "ready-for-integration" && integrationDependenciesSatisfied(task, state));
-    const eligible = ready.filter((task) => task.mergeStrategy !== "ATOMIC_GROUP" || atomicGroupReady(task, ready, state));
-    if (eligible.length === 0) return;
-    this.#integrationRunning = true;
-    const generation = state.nextIntegrationGeneration;
-    const taskIds = eligible.map((task) => task.taskId);
-    const releaseBatchId = `release-${this.#releaseVersion}-g${generation}`;
-    let releaseLease: (() => void) | null = null;
-    let releaseDocument: ReleaseBatchDocument | null = null;
-    let publishedExecutable: string | null = null;
-    let candidate: Awaited<ReturnType<VersionWorkspaceManager["createIntegrationCandidate"]>> | null = null;
-    let verifySpan: string | null = null;
-    let reconcileSpan: string | null = null;
-    const integrationSpan = this.#durations.start(taskIds[0], "integration", { generation, taskCount: taskIds.length });
-    try {
-      releaseLease = await this.#acquireIntegrationRelease({ releaseBatchId, version: this.#releaseVersion, generation, taskIds, initiatorMemberId: LINGHU_MEMBER_ID });
-      const transferred = await this.#workspaces.transferOwnedLocalChanges(eligible.flatMap((task) => {
-        const workspace = task.versionWorkspace;
-        const execution = task.executionRecords.at(-1);
-        if (!workspace || !execution?.changedFiles?.length) return [];
-        return [{ taskId: task.taskId, memberName: execution.executor.displayName, workspace, changedFiles: execution.changedFiles }];
-      }));
-      if (transferred) {
-        this.#store.updateTask(transferred.taskId, "integration.local_changes_transferred", (task) => {
-          if (!task.versionWorkspace) throw new Error("本地修改归属任务缺少版本工作区。");
-          task.versionWorkspace.resultSha = transferred.resultSha;
-          appendFlow(task, "integration.local_changes_transferred", "integration", "completed", `已把 ${transferred.changedFiles.length} 个本地修改转入任务分支并生成唯一最终提交`, task.currentHandler || task.initiator);
-        });
-      }
-      releaseDocument = this.#releaseBatches.create(releaseBatchId, this.#releaseVersion, generation, taskIds.map((taskId) => this.#store.task(taskId)));
-      this.#store.updateTask(taskIds[0], "integration.batch_frozen", (_first, mutable) => {
-        mutable.nextIntegrationGeneration += 1;
-        mutable.integrationBatches.push({ generation, taskIds, state: "frozen", createdAt: new Date().toISOString(), completedAt: null, integrationSha: null, failureReason: null, failureKind: null, conflictFiles: [] });
-        for (const task of mutable.tasks.filter((candidate) => taskIds.includes(candidate.taskId))) {
-          task.state = "queued-integration";
-          task.integrationGeneration = generation;
-          appendFlow(task, "integration.batch_frozen", "integration", "waiting", `任务已进入集成批次 ${generation}`, null);
-        }
-      });
-      for (const taskId of taskIds) {
-        const waitSpan = this.#waitSpans.get(taskId);
-        if (waitSpan) this.#durations.finish(waitSpan, "completed", { releaseEvent: "integration.batch_frozen", generation });
-        this.#waitSpans.delete(taskId);
-      }
-      const tasks = taskIds.map((taskId) => this.#store.task(taskId));
-      reconcileSpan = this.#durations.start(taskIds[0], "conflict-resolution", { generation, taskCount: taskIds.length });
-      candidate = await this.#workspaces.createReleaseCandidate(releaseBatchId, this.#releaseVersion, generation, tasks);
-      releaseDocument.state = "candidate-ready";
-      releaseDocument.candidateBranch = candidate.branchName;
-      releaseDocument.candidateSha = candidate.candidateSha;
-      this.#releaseBatches.write(releaseDocument);
-      this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
-      reconcileSpan = null;
-      this.#store.updateTask(taskIds[0], "integration.started", (_first, mutable) => {
-        const batch = mutable.integrationBatches.find((item) => item.generation === generation);
-        if (batch) batch.state = "integrating";
-        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          const linghu = requireMember(mutable, LINGHU_MEMBER_ID);
-          task.state = "unified-testing";
-          task.currentHandler = participantSnapshot(linghu);
-          task.unifiedTest = { status: "running", owner: participantSnapshot(linghu), failureReason: null, startedAt: new Date().toISOString(), completedAt: null };
-          appendFlow(task, "unified_test.started", "integration", "started", `令狐老祖正在统一测试（集成批次 ${generation}）`, linghu);
-        }
-      });
-      verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
-      releaseDocument.state = "testing";
-      this.#releaseBatches.write(releaseDocument);
-      publishedExecutable = await this.#verifyIntegration(candidate.rootPath, taskIds, releaseBatchId);
-      releaseDocument.state = "verified";
-      releaseDocument.executable = publishedExecutable;
-      this.#releaseBatches.write(releaseDocument);
-      this.#durations.finish(verifySpan, "completed", { releaseEvent: "integration.verified" });
-      verifySpan = null;
-      const integrationSha = await this.#workspaces.promoteIntegrationCandidate(candidate);
-      const localMergeSha = await this.#workspaces.mergeIntoLocalBranch(integrationSha);
-      releaseDocument.state = "integrated";
-      releaseDocument.localMergeSha = localMergeSha;
-      this.#releaseBatches.write(releaseDocument);
-      this.#durations.finish(integrationSpan, "completed", { releaseEvent: "integration.local_branch_updated", integrationSha });
-      this.#store.updateTask(taskIds[0], "integration.completed", (_first, mutable) => {
-        const batch = mutable.integrationBatches.find((item) => item.generation === generation);
-        if (batch) {
-          batch.state = "completed";
-          batch.completedAt = new Date().toISOString();
-          batch.integrationSha = integrationSha;
-        }
-        const completedAt = new Date().toISOString();
-        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = "integrated";
-          task.currentHandler = participantSnapshot(requireMember(mutable, LINGHU_MEMBER_ID));
-          if (task.unifiedTest) {
-            task.unifiedTest.status = "passed";
-            task.unifiedTest.failureReason = null;
-            task.unifiedTest.completedAt = completedAt;
-          }
-          task.completedAt = completedAt;
-          task.blockingReason = null;
-          task.resultSummary ||= createCollaborationResultSummary(task, task.finalResult || "任务已完成协同集成。", []);
-          task.resultSummary.outcome = "succeeded";
-          task.resultSummary.success = true;
-          if (task.resultSummary.remaining === "等待协同集成完成。" || /^无[。.]?$/.test(task.resultSummary.remaining.trim())) {
-            task.resultSummary.remaining = "无已知遗留内容。";
-          }
-          task.resultSummary.generatedAt = completedAt;
-          appendFlow(task, "unified_test.passed", "integration", "completed", "令狐老祖统一测试通过，任务已归档到执行列表", task.currentHandler);
-        }
-      });
-      const retirements = await Promise.allSettled(tasks.map((task) => task.versionWorkspace ? this.#workspaces.retireWorkspace(task.versionWorkspace) : Promise.resolve()));
-      this.#store.updateTask(taskIds[0], "integration.worktrees_retired", (_first, mutable) => {
-        const retiredAt = new Date().toISOString();
-        for (const [index, taskId] of taskIds.entries()) {
-          const task = mutable.tasks.find((item) => item.taskId === taskId);
-          if (task?.versionWorkspace && retirements[index]?.status === "fulfilled") task.versionWorkspace.retiredAt = retiredAt;
-        }
-      });
-      this.#durations.writeGenerationReport(generation, taskIds);
-      releaseDocument.state = "published";
-      releaseDocument.completedAt = new Date().toISOString();
-      this.#releaseBatches.write(releaseDocument);
-    } catch (error) {
-      const ownershipBlocked = error instanceof LocalChangeOwnershipError;
-      const mergeConflict = error instanceof MergeConflictError;
-      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : "verification";
-      const conflictFiles = mergeConflict ? error.conflictFiles : [];
-      if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
-      if (verifySpan) this.#durations.finish(verifySpan, "failed", { error: errorMessage(error) });
-      this.#durations.finish(integrationSpan, "failed", { error: errorMessage(error) });
-      this.#store.updateTask(taskIds[0], "integration.failed", (_first, mutable) => {
-        const batch = mutable.integrationBatches.find((item) => item.generation === generation);
-        if (batch) { batch.state = "failed"; batch.failureReason = errorMessage(error); batch.failureKind = failureKind; batch.conflictFiles = conflictFiles; batch.completedAt = new Date().toISOString(); }
-        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = ownershipBlocked || mergeConflict ? "blocked" : "test-failed";
-          task.phase = null;
-          task.blockingReason = ownershipBlocked ? `合并前本地修改归属门禁阻塞：${errorMessage(error)}` : mergeConflict ? `版本冲突需要基于当前主线重新修正：${errorMessage(error)}` : `令狐老祖统一测试失败：${errorMessage(error)}`;
-          task.recoveryTargetState = "ready-for-integration";
-          task.integrationFailure = { kind: failureKind, detail: errorMessage(error), conflictFiles, baseSha: mergeConflict ? error.baseSha : task.versionWorkspace?.baseSha || null, resultSha: mergeConflict ? error.resultSha : task.versionWorkspace?.resultSha || null, generation, occurredAt: new Date().toISOString() };
-          task.currentHandler = participantSnapshot(requireMember(mutable, LINGHU_MEMBER_ID));
-          if (!ownershipBlocked && !mergeConflict) task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
-          appendFlow(task, ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : "unified_test.failed", "integration", ownershipBlocked || mergeConflict ? "waiting" : "failed", task.blockingReason, task.currentHandler, !ownershipBlocked && !mergeConflict);
-        }
-      });
-      this.#durations.writeGenerationReport(generation, taskIds);
-      if (releaseDocument) {
-        releaseDocument.state = "failed";
-        releaseDocument.failureReason = errorMessage(error);
-        releaseDocument.completedAt = new Date().toISOString();
-        this.#releaseBatches.write(releaseDocument);
-      }
-    } finally {
-      if (candidate) await this.#workspaces.retireCandidate(candidate).catch((error) => {
-        this.#durations.instant(taskIds[0], "integration.candidate_retirement_failed", { generation, error: errorMessage(error) });
-      });
-      releaseLease?.();
-      this.#integrationRunning = false;
-      this.#schedule();
-    }
-    if (publishedExecutable && releaseDocument?.state === "published") this.#publishIntegration(publishedExecutable, releaseBatchId);
   }
 
   #setTaskAndMemberPhase(taskId: string, stateValue: CollaborationTask["state"], phase: Exclude<CollaborationWorkerPhase, null>): void {
@@ -1209,16 +1054,6 @@ function phaseFromStreamEvent(event: CodexStreamEvent): Exclude<CollaborationWor
   if (event.type === "managed-execution" && event.managedExecution?.stage === "interaction-validation") return "verifying";
   if (event.type === "activity" && event.activity?.itemType === "fileChange") return "implementing";
   return null;
-}
-
-function integrationDependenciesSatisfied(task: CollaborationTask, state: CollaborationState): boolean {
-  return task.dependencyTaskIds.every((dependencyId) => state.tasks.find((candidate) => candidate.taskId === dependencyId)?.state === "integrated");
-}
-
-function atomicGroupReady(task: CollaborationTask, ready: CollaborationTask[], state: CollaborationState): boolean {
-  if (!task.atomicGroupId) return false;
-  const group = state.tasks.filter((candidate) => candidate.atomicGroupId === task.atomicGroupId);
-  return group.length > 0 && group.every((candidate) => ready.some((item) => item.taskId === candidate.taskId));
 }
 
 function sha256(value: string): string {

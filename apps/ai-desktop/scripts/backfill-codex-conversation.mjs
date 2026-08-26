@@ -12,13 +12,12 @@ const session = records.find((record) => record.type === "session_meta")?.payloa
 const threadId = String(session?.session_id || session?.id || "").trim();
 if (!threadId) throw new Error("Codex 记录缺少稳定任务 ID。");
 
-const configuration = JSON.parse(readFileSync(path.join(applicationRoot, "db", "ai-memory-paths.json"), "utf8"));
-const databaseRoot = path.resolve(String(configuration.databaseRoot));
-const databasePath = path.join(databaseRoot, String(configuration.databaseFile));
-if (!databasePath.startsWith(`${applicationRoot}${path.sep}`)) throw new Error("回填只允许写入 AI Desktop 已登记数据库目录。");
-
+const resolverModuleUrl = pathToFileURL(path.join(projectRoot, "build", "ai-desktop", "electron", "electron", "config", "ai-memory-path-resolver.js")).href;
 const databaseModuleUrl = pathToFileURL(path.join(projectRoot, "build", "ai-desktop", "electron", "electron", "services", "event-center", "persistence", "sqlite-database.js")).href;
+// 回填与应用启动复用同一解析器，确保当前操作系统只使用当前 SELPLAT 工程内的数据库。
+const { resolveAiMemoryPaths } = await import(resolverModuleUrl);
 const { SqliteDatabase } = await import(databaseModuleUrl);
+const { databaseRoot, databasePath } = resolveAiMemoryPaths(projectRoot);
 const database = SqliteDatabase.open(databasePath, path.join(databaseRoot, "sql"), !existsSync(databasePath));
 
 try {

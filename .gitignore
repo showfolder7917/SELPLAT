@@ -29,3 +29,4 @@ wrapper/
 caches/
 native/
 daemon/
+node_modules/

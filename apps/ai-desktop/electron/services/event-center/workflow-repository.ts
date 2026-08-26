@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
+import type { ApprovalGovernanceRecord } from "../../../contracts/approval-governance.js";
 import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration.js";
 import type { LinghuAutomationState } from "../../../contracts/linghu-automation.js";
-import type { EvolutionProposal, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
+import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
 import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../contracts/workflow.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
@@ -80,6 +81,57 @@ export class WorkflowRepository {
     return eventId;
   }
 
+  /** Codex 授权保留自己的 accept/decline 语义，同时进入统一审批审计投影。 */
+  recordCodexApprovalDecision(input: {
+    requestId: number;
+    title: string;
+    kind: string;
+    decision: "accept" | "decline";
+    command?: string;
+    cwd?: string;
+    trusted: boolean;
+    correlationId?: string | null;
+  }): void {
+    const decidedAt = new Date().toISOString();
+    this.#database.withConnection((connection) => this.#upsertGovernance(connection, {
+      governanceId: `codex-approval:${input.requestId}:${decidedAt}`,
+      domain: "codex-command",
+      subjectId: String(input.requestId),
+      correlationId: input.correlationId || null,
+      title: input.title || "Codex 执行授权",
+      requestKind: input.kind,
+      decision: input.decision,
+      initiatorId: "codex",
+      initiatorDisplayName: "Codex",
+      approverId: "user",
+      approverDisplayName: "用户",
+      source: input.trusted ? "manual-user-and-trust" : "manual-user",
+      reason: input.command || input.title || input.kind,
+      evidence: { command: input.command || null, cwd: input.cwd || null, trusted: input.trusted },
+      decidedAt,
+    }));
+  }
+
+  listApprovalGovernance(limit = 100): ApprovalGovernanceRecord[] {
+    return this.#database.withConnection((connection) => {
+      const rows = connection.prepare(`
+        SELECT governanceId, domain, subjectId, correlationId, title, requestKind, decision,
+          initiatorId, initiatorDisplayName, approverId, approverDisplayName, source, reason, evidenceJson, decidedAt
+        FROM AiDesktopApprovalGovernance
+        ORDER BY decidedAt DESC
+        LIMIT $limit
+      `).all({ $limit: Math.max(1, Math.min(500, limit)) }) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
+        governanceId: String(row.governanceId), domain: row.domain as ApprovalGovernanceRecord["domain"],
+        subjectId: String(row.subjectId), correlationId: nullableString(row.correlationId), title: String(row.title),
+        requestKind: String(row.requestKind), decision: String(row.decision), initiatorId: nullableString(row.initiatorId),
+        initiatorDisplayName: nullableString(row.initiatorDisplayName), approverId: String(row.approverId),
+        approverDisplayName: String(row.approverDisplayName), source: String(row.source), reason: String(row.reason),
+        evidence: parsePayload(row.evidenceJson), decidedAt: String(row.decidedAt),
+      }));
+    });
+  }
+
   listUnhandledExceptions(limit = 50): WorkflowExceptionRecord[] {
     return this.#database.withConnection((connection) => {
       const rows = connection.prepare(`
@@ -152,6 +204,40 @@ export class WorkflowRepository {
 
   syncEvolutionState(state: NangongEvolutionState): void {
     this.#database.transaction((connection) => {
+      for (const deliberation of state.deliberations) {
+        connection.prepare(`
+          INSERT INTO AiDesktopEvolutionDeliberation (deliberationId, topicId, status, candidateJson, createdAt, updatedAt)
+          VALUES ($deliberationId, $topicId, $status, $candidateJson, $createdAt, $updatedAt)
+          ON CONFLICT(deliberationId) DO UPDATE SET topicId=excluded.topicId, status=excluded.status,
+            candidateJson=excluded.candidateJson, updatedAt=excluded.updatedAt
+        `).run({
+          $deliberationId: deliberation.deliberationId, $topicId: deliberation.topicId, $status: deliberation.status,
+          $candidateJson: deliberation.candidate ? JSON.stringify(deliberation.candidate) : null,
+          $createdAt: deliberation.createdAt, $updatedAt: deliberation.updatedAt,
+        });
+        const insertSource = connection.prepare(`
+          INSERT OR IGNORE INTO AiDesktopEvolutionSourceSnapshot
+            (snapshotId, deliberationId, source, conversationId, sourceMessageId, sequenceNumber, role, responsePhase, content, originalCreatedAt, capturedAt)
+          VALUES ($snapshotId, $deliberationId, $source, $conversationId, $sourceMessageId, $sequenceNumber, $role, $responsePhase, $content, $originalCreatedAt, $capturedAt)
+        `);
+        for (const snapshot of deliberation.sourceSnapshots) insertSource.run({
+          $snapshotId: snapshot.snapshotId, $deliberationId: snapshot.deliberationId, $source: snapshot.source,
+          $conversationId: snapshot.conversationId, $sourceMessageId: snapshot.sourceMessageId, $sequenceNumber: snapshot.sequenceNumber,
+          $role: snapshot.role, $responsePhase: snapshot.responsePhase, $content: snapshot.content,
+          $originalCreatedAt: snapshot.originalCreatedAt, $capturedAt: snapshot.capturedAt,
+        });
+      }
+      const insertArchive = connection.prepare(`
+        INSERT OR IGNORE INTO AiDesktopEvolutionArchiveRecord
+          (recordId, deliberationId, topicId, proposalId, taskId, sequenceNumber, category, eventType, actor, title, originalPayloadJson, occurredAt, recordedAt)
+        VALUES ($recordId, $deliberationId, $topicId, $proposalId, $taskId, $sequenceNumber, $category, $eventType, $actor, $title, $originalPayloadJson, $occurredAt, $recordedAt)
+      `);
+      for (const record of state.archiveRecords) insertArchive.run({
+        $recordId: record.recordId, $deliberationId: record.deliberationId, $topicId: record.topicId,
+        $proposalId: record.proposalId, $taskId: record.taskId, $sequenceNumber: record.sequenceNumber,
+        $category: record.category, $eventType: record.eventType, $actor: record.actor, $title: record.title,
+        $originalPayloadJson: JSON.stringify(record.payload), $occurredAt: record.occurredAt, $recordedAt: new Date().toISOString(),
+      });
       for (const topic of state.topics) {
         const proposal = state.proposals.filter((item) => item.topicId === topic.topicId).sort((left, right) => right.version - left.version)[0];
         if (proposal) connection.prepare("DELETE FROM AiDesktopWorkflowRun WHERE workflowId = $workflowId").run({ $workflowId: `evolution-topic:${topic.topicId}` });
@@ -172,6 +258,31 @@ export class WorkflowRepository {
       }
       for (const proposal of state.proposals) this.#upsertApprovals(connection, proposal);
     });
+  }
+
+  getEvolutionTopicDossier(topicId: string, state: NangongEvolutionState): EvolutionTopicDossier {
+    const topic = state.topics.find((item) => item.topicId === topicId);
+    if (!topic) throw new Error("专题池中不存在该专题。 ");
+    const deliberation = topic.deliberationId ? state.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
+    const proposals = state.proposals.filter((item) => item.topicId === topicId);
+    const proposalIds = new Set(proposals.map((item) => item.proposalId));
+    const archiveRecords = state.archiveRecords.filter((item) => item.topicId === topicId || (deliberation && item.deliberationId === deliberation.deliberationId));
+    const executionRecords = this.#database.withConnection((connection) => {
+      const rows = connection.prepare(`
+        SELECT event.eventId, event.correlationId, event.sourceId, event.eventType, event.category, event.message,
+          event.payloadJson, event.occurredAt, task.proposalId
+        FROM AiDesktopEvent event
+        JOIN AiDesktopTaskExecution task ON task.taskId = event.correlationId
+        ORDER BY event.occurredAt, event.recordedAt
+      `).all() as Array<Record<string, unknown>>;
+      return rows.filter((row) => proposalIds.has(String(row.proposalId))).map((row, index): EvolutionArchiveRecord => ({
+        recordId: String(row.eventId), deliberationId: deliberation?.deliberationId || null, topicId,
+        proposalId: String(row.proposalId), taskId: String(row.correlationId), sequenceNumber: archiveRecords.length + index + 1,
+        category: dossierEventCategory(String(row.eventType), String(row.category)), eventType: String(row.eventType),
+        actor: dossierEventActor(String(row.sourceId)), title: String(row.message), payload: parseObject(String(row.payloadJson)), occurredAt: String(row.occurredAt),
+      }));
+    });
+    return { topic: structuredClone(topic), deliberation: structuredClone(deliberation), proposals: structuredClone(proposals), archiveRecords: structuredClone(archiveRecords), executionRecords };
   }
 
   syncLinghuState(state: LinghuAutomationState): void {
@@ -219,7 +330,7 @@ export class WorkflowRepository {
     });
   }
 
-  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink"): number {
+  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopConversationArchiveMessage" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord"): number {
     return this.#database.withConnection((connection) => Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count));
   }
 
@@ -282,25 +393,75 @@ export class WorkflowRepository {
       severity: event.error ? "error" : "info", status: event.error ? "open" : "observed", message: event.summary,
       payload: { stage: event.stage, status: event.status, actor: event.actor }, occurredAt: event.occurredAt,
     });
+    for (const review of task.reviews) this.#upsertGovernance(connection, {
+      governanceId: `collaboration-review:${review.reviewId}`,
+      domain: "collaboration-review",
+      subjectId: task.taskId,
+      correlationId: task.evolutionProposalId || task.taskId,
+      title: task.snapshot.title,
+      requestKind: `plan-v${review.planVersion}`,
+      decision: review.decision,
+      initiatorId: task.initiator?.memberId || null,
+      initiatorDisplayName: task.initiator?.displayName || null,
+      approverId: review.reviewerMemberId,
+      approverDisplayName: review.reviewerDisplayName,
+      source: "collaboration-reviewer",
+      reason: review.feedback,
+      evidence: { planVersion: review.planVersion, reviewerGeneration: review.reviewerGeneration },
+      decidedAt: review.createdAt,
+    });
   }
 
   #upsertApprovals(connection: DatabaseSync, proposal: EvolutionProposal): void {
-    for (const approval of proposal.approvals) connection.prepare(`
-      INSERT OR IGNORE INTO AiDesktopApprovalRecord (approvalId, proposalId, title, proposalType, submitterId, submitterDisplayName, approverId, approverDisplayName, decision, source, advice, evidenceJson, referencedApprovalIdsJson, createdAt, approvedAt)
-      VALUES ($approvalId, $proposalId, $title, $proposalType, $submitterId, $submitterDisplayName, $approverId, $approverDisplayName, $decision, $source, $advice, $evidenceJson, $referencedApprovalIdsJson, $createdAt, $approvedAt)
+    for (const approval of proposal.approvals) {
+      connection.prepare(`
+      INSERT OR IGNORE INTO AiDesktopApprovalRecord (approvalId, proposalId, title, proposalType, submitterId, submitterDisplayName, approverId, approverDisplayName, decision, source, approvalStage, advice, evidenceJson, referencedApprovalIdsJson, createdAt, approvedAt)
+      VALUES ($approvalId, $proposalId, $title, $proposalType, $submitterId, $submitterDisplayName, $approverId, $approverDisplayName, $decision, $source, $approvalStage, $advice, $evidenceJson, $referencedApprovalIdsJson, $createdAt, $approvedAt)
     `).run({
       $approvalId: approval.approvalId, $proposalId: proposal.proposalId, $title: proposal.title,
       $proposalType: proposal.type, $submitterId: proposal.submitterMemberId, $submitterDisplayName: proposal.submitterDisplayName,
       $approverId: approval.approverMemberId, $approverDisplayName: approval.approverDisplayName,
-      $decision: approval.decision, $source: approval.source, $advice: approval.advice,
+      $decision: approval.decision, $source: approval.source, $approvalStage: approval.stage, $advice: approval.advice,
       $evidenceJson: JSON.stringify(proposal.evidence), $referencedApprovalIdsJson: JSON.stringify(approval.referencedApprovalIds),
       $createdAt: proposal.createdAt, $approvedAt: approval.createdAt,
+    });
+      this.#upsertGovernance(connection, {
+        governanceId: `evolution-approval:${approval.approvalId}`,
+        domain: "evolution",
+        subjectId: proposal.proposalId,
+        correlationId: proposal.topicId,
+        title: proposal.title,
+        requestKind: `${approval.stage}:${proposal.type}`,
+        decision: approval.decision,
+        initiatorId: proposal.submitterMemberId,
+        initiatorDisplayName: proposal.submitterDisplayName,
+        approverId: approval.approverMemberId,
+        approverDisplayName: approval.approverDisplayName,
+        source: approval.source,
+        reason: approval.advice,
+        evidence: { facts: proposal.evidence, referencedApprovalIds: approval.referencedApprovalIds },
+        decidedAt: approval.createdAt,
+      });
+    }
+  }
+
+  #upsertGovernance(connection: DatabaseSync, record: ApprovalGovernanceRecord): void {
+    connection.prepare(`
+      INSERT INTO AiDesktopApprovalGovernance (governanceId, domain, subjectId, correlationId, title, requestKind, decision, initiatorId, initiatorDisplayName, approverId, approverDisplayName, source, reason, evidenceJson, decidedAt)
+      VALUES ($governanceId, $domain, $subjectId, $correlationId, $title, $requestKind, $decision, $initiatorId, $initiatorDisplayName, $approverId, $approverDisplayName, $source, $reason, $evidenceJson, $decidedAt)
+      ON CONFLICT(governanceId) DO UPDATE SET decision=excluded.decision, reason=excluded.reason, evidenceJson=excluded.evidenceJson, decidedAt=excluded.decidedAt
+    `).run({
+      $governanceId: record.governanceId, $domain: record.domain, $subjectId: record.subjectId,
+      $correlationId: record.correlationId, $title: record.title, $requestKind: record.requestKind,
+      $decision: record.decision, $initiatorId: record.initiatorId, $initiatorDisplayName: record.initiatorDisplayName,
+      $approverId: record.approverId, $approverDisplayName: record.approverDisplayName, $source: record.source,
+      $reason: record.reason, $evidenceJson: JSON.stringify(record.evidence), $decidedAt: record.decidedAt,
     });
   }
 }
 
 function classifyAuditEvent(type: string): { category: WorkflowEventCategory; severity: WorkflowEventSeverity; status: WorkflowEventStatus; sourceType: "member" | "system" | "launcher"; sourceId: string } {
-  const sourceId = type.startsWith("nangong.") ? "nangong-wan" : type.startsWith("linghu.") ? "linghu-ancestor" : type.startsWith("application.") ? "evolution-launcher" : "ai-desktop";
+  const sourceId = type.startsWith("han-li.") ? "han-li" : type.startsWith("nangong.") ? "nangong-wan" : type.startsWith("linghu.") ? "linghu-ancestor" : type.startsWith("application.") ? "evolution-launcher" : "ai-desktop";
   const sourceType = sourceId === "evolution-launcher" ? "launcher" : sourceId === "ai-desktop" ? "system" : "member";
   if (/business[._-]exception|validation[._-]failed/u.test(type)) return { category: "business-exception", severity: "warning", status: "open", sourceType, sourceId };
   if (/stalled|timeout|heartbeat[._-]missing/u.test(type)) return { category: "stalled", severity: "error", status: "open", sourceType, sourceId };
@@ -315,6 +476,21 @@ function defaultStatus(category: WorkflowEventCategory): WorkflowEventStatus { r
 function stringValue(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : null; }
 function nullableString(value: unknown): string | null { return typeof value === "string" && value ? value : null; }
 function parsePayload(value: unknown): Record<string, unknown> { try { const parsed = JSON.parse(String(value)); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; } }
+function parseObject(value: string): Record<string, unknown> { return parsePayload(value); }
+function dossierEventCategory(eventType: string, category: string): EvolutionArchiveCategory {
+  if (/test/iu.test(eventType)) return "test";
+  if (/release|publish|restart/iu.test(eventType)) return "release";
+  if (/approval|review|decided/iu.test(eventType)) return "approval";
+  if (/failed|error|stalled|recover/iu.test(eventType) || ["technical-error", "business-exception", "stalled"].includes(category)) return "recovery";
+  return "execution";
+}
+function dossierEventActor(sourceId: string): EvolutionArchiveActor {
+  if (sourceId === "han-li") return "han-li";
+  if (sourceId.includes("nangong")) return "nangong-wan";
+  if (sourceId.includes("linghu")) return "linghu-ancestor";
+  if (sourceId.includes("codex")) return "codex";
+  return "system";
+}
 function latestTime(...values: Array<string | null | undefined>): string { return values.filter((value): value is string => Boolean(value)).sort((left, right) => Date.parse(right) - Date.parse(left))[0] || new Date().toISOString(); }
 function taskRuntimeStatus(state: CollaborationTask["state"]): string {
   if (state === "integrated") return "completed";

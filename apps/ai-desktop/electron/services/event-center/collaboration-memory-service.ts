@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { ApprovalMemoryEvidence, CollaborationMemoryMessage, CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration-memory.js";
-import type { EvolutionProposalOrigin, EvolutionProposalType, NangongConversation, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
+import type { EvolutionProposalOrigin, EvolutionProposalType, EvolutionSourceMessageSnapshot, NangongConversation, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
 const CURRENT_CONVERSATION_TURN_LIMIT = 20;
@@ -94,6 +94,34 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     `).all({ $proposalType: proposalType, $origin: origin, $limit: APPROVAL_EVIDENCE_LIMIT }) as unknown as ApprovalMemoryEvidence[]);
   }
 
+  readHanLiEvolutionCorpus(deliberationId: string): EvolutionSourceMessageSnapshot[] {
+    const capturedAt = new Date().toISOString();
+    return this.#database.withConnection((connection) => {
+      // 韩立按会话组读取全部原文，不把 FTS 命中片段误当成一段完整会话。
+      const nangongRows = connection.prepare(`
+        SELECT messageId, conversationId, sequenceNumber, role, content, createdAt
+        FROM AiDesktopConversationMemory
+        ORDER BY conversationId, sequenceNumber
+      `).all() as Array<Record<string, unknown>>;
+      const codexRows = connection.prepare(`
+        SELECT messageId, threadId, sequenceNumber, sourceRole, responsePhase, content, createdAt
+        FROM AiDesktopConversationArchiveMessage
+        ORDER BY threadId, sequenceNumber
+      `).all() as Array<Record<string, unknown>>;
+      const nangong = nangongRows.map((row) => sourceSnapshot({
+        deliberationId, source: "nangong", conversationId: String(row.conversationId), sourceMessageId: String(row.messageId),
+        sequenceNumber: Number(row.sequenceNumber), role: String(row.role), responsePhase: null,
+        content: String(row.content), originalCreatedAt: String(row.createdAt), capturedAt,
+      }));
+      const codex = codexRows.map((row) => sourceSnapshot({
+        deliberationId, source: "codex", conversationId: String(row.threadId), sourceMessageId: String(row.messageId),
+        sequenceNumber: Number(row.sequenceNumber), role: String(row.sourceRole), responsePhase: row.responsePhase ? String(row.responsePhase) : null,
+        content: String(row.content), originalCreatedAt: String(row.createdAt), capturedAt,
+      }));
+      return [...nangong, ...codex];
+    });
+  }
+
   registerRound(conversation: NangongConversation, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision): void {
     this.syncConversation(conversation);
     const now = new Date().toISOString();
@@ -137,6 +165,10 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       `).run({ $conversationTopicId: conversationTopicId!, $userMessageId: userMessageId, $nangongMessageId: nangongMessageId });
     });
   }
+}
+
+function sourceSnapshot(value: Omit<EvolutionSourceMessageSnapshot, "snapshotId">): EvolutionSourceMessageSnapshot {
+  return { ...value, snapshotId: `evolution-source:${value.deliberationId}:${value.source}:${value.sourceMessageId}` };
 }
 
 function preview(content: string): string {

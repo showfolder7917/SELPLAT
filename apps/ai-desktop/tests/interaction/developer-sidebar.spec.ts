@@ -76,7 +76,7 @@ test("AI Memory 恢复状态显示明确提示且不暴露数据库路径", asyn
 
   await page.goto(pathToFileURL(productionRendererFile).href);
   await expect(page.locator(".ai-memory-recovery")).toHaveCount(0);
-  await expect(page.locator(".dev-statusbar")).toContainText("AI Memory v0004 · 统一事件中心");
+  await expect(page.locator(".dev-statusbar")).toContainText("AI Memory v0006 · 统一事件中心");
 });
 
 test("新建任务入口位于聊天标签且不再占用任务标题", async () => {

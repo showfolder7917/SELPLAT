@@ -14,6 +14,10 @@ test("正式配置把所有 Developer 运行入口固定到应用 db 根", () =>
   assert.equal(resolved.databaseRoot, path.join(appRoot, "db"));
   assert.equal(resolved.databaseFile, "events.sqlite3");
   assert.equal(resolved.databasePath, path.join(appRoot, "db", "events.sqlite3"));
+  assert.deepEqual(JSON.parse(readFileSync(resolved.configPath, "utf8")), {
+    schemaVersion: 2,
+    databaseFile: "events.sqlite3",
+  });
 
   const appConfigSource = readFileSync(path.join(appRoot, "electron", "config", "app-config.ts"), "utf8");
   assert.match(appConfigSource, /resolveConfiguredAiMemoryPaths\(resolveProjectRoot\(\)\)/);
@@ -31,7 +35,7 @@ test("路径解析只读取显式配置且不会创建数据库或备用目录",
   }
 });
 
-test("缺失、损坏、相对根和文件名逃逸均被阻断", () => {
+test("缺失、损坏、旧版机器路径和文件名逃逸均被阻断", () => {
   const missing = mkdtempSync(path.join(controlledTestRoot, "ai-memory-path-missing-"));
   try {
     assert.throws(() => resolveAiMemoryPaths(missing), /路径配置不存在/);
@@ -42,14 +46,14 @@ test("缺失、损坏、相对根和文件名逃逸均被阻断", () => {
   for (const [name, rawConfiguration, expected] of [
     ["broken", "{", /路径配置无法读取/],
     ["array", "[]", /配置根必须是 JSON 对象/],
-    ["version", JSON.stringify({ schemaVersion: 2, databaseRoot: "/tmp", databaseFile: "events.sqlite3" }), /配置版本不受支持/],
-    ["relative", JSON.stringify({ schemaVersion: 1, databaseRoot: "relative/db", databaseFile: "events.sqlite3" }), /databaseRoot 必须是已存在的绝对目录/],
+    ["version", JSON.stringify({ schemaVersion: 1, databaseFile: "events.sqlite3" }), /配置版本不受支持/],
+    ["machine-root", JSON.stringify({ schemaVersion: 2, databaseRoot: "/Users/example/project/db", databaseFile: "events.sqlite3" }), /包含不支持字段：databaseRoot/],
     ["escape", null, /不是安全的 SQLite 文件名/],
   ]) {
     const fixture = createFixture(undefined, name);
     try {
       const configuration = name === "escape"
-        ? JSON.stringify({ schemaVersion: 1, databaseRoot: fixture.databaseRoot, databaseFile: "../events.sqlite3" })
+        ? JSON.stringify({ schemaVersion: 2, databaseFile: "../events.sqlite3" })
         : rawConfiguration;
       writeFileSync(fixture.configPath, `${configuration}\n`, "utf8");
       assert.throws(() => resolveAiMemoryPaths(fixture.projectRoot), expected);
@@ -73,10 +77,8 @@ test("Git只精确忽略活跃SQLite文件并继续跟踪配置和SQL", () => {
 function createFixture(overrides = {}, suffix = "valid") {
   const fixtureProjectRoot = mkdtempSync(path.join(controlledTestRoot, `ai-memory-path-${suffix}-`));
   const configRoot = path.join(fixtureProjectRoot, "apps", "ai-desktop", "db");
-  const databaseRoot = path.join(fixtureProjectRoot, "database-root");
   mkdirSync(configRoot, { recursive: true });
-  mkdirSync(databaseRoot, { recursive: true });
   const configPath = path.join(configRoot, "ai-memory-paths.json");
-  writeFileSync(configPath, `${JSON.stringify({ schemaVersion: 1, databaseRoot, databaseFile: "events.sqlite3", ...overrides }, null, 2)}\n`, "utf8");
-  return { projectRoot: fixtureProjectRoot, configPath, databaseRoot };
+  writeFileSync(configPath, `${JSON.stringify({ schemaVersion: 2, databaseFile: "events.sqlite3", ...overrides }, null, 2)}\n`, "utf8");
+  return { projectRoot: fixtureProjectRoot, configPath, databaseRoot: configRoot };
 }

@@ -60,6 +60,7 @@ import type {
   ManagedExecutionMode,
   NangongEvolutionState,
   NangongEvolutionStateEvent,
+  EvolutionTopicDossier,
   ModelServiceTier,
   ReasoningEffort,
   SandboxMode,
@@ -67,6 +68,7 @@ import type {
   TrustedCommandInfo,
   AuditLogInfo,
   AuditTaskSummary,
+  ApprovalGovernanceRecord,
   WorkspaceEntry,
   WorkspacePermission,
   WorkspaceState,
@@ -1664,9 +1666,18 @@ function NangongEvolutionRail({ member, state, workspaces, locale, onState, onEr
   const [proposalEditorOpen, setProposalEditorOpen] = useState(false);
   const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" });
   const [proposalDraft, setProposalDraft] = useState({ content: "", risks: "", rollbackPlan: "" });
+  const [automationDraft, setAutomationDraft] = useState({ maxRounds: state.automationSettings.maxRoundsPerTopic === null ? "" : String(state.automationSettings.maxRoundsPerTopic), maxCorrections: String(state.automationSettings.maxCorrectionRounds) });
+  const [dossier, setDossier] = useState<EvolutionTopicDossier | null>(null);
   const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
   const updateProposalDraft = (field: keyof typeof proposalDraft, value: string) => setProposalDraft((current) => ({ ...current, [field]: value }));
   const selected = proposals.find((proposal) => proposal.proposalId === selectedId) || proposals[0] || null;
+  const activeDeliberation = [...state.deliberations].reverse().find((item) => ["questioning", "ready-to-establish", "blocked"].includes(item.status)) || null;
+  useEffect(() => {
+    if (!topic) { setDossier(null); return; }
+    let active = true;
+    void window.desktop?.getEvolutionTopicDossier(topic.topicId).then((value) => { if (active) setDossier(value); }).catch((error) => { if (active) onError(readableDesktopError(error, "无法读取专题全流程档案。")); });
+    return () => { active = false; };
+  }, [topic?.topicId, state.updatedAt]);
   const update = async (operation: () => Promise<NangongEvolutionState> | undefined) => {
     try { const pending = operation(); if (!pending) return; onState(await pending); } catch (error) { onError(readableDesktopError(error, "专项演化操作失败。")); }
   };
@@ -1715,18 +1726,47 @@ function NangongEvolutionRail({ member, state, workspaces, locale, onState, onEr
     setProposalEditorOpen(false);
   };
   const toggle = (kind: "evolution" | "nangong-approval" | "execution", enabled: boolean) => void update(() => window.desktop?.setNangongAutomation(kind, enabled));
+  const saveAutomation = () => void update(() => window.desktop?.configureEvolutionAutomation({ maxRoundsPerTopic: automationDraft.maxRounds.trim() ? Number(automationDraft.maxRounds) : null, maxCorrectionRounds: Number(automationDraft.maxCorrections), workspaceState: workspaces || undefined, locale }));
+  const controlAutomation = (action: "start" | "pause" | "resume" | "stop") => void update(() => window.desktop?.controlEvolutionAutomation(action));
+  const startAutomation = async () => {
+    if (!workspaces?.roots.length) return onError("自动演化必须先登记实施工作区。 ");
+    try {
+      await window.desktop?.configureEvolutionAutomation({ maxRoundsPerTopic: automationDraft.maxRounds.trim() ? Number(automationDraft.maxRounds) : null, maxCorrectionRounds: Number(automationDraft.maxCorrections), workspaceState: workspaces, locale });
+      await window.desktop?.controlEvolutionAutomation(state.automationRuntime.status === "paused" ? "resume" : "start");
+      const next = await window.desktop?.advanceHanLiDeliberation();
+      if (next) onState(next);
+    } catch (error) { onError(readableDesktopError(error, "韩立无法推进专题研讨。")); }
+  };
   return <aside className="person-workspace-rail nangong-workspace-rail" aria-label="南宫婉课题和提案工作栏">
-    <header><div><span>专项演化</span><h2>课题与提案</h2><p>{topic ? topic.title : "先讨论，再把成熟方向整理成课题。"}</p></div><button type="button" onClick={() => { setEditingTopicId(null); setTopicDraft({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" }); setTopicEditorOpen((current) => !current); }}>新建课题</button></header>
+    <header><div><span>专项演化</span><h2>专题池与全流程档案</h2><p>{topic ? topic.title : activeDeliberation ? "韩立正在根据对话库逐轮向南宫婉发问。" : "韩立先研讨确立，南宫婉再登记专题池。"}</p></div><button type="button" onClick={() => { setEditingTopicId(null); setTopicDraft({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" }); setTopicEditorOpen((current) => !current); }}>人工登记</button></header>
     {topicEditorOpen && <section className="evolution-inline-editor" aria-label="新建演化课题"><label>课题标题<input aria-label="新课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label><label>课题目标<textarea aria-label="新课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label><label>影响范围<input aria-label="新课题影响范围" placeholder="多项用逗号分隔" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label><label>排除范围<input aria-label="新课题排除范围" placeholder="多项用逗号分隔" value={topicDraft.exclusions} onChange={(event) => updateTopicDraft("exclusions", event.currentTarget.value)} /></label><label>事实证据<input aria-label="新课题事实证据" placeholder="多项用逗号分隔" value={topicDraft.evidence} onChange={(event) => updateTopicDraft("evidence", event.currentTarget.value)} /></label><label>验收条件<input aria-label="新课题验收条件" placeholder="多项用逗号分隔" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label><nav><button type="button" onClick={() => setTopicEditorOpen(false)}>取消</button><button type="button" className="primary" onClick={() => void createTopic()}>保存课题</button></nav></section>}
-    <section className="person-rail-section"><h3>自动化</h3><div className="nangong-automation-switches"><label><input type="checkbox" checked={state.automaticEvolutionEnabled} onChange={(event) => toggle("evolution", event.currentTarget.checked)} />自动演化</label><label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => toggle("nangong-approval", event.currentTarget.checked)} />提案自动审批</label><label><input type="checkbox" checked={state.automaticExecutionEnabled} onChange={(event) => toggle("execution", event.currentTarget.checked)} />通过后自动分发</label></div></section>
+    <section className="person-rail-section evolution-automation-control"><div className="person-rail-heading"><h3>自动演化控制</h3><span>{state.automationRuntime.status}</span></div><div className="evolution-automation-settings"><label>专题研讨最大轮次<input aria-label="专题研讨最大轮次" type="number" min="1" max="100" placeholder="留空为无限" value={automationDraft.maxRounds} onChange={(event) => setAutomationDraft((current) => ({ ...current, maxRounds: event.currentTarget.value }))} /></label><label>实施纠偏上限<input aria-label="实施纠偏上限" type="number" min="1" max="20" value={automationDraft.maxCorrections} onChange={(event) => setAutomationDraft((current) => ({ ...current, maxCorrections: event.currentTarget.value }))} /></label><button type="button" onClick={saveAutomation}>保存配置</button></div><nav><button type="button" className="primary" onClick={() => void startAutomation()}>{state.automationRuntime.status === "paused" ? "继续并推进一轮" : "开始并推进一轮"}</button><button type="button" onClick={() => controlAutomation("pause")}>暂停</button><button type="button" className="danger" onClick={() => controlAutomation("stop")}>停止</button></nav>{state.automationRuntime.stopReason && <p className="proposal-approval-note">{state.automationRuntime.stopReason}</p>}<small>已完成 {state.automationRuntime.completedRounds} 个专题 · 当前实施纠偏 {state.automationRuntime.correctionRounds} 轮</small><div className="nangong-automation-switches"><label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => toggle("nangong-approval", event.currentTarget.checked)} />提案自动审批</label><label><input type="checkbox" checked={state.automaticExecutionEnabled} onChange={(event) => toggle("execution", event.currentTarget.checked)} />通过后自动分发</label></div></section>
+    {activeDeliberation && <section className="person-rail-section evolution-deliberation"><div className="person-rail-heading"><h3>韩立专题研讨原记录</h3><span>{activeDeliberation.status} · {activeDeliberation.rounds.length} 轮</span></div><p>已冻结 {activeDeliberation.sourceSnapshots.length} 条南宫婉和 Codex 对话原文。</p>{activeDeliberation.rounds.map((round) => <article key={round.roundId}><strong>第 {round.roundNumber} 轮 · 韩立发问</strong><p>{round.question}</p><small>依据：{round.questionReason}</small>{round.answer && <><strong>南宫婉原回答</strong><p>{round.answer}</p></>}{round.assessment && <><strong>韩立判断</strong><p>{round.assessment}</p></>}</article>)}{activeDeliberation.status !== "blocked" && <button type="button" className="primary" onClick={() => void update(() => window.desktop?.advanceHanLiDeliberation())}>推进下一轮研讨</button>}</section>}
     {nangongTopics.length > 1 && <section className="person-rail-section"><h3>已保存课题</h3><div className="evolution-topic-list">{nangongTopics.map((item) => <button key={item.topicId} type="button" className={item.topicId === topic?.topicId ? "selected" : ""} onClick={() => setSelectedTopicId(item.topicId)}>{item.title}</button>)}</div></section>}
-    {topic && <article className="evolution-topic-card"><span>{topic.status}</span><h3>{topic.title}</h3><p>{topic.goal}</p><small>课题修订：v{topic.topicRevision} · 恢复点：{topic.recoveryPoint}</small>{topic.currentProposalVersion === 0 && ["registered", "investigating"].includes(topic.status) && <><button type="button" onClick={() => startEditingTopic(topic)}>编辑课题</button><button type="button" onClick={() => { setProposalDraft((current) => ({ ...current, content: current.content || `课题：${topic.title}\n\n目标：${topic.goal}\n\n推荐方向：` })); setProposalEditorOpen((current) => !current); }}>形成新版本提案</button></>}</article>}
+    {topic && <article className="evolution-topic-card"><span>{topic.status}</span><h3>{topic.title}</h3><p>{topic.goal}</p><small>专题第 {topic.roundNumber} 轮 · 课题修订：v{topic.topicRevision} · 恢复点：{topic.recoveryPoint}</small>{topic.currentProposalVersion === 0 && ["registered", "investigating"].includes(topic.status) && <><button type="button" onClick={() => startEditingTopic(topic)}>编辑课题</button><button type="button" onClick={() => { setProposalDraft((current) => ({ ...current, content: current.content || `课题：${topic.title}\n\n目标：${topic.goal}\n\n推荐方向：` })); setProposalEditorOpen((current) => !current); }}>形成新版本提案</button></>}</article>}
+    {dossier && <EvolutionTopicDossierView dossier={dossier} />}
     {editingTopicId && <section className="evolution-inline-editor" aria-label="编辑已保存课题"><label>课题标题<input aria-label="编辑课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label><label>课题目标<textarea aria-label="编辑课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label><label>影响范围<input aria-label="编辑课题影响范围" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label><label>排除范围<input aria-label="编辑课题排除范围" value={topicDraft.exclusions} onChange={(event) => updateTopicDraft("exclusions", event.currentTarget.value)} /></label><label>事实证据<input aria-label="编辑课题事实证据" value={topicDraft.evidence} onChange={(event) => updateTopicDraft("evidence", event.currentTarget.value)} /></label><label>验收条件<input aria-label="编辑课题验收条件" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label><nav><button type="button" onClick={() => setEditingTopicId(null)}>取消</button><button type="button" className="primary" onClick={() => void saveTopic()}>确认保存修改</button></nav></section>}
     {topic && proposalEditorOpen && <section className="evolution-inline-editor" aria-label="形成演化提案"><label>详细方案<textarea aria-label="提案详细方案" value={proposalDraft.content} onChange={(event) => updateProposalDraft("content", event.currentTarget.value)} /></label><label>风险<input aria-label="提案风险" placeholder="多项用逗号分隔" value={proposalDraft.risks} onChange={(event) => updateProposalDraft("risks", event.currentTarget.value)} /></label><label>回退方案<textarea aria-label="提案回退方案" value={proposalDraft.rollbackPlan} onChange={(event) => updateProposalDraft("rollbackPlan", event.currentTarget.value)} /></label><nav><button type="button" onClick={() => setProposalEditorOpen(false)}>取消</button><button type="button" className="primary" onClick={() => void createProposal()}>提交韩立审批</button></nav></section>}
     <section className="person-rail-section proposal-progress-section"><div className="person-rail-heading"><h3>提案进度</h3><span>{proposals.length}</span></div><EvolutionProposalGrid id="nangong-proposal-progress" proposals={proposals} selectedId={selected?.proposalId || null} locale={locale} mode="progress" onSelect={setSelectedId} /></section>
     {selected && <EvolutionProposalDetail proposal={selected} compact>{selected.status === "approved" && <button type="button" onClick={() => void update(() => window.desktop?.dispatchEvolutionProposal(selected.proposalId))}>返还南宫婉并分发</button>}</EvolutionProposalDetail>}
     <MemberSelfUpgradePanel member={member} state={state} onState={onState} onError={onError} />
   </aside>;
+}
+
+/** 专题池展示原始档案而不是只展示当前摘要；执行事件来自统一事件中心的任务关联查询。 */
+function EvolutionTopicDossierView({ dossier }: { dossier: EvolutionTopicDossier }) {
+  const sourceGroups = new Map<string, NonNullable<EvolutionTopicDossier["deliberation"]>["sourceSnapshots"]>();
+  for (const snapshot of dossier.deliberation?.sourceSnapshots || []) {
+    const key = `${snapshot.source}:${snapshot.conversationId}`;
+    sourceGroups.set(key, [...(sourceGroups.get(key) || []), snapshot]);
+  }
+  const timeline = [...dossier.archiveRecords, ...dossier.executionRecords].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.sequenceNumber - right.sequenceNumber);
+  return <section className="person-rail-section evolution-topic-dossier" aria-label="专题全生命周期原始档案">
+    <div className="person-rail-heading"><h3>专题全流程原始档案</h3><span>{timeline.length} 条事件</span></div>
+    <details><summary>来源对话原文 · {dossier.deliberation?.sourceSnapshots.length || 0} 条</summary>{[...sourceGroups.entries()].map(([group, messages]) => <details key={group}><summary>{group} · {messages.length} 条</summary>{messages.sort((left, right) => left.sequenceNumber - right.sequenceNumber).map((message) => <article key={message.snapshotId}><small>{message.originalCreatedAt} · {message.role}{message.responsePhase ? `/${message.responsePhase}` : ""}</small><p>{message.content}</p></article>)}</details>)}</details>
+    {dossier.deliberation && <details open><summary>韩立—南宫婉研讨 · {dossier.deliberation.rounds.length} 轮</summary>{dossier.deliberation.rounds.map((round) => <article key={round.roundId}><strong>第 {round.roundNumber} 轮</strong><p>韩立：{round.question}</p>{round.answer && <p>南宫婉：{round.answer}</p>}{round.assessment && <p>韩立判断：{round.assessment}</p>}</article>)}</details>}
+    <details open><summary>实施、测试、发布与验收时间线</summary>{timeline.length ? timeline.map((record) => <article key={`${record.recordId}:${record.sequenceNumber}`}><small>{record.occurredAt} · {record.actor} · {record.category}</small><strong>{record.title}</strong><details><summary>查看原始数据</summary><pre>{JSON.stringify(record.payload, null, 2)}</pre></details></article>) : <p>专题尚未产生执行记录。</p>}</details>
+  </section>;
 }
 
 /** 选中行的证据、风险和业务动作在表格下方展开，避免把长文本塞进数据单元格。 */
@@ -1743,18 +1783,22 @@ function HanLiEvolutionApprovalPanel({ state, locale, onState, onError }: { stat
   const [capabilityScope, setCapabilityScope] = useState("");
   const [decisionBusy, setDecisionBusy] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [governance, setGovernance] = useState<ApprovalGovernanceRecord[]>([]);
   const selected = proposals.find((proposal) => proposal.proposalId === selectedId) || proposals[0] || null;
+  useEffect(() => { void window.desktop?.getApprovalGovernance().then(setGovernance).catch(() => setGovernance([])); }, [state.updatedAt]);
   const update = async (operation: () => Promise<NangongEvolutionState> | undefined) => {
     try { const pending = operation(); if (!pending) return; onState(await pending); } catch (error) { onError(readableDesktopError(error, "演化审批操作失败。")); }
   };
   const decide = async (proposalId: string, decision: "approved" | "rejected" | "supplement-required") => {
     if (decisionBusy) return;
     if (decision !== "approved" && !advice.trim()) return onError("退回或驳回必须写明具体问题和预期结果。");
-    if (decision !== "approved" && feedbackTarget === "submitter-capability" && !capabilityScope.trim()) return onError("请写明需要升级的提交能力范围。");
+    if (selected?.status !== "pending-acceptance" && decision !== "approved" && feedbackTarget === "submitter-capability" && !capabilityScope.trim()) return onError("请写明需要升级的提交能力范围。");
     setDecisionBusy(true);
     setDecisionError(null);
     try {
-      const next = await window.desktop?.decideEvolutionProposal(proposalId, { decision, advice, feedbackTarget, capabilityScope });
+      const next = selected?.status === "pending-acceptance"
+        ? await window.desktop?.decideEvolutionResult(proposalId, { decision, advice })
+        : await window.desktop?.decideEvolutionProposal(proposalId, { decision, advice, feedbackTarget, capabilityScope });
       if (next) onState(next);
       setAdvice("");
       setFeedbackTarget("proposal-content");
@@ -1766,12 +1810,13 @@ function HanLiEvolutionApprovalPanel({ state, locale, onState, onError }: { stat
     } finally { setDecisionBusy(false); }
   };
   const latest = selected?.approvals.at(-1);
-  const canDecide = Boolean(selected && (["pending-approval", "supplement-required"].includes(selected.status) || (latest?.source === "automatic-han-li" && selected.distributedTaskIds.length === 0)));
+  const canDecide = Boolean(selected && (["pending-approval", "supplement-required", "pending-acceptance"].includes(selected.status) || (latest?.source === "automatic-han-li" && selected.distributedTaskIds.length === 0)));
   return <aside className="person-workspace-rail hanli-evolution-approval" aria-label="韩立统一演化审批">
-    <header><div><span>审批工作台</span><h2>统一演化审批</h2><p>依据调查事实和你的历史审批习惯判断方向。</p></div><strong>{proposals.length}</strong></header>
+    <header><div><span>审批工作台</span><h2>统一审批治理</h2><p>统一查看审批事实，方向、方案评审和命令授权仍保持各自边界。</p></div><strong>{proposals.length}</strong></header>
     <section className="person-rail-section"><h3>自动审批</h3><div className="nangong-automation-switches"><label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => void update(() => window.desktop?.setNangongAutomation("nangong-approval", event.currentTarget.checked))} />南宫婉提案</label><label><input type="checkbox" checked={state.automaticLinghuApprovalEnabled} onChange={(event) => void update(() => window.desktop?.setNangongAutomation("linghu-approval", event.currentTarget.checked))} />令狐修正</label></div></section>
     <section className="person-rail-section approval-grid-section"><div className="person-rail-heading"><h3>审批列表</h3><span>{proposals.length}</span></div><EvolutionProposalGrid id="hanli-evolution-approvals" proposals={proposals} selectedId={selected?.proposalId || null} locale={locale} mode="approval" onSelect={setSelectedId} /></section>
-    {selected && <EvolutionProposalDetail proposal={selected}>{canDecide && <div className="evolution-approval-editor"><label>审批建议<textarea aria-label="审批建议" placeholder="写明哪里有问题、要修正什么、预期达到什么结果" value={advice} onChange={(event) => setAdvice(event.currentTarget.value)} /></label><label><input type="checkbox" checked={feedbackTarget === "submitter-capability"} onChange={(event) => setFeedbackTarget(event.currentTarget.checked ? "submitter-capability" : "proposal-content")} />同时升级{selected.submitterDisplayName}自身的提交与调查能力</label>{feedbackTarget === "submitter-capability" && <label>能力升级范围<input aria-label="自身能力升级范围" placeholder="例如：提案具体性、事实调查、预期结果表达" value={capabilityScope} onChange={(event) => setCapabilityScope(event.currentTarget.value)} /></label>}{decisionError && <p role="alert">{decisionError}</p>}<nav><button type="button" className="primary" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "approved")}>通过</button><button type="button" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "supplement-required")}>退回补充</button><button type="button" className="danger" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "rejected")}>驳回</button></nav></div>}{["pending-approval", "supplement-required"].includes(selected.status) && <button type="button" disabled={decisionBusy} onClick={() => void update(() => window.desktop?.autoApproveEvolutionProposal(selected.proposalId))}>韩立立即审批</button>}{selected.status === "approved" && <button type="button" className="primary" disabled={decisionBusy} onClick={() => void update(() => window.desktop?.dispatchEvolutionProposal(selected.proposalId))}>返还{selected.submitterDisplayName}并执行</button>}</EvolutionProposalDetail>}
+    {selected && <EvolutionProposalDetail proposal={selected}>{canDecide && <div className="evolution-approval-editor"><label>{selected.status === "pending-acceptance" ? "验收意见" : "审批建议"}<textarea aria-label="审批建议" placeholder="写明检查位置、实际操作、发现的问题和预期结果" value={advice} onChange={(event) => setAdvice(event.currentTarget.value)} /></label>{selected.status !== "pending-acceptance" && <label><input type="checkbox" checked={feedbackTarget === "submitter-capability"} onChange={(event) => setFeedbackTarget(event.currentTarget.checked ? "submitter-capability" : "proposal-content")} />同时升级{selected.submitterDisplayName}自身的提交与调查能力</label>}{selected.status !== "pending-acceptance" && feedbackTarget === "submitter-capability" && <label>能力升级范围<input aria-label="自身能力升级范围" placeholder="例如：提案具体性、事实调查、预期结果表达" value={capabilityScope} onChange={(event) => setCapabilityScope(event.currentTarget.value)} /></label>}{decisionError && <p role="alert">{decisionError}</p>}<nav><button type="button" className="primary" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "approved")}>{selected.status === "pending-acceptance" ? "验收通过" : "通过"}</button><button type="button" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "supplement-required")}>{selected.status === "pending-acceptance" ? "继续纠偏" : "退回补充"}</button><button type="button" className="danger" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "rejected")}>驳回</button></nav></div>}{["pending-approval", "supplement-required"].includes(selected.status) && <button type="button" disabled={decisionBusy} onClick={() => void update(() => window.desktop?.autoApproveEvolutionProposal(selected.proposalId))}>韩立立即审批</button>}{selected.status === "approved" && <button type="button" className="primary" disabled={decisionBusy} onClick={() => void update(() => window.desktop?.dispatchEvolutionProposal(selected.proposalId))}>返还{selected.submitterDisplayName}并执行</button>}</EvolutionProposalDetail>}
+    <section className="person-rail-section approval-governance-history"><div className="person-rail-heading"><h3>统一审批轨迹</h3><span>{governance.length}</span></div>{governance.length ? governance.slice(0, 12).map((record) => <article key={record.governanceId}><header><strong>{record.title}</strong><span>{record.decision}</span></header><small>{record.domain} · {record.approverDisplayName} · {new Date(record.decidedAt).toLocaleString()}</small>{record.reason && <p>{record.reason}</p>}</article>) : <p>数据库可用后，这里汇总演化审批、协作评审和 Codex 命令授权。</p>}</section>
   </aside>;
 }
 

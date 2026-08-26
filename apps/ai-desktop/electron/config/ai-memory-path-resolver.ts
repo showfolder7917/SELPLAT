@@ -2,11 +2,11 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
 const AI_MEMORY_CONFIG_RELATIVE_PATH = path.join("apps", "ai-desktop", "db", "ai-memory-paths.json");
-const SUPPORTED_SCHEMA_VERSION = 1;
+const SUPPORTED_SCHEMA_VERSION = 2;
+const SUPPORTED_CONFIGURATION_KEYS = new Set(["schemaVersion", "databaseFile"]);
 
 type AiMemoryPathConfiguration = {
   schemaVersion?: unknown;
-  databaseRoot?: unknown;
   databaseFile?: unknown;
 };
 
@@ -20,9 +20,9 @@ export type ResolvedAiMemoryPaths = {
 /**
  * 从稳定 SELPLAT 工程根读取唯一 AI Memory 数据库位置。
  *
- * 真实传参示例：`/Users/showfolder/Documents/workSpace/SELF/SELPLAT`。
- * 真实返回示例：`databasePath=/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/db/events.sqlite3`。
- * 异常或副作用示例：配置缺失、损坏、相对根目录或文件名路径逃逸时抛错；不会创建目录、数据库或备用配置。
+ * 真实传参示例：Windows 为 `C:/opt/workspace/SELPLAT`，macOS 为当前机器实际识别的 SELPLAT 根。
+ * 真实返回示例：Windows 返回 `databasePath=C:/opt/workspace/SELPLAT/apps/ai-desktop/db/events.sqlite3`。
+ * 异常或副作用示例：配置缺失、损坏、包含机器路径或文件名路径逃逸时抛错；不会创建目录、数据库或备用配置。
  */
 export function resolveAiMemoryPaths(projectRoot: string): ResolvedAiMemoryPaths {
   const stableProjectRoot = requireExistingAbsoluteDirectory(projectRoot, "SELPLAT 工程根");
@@ -40,10 +40,16 @@ export function resolveAiMemoryPaths(projectRoot: string): ResolvedAiMemoryPaths
   if (configuration.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
     throw new Error(`AI Memory 路径配置版本不受支持：${String(configuration.schemaVersion)}`);
   }
-  if (typeof configuration.databaseRoot !== "string" || !path.isAbsolute(configuration.databaseRoot)) {
-    throw new Error("AI Memory databaseRoot 必须是已存在的绝对目录。");
+  const unsupportedKeys = Object.keys(configuration).filter((key) => !SUPPORTED_CONFIGURATION_KEYS.has(key));
+  if (unsupportedKeys.length) {
+    throw new Error(`AI Memory 路径配置包含不支持字段：${unsupportedKeys.join(", ")}`);
   }
-  const databaseRoot = requireExistingAbsoluteDirectory(configuration.databaseRoot, "AI Memory databaseRoot");
+  // 数据库始终跟随本次已验证的工程根，禁止配置文件固化开发者用户名、盘符或其他机器路径。
+  const databaseRoot = requireContainedDirectory(
+    stableProjectRoot,
+    path.dirname(configPath),
+    "AI Memory databaseRoot",
+  );
   const databaseFile = requireSafeDatabaseFile(configuration.databaseFile);
   const databasePath = path.resolve(databaseRoot, databaseFile);
   const relativeDatabasePath = path.relative(databaseRoot, databasePath);
@@ -51,6 +57,15 @@ export function resolveAiMemoryPaths(projectRoot: string): ResolvedAiMemoryPaths
     throw new Error("AI Memory 数据库文件必须位于已配置的 databaseRoot 内。");
   }
   return { configPath, databaseRoot, databaseFile, databasePath };
+}
+
+function requireContainedDirectory(parentRoot: string, candidate: string, label: string): string {
+  const resolved = requireExistingAbsoluteDirectory(candidate, label);
+  const relative = path.relative(parentRoot, resolved);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`${label}必须位于当前 SELPLAT 工程根内：${resolved}`);
+  }
+  return resolved;
 }
 
 function requireExistingAbsoluteDirectory(value: string, label: string): string {

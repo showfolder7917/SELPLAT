@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
-  "databaseRoot": "/Users/showfolder/Documents/workSpace/SELF/SELPLAT/apps/ai-desktop/db",
+  "schemaVersion": 2,
   "databaseFile": "events.sqlite3"
 }
