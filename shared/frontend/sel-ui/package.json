@@ -78,6 +78,14 @@
       "types": "./src/theme/css.d.ts",
       "default": "./src/components/context-menu/selContextMenu.css"
     },
+    "./components/conversation": {
+      "types": "./src/runtime.d.ts",
+      "default": "./src/components/conversation/selConversation.js"
+    },
+    "./components/conversation/styles": {
+      "types": "./src/theme/css.d.ts",
+      "default": "./src/components/conversation/selConversation.css"
+    },
     "./components/cursor/styles": {
       "types": "./src/theme/css.d.ts",
       "default": "./src/components/cursor/selCursor.css"
@@ -113,6 +121,10 @@
     "./components/floating-panel/styles": {
       "types": "./src/theme/css.d.ts",
       "default": "./src/components/floating-panel/selFloatingPanel.css"
+    },
+    "./components/form/styles": {
+      "types": "./src/theme/css.d.ts",
+      "default": "./src/components/form/selForm.css"
     },
     "./components/grid": {
       "types": "./src/runtime.d.ts",

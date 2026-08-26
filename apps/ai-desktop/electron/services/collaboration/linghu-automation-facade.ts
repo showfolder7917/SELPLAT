@@ -438,7 +438,7 @@ function waitingPoint(task: CollaborationTask, health: LinghuFlowHealth): string
   if (health === "stalled" || health === "recovering") return task.blockingReason || "等待安全恢复条件";
   if (task.state === "queued-executor") return "等待执行者容量";
   if (task.state === "queued-reviewer") return "等待审核者容量";
-  if (task.state === "returned-to-nangong") return "等待南宫婉收齐本轮任务";
+  if (task.state === "returned-to-nangong") return "等待本轮全部任务返回南宫婉";
   if (task.state === "awaiting-restart") return "等待新版本重启健康检查";
   if (task.state === "ready-for-integration" || task.state === "queued-integration") return "等待令狐整批集成";
   return null;

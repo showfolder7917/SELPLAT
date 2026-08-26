@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.98.0 固定南宫婉与韩立共用唯一独立专题演化窗口，主会话不再嵌入业务工作台。 -->
-rule_version = 5.98.0
+<!-- 5.100.0 固定人物会话必须共用 SELUI 对话控件，并统一输入法与发送附件生命周期。 -->
+rule_version = 5.100.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -36,6 +36,10 @@ upgrade_record_5_96 = 2026-08-26:演化执行结果统一返回南宫婉_按prop
 upgrade_record_5_97 = 2026-08-26:影响范围不等于任务数量_南宫婉AI调查最小可独立合并任务_预计文件职责回退验收边界_令狐分发合理性审计_文件或职责重叠阻止分发_单按钮同页面同文件合并一人_令狐接收事件改为普通状态事件_令狐查询排除新旧接收事件防止自消费_迟到审批返回expired不抛业务异常_南宫婉韩立统一两级树工作台_人物专题审计一级模块_人工工作区与自动控制台二级隔离_SELUI树表格表单控件
 <!-- 5.98.0 把专题业务从主会话分栏移入真正独立 Electron Window，并由两个人物入口复用同一实例。 -->
 upgrade_record_5_98 = 2026-08-26:主窗口只保留南宫婉和韩立会话_专题演化工作台独立BrowserWindow_南宫婉韩立共用同一窗口同一状态源同一模块树_人物入口只切换初始视角_重复点击聚焦现有窗口_最小化自动恢复_关闭后允许重新打开_主窗口与业务窗口独立生命周期_Dock激活恢复主窗口_禁止内嵌右栏和双实现
+<!-- 5.99.0 把“全部返回”明确为本轮应收任务清单的全集合，并用双任务部分返回回归防止单任务提前触发测试。 -->
+upgrade_record_5_99 = 2026-08-27:本轮distributedTaskIds全部存在_每个任务全部returned_to_nangong_部分返回继续等待不封存_全部返回只封存一次_令狐只对完整原子批次执行一次合并统一测试打包重启_双任务部分返回回归
+<!-- 5.100.0 把韩立和南宫婉对话、输入法安全发送、附件转移和演化表单视觉统一交给正式 SELUI 控件。 -->
+upgrade_record_5_100 = 2026-08-27:韩立南宫婉共用selConversation正式出口_普通Enter发送_ShiftEnter换行_compositionstart到compositionend及isComposing和229期间禁止发送_人物专有阶段操作使用可选插槽且南宫婉不显示韩立选择框_发送瞬间文字图片移入用户消息并清空输入附件区_失败保留可见消息状态_整理为演化课题和根据当前对话生成草稿是独立按钮_课题提案修订表单视觉归selForm_developer_css只保留业务布局
 <!-- 南宫婉必须依据真实文件边界形成最小任务，令狐审计不替代韩立方向审批；适用于所有演化提案返还分发。 -->
 nangong_distribution_planning_contract = AI_read_only_investigation + impact_scope_not_task_count + minimal_independently_mergeable_units + expected_files_and_acceptance + linghu_distribution_audit_before_dispatch + overlap_blocks_dispatch
 <!-- 令狐接收统一异常时生成的自身事件只能作为状态记录，不得再次进入异常消费队列。 -->
@@ -44,6 +48,8 @@ linghu_exception_intake_loop_prevention_contract = single_event_center_entry + i
 evolution_workspace_information_architecture_contract = stable_module_tree_people_evolution_audit + contextual_flow_tree + manual_workspace_separate_from_automatic_console + hanli_approval_integrated + SELUI_tree_grid_form_action_controls
 <!-- 专题演化是独立业务窗口；两个角色入口只能聚焦和切换唯一实例，不得在主窗口继续保留旧右栏。 -->
 evolution_workspace_window_contract = main_window_conversation_only + one_independent_BrowserWindow + nangong_and_hanli_share_instance_state_and_tree + entry_switches_perspective_and_focuses + close_then_reopen + main_window_recreated_on_app_activate_even_if_workspace_remains + no_embedded_or_parallel_legacy_workspace
+<!-- 单个任务返回不能代表本轮完成；只有应收清单全部返回并携带结果版本，才能封存为唯一原子批次触发统一测试。 -->
+evolution_round_batch_test_trigger_contract = expected_distributed_task_id_set_complete + every_task_returned_to_nangong_with_result_sha + partial_return_waits_without_seal_or_test + all_returned_seals_exactly_once + one_atomic_batch_to_linghu_unified_test_package_and_restart
 <!-- 应用业务只能调用 EventCenterFacade；JSONL、SQLite 和令狐消费均为门面后的可替换实现。 -->
 workflow_event_center_facade_contract = all_application_events_and_exceptions_via_EventCenterFacade + archive_and_SQLite_behind_facade + no_direct_business_sink_coupling
 <!-- 主进程早期、IPC、渲染器、后台服务和退出边界必须统一登记，异常按状态受理直至有事实证明恢复。 -->
@@ -58,6 +64,10 @@ nangong_visible_intent_contract = respectful_listening_and_correction_are_nangon
 codex_conversation_backfill_contract = separate_archive_not_nangong_memory + exact_real_user_messages + visible_codex_commentary_and_final_answer_80_unicode_preview_only + free_topic_type_and_intent_per_user_message + exclude_system_developer_environment_tool_and_hidden_reasoning + stable_thread_message_idempotency
 <!-- AI Desktop 页面不得维护可复用控件皮肤；缺失能力必须先进入 SELUI 中央登记、正式出口和统一 Token，再由页面消费。 -->
 ai_desktop_selui_ownership_contract = page_uses_SELUI_for_all_reusable_visual_controls + missing_control_register_and_extend_SELUI_first + developer_css_business_layout_only + no_private_tooltip_confirm_prompt_dialog_switch_skin
+<!-- 所有人物会话共享一个 SELUI 对话控件；人物差异只通过插槽注入，不得复制回车、附件、消息卡或输入区实现。 -->
+ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation + hanli_and_nangong_same_formal_exports + standard_Enter_submit + Shift_Enter_newline + compositionstart_to_compositionend_isComposing_or_keyCode229_never_submit + optional_person_actions_slot + nangong_no_hanli_managed_stage_choice + submit_moves_text_and_images_to_outgoing_message_immediately + composer_clears_before_response + failure_visible_on_outgoing_message + no_private_chat_visual_css
+<!-- 演化课题、提案、审批与修订表单的字段、按钮和状态视觉统一由 selForm 承担。 -->
+ai_desktop_evolution_form_component_contract = organize_topic_and_generate_draft_are_distinct_actions + topic_proposal_approval_revision_use_selForm + application_owns_values_validation_and_business_callbacks_only + no_private_form_field_or_button_skin
 <!-- 5.87.0 依据阶段0实施结果，禁止业务绕过 Persistence，也禁止恢复场景伪造新库。 -->
 upgrade_record_5_87 = 2026-08-25:Electron内置node_sqlite_主进程唯一连接_load_order唯一清单_AiDesktopSchemaVersion版本与SHA256校验_立即事务同步SQL和版本记录_首次创建与已初始化丢库分离_userData只存路径哈希标记_恢复状态只读IPC_渲染层禁止连接与SQL_before_quit_checkpoint关闭
 

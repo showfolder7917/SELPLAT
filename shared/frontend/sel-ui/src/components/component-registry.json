@@ -40,6 +40,16 @@
       "themeAware": true
     },
     {
+      "id": "selConversation",
+      "directory": "conversation",
+      "type": "interactive",
+      "scripts": ["selConversation.js"],
+      "styles": ["selConversation.css"],
+      "publicApi": "sel.components.conversation",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
       "id": "selContextMenu",
       "directory": "context-menu",
       "type": "interactive",
@@ -98,6 +108,16 @@
       "scripts": ["selFloatingPanel.js"],
       "styles": ["selFloatingPanel.css"],
       "publicApi": "sel.components.floatingPanel",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
+      "id": "selForm",
+      "directory": "form",
+      "type": "presentation",
+      "scripts": [],
+      "styles": ["selForm.css"],
+      "publicApi": null,
       "dependencies": [],
       "themeAware": true
     },

@@ -15,6 +15,8 @@ const electronMain = read("../electron/main.ts");
 const preload = read("../electron/preload.cts");
 const screenshotEditor = read("../src/features/screenshot/components/ScreenshotEditor.tsx");
 const selUiProvider = read("../src/theme/SelUiProvider.tsx");
+const selUiConversation = read("../src/features/conversation/components/SelUiConversation.tsx");
+const conversationControl = read("../../../shared/frontend/sel-ui/src/components/conversation/selConversation.js");
 const selWindow = read("../../../shared/frontend/sel-ui/src/components/window/selWindow.js");
 const themeContract = read("../../../shared/frontend/sel-ui/src/theme/contract/selThemeContract.css");
 const sharedTokens = read("../../../shared/frontend/sel-ui/src/theme/selThemeTokens.css");
@@ -98,6 +100,21 @@ test("确认、输入和提示交互只通过 SELUI 公共组件", () => {
   assert.doesNotMatch(developerStyles, /content:\s*attr\(data-tooltip\)|\[data-tooltip\]/);
   assert.match(selWindow, /selWindow:close/);
   assert.match(selWindow, /destroy:\s*\(\)\s*=>/);
+});
+
+test("韩立与南宫婉共用 SELUI 对话和表单视觉", () => {
+  assert.ok(selUiManifest.exports["./components/conversation"]);
+  assert.ok(selUiManifest.exports["./components/conversation/styles"]);
+  assert.ok(selUiManifest.exports["./components/form/styles"]);
+  assert.match(selUiConversation, /api\.mount\(root/);
+  assert.match(developerApp, /selConversationHanLiId/);
+  assert.match(developerApp, /selConversationNangongWanId/);
+  assert.match(conversationControl, /compositionstart/);
+  assert.match(conversationControl, /event\.isComposing === true/);
+  assert.match(conversationControl, /event\.keyCode === 229/);
+  assert.doesNotMatch(developerApp, /onKeyDown=\{onKeyDown\}|event\.key === "Enter" && !event\.shiftKey/);
+  assert.doesNotMatch(developerApp, /evolution-inline-editor|evolution-approval-editor/);
+  assert.doesNotMatch(developerStyles, /\.dev-chat|\.dev-message|\.dev-composer|\.nangong-topic-draft-action|\.nangong-convert-action/);
 });
 
 test("锁文件依赖缓存迁移后重建本地公共包链接", () => {

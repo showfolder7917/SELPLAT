@@ -1,0 +1,13 @@
+/** selForm：可复用业务表单、字段和动作区的统一主题外观。 */
+.selform-root { min-width: 0; display: grid; gap: 9px; padding: 12px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: var(--sel-theme-radius-panel); background: var(--sel-theme-workbench-surface-raised); }
+.selform-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.selform-field, .selform-root > label { min-width: 0; display: grid; gap: 5px; color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-caption); }
+.selform-field > input, .selform-field > textarea, .selform-field > select, .selform-root > label > input, .selform-root > label > textarea, .selform-root > label > select { width: 100%; min-width: 0; padding: 8px 10px; box-sizing: border-box; border: 1px solid var(--sel-theme-control-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text); background: var(--sel-theme-control-surface); font: inherit; line-height: 1.45; }
+.selform-field > textarea, .selform-root > label > textarea { min-height: 74px; resize: vertical; }
+.selform-actions, .selform-root > nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.selform-action, .selform-root > nav > button, .selform-root > button { min-height: var(--sel-theme-action-height); display: inline-flex; align-items: center; justify-content: center; padding: 0 var(--sel-theme-action-padding-inline); border: 1px solid var(--sel-theme-control-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text); background: var(--sel-theme-control-surface); font: inherit; cursor: pointer; }
+.selform-action[data-tone="primary"], .selform-root .primary { border-color: var(--sel-theme-workbench-accent-line); color: var(--sel-theme-text-on-accent); background: var(--sel-theme-workbench-accent); }
+.selform-root .danger { color: var(--sel-theme-semantic-error); }
+.selform-action:disabled, .selform-root button:disabled { cursor: not-allowed; color: var(--sel-theme-text-disabled); opacity: .55; }
+.selform-feedback { margin: 0; color: var(--sel-theme-workbench-accent); font-size: var(--sel-theme-font-size-caption); }
+.selform-root > p[role="alert"] { margin: 0; color: var(--sel-theme-semantic-error); font-size: var(--sel-theme-font-size-caption); }

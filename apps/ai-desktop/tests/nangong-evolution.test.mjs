@@ -105,21 +105,46 @@ test("全部执行结果返回南宫婉后才封存同一轮并一次性交给�
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-round-collection-"));
   try {
     const store = new NangongEvolutionStore(path.join(directory, "state.json"));
-    let taskState = "returned-to-nangong"; let proposalId = null; let sealed = null;
+    // 双任务夹具明确覆盖“部分返回继续等待、全部返回后仅触发一次”的业务边界。
+    const taskStates = new Map([["round-task-1", "returned-to-nangong"], ["round-task-2", "executing"]]);
+    const taskIds = []; let proposalId = null; const sealed = [];
     const collaboration = {
-      submitTask(request) { proposalId = request.evolutionProposalId; return { tasks: [{ taskId: "round-task-1", evolutionProposalId: proposalId }] }; },
-      state() { return { tasks: proposalId ? [{ taskId: "round-task-1", evolutionProposalId: proposalId, evolutionRoundId: proposalId, state: taskState }] : [] }; },
-      sealEvolutionRound(receivedProposalId, taskIds) { sealed = { receivedProposalId, taskIds }; taskState = "ready-for-integration"; return this.state(); },
+      submitTask(request) {
+        proposalId = request.evolutionProposalId;
+        taskIds.push(`round-task-${taskIds.length + 1}`);
+        return this.state();
+      },
+      state() {
+        return { tasks: taskIds.map((taskId) => ({ taskId, evolutionProposalId: proposalId, evolutionRoundId: proposalId, state: taskStates.get(taskId) })) };
+      },
+      sealEvolutionRound(receivedProposalId, receivedTaskIds) {
+        sealed.push({ receivedProposalId, taskIds: receivedTaskIds });
+        for (const taskId of receivedTaskIds) taskStates.set(taskId, "ready-for-integration");
+        return this.state();
+      },
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    const facade = new NangongEvolutionFacade({
+      store, collaboration, conversation, recordEvent: () => undefined,
+      async planDistribution() { return JSON.stringify({ summary: "两个文件边界可独立执行，但必须整轮返回后统一测试。", units: [
+        { title: "任务一", scope: "修改文件一", acceptanceCriteria: ["文件一通过"], expectedFiles: ["apps/ai-desktop/one.ts"], independentReason: "文件边界独立" },
+        { title: "任务二", scope: "修改文件二", acceptanceCriteria: ["文件二通过"], expectedFiles: ["apps/ai-desktop/two.ts"], independentReason: "文件边界独立" },
+      ] }); },
+      async auditDistribution() { return JSON.stringify({ decision: "passed", reason: "两个任务文件与职责均不重叠。", findings: [] }); },
+    });
     let state = facade.createTopic(topicRequest("南宫婉轮次收集"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     proposalId = state.proposals[0].proposalId;
     facade.decideProposal(proposalId, { decision: "approved", advice: "批准整轮收集" });
     await facade.dispatch(proposalId);
     facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
-    assert.deepEqual(sealed, { receivedProposalId: proposalId, taskIds: ["round-task-1"] });
+    assert.deepEqual(sealed, [], "仅部分任务返回时不得封存或启动统一测试");
+    assert.equal(facade.state().proposals[0].status, "verifying", "已有结果返回时可显示验证中，但仍必须等待本轮其他任务");
+    taskStates.set("round-task-2", "returned-to-nangong");
+    facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
+    assert.deepEqual(sealed, [{ receivedProposalId: proposalId, taskIds: ["round-task-1", "round-task-2"] }]);
     assert.equal(facade.state().proposals[0].status, "verifying");
+    facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
+    assert.equal(sealed.length, 1, "重复巡检不得再次封存同一轮或重复触发统一测试");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
