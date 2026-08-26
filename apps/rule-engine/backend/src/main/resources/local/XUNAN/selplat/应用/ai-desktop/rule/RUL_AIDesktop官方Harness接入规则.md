@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.95.0 建立韩立发问研讨与专题全生命周期原始档案。 -->
-rule_version = 5.96.0
+<!-- 5.97.0 固定证据化最小任务拆分、令狐分发审计、异常自消费隔离与统一两级树工作台。 -->
+rule_version = 5.97.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -32,6 +32,14 @@ upgrade_record_5_94 = 2026-08-26:演化审批_协作评审_Codex授权统一治�
 upgrade_record_5_95 = 2026-08-26:韩立按完整会话组综合南宫婉与Codex对话_韩立作为发问方逐轮向南宫婉提问_多轮研讨后由韩立确立专项_南宫婉接收确立通知后登记专题池并拆解分发_专题池永久保存来源快照问答判断方案审批任务命令日志测试发布重启验收纠偏原记录_原记录只追加_当前状态为派生投影
 <!-- 5.96.0 删除逐结果即时集成旧模型，固定南宫婉整轮收集、令狐整批发布和重启健康确认。 -->
 upgrade_record_5_96 = 2026-08-26:演化执行结果统一返回南宫婉_按proposalId形成唯一roundId_数据库保存应收数返回数resultSHA封存和发布状态_全部返回后一次封存_令狐不参与普通执行审核_令狐整批合并统一测试打包重启_新渲染器健康后才标记集成并返回南宫_韩立最终结果验收_失败保留同轮修正重试_删除逐结果即时集成和兼容分支
+<!-- 5.97.0 影响范围不再机械生成任务，南宫婉先只读调查文件边界，令狐只审计分发合理性；统一工作台用一级模块树和二级流程树隔离人工与自动控制。 -->
+upgrade_record_5_97 = 2026-08-26:影响范围不等于任务数量_南宫婉AI调查最小可独立合并任务_预计文件职责回退验收边界_令狐分发合理性审计_文件或职责重叠阻止分发_单按钮同页面同文件合并一人_令狐接收事件改为普通状态事件_令狐查询排除新旧接收事件防止自消费_迟到审批返回expired不抛业务异常_南宫婉韩立统一两级树工作台_人物专题审计一级模块_人工工作区与自动控制台二级隔离_SELUI树表格表单控件
+<!-- 南宫婉必须依据真实文件边界形成最小任务，令狐审计不替代韩立方向审批；适用于所有演化提案返还分发。 -->
+nangong_distribution_planning_contract = AI_read_only_investigation + impact_scope_not_task_count + minimal_independently_mergeable_units + expected_files_and_acceptance + linghu_distribution_audit_before_dispatch + overlap_blocks_dispatch
+<!-- 令狐接收统一异常时生成的自身事件只能作为状态记录，不得再次进入异常消费队列。 -->
+linghu_exception_intake_loop_prevention_contract = single_event_center_entry + intake_event_is_state_change + exclude_legacy_and_current_intake_types_from_unhandled_query + source_event_fingerprint_dedup
+<!-- 重大业务工作台使用稳定一级模块树和当前模块二级流程树；人工动作与自动运行控制不得混排。 -->
+evolution_workspace_information_architecture_contract = stable_module_tree_people_evolution_audit + contextual_flow_tree + manual_workspace_separate_from_automatic_console + hanli_approval_integrated + SELUI_tree_grid_form_action_controls
 <!-- 应用业务只能调用 EventCenterFacade；JSONL、SQLite 和令狐消费均为门面后的可替换实现。 -->
 workflow_event_center_facade_contract = all_application_events_and_exceptions_via_EventCenterFacade + archive_and_SQLite_behind_facade + no_direct_business_sink_coupling
 <!-- 主进程早期、IPC、渲染器、后台服务和退出边界必须统一登记，异常按状态受理直至有事实证明恢复。 -->

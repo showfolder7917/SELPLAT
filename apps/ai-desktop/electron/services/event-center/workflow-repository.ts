@@ -141,7 +141,9 @@ export class WorkflowRepository {
         SELECT eventId, correlationId, sourceType, sourceId, eventType, category, severity, status,
           message, payloadJson, fingerprint, occurredAt, handlingOwnerId, handlingStartedAt
         FROM AiDesktopEvent
-        WHERE category IN ('technical-error', 'business-exception', 'stalled') AND status IN ('open', 'processing')
+        WHERE category IN ('technical-error', 'business-exception', 'stalled')
+          AND status IN ('open', 'processing')
+          AND eventType NOT IN ('linghu.unified_exception.accepted', 'linghu.unified_issue.accepted')
         ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, occurredAt ASC
         LIMIT $limit
       `).all({ $limit: Math.max(1, Math.min(200, limit)) }) as Array<Record<string, unknown>>;

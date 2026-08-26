@@ -32,6 +32,9 @@ test("统一测试执行后立即归档共享测试文档", () => {
   assert.match(runner, /archiveRoot = projectPaths\.testArchiveRoot/);
   assert.match(runner, /renameSync\(runRoot, archivePath\)/);
   assert.match(runner, /测试运行已归档/);
+  assert.match(runner, /selectRun\(argumentsMap\.runId \|\| null\)/);
+  assert.match(runner, /指定测试批次不存在/);
+  assert.match(runner, /filter\(\(entry\) => readdirSync[\s\S]*测试文档\./);
 });
 
 test("自动测试入口只执行验证白名单并拒绝递归或启动脚本", () => {

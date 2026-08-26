@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration-memory.js";
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
 import type { SendMessageResponse } from "../../../contracts/conversation.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
@@ -19,6 +19,8 @@ export interface NangongEvolutionFacadeOptions {
   nangongDeliberation?: {
     send(question: string, context: string, state: NangongEvolutionState): Promise<string>;
   };
+  planDistribution?: (prompt: string, state: NangongEvolutionState) => Promise<string>;
+  auditDistribution?: (prompt: string, state: NangongEvolutionState) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   memory?: CollaborationMemoryPort | null;
   readDossier?: (topicId: string, state: NangongEvolutionState) => EvolutionTopicDossier;
@@ -32,6 +34,8 @@ export class NangongEvolutionFacade {
   readonly #conversation: NangongEvolutionFacadeOptions["conversation"];
   readonly #hanLi: NonNullable<NangongEvolutionFacadeOptions["hanLi"]>;
   readonly #nangongDeliberation: NonNullable<NangongEvolutionFacadeOptions["nangongDeliberation"]>;
+  readonly #planDistribution: NonNullable<NangongEvolutionFacadeOptions["planDistribution"]>;
+  readonly #auditDistribution: NonNullable<NangongEvolutionFacadeOptions["auditDistribution"]>;
   readonly #recordEvent: NangongEvolutionFacadeOptions["recordEvent"];
   readonly #memory: CollaborationMemoryPort | null;
   readonly #readDossier: NangongEvolutionFacadeOptions["readDossier"];
@@ -39,7 +43,7 @@ export class NangongEvolutionFacade {
   #timer: ReturnType<typeof setInterval> | null = null;
   #running = false;
 
-  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
+  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#auditDistribution = options.auditDistribution || (async () => { throw new Error("令狐分发合理性审计尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
   state(): NangongEvolutionState { return this.#store.state(); }
   dossier(topicId: string): EvolutionTopicDossier {
     const state = this.state();
@@ -159,11 +163,28 @@ export class NangongEvolutionFacade {
     return this.#store.decide(proposalId, decision, `参考同类型人工审批 ${latest.approvalId}，按用户历史关注点和审批习惯作出决定${adviceContext}。`, "automatic-han-li", [latest.approvalId]);
   }
 
-  dispatch(proposalId: string): NangongEvolutionState {
-    const state = this.state();
-    const proposal = requireProposal(state, proposalId);
+  async dispatch(proposalId: string): Promise<NangongEvolutionState> {
+    let state = this.state();
+    let proposal = requireProposal(state, proposalId);
     const topic = state.topics.find((item) => item.topicId === proposal.topicId)!;
     if (proposal.status !== "approved") throw new Error("只有审批通过并返还提交人的提案才能分发。");
+    if (!proposal.distributionPlan || proposal.distributionPlan.audit.decision !== "passed") {
+      let feedback = proposal.distributionPlan?.audit.findings.join("；") || "";
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const planned = parseDistributionPlan(await this.#planDistribution(distributionPlanningPrompt(proposal, topic, feedback), state));
+        const hardFindings = distributionHardFindings(planned.units);
+        const audit = parseDistributionAudit(await this.#auditDistribution(distributionAuditPrompt(proposal, topic, planned, hardFindings), state), hardFindings);
+        const plan: EvolutionDistributionPlan = { version: 1, summary: planned.summary, units: planned.units, audit, plannedAt: new Date().toISOString() };
+        state = this.#store.saveDistributionPlan(proposalId, plan);
+        proposal = requireProposal(state, proposalId);
+        this.#recordEvent("nangong.evolution.distribution_planned", { proposalId, attempt, unitCount: plan.units.length, expectedFiles: plan.units.flatMap((unit) => unit.expectedFiles), auditDecision: audit.decision, auditFindings: audit.findings });
+        this.#recordEvent("linghu.distribution_audit.completed", { proposalId, attempt, decision: audit.decision, reason: audit.reason, findings: audit.findings });
+        if (audit.decision === "passed") break;
+        feedback = [audit.reason, ...audit.findings].filter(Boolean).join("；");
+      }
+    }
+    proposal = requireProposal(this.state(), proposalId);
+    if (!proposal.distributionPlan || proposal.distributionPlan.audit.decision !== "passed") throw new Error("令狐确认当前任务拆分仍存在重叠，已阻止分发并退回南宫婉重新规划。");
     let result = state;
     const distributedTaskIds = [...proposal.distributedTaskIds];
     const latestApproval = proposal.approvals.at(-1);
@@ -171,7 +192,7 @@ export class NangongEvolutionFacade {
       ? state.proposals.flatMap((item) => item.approvals).find((approval) => approval.approvalId === proposal.revisionFeedbackApprovalId)
       : null;
     const targetMember = proposal.targetMemberId ? this.#collaboration.state().members.find((member) => member.memberId === proposal.targetMemberId) : null;
-    for (const [index, unit] of proposal.distributionUnits.entries()) {
+    for (const [index, unit] of proposal.distributionPlan.units.entries()) {
       const selfUpgradeContext = proposal.purpose === "self-capability-upgrade"
         ? `\n\n自身能力升级目标：${proposal.targetMemberDisplayName}（${proposal.targetMemberId}）\n能力范围：${proposal.capabilityScope}\n原人工反馈：${revisionFeedback?.advice || "—"}\n必须修改该人物自身使用的规则、提示、工作流或实现，并用回归测试证明以后同类提交会更具体。`
         : "";
@@ -287,7 +308,7 @@ export class NangongEvolutionFacade {
         if (enabled) state = this.autoApprove(proposal.proposalId);
       }
       for (const proposal of state.proposals.filter((item) => item.status === "approved" && item.distributedTaskIds.length === 0)) {
-        if (proposal.origin === "linghu" || state.automaticExecutionEnabled) state = this.dispatch(proposal.proposalId);
+        if (proposal.origin === "linghu" || state.automaticExecutionEnabled) state = await this.dispatch(proposal.proposalId);
       }
       if (!state.automaticEvolutionEnabled) return;
       const hasOpenTopicFlow = state.topics.some((item) => !["completed", "rejected"].includes(item.status));
@@ -299,12 +320,82 @@ export class NangongEvolutionFacade {
       const proposal = next.proposals.at(-1)!;
       if (next.automaticNangongApprovalEnabled) next = this.autoApprove(proposal.proposalId);
       const decided = requireProposal(next, proposal.proposalId);
-      if (next.automaticExecutionEnabled && decided.status === "approved") this.dispatch(proposal.proposalId);
+      if (next.automaticExecutionEnabled && decided.status === "approved") await this.dispatch(proposal.proposalId);
     } finally { this.#running = false; }
   }
 }
 
 function requireProposal(state: NangongEvolutionState, proposalId: string): EvolutionProposal { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+
+function distributionPlanningPrompt(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], feedback: string): string {
+  return [
+    "你是南宫婉，负责在真实工程中调查后形成最小、可独立合并的执行任务。现在只读调查，不修改源码。",
+    "影响范围只是调查边界，不等于任务数量。单个按钮、单个页面、同一组件、预计修改文件重叠或必须一起验收的内容必须合并为一个任务。约束、风险、保持功能不变和测试要求不能单独成为任务。只有可以独立修改、独立回退、独立验收且预计文件不重叠时才允许并行。",
+    "请读取工作区相关实现，列出预计修改文件。返回 JSON：{\"summary\":\"为什么采用这个任务数量\",\"units\":[{\"title\":\"任务标题\",\"scope\":\"完整职责边界\",\"acceptanceCriteria\":[\"独立验收条件\"],\"expectedFiles\":[\"工程相对路径\"],\"independentReason\":\"为什么能独立执行；只有一个任务时说明为什么不拆分\"}]}。不要返回 Markdown。",
+    `课题：${topic.title}\n目标：${topic.goal}`,
+    `提案：${proposal.content}`,
+    `影响范围：${proposal.impactScope.join("；")}`,
+    `验收条件：${proposal.acceptanceCriteria.join("；")}`,
+    `排除范围：${proposal.exclusions.join("；") || "无"}`,
+    feedback ? `令狐上一轮审计意见：${feedback}` : "这是首次拆分。",
+  ].join("\n\n");
+}
+
+function distributionAuditPrompt(
+  proposal: EvolutionProposal,
+  topic: NangongEvolutionState["topics"][number],
+  plan: Pick<EvolutionDistributionPlan, "summary" | "units">,
+  hardFindings: string[],
+): string {
+  return [
+    "你是令狐老祖，只负责分发合理性与合并安全审计，不审批演化方向。请依据事实判断，不使用固定评分。",
+    "检查每个任务是否可独立修改、独立回退、独立验收，是否把约束伪装成任务，是否语义重复，预计文件是否重叠，以及并行收益是否确实高于协作与合并成本。小型同域改动应由一个人完成。",
+    "返回 JSON：{\"decision\":\"passed 或 revise\",\"reason\":\"结论依据\",\"findings\":[\"需要南宫婉修正的具体事实\"]}。不要返回 Markdown。",
+    `课题：${topic.title}\n目标：${topic.goal}\n提案：${proposal.content}`,
+    `南宫婉拆分：${JSON.stringify(plan)}`,
+    `程序核对到的确定事实：${hardFindings.length ? hardFindings.join("；") : "未发现确定性冲突"}`,
+  ].join("\n\n");
+}
+
+function parseDistributionPlan(text: string): Pick<EvolutionDistributionPlan, "summary" | "units"> {
+  const value = parseJsonObject(text);
+  const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 4_000) : "";
+  const rawUnits = Array.isArray(value.units) ? value.units : [];
+  const units = rawUnits.flatMap((raw): EvolutionDistributionUnit[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const item = raw as Record<string, unknown>;
+    const title = typeof item.title === "string" ? item.title.trim().slice(0, 200) : "";
+    const scope = typeof item.scope === "string" ? item.scope.trim().slice(0, 8_000) : "";
+    const acceptanceCriteria = normalizeDraftList(item.acceptanceCriteria);
+    const expectedFiles = normalizeDraftList(item.expectedFiles).map((file) => file.replaceAll("\\", "/").replace(/^\.\//u, "")).filter((file) => !file.startsWith("/") && !file.split("/").includes(".."));
+    const independentReason = typeof item.independentReason === "string" ? item.independentReason.trim().slice(0, 4_000) : "";
+    return title && scope && acceptanceCriteria.length && expectedFiles.length && independentReason ? [{ title, scope, acceptanceCriteria, expectedFiles, independentReason }] : [];
+  });
+  if (!summary || !units.length) throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
+  return { summary, units };
+}
+
+function distributionHardFindings(units: EvolutionDistributionUnit[]): string[] {
+  const findings: string[] = [];
+  const owners = new Map<string, string[]>();
+  for (const unit of units) for (const file of unit.expectedFiles) owners.set(file, [...(owners.get(file) || []), unit.title]);
+  for (const [file, titles] of owners) if (titles.length > 1) findings.push(`预计文件 ${file} 同时属于 ${titles.join("、")}`);
+  const scopes = new Map<string, string[]>();
+  for (const unit of units) {
+    const key = unit.scope.replaceAll(/\s+/gu, "").toLowerCase();
+    scopes.set(key, [...(scopes.get(key) || []), unit.title]);
+  }
+  for (const titles of scopes.values()) if (titles.length > 1) findings.push(`任务职责重复：${titles.join("、")}`);
+  return findings;
+}
+
+function parseDistributionAudit(text: string, hardFindings: string[]): EvolutionDistributionAudit {
+  const value = parseJsonObject(text);
+  const modelDecision = value.decision === "passed" ? "passed" : "revise";
+  const reason = typeof value.reason === "string" && value.reason.trim() ? value.reason.trim().slice(0, 4_000) : "令狐没有提供充分的分发审计依据。";
+  const findings = [...new Set([...hardFindings, ...normalizeDraftList(value.findings)])];
+  return { decision: hardFindings.length ? "revise" : modelDecision, reason, findings, auditedAt: new Date().toISOString() };
+}
 
 function parseTopicDraft(text: string): NangongTopicDraft {
   const candidate = text.match(/\{[\s\S]*\}/)?.[0];
@@ -351,8 +442,8 @@ function normalizeDraftList(value: unknown): string[] { return Array.isArray(val
 
 function parseJsonObject(text: string): Record<string, unknown> {
   const candidate = text.match(/\{[\s\S]*\}/)?.[0];
-  if (!candidate) throw new Error("韩立没有返回可解析的研讨判断。 ");
-  try { return JSON.parse(candidate) as Record<string, unknown>; } catch { throw new Error("韩立返回的研讨判断不是有效 JSON。 "); }
+  if (!candidate) throw new Error("AI 没有返回可解析的结构化判断。 ");
+  try { return JSON.parse(candidate) as Record<string, unknown>; } catch { throw new Error("AI 返回的结构化判断不是有效 JSON。 "); }
 }
 
 function parseHanLiQuestion(text: string): { question: string; reason: string } {

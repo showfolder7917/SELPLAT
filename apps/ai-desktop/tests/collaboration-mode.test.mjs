@@ -892,7 +892,10 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.96\.0/);
+  assert.match(rule, /rule_version = 5\.97\.0/);
+  assert.match(rule, /nangong_distribution_planning_contract = AI_read_only_investigation/);
+  assert.match(rule, /linghu_exception_intake_loop_prevention_contract = single_event_center_entry/);
+  assert.match(rule, /evolution_workspace_information_architecture_contract = stable_module_tree_people_evolution_audit/);
   assert.match(rule, /respectful_listening_and_correction_are_nangong_personality/);
   assert.match(rule, /reflect_current_concern_not_mechanical_template/);
   assert.match(rule, /never_expand_user_intent/);

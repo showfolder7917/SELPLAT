@@ -355,7 +355,7 @@ button { color: inherit; }
 .collaboration-member-page h1 { margin: 0; color: var(--sel-theme-workbench-text-strong); font-size: var(--sel-theme-font-size-title); font-weight: 650; }
 .collaboration-member-page header p { margin: 4px 0 0; color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-caption); }
 .collaboration-member-page nav, .member-task-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.collaboration-member-page button { min-height: 32px; padding: 0 11px; border: 1px solid var(--sel-theme-line); border-radius: 7px; color: var(--sel-theme-workbench-text); background: var(--sel-theme-workbench-surface); cursor: pointer; }
+.collaboration-member-page button:not(.seltree-node-toggle):not(.seltree-node-button) { min-height: 32px; padding: 0 11px; border: 1px solid var(--sel-theme-line); border-radius: 7px; color: var(--sel-theme-workbench-text); background: var(--sel-theme-workbench-surface); cursor: pointer; }
 .collaboration-member-page button:hover { border-color: color-mix(in srgb, var(--sel-theme-workbench-accent) 53.33%, transparent); color: var(--sel-theme-workbench-accent); }
 .collaboration-member-page button.danger { border-color: var(--sel-theme-semantic-error); color: var(--sel-theme-semantic-error); background: var(--sel-theme-workbench-surface); }
 .linghu-automation { min-width: 0; display: grid; gap: 16px; margin-top: 20px; padding: 18px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: 12px; background: color-mix(in srgb, var(--sel-theme-workbench-surface) 88%, transparent); }
@@ -537,6 +537,33 @@ button { color: inherit; }
 .person-workspace-main-region, .person-workspace-side-region { min-width: 0; min-height: 0; }
 .person-workspace-side-region { border-left: 1px solid var(--sel-theme-line); background: var(--sel-theme-workbench-context); }
 
+/* 专项演化采用可扩展的两级树工作台；树、表格和控件视觉均由 SELUI 提供，应用只定义业务排版。 */
+.evolution-control-workspace { width: 100%; height: 100%; min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; background: var(--sel-theme-workbench-canvas); }
+.evolution-workspace-header { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--sel-theme-line); background: var(--sel-theme-workbench-context); }
+.evolution-workspace-header > div { min-width: 0; display: grid; gap: 3px; }
+.evolution-workspace-header span { color: var(--sel-theme-workbench-accent); font-size: var(--sel-theme-font-size-caption); letter-spacing: .08em; }
+.evolution-workspace-header h2 { margin: 0; color: var(--sel-theme-workbench-text-strong); font-size: var(--sel-theme-font-size-heading); }
+.evolution-workspace-header p { margin: 0; color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); line-height: 1.45; }
+.evolution-workspace-header > strong { padding: 5px 9px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: var(--sel-theme-radius-chip); color: var(--sel-theme-workbench-accent); background: var(--sel-theme-workbench-accent-surface); font-size: var(--sel-theme-font-size-caption); }
+.evolution-workspace-layout { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(190px, .82fr) minmax(244px, 1.04fr) minmax(380px, 2.35fr); overflow: hidden; }
+.evolution-module-column, .evolution-flow-column { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 14px 10px; border-right: 1px solid var(--sel-theme-line); overflow: hidden; background: var(--sel-theme-workbench-context); }
+.evolution-module-column > h3, .evolution-flow-column > h3 { margin: 0; padding: 0 8px; color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); font-weight: 600; }
+.evolution-tree-host, .evolution-tree-host > [data-sel-grid-role="tree"] { min-width: 0; min-height: 0; height: 100%; overflow: auto; }
+.evolution-workspace-canvas { min-width: 0; min-height: 0; overflow: hidden; background: var(--sel-theme-workbench-canvas); }
+.evolution-workspace-canvas > .person-workspace-rail { background: transparent; }
+.evolution-module-summary { display: grid; align-content: start; gap: 14px; height: 100%; padding: 24px; box-sizing: border-box; overflow: auto; }
+.evolution-module-summary > span { color: var(--sel-theme-workbench-accent); font-size: var(--sel-theme-font-size-caption); }
+.evolution-module-summary h2, .evolution-module-summary p { margin: 0; }
+.evolution-module-summary p { color: var(--sel-theme-workbench-text-muted); line-height: 1.65; }
+.evolution-module-summary dl { display: grid; gap: 10px; margin: 0; }
+.evolution-module-summary dl > div { display: grid; gap: 5px; padding: 14px; border: 1px solid var(--sel-theme-line); border-radius: var(--sel-theme-radius-panel); background: var(--sel-theme-workbench-surface); }
+.evolution-module-summary dt { color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); }
+.evolution-module-summary dd { margin: 0; color: var(--sel-theme-workbench-text); line-height: 1.5; }
+.nangong-workspace-rail.view-manual > .evolution-automation-control { display: none; }
+.nangong-workspace-rail.view-automatic > :not(header):not(.evolution-automation-control) { display: none; }
+.hanli-evolution-approval.view-manual > .hanli-automation-control { display: none; }
+.hanli-evolution-approval.view-automatic > :not(header):not(.hanli-automation-control):not(.approval-governance-history) { display: none; }
+
 /* 人物右栏只定义应用内容排布；分隔条、表格结构、滚动和栏目调宽继续由 SELUI 控件拥有。 */
 .person-workspace-rail { width: 100%; height: 100%; min-width: 0; display: grid; align-content: start; gap: 14px; padding: 18px; overflow-x: hidden; overflow-y: auto; box-sizing: border-box; background: var(--sel-theme-workbench-context); scrollbar-width: thin; scrollbar-color: var(--sel-theme-scrollbar-thumb) transparent; }
 .person-workspace-rail > header { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--sel-theme-line); }
@@ -609,6 +636,9 @@ button { color: inherit; }
 .nangong-person-composer button:disabled { cursor: not-allowed; opacity: .45; }
 
 @media (max-width: 1080px) {
+  .evolution-workspace-layout { grid-template-columns: 150px 184px minmax(340px, 1fr); }
+  .evolution-workspace-header { padding: 14px; }
+  .evolution-workspace-header p { display: none; }
   .person-workspace-rail { padding: 14px; }
   .person-workspace-rail .nangong-automation-switches { grid-template-columns: minmax(0, 1fr); }
   .evolution-proposal-grid-host { height: 360px; }

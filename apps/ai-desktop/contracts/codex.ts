@@ -36,6 +36,11 @@ export interface CodexApproval {
   trustEligible: boolean;
 }
 
+export interface ResolveCodexApprovalResult {
+  status: "resolved" | "expired";
+  trusted: boolean;
+}
+
 export interface TrustedCommandInfo {
   count: number;
 }

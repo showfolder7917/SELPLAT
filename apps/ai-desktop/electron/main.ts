@@ -55,6 +55,8 @@ let codex: CodexService | undefined;
 let nangongCodex: CodexService | undefined;
 let hanLiCodex: CodexService | undefined;
 let nangongDeliberationCodex: CodexService | undefined;
+let nangongDistributionCodex: CodexService | undefined;
+let linghuDistributionAuditCodex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
 let nangongEvolution: NangongEvolutionFacade | undefined;
@@ -210,6 +212,26 @@ app.whenReady().then(async () => {
     (details) => eventCenter.recordEvent("nangong.deliberation.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.deliberation.thread.lifecycle", details),
   );
+  const nangongDistributionSessions = new CodexSessionStore(path.join(app.getPath("userData"), "nangong-distribution-session.json"));
+  nangongDistributionCodex = new CodexService(
+    projectRoot, trustedCommands, nangongDistributionSessions,
+    {
+      codexHome, serviceName: "selplat_ai_desktop_nangong_distribution", threadSource: "ai-desktop-nangong-distribution",
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(),
+    },
+    (details) => eventCenter.recordEvent("nangong.distribution.trusted_command.decision", details),
+    (details) => eventCenter.recordEvent("nangong.distribution.thread.lifecycle", details),
+  );
+  const linghuDistributionAuditSessions = new CodexSessionStore(path.join(app.getPath("userData"), "linghu-distribution-audit-session.json"));
+  linghuDistributionAuditCodex = new CodexService(
+    projectRoot, trustedCommands, linghuDistributionAuditSessions,
+    {
+      codexHome, serviceName: "selplat_ai_desktop_linghu_distribution_audit", threadSource: "ai-desktop-linghu-distribution-audit",
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(),
+    },
+    (details) => eventCenter.recordEvent("linghu.distribution_audit.trusted_command.decision", details),
+    (details) => eventCenter.recordEvent("linghu.distribution_audit.thread.lifecycle", details),
+  );
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
   const workspaces = new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), projectRoot);
@@ -319,6 +341,8 @@ app.whenReady().then(async () => {
         `韩立当前问题：\n${question}`,
       ].join("\n\n"), state.automationContext.locale, "read-only", state.automationContext.workspaceState!, [], () => undefined, "conversation-managed")).text,
     },
+    planDistribution: async (prompt, state) => (await nangongDistributionCodex!.send(prompt, state.automationContext.locale, "read-only", state.automationContext.workspaceState!, [], () => undefined, "conversation-managed")).text,
+    auditDistribution: async (prompt, state) => (await linghuDistributionAuditCodex!.send(prompt, state.automationContext.locale, "read-only", state.automationContext.workspaceState!, [], () => undefined, "conversation-managed")).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     memory: collaborationMemory,
     readDossier: workflowRepository ? (topicId, state) => workflowRepository!.getEvolutionTopicDossier(topicId, state) : undefined,
@@ -447,6 +471,8 @@ app.on("before-quit", () => {
   nangongCodex?.dispose();
   hanLiCodex?.dispose();
   nangongDeliberationCodex?.dispose();
+  nangongDistributionCodex?.dispose();
+  linghuDistributionAuditCodex?.dispose();
   prepareAiMemoryShutdown();
 });
 

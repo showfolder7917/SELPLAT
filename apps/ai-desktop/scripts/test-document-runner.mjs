@@ -60,7 +60,7 @@ acquireLock({ executor, task, thread, token });
 const heartbeat = setInterval(() => writeLock({ executor, task, thread, token, currentItem }), 5_000);
 
 try {
-  const { runId, runRoot, documentPath } = selectRun();
+  const { runId, runRoot, documentPath } = selectRun(argumentsMap.runId || null);
   const original = readFileSync(documentPath, "utf8");
   const lines = original.split("\n");
   const testItems = lines.flatMap((line, index) => {
@@ -108,10 +108,15 @@ try {
   releaseOwnLock(token);
 }
 
-function selectRun() {
+function selectRun(requestedRunId) {
   const runningIds = listRunIds(runningRoot);
   if (runningIds.length > 1) throw new Error(`运行中存在多个测试批次，无法确定唯一批次：${runningIds.join("、")}`);
   let runId = runningIds[0];
+  if (requestedRunId) {
+    const safeRunId = validateSafeIdentifier(requestedRunId, "runId");
+    if (runId && runId !== safeRunId) throw new Error(`已有其他测试批次正在运行：${runId}`);
+    runId = runId || safeRunId;
+  }
   if (!runId) {
     const pendingIds = listRunIds(pendingRoot);
     if (pendingIds.length !== 1) {
@@ -120,6 +125,9 @@ function selectRun() {
         : `待执行目录存在多个测试批次，请先保留唯一批次：${pendingIds.join("、")}`);
     }
     runId = pendingIds[0];
+  }
+  if (!existsSync(path.join(runningRoot, runId))) {
+    if (!existsSync(path.join(pendingRoot, runId))) throw new Error(`指定测试批次不存在：${runId}`);
     renameSync(path.join(pendingRoot, runId), path.join(runningRoot, runId));
   }
   const runRoot = path.join(runningRoot, runId);
@@ -132,8 +140,8 @@ function listRunIds(root) {
   if (!existsSync(root)) return [];
   return readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
+    .filter((entry) => readdirSync(path.join(root, entry.name)).some((name) => name.startsWith("测试文档.") && name.endsWith(".md")))
     .map((entry) => validateSafeIdentifier(entry.name, "runId"))
-    .filter((runId) => readdirSync(path.join(root, runId)).some((name) => name.startsWith("测试文档.") && name.endsWith(".md")))
     .sort();
 }
 
@@ -203,8 +211,8 @@ function printStatus() {
 function readArguments(values) {
   const result = { command: values[0] === "status" ? "status" : "run" };
   for (let index = result.command === "status" ? 1 : 0; index < values.length; index += 1) {
-    const match = values[index].match(/^--(executor|task|thread)=(.+)$/);
-    if (match) result[match[1]] = match[2];
+    const match = values[index].match(/^--(executor|task|thread|run-id)=(.+)$/);
+    if (match) result[match[1] === "run-id" ? "runId" : match[1]] = match[2];
   }
   return result;
 }

@@ -81,8 +81,10 @@
 .seltree-node-toggle,
 .seltree-node-button {
     height: 34px;
+    border: 0;
     color: inherit;
     background: transparent;
+    font: inherit;
     cursor: pointer;
 }
 

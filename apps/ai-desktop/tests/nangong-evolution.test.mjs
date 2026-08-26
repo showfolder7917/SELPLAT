@@ -13,6 +13,10 @@ const nangongPromptSource = readFileSync(new URL("../electron/main.ts", import.m
 function topicRequest(title = "协同审批分层") { return { title, goal: "把演化方向审批从执行审核中独立出来", scope: ["AI Desktop"], exclusions: ["其他应用"], evidence: ["现有审核只覆盖执行方案"], acceptanceCriteria: ["提案审批与执行审核具有独立记录"], workspaceState, locale: "zh-CN" }; }
 function proposalRequest() { return { type: "代码修正", content: "建立独立演化审批入口，审批通过后返还南宫婉分发。", risks: ["历史记录迁移"], rollbackPlan: "保留旧记录并关闭三项自动开关。" }; }
 const conversation = { async send(_request, context) { return { text: `我了解到您的想法是：调查当前问题。如果我理解有偏差，您可以直接纠正我。\n\n南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据"}`, itemCount: 1 }; }, async newChat() {} };
+const distributionServices = {
+  async planDistribution() { return JSON.stringify({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
+  async auditDistribution() { return JSON.stringify({ decision: "passed", reason: "单任务没有文件重叠，职责、回退和验收边界完整。", findings: [] }); },
+};
 
 test("南宫婉会话提示固定自然表达与只读调查边界", () => {
   assert.match(nangongPromptSource, /语气克制、温和、有判断/);
@@ -56,18 +60,44 @@ test("自动审批无人工偏好时退回补充，人工决定形成版本化�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("审批通过后才由南宫婉分发并固定 proposalId", () => {
+test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-"));
   try {
     const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "collab-1", evolutionProposalId: request.evolutionProposalId }] }; } };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest()); const proposalId = state.proposals[0].proposalId;
-    assert.throws(() => facade.dispatch(proposalId), /只有审批通过/);
-    facade.decideProposal(proposalId, { decision: "approved", advice: "通过" }); state = facade.dispatch(proposalId);
+    await assert.rejects(() => facade.dispatch(proposalId), /只有审批通过/);
+    facade.decideProposal(proposalId, { decision: "approved", advice: "通过" }); state = await facade.dispatch(proposalId);
     assert.equal(submitted.initiatorMemberId, "nangong-wan"); assert.equal(submitted.evolutionProposalId, proposalId);
     assert.equal(submitted.evolutionRoundId, proposalId); assert.equal(submitted.mergeStrategy, "ATOMIC_GROUP"); assert.equal(submitted.atomicGroupId, proposalId);
     assert.deepEqual(submitted.dependencyTaskIds, []); assert.deepEqual(state.proposals[0].distributedTaskIds, ["collab-1"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("预计修改文件重叠时令狐阻止多人重复分发", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-overlap-audit-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    let submitted = 0;
+    const collaboration = { submitTask() { submitted += 1; return { tasks: [] }; } };
+    const overlappingPlan = JSON.stringify({ summary: "错误地按影响范围拆成两个任务。", units: [
+      { title: "修改按钮", scope: "调整同一工具栏按钮", acceptanceCriteria: ["按钮可用"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "页面改动" },
+      { title: "验证按钮", scope: "验证同一工具栏按钮", acceptanceCriteria: ["按钮通过测试"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "测试改动" },
+    ] });
+    const facade = new NangongEvolutionFacade({
+      store, collaboration, conversation, recordEvent: () => undefined,
+      async planDistribution() { return overlappingPlan; },
+      async auditDistribution() { return JSON.stringify({ decision: "passed", reason: "模型误判为可并行", findings: [] }); },
+    });
+    let state = facade.createTopic(topicRequest("单按钮样式修正"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { decision: "approved", advice: "方向通过" });
+    await assert.rejects(() => facade.dispatch(proposalId), /阻止分发/);
+    assert.equal(submitted, 0);
+    assert.equal(facade.state().proposals[0].distributionPlan.audit.decision, "revise");
+    assert.match(facade.state().proposals[0].distributionPlan.audit.findings.join("；"), /同时属于/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -81,12 +111,12 @@ test("全部执行结果返回南宫婉后才封存同一轮并一次性交给�
       state() { return { tasks: proposalId ? [{ taskId: "round-task-1", evolutionProposalId: proposalId, evolutionRoundId: proposalId, state: taskState }] : [] }; },
       sealEvolutionRound(receivedProposalId, taskIds) { sealed = { receivedProposalId, taskIds }; taskState = "ready-for-integration"; return this.state(); },
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest("南宫婉轮次收集"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     proposalId = state.proposals[0].proposalId;
     facade.decideProposal(proposalId, { decision: "approved", advice: "批准整轮收集" });
-    facade.dispatch(proposalId);
+    await facade.dispatch(proposalId);
     facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
     assert.deepEqual(sealed, { receivedProposalId: proposalId, taskIds: ["round-task-1"] });
     assert.equal(facade.state().proposals[0].status, "verifying");
@@ -102,7 +132,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
       submitTask(request) { distributedTaskId = "collab-evolution-completed"; return { tasks: [{ taskId: distributedTaskId, evolutionProposalId: request.evolutionProposalId, state: "integrated" }] }; },
       state() { return { tasks: distributedTaskId ? [{ taskId: distributedTaskId, state: "integrated" }] : [] }; },
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     store.setAutomation("evolution", true);
     let state = facade.createTopic(topicRequest("完整演化闭环"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
@@ -110,7 +140,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     state = facade.decideProposal(proposalId, { decision: "supplement-required", advice: "补充完成记录验收依据" });
     assert.equal(state.proposals[0].approvals.at(-1).source, "manual-user");
     state = facade.decideProposal(proposalId, { decision: "approved", advice: "事实完整，批准执行" });
-    state = facade.dispatch(proposalId);
+    state = await facade.dispatch(proposalId);
     assert.deepEqual(state.proposals[0].distributedTaskIds, [distributedTaskId]);
     facade.start();
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -259,23 +289,23 @@ test("南宫婉线程删除最终失败时保留原页面消息", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐修正与南宫提案使用独立自动审批开关并返还原提交人", () => {
+test("令狐修正与南宫提案使用独立自动审批开关并返还原提交人", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "linghu-approval-"));
   try {
     const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "linghu-task", evolutionProposalId: request.evolutionProposalId }] }; }, state() { return { tasks: [] }; } };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     store.setAutomation("linghu-approval", true);
     let state = facade.createLinghuRepairProposal({ title: "修正持续运行 Bug", content: "依据停点事实修正恢复逻辑", evidence: ["任务停在 test-failed"], impactScope: ["令狐恢复流程"], risks: ["重复恢复"], rollbackPlan: "恢复旧恢复点", acceptanceCriteria: ["任务恢复且不重复"], workspaceState, locale: "zh-CN" });
     const proposal = state.proposals.at(-1);
     assert.equal(proposal.submitterMemberId, "linghu-ancestor");
     state = facade.decideProposal(proposal.proposalId, { decision: "approved", advice: "人工确认令狐方向" });
-    state = facade.dispatch(proposal.proposalId);
+    state = await facade.dispatch(proposal.proposalId);
     assert.equal(submitted.initiatorMemberId, "linghu-ancestor"); assert.equal(submitted.preferredExecutorMemberId, "linghu-ancestor");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("所有人物共用自身能力升级修订链并在任务中固定审批依据", () => {
+test("所有人物共用自身能力升级修订链并在任务中固定审批依据", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "member-self-upgrade-"));
   try {
     const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted;
@@ -287,7 +317,7 @@ test("所有人物共用自身能力升级修订链并在任务中固定审批�
       submitTask(request) { submitted = request; return { tasks: [{ taskId: "self-upgrade-task", evolutionProposalId: request.evolutionProposalId }] }; },
       state() { return { members, tasks: [] }; },
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest("人物提交能力升级"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const original = state.proposals[0];
@@ -311,7 +341,7 @@ test("所有人物共用自身能力升级修订链并在任务中固定审批�
     assert.throws(() => facade.reviseProposal(original.proposalId, { submitterMemberId: "custom-member" }), /原提交人/);
     state = facade.decideProposal(revised.proposalId, { decision: "approved", advice: "方案具体，批准升级自身逻辑。" });
     const approvedRevision = state.proposals.find((proposal) => proposal.proposalId === revised.proposalId);
-    state = facade.dispatch(revised.proposalId);
+    state = await facade.dispatch(revised.proposalId);
     assert.equal(submitted.preferredExecutorMemberId, "nangong-wan");
     assert.equal(submitted.selfUpgradeTargetMemberId, "nangong-wan");
     assert.equal(submitted.selfUpgradeCapabilityScope, "事实调查与具体提案表达");

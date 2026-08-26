@@ -209,3 +209,35 @@ ai_aesthetic_review_report_must_include.6 = remaining_major_count
 ai_aesthetic_review_report_must_include.7 = final_status
 <!-- visual_artifact_final_status 的当前独立事实为 passed_only_when_all_pages_reviewed_and_no_unresolved_blocker_or_major。 -->
 visual_artifact_final_status = passed_only_when_all_pages_reviewed_and_no_unresolved_blocker_or_major
+
+<!-- 重大界面改造在写代码前必须先生成三套真实画面方向；适用于信息架构、主流程、工作台、导航层级或整页布局变化；业务含义是用户先看见并选择结果方向，避免只靠文字方案反复返工。 -->
+significant_ui_redesign_requires_three_visual_directions_before_implementation = true
+<!-- significant_ui_redesign_trigger 的当前独立事实为 information_architecture。 -->
+significant_ui_redesign_trigger = information_architecture
+<!-- significant_ui_redesign_trigger.2 的当前独立事实为 primary_workflow。 -->
+significant_ui_redesign_trigger.2 = primary_workflow
+<!-- significant_ui_redesign_trigger.3 的当前独立事实为 workspace_or_navigation_hierarchy。 -->
+significant_ui_redesign_trigger.3 = workspace_or_navigation_hierarchy
+<!-- significant_ui_redesign_trigger.4 的当前独立事实为 full_page_layout。 -->
+significant_ui_redesign_trigger.4 = full_page_layout
+
+<!-- 三套方案必须解决同一业务问题但采用可辨认的布局方向；适用于用户需要比较工作密度、扩展能力和操作路径时；业务含义是禁止只改颜色或装饰伪造三个方案。 -->
+visual_direction_options_must_be_structurally_distinct = true
+<!-- user_feedback_on_visual_direction_requires_regeneration_before_code 的当前独立事实为 true。 -->
+user_feedback_on_visual_direction_requires_regeneration_before_code = true
+<!-- selected_or_revised_visual_becomes_implementation_source_of_truth 的当前独立事实为 true。 -->
+selected_or_revised_visual_becomes_implementation_source_of_truth = true
+
+<!-- 实施完成后必须以真实运行页面与选定画面并排比较；适用于选定方案进入代码后的交付；业务含义是结构存在但层级、密度、位置或操作关系明显偏离时仍判定未完成。 -->
+selected_visual_implementation_gate = render_real_ui -> compare_with_selected_visual -> repair_difference -> rerender -> pass
+<!-- selected_visual_comparison_must_check 的当前独立事实为 module_hierarchy。 -->
+selected_visual_comparison_must_check = module_hierarchy
+<!-- selected_visual_comparison_must_check.2 的当前独立事实为 workflow_separation。 -->
+selected_visual_comparison_must_check.2 = workflow_separation
+<!-- selected_visual_comparison_must_check.3 的当前独立事实为 control_placement_and_density。 -->
+selected_visual_comparison_must_check.3 = control_placement_and_density
+<!-- selected_visual_comparison_must_check.4 的当前独立事实为 usability_and_accessibility。 -->
+selected_visual_comparison_must_check.4 = usability_and_accessibility
+
+<!-- 单个按钮文案、间距、颜色或不改变页面结构的微调不触发三方案流程；适用于快速修正；业务含义是重大方案确认规则不能让小改动失去效率。 -->
+minor_ui_tweak_exempt_from_three_visual_directions = button_copy + local_spacing + local_color + non_structural_style_fix

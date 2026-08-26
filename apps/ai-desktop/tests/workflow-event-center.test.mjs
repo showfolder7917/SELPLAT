@@ -27,6 +27,8 @@ test("异常从统一队列受理并在相关流程恢复后进入已解决终�
   const fixture = createFixture("exception-lifecycle");
   try {
     fixture.repository.recordAuditEvent("technical.exception", { message: "渲染失败", correlationId: "round-1" });
+    fixture.repository.recordAuditEvent("linghu.unified_exception.accepted", { message: "旧版令狐接收事件", sourceEventId: "source-old" });
+    fixture.repository.recordAuditEvent("linghu.unified_issue.accepted", { message: "新版令狐接收事件", sourceEventId: "source-new" });
     const open = fixture.repository.listUnhandledExceptions();
     assert.equal(open.length, 1);
     assert.equal(open[0].status, "open");
@@ -153,7 +155,7 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
   try {
     const now = new Date().toISOString();
     fixture.repository.syncEvolutionState({
-      version: 7, automaticEvolutionEnabled: true, automaticNangongApprovalEnabled: false,
+      version: 8, automaticEvolutionEnabled: true, automaticNangongApprovalEnabled: false,
       automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "running", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: now, pausedAt: null }, automationContext: { workspaceState: { roots: [{ path: appRoot, permission: "workspace-write" }] }, locale: "zh-CN" }, preferenceSnapshotVersion: 1,
       activeTopicId: "topic-1", updatedAt: now, conversation: { conversationId: "conversation-1", messages: [], updatedAt: now },
       deliberations: [{
@@ -175,7 +177,7 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
         submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", purpose: "work-proposal", targetMemberId: null,
         targetMemberDisplayName: null, capabilityScope: null, supersedesProposalId: null, revisionFeedbackApprovalId: null,
         content: "建立统一入口", evidence: ["用户要求统一入口"], impactScope: ["AI Desktop"], exclusions: [], risks: ["迁移风险"],
-        rollbackPlan: "保留原状态", acceptanceCriteria: ["异常可查询"], distributionUnits: [], status: "approved", distributedTaskIds: [],
+        rollbackPlan: "保留原状态", acceptanceCriteria: ["异常可查询"], distributionPlan: null, status: "approved", distributedTaskIds: [],
         resultSummary: null, createdAt: now, updatedAt: now,
         approvals: [{
           approvalId: "approval-1", proposalId: "proposal-1", decision: "approved", source: "manual-user", stage: "direction", approverMemberId: "han-li",
@@ -200,7 +202,7 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
     const task = fixture.database.withConnection((connection) => connection.prepare("SELECT workflowId, proposalId FROM AiDesktopTaskExecution WHERE taskId='task-1'").get());
     assert.deepEqual({ ...task }, { workflowId: "evolution:proposal-1", proposalId: "proposal-1" });
     const dossier = fixture.repository.getEvolutionTopicDossier("topic-1", {
-      version: 7, topics: [{ topicId: "topic-1", deliberationId: "deliberation-1" }], proposals: [{ proposalId: "proposal-1", topicId: "topic-1" }],
+      version: 8, topics: [{ topicId: "topic-1", deliberationId: "deliberation-1" }], proposals: [{ proposalId: "proposal-1", topicId: "topic-1" }],
       deliberations: [{ deliberationId: "deliberation-1", sourceSnapshots: [{ content: "原始执行记录" }] }], archiveRecords: [{ topicId: "topic-1", eventType: "topic.established_from_deliberation" }],
     });
     assert.equal(dossier.deliberation.sourceSnapshots[0].content, "原始执行记录");

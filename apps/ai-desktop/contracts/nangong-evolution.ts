@@ -151,7 +151,7 @@ export interface EvolutionProposal {
   risks: string[];
   rollbackPlan: string;
   acceptanceCriteria: string[];
-  distributionUnits: Array<{ title: string; scope: string; acceptanceCriteria: string[] }>;
+  distributionPlan: EvolutionDistributionPlan | null;
   status: Exclude<EvolutionTopicStatus, "registered" | "investigating">;
   approvals: EvolutionApproval[];
   distributedTaskIds: string[];
@@ -160,8 +160,31 @@ export interface EvolutionProposal {
   updatedAt: string;
 }
 
+export interface EvolutionDistributionUnit {
+  title: string;
+  scope: string;
+  acceptanceCriteria: string[];
+  expectedFiles: string[];
+  independentReason: string;
+}
+
+export interface EvolutionDistributionAudit {
+  decision: "passed" | "revise";
+  reason: string;
+  findings: string[];
+  auditedAt: string;
+}
+
+export interface EvolutionDistributionPlan {
+  version: 1;
+  summary: string;
+  units: EvolutionDistributionUnit[];
+  audit: EvolutionDistributionAudit;
+  plannedAt: string;
+}
+
 export interface NangongEvolutionState {
-  version: 7;
+  version: 8;
   automaticEvolutionEnabled: boolean;
   automaticNangongApprovalEnabled: boolean;
   automaticLinghuApprovalEnabled: boolean;
@@ -291,7 +314,6 @@ export interface CreateEvolutionProposalRequest {
   content: string;
   risks: string[];
   rollbackPlan: string;
-  distributionUnits?: Array<{ title: string; scope: string; acceptanceCriteria: string[] }>;
 }
 
 export interface DecideEvolutionProposalRequest {

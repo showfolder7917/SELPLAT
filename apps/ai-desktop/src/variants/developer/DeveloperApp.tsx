@@ -82,6 +82,10 @@ import "@selplat/sel-ui/components/floating-panel";
 import "@selplat/sel-ui/components/floating-panel/styles";
 import "@selplat/sel-ui/components/tooltip";
 import "@selplat/sel-ui/components/tooltip/styles";
+import "@selplat/sel-ui/components/context-menu";
+import "@selplat/sel-ui/components/context-menu/styles";
+import "@selplat/sel-ui/components/tree";
+import "@selplat/sel-ui/components/tree/styles";
 import "@selplat/sel-ui/components/grid";
 import "@selplat/sel-ui/components/grid/styles";
 import "@selplat/sel-ui/components/split-pane";
@@ -121,6 +125,30 @@ type SelTooltipController = { destroy: () => boolean };
 type SelTooltipApi = {
   attach: (host: Element, options: Record<string, unknown>) => SelTooltipController | null;
 };
+
+type SelTreeController = { destroy: () => boolean; select: (id: string) => boolean };
+type SelTreeApi = { mount: (root: HTMLElement, data: Record<string, unknown>) => SelTreeController | null };
+
+/** 使用 SELUI Tree 承载模块与流程导航，业务层只提供节点和选择状态。 */
+function EvolutionTreeNavigation({ id, label, selectedId, items, onSelect }: { id: string; label: string; selectedId: string; items: Array<Record<string, unknown>>; onSelect(id: string): void }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    const tree = (window as typeof window & { sel?: { components?: { tree?: SelTreeApi } } }).sel?.components?.tree;
+    if (!root || !tree) return;
+    const handleSelect = (event: Event) => onSelect(String((event as CustomEvent<{ id?: string }>).detail?.id || ""));
+    root.addEventListener("selTree:select", handleSelect);
+    const controller = tree.mount(root, {
+      selectedId,
+      expandLabelTemplate: "展开{label}",
+      collapseLabelTemplate: "收起{label}",
+      contextMenuLabelTemplate: "{label}操作",
+      items,
+    });
+    return () => { root.removeEventListener("selTree:select", handleSelect); controller?.destroy(); };
+  }, [id, items, onSelect, selectedId]);
+  return <div ref={rootRef} className="evolution-tree-host" data-sel-grid={id} data-sel-entity="EvolutionWorkspace"><nav data-sel-grid-role="tree" aria-label={label} /></div>;
+}
 
 const DEFAULT_SETTINGS_WIDTH = 390;
 const MINIMUM_SETTINGS_WIDTH = 320;
@@ -192,14 +220,14 @@ function PersonWorkspaceSplitPane({ id, locale, side, children }: { id: string; 
     const host = hostRef.current;
     const splitPane = (window as typeof window & { sel?: { components?: { splitPane?: SelSplitPaneApi } } }).sel?.components?.splitPane;
     if (!host || !side || !splitPane) return;
-    const storageKey = `ai-desktop:person-workspace-ratio:${id}`;
+    const storageKey = `ai-desktop:person-workspace-ratio:v2:${id}`;
     const storedRatio = Number(window.localStorage.getItem(storageKey));
     const controller = splitPane.mount(host, {
       id: `developer-person-workspace-${id}`,
       direction: "horizontal",
-      ratio: Number.isFinite(storedRatio) && storedRatio > 0 ? storedRatio : 68,
-      minRatio: 48,
-      maxRatio: 78,
+      ratio: Number.isFinite(storedRatio) && storedRatio > 0 ? storedRatio : 34,
+      minRatio: 24,
+      maxRatio: 60,
       startLabel: locale === "ja" ? "会話ワークスペース" : "会话工作区",
       endLabel: locale === "ja" ? "人物ワークパネル" : "人物工作栏",
       separatorLabel: locale === "ja" ? "人物ワークパネルの幅を調整" : "调整人物工作栏宽度",
@@ -1226,8 +1254,8 @@ export function DeveloperApp() {
 
   const resolveApproval = async (decision: "accept" | "decline") => {
     if (!approval) return;
-    await window.desktop?.resolveCodexApproval(approval.requestId, decision);
-    if (decision === "accept" && approval.kind === "command" && approval.trustEligible) {
+    const result = await window.desktop?.resolveCodexApproval(approval.requestId, decision);
+    if (result?.status === "resolved" && decision === "accept" && approval.kind === "command" && approval.trustEligible) {
       const info = await window.desktop?.getTrustedCommandInfo();
       if (info) setTrustedCommandInfo(info);
     }
@@ -1270,9 +1298,9 @@ export function DeveloperApp() {
   const showNangongConversationWorkspace = Boolean(collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "nangong-wan" && nangongEvolutionState);
   const personWorkspaceId = showNangongConversationWorkspace ? "nangong-wan" : showHanLiConversationWorkspace && collaborationMode ? "han-li" : "single-conversation";
   const personWorkspaceRail = collaborationMode && nangongEvolutionState && showHanLiConversationWorkspace
-    ? <HanLiEvolutionApprovalPanel state={nangongEvolutionState} locale={locale} onState={setNangongEvolutionState} onError={setDispatchError} />
+    ? <EvolutionControlWorkspace perspective="hanli" state={nangongEvolutionState} workspaces={workspaces} locale={locale} onState={setNangongEvolutionState} onError={setDispatchError} />
     : showNangongConversationWorkspace && nangongEvolutionState
-      ? <NangongEvolutionRail member={selectedCollaborationMember!} state={nangongEvolutionState} workspaces={workspaces} locale={locale} onState={setNangongEvolutionState} onError={setNangongError} />
+      ? <EvolutionControlWorkspace perspective="nangong" member={selectedCollaborationMember!} state={nangongEvolutionState} workspaces={workspaces} locale={locale} onState={setNangongEvolutionState} onError={setNangongError} />
       : null;
   const collaborationTabTitle = collaborationPanel === "execution-list"
     ? (locale === "ja" ? "実行一覧" : "执行列表")
@@ -1654,8 +1682,64 @@ function EvolutionProposalGrid({ id, proposals, selectedId, locale, mode, onSele
   return <div ref={hostRef} className={`evolution-proposal-grid-host${proposals.length ? "" : " empty"}`} />;
 }
 
+type EvolutionWorkspaceModule = "people" | "evolution" | "audit";
+type EvolutionWorkspaceView = "manual" | "automatic";
+
+/** 南宫婉与韩立共用两级树工作台；一级模块稳定扩展，二级树只描述当前模块的流程。 */
+function EvolutionControlWorkspace({ perspective, member, state, workspaces, locale, onState, onError }: { perspective: "nangong" | "hanli"; member?: CollaborationMember; state: NangongEvolutionState; workspaces: WorkspaceState | null; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
+  const [module, setModule] = useState<EvolutionWorkspaceModule>("evolution");
+  const [flowNode, setFlowNode] = useState(perspective === "hanli" ? "manual-approval" : "manual-topic");
+  const view: EvolutionWorkspaceView = flowNode === "automatic" || flowNode.startsWith("automatic-") ? "automatic" : "manual";
+  const pendingCount = state.proposals.filter((proposal) => ["pending-approval", "supplement-required", "pending-acceptance"].includes(proposal.status)).length;
+  const moduleItems = useMemo(() => [
+    { id: "people", label: "人物与个性", icon: "ri-user-settings-line", count: 2 },
+    { id: "evolution", label: "专题演化", icon: "ri-git-merge-line", count: state.topics.length },
+    { id: "audit", label: "审计与异常", icon: "ri-shield-check-line", count: pendingCount },
+  ], [pendingCount, state.topics.length]);
+  const flowItems = useMemo(() => module === "evolution" ? [
+    { id: "manual", label: "人工工作区", icon: "ri-hand", count: state.proposals.length, expanded: true, children: [
+      { id: "manual-topic", label: "当前专题", icon: "ri-focus-3-line", count: state.activeTopicId ? 1 : 0 },
+      { id: "manual-research", label: "调查与研讨", icon: "ri-search-eye-line", count: state.deliberations.length },
+      { id: "manual-approval", label: "韩立审批", icon: "ri-stamp-line", count: pendingCount },
+      { id: "manual-proposal", label: "提案与任务", icon: "ri-file-list-3-line", count: state.proposals.length },
+      { id: "manual-release", label: "发布与验收", icon: "ri-rocket-line", count: state.proposals.filter((proposal) => ["verifying", "pending-acceptance", "completed"].includes(proposal.status)).length },
+      { id: "manual-archive", label: "原始档案", icon: "ri-archive-line", count: state.topics.length },
+    ] },
+    { id: "automatic", label: "自动控制台", icon: "ri-dashboard-3-line", count: state.automationRuntime.status === "idle" ? 0 : 1, expanded: true, children: [
+      { id: "automatic-console", label: "运行控制", icon: "ri-play-circle-line", count: 1 },
+      { id: "automatic-switches", label: "审批与分发开关", icon: "ri-toggle-line", count: 3 },
+      { id: "automatic-recovery", label: "纠偏与恢复", icon: "ri-restart-line", count: state.automationRuntime.correctionRounds },
+    ] },
+  ] : module === "people" ? [
+    { id: "people-nangong", label: "南宫婉", icon: "ri-user-heart-line", count: 1 },
+    { id: "people-hanli", label: "韩立", icon: "ri-user-star-line", count: 1 },
+  ] : [
+    { id: "audit-approval", label: "审批轨迹", icon: "ri-file-shield-2-line", count: state.proposals.length },
+    { id: "audit-exception", label: "异常入口", icon: "ri-alarm-warning-line", count: pendingCount },
+    { id: "audit-archive", label: "专题档案", icon: "ri-history-line", count: state.topics.length },
+  ], [module, pendingCount, state.activeTopicId, state.automationRuntime.correctionRounds, state.automationRuntime.status, state.deliberations.length, state.proposals.length, state.topics.length]);
+  const selectModule = (id: string) => {
+    const next = id as EvolutionWorkspaceModule;
+    setModule(next);
+    setFlowNode(next === "evolution" ? (perspective === "hanli" ? "manual-approval" : "manual-topic") : next === "people" ? `people-${perspective}` : "audit-approval");
+  };
+  return <aside className="evolution-control-workspace" aria-label="专项演化统一工作台">
+    <header className="evolution-workspace-header"><div><span>专项演化</span><h2>{perspective === "hanli" ? "韩立审批与演化工作台" : "南宫婉专题演化工作台"}</h2><p>模块、流程、表格、表单和动作各守其位；人工操作与自动运行互不混排。</p></div><strong>{state.automationRuntime.status}</strong></header>
+    <div className="evolution-workspace-layout">
+      <section className="evolution-module-column"><h3>功能模块</h3><EvolutionTreeNavigation id={`evolution-modules-${perspective}`} label="功能模块" selectedId={module} items={moduleItems} onSelect={selectModule} /></section>
+      <section className="evolution-flow-column"><h3>{module === "evolution" ? "演化流程" : module === "people" ? "人物目录" : "治理目录"}</h3><EvolutionTreeNavigation id={`evolution-flow-${perspective}-${module}`} label="当前模块流程" selectedId={flowNode} items={flowItems} onSelect={setFlowNode} /></section>
+      <main className="evolution-workspace-canvas">
+        {module === "evolution" && perspective === "nangong" && member && <NangongEvolutionRail member={member} state={state} workspaces={workspaces} locale={locale} view={view} onState={onState} onError={onError} />}
+        {module === "evolution" && perspective === "hanli" && <HanLiEvolutionApprovalPanel state={state} locale={locale} view={view} onState={onState} onError={onError} />}
+        {module === "people" && <section className="evolution-module-summary"><span>人物与个性</span><h2>{perspective === "hanli" ? "韩立" : "南宫婉"}</h2><p>人物职责、说话模式、调查习惯和审批偏好在这里独立扩展。新增人物设置时只增加树节点与表单，不挤占专题流程。</p><dl><div><dt>当前职责</dt><dd>{perspective === "hanli" ? "依据事实审批，学习用户审批习惯，控制提案返还与执行。" : "理解用户意图，充分调查，形成提案，收集本轮成果。"}</dd></div><div><dt>协作边界</dt><dd>人物配置与专题运行分开保存、分开操作。</dd></div></dl></section>}
+        {module === "audit" && <section className="evolution-module-summary"><span>审计与异常</span><h2>统一治理入口</h2><p>审批、分发、执行、合并、测试与重启事件由统一事件中心登记；令狐只消费业务事件，不消费自己生成的接收事件。</p><dl><div><dt>待处理审批</dt><dd>{pendingCount} 项</dd></div><div><dt>专题档案</dt><dd>{state.topics.length} 项</dd></div><div><dt>当前恢复点</dt><dd>{state.topics.find((topic) => topic.topicId === state.activeTopicId)?.recoveryPoint || "未建立"}</dd></div></dl></section>}
+      </main>
+    </div>
+  </aside>;
+}
+
 /** 南宫婉右栏集中课题、自动化和提案进度，不再挤压连续对话。 */
-function NangongEvolutionRail({ member, state, workspaces, locale, onState, onError }: { member: CollaborationMember; state: NangongEvolutionState; workspaces: WorkspaceState | null; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
+function NangongEvolutionRail({ member, state, workspaces, locale, view, onState, onError }: { member: CollaborationMember; state: NangongEvolutionState; workspaces: WorkspaceState | null; locale: Locale; view: EvolutionWorkspaceView; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
   const nangongTopics = state.topics.filter((item) => item.origin === "nangong");
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(state.activeTopicId);
   const topic = nangongTopics.find((item) => item.topicId === selectedTopicId) || nangongTopics.find((item) => item.topicId === state.activeTopicId) || nangongTopics.at(-1) || null;
@@ -1737,7 +1821,7 @@ function NangongEvolutionRail({ member, state, workspaces, locale, onState, onEr
       if (next) onState(next);
     } catch (error) { onError(readableDesktopError(error, "韩立无法推进专题研讨。")); }
   };
-  return <aside className="person-workspace-rail nangong-workspace-rail" aria-label="南宫婉课题和提案工作栏">
+  return <aside className={`person-workspace-rail nangong-workspace-rail view-${view}`} aria-label="南宫婉课题和提案工作栏">
     <header><div><span>专项演化</span><h2>专题池与全流程档案</h2><p>{topic ? topic.title : activeDeliberation ? "韩立正在根据对话库逐轮向南宫婉发问。" : "韩立先研讨确立，南宫婉再登记专题池。"}</p></div><button type="button" onClick={() => { setEditingTopicId(null); setTopicDraft({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" }); setTopicEditorOpen((current) => !current); }}>人工登记</button></header>
     {topicEditorOpen && <section className="evolution-inline-editor" aria-label="新建演化课题"><label>课题标题<input aria-label="新课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label><label>课题目标<textarea aria-label="新课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label><label>影响范围<input aria-label="新课题影响范围" placeholder="多项用逗号分隔" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label><label>排除范围<input aria-label="新课题排除范围" placeholder="多项用逗号分隔" value={topicDraft.exclusions} onChange={(event) => updateTopicDraft("exclusions", event.currentTarget.value)} /></label><label>事实证据<input aria-label="新课题事实证据" placeholder="多项用逗号分隔" value={topicDraft.evidence} onChange={(event) => updateTopicDraft("evidence", event.currentTarget.value)} /></label><label>验收条件<input aria-label="新课题验收条件" placeholder="多项用逗号分隔" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label><nav><button type="button" onClick={() => setTopicEditorOpen(false)}>取消</button><button type="button" className="primary" onClick={() => void createTopic()}>保存课题</button></nav></section>}
     <section className="person-rail-section evolution-automation-control"><div className="person-rail-heading"><h3>自动演化控制</h3><span>{state.automationRuntime.status}</span></div><div className="evolution-automation-settings"><label>专题研讨最大轮次<input aria-label="专题研讨最大轮次" type="number" min="1" max="100" placeholder="留空为无限" value={automationDraft.maxRounds} onChange={(event) => setAutomationDraft((current) => ({ ...current, maxRounds: event.currentTarget.value }))} /></label><label>实施纠偏上限<input aria-label="实施纠偏上限" type="number" min="1" max="20" value={automationDraft.maxCorrections} onChange={(event) => setAutomationDraft((current) => ({ ...current, maxCorrections: event.currentTarget.value }))} /></label><button type="button" onClick={saveAutomation}>保存配置</button></div><nav><button type="button" className="primary" onClick={() => void startAutomation()}>{state.automationRuntime.status === "paused" ? "继续并推进一轮" : "开始并推进一轮"}</button><button type="button" onClick={() => controlAutomation("pause")}>暂停</button><button type="button" className="danger" onClick={() => controlAutomation("stop")}>停止</button></nav>{state.automationRuntime.stopReason && <p className="proposal-approval-note">{state.automationRuntime.stopReason}</p>}<small>已完成 {state.automationRuntime.completedRounds} 个专题 · 当前实施纠偏 {state.automationRuntime.correctionRounds} 轮</small><div className="nangong-automation-switches"><label><input type="checkbox" checked={state.automaticEvolutionEnabled} onChange={(event) => toggle("evolution", event.currentTarget.checked)} />自动演化</label><label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => toggle("nangong-approval", event.currentTarget.checked)} />提案自动审批</label><label><input type="checkbox" checked={state.automaticExecutionEnabled} onChange={(event) => toggle("execution", event.currentTarget.checked)} />通过后自动分发</label></div></section>
@@ -1775,7 +1859,7 @@ function EvolutionProposalDetail({ proposal, compact = false, children }: { prop
 }
 
 /** 韩立只在统一入口审批两个来源的演化方向；两个自动审批开关分别持久化。 */
-function HanLiEvolutionApprovalPanel({ state, locale, onState, onError }: { state: NangongEvolutionState; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
+function HanLiEvolutionApprovalPanel({ state, locale, view, onState, onError }: { state: NangongEvolutionState; locale: Locale; view: EvolutionWorkspaceView; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
   const proposals = [...state.proposals].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   const [selectedId, setSelectedId] = useState<string | null>(proposals[0]?.proposalId || null);
   const [advice, setAdvice] = useState("");
@@ -1811,9 +1895,9 @@ function HanLiEvolutionApprovalPanel({ state, locale, onState, onError }: { stat
   };
   const latest = selected?.approvals.at(-1);
   const canDecide = Boolean(selected && (["pending-approval", "supplement-required", "pending-acceptance"].includes(selected.status) || (latest?.source === "automatic-han-li" && selected.distributedTaskIds.length === 0)));
-  return <aside className="person-workspace-rail hanli-evolution-approval" aria-label="韩立统一演化审批">
+  return <aside className={`person-workspace-rail hanli-evolution-approval view-${view}`} aria-label="韩立统一演化审批">
     <header><div><span>审批工作台</span><h2>统一审批治理</h2><p>统一查看审批事实，方向、方案评审和命令授权仍保持各自边界。</p></div><strong>{proposals.length}</strong></header>
-    <section className="person-rail-section"><h3>自动审批</h3><div className="nangong-automation-switches"><label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => void update(() => window.desktop?.setNangongAutomation("nangong-approval", event.currentTarget.checked))} />南宫婉提案</label><label><input type="checkbox" checked={state.automaticLinghuApprovalEnabled} onChange={(event) => void update(() => window.desktop?.setNangongAutomation("linghu-approval", event.currentTarget.checked))} />令狐修正</label></div></section>
+    <section className="person-rail-section hanli-automation-control"><h3>自动审批</h3><div className="nangong-automation-switches"><label><input type="checkbox" checked={state.automaticNangongApprovalEnabled} onChange={(event) => void update(() => window.desktop?.setNangongAutomation("nangong-approval", event.currentTarget.checked))} />南宫婉提案</label><label><input type="checkbox" checked={state.automaticLinghuApprovalEnabled} onChange={(event) => void update(() => window.desktop?.setNangongAutomation("linghu-approval", event.currentTarget.checked))} />令狐修正</label></div></section>
     <section className="person-rail-section approval-grid-section"><div className="person-rail-heading"><h3>审批列表</h3><span>{proposals.length}</span></div><EvolutionProposalGrid id="hanli-evolution-approvals" proposals={proposals} selectedId={selected?.proposalId || null} locale={locale} mode="approval" onSelect={setSelectedId} /></section>
     {selected && <EvolutionProposalDetail proposal={selected}>{canDecide && <div className="evolution-approval-editor"><label>{selected.status === "pending-acceptance" ? "验收意见" : "审批建议"}<textarea aria-label="审批建议" placeholder="写明检查位置、实际操作、发现的问题和预期结果" value={advice} onChange={(event) => setAdvice(event.currentTarget.value)} /></label>{selected.status !== "pending-acceptance" && <label><input type="checkbox" checked={feedbackTarget === "submitter-capability"} onChange={(event) => setFeedbackTarget(event.currentTarget.checked ? "submitter-capability" : "proposal-content")} />同时升级{selected.submitterDisplayName}自身的提交与调查能力</label>}{selected.status !== "pending-acceptance" && feedbackTarget === "submitter-capability" && <label>能力升级范围<input aria-label="自身能力升级范围" placeholder="例如：提案具体性、事实调查、预期结果表达" value={capabilityScope} onChange={(event) => setCapabilityScope(event.currentTarget.value)} /></label>}{decisionError && <p role="alert">{decisionError}</p>}<nav><button type="button" className="primary" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "approved")}>{selected.status === "pending-acceptance" ? "验收通过" : "通过"}</button><button type="button" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "supplement-required")}>{selected.status === "pending-acceptance" ? "继续纠偏" : "退回补充"}</button><button type="button" className="danger" disabled={decisionBusy} onClick={() => void decide(selected.proposalId, "rejected")}>驳回</button></nav></div>}{["pending-approval", "supplement-required"].includes(selected.status) && <button type="button" disabled={decisionBusy} onClick={() => void update(() => window.desktop?.autoApproveEvolutionProposal(selected.proposalId))}>韩立立即审批</button>}{selected.status === "approved" && <button type="button" className="primary" disabled={decisionBusy} onClick={() => void update(() => window.desktop?.dispatchEvolutionProposal(selected.proposalId))}>返还{selected.submitterDisplayName}并执行</button>}</EvolutionProposalDetail>}
     <section className="person-rail-section approval-governance-history"><div className="person-rail-heading"><h3>统一审批轨迹</h3><span>{governance.length}</span></div>{governance.length ? governance.slice(0, 12).map((record) => <article key={record.governanceId}><header><strong>{record.title}</strong><span>{record.decision}</span></header><small>{record.domain} · {record.approverDisplayName} · {new Date(record.decidedAt).toLocaleString()}</small>{record.reason && <p>{record.reason}</p>}</article>) : <p>数据库可用后，这里汇总演化审批、协作评审和 Codex 命令授权。</p>}</section>

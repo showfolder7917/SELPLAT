@@ -87,12 +87,13 @@ export class LinghuAutomationFacade {
 
   /** 统一异常队列只交给令狐一个入口；受理本身不冒充修复完成，实际恢复仍走既有有限重试流程。 */
   async handleUnifiedExceptions(events: WorkflowExceptionRecord[]): Promise<void> {
-    for (const event of events) this.#recordEvent("linghu.unified_exception.accepted", {
+    for (const event of events) this.#recordEvent("linghu.unified_issue.accepted", {
       sourceEventId: event.eventId,
       sourceEventType: event.eventType,
       category: event.category,
       sourceCorrelationId: event.correlationId,
       message: event.message,
+      fingerprint: `linghu-intake:${event.eventId}`,
     });
     this.#store.updateRuntime("automation.unified_exceptions_received", (state) => {
       state.blockingReason = `令狐已从统一入口受理 ${events.length} 条异常；正在按任务、测试和审计职责检查恢复条件。`;

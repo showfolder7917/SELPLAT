@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionFeedbackTarget, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
 
 type StateListener = (state: NangongEvolutionState, reason: string, topicId: string | null, proposalId: string | null) => void;
 
@@ -199,7 +199,7 @@ export class NangongEvolutionStore {
         impactScope: [...mutableTopic.scope], exclusions: [...mutableTopic.exclusions],
         risks: normalizedList(request.risks, "风险"), rollbackPlan: required(request.rollbackPlan, "回退方案", 8_000),
         acceptanceCriteria: [...mutableTopic.acceptanceCriteria],
-        distributionUnits: normalizeDistributionUnits(request.distributionUnits, mutableTopic), status: "pending-approval",
+        distributionPlan: null, status: "pending-approval",
         approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
       });
     });
@@ -284,7 +284,7 @@ export class NangongEvolutionStore {
         evidence: normalizedList(request.evidence, "调查证据"), impactScope: normalizedList(request.impactScope, "影响范围"), exclusions: [],
         risks: normalizedList(request.risks, "风险"), rollbackPlan: required(request.rollbackPlan, "回退方案", 8_000),
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "验收条件"),
-        distributionUnits: request.impactScope.map((scope) => ({ title: `${request.title} · ${scope}`, scope, acceptanceCriteria: [...request.acceptanceCriteria] })),
+        distributionPlan: null,
         status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
       });
       state.activeTopicId = topicId;
@@ -397,7 +397,7 @@ export class NangongEvolutionStore {
         risks: normalizedList(request.risks, "修订风险"),
         rollbackPlan: required(request.rollbackPlan, "修订回退方案", 8_000),
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "修订验收条件"),
-        distributionUnits: normalizeRevisedDistributionUnits(previous, request),
+        distributionPlan: null,
         status: "pending-approval",
         approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
       });
@@ -415,6 +415,16 @@ export class NangongEvolutionStore {
       topic.status = "executing";
       topic.recoveryPoint = `distributed:${taskId}`;
       topic.updatedAt = mutable.updatedAt;
+    });
+  }
+
+  saveDistributionPlan(proposalId: string, plan: EvolutionDistributionPlan): NangongEvolutionState {
+    const proposal = requireProposal(this.#state, proposalId);
+    return this.#commit("proposal.distribution_planned", proposal.topicId, proposalId, (state) => {
+      const mutable = requireProposal(state, proposalId);
+      if (mutable.distributedTaskIds.length) throw new Error("已经分发的提案不能覆盖任务拆分计划。");
+      mutable.distributionPlan = structuredClone(plan);
+      mutable.updatedAt = new Date().toISOString();
     });
   }
 
@@ -467,10 +477,10 @@ export class NangongEvolutionStore {
   #load(): NangongEvolutionState {
     try {
       const raw = JSON.parse(readFileSync(this.#filePath, "utf8")) as Omit<Partial<NangongEvolutionState>, "version"> & { version?: number; automaticApprovalEnabled?: boolean };
-      if ((raw.version === 1 || raw.version === 2 || raw.version === 3 || raw.version === 4 || raw.version === 5 || raw.version === 6 || raw.version === 7) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
+      if ((raw.version === 1 || raw.version === 2 || raw.version === 3 || raw.version === 4 || raw.version === 5 || raw.version === 6 || raw.version === 7 || raw.version === 8) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
         const value = raw as NangongEvolutionState;
         const legacy = raw;
-        value.version = 7;
+        value.version = 8;
         value.automaticNangongApprovalEnabled ??= legacy.automaticApprovalEnabled === true;
         value.automaticLinghuApprovalEnabled ??= false;
         value.conversation ??= createConversation();
@@ -493,7 +503,7 @@ export class NangongEvolutionStore {
           topic && (topic.origin ??= "nangong");
           topic && (topic.sourceConversationMessageIds ??= []);
           proposal.origin ??= topic?.origin || "nangong";
-          proposal.distributionUnits ??= topic ? topic.scope.map((scope) => ({ title: `${topic.title} · ${scope}`, scope, acceptanceCriteria: [...topic.acceptanceCriteria] })) : [];
+          proposal.distributionPlan ??= null;
           proposal.resultSummary ??= null;
           proposal.purpose ??= "work-proposal";
           proposal.targetMemberId ??= null;
@@ -510,7 +520,7 @@ export class NangongEvolutionStore {
         return value;
       }
     } catch { /* 首次启动或损坏状态使用安全关闭的空状态，历史文件不会被扫描猜测。 */ }
-    return { version: 7, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+    return { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
   }
 
   #write(state: NangongEvolutionState): void {
@@ -535,13 +545,6 @@ function normalizeCandidate(candidate: HanLiTopicCandidate): HanLiTopicCandidate
     evidence: normalizedList(candidate.evidence, "演进专项证据"), acceptanceCriteria: normalizedList(candidate.acceptanceCriteria, "演进专项验收条件"),
     establishmentReason: required(candidate.establishmentReason, "韩立确立理由", 8_000),
   };
-}
-function normalizeDistributionUnits(values: CreateEvolutionProposalRequest["distributionUnits"], topic: NangongEvolutionState["topics"][number]): EvolutionProposal["distributionUnits"] {
-  const units = Array.isArray(values) ? values.map((item) => ({ title: item.title?.trim(), scope: item.scope?.trim(), acceptanceCriteria: normalizedOptionalList(item.acceptanceCriteria) })).filter((item) => item.title && item.scope && item.acceptanceCriteria.length) : [];
-  return units.length ? units : topic.scope.map((scope) => ({ title: `${topic.title} · ${scope}`, scope, acceptanceCriteria: [...topic.acceptanceCriteria] }));
-}
-function normalizeRevisedDistributionUnits(previous: EvolutionProposal, request: ReviseEvolutionProposalRequest): EvolutionProposal["distributionUnits"] {
-  return normalizedList(request.impactScope, "修订影响范围").map((scope) => ({ title: `${previous.title} · v${previous.version + 1} · ${scope}`, scope, acceptanceCriteria: normalizedList(request.acceptanceCriteria, "修订验收条件") }));
 }
 function requireTopic(state: NangongEvolutionState, topicId: string) { const topic = state.topics.find((item) => item.topicId === topicId); if (!topic) throw new Error("专项课题不存在。"); return topic; }
 function requireProposal(state: NangongEvolutionState, proposalId: string) { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }

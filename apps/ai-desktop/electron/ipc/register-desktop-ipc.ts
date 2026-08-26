@@ -272,10 +272,16 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     // “允许”对满足安全边界的项目内固定命令默认同时建立信任；文件修改和高风险命令不会进入持久信任。
     const pendingApproval = [...codex.pendingApprovals(), ...collaborationRegistry.pendingApprovals()].find((item) => item.requestId === requestId);
+    if (!pendingApproval) {
+      seenApprovalRequests.delete(requestId);
+      approvalAuditTasks.delete(requestId);
+      audit.recordEvent("approval.expired_response_ignored", { requestId, decision, message: "审批请求已结束，迟到响应已忽略。" });
+      return { status: "expired", trusted: false } as const;
+    }
     const trustResult = requestId >= 1_000_000
       ? collaborationRegistry.resolveApproval(requestId, decision, decision === "accept")
       : codex.resolveApproval(requestId, decision, decision === "accept");
-    if (pendingApproval) workflowRepository?.recordCodexApprovalDecision({
+    workflowRepository?.recordCodexApprovalDecision({
       requestId,
       title: pendingApproval.title,
       kind: pendingApproval.kind,
@@ -288,6 +294,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     audit.recordApproval(approvalAuditTasks.get(requestId), requestId, decision, trustResult.trusted);
     seenApprovalRequests.delete(requestId);
     approvalAuditTasks.delete(requestId);
+    return { status: "resolved", trusted: trustResult.trusted } as const;
   });
   handle("desktop:get-trusted-command-info", () => ({ count: trustedCommands.count() }));
   handle("desktop:clear-trusted-commands", () => {

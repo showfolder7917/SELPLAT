@@ -1,7 +1,7 @@
 import type { AuditLogInfo } from "./audit.js";
 import type { ApprovalGovernanceRecord } from "./approval-governance.js";
 import type { DesktopEnvironment, WindowAction, WorkspacePermission } from "./base.js";
-import type { AutomaticTestPreflightResult, CodexApproval, CodexHarnessStatus, CodexLoginResponse, CodexModelCatalog, CodexUserInputRequest, ResolveCodexUserInputRequest, TrustedCommandInfo } from "./codex.js";
+import type { AutomaticTestPreflightResult, CodexApproval, CodexHarnessStatus, CodexLoginResponse, CodexModelCatalog, CodexUserInputRequest, ResolveCodexApprovalResult, ResolveCodexUserInputRequest, TrustedCommandInfo } from "./codex.js";
 import type { CodexStreamEvent } from "./codex-stream.js";
 import type { CollaborationState, CollaborationStreamEnvelope, CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "./collaboration.js";
 import type { CodexSessionInfo, ConversationDispatchState, EnqueueMessageRequest, SendMessageRequest, SendMessageResponse } from "./conversation.js";
@@ -32,7 +32,7 @@ export interface DesktopApi {
   logoutCodex(): Promise<CodexHarnessStatus>;
   getCodexApprovals(): Promise<CodexApproval[]>;
   getApprovalGovernance(): Promise<ApprovalGovernanceRecord[]>;
-  resolveCodexApproval(requestId: number, decision: "accept" | "decline"): Promise<void>;
+  resolveCodexApproval(requestId: number, decision: "accept" | "decline"): Promise<ResolveCodexApprovalResult>;
   getTrustedCommandInfo(): Promise<TrustedCommandInfo>;
   clearTrustedCommands(): Promise<TrustedCommandInfo>;
   prepareAutomaticTesting(): Promise<AutomaticTestPreflightResult>;

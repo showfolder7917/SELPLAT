@@ -289,6 +289,10 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   const rail = page.locator(".nangong-workspace-rail");
   await expect(conversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
   await expect(rail.getByText("专项演化", { exact: true })).toBeVisible();
+  const workspace = page.locator(".evolution-control-workspace");
+  await expect(workspace.getByRole("button", { name: /人物与个性/ })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: /专题演化/ })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: /审计与异常/ })).toBeVisible();
   await expect(page.locator(".dev-context")).toHaveCount(0);
   const separator = page.getByRole("separator", { name: "调整人物工作栏宽度" });
   const initialRatio = Number(await separator.getAttribute("aria-valuenow"));
@@ -301,6 +305,7 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   const adjustedRailBounds = await rail.boundingBox();
   if (!initialRailBounds || !adjustedRailBounds) throw new Error("南宫婉右侧工作栏缺少可视边界。");
   expect(adjustedRailBounds.width).not.toEqual(initialRailBounds.width);
+  await workspace.getByRole("button", { name: "自动控制台", exact: true }).click();
   const evolution = rail.getByRole("checkbox", { name: "自动演化" });
   const approval = rail.getByRole("checkbox", { name: "提案自动审批" });
   const execution = rail.getByRole("checkbox", { name: "通过后自动分发" });
@@ -311,6 +316,7 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await approval.check();
   await expect(approval).toBeChecked();
   await expect(execution).not.toBeChecked();
+  await workspace.getByRole("button", { name: "人工工作区", exact: true }).click();
   await page.getByLabel("给南宫婉发送消息").fill("先调查令狐持续修正 Bug 如何接入审批");
   await page.getByRole("button", { name: "发送给南宫婉" }).click();
   await expect(conversation.getByText(/已确认事实：令狐持续修正需要先形成可审批方案/)).toBeVisible();
@@ -356,6 +362,8 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   const approvalPanel = page.locator(".hanli-evolution-approval");
   await expect(approvalPanel).toBeVisible();
   await expect(approvalPanel.locator(".selgrid-table")).toBeVisible();
+  const hanliWorkspace = page.locator(".evolution-control-workspace");
+  await hanliWorkspace.getByRole("button", { name: "自动控制台", exact: true }).click();
   const nangongApproval = approvalPanel.getByRole("checkbox", { name: "南宫婉提案" });
   const linghuApproval = approvalPanel.getByRole("checkbox", { name: "令狐修正" });
   await expect(nangongApproval).toBeChecked();
@@ -363,6 +371,8 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await linghuApproval.check();
   await expect(nangongApproval).toBeChecked();
   await expect(linghuApproval).toBeChecked();
+  await hanliWorkspace.getByRole("button", { name: "人工工作区", exact: true }).click();
+  await testInfo.attach("hanli-approval-workspace", { body: await page.screenshot(), contentType: "image/png" });
   await approvalPanel.getByLabel("审批建议").fill("提交内容不具体：写明问题位置、修正动作和预期结果");
   await approvalPanel.getByRole("checkbox", { name: /同时升级南宫婉自身/ }).check();
   await approvalPanel.getByLabel("自身能力升级范围").fill("事实调查与具体提案表达");
@@ -395,7 +405,7 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(completedRecord).toBeVisible();
   await completedRecord.locator("summary").click();
   await expect(completedRecord.getByText("南宫婉提案已经审批、分发并完成。", { exact: true })).toBeVisible();
-  await testInfo.attach("hanli-approval-workspace", { body: await page.screenshot(), contentType: "image/png" });
+  await testInfo.attach("evolution-execution-list", { body: await page.screenshot(), contentType: "image/png" });
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   await page.getByRole("button", { name: "重新建立南宫婉对话" }).click();
   await expect(page.locator(".nangong-person-composer").getByRole("alert")).toContainText("active writer");
