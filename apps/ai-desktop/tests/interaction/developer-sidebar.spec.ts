@@ -386,6 +386,9 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await approvalPanel.getByRole("button", { name: "通过", exact: true }).click();
   await expect(approvalPanel.getByText(/用户 · approved · 事实完整，批准进入执行链路/)).toBeVisible();
   await approvalPanel.getByRole("button", { name: /返还南宫婉并执行/ }).click();
+  await expect(approvalPanel.getByText("pending-acceptance", { exact: true }).first()).toBeVisible();
+  await approvalPanel.getByLabel("审批建议").fill("执行结果符合课题验收条件");
+  await approvalPanel.getByRole("button", { name: "验收通过" }).click();
   await expect(approvalPanel.getByText("completed", { exact: true }).first()).toBeVisible();
   await taskList.getByRole("button", { name: /执行列表/ }).click();
   const completedRecord = page.locator(".execution-record").filter({ hasText: "南宫婉完整审批链路" });
@@ -438,8 +441,10 @@ test("令狐老祖位于南宫婉下方并可管理持续自动保障启动文�
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
   const overflow = await page.locator(".collaboration-member-page").evaluate((element) => element.scrollWidth - element.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
-  page.once("dialog", (dialog) => dialog.accept());
   await renamed.getByRole("button", { name: "删除" }).click();
+  const deleteDialog = page.getByRole("dialog", { name: "删除启动文案" });
+  await expect(deleteDialog).toBeVisible();
+  await deleteDialog.getByRole("button", { name: "确认", exact: true }).click();
   await expect(renamed).toHaveCount(0);
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
   await taskList.getByRole("button", { name: "单会话" }).click();
@@ -575,10 +580,10 @@ test("自动测试默认关闭，预检成功后才进入开启态", async () =>
   expect(automaticBounds.x).toBeLessThan(screenshotBounds.x);
   await automaticTest.click();
 
-  const dialog = page.getByRole("dialog", { name: "自动测试" });
-  await expect(dialog.getByRole("heading", { name: "自动测试环境已就绪" })).toBeVisible();
-  await expect(dialog.locator(".automatic-test-checks li.passed")).toHaveCount(7);
-  const dialogBounds = await dialog.locator(".automatic-test-card").boundingBox();
+  const dialog = page.getByRole("dialog", { name: "自动测试环境已就绪" });
+  await expect(dialog.getByText("自动测试环境已就绪", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".seldialog-checks li.passed")).toHaveCount(7);
+  const dialogBounds = await dialog.locator(".seldialog-surface").boundingBox();
   if (!dialogBounds) throw new Error("自动测试结果弹窗缺少可见边界。");
   expect(dialogBounds.x).toBeGreaterThanOrEqual(0);
   expect(dialogBounds.x + dialogBounds.width).toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));

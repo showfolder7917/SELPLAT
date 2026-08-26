@@ -83,9 +83,9 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(collaborationContractSource, /unified-testing/);
   assert.match(coordinatorSource, /review\.repair_completed[\s\S]*preferredReviewerMemberId/);
   assert.match(coordinatorSource, /execution\.repair_completed[\s\S]*preferredExecutorMemberId/);
-  assert.match(coordinatorSource, /令狐老祖正在统一测试/);
-  assert.match(coordinatorSource, /unified_test\.passed/);
-  assert.match(coordinatorSource, /unified_test\.failed/);
+  assert.match(integrationPipelineSource, /currentActor\.displayName\}正在统一测试/);
+  assert.match(integrationPipelineSource, /unified_test\.passed/);
+  assert.match(integrationPipelineSource, /unified_test\.failed/);
 });
 
 const workspaceState = {
@@ -885,7 +885,7 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.91\.0/);
+  assert.match(rule, /rule_version = 5\.95\.0/);
   assert.match(rule, /respectful_listening_and_correction_are_nangong_personality/);
   assert.match(rule, /reflect_current_concern_not_mechanical_template/);
   assert.match(rule, /never_expand_user_intent/);

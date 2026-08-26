@@ -90,15 +90,15 @@ test("测试托管只在完成门禁明确要求时执行自身的单次受控�
   assert.doesNotMatch(ipc, /function isTestManagedRequest/);
   const testManagedRestartBlock = ipc.match(/if \(response\.restartRequired\) \{[\s\S]*?\n      \}/)?.[0] || "";
   assert.match(testManagedRestartBlock, /test_managed_completed/);
-  assert.match(testManagedRestartBlock, /app\.relaunch\(\); app\.exit\(0\)/);
+  assert.match(testManagedRestartBlock, /app\.relaunch\(\); prepareForApplicationExit\(\); app\.exit\(0\)/);
   assert.equal((testManagedRestartBlock.match(/app\.relaunch\(\)/g) || []).length, 1);
 });
 
 test("屏幕录制权限恢复只允许用户通过 macOS 专用无参数 IPC 重启", () => {
-  const permissionRestartHandler = ipc.match(/ipcMain\.handle\("desktop:restart-for-screen-recording-permission"[\s\S]*?\n  \}\);/)?.[0] || "";
+  const permissionRestartHandler = ipc.match(/handle\("desktop:restart-for-screen-recording-permission"[\s\S]*?\n  \}\);/)?.[0] || "";
   assert.match(permissionRestartHandler, /process\.platform !== "darwin"/);
   assert.match(permissionRestartHandler, /main-permission-restart-requested/);
-  assert.match(permissionRestartHandler, /app\.relaunch\(\);[\s\S]*app\.exit\(0\)/);
+  assert.match(permissionRestartHandler, /app\.relaunch\(\);[\s\S]*prepareForApplicationExit\(\);[\s\S]*app\.exit\(0\)/);
   assert.equal((permissionRestartHandler.match(/app\.relaunch\(\)/g) || []).length, 1);
   // 主进程只允许上述两条目的明确、互不混用的重启路径。
   assert.equal((ipc.match(/app\.relaunch\(\)/g) || []).length, 2);

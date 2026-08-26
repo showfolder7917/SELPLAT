@@ -816,8 +816,7 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             )
             (project / "db/desktop-paths.json").write_text(
                 json.dumps({
-                    "schemaVersion": 1,
-                    "databaseRoot": str((project / "db").resolve()),
+                    "schemaVersion": 2,
                     "databaseFile": "events.sqlite3",
                 }),
                 encoding="utf-8",

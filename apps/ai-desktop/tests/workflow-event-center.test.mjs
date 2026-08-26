@@ -112,12 +112,14 @@ test("所有角色事件走统一入口并区分业务异常、技术异常和�
   const fixture = createFixture("events");
   try {
     fixture.repository.recordAuditEvent("business.exception", { channel: "desktop:dispatch-evolution-proposal", message: "验收条件缺失" }, "task-business");
-    fixture.repository.recordAuditEvent("application.uncaught_exception", { message: "boom" });
+    fixture.repository.recordAuditEvent("application.uncaught_exception", { message: "boom", sourceType: "launcher", sourceId: "electron-main", severity: "critical" });
     fixture.repository.recordAuditEvent("nangong.evolution.proposal_decided", { proposalId: "proposal-1" });
-    const rows = fixture.database.withConnection((connection) => connection.prepare("SELECT eventType, category, severity, status FROM AiDesktopEvent ORDER BY occurredAt, rowid").all());
+    const rows = fixture.database.withConnection((connection) => connection.prepare("SELECT eventType, category, severity, status, sourceType, sourceId FROM AiDesktopEvent ORDER BY occurredAt, rowid").all());
     assert.deepEqual(rows.map((row) => row.category), ["business-exception", "technical-error", "approval"]);
     assert.equal(rows[0].status, "open");
-    assert.equal(rows[1].severity, "error");
+    assert.equal(rows[1].severity, "critical");
+    assert.equal(rows[1].sourceType, "launcher");
+    assert.equal(rows[1].sourceId, "electron-main");
     assert.equal(rows[2].status, "observed");
   } finally {
     fixture.close();
@@ -240,10 +242,11 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
     onUnhandledExceptions: (events) => handedOffExceptions.push(...events),
   });
   try {
-    supervisor.start();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // 直接等待一次完整监督周期，保证卡住任务交接与异常认领两个异步回调都已结束。
+    await supervisor.checkNow();
     assert.deepEqual(handedOff, ["task-1"]);
     assert.ok(handedOffExceptions.some((event) => event.category === "stalled" && event.handlingOwnerId === "linghu-ancestor"));
+    assert.ok(handedOffExceptions.some((event) => event.eventType === "workflow.supervisor.evolution_sync_failed" && event.handlingOwnerId === "linghu-ancestor"));
   } finally {
     supervisor.stop();
     fixture.close();

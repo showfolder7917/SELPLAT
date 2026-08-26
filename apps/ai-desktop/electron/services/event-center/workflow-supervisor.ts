@@ -49,9 +49,10 @@ export class WorkflowSupervisor {
     try {
       const now = this.#now().toISOString();
       this.#repository.heartbeatRuntimeSession(now);
-      this.#repository.syncEvolutionState(this.#readers.evolution());
-      this.#repository.syncCollaborationState(this.#readers.collaboration());
-      this.#repository.syncLinghuState(this.#readers.linghu());
+      // 三个业务域必须相互隔离；某一份状态损坏时仍要让其他领域和卡住检测继续推进。
+      this.#syncDomain("evolution", () => this.#repository.syncEvolutionState(this.#readers.evolution()), now);
+      this.#syncDomain("collaboration", () => this.#repository.syncCollaborationState(this.#readers.collaboration()), now);
+      this.#syncDomain("linghu", () => this.#repository.syncLinghuState(this.#readers.linghu()), now);
       const stalled = this.#repository.detectStalledTasks(now);
       if (stalled.length > 0) await this.#onStalledTasks(stalled.map((item) => item.taskId));
       if (this.#onUnhandledExceptions) {
@@ -78,6 +79,29 @@ export class WorkflowSupervisor {
       }
     } finally {
       this.#checking = false;
+    }
+  }
+
+  /** 单域同步失败进入统一技术异常队列，但不能让令狐失去对其余流程的监督能力。 */
+  #syncDomain(domain: "evolution" | "collaboration" | "linghu", operation: () => void, now: string): void {
+    try {
+      operation();
+    } catch (error) {
+      try {
+        this.#repository.recordEvent({
+          sourceType: "launcher",
+          sourceId: "workflow-supervisor",
+          eventType: `workflow.supervisor.${domain}_sync_failed`,
+          category: "technical-error",
+          severity: "error",
+          status: "open",
+          message: error instanceof Error ? error.message : String(error),
+          payload: { domain },
+          occurredAt: now,
+        });
+      } catch {
+        // SQLite 自身不可用时由外层文件审计保留证据，监督循环仍不能被单域失败中断。
+      }
     }
   }
 }

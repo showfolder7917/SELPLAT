@@ -62,13 +62,16 @@ export class WorkflowRepository {
   recordAuditEvent(type: string, details: Record<string, unknown>, taskId?: string, occurredAt = new Date().toISOString()): string {
     const classified = classifyAuditEvent(type);
     const correlationId = taskId || stringValue(details.correlationId) || stringValue(details.proposalId) || stringValue(details.topicId);
+    const sourceType = taskId ? "task" : workflowSourceType(details.sourceType) || classified.sourceType;
+    const sourceId = stringValue(details.sourceId) || classified.sourceId;
+    const severity = workflowSeverity(details.severity) || classified.severity;
     const eventId = this.recordEvent({
       correlationId,
-      sourceType: taskId ? "task" : classified.sourceType,
-      sourceId: classified.sourceId,
+      sourceType,
+      sourceId,
       eventType: type,
       category: classified.category,
-      severity: classified.severity,
+      severity,
       status: classified.status,
       message: stringValue(details.message) || stringValue(details.reason) || type,
       payload: details,
@@ -268,6 +271,13 @@ export class WorkflowRepository {
     const proposalIds = new Set(proposals.map((item) => item.proposalId));
     const archiveRecords = state.archiveRecords.filter((item) => item.topicId === topicId || (deliberation && item.deliberationId === deliberation.deliberationId));
     const executionRecords = this.#database.withConnection((connection) => {
+      // 任务即使还没有产生 flowEvent，也已经是专题从审批进入执行的事实，档案不能因此漏掉整条执行记录。
+      const tasks = connection.prepare(`
+        SELECT taskId, proposalId, executorMemberId, state, phase, runtimeStatus, heartbeatAt,
+          timeoutAt, acceptanceState, startedAt, completedAt, updatedAt
+        FROM AiDesktopTaskExecution
+        ORDER BY startedAt, updatedAt, taskId
+      `).all() as Array<Record<string, unknown>>;
       const rows = connection.prepare(`
         SELECT event.eventId, event.correlationId, event.sourceId, event.eventType, event.category, event.message,
           event.payloadJson, event.occurredAt, task.proposalId
@@ -275,12 +285,25 @@ export class WorkflowRepository {
         JOIN AiDesktopTaskExecution task ON task.taskId = event.correlationId
         ORDER BY event.occurredAt, event.recordedAt
       `).all() as Array<Record<string, unknown>>;
-      return rows.filter((row) => proposalIds.has(String(row.proposalId))).map((row, index): EvolutionArchiveRecord => ({
+      const taskRecords = tasks.filter((task) => proposalIds.has(String(task.proposalId))).map((task, index): EvolutionArchiveRecord => ({
+        recordId: `task-snapshot:${String(task.taskId)}`, deliberationId: deliberation?.deliberationId || null, topicId,
+        proposalId: String(task.proposalId), taskId: String(task.taskId), sequenceNumber: archiveRecords.length + index + 1,
+        category: "execution", eventType: "task.execution.snapshot", actor: "system",
+        title: `任务已进入 ${String(task.state)} 状态`,
+        payload: {
+          executorMemberId: task.executorMemberId, state: task.state, phase: task.phase,
+          runtimeStatus: task.runtimeStatus, heartbeatAt: task.heartbeatAt, timeoutAt: task.timeoutAt,
+          acceptanceState: task.acceptanceState, completedAt: task.completedAt,
+        },
+        occurredAt: String(task.updatedAt),
+      }));
+      const eventRecords = rows.filter((row) => proposalIds.has(String(row.proposalId))).map((row, index): EvolutionArchiveRecord => ({
         recordId: String(row.eventId), deliberationId: deliberation?.deliberationId || null, topicId,
-        proposalId: String(row.proposalId), taskId: String(row.correlationId), sequenceNumber: archiveRecords.length + index + 1,
+        proposalId: String(row.proposalId), taskId: String(row.correlationId), sequenceNumber: archiveRecords.length + taskRecords.length + index + 1,
         category: dossierEventCategory(String(row.eventType), String(row.category)), eventType: String(row.eventType),
         actor: dossierEventActor(String(row.sourceId)), title: String(row.message), payload: parseObject(String(row.payloadJson)), occurredAt: String(row.occurredAt),
       }));
+      return [...taskRecords, ...eventRecords];
     });
     return { topic: structuredClone(topic), deliberation: structuredClone(deliberation), proposals: structuredClone(proposals), archiveRecords: structuredClone(archiveRecords), executionRecords };
   }
@@ -474,6 +497,12 @@ function classifyAuditEvent(type: string): { category: WorkflowEventCategory; se
 function defaultSeverity(category: WorkflowEventCategory): WorkflowEventSeverity { return category === "technical-error" || category === "stalled" ? "error" : category === "business-exception" ? "warning" : "info"; }
 function defaultStatus(category: WorkflowEventCategory): WorkflowEventStatus { return ["technical-error", "business-exception", "stalled"].includes(category) ? "open" : "observed"; }
 function stringValue(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : null; }
+function workflowSourceType(value: unknown): WorkflowEventInput["sourceType"] | null {
+  return value === "member" || value === "system" || value === "launcher" || value === "task" ? value : null;
+}
+function workflowSeverity(value: unknown): WorkflowEventSeverity | null {
+  return value === "info" || value === "warning" || value === "error" || value === "critical" ? value : null;
+}
 function nullableString(value: unknown): string | null { return typeof value === "string" && value ? value : null; }
 function parsePayload(value: unknown): Record<string, unknown> { try { const parsed = JSON.parse(String(value)); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; } }
 function parseObject(value: string): Record<string, unknown> { return parsePayload(value); }

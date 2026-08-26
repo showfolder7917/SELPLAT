@@ -1297,23 +1297,19 @@ def audit_registered_sqlite_database(
             "message": f"SQLite pathConfig is unreadable: {exception}",
         })
         return violations
-    expected_database_root = (application_root / "db").resolve()
-    if path_document.get("schemaVersion") != 1:
+    if path_document.get("schemaVersion") != 2:
         violations.append({
             "code": "MANAGED_DATABASE_SQLITE_PATH_CONFIG_VERSION_INVALID",
             "path": str(path_config.relative_to(project_root)),
-            "message": "SQLite pathConfig requires schemaVersion=1",
+            "message": "SQLite pathConfig requires schemaVersion=2",
         })
-    configured_database_root = path_document.get("databaseRoot")
     configured_database_file = path_document.get("databaseFile")
     registered_database_file = Path(str(registration.get("databaseFile", "")))
-    if not isinstance(configured_database_root, str) \
-            or not Path(configured_database_root).is_absolute() \
-            or Path(configured_database_root).resolve() != expected_database_root:
+    if "databaseRoot" in path_document:
         violations.append({
-            "code": "MANAGED_DATABASE_SQLITE_ROOT_MISMATCH",
+            "code": "MANAGED_DATABASE_SQLITE_MACHINE_ROOT_FORBIDDEN",
             "path": str(path_config.relative_to(project_root)),
-            "message": f"SQLite databaseRoot must resolve to {expected_database_root}",
+            "message": "SQLite pathConfig must derive its db root from the registered application and must not store databaseRoot",
         })
     if configured_database_file != registered_database_file.name:
         violations.append({
