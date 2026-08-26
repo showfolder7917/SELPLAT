@@ -88,8 +88,6 @@ import "@selplat/sel-ui/components/tree";
 import "@selplat/sel-ui/components/tree/styles";
 import "@selplat/sel-ui/components/grid";
 import "@selplat/sel-ui/components/grid/styles";
-import "@selplat/sel-ui/components/split-pane";
-import "@selplat/sel-ui/components/split-pane/styles";
 import "@selplat/sel-ui/components/switch/styles";
 import "./developer.css";
 
@@ -103,16 +101,6 @@ type SelFloatingPanelController = {
 
 type SelFloatingPanelApi = {
   mount: (host: HTMLElement, options: Record<string, unknown>) => SelFloatingPanelController | null;
-};
-
-type SelSplitPaneController = {
-  start: HTMLElement;
-  end: HTMLElement;
-  destroy: () => boolean;
-};
-
-type SelSplitPaneApi = {
-  mount: (host: HTMLElement, options: Record<string, unknown>) => SelSplitPaneController | null;
 };
 
 type SelGridController = { destroy: () => boolean };
@@ -212,47 +200,6 @@ function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { local
   </div>;
 }
 
-/** 人物工作台通过 SELUI SplitPane 统一管理主会话和右侧业务栏的拖拽、键盘调整及复位。 */
-function PersonWorkspaceSplitPane({ id, locale, side, children }: { id: string; locale: Locale; side: ReactNode | null; children: ReactNode }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [regions, setRegions] = useState<{ start: HTMLElement; end: HTMLElement } | null>(null);
-  useEffect(() => {
-    const host = hostRef.current;
-    const splitPane = (window as typeof window & { sel?: { components?: { splitPane?: SelSplitPaneApi } } }).sel?.components?.splitPane;
-    if (!host || !side || !splitPane) return;
-    const storageKey = `ai-desktop:person-workspace-ratio:v2:${id}`;
-    const storedRatio = Number(window.localStorage.getItem(storageKey));
-    const controller = splitPane.mount(host, {
-      id: `developer-person-workspace-${id}`,
-      direction: "horizontal",
-      ratio: Number.isFinite(storedRatio) && storedRatio > 0 ? storedRatio : 34,
-      minRatio: 24,
-      maxRatio: 60,
-      startLabel: locale === "ja" ? "会話ワークスペース" : "会话工作区",
-      endLabel: locale === "ja" ? "人物ワークパネル" : "人物工作栏",
-      separatorLabel: locale === "ja" ? "人物ワークパネルの幅を調整" : "调整人物工作栏宽度",
-    });
-    if (!controller) return;
-    const rememberRatio = (event: Event) => {
-      const ratio = Number((event as CustomEvent<{ ratio?: number }>).detail?.ratio);
-      if (Number.isFinite(ratio)) window.localStorage.setItem(storageKey, String(ratio));
-    };
-    controller.start.classList.add("person-workspace-main-region");
-    controller.end.classList.add("person-workspace-side-region");
-    host.addEventListener("selSplitPane:resize", rememberRatio);
-    setRegions({ start: controller.start, end: controller.end });
-    return () => {
-      setRegions(null);
-      host.removeEventListener("selSplitPane:resize", rememberRatio);
-      controller.destroy();
-    };
-  }, [id, locale, side !== null]);
-  if (!side) return <div className="workspace-stage-single">{children}</div>;
-  return <div ref={hostRef} className="person-workspace-split-host">
-    {regions && createPortal(children, regions.start)}
-    {regions && createPortal(side, regions.end)}
-  </div>;
-}
 /** 每个协同流式回合保留收到时的环节，避免状态推进后把旧报告错放到新环节。 */
 type CollaborationLiveOutput = {
   message: Message;
@@ -283,6 +230,57 @@ function WindowControls() {
     <button onClick={() => window.desktop?.windowControl("minimize")}><Subtract20Regular /></button>
     <button onClick={() => window.desktop?.windowControl("maximize")}><Square20Regular /></button>
     <button className="close" onClick={() => window.desktop?.windowControl("close")}><Dismiss20Regular /></button>
+  </div>;
+}
+
+/** 南宫婉与韩立共用一个独立专题演化窗口；人物入口只改变初始视角，不复制业务实现或状态。 */
+export function EvolutionWorkspaceWindowApp() {
+  const requestedPerspective = new URLSearchParams(window.location.search).get("perspective");
+  const [perspective, setPerspective] = useState<"nangong" | "hanli">(requestedPerspective === "hanli" ? "hanli" : "nangong");
+  const [state, setState] = useState<NangongEvolutionState | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceState | null>(null);
+  const [nangongMember, setNangongMember] = useState<CollaborationMember | null>(null);
+  const [locale, setLocale] = useState<Locale>("zh-CN");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    void Promise.all([
+      window.desktop?.getNangongEvolutionState(),
+      window.desktop?.getWorkspaces(),
+      window.desktop?.getCollaborationState(),
+      window.desktop?.getSettings(),
+    ]).then(([nextState, nextWorkspaces, collaboration, settings]) => {
+      if (!active) return;
+      if (nextState) setState(nextState);
+      if (nextWorkspaces) setWorkspaces(nextWorkspaces);
+      if (collaboration) setNangongMember(collaboration.members.find((member) => member.memberId === "nangong-wan") || null);
+      if (settings) setLocale(settings.locale);
+    }).catch((reason) => { if (active) setError(readableDesktopError(reason, "无法打开专题演化工作台。")); });
+    const unsubscribeState = window.desktop?.onNangongEvolutionState((event) => setState(event.state));
+    const unsubscribeCollaboration = window.desktop?.onCollaborationState((event) => setNangongMember(event.state.members.find((member) => member.memberId === "nangong-wan") || null));
+    const unsubscribePerspective = window.desktop?.onEvolutionWorkspacePerspective(setPerspective);
+    return () => {
+      active = false;
+      unsubscribeState?.();
+      unsubscribeCollaboration?.();
+      unsubscribePerspective?.();
+    };
+  }, []);
+  return <div className="evolution-window-shell" lang={locale}>
+    <header className="dev-titlebar evolution-window-titlebar">
+      <div className="dev-brand"><Code24Regular /><strong>AI Desktop</strong><span>专题演化工作台</span></div>
+      <div className="operating-mode-switch evolution-perspective-switch" role="group" aria-label="工作台人物视角">
+        <button type="button" className={perspective === "nangong" ? "active" : ""} aria-pressed={perspective === "nangong"} onClick={() => setPerspective("nangong")}>南宫婉</button>
+        <button type="button" className={perspective === "hanli" ? "active" : ""} aria-pressed={perspective === "hanli"} onClick={() => setPerspective("hanli")}>韩立</button>
+      </div>
+      <WindowControls />
+    </header>
+    <main className="evolution-window-main">
+      {error && <div className="evolution-window-error" role="alert">{error}</div>}
+      {state && (perspective === "hanli" || nangongMember)
+        ? <EvolutionControlWorkspace perspective={perspective} member={nangongMember || undefined} state={state} workspaces={workspaces} locale={locale} onState={setState} onError={setError} />
+        : !error && <div className="evolution-window-loading" role="status">正在读取专题、审批和运行状态…</div>}
+    </main>
   </div>;
 }
 
@@ -1296,11 +1294,10 @@ export function DeveloperApp() {
     : null;
   const showHanLiConversationWorkspace = !collaborationMode || (collaborationPanel === "member" && selectedCollaborationMember?.memberId === "han-li");
   const showNangongConversationWorkspace = Boolean(collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "nangong-wan" && nangongEvolutionState);
-  const personWorkspaceId = showNangongConversationWorkspace ? "nangong-wan" : showHanLiConversationWorkspace && collaborationMode ? "han-li" : "single-conversation";
-  const personWorkspaceRail = collaborationMode && nangongEvolutionState && showHanLiConversationWorkspace
-    ? <EvolutionControlWorkspace perspective="hanli" state={nangongEvolutionState} workspaces={workspaces} locale={locale} onState={setNangongEvolutionState} onError={setDispatchError} />
-    : showNangongConversationWorkspace && nangongEvolutionState
-      ? <EvolutionControlWorkspace perspective="nangong" member={selectedCollaborationMember!} state={nangongEvolutionState} workspaces={workspaces} locale={locale} onState={setNangongEvolutionState} onError={setNangongError} />
+  const evolutionWorkspacePerspective = collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "han-li"
+    ? "hanli"
+    : collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "nangong-wan"
+      ? "nangong"
       : null;
   const collaborationTabTitle = collaborationPanel === "execution-list"
     ? (locale === "ja" ? "実行一覧" : "执行列表")
@@ -1414,9 +1411,9 @@ export function DeveloperApp() {
       }}
     />}
 
-    <PersonWorkspaceSplitPane id={personWorkspaceId} locale={locale} side={personWorkspaceRail}>
+    <div className="workspace-stage-single">
     <main className="dev-main">
-      <div className="dev-tab"><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={text.newCodexSession} data-sel-tooltip-mode="always" aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}{showNangongConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={nangongNewConversationLabel} data-sel-tooltip-mode="always" aria-label={nangongNewConversationLabel} disabled={nangongNewConversationBusy} onClick={() => void startNewNangongConversation()}><ArrowClockwise24Regular className={nangongNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}<Dismiss20Regular /></div>
+      <div className={`dev-tab${evolutionWorkspacePerspective ? " with-workspace-action" : ""}`}><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{evolutionWorkspacePerspective && <button type="button" className="open-evolution-workspace" onClick={() => void window.desktop?.openEvolutionWorkspace(evolutionWorkspacePerspective)}>{locale === "ja" ? "専門進化ワークベンチ" : "打开专题演化工作台"}</button>}{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={text.newCodexSession} data-sel-tooltip-mode="always" aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}{showNangongConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={nangongNewConversationLabel} data-sel-tooltip-mode="always" aria-label={nangongNewConversationLabel} disabled={nangongNewConversationBusy} onClick={() => void startNewNangongConversation()}><ArrowClockwise24Regular className={nangongNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}<Dismiss20Regular /></div>
       {aiMemoryDatabaseStatus && aiMemoryDatabaseStatus.state !== "ready" && <div className={`ai-memory-recovery ${aiMemoryDatabaseStatus.state}`} role="alert"><strong>{locale === "ja" ? "AI Memory データベースは停止中です" : "AI Memory 数据库已停用"}</strong><span>{locale === "ja" ? "設定、移行、または整合性の問題を確認し、元のデータベースを復旧してから再起動してください。" : aiMemoryDatabaseStatus.message || "请恢复数据库后重新启动。"}</span></div>}
       {showHanLiConversationWorkspace ? <section ref={chatRef} className="dev-chat">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p>{!codexStatus.account.authenticated && <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{!codexStatus.account.authenticated && loginHint && <em className="dev-login-hint">{loginHint}</em>}</div>}
@@ -1444,7 +1441,7 @@ export function DeveloperApp() {
         <div className="composer-footer"><div className="composer-tools" aria-label="输入工具栏"><div className="composer-tool-group composer-context-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}</div><div className="composer-tool-group composer-automation-tools"><button type="button" role="switch" aria-checked={automaticTestEnabled} className="selswitch composer-automatic-test-switch" disabled={automaticTestChecking || (loading && !automaticTestEnabled)} onClick={() => void toggleAutomaticTesting()}><span>{text.automaticTest}</span><i className="selswitch-track" aria-hidden="true"><i className="selswitch-thumb" /></i></button>{(automaticTestChecking || automaticTestEnabled) && <span className="automatic-test-status" role="status">{automaticTestChecking ? text.automaticTestChecking : text.automaticTestReady}</span>}</div><div className="composer-tool-group composer-attachment-tools"><button type="button" className="screenshot-button" aria-label={text.screenshot} data-sel-tooltip={text.screenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" aria-label={text.hiddenScreenshot} data-sel-tooltip={text.hiddenScreenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
       </form>}
     </main>
-    </PersonWorkspaceSplitPane>
+    </div>
 
     <footer className="dev-statusbar"><span><Branch24Regular /> main*</span><span>0 errors</span><span>{sandboxMode}</span><span>AI Memory {aiMemoryDatabaseStatus?.state === "ready" ? `v${aiMemoryDatabaseStatus.schemaVersion || "-"} · ${locale === "ja" ? "統合イベントセンター" : "统一事件中心"}` : (locale === "ja" ? "要復旧" : "待恢复")}</span><span>UTF-8</span></footer>
 

@@ -10,6 +10,9 @@ const themeAdapter = read("../src/theme/selUiTheme.ts");
 const entry = read("../src/main.tsx");
 const developerStyles = read("../src/variants/developer/developer.css");
 const developerApp = read("../src/variants/developer/DeveloperApp.tsx");
+const desktopIpc = read("../electron/ipc/register-desktop-ipc.ts");
+const electronMain = read("../electron/main.ts");
+const preload = read("../electron/preload.cts");
 const screenshotEditor = read("../src/features/screenshot/components/ScreenshotEditor.tsx");
 const selUiProvider = read("../src/theme/SelUiProvider.tsx");
 const selWindow = read("../../../shared/frontend/sel-ui/src/components/window/selWindow.js");
@@ -53,19 +56,34 @@ test("SELUI 中央登记的全部控件自动发布正式脚本和样式出口",
   assert.equal(selUiManifest.scripts.prepare, "npm run sync:component-exports");
 });
 
-test("人物工作台通过 SELUI Grid 与 SplitPane 正式出口装配", () => {
+test("独立专题演化窗口通过 SELUI Tree 与 Grid 正式出口装配", () => {
   for (const exportedPath of [
     "@selplat/sel-ui/components/tooltip",
+    "@selplat/sel-ui/components/tree",
     "@selplat/sel-ui/components/grid",
-    "@selplat/sel-ui/components/split-pane",
   ]) assert.match(developerApp, new RegExp(exportedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(developerApp, /splitPane\.mount/);
+  assert.doesNotMatch(developerApp, /splitPane\.mount|PersonWorkspaceSplitPane/);
   assert.match(developerApp, /grid\.create/);
   assert.match(developerApp, /grid\.mount/);
   assert.match(developerApp, /selGrid:selectionChange/);
-  assert.match(developerStyles, /\.person-workspace-split-host/);
+  assert.match(entry, /evolution-workspace/);
+  assert.match(developerApp, /EvolutionWorkspaceWindowApp/);
+  assert.match(developerStyles, /\.evolution-window-shell/);
   assert.match(developerStyles, /\.evolution-proposal-grid-host/);
   assert.doesNotMatch(developerApp, /<aside className="dev-context">/);
+});
+
+test("南宫婉与韩立复用唯一独立专题演化窗口", () => {
+  assert.match(preload, /desktop:open-evolution-workspace/);
+  assert.match(preload, /desktop:evolution-workspace-perspective/);
+  assert.match(desktopIpc, /let evolutionWorkspaceWindow: BrowserWindow \| null = null/);
+  assert.match(desktopIpc, /evolutionWorkspaceWindow\.webContents\.send\("desktop:evolution-workspace-perspective"/);
+  assert.match(desktopIpc, /evolutionWorkspaceWindow\.focus\(\)/);
+  assert.match(desktopIpc, /mode: "evolution-workspace", perspective/);
+  assert.match(electronMain, /let mainApplicationWindow: BrowserWindow \| null/);
+  assert.doesNotMatch(electronMain, /BrowserWindow\.getAllWindows\(\)\.length === 0/);
+  assert.match(developerApp, /openEvolutionWorkspace\(evolutionWorkspacePerspective\)/);
+  assert.doesNotMatch(developerStyles, /person-workspace-split-host|person-workspace-side-region/);
 });
 
 test("确认、输入和提示交互只通过 SELUI 公共组件", () => {

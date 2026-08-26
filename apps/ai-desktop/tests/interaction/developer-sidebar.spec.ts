@@ -286,25 +286,21 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   const conversation = page.locator(".nangong-person-chat");
-  const rail = page.locator(".nangong-workspace-rail");
   await expect(conversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
+  await expect(page.locator(".evolution-control-workspace")).toHaveCount(0);
+  const [evolutionPage] = await Promise.all([
+    application.waitForEvent("window"),
+    page.getByRole("button", { name: "打开专题演化工作台" }).click(),
+  ]);
+  await evolutionPage.waitForLoadState("domcontentloaded");
+  const rail = evolutionPage.locator(".nangong-workspace-rail");
   await expect(rail.getByText("专项演化", { exact: true })).toBeVisible();
-  const workspace = page.locator(".evolution-control-workspace");
+  const workspace = evolutionPage.locator(".evolution-control-workspace");
   await expect(workspace.getByRole("button", { name: /人物与个性/ })).toBeVisible();
   await expect(workspace.getByRole("button", { name: /专题演化/ })).toBeVisible();
   await expect(workspace.getByRole("button", { name: /审计与异常/ })).toBeVisible();
   await expect(page.locator(".dev-context")).toHaveCount(0);
-  const separator = page.getByRole("separator", { name: "调整人物工作栏宽度" });
-  const initialRatio = Number(await separator.getAttribute("aria-valuenow"));
-  const minimumRatio = Number(await separator.getAttribute("aria-valuemin"));
-  const initialRailBounds = await rail.boundingBox();
-  await separator.focus();
-  const adjustment = initialRatio > minimumRatio ? -2 : 2;
-  await separator.press(adjustment < 0 ? "ArrowLeft" : "ArrowRight");
-  await expect(separator).toHaveAttribute("aria-valuenow", String(initialRatio + adjustment));
-  const adjustedRailBounds = await rail.boundingBox();
-  if (!initialRailBounds || !adjustedRailBounds) throw new Error("南宫婉右侧工作栏缺少可视边界。");
-  expect(adjustedRailBounds.width).not.toEqual(initialRailBounds.width);
+  await expect(evolutionPage.getByRole("group", { name: "工作台人物视角" })).toBeVisible();
   await workspace.getByRole("button", { name: "自动控制台", exact: true }).click();
   const evolution = rail.getByRole("checkbox", { name: "自动演化" });
   const approval = rail.getByRole("checkbox", { name: "提案自动审批" });
@@ -330,10 +326,15 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(topicEditor.getByText("已根据当前对话填充草稿", { exact: true })).toBeVisible();
   await expect(page.getByLabel("课题标题")).toHaveValue("南宫婉完整审批链路");
   await expect(page.getByLabel("课题事实证据")).toHaveValue(/用户要求草稿由当前对话生成/);
-  await page.getByLabel("课题标题").fill("南宫婉完整审批链路");
-  await page.getByLabel("课题影响范围").fill("AI Desktop");
-  await page.getByLabel("课题验收条件").fill("审批后生成任务,任务完成后形成记录");
-  await page.getByRole("button", { name: "确认保存课题" }).click();
+  await topicEditor.getByRole("button", { name: "取消" }).click();
+  await rail.getByRole("button", { name: "人工登记" }).click();
+  const manualTopic = rail.getByRole("region", { name: "新建演化课题" });
+  await manualTopic.getByLabel("新课题标题").fill("南宫婉完整审批链路");
+  await manualTopic.getByLabel("新课题目标").fill("用户可以在提案提交前修正已保存课题。");
+  await manualTopic.getByLabel("新课题影响范围").fill("AI Desktop");
+  await manualTopic.getByLabel("新课题事实证据").fill("用户要求独立专题演化窗口");
+  await manualTopic.getByLabel("新课题验收条件").fill("审批后生成任务,任务完成后形成记录");
+  await manualTopic.getByRole("button", { name: "保存课题" }).click();
   await expect(rail.getByRole("heading", { name: "南宫婉完整审批链路", exact: true })).toBeVisible();
   const nangongTab = page.locator(".dev-tab");
   const newNangongConversation = nangongTab.getByRole("button", { name: "重新建立南宫婉对话" });
@@ -357,12 +358,16 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(rail.getByText("提案进度", { exact: true })).toBeVisible();
   await expect(rail.locator(".selgrid-table")).toBeVisible();
   await expect(page.getByRole("button", { name: "截取当前屏幕" })).toBeVisible();
-  await testInfo.attach("nangong-person-workspace", { body: await page.screenshot(), contentType: "image/png" });
+  await testInfo.attach("nangong-person-workspace", { body: await evolutionPage.screenshot(), contentType: "image/png" });
   await taskList.getByRole("button", { name: /韩立/ }).click();
-  const approvalPanel = page.locator(".hanli-evolution-approval");
+  const windowCount = application.windows().length;
+  await page.getByRole("button", { name: "打开专题演化工作台" }).click();
+  expect(application.windows()).toHaveLength(windowCount);
+  await expect(evolutionPage.getByRole("button", { name: "韩立", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const approvalPanel = evolutionPage.locator(".hanli-evolution-approval");
   await expect(approvalPanel).toBeVisible();
   await expect(approvalPanel.locator(".selgrid-table")).toBeVisible();
-  const hanliWorkspace = page.locator(".evolution-control-workspace");
+  const hanliWorkspace = evolutionPage.locator(".evolution-control-workspace");
   await hanliWorkspace.getByRole("button", { name: "自动控制台", exact: true }).click();
   const nangongApproval = approvalPanel.getByRole("checkbox", { name: "南宫婉提案" });
   const linghuApproval = approvalPanel.getByRole("checkbox", { name: "令狐修正" });
@@ -372,14 +377,16 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(nangongApproval).toBeChecked();
   await expect(linghuApproval).toBeChecked();
   await hanliWorkspace.getByRole("button", { name: "人工工作区", exact: true }).click();
-  await testInfo.attach("hanli-approval-workspace", { body: await page.screenshot(), contentType: "image/png" });
+  await testInfo.attach("hanli-approval-workspace", { body: await evolutionPage.screenshot(), contentType: "image/png" });
   await approvalPanel.getByLabel("审批建议").fill("提交内容不具体：写明问题位置、修正动作和预期结果");
   await approvalPanel.getByRole("checkbox", { name: /同时升级南宫婉自身/ }).check();
   await approvalPanel.getByLabel("自身能力升级范围").fill("事实调查与具体提案表达");
   await approvalPanel.getByRole("button", { name: "退回补充" }).click();
   await expect(approvalPanel.getByText(/升级提交能力：事实调查与具体提案表达/)).toBeVisible();
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
-  const revisionPanel = page.getByRole("region", { name: "南宫婉重新提交方案" });
+  await page.getByRole("button", { name: "打开专题演化工作台" }).click();
+  await expect(evolutionPage.getByRole("button", { name: "南宫婉", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const revisionPanel = evolutionPage.getByRole("region", { name: "南宫婉重新提交方案" });
   await expect(revisionPanel.getByText(/用户意见：提交内容不具体/)).toBeVisible();
   await revisionPanel.getByLabel("修订后的具体方案").fill("升级自身提案规则，强制说明问题位置、修正动作和预期结果");
   await revisionPanel.getByLabel("补充调查事实").fill("原提案缺少修改位置,原提案缺少预期结果");
@@ -390,6 +397,7 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await revisionPanel.getByRole("button", { name: "重新提交韩立审批" }).click();
   await expect(rail.locator(".selgrid-table tbody tr")).toHaveCount(2);
   await taskList.getByRole("button", { name: /韩立/ }).click();
+  await page.getByRole("button", { name: "打开专题演化工作台" }).click();
   await approvalPanel.locator(".selgrid-table tbody tr").first().click();
   await expect(approvalPanel.getByText(/升级对象：南宫婉 · 事实调查与具体提案表达/)).toBeVisible();
   await approvalPanel.getByLabel("审批建议").fill("事实完整，批准进入执行链路");
@@ -400,13 +408,17 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await approvalPanel.getByLabel("审批建议").fill("执行结果符合课题验收条件");
   await approvalPanel.getByRole("button", { name: "验收通过" }).click();
   await expect(approvalPanel.getByText("completed", { exact: true }).first()).toBeVisible();
-  await taskList.getByRole("button", { name: /执行列表/ }).click();
-  const completedRecord = page.locator(".execution-record").filter({ hasText: "南宫婉完整审批链路" });
-  await expect(completedRecord).toBeVisible();
-  await completedRecord.locator("summary").click();
-  await expect(completedRecord.getByText("南宫婉提案已经审批、分发并完成。", { exact: true })).toBeVisible();
-  await testInfo.attach("evolution-execution-list", { body: await page.screenshot(), contentType: "image/png" });
+  await evolutionPage.getByRole("button", { name: "南宫婉", exact: true }).click();
+  await expect(rail.getByText("completed", { exact: true }).first()).toBeVisible();
+  await testInfo.attach("evolution-execution-list", { body: await evolutionPage.screenshot(), contentType: "image/png" });
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
+  await evolutionPage.close();
+  const [reopenedEvolutionPage] = await Promise.all([
+    application.waitForEvent("window"),
+    page.getByRole("button", { name: "打开专题演化工作台" }).click(),
+  ]);
+  await expect(reopenedEvolutionPage.getByText("南宫婉专题演化工作台", { exact: true })).toBeVisible();
+  await reopenedEvolutionPage.close();
   await page.getByRole("button", { name: "重新建立南宫婉对话" }).click();
   await expect(page.locator(".nangong-person-composer").getByRole("alert")).toContainText("active writer");
   await taskList.getByRole("button", { name: "单会话" }).click();

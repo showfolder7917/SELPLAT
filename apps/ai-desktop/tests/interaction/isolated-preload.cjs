@@ -1,6 +1,6 @@
 const path = require("node:path");
 
-const { contextBridge } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 
 const projectRoot = path.resolve(__dirname, "../../../..");
 const linghuDefault = JSON.parse(process.env.AI_DESKTOP_INTERACTION_LINGHU_DEFAULT || "null");
@@ -263,6 +263,12 @@ contextBridge.exposeInMainWorld("desktop", {
   selectLinghuStartupPrompt: async (promptId) => { linghuAutomationState.activePromptId = promptId; return publishLinghuAutomation("prompt.selected"); },
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
   getNangongEvolutionState: async () => structuredClone(nangongEvolutionState),
+  openEvolutionWorkspace: async (perspective) => ipcRenderer.invoke("desktop:test-open-evolution-workspace", perspective),
+  onEvolutionWorkspacePerspective: (listener) => {
+    const handler = (_event, perspective) => listener(perspective);
+    ipcRenderer.on("desktop:evolution-workspace-perspective", handler);
+    return () => ipcRenderer.removeListener("desktop:evolution-workspace-perspective", handler);
+  },
   getEvolutionTopicDossier: async (topicId) => {
     const topic = nangongEvolutionState.topics.find((item) => item.topicId === topicId);
     const deliberation = topic?.deliberationId ? nangongEvolutionState.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;

@@ -447,7 +447,8 @@ app.whenReady().then(async () => {
     };
     healthTimeout = setTimeout(() => finishHealthCheck({ status: "failed", errorDescription: "renderer-timeout" }), 15_000);
   }
-  createMainWindow({ preloadPath, rendererRoot, variant, distributionMode, onRendererReady, onRendererFailed });
+  let mainApplicationWindow: BrowserWindow | null = createMainWindow({ preloadPath, rendererRoot, variant, distributionMode, onRendererReady, onRendererFailed });
+  mainApplicationWindow.once("closed", () => { mainApplicationWindow = null; });
   if (healthCheckFile) {
     return;
   }
@@ -456,7 +457,13 @@ app.whenReady().then(async () => {
   nangongEvolution.start();
   workflowSupervisor?.start();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow({ preloadPath, rendererRoot, variant, distributionMode, onRendererFailed });
+    if (mainApplicationWindow && !mainApplicationWindow.isDestroyed()) {
+      mainApplicationWindow.show();
+      mainApplicationWindow.focus();
+      return;
+    }
+    mainApplicationWindow = createMainWindow({ preloadPath, rendererRoot, variant, distributionMode, onRendererFailed });
+    mainApplicationWindow.once("closed", () => { mainApplicationWindow = null; });
   });
 }).catch((error) => {
   eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "electron-main", operation: "application_ready", error, severity: "critical" });

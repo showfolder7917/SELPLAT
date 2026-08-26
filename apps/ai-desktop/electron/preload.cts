@@ -84,6 +84,12 @@ contextBridge.exposeInMainWorld("desktop", {
     return () => ipcRenderer.removeListener("desktop:linghu-automation-state", handler);
   },
   getNangongEvolutionState: () => ipcRenderer.invoke("desktop:get-nangong-evolution-state"),
+  openEvolutionWorkspace: (perspective: "nangong" | "hanli") => ipcRenderer.invoke("desktop:open-evolution-workspace", perspective),
+  onEvolutionWorkspacePerspective: (listener: (perspective: "nangong" | "hanli") => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: "nangong" | "hanli") => listener(value);
+    ipcRenderer.on("desktop:evolution-workspace-perspective", handler);
+    return () => ipcRenderer.removeListener("desktop:evolution-workspace-perspective", handler);
+  },
   getEvolutionTopicDossier: (topicId: string) => ipcRenderer.invoke("desktop:get-evolution-topic-dossier", topicId),
   advanceHanLiDeliberation: () => ipcRenderer.invoke("desktop:advance-han-li-deliberation"),
   sendNangongConversationMessage: (request: unknown) => ipcRenderer.invoke("desktop:send-nangong-conversation-message", request),

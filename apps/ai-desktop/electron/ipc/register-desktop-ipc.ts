@@ -112,6 +112,8 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const approvalAuditTasks = new Map<number, string>();
   const managedExecutor = new ManagedTaskExecutor();
   let screenCaptureAttemptId = 0;
+  let evolutionWorkspaceWindow: BrowserWindow | null = null;
+  let evolutionWorkspacePerspective: "nangong" | "hanli" = "nangong";
 
   const publishDispatchState = () => {
     const state = dispatch.state();
@@ -120,6 +122,42 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     return state;
   };
+
+  handle("desktop:open-evolution-workspace", async (_event, perspective: unknown) => {
+    if (perspective !== "nangong" && perspective !== "hanli") throw new Error("无效的专题演化工作台视角。");
+    evolutionWorkspacePerspective = perspective;
+    if (evolutionWorkspaceWindow && !evolutionWorkspaceWindow.isDestroyed()) {
+      evolutionWorkspaceWindow.webContents.send("desktop:evolution-workspace-perspective", perspective);
+      if (evolutionWorkspaceWindow.isMinimized()) evolutionWorkspaceWindow.restore();
+      evolutionWorkspaceWindow.show();
+      evolutionWorkspaceWindow.focus();
+      audit.recordEvent("evolution.workspace.focused", { perspective });
+      return;
+    }
+    evolutionWorkspaceWindow = new BrowserWindow({
+      width: 1320,
+      height: 880,
+      minWidth: 980,
+      minHeight: 680,
+      frame: false,
+      show: false,
+      backgroundColor: "#080b12",
+      title: "AI Desktop · 专题演化工作台",
+      webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    evolutionWorkspaceWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    evolutionWorkspaceWindow.once("ready-to-show", () => {
+      evolutionWorkspaceWindow?.show();
+      evolutionWorkspaceWindow?.focus();
+    });
+    evolutionWorkspaceWindow.once("closed", () => {
+      evolutionWorkspaceWindow = null;
+      audit.recordEvent("evolution.workspace.closed", { perspective: evolutionWorkspacePerspective });
+    });
+    const target = path.join(rendererRoot, "index.html");
+    await evolutionWorkspaceWindow.loadFile(target, { query: { mode: "evolution-workspace", perspective } });
+    audit.recordEvent("evolution.workspace.opened", { perspective });
+  });
 
   const recordScreenCaptureStage = (
     stage: string,

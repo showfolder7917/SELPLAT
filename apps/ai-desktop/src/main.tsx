@@ -24,11 +24,14 @@ class RendererErrorBoundary extends Component<{ children: ReactNode }, { failed:
 }
 const requestedMode = new URLSearchParams(window.location.search).get("mode");
 const screenshotMode = requestedMode === "screenshot";
+const evolutionWorkspaceMode = requestedMode === "evolution-workspace";
 const screenshotInteractionMode = import.meta.env.DEV && requestedMode === "screenshot-interaction";
 const Application = lazy(() => screenshotInteractionMode
   ? import("../tests/interaction/ScreenshotEditorHarness").then(({ ScreenshotEditorHarness }) => ({ default: ScreenshotEditorHarness }))
   : screenshotMode
   ? import("./variants/developer/ScreenshotWindowApp").then(({ ScreenshotWindowApp }) => ({ default: ScreenshotWindowApp }))
+  : evolutionWorkspaceMode
+  ? import("./variants/developer/DeveloperApp").then(({ EvolutionWorkspaceWindowApp }) => ({ default: EvolutionWorkspaceWindowApp }))
   : import("./variants/developer/DeveloperApp").then(({ DeveloperApp }) => ({ default: DeveloperApp })));
 
 createRoot(document.getElementById("root")!).render(

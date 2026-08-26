@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.97.0 固定证据化最小任务拆分、令狐分发审计、异常自消费隔离与统一两级树工作台。 -->
-rule_version = 5.97.0
+<!-- 5.98.0 固定南宫婉与韩立共用唯一独立专题演化窗口，主会话不再嵌入业务工作台。 -->
+rule_version = 5.98.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -34,12 +34,16 @@ upgrade_record_5_95 = 2026-08-26:韩立按完整会话组综合南宫婉与Codex
 upgrade_record_5_96 = 2026-08-26:演化执行结果统一返回南宫婉_按proposalId形成唯一roundId_数据库保存应收数返回数resultSHA封存和发布状态_全部返回后一次封存_令狐不参与普通执行审核_令狐整批合并统一测试打包重启_新渲染器健康后才标记集成并返回南宫_韩立最终结果验收_失败保留同轮修正重试_删除逐结果即时集成和兼容分支
 <!-- 5.97.0 影响范围不再机械生成任务，南宫婉先只读调查文件边界，令狐只审计分发合理性；统一工作台用一级模块树和二级流程树隔离人工与自动控制。 -->
 upgrade_record_5_97 = 2026-08-26:影响范围不等于任务数量_南宫婉AI调查最小可独立合并任务_预计文件职责回退验收边界_令狐分发合理性审计_文件或职责重叠阻止分发_单按钮同页面同文件合并一人_令狐接收事件改为普通状态事件_令狐查询排除新旧接收事件防止自消费_迟到审批返回expired不抛业务异常_南宫婉韩立统一两级树工作台_人物专题审计一级模块_人工工作区与自动控制台二级隔离_SELUI树表格表单控件
+<!-- 5.98.0 把专题业务从主会话分栏移入真正独立 Electron Window，并由两个人物入口复用同一实例。 -->
+upgrade_record_5_98 = 2026-08-26:主窗口只保留南宫婉和韩立会话_专题演化工作台独立BrowserWindow_南宫婉韩立共用同一窗口同一状态源同一模块树_人物入口只切换初始视角_重复点击聚焦现有窗口_最小化自动恢复_关闭后允许重新打开_主窗口与业务窗口独立生命周期_Dock激活恢复主窗口_禁止内嵌右栏和双实现
 <!-- 南宫婉必须依据真实文件边界形成最小任务，令狐审计不替代韩立方向审批；适用于所有演化提案返还分发。 -->
 nangong_distribution_planning_contract = AI_read_only_investigation + impact_scope_not_task_count + minimal_independently_mergeable_units + expected_files_and_acceptance + linghu_distribution_audit_before_dispatch + overlap_blocks_dispatch
 <!-- 令狐接收统一异常时生成的自身事件只能作为状态记录，不得再次进入异常消费队列。 -->
 linghu_exception_intake_loop_prevention_contract = single_event_center_entry + intake_event_is_state_change + exclude_legacy_and_current_intake_types_from_unhandled_query + source_event_fingerprint_dedup
 <!-- 重大业务工作台使用稳定一级模块树和当前模块二级流程树；人工动作与自动运行控制不得混排。 -->
 evolution_workspace_information_architecture_contract = stable_module_tree_people_evolution_audit + contextual_flow_tree + manual_workspace_separate_from_automatic_console + hanli_approval_integrated + SELUI_tree_grid_form_action_controls
+<!-- 专题演化是独立业务窗口；两个角色入口只能聚焦和切换唯一实例，不得在主窗口继续保留旧右栏。 -->
+evolution_workspace_window_contract = main_window_conversation_only + one_independent_BrowserWindow + nangong_and_hanli_share_instance_state_and_tree + entry_switches_perspective_and_focuses + close_then_reopen + main_window_recreated_on_app_activate_even_if_workspace_remains + no_embedded_or_parallel_legacy_workspace
 <!-- 应用业务只能调用 EventCenterFacade；JSONL、SQLite 和令狐消费均为门面后的可替换实现。 -->
 workflow_event_center_facade_contract = all_application_events_and_exceptions_via_EventCenterFacade + archive_and_SQLite_behind_facade + no_direct_business_sink_coupling
 <!-- 主进程早期、IPC、渲染器、后台服务和退出边界必须统一登记，异常按状态受理直至有事实证明恢复。 -->

@@ -13,6 +13,8 @@ import type { ScreenCapture, ScreenCaptureFrameRequest, ScreenCaptureFrameResult
 import type { WorkspaceEntry, WorkspaceState } from "./workspace.js";
 import type { RendererExceptionReport } from "./workflow.js";
 
+export type EvolutionWorkspacePerspective = "nangong" | "hanli";
+
 /** 定义 preload 向渲染层公开的完整白名单；各领域数据结构保留在独立契约文件。 */
 export interface DesktopApi {
   getEnvironment(): Promise<DesktopEnvironment>;
@@ -78,6 +80,8 @@ export interface DesktopApi {
   selectLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationState>;
   onLinghuAutomationState(listener: (event: LinghuAutomationStateEvent) => void): () => void;
   getNangongEvolutionState(): Promise<NangongEvolutionState>;
+  openEvolutionWorkspace(perspective: EvolutionWorkspacePerspective): Promise<void>;
+  onEvolutionWorkspacePerspective(listener: (perspective: EvolutionWorkspacePerspective) => void): () => void;
   getEvolutionTopicDossier(topicId: string): Promise<EvolutionTopicDossier>;
   advanceHanLiDeliberation(): Promise<NangongEvolutionState>;
   createEvolutionTopic(request: CreateEvolutionTopicRequest): Promise<NangongEvolutionState>;
