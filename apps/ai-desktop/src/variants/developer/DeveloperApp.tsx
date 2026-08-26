@@ -305,7 +305,7 @@ export function DeveloperApp() {
   const [nangongError, setNangongError] = useState("");
   const [automaticTestEnabled, setAutomaticTestEnabled] = useState(false);
   const [automaticTestChecking, setAutomaticTestChecking] = useState(false);
-  const [automaticTestDialog, setAutomaticTestDialog] = useState<AutomaticTestPreflightResult | "checking" | null>(null);
+  const [automaticTestDialog, setAutomaticTestDialog] = useState<AutomaticTestPreflightResult | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 资源管理器控制整栏宽度；工作区和任务使用单一活动分区，确保切换后当前内容置顶并独占可用高度。
   const [explorerExpanded, setExplorerExpanded] = useState(true);
@@ -1158,12 +1158,14 @@ export function DeveloperApp() {
     }
     if (automaticTestChecking || loading) return;
     setAutomaticTestChecking(true);
-    setAutomaticTestDialog("checking");
+    setAutomaticTestDialog(null);
     try {
       const result = await window.desktop?.prepareAutomaticTesting();
       if (!result) throw new Error("Automatic test preflight is unavailable.");
-      setAutomaticTestDialog(result);
-      if (result.status !== "ready") return;
+      if (result.status !== "ready") {
+        setAutomaticTestDialog(result);
+        return;
+      }
       automaticTestEnabledRef.current = true;
       setAutomaticTestEnabled(true);
       const latestCompletedTask = [...messages].reverse().find((message) =>
@@ -1411,7 +1413,7 @@ export function DeveloperApp() {
         <textarea ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} placeholder={text.placeholder} />
         {dispatchError && <div className="composer-error" role="alert"><span>{dispatchError}</span></div>}
         {screenshotError && <div className="composer-error" role="alert"><span>{screenshotError}</span>{(screenRecordingSettingsAvailable || screenRecordingRestartRequired) && <div className="composer-error-actions">{screenRecordingSettingsAvailable && <button type="button" onClick={() => void openScreenRecordingSettings()}>{text.openScreenRecordingSettings}</button>}{screenRecordingRestartRequired && <button type="button" className="primary" disabled={screenRecordingRestarting} onClick={() => void restartForScreenRecordingPermission()}>{locale === "ja" ? "AI Desktop を再起動" : "重启 AI Desktop"}</button>}</div>}</div>}
-        <div className="composer-footer"><div className="composer-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span><button type="button" role="switch" aria-checked={automaticTestEnabled} className="selswitch composer-automatic-test-switch" disabled={automaticTestChecking || (loading && !automaticTestEnabled)} onClick={() => void toggleAutomaticTesting()}><span>{text.automaticTest}</span><i className="selswitch-track" aria-hidden="true"><i className="selswitch-thumb" /></i></button>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}<button type="button" className="screenshot-button" aria-label={text.screenshot} data-sel-tooltip={text.screenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" aria-label={text.hiddenScreenshot} data-sel-tooltip={text.hiddenScreenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
+        <div className="composer-footer"><div className="composer-tools" aria-label="输入工具栏"><div className="composer-tool-group composer-context-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}</div><div className="composer-tool-group composer-automation-tools"><button type="button" role="switch" aria-checked={automaticTestEnabled} className="selswitch composer-automatic-test-switch" disabled={automaticTestChecking || (loading && !automaticTestEnabled)} onClick={() => void toggleAutomaticTesting()}><span>{text.automaticTest}</span><i className="selswitch-track" aria-hidden="true"><i className="selswitch-thumb" /></i></button>{(automaticTestChecking || automaticTestEnabled) && <span className="automatic-test-status" role="status">{automaticTestChecking ? text.automaticTestChecking : text.automaticTestReady}</span>}</div><div className="composer-tool-group composer-attachment-tools"><button type="button" className="screenshot-button" aria-label={text.screenshot} data-sel-tooltip={text.screenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" aria-label={text.hiddenScreenshot} data-sel-tooltip={text.hiddenScreenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div></div><div className="composer-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
       </form>}
     </main>
     </PersonWorkspaceSplitPane>
@@ -1422,10 +1424,8 @@ export function DeveloperApp() {
       {approval && <>{approval.reason && <p className="seldialog-copy">{approval.reason}</p>}{approval.command && <pre className="seldialog-code">{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p className="seldialog-copy">{text.trustHint}</p>}{approval.details && <details className="seldialog-detail"><summary>Details</summary><pre className="seldialog-code">{approval.details}</pre></details>}<div className="seldialog-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button data-sel-action="primary" onClick={() => void resolveApproval("accept")}>{approval.kind === "command" && approval.trustEligible ? text.approveAndTrust : text.approve}</button></div></>}
     </SelUiDialog>
 
-    <SelUiDialog id="ai-desktop-automatic-test" open={Boolean(automaticTestDialog)} title={automaticTestDialog === "checking" ? text.automaticTestChecking : automaticTestDialog?.status === "ready" ? text.automaticTestReady : text.automaticTestBlocked} kicker="AUTOMATIC TEST" dismissible={automaticTestDialog !== "checking"} size="compact" onRequestClose={() => { if (automaticTestDialog !== "checking") setAutomaticTestDialog(null); }}>
-      {automaticTestDialog === "checking"
-        ? <div className="seldialog-status"><span className="screenshot-spinner">◌</span><span>{text.automaticTestChecking}</span></div>
-        : automaticTestDialog && <><ul className="seldialog-checks">{automaticTestDialog.checks.map((check) => <li className={check.status} key={check.id}><i /><span><strong>{check.label}</strong><small>{check.detail}</small></span></li>)}</ul><div className="seldialog-actions"><button data-sel-action="primary" onClick={() => setAutomaticTestDialog(null)}>{text.close}</button></div></>}
+    <SelUiDialog id="ai-desktop-automatic-test" open={Boolean(automaticTestDialog)} title={text.automaticTestBlocked} kicker="AUTOMATIC TEST" dismissible size="compact" onRequestClose={() => setAutomaticTestDialog(null)}>
+      {automaticTestDialog && <><ul className="seldialog-checks">{automaticTestDialog.checks.map((check) => <li className={check.status} key={check.id}><i /><span><strong>{check.label}</strong><small>{check.detail}</small></span></li>)}</ul><div className="seldialog-actions"><button data-sel-action="primary" onClick={() => setAutomaticTestDialog(null)}>{text.close}</button></div></>}
     </SelUiDialog>
   </div>;
 }

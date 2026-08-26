@@ -146,8 +146,10 @@ button { color: inherit; }
 .composer-attachments figure button:hover { background: var(--sel-theme-semantic-error); }
 .message-attachments { display: grid; gap: 8px; margin-bottom: 12px; }
 .message-attachments img { display: block; max-width: min(100%, 560px); max-height: 420px; border: 1px solid var(--sel-theme-line); border-radius: 8px; object-fit: contain; background: var(--sel-theme-workbench-surface); }
-.composer-tools { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
-.composer-actions { display: flex; align-items: center; gap: 7px; }
+.composer-tools { min-width: 0; display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 8px 0; }
+.composer-tool-group { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.composer-tool-group + .composer-tool-group { margin-left: 11px; padding-left: 11px; border-left: 1px solid var(--sel-theme-line); }
+.composer-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; margin-left: 12px; }
 .composer-actions .stop-action { color: var(--sel-theme-semantic-error); background: var(--sel-theme-workbench-error-surface); }
 .queued-send-count { color: var(--sel-theme-workbench-accent); white-space: nowrap; }
 .dispatch-recovery,
@@ -170,6 +172,7 @@ button { color: inherit; }
 .execution-mode-badge { height: 28px; display: inline-flex; align-items: center; padding: 0 9px; border: 1px solid var(--sel-theme-line); border-radius: 7px; color: var(--sel-theme-workbench-text-muted); background: var(--sel-theme-workbench-surface); font-size: var(--sel-theme-font-size-caption); }
 .composer-automatic-test-switch { min-width: 100px; }
 .composer-automatic-test-switch > span:first-child { white-space: nowrap; }
+.automatic-test-status { max-width: 132px; overflow: hidden; color: var(--sel-theme-workbench-accent); font-size: var(--sel-theme-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .managed-execution-status { min-width: 0; max-width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 10px; overflow: hidden; border: 1px solid var(--sel-theme-line); border-radius: 8px; box-sizing: border-box; background: var(--sel-theme-workbench-surface); color: var(--sel-theme-workbench-text-muted); }
 .managed-execution-status strong { color: var(--sel-theme-workbench-accent); font-size: var(--sel-theme-font-size-caption); }
 .managed-execution-status span { min-width: 0; overflow-wrap: anywhere; }

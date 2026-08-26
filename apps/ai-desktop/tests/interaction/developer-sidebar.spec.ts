@@ -566,29 +566,31 @@ test("正式最小窗口和默认窗口支持资源管理器键盘调节且没�
 });
 
 test("自动测试默认关闭，预检成功后才进入开启态", async () => {
+  const composer = page.locator(".dev-composer");
   const automaticTest = page.getByRole("switch", { name: "自动测试" });
-  const modeBadge = page.locator(".execution-mode-badge");
+  const contextTools = composer.locator(".composer-context-tools");
+  const automationTools = composer.locator(".composer-automation-tools");
+  const attachmentTools = composer.locator(".composer-attachment-tools");
   const screenshotButton = page.getByRole("button", { name: "截取当前屏幕" });
   await expect(automaticTest).toHaveAttribute("aria-checked", "false");
-  const [modeBounds, automaticBounds, screenshotBounds] = await Promise.all([
-    modeBadge.boundingBox(),
+  const [contextBounds, automationBounds, attachmentBounds, automaticBounds, screenshotBounds] = await Promise.all([
+    contextTools.boundingBox(),
+    automationTools.boundingBox(),
+    attachmentTools.boundingBox(),
     automaticTest.boundingBox(),
     screenshotButton.boundingBox(),
   ]);
-  if (!modeBounds || !automaticBounds || !screenshotBounds) throw new Error("自动测试工具栏控件缺少可见边界。");
-  expect(modeBounds.x).toBeLessThan(automaticBounds.x);
+  if (!contextBounds || !automationBounds || !attachmentBounds || !automaticBounds || !screenshotBounds) throw new Error("自动测试工具栏控件缺少可见边界。");
+  expect(contextBounds.x).toBeLessThan(automationBounds.x);
+  expect(automationBounds.x).toBeLessThan(attachmentBounds.x);
   expect(automaticBounds.x).toBeLessThan(screenshotBounds.x);
   await automaticTest.click();
 
-  const dialog = page.getByRole("dialog", { name: "自动测试环境已就绪" });
-  await expect(dialog.getByText("自动测试环境已就绪", { exact: true })).toBeVisible();
-  await expect(dialog.locator(".seldialog-checks li.passed")).toHaveCount(7);
-  const dialogBounds = await dialog.locator(".seldialog-surface").boundingBox();
-  if (!dialogBounds) throw new Error("自动测试结果弹窗缺少可见边界。");
-  expect(dialogBounds.x).toBeGreaterThanOrEqual(0);
-  expect(dialogBounds.x + dialogBounds.width).toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
-  await dialog.getByRole("button", { name: "知道了" }).click();
   await expect(automaticTest).toHaveAttribute("aria-checked", "true");
+  await expect(automationTools.getByText("自动测试环境已就绪", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "自动测试环境已就绪" })).toHaveCount(0);
+  await composer.locator("textarea").focus();
+  await expect(composer.locator("textarea")).toBeFocused();
 
   await automaticTest.click();
   await expect(automaticTest).toHaveAttribute("aria-checked", "false");
