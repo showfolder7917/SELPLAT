@@ -91,6 +91,37 @@ export class VersionIntegrationPipeline {
     this.#waitSpans.clear();
   }
 
+  /** 新版本渲染器真实就绪后再把已发布批次交还南宫婉，禁止重启前伪报完成。 */
+  confirmPublishedRestart(): number[] {
+    const state = this.#store.state();
+    const generations = state.integrationBatches
+      .filter((batch) => batch.state === "verified" && state.tasks.some((task) => task.integrationGeneration === batch.generation && task.state === "awaiting-restart"))
+      .map((batch) => batch.generation);
+    for (const generation of generations) {
+      const taskIds = state.tasks.filter((task) => task.integrationGeneration === generation && task.state === "awaiting-restart").map((task) => task.taskId);
+      if (!taskIds.length) continue;
+      this.#store.updateTask(taskIds[0], "release.restart_healthy", (_first, mutable) => {
+        const batch = mutable.integrationBatches.find((item) => item.generation === generation);
+        const completedAt = new Date().toISOString();
+        if (batch) { batch.state = "completed"; batch.completedAt = completedAt; }
+        const currentActor = requireActor(mutable, this.#actorMemberId);
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "integrated";
+          task.currentHandler = participantSnapshot(currentActor);
+          task.completedAt = completedAt;
+          task.blockingReason = null;
+          task.resultSummary ||= createCollaborationResultSummary(task, task.finalResult || "任务已完成协同集成。", []);
+          task.resultSummary.outcome = "succeeded";
+          task.resultSummary.success = true;
+          task.resultSummary.remaining = "无已知遗留内容。";
+          task.resultSummary.generatedAt = completedAt;
+          appendFlow(task, "release.restart_healthy", "integration", "completed", "新版本已重启并通过渲染器健康检查，结果返回南宫婉", currentActor);
+        }
+      });
+    }
+    return generations;
+  }
+
   async #runNextBatch(): Promise<void> {
     if (this.#disposed || this.#running) return;
     // 只冻结当前已经满足依赖和原子组屏障的任务，后到结果自然进入下一代。
@@ -194,32 +225,25 @@ export class VersionIntegrationPipeline {
       releaseDocument.localMergeSha = localMergeSha;
       this.#releaseBatches.write(releaseDocument);
       this.#durations.finish(integrationSpan, "completed", { releaseEvent: "integration.local_branch_updated", integrationSha });
-      // 成功结果在一个状态提交中同步批次、统一测试、任务终态和可展示结果摘要。
-      this.#store.updateTask(taskIds[0], "integration.completed", (_first, mutable) => {
+      // 合并和统一测试通过后先等待新版本真实启动，禁止在重启前把任务伪报为终态。
+      this.#store.updateTask(taskIds[0], "release.awaiting_restart", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
         if (batch) {
-          batch.state = "completed";
-          batch.completedAt = new Date().toISOString();
+          batch.state = "verified";
           batch.integrationSha = integrationSha;
         }
-        const completedAt = new Date().toISOString();
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = "integrated";
+          task.state = "awaiting-restart";
           task.currentHandler = participantSnapshot(currentActor);
           if (task.unifiedTest) {
             task.unifiedTest.status = "passed";
             task.unifiedTest.failureReason = null;
-            task.unifiedTest.completedAt = completedAt;
+            task.unifiedTest.completedAt = new Date().toISOString();
           }
-          task.completedAt = completedAt;
+          task.completedAt = null;
           task.blockingReason = null;
-          task.resultSummary ||= createCollaborationResultSummary(task, task.finalResult || "任务已完成协同集成。", []);
-          task.resultSummary.outcome = "succeeded";
-          task.resultSummary.success = true;
-          if (task.resultSummary.remaining === "等待协同集成完成。" || /^无[。.]?$/.test(task.resultSummary.remaining.trim())) task.resultSummary.remaining = "无已知遗留内容。";
-          task.resultSummary.generatedAt = completedAt;
-          appendFlow(task, "unified_test.passed", "integration", "completed", `${currentActor.displayName}统一测试通过，任务已归档到执行列表`, currentActor);
+          appendFlow(task, "unified_test.passed", "integration", "completed", `${currentActor.displayName}统一测试通过，等待打包版本重启健康检查`, currentActor);
         }
       });
 

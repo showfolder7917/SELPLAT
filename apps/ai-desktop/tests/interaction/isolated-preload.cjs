@@ -132,7 +132,7 @@ const readInteractionAiMemoryDatabaseStatus = () => {
   const state = new URLSearchParams(globalThis.location.search).get("interactionAiMemoryState");
   return state === "recovery-required"
     ? { state, schemaVersion: null, message: "已初始化的 AI Memory 数据库丢失，请先恢复原文件。" }
-    : { state: "ready", schemaVersion: "0006", message: null };
+    : { state: "ready", schemaVersion: "0008", message: null };
 };
 
 // 隔离测试只提供界面渲染需要的确定性数据，不连接真实 Harness、账号、文件选择器或屏幕权限。

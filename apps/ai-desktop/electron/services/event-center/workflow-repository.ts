@@ -202,6 +202,8 @@ export class WorkflowRepository {
         $protocolProgressAt: member.lastProtocolProgressAt, $blockingReason: member.blockingReason, $updatedAt: member.updatedAt,
       });
       for (const task of state.tasks) this.#upsertTask(connection, state, task);
+      const roundIds = [...new Set(state.tasks.map((task) => task.evolutionRoundId).filter((value): value is string => Boolean(value)))];
+      for (const roundId of roundIds) this.#upsertEvolutionRound(connection, state, roundId);
     });
   }
 
@@ -353,7 +355,7 @@ export class WorkflowRepository {
     });
   }
 
-  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopConversationArchiveMessage" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord"): number {
+  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopConversationArchiveMessage" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord" | "AiDesktopEvolutionRound" | "AiDesktopEvolutionRoundTask"): number {
     return this.#database.withConnection((connection) => Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count));
   }
 
@@ -432,6 +434,44 @@ export class WorkflowRepository {
       reason: review.feedback,
       evidence: { planVersion: review.planVersion, reviewerGeneration: review.reviewerGeneration },
       decidedAt: review.createdAt,
+    });
+  }
+
+  /** 保存南宫婉收集屏障和每项返回事实，应用重启后直接从同一轮恢复。 */
+  #upsertEvolutionRound(connection: DatabaseSync, state: CollaborationState, roundId: string): void {
+    const tasks = state.tasks.filter((task) => task.evolutionRoundId === roundId);
+    if (!tasks.length) return;
+    const returnedStates = new Set(["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart", "test-failed", "integrated"]);
+    const returnedTaskCount = tasks.filter((task) => returnedStates.has(task.state)).length;
+    const blocked = tasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
+    const completed = tasks.every((task) => task.state === "integrated");
+    const integrating = tasks.some((task) => ["queued-integration", "integrating", "unified-testing", "awaiting-restart"].includes(task.state));
+    const sealed = tasks.every((task) => ["ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart", "test-failed", "integrated"].includes(task.state));
+    const roundState = completed ? "completed" : blocked ? "blocked" : integrating ? "integrating" : sealed ? "sealed" : "collecting";
+    const sealedAt = tasks.flatMap((task) => task.flowEvents).filter((event) => event.type === "evolution.task_collected").map((event) => event.occurredAt).sort()[0] || null;
+    const completedAt = completed ? tasks.map((task) => task.completedAt).filter((value): value is string => Boolean(value)).sort().at(-1) || null : null;
+    const updatedAt = tasks.map((task) => task.updatedAt).sort().at(-1) || new Date().toISOString();
+    connection.prepare(`
+      INSERT INTO AiDesktopEvolutionRound (roundId, proposalId, state, expectedTaskCount, returnedTaskCount, sealedAt, submittedToLinghuAt, completedAt, updatedAt)
+      VALUES ($roundId, $proposalId, $state, $expectedTaskCount, $returnedTaskCount, $sealedAt, $submittedToLinghuAt, $completedAt, $updatedAt)
+      ON CONFLICT(roundId) DO UPDATE SET state=excluded.state, expectedTaskCount=excluded.expectedTaskCount,
+        returnedTaskCount=excluded.returnedTaskCount, sealedAt=excluded.sealedAt,
+        submittedToLinghuAt=excluded.submittedToLinghuAt, completedAt=excluded.completedAt, updatedAt=excluded.updatedAt
+    `).run({
+      $roundId: roundId, $proposalId: tasks[0].evolutionProposalId || roundId, $state: roundState,
+      $expectedTaskCount: tasks.length, $returnedTaskCount: returnedTaskCount, $sealedAt: sealedAt,
+      $submittedToLinghuAt: sealedAt, $completedAt: completedAt, $updatedAt: updatedAt,
+    });
+    const upsertTask = connection.prepare(`
+      INSERT INTO AiDesktopEvolutionRoundTask (roundId, taskId, executorMemberId, collectionState, resultSha, returnedAt, updatedAt)
+      VALUES ($roundId, $taskId, $executorMemberId, $collectionState, $resultSha, $returnedAt, $updatedAt)
+      ON CONFLICT(roundId, taskId) DO UPDATE SET executorMemberId=excluded.executorMemberId,
+        collectionState=excluded.collectionState, resultSha=excluded.resultSha, returnedAt=excluded.returnedAt, updatedAt=excluded.updatedAt
+    `);
+    for (const task of tasks) upsertTask.run({
+      $roundId: roundId, $taskId: task.taskId, $executorMemberId: task.executorMemberId,
+      $collectionState: evolutionRoundTaskState(task), $resultSha: task.versionWorkspace?.resultSha || null,
+      $returnedAt: task.returnedToNangongAt, $updatedAt: task.updatedAt,
     });
   }
 
@@ -526,7 +566,7 @@ function taskRuntimeStatus(state: CollaborationTask["state"]): string {
   if (state === "cancelled") return "cancelled";
   if (state === "test-failed" || state === "review-failed" || state === "blocked") return "failed";
   if (state === "recovering" || state.startsWith("repairing-")) return "recovering";
-  if (state.startsWith("queued-") || state === "ready-for-integration") return "waiting";
+  if (state.startsWith("queued-") || state === "returned-to-nangong" || state === "ready-for-integration") return "waiting";
   if (state === "preparing-worktree") return "queued";
   return "running";
 }
@@ -541,3 +581,12 @@ function taskBlockingKind(task: CollaborationTask): string {
 }
 function evolutionStage(status: string): string { return status === "pending-approval" ? "approval" : status === "approved" ? "distribution" : status === "executing" ? "execution" : status === "verifying" ? "verification" : status === "completed" ? "next-evolution" : "investigation"; }
 function evolutionOwner(status: string, origin: string): string { return status === "pending-approval" ? "han-li" : status === "approved" || status === "completed" ? origin === "linghu" ? "linghu-ancestor" : "nangong-wan" : status === "executing" || status === "verifying" ? "collaboration-coordinator" : origin === "linghu" ? "linghu-ancestor" : "nangong-wan"; }
+
+function evolutionRoundTaskState(task: CollaborationTask): "executing" | "returned" | "sealed" | "integrating" | "blocked" | "completed" {
+  if (task.state === "integrated") return "completed";
+  if (["blocked", "cancelled", "test-failed"].includes(task.state)) return "blocked";
+  if (["queued-integration", "integrating", "unified-testing", "awaiting-restart"].includes(task.state)) return "integrating";
+  if (task.state === "ready-for-integration") return "sealed";
+  if (task.state === "returned-to-nangong") return "returned";
+  return "executing";
+}

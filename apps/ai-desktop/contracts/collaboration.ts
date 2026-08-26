@@ -25,10 +25,12 @@ export type CollaborationTaskState =
   | "forced-after-review-limit"
   | "executing"
   | "repairing-execution"
+  | "returned-to-nangong"
   | "ready-for-integration"
   | "queued-integration"
   | "integrating"
   | "unified-testing"
+  | "awaiting-restart"
   | "test-failed"
   | "integrated"
   | "blocked"
@@ -201,6 +203,8 @@ export interface CollaborationTask {
   initiator: CollaborationParticipantSnapshot | null;
   automationSource: CollaborationAutomationSource | null;
   evolutionProposalId: string | null;
+  evolutionRoundId: string | null;
+  returnedToNangongAt: string | null;
   selfUpgradeTargetMemberId: string | null;
   selfUpgradeCapabilityScope: string | null;
   sourceEvolutionApprovalId: string | null;
@@ -273,6 +277,7 @@ export interface SubmitCollaborationTaskRequest {
   preferredExecutorMemberId?: string;
   automationSource?: CollaborationAutomationSource;
   evolutionProposalId?: string;
+  evolutionRoundId?: string;
   selfUpgradeTargetMemberId?: string;
   selfUpgradeCapabilityScope?: string;
   sourceEvolutionApprovalId?: string;

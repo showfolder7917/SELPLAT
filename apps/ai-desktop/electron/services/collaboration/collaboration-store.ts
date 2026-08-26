@@ -162,6 +162,8 @@ export class CollaborationStore {
       initiator: participantSnapshot(initiatorMember),
       automationSource: request.automationSource || null,
       evolutionProposalId: request.evolutionProposalId?.trim() || null,
+      evolutionRoundId: request.evolutionRoundId?.trim() || null,
+      returnedToNangongAt: null,
       selfUpgradeTargetMemberId: request.selfUpgradeTargetMemberId?.trim() || null,
       selfUpgradeCapabilityScope: request.selfUpgradeCapabilityScope?.trim() || null,
       sourceEvolutionApprovalId: request.sourceEvolutionApprovalId?.trim() || null,
@@ -410,7 +412,7 @@ function mergeDefaultMembers(state: CollaborationState): void {
 function recoverInterruptedState(state: CollaborationState): void {
   const interruptedTaskIds = new Set<string>();
   for (const task of state.tasks) {
-    if (TERMINAL_TASK_STATES.has(task.state) || task.state === "queued-executor" || task.state === "ready-for-integration") continue;
+    if (TERMINAL_TASK_STATES.has(task.state) || task.state === "queued-executor" || task.state === "returned-to-nangong" || task.state === "ready-for-integration" || task.state === "awaiting-restart") continue;
     task.recoveryTargetState ??= task.state;
     task.state = "recovering";
     task.phase = null;

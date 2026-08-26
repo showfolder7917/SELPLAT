@@ -23,4 +23,5 @@
 - `AiDesktopApprovalRecord` 保存韩立与用户的审批事实、建议和参考历史。
 - `AiDesktopApprovalGovernance` 以公共信封汇总演化审批、协作方案评审和 Codex 命令授权；各领域仍保留自己的决策语义和状态机。
 - `AiDesktopRuntimeSession` 在下次启动时识别上一次未正常结束的运行，并生成恢复事件。
+- `AiDesktopEvolutionRound`、`AiDesktopEvolutionRoundTask` 保存南宫婉每轮应收任务、实际返回结果和封存事实；只有整轮收齐后才交给令狐合并、测试、打包和重启。
 - 主进程监督器每 30 秒同步状态；执行中任务连续 120 秒没有有效进展时只登记一次卡住事实，再交给令狐现有恢复入口处理。

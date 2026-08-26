@@ -399,6 +399,10 @@ app.whenReady().then(async () => {
   let onRendererFailed: ((details: { errorCode: number; errorDescription: string; validatedURL: string }) => void) | undefined = (details) => eventCenter.recordException({
     kind: "technical", sourceType: "system", sourceId: "electron-renderer", operation: "renderer_load", error: new Error(details.errorDescription), details,
   });
+  onRendererReady = () => {
+    const confirmedGenerations = collaboration?.confirmPublishedRestart() || [];
+    if (confirmedGenerations.length) eventCenter.recordEvent("application.release_restart_healthy", { confirmedGenerations });
+  };
   if (healthCheckFile) {
     const safeHealthRoot = path.join(projectPaths.temporaryMaterialsRoot, "候选包健康检查");
     const resolvedHealthFile = path.resolve(healthCheckFile);

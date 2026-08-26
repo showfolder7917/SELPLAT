@@ -426,7 +426,7 @@ function flowHealth(task: CollaborationTask, stale: boolean): LinghuFlowHealth {
   if (task.state === "unified-testing") return "testing";
   if (task.state === "repairing-review" || task.state === "repairing-execution") return "repairing";
   // 有明确队列释放条件的等待不是停点，不能仅凭排队时长触发具有副作用的恢复。
-  if (["queued-executor", "queued-reviewer", "queued-integration", "ready-for-integration"].includes(task.state)) return "waiting";
+  if (["queued-executor", "queued-reviewer", "returned-to-nangong", "queued-integration", "ready-for-integration", "awaiting-restart"].includes(task.state)) return "waiting";
   if (stale) return "stalled";
   if (["executing", "integrating"].includes(task.state)) return "repairing";
   return "healthy";
@@ -437,7 +437,9 @@ function waitingPoint(task: CollaborationTask, health: LinghuFlowHealth): string
   if (health === "stalled" || health === "recovering") return task.blockingReason || "等待安全恢复条件";
   if (task.state === "queued-executor") return "等待执行者容量";
   if (task.state === "queued-reviewer") return "等待审核者容量";
-  if (task.state === "ready-for-integration" || task.state === "queued-integration") return "等待集成器";
+  if (task.state === "returned-to-nangong") return "等待南宫婉收齐本轮任务";
+  if (task.state === "awaiting-restart") return "等待新版本重启健康检查";
+  if (task.state === "ready-for-integration" || task.state === "queued-integration") return "等待令狐整批集成";
   return null;
 }
 

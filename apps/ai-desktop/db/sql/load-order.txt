@@ -5,3 +5,5 @@
 0004|migration-0004-codex-conversation-archive.sql|建立 Codex 页面历史对话压缩归档
 0005|migration-0005-approval-governance.sql|建立演化、协作评审和 Codex 命令授权的统一审批治理投影
 0006|migration-0006-evolution-topic-dossier.sql|建立韩立研讨、来源会话快照和专题全生命周期原始档案
+0007|schema-AiDesktopEvolutionRound.sql|建立南宫婉演化轮次收集与令狐整批交付表
+0008|schema-AiDesktopEvolutionRoundTask.sql|建立演化轮次任务返回明细表

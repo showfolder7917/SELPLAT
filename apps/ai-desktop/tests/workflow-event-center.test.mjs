@@ -11,13 +11,13 @@ import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });
 
-test("统一迁移建立事件、流程、任务、审批、对话记忆和专题全生命周期档案表", () => {
+test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopConversationArchiveMessage", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopConversationArchiveMessage", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "0006");
+    assert.equal(fixture.database.latestSchemaVersion, "0008");
   } finally {
     fixture.close();
   }
@@ -41,6 +41,28 @@ test("异常从统一队列受理并在相关流程恢复后进入已解决终�
   } finally {
     fixture.close();
   }
+});
+
+test("南宫婉轮次收集状态和任务返回结果统一投影到 SQLite", () => {
+  const fixture = createFixture("evolution-round");
+  try {
+    const returnedAt = "2026-08-26T01:00:00.000Z";
+    const state = collaborationState(returnedAt);
+    Object.assign(state.tasks[0], {
+      state: "returned-to-nangong", phase: "ready", evolutionProposalId: "proposal-round-1",
+      evolutionRoundId: "proposal-round-1", returnedToNangongAt: returnedAt,
+      versionWorkspace: { workspaceId: "workspace-1", rootPath: "/tmp/workspace-1", branchName: "codex/round-1", baseSha: "base", resultSha: "result", createdAt: returnedAt, retiredAt: null },
+    });
+    fixture.database.withConnection((connection) => connection.prepare(`
+      INSERT INTO AiDesktopWorkflowRun (workflowId, topicId, proposalId, origin, title, state, currentStage, currentOwnerId, recoveryPoint, nextLaunchAt, startedAt, completedAt, updatedAt)
+      VALUES ('evolution:proposal-round-1', 'topic-round-1', 'proposal-round-1', 'nangong', '轮次投影', 'executing', 'execution', 'nangong-wan', NULL, NULL, $now, NULL, $now)
+    `).run({ $now: returnedAt }));
+    fixture.repository.syncCollaborationState(state);
+    const round = fixture.database.withConnection((connection) => connection.prepare("SELECT state, expectedTaskCount, returnedTaskCount, sealedAt FROM AiDesktopEvolutionRound WHERE roundId='proposal-round-1'").get());
+    const task = fixture.database.withConnection((connection) => connection.prepare("SELECT collectionState, resultSha, returnedAt FROM AiDesktopEvolutionRoundTask WHERE roundId='proposal-round-1' AND taskId='task-1'").get());
+    assert.deepEqual({ ...round }, { state: "collecting", expectedTaskCount: 1, returnedTaskCount: 1, sealedAt: null });
+    assert.deepEqual({ ...task }, { collectionState: "returned", resultSha: "result", returnedAt });
+  } finally { fixture.close(); }
 });
 
 test("用户与南宫婉完整原文独立保存预览且每轮自由登记主题类型", () => {
@@ -262,7 +284,7 @@ function collaborationState(heartbeat) {
       taskId: "task-1", taskRevision: 1, assignmentId: "assignment-1", workerGeneration: 1, state: "executing", phase: "implementing",
       executorMemberId: "zi-ling", currentReviewerMemberId: null, currentPlanVersion: 1, explicitRejectionCount: 0, infrastructureFailureCount: 0,
       mergeStrategy: "INDEPENDENT", atomicGroupId: null, dependencyTaskIds: [], integrationGeneration: null,
-      initiator: { memberId: "nangong-wan", displayName: "南宫婉" }, automationSource: null, evolutionProposalId: null,
+      initiator: { memberId: "nangong-wan", displayName: "南宫婉" }, automationSource: null, evolutionProposalId: null, evolutionRoundId: null, returnedToNangongAt: null,
       selfUpgradeTargetMemberId: null, selfUpgradeCapabilityScope: null, sourceEvolutionApprovalId: null, historyCompleteness: "complete",
       snapshot: { title: "执行统一异常", problemStatement: "异常分散", confirmedIntent: "统一入口", constraints: [], acceptanceCriteria: ["可追踪"], sourceMessageIds: [], attachmentIds: [], workspaceState: { roots: [{ path: appRoot, permission: "workspace-write" }] }, locale: "zh-CN", contentHash: "hash" },
       plans: [], reviews: [], reviewAttempts: [], executionRecords: [], flowEvents: [], versionWorkspace: null, finalResult: null,

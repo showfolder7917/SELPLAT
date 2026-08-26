@@ -81,9 +81,16 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(collaborationContractSource, /repairing-review/);
   assert.match(collaborationContractSource, /repairing-execution/);
   assert.match(collaborationContractSource, /unified-testing/);
+  assert.match(collaborationContractSource, /returned-to-nangong/);
+  assert.match(collaborationContractSource, /awaiting-restart/);
   assert.match(coordinatorSource, /review\.repair_completed[\s\S]*preferredReviewerMemberId/);
   assert.match(coordinatorSource, /execution\.repair_completed[\s\S]*preferredExecutorMemberId/);
   assert.match(integrationPipelineSource, /currentActor\.displayName\}正在统一测试/);
+  assert.match(coordinatorSource, /sealEvolutionRound/);
+  assert.match(coordinatorSource, /结果已返回南宫婉收集/);
+  assert.match(coordinatorSource, /ORCHESTRATOR_MEMBER_IDS/);
+  assert.match(integrationPipelineSource, /release\.awaiting_restart/);
+  assert.match(integrationPipelineSource, /release\.restart_healthy/);
   assert.match(integrationPipelineSource, /unified_test\.passed/);
   assert.match(integrationPipelineSource, /unified_test\.failed/);
 });
@@ -885,7 +892,7 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.95\.0/);
+  assert.match(rule, /rule_version = 5\.96\.0/);
   assert.match(rule, /respectful_listening_and_correction_are_nangong_personality/);
   assert.match(rule, /reflect_current_concern_not_mechanical_template/);
   assert.match(rule, /never_expand_user_intent/);
@@ -1189,7 +1196,7 @@ test("旧协同状态加载时补齐审核尝试历史", () => {
   }
 });
 
-test("协同编排保持独立连接、异人审核、三次上限、心跳和即时就绪集成契约", () => {
+test("协同编排保持独立连接、异人审核、三次上限、心跳和整轮封存集成契约", () => {
   const coordinator = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
   const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
   const workspaces = readFileSync(new URL("../electron/services/collaboration/version-workspace-manager.ts", import.meta.url), "utf8");

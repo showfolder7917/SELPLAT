@@ -33,7 +33,7 @@ export function deriveCollaborationTaskCurrentStage(
   automation: LinghuAutomationState | null,
 ): CollaborationProgressStageId {
   const automationOwnsTask = automation?.activeTaskId === task.taskId;
-  const unifiedTestActive = ["ready-for-integration", "queued-integration", "integrating", "unified-testing", "test-failed"].includes(task.state)
+  const unifiedTestActive = ["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart", "test-failed"].includes(task.state)
     || (automationOwnsTask && automation?.currentModule === "test-coverage");
   const repairActive = !unifiedTestActive && (
     task.state === "optimizing"
@@ -70,7 +70,7 @@ export function deriveCollaborationTaskProgress(
     ? latestReviewAttempt?.reviewerMemberId === task.currentReviewerMemberId ? latestReviewAttempt.reviewerDisplayName : isJapanese ? "レビュー担当" : "当前审核人"
     : latestReview?.reviewerDisplayName || latestReviewAttempt?.reviewerDisplayName || (isJapanese ? "空きレビュー担当" : "空闲审核员");
   const automationOwnsTask = automation?.activeTaskId === task.taskId;
-  const unifiedTestActive = ["ready-for-integration", "queued-integration", "integrating", "unified-testing", "test-failed"].includes(task.state)
+  const unifiedTestActive = ["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart", "test-failed"].includes(task.state)
     || (automationOwnsTask && automation?.currentModule === "test-coverage");
   const repairEvents = task.flowEvents.filter((event) => event.stage === "recovery" || event.error);
   const repairActive = !unifiedTestActive && (
@@ -141,7 +141,9 @@ function currentAction(task: CollaborationTask, stage: CollaborationProgressStag
   }
   if (stage === "approval") return task.state === "queued-reviewer" ? (ja ? "レビュー担当を待機中" : "正在等待审批人") : (ja ? "修正案をレビュー中" : "正在审批方案");
   if (stage === "execution") {
-    if (["ready-for-integration", "queued-integration"].includes(task.state)) return ja ? "統合待ち" : "正在等待集成";
+    if (task.state === "returned-to-nangong") return ja ? "南宮婉がラウンド結果を収集中" : "南宫婉正在收集本轮结果";
+    if (task.state === "awaiting-restart") return ja ? "新しいバージョンの再起動確認待ち" : "等待新版本重启健康检查";
+    if (["ready-for-integration", "queued-integration"].includes(task.state)) return ja ? "令狐の一括統合待ち" : "等待令狐整批集成";
     if (task.state === "integrating") return ja ? "変更を統合中" : "正在集成修改";
     if (task.phase === "verifying") return ja ? "コード検証中" : "正在验证代码";
     if (task.phase === "finalizing") return ja ? "実行結果を整理中" : "正在整理执行结果";

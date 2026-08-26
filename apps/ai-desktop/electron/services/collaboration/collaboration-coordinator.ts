@@ -21,6 +21,7 @@ import { VersionIntegrationPipeline } from "./version-integration-pipeline.js";
 import { createCollaborationResultSummary } from "./result/result-summary.js";
 
 const LINGHU_MEMBER_ID = "linghu-ancestor";
+const ORCHESTRATOR_MEMBER_IDS = new Set(["nangong-wan", LINGHU_MEMBER_ID]);
 
 export interface CollaborationExecutionResult {
   status: "code-verified" | "incomplete";
@@ -224,6 +225,45 @@ export class CollaborationCoordinator {
     this.#schedule();
   }
 
+  confirmPublishedRestart(): number[] { return this.#integrationPipeline.confirmPublishedRestart(); }
+
+  /** 南宫婉确认同一演化轮全部结果已返回后，才把不可拆分的完整批次交给令狐。 */
+  sealEvolutionRound(proposalId: string, taskIds: string[]): CollaborationState {
+    const uniqueTaskIds = [...new Set(taskIds)];
+    if (!uniqueTaskIds.length) throw new Error("演化轮没有可封存的任务。");
+    const current = this.state();
+    const tasks = uniqueTaskIds.map((taskId) => current.tasks.find((task) => task.taskId === taskId));
+    if (tasks.some((task) => !task || task.evolutionProposalId !== proposalId || task.evolutionRoundId !== proposalId)) {
+      throw new Error("演化轮任务与南宫婉收集清单不一致。");
+    }
+    if (tasks.some((task) => task?.state !== "returned-to-nangong" || !task.versionWorkspace?.resultSha)) {
+      throw new Error("本轮任务尚未全部完成并返回南宫婉。");
+    }
+    const nangong = current.members.find((member) => member.memberId === "nangong-wan");
+    this.#store.updateTask(uniqueTaskIds[0], "evolution.round_sealed", (_first, mutable) => {
+      for (const task of mutable.tasks.filter((candidate) => uniqueTaskIds.includes(candidate.taskId))) {
+        task.state = "ready-for-integration";
+        task.phase = "ready";
+        task.mergeStrategy = "ATOMIC_GROUP";
+        task.atomicGroupId = proposalId;
+        task.dependencyTaskIds = [];
+        task.currentHandler = nangong ? participantSnapshot(nangong) : task.initiator;
+        appendFlow(task, "evolution.task_collected", "integration", "completed", "南宫婉已收齐本轮任务并封存，统一交给令狐老祖", task.currentHandler);
+      }
+    });
+    for (const taskId of uniqueTaskIds) {
+      this.#integrationPipeline.trackWaitingTask(taskId, {
+        segment: "integration-wait",
+        waitType: "system-wait",
+        reasonCode: "nangong-round-sealed",
+        resource: proposalId,
+        resourceOwner: "nangong-wan",
+      });
+    }
+    this.#integrationPipeline.schedule();
+    return this.state();
+  }
+
   async dispose(): Promise<void> {
     this.#disposed = true;
     this.#integrationPipeline.dispose();
@@ -248,7 +288,8 @@ export class CollaborationCoordinator {
 
   #scheduleExecutors(): void {
     const state = this.state();
-    const workers = state.members.filter((member) => member.kind === "worker" && member.enabled && member.state !== "draining" && member.state !== "offline");
+    const allWorkers = state.members.filter((member) => member.kind === "worker" && member.enabled && member.state !== "draining" && member.state !== "offline");
+    const workers = allWorkers.filter((member) => !ORCHESTRATOR_MEMBER_IDS.has(member.memberId));
     const waitingReviews = state.tasks.filter((task) => task.state === "queued-reviewer").length;
     const reviewerReserve = Math.min(3, Math.max(1, Math.ceil(waitingReviews / 2)));
     const activeExecutors = workers.filter((member) => member.role === "executor" && member.currentTaskId).length;
@@ -258,9 +299,10 @@ export class CollaborationCoordinator {
     const idle = fairIdleMembers(workers);
     for (const task of queued) {
       const strictPreferredId = task.preferredExecutorMemberId || null;
+      const strictPreferred = strictPreferredId ? allWorkers.find((member) => member.memberId === strictPreferredId && member.state === "idle") : null;
+      if (strictPreferredId && !strictPreferred) continue;
       const preferredIndex = task.executorMemberId ? idle.findIndex((member) => member.memberId === task.executorMemberId) : -1;
-      if (strictPreferredId && preferredIndex < 0) continue;
-      const [executor] = preferredIndex >= 0 ? idle.splice(preferredIndex, 1) : idle.splice(0, 1);
+      const [executor] = strictPreferred ? [strictPreferred] : preferredIndex >= 0 ? idle.splice(preferredIndex, 1) : idle.splice(0, 1);
       if (!executor) break;
       void this.#beginExecutor(task.taskId, executor.memberId);
     }
@@ -453,7 +495,7 @@ export class CollaborationCoordinator {
   #scheduleReviewers(): void {
     const state = this.state();
     const queued = state.tasks.filter((task) => task.state === "queued-reviewer" && !task.currentReviewerMemberId);
-    const idle = fairIdleMembers(state.members.filter((member) => member.kind === "worker" && member.enabled && member.state === "idle"));
+    const idle = fairIdleMembers(state.members.filter((member) => member.kind === "worker" && member.enabled && member.state === "idle" && !ORCHESTRATOR_MEMBER_IDS.has(member.memberId)));
     for (const task of queued) {
       const reviewerIndex = task.preferredReviewerMemberId
         ? idle.findIndex((member) => member.memberId === task.preferredReviewerMemberId && member.memberId !== task.executorMemberId)
@@ -711,10 +753,11 @@ export class CollaborationCoordinator {
       verificationSpan = null;
       this.#setTaskAndMemberPhase(taskId, "executing", "finalizing");
       const resultSha = await this.#workspaces.commitTaskResult(this.#store.task(taskId), requireMember(this.state(), memberId).displayName);
-      this.#store.updateTask(taskId, "task.integration_ready", (current) => {
+      this.#store.updateTask(taskId, "task.integration_ready", (current, state) => {
         if (!current.versionWorkspace) throw new Error("任务缺少版本工作区。");
         current.versionWorkspace.resultSha = resultSha;
-        current.state = "ready-for-integration";
+        const returnsToNangong = Boolean(current.evolutionProposalId && current.evolutionRoundId);
+        current.state = returnsToNangong ? "returned-to-nangong" : "ready-for-integration";
         current.phase = "ready";
         current.finalResult = result.text;
         current.codeVerifiedAt = new Date().toISOString();
@@ -726,11 +769,16 @@ export class CollaborationCoordinator {
           execution.completedAt = current.codeVerifiedAt;
           execution.result = result.text;
         }
-        appendFlow(current, "task.code_verified", "execution", "completed", "执行修改已完成代码级验证，等待集成", execution?.executor || null);
+        if (returnsToNangong) {
+          current.returnedToNangongAt = current.codeVerifiedAt;
+          current.currentHandler = participantSnapshot(requireMember(state, "nangong-wan"));
+        }
+        appendFlow(current, "task.code_verified", "execution", "completed", returnsToNangong ? "执行修改已完成代码级验证，结果已返回南宫婉收集" : "执行修改已完成代码级验证，等待集成", execution?.executor || null);
       });
       this.#durations.instant(taskId, "task.integration_ready", { memberId, resultSha });
       await this.#retireExecutor(taskId, memberId, session);
       const readyTask = this.#store.task(taskId);
+      if (readyTask.state === "returned-to-nangong") return;
       const unsatisfiedDependencies = readyTask.dependencyTaskIds.filter((dependencyId) => this.state().tasks.find((candidate) => candidate.taskId === dependencyId)?.state !== "integrated");
       this.#integrationPipeline.trackWaitingTask(taskId, unsatisfiedDependencies.length > 0
         ? {

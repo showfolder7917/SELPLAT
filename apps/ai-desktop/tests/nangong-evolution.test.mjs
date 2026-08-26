@@ -65,7 +65,31 @@ test("审批通过后才由南宫婉分发并固定 proposalId", () => {
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest()); const proposalId = state.proposals[0].proposalId;
     assert.throws(() => facade.dispatch(proposalId), /只有审批通过/);
     facade.decideProposal(proposalId, { decision: "approved", advice: "通过" }); state = facade.dispatch(proposalId);
-    assert.equal(submitted.initiatorMemberId, "nangong-wan"); assert.equal(submitted.evolutionProposalId, proposalId); assert.deepEqual(state.proposals[0].distributedTaskIds, ["collab-1"]);
+    assert.equal(submitted.initiatorMemberId, "nangong-wan"); assert.equal(submitted.evolutionProposalId, proposalId);
+    assert.equal(submitted.evolutionRoundId, proposalId); assert.equal(submitted.mergeStrategy, "ATOMIC_GROUP"); assert.equal(submitted.atomicGroupId, proposalId);
+    assert.deepEqual(submitted.dependencyTaskIds, []); assert.deepEqual(state.proposals[0].distributedTaskIds, ["collab-1"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("全部执行结果返回南宫婉后才封存同一轮并一次性交给令狐", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-round-collection-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    let taskState = "returned-to-nangong"; let proposalId = null; let sealed = null;
+    const collaboration = {
+      submitTask(request) { proposalId = request.evolutionProposalId; return { tasks: [{ taskId: "round-task-1", evolutionProposalId: proposalId }] }; },
+      state() { return { tasks: proposalId ? [{ taskId: "round-task-1", evolutionProposalId: proposalId, evolutionRoundId: proposalId, state: taskState }] : [] }; },
+      sealEvolutionRound(receivedProposalId, taskIds) { sealed = { receivedProposalId, taskIds }; taskState = "ready-for-integration"; return this.state(); },
+    };
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    let state = facade.createTopic(topicRequest("南宫婉轮次收集"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { decision: "approved", advice: "批准整轮收集" });
+    facade.dispatch(proposalId);
+    facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
+    assert.deepEqual(sealed, { receivedProposalId: proposalId, taskIds: ["round-task-1"] });
+    assert.equal(facade.state().proposals[0].status, "verifying");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

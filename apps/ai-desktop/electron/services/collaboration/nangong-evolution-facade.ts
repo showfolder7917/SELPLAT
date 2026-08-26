@@ -180,10 +180,11 @@ export class NangongEvolutionFacade {
         confirmedIntent: `${proposal.content}\n\n本任务范围：${unit.scope}\n\n回退方案：${proposal.rollbackPlan}${selfUpgradeContext}`,
         constraints: [...proposal.exclusions.map((item) => `不涉及：${item}`), ...proposal.risks.map((item) => `风险：${item}`)],
         acceptanceCriteria: unit.acceptanceCriteria, workspaceState: topic.workspaceState, locale: topic.locale,
-        mergeStrategy: index === 0 ? "INDEPENDENT" : "DEPENDENCY_CHAIN", dependencyTaskIds: index === 0 ? [] : [distributedTaskIds[index - 1]],
+        mergeStrategy: "ATOMIC_GROUP", atomicGroupId: proposal.proposalId, dependencyTaskIds: [],
         initiatorMemberId: proposal.submitterMemberId,
         preferredExecutorMemberId: proposal.purpose === "self-capability-upgrade" && targetMember?.kind === "worker" ? targetMember.memberId : proposal.origin === "linghu" ? "linghu-ancestor" : undefined,
         evolutionProposalId: proposal.proposalId,
+        evolutionRoundId: proposal.proposalId,
         selfUpgradeTargetMemberId: proposal.targetMemberId || undefined,
         selfUpgradeCapabilityScope: proposal.capabilityScope || undefined,
         sourceEvolutionApprovalId: latestApproval?.approvalId,
@@ -267,11 +268,16 @@ export class NangongEvolutionFacade {
         }
       }
       for (const proposal of state.proposals.filter((item) => item.distributedTaskIds.length && ["executing", "verifying"].includes(item.status))) {
-        const tasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
+        let tasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
         if (tasks.length !== proposal.distributedTaskIds.length) continue;
         const blocked = tasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
+        const allReturned = tasks.every((task) => task.state === "returned-to-nangong");
+        if (!blocked && allReturned) {
+          this.#collaboration.sealEvolutionRound(proposal.proposalId, proposal.distributedTaskIds);
+          tasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
+        }
         const completed = tasks.every((task) => task.state === "integrated");
-        const verifying = tasks.some((task) => ["ready-for-integration", "queued-integration", "integrating", "unified-testing"].includes(task.state));
+        const verifying = tasks.some((task) => ["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart"].includes(task.state));
         const status = blocked ? "blocked" : completed ? "pending-acceptance" : verifying ? "verifying" : "executing";
         if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务已经完成，等待韩立按真实用户路径验收结果。" : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
       }
