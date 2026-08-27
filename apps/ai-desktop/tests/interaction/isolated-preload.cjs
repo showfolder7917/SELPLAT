@@ -1,8 +1,8 @@
-const path = require("node:path");
-
 const { contextBridge, ipcRenderer } = require("electron");
 
-const projectRoot = path.resolve(__dirname, "../../../..");
+// 沙箱 preload 不能加载 node:path；主进程先解析真实工程根，再通过隔离测试环境传入纯字符串。
+const projectRoot = process.env.AI_DESKTOP_INTERACTION_PROJECT_ROOT;
+if (!projectRoot) throw new Error("交互测试缺少工程根。 ");
 const linghuDefault = JSON.parse(process.env.AI_DESKTOP_INTERACTION_LINGHU_DEFAULT || "null");
 if (!linghuDefault?.title || !linghuDefault?.content) throw new Error("交互测试缺少生产令狐默认文案。 ");
 const workspace = {

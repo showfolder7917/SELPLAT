@@ -164,10 +164,10 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
     )
 
     def test_validates_complete_active_user_index_tree(self) -> None:
-        """当前用户二十二层索引完整登记七十九个规则逻辑 ID。"""
+        """当前用户二十二层索引完整登记八十一个规则逻辑 ID。"""
 
         self.assertEqual(
-            loader.IndexValidation(22, 79),
+            loader.IndexValidation(22, 81),
             loader.validate_current_user_index_tree(),
         )
 

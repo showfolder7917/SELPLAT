@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.100.0 固定人物会话必须共用 SELUI 对话控件，并统一输入法与发送附件生命周期。 -->
-rule_version = 5.100.0
+<!-- 5.103.0 固定手动返还执行从专题读取工作区，不得误用可为空的自动演化上下文。 -->
+rule_version = 5.103.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -40,12 +40,22 @@ upgrade_record_5_98 = 2026-08-26:主窗口只保留南宫婉和韩立会话_专�
 upgrade_record_5_99 = 2026-08-27:本轮distributedTaskIds全部存在_每个任务全部returned_to_nangong_部分返回继续等待不封存_全部返回只封存一次_令狐只对完整原子批次执行一次合并统一测试打包重启_双任务部分返回回归
 <!-- 5.100.0 把韩立和南宫婉对话、输入法安全发送、附件转移和演化表单视觉统一交给正式 SELUI 控件。 -->
 upgrade_record_5_100 = 2026-08-27:韩立南宫婉共用selConversation正式出口_普通Enter发送_ShiftEnter换行_compositionstart到compositionend及isComposing和229期间禁止发送_人物专有阶段操作使用可选插槽且南宫婉不显示韩立选择框_发送瞬间文字图片移入用户消息并清空输入附件区_失败保留可见消息状态_整理为演化课题和根据当前对话生成草稿是独立按钮_课题提案修订表单视觉归selForm_developer_css只保留业务布局
+<!-- 5.101.0 用户确认 Windows 已不再从 macOS 打包；所有 Windows 入口必须在构建前先校验原生宿主。 -->
+upgrade_record_5_101 = 2026-08-27:Windows_Developer_Customer_Archive打包入口统一先校验process_platform_win32_macOS立即阻断且不启动构建_平台可选依赖签名工具真实启动与目标系统保持一致_Windows登录和按钮最终验收只在Windows环境执行
+<!-- 5.102.0 修复工作台只改变树选中态却不消费具体流程节点的问题，并把人物、演化、自动和审计入口纳入同一回归。 -->
+upgrade_record_5_102 = 2026-08-27:一级模块和二级流程节点必须驱动右侧画布真实内容切换_禁止只更新selectedId或只区分人工自动总类_父节点显示明确总览_人物视角变化同步默认流程页_人物专题人工自动审计全部叶子逐项点击验证_真实Electron截图与result_json留证
+<!-- 5.103.0 修复手动返还南宫婉执行时把空自动上下文传给 Codex 并读取 null.roots 的问题。 -->
+upgrade_record_5_103 = 2026-08-27:手动返还和自动分发统一使用提案所属topic_workspaceState_任务拆分令狐审计协同任务创建三处同源_禁止读取automationContext替代专题冻结授权_专题工作区缺失返回可理解业务错误_自动上下文为null的手动返还回归
 <!-- 南宫婉必须依据真实文件边界形成最小任务，令狐审计不替代韩立方向审批；适用于所有演化提案返还分发。 -->
 nangong_distribution_planning_contract = AI_read_only_investigation + impact_scope_not_task_count + minimal_independently_mergeable_units + expected_files_and_acceptance + linghu_distribution_audit_before_dispatch + overlap_blocks_dispatch
+<!-- 提案分发的授权边界来自所属专题冻结的工作区；自动演化上下文只服务自动研讨，不能成为手动返还的隐式前置条件。 -->
+nangong_dispatch_workspace_source_contract = proposal_topic_workspace_is_single_source_for_planning_audit_and_task_creation + manual_dispatch_independent_from_automation_context + validate_roots_before_Codex_send + missing_workspace_returns_business_error_not_null_property_TypeError
 <!-- 令狐接收统一异常时生成的自身事件只能作为状态记录，不得再次进入异常消费队列。 -->
 linghu_exception_intake_loop_prevention_contract = single_event_center_entry + intake_event_is_state_change + exclude_legacy_and_current_intake_types_from_unhandled_query + source_event_fingerprint_dedup
 <!-- 重大业务工作台使用稳定一级模块树和当前模块二级流程树；人工动作与自动运行控制不得混排。 -->
 evolution_workspace_information_architecture_contract = stable_module_tree_people_evolution_audit + contextual_flow_tree + manual_workspace_separate_from_automatic_console + hanli_approval_integrated + SELUI_tree_grid_form_action_controls
+<!-- 两级树的每个可点击节点都必须对应真实画布页面；人物入口复用窗口时同步默认节点，禁止出现高亮变化但内容不变。 -->
+evolution_workspace_navigation_routing_contract = every_module_and_flow_node_drives_distinct_canvas_content + parent_node_has_explicit_overview + perspective_change_syncs_default_flow + selected_state_and_visible_page_remain_consistent + real_Electron_click_every_leaf_with_screenshot_and_result_json
 <!-- 专题演化是独立业务窗口；两个角色入口只能聚焦和切换唯一实例，不得在主窗口继续保留旧右栏。 -->
 evolution_workspace_window_contract = main_window_conversation_only + one_independent_BrowserWindow + nangong_and_hanli_share_instance_state_and_tree + entry_switches_perspective_and_focuses + close_then_reopen + main_window_recreated_on_app_activate_even_if_workspace_remains + no_embedded_or_parallel_legacy_workspace
 <!-- 单个任务返回不能代表本轮完成；只有应收清单全部返回并携带结果版本，才能封存为唯一原子批次触发统一测试。 -->
@@ -673,8 +683,10 @@ automatic_test_command_safety_contract = explicit_switch_authorizes_exact_no_arg
 automatic_test_transition_contract = task_code_verified_then_enqueue_exactly_one_test_managed_turn + existing_fifo_queue + no_stage_skip_before_code_verified + test_failure_never_auto_approves_more_permissions
 <!-- Electron 打包必须把官方 Codex JavaScript 入口和当前平台原生二进制解包到可执行文件系统，禁止从 asar 内直接拉起。 -->
 packaged_harness_binary_contract = asar_unpack_@openai_codex_and_platform_package
-<!-- macOS 跨平台生成 Windows 包时 npm 只自动选择宿主可选依赖，因此 Windows x64 平台别名包必须作为直接锁定依赖随安装包携带。 -->
+<!-- Windows 包只允许在 Windows 原生宿主生成；平台包仍直接锁定，但 macOS 不得再执行 Windows 交叉打包。 -->
 windows_harness_platform_dependency = direct_alias_@openai/codex-win32-x64_to_@openai/codex@0.149.0-win32-x64
+<!-- 所有 Windows 打包入口必须在任何构建前校验 process.platform=win32，真实启动和登录验收也只在 Windows 环境执行。 -->
+windows_native_build_host_contract = win32_host_gate_before_build + prohibit_macos_cross_package + windows_runtime_login_and_button_acceptance_on_windows_only
 <!-- 规则没有重复文档结构，不创建虚假模板或案例；官方协议 README 和应用真实源码构成可核对依据。 -->
 template_and_example_policy = not_applicable_because_protocol_and_existing_application_source_are_authoritative
 <!-- 验证责任按托管模式登记：任务托管只完成类型检查和针对性快速测试；Electron 与渲染构建、运行验证只属于显式测试托管。 -->

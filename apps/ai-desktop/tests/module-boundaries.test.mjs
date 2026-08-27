@@ -69,6 +69,20 @@ test("all Electron IPC domains and renderer failures use the unified event bound
   }
 });
 
+test("sandboxed preload keeps domain source boundaries but builds one physical bridge", () => {
+  const manifest = JSON.parse(source("package.json"));
+  const preloadBuilder = source("scripts/build-sandboxed-preload.mjs");
+  const mainWindow = source("electron/window/create-main-window.ts");
+  const rendererEntry = source("src/main.tsx");
+  assert.match(manifest.scripts["build:electron"], /build-sandboxed-preload\.mjs/);
+  assert.match(preloadBuilder, /bundle:\s*true/);
+  assert.match(preloadBuilder, /external:\s*\["electron"\]/);
+  assert.match(mainWindow, /sandbox:\s*true/);
+  assert.match(rendererEntry, /AI Desktop 桌面桥接加载失败/);
+  assert.doesNotMatch(source("tests/interaction/isolated-preload.cjs"), /require\(["']node:path["']\)/);
+  assert.match(source("tests/interaction/isolated-main.cjs"), /sandbox:\s*true/);
+});
+
 test("Nangong memory keeps source, preview, free topic semantics and visible user intent", () => {
   const memory = source("electron/services/event-center/collaboration-memory-service.ts");
   const migration = source("db/sql/migration-0003-event-handling-and-collaboration-memory.sql");

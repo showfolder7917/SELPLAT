@@ -205,7 +205,7 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         common_validation = loader.validate_index_tree()
         self.assertEqual(loader.IndexValidation(2, 11), common_validation)
         user_validation = loader.validate_current_user_index_tree()
-        self.assertEqual(loader.IndexValidation(22, 79), user_validation)
+        self.assertEqual(loader.IndexValidation(22, 81), user_validation)
 
     def test_loads_fujitsu_json_single_line_format_gate(self) -> None:
         """Fujitsu JSON 变更必须从当前用户层命中单行格式交付门禁。"""
@@ -302,6 +302,7 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         """根索引和注册表只登记 Python，Java 源码、测试与 fallback 均已清理。"""
 
         ruleengine_root = PROJECT_ROOT / "apps/ai-desktop/ruleengine"
+        legacy_backend_root = PROJECT_ROOT / "apps/rule-engine/backend"
         root_index = (ruleengine_root / "rules/RULE_INDEX.md").read_text(
             encoding="utf-8"
         )
@@ -322,7 +323,7 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         )
         self.assertFalse(
             (
-                backend_root
+                legacy_backend_root
                 / "src/test/java/com/sp/selplat/local/code/core/rule/LayeredRuleLoaderTest.java"
             ).exists()
         )

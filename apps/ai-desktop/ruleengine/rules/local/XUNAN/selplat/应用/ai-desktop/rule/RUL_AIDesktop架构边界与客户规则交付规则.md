@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 首版沉淀用户确认的结构整改、补注释、前后端分离、解耦、分模块和客户规则可用性要求。 -->
-rule_version = 1.0.0
+<!-- 1.1.0 在保持领域源码分层的同时固定沙箱 preload 单文件交付，防止整个桌面按钮桥接静默失效。 -->
+rule_version = 1.1.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -32,6 +32,8 @@ contracts_key_line_comment_contract = IPC_security + state_transition + data_red
 runtime_boundary_contract = renderer_to_typed_DesktopApi_to_preload_whitelist_to_registered_IPC_to_application_service_to_infrastructure
 <!-- preload 只桥接登记能力，IPC handler 只校验和编排，业务服务不反向依赖 Renderer。 -->
 runtime_decoupling_contract = preload_no_business_logic + handler_validation_and_orchestration_only + service_no_renderer_dependency + infrastructure_no_UI_callback
+<!-- Electron 沙箱 preload 可以按领域维护源码，但生产构建必须打包为只保留 electron 外部依赖的单一物理文件；真实沙箱测试必须覆盖全部领域代表能力。 -->
+sandboxed_preload_delivery_contract = domain_source_modules + build_single_CJS_bundle + external_electron_only + sandbox_true_runtime_smoke_across_all_capability_domains + renderer_blocks_fake_interactive_UI_when_bridge_missing
 <!-- 集中入口只能组合领域模块，不得继续承载多个业务域的具体实现。 -->
 composition_root_contract = composition_only + domain_modules_own_implementation + no_god_registration_or_application_component
 <!-- 大文件必须按业务能力和状态所有权拆分，禁止只按行数机械切割。 -->

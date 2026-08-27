@@ -146,7 +146,7 @@ class PythonAbilityMigrationTests(unittest.TestCase):
         if settings_path.is_file():
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
             self.assertEqual(
-                str((PROJECT_ROOT / "cache/gradle-user-home").resolve()),
+                "${workspaceFolder}/cache/gradle-user-home",
                 settings["java.import.gradle.user.home"],
             )
 

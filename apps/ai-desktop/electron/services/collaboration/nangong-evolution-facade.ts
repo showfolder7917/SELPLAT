@@ -19,8 +19,8 @@ export interface NangongEvolutionFacadeOptions {
   nangongDeliberation?: {
     send(question: string, context: string, state: NangongEvolutionState): Promise<string>;
   };
-  planDistribution?: (prompt: string, state: NangongEvolutionState) => Promise<string>;
-  auditDistribution?: (prompt: string, state: NangongEvolutionState) => Promise<string>;
+  planDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
+  auditDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   memory?: CollaborationMemoryPort | null;
   readDossier?: (topicId: string, state: NangongEvolutionState) => EvolutionTopicDossier;
@@ -166,14 +166,17 @@ export class NangongEvolutionFacade {
   async dispatch(proposalId: string): Promise<NangongEvolutionState> {
     let state = this.state();
     let proposal = requireProposal(state, proposalId);
-    const topic = state.topics.find((item) => item.topicId === proposal.topicId)!;
+    const topic = state.topics.find((item) => item.topicId === proposal.topicId);
+    if (!topic) throw new Error("当前提案关联的专题不存在，无法返还执行。");
+    // 手动返还和自动分发都属于当前专题，必须使用专题冻结的工作区，不能误读可能尚未配置的自动演化上下文。
+    const topicWorkspaceState = requireTopicWorkspaceState(topic);
     if (proposal.status !== "approved") throw new Error("只有审批通过并返还提交人的提案才能分发。");
     if (!proposal.distributionPlan || proposal.distributionPlan.audit.decision !== "passed") {
       let feedback = proposal.distributionPlan?.audit.findings.join("；") || "";
       for (let attempt = 1; attempt <= 2; attempt += 1) {
-        const planned = parseDistributionPlan(await this.#planDistribution(distributionPlanningPrompt(proposal, topic, feedback), state));
+        const planned = parseDistributionPlan(await this.#planDistribution(distributionPlanningPrompt(proposal, topic, feedback), topicWorkspaceState, topic.locale));
         const hardFindings = distributionHardFindings(planned.units);
-        const audit = parseDistributionAudit(await this.#auditDistribution(distributionAuditPrompt(proposal, topic, planned, hardFindings), state), hardFindings);
+        const audit = parseDistributionAudit(await this.#auditDistribution(distributionAuditPrompt(proposal, topic, planned, hardFindings), topicWorkspaceState, topic.locale), hardFindings);
         const plan: EvolutionDistributionPlan = { version: 1, summary: planned.summary, units: planned.units, audit, plannedAt: new Date().toISOString() };
         state = this.#store.saveDistributionPlan(proposalId, plan);
         proposal = requireProposal(state, proposalId);
@@ -200,7 +203,7 @@ export class NangongEvolutionFacade {
         title: unit.title, problemStatement: topic.goal,
         confirmedIntent: `${proposal.content}\n\n本任务范围：${unit.scope}\n\n回退方案：${proposal.rollbackPlan}${selfUpgradeContext}`,
         constraints: [...proposal.exclusions.map((item) => `不涉及：${item}`), ...proposal.risks.map((item) => `风险：${item}`)],
-        acceptanceCriteria: unit.acceptanceCriteria, workspaceState: topic.workspaceState, locale: topic.locale,
+        acceptanceCriteria: unit.acceptanceCriteria, workspaceState: topicWorkspaceState, locale: topic.locale,
         mergeStrategy: "ATOMIC_GROUP", atomicGroupId: proposal.proposalId, dependencyTaskIds: [],
         initiatorMemberId: proposal.submitterMemberId,
         preferredExecutorMemberId: proposal.purpose === "self-capability-upgrade" && targetMember?.kind === "worker" ? targetMember.memberId : proposal.origin === "linghu" ? "linghu-ancestor" : undefined,
@@ -326,6 +329,12 @@ export class NangongEvolutionFacade {
 }
 
 function requireProposal(state: NangongEvolutionState, proposalId: string): EvolutionProposal { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+
+/** 旧状态或损坏数据缺少专题工作区时返回可理解的业务错误，禁止把 null 继续传给 Codex 后读取 roots。 */
+function requireTopicWorkspaceState(topic: NangongEvolutionState["topics"][number]): NangongEvolutionState["topics"][number]["workspaceState"] {
+  if (!topic.workspaceState?.roots?.length) throw new Error("当前专题缺少可用的实施工作区，无法返还执行；请重新登记专题工作区后再试。");
+  return topic.workspaceState;
+}
 
 function distributionPlanningPrompt(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], feedback: string): string {
   return [

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -22,7 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** 使用真实隔离 H2 验证三角色快速流程、AI 门禁和公共画布接口。 */
-@SpringBootTest(properties={
+@SpringBootTest(classes = AiFactoryWorkflowV2Test.TestApplication.class, properties={
         "ai-factory.datasource.jdbc-url=jdbc:h2:mem:aifactory-workflow-v2;DB_CLOSE_DELAY=-1",
         "ai-factory.datasource.username=sa","ai-factory.datasource.password="})
 @AutoConfigureMockMvc
@@ -163,5 +164,10 @@ class AiFactoryWorkflowV2Test {
             jdbc.update("DELETE FROM AiWorkflowNode WHERE nodeCode LIKE 'ROLE_%'");
             jdbc.update("DELETE FROM AiRole WHERE id=199999");
         }
+    }
+
+    /** 测试专用最小 Spring Boot 入口，只扫描 AI 工厂业务与公共 Web 组件。 */
+    @SpringBootApplication(scanBasePackages = {"com.sp.selplat.aifactory", "com.sp.selplat.common.web"})
+    static class TestApplication {
     }
 }

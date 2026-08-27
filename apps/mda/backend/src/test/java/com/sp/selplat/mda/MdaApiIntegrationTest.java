@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sp.selplat.mda.common.util.jdbc.JdbcConnectionFactory;
+import com.sp.selplat.testsupport.MdaTestApplication;
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.Locale;
 import java.util.Map;
@@ -32,7 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * 使用真实 H2 控制库和动态目标库验证页面依赖的完整 API 主流程。
  */
-@SpringBootTest
+@SpringBootTest(classes = MdaTestApplication.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -82,15 +83,14 @@ class MdaApiIntegrationTest {
                         .value("file:./apps/ai-factiory/db/ai-factiory"))
                 .andExpect(jsonPath("$.records[2].password").value("123456"));
 
-        String body = objectMapper.writeValueAsString(Map.of(
-                "connectionName", "动态目标库",
-                "databaseType", "H2",
-                "databaseName", "mem:mda_dynamic_target;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
-                "schemaName", "PUBLIC",
-                "username", "sa",
-                "password", ""));
         MvcResult result = mockMvc.perform(post("/api/mda/connections/create.htm")
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("connectionName", "动态目标库")
+                        .param("databaseType", "H2")
+                        .param("databaseName", "mem:mda_dynamic_target;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false")
+                        .param("schemaName", "PUBLIC")
+                        .param("username", "sa")
+                        .param("password", ""))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.connectionName").value("动态目标库"))
@@ -103,14 +103,13 @@ class MdaApiIntegrationTest {
     @Test
     @Order(2)
     void shouldSaveAndReturnPlaintextPassword() throws Exception {
-        String body = objectMapper.writeValueAsString(Map.of(
-                "connectionName", "明文连接测试",
-                "databaseType", "H2",
-                "databaseName", "mem:mda_cipher_test;DB_CLOSE_DELAY=-1",
-                "username", "sa",
-                "password", "plain-secret"));
         MvcResult result = mockMvc.perform(post("/api/mda/connections/create.htm")
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("connectionName", "明文连接测试")
+                        .param("databaseType", "H2")
+                        .param("databaseName", "mem:mda_cipher_test;DB_CLOSE_DELAY=-1")
+                        .param("username", "sa")
+                        .param("password", "plain-secret"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.password").value("plain-secret"))
@@ -176,8 +175,8 @@ class MdaApiIntegrationTest {
                 .andExpect(jsonPath("$.data.results[0].rows[0][1]").value("alpha"));
 
         MvcResult metadata = mockMvc.perform(post("/api/mda/metadata/tree.htm")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionId\":" + targetConnectionId + "}"))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("connectionId", String.valueOf(targetConnectionId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
@@ -206,8 +205,8 @@ class MdaApiIntegrationTest {
                 .contains("\"ordinalposition\":4");
 
         mockMvc.perform(post("/api/mda/metadata/tree.htm")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionId\":" + targetConnectionId + "}"))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("connectionId", String.valueOf(targetConnectionId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.msg").value("数据库结构读取完成（缓存）。"));
 
@@ -215,8 +214,8 @@ class MdaApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
         MvcResult refreshedMetadata = mockMvc.perform(post("/api/mda/metadata/tree.htm")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionId\":" + targetConnectionId + "}"))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("connectionId", String.valueOf(targetConnectionId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.msg").value("数据库结构读取完成。"))
                 .andReturn();
@@ -248,8 +247,8 @@ class MdaApiIntegrationTest {
     @Order(5)
     void shouldTestSavedConnection() throws Exception {
         mockMvc.perform(post("/api/mda/connections/test.htm")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"connectionId\":" + targetConnectionId + "}"))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("connectionId", String.valueOf(targetConnectionId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.databaseProductName").value("H2"));
@@ -273,31 +272,29 @@ class MdaApiIntegrationTest {
     @Order(7)
     void shouldCloseOldTargetPoolAfterConnectionUpdate() throws Exception {
         assertThat(connectionFactory.activePoolCount()).isEqualTo(1);
-        String body = objectMapper.writeValueAsString(Map.of(
-                "id", targetConnectionId,
-                "connectionName", "动态目标库",
-                "databaseType", "H2",
-                "databaseName", "mem:mda_dynamic_target;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
-                "schemaName", "PUBLIC",
-                "username", "sa",
-                "password", "",
-                "sortnum", 10));
         mockMvc.perform(post("/api/mda/connections/update.htm")
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("id", String.valueOf(targetConnectionId))
+                        .param("connectionName", "动态目标库")
+                        .param("databaseType", "H2")
+                        .param("databaseName", "mem:mda_dynamic_target;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false")
+                        .param("schemaName", "PUBLIC")
+                        .param("username", "sa")
+                        .param("password", "")
+                        .param("sortnum", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
         assertThat(connectionFactory.activePoolCount()).isZero();
     }
 
     private org.springframework.test.web.servlet.ResultActions execute(String sql) throws Exception {
-        String body = objectMapper.writeValueAsString(Map.of(
-                "connectionId", targetConnectionId,
-                "sql", sql,
-                "autoCommit", true,
-                "maxRows", 1000,
-                "queryTimeoutSeconds", 30));
         return mockMvc.perform(post("/api/mda/sql/execute.htm")
-                .contentType(MediaType.APPLICATION_JSON).content(body));
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("connectionId", String.valueOf(targetConnectionId))
+                .param("sql", sql)
+                .param("autoCommit", "true")
+                .param("maxRows", "1000")
+                .param("queryTimeoutSeconds", "30"));
     }
 
     /**

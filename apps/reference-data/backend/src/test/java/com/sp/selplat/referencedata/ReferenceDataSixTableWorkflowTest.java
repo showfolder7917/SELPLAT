@@ -380,6 +380,9 @@ class ReferenceDataSixTableWorkflowTest {
                 () -> typeService.getTypeByCode(null));
         assertBusiness("REFERENCE_DATA_OPTION_SET_CODE_INVALID",
                 () -> typeService.getOptionsByOptionSetCode("ROLE_TYPE", Map.of()));
+        // 缺失选项组 Code 与格式错误使用同一稳定业务错误，且不得进入数据库查询。
+        assertBusiness("REFERENCE_DATA_OPTION_SET_CODE_INVALID",
+                () -> typeService.getOptionsByOptionSetCode(null, Map.of()));
         assertTrue(resourceQueryController.getOptions(
                 "optionSet999999", Map.of("locale", "zh-CN")).contains("\"data\":[]"));
         Map<String, Object> negativePage = data(controlLayoutService.insert(params(Map.of(

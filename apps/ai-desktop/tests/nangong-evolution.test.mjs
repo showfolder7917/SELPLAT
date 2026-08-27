@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
@@ -63,16 +63,49 @@ test("自动审批无人工偏好时退回补充，人工决定形成版本化�
 test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted;
+    const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted; let planningWorkspace; let auditWorkspace;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "collab-1", evolutionProposalId: request.evolutionProposalId }] }; } };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    const facade = new NangongEvolutionFacade({
+      store, collaboration, conversation, recordEvent: () => undefined,
+      async planDistribution(_prompt, receivedWorkspace) { planningWorkspace = receivedWorkspace; return distributionServices.planDistribution(); },
+      async auditDistribution(_prompt, receivedWorkspace) { auditWorkspace = receivedWorkspace; return distributionServices.auditDistribution(); },
+    });
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest()); const proposalId = state.proposals[0].proposalId;
+    assert.equal(state.automationContext.workspaceState, null, "手动返还不应要求先配置自动演化工作区");
     await assert.rejects(() => facade.dispatch(proposalId), /只有审批通过/);
     facade.decideProposal(proposalId, { decision: "approved", advice: "通过" }); state = await facade.dispatch(proposalId);
+    assert.deepEqual(planningWorkspace, workspaceState); assert.deepEqual(auditWorkspace, workspaceState);
+    assert.deepEqual(submitted.workspaceState, workspaceState);
     assert.equal(submitted.initiatorMemberId, "nangong-wan"); assert.equal(submitted.evolutionProposalId, proposalId);
     assert.equal(submitted.evolutionRoundId, proposalId); assert.equal(submitted.mergeStrategy, "ATOMIC_GROUP"); assert.equal(submitted.atomicGroupId, proposalId);
     assert.deepEqual(submitted.dependencyTaskIds, []); assert.deepEqual(state.proposals[0].distributedTaskIds, ["collab-1"]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("专题工作区缺失时返还执行显示业务错误而不是读取 null.roots", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-missing-workspace-"));
+  const statePath = path.join(directory, "state.json");
+  try {
+    const store = new NangongEvolutionStore(statePath);
+    const collaboration = { submitTask() { throw new Error("缺少工作区时不得创建任务"); } };
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    let state = facade.createTopic(topicRequest());
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { decision: "approved", advice: "通过" });
+    const persisted = JSON.parse(readFileSync(statePath, "utf8"));
+    persisted.topics[0].workspaceState = null;
+    writeFileSync(statePath, JSON.stringify(persisted), "utf8");
+    const restored = new NangongEvolutionFacade({ store: new NangongEvolutionStore(statePath), collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    await assert.rejects(() => restored.dispatch(proposalId), /当前专题缺少可用的实施工作区/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("生产分发会话显式使用专题工作区而不是自动演化上下文", () => {
+  assert.match(nangongPromptSource, /planDistribution: async \(prompt, workspaceState, locale\)[\s\S]*nangongDistributionCodex![\s\S]*workspaceState/);
+  assert.match(nangongPromptSource, /auditDistribution: async \(prompt, workspaceState, locale\)[\s\S]*linghuDistributionAuditCodex![\s\S]*workspaceState/);
+  assert.doesNotMatch(nangongPromptSource, /planDistribution: async[^\n]*automationContext\.workspaceState/);
+  assert.doesNotMatch(nangongPromptSource, /auditDistribution: async[^\n]*automationContext\.workspaceState/);
 });
 
 test("预计修改文件重叠时令狐阻止多人重复分发", async () => {

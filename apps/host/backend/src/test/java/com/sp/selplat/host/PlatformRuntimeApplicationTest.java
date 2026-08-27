@@ -129,7 +129,8 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("data-aifactory-app")));
         mockMvc.perform(get("/api/v1/ai-factory/management/dashboard"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.roles.length()").value(6));
+                // 当前固定角色树共十条：根节点、两个分类、三个开发角色和四个审核/总控角色。
+                .andExpect(jsonPath("$.data.roles.length()").value(10));
         // MDA 由应用 payload 主动启用宽表和默认列宽，字段较多时允许在结果区内水平滚动。
         mockMvc.perform(get("/mda/mda.js"))
                 .andExpect(status().isOk())
@@ -168,7 +169,7 @@ class PlatformRuntimeApplicationTest {
     /**
      * 方法作用：定向验证 desktop 清单、同源白名单、AI 工厂页面和管理接口在统一 Host 内完整闭环。
      * 真实传参示例：依次访问 applications.json、desktop.js、aifactory.html 和 management/dashboard。
-     * 真实返回示例：第五个应用为 AI 工厂，页面与接口 HTTP 200，角色表仅含三个开发角色和三个结构节点。
+     * 真实返回示例：第五个应用为 AI 工厂，页面与接口 HTTP 200，角色表返回十条固定角色树记录。
      * 异常或副作用示例：模块未导入、静态资源缺失或清单未登记时断言失败，只使用隔离内存数据库。
      */
     @Test
@@ -195,7 +196,8 @@ class PlatformRuntimeApplicationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("data-aifactory-app")));
         mockMvc.perform(get("/api/v1/ai-factory/management/dashboard"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.roles.length()").value(6));
+                // Host 聚合接口必须与 AI 工厂当前十条固定角色树种子保持一致。
+                .andExpect(jsonPath("$.data.roles.length()").value(10));
         mockMvc.perform(get("/api/platform/runtime/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.modules[5]").value("ai-factory"));

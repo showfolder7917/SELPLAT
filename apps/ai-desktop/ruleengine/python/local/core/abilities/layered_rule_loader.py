@@ -691,11 +691,8 @@ def _load_rule(
     path_parts = resource_path.split("/", 2)
     if len(path_parts) < 3:
         raise RuleLoadingError(f"Invalid layered rule path: {resource_path}")
-    actual_layer = (
-        expected_layer
-        if path_parts[:2] == ["ruleengine", "active-user"]
-        else path_parts[1]
-    )
+    # active-user 是由根索引解析出的当前稳定用户映射层，资源路径本身不重复写死用户 ID。
+    actual_layer = expected_layer if path_parts[0] == "active-user" else path_parts[1]
     if expected_layer and actual_layer != expected_layer:
         raise RuleLoadingError(
             f"Rule layer mismatch: expected={expected_layer}, path={resource_path}"

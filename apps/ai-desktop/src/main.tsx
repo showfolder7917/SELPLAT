@@ -26,6 +26,7 @@ const requestedMode = new URLSearchParams(window.location.search).get("mode");
 const screenshotMode = requestedMode === "screenshot";
 const evolutionWorkspaceMode = requestedMode === "evolution-workspace";
 const screenshotInteractionMode = import.meta.env.DEV && requestedMode === "screenshot-interaction";
+const desktopBridgeRequired = !screenshotInteractionMode;
 const Application = lazy(() => screenshotInteractionMode
   ? import("../tests/interaction/ScreenshotEditorHarness").then(({ ScreenshotEditorHarness }) => ({ default: ScreenshotEditorHarness }))
   : screenshotMode
@@ -34,8 +35,14 @@ const Application = lazy(() => screenshotInteractionMode
   ? import("./variants/developer/DeveloperApp").then(({ EvolutionWorkspaceWindowApp }) => ({ default: EvolutionWorkspaceWindowApp }))
   : import("./variants/developer/DeveloperApp").then(({ DeveloperApp }) => ({ default: DeveloperApp })));
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <RendererErrorBoundary><SelUiProvider><Suspense fallback={null}><Application /></Suspense></SelUiProvider></RendererErrorBoundary>
-  </React.StrictMode>,
-);
+const root = createRoot(document.getElementById("root")!);
+if (desktopBridgeRequired && !window.desktop) {
+  // preload 失效时停止展示无法工作的假界面，直接说明所有桌面操作不可用并提供安全的页面重载入口。
+  root.render(<main role="alert" style={{ minHeight: "100vh", display: "grid", placeItems: "center", alignContent: "center", gap: 14, color: "#dbe5f6", background: "#080b12", fontFamily: "system-ui, sans-serif" }}><strong>AI Desktop 桌面桥接加载失败，当前按钮无法执行。</strong><span>请重新加载；若仍然失败，请重新构建并启动 AI Desktop。</span><button type="button" onClick={() => window.location.reload()}>重新加载页面</button></main>);
+} else {
+  root.render(
+    <React.StrictMode>
+      <RendererErrorBoundary><SelUiProvider><Suspense fallback={null}><Application /></Suspense></SelUiProvider></RendererErrorBoundary>
+    </React.StrictMode>,
+  );
+}

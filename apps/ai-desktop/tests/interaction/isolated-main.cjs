@@ -17,6 +17,8 @@ app.whenReady().then(async () => {
     title: linghuStore.DEFAULT_LINGHU_STARTUP_PROMPT_TITLE,
     content: linghuStore.DEFAULT_LINGHU_STARTUP_PROMPT,
   });
+  // 主进程负责路径解析，沙箱 preload 只接收已验证的字符串，保持和生产安全边界一致。
+  process.env.AI_DESKTOP_INTERACTION_PROJECT_ROOT = path.resolve(__dirname, "../../../..");
   const initialSize = mainWindowInitialSize("developer");
   // 隔离窗口复用正式桌面尺寸并加载生产构建，不替换、不重启用户正在使用的 AI Desktop。
   const window = new BrowserWindow({
@@ -30,7 +32,7 @@ app.whenReady().then(async () => {
       preload: path.join(__dirname, "isolated-preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
   const productionFile = process.env.AI_DESKTOP_INTERACTION_FILE;
@@ -51,7 +53,7 @@ app.whenReady().then(async () => {
       minHeight: 680,
       show: false,
       backgroundColor: "#080b12",
-      webPreferences: { preload: path.join(__dirname, "isolated-preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: false },
+      webPreferences: { preload: path.join(__dirname, "isolated-preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
     evolutionWindow.once("closed", () => { evolutionWindow = null; });
     await evolutionWindow.loadFile(productionFile, { query: { mode: "evolution-workspace", perspective } });
