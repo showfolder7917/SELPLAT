@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, protocol } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
-import type { AiMemoryDatabaseStatus } from "../contracts/desktop/database.js";
+import type { AiMemoryDatabaseStatus, TestDataResetResult } from "../contracts/desktop/database.js";
 import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import { BusinessAuditLog } from "./services/business-audit-log.js";
@@ -406,6 +406,53 @@ app.whenReady().then(async () => {
     });
   }
 
+  let testDataResetInProgress = false;
+  /** 停止所有写入者后清空应用内部测试态，保留账号与配置，并在 IPC 回执送达后受控重启。 */
+  const clearTestData = async (): Promise<TestDataResetResult> => {
+    if (testDataResetInProgress) throw new Error("测试数据正在清空，请等待应用重启。");
+    testDataResetInProgress = true;
+    let runtimeDisposed = false;
+    try {
+      workflowSupervisor?.stop();
+      workflowSupervisor = null;
+      linghuAutomation?.stop();
+      nangongEvolution?.stop();
+
+      // 官方线程删除必须全部成功才进入不可逆的数据清理，避免界面清空但 Harness 仍保留旧任务。
+      await Promise.all([codex, nangongCodex, hanLiCodex, nangongDeliberationCodex, nangongDistributionCodex, linghuDistributionAuditCodex].map((service) => service!.newChat()));
+      await collaboration?.dispose();
+      runtimeDisposed = true;
+
+      const repositoryToClear = workflowRepository;
+      let clearedRecordCount = 0;
+      dispatch.clear();
+      clearedRecordCount += collaborationStore.clearTestData();
+      clearedRecordCount += nangongStore.clearTestData();
+      clearedRecordCount += linghuStore.clearTestData();
+      clearedRecordCount += repositoryToClear?.clearTestData() || 0;
+      eventCenter.attachRepository(null);
+      workflowRepository = null;
+      closeAiMemoryDatabase();
+
+      const result: TestDataResetResult = { cleared: true, clearedRecordCount, restartScheduled: true };
+      app.relaunch({ args: process.argv.slice(1) });
+      setTimeout(() => app.exit(0), 180);
+      return result;
+    } catch (error) {
+      testDataResetInProgress = false;
+      if (runtimeDisposed) {
+        // 协同连接已经释放后不能在同一进程伪恢复，重启可从仍然有效的持久状态重新装配。
+        app.relaunch({ args: process.argv.slice(1) });
+        setTimeout(() => app.exit(1), 180);
+      } else {
+        linghuAutomation?.start();
+        nangongEvolution?.start();
+        workflowSupervisor?.start();
+      }
+      throw error;
+    }
+  };
+
   registerDesktopIpc({
     codex,
     screenshots,
@@ -426,6 +473,7 @@ app.whenReady().then(async () => {
     preloadPath,
     rendererRoot,
     rules,
+    clearTestData,
     prepareForApplicationExit: prepareAiMemoryShutdown,
   });
 

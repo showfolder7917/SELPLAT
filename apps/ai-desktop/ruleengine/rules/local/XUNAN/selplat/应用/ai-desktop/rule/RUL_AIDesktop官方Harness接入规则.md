@@ -8,8 +8,8 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.103.0 固定手动返还执行从专题读取工作区，不得误用可为空的自动演化上下文。 -->
-rule_version = 5.103.0
+<!-- 5.105.0 固定演化工作台单树左右结构，并登记可审计的一键清空测试数据边界。 -->
+rule_version = 5.105.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->
@@ -46,16 +46,22 @@ upgrade_record_5_101 = 2026-08-27:Windows_Developer_Customer_Archive打包入口
 upgrade_record_5_102 = 2026-08-27:一级模块和二级流程节点必须驱动右侧画布真实内容切换_禁止只更新selectedId或只区分人工自动总类_父节点显示明确总览_人物视角变化同步默认流程页_人物专题人工自动审计全部叶子逐项点击验证_真实Electron截图与result_json留证
 <!-- 5.103.0 修复手动返还南宫婉执行时把空自动上下文传给 Codex 并读取 null.roots 的问题。 -->
 upgrade_record_5_103 = 2026-08-27:手动返还和自动分发统一使用提案所属topic_workspaceState_任务拆分令狐审计协同任务创建三处同源_禁止读取automationContext替代专题冻结授权_专题工作区缺失返回可理解业务错误_自动上下文为null的手动返还回归
+<!-- 5.104.0 修复测试日志引用“用户/人工”等规则正文时被误判为业务选择，并补齐令狐真实修复后再重测的闭环。 -->
+upgrade_record_5_104 = 2026-08-28:test_failed和verification结构化事实优先于自由文本分类_日志引用用户人工选择不得污染阻塞类型_令狐在原任务工作树接收失败证据并完成最小修复_代码级验证后提交新resultSHA再进入集成统一测试_同一故障指纹最多三次修复副作用_真实业务选择继续等待人工
+<!-- 5.105.0 合并重复占宽的模块树和流程树，并为新测试周期提供明确保留范围的一键清空。 -->
+upgrade_record_5_105 = 2026-08-28:人物专题审计模块及其分组叶子合并为一棵可展开SELUI树_左树右内容两列结构_父节点总览和叶子页面都是真实路由_逐项点击与截图回归_设置危险区一键清空测试数据_二次确认明确不可撤销和保留范围_Renderer不接触SQL_主进程停止写入者_SQLite业务表单事务清空并保留SchemaVersion_登录设置工作区可信命令规则源码审计文件全部保留_完成后受控重启
 <!-- 南宫婉必须依据真实文件边界形成最小任务，令狐审计不替代韩立方向审批；适用于所有演化提案返还分发。 -->
 nangong_distribution_planning_contract = AI_read_only_investigation + impact_scope_not_task_count + minimal_independently_mergeable_units + expected_files_and_acceptance + linghu_distribution_audit_before_dispatch + overlap_blocks_dispatch
 <!-- 提案分发的授权边界来自所属专题冻结的工作区；自动演化上下文只服务自动研讨，不能成为手动返还的隐式前置条件。 -->
 nangong_dispatch_workspace_source_contract = proposal_topic_workspace_is_single_source_for_planning_audit_and_task_creation + manual_dispatch_independent_from_automation_context + validate_roots_before_Codex_send + missing_workspace_returns_business_error_not_null_property_TypeError
 <!-- 令狐接收统一异常时生成的自身事件只能作为状态记录，不得再次进入异常消费队列。 -->
 linghu_exception_intake_loop_prevention_contract = single_event_center_entry + intake_event_is_state_change + exclude_legacy_and_current_intake_types_from_unhandled_query + source_event_fingerprint_dedup
-<!-- 重大业务工作台使用稳定一级模块树和当前模块二级流程树；人工动作与自动运行控制不得混排。 -->
-evolution_workspace_information_architecture_contract = stable_module_tree_people_evolution_audit + contextual_flow_tree + manual_workspace_separate_from_automatic_console + hanli_approval_integrated + SELUI_tree_grid_form_action_controls
-<!-- 两级树的每个可点击节点都必须对应真实画布页面；人物入口复用窗口时同步默认节点，禁止出现高亮变化但内容不变。 -->
-evolution_workspace_navigation_routing_contract = every_module_and_flow_node_drives_distinct_canvas_content + parent_node_has_explicit_overview + perspective_change_syncs_default_flow + selected_state_and_visible_page_remain_consistent + real_Electron_click_every_leaf_with_screenshot_and_result_json
+<!-- 重大业务工作台使用包含模块、流程分组和页面叶子的单棵树；人工动作与自动运行控制不得混排。 -->
+evolution_workspace_information_architecture_contract = one_expandable_tree_people_evolution_audit_with_groups_and_leaves + left_tree_right_content_two_column_layout + manual_workspace_separate_from_automatic_console + hanli_approval_integrated + SELUI_tree_grid_form_action_controls
+<!-- 单棵树的每个可点击节点都必须对应真实画布页面；人物入口复用窗口时同步默认节点，禁止出现高亮变化但内容不变。 -->
+evolution_workspace_navigation_routing_contract = every_parent_group_and_leaf_drives_distinct_canvas_content + parent_node_has_explicit_overview + perspective_change_syncs_default_flow + selected_state_and_visible_page_remain_consistent + real_Electron_click_every_leaf_with_screenshot_and_result_json
+<!-- 一键清空只处理应用内部测试业务态，必须由设置危险区二次确认并在主进程受控重启。 -->
+ai_desktop_test_data_reset_contract = settings_danger_action_with_SELUI_confirm + explicit_irreversible_scope_and_preserved_scope + typed_renderer_preload_IPC_main_service + stop_all_runtime_writers_before_clear + clear_conversation_dispatch_collaboration_evolution_linghu_and_SQLite_business_tables + preserve_AiDesktopSchemaVersion_login_settings_workspaces_trusted_commands_rules_source_and_audit_files + official_thread_delete_must_succeed_before_irreversible_clear + controlled_restart_after_success + cancellation_and_confirmation_interaction_regression
 <!-- 专题演化是独立业务窗口；两个角色入口只能聚焦和切换唯一实例，不得在主窗口继续保留旧右栏。 -->
 evolution_workspace_window_contract = main_window_conversation_only + one_independent_BrowserWindow + nangong_and_hanli_share_instance_state_and_tree + entry_switches_perspective_and_focuses + close_then_reopen + main_window_recreated_on_app_activate_even_if_workspace_remains + no_embedded_or_parallel_legacy_workspace
 <!-- 单个任务返回不能代表本轮完成；只有应收清单全部返回并携带结果版本，才能封存为唯一原子批次触发统一测试。 -->
@@ -431,6 +437,8 @@ collaboration_conversation_status_chain_contract = persisted_task_id_binding + r
 collaboration_review_repair_return_contract = rejected_reason_persisted + retry_action_dispatches_linghu_repair + repaired_plan_returns_to_original_reviewer + real_lease_and_event_evidence
 <!-- 执行失败自动由令狐老祖修复，修复完成固定退回原执行人重新执行，成功后再进入令狐统一测试。 -->
 collaboration_execution_repair_and_test_contract = execution_failure_dispatches_linghu + repair_returns_to_original_executor + successful_reexecution_dispatches_linghu_unified_test + test_running_passed_or_failed_visible
+<!-- 统一测试失败不能只把同一结果重新排队；结构化 verification 失败由令狐在原任务范围内修复并形成新结果，只有真实业务选择才等待人工。 -->
+collaboration_unified_test_repair_contract = task_state_and_structured_failure_kind_before_free_text_classification + test_failed_or_verification_never_business_due_to_quoted_rule_text + linghu_repairs_original_task_worktree_with_failure_evidence + code_validation_then_new_resultSHA + retry_unified_test + same_fault_max_three_repair_attempts + genuine_business_choice_waits_for_human
 <!-- 任务详细默认折叠，折叠标题中的发起人来自任务冻结快照，禁止展示层按任务类型猜测姓名。 -->
 collaboration_task_detail_disclosure_contract = collapsed_by_default + dynamic_persisted_initiator_snapshot_in_summary + no_inferred_display_name
 <!-- 任务托管负责源码修改、静态检查和后台隔离 Electron 交互测试；失败证据进入应用 temp 并最多自动修复复测五轮，完成点固定为代码级验证。 -->

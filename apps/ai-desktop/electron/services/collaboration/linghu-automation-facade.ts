@@ -239,7 +239,17 @@ export class LinghuAutomationFacade {
       return;
     }
 
-    if (["review-failed", "test-failed", "blocked", "recovering"].includes(task.state)) {
+    if (task.state === "test-failed" && snapshot?.blockingKind === "test") {
+      // 测试失败必须先产生新结果版本再重测；只把状态退回集成队列会永久重复同一失败。
+      const started = await this.#collaboration.repairFailedUnifiedTest(task.taskId);
+      if (!started) {
+        this.#store.updateRuntime("automation.test_repair_waiting", (state) => {
+          state.recoveryCheckpoint = checkpoint;
+          state.blockingReason = `任务 ${task.taskId} 已识别为可修复测试失败，等待令狐老祖执行容量`;
+        });
+        return;
+      }
+    } else if (["review-failed", "test-failed", "blocked", "recovering"].includes(task.state)) {
       const linghu = this.#collaboration.state().members.find((member) => member.memberId === LINGHU_MEMBER_ID);
       if (!linghu) throw new Error("令狐老祖成员记录缺失，无法记录自动恢复负责人。");
       this.#collaboration.continueTask(task.taskId, linghu);
@@ -445,6 +455,10 @@ function waitingPoint(task: CollaborationTask, health: LinghuFlowHealth): string
 }
 
 function blockingKind(task: CollaborationTask): LinghuBlockingKind {
+  // 状态与结构化集成失败比自由文本可靠；测试输出可能引用“用户选择”等规则正文，不能因此误判为业务选择。
+  if (task.state === "test-failed" || task.integrationFailure?.kind === "verification") return "test";
+  if (task.integrationFailure?.kind === "merge-conflict") return "code";
+  if (task.integrationFailure?.kind === "local-change-ownership") return "infrastructure";
   if (!task.blockingReason) return "none";
   const reason = task.blockingReason;
   if (/用户|人工|选择/.test(reason)) return "business";

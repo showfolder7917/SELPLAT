@@ -10,7 +10,7 @@
 
 - 可复用 Maven 构件：`<CURRENT_PROJECT_ROOT>/cache/gradle-offline/maven-repository`
 - 无完整 POM 的显式运行时 JAR：`<CURRENT_PROJECT_ROOT>/cache/gradle-offline/runtime-jars`
-- Gradle 用户缓存：`<CURRENT_PROJECT_ROOT>/cache/gradle-user-home`
+- Gradle 用户缓存：`cache/gradle-user-home`
 - 恢复清单、init script 和日志：`<CURRENT_PROJECT_ROOT>/OPTION/temp/gradle-offline`
 - 正式编译、测试与覆盖率产物：`<CURRENT_PROJECT_ROOT>/build`；既有工程任务另有报告目录时，先按规则治理修正任务配置，恢复能力本身不改写正式 `build.gradle`
 

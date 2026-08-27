@@ -13,3 +13,10 @@ export interface AiMemoryDatabaseStatus {
   schemaVersion: string | null;
   message: string | null;
 }
+
+/** 一键清空完成后的受控重启回执；不暴露数据库路径、表名或删除语句。 */
+export interface TestDataResetResult {
+  cleared: true;
+  clearedRecordCount: number;
+  restartScheduled: true;
+}

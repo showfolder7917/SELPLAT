@@ -19,6 +19,7 @@ import type {
   ScreenshotSaveRequest,
   SendMessageRequest,
   WindowAction,
+  TestDataResetResult,
 } from "../../contracts/desktop/desktop.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
@@ -63,6 +64,7 @@ interface DesktopIpcDependencies {
   prepareForApplicationExit: () => void;
   rendererRoot: string;
   rules: RuleBundleService;
+  clearTestData: () => Promise<TestDataResetResult>;
 }
 
 interface ScreenshotWindowSession {
@@ -275,7 +277,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.showInactive();
   };
 
-  registerSystemIpc({ aiMemoryDatabaseStatus, projectRoot, variant, screenshots, workflowRepository, eventCenter });
+  registerSystemIpc({ aiMemoryDatabaseStatus, projectRoot, variant, screenshots, workflowRepository, eventCenter, clearTestData: dependencies.clearTestData });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
   registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter);

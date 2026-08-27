@@ -20,6 +20,19 @@ export class NangongEvolutionStore {
   state(): NangongEvolutionState { return structuredClone(this.#state); }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
 
+  /** 清除专题测试历史并安全关闭自动流程，保留用户设置的轮次上限与语言；返回被移除的业务记录数。示例：1 个专题、2 个提案返回至少 3；写入失败时抛错。 */
+  clearTestData(): number {
+    const clearedCount = this.#state.topics.length + this.#state.proposals.length + this.#state.deliberations.length + this.#state.archiveRecords.length + this.#state.conversation.messages.length;
+    const next = createInitialState();
+    next.automationSettings = structuredClone(this.#state.automationSettings);
+    next.automationContext.locale = this.#state.automationContext.locale;
+    this.#write(next);
+    this.#state = next;
+    const snapshot = this.state();
+    for (const listener of this.#listeners) listener(snapshot, "test-data.cleared", null, null);
+    return clearedCount;
+  }
+
   setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): NangongEvolutionState {
     return this.#commit(`automation.${kind}.${enabled ? "enabled" : "disabled"}`, null, null, (state) => {
       if (kind === "evolution") {
@@ -520,7 +533,7 @@ export class NangongEvolutionStore {
         return value;
       }
     } catch { /* 首次启动或损坏状态使用安全关闭的空状态，历史文件不会被扫描猜测。 */ }
-    return { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+    return createInitialState();
   }
 
   #write(state: NangongEvolutionState): void {
@@ -529,6 +542,10 @@ export class NangongEvolutionStore {
     writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
     renameSync(temporary, this.#filePath);
   }
+}
+
+function createInitialState(): NangongEvolutionState {
+  return { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
 }
 
 function required(value: unknown, label: string, maximum: number): string {

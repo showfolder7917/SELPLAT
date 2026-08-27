@@ -122,6 +122,25 @@ const MAXIMUM_EXPLORER_WIDTH = 520;
 const EMPTY_DISPATCH_STATE: ConversationDispatchState = { activeTask: null, queue: [] };
 type ActiveExplorerSection = "workspace" | "tasks";
 
+const testDataResetCopy = {
+  ja: {
+    title: "テストデータ",
+    summary: "トピック、タスク、承認、会話、イベント、実行履歴",
+    detail: "ログイン、設定、ワークスペース、信頼済みコマンド、ルール、ソースコード、監査ファイルは保持されます。完了後にアプリを再起動します。",
+    action: "テストデータを一括消去",
+    busy: "消去中…",
+    confirm: "AI Desktop 内部のテストデータと会話履歴をすべて消去しますか？この操作は元に戻せません。ログイン、設定、ワークスペース、信頼済みコマンド、ルール、ソースコード、監査ファイルは削除されません。",
+  },
+  "zh-CN": {
+    title: "测试数据",
+    summary: "专题、任务、审批、对话、事件和运行记录",
+    detail: "保留登录、设置、工作区、可信命令、规则、源码和工程审计文件；完成后自动重启应用。",
+    action: "一键清空测试数据",
+    busy: "正在清空…",
+    confirm: "确定一键清空 AI Desktop 内部的测试数据和会话历史吗？此操作不可撤销。不会删除登录、设置、工作区、可信命令、规则、源码和工程审计文件。",
+  },
+} as const;
+
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
@@ -214,6 +233,8 @@ export function DeveloperApp() {
   const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-detail">("member");
   const [selectedCollaborationTaskId, setSelectedCollaborationTaskId] = useState<string | null>(null);
   const [trustedCommandInfo, setTrustedCommandInfo] = useState<TrustedCommandInfo>({ count: 0 });
+  const [testDataResetting, setTestDataResetting] = useState(false);
+  const [testDataResetError, setTestDataResetError] = useState("");
   const [loading, setLoading] = useState(false);
   const [dispatchState, setDispatchState] = useState<ConversationDispatchState>(EMPTY_DISPATCH_STATE);
   const [dispatchError, setDispatchError] = useState("");
@@ -1064,6 +1085,19 @@ export function DeveloperApp() {
     if (info) setTrustedCommandInfo(info);
   };
 
+  const clearTestData = async () => {
+    const copy = testDataResetCopy[locale];
+    if (!await selUi.confirm({ title: copy.action, message: copy.confirm, tone: "danger", confirmLabel: copy.action })) return;
+    setTestDataResetting(true);
+    setTestDataResetError("");
+    try {
+      await window.desktop?.clearTestData();
+    } catch (error) {
+      setTestDataResetError(readableDesktopError(error, locale === "ja" ? "テストデータを消去できませんでした。" : "清空测试数据失败。"));
+      setTestDataResetting(false);
+    }
+  };
+
   const toggleAutomaticTesting = async () => {
     if (automaticTestEnabledRef.current) {
       automaticTestEnabledRef.current = false;
@@ -1217,6 +1251,7 @@ export function DeveloperApp() {
         <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
         <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void clearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
         <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
+        <div className="temp-card test-data-reset-card"><span>{testDataResetCopy[locale].title}</span><strong>{testDataResetCopy[locale].summary}</strong><small>{testDataResetCopy[locale].detail}</small>{testDataResetError && <em role="alert">{testDataResetError}</em>}<div><button className="danger" disabled={testDataResetting} onClick={() => void clearTestData()}><Delete24Regular />{testDataResetting ? testDataResetCopy[locale].busy : testDataResetCopy[locale].action}</button></div></div>
         <RuleManagementFeature locale={locale} />
       </SettingsFloatingPanel>
     </aside>
@@ -1588,68 +1623,73 @@ function EvolutionProposalGrid({ id, proposals, selectedId, locale, mode, onSele
 type EvolutionWorkspaceModule = "people" | "evolution" | "audit";
 type EvolutionWorkspaceView = "manual" | "automatic";
 type EvolutionWorkspaceFlowNode = "manual" | "manual-topic" | "manual-research" | "manual-approval" | "manual-proposal" | "manual-release" | "manual-archive" | "automatic" | "automatic-console" | "automatic-switches" | "automatic-recovery" | "people-nangong" | "people-hanli" | "audit-approval" | "audit-exception" | "audit-archive";
+type EvolutionWorkspaceTreeNode = EvolutionWorkspaceModule | EvolutionWorkspaceFlowNode;
 
-/** 南宫婉与韩立共用两级树工作台；一级模块稳定扩展，二级树只描述当前模块的流程。 */
+/** 南宫婉与韩立共用一棵完整业务树；父节点展示总览，叶节点直接路由右侧页面。 */
 function EvolutionControlWorkspace({ perspective, member, state, workspaces, locale, onState, onError }: { perspective: "nangong" | "hanli"; member?: CollaborationMember; state: NangongEvolutionState; workspaces: WorkspaceState | null; locale: Locale; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
-  const [module, setModule] = useState<EvolutionWorkspaceModule>("evolution");
-  const [flowNode, setFlowNode] = useState<EvolutionWorkspaceFlowNode>(perspective === "hanli" ? "manual-approval" : "manual-topic");
+  const [selectedNode, setSelectedNode] = useState<EvolutionWorkspaceTreeNode>(perspective === "hanli" ? "manual-approval" : "manual-topic");
+  const module: EvolutionWorkspaceModule = selectedNode === "people" || selectedNode.startsWith("people-")
+    ? "people"
+    : selectedNode === "audit" || selectedNode.startsWith("audit-")
+      ? "audit"
+      : "evolution";
+  const flowNode = selectedNode as EvolutionWorkspaceFlowNode;
   const view: EvolutionWorkspaceView = flowNode === "automatic" || flowNode.startsWith("automatic-") ? "automatic" : "manual";
   const pendingCount = state.proposals.filter((proposal) => ["pending-approval", "supplement-required", "pending-acceptance"].includes(proposal.status)).length;
-  const moduleItems = useMemo(() => [
-    { id: "people", label: "人物与个性", icon: "ri-user-settings-line", count: 2 },
-    { id: "evolution", label: "专题演化", icon: "ri-git-merge-line", count: state.topics.length },
-    { id: "audit", label: "审计与异常", icon: "ri-shield-check-line", count: pendingCount },
-  ], [pendingCount, state.topics.length]);
-  const flowItems = useMemo(() => module === "evolution" ? [
-    { id: "manual", label: "人工工作区", icon: "ri-hand", count: state.proposals.length, expanded: true, children: [
-      { id: "manual-topic", label: "当前专题", icon: "ri-focus-3-line", count: state.activeTopicId ? 1 : 0 },
-      { id: "manual-research", label: "调查与研讨", icon: "ri-search-eye-line", count: state.deliberations.length },
-      { id: "manual-approval", label: "韩立审批", icon: "ri-stamp-line", count: pendingCount },
-      { id: "manual-proposal", label: "提案与任务", icon: "ri-file-list-3-line", count: state.proposals.length },
-      { id: "manual-release", label: "发布与验收", icon: "ri-rocket-line", count: state.proposals.filter((proposal) => ["verifying", "pending-acceptance", "completed"].includes(proposal.status)).length },
-      { id: "manual-archive", label: "原始档案", icon: "ri-archive-line", count: state.topics.length },
+  const treeItems = useMemo(() => [
+    { id: "people", label: "人物与个性", icon: "ri-user-settings-line", count: 2, expanded: false, children: [
+      { id: "people-nangong", label: "南宫婉", icon: "ri-user-heart-line", count: 1 },
+      { id: "people-hanli", label: "韩立", icon: "ri-user-star-line", count: 1 },
     ] },
-    { id: "automatic", label: "自动控制台", icon: "ri-dashboard-3-line", count: state.automationRuntime.status === "idle" ? 0 : 1, expanded: true, children: [
-      { id: "automatic-console", label: "运行控制", icon: "ri-play-circle-line", count: 1 },
-      { id: "automatic-switches", label: "审批与分发开关", icon: "ri-toggle-line", count: 3 },
-      { id: "automatic-recovery", label: "纠偏与恢复", icon: "ri-restart-line", count: state.automationRuntime.correctionRounds },
+    { id: "evolution", label: "专题演化", icon: "ri-git-merge-line", count: state.topics.length, expanded: true, children: [
+      { id: "manual", label: "人工工作区", icon: "ri-hand", count: state.proposals.length, expanded: true, children: [
+        { id: "manual-topic", label: "当前专题", icon: "ri-focus-3-line", count: state.activeTopicId ? 1 : 0 },
+        { id: "manual-research", label: "调查与研讨", icon: "ri-search-eye-line", count: state.deliberations.length },
+        { id: "manual-approval", label: "韩立审批", icon: "ri-stamp-line", count: pendingCount },
+        { id: "manual-proposal", label: "提案与任务", icon: "ri-file-list-3-line", count: state.proposals.length },
+        { id: "manual-release", label: "发布与验收", icon: "ri-rocket-line", count: state.proposals.filter((proposal) => ["verifying", "pending-acceptance", "completed"].includes(proposal.status)).length },
+        { id: "manual-archive", label: "原始档案", icon: "ri-archive-line", count: state.topics.length },
+      ] },
+      { id: "automatic", label: "自动控制台", icon: "ri-dashboard-3-line", count: state.automationRuntime.status === "idle" ? 0 : 1, expanded: true, children: [
+        { id: "automatic-console", label: "运行控制", icon: "ri-play-circle-line", count: 1 },
+        { id: "automatic-switches", label: "审批与分发开关", icon: "ri-toggle-line", count: 3 },
+        { id: "automatic-recovery", label: "纠偏与恢复", icon: "ri-restart-line", count: state.automationRuntime.correctionRounds },
+      ] },
     ] },
-  ] : module === "people" ? [
-    { id: "people-nangong", label: "南宫婉", icon: "ri-user-heart-line", count: 1 },
-    { id: "people-hanli", label: "韩立", icon: "ri-user-star-line", count: 1 },
-  ] : [
-    { id: "audit-approval", label: "审批轨迹", icon: "ri-file-shield-2-line", count: state.proposals.length },
-    { id: "audit-exception", label: "异常入口", icon: "ri-alarm-warning-line", count: pendingCount },
-    { id: "audit-archive", label: "专题档案", icon: "ri-history-line", count: state.topics.length },
-  ], [module, pendingCount, state.activeTopicId, state.automationRuntime.correctionRounds, state.automationRuntime.status, state.deliberations.length, state.proposals.length, state.topics.length]);
-  const selectModule = (id: string) => {
-    const next = id as EvolutionWorkspaceModule;
-    setModule(next);
-    setFlowNode(next === "evolution" ? (perspective === "hanli" ? "manual-approval" : "manual-topic") : next === "people" ? `people-${perspective}` : "audit-approval");
-  };
-  const selectFlowNode = (id: string) => {
-    // 树节点是右侧画布的真实路由；父节点保留总览，叶子节点进入各自业务页面。
-    setFlowNode(id as EvolutionWorkspaceFlowNode);
-  };
+    { id: "audit", label: "审计与异常", icon: "ri-shield-check-line", count: pendingCount, expanded: false, children: [
+      { id: "audit-approval", label: "审批轨迹", icon: "ri-file-shield-2-line", count: state.proposals.length },
+      { id: "audit-exception", label: "异常入口", icon: "ri-alarm-warning-line", count: pendingCount },
+      { id: "audit-archive", label: "专题档案", icon: "ri-history-line", count: state.topics.length },
+    ] },
+  ], [pendingCount, state.activeTopicId, state.automationRuntime.correctionRounds, state.automationRuntime.status, state.deliberations.length, state.proposals.length, state.topics.length]);
   useEffect(() => {
     // 人物入口复用同一窗口时同步回该人物默认页，避免标题已切换而画布仍停在前一人物节点。
-    setModule("evolution");
-    setFlowNode(perspective === "hanli" ? "manual-approval" : "manual-topic");
+    setSelectedNode(perspective === "hanli" ? "manual-approval" : "manual-topic");
   }, [perspective]);
   const showHanLiPanel = module === "evolution" && (flowNode === "manual-approval" || (perspective === "hanli" && (flowNode === "manual" || flowNode === "automatic")));
   return <aside className="evolution-control-workspace" aria-label="专项演化统一工作台">
     <header className="evolution-workspace-header"><div><span>专项演化</span><h2>{perspective === "hanli" ? "韩立审批与演化工作台" : "南宫婉专题演化工作台"}</h2><p>模块、流程、表格、表单和动作各守其位；人工操作与自动运行互不混排。</p></div><strong>{state.automationRuntime.status}</strong></header>
     <div className="evolution-workspace-layout">
-      <section className="evolution-module-column"><h3>功能模块</h3><EvolutionTreeNavigation id={`evolution-modules-${perspective}`} label="功能模块" selectedId={module} items={moduleItems} onSelect={selectModule} /></section>
-      <section className="evolution-flow-column"><h3>{module === "evolution" ? "演化流程" : module === "people" ? "人物目录" : "治理目录"}</h3><EvolutionTreeNavigation id={`evolution-flow-${perspective}-${module}`} label="当前模块流程" selectedId={flowNode} items={flowItems} onSelect={selectFlowNode} /></section>
+      <section className="evolution-tree-column"><h3>功能与流程</h3><EvolutionTreeNavigation id={`evolution-navigation-${perspective}`} label="功能与流程" selectedId={selectedNode} items={treeItems} onSelect={(id) => setSelectedNode(id as EvolutionWorkspaceTreeNode)} /></section>
       <main className="evolution-workspace-canvas" data-active-flow={flowNode}>
-        {module === "evolution" && !showHanLiPanel && member && <NangongEvolutionRail activeNode={flowNode} member={member} state={state} workspaces={workspaces} locale={locale} onState={onState} onError={onError} />}
+        {(selectedNode === "people" || selectedNode === "evolution" || selectedNode === "audit") && <EvolutionModuleOverview module={module} state={state} pendingCount={pendingCount} />}
+        {module === "evolution" && selectedNode !== "evolution" && !showHanLiPanel && member && <NangongEvolutionRail activeNode={flowNode} member={member} state={state} workspaces={workspaces} locale={locale} onState={onState} onError={onError} />}
         {showHanLiPanel && <HanLiEvolutionApprovalPanel state={state} locale={locale} view={view} onState={onState} onError={onError} />}
-        {module === "people" && <EvolutionPeopleSummary selectedNode={flowNode} />}
-        {module === "audit" && <EvolutionAuditSummary selectedNode={flowNode} state={state} pendingCount={pendingCount} />}
+        {module === "people" && selectedNode !== "people" && <EvolutionPeopleSummary selectedNode={flowNode} />}
+        {module === "audit" && selectedNode !== "audit" && <EvolutionAuditSummary selectedNode={flowNode} state={state} pendingCount={pendingCount} />}
       </main>
     </div>
   </aside>;
+}
+
+/** 单树一级节点拥有自己的右侧总览，点击父节点同样产生可核对的页面切换。 */
+function EvolutionModuleOverview({ module, state, pendingCount }: { module: EvolutionWorkspaceModule; state: NangongEvolutionState; pendingCount: number }) {
+  const content = module === "people"
+    ? { eyebrow: "人物与个性", title: "人物目录", detail: "查看南宫婉与韩立在专题演化中的职责和协作边界。", facts: [["人物", "2 位"], ["专题", `${state.topics.length} 项`]] }
+    : module === "audit"
+      ? { eyebrow: "审计与异常", title: "治理总览", detail: "集中查看审批事实、当前异常和专题档案。", facts: [["待处理审批", `${pendingCount} 项`], ["档案", `${state.archiveRecords.length} 条`]] }
+      : { eyebrow: "专题演化", title: "演化流程总览", detail: "人工工作区与自动控制台共用同一棵导航树，具体页面在右侧展开。", facts: [["专题", `${state.topics.length} 项`], ["提案", `${state.proposals.length} 项`], ["自动运行", state.automationRuntime.status]] };
+  return <section className="evolution-module-summary" aria-label={`${content.title}页面`}><span>{content.eyebrow}</span><h2>{content.title}</h2><p>{content.detail}</p><dl>{content.facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>;
 }
 
 /** 人物目录按当前树节点展示对应职责，不能继续沿用窗口入口人物造成两个按钮同页。 */

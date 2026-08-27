@@ -139,6 +139,7 @@ const readInteractionAiMemoryDatabaseStatus = () => {
 contextBridge.exposeInMainWorld("desktop", {
   getEnvironment: async () => ({ projectRoot, platform: process.platform, variant: "developer" }),
   getAiMemoryDatabaseStatus: async () => ({ ...readInteractionAiMemoryDatabaseStatus() }),
+  clearTestData: async () => { document.documentElement.dataset.interactionTestDataReset = "true"; return { cleared: true, clearedRecordCount: 42, restartScheduled: true }; },
   getSettings: async () => ({ ...desktopSettings }),
   updateSettings: async (settings) => { desktopSettings = { ...desktopSettings, ...settings }; return { ...desktopSettings }; },
   getCodexModels: async () => ({ models: [

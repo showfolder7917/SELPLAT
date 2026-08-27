@@ -114,7 +114,7 @@ normal_test_must_not_be_replaced_by.3 = manual_junit_launcher
 normal_test_must_not_be_replaced_by.4 = mock_only_execution
 
 <!-- 测试与构建报告继续写入当前工程 build；能力日志和依赖恢复清单写入 OPTION/temp；Gradle 用户缓存写入 cache。 -->
-offline_gradle_user_home = <CURRENT_PROJECT_ROOT>/cache/gradle-user-home
+offline_gradle_user_home = cache/gradle-user-home
 <!-- offline_build_and_test_reports 的当前独立事实为 <CURRENT_PROJECT_ROOT>/build。 -->
 offline_build_and_test_reports = <CURRENT_PROJECT_ROOT>/build
 

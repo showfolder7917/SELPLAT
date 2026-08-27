@@ -5,6 +5,7 @@ export function systemBridge() {
   return {
     getEnvironment: () => invoke("desktop:get-environment"),
     getAiMemoryDatabaseStatus: () => invoke("desktop:get-ai-memory-database-status"),
+    clearTestData: () => invoke("desktop:clear-test-data"),
     getApprovalGovernance: () => invoke("desktop:get-approval-governance"),
     getSettings: () => invoke("desktop:get-settings"),
     updateSettings: (settings: unknown) => invoke("desktop:update-settings", settings),

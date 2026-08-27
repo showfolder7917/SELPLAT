@@ -357,6 +357,22 @@ export class WorkflowRepository {
     });
   }
 
+  /** 在单个事务内清空 AI Desktop 业务测试投影并保留迁移版本表。示例：共有 12 条业务记录时返回 12；任一删除失败会整体回滚。 */
+  clearTestData(): number {
+    return this.#database.transaction((connection) => {
+      // 固定白名单按外键子表到父表排序，表名不接受外部输入；AiDesktopSchemaVersion 永远不进入清理范围。
+      const tables = [
+        "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord",
+        "AiDesktopConversationTopicLink", "AiDesktopConversationTopic", "AiDesktopConversationMemory", "AiDesktopConversationArchiveMessage",
+        "AiDesktopApprovalGovernance", "AiDesktopApprovalRecord", "AiDesktopTaskExecution", "AiDesktopWorkflowRun",
+        "AiDesktopMemberRuntime", "AiDesktopEvent", "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation",
+      ] as const;
+      let clearedRecordCount = 0;
+      for (const table of tables) clearedRecordCount += Number(connection.prepare(`DELETE FROM ${table}`).run().changes);
+      return clearedRecordCount;
+    });
+  }
+
   tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopConversationArchiveMessage" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord" | "AiDesktopEvolutionRound" | "AiDesktopEvolutionRoundTask"): number {
     return this.#database.withConnection((connection) => Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count));
   }
@@ -574,6 +590,10 @@ function taskRuntimeStatus(state: CollaborationTask["state"]): string {
 }
 function taskBlockingKind(task: CollaborationTask): string {
   const reason = task.blockingReason || "";
+  // 先使用任务状态和结构化失败类型，避免测试日志引用规则正文时被“用户/人工”等词污染分类。
+  if (task.state === "test-failed" || task.integrationFailure?.kind === "verification") return "test";
+  if (task.integrationFailure?.kind === "merge-conflict") return "code";
+  if (task.integrationFailure?.kind === "local-change-ownership") return "infrastructure";
   if (!reason) return "none";
   if (/用户|人工|选择/u.test(reason)) return "business";
   if (/测试|test/iu.test(reason)) return "test";

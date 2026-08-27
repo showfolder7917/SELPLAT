@@ -108,6 +108,20 @@ export class LinghuAutomationStore {
     return this.#commit(reason, update);
   }
 
+  /** 清除令狐运行、恢复和检测历史，保留用户维护的启动文案与轮询间隔并安全关闭自动执行；返回被移除的历史项数量。 */
+  clearTestData(): number {
+    const clearedCount = this.#state.flowSnapshots.length + Object.keys(this.#state.recoveryAttemptsByFingerprint).length + (this.#state.lastModuleReport ? 1 : 0);
+    const next = createInitialState();
+    next.pollIntervalMs = this.#state.pollIntervalMs;
+    next.prompts = structuredClone(this.#state.prompts);
+    next.activePromptId = next.prompts.some((prompt) => prompt.promptId === this.#state.activePromptId && prompt.enabled) ? this.#state.activePromptId : next.prompts.find((prompt) => prompt.enabled)?.promptId || null;
+    this.#write(next);
+    this.#state = next;
+    const event = { state: this.state(), reason: "test-data.cleared" };
+    for (const listener of this.#listeners) listener(event);
+    return clearedCount;
+  }
+
   #commit(reason: string, update: (state: LinghuAutomationState) => void): LinghuAutomationState {
     const next = structuredClone(this.#state);
     update(next);

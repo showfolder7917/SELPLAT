@@ -101,7 +101,11 @@ export function SelUiProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<SelUiContextValue>(() => ({
-    confirm: (options) => confirmRef.current?.open(options) || Promise.resolve(false),
+    confirm: (options) => confirmRef.current?.open({
+      ...options,
+      confirmLabel: options.confirmLabel || "确认",
+      cancelLabel: options.cancelLabel || "取消",
+    }) || Promise.resolve(false),
     prompt: (options) => {
       const id = options.multiline ? "ai-desktop-multiline-prompt" : "ai-desktop-prompt";
       const controller = options.multiline ? multilinePromptRef.current : promptRef.current;

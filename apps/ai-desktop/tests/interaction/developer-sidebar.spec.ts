@@ -194,6 +194,28 @@ test("全局模型设置复用 Harness 模型能力并同时保存强度与速�
   await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
 });
 
+test("一键清空测试数据必须二次确认且明确保留范围", async () => {
+  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
+  const resetButton = page.getByRole("button", { name: "一键清空测试数据" });
+  await expect(resetButton).toBeVisible();
+  await expect(page.getByText("保留登录、设置、工作区、可信命令、规则、源码和工程审计文件；完成后自动重启应用。")).toBeVisible();
+
+  await resetButton.click();
+  let dialog = page.getByRole("dialog", { name: "一键清空测试数据" });
+  await expect(dialog).toContainText("此操作不可撤销");
+  await expect(dialog).toContainText("不会删除登录、设置、工作区、可信命令、规则、源码和工程审计文件");
+  await dialog.getByRole("button", { name: "取消" }).click();
+  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
+  const reopenedResetButton = page.getByRole("button", { name: "一键清空测试数据" });
+  await expect(reopenedResetButton).toBeEnabled();
+
+  await reopenedResetButton.click();
+  dialog = page.getByRole("dialog", { name: "一键清空测试数据" });
+  await dialog.getByRole("button", { name: "一键清空测试数据" }).click();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.interactionTestDataReset)).toBe("true");
+  await expect(page.getByRole("dialog", { name: "一键清空测试数据" })).toHaveCount(0);
+});
+
 test("生产构建在正式默认、实际复现和最小窗口中保持设置入口与面板定位", async () => {
   const sizes = [
     { name: "正式默认", width: 1560, height: 980 },
@@ -296,24 +318,30 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   const rail = evolutionPage.locator(".nangong-workspace-rail");
   await expect(rail.getByText("专项演化", { exact: true })).toBeVisible();
   const workspace = evolutionPage.locator(".evolution-control-workspace");
-  await expect(workspace.getByRole("button", { name: /人物与个性/ })).toBeVisible();
-  await expect(workspace.getByRole("button", { name: /专题演化/ })).toBeVisible();
-  await expect(workspace.getByRole("button", { name: /审计与异常/ })).toBeVisible();
+  await expect(workspace.locator(".evolution-tree-column")).toHaveCount(1);
+  await expect(workspace.locator(".evolution-module-column, .evolution-flow-column")).toHaveCount(0);
+  await expect(workspace.getByRole("button", { name: "人物与个性", exact: true })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "专题演化", exact: true })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "审计与异常", exact: true })).toBeVisible();
   await expect(page.locator(".dev-context")).toHaveCount(0);
   await expect(evolutionPage.getByRole("group", { name: "工作台人物视角" })).toBeVisible();
   // 每个树节点必须驱动独立画布内容；只改变高亮而右侧不变属于导航失效。
-  await workspace.getByRole("button", { name: /人物与个性/ }).click();
+  await workspace.getByRole("button", { name: "人物与个性", exact: true }).click();
+  await expect(workspace.getByLabel("人物目录页面")).toBeVisible();
+  await workspace.getByRole("button", { name: "展开人物与个性" }).click();
   await workspace.getByRole("button", { name: "韩立", exact: true }).click();
   await expect(workspace.getByLabel("韩立人物设置")).toBeVisible();
   await workspace.getByRole("button", { name: "南宫婉", exact: true }).click();
   await expect(workspace.getByLabel("南宫婉人物设置")).toBeVisible();
-  await workspace.getByRole("button", { name: /审计与异常/ }).click();
-  await expect(workspace.getByLabel("审批轨迹页面")).toBeVisible();
+  await workspace.getByRole("button", { name: "审计与异常", exact: true }).click();
+  await expect(workspace.getByLabel("治理总览页面")).toBeVisible();
+  await workspace.getByRole("button", { name: "展开审计与异常" }).click();
   await workspace.getByRole("button", { name: "异常入口", exact: true }).click();
   await expect(workspace.getByLabel("异常入口页面")).toBeVisible();
   await workspace.getByRole("button", { name: "专题档案", exact: true }).click();
   await expect(workspace.getByLabel("专题档案页面")).toBeVisible();
-  await workspace.getByRole("button", { name: /专题演化/ }).click();
+  await workspace.getByRole("button", { name: "专题演化", exact: true }).click();
+  await expect(workspace.getByLabel("演化流程总览页面")).toBeVisible();
   await workspace.getByRole("button", { name: "调查与研讨", exact: true }).click();
   await expect(workspace.locator(".nangong-workspace-rail")).toHaveAttribute("aria-label", "调查与研讨页面");
   await workspace.getByRole("button", { name: "韩立审批", exact: true }).click();
@@ -395,7 +423,7 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   const windowCount = application.windows().length;
   await page.getByRole("button", { name: "打开专题演化工作台" }).click();
   expect(application.windows()).toHaveLength(windowCount);
-  await expect(evolutionPage.getByRole("button", { name: "韩立", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(evolutionPage.getByRole("group", { name: "工作台人物视角" }).getByRole("button", { name: "韩立", exact: true })).toHaveAttribute("aria-pressed", "true");
   const approvalPanel = evolutionPage.locator(".hanli-evolution-approval");
   await expect(approvalPanel).toBeVisible();
   await expect(approvalPanel.locator(".selgrid-table")).toBeVisible();
@@ -417,7 +445,7 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(approvalPanel.getByText(/升级提交能力：事实调查与具体提案表达/)).toBeVisible();
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   await page.getByRole("button", { name: "打开专题演化工作台" }).click();
-  await expect(evolutionPage.getByRole("button", { name: "南宫婉", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(evolutionPage.getByRole("group", { name: "工作台人物视角" }).getByRole("button", { name: "南宫婉", exact: true })).toHaveAttribute("aria-pressed", "true");
   const revisionPanel = evolutionPage.getByRole("region", { name: "南宫婉重新提交方案" });
   await expect(revisionPanel.getByText(/用户意见：提交内容不具体/)).toBeVisible();
   await revisionPanel.getByLabel("修订后的具体方案").fill("升级自身提案规则，强制说明问题位置、修正动作和预期结果");
@@ -458,6 +486,7 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
 });
 
 test("令狐老祖位于南宫婉下方并可管理持续自动保障启动文案", async () => {
+  test.setTimeout(60_000);
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();

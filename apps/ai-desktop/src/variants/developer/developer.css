@@ -544,9 +544,9 @@ button { color: inherit; }
 .evolution-workspace-header h2 { margin: 0; color: var(--sel-theme-workbench-text-strong); font-size: var(--sel-theme-font-size-heading); }
 .evolution-workspace-header p { margin: 0; color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); line-height: 1.45; }
 .evolution-workspace-header > strong { padding: 5px 9px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: var(--sel-theme-radius-chip); color: var(--sel-theme-workbench-accent); background: var(--sel-theme-workbench-accent-surface); font-size: var(--sel-theme-font-size-caption); }
-.evolution-workspace-layout { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(190px, .82fr) minmax(244px, 1.04fr) minmax(380px, 2.35fr); overflow: hidden; }
-.evolution-module-column, .evolution-flow-column { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 14px 10px; border-right: 1px solid var(--sel-theme-line); overflow: hidden; background: var(--sel-theme-workbench-context); }
-.evolution-module-column > h3, .evolution-flow-column > h3 { margin: 0; padding: 0 8px; color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); font-weight: 600; }
+.evolution-workspace-layout { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(280px, .92fr) minmax(520px, 3.08fr); overflow: hidden; }
+.evolution-tree-column { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 14px 10px; border-right: 1px solid var(--sel-theme-line); overflow: hidden; background: var(--sel-theme-workbench-context); }
+.evolution-tree-column > h3 { margin: 0; padding: 0 8px; color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); font-weight: 600; }
 .evolution-tree-host, .evolution-tree-host > [data-sel-grid-role="tree"] { min-width: 0; min-height: 0; height: 100%; overflow: auto; }
 .evolution-workspace-canvas { min-width: 0; min-height: 0; overflow: hidden; background: var(--sel-theme-workbench-canvas); }
 .evolution-workspace-canvas > .person-workspace-rail { background: transparent; }
@@ -625,7 +625,7 @@ button { color: inherit; }
 .nangong-person-composer button:disabled { cursor: not-allowed; opacity: .45; }
 
 @media (max-width: 1080px) {
-  .evolution-workspace-layout { grid-template-columns: 150px 184px minmax(340px, 1fr); }
+  .evolution-workspace-layout { grid-template-columns: 230px minmax(420px, 1fr); }
   .evolution-workspace-header { padding: 14px; }
   .evolution-workspace-header p { display: none; }
   .person-workspace-rail { padding: 14px; }

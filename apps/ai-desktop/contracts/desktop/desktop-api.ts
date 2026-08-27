@@ -13,7 +13,7 @@ import type { AutomaticTestPreflightResult, CodexApproval, CodexHarnessStatus, C
 import type { CodexStreamEvent } from "../codex/codex-stream.js";
 import type { CollaborationState, CollaborationStateEvent, CollaborationStreamEnvelope, CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../collaboration/collaboration.js";
 import type { CodexSessionInfo, ConversationDispatchState, EnqueueMessageRequest, SendMessageRequest, SendMessageResponse } from "../codex/conversation.js";
-import type { AiMemoryDatabaseStatus } from "./database.js";
+import type { AiMemoryDatabaseStatus, TestDataResetResult } from "./database.js";
 import type { CreateLinghuStartupPromptRequest, LinghuAutomationState, LinghuAutomationStateEvent, UpdateLinghuStartupPromptRequest } from "../collaboration/linghu-automation.js";
 import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, NangongEvolutionState, NangongEvolutionStateEvent, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../collaboration/nangong-evolution.js";
 import type { DesktopSettings } from "./settings.js";
@@ -36,6 +36,8 @@ export interface DesktopApi {
   getEnvironment(): Promise<DesktopEnvironment>;
   /** 读取 AI Memory 数据库初始化状态，不触发重建。 */
   getAiMemoryDatabaseStatus(): Promise<AiMemoryDatabaseStatus>;
+  /** 清除应用内部测试业务数据并安排受控重启。示例：确认后返回 cleared=true；清理失败时拒绝 Promise，登录、设置、规则和工程文件不受影响。 */
+  clearTestData(): Promise<TestDataResetResult>;
   /** 读取当前桌面设置快照。 */
   getSettings(): Promise<DesktopSettings>;
   /** 合并并持久化允许修改的桌面设置字段。 */

@@ -23,6 +23,39 @@ test("统一迁移建立事件、流程、任务、审批、对话记忆、专�
   }
 });
 
+test("一键清空在单一事务删除业务投影并保留数据库版本记录", () => {
+  const fixture = createFixture("clear-test-data");
+  try {
+    fixture.repository.startRuntimeSession(4321, "2026-08-28T00:00:00.000Z");
+    fixture.repository.recordAuditEvent("test.recorded", { message: "待清空事件" });
+    fixture.repository.syncCollaborationState(collaborationState("2026-08-28T00:00:01.000Z"));
+    const schemaCountBefore = fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get().count));
+    assert.ok(fixture.repository.clearTestData() > 0);
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopConversationArchiveMessage", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask"]) {
+      assert.equal(fixture.repository.tableCount(table), 0, table);
+    }
+    const schemaCountAfter = fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get().count));
+    assert.equal(schemaCountAfter, schemaCountBefore);
+    assert.ok(schemaCountAfter > 0);
+  } finally { fixture.close(); }
+});
+
+test("统一测试失败优先按结构化 verification 投影为测试阻塞", () => {
+  const fixture = createFixture("test-failure-kind");
+  try {
+    const state = collaborationState("2026-08-28T00:00:00.000Z");
+    Object.assign(state.tasks[0], {
+      state: "test-failed",
+      phase: null,
+      blockingReason: "统一测试失败：规则正文包含用户明确选择；expected 5.100.0, actual 5.103.0",
+      integrationFailure: { kind: "verification", detail: "过期断言", conflictFiles: [], baseSha: "base", resultSha: "result", generation: 1, occurredAt: "2026-08-28T00:00:00.000Z" },
+    });
+    fixture.repository.syncCollaborationState(state);
+    const task = fixture.database.withConnection((connection) => connection.prepare("SELECT blockingKind, runtimeStatus, acceptanceState FROM AiDesktopTaskExecution WHERE taskId='task-1'").get());
+    assert.deepEqual({ ...task }, { blockingKind: "test", runtimeStatus: "failed", acceptanceState: "failed" });
+  } finally { fixture.close(); }
+});
+
 test("异常从统一队列受理并在相关流程恢复后进入已解决终态", () => {
   const fixture = createFixture("exception-lifecycle");
   try {

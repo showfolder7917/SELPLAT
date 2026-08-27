@@ -139,6 +139,97 @@ export class CollaborationCoordinator {
     return state;
   }
 
+  /**
+   * 统一测试已经提供了确定失败证据时，由令狐在原任务工作树内完成最小修正并生成新的结果版本。
+   * 该入口只接受 verification 失败，不处理需要人工选择、工作区归属或 Git 冲突问题。
+   */
+  async repairFailedUnifiedTest(taskId: string): Promise<boolean> {
+    const failedTask = this.#store.task(taskId);
+    if (failedTask.state !== "test-failed" || failedTask.integrationFailure?.kind !== "verification") return false;
+    const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
+    if (linghu.state !== "idle") return false;
+
+    const originalReason = failedTask.blockingReason || failedTask.integrationFailure.detail;
+    let repairSession: CollaborationExecutorSession | null = null;
+    try {
+      this.#store.updateTask(taskId, "unified_test.repair_started", (current, state) => {
+        const handler = requireMember(state, LINGHU_MEMBER_ID);
+        handler.generation += 1;
+        handler.state = "working";
+        handler.role = "executor";
+        handler.phase = "implementing";
+        handler.currentTaskId = taskId;
+        handler.updatedAt = new Date().toISOString();
+        current.taskRevision += 1;
+        current.state = "repairing-execution";
+        current.phase = "implementing";
+        current.repairKind = "execution";
+        current.repairFailureReason = originalReason;
+        current.currentHandler = participantSnapshot(handler);
+        current.blockingReason = `${handler.displayName}正在依据统一测试失败证据修复源码与测试契约`;
+        appendFlow(current, "unified_test.repair_started", "recovery", "started", current.blockingReason, handler);
+      });
+
+      const task = this.#store.task(taskId);
+      const approvedPlan = task.plans.find((candidate) => candidate.version === task.currentPlanVersion);
+      if (!approvedPlan) throw new Error("统一测试修复找不到已批准的执行方案。");
+      const repairPlan: CollaborationRequirementPlan = {
+        ...approvedPlan,
+        text: [
+          approvedPlan.text,
+          "令狐统一测试修复要求：只处理下述失败证据所证明的源码、测试契约或配置问题，不扩大原任务范围。完成最小修正后执行代码级验证。",
+          task.integrationFailure?.detail || originalReason,
+        ].join("\n\n"),
+      };
+      repairSession = await this.#sessions.createExecutor(task, requireMember(this.state(), LINGHU_MEMBER_ID));
+      const repaired = await repairSession.execute(task, repairPlan, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "统一测试修复未完成代码级验证");
+      const resultSha = await this.#workspaces.commitTaskResult(this.#store.task(taskId), linghu.displayName);
+      this.#store.updateTask(taskId, "unified_test.repair_completed", (current, state) => {
+        if (!current.versionWorkspace) throw new Error("统一测试修复后缺少版本工作区。");
+        current.versionWorkspace.resultSha = resultSha;
+        current.state = "ready-for-integration";
+        current.phase = "ready";
+        current.integrationGeneration = null;
+        current.integrationFailure = null;
+        current.recoveryTargetState = "ready-for-integration";
+        current.repairKind = null;
+        current.repairFailureReason = null;
+        current.blockingReason = null;
+        current.codeVerifiedAt = new Date().toISOString();
+        current.finalResult = repaired.text;
+        current.resultSummary = createCollaborationResultSummary(current, repaired.text, repaired.pendingActions);
+        current.unifiedTest = { status: "pending", owner: participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), failureReason: null, startedAt: null, completedAt: null };
+        appendFlow(current, "unified_test.repair_completed", "recovery", "completed", "令狐老祖已完成最小修正并生成新结果版本，等待重新统一测试", requireMember(state, LINGHU_MEMBER_ID));
+        releaseMemberFromState(state, LINGHU_MEMBER_ID);
+      });
+      this.#integrationPipeline.trackWaitingTask(taskId, {
+        segment: "integration-wait",
+        waitType: "recovery-wait",
+        reasonCode: "unified-test-repair-completed",
+        resource: "integration-coordinator",
+        resourceOwner: null,
+      });
+      this.#integrationPipeline.schedule();
+      return true;
+    } catch (error) {
+      // 修复失败保留原始测试故障指纹，让自动保障的三次上限能够真实限制重复副作用。
+      this.#store.updateTask(taskId, "unified_test.repair_failed", (current, state) => {
+        current.state = "test-failed";
+        current.phase = null;
+        current.repairKind = null;
+        current.repairFailureReason = errorMessage(error);
+        current.blockingReason = originalReason;
+        appendFlow(current, "unified_test.repair_failed", "recovery", "failed", `令狐老祖修复统一测试失败：${errorMessage(error)}`, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), true);
+        releaseMemberFromState(state, LINGHU_MEMBER_ID);
+      });
+      return true;
+    } finally {
+      await repairSession?.dispose();
+      this.#schedule();
+    }
+  }
+
   async #repairRejectedReview(taskId: string): Promise<void> {
     let repairSession: CollaborationExecutorSession | null = null;
     try {

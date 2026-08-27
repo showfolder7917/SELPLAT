@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 
 const component = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const settingsPanel = readFileSync(new URL("../src/features/settings/components/SettingsFloatingPanel.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
 const floatingPanel = readFileSync(new URL("../../../shared/frontend/sel-ui/src/components/floating-panel/selFloatingPanel.js", import.meta.url), "utf8");
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,19 +18,22 @@ test("连接与执行设置不再把本机路径渲染为文本", () => {
   assert.doesNotMatch(component, /auditInfo\?\.path/);
   assert.match(component, /openTempDirectory/);
   assert.match(component, /clearTempFiles/);
+  assert.match(component, /clearTestData/);
+  assert.match(component, /一键清空测试数据/);
+  assert.match(component, /保留登录、设置、工作区、可信命令、规则、源码和工程审计文件/);
   assert.match(component, /openAuditLogDirectory/);
 });
 
 test("连接与执行设置复用 SELUI 浮动面板并支持调整宽度", () => {
   assert.match(component, /@selplat\/sel-ui\/components\/floating-panel/);
   assert.doesNotMatch(component, /shared\/frontend\/sel-ui/);
-  assert.match(component, /floatingPanel\.mount/);
-  assert.match(component, /resizable:\s*\{/);
-  assert.match(component, /minWidth:\s*MINIMUM_SETTINGS_WIDTH/);
-  assert.match(component, /maxWidth:\s*MAXIMUM_SETTINGS_WIDTH/);
-  assert.match(component, /resetLabel:/);
+  assert.match(settingsPanel, /floatingPanel\.mount/);
+  assert.match(settingsPanel, /resizable:\s*\{/);
+  assert.match(settingsPanel, /minWidth:\s*MINIMUM_WIDTH/);
+  assert.match(settingsPanel, /maxWidth:\s*MAXIMUM_WIDTH/);
+  assert.match(settingsPanel, /resetLabel:/);
   assert.doesNotMatch(component, /SettingsWidthResizer/);
-  assert.match(component, /portalBody && open && createPortal\(children, portalBody\)/);
+  assert.match(settingsPanel, /portalBody && open && createPortal\(children, portalBody\)/);
   assert.match(styles, /\.dev-activitybar \.dev-settings \.selfloating-resize-bottom, \.dev-activitybar \.dev-settings \.selfloating-resize-corner/);
   assert.match(styles, /max-width:\s*min\(720px, calc\(100vw - 70px\)\)/);
 });

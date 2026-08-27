@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
-import { nextReviewAction } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
+import { CollaborationCoordinator, nextReviewAction } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
 import { createCollaborationResultSummary } from "../../../build/ai-desktop/electron/electron/services/collaboration/result/result-summary.js";
 import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../../../build/ai-desktop/electron/electron/services/collaboration/review/review-decision-parser.js";
 import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
@@ -117,6 +117,34 @@ test("默认人物稳定列出且韩立不能被删除", () => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("清空测试数据保留人物配置与令狐文案并重置全部运行态", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "clear-test-data-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const custom = collaborationStore.createMember({ displayName: "银月" }).members.find((member) => member.displayName === "银月");
+    collaborationStore.submitTask({ title: "待清空任务", problemStatement: "验证测试数据清理", confirmedIntent: "删除运行记录并保留配置", workspaceState, locale: "zh-CN" });
+    assert.ok(collaborationStore.clearTestData() > 0);
+    const collaborationState = new CollaborationStore(path.join(directory, "collaboration.json")).state();
+    assert.equal(collaborationState.mode, "collaboration");
+    assert.equal(collaborationState.tasks.length, 0);
+    assert.equal(collaborationState.integrationBatches.length, 0);
+    assert.ok(collaborationState.members.some((member) => member.memberId === custom.memberId));
+    assert.ok(collaborationState.members.every((member) => member.currentTaskId === null));
+
+    const linghuPath = path.join(directory, "linghu.json");
+    const linghuStore = new LinghuAutomationStore(linghuPath);
+    const prompt = linghuStore.createPrompt({ title: "保留的启动文案", content: "这是用户配置，不属于测试运行历史。" });
+    linghuStore.setEnabled(true);
+    linghuStore.updateRuntime("test.runtime", (state) => { state.flowSnapshots.push({ sourceTaskId: "task-1", taskTitle: "旧任务", taskState: "executing", sourceGeneration: 1, sourceStage: "execution", sourceStatus: "started", sourceResultSha: null, completionConditions: [], observedAt: new Date().toISOString() }); });
+    assert.ok(linghuStore.clearTestData() > 0);
+    const linghuState = new LinghuAutomationStore(linghuPath).state();
+    assert.equal(linghuState.enabled, false);
+    assert.equal(linghuState.flowSnapshots.length, 0);
+    assert.ok(linghuState.prompts.some((item) => item.promptId === prompt.prompts.at(-1).promptId));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启动文案", async () => {
@@ -356,6 +384,116 @@ test("令狐对同一故障指纹最多执行三次恢复副作用但继续检�
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("统一测试失败即使日志引用用户规则也由令狐修复而不是误判为人工选择", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-test-repair-classification-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const submitted = collaborationStore.submitTask({
+      title: "修复过期断言",
+      problemStatement: "统一测试断言仍引用旧规则版本。",
+      confirmedIntent: "令狐依据失败证据完成最小修复并重新统一测试。",
+      workspaceState,
+      locale: "zh-CN",
+    });
+    collaborationStore.updateTask(submitted.taskId, "test.failed", (task) => {
+      task.state = "test-failed";
+      task.blockingReason = "统一测试失败：规则正文包含用户明确选择；expected 5.100.0, actual 5.103.0";
+      task.integrationFailure = { kind: "verification", detail: task.blockingReason, conflictFiles: [], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString() };
+    });
+    let repairRequests = 0;
+    let retryOnlyRequests = 0;
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+      continueTask: () => { retryOnlyRequests += 1; return collaborationStore.state(); },
+      repairFailedUnifiedTest: async (taskId) => {
+        repairRequests += 1;
+        collaborationStore.updateTask(taskId, "test.repaired", (task) => { task.state = "ready-for-integration"; task.blockingReason = null; });
+        return true;
+      },
+    };
+    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    store.setEnabled(true);
+    const facade = new LinghuAutomationFacade({ store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined });
+    await facade.checkNow();
+    assert.equal(repairRequests, 1);
+    assert.equal(retryOnlyRequests, 0);
+    assert.equal(facade.state().flowSnapshots[0].blockingKind, "test");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("同一统一测试故障最多触发三次令狐源码修复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-test-repair-limit-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const submitted = collaborationStore.submitTask({ title: "固定测试故障", problemStatement: "验证修复次数上限", confirmedIntent: "同一失败不得无限修改", workspaceState, locale: "zh-CN" });
+    collaborationStore.updateTask(submitted.taskId, "fixture.test_failed", (task) => {
+      task.state = "test-failed";
+      task.blockingReason = "固定统一测试失败";
+      task.integrationFailure = { kind: "verification", detail: task.blockingReason, conflictFiles: [], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString() };
+    });
+    let repairRequests = 0;
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+      repairFailedUnifiedTest: async () => { repairRequests += 1; return true; },
+    };
+    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    store.setEnabled(true);
+    const facade = new LinghuAutomationFacade({ store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined });
+    await facade.checkNow();
+    await facade.checkNow();
+    await facade.checkNow();
+    await facade.checkNow();
+    assert.equal(repairRequests, 3);
+    assert.equal(facade.state().enabled, true);
+    assert.match(facade.state().blockingReason, /安全恢复三次/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("令狐在原任务工作树修复统一测试失败并生成新的待集成结果", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-test-repair-result-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    store.setMode("collaboration");
+    const submitted = store.submitTask({ title: "修复统一测试", problemStatement: "修复过期断言", confirmedIntent: "只修复本次统一测试失败", workspaceState, locale: "zh-CN" });
+    store.updateTask(submitted.taskId, "fixture.test_failed", (task) => {
+      task.state = "test-failed";
+      task.currentPlanVersion = 1;
+      task.plans = [{ version: 1, ownerMemberId: "li-feiyu", ownerDisplayName: "厉飞雨", status: "approved", text: "保持原任务功能不变", contentHash: "plan", createdAt: new Date().toISOString() }];
+      task.versionWorkspace = { workspaceId: "worktree:test", rootPath: directory, branchName: "codex/test", baseSha: "base-sha", resultSha: "old-result-sha", createdAt: new Date().toISOString(), retiredAt: null };
+      task.blockingReason = "统一测试失败：expected 5.100.0, actual 5.103.0";
+      task.integrationFailure = { kind: "verification", detail: task.blockingReason, conflictFiles: [], baseSha: "base-sha", resultSha: "old-result-sha", generation: 1, occurredAt: new Date().toISOString() };
+    });
+    let receivedRepairPlan = "";
+    let integrationSchedules = 0;
+    const coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: { commitTaskResult: async () => "new-result-sha" },
+      sessions: { createExecutor: async () => ({ isAlive: () => true, analyze: async () => "", optimize: async () => "", execute: async (_task, plan) => { receivedRepairPlan = plan.text; return { status: "code-verified", text: "断言已同步并完成代码级验证", pendingActions: [] }; }, dispose: async () => undefined }) },
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => { integrationSchedules += 1; }, dispose: () => undefined },
+      emitState: () => undefined,
+      emitStream: () => undefined,
+    });
+    assert.equal(await coordinator.repairFailedUnifiedTest(submitted.taskId), true);
+    const repaired = store.task(submitted.taskId);
+    assert.match(receivedRepairPlan, /expected 5\.100\.0, actual 5\.103\.0/);
+    assert.match(receivedRepairPlan, /不扩大原任务范围/);
+    assert.equal(repaired.state, "ready-for-integration");
+    assert.equal(repaired.versionWorkspace.resultSha, "new-result-sha");
+    assert.equal(repaired.integrationFailure, null);
+    assert.equal(repaired.unifiedTest.status, "pending");
+    assert.equal(repaired.flowEvents.some((event) => event.type === "unified_test.repair_completed"), true);
+    assert.ok(integrationSchedules >= 1);
+    await coordinator.dispose();
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("令狐活动任务记录缺失时保留恢复点并派发同模块替代任务", async () => {
@@ -892,10 +1030,12 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
   const rule = readFileSync(new URL("../ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
-  assert.match(rule, /rule_version = 5\.100\.0/);
+  assert.match(rule, /^rule_version = \d+\.\d+\.\d+$/m);
+  assert.match(rule, /upgrade_record_5_100 = [^\n]*韩立南宫婉共用selConversation正式出口/);
   assert.match(rule, /nangong_distribution_planning_contract = AI_read_only_investigation/);
   assert.match(rule, /linghu_exception_intake_loop_prevention_contract = single_event_center_entry/);
-  assert.match(rule, /evolution_workspace_information_architecture_contract = stable_module_tree_people_evolution_audit/);
+  assert.match(rule, /evolution_workspace_information_architecture_contract = one_expandable_tree_people_evolution_audit_with_groups_and_leaves/);
+  assert.match(rule, /ai_desktop_test_data_reset_contract = settings_danger_action_with_SELUI_confirm/);
   assert.match(rule, /evolution_workspace_window_contract = main_window_conversation_only/);
   assert.match(rule, /respectful_listening_and_correction_are_nangong_personality/);
   assert.match(rule, /reflect_current_concern_not_mechanical_template/);

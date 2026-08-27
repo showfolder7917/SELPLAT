@@ -51,6 +51,31 @@ export class CollaborationStore {
     return () => this.#listeners.delete(listener);
   }
 
+  /** 清除测试任务与运行态，保留用户维护的人物、启用状态、选择和桌面模式；返回实际移除的任务与批次数。示例：2 个任务和 1 个批次返回 3；写入失败时抛错且内存状态不变。 */
+  clearTestData(): number {
+    const clearedCount = this.#state.tasks.length + this.#state.integrationBatches.length;
+    const taskIds = this.#state.tasks.map((task) => task.taskId);
+    this.#commit("test-data.cleared", (state) => {
+      state.tasks = [];
+      state.integrationBatches = [];
+      state.nextIntegrationGeneration = 1;
+      for (const member of state.members) {
+        const owner = member.kind === "conversation-owner";
+        member.state = owner ? "conversation" : "idle";
+        member.role = owner ? "conversation" : null;
+        member.phase = null;
+        member.currentTaskId = null;
+        member.blockingReason = null;
+        member.lastHeartbeatAt = null;
+        member.lastProtocolProgressAt = null;
+        member.lastAssignedAt = null;
+        member.generation = owner ? 1 : 0;
+        member.updatedAt = new Date().toISOString();
+      }
+    }, taskIds);
+    return clearedCount;
+  }
+
   setMode(mode: DesktopOperatingMode): CollaborationState {
     if (mode !== "single-conversation" && mode !== "collaboration") throw new Error("无效的桌面运行模式。");
     return this.#commit("mode.changed", (state) => { state.mode = mode; });
