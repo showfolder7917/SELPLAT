@@ -560,7 +560,7 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
             throw new IOException("AGENTS.md 当前稳定用户 ID 不唯一或不安全");
         }
         return insideRoot(projectRoot.resolve(
-                "apps/ai-desktop/ruleengine/backend/src/main/resources/local/"
+                "apps/ai-desktop/ruleengine/rules/local/"
                         + stableUserId
                         + "/selplat/通用/registry/managed-database-applications.json"));
     }

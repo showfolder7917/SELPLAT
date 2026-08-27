@@ -14,7 +14,7 @@ import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } fro
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const projectRoot = path.resolve(appRoot, "../..");
-const resourceRoot = path.join(appRoot, "ruleengine", "backend", "src", "main", "resources");
+const resourceRoot = path.join(appRoot, "ruleengine", "rules");
 const sourceManifestPath = path.join(appRoot, "ruleengine", "manifest", "production-rules.json");
 const applicationName = resolveApplicationNameFromSourceRoot(appRoot);
 const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName });

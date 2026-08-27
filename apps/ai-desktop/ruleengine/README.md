@@ -1,33 +1,36 @@
 # AI Desktop ruleengine
 
-这里承载 SELPLAT 面向 AI 的规则驱动执行与持续规则包成长体系。
+这是 AI Desktop 内嵌的 Python 规则工程，不是独立后端、Gradle 子项目或 HTTP 服务。
 
-负责内容：
+## 目录
 
-- 按稳定逻辑 ID 和当前作用域加载最少必要规则
-- 按规则正文执行任务并完成偏差验证
-- 维护规则、模板、案例、程序、验证和升级记录组成的规则包
-- 通过 Java、Python、Node 原生能力完成可重复动作
-- 将重复偏差沉淀为规则包升级，并形成 common 人工审查补丁
+- `python/ruleengine/`：统一执行器、生命周期管理器和规则快照等运行能力。
+- `python/local/core/`：冻结的核心 Python 能力。
+- `python/local/<stable-user-id>/`：从根 `AGENTS.md` 解析的当前用户能力。
+- `rules/`：唯一规则索引、协议、分层规则、注册表和路径配置。
+- `tests/local/`：按 core 与当前用户分层的 Python 测试。
+- `manifest/`：客户规则白名单、覆盖示例和模块元数据。
 
-说明：
+架构方案和目录职责文档统一保存在工程根 `OPTION/`；ruleengine 内不再保留已退役的设计副本。
 
-- 当前模式不是传统的解析器、裁决器和执行服务流水线。
-- `local/core` 是冻结基线，`local/common` 只接受人工审查合并，自动修正进入已验证用户层。
-- 规则数量增长不是目标；减少偏差、补全规则包和保持引用有效才是成长指标。
+项目不再使用 `backend/src/main|test` 和 `com/sp/selplat` 式目录。Python 导入根是
+`python/`，包名使用 `ruleengine`、`local.core` 和 `local.<stable-user-id>`。
 
-## 客户交付与运行方式
+## 运行与测试
 
-开发期完整规则库不会整体进入客户安装包。构建脚本只读取
-`manifest/production-rules.json` 的显式白名单，生成 `build/ai-desktop/rule-bundle`，
-Electron Builder 再把 `manifest.json` 和 `rules.json` 放到安装目录的
-`resources/ruleengine/`。因此客户机器不需要 Python、不需要源码工程，也能使用产品规则。
+- 启动协议：`python apps/ai-desktop/ruleengine/python/local/core/abilities/startup_protocol_loader.py`
+- 能力执行：`python apps/ai-desktop/ruleengine/python/ruleengine/执行器.py <ability_name> <context_json>`
+- 统一测试：`python apps/ai-desktop/ruleengine/tests/run_tests.py all`
 
-主进程启动时校验每条内置规则的 SHA-256。Windows 客户若需要覆盖允许定制的规则，
-可把 UTF-8 JSON 文件放到 `%APPDATA%\ai-desktop\ruleengine\overrides\`；文件格式参考
-`manifest/customer-overlay.example.json`。覆盖只能使用内置清单中的稳定逻辑 ID，且该规则
-必须标记 `customerOverridable=true`。未知规则、禁止覆盖规则、重复声明、超大或损坏文件会被
-整文件拒绝，内置规则继续生效。
+Python 缓存统一写入工程 `cache/python-pycache`，源码目录不得出现 `__pycache__` 或 `.pyc`。
 
-Renderer 只能读取规则状态和有效规则，不能写覆盖目录；Codex 会话读取主进程校验后的最终
-规则正文。客户覆盖发生变化后，下一次启动会形成新的会话签名，不会沿用旧规则线程。
+## 客户交付
+
+开发期规则源不会直接复制给客户。`apps/ai-desktop/scripts/build-rule-bundle.mjs` 只读取
+`manifest/production-rules.json` 白名单，从 `rules/` 生成
+`build/ai-desktop/rule-bundle`。Electron Builder 将 `manifest.json` 与 `rules.json`
+放入安装目录 `resources/ruleengine/`，所以客户机器不需要 Python 或源码工程也能使用规则。
+
+Windows 客户规则覆盖位于 `%APPDATA%\ai-desktop\ruleengine\overrides\`，格式参考
+`manifest/customer-overlay.example.json`。覆盖只能使用白名单中的稳定逻辑 ID，并在主进程
+完成大小、重复项、权限和 SHA-256 校验后生效。

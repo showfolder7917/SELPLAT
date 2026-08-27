@@ -12,16 +12,14 @@
 - `CURRENT_OS=windows` 时：`SELPLAT_ROOT=${SELPLAT_ROOT_WINDOWS}`
 - `CURRENT_OS=macos` 时：`SELPLAT_ROOT=${SELPLAT_ROOT_MACOS}`
 - `CURRENT_OS=linux` 时不固定机器绝对路径；必须从当前工作目录向上识别本文件所属工程根，并设置 `SELPLAT_ROOT=<识别出的工程根>`。
-- 不可变核心资源根：`MEMORY_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/backend/src/main/resources/local/core`
+- 不可变核心资源根：`MEMORY_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/rules/local/core`
 - 核心协议目录：`CORE_PROTOCOL_ROOT=${MEMORY_ROOT}/protocol`
 - rule-engine 资源根：`RULE_ENGINE_RESOURCE_ROOT=${MEMORY_ROOT}/../..`
 - 唯一规则索引：`RULE_ENGINE_RULE_INDEX=${RULE_ENGINE_RESOURCE_ROOT}/RULE_INDEX.md`
-- Java 核心代码根：`CORE_JAVA_ROOT=${MEMORY_ROOT}/../../../java/com/sp/selplat/local/code/core`
-- Python 核心代码根：`CORE_PYTHON_ROOT=${MEMORY_ROOT}/../../../python/com/sp/selplat/local/code/core`
-- Node 核心代码根：`CORE_NODE_ROOT=${MEMORY_ROOT}/../../../node/com/sp/selplat/local/code/core`
-- rule-engine 新 Python 能力根：`RULE_ENGINE_PYTHON_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/backend/src/main/python/com/sp/selplat/ruleengine`
-- rule-engine 公共路径配置：`RULE_ENGINE_PATH_CONFIG=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/backend/src/main/resources/ruleengine/config/路径配置.toml`
-- rule-engine 调整后规则根：`RULE_ENGINE_RULE_RESOURCE_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/backend/src/main/resources/ruleengine`
+- Python 核心代码根：`CORE_PYTHON_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/python/local/core`
+- rule-engine 新 Python 能力根：`RULE_ENGINE_PYTHON_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/python/ruleengine`
+- rule-engine 公共路径配置：`RULE_ENGINE_PATH_CONFIG=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/rules/config/路径配置.toml`
+- rule-engine 规则根：`RULE_ENGINE_RULE_RESOURCE_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/rules`
 
 ## 必须阅读链路
 
@@ -47,7 +45,7 @@
 - `local/core` 与 `local/common` 默认保持冻结；没有用户明确点名修改目标时，自动修正只能写入当前已验证用户层。
 - 当用户明确提出 `local/core` 或 `local/common` 的具体修改需求，并以独立 `1` 启动后，视为把该次指定范围托管给 AI；AI 可以直接完成分析、修改、引用同步和验证，但不得扩大目标范围。
 - 用户明确托管的修改必须在执行前核对索引、调用方、注册表和测试；删除或合并必须记录保留方与替代关系，执行后必须完成相关回归。
-- 旧分层 Java、Python、Node 执行代码分别位于 `src/main/<java|python|node>/com/sp/selplat/local/code/<layer>/`；本次已迁移的 rule-engine Python 能力位于 `${RULE_ENGINE_PYTHON_ROOT}`。禁止跨语言源目录混放；新调整的 rule-engine 规则可位于 `${RULE_ENGINE_RULE_RESOURCE_ROOT}`，其余规则与协议仍位于 `src/main/resources/local/<layer>/`。
+- rule-engine 只承载 Python 执行代码与规则资源：通用执行器位于 `${RULE_ENGINE_PYTHON_ROOT}`，分层 Python 能力位于 `apps/ai-desktop/ruleengine/python/local/<layer>/`，规则与协议位于 `${RULE_ENGINE_RULE_RESOURCE_ROOT}/local/<layer>/`，测试位于 `apps/ai-desktop/ruleengine/tests/local/<layer>/`。禁止恢复 `backend/src/main|test` 或 `com/sp/selplat` 式目录。
 
 ## 失败阻断
 
@@ -66,7 +64,7 @@
 - `AGENTS.md` 中的“当前稳定用户 ID”是当前工程识别用户身份的唯一事实来源。
 - 执行任务前必须读取当前稳定用户 ID，并设置 `ACTIVE_STABLE_USER_ID=<读取值>`；禁止从目录名称、历史规则、环境来源或既有代码推断当前用户。
 - 用户规则资源统一沉淀到 `local/<ACTIVE_STABLE_USER_ID>/`。
-- 用户 Java、Python、Node 能力分别沉淀到对应语言源码根下的 `<ACTIVE_STABLE_USER_ID>/`。
+- 用户 Python 能力沉淀到 `apps/ai-desktop/ruleengine/python/local/<ACTIVE_STABLE_USER_ID>/`。
 - 当前用户实体目录只能由上述变量代入生成；文档、程序、规则逻辑 ID 和测试框架不得枚举具体用户名作为分支条件。
 - 禁止扫描 `local/` 下已有目录选择当前用户，也禁止同时加载或合并多个用户层。
 

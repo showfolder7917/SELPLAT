@@ -15,8 +15,8 @@ const interactionPreload = read("tests/interaction/isolated-preload.cjs");
 const packageManifest = read("package.json");
 const testDocumentRunner = read("scripts/test-document-runner.mjs");
 const agents = read("AGENTS.md");
-const ruleIndex = read("../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/RULE_INDEX.md");
-const harnessRule = read("../rule-engine/backend/src/main/resources/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md");
+const ruleIndex = read("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/RULE_INDEX.md");
+const harnessRule = read("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md");
 
 test("全局设置持久化模型、推理强度和速度且不提供会话覆盖字段", () => {
   assert.match(contracts, /defaultModel: string \| null/);

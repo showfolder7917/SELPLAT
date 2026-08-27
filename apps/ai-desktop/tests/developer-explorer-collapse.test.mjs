@@ -7,7 +7,7 @@ const styles = readFileSync(new URL("../src/variants/developer/developer.css", i
 const projectAgents = readFileSync(new URL("../../../AGENTS.md", import.meta.url), "utf8");
 const activeUser = projectAgents.match(/^- 当前稳定用户 ID：`([^`]+)`$/m)?.[1];
 if (!activeUser) throw new Error("AGENTS.md 未声明当前稳定用户 ID。");
-const aiDesktopRuleRoot = `../../rule-engine/backend/src/main/resources/local/${activeUser}/selplat/应用/ai-desktop/`;
+const aiDesktopRuleRoot = `../ruleengine/rules/local/${activeUser}/selplat/应用/ai-desktop/`;
 const aiDesktopRuleIndex = readFileSync(new URL(`${aiDesktopRuleRoot}RULE_INDEX.md`, import.meta.url), "utf8");
 const aiDesktopRule = readFileSync(new URL(`${aiDesktopRuleRoot}rule/RUL_AIDesktop官方Harness接入规则.md`, import.meta.url), "utf8");
 

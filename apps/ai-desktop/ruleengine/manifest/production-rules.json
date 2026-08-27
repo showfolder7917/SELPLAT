@@ -39,12 +39,12 @@
     },
     {
       "logicalId": "SELPLAT_PROJECT_PATH_RULES",
-      "resourcePath": "ruleengine/active-user/rules/平台/RUL_SELPLAT工程路径规则.md",
+      "resourcePath": "active-user/rules/平台/RUL_SELPLAT工程路径规则.md",
       "customerOverridable": false
     },
     {
       "logicalId": "SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES",
-      "resourcePath": "ruleengine/active-user/rules/平台/RUL_SELPLAT程序源码语言与归属门禁规则.md",
+      "resourcePath": "active-user/rules/平台/RUL_SELPLAT程序源码语言与归属门禁规则.md",
       "customerOverridable": false
     }
   ],

@@ -1,0 +1,10 @@
+[paths]
+ruleengine_python = "apps/ai-desktop/ruleengine/python/ruleengine"
+legacy_core_python = "apps/ai-desktop/ruleengine/python/local/core"
+ability_registry = "apps/ai-desktop/ruleengine/rules/local/core/registry/abilities.json"
+resource_root = "apps/ai-desktop/ruleengine/rules"
+agents_file = "AGENTS.md"
+option_root = "OPTION"
+history_root = "OPTION/temp"
+python_cache = "cache/python-pycache"
+rule_snapshot_cache = "cache/ruleengine-snapshots"

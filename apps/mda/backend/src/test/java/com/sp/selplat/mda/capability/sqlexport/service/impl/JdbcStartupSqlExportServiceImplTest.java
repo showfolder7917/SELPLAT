@@ -49,7 +49,7 @@ class JdbcStartupSqlExportServiceImplTest {
         Files.writeString(testRoot.resolve("settings.gradle"), "rootProject.name='test'\n", StandardCharsets.UTF_8);
         Files.writeString(testRoot.resolve("AGENTS.md"), "- 当前稳定用户 ID：`TESTUSER`\n", StandardCharsets.UTF_8);
         Path registry = testRoot.resolve(
-                "apps/ai-desktop/ruleengine/backend/src/main/resources/local/TESTUSER/selplat/通用/registry/managed-database-applications.json");
+                "apps/ai-desktop/ruleengine/rules/local/TESTUSER/selplat/通用/registry/managed-database-applications.json");
         Files.createDirectories(registry.getParent());
         Files.writeString(registry, """
                 {
