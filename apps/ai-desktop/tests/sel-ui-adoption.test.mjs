@@ -10,9 +10,13 @@ const themeAdapter = read("../src/theme/selUiTheme.ts");
 const entry = read("../src/main.tsx");
 const developerStyles = read("../src/variants/developer/developer.css");
 const developerApp = read("../src/variants/developer/DeveloperApp.tsx");
+const desktopChrome = read("../src/features/shell/components/DesktopChrome.tsx");
 const desktopIpc = read("../electron/ipc/register-desktop-ipc.ts");
 const electronMain = read("../electron/main.ts");
-const preload = read("../electron/preload.cts");
+const preload = [
+  read("../electron/preload.cts"),
+  read("../electron/preload/domains/collaboration-bridge.cts"),
+].join("\n");
 const screenshotEditor = read("../src/features/screenshot/components/ScreenshotEditor.tsx");
 const selUiProvider = read("../src/theme/SelUiProvider.tsx");
 const selUiConversation = read("../src/features/conversation/components/SelUiConversation.tsx");
@@ -172,6 +176,6 @@ test("登录主操作完整消费 SEL UI 令牌并保留可读文字节点", () 
     "--sel-theme-text-on-accent",
   ]) assert.match(accountRule, new RegExp(`var\\(${token}\\)`), `登录按钮缺少 ${token}`);
   assert.doesNotMatch(accountRule, /min-height:\s*32px|padding:\s*0 13px|border-radius:\s*6px|font-weight:\s*650/);
-  assert.match(developerApp, /className="chatgpt-login-action primary"[\s\S]*?<span>\{label\}<\/span>/);
+  assert.match(desktopChrome, /className="chatgpt-login-action primary"[\s\S]*?<span>\{label\}<\/span>/);
   assert.match(developerApp, /<ChatGPTLoginAction label=\{text\.signIn\}/);
 });

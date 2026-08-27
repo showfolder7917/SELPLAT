@@ -189,6 +189,7 @@ export class RuleBundleService {
     }
     if (Buffer.byteLength(overlay.content, "utf8") > MAX_RULE_CONTENT_BYTES) throw new Error(`覆盖规则过大：${overlay.logicalId}`);
     const builtin = this.#rules.get(overlay.logicalId);
+    if (!builtin) throw new Error(`覆盖了未知规则：${overlay.logicalId}`);
     const decision = decideRuleOverlay(builtin, this.#overriddenIds.has(overlay.logicalId), overlay.logicalId);
     if (!decision.allowed) throw new Error(decision.message);
     this.#rules.set(overlay.logicalId, {

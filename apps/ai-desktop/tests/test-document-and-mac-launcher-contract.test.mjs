@@ -11,10 +11,17 @@ const macVerifier = readFileSync(new URL("../scripts/verify-mac-developer-app.mj
 const packagedBootstrap = readFileSync(new URL("../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const developerCss = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
+const conversationCss = readFileSync(new URL("../../../shared/frontend/sel-ui/src/components/conversation/selConversation.css", import.meta.url), "utf8");
 const automaticPreflight = readFileSync(new URL("../electron/services/automatic-test-preflight.ts", import.meta.url), "utf8");
 const trustedCommands = readFileSync(new URL("../electron/services/trusted-command-store.ts", import.meta.url), "utf8");
-const preload = readFileSync(new URL("../electron/preload.cts", import.meta.url), "utf8");
-const desktopIpc = readFileSync(new URL("../electron/ipc/register-desktop-ipc.ts", import.meta.url), "utf8");
+const preload = [
+  "../electron/preload.cts",
+  "../electron/preload/domains/codex-bridge.cts",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
+const desktopIpc = [
+  "../electron/ipc/register-desktop-ipc.ts",
+  "../electron/ipc/domains/register-codex-ipc.ts",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 
 test("共享测试文档使用独占锁、占用身份、心跳和过期恢复", () => {
   assert.match(runner, /openSync\(lockPath, "wx"\)/);
@@ -102,7 +109,7 @@ test("执行亮点只在运行中闪烁，结束后变暗并显示完成语义",
 });
 
 test("回复卡及内部执行面板不允许撑出消息边界", () => {
-  assert.match(developerCss, /\.dev-message \{ width: 100%; min-width: 0; max-width: 780px/);
+  assert.match(conversationCss, /\.selconversation-message \{ width: 100%; min-width: 0; max-width: 780px/);
   assert.match(developerCss, /\.stream-details \{ width: 100%; min-width: 0; max-width: 100%/);
   assert.match(developerCss, /grid-template-columns: auto minmax\(0, 1fr\) auto/);
 });

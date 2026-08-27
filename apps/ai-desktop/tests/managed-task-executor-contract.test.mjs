@@ -12,7 +12,11 @@ const codexRuntime = readFileSync(new URL("../electron/services/codex-runtime.ts
 const codexSessionStore = readFileSync(new URL("../electron/services/codex-session-store.ts", import.meta.url), "utf8");
 const taskWorktreeTestRunner = readFileSync(new URL("../electron/services/collaboration/task-worktree-test-runner.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
-const ipc = readFileSync(new URL("../electron/ipc/register-desktop-ipc.ts", import.meta.url), "utf8");
+const ipc = [
+  "../electron/ipc/register-desktop-ipc.ts",
+  "../electron/ipc/domains/register-codex-ipc.ts",
+  "../electron/ipc/domains/register-system-ipc.ts",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const chatMessageModel = readFileSync(new URL("../src/features/conversation/model/chat-message.ts", import.meta.url), "utf8");
 

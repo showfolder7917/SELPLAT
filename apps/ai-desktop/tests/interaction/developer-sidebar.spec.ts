@@ -104,7 +104,7 @@ test("新建任务入口位于聊天标签且不再占用任务标题", async ()
   await expect(hoverTip).toBeVisible();
   await expect(hoverTip).toHaveText("重新建立一个 Codex 会话");
 
-  await page.locator(".dev-chat").hover({ position: { x: 12, y: 120 } });
+  await page.locator(".dev-main").hover({ position: { x: 12, y: 120 } });
   await newTask.focus();
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Tab");
@@ -274,7 +274,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
 
   await taskList.getByRole("button", { name: /韩立/ }).click();
   await expect(page.locator(".dev-tab").getByText("韩立", { exact: true })).toBeVisible();
-  await expect(page.locator(".dev-composer")).toBeVisible();
+  await expect(page.locator(".selconversation-composer")).toBeVisible();
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
@@ -588,7 +588,7 @@ test("正式最小窗口和默认窗口支持资源管理器键盘调节且没�
 });
 
 test("自动测试默认关闭，预检成功后才进入开启态", async () => {
-  const composer = page.locator(".dev-composer");
+  const composer = page.locator(".selconversation-composer");
   const automaticTest = page.getByRole("switch", { name: "自动测试" });
   const contextTools = composer.locator(".composer-context-tools");
   const automationTools = composer.locator(".composer-automation-tools");
@@ -619,7 +619,7 @@ test("自动测试默认关闭，预检成功后才进入开启态", async () =>
 });
 
 test("多个结构化疑问逐题确认后继续原回合并重新展示完整意图", async () => {
-  const composer = page.locator(".dev-composer");
+  const composer = page.locator(".selconversation-composer");
   await composer.locator("textarea").fill("需要确认的截图交互");
   await composer.getByRole("button", { name: "发送" }).click();
 
@@ -651,15 +651,15 @@ test("多个结构化疑问逐题确认后继续原回合并重新展示完整�
 
 test("托管内部新回合向下新增回复卡且不覆盖上一轮文字", async () => {
   await page.getByRole("button", { name: "重新建立一个 Codex 会话" }).click();
-  const composer = page.locator(".dev-composer");
+  const composer = page.locator(".selconversation-composer");
   await composer.locator("textarea").fill("multi-turn-test");
   await composer.getByRole("button", { name: "发送" }).click();
 
-  const firstRound = page.locator(".dev-message.assistant").filter({ hasText: "第一轮必须保留的文字" });
-  const secondRound = page.locator(".dev-message.assistant").filter({ hasText: "第二轮向下新增的文字" });
+  const firstRound = page.locator('.selconversation-message[data-role="assistant"]').filter({ hasText: "第一轮必须保留的文字" });
+  const secondRound = page.locator('.selconversation-message[data-role="assistant"]').filter({ hasText: "第二轮向下新增的文字" });
   await expect(firstRound).toHaveCount(1);
   await expect(secondRound).toHaveCount(1);
-  const positions = await page.locator(".dev-message.assistant").evaluateAll((cards) => cards
+  const positions = await page.locator('.selconversation-message[data-role="assistant"]').evaluateAll((cards) => cards
     .filter((card) => card.textContent?.includes("第一轮必须保留的文字") || card.textContent?.includes("第二轮向下新增的文字"))
     .map((card) => ({ text: card.textContent || "", top: card.getBoundingClientRect().top })));
   expect(positions).toHaveLength(2);
@@ -667,7 +667,7 @@ test("托管内部新回合向下新增回复卡且不覆盖上一轮文字", as
   expect(positions[1].text).toContain("第二轮向下新增的文字");
   expect(positions[1].top).toBeGreaterThan(positions[0].top);
   // 回复文字可能早于任务清理完成；必须等待回合终态，避免下一用例的阶段操作被误排入等待队列。
-  await expect(page.locator(".dev-message.assistant.streaming")).toHaveCount(0);
+  await expect(page.locator('.selconversation-message[data-role="assistant"][data-streaming="true"]')).toHaveCount(0);
   await expect(composer.getByRole("button", { name: "发送" })).toBeVisible();
   await expect(composer.locator(".dispatch-queue-item")).toHaveCount(0);
 });
@@ -690,7 +690,7 @@ test("最新阶段按钮在回复运行中保持可见禁用并在完成后启�
   await expect(execute).toBeEnabled();
   await execute.click();
 
-  const latestManagedCard = page.locator(".dev-message.assistant").last();
+  const latestManagedCard = page.locator('.selconversation-message[data-role="assistant"]').last();
   const returnConversation = latestManagedCard.getByRole("button", { name: "回到会话托管" });
   const returnTask = latestManagedCard.getByRole("button", { name: "回到任务托管" });
   const testAction = latestManagedCard.getByRole("button", { name: "测试一下" });
@@ -720,7 +720,7 @@ test("最新阶段按钮在回复运行中保持可见禁用并在完成后启�
 
 test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清空", async () => {
   await page.getByRole("button", { name: "重新建立一个 Codex 会话" }).click();
-  const composer = page.locator(".dev-composer");
+  const composer = page.locator(".selconversation-composer");
   await composer.locator("textarea").fill("markdown-test");
   await composer.getByRole("button", { name: "发送" }).click();
 

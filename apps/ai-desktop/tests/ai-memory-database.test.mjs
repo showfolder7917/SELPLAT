@@ -146,8 +146,11 @@ test("通用事务包装在异常时不留下部分写入", () => {
 
 test("主进程与渲染层只公开数据库状态，不公开连接或 SQL", () => {
   const mainSource = readFileSync(path.join(appRoot, "electron", "main.ts"), "utf8");
-  const ipcSource = readFileSync(path.join(appRoot, "electron", "ipc", "register-desktop-ipc.ts"), "utf8");
-  const preloadSource = readFileSync(path.join(appRoot, "electron", "preload.cts"), "utf8");
+  const ipcSource = readFileSync(path.join(appRoot, "electron", "ipc", "domains", "register-system-ipc.ts"), "utf8");
+  const preloadSource = [
+    readFileSync(path.join(appRoot, "electron", "preload.cts"), "utf8"),
+    readFileSync(path.join(appRoot, "electron", "preload", "domains", "system-bridge.cts"), "utf8"),
+  ].join("\n");
   const rendererSource = readFileSync(path.join(appRoot, "src", "variants", "developer", "DeveloperApp.tsx"), "utf8");
   assert.match(mainSource, /initializeAiMemoryDatabase/);
   assert.match(mainSource, /aiMemoryDatabase\?\.close\(\)/);

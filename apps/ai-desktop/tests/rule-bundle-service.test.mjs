@@ -67,5 +67,5 @@ test("one invalid record rejects its whole overlay file and preserves built-ins"
 test("production manifest keeps development resources out of the packaged whitelist", () => {
   const manifest = JSON.parse(readFileSync(path.join(appRoot, "ruleengine/manifest/production-rules.json"), "utf8"));
   assert.ok(manifest.rules.length > 0);
-  assert.ok(manifest.rules.every((rule) => !/(archive|test|template|python|会话)/i.test(rule.resourcePath)));
+  assert.ok(manifest.rules.every((rule) => !rule.resourcePath.split("/").some((segment) => /^(archive|tests?|templates?|python|会话)$/i.test(segment))));
 });

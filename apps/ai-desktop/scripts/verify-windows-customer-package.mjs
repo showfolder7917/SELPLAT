@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
+const { extractFile } = require("@electron/asar");
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageRoot = path.resolve(appRoot, "../../build/ai-desktop/package/customer/win-unpacked");
 const resourcesRoot = path.join(packageRoot, "resources");
@@ -27,6 +28,6 @@ const forbidden = entries.filter((entry) =>
 );
 if (forbidden.length > 0) throw new Error(`Forbidden development content entered customer app.asar:\n${forbidden.slice(0, 30).join("\n")}`);
 
-const packagedManifest = JSON.parse(execFileSync(process.execPath, [require.resolve("@electron/asar/bin/asar.js"), "extract-file", asarPath, "package.json"], { encoding: "utf8" }));
+const packagedManifest = JSON.parse(extractFile(asarPath, "package.json").toString("utf8"));
 if (Object.hasOwn(packagedManifest, "selplatDevelopmentRoot")) throw new Error("Customer package leaked selplatDevelopmentRoot metadata.");
 console.log(`Windows customer package verified: ${entries.length} asar entries and external production rule bundle.`);

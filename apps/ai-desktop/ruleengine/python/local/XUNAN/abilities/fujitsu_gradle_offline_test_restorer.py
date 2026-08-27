@@ -83,11 +83,9 @@ ACTIVE_STABLE_USER_ID = ACTIVE_USER_MATCHES[0].strip()
 DEFAULT_TEMPLATE_PATH = (
     PROJECT_ROOT
     / "apps"
-    / "rule-engine"
-    / "backend"
-    / "src"
-    / "main"
-    / "resources"
+    / "ai-desktop"
+    / "ruleengine"
+    / "rules"
     / "local"
     / ACTIVE_STABLE_USER_ID
     / "fujitsu"
