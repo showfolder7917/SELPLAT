@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -13,23 +13,38 @@ function source(relativePath) {
 test("application-private contracts are domain modules outside shared", () => {
   assert.equal(existsSync(path.join(appRoot, "shared")), false);
   for (const contract of [
-    "base.ts",
-    "workspace.ts",
-    "codex-stream.ts",
-    "conversation.ts",
-    "codex.ts",
-    "settings.ts",
-    "screenshot.ts",
-    "audit.ts",
-    "desktop-api.ts",
-    "nangong-evolution.ts",
-    "collaboration-memory.ts",
-    "workflow.ts",
+    "foundation/base.ts",
+    "desktop/workspace.ts",
+    "codex/codex-stream.ts",
+    "codex/conversation.ts",
+    "codex/codex.ts",
+    "desktop/settings.ts",
+    "desktop/screenshot.ts",
+    "governance/audit.ts",
+    "desktop/desktop-api.ts",
+    "desktop/capability-registry.ts",
+    "collaboration/nangong-evolution.ts",
+    "collaboration/collaboration-memory.ts",
+    "governance/workflow.ts",
+    "governance/rules.ts",
   ]) {
     assert.equal(existsSync(path.join(appRoot, "contracts", contract)), true, contract);
+    assert.match(source(path.join("contracts", contract)), /生产者：|preload 向 Renderer/, `${contract} should explain ownership`);
   }
-  assert.doesNotMatch(source("contracts/collaboration.ts"), /from ["']\.\/desktop(?:\.js)?["']/);
-  assert.match(source("contracts/desktop.ts"), /export \* from "\.\/desktop-api\.js"/);
+  assert.deepEqual(readdirSync(path.join(appRoot, "contracts")).filter((name) => name.endsWith(".ts")), []);
+  assert.doesNotMatch(source("contracts/collaboration/collaboration.ts"), /from ["']\.\/desktop(?:\.js)?["']/);
+  assert.match(source("contracts/desktop/desktop.ts"), /export \* from "\.\/desktop-api\.js"/);
+  assert.match(source("contracts/desktop/capability-registry.ts"), /keyof DesktopApi/);
+  assert.match(source("contracts/desktop/capability-registry.ts"), /satisfies Record<string, readonly \(keyof DesktopCapabilityRegistry\)\[]>/);
+  const apiMethods = [...source("contracts/desktop/desktop-api.ts").matchAll(/^\s{2}(\w+)\(/gm)].map((match) => match[1]);
+  const registryBody = source("contracts/desktop/capability-registry.ts").split("export const DESKTOP_CAPABILITY_DOMAINS", 2)[1];
+  const registeredMethods = [...registryBody.matchAll(/"(\w+)"/g)].map((match) => match[1]);
+  assert.deepEqual(new Set(registeredMethods).size, registeredMethods.length, "capability IDs must not repeat across domains");
+  assert.deepEqual([...registeredMethods].sort(), [...apiMethods].sort(), "every DesktopApi method must belong to one capability domain");
+  const bridgeMethods = ["system", "rule", "codex", "screenshot", "collaboration", "conversation"]
+    .flatMap((domain) => [...source(`electron/preload/domains/${domain}-bridge.cts`).matchAll(/^\s{4}(\w+):/gm)].map((match) => match[1]));
+  assert.deepEqual(new Set(bridgeMethods).size, bridgeMethods.length, "preload methods must not repeat across domain bridges");
+  assert.deepEqual([...bridgeMethods].sort(), [...apiMethods].sort(), "preload must expose every registered DesktopApi method exactly once");
 });
 
 test("all Electron IPC domains and renderer failures use the unified event boundary", () => {
@@ -39,13 +54,19 @@ test("all Electron IPC domains and renderer failures use the unified event bound
     "electron/ipc/domains/register-collaboration-ipc.ts",
     "electron/ipc/domains/register-settings-ipc.ts",
     "electron/ipc/domains/register-workspace-ipc.ts",
+    "electron/ipc/domains/register-rules-ipc.ts",
+    "electron/ipc/domains/register-codex-ipc.ts",
+    "electron/ipc/domains/register-system-ipc.ts",
   ]) assert.match(source(domain), /registerEventCenterIpcHandler/);
   assert.match(helper, /ipcMain\.handle\(channel/);
   assert.doesNotMatch(desktopIpc, /ipcMain\.handle\(/);
   assert.match(desktopIpc, /desktop:renderer-exception/);
   assert.match(source("src/main.tsx"), /unhandledrejection/);
   assert.match(source("src/main.tsx"), /RendererErrorBoundary/);
-  assert.match(source("electron/preload.cts"), /reportRendererException/);
+  assert.match(source("electron/preload/domains/system-bridge.cts"), /reportRendererException/);
+  for (const bridge of ["system", "rule", "codex", "screenshot", "collaboration", "conversation"]) {
+    assert.match(source("electron/preload.cts"), new RegExp(`${bridge}Bridge\\(\\)`));
+  }
 });
 
 test("Nangong memory keeps source, preview, free topic semantics and visible user intent", () => {
@@ -75,6 +96,9 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.doesNotMatch(developerApp, /function applyCodexStreamEvent/);
   assert.doesNotMatch(developerApp, /function readStoredChat/);
   assert.match(developerApp, /features\/conversation\/model\/chat-message/);
+  assert.match(developerApp, /features\/collaboration\/model\/collaboration-task-progress/);
+  assert.match(developerApp, /features\/settings\/components\/SettingsFloatingPanel/);
+  assert.match(developerApp, /features\/evolution\/components\/EvolutionTreeNavigation/);
   assert.equal(existsSync(path.join(appRoot, "src/features/screenshot/geometry/annotation-geometry.ts")), true);
   assert.equal(existsSync(path.join(appRoot, "src/features/screenshot/canvas/annotation-renderer.ts")), true);
 });
@@ -84,9 +108,20 @@ test("main-process orchestration delegates IPC and pure collaboration parsing", 
   assert.match(ipcSource, /registerSettingsIpc\(/);
   assert.match(ipcSource, /registerWorkspaceIpc\(/);
   assert.match(ipcSource, /registerCollaborationIpc\(/);
+  assert.match(ipcSource, /registerRulesIpc\(/);
   assert.match(source("electron/services/codex-service.ts"), /codex\/stream-event-mapper/);
   assert.match(source("electron/services/collaboration/collaboration-codex-sessions.ts"), /review\/review-decision-parser/);
   assert.match(source("electron/services/collaboration/collaboration-coordinator.ts"), /result\/result-summary/);
   assert.match(source("electron/ipc/domains/register-collaboration-ipc.ts"), /NangongEvolutionFacade/);
   assert.match(source("electron/services/collaboration/nangong-evolution-facade.ts"), /evolutionProposalId/);
+});
+
+test("customer package config excludes build-machine roots and carries external rule resources", () => {
+  const customerConfig = source("electron-builder.customer.config.cjs");
+  const builderManifest = JSON.parse(source("electron-builder.developer.json"));
+  assert.doesNotMatch(customerConfig, /selplatDevelopmentRoot\s*:/);
+  assert.match(customerConfig, /package\/customer/);
+  assert.ok(builderManifest.extraResources.some((resource) => resource.to === "ruleengine"));
+  assert.match(source("electron/config/app-config.ts"), /userData"\), "workspace"/);
+  assert.match(source("electron/main.ts"), /process\.resourcesPath, "ruleengine"/);
 });

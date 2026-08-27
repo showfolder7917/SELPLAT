@@ -1,0 +1,59 @@
+{
+  "formatVersion": 1,
+  "bundleVersion": "1.0.0",
+  "rules": [
+    {
+      "logicalId": "CODE_JS_RULES",
+      "resourcePath": "local/core/rule/CODE_JS_RULES.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "CODE_TEST_RULES",
+      "resourcePath": "local/core/rule/CODE_TEST_RULES.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "AI_DESKTOP_OFFICIAL_HARNESS_RULES",
+      "resourcePath": "local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "AI_DESKTOP_ARCHITECTURE_BOUNDARY_RULES",
+      "resourcePath": "local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop架构边界与客户规则交付规则.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "SELPLAT_NODE_APPLICATION_PROJECT_STRUCTURE_RULES",
+      "resourcePath": "local/XUNAN/selplat/通用/rule/RUL_SELPLATNode工程结构规则.md",
+      "customerOverridable": true
+    },
+    {
+      "logicalId": "SELPLAT_NODE_COMMON_CAPABILITY_RULES",
+      "resourcePath": "local/XUNAN/selplat/通用/rule/RUL_SELPLATNode共通能力规则.md",
+      "customerOverridable": true
+    },
+    {
+      "logicalId": "SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES",
+      "resourcePath": "local/XUNAN/selplat/通用/rule/RUL_SELPLAT应用工程数据目录结构规则.md",
+      "customerOverridable": true
+    },
+    {
+      "logicalId": "SELPLAT_PROJECT_PATH_RULES",
+      "resourcePath": "ruleengine/active-user/rules/平台/RUL_SELPLAT工程路径规则.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES",
+      "resourcePath": "ruleengine/active-user/rules/平台/RUL_SELPLAT程序源码语言与归属门禁规则.md",
+      "customerOverridable": false
+    }
+  ],
+  "excludedCategories": [
+    "archive",
+    "tests",
+    "templates",
+    "python-development-abilities",
+    "user-session-materials",
+    "unrelated-application-rules"
+  ]
+}

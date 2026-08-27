@@ -1,4 +1,4 @@
-import type { WorkflowExceptionRecord, WorkflowStateReaders } from "../../../contracts/workflow.js";
+import type { WorkflowExceptionRecord, WorkflowStateReaders } from "../../../contracts/governance/workflow.js";
 import type { WorkflowRepository } from "./workflow-repository.js";
 
 export interface WorkflowSupervisorOptions {

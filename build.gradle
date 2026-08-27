@@ -129,13 +129,13 @@ def selplatPythonCommand = {
 def selplatPythonCacheRoot = layout.projectDirectory.dir('cache/python-pycache').asFile.absolutePath
 // 快速门禁直接运行生产源码归属扫描器，不启动 Spring 或连接正式业务数据库。
 def selplatQuickGateScript = file(
-        'apps/rule-engine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/'
+        'apps/ai-desktop/ruleengine/backend/src/main/python/com/sp/selplat/local/code/XUNAN/abilities/'
                 + 'selplat_source_ownership_guard.py')
 // Python 规则测试使用唯一统一入口，scope 参数决定当前用户专项或全部规则回归。
-def selplatRuleTestScript = file('apps/rule-engine/backend/src/test/python/run_tests.py')
+def selplatRuleTestScript = file('apps/ai-desktop/ruleengine/backend/src/test/python/run_tests.py')
 // 执行文档统一通过 ruleengine 中文执行器调用登记能力，Gradle 不直接复制 Python 内务实现。
 def selplatAbilityExecutorScript = file(
-        'apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine/执行器.py')
+        'apps/ai-desktop/ruleengine/backend/src/main/python/com/sp/selplat/ruleengine/执行器.py')
 // 每个任务生命周期动作都保留结构化 JSON，便于执行器和测试稳定识别 begin、step、active、ready、finish。
 def selplatExecutionDocumentCommand = { String action ->
     String contextJson = JsonOutput.toJson([action: action])

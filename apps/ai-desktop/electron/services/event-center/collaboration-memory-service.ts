@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import type { ApprovalMemoryEvidence, CollaborationMemoryMessage, CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration-memory.js";
-import type { EvolutionProposalOrigin, EvolutionProposalType, EvolutionSourceMessageSnapshot, NangongConversation, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
+import type { ApprovalMemoryEvidence, CollaborationMemoryMessage, CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration/collaboration-memory.js";
+import type { EvolutionProposalOrigin, EvolutionProposalType, EvolutionSourceMessageSnapshot, NangongConversation, NangongEvolutionState } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
 const CURRENT_CONVERSATION_TURN_LIMIT = 20;

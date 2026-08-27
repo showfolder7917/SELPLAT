@@ -12,16 +12,16 @@
 - `CURRENT_OS=windows` 时：`SELPLAT_ROOT=${SELPLAT_ROOT_WINDOWS}`
 - `CURRENT_OS=macos` 时：`SELPLAT_ROOT=${SELPLAT_ROOT_MACOS}`
 - `CURRENT_OS=linux` 时不固定机器绝对路径；必须从当前工作目录向上识别本文件所属工程根，并设置 `SELPLAT_ROOT=<识别出的工程根>`。
-- 不可变核心资源根：`MEMORY_ROOT=${SELPLAT_ROOT}/apps/rule-engine/backend/src/main/resources/local/core`
+- 不可变核心资源根：`MEMORY_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/backend/src/main/resources/local/core`
 - 核心协议目录：`CORE_PROTOCOL_ROOT=${MEMORY_ROOT}/protocol`
 - rule-engine 资源根：`RULE_ENGINE_RESOURCE_ROOT=${MEMORY_ROOT}/../..`
 - 唯一规则索引：`RULE_ENGINE_RULE_INDEX=${RULE_ENGINE_RESOURCE_ROOT}/RULE_INDEX.md`
 - Java 核心代码根：`CORE_JAVA_ROOT=${MEMORY_ROOT}/../../../java/com/sp/selplat/local/code/core`
 - Python 核心代码根：`CORE_PYTHON_ROOT=${MEMORY_ROOT}/../../../python/com/sp/selplat/local/code/core`
 - Node 核心代码根：`CORE_NODE_ROOT=${MEMORY_ROOT}/../../../node/com/sp/selplat/local/code/core`
-- rule-engine 新 Python 能力根：`RULE_ENGINE_PYTHON_ROOT=${SELPLAT_ROOT}/apps/rule-engine/backend/src/main/python/com/sp/selplat/ruleengine`
-- rule-engine 公共路径配置：`RULE_ENGINE_PATH_CONFIG=${SELPLAT_ROOT}/apps/rule-engine/backend/src/main/resources/ruleengine/config/路径配置.toml`
-- rule-engine 调整后规则根：`RULE_ENGINE_RULE_RESOURCE_ROOT=${SELPLAT_ROOT}/apps/rule-engine/backend/src/main/resources/ruleengine`
+- rule-engine 新 Python 能力根：`RULE_ENGINE_PYTHON_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/backend/src/main/python/com/sp/selplat/ruleengine`
+- rule-engine 公共路径配置：`RULE_ENGINE_PATH_CONFIG=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/backend/src/main/resources/ruleengine/config/路径配置.toml`
+- rule-engine 调整后规则根：`RULE_ENGINE_RULE_RESOURCE_ROOT=${SELPLAT_ROOT}/apps/ai-desktop/ruleengine/backend/src/main/resources/ruleengine`
 
 ## 必须阅读链路
 

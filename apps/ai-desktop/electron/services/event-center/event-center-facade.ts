@@ -1,5 +1,5 @@
-import type { CodexStreamEvent } from "../../../contracts/desktop.js";
-import type { EventCenterExceptionInput } from "../../../contracts/workflow.js";
+import type { CodexStreamEvent } from "../../../contracts/desktop/desktop.js";
+import type { EventCenterExceptionInput } from "../../../contracts/governance/workflow.js";
 import { BusinessAuditLog } from "../business-audit-log.js";
 import type { WorkflowRepository } from "./workflow-repository.js";
 

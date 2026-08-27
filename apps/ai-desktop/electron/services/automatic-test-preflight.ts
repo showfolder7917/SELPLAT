@@ -11,7 +11,7 @@ import type {
   CodexHarnessStatus,
   Locale,
   WorkspaceState,
-} from "../../contracts/desktop.js";
+} from "../../contracts/desktop/desktop.js";
 import type { TrustedCommandStore } from "./trusted-command-store.js";
 
 const interactionPort = 4197;

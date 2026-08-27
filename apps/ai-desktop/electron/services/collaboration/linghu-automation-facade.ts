@@ -1,15 +1,15 @@
-import type { Locale, WorkspaceState } from "../../../contracts/desktop.js";
-import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration.js";
+import type { Locale, WorkspaceState } from "../../../contracts/desktop/desktop.js";
+import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
 import type {
   LinghuAutomaticFlowSnapshot,
   LinghuAutomationModule,
   LinghuAutomationState,
   LinghuBlockingKind,
   LinghuFlowHealth,
-} from "../../../contracts/linghu-automation.js";
-import type { TestResourceCoordinatorState } from "../../../contracts/test-resource.js";
-import type { CreateLinghuRepairProposalRequest, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
-import type { WorkflowExceptionRecord } from "../../../contracts/workflow.js";
+} from "../../../contracts/collaboration/linghu-automation.js";
+import type { TestResourceCoordinatorState } from "../../../contracts/collaboration/test-resource.js";
+import type { CreateLinghuRepairProposalRequest, NangongEvolutionState } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { WorkflowExceptionRecord } from "../../../contracts/governance/workflow.js";
 import { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./linghu-automation-store.js";
 

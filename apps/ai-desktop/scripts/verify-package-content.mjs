@@ -15,7 +15,12 @@ const macDirectory = existsSync(packageRoot)
   : null;
 if (!macDirectory) throw new Error(`Packaged developer application is unavailable: ${packageRoot}`);
 const asarPath = path.join(packageRoot, macDirectory.name, "AI Desktop.app", "Contents", "Resources", "app.asar");
+const resourcesRoot = path.dirname(asarPath);
 if (!existsSync(asarPath)) throw new Error(`Electron asar is unavailable: ${asarPath}`);
+for (const ruleResource of ["manifest.json", "rules.json"]) {
+  const rulePath = path.join(resourcesRoot, "ruleengine", ruleResource);
+  if (!existsSync(rulePath)) throw new Error(`Packaged production rule resource is missing: ${rulePath}`);
+}
 
 const listing = execFileSync(process.execPath, [require.resolve("@electron/asar/bin/asar.js"), "list", asarPath], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 const entries = listing.split("\n").filter(Boolean);
@@ -32,7 +37,7 @@ const required = [
 for (const entry of required) if (!entries.includes(entry)) throw new Error(`Packaged Node common runtime is missing: ${entry}`);
 
 const forbidden = entries.filter((entry) =>
-  /(?:^|\/)(?:shared\/backend|rule-engine|__pycache__|OPTION\/temp)(?:\/|$)|\.(?:java|class|jar|py|pyc)$|(?:^|\/)build\.gradle$/.test(entry)
+  /(?:^|\/)(?:shared\/backend|rule-engine|ruleengine|__pycache__|OPTION\/temp)(?:\/|$)|\.(?:java|class|jar|py|pyc)$|(?:^|\/)build\.gradle$/.test(entry)
   || /\/node_modules\/@selplat\/node-common-core\/(?:src|tests)(?:\/|$)/.test(entry)
   || /\/node_modules\/@selplat\/node-common-core\/.*(?:\.map|\.d\.ts)$/.test(entry)
   || /\/node_modules\/@selplat\/sel-ui(?:\/|$)/.test(entry)

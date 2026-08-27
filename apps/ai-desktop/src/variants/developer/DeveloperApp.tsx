@@ -1,6 +1,4 @@
 import { ClipboardEvent, CSSProperties, FormEvent, PointerEvent as ReactPointerEvent, type Dispatch, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { createRoot, type Root } from "react-dom/client";
 import {
   Add24Regular,
   ArrowClockwise24Regular,
@@ -24,15 +22,12 @@ import {
   Search24Regular,
   Screenshot24Regular,
   Send24Filled,
-  Settings24Regular,
   ShieldLock16Filled,
   ShieldLock16Regular,
   ShieldCheckmark24Regular,
-  Square20Regular,
   Star16Filled,
   Star16Regular,
   Stop24Filled,
-  Subtract20Regular,
 } from "@fluentui/react-icons";
 
 import type {
@@ -72,11 +67,15 @@ import type {
   WorkspaceEntry,
   WorkspacePermission,
   WorkspaceState,
-} from "../../../contracts/desktop";
+} from "../../../contracts/desktop/desktop";
 import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, managedModeForCommand, nextManagedMode, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "../../features/conversation/model/chat-message";
 import { SelUiConversation } from "../../features/conversation/components/SelUiConversation";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "./collaboration-task-progress";
+import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "../../features/collaboration/model/collaboration-task-progress";
+import { EvolutionTreeNavigation } from "../../features/evolution/components/EvolutionTreeNavigation";
+import { SettingsFloatingPanel } from "../../features/settings/components/SettingsFloatingPanel";
+import { ChatGPTLoginAction, WindowControls } from "../../features/shell/components/DesktopChrome";
+import { RuleManagementFeature } from "../../features/rules/components/RuleManagementFeature";
 import { SelUiDialog, useSelUi } from "../../theme/SelUiProvider";
 import "@selplat/sel-ui/core/kernel";
 import "@selplat/sel-ui/components/floating-panel";
@@ -92,18 +91,6 @@ import "@selplat/sel-ui/components/grid/styles";
 import "@selplat/sel-ui/components/switch/styles";
 import "./developer.css";
 
-type SelFloatingPanelController = {
-  body: HTMLElement;
-  panel: HTMLElement;
-  trigger: HTMLButtonElement;
-  open: () => boolean;
-  destroy: () => void;
-};
-
-type SelFloatingPanelApi = {
-  mount: (host: HTMLElement, options: Record<string, unknown>) => SelFloatingPanelController | null;
-};
-
 type SelGridController = { destroy: () => boolean };
 type SelGridApi = {
   create: (host: HTMLElement, definition: Record<string, unknown>) => HTMLElement | null;
@@ -114,92 +101,6 @@ type SelTooltipController = { destroy: () => boolean };
 type SelTooltipApi = {
   attach: (host: Element, options: Record<string, unknown>) => SelTooltipController | null;
 };
-
-type SelTreeController = { destroy: () => boolean; select: (id: string) => boolean };
-type SelTreeApi = { mount: (root: HTMLElement, data: Record<string, unknown>) => SelTreeController | null };
-
-/** 使用 SELUI Tree 承载模块与流程导航，业务层只提供节点和选择状态。 */
-function EvolutionTreeNavigation({ id, label, selectedId, items, onSelect }: { id: string; label: string; selectedId: string; items: Array<Record<string, unknown>>; onSelect(id: string): void }) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const root = rootRef.current;
-    const tree = (window as typeof window & { sel?: { components?: { tree?: SelTreeApi } } }).sel?.components?.tree;
-    if (!root || !tree) return;
-    const handleSelect = (event: Event) => onSelect(String((event as CustomEvent<{ id?: string }>).detail?.id || ""));
-    root.addEventListener("selTree:select", handleSelect);
-    const controller = tree.mount(root, {
-      selectedId,
-      expandLabelTemplate: "展开{label}",
-      collapseLabelTemplate: "收起{label}",
-      contextMenuLabelTemplate: "{label}操作",
-      items,
-    });
-    return () => { root.removeEventListener("selTree:select", handleSelect); controller?.destroy(); };
-  }, [id, items, onSelect, selectedId]);
-  return <div ref={rootRef} className="evolution-tree-host" data-sel-grid={id} data-sel-entity="EvolutionWorkspace"><nav data-sel-grid-role="tree" aria-label={label} /></div>;
-}
-
-const DEFAULT_SETTINGS_WIDTH = 390;
-const MINIMUM_SETTINGS_WIDTH = 320;
-const MAXIMUM_SETTINGS_WIDTH = 720;
-
-/** 使用 SELUI 浮动面板承载设置内容，并由控件统一处理面板宽度调整。 */
-function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { locale: Locale; open: boolean; onOpenChange: (open: boolean) => void; children: ReactNode }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const openRef = useRef(open);
-  const [portalBody, setPortalBody] = useState<HTMLElement | null>(null);
-  openRef.current = open;
-
-  useEffect(() => {
-    const host = hostRef.current;
-    const floatingPanel = (window as typeof window & { sel?: { components?: { floatingPanel?: SelFloatingPanelApi } } }).sel?.components?.floatingPanel;
-    if (!host || !floatingPanel) return;
-
-    const content = document.createElement("div");
-    content.className = "dev-settings-content";
-    const controller = floatingPanel.mount(host, {
-      id: "developer-settings",
-      title: locale === "ja" ? "接続と実行設定" : "连接与执行设置",
-      label: locale === "ja" ? "接続と実行設定" : "连接与执行设置",
-      openLabel: locale === "ja" ? "接続と実行設定を開く" : "打开连接与执行设置",
-      closeLabel: locale === "ja" ? "接続と実行設定を閉じる" : "关闭连接与执行设置",
-      content,
-      classes: { control: "dev-settings-control", trigger: "activity-settings", panel: "dev-settings" },
-      // 设置面板固定左下入口，SELUI 左侧手柄向左拖拽时会把新增宽度展开到右侧。
-      resizable: {
-        minWidth: MINIMUM_SETTINGS_WIDTH,
-        maxWidth: MAXIMUM_SETTINGS_WIDTH,
-        labels: { left: locale === "ja" ? "設定パネルの幅を調整" : "调整设置面板宽度" },
-        resetLabel: locale === "ja" ? "ダブルクリックで既定の幅に戻す" : "双击恢复默认宽度",
-      },
-      onOpenChange,
-    });
-    if (!controller) return;
-
-    // SELUI 提供浮层生命周期；入口和关闭动作继续渲染项目既有 Fluent 图标，避免引入第二套图标字体。
-    const triggerIconRoot: Root = createRoot(controller.trigger);
-    triggerIconRoot.render(<Settings24Regular />);
-    const closeButton = controller.panel.querySelector<HTMLButtonElement>(".selfloating-close");
-    const closeIconRoot = closeButton ? createRoot(closeButton) : null;
-    closeIconRoot?.render(<Dismiss20Regular />);
-
-    controller.panel.style.width = `${DEFAULT_SETTINGS_WIDTH}px`;
-    setPortalBody(controller.body);
-    // 语言切换会按新文案重建 SELUI 外壳，原先已打开的设置面板应立即恢复打开状态。
-    if (openRef.current) controller.open();
-    return () => {
-      setPortalBody(null);
-      triggerIconRoot.unmount();
-      closeIconRoot?.unmount();
-      controller.destroy();
-    };
-  }, [locale, onOpenChange]);
-
-  return <div ref={hostRef} className="dev-settings-host">
-    {/* 关闭时不保留业务内容，避免隐藏设置卡与工作区中的同名状态文本同时进入辅助查询树。 */}
-    {portalBody && open && createPortal(children, portalBody)}
-  </div>;
-}
 
 /** 每个协同流式回合保留收到时的环节，避免状态推进后把旧报告错放到新环节。 */
 type CollaborationLiveOutput = {
@@ -224,14 +125,6 @@ type ActiveExplorerSection = "workspace" | "tasks";
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
-}
-
-function WindowControls() {
-  return <div className="dev-window-controls">
-    <button onClick={() => window.desktop?.windowControl("minimize")}><Subtract20Regular /></button>
-    <button onClick={() => window.desktop?.windowControl("maximize")}><Square20Regular /></button>
-    <button className="close" onClick={() => window.desktop?.windowControl("close")}><Dismiss20Regular /></button>
-  </div>;
 }
 
 /** 南宫婉与韩立共用一个独立专题演化窗口；人物入口只改变初始视角，不复制业务实现或状态。 */
@@ -283,10 +176,6 @@ export function EvolutionWorkspaceWindowApp() {
         : !error && <div className="evolution-window-loading" role="status">正在读取专题、审批和运行状态…</div>}
     </main>
   </div>;
-}
-
-function ChatGPTLoginAction({ label, onLogin }: { label: string; onLogin: () => void }) {
-  return <button type="button" className="chatgpt-login-action primary" onClick={onLogin}><span>{label}</span></button>;
 }
 
 export function DeveloperApp() {
@@ -1328,6 +1217,7 @@ export function DeveloperApp() {
         <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
         <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void clearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
         <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
+        <RuleManagementFeature locale={locale} />
       </SettingsFloatingPanel>
     </aside>
 

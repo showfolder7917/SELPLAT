@@ -8,7 +8,7 @@ import type {
   LinghuAutomationState,
   LinghuAutomationStateEvent,
   UpdateLinghuStartupPromptRequest,
-} from "../../../contracts/linghu-automation.js";
+} from "../../../contracts/collaboration/linghu-automation.js";
 
 type StateListener = (event: LinghuAutomationStateEvent) => void;
 

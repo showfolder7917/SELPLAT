@@ -19,7 +19,7 @@ import type {
   SandboxMode,
   SendMessageResponse,
   WorkspaceState,
-} from "../../contracts/desktop.js";
+} from "../../contracts/desktop/desktop.js";
 import { CodexSessionStore } from "./codex-session-store.js";
 import { resolveCodexRuntime, type CodexRuntime } from "./codex-runtime.js";
 import { toCodexStreamEvent } from "./codex/stream-event-mapper.js";
@@ -61,6 +61,8 @@ export interface CodexServiceOptions {
   sessionStorage: "ai-desktop" | "legacy-default";
   validationOwner: "codex" | "desktop";
   readSettings: () => DesktopSettings;
+  /** 读取主进程已校验的有效规则；返回空串时仅应用基础会话指令。 */
+  readRuleInstructions?: () => string;
 }
 
 const EMPTY_ACCOUNT: CodexAccount = {
@@ -732,9 +734,12 @@ export class CodexService {
   }
 
   #developerInstructions(locale: Locale): string {
-    return locale === "ja"
+    const conversationInstructions = locale === "ja"
       ? "Reply in natural Japanese unless the user explicitly requests another language. Lead with the outcome and speak like a thoughtful collaborator with warmth, judgment, and awareness of the user's context. Answer ordinary questions directly instead of converting every message into a formal requirement. Acknowledge frustration or uncertainty when it matters, and be candid about what is known or still unverified. Use Markdown only when it materially improves readability. Keep execution constraints and workflow state internal instead of repeating stage names, rules, tags, or fixed templates."
       : "除非用户明确要求其他语言，否则请使用自然、清晰的简体中文回答。先给结论，像体贴、可靠的协作伙伴一样结合上下文交流，表达应有温度、有判断，也要坦诚说明尚未确认的部分。普通问题直接回答，不要把用户每句话都改写成正式需求；用户困惑或受挫时先回应真正关心的问题。短问题直接说清楚，复杂内容才使用必要的 Markdown 结构。执行门禁和流程状态属于内部约束，不要机械复述阶段名称、规则、标签或固定模板。";
+    const ruleInstructions = this.#options.readRuleInstructions?.().trim();
+    // 规则正文参与工作区签名：客户覆盖变化后不会错误复用带旧规则的 Codex 线程。
+    return ruleInstructions ? `${conversationInstructions}\n\n${ruleInstructions}` : conversationInstructions;
   }
 }
 

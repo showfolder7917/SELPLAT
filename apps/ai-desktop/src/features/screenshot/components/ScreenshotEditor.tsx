@@ -8,7 +8,7 @@ import {
   Square20Regular,
 } from "@fluentui/react-icons";
 
-import type { Locale, ScreenCapture } from "../../../../contracts/desktop";
+import type { Locale, ScreenCapture } from "../../../../contracts/desktop/desktop";
 import { useSelUi } from "../../../theme/SelUiProvider";
 import { drawAnnotations, loadDataUrl, nextPaint, syncCanvasViewport } from "../canvas/annotation-renderer";
 import { canvasPointFromClient, clamp, findTopRectangleAtPoint, moveRectangle, normalizeRectangle, rectangleToViewport, resizeRectangle, sameRectangle, selectionConfirmPosition } from "../geometry/annotation-geometry";

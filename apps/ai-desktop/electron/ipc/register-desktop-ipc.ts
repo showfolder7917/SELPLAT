@@ -5,13 +5,12 @@ import { promisify } from "node:util";
 
 import { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, screen, shell, systemPreferences } from "electron";
 
-import { LOCALES, SANDBOX_MODES } from "../../contracts/desktop.js";
+import { LOCALES, SANDBOX_MODES } from "../../contracts/desktop/desktop.js";
 import type {
   AiMemoryDatabaseStatus,
   AppVariant,
   EnqueueMessageRequest,
   ManagedExecutionMode,
-  ResolveCodexUserInputRequest,
   ScreenCaptureFrameRequest,
   ScreenCaptureFrameResult,
   ScreenCapturePreparationResult,
@@ -20,12 +19,14 @@ import type {
   ScreenshotSaveRequest,
   SendMessageRequest,
   WindowAction,
-} from "../../contracts/desktop.js";
+} from "../../contracts/desktop/desktop.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
+import { registerRulesIpc } from "./domains/register-rules-ipc.js";
+import { registerCodexIpc } from "./domains/register-codex-ipc.js";
+import { registerSystemIpc } from "./domains/register-system-ipc.js";
 import { registerEventCenterIpcHandler } from "./event-center-ipc.js";
-import { prepareAutomaticTesting } from "../services/automatic-test-preflight.js";
 import { CodexService } from "../services/codex-service.js";
 import { ConversationDispatchStore } from "../services/conversation-dispatch-store.js";
 import { CollaborationCodexRegistry } from "../services/collaboration/collaboration-codex-sessions.js";
@@ -39,6 +40,7 @@ import { TrustedCommandStore } from "../services/trusted-command-store.js";
 import { EventCenterFacade } from "../services/event-center/event-center-facade.js";
 import type { WorkflowRepository } from "../services/event-center/workflow-repository.js";
 import { WorkspaceStore } from "../services/workspace-store.js";
+import { RuleBundleService } from "../services/rules/rule-bundle-service.js";
 
 interface DesktopIpcDependencies {
   aiMemoryDatabaseStatus: AiMemoryDatabaseStatus;
@@ -60,6 +62,7 @@ interface DesktopIpcDependencies {
   preloadPath: string;
   prepareForApplicationExit: () => void;
   rendererRoot: string;
+  rules: RuleBundleService;
 }
 
 interface ScreenshotWindowSession {
@@ -104,16 +107,16 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, eventCenter, workflowRepository, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, eventCenter, workflowRepository, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
-  const seenApprovalRequests = new Set<number>();
-  const approvalAuditTasks = new Map<number, string>();
   const managedExecutor = new ManagedTaskExecutor();
   let screenCaptureAttemptId = 0;
   let evolutionWorkspaceWindow: BrowserWindow | null = null;
   let evolutionWorkspacePerspective: "nangong" | "hanli" = "nangong";
+
+  registerRulesIpc(rules, eventCenter);
 
   const publishDispatchState = () => {
     const state = dispatch.state();
@@ -272,113 +275,11 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.showInactive();
   };
 
-  handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
-  handle("desktop:get-ai-memory-database-status", () => aiMemoryDatabaseStatus);
-  handle("desktop:get-approval-governance", () => workflowRepository?.listApprovalGovernance() || []);
+  registerSystemIpc({ aiMemoryDatabaseStatus, projectRoot, variant, screenshots, workflowRepository, eventCenter });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
   registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter);
-  handle("desktop:get-codex-models", () => codex.getModels());
-  handle("desktop:get-codex-status", () => codex.getStatus());
-  handle("desktop:get-active-codex-session", () => codex.activeSession());
-  handle("desktop:login-with-chatgpt", async () => {
-    const login = await codex.loginWithChatGPT();
-    await shell.openExternal(login.authUrl);
-    return login;
-  });
-  handle("desktop:logout-codex", () => codex.logout());
-  handle("desktop:get-codex-approvals", () => {
-    const approvals = [...codex.pendingApprovals(), ...collaborationRegistry.pendingApprovals()];
-    for (const approval of approvals) {
-      if (seenApprovalRequests.has(approval.requestId)) continue;
-      seenApprovalRequests.add(approval.requestId);
-      const taskId = [...activeAuditTasks.values()].at(-1);
-      if (taskId) approvalAuditTasks.set(approval.requestId, taskId);
-      audit.recordEvent("approval.requested", {
-        requestId: approval.requestId,
-        kind: approval.kind,
-        title: approval.title,
-        command: approval.command,
-        cwd: approval.cwd,
-      }, taskId);
-    }
-    return approvals;
-  });
-  handle("desktop:resolve-codex-approval", (_event, requestId: number, decision: "accept" | "decline") => {
-    if (!Number.isSafeInteger(requestId) || (decision !== "accept" && decision !== "decline")) {
-      throw new Error("Invalid Codex approval response.");
-    }
-    // “允许”对满足安全边界的项目内固定命令默认同时建立信任；文件修改和高风险命令不会进入持久信任。
-    const pendingApproval = [...codex.pendingApprovals(), ...collaborationRegistry.pendingApprovals()].find((item) => item.requestId === requestId);
-    if (!pendingApproval) {
-      seenApprovalRequests.delete(requestId);
-      approvalAuditTasks.delete(requestId);
-      audit.recordEvent("approval.expired_response_ignored", { requestId, decision, message: "审批请求已结束，迟到响应已忽略。" });
-      return { status: "expired", trusted: false } as const;
-    }
-    const trustResult = requestId >= 1_000_000
-      ? collaborationRegistry.resolveApproval(requestId, decision, decision === "accept")
-      : codex.resolveApproval(requestId, decision, decision === "accept");
-    workflowRepository?.recordCodexApprovalDecision({
-      requestId,
-      title: pendingApproval.title,
-      kind: pendingApproval.kind,
-      decision,
-      command: pendingApproval.command ?? undefined,
-      cwd: pendingApproval.cwd ?? undefined,
-      trusted: trustResult.trusted,
-      correlationId: approvalAuditTasks.get(requestId) || null,
-    });
-    audit.recordApproval(approvalAuditTasks.get(requestId), requestId, decision, trustResult.trusted);
-    seenApprovalRequests.delete(requestId);
-    approvalAuditTasks.delete(requestId);
-    return { status: "resolved", trusted: trustResult.trusted } as const;
-  });
-  handle("desktop:get-trusted-command-info", () => ({ count: trustedCommands.count() }));
-  handle("desktop:clear-trusted-commands", () => {
-    trustedCommands.clear();
-    audit.recordEvent("trusted_commands.cleared");
-    return { count: 0 };
-  });
-  handle("desktop:prepare-automatic-testing", async () => {
-    const result = await prepareAutomaticTesting({
-      appRoot,
-      codexStatus: await codex.getStatus(),
-      locale: settings.read().locale,
-      trustedCommands,
-      workspaces: workspaces.read(),
-    });
-    audit.recordEvent("automatic_test.preflight", {
-      status: result.status,
-      failedChecks: result.checks.filter((check) => check.status === "failed").map((check) => check.id),
-    });
-    if (result.status === "ready") {
-      audit.recordEvent("trusted_command.decision", {
-        action: "automatic-test-authorized",
-        command: "npm run test:document",
-        cwd: appRoot,
-      });
-    }
-    return result;
-  });
-  handle("desktop:get-codex-user-inputs", () => [...codex.pendingUserInputs(), ...collaborationRegistry.pendingUserInputs()]);
-  handle("desktop:resolve-codex-user-input", (_event, request: ResolveCodexUserInputRequest) => {
-    if (request.requestId >= 1_000_000) collaborationRegistry.resolveUserInput(request);
-    else codex.resolveUserInput(request);
-    // 业务日志只记录协议生命周期，不记录可能包含敏感内容的答案正文。
-    audit.recordEvent("user_input.resolved", { requestId: request.requestId, answerCount: Object.keys(request.answers || {}).length });
-  });
-  handle("desktop:new-chat", async () => {
-    await codex.newChat();
-    dispatch.clear();
-    return publishDispatchState();
-  });
-  handle("desktop:open-external-url", async (_event, value: string) => {
-    if (typeof value !== "string" || value.length > 2_048) throw new Error("Invalid external URL.");
-    const url = new URL(value);
-    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Only HTTP(S) links can be opened.");
-    await shell.openExternal(url.toString());
-  });
+  registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();
@@ -729,18 +630,6 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       }
     }
     return saved;
-  });
-  handle("desktop:get-temp-directory-info", () => screenshots.info());
-  handle("desktop:open-temp-directory", async () => {
-    const directory = await screenshots.ensure();
-    const error = await shell.openPath(directory);
-    if (error) throw new Error(error);
-  });
-  handle("desktop:clear-temp-files", () => screenshots.clear());
-  handle("desktop:get-audit-log-info", () => audit.info());
-  handle("desktop:open-audit-log-directory", async () => {
-    const error = await shell.openPath(audit.ensure());
-    if (error) throw new Error(error);
   });
   handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
   handle("desktop:enqueue-message", (_event, value: EnqueueMessageRequest) => {

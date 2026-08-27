@@ -685,7 +685,15 @@ public class JdbcStartupSqlExportServiceImpl implements JdbcStartupSqlExportServ
         }
     }
 
-    /** 根据 AGENTS.md 当前稳定用户定位中央登记文件。 */
+    /**
+     * 根据根 AGENTS.md 的当前稳定用户定位 AI Desktop 内 ruleengine 的中央数据库应用登记。
+     * 真实传参示例：无显式参数，AGENTS.md 声明 {@code 当前稳定用户 ID：XUNAN}。
+     * 真实返回示例：返回 apps/ai-desktop/ruleengine 下 XUNAN 用户层的 managed-database-applications.json。
+     * 异常或副作用示例：用户声明缺失、重复或不安全时抛出 IOException，不创建登记文件。
+     *
+     * @return 位于当前 SELPLAT 根内的中央登记绝对路径
+     * @throws IOException AGENTS.md 用户声明不唯一或不安全时抛出
+     */
     private Path managedRegistryPath() throws IOException {
         String agents = Files.readString(projectRoot.resolve("AGENTS.md"), StandardCharsets.UTF_8);
         Matcher matcher = STABLE_USER_PATTERN.matcher(agents);
@@ -695,7 +703,7 @@ public class JdbcStartupSqlExportServiceImpl implements JdbcStartupSqlExportServ
             throw new IOException("AGENTS.md 当前稳定用户 ID 不唯一或不安全");
         }
         return insideProjectRoot(projectRoot.resolve(
-                "apps/rule-engine/backend/src/main/resources/local/" + stableUserId
+                "apps/ai-desktop/ruleengine/backend/src/main/resources/local/" + stableUserId
                         + "/selplat/通用/registry/managed-database-applications.json"));
     }
 

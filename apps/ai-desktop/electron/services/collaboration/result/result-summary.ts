@@ -1,4 +1,4 @@
-import type { CollaborationTask } from "../../../../contracts/collaboration.js";
+import type { CollaborationTask } from "../../../../contracts/collaboration/collaboration.js";
 
 /** 把执行人的结构化标题转换为首页短摘要；缺少标题时使用已确认任务事实兜底。 */
 export function createCollaborationResultSummary(task: CollaborationTask, text: string, pendingActions: string[] = []): NonNullable<CollaborationTask["resultSummary"]> {

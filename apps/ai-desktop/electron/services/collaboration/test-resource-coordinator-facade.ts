@@ -16,7 +16,7 @@ import type {
   TestResourceHolder,
   TestResourceRequest,
   TestResourceWaiter,
-} from "../../../contracts/test-resource.js";
+} from "../../../contracts/collaboration/test-resource.js";
 
 interface TestResourceCoordinatorOptions {
   coordinationRoot: string;

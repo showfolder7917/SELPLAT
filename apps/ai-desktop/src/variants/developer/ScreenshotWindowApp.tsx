@@ -4,7 +4,7 @@ import type {
   Locale,
   ScreenCapture,
   ScreenCaptureFrameRequest,
-} from "../../../contracts/desktop";
+} from "../../../contracts/desktop/desktop";
 import { ScreenshotEditor } from "../../features/screenshot/components/ScreenshotEditor";
 import "./developer.css";
 

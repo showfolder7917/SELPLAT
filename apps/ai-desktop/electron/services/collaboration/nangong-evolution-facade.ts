@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 
-import type { CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration-memory.js";
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/nangong-evolution.js";
-import type { SendMessageResponse } from "../../../contracts/conversation.js";
+import type { CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration/collaboration-memory.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { SendMessageResponse } from "../../../contracts/codex/conversation.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
 

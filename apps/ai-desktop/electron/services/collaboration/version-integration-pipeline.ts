@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import type { CollaborationMember, CollaborationState, CollaborationTask } from "../../../contracts/collaboration.js";
-import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../contracts/integration-release.js";
+import type { CollaborationMember, CollaborationState, CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
+import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../contracts/collaboration/integration-release.js";
 import { CollaborationDurationLog, type CollaborationDurationSegment, type CollaborationWaitType } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
 import { ReleaseBatchStore } from "./release-batch-store.js";

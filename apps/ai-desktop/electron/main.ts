@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, protocol } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
-import type { AiMemoryDatabaseStatus } from "../contracts/database.js";
+import type { AiMemoryDatabaseStatus } from "../contracts/desktop/database.js";
 import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import { BusinessAuditLog } from "./services/business-audit-log.js";
@@ -38,6 +38,7 @@ import { WorkflowRepository } from "./services/event-center/workflow-repository.
 import { WorkflowSupervisor } from "./services/event-center/workflow-supervisor.js";
 import { EventCenterFacade } from "./services/event-center/event-center-facade.js";
 import { CollaborationMemoryService } from "./services/event-center/collaboration-memory-service.js";
+import { RuleBundleService } from "./services/rules/rule-bundle-service.js";
 import { createMainWindow } from "./window/create-main-window.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -121,7 +122,7 @@ app.whenReady().then(async () => {
   const archiveRuntime = distributionMode === "archive";
   const rendererRoot = archiveRuntime
     ? path.join(path.dirname(process.execPath), "dist", "developer")
-    : path.join(projectPaths.buildRoot, "renderer", "developer");
+    : app.isPackaged ? path.join(app.getAppPath(), "dist", "developer") : path.join(projectPaths.buildRoot, "renderer", "developer");
   if (archiveRuntime) {
     await protocol.handle(archiveScheme, (request) => {
       const relativePath = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, "");
@@ -143,7 +144,7 @@ app.whenReady().then(async () => {
       }
     });
   }
-  const appRoot = archiveRuntime ? app.getAppPath() : projectPaths.sourceRoot;
+  const appRoot = app.isPackaged ? app.getAppPath() : projectPaths.sourceRoot;
   const releaseVersion = (JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8")) as { version: string }).version;
   workflowRepository = aiMemoryDatabase ? new WorkflowRepository(aiMemoryDatabase) : null;
   collaborationMemory = aiMemoryDatabase ? new CollaborationMemoryService(aiMemoryDatabase) : null;
@@ -152,6 +153,11 @@ app.whenReady().then(async () => {
   const trustedCommands = new TrustedCommandStore(path.join(app.getPath("userData"), "trusted-project-commands.json"));
   const codexSessions = new CodexSessionStore(path.join(app.getPath("userData"), "active-codex-session.json"));
   const settings = new SettingsStore(path.join(app.getPath("userData"), "desktop-settings.json"));
+  const rules = new RuleBundleService(
+    app.isPackaged ? path.join(process.resourcesPath, "ruleengine") : path.join(projectPaths.buildRoot, "rule-bundle"),
+    path.join(app.getPath("userData"), "ruleengine", "overrides"),
+  );
+  const readRuleInstructions = () => rules.renderDeveloperInstructions();
   // 主会话与所有协同成员共用 AI Desktop 自己的数据域，和 Codex App 的默认 ~/.codex 完全隔离。
   const codexHome = path.join(app.getPath("userData"), "codex-home");
   mkdirSync(codexHome, { recursive: true });
@@ -171,6 +177,7 @@ app.whenReady().then(async () => {
       sessionStorage: "ai-desktop",
       validationOwner: "codex",
       readSettings: () => settings.read(),
+      readRuleInstructions,
     },
     (details) => eventCenter.recordEvent("trusted_command.decision", details),
     (details) => eventCenter.recordEvent("thread.lifecycle", details),
@@ -188,6 +195,7 @@ app.whenReady().then(async () => {
       sessionStorage: "ai-desktop",
       validationOwner: "desktop",
       readSettings: () => settings.read(),
+      readRuleInstructions,
     },
     (details) => eventCenter.recordEvent("nangong.conversation.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.conversation.thread.lifecycle", details),
@@ -197,7 +205,7 @@ app.whenReady().then(async () => {
     projectRoot, trustedCommands, hanLiSessions,
     {
       codexHome, serviceName: "selplat_ai_desktop_han_li_evolution", threadSource: "ai-desktop-han-li-evolution",
-      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(),
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
     },
     (details) => eventCenter.recordEvent("han-li.evolution.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("han-li.evolution.thread.lifecycle", details),
@@ -207,7 +215,7 @@ app.whenReady().then(async () => {
     projectRoot, trustedCommands, nangongDeliberationSessions,
     {
       codexHome, serviceName: "selplat_ai_desktop_nangong_deliberation", threadSource: "ai-desktop-nangong-deliberation",
-      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(),
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
     },
     (details) => eventCenter.recordEvent("nangong.deliberation.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.deliberation.thread.lifecycle", details),
@@ -217,7 +225,7 @@ app.whenReady().then(async () => {
     projectRoot, trustedCommands, nangongDistributionSessions,
     {
       codexHome, serviceName: "selplat_ai_desktop_nangong_distribution", threadSource: "ai-desktop-nangong-distribution",
-      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(),
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
     },
     (details) => eventCenter.recordEvent("nangong.distribution.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.distribution.thread.lifecycle", details),
@@ -227,7 +235,7 @@ app.whenReady().then(async () => {
     projectRoot, trustedCommands, linghuDistributionAuditSessions,
     {
       codexHome, serviceName: "selplat_ai_desktop_linghu_distribution_audit", threadSource: "ai-desktop-linghu-distribution-audit",
-      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(),
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
     },
     (details) => eventCenter.recordEvent("linghu.distribution_audit.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("linghu.distribution_audit.thread.lifecycle", details),
@@ -268,6 +276,7 @@ app.whenReady().then(async () => {
       await taskTests.run({ taskId: task.taskId, worktreeRoot, emit });
     },
     readSettings: () => settings.read(),
+    readRuleInstructions,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
   });
   const versionIntegration = new VersionIntegrationPipeline({
@@ -416,6 +425,7 @@ app.whenReady().then(async () => {
     variant,
     preloadPath,
     rendererRoot,
+    rules,
     prepareForApplicationExit: prepareAiMemoryShutdown,
   });
 

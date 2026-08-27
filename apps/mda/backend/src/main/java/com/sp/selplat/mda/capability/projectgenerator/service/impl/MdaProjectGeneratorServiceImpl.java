@@ -545,7 +545,7 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
     /**
      * 根据根 AGENTS.md 的当前稳定用户定位唯一中央数据库应用登记。
      * 真实传参示例：声明 {@code 当前稳定用户 ID：XUNAN} 时定位其 SELPLAT 通用 registry。
-     * 真实返回示例：返回 rule-engine 当前用户层的 managed-database-applications.json。
+     * 真实返回示例：返回 apps/ai-desktop/ruleengine 下当前用户层的 managed-database-applications.json。
      * 异常或副作用示例：用户声明缺失、重复或不安全时抛出 IOException，不创建目录。
      *
      * @return 位于当前 SELPLAT 根内的中央登记绝对路径
@@ -560,7 +560,7 @@ public class MdaProjectGeneratorServiceImpl implements MdaProjectGeneratorServic
             throw new IOException("AGENTS.md 当前稳定用户 ID 不唯一或不安全");
         }
         return insideRoot(projectRoot.resolve(
-                "apps/rule-engine/backend/src/main/resources/local/"
+                "apps/ai-desktop/ruleengine/backend/src/main/resources/local/"
                         + stableUserId
                         + "/selplat/通用/registry/managed-database-applications.json"));
     }

@@ -45,14 +45,14 @@ class MdaProjectGeneratorServiceImplTest {
         Files.createDirectories(testRoot.resolve(
                 "apps/host/backend/src/main/resources/static/desktop"));
         Files.createDirectories(testRoot.resolve(
-                "apps/rule-engine/backend/src/main/resources/local/TESTUSER/"
+                "apps/ai-desktop/ruleengine/backend/src/main/resources/local/TESTUSER/"
                         + "selplat/通用/registry"));
         Files.writeString(
                 testRoot.resolve("AGENTS.md"),
                 "- 当前稳定用户 ID：`TESTUSER`\n");
         Files.writeString(
                 testRoot.resolve(
-                        "apps/rule-engine/backend/src/main/resources/local/TESTUSER/"
+                        "apps/ai-desktop/ruleengine/backend/src/main/resources/local/TESTUSER/"
                                 + "selplat/通用/registry/managed-database-applications.json"),
                 """
                 {
@@ -293,7 +293,7 @@ class MdaProjectGeneratorServiceImplTest {
                 "apps/host/backend/src/main/resources/static/desktop/desktop.js")))
                 .contains("\"/japan/\"");
         Path centralRegistry = testRoot.resolve(
-                "apps/rule-engine/backend/src/main/resources/local/TESTUSER/"
+                "apps/ai-desktop/ruleengine/backend/src/main/resources/local/TESTUSER/"
                         + "selplat/通用/registry/managed-database-applications.json");
         JsonNode managedApplications = new ObjectMapper().readTree(centralRegistry.toFile())
                 .path("applications");

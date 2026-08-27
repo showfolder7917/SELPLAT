@@ -4,7 +4,7 @@ import path from "node:path";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
 
-import type { CodexStreamEvent } from "../../../contracts/desktop.js";
+import type { CodexStreamEvent } from "../../../contracts/desktop/desktop.js";
 import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "./integration-verifier.js";
 import { TestResourceCoordinatorFacade } from "./test-resource-coordinator-facade.js";
 

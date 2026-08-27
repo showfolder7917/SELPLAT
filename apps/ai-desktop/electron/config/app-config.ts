@@ -1,10 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { app } from "electron";
 import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
-import type { AppVariant } from "../../contracts/desktop.js";
+import type { AppVariant } from "../../contracts/desktop/desktop.js";
 import { resolveAiMemoryPaths as resolveConfiguredAiMemoryPaths, type ResolvedAiMemoryPaths } from "./ai-memory-path-resolver.js";
 
 type ApplicationMetadata = {
@@ -32,13 +32,19 @@ export function resolveProjectRoot(): string {
   const packagedDevelopmentRoot = app.isPackaged
     ? readApplicationMetadata().selplatDevelopmentRoot
     : undefined;
-  // 显式启动参数和环境变量始终可以覆盖包内开发根；发布变体不读取开发版专属元数据。
-  const configuredRoot = argumentRoot
-    || process.env.SELPLAT_ROOT
-    || (typeof packagedDevelopmentRoot === "string" ? packagedDevelopmentRoot : undefined);
-  const projectRoot = path.resolve(configuredRoot || path.join(app.getAppPath(), "../.."));
+  // 显式启动参数和环境变量优先；包内开发根只在客户机器上仍然存在时继续使用。
+  const explicitRoot = argumentRoot || process.env.SELPLAT_ROOT;
+  const metadataRoot = typeof packagedDevelopmentRoot === "string" ? packagedDevelopmentRoot : undefined;
+  const defaultDevelopmentRoot = path.resolve(app.getAppPath(), "../..");
+  const packagedCustomerRoot = path.join(app.getPath("userData"), "workspace");
+  // 开发包在构建机继续使用已登记工程；客户机器上该路径不存在时回落到独立用户数据工作区。
+  const fallbackRoot = app.isPackaged
+    ? metadataRoot && existsSync(metadataRoot) ? metadataRoot : packagedCustomerRoot
+    : defaultDevelopmentRoot;
+  const projectRoot = path.resolve(explicitRoot || fallbackRoot);
   const archiveDataRoot = resolveDistributionMode() === "archive";
-  if (!existsSync(projectRoot) || (!archiveDataRoot && !existsSync(path.join(projectRoot, ".git")))) {
+  if (app.isPackaged && !explicitRoot && projectRoot === path.resolve(packagedCustomerRoot)) mkdirSync(projectRoot, { recursive: true });
+  if (!existsSync(projectRoot) || (!app.isPackaged && !archiveDataRoot && !existsSync(path.join(projectRoot, ".git")))) {
     throw new Error(`SELPLAT project root is unavailable: ${projectRoot}`);
   }
   return projectRoot;

@@ -5,14 +5,14 @@ import type {
   CollaborationMember,
   CollaborationRequirementPlan,
   CollaborationTask,
-} from "../../../contracts/collaboration.js";
+} from "../../../contracts/collaboration/collaboration.js";
 import type {
   CodexApproval,
   CodexStreamEvent,
   CodexUserInputRequest,
   ResolveCodexUserInputRequest,
   WorkspaceState,
-} from "../../../contracts/desktop.js";
+} from "../../../contracts/desktop/desktop.js";
 import { CodexService, type CodexServiceOptions } from "../codex-service.js";
 import { CodexSessionStore } from "../codex-session-store.js";
 import { ManagedTaskExecutor } from "../managed-task-executor.js";
@@ -139,6 +139,7 @@ export interface CodexCollaborationSessionFactoryOptions {
   resolveAttachmentPaths(attachmentIds: string[]): Promise<string[]>;
   runCodeValidation(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<void>;
   readSettings: CodexServiceOptions["readSettings"];
+  readRuleInstructions?: CodexServiceOptions["readRuleInstructions"];
   recordEvent(type: string, details: Record<string, unknown>, taskId: string): void;
 }
 
@@ -182,6 +183,7 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
         sessionStorage: "ai-desktop",
         validationOwner: "desktop",
         readSettings: this.#options.readSettings,
+        readRuleInstructions: this.#options.readRuleInstructions,
       },
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),

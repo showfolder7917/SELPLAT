@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { IntegrationReleaseEventType, IntegrationReleaseHolder, IntegrationReleaseRequest } from "../../../contracts/integration-release.js";
+import type { IntegrationReleaseEventType, IntegrationReleaseHolder, IntegrationReleaseRequest } from "../../../contracts/collaboration/integration-release.js";
 
 interface Options {
   coordinationRoot: string;

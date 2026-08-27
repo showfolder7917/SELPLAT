@@ -1,4 +1,4 @@
-import type { DesktopSettings } from "../../../contracts/settings.js";
+import type { DesktopSettings } from "../../../contracts/desktop/settings.js";
 import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
 import type { SettingsStore } from "../../services/settings-store.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";

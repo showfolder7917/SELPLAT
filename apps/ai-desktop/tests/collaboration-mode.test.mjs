@@ -26,7 +26,7 @@ const developerSource = readFileSync(new URL("../src/variants/developer/Develope
 const coordinatorSource = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
 const integrationPipelineSource = readFileSync(new URL("../electron/services/collaboration/version-integration-pipeline.ts", import.meta.url), "utf8");
 const releaseBatchStoreSource = readFileSync(new URL("../electron/services/collaboration/release-batch-store.ts", import.meta.url), "utf8");
-const collaborationContractSource = readFileSync(new URL("../contracts/collaboration.ts", import.meta.url), "utf8");
+const collaborationContractSource = readFileSync(new URL("../contracts/collaboration/collaboration.ts", import.meta.url), "utf8");
 const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/collaboration/linghu-unified-test-runner.ts", import.meta.url), "utf8");
 const integrationVerifierSource = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });

@@ -11,6 +11,9 @@
     "!node_modules/@selplat/node-common-core/**/*.d.ts",
     "!node_modules/@selplat/node-common-core/{src,tests}/**/*"
   ],
+  "extraResources": [
+    { "from": "../../build/ai-desktop/rule-bundle", "to": "ruleengine", "filter": ["manifest.json", "rules.json"] }
+  ],
   "asarUnpack": ["node_modules/@openai/codex/**/*", "node_modules/@openai/codex-*/**/*"],
   "win": { "target": "nsis", "artifactName": "AI-Desktop-${version}-Setup.${ext}" },
   "mac": { "target": "dmg", "artifactName": "AI-Desktop-${version}.${ext}", "category": "public.app-category.developer-tools" }

@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-import type { ApprovalGovernanceRecord } from "../../../contracts/approval-governance.js";
-import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration.js";
-import type { LinghuAutomationState } from "../../../contracts/linghu-automation.js";
-import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, NangongEvolutionState } from "../../../contracts/nangong-evolution.js";
-import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../contracts/workflow.js";
+import type { ApprovalGovernanceRecord } from "../../../contracts/governance/approval-governance.js";
+import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
+import type { LinghuAutomationState } from "../../../contracts/collaboration/linghu-automation.js";
+import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, NangongEvolutionState } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../contracts/governance/workflow.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
 const STALE_AFTER_MS = 120_000;

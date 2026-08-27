@@ -12,8 +12,8 @@ import type {
   DesktopOperatingMode,
   SubmitCollaborationTaskRequest,
   UpdateCollaborationMemberRequest,
-} from "../../../contracts/collaboration.js";
-import type { CodexStreamEvent } from "../../../contracts/desktop.js";
+} from "../../../contracts/collaboration/collaboration.js";
+import type { CodexStreamEvent } from "../../../contracts/desktop/desktop.js";
 import { CollaborationDurationLog } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
 import { VersionWorkspaceManager } from "./version-workspace-manager.js";

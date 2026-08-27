@@ -21,7 +21,7 @@ import type {
   ManagedExecutionMode,
   SandboxMode,
   WorkspaceState,
-} from "../../contracts/desktop.js";
+} from "../../contracts/desktop/desktop.js";
 
 interface ActiveAuditTask extends AuditTaskSummary {
   commandIds: Set<string>;

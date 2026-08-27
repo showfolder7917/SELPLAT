@@ -1,4 +1,4 @@
-import type { CodexStreamActivity, CodexStreamEvent, CodexStreamPlanStep, ManagedExecutionMode, ManagedExecutionUpdate, ScreenshotAttachment } from "../../../../contracts/desktop";
+import type { CodexStreamActivity, CodexStreamEvent, CodexStreamPlanStep, ManagedExecutionMode, ManagedExecutionUpdate, ScreenshotAttachment } from "../../../../contracts/desktop/desktop";
 
 export type ComposerAttachment = ScreenshotAttachment & { dataUrl: string };
 

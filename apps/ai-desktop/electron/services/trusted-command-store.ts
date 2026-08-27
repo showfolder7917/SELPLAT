@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { WorkspaceState } from "../../contracts/desktop.js";
+import type { WorkspaceState } from "../../contracts/desktop/desktop.js";
 
 interface TrustedCommandEntry {
   id: string;

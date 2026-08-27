@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import type { CollaborationTask, CollaborationVersionWorkspace } from "../../../contracts/collaboration.js";
+import type { CollaborationTask, CollaborationVersionWorkspace } from "../../../contracts/collaboration/collaboration.js";
 
 const execFileAsync = promisify(execFile);
 

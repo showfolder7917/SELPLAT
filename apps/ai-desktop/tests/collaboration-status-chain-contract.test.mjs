@@ -4,7 +4,7 @@ import test from "node:test";
 
 const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const coordinatorSource = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
-const contractSource = readFileSync(new URL("../contracts/collaboration.ts", import.meta.url), "utf8");
+const contractSource = readFileSync(new URL("../contracts/collaboration/collaboration.ts", import.meta.url), "utf8");
 
 test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
   assert.match(developerSource, /collaborationTaskId/);

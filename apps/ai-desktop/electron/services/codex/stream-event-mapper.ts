@@ -1,4 +1,4 @@
-import type { CodexStreamActivity, CodexStreamEvent, CodexStreamPlanStep } from "../../../contracts/codex-stream.js";
+import type { CodexStreamActivity, CodexStreamEvent, CodexStreamPlanStep } from "../../../contracts/codex/codex-stream.js";
 
 type JsonObject = Record<string, unknown>;
 

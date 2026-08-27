@@ -1,5 +1,5 @@
-import type { CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../../../contracts/collaboration.js";
-import type { CreateLinghuStartupPromptRequest, UpdateLinghuStartupPromptRequest } from "../../../contracts/linghu-automation.js";
+import type { CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../../../contracts/collaboration/collaboration.js";
+import type { CreateLinghuStartupPromptRequest, UpdateLinghuStartupPromptRequest } from "../../../contracts/collaboration/linghu-automation.js";
 import type {
   ConfigureEvolutionAutomationRequest,
   ConvertNangongConversationToTopicRequest,
@@ -13,7 +13,7 @@ import type {
   ReviseEvolutionProposalRequest,
   SendNangongConversationMessageRequest,
   UpdateEvolutionTopicRequest,
-} from "../../../contracts/nangong-evolution.js";
+} from "../../../contracts/collaboration/nangong-evolution.js";
 import type { CollaborationCoordinator } from "../../services/collaboration/collaboration-coordinator.js";
 import type { LinghuAutomationFacade } from "../../services/collaboration/linghu-automation-facade.js";
 import type { NangongEvolutionFacade } from "../../services/collaboration/nangong-evolution-facade.js";

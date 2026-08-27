@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog } from "electron";
 
-import { WORKSPACE_PERMISSIONS, type WorkspacePermission } from "../../../contracts/base.js";
+import { WORKSPACE_PERMISSIONS, type WorkspacePermission } from "../../../contracts/foundation/base.js";
 import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
 import type { WorkspaceStore } from "../../services/workspace-store.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
