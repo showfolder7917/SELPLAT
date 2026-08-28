@@ -59,6 +59,9 @@ load_rule_for_rule_creation_move_delete_or_classification = RULE_LIFECYCLE_GOVER
 <!-- load_rule_for_rule_index_maintenance 的当前独立事实为 RULE_LIFECYCLE_GOVERNANCE_RULES。 -->
 load_rule_for_rule_index_maintenance = RULE_LIFECYCLE_GOVERNANCE_RULES
 
+<!-- 每个任务完成阶段固定加载生命周期治理规则，避免规则沉淀评估依赖关键词或专项场景偶然命中。 -->
+load_rule_for_every_task_completion_rule_sedimentation_evaluation = RULE_LIFECYCLE_GOVERNANCE_RULES
+
 <!-- 执行文档按当前任务页面隔离，并接入 begin、step、active、ready、finish 统一任务门禁。 -->
 EXECUTION_DOCUMENT_TASK_LIFECYCLE_GATE_RULES = local/XUNAN/跨工程通用规则/RUL_执行文档任务生命周期门禁规则.md
 

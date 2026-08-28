@@ -71,6 +71,8 @@ MEMORY_FILE_EDIT_RULES = local/core/rule/MEMORY_FILE_EDIT_RULES.md
 <!-- 当前稳定用户只从工程根 AGENTS.md 读取；加载器把安全校验后的值代入该唯一模式。 -->
 USER_RULE_INDEX_PATTERN = local/<stable-user-id>/RULE_INDEX.md
 load_rule_for_active_user_rule_cleanup_package_completion_or_continuous_upgrade = AI_RULE_PACKAGE_INTELLIGENCE_RULES
+<!-- 每个任务交付前必须递归命中当前用户生命周期治理规则并完成规则沉淀评估。 -->
+load_rule_for_active_user_every_task_completion_rule_sedimentation_evaluation = RULE_LIFECYCLE_GOVERNANCE_RULES
 load_rule_for_active_user_explicit_ai_managed_core_or_common_change = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
 load_rule_for_active_user_same_task_followup_after_standalone_1 = RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES
 <!-- 独立 3 必须加载当前用户的最新问答记录与执行规则。 -->

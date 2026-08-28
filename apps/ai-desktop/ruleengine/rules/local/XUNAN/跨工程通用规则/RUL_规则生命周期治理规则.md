@@ -44,6 +44,73 @@ new_rule_must_check_and_merge_existing_semantics = true
 <!-- 规则变更必须同步唯一索引；适用于新增、移动、改名和删除；业务含义是任何有效规则始终拥有可调用入口 -->
 rule_change_must_sync_rule_index = RULE_INDEX.md
 
+## 任务完成前规则沉淀评估
+
+<!-- 每个任务交付前都必须加载本逻辑 ID 并执行沉淀评估；业务含义是完成门禁不依赖用户措辞、关键词或专项规则偶然命中。 -->
+task_completion_rule_sedimentation_evaluation = mandatory_every_task
+
+<!-- 沉淀评估必须形成一个显式结果，禁止没有结论就交付。 -->
+rule_sedimentation_evaluation_outcome = upgrade_existing_rule
+<!-- rule_sedimentation_evaluation_outcome.2 的当前独立事实为 create_new_rule。 -->
+rule_sedimentation_evaluation_outcome.2 = create_new_rule
+<!-- rule_sedimentation_evaluation_outcome.3 的当前独立事实为 no_change_with_near_rule_and_reason_evidence。 -->
+rule_sedimentation_evaluation_outcome.3 = no_change_with_near_rule_and_reason_evidence
+
+<!-- 用户纠正规范、同类偏差重复、约束可复用、公共结构或完成门槛变化、现有规则失效以及单点修正无法防复发时，必须进入正式沉淀判断。 -->
+rule_sedimentation_evaluation_triggers = explicit_user_standardization_or_correction
+<!-- rule_sedimentation_evaluation_triggers.2 的当前独立事实为 repeated_deviation_or_rework。 -->
+rule_sedimentation_evaluation_triggers.2 = repeated_deviation_or_rework
+<!-- rule_sedimentation_evaluation_triggers.3 的当前独立事实为 reusable_cross_file_or_future_task_constraint。 -->
+rule_sedimentation_evaluation_triggers.3 = reusable_cross_file_or_future_task_constraint
+<!-- rule_sedimentation_evaluation_triggers.4 的当前独立事实为 shared_structure_naming_boundary_sequence_or_completion_gate_change。 -->
+rule_sedimentation_evaluation_triggers.4 = shared_structure_naming_boundary_sequence_or_completion_gate_change
+<!-- rule_sedimentation_evaluation_triggers.5 的当前独立事实为 missing_incomplete_stale_or_ineffective_existing_rule。 -->
+rule_sedimentation_evaluation_triggers.5 = missing_incomplete_stale_or_ineffective_existing_rule
+<!-- rule_sedimentation_evaluation_triggers.6 的当前独立事实为 one_output_fix_cannot_prevent_recurrence。 -->
+rule_sedimentation_evaluation_triggers.6 = one_output_fix_cannot_prevent_recurrence
+
+<!-- 用户确认的约束可复用、超出单文件、语义明确且当前任务已有独立授权时，必须在同一任务内升级当前用户层规则与门禁。 -->
+automatic_rule_sedimentation_requires = reusable_user_confirmed_constraint
+<!-- automatic_rule_sedimentation_requires.2 的当前独立事实为 applies_beyond_one_file_or_one_record。 -->
+automatic_rule_sedimentation_requires.2 = applies_beyond_one_file_or_one_record
+<!-- automatic_rule_sedimentation_requires.3 的当前独立事实为 unambiguous_business_semantics。 -->
+automatic_rule_sedimentation_requires.3 = unambiguous_business_semantics
+<!-- automatic_rule_sedimentation_requires.4 的当前独立事实为 current_task_has_standalone_authorization。 -->
+automatic_rule_sedimentation_requires.4 = current_task_has_standalone_authorization
+<!-- automatic_rule_sedimentation_requires.5 的当前独立事实为 active_user_layer_only_without_scope_expansion。 -->
+automatic_rule_sedimentation_requires.5 = active_user_layer_only_without_scope_expansion
+
+<!-- 一次性数据或页面、仍在比较的方案、业务语义未确认、已有规则可吸收、未授权层级及 AI 临时偏好不得直接形成新长期规则。 -->
+automatic_rule_sedimentation_forbidden = one_off_data_file_or_page_change
+<!-- automatic_rule_sedimentation_forbidden.2 的当前独立事实为 undecided_alternative。 -->
+automatic_rule_sedimentation_forbidden.2 = undecided_alternative
+<!-- automatic_rule_sedimentation_forbidden.3 的当前独立事实为 unconfirmed_business_semantics。 -->
+automatic_rule_sedimentation_forbidden.3 = unconfirmed_business_semantics
+<!-- automatic_rule_sedimentation_forbidden.4 的当前独立事实为 near_rule_can_absorb_change。 -->
+automatic_rule_sedimentation_forbidden.4 = near_rule_can_absorb_change
+<!-- automatic_rule_sedimentation_forbidden.5 的当前独立事实为 unauthorized_core_common_or_other_user_change。 -->
+automatic_rule_sedimentation_forbidden.5 = unauthorized_core_common_or_other_user_change
+<!-- automatic_rule_sedimentation_forbidden.6 的当前独立事实为 ai_implementation_preference_without_stable_evidence。 -->
+automatic_rule_sedimentation_forbidden.6 = ai_implementation_preference_without_stable_evidence
+
+<!-- 沉淀目标按适用范围选择：单应用进入应用 rule，同项目多应用进入通用 rule，跨项目进入跨工程通用规则；所有路径都必须由稳定用户变量解析。 -->
+rule_sedimentation_target_by_scope = single_application_to_active_user_project_application_rule
+<!-- rule_sedimentation_target_by_scope.2 的当前独立事实为 multi_application_same_project_to_active_user_project_general_rule。 -->
+rule_sedimentation_target_by_scope.2 = multi_application_same_project_to_active_user_project_general_rule
+<!-- rule_sedimentation_target_by_scope.3 的当前独立事实为 project_independent_to_active_user_cross_project_rule。 -->
+rule_sedimentation_target_by_scope.3 = project_independent_to_active_user_cross_project_rule
+
+<!-- 沉淀闭环必须先检查近义规则，再修改正文与所属叶子索引，沿父链验证根索引可达，并检查失效路径、重复 ID 和跨用户引用。 -->
+rule_sedimentation_required_closure = check_near_rules
+<!-- rule_sedimentation_required_closure.2 的当前独立事实为 update_or_create_active_user_rule。 -->
+rule_sedimentation_required_closure.2 = update_or_create_active_user_rule
+<!-- rule_sedimentation_required_closure.3 的当前独立事实为 sync_owning_leaf_and_validate_parent_chain。 -->
+rule_sedimentation_required_closure.3 = sync_owning_leaf_and_validate_parent_chain
+<!-- rule_sedimentation_required_closure.4 的当前独立事实为 validate_root_reachability_stale_paths_duplicate_ids_and_cross_user_refs。 -->
+rule_sedimentation_required_closure.4 = validate_root_reachability_stale_paths_duplicate_ids_and_cross_user_refs
+<!-- rule_sedimentation_required_closure.5 的当前独立事实为 record_required_tests_and_handoff_outcome。 -->
+rule_sedimentation_required_closure.5 = record_required_tests_and_handoff_outcome
+
 ## 分级规则索引
 
 <!-- 问题：当前用户层中多个工程、组织和业务域全部平铺到根索引后，任何局部维护都会扩大根索引冲突和审查范围。 -->
