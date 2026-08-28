@@ -6,14 +6,14 @@ java_ability_refs = none
 python_ability_refs = ai_rule_package_integrator
 <!-- Node 当前没有参与这些引用迁移修正。 -->
 node_ability_refs = none
-<!-- 当前修正规则从 1.0.0 开始记录版本。 -->
-rule_version = 1.2.0
+<!-- 当前修正规则升级到 1.3.0，失效的旧实体路径已经替换为当前权威规则入口。 -->
+rule_version = 1.3.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示当前用户覆盖已经通过加载测试。 -->
 rule_status = active
-<!-- 首次升级记录说明本规则处理的是迁移后旧路径。 -->
-upgrade_record = 2026-08-03:为迁移后失效程序与模板路径建立用户层修正;2026-08-03:core表结构规则完成正式路径修复后移除冗余用户覆盖;2026-08-03:用户确认详细设计与XLS规则及能力整体退役;2026-08-07:所有者与用户资产路径改为动态当前用户语义
+<!-- 当前版本只保留已验证存在的权威规则路径，禁止迁移包装继续指向已经删除的旧实体。 -->
+current_version_change_summary = replace_two_stale_base_rule_paths_with_current_authority
 
 <!-- 问题：规则分层迁移已经完成，但少量规则正文仍引用迁移前路径。 -->
 <!-- 场景：当前稳定用户命中下列逻辑 ID 时，必须读取原权威规则语义并使用本文件登记的当前程序或模板路径。 -->
@@ -30,8 +30,8 @@ example_path = local/<active-stable-user-id>/selplat/应用/rule-engine/template
 <!-- 失效路径扫描和修正后验证统一使用已登记的智慧整合能力。 -->
 verification_program = ai_rule_package_integrator
 
-<!-- 拼音规则的原业务语义从迁入后的当前用户权威规则读取。 -->
-CHINESE_PINYIN_CORRECTION_RULES.base_rule = local/XUNAN/中文教学/应用/拼音生成/rule/RUL_拼音标注与朗读版校正规则.md
+<!-- 拼音修正逻辑 ID 的当前权威正文就是本迁移收敛规则，禁止再追踪已删除的旧应用规则文件。 -->
+CHINESE_PINYIN_CORRECTION_RULES.current_authority_rule = local/XUNAN/中文教学/通用/rule/RUL_规则引用迁移修正规则.md
 <!-- 拼音能力已收敛到 rule-engine 当前用户 Python abilities。 -->
 CHINESE_PINYIN_CORRECTION_RULES.python_program = apps/ai-desktop/ruleengine/python/local/XUNAN/abilities/pinyin_docx_tools.py
 <!-- pinyin_docx_tools.py 是拼音规则的当前统一命令入口。 -->
@@ -41,8 +41,8 @@ CHINESE_PINYIN_CORRECTION_RULES.dictionary_policy = caller_supplied_utf8_tsv_via
 <!-- 迁移前 shared/common-core 下的固定词典路径已经退役，命中时必须阻断使用。 -->
 CHINESE_PINYIN_CORRECTION_RULES.retired_dictionary_paths_must_not_be_used = shared/backend/common-core/src/main/resources/pinyin/
 
-<!-- 古诗底图规则的原业务语义从迁入后的当前用户中文教学规则读取。 -->
-ANCIENT_POEM_BACKGROUND_RULES.base_rule = local/XUNAN/中文教学/应用/教学图片与PPT生成/rule/RUL_古诗无文字底图生成工作流程规则.md
+<!-- 古诗底图逻辑 ID 的当前权威正文就是本迁移收敛规则，禁止再追踪已删除的旧应用规则文件。 -->
+ANCIENT_POEM_BACKGROUND_RULES.current_authority_rule = local/XUNAN/中文教学/通用/rule/RUL_规则引用迁移修正规则.md
 <!-- 古诗教学图解析、渲染和清单能力统一进入当前用户 abilities。 -->
 ANCIENT_POEM_BACKGROUND_RULES.python_program = apps/ai-desktop/ruleengine/python/local/XUNAN/abilities/teaching_image_tools.py
 

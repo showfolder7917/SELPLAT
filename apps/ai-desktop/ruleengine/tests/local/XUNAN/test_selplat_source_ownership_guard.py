@@ -29,7 +29,9 @@ PROGRAM_PATH = (
 )
 RULE_PATH = (
     PROJECT_ROOT
-    / "apps/ai-desktop/ruleengine/rules/active-user/rules/平台"
+    / "apps/ai-desktop/ruleengine/rules/local"
+    / ACTIVE_STABLE_USER_ID
+    / "selplat/通用/rule"
     / "RUL_SELPLAT程序源码语言与归属门禁规则.md"
 )
 PUBLIC_COMPONENT_RULE_PATH = (

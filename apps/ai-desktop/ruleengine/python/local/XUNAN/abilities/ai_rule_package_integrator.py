@@ -23,9 +23,13 @@ sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)
 os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)
 
 from collections import Counter
+import hashlib
 import importlib.util
 import json
+import math
 import re
+import statistics
+import time
 from typing import Any
 
 PYTHON_SOURCE_ROOT = next(
@@ -58,6 +62,43 @@ DEPRECATED_CHAIN_TEXTS = (
     "规则解析 → 校验 → 裁决 → 执行 → 解释 → 审计",
     "parser/validator/adjudicator/executor/explainer/auditor",
 )
+# 这些键描述规则包元数据或加载机制，本身在不同规则间取值不同不代表业务语义冲突。
+CONFLICT_CANDIDATE_EXCLUDED_KEYS = {
+    "application_program_path",
+    "canonical_document",
+    "current_version_change_summary",
+    "override_mode",
+    "rule_scope",
+    "rule_owner",
+    "rule_owner_source",
+    "rule_status",
+    "rule_version",
+    "template_applicability",
+    "version",
+}
+# 带序号的能力引用、依赖、适用性说明和验证范围属于每个规则自己的装配信息，不进入跨规则语义候选。
+CONFLICT_CANDIDATE_EXCLUDED_PREFIXES = (
+    "java_ability_refs",
+    "node_ability_refs",
+    "python_ability_refs",
+    "requires_rule_ids",
+    "example_not_applicable_reason",
+    "program_not_applicable_reason",
+    "template_not_applicable_reason",
+    "verification_contract",
+    "verification_required",
+    "verification_scope",
+    "verified_example_refs",
+)
+
+
+def _configure_utf8_console() -> None:
+    """让 Windows 直接入口稳定输出中文 JSON，同时不改变被导入时的调用方流。"""
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
 
 
 def _load_core_executor():
@@ -227,6 +268,13 @@ def _is_project_reference(line: str, raw_reference: str) -> bool:
 
     if "http://" in line or "https://" in line or any(marker in line for marker in ("<", ">", "${")):
         return False
+    # 明确写成同目录、当前目录或相对路径的文件属于规则自己声明的依赖，不能因缺少工程前缀而漏报。
+    normalized_raw = raw_reference.replace("\\", "/")
+    if normalized_raw.startswith(("./", "../")) or (
+            "/" not in normalized_raw
+            and any(marker in line for marker in ("同目录", "当前目录"))
+    ):
+        return True
     normalized = raw_reference.lstrip("./").replace("\\", "/")
     return normalized.startswith(PROJECT_REFERENCE_PREFIXES)
 
@@ -295,12 +343,133 @@ def _audit_rule(rule: dict[str, Any], core_executor: Any) -> dict[str, Any]:
     return {
         **rule,
         **assets,
+        # 私有字段只供本次审计生成冲突候选，公开结果会在返回前移除。
+        "_assignments": assignments,
         "ability_reference_fields": reference_fields,
         "program_references": program_refs,
         "has_verification_language": bool(re.search(r"验证|测试|校验|回归|验收|verify|test", text, re.I)),
         "has_upgrade_language": bool(re.search(r"升级|更新|修复|合并|退役|生命周期|upgrade|repair", text, re.I)),
         "stale_references": stale_references,
         "gaps": gaps,
+    }
+
+
+def _is_conflict_candidate_key(key: str) -> bool:
+    """排除元数据和装配键，只保留可能表达业务约束的 DSL 键。"""
+
+    if key in CONFLICT_CANDIDATE_EXCLUDED_KEYS:
+        return False
+    return not any(
+        key == prefix or key.startswith(f"{prefix}.")
+        for prefix in CONFLICT_CANDIDATE_EXCLUDED_PREFIXES
+    )
+
+
+def _semantic_conflict_candidates(audited_rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """按跨文件同键异值形成候选证据，不把语法差异直接裁决为真实冲突。"""
+
+    values_by_key: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for rule in audited_rules:
+        assignments = rule.get("_assignments") or {}
+        for key, value in assignments.items():
+            if not _is_conflict_candidate_key(str(key)):
+                continue
+            evidence = {
+                "logicalIds": list(rule.get("logical_ids") or [rule["logical_id"]]),
+                "resourcePath": rule["path"],
+            }
+            values_by_key.setdefault(str(key), {}).setdefault(str(value), []).append(evidence)
+
+    candidates: list[dict[str, Any]] = []
+    for dsl_key, value_groups in sorted(values_by_key.items()):
+        physical_paths = {
+            evidence["resourcePath"]
+            for evidences in value_groups.values()
+            for evidence in evidences
+        }
+        if len(value_groups) < 2 or len(physical_paths) < 2:
+            continue
+        candidates.append({
+            "candidateType": "same_dsl_key_with_different_values",
+            "dslKey": dsl_key,
+            "values": [
+                {"value": value, "rules": evidences}
+                for value, evidences in sorted(value_groups.items())
+            ],
+            "decision": "evidence_review_required_not_an_automatic_conflict_verdict",
+        })
+    return candidates
+
+
+def _without_private_audit_fields(rule: dict[str, Any]) -> dict[str, Any]:
+    """移除只用于单次计算的内部字段，保持审计 JSON 简洁稳定。"""
+
+    return {key: value for key, value in rule.items() if not key.startswith("_")}
+
+
+def _build_bundle_benchmark(
+        logical_ids: list[str], active_scope: str | None, active_user: str,
+        iterations: int, core_executor: Any,
+) -> dict[str, Any]:
+    """加载真实依赖闭包并报告回执、内容体量和明确标注的 Token 代理值。"""
+
+    if not logical_ids or any(not LOGICAL_ID_PATTERN.fullmatch(value) for value in logical_ids):
+        raise ValueError("logical_ids 必须包含一个或多个已登记的大写逻辑 ID。")
+    if iterations < 1 or iterations > 10:
+        raise ValueError("iterations 必须位于 1 到 10。")
+
+    elapsed_samples: list[float] = []
+    load_result: dict[str, Any] = {}
+    for _ in range(iterations):
+        started = time.perf_counter_ns()
+        load_result = core_executor.execute(
+            "layered_rule_loader",
+            {
+                "action": "load_bundle",
+                "logical_ids": logical_ids,
+                "active_scope": active_scope,
+                "active_user": active_user,
+            },
+        )
+        elapsed_samples.append((time.perf_counter_ns() - started) / 1_000_000)
+        if load_result.get("status") != "completed":
+            raise RuntimeError(f"规则依赖闭包加载失败：{load_result}")
+
+    bundle = load_result["result"]
+    rules = bundle["rules"]
+    contents = [str(stack["effective_rule"]["content"]) for stack in rules.values()]
+    combined_content = "\n".join(contents)
+    utf8_bytes = combined_content.encode("utf-8")
+    source_paths = sorted({
+        str(layer["resource_path"])
+        for stack in rules.values()
+        for layer in stack["layers"]
+    })
+    return {
+        "status": "completed",
+        "ability": ABILITY_ID,
+        "action": "benchmark_bundle",
+        "requestedLogicalIds": logical_ids,
+        "resolvedLogicalIds": list(rules),
+        "resolvedRuleCount": len(rules),
+        "physicalSourceCount": len(source_paths),
+        "physicalSources": source_paths,
+        "receipt": list(bundle["receipt"]),
+        "contentMetrics": {
+            "unicodeCharacterCount": len(combined_content),
+            "utf8ByteCount": len(utf8_bytes),
+            "lineCount": sum(len(content.splitlines()) for content in contents),
+            "dslAssignmentCount": sum(len(_parse_assignments(content)) for content in contents),
+            "tokenProxyFourUtf8Bytes": math.ceil(len(utf8_bytes) / 4),
+            "tokenProxyDisclaimer": "size_proxy_only_not_model_billing_or_tokenizer_output",
+            "contentSha256": hashlib.sha256(utf8_bytes).hexdigest(),
+        },
+        "timingMetrics": {
+            "iterations": iterations,
+            "samplesMs": [round(value, 3) for value in elapsed_samples],
+            "medianMs": round(statistics.median(elapsed_samples), 3),
+            "timingDisclaimer": "local_loader_wall_time_not_end_to_end_agent_latency",
+        },
     }
 
 
@@ -313,7 +482,12 @@ def _build_audit() -> dict[str, Any]:
     )
     audited_rules = [_audit_rule(rule, core_executor) for rule in rules]
     audited_user_rules = [_audit_rule(rule, core_executor) for rule in user_rules]
-    gap_counts = Counter(gap for rule in audited_rules for gap in rule["gaps"])
+    all_audited_rules = [*audited_rules, *audited_user_rules]
+    gap_counts = Counter(gap for rule in all_audited_rules for gap in rule["gaps"])
+    active_user_gap_counts = Counter(
+        gap for rule in audited_user_rules for gap in rule["gaps"]
+    )
+    semantic_candidates = _semantic_conflict_candidates(all_audited_rules)
     return {
         "status": "completed",
         "ability": ABILITY_ID,
@@ -324,20 +498,39 @@ def _build_audit() -> dict[str, Any]:
         "active_user_indexes": len(user_indexes),
         "active_user_overrides": user_registration_count,
         "active_user_rule_files": len(audited_user_rules),
+        "audited_rule_files": len(all_audited_rules),
+        "audit_scope": "core_common_and_current_active_user",
         "active_user_standard_asset_packages": sum(bool(rule["asset_root"]) for rule in audited_user_rules),
         "active_user_rules_with_program_references": sum(
             bool(rule["program_references"]) for rule in audited_user_rules
         ),
-        "standard_asset_packages": sum(bool(rule["asset_root"]) for rule in audited_rules),
-        "template_packages": sum(rule["has_template"] for rule in audited_rules),
-        "example_packages": sum(rule["has_examples"] for rule in audited_rules),
-        "rules_with_program_references": sum(bool(rule["program_references"]) for rule in audited_rules),
-        "rules_with_verification_language": sum(rule["has_verification_language"] for rule in audited_rules),
-        "rules_with_upgrade_language": sum(rule["has_upgrade_language"] for rule in audited_rules),
-        "stale_reference_count": sum(len(rule["stale_references"]) for rule in audited_rules),
+        "standard_asset_packages": sum(bool(rule["asset_root"]) for rule in all_audited_rules),
+        "template_packages": sum(rule["has_template"] for rule in all_audited_rules),
+        "example_packages": sum(rule["has_examples"] for rule in all_audited_rules),
+        "rules_with_program_references": sum(
+            bool(rule["program_references"]) for rule in all_audited_rules
+        ),
+        "rules_with_verification_language": sum(
+            rule["has_verification_language"] for rule in all_audited_rules
+        ),
+        "rules_with_upgrade_language": sum(
+            rule["has_upgrade_language"] for rule in all_audited_rules
+        ),
+        "stale_reference_count": sum(
+            len(rule["stale_references"]) for rule in all_audited_rules
+        ),
+        "active_user_stale_reference_count": sum(
+            len(rule["stale_references"]) for rule in audited_user_rules
+        ),
         "gap_counts": dict(gap_counts),
-        "rules": audited_rules,
-        "active_user_rules": audited_user_rules,
+        "active_user_gap_counts": dict(active_user_gap_counts),
+        "semantic_conflict_candidate_basis": "same_dsl_key_with_different_values_across_rule_files",
+        "semantic_conflict_candidate_count": len(semantic_candidates),
+        "semantic_conflict_candidates": semantic_candidates,
+        "rules": [_without_private_audit_fields(rule) for rule in audited_rules],
+        "active_user_rules": [
+            _without_private_audit_fields(rule) for rule in audited_user_rules
+        ],
         "decision_boundary": "facts_only_ai_must_review_before_merge_or_delete",
     }
 
@@ -355,12 +548,36 @@ def _safe_output_path(raw_path: str) -> Path:
 
 
 def execute(context: dict[str, Any], skills: dict[str, Any], apps: dict[str, Any]) -> dict[str, Any]:
-    """执行只读审查，或把同一审查结果写入 OPTION。"""
+    """执行只读审查、规则闭包基准，或把同一审查结果写入 OPTION。"""
 
     _ = skills, apps
     action = str(context.get("action") or "audit").strip().lower()
+    if action == "benchmark_bundle":
+        try:
+            raw_logical_ids = context.get("logical_ids") or []
+            if not isinstance(raw_logical_ids, list):
+                raise ValueError("logical_ids 必须是数组。")
+            return _build_bundle_benchmark(
+                [str(value).strip() for value in raw_logical_ids],
+                str(context["active_scope"]).strip() if context.get("active_scope") else None,
+                _active_stable_user_id(),
+                int(context.get("iterations") or 3),
+                _load_core_executor(),
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
+            return {
+                "status": "blocked",
+                "exit_code": 1,
+                "ability": ABILITY_ID,
+                "action": action,
+                "message": str(error),
+            }
     if action not in {"audit", "write_report"}:
-        return {"status": "blocked", "ability": ABILITY_ID, "message": "支持 audit/write_report。"}
+        return {
+            "status": "blocked",
+            "ability": ABILITY_ID,
+            "message": "支持 audit/write_report/benchmark_bundle。",
+        }
     audit = _build_audit()
     if action == "audit":
         return audit
@@ -376,6 +593,8 @@ def execute(context: dict[str, Any], skills: dict[str, Any], apps: dict[str, Any
 def main(arguments: list[str] | None = None) -> int:
     """提供无需用户注册表和二次执行器的直接命令行入口。"""
 
+    # Windows PowerShell 的本地代码页可能无法承载中文 JSON，入口统一切换为 UTF-8。
+    _configure_utf8_console()
     # 无参数默认只读审查；有参数时接收一份 JSON 上下文。
     raw_arguments = list(arguments if arguments is not None else sys.argv[1:])
     try:

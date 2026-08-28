@@ -18,6 +18,31 @@
       "customerOverridable": false
     },
     {
+      "logicalId": "AI_DESKTOP_EVENT_MEMORY_UI_RULES",
+      "resourcePath": "local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop事件记忆与统一界面规则.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "AI_DESKTOP_HARNESS_WORKSPACE_RUNTIME_RULES",
+      "resourcePath": "local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktopHarness工作区与运行时规则.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "AI_DESKTOP_COLLABORATION_AUTOMATION_RULES",
+      "resourcePath": "local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "AI_DESKTOP_SCREENSHOT_INPUT_RULES",
+      "resourcePath": "local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop截图与输入规则.md",
+      "customerOverridable": false
+    },
+    {
+      "logicalId": "AI_DESKTOP_EVOLUTION_PERSISTENCE_RELEASE_RULES",
+      "resourcePath": "local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop演化持久化与发布规则.md",
+      "customerOverridable": false
+    },
+    {
       "logicalId": "AI_DESKTOP_ARCHITECTURE_BOUNDARY_RULES",
       "resourcePath": "local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop架构边界与客户规则交付规则.md",
       "customerOverridable": false
@@ -39,16 +64,17 @@
     },
     {
       "logicalId": "SELPLAT_PROJECT_PATH_RULES",
-      "resourcePath": "active-user/rules/平台/RUL_SELPLAT工程路径规则.md",
+      "resourcePath": "local/XUNAN/selplat/通用/rule/RUL_SELPLAT工程路径规则.md",
       "customerOverridable": false
     },
     {
       "logicalId": "SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES",
-      "resourcePath": "active-user/rules/平台/RUL_SELPLAT程序源码语言与归属门禁规则.md",
+      "resourcePath": "local/XUNAN/selplat/通用/rule/RUL_SELPLAT程序源码语言与归属门禁规则.md",
       "customerOverridable": false
     }
   ],
   "excludedCategories": [
+    "history",
     "archive",
     "tests",
     "templates",

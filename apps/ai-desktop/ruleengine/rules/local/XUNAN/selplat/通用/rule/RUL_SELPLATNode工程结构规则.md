@@ -10,8 +10,6 @@ requires_rule_ids = SELPLAT_APPLICATION_PROJECT_DATA_LAYOUT_RULES,SELPLAT_NODE_C
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 首版固化 Node 应用源码根、入口、依赖、脚本、测试、打包和清理判断。 -->
 rule_version = 1.1.0
-<!-- 1.1.0 固定根 shared 只承载跨工程共通，单应用 Electron 协议进入应用 contracts。 -->
-upgrade_record = 2026-08-24:应用私有Electron协议由应用内shared/contracts迁入contracts_根shared只保留跨工程共通
 <!-- active 表示规则正文、权威文档和叶子索引已形成可加载入口。 -->
 rule_status = active
 

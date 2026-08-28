@@ -8,8 +8,6 @@ rule_version = 1.0.0
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示路径规则、生产守卫和回归测试已经形成闭环。 -->
 rule_status = active
-<!-- 本规则来自 PDF 导入误用工程根 tmp 后的防复发修正。 -->
-upgrade_record = 2026-08-09:禁止通用技能默认tmp覆盖SELPLAT_OPTION_temp并增加程序路径守卫_默认任务目录_迁移与污染扫描
 
 ## 唯一运行数据根
 

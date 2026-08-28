@@ -34,6 +34,8 @@
     "paths:resolve": "node scripts/run-with-dependencies.mjs node scripts/resolve-application-paths.mjs",
     "migrate:dependencies": "node scripts/migrate-dependencies-to-cache.mjs",
     "dependencies:ensure": "node scripts/ensure-dependency-cache.mjs",
+    "dependencies:link": "node scripts/manage-dependency-link.mjs link",
+    "dependencies:unlink": "node scripts/manage-dependency-link.mjs unlink",
     "test:document": "node scripts/run-with-dependencies.mjs node scripts/test-document-runner.mjs",
     "test:developer-settings": "node scripts/run-with-dependencies.mjs node --test tests/developer-settings-panel.test.mjs",
     "test:model-settings": "node --test tests/model-settings-contract.test.mjs",

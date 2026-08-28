@@ -1,12 +1,17 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { repairLocalPackageLinks, resolveDependencyCache } from "./dependency-cache.mjs";
+import { detachDeveloperDependencyCache, repairLocalPackageLinks, resolveDependencyCache } from "./dependency-cache.mjs";
 
 let details = resolveDependencyCache();
 if (!existsSync(details.dependencyRoot)) {
-  const sourceDependenciesAreReusableLink = existsSync(details.linkPath) && lstatSync(details.linkPath).isSymbolicLink();
-  if (!sourceDependenciesAreReusableLink) {
+  const sourceDependencyEntry = lstatSync(details.linkPath, { throwIfNoEntry: false });
+  const sourceDependenciesAreReusableLink = Boolean(sourceDependencyEntry?.isSymbolicLink());
+  if (sourceDependenciesAreReusableLink) {
+    // 锁文件变化后先解除经本应用缓存验证的旧开发链接，禁止把旧哈希或跨机器目标迁入新缓存。
+    detachDeveloperDependencyCache(details);
+  }
+  if (!sourceDependenciesAreReusableLink || !existsSync(details.linkPath)) {
     const npm = process.platform === "win32" ? "npm.cmd" : "npm";
     const npmCacheRoot = path.join(details.projectRoot, "cache", details.applicationName, "npm");
     mkdirSync(npmCacheRoot, { recursive: true });

@@ -12,8 +12,6 @@ rule_version = 1.2.0
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示该覆盖已由根索引登记并用于当前 SELPLAT 工程。 -->
 rule_status = active
-<!-- 记录用户明确要求 AI 可以托管其提出的修改需求。 -->
-upgrade_record = 2026-08-03:建立用户明确委托后的AI托管修正例外;2026-08-04:允许独立1后的同任务补充说明延续现有托管窗口;2026-08-07:所有者与验证契约改为从AGENTS动态解析当前稳定用户
 
 <!-- 问题：默认冻结规则会阻止用户已经明确提出并希望交由 AI 完成的 core 或 common 修改。 -->
 <!-- 场景：当前稳定用户明确点名修改 local/core 或 local/common 的具体目标，并随后以独立 1 启动执行。 -->

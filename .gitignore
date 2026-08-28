@@ -22,7 +22,7 @@ apps/*/db/*.mv.db
 /build/ai-desktop/
 /OPTION/temp/ai-desktop/
 /log/ai-desktop/
-# AI Desktop 运行命令会短暂挂载锁文件哈希依赖；链接只服务当前命令，不属于应用源码。
+# AI Desktop 运行命令和 VS Code 开发环境按当前平台挂载锁文件哈希依赖；本机链接不属于应用源码。
 /apps/ai-desktop/node_modules/
 
 wrapper/

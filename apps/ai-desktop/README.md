@@ -14,6 +14,20 @@ AI Desktop 是 Electron、React 与 TypeScript 构建的 Developer 桌面应用�
 
 渲染进程不直接导入或调用 Codex SDK。
 
+## VS Code 依赖链接
+
+首次检出工程或 `package-lock.json` 变化后，在当前平台准备锁文件缓存并建立本机开发链接：
+
+```powershell
+npm run dependencies:link
+```
+
+Windows 创建 Junction，macOS 与 Linux 创建目录符号链接。链接目标始终由当前锁文件哈希解析到工程根 `cache/ai-desktop/dependencies/`，应用根的 `node_modules` 只属于本机开发环境，不提交 Git。需要清理本机开发链接时执行：
+
+```powershell
+npm run dependencies:unlink
+```
+
 ## Windows 启动
 
 日常开发双击 `启动开发版.bat`。该入口检查锁文件专属依赖缓存、正式编译 Developer 桌面运行时，并由 Electron 直接加载本地构建页面；不启动 Vite HTTP 服务，也不占用开发端口。

@@ -12,8 +12,6 @@ rule_version = 1.0.0
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已经进入当前用户 SELPLAT 通用索引。 -->
 rule_status = active
-<!-- 本次升级来源于用户确认：不启动测试会让后续执行偏离真实运行状态。 -->
-upgrade_record = 2026-08-20:运行时修改完成后立即执行目标启动冒烟测试_启动失败当场阻断_完整回归仍等待统一测试
 <!-- 启动冒烟测试仍遵守 core 测试规则的命令、结果和失败报告约束。 -->
 requires_rule_ids = CODE_TEST_RULES
 
@@ -60,4 +58,3 @@ selplat_immediate_startup_test_boundary = targeted_startup_smoke_not_full_unifie
 selplat_immediate_startup_test_boundary.2 = keep_remaining_regressions_pending_until_explicit_unified_test
 <!-- 即时启动的实际结果可以单项回写，但不得借此把未执行项目标记为通过。 -->
 selplat_immediate_startup_test_result_policy = update_only_executed_startup_item
-

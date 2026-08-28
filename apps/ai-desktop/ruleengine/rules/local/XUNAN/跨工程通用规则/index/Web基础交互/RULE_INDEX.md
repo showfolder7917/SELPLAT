@@ -1,0 +1,87 @@
+# Web基础交互规则索引
+
+<!-- 本叶子索引由原索引按职责无损分片；逻辑 ID、路径和触发映射保持不变。 -->
+
+<!-- 网页上下文菜单、更多操作菜单与下拉动作菜单。 -->
+WEB_CONTEXT_MENU_UI_DESIGN_RULES = local/XUNAN/跨工程通用规则/RUL_网页上下文菜单设计规则.md
+
+<!-- load_rule_for_web_context_action_or_dropdown_menu_design 的当前独立事实为 WEB_CONTEXT_MENU_UI_DESIGN_RULES。 -->
+load_rule_for_web_context_action_or_dropdown_menu_design = WEB_CONTEXT_MENU_UI_DESIGN_RULES
+
+<!-- load_rule_for_configurable_web_menu_items_scroll_threshold_or_submenu 的当前独立事实为 WEB_CONTEXT_MENU_UI_DESIGN_RULES。 -->
+load_rule_for_configurable_web_menu_items_scroll_threshold_or_submenu = WEB_CONTEXT_MENU_UI_DESIGN_RULES
+
+<!-- load_rule_for_web_menu_hover_pressed_disabled_or_danger_state 的当前独立事实为 WEB_CONTEXT_MENU_UI_DESIGN_RULES。 -->
+load_rule_for_web_menu_hover_pressed_disabled_or_danger_state = WEB_CONTEXT_MENU_UI_DESIGN_RULES
+
+<!-- load_rule_for_web_menu_nine_slice_border_image_or_visual_qa 的当前独立事实为 WEB_CONTEXT_MENU_UI_DESIGN_RULES。 -->
+load_rule_for_web_menu_nine_slice_border_image_or_visual_qa = WEB_CONTEXT_MENU_UI_DESIGN_RULES
+
+<!-- 网页原生 select 与自定义下拉控件。 -->
+WEB_SELECT_DROPDOWN_UI_DESIGN_RULES = local/XUNAN/跨工程通用规则/RUL_网页选择下拉控件设计规则.md
+
+<!-- load_rule_for_web_select_combobox_or_filter_dropdown_design 的当前独立事实为 WEB_SELECT_DROPDOWN_UI_DESIGN_RULES。 -->
+load_rule_for_web_select_combobox_or_filter_dropdown_design = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
+
+<!-- load_rule_for_native_select_custom_dropdown_and_change_sync 的当前独立事实为 WEB_SELECT_DROPDOWN_UI_DESIGN_RULES。 -->
+load_rule_for_native_select_custom_dropdown_and_change_sync = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
+
+<!-- load_rule_for_select_dropdown_scroll_threshold_keyboard_or_placement 的当前独立事实为 WEB_SELECT_DROPDOWN_UI_DESIGN_RULES。 -->
+load_rule_for_select_dropdown_scroll_threshold_keyboard_or_placement = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
+
+<!-- load_rule_for_select_dropdown_visual_qa_or_accessibility 的当前独立事实为 WEB_SELECT_DROPDOWN_UI_DESIGN_RULES。 -->
+load_rule_for_select_dropdown_visual_qa_or_accessibility = WEB_SELECT_DROPDOWN_UI_DESIGN_RULES
+
+<!-- 网页单日期选择控件。 -->
+WEB_DATE_PICKER_UI_DESIGN_RULES = local/XUNAN/跨工程通用规则/RUL_网页日期选择控件设计规则.md
+
+<!-- load_rule_for_web_form_or_window_single_date_picker_design 的当前独立事实为 WEB_DATE_PICKER_UI_DESIGN_RULES。 -->
+load_rule_for_web_form_or_window_single_date_picker_design = WEB_DATE_PICKER_UI_DESIGN_RULES
+
+<!-- load_rule_for_native_date_value_custom_calendar_and_form_sync 的当前独立事实为 WEB_DATE_PICKER_UI_DESIGN_RULES。 -->
+load_rule_for_native_date_value_custom_calendar_and_form_sync = WEB_DATE_PICKER_UI_DESIGN_RULES
+
+<!-- load_rule_for_date_picker_keyboard_min_max_or_popup_placement 的当前独立事实为 WEB_DATE_PICKER_UI_DESIGN_RULES。 -->
+load_rule_for_date_picker_keyboard_min_max_or_popup_placement = WEB_DATE_PICKER_UI_DESIGN_RULES
+
+<!-- load_rule_for_date_picker_visual_qa_accessibility_or_host_lifecycle 的当前独立事实为 WEB_DATE_PICKER_UI_DESIGN_RULES。 -->
+load_rule_for_date_picker_visual_qa_accessibility_or_host_lifecycle = WEB_DATE_PICKER_UI_DESIGN_RULES
+
+<!-- 网页品牌化与主题化自定义鼠标指针。 -->
+WEB_CUSTOM_CURSOR_UI_DESIGN_RULES = local/XUNAN/跨工程通用规则/RUL_网页自定义鼠标指针设计规则.md
+
+<!-- load_rule_for_web_custom_mouse_cursor_or_pointer_design 的当前独立事实为 WEB_CUSTOM_CURSOR_UI_DESIGN_RULES。 -->
+load_rule_for_web_custom_mouse_cursor_or_pointer_design = WEB_CUSTOM_CURSOR_UI_DESIGN_RULES
+
+<!-- load_rule_for_css_cursor_image_hotspot_or_fallback 的当前独立事实为 WEB_CUSTOM_CURSOR_UI_DESIGN_RULES。 -->
+load_rule_for_css_cursor_image_hotspot_or_fallback = WEB_CUSTOM_CURSOR_UI_DESIGN_RULES
+
+<!-- load_rule_for_custom_cursor_asset_transparency_or_size 的当前独立事实为 WEB_CUSTOM_CURSOR_UI_DESIGN_RULES。 -->
+load_rule_for_custom_cursor_asset_transparency_or_size = WEB_CUSTOM_CURSOR_UI_DESIGN_RULES
+
+<!-- load_rule_for_custom_cursor_text_input_exception_or_browser_qa 的当前独立事实为 WEB_CUSTOM_CURSOR_UI_DESIGN_RULES。 -->
+load_rule_for_custom_cursor_text_input_exception_or_browser_qa = WEB_CUSTOM_CURSOR_UI_DESIGN_RULES
+
+<!-- 网页数据表格、列表、图表和配置器稳定面板布局。 -->
+WEB_STABLE_PANEL_LAYOUT_RULES = local/XUNAN/跨工程通用规则/RUL_网页稳定面板布局规则.md
+
+<!-- load_rule_for_web_panel_header_toolbar_body_footer_layout 的当前独立事实为 WEB_STABLE_PANEL_LAYOUT_RULES。 -->
+load_rule_for_web_panel_header_toolbar_body_footer_layout = WEB_STABLE_PANEL_LAYOUT_RULES
+
+<!-- load_rule_for_web_panel_left_center_right_or_collapsible_sidebar 的当前独立事实为 WEB_STABLE_PANEL_LAYOUT_RULES。 -->
+load_rule_for_web_panel_left_center_right_or_collapsible_sidebar = WEB_STABLE_PANEL_LAYOUT_RULES
+
+<!-- load_rule_for_web_panel_top_left_center_right_bottom_declarative_layout 的当前独立事实为 WEB_STABLE_PANEL_LAYOUT_RULES。 -->
+load_rule_for_web_panel_top_left_center_right_bottom_declarative_layout = WEB_STABLE_PANEL_LAYOUT_RULES
+
+<!-- load_rule_for_web_panel_component_payload_position_mapping 的当前独立事实为 WEB_STABLE_PANEL_LAYOUT_RULES。 -->
+load_rule_for_web_panel_component_payload_position_mapping = WEB_STABLE_PANEL_LAYOUT_RULES
+
+<!-- load_rule_for_web_tree_navigation_inside_data_panel 的当前独立事实为 WEB_STABLE_PANEL_LAYOUT_RULES。 -->
+load_rule_for_web_tree_navigation_inside_data_panel = WEB_STABLE_PANEL_LAYOUT_RULES
+
+<!-- load_rule_for_web_panel_shared_crystal_surface_or_viewport_qa 的当前独立事实为 WEB_STABLE_PANEL_LAYOUT_RULES。 -->
+load_rule_for_web_panel_shared_crystal_surface_or_viewport_qa = WEB_STABLE_PANEL_LAYOUT_RULES
+
+<!-- load_rule_for_web_panel_region_comments_or_independent_deletion 的当前独立事实为 WEB_STABLE_PANEL_LAYOUT_RULES。 -->
+load_rule_for_web_panel_region_comments_or_independent_deletion = WEB_STABLE_PANEL_LAYOUT_RULES

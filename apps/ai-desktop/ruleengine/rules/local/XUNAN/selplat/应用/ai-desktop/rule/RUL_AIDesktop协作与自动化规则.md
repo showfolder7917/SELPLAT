@@ -1,0 +1,172 @@
+# AI Desktop 协作与自动化规则
+
+<!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
+rule_version = 5.105.0
+<!-- 规则所有者始终从工程根稳定用户声明解析。 -->
+rule_owner_source = AGENTS.md.current_stable_user_id
+<!-- 本职责分片处于生产启用状态。 -->
+rule_status = active
+
+<!-- 本职责没有独立 Java 能力入口。 -->
+java_ability_refs = none
+<!-- 本职责没有独立 Python 能力入口。 -->
+python_ability_refs = none
+<!-- 本职责没有独立 Node 能力入口。 -->
+node_ability_refs = none
+
+business_audit_log_contract = selplat_log_ai_desktop_only + append_only_jsonl_timeline + atomic_per_task_summary + request_workspace_sandbox_turn_approval_command_changed_files_completion_correlation + no_auth_secret_or_raw_reasoning
+<!-- 协同耗时分析必须由结构化事件计算并只写日志；人物页面禁止展示时间线、耗时分解和瓶颈占用链。 -->
+collaboration_duration_diagnosis_contract = wall_clock_timestamp_plus_monotonic_duration + analysis_review_wait_review_rework_codex_worktree_change_validation_integration_conflict_approval_user_dependency_recovery_segments + wait_type_reason_resource_owner_and_release_event_attribution + per_integration_generation_bottleneck_report + cross_generation_trend_report + structured_event_evidence_only + member_ui_current_state_block_reason_and_result_only + no_member_timeline_duration_breakdown_or_bottleneck_chain
+<!-- 部分完成诊断必须根据真实 Harness 状态、命令开始完成与退出码、文件变更、构建测试观察和源码产物时间自动生成可检索原因码。 -->
+partial_completion_diagnosis_contract = harness_failed_or_interrupted + command_completion_and_exit_code + changed_files + build_or_validation_observation + source_vs_bundle_mtime + explicit_reason_codes
+<!-- 设置面板必须显示最近任务状态和原因数量，并提供直接打开日志目录的入口。 -->
+business_audit_log_ui_contract = settings_latest_task_status_and_reason_count + visible_reason_messages + open_log_directory
+<!-- 托管执行必须按会话、需求、任务、测试四阶段推进，默认只理解意图，任何阶段不得自动越过下一次用户确认。 -->
+managed_execution_mode_split_contract = conversation_managed_default + requirement_managed_read_only_analysis + task_managed_code_level_validation + test_managed_build_post_build_test_optional_single_restart + no_automatic_stage_skipping
+<!-- 协作任务提交后，原会话回复卡必须绑定持久化任务 ID 并持续消费真实状态事件，禁止继续显示会话意图分析静态终态。 -->
+collaboration_conversation_status_chain_contract = persisted_task_id_binding + real_analysis_reviewer_executor_and_test_actor + current_handler_progress_blocking_reason_and_next_action + no_static_intent_completion_after_collaboration_submission
+<!-- 审批失败必须先保留原因；重新审批先由令狐老祖真实处理，再固定回到原审批人，禁止只替换按钮文案。 -->
+collaboration_review_repair_return_contract = rejected_reason_persisted + retry_action_dispatches_linghu_repair + repaired_plan_returns_to_original_reviewer + real_lease_and_event_evidence
+<!-- 执行失败自动由令狐老祖修复，修复完成固定退回原执行人重新执行，成功后再进入令狐统一测试。 -->
+collaboration_execution_repair_and_test_contract = execution_failure_dispatches_linghu + repair_returns_to_original_executor + successful_reexecution_dispatches_linghu_unified_test + test_running_passed_or_failed_visible
+<!-- 统一测试失败不能只把同一结果重新排队；结构化 verification 失败由令狐在原任务范围内修复并形成新结果，只有真实业务选择才等待人工。 -->
+collaboration_unified_test_repair_contract = task_state_and_structured_failure_kind_before_free_text_classification + test_failed_or_verification_never_business_due_to_quoted_rule_text + linghu_repairs_original_task_worktree_with_failure_evidence + code_validation_then_new_resultSHA + retry_unified_test + same_fault_max_three_repair_attempts + genuine_business_choice_waits_for_human
+<!-- 任务详细默认折叠，折叠标题中的发起人来自任务冻结快照，禁止展示层按任务类型猜测姓名。 -->
+collaboration_task_detail_disclosure_contract = collapsed_by_default + dynamic_persisted_initiator_snapshot_in_summary + no_inferred_display_name
+<!-- 任务托管负责源码修改、静态检查和后台隔离 Electron 交互测试；失败证据进入应用 temp 并最多自动修复复测五轮，完成点固定为代码级验证。 -->
+task_managed_completion_contract = analysis_source_change + static_check + hidden_isolated_electron + playwright_locator_interaction_test + screenshot_only_on_failure_to_app_temp + close_isolated_instance + maximum_five_fix_retest_rounds + code_verified + prohibit_formal_build_or_current_app_restart
+<!-- 后台交互测试必须使用语义定位器，不得依赖屏幕坐标；成功不生成截图，失败保留结果、截图和 trace 供下一轮修复。 -->
+task_managed_interaction_test_contract = typescript_playwright_electron + semantic_role_or_aria_locator + no_os_cursor_coordinate_click + one_instance_per_test_group + success_no_screenshot + failure_result_screenshot_trace
+<!-- 测试托管只能由界面选择或明确命令触发，执行构建和构建后测试，运行包确需刷新时最多受控重启一次。 -->
+test_managed_completion_contract = explicit_only + build + post_build_tests + failure_fix_rebuild_retest + optional_single_controlled_restart
+<!-- 主进程必须在任务托管模式拦截构建、启动和重启类命令，并把拦截事实写入流事件与业务日志。 -->
+managed_command_policy_contract = task_mode_blocks_build_start_restart + test_mode_allows_build_validation + policy_event_is_auditable
+<!-- 任务托管完成代码级验证后，尚未执行构建只登记为后续动作，不得作为部分完成或失败原因。 -->
+audit_build_pending_contract = code_verified_without_build_is_completed + build_recorded_as_pending_action + never_partial_only_because_bundle_is_stale
+<!-- 托管执行每轮回答必须按顺序保留；新回合建立独立文本起点，完成事件只能替换当前轮片段，最终 IPC 返回不得覆盖累计内容。 -->
+managed_multiturn_text_preservation_contract = first_real_turn_reuses_pending_card + every_later_real_turn_id_appends_new_assistant_card_below + explicit_turn_id_to_message_id_routing + previous_card_frozen_before_next_turn + completed_message_reconciles_own_segment_id_only + final_response_updates_latest_card_only + terminal_state_rejects_late_non_error_events + real_two_turn_interaction_asserts_two_cards_and_immutable_first_text + prohibit_source_regex_only_completion
+<!-- 协同模式未来实施时必须使用独立编排器，人物条目长期存在而非韩立 Codex 只在分配工作期间临时存在。 -->
+collaboration_mode_architecture_contract = orchestration_isolated_from_single_conversation + protected_hanli_persistent_conversation_connection + nangong_single_evolution_round_collector + linghu_protected_release_and_recovery_safeguard_not_ordinary_worker_or_reviewer + stable_crud_worker_members_individually_listed_under_tasks + member_named_tabs_not_generic_codex_chat + idle_worker_has_no_codex_process_pipe_or_thread + assignment_creates_fresh_lease_generation_process_pipe_and_thread + executor_owns_analysis_review_optimization_execution_chain + different_idle_reviewer_per_review + minimum_confirmed_customer_requirement_is_only_blocking_review_scope + broader_improvements_are_nonblocking + first_two_explicit_rejections_optimize_then_review + third_explicit_rejection_final_necessary_optimization_then_execute_without_fourth_review + infrastructure_failure_does_not_consume_rejection + executor_completion_returns_signed_result_to_nangong_without_direct_integration + persist_result_before_connection_retirement + conversation_remains_available_during_collection + proposal_id_is_round_id + persist_expected_returned_result_sha_sealed_release_and_restart_facts + all_round_tasks_return_before_atomic_seal + nangong_submits_one_complete_batch_to_linghu + linghu_serial_merge_combination_test_package_and_restart + renderer_health_confirmation_before_integrated_and_return_to_nangong + hanli_result_acceptance_after_restart + failure_keeps_same_round_for_repair_and_retry + next_round_forbidden_before_acceptance + no_immediate_per_result_integration_or_compatibility_path + member_page_and_audit_history_survive_codex_retirement + full_member_history_never_injected_into_fresh_codex + lease_pipe_and_protocol_progress_liveness + silent_healthy_reasoning_not_timeout + reviewer_capacity_reserved_to_prevent_deadlock + executor_task_specific_git_branch_and_worktree + immutable_task_plan_assignment_worker_base_and_result_versions + reject_stale_generation_results + evidence_backed_verifying_or_finalizing_for_capacity_and_bottleneck_only + heartbeat_means_liveness_not_progress + integration_worktree_dependency_preflight_and_self_heal + lockfile_identical_verified_dependency_reuse + lockfile_install_offline_first_fallback + reused_dependency_link_removed_before_candidate_promotion + temporary_candidate_branch_is_peer_of_stable_integration_branch + dependency_failure_is_infrastructure_not_review_rejection + complete_round_combination_tests_before_safe_local_branch_sync
+<!-- 完成任务统一进入协同专用执行列表，人物页只保留当前状态入口；归档必须优先显示任务价值并保留可折叠事实链。 -->
+collaboration_execution_archive_contract = collaboration_mode_only_global_execution_list + single_conversation_never_uses_entry + terminal_task_removed_from_member_current_area + persisted_real_initiator_snapshot_selected_by_submitter + current_human_conversation_submission_uses_hanli + future_automatic_execution_submission_uses_nangong_wan + future_automatic_error_repair_submission_uses_linghu_ancestor + display_never_guesses_initiator_from_task_type + all_executor_assignment_and_transfer_snapshots + analysis_plan_disclosure_labels_real_owner + review_disclosure_labels_real_reviewer + execution_disclosure_labels_real_executor + execution_diff_snapshot_persisted_per_assignment + blocked_execution_prominently_shows_reason_changed_files_and_continue_action + recovering_execution_shows_continue_action + code_verified_at_separate_from_terminal_completed_at + list_title_initiator_all_executors_start_finish_total_wall_clock_duration + prominent_final_result_original_problem_solved_problem_concrete_changes_success_or_remaining_summary + expandable_whole_task_analysis_review_execution_flow_and_error_logs + every_flow_and_error_correlated_by_task_id + never_change_scheduler_or_infer_unrecorded_participant
+<!-- Codex 启动路径只属于主进程内部执行参数，渲染状态、生命周期日志和界面不得保留可被重新展示的路径副本。 -->
+codex_runtime_path_exposure_contract = main_process_command_only + no_renderer_contract_field + no_runtime_status_mapping + no_thread_lifecycle_path + no_hidden_compatibility_field
+<!-- Developer 桌面样式必须由一个生产 CSS 承载，SELUI 基础样式先于宿主覆盖，禁止异步 CSS 分块重新决定级联顺序。 -->
+developer_production_css_contract = single_css_output + selui_base_before_host_override + no_lazy_css_chunk_order_dependency
+<!-- 主桌面交互必须在生产文件和正式 BrowserWindow 尺寸下执行，开发服务器通过不能替代生产桌面通过。 -->
+developer_desktop_interaction_contract = build_before_interaction + load_production_file + reuse_formal_window_layout + default_1560x980 + minimum_1000x700 + reported_reproduction_size_when_available + assert_settings_bottom_left_panel_bounds_and_horizontal_title
+<!-- 默认成员名单由用户确认；韩立保持保护身份，其余十一人为可调度 worker，成员管理仍可增删改查。 -->
+collaboration_default_member_roster_contract = 韩立_conversation_owner_protected + 南宫婉_worker + 令狐老祖_protected_automatic_flow_last_safeguard + 紫灵_worker + 元瑶_worker + 宋玉_worker + 冰魄仙子_worker + 墨彩环_worker + 墨大夫_worker + 厉飞雨_worker + 张铁_worker + 李化元_worker + roster_crud_enabled_for_unprotected_members
+<!-- 令狐老祖自动保障必须只有一个 Facade 入口，调用方不得直接拼接协同任务、恢复命令或重启实现。 -->
+linghu_automation_single_entry_contract = LinghuAutomationFacade + collaboration_coordinator_reuse + persistent_automation_store + caller_decoupled_from_dispatch_recovery_test_and_restart_implementation
+<!-- 自动执行按钮是唯一启停边界；开启后即使阻塞或等待人工业务选择也只进入等待与持续检测，禁止系统自行关闭检测。 -->
+linghu_automation_liveness_contract = explicit_human_switch + default_off + poll_every_30_seconds + enabled_monitor_never_self_disables + one_active_module_task_only + no_duplicate_dispatch_while_task_active + blocked_or_business_choice_keeps_monitoring_and_recovery_point
+<!-- 每轮检测必须从协同权威状态生成全部人物非终态任务快照，联合心跳、协议进展和状态时间判断停点，禁止只看活动任务、自动来源或单一耗时。 -->
+linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_only + cancelled_or_integrated_active_pointer_released_before_dispatch + state_phase_executor_generation + heartbeat_protocol_and_state_progress + waiting_point + completion_conditions_and_completed_conditions + blocking_kind + recovery_checkpoint + persisted_detection_cursor
+<!-- 合并冲突是代码修正事实，不得伪装成统一测试失败或对同一提交盲目重试。 -->
+collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort + persist_structured_failure_kind + blocked_requires_current_mainline_correction + continue_increments_task_revision_and_worker_generation + fresh_signed_worktree + reuse_approved_plan + old_resultSHA_never_retried
+<!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，状态阶段、代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
+linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
+<!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
+linghu_automation_state_recovery_contract = atomic_primary_plus_latest_valid_backup + restore_enabled_cycle_module_cursor_active_task_fault_and_checkpoint + primary_and_backup_both_corrupt_safely_disable_until_human_reenables + first_install_default_off
+<!-- 三个职责模块严格串行；最终流程保障始终先于令狐自己的测试与审计循环。 -->
+linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness -> next_cycle
+<!-- 自动保障任务的真实发起人和严格首选执行人都是令狐老祖；其他人物仍可作为异人审核员，禁止首选人物忙碌时悄悄转派顶层保障职责。 -->
+linghu_automation_actor_contract = initiator_linghu_ancestor + protected_strict_preferred_executor_linghu_ancestor + different_idle_reviewer + persist_real_actor_snapshots
+<!-- 启动文案属于用户数据并通过令狐人物页进行完整管理，页面必须在人类可读布局下直接说明循环、模块、检测和阻塞状态。 -->
+linghu_startup_prompt_management_contract = electron_userData_persistence + list_create_update_delete_enable_disable_select_active + linghu_member_page_human_readable_layout + cycle_module_execution_last_check_block_and_feedback_visible
+<!-- 测试能力模块通过跨进程 Facade 统一调度固定测试，补漏与性能优化不得破坏隔离和审计。 -->
+linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry + atomic_cross_process_lease + task_process_port_build_root_and_heartbeat + queued_acquired_contended_released_timeout_failed_and_stale_recovered_events + fixed_test_interaction_then_test_collaboration_then_test_managed_then_package_and_verify + real_multi_process_max_concurrency_one_regression + wait_execution_and_contention_metrics + no_dynamic_prompt_command + persist_next_cycle_before_relaunch + test_failure_returns_flow_completion_repair_cycle
+<!-- 发布只冻结当前已经完成的任务，冻结后完成的任务进入下一批；发布批次独占维护汇总证据。 -->
+linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry + atomic_cross_process_release_lease + coding_continues_while_merge_and_release_are_serial + freeze_task_branch_result_sha_and_test_evidence + release_semver_rc_candidate_branch + unified_tests_package_and_verification_run_on_candidate_root + release_batch_document_single_writer + terminal_archive_and_running_material_cleanup + verified_executable_controlled_restart + stable_userData_task_recovery
+<!-- 版本合并能力与人物身份分离；人物协调器只能登记等待和触发调度，候选到发布的状态机由独立流水线单点维护。 -->
+version_integration_pipeline_decoupling_contract = VersionIntegrationPipeline_single_entry + CollaborationCoordinator_register_wait_and_schedule_only + candidate_create_verify_promote_local_merge_release_cleanup_owned_by_pipeline + actor_injected_at_application_composition + pipeline_and_release_batch_store_prohibit_character_identity_hardcode
+<!-- 合并源与目标的干净门禁必须分别处理：任务分支可提交已登记修改，目标分支只允许转交唯一可证明的任务归属。 -->
+collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit + unchanged_task_worktree_creates_no_empty_commit + verify_task_worktree_clean_after_commit + freeze_result_sha + dirty_target_matches_every_changed_file_to_exactly_one_ready_task_changedFiles_record + all_dirty_files_share_one_task_owner + create_recoverable_stash_before_transfer + apply_to_signed_task_worktree + transfer_creates_exactly_one_commit + verify_source_and_target_clean + unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing
+<!-- 模块终态必须持久保存固定报告；统一测试通过事实必须在退出进程前写入，字段缺失不得推进为可归档完成。 -->
+linghu_module_completion_report_contract = cycle_module_evidence_tasks_real_executors_tests_restart_recovery_blocking_and_next_suggestion + explicit_not_applicable_reason + unified_test_verified_callback_persists_before_relaunch + report_reused_as_next_module_feedback
+<!-- 审核正文生成完成与机器结论解析属于两个独立事实；格式偏差不得伪装成 Codex 连接失败。 -->
+collaboration_review_decision_contract = preserve_raw_review_before_retirement + prefer_unique_review_decision_tag + accept_legacy_exact_marker_and_explicit_chinese_decision + never_infer_from_ordinary_prose + same_reviewer_one_clarification_turn + persist_every_attempt_and_parse_failure + unrecognized_decision_does_not_increment_infrastructure_failure + infrastructure_failure_only_for_connection_process_or_transport_failure
+<!-- Harness 执行期间输入区保持可编辑，截图、图片粘贴和后续消息进入有序队列，不得由全局 loading 一并锁死。 -->
+managed_running_composer_availability_contract = screenshot_and_image_paste_available_while_running + composer_editable + next_message_fifo_queue + cancel_scoped_to_active_turn
+<!-- 执行中普通发送只能持久排队；用户明确点击补充后才通过官方 turn/steer 注入当前回合，进程重建后必须先让用户继续或放弃，全部状态变化复用统一业务日志。 -->
+managed_conversation_dispatch_contract = electron_main_single_active_dispatch + default_persistent_fifo_queue + explicit_supplement_button_uses_official_turn_steer + no_second_turn_start_while_active + renderer_close_keeps_background_task + process_reconstruction_marks_recoverable + visible_continue_or_discard + idempotent_dispatch_id + unified_business_audit_events
+<!-- 执行状态亮点仅在运行中高亮闪烁，终态变暗静止，并按阶段显示准确结果语义。 -->
+managed_status_indicator_lifecycle_contract = running_bright_pulsing + terminal_dim_static + analysis_execution_validation_test_completed_labels + failed_and_interrupted_labels
+<!-- 回复卡和全部内部执行面板必须允许收缩，长路径不得建立超出卡片的固有宽度。 -->
+managed_response_boundary_contract = card_width_100_percent_with_maximum + all_flex_grid_children_min_width_zero + internal_panels_max_width_100_percent + long_path_wrap_or_ellipsis + no_horizontal_boundary_escape
+<!-- Harness 连接时必须重新识别运行时；优先使用与当前 AI Desktop 专属模型缓存客户端版本一致的本机 Codex，避免旧二进制读取新缓存字段失败。 -->
+<!-- 模型配置必须来自固定 app-server 的真实模型能力并由所有连接逐轮读取同一全局设置，禁止渲染层固定列表或会话级覆盖。 -->
+harness_global_model_settings_contract = settings_panel_default_model_reasoning_effort_and_service_tier + model_list_and_supported_efforts_from_pinned_app_server + electron_userData_persistence + main_conversation_collaboration_executor_and_reviewer_read_latest_each_turn + no_conversation_level_override
+<!-- AI Desktop 初始安装和旧版空模型设置统一迁移到 Terra，迁移后仍以用户显式选择为最高优先级。 -->
+harness_default_model_contract = initialize_and_migrate_legacy_empty_default_to_gpt_5_6_terra + preserve_later_explicit_user_selection
+<!-- Harness 运行时版本是应用发布事实，只允许安装包内置目标版或下载校验后的同一目标版。 -->
+harness_runtime_version_alignment_contract = exact_target_0_149_0 + packaged_native_runtime_first + verified_same_version_private_download_only_when_packaged_missing_or_invalid + no_hot_swap_during_active_turn + visible_packaged_or_verified_download_source_path_and_version + audit_selected_runtime
+<!-- 旧的兼容探测会造成 AI 误认和不受控切换，因此源码与规则都不得保留任何外部候选入口。 -->
+harness_external_runtime_prohibition = no_PATH_scan + no_Homebrew + no_ChatGPT_app_runtime + no_Codex_app_runtime + no_models_cache_version_selection + no_user_configured_executable + no_highest_version_fallback
+<!-- 下载修复只接受已固化清单，归档、包元数据和原生程序必须在执行前逐项验证。 -->
+harness_runtime_recovery_verification = exact_registry_https_url + pinned_sha512_integrity + exact_platform_and_architecture + exact_package_and_cli_version + macos_codesign_strict + macos_OpenAI_team_2DC432GLL2 + atomic_private_install + offline_failure_requires_retry_or_reinstall
+<!-- 协同执行人只修改和修复源码；固定代码验证由桌面主进程在任务签发 worktree 内完成，避免 Harness 反复申请 Playwright 权限。 -->
+collaboration_task_worktree_validation_owner = ai_desktop_main_process + validate_task_id_workspace_id_managed_root_branch_and_base_sha + run_inside_each_executor_worktree + fixed_typecheck_then_isolated_playwright + codex_direct_validation_request_declined_without_user_approval
+<!-- 多任务可以复用应用私有依赖下载缓存，但源码、执行目录、报告、截图和结果必须保持任务隔离。 -->
+collaboration_task_test_cache_and_artifact_scope = shared_private_npm_and_playwright_dependency_cache + lockfile_identical_node_modules_temporary_reuse + per_task_worktree_execution + per_task_temp_interaction_task_id + remove_dependency_link_before_commit + serialized_local_interaction_port
+<!-- 隔离 Playwright 使用确定性测试画面，不得借此申请真实屏幕录制；真实屏幕只能由稳定签名的 AI Desktop 能力验证。 -->
+isolated_playwright_permission_boundary = no_harness_command_approval + no_macos_screen_recording_requirement + localhost_only + stable_ai_desktop_identity_for_separate_real_screen_validation
+<!-- 会话托管只理解和复述意图，需求托管只读调查并给出方案；两阶段必须强制只读沙箱并拒绝文件修改及命令提权。 -->
+managed_analysis_stage_write_guard_contract = conversation_intent_only + requirement_read_only_investigation_and_plan + force_read_only_sandbox + decline_file_change_and_privileged_command
+<!-- 每次确认只推进一个阶段；独立 1 和配置短语与按钮等价，关键词不得替代授权，任务阶段必须观察到真实源码变更。 -->
+managed_stage_advance_authorization_contract = conversation_to_requirement_to_task_to_test + one_confirmation_one_stage + standalone_1_or_matching_phrase_equivalent + no_keyword_inferred_authorization + task_requires_observed_source_change
+<!-- 最新托管回复右下角必须显示与当前阶段匹配的图标文字动作。 -->
+managed_stage_action_button_contract = latest_managed_response_lower_right_icon_and_text
+<!-- 会话、需求和任务阶段动作分别使用确认意图、执行方案和测试。 -->
+managed_stage_action_button_contract.2 = confirm_intent_execute_plan_test_actions
+<!-- 最新回复运行期间动作保持可见但必须禁用，完成后才启用。 -->
+managed_stage_action_button_contract.3 = latest_action_visible_disabled_while_running_then_enabled_on_completion
+<!-- 已点击的历史动作保留高亮状态但不得再次推进或回退阶段。 -->
+managed_stage_action_button_contract.4 = historical_clicked_action_highlighted_but_not_actionable
+<!-- 独立 1 或完全匹配的配置短语才与按钮等价，包含关键词的长句不构成授权。 -->
+managed_stage_action_button_contract.5 = standalone_1_or_exact_configured_phrase_only
+<!-- 从需求、任务或测试阶段可以通过最新回复右下角显式返回会话托管。 -->
+managed_stage_return_button_contract = latest_response_can_return_to_conversation_managed
+<!-- 任务阶段已经到达时，最新回复右下角必须显示返回任务托管入口。 -->
+managed_stage_return_button_contract.2 = task_or_test_response_can_return_to_task_managed
+<!-- 返回按钮只更新本地执行模式，禁止仅因点击返回就发起 Harness 回合。 -->
+managed_stage_return_button_contract.3 = switch_local_execution_mode_without_new_harness_turn
+<!-- 当前已选模式对应的返回按钮必须禁用。 -->
+managed_stage_return_button_contract.4 = selected_mode_return_button_disabled
+<!-- 历史回复中的返回入口不得切换当前执行模式。 -->
+managed_stage_return_button_contract.5 = historical_response_return_buttons_not_actionable
+<!-- 默认协作模式必须显式启用官方实验性 requestUserInput 能力。 -->
+harness_user_input_confirmation_contract = default_mode_experimental_request_user_input_enabled
+<!-- 会话托管每次只询问一个最高优先级疑问。 -->
+harness_user_input_confirmation_contract.2 = one_highest_priority_question_per_request
+<!-- 每个问题独立显示互斥选项、其他输入和紧邻的确认动作。 -->
+harness_user_input_confirmation_contract.3 = one_question_one_choice_group_other_input_and_adjacent_confirm
+<!-- 正常单题确认必须响应原 requestId 并继续同一 Harness 回合。 -->
+harness_user_input_confirmation_contract.4 = respond_original_request_id_and_continue_same_turn
+<!-- 异常多题请求必须逐题本地锁定，并在全部确认后一次回传完整答案集合。 -->
+harness_user_input_confirmation_contract.5 = multi_question_fallback_local_lock_then_complete_answer_map
+<!-- 疑问答案只是重新理解完整会话的中间状态。 -->
+managed_clarification_restatement_contract = structured_answer_is_intermediate
+<!-- 每次确认后必须重新理解完整会话，有剩余歧义时再提出下一个问题。 -->
+managed_clarification_restatement_contract.2 = reunderstand_full_conversation_then_ask_next_remaining_ambiguity
+<!-- 完整意图重述完成前，阶段动作只允许显示为禁用占位。 -->
+managed_clarification_restatement_contract.3 = stage_action_visible_but_disabled_until_complete_intent_restatement
+<!-- 中断、新建任务或 Harness 退出时必须清理全部待确认状态。 -->
+managed_clarification_restatement_contract.4 = clear_pending_on_interrupt_new_chat_or_harness_exit
+<!-- 聊天历史必须在受高度约束的独立区域滚动，输入框固定，滚动条可见，新消息自动定位到最新内容。 -->
+developer_chat_scroll_contract = constrained_independent_vertical_scroll + visible_scrollbar + fixed_composer + append_scrolls_to_latest
+<!-- 流式进度只能来自官方 app-server 通知，必须增量显示回答、可读推理摘要、计划、命令、文件和工具生命周期，完成项为最终权威状态。 -->
+harness_streaming_ui_contract = official_notifications_only + agent_message_delta + readable_reasoning_summary + plan_and_item_lifecycle + turn_diff_changed_files + completed_item_authoritative
+<!-- 详细执行清单默认折叠，折叠栏显示事件项数和最新步骤，用户仍可手动展开查看命令与文件细节。 -->
+harness_streaming_activity_disclosure_contract = collapsed_by_default + visible_item_count_and_latest_step + user_expandable_details
+<!-- 人物当前任务和独立任务详情必须共用真实任务事实推导的唯一进度模型，禁止各卡片自行翻译状态。 -->
+collaboration_task_progress_view_contract = shared_fact_derived_progress_model + current_owner_action_step_latest_update_and_next_handoff
+<!-- 当前任务正文只按五个业务环节组织，长内容和实时输出必须进入所属环节。 -->
+collaboration_task_progress_view_contract.2 = intent_analysis_approval_execution_problem_repair_unified_test_disclosures + plans_evidence_scores_live_output_repair_and_test_results_inside_owning_stage
+<!-- 页面进入或真实状态变化后只自动展开并定位当前环节，完成和未来环节保持折叠且标题显示负责人和结果或等待条件。 -->
+collaboration_task_progress_view_contract.3 = current_stage_auto_open_and_scroll_nearest + completed_and_future_default_collapsed + summary_owner_and_result_or_wait_condition
+<!-- 当前进度禁止退化为笼统执行标签，也禁止分析完成后继续让展开的分析报告占据当前卡点。 -->
+collaboration_task_progress_view_contract.4 = prohibit_generic_executing_as_progress + prohibit_stale_expanded_analysis_after_state_transition
+<!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
+harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events

@@ -14,8 +14,6 @@ rule_owner_source = AGENTS.md.current_stable_user_id
 rule_status = active
 <!-- 用户层只扩展 common 同名逻辑 ID，未冲突的文件读写与旧编码转换约束继续保留。 -->
 override_mode = extend
-<!-- 本次升级记录固定 PowerShell HTTP 显式 UTF-8 解码、最小更新载荷和乱码写入阻断。 -->
-upgrade_record = 2026-08-18:powershell_51_http_raw_bytes_utf8_decode_and_mojibake_mutation_block
 
 ## Windows 命令编码边界
 

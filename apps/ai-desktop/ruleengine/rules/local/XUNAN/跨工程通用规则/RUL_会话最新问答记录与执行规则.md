@@ -12,8 +12,6 @@ rule_version = 1.0.0
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示协议、能力、注册入口和测试已经形成实现闭环。 -->
 rule_status = active
-<!-- 本次升级来源于用户确认：一个会话一个文档，每次只记录最新问答并随后执行。 -->
-upgrade_record = 2026-08-20:独立3记录最新完整问答_一会话一文档_成功记录后执行该轮明确任务
 <!-- 本规则依赖通用 Python 和测试约束。 -->
 requires_rule_ids = CODE_PYTHON_RULES
 <!-- 测试规则作为第二项显式依赖参与闭包。 -->

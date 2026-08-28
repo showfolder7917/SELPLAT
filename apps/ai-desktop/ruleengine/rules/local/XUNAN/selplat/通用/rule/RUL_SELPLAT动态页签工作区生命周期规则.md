@@ -12,8 +12,6 @@ rule_version = 1.3.0
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已登记到当前用户索引并完成页面回归。 -->
 rule_status = active
-<!-- 升级记录说明规则来自用户对页签隐藏、销毁和统一令牌的确认。 -->
-upgrade_record = 2026-08-08:固定动态页签切换保留关闭销毁和公共工作区统一令牌约束;2026-08-10:抽取selContextMenu公共右键菜单_Tab统一提供关闭右侧_关闭其他_全部关闭并保留固定页签与beforeClose检查;2026-08-10:selTabs默认挂载selContextMenu_创建期contextMenu_false与运行期setContextMenuEnabled作为唯一显式关闭入口_页面资源配对进入构建门禁;2026-08-11:未保存页签单个关闭_批量关闭_切换数据源统一先确认_批量脏页签合并一次提示
 
 ## 公共组件边界
 

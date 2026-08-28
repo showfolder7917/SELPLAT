@@ -8,8 +8,6 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 2.0.0 表示应用 DAO 接入结构已经从直接继承公共 Base 升级为项目 BaseDao 中间层。 -->
 rule_version = 2.0.0
-<!-- 本次升级同步固定包目录、类型名称、DAO 类名与数据库表名的可追踪映射。 -->
-upgrade_record = 2026-08-07:应用DAO改经项目BaseDao接入并补齐包目录到数据库表的命名映射
 
 <!-- 问题：各应用 DAO 为基础类已有的增删改查能力重复建立包装方法，并在通用查询内部硬编码业务字段时，会造成接口膨胀、隐藏查询条件和跨应用实现漂移。 -->
 <!-- 场景：SELPLAT 任意 apps/<app> 的简单单表 DAO 经项目 BaseDao 接入 BaseDao、BaseDaoImpl、CommonParam、CommonPageParam 或公共主键号段能力。 -->

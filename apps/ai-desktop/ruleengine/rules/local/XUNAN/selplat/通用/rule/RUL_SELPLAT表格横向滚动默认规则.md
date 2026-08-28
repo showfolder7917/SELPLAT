@@ -12,8 +12,6 @@ rule_version = 1.1.0
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已登记到当前用户 SELPLAT 通用索引并完成组件回归。 -->
 rule_status = active
-<!-- 升级记录说明规则由 MDA 单页修正提升为所有 selGrid 的公共默认行为。 -->
-upgrade_record = 2026-08-08:将可发现横向滚动反馈从MDA显式状态提升为所有selGrid真实溢出时的默认行为;2026-08-11:所有selGrid表头字段边界默认支持列宽调整_允许columnResize显式关闭
 
 <!-- 问题：横向滚动条只由单个应用开关控制时，其他 selGrid 即使内容超宽也缺少明显反馈，用户无法判断页面是否可以横向浏览。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 任一应用中创建、装配、调整或复用公共 selGrid。 -->

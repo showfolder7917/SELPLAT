@@ -1,0 +1,97 @@
+# AI Desktop 演化、持久化与发布规则
+
+<!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
+rule_version = 5.105.0
+<!-- 规则所有者始终从工程根稳定用户声明解析。 -->
+rule_owner_source = AGENTS.md.current_stable_user_id
+<!-- 本职责分片处于生产启用状态。 -->
+rule_status = active
+
+<!-- 本职责没有独立 Java 能力入口。 -->
+java_ability_refs = none
+<!-- 本职责没有独立 Python 能力入口。 -->
+python_ability_refs = none
+<!-- 本职责没有独立 Node 能力入口。 -->
+node_ability_refs = none
+
+windows_developer_launcher_contract = self_relative_path + dependency_check + mandatory_current_developer_build + electron_local_file_start + prohibit_application_http_dev_server + isolated_test_server_not_runtime_dependency
+<!-- macOS 开发版双击启动器必须从自身目录解析工程，检查 Node、npm、Electron 和官方 Codex 依赖，每次先正式构建最新开发版，构建失败时禁止启动 Electron。 -->
+macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_official_codex_dependency_check + mandatory_fresh_developer_build_before_launch + build_failure_blocks_launch + package_fixed_bundle_id_ai_desktop_app + bootstrap_loads_packaged_main_only + prohibit_external_runtime_compatibility + always_repackage_self_contained_latest_build + stable_designated_requirement_uses_bundle_identifier_not_cdhash + verifier_rejects_cdhash_designated_requirement + verify_packaged_codex_official_signature_and_isolated_real_start + permission_refresh_after_identity_change + exact_resolved_app_executable_process_match + gracefully_terminate_all_existing_same_app_instances + abort_when_old_instance_remains + launchservices_register + open_packaged_app_never_raw_dependency_electron + prohibit_parallel_old_and_new_ai_desktop_processes
+<!-- 测试以唯一 runId 批次流转；执行者取得独占锁，其他读取者看到占用身份，完整批次结束后立即归档。 -->
+shared_test_document_lifecycle_contract = ai_desktop_runtime_managed_batch_only + manifest_application_name_plus_common_path_resolution + pending_test_runId_directory_with_thread_document + exactly_one_selectable_run + atomic_whole_batch_pending_to_running_transition + exclusive_execution_lock + executor_task_thread_pid_start_item_heartbeat_metadata + concurrent_reader_reports_owner + stale_lock_and_interrupted_running_batch_recovery + every_terminal_result_immediate_month_and_runId_archive + next_run_new_runId + legacy_documents_migrated_not_deleted
+<!-- 外部 Codex 对 SELPLAT 源码执行工程任务时，必须继续使用 rule-engine 的工程根执行文档与测试文档生命周期；应用运行时批次不能替代该门禁。 -->
+external_engineering_test_document_contract = selplat_project_root_OPTION_execution_and_test_documents + rule_engine_execution_doc_manager_and_test_doc_manager + runtime_batch_never_replaces_engineering_task_gate
+<!-- 南宫婉只负责单一登记课题的调查、版本化提案和审批后组织，不得在审批前直接修改源码。 -->
+nangong_special_evolution_role_contract = one_registered_topic_per_cycle + evidence_first_investigation + versioned_immutable_proposal + no_source_change_before_evolution_approval + approved_proposal_returns_to_nangong_before_distribution
+<!-- 演化方向审批必须与随机执行方案审核、Codex 命令审批分离，并保留真实审批人与引用事实。 -->
+nangong_evolution_approval_contract = dedicated_evolution_approval_records + manual_user_or_automatic_han_li + approve_reject_or_supplement_only + separate_from_execution_review_and_command_approval + real_approver_timestamps_evidence_and_advice
+<!-- 韩立自动审批只引用同类型人工决定；事实或人工偏好不足时必须退回补充，自动决定不得成为最高可信偏好事实。 -->
+nangong_automatic_approval_contract = complete_goal_scope_evidence_risk_rollback_and_acceptance_gate + similar_manual_approval_reference + insufficient_fact_or_preference_returns_supplement + automatic_decision_not_highest_trust_training_fact + later_manual_correction_wins
+<!-- 自动演化、自动审批和审批后自动分发是三个独立开关；关闭后保留历史和恢复点。 -->
+nangong_three_automation_switch_contract = automatic_evolution_independent_from_automatic_approval_independent_from_automatic_execution + all_default_off + disabling_preserves_history_and_recovery_point + no_unregistered_topic_scan
+<!-- 三个审批领域统一使用可查询审计信封，但不得丢失各自决策词、审批人、事实与关联工作流。 -->
+approval_governance_envelope_contract = evolution_plus_collaboration_review_plus_codex_command + one_queryable_main_process_SQLite_projection + domain_native_decision_vocabulary + real_initiator_approver_reason_evidence_time_and_correlation + no_cross_domain_state_machine_merge
+<!-- 执行任务全部完成只形成待验收事实；韩立结果审批通过后才完成本轮并允许继续演化。 -->
+evolution_result_acceptance_contract = all_distributed_tasks_complete_to_pending_acceptance + han_li_real_user_path_review + approved_completes_round + rejected_or_supplement_returns_correction + task_completion_never_impersonates_business_acceptance
+<!-- 自动演化提供有限或无限轮次及纠偏预算；有限专题到限后等待韩立选择下一方向，开放价值判断不得退化为固定评分器。 -->
+evolution_round_control_contract = finite_or_unlimited_rounds + bounded_correction_rounds + explicit_start_pause_resume_stop + persisted_runtime_and_stop_reason + finite_topic_limit_pauses_for_han_li_next_direction + evidence_based_AI_judgment_not_fixed_benefit_or_user_fit_score
+<!-- 专题只能由韩立综合完整会话并逐轮发问后确立；南宫婉负责登记专题池和执行编排。 -->
+han_li_deliberation_topic_establishment_contract = complete_nangong_and_codex_conversation_groups + han_li_is_questioner + one_recorded_question_and_original_nangong_answer_per_round + han_li_follow_up_correction_or_establishment + nangong_registers_only_han_li_established_topic + no_direct_topic_discovery_from_search_hits
+<!-- 每个专题保存从来源对话到落地验收的不可覆盖原始案卷，页面状态只是派生视图。 -->
+evolution_topic_full_lifecycle_dossier_contract = immutable_source_ids_and_snapshots + append_only_deliberation_proposal_approval_distribution_execution_command_log_test_release_restart_acceptance_and_correction_records + topic_proposal_task_correlation + derived_current_state + original_records_never_overwritten
+<!-- 审批后的任务必须由南宫婉作为真实发起人并携带 proposalId 进入既有协同执行、验证、集成和统一测试链。 -->
+nangong_distribution_contract = approved_only + initiator_nangong_wan + stable_proposalId_bidirectional_link + existing_collaboration_worktree_review_validation_integration_and_unified_test_pipeline
+<!-- 南宫婉讨论使用独立只读 Codex 线程；聊天本身不是正式课题，只有用户显式转换时冻结消息标识和调查结论。 -->
+nangong_conversation_to_topic_contract = dedicated_persistent_read_only_codex_thread + flexible_user_dialogue_and_fact_investigation + conversation_is_not_topic + explicit_user_conversion_freezes_message_ids_goal_scope_and_acceptance + no_source_change_or_distribution_from_chat
+<!-- AI 为理解用户当前习惯和长期方向读取历史时，必须按当前问题受控检索相关原文、纠正、反例与时间变化；不得只用最近消息冒充完整对话理解，也不得把后台检索能力等同于新增应用历史列表。 -->
+conversation_grounded_user_direction_retrieval_contract = scoped_semantic_cross_conversation_evidence_retrieval + relevant_original_user_text + explicit_corrections + counterexamples + contradictions + chronological_change + no_recent_only_claim_of_complete_understanding + backend_retrieval_does_not_require_application_history_list
+<!-- 用户方向必须由 AI 表达为带来源、反例、不确定性和版本变化原因的可修订自然语言假设；用户后续纠正优先，禁止把一次行为或重复次数直接固化为永久人格。 -->
+user_direction_narrative_contract = ai_authored_revisionable_natural_language_hypotheses + source_message_evidence + counterevidence + uncertainty + versioned_change_reason + later_user_correction_wins + distinguish_temporary_behavior_stable_habit_current_goal_and_emerging_direction
+<!-- AI 生成回答、成长建议或演化提案时必须保留合理探索和多种解释空间；固定标签、次数阈值、单一符合用户度评分和只复制历史成功方案不得替代模型结合上下文的创造性判断。 -->
+non_mechanical_creative_evolution_contract = preserve_competing_interpretations + allow_evidence_explained_exploration + context_sensitive_model_judgment + prohibit_fixed_personality_labels_as_decision_authority + prohibit_frequency_threshold_as_preference_truth + prohibit_single_user_fit_score_as_candidate_gate + prohibit_history_copy_only
+<!-- 机械边界只承担授权、隐私、来源追踪、风险审批、成本限制和可恢复性；不得用流程模板规定开放问题的答案或用户未来方向。 -->
+creative_evolution_hard_boundary_contract = authorization + privacy_scope_and_deletion + evidence_provenance + high_risk_approval + bounded_cost_and_cycles + rollback_and_user_sovereignty + never_use_governance_template_to_define_open_ended_answer_or_future_direction
+<!-- 整理入口、南宫婉自动填写和最终保存必须分别可见；草稿五项来源明确、可继续编辑，禁止用下拉框隐藏生成动作。 -->
+nangong_topic_draft_interaction_contract = organize_entry_opens_editable_form_only + standalone_button_named_根据当前对话生成草稿 + prohibit_select_or_dropdown_replacement + nangong_reads_current_conversation + auto_fill_title_goal_impact_scope_factual_evidence_and_acceptance + visible_feedback_已根据当前对话填充草稿 + generated_values_remain_editable + explicit_confirm_save_only
+<!-- 南宫婉新建对话必须和韩立使用同位入口，只有官方线程删除成功才能清空；活动写入等待和最终失败都必须在本页可见。 -->
+nangong_new_conversation_interaction_contract = same_person_tab_position_and_visual_as_han_li + no_duplicate_composer_toolbar_action + pending_disabled_and_visible + bounded_retry_for_active_writer_only + official_thread_delete_success_before_clear + success_clears_persisted_messages_attachments_and_local_draft + final_failure_preserves_all_state + real_error_visible_in_nangong_composer + production_interaction_success_and_failure_regression
+<!-- 三个人物页复用 SELUI 公共能力与主题，业务布局留在 AI Desktop；韩立审批不得占用主会话。 -->
+evolution_person_workspace_ui_contract = selui_formal_exports_and_theme_tokens_only + no_shared_source_change + hanli_conversation_keeps_chat_timeline + hanli_approval_center_is_independent_selui_floating_panel + nangong_continuous_chat_and_localImage_screenshot_attachments + topic_and_automation_sidebar + linghu_human_readable_runtime_recovery_and_proposal_status
+<!-- 韩立统一审批表必须同时接收南宫婉演化提案和令狐修正方案，并完整显示用户指定字段。 -->
+han_li_unified_evolution_approval_contract = source_nangong_or_linghu + title_type_submitter_approver_createdAt_approvedAt_status + detailed_free_form_content_with_clear_direction + manual_user_advice_or_automatic_han_li_fact_decision
+<!-- 南宫与令狐自动审批必须分别设置；人工记录只按同来源同类型形成偏好，自动结论不能反向成为最高可信事实。 -->
+han_li_source_specific_automatic_approval_contract = independent_nangong_and_linghu_switches_default_off + complete_fact_gate + same_origin_and_type_manual_history + insufficient_fact_or_history_returns_supplement + later_manual_correction_wins
+<!-- Electron 人物工作区的审批、课题和提案输入必须使用当前页面可见编辑器；系统 prompt 不得成为发送 IPC 的前置条件。 -->
+evolution_person_action_input_contract = visible_inline_editor_in_owning_workspace + no_window_prompt_before_ipc + direct_approve_supplement_reject_dispatch_actions + pending_disables_duplicate_submission + local_error_feedback + interaction_test_covers_topic_proposal_manual_decisions_distribution_and_completed_record
+<!-- 所有人物的自身能力升级只依赖登记人物身份和提案归属，禁止按南宫婉、令狐或未来人物姓名分支实现。 -->
+collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow + approval_feedback_target_proposal_or_submitter_capability + explicit_capability_scope + original_submitter_only_revision + immutable_version_and_supersedes_chain + revision_feedback_approval_link + approved_task_target_member_scope_and_approval_audit + modify_own_rule_prompt_workflow_or_implementation + regression_and_integration_completion_record + no_display_name_business_branch
+<!-- 令狐持续修正发现的 Bug 方向必须先形成方案；审批通过后返还令狐并携带 proposalId 进入既有持续恢复和测试链。 -->
+linghu_repair_approval_and_return_contract = detected_bug_to_versioned_repair_proposal + no_repair_execution_before_evolution_approval + approved_return_to_linghu_ancestor + initiator_and_preferred_executor_linghu_ancestor + stable_proposalId + existing_recovery_validation_and_unified_test_pipeline
+<!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->
+ai_desktop_project_data_domain_contract = manifest_name_driven_node_common_path_api + apps_application_source_config_permanent_tests_and_scripts_only + exact_user_confirmed_runtime_exception_apps_ai_desktop_db_events_sqlite3_only + no_other_node_modules_runtime_or_build_data_under_source + cache_application_lockHash_dependencies_and_regenerable_only + controlled_temporary_dependency_links_removed_after_command + build_application_compile_package_sites_and_reports_only + OPTION_temp_application_exactly_execution_log_and_temporary_materials + log_application_archive_log_kind_month_identifier_hierarchy + private_user_settings_sessions_and_secrets_remain_electron_userData
+<!-- AI Memory 数据库根只能从当前已验证 SELPLAT 工程根派生，配置仅登记跨平台文件名；任何失败都不得回退生成另一份空库。 -->
+ai_desktop_sqlite_path_configuration_contract = current_resolved_SELPLAT_root_plus_apps_ai_desktop_db + ai_memory_paths_json_schema_and_databaseFile_only + prohibit_databaseRoot_username_drive_letter_and_machine_absolute_path + databaseFile_events_sqlite3 + AiMemoryPathResolver_only + developer_source_packaged_developer_and_backfill_same_resolveProjectRoot_chain + missing_malformed_unsupported_field_inaccessible_or_escape_blocks + prohibit_userData_cache_or_implicit_fallback + configuration_read_only_does_not_create_database + root_gitignore_exact_events_sqlite3_wal_shm_only + configuration_readme_and_sql_tracked
+<!-- SQLite 基础层只在主进程保持一个连接，迁移、丢库判定和关闭顺序都必须可验证。 -->
+ai_desktop_sqlite_persistence_foundation_contract = electron_builtin_node_sqlite_no_native_addon + main_process_single_connection + event_center_persistence_layer_only + load_order_txt_only_manifest + four_digit_strictly_increasing_version + published_sql_sha256_immutable + AiDesktopSchemaVersion_success_record + begin_immediate_atomic_sql_and_version_insert + foreign_keys_on_wal_synchronous_normal_busy_timeout_5000 + quick_check_after_migration + userData_marker_initialization_metadata_and_database_path_hash_only + genuine_first_initialization_may_create + initialized_missing_unknown_existing_corrupt_marker_checksum_migration_or_integrity_failure_never_creates_fallback + recovery_status_visible_without_database_path_connection_or_sql_api + before_quit_checkpoint_then_close + no_business_table_or_existing_person_behavior_change_in_foundation_stage
+<!-- 开发包必须在构建时携带持续存在的源工程根，使安装后日志仍进入原工程；发布包不得包含该开发机路径。 -->
+developer_package_project_root_contract = all_windows_and_macos_developer_package_entries_use_dynamic_config + build_time_validated_selplat_root_metadata + command_line_override_then_environment_override_then_packaged_development_root + candidate_worktree_package_uses_stable_source_project_root + release_package_prohibit_development_machine_root
+<!-- 应用路径诊断必须通过正式包脚本挂载当前锁哈希缓存后导入公共路径出口，禁止要求调用者直接在无依赖源码目录执行裸包导入。 -->
+ai_desktop_path_diagnostic_contract = npm_run_paths_resolve + run_with_dependencies_lock_hash_cache + import_@selplat_node_common_core_path + canonical_application_name_and_all_data_domains_json + detach_source_node_modules_after_command
+<!-- 自动测试属于当前应用会话的显式模式；默认关闭，只有已知环境与窄命令授权全部通过才允许开启。 -->
+automatic_test_activation_contract = composer_toolbar_after_managed_mode_before_screenshot_actions + labeled_switch + default_off_after_every_application_start + visible_preflight_dialog + all_checks_must_pass_before_on
+<!-- 预检必须覆盖已知的无人值守阻断面，并且不得通过预检自动点击系统或未知 Harness 授权。 -->
+automatic_test_preflight_contract = codex_connected_and_authenticated + writable_registered_workspace + runner_and_dependencies_ready + shared_lock_available_or_stale_recoverable + local_interaction_port_available + isolated_playwright_does_not_require_screen_recording + never_click_unknown_approval
+<!-- 自动测试只授权无参数共享执行器，文档内脚本受验证白名单约束，任何额外参数或运行期新审批都退回人工处理。 -->
+automatic_test_command_safety_contract = explicit_switch_authorizes_exact_no_argument_npm_run_test_document + explicit_fixed_allowlist_for_existing_typecheck_build_developer_verify_mac_and_named_test_scripts_only + prohibit_wildcard_test_prefix_recursive_test_document_start_publish_or_arbitrary_script + script_signature_change_invalidates_trust + unexpected_approval_disables_auto_mode_and_removes_queued_test
+<!-- 开启后只在任务托管已完成代码级验证时排入一轮测试托管，继续复用既有串行发送队列。 -->
+automatic_test_transition_contract = task_code_verified_then_enqueue_exactly_one_test_managed_turn + existing_fifo_queue + no_stage_skip_before_code_verified + test_failure_never_auto_approves_more_permissions
+<!-- Electron 打包必须把官方 Codex JavaScript 入口和当前平台原生二进制解包到可执行文件系统，禁止从 asar 内直接拉起。 -->
+packaged_harness_binary_contract = asar_unpack_@openai_codex_and_platform_package
+<!-- Windows 包只允许在 Windows 原生宿主生成；平台包仍直接锁定，但 macOS 不得再执行 Windows 交叉打包。 -->
+windows_harness_platform_dependency = direct_alias_@openai/codex-win32-x64_to_@openai/codex@0.149.0-win32-x64
+<!-- 所有 Windows 打包入口必须在任何构建前校验 process.platform=win32，真实启动和登录验收也只在 Windows 环境执行。 -->
+windows_native_build_host_contract = win32_host_gate_before_build + prohibit_macos_cross_package + windows_runtime_login_and_button_acceptance_on_windows_only
+<!-- 规则没有重复文档结构，不创建虚假模板或案例；官方协议 README 和应用真实源码构成可核对依据。 -->
+template_and_example_policy = not_applicable_because_protocol_and_existing_application_source_are_authoritative
+<!-- 验证责任按托管模式登记：任务托管只完成类型检查和针对性快速测试；Electron 与渲染构建、运行验证只属于显式测试托管。 -->
+harness_verification_requires = task_managed_typecheck_and_hidden_isolated_electron_playwright_interaction_test + test_managed_electron_and_renderer_build_and_post_build_test + account_read_login + approval_decline_path

@@ -179,13 +179,7 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             with self.subTest(logical_id=logical_id):
                 rule = loader.load_for_current_user(logical_id, scope)
                 self.assertEqual(active_user, rule.layer)
-                expected_path = (
-                    "active-user/rules/平台/"
-                    "RUL_SELPLAT程序源码语言与归属门禁规则.md"
-                    if logical_id
-                    == "SELPLAT_PROGRAM_SOURCE_LANGUAGE_AND_OWNERSHIP_GUARD_RULES"
-                    else f"local/{active_user}/{relative_path}"
-                )
+                expected_path = f"local/{active_user}/{relative_path}"
                 self.assertEqual(expected_path, rule.resource_path)
                 self.assertIn(expected_content, rule.content)
 

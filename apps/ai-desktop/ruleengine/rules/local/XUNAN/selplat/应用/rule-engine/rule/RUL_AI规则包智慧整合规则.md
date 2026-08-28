@@ -4,17 +4,18 @@
 java_ability_refs = none
 <!-- Python 统一通过已登记的智慧整合能力生成可复核事实。 -->
 python_ability_refs = ai_rule_package_integrator
+<!-- 规则结构、索引体量、缓存和 history 解耦由独立门禁统一报告。 -->
+python_ability_refs.2 = ruleengine_structure_guard
 <!-- Node 当前没有承载本规则的自动化程序，显式写 none 防止误调用生成器。 -->
 node_ability_refs = none
-<!-- 规则版本从 1.0.0 起步，后续语义变化必须递增并记录升级原因。 -->
-rule_version = 1.3.0
+<!-- 规则版本升级到 1.6.0，新增全层审计汇总、冲突候选证据和规则闭包体量基准。 -->
+rule_version = 1.6.0
 <!-- 规则所有者始终来自工程根 AGENTS.md 的当前稳定用户声明，公共合并前不得扩大作用域。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- active 表示本规则已由根索引登记并通过当前回归验证。 -->
 rule_status = active
-<!-- 升级记录同时保存首次整合和用户发现的逐行注释缺口，防止修正规范被口头带过。 -->
-upgrade_record = 2026-08-03:清理废弃传统链并建立AI规则包持续整合入口;2026-08-03:补齐新增规则逐行中文业务注释并增加自动检查;2026-08-03:增加用户明确委托后的AI托管修正边界;2026-08-07:程序_规则路径和所有者统一改为AGENTS动态当前用户;2026-08-21:每次变更交付前强制评估规则与门禁升级_用户确认的可复用约束必须同任务沉淀_测试登记不得替代规则升级
-
+<!-- 当前版本变化只描述仍然生效的规则语义，完整演进过程进入可丢失历史记录且不得成为运行依赖。 -->
+current_version_change_summary = complete_layer_audit_conflict_candidate_and_bundle_size_benchmark
 <!-- 问题：历史规则、模板、案例和程序分别增长，迁移后仍存在旧路径、缺失关联和只修成品不升级规则包的问题。 -->
 <!-- 场景：当前稳定用户在 SELPLAT 中新增、审查、执行、修正、合并或退役规则。 -->
 <!-- 业务含义：AI 以规则包为唯一成长单元，在不污染 core/common 的前提下持续减少执行偏差。 -->
@@ -38,8 +39,8 @@ rule_package_required_components.3 = example_or_not_applicable
 rule_package_required_components.4 = program_or_not_applicable
 <!-- rule_package_required_components.5 的当前独立事实为 verification。 -->
 rule_package_required_components.5 = verification
-<!-- rule_package_required_components.6 的当前独立事实为 upgrade_record。 -->
-rule_package_required_components.6 = upgrade_record
+<!-- rule_package_required_components.6 的当前独立事实为 current_version_change_summary。 -->
+rule_package_required_components.6 = current_version_change_summary
 <!-- 规则正文是唯一权威指令入口，README、案例和模板不得复制或改写约束。 -->
 rule_is_the_only_authoritative_instruction_entry = true
 <!-- 输出结构会重复出现时必须由模板固定，避免每次任务临时设计。 -->
@@ -50,8 +51,8 @@ example_must_show_a_verified_correct_result_when_applicable = true
 program_must_implement_stable_repeatable_verifiable_actions_when_applicable = true
 <!-- 验证必须同时检查规则、模板、案例和程序契约，不能只检查文件存在。 -->
 verification_must_detect_deviation_from_rule_template_example_and_program_contract = true
-<!-- 每次升级必须记录原问题、具体变化和回归结果，形成持续成长证据。 -->
-upgrade_record_must_explain_problem_change_and_regression_result = true
+<!-- 每次升级的当前有效变化必须留在规则正文；完整历史可以另存，但不得成为规则正确性的前提。 -->
+current_version_change_summary_must_explain_effective_change = true
 <!-- 任一组成被判定不适用时必须解释业务原因，禁止用 none 掩盖能力缺口。 -->
 not_applicable_must_include_reason = true
 
@@ -65,6 +66,10 @@ rule_edit_preflight_required_rules.2 = RULE_LIFECYCLE_GOVERNANCE_RULES
 ai_must_distinguish_similarity_from_true_duplication = true
 <!-- 文件名、关键词和相似度只能产生候选，不能直接触发删除。 -->
 ai_must_not_delete_by_filename_keyword_or_similarity_score_only = true
+<!-- 同一 DSL 键在不同规则文件中出现不同值时只能形成语义冲突候选，禁止程序直接裁决冲突或改写规则。 -->
+semantic_conflict_candidate_basis = same_dsl_key_with_different_values_across_rule_files
+<!-- 冲突候选必须交由 AI 结合语义、作用域、调用方、资源、程序、测试和替代关系复核。 -->
+semantic_conflict_candidate_decision = evidence_review_required_not_automatic_verdict
 <!-- 合并判断必须同时比较语义、作用域、调用方、资产、程序、测试和替代关系。 -->
 ai_merge_decision_evidence = semantics
 <!-- ai_merge_decision_evidence.2 的当前独立事实为 scope。 -->
@@ -99,8 +104,8 @@ ai_must_classify_each_gap.3 = example_gap
 ai_must_classify_each_gap.4 = program_gap
 <!-- ai_must_classify_each_gap.5 的当前独立事实为 verification_gap。 -->
 ai_must_classify_each_gap.5 = verification_gap
-<!-- ai_must_classify_each_gap.6 的当前独立事实为 upgrade_record_gap。 -->
-ai_must_classify_each_gap.6 = upgrade_record_gap
+<!-- ai_must_classify_each_gap.6 的当前独立事实为 history_runtime_coupling_gap。 -->
+ai_must_classify_each_gap.6 = history_runtime_coupling_gap
 <!-- ai_must_classify_each_gap.7 的当前独立事实为 stale_reference。 -->
 ai_must_classify_each_gap.7 = stale_reference
 <!-- ai_must_classify_each_gap.8 的当前独立事实为 duplicate_or_conflict。 -->
@@ -117,12 +122,41 @@ no_upgrade_decision_requires_near_rule_and_reason_evidence = true
 <!-- 测试文档只承载待测责任，不能替代规则语义、索引登记或门禁接线升级；业务含义是测试清单存在不代表防复发规则已经完成。 -->
 test_document_must_not_substitute_rule_or_gate_upgrade = true
 
+## 历史与素材解耦
+
+<!-- rule-engine 的辅助历史根固定在应用内部的 history 目录，禁止散落回生产规则目录。 -->
+rule_engine_optional_history_root = apps/ai-desktop/ruleengine/history
+<!-- 非权威图片、Excel、示例数据和人工参考资料统一进入素材子目录。 -->
+rule_engine_optional_material_root = apps/ai-desktop/ruleengine/history/素材
+<!-- 已失效规则、升级明细、迁移清单和冲突处理记录统一进入历史记录子目录。 -->
+rule_engine_optional_record_root = apps/ai-desktop/ruleengine/history/历史记录
+<!-- history 整棵目录只承担人工参考和审计便利，不属于生产规则包组成。 -->
+rule_engine_history_tree_role = optional_non_authoritative_reference
+<!-- 生产规则索引禁止登记 history 文件或其子索引，避免辅助资料重新进入加载闭包。 -->
+production_rule_index_must_not_register_history_tree = true
+<!-- requires_rule_ids 只能依赖生产逻辑 ID，禁止通过规则依赖间接要求 history 存在。 -->
+rule_dependency_closure_must_not_reference_history_tree = true
+<!-- Python 能力、构建、测试、门禁和客户规则包都不得把 history 作为必需输入。 -->
+runtime_build_test_gate_and_bundle_dependency_on_history = forbidden
+<!-- history、素材或历史记录缺失时必须继续运行且不得产生缺依赖错误。 -->
+history_tree_missing_behavior = continue_without_error_or_degraded_production_result
+<!-- 当前有效约束、路径、模板契约和验证门槛必须完整保留在 rules、python、tests 或 manifest 的正式位置。 -->
+current_effective_contract_must_exist_outside_history = true
+<!-- 真正影响运行或稳定复现的资源不得移入素材目录后继续被生产代码引用。 -->
+required_runtime_or_repeatability_resource_must_not_enter_optional_material_root = true
+<!-- 素材目录只能保存副本或参考资料，丢失后不得改变规则执行结果。 -->
+optional_material_must_be_copy_or_reference_with_zero_execution_effect = true
+<!-- 历史记录只能解释过去，丢失后不得改变当前有效 DSL 或当前版本判断。 -->
+optional_history_record_must_not_define_current_effective_fact = true
+<!-- 清理或重建 history 时不需要修复生产索引，业务含义是辅助资料与运行规则已经真正解耦。 -->
+history_cleanup_or_recreation_must_not_require_production_index_change = true
+
 ## 按规则运行
 
-<!-- 正式执行按最小规则、资产加载、任务执行、偏差验证、结果记录和升级判断顺序进行。 -->
+<!-- 正式执行按最小规则、必需资源加载、任务执行、偏差验证、结果记录和升级判断顺序进行。 -->
 execution_sequence = load_minimum_rules
-<!-- execution_sequence.2 的当前独立事实为 load_rule_package_assets。 -->
-execution_sequence.2 = load_rule_package_assets
+<!-- execution_sequence.2 的当前独立事实为 load_required_rule_package_resources。 -->
+execution_sequence.2 = load_required_rule_package_resources
 <!-- execution_sequence.3 的当前独立事实为 execute_by_rule。 -->
 execution_sequence.3 = execute_by_rule
 <!-- execution_sequence.4 的当前独立事实为 verify_deviation。 -->
@@ -133,11 +167,11 @@ execution_sequence.5 = record_result
 execution_sequence.6 = evaluate_upgrade
 <!-- 规则选择只能使用索引登记的 SELPLAT 作用域和 AGENTS.md 当前稳定用户，不得扫描其他作用域。 -->
 rule_selection_must_follow_registered_scope_and_user = true
-<!-- 程序、模板和案例必须通过登记入口或已验证路径定位，禁止按名称猜测。 -->
+<!-- 生产程序、必需模板和必需案例必须通过登记入口或已验证路径定位，history 内辅助资料不得作为候选。 -->
 physical_path_guessing_is_forbidden = true
 <!-- 迁移后的旧路径必须改为稳定 ability ID 或已经验证存在的当前路径。 -->
 stale_reference_must_be_replaced_by_registered_ability_or_verified_current_path = true
-<!-- 规则缺少本应存在的资产时必须先报告缺口，不得声称可以稳定复现。 -->
+<!-- 规则缺少本应存在的生产资源时必须先报告缺口；history 内辅助资料缺失不属于规则包缺口。 -->
 rule_without_required_asset_must_report_gap_before_claiming_repeatable_execution = true
 
 ## 持续更新升级
@@ -148,8 +182,8 @@ upgrade_trigger = repeated_deviation
 upgrade_trigger.2 = user_correction
 <!-- upgrade_trigger.3 的当前独立事实为 stale_reference。 -->
 upgrade_trigger.3 = stale_reference
-<!-- upgrade_trigger.4 的当前独立事实为 missing_asset。 -->
-upgrade_trigger.4 = missing_asset
+<!-- upgrade_trigger.4 的当前独立事实为 missing_required_resource。 -->
+upgrade_trigger.4 = missing_required_resource
 <!-- upgrade_trigger.5 的当前独立事实为 missing_program。 -->
 upgrade_trigger.5 = missing_program
 <!-- upgrade_trigger.6 的当前独立事实为 missing_verification。 -->
@@ -180,26 +214,40 @@ core_common_change_policy_without_explicit_delegation = forbidden
 upgrade_must_run_index_reference_registry_and_relevant_regression_checks = true
 <!-- 成长结果必须比较升级前后缺口数量，禁止只用新增文件数证明完成。 -->
 upgrade_must_record_before_after_gap_counts = true
+<!-- 全量缺口统计必须覆盖 core、已识别 common 和当前稳定用户，禁止顶层指标遗漏用户层问题。 -->
+rule_package_audit_aggregate_scope = core_common_and_current_active_user
+<!-- 顶层失效引用和缺口计数必须等于全部已审查正式规则的汇总，不得只统计根索引直登规则。 -->
+rule_package_audit_top_level_counts = all_audited_rule_files
 
 ## 程序入口
 
 <!-- 稳定程序 ID 供规则正文、测试和直接命令共同引用。 -->
 python_ability_id = ai_rule_package_integrator
+<!-- 结构治理能力使用独立稳定 ID，避免把统计和硬违规判断继续塞入整合器。 -->
+python_ability_id.2 = ruleengine_structure_guard
 <!-- 能力文件进入 AGENTS.md 当前稳定用户对应的 Python 原生分层目录。 -->
 python_ability_path = apps/ai-desktop/ruleengine/python/local/<active-stable-user-id>/abilities/ai_rule_package_integrator.py
+<!-- 结构门禁能力进入同一当前用户能力根，并且不读取 history 内容。 -->
+python_ability_path.2 = apps/ai-desktop/ruleengine/python/local/<active-stable-user-id>/abilities/ruleengine_structure_guard.py
 <!-- 用户程序无需注册表或二次执行器，代入当前稳定用户后直接接收 JSON 上下文并复用同一 execute 实现。 -->
 python_program_command = python3 apps/ai-desktop/ruleengine/python/local/<active-stable-user-id>/abilities/ai_rule_package_integrator.py <context_json>
 <!-- audit 只返回事实，write_report 只允许把同一事实写入 OPTION。 -->
 ability_actions = audit
 <!-- ability_actions.2 的当前独立事实为 write_report。 -->
 ability_actions.2 = write_report
+<!-- ability_actions.3 的当前独立事实为 report_structure。 -->
+ability_actions.3 = report_structure
+<!-- ability_actions.4 的当前独立事实为 strict_structure_gate。 -->
+ability_actions.4 = strict_structure_gate
+<!-- ability_actions.5 的当前独立事实为按真实依赖闭包生成加载回执和体量基准。 -->
+ability_actions.5 = benchmark_bundle
 
 ## 成长指标
 
 <!-- 指标覆盖规则规模、规则包组成、程序关联、验证、失效引用和升级元数据。 -->
 growth_metrics = indexed_rules
-<!-- growth_metrics.2 的当前独立事实为 standard_asset_packages。 -->
-growth_metrics.2 = standard_asset_packages
+<!-- growth_metrics.2 的当前独立事实为 decoupled_optional_history_materials。 -->
+growth_metrics.2 = decoupled_optional_history_materials
 <!-- growth_metrics.3 的当前独立事实为 template_coverage。 -->
 growth_metrics.3 = template_coverage
 <!-- growth_metrics.4 的当前独立事实为 example_coverage。 -->
@@ -210,7 +258,17 @@ growth_metrics.5 = program_reference_coverage
 growth_metrics.6 = verification_coverage
 <!-- growth_metrics.7 的当前独立事实为 stale_reference_count。 -->
 growth_metrics.7 = stale_reference_count
-<!-- growth_metrics.8 的当前独立事实为 upgrade_metadata_coverage。 -->
-growth_metrics.8 = upgrade_metadata_coverage
+<!-- growth_metrics.8 的当前独立事实为 current_version_summary_coverage。 -->
+growth_metrics.8 = current_version_summary_coverage
+<!-- growth_metrics.9 的当前独立事实为跨层缺口汇总。 -->
+growth_metrics.9 = complete_layer_gap_counts
+<!-- growth_metrics.10 的当前独立事实为语义冲突候选数量。 -->
+growth_metrics.10 = semantic_conflict_candidate_count
+<!-- growth_metrics.11 的当前独立事实为任务规则闭包体量代理。 -->
+growth_metrics.11 = task_bundle_content_and_token_proxy
+<!-- Token 代理只按 UTF-8 字节体量提供趋势比较，不得表述为模型 tokenizer 或计费结果。 -->
+token_proxy_semantics = size_proxy_only_not_model_billing_or_tokenizer_output
+<!-- 本地加载耗时只衡量规则闭包加载器，不得表述为端到端 Agent 响应速度。 -->
+bundle_timing_semantics = local_loader_wall_time_not_end_to_end_agent_latency
 <!-- 成长必须表现为偏差和失效引用减少，禁止只追求规则数量增加。 -->
 growth_must_reduce_deviation_and_stale_references_not_only_increase_rule_count = true

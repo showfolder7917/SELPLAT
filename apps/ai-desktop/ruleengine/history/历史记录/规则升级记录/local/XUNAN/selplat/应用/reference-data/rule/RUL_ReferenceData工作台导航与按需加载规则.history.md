@@ -1,0 +1,57 @@
+# RUL_ReferenceData工作台导航与按需加载规则 升级历史
+
+> 可丢失历史记录：本文件不是规则、索引、程序、测试或构建输入；当前有效约束只以正式规则正文为准。
+
+<!-- 本次升级来自用户对多接口首屏加载和表格字段一级菜单的架构纠正。 -->
+upgrade_record = 2026-08-11:navigation_moves_to_database_free_capability_five_top_level_modules_lazy_load_table_definition_drills_into_columns;2026-08-11:table_definition_uses_business_detail_info_columns_preview_full_crud_and_idempotent_demo_data;2026-08-15:window_remains_top_level_without_record_children_or_expand_menu;2026-08-15:page_edit_table_heading_uses_active_module_title_and_ReferenceDataTable_code;2026-08-15:all_management_windows_share_one_ReferenceDataWindow_page_edit_control;2026-08-15:table_edit_action_moves_beside_code_and_uses_shared_page_editor_accent;2026-08-15:table_and_each_management_window_save_independently_window_geometry_becomes_next_default_navigation_remains_available;2026-08-15:query_toolbar_has_parent_layout_and_five_independently_draggable_resizable_code_addressed_children;2026-08-15:page_controls_remains_top_level_without_page_record_children_or_expand_menu;2026-08-15:query_editor_cards_removed_one_shared_current_control_save_action_after_reset_single_child_payload;2026-08-15:query_width_change_reflows_following_siblings_and_save_action_follows_reset;2026-08-15:type_catalog_owns_tree_dropdown_and_menu_classification_tree_module_only_reads_TREE_nodes
+
+<!-- 独立树升级记录说明树节点页面不再依赖类型目录。 -->
+upgrade_record_20260815_independent_tree = 树节点模块不加载数据类型_使用根节点code筛选_编辑只维护parentId_nodeValue_多语言名称_状态排序
+
+<!-- 查询条件内部结构由 selSearch 配置拥有，页面控件表只保留整组搜索及三个同级动作。 -->
+upgrade_record_20260816_query_condition_group = toolbar逐条登记当前可见查询元素_输入和下拉变化不立即查询_查询按钮统一提交全部草稿_字段结构切换重绑真实根_无记录使用默认布局_禁止search空父组残留
+
+<!-- 本次升级让数据类型页面与精简后的全局分类表保持同一字段边界。 -->
+upgrade_record_20260816_type_catalog = 数据类型模块只维护全局唯一categoryCode_多语言名称_状态排序_不显示项目资源坐标或说明字段
+
+<!-- 本次升级把数据类型改为页面控件拥有的值目录，并支持同控件父子菜单。 -->
+upgrade_record_20260816_type_control_binding = 数据类型使用controlCode绑定页面控件_valueCode保存业务值_parentTypeCode建立二级及多级菜单_页面控件删除typeId_categoryCode废弃
+
+<!-- 本次升级把同一页面六份伪表定义收敛为一条真实 Grid，子元素使用 viewCode 表达业务视图。 -->
+upgrade_record_20260816_single_grid = ReferenceDataTable每页面每Grid唯一一条_ReferenceDataTableElement使用tableId外键加viewCode区分六类视图_Service只通过业务Service与BaseDao查询
+
+<!-- 本次升级消除 HTTP tableCode 与元素 viewCode 同名歧义，并删除唯一 Grid 场景的多父级 IN 查询。 -->
+upgrade_record_20260816_table_code_query = getGridColumn使用tableCode定位唯一Grid_元素使用tableId等值查询加自身viewCode_页面读取保存禁止tableIdIn
+
+<!-- 本次升级把结构搜索收紧为对象 code 和真实父级坐标，不再混入多语名称或业务值。 -->
+upgrade_record_20260816_code_parent_search = 工作台搜索只使用code和真实父级字段_无父级字段的模块只搜索code_名称值项目页面字段不参与
+
+<!-- 本次升级纠正历史分类边界：TREE 是树节点视图，不是 ReferenceDataType 类型值。 -->
+upgrade_record_20260816_tree_type_cleanup = ReferenceDataType物理删除TREE并禁止再次保存_ReferenceDataTreeNode保留真实树节点_Window旧树与选项名称定向改为树节点
+
+<!-- 本次升级让数据类型与其他管理模块保持相同一级入口，记录只在右侧 Grid 展示。 -->
+upgrade_record_20260816_type_top_level_only = 数据类型左侧导航无展开箭头无记录子节点_数量仍显示_右侧表格和编辑功能保留
+
+<!-- 本次升级给树节点增加可辨认来源，但不改变独立建树和搜索字段。 -->
+upgrade_record_20260816_tree_ownership = 树节点保存projectCode_pageCode用于表格与表单归属展示_建树只使用code_parentId_搜索仍只使用code_parentId
+
+<!-- 本次升级让页面和 Window 真实子控件通过唯一 control code 使用可共享选项组。 -->
+upgrade_record_20260816_option_set_controls = Type删除controlCode改用optionSetCode_页面和Window多个真实控件可共享选项组_Window子控件使用WINDOW加windowCode父坐标并逐字段独立code
+
+<!-- 本次升级明确废弃上一版 Window 子字段登记；内部表单不参与拖拽，95 条历史记录必须物理清理且不得重建。 -->
+upgrade_record_20260816_window_layout_boundary = Window外框使用ReferenceDataWindow_内部字段不登记ControlLayout_parentKind_WINDOW服务和数据库拒绝_启动不得生成
+
+<!-- 本次升级把页面控件查询拆为三个独立字段，并使用 BaseDao AND 与真实后台分页。 -->
+upgrade_record_20260816_control_remote_query = 控件code_父控件code_选项组code三个输入独立提交_BaseDao_AND_后台当前页_totalCount_禁止全量前端过滤
+
+<!-- 本次升级纠正数据类型仍使用单 keyword 的回退，并清理类型筛选器上浮的旧纵坐标表现。 -->
+upgrade_record_20260816_type_independent_query = 数据类型code_parentTypeCode两个独立输入_逐字段AND_类型状态重置与输入共享横向基线
+
+<!-- 本次升级把剩余模块的组合关键词彻底拆开，并物理清理 keyword 与重复查询按钮布局。 -->
+upgrade_record_20260816_all_structural_queries = tree使用code_parentId独立输入_table_elements使用code_tableId独立输入_tables_windows只保留code_BaseDao_AND_一个共享submit_删除keyword和重复submit布局
+
+<!-- 本次升级把已确认的引用数据国际化方案固化为可回归的应用规则。 -->
+upgrade_record_20260816_runtime_i18n = 应用固定文案使用reference-data_i18n三语同构JSON_公共Window和personalization使用SEL独立语言包_数据库业务名按当前locale回退_原子原位切换保留查询分页详情编辑状态
+
+<!-- 本次升级为跨应用共享选项组建立稳定只读查询入口，业务表仍只保存稳定值。 -->
+upgrade_record_20260820_public_option_set_query = optionSetCode精确查询_只返回启用选项_按locale名称回退_业务页面禁止复制显示名称

@@ -1,0 +1,45 @@
+# RUL_SELPLAT数据库SQL文件结构与命名规则 升级历史
+
+> 可丢失历史记录：本文件不是规则、索引、程序、测试或构建输入；当前有效约束只以正式规则正文为准。
+
+<!-- 首次升级记录说明规则来自用户对 dataShape、混合建表文件和错误命名的连续修正。 -->
+upgrade_record = 2026-08-07:根据reference-data数据库重构建立SQL目录_单表文件_职责分离_注释与隔离验证规则;2026-08-07:移除具体用户前缀并通过AGENTS动态解析规则所有者;2026-08-10:权威数据库统一到db根_业务表按TableNameId一表一号段_CommonSequenceSegment自身保留identity避免循环依赖;2026-08-10:严格本地数据库应用默认账号统一为sa_默认密码统一为123456_测试必须显式隔离覆盖;2026-08-10:数据库应用路径_结构_号段策略和数据源前缀统一进入当前用户中央登记_业务工程不再保存受管隐藏文件;2026-08-10:H2忽略规则统一迁移到SELPLAT根_数据库应用禁止嵌套gitignore;2026-08-10:固化缺库SQL重建_已有库幂等升级_禁止启动脚本删除清空覆盖和MERGE种子;2026-08-10:正式apps数据库改为Git可提交_仅忽略H2运行副产物;2026-08-10:移除根mvdb通配忽略_保证编辑器显示所有正式数据库;2026-08-10:删除MDA嵌套gitignore_before备份规则迁移到根_全模块统一禁止嵌套;2026-08-11:数据库反向导出必须中央登记匹配_完整批次门禁_临时文件原子替换与失败恢复;2026-08-11:删除按项目选择structure的专属架构开关_所有受管应用统一采用真实表业务_无状态能力_common三类职责;2026-08-11:固定初始化主键不得超过六位_reference-data统一六位种子保留区并让运行号段从下一完整区间开始;2026-08-15:增加全局code命名空间聚合号段策略_允许无种子业务表省略data文件_类型与树节点通过显式type模型统一承载选择项和菜单节点;2026-08-15:废弃实体表清理由兼容迁移固定白名单执行_先核对全部记录数_任一非空整体阻断_禁止依赖删除建表SQL自动清库
+
+<!-- 配置数据恢复门禁把正式库和启动 SQL 绑成同一个可恢复交付，但不将用户产生的运行记录回灌为种子数据。 -->
+upgrade_record_20260818_database_recovery_sync = 修改连接_Window等可恢复配置时同步dataSQL_中央登记startupRecoveryTables_门禁检查单表data文件和生产加载清单_运行业务记录不进启动SQL
+
+<!-- 2026-08-21 将活跃H2文件改为本地持久化且不纳入Git，数据库交付以db/sql和说明为准。 -->
+upgrade_record_20260821_runtime_database_git_boundary = Git只提交db_sql和说明_apps_db_mvdb精确忽略_本地运行数据通过备份恢复
+
+<!-- 本次升级把不可辨认的项目名前缀改为对象类型前缀，并明确父容器关联不得依靠解析前缀。 -->
+upgrade_record_20260815_object_code = 全局code使用对象类型前缀加聚合主键_中央登记声明object-kind-plus-global-id_页面父容器使用kind与code显式关联
+
+<!-- 类型和树职责升级记录明确两张表不得混合保存分类与节点明细。 -->
+upgrade_record_20260815_type_tree_boundary = ReferenceDataType只维护类型分类与多语言目录_ReferenceDataTreeNode只允许TREE父子节点_菜单和下拉不得混入树管理
+
+<!-- 废弃清理升级记录固定用户确认不兼容时的物理清理边界。 -->
+upgrade_record_20260815_type_tree_cleanup = 用户确认废弃即物理删除非TREE节点和无调用字段_恢复按真实表结构通查_禁止长期字段白名单兼容
+
+<!-- 独立树升级记录固定 code 与 parentId 为唯一建树关系。 -->
+upgrade_record_20260815_independent_tree = ReferenceDataTreeNode以code和parentId独立建树_删除typeId_nodeCode_attributesJson_类型目录与树表禁止建立外键耦合
+
+<!-- 本次升级把类型目录固定为不依赖项目和资源坐标的全局分类目录。 -->
+upgrade_record_20260816_type_catalog = ReferenceDataType只保存global_code_categoryCode_localized_names_status_sort_audit_删除项目资源坐标和说明字段_categoryCode全局唯一
+
+<!-- 类型目录顺序升级记录固定物理表与业务阅读顺序一致，禁止后补字段长期堆在时间列之后。 -->
+upgrade_record_20260816_type_column_order = ReferenceDataType按id_code_identity_category_localized_status_sort_time排列_已有库原地保留数据重排
+
+<!-- 本次升级把重复的控件种类字段替换为真实控件归属和值层级，业务关联直接使用稳定 code。 -->
+upgrade_record_20260816_type_control_binding = ReferenceDataType使用controlCode绑定ReferenceDataControlLayout_code_valueCode保存业务值_parentTypeCode建立同控件菜单层级_ControlLayout删除typeId_categoryCode物理删除
+
+<!-- 本次升级把 TREE 从类型目录中物理清除，并阻止初始化迁移再次生成。 -->
+upgrade_record_20260816_tree_type_cleanup = ReferenceDataType禁止TREE_valueCode_旧TREE物理删除_有效子类型只解除错误父级_ReferenceDataTreeNode数据不受影响
+
+<!-- 本次升级为独立树补充只读归属坐标，同时禁止坐标重新进入建树或类型耦合。 -->
+upgrade_record_20260816_tree_ownership = ReferenceDataTreeNode增加projectCode_pageCode用于归属展示查询_code加parentId仍是唯一建树关系_禁止类型外键耦合
+
+<!-- 本次升级恢复六张实体表一表一号段，并把无实体表的共享选项组交给独立通用逻辑号段。 -->
+upgrade_record_20260816_option_set_sequence = 六张实体表各用TableNameId且code后缀等于本表id_ReferenceDataObjectId只发optionSetCode等无实体逻辑编码_Type删除controlCode并以optionSetCode建立共享层级
+
+<!-- 本次升级统一独立表号段初始值；表之间依靠表名隔离，不得再用 200000、300000 等人为区间表达表类型。 -->
+upgrade_record_20260817_table_sequence_start = 新建独立实体表号段统一从100000开始_不同表允许相同主键数值_禁止以首位数字划分表类型_已有游标不得被启动重置

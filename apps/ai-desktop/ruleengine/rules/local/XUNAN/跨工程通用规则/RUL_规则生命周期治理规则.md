@@ -105,45 +105,49 @@ legacy_unlayered_rule_layout_policy.2 = no_new_authoring
 <!-- 被完全替代或失去入口的规则必须删除并清理索引；适用于规则退役；业务含义是避免旧规则继续误导执行 -->
 obsolete_rule_and_index_reference_must_be_removed = true
 
-## 规则正文与可选真实材料
+## 规则正文、正式资源与可丢失素材
 
 <!-- 当前用户大项目中的主规则文件必须位于所属通用或应用子项目的 rule 目录。 -->
 active_user_rule_main_file_pattern = <project-or-subproject>/rule/RUL_<主题>规则.md
 
-<!-- 规则需要真实辅助材料时，材料统一进入同一项目下 template 中与规则文件去扩展名同名的目录。 -->
+<!-- 只有影响运行或稳定复现的正式资源才允许进入同一项目下 template 中与规则文件去扩展名同名的目录。 -->
 active_user_rule_template_material_pattern = <project-or-subproject>/template/RUL_<主题>规则/
 
-<!-- template 目录和规则同名材料目录都不是必建项；没有真实材料时不得创建空目录。 -->
-active_user_rule_template_directory_policy = optional_create_only_when_verified_material_exists
+<!-- template 不是辅助素材目录；没有已验证的正式运行或复现依赖时不得创建。 -->
+active_user_rule_template_directory_policy = optional_create_only_when_verified_required_resource_exists
 
-<!-- template 只能收集已经存在、来源可说明且确实帮助规则稳定运行的材料，禁止为补齐结构自行生成模板、案例或素材。 -->
-active_user_rule_template_material_source_policy = collect_verified_existing_material_only
-<!-- active_user_rule_template_material_source_policy.2 的当前独立事实为不生成虚假材料。 -->
+<!-- template 只能保存已经存在、来源可说明且确实影响规则运行或稳定复现的正式资源。 -->
+active_user_rule_template_material_source_policy = verified_required_runtime_or_repeatability_resource_only
+<!-- active_user_rule_template_material_source_policy.2 的当前独立事实为不生成虚假资源。 -->
 active_user_rule_template_material_source_policy.2 = no_synthetic_material
 
-<!-- 无法证明材料属于哪条规则时必须停止归类并报告，禁止按文件名或目录相似度猜测。 -->
-unowned_template_material_policy = report_without_guessing_or_copying
+<!-- 非权威图片、Excel、示例数据和人工参考副本统一进入可丢失素材根，禁止继续散落在规则包 template。 -->
+optional_rule_material_root = apps/ai-desktop/ruleengine/history/素材
+<!-- 辅助素材目录整体丢失时不得影响生产规则、能力、构建、测试、门禁或客户规则包。 -->
+optional_rule_material_missing_policy = no_runtime_build_test_gate_or_bundle_effect
+<!-- 无法证明属于正式运行或稳定复现依赖的材料一律按可丢失素材处理，禁止凭文件名升级为正式资源。 -->
+unowned_template_material_policy = move_to_optional_material_root_without_production_reference
 
-<!-- 同一真实材料被多个子项目复用时必须提升到大项目通用规则包，禁止复制二进制或维护多个版本。 -->
-shared_template_material_policy = promote_to_large_project_general_rule_package
-<!-- shared_template_material_policy.2 的当前独立事实为 no_duplicate_binary。 -->
+<!-- 同一正式必需资源被多个子项目复用时必须提升到大项目通用正式资源包，禁止复制二进制或维护多个版本。 -->
+shared_template_material_policy = promote_required_resource_to_large_project_general_rule_package
+<!-- shared_template_material_policy.2 的当前独立事实为不复制正式二进制资源。 -->
 shared_template_material_policy.2 = no_duplicate_binary
 
-<!-- 需要解释材料来源、用途、使用方法或主规则入口时可以编写 README，但不得复制规则正文。 -->
-active_user_rule_template_readme_policy = optional_manifest_source_usage_and_rule_entry_only
+<!-- 正式 template 的 README 只解释必需资源来源、用途、使用方法和主规则入口，不得复制规则正文。 -->
+active_user_rule_template_readme_policy = required_resource_manifest_source_usage_and_rule_entry_only
 
 <!-- RULE_INDEX 只指向 rule 下的主规则文件，不得指向 template 材料或 README。 -->
 active_user_rule_index_target_policy = rule_main_file_only
 <!-- active_user_rule_index_target_policy.2 的当前独立事实为索引不得指向模板或说明文件。 -->
 active_user_rule_index_target_policy.2 = no_template_or_readme_target
 
-<!-- 跨工程通用规则是明确例外，继续直接位于其作用域根；已有真实同名材料目录可以保留，但不强制创建。 -->
+<!-- 跨工程通用规则是规则正文布局例外并继续位于作用域根；辅助素材仍必须进入统一 history 素材根。 -->
 cross_project_rule_layout_exception = direct_rule_file_in_cross_project_root
-<!-- cross_project_rule_layout_exception.2 的当前独立事实为 optional_existing_same_name_material_directory。 -->
-cross_project_rule_layout_exception.2 = optional_existing_same_name_material_directory
+<!-- cross_project_rule_layout_exception.2 的当前独立事实为辅助素材不允许使用规则旁目录。 -->
+cross_project_rule_layout_exception.2 = optional_material_still_uses_ruleengine_history_material_root
 
-<!-- 当前用户规则层使用大项目、通用/应用、rule 和可选 template 结构；业务含义是未来规则经审查提升到 common 时可以保持相对分类和规则包边界。 -->
-active_user_rule_layout_policy = project_general_application_rule_optional_template_structure
+<!-- 当前用户规则层使用大项目、通用/应用、rule 和可选正式 template；辅助素材与历史记录统一离开生产规则树。 -->
+active_user_rule_layout_policy = project_general_application_rule_optional_required_template_plus_decoupled_history
 
 <!-- 用户根索引只汇总跨工程和大项目索引，具体逻辑 ID 由最下级所属索引维护。 -->
 active_user_index_pattern = local/<stable-user-id>/RULE_INDEX.md -> cross-project-or-project-index -> owning-leaf-index
@@ -153,10 +157,10 @@ active_user_program_registry_policy = create_only_for_multiple_registered_runtim
 <!-- active_user_program_registry_policy.2 的当前独立事实为 otherwise_direct_program_entry。 -->
 active_user_program_registry_policy.2 = otherwise_direct_program_entry
 
-<!-- 规则生成器只创建 rule 主文件和索引入口；真实材料的核验与 template 收集保持人工处理，避免程序复制或生成虚假材料。 -->
+<!-- 规则生成器只创建 rule 主文件和索引入口；正式资源与辅助素材均须人工判定，避免程序复制或生成虚假材料。 -->
 rule_generator_default_output = rule_main_file + owning_leaf_rule_index_entry
-<!-- rule_generator_template_output_condition 的当前独立事实为 manual_collection_after_source_verification_only。 -->
-rule_generator_template_output_condition = manual_collection_after_source_verification_only
+<!-- rule_generator_template_output_condition 的当前独立事实为仅在证明为正式必需资源后人工收集。 -->
+rule_generator_template_output_condition = manual_collection_after_required_resource_verification_only
 
 <!-- Java、Python 和 Node 能力统一保存在 rule-engine 的对应源码根；适用于规则自动生成、检测、迁移和工具交付；业务含义是能力可被多个规则包引用且不会复制到 resources。 -->
 rule_engine_ability_source_roots = ../java/com/sp/selplat/local/code/<layer>/
@@ -195,7 +199,7 @@ rule_generator_must_block.4 = empty_template_directory
 <!-- rule_generator_must_block.5 的当前独立事实为 synthetic_material。 -->
 rule_generator_must_block.5 = synthetic_material
 
-<!-- common 旧“通用规则/应用规则”、根 rule/template、散落 docs/assets 和规则旁同名资产目录必须迁入新分类并清理旧引用。 -->
-legacy_common_layout_migration_policy = move_to_general_or_application_rule_and_optional_template
+<!-- 旧规则正文迁入正式分层，必需资源迁入正式 template，辅助素材和历史记录迁入 ruleengine/history 并清理生产引用。 -->
+legacy_common_layout_migration_policy = rules_to_layered_rule_required_resources_to_template_optional_material_and_records_to_history
 <!-- legacy_common_layout_migration_policy.2 的当前独立事实为 clean_old_paths。 -->
 legacy_common_layout_migration_policy.2 = clean_old_paths

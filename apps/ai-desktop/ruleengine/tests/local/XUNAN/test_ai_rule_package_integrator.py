@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import importlib.util
 import os
 from pathlib import Path
@@ -83,6 +84,26 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertEqual(result["active_user_rule_files"], expected_rule_files)
         self.assertGreaterEqual(result["active_user_standard_asset_packages"], 1)
         self.assertGreaterEqual(result["active_user_rules_with_program_references"], 1)
+        # 顶层指标必须汇总根层与当前用户层，不能再隐藏用户规则中的失效引用或元数据缺口。
+        self.assertEqual(
+            result["audited_rule_files"],
+            result["indexed_rules"] + result["active_user_rule_files"],
+        )
+        self.assertEqual(result["audit_scope"], "core_common_and_current_active_user")
+        all_rule_audits = [*result["rules"], *result["active_user_rules"]]
+        self.assertEqual(
+            result["stale_reference_count"],
+            sum(len(rule["stale_references"]) for rule in all_rule_audits),
+        )
+        self.assertEqual(
+            result["active_user_stale_reference_count"],
+            sum(len(rule["stale_references"]) for rule in result["active_user_rules"]),
+        )
+        self.assertEqual(
+            result["gap_counts"],
+            dict(Counter(gap for rule in all_rule_audits for gap in rule["gaps"])),
+        )
+        self.assertEqual(result["stale_reference_count"], 0)
         self.assertEqual(result["decision_boundary"], "facts_only_ai_must_review_before_merge_or_delete")
 
     def test_write_report_is_limited_to_option(self) -> None:
@@ -154,6 +175,62 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             text,
         )
 
+    def test_rule_engine_history_tree_is_optional_and_unindexed(self) -> None:
+        """辅助素材和历史记录不得进入生产索引或程序依赖闭包。"""
+
+        rule_engine_root = PROJECT_ROOT / "apps/ai-desktop/ruleengine"
+        rule_path = (
+            rule_engine_root
+            / "rules/local"
+            / ACTIVE_STABLE_USER_ID
+            / "selplat/应用/rule-engine/rule/RUL_AI规则包智慧整合规则.md"
+        )
+        rule_text = rule_path.read_text(encoding="utf-8")
+        # 可丢失语义必须由正式规则承载，不能只写在 history 自身的说明文件中。
+        self.assertIn(
+            "history_tree_missing_behavior = "
+            "continue_without_error_or_degraded_production_result",
+            rule_text,
+        )
+        self.assertIn(
+            "current_effective_contract_must_exist_outside_history = true",
+            rule_text,
+        )
+        self.assertIn(
+            "runtime_build_test_gate_and_bundle_dependency_on_history = forbidden",
+            rule_text,
+        )
+
+        # 任何生产规则索引都不得把 history 文件登记成逻辑 ID 的实体路径。
+        rules_root = rule_engine_root / "rules"
+        for index_path in rules_root.rglob("RULE_INDEX.md"):
+            for line_number, line in enumerate(
+                    index_path.read_text(encoding="utf-8").splitlines(), 1):
+                if re.match(r"^[A-Z][A-Z0-9_]*\s*=", line):
+                    self.assertNotIn(
+                        "history/",
+                        line.replace("\\", "/"),
+                        f"{index_path}:{line_number} 不得登记 history 资源",
+                    )
+
+        # 生产 Python、清单和 AI Desktop 脚本不能读取可丢失历史根。
+        production_roots = [
+            rule_engine_root / "python",
+            rule_engine_root / "manifest",
+            PROJECT_ROOT / "apps/ai-desktop/scripts",
+        ]
+        source_suffixes = {".py", ".js", ".mjs", ".cjs", ".json", ".toml"}
+        for production_root in production_roots:
+            for source_path in production_root.rglob("*"):
+                if not source_path.is_file() or source_path.suffix not in source_suffixes:
+                    continue
+                source_text = source_path.read_text(encoding="utf-8", errors="ignore")
+                self.assertNotIn(
+                    "ruleengine/history",
+                    source_text.replace("\\", "/"),
+                    f"生产文件不得依赖可丢失历史根：{source_path}",
+                )
+
     def test_transient_operation_feedback_rule_is_registered(self) -> None:
         """非阻断操作提示必须从当前用户 SELPLAT 通用索引稳定命中。"""
 
@@ -164,7 +241,9 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             / "selplat/通用"
         )
         # 叶子索引必须登记稳定逻辑 ID，禁止依赖扫描目录猜测规则入口。
-        index_text = (user_rule_root / "RULE_INDEX.md").read_text(encoding="utf-8")
+        index_text = (
+            user_rule_root / "index/界面运行时/RULE_INDEX.md"
+        ).read_text(encoding="utf-8")
         self.assertIn(
             "SELPLAT_TRANSIENT_OPERATION_FEEDBACK_TOAST_RULES = "
             f"local/{ACTIVE_STABLE_USER_ID}/selplat/通用/rule/RUL_SELPLAT短时操作反馈规则.md",
@@ -200,7 +279,7 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             PROJECT_ROOT
             / "apps/ai-desktop/ruleengine/rules/local"
             / ACTIVE_STABLE_USER_ID
-            / "跨工程通用规则/RULE_INDEX.md"
+            / "跨工程通用规则/index/规则与执行治理/RULE_INDEX.md"
         ).read_text(encoding="utf-8")
         self.assertIn(
             "RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES = "

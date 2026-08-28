@@ -3,6 +3,15 @@
 <!-- AI 规则包智慧整合由当前用户层优先加载。 -->
 AI_RULE_PACKAGE_INTELLIGENCE_RULES = local/XUNAN/selplat/应用/rule-engine/rule/RUL_AI规则包智慧整合规则.md
 
+<!-- 新建、迁移、清理或审查 rule-engine 的 history、素材、历史记录及其生产零依赖边界时加载智慧整合规则。 -->
+load_rule_for_rule_engine_history_material_or_record_decoupling = AI_RULE_PACKAGE_INTELLIGENCE_RULES
+
+<!-- 新增、拆分或审查索引、规则正文体量、依赖闭包、缓存和生产清单时加载结构门禁。 -->
+load_rule_for_rule_engine_index_rule_size_dependency_or_structure_gate = AI_RULE_PACKAGE_INTELLIGENCE_RULES
+
+<!-- 审查全层缺口、失效引用、语义冲突候选或比较任务规则闭包 Token 代理与加载耗时时加载智慧整合规则。 -->
+load_rule_for_rule_engine_audit_conflict_candidate_or_bundle_benchmark = AI_RULE_PACKAGE_INTELLIGENCE_RULES
+
 <!-- AI 工厂的服务端登记、七角色体系、任务生成根、审计事实和 Java 展示边界由当前用户层固定。 -->
 AI_FACTORY_SERVER_MANAGEMENT_AND_TASK_RUNTIME_RULES = local/XUNAN/selplat/应用/rule-engine/rule/RUL_AI工厂服务端管理与任务目录规则.md
 
@@ -10,7 +19,7 @@ AI_FACTORY_SERVER_MANAGEMENT_AND_TASK_RUNTIME_RULES = local/XUNAN/selplat/应用
 load_rule_for_ai_factory_architecture_runtime_or_naming_change = AI_FACTORY_SERVER_MANAGEMENT_AND_TASK_RUNTIME_RULES
 
 <!-- Python core 采用 executor、abilities、util 三段活跃结构，并隔离封存非核心实现。 -->
-RULE_ENGINE_PYTHON_CORE_ABILITY_UTIL_STRUCTURE_RULES = active-user/rules/应用/RUL_Python核心能力与Util结构规则.md
+RULE_ENGINE_PYTHON_CORE_ABILITY_UTIL_STRUCTURE_RULES = local/XUNAN/selplat/应用/rule-engine/rule/RUL_Python核心能力与Util结构规则.md
 
 <!-- 修改 Python core 目录结构、执行器注册或 util 边界时加载该规则。 -->
 load_rule_for_python_core_ability_util_structure_change = RULE_ENGINE_PYTHON_CORE_ABILITY_UTIL_STRUCTURE_RULES

@@ -10,8 +10,6 @@ rule_owner_source = AGENTS.md.current_stable_user_id
 rule_version = 1.1.0
 <!-- 当前规则已经登记到由 AGENTS.md 解析的当前稳定用户 SELPLAT 通用规则索引。 -->
 rule_status = active
-<!-- 本次升级来自对三类根目录是否可合并、可删除的工程级确认。 -->
-upgrade_record = 2026-08-25:固化_build_cache_OPTION_temp_不可合并_职责判定_Gradle映射_离线缓存与任务现场清理门槛
 
 <!-- 工程名必须从当前被操作应用的登记、清单或已验证源码根解析，禁止复制示例名。 -->
 application_name_resolution_contract = registered_application_or_verified_source_root_basename + exactly_one_application_scope_per_turn + safe_identifier_validation + no_example_name_copy + no_arbitrary_path_as_name
