@@ -242,6 +242,10 @@ button { color: inherit; }
 .temp-card button svg { width: 16px; }
 .temp-card button:hover { border-color: color-mix(in srgb, var(--sel-theme-workbench-accent) 46.67%, transparent); }
 .temp-card button.danger:hover { border-color: var(--sel-theme-semantic-error); color: var(--sel-theme-semantic-error); }
+/* 重启级测试数据清空入口保持首屏醒目，并明确区别于只删除临时文件的普通“一键清理”。 */
+.test-data-reset-card { border-color: color-mix(in srgb, var(--sel-theme-semantic-error) 58%, var(--sel-theme-line)); background: color-mix(in srgb, var(--sel-theme-workbench-error-surface) 72%, var(--sel-theme-workbench-input)); }
+.test-data-reset-card > div { grid-template-columns: minmax(0, 1fr); }
+.test-data-reset-card button.danger { border-color: color-mix(in srgb, var(--sel-theme-semantic-error) 72%, var(--sel-theme-line)); color: var(--sel-theme-semantic-error); }
 .audit-card em { color: var(--sel-theme-semantic-error); font-size: var(--sel-theme-font-size-caption); font-style: normal; line-height: 1.45; }
 .audit-card > div { grid-template-columns: 1fr; }
 

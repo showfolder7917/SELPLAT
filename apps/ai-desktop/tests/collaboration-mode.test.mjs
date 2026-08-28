@@ -1029,9 +1029,16 @@ test("进程在写入持有者记录前退出时能够恢复孤儿锁", async ()
 });
 
 test("令狐自动保障用户层规则登记全量检测、故障指纹、损坏恢复与固定报告", () => {
-  const rule = readFileSync(new URL("../ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md", import.meta.url), "utf8");
+  const rule = [
+    "RUL_AIDesktop官方Harness接入规则.md",
+    "RUL_AIDesktop事件记忆与统一界面规则.md",
+    "RUL_AIDesktopHarness工作区与运行时规则.md",
+    "RUL_AIDesktop协作与自动化规则.md",
+    "RUL_AIDesktop截图与输入规则.md",
+    "RUL_AIDesktop演化持久化与发布规则.md",
+  ].map((fileName) => readFileSync(new URL(`../ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/${fileName}`, import.meta.url), "utf8")).join("\n");
   assert.match(rule, /^rule_version = \d+\.\d+\.\d+$/m);
-  assert.match(rule, /upgrade_record_5_100 = [^\n]*韩立南宫婉共用selConversation正式出口/);
+  assert.match(rule, /ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation \+ hanli_and_nangong_same_formal_exports/);
   assert.match(rule, /nangong_distribution_planning_contract = AI_read_only_investigation/);
   assert.match(rule, /linghu_exception_intake_loop_prevention_contract = single_event_center_entry/);
   assert.match(rule, /evolution_workspace_information_architecture_contract = one_expandable_tree_people_evolution_audit_with_groups_and_leaves/);
@@ -1040,11 +1047,12 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /respectful_listening_and_correction_are_nangong_personality/);
   assert.match(rule, /reflect_current_concern_not_mechanical_template/);
   assert.match(rule, /never_expand_user_intent/);
-  assert.match(rule, /codex_conversation_backfill_contract = separate_archive_not_nangong_memory/);
+  assert.match(rule, /codex_conversation_backfill_contract = one_training_corpus_table_with_codex_nangong_hanli_source/);
   assert.match(rule, /workflow_event_center_single_entry_contract = EventCenterFacade_to_archive_and_main_process_SQLite/);
+  assert.match(rule, /opt_in_codex_work_desktop_current_workspace_task_complete_watch_plus_startup_backfill/);
+  assert.match(rule, /codex_app_ingestion_default_off_and_user_toggleable/);
   assert.match(rule, /workflow_event_center_stall_contract = independent_30_second_supervisor_plus_120_second_timeout_plus_fault_fact_dedup_plus_linghu_handoff/);
   assert.match(rule, /nangong_next_evolution_launcher_contract = completed_and_accepted_plus_automatic_evolution_enabled_plus_reciprocal_topic_ids_plus_idempotent_restart/);
-  assert.match(rule, /upgrade_record_5_83 = [^\n]*所有登记人物共用原提交人校验和不可覆盖修订版本/);
   assert.match(rule, /collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow[\s\S]*no_display_name_business_branch/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);

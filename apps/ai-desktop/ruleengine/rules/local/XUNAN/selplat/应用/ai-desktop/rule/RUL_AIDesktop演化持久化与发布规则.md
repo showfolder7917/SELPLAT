@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- Windows 开发启动器必须使用自相对路径、最新正式构建和本地 Electron 文件入口。 -->
 windows_developer_launcher_contract = self_relative_path + dependency_check + mandatory_current_developer_build + electron_local_file_start + prohibit_application_http_dev_server + isolated_test_server_not_runtime_dependency
 <!-- macOS 开发版双击启动器必须从自身目录解析工程，检查 Node、npm、Electron 和官方 Codex 依赖，每次先正式构建最新开发版，构建失败时禁止启动 Electron。 -->
 macos_developer_launcher_contract = self_relative_path + node_npm_electron_and_official_codex_dependency_check + mandatory_fresh_developer_build_before_launch + build_failure_blocks_launch + package_fixed_bundle_id_ai_desktop_app + bootstrap_loads_packaged_main_only + prohibit_external_runtime_compatibility + always_repackage_self_contained_latest_build + stable_designated_requirement_uses_bundle_identifier_not_cdhash + verifier_rejects_cdhash_designated_requirement + verify_packaged_codex_official_signature_and_isolated_real_start + permission_refresh_after_identity_change + exact_resolved_app_executable_process_match + gracefully_terminate_all_existing_same_app_instances + abort_when_old_instance_remains + launchservices_register + open_packaged_app_never_raw_dependency_electron + prohibit_parallel_old_and_new_ai_desktop_processes

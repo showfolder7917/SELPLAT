@@ -9,9 +9,12 @@ rule_status = active
 
 <!-- 本职责按真实 Japanese 调用方登记 Java、Python 与 Node 边界。 -->
 java_ability_refs = apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion/service/JapaneseN2BlueBookQuestionService.java
+<!-- 本职责没有独立 Python 能力入口。 -->
 python_ability_refs = none
+<!-- 题库界面与应用结构由 Japanese 页面脚本承载。 -->
 node_ability_refs = apps/japanese/backend/src/main/resources/static/japanese/japanese.js
 
+<!-- 各日语等级使用独立题库表，禁止把未来等级混入 N2 表。 -->
 japanese_question_bank_level_table_boundary = N2:JapaneseN2BlueBookQuestion
 <!-- japanese_question_bank_level_table_boundary.2 的当前独立事实为 N1:separate_future_table。 -->
 japanese_question_bank_level_table_boundary.2 = N1:separate_future_table

@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 协作业务日志只保存可审计事件与任务摘要，禁止记录认证秘密和原始推理。 -->
 business_audit_log_contract = selplat_log_ai_desktop_only + append_only_jsonl_timeline + atomic_per_task_summary + request_workspace_sandbox_turn_approval_command_changed_files_completion_correlation + no_auth_secret_or_raw_reasoning
 <!-- 协同耗时分析必须由结构化事件计算并只写日志；人物页面禁止展示时间线、耗时分解和瓶颈占用链。 -->
 collaboration_duration_diagnosis_contract = wall_clock_timestamp_plus_monotonic_duration + analysis_review_wait_review_rework_codex_worktree_change_validation_integration_conflict_approval_user_dependency_recovery_segments + wait_type_reason_resource_owner_and_release_event_attribution + per_integration_generation_bottleneck_report + cross_generation_trend_report + structured_event_evidence_only + member_ui_current_state_block_reason_and_result_only + no_member_timeline_duration_breakdown_or_bottleneck_chain

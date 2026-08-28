@@ -54,9 +54,9 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "reference_data_top_level_modules = types",
         ),
         (
-            "SELPLAT_PUBLIC_COMPONENT_GOVERNANCE_GATE_RULES",
+            "SELPLAT_COMPONENT_REGISTRY_AND_HOST_ADOPTION_RULES",
             "selplat",
-            "selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md",
+            "selplat/通用/rule/RUL_SELPLAT控件注册与宿主接入规则.md",
             "selplat_component_registry = shared/frontend/sel-ui/src/components/component-registry.json",
         ),
         (
@@ -78,9 +78,9 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "selplat_scaffold_required_inputs = projectName",
         ),
         (
-            "JAPANESE_QUESTION_BANK_AI_MEDIA_GENERATION_RULES",
+            "JAPANESE_QUESTION_LEARNING_INTERACTION_RULES",
             "selplat",
-            "selplat/应用/japanese/rule/RUL_日本语题库AI媒体生成规则.md",
+            "selplat/应用/japanese/rule/RUL_日本语题库学习与作答交互规则.md",
             "japanese_generation_confirmation_policy = direct_execution_without_second_confirmation",
         ),
         (
@@ -96,9 +96,9 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
             "ai_factory_local_workflow_driver = none_external_clients_use_registered_http_api",
         ),
         (
-            "SELPLAT_DATABASE_SQL_FILE_STRUCTURE_AND_NAMING_RULES",
+            "SELPLAT_DATABASE_SCHEMA_TABLE_MODEL_RULES",
             "selplat",
-            "selplat/通用/rule/RUL_SELPLAT数据库SQL文件结构与命名规则.md",
+            "selplat/通用/rule/RUL_SELPLAT数据库Schema与表模型规则.md",
             "selplat_schema_sql_single_formal_table_policy",
         ),
         (
@@ -164,10 +164,10 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
     )
 
     def test_validates_complete_active_user_index_tree(self) -> None:
-        """当前用户二十二层索引完整登记八十一个规则逻辑 ID。"""
+        """当前用户三十二层索引完整登记一百零四个规则逻辑 ID。"""
 
         self.assertEqual(
-            loader.IndexValidation(22, 81),
+            loader.IndexValidation(32, 104),
             loader.validate_current_user_index_tree(),
         )
 

@@ -20,12 +20,14 @@ export class NangongEvolutionStore {
   state(): NangongEvolutionState { return structuredClone(this.#state); }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
 
-  /** 清除专题测试历史并安全关闭自动流程，保留用户设置的轮次上限与语言；返回被移除的业务记录数。示例：1 个专题、2 个提案返回至少 3；写入失败时抛错。 */
+  /** 清除专题测试运行态并安全关闭自动流程，保留人物完整对话、训练意图、轮次上限与语言；返回被移除的业务记录数。示例：1 个专题、2 个提案返回 3；写入失败时抛错。 */
   clearTestData(): number {
-    const clearedCount = this.#state.topics.length + this.#state.proposals.length + this.#state.deliberations.length + this.#state.archiveRecords.length + this.#state.conversation.messages.length;
+    const clearedCount = this.#state.topics.length + this.#state.proposals.length + this.#state.deliberations.length + this.#state.archiveRecords.length;
     const next = createInitialState();
     next.automationSettings = structuredClone(this.#state.automationSettings);
     next.automationContext.locale = this.#state.automationContext.locale;
+    // 人物原话与已登记意图是韩立训练语料，不属于可重建测试运行态。
+    next.conversation = structuredClone(this.#state.conversation);
     this.#write(next);
     this.#state = next;
     const snapshot = this.state();

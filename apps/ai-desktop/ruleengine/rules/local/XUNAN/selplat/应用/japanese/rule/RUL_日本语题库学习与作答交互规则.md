@@ -9,9 +9,12 @@ rule_status = active
 
 <!-- 本职责按真实 Japanese 调用方登记 Java、Python 与 Node 边界。 -->
 java_ability_refs = apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion/service/JapaneseN2BlueBookQuestionService.java
+<!-- 本职责没有独立 Python 能力入口。 -->
 python_ability_refs = none
+<!-- 学习与作答交互由 Japanese 页面脚本承载。 -->
 node_ability_refs = apps/japanese/backend/src/main/resources/static/japanese/japanese.js
 
+<!-- 每轮作答必须分别保存轮次和题目记录，支持完整复盘。 -->
 japanese_answer_history_storage = JapaneseN2QuestionAnswerRound
 <!-- japanese_answer_history_storage.2 的当前独立事实为 JapaneseN2QuestionAnswerRecord。 -->
 japanese_answer_history_storage.2 = JapaneseN2QuestionAnswerRecord

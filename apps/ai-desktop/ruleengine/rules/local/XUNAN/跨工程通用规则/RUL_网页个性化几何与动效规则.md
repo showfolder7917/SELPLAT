@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 个性化几何与动效统一覆盖面板、窗口和下拉表面，避免各控件私有实现。 -->
 web_personalization_shared_surface_scope = panel
 <!-- web_personalization_shared_surface_scope.2 的当前独立事实为 window。 -->
 web_personalization_shared_surface_scope.2 = window

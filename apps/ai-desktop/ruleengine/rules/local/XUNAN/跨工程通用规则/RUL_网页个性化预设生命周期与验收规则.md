@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 个性化预设必须覆盖已登记的稳定主题组合并遵循统一生命周期。 -->
 web_personalization_presets = deep-space
 <!-- web_personalization_presets.2 的当前独立事实为 transparent。 -->
 web_personalization_presets.2 = transparent

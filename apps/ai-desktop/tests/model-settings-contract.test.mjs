@@ -14,9 +14,12 @@ const developer = read("src/variants/developer/DeveloperApp.tsx");
 const interactionPreload = read("tests/interaction/isolated-preload.cjs");
 const packageManifest = read("package.json");
 const testDocumentRunner = read("scripts/test-document-runner.mjs");
-const agents = read("AGENTS.md");
 const ruleIndex = read("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/RULE_INDEX.md");
-const harnessRule = read("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md");
+const harnessRule = [
+  read("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md"),
+  read("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktopHarness工作区与运行时规则.md"),
+  read("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md"),
+].join("\n");
 
 test("全局设置持久化模型、推理强度和速度且不提供会话覆盖字段", () => {
   assert.match(contracts, /defaultModel: string \| null/);
@@ -26,6 +29,15 @@ test("全局设置持久化模型、推理强度和速度且不提供会话覆�
   assert.match(store, /DEFAULT_AI_DESKTOP_MODEL = "gpt-5\.6-terra"/);
   assert.match(store, /validModel\(value\.defaultModel\) \|\| DEFAULT_AI_DESKTOP_MODEL/);
   assert.doesNotMatch(contracts, /sessionModel|conversationModel/);
+});
+
+test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () => {
+  assert.match(contracts, /codexAppCorpusIngestionEnabled: boolean/);
+  assert.match(store, /codexAppCorpusIngestionEnabled: false/);
+  assert.match(store, /value\.codexAppCorpusIngestionEnabled === true/);
+  assert.match(store, /typeof patch\.codexAppCorpusIngestionEnabled === "boolean"/);
+  assert.match(developer, /Codex 聊天训练入库/);
+  assert.match(developer, /aria-pressed=\{codexAppCorpusIngestionEnabled\}/);
 });
 
 test("模型目录来自官方 app-server 并按模型能力渲染推理强度和速度", () => {
@@ -53,7 +65,6 @@ test("每轮主会话与协同连接读取同一份全局模型设置", () => {
 });
 
 test("已确认的全局模型行为进入应用约束和当前用户规则索引链", () => {
-  assert.match(agents, /default model, reasoning effort, and processing speed/);
   assert.match(harnessRule, /harness_global_model_settings_contract/);
   assert.match(harnessRule, /harness_default_model_contract = initialize_and_migrate_legacy_empty_default_to_gpt_5_6_terra/);
   assert.match(ruleIndex, /RUL_AIDesktop官方Harness接入规则\.md/);

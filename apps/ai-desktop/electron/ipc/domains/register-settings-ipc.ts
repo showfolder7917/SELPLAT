@@ -14,6 +14,7 @@ export function registerSettingsIpc(settings: SettingsStore, eventCenter: EventC
       defaultModel: result.defaultModel,
       reasoningEffort: result.reasoningEffort,
       serviceTier: result.serviceTier,
+      codexAppCorpusIngestionEnabled: result.codexAppCorpusIngestionEnabled,
     });
     return result;
   }, "business");

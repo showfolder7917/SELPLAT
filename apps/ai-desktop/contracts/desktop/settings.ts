@@ -14,4 +14,5 @@ export interface DesktopSettings {
   defaultModel: string | null;
   reasoningEffort: ReasoningEffort | null;
   serviceTier: ModelServiceTier;
+  codexAppCorpusIngestionEnabled: boolean;
 }

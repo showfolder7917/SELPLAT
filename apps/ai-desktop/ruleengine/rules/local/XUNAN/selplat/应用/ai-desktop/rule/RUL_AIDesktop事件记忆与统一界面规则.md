@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.105.0
+rule_version = 5.110.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 南宫婉分发前必须只读调查影响范围，并生成可独立合并且通过令狐审计的任务单元。 -->
 nangong_distribution_planning_contract = AI_read_only_investigation + impact_scope_not_task_count + minimal_independently_mergeable_units + expected_files_and_acceptance + linghu_distribution_audit_before_dispatch + overlap_blocks_dispatch
 <!-- 提案分发的授权边界来自所属专题冻结的工作区；自动演化上下文只服务自动研讨，不能成为手动返还的隐式前置条件。 -->
 nangong_dispatch_workspace_source_contract = proposal_topic_workspace_is_single_source_for_planning_audit_and_task_creation + manual_dispatch_independent_from_automation_context + validate_roots_before_Codex_send + missing_workspace_returns_business_error_not_null_property_TypeError
@@ -23,8 +24,8 @@ linghu_exception_intake_loop_prevention_contract = single_event_center_entry + i
 evolution_workspace_information_architecture_contract = one_expandable_tree_people_evolution_audit_with_groups_and_leaves + left_tree_right_content_two_column_layout + manual_workspace_separate_from_automatic_console + hanli_approval_integrated + SELUI_tree_grid_form_action_controls
 <!-- 单棵树的每个可点击节点都必须对应真实画布页面；人物入口复用窗口时同步默认节点，禁止出现高亮变化但内容不变。 -->
 evolution_workspace_navigation_routing_contract = every_parent_group_and_leaf_drives_distinct_canvas_content + parent_node_has_explicit_overview + perspective_change_syncs_default_flow + selected_state_and_visible_page_remain_consistent + real_Electron_click_every_leaf_with_screenshot_and_result_json
-<!-- 一键清空只处理应用内部测试业务态，必须由设置危险区二次确认并在主进程受控重启。 -->
-ai_desktop_test_data_reset_contract = settings_danger_action_with_SELUI_confirm + explicit_irreversible_scope_and_preserved_scope + typed_renderer_preload_IPC_main_service + stop_all_runtime_writers_before_clear + clear_conversation_dispatch_collaboration_evolution_linghu_and_SQLite_business_tables + preserve_AiDesktopSchemaVersion_login_settings_workspaces_trusted_commands_rules_source_and_audit_files + official_thread_delete_must_succeed_before_irreversible_clear + controlled_restart_after_success + cancellation_and_confirmation_interaction_regression
+<!-- 一键清空只处理可重建的测试运行态，人物原文、训练意图、主题关联、归档语料和主人物官方线程必须长期保留。 -->
+ai_desktop_test_data_reset_contract = settings_danger_action_with_SELUI_confirm + explicit_irreversible_scope_and_preserved_scope + typed_renderer_preload_IPC_main_service + stop_all_runtime_writers_before_clear + clear_conversation_dispatch_collaboration_test_tasks_evolution_runtime_linghu_runtime_and_SQLite_operational_projections + preserve_AiDesktopSchemaVersion_conversation_memory_conversation_topics_topic_links_codex_archive_corpus_checkpoint_main_character_threads_login_settings_workspaces_trusted_commands_rules_source_and_audit_files + internal_automation_thread_delete_must_succeed_before_irreversible_clear + controlled_restart_after_success + cancellation_confirmation_and_training_corpus_preservation_regression
 <!-- 专题演化是独立业务窗口；两个角色入口只能聚焦和切换唯一实例，不得在主窗口继续保留旧右栏。 -->
 evolution_workspace_window_contract = main_window_conversation_only + one_independent_BrowserWindow + nangong_and_hanli_share_instance_state_and_tree + entry_switches_perspective_and_focuses + close_then_reopen + main_window_recreated_on_app_activate_even_if_workspace_remains + no_embedded_or_parallel_legacy_workspace
 <!-- 单个任务返回不能代表本轮完成；只有应收清单全部返回并携带结果版本，才能封存为唯一原子批次触发统一测试。 -->
@@ -39,8 +40,16 @@ nangong_conversation_memory_contract = full_user_and_nangong_source_text_in_SQLi
 nangong_round_semantics_contract = free_form_topic_plus_type_plus_user_intent_each_round + AI_detected_topic_switch_closes_previous + no_fixed_enum
 <!-- 南宫婉可见回答先以自然措辞复述理解，数据库只保存简洁意图本身，用户可据此判断并纠正偏差。 -->
 nangong_visible_intent_contract = respectful_listening_and_correction_are_nangong_personality + answer_starts_我了解到您的想法是 + invite_direct_correction + reflect_current_concern_not_mechanical_template + never_expand_user_intent + database_intent_without_polite_wrapper + intent_visible_below_source_user_message
-<!-- Codex 历史任务页与南宫婉会话分表保存，保证来源真实且控制 AI 内容长度。 -->
-codex_conversation_backfill_contract = separate_archive_not_nangong_memory + exact_real_user_messages + visible_codex_commentary_and_final_answer_80_unicode_preview_only + free_topic_type_and_intent_per_user_message + exclude_system_developer_environment_tool_and_hidden_reasoning + stable_thread_message_idempotency
+<!-- Codex、南宫婉和韩立训练资料进入统一语料表，人物运行表继续保留独立职责；主题与标签只能来自 AI 回合元数据。 -->
+codex_conversation_backfill_contract = one_training_corpus_table_with_codex_nangong_hanli_source + exact_real_user_messages + AI_generated_final_summary_max_300_unicode + per_turn_topic_id + AI_confirmed_free_topic_type_intent_and_tags + pending_when_metadata_absent + no_keyword_classification + exclude_system_developer_environment_tool_hidden_reasoning_and_commentary + stable_source_message_idempotency
+<!-- 主人物 Codex rollout 是持久入库源；回合完成和应用启动都按内容哈希水位补录，失败不得推进检查点。 -->
+character_training_corpus_ingestion_contract = main_character_visible_conversation_only + unified_topic_and_message_tables_with_source_turn_and_evidence_tier + nangong_state_change_sync_plus_startup_resync + ai_desktop_codex_rollout_turn_complete_streaming_ingest_plus_startup_backfill + opt_in_codex_work_desktop_current_workspace_task_complete_watch_plus_startup_backfill + codex_app_ingestion_default_off_and_user_toggleable + exact_user_text_without_injected_workspace_context + AI_confirmed_topic_tags_intent_and_summary_max_300 + missing_metadata_is_pending_without_AI_message + stable_message_idempotency + source_namespaced_content_hash_checkpoint + malformed_historical_internal_line_skipped_without_whole_file_memory_load + database_failure_keeps_source_and_old_checkpoint_for_retry + system_developer_tool_and_internal_automation_prompts_excluded + recent_codex_and_nangong_primary_hanli_low + topic_and_tag_search + hanli_reads_unified_database_corpus_only
+<!-- 历史 Codex 最终回答只能由隔离的 AI 语义整理器补齐；原文不落库，主题标签拒绝机械猜测，成功项逐轮提交并可按原始消息 ID 续跑。 -->
+codex_historical_ai_semantic_backfill_contract = explicit_one_click_all_missing_history_action + completed_visible_codex_work_desktop_SELPLAT_turns_only + newest_created_at_globally_not_file_mtime + bounded_in_memory_semantic_windows + isolated_read_only_non_project_analyzer_workspace + AI_semantic_title_type_intent_tags_and_summary_max_300 + raw_assistant_answer_never_persisted + exact_source_message_id_dedup + strict_JSON_validation_rejects_missing_duplicate_or_over_limit_metadata + small_batch_per_turn_atomic_commit + restart_resumes_remaining + progress_without_raw_content_over_typed_preload
+<!-- 专题、提案、审批、任务、测试、发布与异常属于业务投影，不得伪装成任何人物对话；语料主题只为真实回合建立搜索坐标。 -->
+training_corpus_business_projection_exclusion_contract = visible_spoken_conversation_only + corpus_topic_is_turn_metadata_not_evolution_topic + exclude_proposal_approval_task_test_release_exception_and_audit_records
+<!-- 明确放弃旧库兼容时，数据库只保留一份当前结构基线；禁止恢复旧 Codex 归档表、旧版本搬运 SQL 和原地升级测试。 -->
+ai_memory_current_baseline_contract = one_current_schema_version_1000 + no_legacy_migration_chain + no_AiDesktopConversationArchiveMessage + no_preview_80 + no_old_version_data_copy + rebuild_database_then_rescan_authoritative_codex_rollouts + current_conversation_checkpoint_and_business_tables_remain
 <!-- AI Desktop 页面不得维护可复用控件皮肤；缺失能力必须先进入 SELUI 中央登记、正式出口和统一 Token，再由页面消费。 -->
 ai_desktop_selui_ownership_contract = page_uses_SELUI_for_all_reusable_visual_controls + missing_control_register_and_extend_SELUI_first + developer_css_business_layout_only + no_private_tooltip_confirm_prompt_dialog_switch_skin
 <!-- 所有人物会话共享一个 SELUI 对话控件；人物差异只通过插槽注入，不得复制回车、附件、消息卡或输入区实现。 -->

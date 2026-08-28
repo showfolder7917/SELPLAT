@@ -125,7 +125,7 @@ test("锁文件依赖缓存迁移后重建本地公共包链接", () => {
   assert.match(dependencyCache, /export function repairLocalPackageLinks/);
   assert.match(dependencyCache, /metadata\?\.link !== true/);
   assert.match(dependencyCache, /targetRelative\.startsWith/);
-  assert.match(dependencyCache, /repairLocalPackageLinks\(details\);[\s\S]*symlinkSync\(details\.dependencyRoot/);
+  assert.match(dependencyCache, /repairLocalPackageLinks\(details\);[\s\S]*createDependencyLink\(details\.dependencyRoot, details\.linkPath\)/);
   assert.match(dependencyRunner, /node-common-core[\s\S]*build-node-common\.mjs[\s\S]*sync-node-common-runtime\.mjs/);
 });
 

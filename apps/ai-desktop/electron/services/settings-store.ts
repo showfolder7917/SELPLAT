@@ -9,7 +9,7 @@ import {
 } from "../../contracts/desktop/desktop.js";
 
 export const DEFAULT_AI_DESKTOP_MODEL = "gpt-5.6-terra";
-const SETTINGS_SCHEMA_VERSION = 1;
+const SETTINGS_SCHEMA_VERSION = 2;
 
 const DEFAULT_SETTINGS: DesktopSettings = {
   locale: "ja",
@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS: DesktopSettings = {
   defaultModel: DEFAULT_AI_DESKTOP_MODEL,
   reasoningEffort: null,
   serviceTier: "default",
+  codexAppCorpusIngestionEnabled: false,
 };
 
 interface StoredDesktopSettings extends Partial<DesktopSettings> {
@@ -25,6 +26,7 @@ interface StoredDesktopSettings extends Partial<DesktopSettings> {
 
 export class SettingsStore {
   readonly #filePath: string;
+  readonly #listeners = new Set<(settings: DesktopSettings) => void>();
 
   constructor(filePath: string) {
     this.#filePath = filePath;
@@ -34,7 +36,7 @@ export class SettingsStore {
     try {
       const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as StoredDesktopSettings;
       // 旧版本没有模型迁移标记；仅把旧的空默认值升级为 Terra，之后仍允许用户主动选择 Codex 默认。
-      const defaultModel = value.settingsSchemaVersion === SETTINGS_SCHEMA_VERSION
+      const defaultModel = Number(value.settingsSchemaVersion || 0) >= 1
         ? validModel(value.defaultModel)
         : validModel(value.defaultModel) || DEFAULT_AI_DESKTOP_MODEL;
       return {
@@ -43,6 +45,7 @@ export class SettingsStore {
         defaultModel,
         reasoningEffort: validReasoningEffort(value.reasoningEffort),
         serviceTier: validServiceTier(value.serviceTier) || "default",
+        codexAppCorpusIngestionEnabled: value.codexAppCorpusIngestionEnabled === true,
       };
     } catch {
       return { ...DEFAULT_SETTINGS };
@@ -61,9 +64,19 @@ export class SettingsStore {
         ? current.reasoningEffort
         : validReasoningEffort(patch.reasoningEffort),
       serviceTier: validServiceTier(patch.serviceTier) || current.serviceTier,
+      codexAppCorpusIngestionEnabled: typeof patch.codexAppCorpusIngestionEnabled === "boolean"
+        ? patch.codexAppCorpusIngestionEnabled
+        : current.codexAppCorpusIngestionEnabled,
     };
     writeFileSync(this.#filePath, JSON.stringify({ settingsSchemaVersion: SETTINGS_SCHEMA_VERSION, ...next }, null, 2), "utf8");
+    for (const listener of this.#listeners) listener(next);
     return next;
+  }
+
+  /** 设置保存后通知同一主进程中的运行能力。示例：开启 Codex 入库立即启动补录；监听异常会传播给设置 IPC 并保持旧文件可重读。 */
+  subscribe(listener: (settings: DesktopSettings) => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
   }
 }
 

@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 主题颜色模式必须覆盖跟随皮肤、自定义颜色和快捷色板。 -->
 web_personalization_unified_theme_color_modes = follow-current-skin
 <!-- web_personalization_unified_theme_color_modes.2 的当前独立事实为 arbitrary-color。 -->
 web_personalization_unified_theme_color_modes.2 = arbitrary-color

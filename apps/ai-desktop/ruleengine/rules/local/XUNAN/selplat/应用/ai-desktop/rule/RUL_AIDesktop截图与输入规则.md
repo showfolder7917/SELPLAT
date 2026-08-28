@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 截图必须由主进程选择平台适配器并向隔离窗口交付单张已校验 PNG，再由用户完成区域与标注。 -->
 screenshot_capture_and_annotation_boundary = capture_click_state + separate_borderless_screenshot_window + main_window_bounds_unchanged + hide_cached_screenshot_window_on_done_or_cancel + electron_main_preflights_bound_display + one_platform_capture_adapter_entry + macos_usr_sbin_screencapture_x_t_png_D + windows_target_display_physical_pixel_desktopCapturerSource_thumbnail + isolated_screenshot_renderer_receives_one_validated_png_per_round + renderer_region_crop_red_pen_rectangle + validated_png_only
 <!-- macOS 原生截图不传 -C；Windows 只读取目标显示器一次性缩略帧；两个平台均禁止视频流、透明指针遮罩和像素修补。 -->
 screenshot_cursor_exclusion_contract = macos_native_screencapture_without_C + windows_one_shot_target_display_thumbnail + wait_1200ms_for_automation_pointer_overlay_window_to_expire_before_capture + prohibit_getDisplayMedia_getUserMedia_media_stream + prohibit_getCursorScreenPoint_transparent_cursor_overlay_and_pixel_repair + macos_scratch_png_deleted_immediately_after_read + original_and_annotated_png_without_cursor_artifact

@@ -76,7 +76,7 @@ test("AI Memory 恢复状态显示明确提示且不暴露数据库路径", asyn
 
   await page.goto(pathToFileURL(productionRendererFile).href);
   await expect(page.locator(".ai-memory-recovery")).toHaveCount(0);
-  await expect(page.locator(".dev-statusbar")).toContainText("AI Memory v0008 · 统一事件中心");
+  await expect(page.locator(".dev-statusbar")).toContainText("AI Memory v1000 · 统一事件中心");
 });
 
 test("新建任务入口位于聊天标签且不再占用任务标题", async () => {
@@ -194,16 +194,37 @@ test("全局模型设置复用 Harness 模型能力并同时保存强度与速�
   await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
 });
 
+test("Codex 桌面聊天训练入库由用户显式开启并说明采集边界", async () => {
+  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
+  const card = page.locator(".codex-corpus-card");
+  await expect(card).toContainText("只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库");
+  const toggle = card.getByRole("button", { name: "开启入库" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  await expect(card.getByRole("button", { name: "停止入库" })).toHaveAttribute("aria-pressed", "true");
+  await expect(card.getByText("已开启", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "停止入库" }).click();
+  await expect(card.getByRole("button", { name: "开启入库" })).toHaveAttribute("aria-pressed", "false");
+  const backfill = card.getByRole("button", { name: "一键补齐历史 AI 摘要" });
+  await expect(backfill).toBeVisible();
+  await backfill.click();
+  await expect(card.getByRole("status")).toContainText("补齐完成：新增 2 条 AI 摘要。");
+  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
+});
+
 test("一键清空测试数据必须二次确认且明确保留范围", async () => {
   await page.getByRole("button", { name: "打开连接与执行设置" }).click();
   const resetButton = page.getByRole("button", { name: "一键清空测试数据" });
   await expect(resetButton).toBeVisible();
-  await expect(page.getByText("保留登录、设置、工作区、可信命令、规则、源码和工程审计文件；完成后自动重启应用。")).toBeVisible();
+  // 打开设置后入口必须直接位于首屏，不能依赖用户猜测面板还可以继续向下滚动。
+  await expect(resetButton).toBeInViewport();
+  await expect(page.locator(".dev-account").locator("xpath=following-sibling::*[1]")).toHaveClass(/test-data-reset-card/);
+  await expect(page.getByText("保留人物对话、训练记忆、登录、设置、工作区、规则和源码；完成后自动重启应用。")).toBeVisible();
 
   await resetButton.click();
   let dialog = page.getByRole("dialog", { name: "一键清空测试数据" });
   await expect(dialog).toContainText("此操作不可撤销");
-  await expect(dialog).toContainText("不会删除登录、设置、工作区、可信命令、规则、源码和工程审计文件");
+  await expect(dialog).toContainText("不会删除人物对话、训练记忆、登录、设置、工作区、可信命令、规则、源码和工程审计文件");
   await dialog.getByRole("button", { name: "取消" }).click();
   await page.getByRole("button", { name: "打开连接与执行设置" }).click();
   const reopenedResetButton = page.getByRole("button", { name: "一键清空测试数据" });

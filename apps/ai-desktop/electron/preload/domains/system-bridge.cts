@@ -6,6 +6,8 @@ export function systemBridge() {
     getEnvironment: () => invoke("desktop:get-environment"),
     getAiMemoryDatabaseStatus: () => invoke("desktop:get-ai-memory-database-status"),
     clearTestData: () => invoke("desktop:clear-test-data"),
+    getCorpusSemanticBackfillStatus: () => invoke("desktop:get-corpus-semantic-backfill-status"),
+    startCorpusSemanticBackfill: (limit?: number) => invoke("desktop:start-corpus-semantic-backfill", limit),
     getApprovalGovernance: () => invoke("desktop:get-approval-governance"),
     getSettings: () => invoke("desktop:get-settings"),
     updateSettings: (settings: unknown) => invoke("desktop:update-settings", settings),

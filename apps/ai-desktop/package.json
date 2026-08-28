@@ -30,7 +30,6 @@
     "verify:developer-package-root": "node scripts/run-with-dependencies.mjs node scripts/verify-developer-package-root.mjs",
     "verify:package-content": "node scripts/run-with-dependencies.mjs node scripts/verify-package-content.mjs",
     "migrate:data-layout": "node scripts/run-with-dependencies.mjs node scripts/migrate-project-data-layout.mjs",
-    "backfill:codex-conversation": "npm run build:electron && node scripts/run-with-dependencies.mjs node scripts/backfill-codex-conversation.mjs",
     "paths:resolve": "node scripts/run-with-dependencies.mjs node scripts/resolve-application-paths.mjs",
     "migrate:dependencies": "node scripts/migrate-dependencies-to-cache.mjs",
     "dependencies:ensure": "node scripts/ensure-dependency-cache.mjs",

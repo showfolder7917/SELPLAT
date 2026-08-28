@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 本职责分片延续官方 Harness 聚合规则作用域，供依赖闭包加载与审计识别。 -->
 rule_scope = selplat/application/ai-desktop/official_harness
 <!-- AI Desktop 只维护 Developer 产品线；启动、构建、打包、运行时契约、样式、文档和测试不得重新引入第二产品变体。 -->
 desktop_product_variant_contract = developer_only + no_secondary_variant_entry_or_artifact

@@ -34,11 +34,17 @@ RULE_PATH = (
     / "selplat/通用/rule"
     / "RUL_SELPLAT程序源码语言与归属门禁规则.md"
 )
-PUBLIC_COMPONENT_RULE_PATH = (
+COMPONENT_REGISTRY_RULE_PATH = (
     PROJECT_ROOT
     / "apps/ai-desktop/ruleengine/rules/local"
     / ACTIVE_STABLE_USER_ID
-    / "selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md"
+    / "selplat/通用/rule/RUL_SELPLAT控件注册与宿主接入规则.md"
+)
+COMPONENT_DELIVERY_RULE_PATH = (
+    PROJECT_ROOT
+    / "apps/ai-desktop/ruleengine/rules/local"
+    / ACTIVE_STABLE_USER_ID
+    / "selplat/通用/rule/RUL_SELPLAT控件交付门禁规则.md"
 )
 OPTION_TEMP_ROOT = PROJECT_ROOT / "OPTION/temp"
 
@@ -386,7 +392,10 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
             )
 
         # 规则正本必须同时声明消费入口和快速门禁，避免只改程序而后续任务无法加载约束。
-        rule_text = PUBLIC_COMPONENT_RULE_PATH.read_text(encoding="utf-8")
+        rule_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (COMPONENT_REGISTRY_RULE_PATH, COMPONENT_DELIVERY_RULE_PATH)
+        )
         self.assertIn("selplat_application_dom_creation_entry = sel.core.element", rule_text)
         self.assertIn("selplat_application_dom_creation_gate =", rule_text)
         self.assertIn("nontrivial_function_chinese_contract", rule_text)
@@ -712,15 +721,13 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
         self.assertIn(".selpersonal-page-direct-move-handle", personalization_style)
         self.assertIn(".selpersonal-page-direct-resize-handle", personalization_style)
         self.assertIn("cursor: ew-resize", personalization_style)
-        governance_rule = (PROJECT_ROOT / "apps/ai-desktop/ruleengine/rules/local/XUNAN/selplat/通用/rule/RUL_SELPLAT公共控件治理门禁规则.md") \
-            .read_text(encoding="utf-8")
-        self.assertIn(
-            "upgrade_record_20260815_unified_edit_affordance = "
-            "independent_editor_frame,real_right_edge_resize_handle,uniform_radius_and_line,"
-            "no_business_control_override",
-            governance_rule
+        governance_rule = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (COMPONENT_REGISTRY_RULE_PATH, COMPONENT_DELIVERY_RULE_PATH)
         )
-        self.assertIn("upgrade_record_20260817_query_group_horizontal_move", governance_rule)
+        self.assertIn("selplat_page_editor_verification.9 = independent_uniform_editor_frame", governance_rule)
+        self.assertIn("selplat_page_editor_verification.10 = real_right_edge_handle_hover_and_drag", governance_rule)
+        self.assertIn("selplat_page_editor_verification.14 = composite_ordered_sibling_reflow_horizontal_group_move_and_one_following_shared_save", governance_rule)
         self.assertIn("dragend_outside_tbody_keeps_valid_draft", governance_rule)
         self.assertIn("preview_draft_before_public_confirmation", governance_rule)
         self.assertIn("confirm_before_atomic_sortnum_batch_save", governance_rule)

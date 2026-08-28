@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 数据库 Schema 必须为表、列和约束提供业务注释，保证恢复材料可审查。 -->
 selplat_schema_business_comment_requirement = table
 <!-- selplat_schema_business_comment_requirement.2 的当前独立事实为 column。 -->
 selplat_schema_business_comment_requirement.2 = column

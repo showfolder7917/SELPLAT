@@ -63,6 +63,8 @@ export interface CodexServiceOptions {
   readSettings: () => DesktopSettings;
   /** 读取主进程已校验的有效规则；返回空串时仅应用基础会话指令。 */
   readRuleInstructions?: () => string;
+  /** 主人物回合完成后触发训练语料增量归档；内部自动化连接不配置此回调。 */
+  onConversationTurnCompleted?: () => void | Promise<void>;
 }
 
 const EMPTY_ACCOUNT: CodexAccount = {
@@ -297,7 +299,10 @@ export class CodexService {
       const turnId = stringValue(asObject(result.turn).id);
       if (!turnId) throw new Error("Codex harness did not return a turn id.");
       this.#activeTurnId = turnId;
-      return { ...await this.#waitForTurn(turnId, onStreamEvent), threadId };
+      const response = { ...await this.#waitForTurn(turnId, onStreamEvent), threadId };
+      // 官方 rollout 已落盘后再推进检查点；失败由持久源和未更新水位留待下次启动重试。
+      await this.#options.onConversationTurnCompleted?.();
+      return response;
     } finally {
       this.#activeExecutionMode = null;
       this.#activeWorkspaces = null;

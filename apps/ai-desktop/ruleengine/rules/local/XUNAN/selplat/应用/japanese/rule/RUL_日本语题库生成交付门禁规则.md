@@ -9,9 +9,12 @@ rule_status = active
 
 <!-- 本职责按真实 Japanese 调用方登记 Java、Python 与 Node 边界。 -->
 java_ability_refs = apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion/service/impl/JapaneseN2BlueBookQuestionServiceImpl.java
+<!-- 本职责没有独立 Python 能力入口。 -->
 python_ability_refs = none
+<!-- 生成结果的页面交付检查由 Japanese 页面脚本承载。 -->
 node_ability_refs = apps/japanese/backend/src/main/resources/static/japanese/japanese.js
 
+<!-- 生成测试必须隔离所有真实外部媒体进程，确保回归可重复。 -->
 japanese_generation_test_isolation = fake_process_runner
 <!-- japanese_generation_test_isolation.2 的当前独立事实为 no_real_deep_translator。 -->
 japanese_generation_test_isolation.2 = no_real_deep_translator

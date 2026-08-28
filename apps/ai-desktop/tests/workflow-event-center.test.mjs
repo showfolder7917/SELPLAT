@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
 import { SqliteDatabase } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/sqlite-database.js";
 import { CollaborationMemoryService } from "../../../build/ai-desktop/electron/electron/services/event-center/collaboration-memory-service.js";
+import { CodexConversationCorpusIngestion } from "../../../build/ai-desktop/electron/electron/services/event-center/codex-conversation-corpus-ingestion.js";
+import { CodexConversationSemanticBackfill } from "../../../build/ai-desktop/electron/electron/services/event-center/codex-conversation-semantic-backfill.js";
 import { WorkflowRepository } from "../../../build/ai-desktop/electron/electron/services/event-center/workflow-repository.js";
 import { WorkflowSupervisor } from "../../../build/ai-desktop/electron/electron/services/event-center/workflow-supervisor.js";
 import { appRoot, controlledTestRoot } from "./test-paths.mjs";
@@ -14,29 +16,175 @@ mkdirSync(controlledTestRoot, { recursive: true });
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopConversationArchiveMessage", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "0008");
+    assert.equal(fixture.database.latestSchemaVersion, "1000");
   } finally {
     fixture.close();
   }
 });
 
-test("一键清空在单一事务删除业务投影并保留数据库版本记录", () => {
+test("一键清空只删除运行投影并保留数据库版本与人物训练语料", () => {
   const fixture = createFixture("clear-test-data");
   try {
     fixture.repository.startRuntimeSession(4321, "2026-08-28T00:00:00.000Z");
     fixture.repository.recordAuditEvent("test.recorded", { message: "待清空事件" });
     fixture.repository.syncCollaborationState(collaborationState("2026-08-28T00:00:01.000Z"));
+    const memory = new CollaborationMemoryService(fixture.database);
+    memory.syncConversation({ conversationId: "training-conversation", messages: [
+      { messageId: "training-user", role: "user", content: "这是必须保留的训练原话。", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z" },
+    ], updatedAt: "2026-08-28T00:00:02.000Z" });
+    fixture.database.withConnection((connection) => {
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusTopic
+        (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent, tagsJson, definitionSource, createdAt, updatedAt)
+        VALUES ('training-topic', 'codex', 'training-thread', 'training-turn', '训练', '人物训练语料', NULL, '[]', 'pending', '2026-08-28T00:00:03.000Z', '2026-08-28T00:00:03.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusMessage
+        (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId, sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
+        VALUES ('training-codex', 'training-topic', 'codex', 'training-thread', 'training-turn', 'training-message', 0, 'codex', '保留的韩立回答', 'preview-300', 'supporting', '2026-08-28T00:00:03.000Z', '2026-08-28T00:00:03.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopCorpusIngestionCheckpoint
+        (sourceKey, sourceThreadId, sourceContentHash, sourceSize, ingestedMessageCount, updatedAt)
+        VALUES ('2026/08/28/rollout.jsonl', 'training-thread', $hash, 10, 1, '2026-08-28T00:00:03.000Z')`).run({ $hash: "a".repeat(64) });
+    });
     const schemaCountBefore = fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get().count));
     assert.ok(fixture.repository.clearTestData() > 0);
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopConversationArchiveMessage", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
+    assert.equal(fixture.repository.tableCount("AiDesktopConversationMemory"), 1);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
+    assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopCorpusIngestionCheckpoint").get()).count, 1);
     const schemaCountAfter = fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get().count));
     assert.equal(schemaCountAfter, schemaCountBefore);
     assert.ok(schemaCountAfter > 0);
+  } finally { fixture.close(); }
+});
+
+test("Codex 主人物语料按水位自动入库并在失败后保留旧检查点重试", () => {
+  const fixture = createFixture("corpus-ingestion");
+  const sessionsRoot = path.join(fixture.root, "sessions", "2026", "08", "28");
+  mkdirSync(sessionsRoot, { recursive: true });
+  const rolloutPath = path.join(sessionsRoot, "rollout-main.jsonl");
+  const internalRolloutPath = path.join(sessionsRoot, "rollout-internal.jsonl");
+  const records = [
+    { timestamp: "2026-08-28T01:00:00.000Z", type: "session_meta", payload: { session_id: "thread-main", thread_source: "ai-desktop" } },
+    { ordinal: 8, timestamp: "2026-08-28T01:00:01.000Z", type: "response_item", payload: { type: "message", role: "user", id: "user-1", content: [{ text: "保留我的完整原话。\n\nRegistered workspace roots:\n- /project (primary, workspace-write)" }] } },
+    { ordinal: 13, timestamp: "2026-08-28T01:00:02.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", id: "answer-1", content: [{ text: `韩立回答。\n<!-- SELPLAT_CORPUS_META ${JSON.stringify({ title: "完整原话归档", type: "训练语料", intent: "保留用户完整原话", tags: ["语料", "原话"], summary: "用户原话已完整归档，AI 仅保留本段主旨。" })} -->` }] } },
+  ];
+  const writeRollout = (values) => writeFileSync(rolloutPath, `${values.map((value) => JSON.stringify(value)).join("\n")}\n`, "utf8");
+  try {
+    writeRollout(records);
+    writeFileSync(internalRolloutPath, `${[
+      { timestamp: "2026-08-28T01:00:00.000Z", type: "session_meta", payload: { session_id: "thread-internal", thread_source: "ai-desktop-han-li-evolution" } },
+      { ordinal: 1, timestamp: "2026-08-28T01:00:01.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ text: "内部自动审批提示不得进入训练语料。" }] } },
+    ].map((value) => JSON.stringify(value)).join("\n")}\n`, "utf8");
+    const ingestion = new CodexConversationCorpusIngestion(fixture.database, path.join(fixture.root, "sessions"));
+    assert.deepEqual(ingestion.ingestPendingRollouts(), { scannedFileCount: 2, changedFileCount: 2, ingestedMessageCount: 2, skippedInternalFileCount: 1 });
+    const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT speakerRole AS sourceRole, content, contentRetention FROM AiDesktopTrainingCorpusMessage WHERE source='codex' ORDER BY sequenceNumber").all());
+    assert.equal(stored[0].content, "保留我的完整原话。");
+    assert.equal(stored[0].contentRetention, "exact");
+    assert.equal(stored[1].contentRetention, "preview-300");
+    assert.equal(stored[1].content, "用户原话已完整归档，AI 仅保留本段主旨。");
+    assert.deepEqual(ingestion.ingestPendingRollouts(), { scannedFileCount: 2, changedFileCount: 0, ingestedMessageCount: 0, skippedInternalFileCount: 0 });
+    assert.equal(fixture.repository.tableCount("AiDesktopCorpusIngestionCheckpoint"), 2);
+
+    writeFileSync(rolloutPath, `${records.map((value) => JSON.stringify(value)).join("\n")}\n{broken`, "utf8");
+    assert.throws(() => ingestion.ingestPendingRollouts(), /无法解析/);
+    const checkpointBeforeRetry = fixture.database.withConnection((connection) => connection.prepare("SELECT sourceContentHash FROM AiDesktopCorpusIngestionCheckpoint WHERE sourceKey = '2026/08/28/rollout-main.jsonl'").get()).sourceContentHash;
+    records.push({ ordinal: 21, timestamp: "2026-08-28T01:00:03.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "commentary", id: "answer-2", content: [{ text: "补录成功。" }] } });
+    writeRollout(records);
+    assert.equal(ingestion.ingestPendingRollouts().ingestedMessageCount, 0);
+    const checkpointAfterRetry = fixture.database.withConnection((connection) => connection.prepare("SELECT sourceContentHash FROM AiDesktopCorpusIngestionCheckpoint WHERE sourceKey = '2026/08/28/rollout-main.jsonl'").get()).sourceContentHash;
+    assert.notEqual(checkpointAfterRetry, checkpointBeforeRetry);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
+  } finally { fixture.close(); }
+});
+
+test("Codex 桌面会话只在每轮完成后按 SELPLAT 工作区分批增量入库", async () => {
+  const fixture = createFixture("codex-app-corpus-ingestion");
+  const sessionsRoot = path.join(fixture.root, "codex-app-sessions");
+  mkdirSync(sessionsRoot, { recursive: true });
+  const rolloutPath = path.join(sessionsRoot, "rollout-codex-app.jsonl");
+  const otherWorkspacePath = path.join(sessionsRoot, "rollout-other-workspace.jsonl");
+  const records = [
+    { timestamp: "2026-08-28T02:00:00.000Z", type: "session_meta", payload: { session_id: "codex-app-thread", thread_source: "user", originator: "codex_work_desktop", cwd: fixture.root } },
+    { timestamp: "2026-08-28T02:00:01.000Z", type: "event_msg", payload: { type: "task_started" } },
+    { ordinal: 1, timestamp: "2026-08-28T02:00:02.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ text: "第一轮用户原话。" }] } },
+    { ordinal: 2, timestamp: "2026-08-28T02:00:03.000Z", type: "response_item", payload: { type: "custom_tool_call_output", output: "不得进入语料" } },
+    { ordinal: 3, timestamp: "2026-08-28T02:00:04.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", content: [{ text: `第一轮最终回答。\n<!-- SELPLAT_CORPUS_META ${JSON.stringify({ title: "第一轮主题", type: "测试", intent: "完成第一轮入库", tags: ["第一轮", "入库"], summary: "第一轮最终回答主旨。" })} -->` }] } },
+    { timestamp: "2026-08-28T02:00:05.000Z", type: "event_msg", payload: { type: "task_complete" } },
+    { timestamp: "2026-08-28T02:01:00.000Z", type: "event_msg", payload: { type: "task_started" } },
+    { ordinal: 4, timestamp: "2026-08-28T02:01:01.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ text: "第二轮尚未完成。" }] } },
+  ];
+  const writeRollout = () => writeFileSync(rolloutPath, `${records.map((value) => JSON.stringify(value)).join("\n")}\n`, "utf8");
+  try {
+    writeRollout();
+    writeFileSync(otherWorkspacePath, `${JSON.stringify({ timestamp: "2026-08-28T02:00:00.000Z", type: "session_meta", payload: { session_id: "other-workspace", thread_source: "user", originator: "codex_work_desktop", cwd: path.join(fixture.root, "..", "OTHER") } })}\n`, "utf8");
+    const ingestion = new CodexConversationCorpusIngestion(fixture.database, sessionsRoot, {
+      sourceKeyPrefix: "codex-app/active",
+      eligibleThreadSources: ["user"],
+      requiredWorkspaceRoot: fixture.root,
+      requiredOriginator: "codex_work_desktop",
+      requireCompletedTurns: true,
+    });
+    assert.deepEqual(await ingestion.ingestPendingRolloutsIncrementally(), { scannedFileCount: 2, changedFileCount: 2, ingestedMessageCount: 2, skippedInternalFileCount: 1 });
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
+    assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT sourceKey FROM AiDesktopCorpusIngestionCheckpoint WHERE sourceThreadId = 'codex-app-thread'").get()).sourceKey, "codex-app/active/rollout-codex-app.jsonl");
+    assert.equal(fixture.repository.tableCount("AiDesktopCorpusIngestionCheckpoint"), 2);
+
+    records.push(
+      { ordinal: 5, timestamp: "2026-08-28T02:01:02.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", content: [{ text: `第二轮最终回答。\n<!-- SELPLAT_CORPUS_META ${JSON.stringify({ title: "第二轮主题", type: "测试", intent: "完成第二轮入库", tags: ["第二轮", "入库"], summary: "第二轮最终回答主旨。" })} -->` }] } },
+      { timestamp: "2026-08-28T02:01:03.000Z", type: "event_msg", payload: { type: "task_complete" } },
+    );
+    writeRollout();
+    assert.equal((await ingestion.ingestPendingRolloutsIncrementally()).ingestedMessageCount, 2);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 4);
+  } finally { fixture.close(); }
+});
+
+test("Codex 历史最终回答由 AI 生成短摘要并按原始消息去重补齐", async () => {
+  const fixture = createFixture("codex-semantic-backfill");
+  const sessionsRoot = path.join(fixture.root, "codex-app-sessions");
+  mkdirSync(sessionsRoot, { recursive: true });
+  const records = [
+    { timestamp: "2026-08-28T03:00:00.000Z", type: "session_meta", payload: { session_id: "history-thread", thread_source: "user", originator: "codex_work_desktop", cwd: fixture.root } },
+    { ordinal: 1, timestamp: "2026-08-28T03:00:01.000Z", type: "response_item", payload: { type: "message", role: "user", id: "history-user", content: [{ text: "怎样从南宫婉的回答继续发问？" }] } },
+    { ordinal: 2, timestamp: "2026-08-28T03:00:02.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", id: "history-answer", content: [{ text: "先识别回答里的事实、缺口和假设，再围绕缺口提出下一问，并让问题指向可执行的演化方向。" }] } },
+    { timestamp: "2026-08-28T03:00:03.000Z", type: "event_msg", payload: { type: "task_complete" } },
+  ];
+  writeFileSync(path.join(sessionsRoot, "rollout-history.jsonl"), `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+  try {
+    const ingestion = new CodexConversationCorpusIngestion(fixture.database, sessionsRoot, {
+      sourceKeyPrefix: "codex-app/active", eligibleThreadSources: ["user"], requiredWorkspaceRoot: fixture.root,
+      requiredOriginator: "codex_work_desktop", requireCompletedTurns: true,
+    });
+    await ingestion.ingestPendingRolloutsIncrementally();
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 1, "没有元数据标记时先只保留用户原话");
+    const backfill = new CodexConversationSemanticBackfill({
+      database: fixture.database,
+      roots: [sessionsRoot],
+      requiredWorkspaceRoot: fixture.root,
+      analyzer: async (candidates) => candidates.map((candidate) => ({
+        turnId: candidate.turnId,
+        title: "根据回答继续发问",
+        type: "演化提问训练",
+        intent: "学习从南宫婉回答中识别缺口并继续发问",
+        tags: ["南宫婉", "继续发问", "演化方向"],
+        summary: "识别回答中的事实、缺口和假设，围绕缺口继续提问，并让问题指向可执行的演化方向。",
+      })),
+    });
+    backfill.start(10);
+    for (let count = 0; count < 100 && backfill.status().state === "running"; count += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(backfill.status().state, "completed");
+    assert.equal(backfill.status().insertedCount, 1);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
+    const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT content, contentRetention FROM AiDesktopTrainingCorpusMessage WHERE speakerRole='codex'").get());
+    assert.equal(stored.contentRetention, "preview-300");
+    assert.match(stored.content, /缺口/);
+    backfill.start(10);
+    for (let count = 0; count < 100 && backfill.status().state === "running"; count += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(backfill.status().insertedCount, 0);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
   } finally { fixture.close(); }
 });
 
@@ -113,7 +261,7 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
       updatedAt: "2026-08-25T00:00:01.000Z",
     };
     firstConversation.messages[0].inferredIntent = "完整保存用户原话，不得由摘要替代。";
-    memory.registerRound(firstConversation, "user-old", "nangong-old", { title: "统一日志入口", type: "架构治理", switchTopic: false, userIntent: firstConversation.messages[0].inferredIntent });
+    memory.registerRound(firstConversation, "user-old", "nangong-old", { title: "统一日志入口", type: "架构治理", switchTopic: false, userIntent: firstConversation.messages[0].inferredIntent, tags: ["日志", "架构"], summary: "南宫婉确认完整保存用户原话。" });
     const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT content, contentPreview, conversationTopicId FROM AiDesktopConversationMemory WHERE messageId='nangong-old'").get());
     const storedUser = fixture.database.withConnection((connection) => connection.prepare("SELECT content, inferredIntent FROM AiDesktopConversationMemory WHERE messageId='user-old'").get());
     assert.equal(storedUser.inferredIntent, "完整保存用户原话，不得由摘要替代。");
@@ -133,7 +281,7 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
       updatedAt: "2026-08-25T00:01:01.000Z",
     };
     continued.messages[2].inferredIntent = "继续完成统一入口。";
-    memory.registerRound(continued, "user-next", "nangong-next", { title: "标题可由 AI 调整", type: "自由类型", switchTopic: false, userIntent: continued.messages[2].inferredIntent });
+    memory.registerRound(continued, "user-next", "nangong-next", { title: "标题可由 AI 调整", type: "自由类型", switchTopic: false, userIntent: continued.messages[2].inferredIntent, tags: ["统一入口"], summary: "继续调查统一入口并补充证据。" });
     assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopConversationTopic").get()).count, 1);
 
     const switched = {
@@ -145,20 +293,27 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
       updatedAt: "2026-08-26T00:00:01.000Z",
     };
     switched.messages.at(-2).inferredIntent = "切换问题中心并分析审批习惯。";
-    memory.registerRound(switched, "user-new", "nangong-new", { title: "审批习惯分析", type: "审批偏好", switchTopic: true, userIntent: switched.messages.at(-2).inferredIntent });
+    memory.registerRound(switched, "user-new", "nangong-new", { title: "审批习惯分析", type: "审批偏好", switchTopic: true, userIntent: switched.messages.at(-2).inferredIntent, tags: ["审批", "习惯"], summary: "识别并分析新的审批习惯主题。" });
     const context = memory.buildNangongContext({ conversationId: "conversation-current", messages: [], updatedAt: "2026-08-26T00:02:00.000Z" });
     assert.match(context, /我的原话必须逐字保留，包括空格  和换行/);
     assert.match(context, /审批习惯分析|现在切换到审批习惯分析/);
     const topics = fixture.database.withConnection((connection) => connection.prepare("SELECT title, topicType, state FROM AiDesktopConversationTopic ORDER BY startedAt").all());
     assert.deepEqual(topics.map((item) => [item.title, item.topicType]), [["统一日志入口", "架构治理"], ["审批习惯分析", "审批偏好"]]);
     assert.deepEqual(topics.map((item) => item.state), ["closed", "active"]);
-    fixture.database.withConnection((connection) => connection.prepare(`
-      INSERT INTO AiDesktopConversationArchiveMessage
-        (messageId, threadId, sequenceNumber, sourceRole, responsePhase, content, contentRetention, inferredIntent, topicTitle, topicType, createdAt, recordedAt)
-      VALUES ('codex-source-1', 'codex-thread-1', 0, 'codex', 'final_answer', 'Codex 执行原始记录必须进入专题案卷。', 'preview-80', NULL, '专题档案', '执行记录', '2026-08-26T00:03:00.000Z', '2026-08-26T00:03:00.000Z')
-    `).run());
+    const searched = memory.searchTrainingCorpusTopics("审批");
+    assert.equal(searched[0].title, "审批习惯分析");
+    assert.deepEqual(searched[0].tags, ["审批", "习惯"]);
+    assert.ok(searched[0].messages.some((message) => message.content === "现在切换到审批习惯分析。"));
+    fixture.database.withConnection((connection) => {
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusTopic
+        (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent, tagsJson, definitionSource, createdAt, updatedAt)
+        VALUES ('codex-topic-1', 'codex', 'codex-thread-1', 'codex-turn-1', '专题档案', '执行记录', NULL, '["专题"]', 'ai-confirmed', '2026-08-26T00:03:00.000Z', '2026-08-26T00:03:00.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusMessage
+        (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId, sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
+        VALUES ('codex-corpus-1', 'codex-topic-1', 'codex', 'codex-thread-1', 'codex-turn-1', 'codex-source-1', 0, 'codex', 'Codex 执行原始记录必须进入专题案卷。', 'preview-300', 'supporting', '2026-08-26T00:03:00.000Z', '2026-08-26T00:03:00.000Z')`).run();
+    });
     const corpus = memory.readHanLiEvolutionCorpus("deliberation-1");
-    assert.ok(corpus.some((item) => item.source === "nangong" && item.content === firstConversation.messages[1].content));
+    assert.ok(corpus.some((item) => item.source === "nangong" && item.content === "南宫婉确认完整保存用户原话。"));
     assert.ok(corpus.some((item) => item.source === "codex" && item.content === "Codex 执行原始记录必须进入专题案卷。"));
   } finally {
     fixture.close();
@@ -335,5 +490,5 @@ function createFixture(suffix) {
   cpSync(path.join(appRoot, "db", "sql"), sqlRoot, { recursive: true });
   const database = SqliteDatabase.open(databasePath, sqlRoot, true);
   const repository = new WorkflowRepository(database);
-  return { database, repository, close() { database.close(); rmSync(root, { recursive: true, force: true }); } };
+  return { root, database, repository, close() { database.close(); rmSync(root, { recursive: true, force: true }); } };
 }

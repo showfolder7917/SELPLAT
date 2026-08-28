@@ -22,7 +22,8 @@ test("受控命令在锁文件哈希缓存缺失时先调用统一依赖准备�
 
 test("首次安装和中断恢复都使用应用工程内 npm 缓存", () => {
   assert.match(ensure, /sourceDependenciesAreReusableLink/);
-  assert.match(ensure, /lstatSync\(details\.linkPath\)\.isSymbolicLink\(\)/);
+  assert.match(ensure, /lstatSync\(details\.linkPath, \{ throwIfNoEntry: false \}\)/);
+  assert.match(ensure, /Boolean\(sourceDependencyEntry\?\.isSymbolicLink\(\)\)/);
   assert.match(ensure, /path\.join\(details\.projectRoot, "cache", details\.applicationName, "npm"\)/);
   assert.match(ensure, /NPM_CONFIG_CACHE: npmCacheRoot/);
   assert.ok(ensure.indexOf("NPM_CONFIG_CACHE") < ensure.indexOf("migrate-dependencies-to-cache.mjs"));

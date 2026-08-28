@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 每个正式表使用与真实表名一致的独立 schema SQL 文件。 -->
 selplat_schema_sql_filename_pattern = schema-<ActualTableName>.sql
 <!-- 表存在初始化数据时必须使用 data-实际表名.sql；没有种子数据的空业务表可以不创建空 data 文件。 -->
 selplat_data_sql_filename_pattern = data-<ActualTableName>.sql

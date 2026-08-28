@@ -14,6 +14,7 @@ python_ability_refs = apps/ai-desktop/ruleengine/python/local/<active-stable-use
 <!-- 公共控件实现属于 shared 前端源码，不建立 rule-engine Node 能力。 -->
 node_ability_refs = none
 
+<!-- 公共控件快速门禁统一复用源码归属扫描器，并要求控件治理违规为零。 -->
 selplat_component_quick_gate = selplat_source_ownership_guard
 <!-- selplat_component_quick_gate.2 的当前独立事实为 zero_component_governance_violations。 -->
 selplat_component_quick_gate.2 = zero_component_governance_violations

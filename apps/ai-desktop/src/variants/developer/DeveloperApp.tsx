@@ -37,6 +37,7 @@ import type {
   CodexApproval,
   CodexHarnessStatus,
   CodexModelCatalog,
+  CorpusSemanticBackfillStatus,
   CodexStreamActivity,
   CodexStreamEvent,
   CodexUserInputRequest,
@@ -125,19 +126,19 @@ type ActiveExplorerSection = "workspace" | "tasks";
 const testDataResetCopy = {
   ja: {
     title: "テストデータ",
-    summary: "トピック、タスク、承認、会話、イベント、実行履歴",
-    detail: "ログイン、設定、ワークスペース、信頼済みコマンド、ルール、ソースコード、監査ファイルは保持されます。完了後にアプリを再起動します。",
+    summary: "テストトピック、タスク、承認、イベント、実行履歴",
+    detail: "人物の会話、学習メモリ、ログイン、設定、ワークスペース、ルール、ソースコードは保持されます。完了後にアプリを再起動します。",
     action: "テストデータを一括消去",
     busy: "消去中…",
-    confirm: "AI Desktop 内部のテストデータと会話履歴をすべて消去しますか？この操作は元に戻せません。ログイン、設定、ワークスペース、信頼済みコマンド、ルール、ソースコード、監査ファイルは削除されません。",
+    confirm: "AI Desktop 内部のテスト実行データを消去しますか？この操作は元に戻せません。人物の会話、学習メモリ、ログイン、設定、ワークスペース、信頼済みコマンド、ルール、ソースコード、監査ファイルは削除されません。",
   },
   "zh-CN": {
     title: "测试数据",
-    summary: "专题、任务、审批、对话、事件和运行记录",
-    detail: "保留登录、设置、工作区、可信命令、规则、源码和工程审计文件；完成后自动重启应用。",
+    summary: "测试专题、任务、审批、事件和运行记录",
+    detail: "保留人物对话、训练记忆、登录、设置、工作区、规则和源码；完成后自动重启应用。",
     action: "一键清空测试数据",
     busy: "正在清空…",
-    confirm: "确定一键清空 AI Desktop 内部的测试数据和会话历史吗？此操作不可撤销。不会删除登录、设置、工作区、可信命令、规则、源码和工程审计文件。",
+    confirm: "确定一键清空 AI Desktop 内部的测试运行数据吗？此操作不可撤销。不会删除人物对话、训练记忆、登录、设置、工作区、可信命令、规则、源码和工程审计文件。",
   },
 } as const;
 
@@ -206,6 +207,8 @@ export function DeveloperApp() {
   const [defaultModel, setDefaultModel] = useState<string | null>(null);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
   const [serviceTier, setServiceTier] = useState<ModelServiceTier>("default");
+  const [codexAppCorpusIngestionEnabled, setCodexAppCorpusIngestionEnabled] = useState(false);
+  const [corpusSemanticBackfill, setCorpusSemanticBackfill] = useState<CorpusSemanticBackfillStatus | null>(null);
   const [modelCatalog, setModelCatalog] = useState<CodexModelCatalog>({ models: [] });
   const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
   const [modelSettingsError, setModelSettingsError] = useState("");
@@ -336,6 +339,7 @@ export function DeveloperApp() {
   useEffect(() => {
     window.desktop?.getEnvironment().then((environment) => setProjectRoot(environment.projectRoot));
     window.desktop?.getAiMemoryDatabaseStatus().then(setAiMemoryDatabaseStatus);
+    window.desktop?.getCorpusSemanticBackfillStatus().then(setCorpusSemanticBackfill);
     window.desktop?.getWorkspaces().then((state) => {
       setWorkspaces(state);
       const primary = state.roots.find((root) => root.id === state.primaryId);
@@ -353,6 +357,7 @@ export function DeveloperApp() {
       setDefaultModel(settings.defaultModel);
       setReasoningEffort(settings.reasoningEffort);
       setServiceTier(settings.serviceTier);
+      setCodexAppCorpusIngestionEnabled(settings.codexAppCorpusIngestionEnabled);
     });
     // 任务分区只展示业务日志中的最新任务摘要，不在渲染层复制或猜测 Harness 会话状态。
     window.desktop?.getAuditLogInfo().then(setAuditInfo);
@@ -368,6 +373,14 @@ export function DeveloperApp() {
     const userInputTimer = window.setInterval(refreshUserInputs, 350);
     return () => { window.clearInterval(statusTimer); window.clearInterval(approvalTimer); window.clearInterval(userInputTimer); };
   }, []);
+
+  useEffect(() => {
+    if (corpusSemanticBackfill?.state !== "running") return;
+    const timer = window.setInterval(() => {
+      void window.desktop?.getCorpusSemanticBackfillStatus().then(setCorpusSemanticBackfill);
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [corpusSemanticBackfill?.state]);
 
   useEffect(() => {
     const desktop = window.desktop;
@@ -595,6 +608,7 @@ export function DeveloperApp() {
     setDefaultModel(settings.defaultModel);
     setReasoningEffort(settings.reasoningEffort);
     setServiceTier(settings.serviceTier);
+    setCodexAppCorpusIngestionEnabled(settings.codexAppCorpusIngestionEnabled);
   };
 
   /** 所有模型选择都写入同一主进程设置，渲染层不建立会话级副本或覆盖入口。 */
@@ -1237,6 +1251,8 @@ export function DeveloperApp() {
       <button className="active" title={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-pressed={explorerExpanded} onClick={() => setExplorerExpanded((value) => !value)}><Folder24Regular /></button><button><Search24Regular /></button><button><Branch24Regular /></button><button><Bug24Regular /></button>
       <SettingsFloatingPanel locale={locale} open={settingsOpen} onOpenChange={setSettingsOpen}>
         <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button type="button" onClick={() => void logout()}><span>{text.signOut}</span></button> : <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{loginHint && <em>{loginHint}</em>}</div>
+        {/* 测试数据清空是重启级危险操作，固定放在账号卡片后，避免被常规设置与长列表挤出首屏。 */}
+        <div className="temp-card test-data-reset-card"><span>{testDataResetCopy[locale].title}</span><strong>{testDataResetCopy[locale].summary}</strong><small>{testDataResetCopy[locale].detail}</small>{testDataResetError && <em role="alert">{testDataResetError}</em>}<div><button className="danger" disabled={testDataResetting} onClick={() => void clearTestData()}><Delete24Regular />{testDataResetting ? testDataResetCopy[locale].busy : testDataResetCopy[locale].action}</button></div></div>
         <section className="model-settings-card" aria-labelledby="global-model-settings-title">
           <header><div><span id="global-model-settings-title">{locale === "ja" ? "グローバルモデル設定" : "全局模型配置"}</span><small>{locale === "ja" ? "すべての会話と協同タスクに適用" : "对所有会话与协同任务生效"}</small></div><strong>{selectedModel?.displayName || (locale === "ja" ? "Codex の既定値" : "Codex 默认")}</strong></header>
           <label><span>{locale === "ja" ? "既定モデル" : "默认模型"}</span><select aria-label={locale === "ja" ? "既定モデル" : "默认模型"} value={defaultModel || ""} disabled={modelCatalogLoading} onChange={(event) => selectDefaultModel(event.target.value)}><option value="">{modelCatalogLoading ? (locale === "ja" ? "モデルを読み込み中…" : "正在读取模型…") : (locale === "ja" ? "Codex の既定値" : "Codex 默认")}</option>{defaultModel && !modelCatalog.models.some((model) => model.id === defaultModel) && <option value={defaultModel}>{defaultModel}</option>}{modelCatalog.models.map((model) => <option key={model.id} value={model.id}>{model.displayName}{model.provider ? ` · ${model.provider}` : ""}</option>)}</select></label>
@@ -1246,12 +1262,21 @@ export function DeveloperApp() {
           {configuredSpeedUnavailable && <em role="alert">{locale === "ja" ? "選択中のモデルは高速処理に対応していません。標準速度へ変更してください。" : "当前模型不支持快速处理，请切换为标准速度。"}</em>}
           {modelSettingsError && <em role="alert">{modelSettingsError}</em>}
         </section>
+        <div className="temp-card codex-corpus-card">
+          <span>{locale === "ja" ? "Codex 会話の学習登録" : "Codex 聊天训练入库"}</span>
+          <strong>{codexAppCorpusIngestionEnabled ? (locale === "ja" ? "有効" : "已开启") : (locale === "ja" ? "無効" : "未开启")}</strong>
+          <small>{locale === "ja" ? "現在の SELPLAT ワークスペースに属する完了済みの各ターンだけを登録し、システム指示・ツール出力・ファイル注入は除外します。" : "只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库，排除系统指令、工具输出和文件注入内容。"}</small>
+          {corpusSemanticBackfill?.message && <em role="status">{corpusSemanticBackfill.message}{corpusSemanticBackfill.state === "running" ? ` · ${corpusSemanticBackfill.processedCount}/${corpusSemanticBackfill.targetCount}` : ""}</em>}
+          <div>
+            <button type="button" aria-pressed={codexAppCorpusIngestionEnabled} onClick={() => updateSettings({ codexAppCorpusIngestionEnabled: !codexAppCorpusIngestionEnabled })}>{codexAppCorpusIngestionEnabled ? (locale === "ja" ? "登録を停止" : "停止入库") : (locale === "ja" ? "登録を開始" : "开启入库")}</button>
+            <button type="button" aria-label={locale === "ja" ? "履歴の AI 要約を一括補完" : "一键补齐历史 AI 摘要"} disabled={corpusSemanticBackfill?.state === "running"} onClick={() => void window.desktop?.startCorpusSemanticBackfill().then(setCorpusSemanticBackfill)}>{corpusSemanticBackfill?.state === "running" ? (locale === "ja" ? "補完中…" : "正在补齐…") : (locale === "ja" ? "履歴を一括補完" : "补齐历史摘要")}</button>
+          </div>
+        </div>
         <label>Language<select value={locale} onChange={(event) => updateSettings({ locale: event.target.value as Locale })}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
         <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings({ sandboxMode: event.target.value as SandboxMode })}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
         <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void clearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
         <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void clearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
         <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
-        <div className="temp-card test-data-reset-card"><span>{testDataResetCopy[locale].title}</span><strong>{testDataResetCopy[locale].summary}</strong><small>{testDataResetCopy[locale].detail}</small>{testDataResetError && <em role="alert">{testDataResetError}</em>}<div><button className="danger" disabled={testDataResetting} onClick={() => void clearTestData()}><Delete24Regular />{testDataResetting ? testDataResetCopy[locale].busy : testDataResetCopy[locale].action}</button></div></div>
         <RuleManagementFeature locale={locale} />
       </SettingsFloatingPanel>
     </aside>

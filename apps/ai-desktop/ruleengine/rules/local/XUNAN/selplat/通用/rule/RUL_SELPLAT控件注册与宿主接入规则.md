@@ -14,6 +14,7 @@ python_ability_refs = apps/ai-desktop/ruleengine/python/local/<active-stable-use
 <!-- 公共控件实现属于 shared 前端源码，不建立 rule-engine Node 能力。 -->
 node_ability_refs = none
 
+<!-- 公共控件创建必须先判断可复用交互，再登记、实现并由宿主正式接入。 -->
 selplat_component_creation_sequence = classify_reusable_interaction
 <!-- selplat_component_creation_sequence.2 的当前独立事实为 register_public_component。 -->
 selplat_component_creation_sequence.2 = register_public_component

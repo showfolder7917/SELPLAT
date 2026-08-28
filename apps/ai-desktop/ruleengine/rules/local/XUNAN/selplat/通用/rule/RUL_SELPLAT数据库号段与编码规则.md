@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 公共号段表的结构与种子数据必须分别使用固定 SQL 文件。 -->
 selplat_common_sequence_sql_files = schema-CommonSequenceSegment.sql
 <!-- selplat_common_sequence_sql_files.2 的当前独立事实为 data-CommonSequenceSegment.sql。 -->
 selplat_common_sequence_sql_files.2 = data-CommonSequenceSegment.sql

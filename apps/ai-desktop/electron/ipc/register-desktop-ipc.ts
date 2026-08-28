@@ -20,6 +20,7 @@ import type {
   SendMessageRequest,
   WindowAction,
   TestDataResetResult,
+  CorpusSemanticBackfillStatus,
 } from "../../contracts/desktop/desktop.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
@@ -65,6 +66,8 @@ interface DesktopIpcDependencies {
   rendererRoot: string;
   rules: RuleBundleService;
   clearTestData: () => Promise<TestDataResetResult>;
+  corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatus;
+  startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatus;
 }
 
 interface ScreenshotWindowSession {
@@ -277,7 +280,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.showInactive();
   };
 
-  registerSystemIpc({ aiMemoryDatabaseStatus, projectRoot, variant, screenshots, workflowRepository, eventCenter, clearTestData: dependencies.clearTestData });
+  registerSystemIpc({
+    aiMemoryDatabaseStatus, projectRoot, variant, screenshots, workflowRepository, eventCenter,
+    clearTestData: dependencies.clearTestData,
+    corpusSemanticBackfillStatus: dependencies.corpusSemanticBackfillStatus,
+    startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
+  });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
   registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter);

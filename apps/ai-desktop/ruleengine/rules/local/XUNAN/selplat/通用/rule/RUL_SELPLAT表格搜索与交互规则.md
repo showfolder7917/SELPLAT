@@ -14,6 +14,7 @@ python_ability_refs = apps/ai-desktop/ruleengine/python/local/<active-stable-use
 <!-- 公共控件实现属于 shared 前端源码，不建立 rule-engine Node 能力。 -->
 node_ability_refs = none
 
+<!-- 公共表格记录类型字段只接受标量或数组，并统一规范为非空字符串集合。 -->
 selplat_grid_record_type_value_contract = scalar_or_array
 <!-- selplat_grid_record_type_value_contract.2 的当前独立事实为 normalize_to_non_empty_string_values。 -->
 selplat_grid_record_type_value_contract.2 = normalize_to_non_empty_string_values

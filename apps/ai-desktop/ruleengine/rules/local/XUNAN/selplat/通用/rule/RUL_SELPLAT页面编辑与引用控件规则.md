@@ -14,6 +14,7 @@ python_ability_refs = apps/ai-desktop/ruleengine/python/local/<active-stable-use
 <!-- 公共控件实现属于 shared 前端源码，不建立 rule-engine Node 能力。 -->
 node_ability_refs = none
 
+<!-- 整页编辑能力唯一归属公共个性化组件，应用只登记必要业务信息。 -->
 selplat_page_editor_owner = selPersonalization
 <!-- selplat_page_editor_owner.2 的当前独立事实为 application_registers_root_title_coordinates_capture_save_only。 -->
 selplat_page_editor_owner.2 = application_registers_root_title_coordinates_capture_save_only

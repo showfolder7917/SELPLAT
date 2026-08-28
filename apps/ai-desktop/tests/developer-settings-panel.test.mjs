@@ -20,7 +20,13 @@ test("连接与执行设置不再把本机路径渲染为文本", () => {
   assert.match(component, /clearTempFiles/);
   assert.match(component, /clearTestData/);
   assert.match(component, /一键清空测试数据/);
-  assert.match(component, /保留登录、设置、工作区、可信命令、规则、源码和工程审计文件/);
+  assert.match(component, /保留人物对话、训练记忆、登录、设置、工作区、规则和源码/);
+  assert.match(component, /Codex 聊天训练入库/);
+  assert.match(component, /只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库/);
+  assert.match(component, /aria-label=.*一键补齐历史 AI 摘要/);
+  assert.match(component, /startCorpusSemanticBackfill\(\)/);
+  assert.match(component, /dev-account[\s\S]*test-data-reset-card[\s\S]*model-settings-card/);
+  assert.match(styles, /\.test-data-reset-card\s*\{/);
   assert.match(component, /openAuditLogDirectory/);
 });
 

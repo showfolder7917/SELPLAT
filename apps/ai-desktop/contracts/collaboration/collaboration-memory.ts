@@ -24,6 +24,8 @@ export interface ConversationRoundTopicDecision {
   type: string;
   switchTopic: boolean;
   userIntent: string;
+  tags: string[];
+  summary: string;
 }
 
 export interface ApprovalMemoryEvidence {
@@ -35,11 +37,24 @@ export interface ApprovalMemoryEvidence {
   approvedAt: string;
 }
 
+export interface TrainingCorpusTopicSearchResult {
+  corpusTopicId: string;
+  source: "codex" | "nangong" | "hanli";
+  title: string;
+  topicType: string;
+  inferredIntent: string | null;
+  tags: string[];
+  definitionSource: "pending" | "ai-confirmed";
+  createdAt: string;
+  messages: Array<{ speakerRole: "user" | "codex" | "nangong" | "hanli"; content: string; createdAt: string }>;
+}
+
 export interface CollaborationMemoryPort {
   syncConversation(conversation: NangongConversation): void;
   syncEvolutionState(state: NangongEvolutionState): void;
   buildNangongContext(conversation: NangongConversation): string;
   approvalEvidence(proposalType: EvolutionProposalType, origin: EvolutionProposalOrigin): ApprovalMemoryEvidence[];
+  searchTrainingCorpusTopics(query: string, limit?: number): TrainingCorpusTopicSearchResult[];
   /** 按完整会话组读取南宫婉与 Codex 原文，供韩立综合后逐轮发问。 */
   readHanLiEvolutionCorpus(deliberationId: string): EvolutionSourceMessageSnapshot[];
   registerRound(conversation: NangongConversation, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision): void;

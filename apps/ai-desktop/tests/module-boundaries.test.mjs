@@ -85,24 +85,70 @@ test("sandboxed preload keeps domain source boundaries but builds one physical b
 
 test("Nangong memory keeps source, preview, free topic semantics and visible user intent", () => {
   const memory = source("electron/services/event-center/collaboration-memory-service.ts");
-  const migration = source("db/sql/migration-0003-event-handling-and-collaboration-memory.sql");
-  const archiveMigration = source("db/sql/migration-0004-codex-conversation-archive.sql");
-  const backfill = source("scripts/backfill-codex-conversation.mjs");
+  const migration = source("db/sql/schema-AiDesktopCurrent.sql");
+  const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");
   const main = source("electron/main.ts");
   const app = source("src/variants/developer/DeveloperApp.tsx");
   assert.match(migration, /content TEXT NOT NULL/);
   assert.match(migration, /contentPreview TEXT NOT NULL/);
   assert.match(migration, /inferredIntent TEXT/);
   assert.match(migration, /topicType TEXT NOT NULL/);
-  assert.match(archiveMigration, /AiDesktopConversationArchiveMessage/);
-  assert.match(archiveMigration, /contentRetention IN \('exact', 'preview-80'\)/);
-  assert.match(backfill, /role === "user" \? rawContent : preview\(rawContent\)/);
-  assert.match(backfill, /isPlatformContext/);
+  assert.match(corpusMigration, /AiDesktopTrainingCorpusTopic/);
+  assert.match(corpusMigration, /AiDesktopTrainingCorpusMessage/);
+  assert.doesNotMatch(corpusMigration, /AiDesktopConversationArchiveMessage/);
+  assert.match(corpusMigration, /contentRetention IN \('exact', 'preview-300'\)/);
   assert.match(memory, /characters\.slice\(0, 80\)/);
   assert.match(memory, /AI登记的用户意图/);
   assert.match(main, /我了解到您的想法是/);
   assert.match(main, /NANGONG_TOPIC_META=.*userIntent/);
   assert.match(app, /我了解到您的想法是/);
+});
+
+test("人物训练语料通过主会话完成钩子和启动补录闭环且清空只重置内部线程", () => {
+  const main = source("electron/main.ts");
+  const codexService = source("electron/services/codex-service.ts");
+  const ingestion = source("electron/services/event-center/codex-conversation-corpus-ingestion.ts");
+  const repository = source("electron/services/event-center/workflow-repository.ts");
+  assert.match(main, /ingestTrainingCorpus\("startup"\)/);
+  assert.match(main, /onConversationTurnCompleted:\s*\(\) => ingestTrainingCorpus\("turn-completed"\)/);
+  assert.match(codexService, /await this\.#options\.onConversationTurnCompleted\?\.\(\)/);
+  assert.match(ingestion, /eligibleThreadSources:\s*policy\.eligibleThreadSources \|\| \["ai-desktop"\]/);
+  assert.match(ingestion, /AiDesktopCorpusIngestionCheckpoint/);
+  assert.match(ingestion, /SELPLAT_CORPUS_META/);
+  assert.match(ingestion, /contentRetention:\s*"preview-300"/);
+  assert.doesNotMatch(ingestion, /classifyUserMessage/);
+  assert.match(main, /CodexConversationCorpusWatcher/);
+  assert.match(main, /requiredWorkspaceRoot:\s*projectRoot/);
+  assert.match(main, /requiredOriginator:\s*"codex_work_desktop"/);
+  assert.match(main, /requireCompletedTurns:\s*true/);
+  assert.match(main, /codexAppCorpusIngestionEnabled/);
+  assert.match(main, /ingestPendingRolloutsIncrementally/);
+  assert.match(main, /corpusIngestionRunning/);
+  assert.match(ingestion, /task_complete/);
+  assert.match(ingestion, /setImmediate/);
+  assert.match(ingestion, /watch\(root, \{ recursive: true \}/);
+  assert.match(main, /Promise\.all\(\[hanLiCodex, nangongDeliberationCodex, nangongDistributionCodex, linghuDistributionAuditCodex\]/);
+  const semanticBackfill = source("electron/services/event-center/codex-conversation-semantic-backfill.ts");
+  assert.match(semanticBackfill, /phase\) === "final_answer"/);
+  assert.match(semanticBackfill, /task_complete/);
+  assert.match(semanticBackfill, /preview-300/);
+  assert.match(semanticBackfill, /ON CONFLICT\(source, sourceMessageId\) DO NOTHING/);
+  assert.doesNotMatch(semanticBackfill, /AiDesktop(?:Approval|Workflow|Task|Event|Evolution)/);
+  assert.match(main, /ai-desktop-corpus-semantic-backfill/);
+  assert.doesNotMatch(main, /Promise\.all\(\[(?:[^\]]*codex|[^\]]*nangongCodex)[^\]]*\]\.map\(\(service\) => service!\.newChat\(\)\)\)/);
+  assert.doesNotMatch(repository.match(/const tables = \[([\s\S]*?)\] as const/)?.[1] || "", /Conversation|CorpusIngestionCheckpoint/);
+});
+
+test("统一对话语料不吸收专题审批任务测试与异常业务投影", () => {
+  const packageJson = source("package.json");
+  const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");
+  const ingestion = source("electron/services/event-center/codex-conversation-corpus-ingestion.ts");
+  assert.doesNotMatch(packageJson, /backfill:codex-conversation/);
+  assert.doesNotMatch(packageJson, /backfill-codex-conversation\.mjs/);
+  assert.doesNotMatch(corpusMigration, /FROM AiDesktop(?:Approval|Workflow|Task|Event|Evolution)/);
+  assert.doesNotMatch(ingestion, /AiDesktop(?:Approval|Workflow|Task|Event|Evolution)/);
+  assert.match(corpusMigration, /CREATE TABLE AiDesktopConversationMemory/);
+  assert.doesNotMatch(corpusMigration, /AiDesktopConversationArchiveMessage|preview-80|legacy:/);
 });
 
 test("renderer feature logic is no longer owned by the developer shell", () => {

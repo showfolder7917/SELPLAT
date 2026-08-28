@@ -15,7 +15,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "0008");
+    assert.equal(first.status.schemaVersion, "1000");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -28,9 +28,9 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 8);
+      assert.equal(Number(row.count), 1);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "0008", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1000", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
     } finally {
       inspection.close();
@@ -46,7 +46,7 @@ test("已发布 SQL 被修改时阻断启动且保留原数据库", () => {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
     first.database?.close();
-    const schemaPath = path.join(fixture.sqlRoot, "schema-AiDesktopSchemaVersion.sql");
+    const schemaPath = path.join(fixture.sqlRoot, "schema-AiDesktopCurrent.sql");
     writeFileSync(schemaPath, `${readFileSync(schemaPath, "utf8")}\n-- forbidden rewrite\n`, "utf8");
 
     const second = initializeAiMemoryDatabase(fixture.options);
@@ -81,11 +81,11 @@ test("首次迁移失败回滚并清理本轮创建的数据库现场", () => {
   const fixture = createFixture("rollback");
   try {
     writeFileSync(path.join(fixture.sqlRoot, "load-order.txt"), [
-      "0001|schema-AiDesktopSchemaVersion.sql|建立版本表",
-      "0002|migration-0002-invalid.sql|模拟失败迁移",
+      "1000|schema-AiDesktopCurrent.sql|建立当前数据库基线",
+      "1001|migration-1001-invalid.sql|模拟失败迁移",
       "",
     ].join("\n"), "utf8");
-    writeFileSync(path.join(fixture.sqlRoot, "migration-0002-invalid.sql"), "CREATE TABLE BrokenTable (id INTEGER PRIMARY KEY);\nTHIS IS NOT SQL;\n", "utf8");
+    writeFileSync(path.join(fixture.sqlRoot, "migration-1001-invalid.sql"), "CREATE TABLE BrokenTable (id INTEGER PRIMARY KEY);\nTHIS IS NOT SQL;\n", "utf8");
 
     const result = initializeAiMemoryDatabase(fixture.options);
     assert.equal(result.database, null);

@@ -41,19 +41,21 @@ test("自动演化、两个来源审批和自动分发四项开关独立持久�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("清空测试数据删除专题历史并保留自动化配置和语言", () => {
+test("清空测试数据删除专题运行历史并保留人物对话、自动化配置和语言", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-clear-test-data-"));
   try {
     const filePath = path.join(directory, "state.json");
     const store = new NangongEvolutionStore(filePath);
     store.configureAutomation({ maxRoundsPerTopic: 9, maxCorrectionRounds: 4, locale: "ja", workspaceState });
+    store.appendConversation("user", "这是用于韩立训练的用户原话。", []);
+    store.appendConversation("nangong", "这是南宫婉对用户原话的回答。", []);
     let state = store.createTopic(topicRequest());
     store.createProposal(state.topics[0].topicId, proposalRequest());
     assert.ok(store.clearTestData() >= 2);
     state = new NangongEvolutionStore(filePath).state();
     assert.equal(state.topics.length, 0);
     assert.equal(state.proposals.length, 0);
-    assert.equal(state.conversation.messages.length, 0);
+    assert.deepEqual(state.conversation.messages.map((message) => message.content), ["这是用于韩立训练的用户原话。", "这是南宫婉对用户原话的回答。"]);
     assert.deepEqual(state.automationSettings, { maxRoundsPerTopic: 9, maxCorrectionRounds: 4 });
     assert.equal(state.automationContext.locale, "ja");
     assert.equal(state.automationContext.workspaceState, null);

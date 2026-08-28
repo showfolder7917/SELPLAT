@@ -9,9 +9,12 @@ rule_status = active
 
 <!-- 本职责按真实 Japanese 调用方登记 Java、Python 与 Node 边界。 -->
 java_ability_refs = apps/japanese/backend/src/main/java/com/sp/selplat/japanese/common/util/media/JapaneseMediaStorage.java
+<!-- 本职责没有独立 Python 能力入口。 -->
 python_ability_refs = none
+<!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- Codex CLI 只承担图片生成，其他媒体能力必须走已登记实现。 -->
 japanese_codex_cli_boundary = image_only
 <!-- japanese_codex_cli_boundary.2 的当前独立事实为 local_codex_exec。 -->
 japanese_codex_cli_boundary.2 = local_codex_exec

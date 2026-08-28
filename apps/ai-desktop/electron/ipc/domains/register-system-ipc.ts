@@ -1,7 +1,7 @@
 /** 桌面系统 IPC：提供环境、数据库状态、临时目录、审计目录和安全外链能力。 */
 import { shell } from "electron";
 
-import type { AiMemoryDatabaseStatus, AppVariant, TestDataResetResult } from "../../../contracts/desktop/desktop.js";
+import type { AiMemoryDatabaseStatus, AppVariant, CorpusSemanticBackfillStatus, TestDataResetResult } from "../../../contracts/desktop/desktop.js";
 import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
 import type { WorkflowRepository } from "../../services/event-center/workflow-repository.js";
 import type { ScreenshotStore } from "../../services/screenshot-store.js";
@@ -15,14 +15,18 @@ interface SystemIpcDependencies {
   workflowRepository: WorkflowRepository | null;
   eventCenter: EventCenterFacade;
   clearTestData: () => Promise<TestDataResetResult>;
+  corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatus;
+  startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatus;
 }
 
 /** 注册系统只读查询和受控目录操作；外部 URL 仅允许 HTTP(S)。 */
-export function registerSystemIpc({ aiMemoryDatabaseStatus, projectRoot, variant, screenshots, workflowRepository, eventCenter, clearTestData }: SystemIpcDependencies): void {
+export function registerSystemIpc({ aiMemoryDatabaseStatus, projectRoot, variant, screenshots, workflowRepository, eventCenter, clearTestData, corpusSemanticBackfillStatus, startCorpusSemanticBackfill }: SystemIpcDependencies): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto") => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
   handle("desktop:get-ai-memory-database-status", () => aiMemoryDatabaseStatus);
   handle("desktop:clear-test-data", () => clearTestData(), "business");
+  handle("desktop:get-corpus-semantic-backfill-status", () => corpusSemanticBackfillStatus());
+  handle("desktop:start-corpus-semantic-backfill", (_event, limit?: number) => startCorpusSemanticBackfill(limit), "business");
   handle("desktop:get-approval-governance", () => workflowRepository?.listApprovalGovernance() || []);
   handle("desktop:open-external-url", async (_event, value: string) => {
     if (typeof value !== "string" || value.length > 2_048) throw new Error("Invalid external URL.");

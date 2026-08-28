@@ -235,6 +235,7 @@ export class NangongEvolutionFacade {
       const first = parseHanLiQuestion(await this.#hanLi.send([
         "你是韩立，是自动演化专题研讨的发问方和最终确立者。",
         "请综合下面按完整会话分组保存的南宫婉与 Codex 原始对话。现在不能直接生成专题，也不能替南宫婉拆任务。",
+        "取材优先级：近期 Codex 用户原话与南宫婉会话是主要事实；Codex 最终答复短预览只用于理解执行结果；你自己的既有问答和判断不是主要训练来源。越早期的记录成熟度越低，只用于观察演变，不能覆盖近期明确要求。",
         "找出最值得进一步问清、又不能仅靠原记录下结论的一个问题。返回 JSON：{\"question\":\"向南宫婉提出的具体问题\",\"reason\":\"为什么必须先问清\"}。",
         corpus,
       ].join("\n\n"), state));
@@ -432,18 +433,20 @@ function parseConversationResponse(text: string): { reply: string; topic: Conver
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     if (lines[index].trim().startsWith(CONVERSATION_TOPIC_META_PREFIX)) { markerIndex = index; break; }
   }
-  if (markerIndex < 0) return { reply: text.trim(), topic: { title: "待分类主题", type: "待分类", switchTopic: false, userIntent: "待确认用户意图" } };
+  if (markerIndex < 0) return { reply: text.trim(), topic: { title: "待 AI 归类", type: "待归类", switchTopic: false, userIntent: "", tags: [], summary: "" } };
   const marker = lines[markerIndex].trim().slice(CONVERSATION_TOPIC_META_PREFIX.length);
   try {
     const value = JSON.parse(marker) as Partial<ConversationRoundTopicDecision>;
     const title = typeof value.title === "string" ? value.title.trim().slice(0, 120) : "";
     const type = typeof value.type === "string" ? value.type.trim().slice(0, 120) : "";
     const userIntent = typeof value.userIntent === "string" ? value.userIntent.trim().slice(0, 2_000) : "";
+    const tags = Array.isArray(value.tags) ? [...new Set(value.tags.filter((item): item is string => typeof item === "string").map((item) => item.replaceAll(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 12) : [];
+    const summary = typeof value.summary === "string" && Array.from(value.summary.trim()).length <= 300 ? value.summary.trim() : "";
     const reply = lines.filter((_line, index) => index !== markerIndex).join("\n").trim();
-    if (!reply || !title || !type || !userIntent) throw new Error("incomplete conversation topic metadata");
-    return { reply, topic: { title, type, switchTopic: value.switchTopic === true, userIntent } };
+    if (!reply || !title || !type || !userIntent || !tags.length || !summary) throw new Error("incomplete conversation topic metadata");
+    return { reply, topic: { title, type, switchTopic: value.switchTopic === true, userIntent, tags, summary } };
   } catch {
-    return { reply: lines.filter((_line, index) => index !== markerIndex).join("\n").trim() || text.trim(), topic: { title: "待分类主题", type: "待分类", switchTopic: false, userIntent: "待确认用户意图" } };
+    return { reply: lines.filter((_line, index) => index !== markerIndex).join("\n").trim() || text.trim(), topic: { title: "待 AI 归类", type: "待归类", switchTopic: false, userIntent: "", tags: [], summary: "" } };
   }
 }
 
@@ -489,10 +492,24 @@ function formatEvolutionCorpus(snapshots: EvolutionSourceMessageSnapshot[]): str
     const key = `${snapshot.source}:${snapshot.conversationId}`;
     groups.set(key, [...(groups.get(key) || []), snapshot]);
   }
-  return [...groups.entries()].map(([key, messages]) => [
-    `完整会话组 ${key}`,
+  const newestTime = Math.max(...snapshots.map((item) => Date.parse(item.originalCreatedAt)).filter(Number.isFinite), 0);
+  return [...groups.entries()]
+    .sort(([, left], [, right]) => latestMessageTime(right) - latestMessageTime(left))
+    .map(([key, messages]) => [
+    `会话组 ${key}（${maturityLabel(newestTime, latestMessageTime(messages))}）`,
     ...messages.sort((left, right) => left.sequenceNumber - right.sequenceNumber).map((item) => `[${item.originalCreatedAt}] ${item.role}${item.responsePhase ? `/${item.responsePhase}` : ""}：${item.content}`),
   ].join("\n")).join("\n\n---\n\n");
+}
+
+function latestMessageTime(messages: EvolutionSourceMessageSnapshot[]): number {
+  return Math.max(...messages.map((item) => Date.parse(item.originalCreatedAt)).filter(Number.isFinite), 0);
+}
+
+function maturityLabel(newestTime: number, groupTime: number): string {
+  const ageDays = Math.max(0, newestTime - groupTime) / 86_400_000;
+  if (ageDays <= 30) return "近期高权重";
+  if (ageDays <= 180) return "中期参考";
+  return "早期低权重，仅用于演变追溯";
 }
 
 function formatDeliberationContext(deliberation: HanLiEvolutionDeliberation): string {

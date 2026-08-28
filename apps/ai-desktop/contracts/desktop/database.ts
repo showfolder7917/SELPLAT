@@ -20,3 +20,18 @@ export interface TestDataResetResult {
   clearedRecordCount: number;
   restartScheduled: true;
 }
+
+export type CorpusSemanticBackfillState = "idle" | "running" | "completed" | "failed";
+
+/** Codex 历史 AI 摘要补齐进度；只暴露计数和业务提示，不暴露原始会话正文。 */
+export interface CorpusSemanticBackfillStatus {
+  state: CorpusSemanticBackfillState;
+  targetCount: number;
+  discoveredCount: number;
+  processedCount: number;
+  insertedCount: number;
+  failedCount: number;
+  message: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}

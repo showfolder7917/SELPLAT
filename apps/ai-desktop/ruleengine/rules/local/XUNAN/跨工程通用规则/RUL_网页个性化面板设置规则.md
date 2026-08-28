@@ -12,6 +12,7 @@ rule_owner_source = AGENTS.md.current_stable_user_id
 rule_status = active
 <!-- 当前版本变化只描述职责拆分，原有有效事实全部由依赖规则继续承载。 -->
 current_version_change_summary = compatibility_umbrella_requires_four_personalization_responsibility_rules
+<!-- 聚合规则没有独立 Java 能力入口。 -->
 java_ability_refs = none
 <!-- python_ability_refs 的当前独立事实为 none。 -->
 python_ability_refs = none

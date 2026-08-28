@@ -8,8 +8,10 @@ python_ability_refs = none
 node_ability_refs = none
 <!-- 真实应用程序入口固定为 Electron 主进程服务，供规则核对调用方和验证路径。 -->
 application_program_path = apps/ai-desktop/electron/services/codex-service.ts
-<!-- 5.105.0 固定演化工作台单树左右结构，并登记可审计的一键清空测试数据边界。 -->
-rule_version = 5.105.0
+<!-- 5.107.0 增加 Codex 桌面当前工作区逐轮训练语料显式入库开关与完成监听。 -->
+<!-- 5.108.0 统一 Codex、南宫婉与韩立训练语料来源，并由 AI 回合元数据确认主题、标签和 300 字主旨。 -->
+<!-- 5.110.0 增加历史 Codex 最终回答的隔离 AI 语义补齐、全局近期优先与原消息去重。 -->
+rule_version = 5.110.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 当前规则已经登记到 SELPLAT 应用索引。 -->

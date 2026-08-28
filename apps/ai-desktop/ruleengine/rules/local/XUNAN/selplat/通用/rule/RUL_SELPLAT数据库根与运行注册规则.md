@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 每个应用唯一权威 H2 数据库位于应用 db 根，禁止产生并行数据库副本。 -->
 selplat_application_authoritative_database_root = apps/<app>/db/<app>.mv.db
 <!-- 应用权威数据库使用的结构和初始化 SQL 统一位于 db/sql，运行数据库文件不得进入 sql。 -->
 selplat_application_database_sql_root = apps/<app>/db/sql

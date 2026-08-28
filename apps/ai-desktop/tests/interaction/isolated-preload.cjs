@@ -15,7 +15,7 @@ let harnessStatus = {
   error: null,
   runtime: { source: "bundled", version: "0.149.0" },
 };
-let desktopSettings = { locale: "zh-CN", sandboxMode: "workspace-write", defaultModel: "gpt-5.6-terra", reasoningEffort: "medium", serviceTier: "default" };
+let desktopSettings = { locale: "zh-CN", sandboxMode: "workspace-write", defaultModel: "gpt-5.6-terra", reasoningEffort: "medium", serviceTier: "default", codexAppCorpusIngestionEnabled: false };
 let pendingUserInput = null;
 let finishManagedTurn = null;
 let clarificationAnswers = {};
@@ -132,7 +132,7 @@ const readInteractionAiMemoryDatabaseStatus = () => {
   const state = new URLSearchParams(globalThis.location.search).get("interactionAiMemoryState");
   return state === "recovery-required"
     ? { state, schemaVersion: null, message: "已初始化的 AI Memory 数据库丢失，请先恢复原文件。" }
-    : { state: "ready", schemaVersion: "0008", message: null };
+    : { state: "ready", schemaVersion: "1000", message: null };
 };
 
 // 隔离测试只提供界面渲染需要的确定性数据，不连接真实 Harness、账号、文件选择器或屏幕权限。
@@ -140,6 +140,8 @@ contextBridge.exposeInMainWorld("desktop", {
   getEnvironment: async () => ({ projectRoot, platform: process.platform, variant: "developer" }),
   getAiMemoryDatabaseStatus: async () => ({ ...readInteractionAiMemoryDatabaseStatus() }),
   clearTestData: async () => { document.documentElement.dataset.interactionTestDataReset = "true"; return { cleared: true, clearedRecordCount: 42, restartScheduled: true }; },
+  getCorpusSemanticBackfillStatus: async () => ({ state: "idle", targetCount: 0, discoveredCount: 0, processedCount: 0, insertedCount: 0, failedCount: 0, message: null, startedAt: null, completedAt: null }),
+  startCorpusSemanticBackfill: async () => ({ state: "completed", targetCount: 2, discoveredCount: 2, processedCount: 2, insertedCount: 2, failedCount: 0, message: "补齐完成：新增 2 条 AI 摘要。", startedAt: "2026-08-28T00:00:00.000Z", completedAt: "2026-08-28T00:00:01.000Z" }),
   getSettings: async () => ({ ...desktopSettings }),
   updateSettings: async (settings) => { desktopSettings = { ...desktopSettings, ...settings }; return { ...desktopSettings }; },
   getCodexModels: async () => ({ models: [

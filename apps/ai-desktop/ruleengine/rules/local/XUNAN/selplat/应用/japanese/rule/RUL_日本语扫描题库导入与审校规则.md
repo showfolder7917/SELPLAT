@@ -9,9 +9,12 @@ rule_status = active
 
 <!-- 本职责按真实 Japanese 调用方登记 Java、Python 与 Node 边界。 -->
 java_ability_refs = apps/japanese/backend/src/main/java/com/sp/selplat/japanese/n2bluebookquestion/service/impl/JapaneseN2BlueBookQuestionServiceImpl.java
+<!-- 扫描题库导入由当前稳定用户层的 Python 导入器承载。 -->
 python_ability_refs = apps/ai-desktop/ruleengine/python/local/<active-stable-user-id>/abilities/japanese_n2_red_blue_book_importer.py
+<!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 扫描题必须保留来源书籍和题号，作为去重、追踪和审校身份。 -->
 japanese_scanned_question_source_identity = sourceBook
 <!-- japanese_scanned_question_source_identity.2 的当前独立事实为 sourceQuestionNo。 -->
 japanese_scanned_question_source_identity.2 = sourceQuestionNo

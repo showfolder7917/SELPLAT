@@ -14,6 +14,7 @@ python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
+<!-- 破坏性数据库变更必须先解析精确目标并完成只读证据检查。 -->
 selplat_database_destructive_change_precheck = resolve_exact_target
 <!-- selplat_database_destructive_change_precheck.2 的当前独立事实为 read_only_schema_check。 -->
 selplat_database_destructive_change_precheck.2 = read_only_schema_check

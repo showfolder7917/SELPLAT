@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, protocol } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
-import type { AiMemoryDatabaseStatus, TestDataResetResult } from "../contracts/desktop/database.js";
+import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../contracts/desktop/database.js";
 import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import { BusinessAuditLog } from "./services/business-audit-log.js";
@@ -38,6 +38,8 @@ import { WorkflowRepository } from "./services/event-center/workflow-repository.
 import { WorkflowSupervisor } from "./services/event-center/workflow-supervisor.js";
 import { EventCenterFacade } from "./services/event-center/event-center-facade.js";
 import { CollaborationMemoryService } from "./services/event-center/collaboration-memory-service.js";
+import { CodexConversationCorpusIngestion, CodexConversationCorpusWatcher } from "./services/event-center/codex-conversation-corpus-ingestion.js";
+import { CodexConversationSemanticBackfill, buildCodexSemanticBackfillPrompt, parseCodexSemanticBackfillResponse } from "./services/event-center/codex-conversation-semantic-backfill.js";
 import { RuleBundleService } from "./services/rules/rule-bundle-service.js";
 import { createMainWindow } from "./window/create-main-window.js";
 
@@ -58,6 +60,7 @@ let hanLiCodex: CodexService | undefined;
 let nangongDeliberationCodex: CodexService | undefined;
 let nangongDistributionCodex: CodexService | undefined;
 let linghuDistributionAuditCodex: CodexService | undefined;
+let corpusSemanticBackfillCodex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
 let nangongEvolution: NangongEvolutionFacade | undefined;
@@ -65,6 +68,7 @@ let aiMemoryDatabase: SqliteDatabase | null = null;
 let workflowRepository: WorkflowRepository | null = null;
 let workflowSupervisor: WorkflowSupervisor | null = null;
 let collaborationMemory: CollaborationMemoryService | null = null;
+let codexAppCorpusWatcher: CodexConversationCorpusWatcher | null = null;
 let aiMemoryDatabaseStatus: AiMemoryDatabaseStatus = {
   state: "unavailable",
   schemaVersion: null,
@@ -82,6 +86,8 @@ function closeAiMemoryDatabase(): void {
 }
 
 function prepareAiMemoryShutdown(): void {
+  codexAppCorpusWatcher?.stop();
+  codexAppCorpusWatcher = null;
   try {
     workflowSupervisor?.stop();
   } catch (error) {
@@ -161,6 +167,75 @@ app.whenReady().then(async () => {
   // 主会话与所有协同成员共用 AI Desktop 自己的数据域，和 Codex App 的默认 ~/.codex 完全隔离。
   const codexHome = path.join(app.getPath("userData"), "codex-home");
   mkdirSync(codexHome, { recursive: true });
+  const corpusIngestion = aiMemoryDatabase
+    ? new CodexConversationCorpusIngestion(aiMemoryDatabase, path.join(codexHome, "sessions"))
+    : null;
+  const externalCodexHome = path.resolve(process.env.CODEX_HOME || path.join(app.getPath("home"), ".codex"));
+  const externalCorpusIngestions = aiMemoryDatabase ? [
+    new CodexConversationCorpusIngestion(aiMemoryDatabase, path.join(externalCodexHome, "sessions"), {
+      sourceKeyPrefix: "codex-app/active",
+      eligibleThreadSources: ["user"],
+      requiredWorkspaceRoot: projectRoot,
+      requiredOriginator: "codex_work_desktop",
+      requireCompletedTurns: true,
+    }),
+    new CodexConversationCorpusIngestion(aiMemoryDatabase, path.join(externalCodexHome, "archived_sessions"), {
+      sourceKeyPrefix: "codex-app/archived",
+      eligibleThreadSources: ["user"],
+      requiredWorkspaceRoot: projectRoot,
+      requiredOriginator: "codex_work_desktop",
+      requireCompletedTurns: true,
+    }),
+  ] : [];
+  /** rollout 本身是持久重试源；只有完整入库后才更新检查点，失败会在下一回合或启动时重试。 */
+  let corpusIngestionRunning = false;
+  let corpusIngestionRequested = false;
+  let latestCorpusTrigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled" = "startup";
+  const ingestTrainingCorpus = (trigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled"): void => {
+    if (!corpusIngestion) return;
+    latestCorpusTrigger = trigger;
+    if (corpusIngestionRunning) {
+      corpusIngestionRequested = true;
+      return;
+    }
+    corpusIngestionRunning = true;
+    void (async () => {
+      try {
+        const summaries = [await corpusIngestion.ingestPendingRolloutsIncrementally()];
+        if (settings.read().codexAppCorpusIngestionEnabled) {
+          for (const ingestion of externalCorpusIngestions) summaries.push(await ingestion.ingestPendingRolloutsIncrementally());
+        }
+        const summary = summaries.reduce((total, current) => ({
+          scannedFileCount: total.scannedFileCount + current.scannedFileCount,
+          changedFileCount: total.changedFileCount + current.changedFileCount,
+          ingestedMessageCount: total.ingestedMessageCount + current.ingestedMessageCount,
+          skippedInternalFileCount: total.skippedInternalFileCount + current.skippedInternalFileCount,
+        }), { scannedFileCount: 0, changedFileCount: 0, ingestedMessageCount: 0, skippedInternalFileCount: 0 });
+        eventCenter.recordEvent("training_corpus.ingested", { trigger, ...summary });
+      } catch (error) {
+        // 数据库或尾行暂不可用时保留 rollout 与旧水位；事件登记失败也不能覆盖原始会话。
+        try { eventCenter.recordEvent("training_corpus.ingestion_failed", { trigger, message: error instanceof Error ? error.message : String(error) }); } catch { /* AI Memory 故障由启动状态统一回显。 */ }
+      } finally {
+        corpusIngestionRunning = false;
+        if (corpusIngestionRequested) {
+          corpusIngestionRequested = false;
+          ingestTrainingCorpus(latestCorpusTrigger);
+        }
+      }
+    })();
+  };
+  ingestTrainingCorpus("startup");
+  settings.subscribe((next) => {
+    if (next.codexAppCorpusIngestionEnabled) ingestTrainingCorpus("codex-app-enabled");
+  });
+  // 只监听 Codex 的持久会话目录；开关关闭时回调不读取外部会话，开启后下一次变化或30秒兜底扫描立即补录。
+  codexAppCorpusWatcher = new CodexConversationCorpusWatcher(
+    [path.join(externalCodexHome, "sessions"), path.join(externalCodexHome, "archived_sessions")],
+    () => {
+      if (settings.read().codexAppCorpusIngestionEnabled) ingestTrainingCorpus("codex-app-changed");
+    },
+  );
+  codexAppCorpusWatcher.start();
   const dispatch = new ConversationDispatchStore(
     path.join(app.getPath("userData"), "conversation-dispatch.json"),
     (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
@@ -178,6 +253,7 @@ app.whenReady().then(async () => {
       validationOwner: "codex",
       readSettings: () => settings.read(),
       readRuleInstructions,
+      onConversationTurnCompleted: () => ingestTrainingCorpus("turn-completed"),
     },
     (details) => eventCenter.recordEvent("trusted_command.decision", details),
     (details) => eventCenter.recordEvent("thread.lifecycle", details),
@@ -243,6 +319,46 @@ app.whenReady().then(async () => {
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
   const workspaces = new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), projectRoot);
+  const corpusSemanticWorkspaceRoot = path.join(app.getPath("userData"), "corpus-semantic-backfill-workspace");
+  mkdirSync(corpusSemanticWorkspaceRoot, { recursive: true });
+  const corpusSemanticWorkspace = {
+    primaryId: "corpus-semantic-backfill",
+    roots: [{ id: "corpus-semantic-backfill", name: "会话语义整理", path: corpusSemanticWorkspaceRoot, permission: "read-only" as const }],
+  };
+  const corpusSemanticBackfillSessions = new CodexSessionStore(path.join(app.getPath("userData"), "corpus-semantic-backfill-session.json"));
+  corpusSemanticBackfillCodex = new CodexService(
+    corpusSemanticWorkspaceRoot,
+    trustedCommands,
+    corpusSemanticBackfillSessions,
+    {
+      codexHome,
+      serviceName: "selplat_ai_desktop_corpus_semantic_backfill",
+      threadSource: "ai-desktop-corpus-semantic-backfill",
+      migrateLegacySession: false,
+      sessionStorage: "ai-desktop",
+      validationOwner: "desktop",
+      readSettings: () => settings.read(),
+      // 历史语义整理只接收固定 JSON 协议，禁止把工程规则正文注入原始对话分析。
+      readRuleInstructions: () => "",
+    },
+    (details) => eventCenter.recordEvent("training_corpus.semantic_backfill.trusted_command.decision", details),
+    (details) => eventCenter.recordEvent("training_corpus.semantic_backfill.thread.lifecycle", details),
+  );
+  const corpusSemanticBackfill = aiMemoryDatabase ? new CodexConversationSemanticBackfill({
+    database: aiMemoryDatabase,
+    roots: [path.join(externalCodexHome, "sessions"), path.join(externalCodexHome, "archived_sessions")],
+    requiredWorkspaceRoot: projectRoot,
+    analyzer: async (candidates) => {
+      if (!corpusSemanticBackfillCodex) throw new Error("Codex 历史语义整理服务尚未就绪。");
+      const response = await corpusSemanticBackfillCodex.send(
+        buildCodexSemanticBackfillPrompt(candidates),
+        "zh-CN",
+        "read-only",
+        corpusSemanticWorkspace,
+      );
+      return parseCodexSemanticBackfillResponse(response.text);
+    },
+  }) : null;
   const collaborationStore = new CollaborationStore(path.join(collaborationRoot, "collaboration-state.json"));
   const collaborationDurations = new CollaborationDurationLog(projectPaths.collaborationArchiveRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
@@ -333,7 +449,7 @@ app.whenReady().then(async () => {
         "语气克制、温和、有判断，不冷硬、不说教，也不故作亲昵。把尊重用户、认真倾听和允许纠偏作为南宫婉性格的一部分：先用“我了解到您的想法是：……”自然复述本轮理解，再说“如果我理解有偏差，您可以直接纠正我”，然后进入回答。复述必须贴合用户这次真正关心的内容，不能机械复制固定句子或擅自扩大用户意图。短问题直接短答；复杂问题按内容自然分段，不使用“结论：”“建议：”“1、2、3”这类模板化标题或编号。不要使用“我更希望”“就行”“可以考虑”等没有明确落点的表达。",
         "需要提出方向时，明确说清现在有什么问题、为什么会造成问题，以及什么做法更合理。把已证实事实、基于事实的推断和仍待验证内容自然写进句子，不把推断或用户陈述说成既定事实，也不要机械套固定栏目。",
         "这段聊天始终只是调查材料；不得声称已形成正式课题、已提交审批或将开始修改。只有用户在界面明确确认转换后，系统才会冻结对话材料为课题；即使提案获批，也不能替代工程写入授权或命令审批。",
-        "你必须自行判断本轮是否仍在处理当前主题，并用一句清楚的话总结用户这条原话真正要推动的意图。回答正文最后另起一行输出 NANGONG_TOPIC_META={\"title\":\"本轮主题\",\"type\":\"自由判断的类型\",\"switchTopic\":false,\"userIntent\":\"用户意图摘要\"}。可见正文中的想法理解与 userIntent 必须语义一致；数据库摘要只写意图本身，不包含客套语。主题、类型和意图不受固定枚举约束；用户明显切换问题中心时 switchTopic 才为 true。该行只供程序登记，正文不得解释它。",
+        "你必须自行判断本轮是否仍在处理当前主题，并用一句清楚的话总结用户这条原话真正要推动的意图。回答正文最后另起一行输出 NANGONG_TOPIC_META={\"title\":\"本轮主题\",\"type\":\"自由判断的类型\",\"switchTopic\":false,\"userIntent\":\"用户意图摘要\",\"tags\":[\"AI理解后给出的标签\"],\"summary\":\"本轮回答核心主旨，最多300字\"}。可见正文中的想法理解与 userIntent 必须语义一致；主题、类型、标签、意图和摘要必须基于本轮语义判断，不得用关键词规则机械填写。用户明显切换问题中心时 switchTopic 才为 true。该行只供程序登记，正文不得解释它。",
         `最近对话：\n${context}`,
         `用户最新消息：\n${request.message}`,
       ].join("\n\n"), request.locale, "read-only", request.workspaceState, await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
@@ -415,11 +531,12 @@ app.whenReady().then(async () => {
     try {
       workflowSupervisor?.stop();
       workflowSupervisor = null;
+      codexAppCorpusWatcher?.stop();
       linghuAutomation?.stop();
       nangongEvolution?.stop();
 
-      // 官方线程删除必须全部成功才进入不可逆的数据清理，避免界面清空但 Harness 仍保留旧任务。
-      await Promise.all([codex, nangongCodex, hanLiCodex, nangongDeliberationCodex, nangongDistributionCodex, linghuDistributionAuditCodex].map((service) => service!.newChat()));
+      // 人物主对话与训练语料属于长期记忆；只删除自动研讨、分发和审计的内部运行线程。
+      await Promise.all([hanLiCodex, nangongDeliberationCodex, nangongDistributionCodex, linghuDistributionAuditCodex].map((service) => service!.newChat()));
       await collaboration?.dispose();
       runtimeDisposed = true;
 
@@ -445,6 +562,7 @@ app.whenReady().then(async () => {
         app.relaunch({ args: process.argv.slice(1) });
         setTimeout(() => app.exit(1), 180);
       } else {
+        codexAppCorpusWatcher?.start();
         linghuAutomation?.start();
         nangongEvolution?.start();
         workflowSupervisor?.start();
@@ -474,6 +592,14 @@ app.whenReady().then(async () => {
     rendererRoot,
     rules,
     clearTestData,
+    corpusSemanticBackfillStatus: () => corpusSemanticBackfill?.status() || ({
+      state: "failed", targetCount: 0, discoveredCount: 0, processedCount: 0, insertedCount: 0,
+      failedCount: 1, message: "AI Memory 数据库不可用，无法补齐历史摘要。", startedAt: null, completedAt: null,
+    } satisfies CorpusSemanticBackfillStatus),
+    startCorpusSemanticBackfill: (limit?: number) => {
+      if (!corpusSemanticBackfill) throw new Error("AI Memory 数据库不可用，无法补齐历史摘要。");
+      return corpusSemanticBackfill.start(limit);
+    },
     prepareForApplicationExit: prepareAiMemoryShutdown,
   });
 
@@ -538,6 +664,7 @@ app.on("before-quit", () => {
   nangongDeliberationCodex?.dispose();
   nangongDistributionCodex?.dispose();
   linghuDistributionAuditCodex?.dispose();
+  corpusSemanticBackfillCodex?.dispose();
   prepareAiMemoryShutdown();
 });
 
