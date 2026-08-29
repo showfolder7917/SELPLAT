@@ -516,6 +516,35 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("一次性流程捕获的 AI JSON 解析失败仍登记为技术异常并保留恢复点", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-technical-failure-"));
+  try {
+    const failures = [];
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const readyConversation = {
+      async send(request) {
+        if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "异常登记课题", goal: "验证失败登记", scope: ["AI Desktop"], evidence: ["已确认复现事实"], acceptanceCriteria: ["失败进入统一异常中心"] }), itemCount: 1 };
+        return { text: "事实已经成熟。若确认启动本轮完整演化，请回复 1。\nNANGONG_TOPIC_META={\"title\":\"异常登记\",\"type\":\"技术治理\",\"switchTopic\":false,\"userIntent\":\"验证失败登记\",\"tags\":[\"异常中心\"],\"summary\":\"邀请启动一次性流程。\"}", itemCount: 1 };
+      },
+      async newChat() {},
+    };
+    const collaboration = { state() { return { members: [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }], tasks: [] }; } };
+    const facade = new NangongEvolutionFacade({
+      store, collaboration, conversation: readyConversation, recordEvent: () => undefined,
+      recordFailure: (failure) => failures.push(failure),
+      hanLi: { async send() { return '{"decision":"approved","advice":"缺少结束引号}'; } },
+    });
+    await facade.sendConversationMessage({ message: "确认进入流程", workspaceState, locale: "zh-CN" });
+    const state = await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
+    assert.equal(state.oneShotRun.status, "blocked");
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].kind, "technical");
+    assert.equal(failures[0].operation, "review_one_shot_proposal");
+    assert.equal(failures[0].correlationId, state.activeTopicId);
+    assert.match(failures[0].fingerprint, /nangong-one-shot:.*:review_one_shot_proposal/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("专题群人物消息复用南宫婉会话并只向专题档案写入短预览", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-topic-group-message-"));
   try {

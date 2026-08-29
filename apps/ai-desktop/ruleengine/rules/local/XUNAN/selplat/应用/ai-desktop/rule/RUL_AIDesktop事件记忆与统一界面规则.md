@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.134.0
+rule_version = 5.135.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -66,8 +66,8 @@ evolution_workspace_window_contract = main_window_conversation_only + one_indepe
 evolution_round_batch_test_trigger_contract = expected_distributed_task_id_set_complete + every_task_returned_to_nangong_with_result_sha + partial_return_waits_without_seal_or_test + all_returned_seals_exactly_once + one_atomic_batch_to_linghu_unified_test_package_and_restart
 <!-- 应用业务只能调用 EventCenterFacade；JSONL、SQLite 和令狐消费均为门面后的可替换实现。 -->
 workflow_event_center_facade_contract = all_application_events_and_exceptions_via_EventCenterFacade + archive_and_SQLite_behind_facade + no_direct_business_sink_coupling
-<!-- 主进程早期、IPC、渲染器、后台服务和退出边界必须统一登记，异常按状态受理直至有事实证明恢复。 -->
-workflow_exception_lifecycle_contract = process_startup_plus_IPC_plus_renderer_plus_background_plus_shutdown_boundaries + open_to_processing_by_linghu + resolved_only_by_recovery_fact
+<!-- 主进程早期、IPC、渲染器、后台服务和退出边界必须统一登记；被 catch 后转换为可恢复状态的失败也不能丢失，异常只能由明确恢复事实关闭。 -->
+workflow_exception_lifecycle_contract = process_startup_plus_IPC_plus_renderer_plus_background_plus_shutdown_boundaries + caught_and_state_converted_failure_explicitly_records_business_or_technical_exception + stable_fingerprint_deduplicates_active_occurrence_and_reopens_resolved_recurrence + normal_state_change_never_resolves_exception + explicit_completed_recovered_revised_passed_integrated_fixed_resolved_fact_only + linghu_claims_open_exception_only_when_enabled + open_to_processing_by_linghu + resolved_only_by_recovery_fact + correlation_identifiers_without_raw_sensitive_payload
 <!-- 完整对话原文与读取预览分离；用户原话不可截断，AI 长回答在后续上下文中只取前八十个 Unicode 字符。 -->
 nangong_conversation_memory_contract = full_user_and_nangong_source_text_in_SQLite + user_exact_context + nangong_80_unicode_preview_context + preview_never_replaces_source
 <!-- 每轮由 AI 自由生成主题、类型和用户意图；问题中心改变时关闭旧主题并新建，禁止枚举限制。 -->

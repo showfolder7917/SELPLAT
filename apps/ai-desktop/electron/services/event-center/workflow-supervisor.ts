@@ -55,7 +55,7 @@ export class WorkflowSupervisor {
       this.#syncDomain("linghu", () => this.#repository.syncLinghuState(this.#readers.linghu()), now);
       const stalled = this.#repository.detectStalledTasks(now);
       if (stalled.length > 0) await this.#onStalledTasks(stalled.map((item) => item.taskId));
-      if (this.#onUnhandledExceptions) {
+      if (this.#onUnhandledExceptions && this.#readers.linghu().enabled) {
         const open = this.#repository.listUnhandledExceptions().filter((event) => event.status === "open");
         const claimedIds = this.#repository.claimExceptions(open.map((event) => event.eventId), "linghu-ancestor", now);
         const claimed = open.filter((event) => claimedIds.includes(event.eventId)).map((event) => ({

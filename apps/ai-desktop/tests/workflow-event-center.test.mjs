@@ -263,7 +263,7 @@ test("统一测试失败优先按结构化 verification 投影为测试阻塞", 
 test("异常从统一队列受理并在相关流程恢复后进入已解决终态", () => {
   const fixture = createFixture("exception-lifecycle");
   try {
-    fixture.repository.recordAuditEvent("technical.exception", { message: "渲染失败", correlationId: "round-1" });
+    fixture.repository.recordAuditEvent("technical.exception", { message: "渲染失败", correlationId: "round-1", fingerprint: "renderer:round-1" });
     fixture.repository.recordAuditEvent("linghu.unified_exception.accepted", { message: "旧版令狐接收事件", sourceEventId: "source-old" });
     fixture.repository.recordAuditEvent("linghu.unified_issue.accepted", { message: "新版令狐接收事件", sourceEventId: "source-new" });
     const open = fixture.repository.listUnhandledExceptions();
@@ -271,12 +271,20 @@ test("异常从统一队列受理并在相关流程恢复后进入已解决终�
     assert.equal(open[0].status, "open");
     assert.deepEqual(fixture.repository.claimExceptions([open[0].eventId], "linghu-ancestor", "2026-08-26T00:00:00.000Z"), [open[0].eventId]);
     assert.equal(fixture.repository.listUnhandledExceptions()[0].status, "processing");
+    fixture.repository.recordAuditEvent("nangong.evolution.state_changed", { correlationId: "round-1", reason: "blocked" });
+    assert.equal(fixture.repository.listUnhandledExceptions()[0].status, "processing");
     fixture.repository.recordAuditEvent("conversation.round.completed", { correlationId: "round-1" });
     assert.equal(fixture.repository.listUnhandledExceptions().length, 0);
     const resolved = fixture.database.withConnection((connection) => connection.prepare("SELECT status, handlingOwnerId, resolutionSummary FROM AiDesktopEvent WHERE eventId = $eventId").get({ $eventId: open[0].eventId }));
     assert.equal(resolved.status, "resolved");
     assert.equal(resolved.handlingOwnerId, "linghu-ancestor");
     assert.match(resolved.resolutionSummary, /流程继续推进/);
+    fixture.repository.recordAuditEvent("technical.exception", { message: "渲染失败再次发生", correlationId: "round-1", fingerprint: "renderer:round-1" });
+    const reopened = fixture.repository.listUnhandledExceptions();
+    assert.equal(reopened.length, 1);
+    assert.equal(reopened[0].eventId, open[0].eventId);
+    assert.equal(reopened[0].status, "open");
+    assert.equal(reopened[0].handlingOwnerId, null);
   } finally {
     fixture.close();
   }
@@ -567,6 +575,7 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
   const heartbeat = new Date(now.getTime() - 180_000).toISOString();
   const handedOff = [];
   const handedOffExceptions = [];
+  let linghuEnabled = false;
   const supervisor = new WorkflowSupervisor({
     repository: fixture.repository,
     intervalMs: 60_000,
@@ -574,15 +583,20 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
     readers: {
       collaboration: () => collaborationState(heartbeat),
       evolution: () => ({ version: 5, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { conversationId: "conversation", messages: [], updatedAt: now.toISOString() }, updatedAt: now.toISOString() }),
-      linghu: () => ({ version: 2, enabled: true, pollIntervalMs: 30_000, cycle: 1, currentModule: "flow-completion", activePromptId: null, activeTaskId: null, pendingRepairProposalId: null, recoveryAttemptCount: 0, currentFaultFingerprint: null, recoveryAttemptsByFingerprint: {}, detectionCursor: null, flowSnapshots: [], testResourceState: null, recoveryCheckpoint: null, lastDispatchAt: null, lastCompletedAt: null, lastCheckedAt: null, blockingReason: null, lastFeedback: null, lastModuleReport: null, prompts: [], updatedAt: now.toISOString() }),
+      linghu: () => ({ version: 2, enabled: linghuEnabled, pollIntervalMs: 30_000, cycle: 1, currentModule: "flow-completion", activePromptId: null, activeTaskId: null, pendingRepairProposalId: null, recoveryAttemptCount: 0, currentFaultFingerprint: null, recoveryAttemptsByFingerprint: {}, detectionCursor: null, flowSnapshots: [], testResourceState: null, recoveryCheckpoint: null, lastDispatchAt: null, lastCompletedAt: null, lastCheckedAt: null, blockingReason: null, lastFeedback: null, lastModuleReport: null, prompts: [], updatedAt: now.toISOString() }),
     },
     onStalledTasks: (taskIds) => handedOff.push(...taskIds),
     onUnhandledExceptions: (events) => handedOffExceptions.push(...events),
   });
   try {
-    // 直接等待一次完整监督周期，保证卡住任务交接与异常认领两个异步回调都已结束。
+    // 令狐关闭时异常保持 open，不能先认领为 processing 后失去实际处理者。
     await supervisor.checkNow();
     assert.deepEqual(handedOff, ["task-1"]);
+    assert.equal(handedOffExceptions.length, 0);
+    assert.ok(fixture.repository.listUnhandledExceptions().every((event) => event.status === "open"));
+    linghuEnabled = true;
+    // 开启后才由统一入口原子认领并交给令狐。
+    await supervisor.checkNow();
     assert.ok(handedOffExceptions.some((event) => event.category === "stalled" && event.handlingOwnerId === "linghu-ancestor"));
     assert.ok(handedOffExceptions.some((event) => event.eventType === "workflow.supervisor.evolution_sync_failed" && event.handlingOwnerId === "linghu-ancestor"));
   } finally {

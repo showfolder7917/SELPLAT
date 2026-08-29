@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration/collaboration-memory.js";
 import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionMutationRequest, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, GenerateNangongTopicDraftRequest, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, QueryEvolutionWorkbenchRequest, ReviseEvolutionProposalRequest, SaveEvolutionWorkbenchPreferenceRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { SendMessageResponse } from "../../../contracts/codex/conversation.js";
+import type { EventCenterExceptionInput } from "../../../contracts/governance/workflow.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { EvolutionMutationCoordinator } from "./evolution-mutation-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
@@ -28,6 +29,7 @@ export interface NangongEvolutionFacadeOptions {
   auditDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   planAcceptance?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
+  recordFailure?(input: EventCenterExceptionInput): void;
   memory?: CollaborationMemoryPort | null;
   readDossier?: (topicId: string, state: NangongEvolutionState) => EvolutionTopicDossier;
   queryWorkbench?: (request: QueryEvolutionWorkbenchRequest) => EvolutionWorkbenchPage;
@@ -51,6 +53,7 @@ export class NangongEvolutionFacade {
   readonly #auditDistribution: NonNullable<NangongEvolutionFacadeOptions["auditDistribution"]>;
   readonly #planAcceptance: NonNullable<NangongEvolutionFacadeOptions["planAcceptance"]>;
   readonly #recordEvent: NangongEvolutionFacadeOptions["recordEvent"];
+  readonly #recordFailure: NonNullable<NangongEvolutionFacadeOptions["recordFailure"]>;
   readonly #memory: CollaborationMemoryPort | null;
   readonly #readDossier: NangongEvolutionFacadeOptions["readDossier"];
   readonly #queryWorkbench: NangongEvolutionFacadeOptions["queryWorkbench"];
@@ -62,7 +65,7 @@ export class NangongEvolutionFacade {
   #running = false;
   #oneShotAcceptanceRunner: ((plan: HanLiAcceptancePlan) => Promise<HanLiAcceptanceRun>) | null = null;
 
-  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#investigateRevision = options.investigateRevision || (async () => { throw new Error("南宫婉返修调查能力尚未接入。"); }); this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#auditDistribution = options.auditDistribution || (async () => { throw new Error("令狐分发合理性审计尚未接入。"); }); this.#planAcceptance = options.planAcceptance || (async () => { throw new Error("韩立界面验收计划能力尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#queryWorkbench = options.queryWorkbench; this.#getWorkbenchPreference = options.getWorkbenchPreference; this.#saveWorkbenchPreference = options.saveWorkbenchPreference; this.#mutations = new EvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation }); this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
+  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#investigateRevision = options.investigateRevision || (async () => { throw new Error("南宫婉返修调查能力尚未接入。"); }); this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#auditDistribution = options.auditDistribution || (async () => { throw new Error("令狐分发合理性审计尚未接入。"); }); this.#planAcceptance = options.planAcceptance || (async () => { throw new Error("韩立界面验收计划能力尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#recordFailure = options.recordFailure || (() => undefined); this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#queryWorkbench = options.queryWorkbench; this.#getWorkbenchPreference = options.getWorkbenchPreference; this.#saveWorkbenchPreference = options.saveWorkbenchPreference; this.#mutations = new EvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation }); this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
   state(): NangongEvolutionState { return this.#store.state(); }
   dossier(topicId: string): EvolutionTopicDossier {
     const state = this.state();
@@ -144,7 +147,7 @@ export class NangongEvolutionFacade {
       return this.state();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      state = this.#store.blockOneShotRun(reason);
+      state = this.#blockOneShotFailure("technical", "form_topic_from_conversation", error, reason);
       return this.#store.appendConversation("nangong", `本轮一次性演化已保留当前进度，但遇到无法自动继续的阻塞：${reason}`, []);
     }
   }
@@ -236,8 +239,9 @@ export class NangongEvolutionFacade {
     const investigation = parseRevisionInvestigation(response);
     if (!hasMaterialRevisionEvidence(proposal, investigation, feedback.advice)) {
       const reason = `南宫婉只读调查没有产生可核验的新事实，未创建提案 v${proposal.version + 1}；请补充实际组件、状态或复现证据后从当前卡点继续。`;
-      this.#recordEvent("nangong.evolution.revision_no_material_evidence", { topicId: topic.topicId, proposalId, feedbackApprovalId: feedback.approvalId });
-      return state.oneShotRun?.status === "running" ? this.#store.blockOneShotRun(reason) : this.state();
+      if (state.oneShotRun?.status === "running") return this.#blockOneShotFailure("business", "revise_proposal_without_new_evidence", new Error(reason), reason, { feedbackApprovalId: feedback.approvalId });
+      this.#recordFailure({ kind: "business", sourceType: "member", sourceId: "nangong-wan", operation: "revise_proposal_without_new_evidence", error: new Error(reason), correlationId: topic.topicId, fingerprint: `nangong-revision:${proposal.proposalId}:no-material-evidence`, details: { topicId: topic.topicId, proposalId, feedbackApprovalId: feedback.approvalId } });
+      return this.state();
     }
     const revised = this.reviseProposal(proposal.proposalId, {
       mutation: { expectedStateVersion: state.updatedAt, idempotencyKey: `automatic-revise:${proposal.proposalId}:${state.updatedAt}` },
@@ -250,7 +254,7 @@ export class NangongEvolutionFacade {
       rollbackPlan: investigation.rollbackPlan,
       acceptanceCriteria: investigation.acceptanceCriteria,
     });
-    this.#recordEvent("member.evolution.proposal_revised_after_investigation", { proposalId: proposal.proposalId, submitterMemberId: proposal.submitterMemberId, feedbackApprovalId: feedback.approvalId, evidenceCount: investigation.evidence.length });
+    this.#recordEvent("member.evolution.proposal_revised_after_investigation", { proposalId: proposal.proposalId, submitterMemberId: proposal.submitterMemberId, feedbackApprovalId: feedback.approvalId, evidenceCount: investigation.evidence.length, correlationId: topic.topicId, resolvesFailure: true });
     return revised;
   }
 
@@ -424,7 +428,7 @@ export class NangongEvolutionFacade {
       const run = state.oneShotRun;
       if (!run || run.status !== "running" || !run.topicId) return state;
       const topic = state.topics.find((item) => item.topicId === run.topicId);
-      if (!topic) return this.#store.blockOneShotRun("一次性运行关联的演化课题不存在。");
+      if (!topic) return this.#blockOneShotFailure("technical", "load_one_shot_topic", new Error("一次性运行关联的演化课题不存在。"), "一次性运行关联的演化课题不存在。");
       const proposals = state.proposals.filter((item) => item.topicId === topic.topicId).sort((left, right) => left.version - right.version);
       let proposal = proposals.at(-1) || null;
 
@@ -439,23 +443,38 @@ export class NangongEvolutionFacade {
 
       if (proposal.status === "pending-approval") {
         this.#store.updateOneShotRun("approving", "han-li", "韩立", `正在审批提案 v${proposal.version}`, topic.topicId, proposal.proposalId);
-        const decision = await this.#reviewOneShotProposal(proposal);
+        let decision: { decision: "approved" | "rejected" | "supplement-required"; advice: string };
+        try { decision = await this.#reviewOneShotProposal(proposal); }
+        catch (error) {
+          const reason = `韩立方向审批结果无法处理：${error instanceof Error ? error.message : String(error)}`;
+          return this.#blockOneShotFailure("technical", "review_one_shot_proposal", error, reason);
+        }
         this.#store.decide(proposal.proposalId, decision.decision, decision.advice, "automatic-han-li", []);
         continue;
       }
 
       if (["supplement-required", "rejected"].includes(proposal.status)) {
         const correctionRounds = proposals.filter((item) => item.supersedesProposalId !== null).length;
-        if (correctionRounds >= state.automationSettings.maxCorrectionRounds) return this.#store.blockOneShotRun(`提案返修已经达到 ${state.automationSettings.maxCorrectionRounds} 轮，韩立仍未确认方向可执行。`);
+        if (correctionRounds >= state.automationSettings.maxCorrectionRounds) {
+          const reason = `提案返修已经达到 ${state.automationSettings.maxCorrectionRounds} 轮，韩立仍未确认方向可执行。`;
+          return this.#blockOneShotFailure("business", "revision_budget_exhausted", new Error(reason), reason);
+        }
         this.#store.updateOneShotRun("revising", "nangong-wan", "南宫婉", `正在按韩立退回项重新调查提案 v${proposal.version}`, topic.topicId, proposal.proposalId);
         try { await this.investigateAndReviseReturnedProposal(proposal.proposalId); }
-        catch (error) { return this.#store.blockOneShotRun(`南宫婉重新调查失败：${error instanceof Error ? error.message : String(error)}`); }
+        catch (error) {
+          const reason = `南宫婉重新调查失败：${error instanceof Error ? error.message : String(error)}`;
+          return this.#blockOneShotFailure("technical", "investigate_and_revise_proposal", error, reason);
+        }
         continue;
       }
 
       if (proposal.status === "approved" && proposal.distributedTaskIds.length === 0) {
         this.#store.updateOneShotRun("distributing", "nangong-wan", "南宫婉", "审批已通过，正在拆分并分发任务", topic.topicId, proposal.proposalId);
-        await this.dispatch(proposal.proposalId);
+        try { await this.dispatch(proposal.proposalId); }
+        catch (error) {
+          const reason = `南宫婉任务拆分或分发失败：${error instanceof Error ? error.message : String(error)}`;
+          return this.#blockOneShotFailure("technical", "plan_and_dispatch_one_shot", error, reason);
+        }
         continue;
       }
 
@@ -475,17 +494,22 @@ export class NangongEvolutionFacade {
 
       if (proposal.status === "pending-acceptance") {
         this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在生成检查计划并验收真实应用界面", topic.topicId, proposal.proposalId);
-        if (!this.#oneShotAcceptanceRunner) return this.#store.blockOneShotRun("韩立真实应用验收执行器尚未接入。");
-        const existingPlan = [...state.archiveRecords].reverse().find((record) => record.proposalId === proposal!.proposalId && record.eventType === "acceptance.plan_generated")?.payload.acceptancePlan as HanLiAcceptancePlan | undefined;
-        const plan = existingPlan || await this.generateAcceptancePlan(proposal.proposalId);
-        const runResult = await this.#oneShotAcceptanceRunner(plan);
-        this.recordAcceptanceRun(runResult);
-        state = this.state();
-        this.#decideResult(proposal.proposalId, {
-          mutation: { expectedStateVersion: state.updatedAt, idempotencyKey: `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}` },
-          decision: runResult.status === "passed" ? "approved" : "supplement-required",
-          advice: runResult.status === "passed" ? "韩立已按真实用户路径完成检查，全部适用项目通过。" : "真实应用检查未通过，已携带复现步骤、实际结果、期望结果和截图证据返还南宫婉修订。",
-        }, "automatic-han-li");
+        if (!this.#oneShotAcceptanceRunner) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立真实应用验收执行器尚未接入。"), "韩立真实应用验收执行器尚未接入。");
+        try {
+          const existingPlan = [...state.archiveRecords].reverse().find((record) => record.proposalId === proposal!.proposalId && record.eventType === "acceptance.plan_generated")?.payload.acceptancePlan as HanLiAcceptancePlan | undefined;
+          const plan = existingPlan || await this.generateAcceptancePlan(proposal.proposalId);
+          const runResult = await this.#oneShotAcceptanceRunner(plan);
+          this.recordAcceptanceRun(runResult);
+          state = this.state();
+          this.#decideResult(proposal.proposalId, {
+            mutation: { expectedStateVersion: state.updatedAt, idempotencyKey: `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}` },
+            decision: runResult.status === "passed" ? "approved" : "supplement-required",
+            advice: runResult.status === "passed" ? "韩立已按真实用户路径完成检查，全部适用项目通过。" : "真实应用检查未通过，已携带复现步骤、实际结果、期望结果和截图证据返还南宫婉修订。",
+          }, "automatic-han-li");
+        } catch (error) {
+          const reason = `韩立真实应用验收失败：${error instanceof Error ? error.message : String(error)}`;
+          return this.#blockOneShotFailure("technical", "run_real_application_acceptance", error, reason);
+        }
         continue;
       }
 
@@ -495,7 +519,25 @@ export class NangongEvolutionFacade {
       }
       return state;
     }
-    return this.#store.blockOneShotRun("一次性流程在单次推进中出现过多连续状态变化，已保留恢复点等待检查。");
+    return this.#blockOneShotFailure("technical", "advance_one_shot_transition_limit", new Error("一次性流程在单次推进中出现过多连续状态变化。"), "一次性流程在单次推进中出现过多连续状态变化，已保留恢复点等待检查。");
+  }
+
+  /** 被转换为可恢复暂停态的失败也必须进入统一异常中心，不能因 catch 而丢失。 */
+  #blockOneShotFailure(kind: "technical" | "business", operation: string, error: unknown, reason: string, details: Record<string, unknown> = {}): NangongEvolutionState {
+    const state = this.state();
+    const run = state.oneShotRun;
+    const topicId = run?.topicId || state.activeTopicId;
+    this.#recordFailure({
+      kind,
+      sourceType: kind === "business" ? "member" : "system",
+      sourceId: kind === "business" ? "nangong-wan" : "nangong-evolution",
+      operation,
+      error,
+      correlationId: topicId || run?.runId || null,
+      fingerprint: `nangong-one-shot:${run?.runId || "unknown"}:${operation}:${run?.proposalId || "none"}`,
+      details: { runId: run?.runId || null, topicId: topicId || null, proposalId: run?.proposalId || null, phase: run?.phase || null, recoveryPoint: run?.action || null, ...details },
+    });
+    return this.#store.blockOneShotRun(reason);
   }
 
   /** 韩立在一次性运行中仍形成正式方向审批记录，不读取长期自动开关，也不跳过事实审查。 */
@@ -559,6 +601,10 @@ export class NangongEvolutionFacade {
       if (next.automaticNangongApprovalEnabled) next = this.autoApprove(proposal.proposalId);
       const decided = requireProposal(next, proposal.proposalId);
       if (next.automaticExecutionEnabled && decided.status === "approved") await this.dispatch(proposal.proposalId);
+    } catch (error) {
+      const state = this.state();
+      if (state.oneShotRun?.status === "running") this.#blockOneShotFailure("technical", "nangong_evolution_tick", error, `南宫婉自动推进失败：${error instanceof Error ? error.message : String(error)}`);
+      else this.#recordFailure({ kind: "technical", sourceType: "system", sourceId: "nangong-evolution", operation: "nangong_evolution_tick", error, correlationId: state.activeTopicId, fingerprint: `nangong-evolution-tick:${state.activeTopicId || "no-topic"}` });
     } finally { this.#running = false; }
   }
 }

@@ -131,7 +131,7 @@ export class WorkflowRepository {
       fingerprint: stringValue(details.fingerprint),
       occurredAt,
     });
-    if (correlationId && !["technical-error", "business-exception", "stalled"].includes(classified.category)) {
+    if (correlationId && !["technical-error", "business-exception", "stalled"].includes(classified.category) && provesFailureResolved(type, details)) {
       this.resolveCorrelatedExceptions(correlationId, `后续事件 ${type} 已证明流程继续推进。`, occurredAt);
     }
     return eventId;
@@ -562,6 +562,26 @@ export class WorkflowRepository {
     const category = input.category || "audit";
     const severity = input.severity || defaultSeverity(category);
     const status = input.status || defaultStatus(category);
+    if (input.fingerprint) {
+      const existing = connection.prepare("SELECT eventId, status FROM AiDesktopEvent WHERE fingerprint = $fingerprint").get({ $fingerprint: input.fingerprint }) as { eventId: string; status: WorkflowEventStatus } | undefined;
+      if (existing) {
+        const reopenedStatus = existing.status === "processing" && status === "open" ? "processing" : status;
+        connection.prepare(`UPDATE AiDesktopEvent SET correlationId=$correlationId, sourceType=$sourceType, sourceId=$sourceId,
+          eventType=$eventType, category=$category, severity=$severity, status=$status, message=$message, payloadJson=$payloadJson,
+          occurredAt=$occurredAt, recordedAt=$recordedAt,
+          resolvedAt=CASE WHEN $status='resolved' THEN $occurredAt ELSE NULL END,
+          resolutionSummary=CASE WHEN $status='resolved' THEN resolutionSummary ELSE NULL END,
+          handlingOwnerId=CASE WHEN $status='processing' THEN handlingOwnerId ELSE NULL END,
+          handlingStartedAt=CASE WHEN $status='processing' THEN handlingStartedAt ELSE NULL END
+          WHERE eventId=$eventId`).run({
+          $eventId: existing.eventId, $correlationId: input.correlationId || null, $sourceType: input.sourceType || "system",
+          $sourceId: input.sourceId || "ai-desktop", $eventType: input.eventType, $category: category,
+          $severity: severity, $status: reopenedStatus, $message: input.message || input.eventType,
+          $payloadJson: JSON.stringify(input.payload || {}), $occurredAt: occurredAt, $recordedAt: new Date().toISOString(),
+        });
+        return existing.eventId;
+      }
+    }
     connection.prepare(`
       INSERT OR IGNORE INTO AiDesktopEvent (eventId, correlationId, sourceType, sourceId, eventType, category, severity, status, message, payloadJson, fingerprint, occurredAt, recordedAt, resolvedAt)
       VALUES ($eventId, $correlationId, $sourceType, $sourceId, $eventType, $category, $severity, $status, $message, $payloadJson, $fingerprint, $occurredAt, $recordedAt, $resolvedAt)
@@ -820,6 +840,12 @@ function classifyAuditEvent(type: string): { category: WorkflowEventCategory; se
   if (/approval|decided/u.test(type)) return { category: "approval", severity: "info", status: "observed", sourceType, sourceId };
   if (/task|execution|integration|test/u.test(type)) return { category: "execution", severity: "info", status: "observed", sourceType, sourceId };
   return { category: "state-change", severity: "info", status: "observed", sourceType, sourceId };
+}
+
+/** 只有明确完成、恢复或通过的事实才能关闭异常；普通状态刷新和“已受理”不构成恢复证据。 */
+function provesFailureResolved(type: string, details: Record<string, unknown>): boolean {
+  if (details.resolvesFailure === true) return true;
+  return /(?:^|[._-])(completed|recovered|revised|passed|integrated|fixed|resolved)(?:$|[._-])/u.test(type);
 }
 
 function defaultSeverity(category: WorkflowEventCategory): WorkflowEventSeverity { return category === "technical-error" || category === "stalled" ? "error" : category === "business-exception" ? "warning" : "info"; }

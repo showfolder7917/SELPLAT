@@ -223,6 +223,15 @@ export class LinghuAutomationFacade {
     const attempts = this.#store.state().recoveryAttemptsByFingerprint[fingerprint] || 0;
     const checkpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
     if (snapshot?.blockingKind === "business") {
+      this.#recordEvent("business.exception", {
+        operation: "linghu_recover_flow_requires_business_choice",
+        sourceType: "task",
+        sourceId: task.taskId,
+        message: task.blockingReason || "流程需要人工业务选择。",
+        severity: "warning",
+        fingerprint: `linghu-business-choice:${fingerprint}`,
+        recoveryCheckpoint: checkpoint,
+      }, task.taskId);
       this.#store.updateRuntime("automation.business_choice_required", (state) => {
         state.recoveryCheckpoint = checkpoint;
         state.blockingReason = `任务 ${task.taskId} 需要人工业务选择：${task.blockingReason || "未记录具体选择"}；检测继续运行`;

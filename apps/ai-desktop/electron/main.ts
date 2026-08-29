@@ -473,6 +473,7 @@ app.whenReady().then(async () => {
     auditDistribution: async (prompt, workspaceState, locale) => (await linghuDistributionAuditCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
     planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
+    recordFailure: (input) => eventCenter.recordException(input),
     memory: collaborationMemory,
     readDossier: workflowRepository ? (topicId, state) => workflowRepository!.getEvolutionTopicDossier(topicId, state) : undefined,
     queryWorkbench: workflowRepository ? (request) => workflowRepository!.queryEvolutionWorkbench(request) : undefined,
