@@ -1,7 +1,7 @@
 # AI Desktop Harness 工作区与运行时规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.105.0
+rule_version = 5.106.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -55,6 +55,8 @@ trusted_project_command_identity_contract = explicit_allow_and_trust + electron_
 trusted_project_command_safety_and_management_contract = destructive_privileged_permission_or_git_state_command_always_review + file_change_never_trusted_as_command + settings_count_and_confirmed_clear + audit_trusted_and_auto_allowed
 <!-- 未实现的权限、动态工具或结构化请求不得被隐式接受；业务含义是未知能力默认保持最小权限。 -->
 unsupported_harness_server_request_policy = deny_or_cancel_without_permission_expansion
+<!-- 固定诊断与路径解析只能读取已准备的依赖缓存；链接修复、迁移和共享缓存写入必须限定在显式准备阶段，禁止普通 paths:resolve 或类型检查反复改写工程外缓存并触发权限审批。 -->
+dependency_cache_mutation_boundary_contract = diagnostics_and_paths_resolve_read_prepared_cache_only + repair_migrate_and_symlink_write_in_explicit_prepare_stage_only + no_shared_cache_mutation_during_typecheck_or_fixed_diagnostics + permission_request_visible_waiting_state + no_false_running_while_human_authorization_pending
 
 <!-- 新会话、发送任务、中止任务、账号读取、登录和退出必须由同一长期运行 app-server 连接完成。 -->
 harness_required_lifecycle = initialize + account + thread + turn + interrupt + logout

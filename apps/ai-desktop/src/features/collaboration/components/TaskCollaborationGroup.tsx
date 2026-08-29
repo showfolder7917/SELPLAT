@@ -69,7 +69,7 @@ export function TaskCollaborationGroup({ snapshot, liveTextByTaskId, locale, onM
 function TaskGroupHeader({ group, locale, nowMs }: { group: CollaborationTimelineGroup; locale: Locale; nowMs: number }) {
   const activeCount = group.executingCount + group.verifyingCount;
   const duration = group.status === "completed" || group.status === "cancelled" ? group.durationMs : Math.max(group.durationMs, nowMs - Date.parse(group.startedAt));
-  return <span className="task-group-header-content"><span><strong>{group.title}</strong><small>{group.summary}</small></span><span className="task-group-facts"><b>{groupStatusLabel(group.status, locale)}</b>{activeCount > 0 && <em>{locale === "ja" ? `並行 ${activeCount}人` : `并行处理中 ${activeCount} 人`}</em>}<small>{locale === "ja" ? "合計" : "总历时"} {formatDuration(duration, locale)}</small></span></span>;
+  return <span className="task-group-header-content"><span><strong>{group.title}</strong><small>{group.summary}</small></span><span className="task-group-facts"><b>{groupStatusLabel(group.status, locale)}</b>{activeCount > 0 && <em>{locale === "ja" ? `並行 ${activeCount}人` : `并行处理中 ${activeCount} 人`}</em>}<small>{locale === "ja" ? "テーマ総所要時間" : "专题总历时"} {formatDuration(duration, locale)}</small></span></span>;
 }
 
 function TaskNodeHeader({ node, locale, nowMs }: { node: CollaborationTimelineNode; locale: Locale; nowMs: number }) {
@@ -86,9 +86,9 @@ function updateOpenOverride(setter: (update: (current: Map<string, boolean>) => 
 }
 
 function recipientLabel(node: CollaborationTimelineNode): string {
-  const visible = node.recipients.slice(0, 3).map((item) => `@${item.displayName}`).join(" ");
+  const visible = node.recipients.slice(0, 3).map((item) => item.displayName).join("、");
   const remaining = node.recipients.length - 3;
-  return `${visible}${remaining > 0 ? ` +${remaining}` : ""}`;
+  return `→ ${visible}${remaining > 0 ? ` 等 ${node.recipients.length} 人` : ""}`;
 }
 
 function compact(value: string): string {

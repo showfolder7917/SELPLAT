@@ -46,7 +46,6 @@ function createDependencyLink(target, linkPath) {
 /** 为 VS Code 保留当前锁哈希的本机开发链接；Windows 使用 Junction，macOS 与 Linux 使用目录符号链接，链接本身永不进入 Git。 */
 export function attachDeveloperDependencyCache(details = resolveDependencyCache()) {
   if (!existsSync(details.dependencyRoot)) throw new Error(`Dependency cache is missing for current package-lock.json: ${details.cacheRoot}`);
-  repairLocalPackageLinks(details);
   const currentTarget = managedLinkTarget(details);
   if (currentTarget) {
     if (existsSync(currentTarget) && realpathSync(currentTarget) === realpathSync(details.dependencyRoot)) {
@@ -85,10 +84,10 @@ export function repairLocalPackageLinks(details = resolveDependencyCache()) {
       throw new Error(`Local dependency target escaped or is missing: ${metadata.resolved}`);
     }
     const current = lstatSync(linkPath, { throwIfNoEntry: false });
-    if (current && !current.isSymbolicLink()) continue;
     // 已指向锁文件声明的本地包时无需重建；只读诊断不能因为无意义的删链操作而要求缓存写权限。
-    if (current && path.resolve(path.dirname(linkPath), readlinkSync(linkPath)) === targetPath) continue;
-    if (current) rmSync(linkPath, { force: true });
+    if (current?.isSymbolicLink() && path.resolve(path.dirname(linkPath), readlinkSync(linkPath)) === targetPath) continue;
+    // 哈希缓存中遗留的实体目录会掩盖共享包源码更新；路径已由 linkRelative 验证，收敛为锁文件规定的链接。
+    if (current) rmSync(linkPath, { recursive: !current.isSymbolicLink(), force: true });
     mkdirSync(path.dirname(linkPath), { recursive: true });
     createDependencyLink(targetPath, linkPath);
   }
@@ -97,7 +96,8 @@ export function repairLocalPackageLinks(details = resolveDependencyCache()) {
 export function attachDependencyCache(options = {}) {
   const details = resolveDependencyCache();
   if (!existsSync(details.dependencyRoot)) throw new Error(`Dependency cache is missing for current package-lock.json: ${details.cacheRoot}`);
-  repairLocalPackageLinks(details);
+  // 普通诊断、类型检查和测试只挂载已准备好的缓存；本地包链接修复仅允许由 ensure/migrate 准备阶段执行，
+  // 避免每条固定命令都修改共享缓存并反复触发 Codex 人工权限审批。
   if (existsSync(details.linkPath)) {
     if (lstatSync(details.linkPath).isSymbolicLink()) {
       const linkedDependencyRoot = realpathSync(details.linkPath);

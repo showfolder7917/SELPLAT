@@ -551,6 +551,49 @@ test("令狐在原任务工作树修复统一测试失败并生成新的待集�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("执行修复单次未完成后由令狐保留恢复点且不错误归属原执行人", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-execution-recovery-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    store.setMode("collaboration");
+    const workspace = { workspaceId: "worktree:recovery", rootPath: directory, branchName: "codex/recovery", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
+    const coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: { prepareTask: async () => workspace, resumeTask: async () => workspace, commitTaskResult: async () => "result" },
+      sessions: {
+        createExecutor: async (_task, member) => ({
+          isAlive: () => true,
+          analyze: async () => "只修改目标文件并完成代码级检查",
+          optimize: async () => "",
+          execute: async () => member.memberId === "linghu-ancestor"
+            ? { status: "partial", text: "等待权限", pendingActions: ["Codex requests command execution approval"] }
+            : { status: "partial", text: "执行未完成", pendingActions: ["路径诊断失败"] },
+          dispose: async () => undefined,
+        }),
+      },
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      emitState: () => undefined,
+      emitStream: () => undefined,
+    });
+    const state = coordinator.submitTask({ title: "权限恢复", problemStatement: "固定命令需要授权", confirmedIntent: "授权后继续原任务", workspaceState, locale: "zh-CN", preferredExecutorMemberId: "yuan-yao" });
+    const taskId = state.tasks.at(-1).taskId;
+    for (let attempt = 0; attempt < 100 && store.task(taskId).state !== "recovering"; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    const task = store.task(taskId);
+    assert.equal(task.state, "recovering");
+    assert.equal(task.currentHandler.displayName, "令狐老祖");
+    assert.equal(task.preferredExecutorMemberId, "linghu-ancestor");
+    assert.match(task.blockingReason, /等待用户授权/);
+    assert.equal(task.executionRecords[0].status, "blocked");
+    assert.ok(task.executionRecords[0].completedAt);
+    const waiting = task.flowEvents.find((event) => event.type === "execution.repair_waiting");
+    assert.equal(waiting.actor.displayName, "令狐老祖");
+    assert.equal(waiting.status, "waiting");
+    assert.equal(task.flowEvents.some((event) => event.type === "task.blocked"), false);
+    await coordinator.dispose();
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("令狐活动任务记录缺失时保留恢复点并派发同模块替代任务", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-missing-task-"));
   try {

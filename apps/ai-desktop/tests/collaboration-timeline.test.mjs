@@ -20,7 +20,7 @@ test("数据库时间线按申请、拒绝、补充申请和通过顺序追加�
     const proposal2 = { ...proposal(fixture.at(3), "proposal-2", 2, "pending-approval", "proposal-1", []), revisionFeedbackApprovalId: "approval-1", content: "已补充忙碌状态。" };
     fixture.timeline.syncEvolutionState(evolution(fixture.at(4), [proposal1, proposal2], false));
     let nodes = fixture.timeline.snapshot(fixture.at(5)).groups[0].nodes;
-    assert.deepEqual(nodes.map((node) => node.action), ["审批申请", "审批未通过", "补充后再次申请"]);
+    assert.deepEqual(nodes.map((node) => node.action), ["审批申请", "审批退回补充", "补充材料已重新提交", "补充后再次申请"]);
     assert.equal(nodes.at(-1).manualApprovalProposalId, "proposal-2");
 
     proposal2.status = "approved";
@@ -28,7 +28,7 @@ test("数据库时间线按申请、拒绝、补充申请和通过顺序追加�
     proposal2.updatedAt = fixture.at(6);
     fixture.timeline.syncEvolutionState(evolution(fixture.at(6), [proposal1, proposal2], false));
     nodes = fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes;
-    assert.deepEqual(nodes.map((node) => node.action), ["审批申请", "审批未通过", "补充后再次申请", "审批通过"]);
+    assert.deepEqual(nodes.map((node) => node.action), ["审批申请", "审批退回补充", "补充材料已重新提交", "补充后再次申请", "审批通过"]);
     assert.equal(nodes.filter((node) => node.manualApprovalProposalId).length, 0);
     assert.equal(fixture.timeline.snapshot(fixture.at(7)).groups[0].status, "running");
   } finally { fixture.close(); }
@@ -66,7 +66,7 @@ test("任务转交令狐后保留原执行人、原时间和正文，后续修�
     original.evolutionProposalId = null;
     original.evolutionRoundId = null;
     fixture.timeline.syncCollaborationState(collaboration(fixture.at(5), [original]));
-    const before = fixture.timeline.snapshot(fixture.at(6)).groups[0].nodes.find((node) => node.kind === "execution");
+    const before = fixture.timeline.snapshot(fixture.at(6)).groups[0].nodes.find((node) => node.kind === "execution" && node.nodeId.includes("assignment-1"));
 
     original.executionRecords[0].status = "blocked";
     original.executionRecords[0].completedAt = fixture.at(7);
@@ -83,8 +83,73 @@ test("任务转交令狐后保留原执行人、原时间和正文，后续修�
     const oldExecution = nodes.find((node) => node.nodeId === before.nodeId);
     assert.equal(oldExecution.actor.displayName, "执行人1");
     assert.equal(oldExecution.startedAt, before.startedAt);
+    assert.equal(oldExecution.status, "failed");
+    assert.equal(oldExecution.completedAt, fixture.at(7));
     assert.match(oldExecution.summary, /依赖路径/);
     assert.ok(nodes.some((node) => node.kind === "repair" && node.actor.displayName === "令狐老祖"));
+  } finally { fixture.close(); }
+});
+
+test("任务分发在真实执行人确定后修正临时接收人且不保留南宫婉自派发", () => {
+  const fixture = createFixture("recipient-correction");
+  try {
+    const approved = proposal(fixture.at(1), "proposal-1", 1, "executing", null, [{
+      approvalId: "approval-1", proposalId: "proposal-1", decision: "approved", source: "automatic", stage: "direction",
+      approverMemberId: "han-li", approverDisplayName: "韩立", advice: "范围明确，可以执行。", feedbackTarget: "proposal-content",
+      capabilityScope: null, referencedApprovalIds: [], preferenceSnapshotVersion: 0, createdAt: fixture.at(2),
+    }]);
+    const assigned = task(fixture, 1, "implementing");
+    assigned.executionRecords = [];
+    assigned.plans = [];
+    assigned.executorMemberId = null;
+    assigned.preferredExecutorMemberId = null;
+    assigned.originalExecutor = null;
+    assigned.currentHandler = member("nangong-wan", "南宫婉");
+    fixture.timeline.syncCollaborationState(collaboration(fixture.at(3), [assigned]));
+    approved.distributedTaskIds = [assigned.taskId];
+    approved.distributionPlan = { version: 1, summary: "单人执行", units: [], audit: { decision: "passed", reason: "可执行", findings: [], auditedAt: fixture.at(3) }, plannedAt: fixture.at(3) };
+    fixture.timeline.syncEvolutionState(evolution(fixture.at(4), [approved], true));
+    assert.equal(fixture.timeline.snapshot(fixture.at(4)).groups[0].nodes.find((node) => node.kind === "distribution").recipients[0].displayName, "等待分配");
+
+    const executor = member("yuan-yao", "元瑶");
+    assigned.executorMemberId = executor.memberId;
+    assigned.currentHandler = executor;
+    assigned.plans = [{ version: 1, ownerMemberId: executor.memberId, ownerDisplayName: executor.displayName, status: "ready-for-execution", text: "元瑶完成技术分析", contentHash: "yuan-plan", createdAt: fixture.at(5) }];
+    assigned.executionRecords = [{ assignmentId: "yuan-assignment", executor, workerGeneration: 1, status: "executing", assignedAt: fixture.at(5), executionStartedAt: fixture.at(5), completedAt: null, transferFromAssignmentId: null, handoffType: "initial", result: null, blockingReason: null, changedFiles: [] }];
+    assigned.updatedAt = fixture.at(5);
+    fixture.timeline.syncCollaborationState(collaboration(fixture.at(5), [assigned]));
+    fixture.timeline.syncEvolutionState(evolution(fixture.at(6), [approved], true));
+    const distribution = fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes.find((node) => node.kind === "distribution");
+    assert.deepEqual(distribution.recipients, [executor]);
+    assert.notEqual(distribution.actor.memberId, distribution.recipients[0].memberId);
+  } finally { fixture.close(); }
+});
+
+test("执行、自检、南宫交接和令狐统一测试按真实顺序形成独立节点", () => {
+  const fixture = createFixture("strict-handoff");
+  try {
+    const completed = task(fixture, 1, "ready");
+    completed.executionRecords[0].status = "code-verified";
+    completed.executionRecords[0].completedAt = fixture.at(5);
+    completed.executionRecords[0].result = "源码修改和执行人自检通过";
+    completed.codeVerifiedAt = fixture.at(5);
+    completed.finalResult = "源码修改完成";
+    completed.state = "unified-testing";
+    completed.currentHandler = member("linghu-ancestor", "令狐老祖");
+    completed.integrationGeneration = 1;
+    completed.unifiedTest = { status: "running", owner: member("linghu-ancestor", "令狐老祖"), failureReason: null, startedAt: fixture.at(8), completedAt: null };
+    completed.flowEvents.push(
+      { eventId: "verify", type: "worker.phase.verifying", stage: "execution", status: "started", actor: completed.executionRecords[0].executor, summary: "开始执行人自检", occurredAt: fixture.at(4), error: false },
+      { eventId: "return", type: "task.code_verified", stage: "execution", status: "completed", actor: completed.executionRecords[0].executor, summary: "执行与自检完成，返回南宫婉", occurredAt: fixture.at(5), error: false },
+      { eventId: "collect", type: "evolution.task_collected", stage: "integration", status: "completed", actor: member("nangong-wan", "南宫婉"), summary: "南宫婉收齐结果", occurredAt: fixture.at(7), error: false },
+      { eventId: "test", type: "unified_test.started", stage: "integration", status: "started", actor: member("linghu-ancestor", "令狐老祖"), summary: "令狐老祖开始统一测试", occurredAt: fixture.at(8), error: false },
+    );
+    fixture.timeline.syncCollaborationState(collaboration(fixture.at(8), [completed]));
+    const nodes = fixture.timeline.snapshot(fixture.at(9)).groups[0].nodes;
+    assert.ok(nodes.some((node) => node.action === "执行人自检完成" && node.actor.displayName === "执行人1"));
+    assert.ok(nodes.some((node) => node.action === "执行结果返回" && node.recipients[0].displayName === "南宫婉"));
+    assert.ok(nodes.some((node) => node.action === "提交统一测试" && node.actor.displayName === "南宫婉" && node.recipients[0].displayName === "令狐老祖"));
+    assert.ok(nodes.some((node) => node.action === "当前正在统一测试" && node.actor.displayName === "令狐老祖"));
   } finally { fixture.close(); }
 });
 

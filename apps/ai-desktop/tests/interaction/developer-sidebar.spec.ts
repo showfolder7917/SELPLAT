@@ -738,7 +738,7 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await expect(group.locator(".task-timeline-node")).toHaveCount(1);
   const applicationNode = group.locator(".task-timeline-node").first();
   await expect(applicationNode).toContainText("南宫婉");
-  await expect(applicationNode).toContainText("@韩立");
+  await expect(applicationNode).toContainText("→ 韩立");
   await expect(applicationNode).toContainText("审批申请");
   await expect(group.getByText("韩立审批 · 等待中", { exact: true })).toBeVisible();
   await expect(group.getByText("韩立", { exact: true })).toHaveCount(0);
@@ -790,9 +790,10 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await expect(group.getByRole("button", { name: "手动审批" })).toHaveCount(0);
   await expect(group.locator(".task-timeline-node")).toHaveCount(13);
   await expect(group.locator(".task-timeline-node").nth(1)).toContainText("韩立");
-  await expect(group.locator(".task-timeline-node").nth(1)).toContainText("@南宫婉");
+  await expect(group.locator(".task-timeline-node").nth(1)).toContainText("→ 南宫婉");
   await expect(group.locator(".task-timeline-node").nth(1)).toContainText("审批通过");
-  await expect(group.locator(".distribution")).toContainText("@令狐老祖 @紫灵 @元瑶 +7");
+  await expect(group.locator(".distribution")).toContainText("→ 令狐老祖、紫灵、元瑶 等 10 人");
+  await expect(group).toContainText("专题总历时");
   await expect(group.locator(".task-timeline-position.current")).toHaveCount(2);
   await expect(group.locator(".task-timeline-position.waiting")).toHaveCount(2);
   await expect(group.getByText("当前正在验证", { exact: true })).toBeVisible();
@@ -835,9 +836,10 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await approvalWindow.getByLabel("审批原因").fill("请补充忙碌禁用态的触发条件和解除条件。");
   await expect(approvalWindow.getByLabel("审批原因")).toHaveValue("请补充忙碌禁用态的触发条件和解除条件。");
   await approvalWindow.getByRole("button", { name: "提交审批" }).click();
-  await expect(group.locator(".task-timeline-node")).toHaveCount(2);
-  await expect(group).toContainText("审批未通过");
+  await expect(group.locator(".task-timeline-node")).toHaveCount(3);
+  await expect(group).toContainText("审批退回补充");
   await expect(group).toContainText("请补充忙碌禁用态的触发条件和解除条件。");
+  await expect(group).toContainText("南宫婉 · 正在补充审批材料");
   await expect(group.locator(".distribution")).toHaveCount(0);
 
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(false));
@@ -849,7 +851,8 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await approvalWindow.getByLabel("审批原因").fill("当前方案越过专题范围，审批驳回。");
   await expect(approvalWindow.getByLabel("审批原因")).toHaveValue("当前方案越过专题范围，审批驳回。");
   await approvalWindow.getByRole("button", { name: "提交审批" }).click();
-  await expect(group.locator(".task-timeline-node")).toHaveCount(2);
+  await expect(group.locator(".task-timeline-node")).toHaveCount(3);
+  await expect(group).toContainText("审批驳回");
   await expect(group).toContainText("当前方案越过专题范围，审批驳回。");
   await expect(group.locator(".distribution")).toHaveCount(0);
 

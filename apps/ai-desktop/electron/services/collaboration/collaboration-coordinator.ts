@@ -588,7 +588,17 @@ export class CollaborationCoordinator {
         linghu.role = "executor";
         linghu.phase = "implementing";
         linghu.currentTaskId = taskId;
+        const previousExecution = current.executionRecords.find((item) => item.assignmentId === current.assignmentId);
+        if (previousExecution && !previousExecution.completedAt) {
+          previousExecution.status = "blocked";
+          previousExecution.completedAt = new Date().toISOString();
+          previousExecution.blockingReason = reason;
+        }
+        current.assignmentId = null;
+        current.executorMemberId = LINGHU_MEMBER_ID;
+        current.taskRevision += 1;
         current.state = "repairing-execution";
+        current.phase = "implementing";
         current.repairKind = "execution";
         current.repairFailureReason = reason;
         current.currentHandler = participantSnapshot(linghu);
@@ -615,11 +625,38 @@ export class CollaborationCoordinator {
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
     } catch (error) {
-      await this.#blockTask(taskId, `令狐老祖修复执行问题失败：${errorMessage(error)}`);
+      this.#holdForLinghuRecovery(taskId, errorMessage(error));
     } finally {
       await repairSession?.dispose();
       this.#schedule();
     }
+  }
+
+  /** 令狐单次修复未完成时保留任务与恢复点；只有用户取消才能结束持续保障。 */
+  #holdForLinghuRecovery(taskId: string, detail: string): void {
+    this.#store.updateTask(taskId, "execution.repair_waiting", (current, state) => {
+      const linghu = requireMember(state, LINGHU_MEMBER_ID);
+      const waitingForPermission = requiresHumanAuthorization(detail);
+      current.state = "recovering";
+      current.phase = "blocked";
+      current.executorMemberId = LINGHU_MEMBER_ID;
+      current.preferredExecutorMemberId = LINGHU_MEMBER_ID;
+      current.assignmentId = null;
+      current.recoveryTargetState = "executing";
+      current.repairKind = "execution";
+      current.repairFailureReason = detail;
+      current.currentHandler = participantSnapshot(linghu);
+      current.blockingReason = waitingForPermission
+        ? `等待用户授权后由令狐老祖从恢复点继续：${detail}`
+        : `令狐老祖本次恢复未完成，持续保障仍在运行并等待下一次安全恢复：${detail}`;
+      linghu.state = "recovering";
+      linghu.role = "executor";
+      linghu.phase = "blocked";
+      linghu.currentTaskId = taskId;
+      linghu.blockingReason = current.blockingReason;
+      linghu.updatedAt = new Date().toISOString();
+      appendFlow(current, "execution.repair_waiting", "recovery", "waiting", current.blockingReason, linghu, true);
+    });
   }
 
   #setTaskAndMemberPhase(taskId: string, stateValue: CollaborationTask["state"], phase: Exclude<CollaborationWorkerPhase, null>): void {
@@ -680,7 +717,7 @@ export class CollaborationCoordinator {
       current.resultSummary.outcome = "incomplete";
       current.resultSummary.success = false;
       current.resultSummary.remaining = current.blockingReason;
-      appendFlow(current, "task.blocked", "recovery", "failed", current.blockingReason, execution?.executor || null, true);
+      appendFlow(current, "task.blocked", "recovery", "failed", current.blockingReason, current.currentHandler || execution?.executor || null, true);
     });
     this.#durations.instant(taskId, "task.blocked", { reason, executorMemberId: task.executorMemberId });
   }
@@ -854,4 +891,9 @@ function sha256(value: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** 权限类失败必须等待真实用户授权，禁止自动循环反复弹出同一审批框。 */
+function requiresHumanAuthorization(detail: string): boolean {
+  return /(?:等待|需要|请求).{0,12}(?:用户|人工).{0,8}(?:授权|批准)|command execution|approval|permission|operation not permitted|\bEPERM\b/iu.test(detail);
 }

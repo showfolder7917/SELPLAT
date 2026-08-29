@@ -148,11 +148,19 @@ const interactionTimelineSnapshot = () => {
     nodes.push({
       nodeId: `approval:${approval.approvalId}`, taskId: null, kind: "approval-decision",
       actor: { memberId: "han-li", displayName: "韩立" }, recipients: [{ memberId: "nangong-wan", displayName: "南宫婉" }],
-      status: approval.decision === "approved" ? "completed" : "failed", action: approval.decision === "approved" ? "审批通过" : "审批未通过",
+      status: approval.decision === "approved" ? "completed" : "failed", action: approval.decision === "approved" ? "审批通过" : approval.decision === "supplement-required" ? "审批退回补充" : "审批驳回",
       summary: approval.advice, content: approval.advice, detail: "人工审批结论已写入统一时间线。", startedAt: approval.createdAt,
       completedAt: approval.createdAt, durationMs: 472_000, automaticOpen: false, manualApprovalProposalId: null,
     });
-    if (approval.decision === "approved") {
+    if (approval.decision !== "approved") {
+      nodes.push({
+        nodeId: `supplement:${proposal.proposalId}`, taskId: null, kind: "analysis",
+        actor: { memberId: "nangong-wan", displayName: "南宫婉" }, recipients: [{ memberId: "han-li", displayName: "韩立" }],
+        status: "current", action: "正在补充审批材料", summary: `根据韩立的退回原因补充方案：${approval.advice}`,
+        content: approval.advice, detail: approval.advice, startedAt: approval.createdAt, completedAt: null,
+        durationMs: 15_000, automaticOpen: true, manualApprovalProposalId: null,
+      });
+    } else {
       const people = collaborationState.members.slice(2, 12);
       nodes.push({
         nodeId: "distribution:interaction-timeline-proposal", taskId: null, kind: "distribution",
@@ -179,13 +187,13 @@ const interactionTimelineSnapshot = () => {
   const currentCount = nodes.filter((node) => node.status === "current").length;
   return { version: 1, groups: [{
     groupId: "topic:interaction-timeline", topicId: "interaction-timeline", proposalId: proposal.proposalId,
-    title: "专题任务 01 · 修订截图按钮可用态", status: pending ? "waiting-approval" : proposal.status === "approved" ? "running" : "blocked",
+    title: "专题任务 01 · 修订截图按钮可用态", status: pending ? "waiting-approval" : proposal.status === "approved" ? "running" : "running",
     summary: pending ? proposal.content : "多人并行执行与验证正在按时间顺序推进。", nodes,
     executingCount: nodes.filter((node) => node.kind === "execution" && node.status === "current").length,
     verifyingCount: nodes.filter((node) => node.kind === "verification" && node.status === "current").length,
     waitingCount: nodes.filter((node) => node.status === "waiting").length, completedCount: nodes.filter((node) => node.status === "completed").length,
     startedAt, updatedAt: nangongEvolutionState.updatedAt, durationMs: 2_160_000,
-    nextStep: pending ? "韩立审批 · 等待中" : currentCount ? `结果汇总与验收 · 等待 ${currentCount} 个节点完成` : "结果汇总与验收 · 等待中",
+    nextStep: pending ? "韩立审批 · 等待中" : proposal.status !== "approved" ? "南宫婉 · 正在补充审批材料" : currentCount ? `结果汇总与验收 · 等待 ${currentCount} 个节点完成` : "结果汇总与验收 · 等待中",
   }], updatedAt: nangongEvolutionState.updatedAt };
 };
 const publishDispatchState = () => {

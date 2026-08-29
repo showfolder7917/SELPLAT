@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.109.0
+rule_version = 5.110.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -179,5 +179,9 @@ collaboration_topic_timeline_projection_contract.4 = distribution_content_plus_p
 collaboration_topic_timeline_projection_contract.5 = event_center_wrapped_ipc_for_read_and_write + business_and_exception_correlation_topic_proposal_task_actor + linghu_observable + no_renderer_catch_side_log + no_cache_or_file_side_channel
 <!-- 专题卡当前投影、不可变节点事实和流式正文分片各自独立建表；切换点以前的 JSON 历史不回填，状态变化只追加事实并由查询折叠，同一节点不得覆盖原人物、原时间和原正文。 -->
 collaboration_topic_timeline_projection_contract.6 = separate_SQLite_topic_card_timeline_fact_and_stream_chunk_tables + schema_cutover_ignores_old_JSON_history + immutable_source_fact_key_and_sequence + lifecycle_updates_append_new_fact + database_read_folds_latest_node_state_without_rewriting_actor_time_or_content + stream_turn_completion_deduplicates_delta + reset_clears_all_three_operational_tables
+<!-- 人物交接必须使用真实发件人、全部收件人和明确方向；审批摘要只表达人能看懂的事实与结论，退回后由南宫婉补充并重新申请，不得显示南宫婉向自己分发。 -->
+collaboration_topic_timeline_projection_contract.7 = explicit_sender_arrow_full_real_recipients + approval_human_readable_factual_reason_only + rejected_returns_current_ownership_to_nangong_supplement_and_resubmit + distribution_recipient_from_authoritative_assignment + no_self_distribution_or_renderer_actor_guess
+<!-- 专题总历时只计算墙钟时间，并行节点不累加；执行人执行与自检、南宫婉汇总转交、令狐老祖统一测试必须分阶段追加，旧执行节点和租约先结束才能转入修复。 -->
+collaboration_topic_timeline_projection_contract.8 = topic_wall_clock_elapsed_never_sum_parallel_nodes + separate_executor_execution_and_self_check + executor_to_nangong_completion + nangong_to_linghu_unified_test_handoff + linghu_test_before_repair + close_old_node_and_release_lease_before_new_handler + single_active_writer + one_repair_failure_enters_recovering_or_waiting_not_terminal_block + permission_waits_for_human_with_checkpoint + terminal_cancel_only_by_user
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events

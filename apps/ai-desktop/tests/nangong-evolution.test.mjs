@@ -11,6 +11,7 @@ import { controlledTestRoot } from "./test-paths.mjs";
 mkdirSync(controlledTestRoot, { recursive: true });
 const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: "/workspace", permission: "workspace-write" }] };
 const nangongPromptSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+const evolutionFacadeSource = readFileSync(new URL("../electron/services/collaboration/nangong-evolution-facade.ts", import.meta.url), "utf8");
 function topicRequest(title = "协同审批分层") { return { title, goal: "把演化方向审批从执行审核中独立出来", scope: ["AI Desktop"], exclusions: ["其他应用"], evidence: ["现有审核只覆盖执行方案"], acceptanceCriteria: ["提案审批与执行审核具有独立记录"], workspaceState, locale: "zh-CN" }; }
 function proposalRequest() { return { type: "代码修正", content: "建立独立演化审批入口，审批通过后返还南宫婉分发。", risks: ["历史记录迁移"], rollbackPlan: "保留旧记录并关闭三项自动开关。" }; }
 const conversation = { async send(_request, context) { return { text: `我了解到您的想法是：调查当前问题。如果我理解有偏差，您可以直接纠正我。\n\n南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据","tags":["调查","事实依据"],"summary":"围绕当前问题收集事实并形成可继续分析的依据。"}`, itemCount: 1 }; }, async newChat() {} };
@@ -35,6 +36,13 @@ test("南宫婉会话提示固定自然表达与只读调查边界", () => {
   assert.match(nangongPromptSource, /不得提示用户回复 1 直接修改源码/);
   assert.match(nangongPromptSource, /可恢复的等待确认状态/);
   assert.doesNotMatch(nangongPromptSource, /oneShotReady/);
+});
+
+test("韩立审批意见面向普通用户且不得发明产品约束", () => {
+  assert.match(evolutionFacadeSource, /审批意见直接面向普通用户/);
+  assert.match(evolutionFacadeSource, /先用自然语言说明哪里不完整或为什么可以通过/);
+  assert.match(evolutionFacadeSource, /只能引用提案、专题或源码调查中已经存在的事实/);
+  assert.match(evolutionFacadeSource, /不得自行发明数量上限、页面规则或验收要求/);
 });
 
 test("自动演化、两个来源审批和自动分发四项开关独立持久化", () => {

@@ -99,6 +99,9 @@ test("应用路径诊断通过受控依赖入口加载公共路径包且不要�
   assert.match(pathResolver, /from "@selplat\/node-common-core\/path"/);
   assert.match(pathResolver, /resolveApplicationNameFromSourceRoot\(applicationRoot\)/);
   assert.match(pathResolver, /resolveApplicationDataPaths\(\{ selplatRoot, applicationName \}\)/);
+  const attachBody = cache.slice(cache.indexOf("export function attachDependencyCache"), cache.indexOf("export function detachOwnedDependencyCache"));
+  assert.doesNotMatch(attachBody, /repairLocalPackageLinks\(/, "固定诊断只能挂载已准备缓存，不能在每次命令中改写共享本地包");
+  assert.match(ensure, /repairLocalPackageLinks\(details\)/, "本地包链接修复只属于显式依赖准备阶段");
 });
 
 test("隔离 Playwright 不复用缺少 Electron 安装产物的临时依赖链接", () => {
