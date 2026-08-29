@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.105.0
+rule_version = 5.106.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -67,15 +67,15 @@ linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_only +
 <!-- 合并冲突是代码修正事实，不得伪装成统一测试失败或对同一提交盲目重试。 -->
 collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort + persist_structured_failure_kind + blocked_requires_current_mainline_correction + continue_increments_task_revision_and_worker_generation + fresh_signed_worktree + reuse_approved_plan + old_resultSHA_never_retried
 <!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，状态阶段、代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
-linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
+linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + local_change_ownership_blocks_without_automatic_retry_until_ownership_fact_changes_or_human_continue + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
 <!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
 linghu_automation_state_recovery_contract = atomic_primary_plus_latest_valid_backup + restore_enabled_cycle_module_cursor_active_task_fault_and_checkpoint + primary_and_backup_both_corrupt_safely_disable_until_human_reenables + first_install_default_off
 <!-- 三个职责模块严格串行；最终流程保障始终先于令狐自己的测试与审计循环。 -->
 linghu_automation_module_cycle_contract = all_persons_flow_completion_first -> test_coverage_gap_and_capability_upgrade -> audit_log_completeness -> next_cycle
 <!-- 自动保障任务的真实发起人和严格首选执行人都是令狐老祖；其他人物仍可作为异人审核员，禁止首选人物忙碌时悄悄转派顶层保障职责。 -->
-linghu_automation_actor_contract = initiator_linghu_ancestor + protected_strict_preferred_executor_linghu_ancestor + different_idle_reviewer + persist_real_actor_snapshots
+linghu_automation_actor_contract = initiator_linghu_ancestor + protected_strict_preferred_executor_linghu_ancestor + different_idle_reviewer + persist_real_actor_snapshots + live_actor_resolved_from_task_phase_and_authoritative_executor_or_reviewer_member_id + stale_current_handler_never_overrides_active_executor + parallel_active_tasks_show_all_real_actors_and_task_count
 <!-- 启动文案属于用户数据并通过令狐人物页进行完整管理，页面必须在人类可读布局下直接说明循环、模块、检测和阻塞状态。 -->
-linghu_startup_prompt_management_contract = electron_userData_persistence + list_create_update_delete_enable_disable_select_active + linghu_member_page_human_readable_layout + cycle_module_execution_last_check_block_and_feedback_visible
+linghu_startup_prompt_management_contract = electron_userData_persistence + list_create_update_delete_enable_disable_select_active + linghu_member_page_human_readable_layout + cycle_module_execution_last_check_block_and_feedback_visible + fault_report_names_person_task_stage_finding_and_action + no_concrete_fault_means_inspection_report_only_and_no_generic_repair_proposal
 <!-- 测试能力模块通过跨进程 Facade 统一调度固定测试，补漏与性能优化不得破坏隔离和审计。 -->
 linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry + atomic_cross_process_lease + task_process_port_build_root_and_heartbeat + queued_acquired_contended_released_timeout_failed_and_stale_recovered_events + fixed_test_interaction_then_test_collaboration_then_test_managed_then_package_and_verify + real_multi_process_max_concurrency_one_regression + wait_execution_and_contention_metrics + no_dynamic_prompt_command + persist_next_cycle_before_relaunch + test_failure_returns_flow_completion_repair_cycle
 <!-- 发布只冻结当前已经完成的任务，冻结后完成的任务进入下一批；发布批次独占维护汇总证据。 -->

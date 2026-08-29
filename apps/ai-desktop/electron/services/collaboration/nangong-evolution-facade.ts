@@ -260,6 +260,15 @@ export class NangongEvolutionFacade {
 
   /** 从当前持久化卡点恢复同一轮；恢复后立即沿原状态机推进，不触碰长期自动开关。 */
   async resumeOneShotRun(): Promise<NangongEvolutionState> {
+    const before = this.state();
+    const run = before.oneShotRun;
+    const proposal = run?.proposalId ? before.proposals.find((item) => item.proposalId === run.proposalId) : null;
+    if (proposal?.status === "blocked") {
+      const blockedTasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId) && ["blocked", "test-failed", "review-failed"].includes(task.state));
+      for (const task of blockedTasks) {
+        await this.#collaboration.recoverTask(task.taskId, `用户已从一次性演化卡点明确继续：${itemFailureReason(task)}`);
+      }
+    }
     this.#store.resumeOneShotRun();
     await this.#tick();
     return this.state();
@@ -479,16 +488,58 @@ export class NangongEvolutionFacade {
       }
 
       if (["executing", "verifying", "blocked"].includes(proposal.status)) {
-        const tasks = this.#collaboration.state().tasks.filter((task) => proposal!.distributedTaskIds.includes(task.taskId));
+        const collaborationState = this.#collaboration.state();
+        const tasks = collaborationState.tasks.filter((task) => proposal!.distributedTaskIds.includes(task.taskId));
         if (proposal.status === "blocked") {
-          this.#store.updateOneShotRun("testing", "linghu-ancestor", "令狐老祖", "检测到执行或测试失败，正在按原恢复线路修正并继续", topic.topicId, proposal.proposalId);
-          for (const task of tasks.filter((item) => ["blocked", "test-failed", "review-failed"].includes(item.state))) await this.#collaboration.recoverTask(task.taskId, itemFailureReason(task));
+          const blockedTasks = tasks.filter((item) => ["blocked", "test-failed", "review-failed"].includes(item.state));
+          const blockedTask = blockedTasks[0];
+          const reason = blockedTask
+            ? `${taskOwnerName(collaborationState, blockedTask)}负责的“${blockedTask.snapshot.title}”停在${taskStageName(blockedTask)}；发现：${itemFailureReason(blockedTask)}`
+            : `提案“${proposal.title}”已经进入阻塞态，但没有找到对应的阻塞任务记录。`;
+          const failureKind = blockedTask?.integrationFailure?.kind || blockedTask?.state || "unknown";
+          const details = {
+            taskId: blockedTask?.taskId || null,
+            taskTitle: blockedTask?.snapshot.title || null,
+            executorMemberId: blockedTask?.executorMemberId || null,
+            taskState: blockedTask?.state || null,
+            taskPhase: blockedTask?.phase || null,
+            integrationFailureKind: blockedTask?.integrationFailure?.kind || null,
+            conflictFiles: blockedTask?.integrationFailure?.conflictFiles || [],
+            blockedTaskCount: blockedTasks.length,
+          };
+          if (!blockedTask || blockedTask.integrationFailure?.kind === "local-change-ownership") {
+            return this.#blockOneShotFailure(
+              "technical",
+              `one_shot_task_blocked:${failureKind}`,
+              new Error(reason),
+              `${reason}。本轮已保留在当前卡点；只有本地修改归属事实明确或用户从卡点继续时才会重新执行。`,
+              details,
+            );
+          }
+          const run = state.oneShotRun;
+          this.#recordFailure({
+            kind: "technical",
+            sourceType: "system",
+            sourceId: "nangong-evolution",
+            operation: `one_shot_task_waiting_for_linghu:${failureKind}`,
+            error: new Error(reason),
+            correlationId: topic.topicId,
+            fingerprint: `nangong-one-shot:${run?.runId || "unknown"}:waiting-for-linghu:${blockedTask.taskId}:${failureKind}`,
+            details: { runId: run?.runId || null, topicId: topic.topicId, proposalId: proposal.proposalId, ...details },
+          });
+          this.#store.updateOneShotRun("testing", "linghu-ancestor", "令狐老祖", `${reason}；正在沿统一异常入口修正，取得新的执行或测试事实后本轮会自动继续`, topic.topicId, proposal.proposalId);
           return this.state();
         }
         const testing = proposal.status === "verifying" || tasks.some((item) => item.unifiedTest?.status === "running" || ["unified-testing", "integrating", "queued-integration"].includes(item.state));
-        const activeTask = tasks.find((item) => !["integrated", "cancelled"].includes(item.state)) || tasks.at(-1);
-        const actorName = testing ? "令狐老祖" : activeTask?.currentHandler?.displayName || activeTask?.originalExecutor?.displayName || "执行成员";
-        this.#store.updateOneShotRun(testing ? "testing" : "executing", testing ? "linghu-ancestor" : "codex", actorName, testing ? "正在执行统一测试、集成和恢复门禁" : `正在执行：${activeTask?.snapshot.title || proposal.title}`, topic.topicId, proposal.proposalId);
+        const activity = currentExecutionActivity(collaborationState, tasks, proposal.title);
+        this.#store.updateOneShotRun(
+          testing ? "testing" : "executing",
+          testing ? "linghu-ancestor" : "codex",
+          testing ? "令狐老祖" : activity.actorName,
+          testing ? "正在执行统一测试、集成和恢复门禁" : activity.action,
+          topic.topicId,
+          proposal.proposalId,
+        );
         return this.state();
       }
 
@@ -564,7 +615,7 @@ export class NangongEvolutionFacade {
           state = await this.investigateAndReviseReturnedProposal(proposal.proposalId);
         }
       }
-      for (const proposal of state.proposals.filter((item) => item.distributedTaskIds.length && ["executing", "verifying"].includes(item.status))) {
+      for (const proposal of state.proposals.filter((item) => item.distributedTaskIds.length && ["executing", "verifying", "blocked"].includes(item.status))) {
         let tasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
         if (tasks.length !== proposal.distributedTaskIds.length) continue;
         const blocked = tasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
@@ -610,6 +661,42 @@ export class NangongEvolutionFacade {
 }
 
 function requireProposal(state: NangongEvolutionState, proposalId: string): EvolutionProposal { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+
+/** 运行中人物以任务当前阶段的权威成员 ID 为准，不能让上一阶段遗留的 currentHandler 覆盖真实执行者。 */
+function taskOwnerName(state: ReturnType<CollaborationCoordinator["state"]>, task: ReturnType<CollaborationCoordinator["state"]>["tasks"][number]): string {
+  const memberId = ["queued-reviewer", "reviewing", "review-failed", "repairing-review"].includes(task.state)
+    ? task.currentReviewerMemberId
+    : task.executorMemberId;
+  return state.members.find((member) => member.memberId === memberId)?.displayName
+    || (memberId === task.originalExecutor?.memberId ? task.originalExecutor.displayName : null)
+    || (memberId === task.originalReviewer?.memberId ? task.originalReviewer.displayName : null)
+    || task.currentHandler?.displayName
+    || "未识别负责人";
+}
+
+function taskStageName(task: ReturnType<CollaborationCoordinator["state"]>["tasks"][number]): string {
+  if (["queued-reviewer", "reviewing", "review-failed", "repairing-review"].includes(task.state)) return "方案审批阶段";
+  if (["ready-for-integration", "queued-integration", "integrating"].includes(task.state) || task.integrationFailure) return "版本集成阶段";
+  if (["unified-testing", "test-failed"].includes(task.state)) return "统一测试阶段";
+  if (task.state === "awaiting-restart") return "应用重启验收阶段";
+  return "任务执行阶段";
+}
+
+function currentExecutionActivity(
+  state: ReturnType<CollaborationCoordinator["state"]>,
+  tasks: ReturnType<CollaborationCoordinator["state"]>["tasks"],
+  fallbackTitle: string,
+): { actorName: string; action: string } {
+  const active = tasks
+    .filter((task) => !["integrated", "cancelled"].includes(task.state))
+    .sort((left, right) => Date.parse(right.updatedAt || right.createdAt) - Date.parse(left.updatedAt || left.createdAt));
+  const selected = active.length ? active : tasks.slice(-1);
+  const actors = [...new Set(selected.map((task) => taskOwnerName(state, task)))];
+  const actorName = actors.join("、") || "执行成员";
+  if (selected.length <= 1) return { actorName, action: `正在执行：${selected[0]?.snapshot.title || fallbackTitle}` };
+  const titles = selected.slice(0, 3).map((task) => `“${task.snapshot.title}”`).join("、");
+  return { actorName, action: `正在并行执行 ${selected.length} 个任务：${titles}${selected.length > 3 ? "等" : ""}` };
+}
 
 /** 旧状态或损坏数据缺少专题工作区时返回可理解的业务错误，禁止把 null 继续传给 Codex 后读取 roots。 */
 function requireTopicWorkspaceState(topic: NangongEvolutionState["topics"][number]): NangongEvolutionState["topics"][number]["workspaceState"] {

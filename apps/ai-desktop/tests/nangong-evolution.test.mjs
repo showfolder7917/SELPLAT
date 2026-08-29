@@ -479,9 +479,9 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
     const store = new NangongEvolutionStore(path.join(directory, "state.json"));
     const tasks = [];
     const collaboration = {
-      state() { return { members: [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }], tasks }; },
+      state() { return { members: [{ memberId: "mo-caihuan", displayName: "墨彩环", enabled: true, kind: "worker" }, { memberId: "doctor-mo", displayName: "墨大夫", enabled: true, kind: "worker" }], tasks }; },
       submitTask(request) {
-        tasks.push({ taskId: "one-shot-task", evolutionProposalId: request.evolutionProposalId, state: "executing", snapshot: { title: request.title }, originalExecutor: { displayName: "南宫婉" } });
+        tasks.push({ taskId: "one-shot-task", evolutionProposalId: request.evolutionProposalId, state: "executing", phase: "implementing", executorMemberId: "mo-caihuan", currentHandler: { memberId: "doctor-mo", displayName: "墨大夫" }, originalExecutor: { memberId: "doctor-mo", displayName: "墨大夫" }, snapshot: { title: request.title }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
         return this.state();
       },
     };
@@ -508,11 +508,90 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
     assert.deepEqual(state.proposals[0].distributedTaskIds, ["one-shot-task"]);
     assert.equal(state.oneShotRun.status, "running");
     assert.equal(state.oneShotRun.phase, "executing");
-    assert.equal(state.oneShotRun.actorName, "南宫婉");
+    assert.equal(state.oneShotRun.actorName, "墨彩环");
     const activity = [...state.archiveRecords].reverse().find((record) => record.eventType === "one-shot.activity");
     assert.equal(activity.actor, "codex");
-    assert.equal(activity.payload.actorName, "南宫婉");
+    assert.equal(activity.payload.actorName, "墨彩环");
     assert.deepEqual([state.automaticEvolutionEnabled, state.automaticNangongApprovalEnabled, state.automaticLinghuApprovalEnabled, state.automaticExecutionEnabled], [false, false, false, false]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("一次性流程遇到同一集成归属阻塞时只登记停点且不直接重试", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-integration-blocked-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const failures = [];
+    let recoveryRequests = 0;
+    const tasks = [];
+    const collaboration = {
+      state() { return { members: [{ memberId: "mo-caihuan", displayName: "墨彩环", enabled: true, kind: "worker" }], tasks }; },
+      submitTask(request) {
+        const detail = "合并前本地修改归属门禁阻塞：apps/ai-desktop/electron/main.ts 未登记到任何待集成任务";
+        tasks.push({
+          taskId: "blocked-integration-task", evolutionProposalId: request.evolutionProposalId, state: "blocked", phase: "verifying",
+          executorMemberId: "mo-caihuan", currentHandler: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, originalExecutor: { memberId: "mo-caihuan", displayName: "墨彩环" },
+          snapshot: { title: request.title }, blockingReason: detail, recoveryTargetState: "ready-for-integration",
+          integrationFailure: { kind: "local-change-ownership", detail, conflictFiles: ["apps/ai-desktop/electron/main.ts"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString() },
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        });
+        return this.state();
+      },
+      async recoverTask(taskId) {
+        recoveryRequests += 1;
+        const task = tasks.find((item) => item.taskId === taskId);
+        task.state = "ready-for-integration";
+        task.phase = "verifying";
+        task.blockingReason = null;
+        task.integrationFailure = null;
+        task.updatedAt = new Date().toISOString();
+        return this.state();
+      },
+    };
+    const readyConversation = {
+      async send(request) {
+        if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "集成阻塞课题", goal: "验证相同失败不重复执行", scope: ["AI Desktop"], evidence: ["已确认本地修改没有任务归属"], acceptanceCriteria: ["同一事实只登记一次并保留恢复点"] }), itemCount: 1 };
+        return { text: "事实已经成熟。若确认启动本轮完整演化，请回复 1。\n<!-- SELPLAT_CORPUS_META {\"title\":\"集成阻塞\",\"type\":\"技术治理\",\"intent\":\"阻止同一失败循环\",\"tags\":[\"集成\",\"去重\"],\"summary\":\"确认集成阻塞事实后启动一次性流程。\"} -->", itemCount: 1 };
+      },
+      async newChat() {},
+    };
+    const facade = new NangongEvolutionFacade({
+      store, collaboration, conversation: readyConversation, ...distributionServices,
+      recordEvent: () => undefined, recordFailure: (failure) => failures.push(failure),
+      hanLi: { async send() { return JSON.stringify({ decision: "approved", advice: "事实和验收条件完整。" }); } },
+    });
+    await facade.sendConversationMessage({ message: "请确认进入本轮流程", workspaceState, locale: "zh-CN" });
+    await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+    const state = facade.state();
+    assert.equal(state.oneShotRun.status, "blocked");
+    assert.equal(recoveryRequests, 0);
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].operation, "one_shot_task_blocked:local-change-ownership");
+    assert.equal(failures[0].details.executorMemberId, "mo-caihuan");
+    assert.match(state.oneShotRun.blockingReason, /墨彩环负责/);
+    assert.match(state.oneShotRun.blockingReason, /版本集成阶段/);
+    assert.match(state.oneShotRun.blockingReason, /main\.ts 未登记/);
+
+    const explicitlyResumed = await facade.resumeOneShotRun();
+    assert.equal(recoveryRequests, 1);
+    assert.equal(explicitlyResumed.oneShotRun.status, "running");
+
+    tasks[0].state = "test-failed";
+    tasks[0].blockingReason = "统一测试失败：按钮忙碌态断言不通过";
+    tasks[0].integrationFailure = { ...tasks[0].integrationFailure, kind: "verification", detail: tasks[0].blockingReason, conflictFiles: [] };
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+    const waitingForLinghu = facade.state();
+    assert.equal(waitingForLinghu.oneShotRun.status, "running");
+    assert.equal(waitingForLinghu.oneShotRun.phase, "testing");
+    assert.equal(waitingForLinghu.oneShotRun.actorName, "令狐老祖");
+    assert.match(waitingForLinghu.oneShotRun.action, /统一测试失败/);
+    assert.equal(recoveryRequests, 1);
+    assert.equal(failures.length, 2);
+    assert.equal(failures[1].operation, "one_shot_task_waiting_for_linghu:verification");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

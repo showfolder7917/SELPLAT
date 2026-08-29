@@ -233,7 +233,7 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
   }
 });
 
-test("令狐生产修正先提交韩立审批并在返还任务后恢复持续执行", async () => {
+test("令狐没有具体故障时只报告检查结果，已有具体修正仍沿韩立审批返还执行", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-evolution-approval-"));
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
@@ -261,8 +261,17 @@ test("令狐生产修正先提交韩立审批并在返还任务后恢复持续�
       },
     });
     await facade.checkNow();
-    assert.equal(facade.state().pendingRepairProposalId, "linghu-proposal-1");
+    assert.equal(proposalState.proposals.length, 0);
+    assert.equal(facade.state().pendingRepairProposalId, null);
+    assert.match(facade.state().blockingReason, /没有未完成任务/);
+    assert.match(facade.state().blockingReason, /不生成泛化修正方案/);
     assert.equal(collaborationStore.state().tasks.length, 0, "审批前不得创建修正执行任务");
+    proposalState = { proposals: [{ proposalId: "linghu-proposal-1", version: 1, status: "pending-approval", approvals: [] }] };
+    automationStore.updateRuntime("test.concrete_repair_proposal", (state) => {
+      state.pendingRepairProposalId = "linghu-proposal-1";
+      state.recoveryCheckpoint = "repair-proposal:linghu-proposal-1:flow-completion";
+      state.blockingReason = "墨彩环负责的任务停在版本集成阶段；发现：已登记的本地修改归属不明确。";
+    });
     proposalState.proposals[0].status = "supplement-required";
     proposalState.proposals[0].approvals = [{ advice: "补充修改位置和预期结果" }];
     await facade.checkNow();
@@ -454,6 +463,54 @@ test("同一统一测试故障最多触发三次令狐源码修复", async () =>
     assert.equal(repairRequests, 3);
     assert.equal(facade.state().enabled, true);
     assert.match(facade.state().blockingReason, /安全恢复三次/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("令狐遇到本地修改归属门禁时报告真实人物与阶段且不重复恢复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-local-change-ownership-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const submitted = collaborationStore.submitTask({
+      title: "修正南宫婉截图入口的可用态辨识与忙碌反馈",
+      problemStatement: "修复截图入口状态",
+      confirmedIntent: "保持现有流程并完成集成",
+      workspaceState,
+      locale: "zh-CN",
+      preferredExecutorMemberId: "mo-caihuan",
+    });
+    collaborationStore.updateTask(submitted.taskId, "fixture.integration_ownership_blocked", (task) => {
+      task.state = "blocked";
+      task.phase = "verifying";
+      task.executorMemberId = "mo-caihuan";
+      task.currentHandler = { memberId: "linghu-ancestor", displayName: "令狐老祖" };
+      task.blockingReason = "合并前本地修改归属门禁阻塞：apps/ai-desktop/electron/main.ts 未登记到任何待集成任务";
+      task.recoveryTargetState = "ready-for-integration";
+      task.integrationFailure = { kind: "local-change-ownership", detail: task.blockingReason, conflictFiles: ["apps/ai-desktop/electron/main.ts"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString() };
+    });
+    let continueRequests = 0;
+    const events = [];
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      continueTask: () => { continueRequests += 1; return collaborationStore.state(); },
+      recoverTask: () => { continueRequests += 1; return collaborationStore.state(); },
+    };
+    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    store.setEnabled(true);
+    const facade = new LinghuAutomationFacade({
+      store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN",
+      recordEvent: (type, details) => events.push({ type, details }), readTestResourceState: idleTestResourceState,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+    await facade.checkNow();
+    await facade.checkNow();
+    assert.equal(continueRequests, 0);
+    assert.match(facade.state().blockingReason, /墨彩环负责/);
+    assert.match(facade.state().blockingReason, /版本集成阶段/);
+    assert.match(facade.state().blockingReason, /main\.ts 未登记/);
+    assert.match(facade.state().blockingReason, /不会把同一份本地修改反复送回集成/);
+    assert.equal(events.filter((event) => event.type === "linghu.automation.local_change_ownership_waiting").length, 1);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -1054,6 +1111,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /workflow_event_center_stall_contract = independent_30_second_supervisor_plus_120_second_timeout_plus_fault_fact_dedup_plus_linghu_handoff/);
   assert.match(rule, /nangong_next_evolution_launcher_contract = completed_and_accepted_plus_automatic_evolution_enabled_plus_reciprocal_topic_ids_plus_idempotent_restart/);
   assert.match(rule, /nangong_one_shot_complete_evolution_contract = AI_semantic_maturity_then_canonical_visible_invitation_creates_persisted_waiting_confirmation[\s\S]*no_hidden_metadata_readiness_field[\s\S]*preserve_all_long_term_automation_switches[\s\S]*no_parallel_approval_distribution_recovery_or_acceptance_route/);
+  assert.match(rule, /blocked_task_records_one_unified_failure_and_never_directly_recovers_on_state_change/);
   assert.match(rule, /collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow[\s\S]*no_display_name_business_branch/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);
@@ -1063,6 +1121,9 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort/);
   assert.match(rule, /evolution_person_workspace_ui_contract = selui_formal_exports_and_theme_tokens_only/);
   assert.match(rule, /linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint/);
+  assert.match(rule, /local_change_ownership_blocks_without_automatic_retry_until_ownership_fact_changes_or_human_continue/);
+  assert.match(rule, /fault_report_names_person_task_stage_finding_and_action/);
+  assert.match(rule, /stale_current_handler_never_overrides_active_executor/);
   assert.match(rule, /linghu_automation_state_recovery_contract/);
   assert.match(rule, /linghu_module_completion_report_contract/);
 });

@@ -222,6 +222,7 @@ export class LinghuAutomationFacade {
     const fingerprint = faultFingerprint(task, snapshot);
     const attempts = this.#store.state().recoveryAttemptsByFingerprint[fingerprint] || 0;
     const checkpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
+    const report = taskHumanReport(this.#collaboration.state(), task, snapshot);
     if (snapshot?.blockingKind === "business") {
       this.#recordEvent("business.exception", {
         operation: "linghu_recover_flow_requires_business_choice",
@@ -234,8 +235,29 @@ export class LinghuAutomationFacade {
       }, task.taskId);
       this.#store.updateRuntime("automation.business_choice_required", (state) => {
         state.recoveryCheckpoint = checkpoint;
-        state.blockingReason = `任务 ${task.taskId} 需要人工业务选择：${task.blockingReason || "未记录具体选择"}；检测继续运行`;
+        state.blockingReason = `${report}。这是业务选择，令狐老祖不会越权代替用户决定；检测继续运行。`;
       });
+      return;
+    }
+    if (task.integrationFailure?.kind === "local-change-ownership") {
+      const alreadyReported = this.#store.state().currentFaultFingerprint === fingerprint;
+      this.#store.updateRuntime("automation.local_change_ownership_waiting", (state) => {
+        state.currentFaultFingerprint = fingerprint;
+        state.recoveryAttemptCount = attempts;
+        state.recoveryCheckpoint = checkpoint;
+        state.blockingReason = `${report}。我已保留原任务和集成证据，不会把同一份本地修改反复送回集成；请先明确这些文件属于哪个任务，再从当前卡点继续。`;
+      });
+      if (!alreadyReported) {
+        this.#recordEvent("linghu.automation.local_change_ownership_waiting", {
+          taskId: task.taskId,
+          taskTitle: task.snapshot.title,
+          executorMemberId: task.executorMemberId,
+          failureKind: task.integrationFailure.kind,
+          conflictFiles: task.integrationFailure.conflictFiles,
+          detail: task.integrationFailure.detail,
+          fingerprint,
+        }, task.taskId);
+      }
       return;
     }
     if (attempts >= 3) {
@@ -243,7 +265,7 @@ export class LinghuAutomationFacade {
         state.currentFaultFingerprint = fingerprint;
         state.recoveryAttemptCount = attempts;
         state.recoveryCheckpoint = checkpoint;
-        state.blockingReason = `任务 ${task.taskId} 的同一停点已安全恢复三次；检测仍保持运行，等待新的心跳、数据或依赖事实`;
+        state.blockingReason = `${report}。同一停点已经安全恢复三次；我不会继续重复操作，检测仍保持运行，等待新的心跳、数据或依赖事实。`;
       });
       return;
     }
@@ -254,7 +276,7 @@ export class LinghuAutomationFacade {
       if (!started) {
         this.#store.updateRuntime("automation.test_repair_waiting", (state) => {
           state.recoveryCheckpoint = checkpoint;
-          state.blockingReason = `任务 ${task.taskId} 已识别为可修复测试失败，等待令狐老祖执行容量`;
+          state.blockingReason = `${report}。我已确认这是可修复的测试失败，当前等待令狐老祖执行容量。`;
         });
         return;
       }
@@ -269,7 +291,7 @@ export class LinghuAutomationFacade {
       state.currentFaultFingerprint = fingerprint;
       state.recoveryAttemptCount = attempts + 1;
       state.recoveryCheckpoint = checkpoint;
-      state.blockingReason = `正在保障任务 ${task.taskId} 完成最后流程，本停点第 ${attempts + 1} 次安全恢复`;
+      state.blockingReason = `${report}。我已发起本停点第 ${attempts + 1} 次安全恢复，并会继续核对新的执行结果。`;
     });
   }
 
@@ -310,6 +332,27 @@ export class LinghuAutomationFacade {
           return;
         }
         this.#store.updateRuntime("automation.repair_proposal_missing", (current) => { current.pendingRepairProposalId = null; current.blockingReason = "令狐修正方案记录缺失，已保留恢复点并准备重新提交"; });
+        return;
+      }
+      const actionableSnapshots = state.flowSnapshots.filter((snapshot) => ["stalled", "recovering", "human-blocked"].includes(snapshot.health) || snapshot.blockingKind !== "none");
+      if (actionableSnapshots.length === 0) {
+        const inspectionPrefix = `inspection:${state.cycle}:${state.currentModule}:`;
+        if (state.recoveryCheckpoint?.startsWith(inspectionPrefix)) return;
+        const collaboration = this.#collaboration.state();
+        const running = collaboration.tasks.filter((task) => !["integrated", "cancelled"].includes(task.state));
+        const report = running.length === 0
+          ? `令狐老祖刚检查了协作执行池：当前没有未完成任务，也没有发现可提交修正的真实故障。第 ${state.cycle} 轮“${moduleLabel(state.currentModule)}”只保留检查结果，不生成泛化修正方案。`
+          : `令狐老祖刚检查了 ${running.length} 个未完成任务：它们都处于执行、排队或正常等待状态，没有发现停住、失败或缺少恢复条件的事实。本轮不生成泛化修正方案。`;
+        this.#store.updateRuntime("automation.inspection_no_action_required", (current) => {
+          current.recoveryCheckpoint = `${inspectionPrefix}${current.detectionCursor || "initial"}`;
+          current.blockingReason = `${report} 我会在任务状态变化或下一次定时检测时继续检查。`;
+        });
+        this.#recordEvent("linghu.automation.inspection_no_action_required", {
+          cycle: state.cycle,
+          module: state.currentModule,
+          unfinishedTaskCount: running.length,
+          report,
+        });
         return;
       }
       const moduleText = moduleInstruction(state.currentModule);
@@ -435,6 +478,25 @@ function automaticFlowSnapshot(state: CollaborationState, task: CollaborationTas
     blockingReason: task.blockingReason,
     blockingKind: blockingKind(task),
   };
+}
+
+/** 把结构化停点转换成人可以立即判断“谁、哪项任务、停在哪里、发现什么”的报告。 */
+function taskHumanReport(state: CollaborationState, task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshot | undefined): string {
+  const responsibleMemberId = ["queued-reviewer", "reviewing", "review-failed", "repairing-review"].includes(task.state)
+    ? task.currentReviewerMemberId
+    : task.executorMemberId;
+  const responsible = state.members.find((member) => member.memberId === responsibleMemberId)?.displayName
+    || (responsibleMemberId === task.originalExecutor?.memberId ? task.originalExecutor.displayName : null)
+    || (responsibleMemberId === task.originalReviewer?.memberId ? task.originalReviewer.displayName : null)
+    || task.currentHandler?.displayName
+    || "未识别负责人";
+  const stage = ["queued-reviewer", "reviewing", "review-failed", "repairing-review"].includes(task.state)
+    ? "方案审批阶段"
+    : (["ready-for-integration", "queued-integration", "integrating"].includes(task.state) || task.integrationFailure ? "版本集成阶段"
+      : (["unified-testing", "test-failed"].includes(task.state) ? "统一测试阶段"
+        : (task.state === "awaiting-restart" ? "应用重启验收阶段" : "任务执行阶段")));
+  const finding = task.integrationFailure?.detail || task.blockingReason || snapshot?.waitingPoint || "任务进展超过安全阈值，尚未收到新的执行事实";
+  return `${responsible}负责的“${task.snapshot.title}”停在${stage}（状态：${task.state}${task.phase ? `，阶段：${task.phase}` : ""}）；发现：${finding}`;
 }
 
 function flowHealth(task: CollaborationTask, stale: boolean): LinghuFlowHealth {
