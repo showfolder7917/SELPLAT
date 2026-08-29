@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.107.0
+rule_version = 5.108.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -167,5 +167,15 @@ collaboration_task_progress_view_contract.2 = intent_analysis_approval_execution
 collaboration_task_progress_view_contract.3 = current_stage_auto_open_and_scroll_nearest + completed_and_future_default_collapsed + summary_owner_and_result_or_wait_condition
 <!-- 当前进度禁止退化为笼统执行标签，也禁止分析完成后继续让展开的分析报告占据当前卡点。 -->
 collaboration_task_progress_view_contract.4 = prohibit_generic_executing_as_progress + prohibit_stale_expanded_analysis_after_state_transition
+<!-- 任务协作群必须使用主进程统一只读投影，把同一专题的申请、审批、补充、分发、分析、执行、修复、验证和验收按真实发生时间追加；旧人物阶段模型不得覆盖或反向写入。 -->
+collaboration_topic_timeline_projection_contract = main_process_single_read_projection + typed_preload_ipc_api + append_only_business_nodes_oldest_to_newest + preserve_every_actor_handoff_and_stage + renderer_no_status_or_actor_inference + legacy_progress_view_isolated_for_retirement
+<!-- 一个专题对应一张可折叠任务卡；卡片折叠时显示摘要，展开后每个人物节点都可独立展开，当前节点首次自动展开并闪烁但人工操作优先。 -->
+collaboration_topic_timeline_projection_contract.2 = one_topic_one_collapsible_card + collapsed_summary_expanded_natural_language_detail + every_person_independent_selui_disclosure + current_node_initial_auto_open_and_pulse + manual_open_close_override + per_node_duration + one_next_waiting_step_only
+<!-- 人工审批只出现在自动审批关闭后的最新待审批申请；窗口必须显示专题标题、长审批正文、结论与必填原因，并复用可拖动缩放的正式 SELUI Window。 -->
+collaboration_topic_timeline_projection_contract.3 = latest_pending_application_only_manual_approval_button + no_hanli_node_before_decision + selui_window_topic_title_long_readonly_content_decision_required_reason_drag_resize + decision_appends_new_hanli_node
+<!-- 多人分发必须保留完整收件人和分工，页面摘要允许前三人加剩余数量；十人以上仍按单列稳定顺序呈现，禁止双列卡片和交叉连线。 -->
+collaboration_topic_timeline_projection_contract.4 = distribution_content_plus_prior_rejection_supplements_plus_work_division + full_recipient_facts + first_three_plus_remaining_summary + one_to_many_parallel_single_column_stable_order + executing_and_verifying_concurrent + no_nested_parallel_scroll_or_spaghetti_links
+<!-- 时间线查询、审批和协作写动作必须复用统一事件中心 IPC 包装；异常与业务事实可由令狐老祖消费，禁止 Renderer 或缓存旁路另写日志。 -->
+collaboration_topic_timeline_projection_contract.5 = event_center_wrapped_ipc_for_read_and_write + business_and_exception_correlation_topic_proposal_task_actor + linghu_observable + no_renderer_catch_side_log + no_cache_or_file_side_channel
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events

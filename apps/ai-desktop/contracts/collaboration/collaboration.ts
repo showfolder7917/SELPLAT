@@ -262,3 +262,48 @@ export interface CollaborationStreamEnvelope {
   memberId: string;
   event: CodexStreamEvent;
 }
+
+/** 任务协作群统一时间线节点；主进程按真实业务事实生成，Renderer 不再猜测人物和顺序。 */
+export interface CollaborationTimelineNode {
+  nodeId: string;
+  taskId: string | null;
+  kind: "approval-application" | "approval-decision" | "distribution" | "analysis" | "execution" | "verification" | "repair" | "result";
+  actor: CollaborationParticipantSnapshot;
+  recipients: CollaborationParticipantSnapshot[];
+  status: "completed" | "current" | "waiting" | "failed";
+  action: string;
+  summary: string;
+  content: string;
+  detail: string;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number;
+  automaticOpen: boolean;
+  manualApprovalProposalId: string | null;
+}
+
+/** 一个专题对应一张可折叠任务卡；并行人物仍按分配顺序保存在同一纵向节点列表中。 */
+export interface CollaborationTimelineGroup {
+  groupId: string;
+  topicId: string | null;
+  proposalId: string | null;
+  title: string;
+  status: "waiting-approval" | "running" | "verifying" | "blocked" | "completed" | "cancelled";
+  summary: string;
+  nodes: CollaborationTimelineNode[];
+  executingCount: number;
+  verifyingCount: number;
+  waitingCount: number;
+  completedCount: number;
+  startedAt: string;
+  updatedAt: string;
+  durationMs: number;
+  nextStep: string;
+}
+
+/** 主进程一次返回完整、稳定、有序的任务协作群投影。 */
+export interface CollaborationTimelineSnapshot {
+  version: 1;
+  groups: CollaborationTimelineGroup[];
+  updatedAt: string;
+}

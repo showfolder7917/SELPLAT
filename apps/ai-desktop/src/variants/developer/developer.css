@@ -724,3 +724,69 @@ button { color: inherit; }
   .evolution-topic-group-summary dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .evolution-proposal-grid-host { height: 360px; }
 }
+
+/* 任务协作群只定义业务排版，展开行为和基础控件状态由 SELUI Disclosure 统一提供。 */
+.task-collaboration-page { min-height: 0; height: 100%; overflow: auto; padding: 22px 24px 72px; color: var(--sel-theme-workbench-text); }
+.task-collaboration-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+.task-collaboration-heading h1 { margin: 0; color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-title); }
+.task-collaboration-heading p { margin: 6px 0 0; color: var(--sel-theme-workbench-text-muted); }
+.task-collaboration-heading button { margin-left: auto; min-height: 34px; padding: 5px 12px; border: 1px solid var(--sel-theme-control-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text); background: var(--sel-theme-workbench-surface-soft); cursor: pointer; }
+.task-collaboration-heading button:hover, .task-collaboration-heading button:focus-visible { border-color: var(--sel-theme-accent); outline: none; }
+.task-collaboration-heading > span { min-width: 28px; padding: 4px 8px; border-radius: 999px; text-align: center; color: var(--sel-theme-accent); background: var(--sel-theme-workbench-surface-soft); }
+.task-collaboration-groups { display: grid; gap: 14px; }
+.task-collaboration-group { border-color: var(--sel-theme-control-line-soft); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 72%, transparent); }
+.task-collaboration-group > .selui-disclosure-heading > .seldisclosure-trigger { min-height: 72px; padding: 14px 16px; }
+.selui-disclosure-heading { display: flex; align-items: center; }
+.selui-disclosure-heading > .seldisclosure-trigger { min-width: 0; }
+.selui-disclosure-trigger-content { display: block; min-width: 0; flex: 1; }
+.task-group-header-content, .task-node-header-content { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-width: 0; width: 100%; }
+.task-group-header-content > span:first-child, .task-node-main { display: grid; min-width: 0; gap: 5px; }
+.task-group-header-content strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-body); }
+.task-group-header-content small, .task-node-main > small { overflow: hidden; color: var(--sel-theme-workbench-text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.task-group-facts { display: flex; align-items: center; gap: 12px; flex: none; }
+.task-group-facts b { color: var(--sel-theme-accent); }
+.task-group-facts em { color: var(--sel-theme-workbench-text); font-style: normal; }
+.task-group-facts small { color: var(--sel-theme-workbench-text-muted); }
+.task-collaboration-group > .seldisclosure-content { padding: 0 16px 16px; }
+.task-timeline-list { position: relative; display: grid; gap: 8px; padding: 8px 0 8px 38px; }
+.task-timeline-list::before { position: absolute; top: 0; bottom: 0; left: 17px; width: 1px; content: ""; background: var(--sel-theme-control-line-soft); }
+.task-timeline-position { position: relative; min-width: 0; }
+.task-timeline-index { position: absolute; left: -38px; top: 16px; width: 20px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
+.task-timeline-dot { position: absolute; z-index: 1; left: -26px; top: 20px; width: 9px; height: 9px; border: 2px solid var(--sel-theme-workbench-surface); border-radius: 50%; background: var(--sel-theme-workbench-text-muted); box-shadow: 0 0 0 2px var(--sel-theme-control-line-soft); }
+.task-timeline-position.completed .task-timeline-dot { background: var(--sel-theme-semantic-success); }
+.task-timeline-position.current .task-timeline-dot { background: var(--sel-theme-accent); animation: task-collaboration-pulse 1.35s ease-in-out infinite; }
+.task-timeline-position.waiting .task-timeline-dot { background: var(--sel-theme-semantic-warning); animation: task-collaboration-pulse 1.6s ease-in-out infinite; }
+.task-timeline-position.failed .task-timeline-dot { background: var(--sel-theme-semantic-error); }
+@keyframes task-collaboration-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--sel-theme-accent) 18%, transparent); } }
+.task-timeline-node { border-color: transparent; border-radius: var(--sel-theme-radius-control); background: transparent; overflow: visible; }
+.task-timeline-node[data-sel-disclosure-open="true"] { border-color: var(--sel-theme-control-line-soft); background: var(--sel-theme-workbench-surface-soft); }
+.task-timeline-node > .selui-disclosure-heading > .seldisclosure-trigger { min-height: 58px; padding: 10px 12px; }
+.task-node-main > span { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.task-node-main strong { color: var(--sel-theme-workbench-text); }
+.task-node-main em { color: var(--sel-theme-workbench-text-muted); font-style: normal; }
+.task-node-main b { color: var(--sel-theme-workbench-text); }
+.task-timeline-position.failed .task-node-main b, .task-timeline-position.failed .task-node-meta b { color: var(--sel-theme-semantic-error); }
+.task-node-meta { display: flex; align-items: center; gap: 14px; flex: none; }
+.task-node-meta small { color: var(--sel-theme-workbench-text-muted); }
+.task-node-meta b { color: var(--sel-theme-accent); }
+.task-manual-approval { flex: none; margin-right: 10px; min-height: 32px; padding: 4px 12px; border: 1px solid var(--sel-theme-accent); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-accent); background: transparent; cursor: pointer; }
+.task-manual-approval:hover, .task-manual-approval:focus-visible { background: var(--sel-theme-workbench-surface-hover); outline: none; }
+/* 人工审批仍使用正式 SELUI Window；这里只为该业务实例分配更长的只读正文视口，窗口拖动和八向缩放继续由 SELUI 接管。 */
+.selwindow-window-shell[data-sel-window-id="ai-desktop-evolution-approval"] .selwindow-field-row:first-child { min-height: 184px; }
+.selwindow-window-shell[data-sel-window-id="ai-desktop-evolution-approval"] .selwindow-field-row:first-child .selwindow-control-shell-textarea { min-height: 184px; }
+.selwindow-window-shell[data-sel-window-id="ai-desktop-evolution-approval"] .selwindow-field-row:first-child .selwindow-control-textarea { min-height: 156px; }
+.task-node-content { padding: 0 12px 10px; color: var(--sel-theme-workbench-text); white-space: pre-wrap; }
+.task-node-content p { margin: 0; line-height: 1.7; }
+.task-live-caret { display: inline-block; width: 3px; height: 18px; margin-left: 5px; vertical-align: -3px; background: var(--sel-theme-accent); animation: task-live-caret 0.8s steps(1) infinite; }
+@keyframes task-live-caret { 50% { opacity: 0; } }
+.task-node-detail { margin: 2px 12px 10px; }
+.task-node-detail pre { margin: 0; color: var(--sel-theme-workbench-text-muted); font: inherit; line-height: 1.65; white-space: pre-wrap; }
+.task-timeline-next { display: flex; align-items: center; gap: 10px; margin: 12px 0 0 38px; padding: 12px 4px; color: var(--sel-theme-workbench-text-muted); }
+.task-timeline-next i { width: 12px; height: 12px; border: 2px solid var(--sel-theme-control-line-soft); border-radius: 50%; }
+.task-timeline-next strong { color: var(--sel-theme-workbench-text); }
+.task-collaboration-empty { display: grid; place-items: center; gap: 8px; min-height: 320px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
+.task-collaboration-empty strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-subtitle); }
+@media (max-width: 1120px) {
+  .task-group-header-content, .task-node-header-content { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .task-group-facts, .task-node-meta { flex-wrap: wrap; }
+}

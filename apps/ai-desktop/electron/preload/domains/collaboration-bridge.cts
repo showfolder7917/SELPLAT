@@ -4,6 +4,7 @@ import { invoke, subscribe } from "../ipc-client.cjs";
 export function collaborationBridge() {
   return {
     getCollaborationState: () => invoke("desktop:get-collaboration-state"),
+    getCollaborationTimeline: () => invoke("desktop:get-collaboration-timeline"),
     setDesktopOperatingMode: (mode: string) => invoke("desktop:set-operating-mode", mode),
     selectCollaborationMember: (memberId: string) => invoke("desktop:select-collaboration-member", memberId),
     createCollaborationMember: (request: unknown) => invoke("desktop:create-collaboration-member", request),

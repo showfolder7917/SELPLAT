@@ -240,7 +240,7 @@ test("一键清空测试数据必须二次确认且明确保留范围", async ()
 test("生产构建在正式默认、实际复现和最小窗口中保持设置入口与面板定位", async () => {
   const sizes = [
     { name: "正式默认", width: 1560, height: 980 },
-    { name: "实际复现", width: 1224, height: 768 },
+    { name: "标准窗口", width: 1366, height: 768 },
     { name: "正式最小", width: 1000, height: 700 },
   ];
   for (const size of sizes) {
@@ -707,6 +707,153 @@ test("协同执行列表归档完成任务并优先展示结构化结果摘要",
   await expect(executionStage.locator(".task-stage-record header strong").filter({ hasText: /^冰魄仙子$/ })).toBeVisible();
 
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(false));
+  await taskList.getByRole("button", { name: "单会话" }).click();
+  await page.getByRole("button", { name: "展开工作区" }).click();
+});
+
+test("任务协作群按真实顺序追加节点并覆盖人工审批、十人并行和独立展开", async ({}, testInfo) => {
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(true));
+  await page.getByRole("button", { name: "展开任务" }).click();
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式" }).click();
+  const executionListEntry = taskList.getByRole("button", { name: /执行列表/ });
+  const taskGroupEntry = taskList.getByRole("button", { name: /任务协作群/ });
+  await expect(taskGroupEntry).toBeVisible();
+  const [executionBounds, taskGroupBounds, hanLiBounds] = await Promise.all([
+    executionListEntry.boundingBox(), taskGroupEntry.boundingBox(), taskList.getByRole("button", { name: /韩立/ }).boundingBox(),
+  ]);
+  if (!executionBounds || !taskGroupBounds || !hanLiBounds) throw new Error("任务协作群侧栏顺序缺少可视边界。");
+  expect(taskGroupBounds.y).toBeGreaterThan(executionBounds.y);
+  expect(taskGroupBounds.y).toBeLessThan(hanLiBounds.y);
+  await taskGroupEntry.click();
+
+  const pageRoot = page.getByRole("region", { name: "任务协作群" });
+  const group = pageRoot.locator(".task-collaboration-group");
+  await expect(group.getByText("专题任务 01 · 修订截图按钮可用态", { exact: true })).toBeVisible();
+  const groupTrigger = group.locator(":scope > .selui-disclosure-heading > .seldisclosure-trigger");
+  await groupTrigger.click();
+  await expect(group.locator(":scope > .seldisclosure-content")).toBeHidden();
+  await pageRoot.getByRole("button", { name: "定位当前步骤" }).click();
+  await expect(group.locator(":scope > .seldisclosure-content")).toBeVisible();
+  await expect(group.locator(".task-timeline-node")).toHaveCount(1);
+  const applicationNode = group.locator(".task-timeline-node").first();
+  await expect(applicationNode).toContainText("南宫婉");
+  await expect(applicationNode).toContainText("@韩立");
+  await expect(applicationNode).toContainText("审批申请");
+  await expect(group.getByText("韩立审批 · 等待中", { exact: true })).toBeVisible();
+  await expect(group.getByText("韩立", { exact: true })).toHaveCount(0);
+  await expect(applicationNode.locator(":scope > .seldisclosure-content")).toBeVisible();
+  await applicationNode.locator(":scope > .selui-disclosure-heading > .seldisclosure-trigger").click();
+  await expect(applicationNode.locator(":scope > .seldisclosure-content")).toBeHidden();
+  await applicationNode.locator(":scope > .selui-disclosure-heading > .seldisclosure-trigger").click();
+
+  const manualApproval = applicationNode.getByRole("button", { name: "手动审批" });
+  await manualApproval.click();
+  let approvalWindow = page.getByRole("dialog", { name: "审批任务 · 专题任务 01 · 修订截图按钮可用态" });
+  await expect(approvalWindow).toBeVisible();
+  await expect(approvalWindow.getByLabel("审批内容")).toHaveValue(/统一修正主会话/);
+  await expect(approvalWindow.getByLabel("审批内容")).toHaveAttribute("readonly", "");
+  const approvalContentBounds = await approvalWindow.getByLabel("审批内容").boundingBox();
+  if (!approvalContentBounds) throw new Error("审批内容缺少可视边界。");
+  expect(approvalContentBounds.height).toBeGreaterThanOrEqual(150);
+  const resizeHandle = approvalWindow.locator(".selwindow-resize-south-east");
+  await expect(resizeHandle).toHaveCount(1);
+  const [beforeResize, resizeBounds] = await Promise.all([approvalWindow.boundingBox(), resizeHandle.boundingBox()]);
+  if (!beforeResize || !resizeBounds) throw new Error("审批窗口缺少缩放边界。");
+  await page.mouse.move(resizeBounds.x + resizeBounds.width / 2, resizeBounds.y + resizeBounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(resizeBounds.x + resizeBounds.width / 2 + 35, resizeBounds.y + resizeBounds.height / 2 + 45, { steps: 6 });
+  await page.mouse.up();
+  const afterResize = await approvalWindow.boundingBox();
+  if (!afterResize) throw new Error("审批窗口缩放后缺少可视边界。");
+  expect(afterResize.height).toBeGreaterThan(beforeResize.height + 25);
+  await approvalWindow.getByRole("button", { name: "最大化窗口" }).click();
+  await expect(approvalWindow.getByRole("button", { name: "还原窗口" })).toHaveAttribute("aria-pressed", "true");
+  await approvalWindow.getByRole("button", { name: "还原窗口" }).click();
+  await approvalWindow.getByRole("button", { name: "最小化窗口" }).click();
+  await page.getByRole("button", { name: /恢复审批任务/ }).click();
+  await approvalWindow.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(approvalWindow).toBeHidden();
+  await expect(manualApproval).toBeVisible();
+
+  await manualApproval.click();
+  approvalWindow = page.getByRole("dialog", { name: "审批任务 · 专题任务 01 · 修订截图按钮可用态" });
+  await approvalWindow.locator(".selwindow-close-button").click();
+  await expect(approvalWindow).toBeHidden();
+  await manualApproval.click();
+  approvalWindow = page.getByRole("dialog", { name: "审批任务 · 专题任务 01 · 修订截图按钮可用态" });
+  await approvalWindow.getByLabel("审批结论").selectOption("approved");
+  await approvalWindow.getByLabel("审批原因").fill("范围与验收标准明确，可以进入多人并行执行。");
+  await expect(approvalWindow.getByLabel("审批原因")).toHaveValue("范围与验收标准明确，可以进入多人并行执行。");
+  await approvalWindow.getByRole("button", { name: "提交审批" }).click();
+  await expect(approvalWindow).toBeHidden();
+  await expect(group.getByRole("button", { name: "手动审批" })).toHaveCount(0);
+  await expect(group.locator(".task-timeline-node")).toHaveCount(13);
+  await expect(group.locator(".task-timeline-node").nth(1)).toContainText("韩立");
+  await expect(group.locator(".task-timeline-node").nth(1)).toContainText("@南宫婉");
+  await expect(group.locator(".task-timeline-node").nth(1)).toContainText("审批通过");
+  await expect(group.locator(".distribution")).toContainText("@令狐老祖 @紫灵 @元瑶 +7");
+  await expect(group.locator(".task-timeline-position.current")).toHaveCount(2);
+  await expect(group.locator(".task-timeline-position.waiting")).toHaveCount(2);
+  await expect(group.getByText("当前正在验证", { exact: true })).toBeVisible();
+  await expect(group.getByText(/处理耗时|已处理|已验证/).first()).toBeVisible();
+
+  const nodeDisclosures = group.locator(".task-timeline-node");
+  for (let index = 0; index < await nodeDisclosures.count(); index += 1) {
+    const node = nodeDisclosures.nth(index);
+    const trigger = node.locator(":scope > .selui-disclosure-heading > .seldisclosure-trigger");
+    if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
+    await expect(node.locator(":scope > .seldisclosure-content")).toBeVisible();
+    const detailTrigger = node.locator(".task-node-detail > .selui-disclosure-heading > .seldisclosure-trigger");
+    if (await detailTrigger.count()) {
+      await detailTrigger.click();
+      await expect(node.locator(".task-node-detail > .seldisclosure-content")).toBeVisible();
+      await detailTrigger.click();
+      await expect(node.locator(".task-node-detail > .seldisclosure-content")).toBeHidden();
+    }
+    await trigger.click();
+    await expect(node.locator(":scope > .seldisclosure-content")).toBeHidden();
+  }
+
+  await testInfo.attach("task-collaboration-group-1560x980", { body: await page.screenshot(), contentType: "image/png" });
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1366, 768));
+  const standardHorizontalOverflow = await pageRoot.evaluate((element) => element.scrollWidth - element.clientWidth);
+  expect(standardHorizontalOverflow).toBeLessThanOrEqual(1);
+  await testInfo.attach("task-collaboration-group-1366x768", { body: await page.screenshot(), contentType: "image/png" });
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
+  const horizontalOverflow = await pageRoot.evaluate((element) => element.scrollWidth - element.clientWidth);
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
+  await testInfo.attach("task-collaboration-group-1000x700", { body: await page.screenshot(), contentType: "image/png" });
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
+
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(false));
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(true));
+  await expect(group.locator(".task-timeline-node")).toHaveCount(1);
+  await group.getByRole("button", { name: "手动审批" }).click();
+  approvalWindow = page.getByRole("dialog", { name: "审批任务 · 专题任务 01 · 修订截图按钮可用态" });
+  await approvalWindow.getByLabel("审批结论").selectOption("supplement-required");
+  await approvalWindow.getByLabel("审批原因").fill("请补充忙碌禁用态的触发条件和解除条件。");
+  await expect(approvalWindow.getByLabel("审批原因")).toHaveValue("请补充忙碌禁用态的触发条件和解除条件。");
+  await approvalWindow.getByRole("button", { name: "提交审批" }).click();
+  await expect(group.locator(".task-timeline-node")).toHaveCount(2);
+  await expect(group).toContainText("审批未通过");
+  await expect(group).toContainText("请补充忙碌禁用态的触发条件和解除条件。");
+  await expect(group.locator(".distribution")).toHaveCount(0);
+
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(false));
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(true));
+  await expect(group.locator(".task-timeline-node")).toHaveCount(1);
+  await group.getByRole("button", { name: "手动审批" }).click();
+  approvalWindow = page.getByRole("dialog", { name: "审批任务 · 专题任务 01 · 修订截图按钮可用态" });
+  await approvalWindow.getByLabel("审批结论").selectOption("rejected");
+  await approvalWindow.getByLabel("审批原因").fill("当前方案越过专题范围，审批驳回。");
+  await expect(approvalWindow.getByLabel("审批原因")).toHaveValue("当前方案越过专题范围，审批驳回。");
+  await approvalWindow.getByRole("button", { name: "提交审批" }).click();
+  await expect(group.locator(".task-timeline-node")).toHaveCount(2);
+  await expect(group).toContainText("当前方案越过专题范围，审批驳回。");
+  await expect(group.locator(".distribution")).toHaveCount(0);
+
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();
 });

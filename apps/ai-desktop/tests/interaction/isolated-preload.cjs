@@ -31,6 +31,7 @@ const nangongEvolutionListeners = new Set();
 const evolutionWorkbenchChangeListeners = new Set();
 const evolutionWorkbenchPreferences = new Map();
 let nangongNewConversationCalls = 0;
+let taskTimelineFixtureEnabled = false;
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
   version: 1,
@@ -127,6 +128,65 @@ const publishCollaborationState = (reason) => {
   const taskIds = copy.tasks.map((task) => task.taskId);
   for (const listener of collaborationStateListeners) listener({ state: copy, reason, taskIds });
   return copy;
+};
+const interactionTimelineSnapshot = () => {
+  if (!taskTimelineFixtureEnabled) return { version: 1, groups: [], updatedAt: nangongEvolutionState.updatedAt };
+  const proposal = nangongEvolutionState.proposals.find((item) => item.proposalId === "interaction-timeline-proposal");
+  if (!proposal) return { version: 1, groups: [], updatedAt: nangongEvolutionState.updatedAt };
+  const pending = proposal.status === "pending-approval";
+  const startedAt = proposal.createdAt;
+  const nodes = [{
+    nodeId: `proposal:${proposal.proposalId}`, taskId: null, kind: "approval-application",
+    actor: { memberId: "nangong-wan", displayName: "南宫婉" }, recipients: [{ memberId: "han-li", displayName: "韩立" }],
+    status: pending ? "current" : "completed", action: "审批申请", summary: proposal.content, content: proposal.content,
+    detail: "保留截图、附件和发送流程；统一主会话与南宫婉会话的验收范围。", startedAt,
+    completedAt: pending ? null : proposal.updatedAt, durationMs: pending ? 360_000 : 420_000,
+    automaticOpen: pending, manualApprovalProposalId: pending ? proposal.proposalId : null,
+  }];
+  if (!pending) {
+    const approval = proposal.approvals.at(-1);
+    nodes.push({
+      nodeId: `approval:${approval.approvalId}`, taskId: null, kind: "approval-decision",
+      actor: { memberId: "han-li", displayName: "韩立" }, recipients: [{ memberId: "nangong-wan", displayName: "南宫婉" }],
+      status: approval.decision === "approved" ? "completed" : "failed", action: approval.decision === "approved" ? "审批通过" : "审批未通过",
+      summary: approval.advice, content: approval.advice, detail: "人工审批结论已写入统一时间线。", startedAt: approval.createdAt,
+      completedAt: approval.createdAt, durationMs: 472_000, automaticOpen: false, manualApprovalProposalId: null,
+    });
+    if (approval.decision === "approved") {
+      const people = collaborationState.members.slice(2, 12);
+      nodes.push({
+        nodeId: "distribution:interaction-timeline-proposal", taskId: null, kind: "distribution",
+        actor: { memberId: "nangong-wan", displayName: "南宫婉" }, recipients: people.map(({ memberId, displayName }) => ({ memberId, displayName })),
+        status: "completed", action: "任务分发", summary: "并行分发实现、验证与异常捕捉任务。",
+        content: "完成时间线接口、人物节点、手动审批、流式内容与统一异常日志；包含审批退回后的补充细节。",
+        detail: people.map((person, index) => `${person.displayName}：并行子任务 ${index + 1}`).join("\n"), startedAt: approval.createdAt,
+        completedAt: approval.createdAt, durationMs: 78_000, automaticOpen: false, manualApprovalProposalId: null,
+      });
+      people.forEach((person, index) => nodes.push({
+        nodeId: `task:interaction-parallel-${index}`, taskId: `interaction-parallel-${index}`,
+        kind: index % 3 === 0 ? "verification" : index === 8 ? "analysis" : "execution",
+        actor: { memberId: person.memberId, displayName: person.displayName }, recipients: [{ memberId: "nangong-wan", displayName: "南宫婉" }],
+        status: index < 2 ? "current" : index < 8 ? "completed" : "waiting",
+        action: index < 2 ? (index === 0 ? "当前正在验证" : "当前正在执行") : index < 8 ? "执行完成" : "等待接手",
+        summary: index === 0 ? "正在验证任务协作群的审批按钮、布局和多人流程。" : `并行子任务 ${index + 1} 的自然语言摘要。`,
+        content: index === 0 ? "当前正在验证审批申请、人工审批窗口、十人顺序布局和所有展开按钮。" : `正在处理第 ${index + 1} 项任务，输出按流式内容持续追加。`,
+        detail: `原始步骤 ${index + 1}\n文件变化与技术证据均保留在折叠详情。`, startedAt: new Date(Date.parse(approval.createdAt) + index * 1_000).toISOString(),
+        completedAt: index >= 2 && index < 8 ? new Date(Date.parse(approval.createdAt) + (index + 2) * 60_000).toISOString() : null,
+        durationMs: (index + 1) * 60_000, automaticOpen: index < 2, manualApprovalProposalId: null,
+      }));
+    }
+  }
+  const currentCount = nodes.filter((node) => node.status === "current").length;
+  return { version: 1, groups: [{
+    groupId: "topic:interaction-timeline", topicId: "interaction-timeline", proposalId: proposal.proposalId,
+    title: "专题任务 01 · 修订截图按钮可用态", status: pending ? "waiting-approval" : proposal.status === "approved" ? "running" : "blocked",
+    summary: pending ? proposal.content : "多人并行执行与验证正在按时间顺序推进。", nodes,
+    executingCount: nodes.filter((node) => node.kind === "execution" && node.status === "current").length,
+    verifyingCount: nodes.filter((node) => node.kind === "verification" && node.status === "current").length,
+    waitingCount: nodes.filter((node) => node.status === "waiting").length, completedCount: nodes.filter((node) => node.status === "completed").length,
+    startedAt, updatedAt: nangongEvolutionState.updatedAt, durationMs: 2_160_000,
+    nextStep: pending ? "韩立审批 · 等待中" : currentCount ? `结果汇总与验收 · 等待 ${currentCount} 个节点完成` : "结果汇总与验收 · 等待中",
+  }], updatedAt: nangongEvolutionState.updatedAt };
 };
 const publishDispatchState = () => {
   const copy = structuredClone(dispatchState);
@@ -240,6 +300,7 @@ contextBridge.exposeInMainWorld("desktop", {
   getAuditLogInfo: async () => ({ path: process.env.AI_DESKTOP_ARCHIVE_LOG_ROOT, taskCount: 0, latestTask: null }),
   openAuditLogDirectory: async () => undefined,
   getCollaborationState: async () => structuredClone(collaborationState),
+  getCollaborationTimeline: async () => structuredClone(interactionTimelineSnapshot()),
   setDesktopOperatingMode: async (mode) => { collaborationState.mode = mode; return publishCollaborationState("mode.changed"); },
   selectCollaborationMember: async (memberId) => { collaborationState.selectedMemberId = memberId; return publishCollaborationState("member.selected"); },
   createCollaborationMember: async ({ displayName }) => {
@@ -418,6 +479,14 @@ contextBridge.exposeInMainWorld("desktop", {
   onNangongEvolutionState: (listener) => { nangongEvolutionListeners.add(listener); return () => nangongEvolutionListeners.delete(listener); },
   onCollaborationState: (listener) => { collaborationStateListeners.add(listener); return () => collaborationStateListeners.delete(listener); },
   onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
+  setInteractionTaskTimelineFixture: async (active) => {
+    taskTimelineFixtureEnabled = active === true;
+    nangongEvolutionState.topics = active ? [{ topicId: "interaction-timeline", title: "专题任务 01 · 修订截图按钮可用态", status: "pending-approval", currentProposalVersion: 1, createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
+    nangongEvolutionState.proposals = active ? [{ proposalId: "interaction-timeline-proposal", topicId: "interaction-timeline", version: 1, title: "修订截图按钮可用态", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: "统一修正主会话与南宫婉会话截图按钮的可用态、悬停态、键盘焦点态和忙碌禁用态。", status: "pending-approval", approvals: [], distributedTaskIds: [], createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
+    nangongEvolutionState.activeTopicId = active ? "interaction-timeline" : null;
+    publishNangongEvolution(active ? "interaction.timeline_fixture" : "interaction.timeline_fixture_cleared");
+    return structuredClone(interactionTimelineSnapshot());
+  },
   setInteractionCollaborationExecutionFixture: async (active) => {
     collaborationState.tasks = active ? [{
       taskId: "interaction-execution-task", taskRevision: 1, assignmentId: "assignment-2", workerGeneration: 2, state: "integrated", phase: "ready", executorMemberId: "isolated-member-5", currentReviewerMemberId: null, currentPlanVersion: 1, explicitRejectionCount: 0, infrastructureFailureCount: 0, mergeStrategy: "INDEPENDENT", atomicGroupId: null, dependencyTaskIds: [], integrationGeneration: 2,

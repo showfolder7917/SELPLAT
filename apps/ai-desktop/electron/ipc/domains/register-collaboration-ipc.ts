@@ -22,6 +22,7 @@ import type { LinghuAutomationFacade } from "../../services/collaboration/linghu
 import type { NangongEvolutionFacade } from "../../services/collaboration/nangong-evolution-facade.js";
 import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
+import { buildCollaborationTimeline } from "../../services/collaboration/collaboration-timeline-projection.js";
 
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
 export function registerCollaborationIpc(
@@ -32,6 +33,8 @@ export function registerCollaborationIpc(
 ): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-collaboration-state", () => collaboration.state());
+  // 新任务协作群只读取统一投影；IPC 异常继续由 EventCenter 包装并交给令狐监听，不建立旁路 catch 日志。
+  handle("desktop:get-collaboration-timeline", () => buildCollaborationTimeline(collaboration.state(), nangongEvolution.state()));
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
   handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
   handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberRequest) => collaboration.createMember(request));

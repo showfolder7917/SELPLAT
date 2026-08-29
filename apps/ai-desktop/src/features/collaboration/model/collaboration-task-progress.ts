@@ -1,4 +1,7 @@
-/** 协同任务进度展示模型：把持久化事实转换为 UI 唯一可消费的阶段视图。 */
+/**
+ * 旧人物页四阶段进度模型，仅供人物页和会话回退视图继续读取。
+ * @deprecated 新任务协作群统一消费主进程 CollaborationTimelineSnapshot；稳定后单独删除本实现。
+ */
 import type { CollaborationMember, CollaborationTask, LinghuAutomationState, Locale } from "../../../../contracts/desktop/desktop";
 
 export type CollaborationProgressStageId = "intent" | "execution" | "repair" | "unified-test";

@@ -46,6 +46,7 @@ import type {
   CollaborationStateEvent,
   CollaborationStreamEnvelope,
   CollaborationTask,
+  CollaborationTimelineSnapshot,
   ConversationDispatchState,
   ConversationQueueItem,
   DesktopSettings,
@@ -73,10 +74,11 @@ import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, managed
 import { SelUiConversation } from "../../features/conversation/components/SelUiConversation";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "../../features/collaboration/model/collaboration-task-progress";
+import { TaskCollaborationGroup } from "../../features/collaboration/components/TaskCollaborationGroup";
 import { LinghuRepairProposalPanel, MemberSelfUpgradePanel } from "../../features/evolution/components/EvolutionRevisionPanels";
 import { EvolutionControlWorkspace } from "../../features/evolution/components/EvolutionControlWorkspace";
 import { EvolutionLiveActivity } from "../../features/evolution/components/EvolutionLiveActivity";
-import { defaultEvolutionWorkspaceLocation, evolutionWorkspaceLocationFromSearch, evolutionWorkspaceLocationSearch } from "../../features/evolution/model/evolution-workbench";
+import { defaultEvolutionWorkspaceLocation, evolutionMutationRequest, evolutionWorkspaceLocationFromSearch, evolutionWorkspaceLocationSearch } from "../../features/evolution/model/evolution-workbench";
 import { SettingsFloatingPanel } from "../../features/settings/components/SettingsFloatingPanel";
 import { ChatGPTLoginAction, WindowControls } from "../../features/shell/components/DesktopChrome";
 import { RuleManagementFeature } from "../../features/rules/components/RuleManagementFeature";
@@ -241,10 +243,11 @@ export function DeveloperApp() {
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
   const [aiMemoryDatabaseStatus, setAiMemoryDatabaseStatus] = useState<AiMemoryDatabaseStatus | null>(null);
   const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
+  const [collaborationTimeline, setCollaborationTimeline] = useState<CollaborationTimelineSnapshot | null>(null);
   const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationState | null>(null);
   const [nangongEvolutionState, setNangongEvolutionState] = useState<NangongEvolutionState | null>(null);
   const [collaborationStreams, setCollaborationStreams] = useState<Record<string, CollaborationLiveOutput>>({});
-  const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-detail">("member");
+  const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-group" | "task-detail">("member");
   const [selectedCollaborationTaskId, setSelectedCollaborationTaskId] = useState<string | null>(null);
   const [trustedCommandInfo, setTrustedCommandInfo] = useState<TrustedCommandInfo>({ count: 0 });
   const [testDataResetting, setTestDataResetting] = useState(false);
@@ -396,12 +399,14 @@ export function DeveloperApp() {
   useEffect(() => {
     const desktop = window.desktop;
     if (!desktop) return;
+    const refreshTimeline = () => void desktop.getCollaborationTimeline().then(setCollaborationTimeline).catch((error) => setDispatchError(readableDesktopError(error, "无法读取任务协作时间线。")));
     void desktop.getCollaborationState().then((state) => { collaborationStateRef.current = state; setCollaborationState(state); });
+    refreshTimeline();
     void desktop.getLinghuAutomationState().then((state) => { linghuAutomationStateRef.current = state; setLinghuAutomationState(state); });
     void desktop.getNangongEvolutionState().then(setNangongEvolutionState);
-    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
+    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); refreshTimeline(); });
     const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEvent) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
-    const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => setNangongEvolutionState(event.state));
+    const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => { setNangongEvolutionState(event.state); refreshTimeline(); });
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
       // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
       setCollaborationStreams((current) => {
@@ -912,6 +917,27 @@ export function DeveloperApp() {
     if (state) setCollaborationState(state);
   };
 
+  const manuallyApproveTimelineProposal = async (proposalId: string, title: string, content: string) => {
+    if (!nangongEvolutionState) return;
+    const result = await selUi.approval({ title, subtitle: `专题任务 · 等待韩立审批`, content });
+    if (!result) return;
+    setDispatchError("");
+    try {
+      // 审批写动作继续复用演化协调器；主进程 EventCenter 会记录成功或 catch 异常并供令狐老祖消费。
+      const next = await window.desktop?.decideEvolutionProposal(proposalId, {
+        mutation: evolutionMutationRequest(nangongEvolutionState),
+        decision: result.decision,
+        advice: result.reason,
+        feedbackTarget: "proposal-content",
+      });
+      if (next) setNangongEvolutionState(next);
+      const timeline = await window.desktop?.getCollaborationTimeline();
+      if (timeline) setCollaborationTimeline(timeline);
+    } catch (error) {
+      setDispatchError(readableDesktopError(error, "提交人工审批失败。"));
+    }
+  };
+
   const submitConfirmedCollaborationTask = async (message: Message) => {
     if (!workspaces) throw new Error("协同任务缺少工作区。");
     const latestUser = [...messages].reverse().find((item) => item.role === "user");
@@ -1243,6 +1269,8 @@ export function DeveloperApp() {
       : null;
   const collaborationTabTitle = collaborationPanel === "execution-list"
     ? (locale === "ja" ? "実行一覧" : "执行列表")
+    : collaborationPanel === "task-group"
+      ? (locale === "ja" ? "タスク協同グループ" : "任务协作群")
     : collaborationPanel === "task-detail"
       ? selectedCollaborationTask?.snapshot.title || (locale === "ja" ? "タスク詳細" : "任务详情")
       : selectedCollaborationMember?.displayName || (locale === "ja" ? "協同" : "协同模式");
@@ -1338,7 +1366,7 @@ export function DeveloperApp() {
             <button type="button" className={collaborationMode ? "active" : ""} aria-pressed={collaborationMode} onClick={() => void setOperatingMode("collaboration")}>{locale === "ja" ? "協同" : "协同模式"}</button>
           </div>
           {collaborationMode
-            ? <><button type="button" className={`collaboration-execution-list-entry ${collaborationPanel === "execution-list" ? "selected" : ""}`} aria-pressed={collaborationPanel === "execution-list"} onClick={() => { setCollaborationPanel("execution-list"); setSelectedCollaborationTaskId(null); }}><span><Document24Regular />{locale === "ja" ? "実行一覧" : "执行列表"}</span><strong>{completedCollaborationTasks.length}</strong></button><div className="collaboration-member-list">{collaborationState?.members.map((member) => <button type="button" key={member.memberId} className={`collaboration-member ${collaborationPanel === "member" && member.memberId === collaborationState.selectedMemberId ? "selected" : ""}`} aria-pressed={collaborationPanel === "member" && member.memberId === collaborationState.selectedMemberId} onClick={() => void selectCollaborationMember(member.memberId)}><span><i className={member.state} />{member.displayName}</span><small>{collaborationMemberStateLabel(member, locale)}</small></button>)}</div><button type="button" className="add-collaboration-member" onClick={() => void createCollaborationMember()}><Add24Regular />{locale === "ja" ? "メンバー追加" : "新增人物"}</button></>
+            ? <><button type="button" className={`collaboration-execution-list-entry ${collaborationPanel === "execution-list" ? "selected" : ""}`} aria-pressed={collaborationPanel === "execution-list"} onClick={() => { setCollaborationPanel("execution-list"); setSelectedCollaborationTaskId(null); }}><span><Document24Regular />{locale === "ja" ? "実行一覧" : "执行列表"}</span><strong>{completedCollaborationTasks.length}</strong></button><button type="button" className={`collaboration-execution-list-entry collaboration-task-group-entry ${collaborationPanel === "task-group" ? "selected" : ""}`} aria-pressed={collaborationPanel === "task-group"} onClick={() => { setCollaborationPanel("task-group"); setSelectedCollaborationTaskId(null); }}><span><Branch24Regular />{locale === "ja" ? "タスク協同グループ" : "任务协作群"}</span><strong>{collaborationTimeline?.groups.length || 0}</strong></button><div className="collaboration-member-list">{collaborationState?.members.map((member) => <button type="button" key={member.memberId} className={`collaboration-member ${collaborationPanel === "member" && member.memberId === collaborationState.selectedMemberId ? "selected" : ""}`} aria-pressed={collaborationPanel === "member" && member.memberId === collaborationState.selectedMemberId} onClick={() => void selectCollaborationMember(member.memberId)}><span><i className={member.state} />{member.displayName}</span><small>{collaborationMemberStateLabel(member, locale)}</small></button>)}</div><button type="button" className="add-collaboration-member" onClick={() => void createCollaborationMember()}><Add24Regular />{locale === "ja" ? "メンバー追加" : "新增人物"}</button></>
             : auditInfo?.latestTask
               ? <div className="task-summary" title={auditInfo.latestTask.request}><strong>{auditInfo.latestTask.request || text.newTask}</strong><span>{auditStatusText(auditInfo.latestTask.status, locale)}</span></div>
               : <span className="task-empty">{text.noAuditTask}</span>}
@@ -1381,6 +1409,8 @@ export function DeveloperApp() {
         })}
       </section> : showNangongConversationWorkspace && nangongEvolutionState
         ? <NangongConversationWorkspace key={nangongEvolutionState.conversation.conversationId} state={nangongEvolutionState} attachments={nangongAttachments} workspaces={workspaces} locale={locale} newConversationBusy={nangongNewConversationBusy} error={nangongError} onState={setNangongEvolutionState} onAttachments={setNangongAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setNangongError} />
+        : collaborationPanel === "task-group"
+        ? <TaskCollaborationGroup snapshot={collaborationTimeline} liveTextByTaskId={Object.fromEntries(Object.entries(collaborationStreams).map(([taskId, output]) => [taskId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} />
         : collaborationPanel === "execution-list"
         ? <CollaborationExecutionList tasks={completedCollaborationTasks} locale={locale} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />
         : collaborationPanel === "task-detail" && selectedCollaborationTask && selectedCollaborationTaskMember

@@ -11,6 +11,8 @@ import "@selplat/sel-ui/components/window/styles";
 
 type ConfirmOptions = { title?: string; message: string; target?: string; tone?: "info" | "danger"; confirmLabel?: string; cancelLabel?: string };
 type PromptOptions = { title: string; label: string; defaultValue?: string; placeholder?: string; submitLabel?: string; cancelLabel?: string; multiline?: boolean };
+type ApprovalOptions = { title: string; subtitle: string; content: string };
+type ApprovalResult = { decision: "approved" | "supplement-required" | "rejected"; reason: string };
 
 type ConfirmController = { open(options: Record<string, unknown>): Promise<boolean>; destroy(): boolean };
 type WindowController = {
@@ -31,6 +33,7 @@ type DialogController = {
 type SelUiContextValue = {
   confirm(options: ConfirmOptions): Promise<boolean>;
   prompt(options: PromptOptions): Promise<string | null>;
+  approval(options: ApprovalOptions): Promise<ApprovalResult | null>;
 };
 
 const SelUiContext = createContext<SelUiContextValue | null>(null);
@@ -41,7 +44,9 @@ export function SelUiProvider({ children }: { children: ReactNode }) {
   const confirmRef = useRef<ConfirmController | null>(null);
   const promptRef = useRef<WindowController | null>(null);
   const multilinePromptRef = useRef<WindowController | null>(null);
+  const approvalRef = useRef<WindowController | null>(null);
   const pendingPromptRef = useRef<{ id: string; resolve(value: string | null): void } | null>(null);
+  const pendingApprovalRef = useRef<{ resolve(value: ApprovalResult | null): void } | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -66,9 +71,23 @@ export function SelUiProvider({ children }: { children: ReactNode }) {
       cancelLabel: "取消",
       autoSuccess: false,
     }) as WindowController | null;
+    const approvalController = components.window.mount(host, {
+      id: "ai-desktop-evolution-approval",
+      title: "审批任务",
+      subtitle: "等待人工审批",
+      rows: [
+        [{ name: "content", inputId: "ai-desktop-approval-content", label: "审批内容", type: "textarea", readOnly: true }],
+        [{ name: "decision", inputId: "ai-desktop-approval-decision", label: "审批结论", type: "select", required: true, options: [{ value: "approved", label: "审批通过" }, { value: "supplement-required", label: "审批未通过，退回补充" }, { value: "rejected", label: "审批驳回" }] }],
+        [{ name: "reason", inputId: "ai-desktop-approval-reason", label: "审批原因", type: "textarea", required: true, maxLength: 20_000 }],
+      ],
+      submitLabel: "提交审批",
+      cancelLabel: "取消",
+      autoSuccess: false,
+    }) as WindowController | null;
     confirmRef.current = confirmController;
     promptRef.current = promptController;
     multilinePromptRef.current = multilinePromptController;
+    approvalRef.current = approvalController;
     const settlePrompt = (id: string, value: string | null) => {
       const pending = pendingPromptRef.current;
       if (!pending || pending.id !== id) return;
@@ -81,22 +100,43 @@ export function SelUiProvider({ children }: { children: ReactNode }) {
       settlePrompt(detail.id, typeof detail.values?.value === "string" ? detail.values.value : "");
       (detail.id === "ai-desktop-multiline-prompt" ? multilinePromptController : promptController)?.close();
     };
+    const onApprovalSubmit = (event: Event) => {
+      const detail = (event as CustomEvent<{ id?: string; values?: Record<string, unknown> }>).detail;
+      if (detail?.id !== "ai-desktop-evolution-approval" || !pendingApprovalRef.current) return;
+      const decision = String(detail.values?.decision || "");
+      const reason = String(detail.values?.reason || "").trim();
+      if (!["approved", "supplement-required", "rejected"].includes(decision) || !reason) return;
+      const pending = pendingApprovalRef.current;
+      pendingApprovalRef.current = null;
+      pending.resolve({ decision: decision as ApprovalResult["decision"], reason });
+      approvalController?.close();
+    };
     const onClose = (event: Event) => {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id;
       if (id) settlePrompt(id, null);
+      if (id === "ai-desktop-evolution-approval" && pendingApprovalRef.current) {
+        const pending = pendingApprovalRef.current;
+        pendingApprovalRef.current = null;
+        pending.resolve(null);
+      }
     };
     host.addEventListener("selWindow:submit", onSubmit);
+    host.addEventListener("selWindow:submit", onApprovalSubmit);
     host.addEventListener("selWindow:close", onClose);
     return () => {
       host.removeEventListener("selWindow:submit", onSubmit);
+      host.removeEventListener("selWindow:submit", onApprovalSubmit);
       host.removeEventListener("selWindow:close", onClose);
       if (pendingPromptRef.current) settlePrompt(pendingPromptRef.current.id, null);
+      if (pendingApprovalRef.current) { pendingApprovalRef.current.resolve(null); pendingApprovalRef.current = null; }
       confirmController?.destroy();
       promptController?.destroy();
       multilinePromptController?.destroy();
+      approvalController?.destroy();
       confirmRef.current = null;
       promptRef.current = null;
       multilinePromptRef.current = null;
+      approvalRef.current = null;
     };
   }, []);
 
@@ -126,6 +166,25 @@ export function SelUiProvider({ children }: { children: ReactNode }) {
       controller.setValues({ value: options.defaultValue || "" });
       controller.open();
       return new Promise<string | null>((resolve) => { pendingPromptRef.current = { id, resolve }; });
+    },
+    approval: (options) => {
+      const controller = approvalRef.current;
+      if (!controller) return Promise.resolve(null);
+      if (pendingApprovalRef.current) pendingApprovalRef.current.resolve(null);
+      controller.setLocale({
+        title: `审批任务 · ${options.title}`,
+        subtitle: options.subtitle,
+        submitLabel: "提交审批",
+        cancelLabel: "取消",
+        rows: [
+          [{ name: "content", inputId: "ai-desktop-approval-content", label: "审批内容", type: "textarea", readOnly: true }],
+          [{ name: "decision", inputId: "ai-desktop-approval-decision", label: "审批结论", type: "select", required: true, options: [{ value: "approved", label: "审批通过" }, { value: "supplement-required", label: "审批未通过，退回补充" }, { value: "rejected", label: "审批驳回" }] }],
+          [{ name: "reason", inputId: "ai-desktop-approval-reason", label: "审批原因", type: "textarea", required: true, maxLength: 20_000, placeholder: "请填写通过原因或未通过原因" }],
+        ],
+      });
+      controller.setValues({ content: options.content, decision: "approved", reason: "" });
+      controller.open();
+      return new Promise<ApprovalResult | null>((resolve) => { pendingApprovalRef.current = { resolve }; });
     },
   }), []);
 

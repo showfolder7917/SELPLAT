@@ -9,6 +9,7 @@ const requiredCapabilities = [
   "loginWithChatGPT",
   "prepareScreenCapture",
   "getCollaborationState",
+  "getCollaborationTimeline",
   "enqueueMessage",
   "windowControl",
 ];
