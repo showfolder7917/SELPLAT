@@ -50,6 +50,16 @@
       "themeAware": true
     },
     {
+      "id": "selDisclosure",
+      "directory": "disclosure",
+      "type": "interactive",
+      "scripts": ["selDisclosure.js"],
+      "styles": ["selDisclosure.css"],
+      "publicApi": "sel.components.disclosure",
+      "dependencies": [],
+      "themeAware": true
+    },
+    {
       "id": "selContextMenu",
       "directory": "context-menu",
       "type": "interactive",

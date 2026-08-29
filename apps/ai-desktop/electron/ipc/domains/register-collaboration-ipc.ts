@@ -9,7 +9,10 @@ import type {
   DecideEvolutionProposalRequest,
   DecideEvolutionResultRequest,
   EvolutionAutomationAction,
+  EvolutionMutationRequest,
   GenerateNangongTopicDraftRequest,
+  QueryEvolutionWorkbenchRequest,
+  SaveEvolutionWorkbenchPreferenceRequest,
   ReviseEvolutionProposalRequest,
   SendNangongConversationMessageRequest,
   UpdateEvolutionTopicRequest,
@@ -45,6 +48,9 @@ export function registerCollaborationIpc(
   handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
   handle("desktop:get-nangong-evolution-state", () => nangongEvolution.state());
   handle("desktop:get-evolution-topic-dossier", (_event, topicId: string) => nangongEvolution.dossier(topicId));
+  handle("desktop:query-evolution-workbench", (_event, request: QueryEvolutionWorkbenchRequest) => nangongEvolution.queryWorkbench(request));
+  handle("desktop:get-evolution-workbench-preference", (_event, perspective: "nangong" | "hanli", nodeId: string) => nangongEvolution.getWorkbenchPreference(perspective, nodeId));
+  handle("desktop:save-evolution-workbench-preference", (_event, request: SaveEvolutionWorkbenchPreferenceRequest) => nangongEvolution.saveWorkbenchPreference(request));
   handle("desktop:advance-han-li-deliberation", () => nangongEvolution.advanceHanLiDeliberation());
   handle("desktop:send-nangong-conversation-message", (_event, request: SendNangongConversationMessageRequest) => nangongEvolution.sendConversationMessage(request));
   handle("desktop:new-nangong-conversation", () => nangongEvolution.newConversation());
@@ -59,7 +65,8 @@ export function registerCollaborationIpc(
   handle("desktop:create-linghu-repair-proposal", (_event, request: CreateLinghuRepairProposalRequest) => nangongEvolution.createLinghuRepairProposal(request));
   handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideEvolutionProposalRequest) => nangongEvolution.decideProposal(proposalId, request));
   handle("desktop:decide-evolution-result", (_event, proposalId: string, request: DecideEvolutionResultRequest) => nangongEvolution.decideResult(proposalId, request));
+  handle("desktop:generate-han-li-acceptance-plan", (_event, proposalId: string) => nangongEvolution.generateAcceptancePlan(proposalId));
   handle("desktop:revise-evolution-proposal", (_event, proposalId: string, request: ReviseEvolutionProposalRequest) => nangongEvolution.reviseProposal(proposalId, request));
-  handle("desktop:auto-approve-evolution-proposal", (_event, proposalId: string) => nangongEvolution.autoApprove(proposalId));
-  handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string) => nangongEvolution.dispatch(proposalId));
+  handle("desktop:auto-approve-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationRequest) => nangongEvolution.autoApprove(proposalId, request));
+  handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationRequest) => nangongEvolution.dispatch(proposalId, request));
 }

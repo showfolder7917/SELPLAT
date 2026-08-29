@@ -10,6 +10,9 @@ const themeAdapter = read("../src/theme/selUiTheme.ts");
 const entry = read("../src/main.tsx");
 const developerStyles = read("../src/variants/developer/developer.css");
 const developerApp = read("../src/variants/developer/DeveloperApp.tsx");
+const evolutionGrids = [read("../src/features/evolution/components/EvolutionDatabaseGrid.tsx"), read("../src/features/evolution/components/EvolutionProposalGrid.tsx")].join("\n");
+const evolutionDisclosure = read("../src/features/evolution/components/EvolutionDisclosure.tsx");
+const evolutionDossier = read("../src/features/evolution/components/EvolutionTopicDossierView.tsx");
 const desktopChrome = read("../src/features/shell/components/DesktopChrome.tsx");
 const desktopIpc = read("../electron/ipc/register-desktop-ipc.ts");
 const electronMain = read("../electron/main.ts");
@@ -21,6 +24,12 @@ const screenshotEditor = read("../src/features/screenshot/components/ScreenshotE
 const selUiProvider = read("../src/theme/SelUiProvider.tsx");
 const selUiConversation = read("../src/features/conversation/components/SelUiConversation.tsx");
 const conversationControl = read("../../../shared/frontend/sel-ui/src/components/conversation/selConversation.js");
+const selGrid = read("../../../shared/frontend/sel-ui/src/components/grid/selGrid.js");
+const selTree = read("../../../shared/frontend/sel-ui/src/components/tree/selTree.js");
+const evolutionTree = read("../src/features/evolution/components/EvolutionTreeNavigation.tsx");
+const evolutionWorkspace = read("../src/features/evolution/components/EvolutionControlWorkspace.tsx");
+const evolutionTopicGroup = read("../src/features/evolution/components/EvolutionTopicGroupView.tsx");
+const selSearch = read("../../../shared/frontend/sel-ui/src/components/search/selSearch.js");
 const selWindow = read("../../../shared/frontend/sel-ui/src/components/window/selWindow.js");
 const themeContract = read("../../../shared/frontend/sel-ui/src/theme/contract/selThemeContract.css");
 const sharedTokens = read("../../../shared/frontend/sel-ui/src/theme/selThemeTokens.css");
@@ -67,11 +76,26 @@ test("独立专题演化窗口通过 SELUI Tree 与 Grid 正式出口装配", ()
     "@selplat/sel-ui/components/tooltip",
     "@selplat/sel-ui/components/tree",
     "@selplat/sel-ui/components/grid",
+    "@selplat/sel-ui/components/search",
+    "@selplat/sel-ui/components/disclosure",
   ]) assert.match(developerApp, new RegExp(exportedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(developerApp, /splitPane\.mount|PersonWorkspaceSplitPane/);
-  assert.match(developerApp, /grid\.create/);
-  assert.match(developerApp, /grid\.mount/);
-  assert.match(developerApp, /selGrid:selectionChange/);
+  assert.match(evolutionGrids, /grid\.create/);
+  assert.match(evolutionGrids, /grid\.mount/);
+  assert.match(evolutionGrids, /selGrid:selectionChange/);
+  assert.match(evolutionGrids, /selGrid:queryChange/);
+  assert.match(evolutionGrids, /selGrid:sortChange/);
+  assert.match(evolutionGrids, /nodeId: `\$\{nodeId\}::sort`/);
+  assert.match(evolutionGrids, /nodeId: `\$\{nodeId\}::columns`/);
+  assert.match(evolutionGrids, /selGrid:columnResizeChange/);
+  assert.match(evolutionGrids, /mode: "REMOTE"/);
+  assert.match(selGrid, /selGrid:sortChange/);
+  assert.match(selTree, /selTree:expandedChange/);
+  assert.match(evolutionTree, /selTree:expandedChange/);
+  assert.match(evolutionWorkspace, /nodeId: "__tree__"/);
+  assert.match(selGrid, /data-sel-grid-role="search-host"/);
+  assert.match(selGrid, /components\.search\?\.mount/);
+  assert.match(selSearch, /function selSearchDestroy/);
   assert.match(entry, /evolution-workspace/);
   assert.match(developerApp, /EvolutionWorkspaceWindowApp/);
   assert.match(developerStyles, /\.evolution-window-shell/);
@@ -81,15 +105,44 @@ test("独立专题演化窗口通过 SELUI Tree 与 Grid 正式出口装配", ()
 
 test("南宫婉与韩立复用唯一独立专题演化窗口", () => {
   assert.match(preload, /desktop:open-evolution-workspace/);
-  assert.match(preload, /desktop:evolution-workspace-perspective/);
+  assert.match(preload, /desktop:evolution-workspace-location/);
   assert.match(desktopIpc, /let evolutionWorkspaceWindow: BrowserWindow \| null = null/);
-  assert.match(desktopIpc, /evolutionWorkspaceWindow\.webContents\.send\("desktop:evolution-workspace-perspective"/);
+  assert.match(desktopIpc, /evolutionWorkspaceWindow\.webContents\.send\("desktop:evolution-workspace-location"/);
   assert.match(desktopIpc, /evolutionWorkspaceWindow\.focus\(\)/);
-  assert.match(desktopIpc, /mode: "evolution-workspace", perspective/);
+  assert.match(desktopIpc, /evolutionWorkspaceLocationQuery\(location\)/);
   assert.match(electronMain, /let mainApplicationWindow: BrowserWindow \| null/);
   assert.doesNotMatch(electronMain, /BrowserWindow\.getAllWindows\(\)\.length === 0/);
-  assert.match(developerApp, /openEvolutionWorkspace\(evolutionWorkspacePerspective\)/);
+  assert.match(developerApp, /openEvolutionWorkspace\(defaultEvolutionWorkspaceLocation\(evolutionWorkspacePerspective\)\)/);
   assert.doesNotMatch(developerStyles, /person-workspace-split-host|person-workspace-side-region/);
+});
+
+test("专题档案展开区只使用正式 SELUI Disclosure", () => {
+  assert.ok(selUiManifest.exports["./components/disclosure"]);
+  assert.ok(selUiManifest.exports["./components/disclosure/styles"]);
+  assert.match(evolutionDisclosure, /components\?\.disclosure/);
+  assert.match(evolutionDisclosure, /disclosure\.mount/);
+  assert.match(evolutionDossier, /EvolutionDisclosure/);
+  assert.doesNotMatch(evolutionDossier, /<(?:details|summary)\b/);
+});
+
+test("专题执行群只读聚合 SQLite 档案并跳回既有业务页面", () => {
+  assert.match(evolutionWorkspace, /manual-group/);
+  assert.match(evolutionWorkspace, /EvolutionTopicGroupView/);
+  assert.match(evolutionTopicGroup, /getEvolutionTopicDossier/);
+  assert.match(evolutionTopicGroup, /查看来源与研讨/);
+  assert.match(evolutionTopicGroup, /查看审批/);
+  assert.match(evolutionTopicGroup, /查看提案与任务/);
+  assert.match(evolutionTopicGroup, /查看发布与验收/);
+  assert.match(evolutionTopicGroup, /getEvolutionWorkbenchPreference/);
+  assert.match(evolutionTopicGroup, /saveEvolutionWorkbenchPreference/);
+  assert.match(evolutionTopicGroup, /全部标为已读/);
+  assert.match(evolutionTopicGroup, /重新核对数据库/);
+  assert.match(evolutionTopicGroup, /按人物筛选专题群/);
+  assert.match(evolutionTopicGroup, /按类型筛选专题群/);
+  assert.match(evolutionTopicGroup, /sendNangongConversationMessage/);
+  assert.match(evolutionTopicGroup, /topicId: topic\.topicId/);
+  assert.match(evolutionTopicGroup, /完整原话保存在人物对话库/);
+  assert.doesNotMatch(evolutionTopicGroup, /decideEvolutionProposal|dispatchEvolutionProposal|controlEvolutionAutomation|createEvolutionProposal/);
 });
 
 test("确认、输入和提示交互只通过 SELUI 公共组件", () => {

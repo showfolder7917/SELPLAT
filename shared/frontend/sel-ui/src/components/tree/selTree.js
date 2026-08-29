@@ -264,6 +264,10 @@
                     state.expandedIds.add(item.id);
                 }
                 render();
+                gridRoot.dispatchEvent(new CustomEvent("selTree:expandedChange", {
+                    bubbles: true,
+                    detail: { gridId, entity: gridRoot.dataset.selEntity || "", expandedIds: Array.from(state.expandedIds) }
+                }));
                 return;
             }
             select(item.id);
@@ -346,6 +350,7 @@
             refresh: render,
             setLocale: selTreeSetLocale,
             getSelectedId: () => state.selectedId,
+            getExpandedIds: () => Array.from(state.expandedIds),
             closeContextMenu,
             destroy
         });

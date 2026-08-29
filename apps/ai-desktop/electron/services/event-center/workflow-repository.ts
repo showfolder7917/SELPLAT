@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { ApprovalGovernanceRecord } from "../../../contracts/governance/approval-governance.js";
 import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
 import type { LinghuAutomationState } from "../../../contracts/collaboration/linghu-automation.js";
-import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, NangongEvolutionState } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkbenchRow, EvolutionWorkbenchView, NangongEvolutionState, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../contracts/governance/workflow.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
@@ -15,6 +15,7 @@ const TERMINAL_TASK_STATES = new Set(["integrated", "cancelled"]);
 export class WorkflowRepository {
   readonly #database: SqliteDatabase;
   readonly #sessionId = `runtime-session-${randomUUID()}`;
+  #evolutionWorkbenchStateVersion = "";
 
   constructor(database: SqliteDatabase) {
     this.#database = database;
@@ -57,6 +58,58 @@ export class WorkflowRepository {
 
   recordEvent(input: WorkflowEventInput): string {
     return this.#database.withConnection((connection) => this.#insertEvent(connection, input));
+  }
+
+  /**
+   * 使用 SQLite 事件事实同时承担专题互斥锁和幂等日志；应用异常退出时，既有运行会话恢复会把 processing 还原为 open。
+   * 返回 completed 表示同一幂等键已经成功，调用方只返回当前事实，不得再次产生分发副作用。
+   */
+  beginEvolutionMutation(topicId: string, action: string, request: { expectedStateVersion: string; idempotencyKey: string }, currentStateVersion: string, now = new Date().toISOString()): "started" | "completed" {
+    const normalizedTopicId = requiredMutationValue(topicId, "专题", 200);
+    const normalizedAction = requiredMutationValue(action, "动作", 80);
+    const idempotencyKey = requiredMutationValue(request.idempotencyKey, "幂等键", 200);
+    const expectedStateVersion = requiredMutationValue(request.expectedStateVersion, "状态版本", 80);
+    const fingerprint = `evolution-mutation:${idempotencyKey}`;
+    return this.#database.transaction((connection) => {
+      const existing = connection.prepare("SELECT status FROM AiDesktopEvent WHERE fingerprint = $fingerprint").get({ $fingerprint: fingerprint }) as { status: string } | undefined;
+      if (existing?.status === "resolved") return "completed";
+      if (existing?.status === "processing") throw new Error("当前操作正在处理中，请勿重复提交。");
+      if (expectedStateVersion !== currentStateVersion) throw new Error("状态已更新，请重新确认后再执行。");
+      const active = connection.prepare(`SELECT eventId FROM AiDesktopEvent
+        WHERE eventType = 'evolution.mutation' AND status = 'processing'
+          AND json_extract(payloadJson, '$.topicId') = $topicId AND fingerprint <> $fingerprint
+        LIMIT 1`).get({ $topicId: normalizedTopicId, $fingerprint: fingerprint });
+      if (active) throw new Error("当前专题正在执行其他推进或恢复操作，请等待完成后重试。");
+      const payloadJson = JSON.stringify({ topicId: normalizedTopicId, action: normalizedAction, expectedStateVersion });
+      if (existing) {
+        connection.prepare(`UPDATE AiDesktopEvent SET status='processing', message=$message, payloadJson=$payloadJson,
+          occurredAt=$now, recordedAt=$now, resolvedAt=NULL, resolutionSummary=NULL, handlingOwnerId='evolution-workbench', handlingStartedAt=$now
+          WHERE fingerprint=$fingerprint`).run({ $message: `专题正在执行：${normalizedAction}`, $payloadJson: payloadJson, $now: now, $fingerprint: fingerprint });
+      } else {
+        connection.prepare(`INSERT INTO AiDesktopEvent
+          (eventId, correlationId, sourceType, sourceId, eventType, category, severity, status, message, payloadJson, fingerprint,
+           occurredAt, recordedAt, resolvedAt, handlingOwnerId, handlingStartedAt, resolutionSummary)
+          VALUES ($eventId, $topicId, 'system', 'evolution-workbench', 'evolution.mutation', 'execution', 'info', 'processing',
+           $message, $payloadJson, $fingerprint, $now, $now, NULL, 'evolution-workbench', $now, NULL)`)
+          .run({ $eventId: `evolution-mutation-${randomUUID()}`, $topicId: normalizedTopicId, $message: `专题正在执行：${normalizedAction}`, $payloadJson: payloadJson, $fingerprint: fingerprint, $now: now });
+      }
+      return "started";
+    });
+  }
+
+  completeEvolutionMutation(idempotencyKey: string, resultStateVersion: string, now = new Date().toISOString()): void {
+    const fingerprint = `evolution-mutation:${requiredMutationValue(idempotencyKey, "幂等键", 200)}`;
+    this.#database.withConnection((connection) => connection.prepare(`UPDATE AiDesktopEvent
+      SET status='resolved', resolvedAt=$now, resolutionSummary=$resultStateVersion, handlingOwnerId=NULL, handlingStartedAt=NULL
+      WHERE fingerprint=$fingerprint AND status='processing'`).run({ $now: now, $resultStateVersion: resultStateVersion, $fingerprint: fingerprint }));
+  }
+
+  failEvolutionMutation(idempotencyKey: string, error: unknown, now = new Date().toISOString()): void {
+    const fingerprint = `evolution-mutation:${requiredMutationValue(idempotencyKey, "幂等键", 200)}`;
+    const summary = (error instanceof Error ? error.message : String(error)).slice(0, 2_000);
+    this.#database.withConnection((connection) => connection.prepare(`UPDATE AiDesktopEvent
+      SET status='open', resolvedAt=NULL, resolutionSummary=$summary, handlingOwnerId=NULL, handlingStartedAt=NULL, recordedAt=$now
+      WHERE fingerprint=$fingerprint AND status='processing'`).run({ $summary: summary, $now: now, $fingerprint: fingerprint }));
   }
 
   recordAuditEvent(type: string, details: Record<string, unknown>, taskId?: string, occurredAt = new Date().toISOString()): string {
@@ -157,6 +210,63 @@ export class WorkflowRepository {
         handlingStartedAt: nullableString(row.handlingStartedAt),
       }));
     });
+  }
+
+  /**
+   * 工作台列表只查询 SQLite 当前事实投影，并在数据库完成筛选、排序和分页。
+   * 例如查询 topics 第 2 页、每页 20 条时最多返回 20 行及独立 total；不读取 JSON 状态文件，也不返回原始 payload。
+   */
+  queryEvolutionWorkbench(request: QueryEvolutionWorkbenchRequest): EvolutionWorkbenchPage {
+    const pageSize = Math.max(10, Math.min(100, Math.floor(Number(request.pageSize) || 20)));
+    const page = Math.max(1, Math.floor(Number(request.page) || 1));
+    const keyword = String(request.keyword || "").trim().slice(0, 120);
+    const status = workbenchStatusFilter(String(request.status || "").trim().slice(0, 80));
+    const source = evolutionWorkbenchSource(request.view);
+    const sortColumn = ({ createdAt: "createdAt", title: "title", status: "status", updatedAt: "updatedAt" } as const)[request.sortField || "updatedAt"];
+    const sortDirection = request.sortDirection === "asc" ? "ASC" : "DESC";
+    return this.#database.withConnection((connection) => {
+      const where = "WHERE ($keyword = '' OR title LIKE $like OR stage LIKE $like OR owner LIKE $like) AND ($status = '' OR status = $status)";
+      const bindings = { $keyword: keyword, $like: `%${keyword}%`, $status: status };
+      const totalRow = connection.prepare(`SELECT COUNT(*) AS total, COALESCE(MAX(updatedAt), '') AS latestVisibleUpdate FROM (${source}) workbench ${where}`).get(bindings) as { total: number | bigint; latestVisibleUpdate: string };
+      const rows = connection.prepare(`
+        SELECT id, topicId, proposalId, taskId, title, status, stage, owner, blockedReason, recoveryPoint, nextStep, createdAt, updatedAt
+        FROM (${source}) workbench
+        ${where}
+        ORDER BY ${sortColumn} ${sortDirection}, id ASC
+        LIMIT $limit OFFSET $offset
+      `).all({ ...bindings, $limit: pageSize, $offset: (page - 1) * pageSize }) as Array<Record<string, unknown>>;
+      return {
+        view: request.view,
+        page,
+        pageSize,
+        total: Number(totalRow.total),
+        stateVersion: this.#evolutionWorkbenchStateVersion || String(totalRow.latestVisibleUpdate),
+        rows: rows.map((row): EvolutionWorkbenchRow => ({
+          id: String(row.id), topicId: nullableString(row.topicId), proposalId: nullableString(row.proposalId), taskId: nullableString(row.taskId),
+          title: String(row.title), status: String(row.status), stage: String(row.stage), owner: workbenchOwnerLabel(String(row.owner)),
+          blockedReason: nullableString(row.blockedReason), recoveryPoint: nullableString(row.recoveryPoint), nextStep: String(row.nextStep), updatedAt: String(row.updatedAt),
+        })),
+        generatedAt: new Date().toISOString(),
+      };
+    });
+  }
+
+  getEvolutionWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): EvolutionWorkbenchPreference | null {
+    return this.#database.withConnection((connection) => {
+      const row = connection.prepare(`SELECT perspective, nodeId, page, pageSize, keyword, status, selectedRowId, updatedAt
+        FROM AiDesktopEvolutionWorkbenchPreference WHERE perspective=$perspective AND nodeId=$nodeId`).get({ $perspective: perspective, $nodeId: nodeId }) as Record<string, unknown> | undefined;
+      return row ? { perspective: row.perspective as "nangong" | "hanli", nodeId: String(row.nodeId), page: Number(row.page), pageSize: Number(row.pageSize), keyword: String(row.keyword), status: String(row.status), selectedRowId: nullableString(row.selectedRowId), updatedAt: String(row.updatedAt) } : null;
+    });
+  }
+
+  saveEvolutionWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceRequest, now = new Date().toISOString()): EvolutionWorkbenchPreference {
+    const value: EvolutionWorkbenchPreference = { ...request, page: Math.max(1, Math.floor(request.page)), pageSize: [20, 50, 100].includes(request.pageSize) ? request.pageSize : 20, keyword: request.keyword.slice(0, 120), status: request.status.slice(0, 80), selectedRowId: request.selectedRowId?.slice(0, 200) || null, updatedAt: now };
+    this.#database.withConnection((connection) => connection.prepare(`INSERT INTO AiDesktopEvolutionWorkbenchPreference
+      (perspective, nodeId, page, pageSize, keyword, status, selectedRowId, updatedAt)
+      VALUES ($perspective, $nodeId, $page, $pageSize, $keyword, $status, $selectedRowId, $updatedAt)
+      ON CONFLICT(perspective, nodeId) DO UPDATE SET page=excluded.page, pageSize=excluded.pageSize, keyword=excluded.keyword,
+        status=excluded.status, selectedRowId=excluded.selectedRowId, updatedAt=excluded.updatedAt`).run({ $perspective: value.perspective, $nodeId: value.nodeId, $page: value.page, $pageSize: value.pageSize, $keyword: value.keyword, $status: value.status, $selectedRowId: value.selectedRowId, $updatedAt: value.updatedAt }));
+    return value;
   }
 
   claimExceptions(eventIds: string[], ownerId: string, now = new Date().toISOString()): string[] {
@@ -295,16 +405,56 @@ export class WorkflowRepository {
       }
       for (const proposal of state.proposals) this.#upsertApprovals(connection, proposal);
     });
+    // 查询版本代表整个演化读模型，不随当前筛选结果变化，供增量事件准确识别漏报和乱序。
+    this.#evolutionWorkbenchStateVersion = state.updatedAt;
   }
 
   getEvolutionTopicDossier(topicId: string, state: NangongEvolutionState): EvolutionTopicDossier {
     const topic = state.topics.find((item) => item.topicId === topicId);
     if (!topic) throw new Error("专题池中不存在该专题。 ");
-    const deliberation = topic.deliberationId ? state.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
+    const stateDeliberation = topic.deliberationId ? state.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
     const proposals = state.proposals.filter((item) => item.topicId === topicId);
     const proposalIds = new Set(proposals.map((item) => item.proposalId));
-    const archiveRecords = state.archiveRecords.filter((item) => item.topicId === topicId || (deliberation && item.deliberationId === deliberation.deliberationId));
-    const executionRecords = this.#database.withConnection((connection) => {
+    const { deliberation, archiveRecords, executionRecords } = this.#database.withConnection((connection) => {
+      const storedDeliberationRow = stateDeliberation ? connection.prepare(`
+        SELECT deliberationId, topicId, status, candidateJson, createdAt, updatedAt
+        FROM AiDesktopEvolutionDeliberation WHERE deliberationId = $deliberationId
+      `).get({ $deliberationId: stateDeliberation.deliberationId }) as Record<string, unknown> | undefined : undefined;
+      const storedSourceSnapshots = stateDeliberation ? connection.prepare(`
+        SELECT snapshotId, deliberationId, source, conversationId, sourceMessageId, sequenceNumber,
+          role, responsePhase, content, originalCreatedAt, capturedAt
+        FROM AiDesktopEvolutionSourceSnapshot WHERE deliberationId = $deliberationId
+        ORDER BY sequenceNumber, originalCreatedAt, snapshotId
+      `).all({ $deliberationId: stateDeliberation.deliberationId }) as Array<Record<string, unknown>> : [];
+      const storedDeliberation = stateDeliberation && storedDeliberationRow ? {
+        ...stateDeliberation,
+        topicId: storedDeliberationRow.topicId ? String(storedDeliberationRow.topicId) : null,
+        status: String(storedDeliberationRow.status) as typeof stateDeliberation.status,
+        candidate: storedDeliberationRow.candidateJson ? parseObject(String(storedDeliberationRow.candidateJson)) as unknown as typeof stateDeliberation.candidate : null,
+        sourceSnapshots: storedSourceSnapshots.map((row) => ({
+          snapshotId: String(row.snapshotId), deliberationId: String(row.deliberationId), source: row.source as "nangong" | "codex",
+          conversationId: String(row.conversationId), sourceMessageId: String(row.sourceMessageId), sequenceNumber: Number(row.sequenceNumber),
+          role: String(row.role), responsePhase: row.responsePhase ? String(row.responsePhase) : null, content: String(row.content),
+          originalCreatedAt: String(row.originalCreatedAt), capturedAt: String(row.capturedAt),
+        })),
+        createdAt: String(storedDeliberationRow.createdAt), updatedAt: String(storedDeliberationRow.updatedAt),
+      } : null;
+      // 专题执行群与原始档案只读取已经同步到 SQLite 的追加式事实，避免页面重新依赖内存状态或文件展示。
+      const storedArchiveRecords = connection.prepare(`
+        SELECT recordId, deliberationId, topicId, proposalId, taskId, sequenceNumber,
+          category, eventType, actor, title, originalPayloadJson, occurredAt
+        FROM AiDesktopEvolutionArchiveRecord
+        WHERE topicId = $topicId
+          OR ($deliberationId IS NOT NULL AND deliberationId = $deliberationId)
+        ORDER BY occurredAt, sequenceNumber, recordId
+      `).all({ $topicId: topicId, $deliberationId: storedDeliberation?.deliberationId || null }).map((row: Record<string, unknown>): EvolutionArchiveRecord => ({
+        recordId: String(row.recordId), deliberationId: row.deliberationId ? String(row.deliberationId) : null,
+        topicId: row.topicId ? String(row.topicId) : null, proposalId: row.proposalId ? String(row.proposalId) : null,
+        taskId: row.taskId ? String(row.taskId) : null, sequenceNumber: Number(row.sequenceNumber),
+        category: row.category as EvolutionArchiveRecord["category"], eventType: String(row.eventType),
+        actor: row.actor as EvolutionArchiveRecord["actor"], title: String(row.title),
+        payload: parseObject(String(row.originalPayloadJson)), occurredAt: String(row.occurredAt),
+      }));
       // 任务即使还没有产生 flowEvent，也已经是专题从审批进入执行的事实，档案不能因此漏掉整条执行记录。
       const tasks = connection.prepare(`
         SELECT taskId, proposalId, executorMemberId, state, phase, runtimeStatus, heartbeatAt,
@@ -320,8 +470,8 @@ export class WorkflowRepository {
         ORDER BY event.occurredAt, event.recordedAt
       `).all() as Array<Record<string, unknown>>;
       const taskRecords = tasks.filter((task) => proposalIds.has(String(task.proposalId))).map((task, index): EvolutionArchiveRecord => ({
-        recordId: `task-snapshot:${String(task.taskId)}`, deliberationId: deliberation?.deliberationId || null, topicId,
-        proposalId: String(task.proposalId), taskId: String(task.taskId), sequenceNumber: archiveRecords.length + index + 1,
+        recordId: `task-snapshot:${String(task.taskId)}`, deliberationId: storedDeliberation?.deliberationId || null, topicId,
+        proposalId: String(task.proposalId), taskId: String(task.taskId), sequenceNumber: storedArchiveRecords.length + index + 1,
         category: "execution", eventType: "task.execution.snapshot", actor: "system",
         title: `任务已进入 ${String(task.state)} 状态`,
         payload: {
@@ -332,12 +482,12 @@ export class WorkflowRepository {
         occurredAt: String(task.updatedAt),
       }));
       const eventRecords = rows.filter((row) => proposalIds.has(String(row.proposalId))).map((row, index): EvolutionArchiveRecord => ({
-        recordId: String(row.eventId), deliberationId: deliberation?.deliberationId || null, topicId,
-        proposalId: String(row.proposalId), taskId: String(row.correlationId), sequenceNumber: archiveRecords.length + taskRecords.length + index + 1,
+        recordId: String(row.eventId), deliberationId: storedDeliberation?.deliberationId || null, topicId,
+        proposalId: String(row.proposalId), taskId: String(row.correlationId), sequenceNumber: storedArchiveRecords.length + taskRecords.length + index + 1,
         category: dossierEventCategory(String(row.eventType), String(row.category)), eventType: String(row.eventType),
         actor: dossierEventActor(String(row.sourceId)), title: String(row.message), payload: parseObject(String(row.payloadJson)), occurredAt: String(row.occurredAt),
       }));
-      return [...taskRecords, ...eventRecords];
+      return { deliberation: storedDeliberation, archiveRecords: storedArchiveRecords, executionRecords: [...taskRecords, ...eventRecords] };
     });
     return { topic: structuredClone(topic), deliberation: structuredClone(deliberation), proposals: structuredClone(proposals), archiveRecords: structuredClone(archiveRecords), executionRecords };
   }
@@ -570,6 +720,97 @@ export class WorkflowRepository {
   }
 }
 
+/** 各叶节点只选择既有数据库事实并规范成同一读模型，避免 Renderer 自行拼业务含义。 */
+function evolutionWorkbenchSource(view: EvolutionWorkbenchView): string {
+  const workflow = `
+    SELECT workflowId AS id, topicId, proposalId, NULL AS taskId, title, state AS status,
+      currentStage AS stage, currentOwnerId AS owner, CASE WHEN state = 'blocked' THEN '流程已阻塞' ELSE NULL END AS blockedReason,
+      recoveryPoint, CASE
+        WHEN state = 'pending-approval' THEN '等待韩立审批'
+        WHEN state = 'approved' THEN '返还南宫婉并分发'
+        WHEN state IN ('executing', 'verifying') THEN '查看执行进度'
+        WHEN state = 'blocked' THEN '从恢复点继续或交给令狐修复'
+        WHEN state = 'completed' THEN '查看验收档案'
+        ELSE '继续调查并形成提案' END AS nextStep,
+      startedAt AS createdAt, updatedAt
+    FROM AiDesktopWorkflowRun
+    WHERE origin IN ('nangong', 'linghu')`;
+  switch (view) {
+    case "topics": return `${workflow} AND topicId IS NOT NULL
+      AND workflowId = (SELECT latest.workflowId FROM AiDesktopWorkflowRun latest WHERE latest.topicId = AiDesktopWorkflowRun.topicId ORDER BY latest.updatedAt DESC, latest.workflowId DESC LIMIT 1)`;
+    case "proposals": return `${workflow} AND proposalId IS NOT NULL`;
+    case "pending-approvals": return `${workflow} AND proposalId IS NOT NULL AND state IN ('pending-approval', 'supplement-required', 'approved', 'pending-acceptance')`;
+    case "automation-runs": return workflow;
+    case "deliberations": return `
+      SELECT deliberationId AS id, topicId, NULL AS proposalId, NULL AS taskId,
+        COALESCE(json_extract(candidateJson, '$.title'), '待形成专题') AS title, status,
+        '调查与研讨' AS stage, 'han-li' AS owner,
+        CASE WHEN status = 'blocked' THEN '研讨已阻塞' ELSE NULL END AS blockedReason,
+        deliberationId AS recoveryPoint,
+        CASE WHEN status = 'questioning' THEN '推进下一轮研讨' WHEN status = 'ready-to-establish' THEN '确立专题' WHEN status = 'blocked' THEN '检查证据后恢复' ELSE '查看专题' END AS nextStep,
+        createdAt, updatedAt
+      FROM AiDesktopEvolutionDeliberation`;
+    case "approvals": return `
+      SELECT approval.approvalId AS id, workflow.topicId, approval.proposalId, NULL AS taskId,
+        approval.title, approval.decision AS status, approval.approvalStage AS stage,
+        approval.approverDisplayName AS owner, NULL AS blockedReason, workflow.recoveryPoint,
+        CASE WHEN approval.decision = 'supplement-required' THEN '按审批意见补充后重新提交' WHEN approval.approvalStage = 'result' THEN '查看验收结果' ELSE '查看提案与审批意见' END AS nextStep,
+        approval.createdAt, approval.approvedAt AS updatedAt
+      FROM AiDesktopApprovalRecord approval
+      LEFT JOIN AiDesktopWorkflowRun workflow ON workflow.proposalId = approval.proposalId`;
+    case "tasks": return evolutionTaskWorkbenchSource("1 = 1");
+    case "releases": return evolutionTaskWorkbenchSource("task.acceptanceState <> 'pending' OR task.state IN ('unified-testing', 'awaiting-restart', 'integrated')");
+    case "recovery": return evolutionTaskWorkbenchSource("task.runtimeStatus IN ('stalled', 'recovering', 'failed') OR task.blockingKind <> 'none'");
+    case "archives": return `
+      SELECT recordId AS id, topicId, proposalId, taskId, title, eventType AS status, category AS stage,
+        actor AS owner, NULL AS blockedReason, NULL AS recoveryPoint, '查看专题完整档案' AS nextStep,
+        occurredAt AS createdAt, occurredAt AS updatedAt
+      FROM AiDesktopEvolutionArchiveRecord`;
+    case "exceptions": return `
+      SELECT eventId AS id, workflow.topicId, task.proposalId, event.correlationId AS taskId,
+        event.message AS title, event.status, event.category AS stage, COALESCE(event.handlingOwnerId, '待领取') AS owner,
+        event.message AS blockedReason, COALESCE(task.recoveryPoint, workflow.recoveryPoint) AS recoveryPoint,
+        CASE WHEN event.status = 'processing' THEN '查看令狐修复进度' ELSE '交给令狐修复或人工处理' END AS nextStep,
+        event.occurredAt AS createdAt, event.occurredAt AS updatedAt
+      FROM AiDesktopEvent event
+      LEFT JOIN AiDesktopTaskExecution task ON task.taskId = event.correlationId
+      LEFT JOIN AiDesktopWorkflowRun workflow ON workflow.workflowId = task.workflowId
+      WHERE event.category IN ('technical-error', 'business-exception', 'stalled')`;
+  }
+  throw new Error("工作台查询类型无效。");
+}
+
+function evolutionTaskWorkbenchSource(condition: string): string {
+  return `
+    SELECT task.taskId AS id, workflow.topicId, task.proposalId, task.taskId,
+      task.title, task.state AS status, COALESCE(task.phase, task.runtimeStatus) AS stage,
+      COALESCE(task.executorMemberId, '待分配') AS owner, task.blockingReason AS blockedReason,
+      COALESCE(task.recoveryPoint, workflow.recoveryPoint) AS recoveryPoint,
+      CASE
+        WHEN task.runtimeStatus IN ('stalled', 'failed') THEN '交给令狐修复或从恢复点继续'
+        WHEN task.runtimeStatus = 'recovering' THEN '查看修复进度'
+        WHEN task.acceptanceState = 'failed' THEN '修正后重新统一测试'
+        WHEN task.acceptanceState = 'passed' THEN '查看验收档案'
+        ELSE '查看实时执行状态' END AS nextStep,
+      task.startedAt AS createdAt, task.updatedAt
+    FROM AiDesktopTaskExecution task
+    LEFT JOIN AiDesktopWorkflowRun workflow ON workflow.workflowId = task.workflowId
+    WHERE task.proposalId IS NOT NULL AND (${condition})`;
+}
+
+function workbenchOwnerLabel(owner: string): string {
+  return ({ "han-li": "韩立", "nangong-wan": "南宫婉", "linghu-ancestor": "令狐老祖", "collaboration-coordinator": "协同调度", system: "系统", user: "用户" } as Record<string, string>)[owner] || owner;
+}
+
+/** 用户可直接输入页面看到的中文状态；未知值仍按机器状态精确查询，避免关键词猜测业务状态。 */
+function workbenchStatusFilter(status: string): string {
+  return ({
+    "未开始": "registered", "调查中": "investigating", "待审批": "pending-approval", "待补充": "supplement-required",
+    "已退回": "rejected", "已批准": "approved", "执行中": "executing", "验证中": "verifying",
+    "待验收": "pending-acceptance", "已完成": "completed", "已阻塞": "blocked", "失败": "failed",
+  } as Record<string, string>)[status] || status;
+}
+
 function classifyAuditEvent(type: string): { category: WorkflowEventCategory; severity: WorkflowEventSeverity; status: WorkflowEventStatus; sourceType: "member" | "system" | "launcher"; sourceId: string } {
   const sourceId = type.startsWith("han-li.") ? "han-li" : type.startsWith("nangong.") ? "nangong-wan" : type.startsWith("linghu.") ? "linghu-ancestor" : type.startsWith("application.") ? "evolution-launcher" : "ai-desktop";
   const sourceType = sourceId === "evolution-launcher" ? "launcher" : sourceId === "ai-desktop" ? "system" : "member";
@@ -583,6 +824,7 @@ function classifyAuditEvent(type: string): { category: WorkflowEventCategory; se
 
 function defaultSeverity(category: WorkflowEventCategory): WorkflowEventSeverity { return category === "technical-error" || category === "stalled" ? "error" : category === "business-exception" ? "warning" : "info"; }
 function defaultStatus(category: WorkflowEventCategory): WorkflowEventStatus { return ["technical-error", "business-exception", "stalled"].includes(category) ? "open" : "observed"; }
+function requiredMutationValue(value: unknown, label: string, maximum: number): string { const text = typeof value === "string" ? value.trim() : ""; if (!text) throw new Error(`${label}不能为空。`); return text.slice(0, maximum); }
 function stringValue(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : null; }
 function workflowSourceType(value: unknown): WorkflowEventInput["sourceType"] | null {
   return value === "member" || value === "system" || value === "launcher" || value === "task" ? value : null;

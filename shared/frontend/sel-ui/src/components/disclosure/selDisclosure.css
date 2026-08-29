@@ -1,0 +1,45 @@
+.seldisclosure-root {
+    border: 1px solid var(--sel-theme-control-line-soft);
+    border-radius: var(--sel-theme-radius-control);
+    background: var(--sel-theme-control-surface);
+    overflow: clip;
+}
+
+.seldisclosure-trigger {
+    width: 100%;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 0;
+    color: var(--sel-theme-text-body);
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.seldisclosure-trigger:hover {
+    background: var(--sel-theme-control-surface-hover);
+}
+
+.seldisclosure-trigger:focus-visible {
+    outline: 2px solid var(--sel-theme-interaction-hover-edge);
+    outline-offset: -2px;
+}
+
+.seldisclosure-trigger i {
+    flex: none;
+    font-size: 18px;
+}
+
+.seldisclosure-content {
+    padding: 4px 14px 14px;
+}
+
+.seldisclosure-content[hidden] {
+    display: none;
+}

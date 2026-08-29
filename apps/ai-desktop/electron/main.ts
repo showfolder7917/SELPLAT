@@ -21,6 +21,7 @@ import { LinghuAutomationStore } from "./services/collaboration/linghu-automatio
 import { LinghuUnifiedTestRunner } from "./services/collaboration/linghu-unified-test-runner.js";
 import { NangongEvolutionFacade } from "./services/collaboration/nangong-evolution-facade.js";
 import { NangongEvolutionStore } from "./services/collaboration/nangong-evolution-store.js";
+import { buildEvolutionWorkbenchChange } from "./services/collaboration/evolution-workbench-change-assembler.js";
 import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
 import { VersionWorkspaceManager } from "./services/collaboration/version-workspace-manager.js";
 import { VersionIntegrationPipeline } from "./services/collaboration/version-integration-pipeline.js";
@@ -468,15 +469,26 @@ app.whenReady().then(async () => {
     },
     planDistribution: async (prompt, workspaceState, locale) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
     auditDistribution: async (prompt, workspaceState, locale) => (await linghuDistributionAuditCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
+    planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     memory: collaborationMemory,
     readDossier: workflowRepository ? (topicId, state) => workflowRepository!.getEvolutionTopicDossier(topicId, state) : undefined,
+    queryWorkbench: workflowRepository ? (request) => workflowRepository!.queryEvolutionWorkbench(request) : undefined,
+    getWorkbenchPreference: workflowRepository ? (perspective, nodeId) => workflowRepository!.getEvolutionWorkbenchPreference(perspective, nodeId) : undefined,
+    saveWorkbenchPreference: workflowRepository ? (request) => workflowRepository!.saveEvolutionWorkbenchPreference(request) : undefined,
+    beginMutation: workflowRepository ? (topicId, action, request, currentStateVersion) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined,
+    completeMutation: workflowRepository ? (idempotencyKey, resultStateVersion) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined,
+    failMutation: workflowRepository ? (idempotencyKey, error) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined,
   });
-  nangongEvolution.subscribe((state, reason, topicId, proposalId) => {
+  nangongEvolution.subscribe((state, reason, topicId, proposalId, previousState) => {
     workflowRepository?.syncEvolutionState(state);
     collaborationMemory?.syncEvolutionState(state);
     eventCenter.recordEvent("nangong.evolution.state_changed", { reason, topicId, proposalId, activeTopicId: state.activeTopicId });
-    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:nangong-evolution-state", { state, reason, topicId, proposalId });
+    const workbenchChange = buildEvolutionWorkbenchChange(previousState, state, reason, topicId, proposalId);
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
+      window.webContents.send("desktop:evolution-workbench-changed", workbenchChange);
+      window.webContents.send("desktop:nangong-evolution-state", { state, reason, topicId, proposalId });
+    }
   });
   collaborationMemory?.syncEvolutionState(nangongEvolution.state());
   const linghuStore = new LinghuAutomationStore(path.join(collaborationRoot, "linghu-automation.json"));

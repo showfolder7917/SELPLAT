@@ -318,6 +318,21 @@ CREATE TABLE AiDesktopEvolutionRoundTask (
 CREATE INDEX IX_AiDesktopEvolutionRoundTask_RoundState
 ON AiDesktopEvolutionRoundTask (roundId, collectionState, updatedAt DESC);
 
+CREATE TABLE AiDesktopEvolutionWorkbenchPreference (
+  perspective TEXT NOT NULL,
+  nodeId TEXT NOT NULL,
+  page INTEGER NOT NULL,
+  pageSize INTEGER NOT NULL,
+  keyword TEXT NOT NULL,
+  status TEXT NOT NULL,
+  selectedRowId TEXT,
+  updatedAt TEXT NOT NULL,
+  PRIMARY KEY (perspective, nodeId),
+  CONSTRAINT CK_AiDesktopEvolutionWorkbenchPreference_Perspective CHECK (perspective IN ('nangong', 'hanli')),
+  CONSTRAINT CK_AiDesktopEvolutionWorkbenchPreference_Page CHECK (page >= 1),
+  CONSTRAINT CK_AiDesktopEvolutionWorkbenchPreference_PageSize CHECK (pageSize IN (20, 50, 100))
+) STRICT;
+
 CREATE TABLE AiDesktopCorpusIngestionCheckpoint (
   sourceKey TEXT PRIMARY KEY,
   sourceThreadId TEXT,

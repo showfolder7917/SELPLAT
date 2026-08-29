@@ -16,7 +16,7 @@ mkdirSync(controlledTestRoot, { recursive: true });
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
     assert.equal(fixture.database.latestSchemaVersion, "1000");
@@ -31,6 +31,7 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
     fixture.repository.startRuntimeSession(4321, "2026-08-28T00:00:00.000Z");
     fixture.repository.recordAuditEvent("test.recorded", { message: "待清空事件" });
     fixture.repository.syncCollaborationState(collaborationState("2026-08-28T00:00:01.000Z"));
+    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "manual-topic", page: 3, pageSize: 50, keyword: "滚动条", status: "已阻塞", selectedRowId: "topic-25" }, "2026-08-28T00:00:01.500Z");
     const memory = new CollaborationMemoryService(fixture.database);
     memory.syncConversation({ conversationId: "training-conversation", messages: [
       { messageId: "training-user", role: "user", content: "这是必须保留的训练原话。", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z" },
@@ -52,6 +53,7 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
     assert.equal(fixture.repository.tableCount("AiDesktopConversationMemory"), 1);
+    assert.deepEqual(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-topic"), { perspective: "nangong", nodeId: "manual-topic", page: 3, pageSize: 50, keyword: "滚动条", status: "已阻塞", selectedRowId: "topic-25", updatedAt: "2026-08-28T00:00:01.500Z" });
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
     assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopCorpusIngestionCheckpoint").get()).count, 1);
     const schemaCountAfter = fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get().count));
@@ -146,13 +148,15 @@ test("Codex 历史最终回答由 AI 生成短摘要并按原始消息去重补�
   const fixture = createFixture("codex-semantic-backfill");
   const sessionsRoot = path.join(fixture.root, "codex-app-sessions");
   mkdirSync(sessionsRoot, { recursive: true });
+  const rolloutPath = path.join(sessionsRoot, "rollout-history.jsonl");
   const records = [
     { timestamp: "2026-08-28T03:00:00.000Z", type: "session_meta", payload: { session_id: "history-thread", thread_source: "user", originator: "codex_work_desktop", cwd: fixture.root } },
     { ordinal: 1, timestamp: "2026-08-28T03:00:01.000Z", type: "response_item", payload: { type: "message", role: "user", id: "history-user", content: [{ text: "怎样从南宫婉的回答继续发问？" }] } },
     { ordinal: 2, timestamp: "2026-08-28T03:00:02.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", id: "history-answer", content: [{ text: "先识别回答里的事实、缺口和假设，再围绕缺口提出下一问，并让问题指向可执行的演化方向。" }] } },
     { timestamp: "2026-08-28T03:00:03.000Z", type: "event_msg", payload: { type: "task_complete" } },
   ];
-  writeFileSync(path.join(sessionsRoot, "rollout-history.jsonl"), `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+  const writeRollout = () => writeFileSync(rolloutPath, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+  writeRollout();
   try {
     const ingestion = new CodexConversationCorpusIngestion(fixture.database, sessionsRoot, {
       sourceKeyPrefix: "codex-app/active", eligibleThreadSources: ["user"], requiredWorkspaceRoot: fixture.root,
@@ -181,10 +185,62 @@ test("Codex 历史最终回答由 AI 生成短摘要并按原始消息去重补�
     const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT content, contentRetention FROM AiDesktopTrainingCorpusMessage WHERE speakerRole='codex'").get());
     assert.equal(stored.contentRetention, "preview-300");
     assert.match(stored.content, /缺口/);
+
+    records.push(
+      { ordinal: 3, timestamp: "2026-08-28T03:01:01.000Z", type: "response_item", payload: { type: "message", role: "user", id: "history-user-2", content: [{ text: "继续补充新的问题。" }] } },
+      { ordinal: 4, timestamp: "2026-08-28T03:01:02.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", id: "history-answer-2", content: [{ text: "新的回答暂时没有语料元数据。" }] } },
+      { timestamp: "2026-08-28T03:01:03.000Z", type: "event_msg", payload: { type: "task_complete" } },
+    );
+    writeRollout();
+    assert.equal((await ingestion.ingestPendingRolloutsIncrementally()).ingestedMessageCount, 1);
+    const appended = fixture.database.withConnection((connection) => connection.prepare("SELECT sourceMessageId, sequenceNumber FROM AiDesktopTrainingCorpusMessage WHERE sourceConversationId='history-thread' ORDER BY sequenceNumber").all());
+    assert.deepEqual(appended.map((row) => Number(row.sequenceNumber)), [0, 1, 2]);
+    assert.match(appended[2].sourceMessageId, /-3$/);
+
+    backfill.start(10);
+    for (let count = 0; count < 100 && backfill.status().state === "running"; count += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(backfill.status().insertedCount, 1);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 4);
     backfill.start(10);
     for (let count = 0; count < 100 && backfill.status().state === "running"; count += 1) await new Promise((resolve) => setTimeout(resolve, 5));
     assert.equal(backfill.status().insertedCount, 0);
-    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 4);
+  } finally { fixture.close(); }
+});
+
+test("Codex 历史摘要批次异常时隔离失败轮并继续写入合格轮", async () => {
+  const fixture = createFixture("codex-semantic-backfill-partial-failure");
+  const sessionsRoot = path.join(fixture.root, "codex-app-sessions");
+  mkdirSync(sessionsRoot, { recursive: true });
+  const records = [
+    { timestamp: "2026-08-28T04:00:00.000Z", type: "session_meta", payload: { session_id: "partial-thread", thread_source: "user", originator: "codex_work_desktop", cwd: fixture.root } },
+    { ordinal: 1, timestamp: "2026-08-28T04:00:01.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ text: "第一轮问题" }] } },
+    { ordinal: 2, timestamp: "2026-08-28T04:00:02.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", content: [{ text: "第一轮回答" }] } },
+    { timestamp: "2026-08-28T04:00:03.000Z", type: "event_msg", payload: { type: "task_complete" } },
+    { ordinal: 3, timestamp: "2026-08-28T04:01:01.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ text: "第二轮问题" }] } },
+    { ordinal: 4, timestamp: "2026-08-28T04:01:02.000Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", content: [{ text: "第二轮回答" }] } },
+    { timestamp: "2026-08-28T04:01:03.000Z", type: "event_msg", payload: { type: "task_complete" } },
+  ];
+  writeFileSync(path.join(sessionsRoot, "rollout-partial.jsonl"), `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+  try {
+    const backfill = new CodexConversationSemanticBackfill({
+      database: fixture.database,
+      roots: [sessionsRoot],
+      requiredWorkspaceRoot: fixture.root,
+      analyzer: async (candidates) => {
+        if (candidates.length > 1) throw new Error("AI 摘要字段 tag 为空或超过 30 字。");
+        if (candidates[0].assistantText.includes("第一轮")) throw new Error("AI 摘要字段 tag 为空或超过 30 字。");
+        return [{ turnId: candidates[0].turnId, title: "第二轮", type: "测试", intent: "验证失败隔离", tags: ["续跑"], summary: "第二轮合格摘要。" }];
+      },
+    });
+    backfill.start(10);
+    for (let count = 0; count < 100 && backfill.status().state === "running"; count += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(backfill.status().state, "failed");
+    assert.equal(backfill.status().processedCount, 2);
+    assert.equal(backfill.status().insertedCount, 1);
+    assert.equal(backfill.status().failedCount, 1);
+    assert.match(backfill.status().message, /再次点击续跑/);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 1);
   } finally { fixture.close(); }
 });
 
@@ -391,13 +447,83 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
     assert.deepEqual({ ...task }, { workflowId: "evolution:proposal-1", proposalId: "proposal-1" });
     const dossier = fixture.repository.getEvolutionTopicDossier("topic-1", {
       version: 8, topics: [{ topicId: "topic-1", deliberationId: "deliberation-1" }], proposals: [{ proposalId: "proposal-1", topicId: "topic-1" }],
-      deliberations: [{ deliberationId: "deliberation-1", sourceSnapshots: [{ content: "原始执行记录" }] }], archiveRecords: [{ topicId: "topic-1", eventType: "topic.established_from_deliberation" }],
+      deliberations: [{ deliberationId: "deliberation-1", sourceSnapshots: [{ content: "不应覆盖数据库快照" }], rounds: [] }], archiveRecords: [],
     });
     assert.equal(dossier.deliberation.sourceSnapshots[0].content, "原始执行记录");
+    assert.equal(dossier.archiveRecords.length, 1);
+    assert.equal(dossier.archiveRecords[0].eventType, "topic.established_from_deliberation");
+    assert.deepEqual(dossier.archiveRecords[0].payload, { original: true });
     assert.ok(dossier.executionRecords.some((item) => item.taskId === "task-1"));
   } finally {
     fixture.close();
   }
+});
+
+test("专题工作台列表由 SQLite 完成搜索和真实分页且不返回原始 JSON", () => {
+  const fixture = createFixture("evolution-workbench-pagination");
+  try {
+    fixture.database.withConnection((connection) => {
+      const insert = connection.prepare(`INSERT INTO AiDesktopWorkflowRun
+        (workflowId, topicId, proposalId, origin, title, state, currentStage, currentOwnerId, recoveryPoint, nextLaunchAt, startedAt, completedAt, updatedAt)
+        VALUES ($workflowId, $topicId, $proposalId, 'nangong', $title, $state, $stage, 'nangong-wan', $recoveryPoint, NULL, $createdAt, NULL, $updatedAt)`);
+      for (let index = 1; index <= 25; index += 1) insert.run({
+        $workflowId: `evolution:proposal-${index}`, $topicId: `topic-${index}`, $proposalId: `proposal-${index}`,
+        $title: index % 2 ? `滚动条专项 ${index}` : `分页专项 ${index}`, $state: index === 25 ? "blocked" : "executing",
+        $stage: index === 25 ? "recovery" : "execution", $recoveryPoint: `checkpoint-${index}`,
+        $createdAt: `2026-08-28T00:${String(index).padStart(2, "0")}:00.000Z`, $updatedAt: `2026-08-28T00:${String(index).padStart(2, "0")}:30.000Z`,
+      });
+    });
+    const first = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 1, pageSize: 10, sortField: "updatedAt", sortDirection: "desc" });
+    const third = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 3, pageSize: 10, sortField: "updatedAt", sortDirection: "desc" });
+    const searched = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 1, pageSize: 20, keyword: "滚动条" });
+    const blocked = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 1, pageSize: 20, status: "已阻塞" });
+    assert.equal(first.total, 25);
+    assert.equal(first.rows.length, 10);
+    assert.equal(third.rows.length, 5);
+    assert.equal(searched.total, 13);
+    assert.equal(blocked.total, 1);
+    assert.equal(blocked.rows[0].status, "blocked");
+    assert.equal(first.stateVersion, "2026-08-28T00:25:30.000Z");
+    assert.equal(searched.rows[0].owner, "南宫婉");
+    const byTitle = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 1, pageSize: 10, sortField: "title", sortDirection: "asc" });
+    assert.equal(byTitle.rows[0].title, "分页专项 10");
+    assert.equal(Object.hasOwn(searched.rows[0], "payload"), false);
+    assert.equal(Object.hasOwn(searched.rows[0], "internalPath"), false);
+  } finally { fixture.close(); }
+});
+
+test("工作台树展开和列表排序偏好使用同一 SQLite 偏好表按人物视角恢复", () => {
+  const fixture = createFixture("evolution-workbench-view-preferences");
+  try {
+    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "__tree__", page: 1, pageSize: 20, keyword: "evolution|manual", status: "", selectedRowId: null }, "2026-08-29T03:00:00.000Z");
+    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "manual-proposal::sort", page: 1, pageSize: 20, keyword: "title", status: "asc", selectedRowId: null }, "2026-08-29T03:00:01.000Z");
+    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "manual-proposal::columns", page: 1, pageSize: 20, keyword: "title=292,status=116,stage=140,owner=112,nextStep=230,updatedAt=160", status: "", selectedRowId: null }, "2026-08-29T03:00:01.500Z");
+    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "hanli", nodeId: "__tree__", page: 1, pageSize: 20, keyword: "audit", status: "", selectedRowId: null }, "2026-08-29T03:00:02.000Z");
+    assert.equal(fixture.repository.getEvolutionWorkbenchPreference("nangong", "__tree__").keyword, "evolution|manual");
+    assert.deepEqual(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-proposal::sort"), { perspective: "nangong", nodeId: "manual-proposal::sort", page: 1, pageSize: 20, keyword: "title", status: "asc", selectedRowId: null, updatedAt: "2026-08-29T03:00:01.000Z" });
+    assert.equal(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-proposal::columns").keyword, "title=292,status=116,stage=140,owner=112,nextStep=230,updatedAt=160");
+    assert.equal(fixture.repository.getEvolutionWorkbenchPreference("hanli", "__tree__").keyword, "audit");
+  } finally { fixture.close(); }
+});
+
+test("专题分发使用 SQLite 幂等日志、全局状态版本和单专题互斥锁", () => {
+  const fixture = createFixture("evolution-mutation-guard");
+  try {
+    const version = "2026-08-29T02:00:00.000Z";
+    const request = { expectedStateVersion: version, idempotencyKey: "dispatch-topic-1-once" };
+    assert.equal(fixture.repository.beginEvolutionMutation("topic-1", "返还南宫婉并分发", request, version), "started");
+    assert.throws(() => fixture.repository.beginEvolutionMutation("topic-1", "返还南宫婉并分发", request, version), /正在处理中/);
+    assert.throws(() => fixture.repository.beginEvolutionMutation("topic-1", "恢复专题", { expectedStateVersion: version, idempotencyKey: "recover-topic-1" }, version), /其他推进或恢复操作/);
+    fixture.repository.completeEvolutionMutation(request.idempotencyKey, "2026-08-29T02:00:01.000Z");
+    assert.equal(fixture.repository.beginEvolutionMutation("topic-1", "返还南宫婉并分发", request, "2026-08-29T02:00:02.000Z"), "completed");
+    assert.throws(() => fixture.repository.beginEvolutionMutation("topic-1", "返还南宫婉并分发", { expectedStateVersion: version, idempotencyKey: "stale-dispatch" }, "2026-08-29T02:00:02.000Z"), /状态已更新/);
+    const retry = { expectedStateVersion: version, idempotencyKey: "retry-after-failure" };
+    assert.equal(fixture.repository.beginEvolutionMutation("topic-2", "返还南宫婉并分发", retry, version), "started");
+    fixture.repository.failEvolutionMutation(retry.idempotencyKey, new Error("任务创建失败"));
+    assert.equal(fixture.repository.beginEvolutionMutation("topic-2", "返还南宫婉并分发", retry, version), "started");
+    fixture.repository.startRuntimeSession(12345, "2026-08-29T02:00:03.000Z");
+    assert.equal(fixture.repository.beginEvolutionMutation("topic-2", "返还南宫婉并分发", retry, version), "started");
+  } finally { fixture.close(); }
 });
 
 test("成员任务心跳超时只登记一次卡住事件并交给有限重试链", () => {

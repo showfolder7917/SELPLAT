@@ -88,20 +88,17 @@ export class CodexConversationSemanticBackfill {
       this.#status = { ...this.#status, discoveredCount: candidates.length, targetCount: candidates.length, message: candidates.length ? "正在生成 AI 回答摘要与主题…" : "没有需要补齐的完整回合。" };
       for (let index = 0; index < candidates.length; index += ANALYSIS_BATCH_SIZE) {
         const batch = candidates.slice(index, index + ANALYSIS_BATCH_SIZE);
-        const metadata = await this.#analyzer(batch);
-        const metadataByTurn = validateMetadataBatch(batch, metadata);
-        for (const candidate of batch) {
-          const item = metadataByTurn.get(candidate.turnId)!;
-          const inserted = this.#writeSummary(candidate, item);
-          this.#status = {
-            ...this.#status,
-            processedCount: this.#status.processedCount + 1,
-            insertedCount: this.#status.insertedCount + inserted,
-            message: `已处理 ${this.#status.processedCount + 1}/${candidates.length} 轮`,
-          };
-        }
+        await this.#processBatch(batch, candidates.length);
       }
-      this.#status = { ...this.#status, state: "completed", message: `补齐完成：新增 ${this.#status.insertedCount} 条 AI 摘要。`, completedAt: new Date().toISOString() };
+      const failedCount = this.#status.failedCount;
+      this.#status = {
+        ...this.#status,
+        state: failedCount ? "failed" : "completed",
+        message: failedCount
+          ? `本轮补齐结束：新增 ${this.#status.insertedCount} 条，${failedCount} 轮未通过校验，可再次点击续跑。`
+          : `补齐完成：新增 ${this.#status.insertedCount} 条 AI 摘要。`,
+        completedAt: new Date().toISOString(),
+      };
     } catch (error) {
       this.#status = {
         ...this.#status,
@@ -111,6 +108,53 @@ export class CodexConversationSemanticBackfill {
         completedAt: new Date().toISOString(),
       };
     }
+  }
+
+  /** 批量返回异常时拆成单轮重试，隔离坏标签，确保同批及后续的合格摘要仍可入库。 */
+  async #processBatch(batch: readonly CodexSemanticCandidate[], targetCount: number): Promise<void> {
+    let metadataByTurn: Map<string, CodexSemanticMetadata>;
+    try {
+      const metadata = await this.#analyzer(batch);
+      metadataByTurn = validateMetadataBatch(batch, metadata);
+    } catch (batchError) {
+      if (batch.length === 1) {
+        this.#recordCandidateFailure(targetCount, batchError);
+        return;
+      }
+      for (const candidate of batch) {
+        try {
+          const metadata = await this.#analyzer([candidate]);
+          const metadataByTurn = validateMetadataBatch([candidate], metadata);
+          this.#commitCandidate(candidate, metadataByTurn.get(candidate.turnId)!, targetCount);
+        } catch (candidateError) {
+          this.#recordCandidateFailure(targetCount, candidateError);
+        }
+      }
+      return;
+    }
+    // 数据库写入异常仍由外层终止任务，避免把存储故障误判成可跳过的模型字段问题。
+    for (const candidate of batch) this.#commitCandidate(candidate, metadataByTurn.get(candidate.turnId)!, targetCount);
+  }
+
+  #commitCandidate(candidate: CodexSemanticCandidate, metadata: CodexSemanticMetadata, targetCount: number): void {
+    const inserted = this.#writeSummary(candidate, metadata);
+    const processedCount = this.#status.processedCount + 1;
+    this.#status = {
+      ...this.#status,
+      processedCount,
+      insertedCount: this.#status.insertedCount + inserted,
+      message: `已处理 ${processedCount}/${targetCount} 轮`,
+    };
+  }
+
+  #recordCandidateFailure(targetCount: number, error: unknown): void {
+    const processedCount = this.#status.processedCount + 1;
+    this.#status = {
+      ...this.#status,
+      processedCount,
+      failedCount: this.#status.failedCount + 1,
+      message: `已处理 ${processedCount}/${targetCount} 轮；最近失败：${error instanceof Error ? error.message : String(error)}`,
+    };
   }
 
   #messageExists(sourceMessageId: string): boolean {

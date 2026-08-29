@@ -26,8 +26,17 @@
     min-height: 0;
     overflow: hidden;
     background: var(--sel-theme-workspace-surface-soft);
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
 }
+
+.selgrid-standalone-query {
+    min-width: 0;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--sel-theme-workspace-line);
+    background: var(--sel-theme-workspace-surface);
+}
+
+.selgrid-standalone-query:has(.selsearch-root:empty) { display: none; }
 
 .selgrid-standalone-shell .selgrid-board-shell {
     min-height: 0;

@@ -106,6 +106,14 @@
       "types": "./src/theme/css.d.ts",
       "default": "./src/components/dialog/selDialog.css"
     },
+    "./components/disclosure": {
+      "types": "./src/runtime.d.ts",
+      "default": "./src/components/disclosure/selDisclosure.js"
+    },
+    "./components/disclosure/styles": {
+      "types": "./src/theme/css.d.ts",
+      "default": "./src/components/disclosure/selDisclosure.css"
+    },
     "./components/dropdown-menu": {
       "types": "./src/runtime.d.ts",
       "default": "./src/components/dropdown/selDropdownMenu.js"

@@ -23,7 +23,6 @@ type CorpusMessage = {
   messageId: string;
   threadId: string;
   turnId: string;
-  sequenceNumber: number;
   sourceRole: "user" | "codex";
   content: string;
   contentRetention: "exact" | "preview-300";
@@ -200,7 +199,9 @@ function prepareCorpusStatements(connection: DatabaseSync): CorpusStatements {
         (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId,
          sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
       VALUES ($corpusMessageId, $corpusTopicId, 'codex', $threadId, $turnId, $messageId,
-        $sequenceNumber, $sourceRole, $content, $contentRetention, $evidenceTier, $createdAt, $recordedAt)
+        (SELECT COALESCE(MAX(sequenceNumber), -1) + 1 FROM AiDesktopTrainingCorpusMessage
+          WHERE source='codex' AND sourceConversationId=$threadId),
+        $sourceRole, $content, $contentRetention, $evidenceTier, $createdAt, $recordedAt)
       ON CONFLICT(corpusMessageId) DO NOTHING
     `),
     upsertCheckpoint: connection.prepare(`
@@ -231,13 +232,13 @@ function writeCorpusMessages(statements: CorpusStatements, messages: CorpusMessa
   });
   let inserted = 0;
   for (const message of messages) {
+    // 历史 AI 摘要也会向同一会话追加记录；由数据库现有尾号统一分配序号，避免后续 rollout 消息占用摘要已经使用的位置。
     const result = statements.upsertMessage.run({
       $corpusMessageId: `corpus:codex:${message.messageId}`,
       $corpusTopicId: message.topic.topicId,
       $threadId: message.threadId,
       $turnId: message.turnId,
       $messageId: message.messageId,
-      $sequenceNumber: message.sequenceNumber,
       $sourceRole: message.sourceRole,
       $content: message.content,
       $contentRetention: message.contentRetention,
@@ -350,7 +351,6 @@ function appendVisibleRecord(
       messageId,
       threadId,
       turnId: state.currentTurnId,
-      sequenceNumber: messages.length,
       sourceRole: "user",
       content: userContent,
       contentRetention: "exact",
@@ -377,7 +377,6 @@ function appendVisibleRecord(
     messageId,
     threadId,
     turnId: state.currentTurnId,
-    sequenceNumber: messages.length,
     sourceRole: "codex",
     content: metadata.summary,
     contentRetention: "preview-300",

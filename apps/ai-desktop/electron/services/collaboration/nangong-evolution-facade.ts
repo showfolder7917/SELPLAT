@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 
 import type { CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration/collaboration-memory.js";
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionMutationRequest, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, GenerateNangongTopicDraftRequest, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, QueryEvolutionWorkbenchRequest, ReviseEvolutionProposalRequest, SaveEvolutionWorkbenchPreferenceRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { SendMessageResponse } from "../../../contracts/codex/conversation.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
+import { EvolutionMutationCoordinator } from "./evolution-mutation-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
 
 export interface NangongEvolutionFacadeOptions {
@@ -21,9 +22,16 @@ export interface NangongEvolutionFacadeOptions {
   };
   planDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   auditDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
+  planAcceptance?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   memory?: CollaborationMemoryPort | null;
   readDossier?: (topicId: string, state: NangongEvolutionState) => EvolutionTopicDossier;
+  queryWorkbench?: (request: QueryEvolutionWorkbenchRequest) => EvolutionWorkbenchPage;
+  getWorkbenchPreference?: (perspective: "nangong" | "hanli", nodeId: string) => EvolutionWorkbenchPreference | null;
+  saveWorkbenchPreference?: (request: SaveEvolutionWorkbenchPreferenceRequest) => EvolutionWorkbenchPreference;
+  beginMutation?: (topicId: string, action: string, request: EvolutionMutationRequest, currentStateVersion: string) => "started" | "completed";
+  completeMutation?: (idempotencyKey: string, resultStateVersion: string) => void;
+  failMutation?: (idempotencyKey: string, error: unknown) => void;
   newConversationRetryDelaysMs?: number[];
 }
 
@@ -36,14 +44,19 @@ export class NangongEvolutionFacade {
   readonly #nangongDeliberation: NonNullable<NangongEvolutionFacadeOptions["nangongDeliberation"]>;
   readonly #planDistribution: NonNullable<NangongEvolutionFacadeOptions["planDistribution"]>;
   readonly #auditDistribution: NonNullable<NangongEvolutionFacadeOptions["auditDistribution"]>;
+  readonly #planAcceptance: NonNullable<NangongEvolutionFacadeOptions["planAcceptance"]>;
   readonly #recordEvent: NangongEvolutionFacadeOptions["recordEvent"];
   readonly #memory: CollaborationMemoryPort | null;
   readonly #readDossier: NangongEvolutionFacadeOptions["readDossier"];
+  readonly #queryWorkbench: NangongEvolutionFacadeOptions["queryWorkbench"];
+  readonly #getWorkbenchPreference: NangongEvolutionFacadeOptions["getWorkbenchPreference"];
+  readonly #saveWorkbenchPreference: NangongEvolutionFacadeOptions["saveWorkbenchPreference"];
+  readonly #mutations: EvolutionMutationCoordinator;
   readonly #newConversationRetryDelaysMs: number[];
   #timer: ReturnType<typeof setInterval> | null = null;
   #running = false;
 
-  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#auditDistribution = options.auditDistribution || (async () => { throw new Error("令狐分发合理性审计尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
+  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#auditDistribution = options.auditDistribution || (async () => { throw new Error("令狐分发合理性审计尚未接入。"); }); this.#planAcceptance = options.planAcceptance || (async () => { throw new Error("韩立界面验收计划能力尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#queryWorkbench = options.queryWorkbench; this.#getWorkbenchPreference = options.getWorkbenchPreference; this.#saveWorkbenchPreference = options.saveWorkbenchPreference; this.#mutations = new EvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation }); this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
   state(): NangongEvolutionState { return this.#store.state(); }
   dossier(topicId: string): EvolutionTopicDossier {
     const state = this.state();
@@ -52,6 +65,15 @@ export class NangongEvolutionFacade {
     if (!topic) throw new Error("专题池中不存在该专题。 ");
     const deliberation = topic.deliberationId ? state.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
     return { topic, deliberation, proposals: state.proposals.filter((item) => item.topicId === topicId), archiveRecords: state.archiveRecords.filter((item) => item.topicId === topicId || item.deliberationId === topic.deliberationId), executionRecords: [] };
+  }
+  queryWorkbench(request: QueryEvolutionWorkbenchRequest): EvolutionWorkbenchPage {
+    if (!this.#queryWorkbench) throw new Error("专题演化数据库读模型不可用，请检查数据库初始化状态。");
+    return this.#queryWorkbench(request);
+  }
+  getWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): EvolutionWorkbenchPreference | null { return this.#getWorkbenchPreference?.(perspective, nodeId) || null; }
+  saveWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceRequest): EvolutionWorkbenchPreference {
+    if (!this.#saveWorkbenchPreference) throw new Error("专题演化视图偏好数据库不可用。");
+    return this.#saveWorkbenchPreference(request);
   }
   subscribe(listener: Parameters<NangongEvolutionStore["subscribe"]>[0]) { return this.#store.subscribe(listener); }
   start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
@@ -71,12 +93,14 @@ export class NangongEvolutionFacade {
     state = this.#store.recordConversationIntent(userMessage.messageId, parsed.topic.userIntent);
     const nangongMessage = state.conversation.messages.at(-1)!;
     this.#memory?.registerRound(state.conversation, userMessage.messageId, nangongMessage.messageId, parsed.topic);
+    if (request.topicId) state = this.#store.recordTopicConversation(request.topicId, userMessage.messageId, nangongMessage.messageId);
     this.#recordEvent("nangong.evolution.conversation_replied", {
       conversationId: state.conversation.conversationId,
       messageCount: state.conversation.messages.length,
       conversationTopicTitle: parsed.topic.title,
       conversationTopicType: parsed.topic.type,
       switchedTopic: parsed.topic.switchTopic,
+      topicId: request.topicId || null,
     });
     return state;
   }
@@ -111,15 +135,46 @@ export class NangongEvolutionFacade {
   updateTopic(topicId: string, request: UpdateEvolutionTopicRequest): NangongEvolutionState { return this.#store.updateTopic(topicId, request); }
   createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): NangongEvolutionState { return this.#store.createLinghuRepairProposal(request); }
   decideProposal(proposalId: string, request: DecideEvolutionProposalRequest): NangongEvolutionState {
-    return this.#store.decide(proposalId, request.decision, request.advice || "", "manual-user", [], request.feedbackTarget || "proposal-content", request.capabilityScope || "");
+    const proposal = requireProposal(this.state(), proposalId);
+    return this.#mutations.run(proposal.topicId, "人工审批", request.mutation, () => this.state().updatedAt, () => this.state(), () => this.#store.decide(proposalId, request.decision, request.advice || "", "manual-user", [], request.feedbackTarget || "proposal-content", request.capabilityScope || ""));
   }
   decideResult(proposalId: string, request: DecideEvolutionResultRequest): NangongEvolutionState {
-    return this.#store.decideResult(proposalId, request.decision, request.advice || "");
+    const proposal = requireProposal(this.state(), proposalId);
+    return this.#mutations.run(proposal.topicId, "结果验收", request.mutation, () => this.state().updatedAt, () => this.state(), () => this.#store.decideResult(proposalId, request.decision, request.advice || ""));
   }
+
+  /** 只让韩立根据当前专题语义生成检查计划；生成动作不会自动判定通过或改变审批线路。 */
+  async generateAcceptancePlan(proposalId: string): Promise<HanLiAcceptancePlan> {
+    const state = this.state();
+    const proposal = requireProposal(state, proposalId);
+    if (proposal.status !== "pending-acceptance") throw new Error("只有等待结果验收的提案才能生成韩立界面验收计划。 ");
+    const topic = state.topics.find((item) => item.topicId === proposal.topicId);
+    if (!topic) throw new Error("验收计划对应的专题不存在。 ");
+    const priorFindings = state.archiveRecords.filter((item) => item.eventType === "acceptance.experience_promoted").slice(-10).map((item) => item.payload);
+    const response = await this.#planAcceptance(acceptancePlanningPrompt(topic, proposal, priorFindings), topic.workspaceState, topic.locale);
+    const plan = parseAcceptancePlan(response, topic.topicId, proposal.proposalId);
+    this.#store.recordAcceptancePlan(plan);
+    this.#recordEvent("hanli.acceptance.plan_generated", { topicId: topic.topicId, proposalId, planId: plan.planId, checkCount: plan.checks.length });
+    return plan;
+  }
+  acceptancePlan(planId: string): HanLiAcceptancePlan {
+    for (const record of [...this.state().archiveRecords].reverse()) {
+      const value = record.eventType === "acceptance.plan_generated" ? record.payload.acceptancePlan : null;
+      if (value && typeof value === "object" && (value as HanLiAcceptancePlan).planId === planId) return structuredClone(value as HanLiAcceptancePlan);
+    }
+    throw new Error("韩立验收计划不存在或已清理。 ");
+  }
+  recordAcceptanceRun(run: HanLiAcceptanceRun): NangongEvolutionState {
+    const plan = this.acceptancePlan(run.planId);
+    if (plan.topicId !== run.topicId || plan.proposalId !== run.proposalId) throw new Error("真实验收记录与计划关联不一致。 ");
+    return this.#store.recordAcceptanceRun(run);
+  }
+
   reviseProposal(proposalId: string, request: ReviseEvolutionProposalRequest): NangongEvolutionState {
+    const proposal = requireProposal(this.state(), proposalId);
     const member = this.#collaboration.state().members.find((item) => item.memberId === request.submitterMemberId && item.enabled);
     if (!member) throw new Error("重新提交人不是当前已启用的协同人物。");
-    return this.#store.revise(proposalId, request, member.displayName);
+    return this.#mutations.run(proposal.topicId, "返修重提", request.mutation, () => this.state().updatedAt, () => this.state(), () => this.#store.revise(proposalId, request, member.displayName));
   }
   /** 自动职责只复用通用修订合同；已有子版本时返回现状，避免定时检测重复提交。 */
   reviseReturnedProposalAutomatically(proposalId: string): NangongEvolutionState {
@@ -132,6 +187,7 @@ export class NangongEvolutionFacade {
       ? `\n\n自身能力升级：修改${proposal.submitterDisplayName}自身使用的规则、提示、工作流或实现，能力范围为“${feedback.capabilityScope}”。`
       : "";
     const revised = this.reviseProposal(proposal.proposalId, {
+      mutation: { expectedStateVersion: state.updatedAt, idempotencyKey: `automatic-revise:${proposal.proposalId}:${state.updatedAt}` },
       submitterMemberId: proposal.submitterMemberId,
       content: `${proposal.content}\n\n根据审批意见修订：${feedback.advice}${capabilityInstruction}`,
       evidence: [...proposal.evidence, `人工审批事实：${feedback.advice}`],
@@ -143,7 +199,14 @@ export class NangongEvolutionFacade {
     return revised;
   }
 
-  autoApprove(proposalId: string): NangongEvolutionState {
+  autoApprove(proposalId: string, request?: EvolutionMutationRequest): NangongEvolutionState {
+    const state = this.state();
+    const proposal = requireProposal(state, proposalId);
+    const mutation = request || { expectedStateVersion: state.updatedAt, idempotencyKey: `automatic-approve:${proposalId}:${state.updatedAt}` };
+    return this.#mutations.run(proposal.topicId, "韩立审批", mutation, () => this.state().updatedAt, () => this.state(), () => this.#autoApproveOnce(proposalId));
+  }
+
+  #autoApproveOnce(proposalId: string): NangongEvolutionState {
     const state = this.state();
     const proposal = requireProposal(state, proposalId);
     const manualHistory = state.proposals.flatMap((item) => item.approvals.map((approval) => ({ item, approval })))
@@ -163,7 +226,14 @@ export class NangongEvolutionFacade {
     return this.#store.decide(proposalId, decision, `参考同类型人工审批 ${latest.approvalId}，按用户历史关注点和审批习惯作出决定${adviceContext}。`, "automatic-han-li", [latest.approvalId]);
   }
 
-  async dispatch(proposalId: string): Promise<NangongEvolutionState> {
+  async dispatch(proposalId: string, request?: EvolutionMutationRequest): Promise<NangongEvolutionState> {
+    const initialState = this.state();
+    const initialProposal = requireProposal(initialState, proposalId);
+    const mutation = request || { expectedStateVersion: initialState.updatedAt, idempotencyKey: `automatic-dispatch:${proposalId}:${initialState.updatedAt}` };
+    return this.#mutations.runAsync(initialProposal.topicId, "返还南宫婉并分发", mutation, () => this.state().updatedAt, () => this.state(), () => this.#dispatchOnce(proposalId));
+  }
+
+  async #dispatchOnce(proposalId: string): Promise<NangongEvolutionState> {
     let state = this.state();
     let proposal = requireProposal(state, proposalId);
     const topic = state.topics.find((item) => item.topicId === proposal.topicId);
@@ -195,7 +265,10 @@ export class NangongEvolutionFacade {
       ? state.proposals.flatMap((item) => item.approvals).find((approval) => approval.approvalId === proposal.revisionFeedbackApprovalId)
       : null;
     const targetMember = proposal.targetMemberId ? this.#collaboration.state().members.find((member) => member.memberId === proposal.targetMemberId) : null;
+    const existingTaskTitles = new Set((this.#collaboration.state?.().tasks || []).filter((task) => task.evolutionProposalId === proposal.proposalId).map((task) => task.snapshot.title));
     for (const [index, unit] of proposal.distributionPlan.units.entries()) {
+      // 失败重试从已持久化的任务关联继续，已创建的任务单元不得再次分发。
+      if (existingTaskTitles.has(unit.title)) continue;
       const selfUpgradeContext = proposal.purpose === "self-capability-upgrade"
         ? `\n\n自身能力升级目标：${proposal.targetMemberDisplayName}（${proposal.targetMemberId}）\n能力范围：${proposal.capabilityScope}\n原人工反馈：${revisionFeedback?.advice || "—"}\n必须修改该人物自身使用的规则、提示、工作流或实现，并用回归测试证明以后同类提交会更具体。`
         : "";
@@ -216,6 +289,7 @@ export class NangongEvolutionFacade {
       const taskId = next.tasks.find((task) => task.evolutionProposalId === proposal.proposalId && !distributedTaskIds.includes(task.taskId))?.taskId;
       if (!taskId) throw new Error("协同任务已经创建，但未能建立提案关联。");
       distributedTaskIds.push(taskId);
+      existingTaskTitles.add(unit.title);
       this.#recordEvent(`${proposal.origin}.evolution.proposal_distributed`, { proposalId, topicId: topic.topicId, unit: unit.title, index }, taskId);
       result = this.#store.markDispatched(proposalId, taskId);
     }
@@ -422,6 +496,52 @@ function parseTopicDraft(text: string): NangongTopicDraft {
   } catch {
     throw new Error("南宫婉生成的课题草稿不完整，请重试。");
   }
+}
+
+function acceptancePlanningPrompt(topic: NangongEvolutionState["topics"][number], proposal: EvolutionProposal, priorFindings: Record<string, unknown>[]): string {
+  return [
+    "你是韩立，负责在令狐门禁完成后制定真实应用界面验收计划。只制定计划，不声称已打开应用或已经通过。",
+    "必须从本次专题事实中理解用户关注点，并主动覆盖容易遗漏的交互细节：入口可达、按钮响应、状态切换、表格分页与滚动、弹窗或侧栏溢出、窗口缩放、键盘操作、加载/空态/错误态、数据写入与刷新一致性。不要机械复制固定清单；只保留与本专题有关的检查，并补充你根据界面影响合理推断的隐含检查。",
+    "每项必须能在真实应用里执行并留下证据，不得用源码、构建成功或测试报告替代操作检查。若项目经验为空，不得编造历史经验。",
+    `专题：${JSON.stringify({ title: topic.title, goal: topic.goal, scope: topic.scope, exclusions: topic.exclusions, evidence: topic.evidence, acceptanceCriteria: topic.acceptanceCriteria })}`,
+    `提案：${JSON.stringify({ title: proposal.title, content: proposal.content, impactScope: proposal.impactScope, risks: proposal.risks, resultSummary: proposal.resultSummary })}`,
+    `已验证项目经验：${JSON.stringify(priorFindings)}`,
+    "每个检查项还必须给出受控 operations，只能使用：focus-window；resize-window(width,height)；click(target)；scroll(target,direction,amount)；press-key(target,key)；inspect-text(text)；capture(label)。click 只用于导航、展开、切换等无破坏操作，禁止生成删除、清空、提交审批、分发、验收通过等写动作。",
+    "仅返回 JSON：{\"summary\":\"本次验收重点\",\"concerns\":[\"用户关注点\"],\"checks\":[{\"category\":\"AI自由判断类别\",\"target\":\"页面或控件\",\"action\":\"真实操作步骤\",\"expected\":\"可观察预期\",\"evidenceRequired\":\"截图、状态或数据证据\",\"operations\":[{\"type\":\"capture\",\"label\":\"初始状态\"}]}]}。checks 至少 2 项、最多 30 项，每项至少一个 operation。",
+  ].join("\n\n");
+}
+
+function parseAcceptancePlan(text: string, topicId: string, proposalId: string): HanLiAcceptancePlan {
+  const value = parseJsonObject(text);
+  const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 2_000) : "";
+  const concerns = normalizeDraftList(value.concerns).slice(0, 20);
+  const rawChecks = Array.isArray(value.checks) ? value.checks.slice(0, 30) : [];
+  const checks = rawChecks.flatMap((raw, index) => {
+    if (!raw || typeof raw !== "object") return [];
+    const item = raw as Record<string, unknown>;
+    const category = typeof item.category === "string" ? item.category.trim().slice(0, 120) : "";
+    const target = typeof item.target === "string" ? item.target.trim().slice(0, 300) : "";
+    const action = typeof item.action === "string" ? item.action.trim().slice(0, 2_000) : "";
+    const expected = typeof item.expected === "string" ? item.expected.trim().slice(0, 2_000) : "";
+    const evidenceRequired = typeof item.evidenceRequired === "string" ? item.evidenceRequired.trim().slice(0, 1_000) : "";
+    const operations = Array.isArray(item.operations) ? item.operations.slice(0, 20).flatMap(parseAcceptanceOperation) : [];
+    return category && target && action && expected && evidenceRequired && operations.length ? [{ checkId: `check-${index + 1}`, category, target, action, expected, evidenceRequired, operations }] : [];
+  });
+  if (!summary || !concerns.length || checks.length < 2) throw new Error("韩立没有形成包含用户关注点和真实操作证据的有效验收计划。 ");
+  return { version: 1, planId: `hanli-acceptance-plan-${randomUUID()}`, topicId, proposalId, summary, concerns, checks, generatedAt: new Date().toISOString() };
+}
+
+function parseAcceptanceOperation(raw: unknown): HanLiAcceptancePlan["checks"][number]["operations"] {
+  if (!raw || typeof raw !== "object") return [];
+  const item = raw as Record<string, unknown>;
+  if (item.type === "focus-window") return [{ type: "focus-window" }];
+  if (item.type === "resize-window" && Number.isInteger(item.width) && Number.isInteger(item.height)) return [{ type: "resize-window", width: Number(item.width), height: Number(item.height) }];
+  if (item.type === "click" && typeof item.target === "string" && item.target.trim()) return [{ type: "click", target: item.target.trim().slice(0, 200) }];
+  if (item.type === "scroll" && typeof item.target === "string" && (item.direction === "up" || item.direction === "down") && Number.isFinite(item.amount)) return [{ type: "scroll", target: item.target.trim().slice(0, 200), direction: item.direction, amount: Math.max(40, Math.min(2_000, Math.round(Number(item.amount)))) }];
+  if (item.type === "press-key" && ["Tab", "Enter", "Escape", "ArrowDown", "ArrowUp", "PageDown", "PageUp"].includes(String(item.key))) return [{ type: "press-key", target: typeof item.target === "string" ? item.target.trim().slice(0, 200) : undefined, key: item.key as "Tab" | "Enter" | "Escape" | "ArrowDown" | "ArrowUp" | "PageDown" | "PageUp" }];
+  if (item.type === "inspect-text" && typeof item.text === "string" && item.text.trim()) return [{ type: "inspect-text", text: item.text.trim().slice(0, 500) }];
+  if (item.type === "capture" && typeof item.label === "string" && item.label.trim()) return [{ type: "capture", label: item.label.trim().slice(0, 160) }];
+  return [];
 }
 
 const CONVERSATION_TOPIC_META_PREFIX = "NANGONG_TOPIC_META=";

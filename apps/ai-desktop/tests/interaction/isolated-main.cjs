@@ -38,10 +38,10 @@ app.whenReady().then(async () => {
   const productionFile = process.env.AI_DESKTOP_INTERACTION_FILE;
   if (!productionFile) throw new Error("生产桌面交互测试缺少 AI_DESKTOP_INTERACTION_FILE。 ");
   let evolutionWindow = null;
-  ipcMain.handle("desktop:test-open-evolution-workspace", async (_event, perspective) => {
-    if (perspective !== "nangong" && perspective !== "hanli") throw new Error("Invalid evolution perspective.");
+  ipcMain.handle("desktop:test-open-evolution-workspace", async (_event, location) => {
+    if (!location || (location.perspective !== "nangong" && location.perspective !== "hanli")) throw new Error("Invalid evolution workspace location.");
     if (evolutionWindow && !evolutionWindow.isDestroyed()) {
-      evolutionWindow.webContents.send("desktop:evolution-workspace-perspective", perspective);
+      evolutionWindow.webContents.send("desktop:evolution-workspace-location", location);
       evolutionWindow.show();
       evolutionWindow.focus();
       return;
@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
       webPreferences: { preload: path.join(__dirname, "isolated-preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
     evolutionWindow.once("closed", () => { evolutionWindow = null; });
-    await evolutionWindow.loadFile(productionFile, { query: { mode: "evolution-workspace", perspective } });
+    await evolutionWindow.loadFile(productionFile, { query: { mode: "evolution-workspace", perspective: location.perspective, node: location.nodeId || "", page: String(location.page || 1), pageSize: String(location.pageSize || 20), keyword: location.keyword || "", status: location.status || "", selected: location.selectedRowId || "" } });
     evolutionWindow.show();
   });
   await window.loadFile(productionFile);

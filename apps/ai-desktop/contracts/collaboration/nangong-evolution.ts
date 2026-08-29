@@ -21,6 +21,108 @@ export type EvolutionArchiveActor = "han-li" | "nangong-wan" | "codex" | "linghu
 export type EvolutionArchiveCategory = "source" | "deliberation" | "topic" | "proposal" | "approval" | "distribution" | "execution" | "test" | "release" | "acceptance" | "recovery";
 export type HanLiDeliberationStatus = "questioning" | "ready-to-establish" | "established" | "blocked";
 
+/** 工作台叶节点使用统一数据库读模型；业务动作仍由原有审批、分发和恢复命令处理。 */
+export type EvolutionWorkbenchView =
+  | "topics"
+  | "deliberations"
+  | "pending-approvals"
+  | "approvals"
+  | "proposals"
+  | "tasks"
+  | "releases"
+  | "archives"
+  | "automation-runs"
+  | "recovery"
+  | "exceptions";
+
+export interface QueryEvolutionWorkbenchRequest {
+  view: EvolutionWorkbenchView;
+  page: number;
+  pageSize: number;
+  keyword?: string;
+  status?: string;
+  sortField?: "updatedAt" | "createdAt" | "title" | "status";
+  sortDirection?: "asc" | "desc";
+}
+
+/** 每行只公开人可读字段和稳定业务关联，不把原始 JSON、内部路径或机器字段交给页面。 */
+export interface EvolutionWorkbenchRow {
+  id: string;
+  topicId: string | null;
+  proposalId: string | null;
+  taskId: string | null;
+  title: string;
+  status: string;
+  stage: string;
+  owner: string;
+  blockedReason: string | null;
+  recoveryPoint: string | null;
+  nextStep: string;
+  updatedAt: string;
+}
+
+export interface EvolutionWorkbenchPage {
+  view: EvolutionWorkbenchView;
+  page: number;
+  pageSize: number;
+  total: number;
+  rows: EvolutionWorkbenchRow[];
+  stateVersion: string;
+  generatedAt: string;
+}
+
+/**
+ * 工作台只消费受影响实体的轻量变化；完整专题对象继续由既有状态事件服务审批和执行页面。
+ * previousStateVersion 与当前页版本不一致时，页面必须重新查询当前页，禁止用旧状态覆盖新事实。
+ */
+export interface EvolutionWorkbenchChangeEvent {
+  entityType: "topic" | "deliberation" | "proposal" | "automation" | "workspace" | "conversation";
+  entityId: string;
+  topicId: string | null;
+  proposalId: string | null;
+  reason: string;
+  previousState: string | null;
+  currentState: string | null;
+  currentStage: string | null;
+  currentOwner: string | null;
+  blockingReason: string | null;
+  nextAction: string | null;
+  previousStateVersion: string;
+  stateVersion: string;
+  updatedAt: string;
+  affectedViews: EvolutionWorkbenchView[];
+}
+
+export interface EvolutionWorkbenchPreference {
+  perspective: "nangong" | "hanli";
+  nodeId: string;
+  page: number;
+  pageSize: number;
+  keyword: string;
+  status: string;
+  selectedRowId: string | null;
+  updatedAt: string;
+}
+
+export type SaveEvolutionWorkbenchPreferenceRequest = Omit<EvolutionWorkbenchPreference, "updatedAt">;
+
+/** 独立工作台的稳定位置同时描述人物、树节点、列表查询和当前记录，可写入窗口地址并在复用窗口时重新定位。 */
+export interface EvolutionWorkspaceLocation {
+  perspective: "nangong" | "hanli";
+  nodeId: string | null;
+  page: number;
+  pageSize: number;
+  keyword: string;
+  status: string;
+  selectedRowId: string | null;
+}
+
+/** 专题写动作必须携带页面读取到的全局版本和一次性幂等键。 */
+export interface EvolutionMutationRequest {
+  expectedStateVersion: string;
+  idempotencyKey: string;
+}
+
 /** 对话库原文在研讨开始时冻结；来源表以后迁移或清理也不能破坏专题证据。 */
 export interface EvolutionSourceMessageSnapshot {
   snapshotId: string;
@@ -191,6 +293,94 @@ export interface EvolutionDistributionPlan {
   plannedAt: string;
 }
 
+/** 韩立依据专题事实生成的真实界面检查项；字段保持开放语义，不用固定枚举替代判断。 */
+export interface HanLiAcceptanceCheck {
+  checkId: string;
+  category: string;
+  target: string;
+  action: string;
+  expected: string;
+  evidenceRequired: string;
+  operations: HanLiAcceptanceOperation[];
+}
+
+export type HanLiAcceptanceOperation =
+  | { type: "focus-window" }
+  | { type: "resize-window"; width: number; height: number }
+  | { type: "click"; target: string }
+  | { type: "scroll"; target: string; direction: "up" | "down"; amount: number }
+  | { type: "press-key"; target?: string; key: "Tab" | "Enter" | "Escape" | "ArrowDown" | "ArrowUp" | "PageDown" | "PageUp" }
+  | { type: "inspect-text"; text: string }
+  | { type: "capture"; label: string };
+
+/** 验收计划只描述待执行检查，不等同于测试通过或结果验收。 */
+export interface HanLiAcceptancePlan {
+  version: 1;
+  planId: string;
+  topicId: string;
+  proposalId: string;
+  summary: string;
+  concerns: string[];
+  checks: HanLiAcceptanceCheck[];
+  generatedAt: string;
+}
+
+export interface HanLiAcceptanceStepResult {
+  checkId: string;
+  operationIndex: number;
+  operation: HanLiAcceptanceOperation;
+  status: "passed" | "failed" | "blocked";
+  actual: string;
+  screenshotAttachmentId: string | null;
+  occurredAt: string;
+}
+
+/** 真实应用检查运行只保存事实证据，失败不会直接改变审批结果。 */
+export interface HanLiAcceptanceRun {
+  version: 1;
+  runId: string;
+  planId: string;
+  topicId: string;
+  proposalId: string;
+  status: "passed" | "failed" | "blocked";
+  windowTitle: string;
+  initialBounds: { x: number; y: number; width: number; height: number };
+  finalBounds: { x: number; y: number; width: number; height: number };
+  stepResults: HanLiAcceptanceStepResult[];
+  evidenceAttachmentIds: string[];
+  startedAt: string;
+  completedAt: string;
+}
+
+/** 真实检查失败返还南宫婉时使用结构化证据，避免只剩一句无法复现的审批意见。 */
+export interface HanLiAcceptanceFailureEvidence {
+  evidenceId: string;
+  runId: string;
+  planId: string;
+  checkId: string;
+  target: string;
+  severity: "blocking" | "major";
+  reproductionOperations: HanLiAcceptanceOperation[];
+  actual: string;
+  expected: string;
+  screenshotAttachmentIds: string[];
+}
+
+/** 修复并复验成功只形成项目候选经验；没有跨场景治理前不得冒充稳定规则。 */
+export interface HanLiAcceptanceExperienceCandidate {
+  candidateId: string;
+  status: "candidate" | "validated" | "degraded" | "retired";
+  title: string;
+  applicableScope: string[];
+  sourceFailureEvidenceIds: string[];
+  failedProposalId: string;
+  correctionProposalId: string;
+  failedRunId: string;
+  passedRetestRunId: string;
+  counterexampleCount: number;
+  createdAt: string;
+}
+
 export interface NangongEvolutionState {
   version: 8;
   automaticEvolutionEnabled: boolean;
@@ -232,7 +422,7 @@ export interface ConfigureEvolutionAutomationRequest {
   locale?: Locale;
 }
 
-export type EvolutionAutomationAction = "start" | "pause" | "resume" | "stop";
+export type EvolutionAutomationAction = "start" | "pause" | "resume" | "stop" | "handover";
 
 export interface NangongConversationMessage {
   messageId: string;
@@ -263,6 +453,8 @@ export interface CreateEvolutionTopicRequest {
 export interface SendNangongConversationMessageRequest {
   message: string;
   attachmentIds?: string[];
+  /** 从专题执行群发言时只保存稳定专题关联；普通南宫婉对话保持为空。 */
+  topicId?: string;
   workspaceState: WorkspaceState;
   locale: Locale;
 }
@@ -325,6 +517,7 @@ export interface CreateEvolutionProposalRequest {
 }
 
 export interface DecideEvolutionProposalRequest {
+  mutation: EvolutionMutationRequest;
   decision: EvolutionApprovalDecision;
   advice?: string;
   feedbackTarget?: EvolutionFeedbackTarget;
@@ -332,12 +525,14 @@ export interface DecideEvolutionProposalRequest {
 }
 
 export interface DecideEvolutionResultRequest {
+  mutation: EvolutionMutationRequest;
   decision: EvolutionApprovalDecision;
   advice?: string;
 }
 
 /** 原提交人依据人工意见补充调查，并以不可覆盖的新版本重新提交。 */
 export interface ReviseEvolutionProposalRequest {
+  mutation: EvolutionMutationRequest;
   submitterMemberId: string;
   content: string;
   evidence: string[];

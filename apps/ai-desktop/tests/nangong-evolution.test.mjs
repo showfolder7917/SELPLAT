@@ -5,6 +5,7 @@ import test from "node:test";
 
 import { NangongEvolutionFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/nangong-evolution-facade.js";
 import { NangongEvolutionStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/nangong-evolution-store.js";
+import { HanLiRealAppAcceptanceExecutor } from "../../../build/ai-desktop/electron/electron/services/collaboration/hanli-real-app-acceptance-executor.js";
 import { controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });
@@ -12,11 +13,13 @@ const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT
 const nangongPromptSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
 function topicRequest(title = "协同审批分层") { return { title, goal: "把演化方向审批从执行审核中独立出来", scope: ["AI Desktop"], exclusions: ["其他应用"], evidence: ["现有审核只覆盖执行方案"], acceptanceCriteria: ["提案审批与执行审核具有独立记录"], workspaceState, locale: "zh-CN" }; }
 function proposalRequest() { return { type: "代码修正", content: "建立独立演化审批入口，审批通过后返还南宫婉分发。", risks: ["历史记录迁移"], rollbackPlan: "保留旧记录并关闭三项自动开关。" }; }
-const conversation = { async send(_request, context) { return { text: `我了解到您的想法是：调查当前问题。如果我理解有偏差，您可以直接纠正我。\n\n南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据"}`, itemCount: 1 }; }, async newChat() {} };
+const conversation = { async send(_request, context) { return { text: `我了解到您的想法是：调查当前问题。如果我理解有偏差，您可以直接纠正我。\n\n南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据","tags":["调查","事实依据"],"summary":"围绕当前问题收集事实并形成可继续分析的依据。"}`, itemCount: 1 }; }, async newChat() {} };
 const distributionServices = {
   async planDistribution() { return JSON.stringify({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
   async auditDistribution() { return JSON.stringify({ decision: "passed", reason: "单任务没有文件重叠，职责、回退和验收边界完整。", findings: [] }); },
 };
+let mutationSequence = 0;
+function mutation(facade) { return { expectedStateVersion: facade.state().updatedAt, idempotencyKey: `nangong-test-${++mutationSequence}` }; }
 
 test("南宫婉会话提示固定自然表达与只读调查边界", () => {
   assert.match(nangongPromptSource, /语气克制、温和、有判断/);
@@ -38,6 +41,52 @@ test("自动演化、两个来源审批和自动分发四项开关独立持久�
     store.setAutomation("evolution", true); store.setAutomation("nangong-approval", true);
     const state = new NangongEvolutionStore(path.join(directory, "state.json")).state();
     assert.equal(state.automaticEvolutionEnabled, true); assert.equal(state.automaticNangongApprovalEnabled, true); assert.equal(state.automaticLinghuApprovalEnabled, false); assert.equal(state.automaticExecutionEnabled, false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("自动控制台转人工后只观察且必须明确恢复才能继续", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-handover-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    let state = store.controlAutomation("start");
+    assert.equal(state.automaticEvolutionEnabled, true);
+    state = store.controlAutomation("handover");
+    assert.equal(state.automaticEvolutionEnabled, false);
+    assert.equal(state.automationRuntime.status, "paused");
+    assert.match(state.automationRuntime.stopReason, /人工接管.*仅观察/);
+    state = store.controlAutomation("resume");
+    assert.equal(state.automaticEvolutionEnabled, true);
+    assert.equal(state.automationRuntime.status, "running");
+    assert.equal(state.automationRuntime.stopReason, null);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("专题状态只读取当前版本并拒绝旧版本兼容补造", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-current-state-only-"));
+  try {
+    const filePath = path.join(directory, "state.json");
+    writeFileSync(filePath, JSON.stringify({ version: 7, automaticApprovalEnabled: true, topics: [], proposals: [] }), "utf8");
+    const state = new NangongEvolutionStore(filePath).state();
+    assert.equal(state.version, 8);
+    assert.equal(state.automaticNangongApprovalEnabled, false);
+    assert.deepEqual(state.topics, []);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("专题提交同时发布可校验前后版本的工作台增量事实", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-workbench-change-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    let observed = null;
+    store.subscribe((state, reason, topicId, proposalId, previousState) => { observed = { state, reason, topicId, proposalId, previousState }; });
+    const current = store.createTopic(topicRequest("实时专题状态"));
+    assert.equal(observed.reason, "topic.created");
+    assert.equal(observed.previousState.topics.length, 0);
+    assert.equal(observed.state.topics.length, 1);
+    assert.equal(observed.topicId, current.activeTopicId);
+    assert.equal(observed.proposalId, null);
+    assert.equal(observed.previousState.updatedAt.length > 0, true);
+    assert.equal(observed.state.updatedAt, current.updatedAt);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -71,14 +120,39 @@ test("自动审批无人工偏好时退回补充，人工决定形成版本化�
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposal = state.proposals[0]; state = facade.autoApprove(proposal.proposalId);
     assert.equal(state.proposals[0].status, "supplement-required");
-    state = facade.decideProposal(proposal.proposalId, { decision: "approved", advice: "人工确认方向正确" });
+    state = facade.decideProposal(proposal.proposalId, { mutation: mutation(facade), decision: "approved", advice: "人工确认方向正确" });
     assert.equal(state.preferenceSnapshotVersion, 1);
     state = facade.createTopic(topicRequest("相同类型第二课题")); state = facade.createProposal(state.topics.at(-1).topicId, proposalRequest());
     state = facade.autoApprove(state.proposals.at(-1).proposalId);
     assert.equal(state.proposals.at(-1).status, "approved"); assert.equal(state.proposals.at(-1).approvals.at(-1).referencedApprovalIds.length, 1);
-    state = facade.decideProposal(state.proposals.at(-1).proposalId, { decision: "rejected", advice: "用户纠正自动结论" });
+    state = facade.decideProposal(state.proposals.at(-1).proposalId, { mutation: mutation(facade), decision: "rejected", advice: "用户纠正自动结论" });
     assert.equal(state.proposals.at(-1).status, "rejected"); assert.equal(state.preferenceSnapshotVersion, 2);
     assert.equal(state.proposals.at(-1).approvals.at(-1).source, "manual-user");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("审批、验收与返修统一使用专题版本和幂等写入口", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-mutation-coordinator-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const collaboration = { state() { return { members: [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }], tasks: [] }; } };
+    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    let state = facade.createTopic(topicRequest("统一专题写入口"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    const approvalMutation = mutation(facade);
+    state = facade.decideProposal(proposalId, { mutation: approvalMutation, decision: "supplement-required", advice: "补齐验证事实" });
+    assert.equal(state.proposals[0].approvals.length, 1);
+    state = facade.decideProposal(proposalId, { mutation: approvalMutation, decision: "supplement-required", advice: "不应重复写入" });
+    assert.equal(state.proposals[0].approvals.length, 1, "已完成幂等键不得重复形成审批记录");
+    assert.throws(() => facade.reviseProposal(proposalId, {
+      mutation: { expectedStateVersion: "stale-version", idempotencyKey: "stale-revision" },
+      submitterMemberId: "nangong-wan", content: "补齐验证事实", evidence: ["新增事实"], impactScope: ["AI Desktop"], risks: ["无"], rollbackPlan: "撤销新版本", acceptanceCriteria: ["审批记录只生成一次"],
+    }), /状态已更新/);
+    state = facade.reviseProposal(proposalId, {
+      mutation: mutation(facade), submitterMemberId: "nangong-wan", content: "补齐验证事实", evidence: ["新增事实"], impactScope: ["AI Desktop"], risks: ["无"], rollbackPlan: "撤销新版本", acceptanceCriteria: ["审批记录只生成一次"],
+    });
+    assert.equal(state.proposals.length, 2);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -95,7 +169,7 @@ test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest()); const proposalId = state.proposals[0].proposalId;
     assert.equal(state.automationContext.workspaceState, null, "手动返还不应要求先配置自动演化工作区");
     await assert.rejects(() => facade.dispatch(proposalId), /只有审批通过/);
-    facade.decideProposal(proposalId, { decision: "approved", advice: "通过" }); state = await facade.dispatch(proposalId);
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" }); state = await facade.dispatch(proposalId);
     assert.deepEqual(planningWorkspace, workspaceState); assert.deepEqual(auditWorkspace, workspaceState);
     assert.deepEqual(submitted.workspaceState, workspaceState);
     assert.equal(submitted.initiatorMemberId, "nangong-wan"); assert.equal(submitted.evolutionProposalId, proposalId);
@@ -114,7 +188,7 @@ test("专题工作区缺失时返还执行显示业务错误而不是读取 null
     let state = facade.createTopic(topicRequest());
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
-    facade.decideProposal(proposalId, { decision: "approved", advice: "通过" });
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
     const persisted = JSON.parse(readFileSync(statePath, "utf8"));
     persisted.topics[0].workspaceState = null;
     writeFileSync(statePath, JSON.stringify(persisted), "utf8");
@@ -148,7 +222,7 @@ test("预计修改文件重叠时令狐阻止多人重复分发", async () => {
     let state = facade.createTopic(topicRequest("单按钮样式修正"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
-    facade.decideProposal(proposalId, { decision: "approved", advice: "方向通过" });
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "方向通过" });
     await assert.rejects(() => facade.dispatch(proposalId), /阻止分发/);
     assert.equal(submitted, 0);
     assert.equal(facade.state().proposals[0].distributionPlan.audit.decision, "revise");
@@ -189,7 +263,7 @@ test("全部执行结果返回南宫婉后才封存同一轮并一次性交给�
     let state = facade.createTopic(topicRequest("南宫婉轮次收集"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     proposalId = state.proposals[0].proposalId;
-    facade.decideProposal(proposalId, { decision: "approved", advice: "批准整轮收集" });
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "批准整轮收集" });
     await facade.dispatch(proposalId);
     facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
     assert.deepEqual(sealed, [], "仅部分任务返回时不得封存或启动统一测试");
@@ -217,9 +291,9 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     let state = facade.createTopic(topicRequest("完整演化闭环"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
-    state = facade.decideProposal(proposalId, { decision: "supplement-required", advice: "补充完成记录验收依据" });
+    state = facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "supplement-required", advice: "补充完成记录验收依据" });
     assert.equal(state.proposals[0].approvals.at(-1).source, "manual-user");
-    state = facade.decideProposal(proposalId, { decision: "approved", advice: "事实完整，批准执行" });
+    state = facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "事实完整，批准执行" });
     state = await facade.dispatch(proposalId);
     assert.deepEqual(state.proposals[0].distributedTaskIds, [distributedTaskId]);
     facade.start();
@@ -229,7 +303,10 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     assert.equal(state.proposals[0].status, "pending-acceptance");
     assert.equal(state.proposals[0].resultSummary, "全部关联任务已经完成，等待韩立按真实用户路径验收结果。");
     assert.equal(state.topics.length, 1);
-    state = facade.decideResult(proposalId, { decision: "approved", advice: "真实操作和视觉检查符合目标。" });
+    const acceptancePlan = { version: 1, planId: "completed-plan", topicId: state.topics[0].topicId, proposalId, summary: "检查完成结果", concerns: ["真实操作"], checks: [{ checkId: "completed-check", category: "交互", target: "专题工作台", action: "检查结果", expected: "真实界面符合目标", evidenceRequired: "截图", operations: [{ type: "capture", label: "完成结果" }] }], generatedAt: new Date().toISOString() };
+    store.recordAcceptancePlan(acceptancePlan);
+    store.recordAcceptanceRun({ version: 1, runId: "completed-run", planId: acceptancePlan.planId, topicId: acceptancePlan.topicId, proposalId, status: "passed", windowTitle: "专题工作台", initialBounds: { x: 0, y: 0, width: 1320, height: 880 }, finalBounds: { x: 0, y: 0, width: 1320, height: 880 }, stepResults: [{ checkId: "completed-check", operationIndex: 0, operation: { type: "capture", label: "完成结果" }, status: "passed", actual: "截图已保存", screenshotAttachmentId: "shot-completed", occurredAt: new Date().toISOString() }], evidenceAttachmentIds: ["shot-completed"], startedAt: new Date().toISOString(), completedAt: new Date().toISOString() });
+    state = facade.decideResult(proposalId, { mutation: mutation(facade), decision: "approved", advice: "真实操作和视觉检查符合目标。" });
     assert.equal(state.proposals[0].status, "completed");
     assert.equal(state.proposals[0].approvals.at(-1).stage, "result");
     state = facade.state();
@@ -317,6 +394,27 @@ test("南宫婉对话持久化并冻结为正式课题快照", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("专题群人物消息复用南宫婉会话并只向专题档案写入短预览", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-topic-group-message-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
+    let state = facade.createTopic(topicRequest("专题群消息回流"));
+    const topicId = state.activeTopicId;
+    const originalArchiveCount = state.archiveRecords.length;
+    state = await facade.sendConversationMessage({ topicId, message: "请南宫婉说明当前专题下一步。", workspaceState, locale: "zh-CN" });
+    assert.equal(state.conversation.messages.at(-2).content, "请南宫婉说明当前专题下一步。");
+    assert.equal(state.archiveRecords.length, originalArchiveCount + 1);
+    const groupRecord = state.archiveRecords.at(-1);
+    assert.equal(groupRecord.topicId, topicId);
+    assert.equal(groupRecord.eventType, "conversation.topic_group_replied");
+    assert.equal(groupRecord.category, "source");
+    assert.equal(groupRecord.payload.userPreview, "请南宫婉说明当前专题下一步。");
+    assert.match(groupRecord.payload.nangongPreview, /南宫婉调查结论/);
+    assert.equal(groupRecord.payload.nextOwner, "han-li");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("南宫婉根据当前对话生成五项可编辑草稿但不直接保存课题", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-topic-draft-"));
   try {
@@ -324,7 +422,7 @@ test("南宫婉根据当前对话生成五项可编辑草稿但不直接保存�
     const draftConversation = {
       async send(request) {
         if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "令狐持续修正演化", goal: "保持 Bug 修复链稳定运行", scope: ["AI Desktop"], evidence: ["用户陈述：草稿需要从当前对话生成", "南宫婉调查：修正方案需要审批"], acceptanceCriteria: ["五项内容可编辑后再保存"] }), itemCount: 1 };
-        return { text: "南宫婉调查：修正方案需要先进入审批。", itemCount: 1 };
+        return { text: "南宫婉调查：修正方案需要先进入审批。\nNANGONG_TOPIC_META={\"title\":\"修正方案审批\",\"type\":\"事实调查\",\"switchTopic\":false,\"userIntent\":\"根据当前对话生成可编辑课题草稿\",\"tags\":[\"课题草稿\",\"审批\"],\"summary\":\"先调查修正方案的审批边界，再由用户确认草稿。\"}", itemCount: 1 };
       },
       async newChat() {},
     };
@@ -357,6 +455,113 @@ test("南宫婉新建对话等待活动写入者释放后才清空持久消息",
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("韩立验收计划由专题语义生成并只登记为待执行档案", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    let receivedPrompt = "";
+    const facade = new NangongEvolutionFacade({
+      store, collaboration: {}, conversation, recordEvent: () => undefined,
+      async planAcceptance(prompt) {
+        receivedPrompt = prompt;
+        return JSON.stringify({
+          summary: "确认侧栏在真实窗口内可完整操作。",
+          concerns: ["侧栏内容不能被截断", "最后一个按钮必须可达"],
+          checks: [
+            { category: "滚动可达性", target: "连接与执行设置侧栏", action: "缩小窗口后滚动到侧栏底部并查看最后一个按钮", expected: "滚动能力可发现且末项可达", evidenceRequired: "缩小窗口和滚动到底部后的截图", operations: [{ type: "resize-window", width: 980, height: 680 }, { type: "scroll", target: "连接与执行设置", direction: "down", amount: 900 }, { type: "capture", label: "侧栏底部" }] },
+            { category: "状态反馈", target: "一键清空测试数据按钮", action: "确认按钮在真实设置页可见但不自动触发破坏动作", expected: "按钮文字清晰且保持未触发", evidenceRequired: "按钮可见截图", operations: [{ type: "inspect-text", text: "一键清空测试数据" }, { type: "capture", label: "危险操作保持未触发" }] },
+          ],
+        });
+      },
+    });
+    let state = facade.createTopic(topicRequest("设置侧栏滚动验收"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "实现与定向测试完成，等待真实界面验收。");
+    const plan = await facade.generateAcceptancePlan(proposalId);
+    state = facade.state();
+    assert.match(receivedPrompt, /设置侧栏滚动验收/);
+    assert.match(receivedPrompt, /表格分页与滚动/);
+    assert.equal(plan.checks.length, 2);
+    assert.equal(plan.checks[0].operations[0].type, "resize-window");
+    assert.equal(state.proposals[0].status, "pending-acceptance");
+    const record = state.archiveRecords.at(-1);
+    assert.equal(record.eventType, "acceptance.plan_generated");
+    assert.equal(record.category, "acceptance");
+    assert.equal(record.actor, "han-li");
+    assert.equal(record.payload.status, "planned");
+    assert.equal(record.payload.acceptancePlan.planId, plan.planId);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("真实应用验收执行器只执行白名单操作并阻止业务写按钮", async () => {
+  let bounds = { x: 10, y: 20, width: 1320, height: 880 };
+  let screenshots = 0;
+  const sentKeys = [];
+  const targetWindow = {
+    isDestroyed: () => false, show() {}, focus() {}, getBounds: () => ({ ...bounds }), setBounds(next) { bounds = { ...next }; }, getTitle: () => "AI Desktop · 专题演化工作台",
+    webContents: {
+      async executeJavaScript(source) {
+        if (source.includes('})({ type: "click"')) return { clicked: true, description: "已点击：专题执行群" };
+        if (source.includes('})({ type: "scroll"')) return { moved: true, description: "滚动位置 0 → 600，最大 1200。" };
+        if (source.includes('})({ type: "focus"')) return true;
+        return true;
+      },
+      sendInputEvent(event) { sentKeys.push(event); },
+      async capturePage() { return { toPNG: () => Buffer.from("png") }; },
+    },
+  };
+  const executor = new HanLiRealAppAcceptanceExecutor({ async save() { screenshots += 1; return { id: `shot-${screenshots}`, name: "shot.png", filePath: "/evidence/shot.png", sizeBytes: 3, createdAt: new Date().toISOString() }; } });
+  const plan = { version: 1, planId: "plan-1", topicId: "topic-1", proposalId: "proposal-1", summary: "真实检查", concerns: ["滚动"], generatedAt: new Date().toISOString(), checks: [{ checkId: "check-1", category: "真实交互", target: "专题工作台", action: "缩放、导航和截图", expected: "可操作", evidenceRequired: "截图", operations: [{ type: "focus-window" }, { type: "resize-window", width: 980, height: 680 }, { type: "click", target: "专题执行群" }, { type: "scroll", target: "真实界面验收计划", direction: "down", amount: 600 }, { type: "press-key", key: "PageDown" }, { type: "inspect-text", text: "真实界面验收计划" }, { type: "capture", label: "检查结果" }, { type: "click", target: "验收通过" }] }] };
+  const run = await executor.execute(plan, targetWindow);
+  assert.equal(run.status, "blocked");
+  assert.match(run.stepResults.at(-1).actual, /禁止自动点击/);
+  assert.equal(run.stepResults.filter((item) => item.status === "passed").length, 7);
+  assert.equal(run.evidenceAttachmentIds.length, 1);
+  assert.equal(screenshots, 2);
+  assert.equal(sentKeys.length, 2);
+  assert.deepEqual(bounds, { x: 10, y: 20, width: 1320, height: 880 });
+});
+
+test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫婉", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-acceptance-failure-"));
+  try {
+    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic(topicRequest("真实界面失败返还"));
+    state = store.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待真实检查");
+    assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /必须先完成真实应用检查/);
+    const plan = { version: 1, planId: "failure-plan", topicId: state.topics[0].topicId, proposalId, summary: "检查滚动", concerns: ["末项可达"], checks: [{ checkId: "scroll-check", category: "可达性", target: "设置侧栏", action: "缩小窗口并滚动", expected: "最后一个控件可达", evidenceRequired: "截图", operations: [{ type: "resize-window", width: 980, height: 680 }, { type: "scroll", target: "设置侧栏", direction: "down", amount: 600 }] }], generatedAt: new Date().toISOString() };
+    store.recordAcceptancePlan(plan);
+    store.recordAcceptanceRun({ version: 1, runId: "failure-run", planId: plan.planId, topicId: plan.topicId, proposalId, status: "failed", windowTitle: "专题工作台", initialBounds: { x: 0, y: 0, width: 1320, height: 880 }, finalBounds: { x: 0, y: 0, width: 1320, height: 880 }, stepResults: [{ checkId: "scroll-check", operationIndex: 0, operation: plan.checks[0].operations[0], status: "passed", actual: "窗口已缩小", screenshotAttachmentId: null, occurredAt: new Date().toISOString() }, { checkId: "scroll-check", operationIndex: 1, operation: plan.checks[0].operations[1], status: "failed", actual: "滚动位置没有变化", screenshotAttachmentId: "failure-shot", occurredAt: new Date().toISOString() }], evidenceAttachmentIds: ["failure-shot"], startedAt: new Date().toISOString(), completedAt: new Date().toISOString() });
+    state = store.decideResult(proposalId, "supplement-required", "修复设置侧栏滚动后重新提交");
+    assert.equal(state.proposals[0].status, "supplement-required");
+    const resultRecord = state.archiveRecords.at(-1);
+    assert.equal(resultRecord.eventType, "proposal.result_decided");
+    assert.equal(resultRecord.payload.nextOwner, "nangong-wan");
+    assert.equal(resultRecord.payload.failureEvidence[0].target, "设置侧栏");
+    assert.equal(resultRecord.payload.failureEvidence[0].actual, "滚动位置没有变化");
+    assert.equal(resultRecord.payload.failureEvidence[0].expected, "最后一个控件可达");
+    assert.deepEqual(resultRecord.payload.failureEvidence[0].screenshotAttachmentIds, ["failure-shot"]);
+    assert.equal(resultRecord.payload.failureEvidence[0].reproductionOperations.length, 2);
+    state = store.revise(proposalId, { submitterMemberId: state.proposals[0].submitterMemberId, content: "修复设置侧栏高度与滚动容器，确保窄窗口下最后一个控件可达。", evidence: ["失败截图与滚动位置记录"], impactScope: ["设置侧栏"], risks: ["小窗口布局变化"], rollbackPlan: "回退侧栏滚动容器变更", acceptanceCriteria: ["最后一个控件可滚动到达"] }, "南宫婉");
+    const correction = state.proposals.at(-1);
+    store.markProgress(correction.proposalId, "pending-acceptance", "修复完成，等待复验");
+    const retestPlan = { ...plan, planId: "retest-plan", proposalId: correction.proposalId, generatedAt: new Date().toISOString() };
+    store.recordAcceptancePlan(retestPlan);
+    store.recordAcceptanceRun({ version: 1, runId: "retest-run", planId: retestPlan.planId, topicId: retestPlan.topicId, proposalId: correction.proposalId, status: "passed", windowTitle: "专题工作台", initialBounds: { x: 0, y: 0, width: 1320, height: 880 }, finalBounds: { x: 0, y: 0, width: 1320, height: 880 }, stepResults: [{ checkId: "scroll-check", operationIndex: 1, operation: retestPlan.checks[0].operations[1], status: "passed", actual: "滚动位置 0 → 600", screenshotAttachmentId: "retest-shot", occurredAt: new Date().toISOString() }], evidenceAttachmentIds: ["retest-shot"], startedAt: new Date().toISOString(), completedAt: new Date().toISOString() });
+    state = store.decideResult(correction.proposalId, "approved", "复验通过");
+    const candidate = state.archiveRecords.at(-1).payload.experienceCandidate;
+    assert.equal(candidate.status, "candidate");
+    assert.equal(candidate.failedProposalId, proposalId);
+    assert.equal(candidate.correctionProposalId, correction.proposalId);
+    assert.equal(candidate.failedRunId, "failure-run");
+    assert.equal(candidate.passedRetestRunId, "retest-run");
+    assert.deepEqual(candidate.sourceFailureEvidenceIds, [resultRecord.payload.failureEvidence[0].evidenceId]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("南宫婉线程删除最终失败时保留原页面消息", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-new-conversation-failed-"));
   try {
@@ -379,7 +584,7 @@ test("令狐修正与南宫提案使用独立自动审批开关并返还原提�
     let state = facade.createLinghuRepairProposal({ title: "修正持续运行 Bug", content: "依据停点事实修正恢复逻辑", evidence: ["任务停在 test-failed"], impactScope: ["令狐恢复流程"], risks: ["重复恢复"], rollbackPlan: "恢复旧恢复点", acceptanceCriteria: ["任务恢复且不重复"], workspaceState, locale: "zh-CN" });
     const proposal = state.proposals.at(-1);
     assert.equal(proposal.submitterMemberId, "linghu-ancestor");
-    state = facade.decideProposal(proposal.proposalId, { decision: "approved", advice: "人工确认令狐方向" });
+    state = facade.decideProposal(proposal.proposalId, { mutation: mutation(facade), decision: "approved", advice: "人工确认令狐方向" });
     state = await facade.dispatch(proposal.proposalId);
     assert.equal(submitted.initiatorMemberId, "linghu-ancestor"); assert.equal(submitted.preferredExecutorMemberId, "linghu-ancestor");
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -402,6 +607,7 @@ test("所有人物共用自身能力升级修订链并在任务中固定审批�
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const original = state.proposals[0];
     state = facade.decideProposal(original.proposalId, {
+      mutation: mutation(facade),
       decision: "supplement-required",
       advice: "提交内容不具体：写明问题位置、修正动作和预期结果。",
       feedbackTarget: "submitter-capability",
@@ -409,6 +615,7 @@ test("所有人物共用自身能力升级修订链并在任务中固定审批�
     });
     const feedbackApprovalId = state.proposals[0].approvals.at(-1).approvalId;
     state = facade.reviseProposal(original.proposalId, {
+      mutation: mutation(facade),
       submitterMemberId: "nangong-wan",
       content: "升级南宫婉自身提案模板，强制列出问题位置、修正动作和预期结果。",
       evidence: ["原提案未说明修改位置"], impactScope: ["南宫婉提案生成规则"], risks: ["旧提案兼容"],
@@ -418,8 +625,8 @@ test("所有人物共用自身能力升级修订链并在任务中固定审批�
     assert.equal(revised.version, 2); assert.equal(revised.purpose, "self-capability-upgrade");
     assert.equal(revised.targetMemberId, "nangong-wan"); assert.equal(revised.supersedesProposalId, original.proposalId);
     assert.equal(revised.revisionFeedbackApprovalId, feedbackApprovalId);
-    assert.throws(() => facade.reviseProposal(original.proposalId, { submitterMemberId: "custom-member" }), /原提交人/);
-    state = facade.decideProposal(revised.proposalId, { decision: "approved", advice: "方案具体，批准升级自身逻辑。" });
+    assert.throws(() => facade.reviseProposal(original.proposalId, { mutation: mutation(facade), submitterMemberId: "custom-member" }), /原提交人/);
+    state = facade.decideProposal(revised.proposalId, { mutation: mutation(facade), decision: "approved", advice: "方案具体，批准升级自身逻辑。" });
     const approvedRevision = state.proposals.find((proposal) => proposal.proposalId === revised.proposalId);
     state = await facade.dispatch(revised.proposalId);
     assert.equal(submitted.preferredExecutorMemberId, "nangong-wan");
@@ -441,7 +648,7 @@ test("自动演化开启后原人物依据退回意见只重新提交一个自�
     store.setAutomation("evolution", true);
     let state = facade.createLinghuRepairProposal({ title: "令狐提交具体性修正", content: "修正持续任务提交内容", evidence: ["提交内容缺少位置"], impactScope: ["令狐提案流程"], risks: ["模板兼容"], rollbackPlan: "保留旧模板", acceptanceCriteria: ["内容可审批"], workspaceState, locale: "zh-CN" });
     const original = state.proposals.at(-1);
-    facade.decideProposal(original.proposalId, { decision: "supplement-required", advice: "写明哪里有问题、修改哪里和预期结果。", feedbackTarget: "submitter-capability", capabilityScope: "修正方案具体性" });
+    facade.decideProposal(original.proposalId, { mutation: mutation(facade), decision: "supplement-required", advice: "写明哪里有问题、修改哪里和预期结果。", feedbackTarget: "submitter-capability", capabilityScope: "修正方案具体性" });
     facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
     state = facade.state();
     const revisions = state.proposals.filter((proposal) => proposal.supersedesProposalId === original.proposalId);

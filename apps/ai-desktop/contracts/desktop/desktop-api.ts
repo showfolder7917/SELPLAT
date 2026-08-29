@@ -15,14 +15,12 @@ import type { CollaborationState, CollaborationStateEvent, CollaborationStreamEn
 import type { CodexSessionInfo, ConversationDispatchState, EnqueueMessageRequest, SendMessageRequest, SendMessageResponse } from "../codex/conversation.js";
 import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "./database.js";
 import type { CreateLinghuStartupPromptRequest, LinghuAutomationState, LinghuAutomationStateEvent, UpdateLinghuStartupPromptRequest } from "../collaboration/linghu-automation.js";
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionTopicDossier, GenerateNangongTopicDraftRequest, NangongEvolutionState, NangongEvolutionStateEvent, NangongTopicDraft, ReviseEvolutionProposalRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../collaboration/nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionMutationRequest, EvolutionTopicDossier, EvolutionWorkbenchChangeEvent, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkspaceLocation, GenerateNangongTopicDraftRequest, HanLiAcceptancePlan, HanLiAcceptanceRun, NangongEvolutionState, NangongEvolutionStateEvent, NangongTopicDraft, QueryEvolutionWorkbenchRequest, ReviseEvolutionProposalRequest, SaveEvolutionWorkbenchPreferenceRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../collaboration/nangong-evolution.js";
 import type { DesktopSettings } from "./settings.js";
 import type { ScreenCapture, ScreenCaptureFrameRequest, ScreenCaptureFrameResult, ScreenCapturePreparationResult, ScreenCaptureRequest, ScreenshotAnnotationWindowRequest, ScreenshotAttachment, ScreenshotCompletedEvent, ScreenshotSaveRequest, TempDirectoryInfo } from "./screenshot.js";
 import type { WorkspaceEntry, WorkspaceState } from "./workspace.js";
 import type { RendererExceptionReport } from "../governance/workflow.js";
 import type { ResolvedRuntimeRule, RuleBundleStatus, RuntimeRule } from "../governance/rules.js";
-
-export type EvolutionWorkspacePerspective = "nangong" | "hanli";
 
 /** 定义 preload 向渲染层公开的完整白名单；各领域数据结构保留在独立契约文件。 */
 export interface DesktopApi {
@@ -164,12 +162,18 @@ export interface DesktopApi {
   onLinghuAutomationState(listener: (event: LinghuAutomationStateEvent) => void): () => void;
   /** 读取专题、提案、审批和自动化运行状态。 */
   getNangongEvolutionState(): Promise<NangongEvolutionState>;
-  /** 打开独立演化工作台并选择南宫或韩立视角。 */
-  openEvolutionWorkspace(perspective: EvolutionWorkspacePerspective): Promise<void>;
-  /** 订阅独立演化窗口的视角切换。 */
-  onEvolutionWorkspacePerspective(listener: (perspective: EvolutionWorkspacePerspective) => void): () => void;
+  /** 按人物、树节点、查询页和选中记录打开或重新定位唯一独立演化工作台。 */
+  openEvolutionWorkspace(location: EvolutionWorkspaceLocation): Promise<void>;
+  /** 订阅已复用工作台窗口的完整位置变化。 */
+  onEvolutionWorkspaceLocation(listener: (location: EvolutionWorkspaceLocation) => void): () => void;
   /** 读取指定专题的来源、对话、审批和执行档案。 */
   getEvolutionTopicDossier(topicId: string): Promise<EvolutionTopicDossier>;
+  /** 按工作台叶节点从 SQLite 查询一页人类可读记录；示例：page=1、pageSize=20 返回 total 和最多 20 行，不返回原始 JSON。 */
+  queryEvolutionWorkbench(request: QueryEvolutionWorkbenchRequest): Promise<EvolutionWorkbenchPage>;
+  getEvolutionWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): Promise<EvolutionWorkbenchPreference | null>;
+  saveEvolutionWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceRequest): Promise<EvolutionWorkbenchPreference>;
+  /** 订阅工作台轻量增量事件；版本断档时由 Renderer 重新查询当前数据库页。 */
+  onEvolutionWorkbenchChanged(listener: (event: EvolutionWorkbenchChangeEvent) => void): () => void;
   /** 推进一轮韩立审议并返回新的演化状态。 */
   advanceHanLiDeliberation(): Promise<NangongEvolutionState>;
   /** 从已确认输入建立新专题。 */
@@ -198,12 +202,16 @@ export interface DesktopApi {
   decideEvolutionProposal(proposalId: string, request: DecideEvolutionProposalRequest): Promise<NangongEvolutionState>;
   /** 验收或退回提案执行结果。 */
   decideEvolutionResult(proposalId: string, request: DecideEvolutionResultRequest): Promise<NangongEvolutionState>;
+  /** 由韩立依据当前专题事实生成并持久化真实界面验收计划。 */
+  generateHanLiAcceptancePlan(proposalId: string): Promise<HanLiAcceptancePlan>;
+  /** 在独立专题窗口执行计划中的受控真实操作并保存截图证据。 */
+  executeHanLiAcceptancePlan(planId: string): Promise<HanLiAcceptanceRun>;
   /** 根据审批意见修订指定提案。 */
   reviseEvolutionProposal(proposalId: string, request: ReviseEvolutionProposalRequest): Promise<NangongEvolutionState>;
   /** 在允许自动审批时执行韩立审批。 */
-  autoApproveEvolutionProposal(proposalId: string): Promise<NangongEvolutionState>;
+  autoApproveEvolutionProposal(proposalId: string, request: EvolutionMutationRequest): Promise<NangongEvolutionState>;
   /** 把已审批提案分发为受控协同任务。 */
-  dispatchEvolutionProposal(proposalId: string): Promise<NangongEvolutionState>;
+  dispatchEvolutionProposal(proposalId: string, request: EvolutionMutationRequest): Promise<NangongEvolutionState>;
   /** 订阅演化状态变化，返回取消订阅函数。 */
   onNangongEvolutionState(listener: (event: NangongEvolutionStateEvent) => void): () => void;
   /** 读取主会话当前执行项、等待队列和恢复状态。 */

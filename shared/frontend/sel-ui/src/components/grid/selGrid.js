@@ -33,6 +33,9 @@
         selGridRoot.dataset.selEntity = String(selGridDefinition.entity || "");
         selGridRoot.setAttribute("aria-label", String(selGridDefinition.ariaLabel || "数据表格"));
         selGridRoot.innerHTML = `
+            <div class="selgrid-standalone-query" data-sel-grid-role="query">
+                <div class="selsearch-root" data-sel-grid-role="search-host"></div>
+            </div>
             <div class="selgrid-board-shell" aria-label="数据表格">
                 <div class="selgrid-board-highlight" aria-hidden="true"></div>
                 <header class="selgrid-table-heading" data-sel-grid-role="table-heading">
@@ -147,6 +150,10 @@
         let selGridMessages = selGridInputPayload.title.messages;
         // 当前语言分页模板集中来自 pagination JSON。
         let selGridPaginationData = selGridInputPayload.pagination;
+        // 独立表格由 Grid 自己挂载公共 Search；应用只传标准查询数据，不复制输入框、清空和提交结构。
+        const selGridSearchController = selGridRoot.classList.contains("selgrid-standalone-shell") && selGridInputPayload.search
+            ? window.sel.components.search?.mount(selGridRoot, selGridInputPayload.search)
+            : null;
 
         // 把后端本地化模板中的 {name} 占位符替换成当前业务值。
         function selGridFormatMessage(selGridTemplate, selGridValues) {
@@ -360,6 +367,7 @@
                     selGridSortButton.className = "selgrid-sort-button";
                     // 按钮不提交外部表单。
                     selGridSortButton.type = "button";
+                    selGridSortButton.dataset.selGridSortColumn = selGridResolveColumnKey(selGridColumnData, selGridColumnIndex);
                     // 当前语言排序说明进入可访问名称。
                     selGridSortButton.setAttribute("aria-label", selGridColumnData.sortAriaLabel);
                     // 当前语言列名作为可见文字。
@@ -841,6 +849,21 @@
     selGridView.tableHead?.addEventListener("lostpointercapture", selGridHandleColumnResizeEnd);
     selGridView.tableHead?.addEventListener("keydown", selGridHandleColumnResizeKeydown);
     selGridView.tableHead?.addEventListener("change", selGridHandleHeaderColumnSelection);
+
+    // 可排序表头只发布稳定列键与下一方向，远程或本地数据排序由应用查询契约决定。
+    function selGridHandleSortChange(selGridEvent) {
+        const selGridSortButton = selGridEvent.target.closest("[data-sel-grid-sort-column]");
+        if (!selGridSortButton || !selGridView.tableHead?.contains(selGridSortButton)) return;
+        const selGridColumnId = String(selGridSortButton.dataset.selGridSortColumn || "");
+        const selGridColumnData = selGridInputPayload.column.items.find((item, index) => selGridResolveColumnKey(item, index) === selGridColumnId);
+        if (!selGridColumnData?.sortable) return;
+        const selGridSortDirection = selGridColumnData.sortDirection === "descending" ? "asc" : "desc";
+        selGridRoot.dispatchEvent(new CustomEvent("selGrid:sortChange", {
+            bubbles: true,
+            detail: { instanceKey: selGridId, entity: selGridEntity, sortField: String(selGridColumnData.field || selGridColumnId), sortDirection: selGridSortDirection }
+        }));
+    }
+    selGridView.tableHead?.addEventListener("click", selGridHandleSortChange);
 
     // 面板缩放、侧栏折叠和浏览器尺寸变化都可能改变中央视口的真实溢出状态。
     const selGridHorizontalOverflowObserver = typeof window.ResizeObserver === "function" && selGridView.tableScroller
@@ -2308,6 +2331,7 @@
         if (selGridHorizontalOverflowFrame) window.cancelAnimationFrame(selGridHorizontalOverflowFrame);
         if (selGridToastTimer) window.clearTimeout(selGridToastTimer);
         selGridTooltipController?.destroy();
+        selGridSearchController?.destroy?.();
         selGridView.tableHead?.removeEventListener("pointerdown", selGridHandleColumnResizeStart);
         selGridView.tableHead?.removeEventListener("pointermove", selGridHandleColumnResizeMove);
         selGridView.tableHead?.removeEventListener("pointerup", selGridHandleColumnResizeEnd);
@@ -2315,6 +2339,7 @@
         selGridView.tableHead?.removeEventListener("lostpointercapture", selGridHandleColumnResizeEnd);
         selGridView.tableHead?.removeEventListener("keydown", selGridHandleColumnResizeKeydown);
         selGridView.tableHead?.removeEventListener("change", selGridHandleHeaderColumnSelection);
+        selGridView.tableHead?.removeEventListener("click", selGridHandleSortChange);
         selGridInstances.delete(selGridId);
         selGridRoots.delete(selGridId);
         selGridRoot.remove();

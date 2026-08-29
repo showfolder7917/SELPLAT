@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 
-type StateListener = (state: NangongEvolutionState, reason: string, topicId: string | null, proposalId: string | null) => void;
+type StateListener = (state: NangongEvolutionState, reason: string, topicId: string | null, proposalId: string | null, previousState: NangongEvolutionState) => void;
 
 /** 原子保存专项课题、不可覆盖的提案版本和审批历史，避免把演化状态混入普通协同任务。 */
 export class NangongEvolutionStore {
@@ -22,6 +22,7 @@ export class NangongEvolutionStore {
 
   /** 清除专题测试运行态并安全关闭自动流程，保留人物完整对话、训练意图、轮次上限与语言；返回被移除的业务记录数。示例：1 个专题、2 个提案返回 3；写入失败时抛错。 */
   clearTestData(): number {
+    const previousState = this.state();
     const clearedCount = this.#state.topics.length + this.#state.proposals.length + this.#state.deliberations.length + this.#state.archiveRecords.length;
     const next = createInitialState();
     next.automationSettings = structuredClone(this.#state.automationSettings);
@@ -31,7 +32,7 @@ export class NangongEvolutionStore {
     this.#write(next);
     this.#state = next;
     const snapshot = this.state();
-    for (const listener of this.#listeners) listener(snapshot, "test-data.cleared", null, null);
+    for (const listener of this.#listeners) listener(snapshot, "test-data.cleared", null, null, previousState);
     return clearedCount;
   }
 
@@ -69,10 +70,11 @@ export class NangongEvolutionStore {
         state.automationRuntime.startedAt ??= now;
         state.automationRuntime.pausedAt = null;
         state.automationRuntime.stopReason = null;
-      } else if (action === "pause") {
+      } else if (action === "pause" || action === "handover") {
         state.automaticEvolutionEnabled = false;
         state.automationRuntime.status = "paused";
         state.automationRuntime.pausedAt = now;
+        state.automationRuntime.stopReason = action === "handover" ? "当前专题已转入人工接管，自动控制台仅观察；明确恢复后才会继续推进。" : null;
       } else {
         state.automaticEvolutionEnabled = false;
         state.automationRuntime.status = "stopped";
@@ -259,6 +261,33 @@ export class NangongEvolutionStore {
     });
   }
 
+  /** 专题群只追加人物消息引用与短预览，完整原话继续由人物会话表权威保存。 */
+  recordTopicConversation(topicId: string, userMessageId: string, nangongMessageId: string): NangongEvolutionState {
+    const topic = requireTopic(this.#state, topicId);
+    const userMessage = this.#state.conversation.messages.find((item) => item.messageId === userMessageId && item.role === "user");
+    const nangongMessage = this.#state.conversation.messages.find((item) => item.messageId === nangongMessageId && item.role === "nangong");
+    if (!userMessage || !nangongMessage) throw new Error("专题群人物消息不完整，不能登记回流记录。");
+    return this.#commit("conversation.topic_group_replied", topic.topicId, null, () => undefined, {
+      conversationId: this.#state.conversation.conversationId,
+      userMessageId, userPreview: preview(userMessage.content), nangongMessageId, nangongPreview: preview(nangongMessage.content),
+      status: "replied", nextOwner: "han-li",
+    });
+  }
+
+  /** 验收计划作为专题档案事实保存，不改变提案状态，也不伪装成已经执行的验收结果。 */
+  recordAcceptancePlan(plan: HanLiAcceptancePlan): NangongEvolutionState {
+    const proposal = requireProposal(this.#state, plan.proposalId);
+    if (proposal.topicId !== plan.topicId) throw new Error("验收计划与专题不一致。 ");
+    return this.#commit("acceptance.plan_generated", plan.topicId, plan.proposalId, () => undefined, { acceptancePlan: structuredClone(plan), status: "planned", nextOwner: "han-li" });
+  }
+
+  /** 真实应用操作证据与计划分开追加，失败事实交由后续结果线路处理。 */
+  recordAcceptanceRun(run: HanLiAcceptanceRun): NangongEvolutionState {
+    const proposal = requireProposal(this.#state, run.proposalId);
+    if (proposal.topicId !== run.topicId) throw new Error("真实验收记录与专题不一致。 ");
+    return this.#commit("acceptance.real_app_checked", run.topicId, run.proposalId, () => undefined, { acceptanceRun: structuredClone(run), status: run.status, nextOwner: run.status === "passed" ? "han-li" : "nangong-wan" });
+  }
+
   newConversation(): NangongEvolutionState {
     return this.#commit("conversation.created", null, null, (state) => {
       state.conversation = createConversation();
@@ -340,7 +369,40 @@ export class NangongEvolutionStore {
   decideResult(proposalId: string, decision: EvolutionApprovalDecision, advice: string): NangongEvolutionState {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
+    const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.real_app_checked")?.payload.acceptanceRun as HanLiAcceptanceRun | undefined;
+    if (decision === "approved" && run?.status !== "passed") throw new Error("韩立必须先完成真实应用检查且全部通过，才能验收通过。 ");
+    const plan = run ? [...this.#state.archiveRecords].reverse().find((record) => record.eventType === "acceptance.plan_generated" && (record.payload.acceptancePlan as { planId?: string } | undefined)?.planId === run.planId)?.payload.acceptancePlan as HanLiAcceptancePlan | undefined : undefined;
+    const failureEvidence = decision === "approved" || !run ? [] : run.stepResults.filter((step) => step.status !== "passed").map((step) => {
+      const check = plan?.checks.find((item) => item.checkId === step.checkId);
+      return {
+        evidenceId: `acceptance-failure-${run.runId}-${step.checkId}-${step.operationIndex}`,
+        runId: run.runId,
+        planId: run.planId,
+        checkId: step.checkId,
+        target: check?.target || "真实应用界面",
+        severity: step.status === "blocked" ? "blocking" : "major",
+        reproductionOperations: check?.operations ? structuredClone(check.operations.slice(0, step.operationIndex + 1)) : [structuredClone(step.operation)],
+        actual: step.actual,
+        expected: check?.expected || "符合专题验收条件",
+        screenshotAttachmentIds: [...new Set([step.screenshotAttachmentId, ...run.evidenceAttachmentIds].filter((item): item is string => Boolean(item)))],
+      };
+    });
     const now = new Date().toISOString();
+    const priorFailureRecord = decision === "approved" && proposal.supersedesProposalId ? [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposal.supersedesProposalId && record.eventType === "proposal.result_decided" && Array.isArray(record.payload.failureEvidence) && record.payload.failureEvidence.length > 0) : undefined;
+    const priorFailures = priorFailureRecord?.payload.failureEvidence as Array<{ evidenceId: string; runId: string; target: string; expected: string }> | undefined;
+    const experienceCandidate = run?.status === "passed" && proposal.supersedesProposalId && priorFailures?.length ? {
+      candidateId: `acceptance-experience-${randomUUID()}`,
+      status: "candidate" as const,
+      title: `检查 ${priorFailures[0].target} 是否达到“${priorFailures[0].expected}”`,
+      applicableScope: [...new Set(priorFailures.map((item) => item.target))],
+      sourceFailureEvidenceIds: priorFailures.map((item) => item.evidenceId),
+      failedProposalId: proposal.supersedesProposalId,
+      correctionProposalId: proposal.proposalId,
+      failedRunId: priorFailures[0].runId,
+      passedRetestRunId: run.runId,
+      counterexampleCount: 0,
+      createdAt: now,
+    } : null;
     return this.#commit("proposal.result_decided", proposal.topicId, proposalId, (state) => {
       const mutable = requireProposal(state, proposalId);
       state.preferenceSnapshotVersion += 1;
@@ -370,7 +432,7 @@ export class NangongEvolutionStore {
       }
       mutable.updatedAt = now;
       topic.updatedAt = now;
-    });
+    }, { acceptanceRunId: run?.runId || null, failureEvidence, experienceCandidate, nextOwner: decision === "approved" ? "han-li" : proposal.submitterMemberId });
   }
 
   /** 原提交人只能修订退回的本人提案；新版本保留原审批、反馈目标和完整替代链。 */
@@ -457,7 +519,8 @@ export class NangongEvolutionStore {
     });
   }
 
-  #commit(reason: string, topicId: string | null, proposalId: string | null, mutate: (state: NangongEvolutionState) => void): NangongEvolutionState {
+  #commit(reason: string, topicId: string | null, proposalId: string | null, mutate: (state: NangongEvolutionState) => void, payloadExtra: Record<string, unknown> = {}): NangongEvolutionState {
+    const previousState = this.state();
     const next = structuredClone(this.#state);
     mutate(next);
     const occurredAt = new Date().toISOString();
@@ -479,61 +542,22 @@ export class NangongEvolutionStore {
       eventType: reason,
       actor: archiveActor(reason),
       title: archiveTitle(reason),
-      payload: archivePayload(topic, proposal, deliberation),
+      payload: { ...archivePayload(topic, proposal, deliberation), ...payloadExtra },
       occurredAt,
     });
     this.#write(next);
     this.#state = next;
     const snapshot = this.state();
-    for (const listener of this.#listeners) listener(snapshot, reason, topicId, proposalId);
+    for (const listener of this.#listeners) listener(snapshot, reason, topicId, proposalId, previousState);
     return snapshot;
   }
 
   #load(): NangongEvolutionState {
     try {
-      const raw = JSON.parse(readFileSync(this.#filePath, "utf8")) as Omit<Partial<NangongEvolutionState>, "version"> & { version?: number; automaticApprovalEnabled?: boolean };
-      if ((raw.version === 1 || raw.version === 2 || raw.version === 3 || raw.version === 4 || raw.version === 5 || raw.version === 6 || raw.version === 7 || raw.version === 8) && Array.isArray(raw.topics) && Array.isArray(raw.proposals)) {
-        const value = raw as NangongEvolutionState;
-        const legacy = raw;
-        value.version = 8;
-        value.automaticNangongApprovalEnabled ??= legacy.automaticApprovalEnabled === true;
-        value.automaticLinghuApprovalEnabled ??= false;
-        value.conversation ??= createConversation();
-        value.automationSettings ??= { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 };
-        value.automationRuntime ??= { status: value.automaticEvolutionEnabled ? "running" : "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null };
-        value.automationContext ??= { workspaceState: null, locale: "zh-CN" };
-        value.deliberations ??= [];
-        value.archiveRecords ??= [];
-        // 旧状态即使尚未生成提案，也必须获得首个课题修订号才能安全编辑。
-        for (const topic of value.topics) {
-          topic.topicRevision ??= 1;
-          topic.continuationOfTopicId ??= null;
-          topic.nextTopicId ??= null;
-          topic.seriesId ??= topic.continuationOfTopicId || topic.topicId;
-          topic.roundNumber ??= 1;
-          topic.deliberationId ??= null;
-        }
-        for (const proposal of value.proposals) {
-          const topic = value.topics.find((item) => item.topicId === proposal.topicId);
-          topic && (topic.origin ??= "nangong");
-          topic && (topic.sourceConversationMessageIds ??= []);
-          proposal.origin ??= topic?.origin || "nangong";
-          proposal.distributionPlan ??= null;
-          proposal.resultSummary ??= null;
-          proposal.purpose ??= "work-proposal";
-          proposal.targetMemberId ??= null;
-          proposal.targetMemberDisplayName ??= null;
-          proposal.capabilityScope ??= null;
-          proposal.supersedesProposalId ??= null;
-          proposal.revisionFeedbackApprovalId ??= null;
-          for (const approval of proposal.approvals) {
-            approval.feedbackTarget ??= "proposal-content";
-            approval.capabilityScope ??= null;
-            approval.stage ??= "direction";
-          }
-        }
-        return value;
-      }
+      const raw = JSON.parse(readFileSync(this.#filePath, "utf8")) as Partial<NangongEvolutionState>;
+      if (raw.version === 8 && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
+        && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext
+        && typeof raw.automaticNangongApprovalEnabled === "boolean" && typeof raw.automaticLinghuApprovalEnabled === "boolean") return raw as NangongEvolutionState;
     } catch { /* 首次启动或损坏状态使用安全关闭的空状态，历史文件不会被扫描猜测。 */ }
     return createInitialState();
   }
@@ -557,6 +581,7 @@ function required(value: unknown, label: string, maximum: number): string {
 }
 function normalizedList(values: unknown, label: string): string[] { const result = normalizedOptionalList(values); if (!result.length) throw new Error(`${label}至少需要一项。`); return result; }
 function normalizedOptionalList(values: unknown): string[] { return Array.isArray(values) ? [...new Set(values.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean))].slice(0, 100) : []; }
+function preview(value: string): string { const characters = Array.from(value.trim()); return characters.length > 300 ? `${characters.slice(0, 300).join("")}…` : characters.join(""); }
 function normalizeCandidate(candidate: HanLiTopicCandidate): HanLiTopicCandidate {
   return {
     title: required(candidate.title, "演进专项标题", 160), goal: required(candidate.goal, "演进专项目标", 8_000),
@@ -577,9 +602,10 @@ function assertTopicEditableBeforeProposal(state: NangongEvolutionState, topic: 
 function createConversation(): NangongEvolutionState["conversation"] { const now = new Date().toISOString(); return { conversationId: `nangong-conversation-${randomUUID()}`, messages: [], updatedAt: now }; }
 
 function archiveCategory(reason: string): EvolutionArchiveCategory {
+  if (reason === "conversation.topic_group_replied") return "source";
   if (reason.startsWith("deliberation.")) return "deliberation";
   if (reason.includes("distributed")) return "distribution";
-  if (reason.includes("result_decided")) return "acceptance";
+  if (reason.includes("result_decided") || reason.startsWith("acceptance.")) return "acceptance";
   if (reason.includes("decided")) return "approval";
   if (reason.includes("progress")) return "execution";
   if (reason.startsWith("proposal.")) return "proposal";
@@ -589,7 +615,7 @@ function archiveCategory(reason: string): EvolutionArchiveCategory {
 
 function archiveActor(reason: string): EvolutionArchiveActor {
   if (reason.includes("nangong_answered") || reason.includes("proposal.created") || reason.includes("distributed")) return "nangong-wan";
-  if (reason.startsWith("deliberation.") || reason.includes("established_from_deliberation") || reason.includes("proposal.decided") || reason.includes("result_decided")) return "han-li";
+  if (reason.startsWith("deliberation.") || reason.startsWith("acceptance.") || reason.includes("established_from_deliberation") || reason.includes("proposal.decided") || reason.includes("result_decided")) return "han-li";
   if (reason.startsWith("linghu.")) return "linghu-ancestor";
   return "system";
 }
@@ -607,6 +633,9 @@ function archiveTitle(reason: string): string {
     "proposal.distributed": "南宫婉分发实施任务",
     "proposal.progress_reconciled": "专题执行状态更新",
     "proposal.result_decided": "韩立完成实施结果验收",
+    "acceptance.plan_generated": "韩立生成真实界面验收计划",
+    "acceptance.real_app_checked": "韩立完成真实应用界面检查",
+    "conversation.topic_group_replied": "专题群收到用户消息与南宫婉回复",
   };
   return titles[reason] || reason;
 }

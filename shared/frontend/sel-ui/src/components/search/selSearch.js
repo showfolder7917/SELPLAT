@@ -223,6 +223,13 @@
             return true;
         }
 
+        // 动态页签关闭时必须同时删除 DOM 和注册表，避免同名 Grid 重建后拿到旧输入框控制器。
+        function selSearchDestroy() {
+            selSearchHost.replaceChildren();
+            selSearchInstances.delete(selSearchGridId);
+            return true;
+        }
+
         /** 返回当前查询组件内每个可编辑元素；提交按钮仍由同一 form 统一提交全部条件。 */
         function selSearchGetLayoutTargets() {
             return selFreeze({
@@ -327,7 +334,9 @@
             // isLoading 返回当前实例查询状态。
             isLoading: () => selSearchState.loading,
             // setLocale 供统一语言管理器原位替换公共文案。
-            setLocale: selSearchSetLocale
+            setLocale: selSearchSetLocale,
+            // destroy 与 Grid 生命周期绑定，关闭页面后不保留旧实例。
+            destroy: selSearchDestroy
         });
     }
 
