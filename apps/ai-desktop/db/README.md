@@ -7,6 +7,7 @@
 - 提交：路径配置、本说明、`sql/load-order.txt` 和所有已发布 SQL。
 - 不提交：`events.sqlite3`、`events.sqlite3-wal`、`events.sqlite3-shm`。
 - 已发布 SQL 不得修改；变更结构必须追加新版本并更新加载清单。
+- `1007` 只在旧协作三表全部为空时物理删除它们；任何一表非空都会整批阻断，禁止部分删除。
 - `0006` 起，`AiDesktopEvolutionDeliberation`、`AiDesktopEvolutionSourceSnapshot` 和 `AiDesktopEvolutionArchiveRecord` 共同保存韩立研讨、对话库原文快照与专题全生命周期追加式档案；当前专题状态只是原始记录之上的投影。
 
 ## 启动和恢复

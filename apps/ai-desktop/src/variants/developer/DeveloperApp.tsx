@@ -77,7 +77,6 @@ import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, t
 import { TaskCollaborationGroup } from "../../features/collaboration/components/TaskCollaborationGroup";
 import { LinghuRepairProposalPanel, MemberSelfUpgradePanel } from "../../features/evolution/components/EvolutionRevisionPanels";
 import { EvolutionControlWorkspace } from "../../features/evolution/components/EvolutionControlWorkspace";
-import { EvolutionLiveActivity } from "../../features/evolution/components/EvolutionLiveActivity";
 import { defaultEvolutionWorkspaceLocation, evolutionMutationRequest, evolutionWorkspaceLocationFromSearch, evolutionWorkspaceLocationSearch } from "../../features/evolution/model/evolution-workbench";
 import { SettingsFloatingPanel } from "../../features/settings/components/SettingsFloatingPanel";
 import { ChatGPTLoginAction, WindowControls } from "../../features/shell/components/DesktopChrome";
@@ -135,7 +134,7 @@ type ActiveExplorerSection = "workspace" | "tasks";
 const testDataResetCopy = {
   ja: {
     title: "テストデータ",
-    summary: "テストトピック、タスク、承認、イベント、実行履歴",
+    summary: "データベース内のテストトピック、タスク、承認、イベント、実行状態",
     detail: "人物の会話、学習メモリ、ログイン、設定、ワークスペース、ルール、ソースコードは保持されます。完了後にアプリを再起動します。",
     action: "テストデータを一括消去",
     busy: "消去中…",
@@ -143,7 +142,7 @@ const testDataResetCopy = {
   },
   "zh-CN": {
     title: "测试数据",
-    summary: "测试专题、任务、审批、事件和运行记录",
+    summary: "数据库中的测试专题、任务、审批、事件和运行状态",
     detail: "保留人物对话、训练记忆、登录、设置、工作区、规则和源码；完成后自动重启应用。",
     action: "一键清空测试数据",
     busy: "正在清空…",
@@ -1527,7 +1526,6 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
 function NangongConversationWorkspace({ state, attachments, workspaces, locale, newConversationBusy, error, onState, onAttachments, onScreenshot, onPaste, onError }: { state: NangongEvolutionState; attachments: ComposerAttachment[]; workspaces: WorkspaceState | null; locale: Locale; newConversationBusy: boolean; error: string; onState(state: NangongEvolutionState): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
   const [chatText, setChatText] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
-  const [resumeBusy, setResumeBusy] = useState(false);
   const [topicDraftOpen, setTopicDraftOpen] = useState(false);
   const [topicDraftBusy, setTopicDraftBusy] = useState(false);
   const [topicDraftFeedback, setTopicDraftFeedback] = useState("");
@@ -1538,11 +1536,6 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
   const update = async (operation: () => Promise<NangongEvolutionState> | undefined) => {
     onError("");
     try { const pending = operation(); if (!pending) return; const next = await pending; onState(next); } catch (error) { onError(readableDesktopError(error, "专项演化操作失败。")); }
-  };
-  const resumeOneShot = async () => {
-    if (resumeBusy) return;
-    setResumeBusy(true);
-    try { await update(() => window.desktop?.resumeNangongOneShotEvolution()); } finally { setResumeBusy(false); }
   };
   const sendChat = async (confirmedMessage?: string) => {
     const message = confirmedMessage?.trim() || chatText.trim() || (attachments.length ? "请调查并分析这些截图中的问题。" : "");
@@ -1596,14 +1589,13 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
     ? [...state.conversation.messages].reverse().find((item) => item.role === "user" && item.content === outgoingMessage.content)?.messageId
     : null;
   return <SelUiConversation id="selConversationNangongWanId" onSubmit={() => void sendChat()} timeline={<section className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
-      <EvolutionLiveActivity run={state.oneShotRun} onResume={() => void resumeOneShot()} resumeBusy={resumeBusy} />
       {state.oneShotConfirmation?.status === "awaiting-user-confirmation" && state.oneShotRun?.status !== "running" && <section className="nangong-one-shot-confirmation" role="status" aria-label="本轮演化等待确认">
         <strong>本轮已具备启动条件</strong>
         <span>回复 1 将整理为演化课题，并连续进入审批、分发、测试和验收。</span>
         <button type="button" className="selform-action" disabled={chatBusy || !workspaces} onClick={() => void sendChat("1")}>回复 1 并启动本轮完整流程</button>
       </section>}
       {state.conversation.messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
-      {state.conversation.messages.filter((message) => message.messageId !== outgoingPersistedMessageId).map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.role}><header>{message.role === "user" ? "我" : "南宫婉"}</header><div className="selconversation-message-body">{attachmentPreviews[message.messageId]?.length ? <div className="selconversation-message-attachments">{attachmentPreviews[message.messageId].map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} />{message.role === "user" && message.inferredIntent && <aside className="nangong-intent-summary"><strong>我了解到您的想法是</strong><span>{message.inferredIntent}</span><small>如果我理解有偏差，您可以直接纠正我。</small></aside>}</div></article>)}
+      {state.conversation.messages.filter((message) => message.messageId !== outgoingPersistedMessageId).map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.role}><header>{message.role === "user" ? "我" : "南宫婉"}</header><div className="selconversation-message-body">{attachmentPreviews[message.messageId]?.length ? <div className="selconversation-message-attachments">{attachmentPreviews[message.messageId].map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
       {outgoingMessage && <article className="selconversation-message" data-role="user"><header>我 · {outgoingMessage.failed ? "发送失败" : "发送中"}</header><div className="selconversation-message-body">{outgoingMessage.attachments.length > 0 && <div className="selconversation-message-attachments">{outgoingMessage.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div>}<MarkdownMessage text={outgoingMessage.content} /></div></article>}
     </section>} composer={<form className="selconversation-composer nangong-person-composer" onSubmit={(event) => { event.preventDefault(); void sendChat(); }}>
       {topicDraftOpen && <section className="selform-root" aria-label="整理演化课题">

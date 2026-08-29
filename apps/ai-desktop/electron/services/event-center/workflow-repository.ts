@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { ApprovalGovernanceRecord } from "../../../contracts/governance/approval-governance.js";
 import type { CodexStreamEvent } from "../../../contracts/codex/codex-stream.js";
 import type { CollaborationState, CollaborationTask, CollaborationTimelineSnapshot } from "../../../contracts/collaboration/collaboration.js";
+import type { CollaborationTimelineBusinessEvent } from "../../../contracts/collaboration/collaboration-timeline-event.js";
 import type { LinghuAutomationState } from "../../../contracts/collaboration/linghu-automation.js";
 import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkbenchRow, EvolutionWorkbenchView, NangongEvolutionState, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../contracts/governance/workflow.js";
@@ -321,7 +322,6 @@ export class WorkflowRepository {
       const roundIds = [...new Set(state.tasks.map((task) => task.evolutionRoundId).filter((value): value is string => Boolean(value)))];
       for (const roundId of roundIds) this.#upsertEvolutionRound(connection, state, roundId);
     });
-    this.#collaborationTimeline.syncCollaborationState(state);
   }
 
   syncEvolutionState(state: NangongEvolutionState): void {
@@ -412,7 +412,16 @@ export class WorkflowRepository {
     });
     // 查询版本代表整个演化读模型，不随当前筛选结果变化，供增量事件准确识别漏报和乱序。
     this.#evolutionWorkbenchStateVersion = state.updatedAt;
-    this.#collaborationTimeline.syncEvolutionState(state);
+  }
+
+  /** 新任务协作群的唯一写入口；调用方必须提交已发生的不可变业务事件。 */
+  appendCollaborationTimelineEvent(event: CollaborationTimelineBusinessEvent): void {
+    this.#collaborationTimeline.appendBusinessEvent(event);
+  }
+
+  /** 协作执行仅追加 Coordinator 生成的 flowEvents，不从任务当前状态反推节点。 */
+  appendCollaborationTaskFlowEvents(state: CollaborationState, taskIds: string[]): void {
+    this.#collaborationTimeline.appendTaskFlowEvents(state, taskIds);
   }
 
   /** 任务协作群只从 SQLite 追加事实生成，不再读取或拼接 JSON 当前快照。 */
@@ -558,18 +567,22 @@ export class WorkflowRepository {
     return this.#database.transaction((connection) => {
       // 固定白名单只包含可重建运行投影；SchemaVersion、人物原文、主题、归档消息与入库检查点永远不进入清理范围。
       const tables = [
-        "AiDesktopCollaborationStreamChunk", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationTopic",
+        "AiDesktopTaskCollaborationStream", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationTopic",
         "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord",
         "AiDesktopApprovalGovernance", "AiDesktopApprovalRecord", "AiDesktopTaskExecution", "AiDesktopWorkflowRun",
         "AiDesktopMemberRuntime", "AiDesktopEvent", "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation",
       ] as const;
       let clearedRecordCount = 0;
       for (const table of tables) clearedRecordCount += Number(connection.prepare(`DELETE FROM ${table}`).run().changes);
+      for (const table of tables) {
+        const remaining = Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count);
+        if (remaining !== 0) throw new Error(`测试数据清空后仍检测到 ${table} 运行记录。`);
+      }
       return clearedRecordCount;
     });
   }
 
-  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopTrainingCorpusTopic" | "AiDesktopTrainingCorpusMessage" | "AiDesktopCorpusIngestionCheckpoint" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord" | "AiDesktopEvolutionRound" | "AiDesktopEvolutionRoundTask" | "AiDesktopEvolutionWorkbenchPreference" | "AiDesktopCollaborationTopic" | "AiDesktopCollaborationTimelineEvent" | "AiDesktopCollaborationStreamChunk"): number {
+  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopTrainingCorpusTopic" | "AiDesktopTrainingCorpusMessage" | "AiDesktopCorpusIngestionCheckpoint" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord" | "AiDesktopEvolutionRound" | "AiDesktopEvolutionRoundTask" | "AiDesktopEvolutionWorkbenchPreference" | "AiDesktopTaskCollaborationTopic" | "AiDesktopTaskCollaborationEvent" | "AiDesktopTaskCollaborationStream"): number {
     return this.#database.withConnection((connection) => Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count));
   }
 

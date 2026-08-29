@@ -10,7 +10,7 @@ import type {
   CollaborationTimelineNode,
   CollaborationTimelineSnapshot,
 } from "../../../contracts/collaboration/collaboration.js";
-import type { EvolutionProposal, NangongEvolutionState } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { CollaborationTimelineBusinessEvent } from "../../../contracts/collaboration/collaboration-timeline-event.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
 const HAN_LI: CollaborationParticipantSnapshot = { memberId: "han-li", displayName: "韩立" };
@@ -34,60 +34,71 @@ type TimelineFact = Omit<CollaborationTimelineNode, "durationMs"> & {
  */
 export class CollaborationTimelineRepository {
   readonly #database: SqliteDatabase;
-  readonly #cutoverAt: string;
 
   constructor(database: SqliteDatabase) {
     this.#database = database;
-    this.#cutoverAt = database.withConnection((connection) => {
-      const row = connection.prepare("SELECT appliedAt FROM AiDesktopSchemaVersion WHERE versionCode = '1003'").get() as { appliedAt?: unknown } | undefined;
-      return typeof row?.appliedAt === "string" ? row.appliedAt : new Date().toISOString();
+  }
+
+  /** 追加一条已发生的业务事件；仓库不接收也不反推提案当前状态。 */
+  appendBusinessEvent(event: CollaborationTimelineBusinessEvent): void {
+    this.#database.transaction((connection) => {
+      this.#upsertTopic(connection, event.group);
+      this.#appendFact(connection, { ...event.fact, groupId: event.group.groupId });
     });
   }
 
-  syncEvolutionState(state: NangongEvolutionState): void {
+  /** 只消费 Coordinator 已追加的 flowEvents，不再从 executionRecords、plan 或 task.state 重建历史。 */
+  appendTaskFlowEvents(state: CollaborationState, taskIds: string[]): void {
     this.#database.transaction((connection) => {
-      for (const topic of state.topics) {
-        const groupId = `topic:${topic.topicId}`;
-        if (!this.#tracks(connection, groupId, topic.createdAt)) continue;
-        const proposals = state.proposals.filter((proposal) => proposal.topicId === topic.topicId).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-        if (!proposals.length) continue;
-        const latest = proposals.at(-1)!;
-        this.#upsertTopic(connection, {
-          groupId, topicId: topic.topicId, proposalId: latest.proposalId, title: topic.title,
-          status: topicStatus(latest.status), summary: latest.resultSummary || latest.content,
-          startedAt: topic.createdAt, updatedAt: topic.updatedAt,
-        });
-        for (const proposal of proposals) this.#appendProposalFacts(connection, groupId, proposal, proposals, state);
-      }
-    });
-  }
-
-  syncCollaborationState(state: CollaborationState): void {
-    this.#database.transaction((connection) => {
-      for (const task of state.tasks) {
-        let group = task.evolutionProposalId ? connection.prepare(`
-          SELECT groupId, topicId, proposalId, title FROM AiDesktopCollaborationTopic
-          WHERE proposalId = $proposalId OR groupId IN (
-            SELECT groupId FROM AiDesktopCollaborationTimelineEvent WHERE proposalId = $proposalId
-          ) ORDER BY updatedAt DESC LIMIT 1
-        `).get({ $proposalId: task.evolutionProposalId }) as Record<string, unknown> | undefined : undefined;
+      for (const task of state.tasks.filter((candidate) => taskIds.includes(candidate.taskId))) {
+        let group = task.evolutionProposalId ? connection.prepare(`SELECT groupId, topicId, proposalId, title, startedAt
+          FROM AiDesktopTaskCollaborationTopic WHERE proposalId=$proposalId ORDER BY updatedAt DESC LIMIT 1`)
+          .get({ $proposalId: task.evolutionProposalId }) as Record<string, unknown> | undefined : undefined;
         if (!group) {
           const groupId = `task:${task.taskId}`;
-          if (!this.#tracks(connection, groupId, task.createdAt)) continue;
           this.#upsertTopic(connection, {
             groupId, topicId: null, proposalId: task.evolutionProposalId, title: task.snapshot.title,
-            status: taskStatus(task), summary: task.blockingReason || task.finalResult || task.snapshot.confirmedIntent,
+            status: "running", summary: task.snapshot.confirmedIntent,
             startedAt: task.createdAt, updatedAt: task.updatedAt,
           });
-          group = { groupId, topicId: null, proposalId: task.evolutionProposalId, title: task.snapshot.title };
-        } else {
-          connection.prepare(`UPDATE AiDesktopCollaborationTopic SET status=$status, summary=$summary,
+          group = { groupId, topicId: null, proposalId: task.evolutionProposalId, title: task.snapshot.title, startedAt: task.createdAt };
+        }
+        for (const event of task.flowEvents) {
+          if (connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: `flow:${event.eventId}` })) continue;
+          const mapped = flowFact(task, event, task.initiator || NANGONG);
+          if (!mapped) continue;
+          this.#appendFact(connection, { ...mapped, groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId, sourceFactKey: `flow:${event.eventId}`, occurredAt: event.occurredAt });
+          const actor = event.actor || SYSTEM;
+          const assignment = assignmentAt(task, actor.memberId, event.occurredAt);
+          if (event.type === "worker.phase.verifying" && assignment) this.#appendFact(connection, {
+            groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
+            nodeId: `execution:${task.taskId}:${assignment.assignmentId}`, sourceFactKey: `flow:${event.eventId}:execution-completed`,
+            kind: "execution", actor, recipients: [task.initiator || NANGONG], status: "completed", action: "执行完成",
+            summary: event.summary, content: assignment.result || event.summary, detail: (assignment.changedFiles || []).join("\n"),
+            startedAt: assignment.executionStartedAt || assignment.assignedAt, completedAt: event.occurredAt, automaticOpen: false,
+            manualApprovalProposalId: null, occurredAt: event.occurredAt,
+          });
+          if (event.type === "task.blocked" && assignment) this.#appendFact(connection, {
+            groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
+            nodeId: `execution:${task.taskId}:${assignment.assignmentId}`, sourceFactKey: `flow:${event.eventId}:execution-failed`,
+            kind: "execution", actor: assignment.executor, recipients: [task.initiator || NANGONG], status: "failed", action: "处理未完成",
+            summary: event.summary, content: assignment.result || event.summary, detail: task.blockingReason || assignment.blockingReason || "",
+            startedAt: assignment.executionStartedAt || assignment.assignedAt, completedAt: event.occurredAt, automaticOpen: true,
+            manualApprovalProposalId: null, occurredAt: event.occurredAt,
+          });
+          if (event.type === "task.code_verified" && task.evolutionProposalId) this.#appendFact(connection, {
+            groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
+            nodeId: `return:${task.taskId}`, sourceFactKey: `flow:${event.eventId}:returned-to-nangong`, kind: "result",
+            actor, recipients: [NANGONG], status: "completed", action: "执行与自检结果已返回",
+            summary: event.summary, content: task.finalResult || event.summary, detail: task.resultSummary?.changes || "",
+            startedAt: event.occurredAt, completedAt: event.occurredAt, automaticOpen: false,
+            manualApprovalProposalId: null, occurredAt: event.occurredAt,
+          });
+          connection.prepare(`UPDATE AiDesktopTaskCollaborationTopic SET status=$status, summary=$summary,
             updatedAt=CASE WHEN updatedAt < $updatedAt THEN $updatedAt ELSE updatedAt END WHERE groupId=$groupId`).run({
-            $status: taskStatus(task), $summary: task.blockingReason || task.finalResult || task.snapshot.confirmedIntent,
-            $updatedAt: task.updatedAt, $groupId: String(group.groupId),
+            $status: groupStatusForFact(mapped), $summary: mapped.summary, $updatedAt: event.occurredAt, $groupId: String(group.groupId),
           });
         }
-        this.#appendTaskFacts(connection, String(group.groupId), task);
       }
     });
   }
@@ -96,14 +107,14 @@ export class CollaborationTimelineRepository {
     this.#database.transaction((connection) => {
       const active = connection.prepare(`
         SELECT timeline.groupId, timeline.nodeId
-        FROM AiDesktopCollaborationTimelineEvent timeline
-        JOIN AiDesktopCollaborationTopic topic ON topic.groupId = timeline.groupId
+        FROM AiDesktopTaskCollaborationEvent timeline
+        JOIN AiDesktopTaskCollaborationTopic topic ON topic.groupId = timeline.groupId
         WHERE timeline.taskId=$taskId AND timeline.actorMemberId=$memberId
         ORDER BY timeline.sequenceNumber DESC LIMIT 1
       `).get({ $taskId: taskId, $memberId: memberId }) as { groupId: string; nodeId: string } | undefined;
       if (!active) return;
-      const sequence = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopCollaborationStreamChunk WHERE taskId=$taskId").get({ $taskId: taskId }) as { value: number | bigint }).value);
-      connection.prepare(`INSERT INTO AiDesktopCollaborationStreamChunk
+      const sequence = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopTaskCollaborationStream WHERE taskId=$taskId").get({ $taskId: taskId }) as { value: number | bigint }).value);
+      connection.prepare(`INSERT INTO AiDesktopTaskCollaborationStream
         (chunkId, groupId, taskId, nodeId, memberId, turnId, segmentId, itemId, eventType, sequenceNumber, deltaText, snapshotText, occurredAt)
         VALUES ($chunkId, $groupId, $taskId, $nodeId, $memberId, $turnId, $segmentId, $itemId, $eventType, $sequenceNumber, $deltaText, $snapshotText, $occurredAt)`).run({
         $chunkId: `timeline-stream-${randomUUID()}`, $groupId: active.groupId, $taskId: taskId, $nodeId: active.nodeId,
@@ -111,200 +122,39 @@ export class CollaborationTimelineRepository {
         $eventType: event.type, $sequenceNumber: sequence, $deltaText: event.delta || null,
         $snapshotText: event.text || event.managedExecution?.message || event.error || null, $occurredAt: occurredAt,
       });
-      connection.prepare("UPDATE AiDesktopCollaborationTopic SET updatedAt=$occurredAt WHERE groupId=$groupId AND updatedAt < $occurredAt").run({ $occurredAt: occurredAt, $groupId: active.groupId });
+      connection.prepare("UPDATE AiDesktopTaskCollaborationTopic SET updatedAt=$occurredAt WHERE groupId=$groupId AND updatedAt < $occurredAt").run({ $occurredAt: occurredAt, $groupId: active.groupId });
     });
   }
 
   snapshot(now = new Date().toISOString()): CollaborationTimelineSnapshot {
     return this.#database.withConnection((connection) => {
       const topics = connection.prepare(`SELECT groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt
-        FROM AiDesktopCollaborationTopic ORDER BY updatedAt DESC, groupId`).all() as Array<Record<string, unknown>>;
+        FROM AiDesktopTaskCollaborationTopic ORDER BY updatedAt DESC, groupId`).all() as Array<Record<string, unknown>>;
       const groups = topics.map((topic) => this.#group(connection, topic, now));
       return { version: 1, groups, updatedAt: groups.map((group) => group.updatedAt).sort().at(-1) || now };
     });
-  }
-
-  #tracks(connection: DatabaseSync, groupId: string, sourceCreatedAt: string): boolean {
-    if (connection.prepare("SELECT 1 FROM AiDesktopCollaborationTopic WHERE groupId=$groupId").get({ $groupId: groupId })) return true;
-    return sourceCreatedAt >= this.#cutoverAt;
   }
 
   #upsertTopic(connection: DatabaseSync, input: {
     groupId: string; topicId: string | null; proposalId: string | null; title: string;
     status: CollaborationTimelineGroup["status"]; summary: string; startedAt: string; updatedAt: string;
   }): void {
-    connection.prepare(`INSERT INTO AiDesktopCollaborationTopic
+    connection.prepare(`INSERT INTO AiDesktopTaskCollaborationTopic
       (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
       VALUES ($groupId, $topicId, $proposalId, $title, $status, $summary, $startedAt, $updatedAt, $createdAt)
       ON CONFLICT(groupId) DO UPDATE SET proposalId=excluded.proposalId, title=excluded.title,
         status=excluded.status, summary=excluded.summary,
-        updatedAt=CASE WHEN AiDesktopCollaborationTopic.updatedAt < excluded.updatedAt THEN excluded.updatedAt ELSE AiDesktopCollaborationTopic.updatedAt END`).run({
+        updatedAt=CASE WHEN AiDesktopTaskCollaborationTopic.updatedAt < excluded.updatedAt THEN excluded.updatedAt ELSE AiDesktopTaskCollaborationTopic.updatedAt END`).run({
       $groupId: input.groupId, $topicId: input.topicId, $proposalId: input.proposalId, $title: input.title,
       $status: input.status, $summary: input.summary, $startedAt: input.startedAt,
       $updatedAt: input.updatedAt, $createdAt: new Date().toISOString(),
     });
   }
 
-  #appendProposalFacts(connection: DatabaseSync, groupId: string, proposal: EvolutionProposal, proposals: EvolutionProposal[], state: NangongEvolutionState): void {
-    const waiting = proposal.status === "pending-approval"
-      && !(proposal.origin === "linghu" ? state.automaticLinghuApprovalEnabled : state.automaticNangongApprovalEnabled);
-    const decisionAt = proposal.approvals[0]?.createdAt || (proposal.status === "pending-approval" ? null : proposal.updatedAt);
-    this.#appendFact(connection, {
-      groupId, proposalId: proposal.proposalId, taskId: null, nodeId: `proposal:${proposal.proposalId}`,
-      sourceFactKey: `proposal:${proposal.proposalId}:application:${waiting ? "waiting" : "submitted"}`,
-      kind: "approval-application", actor: participant(proposal.submitterMemberId, proposal.submitterDisplayName), recipients: [HAN_LI],
-      status: waiting ? "current" : "completed", action: proposal.supersedesProposalId ? "补充后再次申请" : "审批申请",
-      summary: proposal.content, content: proposal.content, detail: proposal.evidence.join("\n"), startedAt: proposal.createdAt,
-      completedAt: waiting ? null : decisionAt || proposal.createdAt, automaticOpen: waiting,
-      manualApprovalProposalId: waiting ? proposal.proposalId : null, occurredAt: decisionAt || proposal.createdAt,
-    });
-    for (const approval of proposal.approvals) this.#appendFact(connection, {
-      groupId, proposalId: proposal.proposalId, taskId: null, nodeId: `approval:${approval.approvalId}`,
-      sourceFactKey: `approval:${approval.approvalId}`, kind: "approval-decision",
-      actor: participant(approval.approverMemberId, approval.approverDisplayName),
-      recipients: [participant(proposal.submitterMemberId, proposal.submitterDisplayName)],
-      status: approval.decision === "approved" ? "completed" : "failed",
-      action: approval.decision === "approved" ? "审批通过" : approval.decision === "supplement-required" ? "审批退回补充" : "审批驳回",
-      summary: approval.advice, content: approval.advice, detail: approval.capabilityScope || "",
-      startedAt: approval.createdAt, completedAt: approval.createdAt, automaticOpen: false,
-      manualApprovalProposalId: null, occurredAt: approval.createdAt,
-    });
-    const returnedApproval = proposal.approvals.at(-1);
-    if (returnedApproval && returnedApproval.decision !== "approved") {
-      const revision = proposals.find((candidate) => candidate.supersedesProposalId === proposal.proposalId);
-      const supplementStatus: CollaborationTimelineNode["status"] = revision ? "completed" : state.automaticEvolutionEnabled ? "current" : "waiting";
-      const action = revision ? "补充材料已重新提交" : state.automaticEvolutionEnabled ? "正在补充审批材料" : "等待手动补充审批材料";
-      this.#appendFact(connection, {
-        groupId, proposalId: proposal.proposalId, taskId: null, nodeId: `supplement:${proposal.proposalId}`,
-        sourceFactKey: `supplement:${proposal.proposalId}:${revision?.proposalId || supplementStatus}`, kind: "analysis",
-        actor: participant(proposal.submitterMemberId, proposal.submitterDisplayName), recipients: [HAN_LI], status: supplementStatus, action,
-        summary: revision ? "已根据韩立的退回原因补充方案并重新申请审批。" : `根据韩立的退回原因补充方案：${returnedApproval.advice}`,
-        content: revision?.content || returnedApproval.advice, detail: returnedApproval.advice,
-        startedAt: returnedApproval.createdAt, completedAt: revision?.createdAt || null, automaticOpen: supplementStatus === "current",
-        manualApprovalProposalId: null, occurredAt: revision?.createdAt || returnedApproval.createdAt,
-      });
-    }
-    if (!proposal.distributedTaskIds.length) return;
-    const recipients = proposal.distributedTaskIds.map((taskId) => {
-      const row = connection.prepare("SELECT executorMemberId FROM AiDesktopTaskExecution WHERE taskId=$taskId").get({ $taskId: taskId }) as { executorMemberId?: unknown } | undefined;
-      const memberId = typeof row?.executorMemberId === "string" ? row.executorMemberId : null;
-      if (memberId && !["nangong-wan", "system", "pending"].includes(memberId)) {
-        const runtimeMember = connection.prepare("SELECT displayName FROM AiDesktopMemberRuntime WHERE memberId=$memberId").get({ $memberId: memberId }) as { displayName?: unknown } | undefined;
-        return participant(memberId, typeof runtimeMember?.displayName === "string" ? runtimeMember.displayName : memberId);
-      }
-      const timelineActor = connection.prepare(`SELECT actorMemberId, actorDisplayName
-        FROM AiDesktopCollaborationTimelineEvent WHERE taskId=$taskId AND kind IN ('analysis', 'execution')
-          AND actorMemberId NOT IN ('nangong-wan', 'system', 'pending')
-        ORDER BY sequenceNumber DESC LIMIT 1`).get({ $taskId: taskId }) as { actorMemberId?: unknown; actorDisplayName?: unknown } | undefined;
-      if (typeof timelineActor?.actorMemberId === "string" && typeof timelineActor.actorDisplayName === "string") {
-        return participant(timelineActor.actorMemberId, timelineActor.actorDisplayName);
-      }
-      return participant("pending", "等待分配");
-    }).filter(uniqueParticipant);
-    const plannedAt = proposal.distributionPlan?.plannedAt || proposal.updatedAt;
-    this.#appendFact(connection, {
-      groupId, proposalId: proposal.proposalId, taskId: null, nodeId: `distribution:${proposal.proposalId}`,
-      sourceFactKey: `distribution:${proposal.proposalId}:${recipients.map((recipient) => recipient.memberId).sort().join(",")}`, kind: "distribution",
-      actor: participant(proposal.submitterMemberId, proposal.submitterDisplayName), recipients,
-      status: "completed", action: "任务分发", summary: proposal.distributionPlan?.summary || proposal.content,
-      content: distributionContent(proposal, proposals),
-      detail: proposal.distributionPlan?.units.map((unit) => `${unit.title}：${unit.scope}`).join("\n") || "",
-      startedAt: plannedAt, completedAt: plannedAt, automaticOpen: false, manualApprovalProposalId: null, occurredAt: plannedAt,
-    });
-  }
-
-  #appendTaskFacts(connection: DatabaseSync, groupId: string, task: CollaborationTask): void {
-    const initiator = task.initiator || NANGONG;
-    const firstAssignment = task.executionRecords[0];
-    if (firstAssignment) this.#appendFact(connection, {
-      groupId, proposalId: task.evolutionProposalId, taskId: task.taskId, nodeId: `execution:${task.taskId}:waiting`,
-      sourceFactKey: `execution:${task.taskId}:waiting:assigned:${firstAssignment.assignmentId}`, kind: "execution",
-      actor: SYSTEM, recipients: [firstAssignment.executor], status: "completed", action: "执行人已确定",
-      summary: `${firstAssignment.executor.displayName}已接收任务，等待阶段结束。`, content: "", detail: "",
-      startedAt: task.createdAt, completedAt: firstAssignment.assignedAt, automaticOpen: false,
-      manualApprovalProposalId: null, occurredAt: firstAssignment.assignedAt,
-    });
-    const completedAnalysisAssignments = new Set<string>();
-    for (const plan of task.plans) {
-      const assignment = [...task.executionRecords].reverse().find((record) => record.executor.memberId === plan.ownerMemberId && record.assignedAt <= plan.createdAt);
-      const firstForAssignment = Boolean(assignment && !completedAnalysisAssignments.has(assignment.assignmentId));
-      if (assignment) completedAnalysisAssignments.add(assignment.assignmentId);
-      this.#appendFact(connection, {
-        groupId, proposalId: task.evolutionProposalId, taskId: task.taskId,
-        nodeId: firstForAssignment ? `analysis:${task.taskId}:assignment:${assignment!.assignmentId}` : `analysis:${task.taskId}:plan:${plan.version}`,
-        sourceFactKey: `analysis:${task.taskId}:plan:${plan.version}`, kind: "analysis",
-        actor: participant(plan.ownerMemberId, plan.ownerDisplayName), recipients: [initiator], status: "completed", action: "技术分析",
-        summary: plan.text, content: plan.text, detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"),
-        startedAt: assignment?.assignedAt || task.startedAt, completedAt: plan.createdAt, automaticOpen: false,
-        manualApprovalProposalId: null, occurredAt: plan.createdAt,
-      });
-    }
-    for (const record of task.executionRecords) {
-      const plan = [...task.plans].reverse().find((candidate) => candidate.ownerMemberId === record.executor.memberId && candidate.createdAt >= record.assignedAt);
-      if (!plan && record.status === "analyzing") this.#appendFact(connection, {
-        groupId, proposalId: task.evolutionProposalId, taskId: task.taskId, nodeId: `analysis:${task.taskId}:assignment:${record.assignmentId}`,
-        sourceFactKey: `analysis:${task.taskId}:${record.assignmentId}:started`, kind: "analysis", actor: record.executor,
-        recipients: [initiator], status: "current", action: "当前正在技术分析", summary: task.snapshot.confirmedIntent,
-        content: "", detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"),
-        startedAt: record.assignedAt, completedAt: null, automaticOpen: true,
-        manualApprovalProposalId: null, occurredAt: record.assignedAt,
-      });
-
-      const isLatestRecord = record === task.executionRecords.at(-1);
-      const isLatestVerification = isLatestRecord && task.phase === "verifying";
-      const superseded = !isLatestRecord && !record.completedAt;
-      const handlerChanged = isLatestRecord && Boolean(task.currentHandler && task.currentHandler.memberId !== record.executor.memberId)
-        && ["repairing-execution", "recovering", "blocked", "test-failed"].includes(task.state);
-      const executionStatus: CollaborationTimelineNode["status"] = record.status === "blocked" || superseded || handlerChanged ? "failed"
-        : record.status === "assigned" || record.status === "analyzing" ? "waiting"
-          : isLatestVerification || ["code-verified", "transferred", "cancelled"].includes(record.status) ? "completed" : "current";
-      const executionCompletedAt = executionStatus === "completed" || executionStatus === "failed" ? record.completedAt || task.updatedAt : null;
-      this.#appendFact(connection, {
-        groupId, proposalId: task.evolutionProposalId, taskId: task.taskId, nodeId: `execution:${task.taskId}:${record.assignmentId}`,
-        sourceFactKey: `execution:${task.taskId}:${record.assignmentId}:${record.status}:${executionCompletedAt || "open"}`,
-        kind: "execution", actor: record.executor, recipients: [initiator], status: executionStatus,
-        action: executionStatus === "failed" ? "处理失败" : executionStatus === "waiting" ? "等待执行" : executionStatus === "completed" ? "执行完成" : "当前正在执行",
-        summary: record.blockingReason || record.result || task.snapshot.confirmedIntent,
-        content: record.result || (executionStatus === "current" ? "" : task.snapshot.confirmedIntent),
-        detail: (record.changedFiles || []).join("\n"), startedAt: record.executionStartedAt || plan?.createdAt || record.assignedAt,
-        completedAt: executionCompletedAt, automaticOpen: executionStatus === "current" || executionStatus === "failed",
-        manualApprovalProposalId: null, occurredAt: executionCompletedAt || record.executionStartedAt || record.assignedAt,
-      });
-
-      const verifying = isLatestVerification;
-      const verified = record.status === "code-verified";
-      if (verifying || verified) this.#appendFact(connection, {
-        groupId, proposalId: task.evolutionProposalId, taskId: task.taskId, nodeId: `verification:${task.taskId}:${record.assignmentId}`,
-        sourceFactKey: `verification:${task.taskId}:${record.assignmentId}:${verified ? "completed" : "started"}`,
-        kind: "verification", actor: record.executor, recipients: [initiator], status: verified ? "completed" : "current",
-        action: verified ? "执行人自检完成" : "当前正在执行人自检", summary: record.result || task.flowEvents.at(-1)?.summary || "正在对已完成的修改进行代码级检查",
-        content: record.result || "", detail: (record.changedFiles || []).join("\n"),
-        startedAt: verificationStartedAt(task, record), completedAt: verified ? record.completedAt || task.codeVerifiedAt : null,
-        automaticOpen: !verified, manualApprovalProposalId: null, occurredAt: verified ? record.completedAt || task.codeVerifiedAt || task.updatedAt : task.updatedAt,
-      });
-    }
-
-    if (!task.executionRecords.length) {
-      const actor = task.originalExecutor || task.currentHandler || participant(task.preferredExecutorMemberId || "pending", "等待分配");
-      this.#appendFact(connection, {
-        groupId, proposalId: task.evolutionProposalId, taskId: task.taskId, nodeId: `execution:${task.taskId}:waiting`,
-        sourceFactKey: `execution:${task.taskId}:waiting`, kind: "execution", actor, recipients: [initiator], status: "waiting",
-        action: "等待执行", summary: task.snapshot.confirmedIntent, content: task.snapshot.confirmedIntent,
-        detail: task.snapshot.acceptanceCriteria.join("\n"), startedAt: task.createdAt, completedAt: null,
-        automaticOpen: false, manualApprovalProposalId: null, occurredAt: task.createdAt,
-      });
-    }
-
-    for (const event of task.flowEvents) {
-      const mapped = flowFact(task, event, initiator);
-      if (mapped) this.#appendFact(connection, { ...mapped, groupId, proposalId: task.evolutionProposalId, taskId: task.taskId, sourceFactKey: `flow:${event.eventId}`, occurredAt: event.occurredAt });
-    }
-  }
-
   #appendFact(connection: DatabaseSync, fact: TimelineFact): void {
-    if (connection.prepare("SELECT 1 FROM AiDesktopCollaborationTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: fact.sourceFactKey })) return;
-    const sequenceNumber = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopCollaborationTimelineEvent WHERE groupId=$groupId").get({ $groupId: fact.groupId }) as { value: number | bigint }).value);
-    connection.prepare(`INSERT INTO AiDesktopCollaborationTimelineEvent
+    if (connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: fact.sourceFactKey })) return;
+    const sequenceNumber = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopTaskCollaborationEvent WHERE groupId=$groupId").get({ $groupId: fact.groupId }) as { value: number | bigint }).value);
+    connection.prepare(`INSERT INTO AiDesktopTaskCollaborationEvent
       (factId, groupId, proposalId, taskId, nodeId, sourceFactKey, sequenceNumber, kind, actorMemberId, actorDisplayName,
        recipientsJson, status, action, summary, content, detail, startedAt, completedAt, automaticOpen,
        manualApprovalProposalId, occurredAt, recordedAt)
@@ -322,7 +172,7 @@ export class CollaborationTimelineRepository {
   }
 
   #group(connection: DatabaseSync, topic: Record<string, unknown>, now: string): CollaborationTimelineGroup {
-    const rows = connection.prepare(`SELECT * FROM AiDesktopCollaborationTimelineEvent WHERE groupId=$groupId
+    const rows = connection.prepare(`SELECT * FROM AiDesktopTaskCollaborationEvent WHERE groupId=$groupId
       ORDER BY sequenceNumber, occurredAt, factId`).all({ $groupId: String(topic.groupId) }) as Array<Record<string, unknown>>;
     const latestByNode = new Map<string, Record<string, unknown>>();
     const firstSequence = new Map<string, number>();
@@ -370,10 +220,36 @@ export class CollaborationTimelineRepository {
 
 function flowFact(task: CollaborationTask, event: CollaborationTask["flowEvents"][number], initiator: CollaborationParticipantSnapshot): Omit<TimelineFact, "groupId" | "proposalId" | "taskId" | "sourceFactKey" | "occurredAt"> | null {
   const actor = event.actor || SYSTEM;
+  const assignment = assignmentAt(task, actor.memberId, event.occurredAt);
+  const assignmentKey = assignment?.assignmentId || `${actor.memberId}:${event.eventId}`;
+  const analysisNodeId = `analysis:${task.taskId}:${assignmentKey}`;
+  const executionNodeId = `execution:${task.taskId}:${assignmentKey}`;
+  const verificationNodeId = `verification:${task.taskId}:${assignmentKey}`;
+  if (event.type === "executor.assigned" || event.type === "executor.reassigned") return {
+    nodeId: analysisNodeId, kind: "analysis", actor, recipients: [initiator], status: "current", action: "当前正在技术分析",
+    summary: event.summary, content: "", detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"),
+    startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
+  };
+  if (event.type === "technical_analysis.ready") return {
+    nodeId: analysisNodeId, kind: "analysis", actor, recipients: [initiator], status: "completed", action: "技术分析完成",
+    summary: event.summary, content: task.plans.find((plan) => plan.ownerMemberId === actor.memberId)?.text || event.summary,
+    detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"), startedAt: assignment?.assignedAt || event.occurredAt,
+    completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
+  };
+  if (event.type === "execution.started") return {
+    nodeId: executionNodeId, kind: "execution", actor, recipients: [initiator], status: "current", action: "当前正在执行",
+    summary: event.summary, content: "", detail: "", startedAt: event.occurredAt, completedAt: null,
+    automaticOpen: true, manualApprovalProposalId: null,
+  };
+  if (event.type === "worker.phase.verifying") return {
+    nodeId: verificationNodeId, kind: "verification", actor, recipients: [initiator], status: "current", action: "当前正在执行人自检",
+    summary: event.summary, content: "", detail: (assignment?.changedFiles || []).join("\n"), startedAt: event.occurredAt,
+    completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
+  };
   if (event.type === "task.code_verified" && task.evolutionProposalId) return {
-    nodeId: `return:${task.taskId}`, kind: "result", actor, recipients: [initiator], status: "completed", action: "执行结果返回",
-    summary: event.summary, content: task.finalResult || event.summary, detail: task.resultSummary?.changes || "",
-    startedAt: task.startedAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
+    nodeId: verificationNodeId, kind: "verification", actor, recipients: [initiator], status: "completed", action: "执行人自检完成",
+    summary: event.summary, content: task.finalResult || event.summary, detail: task.resultSummary?.changes || (assignment?.changedFiles || []).join("\n"),
+    startedAt: assignment?.executionStartedAt || task.startedAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
   };
   if (event.type === "evolution.task_collected") return {
     nodeId: `collection:${task.evolutionRoundId || task.taskId}`, kind: "result", actor: NANGONG, recipients: [LINGHU], status: "completed",
@@ -413,8 +289,12 @@ function flowFact(task: CollaborationTask, event: CollaborationTask["flowEvents"
   return null;
 }
 
+function assignmentAt(task: CollaborationTask, memberId: string, occurredAt: string): CollaborationTask["executionRecords"][number] | null {
+  return [...task.executionRecords].reverse().find((record) => record.executor.memberId === memberId && record.assignedAt <= occurredAt) || null;
+}
+
 function visibleStreamText(connection: DatabaseSync, groupId: string, nodeId: string): string {
-  const rows = connection.prepare(`SELECT turnId, eventType, deltaText, snapshotText FROM AiDesktopCollaborationStreamChunk
+  const rows = connection.prepare(`SELECT turnId, eventType, deltaText, snapshotText FROM AiDesktopTaskCollaborationStream
     WHERE groupId=$groupId AND nodeId=$nodeId AND eventType IN ('message-delta', 'message-completed', 'reasoning-summary-delta', 'managed-execution')
     ORDER BY sequenceNumber, occurredAt, chunkId`).all({ $groupId: groupId, $nodeId: nodeId }) as Array<Record<string, unknown>>;
   const turns = new Map<string, { deltas: string[]; completed: string | null }>();
@@ -431,33 +311,6 @@ function visibleStreamText(connection: DatabaseSync, groupId: string, nodeId: st
   return [...turns.values()].map((turn) => turn.completed || turn.deltas.join("")).filter(Boolean).join("\n\n");
 }
 
-function topicStatus(status: EvolutionProposal["status"]): CollaborationTimelineGroup["status"] {
-  if (status === "pending-approval" || status === "supplement-required") return "waiting-approval";
-  if (status === "rejected") return "waiting-approval";
-  if (status === "blocked") return "blocked";
-  if (status === "completed") return "completed";
-  if (status === "pending-acceptance" || status === "verifying") return "verifying";
-  return "running";
-}
-
-function taskStatus(task: CollaborationTask): CollaborationTimelineGroup["status"] {
-  if (task.state === "integrated") return "completed";
-  if (task.state === "cancelled") return "cancelled";
-  if (task.state === "blocked" || task.state === "test-failed") return "blocked";
-  if (task.state === "unified-testing" || task.state === "awaiting-restart" || task.phase === "verifying") return "verifying";
-  return "running";
-}
-
-function distributionContent(proposal: EvolutionProposal, proposals: EvolutionProposal[]): string {
-  const supplements = proposal.revisionFeedbackApprovalId ? proposals
-    .filter((candidate) => candidate.createdAt < proposal.createdAt)
-    .flatMap((candidate) => candidate.approvals)
-    .filter((approval) => approval.decision !== "approved" && approval.advice.trim())
-    .map((approval) => `审批未通过补充：${approval.advice.trim()}`).join("\n") : "";
-  const tasks = proposal.distributionPlan?.units.map((unit) => `${unit.title}：${unit.scope}`).join("\n") || proposal.content;
-  return [proposal.content, supplements, tasks].filter(Boolean).join("\n\n");
-}
-
 function nextStep(status: CollaborationTimelineGroup["status"], nodes: CollaborationTimelineNode[]): string {
   const active = nodes.filter((node) => node.status === "current" || node.status === "waiting");
   const current = active.at(-1);
@@ -469,13 +322,7 @@ function nextStep(status: CollaborationTimelineGroup["status"], nodes: Collabora
   return active.length ? `结果汇总与验收 · 等待 ${active.length} 个节点完成` : "下一任务 · 等待中";
 }
 
-function verificationStartedAt(task: CollaborationTask, record: CollaborationTask["executionRecords"][number]): string {
-  return [...task.flowEvents].reverse().find((event) => event.type === "worker.phase.verifying" && event.actor?.memberId === record.executor.memberId)?.occurredAt
-    || record.completedAt || task.codeVerifiedAt || task.updatedAt;
-}
-
 function participant(memberId: string, displayName: string): CollaborationParticipantSnapshot { return { memberId, displayName }; }
-function uniqueParticipant(value: CollaborationParticipantSnapshot, index: number, items: CollaborationParticipantSnapshot[]): boolean { return items.findIndex((item) => item.memberId === value.memberId) === index; }
 function nullable(value: unknown): string | null { return typeof value === "string" && value ? value : null; }
 function parseParticipants(value: unknown): CollaborationParticipantSnapshot[] {
   try {
@@ -486,4 +333,12 @@ function parseParticipants(value: unknown): CollaborationParticipantSnapshot[] {
 function durationMs(startedAt: string, endedAt: string): number {
   const start = Date.parse(startedAt); const end = Date.parse(endedAt);
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
+}
+
+function groupStatusForFact(fact: Omit<TimelineFact, "groupId" | "proposalId" | "taskId" | "sourceFactKey" | "occurredAt">): CollaborationTimelineGroup["status"] {
+  if (fact.status === "failed") return "blocked";
+  if (fact.kind === "verification" && fact.status === "current") return "verifying";
+  if (fact.kind === "approval-application" && fact.status === "current") return "waiting-approval";
+  if (fact.kind === "result" && fact.action.includes("验收完成")) return "completed";
+  return "running";
 }

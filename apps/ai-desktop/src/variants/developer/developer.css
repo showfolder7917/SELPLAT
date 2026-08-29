@@ -700,19 +700,6 @@ button { color: inherit; }
 .nangong-person-composer .selform-root { max-height: 360px; overflow-y: auto; }
 .nangong-person-composer .nangong-topic-draft-feedback { margin: 0; color: var(--sel-theme-semantic-success); font-size: var(--sel-theme-font-size-caption); }
 .nangong-person-composer .nangong-conversation-refresh-status { padding: 8px 14px 0; color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-caption); }
-.evolution-live-activity { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 12px; margin: 12px 0; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--sel-theme-accent) 55%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--sel-theme-accent) 8%, var(--sel-theme-workbench-surface)); box-shadow: 0 10px 30px color-mix(in srgb, var(--sel-theme-accent) 9%, transparent); }
-.evolution-live-activity.compact { margin: 0; padding: 10px 12px; }
-.evolution-live-activity-indicator { display: grid; place-items: center; }
-.evolution-live-activity-indicator i { width: 10px; height: 10px; border-radius: 50%; background: var(--sel-theme-accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--sel-theme-accent) 45%, transparent); animation: evolution-live-pulse 1.6s ease-out infinite; }
-.evolution-live-activity[data-status="completed"] .evolution-live-activity-indicator i { background: var(--sel-theme-semantic-success); animation: none; }
-.evolution-live-activity[data-status="blocked"] { border-color: color-mix(in srgb, var(--sel-theme-semantic-danger) 60%, transparent); background: color-mix(in srgb, var(--sel-theme-semantic-danger) 8%, var(--sel-theme-workbench-surface)); }
-.evolution-live-activity[data-status="blocked"] .evolution-live-activity-indicator i { background: var(--sel-theme-semantic-danger); animation: none; }
-.evolution-live-activity span, .evolution-live-activity strong, .evolution-live-activity p, .evolution-live-activity small { display: block; }
-.evolution-live-activity span { color: var(--sel-theme-accent); font-size: var(--sel-theme-font-size-caption); }
-.evolution-live-activity strong { margin-top: 3px; color: var(--sel-theme-workbench-text); }
-.evolution-live-activity p { margin: 5px 0 0; color: var(--sel-theme-workbench-text-muted); }
-.evolution-live-activity small { margin-top: 6px; color: var(--sel-theme-semantic-danger); }
-@keyframes evolution-live-pulse { 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 .nangong-person-composer button:disabled { cursor: not-allowed; opacity: .45; }
 
 @media (max-width: 1080px) {

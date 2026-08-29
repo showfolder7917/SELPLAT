@@ -35,6 +35,7 @@ import { SettingsStore } from "./services/settings-store.js";
 import { WorkspaceStore } from "./services/workspace-store.js";
 import { TrustedCommandStore } from "./services/trusted-command-store.js";
 import { initializeAiMemoryDatabase, type SqliteDatabase } from "./services/event-center/persistence/sqlite-database.js";
+import { NangongEvolutionStateRepository } from "./services/event-center/persistence/nangong-evolution-state-repository.js";
 import { WorkflowRepository } from "./services/event-center/workflow-repository.js";
 import { WorkflowSupervisor } from "./services/event-center/workflow-supervisor.js";
 import { EventCenterFacade } from "./services/event-center/event-center-facade.js";
@@ -111,6 +112,14 @@ const startupApplicationName = resolveApplicationName();
 const startupProjectPaths = resolveApplicationDataPaths({ selplatRoot: startupProjectRoot, applicationName: startupApplicationName });
 const eventCenter = new EventCenterFacade(new BusinessAuditLog(startupProjectPaths.sourceRoot, startupProjectPaths.buildRoot, startupProjectPaths.archiveLogRoot));
 eventCenter.installProcessExceptionBoundary();
+const ownsApplicationInstance = app.requestSingleInstanceLock();
+if (!ownsApplicationInstance) app.quit();
+else app.on("second-instance", () => {
+  const window = BrowserWindow.getAllWindows()[0];
+  if (!window) return;
+  if (window.isMinimized()) window.restore();
+  window.focus();
+});
 // 压缩包版必须在远程桌面、虚拟机和无可用 GPU 环境中保持可启动。
 if (resolveDistributionMode() === "archive") app.disableHardwareAcceleration();
 
@@ -431,7 +440,10 @@ app.whenReady().then(async () => {
     integrationPipeline: versionIntegration,
     emitState: (state, reason, taskIds) => {
       // 单任务事件写入顶层 taskId；批量集成同时保留 taskIds，确保每条流程和错误都能反查所属任务。
-      try { workflowRepository?.syncCollaborationState(state); }
+      try {
+        workflowRepository?.syncCollaborationState(state);
+        workflowRepository?.appendCollaborationTaskFlowEvents(state, taskIds);
+      }
       catch (error) {
         eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_collaboration_state", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
       }
@@ -448,17 +460,18 @@ app.whenReady().then(async () => {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
     },
   });
-  const nangongStore = new NangongEvolutionStore(path.join(collaborationRoot, "nangong-evolution.json"));
+  // 旧 nangong-evolution.json 仅作为可恢复的历史取证文件保留，生产运行不再读取、写入或回退。
+  const nangongStore = new NangongEvolutionStore(new NangongEvolutionStateRepository(aiMemoryDatabase));
   nangongEvolution = new NangongEvolutionFacade({
     store: nangongStore,
     collaboration,
     conversation: {
       send: async (request, context) => nangongCodex!.send([
         "你现在以南宫婉的专项演化调查者身份与用户讨论。只读调查和分析，不修改源码、不执行构建、不越过审批。",
-        "语气克制、温和、有判断，不冷硬、不说教，也不故作亲昵。把尊重用户、认真倾听和允许纠偏作为南宫婉性格的一部分：先用“我了解到您的想法是：……”自然复述本轮理解，再说“如果我理解有偏差，您可以直接纠正我”，然后进入回答。复述必须贴合用户这次真正关心的内容，不能机械复制固定句子或擅自扩大用户意图。短问题直接短答；复杂问题按内容自然分段，不使用“结论：”“建议：”“1、2、3”这类模板化标题或编号。不要使用“我更希望”“就行”“可以考虑”等没有明确落点的表达。",
+        "语气克制、温和、有判断，不冷硬、不说教，也不故作亲昵。直接回答用户真正关心的内容；不要复述、改写或冒充用户原话，也不要添加固定的意图确认套话。短问题直接短答；复杂问题按内容自然分段，不使用“结论：”“建议：”“1、2、3”这类模板化标题或编号。不要使用“我更希望”“就行”“可以考虑”等没有明确落点的表达。",
         "需要提出方向时，明确说清现在有什么问题、为什么会造成问题，以及什么做法更合理。把已证实事实、基于事实的推断和仍待验证内容自然写进句子，不把推断或用户陈述说成既定事实，也不要机械套固定栏目。",
         `这段聊天始终只是调查材料；不得声称已形成正式课题、已提交审批或将开始修改。只有用户在界面明确确认转换后，系统才会冻结对话材料为课题；即使提案获批，也不能替代工程写入授权或命令审批。不得提示用户回复 1 直接修改源码。你必须语义判断事实、范围和验收条件是否足以整理课题；成熟时在正文最后原样显示“${NANGONG_ONE_SHOT_INVITATION}”，由程序登记可恢复的等待确认状态；用户已明确要求修正且对话中已有事实、范围和验收条件时，不要重复停留在只读边界说明。条件不足时说明唯一缺口，不得要求用户发送 1。`,
-        "你必须自行判断本轮是否仍在处理当前主题，并用一句清楚的话总结用户这条原话真正要推动的意图。回答正文最后另起一行输出 NANGONG_TOPIC_META={\"title\":\"本轮主题\",\"type\":\"自由判断的类型\",\"switchTopic\":false,\"userIntent\":\"用户意图摘要\",\"tags\":[\"AI理解后给出的标签\"],\"summary\":\"本轮回答核心主旨，最多300字\"}。可见正文中的想法理解与 userIntent 必须语义一致；主题、类型、标签、意图和摘要必须基于本轮语义判断，不得用关键词规则机械填写。用户明显切换问题中心时 switchTopic 才为 true。该行只供程序登记，正文不得解释它。",
+        "你必须自行判断本轮是否仍在处理当前主题，并在隐藏元数据中用一句清楚的话总结用户这条原话真正要推动的意图。回答正文最后另起一行输出 NANGONG_TOPIC_META={\"title\":\"本轮主题\",\"type\":\"自由判断的类型\",\"switchTopic\":false,\"userIntent\":\"用户意图摘要\",\"tags\":[\"AI理解后给出的标签\"],\"summary\":\"本轮回答核心主旨，最多300字\"}。正文直接回答，userIntent 只供内部检索；主题、类型、标签、意图和摘要必须基于本轮语义判断，不得用关键词规则机械填写。用户明显切换问题中心时 switchTopic 才为 true。该行只供程序登记，正文不得解释它。",
         `最近对话：\n${context}`,
         `用户最新消息：\n${request.message}`,
       ].join("\n\n"), request.locale, "read-only", request.workspaceState, await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
@@ -489,6 +502,17 @@ app.whenReady().then(async () => {
     beginMutation: workflowRepository ? (topicId, action, request, currentStateVersion) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined,
     completeMutation: workflowRepository ? (idempotencyKey, resultStateVersion) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined,
     failMutation: workflowRepository ? (idempotencyKey, error) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined,
+    recordTimelineEvent: workflowRepository ? (event) => {
+      try { workflowRepository!.appendCollaborationTimelineEvent(event); }
+      catch (error) {
+        eventCenter.recordException({
+          kind: "technical", sourceType: "system", sourceId: "collaboration-timeline",
+          operation: "append_business_event", error, correlationId: event.fact.taskId || event.fact.proposalId || undefined,
+          details: { eventId: event.eventId, sourceFactKey: event.fact.sourceFactKey, action: event.fact.action },
+        });
+        throw error;
+      }
+    } : undefined,
   });
   nangongEvolution.subscribe((state, reason, topicId, proposalId, previousState) => {
     try { workflowRepository?.syncEvolutionState(state); }
@@ -572,6 +596,7 @@ app.whenReady().then(async () => {
       clearedRecordCount += nangongStore.clearTestData();
       clearedRecordCount += linghuStore.clearTestData();
       clearedRecordCount += repositoryToClear?.clearTestData() || 0;
+      nangongStore.assertTestDataCleared();
       eventCenter.attachRepository(null);
       workflowRepository = null;
       closeAiMemoryDatabase();

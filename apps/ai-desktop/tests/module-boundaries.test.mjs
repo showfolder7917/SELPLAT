@@ -53,6 +53,9 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.match(mutationCoordinator, /runAsync/);
   assert.match(source("electron/services/collaboration/nangong-evolution-facade.ts"), /#mutations\.run\(/);
   assert.doesNotMatch(source("electron/services/collaboration/nangong-evolution-store.ts"), /automaticApprovalEnabled|raw\.version === [1-7]/);
+  assert.doesNotMatch(source("electron/services/collaboration/nangong-evolution-store.ts"), /node:fs|readFileSync|writeFileSync|renameSync/);
+  assert.match(source("electron/main.ts"), /new NangongEvolutionStore\(new NangongEvolutionStateRepository\(aiMemoryDatabase\)\)/);
+  assert.doesNotMatch(source("electron/main.ts"), /new NangongEvolutionStore\(path\.join\([^\n]+nangong-evolution\.json/);
   assert.match(source("src/features/evolution/components/HanLiEvolutionApprovalPanel.tsx"), /decideEvolutionProposal\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
   assert.match(source("src/features/evolution/components/HanLiEvolutionApprovalPanel.tsx"), /decideEvolutionResult\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
   assert.match(source("src/features/evolution/components/EvolutionRevisionPanels.tsx"), /reviseEvolutionProposal\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
@@ -103,7 +106,7 @@ test("sandboxed preload keeps domain source boundaries but builds one physical b
   assert.match(source("tests/interaction/isolated-main.cjs"), /sandbox:\s*true/);
 });
 
-test("Nangong memory keeps source, preview, free topic semantics and visible user intent", () => {
+test("Nangong memory keeps internal intent without rendering it as user-authored text", () => {
   const memory = source("electron/services/event-center/collaboration-memory-service.ts");
   const migration = source("db/sql/schema-AiDesktopCurrent.sql");
   const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");
@@ -119,9 +122,9 @@ test("Nangong memory keeps source, preview, free topic semantics and visible use
   assert.match(corpusMigration, /contentRetention IN \('exact', 'preview-300'\)/);
   assert.match(memory, /characters\.slice\(0, 80\)/);
   assert.match(memory, /AI登记的用户意图/);
-  assert.match(main, /我了解到您的想法是/);
+  assert.match(main, /不要复述、改写或冒充用户原话/);
   assert.match(main, /NANGONG_TOPIC_META=.*userIntent/);
-  assert.match(app, /我了解到您的想法是/);
+  assert.doesNotMatch(app, /nangong-intent-summary|我了解到您的想法是/);
 });
 
 test("人物训练语料通过主会话完成钩子和启动补录闭环且清空只重置内部线程", () => {
@@ -212,7 +215,7 @@ test("main-process orchestration delegates IPC and pure collaboration parsing", 
   assert.doesNotMatch(source("electron/services/collaboration/collaboration-codex-sessions.ts"), /review-decision-parser|CodexReviewerSession/);
   assert.match(source("electron/services/collaboration/collaboration-coordinator.ts"), /result\/result-summary/);
   assert.match(source("electron/ipc/domains/register-collaboration-ipc.ts"), /NangongEvolutionFacade/);
-  assert.match(source("electron/services/collaboration/nangong-evolution-facade.ts"), /evolutionProposalId/);
+  assert.match(source("electron/services/collaboration/evolution-task-distribution-service.ts"), /evolutionProposalId/);
 });
 
 test("customer package config excludes build-machine roots and carries external rule resources", () => {

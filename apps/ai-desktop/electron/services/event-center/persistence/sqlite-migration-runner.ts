@@ -19,6 +19,13 @@ type AppliedMigrationRow = {
   successFlag: number;
 };
 
+const LEGACY_COLLABORATION_RETIREMENT_VERSION = "1007";
+const LEGACY_COLLABORATION_TABLES = [
+  "AiDesktopCollaborationStreamChunk",
+  "AiDesktopCollaborationTimelineEvent",
+  "AiDesktopCollaborationTopic",
+] as const;
+
 export type SqliteMigrationResult = {
   latestVersion: string | null;
   appliedVersions: string[];
@@ -54,6 +61,9 @@ export class SqliteMigrationRunner {
       if (applied.has(migration.versionCode)) continue;
       const startedAt = Date.now();
       runSqliteTransaction(database, () => {
+        if (migration.versionCode === LEGACY_COLLABORATION_RETIREMENT_VERSION) {
+          assertLegacyCollaborationTablesEmpty(database);
+        }
         database.exec(migration.sql);
         database.prepare(`
           INSERT INTO AiDesktopSchemaVersion
@@ -98,6 +108,19 @@ export class SqliteMigrationRunner {
       .filter((fileName) => fileName.endsWith(".sql") && !fileNames.has(fileName));
     if (unregisteredSql.length > 0) throw new Error(`存在未登记的 SQLite SQL 文件：${unregisteredSql.join(", ")}`);
     return definitions;
+  }
+}
+
+function assertLegacyCollaborationTablesEmpty(database: DatabaseSync): void {
+  const nonempty = LEGACY_COLLABORATION_TABLES.flatMap((table) => {
+    const exists = database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+    if (!exists) return [];
+    const row = database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint };
+    const count = Number(row.count);
+    return count > 0 ? [`${table}=${count}`] : [];
+  });
+  if (nonempty.length > 0) {
+    throw new Error(`旧协作时间线表仍有数据，已阻止部分删除：${nonempty.join("，")}。请先完成受控备份与清空。`);
   }
 }
 

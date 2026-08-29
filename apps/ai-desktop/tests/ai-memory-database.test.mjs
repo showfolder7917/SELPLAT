@@ -5,6 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import { initializeAiMemoryDatabase } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/sqlite-database.js";
+import { NangongEvolutionStateRepository } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/nangong-evolution-state-repository.js";
+import { NangongEvolutionStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/nangong-evolution-store.js";
 import { runSqliteTransaction } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/sqlite-transaction.js";
 import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
@@ -15,7 +17,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "1003");
+    assert.equal(first.status.schemaVersion, "1008");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -28,9 +30,9 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 4);
+      assert.equal(Number(row.count), 9);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1003", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1008", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
     } finally {
       inspection.close();
@@ -54,6 +56,79 @@ test("已发布 SQL 被修改时阻断启动且保留原数据库", () => {
     assert.equal(second.status.state, "recovery-required");
     assert.match(second.status.message || "", /校验和不一致/);
     assert.equal(existsSync(fixture.databasePath), true);
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("专题演化状态只写入 SQLite 并在清空后验证运行态归零", () => {
+  const fixture = createFixture("evolution-state");
+  try {
+    const initialized = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(initialized.status.state, "ready");
+    const repository = new NangongEvolutionStateRepository(initialized.database);
+    const store = new NangongEvolutionStore(repository);
+    store.appendConversation("user", "保留的用户原话", []);
+    store.beginOneShotRun({ primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: fixture.projectRoot, permission: "workspace-write" }] }, "zh-CN");
+    assert.equal(new NangongEvolutionStore(repository).state().oneShotRun?.status, "running");
+    store.clearTestData();
+    store.assertTestDataCleared();
+    const persisted = initialized.database?.withConnection((connection) => connection.prepare("SELECT stateVersion, stateJson FROM AiDesktopEvolutionState WHERE singletonId=1").get());
+    assert.equal(Number(persisted.stateVersion), 8);
+    assert.equal(JSON.parse(String(persisted.stateJson)).conversation.messages[0].content, "保留的用户原话");
+    initialized.database?.close();
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("旧协作三表为空时整批物理删除并升级到 1007", () => {
+  const fixture = createFixture("legacy-empty-retirement");
+  try {
+    installUpTo1006(fixture);
+    const legacy = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(legacy.status.schemaVersion, "1006");
+    legacy.database?.close();
+    restore1007(fixture);
+
+    const retired = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(retired.status.state, "ready");
+    assert.equal(retired.status.schemaVersion, "1007");
+    retired.database?.withConnection((connection) => {
+      for (const table of legacyCollaborationTables) {
+        assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table), undefined, table);
+      }
+    });
+    retired.database?.close();
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("旧协作任一表非空时阻断全部删除并保留三表", () => {
+  const fixture = createFixture("legacy-nonempty-retirement");
+  try {
+    installUpTo1006(fixture);
+    const legacy = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(legacy.status.schemaVersion, "1006");
+    legacy.database?.withConnection((connection) => connection.prepare(`INSERT INTO AiDesktopCollaborationTopic
+      (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
+      VALUES ('legacy:topic', 'legacy-topic', 'legacy-proposal', '旧专题', 'running', '待退役', '2026-08-29T00:00:00.000Z', '2026-08-29T00:00:00.000Z', '2026-08-29T00:00:00.000Z')`).run());
+    legacy.database?.close();
+    restore1007(fixture);
+
+    const blocked = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(blocked.database, null);
+    assert.equal(blocked.status.state, "recovery-required");
+    assert.match(blocked.status.message || "", /旧协作时间线仍有数据/);
+    const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
+    try {
+      for (const table of legacyCollaborationTables) {
+        assert.ok(inspection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table), table);
+      }
+      assert.equal(Number(inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopCollaborationTopic").get().count), 1);
+      assert.equal(inspection.prepare("SELECT 1 FROM AiDesktopSchemaVersion WHERE versionCode='1007'").get(), undefined);
+    } finally { inspection.close(); }
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
   }
@@ -182,4 +257,24 @@ function createFixture(suffix) {
     sqlRoot,
     options: { projectRoot, runtimeMarkerPath: markerPath },
   };
+}
+
+const legacyCollaborationTables = [
+  "AiDesktopCollaborationStreamChunk",
+  "AiDesktopCollaborationTimelineEvent",
+  "AiDesktopCollaborationTopic",
+];
+
+function installUpTo1006(fixture) {
+  const manifestPath = path.join(fixture.sqlRoot, "load-order.txt");
+  writeFileSync(manifestPath, readFileSync(manifestPath, "utf8").split(/\r?\n/u).filter((line) => !line.startsWith("1007|") && !line.startsWith("1008|")).join("\n"), "utf8");
+  unlinkSync(path.join(fixture.sqlRoot, "migration-1007-retire-legacy-collaboration.sql"));
+  unlinkSync(path.join(fixture.sqlRoot, "schema-AiDesktopEvolutionState.sql"));
+}
+
+function restore1007(fixture) {
+  const sourceSqlRoot = path.join(appRoot, "db", "sql");
+  const manifest = readFileSync(path.join(sourceSqlRoot, "load-order.txt"), "utf8").split(/\r?\n/u).filter((line) => !line.startsWith("1008|")).join("\n");
+  writeFileSync(path.join(fixture.sqlRoot, "load-order.txt"), manifest, "utf8");
+  copyFileSync(path.join(sourceSqlRoot, "migration-1007-retire-legacy-collaboration.sql"), path.join(fixture.sqlRoot, "migration-1007-retire-legacy-collaboration.sql"));
 }

@@ -3,3 +3,8 @@
 1001|schema-AiDesktopCollaborationTopic.sql|建立任务协作群专题卡当前投影
 1002|schema-AiDesktopCollaborationTimelineEvent.sql|建立任务协作群不可变时间线事实
 1003|schema-AiDesktopCollaborationStreamChunk.sql|建立任务协作群流式正文分片
+1004|schema-AiDesktopTaskCollaborationTopic.sql|建立不兼容新任务协作专题投影
+1005|schema-AiDesktopTaskCollaborationEvent.sql|建立显式业务事件时间线
+1006|schema-AiDesktopTaskCollaborationStream.sql|建立新时间线流式正文分片
+1007|migration-1007-retire-legacy-collaboration.sql|物理删除已退役且已清空的旧协作时间线三表
+1008|schema-AiDesktopEvolutionState.sql|建立专题演化当前状态唯一事实表

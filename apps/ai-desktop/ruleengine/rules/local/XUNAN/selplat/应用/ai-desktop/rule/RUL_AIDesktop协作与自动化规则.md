@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.110.0
+rule_version = 5.112.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -183,5 +183,9 @@ collaboration_topic_timeline_projection_contract.6 = separate_SQLite_topic_card_
 collaboration_topic_timeline_projection_contract.7 = explicit_sender_arrow_full_real_recipients + approval_human_readable_factual_reason_only + rejected_returns_current_ownership_to_nangong_supplement_and_resubmit + distribution_recipient_from_authoritative_assignment + no_self_distribution_or_renderer_actor_guess
 <!-- 专题总历时只计算墙钟时间，并行节点不累加；执行人执行与自检、南宫婉汇总转交、令狐老祖统一测试必须分阶段追加，旧执行节点和租约先结束才能转入修复。 -->
 collaboration_topic_timeline_projection_contract.8 = topic_wall_clock_elapsed_never_sum_parallel_nodes + separate_executor_execution_and_self_check + executor_to_nangong_completion + nangong_to_linghu_unified_test_handoff + linghu_test_before_repair + close_old_node_and_release_lease_before_new_handler + single_active_writer + one_repair_failure_enters_recovering_or_waiting_not_terminal_block + permission_waits_for_human_with_checkpoint + terminal_cancel_only_by_user
+<!-- 审批、流程编排、任务分发和专题时间线必须是四个单向服务；切换后旧状态推断及双写实现直接退役，不做兼容读取。 -->
+collaboration_topic_timeline_projection_contract.9 = approval_service_only_persists_application_and_decision + orchestrator_only_consumes_fact_and_emits_next_command + distribution_service_only_consumes_approved_dispatch_command_and_creates_real_recipients + timeline_only_consumes_immutable_business_events_and_flow_events + no_current_proposal_or_task_snapshot_history_inference + incompatible_cutover_no_dual_write_no_old_table_read + old_runtime_interfaces_retired
+<!-- 旧协作线路退役后必须同步删除旧运行表、旧清空分支和旧计数类型；已发布 SQL 仅作为校验历史保留。 -->
+collaboration_topic_timeline_projection_contract.10 = no_legacy_runtime_callers + no_legacy_table_read_write_reset_or_count_contract + empty_only_atomic_physical_drop_migration + published_1001_to_1003_SQL_kept_as_checksum_history_only + fresh_and_legacy_upgrade_tests_required
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events

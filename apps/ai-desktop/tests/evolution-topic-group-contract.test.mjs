@@ -15,10 +15,10 @@ test("专题协作群独立于南宫婉个人聊天并按专题折叠展示真�
   assert.match(groupSource, /阻塞报告/);
 });
 
-test("专题协作群使用权威档案投影并突出实时人物状态", () => {
+test("专题协作群使用权威档案投影且不再混入旧实时横幅", () => {
   assert.match(groupSource, /getEvolutionTopicDossier/);
   assert.match(groupSource, /data-active=\{entry\.active\}/);
-  assert.match(groupSource, /EvolutionLiveActivity/);
+  assert.doesNotMatch(groupSource, /EvolutionLiveActivity|evolution-live-activity/);
   assert.match(styles, /evolution-group-active/);
   assert.match(styles, /article\[data-active="true"\]/);
 });

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
 import { NangongEvolutionFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/nangong-evolution-facade.js";
 import { NangongEvolutionStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/nangong-evolution-store.js";
+import { EvolutionFlowOrchestrator } from "../../../build/ai-desktop/electron/electron/services/collaboration/evolution-flow-orchestrator.js";
 import { HanLiRealAppAcceptanceExecutor } from "../../../build/ai-desktop/electron/electron/services/collaboration/hanli-real-app-acceptance-executor.js";
 import { controlledTestRoot } from "./test-paths.mjs";
 
@@ -12,9 +13,22 @@ mkdirSync(controlledTestRoot, { recursive: true });
 const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: "/workspace", permission: "workspace-write" }] };
 const nangongPromptSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
 const evolutionFacadeSource = readFileSync(new URL("../electron/services/collaboration/nangong-evolution-facade.ts", import.meta.url), "utf8");
+const approvalServiceSource = readFileSync(new URL("../electron/services/collaboration/evolution-approval-service.ts", import.meta.url), "utf8");
+const distributionServiceSource = readFileSync(new URL("../electron/services/collaboration/evolution-task-distribution-service.ts", import.meta.url), "utf8");
+const persistedEvolutionStates = new Map();
+function evolutionPersistence(key) {
+  return {
+    load() { const state = persistedEvolutionStates.get(key); return state ? structuredClone(state) : null; },
+    loadLatestConversation() { return null; },
+    save(state) { persistedEvolutionStates.set(key, structuredClone(state)); },
+  };
+}
+function evolutionStore(key) { return new NangongEvolutionStore(evolutionPersistence(key)); }
+function readPersistedState(key) { return structuredClone(persistedEvolutionStates.get(key)); }
+function writePersistedState(key, state) { persistedEvolutionStates.set(key, structuredClone(state)); }
 function topicRequest(title = "协同审批分层") { return { title, goal: "把演化方向审批从执行审核中独立出来", scope: ["AI Desktop"], exclusions: ["其他应用"], evidence: ["现有审核只覆盖执行方案"], acceptanceCriteria: ["提案审批与执行审核具有独立记录"], workspaceState, locale: "zh-CN" }; }
 function proposalRequest() { return { type: "代码修正", content: "建立独立演化审批入口，审批通过后返还南宫婉分发。", risks: ["历史记录迁移"], rollbackPlan: "保留旧记录并关闭三项自动开关。" }; }
-const conversation = { async send(_request, context) { return { text: `我了解到您的想法是：调查当前问题。如果我理解有偏差，您可以直接纠正我。\n\n南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据","tags":["调查","事实依据"],"summary":"围绕当前问题收集事实并形成可继续分析的依据。"}`, itemCount: 1 }; }, async newChat() {} };
+const conversation = { async send(_request, context) { return { text: `南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据","tags":["调查","事实依据"],"summary":"围绕当前问题收集事实并形成可继续分析的依据。"}`, itemCount: 1 }; }, async newChat() {} };
 const distributionServices = {
   async planDistribution() { return JSON.stringify({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
   async auditDistribution() { return JSON.stringify({ decision: "passed", reason: "单任务没有文件重叠，职责、回退和验收边界完整。", findings: [] }); },
@@ -22,16 +36,15 @@ const distributionServices = {
 let mutationSequence = 0;
 function mutation(facade) { return { expectedStateVersion: facade.state().updatedAt, idempotencyKey: `nangong-test-${++mutationSequence}` }; }
 
-test("南宫婉会话提示固定自然表达与只读调查边界", () => {
+test("南宫婉会话直接回答且内部意图不冒充用户原话", () => {
   assert.match(nangongPromptSource, /语气克制、温和、有判断/);
-  assert.match(nangongPromptSource, /作为南宫婉性格的一部分/);
-  assert.match(nangongPromptSource, /不能机械复制固定句子或擅自扩大用户意图/);
+  assert.match(nangongPromptSource, /不要复述、改写或冒充用户原话/);
   assert.match(nangongPromptSource, /短问题直接短答/);
   assert.match(nangongPromptSource, /不使用“结论：”“建议：”“1、2、3”/);
   assert.match(nangongPromptSource, /不把推断或用户陈述说成既定事实/);
   assert.match(nangongPromptSource, /不得声称已形成正式课题、已提交审批或将开始修改/);
-  assert.match(nangongPromptSource, /我了解到您的想法是/);
-  assert.match(nangongPromptSource, /如果我理解有偏差，您可以直接纠正我/);
+  assert.doesNotMatch(nangongPromptSource, /先用“我了解到您的想法是/);
+  assert.doesNotMatch(nangongPromptSource, /如果我理解有偏差/);
   assert.match(nangongPromptSource, /userIntent/);
   assert.match(nangongPromptSource, /不得提示用户回复 1 直接修改源码/);
   assert.match(nangongPromptSource, /可恢复的等待确认状态/);
@@ -45,12 +58,58 @@ test("韩立审批意见面向普通用户且不得发明产品约束", () => {
   assert.match(evolutionFacadeSource, /不得自行发明数量上限、页面规则或验收要求/);
 });
 
+test("审批、编排和分发服务不再互相代替职责", () => {
+  const orchestrator = new EvolutionFlowOrchestrator();
+  assert.equal(orchestrator.next({ status: "pending-approval", distributedTaskIds: [] }), "await-approval");
+  assert.equal(orchestrator.next({ status: "approved", distributedTaskIds: [] }), "dispatch");
+  assert.equal(orchestrator.next({ status: "executing", distributedTaskIds: ["task-1"] }), "monitor-execution");
+  assert.doesNotMatch(approvalServiceSource, /EvolutionTaskDistributionService|\.submitTask\(|\.dispatch\(/);
+  assert.doesNotMatch(distributionServiceSource, /\.decide\(|EvolutionApprovalService/);
+  assert.doesNotMatch(evolutionFacadeSource, /#dispatchOnce|#store\.decide\(/);
+  assert.match(evolutionFacadeSource, /EvolutionApprovalService/);
+  assert.match(evolutionFacadeSource, /EvolutionFlowOrchestrator/);
+  assert.match(evolutionFacadeSource, /EvolutionTaskDistributionService/);
+});
+
+test("审批服务按发生顺序发布申请、决定和补充事实且不会提前分发", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-approval-events-"));
+  try {
+    const events = [];
+    let submitted = 0;
+    const facade = new NangongEvolutionFacade({
+      store: evolutionStore(path.join(directory, "state.json")),
+      collaboration: { state() { return { members: [{ memberId: "nangong-wan", enabled: true }], tasks: [] }; }, submitTask() { submitted += 1; return { tasks: [] }; } },
+      conversation,
+      ...distributionServices,
+      recordEvent: () => undefined,
+      recordTimelineEvent: (event) => events.push(event),
+    });
+    let state = facade.createTopic(topicRequest("审批事件顺序"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const originalId = state.proposals[0].proposalId;
+    state = facade.decideProposal(originalId, { mutation: mutation(facade), decision: "supplement-required", advice: "补充具体影响范围" });
+    state = facade.reviseProposal(originalId, {
+      mutation: mutation(facade), submitterMemberId: "nangong-wan", content: "已补充具体影响范围", evidence: ["组件与文件范围"],
+      impactScope: ["AI Desktop"], risks: ["无"], rollbackPlan: "撤销新版本", acceptanceCriteria: ["范围明确"],
+    });
+    assert.deepEqual(events.map((event) => event.fact.action), [
+      "审批申请", "审批申请", "审批退回补充", "等待手动补充审批材料", "补充后再次申请", "补充材料已重新提交",
+    ]);
+    assert.equal(events[0].fact.actor.displayName, "南宫婉");
+    assert.equal(events[0].fact.recipients[0].displayName, "韩立");
+    assert.equal(events[2].fact.actor.displayName, "韩立");
+    assert.equal(events[2].fact.recipients[0].displayName, "南宫婉");
+    assert.equal(events.some((event) => event.fact.kind === "distribution"), false);
+    assert.equal(submitted, 0);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("自动演化、两个来源审批和自动分发四项开关独立持久化", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-switches-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     store.setAutomation("evolution", true); store.setAutomation("nangong-approval", true);
-    const state = new NangongEvolutionStore(path.join(directory, "state.json")).state();
+    const state = evolutionStore(path.join(directory, "state.json")).state();
     assert.equal(state.automaticEvolutionEnabled, true); assert.equal(state.automaticNangongApprovalEnabled, true); assert.equal(state.automaticLinghuApprovalEnabled, false); assert.equal(state.automaticExecutionEnabled, false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -59,7 +118,7 @@ test("一次性完整流程独立持久化且不改写四个长期自动开关",
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-state-"));
   try {
     const filePath = path.join(directory, "state.json");
-    const store = new NangongEvolutionStore(filePath);
+    const store = evolutionStore(filePath);
     store.setAutomation("evolution", true);
     store.setAutomation("linghu-approval", true);
     const before = store.state();
@@ -72,7 +131,7 @@ test("一次性完整流程独立持久化且不改写四个长期自动开关",
     ], [before.automaticEvolutionEnabled, before.automaticNangongApprovalEnabled, before.automaticLinghuApprovalEnabled, before.automaticExecutionEnabled]);
     assert.equal(state.oneShotRun.status, "running");
     state = store.finishOneShotRun();
-    const restored = new NangongEvolutionStore(filePath).state();
+    const restored = evolutionStore(filePath).state();
     assert.equal(restored.oneShotRun.status, "completed");
     assert.equal(restored.oneShotRun.phase, "completed");
     assert.equal(restored.automaticEvolutionEnabled, true);
@@ -83,7 +142,7 @@ test("一次性完整流程独立持久化且不改写四个长期自动开关",
 test("一次性流程从同一专题提案卡点原位恢复且不打开长期自动开关", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-resume-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     store.beginOneShotRun(workspaceState, "zh-CN");
     let state = store.createTopic(topicRequest("原位恢复专题"));
     const topicId = state.activeTopicId;
@@ -106,7 +165,7 @@ test("一次性流程从同一专题提案卡点原位恢复且不打开长期�
 test("自动控制台转人工后只观察且必须明确恢复才能继续", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-handover-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     let state = store.controlAutomation("start");
     assert.equal(state.automaticEvolutionEnabled, true);
     state = store.controlAutomation("handover");
@@ -124,8 +183,8 @@ test("专题状态只读取当前版本并拒绝旧版本兼容补造", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-current-state-only-"));
   try {
     const filePath = path.join(directory, "state.json");
-    writeFileSync(filePath, JSON.stringify({ version: 7, automaticApprovalEnabled: true, topics: [], proposals: [] }), "utf8");
-    const state = new NangongEvolutionStore(filePath).state();
+    writePersistedState(filePath, { version: 7, automaticApprovalEnabled: true, topics: [], proposals: [] });
+    const state = evolutionStore(filePath).state();
     assert.equal(state.version, 8);
     assert.equal(state.automaticNangongApprovalEnabled, false);
     assert.deepEqual(state.topics, []);
@@ -135,7 +194,7 @@ test("专题状态只读取当前版本并拒绝旧版本兼容补造", () => {
 test("专题提交同时发布可校验前后版本的工作台增量事实", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-workbench-change-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     let observed = null;
     store.subscribe((state, reason, topicId, proposalId, previousState) => { observed = { state, reason, topicId, proposalId, previousState }; });
     const current = store.createTopic(topicRequest("实时专题状态"));
@@ -153,14 +212,14 @@ test("清空测试数据删除专题运行历史并保留人物对话、自动�
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-clear-test-data-"));
   try {
     const filePath = path.join(directory, "state.json");
-    const store = new NangongEvolutionStore(filePath);
+    const store = evolutionStore(filePath);
     store.configureAutomation({ maxRoundsPerTopic: 9, maxCorrectionRounds: 4, locale: "ja", workspaceState });
     store.appendConversation("user", "这是用于韩立训练的用户原话。", []);
     store.appendConversation("nangong", "这是南宫婉对用户原话的回答。", []);
     let state = store.createTopic(topicRequest());
     store.createProposal(state.topics[0].topicId, proposalRequest());
     assert.ok(store.clearTestData() >= 2);
-    state = new NangongEvolutionStore(filePath).state();
+    state = evolutionStore(filePath).state();
     assert.equal(state.topics.length, 0);
     assert.equal(state.proposals.length, 0);
     assert.deepEqual(state.conversation.messages.map((message) => message.content), ["这是用于韩立训练的用户原话。", "这是南宫婉对用户原话的回答。"]);
@@ -174,7 +233,7 @@ test("清空测试数据删除专题运行历史并保留人物对话、自动�
 test("自动审批无人工偏好时退回补充，人工决定形成版本化偏好", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-approval-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposal = state.proposals[0]; state = facade.autoApprove(proposal.proposalId);
@@ -193,7 +252,7 @@ test("自动审批无人工偏好时退回补充，人工决定形成版本化�
 test("审批、验收与返修统一使用专题版本和幂等写入口", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-mutation-coordinator-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const collaboration = { state() { return { members: [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }], tasks: [] }; } };
     const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest("统一专题写入口"));
@@ -218,7 +277,7 @@ test("审批、验收与返修统一使用专题版本和幂等写入口", () =>
 test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted; let planningWorkspace; let auditWorkspace;
+    const store = evolutionStore(path.join(directory, "state.json")); let submitted; let planningWorkspace; let auditWorkspace;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "collab-1", evolutionProposalId: request.evolutionProposalId }] }; } };
     const facade = new NangongEvolutionFacade({
       store, collaboration, conversation, recordEvent: () => undefined,
@@ -241,17 +300,17 @@ test("专题工作区缺失时返还执行显示业务错误而不是读取 null
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-missing-workspace-"));
   const statePath = path.join(directory, "state.json");
   try {
-    const store = new NangongEvolutionStore(statePath);
+    const store = evolutionStore(statePath);
     const collaboration = { submitTask() { throw new Error("缺少工作区时不得创建任务"); } };
     const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest());
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
     facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
-    const persisted = JSON.parse(readFileSync(statePath, "utf8"));
+    const persisted = readPersistedState(statePath);
     persisted.topics[0].workspaceState = null;
-    writeFileSync(statePath, JSON.stringify(persisted), "utf8");
-    const restored = new NangongEvolutionFacade({ store: new NangongEvolutionStore(statePath), collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    writePersistedState(statePath, persisted);
+    const restored = new NangongEvolutionFacade({ store: evolutionStore(statePath), collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     await assert.rejects(() => restored.dispatch(proposalId), /当前专题缺少可用的实施工作区/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -266,7 +325,7 @@ test("生产分发会话显式使用专题工作区而不是自动演化上下�
 test("预计修改文件重叠时令狐阻止多人重复分发", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-overlap-audit-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     let submitted = 0;
     const collaboration = { submitTask() { submitted += 1; return { tasks: [] }; } };
     const overlappingPlan = JSON.stringify({ summary: "错误地按影响范围拆成两个任务。", units: [
@@ -292,7 +351,7 @@ test("预计修改文件重叠时令狐阻止多人重复分发", async () => {
 test("全部执行结果返回南宫婉后才封存同一轮并一次性交给令狐", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-round-collection-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     // 双任务夹具明确覆盖“部分返回继续等待、全部返回后仅触发一次”的业务边界。
     const taskStates = new Map([["round-task-1", "returned-to-nangong"], ["round-task-2", "executing"]]);
     const taskIds = []; let proposalId = null; const sealed = [];
@@ -339,7 +398,7 @@ test("全部执行结果返回南宫婉后才封存同一轮并一次性交给�
 test("南宫婉提案从人工审批、任务分发推进到韩立验收后才完成且不复制旧专题", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-completed-flow-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     let distributedTaskId = null;
     const collaboration = {
       submitTask(request) { distributedTaskId = "collab-evolution-completed"; return { tasks: [{ taskId: distributedTaskId, evolutionProposalId: request.evolutionProposalId, state: "integrated" }] }; },
@@ -378,7 +437,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
 test("韩立综合南宫婉和 Codex 完整会话后逐轮发问，确立后才通知南宫婉登记专题池", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "han-li-deliberation-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     store.configureAutomation({ maxRoundsPerTopic: 5, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
     const hanLiReplies = [
       '{"question":"现有审批记录在哪一步丢失原始执行证据？","reason":"必须先确认断点才能确定专项边界"}',
@@ -415,7 +474,7 @@ test("韩立综合南宫婉和 Codex 完整会话后逐轮发问，确立后才�
 test("研讨达到配置上限但证据仍不足时保留缺口并阻断，不机械生成专题", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "han-li-deliberation-limit-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     store.configureAutomation({ maxRoundsPerTopic: 1, maxCorrectionRounds: 3, workspaceState, locale: "zh-CN" });
     const replies = [
       '{"question":"还缺少哪项执行事实？","reason":"现有原文没有证明发布结果"}',
@@ -439,7 +498,7 @@ test("研讨达到配置上限但证据仍不足时保留缺口并阻断，不�
 test("南宫婉对话持久化并冻结为正式课题快照", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-conversation-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     let state = await facade.sendConversationMessage({ message: "调查令狐持续修正 Bug", attachmentIds: ["screenshot-1"], workspaceState, locale: "zh-CN" });
     assert.equal(state.conversation.messages.length, 2);
@@ -456,7 +515,7 @@ test("南宫婉对话持久化并冻结为正式课题快照", async () => {
 test("南宫婉缺少回合元数据时仍保留完整回复且不伪装成发送失败", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-missing-meta-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const plainConversation = { async send() { return { text: "我已看到这个问题，会先继续核对事实。", itemCount: 1 }; }, async newChat() {} };
     const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: plainConversation, recordEvent: () => undefined });
     const state = await facade.sendConversationMessage({ message: "继续调查", workspaceState, locale: "zh-CN" });
@@ -469,7 +528,7 @@ test("南宫婉缺少回合元数据时仍保留完整回复且不伪装成发�
 test("没有南宫婉明确邀请时回复 1 不启动流程或直接修改源码", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-not-ready-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     await facade.sendConversationMessage({ message: "继续调查", workspaceState, locale: "zh-CN" });
     const state = await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
@@ -481,10 +540,48 @@ test("没有南宫婉明确邀请时回复 1 不启动流程或直接修改源�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("已有真实运行时再次回复 1 返回可理解说明而不是发送失败", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-live-conflict-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.beginOneShotRun(workspaceState, "zh-CN");
+    const invited = store.appendConversation("nangong", "当前事实已经明确，若确认启动请回复 1。", []);
+    store.setOneShotConfirmation(invited.conversation.messages.at(-1).messageId);
+    const facade = new NangongEvolutionFacade({ store, collaboration: { state() { return { members: [], tasks: [] }; } }, conversation, recordEvent: () => undefined });
+    const state = await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
+    assert.equal(state.oneShotRun.status, "running");
+    assert.equal(state.oneShotRun.phase, "preparing-topic");
+    assert.match(state.conversation.messages.at(-1).content, /上一轮演化任务仍在处理/);
+    assert.match(state.conversation.messages.at(-1).content, /任务协作群/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("数据库遗留运行没有真实执行人时自动结束旧状态并继续本次确认", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-orphan-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.beginOneShotRun(workspaceState, "zh-CN");
+    store.updateOneShotRun("executing", "mo-caihuan", "墨彩环", "正在执行已分发任务", null, null);
+    const invited = store.appendConversation("nangong", "当前事实已经明确，若确认启动请回复 1。", []);
+    store.setOneShotConfirmation(invited.conversation.messages.at(-1).messageId);
+    const events = [];
+    const facade = new NangongEvolutionFacade({
+      store,
+      collaboration: { state() { return { members: [], tasks: [] }; } },
+      conversation,
+      recordEvent: (eventType, payload) => events.push({ eventType, payload }),
+    });
+    const state = await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
+    assert.equal(events.some((event) => event.eventType === "nangong.evolution.orphan_run_retired"), true);
+    assert.equal(state.archiveRecords.some((record) => record.eventType === "one-shot.orphan-retired"), true);
+    assert.notEqual(state.oneShotRun.action, "正在执行已分发任务");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协作执行", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-start-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const tasks = [];
     const collaboration = {
       state() { return { members: [{ memberId: "mo-caihuan", displayName: "墨彩环", enabled: true, kind: "worker" }, { memberId: "doctor-mo", displayName: "墨大夫", enabled: true, kind: "worker" }], tasks }; },
@@ -507,7 +604,7 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
     const invited = await facade.sendConversationMessage({ message: "请确认现在是否可以进入完整流程", workspaceState, locale: "zh-CN" });
     assert.equal(invited.oneShotConfirmation.status, "awaiting-user-confirmation");
     assert.equal(invited.oneShotConfirmation.invitationMessageId, invited.conversation.messages.at(-1).messageId);
-    assert.equal(new NangongEvolutionStore(path.join(directory, "state.json")).state().oneShotConfirmation.status, "awaiting-user-confirmation");
+    assert.equal(evolutionStore(path.join(directory, "state.json")).state().oneShotConfirmation.status, "awaiting-user-confirmation");
     const state = await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
     assert.equal(state.oneShotConfirmation, null);
     assert.equal(state.topics.length, 1);
@@ -527,7 +624,7 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
 test("一次性流程遇到同一集成归属阻塞时只登记停点且不直接重试", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-integration-blocked-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const failures = [];
     let recoveryRequests = 0;
     const tasks = [];
@@ -607,7 +704,7 @@ test("一次性流程捕获的 AI JSON 解析失败仍登记为技术异常并�
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-technical-failure-"));
   try {
     const failures = [];
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const readyConversation = {
       async send(request) {
         if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "异常登记课题", goal: "验证失败登记", scope: ["AI Desktop"], evidence: ["已确认复现事实"], acceptanceCriteria: ["失败进入统一异常中心"] }), itemCount: 1 };
@@ -635,7 +732,7 @@ test("一次性流程捕获的 AI JSON 解析失败仍登记为技术异常并�
 test("专题群人物消息复用南宫婉会话并只向专题档案写入短预览", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-topic-group-message-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest("专题群消息回流"));
     const topicId = state.activeTopicId;
@@ -656,7 +753,7 @@ test("专题群人物消息复用南宫婉会话并只向专题档案写入短�
 test("南宫婉根据当前对话生成五项可编辑草稿但不直接保存课题", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-topic-draft-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const draftConversation = {
       async send(request) {
         if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "令狐持续修正演化", goal: "保持 Bug 修复链稳定运行", scope: ["AI Desktop"], evidence: ["用户陈述：草稿需要从当前对话生成", "南宫婉调查：修正方案需要审批"], acceptanceCriteria: ["五项内容可编辑后再保存"] }), itemCount: 1 };
@@ -675,7 +772,7 @@ test("南宫婉根据当前对话生成五项可编辑草稿但不直接保存�
 test("南宫婉新建对话等待活动写入者释放后才清空持久消息", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-new-conversation-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     store.appendConversation("user", "必须在旧线程删除成功后再清空");
     let attempts = 0;
     const retryingConversation = {
@@ -689,14 +786,14 @@ test("南宫婉新建对话等待活动写入者释放后才清空持久消息",
     const state = await facade.newConversation();
     assert.equal(attempts, 3);
     assert.equal(state.conversation.messages.length, 0);
-    assert.equal(new NangongEvolutionStore(path.join(directory, "state.json")).state().conversation.messages.length, 0);
+    assert.equal(evolutionStore(path.join(directory, "state.json")).state().conversation.messages.length, 0);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("韩立验收计划由专题语义生成并只登记为待执行档案", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     let receivedPrompt = "";
     const facade = new NangongEvolutionFacade({
       store, collaboration: {}, conversation, recordEvent: () => undefined,
@@ -764,7 +861,7 @@ test("真实应用验收执行器只执行白名单操作并阻止业务写按�
 test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫婉", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-acceptance-failure-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     let state = store.createTopic(topicRequest("真实界面失败返还"));
     state = store.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
@@ -803,7 +900,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
 test("南宫婉线程删除最终失败时保留原页面消息", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-new-conversation-failed-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     store.appendConversation("user", "删除失败时必须保留");
     const failingConversation = { async send() { return { text: "unused", itemCount: 1 }; }, async newChat() { throw new Error("thread already has an active writer"); } };
     const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: failingConversation, recordEvent: () => undefined, newConversationRetryDelaysMs: [0, 1, 1] });
@@ -815,7 +912,7 @@ test("南宫婉线程删除最终失败时保留原页面消息", async () => {
 test("令狐修正与南宫提案使用独立自动审批开关并返还原提交人", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "linghu-approval-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted;
+    const store = evolutionStore(path.join(directory, "state.json")); let submitted;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "linghu-task", evolutionProposalId: request.evolutionProposalId }] }; }, state() { return { tasks: [] }; } };
     const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     store.setAutomation("linghu-approval", true);
@@ -831,7 +928,7 @@ test("令狐修正与南宫提案使用独立自动审批开关并返还原提�
 test("所有人物共用自身能力升级修订链并在任务中固定审批依据", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "member-self-upgrade-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json")); let submitted;
+    const store = evolutionStore(path.join(directory, "state.json")); let submitted;
     const members = [
       { memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" },
       { memberId: "custom-member", displayName: "自定义人物", enabled: true, kind: "worker" },
@@ -879,7 +976,7 @@ test("所有人物共用自身能力升级修订链并在任务中固定审批�
 test("自动演化开启后原人物依据退回意见只重新提交一个自身升级版本", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "automatic-self-revision-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const members = [{ memberId: "linghu-ancestor", displayName: "令狐老祖", enabled: true, kind: "worker" }];
     const collaboration = { state() { return { members, tasks: [] }; } };
     const facade = new NangongEvolutionFacade({
@@ -912,7 +1009,7 @@ test("自动演化开启后原人物依据退回意见只重新提交一个自�
 test("返修调查没有新增可核验事实时不创建提案版本", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "revision-without-evidence-"));
   try {
-    const store = new NangongEvolutionStore(path.join(directory, "state.json"));
+    const store = evolutionStore(path.join(directory, "state.json"));
     const members = [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }];
     const facade = new NangongEvolutionFacade({
       store, collaboration: { state() { return { members, tasks: [] }; } }, conversation, recordEvent: () => undefined,

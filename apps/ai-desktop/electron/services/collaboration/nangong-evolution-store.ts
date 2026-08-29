@@ -1,19 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import path from "node:path";
 
 import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionOneShotPhase, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { EvolutionStatePersistence } from "../event-center/persistence/nangong-evolution-state-repository.js";
 
 type StateListener = (state: NangongEvolutionState, reason: string, topicId: string | null, proposalId: string | null, previousState: NangongEvolutionState) => void;
 
 /** 原子保存专项课题、不可覆盖的提案版本和审批历史，避免把演化状态混入普通协同任务。 */
 export class NangongEvolutionStore {
-  readonly #filePath: string;
+  readonly #repository: EvolutionStatePersistence;
   readonly #listeners = new Set<StateListener>();
   #state: NangongEvolutionState;
 
-  constructor(filePath: string) {
-    this.#filePath = filePath;
+  constructor(repository: EvolutionStatePersistence) {
+    this.#repository = repository;
     this.#state = this.#load();
   }
 
@@ -34,6 +33,26 @@ export class NangongEvolutionStore {
     const snapshot = this.state();
     for (const listener of this.#listeners) listener(snapshot, "test-data.cleared", null, null, previousState);
     return clearedCount;
+  }
+
+  /**
+   * 作用：确认一键清空已经同时落到内存和 SQLite，而不是只清理页面投影。
+   * 真实传参示例：清空完成后调用，无需额外参数。
+   * 真实返回示例：运行态、专题、提案和确认均为空时正常返回。
+   * 异常或副作用示例：数据库仍残留 running 或业务记录时抛错并阻止应用按成功结果重启。
+   */
+  assertTestDataCleared(): void {
+    const persisted = this.#repository.load();
+    const states = [this.#state, persisted].filter((item): item is NangongEvolutionState => Boolean(item));
+    if (states.some((state) => state.oneShotRun !== null
+      || state.oneShotConfirmation !== null
+      || state.activeTopicId !== null
+      || state.topics.length > 0
+      || state.proposals.length > 0
+      || state.deliberations.length > 0
+      || state.archiveRecords.length > 0)) {
+      throw new Error("测试数据清空后仍检测到专题演化运行记录，已阻止按成功结果重启。");
+    }
   }
 
   setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): NangongEvolutionState {
@@ -151,6 +170,24 @@ export class NangongEvolutionStore {
       run.actorName = "系统";
       run.action = "等待处理无法自动完成的阻塞";
       run.blockingReason = required(reason, "一次性运行阻塞原因", 8_000);
+      run.updatedAt = now;
+      run.completedAt = now;
+    }, { phase: "blocked", actor: "system", status: "blocked", blockingReason: reason, nextOwner: "user" });
+  }
+
+  /** 把没有真实执行者或任务的遗留 running 状态终止为可审计事实，允许新的用户确认继续。 */
+  retireOrphanedOneShotRun(reason: string): NangongEvolutionState {
+    const current = this.#state.oneShotRun;
+    if (!current || current.status !== "running") return this.state();
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.orphan-retired", current.topicId, current.proposalId, (state) => {
+      const run = state.oneShotRun!;
+      run.status = "blocked";
+      run.phase = "blocked";
+      run.actor = "system";
+      run.actorName = "系统";
+      run.action = "上一轮遗留运行状态已结束";
+      run.blockingReason = required(reason, "遗留运行状态结束原因", 8_000);
       run.updatedAt = now;
       run.completedAt = now;
     }, { phase: "blocked", actor: "system", status: "blocked", blockingReason: reason, nextOwner: "user" });
@@ -642,7 +679,7 @@ export class NangongEvolutionStore {
       ? next.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null
       : [...next.deliberations].reverse().find((item) => item.status !== "established" || item.topicId === topicId) || null;
     // 专题档案只追加业务事实；普通聊天和纯配置变化没有专题或研讨关联时不伪造档案。
-    if (topic || proposal || deliberation) next.archiveRecords.push({
+    if (topic || proposal || deliberation || reason === "one-shot.orphan-retired") next.archiveRecords.push({
       recordId: `evolution-archive-${randomUUID()}`,
       deliberationId: deliberation?.deliberationId || topic?.deliberationId || null,
       topicId: topicId || deliberation?.topicId || proposal?.topicId || null,
@@ -665,19 +702,19 @@ export class NangongEvolutionStore {
 
   #load(): NangongEvolutionState {
     try {
-      const raw = JSON.parse(readFileSync(this.#filePath, "utf8")) as Partial<NangongEvolutionState>;
-      if (raw.version === 8 && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
+      const raw = this.#repository.load() as Partial<NangongEvolutionState> | null;
+      if (raw && raw.version === 8 && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
         && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext
         && typeof raw.automaticNangongApprovalEnabled === "boolean" && typeof raw.automaticLinghuApprovalEnabled === "boolean") return raw as NangongEvolutionState;
-    } catch { /* 首次启动或损坏状态使用安全关闭的空状态，历史文件不会被扫描猜测。 */ }
-    return createInitialState();
+    } catch { /* 损坏状态安全关闭；禁止扫描或恢复旧 JSON 文件。 */ }
+    const initial = createInitialState();
+    const conversation = this.#repository.loadLatestConversation();
+    if (conversation) initial.conversation = conversation;
+    return initial;
   }
 
   #write(state: NangongEvolutionState): void {
-    mkdirSync(path.dirname(this.#filePath), { recursive: true });
-    const temporary = `${this.#filePath}.tmp`;
-    writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-    renameSync(temporary, this.#filePath);
+    this.#repository.save(state);
   }
 }
 
@@ -713,7 +750,7 @@ function assertTopicEditableBeforeProposal(state: NangongEvolutionState, topic: 
 function createConversation(): NangongEvolutionState["conversation"] { const now = new Date().toISOString(); return { conversationId: `nangong-conversation-${randomUUID()}`, messages: [], updatedAt: now }; }
 
 function archiveCategory(reason: string): EvolutionArchiveCategory {
-  if (reason.startsWith("one-shot.")) return reason.includes("blocked") ? "recovery" : reason.includes("completed") ? "acceptance" : "execution";
+  if (reason.startsWith("one-shot.")) return reason.includes("blocked") || reason.includes("orphan-retired") ? "recovery" : reason.includes("completed") ? "acceptance" : "execution";
   if (reason === "conversation.topic_group_replied") return "source";
   if (reason.startsWith("deliberation.")) return "deliberation";
   if (reason.includes("distributed")) return "distribution";
@@ -753,6 +790,7 @@ function archiveTitle(reason: string): string {
     "one-shot.activity": "一次性演化当前动作更新",
     "one-shot.completed": "一次性演化完整结束",
     "one-shot.blocked": "一次性演化遇到无法自动处理的阻塞",
+    "one-shot.orphan-retired": "遗留的一次性演化运行状态已结束",
   };
   return titles[reason] || reason;
 }

@@ -198,5 +198,6 @@ function publicErrorMessage(error: unknown): string {
   if (message.includes("AiDesktopSchemaVersion")) return "现有数据库缺少可验证的版本记录，已阻断自动重建。";
   if (message.includes("运行标记损坏")) return "AI Memory 初始化标记损坏，数据库业务已停用。";
   if (message.includes("完整性检查")) return "AI Memory 数据库完整性检查未通过，请先恢复数据。";
+  if (message.includes("旧协作时间线表仍有数据")) return "旧协作时间线仍有数据，已阻止物理删除。请先完成受控备份与清空。";
   return "AI Memory 数据库配置、迁移或打开失败，数据库业务已停用。";
 }

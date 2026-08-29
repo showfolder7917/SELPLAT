@@ -11,7 +11,6 @@ import type {
 } from "../../../../contracts/desktop/desktop";
 import { evolutionOwnerForStatus, evolutionStatusLabel, workbenchOwnerLabel } from "../model/evolution-workbench";
 import type { EvolutionWorkspaceFlowNode } from "./NangongEvolutionRail";
-import { EvolutionLiveActivity } from "./EvolutionLiveActivity";
 
 interface TopicGroupEntry {
   id: string;
@@ -34,10 +33,9 @@ interface TopicGroupEntry {
  * 真实返回示例：返回可跳往既有审批、任务、发布和恢复页面的群卡片，不触发任何业务写动作。
  * 异常或副作用示例：SQLite 档案读取失败时显示错误并上报；组件本身不审批、不分发、不恢复任务。
  */
-export function EvolutionTopicGroupView({ topic, stateVersion, oneShotRun, perspective, locale, workspaces, onNavigate, onState, onError }: {
+export function EvolutionTopicGroupView({ topic, stateVersion, perspective, locale, workspaces, onNavigate, onState, onError }: {
   topic: EvolutionTopic | null;
   stateVersion: string;
-  oneShotRun: NangongEvolutionState["oneShotRun"];
   perspective: "nangong" | "hanli";
   locale: Locale;
   workspaces: WorkspaceState | null;
@@ -144,7 +142,6 @@ export function EvolutionTopicGroupView({ topic, stateVersion, oneShotRun, persp
     <details className="evolution-topic-group-topic" open>
       <summary><span>当前专题</span><strong>{topic.title}</strong><em>{evolutionStatusLabel(topic.status)}</em></summary>
     <section className="evolution-topic-group-summary" aria-label="专题群当前状态">
-      {oneShotRun?.topicId === topic.topicId && <EvolutionLiveActivity run={oneShotRun} />}
       <dl>
         <div><dt>当前负责人</dt><dd>{workbenchOwnerLabel(evolutionOwnerForStatus(topic.status, topic.origin))}</dd></div>
         <div><dt>下一步</dt><dd>{nextStepForTopic(topic.status)}</dd></div>
