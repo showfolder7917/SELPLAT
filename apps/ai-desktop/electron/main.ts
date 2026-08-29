@@ -431,13 +431,20 @@ app.whenReady().then(async () => {
     integrationPipeline: versionIntegration,
     emitState: (state, reason, taskIds) => {
       // 单任务事件写入顶层 taskId；批量集成同时保留 taskIds，确保每条流程和错误都能反查所属任务。
-      workflowRepository?.syncCollaborationState(state);
+      try { workflowRepository?.syncCollaborationState(state); }
+      catch (error) {
+        eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_collaboration_state", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
+      }
       eventCenter.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
       nangongEvolution?.notifyWorkflowChanged();
     },
     emitStream: (taskId, memberId, event) => {
       eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
+      try { workflowRepository?.appendCollaborationStream(taskId, memberId, event); }
+      catch (error) {
+        eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "append_stream_chunk", error, correlationId: taskId, details: { memberId, eventType: event.type, turnId: event.turnId } });
+      }
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
     },
   });
@@ -484,7 +491,10 @@ app.whenReady().then(async () => {
     failMutation: workflowRepository ? (idempotencyKey, error) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined,
   });
   nangongEvolution.subscribe((state, reason, topicId, proposalId, previousState) => {
-    workflowRepository?.syncEvolutionState(state);
+    try { workflowRepository?.syncEvolutionState(state); }
+    catch (error) {
+      eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_evolution_state", error, correlationId: topicId || proposalId || undefined, details: { reason, topicId, proposalId } });
+    }
     collaborationMemory?.syncEvolutionState(state);
     eventCenter.recordEvent("nangong.evolution.state_changed", { reason, topicId, proposalId, activeTopicId: state.activeTopicId });
     const workbenchChange = buildEvolutionWorkbenchChange(previousState, state, reason, topicId, proposalId);

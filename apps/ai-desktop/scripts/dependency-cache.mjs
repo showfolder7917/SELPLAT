@@ -86,6 +86,8 @@ export function repairLocalPackageLinks(details = resolveDependencyCache()) {
     }
     const current = lstatSync(linkPath, { throwIfNoEntry: false });
     if (current && !current.isSymbolicLink()) continue;
+    // 已指向锁文件声明的本地包时无需重建；只读诊断不能因为无意义的删链操作而要求缓存写权限。
+    if (current && path.resolve(path.dirname(linkPath), readlinkSync(linkPath)) === targetPath) continue;
     if (current) rmSync(linkPath, { force: true });
     mkdirSync(path.dirname(linkPath), { recursive: true });
     createDependencyLink(targetPath, linkPath);

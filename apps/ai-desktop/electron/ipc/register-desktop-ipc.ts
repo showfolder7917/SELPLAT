@@ -342,7 +342,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter, workflowRepository);
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);

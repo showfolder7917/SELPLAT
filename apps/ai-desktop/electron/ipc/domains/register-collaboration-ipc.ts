@@ -21,8 +21,8 @@ import type { CollaborationCoordinator } from "../../services/collaboration/coll
 import type { LinghuAutomationFacade } from "../../services/collaboration/linghu-automation-facade.js";
 import type { NangongEvolutionFacade } from "../../services/collaboration/nangong-evolution-facade.js";
 import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
+import type { WorkflowRepository } from "../../services/event-center/workflow-repository.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
-import { buildCollaborationTimeline } from "../../services/collaboration/collaboration-timeline-projection.js";
 
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
 export function registerCollaborationIpc(
@@ -30,11 +30,15 @@ export function registerCollaborationIpc(
   linghuAutomation: LinghuAutomationFacade,
   nangongEvolution: NangongEvolutionFacade,
   eventCenter: EventCenterFacade,
+  workflowRepository: WorkflowRepository | null,
 ): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-collaboration-state", () => collaboration.state());
-  // 新任务协作群只读取统一投影；IPC 异常继续由 EventCenter 包装并交给令狐监听，不建立旁路 catch 日志。
-  handle("desktop:get-collaboration-timeline", () => buildCollaborationTimeline(collaboration.state(), nangongEvolution.state()));
+  // 任务协作群只读取 SQLite 不可变事件；数据库不可用时抛给 EventCenter，禁止退回 JSON 快照拼接旧实现。
+  handle("desktop:get-collaboration-timeline", () => {
+    if (!workflowRepository) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
+    return workflowRepository.getCollaborationTimeline();
+  });
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
   handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
   handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberRequest) => collaboration.createMember(request));

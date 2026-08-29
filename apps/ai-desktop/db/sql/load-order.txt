@@ -1,2 +1,5 @@
 # versionCode|SQL file|description
 1000|schema-AiDesktopCurrent.sql|建立不兼容旧库的 AI Desktop 当前完整数据库基线
+1001|schema-AiDesktopCollaborationTopic.sql|建立任务协作群专题卡当前投影
+1002|schema-AiDesktopCollaborationTimelineEvent.sql|建立任务协作群不可变时间线事实
+1003|schema-AiDesktopCollaborationStreamChunk.sql|建立任务协作群流式正文分片

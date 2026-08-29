@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { ApprovalGovernanceRecord } from "../../../contracts/governance/approval-governance.js";
-import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
+import type { CodexStreamEvent } from "../../../contracts/codex/codex-stream.js";
+import type { CollaborationState, CollaborationTask, CollaborationTimelineSnapshot } from "../../../contracts/collaboration/collaboration.js";
 import type { LinghuAutomationState } from "../../../contracts/collaboration/linghu-automation.js";
 import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkbenchRow, EvolutionWorkbenchView, NangongEvolutionState, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../contracts/governance/workflow.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
+import { CollaborationTimelineRepository } from "./collaboration-timeline-repository.js";
 
 const STALE_AFTER_MS = 120_000;
 const TERMINAL_TASK_STATES = new Set(["integrated", "cancelled"]);
@@ -14,11 +16,13 @@ const TERMINAL_TASK_STATES = new Set(["integrated", "cancelled"]);
 /** 把现有协同控制面投影到统一 SQLite；JSON 继续负责恢复对象图，数据库负责跨角色查询、异常和审计。 */
 export class WorkflowRepository {
   readonly #database: SqliteDatabase;
+  readonly #collaborationTimeline: CollaborationTimelineRepository;
   readonly #sessionId = `runtime-session-${randomUUID()}`;
   #evolutionWorkbenchStateVersion = "";
 
   constructor(database: SqliteDatabase) {
     this.#database = database;
+    this.#collaborationTimeline = new CollaborationTimelineRepository(database);
   }
 
   startRuntimeSession(processId = process.pid, now = new Date().toISOString()): string[] {
@@ -317,6 +321,7 @@ export class WorkflowRepository {
       const roundIds = [...new Set(state.tasks.map((task) => task.evolutionRoundId).filter((value): value is string => Boolean(value)))];
       for (const roundId of roundIds) this.#upsertEvolutionRound(connection, state, roundId);
     });
+    this.#collaborationTimeline.syncCollaborationState(state);
   }
 
   syncEvolutionState(state: NangongEvolutionState): void {
@@ -407,6 +412,17 @@ export class WorkflowRepository {
     });
     // 查询版本代表整个演化读模型，不随当前筛选结果变化，供增量事件准确识别漏报和乱序。
     this.#evolutionWorkbenchStateVersion = state.updatedAt;
+    this.#collaborationTimeline.syncEvolutionState(state);
+  }
+
+  /** 任务协作群只从 SQLite 追加事实生成，不再读取或拼接 JSON 当前快照。 */
+  getCollaborationTimeline(now = new Date().toISOString()): CollaborationTimelineSnapshot {
+    return this.#collaborationTimeline.snapshot(now);
+  }
+
+  /** 执行人的可见流式正文追加到时间线分片表；异常由调用方的统一 EventCenter 边界接管。 */
+  appendCollaborationStream(taskId: string, memberId: string, event: CodexStreamEvent, occurredAt = new Date().toISOString()): void {
+    this.#collaborationTimeline.appendStream(taskId, memberId, event, occurredAt);
   }
 
   getEvolutionTopicDossier(topicId: string, state: NangongEvolutionState): EvolutionTopicDossier {
@@ -542,6 +558,7 @@ export class WorkflowRepository {
     return this.#database.transaction((connection) => {
       // 固定白名单只包含可重建运行投影；SchemaVersion、人物原文、主题、归档消息与入库检查点永远不进入清理范围。
       const tables = [
+        "AiDesktopCollaborationStreamChunk", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationTopic",
         "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord",
         "AiDesktopApprovalGovernance", "AiDesktopApprovalRecord", "AiDesktopTaskExecution", "AiDesktopWorkflowRun",
         "AiDesktopMemberRuntime", "AiDesktopEvent", "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation",
@@ -552,7 +569,7 @@ export class WorkflowRepository {
     });
   }
 
-  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopTrainingCorpusTopic" | "AiDesktopTrainingCorpusMessage" | "AiDesktopCorpusIngestionCheckpoint" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord" | "AiDesktopEvolutionRound" | "AiDesktopEvolutionRoundTask"): number {
+  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopTrainingCorpusTopic" | "AiDesktopTrainingCorpusMessage" | "AiDesktopCorpusIngestionCheckpoint" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord" | "AiDesktopEvolutionRound" | "AiDesktopEvolutionRoundTask" | "AiDesktopEvolutionWorkbenchPreference" | "AiDesktopCollaborationTopic" | "AiDesktopCollaborationTimelineEvent" | "AiDesktopCollaborationStreamChunk"): number {
     return this.#database.withConnection((connection) => Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count));
   }
 
