@@ -61,6 +61,7 @@ export function registerCollaborationIpc(
   handle("desktop:set-nangong-automation", (_event, kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean) => nangongEvolution.setAutomation(kind, enabled === true));
   handle("desktop:configure-evolution-automation", (_event, request: ConfigureEvolutionAutomationRequest) => nangongEvolution.configureAutomation(request));
   handle("desktop:control-evolution-automation", (_event, action: EvolutionAutomationAction) => nangongEvolution.controlAutomation(action));
+  handle("desktop:resume-nangong-one-shot-evolution", () => nangongEvolution.resumeOneShotRun());
   handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateEvolutionProposalRequest) => nangongEvolution.createProposal(topicId, request));
   handle("desktop:create-linghu-repair-proposal", (_event, request: CreateLinghuRepairProposalRequest) => nangongEvolution.createLinghuRepairProposal(request));
   handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideEvolutionProposalRequest) => nangongEvolution.decideProposal(proposalId, request));

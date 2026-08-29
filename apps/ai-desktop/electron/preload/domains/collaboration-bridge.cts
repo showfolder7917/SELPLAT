@@ -39,6 +39,7 @@ export function collaborationBridge() {
     setNangongAutomation: (kind: string, enabled: boolean) => invoke("desktop:set-nangong-automation", kind, enabled),
     configureEvolutionAutomation: (request: unknown) => invoke("desktop:configure-evolution-automation", request),
     controlEvolutionAutomation: (action: string) => invoke("desktop:control-evolution-automation", action),
+    resumeNangongOneShotEvolution: () => invoke("desktop:resume-nangong-one-shot-evolution"),
     createEvolutionProposal: (topicId: string, request: unknown) => invoke("desktop:create-evolution-proposal", topicId, request),
     createLinghuRepairProposal: (request: unknown) => invoke("desktop:create-linghu-repair-proposal", request),
     decideEvolutionProposal: (proposalId: string, request: unknown) => invoke("desktop:decide-evolution-proposal", proposalId, request),

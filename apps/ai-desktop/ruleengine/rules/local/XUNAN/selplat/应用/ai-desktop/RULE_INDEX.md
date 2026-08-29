@@ -47,7 +47,7 @@ AI_DESKTOP_SCREENSHOT_INPUT_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/R
 <!-- 修改截图权限、选区、标注、剪贴板图片或临时素材时直接加载。 -->
 load_rule_for_ai_desktop_screenshot_annotation_clipboard_or_temp_image_change = AI_DESKTOP_SCREENSHOT_INPUT_RULES
 
-<!-- AI Desktop 人物演化、SQLite 持久化、自动测试和跨平台发布的独立职责规则。 -->
+<!-- AI Desktop 人物演化、可见邀请形成的持久一次性确认、SQLite 持久化、自动测试和跨平台发布的独立职责规则。 -->
 AI_DESKTOP_EVOLUTION_PERSISTENCE_RELEASE_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop演化持久化与发布规则.md
-<!-- 修改专题演化、持久化、自动测试或 Windows/macOS 发布入口时直接加载。 -->
+<!-- 修改专题演化、对话确认后一次性完整推进、持久化、自动测试或 Windows/macOS 发布入口时直接加载。 -->
 load_rule_for_ai_desktop_evolution_persistence_automatic_test_or_release_change = AI_DESKTOP_EVOLUTION_PERSISTENCE_RELEASE_RULES

@@ -166,8 +166,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return state;
   };
 
-  handle("desktop:open-evolution-workspace", async (_event, requestedLocation: unknown) => {
-    const location = normalizeEvolutionWorkspaceLocation(requestedLocation);
+  const openEvolutionWorkspace = async (location: EvolutionWorkspaceLocation): Promise<void> => {
     evolutionWorkspaceLocation = location;
     if (evolutionWorkspaceWindow && !evolutionWorkspaceWindow.isDestroyed()) {
       evolutionWorkspaceWindow.webContents.send("desktop:evolution-workspace-location", location);
@@ -200,14 +199,25 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const target = path.join(rendererRoot, "index.html");
     await evolutionWorkspaceWindow.loadFile(target, { query: evolutionWorkspaceLocationQuery(location) });
     audit.recordEvent("evolution.workspace.opened", { ...location });
+  };
+
+  handle("desktop:open-evolution-workspace", async (_event, requestedLocation: unknown) => {
+    await openEvolutionWorkspace(normalizeEvolutionWorkspaceLocation(requestedLocation));
   });
 
-  handle("desktop:execute-han-li-acceptance-plan", async (_event, planId: string) => {
-    if (!evolutionWorkspaceWindow || evolutionWorkspaceWindow.isDestroyed()) throw new Error("请先打开专题演化工作台，再执行韩立真实界面验收。 ");
-    const plan = nangongEvolution.acceptancePlan(planId);
+  const executeAcceptancePlan = async (plan: ReturnType<NangongEvolutionFacade["acceptancePlan"]>) => {
+    if (!evolutionWorkspaceWindow || evolutionWorkspaceWindow.isDestroyed()) await openEvolutionWorkspace({ perspective: "hanli", nodeId: "manual-release", page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: plan.proposalId });
+    if (!evolutionWorkspaceWindow || evolutionWorkspaceWindow.isDestroyed()) throw new Error("专题演化工作台未能打开，无法执行韩立真实界面验收。");
     const run = await acceptanceExecutor.execute(plan, evolutionWorkspaceWindow);
+    audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, planId: plan.planId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
+    return run;
+  };
+  nangongEvolution.setOneShotAcceptanceRunner(executeAcceptancePlan);
+
+  handle("desktop:execute-han-li-acceptance-plan", async (_event, planId: string) => {
+    const plan = nangongEvolution.acceptancePlan(planId);
+    const run = await executeAcceptancePlan(plan);
     nangongEvolution.recordAcceptanceRun(run);
-    audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, planId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
     return run;
   });
 

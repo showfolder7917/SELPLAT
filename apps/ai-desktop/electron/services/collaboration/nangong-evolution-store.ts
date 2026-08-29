@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionOneShotPhase, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 
 type StateListener = (state: NangongEvolutionState, reason: string, topicId: string | null, proposalId: string | null, previousState: NangongEvolutionState) => void;
 
@@ -82,6 +82,103 @@ export class NangongEvolutionStore {
         state.automationRuntime.pausedAt = null;
       }
     });
+  }
+
+  /**
+   * 作用：为当前一次用户确认建立独立运行实例，不改写长期自动化开关。
+   * 真实传参示例：workspaceState=SELPLAT 工作区、locale=zh-CN，返回 phase=preparing-topic。
+   * 真实返回示例：oneShotRun.actor=nangong-wan，界面显示“南宫婉正在整理演化课题”。
+   * 异常或副作用示例：已有未结束的一次性运行时拒绝重复建立；成功后原子保存运行状态。
+   */
+  beginOneShotRun(workspaceState: NangongEvolutionState["automationContext"]["workspaceState"], locale: NangongEvolutionState["automationContext"]["locale"]): NangongEvolutionState {
+    if (!workspaceState?.roots?.length) throw new Error("一次性演化必须先登记实施工作区。");
+    if (this.#state.oneShotRun?.status === "running") throw new Error("当前已有一次性演化正在运行，请勿重复启动。");
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.started", null, null, (state) => {
+      state.automationContext = { workspaceState: structuredClone(workspaceState), locale };
+      state.oneShotConfirmation = null;
+      state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
+    });
+  }
+
+  /** 更新一次性运行的人物、阶段和动作；专题档案使用同一条状态事实，不创建旁路流程。 */
+  updateOneShotRun(phase: EvolutionOneShotPhase, actor: EvolutionArchiveActor, actorName: string, action: string, topicId?: string | null, proposalId?: string | null): NangongEvolutionState {
+    const current = this.#state.oneShotRun;
+    if (!current || current.status !== "running") return this.state();
+    const resolvedTopicId = topicId === undefined ? current.topicId : topicId;
+    const resolvedProposalId = proposalId === undefined ? current.proposalId : proposalId;
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.activity", resolvedTopicId || null, resolvedProposalId || null, (state) => {
+      const run = state.oneShotRun;
+      if (!run || run.status !== "running") return;
+      run.topicId = resolvedTopicId || null;
+      run.proposalId = resolvedProposalId || null;
+      run.phase = phase;
+      run.actor = actor;
+      run.actorName = required(actorName, "一次性运行当前人物", 160);
+      run.action = required(action, "一次性运行当前动作", 2_000);
+      run.blockingReason = null;
+      run.updatedAt = now;
+    }, { phase, actor, actorName, action, status: "running", nextOwner: actorName });
+  }
+
+  finishOneShotRun(): NangongEvolutionState {
+    const current = this.#state.oneShotRun;
+    if (!current || current.status !== "running") return this.state();
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.completed", current.topicId, current.proposalId, (state) => {
+      const run = state.oneShotRun!;
+      run.status = "completed";
+      run.phase = "completed";
+      run.actor = "nangong-wan";
+      run.actorName = "南宫婉";
+      run.action = "本轮演化已经完成并归档";
+      run.blockingReason = null;
+      run.updatedAt = now;
+      run.completedAt = now;
+    }, { phase: "completed", actor: "nangong-wan", status: "completed", nextOwner: "user" });
+  }
+
+  blockOneShotRun(reason: string): NangongEvolutionState {
+    const current = this.#state.oneShotRun;
+    if (!current || current.status !== "running") return this.state();
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.blocked", current.topicId, current.proposalId, (state) => {
+      const run = state.oneShotRun!;
+      run.status = "blocked";
+      run.phase = "blocked";
+      run.actor = "system";
+      run.actorName = "系统";
+      run.action = "等待处理无法自动完成的阻塞";
+      run.blockingReason = required(reason, "一次性运行阻塞原因", 8_000);
+      run.updatedAt = now;
+      run.completedAt = now;
+    }, { phase: "blocked", actor: "system", status: "blocked", blockingReason: reason, nextOwner: "user" });
+  }
+
+  /**
+   * 作用：从已持久化的一次性流程卡点原位恢复，不改变长期自动开关，也不新建专题或提案。
+   * 真实传参示例：当前 run.status=blocked、proposalId 指向待补充提案，返回同一 runId 的 running 状态。
+   * 真实返回示例：界面显示“南宫婉正在重新调查韩立退回项”，后续状态机沿原专题继续。
+   * 异常或副作用示例：没有可恢复卡点时拒绝；成功后清除旧阻塞原因但保留全部审批和版本记录。
+   */
+  resumeOneShotRun(): NangongEvolutionState {
+    const current = this.#state.oneShotRun;
+    if (!current || current.status !== "blocked" || !current.topicId || !current.proposalId) throw new Error("当前没有可原位恢复的一次性演化卡点。");
+    const proposal = requireProposal(this.#state, current.proposalId);
+    if (!["supplement-required", "rejected", "blocked"].includes(proposal.status)) throw new Error("当前提案状态不允许从调查修订点恢复。");
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.resumed", current.topicId, current.proposalId, (state) => {
+      const run = state.oneShotRun!;
+      run.status = "running";
+      run.phase = "revising";
+      run.actor = "nangong-wan";
+      run.actorName = "南宫婉";
+      run.action = "正在重新调查韩立退回项并核对可验证的新事实";
+      run.blockingReason = null;
+      run.updatedAt = now;
+      run.completedAt = null;
+    }, { phase: "revising", actor: "nangong-wan", status: "running", nextOwner: "nangong-wan" });
   }
 
   createTopic(request: CreateEvolutionTopicRequest, sourceConversationMessageIds: string[] = []): NangongEvolutionState {
@@ -251,6 +348,19 @@ export class NangongEvolutionStore {
     });
   }
 
+  /** 把南宫婉正文中的明确邀请登记为可恢复事实；传入 null 表示最新回答尚未具备启动条件。 */
+  setOneShotConfirmation(invitationMessageId: string | null): NangongEvolutionState {
+    const message = invitationMessageId
+      ? this.#state.conversation.messages.find((item) => item.messageId === invitationMessageId && item.role === "nangong")
+      : null;
+    if (invitationMessageId && !message) throw new Error("一次性演化邀请消息不存在。");
+    return this.#commit("conversation.one-shot-confirmation-changed", null, null, (state) => {
+      state.oneShotConfirmation = message
+        ? { conversationId: state.conversation.conversationId, invitationMessageId: message.messageId, status: "awaiting-user-confirmation", createdAt: message.createdAt }
+        : null;
+    });
+  }
+
   recordConversationIntent(messageId: string, inferredIntent: string): NangongEvolutionState {
     const now = new Date().toISOString();
     return this.#commit("conversation.intent_recorded", null, null, (state) => {
@@ -291,6 +401,7 @@ export class NangongEvolutionStore {
   newConversation(): NangongEvolutionState {
     return this.#commit("conversation.created", null, null, (state) => {
       state.conversation = createConversation();
+      state.oneShotConfirmation = null;
     });
   }
 
@@ -366,7 +477,7 @@ export class NangongEvolutionStore {
   }
 
   /** 执行结果必须由韩立单独验收；任务完成事实不能直接替代最终业务判断。 */
-  decideResult(proposalId: string, decision: EvolutionApprovalDecision, advice: string): NangongEvolutionState {
+  decideResult(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource = "manual-user"): NangongEvolutionState {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
     const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.real_app_checked")?.payload.acceptanceRun as HanLiAcceptanceRun | undefined;
@@ -405,9 +516,9 @@ export class NangongEvolutionStore {
     } : null;
     return this.#commit("proposal.result_decided", proposal.topicId, proposalId, (state) => {
       const mutable = requireProposal(state, proposalId);
-      state.preferenceSnapshotVersion += 1;
+      if (source === "manual-user") state.preferenceSnapshotVersion += 1;
       mutable.approvals.push({
-        approvalId: `evolution-approval-${randomUUID()}`, proposalId, decision, source: "manual-user", stage: "result",
+        approvalId: `evolution-approval-${randomUUID()}`, proposalId, decision, source, stage: "result",
         approverMemberId: "han-li", approverDisplayName: "韩立", advice: advice.trim().slice(0, 8_000),
         referencedApprovalIds: mutable.approvals.slice(-1).map((item) => item.approvalId), feedbackTarget: "proposal-content",
         capabilityScope: null, preferenceSnapshotVersion: state.preferenceSnapshotVersion, createdAt: now,
@@ -424,7 +535,7 @@ export class NangongEvolutionStore {
         topic.status = "supplement-required";
         topic.recoveryPoint = "han-li-result-correction-required";
         state.automationRuntime.correctionRounds += 1;
-        if (state.automationRuntime.correctionRounds >= state.automationSettings.maxCorrectionRounds) {
+        if (state.automationRuntime.correctionRounds >= state.automationSettings.maxCorrectionRounds && state.oneShotRun?.status !== "running") {
           state.automaticEvolutionEnabled = false;
           state.automationRuntime.status = "blocked";
           state.automationRuntime.stopReason = `结果纠偏达到 ${state.automationSettings.maxCorrectionRounds} 轮，等待韩立调整方向。`;
@@ -470,7 +581,7 @@ export class NangongEvolutionStore {
         content: required(request.content, "修订方案", 30_000),
         evidence: normalizedList(request.evidence, "补充调查证据"),
         impactScope: normalizedList(request.impactScope, "修订影响范围"),
-        exclusions: [...previous.exclusions],
+        exclusions: request.exclusions === undefined ? [...previous.exclusions] : normalizedOptionalList(request.exclusions),
         risks: normalizedList(request.risks, "修订风险"),
         rollbackPlan: required(request.rollbackPlan, "修订回退方案", 8_000),
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "修订验收条件"),
@@ -540,7 +651,7 @@ export class NangongEvolutionStore {
       sequenceNumber: next.archiveRecords.length + 1,
       category: archiveCategory(reason),
       eventType: reason,
-      actor: archiveActor(reason),
+      actor: archiveActor(reason, payloadExtra),
       title: archiveTitle(reason),
       payload: { ...archivePayload(topic, proposal, deliberation), ...payloadExtra },
       occurredAt,
@@ -571,7 +682,7 @@ export class NangongEvolutionStore {
 }
 
 function createInitialState(): NangongEvolutionState {
-  return { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+  return { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
 }
 
 function required(value: unknown, label: string, maximum: number): string {
@@ -602,6 +713,7 @@ function assertTopicEditableBeforeProposal(state: NangongEvolutionState, topic: 
 function createConversation(): NangongEvolutionState["conversation"] { const now = new Date().toISOString(); return { conversationId: `nangong-conversation-${randomUUID()}`, messages: [], updatedAt: now }; }
 
 function archiveCategory(reason: string): EvolutionArchiveCategory {
+  if (reason.startsWith("one-shot.")) return reason.includes("blocked") ? "recovery" : reason.includes("completed") ? "acceptance" : "execution";
   if (reason === "conversation.topic_group_replied") return "source";
   if (reason.startsWith("deliberation.")) return "deliberation";
   if (reason.includes("distributed")) return "distribution";
@@ -613,7 +725,9 @@ function archiveCategory(reason: string): EvolutionArchiveCategory {
   return "topic";
 }
 
-function archiveActor(reason: string): EvolutionArchiveActor {
+function archiveActor(reason: string, payload: Record<string, unknown>): EvolutionArchiveActor {
+  if (reason.startsWith("one-shot.") && ["han-li", "nangong-wan", "codex", "linghu-ancestor", "system", "user"].includes(String(payload.actor))) return payload.actor as EvolutionArchiveActor;
+  if (reason.startsWith("one-shot.")) return "system";
   if (reason.includes("nangong_answered") || reason.includes("proposal.created") || reason.includes("distributed")) return "nangong-wan";
   if (reason.startsWith("deliberation.") || reason.startsWith("acceptance.") || reason.includes("established_from_deliberation") || reason.includes("proposal.decided") || reason.includes("result_decided")) return "han-li";
   if (reason.startsWith("linghu.")) return "linghu-ancestor";
@@ -636,6 +750,9 @@ function archiveTitle(reason: string): string {
     "acceptance.plan_generated": "韩立生成真实界面验收计划",
     "acceptance.real_app_checked": "韩立完成真实应用界面检查",
     "conversation.topic_group_replied": "专题群收到用户消息与南宫婉回复",
+    "one-shot.activity": "一次性演化当前动作更新",
+    "one-shot.completed": "一次性演化完整结束",
+    "one-shot.blocked": "一次性演化遇到无法自动处理的阻塞",
   };
   return titles[reason] || reason;
 }

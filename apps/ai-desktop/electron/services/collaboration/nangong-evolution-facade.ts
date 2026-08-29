@@ -7,6 +7,9 @@ import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { EvolutionMutationCoordinator } from "./evolution-mutation-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
 
+/** 南宫婉语义判断成熟后必须在可见正文中使用该句，Store 据此建立可恢复的等待确认事实。 */
+export const NANGONG_ONE_SHOT_INVITATION = "若确认启动本轮完整演化，请回复 1。";
+
 export interface NangongEvolutionFacadeOptions {
   store: NangongEvolutionStore;
   collaboration: CollaborationCoordinator;
@@ -20,6 +23,7 @@ export interface NangongEvolutionFacadeOptions {
   nangongDeliberation?: {
     send(question: string, context: string, state: NangongEvolutionState): Promise<string>;
   };
+  investigateRevision?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   planDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   auditDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   planAcceptance?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
@@ -42,6 +46,7 @@ export class NangongEvolutionFacade {
   readonly #conversation: NangongEvolutionFacadeOptions["conversation"];
   readonly #hanLi: NonNullable<NangongEvolutionFacadeOptions["hanLi"]>;
   readonly #nangongDeliberation: NonNullable<NangongEvolutionFacadeOptions["nangongDeliberation"]>;
+  readonly #investigateRevision: NonNullable<NangongEvolutionFacadeOptions["investigateRevision"]>;
   readonly #planDistribution: NonNullable<NangongEvolutionFacadeOptions["planDistribution"]>;
   readonly #auditDistribution: NonNullable<NangongEvolutionFacadeOptions["auditDistribution"]>;
   readonly #planAcceptance: NonNullable<NangongEvolutionFacadeOptions["planAcceptance"]>;
@@ -55,8 +60,9 @@ export class NangongEvolutionFacade {
   readonly #newConversationRetryDelaysMs: number[];
   #timer: ReturnType<typeof setInterval> | null = null;
   #running = false;
+  #oneShotAcceptanceRunner: ((plan: HanLiAcceptancePlan) => Promise<HanLiAcceptanceRun>) | null = null;
 
-  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#auditDistribution = options.auditDistribution || (async () => { throw new Error("令狐分发合理性审计尚未接入。"); }); this.#planAcceptance = options.planAcceptance || (async () => { throw new Error("韩立界面验收计划能力尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#queryWorkbench = options.queryWorkbench; this.#getWorkbenchPreference = options.getWorkbenchPreference; this.#saveWorkbenchPreference = options.saveWorkbenchPreference; this.#mutations = new EvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation }); this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
+  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#investigateRevision = options.investigateRevision || (async () => { throw new Error("南宫婉返修调查能力尚未接入。"); }); this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#auditDistribution = options.auditDistribution || (async () => { throw new Error("令狐分发合理性审计尚未接入。"); }); this.#planAcceptance = options.planAcceptance || (async () => { throw new Error("韩立界面验收计划能力尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#queryWorkbench = options.queryWorkbench; this.#getWorkbenchPreference = options.getWorkbenchPreference; this.#saveWorkbenchPreference = options.saveWorkbenchPreference; this.#mutations = new EvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation }); this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
   state(): NangongEvolutionState { return this.#store.state(); }
   dossier(topicId: string): EvolutionTopicDossier {
     const state = this.state();
@@ -78,11 +84,19 @@ export class NangongEvolutionFacade {
   subscribe(listener: Parameters<NangongEvolutionStore["subscribe"]>[0]) { return this.#store.subscribe(listener); }
   start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
   stop(): void { if (this.#timer) clearInterval(this.#timer); this.#timer = null; }
+  /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
+  setOneShotAcceptanceRunner(runner: (plan: HanLiAcceptancePlan) => Promise<HanLiAcceptanceRun>): void { this.#oneShotAcceptanceRunner = runner; }
+  /** 协作任务状态变化时立即核对一次性流程，避免等待固定轮询间隔。 */
+  notifyWorkflowChanged(): void { void this.#tick(); }
   createTopic(request: CreateEvolutionTopicRequest): NangongEvolutionState { return this.#store.createTopic(request); }
   setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): NangongEvolutionState { return this.#store.setAutomation(kind, enabled); }
   configureAutomation(request: ConfigureEvolutionAutomationRequest): NangongEvolutionState { return this.#store.configureAutomation(request); }
   controlAutomation(action: EvolutionAutomationAction): NangongEvolutionState { return this.#store.controlAutomation(action); }
   async sendConversationMessage(request: SendNangongConversationMessageRequest): Promise<NangongEvolutionState> {
+    const current = this.state();
+    const confirmation = current.oneShotConfirmation;
+    const ready = confirmation?.status === "awaiting-user-confirmation" && confirmation.conversationId === current.conversation.conversationId;
+    if (request.message.trim() === "1") return this.#startOneShotFromConversation(request, ready);
     let state = this.#store.appendConversation("user", request.message, request.attachmentIds || []);
     const userMessage = state.conversation.messages.at(-1)!;
     const context = this.#memory?.buildNangongContext(state.conversation)
@@ -90,9 +104,10 @@ export class NangongEvolutionFacade {
     const response = await this.#conversation.send(request, context);
     const parsed = parseConversationResponse(response.text);
     state = this.#store.appendConversation("nangong", parsed.reply);
-    state = this.#store.recordConversationIntent(userMessage.messageId, parsed.topic.userIntent);
+    if (parsed.topic.userIntent) state = this.#store.recordConversationIntent(userMessage.messageId, parsed.topic.userIntent);
     const nangongMessage = state.conversation.messages.at(-1)!;
-    this.#memory?.registerRound(state.conversation, userMessage.messageId, nangongMessage.messageId, parsed.topic);
+    state = this.#store.setOneShotConfirmation(!request.topicId && parsed.invitesOneShot ? nangongMessage.messageId : null);
+    if (parsed.topic.userIntent) this.#memory?.registerRound(state.conversation, userMessage.messageId, nangongMessage.messageId, parsed.topic);
     if (request.topicId) state = this.#store.recordTopicConversation(request.topicId, userMessage.messageId, nangongMessage.messageId);
     this.#recordEvent("nangong.evolution.conversation_replied", {
       conversationId: state.conversation.conversationId,
@@ -103,6 +118,35 @@ export class NangongEvolutionFacade {
       topicId: request.topicId || null,
     });
     return state;
+  }
+
+  /**
+   * 作用：把南宫婉已经明确提出的一次确认转换为当前课题的单轮全流程托管。
+   * 真实传参示例：界面已显示可恢复的“等待用户确认”状态，用户回复“1”后使用当前 SELPLAT 工作区开始整理课题。
+   * 真实返回示例：返回已保存的课题和 oneShotRun；后续审批、分发、执行、测试与验收由原状态机继续。
+   * 异常或副作用示例：没有南宫婉明确邀请时只保存解释回复；生成失败会持久化阻塞原因，不把已保存消息伪装成发送失败。
+   */
+  async #startOneShotFromConversation(request: SendNangongConversationMessageRequest, ready: boolean): Promise<NangongEvolutionState> {
+    let state = this.#store.appendConversation("user", request.message, request.attachmentIds || []);
+    const userMessage = state.conversation.messages.at(-1)!;
+    if (!ready) return this.#store.appendConversation("nangong", "当前没有等待确认的一次性演化。请继续补充事实，或点击“整理为演化课题”检查内容；南宫婉明确显示本轮已可启动后，再回复 1。", []);
+    state = this.#store.recordConversationIntent(userMessage.messageId, "确认将当前南宫婉调查对话整理为演化课题，并自动完成本轮既有审批、分发、测试与验收流程");
+    state = this.#store.beginOneShotRun(request.workspaceState, request.locale);
+    state = this.#store.appendConversation("nangong", "已确认启动本轮一次性演化。我正在整理课题；后续韩立审批、南宫婉分发、执行、令狐测试和韩立验收会沿现有流程连续推进，当前人物和动作会实时显示。", []);
+    const confirmationMessage = state.conversation.messages.at(-1)!;
+    try {
+      const draft = await this.generateTopicDraft({ workspaceState: request.workspaceState, locale: request.locale });
+      state = this.#store.convertConversationToTopic({ confirmedByUser: true, ...draft, workspaceState: request.workspaceState, locale: request.locale });
+      const topicId = state.activeTopicId!;
+      state = this.#store.updateOneShotRun("forming-proposal", "nangong-wan", "南宫婉", "正在根据已确认课题形成实施提案", topicId, null);
+      state = this.#store.recordTopicConversation(topicId, userMessage.messageId, confirmationMessage.messageId);
+      await this.#tick();
+      return this.state();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      state = this.#store.blockOneShotRun(reason);
+      return this.#store.appendConversation("nangong", `本轮一次性演化已保留当前进度，但遇到无法自动继续的阻塞：${reason}`, []);
+    }
   }
   async newConversation(): Promise<NangongEvolutionState> {
     for (const [index, retryDelay] of this.#newConversationRetryDelaysMs.entries()) {
@@ -139,8 +183,12 @@ export class NangongEvolutionFacade {
     return this.#mutations.run(proposal.topicId, "人工审批", request.mutation, () => this.state().updatedAt, () => this.state(), () => this.#store.decide(proposalId, request.decision, request.advice || "", "manual-user", [], request.feedbackTarget || "proposal-content", request.capabilityScope || ""));
   }
   decideResult(proposalId: string, request: DecideEvolutionResultRequest): NangongEvolutionState {
+    return this.#decideResult(proposalId, request, "manual-user");
+  }
+
+  #decideResult(proposalId: string, request: DecideEvolutionResultRequest, source: "manual-user" | "automatic-han-li"): NangongEvolutionState {
     const proposal = requireProposal(this.state(), proposalId);
-    return this.#mutations.run(proposal.topicId, "结果验收", request.mutation, () => this.state().updatedAt, () => this.state(), () => this.#store.decideResult(proposalId, request.decision, request.advice || ""));
+    return this.#mutations.run(proposal.topicId, "结果验收", request.mutation, () => this.state().updatedAt, () => this.state(), () => this.#store.decideResult(proposalId, request.decision, request.advice || "", source));
   }
 
   /** 只让韩立根据当前专题语义生成检查计划；生成动作不会自动判定通过或改变审批线路。 */
@@ -176,27 +224,41 @@ export class NangongEvolutionFacade {
     if (!member) throw new Error("重新提交人不是当前已启用的协同人物。");
     return this.#mutations.run(proposal.topicId, "返修重提", request.mutation, () => this.state().updatedAt, () => this.state(), () => this.#store.revise(proposalId, request, member.displayName));
   }
-  /** 自动职责只复用通用修订合同；已有子版本时返回现状，避免定时检测重复提交。 */
-  reviseReturnedProposalAutomatically(proposalId: string): NangongEvolutionState {
+  /** 驳回后先由南宫婉只读核查工作区；只有形成新的可验证事实才创建不可覆盖的新版本。 */
+  async investigateAndReviseReturnedProposal(proposalId: string): Promise<NangongEvolutionState> {
     const state = this.state();
     const proposal = requireProposal(state, proposalId);
     if (state.proposals.some((item) => item.supersedesProposalId === proposal.proposalId)) return state;
     const feedback = proposal.approvals.at(-1);
-    if (!feedback?.advice.trim()) throw new Error("自动修订缺少明确的人工审批意见。");
-    const capabilityInstruction = feedback.feedbackTarget === "submitter-capability"
-      ? `\n\n自身能力升级：修改${proposal.submitterDisplayName}自身使用的规则、提示、工作流或实现，能力范围为“${feedback.capabilityScope}”。`
-      : "";
+    const topic = state.topics.find((item) => item.topicId === proposal.topicId);
+    if (!feedback?.advice.trim() || !topic) throw new Error("返修调查缺少课题或明确审批意见。");
+    const response = await this.#investigateRevision(revisionInvestigationPrompt(topic, proposal, feedback.advice, feedback.feedbackTarget, feedback.capabilityScope), topic.workspaceState, topic.locale);
+    const investigation = parseRevisionInvestigation(response);
+    if (!hasMaterialRevisionEvidence(proposal, investigation, feedback.advice)) {
+      const reason = `南宫婉只读调查没有产生可核验的新事实，未创建提案 v${proposal.version + 1}；请补充实际组件、状态或复现证据后从当前卡点继续。`;
+      this.#recordEvent("nangong.evolution.revision_no_material_evidence", { topicId: topic.topicId, proposalId, feedbackApprovalId: feedback.approvalId });
+      return state.oneShotRun?.status === "running" ? this.#store.blockOneShotRun(reason) : this.state();
+    }
     const revised = this.reviseProposal(proposal.proposalId, {
       mutation: { expectedStateVersion: state.updatedAt, idempotencyKey: `automatic-revise:${proposal.proposalId}:${state.updatedAt}` },
       submitterMemberId: proposal.submitterMemberId,
-      content: `${proposal.content}\n\n根据审批意见修订：${feedback.advice}${capabilityInstruction}`,
-      evidence: [...proposal.evidence, `人工审批事实：${feedback.advice}`],
-      impactScope: feedback.feedbackTarget === "submitter-capability" ? [...proposal.impactScope, `${proposal.submitterDisplayName}自身能力配置`] : proposal.impactScope,
-      risks: [...proposal.risks], rollbackPlan: proposal.rollbackPlan,
-      acceptanceCriteria: [...proposal.acceptanceCriteria, "修订版本逐项回应人工审批意见并保留版本与审批追溯"],
+      content: investigation.content,
+      evidence: investigation.evidence,
+      impactScope: investigation.impactScope,
+      exclusions: investigation.exclusions,
+      risks: investigation.risks,
+      rollbackPlan: investigation.rollbackPlan,
+      acceptanceCriteria: investigation.acceptanceCriteria,
     });
-    this.#recordEvent("member.evolution.proposal_revised", { proposalId: proposal.proposalId, submitterMemberId: proposal.submitterMemberId, feedbackApprovalId: feedback.approvalId });
+    this.#recordEvent("member.evolution.proposal_revised_after_investigation", { proposalId: proposal.proposalId, submitterMemberId: proposal.submitterMemberId, feedbackApprovalId: feedback.approvalId, evidenceCount: investigation.evidence.length });
     return revised;
+  }
+
+  /** 从当前持久化卡点恢复同一轮；恢复后立即沿原状态机推进，不触碰长期自动开关。 */
+  async resumeOneShotRun(): Promise<NangongEvolutionState> {
+    this.#store.resumeOneShotRun();
+    await this.#tick();
+    return this.state();
   }
 
   autoApprove(proposalId: string, request?: EvolutionMutationRequest): NangongEvolutionState {
@@ -354,6 +416,100 @@ export class NangongEvolutionFacade {
     return state;
   }
 
+  /** 一次性托管只调度现有动作；每次推进到需要等待真实任务状态的位置即返回。 */
+  async #advanceOneShot(): Promise<NangongEvolutionState> {
+    const transitionLimit = Math.max(12, this.state().automationSettings.maxCorrectionRounds * 3 + 8);
+    for (let transition = 0; transition < transitionLimit; transition += 1) {
+      let state = this.state();
+      const run = state.oneShotRun;
+      if (!run || run.status !== "running" || !run.topicId) return state;
+      const topic = state.topics.find((item) => item.topicId === run.topicId);
+      if (!topic) return this.#store.blockOneShotRun("一次性运行关联的演化课题不存在。");
+      const proposals = state.proposals.filter((item) => item.topicId === topic.topicId).sort((left, right) => left.version - right.version);
+      let proposal = proposals.at(-1) || null;
+
+      if (!proposal) {
+        state = this.#store.updateOneShotRun("forming-proposal", "nangong-wan", "南宫婉", "正在根据课题事实形成实施提案", topic.topicId, null);
+        const content = `课题：${topic.title}\n\n目标：${topic.goal}\n\n调查事实：\n${topic.evidence.map((item) => `- ${item}`).join("\n")}\n\n推荐方向：在已登记范围内实施，并保持排除项不变。`;
+        state = this.createProposal(topic.topicId, { type: "代码修正", content, risks: ["实施可能影响既有调用方，必须通过原测试和验收门禁确认"], rollbackPlan: "保留课题、提案、任务和版本记录；失败时沿原恢复点返修，不覆盖已完成事实。" });
+        proposal = state.proposals.at(-1)!;
+        this.#store.updateOneShotRun("approving", "han-li", "韩立", "正在审批南宫婉提交的演化方向", topic.topicId, proposal.proposalId);
+        continue;
+      }
+
+      if (proposal.status === "pending-approval") {
+        this.#store.updateOneShotRun("approving", "han-li", "韩立", `正在审批提案 v${proposal.version}`, topic.topicId, proposal.proposalId);
+        const decision = await this.#reviewOneShotProposal(proposal);
+        this.#store.decide(proposal.proposalId, decision.decision, decision.advice, "automatic-han-li", []);
+        continue;
+      }
+
+      if (["supplement-required", "rejected"].includes(proposal.status)) {
+        const correctionRounds = proposals.filter((item) => item.supersedesProposalId !== null).length;
+        if (correctionRounds >= state.automationSettings.maxCorrectionRounds) return this.#store.blockOneShotRun(`提案返修已经达到 ${state.automationSettings.maxCorrectionRounds} 轮，韩立仍未确认方向可执行。`);
+        this.#store.updateOneShotRun("revising", "nangong-wan", "南宫婉", `正在按韩立退回项重新调查提案 v${proposal.version}`, topic.topicId, proposal.proposalId);
+        try { await this.investigateAndReviseReturnedProposal(proposal.proposalId); }
+        catch (error) { return this.#store.blockOneShotRun(`南宫婉重新调查失败：${error instanceof Error ? error.message : String(error)}`); }
+        continue;
+      }
+
+      if (proposal.status === "approved" && proposal.distributedTaskIds.length === 0) {
+        this.#store.updateOneShotRun("distributing", "nangong-wan", "南宫婉", "审批已通过，正在拆分并分发任务", topic.topicId, proposal.proposalId);
+        await this.dispatch(proposal.proposalId);
+        continue;
+      }
+
+      if (["executing", "verifying", "blocked"].includes(proposal.status)) {
+        const tasks = this.#collaboration.state().tasks.filter((task) => proposal!.distributedTaskIds.includes(task.taskId));
+        if (proposal.status === "blocked") {
+          this.#store.updateOneShotRun("testing", "linghu-ancestor", "令狐老祖", "检测到执行或测试失败，正在按原恢复线路修正并继续", topic.topicId, proposal.proposalId);
+          for (const task of tasks.filter((item) => ["blocked", "test-failed", "review-failed"].includes(item.state))) await this.#collaboration.recoverTask(task.taskId, itemFailureReason(task));
+          return this.state();
+        }
+        const testing = proposal.status === "verifying" || tasks.some((item) => item.unifiedTest?.status === "running" || ["unified-testing", "integrating", "queued-integration"].includes(item.state));
+        const activeTask = tasks.find((item) => !["integrated", "cancelled"].includes(item.state)) || tasks.at(-1);
+        const actorName = testing ? "令狐老祖" : activeTask?.currentHandler?.displayName || activeTask?.originalExecutor?.displayName || "执行成员";
+        this.#store.updateOneShotRun(testing ? "testing" : "executing", testing ? "linghu-ancestor" : "codex", actorName, testing ? "正在执行统一测试、集成和恢复门禁" : `正在执行：${activeTask?.snapshot.title || proposal.title}`, topic.topicId, proposal.proposalId);
+        return this.state();
+      }
+
+      if (proposal.status === "pending-acceptance") {
+        this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在生成检查计划并验收真实应用界面", topic.topicId, proposal.proposalId);
+        if (!this.#oneShotAcceptanceRunner) return this.#store.blockOneShotRun("韩立真实应用验收执行器尚未接入。");
+        const existingPlan = [...state.archiveRecords].reverse().find((record) => record.proposalId === proposal!.proposalId && record.eventType === "acceptance.plan_generated")?.payload.acceptancePlan as HanLiAcceptancePlan | undefined;
+        const plan = existingPlan || await this.generateAcceptancePlan(proposal.proposalId);
+        const runResult = await this.#oneShotAcceptanceRunner(plan);
+        this.recordAcceptanceRun(runResult);
+        state = this.state();
+        this.#decideResult(proposal.proposalId, {
+          mutation: { expectedStateVersion: state.updatedAt, idempotencyKey: `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}` },
+          decision: runResult.status === "passed" ? "approved" : "supplement-required",
+          advice: runResult.status === "passed" ? "韩立已按真实用户路径完成检查，全部适用项目通过。" : "真实应用检查未通过，已携带复现步骤、实际结果、期望结果和截图证据返还南宫婉修订。",
+        }, "automatic-han-li");
+        continue;
+      }
+
+      if (proposal.status === "completed" || topic.status === "completed") {
+        state = this.#store.finishOneShotRun();
+        return this.#store.appendConversation("nangong", `本轮演化已经完整完成：课题“${topic.title}”已通过韩立审批、任务执行、令狐统一测试和韩立真实界面验收，全部记录已归档到专题工作台。`, []);
+      }
+      return state;
+    }
+    return this.#store.blockOneShotRun("一次性流程在单次推进中出现过多连续状态变化，已保留恢复点等待检查。");
+  }
+
+  /** 韩立在一次性运行中仍形成正式方向审批记录，不读取长期自动开关，也不跳过事实审查。 */
+  async #reviewOneShotProposal(proposal: EvolutionProposal): Promise<{ decision: "approved" | "rejected" | "supplement-required"; advice: string }> {
+    const state = this.state();
+    const response = await this.#hanLi.send([
+      "你是韩立，正在执行现有演化方向审批。用户只授权这一轮连续托管，没有授权跳过审批。",
+      "请审查事实证据、影响范围、排除项、风险、回退方案和验收条件。材料足够且方向可执行时通过；缺少事实时退回补充；方向明显不成立时驳回。",
+      "仅返回 JSON：{\"decision\":\"approved|supplement-required|rejected\",\"advice\":\"具体审批依据或需要补充的内容\"}。",
+      JSON.stringify({ proposal, topic: state.topics.find((item) => item.topicId === proposal.topicId) }),
+    ].join("\n\n"), state);
+    return parseOneShotApproval(response);
+  }
+
   async #tick(): Promise<void> {
     if (this.#running) return;
     this.#running = true;
@@ -363,7 +519,7 @@ export class NangongEvolutionFacade {
         for (const proposal of state.proposals.filter((item) => ["supplement-required", "rejected"].includes(item.status))) {
           if (state.proposals.some((item) => item.supersedesProposalId === proposal.proposalId)) continue;
           if (!proposal.approvals.at(-1)?.advice.trim()) continue;
-          state = this.reviseReturnedProposalAutomatically(proposal.proposalId);
+          state = await this.investigateAndReviseReturnedProposal(proposal.proposalId);
         }
       }
       for (const proposal of state.proposals.filter((item) => item.distributedTaskIds.length && ["executing", "verifying"].includes(item.status))) {
@@ -379,6 +535,10 @@ export class NangongEvolutionFacade {
         const verifying = tasks.some((task) => ["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart"].includes(task.state));
         const status = blocked ? "blocked" : completed ? "pending-acceptance" : verifying ? "verifying" : "executing";
         if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务已经完成，等待韩立按真实用户路径验收结果。" : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
+      }
+      if (state.oneShotRun?.status === "running") {
+        await this.#advanceOneShot();
+        return;
       }
       // 一个专题完成后重新进入韩立读库与发问流程；禁止复制旧专题标题伪造下一专题。
       for (const proposal of state.proposals.filter((item) => item.status === "pending-approval")) {
@@ -440,6 +600,57 @@ function distributionAuditPrompt(
     `程序核对到的确定事实：${hardFindings.length ? hardFindings.join("；") : "未发现确定性冲突"}`,
   ].join("\n\n");
 }
+
+interface RevisionInvestigation {
+  content: string;
+  evidence: string[];
+  impactScope: string[];
+  exclusions: string[];
+  risks: string[];
+  rollbackPlan: string;
+  acceptanceCriteria: string[];
+}
+
+function revisionInvestigationPrompt(topic: NangongEvolutionState["topics"][number], proposal: EvolutionProposal, advice: string, feedbackTarget: string, capabilityScope: string | null): string {
+  return [
+    "你是南宫婉。韩立已经退回当前提案；先只读检查实际工作区，再决定是否存在足以重新提交的新事实。不得修改文件、启动构建或把审批意见改写成事实。",
+    "重点核对韩立指出的实际组件、选择器或文件位置，当前可用、悬停、忙碌或禁用状态，明确影响范围与排除项，具体风险与回退边界，以及能在真实应用中观察的验收条件。",
+    "只写亲自从源码、配置或可重复读取结果中核实的内容；每条 evidence 必须带可定位对象和观察结果。若没有新事实，evidence 返回空数组，程序不会创建新版本。",
+    `反馈目标：${feedbackTarget}${capabilityScope ? `；能力范围：${capabilityScope}` : ""}`,
+    `韩立退回意见：${advice}`,
+    `课题：${JSON.stringify({ title: topic.title, goal: topic.goal, scope: topic.scope, exclusions: topic.exclusions, evidence: topic.evidence, acceptanceCriteria: topic.acceptanceCriteria })}`,
+    `当前提案：${JSON.stringify({ version: proposal.version, content: proposal.content, evidence: proposal.evidence, impactScope: proposal.impactScope, exclusions: proposal.exclusions, risks: proposal.risks, rollbackPlan: proposal.rollbackPlan, acceptanceCriteria: proposal.acceptanceCriteria })}`,
+    "仅返回 JSON：{\"content\":\"基于本次实查形成的完整修订方案\",\"evidence\":[\"文件/组件/状态 + 实际观察\"],\"impactScope\":[\"明确影响范围\"],\"exclusions\":[\"明确不改内容\"],\"risks\":[\"具体风险和缓解方式\"],\"rollbackPlan\":\"限定到本次改动的回退方案\",\"acceptanceCriteria\":[\"可在真实应用观察的结果\"]}。不要返回 Markdown。",
+  ].join("\n\n");
+}
+
+function parseRevisionInvestigation(text: string): RevisionInvestigation {
+  const value = parseJsonObject(text);
+  const content = typeof value.content === "string" ? value.content.trim().slice(0, 30_000) : "";
+  const evidence = normalizeDraftList(value.evidence);
+  const impactScope = normalizeDraftList(value.impactScope);
+  const exclusions = normalizeDraftList(value.exclusions);
+  const risks = normalizeDraftList(value.risks);
+  const rollbackPlan = typeof value.rollbackPlan === "string" ? value.rollbackPlan.trim().slice(0, 8_000) : "";
+  const acceptanceCriteria = normalizeDraftList(value.acceptanceCriteria);
+  if (!content || !impactScope.length || !risks.length || !rollbackPlan || !acceptanceCriteria.length) throw new Error("南宫婉返修调查没有形成完整的范围、风险、回退和验收结构。");
+  return { content, evidence, impactScope, exclusions, risks, rollbackPlan, acceptanceCriteria };
+}
+
+function hasMaterialRevisionEvidence(proposal: EvolutionProposal, investigation: RevisionInvestigation, advice: string): boolean {
+  const oldEvidence = new Set(proposal.evidence.map(normalizedComparisonText));
+  const approvalText = normalizedComparisonText(advice);
+  const hasNewEvidence = investigation.evidence.some((item) => {
+    const normalized = normalizedComparisonText(item);
+    return normalized.length >= 12 && !oldEvidence.has(normalized) && normalized !== approvalText && !normalized.startsWith("人工审批事实");
+  });
+  if (!hasNewEvidence) return false;
+  const nextStructure = normalizedComparisonText(JSON.stringify({ content: investigation.content, impactScope: investigation.impactScope, exclusions: investigation.exclusions, risks: investigation.risks, rollbackPlan: investigation.rollbackPlan, acceptanceCriteria: investigation.acceptanceCriteria }));
+  const previousStructure = normalizedComparisonText(JSON.stringify({ content: proposal.content, impactScope: proposal.impactScope, exclusions: proposal.exclusions, risks: proposal.risks, rollbackPlan: proposal.rollbackPlan, acceptanceCriteria: proposal.acceptanceCriteria }));
+  return nextStructure !== previousStructure;
+}
+
+function normalizedComparisonText(value: string): string { return value.normalize("NFKC").replaceAll(/\s+/gu, "").toLowerCase(); }
 
 function parseDistributionPlan(text: string): Pick<EvolutionDistributionPlan, "summary" | "units"> {
   const value = parseJsonObject(text);
@@ -547,13 +758,17 @@ function parseAcceptanceOperation(raw: unknown): HanLiAcceptancePlan["checks"][n
 const CONVERSATION_TOPIC_META_PREFIX = "NANGONG_TOPIC_META=";
 
 /** 南宫婉正文保持自然语言；最后一行只提供机器可读主题坐标，解析失败也不丢失正文。 */
-function parseConversationResponse(text: string): { reply: string; topic: ConversationRoundTopicDecision } {
+function parseConversationResponse(text: string): { reply: string; topic: ConversationRoundTopicDecision; invitesOneShot: boolean } {
   const lines = text.trim().split(/\r?\n/);
   let markerIndex = -1;
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     if (lines[index].trim().startsWith(CONVERSATION_TOPIC_META_PREFIX)) { markerIndex = index; break; }
   }
-  if (markerIndex < 0) return { reply: text.trim(), topic: { title: "待 AI 归类", type: "待归类", switchTopic: false, userIntent: "", tags: [], summary: "" } };
+  if (markerIndex < 0) {
+    const corpus = parseCorpusMetadata(text);
+    const reply = text.trim();
+    return { reply, topic: corpus || { title: "待 AI 归类", type: "待归类", switchTopic: false, userIntent: "", tags: [], summary: "" }, invitesOneShot: reply.includes(NANGONG_ONE_SHOT_INVITATION) };
+  }
   const marker = lines[markerIndex].trim().slice(CONVERSATION_TOPIC_META_PREFIX.length);
   try {
     const value = JSON.parse(marker) as Partial<ConversationRoundTopicDecision>;
@@ -564,10 +779,26 @@ function parseConversationResponse(text: string): { reply: string; topic: Conver
     const summary = typeof value.summary === "string" && Array.from(value.summary.trim()).length <= 300 ? value.summary.trim() : "";
     const reply = lines.filter((_line, index) => index !== markerIndex).join("\n").trim();
     if (!reply || !title || !type || !userIntent || !tags.length || !summary) throw new Error("incomplete conversation topic metadata");
-    return { reply, topic: { title, type, switchTopic: value.switchTopic === true, userIntent, tags, summary } };
+    return { reply, topic: { title, type, switchTopic: value.switchTopic === true, userIntent, tags, summary }, invitesOneShot: reply.includes(NANGONG_ONE_SHOT_INVITATION) };
   } catch {
-    return { reply: lines.filter((_line, index) => index !== markerIndex).join("\n").trim() || text.trim(), topic: { title: "待 AI 归类", type: "待归类", switchTopic: false, userIntent: "", tags: [], summary: "" } };
+    const reply = lines.filter((_line, index) => index !== markerIndex).join("\n").trim() || text.trim();
+    return { reply, topic: { title: "待 AI 归类", type: "待归类", switchTopic: false, userIntent: "", tags: [], summary: "" }, invitesOneShot: reply.includes(NANGONG_ONE_SHOT_INVITATION) };
   }
+}
+
+/** Codex 最终回答可能只带工程语料元数据；该元数据同样来自 AI 语义判断，可用于避免保存后误报整轮失败。 */
+function parseCorpusMetadata(text: string): ConversationRoundTopicDecision | null {
+  const match = text.match(/<!--\s*SELPLAT_CORPUS_META\s+(\{[\s\S]*?\})\s*-->/);
+  if (!match) return null;
+  try {
+    const value = JSON.parse(match[1]) as Record<string, unknown>;
+    const title = typeof value.title === "string" ? value.title.trim().slice(0, 120) : "";
+    const type = typeof value.type === "string" ? value.type.trim().slice(0, 120) : "";
+    const userIntent = typeof value.intent === "string" ? value.intent.trim().slice(0, 2_000) : "";
+    const tags = normalizeDraftList(value.tags).slice(0, 12);
+    const summary = typeof value.summary === "string" && Array.from(value.summary.trim()).length <= 300 ? value.summary.trim() : "";
+    return title && type && userIntent && tags.length && summary ? { title, type, switchTopic: false, userIntent, tags, summary } : null;
+  } catch { return null; }
 }
 
 function normalizeDraftList(value: unknown): string[] { return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : []; }
@@ -576,6 +807,18 @@ function parseJsonObject(text: string): Record<string, unknown> {
   const candidate = text.match(/\{[\s\S]*\}/)?.[0];
   if (!candidate) throw new Error("AI 没有返回可解析的结构化判断。 ");
   try { return JSON.parse(candidate) as Record<string, unknown>; } catch { throw new Error("AI 返回的结构化判断不是有效 JSON。 "); }
+}
+
+function parseOneShotApproval(text: string): { decision: "approved" | "rejected" | "supplement-required"; advice: string } {
+  const value = parseJsonObject(text);
+  const decision = value.decision;
+  const advice = typeof value.advice === "string" ? value.advice.trim().slice(0, 8_000) : "";
+  if (!(["approved", "rejected", "supplement-required"] as unknown[]).includes(decision) || !advice) throw new Error("韩立一次性方向审批缺少有效决定或具体意见。");
+  return { decision: decision as "approved" | "rejected" | "supplement-required", advice };
+}
+
+function itemFailureReason(task: ReturnType<CollaborationCoordinator["state"]>["tasks"][number]): string {
+  return task.blockingReason || task.repairFailureReason || task.unifiedTest?.failureReason || `任务 ${task.snapshot.title} 未能继续，交给令狐按原恢复线路处理。`;
 }
 
 function parseHanLiQuestion(text: string): { question: string; reason: string } {

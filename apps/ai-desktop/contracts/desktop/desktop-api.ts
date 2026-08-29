@@ -184,6 +184,8 @@ export interface DesktopApi {
   configureEvolutionAutomation(request: ConfigureEvolutionAutomationRequest): Promise<NangongEvolutionState>;
   /** 启动、暂停、恢复或停止演化自动化。 */
   controlEvolutionAutomation(action: EvolutionAutomationAction): Promise<NangongEvolutionState>;
+  /** 从一次性演化已持久化卡点恢复同一专题和提案链，不改变长期自动开关。 */
+  resumeNangongOneShotEvolution(): Promise<NangongEvolutionState>;
   /** 向南宫调查会话发送消息并记录来源。 */
   sendNangongConversationMessage(request: SendNangongConversationMessageRequest): Promise<NangongEvolutionState>;
   /** 清空当前南宫会话并创建新会话。 */

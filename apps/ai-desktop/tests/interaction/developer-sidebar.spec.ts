@@ -331,6 +331,15 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   const conversation = page.locator(".nangong-person-chat");
   await expect(conversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
+  const confirmation = { conversationId: "nangong-conversation-isolated", invitationMessageId: "nangong-invitation", status: "awaiting-user-confirmation", createdAt: new Date().toISOString() };
+  await page.evaluate((value) => (window as unknown as { desktop: { setInteractionOneShotConfirmation(value: unknown): Promise<void> } }).desktop.setInteractionOneShotConfirmation(value), confirmation);
+  const confirmationPanel = conversation.getByLabel("本轮演化等待确认");
+  await expect(confirmationPanel).toContainText("本轮已具备启动条件");
+  await testInfo.attach("one-shot-persisted-confirmation", { body: await page.screenshot(), contentType: "image/png" });
+  await confirmationPanel.getByRole("button", { name: "回复 1 并启动本轮完整流程" }).click();
+  await expect(conversation.getByLabel("本轮演化实时进度")).toContainText("南宫婉正在思考");
+  await expect(conversation.getByLabel("本轮演化实时进度")).toContainText("正在根据当前对话整理演化课题");
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionOneShotRun(run: unknown): Promise<void> } }).desktop.setInteractionOneShotRun(null));
   await expect(page.locator(".evolution-control-workspace")).toHaveCount(0);
   const [evolutionPage] = await Promise.all([
     application.waitForEvent("window"),
@@ -341,6 +350,14 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(rail.getByText("专项演化", { exact: true })).toBeVisible();
   const workspace = evolutionPage.locator(".evolution-control-workspace");
   await expect(workspace.locator(".evolution-tree-column")).toHaveCount(1);
+  const liveRun = { runId: "interaction-one-shot", topicId: null, proposalId: null, status: "running", phase: "approving", actor: "han-li", actorName: "韩立", action: "正在审批南宫婉提交的演化方向", blockingReason: null, startedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), completedAt: null };
+  await page.evaluate((run) => (window as unknown as { desktop: { setInteractionOneShotRun(run: unknown): Promise<void> } }).desktop.setInteractionOneShotRun(run), liveRun);
+  await evolutionPage.evaluate((run) => (window as unknown as { desktop: { setInteractionOneShotRun(run: unknown): Promise<void> } }).desktop.setInteractionOneShotRun(run), liveRun);
+  await expect(conversation.getByLabel("本轮演化实时进度")).toContainText("韩立正在审批");
+  await expect(workspace.getByLabel("本轮演化实时进度")).toContainText("正在审批南宫婉提交的演化方向");
+  await testInfo.attach("one-shot-live-activity", { body: await evolutionPage.screenshot(), contentType: "image/png" });
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionOneShotRun(run: unknown): Promise<void> } }).desktop.setInteractionOneShotRun(null));
+  await evolutionPage.evaluate(() => (window as unknown as { desktop: { setInteractionOneShotRun(run: unknown): Promise<void> } }).desktop.setInteractionOneShotRun(null));
   await expect(workspace.locator(".evolution-module-column, .evolution-flow-column")).toHaveCount(0);
   await expect(workspace.getByRole("button", { name: "人物与个性", exact: true })).toBeVisible();
   await expect(workspace.getByRole("button", { name: "专题演化", exact: true })).toBeVisible();

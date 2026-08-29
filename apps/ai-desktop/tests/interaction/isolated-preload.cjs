@@ -84,7 +84,7 @@ let linghuAutomationState = {
   prompts: [{ promptId: "linghu-default-flow-guardian", title: linghuDefault.title, content: linghuDefault.content, enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
-let nangongEvolutionState = { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
+let nangongEvolutionState = { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
 const publishNangongEvolution = (reason) => {
   const previousStateVersion = nangongEvolutionState.updatedAt;
   nangongEvolutionState.updatedAt = new Date().toISOString();
@@ -275,6 +275,8 @@ contextBridge.exposeInMainWorld("desktop", {
   selectLinghuStartupPrompt: async (promptId) => { linghuAutomationState.activePromptId = promptId; return publishLinghuAutomation("prompt.selected"); },
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
   getNangongEvolutionState: async () => structuredClone(nangongEvolutionState),
+  setInteractionOneShotRun: async (run) => { nangongEvolutionState.oneShotRun = run ? structuredClone(run) : null; return publishNangongEvolution("one-shot.activity"); },
+  setInteractionOneShotConfirmation: async (confirmation) => { nangongEvolutionState.oneShotConfirmation = confirmation ? structuredClone(confirmation) : null; return publishNangongEvolution("conversation.one-shot-confirmation-changed"); },
   openEvolutionWorkspace: async (location) => ipcRenderer.invoke("desktop:test-open-evolution-workspace", location),
   onEvolutionWorkspaceLocation: (listener) => {
     const handler = (_event, location) => listener(location);
@@ -311,6 +313,12 @@ contextBridge.exposeInMainWorld("desktop", {
     const now = new Date().toISOString();
     const userMessageId = `user-${now}`;
     const nangongMessageId = `nangong-${now}`;
+    if (request.message.trim() === "1" && nangongEvolutionState.oneShotConfirmation) {
+      nangongEvolutionState.conversation.messages.push({ messageId: userMessageId, role: "user", content: "1", inferredIntent: "确认启动当前一次性完整演化", createdAt: now });
+      nangongEvolutionState.oneShotConfirmation = null;
+      nangongEvolutionState.oneShotRun = { runId: `interaction-one-shot-${Date.now()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
+      return publishNangongEvolution("one-shot.started");
+    }
     const nangongReply = "已确认事实：令狐持续修正需要先形成可审批方案。建议方向：把修正方案接入韩立统一审批。";
     nangongEvolutionState.conversation.messages.push({ messageId: userMessageId, role: "user", content: request.message, createdAt: now });
     nangongEvolutionState.conversation.messages.push({ messageId: nangongMessageId, role: "nangong", content: nangongReply, createdAt: now });

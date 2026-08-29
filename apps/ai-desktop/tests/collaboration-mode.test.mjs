@@ -1053,6 +1053,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /codex_app_ingestion_default_off_and_user_toggleable/);
   assert.match(rule, /workflow_event_center_stall_contract = independent_30_second_supervisor_plus_120_second_timeout_plus_fault_fact_dedup_plus_linghu_handoff/);
   assert.match(rule, /nangong_next_evolution_launcher_contract = completed_and_accepted_plus_automatic_evolution_enabled_plus_reciprocal_topic_ids_plus_idempotent_restart/);
+  assert.match(rule, /nangong_one_shot_complete_evolution_contract = AI_semantic_maturity_then_canonical_visible_invitation_creates_persisted_waiting_confirmation[\s\S]*no_hidden_metadata_readiness_field[\s\S]*preserve_all_long_term_automation_switches[\s\S]*no_parallel_approval_distribution_recovery_or_acceptance_route/);
   assert.match(rule, /collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow[\s\S]*no_display_name_business_branch/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
   assert.match(rule, /collaboration_clean_merge_contract = changed_task_worktree_creates_exactly_one_final_local_commit[\s\S]*unknown_overlap_multi_task_or_dirty_task_worktree_blocks_without_guessing/);

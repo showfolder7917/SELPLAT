@@ -389,6 +389,10 @@ export interface NangongEvolutionState {
   automaticExecutionEnabled: boolean;
   automationSettings: EvolutionAutomationSettings;
   automationRuntime: EvolutionAutomationRuntime;
+  /** 南宫婉已经在可见正文中明确邀请启动本轮流程；应用重启后仍可继续等待用户确认。 */
+  oneShotConfirmation?: EvolutionOneShotConfirmation | null;
+  /** 当前对话经用户一次确认后启动的单轮托管；不改变四个长期自动开关。 */
+  oneShotRun?: EvolutionOneShotRun | null;
   automationContext: { workspaceState: WorkspaceState | null; locale: Locale };
   preferenceSnapshotVersion: number;
   activeTopicId: string | null;
@@ -413,6 +417,32 @@ export interface EvolutionAutomationRuntime {
   stopReason: string | null;
   startedAt: string | null;
   pausedAt: string | null;
+}
+
+export type EvolutionOneShotPhase = "preparing-topic" | "forming-proposal" | "approving" | "revising" | "distributing" | "executing" | "testing" | "accepting" | "completed" | "blocked";
+
+/** 可见邀请形成的待确认事实；不使用模型隐藏字段推断用户是否能够回复 1。 */
+export interface EvolutionOneShotConfirmation {
+  conversationId: string;
+  invitationMessageId: string;
+  status: "awaiting-user-confirmation";
+  createdAt: string;
+}
+
+/** 一次性运行状态随专题状态共同持久化，并通过既有状态事件实时投影到人物界面。 */
+export interface EvolutionOneShotRun {
+  runId: string;
+  topicId: string | null;
+  proposalId: string | null;
+  status: "running" | "completed" | "blocked";
+  phase: EvolutionOneShotPhase;
+  actor: EvolutionArchiveActor;
+  actorName: string;
+  action: string;
+  blockingReason: string | null;
+  startedAt: string;
+  updatedAt: string;
+  completedAt: string | null;
 }
 
 export interface ConfigureEvolutionAutomationRequest {
@@ -537,6 +567,7 @@ export interface ReviseEvolutionProposalRequest {
   content: string;
   evidence: string[];
   impactScope: string[];
+  exclusions?: string[];
   risks: string[];
   rollbackPlan: string;
   acceptanceCriteria: string[];

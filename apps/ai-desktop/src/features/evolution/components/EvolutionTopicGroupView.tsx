@@ -11,6 +11,7 @@ import type {
 } from "../../../../contracts/desktop/desktop";
 import { evolutionOwnerForStatus, evolutionStatusLabel, workbenchOwnerLabel } from "../model/evolution-workbench";
 import type { EvolutionWorkspaceFlowNode } from "./NangongEvolutionRail";
+import { EvolutionLiveActivity } from "./EvolutionLiveActivity";
 
 interface TopicGroupEntry {
   id: string;
@@ -32,9 +33,10 @@ interface TopicGroupEntry {
  * 真实返回示例：返回可跳往既有审批、任务、发布和恢复页面的群卡片，不触发任何业务写动作。
  * 异常或副作用示例：SQLite 档案读取失败时显示错误并上报；组件本身不审批、不分发、不恢复任务。
  */
-export function EvolutionTopicGroupView({ topic, stateVersion, perspective, locale, workspaces, onNavigate, onState, onError }: {
+export function EvolutionTopicGroupView({ topic, stateVersion, oneShotRun, perspective, locale, workspaces, onNavigate, onState, onError }: {
   topic: EvolutionTopic | null;
   stateVersion: string;
+  oneShotRun: NangongEvolutionState["oneShotRun"];
   perspective: "nangong" | "hanli";
   locale: Locale;
   workspaces: WorkspaceState | null;
@@ -139,6 +141,7 @@ export function EvolutionTopicGroupView({ topic, stateVersion, perspective, loca
   return <section className="person-workspace-rail evolution-topic-group" aria-label="专题执行群页面" aria-busy={loading} data-perspective={perspective}>
     <header><div><span>专题执行群</span><h2>{topic.title}</h2><p>每个专题一条只读协作时间线；所有动作仍进入原审批、分发、修复和验收页面。</p></div><strong>{evolutionStatusLabel(topic.status)}</strong></header>
     <section className="evolution-topic-group-summary" aria-label="专题群当前状态">
+      {oneShotRun?.topicId === topic.topicId && <EvolutionLiveActivity run={oneShotRun} />}
       <dl>
         <div><dt>当前负责人</dt><dd>{workbenchOwnerLabel(evolutionOwnerForStatus(topic.status, topic.origin))}</dd></div>
         <div><dt>下一步</dt><dd>{nextStepForTopic(topic.status)}</dd></div>
@@ -206,7 +209,7 @@ function buildTimeline(dossier: EvolutionTopicDossier | null): TopicGroupEntry[]
 function recordEntry(record: EvolutionArchiveRecord): TopicGroupEntry {
   const targetNode = targetNodeForCategory(record.category);
   return {
-    id: `record:${record.recordId}`, actor: actorLabel(record.actor), category: categoryLabel(record.category), title: record.title,
+    id: `record:${record.recordId}`, actor: typeof record.payload.actorName === "string" ? record.payload.actorName : actorLabel(record.actor), category: categoryLabel(record.category), title: record.title,
     summary: archiveSummary(record), occurredAt: record.occurredAt, targetNode,
     selectedRowId: targetNode === "automatic-recovery" ? record.topicId : record.proposalId || record.taskId || record.deliberationId,
     status: evolutionStatusLabel(String(record.payload.status || record.payload.state || record.payload.runtimeStatus || categoryLabel(record.category))),

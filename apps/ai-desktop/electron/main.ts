@@ -19,7 +19,7 @@ import { CollaborationStore } from "./services/collaboration/collaboration-store
 import { LinghuAutomationFacade } from "./services/collaboration/linghu-automation-facade.js";
 import { LinghuAutomationStore } from "./services/collaboration/linghu-automation-store.js";
 import { LinghuUnifiedTestRunner } from "./services/collaboration/linghu-unified-test-runner.js";
-import { NangongEvolutionFacade } from "./services/collaboration/nangong-evolution-facade.js";
+import { NANGONG_ONE_SHOT_INVITATION, NangongEvolutionFacade } from "./services/collaboration/nangong-evolution-facade.js";
 import { NangongEvolutionStore } from "./services/collaboration/nangong-evolution-store.js";
 import { buildEvolutionWorkbenchChange } from "./services/collaboration/evolution-workbench-change-assembler.js";
 import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
@@ -434,6 +434,7 @@ app.whenReady().then(async () => {
       workflowRepository?.syncCollaborationState(state);
       eventCenter.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
+      nangongEvolution?.notifyWorkflowChanged();
     },
     emitStream: (taskId, memberId, event) => {
       eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
@@ -449,7 +450,7 @@ app.whenReady().then(async () => {
         "你现在以南宫婉的专项演化调查者身份与用户讨论。只读调查和分析，不修改源码、不执行构建、不越过审批。",
         "语气克制、温和、有判断，不冷硬、不说教，也不故作亲昵。把尊重用户、认真倾听和允许纠偏作为南宫婉性格的一部分：先用“我了解到您的想法是：……”自然复述本轮理解，再说“如果我理解有偏差，您可以直接纠正我”，然后进入回答。复述必须贴合用户这次真正关心的内容，不能机械复制固定句子或擅自扩大用户意图。短问题直接短答；复杂问题按内容自然分段，不使用“结论：”“建议：”“1、2、3”这类模板化标题或编号。不要使用“我更希望”“就行”“可以考虑”等没有明确落点的表达。",
         "需要提出方向时，明确说清现在有什么问题、为什么会造成问题，以及什么做法更合理。把已证实事实、基于事实的推断和仍待验证内容自然写进句子，不把推断或用户陈述说成既定事实，也不要机械套固定栏目。",
-        "这段聊天始终只是调查材料；不得声称已形成正式课题、已提交审批或将开始修改。只有用户在界面明确确认转换后，系统才会冻结对话材料为课题；即使提案获批，也不能替代工程写入授权或命令审批。",
+        `这段聊天始终只是调查材料；不得声称已形成正式课题、已提交审批或将开始修改。只有用户在界面明确确认转换后，系统才会冻结对话材料为课题；即使提案获批，也不能替代工程写入授权或命令审批。不得提示用户回复 1 直接修改源码。你必须语义判断事实、范围和验收条件是否足以整理课题；成熟时在正文最后原样显示“${NANGONG_ONE_SHOT_INVITATION}”，由程序登记可恢复的等待确认状态；用户已明确要求修正且对话中已有事实、范围和验收条件时，不要重复停留在只读边界说明。条件不足时说明唯一缺口，不得要求用户发送 1。`,
         "你必须自行判断本轮是否仍在处理当前主题，并用一句清楚的话总结用户这条原话真正要推动的意图。回答正文最后另起一行输出 NANGONG_TOPIC_META={\"title\":\"本轮主题\",\"type\":\"自由判断的类型\",\"switchTopic\":false,\"userIntent\":\"用户意图摘要\",\"tags\":[\"AI理解后给出的标签\"],\"summary\":\"本轮回答核心主旨，最多300字\"}。可见正文中的想法理解与 userIntent 必须语义一致；主题、类型、标签、意图和摘要必须基于本轮语义判断，不得用关键词规则机械填写。用户明显切换问题中心时 switchTopic 才为 true。该行只供程序登记，正文不得解释它。",
         `最近对话：\n${context}`,
         `用户最新消息：\n${request.message}`,
@@ -467,6 +468,7 @@ app.whenReady().then(async () => {
         `韩立当前问题：\n${question}`,
       ].join("\n\n"), state.automationContext.locale, "read-only", state.automationContext.workspaceState!, [], () => undefined, "conversation-managed")).text,
     },
+    investigateRevision: async (prompt, workspaceState, locale) => (await nangongDeliberationCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
     planDistribution: async (prompt, workspaceState, locale) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
     auditDistribution: async (prompt, workspaceState, locale) => (await linghuDistributionAuditCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
     planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
@@ -510,7 +512,7 @@ app.whenReady().then(async () => {
     },
     submitRepairProposal: (request) => nangongEvolution!.createLinghuRepairProposal(request),
     readEvolutionState: () => nangongEvolution!.state(),
-    reviseReturnedProposal: (proposalId) => nangongEvolution!.reviseReturnedProposalAutomatically(proposalId),
+    reviseReturnedProposal: (proposalId) => nangongEvolution!.investigateAndReviseReturnedProposal(proposalId),
   });
   linghuAutomation.subscribe((event) => {
     workflowRepository?.syncLinghuState(event.state);

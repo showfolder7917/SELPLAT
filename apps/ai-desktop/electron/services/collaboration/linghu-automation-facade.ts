@@ -25,7 +25,7 @@ export interface LinghuAutomationFacadeOptions {
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
   submitRepairProposal?(request: CreateLinghuRepairProposalRequest): NangongEvolutionState;
   readEvolutionState?(): NangongEvolutionState;
-  reviseReturnedProposal?(proposalId: string): NangongEvolutionState;
+  reviseReturnedProposal?(proposalId: string): Promise<NangongEvolutionState>;
 }
 
 /** 令狐老祖自动保障的唯一入口；界面和定时器只调用本 Facade，不直接依赖调度、恢复与持久化实现。 */
@@ -180,7 +180,7 @@ export class LinghuAutomationFacade {
         }
       }
 
-      if (!automation.activeTaskId) this.#dispatchCurrentModule(automation);
+      if (!automation.activeTaskId) await this.#dispatchCurrentModule(automation);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.#store.updateRuntime("automation.check_failed", (state) => { state.blockingReason = detail.slice(0, 2_000); });
@@ -264,7 +264,7 @@ export class LinghuAutomationFacade {
     });
   }
 
-  #dispatchCurrentModule(state: LinghuAutomationState): void {
+  async #dispatchCurrentModule(state: LinghuAutomationState): Promise<void> {
     if (this.#submitRepairProposal && this.#readEvolutionState) {
       if (state.pendingRepairProposalId) {
         const evolution = this.#readEvolutionState();
@@ -286,7 +286,7 @@ export class LinghuAutomationFacade {
         }
         if (proposal?.status === "supplement-required" || proposal?.status === "rejected") {
           if (this.#reviseReturnedProposal && proposal.approvals.at(-1)?.advice.trim()) {
-            const revisedState = this.#reviseReturnedProposal(proposal.proposalId);
+            const revisedState = await this.#reviseReturnedProposal(proposal.proposalId);
             const revised = revisedState.proposals.find((candidate) => candidate.supersedesProposalId === proposal.proposalId);
             if (revised) {
               this.#store.updateRuntime("automation.repair_revised", (current) => {
