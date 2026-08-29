@@ -71,7 +71,7 @@ export function EvolutionControlWorkspace({ perspective, requestedLocation, onLo
     { id: "evolution", label: "专题演化", icon: "ri-git-merge-line", count: state.topics.length, expanded: expandedNodeIds.includes("evolution"), children: [
       { id: "manual", label: "人工工作区", icon: "ri-hand", count: state.proposals.length, expanded: expandedNodeIds.includes("manual"), children: [
         { id: "manual-topic", label: "当前专题", icon: "ri-focus-3-line", count: state.activeTopicId ? 1 : 0 },
-        { id: "manual-group", label: "专题执行群", icon: "ri-discuss-line", count: activeTopicGroupCount },
+        { id: "manual-group", label: "专题协作群", icon: "ri-discuss-line", count: activeTopicGroupCount },
         { id: "manual-research", label: "调查与研讨", icon: "ri-search-eye-line", count: state.deliberations.length },
         { id: "manual-approval", label: "韩立审批", icon: "ri-stamp-line", count: pendingCount },
         { id: "manual-proposal", label: "提案与任务", icon: "ri-file-list-3-line", count: state.proposals.length },

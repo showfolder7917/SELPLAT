@@ -12,25 +12,18 @@ import type { WorkspaceState } from "../desktop/workspace.js";
 
 export type DesktopOperatingMode = "single-conversation" | "collaboration";
 export type CollaborationMemberKind = "conversation-owner" | "worker";
-export type CollaborationMemberRole = "conversation" | "executor" | "reviewer" | null;
-export type CollaborationMemberState = "idle" | "conversation" | "assigned" | "working" | "waiting-review" | "reviewing" | "retiring" | "recovering" | "draining" | "offline";
+export type CollaborationMemberRole = "conversation" | "executor" | null;
+export type CollaborationMemberState = "idle" | "conversation" | "assigned" | "working" | "retiring" | "recovering" | "draining" | "offline";
 export type CollaborationWorkerPhase = "analyzing" | "planning" | "implementing" | "verifying" | "finalizing" | "ready" | "blocked" | "failed" | null;
 export type CollaborationMergeStrategy = "INDEPENDENT" | "ATOMIC_GROUP" | "DEPENDENCY_CHAIN";
-export type CollaborationPlanStatus = "awaiting-review" | "approved" | "rejected" | "forced";
-export type CollaborationExecutionStatus = "assigned" | "analyzing" | "waiting-review" | "executing" | "code-verified" | "transferred" | "blocked" | "cancelled";
+export type CollaborationPlanStatus = "ready-for-execution";
+export type CollaborationExecutionStatus = "assigned" | "analyzing" | "executing" | "code-verified" | "transferred" | "blocked" | "cancelled";
 export type CollaborationResultOutcome = "pending-integration" | "succeeded" | "incomplete" | "cancelled";
 export type CollaborationAutomationSource = "linghu-safeguard";
 export type CollaborationTaskState =
   | "queued-executor"
   | "preparing-worktree"
   | "analyzing"
-  | "queued-reviewer"
-  | "reviewing"
-  | "review-failed"
-  | "repairing-review"
-  | "optimizing"
-  | "approved"
-  | "forced-after-review-limit"
   | "executing"
   | "repairing-execution"
   | "returned-to-nangong"
@@ -92,33 +85,6 @@ export interface CollaborationRequirementPlan {
   createdAt: string;
 }
 
-export interface CollaborationReview {
-  reviewId: string;
-  planVersion: number;
-  reviewerMemberId: string;
-  reviewerDisplayName: string;
-  reviewerGeneration: number;
-  decision: "passed" | "rejected";
-  feedback: string;
-  createdAt: string;
-}
-
-export interface CollaborationReviewAttempt {
-  attemptId: string;
-  planVersion: number;
-  reviewerMemberId: string;
-  reviewerDisplayName: string;
-  reviewerGeneration: number;
-  outcome: "decided" | "decision-unrecognized" | "infrastructure-failed";
-  decision: "passed" | "rejected" | null;
-  decisionSource: "tag" | "legacy-marker" | "explicit-chinese" | "clarification" | null;
-  rawOutput: string | null;
-  clarificationOutput: string | null;
-  error: string | null;
-  startedAt: string;
-  completedAt: string;
-}
-
 export interface CollaborationExecutionRecord {
   assignmentId: string;
   executor: CollaborationParticipantSnapshot;
@@ -137,7 +103,7 @@ export interface CollaborationExecutionRecord {
 export interface CollaborationFlowEvent {
   eventId: string;
   type: string;
-  stage: "task" | "analysis" | "review" | "execution" | "integration" | "recovery";
+  stage: "task" | "analysis" | "execution" | "integration" | "recovery";
   status: "started" | "completed" | "failed" | "waiting" | "cancelled";
   actor: CollaborationParticipantSnapshot | null;
   summary: string;
@@ -187,12 +153,9 @@ export interface CollaborationTask {
   phase: CollaborationWorkerPhase;
   executorMemberId: string | null;
   preferredExecutorMemberId?: string | null;
-  currentReviewerMemberId: string | null;
-  preferredReviewerMemberId?: string | null;
-  originalReviewer?: CollaborationParticipantSnapshot | null;
   originalExecutor?: CollaborationParticipantSnapshot | null;
   currentHandler?: CollaborationParticipantSnapshot | null;
-  repairKind?: "review" | "execution" | null;
+  repairKind?: "execution" | null;
   repairFailureReason?: string | null;
   unifiedTest?: {
     status: "pending" | "running" | "passed" | "failed";
@@ -202,7 +165,6 @@ export interface CollaborationTask {
     completedAt: string | null;
   } | null;
   currentPlanVersion: number;
-  explicitRejectionCount: number;
   infrastructureFailureCount: number;
   mergeStrategy: CollaborationMergeStrategy;
   atomicGroupId: string | null;
@@ -219,8 +181,6 @@ export interface CollaborationTask {
   historyCompleteness: "complete" | "legacy-partial";
   snapshot: CollaborationTaskSnapshot;
   plans: CollaborationRequirementPlan[];
-  reviews: CollaborationReview[];
-  reviewAttempts: CollaborationReviewAttempt[];
   executionRecords: CollaborationExecutionRecord[];
   flowEvents: CollaborationFlowEvent[];
   versionWorkspace: CollaborationVersionWorkspace | null;

@@ -169,16 +169,12 @@ export class CollaborationStore {
       phase: null,
       executorMemberId: preferredExecutor?.memberId || null,
       preferredExecutorMemberId: preferredExecutor?.memberId || null,
-      currentReviewerMemberId: null,
-      preferredReviewerMemberId: null,
-      originalReviewer: null,
       originalExecutor: null,
       currentHandler: participantSnapshot(initiatorMember),
       repairKind: null,
       repairFailureReason: null,
       unifiedTest: null,
       currentPlanVersion: 0,
-      explicitRejectionCount: 0,
       infrastructureFailureCount: 0,
       mergeStrategy: request.mergeStrategy || "INDEPENDENT",
       atomicGroupId: request.atomicGroupId?.trim() || null,
@@ -206,8 +202,6 @@ export class CollaborationStore {
         contentHash: sha256(normalizedIntent),
       },
       plans: [],
-      reviews: [],
-      reviewAttempts: [],
       executionRecords: [],
       flowEvents: [{
         eventId: randomUUID(),
@@ -280,14 +274,7 @@ export class CollaborationStore {
 
   continueTask(taskId: string, recoveryActor?: Pick<CollaborationMember, "memberId" | "displayName">): CollaborationState {
     return this.updateTask(taskId, "task.recovery_requested", (task, state) => {
-      if (!["recovering", "blocked", "review-failed", "test-failed"].includes(task.state)) throw new Error("当前任务不需要恢复。");
-      if (task.state === "review-failed") {
-        task.state = "repairing-review";
-        task.repairKind = "review";
-        task.blockingReason = task.repairFailureReason || null;
-        task.flowEvents.push({ eventId: randomUUID(), type: "review.repair_requested", stage: "recovery", status: "started", actor: task.initiator, summary: "已请求令狐老祖处理审核问题，完成后退回原审核人", occurredAt: new Date().toISOString(), error: false });
-        return;
-      }
+      if (!["recovering", "blocked", "test-failed"].includes(task.state)) throw new Error("当前任务不需要恢复。");
       if (task.state === "test-failed") {
         task.state = "ready-for-integration";
         task.blockingReason = null;
@@ -300,10 +287,9 @@ export class CollaborationStore {
         task.taskRevision += 1;
         task.workerGeneration += 1;
         task.state = "queued-executor";
-        task.currentReviewerMemberId = null;
         task.assignmentId = null;
         task.versionWorkspace = null;
-        task.recoveryTargetState = "approved";
+        task.recoveryTargetState = "executing";
         task.phase = null;
         task.blockingReason = `基于当前主线重新修正冲突文件：${files}`;
         const actor = recoveryActor ? participantSnapshot(recoveryActor) : task.initiator;
@@ -315,7 +301,6 @@ export class CollaborationStore {
         task.recoveryTargetState = null;
       } else {
         task.state = "queued-executor";
-        task.currentReviewerMemberId = null;
         task.assignmentId = null;
       }
       task.phase = null;
@@ -422,13 +407,25 @@ function mergeDefaultMembers(state: CollaborationState): void {
     member.lastProtocolProgressAt ??= null;
   }
   for (const task of state.tasks) {
+    const obsolete = task as CollaborationTask & Record<string, unknown>;
+    if (["queued-reviewer", "reviewing", "review-failed", "repairing-review", "optimizing", "approved", "forced-after-review-limit"].includes(String(task.state))) {
+      task.state = "blocked";
+      task.phase = "blocked";
+      task.blockingReason = "旧执行人内部审批线路已删除；保留任务事实，需从南宫婉按当前流程重新分发。";
+      task.recoveryTargetState = null;
+    }
+    delete obsolete.currentReviewerMemberId;
+    delete obsolete.preferredReviewerMemberId;
+    delete obsolete.originalReviewer;
+    delete obsolete.explicitRejectionCount;
+    delete obsolete.reviews;
+    delete obsolete.reviewAttempts;
     task.preferredExecutorMemberId ??= null;
     task.evolutionProposalId ??= null;
     task.selfUpgradeTargetMemberId ??= null;
     task.selfUpgradeCapabilityScope ??= null;
     task.sourceEvolutionApprovalId ??= null;
     task.recoveryTargetState ??= null;
-    task.reviewAttempts ??= [];
     migrateTaskHistory(task, state);
   }
   if (!state.members.some((member) => member.memberId === state.selectedMemberId)) state.selectedMemberId = "han-li";
@@ -530,8 +527,6 @@ function migrateTaskHistory(task: CollaborationTask, state: CollaborationState):
   task.automationSource ??= null;
   task.startedAt ??= task.createdAt;
   task.codeVerifiedAt ??= task.finalResult ? task.completedAt : null;
-  task.preferredReviewerMemberId ??= null;
-  task.originalReviewer ??= null;
   task.originalExecutor ??= task.executionRecords?.[0]?.executor || null;
   task.currentHandler ??= null;
   task.repairKind ??= null;
@@ -567,14 +562,7 @@ function migrateTaskHistory(task: CollaborationTask, state: CollaborationState):
     occurredAt: task.createdAt,
     error: false,
   }];
-  for (const plan of task.plans) {
-    plan.ownerDisplayName ??= memberName(plan.ownerMemberId);
-    plan.status ??= task.reviews.find((review) => review.planVersion === plan.version)?.decision === "passed" ? "approved"
-      : task.reviews.find((review) => review.planVersion === plan.version)?.decision === "rejected" ? "rejected"
-        : "awaiting-review";
-  }
-  for (const review of task.reviews) review.reviewerDisplayName ??= memberName(review.reviewerMemberId);
-  for (const attempt of task.reviewAttempts) attempt.reviewerDisplayName ??= memberName(attempt.reviewerMemberId);
+  for (const plan of task.plans) plan.ownerDisplayName ??= memberName(plan.ownerMemberId);
   task.resultSummary ??= task.finalResult || task.state === "integrated" ? {
     outcome: task.state === "integrated" ? "succeeded" : task.state === "cancelled" ? "cancelled" : "pending-integration",
     finalResult: task.finalResult || "历史任务已完成协同集成；旧版本未保存结果摘要。",

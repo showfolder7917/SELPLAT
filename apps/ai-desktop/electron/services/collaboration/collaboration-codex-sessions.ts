@@ -20,18 +20,16 @@ import { TrustedCommandStore } from "../trusted-command-store.js";
 import type {
   CollaborationExecutionResult,
   CollaborationExecutorSession,
-  CollaborationReviewerSession,
   CollaborationSessionFactory,
 } from "./collaboration-coordinator.js";
 import { CollaborationDurationLog } from "./collaboration-duration-log.js";
-import { CollaborationReviewTransportError, resolveCollaborationReviewDecision, type CollaborationReviewSessionResult } from "./review/review-decision-parser.js";
 
 interface RegisteredConnection {
   connectionId: string;
   taskId: string;
   memberId: string;
   memberName: string;
-  role: "executor" | "reviewer";
+  role: "executor";
   service: CodexService;
   sessions: CodexSessionStore;
 }
@@ -143,7 +141,7 @@ export interface CodexCollaborationSessionFactoryOptions {
   recordEvent(type: string, details: Record<string, unknown>, taskId: string): void;
 }
 
-/** 每次分配创建一条新 Codex 管道；执行与审核完成后先删线程，再关闭进程并注销请求路由。 */
+/** 每次分配创建一条执行人物 Codex 管道；任务完成后先删线程，再关闭进程并注销请求路由。 */
 export class CodexCollaborationSessionFactory implements CollaborationSessionFactory {
   readonly #options: CodexCollaborationSessionFactoryOptions;
 
@@ -160,11 +158,6 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
       this.#options.resolveAttachmentPaths,
       this.#options.runCodeValidation,
     );
-  }
-
-  async createReviewer(task: CollaborationTask, member: CollaborationMember): Promise<CollaborationReviewerSession> {
-    const connection = this.#createConnection(task, member, "reviewer");
-    return new CodexReviewerSession(connection, this.#options.registry, this.#options.resolveAttachmentPaths);
   }
 
   #createConnection(task: CollaborationTask, member: CollaborationMember, role: RegisteredConnection["role"]): RegisteredConnection {
@@ -214,14 +207,19 @@ class CodexExecutorSession implements CollaborationExecutorSession {
   }
 
   async analyze(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<string> {
-    return this.#runRequirement(task, task.snapshot.confirmedIntent, emit);
+    return this.#runRequirement(task, [
+      "[执行人物技术分析]",
+      "南宫婉已经完成客户需求、目标、范围、验收标准和任务拆分。不要重新解释客户为什么要做，也不要重复南宫婉的需求分析。",
+      "只分析如何落地：代码位置、现有调用链、最小实现、技术风险和验证方式。若源码事实与南宫婉任务描述冲突，明确报告冲突并停止扩大实现，等待退回南宫婉修正。",
+      `已确认任务：\n${task.snapshot.confirmedIntent}`,
+    ].join("\n\n"), emit);
   }
 
   isAlive(): boolean { return this.#connection.service.isAlive(); }
 
   async optimize(task: CollaborationTask, feedback: string, emit: (event: CodexStreamEvent) => void): Promise<string> {
     const currentPlan = task.plans.find((plan) => plan.version === task.currentPlanVersion)?.text || "";
-    return this.#runRequirement(task, `继续优化同一任务方案。\n\n当前方案：\n${currentPlan}\n\n审核反馈：\n${feedback}`, emit);
+    return this.#runRequirement(task, `依据已登记的技术失败证据修正同一实施方案，不重复需求分析。\n\n当前技术分析：\n${currentPlan}\n\n失败证据：\n${feedback}`, emit);
   }
 
   async execute(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult> {
@@ -231,7 +229,7 @@ class CodexExecutorSession implements CollaborationExecutorSession {
       mode: "task-managed",
       message: [
         `已确认任务：\n${task.snapshot.confirmedIntent}`,
-        `已通过质量门禁的方案：\n${plan.text}`,
+        `执行人完成的技术分析：\n${plan.text}`,
         "完成源码修改与代码级验证后，最终回答必须在最前面依次使用以下独立 Markdown 标题，并在每个标题下给出简短、可直接归档的事实：最终执行结果、原来存在的问题、本次解决的问题、具体修正或改变、完成状态、遗留内容。之后可以再补充详细说明。禁止省略标题；没有遗留内容时明确写“无”。",
       ].join("\n\n"),
       restartRequired: false,
@@ -256,59 +254,8 @@ class CodexExecutorSession implements CollaborationExecutorSession {
       emit,
       runTurn: (prompt, onEvent, mode) => this.#connection.service.send(prompt, task.snapshot.locale, "read-only", workspaceState, attachmentPaths, onEvent, mode),
     });
-    if (result.managedStatus !== "requirement-ready" || !result.text.trim()) throw new Error("执行人没有产生可审核的需求方案。");
+    if (result.managedStatus !== "requirement-ready" || !result.text.trim()) throw new Error("执行人没有产生可执行的技术分析。");
     return result.text.trim();
-  }
-}
-
-class CodexReviewerSession implements CollaborationReviewerSession {
-  readonly #connection: RegisteredConnection;
-  readonly #registry: CollaborationCodexRegistry;
-  readonly #resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"];
-
-  constructor(connection: RegisteredConnection, registry: CollaborationCodexRegistry, resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"]) {
-    this.#connection = connection;
-    this.#registry = registry;
-    this.#resolveAttachmentPaths = resolveAttachmentPaths;
-  }
-
-  isAlive(): boolean { return this.#connection.service.isAlive(); }
-
-  async review(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<CollaborationReviewSessionResult> {
-    const prompt = [
-      "[协同方案质量审核]",
-      "只读审核下面的方案是否已经满足客户已确认任务的最低必要需求。满足最低需求必须通过；更安全、更简单、更可靠或更完整的做法只能作为非阻断优化建议，禁止据此扩大问题或驳回。禁止修改文件和执行构建。",
-      `任务版本：${task.taskRevision}`,
-      `方案版本：${plan.version}`,
-      `已确认任务：\n${task.snapshot.confirmedIntent}`,
-      `待审核方案：\n${plan.text}`,
-      "只有明确指出未满足的原始客户需求及其证据时才允许驳回；否则应一次通过。请先给出具体依据和必要改进意见，并在正文任意独立位置输出且只输出一个结构化结论标记：<review_decision>PASSED</review_decision> 或 <review_decision>REJECTED</review_decision>。",
-    ].join("\n\n");
-    const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
-    const response = await this.#connection.service.send(prompt, task.snapshot.locale, "read-only", collaborationWorkspaceState(task), attachmentPaths, emit, "requirement-managed");
-    const normalized = response.text.trim();
-    try {
-      return await resolveCollaborationReviewDecision(normalized, async () => {
-        // 审核正文已经完成时只向原审核员补取机器结论，避免丢弃有效分析并重新消耗另一名审核员。
-        const clarification = await this.#connection.service.send(
-          "你的审核正文已收到，但没有识别到唯一结论。请仅返回 <review_decision>PASSED</review_decision> 或 <review_decision>REJECTED</review_decision>，不要添加其他文字。",
-          task.snapshot.locale,
-          "read-only",
-          collaborationWorkspaceState(task),
-          [],
-          emit,
-          "requirement-managed",
-        );
-        return clarification.text.trim();
-      });
-    } catch (error) {
-      // 补取期间的连接异常仍属于基础设施失败，但必须把已经完成的原审核正文带回协调器持久化。
-      throw new CollaborationReviewTransportError(normalized, error);
-    }
-  }
-
-  async dispose(): Promise<void> {
-    await retireConnection(this.#connection, this.#registry);
   }
 }
 

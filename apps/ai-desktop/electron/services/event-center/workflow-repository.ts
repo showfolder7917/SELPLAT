@@ -607,7 +607,7 @@ export class WorkflowRepository {
         recoveryPoint=excluded.recoveryPoint, completedAt=excluded.completedAt, updatedAt=excluded.updatedAt
     `).run({
       $workflowId: workflowId, $title: task.snapshot.title, $state: task.state, $stage: task.phase || task.state,
-      $owner: task.currentHandler?.memberId || task.executorMemberId || task.currentReviewerMemberId || task.initiator?.memberId || "collaboration-coordinator",
+      $owner: task.currentHandler?.memberId || task.executorMemberId || task.initiator?.memberId || "collaboration-coordinator",
       $recoveryPoint: task.recoveryTargetState, $startedAt: task.startedAt, $completedAt: task.completedAt, $updatedAt: task.updatedAt,
     });
     const runtimeStatus = taskRuntimeStatus(task.state);
@@ -631,26 +631,9 @@ export class WorkflowRepository {
     for (const event of task.flowEvents) this.#insertEvent(connection, {
       eventId: event.eventId, correlationId: task.taskId, sourceType: event.actor ? "member" : "task",
       sourceId: event.actor?.memberId || task.taskId, eventType: event.type,
-      category: event.error ? "technical-error" : event.stage === "review" ? "approval" : event.stage === "execution" || event.stage === "integration" ? "execution" : "state-change",
+      category: event.error ? "technical-error" : event.stage === "execution" || event.stage === "integration" ? "execution" : "state-change",
       severity: event.error ? "error" : "info", status: event.error ? "open" : "observed", message: event.summary,
       payload: { stage: event.stage, status: event.status, actor: event.actor }, occurredAt: event.occurredAt,
-    });
-    for (const review of task.reviews) this.#upsertGovernance(connection, {
-      governanceId: `collaboration-review:${review.reviewId}`,
-      domain: "collaboration-review",
-      subjectId: task.taskId,
-      correlationId: task.evolutionProposalId || task.taskId,
-      title: task.snapshot.title,
-      requestKind: `plan-v${review.planVersion}`,
-      decision: review.decision,
-      initiatorId: task.initiator?.memberId || null,
-      initiatorDisplayName: task.initiator?.displayName || null,
-      approverId: review.reviewerMemberId,
-      approverDisplayName: review.reviewerDisplayName,
-      source: "collaboration-reviewer",
-      reason: review.feedback,
-      evidence: { planVersion: review.planVersion, reviewerGeneration: review.reviewerGeneration },
-      decidedAt: review.createdAt,
     });
   }
 
@@ -879,7 +862,7 @@ function latestTime(...values: Array<string | null | undefined>): string { retur
 function taskRuntimeStatus(state: CollaborationTask["state"]): string {
   if (state === "integrated") return "completed";
   if (state === "cancelled") return "cancelled";
-  if (state === "test-failed" || state === "review-failed" || state === "blocked") return "failed";
+  if (state === "test-failed" || state === "blocked") return "failed";
   if (state === "recovering" || state.startsWith("repairing-")) return "recovering";
   if (state.startsWith("queued-") || state === "returned-to-nangong" || state === "ready-for-integration") return "waiting";
   if (state === "preparing-worktree") return "queued";

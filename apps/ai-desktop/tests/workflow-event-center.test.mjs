@@ -617,7 +617,7 @@ function collaborationState(heartbeat) {
       initiator: { memberId: "nangong-wan", displayName: "南宫婉" }, automationSource: null, evolutionProposalId: null, evolutionRoundId: null, returnedToNangongAt: null,
       selfUpgradeTargetMemberId: null, selfUpgradeCapabilityScope: null, sourceEvolutionApprovalId: null, historyCompleteness: "complete",
       snapshot: { title: "执行统一异常", problemStatement: "异常分散", confirmedIntent: "统一入口", constraints: [], acceptanceCriteria: ["可追踪"], sourceMessageIds: [], attachmentIds: [], workspaceState: { roots: [{ path: appRoot, permission: "workspace-write" }] }, locale: "zh-CN", contentHash: "hash" },
-      plans: [], reviews: [], reviewAttempts: [], executionRecords: [], flowEvents: [], versionWorkspace: null, finalResult: null,
+      plans: [], executionRecords: [], flowEvents: [], versionWorkspace: null, finalResult: null,
       resultSummary: null, blockingReason: null, recoveryTargetState: null, startedAt: updatedAt, codeVerifiedAt: null, createdAt: updatedAt, updatedAt, completedAt: null,
     }],
   };

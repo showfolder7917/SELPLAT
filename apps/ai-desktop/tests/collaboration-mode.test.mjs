@@ -6,9 +6,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
-import { CollaborationCoordinator, nextReviewAction } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
+import { CollaborationCoordinator } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
 import { createCollaborationResultSummary } from "../../../build/ai-desktop/electron/electron/services/collaboration/result/result-summary.js";
-import { parseCollaborationReviewDecision, resolveCollaborationReviewDecision } from "../../../build/ai-desktop/electron/electron/services/collaboration/review/review-decision-parser.js";
 import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/collaboration/verified-package-release.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
@@ -76,14 +75,13 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(developerSource, /CollaborationStatusChain/);
   assert.match(developerSource, /task-fact-strip.*task\.initiator\?\.displayName/s);
   assert.match(developerSource, /message\.collaborationTaskId[\s\S]*messageTask[\s\S]*CollaborationStatusChain/);
-  assert.match(developerSource, /review-failed[\s\S]*重新审批/);
   assert.match(developerSource, /test-failed[\s\S]*重新测试/);
-  assert.match(collaborationContractSource, /repairing-review/);
+  assert.doesNotMatch(collaborationContractSource, /repairing-review|queued-reviewer/);
   assert.match(collaborationContractSource, /repairing-execution/);
   assert.match(collaborationContractSource, /unified-testing/);
   assert.match(collaborationContractSource, /returned-to-nangong/);
   assert.match(collaborationContractSource, /awaiting-restart/);
-  assert.match(coordinatorSource, /review\.repair_completed[\s\S]*preferredReviewerMemberId/);
+  assert.doesNotMatch(coordinatorSource, /review\.repair_completed|preferredReviewerMemberId/);
   assert.match(coordinatorSource, /execution\.repair_completed[\s\S]*preferredExecutorMemberId/);
   assert.match(integrationPipelineSource, /currentActor\.displayName\}正在统一测试/);
   assert.match(coordinatorSource, /sealEvolutionRound/);
@@ -901,7 +899,7 @@ test("版本冲突恢复签发新修订而不重复集成旧 resultSha", () => {
     assert.equal(next.taskRevision, 2);
     assert.equal(next.workerGeneration, 3);
     assert.equal(next.versionWorkspace, null);
-    assert.equal(next.recoveryTargetState, "approved");
+    assert.equal(next.recoveryTargetState, "executing");
     assert.match(next.flowEvents.at(-1).summary, /禁止重复集成旧 resultSha/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -1205,10 +1203,10 @@ test("协同任务冻结真实发起人快照，两类自动发起都不回退�
 
 test("人物页按阶段标注真实操作者并在阻塞后保留执行证据与恢复入口", () => {
   assert.match(developerSource, /task\.plans\.map[\s\S]*plan\.ownerDisplayName/);
-  assert.match(developerSource, /task\.reviewAttempts\.map[\s\S]*attempt\.reviewerDisplayName/);
+  assert.doesNotMatch(developerSource, /task\.reviewAttempts\.map|attempt\.reviewerDisplayName/);
   assert.match(developerSource, /task\.executionRecords\.map[\s\S]*record\.executor\.displayName/);
   assert.match(developerSource, /task-fact-strip[\s\S]*task\.initiator\?\.displayName/);
-  assert.match(developerSource, /\["recovering", "blocked", "review-failed", "test-failed"\]\.includes\(currentTask\.state\)/);
+  assert.match(developerSource, /\["recovering", "blocked", "test-failed"\]\.includes\(currentTask\.state\)/);
   assert.match(developerSource, /record\.changedFiles/);
   assert.match(developerSource, /currentTask\?\.initiator\?\.displayName/);
   assert.match(developerSource, /<details key=\{currentTask\.taskId\} className="member-task-detail">/);
@@ -1254,49 +1252,15 @@ test("耗时日志按等待原因生成集成批次瓶颈报告", () => {
   }
 });
 
-test("审核结论兼容标签、Markdown 旧格式和明确中文表达，但拒绝冲突或正文猜测", () => {
-  assert.deepEqual(parseCollaborationReviewDecision("审核完成。\n<review_decision>PASSED</review_decision>"), {
-    decision: "passed",
-    decisionSource: "tag",
-  });
-  assert.deepEqual(parseCollaborationReviewDecision("```text\n**DECISION: REJECTED**\n```"), {
-    decision: "rejected",
-    decisionSource: "legacy-marker",
-  });
-  assert.deepEqual(parseCollaborationReviewDecision("### 审核意见\n审核结论：通过"), {
-    decision: "passed",
-    decisionSource: "explicit-chinese",
-  });
-  assert.equal(parseCollaborationReviewDecision("方案通过类型检查，但仍需补测试。"), null);
-  assert.equal(parseCollaborationReviewDecision("<review_decision>PASSED</review_decision>\n<review_decision>REJECTED</review_decision>"), null);
-});
-
-test("审核正文无法识别时只补取一次结论并保留原正文", async () => {
-  let clarificationCount = 0;
-  const clarified = await resolveCollaborationReviewDecision("方案覆盖完整，建议通过。", async () => {
-    clarificationCount += 1;
-    return "<review_decision>PASSED</review_decision>";
-  });
-  assert.equal(clarificationCount, 1);
-  assert.equal(clarified.outcome, "decided");
-  assert.equal(clarified.decision, "passed");
-  assert.equal(clarified.decisionSource, "clarification");
-  assert.equal(clarified.feedback, "方案覆盖完整，建议通过。");
-
-  const unresolved = await resolveCollaborationReviewDecision("已有完整审核正文。", async () => "仍然没有结构化结论");
-  assert.equal(unresolved.outcome, "decision-unrecognized");
-  assert.equal(unresolved.rawOutput, "已有完整审核正文。");
-  assert.match(unresolved.error, /正文已生成/);
-});
-
-test("审核满足最低需求即通过且第三次驳回先最终修正再强制执行", () => {
-  assert.equal(nextReviewAction("passed", 0), "execute");
-  assert.equal(nextReviewAction("rejected", 1), "optimize-and-review");
-  assert.equal(nextReviewAction("rejected", 2), "optimize-and-review");
-  assert.equal(nextReviewAction("rejected", 3), "optimize-and-execute");
+test("执行人物只做技术分析并直接进入实施，不再创建内部审核连接", () => {
+  const coordinator = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
   const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
-  assert.match(sessions, /满足最低需求必须通过/);
-  assert.match(sessions, /禁止据此扩大问题或驳回/);
+  assert.match(coordinator, /status: "ready-for-execution"/);
+  assert.match(coordinator, /await this\.#execute\(taskId\)/);
+  assert.doesNotMatch(coordinator, /createReviewer|scheduleReviewers|beginReview/);
+  assert.match(sessions, /执行人物技术分析/);
+  assert.match(sessions, /不要重新解释客户为什么要做/);
+  assert.doesNotMatch(sessions, /CodexReviewerSession|review_decision/);
 });
 
 test("集成工作区锁文件一致时自动复用主工作区依赖", async () => {
@@ -1389,28 +1353,7 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
   assert.match(config, /AI_DESKTOP_TEST_TASK_ID/);
 });
 
-test("旧协同状态加载时补齐审核尝试历史", () => {
-  const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-review-migration-"));
-  const filePath = path.join(directory, "state.json");
-  try {
-    const store = new CollaborationStore(filePath);
-    const task = store.submitTask({
-      title: "审核迁移",
-      problemStatement: "旧任务没有审核尝试字段",
-      confirmedIntent: "旧任务重启后应自动补齐审核尝试历史。",
-      workspaceState,
-      locale: "zh-CN",
-    });
-    const persisted = JSON.parse(readFileSync(filePath, "utf8"));
-    delete persisted.tasks.find((candidate) => candidate.taskId === task.taskId).reviewAttempts;
-    writeFileSync(filePath, `${JSON.stringify(persisted, null, 2)}\n`, "utf8");
-    assert.deepEqual(new CollaborationStore(filePath).task(task.taskId).reviewAttempts, []);
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
-test("协同编排保持独立连接、异人审核、三次上限、心跳和整轮封存集成契约", () => {
+test("协同编排保持独立执行连接、心跳和整轮封存集成契约", () => {
   const coordinator = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
   const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
   const workspaces = readFileSync(new URL("../electron/services/collaboration/version-workspace-manager.ts", import.meta.url), "utf8");
@@ -1420,9 +1363,9 @@ test("协同编排保持独立连接、异人审核、三次上限、心跳和�
   assert.match(sessions, /codexHome: this\.#options\.codexHome/);
   assert.match(sessions, /serviceName: "selplat_ai_desktop_collaboration"/);
   assert.match(sessions, /migrateLegacySession: true/);
-  assert.match(sessions, /role: "executor" \| "reviewer"/);
-  assert.match(coordinator, /member\.memberId !== task\.executorMemberId/);
-  assert.match(coordinator, /optimize-and-execute/);
+  assert.match(sessions, /role: "executor"/);
+  assert.doesNotMatch(sessions, /role: "executor" \| "reviewer"/);
+  assert.doesNotMatch(coordinator, /optimize-and-execute|queued-reviewer/);
   assert.match(coordinator, /member\.heartbeat/);
   assert.match(coordinator, /state === "ready-for-integration"/);
   assert.doesNotMatch(coordinator, /setTimeout\([^)]*integration/i);
@@ -1432,8 +1375,7 @@ test("协同编排保持独立连接、异人审核、三次上限、心跳和�
   assert.match(workspaces, /resultSha/);
   assert.match(integrationVerifier, /ensureBuildDependencyLink\(candidateDesktopRoot, sourceModules\)/);
   assert.match(integrationVerifier, /cleanupIntegrationDependencyLinks\(desktopRoot\)/);
-  assert.match(ui, /reviewAttempts\.some/);
-  assert.match(ui, /"decision-unrecognized": "结论未识别"/);
+  assert.doesNotMatch(ui, /reviewAttempts\.some|decision-unrecognized/);
   const memberPageSource = ui.slice(ui.indexOf("function CollaborationMemberPage"), ui.indexOf("function collaborationMemberStateLabel"));
   assert.doesNotMatch(memberPageSource, /durationMs|总耗时/);
   assert.match(ui, /CollaborationExecutionList/);

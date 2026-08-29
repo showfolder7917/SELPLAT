@@ -209,7 +209,7 @@ test("main-process orchestration delegates IPC and pure collaboration parsing", 
   assert.match(ipcSource, /registerCollaborationIpc\(/);
   assert.match(ipcSource, /registerRulesIpc\(/);
   assert.match(source("electron/services/codex-service.ts"), /codex\/stream-event-mapper/);
-  assert.match(source("electron/services/collaboration/collaboration-codex-sessions.ts"), /review\/review-decision-parser/);
+  assert.doesNotMatch(source("electron/services/collaboration/collaboration-codex-sessions.ts"), /review-decision-parser|CodexReviewerSession/);
   assert.match(source("electron/services/collaboration/collaboration-coordinator.ts"), /result\/result-summary/);
   assert.match(source("electron/ipc/domains/register-collaboration-ipc.ts"), /NangongEvolutionFacade/);
   assert.match(source("electron/services/collaboration/nangong-evolution-facade.ts"), /evolutionProposalId/);

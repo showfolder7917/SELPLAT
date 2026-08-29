@@ -264,7 +264,7 @@ export class NangongEvolutionFacade {
     const run = before.oneShotRun;
     const proposal = run?.proposalId ? before.proposals.find((item) => item.proposalId === run.proposalId) : null;
     if (proposal?.status === "blocked") {
-      const blockedTasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId) && ["blocked", "test-failed", "review-failed"].includes(task.state));
+      const blockedTasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId) && ["blocked", "test-failed"].includes(task.state));
       for (const task of blockedTasks) {
         await this.#collaboration.recoverTask(task.taskId, `用户已从一次性演化卡点明确继续：${itemFailureReason(task)}`);
       }
@@ -491,7 +491,7 @@ export class NangongEvolutionFacade {
         const collaborationState = this.#collaboration.state();
         const tasks = collaborationState.tasks.filter((task) => proposal!.distributedTaskIds.includes(task.taskId));
         if (proposal.status === "blocked") {
-          const blockedTasks = tasks.filter((item) => ["blocked", "test-failed", "review-failed"].includes(item.state));
+          const blockedTasks = tasks.filter((item) => ["blocked", "test-failed"].includes(item.state));
           const blockedTask = blockedTasks[0];
           const reason = blockedTask
             ? `${taskOwnerName(collaborationState, blockedTask)}负责的“${blockedTask.snapshot.title}”停在${taskStageName(blockedTask)}；发现：${itemFailureReason(blockedTask)}`
@@ -664,18 +664,14 @@ function requireProposal(state: NangongEvolutionState, proposalId: string): Evol
 
 /** 运行中人物以任务当前阶段的权威成员 ID 为准，不能让上一阶段遗留的 currentHandler 覆盖真实执行者。 */
 function taskOwnerName(state: ReturnType<CollaborationCoordinator["state"]>, task: ReturnType<CollaborationCoordinator["state"]>["tasks"][number]): string {
-  const memberId = ["queued-reviewer", "reviewing", "review-failed", "repairing-review"].includes(task.state)
-    ? task.currentReviewerMemberId
-    : task.executorMemberId;
+  const memberId = task.executorMemberId;
   return state.members.find((member) => member.memberId === memberId)?.displayName
     || (memberId === task.originalExecutor?.memberId ? task.originalExecutor.displayName : null)
-    || (memberId === task.originalReviewer?.memberId ? task.originalReviewer.displayName : null)
     || task.currentHandler?.displayName
     || "未识别负责人";
 }
 
 function taskStageName(task: ReturnType<CollaborationCoordinator["state"]>["tasks"][number]): string {
-  if (["queued-reviewer", "reviewing", "review-failed", "repairing-review"].includes(task.state)) return "方案审批阶段";
   if (["ready-for-integration", "queued-integration", "integrating"].includes(task.state) || task.integrationFailure) return "版本集成阶段";
   if (["unified-testing", "test-failed"].includes(task.state)) return "统一测试阶段";
   if (task.state === "awaiting-restart") return "应用重启验收阶段";

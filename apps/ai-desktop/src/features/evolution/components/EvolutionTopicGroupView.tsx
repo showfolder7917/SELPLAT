@@ -25,6 +25,7 @@ interface TopicGroupEntry {
   status: string;
   nextOwner: string;
   blockingReason: string | null;
+  active: boolean;
 }
 
 /**
@@ -136,10 +137,12 @@ export function EvolutionTopicGroupView({ topic, stateVersion, oneShotRun, persp
     finally { setMessageBusy(false); }
   };
 
-  if (!topic) return <section className="person-workspace-rail evolution-topic-group" aria-label="专题执行群页面" data-perspective={perspective}><header><div><span>专题演化</span><h2>专题执行群</h2><p>建立专题后，来源会话、审批、执行、修复、测试和验收会集中显示在这里。</p></div><strong>当前空闲</strong></header></section>;
+  if (!topic) return <section className="person-workspace-rail evolution-topic-group" aria-label="专题协作群页面" data-perspective={perspective}><header><div><span>专题演化</span><h2>专题协作群</h2><p>南宫婉建立专题后，人物之间的 @交接、回复、执行、验证、测试与验收会集中显示在这里。</p></div><strong>当前空闲</strong></header></section>;
 
-  return <section className="person-workspace-rail evolution-topic-group" aria-label="专题执行群页面" aria-busy={loading} data-perspective={perspective}>
-    <header><div><span>专题执行群</span><h2>{topic.title}</h2><p>每个专题一条只读协作时间线；所有动作仍进入原审批、分发、修复和验收页面。</p></div><strong>{evolutionStatusLabel(topic.status)}</strong></header>
+  return <section className="person-workspace-rail evolution-topic-group" aria-label="专题协作群页面" aria-busy={loading} data-perspective={perspective}>
+    <header><div><span>专题协作群</span><h2>人物协作与实时交接</h2><p>群聊只投影现有业务事实；审批、分发、令狐验证和韩立验收仍走原流程。</p></div><strong>{evolutionStatusLabel(topic.status)}</strong></header>
+    <details className="evolution-topic-group-topic" open>
+      <summary><span>当前专题</span><strong>{topic.title}</strong><em>{evolutionStatusLabel(topic.status)}</em></summary>
     <section className="evolution-topic-group-summary" aria-label="专题群当前状态">
       {oneShotRun?.topicId === topic.topicId && <EvolutionLiveActivity run={oneShotRun} />}
       <dl>
@@ -162,7 +165,7 @@ export function EvolutionTopicGroupView({ topic, stateVersion, oneShotRun, persp
       <div className="person-rail-heading"><h3>来源会话</h3><span>{sourceAddresses.length}</span></div>
       {sourceAddresses.length ? <ul>{sourceAddresses.map((address) => <li key={address}>{address}</li>)}</ul> : <p>当前专题没有可显示的来源会话地址。</p>}
     </section>
-    <section className="evolution-topic-group-timeline" aria-label="专题执行群时间线">
+    <section className="evolution-topic-group-timeline" aria-label="专题协作群时间线">
       <div className="person-rail-heading"><h3>群内进展</h3><span>{unreadCount ? `${unreadCount} 未读` : "已读"}</span></div>
       <div className="selform-root evolution-topic-group-filters" aria-label="专题群筛选">
         <label>搜索<input type="search" aria-label="搜索专题群记录" value={keyword} onChange={(event) => { const value = event.currentTarget.value; setKeyword(value); void saveGroupPreference({ keyword: value }).catch(() => undefined); }} /></label>
@@ -173,10 +176,10 @@ export function EvolutionTopicGroupView({ topic, stateVersion, oneShotRun, persp
       {loadError && <p role="alert">{loadError}</p>}
       {!loading && !loadError && !timeline.length && <p>当前专题尚未产生群内记录。</p>}
       {!loading && !loadError && timeline.length > 0 && !visibleTimeline.length && <p>没有符合当前筛选条件的记录。</p>}
-      {visibleTimeline.map((entry) => <article key={entry.id} data-unread={lastReadIndex < timeline.findIndex((candidate) => candidate.id === entry.id)}>
-        <header><div><span>{entry.actor} · {entry.category}</span><strong>{entry.title}</strong></div><time>{formatTime(entry.occurredAt, locale)}</time></header>
-        <p>{entry.summary}</p>
-        <dl><div><dt>当前状态</dt><dd>{entry.status}</dd></div><div><dt>下一负责人</dt><dd>{entry.nextOwner}</dd></div>{entry.blockingReason && <div><dt>阻塞原因</dt><dd>{entry.blockingReason}</dd></div>}</dl>
+      {visibleTimeline.map((entry) => <article key={entry.id} data-active={entry.active} data-unread={lastReadIndex < timeline.findIndex((candidate) => candidate.id === entry.id)}>
+        <header><div><span>{entry.actor} · {entry.category}</span><strong>{entry.actor} <b>@{entry.nextOwner}</b> · {entry.title}</strong></div><time>{formatTime(entry.occurredAt, locale)}</time></header>
+        <div className="evolution-topic-group-message"><p>{entry.summary}</p>{entry.active && <i>正在处理…</i>}</div>
+        <details><summary>查看状态与完整报告</summary><dl><div><dt>当前状态</dt><dd>{entry.status}</dd></div><div><dt>下一负责人</dt><dd>@{entry.nextOwner}</dd></div>{entry.blockingReason && <div><dt>阻塞报告</dt><dd>{entry.blockingReason}</dd></div>}</dl></details>
         <button type="button" onClick={() => onNavigate(entry.targetNode, entry.selectedRowId)}>前往原页面查看</button>
       </article>)}
     </section>
@@ -185,6 +188,7 @@ export function EvolutionTopicGroupView({ topic, stateVersion, oneShotRun, persp
       <p>消息进入现有南宫婉人物会话；完整原话保存在人物对话库，群时间线只保留专题关联与短预览。</p>
       <button type="button" className="primary" disabled={messageBusy || !messageDraft.trim()} onClick={() => void sendGroupMessage()}>{messageBusy ? "等待南宫婉回复…" : "发送并回流专题群"}</button>
     </section>
+    </details>
   </section>;
 }
 
@@ -193,14 +197,14 @@ function buildTimeline(dossier: EvolutionTopicDossier | null): TopicGroupEntry[]
   const sourceEntries: TopicGroupEntry[] = (dossier.deliberation?.sourceSnapshots || []).map((message) => ({
     id: `source:${message.snapshotId}`, actor: message.role === "user" ? "用户" : message.source === "codex" ? "Codex" : "南宫婉",
     category: "来源会话", title: `会话消息 · ${message.conversationId}`, summary: concise(message.content), occurredAt: message.originalCreatedAt,
-    targetNode: "manual-research", selectedRowId: dossier.deliberation?.deliberationId || null, status: "已保存原文", nextOwner: "韩立", blockingReason: null,
+    targetNode: "manual-research", selectedRowId: dossier.deliberation?.deliberationId || null, status: "已保存原文", nextOwner: message.role === "user" ? "南宫婉" : "韩立", blockingReason: null, active: false,
   }));
   const roundEntries: TopicGroupEntry[] = (dossier.deliberation?.rounds || []).map((round) => ({
     id: `round:${round.roundId}`, actor: "韩立与南宫婉", category: "调查研讨", title: `第 ${round.roundNumber} 轮专题研讨`,
     summary: concise(`韩立：${round.question}${round.answer ? `；南宫婉：${round.answer}` : ""}${round.assessment ? `；韩立判断：${round.assessment}` : ""}`),
     occurredAt: round.assessedAt || round.answeredAt || round.createdAt, targetNode: "manual-research", selectedRowId: dossier.deliberation?.deliberationId || null,
     status: round.decision === "blocked" ? "已阻塞" : round.decision === "establish-topic" ? "可确立专题" : round.answer ? "已回答" : "等待回答",
-    nextOwner: round.answer ? "韩立" : "南宫婉", blockingReason: round.decision === "blocked" ? round.assessment || "研讨证据不足" : null,
+    nextOwner: round.answer ? "韩立" : "南宫婉", blockingReason: round.decision === "blocked" ? round.assessment || "研讨证据不足" : null, active: !round.answer,
   }));
   const recordEntries = [...dossier.archiveRecords, ...dossier.executionRecords].map((record) => recordEntry(record));
   return [...sourceEntries, ...roundEntries, ...recordEntries].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.id.localeCompare(right.id));
@@ -215,6 +219,7 @@ function recordEntry(record: EvolutionArchiveRecord): TopicGroupEntry {
     status: evolutionStatusLabel(String(record.payload.status || record.payload.state || record.payload.runtimeStatus || categoryLabel(record.category))),
     nextOwner: workbenchOwnerLabel(String(record.payload.nextOwner || record.payload.owner || record.payload.executorMemberId || record.actor)),
     blockingReason: typeof record.payload.blockingReason === "string" ? record.payload.blockingReason : typeof record.payload.reason === "string" && record.category === "recovery" ? record.payload.reason : null,
+    active: ["running", "executing", "verifying", "integrating", "unified-testing", "pending-approval"].includes(String(record.payload.status || record.payload.state || record.payload.runtimeStatus || "")),
   };
 }
 

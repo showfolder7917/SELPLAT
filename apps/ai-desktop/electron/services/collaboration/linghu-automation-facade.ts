@@ -202,7 +202,7 @@ export class LinghuAutomationFacade {
       .sort((left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
     if (pending.length === 0) return false;
 
-    const task = pending.find((candidate) => ["review-failed", "test-failed", "blocked", "recovering"].includes(candidate.state))
+    const task = pending.find((candidate) => ["test-failed", "blocked", "recovering"].includes(candidate.state))
       || pending.find((candidate) => snapshots.find((snapshot) => snapshot.sourceTaskId === candidate.taskId)?.health === "stalled");
     if (!task) {
       // 已有自身保障任务时继续处理该任务；没有时才等待其他人物先进入可审计终点。
@@ -280,7 +280,7 @@ export class LinghuAutomationFacade {
         });
         return;
       }
-    } else if (["review-failed", "test-failed", "blocked", "recovering"].includes(task.state)) {
+    } else if (["test-failed", "blocked", "recovering"].includes(task.state)) {
       const linghu = this.#collaboration.state().members.find((member) => member.memberId === LINGHU_MEMBER_ID);
       if (!linghu) throw new Error("令狐老祖成员记录缺失，无法记录自动恢复负责人。");
       this.#collaboration.continueTask(task.taskId, linghu);
@@ -482,19 +482,14 @@ function automaticFlowSnapshot(state: CollaborationState, task: CollaborationTas
 
 /** 把结构化停点转换成人可以立即判断“谁、哪项任务、停在哪里、发现什么”的报告。 */
 function taskHumanReport(state: CollaborationState, task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshot | undefined): string {
-  const responsibleMemberId = ["queued-reviewer", "reviewing", "review-failed", "repairing-review"].includes(task.state)
-    ? task.currentReviewerMemberId
-    : task.executorMemberId;
+  const responsibleMemberId = task.executorMemberId;
   const responsible = state.members.find((member) => member.memberId === responsibleMemberId)?.displayName
     || (responsibleMemberId === task.originalExecutor?.memberId ? task.originalExecutor.displayName : null)
-    || (responsibleMemberId === task.originalReviewer?.memberId ? task.originalReviewer.displayName : null)
     || task.currentHandler?.displayName
     || "未识别负责人";
-  const stage = ["queued-reviewer", "reviewing", "review-failed", "repairing-review"].includes(task.state)
-    ? "方案审批阶段"
-    : (["ready-for-integration", "queued-integration", "integrating"].includes(task.state) || task.integrationFailure ? "版本集成阶段"
+  const stage = ["ready-for-integration", "queued-integration", "integrating"].includes(task.state) || task.integrationFailure ? "版本集成阶段"
       : (["unified-testing", "test-failed"].includes(task.state) ? "统一测试阶段"
-        : (task.state === "awaiting-restart" ? "应用重启验收阶段" : "任务执行阶段")));
+        : (task.state === "awaiting-restart" ? "应用重启验收阶段" : "任务执行阶段"));
   const finding = task.integrationFailure?.detail || task.blockingReason || snapshot?.waitingPoint || "任务进展超过安全阈值，尚未收到新的执行事实";
   return `${responsible}负责的“${task.snapshot.title}”停在${stage}（状态：${task.state}${task.phase ? `，阶段：${task.phase}` : ""}）；发现：${finding}`;
 }
@@ -504,11 +499,11 @@ function flowHealth(task: CollaborationTask, stale: boolean): LinghuFlowHealth {
   if (task.state === "cancelled") return "human-blocked";
   if (task.state === "blocked") return "stalled";
   if (task.state === "recovering") return "recovering";
-  if (task.state === "review-failed" || task.state === "test-failed") return "stalled";
+  if (task.state === "test-failed") return "stalled";
   if (task.state === "unified-testing") return "testing";
-  if (task.state === "repairing-review" || task.state === "repairing-execution") return "repairing";
+  if (task.state === "repairing-execution") return "repairing";
   // 有明确队列释放条件的等待不是停点，不能仅凭排队时长触发具有副作用的恢复。
-  if (["queued-executor", "queued-reviewer", "returned-to-nangong", "queued-integration", "ready-for-integration", "awaiting-restart"].includes(task.state)) return "waiting";
+  if (["queued-executor", "returned-to-nangong", "queued-integration", "ready-for-integration", "awaiting-restart"].includes(task.state)) return "waiting";
   if (stale) return "stalled";
   if (["executing", "integrating"].includes(task.state)) return "repairing";
   return "healthy";
@@ -518,7 +513,6 @@ function waitingPoint(task: CollaborationTask, health: LinghuFlowHealth): string
   if (health === "human-blocked") return "等待人工重新选择是否继续";
   if (health === "stalled" || health === "recovering") return task.blockingReason || "等待安全恢复条件";
   if (task.state === "queued-executor") return "等待执行者容量";
-  if (task.state === "queued-reviewer") return "等待审核者容量";
   if (task.state === "returned-to-nangong") return "等待本轮全部任务返回南宫婉";
   if (task.state === "awaiting-restart") return "等待新版本重启健康检查";
   if (task.state === "ready-for-integration" || task.state === "queued-integration") return "等待令狐整批集成";

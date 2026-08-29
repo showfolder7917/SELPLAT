@@ -1227,9 +1227,6 @@ export function DeveloperApp() {
     task.initiator?.memberId === selectedCollaborationMember?.memberId
     || task.executorMemberId === selectedCollaborationMember?.memberId
     || task.executionRecords.some((record) => record.executor.memberId === selectedCollaborationMember?.memberId)
-    || task.currentReviewerMemberId === selectedCollaborationMember?.memberId
-    || task.reviews.some((review) => review.reviewerMemberId === selectedCollaborationMember?.memberId)
-    || task.reviewAttempts.some((attempt) => attempt.reviewerMemberId === selectedCollaborationMember?.memberId)
   )) || [];
   const selectedCollaborationTask = collaborationState?.tasks.find((task) => task.taskId === selectedCollaborationTaskId) || null;
   const selectedCollaborationTaskMember = selectedCollaborationTask
@@ -1490,7 +1487,7 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
         <div><MarkdownMessage text={currentTask.snapshot.confirmedIntent} /></div>
       </details>
       <CollaborationTaskProgressView task={currentTask} member={member} liveOutput={liveOutput} automation={linghuAutomation} locale={locale} />
-      <div className="member-task-actions"><button type="button" onClick={() => onOpen(currentTask.taskId)}>{locale === "ja" ? "詳細を見る" : "查看任务详情"}</button>{["recovering", "blocked", "review-failed", "test-failed"].includes(currentTask.state) && <button type="button" onClick={() => onContinue(currentTask.taskId)}>{currentTask.state === "review-failed" ? (locale === "ja" ? "再審査" : "重新审批") : currentTask.state === "test-failed" ? (locale === "ja" ? "再テスト" : "重新测试") : (locale === "ja" ? "続行" : "继续执行")}</button>}{!["integrated", "cancelled"].includes(currentTask.state) && <button type="button" className="danger" onClick={() => onCancel(currentTask.taskId)}>{locale === "ja" ? "キャンセル" : "取消任务"}</button>}</div>
+      <div className="member-task-actions"><button type="button" onClick={() => onOpen(currentTask.taskId)}>{locale === "ja" ? "詳細を見る" : "查看任务详情"}</button>{["recovering", "blocked", "test-failed"].includes(currentTask.state) && <button type="button" onClick={() => onContinue(currentTask.taskId)}>{currentTask.state === "test-failed" ? (locale === "ja" ? "再テスト" : "重新测试") : (locale === "ja" ? "続行" : "继续执行")}</button>}{!["integrated", "cancelled"].includes(currentTask.state) && <button type="button" className="danger" onClick={() => onCancel(currentTask.taskId)}>{locale === "ja" ? "キャンセル" : "取消任务"}</button>}</div>
     </article> : <div className="member-empty-task"><Code24Regular /><strong>{locale === "ja" ? "待機中" : "当前空闲"}</strong><span>{locale === "ja" ? "割り当て時に新しい Codex を作成します。" : "收到任务时才会创建新的 Codex。"}</span></div>}
     {orderedTasks.length > 1 && <section className="member-task-history"><h2>{locale === "ja" ? "過去のタスク" : "历史任务"}</h2>{orderedTasks.slice(1).map((task) => <div key={task.taskId}><strong>{task.snapshot.title}</strong><span>{collaborationTaskStateLabel(task.state, locale)}</span></div>)}</section>}
   </section>;
@@ -1674,10 +1671,6 @@ function CollaborationStageContent({ stageId, task, liveMessage, automation, loc
       <MarkdownMessage text={task.snapshot.confirmedIntent} />
       {task.plans.map((plan) => <article key={plan.version} className="task-stage-record"><header><strong>{plan.ownerDisplayName}</strong><span>v{plan.version} · {collaborationPlanStatusLabel(plan.status, locale)}</span></header><MarkdownMessage text={plan.text} /></article>)}
     </>}
-    {stageId === "approval" && <>
-      {task.reviewAttempts.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "レビュー記録はまだありません。" : "暂时没有审批记录。"}</p>}
-      {task.reviewAttempts.map((attempt) => { const review = task.reviews.find((item) => item.planVersion === attempt.planVersion && item.reviewerMemberId === attempt.reviewerMemberId && item.reviewerGeneration === attempt.reviewerGeneration); return <article key={attempt.attemptId} className="task-stage-record"><header><strong>{attempt.reviewerDisplayName}</strong><span>{review ? (review.decision === "passed" ? (locale === "ja" ? "通過" : "审批通过") : (locale === "ja" ? "差戻し" : "审批未通过")) : collaborationReviewOutcomeLabel(attempt.outcome, locale)}</span></header>{review?.feedback && <MarkdownMessage text={review.feedback} />}{!review && attempt.rawOutput && <MarkdownMessage text={attempt.rawOutput} />}{attempt.error && <p className="task-detail-error">{attempt.error}</p>}</article>; })}
-    </>}
     {stageId === "execution" && <>
       {task.executionRecords.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "実行記録はまだありません。" : "暂时没有执行记录。"}</p>}
       {task.executionRecords.map((record) => <article key={record.assignmentId} className="task-stage-record"><header><strong>{record.executor.displayName}</strong><span>{collaborationExecutionStatusLabel(record.status, locale)}</span></header>{record.changedFiles?.length ? <ChangedFileList files={record.changedFiles} locale={locale} /> : null}{record.result && <MarkdownMessage text={record.result} />}{record.blockingReason && <p className="task-detail-error">{record.blockingReason}</p>}</article>)}
@@ -1788,14 +1781,14 @@ function ChangedFileList({ files, locale }: { files: string[]; locale: Locale })
 }
 
 function collaborationMemberStateLabel(member: CollaborationMember, locale: Locale): string {
-  const chinese: Record<CollaborationMember["state"], string> = { idle: "空闲", conversation: "会话中", assigned: "已分配", working: member.phase === "verifying" ? "正在验证" : member.phase === "finalizing" ? "正在收尾" : "正在执行", "waiting-review": "等待审核", reviewing: "正在审核", retiring: "正在关闭连接", recovering: "等待恢复", draining: "等待退出", offline: "离线" };
-  const japanese: Record<CollaborationMember["state"], string> = { idle: "待機", conversation: "会話中", assigned: "割当済み", working: "実行中", "waiting-review": "レビュー待ち", reviewing: "レビュー中", retiring: "接続終了中", recovering: "復旧待ち", draining: "終了待ち", offline: "オフライン" };
+  const chinese: Record<CollaborationMember["state"], string> = { idle: "空闲", conversation: "会话中", assigned: "已分配", working: member.phase === "verifying" ? "正在验证" : member.phase === "finalizing" ? "正在收尾" : "正在执行", retiring: "正在关闭连接", recovering: "等待恢复", draining: "等待退出", offline: "离线" };
+  const japanese: Record<CollaborationMember["state"], string> = { idle: "待機", conversation: "会話中", assigned: "割当済み", working: "実行中", retiring: "接続終了中", recovering: "復旧待ち", draining: "終了待ち", offline: "オフライン" };
   return (locale === "ja" ? japanese : chinese)[member.state];
 }
 
 function collaborationTaskStateLabel(state: CollaborationState["tasks"][number]["state"], locale: Locale): string {
-  const chinese: Record<CollaborationState["tasks"][number]["state"], string> = { "queued-executor": "等待执行人", "preparing-worktree": "准备独立版本", analyzing: "分析需求", "queued-reviewer": "等待审核员", reviewing: "审核方案", "review-failed": "审批失败", "repairing-review": "令狐处理审批问题", optimizing: "优化方案", approved: "审核通过", "forced-after-review-limit": "达到审核上限后执行", executing: "执行修改", "repairing-execution": "令狐修复执行问题", "returned-to-nangong": "已返回南宫婉", "ready-for-integration": "本轮已封存", "queued-integration": "已进入测试批次", integrating: "正在集成", "unified-testing": "令狐老祖正在统一测试", "awaiting-restart": "等待重启确认", "test-failed": "统一测试失败", integrated: "统一测试通过", blocked: "已阻塞", recovering: "等待恢复", cancelled: "已取消" };
-  const japanese: Record<CollaborationState["tasks"][number]["state"], string> = { "queued-executor": "実行者待ち", "preparing-worktree": "独立版を準備", analyzing: "要件分析", "queued-reviewer": "レビュー担当待ち", reviewing: "レビュー中", "review-failed": "審査失敗", "repairing-review": "令狐が審査問題を修復中", optimizing: "案を改善中", approved: "承認済み", "forced-after-review-limit": "上限後に実行", executing: "変更実行中", "repairing-execution": "令狐が実行問題を修復中", "returned-to-nangong": "南宮婉へ返却済み", "ready-for-integration": "ラウンド確定済み", "queued-integration": "テストキュー", integrating: "統合中", "unified-testing": "令狐が統合テスト中", "awaiting-restart": "再起動確認待ち", "test-failed": "統合テスト失敗", integrated: "統合テスト合格", blocked: "ブロック", recovering: "復旧待ち", cancelled: "キャンセル" };
+  const chinese: Record<CollaborationState["tasks"][number]["state"], string> = { "queued-executor": "等待执行人", "preparing-worktree": "准备独立版本", analyzing: "技术分析", executing: "执行修改", "repairing-execution": "令狐修复执行问题", "returned-to-nangong": "已返回南宫婉", "ready-for-integration": "本轮已封存", "queued-integration": "已进入测试批次", integrating: "正在集成", "unified-testing": "令狐老祖正在统一测试", "awaiting-restart": "等待重启确认", "test-failed": "统一测试失败", integrated: "统一测试通过", blocked: "已阻塞", recovering: "等待恢复", cancelled: "已取消" };
+  const japanese: Record<CollaborationState["tasks"][number]["state"], string> = { "queued-executor": "実行者待ち", "preparing-worktree": "独立版を準備", analyzing: "技術分析", executing: "変更実行中", "repairing-execution": "令狐が実行問題を修復中", "returned-to-nangong": "南宮婉へ返却済み", "ready-for-integration": "ラウンド確定済み", "queued-integration": "テストキュー", integrating: "統合中", "unified-testing": "令狐が統合テスト中", "awaiting-restart": "再起動確認待ち", "test-failed": "統合テスト失敗", integrated: "統合テスト合格", blocked: "ブロック", recovering: "復旧待ち", cancelled: "キャンセル" };
   return (locale === "ja" ? japanese : chinese)[state];
 }
 
@@ -1804,20 +1797,14 @@ function collaborationExecutorNames(task: CollaborationTask): string[] {
 }
 
 function collaborationPlanStatusLabel(status: CollaborationTask["plans"][number]["status"], locale: Locale): string {
-  const chinese = { "awaiting-review": "等待审核", approved: "审核通过", rejected: "审核未通过", forced: "审核上限后最终方案" } as const;
-  const japanese = { "awaiting-review": "レビュー待ち", approved: "承認済み", rejected: "差戻し", forced: "上限後の最終案" } as const;
+  const chinese = { "ready-for-execution": "技术分析完成" } as const;
+  const japanese = { "ready-for-execution": "技術分析完了" } as const;
   return (locale === "ja" ? japanese : chinese)[status];
 }
 
-function collaborationReviewOutcomeLabel(outcome: CollaborationTask["reviewAttempts"][number]["outcome"], locale: Locale): string {
-  const chinese = { decided: "已形成结论", "decision-unrecognized": "结论未识别", "infrastructure-failed": "连接异常" } as const;
-  const japanese = { decided: "結論済み", "decision-unrecognized": "結論未認識", "infrastructure-failed": "接続エラー" } as const;
-  return (locale === "ja" ? japanese : chinese)[outcome];
-}
-
 function collaborationExecutionStatusLabel(status: CollaborationTask["executionRecords"][number]["status"], locale: Locale): string {
-  const chinese = { assigned: "已分配", analyzing: "分析中", "waiting-review": "等待审核", executing: "执行中", "code-verified": "代码已验证", transferred: "已转交", blocked: "已阻塞", cancelled: "已取消" } as const;
-  const japanese = { assigned: "割当済み", analyzing: "分析中", "waiting-review": "レビュー待ち", executing: "実行中", "code-verified": "コード検証済み", transferred: "引継ぎ済み", blocked: "ブロック", cancelled: "キャンセル" } as const;
+  const chinese = { assigned: "已分配", analyzing: "分析中", executing: "执行中", "code-verified": "代码已验证", transferred: "已转交", blocked: "已阻塞", cancelled: "已取消" } as const;
+  const japanese = { assigned: "割当済み", analyzing: "分析中", executing: "実行中", "code-verified": "コード検証済み", transferred: "引継ぎ済み", blocked: "ブロック", cancelled: "キャンセル" } as const;
   return (locale === "ja" ? japanese : chinese)[status];
 }
 
@@ -1959,14 +1946,14 @@ function ManagedStageAction({ message, locale, actionable, activeMode, onReturn,
 }
 
 function CollaborationStatusChain({ task, locale, onRetry }: { task: CollaborationTask; locale: Locale; onRetry(taskId: string): Promise<void> }) {
-  const stages = ["analysis", "review", "execution", "recovery", "integration"] as const;
+  const stages = ["analysis", "execution", "recovery", "integration"] as const;
   const stageLabels = locale === "ja"
-    ? { analysis: "分析", review: "審査", execution: "実行", recovery: "修復", integration: "統合テスト" }
-    : { analysis: "分析", review: "审批", execution: "执行", recovery: "令狐修复", integration: "统一测试" };
+    ? { analysis: "技術分析", execution: "実行", recovery: "修復", integration: "統合テスト" }
+    : { analysis: "技术分析", execution: "执行", recovery: "令狐修复", integration: "统一测试" };
   const latestByStage = new Map(stages.map((stage) => [stage, [...task.flowEvents].reverse().find((event) => event.stage === stage)]));
   const handler = task.currentHandler?.displayName || task.originalExecutor?.displayName || task.initiator?.displayName || (locale === "ja" ? "システム" : "系统");
-  const retryLabel = task.state === "review-failed" ? (locale === "ja" ? "再審査" : "重新审批") : task.state === "test-failed" ? (locale === "ja" ? "再テスト" : "重新测试") : (locale === "ja" ? "続行" : "继续执行");
-  const retryable = ["review-failed", "test-failed", "blocked", "recovering"].includes(task.state);
+  const retryLabel = task.state === "test-failed" ? (locale === "ja" ? "再テスト" : "重新测试") : (locale === "ja" ? "続行" : "继续执行");
+  const retryable = ["test-failed", "blocked", "recovering"].includes(task.state);
   return <section className={`collaboration-status-chain ${task.blockingReason ? "has-blocker" : ""}`} aria-live="polite">
     <header><strong>{locale === "ja" ? "協同タスク" : "协作任务状态"}</strong><span>{handler} · {collaborationTaskStateLabel(task.state, locale)}</span></header>
     <ol>{stages.map((stage) => { const event = latestByStage.get(stage); if (!event && stage !== "analysis") return null; return <li key={stage} className={event?.error ? "failed" : event?.status === "completed" ? "completed" : "active"}><i /><span><strong>{stageLabels[stage]}</strong><small>{event?.summary || (locale === "ja" ? "担当者待ち" : "等待分配负责人")}</small></span></li>; })}</ol>
