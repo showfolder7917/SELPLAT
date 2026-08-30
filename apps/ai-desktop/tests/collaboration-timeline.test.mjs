@@ -115,12 +115,108 @@ test("流式正文按轮次追加到当前显式事件节点", () => {
   } finally { fixture.close(); }
 });
 
+test("执行与自检流式正文按节点隔离，后续自检不会覆盖执行内容", () => {
+  const fixture = createFixture("stream-stage-isolation");
+  try {
+    const running = task(fixture, 1, false);
+    running.evolutionProposalId = null;
+    running.evolutionRoundId = null;
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(3), [running]), [running.taskId]);
+    fixture.timeline.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "execution-turn", text: "执行阶段正文" }, fixture.at(4));
+    running.flowEvents.push(flow("verifying", "worker.phase.verifying", "execution", "started", running.executionRecords[0].executor, "开始执行人自检", fixture.at(5)));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(5), [running]), [running.taskId]);
+    fixture.timeline.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "verification-turn", text: "自检阶段正文" }, fixture.at(6));
+    const nodes = fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes;
+    assert.equal(nodes.find((node) => node.kind === "execution").content, "执行阶段正文");
+    assert.equal(nodes.find((node) => node.kind === "verification").content, "自检阶段正文");
+  } finally { fixture.close(); }
+});
+
+test("集成本地修改归属阻塞生成令狐等待节点并同步专题下一步", () => {
+  const fixture = createFixture("integration-ownership-blocked");
+  try {
+    const blocked = task(fixture, 1, true, true);
+    blocked.currentHandler = member("linghu-ancestor", "令狐老祖");
+    blocked.state = "blocked";
+    blocked.blockingReason = "本地修改 collaboration-timeline-event.ts 未登记到任何待集成任务。";
+    blocked.integrationFailure = { kind: "local-change-ownership", detail: blocked.blockingReason, conflictFiles: ["collaboration-timeline-event.ts"], baseSha: null, resultSha: null, generation: 1, occurredAt: fixture.at(7) };
+    blocked.flowEvents.push(
+      flow("verified", "task.code_verified", "execution", "completed", blocked.executionRecords[0].executor, "执行与自检完成", fixture.at(5)),
+      flow("collected", "evolution.task_collected", "integration", "completed", member("nangong-wan", "南宫婉"), "南宫婉提交统一测试", fixture.at(6)),
+      flow("ownership", "integration.local_change_ownership_blocked", "integration", "waiting", member("linghu-ancestor", "令狐老祖"), blocked.blockingReason, fixture.at(7)),
+    );
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [blocked]), [blocked.taskId]);
+    const group = fixture.timeline.snapshot(fixture.at(8)).groups[0];
+    const ownership = group.nodes.find((node) => node.action === "等待确认本地修改归属");
+    assert.equal(group.status, "blocked");
+    assert.equal(ownership.actor.displayName, "令狐老祖");
+    assert.equal(ownership.status, "waiting");
+    assert.match(ownership.content, /未登记到任何待集成任务/);
+    assert.equal(group.nextStep, "令狐老祖 · 等待确认本地修改归属");
+    assert.equal(group.nodes.find((node) => node.kind === "execution").status, "completed");
+  } finally { fixture.close(); }
+});
+
+test("恢复请求结束本地修改归属等待节点并追加恢复节点", () => {
+  const fixture = createFixture("integration-ownership-recovered");
+  try {
+    const recovered = task(fixture, 1, true, true);
+    recovered.integrationGeneration = 1;
+    recovered.currentHandler = member("linghu-ancestor", "令狐老祖");
+    recovered.integrationFailure = { kind: "local-change-ownership", detail: "等待确认本地修改归属", conflictFiles: ["collaboration-timeline-event.ts"], baseSha: null, resultSha: null, generation: 1, occurredAt: fixture.at(6) };
+    recovered.flowEvents.push(
+      flow("ownership", "integration.local_change_ownership_blocked", "integration", "waiting", member("linghu-ancestor", "令狐老祖"), "等待确认本地修改归属", fixture.at(6)),
+      flow("recovery", "task.recovery_requested", "recovery", "started", member("linghu-ancestor", "令狐老祖"), "归属已确认，恢复任务", fixture.at(7)),
+    );
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [recovered]), [recovered.taskId]);
+    const nodes = fixture.timeline.snapshot(fixture.at(8)).groups[0].nodes;
+    assert.equal(nodes.find((node) => node.action === "本地修改归属已确认").status, "completed");
+    assert.equal(nodes.find((node) => node.action === "正在恢复任务").status, "current");
+    assert.equal(nodes.some((node) => node.action === "等待确认本地修改归属" && node.status === "waiting"), false);
+  } finally { fixture.close(); }
+});
+
+test("统一测试开始后结束等待令狐接手节点", () => {
+  const fixture = createFixture("integration-queue-started");
+  try {
+    const testing = task(fixture, 1, true, true);
+    testing.integrationGeneration = 1;
+    testing.unifiedTest = { startedAt: fixture.at(7), completedAt: null, status: "running", summary: null };
+    testing.flowEvents.push(
+      flow("batch", "integration.batch_frozen", "integration", "waiting", member("nangong-wan", "南宫婉"), "等待令狐老祖统一测试", fixture.at(6)),
+      flow("test", "unified_test.started", "integration", "started", member("linghu-ancestor", "令狐老祖"), "令狐老祖开始统一测试", fixture.at(7)),
+    );
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [testing]), [testing.taskId]);
+    const nodes = fixture.timeline.snapshot(fixture.at(8)).groups[0].nodes;
+    assert.equal(nodes.find((node) => node.action === "令狐老祖已接手统一测试").status, "completed");
+    assert.equal(nodes.find((node) => node.action === "当前正在统一测试").status, "current");
+    assert.equal(nodes.some((node) => node.action === "等待令狐老祖统一测试" && node.status === "waiting"), false);
+  } finally { fixture.close(); }
+});
+
+test("未登记的历史流程事件生成可读兜底节点而非静默丢弃", () => {
+  const fixture = createFixture("unknown-flow-fallback");
+  try {
+    const running = task(fixture, 1, false);
+    running.evolutionProposalId = null;
+    running.evolutionRoundId = null;
+    running.flowEvents = [flow("future", "integration.future_waiting_fact", "integration", "waiting", member("linghu-ancestor", "令狐老祖"), "等待未来版本条件", fixture.at(4))];
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(4), [running]), [running.taskId]);
+    const group = fixture.timeline.snapshot(fixture.at(5)).groups[0];
+    assert.equal(group.status, "blocked");
+    assert.equal(group.nodes[0].action, "等待后续处理");
+    assert.match(group.nodes[0].detail, /integration\.future_waiting_fact/);
+  } finally { fixture.close(); }
+});
+
 test("旧状态反推接口和旧表读取已退役", () => {
   const source = readFileSync(path.join(appRoot, "electron/services/event-center/collaboration-timeline-repository.ts"), "utf8");
   assert.doesNotMatch(source, /syncEvolutionState|#appendProposalFacts|#appendTaskFacts/);
   assert.doesNotMatch(source, /FROM AiDesktopCollaborationTimelineEvent|FROM AiDesktopCollaborationTopic/);
   assert.match(source, /appendBusinessEvent/);
   assert.match(source, /AiDesktopTaskCollaborationEvent/);
+  assert.match(source, /projectCollaborationFlowEvent/);
+  assert.doesNotMatch(source, /function flowFact/);
 });
 
 function approvalApplication(fixture, proposalId, offset, action) {
@@ -156,7 +252,11 @@ function distribution(fixture, recipients, offset) {
   }, "running");
 }
 function businessEvent(fixture, eventId, proposalId, offset, fact, status) {
-  return { eventId, group: { groupId: "topic:topic-1", topicId: "topic-1", proposalId, title: "修订截图按钮可用态", status, summary: fact.summary, startedAt: fixture.at(1), updatedAt: fixture.at(offset) }, fact };
+  const eventType = fact.kind === "approval-application" ? "approval.application"
+    : fact.kind === "approval-decision" ? "approval.decision"
+      : fact.kind === "distribution" ? "task.distribution"
+        : fact.status === "completed" ? "approval.supplement_completed" : "approval.supplement_waiting";
+  return { eventId, eventType, group: { groupId: "topic:topic-1", topicId: "topic-1", proposalId, title: "修订截图按钮可用态", status, summary: fact.summary, startedAt: fixture.at(1), updatedAt: fixture.at(offset) }, fact };
 }
 
 function task(fixture, index, verifying, verified = false) {

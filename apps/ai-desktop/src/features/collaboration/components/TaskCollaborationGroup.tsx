@@ -4,9 +4,9 @@ import type { CollaborationTimelineGroup, CollaborationTimelineNode, Collaborati
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 
 /** 新任务协作群只消费主进程时间线投影；旧四阶段视图保留回退但不再参与本页排序和人物推断。 */
-export function TaskCollaborationGroup({ snapshot, liveTextByTaskId, locale, onManualApproval }: {
+export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval }: {
   snapshot: CollaborationTimelineSnapshot | null;
-  liveTextByTaskId: Record<string, string>;
+  liveTextByNodeId: Record<string, string>;
   locale: Locale;
   onManualApproval(proposalId: string, title: string, content: string): void;
 }) {
@@ -21,7 +21,7 @@ export function TaskCollaborationGroup({ snapshot, liveTextByTaskId, locale, onM
   const currentGroupId = groups.find((group) => group.status !== "completed" && group.status !== "cancelled")?.groupId || groups[0]?.groupId;
   const locateCurrentStep = () => {
     const group = groups.find((candidate) => candidate.groupId === currentGroupId);
-    const node = group?.nodes.find((candidate) => candidate.status === "current" || candidate.status === "waiting");
+    const node = group ? [...group.nodes].reverse().find((candidate) => candidate.status === "current" || candidate.status === "waiting") : undefined;
     if (!group || !node) return;
     updateOpenOverride(setGroupOpenOverrides, group.groupId, true);
     updateOpenOverride(setNodeOpenOverrides, node.nodeId, true);
@@ -44,7 +44,7 @@ export function TaskCollaborationGroup({ snapshot, liveTextByTaskId, locale, onM
       >
         <div className="task-timeline-list">{group.nodes.map((node, index) => {
           const nodeOpen = nodeOpenOverrides.get(node.nodeId) ?? node.automaticOpen;
-          const liveText = node.taskId && node.status === "current" ? liveTextByTaskId[node.taskId] : "";
+          const liveText = node.status === "current" ? liveTextByNodeId[node.nodeId] : "";
           return <div className={`task-timeline-position ${node.status}`} data-task-timeline-node-id={node.nodeId} key={node.nodeId}>
             <span className="task-timeline-index">{index + 1}</span><i className="task-timeline-dot" aria-hidden="true" />
             <SelUiDisclosure
@@ -125,6 +125,8 @@ function formatDuration(durationMs: number, locale: Locale): string {
 
 function detailLabel(node: CollaborationTimelineNode, locale: Locale): string {
   if (node.kind === "verification") return locale === "ja" ? "検証詳細" : "验证详情";
-  if (node.kind === "approval-application" || node.kind === "approval-decision") return locale === "ja" ? "承認詳細" : "审批详情";
+  if (node.kind === "approval-application") return locale === "ja" ? "申請根拠" : "申请依据";
+  if (node.kind === "approval-decision") return locale === "ja" ? "承認補足" : "审批补充说明";
+  if (node.kind === "repair") return locale === "ja" ? "復旧条件" : "阻塞与恢复条件";
   return locale === "ja" ? "実行詳細" : "执行详情";
 }

@@ -20,6 +20,37 @@ export type CollaborationPlanStatus = "ready-for-execution";
 export type CollaborationExecutionStatus = "assigned" | "analyzing" | "executing" | "code-verified" | "transferred" | "blocked" | "cancelled";
 export type CollaborationResultOutcome = "pending-integration" | "succeeded" | "incomplete" | "cancelled";
 export type CollaborationAutomationSource = "linghu-safeguard";
+/** Coordinator 可写入的协作流程事件名称；新增流程必须先在这里登记，再由时间线投影决定可见语义。 */
+export type CollaborationFlowEventType =
+  | "task.submitted"
+  | "task.legacy_imported"
+  | "executor.assigned"
+  | "executor.reassigned"
+  | "technical_analysis.ready"
+  | "execution.started"
+  | `worker.phase.${Exclude<CollaborationWorkerPhase, null>}`
+  | "task.code_verified"
+  | "task.blocked"
+  | "task.cancelled"
+  | "task.interrupted"
+  | "task.recovery_requested"
+  | "execution.repair_started"
+  | "execution.repair_completed"
+  | "execution.repair_waiting"
+  | "integration.local_changes_transferred"
+  | "integration.batch_frozen"
+  | "integration.local_change_ownership_blocked"
+  | "integration.merge_conflict"
+  | "integration.conflict_correction_requested"
+  | "evolution.task_collected"
+  | "unified_test.started"
+  | "unified_test.passed"
+  | "unified_test.failed"
+  | "unified_test.retry_requested"
+  | "unified_test.repair_started"
+  | "unified_test.repair_completed"
+  | "unified_test.repair_failed"
+  | "release.restart_healthy";
 export type CollaborationTaskState =
   | "queued-executor"
   | "preparing-worktree"
@@ -102,7 +133,7 @@ export interface CollaborationExecutionRecord {
 
 export interface CollaborationFlowEvent {
   eventId: string;
-  type: string;
+  type: CollaborationFlowEventType;
   stage: "task" | "analysis" | "execution" | "integration" | "recovery";
   status: "started" | "completed" | "failed" | "waiting" | "cancelled";
   actor: CollaborationParticipantSnapshot | null;
@@ -260,6 +291,8 @@ export interface CollaborationStateEvent {
 export interface CollaborationStreamEnvelope {
   taskId: string;
   memberId: string;
+  /** 主进程在分片入库时确定的不可变时间线节点；为空表示该分片不属于专题时间线。 */
+  timelineNodeId?: string | null;
   event: CodexStreamEvent;
 }
 

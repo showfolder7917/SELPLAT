@@ -430,8 +430,8 @@ export class WorkflowRepository {
   }
 
   /** 执行人的可见流式正文追加到时间线分片表；异常由调用方的统一 EventCenter 边界接管。 */
-  appendCollaborationStream(taskId: string, memberId: string, event: CodexStreamEvent, occurredAt = new Date().toISOString()): void {
-    this.#collaborationTimeline.appendStream(taskId, memberId, event, occurredAt);
+  appendCollaborationStream(taskId: string, memberId: string, event: CodexStreamEvent, occurredAt = new Date().toISOString()): string | null {
+    return this.#collaborationTimeline.appendStream(taskId, memberId, event, occurredAt);
   }
 
   getEvolutionTopicDossier(topicId: string, state: NangongEvolutionState): EvolutionTopicDossier {

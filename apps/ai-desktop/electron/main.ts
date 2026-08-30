@@ -453,11 +453,12 @@ app.whenReady().then(async () => {
     },
     emitStream: (taskId, memberId, event) => {
       eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
-      try { workflowRepository?.appendCollaborationStream(taskId, memberId, event); }
+      let timelineNodeId: string | null = null;
+      try { timelineNodeId = workflowRepository?.appendCollaborationStream(taskId, memberId, event) || null; }
       catch (error) {
         eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "append_stream_chunk", error, correlationId: taskId, details: { memberId, eventType: event.type, turnId: event.turnId } });
       }
-      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, event });
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, timelineNodeId, event });
     },
   });
   // 旧 nangong-evolution.json 仅作为可恢复的历史取证文件保留，生产运行不再读取、写入或回退。

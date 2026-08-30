@@ -246,6 +246,7 @@ export function DeveloperApp() {
   const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationState | null>(null);
   const [nangongEvolutionState, setNangongEvolutionState] = useState<NangongEvolutionState | null>(null);
   const [collaborationStreams, setCollaborationStreams] = useState<Record<string, CollaborationLiveOutput>>({});
+  const [collaborationTimelineStreams, setCollaborationTimelineStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-group" | "task-detail">("member");
   const [selectedCollaborationTaskId, setSelectedCollaborationTaskId] = useState<string | null>(null);
   const [trustedCommandInfo, setTrustedCommandInfo] = useState<TrustedCommandInfo>({ count: 0 });
@@ -408,8 +409,8 @@ export function DeveloperApp() {
     const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => { setNangongEvolutionState(event.state); refreshTimeline(); });
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
       // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
-      setCollaborationStreams((current) => {
-        const existing = current[envelope.taskId];
+      const updateStream = (current: Record<string, CollaborationLiveOutput>, key: string) => {
+        const existing = current[key];
         const task = collaborationStateRef.current?.tasks.find((candidate) => candidate.taskId === envelope.taskId);
         const next = existing?.turnId === envelope.event.turnId
           ? existing
@@ -418,8 +419,10 @@ export function DeveloperApp() {
             stageId: task ? deriveCollaborationTaskCurrentStage(task, linghuAutomationStateRef.current) : "intent",
             turnId: envelope.event.turnId,
           };
-        return { ...current, [envelope.taskId]: { ...next, message: applyCodexStreamEvent(next.message, envelope.event) } };
-      });
+        return { ...current, [key]: { ...next, message: applyCodexStreamEvent(next.message, envelope.event) } };
+      };
+      setCollaborationStreams((current) => updateStream(current, envelope.taskId));
+      if (envelope.timelineNodeId) setCollaborationTimelineStreams((current) => updateStream(current, envelope.timelineNodeId!));
     });
     return () => { removeStateListener(); removeLinghuListener(); removeNangongListener(); removeStreamListener(); };
   }, []);
@@ -1409,7 +1412,7 @@ export function DeveloperApp() {
       </section> : showNangongConversationWorkspace && nangongEvolutionState
         ? <NangongConversationWorkspace key={nangongEvolutionState.conversation.conversationId} state={nangongEvolutionState} attachments={nangongAttachments} workspaces={workspaces} locale={locale} newConversationBusy={nangongNewConversationBusy} error={nangongError} onState={setNangongEvolutionState} onAttachments={setNangongAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setNangongError} />
         : collaborationPanel === "task-group"
-        ? <TaskCollaborationGroup snapshot={collaborationTimeline} liveTextByTaskId={Object.fromEntries(Object.entries(collaborationStreams).map(([taskId, output]) => [taskId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} />
+        ? <TaskCollaborationGroup snapshot={collaborationTimeline} liveTextByNodeId={Object.fromEntries(Object.entries(collaborationTimelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} />
         : collaborationPanel === "execution-list"
         ? <CollaborationExecutionList tasks={completedCollaborationTasks} locale={locale} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />
         : collaborationPanel === "task-detail" && selectedCollaborationTask && selectedCollaborationTaskMember

@@ -796,7 +796,7 @@ function normalizeChangedFiles(files: string[]): string[] {
 /** 流程事件只记录可审计业务事实，不复制原始推理或认证信息。 */
 function appendFlow(
   task: CollaborationTask,
-  type: string,
+  type: CollaborationTask["flowEvents"][number]["type"],
   stage: CollaborationTask["flowEvents"][number]["stage"],
   status: CollaborationTask["flowEvents"][number]["status"],
   summary: string,

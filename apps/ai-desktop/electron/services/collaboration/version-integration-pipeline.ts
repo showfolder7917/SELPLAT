@@ -327,7 +327,7 @@ function participantSnapshot(member: Pick<CollaborationMember, "memberId" | "dis
 /** 流水线只登记可审计的版本集成事实，不保存执行过程中的推理正文。 */
 function appendFlow(
   task: CollaborationTask,
-  type: string,
+  type: CollaborationTask["flowEvents"][number]["type"],
   stage: CollaborationTask["flowEvents"][number]["stage"],
   status: CollaborationTask["flowEvents"][number]["status"],
   summary: string,

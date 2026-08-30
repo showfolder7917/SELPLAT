@@ -86,7 +86,9 @@ export class EvolutionTaskDistributionService {
 
   #publishDistribution(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], observedTasks: CollaborationTask[]): void {
     const tasks = observedTasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
-    const recipients = tasks.map((task) => task.executionRecords?.[0]?.executor || task.currentHandler || { memberId: "pending", displayName: "等待分配" })
+    // 接收人只来自冻结的执行分配；currentHandler 可能仍是提交人，不能据此反推出“南宫婉发给南宫婉”。
+    const recipients = tasks.map((task) => task.executionRecords?.[0]?.executor || task.originalExecutor || { memberId: `pending:${task.taskId}`, displayName: "等待分配" })
+      .filter((recipient) => recipient.memberId !== proposal.submitterMemberId)
       .filter((value, index, values) => values.findIndex((candidate) => candidate.memberId === value.memberId) === index);
     const occurredAt = proposal.distributionPlan?.plannedAt || proposal.updatedAt;
     const priorAdvice = proposal.revisionFeedbackApprovalId
@@ -94,6 +96,7 @@ export class EvolutionTaskDistributionService {
       : "";
     this.options.timeline?.({
       eventId: `distribution-${proposal.proposalId}-${randomUUID()}`,
+      eventType: "task.distribution",
       group: { groupId: `topic:${topic.topicId}`, topicId: topic.topicId, proposalId: proposal.proposalId, title: topic.title, status: "running", summary: proposal.distributionPlan?.summary || proposal.content, startedAt: topic.createdAt, updatedAt: occurredAt },
       fact: {
         nodeId: `distribution:${proposal.proposalId}`, taskId: null, proposalId: proposal.proposalId,

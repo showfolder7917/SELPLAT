@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.112.0
+rule_version = 5.113.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -187,5 +187,7 @@ collaboration_topic_timeline_projection_contract.8 = topic_wall_clock_elapsed_ne
 collaboration_topic_timeline_projection_contract.9 = approval_service_only_persists_application_and_decision + orchestrator_only_consumes_fact_and_emits_next_command + distribution_service_only_consumes_approved_dispatch_command_and_creates_real_recipients + timeline_only_consumes_immutable_business_events_and_flow_events + no_current_proposal_or_task_snapshot_history_inference + incompatible_cutover_no_dual_write_no_old_table_read + old_runtime_interfaces_retired
 <!-- 旧协作线路退役后必须同步删除旧运行表、旧清空分支和旧计数类型；已发布 SQL 仅作为校验历史保留。 -->
 collaboration_topic_timeline_projection_contract.10 = no_legacy_runtime_callers + no_legacy_table_read_write_reset_or_count_contract + empty_only_atomic_physical_drop_migration + published_1001_to_1003_SQL_kept_as_checksum_history_only + fresh_and_legacy_upgrade_tests_required
+<!-- 所有协作阶段必须先登记类型化事件并由独立投影器转换；阻塞、等待和未来未知事件必须生成可读节点并同步专题状态，流式正文只能绑定事件确定的节点。 -->
+collaboration_topic_timeline_projection_contract.11 = registered_typed_approval_distribution_analysis_execution_verification_integration_and_recovery_events + independent_flow_projector_before_SQLite_repository + no_silent_unmapped_event_drop + unknown_event_human_readable_fallback + blocked_waiting_updates_topic_owner_reason_recovery_and_next_step + startup_backfills_unconsumed_immutable_events + stream_chunk_bound_to_projected_node_id_not_task_id
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events

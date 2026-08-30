@@ -33,6 +33,7 @@ export class EvolutionApprovalService {
     const topic = requireTopic(next, proposal.topicId);
     this.timeline?.({
       eventId: `approval-application-closed-${approval.approvalId}`,
+      eventType: "approval.application",
       group: group(topic, proposal, decision === "approved" ? "running" : "waiting-approval", approval.advice, approval.createdAt),
       fact: {
         nodeId: `proposal:${proposal.proposalId}`, taskId: null, proposalId: proposal.proposalId,
@@ -45,6 +46,7 @@ export class EvolutionApprovalService {
     });
     this.timeline?.({
       eventId: approval.approvalId,
+      eventType: "approval.decision",
       group: group(topic, proposal, decision === "approved" ? "running" : "waiting-approval", approval.advice, approval.createdAt),
       fact: {
         nodeId: `approval:${approval.approvalId}`, taskId: null, proposalId: proposal.proposalId,
@@ -65,6 +67,7 @@ export class EvolutionApprovalService {
     const manual = !(proposal.origin === "linghu" ? state.automaticLinghuApprovalEnabled : state.automaticNangongApprovalEnabled);
     this.timeline?.({
       eventId: `approval-application-${proposal.proposalId}`,
+      eventType: "approval.application",
       group: group(topic, proposal, "waiting-approval", proposal.content, proposal.createdAt),
       fact: {
         nodeId: `proposal:${proposal.proposalId}`, taskId: null, proposalId: proposal.proposalId,
@@ -82,6 +85,7 @@ export class EvolutionApprovalService {
     const automatic = state.automaticEvolutionEnabled || state.oneShotRun?.status === "running";
     this.timeline?.({
       eventId: `approval-supplement-${proposal.proposalId}-${randomUUID()}`,
+      eventType: "approval.supplement_waiting",
       group: group(topic, proposal, "waiting-approval", advice, occurredAt),
       fact: {
         nodeId: `supplement:${proposal.proposalId}`, taskId: null, proposalId: proposal.proposalId,
@@ -101,6 +105,7 @@ export class EvolutionApprovalService {
     const topic = requireTopic(state, revision.topicId);
     this.timeline?.({
       eventId: `approval-supplement-completed-${revision.proposalId}`,
+      eventType: "approval.supplement_completed",
       group: group(topic, revision, "waiting-approval", revision.content, revision.createdAt),
       fact: {
         nodeId: `supplement:${previousId}`, taskId: null, proposalId: previousId,

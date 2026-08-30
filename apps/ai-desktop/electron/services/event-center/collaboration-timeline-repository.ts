@@ -5,18 +5,15 @@ import type { CodexStreamEvent } from "../../../contracts/codex/codex-stream.js"
 import type {
   CollaborationParticipantSnapshot,
   CollaborationState,
-  CollaborationTask,
   CollaborationTimelineGroup,
   CollaborationTimelineNode,
   CollaborationTimelineSnapshot,
 } from "../../../contracts/collaboration/collaboration.js";
 import type { CollaborationTimelineBusinessEvent } from "../../../contracts/collaboration/collaboration-timeline-event.js";
+import { projectCollaborationFlowEvent } from "./collaboration-timeline-flow-projector.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
-const HAN_LI: CollaborationParticipantSnapshot = { memberId: "han-li", displayName: "韩立" };
 const NANGONG: CollaborationParticipantSnapshot = { memberId: "nangong-wan", displayName: "南宫婉" };
-const LINGHU: CollaborationParticipantSnapshot = { memberId: "linghu-ancestor", displayName: "令狐老祖" };
-const SYSTEM: CollaborationParticipantSnapshot = { memberId: "system", displayName: "系统" };
 
 type TimelineFact = Omit<CollaborationTimelineNode, "durationMs"> & {
   groupId: string;
@@ -65,54 +62,31 @@ export class CollaborationTimelineRepository {
         }
         for (const event of task.flowEvents) {
           if (connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: `flow:${event.eventId}` })) continue;
-          const mapped = flowFact(task, event, task.initiator || NANGONG);
-          if (!mapped) continue;
-          this.#appendFact(connection, { ...mapped, groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId, sourceFactKey: `flow:${event.eventId}`, occurredAt: event.occurredAt });
-          const actor = event.actor || SYSTEM;
-          const assignment = assignmentAt(task, actor.memberId, event.occurredAt);
-          if (event.type === "worker.phase.verifying" && assignment) this.#appendFact(connection, {
-            groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
-            nodeId: `execution:${task.taskId}:${assignment.assignmentId}`, sourceFactKey: `flow:${event.eventId}:execution-completed`,
-            kind: "execution", actor, recipients: [task.initiator || NANGONG], status: "completed", action: "执行完成",
-            summary: event.summary, content: assignment.result || event.summary, detail: (assignment.changedFiles || []).join("\n"),
-            startedAt: assignment.executionStartedAt || assignment.assignedAt, completedAt: event.occurredAt, automaticOpen: false,
-            manualApprovalProposalId: null, occurredAt: event.occurredAt,
-          });
-          if (event.type === "task.blocked" && assignment) this.#appendFact(connection, {
-            groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
-            nodeId: `execution:${task.taskId}:${assignment.assignmentId}`, sourceFactKey: `flow:${event.eventId}:execution-failed`,
-            kind: "execution", actor: assignment.executor, recipients: [task.initiator || NANGONG], status: "failed", action: "处理未完成",
-            summary: event.summary, content: assignment.result || event.summary, detail: task.blockingReason || assignment.blockingReason || "",
-            startedAt: assignment.executionStartedAt || assignment.assignedAt, completedAt: event.occurredAt, automaticOpen: true,
-            manualApprovalProposalId: null, occurredAt: event.occurredAt,
-          });
-          if (event.type === "task.code_verified" && task.evolutionProposalId) this.#appendFact(connection, {
-            groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
-            nodeId: `return:${task.taskId}`, sourceFactKey: `flow:${event.eventId}:returned-to-nangong`, kind: "result",
-            actor, recipients: [NANGONG], status: "completed", action: "执行与自检结果已返回",
-            summary: event.summary, content: task.finalResult || event.summary, detail: task.resultSummary?.changes || "",
-            startedAt: event.occurredAt, completedAt: event.occurredAt, automaticOpen: false,
-            manualApprovalProposalId: null, occurredAt: event.occurredAt,
+          const projection = projectCollaborationFlowEvent(task, event, task.initiator || NANGONG);
+          for (const { sourceSuffix, ...fact } of projection.facts) this.#appendFact(connection, {
+            ...fact, groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
+            sourceFactKey: `flow:${event.eventId}${sourceSuffix}`, occurredAt: event.occurredAt,
           });
           connection.prepare(`UPDATE AiDesktopTaskCollaborationTopic SET status=$status, summary=$summary,
             updatedAt=CASE WHEN updatedAt < $updatedAt THEN $updatedAt ELSE updatedAt END WHERE groupId=$groupId`).run({
-            $status: groupStatusForFact(mapped), $summary: mapped.summary, $updatedAt: event.occurredAt, $groupId: String(group.groupId),
+            $status: projection.topicStatus, $summary: projection.facts.at(-1)?.summary || event.summary,
+            $updatedAt: event.occurredAt, $groupId: String(group.groupId),
           });
         }
       }
     });
   }
 
-  appendStream(taskId: string, memberId: string, event: CodexStreamEvent, occurredAt = new Date().toISOString()): void {
-    this.#database.transaction((connection) => {
+  appendStream(taskId: string, memberId: string, event: CodexStreamEvent, occurredAt = new Date().toISOString()): string | null {
+    return this.#database.transaction((connection) => {
       const active = connection.prepare(`
         SELECT timeline.groupId, timeline.nodeId
         FROM AiDesktopTaskCollaborationEvent timeline
         JOIN AiDesktopTaskCollaborationTopic topic ON topic.groupId = timeline.groupId
-        WHERE timeline.taskId=$taskId AND timeline.actorMemberId=$memberId
+        WHERE timeline.taskId=$taskId AND timeline.actorMemberId=$memberId AND timeline.status='current'
         ORDER BY timeline.sequenceNumber DESC LIMIT 1
       `).get({ $taskId: taskId, $memberId: memberId }) as { groupId: string; nodeId: string } | undefined;
-      if (!active) return;
+      if (!active) return null;
       const sequence = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopTaskCollaborationStream WHERE taskId=$taskId").get({ $taskId: taskId }) as { value: number | bigint }).value);
       connection.prepare(`INSERT INTO AiDesktopTaskCollaborationStream
         (chunkId, groupId, taskId, nodeId, memberId, turnId, segmentId, itemId, eventType, sequenceNumber, deltaText, snapshotText, occurredAt)
@@ -123,6 +97,7 @@ export class CollaborationTimelineRepository {
         $snapshotText: event.text || event.managedExecution?.message || event.error || null, $occurredAt: occurredAt,
       });
       connection.prepare("UPDATE AiDesktopTaskCollaborationTopic SET updatedAt=$occurredAt WHERE groupId=$groupId AND updatedAt < $occurredAt").run({ $occurredAt: occurredAt, $groupId: active.groupId });
+      return active.nodeId;
     });
   }
 
@@ -188,11 +163,12 @@ export class CollaborationTimelineRepository {
     const waitingCount = nodes.filter((node) => node.status === "waiting" || node.kind === "approval-application" && node.status === "current").length;
     const completedCount = nodes.filter((node) => node.status === "completed").length;
     const currentNodes = nodes.filter((node) => node.status === "current");
-    const calculated = currentNodes.some((node) => node.kind === "approval-application") ? "waiting-approval"
-      : currentNodes.some((node) => node.kind === "verification") ? "verifying"
-        : currentNodes.length > 0 ? "running"
-          : nodes.at(-1)?.status === "failed" ? "blocked"
-            : String(topic.status) as CollaborationTimelineGroup["status"];
+    const persistedStatus = String(topic.status) as CollaborationTimelineGroup["status"];
+    const calculated = persistedStatus === "blocked" || persistedStatus === "cancelled" || persistedStatus === "completed" ? persistedStatus
+      : currentNodes.some((node) => node.kind === "approval-application") ? "waiting-approval"
+        : currentNodes.some((node) => node.kind === "verification") ? "verifying"
+          : currentNodes.length > 0 ? "running"
+            : nodes.at(-1)?.status === "failed" ? "blocked" : persistedStatus;
     const updatedAt = String(topic.updatedAt);
     return {
       groupId: String(topic.groupId), topicId: nullable(topic.topicId), proposalId: nullable(topic.proposalId), title: String(topic.title),
@@ -216,81 +192,6 @@ export class CollaborationTimelineRepository {
       manualApprovalProposalId: nullable(row.manualApprovalProposalId),
     };
   }
-}
-
-function flowFact(task: CollaborationTask, event: CollaborationTask["flowEvents"][number], initiator: CollaborationParticipantSnapshot): Omit<TimelineFact, "groupId" | "proposalId" | "taskId" | "sourceFactKey" | "occurredAt"> | null {
-  const actor = event.actor || SYSTEM;
-  const assignment = assignmentAt(task, actor.memberId, event.occurredAt);
-  const assignmentKey = assignment?.assignmentId || `${actor.memberId}:${event.eventId}`;
-  const analysisNodeId = `analysis:${task.taskId}:${assignmentKey}`;
-  const executionNodeId = `execution:${task.taskId}:${assignmentKey}`;
-  const verificationNodeId = `verification:${task.taskId}:${assignmentKey}`;
-  if (event.type === "executor.assigned" || event.type === "executor.reassigned") return {
-    nodeId: analysisNodeId, kind: "analysis", actor, recipients: [initiator], status: "current", action: "当前正在技术分析",
-    summary: event.summary, content: "", detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"),
-    startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
-  };
-  if (event.type === "technical_analysis.ready") return {
-    nodeId: analysisNodeId, kind: "analysis", actor, recipients: [initiator], status: "completed", action: "技术分析完成",
-    summary: event.summary, content: task.plans.find((plan) => plan.ownerMemberId === actor.memberId)?.text || event.summary,
-    detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"), startedAt: assignment?.assignedAt || event.occurredAt,
-    completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
-  };
-  if (event.type === "execution.started") return {
-    nodeId: executionNodeId, kind: "execution", actor, recipients: [initiator], status: "current", action: "当前正在执行",
-    summary: event.summary, content: "", detail: "", startedAt: event.occurredAt, completedAt: null,
-    automaticOpen: true, manualApprovalProposalId: null,
-  };
-  if (event.type === "worker.phase.verifying") return {
-    nodeId: verificationNodeId, kind: "verification", actor, recipients: [initiator], status: "current", action: "当前正在执行人自检",
-    summary: event.summary, content: "", detail: (assignment?.changedFiles || []).join("\n"), startedAt: event.occurredAt,
-    completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
-  };
-  if (event.type === "task.code_verified" && task.evolutionProposalId) return {
-    nodeId: verificationNodeId, kind: "verification", actor, recipients: [initiator], status: "completed", action: "执行人自检完成",
-    summary: event.summary, content: task.finalResult || event.summary, detail: task.resultSummary?.changes || (assignment?.changedFiles || []).join("\n"),
-    startedAt: assignment?.executionStartedAt || task.startedAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
-  };
-  if (event.type === "evolution.task_collected") return {
-    nodeId: `collection:${task.evolutionRoundId || task.taskId}`, kind: "result", actor: NANGONG, recipients: [LINGHU], status: "completed",
-    action: "提交统一测试", summary: "南宫婉已汇总完整执行结果并提交令狐老祖统一测试。", content: event.summary, detail: task.finalResult || "",
-    startedAt: event.occurredAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
-  };
-  if (event.type === "unified_test.started" || event.type === "unified_test.passed" || event.type === "unified_test.failed") return {
-    nodeId: `unified-test:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor, recipients: [NANGONG],
-    status: event.type === "unified_test.failed" ? "failed" : event.type === "unified_test.passed" ? "completed" : "current",
-    action: event.type === "unified_test.failed" ? "统一测试未通过" : event.type === "unified_test.passed" ? "统一测试通过" : "当前正在统一测试",
-    summary: event.summary, content: event.summary, detail: task.integrationFailure?.detail || "", startedAt: task.unifiedTest?.startedAt || event.occurredAt,
-    completedAt: event.type === "unified_test.started" ? null : event.occurredAt, automaticOpen: event.type !== "unified_test.passed", manualApprovalProposalId: null,
-  };
-  if (event.type.startsWith("unified_test.repair_") || event.type.startsWith("execution.repair_")) return {
-    nodeId: `repair:${task.taskId}:${task.taskRevision}`, kind: "repair", actor: event.actor || LINGHU, recipients: [initiator],
-    status: event.status === "failed" ? "failed" : event.status === "completed" ? "completed" : event.status === "waiting" ? "waiting" : "current",
-    action: event.status === "failed" ? "修复未完成" : event.status === "completed" ? "修复完成" : event.status === "waiting" && /授权/.test(event.summary) ? "等待用户授权" : event.status === "waiting" ? "持续保障中" : "当前正在修复",
-    summary: event.summary, content: event.summary, detail: task.repairFailureReason || task.integrationFailure?.detail || "",
-    startedAt: event.occurredAt, completedAt: event.status === "completed" || event.status === "failed" ? event.occurredAt : null,
-    automaticOpen: event.status !== "completed", manualApprovalProposalId: null,
-  };
-  if (event.type === "integration.batch_frozen" && !task.evolutionProposalId) return {
-    nodeId: `handoff:${task.taskId}:${task.integrationGeneration || 0}`, kind: "result", actor: NANGONG, recipients: [LINGHU], status: "completed",
-    action: "提交统一测试", summary: event.summary, content: "南宫婉已将完整执行结果交给令狐老祖统一测试。", detail: event.summary,
-    startedAt: event.occurredAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
-  };
-  if (event.type === "release.restart_healthy") return {
-    nodeId: `acceptance:${task.taskId}:${task.integrationGeneration || 0}`, kind: "result", actor, recipients: [NANGONG], status: "completed",
-    action: "发布验收完成", summary: event.summary, content: event.summary, detail: task.finalResult || "",
-    startedAt: event.occurredAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
-  };
-  if (event.type === "task.blocked") return {
-    nodeId: `blocked:${event.eventId}`, kind: "repair", actor, recipients: [initiator], status: "failed", action: "处理未完成",
-    summary: event.summary, content: event.summary, detail: task.blockingReason || "", startedAt: event.occurredAt,
-    completedAt: event.occurredAt, automaticOpen: true, manualApprovalProposalId: null,
-  };
-  return null;
-}
-
-function assignmentAt(task: CollaborationTask, memberId: string, occurredAt: string): CollaborationTask["executionRecords"][number] | null {
-  return [...task.executionRecords].reverse().find((record) => record.executor.memberId === memberId && record.assignedAt <= occurredAt) || null;
 }
 
 function visibleStreamText(connection: DatabaseSync, groupId: string, nodeId: string): string {
@@ -333,12 +234,4 @@ function parseParticipants(value: unknown): CollaborationParticipantSnapshot[] {
 function durationMs(startedAt: string, endedAt: string): number {
   const start = Date.parse(startedAt); const end = Date.parse(endedAt);
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
-}
-
-function groupStatusForFact(fact: Omit<TimelineFact, "groupId" | "proposalId" | "taskId" | "sourceFactKey" | "occurredAt">): CollaborationTimelineGroup["status"] {
-  if (fact.status === "failed") return "blocked";
-  if (fact.kind === "verification" && fact.status === "current") return "verifying";
-  if (fact.kind === "approval-application" && fact.status === "current") return "waiting-approval";
-  if (fact.kind === "result" && fact.action.includes("验收完成")) return "completed";
-  return "running";
 }

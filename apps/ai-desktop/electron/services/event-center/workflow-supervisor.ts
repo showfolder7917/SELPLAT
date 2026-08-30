@@ -51,7 +51,12 @@ export class WorkflowSupervisor {
       this.#repository.heartbeatRuntimeSession(now);
       // 三个业务域必须相互隔离；某一份状态损坏时仍要让其他领域和卡住检测继续推进。
       this.#syncDomain("evolution", () => this.#repository.syncEvolutionState(this.#readers.evolution()), now);
-      this.#syncDomain("collaboration", () => this.#repository.syncCollaborationState(this.#readers.collaboration()), now);
+      this.#syncDomain("collaboration", () => {
+        const collaboration = this.#readers.collaboration();
+        this.#repository.syncCollaborationState(collaboration);
+        // 启动和监督轮询都补投影尚未消费的不可变事件，确保升级后旧阻塞事实无需重新执行任务即可显示。
+        this.#repository.appendCollaborationTaskFlowEvents(collaboration, collaboration.tasks.map((task) => task.taskId));
+      }, now);
       this.#syncDomain("linghu", () => this.#repository.syncLinghuState(this.#readers.linghu()), now);
       const stalled = this.#repository.detectStalledTasks(now);
       if (stalled.length > 0) await this.#onStalledTasks(stalled.map((item) => item.taskId));
