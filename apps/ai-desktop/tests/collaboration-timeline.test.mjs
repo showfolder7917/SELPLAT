@@ -195,6 +195,20 @@ test("流式正文按轮次追加到当前显式事件节点", () => {
   } finally { fixture.close(); }
 });
 
+test("同一回合多个消息项分别完成时不会用后到短快照覆盖前文", () => {
+  const fixture = createFixture("stream-items");
+  try {
+    const running = task(fixture, 1, false);
+    running.evolutionProposalId = null;
+    running.evolutionRoundId = null;
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(3), [running]), [running.taskId]);
+    fixture.timeline.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "turn-1", itemId: "item-1", text: "第一项完整内容" }, fixture.at(4));
+    fixture.timeline.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "turn-1", itemId: "item-2", text: "第二项" }, fixture.at(5));
+    const content = fixture.timeline.snapshot(fixture.at(6)).groups[0].nodes.find((node) => node.kind === "execution" && node.status === "current").content;
+    assert.equal(content, "第一项完整内容\n\n第二项");
+  } finally { fixture.close(); }
+});
+
 test("运行状态原样入库但不会重复拼入人物业务正文", () => {
   const fixture = createFixture("stream-status-projection");
   try {
@@ -249,7 +263,8 @@ test("集成本地修改归属阻塞生成令狐等待节点并同步专题下�
     assert.equal(ownership.actor.displayName, "令狐老祖");
     assert.equal(ownership.status, "waiting");
     assert.match(ownership.content, /未登记到任何待集成任务/);
-    assert.equal(group.nextStep, "令狐老祖 · 等待确认本地修改归属");
+    assert.equal(group.nextStep, "令狐老祖 → 南宫婉 · 返回修复结果");
+    assert.match(group.failureNextStep, /恢复条件/);
     assert.equal(group.nodes.find((node) => node.kind === "execution").status, "completed");
   } finally { fixture.close(); }
 });

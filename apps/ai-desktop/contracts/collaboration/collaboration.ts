@@ -35,6 +35,7 @@ export type CollaborationFlowEventType =
   | "task.interrupted"
   | "task.recovery_requested"
   | "execution.repair_started"
+  | "execution.repair_investigated"
   | "execution.repair_completed"
   | "execution.repair_waiting"
   | "integration.local_changes_transferred"
@@ -49,6 +50,7 @@ export type CollaborationFlowEventType =
   | "unified_test.failed"
   | "unified_test.retry_requested"
   | "unified_test.repair_started"
+  | "unified_test.repair_investigated"
   | "unified_test.repair_completed"
   | "unified_test.repair_failed"
   | "release.restart_healthy";
@@ -141,6 +143,29 @@ export interface CollaborationFlowEvent {
   summary: string;
   occurredAt: string;
   error: boolean;
+  details?: CollaborationFlowEventDetails | null;
+}
+
+export interface CollaborationFlowEventDetails {
+  failureStage?: string;
+  failureSummary?: string;
+  technicalEvidence?: string[];
+  originalExecutor?: CollaborationParticipantSnapshot | null;
+  routedBy?: CollaborationParticipantSnapshot | null;
+  repairAssignee?: CollaborationParticipantSnapshot | null;
+  repairDiagnosis?: string;
+  repairResult?: string;
+  returnToExecutor?: CollaborationParticipantSnapshot | null;
+}
+
+export interface CollaborationRepairDiagnosis {
+  diagnosedAt: string;
+  diagnosedBy: CollaborationParticipantSnapshot;
+  failureStage: string;
+  failureSummary: string;
+  technicalEvidence: string[];
+  repairInstruction: string;
+  originalExecutor: CollaborationParticipantSnapshot | null;
 }
 
 export interface CollaborationResultSummary {
@@ -193,6 +218,8 @@ export interface CollaborationTask {
   currentHandler?: CollaborationParticipantSnapshot | null;
   repairKind?: "execution" | null;
   repairFailureReason?: string | null;
+  repairDiagnosis?: CollaborationRepairDiagnosis | null;
+  repairResult?: string | null;
   unifiedTest?: {
     status: "pending" | "running" | "passed" | "failed";
     owner: CollaborationParticipantSnapshot;
@@ -369,6 +396,8 @@ export interface CollaborationTimelineGroup {
   updatedAt: string;
   durationMs: number;
   nextStep: string;
+  failureNextStep: string | null;
+  nextOwner: CollaborationParticipantSnapshot | null;
 }
 
 /** 主进程一次返回完整、稳定、有序的任务协作群投影。 */

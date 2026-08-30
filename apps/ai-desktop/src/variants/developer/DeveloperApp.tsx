@@ -411,10 +411,12 @@ export function DeveloperApp() {
     const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => { setNangongEvolutionState(event.state); });
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
       // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
-      const updateStream = (current: Record<string, CollaborationLiveOutput>, key: string) => {
+      const updateStream = (current: Record<string, CollaborationLiveOutput>, key: string, preserveNodeHistory = false) => {
         const existing = current[key];
         const task = collaborationStateRef.current?.tasks.find((candidate) => candidate.taskId === envelope.taskId);
-        const next = existing?.turnId === envelope.event.turnId
+        const next = preserveNodeHistory && existing
+          ? existing
+          : existing?.turnId === envelope.event.turnId
           ? existing
           : {
             message: createAssistantMessage(Date.now(), "task-managed"),
@@ -424,7 +426,7 @@ export function DeveloperApp() {
         return { ...current, [key]: { ...next, message: applyCodexStreamEvent(next.message, envelope.event) } };
       };
       setCollaborationStreams((current) => updateStream(current, envelope.taskId));
-      if (envelope.timelineNodeId) setCollaborationTimelineStreams((current) => updateStream(current, envelope.timelineNodeId!));
+      if (envelope.timelineNodeId) setCollaborationTimelineStreams((current) => updateStream(current, envelope.timelineNodeId!, true));
     });
     return () => { removeStateListener(); removeTimelineListener(); removeLinghuListener(); removeNangongListener(); removeStreamListener(); };
   }, []);

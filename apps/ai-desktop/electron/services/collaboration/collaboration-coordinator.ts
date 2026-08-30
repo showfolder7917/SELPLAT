@@ -2,6 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 
 import type {
   CollaborationMember,
+  CollaborationParticipantSnapshot,
+  CollaborationFlowEventDetails,
+  CollaborationRepairDiagnosis,
   CollaborationRequirementPlan,
   CollaborationState,
   CollaborationTask,
@@ -25,6 +28,8 @@ export interface CollaborationExecutionResult {
   status: "code-verified" | "incomplete";
   text: string;
   pendingActions: string[];
+  changedFiles: string[];
+  successfulCommands: string[];
 }
 
 export interface CollaborationExecutorSession {
@@ -32,6 +37,8 @@ export interface CollaborationExecutorSession {
   analyze(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<string>;
   optimize(task: CollaborationTask, feedback: string, emit: (event: CodexStreamEvent) => void): Promise<string>;
   execute(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult>;
+  investigateRepair(task: CollaborationTask, failure: string, emit: (event: CodexStreamEvent) => void): Promise<string>;
+  executeRepair(task: CollaborationTask, diagnosis: CollaborationRepairDiagnosis, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult>;
   dispose(): Promise<void> | void;
 }
 
@@ -145,32 +152,35 @@ export class CollaborationCoordinator {
         handler.generation += 1;
         handler.state = "working";
         handler.role = "executor";
-        handler.phase = "implementing";
+        handler.phase = "analyzing";
         handler.currentTaskId = taskId;
         handler.updatedAt = new Date().toISOString();
         current.taskRevision += 1;
         current.state = "repairing-execution";
-        current.phase = "implementing";
+        current.phase = "analyzing";
         current.repairKind = "execution";
         current.repairFailureReason = originalReason;
         current.currentHandler = participantSnapshot(handler);
         current.blockingReason = `${handler.displayName}正在依据统一测试失败证据修复源码与测试契约`;
-        appendFlow(current, "unified_test.repair_started", "recovery", "started", current.blockingReason, handler);
+        appendFlow(current, "unified_test.repair_started", "recovery", "started", current.blockingReason, handler, false, {
+          failureStage: current.integrationFailure?.phase || "verification", failureSummary: originalReason,
+          technicalEvidence: [current.integrationFailure?.detail || originalReason], originalExecutor: current.originalExecutor,
+          routedBy: current.initiator, repairAssignee: participantSnapshot(handler),
+        });
       });
 
       const task = this.#store.task(taskId);
-      const approvedPlan = task.plans.find((candidate) => candidate.version === task.currentPlanVersion);
-      if (!approvedPlan) throw new Error("统一测试修复找不到已批准的执行方案。");
-      const repairPlan: CollaborationRequirementPlan = {
-        ...approvedPlan,
-        text: [
-          approvedPlan.text,
-          "令狐统一测试修复要求：只处理下述失败证据所证明的源码、测试契约或配置问题，不扩大原任务范围。完成最小修正后执行代码级验证。",
-          task.integrationFailure?.detail || originalReason,
-        ].join("\n\n"),
-      };
       repairSession = await this.#sessions.createExecutor(task, requireMember(this.state(), LINGHU_MEMBER_ID));
-      const repaired = await repairSession.execute(task, repairPlan, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const diagnosisText = await repairSession.investigateRepair(task, task.integrationFailure?.detail || originalReason, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const diagnosis = repairDiagnosis(task, diagnosisText, originalReason, participantSnapshot(requireMember(this.state(), LINGHU_MEMBER_ID)));
+      this.#store.updateTask(taskId, "unified_test.repair_investigated", (current, state) => {
+        current.repairDiagnosis = diagnosis;
+        current.phase = "implementing";
+        requireMember(state, LINGHU_MEMBER_ID).phase = "implementing";
+        current.blockingReason = "令狐老祖已完成失败候选只读调查，正在按调查结论修复";
+        appendFlow(current, "unified_test.repair_investigated", "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis));
+      });
+      const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "统一测试修复未完成代码级验证");
       const resultSha = await this.#workspaces.commitTaskResult(this.#store.task(taskId), linghu.displayName);
       this.#store.updateTask(taskId, "unified_test.repair_completed", (current, state) => {
@@ -183,12 +193,13 @@ export class CollaborationCoordinator {
         current.recoveryTargetState = "ready-for-integration";
         current.repairKind = null;
         current.repairFailureReason = null;
+        current.repairResult = repaired.text;
         current.blockingReason = null;
         current.codeVerifiedAt = new Date().toISOString();
         current.finalResult = repaired.text;
         current.resultSummary = createCollaborationResultSummary(current, repaired.text, repaired.pendingActions);
         current.unifiedTest = { status: "pending", owner: participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), failureReason: null, startedAt: null, completedAt: null };
-        appendFlow(current, "unified_test.repair_completed", "recovery", "completed", "令狐老祖已完成最小修正并生成新结果版本，等待重新统一测试", requireMember(state, LINGHU_MEMBER_ID));
+        appendFlow(current, "unified_test.repair_completed", "recovery", "completed", "令狐老祖已完成失败项修复并生成新结果版本，等待重新统一测试", requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis, repaired.text));
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
       this.#integrationPipeline.trackWaitingTask(taskId, {
@@ -386,7 +397,8 @@ export class CollaborationCoordinator {
           : previousAssignment.executor.memberId === memberId
             ? `${member.displayName}通过新的执行租约恢复同一任务`
             : `任务由${previousAssignment.executor.displayName}转交给${member.displayName}`;
-        appendFlow(task, previousAssignment ? "executor.reassigned" : "executor.assigned", "analysis", "started", assignmentSummary, member);
+        appendFlow(task, previousAssignment ? "executor.reassigned" : "executor.assigned", "analysis", "started", assignmentSummary, member, false,
+          previousAssignment ? { repairResult: task.repairResult || undefined, returnToExecutor: participantSnapshot(member), routedBy: task.initiator } : null);
       });
       const assignedTask = this.#store.task(taskId);
       const worktreeSpan = this.#durations.start(taskId, "worktree-prepare", { memberId });
@@ -614,7 +626,7 @@ export class CollaborationCoordinator {
         linghu.generation += 1;
         linghu.state = "working";
         linghu.role = "executor";
-        linghu.phase = "implementing";
+        linghu.phase = "analyzing";
         linghu.currentTaskId = taskId;
         const previousExecution = current.executionRecords.find((item) => item.assignmentId === current.assignmentId);
         if (previousExecution && !previousExecution.completedAt) {
@@ -626,18 +638,28 @@ export class CollaborationCoordinator {
         current.executorMemberId = LINGHU_MEMBER_ID;
         current.taskRevision += 1;
         current.state = "repairing-execution";
-        current.phase = "implementing";
+        current.phase = "analyzing";
         current.repairKind = "execution";
         current.repairFailureReason = reason;
         current.currentHandler = participantSnapshot(linghu);
         current.blockingReason = `执行失败：${reason}；令狐老祖正在修复`;
-        appendFlow(current, "execution.repair_started", "recovery", "started", current.blockingReason, linghu);
+        appendFlow(current, "execution.repair_started", "recovery", "started", current.blockingReason, linghu, false, {
+          failureStage: "execution", failureSummary: reason, technicalEvidence: [reason], originalExecutor: current.originalExecutor,
+          routedBy: current.initiator, repairAssignee: participantSnapshot(linghu),
+        });
       });
       const task = this.#store.task(taskId);
-      const plan = task.plans.find((candidate) => candidate.version === task.currentPlanVersion);
-      if (!plan) throw new Error("令狐老祖修复时找不到当前执行方案。");
       repairSession = await this.#sessions.createExecutor(task, requireMember(this.state(), LINGHU_MEMBER_ID));
-      const repaired = await repairSession.execute(task, plan, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const diagnosisText = await repairSession.investigateRepair(task, reason, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const diagnosis = repairDiagnosis(task, diagnosisText, reason, participantSnapshot(requireMember(this.state(), LINGHU_MEMBER_ID)));
+      this.#store.updateTask(taskId, "execution.repair_investigated", (current, state) => {
+        current.repairDiagnosis = diagnosis;
+        current.phase = "implementing";
+        requireMember(state, LINGHU_MEMBER_ID).phase = "implementing";
+        current.blockingReason = "令狐老祖已完成失败现场只读调查，正在按调查结论修复";
+        appendFlow(current, "execution.repair_investigated", "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis));
+      });
+      const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "修复未完成代码验证");
       this.#store.updateTask(taskId, "execution.repair_completed", (current, state) => {
         const original = current.originalExecutor;
@@ -647,9 +669,10 @@ export class CollaborationCoordinator {
         current.assignmentId = null;
         current.recoveryTargetState = "executing";
         current.repairKind = null;
+        current.repairResult = repaired.text;
         current.currentHandler = original || null;
         current.blockingReason = original ? `令狐老祖修复完成，等待${original.displayName}重新执行` : "令狐老祖修复完成，等待原执行人重新执行";
-        appendFlow(current, "execution.repair_completed", "recovery", "completed", current.blockingReason, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)));
+        appendFlow(current, "execution.repair_completed", "recovery", "completed", current.blockingReason, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), false, flowRepairDetails(current, diagnosis, repaired.text));
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
     } catch (error) {
@@ -830,6 +853,7 @@ function appendFlow(
   summary: string,
   actor: Pick<CollaborationMember, "memberId" | "displayName"> | { memberId: string; displayName: string } | null,
   error = false,
+  details: CollaborationFlowEventDetails | null = null,
 ): void {
   task.flowEvents.push({
     eventId: randomUUID(),
@@ -840,7 +864,29 @@ function appendFlow(
     summary: summary.slice(0, 2_000),
     occurredAt: new Date().toISOString(),
     error,
+    details,
   });
+}
+
+function repairDiagnosis(
+  task: CollaborationTask,
+  repairInstruction: string,
+  failureSummary: string,
+  diagnosedBy: CollaborationParticipantSnapshot,
+): CollaborationRepairDiagnosis {
+  return {
+    diagnosedAt: new Date().toISOString(), diagnosedBy, failureStage: task.integrationFailure?.phase || task.phase || "execution",
+    failureSummary, technicalEvidence: [task.integrationFailure?.detail, task.repairFailureReason, task.blockingReason].filter((value): value is string => Boolean(value)),
+    repairInstruction, originalExecutor: task.originalExecutor || null,
+  };
+}
+
+function flowRepairDetails(task: CollaborationTask, diagnosis: CollaborationRepairDiagnosis, repairResult?: string): CollaborationFlowEventDetails {
+  return {
+    failureStage: diagnosis.failureStage, failureSummary: diagnosis.failureSummary, technicalEvidence: diagnosis.technicalEvidence,
+    originalExecutor: diagnosis.originalExecutor, routedBy: task.initiator, repairAssignee: diagnosis.diagnosedBy,
+    repairDiagnosis: diagnosis.repairInstruction, repairResult, returnToExecutor: repairResult ? diagnosis.originalExecutor : null,
+  };
 }
 
 function phaseLabel(phase: Exclude<CollaborationWorkerPhase, null>): string {

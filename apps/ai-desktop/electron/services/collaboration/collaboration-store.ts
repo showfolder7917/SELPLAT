@@ -549,6 +549,8 @@ function migrateTaskHistory(task: CollaborationTask, state: CollaborationState):
   task.currentHandler ??= null;
   task.repairKind ??= null;
   task.repairFailureReason ??= null;
+  task.repairDiagnosis ??= null;
+  task.repairResult ??= null;
   task.unifiedTest ??= null;
   if (task.state === "integrated" && task.integrationGeneration !== null) {
     task.completedAt = state.integrationBatches.find((batch) => batch.generation === task.integrationGeneration)?.completedAt || task.completedAt;

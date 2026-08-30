@@ -131,6 +131,7 @@ export class CollaborationTimelineRepository {
         $eventType: event.type, $sequenceNumber: sequence, $deltaText: event.delta || null,
         $snapshotText: event.text || event.managedExecution?.message || event.error || null, $occurredAt: occurredAt, $committedAt: committedAt,
       });
+      if (!TIMELINE_CONTENT_EVENT_TYPES.has(event.type)) return null;
       connection.prepare(`UPDATE AiDesktopTaskTimelineTopic SET revision=revision+1,
         updatedAt=CASE WHEN updatedAt < $occurredAt THEN $occurredAt ELSE updatedAt END WHERE groupId=$groupId`)
         .run({ $occurredAt: occurredAt, $groupId: active.groupId });
@@ -208,8 +209,8 @@ export class CollaborationTimelineRepository {
     }
     const nodes = [...latestByNode.values()].map((row) => this.#node(connection, row, now))
       .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || (firstSequence.get(left.nodeId) || 0) - (firstSequence.get(right.nodeId) || 0));
-    const executingCount = nodes.filter((node) => node.kind === "execution" && node.status === "current").length;
-    const verifyingCount = nodes.filter((node) => node.kind === "verification" && node.status === "current").length;
+    const executingCount = activeTaskCount(nodes, new Set(["analysis", "execution", "repair"]));
+    const verifyingCount = activeTaskCount(nodes, new Set(["verification"]));
     const waitingCount = nodes.filter((node) => node.status === "waiting" || node.kind === "approval-application" && node.status === "current").length;
     const completedCount = nodes.filter((node) => node.status === "completed").length;
     const currentNodes = nodes.filter((node) => node.status === "current");
@@ -224,7 +225,7 @@ export class CollaborationTimelineRepository {
       groupId: String(topic.groupId), topicId: nullable(topic.topicId), proposalId: nullable(topic.proposalId), title: String(topic.title),
       status: calculated, summary: [...nodes].reverse().find((node) => node.status === "current" || node.status === "failed")?.summary || String(topic.summary),
       nodes, executingCount, verifyingCount, waitingCount, completedCount, startedAt: String(topic.startedAt), updatedAt,
-      durationMs: durationMs(String(topic.startedAt), calculated === "completed" ? updatedAt : now), nextStep: nextStep(calculated, nodes),
+      durationMs: durationMs(String(topic.startedAt), calculated === "completed" ? updatedAt : now), ...transition(calculated, nodes),
     };
   }
 
@@ -248,33 +249,40 @@ export class CollaborationTimelineRepository {
 
 /** 只投影人物产生的业务正文；managed-execution 等运行状态保留在原始流表，但绝不拼入可读内容。 */
 function projectedContentText(connection: DatabaseSync, groupId: string, nodeId: string): string {
-  const rows = connection.prepare(`SELECT turnId, eventType, deltaText, snapshotText FROM AiDesktopTaskTimelineStream
+  const rows = connection.prepare(`SELECT turnId, segmentId, itemId, eventType, deltaText, snapshotText FROM AiDesktopTaskTimelineStream
     WHERE groupId=$groupId AND nodeId=$nodeId
     ORDER BY sequenceNumber, occurredAt, chunkId`).all({ $groupId: groupId, $nodeId: nodeId }) as Array<Record<string, unknown>>;
-  const turns = new Map<string, { deltas: string[]; completed: string | null }>();
+  const items = new Map<string, { deltas: string[]; completed: string | null }>();
   for (const row of rows) {
     if (!TIMELINE_CONTENT_EVENT_TYPES.has(String(row.eventType) as CodexStreamEvent["type"])) continue;
-    const turn = String(row.turnId);
-    const value = turns.get(turn) || { deltas: [], completed: null };
+    const key = [String(row.turnId), nullable(row.itemId) || nullable(row.segmentId) || "default"].join(":");
+    const value = items.get(key) || { deltas: [], completed: null };
     if (row.eventType === "message-completed" && row.snapshotText) value.completed = String(row.snapshotText);
     else {
       const text = nullable(row.deltaText) || nullable(row.snapshotText);
       if (text) value.deltas.push(text);
     }
-    turns.set(turn, value);
+    items.set(key, value);
   }
-  return [...turns.values()].map((turn) => turn.completed || turn.deltas.join("")).filter(Boolean).join("\n\n");
+  return [...items.values()].map((item) => item.completed || item.deltas.join("")).filter(Boolean).join("\n\n");
 }
 
-function nextStep(status: CollaborationTimelineGroup["status"], nodes: CollaborationTimelineNode[]): string {
+function transition(status: CollaborationTimelineGroup["status"], nodes: CollaborationTimelineNode[]): Pick<CollaborationTimelineGroup, "nextStep" | "failureNextStep" | "nextOwner"> {
   const active = nodes.filter((node) => node.status === "current" || node.status === "waiting");
   const current = active.at(-1);
-  if (current?.kind === "approval-application") return `${current.recipients[0]?.displayName || "韩立"} · 等待审批`;
-  if (current) return `${current.actor.displayName} · ${current.action}`;
-  if (status === "waiting-approval") return "韩立审批 · 等待中";
-  if (status === "blocked") return "令狐老祖持续保障 · 等待恢复条件";
-  if (status === "completed") return "本专题已完成";
-  return active.length ? `结果汇总与验收 · 等待 ${active.length} 个节点完成` : "下一任务 · 等待中";
+  if (current?.kind === "approval-application") return { nextStep: `${current.recipients[0]?.displayName || "韩立"} · 审批申请`, failureNextStep: "韩立 → 南宫婉 · 退回补充", nextOwner: current.recipients[0] || null };
+  if (current?.kind === "analysis") return { nextStep: `${current.actor.displayName} · 执行已确认方案`, failureNextStep: `${current.actor.displayName} → 南宫婉 · 返回分析阻塞`, nextOwner: current.actor };
+  if (current?.kind === "execution") return { nextStep: `${current.actor.displayName} · 执行人自检`, failureNextStep: `南宫婉 → 令狐老祖 · 转交执行故障`, nextOwner: current.actor };
+  if (current?.kind === "verification") return { nextStep: `${current.actor.displayName} → 南宫婉 · 返回验证结果`, failureNextStep: `南宫婉 → 令狐老祖 · 转交验证故障`, nextOwner: current.actor };
+  if (current?.kind === "repair") return { nextStep: `令狐老祖 → 南宫婉 · 返回修复结果`, failureNextStep: `令狐老祖 · 保留真实失败并等待恢复条件`, nextOwner: current.actor };
+  if (status === "waiting-approval") return { nextStep: "韩立 · 等待审批", failureNextStep: "韩立 → 南宫婉 · 退回补充", nextOwner: null };
+  if (status === "blocked") return { nextStep: "南宫婉 → 令狐老祖 · 明确故障并转交修复", failureNextStep: "等待人工解除恢复条件", nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
+  if (status === "completed") return { nextStep: "本专题已完成", failureNextStep: null, nextOwner: null };
+  return { nextStep: "南宫婉 · 生成执行计划并分配执行人", failureNextStep: "南宫婉 · 说明无法分配的原因", nextOwner: NANGONG };
+}
+
+function activeTaskCount(nodes: CollaborationTimelineNode[], kinds: Set<CollaborationTimelineNode["kind"]>): number {
+  return new Set(nodes.filter((node) => node.status === "current" && kinds.has(node.kind)).map((node) => node.taskId || node.nodeId)).size;
 }
 
 function participant(memberId: string, displayName: string): CollaborationParticipantSnapshot { return { memberId, displayName }; }

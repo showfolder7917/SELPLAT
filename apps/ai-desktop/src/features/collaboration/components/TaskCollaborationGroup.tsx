@@ -60,7 +60,7 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
             </SelUiDisclosure>
           </div>;
         })}</div>
-        <footer className="task-timeline-next"><i /> <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong><span>{group.nextStep}</span></footer>
+        <footer className="task-timeline-next"><i /> <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong><span>{group.nextStep}</span>{group.status === "blocked" && group.failureNextStep && <small>{locale === "ja" ? "失敗時" : "失败后"}：{group.failureNextStep}</small>}</footer>
       </SelUiDisclosure>;
     })}</div>
   </section>;

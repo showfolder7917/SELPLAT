@@ -45,8 +45,8 @@ export function createAssistantMessage(id: number, managedMode: ManagedExecution
 
 export function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Message {
   if (message.streamTerminal && event.type !== "error") return message;
-  if (event.type === "message-delta") return updateTurnSegment(message, event.segmentId || event.turnId, (current) => `${current}${event.delta || ""}`, "responding");
-  if (event.type === "message-completed") return updateTurnSegment(message, event.segmentId || event.turnId, (current) => event.text ?? current, "responding");
+  if (event.type === "message-delta") return updateTurnSegment(message, streamItemKey(event), (current) => `${current}${event.delta || ""}`, "responding");
+  if (event.type === "message-completed") return updateTurnSegment(message, streamItemKey(event), (current) => event.text ?? current, "responding");
   if (event.type === "reasoning-summary-delta") return { ...message, reasoningSummary: `${message.reasoningSummary || ""}${event.delta || ""}`, streamStatus: "reasoning" };
   if (event.type === "activity" && event.activity) return { ...message, activities: upsertStreamActivity(message.activities || [], event.activity), streamStatus: event.activity.itemType };
   if (event.type === "plan-updated") return { ...message, plan: event.plan || [], streamStatus: "planning" };
@@ -59,6 +59,10 @@ export function applyCodexStreamEvent(message: Message, event: CodexStreamEvent)
   if (event.type === "error") return { ...message, status: "failed", streaming: false, streamTerminal: true, streamStatus: "failed", streamError: event.error };
   if (event.type === "turn-started") return updateTurnSegment(message, event.turnId, (current) => current, "inProgress", true);
   return message;
+}
+
+function streamItemKey(event: CodexStreamEvent): string {
+  return [event.turnId, event.itemId || event.segmentId || "default"].join(":");
 }
 
 function updateTurnSegment(message: Message, turnId: string, update: (current: string) => string, streamStatus: string, streaming = message.streaming): Message {

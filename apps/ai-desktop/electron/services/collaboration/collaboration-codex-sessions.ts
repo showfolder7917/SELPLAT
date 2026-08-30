@@ -4,6 +4,7 @@ import path from "node:path";
 import type {
   CollaborationMember,
   CollaborationRequirementPlan,
+  CollaborationRepairDiagnosis,
   CollaborationTask,
 } from "../../../contracts/collaboration/collaboration.js";
 import type {
@@ -245,13 +246,19 @@ class CodexExecutorSession implements CollaborationExecutorSession {
   }
 
   async execute(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult> {
+    return this.#executePlan(task, [
+      `已确认任务：\n${task.snapshot.confirmedIntent}`,
+      `执行人完成的技术分析：\n${plan.text}`,
+    ], emit);
+  }
+
+  async #executePlan(task: CollaborationTask, instructions: string[], emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult> {
     const workspaceState = collaborationWorkspaceState(task);
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const result = await this.#managed.run({
       mode: "task-managed",
       message: [
-        `已确认任务：\n${task.snapshot.confirmedIntent}`,
-        `执行人完成的技术分析：\n${plan.text}`,
+        ...instructions,
         "完成源码修改与代码级验证后，最终回答必须在最前面依次使用以下独立 Markdown 标题，并在每个标题下给出简短、可直接归档的事实：最终执行结果、原来存在的问题、本次解决的问题、具体修正或改变、完成状态、遗留内容。之后可以再补充详细说明。禁止省略标题；没有遗留内容时明确写“无”。",
       ].join("\n\n"),
       restartRequired: false,
@@ -259,7 +266,27 @@ class CodexExecutorSession implements CollaborationExecutorSession {
       runCodeValidation: (onEvent) => this.#runCodeValidation(task, onEvent),
       runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, "workspace-write", workspaceState, attachmentPaths, onEvent, mode),
     });
-    return { status: result.managedStatus === "code-verified" ? "code-verified" : "incomplete", text: result.text, pendingActions: result.pendingActions };
+    return { status: result.managedStatus === "code-verified" ? "code-verified" : "incomplete", text: result.text, pendingActions: result.pendingActions, changedFiles: result.changedFiles, successfulCommands: result.successfulCommands };
+  }
+
+  async investigateRepair(task: CollaborationTask, failure: string, emit: (event: CodexStreamEvent) => void): Promise<string> {
+    return this.#runRequirement(task, [
+      "[令狐故障只读调查]",
+      "先调查本次真实失败事实，再决定修复。禁止复述或执行原专题方案，禁止修改文件。",
+      "说明失败阶段、直接原因、证据位置、最小修复边界、禁止触碰范围和必须重跑的验证命令。若证据不足，明确指出缺少什么，不得猜测。",
+      `失败事实：\n${failure}`,
+    ].join("\n\n"), emit);
+  }
+
+  async executeRepair(task: CollaborationTask, diagnosis: CollaborationRepairDiagnosis, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult> {
+    return this.#executePlan(task, [
+      "[故障修复专用执行]",
+      diagnosis.repairInstruction,
+      `失败阶段：${diagnosis.failureStage}`,
+      `失败摘要：${diagnosis.failureSummary}`,
+      `技术证据：\n${diagnosis.technicalEvidence.join("\n")}`,
+      "只修复上述调查结论覆盖的问题；禁止读取或复用原专题实施方案，禁止重新完成原专题任务，禁止扩大范围。",
+    ], emit);
   }
 
   async dispose(): Promise<void> {

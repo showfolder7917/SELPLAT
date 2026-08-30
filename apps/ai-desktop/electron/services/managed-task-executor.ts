@@ -25,6 +25,8 @@ export interface ManagedExecutionResult extends SendMessageResponse {
   managedStatus: "conversation-ready" | "requirement-ready" | "code-verified" | "test-verified" | "incomplete";
   pendingActions: string[];
   restartRequired: boolean;
+  changedFiles: string[];
+  successfulCommands: string[];
 }
 
 const TASK_ROUNDS = 3;
@@ -45,7 +47,7 @@ export class ManagedTaskExecutor {
     const response = await request.runTurn(conversationPrompt(request.message), request.emit, "conversation-managed");
     emitManaged(request, "conversation", "completed", 1, 1, "已经整理好你的完整意图");
     emitManaged(request, "completed", "completed", 1, 1, "确认无误后可以继续调查和分析");
-    return { ...response, managedStatus: "conversation-ready", pendingActions: ["确认意图后进入需求托管"], restartRequired: false };
+    return { ...response, managedStatus: "conversation-ready", pendingActions: ["确认意图后进入需求托管"], restartRequired: false, changedFiles: [], successfulCommands: [] };
   }
 
   async #runRequirementAnalysis(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -53,7 +55,7 @@ export class ManagedTaskExecutor {
     const response = await request.runTurn(requirementPrompt(request.message), request.emit, "requirement-managed");
     emitManaged(request, "requirement-analysis", "completed", 1, 1, "原因和修正方案已经整理完成");
     emitManaged(request, "completed", "completed", 1, 1, "确认方案后可以开始修改");
-    return { ...response, managedStatus: "requirement-ready", pendingActions: ["确认方案后进入任务托管"], restartRequired: false };
+    return { ...response, managedStatus: "requirement-ready", pendingActions: ["确认方案后进入任务托管"], restartRequired: false, changedFiles: [], successfulCommands: [] };
   }
 
   async #runTask(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -78,8 +80,10 @@ export class ManagedTaskExecutor {
       return {
         ...response,
         managedStatus: "incomplete",
-        pendingActions: [evidence.changedFiles.size === 0 ? "任务要求修改源码，但未观察到文件变更" : "处理任务阶段未解决错误"],
+        pendingActions: [evidence.changedFiles.size === 0 ? "任务要求修改源码，但未观察到文件变更" : evidence.failedCommandSummaries().join("；") || "处理任务阶段未解决错误"],
         restartRequired: false,
+        changedFiles: [...evidence.changedFiles],
+        successfulCommands: evidence.successfulCommands(),
       };
     }
     emitManaged(request, "task-execution", "completed", Math.min(taskRound, TASK_ROUNDS), TASK_ROUNDS, "源码任务阶段完成");
@@ -112,6 +116,8 @@ export class ManagedTaskExecutor {
           managedStatus: "code-verified",
           pendingActions: ["按需单独执行测试托管：构建、构建后测试和必要重启"],
           restartRequired: false,
+          changedFiles: [...evidence.changedFiles],
+          successfulCommands: evidence.successfulCommands(),
         };
       }
       validationMessage = codeValidationRepairPrompt(gate.missing, evidence.failedCommandSummaries());
@@ -119,7 +125,7 @@ export class ManagedTaskExecutor {
 
     const gate = evidence.codeValidationGate();
     emitManaged(request, "code-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, gate.missing.join("；"));
-    return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false };
+    return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
   }
 
   /** 协同 worktree 的固定测试由桌面主进程执行，Codex 只在失败后接收事实并修复源码。 */
@@ -146,6 +152,8 @@ export class ManagedTaskExecutor {
           managedStatus: "code-verified",
           pendingActions: ["按需单独执行测试托管：构建、构建后测试和必要重启"],
           restartRequired: false,
+          changedFiles: [...evidence.changedFiles],
+          successfulCommands: evidence.successfulCommands(),
         };
       } catch (error) {
         lastFailure = error instanceof Error ? error.message : String(error);
@@ -160,7 +168,7 @@ export class ManagedTaskExecutor {
     }
     emitManaged(request, "code-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, lastFailure || "当前任务分支验证失败");
     emitManaged(request, "interaction-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, "Playwright 未通过，未进入集成队列");
-    return { ...response, managedStatus: "incomplete", pendingActions: [lastFailure || "当前任务分支验证失败"], restartRequired: false };
+    return { ...response, managedStatus: "incomplete", pendingActions: [lastFailure || "当前任务分支验证失败"], restartRequired: false, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
   }
 
   async #runBuildValidation(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -179,13 +187,13 @@ export class ManagedTaskExecutor {
           emitManaged(request, "runtime-restart", "started", 1, 1, "当前应用将在本轮返回后只重启一次");
         }
         emitManaged(request, "completed", "completed", 1, 1, request.restartRequired ? "测试完成，接下来会受控重启一次" : "测试完成，本次不需要重启");
-        return { ...response, managedStatus: "test-verified", pendingActions: [], restartRequired: request.restartRequired };
+        return { ...response, managedStatus: "test-verified", pendingActions: [], restartRequired: request.restartRequired, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
       }
       message = buildValidationRepairPrompt(gate.missing, evidence.failedCommandSummaries());
     }
     const gate = evidence.buildValidationGate();
     emitManaged(request, "build-validation", "blocked", BUILD_ROUNDS, BUILD_ROUNDS, gate.missing.join("；"));
-    return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false };
+    return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
   }
 }
 
@@ -199,6 +207,7 @@ class ExecutionEvidence {
   #build = 0;
   #unifiedDocumentValidation = 0;
   #roundFailures: string[] = [];
+  #successfulCommands = new Set<string>();
 
   get roundFailed(): boolean { return this.#roundFailures.length > 0; }
 
@@ -225,6 +234,7 @@ class ExecutionEvidence {
       this.#roundFailures.push(command);
       return;
     }
+    this.#successfulCommands.add(command);
     if (isStaticCheckCommand(command)) this.#staticCheck = this.#sequence;
     if (isTargetedTestCommand(command)) this.#targetedTest = this.#sequence;
     if (isIsolatedInteractionTestCommand(command)) this.#isolatedInteractionTest = this.#sequence;
@@ -235,6 +245,7 @@ class ExecutionEvidence {
   }
 
   failedCommandSummaries(): string[] { return [...this.#roundFailures]; }
+  successfulCommands(): string[] { return [...this.#successfulCommands]; }
 
   codeValidationGate(): { passed: boolean; missing: string[] } {
     const missing: string[] = [];

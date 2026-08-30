@@ -93,6 +93,12 @@ export function projectCollaborationFlowEvent(
       action: "任务已分发", summary: event.summary, content: task.snapshot.confirmedIntent, detail: task.snapshot.problemStatement,
       startedAt: task.startedAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
     }, ":distribution-completed"));
+    if (event.type === "executor.reassigned") facts.unshift(fact({
+      nodeId: `return-from-repair:${task.taskId}:${assignmentKey}`, kind: "distribution", actor: NANGONG, recipients: [actor], status: "completed",
+      action: "修复后任务已重新交回", summary: event.summary, content: event.details?.repairResult || task.repairResult || event.summary,
+      detail: event.details?.failureSummary || task.repairFailureReason || "", startedAt: event.occurredAt, completedAt: event.occurredAt,
+      automaticOpen: false, manualApprovalProposalId: null,
+    }, ":repair-returned"));
     return projection("running", facts);
   }
 
@@ -205,13 +211,44 @@ export function projectCollaborationFlowEvent(
 
   if (event.type.startsWith("unified_test.repair_") || event.type.startsWith("execution.repair_")) {
     const status = event.status === "failed" ? "failed" : event.status === "completed" ? "completed" : event.status === "waiting" ? "waiting" : "current";
-    return projection(status === "failed" || status === "waiting" ? "blocked" : "running", [fact({
-      nodeId: `repair:${task.taskId}:${task.taskRevision}`, kind: "repair", actor: event.actor || LINGHU, recipients: [initiator], status,
-      action: status === "failed" ? "修复未完成" : status === "completed" ? "修复完成" : status === "waiting" && /授权/.test(event.summary) ? "等待用户授权" : status === "waiting" ? "等待恢复条件" : "当前正在修复",
-      summary: event.summary, content: event.summary, detail: task.repairFailureReason || task.integrationFailure?.detail || "",
-      startedAt: event.occurredAt, completedAt: status === "completed" || status === "failed" ? event.occurredAt : null,
-      automaticOpen: status !== "completed", manualApprovalProposalId: null,
-    })]);
+    const started = repairStartedEvent(task, event);
+    const repairNodeId = `repair:${task.taskId}:${started?.eventId || event.eventId}`;
+    const facts = [fact({
+      nodeId: repairNodeId, kind: "repair", actor: event.actor || LINGHU, recipients: [initiator], status: event.type.endsWith("repair_investigated") ? "current" : status,
+      action: event.type.endsWith("repair_started") ? "当前正在调查故障" : status === "failed" ? "修复未完成" : status === "completed" ? "修复完成" : status === "waiting" && /授权/.test(event.summary) ? "等待用户授权" : status === "waiting" ? "等待恢复条件" : "当前正在修复",
+      summary: event.summary, content: event.details?.repairResult || event.details?.repairDiagnosis || event.summary,
+      detail: repairDetail(event, task), startedAt: started?.occurredAt || event.occurredAt,
+      completedAt: !event.type.endsWith("repair_investigated") && (status === "completed" || status === "failed") ? event.occurredAt : null,
+      automaticOpen: event.type.endsWith("repair_investigated") || status !== "completed", manualApprovalProposalId: null,
+    })];
+    if (event.type.endsWith("repair_started")) {
+      const previous = latestOriginalExecution(task, event.occurredAt);
+      if (previous) facts.unshift(fact({
+        nodeId: `execution:${task.taskId}:${previous.assignmentId}`, kind: "execution", actor: previous.executor, recipients: [initiator], status: "failed",
+        action: "执行已结束并转交修复", summary: event.details?.failureSummary || task.repairFailureReason || task.blockingReason || event.summary,
+        content: previous.result || "原执行已停止，未继续与令狐同时计时。", detail: repairDetail(event, task),
+        startedAt: previous.executionStartedAt || previous.assignedAt, completedAt: event.occurredAt, automaticOpen: true, manualApprovalProposalId: null,
+      }, ":original-execution-closed"));
+      facts.splice(facts.length - 1, 0, fact({
+        nodeId: `repair-handoff:${task.taskId}:${event.eventId}`, kind: "distribution", actor: initiator, recipients: [event.actor || LINGHU], status: "completed",
+        action: "执行故障已转交修复", summary: event.details?.failureSummary || event.summary,
+        content: event.details?.failureSummary || event.summary, detail: repairDetail(event, task), startedAt: event.occurredAt,
+        completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
+      }, ":failure-handoff"));
+    }
+    if (event.type.endsWith("repair_investigated")) facts.unshift(fact({
+      nodeId: `repair-investigation:${task.taskId}:${event.eventId}`, kind: "analysis", actor: event.actor || LINGHU, recipients: [initiator], status: "completed",
+      action: "故障调查完成", summary: event.summary, content: event.details?.repairDiagnosis || event.summary,
+      detail: repairDetail(event, task), startedAt: event.occurredAt, completedAt: event.occurredAt,
+      automaticOpen: false, manualApprovalProposalId: null,
+    }, ":investigation"));
+    if (event.type.endsWith("repair_completed")) facts.push(fact({
+      nodeId: `repair-result:${task.taskId}:${event.eventId}`, kind: "result", actor: event.actor || LINGHU, recipients: [initiator], status: "completed",
+      action: "修复结果已返回", summary: event.summary, content: event.details?.repairResult || task.repairResult || event.summary,
+      detail: repairDetail(event, task), startedAt: event.occurredAt, completedAt: event.occurredAt,
+      automaticOpen: false, manualApprovalProposalId: null,
+    }, ":result-returned"));
+    return projection(status === "failed" || status === "waiting" ? "blocked" : "running", facts);
   }
 
   if (event.type === "integration.local_change_ownership_blocked" || event.type === "integration.merge_conflict") {
@@ -345,4 +382,18 @@ function assignmentAt(task: CollaborationTask, memberId: string, occurredAt: str
 
 function priorEventAt(task: CollaborationTask, type: string): string | null {
   return [...task.flowEvents].reverse().find((event) => event.type === type)?.occurredAt || null;
+}
+
+function repairStartedEvent(task: CollaborationTask, event: CollaborationFlowEvent): CollaborationFlowEvent | null {
+  const prefix = event.type.startsWith("unified_test.") ? "unified_test.repair_" : "execution.repair_";
+  return [...task.flowEvents].reverse().find((candidate) => candidate.occurredAt <= event.occurredAt && candidate.type === `${prefix}started`) || null;
+}
+
+function latestOriginalExecution(task: CollaborationTask, occurredAt: string): CollaborationTask["executionRecords"][number] | null {
+  return [...task.executionRecords].reverse().find((record) => record.assignedAt <= occurredAt && record.executor.memberId !== LINGHU.memberId) || null;
+}
+
+function repairDetail(event: CollaborationFlowEvent, task: CollaborationTask): string {
+  const evidence = event.details?.technicalEvidence?.filter(Boolean) || [];
+  return [event.details?.failureSummary, ...evidence, task.integrationFailure?.detail, task.repairFailureReason].filter(Boolean).join("\n");
 }

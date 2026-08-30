@@ -529,20 +529,21 @@ test("令狐主动巡检关闭时仍自动修复在途任务的统一测试失�
       task.integrationFailure = { kind: "verification", detail: task.blockingReason, conflictFiles: [], baseSha: "base-sha", resultSha: "old-result-sha", generation: 1, occurredAt: new Date().toISOString() };
     });
     let receivedRepairPlan = "";
+    let investigatedFailure = "";
     let integrationSchedules = 0;
     const coordinator = new CollaborationCoordinator({
       store,
       durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
       workspaces: { commitTaskResult: async () => "new-result-sha" },
-      sessions: { createExecutor: async () => ({ isAlive: () => true, analyze: async () => "", optimize: async () => "", execute: async (_task, plan) => { receivedRepairPlan = plan.text; return { status: "code-verified", text: "断言已同步并完成代码级验证", pendingActions: [] }; }, dispose: async () => undefined }) },
+      sessions: { createExecutor: async () => ({ isAlive: () => true, analyze: async () => "", optimize: async () => "", execute: async () => { throw new Error("修复流程不得调用原专题 execute"); }, investigateRepair: async (_task, failure) => { investigatedFailure = failure; return "只修正失败断言并重跑原验证命令"; }, executeRepair: async (_task, diagnosis) => { receivedRepairPlan = diagnosis.repairInstruction; return { status: "code-verified", text: "断言已同步并完成代码级验证", pendingActions: [], changedFiles: ["tests/version.test.ts"], successfulCommands: ["npm test"] }; }, dispose: async () => undefined }) },
       integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => { integrationSchedules += 1; }, dispose: () => undefined },
       emitState: () => undefined,
       emitStream: () => undefined,
     });
     await new Promise((resolve) => setImmediate(resolve));
     const repaired = store.task(submitted.taskId);
-    assert.match(receivedRepairPlan, /expected 5\.100\.0, actual 5\.103\.0/);
-    assert.match(receivedRepairPlan, /不扩大原任务范围/);
+    assert.match(investigatedFailure, /expected 5\.100\.0, actual 5\.103\.0/);
+    assert.match(receivedRepairPlan, /只修正失败断言/);
     assert.equal(repaired.state, "ready-for-integration");
     assert.equal(repaired.versionWorkspace.resultSha, "new-result-sha");
     assert.equal(repaired.integrationFailure, null);
@@ -568,6 +569,8 @@ test("执行修复单次未完成后由令狐保留恢复点且不错误归属�
           isAlive: () => true,
           analyze: async () => "只修改目标文件并完成代码级检查",
           optimize: async () => "",
+          investigateRepair: async (_task, failure) => `调查结论：${failure}`,
+          executeRepair: async () => ({ status: "incomplete", text: "等待权限", pendingActions: ["Codex requests command execution approval"], changedFiles: [], successfulCommands: [] }),
           execute: async () => member.memberId === "linghu-ancestor"
             ? { status: "partial", text: "等待权限", pendingActions: ["Codex requests command execution approval"] }
             : { status: "partial", text: "执行未完成", pendingActions: ["路径诊断失败"] },
