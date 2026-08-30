@@ -1,9 +1,7 @@
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
-import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
-import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "./integration-verifier.js";
+import { acquireManagedDependencyLease, releaseManagedDependencyLease } from "./integration-verifier.js";
 import { TestResourceCoordinatorFacade } from "./test-resource-coordinator-facade.js";
 import { resolveVerifiedDeveloperExecutable } from "./verified-package-release.js";
 
@@ -13,7 +11,6 @@ const FIXED_UNIFIED_SCRIPTS = ["test:interaction", "test:collaboration", "test:m
 export class LinghuUnifiedTestRunner {
   readonly #sourceProjectRoot: string;
   readonly #applicationName: string;
-  readonly #desktopRoot: string;
   readonly #recordEvent: (type: string, details: Record<string, unknown>) => void;
   readonly #testResources: TestResourceCoordinatorFacade;
   readonly #buildRoot: string;
@@ -21,7 +18,6 @@ export class LinghuUnifiedTestRunner {
   constructor(projectRoot: string, applicationName: string, buildRoot: string, recordEvent: (type: string, details: Record<string, unknown>) => void, testResources: TestResourceCoordinatorFacade) {
     this.#sourceProjectRoot = path.resolve(projectRoot);
     this.#applicationName = applicationName;
-    this.#desktopRoot = path.join(this.#sourceProjectRoot, "apps", applicationName);
     this.#buildRoot = path.resolve(buildRoot);
     this.#recordEvent = recordEvent;
     this.#testResources = testResources;
@@ -33,10 +29,13 @@ export class LinghuUnifiedTestRunner {
     const buildRoot = resolvedProjectRoot === this.#sourceProjectRoot
       ? this.#buildRoot
       : resolveApplicationDataPaths({ selplatRoot: resolvedProjectRoot, applicationName: this.#applicationName }).buildRoot;
-    await this.#ensureCandidateDependencies(desktopRoot, resolvedProjectRoot);
     const runId = `linghu-unified-${Date.now()}`;
+    const dependencyLease = resolvedProjectRoot === this.#sourceProjectRoot
+      ? null
+      : await acquireManagedDependencyLease(resolvedProjectRoot, this.#sourceProjectRoot, this.#applicationName, runId);
     const environment: NodeJS.ProcessEnv = {
       ...process.env,
+      ...dependencyLease?.environment,
       // 候选 worktree 的依赖链接已由外层按锁文件核验；内层所有 npm 脚本只能借用，不能再次迁移或接管。
       AI_DESKTOP_TEST_TASK_ID: runId,
       // 候选包最终会提升并脱离临时 worktree，开发版元数据必须指回持续存在的源工程和归档日志根。
@@ -67,16 +66,8 @@ export class LinghuUnifiedTestRunner {
     }
       return resolveVerifiedDeveloperExecutable(buildRoot);
     }).finally(() => {
-      if (resolvedProjectRoot !== this.#sourceProjectRoot) cleanupIntegrationDependencyLinks(desktopRoot);
+      releaseManagedDependencyLease(dependencyLease);
     });
-  }
-
-  async #ensureCandidateDependencies(candidateDesktopRoot: string, candidateProjectRoot: string): Promise<"ready" | "linked" | "installed"> {
-    if (candidateProjectRoot === this.#sourceProjectRoot) return "ready";
-    const sourceDesktopRoot = this.#desktopRoot;
-    const sourcePaths = resolveApplicationDataPaths({ selplatRoot: this.#sourceProjectRoot, applicationName: this.#applicationName });
-    const sourceModules = resolveLockSpecificDependencyPaths(sourcePaths.dependencyCacheRoot, readFileSync(path.join(sourceDesktopRoot, "package-lock.json"))).nodeModulesRoot;
-    return ensureIntegrationDependencies(candidateDesktopRoot, sourceModules, path.join(sourceDesktopRoot, "package-lock.json"), path.join(sourcePaths.cacheRoot, "npm"));
   }
 }
 

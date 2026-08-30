@@ -34,7 +34,7 @@ test("十人并行只消费 flowEvents，执行和自检分开统计", () => {
     assert.equal(group.executingCount, 6);
     assert.equal(group.verifyingCount, 4);
     assert.equal(group.nodes.filter((node) => node.kind === "analysis").length, 10);
-    assert.equal(group.nodes.find((node) => node.kind === "distribution").recipients.length, 10);
+    assert.equal(group.nodes.find((node) => node.kind === "distribution" && node.action === "任务分发").recipients.length, 10);
   } finally { fixture.close(); }
 });
 
@@ -74,6 +74,66 @@ test("修改任务快照但没有新业务事件时时间线不变", () => {
     running.updatedAt = fixture.at(5);
     fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(5), [running]), [running.taskId]);
     assert.deepEqual(fixture.timeline.snapshot(fixture.at(6)).groups[0].nodes.map(stableNode), before);
+  } finally { fixture.close(); }
+});
+
+test("任务提交在执行人接收后结束计时并显示真实接收人", () => {
+  const fixture = createFixture("distribution-duration");
+  try {
+    const submitted = task(fixture, 1, false);
+    const executor = submitted.executionRecords[0].executor;
+    const executionRecord = { ...submitted.executionRecords[0], assignedAt: fixture.at(3), executionStartedAt: fixture.at(4) };
+    submitted.originalExecutor = null;
+    submitted.executorMemberId = null;
+    submitted.preferredExecutorMemberId = null;
+    submitted.currentHandler = submitted.initiator;
+    submitted.executionRecords = [];
+    submitted.flowEvents = [flow("submitted", "task.submitted", "task", "started", submitted.initiator, "任务已提交并进入协同执行队列", fixture.at(1))];
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(2), [submitted]), [submitted.taskId]);
+    const waiting = fixture.timeline.snapshot(fixture.at(8)).groups[0].nodes.find((node) => node.kind === "distribution");
+    assert.equal(waiting.status, "waiting");
+    assert.equal(waiting.action, "等待分配执行人");
+    assert.equal(waiting.recipients[0].displayName, "执行池");
+
+    submitted.originalExecutor = executor;
+    submitted.executorMemberId = executor.memberId;
+    submitted.currentHandler = executor;
+    submitted.executionRecords = [executionRecord];
+    submitted.flowEvents.push(flow("assigned", "executor.assigned", "analysis", "started", executor, `${executor.displayName}收到任务`, fixture.at(3)));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(3), [submitted]), [submitted.taskId]);
+    const completed = fixture.timeline.snapshot(fixture.at(50)).groups[0].nodes.find((node) => node.kind === "distribution");
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.action, "任务已分发");
+    assert.equal(completed.actor.displayName, "南宫婉");
+    assert.equal(completed.recipients[0].displayName, executor.displayName);
+    assert.equal(completed.durationMs, 2_000);
+  } finally { fixture.close(); }
+});
+
+test("旧数据库中的流程处理中提交节点追加纠正事实后停止计时", () => {
+  const fixture = createFixture("legacy-submission-correction");
+  try {
+    const running = task(fixture, 1, false);
+    const executor = running.executionRecords[0].executor;
+    running.flowEvents = [
+      flow("submitted", "task.submitted", "task", "started", running.initiator, "任务已提交并进入协同执行队列", fixture.at(1)),
+      flow("assigned", "executor.assigned", "analysis", "started", executor, `${executor.displayName}收到任务`, fixture.at(3)),
+    ];
+    fixture.append(businessEvent(fixture, "legacy-submitted", "proposal-1", 1, {
+      nodeId: `unmapped:${running.taskId}:submitted`, taskId: running.taskId, proposalId: "proposal-1",
+      sourceFactKey: "flow:submitted", kind: "distribution", actor: running.initiator, recipients: [running.initiator],
+      status: "current", action: "流程处理中", summary: "任务已提交并进入协同执行队列", content: "",
+      detail: "事件类型：task.submitted", startedAt: fixture.at(1), completedAt: null, automaticOpen: true,
+      manualApprovalProposalId: null, occurredAt: fixture.at(1),
+    }, "running"));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(3), [running]), [running.taskId]);
+    const nodes = fixture.timeline.snapshot(fixture.at(50)).groups[0].nodes;
+    const corrected = nodes.find((node) => node.nodeId === `unmapped:${running.taskId}:submitted`);
+    assert.equal(corrected.status, "completed");
+    assert.equal(corrected.action, "任务已分发");
+    assert.equal(corrected.recipients[0].displayName, executor.displayName);
+    assert.equal(corrected.durationMs, 2_000);
+    assert.equal(nodes.some((node) => node.action === "流程处理中"), false);
   } finally { fixture.close(); }
 });
 
@@ -191,6 +251,57 @@ test("统一测试开始后结束等待令狐接手节点", () => {
     assert.equal(nodes.find((node) => node.action === "令狐老祖已接手统一测试").status, "completed");
     assert.equal(nodes.find((node) => node.action === "当前正在统一测试").status, "current");
     assert.equal(nodes.some((node) => node.action === "等待令狐老祖统一测试" && node.status === "waiting"), false);
+  } finally { fixture.close(); }
+});
+
+test("候选分支冲突按测试准备失败投影且三个数据库语义字段不重复", () => {
+  const fixture = createFixture("candidate-preparation-failure");
+  try {
+    const blocked = task(fixture, 1, true, true);
+    blocked.integrationGeneration = 1;
+    blocked.state = "blocked";
+    blocked.currentHandler = member("linghu-ancestor", "令狐老祖");
+    blocked.integrationFailure = {
+      kind: "candidate-branch-conflict", phase: "preparation",
+      summary: "发布候选批次 1 冲突，统一测试尚未启动",
+      impact: "候选分支创建阶段被阻断，本批次尚未运行统一测试命令，不能记作测试用例未通过。",
+      recoveryAction: "保留既有发布证据，分配新的集成代次后重新准备测试。",
+      detail: "发布候选分支 release/0.1.1-rc-g1 已存在，禁止覆盖同一批次证据。",
+      conflictFiles: [], baseSha: "base", resultSha: "result", generation: 1, occurredAt: fixture.at(7),
+    };
+    blocked.flowEvents.push(
+      flow("batch", "integration.batch_frozen", "integration", "waiting", member("nangong-wan", "南宫婉"), "等待令狐老祖统一测试", fixture.at(6)),
+      flow("prepare-failed", "integration.candidate_preparation_failed", "integration", "failed", member("linghu-ancestor", "令狐老祖"), blocked.integrationFailure.summary, fixture.at(7)),
+    );
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [blocked]), [blocked.taskId]);
+    const node = fixture.timeline.snapshot(fixture.at(8)).groups[0].nodes.find((candidate) => candidate.action === "统一测试准备失败");
+    assert.ok(node);
+    assert.match(node.summary, /尚未启动/);
+    assert.match(node.content, /不能记作测试用例未通过/);
+    assert.match(node.detail, /技术证据：.*release\/0\.1\.1-rc-g1/s);
+    assert.match(node.detail, /恢复动作：/);
+    assert.equal(new Set([node.summary, node.content, node.detail]).size, 3);
+  } finally { fixture.close(); }
+});
+
+test("旧版误记为统一测试失败的候选分支冲突追加语义纠正事实", () => {
+  const fixture = createFixture("legacy-candidate-failure-correction");
+  try {
+    const blocked = task(fixture, 1, true, true);
+    blocked.integrationGeneration = 1;
+    blocked.state = "test-failed";
+    blocked.currentHandler = member("linghu-ancestor", "令狐老祖");
+    blocked.integrationFailure = {
+      kind: "verification",
+      detail: "发布候选分支 release/0.1.1-rc-g1 已存在，禁止覆盖同一批次证据。",
+      conflictFiles: [], baseSha: "base", resultSha: "result", generation: 1, occurredAt: fixture.at(7),
+    };
+    blocked.flowEvents.push(flow("legacy-failed", "unified_test.failed", "integration", "failed", member("linghu-ancestor", "令狐老祖"), blocked.integrationFailure.detail, fixture.at(7)));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [blocked]), [blocked.taskId]);
+    const node = fixture.timeline.snapshot(fixture.at(8)).groups[0].nodes.find((candidate) => candidate.action === "统一测试准备失败");
+    assert.ok(node);
+    assert.equal(new Set([node.summary, node.content, node.detail]).size, 3);
+    assert.doesNotMatch(node.content, /^发布候选分支/);
   } finally { fixture.close(); }
 });
 

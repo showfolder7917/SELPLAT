@@ -1,7 +1,7 @@
 # AI Desktop Harness 工作区与运行时规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.106.0
+rule_version = 5.107.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -57,6 +57,8 @@ trusted_project_command_safety_and_management_contract = destructive_privileged_
 unsupported_harness_server_request_policy = deny_or_cancel_without_permission_expansion
 <!-- 固定诊断与路径解析只能读取已准备的依赖缓存；链接修复、迁移和共享缓存写入必须限定在显式准备阶段，禁止普通 paths:resolve 或类型检查反复改写工程外缓存并触发权限审批。 -->
 dependency_cache_mutation_boundary_contract = diagnostics_and_paths_resolve_read_prepared_cache_only + repair_migrate_and_symlink_write_in_explicit_prepare_stage_only + no_shared_cache_mutation_during_typecheck_or_fixed_diagnostics + permission_request_visible_waiting_state + no_false_running_while_human_authorization_pending
+<!-- 所有开发人物、任务验证、集成验证和令狐统一测试必须复用同一受控依赖租约；缓存根由 Git 公共仓库反向验证，禁止信任环境传入任意路径。 -->
+managed_worktree_dependency_lease_contract = main_process_prepares_and_releases_link + all_developer_executor_task_test_integration_and_linghu_routes_share_one_contract + lease_environment_contains_identifier_only + source_root_derived_from_registered_git_common_directory + worktree_and_source_lock_hash_equal + exact_shared_cache_link_target + source_build_temp_and_evidence_remain_worktree_isolated + inner_command_read_only_consumes_lease + no_test_task_id_dependency_bypass + release_link_never_delete_shared_cache
 
 <!-- 新会话、发送任务、中止任务、账号读取、登录和退出必须由同一长期运行 app-server 连接完成。 -->
 harness_required_lifecycle = initialize + account + thread + turn + interrupt + logout

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,14 +12,58 @@ export function resolveDependencyCache() {
   if (!/^[a-zA-Z0-9_-]+$/.test(applicationName)) throw new Error("package.json name is not a safe application identifier");
   const lockContent = readFileSync(path.join(appRoot, "package-lock.json"));
   const lockHash = createHash("sha256").update(lockContent).digest("hex");
-  const dependencyCacheRoot = path.join(projectRoot, "cache", applicationName, "dependencies");
+  const lease = resolveManagedDependencyLease({ appRoot, projectRoot, applicationName, lockHash });
+  const cacheProjectRoot = lease?.sourceProjectRoot || projectRoot;
+  const dependencyCacheRoot = path.join(cacheProjectRoot, "cache", applicationName, "dependencies");
   const cacheRoot = path.join(dependencyCacheRoot, lockHash);
   return {
-    appRoot, projectRoot, applicationName, lockHash, dependencyCacheRoot, cacheRoot,
+    appRoot, projectRoot, cacheProjectRoot, applicationName, lockHash, dependencyCacheRoot, cacheRoot,
     dependencyRoot: path.join(cacheRoot, "node_modules"),
     linkPath: path.join(appRoot, "node_modules"),
     buildLinkPath: path.join(projectRoot, "build", applicationName, "node_modules"),
+    dependencyLeaseId: lease?.leaseId || null,
   };
+}
+
+/**
+ * 隔离工作树只能消费桌面主进程签发的共享依赖租约；工作树锁文件、源工程锁文件和租约哈希必须完全一致。
+ * 普通本地命令没有完整租约环境时继续使用自身工程缓存，禁止半套环境变量悄悄改变数据根。
+ */
+function resolveManagedDependencyLease({ appRoot, projectRoot, applicationName, lockHash }) {
+  const leaseId = process.env.AI_DESKTOP_DEPENDENCY_LEASE_ID;
+  if (!leaseId) return null;
+  if (!/^[a-zA-Z0-9._-]+$/.test(leaseId)) throw new Error("Managed dependency lease id is invalid");
+  const sourceProjectRoot = resolveRegisteredWorktreeSourceRoot(projectRoot);
+  const sourceApplicationRoot = path.join(sourceProjectRoot, "apps", applicationName);
+  const sourceLockPath = path.join(sourceApplicationRoot, "package-lock.json");
+  if (!existsSync(sourceLockPath)) throw new Error("Managed dependency source package-lock.json is missing");
+  const sourceLockHash = createHash("sha256").update(readFileSync(sourceLockPath)).digest("hex");
+  if (sourceLockHash !== lockHash) throw new Error("Managed dependency source and worktree lock files differ");
+  return { leaseId, sourceProjectRoot };
+}
+
+/** 共享缓存根只从 Git 已登记 worktree 的公共仓库目录推导，禁止租约或调用方直接提供任意路径。 */
+function resolveRegisteredWorktreeSourceRoot(projectRoot) {
+  const common = spawnGit(projectRoot, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  const commonDirectory = path.resolve(projectRoot, common);
+  if (path.basename(commonDirectory) !== ".git") throw new Error("Managed dependency lease requires a standard Git common directory");
+  const sourceProjectRoot = path.dirname(commonDirectory);
+  if (path.resolve(sourceProjectRoot) === path.resolve(projectRoot)) {
+    throw new Error("Managed dependency lease is only valid for an isolated worktree");
+  }
+  const worktrees = spawnGit(sourceProjectRoot, ["worktree", "list", "--porcelain"])
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => path.resolve(line.slice("worktree ".length)));
+  if (!worktrees.includes(path.resolve(projectRoot))) throw new Error("Managed dependency lease worktree is not registered by Git");
+  return sourceProjectRoot;
+}
+
+function spawnGit(cwd, args) {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", shell: false });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`Managed dependency Git verification failed: ${(result.stderr || "").trim()}`);
+  return String(result.stdout || "").trim();
 }
 
 function isInsideRoot(root, candidate) {
@@ -93,7 +138,7 @@ export function repairLocalPackageLinks(details = resolveDependencyCache()) {
   }
 }
 
-export function attachDependencyCache(options = {}) {
+export function attachDependencyCache() {
   const details = resolveDependencyCache();
   if (!existsSync(details.dependencyRoot)) throw new Error(`Dependency cache is missing for current package-lock.json: ${details.cacheRoot}`);
   // 普通诊断、类型检查和测试只挂载已准备好的缓存；本地包链接修复仅允许由 ensure/migrate 准备阶段执行，
@@ -103,16 +148,17 @@ export function attachDependencyCache(options = {}) {
       const linkedDependencyRoot = realpathSync(details.linkPath);
       // 只复用真实指向当前锁哈希缓存的链接；旧哈希链接必须先回收再挂载当前缓存。
       if (linkedDependencyRoot === realpathSync(details.dependencyRoot)) return { ...details, ownsLink: false };
-      // 签发 worktree 的外层验证器已核对锁文件并挂载主工程缓存；内层命令只借用该链接，所有权仍由外层回收。
-      if (options.preserveExistingLink === true) {
-        return { ...details, dependencyRoot: linkedDependencyRoot, ownsLink: false, ownsBuildLink: false };
+      if (details.dependencyLeaseId) {
+        throw new Error(`Managed dependency lease link target does not match the registered repository cache: ${details.linkPath}`);
       }
       rmSync(details.linkPath, { force: true });
     } else {
       // 当前哈希缓存已经完整存在时，源码目录中的实体 node_modules 只是中断迁移留下的可再生产物。
+      if (details.dependencyLeaseId) throw new Error(`Managed dependency lease path is not a link: ${details.linkPath}`);
       rmSync(details.linkPath, { recursive: true, force: true });
     }
   }
+  if (details.dependencyLeaseId) throw new Error(`Managed dependency lease link is missing: ${details.linkPath}`);
   mkdirSync(path.dirname(details.linkPath), { recursive: true });
   createDependencyLink(details.dependencyRoot, details.linkPath);
   let ownsBuildLink = false;

@@ -1,4 +1,4 @@
-import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
@@ -36,5 +36,21 @@ export class ReleaseBatchStore {
     writeFileSync(temporary, `${JSON.stringify(document, null, 2)}\n`, "utf8");
     renameSync(temporary, target);
     if (document.completedAt) rmSync(runningRoot, { recursive: true, force: true });
+  }
+
+  /** 返回归档中明确失败且实际建立过的候选分支；已验证、已发布和无候选分支的准备失败均不进入清理范围。 */
+  failedCandidateBranches(): string[] {
+    if (!existsSync(this.#archiveRoot)) return [];
+    const branches = new Set<string>();
+    for (const month of readdirSync(this.#archiveRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
+      const monthRoot = path.join(this.#archiveRoot, month.name);
+      for (const batch of readdirSync(monthRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
+        const documentPath = path.join(monthRoot, batch.name, "发布批次文档.json");
+        if (!existsSync(documentPath)) continue;
+        const document = JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocument;
+        if (document.state === "failed" && document.candidateBranch) branches.add(document.candidateBranch);
+      }
+    }
+    return [...branches].sort();
   }
 }

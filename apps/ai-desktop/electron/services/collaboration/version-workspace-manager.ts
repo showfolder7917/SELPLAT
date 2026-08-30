@@ -53,6 +53,16 @@ export class MergeConflictError extends Error {
   }
 }
 
+export class CandidateBranchConflictError extends Error {
+  readonly branchName: string;
+
+  constructor(branchName: string) {
+    super(`发布候选分支 ${branchName} 已存在，禁止覆盖同一批次证据。`);
+    this.name = "CandidateBranchConflictError";
+    this.branchName = branchName;
+  }
+}
+
 /** 只在应用签发的目录中建立 Git worktree，执行人永不直接修改用户当前工作目录。 */
 export class VersionWorkspaceManager {
   readonly #repositoryRoot: string;
@@ -256,6 +266,38 @@ export class VersionWorkspaceManager {
     if (candidate.branchName.startsWith("codex/collab/")) await this.#git(this.#repositoryRoot, ["branch", "-D", candidate.branchName]);
   }
 
+  /**
+   * 只回收发布归档明确标记失败的候选；成功证据、稳定集成指针、任务分支和用户分支均保留。
+   *
+   * 真实传参示例：传入 `["release/0.1.1-rc-g9"]` 且分支存在，返回 `{ branchCount: 1, worktreeCount: 0 }`。
+   * 真实返回示例：失败候选仍在签发的 release worktree 中时先移除 worktree，再删除候选分支。
+   * 异常或副作用示例：候选被签出到应用签发目录之外时立即失败，调用方不得继续清数据库。
+   */
+  async clearFailedTestReleaseCandidates(failedBranches: string[]): Promise<{ branchCount: number; worktreeCount: number }> {
+    const targets = new Set(failedBranches);
+    for (const branchName of targets) this.#validateCandidateBranch(branchName);
+    const releaseRoot = path.join(this.#managedRoot, "release");
+    let worktreeCount = 0;
+    for (const worktree of parseGitWorktrees(await this.#gitRaw(this.#repositoryRoot, ["worktree", "list", "--porcelain"]))) {
+      if (!worktree.branchName || !targets.has(worktree.branchName)) continue;
+      const rootPath = path.resolve(worktree.rootPath);
+      const relative = path.relative(releaseRoot, rootPath);
+      if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        throw new Error(`失败候选分支 ${worktree.branchName} 位于应用签发目录之外，已停止清空测试数据。`);
+      }
+      await this.#git(this.#repositoryRoot, ["worktree", "remove", rootPath]);
+      worktreeCount += 1;
+    }
+    let branchCount = 0;
+    for (const branchName of [...targets].sort()) {
+      const exists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${branchName}`]).then(() => true, () => false);
+      if (!exists) continue;
+      await this.#git(this.#repositoryRoot, ["branch", "-D", branchName]);
+      branchCount += 1;
+    }
+    return { branchCount, worktreeCount };
+  }
+
   async #integrationBaseSha(): Promise<string> {
     // 发布锁与本地干净门禁已经在调用前完成；候选必须包含当前本地最新提交，旧集成指针只保留为历史证据。
     return this.currentBaseSha();
@@ -267,9 +309,12 @@ export class VersionWorkspaceManager {
     const primaryExists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${primary}`]).then(() => true, () => false);
     if (!primaryExists) return primary;
     const generated = `${primary}-g${generation}`;
-    const generatedExists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${generated}`]).then(() => true, () => false);
-    if (generatedExists) throw new Error(`发布候选分支 ${generated} 已存在，禁止覆盖同一批次证据。`);
-    return generated;
+    for (let retry = 1; retry <= 1_000; retry += 1) {
+      const candidate = retry === 1 ? generated : `${generated}-r${retry}`;
+      const exists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${candidate}`]).then(() => true, () => false);
+      if (!exists) return candidate;
+    }
+    throw new CandidateBranchConflictError(`${generated}-r1000`);
   }
 
   async #localChangedFiles(): Promise<string[]> {
@@ -294,7 +339,7 @@ export class VersionWorkspaceManager {
   }
 
   #validateCandidateBranch(branchName: string): void {
-    if (/^release\/[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?-rc(?:-g[1-9][0-9]*)?$/.test(branchName)) return;
+    if (/^release\/[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?-rc(?:-g[1-9][0-9]*(?:-r[2-9][0-9]*)?)?$/.test(branchName)) return;
     this.#validateManagedBranch(branchName);
   }
 
@@ -334,6 +379,16 @@ function normalizedFiles(files: string[]): Set<string> { return new Set(files.ma
 function normalizeFile(value: string): string { return value.trim().replaceAll("\\", "/").replace(/^\.\//, ""); }
 function splitZero(value: string): string[] { return value.split("\0").filter(Boolean); }
 function splitLines(value: string): string[] { return [...new Set(value.split(/\r?\n/).map(normalizeFile).filter(Boolean))].sort(); }
+
+function parseGitWorktrees(value: string): Array<{ rootPath: string; branchName: string | null }> {
+  return value.trim().split(/\r?\n\r?\n/).filter(Boolean).map((block) => {
+    const lines = block.split(/\r?\n/);
+    return {
+      rootPath: lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length) || "",
+      branchName: lines.find((line) => line.startsWith("branch refs/heads/"))?.slice("branch refs/heads/".length) || null,
+    };
+  }).filter((worktree) => Boolean(worktree.rootPath));
+}
 
 function errorMessage(error: unknown): string {
   if (error && typeof error === "object") {

@@ -18,6 +18,8 @@ export interface AiMemoryDatabaseStatus {
 export interface TestDataResetResult {
   cleared: true;
   clearedRecordCount: number;
+  clearedCandidateBranchCount: number;
+  clearedCandidateWorktreeCount: number;
   restartScheduled: true;
 }
 

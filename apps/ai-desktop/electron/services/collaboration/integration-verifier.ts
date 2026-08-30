@@ -7,23 +7,82 @@ import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/li
 
 const execFileAsync = promisify(execFile);
 
+export interface ManagedDependencyLease {
+  leaseId: string;
+  workspaceProjectRoot: string;
+  workspaceDesktopRoot: string;
+  environment: Readonly<{ AI_DESKTOP_DEPENDENCY_LEASE_ID: string }>;
+  released: boolean;
+}
+
+const activeDependencyLeases = new Map<string, Map<string, number>>();
+
+/**
+ * 主进程为 Git 已登记的隔离工作树签发共享依赖租约；缓存来源只能是同一公共仓库的主工程锁哈希目录。
+ * 工作树退出时调用 releaseManagedDependencyLease 只解除链接，不删除可由其他任务继续复用的真实缓存。
+ */
+export async function acquireManagedDependencyLease(
+  workspaceProjectRoot: string,
+  sourceProjectRoot: string,
+  applicationName: string,
+  leaseId: string,
+  npmCacheRoot?: string,
+): Promise<ManagedDependencyLease> {
+  const safeLeaseId = safeIdentifier(leaseId, "dependency lease id");
+  const resolvedWorkspaceRoot = path.resolve(workspaceProjectRoot);
+  const resolvedSourceRoot = path.resolve(sourceProjectRoot);
+  if (resolvedWorkspaceRoot === resolvedSourceRoot) throw new Error("共享依赖租约只能签发给隔离工作树。");
+  await verifyRegisteredWorktree(resolvedWorkspaceRoot, resolvedSourceRoot);
+  const workspaceDesktopRoot = path.join(resolvedWorkspaceRoot, "apps", applicationName);
+  const sourceDesktopRoot = path.join(resolvedSourceRoot, "apps", applicationName);
+  const sourceLockPath = path.join(sourceDesktopRoot, "package-lock.json");
+  const sourcePaths = resolveApplicationDataPaths({ selplatRoot: resolvedSourceRoot, applicationName });
+  const sourceModules = resolveLockSpecificDependencyPaths(sourcePaths.dependencyCacheRoot, readFileSync(sourceLockPath)).nodeModulesRoot;
+  const dependencyMode = await ensureIntegrationDependencies(workspaceDesktopRoot, sourceModules, sourceLockPath, npmCacheRoot);
+  if (dependencyMode !== "linked") {
+    cleanupIntegrationDependencyLinks(workspaceDesktopRoot);
+    throw new Error("隔离工作树未能挂载主工程共享依赖缓存，拒绝签发租约。");
+  }
+  const holders = activeDependencyLeases.get(workspaceDesktopRoot) || new Map<string, number>();
+  holders.set(safeLeaseId, (holders.get(safeLeaseId) || 0) + 1);
+  activeDependencyLeases.set(workspaceDesktopRoot, holders);
+  return {
+    leaseId: safeLeaseId,
+    workspaceProjectRoot: resolvedWorkspaceRoot,
+    workspaceDesktopRoot,
+    environment: { AI_DESKTOP_DEPENDENCY_LEASE_ID: safeLeaseId },
+    released: false,
+  };
+}
+
+/** 释放任务拥有的链接，真实共享缓存由主工程生命周期管理。 */
+export function releaseManagedDependencyLease(lease: ManagedDependencyLease | null | undefined): void {
+  if (!lease || lease.released) return;
+  lease.released = true;
+  const holders = activeDependencyLeases.get(lease.workspaceDesktopRoot);
+  const count = holders?.get(lease.leaseId) || 0;
+  if (count > 1) holders?.set(lease.leaseId, count - 1);
+  else holders?.delete(lease.leaseId);
+  if (holders?.size) return;
+  activeDependencyLeases.delete(lease.workspaceDesktopRoot);
+  cleanupIntegrationDependencyLinks(lease.workspaceDesktopRoot);
+}
+
 /** 集成批次只运行代码级组合检查；正式构建和当前应用重启仍属于用户明确触发的测试托管。 */
 export async function verifyCollaborationIntegration(rootPath: string, taskIds: string[], dependencySourceRoot: string, applicationName: string): Promise<void> {
   const commitCount = Math.max(4, taskIds.length * 3);
   await run("git", ["log", "--check", "--oneline", "-n", String(commitCount)], rootPath);
   const desktopRoot = path.join(rootPath, "apps", applicationName);
   if (existsSync(path.join(desktopRoot, "package.json"))) {
-    const sourceDesktopRoot = path.join(dependencySourceRoot, "apps", applicationName);
-    const dataPaths = resolveApplicationDataPaths({ selplatRoot: dependencySourceRoot, applicationName });
-    const sourceModules = resolveLockSpecificDependencyPaths(dataPaths.dependencyCacheRoot, readFileSync(path.join(sourceDesktopRoot, "package-lock.json"))).nodeModulesRoot;
-    await ensureIntegrationDependencies(desktopRoot, sourceModules, path.join(sourceDesktopRoot, "package-lock.json"));
+    const leaseId = `integration-${taskIds.join("-")}`;
+    const dependencyLease = await acquireManagedDependencyLease(rootPath, dependencySourceRoot, applicationName, leaseId);
     try {
       await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "typecheck"], desktopRoot, 180_000, {
         // 组合检查与后续统一测试共享外层已核验的候选依赖链接，禁止内层命令把它当作待迁移源码依赖。
-        AI_DESKTOP_TEST_TASK_ID: `integration-${taskIds.join("-")}`,
+        ...dependencyLease.environment,
       });
     } finally {
-      cleanupIntegrationDependencyLinks(desktopRoot);
+      releaseManagedDependencyLease(dependencyLease);
     }
   }
 }
@@ -71,6 +130,22 @@ export async function ensureIntegrationDependencies(
   if (!hasUsableDesktopDependencies(candidateModules)) throw new Error("集成依赖自愈失败：补齐依赖后仍缺少 TypeScript 或 Electron 运行时。");
   ensureBuildDependencyLink(candidateDesktopRoot, candidateModules);
   return "installed";
+}
+
+async function verifyRegisteredWorktree(workspaceProjectRoot: string, sourceProjectRoot: string): Promise<void> {
+  const { stdout: commonOutput } = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: workspaceProjectRoot });
+  const commonDirectory = path.resolve(workspaceProjectRoot, commonOutput.trim());
+  if (commonDirectory !== path.join(sourceProjectRoot, ".git")) throw new Error("隔离工作树不属于当前主工程，禁止签发共享依赖租约。");
+  const { stdout: worktreeOutput } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: sourceProjectRoot });
+  const registeredRoots = worktreeOutput.split(/\r?\n/)
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => path.resolve(line.slice("worktree ".length)));
+  if (!registeredRoots.includes(workspaceProjectRoot)) throw new Error("隔离工作树未登记到当前主工程，禁止签发共享依赖租约。");
+}
+
+function safeIdentifier(value: string, label: string): string {
+  if (!/^[a-zA-Z0-9._-]+$/.test(value)) throw new Error(`${label} contains unsafe characters`);
+  return value;
 }
 
 /** 同时回收应用目录和构建目录的受控链接；真实依赖目录永不删除。 */

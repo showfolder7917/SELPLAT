@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.113.0
+rule_version = 5.116.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -189,5 +189,11 @@ collaboration_topic_timeline_projection_contract.9 = approval_service_only_persi
 collaboration_topic_timeline_projection_contract.10 = no_legacy_runtime_callers + no_legacy_table_read_write_reset_or_count_contract + empty_only_atomic_physical_drop_migration + published_1001_to_1003_SQL_kept_as_checksum_history_only + fresh_and_legacy_upgrade_tests_required
 <!-- 所有协作阶段必须先登记类型化事件并由独立投影器转换；阻塞、等待和未来未知事件必须生成可读节点并同步专题状态，流式正文只能绑定事件确定的节点。 -->
 collaboration_topic_timeline_projection_contract.11 = registered_typed_approval_distribution_analysis_execution_verification_integration_and_recovery_events + independent_flow_projector_before_SQLite_repository + no_silent_unmapped_event_drop + unknown_event_human_readable_fallback + blocked_waiting_updates_topic_owner_reason_recovery_and_next_step + startup_backfills_unconsumed_immutable_events + stream_chunk_bound_to_projected_node_id_not_task_id
+<!-- 任务提交与执行人接收必须投影为同一个分发生命周期节点；接收事实结束等待计时并写入真实接收人，任何终态节点都不得因历史缺失完成时间继续计时。 -->
+collaboration_topic_timeline_projection_contract.12 = task_submitted_creates_waiting_distribution_node + executor_assigned_closes_same_node_with_real_recipient_and_completed_at + later_stage_never_leaves_submission_current + terminal_completed_or_failed_duration_falls_back_to_fact_occurred_at + no_initiator_self_recipient_fallback
+<!-- 修复必须消除事实生产或投影错误，禁止在页面通过隐藏、吞错或相同内容去重掩盖上游缺陷；失败摘要、业务影响、技术证据和恢复动作必须分别持久化并可独立核验。 -->
+collaboration_topic_timeline_projection_contract.13 = root_cause_fix_before_presentation + no_renderer_hide_swallow_or_duplicate_suppression_as_bug_fix + preparation_failure_distinct_from_test_assertion_failure + separate_human_summary_business_impact_technical_evidence_and_recovery_action + original_error_evidence_preserved + regression_asserts_semantic_fields_not_identical
+<!-- 一键清空测试数据只清除归档明确失败的 release 候选，成功发布证据、稳定集成指针、任务分支和用户分支必须保留；Git 清理先于数据库重置，已有成功候选由唯一重试分支继续推进。 -->
+collaboration_topic_timeline_projection_contract.14 = stop_writers_then_clear_archived_failed_release_candidate_worktrees_and_branches_before_database_reset + git_cleanup_failure_preserves_database_generation_and_recovery_state + preserve_successful_release_evidence_stable_integration_pointer_task_branches_and_user_branches + existing_candidate_allocates_unique_retry_branch + absolute_project_root_runtime_cache_only + no_application_source_root_cache + source_root_cache_not_hidden_by_gitignore
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events

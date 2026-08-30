@@ -14,14 +14,17 @@ test("Codex 子进程使用 AI Desktop 专属数据域且不继承宿主来源�
     PATH: "/runtime/bin",
     CODEX_HOME: "/shared/codex-home",
     CODEX_INTERNAL_ORIGINATOR_OVERRIDE: "Codex Desktop",
-  }, "/ai-desktop/codex-home");
+    AI_DESKTOP_DEPENDENCY_LEASE_ID: "stale-lease",
+  }, "/ai-desktop/codex-home", "task-lease-1");
   assert.equal(environment.CODEX_HOME, "/ai-desktop/codex-home");
   assert.equal(environment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE, undefined);
   assert.equal(environment.PATH, "/runtime/bin");
+  assert.equal(environment.AI_DESKTOP_DEPENDENCY_LEASE_ID, "task-lease-1");
 
   const legacyEnvironment = createCodexChildEnvironment(environment, null);
   assert.equal(legacyEnvironment.CODEX_HOME, undefined);
   assert.equal(legacyEnvironment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE, undefined);
+  assert.equal(legacyEnvironment.AI_DESKTOP_DEPENDENCY_LEASE_ID, undefined);
 });
 
 test("活动线程存储识别旧默认域记录并只写 AI Desktop 域版本", () => {

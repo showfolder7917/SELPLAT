@@ -1,7 +1,7 @@
 .gradle/
 OPTION/
 build/
-cache/
+/cache/
 bin/
 **/__pycache__/
 *.py[cod]

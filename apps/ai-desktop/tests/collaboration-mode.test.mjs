@@ -1,20 +1,22 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
 import { CollaborationCoordinator } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
 import { createCollaborationResultSummary } from "../../../build/ai-desktop/electron/electron/services/collaboration/result/result-summary.js";
-import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
+import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/collaboration/verified-package-release.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
 import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-facade.js";
 import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-store.js";
 import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js";
+import { ReleaseBatchStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/release-batch-store.js";
 import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../build/ai-desktop/electron/electron/services/collaboration/version-workspace-manager.js";
 import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/managed-task-executor.js";
 import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
@@ -886,6 +888,78 @@ test("同一版本已有首个发布候选时后续批次使用唯一代次分�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("失败候选清理保留成功证据、稳定集成指针和用户分支", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "clear-failed-candidates-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "source.txt"), "base\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    git(repositoryRoot, "branch", "release/0.1.1-rc");
+    git(repositoryRoot, "branch", "release/0.1.1-rc-g9");
+    git(repositoryRoot, "branch", "codex/collab/integration");
+    git(repositoryRoot, "branch", "user-preserved");
+    const failedWorktree = path.join(managedRoot, "release", "failed-g9");
+    git(repositoryRoot, "worktree", "add", failedWorktree, "release/0.1.1-rc-g9");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    const result = await manager.clearFailedTestReleaseCandidates(["release/0.1.1-rc-g9"]);
+    assert.deepEqual(result, { branchCount: 1, worktreeCount: 1 });
+    assert.equal(existsSync(failedWorktree), false);
+    assert.throws(() => git(repositoryRoot, "show-ref", "--verify", "refs/heads/release/0.1.1-rc-g9"));
+    assert.ok(git(repositoryRoot, "show-ref", "--verify", "refs/heads/release/0.1.1-rc"));
+    assert.ok(git(repositoryRoot, "show-ref", "--verify", "refs/heads/codex/collab/integration"));
+    assert.ok(git(repositoryRoot, "show-ref", "--verify", "refs/heads/user-preserved"));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("发布归档只把明确失败且建立过候选的分支交给测试清理", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "failed-release-archive-"));
+  try {
+    const store = new ReleaseBatchStore(path.join(directory, "running"), path.join(directory, "archive"));
+    const completedAt = "2026-08-30T01:00:00.000Z";
+    const base = {
+      version: "0.1.1", generation: 1, initiatorMemberId: "tester", candidateSha: "sha",
+      localMergeSha: null, executable: null, tasks: [], startedAt: "2026-08-30T00:00:00.000Z", completedAt, failureReason: null,
+    };
+    store.write({ ...base, releaseBatchId: "failed", state: "failed", candidateBranch: "release/0.1.1-rc-g1", failureReason: "test failed" });
+    store.write({ ...base, releaseBatchId: "published", state: "published", candidateBranch: "release/0.1.1-rc-g2" });
+    store.write({ ...base, releaseBatchId: "prepare-failed", state: "failed", candidateBranch: null, candidateSha: null, failureReason: "candidate not created" });
+    assert.deepEqual(store.failedCandidateBranches(), ["release/0.1.1-rc-g1"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("一键清空先回收失败候选再重置数据库代次", () => {
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(main, /releaseBatches\.failedCandidateBranches\(\)/);
+  assert.ok(main.indexOf("clearFailedTestReleaseCandidates") < main.indexOf("collaborationStore.clearTestData()"));
+});
+
+test("已有同代成功候选时自动分配重试分支而不阻断统一测试", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "candidate-retry-branch-"));
+  const repositoryRoot = path.join(directory, "repository");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "source.txt"), "base\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    const resultSha = git(repositoryRoot, "rev-parse", "HEAD");
+    git(repositoryRoot, "branch", "release/0.1.1-rc");
+    git(repositoryRoot, "branch", "release/0.1.1-rc-g1");
+    const manager = new VersionWorkspaceManager(repositoryRoot, path.join(directory, "managed-worktrees"));
+    const candidate = await manager.createReleaseCandidate("release-0.1.1-g1-retry", "0.1.1", 1, [{ taskId: "TASK-RETRY", versionWorkspace: { resultSha } }]);
+    assert.equal(candidate.branchName, "release/0.1.1-rc-g1-r2");
+    await manager.retireCandidate(candidate);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("发布候选冲突在中止合并前保留冲突文件和非空诊断", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "merge-conflict-evidence-"));
   const repositoryRoot = path.join(directory, "repository");
@@ -1332,11 +1406,71 @@ test("集成工作区锁文件一致时自动复用主工作区依赖", async ()
   }
 });
 
+test("开发人物工作树通过 Git 登记签发共享依赖租约并在结束时只解除链接", async () => {
+  const repository = mkdtempSync(path.join(controlledTempRoot, "collaboration-dependency-lease-"));
+  const worktree = path.join(controlledTempRoot, `collaboration-dependency-lease-worktree-${Date.now()}`);
+  const desktopRoot = path.join(repository, "apps", "ai-desktop");
+  const lockContent = "managed-shared-lock";
+  try {
+    mkdirSync(desktopRoot, { recursive: true });
+    mkdirSync(path.join(desktopRoot, "scripts"), { recursive: true });
+    writeFileSync(path.join(desktopRoot, "package-lock.json"), lockContent, "utf8");
+    writeFileSync(path.join(desktopRoot, "package.json"), JSON.stringify({ name: "ai-desktop" }), "utf8");
+    writeFileSync(
+      path.join(desktopRoot, "scripts", "dependency-cache.mjs"),
+      readFileSync(new URL("../scripts/dependency-cache.mjs", import.meta.url), "utf8"),
+      "utf8",
+    );
+    git(repository, "init");
+    git(repository, "config", "user.email", "lease-test@example.com");
+    git(repository, "config", "user.name", "Lease Test");
+    git(repository, "add", ".");
+    git(repository, "commit", "-m", "lease fixture");
+    git(repository, "worktree", "add", "-b", "lease-worker", worktree, "HEAD");
+
+    const lockHash = createHash("sha256").update(lockContent).digest("hex");
+    const sourceModules = path.join(repository, "cache", "ai-desktop", "dependencies", lockHash, "node_modules");
+    mkdirSync(path.join(sourceModules, ".bin"), { recursive: true });
+    mkdirSync(path.join(sourceModules, "electron", "dist"), { recursive: true });
+    writeFileSync(path.join(sourceModules, ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
+    const electronExecutable = process.platform === "win32" ? "electron.exe" : "Electron";
+    writeFileSync(path.join(sourceModules, "electron", "path.txt"), electronExecutable, "utf8");
+    writeFileSync(path.join(sourceModules, "electron", "dist", electronExecutable), "ready", "utf8");
+
+    const lease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "executor-song-yu-g1");
+    const validationLease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "task-validation-1");
+    assert.deepEqual(lease.environment, { AI_DESKTOP_DEPENDENCY_LEASE_ID: "executor-song-yu-g1" });
+    assert.equal(realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), realpathSync(sourceModules));
+    const probeModule = pathToFileURL(path.join(worktree, "apps", "ai-desktop", "scripts", "dependency-cache.mjs")).href;
+    const probe = JSON.parse(execFileSync(process.execPath, [
+      "--input-type=module",
+      "-e",
+      `const module = await import(${JSON.stringify(probeModule)}); process.stdout.write(JSON.stringify(module.resolveDependencyCache()));`,
+    ], { encoding: "utf8", env: { ...process.env, ...lease.environment } }));
+    assert.equal(probe.projectRoot, worktree);
+    assert.equal(probe.cacheProjectRoot, repository);
+    assert.equal(probe.dependencyCacheRoot, path.join(repository, "cache", "ai-desktop", "dependencies"));
+    assert.equal(probe.dependencyLeaseId, "executor-song-yu-g1");
+    releaseManagedDependencyLease(validationLease);
+    assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), true);
+    releaseManagedDependencyLease(lease);
+    assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), false);
+    assert.equal(existsSync(sourceModules), true);
+  } finally {
+    try { git(repository, "worktree", "remove", "--force", worktree); } catch {}
+    rmSync(repository, { recursive: true, force: true });
+    rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
 test("令狐候选统一测试把外层受控依赖链接传给全部固定脚本", () => {
   assert.match(unifiedTestRunnerSource, /AI_DESKTOP_TEST_TASK_ID: runId/);
+  assert.match(unifiedTestRunnerSource, /acquireManagedDependencyLease/);
+  assert.match(unifiedTestRunnerSource, /dependencyLease\?\.environment/);
   assert.match(unifiedTestRunnerSource, /runNpmScript\(desktopRoot, script, environment\)/);
   assert.match(unifiedTestRunnerSource, /delete environment\.ELECTRON_RUN_AS_NODE/);
-  assert.match(integrationVerifierSource, /AI_DESKTOP_TEST_TASK_ID: `integration-/);
+  assert.match(integrationVerifierSource, /AI_DESKTOP_DEPENDENCY_LEASE_ID/);
+  assert.match(integrationVerifierSource, /verifyRegisteredWorktree/);
 });
 
 test("协同执行人修改源码后由桌面内部验证分支而不再发起 Codex Playwright 回合", async () => {
@@ -1383,14 +1517,17 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
   assert.match(runner, /worktreeRoot/);
   assert.match(runner, /test-cache|PLAYWRIGHT_BROWSERS_PATH/);
   assert.match(runner, /AI_DESKTOP_TEST_TASK_ID/);
+  assert.match(runner, /acquireManagedDependencyLease/);
+  assert.match(runner, /dependencyLease\.environment/);
   assert.match(runner, /npm run/);
-  assert.match(runner, /cleanupIntegrationDependencyLinks\(desktopRoot\)/);
+  assert.match(runner, /releaseManagedDependencyLease\(dependencyLease\)/);
   assert.equal(manifest.scripts["test:interaction"], "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs");
   assert.match(runner, /expected: "npm run build:developer && node scripts\/run-with-dependencies\.mjs node scripts\/run-interaction-tests\.mjs"/);
   assert.match(dependencyVerifier, /hasElectronRuntime/);
   assert.doesNotMatch(dependencyVerifier, /"ci", "--ignore-scripts"/);
   assert.match(sessions, /runCodeValidation/);
   assert.match(sessions, /validationOwner: "desktop"/);
+  assert.match(sessions, /dependencyLeaseId: dependencyLease\?\.leaseId/);
   assert.match(codex, /isDesktopOwnedValidationCommand/);
   assert.match(codex, /无需 Agent 申请 Playwright 权限/);
   assert.match(config, /AI_DESKTOP_TEST_TASK_ID/);
@@ -1417,7 +1554,7 @@ test("协同编排保持独立执行连接、心跳和整轮封存集成契约",
   assert.doesNotMatch(workspaces, /codex\/collab\/integration\/g\$\{generation\}/);
   assert.match(workspaces, /resultSha/);
   assert.match(integrationVerifier, /ensureBuildDependencyLink\(candidateDesktopRoot, sourceModules\)/);
-  assert.match(integrationVerifier, /cleanupIntegrationDependencyLinks\(desktopRoot\)/);
+  assert.match(integrationVerifier, /releaseManagedDependencyLease\(dependencyLease\)/);
   assert.doesNotMatch(ui, /reviewAttempts\.some|decision-unrecognized/);
   const memberPageSource = ui.slice(ui.indexOf("function CollaborationMemberPage"), ui.indexOf("function collaborationMemberStateLabel"));
   assert.doesNotMatch(memberPageSource, /durationMs|总耗时/);

@@ -20,6 +20,12 @@ test("受控命令在锁文件哈希缓存缺失时先调用统一依赖准备�
   assert.ok(runner.indexOf("ensure-dependency-cache.mjs") < runner.indexOf("attachDependencyCache("));
 });
 
+test("Node 编译缓存固定在工程根应用缓存且不继承相对路径", () => {
+  assert.match(runner, /controlledNodeCompileCache = path\.join\(unresolvedCache\.cacheProjectRoot, "cache", unresolvedCache\.applicationName, "test-tmp", "node-compile-cache"\)/);
+  assert.match(runner, /NODE_COMPILE_CACHE: controlledNodeCompileCache/);
+  assert.doesNotMatch(runner, /path\.join\(unresolvedCache\.appRoot, "cache"/);
+});
+
 test("首次安装和中断恢复都使用应用工程内 npm 缓存", () => {
   assert.match(ensure, /sourceDependenciesAreReusableLink/);
   assert.match(ensure, /lstatSync\(details\.linkPath, \{ throwIfNoEntry: false \}\)/);
@@ -99,16 +105,19 @@ test("应用路径诊断通过受控依赖入口加载公共路径包且不要�
   assert.match(pathResolver, /from "@selplat\/node-common-core\/path"/);
   assert.match(pathResolver, /resolveApplicationNameFromSourceRoot\(applicationRoot\)/);
   assert.match(pathResolver, /resolveApplicationDataPaths\(\{ selplatRoot, applicationName \}\)/);
+  assert.match(pathResolver, /dependencyCacheRoot: dependency\.dependencyCacheRoot/);
+  assert.match(pathResolver, /managed-worktree-shared/);
   const attachBody = cache.slice(cache.indexOf("export function attachDependencyCache"), cache.indexOf("export function detachOwnedDependencyCache"));
   assert.doesNotMatch(attachBody, /repairLocalPackageLinks\(/, "固定诊断只能挂载已准备缓存，不能在每次命令中改写共享本地包");
   assert.match(ensure, /repairLocalPackageLinks\(details\)/, "本地包链接修复只属于显式依赖准备阶段");
 });
 
-test("隔离 Playwright 不复用缺少 Electron 安装产物的临时依赖链接", () => {
-  assert.match(runner, /hasElectronRuntime\(linkedDependencies\)/);
-  assert.match(runner, /rmSync\(unresolvedCache\.linkPath, \{ force: true \}\)/);
-  assert.match(runner, /rmSync\(unresolvedCache\.dependencyRoot, \{ recursive: true, force: true \}\)/);
-  assert.match(runner, /if \(!process\.env\.AI_DESKTOP_TEST_TASK_ID\) detachOwnedDependencyCache\(cache\)/);
+test("隔离工作树只消费完整共享依赖租约且不在内层自愈缓存", () => {
+  assert.match(runner, /unresolvedCache\.dependencyLeaseId/);
+  assert.match(runner, /Managed dependency lease cache is missing/);
+  assert.match(runner, /Managed dependency lease is incomplete/);
+  assert.match(runner, /if \(!cache\.dependencyLeaseId\) detachOwnedDependencyCache\(cache\)/);
+  assert.doesNotMatch(runner, /AI_DESKTOP_TEST_TASK_ID/);
 });
 
 test("当前哈希缓存存在时收敛实体目录和旧哈希链接", () => {
@@ -117,8 +126,11 @@ test("当前哈希缓存存在时收敛实体目录和旧哈希链接", () => {
   assert.ok(cache.indexOf("Dependency cache is missing") < cache.indexOf("recursive: true, force: true"));
 });
 
-test("签发 worktree 内层命令借用外层依赖链接且不抢占清理所有权", () => {
-  assert.match(runner, /preserveExistingLink: Boolean\(process\.env\.AI_DESKTOP_TEST_TASK_ID\)/);
-  assert.match(cache, /options\.preserveExistingLink === true/);
-  assert.match(cache, /dependencyRoot: linkedDependencyRoot, ownsLink: false, ownsBuildLink: false/);
+test("共享依赖租约从 Git 公共仓库解析缓存根并核对两份锁文件", () => {
+  assert.match(cache, /AI_DESKTOP_DEPENDENCY_LEASE_ID/);
+  assert.match(cache, /rev-parse", "--path-format=absolute", "--git-common-dir/);
+  assert.match(cache, /worktree", "list", "--porcelain/);
+  assert.match(cache, /sourceLockHash !== lockHash/);
+  assert.match(cache, /link target does not match the registered repository cache/);
+  assert.doesNotMatch(cache, /AI_DESKTOP_DEPENDENCY_SOURCE_ROOT|AI_DESKTOP_DEPENDENCY_LOCK_HASH/);
 });

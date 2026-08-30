@@ -1,11 +1,9 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
-import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
 
 import type { CodexStreamEvent } from "../../../contracts/desktop/desktop.js";
-import { cleanupIntegrationDependencyLinks, ensureIntegrationDependencies } from "./integration-verifier.js";
+import { acquireManagedDependencyLease, releaseManagedDependencyLease } from "./integration-verifier.js";
 import { TestResourceCoordinatorFacade } from "./test-resource-coordinator-facade.js";
 
 interface TaskWorktreeTestRequest {
@@ -57,18 +55,17 @@ export class TaskWorktreeTestRunner {
   async #runIsolated(request: TaskWorktreeTestRequest): Promise<void> {
     const safeTaskId = safeSegment(request.taskId);
     const desktopRoot = path.join(path.resolve(request.worktreeRoot), "apps", this.#applicationName);
-    const sourceDesktopRoot = path.join(this.#sourceProjectRoot, "apps", this.#applicationName);
-    const sourceDataPaths = resolveApplicationDataPaths({ selplatRoot: this.#sourceProjectRoot, applicationName: this.#applicationName });
-    const sourceModules = resolveLockSpecificDependencyPaths(sourceDataPaths.dependencyCacheRoot, readFileSync(path.join(sourceDesktopRoot, "package-lock.json"))).nodeModulesRoot;
     validateFixedScripts(desktopRoot);
-    const dependencyMode = await ensureIntegrationDependencies(
-      desktopRoot,
-      sourceModules,
-      path.join(sourceDesktopRoot, "package-lock.json"),
+    const dependencyLease = await acquireManagedDependencyLease(
+      request.worktreeRoot,
+      this.#sourceProjectRoot,
+      this.#applicationName,
+      `task-validation-${safeTaskId}`,
       path.join(this.#cacheRoot, "npm"),
     );
     const environment: NodeJS.ProcessEnv = {
       ...process.env,
+      ...dependencyLease.environment,
       AI_DESKTOP_TEST_TASK_ID: safeTaskId,
       PLAYWRIGHT_BROWSERS_PATH: path.join(this.#cacheRoot, "playwright"),
       npm_config_cache: path.join(this.#cacheRoot, "npm"),
@@ -81,7 +78,7 @@ export class TaskWorktreeTestRunner {
     delete environment.NODE_OPTIONS;
     delete environment.NODE_INSPECT_RESUME_ON_START;
     delete environment.VSCODE_INSPECTOR_OPTIONS;
-    this.#recordEvent("collaboration.task_test.started", { worktreeRoot: request.worktreeRoot, dependencyMode }, request.taskId);
+    this.#recordEvent("collaboration.task_test.started", { worktreeRoot: request.worktreeRoot, dependencyMode: "managed-lease" }, request.taskId);
     try {
       for (const script of TEST_SCRIPTS) {
         const command = `npm run ${script.name}`;
@@ -100,7 +97,7 @@ export class TaskWorktreeTestRunner {
       this.#recordEvent("collaboration.task_test.completed", { worktreeRoot: request.worktreeRoot }, request.taskId);
     } finally {
       // 锁文件一致时只临时复用主工程依赖，任务验证结束立即移除链接，避免进入分支提交。
-      cleanupIntegrationDependencyLinks(desktopRoot);
+      releaseManagedDependencyLease(dependencyLease);
     }
   }
 }

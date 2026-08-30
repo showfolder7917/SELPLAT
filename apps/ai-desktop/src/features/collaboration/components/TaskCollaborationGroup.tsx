@@ -110,7 +110,8 @@ function nodeStatusLabel(status: CollaborationTimelineNode["status"], locale: Lo
 
 function durationLabel(node: CollaborationTimelineNode, locale: Locale, nowMs: number): string {
   const prefix = node.status === "completed" ? (locale === "ja" ? "処理時間" : "处理耗时") : node.kind === "verification" ? (locale === "ja" ? "検証済み" : "已验证") : node.status === "waiting" ? (locale === "ja" ? "待機" : "已等待") : (locale === "ja" ? "処理済み" : "已处理");
-  const liveDuration = node.completedAt ? node.durationMs : Math.max(node.durationMs, nowMs - Date.parse(node.startedAt));
+  const terminal = node.status === "completed" || node.status === "failed";
+  const liveDuration = node.completedAt || terminal ? node.durationMs : Math.max(node.durationMs, nowMs - Date.parse(node.startedAt));
   return `${prefix} ${formatDuration(liveDuration, locale)}`;
 }
 

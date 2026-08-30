@@ -9,6 +9,7 @@ import type {
 const NANGONG: CollaborationParticipantSnapshot = { memberId: "nangong-wan", displayName: "南宫婉" };
 const LINGHU: CollaborationParticipantSnapshot = { memberId: "linghu-ancestor", displayName: "令狐老祖" };
 const SYSTEM: CollaborationParticipantSnapshot = { memberId: "system", displayName: "系统" };
+const EXECUTION_POOL: CollaborationParticipantSnapshot = { memberId: "execution-pool", displayName: "执行池" };
 
 export type ProjectedTimelineFact = Omit<CollaborationTimelineNode, "durationMs" | "taskId"> & {
   sourceSuffix: string;
@@ -20,10 +21,35 @@ export interface CollaborationFlowProjection {
 }
 
 /**
+ * 把旧版已经落库为 `unmapped` 的 task.submitted 节点追加为终态纠正事实。
+ *
+ * 真实传参示例：旧节点仍为 current、任务已有 executor.assigned 时，返回同 nodeId 的 completed 事实。
+ * 真实返回示例：页面折叠后只保留“任务已分发”，耗时截止到执行人接收时间。
+ * 异常或副作用示例：尚未分配执行人时仍返回 waiting，不伪造完成时间；原始数据库事实保持不变。
+ */
+export function projectLegacySubmittedFlowCorrection(
+  task: CollaborationTask,
+  event: CollaborationFlowEvent,
+  initiator: CollaborationParticipantSnapshot,
+): CollaborationFlowProjection | null {
+  if (event.type !== "task.submitted") return null;
+  const assigned = task.flowEvents.find((candidate) => candidate.type === "executor.assigned" && candidate.occurredAt >= event.occurredAt);
+  const recipient = assigned?.actor || task.originalExecutor || task.executionRecords.at(0)?.executor || EXECUTION_POOL;
+  return projection("running", [{
+    nodeId: `unmapped:${task.taskId}:${event.eventId}`, kind: "distribution", actor: event.actor || initiator,
+    recipients: [recipient], status: assigned ? "completed" : "waiting",
+    action: assigned ? "任务已分发" : "等待分配执行人", summary: assigned?.summary || event.summary,
+    content: task.snapshot.confirmedIntent, detail: task.snapshot.problemStatement, startedAt: event.occurredAt,
+    completedAt: assigned?.occurredAt || null, automaticOpen: !assigned, manualApprovalProposalId: null,
+    sourceSuffix: "",
+  }]);
+}
+
+/**
  * 将 Coordinator 的类型化流程事件转换为页面可读事实，Repository 只负责持久化。
  *
- * 真实传参示例：`integration.local_change_ownership_blocked` 返回“等待确认本地修改归属”的等待节点。
- * 真实返回示例：`worker.phase.verifying` 同时结束执行节点并开启独立自检节点。
+ * 真实传参示例：`task.submitted` 先返回等待分配节点，`executor.assigned` 再结束该节点并开启技术分析。
+ * 真实返回示例：执行人接收任务后，分发节点包含真实接收人和固定处理时长，不再继续计时。
  * 异常或副作用示例：历史数据中的未知事件会生成可读兜底节点，不会静默丢失，也不会修改任务快照。
  */
 export function projectCollaborationFlowEvent(
@@ -41,11 +67,29 @@ export function projectCollaborationFlowEvent(
   };
   const fact = (input: Omit<ProjectedTimelineFact, "sourceSuffix">, sourceSuffix = ""): ProjectedTimelineFact => ({ ...input, sourceSuffix });
 
-  if (event.type === "executor.assigned" || event.type === "executor.reassigned") return projection("running", [fact({
-    nodeId: ids.analysis, kind: "analysis", actor, recipients: [initiator], status: "current", action: "当前正在技术分析",
-    summary: event.summary, content: "", detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"),
-    startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
-  })]);
+  if (event.type === "task.submitted") {
+    const recipient = task.originalExecutor || task.executionRecords.at(0)?.executor || EXECUTION_POOL;
+    return projection("running", [fact({
+      nodeId: `distribution:${task.taskId}`, kind: "distribution", actor: event.actor || initiator, recipients: [recipient],
+      status: "waiting", action: "等待分配执行人", summary: event.summary, content: task.snapshot.confirmedIntent,
+      detail: task.snapshot.problemStatement, startedAt: event.occurredAt, completedAt: null,
+      automaticOpen: true, manualApprovalProposalId: null,
+    })]);
+  }
+
+  if (event.type === "executor.assigned" || event.type === "executor.reassigned") {
+    const facts = [fact({
+      nodeId: ids.analysis, kind: "analysis", actor, recipients: [initiator], status: "current", action: "当前正在技术分析",
+      summary: event.summary, content: "", detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"),
+      startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
+    })];
+    if (event.type === "executor.assigned") facts.unshift(fact({
+      nodeId: `distribution:${task.taskId}`, kind: "distribution", actor: initiator, recipients: [actor], status: "completed",
+      action: "任务已分发", summary: event.summary, content: task.snapshot.confirmedIntent, detail: task.snapshot.problemStatement,
+      startedAt: task.startedAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
+    }, ":distribution-completed"));
+    return projection("running", facts);
+  }
 
   if (event.type === "technical_analysis.ready") return projection("running", [fact({
     nodeId: ids.analysis, kind: "analysis", actor, recipients: [initiator], status: "completed", action: "技术分析完成",
@@ -120,14 +164,28 @@ export function projectCollaborationFlowEvent(
     automaticOpen: false, manualApprovalProposalId: null,
   })]);
 
+  if (event.type === "integration.candidate_preparation_failed") {
+    const presentation = integrationFailurePresentation(task, true);
+    return projection("blocked", [fact({
+      nodeId: `integration-preparation:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor,
+      recipients: [NANGONG], status: "failed", action: "统一测试准备失败",
+      summary: presentation.summary, content: presentation.impact, detail: presentation.detail,
+      startedAt: priorEventAt(task, "integration.batch_frozen") || event.occurredAt, completedAt: event.occurredAt,
+      automaticOpen: true, manualApprovalProposalId: null,
+    })]);
+  }
+
   if (event.type === "unified_test.started" || event.type === "unified_test.passed" || event.type === "unified_test.failed") {
     const failed = event.type === "unified_test.failed";
     const completed = event.type === "unified_test.passed";
+    const preparationFailure = failed && isCandidatePreparationFailure(task);
+    const presentation = failed ? integrationFailurePresentation(task, preparationFailure) : null;
     const facts = [fact({
       nodeId: `unified-test:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor, recipients: [NANGONG],
       status: failed ? "failed" : completed ? "completed" : "current",
-      action: failed ? "统一测试未通过" : completed ? "统一测试通过" : "当前正在统一测试",
-      summary: event.summary, content: event.summary, detail: task.integrationFailure?.detail || "",
+      action: preparationFailure ? "统一测试准备失败" : failed ? "统一测试未通过" : completed ? "统一测试通过" : "当前正在统一测试",
+      summary: presentation?.summary || event.summary, content: presentation?.impact || event.summary,
+      detail: presentation?.detail || task.integrationFailure?.detail || "",
       startedAt: task.unifiedTest?.startedAt || event.occurredAt, completedAt: event.type === "unified_test.started" ? null : event.occurredAt,
       automaticOpen: !completed, manualApprovalProposalId: null,
     })];
@@ -238,6 +296,26 @@ export function projectCollaborationFlowEvent(
     completedAt: fallbackStatus === "completed" || fallbackStatus === "failed" ? event.occurredAt : null,
     automaticOpen: fallbackStatus !== "completed", manualApprovalProposalId: null,
   })]);
+}
+
+function isCandidatePreparationFailure(task: CollaborationTask): boolean {
+  const failure = task.integrationFailure;
+  return failure?.kind === "candidate-branch-conflict"
+    || failure?.phase === "preparation"
+    || /发布候选分支\s+\S+\s+已存在|禁止覆盖同一批次证据/.test(failure?.detail || "");
+}
+
+function integrationFailurePresentation(task: CollaborationTask, preparation: boolean): { summary: string; impact: string; detail: string } {
+  const failure = task.integrationFailure;
+  const evidence = failure?.detail || task.blockingReason || "未记录技术证据";
+  const summary = failure?.summary || (preparation ? "发布候选批次冲突，统一测试尚未启动" : "统一测试发现未通过项，已转入修复");
+  const impact = failure?.impact || (preparation
+    ? "候选分支创建阶段被阻断，本批次尚未运行统一测试命令，不能记作测试用例未通过。"
+    : "候选版本已经开始统一测试，验证命令返回失败，本批次暂不能发布。");
+  const recoveryAction = failure?.recoveryAction || (preparation
+    ? "保留既有发布证据，分配新的集成代次或清理确认无用的冲突候选后重新准备测试。"
+    : "令狐老祖根据失败证据修复后重新执行统一测试。原始失败不会被隐藏或覆盖。");
+  return { summary, impact, detail: `技术证据：${evidence}\n恢复动作：${recoveryAction}` };
 }
 
 function projection(topicStatus: CollaborationTimelineGroup["status"], facts: ProjectedTimelineFact[]): CollaborationFlowProjection {

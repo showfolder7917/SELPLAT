@@ -392,6 +392,7 @@ app.whenReady().then(async () => {
   );
   const collaborationSessions = new CodexCollaborationSessionFactory({
     projectRoot,
+    applicationName,
     sessionRoot: path.join(collaborationRoot, "sessions"),
     codexHome,
     trustedCommands,
@@ -590,6 +591,8 @@ app.whenReady().then(async () => {
       await collaboration?.dispose();
       runtimeDisposed = true;
 
+      // 失败候选必须先于数据库代次清理；Git 回收失败时保留数据库恢复点，成功发布证据不参与清理。
+      const candidateCleanup = await versionWorkspaces.clearFailedTestReleaseCandidates(releaseBatches.failedCandidateBranches());
       const repositoryToClear = workflowRepository;
       let clearedRecordCount = 0;
       dispatch.clear();
@@ -602,7 +605,12 @@ app.whenReady().then(async () => {
       workflowRepository = null;
       closeAiMemoryDatabase();
 
-      const result: TestDataResetResult = { cleared: true, clearedRecordCount, restartScheduled: true };
+      const result: TestDataResetResult = {
+        cleared: true, clearedRecordCount,
+        clearedCandidateBranchCount: candidateCleanup.branchCount,
+        clearedCandidateWorktreeCount: candidateCleanup.worktreeCount,
+        restartScheduled: true,
+      };
       app.relaunch({ args: process.argv.slice(1) });
       setTimeout(() => app.exit(0), 180);
       return result;

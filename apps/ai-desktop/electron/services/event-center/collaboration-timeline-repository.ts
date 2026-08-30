@@ -10,7 +10,7 @@ import type {
   CollaborationTimelineSnapshot,
 } from "../../../contracts/collaboration/collaboration.js";
 import type { CollaborationTimelineBusinessEvent } from "../../../contracts/collaboration/collaboration-timeline-event.js";
-import { projectCollaborationFlowEvent } from "./collaboration-timeline-flow-projector.js";
+import { projectCollaborationFlowEvent, projectLegacySubmittedFlowCorrection } from "./collaboration-timeline-flow-projector.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
 
 const NANGONG: CollaborationParticipantSnapshot = { memberId: "nangong-wan", displayName: "南宫婉" };
@@ -61,11 +61,22 @@ export class CollaborationTimelineRepository {
           group = { groupId, topicId: null, proposalId: task.evolutionProposalId, title: task.snapshot.title, startedAt: task.createdAt };
         }
         for (const event of task.flowEvents) {
-          if (connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: `flow:${event.eventId}` })) continue;
-          const projection = projectCollaborationFlowEvent(task, event, task.initiator || NANGONG);
+          const legacySourceFactKey = `flow:${event.eventId}`;
+          const sourceFactKey = event.type === "task.submitted"
+            ? `${legacySourceFactKey}:submission-lifecycle-v2`
+            : event.type === "unified_test.failed"
+              ? `${legacySourceFactKey}:failure-semantics-v2`
+              : legacySourceFactKey;
+          if (connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: sourceFactKey })) continue;
+          const legacySubmitted = event.type === "task.submitted"
+            && Boolean(connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: legacySourceFactKey }));
+          const projection = legacySubmitted
+            ? projectLegacySubmittedFlowCorrection(task, event, task.initiator || NANGONG)
+            : projectCollaborationFlowEvent(task, event, task.initiator || NANGONG);
+          if (!projection) continue;
           for (const { sourceSuffix, ...fact } of projection.facts) this.#appendFact(connection, {
             ...fact, groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
-            sourceFactKey: `flow:${event.eventId}${sourceSuffix}`, occurredAt: event.occurredAt,
+            sourceFactKey: `${sourceFactKey}${sourceSuffix}`, occurredAt: event.occurredAt,
           });
           connection.prepare(`UPDATE AiDesktopTaskCollaborationTopic SET status=$status, summary=$summary,
             updatedAt=CASE WHEN updatedAt < $updatedAt THEN $updatedAt ELSE updatedAt END WHERE groupId=$groupId`).run({
@@ -182,11 +193,13 @@ export class CollaborationTimelineRepository {
     const nodeId = String(row.nodeId);
     const stream = visibleStreamText(connection, String(row.groupId), nodeId);
     const startedAt = String(row.startedAt);
-    const completedAt = nullable(row.completedAt);
+    const status = row.status as CollaborationTimelineNode["status"];
+    // 历史终态事实可能缺少 completedAt；以事实发生时间收口，禁止页面把已完成或失败节点继续计时。
+    const completedAt = nullable(row.completedAt) || (status === "completed" || status === "failed" ? String(row.occurredAt) : null);
     return {
       nodeId, taskId: nullable(row.taskId), kind: row.kind as CollaborationTimelineNode["kind"],
       actor: participant(String(row.actorMemberId), String(row.actorDisplayName)), recipients: parseParticipants(row.recipientsJson),
-      status: row.status as CollaborationTimelineNode["status"], action: String(row.action), summary: String(row.summary),
+      status, action: String(row.action), summary: String(row.summary),
       content: stream || String(row.content), detail: String(row.detail), startedAt, completedAt,
       durationMs: durationMs(startedAt, completedAt || now), automaticOpen: Number(row.automaticOpen) === 1,
       manualApprovalProposalId: nullable(row.manualApprovalProposalId),

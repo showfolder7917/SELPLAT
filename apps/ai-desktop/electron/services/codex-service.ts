@@ -65,6 +65,8 @@ export interface CodexServiceOptions {
   readRuleInstructions?: () => string;
   /** 主人物回合完成后触发训练语料增量归档；内部自动化连接不配置此回调。 */
   onConversationTurnCompleted?: () => void | Promise<void>;
+  /** 协作工作树由主进程签发的依赖租约；只携带标识，缓存根由子命令从 Git 公共仓库独立验证。 */
+  dependencyLeaseId?: string;
 }
 
 const EMPTY_ACCOUNT: CodexAccount = {
@@ -480,7 +482,7 @@ export class CodexService {
 
   async #start(): Promise<void> {
     // 运行时探测与 app-server 使用完全相同的数据域，避免读取另一个 App 的模型缓存和认证状态。
-    const childEnvironment = createCodexChildEnvironment(process.env, this.#options.codexHome);
+    const childEnvironment = createCodexChildEnvironment(process.env, this.#options.codexHome, this.#options.dependencyLeaseId);
     const runtime = await resolveCodexRuntime(childEnvironment);
     this.#runtime = runtime;
     this.#onThreadLifecycle({ action: "harness_runtime_selected", source: runtime.source, version: runtime.version });
@@ -749,11 +751,17 @@ export class CodexService {
 }
 
 /** 为 AI Desktop Harness 建立明确的数据域，并移除宿主 App 注入的来源冒充标记。 */
-export function createCodexChildEnvironment(environment: NodeJS.ProcessEnv, codexHome: string | null): NodeJS.ProcessEnv {
+export function createCodexChildEnvironment(environment: NodeJS.ProcessEnv, codexHome: string | null, dependencyLeaseId?: string): NodeJS.ProcessEnv {
   const childEnvironment = { ...environment };
   if (codexHome) childEnvironment.CODEX_HOME = codexHome;
   else delete childEnvironment.CODEX_HOME;
   delete childEnvironment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE;
+  // 宿主环境不得把旧任务租约泄漏给新连接；只有当前连接显式持有租约时才重新注入无路径标识。
+  delete childEnvironment.AI_DESKTOP_DEPENDENCY_LEASE_ID;
+  if (dependencyLeaseId) {
+    if (!/^[a-zA-Z0-9._-]+$/.test(dependencyLeaseId)) throw new Error("Dependency lease id is invalid");
+    childEnvironment.AI_DESKTOP_DEPENDENCY_LEASE_ID = dependencyLeaseId;
+  }
   return childEnvironment;
 }
 

@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 
-import type { CollaborationMember, CollaborationState, CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
+import type { CollaborationIntegrationFailureKind, CollaborationMember, CollaborationState, CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
 import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../contracts/collaboration/integration-release.js";
 import { CollaborationDurationLog, type CollaborationDurationSegment, type CollaborationWaitType } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
 import { ReleaseBatchStore } from "./release-batch-store.js";
 import { createCollaborationResultSummary } from "./result/result-summary.js";
 import {
+  CandidateBranchConflictError,
   LocalChangeOwnershipError,
   MergeConflictError,
   type IntegrationCandidate,
@@ -263,7 +264,10 @@ export class VersionIntegrationPipeline {
       // 本地归属、Git 冲突与候选验证失败分别进入不同恢复路径，禁止统一伪装成测试失败。
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;
       const mergeConflict = error instanceof MergeConflictError;
-      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : "verification";
+      const candidateBranchConflict = error instanceof CandidateBranchConflictError;
+      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict ? "candidate-branch-conflict" : "verification";
+      const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict ? "preparation" : verifySpan ? "verification" : "release";
+      const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error));
       const conflictFiles = mergeConflict ? error.conflictFiles : [];
       if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
       if (verifySpan) this.#durations.finish(verifySpan, "failed", { error: errorMessage(error) });
@@ -279,18 +283,26 @@ export class VersionIntegrationPipeline {
         }
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = ownershipBlocked || mergeConflict ? "blocked" : "test-failed";
+          task.state = ownershipBlocked || mergeConflict || candidateBranchConflict ? "blocked" : "test-failed";
           task.phase = null;
-          task.blockingReason = ownershipBlocked
-            ? `合并前本地修改归属门禁阻塞：${errorMessage(error)}`
-            : mergeConflict
-              ? `版本冲突需要基于当前主线重新修正：${errorMessage(error)}`
-              : `${currentActor.displayName}统一测试失败：${errorMessage(error)}`;
+          task.blockingReason = failurePresentation.summary;
           task.recoveryTargetState = "ready-for-integration";
-          task.integrationFailure = { kind: failureKind, detail: errorMessage(error), conflictFiles, baseSha: mergeConflict ? error.baseSha : task.versionWorkspace?.baseSha || null, resultSha: mergeConflict ? error.resultSha : task.versionWorkspace?.resultSha || null, generation, occurredAt: new Date().toISOString() };
+          task.integrationFailure = {
+            kind: failureKind, phase: failurePhase, summary: failurePresentation.summary,
+            impact: failurePresentation.impact, recoveryAction: failurePresentation.recoveryAction,
+            detail: errorMessage(error), conflictFiles,
+            baseSha: mergeConflict ? error.baseSha : task.versionWorkspace?.baseSha || null,
+            resultSha: mergeConflict ? error.resultSha : task.versionWorkspace?.resultSha || null,
+            generation, occurredAt: new Date().toISOString(),
+          };
           task.currentHandler = participantSnapshot(currentActor);
-          if (!ownershipBlocked && !mergeConflict) task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
-          appendFlow(task, ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : "unified_test.failed", "integration", ownershipBlocked || mergeConflict ? "waiting" : "failed", task.blockingReason, currentActor, !ownershipBlocked && !mergeConflict);
+          if (failurePhase === "verification") task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
+          appendFlow(
+            task,
+            ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : candidateBranchConflict ? "integration.candidate_preparation_failed" : "unified_test.failed",
+            "integration", ownershipBlocked || mergeConflict ? "waiting" : "failed", failurePresentation.summary, currentActor,
+            !ownershipBlocked && !mergeConflict,
+          );
         }
       });
       this.#durations.writeGenerationReport(generation, taskIds);
@@ -312,6 +324,33 @@ export class VersionIntegrationPipeline {
     // 发布只消费已经归档为 published 的稳定可执行文件，失败批次不会触发受控重启。
     if (publishedExecutable && releaseDocument?.state === "published") this.#publishRelease(publishedExecutable, releaseBatchId);
   }
+}
+
+function integrationFailurePresentation(kind: CollaborationIntegrationFailureKind, generation: number, detail: string): {
+  summary: string;
+  impact: string;
+  recoveryAction: string;
+} {
+  if (kind === "candidate-branch-conflict") return {
+    summary: `发布候选批次 ${generation} 冲突，统一测试尚未启动`,
+    impact: "候选分支创建阶段被阻断，本批次尚未运行统一测试命令，不能记作测试用例未通过。",
+    recoveryAction: "保留既有发布证据，分配新的集成代次或清理确认无用的冲突候选后重新准备测试。",
+  };
+  if (kind === "local-change-ownership") return {
+    summary: "合并前无法确认本地修改归属",
+    impact: "版本候选尚未建立，未确认归属的修改不会被自动提交或合并。",
+    recoveryAction: "确认修改所属任务并转回对应任务分支后，再重新进入集成准备。",
+  };
+  if (kind === "merge-conflict") return {
+    summary: "版本候选合并发生冲突",
+    impact: "候选版本未完成组装，统一测试尚未开始。",
+    recoveryAction: "依据冲突文件和固定提交证据修正任务分支，然后重新生成候选版本。",
+  };
+  return {
+    summary: "统一测试发现未通过项，已转入修复",
+    impact: "候选版本已经开始统一测试，验证命令返回失败，本批次暂不能发布。",
+    recoveryAction: `当前测试负责人根据失败证据修复后重新执行统一测试；原始证据保留：${detail.slice(0, 240)}`,
+  };
 }
 
 function requireActor(state: CollaborationState, memberId: string): CollaborationMember {

@@ -23,6 +23,11 @@ import type {
   CollaborationSessionFactory,
 } from "./collaboration-coordinator.js";
 import { CollaborationDurationLog } from "./collaboration-duration-log.js";
+import {
+  acquireManagedDependencyLease,
+  releaseManagedDependencyLease,
+  type ManagedDependencyLease,
+} from "./integration-verifier.js";
 
 interface RegisteredConnection {
   connectionId: string;
@@ -32,6 +37,7 @@ interface RegisteredConnection {
   role: "executor";
   service: CodexService;
   sessions: CodexSessionStore;
+  dependencyLease: ManagedDependencyLease | null;
 }
 
 /** 把多个 app-server 的局部请求 ID 映射为主进程唯一 ID，避免不同连接的审批互相串线。 */
@@ -130,6 +136,7 @@ export class CollaborationCodexRegistry {
 
 export interface CodexCollaborationSessionFactoryOptions {
   projectRoot: string;
+  applicationName: string;
   sessionRoot: string;
   codexHome: string;
   trustedCommands: TrustedCommandStore;
@@ -151,16 +158,30 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
   }
 
   async createExecutor(task: CollaborationTask, member: CollaborationMember): Promise<CollaborationExecutorSession> {
-    const connection = this.#createConnection(task, member, "executor");
-    return new CodexExecutorSession(
-      connection,
-      this.#options.registry,
-      this.#options.resolveAttachmentPaths,
-      this.#options.runCodeValidation,
-    );
+    const workspaceRoot = task.versionWorkspace?.rootPath;
+    const dependencyLease = workspaceRoot
+      ? await acquireManagedDependencyLease(
+        workspaceRoot,
+        this.#options.projectRoot,
+        this.#options.applicationName,
+        `executor-${task.taskId}-${member.memberId}-g${member.generation}`,
+      )
+      : null;
+    try {
+      const connection = this.#createConnection(task, member, "executor", dependencyLease);
+      return new CodexExecutorSession(
+        connection,
+        this.#options.registry,
+        this.#options.resolveAttachmentPaths,
+        this.#options.runCodeValidation,
+      );
+    } catch (error) {
+      releaseManagedDependencyLease(dependencyLease);
+      throw error;
+    }
   }
 
-  #createConnection(task: CollaborationTask, member: CollaborationMember, role: RegisteredConnection["role"]): RegisteredConnection {
+  #createConnection(task: CollaborationTask, member: CollaborationMember, role: RegisteredConnection["role"], dependencyLease: ManagedDependencyLease | null): RegisteredConnection {
     const connectionId = `${task.taskId}:${role}:${member.memberId}:g${member.generation}`;
     const sessionPath = path.join(this.#options.sessionRoot, `${safeName(connectionId)}.json`);
     const sessions = new CodexSessionStore(sessionPath);
@@ -175,13 +196,14 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
         migrateLegacySession: true,
         sessionStorage: "ai-desktop",
         validationOwner: "desktop",
+        dependencyLeaseId: dependencyLease?.leaseId,
         readSettings: this.#options.readSettings,
         readRuleInstructions: this.#options.readRuleInstructions,
       },
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
     );
-    const connection = { connectionId, taskId: task.taskId, memberId: member.memberId, memberName: member.displayName, role, service, sessions };
+    const connection = { connectionId, taskId: task.taskId, memberId: member.memberId, memberName: member.displayName, role, service, sessions, dependencyLease };
     this.#options.registry.register(connection);
     return connection;
   }
@@ -278,5 +300,6 @@ async function retireConnection(connection: RegisteredConnection, registry: Coll
     connection.service.dispose();
     connection.sessions.clear();
     registry.unregister(connection.connectionId);
+    releaseManagedDependencyLease(connection.dependencyLease);
   }
 }
