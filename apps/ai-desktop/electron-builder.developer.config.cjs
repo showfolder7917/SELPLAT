@@ -13,6 +13,10 @@ const baseConfig = JSON.parse(readFileSync(path.join(applicationRoot, "electron-
 
 module.exports = {
   ...baseConfig,
+  directories: {
+    ...baseConfig.directories,
+    output: path.join(selplatRoot, "build", "ai-desktop", "package", "developer"),
+  },
   // 只有开发版包写入构建机的工程定位；其他发布配置不得复用本文件，避免携带该绝对路径。
   extraMetadata: {
     ...baseConfig.extraMetadata,

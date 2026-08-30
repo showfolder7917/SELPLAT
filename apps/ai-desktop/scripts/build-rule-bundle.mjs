@@ -11,9 +11,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
+import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const projectRoot = path.resolve(appRoot, "../..");
+const projectRoot = resolveSelectedWorkspaceRoot(path.resolve(appRoot, "../.."));
 const resourceRoot = path.join(appRoot, "ruleengine", "rules");
 const sourceManifestPath = path.join(appRoot, "ruleengine", "manifest", "production-rules.json");
 const applicationName = resolveApplicationNameFromSourceRoot(appRoot);

@@ -10,6 +10,7 @@ const requiredCapabilities = [
   "prepareScreenCapture",
   "getCollaborationState",
   "getCollaborationTimeline",
+  "onCollaborationTimelineChanged",
   "enqueueMessage",
   "windowControl",
 ];

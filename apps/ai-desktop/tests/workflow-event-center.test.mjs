@@ -16,10 +16,10 @@ mkdirSync(controlledTestRoot, { recursive: true });
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1008");
+    assert.equal(fixture.database.latestSchemaVersion, "1011");
     fixture.database.withConnection((connection) => {
       for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);
@@ -42,6 +42,15 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
       { messageId: "training-user", role: "user", content: "这是必须保留的训练原话。", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z" },
     ], updatedAt: "2026-08-28T00:00:02.000Z" });
     fixture.database.withConnection((connection) => {
+      connection.prepare(`INSERT INTO AiDesktopTaskTimelineTopic
+        (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
+        VALUES ('timeline-topic:test', 'task-test', 'proposal-test', '时间线待清空专题', 'running', '时间线运行数据', '2026-08-28T00:00:00.000Z', '2026-08-28T00:00:01.000Z', '2026-08-28T00:00:00.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopTaskTimelineEvent
+        (factId, groupId, proposalId, taskId, nodeId, sourceFactKey, sequenceNumber, eventType, contentRole, detailRole, schemaVersion, kind, actorMemberId, actorDisplayName, recipientsJson, status, action, summary, content, detail, startedAt, completedAt, automaticOpen, manualApprovalProposalId, occurredAt, committedAt)
+        VALUES ('timeline-fact-test', 'timeline-topic:test', 'proposal-test', 'task-test', 'task-node-test', 'timeline-fact:test', 1, 'execution.started', 'execution-output', 'changed-files', 2, 'execution', 'zi-ling', '紫灵', '[]', 'current', '当前正在执行', '测试', '测试', '', '2026-08-28T00:00:00.000Z', NULL, 1, NULL, '2026-08-28T00:00:00.000Z', '2026-08-28T00:00:00.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopTaskTimelineStream
+        (chunkId, groupId, taskId, nodeId, memberId, turnId, segmentId, itemId, eventType, sequenceNumber, deltaText, snapshotText, occurredAt, committedAt)
+        VALUES ('timeline-chunk-test', 'timeline-topic:test', 'task-test', 'task-node-test', 'zi-ling', 'turn-test', NULL, NULL, 'message-delta', 1, '时间线流式测试', NULL, '2026-08-28T00:00:00.000Z', '2026-08-28T00:00:00.000Z')`).run();
       connection.prepare(`INSERT INTO AiDesktopTaskCollaborationTopic
         (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
         VALUES ('task-topic:test', 'task-test', 'proposal-test', '新时间线待清空专题', 'running', '新时间线运行数据', '2026-08-28T00:00:00.000Z', '2026-08-28T00:00:01.000Z', '2026-08-28T00:00:00.000Z')`).run();
@@ -63,8 +72,11 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
     });
     const schemaCountBefore = fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get().count));
     assert.ok(fixture.repository.clearTestData() > 0);
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
+    }
+    for (const retired of ["AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
+      assert.equal(fixture.database.withConnection((connection) => Number(connection.prepare(`SELECT COUNT(*) AS count FROM ${retired}`).get().count)), 0, retired);
     }
     assert.equal(fixture.repository.tableCount("AiDesktopConversationMemory"), 1);
     assert.deepEqual(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-topic"), { perspective: "nangong", nodeId: "manual-topic", page: 3, pageSize: 50, keyword: "滚动条", status: "已阻塞", selectedRowId: "topic-25", updatedAt: "2026-08-28T00:00:01.500Z" });
@@ -599,6 +611,7 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
       evolution: () => ({ version: 5, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { conversationId: "conversation", messages: [], updatedAt: now.toISOString() }, updatedAt: now.toISOString() }),
       linghu: () => ({ version: 2, enabled: linghuEnabled, pollIntervalMs: 30_000, cycle: 1, currentModule: "flow-completion", activePromptId: null, activeTaskId: null, pendingRepairProposalId: null, recoveryAttemptCount: 0, currentFaultFingerprint: null, recoveryAttemptsByFingerprint: {}, detectionCursor: null, flowSnapshots: [], testResourceState: null, recoveryCheckpoint: null, lastDispatchAt: null, lastCompletedAt: null, lastCheckedAt: null, blockingReason: null, lastFeedback: null, lastModuleReport: null, prompts: [], updatedAt: now.toISOString() }),
     },
+    projectCollaborationTimeline: () => undefined,
     onStalledTasks: (taskIds) => handedOff.push(...taskIds),
     onUnhandledExceptions: (events) => handedOffExceptions.push(...events),
   });

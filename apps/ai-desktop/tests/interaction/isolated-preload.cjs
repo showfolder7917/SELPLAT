@@ -26,6 +26,7 @@ const dispatchListeners = new Set();
 const streamListeners = new Set();
 const collaborationStateListeners = new Set();
 const collaborationStreamListeners = new Set();
+const collaborationTimelineListeners = new Set();
 const linghuAutomationListeners = new Set();
 const nangongEvolutionListeners = new Set();
 const evolutionWorkbenchChangeListeners = new Set();
@@ -129,6 +130,10 @@ const publishCollaborationState = (reason) => {
   for (const listener of collaborationStateListeners) listener({ state: copy, reason, taskIds });
   return copy;
 };
+const publishCollaborationTimelineChanged = () => {
+  const event = { committedAt: new Date().toISOString(), groupIds: ["topic:interaction-timeline"], groupVersions: { "topic:interaction-timeline": 1 } };
+  for (const listener of collaborationTimelineListeners) listener(structuredClone(event));
+};
 const interactionTimelineSnapshot = () => {
   if (!taskTimelineFixtureEnabled) return { version: 1, groups: [], updatedAt: nangongEvolutionState.updatedAt };
   const proposal = nangongEvolutionState.proposals.find((item) => item.proposalId === "interaction-timeline-proposal");
@@ -183,6 +188,18 @@ const interactionTimelineSnapshot = () => {
         durationMs: (index + 1) * 60_000, automaticOpen: index < 2, manualApprovalProposalId: null,
       }));
     }
+  }
+  for (const node of nodes) {
+    node.eventType ||= `interaction.${node.kind}`;
+    node.contentRole ||= node.kind === "approval-application" ? "approval-content"
+      : node.kind === "approval-decision" ? "approval-reason"
+        : node.kind === "distribution" ? "task-content"
+          : node.kind === "verification" ? "verification-output"
+            : node.kind === "execution" ? "execution-output" : "analysis-output";
+    node.detailRole ||= node.kind === "approval-application" ? "application-evidence"
+      : node.kind === "approval-decision" ? "approval-scope"
+        : node.kind === "distribution" ? "task-breakdown"
+          : node.kind === "verification" ? "verification-evidence" : "changed-files";
   }
   const currentCount = nodes.filter((node) => node.status === "current").length;
   return { version: 1, groups: [{
@@ -309,6 +326,7 @@ contextBridge.exposeInMainWorld("desktop", {
   openAuditLogDirectory: async () => undefined,
   getCollaborationState: async () => structuredClone(collaborationState),
   getCollaborationTimeline: async () => structuredClone(interactionTimelineSnapshot()),
+  onCollaborationTimelineChanged: (listener) => { collaborationTimelineListeners.add(listener); return () => collaborationTimelineListeners.delete(listener); },
   setDesktopOperatingMode: async (mode) => { collaborationState.mode = mode; return publishCollaborationState("mode.changed"); },
   selectCollaborationMember: async (memberId) => { collaborationState.selectedMemberId = memberId; return publishCollaborationState("member.selected"); },
   createCollaborationMember: async ({ displayName }) => {
@@ -496,6 +514,7 @@ contextBridge.exposeInMainWorld("desktop", {
     nangongEvolutionState.proposals = active ? [{ proposalId: "interaction-timeline-proposal", topicId: "interaction-timeline", version: 1, title: "修订截图按钮可用态", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: "统一修正主会话与南宫婉会话截图按钮的可用态、悬停态、键盘焦点态和忙碌禁用态。", status: "pending-approval", approvals: [], distributedTaskIds: [], createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
     nangongEvolutionState.activeTopicId = active ? "interaction-timeline" : null;
     publishNangongEvolution(active ? "interaction.timeline_fixture" : "interaction.timeline_fixture_cleared");
+    publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());
   },
   setInteractionCollaborationExecutionFixture: async (active) => {

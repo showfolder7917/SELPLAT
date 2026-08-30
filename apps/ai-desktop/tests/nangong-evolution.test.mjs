@@ -99,6 +99,13 @@ test("审批服务按发生顺序发布申请、决定和补充事实且不会�
     assert.equal(events[0].fact.recipients[0].displayName, "韩立");
     assert.equal(events[2].fact.actor.displayName, "韩立");
     assert.equal(events[2].fact.recipients[0].displayName, "南宫婉");
+    assert.equal(events[2].fact.contentRole, "approval-reason");
+    assert.equal(events[3].fact.contentRole, "status");
+    assert.doesNotMatch(events[3].fact.content, /补充具体影响范围/);
+    assert.equal(events[4].fact.contentRole, "approval-content");
+    assert.equal(events[5].fact.contentRole, "analysis-output");
+    assert.match(events[5].fact.content, /组件与文件范围/);
+    assert.equal(events.filter((event) => event.fact.content === "补充具体影响范围").length, 1);
     assert.equal(events.some((event) => event.fact.kind === "distribution"), false);
     assert.equal(submitted, 0);
   } finally { rmSync(directory, { recursive: true, force: true }); }

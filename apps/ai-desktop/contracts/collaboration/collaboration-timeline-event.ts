@@ -22,7 +22,7 @@ export interface CollaborationTimelineBusinessEvent {
     startedAt: string;
     updatedAt: string;
   };
-  fact: Omit<CollaborationTimelineNode, "durationMs"> & {
+  fact: Omit<CollaborationTimelineNode, "durationMs" | "eventType"> & {
     proposalId: string | null;
     sourceFactKey: string;
     occurredAt: string;

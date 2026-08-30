@@ -5,9 +5,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveDependencyCache } from "./dependency-cache.mjs";
+import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 
 const applicationRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const projectRoot = path.resolve(applicationRoot, "../..");
+const projectRoot = resolveSelectedWorkspaceRoot(path.resolve(applicationRoot, "../.."));
 const manifest = JSON.parse(readFileSync(path.join(applicationRoot, "package.json"), "utf8"));
 const releaseRoot = path.join(projectRoot, "build", "ai-desktop", "package", "developer");
 const portableRoot = path.join(releaseRoot, "win-unpacked");

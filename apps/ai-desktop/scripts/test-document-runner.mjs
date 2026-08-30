@@ -5,14 +5,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot, resolveArchiveMonth } from "@selplat/node-common-core/path";
 import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
+import { assertWorkspaceDataPath, resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const projectRoot = path.resolve(appRoot, "../..");
+const sourceProjectRoot = path.resolve(appRoot, "../..");
+const projectRoot = resolveSelectedWorkspaceRoot(sourceProjectRoot);
 const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
-const pendingRoot = projectPaths.pendingTestRoot;
-const runningRoot = projectPaths.runningTestRoot;
+const pendingRoot = assertWorkspaceDataPath(projectRoot, projectPaths.pendingTestRoot);
+const runningRoot = assertWorkspaceDataPath(projectRoot, projectPaths.runningTestRoot);
 const lockPath = path.join(runningRoot, "执行锁.json");
-const archiveRoot = projectPaths.testArchiveRoot;
+const archiveRoot = assertWorkspaceDataPath(projectRoot, projectPaths.testArchiveRoot);
 const staleAfterMs = 10 * 60 * 1_000;
 const allowedStandaloneScripts = new Set([
   "typecheck",
@@ -80,7 +82,7 @@ try {
     writeLock({ executor, task, thread, token, currentItem });
     const startedAt = new Date().toISOString();
     appendFileSync(eventPath, `${JSON.stringify({ type: "test.started", runId, script: item.script, startedAt, executor })}\n`, "utf8");
-    const result = spawnSync("npm", ["run", item.script], { cwd: appRoot, encoding: "utf8", stdio: "inherit" });
+    const result = spawnSync("npm", ["run", item.script], { cwd: appRoot, encoding: "utf8", stdio: "inherit", env: { ...process.env, SELPLAT_ROOT: projectRoot } });
     const completedAt = new Date().toISOString();
     const passed = result.status === 0;
     if (!passed) failed += 1;

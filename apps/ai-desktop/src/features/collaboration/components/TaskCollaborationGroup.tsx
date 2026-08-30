@@ -55,8 +55,8 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
               trigger={<TaskNodeHeader node={node} locale={locale} nowMs={nowMs} />}
               action={node.manualApprovalProposalId ? <button type="button" className="task-manual-approval" onClick={() => onManualApproval(node.manualApprovalProposalId!, group.title, node.content)}>{locale === "ja" ? "手動承認" : "手动审批"}</button> : undefined}
             >
-              <div className="task-node-content"><p>{liveText || node.content || node.summary}</p>{liveText && <span className="task-live-caret" aria-label={locale === "ja" ? "出力中" : "流式输出中"} />}</div>
-              {node.detail && <SelUiDisclosure idPrefix="task-node-detail" className="task-node-detail" open={false} trigger={<span>{detailLabel(node, locale)}</span>}><pre>{node.detail}</pre></SelUiDisclosure>}
+              <div className="task-node-content"><p>{presentTimelineText(liveText || node.content || node.summary)}</p>{liveText && <span className="task-live-caret" aria-label={locale === "ja" ? "出力中" : "流式输出中"} />}</div>
+              {node.detail && <SelUiDisclosure idPrefix="task-node-detail" className="task-node-detail" open={false} trigger={<span>{detailLabel(node, locale)}</span>}><pre>{presentTimelineText(node.detail)}</pre></SelUiDisclosure>}
             </SelUiDisclosure>
           </div>;
         })}</div>
@@ -73,7 +73,12 @@ function TaskGroupHeader({ group, locale, nowMs }: { group: CollaborationTimelin
 }
 
 function TaskNodeHeader({ node, locale, nowMs }: { node: CollaborationTimelineNode; locale: Locale; nowMs: number }) {
-  return <span className="task-node-header-content"><span className="task-node-main"><span><strong>{node.actor.displayName}</strong>{node.recipients.length > 0 && <em>{recipientLabel(node)}</em>}<b>{node.action}</b></span><small>{compact(node.summary)}</small></span><span className="task-node-meta"><small>{durationLabel(node, locale, nowMs)}</small><b>{nodeStatusLabel(node.status, locale)}</b></span></span>;
+  return <span className="task-node-header-content"><span className="task-node-main"><span><strong>{node.actor.displayName}</strong>{node.recipients.length > 0 && <em>{recipientLabel(node)}</em>}<b>{node.action}</b></span><small>{compact(presentTimelineText(node.summary))}</small></span><span className="task-node-meta"><small>{durationLabel(node, locale, nowMs)}</small><b>{nodeStatusLabel(node.status, locale)}</b></span></span>;
+}
+
+/** 原始数据库证据保持不变；页面只把临时候选工作树根显示成稳定逻辑名，文件与行号仍完整可见。 */
+function presentTimelineText(value: string): string {
+  return value.replace(/(?:[A-Za-z]:)?[\\/][^\n"'`]*?[\\/]collaboration[\\/]worktrees[\\/](?:release[\\/][^\\/\s"'`]+|tasks[\\/][^\\/\s"'`]+[\\/]r\d+)(?=[\\/])/gu, "[候选源码]");
 }
 
 function updateOpenOverride(setter: (update: (current: Map<string, boolean>) => Map<string, boolean>) => void, id: string, open: boolean): void {
@@ -125,9 +130,27 @@ function formatDuration(durationMs: number, locale: Locale): string {
 }
 
 function detailLabel(node: CollaborationTimelineNode, locale: Locale): string {
-  if (node.kind === "verification") return locale === "ja" ? "検証詳細" : "验证详情";
-  if (node.kind === "approval-application") return locale === "ja" ? "申請根拠" : "申请依据";
-  if (node.kind === "approval-decision") return locale === "ja" ? "承認補足" : "审批补充说明";
-  if (node.kind === "repair") return locale === "ja" ? "復旧条件" : "阻塞与恢复条件";
-  return locale === "ja" ? "実行詳細" : "执行详情";
+  const zh: Record<CollaborationTimelineNode["detailRole"], string> = {
+    none: "详情",
+    "application-evidence": "申请依据",
+    "approval-scope": "审批说明",
+    "task-breakdown": "任务明细",
+    "acceptance-criteria": "分析依据与验收条件",
+    "changed-files": "执行变更",
+    "verification-evidence": "验证详情",
+    "recovery-conditions": "阻塞与恢复条件",
+    "result-evidence": "结果依据",
+  };
+  const ja: Record<CollaborationTimelineNode["detailRole"], string> = {
+    none: "詳細",
+    "application-evidence": "申請根拠",
+    "approval-scope": "承認説明",
+    "task-breakdown": "タスク詳細",
+    "acceptance-criteria": "分析根拠と受入条件",
+    "changed-files": "実行変更",
+    "verification-evidence": "検証詳細",
+    "recovery-conditions": "停止と復旧条件",
+    "result-evidence": "結果根拠",
+  };
+  return (locale === "ja" ? ja : zh)[node.detailRole];
 }

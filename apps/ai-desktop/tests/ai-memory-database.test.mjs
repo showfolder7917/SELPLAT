@@ -17,7 +17,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "1008");
+    assert.equal(first.status.schemaVersion, "1011");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -30,9 +30,9 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 9);
+      assert.equal(Number(row.count), 12);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1008", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1011", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
     } finally {
       inspection.close();
@@ -267,14 +267,14 @@ const legacyCollaborationTables = [
 
 function installUpTo1006(fixture) {
   const manifestPath = path.join(fixture.sqlRoot, "load-order.txt");
-  writeFileSync(manifestPath, readFileSync(manifestPath, "utf8").split(/\r?\n/u).filter((line) => !line.startsWith("1007|") && !line.startsWith("1008|")).join("\n"), "utf8");
+  writeFileSync(manifestPath, readFileSync(manifestPath, "utf8").split(/\r?\n/u).filter((line) => Number.parseInt(line.split("|")[0] || "0", 10) <= 1006).join("\n"), "utf8");
   unlinkSync(path.join(fixture.sqlRoot, "migration-1007-retire-legacy-collaboration.sql"));
   unlinkSync(path.join(fixture.sqlRoot, "schema-AiDesktopEvolutionState.sql"));
 }
 
 function restore1007(fixture) {
   const sourceSqlRoot = path.join(appRoot, "db", "sql");
-  const manifest = readFileSync(path.join(sourceSqlRoot, "load-order.txt"), "utf8").split(/\r?\n/u).filter((line) => !line.startsWith("1008|")).join("\n");
+  const manifest = readFileSync(path.join(sourceSqlRoot, "load-order.txt"), "utf8").split(/\r?\n/u).filter((line) => Number.parseInt(line.split("|")[0] || "0", 10) <= 1007).join("\n");
   writeFileSync(path.join(fixture.sqlRoot, "load-order.txt"), manifest, "utf8");
   copyFileSync(path.join(sourceSqlRoot, "migration-1007-retire-legacy-collaboration.sql"), path.join(fixture.sqlRoot, "migration-1007-retire-legacy-collaboration.sql"));
 }

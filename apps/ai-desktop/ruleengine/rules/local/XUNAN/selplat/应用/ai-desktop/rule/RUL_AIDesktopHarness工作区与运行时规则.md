@@ -1,7 +1,7 @@
 # AI Desktop Harness 工作区与运行时规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.107.0
+rule_version = 5.108.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -109,6 +109,8 @@ workspace_harness_sandbox_mapping = primary_root_to_turn_cwd + global_read_only_
 workspace_empty_writable_roots_policy = force_readOnly_never_implicit_cwd_write
 <!-- 工作区清单或权限变化后必须开启匹配新签名的线程，防止旧线程继续沿用过期授权范围。 -->
 workspace_permission_change_thread_policy = workspace_signature_change_requires_new_thread
+<!-- 候选工作树只承载待测源码；所有测试数据、缓存、日志、临时材料和证据必须由所选工作区根统一解析，禁止从脚本或候选源码位置反推。 -->
+selected_workspace_test_data_root_contract = selected_workspace_root_single_facade + explicit_SELPLAT_ROOT_or_registered_primary_workspace + candidate_worktree_source_root_code_only + OPTION_cache_log_temp_evidence_and_build_under_selected_workspace + no_import_meta_url_or_test_location_data_root_inference + reject_any_data_path_under_collaboration_worktrees + missing_or_invalid_workspace_reports_工作区中没有工程请添加工程 + logical_workspace_relative_path_in_UI_and_report + source_and_data_root_boundary_tests
 <!-- 开发版关键导航、工作区树、控件、聊天正文和上下文值使用桌面 IDE 可读字号，禁止关键内容落入 10 至 11 像素微缩文字。 -->
 developer_typography_readability_contract = critical_text_13_to_15_css_px + matching_row_height + no_critical_10_to_11_px
 <!-- Windows 开发版启动器必须先正式构建，再由 Electron 加载本地 renderer 文件；禁止 Vite HTTP、localhost 开发端口、环境 URL 注入和热重启监视器进入桌面启动链。 -->

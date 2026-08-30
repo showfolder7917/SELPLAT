@@ -405,9 +405,10 @@ export function DeveloperApp() {
     refreshTimeline();
     void desktop.getLinghuAutomationState().then((state) => { linghuAutomationStateRef.current = state; setLinghuAutomationState(state); });
     void desktop.getNangongEvolutionState().then(setNangongEvolutionState);
-    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); refreshTimeline(); });
+    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
+    const removeTimelineListener = desktop.onCollaborationTimelineChanged(() => refreshTimeline());
     const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEvent) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
-    const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => { setNangongEvolutionState(event.state); refreshTimeline(); });
+    const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => { setNangongEvolutionState(event.state); });
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
       // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
       const updateStream = (current: Record<string, CollaborationLiveOutput>, key: string) => {
@@ -425,7 +426,7 @@ export function DeveloperApp() {
       setCollaborationStreams((current) => updateStream(current, envelope.taskId));
       if (envelope.timelineNodeId) setCollaborationTimelineStreams((current) => updateStream(current, envelope.timelineNodeId!));
     });
-    return () => { removeStateListener(); removeLinghuListener(); removeNangongListener(); removeStreamListener(); };
+    return () => { removeStateListener(); removeTimelineListener(); removeLinghuListener(); removeNangongListener(); removeStreamListener(); };
   }, []);
 
   useEffect(() => {

@@ -8,3 +8,6 @@
 1006|schema-AiDesktopTaskCollaborationStream.sql|建立新时间线流式正文分片
 1007|migration-1007-retire-legacy-collaboration.sql|物理删除已退役且已清空的旧协作时间线三表
 1008|schema-AiDesktopEvolutionState.sql|建立专题演化当前状态唯一事实表
+1009|schema-AiDesktopTaskTimelineTopic.sql|建立任务时间线专题唯一投影表
+1010|schema-AiDesktopTaskTimelineEvent.sql|建立带显式内容归属的任务时间线事件表
+1011|schema-AiDesktopTaskTimelineStream.sql|建立任务时间线流式正文表

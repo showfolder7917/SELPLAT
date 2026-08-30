@@ -1,0 +1,54 @@
+import type { CodexStreamEvent } from "../../../contracts/codex/codex-stream.js";
+import type {
+  CollaborationState,
+  CollaborationTimelineChangedEvent,
+  CollaborationTimelineSnapshot,
+} from "../../../contracts/collaboration/collaboration.js";
+import type { CollaborationTimelineBusinessEvent } from "../../../contracts/collaboration/collaboration-timeline-event.js";
+import { CollaborationTimelineRepository } from "./collaboration-timeline-repository.js";
+import type { SqliteDatabase } from "./persistence/sqlite-database.js";
+
+type TimelineChangedListener = (event: CollaborationTimelineChangedEvent) => void;
+
+/**
+ * 任务时间线唯一业务门面：所有写入先提交 SQLite，再向订阅者发布变更。
+ * 调用方不得越过该类直接操作 Repository 或借人物状态刷新页面。
+ */
+export class CollaborationTimelineFacade {
+  readonly #repository: CollaborationTimelineRepository;
+  readonly #listeners = new Set<TimelineChangedListener>();
+
+  constructor(database: SqliteDatabase) {
+    this.#repository = new CollaborationTimelineRepository(database);
+  }
+
+  appendTimelineEvent(event: CollaborationTimelineBusinessEvent): void {
+    const commit = this.#repository.appendBusinessEvent(event);
+    if (commit) this.#publish(commit);
+  }
+
+  appendTaskFlowEvents(state: CollaborationState, taskIds: string[]): void {
+    const commit = this.#repository.appendTaskFlowEvents(state, taskIds);
+    if (commit) this.#publish(commit);
+  }
+
+  appendStream(taskId: string, memberId: string, event: CodexStreamEvent): string | null {
+    const commit = this.#repository.appendStream(taskId, memberId, event);
+    if (!commit) return null;
+    this.#publish(commit);
+    return commit.nodeId;
+  }
+
+  getTimelineSnapshot(now = new Date().toISOString()): CollaborationTimelineSnapshot {
+    return this.#repository.snapshot(now);
+  }
+
+  subscribeTimelineChanged(listener: TimelineChangedListener): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  #publish(event: CollaborationTimelineChangedEvent): void {
+    for (const listener of this.#listeners) listener(event);
+  }
+}

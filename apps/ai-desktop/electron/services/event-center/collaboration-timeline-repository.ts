@@ -22,6 +22,16 @@ type TimelineFact = Omit<CollaborationTimelineNode, "durationMs"> & {
   occurredAt: string;
 };
 
+export interface CollaborationTimelineCommit {
+  groupIds: string[];
+  committedAt: string;
+  groupVersions: Record<string, number>;
+}
+
+export interface CollaborationTimelineStreamCommit extends CollaborationTimelineCommit {
+  nodeId: string;
+}
+
 const TIMELINE_CONTENT_EVENT_TYPES = new Set<CodexStreamEvent["type"]>([
   "message-delta",
   "message-completed",
@@ -44,19 +54,24 @@ export class CollaborationTimelineRepository {
   }
 
   /** 追加一条已发生的业务事件；仓库不接收也不反推提案当前状态。 */
-  appendBusinessEvent(event: CollaborationTimelineBusinessEvent): void {
-    this.#database.transaction((connection) => {
+  appendBusinessEvent(event: CollaborationTimelineBusinessEvent): CollaborationTimelineCommit | null {
+    const committedAt = new Date().toISOString();
+    const changed = this.#database.transaction((connection) => {
+      if (connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: event.fact.sourceFactKey })) return false;
       this.#upsertTopic(connection, event.group);
-      this.#appendFact(connection, { ...event.fact, groupId: event.group.groupId });
+      return this.#appendFact(connection, { ...event.fact, eventType: event.eventType, groupId: event.group.groupId }, committedAt);
     });
+    return changed ? this.#commit([event.group.groupId], committedAt) : null;
   }
 
   /** 只消费 Coordinator 已追加的 flowEvents，不再从 executionRecords、plan 或 task.state 重建历史。 */
-  appendTaskFlowEvents(state: CollaborationState, taskIds: string[]): void {
+  appendTaskFlowEvents(state: CollaborationState, taskIds: string[]): CollaborationTimelineCommit | null {
+    const committedAt = new Date().toISOString();
+    const changedGroupIds = new Set<string>();
     this.#database.transaction((connection) => {
       for (const task of state.tasks.filter((candidate) => taskIds.includes(candidate.taskId))) {
         let group = task.evolutionProposalId ? connection.prepare(`SELECT groupId, topicId, proposalId, title, startedAt
-          FROM AiDesktopTaskCollaborationTopic WHERE proposalId=$proposalId ORDER BY updatedAt DESC LIMIT 1`)
+          FROM AiDesktopTaskTimelineTopic WHERE proposalId=$proposalId ORDER BY updatedAt DESC LIMIT 1`)
           .get({ $proposalId: task.evolutionProposalId }) as Record<string, unknown> | undefined : undefined;
         if (!group) {
           const groupId = `task:${task.taskId}`;
@@ -74,18 +89,18 @@ export class CollaborationTimelineRepository {
             : event.type === "unified_test.failed"
               ? `${legacySourceFactKey}:failure-semantics-v2`
               : legacySourceFactKey;
-          if (connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: sourceFactKey })) continue;
+          if (connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: sourceFactKey })) continue;
           const legacySubmitted = event.type === "task.submitted"
-            && Boolean(connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: legacySourceFactKey }));
+            && Boolean(connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: legacySourceFactKey }));
           const projection = legacySubmitted
             ? projectLegacySubmittedFlowCorrection(task, event, task.initiator || NANGONG)
             : projectCollaborationFlowEvent(task, event, task.initiator || NANGONG);
           if (!projection) continue;
-          for (const { sourceSuffix, ...fact } of projection.facts) this.#appendFact(connection, {
+          for (const { sourceSuffix, ...fact } of projection.facts) if (this.#appendFact(connection, {
             ...fact, groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
             sourceFactKey: `${sourceFactKey}${sourceSuffix}`, occurredAt: event.occurredAt,
-          });
-          connection.prepare(`UPDATE AiDesktopTaskCollaborationTopic SET status=$status, summary=$summary,
+          }, committedAt)) changedGroupIds.add(String(group.groupId));
+          connection.prepare(`UPDATE AiDesktopTaskTimelineTopic SET status=$status, summary=$summary,
             updatedAt=CASE WHEN updatedAt < $updatedAt THEN $updatedAt ELSE updatedAt END WHERE groupId=$groupId`).run({
             $status: projection.topicStatus, $summary: projection.facts.at(-1)?.summary || event.summary,
             $updatedAt: event.occurredAt, $groupId: String(group.groupId),
@@ -93,36 +108,42 @@ export class CollaborationTimelineRepository {
         }
       }
     });
+    return changedGroupIds.size ? this.#commit([...changedGroupIds], committedAt) : null;
   }
 
-  appendStream(taskId: string, memberId: string, event: CodexStreamEvent, occurredAt = new Date().toISOString()): string | null {
-    return this.#database.transaction((connection) => {
+  appendStream(taskId: string, memberId: string, event: CodexStreamEvent, occurredAt = new Date().toISOString()): CollaborationTimelineStreamCommit | null {
+    const committedAt = new Date().toISOString();
+    const stored = this.#database.transaction((connection) => {
       const active = connection.prepare(`
         SELECT timeline.groupId, timeline.nodeId
-        FROM AiDesktopTaskCollaborationEvent timeline
-        JOIN AiDesktopTaskCollaborationTopic topic ON topic.groupId = timeline.groupId
+        FROM AiDesktopTaskTimelineEvent timeline
+        JOIN AiDesktopTaskTimelineTopic topic ON topic.groupId = timeline.groupId
         WHERE timeline.taskId=$taskId AND timeline.actorMemberId=$memberId AND timeline.status='current'
         ORDER BY timeline.sequenceNumber DESC LIMIT 1
       `).get({ $taskId: taskId, $memberId: memberId }) as { groupId: string; nodeId: string } | undefined;
       if (!active) return null;
-      const sequence = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopTaskCollaborationStream WHERE taskId=$taskId").get({ $taskId: taskId }) as { value: number | bigint }).value);
-      connection.prepare(`INSERT INTO AiDesktopTaskCollaborationStream
-        (chunkId, groupId, taskId, nodeId, memberId, turnId, segmentId, itemId, eventType, sequenceNumber, deltaText, snapshotText, occurredAt)
-        VALUES ($chunkId, $groupId, $taskId, $nodeId, $memberId, $turnId, $segmentId, $itemId, $eventType, $sequenceNumber, $deltaText, $snapshotText, $occurredAt)`).run({
+      const sequence = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopTaskTimelineStream WHERE taskId=$taskId").get({ $taskId: taskId }) as { value: number | bigint }).value);
+      connection.prepare(`INSERT INTO AiDesktopTaskTimelineStream
+        (chunkId, groupId, taskId, nodeId, memberId, turnId, segmentId, itemId, eventType, sequenceNumber, deltaText, snapshotText, occurredAt, committedAt)
+        VALUES ($chunkId, $groupId, $taskId, $nodeId, $memberId, $turnId, $segmentId, $itemId, $eventType, $sequenceNumber, $deltaText, $snapshotText, $occurredAt, $committedAt)`).run({
         $chunkId: `timeline-stream-${randomUUID()}`, $groupId: active.groupId, $taskId: taskId, $nodeId: active.nodeId,
         $memberId: memberId, $turnId: event.turnId, $segmentId: event.segmentId || null, $itemId: event.itemId || null,
         $eventType: event.type, $sequenceNumber: sequence, $deltaText: event.delta || null,
-        $snapshotText: event.text || event.managedExecution?.message || event.error || null, $occurredAt: occurredAt,
+        $snapshotText: event.text || event.managedExecution?.message || event.error || null, $occurredAt: occurredAt, $committedAt: committedAt,
       });
-      connection.prepare("UPDATE AiDesktopTaskCollaborationTopic SET updatedAt=$occurredAt WHERE groupId=$groupId AND updatedAt < $occurredAt").run({ $occurredAt: occurredAt, $groupId: active.groupId });
-      return active.nodeId;
+      connection.prepare(`UPDATE AiDesktopTaskTimelineTopic SET revision=revision+1,
+        updatedAt=CASE WHEN updatedAt < $occurredAt THEN $occurredAt ELSE updatedAt END WHERE groupId=$groupId`)
+        .run({ $occurredAt: occurredAt, $groupId: active.groupId });
+      return active;
     });
+    if (!stored) return null;
+    return { nodeId: stored.nodeId, ...this.#commit([stored.groupId], committedAt) };
   }
 
   snapshot(now = new Date().toISOString()): CollaborationTimelineSnapshot {
     return this.#database.withConnection((connection) => {
       const topics = connection.prepare(`SELECT groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt
-        FROM AiDesktopTaskCollaborationTopic ORDER BY updatedAt DESC, groupId`).all() as Array<Record<string, unknown>>;
+        FROM AiDesktopTaskTimelineTopic ORDER BY updatedAt DESC, groupId`).all() as Array<Record<string, unknown>>;
       const groups = topics.map((topic) => this.#group(connection, topic, now));
       return { version: 1, groups, updatedAt: groups.map((group) => group.updatedAt).sort().at(-1) || now };
     });
@@ -132,40 +153,51 @@ export class CollaborationTimelineRepository {
     groupId: string; topicId: string | null; proposalId: string | null; title: string;
     status: CollaborationTimelineGroup["status"]; summary: string; startedAt: string; updatedAt: string;
   }): void {
-    connection.prepare(`INSERT INTO AiDesktopTaskCollaborationTopic
+    connection.prepare(`INSERT INTO AiDesktopTaskTimelineTopic
       (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
       VALUES ($groupId, $topicId, $proposalId, $title, $status, $summary, $startedAt, $updatedAt, $createdAt)
       ON CONFLICT(groupId) DO UPDATE SET proposalId=excluded.proposalId, title=excluded.title,
         status=excluded.status, summary=excluded.summary,
-        updatedAt=CASE WHEN AiDesktopTaskCollaborationTopic.updatedAt < excluded.updatedAt THEN excluded.updatedAt ELSE AiDesktopTaskCollaborationTopic.updatedAt END`).run({
+        updatedAt=CASE WHEN AiDesktopTaskTimelineTopic.updatedAt < excluded.updatedAt THEN excluded.updatedAt ELSE AiDesktopTaskTimelineTopic.updatedAt END`).run({
       $groupId: input.groupId, $topicId: input.topicId, $proposalId: input.proposalId, $title: input.title,
       $status: input.status, $summary: input.summary, $startedAt: input.startedAt,
       $updatedAt: input.updatedAt, $createdAt: new Date().toISOString(),
     });
   }
 
-  #appendFact(connection: DatabaseSync, fact: TimelineFact): void {
-    if (connection.prepare("SELECT 1 FROM AiDesktopTaskCollaborationEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: fact.sourceFactKey })) return;
-    const sequenceNumber = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopTaskCollaborationEvent WHERE groupId=$groupId").get({ $groupId: fact.groupId }) as { value: number | bigint }).value);
-    connection.prepare(`INSERT INTO AiDesktopTaskCollaborationEvent
-      (factId, groupId, proposalId, taskId, nodeId, sourceFactKey, sequenceNumber, kind, actorMemberId, actorDisplayName,
+  #appendFact(connection: DatabaseSync, fact: TimelineFact, committedAt: string): boolean {
+    if (connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: fact.sourceFactKey })) return false;
+    const sequenceNumber = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopTaskTimelineEvent WHERE groupId=$groupId").get({ $groupId: fact.groupId }) as { value: number | bigint }).value);
+    connection.prepare(`INSERT INTO AiDesktopTaskTimelineEvent
+      (factId, groupId, proposalId, taskId, nodeId, sourceFactKey, sequenceNumber, eventType, contentRole, detailRole, schemaVersion, kind, actorMemberId, actorDisplayName,
        recipientsJson, status, action, summary, content, detail, startedAt, completedAt, automaticOpen,
-       manualApprovalProposalId, occurredAt, recordedAt)
-      VALUES ($factId, $groupId, $proposalId, $taskId, $nodeId, $sourceFactKey, $sequenceNumber, $kind, $actorMemberId,
+       manualApprovalProposalId, occurredAt, committedAt)
+      VALUES ($factId, $groupId, $proposalId, $taskId, $nodeId, $sourceFactKey, $sequenceNumber, $eventType, $contentRole, $detailRole, 2, $kind, $actorMemberId,
        $actorDisplayName, $recipientsJson, $status, $action, $summary, $content, $detail, $startedAt, $completedAt,
-       $automaticOpen, $manualApprovalProposalId, $occurredAt, $recordedAt)`).run({
+       $automaticOpen, $manualApprovalProposalId, $occurredAt, $committedAt)`).run({
       $factId: `timeline-fact-${randomUUID()}`, $groupId: fact.groupId, $proposalId: fact.proposalId, $taskId: fact.taskId,
-      $nodeId: fact.nodeId, $sourceFactKey: fact.sourceFactKey, $sequenceNumber: sequenceNumber, $kind: fact.kind,
+      $nodeId: fact.nodeId, $sourceFactKey: fact.sourceFactKey, $sequenceNumber: sequenceNumber, $eventType: fact.eventType,
+      $contentRole: fact.contentRole, $detailRole: fact.detailRole, $kind: fact.kind,
       $actorMemberId: fact.actor.memberId, $actorDisplayName: fact.actor.displayName, $recipientsJson: JSON.stringify(fact.recipients),
       $status: fact.status, $action: fact.action, $summary: fact.summary.slice(0, 8_000), $content: fact.content.slice(0, 40_000),
       $detail: fact.detail.slice(0, 40_000), $startedAt: fact.startedAt, $completedAt: fact.completedAt,
       $automaticOpen: fact.automaticOpen ? 1 : 0, $manualApprovalProposalId: fact.manualApprovalProposalId,
-      $occurredAt: fact.occurredAt, $recordedAt: new Date().toISOString(),
+      $occurredAt: fact.occurredAt, $committedAt: committedAt,
     });
+    connection.prepare("UPDATE AiDesktopTaskTimelineTopic SET revision=revision+1 WHERE groupId=$groupId").run({ $groupId: fact.groupId });
+    return true;
+  }
+
+  #commit(groupIds: string[], committedAt: string): CollaborationTimelineCommit {
+    const groupVersions = this.#database.withConnection((connection) => Object.fromEntries(groupIds.map((groupId) => {
+      const row = connection.prepare("SELECT revision FROM AiDesktopTaskTimelineTopic WHERE groupId=$groupId").get({ $groupId: groupId }) as { revision: number | bigint } | undefined;
+      return [groupId, Number(row?.revision || 0)];
+    })));
+    return { groupIds, groupVersions, committedAt };
   }
 
   #group(connection: DatabaseSync, topic: Record<string, unknown>, now: string): CollaborationTimelineGroup {
-    const rows = connection.prepare(`SELECT * FROM AiDesktopTaskCollaborationEvent WHERE groupId=$groupId
+    const rows = connection.prepare(`SELECT * FROM AiDesktopTaskTimelineEvent WHERE groupId=$groupId
       ORDER BY sequenceNumber, occurredAt, factId`).all({ $groupId: String(topic.groupId) }) as Array<Record<string, unknown>>;
     const latestByNode = new Map<string, Record<string, unknown>>();
     const firstSequence = new Map<string, number>();
@@ -204,10 +236,10 @@ export class CollaborationTimelineRepository {
     // 历史终态事实可能缺少 completedAt；以事实发生时间收口，禁止页面把已完成或失败节点继续计时。
     const completedAt = nullable(row.completedAt) || (status === "completed" || status === "failed" ? String(row.occurredAt) : null);
     return {
-      nodeId, taskId: nullable(row.taskId), kind: row.kind as CollaborationTimelineNode["kind"],
+      nodeId, taskId: nullable(row.taskId), eventType: String(row.eventType), kind: row.kind as CollaborationTimelineNode["kind"],
       actor: participant(String(row.actorMemberId), String(row.actorDisplayName)), recipients: parseParticipants(row.recipientsJson),
-      status, action: String(row.action), summary: String(row.summary),
-      content: stream || String(row.content), detail: String(row.detail), startedAt, completedAt,
+      status, action: String(row.action), summary: String(row.summary), contentRole: row.contentRole as CollaborationTimelineNode["contentRole"],
+      content: stream || String(row.content), detailRole: row.detailRole as CollaborationTimelineNode["detailRole"], detail: String(row.detail), startedAt, completedAt,
       durationMs: durationMs(startedAt, completedAt || now), automaticOpen: Number(row.automaticOpen) === 1,
       manualApprovalProposalId: nullable(row.manualApprovalProposalId),
     };
@@ -216,7 +248,7 @@ export class CollaborationTimelineRepository {
 
 /** 只投影人物产生的业务正文；managed-execution 等运行状态保留在原始流表，但绝不拼入可读内容。 */
 function projectedContentText(connection: DatabaseSync, groupId: string, nodeId: string): string {
-  const rows = connection.prepare(`SELECT turnId, eventType, deltaText, snapshotText FROM AiDesktopTaskCollaborationStream
+  const rows = connection.prepare(`SELECT turnId, eventType, deltaText, snapshotText FROM AiDesktopTaskTimelineStream
     WHERE groupId=$groupId AND nodeId=$nodeId
     ORDER BY sequenceNumber, occurredAt, chunkId`).all({ $groupId: groupId, $nodeId: nodeId }) as Array<Record<string, unknown>>;
   const turns = new Map<string, { deltas: string[]; completed: string | null }>();

@@ -40,6 +40,7 @@ import { WorkflowRepository } from "./services/event-center/workflow-repository.
 import { WorkflowSupervisor } from "./services/event-center/workflow-supervisor.js";
 import { EventCenterFacade } from "./services/event-center/event-center-facade.js";
 import { CollaborationMemoryService } from "./services/event-center/collaboration-memory-service.js";
+import { CollaborationTimelineFacade } from "./services/event-center/collaboration-timeline-facade.js";
 import { CodexConversationCorpusIngestion, CodexConversationCorpusWatcher } from "./services/event-center/codex-conversation-corpus-ingestion.js";
 import { CodexConversationSemanticBackfill, buildCodexSemanticBackfillPrompt, parseCodexSemanticBackfillResponse } from "./services/event-center/codex-conversation-semantic-backfill.js";
 import { RuleBundleService } from "./services/rules/rule-bundle-service.js";
@@ -68,6 +69,7 @@ let linghuAutomation: LinghuAutomationFacade | undefined;
 let nangongEvolution: NangongEvolutionFacade | undefined;
 let aiMemoryDatabase: SqliteDatabase | null = null;
 let workflowRepository: WorkflowRepository | null = null;
+let collaborationTimeline: CollaborationTimelineFacade | null = null;
 let workflowSupervisor: WorkflowSupervisor | null = null;
 let collaborationMemory: CollaborationMemoryService | null = null;
 let codexAppCorpusWatcher: CodexConversationCorpusWatcher | null = null;
@@ -163,6 +165,12 @@ app.whenReady().then(async () => {
   const appRoot = app.isPackaged ? app.getAppPath() : projectPaths.sourceRoot;
   const releaseVersion = (JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8")) as { version: string }).version;
   workflowRepository = aiMemoryDatabase ? new WorkflowRepository(aiMemoryDatabase) : null;
+  collaborationTimeline = aiMemoryDatabase ? new CollaborationTimelineFacade(aiMemoryDatabase) : null;
+  collaborationTimeline?.subscribeTimelineChanged((event) => {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
+      window.webContents.send("desktop:collaboration-timeline-changed", event);
+    }
+  });
   collaborationMemory = aiMemoryDatabase ? new CollaborationMemoryService(aiMemoryDatabase) : null;
   eventCenter.attachRepository(workflowRepository);
   eventCenter.recordApplicationStart({ variant, projectRoot, rendererRoot });
@@ -444,7 +452,7 @@ app.whenReady().then(async () => {
       // 单任务事件写入顶层 taskId；批量集成同时保留 taskIds，确保每条流程和错误都能反查所属任务。
       try {
         workflowRepository?.syncCollaborationState(state);
-        workflowRepository?.appendCollaborationTaskFlowEvents(state, taskIds);
+        collaborationTimeline?.appendTaskFlowEvents(state, taskIds);
       }
       catch (error) {
         eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_collaboration_state", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
@@ -456,7 +464,7 @@ app.whenReady().then(async () => {
     emitStream: (taskId, memberId, event) => {
       eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
       let timelineNodeId: string | null = null;
-      try { timelineNodeId = workflowRepository?.appendCollaborationStream(taskId, memberId, event) || null; }
+      try { timelineNodeId = collaborationTimeline?.appendStream(taskId, memberId, event) || null; }
       catch (error) {
         eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "append_stream_chunk", error, correlationId: taskId, details: { memberId, eventType: event.type, turnId: event.turnId } });
       }
@@ -505,8 +513,8 @@ app.whenReady().then(async () => {
     beginMutation: workflowRepository ? (topicId, action, request, currentStateVersion) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined,
     completeMutation: workflowRepository ? (idempotencyKey, resultStateVersion) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined,
     failMutation: workflowRepository ? (idempotencyKey, error) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined,
-    recordTimelineEvent: workflowRepository ? (event) => {
-      try { workflowRepository!.appendCollaborationTimelineEvent(event); }
+    recordTimelineEvent: collaborationTimeline ? (event) => {
+      try { collaborationTimeline!.appendTimelineEvent(event); }
       catch (error) {
         eventCenter.recordException({
           kind: "technical", sourceType: "system", sourceId: "collaboration-timeline",
@@ -565,6 +573,7 @@ app.whenReady().then(async () => {
         evolution: () => nangongEvolution!.state(),
         linghu: () => linghuAutomation!.state(),
       },
+      projectCollaborationTimeline: (state) => collaborationTimeline?.appendTaskFlowEvents(state, state.tasks.map((task) => task.taskId)),
       onStalledTasks: async (taskIds) => {
         eventCenter.recordEvent("workflow.stalled_tasks_detected", { taskIds, count: taskIds.length });
         await linghuAutomation!.checkNow();
@@ -647,6 +656,7 @@ app.whenReady().then(async () => {
     collaborationRegistry,
     eventCenter,
     workflowRepository,
+    collaborationTimeline,
     aiMemoryDatabaseStatus,
     projectRoot,
     appRoot,

@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { CollaborationTimelineRepository } from "../../../build/ai-desktop/electron/electron/services/event-center/collaboration-timeline-repository.js";
+import { CollaborationTimelineFacade } from "../../../build/ai-desktop/electron/electron/services/event-center/collaboration-timeline-facade.js";
 import { SqliteDatabase } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/sqlite-database.js";
 import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
@@ -20,6 +21,25 @@ test("审批时间线只按显式事件追加申请、退回、补充和通过",
     fixture.append(approvalDecision(fixture, "proposal-2", "approval-2", 6, "审批通过", "completed"));
     const nodes = fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes;
     assert.deepEqual(nodes.map((node) => node.action), ["审批申请", "审批退回补充", "补充材料已重新提交", "补充后再次申请", "审批通过"]);
+  } finally { fixture.close(); }
+});
+
+test("时间线门面只在事务提交后通知页面读取已落库事实", () => {
+  const fixture = createFixture("commit-notification");
+  try {
+    const facade = new CollaborationTimelineFacade(fixture.database);
+    const received = [];
+    const unsubscribe = facade.subscribeTimelineChanged((event) => {
+      const snapshot = facade.getTimelineSnapshot(fixture.at(2));
+      received.push({ event, nodeCount: snapshot.groups[0]?.nodes.length || 0 });
+    });
+    facade.appendTimelineEvent(approvalApplication(fixture, "proposal-commit", 1, "审批申请"));
+    facade.appendTimelineEvent(approvalApplication(fixture, "proposal-commit", 1, "审批申请"));
+    unsubscribe();
+    assert.equal(received.length, 1);
+    assert.equal(received[0].nodeCount, 1);
+    assert.deepEqual(received[0].event.groupIds, ["topic:topic-1"]);
+    assert.equal(received[0].event.groupVersions["topic:topic-1"], 1);
   } finally { fixture.close(); }
 });
 
@@ -188,7 +208,7 @@ test("运行状态原样入库但不会重复拼入人物业务正文", () => {
     fixture.timeline.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "turn-1", text: "失败原因已定位为测试回调签名不符合 fixture 约定。" }, fixture.at(6));
     const node = fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes.find((candidate) => candidate.kind === "execution" && candidate.status === "current");
     assert.equal(node.content, "失败原因已定位为测试回调签名不符合 fixture 约定。");
-    assert.equal(fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopTaskCollaborationStream WHERE eventType='managed-execution'").get().count)), 2);
+    assert.equal(fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopTaskTimelineStream WHERE eventType='managed-execution'").get().count)), 2);
   } finally { fixture.close(); }
 });
 
@@ -340,9 +360,9 @@ test("未登记的历史流程事件生成可读兜底节点而非静默丢弃",
 test("旧状态反推接口和旧表读取已退役", () => {
   const source = readFileSync(path.join(appRoot, "electron/services/event-center/collaboration-timeline-repository.ts"), "utf8");
   assert.doesNotMatch(source, /syncEvolutionState|#appendProposalFacts|#appendTaskFacts/);
-  assert.doesNotMatch(source, /FROM AiDesktopCollaborationTimelineEvent|FROM AiDesktopCollaborationTopic/);
+  assert.doesNotMatch(source, /AiDesktopTaskCollaboration(?:Topic|Event|Stream)/);
   assert.match(source, /appendBusinessEvent/);
-  assert.match(source, /AiDesktopTaskCollaborationEvent/);
+  assert.match(source, /AiDesktopTaskTimelineEvent/);
   assert.match(source, /projectCollaborationFlowEvent/);
   assert.doesNotMatch(source, /function flowFact/);
 });
@@ -384,7 +404,13 @@ function businessEvent(fixture, eventId, proposalId, offset, fact, status) {
     : fact.kind === "approval-decision" ? "approval.decision"
       : fact.kind === "distribution" ? "task.distribution"
         : fact.status === "completed" ? "approval.supplement_completed" : "approval.supplement_waiting";
-  return { eventId, eventType, group: { groupId: "topic:topic-1", topicId: "topic-1", proposalId, title: "修订截图按钮可用态", status, summary: fact.summary, startedAt: fixture.at(1), updatedAt: fixture.at(offset) }, fact };
+  const contentRole = fact.kind === "approval-application" ? "approval-content"
+    : fact.kind === "approval-decision" ? "approval-reason"
+      : fact.kind === "distribution" ? "task-content" : "analysis-output";
+  const detailRole = fact.kind === "approval-application" ? "application-evidence"
+    : fact.kind === "approval-decision" ? "approval-scope"
+      : fact.kind === "distribution" ? "task-breakdown" : "result-evidence";
+  return { eventId, eventType, group: { groupId: "topic:topic-1", topicId: "topic-1", proposalId, title: "修订截图按钮可用态", status, summary: fact.summary, startedAt: fixture.at(1), updatedAt: fixture.at(offset) }, fact: { ...fact, contentRole, detailRole } };
 }
 
 function task(fixture, index, verifying, verified = false) {

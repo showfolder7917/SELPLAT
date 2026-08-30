@@ -11,7 +11,7 @@ import type { ApprovalGovernanceRecord } from "../governance/approval-governance
 import type { DesktopEnvironment, WindowAction, WorkspacePermission } from "../foundation/base.js";
 import type { AutomaticTestPreflightResult, CodexApproval, CodexHarnessStatus, CodexLoginResponse, CodexModelCatalog, CodexUserInputRequest, ResolveCodexApprovalResult, ResolveCodexUserInputRequest, TrustedCommandInfo } from "../codex/codex.js";
 import type { CodexStreamEvent } from "../codex/codex-stream.js";
-import type { CollaborationState, CollaborationStateEvent, CollaborationStreamEnvelope, CollaborationTimelineSnapshot, CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../collaboration/collaboration.js";
+import type { CollaborationState, CollaborationStateEvent, CollaborationStreamEnvelope, CollaborationTimelineChangedEvent, CollaborationTimelineSnapshot, CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../collaboration/collaboration.js";
 import type { CodexSessionInfo, ConversationDispatchState, EnqueueMessageRequest, SendMessageRequest, SendMessageResponse } from "../codex/conversation.js";
 import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "./database.js";
 import type { CreateLinghuStartupPromptRequest, LinghuAutomationState, LinghuAutomationStateEvent, UpdateLinghuStartupPromptRequest } from "../collaboration/linghu-automation.js";
@@ -128,6 +128,8 @@ export interface DesktopApi {
   getCollaborationState(): Promise<CollaborationState>;
   /** 读取主进程生成的追加式专题任务卡时间线；旧四阶段页面不得反向写入该投影。 */
   getCollaborationTimeline(): Promise<CollaborationTimelineSnapshot>;
+  /** 订阅 SQLite 成功提交后的时间线变更通知。 */
+  onCollaborationTimelineChanged(listener: (event: CollaborationTimelineChangedEvent) => void): () => void;
   /** 在单会话与协同模式之间切换并持久化状态。 */
   setDesktopOperatingMode(mode: DesktopOperatingMode): Promise<CollaborationState>;
   /** 切换 Renderer 当前查看的协同成员。 */

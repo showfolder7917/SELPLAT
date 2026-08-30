@@ -101,6 +101,7 @@ export class EvolutionTaskDistributionService {
       fact: {
         nodeId: `distribution:${proposal.proposalId}`, taskId: null, proposalId: proposal.proposalId,
         sourceFactKey: `distribution:${proposal.proposalId}`, kind: "distribution", actor: { memberId: proposal.submitterMemberId, displayName: proposal.submitterDisplayName }, recipients,
+        contentRole: "task-content", detailRole: "task-breakdown",
         status: "completed", action: "任务分发", summary: proposal.distributionPlan?.summary || proposal.content,
         content: [proposal.content, priorAdvice ? `审批退回后的补充：${priorAdvice}` : "", ...proposal.distributionPlan!.units.map((unit) => `${unit.title}：${unit.scope}`)].filter(Boolean).join("\n\n"),
         detail: proposal.distributionPlan!.units.map((unit) => `${unit.title}：${unit.scope}`).join("\n"), startedAt: occurredAt,

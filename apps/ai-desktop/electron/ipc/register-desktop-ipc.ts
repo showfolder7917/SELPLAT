@@ -43,6 +43,7 @@ import { SettingsStore } from "../services/settings-store.js";
 import { TrustedCommandStore } from "../services/trusted-command-store.js";
 import { EventCenterFacade } from "../services/event-center/event-center-facade.js";
 import type { WorkflowRepository } from "../services/event-center/workflow-repository.js";
+import type { CollaborationTimelineFacade } from "../services/event-center/collaboration-timeline-facade.js";
 import { WorkspaceStore } from "../services/workspace-store.js";
 import { RuleBundleService } from "../services/rules/rule-bundle-service.js";
 
@@ -60,6 +61,7 @@ interface DesktopIpcDependencies {
   collaborationRegistry: CollaborationCodexRegistry;
   eventCenter: EventCenterFacade;
   workflowRepository: WorkflowRepository | null;
+  collaborationTimeline: CollaborationTimelineFacade | null;
   projectRoot: string;
   appRoot: string;
   variant: AppVariant;
@@ -146,7 +148,7 @@ function evolutionWorkspaceLocationQuery(location: EvolutionWorkspaceLocation): 
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, eventCenter, workflowRepository, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
@@ -342,7 +344,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter, workflowRepository);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter, collaborationTimeline);
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);

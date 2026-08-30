@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.142.0
+rule_version = 5.143.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -87,7 +87,7 @@ codex_historical_ai_semantic_backfill_contract = explicit_one_click_all_missing_
 <!-- 专题、提案、审批、任务、测试、发布与异常属于业务投影，不得伪装成任何人物对话；语料主题只为真实回合建立搜索坐标。 -->
 training_corpus_business_projection_exclusion_contract = visible_spoken_conversation_only + corpus_topic_is_turn_metadata_not_evolution_topic + exclude_proposal_approval_task_test_release_exception_and_audit_records
 <!-- 明确放弃旧库兼容时，数据库只保留一份当前结构基线；禁止恢复旧 Codex 归档表、旧版本搬运 SQL 和原地升级测试。 -->
-ai_memory_current_baseline_contract = current_baseline_schema_1000_plus_registered_migrations_1001_to_1008 + one_formal_table_per_additive_schema_file + collaboration_timeline_runtime_reads_only_1004_to_1006_tables + migration_1007_drops_empty_deprecated_1001_to_1003_tables_as_one_atomic_batch + migration_1008_adds_authoritative_AiDesktopEvolutionState + any_nonempty_legacy_table_blocks_all_drops_until_controlled_backup_and_clear + no_legacy_data_migration_into_current_timeline + no_AiDesktopConversationArchiveMessage + no_preview_80 + no_old_collaboration_timeline_backfill + one_click_test_reset_clears_current_1004_to_1006_runtime_rows_and_resets_1008_runtime_content + authoritative_codex_rollout_rescan_only_for_training_corpus + current_conversation_checkpoint_and_business_tables_remain
+ai_memory_current_baseline_contract = current_baseline_schema_1000_plus_registered_migrations_1001_to_1011 + one_formal_table_per_additive_schema_file + collaboration_timeline_runtime_reads_only_1009_to_1011_tables + migration_1007_drops_empty_deprecated_1001_to_1003_tables_as_one_atomic_batch + migration_1008_adds_authoritative_AiDesktopEvolutionState + migrations_1009_to_1011_add_typed_timeline_topic_event_and_stream + no_legacy_data_migration_into_current_timeline + no_AiDesktopConversationArchiveMessage + no_preview_80 + no_old_collaboration_timeline_backfill + one_click_test_reset_clears_current_1009_to_1011_and_retired_1004_to_1006_runtime_rows_and_resets_1008_runtime_content + authoritative_codex_rollout_rescan_only_for_training_corpus + current_conversation_checkpoint_and_business_tables_remain
 <!-- AI Desktop 页面不得维护可复用控件皮肤；缺失能力必须先进入 SELUI 中央登记、正式出口和统一 Token，再由页面消费。 -->
 ai_desktop_selui_ownership_contract = page_uses_SELUI_for_all_reusable_visual_controls + missing_control_register_and_extend_SELUI_first + developer_css_business_layout_only + no_private_tooltip_confirm_prompt_dialog_switch_skin
 <!-- 可展开业务详情必须使用中央登记的 SELUI Disclosure；按钮语义、展开状态、主题令牌、事件和销毁由公共控件统一管理。 -->

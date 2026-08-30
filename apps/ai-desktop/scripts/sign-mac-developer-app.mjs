@@ -3,10 +3,12 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
+import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 
 if (process.platform !== "darwin") throw new Error("macOS developer signing can only run on macOS.");
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const projectRoot = path.resolve(appRoot, "../..");
+const sourceProjectRoot = path.resolve(appRoot, "../..");
+const projectRoot = resolveSelectedWorkspaceRoot(sourceProjectRoot);
 const paths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
 const builder = JSON.parse(readFileSync(path.join(appRoot, "electron-builder.developer.json"), "utf8"));
 const packageRoot = path.join(paths.buildRoot, "package", "developer");

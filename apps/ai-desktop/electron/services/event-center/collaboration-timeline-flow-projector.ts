@@ -36,7 +36,8 @@ export function projectLegacySubmittedFlowCorrection(
   const assigned = task.flowEvents.find((candidate) => candidate.type === "executor.assigned" && candidate.occurredAt >= event.occurredAt);
   const recipient = assigned?.actor || task.originalExecutor || task.executionRecords.at(0)?.executor || EXECUTION_POOL;
   return projection("running", [{
-    nodeId: `unmapped:${task.taskId}:${event.eventId}`, kind: "distribution", actor: event.actor || initiator,
+    nodeId: `unmapped:${task.taskId}:${event.eventId}`, eventType: event.type,
+    contentRole: "task-content", detailRole: "task-breakdown", kind: "distribution", actor: event.actor || initiator,
     recipients: [recipient], status: assigned ? "completed" : "waiting",
     action: assigned ? "任务已分发" : "等待分配执行人", summary: assigned?.summary || event.summary,
     content: task.snapshot.confirmedIntent, detail: task.snapshot.problemStatement, startedAt: event.occurredAt,
@@ -65,7 +66,11 @@ export function projectCollaborationFlowEvent(
     execution: `execution:${task.taskId}:${assignmentKey}`,
     verification: `verification:${task.taskId}:${assignmentKey}`,
   };
-  const fact = (input: Omit<ProjectedTimelineFact, "sourceSuffix">, sourceSuffix = ""): ProjectedTimelineFact => ({ ...input, sourceSuffix });
+  const fact = (
+    input: Omit<ProjectedTimelineFact, "sourceSuffix" | "eventType" | "contentRole" | "detailRole">
+      & Partial<Pick<ProjectedTimelineFact, "eventType" | "contentRole" | "detailRole">>,
+    sourceSuffix = "",
+  ): ProjectedTimelineFact => ({ ...timelineSemantics(input.kind), ...input, eventType: input.eventType || event.type, sourceSuffix });
 
   if (event.type === "task.submitted") {
     const recipient = task.originalExecutor || task.executionRecords.at(0)?.executor || EXECUTION_POOL;
@@ -320,6 +325,18 @@ function integrationFailurePresentation(task: CollaborationTask, preparation: bo
 
 function projection(topicStatus: CollaborationTimelineGroup["status"], facts: ProjectedTimelineFact[]): CollaborationFlowProjection {
   return { facts, topicStatus };
+}
+
+/** 类型字段只由流程事件和节点职责决定，禁止根据可变 action 文案反推详情含义。 */
+function timelineSemantics(kind: CollaborationTimelineNode["kind"]): Pick<ProjectedTimelineFact, "contentRole" | "detailRole"> {
+  if (kind === "distribution") return { contentRole: "task-content", detailRole: "task-breakdown" };
+  if (kind === "analysis") return { contentRole: "analysis-output", detailRole: "acceptance-criteria" };
+  if (kind === "execution") return { contentRole: "execution-output", detailRole: "changed-files" };
+  if (kind === "verification") return { contentRole: "verification-output", detailRole: "verification-evidence" };
+  if (kind === "repair") return { contentRole: "repair-output", detailRole: "recovery-conditions" };
+  if (kind === "result") return { contentRole: "result-output", detailRole: "result-evidence" };
+  if (kind === "approval-application") return { contentRole: "approval-content", detailRole: "application-evidence" };
+  return { contentRole: "approval-reason", detailRole: "approval-scope" };
 }
 
 function assignmentAt(task: CollaborationTask, memberId: string, occurredAt: string): CollaborationTask["executionRecords"][number] | null {

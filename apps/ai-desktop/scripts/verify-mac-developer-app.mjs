@@ -3,9 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync }
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
+import { assertWorkspaceDataPath, resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const projectRoot = path.resolve(appRoot, "../..");
+const sourceProjectRoot = path.resolve(appRoot, "../..");
+const projectRoot = resolveSelectedWorkspaceRoot(sourceProjectRoot);
 const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
 const releaseRoot = path.join(projectPaths.buildRoot, "package", "developer");
 const macDirectory = readdirSync(releaseRoot, { withFileTypes: true })
@@ -39,7 +41,7 @@ const expectedRequirement = `designated => identifier "${bundleId}"`;
 if (!requirementOutput.includes(expectedRequirement)) {
   throw new Error(`AI Desktop.app 屏幕录制身份不稳定：期望 ${expectedRequirement}`);
 }
-const healthRoot = path.join(projectPaths.temporaryMaterialsRoot, "候选包健康检查");
+const healthRoot = assertWorkspaceDataPath(projectRoot, path.join(projectPaths.temporaryMaterialsRoot, "候选包健康检查"));
 mkdirSync(healthRoot, { recursive: true });
 const healthRun = mkdtempSync(path.join(healthRoot, "run-"));
 try {

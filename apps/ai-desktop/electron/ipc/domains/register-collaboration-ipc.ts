@@ -21,7 +21,7 @@ import type { CollaborationCoordinator } from "../../services/collaboration/coll
 import type { LinghuAutomationFacade } from "../../services/collaboration/linghu-automation-facade.js";
 import type { NangongEvolutionFacade } from "../../services/collaboration/nangong-evolution-facade.js";
 import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
-import type { WorkflowRepository } from "../../services/event-center/workflow-repository.js";
+import type { CollaborationTimelineFacade } from "../../services/event-center/collaboration-timeline-facade.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
@@ -30,14 +30,14 @@ export function registerCollaborationIpc(
   linghuAutomation: LinghuAutomationFacade,
   nangongEvolution: NangongEvolutionFacade,
   eventCenter: EventCenterFacade,
-  workflowRepository: WorkflowRepository | null,
+  collaborationTimeline: CollaborationTimelineFacade | null,
 ): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-collaboration-state", () => collaboration.state());
   // 任务协作群只读取 SQLite 不可变事件；数据库不可用时抛给 EventCenter，禁止退回 JSON 快照拼接旧实现。
   handle("desktop:get-collaboration-timeline", () => {
-    if (!workflowRepository) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
-    return workflowRepository.getCollaborationTimeline();
+    if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
+    return collaborationTimeline.getTimelineSnapshot();
   });
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
   handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));

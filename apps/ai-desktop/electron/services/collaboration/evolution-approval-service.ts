@@ -38,6 +38,7 @@ export class EvolutionApprovalService {
       fact: {
         nodeId: `proposal:${proposal.proposalId}`, taskId: null, proposalId: proposal.proposalId,
         sourceFactKey: `approval-application-closed:${approval.approvalId}`, kind: "approval-application",
+        contentRole: "approval-content", detailRole: "application-evidence",
         actor: person(proposal.submitterMemberId, proposal.submitterDisplayName), recipients: [person("han-li", "韩立")],
         status: "completed", action: proposal.supersedesProposalId ? "补充后再次申请" : "审批申请",
         summary: proposal.content, content: proposal.content, detail: proposal.evidence.join("\n"), startedAt: proposal.createdAt,
@@ -51,6 +52,7 @@ export class EvolutionApprovalService {
       fact: {
         nodeId: `approval:${approval.approvalId}`, taskId: null, proposalId: proposal.proposalId,
         sourceFactKey: `approval:${approval.approvalId}`, kind: "approval-decision",
+        contentRole: "approval-reason", detailRole: "approval-scope",
         actor: person(approval.approverMemberId, approval.approverDisplayName), recipients: [person(proposal.submitterMemberId, proposal.submitterDisplayName)],
         status: approval.decision === "approved" ? "completed" : "failed",
         action: approval.decision === "approved" ? "审批通过" : approval.decision === "supplement-required" ? "审批退回补充" : "审批驳回",
@@ -72,6 +74,7 @@ export class EvolutionApprovalService {
       fact: {
         nodeId: `proposal:${proposal.proposalId}`, taskId: null, proposalId: proposal.proposalId,
         sourceFactKey: `approval-application:${proposal.proposalId}`, kind: "approval-application",
+        contentRole: "approval-content", detailRole: "application-evidence",
         actor: person(proposal.submitterMemberId, proposal.submitterDisplayName), recipients: [person("han-li", "韩立")],
         status: "current", action: proposal.supersedesProposalId ? "补充后再次申请" : "审批申请",
         summary: proposal.content, content: proposal.content, detail: proposal.evidence.join("\n"), startedAt: proposal.createdAt,
@@ -90,9 +93,11 @@ export class EvolutionApprovalService {
       fact: {
         nodeId: `supplement:${proposal.proposalId}`, taskId: null, proposalId: proposal.proposalId,
         sourceFactKey: `approval-supplement-waiting:${proposal.approvals.at(-1)!.approvalId}`, kind: "analysis",
+        contentRole: "status", detailRole: "none",
         actor: person(proposal.submitterMemberId, proposal.submitterDisplayName), recipients: [person("han-li", "韩立")],
         status: automatic ? "current" : "waiting", action: automatic ? "正在补充审批材料" : "等待手动补充审批材料",
-        summary: `根据韩立的退回原因补充方案：${advice}`, content: advice, detail: advice,
+        summary: "南宫婉正在根据韩立的审批意见补充材料。",
+        content: `待补充审批材料；原审批意见保留在上一条韩立审批节点中。`, detail: "",
         startedAt: occurredAt, completedAt: null, automaticOpen: automatic, manualApprovalProposalId: null, occurredAt,
       },
     });
@@ -110,9 +115,15 @@ export class EvolutionApprovalService {
       fact: {
         nodeId: `supplement:${previousId}`, taskId: null, proposalId: previousId,
         sourceFactKey: `approval-supplement-completed:${revision.proposalId}`, kind: "analysis",
+        contentRole: "analysis-output", detailRole: "result-evidence",
         actor: person(revision.submitterMemberId, revision.submitterDisplayName), recipients: [person("han-li", "韩立")],
         status: "completed", action: "补充材料已重新提交", summary: "已根据韩立的退回原因补充方案并重新申请审批。",
-        content: revision.content, detail: feedback?.advice || "", startedAt: feedback?.createdAt || revision.createdAt,
+        content: ["补充调查证据：", ...revision.evidence].join("\n"),
+        detail: [
+          revision.impactScope.length ? `影响范围：${revision.impactScope.join("；")}` : "",
+          revision.risks.length ? `风险：${revision.risks.join("；")}` : "",
+          revision.acceptanceCriteria.length ? `验收条件：${revision.acceptanceCriteria.join("；")}` : "",
+        ].filter(Boolean).join("\n"), startedAt: feedback?.createdAt || revision.createdAt,
         completedAt: revision.createdAt, automaticOpen: false, manualApprovalProposalId: null, occurredAt: revision.createdAt,
       },
     });

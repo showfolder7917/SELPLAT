@@ -59,7 +59,7 @@
     "test:nangong-evolution": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/nangong-evolution.test.mjs",
     "test:explorer": "node --test tests/developer-explorer-collapse.test.mjs",
     "test:interaction": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs",
-    "test:managed": "node scripts/run-with-dependencies.mjs node --test tests/managed-task-executor-contract.test.mjs tests/user-input-and-screenshot-contract.test.mjs tests/test-document-and-mac-launcher-contract.test.mjs tests/developer-package-root.test.mjs",
+    "test:managed": "node scripts/run-with-dependencies.mjs node --test tests/managed-task-executor-contract.test.mjs tests/user-input-and-screenshot-contract.test.mjs tests/test-document-and-mac-launcher-contract.test.mjs tests/developer-package-root.test.mjs tests/selected-workspace-root.test.mjs",
     "test:trust": "node scripts/run-with-dependencies.mjs node --test tests/trusted-command-store.test.mjs",
     "test:codex-runtime": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/codex-runtime.test.mjs"
   },

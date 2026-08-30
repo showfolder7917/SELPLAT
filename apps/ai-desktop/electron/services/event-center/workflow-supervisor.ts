@@ -1,9 +1,11 @@
+import type { CollaborationState } from "../../../contracts/collaboration/collaboration.js";
 import type { WorkflowExceptionRecord, WorkflowStateReaders } from "../../../contracts/governance/workflow.js";
 import type { WorkflowRepository } from "./workflow-repository.js";
 
 export interface WorkflowSupervisorOptions {
   repository: WorkflowRepository;
   readers: WorkflowStateReaders;
+  projectCollaborationTimeline(state: CollaborationState): void;
   onStalledTasks(taskIds: string[]): void | Promise<void>;
   onUnhandledExceptions?(events: WorkflowExceptionRecord[]): void | Promise<void>;
   intervalMs?: number;
@@ -14,6 +16,7 @@ export interface WorkflowSupervisorOptions {
 export class WorkflowSupervisor {
   readonly #repository: WorkflowRepository;
   readonly #readers: WorkflowStateReaders;
+  readonly #projectCollaborationTimeline: WorkflowSupervisorOptions["projectCollaborationTimeline"];
   readonly #onStalledTasks: WorkflowSupervisorOptions["onStalledTasks"];
   readonly #onUnhandledExceptions: WorkflowSupervisorOptions["onUnhandledExceptions"];
   readonly #intervalMs: number;
@@ -24,6 +27,7 @@ export class WorkflowSupervisor {
   constructor(options: WorkflowSupervisorOptions) {
     this.#repository = options.repository;
     this.#readers = options.readers;
+    this.#projectCollaborationTimeline = options.projectCollaborationTimeline;
     this.#onStalledTasks = options.onStalledTasks;
     this.#onUnhandledExceptions = options.onUnhandledExceptions;
     this.#intervalMs = options.intervalMs || 30_000;
@@ -55,7 +59,7 @@ export class WorkflowSupervisor {
         const collaboration = this.#readers.collaboration();
         this.#repository.syncCollaborationState(collaboration);
         // 启动和监督轮询都补投影尚未消费的不可变事件，确保升级后旧阻塞事实无需重新执行任务即可显示。
-        this.#repository.appendCollaborationTaskFlowEvents(collaboration, collaboration.tasks.map((task) => task.taskId));
+        this.#projectCollaborationTimeline(collaboration);
       }, now);
       this.#syncDomain("linghu", () => this.#repository.syncLinghuState(this.#readers.linghu()), now);
       const stalled = this.#repository.detectStalledTasks(now);

@@ -305,19 +305,51 @@ export interface CollaborationStreamEnvelope {
 export interface CollaborationTimelineNode {
   nodeId: string;
   taskId: string | null;
+  eventType: string;
   kind: "approval-application" | "approval-decision" | "distribution" | "analysis" | "execution" | "verification" | "repair" | "result";
   actor: CollaborationParticipantSnapshot;
   recipients: CollaborationParticipantSnapshot[];
   status: "completed" | "current" | "waiting" | "failed";
   action: string;
   summary: string;
+  contentRole: CollaborationTimelineContentRole;
   content: string;
+  detailRole: CollaborationTimelineDetailRole;
   detail: string;
   startedAt: string;
   completedAt: string | null;
   durationMs: number;
   automaticOpen: boolean;
   manualApprovalProposalId: string | null;
+}
+
+export type CollaborationTimelineContentRole =
+  | "status"
+  | "approval-content"
+  | "approval-reason"
+  | "task-content"
+  | "analysis-output"
+  | "execution-output"
+  | "verification-output"
+  | "repair-output"
+  | "result-output";
+
+export type CollaborationTimelineDetailRole =
+  | "none"
+  | "application-evidence"
+  | "approval-scope"
+  | "task-breakdown"
+  | "acceptance-criteria"
+  | "changed-files"
+  | "verification-evidence"
+  | "recovery-conditions"
+  | "result-evidence";
+
+/** 数据库事务提交后发布的时间线变更通知；页面据此读取新快照。 */
+export interface CollaborationTimelineChangedEvent {
+  committedAt: string;
+  groupIds: string[];
+  groupVersions: Record<string, number>;
 }
 
 /** 一个专题对应一张可折叠任务卡；并行人物仍按分配顺序保存在同一纵向节点列表中。 */
