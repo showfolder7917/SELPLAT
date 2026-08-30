@@ -22,6 +22,13 @@ type TimelineFact = Omit<CollaborationTimelineNode, "durationMs"> & {
   occurredAt: string;
 };
 
+const TIMELINE_CONTENT_EVENT_TYPES = new Set<CodexStreamEvent["type"]>([
+  "message-delta",
+  "message-completed",
+  "reasoning-summary-delta",
+  "error",
+]);
+
 /**
  * 任务协作群的 SQLite 事实仓库。事件与流分片只追加，页面读模型只从这里生成。
  *
@@ -191,7 +198,7 @@ export class CollaborationTimelineRepository {
 
   #node(connection: DatabaseSync, row: Record<string, unknown>, now: string): CollaborationTimelineNode {
     const nodeId = String(row.nodeId);
-    const stream = visibleStreamText(connection, String(row.groupId), nodeId);
+    const stream = projectedContentText(connection, String(row.groupId), nodeId);
     const startedAt = String(row.startedAt);
     const status = row.status as CollaborationTimelineNode["status"];
     // 历史终态事实可能缺少 completedAt；以事实发生时间收口，禁止页面把已完成或失败节点继续计时。
@@ -207,12 +214,14 @@ export class CollaborationTimelineRepository {
   }
 }
 
-function visibleStreamText(connection: DatabaseSync, groupId: string, nodeId: string): string {
+/** 只投影人物产生的业务正文；managed-execution 等运行状态保留在原始流表，但绝不拼入可读内容。 */
+function projectedContentText(connection: DatabaseSync, groupId: string, nodeId: string): string {
   const rows = connection.prepare(`SELECT turnId, eventType, deltaText, snapshotText FROM AiDesktopTaskCollaborationStream
-    WHERE groupId=$groupId AND nodeId=$nodeId AND eventType IN ('message-delta', 'message-completed', 'reasoning-summary-delta', 'managed-execution')
+    WHERE groupId=$groupId AND nodeId=$nodeId
     ORDER BY sequenceNumber, occurredAt, chunkId`).all({ $groupId: groupId, $nodeId: nodeId }) as Array<Record<string, unknown>>;
   const turns = new Map<string, { deltas: string[]; completed: string | null }>();
   for (const row of rows) {
+    if (!TIMELINE_CONTENT_EVENT_TYPES.has(String(row.eventType) as CodexStreamEvent["type"])) continue;
     const turn = String(row.turnId);
     const value = turns.get(turn) || { deltas: [], completed: null };
     if (row.eventType === "message-completed" && row.snapshotText) value.completed = String(row.snapshotText);

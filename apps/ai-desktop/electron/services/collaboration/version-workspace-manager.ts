@@ -269,33 +269,44 @@ export class VersionWorkspaceManager {
   /**
    * 只回收发布归档明确标记失败的候选；成功证据、稳定集成指针、任务分支和用户分支均保留。
    *
-   * 真实传参示例：传入 `["release/0.1.1-rc-g9"]` 且分支存在，返回 `{ branchCount: 1, worktreeCount: 0 }`。
-   * 真实返回示例：失败候选仍在签发的 release worktree 中时先移除 worktree，再删除候选分支。
-   * 异常或副作用示例：候选被签出到应用签发目录之外时立即失败，调用方不得继续清数据库。
+   * 真实传参示例：传入 `["release/0.1.1-rc-g9"]` 且分支存在，返回 `{ branchCount: 1, worktreeCount: 0, failures: [] }`。
+   * 真实返回示例：失败候选仍在签发的 release worktree 中时先强制移除该测试工作树，再删除候选分支。
+   * 异常或副作用示例：候选位于签发目录之外时写入 failures 并跳过该目标，调用方仍可独立清理数据库运行态。
    */
-  async clearFailedTestReleaseCandidates(failedBranches: string[]): Promise<{ branchCount: number; worktreeCount: number }> {
+  async clearFailedTestReleaseCandidates(failedBranches: string[]): Promise<{ branchCount: number; worktreeCount: number; failures: string[] }> {
     const targets = new Set(failedBranches);
     for (const branchName of targets) this.#validateCandidateBranch(branchName);
     const releaseRoot = path.join(this.#managedRoot, "release");
     let worktreeCount = 0;
+    const failures: string[] = [];
     for (const worktree of parseGitWorktrees(await this.#gitRaw(this.#repositoryRoot, ["worktree", "list", "--porcelain"]))) {
       if (!worktree.branchName || !targets.has(worktree.branchName)) continue;
       const rootPath = path.resolve(worktree.rootPath);
       const relative = path.relative(releaseRoot, rootPath);
       if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-        throw new Error(`失败候选分支 ${worktree.branchName} 位于应用签发目录之外，已停止清空测试数据。`);
+        failures.push(`失败候选分支 ${worktree.branchName} 位于应用签发目录之外，未自动回收。`);
+        continue;
       }
-      await this.#git(this.#repositoryRoot, ["worktree", "remove", rootPath]);
-      worktreeCount += 1;
+      try {
+        // 测试失败可能留下构建产物或诊断文件；目标已由发布归档和受控目录双重确认，可强制回收该测试工作树。
+        await this.#git(this.#repositoryRoot, ["worktree", "remove", "--force", rootPath]);
+        worktreeCount += 1;
+      } catch (error) {
+        failures.push(`失败候选工作树 ${worktree.branchName} 回收失败：${errorMessage(error)}`);
+      }
     }
     let branchCount = 0;
     for (const branchName of [...targets].sort()) {
       const exists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${branchName}`]).then(() => true, () => false);
       if (!exists) continue;
-      await this.#git(this.#repositoryRoot, ["branch", "-D", branchName]);
-      branchCount += 1;
+      try {
+        await this.#git(this.#repositoryRoot, ["branch", "-D", branchName]);
+        branchCount += 1;
+      } catch (error) {
+        failures.push(`失败候选分支 ${branchName} 删除失败：${errorMessage(error)}`);
+      }
     }
-    return { branchCount, worktreeCount };
+    return { branchCount, worktreeCount, failures };
   }
 
   async #integrationBaseSha(): Promise<string> {

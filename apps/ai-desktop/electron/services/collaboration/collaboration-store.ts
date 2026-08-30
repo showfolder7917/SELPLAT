@@ -76,6 +76,16 @@ export class CollaborationStore {
     return clearedCount;
   }
 
+  /** 确认文件状态与内存状态都已移除任务运行记录，避免页面重启后重新读回旧任务。 */
+  assertTestDataCleared(): void {
+    const persisted = this.#loadPersistedState();
+    if (this.#state.tasks.length > 0 || this.#state.integrationBatches.length > 0
+      || persisted.tasks.length > 0 || persisted.integrationBatches.length > 0
+      || [...this.#state.members, ...persisted.members].some((member) => member.currentTaskId !== null)) {
+      throw new Error("测试数据清空后仍检测到协作任务运行记录，已阻止按成功结果重启。");
+    }
+  }
+
   setMode(mode: DesktopOperatingMode): CollaborationState {
     if (mode !== "single-conversation" && mode !== "collaboration") throw new Error("无效的桌面运行模式。");
     return this.#commit("mode.changed", (state) => { state.mode = mode; });
@@ -341,6 +351,14 @@ export class CollaborationStore {
     recoverInterruptedState(state);
     this.#write(state);
     return state;
+  }
+
+  #loadPersistedState(): CollaborationState {
+    const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as CollaborationState;
+    if (value.version !== 1 || !Array.isArray(value.members) || !Array.isArray(value.tasks) || !Array.isArray(value.integrationBatches)) {
+      throw new Error("协作任务状态文件格式无效，无法确认测试数据已清空。");
+    }
+    return value;
   }
 
   #write(state: CollaborationState): void {

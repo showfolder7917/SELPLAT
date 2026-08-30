@@ -122,6 +122,18 @@ export class LinghuAutomationStore {
     return clearedCount;
   }
 
+  /** 确认令狐自动保障不再持有测试任务、故障指纹或运行快照。 */
+  assertTestDataCleared(): void {
+    const persisted = JSON.parse(readFileSync(this.#filePath, "utf8")) as LinghuAutomationState;
+    const states = [this.#state, persisted];
+    if (states.some((state) => state.activeTaskId !== null
+      || state.flowSnapshots.length > 0
+      || Object.keys(state.recoveryAttemptsByFingerprint).length > 0
+      || state.lastModuleReport !== null)) {
+      throw new Error("测试数据清空后仍检测到令狐自动保障运行记录，已阻止按成功结果重启。");
+    }
+  }
+
   #commit(reason: string, update: (state: LinghuAutomationState) => void): LinghuAutomationState {
     const next = structuredClone(this.#state);
     update(next);

@@ -59,9 +59,11 @@ export class CollaborationCoordinator {
   readonly #emitStream: CollaborationCoordinatorOptions["emitStream"];
   readonly #executorSessions = new Map<string, CollaborationExecutorSession>();
   readonly #activeTaskRuns = new Set<string>();
+  readonly #unifiedTestRepairRuns = new Map<string, Promise<boolean>>();
   readonly #waitSpans = new Map<string, string>();
   readonly #heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
   readonly #lastProgressWriteMs = new Map<string, number>();
+  readonly #unsubscribeStore: () => void;
   #disposed = false;
 
   constructor(options: CollaborationCoordinatorOptions) {
@@ -71,7 +73,12 @@ export class CollaborationCoordinator {
     this.#sessions = options.sessions;
     this.#integrationPipeline = options.integrationPipeline;
     this.#emitStream = options.emitStream;
-    this.#store.subscribe(options.emitState);
+    this.#unsubscribeStore = this.#store.subscribe((state, reason, taskIds) => {
+      options.emitState(state, reason, taskIds);
+      // 在途任务的统一测试失败属于协作主流程安全兜底，不依赖令狐“主动巡检”总开关。
+      this.#scheduleUnifiedTestRepairs(state);
+    });
+    this.#scheduleUnifiedTestRepairs(this.#store.state());
   }
 
   state(): CollaborationState { return this.#store.state(); }
@@ -117,6 +124,14 @@ export class CollaborationCoordinator {
    * 该入口只接受 verification 失败，不处理需要人工选择、工作区归属或 Git 冲突问题。
    */
   async repairFailedUnifiedTest(taskId: string): Promise<boolean> {
+    const existing = this.#unifiedTestRepairRuns.get(taskId);
+    if (existing) return existing;
+    const run = this.#repairFailedUnifiedTest(taskId).finally(() => this.#unifiedTestRepairRuns.delete(taskId));
+    this.#unifiedTestRepairRuns.set(taskId, run);
+    return run;
+  }
+
+  async #repairFailedUnifiedTest(taskId: string): Promise<boolean> {
     const failedTask = this.#store.task(taskId);
     if (failedTask.state !== "test-failed" || failedTask.integrationFailure?.kind !== "verification") return false;
     const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
@@ -270,12 +285,25 @@ export class CollaborationCoordinator {
 
   async dispose(): Promise<void> {
     this.#disposed = true;
+    this.#unsubscribeStore();
     this.#integrationPipeline.dispose();
     this.#durations.interruptOpenSpans("application.before-quit");
     await Promise.allSettled([...this.#executorSessions.values()].map((session) => session.dispose()));
     this.#executorSessions.clear();
     for (const timer of this.#heartbeatTimers.values()) clearInterval(timer);
     this.#heartbeatTimers.clear();
+  }
+
+  /** 只为已有确定验证失败的在途任务排队修复；容量释放后的任意状态更新都会再次尝试。 */
+  #scheduleUnifiedTestRepairs(state: CollaborationState): void {
+    if (this.#disposed || state.mode !== "collaboration") return;
+    const linghu = state.members.find((member) => member.memberId === LINGHU_MEMBER_ID);
+    if (!linghu || linghu.state !== "idle") return;
+    const task = state.tasks.find((candidate) => candidate.state === "test-failed" && candidate.integrationFailure?.kind === "verification");
+    if (!task || this.#unifiedTestRepairRuns.has(task.taskId)) return;
+    queueMicrotask(() => {
+      if (!this.#disposed) void this.repairFailedUnifiedTest(task.taskId);
+    });
   }
 
   #schedule(): void {

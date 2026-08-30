@@ -20,8 +20,9 @@ const ipc = [
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const chatMessageModel = readFileSync(new URL("../src/features/conversation/model/chat-message.ts", import.meta.url), "utf8");
 
-test("任务依赖链接清理允许包装器已经先行移除", () => {
-  assert.match(taskWorktreeTestRunner, /cleanupIntegrationDependencyLinks\(desktopRoot\)/);
+test("任务依赖链接只由统一租约释放入口清理", () => {
+  assert.match(taskWorktreeTestRunner, /releaseManagedDependencyLease\(dependencyLease\)/);
+  assert.doesNotMatch(taskWorktreeTestRunner, /cleanupIntegrationDependencyLinks/);
   assert.doesNotMatch(taskWorktreeTestRunner, /existsSync\(dependencyLink\)/);
 });
 

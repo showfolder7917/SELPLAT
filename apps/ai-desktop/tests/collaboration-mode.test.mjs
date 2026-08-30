@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
 import { CollaborationCoordinator } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
 import { createCollaborationResultSummary } from "../../../build/ai-desktop/electron/electron/services/collaboration/result/result-summary.js";
-import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
+import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/collaboration/verified-package-release.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
 import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-facade.js";
@@ -514,7 +514,7 @@ test("令狐遇到本地修改归属门禁时报告真实人物与阶段且不�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐在原任务工作树修复统一测试失败并生成新的待集成结果", async () => {
+test("令狐主动巡检关闭时仍自动修复在途任务的统一测试失败", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-test-repair-result-"));
   try {
     const store = new CollaborationStore(path.join(directory, "collaboration.json"));
@@ -539,7 +539,7 @@ test("令狐在原任务工作树修复统一测试失败并生成新的待集�
       emitState: () => undefined,
       emitStream: () => undefined,
     });
-    assert.equal(await coordinator.repairFailedUnifiedTest(submitted.taskId), true);
+    await new Promise((resolve) => setImmediate(resolve));
     const repaired = store.task(submitted.taskId);
     assert.match(receivedRepairPlan, /expected 5\.100\.0, actual 5\.103\.0/);
     assert.match(receivedRepairPlan, /不扩大原任务范围/);
@@ -906,14 +906,45 @@ test("失败候选清理保留成功证据、稳定集成指针和用户分支",
     git(repositoryRoot, "branch", "user-preserved");
     const failedWorktree = path.join(managedRoot, "release", "failed-g9");
     git(repositoryRoot, "worktree", "add", failedWorktree, "release/0.1.1-rc-g9");
+    writeFileSync(path.join(failedWorktree, "untracked-test-evidence.txt"), "failed test artifact\n");
     const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
     const result = await manager.clearFailedTestReleaseCandidates(["release/0.1.1-rc-g9"]);
-    assert.deepEqual(result, { branchCount: 1, worktreeCount: 1 });
+    assert.deepEqual(result, { branchCount: 1, worktreeCount: 1, failures: [] });
     assert.equal(existsSync(failedWorktree), false);
     assert.throws(() => git(repositoryRoot, "show-ref", "--verify", "refs/heads/release/0.1.1-rc-g9"));
     assert.ok(git(repositoryRoot, "show-ref", "--verify", "refs/heads/release/0.1.1-rc"));
     assert.ok(git(repositoryRoot, "show-ref", "--verify", "refs/heads/codex/collab/integration"));
     assert.ok(git(repositoryRoot, "show-ref", "--verify", "refs/heads/user-preserved"));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("候选差异检查忽略基线前历史问题并完整显示本批错误", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "candidate-delta-check-"));
+  try {
+    git(directory, "init");
+    git(directory, "config", "user.name", "AI Desktop Test");
+    git(directory, "config", "user.email", "ai-desktop-test@example.invalid");
+    writeFileSync(path.join(directory, "historical.txt"), "historical trailing space   \n");
+    git(directory, "add", "-A");
+    git(directory, "commit", "-m", "historical issue");
+    writeFileSync(path.join(directory, "historical.txt"), "historical fixed\n");
+    git(directory, "add", "-A");
+    git(directory, "commit", "-m", "candidate baseline");
+    const baseSha = git(directory, "rev-parse", "HEAD");
+    writeFileSync(path.join(directory, "candidate.txt"), "candidate clean\n");
+    git(directory, "add", "-A");
+    git(directory, "commit", "-m", "clean candidate");
+    const cleanCandidateSha = git(directory, "rev-parse", "HEAD");
+    await verifyCandidateDelta(directory, { baseSha, candidateSha: cleanCandidateSha });
+
+    writeFileSync(path.join(directory, "candidate.txt"), "candidate trailing space   \n");
+    git(directory, "add", "-A");
+    git(directory, "commit", "-m", "bad candidate");
+    const badCandidateSha = git(directory, "rev-parse", "HEAD");
+    await assert.rejects(
+      verifyCandidateDelta(directory, { baseSha, candidateSha: badCandidateSha }),
+      /candidate\.txt:1: trailing whitespace/,
+    );
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -933,10 +964,14 @@ test("发布归档只把明确失败且建立过候选的分支交给测试清�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("一键清空先回收失败候选再重置数据库代次", () => {
+test("一键清空把候选回收与数据库清理解耦并核对全部持久状态", () => {
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
   assert.match(main, /releaseBatches\.failedCandidateBranches\(\)/);
-  assert.ok(main.indexOf("clearFailedTestReleaseCandidates") < main.indexOf("collaborationStore.clearTestData()"));
+  assert.match(main, /clearFailedTestReleaseCandidates[\s\S]*\.catch\(/);
+  assert.match(main, /collaborationStore\.assertTestDataCleared\(\)/);
+  assert.match(main, /nangongStore\.assertTestDataCleared\(\)/);
+  assert.match(main, /linghuStore\.assertTestDataCleared\(\)/);
+  assert.match(main, /candidateCleanupWarnings: candidateCleanup\.failures/);
 });
 
 test("已有同代成功候选时自动分配重试分支而不阻断统一测试", async () => {
@@ -1241,6 +1276,10 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /stale_current_handler_never_overrides_active_executor/);
   assert.match(rule, /linghu_automation_state_recovery_contract/);
   assert.match(rule, /linghu_module_completion_report_contract/);
+  assert.match(rule, /in_flight_verification_failure_directly_schedules_linghu_repair_independent_from_proactive_automation_switch/);
+  assert.match(rule, /candidate_cleanup_partial_failure_is_reported_but_never_preserves_stale_database_tasks/);
+  assert.match(rule, /managed_execution_activity_plan_and_diff_never_enter_business_body/);
+  assert.match(rule, /candidate_diff_check_exact_baseSHA_to_candidateSHA_not_history_window/);
 });
 
 test("自动恢复保留令狐老祖负责人和回流说明", () => {

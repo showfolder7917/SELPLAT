@@ -175,6 +175,23 @@ test("流式正文按轮次追加到当前显式事件节点", () => {
   } finally { fixture.close(); }
 });
 
+test("运行状态原样入库但不会重复拼入人物业务正文", () => {
+  const fixture = createFixture("stream-status-projection");
+  try {
+    const running = task(fixture, 1, false);
+    running.evolutionProposalId = null;
+    running.evolutionRoundId = null;
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(3), [running]), [running.taskId]);
+    const status = { type: "managed-execution", turnId: "turn-1", managedExecution: { mode: "test-managed", stage: "code-validation", status: "continuing", round: 1, maximumRounds: 3, message: "AI Desktop 正在当前任务分支执行隔离 Playwright" } };
+    fixture.timeline.appendStream(running.taskId, "worker-1", status, fixture.at(4));
+    fixture.timeline.appendStream(running.taskId, "worker-1", status, fixture.at(5));
+    fixture.timeline.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "turn-1", text: "失败原因已定位为测试回调签名不符合 fixture 约定。" }, fixture.at(6));
+    const node = fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes.find((candidate) => candidate.kind === "execution" && candidate.status === "current");
+    assert.equal(node.content, "失败原因已定位为测试回调签名不符合 fixture 约定。");
+    assert.equal(fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopTaskCollaborationStream WHERE eventType='managed-execution'").get().count)), 2);
+  } finally { fixture.close(); }
+});
+
 test("执行与自检流式正文按节点隔离，后续自检不会覆盖执行内容", () => {
   const fixture = createFixture("stream-stage-isolation");
   try {
@@ -401,5 +418,5 @@ function createFixture(suffix) {
   const database = SqliteDatabase.open(path.join(root, "events.sqlite3"), sqlRoot, true);
   const timeline = new CollaborationTimelineRepository(database);
   const base = Date.now() + 1_000;
-  return { timeline, at(offset) { return new Date(base + offset * 1_000).toISOString(); }, append(event) { timeline.appendBusinessEvent(event); }, close() { database.close(); rmSync(root, { recursive: true, force: true }); } };
+  return { database, timeline, at(offset) { return new Date(base + offset * 1_000).toISOString(); }, append(event) { timeline.appendBusinessEvent(event); }, close() { database.close(); rmSync(root, { recursive: true, force: true }); } };
 }

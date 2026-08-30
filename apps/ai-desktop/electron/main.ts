@@ -411,7 +411,8 @@ app.whenReady().then(async () => {
     durations: collaborationDurations,
     workspaces: versionWorkspaces,
     actorMemberId: "linghu-ancestor",
-    verifyCandidate: async (rootPath, taskIds, releaseBatchId) => {
+    verifyCandidate: async (candidate, taskIds, releaseBatchId) => {
+      const rootPath = candidate.rootPath;
       await testResources.run({
         runId: `integration-${taskIds.join("-")}`,
         taskId: taskIds.length === 1 ? taskIds[0] : null,
@@ -419,7 +420,7 @@ app.whenReady().then(async () => {
         kind: "integration-validation",
         port: 4197,
         buildRoot: path.join(path.resolve(rootPath), "build", applicationName),
-      }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName));
+      }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName, candidate));
       const candidateExecutable = await linghuUnifiedTests.run(rootPath);
       return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId);
     },
@@ -590,8 +591,9 @@ app.whenReady().then(async () => {
       await collaboration?.dispose();
       runtimeDisposed = true;
 
-      // 失败候选必须先于数据库代次清理；Git 回收失败时保留数据库恢复点，成功发布证据不参与清理。
-      const candidateCleanup = await versionWorkspaces.clearFailedTestReleaseCandidates(releaseBatches.failedCandidateBranches());
+      // 候选证据回收与核心测试态清理是两条独立线路；Git 局部失败必须回传，但不能再次留下旧数据库任务。
+      const candidateCleanup = await versionWorkspaces.clearFailedTestReleaseCandidates(releaseBatches.failedCandidateBranches())
+        .catch((error) => ({ branchCount: 0, worktreeCount: 0, failures: [error instanceof Error ? error.message : String(error)] }));
       const repositoryToClear = workflowRepository;
       let clearedRecordCount = 0;
       dispatch.clear();
@@ -599,7 +601,9 @@ app.whenReady().then(async () => {
       clearedRecordCount += nangongStore.clearTestData();
       clearedRecordCount += linghuStore.clearTestData();
       clearedRecordCount += repositoryToClear?.clearTestData() || 0;
+      collaborationStore.assertTestDataCleared();
       nangongStore.assertTestDataCleared();
+      linghuStore.assertTestDataCleared();
       eventCenter.attachRepository(null);
       workflowRepository = null;
       closeAiMemoryDatabase();
@@ -608,6 +612,7 @@ app.whenReady().then(async () => {
         cleared: true, clearedRecordCount,
         clearedCandidateBranchCount: candidateCleanup.branchCount,
         clearedCandidateWorktreeCount: candidateCleanup.worktreeCount,
+        candidateCleanupWarnings: candidateCleanup.failures,
         restartScheduled: true,
       };
       app.relaunch({ args: process.argv.slice(1) });

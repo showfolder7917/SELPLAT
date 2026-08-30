@@ -69,9 +69,14 @@ export function releaseManagedDependencyLease(lease: ManagedDependencyLease | nu
 }
 
 /** 集成批次只运行代码级组合检查；正式构建和当前应用重启仍属于用户明确触发的测试托管。 */
-export async function verifyCollaborationIntegration(rootPath: string, taskIds: string[], dependencySourceRoot: string, applicationName: string): Promise<void> {
-  const commitCount = Math.max(4, taskIds.length * 3);
-  await run("git", ["log", "--check", "--oneline", "-n", String(commitCount)], rootPath);
+export async function verifyCollaborationIntegration(
+  rootPath: string,
+  taskIds: string[],
+  dependencySourceRoot: string,
+  applicationName: string,
+  candidateRange: Readonly<{ baseSha: string; candidateSha: string }>,
+): Promise<void> {
+  await verifyCandidateDelta(rootPath, candidateRange);
   const desktopRoot = path.join(rootPath, "apps", applicationName);
   if (existsSync(path.join(desktopRoot, "package.json"))) {
     const leaseId = `integration-${taskIds.join("-")}`;
@@ -85,6 +90,11 @@ export async function verifyCollaborationIntegration(rootPath: string, taskIds: 
       releaseManagedDependencyLease(dependencyLease);
     }
   }
+}
+
+/** 只核对本批候选相对冻结基线引入的差异，禁止历史提交中的旧问题阻断当前批次。 */
+export async function verifyCandidateDelta(rootPath: string, candidateRange: Readonly<{ baseSha: string; candidateSha: string }>): Promise<void> {
+  await run("git", ["diff", "--check", `${candidateRange.baseSha}..${candidateRange.candidateSha}`], rootPath);
 }
 
 /**
@@ -212,9 +222,10 @@ async function run(command: string, args: string[], cwd: string, timeout = 180_0
       env: { ...process.env, ...environment, GIT_TERMINAL_PROMPT: "0" },
     });
   } catch (error) {
-    const detail = error && typeof error === "object" && "stderr" in error && typeof error.stderr === "string"
-      ? error.stderr.trim().slice(-2_000)
-      : error instanceof Error ? error.message : String(error);
+    const stderr = error && typeof error === "object" && "stderr" in error && typeof error.stderr === "string" ? error.stderr.trim() : "";
+    const stdout = error && typeof error === "object" && "stdout" in error && typeof error.stdout === "string" ? error.stdout.trim() : "";
+    // Git 的 whitespace 诊断写入 stdout；两路都为空时才退回异常消息，禁止页面只得到一个空错误前缀。
+    const detail = (stderr || stdout || (error instanceof Error ? error.message : String(error))).slice(-2_000);
     throw new Error(`协同组合检查失败：${detail}`);
   }
 }

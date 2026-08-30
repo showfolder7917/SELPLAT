@@ -20,6 +20,8 @@ export interface TestDataResetResult {
   clearedRecordCount: number;
   clearedCandidateBranchCount: number;
   clearedCandidateWorktreeCount: number;
+  /** 候选证据回收失败不会阻止核心测试数据清空；失败目标必须明确回传，禁止伪报全部成功。 */
+  candidateCleanupWarnings: string[];
   restartScheduled: true;
 }
 

@@ -19,7 +19,7 @@ export interface VersionIntegrationPipelineOptions {
   durations: CollaborationDurationLog;
   workspaces: VersionWorkspaceManager;
   actorMemberId: string;
-  verifyCandidate(rootPath: string, taskIds: string[], releaseBatchId: string): Promise<string>;
+  verifyCandidate(candidate: IntegrationCandidate, taskIds: string[], releaseBatchId: string): Promise<string>;
   acquireRelease(request: IntegrationReleaseRequest): Promise<() => void>;
   releaseVersion: string;
   releaseBatches: ReleaseBatchStore;
@@ -212,7 +212,7 @@ export class VersionIntegrationPipeline {
       verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
       releaseDocument.state = "testing";
       this.#releaseBatches.write(releaseDocument);
-      publishedExecutable = await this.#verifyCandidate(candidate.rootPath, taskIds, releaseBatchId);
+      publishedExecutable = await this.#verifyCandidate(candidate, taskIds, releaseBatchId);
       releaseDocument.state = "verified";
       releaseDocument.executable = publishedExecutable;
       this.#releaseBatches.write(releaseDocument);
