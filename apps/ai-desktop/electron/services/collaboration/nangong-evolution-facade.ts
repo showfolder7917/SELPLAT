@@ -108,27 +108,53 @@ export class NangongEvolutionFacade {
     const confirmation = current.oneShotConfirmation;
     const ready = confirmation?.status === "awaiting-user-confirmation" && confirmation.conversationId === current.conversation.conversationId;
     if (request.message.trim() === "1") return this.#startOneShotFromConversation(request, ready);
-    let state = this.#store.appendConversation("user", request.message, request.attachmentIds || []);
+    const userMessageId = request.clientMessageId || `evolution-message-${randomUUID()}`;
+    let state = this.#store.appendConversation("user", request.message, request.attachmentIds || [], { messageId: userMessageId, deliveryStatus: "sending" });
     const userMessage = state.conversation.messages.at(-1)!;
-    const context = this.#memory?.buildNangongContext(state.conversation)
-      || state.conversation.messages.slice(-12).map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
-    const response = await this.#conversation.send(request, context);
-    const parsed = parseConversationResponse(response.text);
-    state = this.#store.appendConversation("nangong", parsed.reply);
-    if (parsed.topic.userIntent) state = this.#store.recordConversationIntent(userMessage.messageId, parsed.topic.userIntent);
-    const nangongMessage = state.conversation.messages.at(-1)!;
-    state = this.#store.setOneShotConfirmation(!request.topicId && parsed.invitesOneShot ? nangongMessage.messageId : null);
-    if (parsed.topic.userIntent) this.#memory?.registerRound(state.conversation, userMessage.messageId, nangongMessage.messageId, parsed.topic);
-    if (request.topicId) state = this.#store.recordTopicConversation(request.topicId, userMessage.messageId, nangongMessage.messageId);
-    this.#recordEvent("nangong.evolution.conversation_replied", {
-      conversationId: state.conversation.conversationId,
-      messageCount: state.conversation.messages.length,
-      conversationTopicTitle: parsed.topic.title,
-      conversationTopicType: parsed.topic.type,
-      switchedTopic: parsed.topic.switchTopic,
-      topicId: request.topicId || null,
+    let turnCompleted = false;
+    try {
+      const context = this.#memory?.buildNangongContext(state.conversation)
+        || state.conversation.messages.slice(-12).map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+      const response = await this.#conversation.send(request, context);
+      const parsed = parseConversationResponse(response.text);
+      state = this.#store.completeConversationTurn(userMessage.messageId, parsed.reply);
+      turnCompleted = true;
+      if (parsed.topic.userIntent) state = this.#store.recordConversationIntent(userMessage.messageId, parsed.topic.userIntent);
+      const nangongMessage = state.conversation.messages.at(-1)!;
+      state = this.#store.setOneShotConfirmation(!request.topicId && parsed.invitesOneShot ? nangongMessage.messageId : null);
+      if (request.topicId) state = this.#store.recordTopicConversation(request.topicId, userMessage.messageId, nangongMessage.messageId);
+      this.#archiveConversationRound(state, userMessage.messageId, nangongMessage.messageId, parsed.topic.userIntent ? parsed.topic : null);
+      this.#recordEvent("nangong.evolution.conversation_replied", {
+        conversationId: state.conversation.conversationId,
+        messageCount: state.conversation.messages.length,
+        conversationTopicTitle: parsed.topic.title,
+        conversationTopicType: parsed.topic.type,
+        switchedTopic: parsed.topic.switchTopic,
+        topicId: request.topicId || null,
+      });
+      return state;
+    } catch (error) {
+      if (!turnCompleted) this.#store.failConversationTurn(userMessage.messageId);
+      throw error;
+    }
+  }
+
+  /** 训练归档是完整人物回合后的旁路；失败写统一异常中心并保留运行态原文供后续重试。 */
+  #archiveConversationRound(state: NangongEvolutionState, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision | null): void {
+    if (!this.#memory) return;
+    queueMicrotask(() => {
+      try {
+        if (decision) this.#memory?.registerRound(state.conversation, userMessageId, nangongMessageId, decision);
+        else this.#memory?.syncConversation(state.conversation);
+        this.#recordEvent("training_corpus.conversation_round_archived", { conversationId: state.conversation.conversationId, userMessageId, nangongMessageId, source: "nangong" });
+      } catch (error) {
+        this.#recordFailure({
+          kind: "technical", sourceType: "system", sourceId: "nangong-training-archive",
+          operation: "archive_completed_conversation_round", error, correlationId: state.conversation.conversationId,
+          details: { userMessageId, nangongMessageId, source: "nangong" },
+        });
+      }
     });
-    return state;
   }
 
   /**
@@ -138,22 +164,30 @@ export class NangongEvolutionFacade {
    * 异常或副作用示例：没有南宫婉明确邀请时只保存解释回复；生成失败会持久化阻塞原因，不把已保存消息伪装成发送失败。
    */
   async #startOneShotFromConversation(request: SendNangongConversationMessageRequest, ready: boolean): Promise<NangongEvolutionState> {
-    let state = this.#store.appendConversation("user", request.message, request.attachmentIds || []);
+    const userMessageId = request.clientMessageId || `evolution-message-${randomUUID()}`;
+    let state = this.#store.appendConversation("user", request.message, request.attachmentIds || [], { messageId: userMessageId, deliveryStatus: "sending" });
     const userMessage = state.conversation.messages.at(-1)!;
-    if (!ready) return this.#store.appendConversation("nangong", "当前没有等待确认的一次性演化。请继续补充事实，或点击“整理为演化课题”检查内容；南宫婉明确显示本轮已可启动后，再回复 1。", []);
+    if (!ready) {
+      state = this.#store.completeConversationTurn(userMessage.messageId, "当前没有等待确认的一次性演化。请继续补充事实，或点击“整理为演化课题”检查内容；南宫婉明确显示本轮已可启动后，再回复 1。");
+      this.#archiveConversationRound(state, userMessage.messageId, state.conversation.messages.at(-1)!.messageId, null);
+      return state;
+    }
     const previousRun = state.oneShotRun;
     if (previousRun?.status === "running") {
       if (this.#oneShotHasLiveOwner(state)) {
         const topic = state.topics.find((item) => item.topicId === previousRun.topicId);
-        return this.#store.appendConversation("nangong", `上一轮${topic ? `专题“${topic.title}”` : "演化任务"}仍在处理，当前环节是“${previousRun.action}”。无需重复启动，请到任务协作群查看当前节点和后续交接。`, []);
+        state = this.#store.completeConversationTurn(userMessage.messageId, `上一轮${topic ? `专题“${topic.title}”` : "演化任务"}仍在处理，当前环节是“${previousRun.action}”。无需重复启动，请到任务协作群查看当前节点和后续交接。`);
+        this.#archiveConversationRound(state, userMessage.messageId, state.conversation.messages.at(-1)!.messageId, null);
+        return state;
       }
       state = this.#store.retireOrphanedOneShotRun("数据库中保留了运行标记，但协作任务中没有对应的实际执行人物；系统已结束该遗留状态并继续本次确认。");
       this.#recordEvent("nangong.evolution.orphan_run_retired", { runId: previousRun.runId, topicId: previousRun.topicId, proposalId: previousRun.proposalId, phase: previousRun.phase });
     }
     state = this.#store.recordConversationIntent(userMessage.messageId, "确认将当前南宫婉调查对话整理为演化课题，并自动完成本轮既有审批、分发、测试与验收流程");
     state = this.#store.beginOneShotRun(request.workspaceState, request.locale);
-    state = this.#store.appendConversation("nangong", "已确认启动本轮一次性演化。我正在整理课题；后续韩立审批、南宫婉分发、执行、令狐测试和韩立验收会沿现有流程连续推进，当前人物和动作会实时显示。", []);
+    state = this.#store.completeConversationTurn(userMessage.messageId, "已确认启动本轮一次性演化。我正在整理课题；后续韩立审批、南宫婉分发、执行、令狐测试和韩立验收会沿现有流程连续推进，当前人物和动作会实时显示。");
     const confirmationMessage = state.conversation.messages.at(-1)!;
+    this.#archiveConversationRound(state, userMessage.messageId, confirmationMessage.messageId, null);
     try {
       const draft = await this.generateTopicDraft({ workspaceState: request.workspaceState, locale: request.locale });
       state = this.#store.convertConversationToTopic({ confirmedByUser: true, ...draft, workspaceState: request.workspaceState, locale: request.locale });

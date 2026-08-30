@@ -521,7 +521,6 @@ app.whenReady().then(async () => {
     catch (error) {
       eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_evolution_state", error, correlationId: topicId || proposalId || undefined, details: { reason, topicId, proposalId } });
     }
-    collaborationMemory?.syncEvolutionState(state);
     eventCenter.recordEvent("nangong.evolution.state_changed", { reason, topicId, proposalId, activeTopicId: state.activeTopicId });
     const workbenchChange = buildEvolutionWorkbenchChange(previousState, state, reason, topicId, proposalId);
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {

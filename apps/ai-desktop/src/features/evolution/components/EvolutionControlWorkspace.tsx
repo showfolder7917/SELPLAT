@@ -95,7 +95,7 @@ export function EvolutionControlWorkspace({ perspective, requestedLocation, onLo
     ] },
   ], [activeTopicGroupCount, expandedNodeIds, pendingCount, state.activeTopicId, state.automationRuntime.correctionRounds, state.automationRuntime.status, state.deliberations.length, state.proposals.length, state.topics.length]);
   useEffect(() => {
-    // 人物入口复用同一窗口时同步回该人物默认页，避免标题已切换而画布仍停在前一人物节点。
+    // 只在人物视角真正切换时加载一次偏好。树内导航更新地址时不得重新进入加载态，否则连续点击会被静默丢弃。
     let active = true;
     workspacePreferencePerspectiveRef.current = null;
     setWorkspacePreferenceReady(false);
@@ -110,7 +110,12 @@ export function EvolutionControlWorkspace({ perspective, requestedLocation, onLo
       setWorkspacePreferenceReady(true);
     }).catch(() => { if (active) { setSelectedNode(perspective === "hanli" ? "manual-approval" : "manual-topic"); setExpandedNodeIds(DEFAULT_EXPANDED_NODES); workspacePreferencePerspectiveRef.current = perspective; setWorkspacePreferenceReady(true); } });
     return () => { active = false; };
-  }, [perspective, requestedLocation]);
+  }, [perspective]);
+  useEffect(() => {
+    if (!workspacePreferenceReady || requestedLocation.perspective !== perspective) return;
+    const requestedNode = requestedLocation.nodeId as EvolutionWorkspaceTreeNode | null;
+    if (requestedNode && EVOLUTION_WORKSPACE_NODE_IDS.has(requestedNode)) setSelectedNode(requestedNode);
+  }, [perspective, requestedLocation.nodeId, requestedLocation.perspective, workspacePreferenceReady]);
   useEffect(() => {
     if (!workspacePreferenceReady || workspacePreferencePerspectiveRef.current !== perspective) return;
     void window.desktop?.saveEvolutionWorkbenchPreference({ perspective, nodeId: "__workspace__", page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: selectedNode }).catch(() => undefined);

@@ -20,6 +20,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
   }
 
   syncConversation(conversation: NangongConversation): void {
+    const completedMessages = conversation.messages.filter((message) => message.deliveryStatus === undefined || message.deliveryStatus === "completed");
     this.#database.transaction((connection) => {
       const upsert = connection.prepare(`
         INSERT INTO AiDesktopConversationMemory
@@ -46,10 +47,10 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
           $sequenceNumber, 'user', $content, 'exact', 'primary', $createdAt, $recordedAt)
         ON CONFLICT(corpusMessageId) DO NOTHING
       `);
-      conversation.messages.forEach((message, sequenceNumber) => upsert.run({
+      completedMessages.forEach((message, fallbackSequenceNumber) => upsert.run({
         $messageId: message.messageId,
         $conversationId: conversation.conversationId,
-        $sequenceNumber: sequenceNumber,
+        $sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : fallbackSequenceNumber,
         $role: message.role,
         // 用户与南宫婉原文都完整保存；预览只是独立展示字段，不能替代分析原文。
         $content: message.content,
@@ -58,7 +59,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         $createdAt: message.createdAt,
         $recordedAt: new Date().toISOString(),
       }));
-      conversation.messages.forEach((message, sequenceNumber) => {
+      completedMessages.forEach((message, fallbackSequenceNumber) => {
         if (message.role !== "user") return;
         const recordedAt = new Date().toISOString();
         const topicId = `corpus-topic:nangong:${conversation.conversationId}:${message.messageId}`;
@@ -69,7 +70,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         insertUserCorpus.run({
           $corpusMessageId: `corpus:nangong:${message.messageId}`, $topicId: topicId,
           $conversationId: conversation.conversationId, $turnId: message.messageId, $messageId: message.messageId,
-          $sequenceNumber: sequenceNumber, $content: message.content, $createdAt: message.createdAt, $recordedAt: recordedAt,
+          $sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : fallbackSequenceNumber, $content: message.content, $createdAt: message.createdAt, $recordedAt: recordedAt,
         });
       });
     });
@@ -95,7 +96,6 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
   }
 
   buildNangongContext(conversation: NangongConversation): string {
-    this.syncConversation(conversation);
     const current = conversation.messages.slice(-CURRENT_CONVERSATION_TURN_LIMIT)
       // 用户原话是方向事实，保持完整；AI 回答使用独立预览，避免长回复挤占后续分析上下文。
       .map((item) => item.role === "user"

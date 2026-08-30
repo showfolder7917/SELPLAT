@@ -51,13 +51,17 @@ export class NangongEvolutionStateRepository implements EvolutionStatePersistenc
       }>;
       return {
         conversationId: latest.conversationId,
-        messages: rows.map((row) => ({
+        messages: rows.map((row, sequenceNumber) => ({
           messageId: row.messageId,
+          sequenceNumber,
           role: row.role,
           content: row.content,
+          replyToMessageId: row.role === "nangong" ? rows.slice(0, sequenceNumber).reverse().find((candidate) => candidate.role === "user")?.messageId || null : null,
+          deliveryStatus: "completed",
           attachmentIds: [],
           inferredIntent: row.inferredIntent || undefined,
           createdAt: row.createdAt,
+          completedAt: row.createdAt,
         })),
         updatedAt: rows.at(-1)?.createdAt || new Date().toISOString(),
       };

@@ -456,11 +456,15 @@ export type EvolutionAutomationAction = "start" | "pause" | "resume" | "stop" | 
 
 export interface NangongConversationMessage {
   messageId: string;
+  sequenceNumber: number;
   role: "user" | "nangong";
   content: string;
+  replyToMessageId: string | null;
+  deliveryStatus: "sending" | "completed" | "failed";
   inferredIntent?: string;
   attachmentIds?: string[];
   createdAt: string;
+  completedAt: string | null;
 }
 
 export interface NangongConversation {
@@ -481,6 +485,8 @@ export interface CreateEvolutionTopicRequest {
 }
 
 export interface SendNangongConversationMessageRequest {
+  /** Renderer 在点击发送时生成，运行态确认和失败必须原位更新同一消息。 */
+  clientMessageId?: string;
   message: string;
   attachmentIds?: string[];
   /** 从专题执行群发言时只保存稳定专题关联；普通南宫婉对话保持为空。 */

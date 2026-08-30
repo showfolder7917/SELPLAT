@@ -338,6 +338,11 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(confirmationPanel).toContainText("本轮已具备启动条件");
   await testInfo.attach("one-shot-persisted-confirmation", { body: await page.screenshot(), contentType: "image/png" });
   await confirmationPanel.getByRole("button", { name: "回复 1 并启动本轮完整流程" }).click();
+  const confirmationMessages = conversation.locator(".selconversation-message");
+  await expect(confirmationMessages.filter({ hasText: "1" })).toHaveCount(1);
+  const confirmationOrder = await confirmationMessages.evaluateAll((messages) => messages.map((message) => message.textContent || ""));
+  expect(confirmationOrder.findIndex((text) => text.includes("我") && text.includes("1"))).toBeLessThan(confirmationOrder.findIndex((text) => text.includes("南宫婉") && text.includes("已确认启动")));
+  await expect(conversation.getByText("发送中", { exact: false })).toHaveCount(0);
   await expect(conversation.getByLabel("本轮演化实时进度")).toHaveCount(0);
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionOneShotRun(run: unknown): Promise<void> } }).desktop.setInteractionOneShotRun(null));
   await expect(page.locator(".evolution-control-workspace")).toHaveCount(0);

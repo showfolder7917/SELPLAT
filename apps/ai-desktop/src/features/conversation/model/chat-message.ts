@@ -1,8 +1,9 @@
 import type { CodexStreamActivity, CodexStreamEvent, CodexStreamPlanStep, ManagedExecutionMode, ManagedExecutionUpdate, ScreenshotAttachment } from "../../../../contracts/desktop/desktop";
+import type { RealtimeConversationMessage } from "./realtime-conversation";
 
 export type ComposerAttachment = ScreenshotAttachment & { dataUrl: string };
 
-export type Message = {
+export type Message = RealtimeConversationMessage & {
   id: number;
   role: "user" | "assistant";
   text: string;
@@ -23,11 +24,23 @@ export type Message = {
   collaborationTaskId?: string;
 };
 
-const ACTIVE_CHAT_STORAGE_KEY = "ai-desktop.active-chat.v1";
+const ACTIVE_CHAT_STORAGE_KEY = "ai-desktop.active-chat.v2";
+const RETIRED_CHAT_STORAGE_KEYS = ["ai-desktop.active-chat.v1"];
+
+export function createUserMessage(id: number, text: string, attachments: ComposerAttachment[]): Message {
+  return {
+    id, messageId: `codex-message-${id}`, sequenceNumber: id, replyToMessageId: null,
+    status: "sending", createdAt: new Date().toISOString(), role: "user", text, attachments,
+  };
+}
 
 /** 每个真实 Harness 回合使用一张独立回复卡，禁止后续回合复用并覆盖已有文字。 */
-export function createAssistantMessage(id: number, managedMode: ManagedExecutionMode): Message {
-  return { id, role: "assistant", text: "", streaming: true, streamStatus: "starting", activities: [], plan: [], changedFiles: [], managedMode };
+export function createAssistantMessage(id: number, managedMode: ManagedExecutionMode, replyToMessageId: string | null = null): Message {
+  return {
+    id, messageId: `codex-message-${id}`, sequenceNumber: id, replyToMessageId,
+    status: "streaming", createdAt: new Date().toISOString(), role: "assistant", text: "", streaming: true,
+    streamStatus: "starting", activities: [], plan: [], changedFiles: [], managedMode,
+  };
 }
 
 export function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Message {
@@ -38,12 +51,12 @@ export function applyCodexStreamEvent(message: Message, event: CodexStreamEvent)
   if (event.type === "activity" && event.activity) return { ...message, activities: upsertStreamActivity(message.activities || [], event.activity), streamStatus: event.activity.itemType };
   if (event.type === "plan-updated") return { ...message, plan: event.plan || [], streamStatus: "planning" };
   if (event.type === "diff-updated") return { ...message, changedFiles: event.changedFiles || [], streamStatus: "fileChange" };
-  if (event.type === "turn-completed") return { ...message, streaming: false, streamStatus: event.status || "completed", streamError: event.error };
+  if (event.type === "turn-completed") return { ...message, status: event.error ? "failed" : "completed", streaming: false, streamStatus: event.status || "completed", streamError: event.error };
   if (event.type === "managed-execution" && event.managedExecution) {
     const terminal = event.managedExecution.stage === "completed" || event.managedExecution.status === "blocked";
-    return { ...message, streaming: !terminal, streamTerminal: terminal, streamStatus: terminal ? (event.managedExecution.status === "blocked" ? "failed" : "completed") : event.managedExecution.stage, managedExecution: event.managedExecution };
+    return { ...message, status: terminal ? (event.managedExecution.status === "blocked" ? "failed" : "completed") : "streaming", streaming: !terminal, streamTerminal: terminal, streamStatus: terminal ? (event.managedExecution.status === "blocked" ? "failed" : "completed") : event.managedExecution.stage, managedExecution: event.managedExecution };
   }
-  if (event.type === "error") return { ...message, streaming: false, streamTerminal: true, streamStatus: "failed", streamError: event.error };
+  if (event.type === "error") return { ...message, status: "failed", streaming: false, streamTerminal: true, streamStatus: "failed", streamError: event.error };
   if (event.type === "turn-started") return updateTurnSegment(message, event.turnId, (current) => current, "inProgress", true);
   return message;
 }
@@ -58,12 +71,13 @@ function updateTurnSegment(message: Message, turnId: string, update: (current: s
 export function readStoredChat(threadId: string): { executionMode: ManagedExecutionMode; messages: Message[] } | null {
   try {
     const value = JSON.parse(window.localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY) || "null") as { version?: number; threadId?: string; executionMode?: ManagedExecutionMode; messages?: unknown[] } | null;
-    if (!value || value.version !== 1 || value.threadId !== threadId || !isManagedExecutionModeValue(value.executionMode)) return null;
+    if (!value || value.version !== 2 || value.threadId !== threadId || !isManagedExecutionModeValue(value.executionMode)) return null;
     const messages = (value.messages || []).flatMap((entry) => {
       if (!entry || typeof entry !== "object") return [];
       const candidate = entry as Partial<Message>;
-      if (!Number.isSafeInteger(candidate.id) || (candidate.role !== "user" && candidate.role !== "assistant") || typeof candidate.text !== "string") return [];
-      return [{ ...candidate, id: candidate.id as number, role: candidate.role, text: candidate.text, streaming: false } as Message];
+      if (!Number.isSafeInteger(candidate.id) || (candidate.role !== "user" && candidate.role !== "assistant") || typeof candidate.text !== "string"
+        || typeof candidate.messageId !== "string" || !Number.isSafeInteger(candidate.sequenceNumber) || typeof candidate.createdAt !== "string") return [];
+      return [{ ...candidate, id: candidate.id as number, role: candidate.role, text: candidate.text, streaming: false, status: candidate.status === "failed" ? "failed" : "completed" } as Message];
     }).slice(-200);
     return { executionMode: value.executionMode, messages };
   } catch {
@@ -72,11 +86,12 @@ export function readStoredChat(threadId: string): { executionMode: ManagedExecut
 }
 
 export function writeStoredChat(threadId: string, executionMode: ManagedExecutionMode, messages: Message[]): void {
-  window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, JSON.stringify({ version: 1, threadId, executionMode, messages }));
+  window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, JSON.stringify({ version: 2, threadId, executionMode, messages }));
 }
 
 export function clearStoredChat(): void {
   window.localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+  RETIRED_CHAT_STORAGE_KEYS.forEach((storageKey) => window.localStorage.removeItem(storageKey));
 }
 
 function isManagedExecutionModeValue(value: unknown): value is ManagedExecutionMode {

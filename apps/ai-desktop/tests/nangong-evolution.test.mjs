@@ -525,6 +525,59 @@ test("南宫婉缺少回合元数据时仍保留完整回复且不伪装成发�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("人物实时会话按稳定消息标识和回复关系向下追加且允许重复正文", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-realtime-timeline-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const plainConversation = { async send() { return { text: "收到。", itemCount: 1 }; }, async newChat() {} };
+    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: plainConversation, recordEvent: () => undefined });
+    await facade.sendConversationMessage({ clientMessageId: "client-message-1", message: "1", workspaceState, locale: "zh-CN" });
+    const state = await facade.sendConversationMessage({ clientMessageId: "client-message-2", message: "1", workspaceState, locale: "zh-CN" });
+    assert.deepEqual(state.conversation.messages.map((message) => message.sequenceNumber), [0, 1, 2, 3]);
+    assert.deepEqual(state.conversation.messages.filter((message) => message.role === "user").map((message) => message.messageId), ["client-message-1", "client-message-2"]);
+    assert.equal(state.conversation.messages[1].replyToMessageId, "client-message-1");
+    assert.equal(state.conversation.messages[3].replyToMessageId, "client-message-2");
+    assert.ok(state.conversation.messages.every((message) => message.deliveryStatus === "completed"));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("训练归档失败进入统一异常旁路且不把已完成聊天标记为发送失败", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-training-archive-failure-"));
+  try {
+    const failures = [];
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const plainConversation = { async send() { return { text: "聊天回复已经完成。", itemCount: 1 }; }, async newChat() {} };
+    const memory = {
+      buildNangongContext() { return "当前运行态上下文"; },
+      syncConversation() { throw new Error("training database unavailable"); },
+    };
+    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: plainConversation, memory, recordEvent: () => undefined, recordFailure: (failure) => failures.push(failure) });
+    const state = await facade.sendConversationMessage({ clientMessageId: "client-training-failure", message: "先完成聊天", workspaceState, locale: "zh-CN" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(state.conversation.messages[0].deliveryStatus, "completed");
+    assert.equal(state.conversation.messages[1].content, "聊天回复已经完成。");
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].operation, "archive_completed_conversation_round");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("人物回复失败只原位标记用户消息且不产生训练归档", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-realtime-failure-"));
+  try {
+    let archiveCount = 0;
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const failedConversation = { async send() { throw new Error("conversation unavailable"); }, async newChat() {} };
+    const memory = { buildNangongContext() { return ""; }, syncConversation() { archiveCount += 1; } };
+    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: failedConversation, memory, recordEvent: () => undefined });
+    await assert.rejects(() => facade.sendConversationMessage({ clientMessageId: "client-send-failure", message: "不要丢失原文", workspaceState, locale: "zh-CN" }), /conversation unavailable/);
+    const state = facade.state();
+    assert.equal(state.conversation.messages.length, 1);
+    assert.equal(state.conversation.messages[0].messageId, "client-send-failure");
+    assert.equal(state.conversation.messages[0].deliveryStatus, "failed");
+    assert.equal(archiveCount, 0);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("没有南宫婉明确邀请时回复 1 不启动流程或直接修改源码", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-not-ready-"));
   try {

@@ -23,6 +23,7 @@ const preload = [
 const screenshotEditor = read("../src/features/screenshot/components/ScreenshotEditor.tsx");
 const selUiProvider = read("../src/theme/SelUiProvider.tsx");
 const selUiConversation = read("../src/features/conversation/components/SelUiConversation.tsx");
+const realtimeConversation = read("../src/features/conversation/model/realtime-conversation.ts");
 const conversationControl = read("../../../shared/frontend/sel-ui/src/components/conversation/selConversation.js");
 const selGrid = read("../../../shared/frontend/sel-ui/src/components/grid/selGrid.js");
 const selTree = read("../../../shared/frontend/sel-ui/src/components/tree/selTree.js");
@@ -34,6 +35,7 @@ const selWindow = read("../../../shared/frontend/sel-ui/src/components/window/se
 const themeContract = read("../../../shared/frontend/sel-ui/src/theme/contract/selThemeContract.css");
 const sharedTokens = read("../../../shared/frontend/sel-ui/src/theme/selThemeTokens.css");
 const dependencyCache = read("../scripts/dependency-cache.mjs");
+const dependencyPreparation = read("../scripts/ensure-dependency-cache.mjs");
 const dependencyRunner = read("../scripts/run-with-dependencies.mjs");
 const developerTheme = [
   read("../../../shared/frontend/sel-ui/src/theme/packs/developer-workbench/theme.css"),
@@ -157,6 +159,7 @@ test("确认、输入和提示交互只通过 SELUI 公共组件", () => {
   assert.doesNotMatch(developerStyles, /content:\s*attr\(data-tooltip\)|\[data-tooltip\]/);
   assert.match(selWindow, /selWindow:close/);
   assert.match(selWindow, /destroy:\s*\(\)\s*=>/);
+  assert.match(selUiProvider, /if \(pendingApprovalRef\.current\)[\s\S]*controller\.open\(\);[\s\S]*return pendingApprovalRef\.current\.promise/);
 });
 
 test("韩立与南宫婉共用 SELUI 对话和表单视觉", () => {
@@ -172,13 +175,20 @@ test("韩立与南宫婉共用 SELUI 对话和表单视觉", () => {
   assert.doesNotMatch(developerApp, /onKeyDown=\{onKeyDown\}|event\.key === "Enter" && !event\.shiftKey/);
   assert.doesNotMatch(developerApp, /evolution-inline-editor|evolution-approval-editor/);
   assert.doesNotMatch(developerStyles, /\.dev-chat|\.dev-message|\.dev-composer|\.nangong-topic-draft-action|\.nangong-convert-action/);
+  assert.match(realtimeConversation, /mergeRealtimeConversationTimeline/);
+  assert.match(developerApp, /clientMessageId/);
+  assert.match(developerApp, /mergeRealtimeConversationTimeline/);
+  assert.doesNotMatch(developerApp, /outgoingPersistedMessageId|message\.messageId !== outgoingPersistedMessageId/);
 });
 
 test("锁文件依赖缓存迁移后重建本地公共包链接", () => {
   assert.match(dependencyCache, /export function repairLocalPackageLinks/);
   assert.match(dependencyCache, /metadata\?\.link !== true/);
   assert.match(dependencyCache, /targetRelative\.startsWith/);
-  assert.match(dependencyCache, /repairLocalPackageLinks\(details\);[\s\S]*createDependencyLink\(details\.dependencyRoot, details\.linkPath\)/);
+  assert.match(dependencyPreparation, /repairLocalPackageLinks\(details\)/);
+  const ordinaryAttachment = dependencyCache.slice(dependencyCache.indexOf("export function attachDependencyCache"), dependencyCache.indexOf("export function detachOwnedDependencyCache"));
+  assert.doesNotMatch(ordinaryAttachment, /repairLocalPackageLinks/);
+  assert.match(ordinaryAttachment, /createDependencyLink\(details\.dependencyRoot, details\.linkPath\)/);
   assert.match(dependencyRunner, /node-common-core[\s\S]*build-node-common\.mjs[\s\S]*sync-node-common-runtime\.mjs/);
 });
 

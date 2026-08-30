@@ -46,7 +46,7 @@ export function SelUiProvider({ children }: { children: ReactNode }) {
   const multilinePromptRef = useRef<WindowController | null>(null);
   const approvalRef = useRef<WindowController | null>(null);
   const pendingPromptRef = useRef<{ id: string; resolve(value: string | null): void } | null>(null);
-  const pendingApprovalRef = useRef<{ resolve(value: ApprovalResult | null): void } | null>(null);
+  const pendingApprovalRef = useRef<{ promise: Promise<ApprovalResult | null>; resolve(value: ApprovalResult | null): void } | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -170,7 +170,11 @@ export function SelUiProvider({ children }: { children: ReactNode }) {
     approval: (options) => {
       const controller = approvalRef.current;
       if (!controller) return Promise.resolve(null);
-      if (pendingApprovalRef.current) pendingApprovalRef.current.resolve(null);
+      // 同一公共审批窗仍在处理时只恢复并置前，复用原 Promise；禁止重复打开把人物已经填写的审批原因清空。
+      if (pendingApprovalRef.current) {
+        controller.open();
+        return pendingApprovalRef.current.promise;
+      }
       controller.setLocale({
         title: `审批任务 · ${options.title}`,
         subtitle: options.subtitle,
@@ -184,7 +188,10 @@ export function SelUiProvider({ children }: { children: ReactNode }) {
       });
       controller.setValues({ content: options.content, decision: "approved", reason: "" });
       controller.open();
-      return new Promise<ApprovalResult | null>((resolve) => { pendingApprovalRef.current = { resolve }; });
+      let settleApproval!: (value: ApprovalResult | null) => void;
+      const promise = new Promise<ApprovalResult | null>((resolve) => { settleApproval = resolve; });
+      pendingApprovalRef.current = { promise, resolve: settleApproval };
+      return promise;
     },
   }), []);
 

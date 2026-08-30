@@ -380,17 +380,20 @@ contextBridge.exposeInMainWorld("desktop", {
   getApprovalGovernance: async () => [],
   sendNangongConversationMessage: async (request) => {
     const now = new Date().toISOString();
-    const userMessageId = `user-${now}`;
+    const userMessageId = request.clientMessageId || `user-${now}`;
     const nangongMessageId = `nangong-${now}`;
     if (request.message.trim() === "1" && nangongEvolutionState.oneShotConfirmation) {
-      nangongEvolutionState.conversation.messages.push({ messageId: userMessageId, role: "user", content: "1", inferredIntent: "确认启动当前一次性完整演化", createdAt: now });
+      const sequenceNumber = nangongEvolutionState.conversation.messages.length;
+      nangongEvolutionState.conversation.messages.push({ messageId: userMessageId, sequenceNumber, role: "user", content: "1", replyToMessageId: null, deliveryStatus: "completed", inferredIntent: "确认启动当前一次性完整演化", createdAt: now, completedAt: now });
+      nangongEvolutionState.conversation.messages.push({ messageId: nangongMessageId, sequenceNumber: sequenceNumber + 1, role: "nangong", content: "已确认启动本轮一次性演化。", replyToMessageId: userMessageId, deliveryStatus: "completed", createdAt: now, completedAt: now });
       nangongEvolutionState.oneShotConfirmation = null;
       nangongEvolutionState.oneShotRun = { runId: `interaction-one-shot-${Date.now()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
       return publishNangongEvolution("one-shot.started");
     }
     const nangongReply = "已确认事实：令狐持续修正需要先形成可审批方案。建议方向：把修正方案接入韩立统一审批。";
-    nangongEvolutionState.conversation.messages.push({ messageId: userMessageId, role: "user", content: request.message, createdAt: now });
-    nangongEvolutionState.conversation.messages.push({ messageId: nangongMessageId, role: "nangong", content: nangongReply, createdAt: now });
+    const sequenceNumber = nangongEvolutionState.conversation.messages.length;
+    nangongEvolutionState.conversation.messages.push({ messageId: userMessageId, sequenceNumber, role: "user", content: request.message, replyToMessageId: null, deliveryStatus: "completed", createdAt: now, completedAt: now });
+    nangongEvolutionState.conversation.messages.push({ messageId: nangongMessageId, sequenceNumber: sequenceNumber + 1, role: "nangong", content: nangongReply, replyToMessageId: userMessageId, deliveryStatus: "completed", createdAt: now, completedAt: now });
     if (request.topicId) nangongEvolutionState.archiveRecords.push({ recordId: `interaction-topic-group-${Date.now()}`, deliberationId: null, topicId: request.topicId, proposalId: null, taskId: null, sequenceNumber: nangongEvolutionState.archiveRecords.length + 1, category: "source", eventType: "conversation.topic_group_replied", actor: "system", title: "专题群收到用户消息与南宫婉回复", payload: { conversationId: nangongEvolutionState.conversation.conversationId, userMessageId, userPreview: request.message, nangongMessageId, nangongPreview: nangongReply, status: "replied", nextOwner: "han-li" }, occurredAt: now });
     return publishNangongEvolution("conversation.replied");
   },

@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.140.0
+rule_version = 5.142.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -74,6 +74,8 @@ nangong_conversation_memory_contract = full_user_and_nangong_source_text_in_SQLi
 nangong_round_semantics_contract = free_form_topic_plus_type_plus_user_intent_each_round + AI_detected_topic_switch_closes_previous + no_fixed_enum
 <!-- 用户消息只能显示用户原文；AI 推断意图只用于数据库检索，南宫婉直接回答且不得把复述包装成用户说过的话。 -->
 nangong_internal_intent_contract = exact_user_source_is_only_visible_user_content + inferred_intent_database_search_only + no_renderer_intent_summary_below_user_message + nangong_direct_answer_without_fixed_restated_intent_or_correction_template + never_impersonate_or_expand_user_words
+<!-- 南宫婉面对用户补充和纠正时先尊重事实、回应当前关注点；人物表达不得使用机械模板或扩大用户意图。 -->
+nangong_conversation_personality_contract = respectful_listening_and_correction_are_nangong_personality + reflect_current_concern_not_mechanical_template + never_expand_user_intent
 <!-- Codex、南宫婉和韩立训练资料进入统一语料表，人物运行表继续保留独立职责；主题与标签只能来自 AI 回合元数据。 -->
 codex_conversation_backfill_contract = one_training_corpus_table_with_codex_nangong_hanli_source + exact_real_user_messages + AI_generated_final_summary_max_300_unicode + per_turn_topic_id + AI_confirmed_free_topic_type_intent_and_tags + pending_when_metadata_absent + no_keyword_classification + exclude_system_developer_environment_tool_hidden_reasoning_and_commentary + stable_source_message_idempotency
 <!-- 主人物 Codex rollout 是持久入库源；回合完成和应用启动都按内容哈希水位补录，失败不得推进检查点。 -->
@@ -90,8 +92,8 @@ ai_memory_current_baseline_contract = current_baseline_schema_1000_plus_register
 ai_desktop_selui_ownership_contract = page_uses_SELUI_for_all_reusable_visual_controls + missing_control_register_and_extend_SELUI_first + developer_css_business_layout_only + no_private_tooltip_confirm_prompt_dialog_switch_skin
 <!-- 可展开业务详情必须使用中央登记的 SELUI Disclosure；按钮语义、展开状态、主题令牌、事件和销毁由公共控件统一管理。 -->
 ai_desktop_selui_disclosure_contract = register_selDisclosure_before_application_use + formal_script_and_style_exports + button_aria_expanded_and_controlled_content + theme_token_only + change_event_and_destroy_lifecycle + nested_dossier_sections_supported + no_business_details_summary
-<!-- 所有人物会话共享一个 SELUI 对话控件；人物差异只通过插槽注入，不得复制回车、附件、消息卡或输入区实现。 -->
-ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation + hanli_and_nangong_same_formal_exports + standard_Enter_submit + Shift_Enter_newline + compositionstart_to_compositionend_isComposing_or_keyCode229_never_submit + optional_person_actions_slot + nangong_no_hanli_managed_stage_choice + submit_moves_text_and_images_to_outgoing_message_immediately + composer_clears_before_response + failure_visible_on_outgoing_message + no_private_chat_visual_css
+<!-- 所有人物会话共享一个 SELUI 对话控件和实时消息契约；页面先按稳定顺序呈现真实对话，训练归档只能在完整回合后异步旁路执行。 -->
+ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation + hanli_and_nangong_same_formal_exports + standard_Enter_submit + Shift_Enter_newline + compositionstart_to_compositionend_isComposing_or_keyCode229_never_submit + optional_person_actions_slot + nangong_no_hanli_managed_stage_choice + one_realtime_message_contract_with_stable_message_id_sequence_reply_to_and_delivery_status + submit_immediately_projects_user_message_at_its_real_sequence + server_ack_updates_same_message_by_id + person_reply_appends_after_parent + stream_updates_reply_in_place + composer_clears_before_response + failure_visible_on_original_outgoing_message + persisted_projection_and_local_pending_merge_by_id_never_content_matching_or_separate_outgoing_tail + completed_round_training_archive_is_async_side_path + archive_failure_records_unified_event_and_never_changes_chat_delivery_status + ordinary_person_conversation_is_separate_from_task_collaboration_timeline + retired_storage_schema_is_not_read_and_is_removed_on_clear + no_private_chat_visual_css
 <!-- 演化课题、提案、审批与修订表单的字段、按钮和状态视觉统一由 selForm 承担。 -->
 ai_desktop_evolution_form_component_contract = organize_topic_and_generate_draft_are_distinct_actions + topic_proposal_approval_revision_use_selForm + application_owns_values_validation_and_business_callbacks_only + no_private_form_field_or_button_skin
 

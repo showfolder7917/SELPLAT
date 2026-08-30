@@ -70,7 +70,8 @@ import type {
   WorkspacePermission,
   WorkspaceState,
 } from "../../../contracts/desktop/desktop";
-import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, managedModeForCommand, nextManagedMode, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "../../features/conversation/model/chat-message";
+import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, createUserMessage, managedModeForCommand, nextManagedMode, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "../../features/conversation/model/chat-message";
+import { mergeRealtimeConversationTimeline } from "../../features/conversation/model/realtime-conversation";
 import { SelUiConversation } from "../../features/conversation/components/SelUiConversation";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "../../features/collaboration/model/collaboration-task-progress";
@@ -757,14 +758,14 @@ export function DeveloperApp() {
     const userId = Math.max(nextId, messageIdSequenceRef.current + 1);
     const assistantId = userId + 1;
     messageIdSequenceRef.current = assistantId;
-    const userMessage = { id: userId, role: "user" as const, text: displayText || text.attachment, attachments: sentAttachments };
+    const userMessage = createUserMessage(userId, displayText || text.attachment, sentAttachments);
     activeTurnIdRef.current = null;
     completedTurnIdsRef.current = new Set();
     turnMessageIdsRef.current = new Map();
     activeManagedModeRef.current = mode;
     activeAssistantIdRef.current = assistantId;
     // 发送后立即创建回复卡，随后只使用官方 app-server 实时事件更新内容和执行阶段。
-    setMessages((current) => [...current, userMessage, createAssistantMessage(assistantId, mode)]);
+    setMessages((current) => [...current, userMessage, createAssistantMessage(assistantId, mode, userMessage.messageId)]);
     setInput("");
     setAttachments([]);
     setLoading(true);
@@ -773,17 +774,21 @@ export function DeveloperApp() {
         ? await window.desktop.sendMessage({ message, locale, sandboxMode, attachmentIds, executionMode: mode, queueItemId: queued?.id })
         : { text: locale === "ja" ? "デスクトップ版でローカル Codex に接続します。" : "桌面版本会在这里返回本地 Codex 的结果。", itemCount: 0 };
       if (response.disposition === "queued") {
-        setMessages((current) => current.map((item) => item.id === assistantId
-          ? { ...item, text: "消息已进入等待队列。", streaming: false, streamTerminal: true, streamStatus: "queued" }
-          : item));
+        setMessages((current) => current.map((item) => item.id === userId
+          ? { ...item, status: "completed" }
+          : item.id === assistantId
+            ? { ...item, status: "queued", text: "消息已进入等待队列。", streaming: false, streamTerminal: true, streamStatus: "queued" }
+            : item));
         return;
       }
       if (response.threadId) setActiveThreadId(response.threadId);
       flushStreamEventsRef.current();
       const completedAssistantId = activeAssistantIdRef.current || assistantId;
-      setMessages((current) => current.map((item) => item.id === completedAssistantId
-        ? { ...item, text: item.text || response.text, streaming: false, streamTerminal: true, streamStatus: "completed" }
-        : item));
+      setMessages((current) => current.map((item) => item.id === userId
+        ? { ...item, status: "completed" }
+        : item.id === completedAssistantId
+          ? { ...item, status: "completed", text: item.text || response.text, streaming: false, streamTerminal: true, streamStatus: "completed" }
+          : item));
       if (automaticTestEnabledRef.current
         && mode === "task-managed"
         && "managedStatus" in response
@@ -794,9 +799,11 @@ export function DeveloperApp() {
     } catch (error) {
       const messageText = readableDesktopError(error, "Codex unavailable");
       const failedAssistantId = activeAssistantIdRef.current || assistantId;
-      setMessages((current) => current.map((item) => item.id === failedAssistantId
-        ? { ...item, text: item.text || messageText, streaming: false, streamTerminal: true, streamStatus: "failed", streamError: messageText }
-        : item));
+      setMessages((current) => current.map((item) => item.id === userId
+        ? { ...item, status: "failed" }
+        : item.id === failedAssistantId
+          ? { ...item, status: "failed", text: item.text || messageText, streaming: false, streamTerminal: true, streamStatus: "failed", streamError: messageText }
+          : item));
     } finally {
       flushStreamEventsRef.current();
       activeAssistantIdRef.current = null;
@@ -1407,7 +1414,7 @@ export function DeveloperApp() {
           const messageTask = message.collaborationTaskId
             ? collaborationState?.tasks.find((task) => task.taskId === message.collaborationTaskId) || null
             : null;
-          return <article key={message.id} className="selconversation-message" data-role={message.role} data-streaming={message.streaming || undefined}><header>{message.role === "user" ? "YOU" : "CODEX"}</header><div className="selconversation-message-body">{message.attachments?.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && messageTask && <CollaborationStatusChain task={messageTask} locale={locale} onRetry={async (taskId) => { const state = await window.desktop?.continueCollaborationTask(taskId); if (state) setCollaborationState(state); }} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} activeMode={executionMode} onReturn={setExecutionMode} onAdvance={(mode, label) => collaborationMode && message.managedMode === "conversation-managed" ? void submitConfirmedCollaborationTask(message).catch((error) => setDispatchError(readableDesktopError(error, "无法提交协同任务。"))) : void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>;
+          return <article key={message.id} className="selconversation-message" data-role={message.role} data-streaming={message.streaming || undefined}><header>{message.role === "user" ? `YOU${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "CODEX"}</header><div className="selconversation-message-body">{message.attachments?.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && messageTask && <CollaborationStatusChain task={messageTask} locale={locale} onRetry={async (taskId) => { const state = await window.desktop?.continueCollaborationTask(taskId); if (state) setCollaborationState(state); }} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} activeMode={executionMode} onReturn={setExecutionMode} onAdvance={(mode, label) => collaborationMode && message.managedMode === "conversation-managed" ? void submitConfirmedCollaborationTask(message).catch((error) => setDispatchError(readableDesktopError(error, "无法提交协同任务。"))) : void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>;
         })}
       </section> : showNangongConversationWorkspace && nangongEvolutionState
         ? <NangongConversationWorkspace key={nangongEvolutionState.conversation.conversationId} state={nangongEvolutionState} attachments={nangongAttachments} workspaces={workspaces} locale={locale} newConversationBusy={nangongNewConversationBusy} error={nangongError} onState={setNangongEvolutionState} onAttachments={setNangongAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setNangongError} />
@@ -1532,7 +1539,7 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
   const [topicDraftOpen, setTopicDraftOpen] = useState(false);
   const [topicDraftBusy, setTopicDraftBusy] = useState(false);
   const [topicDraftFeedback, setTopicDraftFeedback] = useState("");
-  const [outgoingMessage, setOutgoingMessage] = useState<{ content: string; attachments: ComposerAttachment[]; failed: boolean } | null>(null);
+  const [outgoingMessage, setOutgoingMessage] = useState<{ messageId: string; sequenceNumber: number; content: string; attachments: ComposerAttachment[]; failed: boolean; createdAt: string } | null>(null);
   const [attachmentPreviews, setAttachmentPreviews] = useState<Record<string, ComposerAttachment[]>>({});
   const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
   const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
@@ -1544,16 +1551,18 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
     const message = confirmedMessage?.trim() || chatText.trim() || (attachments.length ? "请调查并分析这些截图中的问题。" : "");
     if (!message || !workspaces || chatBusy) return;
     const sentAttachments = [...attachments];
+    const clientMessageId = `nangong-message-${crypto.randomUUID()}`;
+    const createdAt = new Date().toISOString();
     // 用户点击发送后立即把文字和图片移入消息区，输入框不再承担后台等待状态。
     setChatBusy(true);
     setChatText("");
     onAttachments([]);
-    setOutgoingMessage({ content: message, attachments: sentAttachments, failed: false });
+    setOutgoingMessage({ messageId: clientMessageId, sequenceNumber: state.conversation.messages.length, content: message, attachments: sentAttachments, failed: false, createdAt });
     onError("");
     try {
-      const next = await window.desktop?.sendNangongConversationMessage({ message, attachmentIds: sentAttachments.map((item) => item.id), workspaceState: workspaces, locale });
+      const next = await window.desktop?.sendNangongConversationMessage({ clientMessageId, message, attachmentIds: sentAttachments.map((item) => item.id), workspaceState: workspaces, locale });
       if (!next) throw new Error("南宫婉会话服务未返回结果。");
-      const persisted = [...next.conversation.messages].reverse().find((item) => item.role === "user" && item.content === message);
+      const persisted = next.conversation.messages.find((item) => item.messageId === clientMessageId);
       if (persisted && sentAttachments.length) setAttachmentPreviews((current) => ({ ...current, [persisted.messageId]: sentAttachments }));
       onState(next);
       setOutgoingMessage(null);
@@ -1588,9 +1597,20 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
       }
     } catch (error) { onError(readableDesktopError(error, "课题草稿生成失败。")); } finally { setTopicDraftBusy(false); }
   };
-  const outgoingPersistedMessageId = outgoingMessage
-    ? [...state.conversation.messages].reverse().find((item) => item.role === "user" && item.content === outgoingMessage.content)?.messageId
-    : null;
+  const timelineMessages = mergeRealtimeConversationTimeline(
+    state.conversation.messages.map((message, sequenceNumber) => ({
+      ...message,
+      sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : sequenceNumber,
+      status: message.deliveryStatus || "completed" as const,
+      attachments: attachmentPreviews[message.messageId] || [],
+    })),
+    outgoingMessage ? [{
+      messageId: outgoingMessage.messageId, sequenceNumber: outgoingMessage.sequenceNumber, role: "user" as const,
+      content: outgoingMessage.content, replyToMessageId: null, deliveryStatus: outgoingMessage.failed ? "failed" as const : "sending" as const,
+      status: outgoingMessage.failed ? "failed" as const : "sending" as const, attachmentIds: outgoingMessage.attachments.map((item) => item.id),
+      attachments: outgoingMessage.attachments, createdAt: outgoingMessage.createdAt, completedAt: outgoingMessage.failed ? new Date().toISOString() : null,
+    }] : [],
+  );
   return <SelUiConversation id="selConversationNangongWanId" onSubmit={() => void sendChat()} timeline={<section className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
       {state.oneShotConfirmation?.status === "awaiting-user-confirmation" && state.oneShotRun?.status !== "running" && <section className="nangong-one-shot-confirmation" role="status" aria-label="本轮演化等待确认">
         <strong>本轮已具备启动条件</strong>
@@ -1598,8 +1618,7 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
         <button type="button" className="selform-action" disabled={chatBusy || !workspaces} onClick={() => void sendChat("1")}>回复 1 并启动本轮完整流程</button>
       </section>}
       {state.conversation.messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
-      {state.conversation.messages.filter((message) => message.messageId !== outgoingPersistedMessageId).map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.role}><header>{message.role === "user" ? "我" : "南宫婉"}</header><div className="selconversation-message-body">{attachmentPreviews[message.messageId]?.length ? <div className="selconversation-message-attachments">{attachmentPreviews[message.messageId].map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
-      {outgoingMessage && <article className="selconversation-message" data-role="user"><header>我 · {outgoingMessage.failed ? "发送失败" : "发送中"}</header><div className="selconversation-message-body">{outgoingMessage.attachments.length > 0 && <div className="selconversation-message-attachments">{outgoingMessage.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div>}<MarkdownMessage text={outgoingMessage.content} /></div></article>}
+      {timelineMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.role}><header>{message.role === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "南宫婉"}</header><div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
     </section>} composer={<form className="selconversation-composer nangong-person-composer" onSubmit={(event) => { event.preventDefault(); void sendChat(); }}>
       {topicDraftOpen && <section className="selform-root" aria-label="整理演化课题">
         <header className="selform-header"><strong>整理为演化课题</strong><button type="button" className="selform-action" disabled={topicDraftBusy} onClick={() => setTopicDraftOpen(false)}>取消</button></header>

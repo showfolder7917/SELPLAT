@@ -376,11 +376,51 @@ export class NangongEvolutionStore {
     });
   }
 
-  appendConversation(role: "user" | "nangong", content: string, attachmentIds: string[] = []): NangongEvolutionState {
-    const messageId = `evolution-message-${randomUUID()}`;
+  appendConversation(role: "user" | "nangong", content: string, attachmentIds: string[] = [], options: { messageId?: string; replyToMessageId?: string | null; deliveryStatus?: "sending" | "completed" | "failed" } = {}): NangongEvolutionState {
+    const messageId = options.messageId || `evolution-message-${randomUUID()}`;
     const now = new Date().toISOString();
     return this.#commit("conversation.message_added", null, null, (state) => {
-      state.conversation.messages.push({ messageId, role, content: required(content, "对话内容", 30_000), attachmentIds: [...new Set(attachmentIds)].slice(0, 5), createdAt: now });
+      if (state.conversation.messages.some((message) => message.messageId === messageId)) throw new Error("会话消息标识已存在，不能重复发送。");
+      const replyToMessageId = options.replyToMessageId === undefined && role === "nangong"
+        ? [...state.conversation.messages].reverse().find((message) => message.role === "user")?.messageId || null
+        : options.replyToMessageId || null;
+      const deliveryStatus = options.deliveryStatus || "completed";
+      state.conversation.messages.push({
+        messageId, sequenceNumber: state.conversation.messages.length, role,
+        content: required(content, "对话内容", 30_000), replyToMessageId, deliveryStatus,
+        attachmentIds: [...new Set(attachmentIds)].slice(0, 5), createdAt: now,
+        completedAt: deliveryStatus === "sending" ? null : now,
+      });
+      state.conversation.updatedAt = now;
+    });
+  }
+
+  /** 用户消息先进入运行态时间线；人物回复完成后原子结束用户消息并向后追加回复。 */
+  completeConversationTurn(userMessageId: string, content: string): NangongEvolutionState {
+    const now = new Date().toISOString();
+    return this.#commit("conversation.turn_completed", null, null, (state) => {
+      const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId && message.role === "user");
+      if (!userMessage) throw new Error("待完成的用户会话消息不存在。");
+      if (userMessage.deliveryStatus === "failed") throw new Error("发送失败的用户消息不能追加人物回复。");
+      userMessage.deliveryStatus = "completed";
+      userMessage.completedAt = now;
+      state.conversation.messages.push({
+        messageId: `evolution-message-${randomUUID()}`, sequenceNumber: state.conversation.messages.length,
+        role: "nangong", content: required(content, "南宫婉回复", 30_000), replyToMessageId: userMessageId,
+        deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now,
+      });
+      state.conversation.updatedAt = now;
+    });
+  }
+
+  /** 发送失败只改变原用户消息状态，禁止生成一条脱离原位置的错误消息。 */
+  failConversationTurn(userMessageId: string): NangongEvolutionState {
+    const now = new Date().toISOString();
+    return this.#commit("conversation.turn_failed", null, null, (state) => {
+      const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId && message.role === "user");
+      if (!userMessage) throw new Error("待标记失败的用户会话消息不存在。");
+      userMessage.deliveryStatus = "failed";
+      userMessage.completedAt = now;
       state.conversation.updatedAt = now;
     });
   }
