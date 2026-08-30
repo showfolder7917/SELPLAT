@@ -140,13 +140,15 @@ export class CollaborationCoordinator {
 
   async #repairFailedUnifiedTest(taskId: string): Promise<boolean> {
     const failedTask = this.#store.task(taskId);
-    const repairableFailure = failedTask.integrationFailure?.kind === "verification" || failedTask.integrationFailure?.kind === "infrastructure";
+    // 冻结本轮统一测试失败事实，避免后续状态更新使可空字段与本次修复依据脱节。
+    const integrationFailure = failedTask.integrationFailure;
+    const repairableFailure = integrationFailure?.kind === "verification" || integrationFailure?.kind === "infrastructure";
     if (!repairableFailure || !["test-failed", "blocked"].includes(failedTask.state)) return false;
-    const originalFailureKind = failedTask.integrationFailure!.kind;
+    const originalFailureKind = integrationFailure.kind;
     const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
     if (linghu.state !== "idle") return false;
 
-    const originalReason = failedTask.blockingReason || failedTask.integrationFailure.detail;
+    const originalReason = failedTask.blockingReason || integrationFailure.detail;
     let repairSession: CollaborationExecutorSession | null = null;
     try {
       this.#store.updateTask(taskId, "unified_test.repair_started", (current, state) => {

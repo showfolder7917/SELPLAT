@@ -141,7 +141,8 @@ test("多轮托管按真实 turnId 向下新增回复卡并冻结上一轮", () 
   assert.match(developerApp, /createAssistantMessage\(messageId, activeManagedModeRef\.current\)/);
   assert.match(developerApp, /turnMessageIdsRef\.current\.set\(event\.turnId, messageId\)/);
   assert.match(chatMessageModel, /streaming: false, streamTerminal: true/);
-  assert.match(chatMessageModel, /updateTurnSegment\(message, event\.segmentId \|\| event\.turnId/);
+  assert.match(chatMessageModel, /updateTurnSegment\(message, streamItemKey\(event\)/);
+  assert.match(chatMessageModel, /\[event\.turnId, event\.itemId \|\| event\.segmentId \|\| "default"\]\.join\(":"\)/);
   assert.match(chatMessageModel, /message\.streamTerminal && event\.type !== "error"/);
   assert.match(codexStreamMapper, /segmentId: `\$\{turnId\}:\$\{itemId\}`/);
   assert.match(developerApp, /completedAssistantId = activeAssistantIdRef\.current \|\| assistantId/);

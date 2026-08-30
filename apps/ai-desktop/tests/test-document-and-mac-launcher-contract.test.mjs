@@ -32,11 +32,11 @@ test("共享测试文档使用独占锁、占用身份、心跳和过期恢复",
 });
 
 test("统一测试执行后立即归档共享测试文档", () => {
-  assert.match(runner, /pendingRoot = projectPaths\.pendingTestRoot/);
-  assert.match(runner, /runningRoot = projectPaths\.runningTestRoot/);
+  assert.match(runner, /pendingRoot = assertWorkspaceDataPath\(projectRoot, projectPaths\.pendingTestRoot\)/);
+  assert.match(runner, /runningRoot = assertWorkspaceDataPath\(projectRoot, projectPaths\.runningTestRoot\)/);
   assert.match(runner, /renameSync\(path\.join\(pendingRoot, runId\), path\.join\(runningRoot, runId\)\)/);
   assert.match(runner, /renameSync\(documentPath, path\.join\(runRoot, "测试结果\.md"\)\)/);
-  assert.match(runner, /archiveRoot = projectPaths\.testArchiveRoot/);
+  assert.match(runner, /archiveRoot = assertWorkspaceDataPath\(projectRoot, projectPaths\.testArchiveRoot\)/);
   assert.match(runner, /renameSync\(runRoot, archivePath\)/);
   assert.match(runner, /测试运行已归档/);
   assert.match(runner, /selectRun\(argumentsMap\.runId \|\| null\)/);

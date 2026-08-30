@@ -6,6 +6,9 @@ export type CollaborationTimelineBusinessEventType =
   | "approval.decision"
   | "approval.supplement_waiting"
   | "approval.supplement_completed"
+  | "task.distribution_planning_started"
+  | "task.distribution_planning_completed"
+  | "task.distribution_planning_failed"
   | "task.distribution";
 
 /** 专题卡只接收已发生的不可变业务事件，不接收任务或提案当前快照。 */

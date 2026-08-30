@@ -69,13 +69,15 @@ test("旧执行节点先失败结束，令狐修复作为新事件追加", () =>
     original.flowEvents.push(
       flow("blocked", "task.blocked", "recovery", "failed", original.executionRecords[0].executor, original.blockingReason, fixture.at(4), true),
       flow("repair", "execution.repair_started", "recovery", "started", member("linghu-ancestor", "令狐老祖"), "令狐老祖开始修复", fixture.at(5)),
+      flow("repair-investigated", "execution.repair_investigated", "recovery", "completed", member("linghu-ancestor", "令狐老祖"), "故障调查完成，开始修复", fixture.at(6)),
     );
-    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(5), [original]), [original.taskId]);
-    const nodes = fixture.timeline.snapshot(fixture.at(6)).groups[0].nodes;
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(6), [original]), [original.taskId]);
+    const nodes = fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes;
     const oldExecution = nodes.find((node) => node.kind === "execution");
     assert.equal(oldExecution.actor.displayName, "执行人1");
     assert.equal(oldExecution.status, "failed");
     assert.match(oldExecution.summary, /依赖路径/);
+    assert.ok(nodes.some((node) => node.kind === "analysis" && node.actor.displayName === "令狐老祖"));
     assert.ok(nodes.some((node) => node.kind === "repair" && node.actor.displayName === "令狐老祖"));
   } finally { fixture.close(); }
 });

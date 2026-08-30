@@ -323,7 +323,7 @@ test("专题工作区缺失时返还执行显示业务错误而不是读取 null
 });
 
 test("生产分发会话显式使用专题工作区而不是自动演化上下文", () => {
-  assert.match(nangongPromptSource, /planDistribution: async \(prompt, workspaceState, locale\)[\s\S]*nangongDistributionCodex![\s\S]*workspaceState/);
+  assert.match(nangongPromptSource, /planDistribution: async \(prompt, workspaceState, locale, emit\)[\s\S]*nangongDistributionCodex![\s\S]*mergeWorkspaceState\(workspaces\.read\(\), workspaceState\)/);
   assert.match(nangongPromptSource, /auditDistribution: async \(prompt, workspaceState, locale\)[\s\S]*linghuDistributionAuditCodex![\s\S]*workspaceState/);
   assert.doesNotMatch(nangongPromptSource, /planDistribution: async[^\n]*automationContext\.workspaceState/);
   assert.doesNotMatch(nangongPromptSource, /auditDistribution: async[^\n]*automationContext\.workspaceState/);

@@ -266,15 +266,23 @@ const legacyCollaborationTables = [
 ];
 
 function installUpTo1006(fixture) {
-  const manifestPath = path.join(fixture.sqlRoot, "load-order.txt");
-  writeFileSync(manifestPath, readFileSync(manifestPath, "utf8").split(/\r?\n/u).filter((line) => Number.parseInt(line.split("|")[0] || "0", 10) <= 1006).join("\n"), "utf8");
-  unlinkSync(path.join(fixture.sqlRoot, "migration-1007-retire-legacy-collaboration.sql"));
-  unlinkSync(path.join(fixture.sqlRoot, "schema-AiDesktopEvolutionState.sql"));
+  installSchemaUpTo(fixture, 1006);
 }
 
 function restore1007(fixture) {
+  installSchemaUpTo(fixture, 1007);
+}
+
+/** 迁移夹具必须同时收敛清单和 SQL 文件，避免后续新增版本被误判为当前历史版本的未登记脚本。 */
+function installSchemaUpTo(fixture, maximumVersion) {
   const sourceSqlRoot = path.join(appRoot, "db", "sql");
-  const manifest = readFileSync(path.join(sourceSqlRoot, "load-order.txt"), "utf8").split(/\r?\n/u).filter((line) => Number.parseInt(line.split("|")[0] || "0", 10) <= 1007).join("\n");
+  const manifest = readFileSync(path.join(sourceSqlRoot, "load-order.txt"), "utf8").split(/\r?\n/u)
+    .filter((line) => line.trim().startsWith("#") || Number.parseInt(line.split("|")[0] || "0", 10) <= maximumVersion)
+    .join("\n");
+  const allowedSql = new Set(manifest.split(/\r?\n/u).filter((line) => line && !line.startsWith("#")).map((line) => line.split("|")[1]));
   writeFileSync(path.join(fixture.sqlRoot, "load-order.txt"), manifest, "utf8");
-  copyFileSync(path.join(sourceSqlRoot, "migration-1007-retire-legacy-collaboration.sql"), path.join(fixture.sqlRoot, "migration-1007-retire-legacy-collaboration.sql"));
+  for (const fileName of readdirSync(fixture.sqlRoot).filter((name) => name.endsWith(".sql"))) {
+    if (!allowedSql.has(fileName)) unlinkSync(path.join(fixture.sqlRoot, fileName));
+  }
+  for (const fileName of allowedSql) copyFileSync(path.join(sourceSqlRoot, fileName), path.join(fixture.sqlRoot, fileName));
 }
