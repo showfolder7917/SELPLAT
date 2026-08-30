@@ -543,7 +543,6 @@ export class WorkflowRepository {
       // 固定白名单只包含可重建运行投影；SchemaVersion、人物原文、主题、归档消息与入库检查点永远不进入清理范围。
       const tables = [
         "AiDesktopTaskTimelineStream", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineTopic",
-        "AiDesktopTaskCollaborationStream", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationTopic",
         "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord",
         "AiDesktopApprovalGovernance", "AiDesktopApprovalRecord", "AiDesktopTaskExecution", "AiDesktopWorkflowRun",
         "AiDesktopMemberRuntime", "AiDesktopEvent", "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation",
@@ -877,6 +876,7 @@ function taskRuntimeStatus(state: CollaborationTask["state"]): string {
 function taskBlockingKind(task: CollaborationTask): string {
   const reason = task.blockingReason || "";
   // 先使用任务状态和结构化失败类型，避免测试日志引用规则正文时被“用户/人工”等词污染分类。
+  if (task.integrationFailure?.kind === "infrastructure") return "infrastructure";
   if (task.state === "test-failed" || task.integrationFailure?.kind === "verification") return "test";
   if (task.integrationFailure?.kind === "merge-conflict") return "code";
   if (task.integrationFailure?.kind === "local-change-ownership") return "infrastructure";

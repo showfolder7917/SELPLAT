@@ -1,4 +1,5 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import type { SqliteDatabase } from "./event-center/persistence/sqlite-database.js";
 
 export interface LegacyStoredCodexSession {
   version: 1;
@@ -15,8 +16,14 @@ export interface StoredCodexSession {
 
 export type ReadableCodexSession = LegacyStoredCodexSession | StoredCodexSession;
 
+export interface CodexSessionPersistence {
+  read(): ReadableCodexSession | null;
+  write(threadId: string, workspaceSignature: string): StoredCodexSession;
+  clear(): void;
+}
+
 /** 只保存当前活动线程的恢复凭据；用户新建任务后立即清空，不维护历史会话列表。 */
-export class CodexSessionStore {
+export class CodexSessionStore implements CodexSessionPersistence {
   readonly #filePath: string;
 
   constructor(filePath: string) {
@@ -54,5 +61,45 @@ export class CodexSessionStore {
     const temporaryPath = `${this.#filePath}.tmp`;
     writeFileSync(temporaryPath, "{}\n", "utf8");
     renameSync(temporaryPath, this.#filePath);
+  }
+}
+
+/**
+ * 以固定人物键保存唯一活动线程；同一人物只更新一行，不按任务累积临时会话。
+ */
+export class SqliteCodexSessionStore implements CodexSessionPersistence {
+  readonly #database: SqliteDatabase | null;
+  readonly #sessionKey: "nangong" | "han-li" | "linghu";
+
+  constructor(database: SqliteDatabase | null, sessionKey: "nangong" | "han-li" | "linghu") {
+    this.#database = database;
+    this.#sessionKey = sessionKey;
+  }
+
+  read(): StoredCodexSession | null {
+    if (!this.#database) return null;
+    const row = this.#database.withConnection((connection) => connection.prepare(`
+      SELECT threadId, workspaceSignature FROM AiDesktopPersonaSession WHERE sessionKey=$sessionKey
+    `).get({ $sessionKey: this.#sessionKey }) as { threadId: string; workspaceSignature: string } | undefined);
+    return row ? { version: 2, storageDomain: "ai-desktop", threadId: row.threadId, workspaceSignature: row.workspaceSignature } : null;
+  }
+
+  write(threadId: string, workspaceSignature: string): StoredCodexSession {
+    if (!this.#database) throw new Error("AI Memory 数据库不可用，固定人物会话不能启动；请先恢复数据库。");
+    const value: StoredCodexSession = { version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature };
+    this.#database.withConnection((connection) => connection.prepare(`
+      INSERT INTO AiDesktopPersonaSession (sessionKey, threadId, workspaceSignature, updatedAt)
+      VALUES ($sessionKey, $threadId, $workspaceSignature, $updatedAt)
+      ON CONFLICT(sessionKey) DO UPDATE SET threadId=excluded.threadId,
+        workspaceSignature=excluded.workspaceSignature, updatedAt=excluded.updatedAt
+    `).run({ $sessionKey: this.#sessionKey, $threadId: threadId, $workspaceSignature: workspaceSignature, $updatedAt: new Date().toISOString() }));
+    return value;
+  }
+
+  clear(): void {
+    if (!this.#database) return;
+    this.#database.withConnection((connection) => connection.prepare(
+      "DELETE FROM AiDesktopPersonaSession WHERE sessionKey=$sessionKey",
+    ).run({ $sessionKey: this.#sessionKey }));
   }
 }

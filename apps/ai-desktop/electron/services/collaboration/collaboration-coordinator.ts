@@ -128,7 +128,7 @@ export class CollaborationCoordinator {
 
   /**
    * 统一测试已经提供了确定失败证据时，由令狐在原任务工作树内完成最小修正并生成新的结果版本。
-   * 该入口只接受 verification 失败，不处理需要人工选择、工作区归属或 Git 冲突问题。
+   * 该入口接受 verification 与已结构化的 infrastructure 失败；不处理人工选择、工作区归属或 Git 冲突。
    */
   async repairFailedUnifiedTest(taskId: string): Promise<boolean> {
     const existing = this.#unifiedTestRepairRuns.get(taskId);
@@ -140,7 +140,9 @@ export class CollaborationCoordinator {
 
   async #repairFailedUnifiedTest(taskId: string): Promise<boolean> {
     const failedTask = this.#store.task(taskId);
-    if (failedTask.state !== "test-failed" || failedTask.integrationFailure?.kind !== "verification") return false;
+    const repairableFailure = failedTask.integrationFailure?.kind === "verification" || failedTask.integrationFailure?.kind === "infrastructure";
+    if (!repairableFailure || !["test-failed", "blocked"].includes(failedTask.state)) return false;
+    const originalFailureKind = failedTask.integrationFailure!.kind;
     const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
     if (linghu.state !== "idle") return false;
 
@@ -161,7 +163,7 @@ export class CollaborationCoordinator {
         current.repairKind = "execution";
         current.repairFailureReason = originalReason;
         current.currentHandler = participantSnapshot(handler);
-        current.blockingReason = `${handler.displayName}正在依据统一测试失败证据修复源码与测试契约`;
+        current.blockingReason = `${handler.displayName}正在依据${originalFailureKind === "infrastructure" ? "发布基础设施" : "统一测试"}失败证据调查并修复真实故障`;
         appendFlow(current, "unified_test.repair_started", "recovery", "started", current.blockingReason, handler, false, {
           failureStage: current.integrationFailure?.phase || "verification", failureSummary: originalReason,
           technicalEvidence: [current.integrationFailure?.detail || originalReason], originalExecutor: current.originalExecutor,
@@ -214,7 +216,7 @@ export class CollaborationCoordinator {
     } catch (error) {
       // 修复失败保留原始测试故障指纹，让自动保障的三次上限能够真实限制重复副作用。
       this.#store.updateTask(taskId, "unified_test.repair_failed", (current, state) => {
-        current.state = "test-failed";
+        current.state = originalFailureKind === "infrastructure" ? "blocked" : "test-failed";
         current.phase = null;
         current.repairKind = null;
         current.repairFailureReason = errorMessage(error);

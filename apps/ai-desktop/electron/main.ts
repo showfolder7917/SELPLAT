@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -6,11 +6,12 @@ import { app, BrowserWindow, protocol } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
 import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../contracts/desktop/database.js";
+import type { WorkspaceState } from "../contracts/desktop/workspace.js";
 import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import { BusinessAuditLog } from "./services/business-audit-log.js";
 import { CodexService } from "./services/codex-service.js";
-import { CodexSessionStore } from "./services/codex-session-store.js";
+import { CodexSessionStore, SqliteCodexSessionStore } from "./services/codex-session-store.js";
 import { ConversationDispatchStore } from "./services/conversation-dispatch-store.js";
 import { CodexCollaborationSessionFactory, CollaborationCodexRegistry } from "./services/collaboration/collaboration-codex-sessions.js";
 import { CollaborationCoordinator } from "./services/collaboration/collaboration-coordinator.js";
@@ -79,6 +80,14 @@ let aiMemoryDatabaseStatus: AiMemoryDatabaseStatus = {
   message: "AI Memory 数据库尚未初始化。",
 };
 
+/** 当前工作区注册表是唯一入口；任务快照只决定主目录，不覆盖后来新增的工程根。 */
+function mergeWorkspaceState(configured: WorkspaceState, requested: WorkspaceState): WorkspaceState {
+  const requestedPrimary = requested.roots.find((root) => root.id === requested.primaryId);
+  const roots = [...(requestedPrimary ? [requestedPrimary] : []), ...configured.roots, ...requested.roots]
+    .filter((root, index, values) => values.findIndex((candidate) => path.resolve(candidate.path) === path.resolve(root.path)) === index);
+  return { primaryId: requestedPrimary?.id || configured.primaryId, roots };
+}
+
 function closeAiMemoryDatabase(): void {
   try {
     aiMemoryDatabase?.close();
@@ -109,8 +118,16 @@ const healthCheckFile = process.argv.find((argument) => argument.startsWith("--a
 const isolatedUserData = process.argv.find((argument) => argument.startsWith("--ai-desktop-user-data-dir="))?.slice("--ai-desktop-user-data-dir=".length) || null;
 app.setPath("userData", isolatedUserData ? path.resolve(isolatedUserData) : path.join(app.getPath("appData"), resolveApplicationName()));
 const startupVariant = resolveAppVariant();
-const startupProjectRoot = resolveProjectRoot();
 const startupApplicationName = resolveApplicationName();
+const configuredProjectRoot = resolveProjectRoot();
+const startupWorkspaces = new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), configuredProjectRoot);
+const startupWorkspaceState = startupWorkspaces.read();
+const selectedStartupWorkspace = startupWorkspaceState.roots.find((root) => root.id === startupWorkspaceState.primaryId);
+if (!selectedStartupWorkspace || !path.isAbsolute(selectedStartupWorkspace.path)
+  || !existsSync(path.join(selectedStartupWorkspace.path, "apps", startupApplicationName, "package.json"))) {
+  throw new Error("工作区中没有工程，请添加工程");
+}
+const startupProjectRoot = path.resolve(selectedStartupWorkspace.path);
 const startupProjectPaths = resolveApplicationDataPaths({ selplatRoot: startupProjectRoot, applicationName: startupApplicationName });
 const eventCenter = new EventCenterFacade(new BusinessAuditLog(startupProjectPaths.sourceRoot, startupProjectPaths.buildRoot, startupProjectPaths.archiveLogRoot));
 eventCenter.installProcessExceptionBoundary();
@@ -258,6 +275,7 @@ app.whenReady().then(async () => {
     path.join(app.getPath("userData"), "conversation-dispatch.json"),
     (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
   );
+  const workspaces = startupWorkspaces;
   codex = new CodexService(
     projectRoot,
     trustedCommands,
@@ -276,7 +294,7 @@ app.whenReady().then(async () => {
     (details) => eventCenter.recordEvent("trusted_command.decision", details),
     (details) => eventCenter.recordEvent("thread.lifecycle", details),
   );
-  const nangongSessions = new CodexSessionStore(path.join(app.getPath("userData"), "nangong-conversation-session.json"));
+  const nangongSessions = new SqliteCodexSessionStore(aiMemoryDatabase, "nangong");
   nangongCodex = new CodexService(
     projectRoot,
     trustedCommands,
@@ -290,53 +308,38 @@ app.whenReady().then(async () => {
       validationOwner: "desktop",
       readSettings: () => settings.read(),
       readRuleInstructions,
+      preserveThreadAcrossWorkspaceChanges: true,
     },
     (details) => eventCenter.recordEvent("nangong.conversation.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.conversation.thread.lifecycle", details),
   );
-  const hanLiSessions = new CodexSessionStore(path.join(app.getPath("userData"), "han-li-evolution-session.json"));
+  const hanLiSessions = new SqliteCodexSessionStore(aiMemoryDatabase, "han-li");
   hanLiCodex = new CodexService(
     projectRoot, trustedCommands, hanLiSessions,
     {
       codexHome, serviceName: "selplat_ai_desktop_han_li_evolution", threadSource: "ai-desktop-han-li-evolution",
       migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
+      preserveThreadAcrossWorkspaceChanges: true,
     },
     (details) => eventCenter.recordEvent("han-li.evolution.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("han-li.evolution.thread.lifecycle", details),
   );
-  const nangongDeliberationSessions = new CodexSessionStore(path.join(app.getPath("userData"), "nangong-deliberation-session.json"));
-  nangongDeliberationCodex = new CodexService(
-    projectRoot, trustedCommands, nangongDeliberationSessions,
-    {
-      codexHome, serviceName: "selplat_ai_desktop_nangong_deliberation", threadSource: "ai-desktop-nangong-deliberation",
-      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
-    },
-    (details) => eventCenter.recordEvent("nangong.deliberation.trusted_command.decision", details),
-    (details) => eventCenter.recordEvent("nangong.deliberation.thread.lifecycle", details),
-  );
-  const nangongDistributionSessions = new CodexSessionStore(path.join(app.getPath("userData"), "nangong-distribution-session.json"));
-  nangongDistributionCodex = new CodexService(
-    projectRoot, trustedCommands, nangongDistributionSessions,
-    {
-      codexHome, serviceName: "selplat_ai_desktop_nangong_distribution", threadSource: "ai-desktop-nangong-distribution",
-      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
-    },
-    (details) => eventCenter.recordEvent("nangong.distribution.trusted_command.decision", details),
-    (details) => eventCenter.recordEvent("nangong.distribution.thread.lifecycle", details),
-  );
-  const linghuDistributionAuditSessions = new CodexSessionStore(path.join(app.getPath("userData"), "linghu-distribution-audit-session.json"));
+  // 南宫婉的聊天、研讨和分发共享同一人物线程，业务节点仍由各自领域事件区分。
+  nangongDeliberationCodex = nangongCodex;
+  nangongDistributionCodex = nangongCodex;
+  const linghuDistributionAuditSessions = new SqliteCodexSessionStore(aiMemoryDatabase, "linghu");
   linghuDistributionAuditCodex = new CodexService(
     projectRoot, trustedCommands, linghuDistributionAuditSessions,
     {
       codexHome, serviceName: "selplat_ai_desktop_linghu_distribution_audit", threadSource: "ai-desktop-linghu-distribution-audit",
       migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
+      preserveThreadAcrossWorkspaceChanges: true,
     },
     (details) => eventCenter.recordEvent("linghu.distribution_audit.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("linghu.distribution_audit.thread.lifecycle", details),
   );
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
-  const workspaces = new WorkspaceStore(path.join(app.getPath("userData"), "workspace-profiles.json"), projectRoot);
   const corpusSemanticWorkspaceRoot = path.join(app.getPath("userData"), "corpus-semantic-backfill-workspace");
   mkdirSync(corpusSemanticWorkspaceRoot, { recursive: true });
   const corpusSemanticWorkspace = {
@@ -412,6 +415,8 @@ app.whenReady().then(async () => {
     },
     readSettings: () => settings.read(),
     readRuleInstructions,
+    readWorkspaceState: () => workspaces.read(),
+    personaSessionStore: (memberId) => memberId === "linghu-ancestor" ? linghuDistributionAuditSessions : null,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
   });
   const versionIntegration = new VersionIntegrationPipeline({
@@ -427,7 +432,7 @@ app.whenReady().then(async () => {
         initiatorMemberId: "collaboration-integrator",
         kind: "integration-validation",
         port: 4197,
-        buildRoot: path.join(path.resolve(rootPath), "build", applicationName),
+        buildRoot: projectPaths.buildRoot,
       }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName, candidate));
       const candidateExecutable = await linghuUnifiedTests.run(rootPath);
       return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId);
@@ -485,11 +490,11 @@ app.whenReady().then(async () => {
         "你必须自行判断本轮是否仍在处理当前主题，并在隐藏元数据中用一句清楚的话总结用户这条原话真正要推动的意图。回答正文最后另起一行输出 NANGONG_TOPIC_META={\"title\":\"本轮主题\",\"type\":\"自由判断的类型\",\"switchTopic\":false,\"userIntent\":\"用户意图摘要\",\"tags\":[\"AI理解后给出的标签\"],\"summary\":\"本轮回答核心主旨，最多300字\"}。正文直接回答，userIntent 只供内部检索；主题、类型、标签、意图和摘要必须基于本轮语义判断，不得用关键词规则机械填写。用户明显切换问题中心时 switchTopic 才为 true。该行只供程序登记，正文不得解释它。",
         `最近对话：\n${context}`,
         `用户最新消息：\n${request.message}`,
-      ].join("\n\n"), request.locale, "read-only", request.workspaceState, await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
+      ].join("\n\n"), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
       newChat: () => nangongCodex!.newChat(),
     },
     hanLi: {
-      send: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", state.automationContext.workspaceState!, [], () => undefined, "conversation-managed")).text,
+      send: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
     },
     nangongDeliberation: {
       send: async (question, context, state) => (await nangongDeliberationCodex!.send([
@@ -497,12 +502,12 @@ app.whenReady().then(async () => {
         "回答必须区分已知事实、基于记录的判断和仍需调查的内容；不得自行确立专题、拆解任务或开始修改。",
         `研讨原记录：\n${context}`,
         `韩立当前问题：\n${question}`,
-      ].join("\n\n"), state.automationContext.locale, "read-only", state.automationContext.workspaceState!, [], () => undefined, "conversation-managed")).text,
+      ].join("\n\n"), state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
     },
-    investigateRevision: async (prompt, workspaceState, locale) => (await nangongDeliberationCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
-    planDistribution: async (prompt, workspaceState, locale) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
-    auditDistribution: async (prompt, workspaceState, locale) => (await linghuDistributionAuditCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
-    planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", workspaceState, [], () => undefined, "conversation-managed")).text,
+    investigateRevision: async (prompt, workspaceState, locale) => (await nangongDeliberationCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
+    planDistribution: async (prompt, workspaceState, locale, emit) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], emit, "conversation-managed")).text,
+    auditDistribution: async (prompt, workspaceState, locale) => (await linghuDistributionAuditCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
+    planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordFailure: (input) => eventCenter.recordException(input),
     memory: collaborationMemory,
@@ -521,6 +526,13 @@ app.whenReady().then(async () => {
           operation: "append_business_event", error, correlationId: event.fact.taskId || event.fact.proposalId || undefined,
           details: { eventId: event.eventId, sourceFactKey: event.fact.sourceFactKey, action: event.fact.action },
         });
+        throw error;
+      }
+    } : undefined,
+    recordTimelineStream: collaborationTimeline ? (taskId, memberId, event) => {
+      try { collaborationTimeline!.appendStream(taskId, memberId, event); }
+      catch (error) {
+        eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "append_distribution_stream", error, correlationId: taskId });
         throw error;
       }
     } : undefined,
@@ -595,8 +607,7 @@ app.whenReady().then(async () => {
       linghuAutomation?.stop();
       nangongEvolution?.stop();
 
-      // 人物主对话与训练语料属于长期记忆；只删除自动研讨、分发和审计的内部运行线程。
-      await Promise.all([hanLiCodex, nangongDeliberationCodex, nangongDistributionCodex, linghuDistributionAuditCodex].map((service) => service!.newChat()));
+      // 固定人物线程是长期会话事实；清空测试数据只清流程运行态，不重置南宫婉、韩立和令狐老祖。
       await collaboration?.dispose();
       runtimeDisposed = true;
 
@@ -734,8 +745,7 @@ app.on("before-quit", () => {
   codex?.dispose();
   nangongCodex?.dispose();
   hanLiCodex?.dispose();
-  nangongDeliberationCodex?.dispose();
-  nangongDistributionCodex?.dispose();
+  // 南宫婉研讨与分发引用同一服务，不重复关闭。
   linghuDistributionAuditCodex?.dispose();
   corpusSemanticBackfillCodex?.dispose();
   prepareAiMemoryShutdown();

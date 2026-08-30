@@ -43,6 +43,7 @@ export type CollaborationFlowEventType =
   | "integration.local_change_ownership_blocked"
   | "integration.merge_conflict"
   | "integration.candidate_preparation_failed"
+  | "integration.infrastructure_failed"
   | "integration.conflict_correction_requested"
   | "evolution.task_collected"
   | "unified_test.started"
@@ -189,7 +190,7 @@ export interface CollaborationVersionWorkspace {
   retiredAt: string | null;
 }
 
-export type CollaborationIntegrationFailureKind = "merge-conflict" | "local-change-ownership" | "candidate-branch-conflict" | "verification";
+export type CollaborationIntegrationFailureKind = "merge-conflict" | "local-change-ownership" | "candidate-branch-conflict" | "verification" | "infrastructure";
 
 export interface CollaborationIntegrationFailure {
   kind: CollaborationIntegrationFailureKind;

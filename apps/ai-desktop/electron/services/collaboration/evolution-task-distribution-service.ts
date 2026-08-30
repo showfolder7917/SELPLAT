@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { CollaborationTimelineBusinessEvent } from "../../../contracts/collaboration/collaboration-timeline-event.js";
 import type { CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
+import type { CodexStreamEvent } from "../../../contracts/codex/codex-stream.js";
 import type { EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionProposal, NangongEvolutionState } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
@@ -11,10 +12,11 @@ type PlanResult = { summary: string; units: EvolutionDistributionUnit[] };
 export interface EvolutionTaskDistributionServiceOptions {
   store: NangongEvolutionStore;
   collaboration: CollaborationCoordinator;
-  plan(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], feedback: string): Promise<PlanResult>;
+  plan(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], feedback: string, emit: (event: CodexStreamEvent) => void): Promise<PlanResult>;
   audit(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], plan: PlanResult, hardFindings: string[]): Promise<EvolutionDistributionAudit>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   timeline?: (event: CollaborationTimelineBusinessEvent) => void;
+  timelineStream?: (taskId: string, memberId: string, event: CodexStreamEvent) => void;
 }
 
 /** 任务分发唯一服务：只消费“已通过审批”命令，不作审批判断。 */
@@ -31,7 +33,18 @@ export class EvolutionTaskDistributionService {
     if (!proposal.distributionPlan || proposal.distributionPlan.audit.decision !== "passed") {
       let feedback = proposal.distributionPlan?.audit.findings.join("；") || "";
       for (let attempt = 1; attempt <= 2; attempt += 1) {
-        const planned = await this.options.plan(proposal, topic, feedback);
+        const planningTaskId = `proposal:${proposal.proposalId}`;
+        const planningStartedAt = new Date().toISOString();
+        this.#publishPlanning(proposal, topic, attempt, "current", "正在生成执行计划并分配执行人", feedback, planningStartedAt);
+        let planned: PlanResult;
+        try {
+          planned = await this.options.plan(proposal, topic, feedback, (event) => this.options.timelineStream?.(planningTaskId, proposal.submitterMemberId, event));
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          this.#publishPlanning(proposal, topic, attempt, "failed", "生成执行计划失败", detail, planningStartedAt);
+          throw error;
+        }
+        this.#publishPlanning(proposal, topic, attempt, "completed", "执行计划生成完成", planned.summary, planningStartedAt);
         const hardFindings = distributionHardFindings(planned.units);
         const audit = await this.options.audit(proposal, topic, planned, hardFindings);
         const plan: EvolutionDistributionPlan = { version: 1, summary: planned.summary, units: planned.units, audit, plannedAt: new Date().toISOString() };
@@ -82,6 +95,23 @@ export class EvolutionTaskDistributionService {
     }
     this.#publishDistribution(requireProposal(state, proposalId), topic, observedTasks);
     return state;
+  }
+
+  #publishPlanning(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], attempt: number, status: "current" | "completed" | "failed", action: string, content: string, startedAt: string): void {
+    const occurredAt = new Date().toISOString();
+    this.options.timeline?.({
+      eventId: `distribution-planning-${proposal.proposalId}-${attempt}-${status}-${randomUUID()}`,
+      eventType: status === "current" ? "task.distribution_planning_started" : status === "completed" ? "task.distribution_planning_completed" : "task.distribution_planning_failed",
+      group: { groupId: `topic:${topic.topicId}`, topicId: topic.topicId, proposalId: proposal.proposalId, title: topic.title, status: "running", summary: proposal.content, startedAt: topic.createdAt, updatedAt: occurredAt },
+      fact: {
+        nodeId: `distribution-planning:${proposal.proposalId}:${attempt}`, taskId: `proposal:${proposal.proposalId}`, proposalId: proposal.proposalId,
+        sourceFactKey: `distribution-planning:${proposal.proposalId}:${attempt}:${status}`, kind: "analysis",
+        actor: { memberId: proposal.submitterMemberId, displayName: proposal.submitterDisplayName }, recipients: [],
+        contentRole: "analysis-output", detailRole: "task-breakdown", status, action, summary: content || action,
+        content, detail: proposal.content, startedAt,
+        completedAt: status === "current" ? null : occurredAt, automaticOpen: status !== "completed", manualApprovalProposalId: null, occurredAt,
+      },
+    });
   }
 
   #publishDistribution(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], observedTasks: CollaborationTask[]): void {

@@ -185,6 +185,16 @@ export function projectCollaborationFlowEvent(
       automaticOpen: true, manualApprovalProposalId: null,
     })]);
   }
+  if (event.type === "integration.infrastructure_failed") {
+    const presentation = integrationFailurePresentation(task, false);
+    return projection("blocked", [fact({
+      nodeId: `integration-infrastructure:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor,
+      recipients: [NANGONG], status: "waiting", action: "发布基础设施故障",
+      summary: presentation.summary, content: presentation.impact, detail: presentation.detail,
+      startedAt: priorEventAt(task, "unified_test.started") || event.occurredAt, completedAt: event.occurredAt,
+      automaticOpen: true, manualApprovalProposalId: null,
+    })]);
+  }
 
   if (event.type === "unified_test.started" || event.type === "unified_test.passed" || event.type === "unified_test.failed") {
     const failed = event.type === "unified_test.failed";
@@ -212,15 +222,9 @@ export function projectCollaborationFlowEvent(
   if (event.type.startsWith("unified_test.repair_") || event.type.startsWith("execution.repair_")) {
     const status = event.status === "failed" ? "failed" : event.status === "completed" ? "completed" : event.status === "waiting" ? "waiting" : "current";
     const started = repairStartedEvent(task, event);
-    const repairNodeId = `repair:${task.taskId}:${started?.eventId || event.eventId}`;
-    const facts = [fact({
-      nodeId: repairNodeId, kind: "repair", actor: event.actor || LINGHU, recipients: [initiator], status: event.type.endsWith("repair_investigated") ? "current" : status,
-      action: event.type.endsWith("repair_started") ? "当前正在调查故障" : status === "failed" ? "修复未完成" : status === "completed" ? "修复完成" : status === "waiting" && /授权/.test(event.summary) ? "等待用户授权" : status === "waiting" ? "等待恢复条件" : "当前正在修复",
-      summary: event.summary, content: event.details?.repairResult || event.details?.repairDiagnosis || event.summary,
-      detail: repairDetail(event, task), startedAt: started?.occurredAt || event.occurredAt,
-      completedAt: !event.type.endsWith("repair_investigated") && (status === "completed" || status === "failed") ? event.occurredAt : null,
-      automaticOpen: event.type.endsWith("repair_investigated") || status !== "completed", manualApprovalProposalId: null,
-    })];
+    const investigationNodeId = `repair-investigation:${task.taskId}:${started?.eventId || event.eventId}`;
+    const executionNodeId = `repair-execution:${task.taskId}:${started?.eventId || event.eventId}`;
+    const facts: ProjectedTimelineFact[] = [];
     if (event.type.endsWith("repair_started")) {
       const previous = latestOriginalExecution(task, event.occurredAt);
       if (previous) facts.unshift(fact({
@@ -235,13 +239,31 @@ export function projectCollaborationFlowEvent(
         content: event.details?.failureSummary || event.summary, detail: repairDetail(event, task), startedAt: event.occurredAt,
         completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
       }, ":failure-handoff"));
+      facts.push(fact({
+        nodeId: investigationNodeId, kind: "analysis", actor: event.actor || LINGHU, recipients: [initiator], status: "current",
+        action: "当前正在调查故障", summary: event.summary, content: event.summary, detail: repairDetail(event, task),
+        startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
+      }));
     }
-    if (event.type.endsWith("repair_investigated")) facts.unshift(fact({
-      nodeId: `repair-investigation:${task.taskId}:${event.eventId}`, kind: "analysis", actor: event.actor || LINGHU, recipients: [initiator], status: "completed",
+    if (event.type.endsWith("repair_investigated")) facts.push(fact({
+      nodeId: investigationNodeId, kind: "analysis", actor: event.actor || LINGHU, recipients: [initiator], status: "completed",
       action: "故障调查完成", summary: event.summary, content: event.details?.repairDiagnosis || event.summary,
-      detail: repairDetail(event, task), startedAt: event.occurredAt, completedAt: event.occurredAt,
+      detail: repairDetail(event, task), startedAt: started?.occurredAt || event.occurredAt, completedAt: event.occurredAt,
       automaticOpen: false, manualApprovalProposalId: null,
-    }, ":investigation"));
+    }, ":investigation-completed"), fact({
+      nodeId: executionNodeId, kind: "repair", actor: event.actor || LINGHU, recipients: [initiator], status: "current",
+      action: "当前正在修复", summary: event.summary, content: event.details?.repairDiagnosis || event.summary,
+      detail: repairDetail(event, task), startedAt: event.occurredAt, completedAt: null,
+      automaticOpen: true, manualApprovalProposalId: null,
+    }, ":repair-started"));
+    if (!event.type.endsWith("repair_started") && !event.type.endsWith("repair_investigated")) facts.push(fact({
+      nodeId: executionNodeId, kind: "repair", actor: event.actor || LINGHU, recipients: [initiator], status,
+      action: status === "failed" ? "修复未完成" : status === "completed" ? "修复完成" : /授权/.test(event.summary) ? "等待用户授权" : "等待恢复条件",
+      summary: event.summary, content: event.details?.repairResult || event.summary, detail: repairDetail(event, task),
+      startedAt: task.flowEvents.find((candidate) => candidate.type.endsWith("repair_investigated") && candidate.occurredAt >= (started?.occurredAt || ""))?.occurredAt || started?.occurredAt || event.occurredAt,
+      completedAt: status === "completed" || status === "failed" ? event.occurredAt : null,
+      automaticOpen: status !== "completed", manualApprovalProposalId: null,
+    }));
     if (event.type.endsWith("repair_completed")) facts.push(fact({
       nodeId: `repair-result:${task.taskId}:${event.eventId}`, kind: "result", actor: event.actor || LINGHU, recipients: [initiator], status: "completed",
       action: "修复结果已返回", summary: event.summary, content: event.details?.repairResult || task.repairResult || event.summary,

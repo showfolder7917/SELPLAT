@@ -19,11 +19,12 @@ test("统一迁移建立事件、流程、任务、审批、对话记忆、专�
     for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1011");
+    assert.equal(fixture.database.latestSchemaVersion, "1013");
     fixture.database.withConnection((connection) => {
-      for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk"]) {
+      for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);
       }
+      assert.ok(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopPersonaSession'").get());
     });
   } finally {
     fixture.close();
@@ -42,6 +43,8 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
       { messageId: "training-user", role: "user", content: "这是必须保留的训练原话。", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z" },
     ], updatedAt: "2026-08-28T00:00:02.000Z" });
     fixture.database.withConnection((connection) => {
+      connection.prepare(`INSERT INTO AiDesktopPersonaSession (sessionKey, threadId, workspaceSignature, updatedAt)
+        VALUES ('linghu', 'thread-linghu', 'workspace-v1', '2026-08-28T00:00:00.000Z')`).run();
       connection.prepare(`INSERT INTO AiDesktopTaskTimelineTopic
         (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
         VALUES ('timeline-topic:test', 'task-test', 'proposal-test', '时间线待清空专题', 'running', '时间线运行数据', '2026-08-28T00:00:00.000Z', '2026-08-28T00:00:01.000Z', '2026-08-28T00:00:00.000Z')`).run();
@@ -51,15 +54,6 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
       connection.prepare(`INSERT INTO AiDesktopTaskTimelineStream
         (chunkId, groupId, taskId, nodeId, memberId, turnId, segmentId, itemId, eventType, sequenceNumber, deltaText, snapshotText, occurredAt, committedAt)
         VALUES ('timeline-chunk-test', 'timeline-topic:test', 'task-test', 'task-node-test', 'zi-ling', 'turn-test', NULL, NULL, 'message-delta', 1, '时间线流式测试', NULL, '2026-08-28T00:00:00.000Z', '2026-08-28T00:00:00.000Z')`).run();
-      connection.prepare(`INSERT INTO AiDesktopTaskCollaborationTopic
-        (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
-        VALUES ('task-topic:test', 'task-test', 'proposal-test', '新时间线待清空专题', 'running', '新时间线运行数据', '2026-08-28T00:00:00.000Z', '2026-08-28T00:00:01.000Z', '2026-08-28T00:00:00.000Z')`).run();
-      connection.prepare(`INSERT INTO AiDesktopTaskCollaborationEvent
-        (factId, groupId, proposalId, taskId, nodeId, sourceFactKey, sequenceNumber, kind, actorMemberId, actorDisplayName, recipientsJson, status, action, summary, content, detail, startedAt, completedAt, automaticOpen, manualApprovalProposalId, occurredAt, recordedAt)
-        VALUES ('task-fact-test', 'task-topic:test', 'proposal-test', 'task-test', 'task-node-test', 'task-fact:test', 1, 'execution', 'zi-ling', '紫灵', '[]', 'current', '当前正在执行', '测试', '测试', '', '2026-08-28T00:00:00.000Z', NULL, 1, NULL, '2026-08-28T00:00:00.000Z', '2026-08-28T00:00:00.000Z')`).run();
-      connection.prepare(`INSERT INTO AiDesktopTaskCollaborationStream
-        (chunkId, groupId, taskId, nodeId, memberId, turnId, segmentId, itemId, eventType, sequenceNumber, deltaText, snapshotText, occurredAt)
-        VALUES ('task-chunk-test', 'task-topic:test', 'task-test', 'task-node-test', 'zi-ling', 'turn-test', NULL, NULL, 'message-delta', 1, '新流式测试', NULL, '2026-08-28T00:00:00.000Z')`).run();
       connection.prepare(`INSERT INTO AiDesktopTrainingCorpusTopic
         (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent, tagsJson, definitionSource, createdAt, updatedAt)
         VALUES ('training-topic', 'codex', 'training-thread', 'training-turn', '训练', '人物训练语料', NULL, '[]', 'pending', '2026-08-28T00:00:03.000Z', '2026-08-28T00:00:03.000Z')`).run();
@@ -76,9 +70,10 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
     for (const retired of ["AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
-      assert.equal(fixture.database.withConnection((connection) => Number(connection.prepare(`SELECT COUNT(*) AS count FROM ${retired}`).get().count)), 0, retired);
+      assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired)), undefined, retired);
     }
     assert.equal(fixture.repository.tableCount("AiDesktopConversationMemory"), 1);
+    assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT threadId FROM AiDesktopPersonaSession WHERE sessionKey='linghu'").get()).threadId, "thread-linghu");
     assert.deepEqual(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-topic"), { perspective: "nangong", nodeId: "manual-topic", page: 3, pageSize: 50, keyword: "滚动条", status: "已阻塞", selectedRowId: "topic-25", updatedAt: "2026-08-28T00:00:01.500Z" });
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
     assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopCorpusIngestionCheckpoint").get()).count, 1);

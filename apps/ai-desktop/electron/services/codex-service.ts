@@ -20,7 +20,7 @@ import type {
   SendMessageResponse,
   WorkspaceState,
 } from "../../contracts/desktop/desktop.js";
-import { CodexSessionStore } from "./codex-session-store.js";
+import type { CodexSessionPersistence } from "./codex-session-store.js";
 import { resolveCodexRuntime, type CodexRuntime } from "./codex-runtime.js";
 import { toCodexStreamEvent } from "./codex/stream-event-mapper.js";
 import { TrustedCommandStore } from "./trusted-command-store.js";
@@ -67,6 +67,8 @@ export interface CodexServiceOptions {
   onConversationTurnCompleted?: () => void | Promise<void>;
   /** 协作工作树由主进程签发的依赖租约；只携带标识，缓存根由子命令从 Git 公共仓库独立验证。 */
   dependencyLeaseId?: string;
+  /** 固定人物会话允许工作区清单动态变化；仍恢复同一线程并用本轮最新工作区执行。 */
+  preserveThreadAcrossWorkspaceChanges?: boolean;
 }
 
 const EMPTY_ACCOUNT: CodexAccount = {
@@ -99,7 +101,7 @@ export class CodexService {
   #activeExecutionMode: ManagedExecutionMode | null = null;
   #activeWorkspaces: WorkspaceState | null = null;
   readonly #trustedCommands: TrustedCommandStore;
-  readonly #sessions: CodexSessionStore;
+  readonly #sessions: CodexSessionPersistence;
   readonly #options: CodexServiceOptions;
   readonly #onTrustedCommandDecision: (details: Record<string, unknown>) => void;
   readonly #onThreadLifecycle: (details: Record<string, unknown>) => void;
@@ -107,7 +109,7 @@ export class CodexService {
   constructor(
     workingDirectory: string,
     trustedCommands: TrustedCommandStore,
-    sessions: CodexSessionStore,
+    sessions: CodexSessionPersistence,
     options: CodexServiceOptions,
     onTrustedCommandDecision: (details: Record<string, unknown>) => void = () => undefined,
     onThreadLifecycle: (details: Record<string, unknown>) => void = () => undefined,
@@ -346,9 +348,10 @@ export class CodexService {
     if (this.#threadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return this.#threadId;
 
     const stored = this.#readStoredSession();
-    const resumableThreadId = this.#threadId && this.#threadWorkspaceSignature === workspaceSignature
+    const preservePersonaThread = this.#options.preserveThreadAcrossWorkspaceChanges === true;
+    const resumableThreadId = this.#threadId && (preservePersonaThread || this.#threadWorkspaceSignature === workspaceSignature)
       ? this.#threadId
-      : stored?.workspaceSignature === workspaceSignature ? stored.threadId : null;
+      : stored && (preservePersonaThread || stored.workspaceSignature === workspaceSignature) ? stored.threadId : null;
     if (resumableThreadId) {
       try {
         const resumed = asObject(await this.#request("thread/resume", { threadId: resumableThreadId }));

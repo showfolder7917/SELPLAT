@@ -1,11 +1,24 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { acquireManagedDependencyLease, releaseManagedDependencyLease } from "./integration-verifier.js";
 import { TestResourceCoordinatorFacade } from "./test-resource-coordinator-facade.js";
 import { resolveVerifiedDeveloperExecutable } from "./verified-package-release.js";
 
 const FIXED_UNIFIED_SCRIPTS = ["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:mac:developer"] as const;
+
+/** 表示候选测试已经执行，但宿主测试编排器无法读取统一工作区中的发布产物。 */
+export class UnifiedTestInfrastructureError extends Error {
+  readonly selectedWorkspaceRoot: string;
+  readonly buildRoot: string;
+
+  constructor(selectedWorkspaceRoot: string, buildRoot: string, cause: unknown) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    super(`统一测试基础设施无法读取所选工作区产物：${detail}`);
+    this.name = "UnifiedTestInfrastructureError";
+    this.selectedWorkspaceRoot = selectedWorkspaceRoot;
+    this.buildRoot = buildRoot;
+  }
+}
 
 /** 测试漏点模块只通过固定 npm 脚本执行正式构建与统一回归，禁止把动态命令交给自动执行文案。 */
 export class LinghuUnifiedTestRunner {
@@ -26,9 +39,8 @@ export class LinghuUnifiedTestRunner {
   async run(candidateProjectRoot = this.#sourceProjectRoot): Promise<string> {
     const resolvedProjectRoot = path.resolve(candidateProjectRoot);
     const desktopRoot = path.join(resolvedProjectRoot, "apps", this.#applicationName);
-    const buildRoot = resolvedProjectRoot === this.#sourceProjectRoot
-      ? this.#buildRoot
-      : resolveApplicationDataPaths({ selplatRoot: resolvedProjectRoot, applicationName: this.#applicationName }).buildRoot;
+    // 候选工作树只提供待测源码；缓存、测试协调、构建、打包和最终验收始终共用用户选择工作区的数据根。
+    const buildRoot = this.#buildRoot;
     const runId = `linghu-unified-${Date.now()}`;
     const dependencyLease = resolvedProjectRoot === this.#sourceProjectRoot
       ? null
@@ -64,7 +76,17 @@ export class LinghuUnifiedTestRunner {
         throw error;
       }
     }
-      return resolveVerifiedDeveloperExecutable(buildRoot);
+      try {
+        return resolveVerifiedDeveloperExecutable(buildRoot);
+      } catch (error) {
+        this.#recordEvent("linghu.unified_test.infrastructure_failed", {
+          candidateProjectRoot: resolvedProjectRoot,
+          selectedWorkspaceRoot: this.#sourceProjectRoot,
+          buildRoot,
+          detail: error instanceof Error ? error.message : String(error),
+        });
+        throw new UnifiedTestInfrastructureError(this.#sourceProjectRoot, buildRoot, error);
+      }
     }).finally(() => {
       releaseManagedDependencyLease(dependencyLease);
     });

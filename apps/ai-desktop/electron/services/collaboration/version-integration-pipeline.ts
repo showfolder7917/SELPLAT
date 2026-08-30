@@ -5,6 +5,7 @@ import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../c
 import { CollaborationDurationLog, type CollaborationDurationSegment, type CollaborationWaitType } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
 import { ReleaseBatchStore } from "./release-batch-store.js";
+import { UnifiedTestInfrastructureError } from "./linghu-unified-test-runner.js";
 import { createCollaborationResultSummary } from "./result/result-summary.js";
 import {
   CandidateBranchConflictError,
@@ -265,8 +266,9 @@ export class VersionIntegrationPipeline {
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;
       const mergeConflict = error instanceof MergeConflictError;
       const candidateBranchConflict = error instanceof CandidateBranchConflictError;
-      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict ? "candidate-branch-conflict" : "verification";
-      const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict ? "preparation" : verifySpan ? "verification" : "release";
+      const infrastructureFailure = error instanceof UnifiedTestInfrastructureError;
+      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
+      const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
       const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error));
       const conflictFiles = mergeConflict ? error.conflictFiles : [];
       if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
@@ -283,7 +285,7 @@ export class VersionIntegrationPipeline {
         }
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = ownershipBlocked || mergeConflict || candidateBranchConflict ? "blocked" : "test-failed";
+          task.state = ownershipBlocked || mergeConflict || candidateBranchConflict || infrastructureFailure ? "blocked" : "test-failed";
           task.phase = null;
           task.blockingReason = failurePresentation.summary;
           task.recoveryTargetState = "ready-for-integration";
@@ -299,9 +301,9 @@ export class VersionIntegrationPipeline {
           if (failurePhase === "verification") task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
           appendFlow(
             task,
-            ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : candidateBranchConflict ? "integration.candidate_preparation_failed" : "unified_test.failed",
-            "integration", ownershipBlocked || mergeConflict ? "waiting" : "failed", failurePresentation.summary, currentActor,
-            !ownershipBlocked && !mergeConflict,
+            ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : candidateBranchConflict ? "integration.candidate_preparation_failed" : infrastructureFailure ? "integration.infrastructure_failed" : "unified_test.failed",
+            "integration", ownershipBlocked || mergeConflict || infrastructureFailure ? "waiting" : "failed", failurePresentation.summary, currentActor,
+            !ownershipBlocked && !mergeConflict && !infrastructureFailure,
           );
         }
       });
@@ -345,6 +347,11 @@ function integrationFailurePresentation(kind: CollaborationIntegrationFailureKin
     summary: "版本候选合并发生冲突",
     impact: "候选版本未完成组装，统一测试尚未开始。",
     recoveryAction: "依据冲突文件和固定提交证据修正任务分支，然后重新生成候选版本。",
+  };
+  if (kind === "infrastructure") return {
+    summary: "统一测试基础设施故障，候选源码无需重复修复",
+    impact: "统一测试脚本已经执行，但宿主控制器无法从用户所选工作区读取或提升发布产物；当前候选版本不能发布。",
+    recoveryAction: `修复宿主测试控制器或工作区路径后重启，并复用当前候选提交重新验证；禁止把该故障派回候选源码：${detail.slice(0, 240)}`,
   };
   return {
     summary: "统一测试发现未通过项，已转入修复",

@@ -270,8 +270,9 @@ export class LinghuAutomationFacade {
       return;
     }
 
-    if (task.state === "test-failed" && snapshot?.blockingKind === "test") {
-      // 测试失败必须先产生新结果版本再重测；只把状态退回集成队列会永久重复同一失败。
+    if ((task.state === "test-failed" && snapshot?.blockingKind === "test")
+      || (task.state === "blocked" && task.integrationFailure?.kind === "infrastructure")) {
+      // 测试或发布基础设施失败必须先产生新结果版本再重测；只退回队列会永久重复同一失败。
       const started = await this.#collaboration.repairFailedUnifiedTest(task.taskId);
       if (!started) {
         this.#store.updateRuntime("automation.test_repair_waiting", (state) => {
@@ -521,6 +522,7 @@ function waitingPoint(task: CollaborationTask, health: LinghuFlowHealth): string
 
 function blockingKind(task: CollaborationTask): LinghuBlockingKind {
   // 状态与结构化集成失败比自由文本可靠；测试输出可能引用“用户选择”等规则正文，不能因此误判为业务选择。
+  if (task.integrationFailure?.kind === "infrastructure") return "infrastructure";
   if (task.state === "test-failed" || task.integrationFailure?.kind === "verification") return "test";
   if (task.integrationFailure?.kind === "merge-conflict") return "code";
   if (task.integrationFailure?.kind === "local-change-ownership") return "infrastructure";

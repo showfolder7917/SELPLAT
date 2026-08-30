@@ -15,7 +15,7 @@ import type {
   WorkspaceState,
 } from "../../../contracts/desktop/desktop.js";
 import { CodexService, type CodexServiceOptions } from "../codex-service.js";
-import { CodexSessionStore } from "../codex-session-store.js";
+import { CodexSessionStore, type CodexSessionPersistence } from "../codex-session-store.js";
 import { ManagedTaskExecutor } from "../managed-task-executor.js";
 import { TrustedCommandStore } from "../trusted-command-store.js";
 import type {
@@ -37,7 +37,8 @@ interface RegisteredConnection {
   memberName: string;
   role: "executor";
   service: CodexService;
-  sessions: CodexSessionStore;
+  sessions: CodexSessionPersistence;
+  persistentPersona: boolean;
   dependencyLease: ManagedDependencyLease | null;
 }
 
@@ -146,6 +147,8 @@ export interface CodexCollaborationSessionFactoryOptions {
   runCodeValidation(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<void>;
   readSettings: CodexServiceOptions["readSettings"];
   readRuleInstructions?: CodexServiceOptions["readRuleInstructions"];
+  readWorkspaceState?: () => WorkspaceState;
+  personaSessionStore?: (memberId: string) => CodexSessionPersistence | null;
   recordEvent(type: string, details: Record<string, unknown>, taskId: string): void;
 }
 
@@ -175,6 +178,7 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
         this.#options.registry,
         this.#options.resolveAttachmentPaths,
         this.#options.runCodeValidation,
+        this.#options.readWorkspaceState,
       );
     } catch (error) {
       releaseManagedDependencyLease(dependencyLease);
@@ -183,9 +187,10 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
   }
 
   #createConnection(task: CollaborationTask, member: CollaborationMember, role: RegisteredConnection["role"], dependencyLease: ManagedDependencyLease | null): RegisteredConnection {
-    const connectionId = `${task.taskId}:${role}:${member.memberId}:g${member.generation}`;
+    const persistentSessions = this.#options.personaSessionStore?.(member.memberId) || null;
+    const connectionId = persistentSessions ? `persona:${member.memberId}` : `${task.taskId}:${role}:${member.memberId}:g${member.generation}`;
     const sessionPath = path.join(this.#options.sessionRoot, `${safeName(connectionId)}.json`);
-    const sessions = new CodexSessionStore(sessionPath);
+    const sessions = persistentSessions || new CodexSessionStore(sessionPath);
     const service = new CodexService(
       task.versionWorkspace?.rootPath || this.#options.projectRoot,
       this.#options.trustedCommands,
@@ -198,13 +203,14 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
         sessionStorage: "ai-desktop",
         validationOwner: "desktop",
         dependencyLeaseId: dependencyLease?.leaseId,
+        preserveThreadAcrossWorkspaceChanges: Boolean(persistentSessions),
         readSettings: this.#options.readSettings,
         readRuleInstructions: this.#options.readRuleInstructions,
       },
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
     );
-    const connection = { connectionId, taskId: task.taskId, memberId: member.memberId, memberName: member.displayName, role, service, sessions, dependencyLease };
+    const connection = { connectionId, taskId: task.taskId, memberId: member.memberId, memberName: member.displayName, role, service, sessions, dependencyLease, persistentPersona: Boolean(persistentSessions) };
     this.#options.registry.register(connection);
     return connection;
   }
@@ -215,6 +221,7 @@ class CodexExecutorSession implements CollaborationExecutorSession {
   readonly #registry: CollaborationCodexRegistry;
   readonly #resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"];
   readonly #runCodeValidation: CodexCollaborationSessionFactoryOptions["runCodeValidation"];
+  readonly #readWorkspaceState: CodexCollaborationSessionFactoryOptions["readWorkspaceState"];
   readonly #managed = new ManagedTaskExecutor();
 
   constructor(
@@ -222,11 +229,13 @@ class CodexExecutorSession implements CollaborationExecutorSession {
     registry: CollaborationCodexRegistry,
     resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"],
     runCodeValidation: CodexCollaborationSessionFactoryOptions["runCodeValidation"],
+    readWorkspaceState: CodexCollaborationSessionFactoryOptions["readWorkspaceState"],
   ) {
     this.#connection = connection;
     this.#registry = registry;
     this.#resolveAttachmentPaths = resolveAttachmentPaths;
     this.#runCodeValidation = runCodeValidation;
+    this.#readWorkspaceState = readWorkspaceState;
   }
 
   async analyze(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<string> {
@@ -253,7 +262,7 @@ class CodexExecutorSession implements CollaborationExecutorSession {
   }
 
   async #executePlan(task: CollaborationTask, instructions: string[], emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult> {
-    const workspaceState = collaborationWorkspaceState(task);
+    const workspaceState = collaborationWorkspaceState(task, this.#readWorkspaceState?.());
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const result = await this.#managed.run({
       mode: "task-managed",
@@ -294,7 +303,7 @@ class CodexExecutorSession implements CollaborationExecutorSession {
   }
 
   async #runRequirement(task: CollaborationTask, message: string, emit: (event: CodexStreamEvent) => void): Promise<string> {
-    const workspaceState = collaborationWorkspaceState(task);
+    const workspaceState = collaborationWorkspaceState(task, this.#readWorkspaceState?.());
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const result = await this.#managed.run({
       mode: "requirement-managed",
@@ -306,14 +315,17 @@ class CodexExecutorSession implements CollaborationExecutorSession {
     if (result.managedStatus !== "requirement-ready" || !result.text.trim()) throw new Error("执行人没有产生可执行的技术分析。");
     return result.text.trim();
   }
+
 }
 
-function collaborationWorkspaceState(task: CollaborationTask): WorkspaceState {
+function collaborationWorkspaceState(task: CollaborationTask, configured?: WorkspaceState): WorkspaceState {
   const workspace = task.versionWorkspace;
-  if (!workspace) return structuredClone(task.snapshot.workspaceState);
+  const base = configured || task.snapshot.workspaceState;
+  if (!workspace) return structuredClone(base);
+  const roots = base.roots.filter((root) => path.resolve(root.path) !== path.resolve(workspace.rootPath));
   return {
     primaryId: workspace.workspaceId,
-    roots: [{ id: workspace.workspaceId, name: path.basename(workspace.rootPath), path: workspace.rootPath, permission: "workspace-write" }],
+    roots: [{ id: workspace.workspaceId, name: path.basename(workspace.rootPath), path: workspace.rootPath, permission: "workspace-write" }, ...roots],
   };
 }
 
@@ -322,10 +334,11 @@ function safeName(value: string): string {
 }
 
 async function retireConnection(connection: RegisteredConnection, registry: CollaborationCodexRegistry): Promise<void> {
-  try { await connection.service.newChat(); }
-  finally {
+  try {
+    if (!connection.persistentPersona) await connection.service.newChat();
+  } finally {
     connection.service.dispose();
-    connection.sessions.clear();
+    if (!connection.persistentPersona) connection.sessions.clear();
     registry.unregister(connection.connectionId);
     releaseManagedDependencyLease(connection.dependencyLease);
   }
