@@ -39,7 +39,51 @@ interface RegisteredConnection {
   service: CodexService;
   sessions: CodexSessionPersistence;
   persistentPersona: boolean;
+  releasePersonaWriter: (() => void) | null;
   dependencyLease: ManagedDependencyLease | null;
+}
+
+interface PersonaWriterState {
+  activeTaskId: string | null;
+  tail: Promise<void>;
+}
+
+/**
+ * 固定人物会话的唯一写入入口。同一人物的后续任务只排队，不会再创建并发 writer；
+ * 队列只约束该人物，页面事件和其他执行人物仍可并行推进。
+ */
+export class PersonaSessionWriterQueue {
+  readonly #states = new Map<string, PersonaWriterState>();
+
+  async acquire(
+    memberId: string,
+    taskId: string,
+    onState: (state: "queued" | "acquired" | "released", activeTaskId: string | null) => void = () => undefined,
+  ): Promise<() => void> {
+    const previous = this.#states.get(memberId);
+    let releaseCurrent!: () => void;
+    const current = new Promise<void>((resolve) => { releaseCurrent = resolve; });
+    const predecessor = previous?.tail || Promise.resolve();
+    const tail = predecessor.catch(() => undefined).then(() => current);
+    this.#states.set(memberId, { activeTaskId: previous?.activeTaskId || null, tail });
+    if (previous) onState("queued", previous.activeTaskId);
+    await predecessor.catch(() => undefined);
+    const state = this.#states.get(memberId);
+    if (state) state.activeTaskId = taskId;
+    onState("acquired", taskId);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const currentState = this.#states.get(memberId);
+      if (currentState?.tail === tail) currentState.activeTaskId = null;
+      releaseCurrent();
+      void tail.finally(() => {
+        if (this.#states.get(memberId)?.tail === tail) this.#states.delete(memberId);
+      });
+      onState("released", taskId);
+    };
+  }
 }
 
 /** 把多个 app-server 的局部请求 ID 映射为主进程唯一 ID，避免不同连接的审批互相串线。 */
@@ -155,6 +199,7 @@ export interface CodexCollaborationSessionFactoryOptions {
 /** 每次分配创建一条执行人物 Codex 管道；任务完成后先删线程，再关闭进程并注销请求路由。 */
 export class CodexCollaborationSessionFactory implements CollaborationSessionFactory {
   readonly #options: CodexCollaborationSessionFactoryOptions;
+  readonly #personaWriters = new PersonaSessionWriterQueue();
 
   constructor(options: CodexCollaborationSessionFactoryOptions) {
     this.#options = options;
@@ -162,6 +207,16 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
   }
 
   async createExecutor(task: CollaborationTask, member: CollaborationMember): Promise<CollaborationExecutorSession> {
+    const persistentPersona = Boolean(this.#options.personaSessionStore?.(member.memberId));
+    const releasePersonaWriter = persistentPersona
+      ? await this.#personaWriters.acquire(member.memberId, task.taskId, (state, activeTaskId) => {
+        this.#options.recordEvent(`persona_session.writer_${state}`, {
+          memberId: member.memberId,
+          requestedTaskId: task.taskId,
+          activeTaskId,
+        }, task.taskId);
+      })
+      : null;
     const workspaceRoot = task.versionWorkspace?.rootPath;
     const dependencyLease = workspaceRoot
       ? await acquireManagedDependencyLease(
@@ -172,7 +227,7 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
       )
       : null;
     try {
-      const connection = this.#createConnection(task, member, "executor", dependencyLease);
+      const connection = this.#createConnection(task, member, "executor", dependencyLease, releasePersonaWriter);
       return new CodexExecutorSession(
         connection,
         this.#options.registry,
@@ -182,11 +237,12 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
       );
     } catch (error) {
       releaseManagedDependencyLease(dependencyLease);
+      releasePersonaWriter?.();
       throw error;
     }
   }
 
-  #createConnection(task: CollaborationTask, member: CollaborationMember, role: RegisteredConnection["role"], dependencyLease: ManagedDependencyLease | null): RegisteredConnection {
+  #createConnection(task: CollaborationTask, member: CollaborationMember, role: RegisteredConnection["role"], dependencyLease: ManagedDependencyLease | null, releasePersonaWriter: (() => void) | null): RegisteredConnection {
     const persistentSessions = this.#options.personaSessionStore?.(member.memberId) || null;
     const connectionId = persistentSessions ? `persona:${member.memberId}` : `${task.taskId}:${role}:${member.memberId}:g${member.generation}`;
     const sessionPath = path.join(this.#options.sessionRoot, `${safeName(connectionId)}.json`);
@@ -210,7 +266,7 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
     );
-    const connection = { connectionId, taskId: task.taskId, memberId: member.memberId, memberName: member.displayName, role, service, sessions, dependencyLease, persistentPersona: Boolean(persistentSessions) };
+    const connection = { connectionId, taskId: task.taskId, memberId: member.memberId, memberName: member.displayName, role, service, sessions, dependencyLease, persistentPersona: Boolean(persistentSessions), releasePersonaWriter };
     this.#options.registry.register(connection);
     return connection;
   }
@@ -341,5 +397,6 @@ async function retireConnection(connection: RegisteredConnection, registry: Coll
     if (!connection.persistentPersona) connection.sessions.clear();
     registry.unregister(connection.connectionId);
     releaseManagedDependencyLease(connection.dependencyLease);
+    connection.releasePersonaWriter?.();
   }
 }

@@ -31,7 +31,6 @@ function proposalRequest() { return { type: "代码修正", content: "建立独�
 const conversation = { async send(_request, context) { return { text: `南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据","tags":["调查","事实依据"],"summary":"围绕当前问题收集事实并形成可继续分析的依据。"}`, itemCount: 1 }; }, async newChat() {} };
 const distributionServices = {
   async planDistribution() { return JSON.stringify({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
-  async auditDistribution() { return JSON.stringify({ decision: "passed", reason: "单任务没有文件重叠，职责、回退和验收边界完整。", findings: [] }); },
 };
 let mutationSequence = 0;
 function mutation(facade) { return { expectedStateVersion: facade.state().updatedAt, idempotencyKey: `nangong-test-${++mutationSequence}` }; }
@@ -284,18 +283,17 @@ test("审批、验收与返修统一使用专题版本和幂等写入口", () =>
 test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-"));
   try {
-    const store = evolutionStore(path.join(directory, "state.json")); let submitted; let planningWorkspace; let auditWorkspace;
+    const store = evolutionStore(path.join(directory, "state.json")); let submitted; let planningWorkspace;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "collab-1", evolutionProposalId: request.evolutionProposalId }] }; } };
     const facade = new NangongEvolutionFacade({
       store, collaboration, conversation, recordEvent: () => undefined,
       async planDistribution(_prompt, receivedWorkspace) { planningWorkspace = receivedWorkspace; return distributionServices.planDistribution(); },
-      async auditDistribution(_prompt, receivedWorkspace) { auditWorkspace = receivedWorkspace; return distributionServices.auditDistribution(); },
     });
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest()); const proposalId = state.proposals[0].proposalId;
     assert.equal(state.automationContext.workspaceState, null, "手动返还不应要求先配置自动演化工作区");
     await assert.rejects(() => facade.dispatch(proposalId), /只有审批通过/);
     facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" }); state = await facade.dispatch(proposalId);
-    assert.deepEqual(planningWorkspace, workspaceState); assert.deepEqual(auditWorkspace, workspaceState);
+    assert.deepEqual(planningWorkspace, workspaceState);
     assert.deepEqual(submitted.workspaceState, workspaceState);
     assert.equal(submitted.initiatorMemberId, "nangong-wan"); assert.equal(submitted.evolutionProposalId, proposalId);
     assert.equal(submitted.evolutionRoundId, proposalId); assert.equal(submitted.mergeStrategy, "ATOMIC_GROUP"); assert.equal(submitted.atomicGroupId, proposalId);
@@ -322,14 +320,15 @@ test("专题工作区缺失时返还执行显示业务错误而不是读取 null
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("生产分发会话显式使用专题工作区而不是自动演化上下文", () => {
+test("生产分发会话显式使用专题工作区且令狐不再参与常规分发审核", () => {
   assert.match(nangongPromptSource, /planDistribution: async \(prompt, workspaceState, locale, emit\)[\s\S]*nangongDistributionCodex![\s\S]*mergeWorkspaceState\(workspaces\.read\(\), workspaceState\)/);
-  assert.match(nangongPromptSource, /auditDistribution: async \(prompt, workspaceState, locale\)[\s\S]*linghuDistributionAuditCodex![\s\S]*workspaceState/);
   assert.doesNotMatch(nangongPromptSource, /planDistribution: async[^\n]*automationContext\.workspaceState/);
-  assert.doesNotMatch(nangongPromptSource, /auditDistribution: async[^\n]*automationContext\.workspaceState/);
+  assert.doesNotMatch(nangongPromptSource, /linghuDistributionAuditCodex|auditDistribution:/);
+  assert.match(distributionServiceSource, /validateDistributionPlan/);
+  assert.match(distributionServiceSource, /nangong\.distribution_validation\.completed/);
 });
 
-test("预计修改文件重叠时令狐阻止多人重复分发", async () => {
+test("预计修改文件重叠时程序阻止多人重复分发", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-overlap-audit-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
@@ -342,7 +341,6 @@ test("预计修改文件重叠时令狐阻止多人重复分发", async () => {
     const facade = new NangongEvolutionFacade({
       store, collaboration, conversation, recordEvent: () => undefined,
       async planDistribution() { return overlappingPlan; },
-      async auditDistribution() { return JSON.stringify({ decision: "passed", reason: "模型误判为可并行", findings: [] }); },
     });
     let state = facade.createTopic(topicRequest("单按钮样式修正"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
@@ -350,9 +348,30 @@ test("预计修改文件重叠时令狐阻止多人重复分发", async () => {
     facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "方向通过" });
     await assert.rejects(() => facade.dispatch(proposalId), /阻止分发/);
     assert.equal(submitted, 0);
-    assert.equal(facade.state().proposals[0].distributionPlan.audit.decision, "revise");
-    assert.match(facade.state().proposals[0].distributionPlan.audit.findings.join("；"), /同时属于/);
+    assert.equal(facade.state().proposals[0].distributionPlan.validation.decision, "revise");
+    assert.match(facade.state().proposals[0].distributionPlan.validation.findings.join("；"), /同时属于/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("旧分发 audit 字段一次性迁移为程序 validation 且保留专题事实", async () => {
+  const key = "nangong-distribution-validation-migration";
+  const store = evolutionStore(key);
+  const collaboration = { submitTask(request) { return { tasks: [{ taskId: "migration-task", evolutionProposalId: request.evolutionProposalId }] }; } };
+  const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+  let state = facade.createTopic(topicRequest("分发校验迁移"));
+  state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+  const proposalId = state.proposals[0].proposalId;
+  facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+  await facade.dispatch(proposalId);
+  const legacy = readPersistedState(key);
+  const validation = legacy.proposals[0].distributionPlan.validation;
+  legacy.proposals[0].distributionPlan.audit = { ...validation, auditedAt: validation.validatedAt };
+  delete legacy.proposals[0].distributionPlan.validation;
+  writePersistedState(key, legacy);
+  const restored = evolutionStore(key).state();
+  assert.equal(restored.topics[0].title, "分发校验迁移");
+  assert.equal(restored.proposals[0].distributionPlan.validation.decision, "passed");
+  assert.equal("audit" in readPersistedState(key).proposals[0].distributionPlan, false);
 });
 
 test("全部执行结果返回南宫婉后才封存同一轮并一次性交给令狐", async () => {
@@ -383,7 +402,6 @@ test("全部执行结果返回南宫婉后才封存同一轮并一次性交给�
         { title: "任务一", scope: "修改文件一", acceptanceCriteria: ["文件一通过"], expectedFiles: ["apps/ai-desktop/one.ts"], independentReason: "文件边界独立" },
         { title: "任务二", scope: "修改文件二", acceptanceCriteria: ["文件二通过"], expectedFiles: ["apps/ai-desktop/two.ts"], independentReason: "文件边界独立" },
       ] }); },
-      async auditDistribution() { return JSON.stringify({ decision: "passed", reason: "两个任务文件与职责均不重叠。", findings: [] }); },
     });
     let state = facade.createTopic(topicRequest("南宫婉轮次收集"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());

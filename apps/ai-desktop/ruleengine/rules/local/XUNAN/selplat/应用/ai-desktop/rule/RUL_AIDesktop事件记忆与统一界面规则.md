@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.143.0
+rule_version = 5.144.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -15,7 +15,7 @@ python_ability_refs = none
 node_ability_refs = none
 
 <!-- 南宫婉分发前必须只读调查影响范围，并生成可独立合并且通过令狐审计的任务单元。 -->
-nangong_distribution_planning_contract = AI_read_only_investigation + impact_scope_not_task_count + minimal_independently_mergeable_units + expected_files_and_acceptance + linghu_distribution_audit_before_dispatch + overlap_blocks_dispatch
+nangong_distribution_planning_contract = AI_read_only_investigation + impact_scope_not_task_count + minimal_independently_mergeable_units + expected_files_and_acceptance + deterministic_program_conflict_validation_before_dispatch + overlap_blocks_dispatch + no_linghu_regular_distribution_review
 <!-- 提案分发的授权边界来自所属专题冻结的工作区；自动演化上下文只服务自动研讨，不能成为手动返还的隐式前置条件。 -->
 nangong_dispatch_workspace_source_contract = proposal_topic_workspace_is_single_source_for_planning_audit_and_task_creation + manual_dispatch_independent_from_automation_context + validate_roots_before_Codex_send + missing_workspace_returns_business_error_not_null_property_TypeError
 <!-- 令狐接收统一异常时生成的自身事件只能作为状态记录，不得再次进入异常消费队列。 -->

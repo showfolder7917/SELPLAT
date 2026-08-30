@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { CollaborationTimelineBusinessEvent } from "../../../contracts/collaboration/collaboration-timeline-event.js";
 import type { CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
 import type { CodexStreamEvent } from "../../../contracts/codex/codex-stream.js";
-import type { EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionProposal, NangongEvolutionState } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionDistributionValidation, EvolutionProposal, NangongEvolutionState } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { CollaborationCoordinator } from "./collaboration-coordinator.js";
 import { NangongEvolutionStore } from "./nangong-evolution-store.js";
 
@@ -13,7 +13,6 @@ export interface EvolutionTaskDistributionServiceOptions {
   store: NangongEvolutionStore;
   collaboration: CollaborationCoordinator;
   plan(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], feedback: string, emit: (event: CodexStreamEvent) => void): Promise<PlanResult>;
-  audit(proposal: EvolutionProposal, topic: NangongEvolutionState["topics"][number], plan: PlanResult, hardFindings: string[]): Promise<EvolutionDistributionAudit>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   timeline?: (event: CollaborationTimelineBusinessEvent) => void;
   timelineStream?: (taskId: string, memberId: string, event: CodexStreamEvent) => void;
@@ -30,8 +29,8 @@ export class EvolutionTaskDistributionService {
     if (proposal.status !== "approved") throw new Error("只有审批通过后才能分发任务。");
     if (!topic.workspaceState?.roots.length) throw new Error("当前专题缺少可用的实施工作区，无法分发。");
 
-    if (!proposal.distributionPlan || proposal.distributionPlan.audit.decision !== "passed") {
-      let feedback = proposal.distributionPlan?.audit.findings.join("；") || "";
+    if (!proposal.distributionPlan || proposal.distributionPlan.validation.decision !== "passed") {
+      let feedback = proposal.distributionPlan?.validation.findings.join("；") || "";
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         const planningTaskId = `proposal:${proposal.proposalId}`;
         const planningStartedAt = new Date().toISOString();
@@ -46,19 +45,19 @@ export class EvolutionTaskDistributionService {
         }
         this.#publishPlanning(proposal, topic, attempt, "completed", "执行计划生成完成", planned.summary, planningStartedAt);
         const hardFindings = distributionHardFindings(planned.units);
-        const audit = await this.options.audit(proposal, topic, planned, hardFindings);
-        const plan: EvolutionDistributionPlan = { version: 1, summary: planned.summary, units: planned.units, audit, plannedAt: new Date().toISOString() };
+        const validation = validateDistributionPlan(planned, hardFindings);
+        const plan: EvolutionDistributionPlan = { version: 1, summary: planned.summary, units: planned.units, validation, plannedAt: new Date().toISOString() };
         state = this.options.store.saveDistributionPlan(proposalId, plan);
         proposal = requireProposal(state, proposalId);
-        this.options.recordEvent("nangong.evolution.distribution_planned", { proposalId, attempt, unitCount: plan.units.length, expectedFiles: plan.units.flatMap((unit) => unit.expectedFiles), auditDecision: audit.decision, auditFindings: audit.findings });
-        this.options.recordEvent("linghu.distribution_audit.completed", { proposalId, attempt, decision: audit.decision, reason: audit.reason, findings: audit.findings });
-        if (audit.decision === "passed") break;
-        feedback = [audit.reason, ...audit.findings].filter(Boolean).join("；");
+        this.options.recordEvent("nangong.evolution.distribution_planned", { proposalId, attempt, unitCount: plan.units.length, expectedFiles: plan.units.flatMap((unit) => unit.expectedFiles), validationDecision: validation.decision, validationFindings: validation.findings });
+        this.options.recordEvent("nangong.distribution_validation.completed", { proposalId, attempt, decision: validation.decision, reason: validation.reason, findings: validation.findings });
+        if (validation.decision === "passed") break;
+        feedback = [validation.reason, ...validation.findings].filter(Boolean).join("；");
       }
     }
 
     proposal = requireProposal(this.options.store.state(), proposalId);
-    if (!proposal.distributionPlan || proposal.distributionPlan.audit.decision !== "passed") throw new Error("令狐确认当前任务拆分仍存在重叠，已阻止分发并退回南宫婉重新规划。");
+    if (!proposal.distributionPlan || proposal.distributionPlan.validation.decision !== "passed") throw new Error("程序核对到当前任务拆分仍存在确定性冲突，已阻止分发并交由南宫婉重新规划。");
 
     const distributedTaskIds = [...proposal.distributedTaskIds];
     const latestApproval = proposal.approvals.at(-1);
@@ -148,6 +147,28 @@ function distributionHardFindings(units: EvolutionDistributionUnit[]): string[] 
     if (overlap.length) findings.push(`文件同时属于任务“${units[index].title}”与“${units[other].title}”：${overlap.join("、")}`);
   }
   return findings;
+}
+
+/** 程序只校验可确定的分发冲突；业务规划仍由南宫婉负责，令狐不参与常规分发审核。 */
+function validateDistributionPlan(plan: PlanResult, hardFindings: string[]): EvolutionDistributionValidation {
+  const findings = [...hardFindings];
+  const titles = new Set<string>();
+  const scopes = new Set<string>();
+  for (const unit of plan.units) {
+    const title = unit.title.normalize("NFKC").replaceAll(/\s+/gu, "").toLowerCase();
+    const scope = unit.scope.normalize("NFKC").replaceAll(/\s+/gu, "").toLowerCase();
+    if (titles.has(title)) findings.push(`存在重复任务标题：${unit.title}`);
+    if (scopes.has(scope)) findings.push(`存在重复任务职责：${unit.scope}`);
+    titles.add(title);
+    scopes.add(scope);
+  }
+  const uniqueFindings = [...new Set(findings)];
+  return {
+    decision: uniqueFindings.length ? "revise" : "passed",
+    reason: uniqueFindings.length ? "程序发现任务之间存在确定性冲突。" : "程序未发现文件、标题或职责的确定性冲突。",
+    findings: uniqueFindings,
+    validatedAt: new Date().toISOString(),
+  };
 }
 function requireProposal(state: NangongEvolutionState, proposalId: string) { const value = state.proposals.find((item) => item.proposalId === proposalId); if (!value) throw new Error("演化提案不存在。"); return value; }
 function requireTopic(state: NangongEvolutionState, topicId: string) { const value = state.topics.find((item) => item.topicId === topicId); if (!value) throw new Error("专项课题不存在。"); return value; }

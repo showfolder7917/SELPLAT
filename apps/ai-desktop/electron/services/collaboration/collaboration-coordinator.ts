@@ -84,6 +84,7 @@ export class CollaborationCoordinator {
       options.emitState(state, reason, taskIds);
       // 在途任务的统一测试失败属于协作主流程安全兜底，不依赖令狐“主动巡检”总开关。
       this.#scheduleUnifiedTestRepairs(state);
+      this.#scheduleExecutionRepairs(state);
     });
     this.#scheduleUnifiedTestRepairs(this.#store.state());
   }
@@ -318,6 +319,18 @@ export class CollaborationCoordinator {
     if (!task || this.#unifiedTestRepairRuns.has(task.taskId)) return;
     queueMicrotask(() => {
       if (!this.#disposed) void this.repairFailedUnifiedTest(task.taskId);
+    });
+  }
+
+  /** 令狐释放后自动接续最早进入恢复队列的执行故障；等待期间不占用人物状态，也不记为修复失败。 */
+  #scheduleExecutionRepairs(state: CollaborationState): void {
+    if (this.#disposed || state.mode !== "collaboration") return;
+    const linghu = state.members.find((member) => member.memberId === LINGHU_MEMBER_ID);
+    if (!linghu || linghu.state !== "idle") return;
+    const task = state.tasks.find((candidate) => candidate.state === "recovering" && candidate.repairKind === "execution" && candidate.repairFailureReason);
+    if (!task) return;
+    queueMicrotask(() => {
+      if (!this.#disposed) void this.#repairFailedExecution(task.taskId, task.repairFailureReason || "执行故障等待恢复");
     });
   }
 
@@ -620,13 +633,34 @@ export class CollaborationCoordinator {
     const originalSession = this.#executorSessions.get(taskId);
     this.#executorSessions.delete(taskId);
     await originalSession?.dispose();
+    const currentLinghu = requireMember(this.state(), LINGHU_MEMBER_ID);
+    if (currentLinghu.state !== "idle") {
+      this.#store.updateTask(taskId, "execution.repair_queued", (current, state) => {
+        if (originalId && originalId !== LINGHU_MEMBER_ID) current.originalExecutor ??= participantSnapshot(requireMember(state, originalId));
+        if (originalId && originalId !== LINGHU_MEMBER_ID) releaseMemberFromState(state, originalId);
+        current.assignmentId = null;
+        current.executorMemberId = null;
+        current.taskRevision += 1;
+        current.state = "recovering";
+        current.phase = "blocked";
+        current.repairKind = "execution";
+        current.repairFailureReason = reason;
+        current.currentHandler = null;
+        current.blockingReason = `等待令狐老祖完成当前任务 ${currentLinghu.currentTaskId || "后续故障"} 后接续修复：${reason}`;
+        appendFlow(current, "execution.repair_queued", "recovery", "waiting", current.blockingReason, current.initiator, true, {
+          failureStage: "execution", failureSummary: reason, technicalEvidence: [reason], originalExecutor: current.originalExecutor,
+          routedBy: current.initiator, repairAssignee: participantSnapshot(currentLinghu), waitingForTaskId: currentLinghu.currentTaskId,
+        });
+      });
+      return;
+    }
     let repairSession: CollaborationExecutorSession | null = null;
     try {
       this.#store.updateTask(taskId, "execution.repair_started", (current, state) => {
         if (originalId) current.originalExecutor ??= participantSnapshot(requireMember(state, originalId));
         if (originalId) releaseMemberFromState(state, originalId);
         const linghu = requireMember(state, LINGHU_MEMBER_ID);
-        if (linghu.state !== "idle") throw new Error("令狐老祖当前正在处理其他任务。");
+        if (linghu.state !== "idle") throw new Error("令狐老祖人物会话写入状态发生变化，任务将重新排队。");
         linghu.generation += 1;
         linghu.state = "working";
         linghu.role = "executor";

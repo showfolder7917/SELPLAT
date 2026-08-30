@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
 import { CollaborationCoordinator } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
+import { PersonaSessionWriterQueue } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-codex-sessions.js";
 import { createCollaborationResultSummary } from "../../../build/ai-desktop/electron/electron/services/collaboration/result/result-summary.js";
 import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/collaboration/verified-package-release.js";
@@ -1420,6 +1421,34 @@ test("执行人物只做技术分析并直接进入实施，不再创建内部�
   assert.match(sessions, /执行人物技术分析/);
   assert.match(sessions, /不要重新解释客户为什么要做/);
   assert.doesNotMatch(sessions, /CodexReviewerSession|review_decision/);
+});
+
+test("固定人物会话同人物串行且不同人物互不阻塞", async () => {
+  const queue = new PersonaSessionWriterQueue();
+  const events = [];
+  const releaseFirst = await queue.acquire("linghu-ancestor", "task-1", (state, activeTaskId) => events.push({ state, activeTaskId }));
+  let secondAcquired = false;
+  const second = queue.acquire("linghu-ancestor", "task-2", (state, activeTaskId) => events.push({ state, activeTaskId })).then((release) => {
+    secondAcquired = true;
+    return release;
+  });
+  const releaseOther = await queue.acquire("nangong-wan", "task-3");
+  await Promise.resolve();
+  assert.equal(secondAcquired, false, "同一人物的后续任务必须等待当前 writer 释放");
+  releaseOther();
+  releaseFirst();
+  const releaseSecond = await second;
+  assert.equal(secondAcquired, true);
+  releaseSecond();
+  assert.deepEqual(events.map((event) => event.state), ["acquired", "queued", "released", "acquired", "released"]);
+});
+
+test("令狐忙碌时执行故障进入等待节点而不是覆盖人物或记为修复失败", () => {
+  assert.match(coordinatorSource, /execution\.repair_queued/);
+  assert.match(coordinatorSource, /等待令狐老祖完成当前任务/);
+  assert.match(coordinatorSource, /#scheduleExecutionRepairs/);
+  assert.match(coordinatorSource, /current\.currentHandler = null/);
+  assert.doesNotMatch(coordinatorSource, /令狐老祖当前正在处理其他任务/);
 });
 
 test("集成工作区锁文件一致时自动复用主工作区依赖", async () => {

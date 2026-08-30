@@ -150,7 +150,7 @@ test("人物训练语料通过主会话完成钩子和启动补录闭环且清�
   assert.match(ingestion, /task_complete/);
   assert.match(ingestion, /setImmediate/);
   assert.match(ingestion, /watch\(root, \{ recursive: true \}/);
-  assert.match(main, /Promise\.all\(\[hanLiCodex, nangongDeliberationCodex, nangongDistributionCodex, linghuDistributionAuditCodex\]/);
+  assert.doesNotMatch(main, /linghuDistributionAuditCodex|ai-desktop-linghu-distribution-audit/);
   const semanticBackfill = source("electron/services/event-center/codex-conversation-semantic-backfill.ts");
   assert.match(semanticBackfill, /phase\) === "final_answer"/);
   assert.match(semanticBackfill, /task_complete/);

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { CollaborationMemoryPort, ConversationRoundTopicDecision } from "../../../contracts/collaboration/collaboration-memory.js";
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionDistributionAudit, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionMutationRequest, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, GenerateNangongTopicDraftRequest, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, QueryEvolutionWorkbenchRequest, ReviseEvolutionProposalRequest, SaveEvolutionWorkbenchPreferenceRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionMutationRequest, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, GenerateNangongTopicDraftRequest, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiEvolutionDeliberation, HanLiTopicCandidate, NangongEvolutionState, NangongTopicDraft, QueryEvolutionWorkbenchRequest, ReviseEvolutionProposalRequest, SaveEvolutionWorkbenchPreferenceRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { SendMessageResponse } from "../../../contracts/codex/conversation.js";
 import type { EventCenterExceptionInput } from "../../../contracts/governance/workflow.js";
 import type { CollaborationTimelineBusinessEvent } from "../../../contracts/collaboration/collaboration-timeline-event.js";
@@ -31,7 +31,6 @@ export interface NangongEvolutionFacadeOptions {
   };
   investigateRevision?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   planDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"], emit: (event: CodexStreamEvent) => void) => Promise<string>;
-  auditDistribution?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   planAcceptance?: (prompt: string, workspaceState: NangongEvolutionState["topics"][number]["workspaceState"], locale: NangongEvolutionState["topics"][number]["locale"]) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   recordFailure?(input: EventCenterExceptionInput): void;
@@ -57,7 +56,6 @@ export class NangongEvolutionFacade {
   readonly #nangongDeliberation: NonNullable<NangongEvolutionFacadeOptions["nangongDeliberation"]>;
   readonly #investigateRevision: NonNullable<NangongEvolutionFacadeOptions["investigateRevision"]>;
   readonly #planDistribution: NonNullable<NangongEvolutionFacadeOptions["planDistribution"]>;
-  readonly #auditDistribution: NonNullable<NangongEvolutionFacadeOptions["auditDistribution"]>;
   readonly #planAcceptance: NonNullable<NangongEvolutionFacadeOptions["planAcceptance"]>;
   readonly #recordEvent: NangongEvolutionFacadeOptions["recordEvent"];
   readonly #recordFailure: NonNullable<NangongEvolutionFacadeOptions["recordFailure"]>;
@@ -75,7 +73,7 @@ export class NangongEvolutionFacade {
   #running = false;
   #oneShotAcceptanceRunner: ((plan: HanLiAcceptancePlan) => Promise<HanLiAcceptanceRun>) | null = null;
 
-  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#investigateRevision = options.investigateRevision || (async () => { throw new Error("南宫婉返修调查能力尚未接入。"); }); this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#auditDistribution = options.auditDistribution || (async () => { throw new Error("令狐分发合理性审计尚未接入。"); }); this.#planAcceptance = options.planAcceptance || (async () => { throw new Error("韩立界面验收计划能力尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#recordFailure = options.recordFailure || (() => undefined); this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#queryWorkbench = options.queryWorkbench; this.#getWorkbenchPreference = options.getWorkbenchPreference; this.#saveWorkbenchPreference = options.saveWorkbenchPreference; this.#mutations = new EvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation }); this.#approvals = new EvolutionApprovalService(this.#store, options.recordTimelineEvent || null); this.#distribution = new EvolutionTaskDistributionService({ store: this.#store, collaboration: this.#collaboration, recordEvent: this.#recordEvent, timeline: options.recordTimelineEvent, timelineStream: options.recordTimelineStream, plan: async (proposal, topic, feedback, emit) => parseDistributionPlan(await this.#planDistribution(distributionPlanningPrompt(proposal, topic, feedback), topic.workspaceState, topic.locale, emit)), audit: async (proposal, topic, plan, hardFindings) => parseDistributionAudit(await this.#auditDistribution(distributionAuditPrompt(proposal, topic, plan, hardFindings), topic.workspaceState, topic.locale), hardFindings) }); this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
+  constructor(options: NangongEvolutionFacadeOptions) { this.#store = options.store; this.#collaboration = options.collaboration; this.#conversation = options.conversation; this.#hanLi = options.hanLi || { send: async () => { throw new Error("韩立研讨会话尚未接入。 "); } }; this.#nangongDeliberation = options.nangongDeliberation || { send: async () => { throw new Error("南宫婉研讨会话尚未接入。 "); } }; this.#investigateRevision = options.investigateRevision || (async () => { throw new Error("南宫婉返修调查能力尚未接入。"); }); this.#planDistribution = options.planDistribution || (async () => { throw new Error("南宫婉任务拆分调查尚未接入。"); }); this.#planAcceptance = options.planAcceptance || (async () => { throw new Error("韩立界面验收计划能力尚未接入。"); }); this.#recordEvent = options.recordEvent; this.#recordFailure = options.recordFailure || (() => undefined); this.#memory = options.memory || null; this.#readDossier = options.readDossier; this.#queryWorkbench = options.queryWorkbench; this.#getWorkbenchPreference = options.getWorkbenchPreference; this.#saveWorkbenchPreference = options.saveWorkbenchPreference; this.#mutations = new EvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation }); this.#approvals = new EvolutionApprovalService(this.#store, options.recordTimelineEvent || null); this.#distribution = new EvolutionTaskDistributionService({ store: this.#store, collaboration: this.#collaboration, recordEvent: this.#recordEvent, timeline: options.recordTimelineEvent, timelineStream: options.recordTimelineStream, plan: async (proposal, topic, feedback, emit) => parseDistributionPlan(await this.#planDistribution(distributionPlanningPrompt(proposal, topic, feedback), topic.workspaceState, topic.locale, emit)) }); this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000]; }
   state(): NangongEvolutionState { return this.#store.state(); }
   dossier(topicId: string): EvolutionTopicDossier {
     const state = this.state();
@@ -707,25 +705,10 @@ function distributionPlanningPrompt(proposal: EvolutionProposal, topic: NangongE
     `影响范围：${proposal.impactScope.join("；")}`,
     `验收条件：${proposal.acceptanceCriteria.join("；")}`,
     `排除范围：${proposal.exclusions.join("；") || "无"}`,
-    feedback ? `令狐上一轮审计意见：${feedback}` : "这是首次拆分。",
+    feedback ? `程序上一轮核对到的确定性冲突：${feedback}` : "这是首次拆分。",
   ].join("\n\n");
 }
 
-function distributionAuditPrompt(
-  proposal: EvolutionProposal,
-  topic: NangongEvolutionState["topics"][number],
-  plan: Pick<EvolutionDistributionPlan, "summary" | "units">,
-  hardFindings: string[],
-): string {
-  return [
-    "你是令狐老祖，只负责分发合理性与合并安全审计，不审批演化方向。请依据事实判断，不使用固定评分。",
-    "检查每个任务是否可独立修改、独立回退、独立验收，是否把约束伪装成任务，是否语义重复，预计文件是否重叠，以及并行收益是否确实高于协作与合并成本。小型同域改动应由一个人完成。",
-    "返回 JSON：{\"decision\":\"passed 或 revise\",\"reason\":\"结论依据\",\"findings\":[\"需要南宫婉修正的具体事实\"]}。不要返回 Markdown。",
-    `课题：${topic.title}\n目标：${topic.goal}\n提案：${proposal.content}`,
-    `南宫婉拆分：${JSON.stringify(plan)}`,
-    `程序核对到的确定事实：${hardFindings.length ? hardFindings.join("；") : "未发现确定性冲突"}`,
-  ].join("\n\n");
-}
 
 interface RevisionInvestigation {
   content: string;
@@ -794,14 +777,6 @@ function parseDistributionPlan(text: string): Pick<EvolutionDistributionPlan, "s
   });
   if (!summary || !units.length) throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
   return { summary, units };
-}
-
-function parseDistributionAudit(text: string, hardFindings: string[]): EvolutionDistributionAudit {
-  const value = parseJsonObject(text);
-  const modelDecision = value.decision === "passed" ? "passed" : "revise";
-  const reason = typeof value.reason === "string" && value.reason.trim() ? value.reason.trim().slice(0, 4_000) : "令狐没有提供充分的分发审计依据。";
-  const findings = [...new Set([...hardFindings, ...normalizeDraftList(value.findings)])];
-  return { decision: hardFindings.length ? "revise" : modelDecision, reason, findings, auditedAt: new Date().toISOString() };
 }
 
 function parseTopicDraft(text: string): NangongTopicDraft {

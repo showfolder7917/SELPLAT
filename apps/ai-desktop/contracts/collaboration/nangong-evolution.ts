@@ -278,18 +278,18 @@ export interface EvolutionDistributionUnit {
   independentReason: string;
 }
 
-export interface EvolutionDistributionAudit {
+export interface EvolutionDistributionValidation {
   decision: "passed" | "revise";
   reason: string;
   findings: string[];
-  auditedAt: string;
+  validatedAt: string;
 }
 
 export interface EvolutionDistributionPlan {
   version: 1;
   summary: string;
   units: EvolutionDistributionUnit[];
-  audit: EvolutionDistributionAudit;
+  validation: EvolutionDistributionValidation;
   plannedAt: string;
 }
 

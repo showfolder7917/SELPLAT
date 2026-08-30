@@ -63,7 +63,6 @@ let nangongCodex: CodexService | undefined;
 let hanLiCodex: CodexService | undefined;
 let nangongDeliberationCodex: CodexService | undefined;
 let nangongDistributionCodex: CodexService | undefined;
-let linghuDistributionAuditCodex: CodexService | undefined;
 let corpusSemanticBackfillCodex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
@@ -327,17 +326,8 @@ app.whenReady().then(async () => {
   // 南宫婉的聊天、研讨和分发共享同一人物线程，业务节点仍由各自领域事件区分。
   nangongDeliberationCodex = nangongCodex;
   nangongDistributionCodex = nangongCodex;
-  const linghuDistributionAuditSessions = new SqliteCodexSessionStore(aiMemoryDatabase, "linghu");
-  linghuDistributionAuditCodex = new CodexService(
-    projectRoot, trustedCommands, linghuDistributionAuditSessions,
-    {
-      codexHome, serviceName: "selplat_ai_desktop_linghu_distribution_audit", threadSource: "ai-desktop-linghu-distribution-audit",
-      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
-      preserveThreadAcrossWorkspaceChanges: true,
-    },
-    (details) => eventCenter.recordEvent("linghu.distribution_audit.trusted_command.decision", details),
-    (details) => eventCenter.recordEvent("linghu.distribution_audit.thread.lifecycle", details),
-  );
+  // 令狐固定会话仅服务故障兜底和统一测试修复；常规分发由南宫婉规划并交给程序做确定性冲突校验。
+  const linghuSessions = new SqliteCodexSessionStore(aiMemoryDatabase, "linghu");
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
   const corpusSemanticWorkspaceRoot = path.join(app.getPath("userData"), "corpus-semantic-backfill-workspace");
@@ -416,7 +406,7 @@ app.whenReady().then(async () => {
     readSettings: () => settings.read(),
     readRuleInstructions,
     readWorkspaceState: () => workspaces.read(),
-    personaSessionStore: (memberId) => memberId === "linghu-ancestor" ? linghuDistributionAuditSessions : null,
+    personaSessionStore: (memberId) => memberId === "linghu-ancestor" ? linghuSessions : null,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
   });
   const versionIntegration = new VersionIntegrationPipeline({
@@ -506,7 +496,6 @@ app.whenReady().then(async () => {
     },
     investigateRevision: async (prompt, workspaceState, locale) => (await nangongDeliberationCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
     planDistribution: async (prompt, workspaceState, locale, emit) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], emit, "conversation-managed")).text,
-    auditDistribution: async (prompt, workspaceState, locale) => (await linghuDistributionAuditCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
     planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordFailure: (input) => eventCenter.recordException(input),
@@ -746,7 +735,6 @@ app.on("before-quit", () => {
   nangongCodex?.dispose();
   hanLiCodex?.dispose();
   // 南宫婉研讨与分发引用同一服务，不重复关闭。
-  linghuDistributionAuditCodex?.dispose();
   corpusSemanticBackfillCodex?.dispose();
   prepareAiMemoryShutdown();
 });

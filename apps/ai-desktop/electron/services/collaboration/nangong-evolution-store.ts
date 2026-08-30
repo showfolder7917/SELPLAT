@@ -745,7 +745,11 @@ export class NangongEvolutionStore {
       const raw = this.#repository.load() as Partial<NangongEvolutionState> | null;
       if (raw && raw.version === 8 && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
         && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext
-        && typeof raw.automaticNangongApprovalEnabled === "boolean" && typeof raw.automaticLinghuApprovalEnabled === "boolean") return raw as NangongEvolutionState;
+        && typeof raw.automaticNangongApprovalEnabled === "boolean" && typeof raw.automaticLinghuApprovalEnabled === "boolean") {
+        const migrated = migrateDistributionValidation(raw as NangongEvolutionState);
+        if (migrated.changed) this.#repository.save(migrated.state);
+        return migrated.state;
+      }
     } catch { /* 损坏状态安全关闭；禁止扫描或恢复旧 JSON 文件。 */ }
     const initial = createInitialState();
     const conversation = this.#repository.loadLatestConversation();
@@ -756,6 +760,35 @@ export class NangongEvolutionStore {
   #write(state: NangongEvolutionState): void {
     this.#repository.save(state);
   }
+}
+
+/** 只迁移既有确定性校验事实的字段名，不保留或重新启用令狐常规分发审核入口。 */
+function migrateDistributionValidation(state: NangongEvolutionState): { state: NangongEvolutionState; changed: boolean } {
+  let changed = false;
+  const proposals = state.proposals.map((proposal) => {
+    const plan = proposal.distributionPlan as unknown as Record<string, unknown> | null;
+    if (!plan || plan.validation) return proposal;
+    const audit = plan.audit as { decision?: unknown; reason?: unknown; findings?: unknown; auditedAt?: unknown } | undefined;
+    if (!audit) {
+      changed = true;
+      return { ...proposal, distributionPlan: null };
+    }
+    changed = true;
+    const { audit: _retiredAudit, ...rest } = plan;
+    return {
+      ...proposal,
+      distributionPlan: {
+        ...rest,
+        validation: {
+          decision: audit.decision === "passed" ? "passed" : "revise",
+          reason: typeof audit.reason === "string" ? audit.reason : "旧分发校验事实缺少说明。",
+          findings: Array.isArray(audit.findings) ? audit.findings.filter((item): item is string => typeof item === "string") : [],
+          validatedAt: typeof audit.auditedAt === "string" ? audit.auditedAt : proposal.updatedAt,
+        },
+      } as NangongEvolutionState["proposals"][number]["distributionPlan"],
+    };
+  });
+  return { state: changed ? { ...state, proposals } : state, changed };
 }
 
 function createInitialState(): NangongEvolutionState {

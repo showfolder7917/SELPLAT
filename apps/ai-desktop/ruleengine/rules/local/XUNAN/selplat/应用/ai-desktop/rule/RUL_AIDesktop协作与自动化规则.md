@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.118.0
+rule_version = 5.119.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -29,6 +29,10 @@ collaboration_conversation_status_chain_contract = persisted_task_id_binding + r
 <!-- 审批失败必须先保留原因；重新审批先由令狐老祖真实处理，再固定回到原审批人，禁止只替换按钮文案。 -->
 <!-- 执行失败自动由令狐老祖修复，修复完成固定退回原执行人重新执行，成功后再进入令狐统一测试。 -->
 collaboration_execution_repair_and_test_contract = execution_failure_dispatches_linghu + repair_returns_to_original_executor + successful_reexecution_dispatches_linghu_unified_test + test_running_passed_or_failed_visible
+<!-- 令狐固定人物会话只承担故障调查、修复、统一测试和失败复测；常规分发规划属于南宫婉，确定性冲突由程序校验。 -->
+linghu_persona_responsibility_contract = fault_investigation_repair_unified_test_and_failed_retest_only + no_regular_distribution_review + nangong_plans_distribution + deterministic_program_conflict_validation
+<!-- 固定人物会话必须通过人物级唯一 writer 队列；等待是可观察的排队事实，不得记为任务失败，释放后沿原任务断点自动继续。 -->
+persona_session_single_writer_contract = one_writer_per_persona + fifo_waiting_without_renderer_block + queued_acquired_released_audit_events + waiting_is_not_failure + release_on_completion_error_and_dispose + resume_original_task_checkpoint
 <!-- 统一测试失败不能只把同一结果重新排队；结构化 verification 失败由令狐在原任务范围内修复并形成新结果，只有真实业务选择才等待人工。 -->
 collaboration_unified_test_repair_contract = task_state_and_structured_failure_kind_before_free_text_classification + test_failed_or_verification_never_business_due_to_quoted_rule_text + in_flight_verification_failure_directly_schedules_linghu_repair_independent_from_proactive_automation_switch + per_task_idempotent_repair_lock + linghu_repairs_original_task_worktree_with_failure_evidence + code_validation_then_new_resultSHA + retry_unified_test + same_fault_max_three_repair_attempts + external_permission_or_genuine_business_choice_only_waits_for_human
 <!-- 任务详细默认折叠，折叠标题中的发起人来自任务冻结快照，禁止展示层按任务类型猜测姓名。 -->
