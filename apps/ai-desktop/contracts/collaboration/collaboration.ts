@@ -34,6 +34,7 @@ export type CollaborationFlowEventType =
   | "task.cancelled"
   | "task.interrupted"
   | "task.recovery_requested"
+  | "execution.repair_queued"
   | "execution.repair_started"
   | "execution.repair_investigated"
   | "execution.repair_completed"
@@ -157,6 +158,7 @@ export interface CollaborationFlowEventDetails {
   repairDiagnosis?: string;
   repairResult?: string;
   returnToExecutor?: CollaborationParticipantSnapshot | null;
+  waitingForTaskId?: string | null;
 }
 
 export interface CollaborationRepairDiagnosis {
