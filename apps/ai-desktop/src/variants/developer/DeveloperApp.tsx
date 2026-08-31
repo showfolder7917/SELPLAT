@@ -51,9 +51,8 @@ import type {
   ConversationQueueItem,
   DesktopSettings,
   Locale,
-  LinghuAutomationState,
-  LinghuAutomationStateEvent,
-  LinghuStartupPrompt,
+  LinghuAutomationStateEventOutDto,
+  LinghuAutomationStateOutDto,
   ManagedExecutionMode,
   NangongEvolutionState,
   NangongEvolutionStateEvent,
@@ -76,7 +75,8 @@ import { SelUiConversation } from "../../features/conversation/components/SelUiC
 import { MarkdownMessage } from "./MarkdownMessage";
 import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "../../features/collaboration/model/collaboration-task-progress";
 import { TaskCollaborationGroup } from "../../features/collaboration/components/TaskCollaborationGroup";
-import { LinghuRepairProposalPanel, MemberSelfUpgradePanel } from "../../features/evolution/components/EvolutionRevisionPanels";
+import { MemberSelfUpgradePanel } from "../../features/evolution/components/EvolutionRevisionPanels";
+import { LinghuAutomationPanel, LinghuRepairProposalPanel } from "../../features/linghu";
 import { EvolutionControlWorkspace } from "../../features/evolution/components/EvolutionControlWorkspace";
 import { defaultEvolutionWorkspaceLocation, evolutionMutationRequest, evolutionWorkspaceLocationFromSearch, evolutionWorkspaceLocationSearch } from "../../features/evolution/model/evolution-workbench";
 import { SettingsFloatingPanel } from "../../features/settings/components/SettingsFloatingPanel";
@@ -244,7 +244,7 @@ export function DeveloperApp() {
   const [aiMemoryDatabaseStatus, setAiMemoryDatabaseStatus] = useState<AiMemoryDatabaseStatus | null>(null);
   const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
   const [collaborationTimeline, setCollaborationTimeline] = useState<CollaborationTimelineSnapshot | null>(null);
-  const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationState | null>(null);
+  const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationStateOutDto | null>(null);
   const [nangongEvolutionState, setNangongEvolutionState] = useState<NangongEvolutionState | null>(null);
   const [collaborationStreams, setCollaborationStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationTimelineStreams, setCollaborationTimelineStreams] = useState<Record<string, CollaborationLiveOutput>>({});
@@ -293,7 +293,7 @@ export function DeveloperApp() {
   const screenRecordingRecheckBusyRef = useRef(false);
   const automaticTestEnabledRef = useRef(false);
   const collaborationStateRef = useRef<CollaborationState | null>(null);
-  const linghuAutomationStateRef = useRef<LinghuAutomationState | null>(null);
+  const linghuAutomationStateRef = useRef<LinghuAutomationStateOutDto | null>(null);
   const text = labels[locale];
   const screenPermissionRecoveryMessage = locale === "ja"
     ? "システム設定で AI Desktop の画面収録を許可してください。AI Desktop に戻ると自動的に再確認します。"
@@ -407,7 +407,7 @@ export function DeveloperApp() {
     void desktop.getNangongEvolutionState().then(setNangongEvolutionState);
     const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
     const removeTimelineListener = desktop.onCollaborationTimelineChanged(() => refreshTimeline());
-    const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEvent) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
+    const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEventOutDto) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
     const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => { setNangongEvolutionState(event.state); });
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
       // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
@@ -1477,7 +1477,7 @@ function CollaborationExecutionList({ tasks, locale, onOpen }: { tasks: Collabor
   </section>;
 }
 
-function CollaborationTaskDetail({ task, member, liveOutput, automation, locale, onBack }: { task: CollaborationTask; member: CollaborationMember; liveOutput: CollaborationLiveOutput | null; automation: LinghuAutomationState | null; locale: Locale; onBack(): void }) {
+function CollaborationTaskDetail({ task, member, liveOutput, automation, locale, onBack }: { task: CollaborationTask; member: CollaborationMember; liveOutput: CollaborationLiveOutput | null; automation: LinghuAutomationStateOutDto | null; locale: Locale; onBack(): void }) {
   const summary = task.resultSummary;
   return <section className="collaboration-task-detail" aria-label={task.snapshot.title}>
     <header><button type="button" onClick={onBack}><ArrowReply24Regular />{locale === "ja" ? "戻る" : "返回"}</button><div><h1>{task.snapshot.title}</h1><p>{collaborationTaskStateLabel(task.state, locale)}</p></div></header>
@@ -1496,11 +1496,11 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
   tasks: CollaborationState["tasks"];
   streams: Record<string, CollaborationLiveOutput>;
   locale: Locale;
-  linghuAutomation: LinghuAutomationState | null;
+  linghuAutomation: LinghuAutomationStateOutDto | null;
   nangongEvolution: NangongEvolutionState | null;
   nangongAttachments: ComposerAttachment[];
   workspaces: WorkspaceState | null;
-  onLinghuState(state: LinghuAutomationState): void;
+  onLinghuState(state: LinghuAutomationStateOutDto): void;
   onNangongState(state: NangongEvolutionState): void;
   onNangongAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>;
   onNangongScreenshot(hidden: boolean): void;
@@ -1654,7 +1654,7 @@ function CollaborationTaskProgressView({ task, member, liveOutput, automation, l
   task: CollaborationTask;
   member: CollaborationMember;
   liveOutput: CollaborationLiveOutput | null;
-  automation: LinghuAutomationState | null;
+  automation: LinghuAutomationStateOutDto | null;
   locale: Locale;
 }) {
   const progress = useMemo(() => deriveCollaborationTaskProgress(task, member, automation, locale), [task, member, automation, locale]);
@@ -1705,7 +1705,7 @@ function CollaborationStageContent({ stageId, task, liveMessage, automation, loc
   stageId: CollaborationProgressStageId;
   task: CollaborationTask;
   liveMessage: Message | null;
-  automation: LinghuAutomationState | null;
+  automation: LinghuAutomationStateOutDto | null;
   locale: Locale;
 }) {
   const relevantEvents = task.flowEvents.filter((event) => stageId === "repair"
@@ -1735,92 +1735,6 @@ function CollaborationStageContent({ stageId, task, liveMessage, automation, loc
     </>}
     {liveMessage && <div className="member-live-result"><MarkdownMessage text={liveMessage.text} /><StreamDetails message={liveMessage} locale={locale} /></div>}
   </>;
-}
-
-function LinghuAutomationPanel({ state, locale, onState }: { state: LinghuAutomationState; locale: Locale; onState(state: LinghuAutomationState): void }) {
-  const selUi = useSelUi();
-  const [editingPromptId, setEditingPromptId] = useState<string | "new" | null>(null);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftContent, setDraftContent] = useState("");
-  const [error, setError] = useState("");
-  const busyTask = state.activeTaskId !== null;
-
-  const beginEdit = (prompt?: LinghuStartupPrompt) => {
-    setEditingPromptId(prompt?.promptId || "new");
-    setDraftTitle(prompt?.title || "");
-    setDraftContent(prompt?.content || "");
-    setError("");
-  };
-
-  const savePrompt = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!editingPromptId) return;
-    try {
-      const next = editingPromptId === "new"
-        ? await window.desktop?.createLinghuStartupPrompt({ title: draftTitle, content: draftContent })
-        : await window.desktop?.updateLinghuStartupPrompt(editingPromptId, { title: draftTitle, content: draftContent });
-      if (next) onState(next);
-      setEditingPromptId(null);
-      setError("");
-    } catch (reason) {
-      setError(readableDesktopError(reason, locale === "ja" ? "起動文を保存できません。" : "无法保存启动文案。"));
-    }
-  };
-
-  const apply = async (operation: Promise<LinghuAutomationState> | undefined) => {
-    try {
-      if (!operation) throw new Error(locale === "ja" ? "Webプレビューは読み取り専用です。デスクトップアプリで変更してください。" : "网页预览为只读，请在桌面程序中修改。" );
-      const next = await operation;
-      if (next) onState(next);
-      setError("");
-    } catch (reason) {
-      setError(readableDesktopError(reason, locale === "ja" ? "自動保障設定を更新できません。" : "无法更新自动保障设置。"));
-    }
-  };
-  const deletePrompt = async (prompt: LinghuStartupPrompt) => {
-    const confirmed = await selUi.confirm({ title: locale === "ja" ? "起動文を削除" : "删除启动文案", message: locale === "ja" ? `「${prompt.title}」を削除しますか？` : `确定删除启动文案“${prompt.title}”吗？`, target: prompt.title, tone: "danger" });
-    if (confirmed) await apply(window.desktop?.deleteLinghuStartupPrompt(prompt.promptId));
-  };
-
-  return <section className="linghu-automation" aria-label={locale === "ja" ? "自動運行の最終保障" : "自动运行最后保障"}>
-    <header>
-      <div><ShieldCheckmark24Regular /><div><h2>{locale === "ja" ? "自動運行の最終保障" : "自动运行最后保障"}</h2><p>{locale === "ja" ? "有効中は30秒ごとの検査を停止しません。" : "开启后每30秒持续检测，永远不会自行停止。"}</p></div></div>
-      <button type="button" className="selswitch linghu-automation-toggle" role="switch" aria-checked={state.enabled} onClick={() => void apply(window.desktop?.setLinghuAutomationEnabled(!state.enabled))}><span className="selswitch-track" aria-hidden="true"><i className="selswitch-thumb" /></span>{state.enabled ? (locale === "ja" ? "自動実行中" : "自动执行中") : (locale === "ja" ? "自動実行を開始" : "开启自动执行")}</button>
-    </header>
-    <div className="linghu-automation-facts">
-      <span>{locale === "ja" ? "サイクル" : "循环"}<strong>{state.cycle}</strong></span>
-      <span>{locale === "ja" ? "現在のモジュール" : "当前模块"}<strong>{linghuModuleLabel(state.currentModule, locale)}</strong></span>
-      <span>{locale === "ja" ? "実行状態" : "执行状态"}<strong>{busyTask ? (locale === "ja" ? "処理中" : "执行中") : state.enabled ? (locale === "ja" ? "次回検査待ち" : "等待下一次检测") : (locale === "ja" ? "停止" : "未开启")}</strong></span>
-      <span>{locale === "ja" ? "最終検査" : "最后检测"}<strong>{formatCollaborationTime(state.lastCheckedAt, locale)}</strong></span>
-    </div>
-    {state.blockingReason && <p className="linghu-automation-notice" role="status">{state.blockingReason}</p>}
-    {state.lastFeedback && <details className="linghu-last-feedback"><summary>{locale === "ja" ? "前回のフィードバック" : "上一模块反馈"}</summary><div><strong>{linghuModuleLabel(state.lastFeedback.module, locale)}</strong><p>{state.lastFeedback.summary}</p></div></details>}
-    <div className="linghu-prompt-heading"><div><h3>{locale === "ja" ? "起動文一覧" : "启动文案列表"}</h3><p>{locale === "ja" ? "追加・編集・削除・有効化ができます。" : "可新增、修改、删除、启停并选择当前文案。"}</p></div><button type="button" onClick={() => beginEdit()}><Add24Regular />{locale === "ja" ? "追加" : "新增启动文案"}</button></div>
-    {editingPromptId && <form className="linghu-prompt-form" onSubmit={(event) => void savePrompt(event)}>
-      <label>{locale === "ja" ? "名称" : "文案名称"}<input value={draftTitle} maxLength={80} onChange={(event) => setDraftTitle(event.target.value)} autoFocus /></label>
-      <label>{locale === "ja" ? "内容" : "启动内容"}<textarea value={draftContent} maxLength={20_000} rows={12} onChange={(event) => setDraftContent(event.target.value)} /></label>
-      <div><button type="button" onClick={() => setEditingPromptId(null)}>{locale === "ja" ? "キャンセル" : "取消"}</button><button type="submit" className="primary">{locale === "ja" ? "保存" : "保存文案"}</button></div>
-    </form>}
-    <div className="linghu-prompt-list">{state.prompts.length === 0 ? <p className="linghu-prompt-empty">{locale === "ja" ? "起動文がありません。検査は継続し、追加を待ちます。" : "暂无启动文案；检测仍保持运行，等待新增。"}</p> : state.prompts.map((prompt) => <article key={prompt.promptId} className={`${state.activePromptId === prompt.promptId ? "active" : ""} ${prompt.enabled ? "" : "disabled"}`}>
-      <div className="linghu-prompt-summary"><div><strong>{prompt.title}</strong><span>{state.activePromptId === prompt.promptId ? (locale === "ja" ? "現在使用中" : "当前使用") : prompt.enabled ? (locale === "ja" ? "有効" : "已启用") : (locale === "ja" ? "無効" : "已停用")}</span></div><p>{prompt.content}</p></div>
-      <nav>
-        {prompt.enabled && state.activePromptId !== prompt.promptId && <button type="button" onClick={() => void apply(window.desktop?.selectLinghuStartupPrompt(prompt.promptId))}>{locale === "ja" ? "使用" : "设为当前"}</button>}
-        <button type="button" onClick={() => void apply(window.desktop?.updateLinghuStartupPrompt(prompt.promptId, { enabled: !prompt.enabled }))}>{prompt.enabled ? (locale === "ja" ? "無効化" : "停用") : (locale === "ja" ? "有効化" : "启用")}</button>
-        <button type="button" onClick={() => beginEdit(prompt)}>{locale === "ja" ? "編集" : "修改"}</button>
-        <button type="button" className="danger" onClick={() => void deletePrompt(prompt)}>{locale === "ja" ? "削除" : "删除"}</button>
-      </nav>
-    </article>)}</div>
-    {error && <p className="task-detail-error" role="alert">{error}</p>}
-  </section>;
-}
-
-function linghuModuleLabel(module: LinghuAutomationState["currentModule"], locale: Locale): string {
-  const labels = {
-    "flow-completion": { ja: "自動フロー完遂", "zh-CN": "自动流程完成保障" },
-    "test-coverage": { ja: "テスト漏れと能力改善", "zh-CN": "测试漏点与能力升级" },
-    "audit-completeness": { ja: "監査ログ完全性", "zh-CN": "日志审计完整性" },
-  } as const;
-  return labels[module][locale];
 }
 
 function ChangedFileList({ files, locale }: { files: string[]; locale: Locale }) {

@@ -7,7 +7,7 @@
  * 本文件只描述事件，不决定重试、忽略或恢复策略。
  */
 import type { CollaborationState } from "../collaboration/collaboration.js";
-import type { LinghuAutomationState } from "../collaboration/linghu-automation.js";
+import type { LinghuAutomationStateOutDto } from "../collaboration/linghu/index.js";
 import type { NangongEvolutionState } from "../collaboration/nangong-evolution.js";
 
 export type WorkflowEventCategory = "state-change" | "approval" | "execution" | "technical-error" | "business-exception" | "stalled" | "audit";
@@ -83,5 +83,5 @@ export interface StalledTaskDetection {
 export interface WorkflowStateReaders {
   collaboration(): CollaborationState;
   evolution(): NangongEvolutionState;
-  linghu(): LinghuAutomationState;
+  linghu(): LinghuAutomationStateOutDto;
 }

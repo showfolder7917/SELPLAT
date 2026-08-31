@@ -2,7 +2,7 @@
  * 旧人物页四阶段进度模型，仅供人物页和会话回退视图继续读取。
  * @deprecated 新任务协作群统一消费主进程 CollaborationTimelineSnapshot；稳定后单独删除本实现。
  */
-import type { CollaborationMember, CollaborationTask, LinghuAutomationState, Locale } from "../../../../contracts/desktop/desktop";
+import type { CollaborationMember, CollaborationTask, LinghuAutomationStateOutDto, Locale } from "../../../../contracts/desktop/desktop";
 
 export type CollaborationProgressStageId = "intent" | "execution" | "repair" | "unified-test";
 export type CollaborationProgressStageStatus = "completed" | "current" | "waiting" | "not-started" | "failed";
@@ -34,7 +34,7 @@ const STAGE_IDS: CollaborationProgressStageId[] = ["intent", "execution", "repai
 /** 流式内容到达时先冻结所属环节，后续状态推进不能把旧报告迁移到新的当前卡点。 */
 export function deriveCollaborationTaskCurrentStage(
   task: CollaborationTask,
-  automation: LinghuAutomationState | null,
+  automation: LinghuAutomationStateOutDto | null,
 ): CollaborationProgressStageId {
   const automationOwnsTask = automation?.activeTaskId === task.taskId;
   const unifiedTestActive = ["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart", "test-failed"].includes(task.state)
@@ -57,7 +57,7 @@ export function deriveCollaborationTaskCurrentStage(
 export function deriveCollaborationTaskProgress(
   task: CollaborationTask,
   member: CollaborationMember,
-  automation: LinghuAutomationState | null,
+  automation: LinghuAutomationStateOutDto | null,
   locale: Locale,
 ): CollaborationTaskProgress {
   const isJapanese = locale === "ja";
@@ -118,7 +118,7 @@ export function deriveCollaborationTaskProgress(
   };
 }
 
-function currentAction(task: CollaborationTask, stage: CollaborationProgressStageId, automation: LinghuAutomationState | null, ja: boolean): string {
+function currentAction(task: CollaborationTask, stage: CollaborationProgressStageId, automation: LinghuAutomationStateOutDto | null, ja: boolean): string {
   if (stage === "unified-test") {
     if (task.state === "integrated") return ja ? "統合テスト完了" : "统一测试已通过";
     if (task.state === "test-failed") return ja ? "統合テスト失敗を修正中" : "正在修复统一测试失败";

@@ -14,8 +14,8 @@ import type { CodexStreamEvent } from "../codex/codex-stream.js";
 import type { CollaborationState, CollaborationStateEvent, CollaborationStreamEnvelope, CollaborationTimelineChangedEvent, CollaborationTimelineSnapshot, CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../collaboration/collaboration.js";
 import type { CodexSessionInfo, ConversationDispatchState, EnqueueMessageRequest, SendMessageRequest, SendMessageResponse } from "../codex/conversation.js";
 import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "./database.js";
-import type { CreateLinghuStartupPromptRequest, LinghuAutomationState, LinghuAutomationStateEvent, UpdateLinghuStartupPromptRequest } from "../collaboration/linghu-automation.js";
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionMutationRequest, EvolutionTopicDossier, EvolutionWorkbenchChangeEvent, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkspaceLocation, GenerateNangongTopicDraftRequest, HanLiAcceptancePlan, HanLiAcceptanceRun, NangongEvolutionState, NangongEvolutionStateEvent, NangongTopicDraft, QueryEvolutionWorkbenchRequest, ReviseEvolutionProposalRequest, SaveEvolutionWorkbenchPreferenceRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../collaboration/nangong-evolution.js";
+import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto, UpdateLinghuStartupPromptInDto } from "../collaboration/linghu/index.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, DecideEvolutionProposalRequest, DecideEvolutionResultRequest, EvolutionAutomationAction, EvolutionMutationRequest, EvolutionTopicDossier, EvolutionWorkbenchChangeEvent, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkspaceLocation, GenerateNangongTopicDraftRequest, HanLiAcceptancePlan, HanLiAcceptanceRun, NangongEvolutionState, NangongEvolutionStateEvent, NangongTopicDraft, QueryEvolutionWorkbenchRequest, ReviseEvolutionProposalRequest, SaveEvolutionWorkbenchPreferenceRequest, SendNangongConversationMessageRequest, UpdateEvolutionTopicRequest } from "../collaboration/nangong-evolution.js";
 import type { DesktopSettings } from "./settings.js";
 import type { ScreenCapture, ScreenCaptureFrameRequest, ScreenCaptureFrameResult, ScreenCapturePreparationResult, ScreenCaptureRequest, ScreenshotAnnotationWindowRequest, ScreenshotAttachment, ScreenshotCompletedEvent, ScreenshotSaveRequest, TempDirectoryInfo } from "./screenshot.js";
 import type { WorkspaceEntry, WorkspaceState } from "./workspace.js";
@@ -151,19 +151,19 @@ export interface DesktopApi {
   /** 订阅协同成员的筛选后 Codex 流事件。 */
   onCollaborationStream(listener: (event: CollaborationStreamEnvelope) => void): () => void;
   /** 读取令狐自动化的健康检查和恢复状态。 */
-  getLinghuAutomationState(): Promise<LinghuAutomationState>;
+  getLinghuAutomationState(): Promise<LinghuAutomationStateOutDto>;
   /** 启用或暂停令狐自动化轮询。 */
-  setLinghuAutomationEnabled(enabled: boolean): Promise<LinghuAutomationState>;
+  setLinghuAutomationEnabled(enabled: boolean): Promise<LinghuAutomationStateOutDto>;
   /** 新增令狐启动提示配置。 */
-  createLinghuStartupPrompt(request: CreateLinghuStartupPromptRequest): Promise<LinghuAutomationState>;
+  createLinghuStartupPrompt(request: CreateLinghuStartupPromptInDto): Promise<LinghuAutomationStateOutDto>;
   /** 修改指定令狐启动提示。 */
-  updateLinghuStartupPrompt(promptId: string, request: UpdateLinghuStartupPromptRequest): Promise<LinghuAutomationState>;
+  updateLinghuStartupPrompt(promptId: string, request: UpdateLinghuStartupPromptInDto): Promise<LinghuAutomationStateOutDto>;
   /** 删除非系统锁定的令狐启动提示。 */
-  deleteLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationState>;
+  deleteLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationStateOutDto>;
   /** 选择令狐后续自动检查使用的启动提示。 */
-  selectLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationState>;
+  selectLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationStateOutDto>;
   /** 订阅令狐自动化状态事件。 */
-  onLinghuAutomationState(listener: (event: LinghuAutomationStateEvent) => void): () => void;
+  onLinghuAutomationState(listener: (event: LinghuAutomationStateEventOutDto) => void): () => void;
   /** 读取专题、提案、审批和自动化运行状态。 */
   getNangongEvolutionState(): Promise<NangongEvolutionState>;
   /** 按人物、树节点、查询页和选中记录打开或重新定位唯一独立演化工作台。 */
@@ -203,7 +203,7 @@ export interface DesktopApi {
   /** 更新专题允许修改的元数据。 */
   updateEvolutionTopic(topicId: string, request: UpdateEvolutionTopicRequest): Promise<NangongEvolutionState>;
   /** 由令狐异常证据创建修复提案。 */
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): Promise<NangongEvolutionState>;
+  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): Promise<NangongEvolutionState>;
   /** 审批或退回提案方向。 */
   decideEvolutionProposal(proposalId: string, request: DecideEvolutionProposalRequest): Promise<NangongEvolutionState>;
   /** 验收或退回提案执行结果。 */

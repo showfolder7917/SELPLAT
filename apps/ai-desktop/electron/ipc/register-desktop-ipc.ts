@@ -34,7 +34,7 @@ import { CodexService } from "../services/codex-service.js";
 import { ConversationDispatchStore } from "../services/conversation-dispatch-store.js";
 import { CollaborationCodexRegistry } from "../services/collaboration/collaboration-codex-sessions.js";
 import { CollaborationCoordinator } from "../services/collaboration/collaboration-coordinator.js";
-import { LinghuAutomationFacade } from "../services/collaboration/linghu-automation-facade.js";
+import { LinghuAutomationFacade } from "../services/collaboration/linghu/index.js";
 import { HanLiRealAppAcceptanceExecutor } from "../services/collaboration/hanli-real-app-acceptance-executor.js";
 import { NangongEvolutionFacade } from "../services/collaboration/nangong-evolution-facade.js";
 import { ManagedTaskExecutor } from "../services/managed-task-executor.js";

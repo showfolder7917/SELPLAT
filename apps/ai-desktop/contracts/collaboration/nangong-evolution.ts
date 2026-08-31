@@ -533,18 +533,6 @@ export interface UpdateEvolutionTopicRequest {
   acceptanceCriteria: string[];
 }
 
-export interface CreateLinghuRepairProposalRequest {
-  title: string;
-  content: string;
-  evidence: string[];
-  impactScope: string[];
-  risks: string[];
-  rollbackPlan: string;
-  acceptanceCriteria: string[];
-  workspaceState: WorkspaceState;
-  locale: Locale;
-}
-
 export interface CreateEvolutionProposalRequest {
   type: EvolutionProposalType;
   content: string;

@@ -1,11 +1,10 @@
 import type { CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../../../contracts/collaboration/collaboration.js";
-import type { CreateLinghuStartupPromptRequest, UpdateLinghuStartupPromptRequest } from "../../../contracts/collaboration/linghu-automation.js";
+import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, UpdateLinghuStartupPromptInDto } from "../../../contracts/collaboration/linghu/index.js";
 import type {
   ConfigureEvolutionAutomationRequest,
   ConvertNangongConversationToTopicRequest,
   CreateEvolutionProposalRequest,
   CreateEvolutionTopicRequest,
-  CreateLinghuRepairProposalRequest,
   DecideEvolutionProposalRequest,
   DecideEvolutionResultRequest,
   EvolutionAutomationAction,
@@ -18,7 +17,7 @@ import type {
   UpdateEvolutionTopicRequest,
 } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { CollaborationCoordinator } from "../../services/collaboration/collaboration-coordinator.js";
-import type { LinghuAutomationFacade } from "../../services/collaboration/linghu-automation-facade.js";
+import type { LinghuAutomationFacade } from "../../services/collaboration/linghu/index.js";
 import type { NangongEvolutionFacade } from "../../services/collaboration/nangong-evolution-facade.js";
 import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
 import type { CollaborationTimelineFacade } from "../../services/event-center/collaboration-timeline-facade.js";
@@ -49,8 +48,8 @@ export function registerCollaborationIpc(
   handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
   handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
   handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
-  handle("desktop:create-linghu-startup-prompt", (_event, request: CreateLinghuStartupPromptRequest) => linghuAutomation.createPrompt(request));
-  handle("desktop:update-linghu-startup-prompt", (_event, promptId: string, request: UpdateLinghuStartupPromptRequest) => linghuAutomation.updatePrompt(promptId, request));
+  handle("desktop:create-linghu-startup-prompt", (_event, request: CreateLinghuStartupPromptInDto) => linghuAutomation.createPrompt(request));
+  handle("desktop:update-linghu-startup-prompt", (_event, promptId: string, request: UpdateLinghuStartupPromptInDto) => linghuAutomation.updatePrompt(promptId, request));
   handle("desktop:delete-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.deletePrompt(promptId));
   handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
   handle("desktop:get-nangong-evolution-state", () => nangongEvolution.state());
@@ -70,7 +69,7 @@ export function registerCollaborationIpc(
   handle("desktop:control-evolution-automation", (_event, action: EvolutionAutomationAction) => nangongEvolution.controlAutomation(action));
   handle("desktop:resume-nangong-one-shot-evolution", () => nangongEvolution.resumeOneShotRun());
   handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateEvolutionProposalRequest) => nangongEvolution.createProposal(topicId, request));
-  handle("desktop:create-linghu-repair-proposal", (_event, request: CreateLinghuRepairProposalRequest) => nangongEvolution.createLinghuRepairProposal(request));
+  handle("desktop:create-linghu-repair-proposal", (_event, request: CreateLinghuRepairProposalOutDto) => nangongEvolution.createLinghuRepairProposal(request));
   handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideEvolutionProposalRequest) => nangongEvolution.decideProposal(proposalId, request));
   handle("desktop:decide-evolution-result", (_event, proposalId: string, request: DecideEvolutionResultRequest) => nangongEvolution.decideResult(proposalId, request));
   handle("desktop:generate-han-li-acceptance-plan", (_event, proposalId: string) => nangongEvolution.generateAcceptancePlan(proposalId));

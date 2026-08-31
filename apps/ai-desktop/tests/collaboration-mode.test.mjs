@@ -13,8 +13,8 @@ import { createCollaborationResultSummary } from "../../../build/ai-desktop/elec
 import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/collaboration/verified-package-release.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
-import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-facade.js";
-import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu-automation-store.js";
+import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu/index.js";
+import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu/internal/linghu-automation.store.js";
 import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js";
 import { ReleaseBatchStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/release-batch-store.js";
@@ -29,7 +29,8 @@ const coordinatorSource = readFileSync(new URL("../electron/services/collaborati
 const integrationPipelineSource = readFileSync(new URL("../electron/services/collaboration/version-integration-pipeline.ts", import.meta.url), "utf8");
 const releaseBatchStoreSource = readFileSync(new URL("../electron/services/collaboration/release-batch-store.ts", import.meta.url), "utf8");
 const collaborationContractSource = readFileSync(new URL("../contracts/collaboration/collaboration.ts", import.meta.url), "utf8");
-const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/collaboration/linghu-unified-test-runner.ts", import.meta.url), "utf8");
+const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/collaboration/linghu/internal/linghu-unified-test.runner.ts", import.meta.url), "utf8");
+const linghuRuntimeSource = readFileSync(new URL("../electron/services/collaboration/linghu/internal/create-linghu-runtime.ts", import.meta.url), "utf8");
 const integrationVerifierSource = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
 
@@ -766,16 +767,17 @@ test("令狐将依赖自动流程的修正任务纳入同一停点检测闭环",
 });
 
 test("令狐测试漏点模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
-  const runner = readFileSync(new URL("../electron/services/collaboration/linghu-unified-test-runner.ts", import.meta.url), "utf8");
-  const facade = readFileSync(new URL("../electron/services/collaboration/linghu-automation-facade.ts", import.meta.url), "utf8");
+  const runner = readFileSync(new URL("../electron/services/collaboration/linghu/internal/linghu-unified-test.runner.ts", import.meta.url), "utf8");
+  const facade = readFileSync(new URL("../electron/services/collaboration/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
   assert.match(runner, /\["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:mac:developer"\]/);
   assert.doesNotMatch(runner, /confirmedIntent|prompt\.content/);
   assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\(\) =>/);
   assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
-  assert.match(main, /await linghuUnifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*resolveVerifiedDeveloperExecutable[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
+  assert.match(linghuRuntimeSource, /new LinghuUnifiedTestRunner[\s\S]*await unifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*options\.unifiedTest\.onVerified\(executable\)/);
+  assert.match(main, /unifiedTest:[\s\S]*onVerified: \(executable\)[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
   assert.match(main, /IntegrationReleaseCoordinatorFacade[\s\S]*ReleaseBatchStore[\s\S]*new VersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
-  assert.match(main, /linghuUnifiedTests\.run\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId\)/);
+  assert.match(main, /linghuRuntime!\.runUnifiedTests\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId\)/);
   assert.match(coordinatorSource, /integrationPipeline\.schedule\(\)/);
   assert.doesNotMatch(coordinatorSource, /createReleaseCandidate|promoteIntegrationCandidate|mergeIntoLocalBranch|releaseDocument\.state/);
   assert.match(integrationPipelineSource, /createReleaseCandidate[\s\S]*releaseDocument\.state = "testing"[\s\S]*promoteIntegrationCandidate[\s\S]*mergeIntoLocalBranch[\s\S]*releaseDocument\.state = "published"/);
@@ -783,7 +785,7 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
   assert.match(releaseBatchStoreSource, /initiatorMemberId[\s\S]*state: "frozen", initiatorMemberId/);
   assert.doesNotMatch(releaseBatchStoreSource, /linghu-ancestor/);
   assert.match(facade, /automaticFlowSnapshots[\s\S]*faultFingerprint[\s\S]*moduleCompletionReport/);
-  assert.match(main, /const testResources = new TestResourceCoordinatorFacade[\s\S]*new LinghuUnifiedTestRunner\([\s\S]*new TaskWorktreeTestRunner\([\s\S]*verifyCandidate:[\s\S]*testResources\.run[\s\S]*linghuUnifiedTests\.run\(rootPath\)/);
+  assert.match(main, /const testResources = new TestResourceCoordinatorFacade[\s\S]*new TaskWorktreeTestRunner\([\s\S]*verifyCandidate:[\s\S]*testResources\.run[\s\S]*linghuRuntime!\.runUnifiedTests\(rootPath\)/);
   assert.doesNotMatch(main, /TestExecutionGate|test-execution-gate/);
 });
 
@@ -974,7 +976,7 @@ test("一键清空把候选回收与数据库清理解耦并核对全部持久�
   assert.match(main, /clearFailedTestReleaseCandidates[\s\S]*\.catch\(/);
   assert.match(main, /collaborationStore\.assertTestDataCleared\(\)/);
   assert.match(main, /nangongStore\.assertTestDataCleared\(\)/);
-  assert.match(main, /linghuStore\.assertTestDataCleared\(\)/);
+  assert.match(main, /linghuRuntime!\.assertTestDataCleared\(\)/);
   assert.match(main, /candidateCleanupWarnings: candidateCleanup\.failures/);
 });
 
@@ -1288,7 +1290,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
 
 test("自动恢复保留令狐老祖负责人和回流说明", () => {
   const store = readFileSync(new URL("../electron/services/collaboration/collaboration-store.ts", import.meta.url), "utf8");
-  const facade = readFileSync(new URL("../electron/services/collaboration/linghu-automation-facade.ts", import.meta.url), "utf8");
+  const facade = readFileSync(new URL("../electron/services/collaboration/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
   assert.match(store, /continueTask\(taskId: string, recoveryActor\?: Pick<CollaborationMember/);
   assert.match(store, /正在处理流程中断，随后将任务退回原负责人重试/);
   assert.match(facade, /continueTask\(task\.taskId, linghu\)/);

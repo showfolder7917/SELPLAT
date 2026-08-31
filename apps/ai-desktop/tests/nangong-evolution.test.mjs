@@ -1062,7 +1062,7 @@ test("自动演化开启后原人物依据退回意见只重新提交一个自�
       async investigateRevision() {
         return JSON.stringify({
           content: "只读检查确认令狐提案生成器缺少文件位置、修正动作和预期结果字段，修订自身生成规则并补齐三项结构。",
-          evidence: ["apps/ai-desktop/electron/services/collaboration/linghu-automation-facade.ts 的提案生成路径未形成文件位置、修正动作和预期结果三项结构"],
+          evidence: ["apps/ai-desktop/electron/services/collaboration/linghu/linghu-automation.facade.ts 的提案生成路径未形成文件位置、修正动作和预期结果三项结构"],
           impactScope: ["令狐提案生成规则"], exclusions: ["不修改演化方向审批线路"], risks: ["字段过严可能阻断旧输入，使用明确缺项提示缓解"],
           rollbackPlan: "仅回退令狐提案结构校验和提示改动，保留审批及任务状态。", acceptanceCriteria: ["新提案明确包含问题文件、修正动作和可观察预期结果"],
         });

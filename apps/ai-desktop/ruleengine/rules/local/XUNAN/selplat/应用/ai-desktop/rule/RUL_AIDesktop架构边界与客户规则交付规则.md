@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 1.1.0 在保持领域源码分层的同时固定沙箱 preload 单文件交付，防止整个桌面按钮桥接静默失效。 -->
-rule_version = 1.1.0
+<!-- 1.6.0 收紧令狐公开 API：index 只公开 Facade、Runtime 工厂与类型，Runtime 内部组装 Store 和 Runner，Facade 依赖最小协作端口。 -->
+rule_version = 1.6.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -38,6 +38,10 @@ sandboxed_preload_delivery_contract = domain_source_modules + build_single_CJS_b
 composition_root_contract = composition_only + domain_modules_own_implementation + no_god_registration_or_application_component
 <!-- 大文件必须按业务能力和状态所有权拆分，禁止只按行数机械切割。 -->
 module_split_contract = split_by_business_capability_and_state_ownership + independently_testable_boundary + no_arbitrary_line_partition
+<!-- 令狐在 contracts、Electron 主进程和 Renderer 三个既有编译边界下分别使用同名 linghu 目录；主进程令狐根层只保留 index 和 Facade，其他实现进入 internal 并按真实职责命名。 -->
+linghu_vertical_module_contract = contracts/collaboration/linghu + electron/services/collaboration/linghu + src/features/linghu + public_index_only + public_index_exports_only_facade_runtime_factory_and_runtime_types + prohibit_public_store_runner_internal_error_and_internal_constant_exports + runtime_internally_constructs_store_and_runner_and_returns_controlled_capabilities_not_objects + facade_depends_on_minimal_collaboration_port_not_concrete_coordinator + electron_linghu_root_contains_index_and_linghu_automation_facade_only + internal_contains_runtime_store_analyzer_and_runner + facade_store_analyzer_runner_and_runtime_role_names_not_generic_service_names + prohibit_external_direct_internal_or_facade_file_import + preserve_main_preload_renderer_contract_boundaries + main_and_developer_shell_composition_only + flow_analysis_store_test_and_UI_owned_by_linghu_module
+<!-- 令狐 DTO 固定站在令狐模块边界判断方向：进入令狐为 InDto，离开令狐为 OutDto，主动事件为 EventOutDto；每个文件必须写明生产方、接收方、流向和禁止职责。 -->
+linghu_contract_dto_layout_contract = contracts/collaboration/linghu/dto + one_direction_per_kebab_case_dot_in_or_out_dot_dto_dot_ts_file_with_same_direction_supporting_types + linghu_boundary_is_direction_reference + inbound_names_end_with_InDto + outbound_names_end_with_OutDto + outbound_event_names_end_with_EventOutDto + file_comment_declares_producer_consumer_data_flow_and_forbidden_responsibility + linghu_index_is_only_public_facade + prohibit_external_direct_dto_import + repair_proposal_out_owned_by_linghu_not_nangong
 
 <!-- 客户安装包必须携带由显式白名单构建的生产规则 bundle，禁止依赖 SELPLAT 源码仓库。 -->
 production_rule_bundle_contract = explicit_allowlist_build + manifest_and_rules_JSON + packaged_extraResources + no_source_repository_dependency

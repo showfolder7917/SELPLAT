@@ -17,9 +17,7 @@ import { CodexCollaborationSessionFactory, CollaborationCodexRegistry } from "./
 import { CollaborationCoordinator } from "./services/collaboration/collaboration-coordinator.js";
 import { CollaborationDurationLog } from "./services/collaboration/collaboration-duration-log.js";
 import { CollaborationStore } from "./services/collaboration/collaboration-store.js";
-import { LinghuAutomationFacade } from "./services/collaboration/linghu-automation-facade.js";
-import { LinghuAutomationStore } from "./services/collaboration/linghu-automation-store.js";
-import { LinghuUnifiedTestRunner } from "./services/collaboration/linghu-unified-test-runner.js";
+import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "./services/collaboration/linghu/index.js";
 import { NANGONG_ONE_SHOT_INVITATION, NangongEvolutionFacade } from "./services/collaboration/nangong-evolution-facade.js";
 import { NangongEvolutionStore } from "./services/collaboration/nangong-evolution-store.js";
 import { buildEvolutionWorkbenchChange } from "./services/collaboration/evolution-workbench-change-assembler.js";
@@ -30,7 +28,7 @@ import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-t
 import { TestResourceCoordinatorFacade } from "./services/collaboration/test-resource-coordinator-facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "./services/collaboration/integration-release-coordinator-facade.js";
 import { ReleaseBatchStore } from "./services/collaboration/release-batch-store.js";
-import { resolveVerifiedDeveloperExecutable, stageVerifiedDeveloperExecutable } from "./services/collaboration/verified-package-release.js";
+import { stageVerifiedDeveloperExecutable } from "./services/collaboration/verified-package-release.js";
 import { ScreenshotStore } from "./services/screenshot-store.js";
 import { SettingsStore } from "./services/settings-store.js";
 import { WorkspaceStore } from "./services/workspace-store.js";
@@ -383,7 +381,8 @@ app.whenReady().then(async () => {
     recordEvent: (type, details) => eventCenter.recordEvent(type, details),
   });
   const releaseBatches = new ReleaseBatchStore(projectPaths.runningExecutionRoot, projectPaths.archiveLogRoot);
-  const linghuUnifiedTests = new LinghuUnifiedTestRunner(projectRoot, applicationName, projectPaths.buildRoot, (type, details) => eventCenter.recordEvent(type, details), testResources);
+  // 版本集成闭包稍后通过令狐 Runtime 的受控能力执行统一测试，不直接持有内部 Runner。
+  let linghuRuntime: LinghuRuntime | undefined;
   const taskTests = new TaskWorktreeTestRunner(
     projectRoot,
     applicationName,
@@ -424,7 +423,7 @@ app.whenReady().then(async () => {
         port: 4197,
         buildRoot: projectPaths.buildRoot,
       }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName, candidate));
-      const candidateExecutable = await linghuUnifiedTests.run(rootPath);
+      const candidateExecutable = await linghuRuntime!.runUnifiedTests(rootPath);
       return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId);
     },
     acquireRelease: (request) => integrationReleases.acquire(request),
@@ -539,32 +538,37 @@ app.whenReady().then(async () => {
     }
   });
   collaborationMemory?.syncEvolutionState(nangongEvolution.state());
-  const linghuStore = new LinghuAutomationStore(path.join(collaborationRoot, "linghu-automation.json"));
-  linghuAutomation = new LinghuAutomationFacade({
-    store: linghuStore,
+  // 令狐内部的 Store、Facade 和状态订阅由功能模块一次性装配，main 只提供跨领域端口。
+  linghuRuntime = createLinghuRuntime({
+    stateFilePath: path.join(collaborationRoot, "linghu-automation.json"),
     collaboration,
     readWorkspaceState: () => workspaces.read(),
     locale: () => settings.read().locale,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     readTestResourceState: () => testResources.state(),
-    runUnifiedTestAndRestart: async (onVerified) => {
-      await linghuUnifiedTests.run();
-      onVerified();
-      const executable = resolveVerifiedDeveloperExecutable(projectPaths.buildRoot);
-      eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed", executable });
-      app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
-      prepareAiMemoryShutdown();
-      app.exit(0);
+    unifiedTest: {
+      sourceProjectRoot: projectRoot,
+      applicationName,
+      buildRoot: projectPaths.buildRoot,
+      testResources,
+      onVerified: (executable) => {
+        eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed", executable });
+        app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
+        prepareAiMemoryShutdown();
+        app.exit(0);
+      },
     },
     submitRepairProposal: (request) => nangongEvolution!.createLinghuRepairProposal(request),
     readEvolutionState: () => nangongEvolution!.state(),
     reviseReturnedProposal: (proposalId) => nangongEvolution!.investigateAndReviseReturnedProposal(proposalId),
+    onStateChanged: (event) => {
+      workflowRepository?.syncLinghuState(event.state);
+      eventCenter.recordEvent("linghu.automation.state_changed", { reason: event.reason, enabled: event.state.enabled, cycle: event.state.cycle, module: event.state.currentModule }, event.state.activeTaskId || undefined);
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:linghu-automation-state", event);
+    },
   });
-  linghuAutomation.subscribe((event) => {
-    workflowRepository?.syncLinghuState(event.state);
-    eventCenter.recordEvent("linghu.automation.state_changed", { reason: event.reason, enabled: event.state.enabled, cycle: event.state.cycle, module: event.state.currentModule }, event.state.activeTaskId || undefined);
-    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:linghu-automation-state", event);
-  });
+  // 业务调用方只持有 Facade；测试清理通过 Runtime 受控能力完成，Store 不离开令狐边界。
+  linghuAutomation = linghuRuntime.facade;
 
   if (workflowRepository) {
     workflowSupervisor = new WorkflowSupervisor({
@@ -608,11 +612,11 @@ app.whenReady().then(async () => {
       dispatch.clear();
       clearedRecordCount += collaborationStore.clearTestData();
       clearedRecordCount += nangongStore.clearTestData();
-      clearedRecordCount += linghuStore.clearTestData();
+      clearedRecordCount += linghuRuntime!.clearTestData();
       clearedRecordCount += repositoryToClear?.clearTestData() || 0;
       collaborationStore.assertTestDataCleared();
       nangongStore.assertTestDataCleared();
-      linghuStore.assertTestDataCleared();
+      linghuRuntime!.assertTestDataCleared();
       eventCenter.attachRepository(null);
       workflowRepository = null;
       closeAiMemoryDatabase();

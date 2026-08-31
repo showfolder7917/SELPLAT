@@ -5,7 +5,7 @@ import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../c
 import { CollaborationDurationLog, type CollaborationDurationSegment, type CollaborationWaitType } from "./collaboration-duration-log.js";
 import { CollaborationStore } from "./collaboration-store.js";
 import { ReleaseBatchStore } from "./release-batch-store.js";
-import { UnifiedTestInfrastructureError } from "./linghu-unified-test-runner.js";
+import { LinghuAutomationFacade } from "./linghu/index.js";
 import { createCollaborationResultSummary } from "./result/result-summary.js";
 import {
   CandidateBranchConflictError,
@@ -266,7 +266,7 @@ export class VersionIntegrationPipeline {
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;
       const mergeConflict = error instanceof MergeConflictError;
       const candidateBranchConflict = error instanceof CandidateBranchConflictError;
-      const infrastructureFailure = error instanceof UnifiedTestInfrastructureError;
+      const infrastructureFailure = LinghuAutomationFacade.isUnifiedTestInfrastructureError(error);
       const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
       const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
       const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error));

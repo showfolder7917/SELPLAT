@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.144.0
+rule_version = 5.145.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -9,8 +9,8 @@ rule_status = active
 
 <!-- 本职责没有独立 Java 能力入口。 -->
 java_ability_refs = none
-<!-- 本职责没有独立 Python 能力入口。 -->
-python_ability_refs = none
+<!-- 外部 Codex 只有收到用户明确命令后，才可调用当前用户能力保存指定 threadId 的可见会话。 -->
+python_ability_refs = apps/ai-desktop/ruleengine/python/local/<active-stable-user-id>/abilities/external_codex_conversation_archiver.py
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
 
@@ -80,6 +80,8 @@ nangong_conversation_personality_contract = respectful_listening_and_correction_
 codex_conversation_backfill_contract = one_training_corpus_table_with_codex_nangong_hanli_source + exact_real_user_messages + AI_generated_final_summary_max_300_unicode + per_turn_topic_id + AI_confirmed_free_topic_type_intent_and_tags + pending_when_metadata_absent + no_keyword_classification + exclude_system_developer_environment_tool_hidden_reasoning_and_commentary + stable_source_message_idempotency
 <!-- 主人物 Codex rollout 是持久入库源；回合完成和应用启动都按内容哈希水位补录，失败不得推进检查点。 -->
 character_training_corpus_ingestion_contract = main_character_visible_conversation_only + unified_topic_and_message_tables_with_source_turn_and_evidence_tier + nangong_state_change_sync_plus_startup_resync + ai_desktop_codex_rollout_turn_complete_streaming_ingest_plus_startup_backfill + opt_in_codex_work_desktop_current_workspace_task_complete_watch_plus_startup_backfill + codex_app_ingestion_default_off_and_user_toggleable + exact_user_text_without_injected_workspace_context + AI_confirmed_topic_tags_intent_and_summary_max_300 + missing_metadata_is_pending_without_AI_message + stable_message_idempotency + source_namespaced_content_hash_checkpoint + malformed_historical_internal_line_skipped_without_whole_file_memory_load + database_failure_keeps_source_and_old_checkpoint_for_retry + system_developer_tool_and_internal_automation_prompts_excluded + recent_codex_and_nangong_primary_hanli_low + topic_and_tag_search + hanli_reads_unified_database_corpus_only
+<!-- 外部 Codex 会话存档和未来数据库导入都只能由用户明确命令触发，AI Desktop 与后台任务不得自动执行。 -->
+conversation_training_file_staging_contract = external_Codex_manual_command_only + explicit_thread_id_required_and_no_latest_session_guess + current_project_root_docs_会话存档 + one_UTF8_JSON_per_conversation + schema_versioned_import_ready_snapshot + exact_visible_user_and_final_assistant_messages + incomplete_last_turn_explicitly_marked + preserve_SELPLAT_CORPUS_META_separately + exclude_system_developer_tool_hidden_reasoning_commentary_and_internal_automation + stable_conversation_turn_and_message_ids + source_relative_key_and_content_hash + pending_migration_to_unified_conversation_training_library + repeated_manual_save_rewrites_same_conversation_snapshot_idempotently + corrupt_existing_archive_preserved_and_blocks_overwrite + runtime_conversation_files_not_committed_to_Git + no_AI_Desktop_startup_watcher_or_turn_hook + database_presence_never_triggers_import + database_import_requires_separate_explicit_user_command
 <!-- 原始 rollout 与历史摘要向同一会话写入时必须共用数据库尾号分配，消息 ID 只负责幂等，禁止再次按原始位置占用已被摘要使用的序号。 -->
 training_corpus_sequence_allocation_contract = database_transaction_current_conversation_tail_plus_one + semantic_backfill_and_incremental_ingestion_share_allocator + stable_source_message_id_idempotency + no_rollout_position_reuse
 <!-- 历史 Codex 最终回答只能由隔离的 AI 语义整理器补齐；原文不落库，主题标签拒绝机械猜测，成功项逐轮提交并可按原始消息 ID 续跑。 -->

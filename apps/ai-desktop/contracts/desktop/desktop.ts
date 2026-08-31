@@ -14,7 +14,7 @@ export * from "../codex/conversation.js";
 export * from "./database.js";
 export * from "./desktop-api.js";
 export * from "./capability-registry.js";
-export * from "../collaboration/linghu-automation.js";
+export * from "../collaboration/linghu/index.js";
 export * from "../collaboration/nangong-evolution.js";
 export * from "../collaboration/test-resource.js";
 export * from "./screenshot.js";

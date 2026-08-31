@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { ApprovalGovernanceRecord } from "../../../contracts/governance/approval-governance.js";
 import type { CollaborationState, CollaborationTask } from "../../../contracts/collaboration/collaboration.js";
-import type { LinghuAutomationState } from "../../../contracts/collaboration/linghu-automation.js";
+import type { LinghuAutomationStateOutDto } from "../../../contracts/collaboration/linghu/index.js";
 import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkbenchRow, EvolutionWorkbenchView, NangongEvolutionState, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../contracts/governance/workflow.js";
 import type { SqliteDatabase } from "./persistence/sqlite-database.js";
@@ -492,7 +492,7 @@ export class WorkflowRepository {
     return { topic: structuredClone(topic), deliberation: structuredClone(deliberation), proposals: structuredClone(proposals), archiveRecords: structuredClone(archiveRecords), executionRecords };
   }
 
-  syncLinghuState(state: LinghuAutomationState): void {
+  syncLinghuState(state: LinghuAutomationStateOutDto): void {
     const now = state.updatedAt;
     this.#database.withConnection((connection) => connection.prepare(`
       INSERT INTO AiDesktopWorkflowRun (workflowId, topicId, proposalId, origin, title, state, currentStage, currentOwnerId, recoveryPoint, nextLaunchAt, startedAt, completedAt, updatedAt)

@@ -10,6 +10,19 @@ function source(relativePath) {
   return readFileSync(path.join(appRoot, relativePath), "utf8");
 }
 
+function sourceFilesUnder(relativeRoot) {
+  const collected = [];
+  const visit = (relativeDirectory) => {
+    for (const entry of readdirSync(path.join(appRoot, relativeDirectory), { withFileTypes: true })) {
+      const relativePath = path.join(relativeDirectory, entry.name);
+      if (entry.isDirectory()) visit(relativePath);
+      else if (/\.(?:ts|tsx)$/u.test(entry.name)) collected.push(relativePath);
+    }
+  };
+  visit(relativeRoot);
+  return collected;
+}
+
 test("application-private contracts are domain modules outside shared", () => {
   assert.equal(existsSync(path.join(appRoot, "shared")), false);
   for (const contract of [
@@ -198,6 +211,85 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.doesNotMatch(developerApp, /function EvolutionDatabaseGrid/);
   assert.doesNotMatch(developerApp, /function EvolutionProposalDetail|function EvolutionTopicDossierView|function HanLiEvolutionApprovalPanel/);
   assert.doesNotMatch(developerApp, /function MemberSelfUpgradePanel|function LinghuRepairProposalPanel/);
+  assert.doesNotMatch(developerApp, /function LinghuAutomationPanel|function linghuModuleLabel/);
+  assert.match(developerApp, /features\/linghu/);
+  assert.equal(existsSync(path.join(appRoot, "src/features/linghu/index.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu/index.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu/linghu-automation.facade.ts")), true);
+  for (const internalFile of [
+    "create-linghu-runtime.ts",
+    "linghu-automation.store.ts",
+    "linghu-flow.analyzer.ts",
+    "linghu-unified-test.runner.ts",
+  ]) {
+    assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu/internal", internalFile)), true, internalFile);
+  }
+  for (const legacyRootFile of ["automation-facade.ts", "automation-store.ts", "create-runtime.ts", "flow-analysis.ts", "unified-test-runner.ts"]) {
+    assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu", legacyRootFile)), false, legacyRootFile);
+  }
+  for (const sourceRoot of ["electron", "src"]) {
+    for (const sourceFile of sourceFilesUnder(sourceRoot)) {
+      if (sourceFile.startsWith(path.join("electron", "services", "collaboration", "linghu"))) continue;
+      assert.doesNotMatch(source(sourceFile), /services\/collaboration\/linghu\/(?:internal|linghu-automation\.facade)/u, `${sourceFile} must use the Linghu service facade index`);
+    }
+  }
+  const linghuServiceIndex = source("electron/services/collaboration/linghu/index.ts");
+  assert.match(linghuServiceIndex, /LinghuAutomationFacade/);
+  assert.match(linghuServiceIndex, /createLinghuRuntime/);
+  assert.doesNotMatch(linghuServiceIndex, /LinghuAutomationStore|LinghuUnifiedTestRunner|UnifiedTestInfrastructureError|DEFAULT_LINGHU_STARTUP_PROMPT|LINGHU_AUTOMATION_MODULES/);
+  const linghuFacadeSource = source("electron/services/collaboration/linghu/linghu-automation.facade.ts");
+  assert.match(linghuFacadeSource, /interface LinghuCollaborationPort/);
+  assert.doesNotMatch(linghuFacadeSource, /import \{ CollaborationCoordinator \}/);
+  const electronMainSource = source("electron/main.ts");
+  assert.doesNotMatch(electronMainSource, /LinghuAutomationStore|LinghuUnifiedTestRunner|linghuRuntime\.store/);
+  assert.match(electronMainSource, /linghuRuntime!\.runUnifiedTests/);
+  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu/index.ts")), true);
+  const linghuDtoContracts = new Map([
+    ["create-startup-prompt.in.dto.ts", ["CreateLinghuStartupPromptInDto"]],
+    ["update-startup-prompt.in.dto.ts", ["UpdateLinghuStartupPromptInDto"]],
+    ["startup-prompt.out.dto.ts", ["LinghuStartupPromptOutDto"]],
+    ["repair-proposal.out.dto.ts", ["CreateLinghuRepairProposalOutDto"]],
+    ["automation-state-event.out.dto.ts", ["LinghuAutomationStateEventOutDto"]],
+    ["automation-state.out.dto.ts", [
+      "LinghuAutomationModuleOutDto",
+      "LinghuAutomationFeedbackOutDto",
+      "LinghuFlowHealthOutDto",
+      "LinghuBlockingKindOutDto",
+      "LinghuAutomaticFlowSnapshotOutDto",
+      "LinghuModuleCompletionReportOutDto",
+      "LinghuAutomationStateOutDto",
+    ]],
+  ]);
+  for (const [dtoFile, expectedTypeNames] of linghuDtoContracts) {
+    const relativePath = path.join("contracts/collaboration/linghu/dto", dtoFile);
+    assert.equal(existsSync(path.join(appRoot, relativePath)), true, relativePath);
+    const dtoSource = source(relativePath);
+    const exportedTypeNames = [...dtoSource.matchAll(/export (?:interface|type) (\w+)/gu)].map((match) => match[1]);
+    assert.deepEqual(exportedTypeNames, expectedTypeNames, `${dtoFile} must expose its registered directional DTOs`);
+    const expectedSuffix = dtoFile.includes(".in.dto.ts") ? "InDto" : "OutDto";
+    assert.ok(exportedTypeNames.every((name) => name.endsWith(expectedSuffix)), `${dtoFile} exports must use the ${expectedSuffix} suffix`);
+    for (const requiredCommentLabel of ["DTO 方向：", "数据生产方：", "数据接收方：", "数据流向：", "禁止职责："]) {
+      assert.ok(dtoSource.includes(requiredCommentLabel), `${dtoFile} must explain ${requiredCommentLabel}`);
+    }
+  }
+  const linghuContractIndex = source("contracts/collaboration/linghu/index.ts");
+  for (const dtoFile of linghuDtoContracts.keys()) {
+    assert.ok(linghuContractIndex.includes(`./dto/${dtoFile.replace(/\.ts$/u, ".js")}`), `${dtoFile} must be exported by the Linghu facade`);
+  }
+  for (const legacyDtoFile of ["automation-state.dto.ts", "startup-prompt.dto.ts", "repair-proposal.dto.ts", "automation-event.dto.ts"]) {
+    assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu/dto", legacyDtoFile)), false, legacyDtoFile);
+  }
+  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu/automation.ts")), false);
+  for (const sourceRoot of ["contracts", "electron", "src"]) {
+    for (const sourceFile of sourceFilesUnder(sourceRoot)) {
+      if (sourceFile.startsWith(path.join("contracts", "collaboration", "linghu"))) continue;
+      assert.doesNotMatch(source(sourceFile), /collaboration\/linghu\/dto\//u, `${sourceFile} must use the Linghu contract facade`);
+    }
+  }
+  assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu-automation-facade.ts")), false);
+  assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu-automation-store.ts")), false);
+  assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu-unified-test-runner.ts")), false);
+  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu-automation.ts")), false);
   assert.doesNotMatch(developerApp, /function NangongEvolutionRail/);
   assert.doesNotMatch(developerApp, /function EvolutionControlWorkspace|function EvolutionModuleOverview|function EvolutionPeopleSummary/);
   assert.doesNotMatch(developerApp, /const EVOLUTION_STATUS_LABELS/);

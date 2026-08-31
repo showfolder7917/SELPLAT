@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, CreateLinghuRepairProposalRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionOneShotPhase, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
+import type { CreateLinghuRepairProposalOutDto } from "../../../contracts/collaboration/linghu/index.js";
+import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionOneShotPhase, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiTopicCandidate, NangongEvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../contracts/collaboration/nangong-evolution.js";
 import type { EvolutionStatePersistence } from "../event-center/persistence/nangong-evolution-state-repository.js";
 
 type StateListener = (state: NangongEvolutionState, reason: string, topicId: string | null, proposalId: string | null, previousState: NangongEvolutionState) => void;
@@ -494,7 +495,7 @@ export class NangongEvolutionStore {
     return this.createTopic({ ...request, evidence }, sourceMessages.map((item) => item.messageId));
   }
 
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalRequest): NangongEvolutionState {
+  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): NangongEvolutionState {
     const now = new Date().toISOString();
     const topicId = `evolution-topic-${randomUUID()}`;
     const proposalId = `evolution-proposal-${randomUUID()}`;
