@@ -4,7 +4,8 @@
  */
 import type { CollaborationMember, CollaborationTask, LinghuAutomationStateOutDto, Locale } from "../../../../contracts/desktop/desktop";
 
-export type CollaborationProgressStageId = "intent" | "execution" | "repair" | "unified-test";
+// 人物页固定展示五个业务环节；审批在协作任务创建前已完成，因此进入任务页时通常已经是完成态。
+export type CollaborationProgressStageId = "intent" | "approval" | "execution" | "repair" | "unified-test";
 export type CollaborationProgressStageStatus = "completed" | "current" | "waiting" | "not-started" | "failed";
 
 export interface CollaborationProgressStage {
@@ -29,7 +30,8 @@ export interface CollaborationTaskProgress {
   stages: CollaborationProgressStage[];
 }
 
-const STAGE_IDS: CollaborationProgressStageId[] = ["intent", "execution", "repair", "unified-test"];
+// 顺序就是新手在页面上理解任务推进时看到的真实先后顺序。
+const STAGE_IDS: CollaborationProgressStageId[] = ["intent", "approval", "execution", "repair", "unified-test"];
 
 /** 流式内容到达时先冻结所属环节，后续状态推进不能把旧报告迁移到新的当前卡点。 */
 export function deriveCollaborationTaskCurrentStage(
@@ -86,6 +88,8 @@ export function deriveCollaborationTaskProgress(
 
   const stageFacts: Array<Omit<CollaborationProgressStage, "statusLabel"> & { completed: boolean }> = [
     { id: "intent", label: isJapanese ? "意図分析" : "意图分析", owner: currentPlan?.ownerDisplayName || executorName, status: "not-started", waitingFor: null, updatedAt: currentPlan?.createdAt || null, completed: analysisCompleted },
+    // 协作任务由审批通过后的分发动作创建；普通任务没有审批单时按“不需要额外审批”完成该环节。
+    { id: "approval", label: isJapanese ? "方向承認" : "方向审批", owner: task.sourceEvolutionApprovalId ? "韩立" : (isJapanese ? "承認不要" : "无需审批"), status: "not-started", waitingFor: analysisCompleted ? null : (isJapanese ? "意図分析の完了待ち" : "等待意图分析完成"), updatedAt: task.createdAt, completed: analysisCompleted },
     { id: "execution", label: isJapanese ? "実行" : "执行", owner: executorName, status: "not-started", waitingFor: analysisCompleted ? null : isJapanese ? `${executorName}の技術分析完了待ち` : `等待${executorName}完成技术分析`, updatedAt: latestExecution?.completedAt || latestExecution?.executionStartedAt || latestExecution?.assignedAt || null, completed: executionCompleted },
     { id: "repair", label: isJapanese ? "問題修正" : "问题修复", owner: repairEvents.at(-1)?.actor?.displayName || (repairActive ? member.displayName : executorName), status: "not-started", waitingFor: repairEvents.length ? null : isJapanese ? "失敗または中断の検出待ち" : "等待发现失败或流程中断", updatedAt: repairEvents.at(-1)?.occurredAt || null, completed: repairCompleted },
     { id: "unified-test", label: isJapanese ? "統合テスト" : "统一测试", owner: "令狐老祖", status: "not-started", waitingFor: executionCompleted ? null : isJapanese ? `${executorName}の実行完了待ち` : `等待${executorName}完成执行`, updatedAt: unifiedTestActive ? automation?.lastCheckedAt || automation?.updatedAt || task.updatedAt : unifiedTestCompleted ? automation?.lastFeedback?.recordedAt || task.completedAt : null, completed: Boolean(unifiedTestCompleted) },
@@ -129,6 +133,8 @@ function currentAction(task: CollaborationTask, stage: CollaborationProgressStag
     const count = automation?.recoveryAttemptCount || 0;
     return count > 0 ? (ja ? `${count}回目の自動復旧を実行中` : `正在执行第 ${count} 次自动恢复`) : (ja ? "失敗内容を修正中" : "正在修复流程问题");
   }
+  // 审批环节通常已在任务创建前结束，这个分支用于恢复旧快照时给出可理解说明。
+  if (stage === "approval") return ja ? "実行方向を確認中" : "正在确认执行方向";
   if (stage === "execution") {
     if (task.state === "returned-to-nangong") return ja ? "南宮婉がラウンド結果を収集中" : "南宫婉正在收集本轮结果";
     if (task.state === "awaiting-restart") return ja ? "新しいバージョンの再起動確認待ち" : "等待新版本重启健康检查";
@@ -146,7 +152,8 @@ function currentAction(task: CollaborationTask, stage: CollaborationProgressStag
 function nextDestination(task: CollaborationTask, stage: CollaborationProgressStageId, executor: string, member: string, ja: boolean) {
   if (task.state === "integrated") return { owner: ja ? "完了" : "已完成", action: ja ? "次のタスクを待機" : "等待下一项任务" };
   if (task.state === "cancelled") return { owner: ja ? "担当者" : "人工处理", action: ja ? "再開判断待ち" : "等待是否恢复任务" };
-  if (stage === "intent") return { owner: executor, action: ja ? "技術分析に沿って実行" : "按技术分析直接执行" };
+  if (stage === "intent") return { owner: task.sourceEvolutionApprovalId ? "韩立" : executor, action: task.sourceEvolutionApprovalId ? (ja ? "方向を承認" : "审批执行方向") : (ja ? "技術分析に沿って実行" : "按技术分析直接执行") };
+  if (stage === "approval") return { owner: executor, action: ja ? "承認済み方向に沿って実行" : "按已审批方向执行" };
   if (stage === "repair") {
     return { owner: executor, action: ja ? "修正後の実行を再開" : "重新执行修复后的任务" };
   }

@@ -2,9 +2,9 @@
 import { shell } from "electron";
 
 import type { AiMemoryDatabaseStatus, AppVariant, CorpusSemanticBackfillStatus, TestDataResetResult } from "../../../contracts/desktop/desktop.js";
-import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
-import type { WorkflowRepository } from "../../services/event-center/workflow-repository.js";
-import type { ScreenshotStore } from "../../services/screenshot-store.js";
+import type { EventCenterFacade } from "../../services/capabilities/event-center/index.js";
+import type { WorkflowRepositoryPort as WorkflowRepository } from "../../services/workflow/index.js";
+import type { AttachmentFacade as ScreenshotStore } from "../../services/platform/attachments/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 interface SystemIpcDependencies {

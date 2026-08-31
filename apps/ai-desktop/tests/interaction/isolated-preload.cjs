@@ -86,25 +86,25 @@ let linghuAutomationState = {
   prompts: [{ promptId: "linghu-default-flow-guardian", title: linghuDefault.title, content: linghuDefault.content, enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
-let nangongEvolutionState = { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
+let evolutionState = { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
 const publishNangongEvolution = (reason) => {
-  const previousStateVersion = nangongEvolutionState.updatedAt;
-  nangongEvolutionState.updatedAt = new Date().toISOString();
-  const event = { state: structuredClone(nangongEvolutionState), reason, topicId: nangongEvolutionState.activeTopicId, proposalId: null };
-  const workbenchChange = { entityType: reason.startsWith("automation.") ? "automation" : reason.startsWith("conversation.") ? "conversation" : "topic", entityId: nangongEvolutionState.activeTopicId || nangongEvolutionState.conversation.conversationId, topicId: nangongEvolutionState.activeTopicId, proposalId: null, reason, previousState: null, currentState: nangongEvolutionState.topics.find((item) => item.topicId === nangongEvolutionState.activeTopicId)?.status || null, currentStage: null, currentOwner: null, blockingReason: null, nextAction: null, previousStateVersion, stateVersion: nangongEvolutionState.updatedAt, updatedAt: nangongEvolutionState.updatedAt, affectedViews: ["topics", "deliberations", "pending-approvals", "approvals", "proposals", "tasks", "releases", "archives", "automation-runs", "recovery", "exceptions"] };
+  const previousStateVersion = evolutionState.updatedAt;
+  evolutionState.updatedAt = new Date().toISOString();
+  const event = { state: structuredClone(evolutionState), reason, topicId: evolutionState.activeTopicId, proposalId: null };
+  const workbenchChange = { entityType: reason.startsWith("automation.") ? "automation" : reason.startsWith("conversation.") ? "conversation" : "topic", entityId: evolutionState.activeTopicId || evolutionState.conversation.conversationId, topicId: evolutionState.activeTopicId, proposalId: null, reason, previousState: null, currentState: evolutionState.topics.find((item) => item.topicId === evolutionState.activeTopicId)?.status || null, currentStage: null, currentOwner: null, blockingReason: null, nextAction: null, previousStateVersion, stateVersion: evolutionState.updatedAt, updatedAt: evolutionState.updatedAt, affectedViews: ["topics", "deliberations", "pending-approvals", "approvals", "proposals", "tasks", "releases", "archives", "automation-runs", "recovery", "exceptions"] };
   for (const listener of evolutionWorkbenchChangeListeners) listener(structuredClone(workbenchChange));
   for (const listener of nangongEvolutionListeners) listener(event);
   return event.state;
 };
 const assertEvolutionMutation = (request) => {
-  if (!request?.idempotencyKey || request.expectedStateVersion !== nangongEvolutionState.updatedAt) throw new Error("状态已更新，请重新确认后再执行。");
+  if (!request?.idempotencyKey || request.expectedStateVersion !== evolutionState.updatedAt) throw new Error("状态已更新，请重新确认后再执行。");
 };
 const createInteractionTopic = (request, evidence) => {
   const now = new Date().toISOString();
   const topicId = `interaction-topic-${Date.now()}`;
-  nangongEvolutionState.topics.push({ topicId, title: request.title, goal: request.goal, scope: request.scope, exclusions: request.exclusions || [], evidence, acceptanceCriteria: request.acceptanceCriteria, workspaceState: request.workspaceState, locale: request.locale, origin: "nangong", sourceConversationMessageIds: nangongEvolutionState.conversation.messages.map((item) => item.messageId), deliberationId: null, continuationOfTopicId: null, nextTopicId: null, seriesId: topicId, roundNumber: 1, status: "registered", topicRevision: 1, currentProposalVersion: 0, recoveryPoint: "topic-registered", createdAt: now, updatedAt: now });
-  nangongEvolutionState.archiveRecords.push({ recordId: `interaction-topic-created-${Date.now()}`, deliberationId: null, topicId, proposalId: null, taskId: null, sequenceNumber: 1, category: "topic", eventType: "topic.created", actor: "nangong-wan", title: "南宫婉已登记专题", payload: { status: "registered", nextOwner: "nangong-wan" }, occurredAt: now });
-  nangongEvolutionState.activeTopicId = topicId;
+  evolutionState.topics.push({ topicId, title: request.title, goal: request.goal, scope: request.scope, exclusions: request.exclusions || [], evidence, acceptanceCriteria: request.acceptanceCriteria, workspaceState: request.workspaceState, locale: request.locale, origin: "nangong", sourceConversationMessageIds: evolutionState.conversation.messages.map((item) => item.messageId), deliberationId: null, continuationOfTopicId: null, nextTopicId: null, seriesId: topicId, roundNumber: 1, status: "registered", topicRevision: 1, currentProposalVersion: 0, recoveryPoint: "topic-registered", createdAt: now, updatedAt: now });
+  evolutionState.archiveRecords.push({ recordId: `interaction-topic-created-${Date.now()}`, deliberationId: null, topicId, proposalId: null, taskId: null, sequenceNumber: 1, category: "topic", eventType: "topic.created", actor: "nangong-wan", title: "南宫婉已登记专题", payload: { status: "registered", nextOwner: "nangong-wan" }, occurredAt: now });
+  evolutionState.activeTopicId = topicId;
   return publishNangongEvolution("topic.created");
 };
 const createCompletedEvolutionTask = (proposal) => {
@@ -135,9 +135,9 @@ const publishCollaborationTimelineChanged = () => {
   for (const listener of collaborationTimelineListeners) listener(structuredClone(event));
 };
 const interactionTimelineSnapshot = () => {
-  if (!taskTimelineFixtureEnabled) return { version: 1, groups: [], updatedAt: nangongEvolutionState.updatedAt };
-  const proposal = nangongEvolutionState.proposals.find((item) => item.proposalId === "interaction-timeline-proposal");
-  if (!proposal) return { version: 1, groups: [], updatedAt: nangongEvolutionState.updatedAt };
+  if (!taskTimelineFixtureEnabled) return { version: 1, groups: [], updatedAt: evolutionState.updatedAt };
+  const proposal = evolutionState.proposals.find((item) => item.proposalId === "interaction-timeline-proposal");
+  if (!proposal) return { version: 1, groups: [], updatedAt: evolutionState.updatedAt };
   const pending = proposal.status === "pending-approval";
   const startedAt = proposal.createdAt;
   const nodes = [{
@@ -209,9 +209,9 @@ const interactionTimelineSnapshot = () => {
     executingCount: nodes.filter((node) => node.kind === "execution" && node.status === "current").length,
     verifyingCount: nodes.filter((node) => node.kind === "verification" && node.status === "current").length,
     waitingCount: nodes.filter((node) => node.status === "waiting").length, completedCount: nodes.filter((node) => node.status === "completed").length,
-    startedAt, updatedAt: nangongEvolutionState.updatedAt, durationMs: 2_160_000,
+    startedAt, updatedAt: evolutionState.updatedAt, durationMs: 2_160_000,
     nextStep: pending ? "韩立审批 · 等待中" : proposal.status !== "approved" ? "南宫婉 · 正在补充审批材料" : currentCount ? `结果汇总与验收 · 等待 ${currentCount} 个节点完成` : "结果汇总与验收 · 等待中",
-  }], updatedAt: nangongEvolutionState.updatedAt };
+  }], updatedAt: evolutionState.updatedAt };
 };
 const publishDispatchState = () => {
   const copy = structuredClone(dispatchState);
@@ -361,9 +361,9 @@ contextBridge.exposeInMainWorld("desktop", {
   deleteLinghuStartupPrompt: async (promptId) => { linghuAutomationState.prompts = linghuAutomationState.prompts.filter((item) => item.promptId !== promptId); if (linghuAutomationState.activePromptId === promptId) linghuAutomationState.activePromptId = linghuAutomationState.prompts.find((item) => item.enabled)?.promptId || null; return publishLinghuAutomation("prompt.deleted"); },
   selectLinghuStartupPrompt: async (promptId) => { linghuAutomationState.activePromptId = promptId; return publishLinghuAutomation("prompt.selected"); },
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
-  getNangongEvolutionState: async () => structuredClone(nangongEvolutionState),
-  setInteractionOneShotRun: async (run) => { nangongEvolutionState.oneShotRun = run ? structuredClone(run) : null; return publishNangongEvolution("one-shot.activity"); },
-  setInteractionOneShotConfirmation: async (confirmation) => { nangongEvolutionState.oneShotConfirmation = confirmation ? structuredClone(confirmation) : null; return publishNangongEvolution("conversation.one-shot-confirmation-changed"); },
+  getEvolutionState: async () => structuredClone(evolutionState),
+  setInteractionOneShotRun: async (run) => { evolutionState.oneShotRun = run ? structuredClone(run) : null; return publishNangongEvolution("one-shot.activity"); },
+  setInteractionOneShotConfirmation: async (confirmation) => { evolutionState.oneShotConfirmation = confirmation ? structuredClone(confirmation) : null; return publishNangongEvolution("conversation.one-shot-confirmation-changed"); },
   openEvolutionWorkspace: async (location) => ipcRenderer.invoke("desktop:test-open-evolution-workspace", location),
   onEvolutionWorkspaceLocation: (listener) => {
     const handler = (_event, location) => listener(location);
@@ -371,16 +371,16 @@ contextBridge.exposeInMainWorld("desktop", {
     return () => ipcRenderer.removeListener("desktop:evolution-workspace-location", handler);
   },
   getEvolutionTopicDossier: async (topicId) => {
-    const topic = nangongEvolutionState.topics.find((item) => item.topicId === topicId);
-    const deliberation = topic?.deliberationId ? nangongEvolutionState.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
-    return structuredClone({ topic, deliberation, proposals: nangongEvolutionState.proposals.filter((item) => item.topicId === topicId), archiveRecords: nangongEvolutionState.archiveRecords.filter((item) => item.topicId === topicId || item.deliberationId === topic?.deliberationId), executionRecords: [] });
+    const topic = evolutionState.topics.find((item) => item.topicId === topicId);
+    const deliberation = topic?.deliberationId ? evolutionState.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
+    return structuredClone({ topic, deliberation, proposals: evolutionState.proposals.filter((item) => item.topicId === topicId), archiveRecords: evolutionState.archiveRecords.filter((item) => item.topicId === topicId || item.deliberationId === topic?.deliberationId), executionRecords: [] });
   },
   queryEvolutionWorkbench: async (request) => {
-    const topicRows = nangongEvolutionState.topics.map((topic) => ({ id: topic.topicId, topicId: topic.topicId, proposalId: null, taskId: null, title: topic.title, status: topic.status, stage: "专题演化", owner: topic.origin === "linghu" ? "令狐老祖" : "南宫婉", blockedReason: topic.status === "blocked" ? "专题已阻塞" : null, recoveryPoint: topic.recoveryPoint, nextStep: topic.status === "approved" ? "返还南宫婉并分发" : "查看专题", updatedAt: topic.updatedAt }));
-    const proposalRows = nangongEvolutionState.proposals.map((proposal) => ({ id: proposal.proposalId, topicId: proposal.topicId, proposalId: proposal.proposalId, taskId: null, title: proposal.title, status: proposal.status, stage: "提案与任务", owner: proposal.submitterDisplayName, blockedReason: null, recoveryPoint: "proposal", nextStep: proposal.status === "approved" ? "返还南宫婉并分发" : "查看审批意见", updatedAt: proposal.updatedAt }));
-    const deliberationRows = nangongEvolutionState.deliberations.map((item) => ({ id: item.deliberationId, topicId: item.topicId, proposalId: null, taskId: null, title: item.candidate?.title || "待形成专题", status: item.status, stage: "调查与研讨", owner: "韩立", blockedReason: item.status === "blocked" ? "研讨已阻塞" : null, recoveryPoint: item.deliberationId, nextStep: "推进下一轮研讨", updatedAt: item.updatedAt }));
-    const archiveRows = nangongEvolutionState.archiveRecords.map((item) => ({ id: item.recordId, topicId: item.topicId, proposalId: item.proposalId, taskId: item.taskId, title: item.title, status: item.eventType, stage: item.category, owner: item.actor, blockedReason: null, recoveryPoint: null, nextStep: "查看专题完整档案", updatedAt: item.occurredAt }));
-    const approvalRows = proposalRows.filter((row) => nangongEvolutionState.proposals.find((proposal) => proposal.proposalId === row.proposalId)?.approvals.length);
+    const topicRows = evolutionState.topics.map((topic) => ({ id: topic.topicId, topicId: topic.topicId, proposalId: null, taskId: null, title: topic.title, status: topic.status, stage: "专题演化", owner: topic.origin === "linghu" ? "令狐老祖" : "南宫婉", blockedReason: topic.status === "blocked" ? "专题已阻塞" : null, recoveryPoint: topic.recoveryPoint, nextStep: topic.status === "approved" ? "返还南宫婉并分发" : "查看专题", updatedAt: topic.updatedAt }));
+    const proposalRows = evolutionState.proposals.map((proposal) => ({ id: proposal.proposalId, topicId: proposal.topicId, proposalId: proposal.proposalId, taskId: null, title: proposal.title, status: proposal.status, stage: "提案与任务", owner: proposal.submitterDisplayName, blockedReason: null, recoveryPoint: "proposal", nextStep: proposal.status === "approved" ? "返还南宫婉并分发" : "查看审批意见", updatedAt: proposal.updatedAt }));
+    const deliberationRows = evolutionState.deliberations.map((item) => ({ id: item.deliberationId, topicId: item.topicId, proposalId: null, taskId: null, title: item.candidate?.title || "待形成专题", status: item.status, stage: "调查与研讨", owner: "韩立", blockedReason: item.status === "blocked" ? "研讨已阻塞" : null, recoveryPoint: item.deliberationId, nextStep: "推进下一轮研讨", updatedAt: item.updatedAt }));
+    const archiveRows = evolutionState.archiveRecords.map((item) => ({ id: item.recordId, topicId: item.topicId, proposalId: item.proposalId, taskId: item.taskId, title: item.title, status: item.eventType, stage: item.category, owner: item.actor, blockedReason: null, recoveryPoint: null, nextStep: "查看专题完整档案", updatedAt: item.occurredAt }));
+    const approvalRows = proposalRows.filter((row) => evolutionState.proposals.find((proposal) => proposal.proposalId === row.proposalId)?.approvals.length);
     const byView = { topics: topicRows, deliberations: deliberationRows, "pending-approvals": proposalRows.filter((row) => ["pending-approval", "supplement-required", "approved", "pending-acceptance"].includes(row.status)), approvals: approvalRows, proposals: proposalRows, tasks: proposalRows, releases: proposalRows.filter((row) => ["verifying", "pending-acceptance", "completed"].includes(row.status)), archives: archiveRows, "automation-runs": topicRows, recovery: topicRows.filter((row) => row.status === "blocked"), exceptions: topicRows.filter((row) => row.status === "blocked") };
     const keyword = String(request.keyword || "").toLowerCase();
     const rows = (byView[request.view] || []).filter((row) => !keyword || `${row.title} ${row.stage} ${row.owner}`.toLowerCase().includes(keyword));
@@ -389,7 +389,7 @@ contextBridge.exposeInMainWorld("desktop", {
     rows.sort((left, right) => String(left[sortField] || "").localeCompare(String(right[sortField] || ""), "zh-CN") * sortMultiplier || String(left.id).localeCompare(String(right.id)));
     const page = Math.max(1, Number(request.page) || 1);
     const pageSize = Math.max(1, Number(request.pageSize) || 20);
-    return structuredClone({ view: request.view, page, pageSize, total: rows.length, rows: rows.slice((page - 1) * pageSize, page * pageSize), stateVersion: nangongEvolutionState.updatedAt, generatedAt: new Date().toISOString() });
+    return structuredClone({ view: request.view, page, pageSize, total: rows.length, rows: rows.slice((page - 1) * pageSize, page * pageSize), stateVersion: evolutionState.updatedAt, generatedAt: new Date().toISOString() });
   },
   getEvolutionWorkbenchPreference: async (perspective, nodeId) => structuredClone(evolutionWorkbenchPreferences.get(`${perspective}:${nodeId}`) || null),
   saveEvolutionWorkbenchPreference: async (request) => { const value = { ...request, updatedAt: new Date().toISOString() }; evolutionWorkbenchPreferences.set(`${request.perspective}:${request.nodeId}`, value); return structuredClone(value); },
@@ -400,119 +400,119 @@ contextBridge.exposeInMainWorld("desktop", {
     const now = new Date().toISOString();
     const userMessageId = request.clientMessageId || `user-${now}`;
     const nangongMessageId = `nangong-${now}`;
-    if (request.message.trim() === "1" && nangongEvolutionState.oneShotConfirmation) {
-      const sequenceNumber = nangongEvolutionState.conversation.messages.length;
-      nangongEvolutionState.conversation.messages.push({ messageId: userMessageId, sequenceNumber, role: "user", content: "1", replyToMessageId: null, deliveryStatus: "completed", inferredIntent: "确认启动当前一次性完整演化", createdAt: now, completedAt: now });
-      nangongEvolutionState.conversation.messages.push({ messageId: nangongMessageId, sequenceNumber: sequenceNumber + 1, role: "nangong", content: "已确认启动本轮一次性演化。", replyToMessageId: userMessageId, deliveryStatus: "completed", createdAt: now, completedAt: now });
-      nangongEvolutionState.oneShotConfirmation = null;
-      nangongEvolutionState.oneShotRun = { runId: `interaction-one-shot-${Date.now()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
+    if (request.message.trim() === "1" && evolutionState.oneShotConfirmation) {
+      const sequenceNumber = evolutionState.conversation.messages.length;
+      evolutionState.conversation.messages.push({ messageId: userMessageId, sequenceNumber, role: "user", content: "1", replyToMessageId: null, deliveryStatus: "completed", inferredIntent: "确认启动当前一次性完整演化", createdAt: now, completedAt: now });
+      evolutionState.conversation.messages.push({ messageId: nangongMessageId, sequenceNumber: sequenceNumber + 1, role: "nangong", content: "已确认启动本轮一次性演化。", replyToMessageId: userMessageId, deliveryStatus: "completed", createdAt: now, completedAt: now });
+      evolutionState.oneShotConfirmation = null;
+      evolutionState.oneShotRun = { runId: `interaction-one-shot-${Date.now()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
       return publishNangongEvolution("one-shot.started");
     }
     const nangongReply = "已确认事实：令狐持续修正需要先形成可审批方案。建议方向：把修正方案接入韩立统一审批。";
-    const sequenceNumber = nangongEvolutionState.conversation.messages.length;
-    nangongEvolutionState.conversation.messages.push({ messageId: userMessageId, sequenceNumber, role: "user", content: request.message, replyToMessageId: null, deliveryStatus: "completed", createdAt: now, completedAt: now });
-    nangongEvolutionState.conversation.messages.push({ messageId: nangongMessageId, sequenceNumber: sequenceNumber + 1, role: "nangong", content: nangongReply, replyToMessageId: userMessageId, deliveryStatus: "completed", createdAt: now, completedAt: now });
-    if (request.topicId) nangongEvolutionState.archiveRecords.push({ recordId: `interaction-topic-group-${Date.now()}`, deliberationId: null, topicId: request.topicId, proposalId: null, taskId: null, sequenceNumber: nangongEvolutionState.archiveRecords.length + 1, category: "source", eventType: "conversation.topic_group_replied", actor: "system", title: "专题群收到用户消息与南宫婉回复", payload: { conversationId: nangongEvolutionState.conversation.conversationId, userMessageId, userPreview: request.message, nangongMessageId, nangongPreview: nangongReply, status: "replied", nextOwner: "han-li" }, occurredAt: now });
+    const sequenceNumber = evolutionState.conversation.messages.length;
+    evolutionState.conversation.messages.push({ messageId: userMessageId, sequenceNumber, role: "user", content: request.message, replyToMessageId: null, deliveryStatus: "completed", createdAt: now, completedAt: now });
+    evolutionState.conversation.messages.push({ messageId: nangongMessageId, sequenceNumber: sequenceNumber + 1, role: "nangong", content: nangongReply, replyToMessageId: userMessageId, deliveryStatus: "completed", createdAt: now, completedAt: now });
+    if (request.topicId) evolutionState.archiveRecords.push({ recordId: `interaction-topic-group-${Date.now()}`, deliberationId: null, topicId: request.topicId, proposalId: null, taskId: null, sequenceNumber: evolutionState.archiveRecords.length + 1, category: "source", eventType: "conversation.topic_group_replied", actor: "system", title: "专题群收到用户消息与南宫婉回复", payload: { conversationId: evolutionState.conversation.conversationId, userMessageId, userPreview: request.message, nangongMessageId, nangongPreview: nangongReply, status: "replied", nextOwner: "han-li" }, occurredAt: now });
     return publishNangongEvolution("conversation.replied");
   },
   newNangongConversation: async () => {
     nangongNewConversationCalls += 1;
     await new Promise((resolve) => setTimeout(resolve, 80));
     if (nangongNewConversationCalls > 1) throw new Error("thread already has an active writer");
-    nangongEvolutionState.conversation = { conversationId: `nangong-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() };
+    evolutionState.conversation = { conversationId: `nangong-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() };
     return publishNangongEvolution("conversation.created");
   },
   generateNangongTopicDraft: async () => ({ title: "南宫婉完整审批链路", goal: "让令狐持续修正先形成可审批方案，再进入统一审批。", scope: ["AI Desktop", "审批链路"], evidence: ["用户要求草稿由当前对话生成", "南宫婉调查确认修正方案需先审批"], acceptanceCriteria: ["生成内容可编辑", "保存后进入课题卡片"] }),
   convertNangongConversationToTopic: async (request) => createInteractionTopic(request, request.evidence),
   createEvolutionTopic: async (request) => createInteractionTopic(request, request.evidence),
   updateEvolutionTopic: async (topicId, request) => {
-    const topic = nangongEvolutionState.topics.find((item) => item.topicId === topicId);
+    const topic = evolutionState.topics.find((item) => item.topicId === topicId);
     if (!topic || topic.currentProposalVersion !== 0 || topic.status !== "registered") throw new Error("课题已进入提案流程，不能再修改。");
     if (topic.topicRevision !== request.expectedTopicRevision) throw new Error("课题已被其他保存操作更新，请刷新后重新编辑。");
     Object.assign(topic, { title: request.title, goal: request.goal, scope: request.scope, exclusions: request.exclusions || [], evidence: request.evidence, acceptanceCriteria: request.acceptanceCriteria, topicRevision: topic.topicRevision + 1, recoveryPoint: "topic-updated-before-proposal", updatedAt: new Date().toISOString() });
     return publishNangongEvolution("topic.updated");
   },
-  setNangongAutomation: async (kind, enabled) => {
-    if (kind === "evolution") nangongEvolutionState.automaticEvolutionEnabled = enabled === true;
-    if (kind === "nangong-approval") nangongEvolutionState.automaticNangongApprovalEnabled = enabled === true;
-    if (kind === "linghu-approval") nangongEvolutionState.automaticLinghuApprovalEnabled = enabled === true;
-    if (kind === "execution") nangongEvolutionState.automaticExecutionEnabled = enabled === true;
+  setEvolutionAutomationEnabled: async (kind, enabled) => {
+    if (kind === "evolution") evolutionState.automaticEvolutionEnabled = enabled === true;
+    if (kind === "nangong-approval") evolutionState.automaticNangongApprovalEnabled = enabled === true;
+    if (kind === "linghu-approval") evolutionState.automaticLinghuApprovalEnabled = enabled === true;
+    if (kind === "execution") evolutionState.automaticExecutionEnabled = enabled === true;
     return publishNangongEvolution(`automation.${kind}`);
   },
-  configureEvolutionAutomation: async (request) => { nangongEvolutionState.automationSettings = { maxRoundsPerTopic: request.maxRoundsPerTopic, maxCorrectionRounds: request.maxCorrectionRounds }; if (request.workspaceState) nangongEvolutionState.automationContext.workspaceState = structuredClone(request.workspaceState); if (request.locale) nangongEvolutionState.automationContext.locale = request.locale; return publishNangongEvolution("automation.configured"); },
-  controlEvolutionAutomation: async (action) => { nangongEvolutionState.automaticEvolutionEnabled = action === "start" || action === "resume"; nangongEvolutionState.automationRuntime.status = action === "stop" ? "stopped" : action === "pause" ? "paused" : "running"; return publishNangongEvolution(`automation.${action}`); },
-  decideEvolutionResult: async (proposalId, request) => { assertEvolutionMutation(request.mutation); const proposal = nangongEvolutionState.proposals.find((item) => item.proposalId === proposalId); if (!proposal || proposal.status !== "pending-acceptance") throw new Error("尚未进入验收"); const now = new Date().toISOString(); proposal.status = request.decision === "approved" ? "completed" : "supplement-required"; proposal.approvals.push({ approvalId: `interaction-result-${Date.now()}`, proposalId, decision: request.decision, source: "manual-user", stage: "result", approverMemberId: "user", approverDisplayName: "用户", advice: request.advice || "", feedbackTarget: "proposal-content", capabilityScope: null, referencedApprovalIds: [], preferenceSnapshotVersion: ++nangongEvolutionState.preferenceSnapshotVersion, createdAt: now }); const topic = nangongEvolutionState.topics.find((item) => item.topicId === proposal.topicId); if (topic) { topic.status = proposal.status; topic.recoveryPoint = request.decision === "approved" ? "han-li-result-accepted" : "han-li-result-correction-required"; } return publishNangongEvolution("proposal.result_decided"); },
+  configureEvolutionAutomation: async (request) => { evolutionState.automationSettings = { maxRoundsPerTopic: request.maxRoundsPerTopic, maxCorrectionRounds: request.maxCorrectionRounds }; if (request.workspaceState) evolutionState.automationContext.workspaceState = structuredClone(request.workspaceState); if (request.locale) evolutionState.automationContext.locale = request.locale; return publishNangongEvolution("automation.configured"); },
+  controlEvolutionAutomation: async (action) => { evolutionState.automaticEvolutionEnabled = action === "start" || action === "resume"; evolutionState.automationRuntime.status = action === "stop" ? "stopped" : action === "pause" ? "paused" : "running"; return publishNangongEvolution(`automation.${action}`); },
+  decideEvolutionResult: async (proposalId, request) => { assertEvolutionMutation(request.mutation); const proposal = evolutionState.proposals.find((item) => item.proposalId === proposalId); if (!proposal || proposal.status !== "pending-acceptance") throw new Error("尚未进入验收"); const now = new Date().toISOString(); proposal.status = request.decision === "approved" ? "completed" : "supplement-required"; proposal.approvals.push({ approvalId: `interaction-result-${Date.now()}`, proposalId, decision: request.decision, source: "manual-user", stage: "result", approverMemberId: "user", approverDisplayName: "用户", advice: request.advice || "", feedbackTarget: "proposal-content", capabilityScope: null, referencedApprovalIds: [], preferenceSnapshotVersion: ++evolutionState.preferenceSnapshotVersion, createdAt: now }); const topic = evolutionState.topics.find((item) => item.topicId === proposal.topicId); if (topic) { topic.status = proposal.status; topic.recoveryPoint = request.decision === "approved" ? "han-li-result-accepted" : "han-li-result-correction-required"; } return publishNangongEvolution("proposal.result_decided"); },
   generateHanLiAcceptancePlan: async (proposalId) => {
-    const proposal = nangongEvolutionState.proposals.find((item) => item.proposalId === proposalId);
+    const proposal = evolutionState.proposals.find((item) => item.proposalId === proposalId);
     if (!proposal || proposal.status !== "pending-acceptance") throw new Error("尚未进入验收");
     const plan = { version: 1, planId: `interaction-plan-${Date.now()}`, topicId: proposal.topicId, proposalId, summary: "检查真实工作台中的执行结果和用户关注细节。", concerns: ["按钮响应", "滚动与内容可达"], checks: [{ checkId: "check-1", category: "交互", target: "审批工作台", action: "聚焦窗口并观察状态", expected: "窗口获得焦点且状态清晰", evidenceRequired: "操作截图", operations: [{ type: "focus-window" }, { type: "capture", label: "审批工作台" }] }, { checkId: "check-2", category: "可达性", target: "长内容区域", action: "缩小窗口并滚动到最后一个控件", expected: "滚动可发现且末项可达", evidenceRequired: "滚动到底部截图", operations: [{ type: "resize-window", width: 980, height: 680 }, { type: "scroll", target: "真实界面验收计划", direction: "down", amount: 600 }, { type: "capture", label: "滚动结果" }] }], generatedAt: new Date().toISOString() };
-    nangongEvolutionState.archiveRecords.push({ recordId: `interaction-plan-record-${Date.now()}`, deliberationId: null, topicId: proposal.topicId, proposalId, taskId: null, sequenceNumber: nangongEvolutionState.archiveRecords.length + 1, category: "acceptance", eventType: "acceptance.plan_generated", actor: "han-li", title: "韩立生成真实界面验收计划", payload: { acceptancePlan: plan, status: "planned", nextOwner: "han-li" }, occurredAt: plan.generatedAt });
+    evolutionState.archiveRecords.push({ recordId: `interaction-plan-record-${Date.now()}`, deliberationId: null, topicId: proposal.topicId, proposalId, taskId: null, sequenceNumber: evolutionState.archiveRecords.length + 1, category: "acceptance", eventType: "acceptance.plan_generated", actor: "han-li", title: "韩立生成真实界面验收计划", payload: { acceptancePlan: plan, status: "planned", nextOwner: "han-li" }, occurredAt: plan.generatedAt });
     await publishNangongEvolution("acceptance.plan_generated");
     return plan;
   },
   executeHanLiAcceptancePlan: async (planId) => {
-    const record = [...nangongEvolutionState.archiveRecords].reverse().find((item) => item.eventType === "acceptance.plan_generated" && item.payload.acceptancePlan.planId === planId);
+    const record = [...evolutionState.archiveRecords].reverse().find((item) => item.eventType === "acceptance.plan_generated" && item.payload.acceptancePlan.planId === planId);
     if (!record) throw new Error("验收计划不存在");
     const plan = record.payload.acceptancePlan;
     const now = new Date().toISOString();
     const run = { version: 1, runId: `interaction-run-${Date.now()}`, planId, topicId: plan.topicId, proposalId: plan.proposalId, status: "passed", windowTitle: "AI Desktop · 专题演化工作台", initialBounds: { x: 0, y: 0, width: 1320, height: 880 }, finalBounds: { x: 0, y: 0, width: 1320, height: 880 }, stepResults: plan.checks.flatMap((check) => check.operations.map((operation, operationIndex) => ({ checkId: check.checkId, operationIndex, operation, status: "passed", actual: operation.type === "scroll" ? "滚动位置 0 → 600，最大 1200。" : "真实窗口操作完成。", screenshotAttachmentId: operation.type === "capture" ? `interaction-shot-${operationIndex}` : null, occurredAt: now }))), evidenceAttachmentIds: ["interaction-shot-1", "interaction-shot-2"], startedAt: now, completedAt: now };
-    nangongEvolutionState.archiveRecords.push({ recordId: `interaction-run-record-${Date.now()}`, deliberationId: null, topicId: plan.topicId, proposalId: plan.proposalId, taskId: null, sequenceNumber: nangongEvolutionState.archiveRecords.length + 1, category: "acceptance", eventType: "acceptance.real_app_checked", actor: "han-li", title: "韩立完成真实应用界面检查", payload: { acceptanceRun: run, status: run.status, nextOwner: "han-li" }, occurredAt: now });
+    evolutionState.archiveRecords.push({ recordId: `interaction-run-record-${Date.now()}`, deliberationId: null, topicId: plan.topicId, proposalId: plan.proposalId, taskId: null, sequenceNumber: evolutionState.archiveRecords.length + 1, category: "acceptance", eventType: "acceptance.real_app_checked", actor: "han-li", title: "韩立完成真实应用界面检查", payload: { acceptanceRun: run, status: run.status, nextOwner: "han-li" }, occurredAt: now });
     await publishNangongEvolution("acceptance.real_app_checked");
     return run;
   },
   createEvolutionProposal: async (topicId, request) => {
-    const topic = nangongEvolutionState.topics.find((item) => item.topicId === topicId);
+    const topic = evolutionState.topics.find((item) => item.topicId === topicId);
     if (!topic) throw new Error("专项课题不存在。");
     const now = new Date().toISOString();
     const proposalId = `interaction-proposal-${Date.now()}`;
     topic.status = "pending-approval"; topic.currentProposalVersion += 1; topic.recoveryPoint = "proposal-awaiting-approval"; topic.updatedAt = now;
-    nangongEvolutionState.proposals.push({ proposalId, topicId, version: topic.currentProposalVersion, title: topic.title, type: request.type, origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", purpose: "work-proposal", targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null, supersedesProposalId: null, revisionFeedbackApprovalId: null, content: request.content, evidence: topic.evidence, impactScope: topic.scope, exclusions: topic.exclusions, risks: request.risks, rollbackPlan: request.rollbackPlan, acceptanceCriteria: topic.acceptanceCriteria, distributionPlan: null, status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now });
+    evolutionState.proposals.push({ proposalId, topicId, version: topic.currentProposalVersion, title: topic.title, type: request.type, origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", purpose: "work-proposal", targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null, supersedesProposalId: null, revisionFeedbackApprovalId: null, content: request.content, evidence: topic.evidence, impactScope: topic.scope, exclusions: topic.exclusions, risks: request.risks, rollbackPlan: request.rollbackPlan, acceptanceCriteria: topic.acceptanceCriteria, distributionPlan: null, status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now });
     return publishNangongEvolution("proposal.created");
   },
   createLinghuRepairProposal: async () => publishNangongEvolution("linghu.proposal.created"),
   decideEvolutionProposal: async (proposalId, request) => {
     assertEvolutionMutation(request.mutation);
-    const proposal = nangongEvolutionState.proposals.find((item) => item.proposalId === proposalId);
+    const proposal = evolutionState.proposals.find((item) => item.proposalId === proposalId);
     if (!proposal) throw new Error("演化提案不存在。");
     const now = new Date().toISOString();
     proposal.status = request.decision; proposal.updatedAt = now;
-    proposal.approvals.push({ approvalId: `interaction-approval-${Date.now()}`, proposalId, decision: request.decision, source: "manual-user", stage: "direction", approverMemberId: "user", approverDisplayName: "用户", advice: request.advice || "", feedbackTarget: request.feedbackTarget || "proposal-content", capabilityScope: request.feedbackTarget === "submitter-capability" ? request.capabilityScope : null, referencedApprovalIds: [], preferenceSnapshotVersion: ++nangongEvolutionState.preferenceSnapshotVersion, createdAt: now });
-    const topic = nangongEvolutionState.topics.find((item) => item.topicId === proposal.topicId);
+    proposal.approvals.push({ approvalId: `interaction-approval-${Date.now()}`, proposalId, decision: request.decision, source: "manual-user", stage: "direction", approverMemberId: "user", approverDisplayName: "用户", advice: request.advice || "", feedbackTarget: request.feedbackTarget || "proposal-content", capabilityScope: request.feedbackTarget === "submitter-capability" ? request.capabilityScope : null, referencedApprovalIds: [], preferenceSnapshotVersion: ++evolutionState.preferenceSnapshotVersion, createdAt: now });
+    const topic = evolutionState.topics.find((item) => item.topicId === proposal.topicId);
     if (topic) { topic.status = request.decision; topic.recoveryPoint = request.decision === "approved" ? "approved-returned-to-nangong" : request.decision; topic.updatedAt = now; }
     return publishNangongEvolution("proposal.decided");
   },
   reviseEvolutionProposal: async (proposalId, request) => {
     assertEvolutionMutation(request.mutation);
-    const previous = nangongEvolutionState.proposals.find((item) => item.proposalId === proposalId);
+    const previous = evolutionState.proposals.find((item) => item.proposalId === proposalId);
     if (!previous || !["supplement-required", "rejected"].includes(previous.status)) throw new Error("提案不在可修订状态。");
     if (previous.submitterMemberId !== request.submitterMemberId) throw new Error("只能由原提交人重新提交该提案。");
-    const feedback = previous.approvals.at(-1); const topic = nangongEvolutionState.topics.find((item) => item.topicId === previous.topicId); const now = new Date().toISOString();
+    const feedback = previous.approvals.at(-1); const topic = evolutionState.topics.find((item) => item.topicId === previous.topicId); const now = new Date().toISOString();
     topic.currentProposalVersion += 1; topic.status = "pending-approval"; topic.recoveryPoint = `revised-from:${previous.proposalId}`; topic.updatedAt = now;
     const revised = { ...structuredClone(previous), proposalId: `interaction-revised-${Date.now()}`, version: topic.currentProposalVersion, type: feedback.feedbackTarget === "submitter-capability" ? "规则优化" : previous.type, purpose: feedback.feedbackTarget === "submitter-capability" ? "self-capability-upgrade" : previous.purpose, targetMemberId: feedback.feedbackTarget === "submitter-capability" ? previous.submitterMemberId : previous.targetMemberId, targetMemberDisplayName: feedback.feedbackTarget === "submitter-capability" ? previous.submitterDisplayName : previous.targetMemberDisplayName, capabilityScope: feedback.capabilityScope || previous.capabilityScope, supersedesProposalId: previous.proposalId, revisionFeedbackApprovalId: feedback.approvalId, content: request.content, evidence: request.evidence, impactScope: request.impactScope, risks: request.risks, rollbackPlan: request.rollbackPlan, acceptanceCriteria: request.acceptanceCriteria, distributionPlan: null, status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now };
-    nangongEvolutionState.proposals.push(revised);
+    evolutionState.proposals.push(revised);
     return publishNangongEvolution("proposal.revised");
   },
   autoApproveEvolutionProposal: async (_proposalId, request) => { assertEvolutionMutation(request); return publishNangongEvolution("proposal.auto-decided"); },
   dispatchEvolutionProposal: async (proposalId, request) => {
     assertEvolutionMutation(request);
-    const proposal = nangongEvolutionState.proposals.find((item) => item.proposalId === proposalId);
+    const proposal = evolutionState.proposals.find((item) => item.proposalId === proposalId);
     if (!proposal || proposal.status !== "approved") throw new Error("只有审批通过的提案才能分发。");
     const task = createCompletedEvolutionTask(proposal);
     proposal.status = "pending-acceptance"; proposal.distributedTaskIds = [task.taskId]; proposal.resultSummary = task.resultSummary.finalResult; proposal.updatedAt = task.completedAt;
-    const topic = nangongEvolutionState.topics.find((item) => item.topicId === proposal.topicId);
+    const topic = evolutionState.topics.find((item) => item.topicId === proposal.topicId);
     if (topic) { topic.status = "pending-acceptance"; topic.recoveryPoint = "awaiting-han-li-result-acceptance"; topic.updatedAt = task.completedAt; }
     collaborationState.tasks.push(task);
     publishCollaborationState("evolution.task.completed");
     return publishNangongEvolution("proposal.completed");
   },
-  onNangongEvolutionState: (listener) => { nangongEvolutionListeners.add(listener); return () => nangongEvolutionListeners.delete(listener); },
+  onEvolutionState: (listener) => { nangongEvolutionListeners.add(listener); return () => nangongEvolutionListeners.delete(listener); },
   onCollaborationState: (listener) => { collaborationStateListeners.add(listener); return () => collaborationStateListeners.delete(listener); },
   onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
   setInteractionTaskTimelineFixture: async (active) => {
     taskTimelineFixtureEnabled = active === true;
-    nangongEvolutionState.topics = active ? [{ topicId: "interaction-timeline", title: "专题任务 01 · 修订截图按钮可用态", status: "pending-approval", currentProposalVersion: 1, createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
-    nangongEvolutionState.proposals = active ? [{ proposalId: "interaction-timeline-proposal", topicId: "interaction-timeline", version: 1, title: "修订截图按钮可用态", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: "统一修正主会话与南宫婉会话截图按钮的可用态、悬停态、键盘焦点态和忙碌禁用态。", status: "pending-approval", approvals: [], distributedTaskIds: [], createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
-    nangongEvolutionState.activeTopicId = active ? "interaction-timeline" : null;
+    evolutionState.topics = active ? [{ topicId: "interaction-timeline", title: "专题任务 01 · 修订截图按钮可用态", status: "pending-approval", currentProposalVersion: 1, createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
+    evolutionState.proposals = active ? [{ proposalId: "interaction-timeline-proposal", topicId: "interaction-timeline", version: 1, title: "修订截图按钮可用态", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: "统一修正主会话与南宫婉会话截图按钮的可用态、悬停态、键盘焦点态和忙碌禁用态。", status: "pending-approval", approvals: [], distributedTaskIds: [], createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
+    evolutionState.activeTopicId = active ? "interaction-timeline" : null;
     publishNangongEvolution(active ? "interaction.timeline_fixture" : "interaction.timeline_fixture_cleared");
     publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());

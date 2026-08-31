@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { TrustedCommandStore } from "../electron/services/trusted-command-store.ts";
+import { TrustedCommandStore } from "../electron/services/platform/security/internal/trusted-command.store.ts";
 import { controlledTestRoot } from "./test-paths.mjs";
 
 const controlledTempRoot = controlledTestRoot;

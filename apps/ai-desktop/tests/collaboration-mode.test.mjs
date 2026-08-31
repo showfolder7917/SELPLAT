@@ -6,37 +6,44 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-duration-log.js";
-import { CollaborationCoordinator } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-coordinator.js";
-import { PersonaSessionWriterQueue } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-codex-sessions.js";
-import { createCollaborationResultSummary } from "../../../build/ai-desktop/electron/electron/services/collaboration/result/result-summary.js";
-import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-verifier.js";
-import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/collaboration/verified-package-release.js";
-import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/collaboration-store.js";
-import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu/index.js";
-import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/linghu/internal/linghu-automation.store.js";
-import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js";
-import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js";
-import { ReleaseBatchStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/release-batch-store.js";
-import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../build/ai-desktop/electron/electron/services/collaboration/version-workspace-manager.js";
-import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/managed-task-executor.js";
+import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration-duration.log.js";
+import { CollaborationCoordinator } from "../../../build/ai-desktop/electron/electron/services/workflow/collaboration-workflow.facade.js";
+import { PersonaSessionWriterQueue } from "../../../build/ai-desktop/electron/electron/services/capabilities/conversation/internal/collaboration-codex-sessions.js";
+import { createCollaborationResultSummary } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/result/result-summary.js";
+import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/integration.verifier.js";
+import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/verified-package.release.js";
+import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration.store.js";
+import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/personas/linghu/index.js";
+import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-automation.store.js";
+import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/capabilities/testing/test-resource-coordinator.facade.js";
+import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/integration-release.facade.js";
+import { ReleaseBatchStore } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/release-batch.store.js";
+import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/version-workspace.manager.js";
+import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/capabilities/execution/internal/managed-task.executor.js";
+import { createAtomicJsonPersistence } from "../../../build/ai-desktop/electron/electron/services/platform/persistence/index.js";
 import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
 const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
 const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
-const coordinatorSource = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
-const integrationPipelineSource = readFileSync(new URL("../electron/services/collaboration/version-integration-pipeline.ts", import.meta.url), "utf8");
-const releaseBatchStoreSource = readFileSync(new URL("../electron/services/collaboration/release-batch-store.ts", import.meta.url), "utf8");
-const collaborationContractSource = readFileSync(new URL("../contracts/collaboration/collaboration.ts", import.meta.url), "utf8");
-const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/collaboration/linghu/internal/linghu-unified-test.runner.ts", import.meta.url), "utf8");
-const linghuRuntimeSource = readFileSync(new URL("../electron/services/collaboration/linghu/internal/create-linghu-runtime.ts", import.meta.url), "utf8");
-const integrationVerifierSource = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
+const coordinatorSource = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
+const integrationPipelineSource = readFileSync(new URL("../electron/services/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
+const releaseBatchStoreSource = readFileSync(new URL("../electron/services/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
+// 入口存在性由边界测试负责；这里读取领域正文验证完整状态枚举。
+const collaborationContractSource = readFileSync(new URL("../contracts/collaboration/workflow/collaboration.ts", import.meta.url), "utf8");
+const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
+const linghuRuntimeSource = readFileSync(new URL("../electron/services/personas/linghu/internal/create-linghu-runtime.ts", import.meta.url), "utf8");
+const integrationVerifierSource = readFileSync(new URL("../electron/services/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
+
+// 测试也经 Platform Port 创建人物 Store，避免用例重新引入文件路径耦合。
+function createTestLinghuStore(filePath) {
+  return new LinghuAutomationStore(createAtomicJsonPersistence(filePath));
+}
 
 function runCoordinatorWorker(coordinationRoot, runId, buildRoot, holdMilliseconds) {
   const worker = new URL("./fixtures/test-resource-coordinator-worker.mjs", import.meta.url);
-  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/collaboration/test-resource-coordinator-facade.js", import.meta.url).href;
+  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/capabilities/testing/test-resource-coordinator.facade.js", import.meta.url).href;
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [fileURLToPath(worker), moduleUrl, coordinationRoot, runId, buildRoot, String(holdMilliseconds)], {
       stdio: ["ignore", "pipe", "pipe"],
@@ -55,7 +62,7 @@ function runCoordinatorWorker(coordinationRoot, runId, buildRoot, holdMillisecon
 
 function runReleaseWorker(coordinationRoot, releaseBatchId, holdMilliseconds) {
   const worker = new URL("./fixtures/integration-release-coordinator-worker.mjs", import.meta.url);
-  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/collaboration/integration-release-coordinator-facade.js", import.meta.url).href;
+  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/capabilities/release/integration-release.facade.js", import.meta.url).href;
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [fileURLToPath(worker), moduleUrl, coordinationRoot, releaseBatchId, String(holdMilliseconds)], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
@@ -137,12 +144,12 @@ test("清空测试数据保留人物配置与令狐文案并重置全部运行�
     assert.ok(collaborationState.members.every((member) => member.currentTaskId === null));
 
     const linghuPath = path.join(directory, "linghu.json");
-    const linghuStore = new LinghuAutomationStore(linghuPath);
+    const linghuStore = createTestLinghuStore(linghuPath);
     const prompt = linghuStore.createPrompt({ title: "保留的启动文案", content: "这是用户配置，不属于测试运行历史。" });
     linghuStore.setEnabled(true);
     linghuStore.updateRuntime("test.runtime", (state) => { state.flowSnapshots.push({ sourceTaskId: "task-1", taskTitle: "旧任务", taskState: "executing", sourceGeneration: 1, sourceStage: "execution", sourceStatus: "started", sourceResultSha: null, completionConditions: [], observedAt: new Date().toISOString() }); });
     assert.ok(linghuStore.clearTestData() > 0);
-    const linghuState = new LinghuAutomationStore(linghuPath).state();
+    const linghuState = createTestLinghuStore(linghuPath).state();
     assert.equal(linghuState.enabled, false);
     assert.equal(linghuState.flowSnapshots.length, 0);
     assert.ok(linghuState.prompts.some((item) => item.promptId === prompt.prompts.at(-1).promptId));
@@ -166,7 +173,7 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
       continueTask: (taskId) => collaborationStore.continueTask(taskId),
     };
     const storePath = path.join(directory, "linghu.json");
-    const automationStore = new LinghuAutomationStore(storePath);
+    const automationStore = createTestLinghuStore(storePath);
     let restartCount = 0;
     const facade = new LinghuAutomationFacade({
       store: automationStore,
@@ -202,7 +209,7 @@ test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启
     assert.ok(prompt);
     facade.updatePrompt(prompt.promptId, { enabled: false });
     assert.equal(facade.state().prompts.find((candidate) => candidate.promptId === prompt.promptId).enabled, false);
-    const restored = new LinghuAutomationStore(storePath).state();
+    const restored = createTestLinghuStore(storePath).state();
     assert.equal(restored.enabled, true);
     assert.equal(restored.activeTaskId, facade.state().activeTaskId);
     assert.equal(restored.pollIntervalMs, 30_000);
@@ -245,7 +252,7 @@ test("令狐没有具体故障时只报告检查结果，已有具体修正仍�
       setMode: (mode) => collaborationStore.setMode(mode),
       submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
     };
-    const automationStore = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const automationStore = createTestLinghuStore(path.join(directory, "linghu.json"));
     automationStore.setEnabled(true);
     let proposalState = { proposals: [] };
     const facade = new LinghuAutomationFacade({
@@ -291,7 +298,7 @@ test("令狐旧四模块默认文案升级后收敛为三项职责且不覆盖�
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-prompt-v2-migration-"));
   const storePath = path.join(directory, "linghu.json");
   try {
-    const original = new LinghuAutomationStore(storePath);
+    const original = createTestLinghuStore(storePath);
     original.createPrompt({ title: "用户自建", content: "保留用户自己维护的具体执行约束。" });
     const legacy = JSON.parse(readFileSync(storePath, "utf8"));
     legacy.version = 1;
@@ -300,7 +307,7 @@ test("令狐旧四模块默认文案升级后收敛为三项职责且不覆盖�
     writeFileSync(storePath, JSON.stringify(legacy), "utf8");
     rmSync(`${storePath}.bak`, { force: true });
 
-    const migrated = new LinghuAutomationStore(storePath).state();
+    const migrated = createTestLinghuStore(storePath).state();
     assert.equal(migrated.version, 2);
     assert.equal(migrated.currentModule, "flow-completion");
     assert.match(migrated.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian").content, /第二职责是检查测试漏点/);
@@ -315,14 +322,14 @@ test("令狐自动状态损坏时从最近有效备份恢复开启开关和检�
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-backup-recovery-"));
   const storePath = path.join(directory, "linghu.json");
   try {
-    const store = new LinghuAutomationStore(storePath);
+    const store = createTestLinghuStore(storePath);
     store.setEnabled(true);
     store.updateRuntime("test.checkpoint", (state) => {
       state.detectionCursor = "2026-08-23T10:00:00.000Z";
       state.recoveryCheckpoint = "active-task:TASK-1:flow-completion";
     });
     writeFileSync(storePath, "{损坏状态", "utf8");
-    const restored = new LinghuAutomationStore(storePath).state();
+    const restored = createTestLinghuStore(storePath).state();
     assert.equal(restored.enabled, true);
     assert.equal(restored.detectionCursor, "2026-08-23T10:00:00.000Z");
     assert.equal(restored.recoveryCheckpoint, "active-task:TASK-1:flow-completion");
@@ -335,11 +342,11 @@ test("令狐自动状态主文件和备份均损坏时安全关闭并等待用�
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-state-rebuild-"));
   const storePath = path.join(directory, "linghu.json");
   try {
-    const store = new LinghuAutomationStore(storePath);
+    const store = createTestLinghuStore(storePath);
     store.setEnabled(true);
     writeFileSync(storePath, "{主文件损坏", "utf8");
     writeFileSync(`${storePath}.bak`, "{备份损坏", "utf8");
-    const rebuilt = new LinghuAutomationStore(storePath).state();
+    const rebuilt = createTestLinghuStore(storePath).state();
     assert.equal(rebuilt.enabled, false);
     assert.match(rebuilt.blockingReason, /已安全关闭/);
     assert.equal(rebuilt.currentModule, "flow-completion");
@@ -364,7 +371,7 @@ test("令狐对同一故障指纹最多执行三次恢复副作用但继续检�
       continueTask: () => { recoveryRequests += 1; },
       recoverTask: () => { throw new Error("阻塞任务应走 continueTask 恢复入口"); },
     };
-    const automationStore = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const automationStore = createTestLinghuStore(path.join(directory, "linghu.json"));
     const facade = new LinghuAutomationFacade({
       store: automationStore,
       collaboration,
@@ -427,7 +434,7 @@ test("统一测试失败即使日志引用用户规则也由令狐修复而不�
         return true;
       },
     };
-    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
     store.setEnabled(true);
     const facade = new LinghuAutomationFacade({ store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined });
     await facade.checkNow();
@@ -455,7 +462,7 @@ test("同一统一测试故障最多触发三次令狐源码修复", async () =>
       submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
       repairFailedUnifiedTest: async () => { repairRequests += 1; return true; },
     };
-    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
     store.setEnabled(true);
     const facade = new LinghuAutomationFacade({ store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined });
     await facade.checkNow();
@@ -498,7 +505,7 @@ test("令狐遇到本地修改归属门禁时报告真实人物与阶段且不�
       continueTask: () => { continueRequests += 1; return collaborationStore.state(); },
       recoverTask: () => { continueRequests += 1; return collaborationStore.state(); },
     };
-    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
     store.setEnabled(true);
     const facade = new LinghuAutomationFacade({
       store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN",
@@ -621,7 +628,7 @@ test("令狐活动任务记录缺失时保留恢复点并派发同模块替代�
       continueTask: (taskId) => collaborationStore.continueTask(taskId),
       recoverTask: () => { throw new Error("本场景不应进入停点恢复"); },
     };
-    const automationStore = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const automationStore = createTestLinghuStore(path.join(directory, "linghu.json"));
     const facade = new LinghuAutomationFacade({
       store: automationStore,
       collaboration,
@@ -655,7 +662,7 @@ test("令狐活动任务被取消后释放失效指针并继续派发同模块�
       continueTask: (taskId) => collaborationStore.continueTask(taskId),
       recoverTask: () => { throw new Error("本场景不应进入停点恢复"); },
     };
-    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
     const facade = new LinghuAutomationFacade({ store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined });
     store.setEnabled(true);
     await facade.checkNow();
@@ -682,7 +689,7 @@ test("令狐持续检测所有自动流程，并为非活动停点执行独立�
       continueTask: (taskId) => { recovered.push(taskId); return collaborationStore.continueTask(taskId); },
       recoverTask: async (taskId) => { recovered.push(taskId); },
     };
-    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
     const facade = new LinghuAutomationFacade({
       store,
       collaboration,
@@ -732,7 +739,7 @@ test("令狐将依赖自动流程的修正任务纳入同一停点检测闭环",
       continueTask: (taskId) => { recovered.push(taskId); return collaborationStore.continueTask(taskId); },
       recoverTask: async (taskId) => { recovered.push(taskId); },
     };
-    const store = new LinghuAutomationStore(path.join(directory, "linghu.json"));
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
     const facade = new LinghuAutomationFacade({
       store,
       collaboration,
@@ -767,16 +774,16 @@ test("令狐将依赖自动流程的修正任务纳入同一停点检测闭环",
 });
 
 test("令狐测试漏点模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
-  const runner = readFileSync(new URL("../electron/services/collaboration/linghu/internal/linghu-unified-test.runner.ts", import.meta.url), "utf8");
-  const facade = readFileSync(new URL("../electron/services/collaboration/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
+  const runner = readFileSync(new URL("../electron/services/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
+  const facade = readFileSync(new URL("../electron/services/personas/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
   assert.match(runner, /\["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:mac:developer"\]/);
   assert.doesNotMatch(runner, /confirmedIntent|prompt\.content/);
   assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\(\) =>/);
   assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
-  assert.match(linghuRuntimeSource, /new LinghuUnifiedTestRunner[\s\S]*await unifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*options\.unifiedTest\.onVerified\(executable\)/);
+  assert.match(linghuRuntimeSource, /createFixedUnifiedTestRunner[\s\S]*await unifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*options\.unifiedTest\.onVerified\(executable\)/);
   assert.match(main, /unifiedTest:[\s\S]*onVerified: \(executable\)[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
-  assert.match(main, /IntegrationReleaseCoordinatorFacade[\s\S]*ReleaseBatchStore[\s\S]*new VersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
+  assert.match(main, /IntegrationReleaseCoordinatorFacade[\s\S]*createReleaseBatchStore[\s\S]*createVersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
   assert.match(main, /linghuRuntime!\.runUnifiedTests\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId\)/);
   assert.match(coordinatorSource, /integrationPipeline\.schedule\(\)/);
   assert.doesNotMatch(coordinatorSource, /createReleaseCandidate|promoteIntegrationCandidate|mergeIntoLocalBranch|releaseDocument\.state/);
@@ -785,7 +792,7 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
   assert.match(releaseBatchStoreSource, /initiatorMemberId[\s\S]*state: "frozen", initiatorMemberId/);
   assert.doesNotMatch(releaseBatchStoreSource, /linghu-ancestor/);
   assert.match(facade, /automaticFlowSnapshots[\s\S]*faultFingerprint[\s\S]*moduleCompletionReport/);
-  assert.match(main, /const testResources = new TestResourceCoordinatorFacade[\s\S]*new TaskWorktreeTestRunner\([\s\S]*verifyCandidate:[\s\S]*testResources\.run[\s\S]*linghuRuntime!\.runUnifiedTests\(rootPath\)/);
+  assert.match(main, /const testResources = new TestResourceCoordinatorFacade[\s\S]*createTaskWorktreeTestRunner\([\s\S]*verifyCandidate:[\s\S]*testResources\.run[\s\S]*linghuRuntime!\.runUnifiedTests\(rootPath\)/);
   assert.doesNotMatch(main, /TestExecutionGate|test-execution-gate/);
 });
 
@@ -1289,8 +1296,8 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
 });
 
 test("自动恢复保留令狐老祖负责人和回流说明", () => {
-  const store = readFileSync(new URL("../electron/services/collaboration/collaboration-store.ts", import.meta.url), "utf8");
-  const facade = readFileSync(new URL("../electron/services/collaboration/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
+  const store = readFileSync(new URL("../electron/services/workflow/internal/collaboration.store.ts", import.meta.url), "utf8");
+  const facade = readFileSync(new URL("../electron/services/personas/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
   assert.match(store, /continueTask\(taskId: string, recoveryActor\?: Pick<CollaborationMember/);
   assert.match(store, /正在处理流程中断，随后将任务退回原负责人重试/);
   assert.match(facade, /continueTask\(task\.taskId, linghu\)/);
@@ -1415,8 +1422,8 @@ test("耗时日志按等待原因生成集成批次瓶颈报告", () => {
 });
 
 test("执行人物只做技术分析并直接进入实施，不再创建内部审核连接", () => {
-  const coordinator = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
-  const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  const coordinator = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
+  const sessions = readFileSync(new URL("../electron/services/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
   assert.match(coordinator, /status: "ready-for-execution"/);
   assert.match(coordinator, /await this\.#execute\(taskId\)/);
   assert.doesNotMatch(coordinator, /createReviewer|scheduleReviewers|beginReview/);
@@ -1581,11 +1588,11 @@ test("协同执行人修改源码后由桌面内部验证分支而不再发起 C
 });
 
 test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出", () => {
-  const runner = readFileSync(new URL("../electron/services/collaboration/task-worktree-test-runner.ts", import.meta.url), "utf8");
+  const runner = readFileSync(new URL("../electron/services/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
   const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  const dependencyVerifier = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
-  const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
-  const codex = readFileSync(new URL("../electron/services/codex-service.ts", import.meta.url), "utf8");
+  const dependencyVerifier = readFileSync(new URL("../electron/services/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
+  const sessions = readFileSync(new URL("../electron/services/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  const codex = readFileSync(new URL("../electron/services/platform/codex/codex.facade.ts", import.meta.url), "utf8");
   const config = readFileSync(new URL("../playwright.interaction.config.ts", import.meta.url), "utf8");
   assert.match(runner, /worktreeRoot/);
   assert.match(runner, /test-cache|PLAYWRIGHT_BROWSERS_PATH/);
@@ -1607,10 +1614,10 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
 });
 
 test("协同编排保持独立执行连接、心跳和整轮封存集成契约", () => {
-  const coordinator = readFileSync(new URL("../electron/services/collaboration/collaboration-coordinator.ts", import.meta.url), "utf8");
-  const sessions = readFileSync(new URL("../electron/services/collaboration/collaboration-codex-sessions.ts", import.meta.url), "utf8");
-  const workspaces = readFileSync(new URL("../electron/services/collaboration/version-workspace-manager.ts", import.meta.url), "utf8");
-  const integrationVerifier = readFileSync(new URL("../electron/services/collaboration/integration-verifier.ts", import.meta.url), "utf8");
+  const coordinator = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
+  const sessions = readFileSync(new URL("../electron/services/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  const workspaces = readFileSync(new URL("../electron/services/capabilities/release/internal/version-workspace.manager.ts", import.meta.url), "utf8");
+  const integrationVerifier = readFileSync(new URL("../electron/services/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
   const ui = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
   assert.match(sessions, /new CodexService/);
   assert.match(sessions, /codexHome: this\.#options\.codexHome/);

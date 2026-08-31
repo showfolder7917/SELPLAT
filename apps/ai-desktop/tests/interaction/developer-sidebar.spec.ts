@@ -787,6 +787,8 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await expect(approvalWindow).toBeHidden();
   await manualApproval.click();
   approvalWindow = page.getByRole("dialog", { name: "审批任务 · 专题任务 01 · 修订截图按钮可用态" });
+  // 公共窗口在下一帧完成首次焦点交接；等窗口真正可输入后再操作，避免自动化早于浏览器焦点生命周期。
+  await expect(approvalWindow.getByLabel("审批内容")).toBeFocused();
   await approvalWindow.getByLabel("审批结论").selectOption("approved");
   await approvalWindow.getByLabel("审批原因").fill("范围与验收标准明确，可以进入多人并行执行。");
   await expect(approvalWindow.getByLabel("审批原因")).toHaveValue("范围与验收标准明确，可以进入多人并行执行。");

@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import type { CollaborationMember, NangongEvolutionState } from "../../../../contracts/desktop/desktop";
+import type { CollaborationMember, EvolutionState } from "../../../../contracts/desktop/desktop";
 import { evolutionMutationRequest } from "../model/evolution-workbench";
 
 /** 原提交人依据审批意见形成不可覆盖的新版本，继续返回韩立审批。 */
-export function MemberSelfUpgradePanel({ member, state, onState, onError }: { member: CollaborationMember; state: NangongEvolutionState; onState(state: NangongEvolutionState): void; onError(message: string): void }) {
+export function MemberSelfUpgradePanel({ member, state, onState, onError }: { member: CollaborationMember; state: EvolutionState; onState(state: EvolutionState): void; onError(message: string): void }) {
   const returned = state.proposals.filter((proposal) => proposal.submitterMemberId === member.memberId && ["supplement-required", "rejected"].includes(proposal.status));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ content: "", evidence: "", impactScope: "", risks: "", rollbackPlan: "", acceptanceCriteria: "" });

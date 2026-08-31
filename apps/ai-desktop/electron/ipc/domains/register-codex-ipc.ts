@@ -1,16 +1,16 @@
 /** Codex 领域 IPC：集中认证、审批、用户输入和自动测试预检，避免桌面组合入口复制治理判断。 */
 import { shell } from "electron";
 
-import type { ResolveCodexUserInputRequest } from "../../../contracts/codex/codex.js";
-import { prepareAutomaticTesting } from "../../services/automatic-test-preflight.js";
-import type { CodexService } from "../../services/codex-service.js";
-import type { ConversationDispatchStore } from "../../services/conversation-dispatch-store.js";
-import type { CollaborationCodexRegistry } from "../../services/collaboration/collaboration-codex-sessions.js";
-import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
-import type { WorkflowRepository } from "../../services/event-center/workflow-repository.js";
-import type { SettingsStore } from "../../services/settings-store.js";
-import type { TrustedCommandStore } from "../../services/trusted-command-store.js";
-import type { WorkspaceStore } from "../../services/workspace-store.js";
+import type { ResolveCodexUserInputRequest } from "../../../contracts/platform/codex/index.js";
+import { prepareAutomaticTesting } from "../../services/capabilities/testing/index.js";
+import type { CodexFacade as CodexService } from "../../services/platform/codex/index.js";
+import type { ConversationFacade as ConversationDispatchStore } from "../../services/capabilities/conversation/index.js";
+import type { CollaborationCodexRegistry } from "../../services/capabilities/conversation/index.js";
+import type { EventCenterFacade } from "../../services/capabilities/event-center/index.js";
+import type { WorkflowRepositoryPort as WorkflowRepository } from "../../services/workflow/index.js";
+import type { SettingsFacade as SettingsStore } from "../../services/platform/settings/index.js";
+import type { CommandGovernanceFacade as TrustedCommandStore } from "../../services/platform/security/index.js";
+import type { WorkspaceFacade as WorkspaceStore } from "../../services/platform/workspace/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 interface CodexIpcDependencies {

@@ -2,13 +2,13 @@
  * DTO 方向：Out，表示修正材料从令狐模块输出到南宫审批模块。
  *
  * 数据生产方：LinghuAutomationFacade；Renderer 也可以通过正式 DesktopApi 提交同形数据。
- * 数据接收方：NangongEvolutionFacade 和提案 Store。
+ * 数据接收方：EvolutionFacade 和中立提案状态仓库。
  * 数据流向：令狐 -> 南宫审批服务。
  * 作用：携带创建修正提案所需的完整事实、风险和验收材料。
  * 禁止职责：不得自动批准、分发、执行或修改提案状态。
  */
 // 修正提案需要携带用户授权的完整工作区快照，主进程不能自行猜测工程范围。
-import type { WorkspaceState } from "../../../desktop/workspace.js";
+import type { WorkspaceState } from "../../../platform/workspace/workspace.js";
 // locale 决定提案和后续审批使用的业务语言，但不改变提案事实。
 import type { Locale } from "../../../foundation/base.js";
 

@@ -1,8 +1,8 @@
 import { BrowserWindow, dialog } from "electron";
 
 import { WORKSPACE_PERMISSIONS, type WorkspacePermission } from "../../../contracts/foundation/base.js";
-import type { EventCenterFacade } from "../../services/event-center/event-center-facade.js";
-import type { WorkspaceStore } from "../../services/workspace-store.js";
+import type { EventCenterFacade } from "../../services/capabilities/event-center/index.js";
+import type { WorkspaceFacade as WorkspaceStore } from "../../services/platform/workspace/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 /** 工作区领域独立登记目录选择、权限和主目录通道，避免系统对话框逻辑混入总注册器。 */

@@ -30,22 +30,22 @@ import { registerRulesIpc } from "./domains/register-rules-ipc.js";
 import { registerCodexIpc } from "./domains/register-codex-ipc.js";
 import { registerSystemIpc } from "./domains/register-system-ipc.js";
 import { registerEventCenterIpcHandler } from "./event-center-ipc.js";
-import { CodexService } from "../services/codex-service.js";
-import { ConversationDispatchStore } from "../services/conversation-dispatch-store.js";
-import { CollaborationCodexRegistry } from "../services/collaboration/collaboration-codex-sessions.js";
-import { CollaborationCoordinator } from "../services/collaboration/collaboration-coordinator.js";
-import { LinghuAutomationFacade } from "../services/collaboration/linghu/index.js";
-import { HanLiRealAppAcceptanceExecutor } from "../services/collaboration/hanli-real-app-acceptance-executor.js";
-import { NangongEvolutionFacade } from "../services/collaboration/nangong-evolution-facade.js";
-import { ManagedTaskExecutor } from "../services/managed-task-executor.js";
-import { ScreenshotStore } from "../services/screenshot-store.js";
-import { SettingsStore } from "../services/settings-store.js";
-import { TrustedCommandStore } from "../services/trusted-command-store.js";
-import { EventCenterFacade } from "../services/event-center/event-center-facade.js";
-import type { WorkflowRepository } from "../services/event-center/workflow-repository.js";
-import type { CollaborationTimelineFacade } from "../services/event-center/collaboration-timeline-facade.js";
-import { WorkspaceStore } from "../services/workspace-store.js";
-import { RuleBundleService } from "../services/rules/rule-bundle-service.js";
+import { CodexFacade as CodexService } from "../services/platform/codex/index.js";
+import { ConversationFacade as ConversationDispatchStore } from "../services/capabilities/conversation/index.js";
+import { CollaborationCodexRegistry } from "../services/capabilities/conversation/index.js";
+import { CollaborationWorkflowFacade as CollaborationCoordinator, type WorkflowRepositoryPort as WorkflowRepository } from "../services/workflow/index.js";
+import { LinghuAutomationFacade } from "../services/personas/linghu/index.js";
+import type { HanliFacade } from "../services/personas/hanli/index.js";
+import type { NangongFacade } from "../services/personas/nangong/index.js";
+import type { EvolutionFacade } from "../services/evolution/index.js";
+import type { PersonaWorkflowFacade } from "../services/workflow/index.js";
+import { ManagedExecutionFacade as ManagedTaskExecutor } from "../services/capabilities/execution/index.js";
+import { AttachmentFacade as ScreenshotStore } from "../services/platform/attachments/index.js";
+import { SettingsFacade as SettingsStore } from "../services/platform/settings/index.js";
+import { CommandGovernanceFacade as TrustedCommandStore } from "../services/platform/security/index.js";
+import { EventCenterFacade, type EventCenterTimeline as CollaborationTimelineFacade } from "../services/capabilities/event-center/index.js";
+import { WorkspaceFacade as WorkspaceStore } from "../services/platform/workspace/index.js";
+import { RuleBundleFacade as RuleBundleService } from "../services/capabilities/rules/index.js";
 
 interface DesktopIpcDependencies {
   aiMemoryDatabaseStatus: AiMemoryDatabaseStatus;
@@ -57,7 +57,10 @@ interface DesktopIpcDependencies {
   dispatch: ConversationDispatchStore;
   collaboration: CollaborationCoordinator;
   linghuAutomation: LinghuAutomationFacade;
-  nangongEvolution: NangongEvolutionFacade;
+  nangong: NangongFacade;
+  hanli: HanliFacade;
+  evolution: EvolutionFacade;
+  personaWorkflow: PersonaWorkflowFacade;
   collaborationRegistry: CollaborationCodexRegistry;
   eventCenter: EventCenterFacade;
   workflowRepository: WorkflowRepository | null;
@@ -148,12 +151,11 @@ function evolutionWorkspaceLocationQuery(location: EvolutionWorkspaceLocation): 
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangongEvolution, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
   const managedExecutor = new ManagedTaskExecutor();
-  const acceptanceExecutor = new HanLiRealAppAcceptanceExecutor(screenshots);
   let screenCaptureAttemptId = 0;
   let evolutionWorkspaceWindow: BrowserWindow | null = null;
   let evolutionWorkspaceLocation: EvolutionWorkspaceLocation = { perspective: "nangong", nodeId: null, page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: null };
@@ -207,19 +209,19 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     await openEvolutionWorkspace(normalizeEvolutionWorkspaceLocation(requestedLocation));
   });
 
-  const executeAcceptancePlan = async (plan: ReturnType<NangongEvolutionFacade["acceptancePlan"]>) => {
+  const executeAcceptancePlan = async (plan: ReturnType<HanliFacade["acceptancePlan"]>) => {
     if (!evolutionWorkspaceWindow || evolutionWorkspaceWindow.isDestroyed()) await openEvolutionWorkspace({ perspective: "hanli", nodeId: "manual-release", page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: plan.proposalId });
     if (!evolutionWorkspaceWindow || evolutionWorkspaceWindow.isDestroyed()) throw new Error("专题演化工作台未能打开，无法执行韩立真实界面验收。");
-    const run = await acceptanceExecutor.execute(plan, evolutionWorkspaceWindow);
+    const run = await hanli.executeAcceptancePlan(plan, evolutionWorkspaceWindow);
     audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, planId: plan.planId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
     return run;
   };
-  nangongEvolution.setOneShotAcceptanceRunner(executeAcceptancePlan);
+  personaWorkflow.setAcceptanceRunner(executeAcceptancePlan);
 
   handle("desktop:execute-han-li-acceptance-plan", async (_event, planId: string) => {
-    const plan = nangongEvolution.acceptancePlan(planId);
+    const plan = hanli.acceptancePlan(planId);
     const run = await executeAcceptancePlan(plan);
-    nangongEvolution.recordAcceptanceRun(run);
+    hanli.recordAcceptanceRun(run);
     return run;
   });
 
@@ -344,7 +346,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangongEvolution, eventCenter, collaborationTimeline);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, evolution, personaWorkflow, eventCenter, collaborationTimeline);
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);

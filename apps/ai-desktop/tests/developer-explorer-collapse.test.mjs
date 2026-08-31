@@ -10,6 +10,7 @@ if (!activeUser) throw new Error("AGENTS.md 未声明当前稳定用户 ID。");
 const aiDesktopRuleRoot = `../ruleengine/rules/local/${activeUser}/selplat/应用/ai-desktop/`;
 const aiDesktopRuleIndex = readFileSync(new URL(`${aiDesktopRuleRoot}RULE_INDEX.md`, import.meta.url), "utf8");
 const aiDesktopRule = readFileSync(new URL(`${aiDesktopRuleRoot}rule/RUL_AIDesktop官方Harness接入规则.md`, import.meta.url), "utf8");
+const workspaceRuntimeRule = readFileSync(new URL(`${aiDesktopRuleRoot}rule/RUL_AIDesktopHarness工作区与运行时规则.md`, import.meta.url), "utf8");
 
 test("资源管理器折叠整栏并由活动栏图标恢复", () => {
   assert.match(component, /developer-shell.*explorer-collapsed/);
@@ -50,12 +51,16 @@ test("工作区与任务使用单一活动分区并让当前分区置顶占满",
 
 test("当前用户 AI Desktop 规则已登记侧栏单区独占与标签新建入口契约", () => {
   assert.match(aiDesktopRuleIndex, new RegExp(`AI_DESKTOP_OFFICIAL_HARNESS_RULES\\s*=\\s*local/${activeUser}/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则\\.md`));
-  assert.match(aiDesktopRule, /rule_version\s*=\s*5\.100\.0/);
-  assert.match(aiDesktopRule, /developer_sidebar_section_disclosure_contract\.3\s*=\s*workspace_tasks_single_active/);
-  assert.match(aiDesktopRule, /developer_sidebar_section_disclosure_contract\.4\s*=\s*refresh_conversation_action_in_codex_chat_tab_before_close_with_localized_rebuild_session_tip/);
-  assert.match(aiDesktopRule, /developer_sidebar_resizer_contract\.3\s*=\s*no_workspace_tasks_height_divider/);
-  assert.match(aiDesktopRule, /developer_sidebar_active_section_layout_contract\s*=\s*active_section_top_and_fill_available_height/);
-  assert.match(aiDesktopRule, /developer_sidebar_active_section_layout_contract\.2\s*=\s*inactive_section_heading_only_at_bottom/);
+  // 版本会随同一规则的后续能力递增；这里验证版本格式和本功能契约，避免把合法升级误报为回归。
+  assert.match(aiDesktopRule, /rule_version\s*=\s*\d+\.\d+\.\d+/);
+  // 聚合规则已按职责拆分；先核对依赖登记，再到工作区分片读取真实业务约束。
+  assert.match(aiDesktopRule, /requires_rule_ids\s*=.*AI_DESKTOP_HARNESS_WORKSPACE_RUNTIME_RULES/);
+  assert.match(aiDesktopRuleIndex, new RegExp(`AI_DESKTOP_HARNESS_WORKSPACE_RUNTIME_RULES\\s*=\\s*local/${activeUser}/selplat/应用/ai-desktop/rule/RUL_AIDesktopHarness工作区与运行时规则\\.md`));
+  assert.match(workspaceRuntimeRule, /developer_sidebar_section_disclosure_contract\.3\s*=\s*workspace_tasks_single_active/);
+  assert.match(workspaceRuntimeRule, /developer_sidebar_section_disclosure_contract\.4\s*=\s*refresh_conversation_action_in_codex_chat_tab_before_close_with_localized_rebuild_session_tip/);
+  assert.match(workspaceRuntimeRule, /developer_sidebar_resizer_contract\.3\s*=\s*no_workspace_tasks_height_divider/);
+  assert.match(workspaceRuntimeRule, /developer_sidebar_active_section_layout_contract\s*=\s*active_section_top_and_fill_available_height/);
+  assert.match(workspaceRuntimeRule, /developer_sidebar_active_section_layout_contract\.2\s*=\s*inactive_section_heading_only_at_bottom/);
   assert.match(component, /<div className=\{`dev-tab\$\{evolutionWorkspacePerspective \? " with-workspace-action" : ""\}`\}><Prompt24Regular \/><span>\{collaborationMode \? collaborationTabTitle : "Codex Chat"\}<\/span>/);
   assert.match(component, /newCodexSession:\s*"重新建立一个 Codex 会话"/);
   assert.match(component, /className="tab-new-task"[^>]*data-sel-tooltip=\{text\.newCodexSession\}[^>]*data-sel-tooltip-mode="always"[^>]*aria-label=\{text\.newCodexSession\}[^>]*onClick=\{\(\) => void startNewTask\(\)\}[^>]*><ArrowClockwise24Regular \/><\/button>/);

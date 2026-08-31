@@ -3,18 +3,20 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { NangongEvolutionFacade } from "../../../build/ai-desktop/electron/electron/services/collaboration/nangong-evolution-facade.js";
-import { NangongEvolutionStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/nangong-evolution-store.js";
-import { EvolutionFlowOrchestrator } from "../../../build/ai-desktop/electron/electron/services/collaboration/evolution-flow-orchestrator.js";
-import { HanLiRealAppAcceptanceExecutor } from "../../../build/ai-desktop/electron/electron/services/collaboration/hanli-real-app-acceptance-executor.js";
+import { PersonaEvolutionRuntime } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/persona-evolution.runtime.js";
+import { EvolutionStateStore } from "../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
+import { EvolutionFlowOrchestrator } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution-flow.orchestrator.js";
+import { HanliRealAppAcceptanceRunner } from "../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-real-app-acceptance.runner.js";
 import { controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });
 const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: "/workspace", permission: "workspace-write" }] };
 const nangongPromptSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
-const evolutionFacadeSource = readFileSync(new URL("../electron/services/collaboration/nangong-evolution-facade.ts", import.meta.url), "utf8");
-const approvalServiceSource = readFileSync(new URL("../electron/services/collaboration/evolution-approval-service.ts", import.meta.url), "utf8");
-const distributionServiceSource = readFileSync(new URL("../electron/services/collaboration/evolution-task-distribution-service.ts", import.meta.url), "utf8");
+const evolutionFacadeSource = readFileSync(new URL("../electron/services/personas/nangong/nangong.facade.ts", import.meta.url), "utf8");
+const personaEvolutionRuntimeSource = readFileSync(new URL("../electron/services/workflow/internal/persona-evolution.runtime.ts", import.meta.url), "utf8");
+const approvalServiceSource = readFileSync(new URL("../electron/services/personas/hanli/internal/evolution-approval.service.ts", import.meta.url), "utf8");
+const hanliDeliberationSource = readFileSync(new URL("../electron/services/personas/hanli/internal/hanli-deliberation.service.ts", import.meta.url), "utf8");
+const distributionServiceSource = readFileSync(new URL("../electron/services/workflow/internal/evolution-task-distribution.service.ts", import.meta.url), "utf8");
 const persistedEvolutionStates = new Map();
 function evolutionPersistence(key) {
   return {
@@ -23,7 +25,7 @@ function evolutionPersistence(key) {
     save(state) { persistedEvolutionStates.set(key, structuredClone(state)); },
   };
 }
-function evolutionStore(key) { return new NangongEvolutionStore(evolutionPersistence(key)); }
+function evolutionStore(key) { return new EvolutionStateStore(evolutionPersistence(key)); }
 function readPersistedState(key) { return structuredClone(persistedEvolutionStates.get(key)); }
 function writePersistedState(key, state) { persistedEvolutionStates.set(key, structuredClone(state)); }
 function topicRequest(title = "协同审批分层") { return { title, goal: "把演化方向审批从执行审核中独立出来", scope: ["AI Desktop"], exclusions: ["其他应用"], evidence: ["现有审核只覆盖执行方案"], acceptanceCriteria: ["提案审批与执行审核具有独立记录"], workspaceState, locale: "zh-CN" }; }
@@ -51,10 +53,10 @@ test("南宫婉会话直接回答且内部意图不冒充用户原话", () => {
 });
 
 test("韩立审批意见面向普通用户且不得发明产品约束", () => {
-  assert.match(evolutionFacadeSource, /审批意见直接面向普通用户/);
-  assert.match(evolutionFacadeSource, /先用自然语言说明哪里不完整或为什么可以通过/);
-  assert.match(evolutionFacadeSource, /只能引用提案、专题或源码调查中已经存在的事实/);
-  assert.match(evolutionFacadeSource, /不得自行发明数量上限、页面规则或验收要求/);
+  assert.match(hanliDeliberationSource, /审批意见直接面向普通用户/);
+  assert.match(hanliDeliberationSource, /先用自然语言说明哪里不完整或为什么可以通过/);
+  assert.match(hanliDeliberationSource, /只能引用提案、专题或源码调查中已经存在的事实/);
+  assert.match(hanliDeliberationSource, /不得自行发明数量上限、页面规则或验收要求/);
 });
 
 test("审批、编排和分发服务不再互相代替职责", () => {
@@ -64,10 +66,10 @@ test("审批、编排和分发服务不再互相代替职责", () => {
   assert.equal(orchestrator.next({ status: "executing", distributedTaskIds: ["task-1"] }), "monitor-execution");
   assert.doesNotMatch(approvalServiceSource, /EvolutionTaskDistributionService|\.submitTask\(|\.dispatch\(/);
   assert.doesNotMatch(distributionServiceSource, /\.decide\(|EvolutionApprovalService/);
-  assert.doesNotMatch(evolutionFacadeSource, /#dispatchOnce|#store\.decide\(/);
-  assert.match(evolutionFacadeSource, /EvolutionApprovalService/);
-  assert.match(evolutionFacadeSource, /EvolutionFlowOrchestrator/);
-  assert.match(evolutionFacadeSource, /EvolutionTaskDistributionService/);
+  assert.doesNotMatch(evolutionFacadeSource, /#dispatchOnce|#store\.decide\(|createEvolutionApprovalService|EvolutionTaskDistributionService/);
+  assert.match(personaEvolutionRuntimeSource, /createEvolutionApprovalService/);
+  assert.match(personaEvolutionRuntimeSource, /new EvolutionFlowOrchestrator/);
+  assert.match(personaEvolutionRuntimeSource, /new EvolutionTaskDistributionService/);
 });
 
 test("审批服务按发生顺序发布申请、决定和补充事实且不会提前分发", () => {
@@ -75,7 +77,7 @@ test("审批服务按发生顺序发布申请、决定和补充事实且不会�
   try {
     const events = [];
     let submitted = 0;
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store: evolutionStore(path.join(directory, "state.json")),
       collaboration: { state() { return { members: [{ memberId: "nangong-wan", enabled: true }], tasks: [] }; }, submitTask() { submitted += 1; return { tasks: [] }; } },
       conversation,
@@ -240,7 +242,7 @@ test("自动审批无人工偏好时退回补充，人工决定形成版本化�
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-approval-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposal = state.proposals[0]; state = facade.autoApprove(proposal.proposalId);
     assert.equal(state.proposals[0].status, "supplement-required");
@@ -260,7 +262,7 @@ test("审批、验收与返修统一使用专题版本和幂等写入口", () =>
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     const collaboration = { state() { return { members: [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }], tasks: [] }; } };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest("统一专题写入口"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
@@ -285,7 +287,7 @@ test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
   try {
     const store = evolutionStore(path.join(directory, "state.json")); let submitted; let planningWorkspace;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "collab-1", evolutionProposalId: request.evolutionProposalId }] }; } };
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation, recordEvent: () => undefined,
       async planDistribution(_prompt, receivedWorkspace) { planningWorkspace = receivedWorkspace; return distributionServices.planDistribution(); },
     });
@@ -307,7 +309,7 @@ test("专题工作区缺失时返还执行显示业务错误而不是读取 null
   try {
     const store = evolutionStore(statePath);
     const collaboration = { submitTask() { throw new Error("缺少工作区时不得创建任务"); } };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest());
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
@@ -315,7 +317,7 @@ test("专题工作区缺失时返还执行显示业务错误而不是读取 null
     const persisted = readPersistedState(statePath);
     persisted.topics[0].workspaceState = null;
     writePersistedState(statePath, persisted);
-    const restored = new NangongEvolutionFacade({ store: evolutionStore(statePath), collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    const restored = new PersonaEvolutionRuntime({ store: evolutionStore(statePath), collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     await assert.rejects(() => restored.dispatch(proposalId), /当前专题缺少可用的实施工作区/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -338,7 +340,7 @@ test("预计修改文件重叠时程序阻止多人重复分发", async () => {
       { title: "修改按钮", scope: "调整同一工具栏按钮", acceptanceCriteria: ["按钮可用"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "页面改动" },
       { title: "验证按钮", scope: "验证同一工具栏按钮", acceptanceCriteria: ["按钮通过测试"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "测试改动" },
     ] });
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation, recordEvent: () => undefined,
       async planDistribution() { return overlappingPlan; },
     });
@@ -357,7 +359,7 @@ test("旧分发 audit 字段一次性迁移为程序 validation 且保留专题�
   const key = "nangong-distribution-validation-migration";
   const store = evolutionStore(key);
   const collaboration = { submitTask(request) { return { tasks: [{ taskId: "migration-task", evolutionProposalId: request.evolutionProposalId }] }; } };
-  const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+  const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
   let state = facade.createTopic(topicRequest("分发校验迁移"));
   state = facade.createProposal(state.topics[0].topicId, proposalRequest());
   const proposalId = state.proposals[0].proposalId;
@@ -396,7 +398,7 @@ test("全部执行结果返回南宫婉后才封存同一轮并一次性交给�
         return this.state();
       },
     };
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation, recordEvent: () => undefined,
       async planDistribution() { return JSON.stringify({ summary: "两个文件边界可独立执行，但必须整轮返回后统一测试。", units: [
         { title: "任务一", scope: "修改文件一", acceptanceCriteria: ["文件一通过"], expectedFiles: ["apps/ai-desktop/one.ts"], independentReason: "文件边界独立" },
@@ -429,7 +431,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
       submitTask(request) { distributedTaskId = "collab-evolution-completed"; return { tasks: [{ taskId: distributedTaskId, evolutionProposalId: request.evolutionProposalId, state: "integrated" }] }; },
       state() { return { tasks: distributedTaskId ? [{ taskId: distributedTaskId, state: "integrated" }] : [] }; },
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     store.setAutomation("evolution", true);
     let state = facade.createTopic(topicRequest("完整演化闭环"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
@@ -478,7 +480,7 @@ test("韩立综合南宫婉和 Codex 完整会话后逐轮发问，确立后才�
         ];
       },
     };
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration: {}, conversation, memory, recordEvent: () => undefined,
       hanLi: { async send() { return hanLiReplies.shift(); } },
       nangongDeliberation: { async send(question) { return `南宫婉针对韩立问题回答：${question}`; } },
@@ -505,7 +507,7 @@ test("研讨达到配置上限但证据仍不足时保留缺口并阻断，不�
       '{"question":"还缺少哪项执行事实？","reason":"现有原文没有证明发布结果"}',
       '{"decision":"continue","assessment":"发布结果仍没有事实证据。","nextQuestion":"发布后实际页面状态是什么？","questionReason":"缺少发布后用户可见结果"}',
     ];
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration: {}, conversation, recordEvent: () => undefined,
       memory: { readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "limit-source", deliberationId, source: "codex", conversationId: "thread", sourceMessageId: "message", sequenceNumber: 0, role: "codex", responsePhase: "final_answer", content: "只完成了代码修改。", originalCreatedAt: "2026-08-26T00:00:00.000Z", capturedAt: "2026-08-26T00:00:00.000Z" }]; } },
       hanLi: { async send() { return replies.shift(); } },
@@ -524,7 +526,7 @@ test("南宫婉对话持久化并冻结为正式课题快照", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-conversation-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     let state = await facade.sendConversationMessage({ message: "调查令狐持续修正 Bug", attachmentIds: ["screenshot-1"], workspaceState, locale: "zh-CN" });
     assert.equal(state.conversation.messages.length, 2);
     assert.deepEqual(state.conversation.messages[0].attachmentIds, ["screenshot-1"]);
@@ -542,7 +544,7 @@ test("南宫婉缺少回合元数据时仍保留完整回复且不伪装成发�
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     const plainConversation = { async send() { return { text: "我已看到这个问题，会先继续核对事实。", itemCount: 1 }; }, async newChat() {} };
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: plainConversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: plainConversation, recordEvent: () => undefined });
     const state = await facade.sendConversationMessage({ message: "继续调查", workspaceState, locale: "zh-CN" });
     assert.equal(state.conversation.messages.length, 2);
     assert.equal(state.conversation.messages[1].content, "我已看到这个问题，会先继续核对事实。");
@@ -555,7 +557,7 @@ test("人物实时会话按稳定消息标识和回复关系向下追加且允�
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     const plainConversation = { async send() { return { text: "收到。", itemCount: 1 }; }, async newChat() {} };
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: plainConversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: plainConversation, recordEvent: () => undefined });
     await facade.sendConversationMessage({ clientMessageId: "client-message-1", message: "1", workspaceState, locale: "zh-CN" });
     const state = await facade.sendConversationMessage({ clientMessageId: "client-message-2", message: "1", workspaceState, locale: "zh-CN" });
     assert.deepEqual(state.conversation.messages.map((message) => message.sequenceNumber), [0, 1, 2, 3]);
@@ -576,7 +578,7 @@ test("训练归档失败进入统一异常旁路且不把已完成聊天标记�
       buildNangongContext() { return "当前运行态上下文"; },
       syncConversation() { throw new Error("training database unavailable"); },
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: plainConversation, memory, recordEvent: () => undefined, recordFailure: (failure) => failures.push(failure) });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: plainConversation, memory, recordEvent: () => undefined, recordFailure: (failure) => failures.push(failure) });
     const state = await facade.sendConversationMessage({ clientMessageId: "client-training-failure", message: "先完成聊天", workspaceState, locale: "zh-CN" });
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(state.conversation.messages[0].deliveryStatus, "completed");
@@ -593,7 +595,7 @@ test("人物回复失败只原位标记用户消息且不产生训练归档", as
     const store = evolutionStore(path.join(directory, "state.json"));
     const failedConversation = { async send() { throw new Error("conversation unavailable"); }, async newChat() {} };
     const memory = { buildNangongContext() { return ""; }, syncConversation() { archiveCount += 1; } };
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: failedConversation, memory, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: failedConversation, memory, recordEvent: () => undefined });
     await assert.rejects(() => facade.sendConversationMessage({ clientMessageId: "client-send-failure", message: "不要丢失原文", workspaceState, locale: "zh-CN" }), /conversation unavailable/);
     const state = facade.state();
     assert.equal(state.conversation.messages.length, 1);
@@ -607,7 +609,7 @@ test("没有南宫婉明确邀请时回复 1 不启动流程或直接修改源�
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-not-ready-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     await facade.sendConversationMessage({ message: "继续调查", workspaceState, locale: "zh-CN" });
     const state = await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
     assert.equal(state.topics.length, 0);
@@ -625,7 +627,7 @@ test("已有真实运行时再次回复 1 返回可理解说明而不是发送�
     store.beginOneShotRun(workspaceState, "zh-CN");
     const invited = store.appendConversation("nangong", "当前事实已经明确，若确认启动请回复 1。", []);
     store.setOneShotConfirmation(invited.conversation.messages.at(-1).messageId);
-    const facade = new NangongEvolutionFacade({ store, collaboration: { state() { return { members: [], tasks: [] }; } }, conversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: { state() { return { members: [], tasks: [] }; } }, conversation, recordEvent: () => undefined });
     const state = await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
     assert.equal(state.oneShotRun.status, "running");
     assert.equal(state.oneShotRun.phase, "preparing-topic");
@@ -643,7 +645,7 @@ test("数据库遗留运行没有真实执行人时自动结束旧状态并继�
     const invited = store.appendConversation("nangong", "当前事实已经明确，若确认启动请回复 1。", []);
     store.setOneShotConfirmation(invited.conversation.messages.at(-1).messageId);
     const events = [];
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store,
       collaboration: { state() { return { members: [], tasks: [] }; } },
       conversation,
@@ -675,7 +677,7 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
       },
       async newChat() {},
     };
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation: readyConversation, ...distributionServices, recordEvent: () => undefined,
       hanLi: { async send() { return JSON.stringify({ decision: "approved", advice: "事实、范围、风险、回退和验收条件完整，同意沿既有流程执行。" }); } },
     });
@@ -737,7 +739,7 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
       },
       async newChat() {},
     };
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation: readyConversation, ...distributionServices,
       recordEvent: () => undefined, recordFailure: (failure) => failures.push(failure),
       hanLi: { async send() { return JSON.stringify({ decision: "approved", advice: "事实和验收条件完整。" }); } },
@@ -791,7 +793,7 @@ test("一次性流程捕获的 AI JSON 解析失败仍登记为技术异常并�
       async newChat() {},
     };
     const collaboration = { state() { return { members: [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }], tasks: [] }; } };
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation: readyConversation, recordEvent: () => undefined,
       recordFailure: (failure) => failures.push(failure),
       hanLi: { async send() { return '{"decision":"approved","advice":"缺少结束引号}'; } },
@@ -811,7 +813,7 @@ test("专题群人物消息复用南宫婉会话并只向专题档案写入短�
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-topic-group-message-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest("专题群消息回流"));
     const topicId = state.activeTopicId;
     const originalArchiveCount = state.archiveRecords.length;
@@ -839,7 +841,7 @@ test("南宫婉根据当前对话生成五项可编辑草稿但不直接保存�
       },
       async newChat() {},
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: draftConversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: draftConversation, recordEvent: () => undefined });
     await facade.sendConversationMessage({ message: "根据当前对话生成草稿", workspaceState, locale: "zh-CN" });
     const draft = await facade.generateTopicDraft({ workspaceState, locale: "zh-CN" });
     assert.deepEqual(draft, { title: "令狐持续修正演化", goal: "保持 Bug 修复链稳定运行", scope: ["AI Desktop"], evidence: ["用户陈述：草稿需要从当前对话生成", "南宫婉调查：修正方案需要审批"], acceptanceCriteria: ["五项内容可编辑后再保存"] });
@@ -860,7 +862,7 @@ test("南宫婉新建对话等待活动写入者释放后才清空持久消息",
         if (attempts < 3) throw new Error("thread already has an active writer");
       },
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: retryingConversation, recordEvent: () => undefined, newConversationRetryDelaysMs: [0, 1, 1] });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: retryingConversation, recordEvent: () => undefined, newConversationRetryDelaysMs: [0, 1, 1] });
     const state = await facade.newConversation();
     assert.equal(attempts, 3);
     assert.equal(state.conversation.messages.length, 0);
@@ -873,7 +875,7 @@ test("韩立验收计划由专题语义生成并只登记为待执行档案", as
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     let receivedPrompt = "";
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration: {}, conversation, recordEvent: () => undefined,
       async planAcceptance(prompt) {
         receivedPrompt = prompt;
@@ -924,7 +926,7 @@ test("真实应用验收执行器只执行白名单操作并阻止业务写按�
       async capturePage() { return { toPNG: () => Buffer.from("png") }; },
     },
   };
-  const executor = new HanLiRealAppAcceptanceExecutor({ async save() { screenshots += 1; return { id: `shot-${screenshots}`, name: "shot.png", filePath: "/evidence/shot.png", sizeBytes: 3, createdAt: new Date().toISOString() }; } });
+  const executor = new HanliRealAppAcceptanceRunner({ async save() { screenshots += 1; return { id: `shot-${screenshots}`, name: "shot.png", filePath: "/evidence/shot.png", sizeBytes: 3, createdAt: new Date().toISOString() }; } });
   const plan = { version: 1, planId: "plan-1", topicId: "topic-1", proposalId: "proposal-1", summary: "真实检查", concerns: ["滚动"], generatedAt: new Date().toISOString(), checks: [{ checkId: "check-1", category: "真实交互", target: "专题工作台", action: "缩放、导航和截图", expected: "可操作", evidenceRequired: "截图", operations: [{ type: "focus-window" }, { type: "resize-window", width: 980, height: 680 }, { type: "click", target: "专题执行群" }, { type: "scroll", target: "真实界面验收计划", direction: "down", amount: 600 }, { type: "press-key", key: "PageDown" }, { type: "inspect-text", text: "真实界面验收计划" }, { type: "capture", label: "检查结果" }, { type: "click", target: "验收通过" }] }] };
   const run = await executor.execute(plan, targetWindow);
   assert.equal(run.status, "blocked");
@@ -981,7 +983,7 @@ test("南宫婉线程删除最终失败时保留原页面消息", async () => {
     const store = evolutionStore(path.join(directory, "state.json"));
     store.appendConversation("user", "删除失败时必须保留");
     const failingConversation = { async send() { return { text: "unused", itemCount: 1 }; }, async newChat() { throw new Error("thread already has an active writer"); } };
-    const facade = new NangongEvolutionFacade({ store, collaboration: {}, conversation: failingConversation, recordEvent: () => undefined, newConversationRetryDelaysMs: [0, 1, 1] });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: failingConversation, recordEvent: () => undefined, newConversationRetryDelaysMs: [0, 1, 1] });
     await assert.rejects(() => facade.newConversation(), /active writer/);
     assert.equal(facade.state().conversation.messages[0].content, "删除失败时必须保留");
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -992,7 +994,7 @@ test("令狐修正与南宫提案使用独立自动审批开关并返还原提�
   try {
     const store = evolutionStore(path.join(directory, "state.json")); let submitted;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "linghu-task", evolutionProposalId: request.evolutionProposalId }] }; }, state() { return { tasks: [] }; } };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     store.setAutomation("linghu-approval", true);
     let state = facade.createLinghuRepairProposal({ title: "修正持续运行 Bug", content: "依据停点事实修正恢复逻辑", evidence: ["任务停在 test-failed"], impactScope: ["令狐恢复流程"], risks: ["重复恢复"], rollbackPlan: "恢复旧恢复点", acceptanceCriteria: ["任务恢复且不重复"], workspaceState, locale: "zh-CN" });
     const proposal = state.proposals.at(-1);
@@ -1015,7 +1017,7 @@ test("所有人物共用自身能力升级修订链并在任务中固定审批�
       submitTask(request) { submitted = request; return { tasks: [{ taskId: "self-upgrade-task", evolutionProposalId: request.evolutionProposalId }] }; },
       state() { return { members, tasks: [] }; },
     };
-    const facade = new NangongEvolutionFacade({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest("人物提交能力升级"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const original = state.proposals[0];
@@ -1057,12 +1059,12 @@ test("自动演化开启后原人物依据退回意见只重新提交一个自�
     const store = evolutionStore(path.join(directory, "state.json"));
     const members = [{ memberId: "linghu-ancestor", displayName: "令狐老祖", enabled: true, kind: "worker" }];
     const collaboration = { state() { return { members, tasks: [] }; } };
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation, recordEvent: () => undefined,
       async investigateRevision() {
         return JSON.stringify({
           content: "只读检查确认令狐提案生成器缺少文件位置、修正动作和预期结果字段，修订自身生成规则并补齐三项结构。",
-          evidence: ["apps/ai-desktop/electron/services/collaboration/linghu/linghu-automation.facade.ts 的提案生成路径未形成文件位置、修正动作和预期结果三项结构"],
+          evidence: ["apps/ai-desktop/electron/services/personas/linghu/linghu-automation.facade.ts 的提案生成路径未形成文件位置、修正动作和预期结果三项结构"],
           impactScope: ["令狐提案生成规则"], exclusions: ["不修改演化方向审批线路"], risks: ["字段过严可能阻断旧输入，使用明确缺项提示缓解"],
           rollbackPlan: "仅回退令狐提案结构校验和提示改动，保留审批及任务状态。", acceptanceCriteria: ["新提案明确包含问题文件、修正动作和可观察预期结果"],
         });
@@ -1089,7 +1091,7 @@ test("返修调查没有新增可核验事实时不创建提案版本", async ()
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     const members = [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }];
-    const facade = new NangongEvolutionFacade({
+    const facade = new PersonaEvolutionRuntime({
       store, collaboration: { state() { return { members, tasks: [] }; } }, conversation, recordEvent: () => undefined,
       async investigateRevision() { return JSON.stringify({ content: "仍需继续调查", evidence: [], impactScope: ["待确认范围"], exclusions: ["未知"], risks: ["证据不足"], rollbackPlan: "尚无改动，无需回退。", acceptanceCriteria: ["取得实际证据"] }); },
     });

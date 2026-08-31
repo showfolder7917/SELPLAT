@@ -4,10 +4,10 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { initializeAiMemoryDatabase } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/sqlite-database.js";
-import { NangongEvolutionStateRepository } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/nangong-evolution-state-repository.js";
-import { NangongEvolutionStore } from "../../../build/ai-desktop/electron/electron/services/collaboration/nangong-evolution-store.js";
-import { runSqliteTransaction } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/sqlite-transaction.js";
+import { initializeAiMemoryDatabase } from "../../../build/ai-desktop/electron/electron/services/platform/persistence/internal/sqlite-database.js";
+import { EvolutionStateRepository } from "../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.repository.js";
+import { EvolutionStateStore } from "../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
+import { runSqliteTransaction } from "../../../build/ai-desktop/electron/electron/services/platform/persistence/internal/sqlite-transaction.js";
 import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });
@@ -66,11 +66,11 @@ test("专题演化状态只写入 SQLite 并在清空后验证运行态归零", 
   try {
     const initialized = initializeAiMemoryDatabase(fixture.options);
     assert.equal(initialized.status.state, "ready");
-    const repository = new NangongEvolutionStateRepository(initialized.database);
-    const store = new NangongEvolutionStore(repository);
+    const repository = new EvolutionStateRepository(initialized.database);
+    const store = new EvolutionStateStore(repository);
     store.appendConversation("user", "保留的用户原话", []);
     store.beginOneShotRun({ primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: fixture.projectRoot, permission: "workspace-write" }] }, "zh-CN");
-    assert.equal(new NangongEvolutionStore(repository).state().oneShotRun?.status, "running");
+    assert.equal(new EvolutionStateStore(repository).state().oneShotRun?.status, "running");
     store.clearTestData();
     store.assertTestDataCleared();
     const persisted = initialized.database?.withConnection((connection) => connection.prepare("SELECT stateVersion, stateJson FROM AiDesktopEvolutionState WHERE singletonId=1").get());

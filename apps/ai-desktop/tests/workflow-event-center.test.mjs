@@ -3,12 +3,12 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { SqliteDatabase } from "../../../build/ai-desktop/electron/electron/services/event-center/persistence/sqlite-database.js";
-import { CollaborationMemoryService } from "../../../build/ai-desktop/electron/electron/services/event-center/collaboration-memory-service.js";
-import { CodexConversationCorpusIngestion } from "../../../build/ai-desktop/electron/electron/services/event-center/codex-conversation-corpus-ingestion.js";
-import { CodexConversationSemanticBackfill } from "../../../build/ai-desktop/electron/electron/services/event-center/codex-conversation-semantic-backfill.js";
-import { WorkflowRepository } from "../../../build/ai-desktop/electron/electron/services/event-center/workflow-repository.js";
-import { WorkflowSupervisor } from "../../../build/ai-desktop/electron/electron/services/event-center/workflow-supervisor.js";
+import { SqliteDatabase } from "../../../build/ai-desktop/electron/electron/services/platform/persistence/internal/sqlite-database.js";
+import { CollaborationMemoryService } from "../../../build/ai-desktop/electron/electron/services/capabilities/event-center/internal/projection/collaboration-memory.service.js";
+import { CodexConversationCorpusIngestion } from "../../../build/ai-desktop/electron/electron/services/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.js";
+import { CodexConversationSemanticBackfill } from "../../../build/ai-desktop/electron/electron/services/capabilities/event-center/internal/corpus/codex-conversation-semantic-backfill.js";
+import { WorkflowRepository } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.repository.js";
+import { WorkflowSupervisor } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.supervisor.js";
 import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });

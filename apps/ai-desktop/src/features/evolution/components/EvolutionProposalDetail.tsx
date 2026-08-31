@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
-import type { NangongEvolutionState } from "../../../../contracts/desktop/desktop";
+import type { EvolutionState } from "../../../../contracts/desktop/desktop";
 import { MarkdownMessage } from "../../../variants/developer/MarkdownMessage";
 import { evolutionStatusLabel } from "../model/evolution-workbench";
 
-type EvolutionProposal = NangongEvolutionState["proposals"][number];
+type EvolutionProposal = EvolutionState["proposals"][number];
 
 /** 展示选中提案的事实、范围、风险、回退和审批记录，业务动作由 children 注入。 */
 export function EvolutionProposalDetail({ proposal, compact = false, children }: { proposal: EvolutionProposal; compact?: boolean; children?: ReactNode }) {

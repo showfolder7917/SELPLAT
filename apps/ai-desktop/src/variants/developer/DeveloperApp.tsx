@@ -54,8 +54,8 @@ import type {
   LinghuAutomationStateEventOutDto,
   LinghuAutomationStateOutDto,
   ManagedExecutionMode,
-  NangongEvolutionState,
-  NangongEvolutionStateEvent,
+  EvolutionState,
+  EvolutionStateEvent,
   EvolutionWorkspaceLocation,
   ModelServiceTier,
   ReasoningEffort,
@@ -160,7 +160,7 @@ function readableDesktopError(error: unknown, fallback: string): string {
 export function EvolutionWorkspaceWindowApp() {
   const [requestedLocation, setRequestedLocation] = useState<EvolutionWorkspaceLocation>(() => evolutionWorkspaceLocationFromSearch(window.location.search));
   const perspective = requestedLocation.perspective;
-  const [state, setState] = useState<NangongEvolutionState | null>(null);
+  const [state, setState] = useState<EvolutionState | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceState | null>(null);
   const [nangongMember, setNangongMember] = useState<CollaborationMember | null>(null);
   const [locale, setLocale] = useState<Locale>("zh-CN");
@@ -168,7 +168,7 @@ export function EvolutionWorkspaceWindowApp() {
   useEffect(() => {
     let active = true;
     void Promise.all([
-      window.desktop?.getNangongEvolutionState(),
+      window.desktop?.getEvolutionState(),
       window.desktop?.getWorkspaces(),
       window.desktop?.getCollaborationState(),
       window.desktop?.getSettings(),
@@ -179,7 +179,7 @@ export function EvolutionWorkspaceWindowApp() {
       if (collaboration) setNangongMember(collaboration.members.find((member) => member.memberId === "nangong-wan") || null);
       if (settings) setLocale(settings.locale);
     }).catch((reason) => { if (active) setError(readableDesktopError(reason, "无法打开专题演化工作台。")); });
-    const unsubscribeState = window.desktop?.onNangongEvolutionState((event) => setState(event.state));
+    const unsubscribeState = window.desktop?.onEvolutionState((event) => setState(event.state));
     const unsubscribeCollaboration = window.desktop?.onCollaborationState((event) => setNangongMember(event.state.members.find((member) => member.memberId === "nangong-wan") || null));
     const unsubscribeLocation = window.desktop?.onEvolutionWorkspaceLocation((location) => {
       setRequestedLocation(location);
@@ -245,7 +245,7 @@ export function DeveloperApp() {
   const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
   const [collaborationTimeline, setCollaborationTimeline] = useState<CollaborationTimelineSnapshot | null>(null);
   const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationStateOutDto | null>(null);
-  const [nangongEvolutionState, setNangongEvolutionState] = useState<NangongEvolutionState | null>(null);
+  const [evolutionState, setEvolutionState] = useState<EvolutionState | null>(null);
   const [collaborationStreams, setCollaborationStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationTimelineStreams, setCollaborationTimelineStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-group" | "task-detail">("member");
@@ -404,11 +404,11 @@ export function DeveloperApp() {
     void desktop.getCollaborationState().then((state) => { collaborationStateRef.current = state; setCollaborationState(state); });
     refreshTimeline();
     void desktop.getLinghuAutomationState().then((state) => { linghuAutomationStateRef.current = state; setLinghuAutomationState(state); });
-    void desktop.getNangongEvolutionState().then(setNangongEvolutionState);
+    void desktop.getEvolutionState().then(setEvolutionState);
     const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
     const removeTimelineListener = desktop.onCollaborationTimelineChanged(() => refreshTimeline());
     const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEventOutDto) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
-    const removeNangongListener = desktop.onNangongEvolutionState((event: NangongEvolutionStateEvent) => { setNangongEvolutionState(event.state); });
+    const removeNangongListener = desktop.onEvolutionState((event: EvolutionStateEvent) => { setEvolutionState(event.state); });
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
       // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
       const updateStream = (current: Record<string, CollaborationLiveOutput>, key: string, preserveNodeHistory = false) => {
@@ -878,7 +878,7 @@ export function DeveloperApp() {
     try {
       const state = await window.desktop?.newNangongConversation();
       if (!state) throw new Error("南宫婉新建对话服务没有返回状态。");
-      setNangongEvolutionState(state);
+      setEvolutionState(state);
       setNangongAttachments([]);
     } catch (error) {
       // 南宫婉必须在自己的页面看到线程删除失败，不能把错误留在只属于韩立的输入区。
@@ -930,19 +930,19 @@ export function DeveloperApp() {
   };
 
   const manuallyApproveTimelineProposal = async (proposalId: string, title: string, content: string) => {
-    if (!nangongEvolutionState) return;
+    if (!evolutionState) return;
     const result = await selUi.approval({ title, subtitle: `专题任务 · 等待韩立审批`, content });
     if (!result) return;
     setDispatchError("");
     try {
       // 审批写动作继续复用演化协调器；主进程 EventCenter 会记录成功或 catch 异常并供令狐老祖消费。
       const next = await window.desktop?.decideEvolutionProposal(proposalId, {
-        mutation: evolutionMutationRequest(nangongEvolutionState),
+        mutation: evolutionMutationRequest(evolutionState),
         decision: result.decision,
         advice: result.reason,
         feedbackTarget: "proposal-content",
       });
-      if (next) setNangongEvolutionState(next);
+      if (next) setEvolutionState(next);
       const timeline = await window.desktop?.getCollaborationTimeline();
       if (timeline) setCollaborationTimeline(timeline);
     } catch (error) {
@@ -1273,7 +1273,7 @@ export function DeveloperApp() {
       || selectedCollaborationMember
     : null;
   const showHanLiConversationWorkspace = !collaborationMode || (collaborationPanel === "member" && selectedCollaborationMember?.memberId === "han-li");
-  const showNangongConversationWorkspace = Boolean(collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "nangong-wan" && nangongEvolutionState);
+  const showNangongConversationWorkspace = Boolean(collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "nangong-wan" && evolutionState);
   const evolutionWorkspacePerspective = collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "han-li"
     ? "hanli"
     : collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "nangong-wan"
@@ -1419,15 +1419,15 @@ export function DeveloperApp() {
             : null;
           return <article key={message.id} className="selconversation-message" data-role={message.role} data-streaming={message.streaming || undefined}><header>{message.role === "user" ? `YOU${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "CODEX"}</header><div className="selconversation-message-body">{message.attachments?.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && messageTask && <CollaborationStatusChain task={messageTask} locale={locale} onRetry={async (taskId) => { const state = await window.desktop?.continueCollaborationTask(taskId); if (state) setCollaborationState(state); }} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} activeMode={executionMode} onReturn={setExecutionMode} onAdvance={(mode, label) => collaborationMode && message.managedMode === "conversation-managed" ? void submitConfirmedCollaborationTask(message).catch((error) => setDispatchError(readableDesktopError(error, "无法提交协同任务。"))) : void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>;
         })}
-      </section> : showNangongConversationWorkspace && nangongEvolutionState
-        ? <NangongConversationWorkspace key={nangongEvolutionState.conversation.conversationId} state={nangongEvolutionState} attachments={nangongAttachments} workspaces={workspaces} locale={locale} newConversationBusy={nangongNewConversationBusy} error={nangongError} onState={setNangongEvolutionState} onAttachments={setNangongAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setNangongError} />
+      </section> : showNangongConversationWorkspace && evolutionState
+        ? <NangongConversationWorkspace key={evolutionState.conversation.conversationId} state={evolutionState} attachments={nangongAttachments} workspaces={workspaces} locale={locale} newConversationBusy={nangongNewConversationBusy} error={nangongError} onState={setEvolutionState} onAttachments={setNangongAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setNangongError} />
         : collaborationPanel === "task-group"
         ? <TaskCollaborationGroup snapshot={collaborationTimeline} liveTextByNodeId={Object.fromEntries(Object.entries(collaborationTimelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} />
         : collaborationPanel === "execution-list"
         ? <CollaborationExecutionList tasks={completedCollaborationTasks} locale={locale} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />
         : collaborationPanel === "task-detail" && selectedCollaborationTask && selectedCollaborationTaskMember
           ? <CollaborationTaskDetail task={selectedCollaborationTask} member={selectedCollaborationTaskMember} liveOutput={collaborationStreams[selectedCollaborationTask.taskId] || null} automation={linghuAutomationState} locale={locale} onBack={() => { setSelectedCollaborationTaskId(null); setCollaborationPanel(terminalCollaborationStates.has(selectedCollaborationTask.state) ? "execution-list" : "member"); }} />
-          : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} linghuAutomation={linghuAutomationState} nangongEvolution={nangongEvolutionState} nangongAttachments={nangongAttachments} workspaces={workspaces} onLinghuState={setLinghuAutomationState} onNangongState={setNangongEvolutionState} onNangongAttachments={setNangongAttachments} onNangongScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onNangongPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setDispatchError} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
+          : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} linghuAutomation={linghuAutomationState} nangongEvolution={evolutionState} nangongAttachments={nangongAttachments} workspaces={workspaces} onLinghuState={setLinghuAutomationState} onNangongState={setEvolutionState} onNangongAttachments={setNangongAttachments} onNangongScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onNangongPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setDispatchError} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
       {showHanLiConversationWorkspace && <SelUiConversation id="selConversationHanLiId" onSubmit={() => void send()} timeline={null} composer={<form className="selconversation-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
         {dispatchState.activeTask?.status === "recoverable" && <div className="dispatch-recovery" role="status"><span>发现上次未完成的任务</span><div><button type="button" onClick={() => void recoverConversationTask()}>继续执行</button><button type="button" onClick={() => void discardConversationRecovery()}>放弃任务</button></div></div>}
@@ -1497,11 +1497,11 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
   streams: Record<string, CollaborationLiveOutput>;
   locale: Locale;
   linghuAutomation: LinghuAutomationStateOutDto | null;
-  nangongEvolution: NangongEvolutionState | null;
+  nangongEvolution: EvolutionState | null;
   nangongAttachments: ComposerAttachment[];
   workspaces: WorkspaceState | null;
   onLinghuState(state: LinghuAutomationStateOutDto): void;
-  onNangongState(state: NangongEvolutionState): void;
+  onNangongState(state: EvolutionState): void;
   onNangongAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>;
   onNangongScreenshot(hidden: boolean): void;
   onNangongPaste(files: File[]): void;
@@ -1536,7 +1536,7 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
 }
 
 /** 南宫婉沿用韩立主会话的消息区和输入区，只替换人物文案与专项演化发送链路。 */
-function NangongConversationWorkspace({ state, attachments, workspaces, locale, newConversationBusy, error, onState, onAttachments, onScreenshot, onPaste, onError }: { state: NangongEvolutionState; attachments: ComposerAttachment[]; workspaces: WorkspaceState | null; locale: Locale; newConversationBusy: boolean; error: string; onState(state: NangongEvolutionState): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
+function NangongConversationWorkspace({ state, attachments, workspaces, locale, newConversationBusy, error, onState, onAttachments, onScreenshot, onPaste, onError }: { state: EvolutionState; attachments: ComposerAttachment[]; workspaces: WorkspaceState | null; locale: Locale; newConversationBusy: boolean; error: string; onState(state: EvolutionState): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
   const [chatText, setChatText] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [topicDraftOpen, setTopicDraftOpen] = useState(false);
@@ -1546,7 +1546,7 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
   const [attachmentPreviews, setAttachmentPreviews] = useState<Record<string, ComposerAttachment[]>>({});
   const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
   const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
-  const update = async (operation: () => Promise<NangongEvolutionState> | undefined) => {
+  const update = async (operation: () => Promise<EvolutionState> | undefined) => {
     onError("");
     try { const pending = operation(); if (!pending) return; const next = await pending; onState(next); } catch (error) { onError(readableDesktopError(error, "专项演化操作失败。")); }
   };

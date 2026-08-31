@@ -7,9 +7,10 @@
 | 目录 | 职责 | 主要生产者 | 主要消费者 |
 |---|---|---|---|
 | `foundation/` | 稳定枚举、基础值对象和运行环境描述 | 主进程配置 | 全部协议域 |
-| `desktop/` | 桌面壳、工作区、设置、截图、数据库状态和 preload 白名单 | 主进程桌面服务、preload | Renderer 桌面功能 |
-| `codex/` | Codex 运行、流事件、审批、用户输入和对话调度 | Codex 主进程服务 | Renderer 对话功能 |
-| `collaboration/` | 协作任务、记忆、演进、自动化、测试资源和版本发布 | 主进程协作服务 | Renderer 协作与治理功能 |
+| `desktop/` | DesktopApi 组合出口、能力注册表和桌面壳白名单 | preload | Renderer 全部功能 |
+| `platform/` | Codex、工作区、设置、安全、附件和数据库状态 | 主进程平台服务 | 公共能力与 DesktopApi |
+| `capabilities/` | 会话、事件中心、测试、发布和规则包协议 | 主进程公共能力 | Workflow、人物与 DesktopApi |
+| `collaboration/` | Workflow、Evolution 与人物协议 | 主进程人物和流程服务 | Renderer 协作与演化功能 |
 | `governance/` | 工作流事件、异常、审计和审批记录 | 事件中心与审计服务 | Renderer 治理视图 |
 
 ## 数据边界
@@ -30,7 +31,7 @@ Electron main handler → application service → infrastructure
 - Renderer 只能通过 `DesktopApi` 使用主进程能力。
 - preload 只桥接已登记能力，不包含业务判断。
 - IPC handler 校验请求并调用应用服务，不直接操作复杂持久化或外部进程。
-- `desktop/desktop.ts` 是既有调用方的组合出口；新代码应优先从所属领域文件导入。
+- `desktop/desktop.ts` 是 Renderer 的组合出口；主进程新代码必须从所属模块唯一 `index.ts` 导入。
 
 ## 注释要求
 

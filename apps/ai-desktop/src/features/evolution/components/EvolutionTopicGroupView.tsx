@@ -6,11 +6,11 @@ import type {
   EvolutionTopic,
   EvolutionTopicDossier,
   Locale,
-  NangongEvolutionState,
+  EvolutionState,
   WorkspaceState,
 } from "../../../../contracts/desktop/desktop";
 import { evolutionOwnerForStatus, evolutionStatusLabel, workbenchOwnerLabel } from "../model/evolution-workbench";
-import type { EvolutionWorkspaceFlowNode } from "./NangongEvolutionRail";
+import type { EvolutionWorkspaceFlowNode } from "../../nangong";
 
 interface TopicGroupEntry {
   id: string;
@@ -39,7 +39,7 @@ export function EvolutionTopicGroupView({ topic, stateVersion, perspective, loca
   perspective: "nangong" | "hanli";
   locale: Locale;
   workspaces: WorkspaceState | null;
-  onState(state: NangongEvolutionState): void;
+  onState(state: EvolutionState): void;
   onNavigate(nodeId: EvolutionWorkspaceFlowNode, selectedRowId: string | null): void;
   onError(message: string): void;
 }) {

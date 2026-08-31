@@ -5,44 +5,64 @@ import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, protocol } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
-import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../contracts/desktop/database.js";
-import type { WorkspaceState } from "../contracts/desktop/workspace.js";
+import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../contracts/platform/persistence/index.js";
+import type { WorkspaceState } from "../contracts/platform/workspace/index.js";
 import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
-import { BusinessAuditLog } from "./services/business-audit-log.js";
-import { CodexService } from "./services/codex-service.js";
-import { CodexSessionStore, SqliteCodexSessionStore } from "./services/codex-session-store.js";
-import { ConversationDispatchStore } from "./services/conversation-dispatch-store.js";
-import { CodexCollaborationSessionFactory, CollaborationCodexRegistry } from "./services/collaboration/collaboration-codex-sessions.js";
-import { CollaborationCoordinator } from "./services/collaboration/collaboration-coordinator.js";
-import { CollaborationDurationLog } from "./services/collaboration/collaboration-duration-log.js";
-import { CollaborationStore } from "./services/collaboration/collaboration-store.js";
-import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "./services/collaboration/linghu/index.js";
-import { NANGONG_ONE_SHOT_INVITATION, NangongEvolutionFacade } from "./services/collaboration/nangong-evolution-facade.js";
-import { NangongEvolutionStore } from "./services/collaboration/nangong-evolution-store.js";
-import { buildEvolutionWorkbenchChange } from "./services/collaboration/evolution-workbench-change-assembler.js";
-import { verifyCollaborationIntegration } from "./services/collaboration/integration-verifier.js";
-import { VersionWorkspaceManager } from "./services/collaboration/version-workspace-manager.js";
-import { VersionIntegrationPipeline } from "./services/collaboration/version-integration-pipeline.js";
-import { TaskWorktreeTestRunner } from "./services/collaboration/task-worktree-test-runner.js";
-import { TestResourceCoordinatorFacade } from "./services/collaboration/test-resource-coordinator-facade.js";
-import { IntegrationReleaseCoordinatorFacade } from "./services/collaboration/integration-release-coordinator-facade.js";
-import { ReleaseBatchStore } from "./services/collaboration/release-batch-store.js";
-import { stageVerifiedDeveloperExecutable } from "./services/collaboration/verified-package-release.js";
-import { ScreenshotStore } from "./services/screenshot-store.js";
-import { SettingsStore } from "./services/settings-store.js";
-import { WorkspaceStore } from "./services/workspace-store.js";
-import { TrustedCommandStore } from "./services/trusted-command-store.js";
-import { initializeAiMemoryDatabase, type SqliteDatabase } from "./services/event-center/persistence/sqlite-database.js";
-import { NangongEvolutionStateRepository } from "./services/event-center/persistence/nangong-evolution-state-repository.js";
-import { WorkflowRepository } from "./services/event-center/workflow-repository.js";
-import { WorkflowSupervisor } from "./services/event-center/workflow-supervisor.js";
-import { EventCenterFacade } from "./services/event-center/event-center-facade.js";
-import { CollaborationMemoryService } from "./services/event-center/collaboration-memory-service.js";
-import { CollaborationTimelineFacade } from "./services/event-center/collaboration-timeline-facade.js";
-import { CodexConversationCorpusIngestion, CodexConversationCorpusWatcher } from "./services/event-center/codex-conversation-corpus-ingestion.js";
-import { CodexConversationSemanticBackfill, buildCodexSemanticBackfillPrompt, parseCodexSemanticBackfillResponse } from "./services/event-center/codex-conversation-semantic-backfill.js";
-import { RuleBundleService } from "./services/rules/rule-bundle-service.js";
+import {
+  createBusinessAuditArchive,
+  createCodexConversationCorpusIngestion,
+  createCodexConversationCorpusWatcher,
+  createCodexConversationSemanticBackfill,
+  createCollaborationMemory,
+  createCollaborationTimeline,
+  EventCenterFacade,
+  buildCodexSemanticBackfillPrompt,
+  parseCodexSemanticBackfillResponse,
+  type CorpusIngestion,
+  type CorpusSemanticBackfill,
+  type CorpusWatcher,
+  type EventCenterMemory,
+  type EventCenterTimeline,
+} from "./services/capabilities/event-center/index.js";
+import {
+  CodexFacade as CodexService,
+  createFileCodexSessionRepository,
+  createSqliteCodexSessionRepository,
+} from "./services/platform/codex/index.js";
+import { ConversationFacade as ConversationDispatchStore } from "./services/capabilities/conversation/index.js";
+import { CodexCollaborationSessionFactory, CollaborationCodexRegistry } from "./services/capabilities/conversation/index.js";
+import {
+  CollaborationWorkflowFacade as CollaborationCoordinator,
+  createCollaborationDurationLog,
+  createCollaborationState,
+  createWorkflowRepository,
+  createWorkflowSupervisor,
+  createPersonaCapabilityRegistry,
+  createPersonaWorkflowRuntime,
+  type WorkflowRepositoryPort as WorkflowRepository,
+  type WorkflowSupervisorPort as WorkflowSupervisor,
+} from "./services/workflow/index.js";
+import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "./services/personas/linghu/index.js";
+import { createNangongRuntime } from "./services/personas/nangong/index.js";
+import { createHanliRuntime } from "./services/personas/hanli/index.js";
+import { buildEvolutionWorkbenchChange, createEvolutionRuntime, createEvolutionState } from "./services/evolution/index.js";
+import { PersonaEvolutionRuntime } from "./services/workflow/index.js";
+import {
+  createReleaseBatchStore,
+  createVersionIntegrationPipeline,
+  createVersionWorkspaceManager,
+  IntegrationReleaseCoordinatorFacade,
+  stageVerifiedDeveloperExecutable,
+  verifyCollaborationIntegration,
+} from "./services/capabilities/release/index.js";
+import { createTaskWorktreeTestRunner, TestResourceCoordinatorFacade } from "./services/capabilities/testing/index.js";
+import { AttachmentFacade as ScreenshotStore } from "./services/platform/attachments/index.js";
+import { SettingsFacade as SettingsStore } from "./services/platform/settings/index.js";
+import { WorkspaceFacade as WorkspaceStore } from "./services/platform/workspace/index.js";
+import { CommandGovernanceFacade as TrustedCommandStore } from "./services/platform/security/index.js";
+import { createAtomicJsonPersistence, initializeAiMemoryDatabase, type DatabasePort as SqliteDatabase } from "./services/platform/persistence/index.js";
+import { RuleBundleFacade as RuleBundleService } from "./services/capabilities/rules/index.js";
 import { createMainWindow } from "./window/create-main-window.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -64,13 +84,13 @@ let nangongDistributionCodex: CodexService | undefined;
 let corpusSemanticBackfillCodex: CodexService | undefined;
 let collaboration: CollaborationCoordinator | undefined;
 let linghuAutomation: LinghuAutomationFacade | undefined;
-let nangongEvolution: NangongEvolutionFacade | undefined;
+let personaEvolution: PersonaEvolutionRuntime | undefined;
 let aiMemoryDatabase: SqliteDatabase | null = null;
 let workflowRepository: WorkflowRepository | null = null;
-let collaborationTimeline: CollaborationTimelineFacade | null = null;
+let collaborationTimeline: EventCenterTimeline | null = null;
 let workflowSupervisor: WorkflowSupervisor | null = null;
-let collaborationMemory: CollaborationMemoryService | null = null;
-let codexAppCorpusWatcher: CodexConversationCorpusWatcher | null = null;
+let collaborationMemory: EventCenterMemory | null = null;
+let codexAppCorpusWatcher: CorpusWatcher | null = null;
 let aiMemoryDatabaseStatus: AiMemoryDatabaseStatus = {
   state: "unavailable",
   schemaVersion: null,
@@ -126,7 +146,7 @@ if (!selectedStartupWorkspace || !path.isAbsolute(selectedStartupWorkspace.path)
 }
 const startupProjectRoot = path.resolve(selectedStartupWorkspace.path);
 const startupProjectPaths = resolveApplicationDataPaths({ selplatRoot: startupProjectRoot, applicationName: startupApplicationName });
-const eventCenter = new EventCenterFacade(new BusinessAuditLog(startupProjectPaths.sourceRoot, startupProjectPaths.buildRoot, startupProjectPaths.archiveLogRoot));
+const eventCenter = new EventCenterFacade(createBusinessAuditArchive(startupProjectPaths.sourceRoot, startupProjectPaths.buildRoot, startupProjectPaths.archiveLogRoot));
 eventCenter.installProcessExceptionBoundary();
 const ownsApplicationInstance = app.requestSingleInstanceLock();
 if (!ownsApplicationInstance) app.quit();
@@ -178,18 +198,18 @@ app.whenReady().then(async () => {
   }
   const appRoot = app.isPackaged ? app.getAppPath() : projectPaths.sourceRoot;
   const releaseVersion = (JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8")) as { version: string }).version;
-  workflowRepository = aiMemoryDatabase ? new WorkflowRepository(aiMemoryDatabase) : null;
-  collaborationTimeline = aiMemoryDatabase ? new CollaborationTimelineFacade(aiMemoryDatabase) : null;
+  workflowRepository = aiMemoryDatabase ? createWorkflowRepository(aiMemoryDatabase) : null;
+  collaborationTimeline = aiMemoryDatabase ? createCollaborationTimeline(aiMemoryDatabase) : null;
   collaborationTimeline?.subscribeTimelineChanged((event) => {
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
       window.webContents.send("desktop:collaboration-timeline-changed", event);
     }
   });
-  collaborationMemory = aiMemoryDatabase ? new CollaborationMemoryService(aiMemoryDatabase) : null;
+  collaborationMemory = aiMemoryDatabase ? createCollaborationMemory(aiMemoryDatabase) : null;
   eventCenter.attachRepository(workflowRepository);
   eventCenter.recordApplicationStart({ variant, projectRoot, rendererRoot });
   const trustedCommands = new TrustedCommandStore(path.join(app.getPath("userData"), "trusted-project-commands.json"));
-  const codexSessions = new CodexSessionStore(path.join(app.getPath("userData"), "active-codex-session.json"));
+  const codexSessions = createFileCodexSessionRepository(path.join(app.getPath("userData"), "active-codex-session.json"));
   const settings = new SettingsStore(path.join(app.getPath("userData"), "desktop-settings.json"));
   const rules = new RuleBundleService(
     app.isPackaged ? path.join(process.resourcesPath, "ruleengine") : path.join(projectPaths.buildRoot, "rule-bundle"),
@@ -200,18 +220,18 @@ app.whenReady().then(async () => {
   const codexHome = path.join(app.getPath("userData"), "codex-home");
   mkdirSync(codexHome, { recursive: true });
   const corpusIngestion = aiMemoryDatabase
-    ? new CodexConversationCorpusIngestion(aiMemoryDatabase, path.join(codexHome, "sessions"))
+    ? createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(codexHome, "sessions"))
     : null;
   const externalCodexHome = path.resolve(process.env.CODEX_HOME || path.join(app.getPath("home"), ".codex"));
   const externalCorpusIngestions = aiMemoryDatabase ? [
-    new CodexConversationCorpusIngestion(aiMemoryDatabase, path.join(externalCodexHome, "sessions"), {
+    createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(externalCodexHome, "sessions"), {
       sourceKeyPrefix: "codex-app/active",
       eligibleThreadSources: ["user"],
       requiredWorkspaceRoot: projectRoot,
       requiredOriginator: "codex_work_desktop",
       requireCompletedTurns: true,
     }),
-    new CodexConversationCorpusIngestion(aiMemoryDatabase, path.join(externalCodexHome, "archived_sessions"), {
+    createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(externalCodexHome, "archived_sessions"), {
       sourceKeyPrefix: "codex-app/archived",
       eligibleThreadSources: ["user"],
       requiredWorkspaceRoot: projectRoot,
@@ -261,7 +281,7 @@ app.whenReady().then(async () => {
     if (next.codexAppCorpusIngestionEnabled) ingestTrainingCorpus("codex-app-enabled");
   });
   // 只监听 Codex 的持久会话目录；开关关闭时回调不读取外部会话，开启后下一次变化或30秒兜底扫描立即补录。
-  codexAppCorpusWatcher = new CodexConversationCorpusWatcher(
+  codexAppCorpusWatcher = createCodexConversationCorpusWatcher(
     [path.join(externalCodexHome, "sessions"), path.join(externalCodexHome, "archived_sessions")],
     () => {
       if (settings.read().codexAppCorpusIngestionEnabled) ingestTrainingCorpus("codex-app-changed");
@@ -291,7 +311,7 @@ app.whenReady().then(async () => {
     (details) => eventCenter.recordEvent("trusted_command.decision", details),
     (details) => eventCenter.recordEvent("thread.lifecycle", details),
   );
-  const nangongSessions = new SqliteCodexSessionStore(aiMemoryDatabase, "nangong");
+  const nangongSessions = createSqliteCodexSessionRepository(aiMemoryDatabase, "nangong");
   nangongCodex = new CodexService(
     projectRoot,
     trustedCommands,
@@ -310,7 +330,7 @@ app.whenReady().then(async () => {
     (details) => eventCenter.recordEvent("nangong.conversation.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.conversation.thread.lifecycle", details),
   );
-  const hanLiSessions = new SqliteCodexSessionStore(aiMemoryDatabase, "han-li");
+  const hanLiSessions = createSqliteCodexSessionRepository(aiMemoryDatabase, "han-li");
   hanLiCodex = new CodexService(
     projectRoot, trustedCommands, hanLiSessions,
     {
@@ -325,7 +345,7 @@ app.whenReady().then(async () => {
   nangongDeliberationCodex = nangongCodex;
   nangongDistributionCodex = nangongCodex;
   // 令狐固定会话仅服务故障兜底和统一测试修复；常规分发由南宫婉规划并交给程序做确定性冲突校验。
-  const linghuSessions = new SqliteCodexSessionStore(aiMemoryDatabase, "linghu");
+  const linghuSessions = createSqliteCodexSessionRepository(aiMemoryDatabase, "linghu");
   const collaborationRoot = path.join(app.getPath("userData"), "collaboration");
   const screenshots = new ScreenshotStore(path.join(projectPaths.temporaryMaterialsRoot, "截图"));
   const corpusSemanticWorkspaceRoot = path.join(app.getPath("userData"), "corpus-semantic-backfill-workspace");
@@ -334,7 +354,7 @@ app.whenReady().then(async () => {
     primaryId: "corpus-semantic-backfill",
     roots: [{ id: "corpus-semantic-backfill", name: "会话语义整理", path: corpusSemanticWorkspaceRoot, permission: "read-only" as const }],
   };
-  const corpusSemanticBackfillSessions = new CodexSessionStore(path.join(app.getPath("userData"), "corpus-semantic-backfill-session.json"));
+  const corpusSemanticBackfillSessions = createFileCodexSessionRepository(path.join(app.getPath("userData"), "corpus-semantic-backfill-session.json"));
   corpusSemanticBackfillCodex = new CodexService(
     corpusSemanticWorkspaceRoot,
     trustedCommands,
@@ -353,7 +373,7 @@ app.whenReady().then(async () => {
     (details) => eventCenter.recordEvent("training_corpus.semantic_backfill.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("training_corpus.semantic_backfill.thread.lifecycle", details),
   );
-  const corpusSemanticBackfill = aiMemoryDatabase ? new CodexConversationSemanticBackfill({
+  const corpusSemanticBackfill = aiMemoryDatabase ? createCodexConversationSemanticBackfill({
     database: aiMemoryDatabase,
     roots: [path.join(externalCodexHome, "sessions"), path.join(externalCodexHome, "archived_sessions")],
     requiredWorkspaceRoot: projectRoot,
@@ -368,10 +388,10 @@ app.whenReady().then(async () => {
       return parseCodexSemanticBackfillResponse(response.text);
     },
   }) : null;
-  const collaborationStore = new CollaborationStore(path.join(collaborationRoot, "collaboration-state.json"));
-  const collaborationDurations = new CollaborationDurationLog(projectPaths.collaborationArchiveRoot);
+  const collaborationStore = createCollaborationState(path.join(collaborationRoot, "collaboration-state.json"));
+  const collaborationDurations = createCollaborationDurationLog(projectPaths.collaborationArchiveRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
-  const versionWorkspaces = new VersionWorkspaceManager(projectRoot, path.join(collaborationRoot, "worktrees"));
+  const versionWorkspaces = createVersionWorkspaceManager(projectRoot, path.join(collaborationRoot, "worktrees"));
   const testResources = new TestResourceCoordinatorFacade({
     coordinationRoot: path.join(projectPaths.runningTestRoot, "_资源协调"),
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
@@ -380,10 +400,10 @@ app.whenReady().then(async () => {
     coordinationRoot: path.join(projectPaths.runningExecutionRoot, "_集成与发布协调"),
     recordEvent: (type, details) => eventCenter.recordEvent(type, details),
   });
-  const releaseBatches = new ReleaseBatchStore(projectPaths.runningExecutionRoot, projectPaths.archiveLogRoot);
+  const releaseBatches = createReleaseBatchStore(projectPaths.runningExecutionRoot, projectPaths.archiveLogRoot);
   // 版本集成闭包稍后通过令狐 Runtime 的受控能力执行统一测试，不直接持有内部 Runner。
   let linghuRuntime: LinghuRuntime | undefined;
-  const taskTests = new TaskWorktreeTestRunner(
+  const taskTests = createTaskWorktreeTestRunner(
     projectRoot,
     applicationName,
     path.join(projectPaths.cacheRoot, "test-runtime"),
@@ -408,7 +428,7 @@ app.whenReady().then(async () => {
     personaSessionStore: (memberId) => memberId === "linghu-ancestor" ? linghuSessions : null,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
   });
-  const versionIntegration = new VersionIntegrationPipeline({
+  const versionIntegration = createVersionIntegrationPipeline({
     store: collaborationStore,
     durations: collaborationDurations,
     workspaces: versionWorkspaces,
@@ -453,7 +473,7 @@ app.whenReady().then(async () => {
       }
       eventCenter.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
-      nangongEvolution?.notifyWorkflowChanged();
+      personaEvolution?.notifyWorkflowChanged();
     },
     emitStream: (taskId, memberId, event) => {
       eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
@@ -466,8 +486,8 @@ app.whenReady().then(async () => {
     },
   });
   // 旧 nangong-evolution.json 仅作为可恢复的历史取证文件保留，生产运行不再读取、写入或回退。
-  const nangongStore = new NangongEvolutionStore(new NangongEvolutionStateRepository(aiMemoryDatabase));
-  nangongEvolution = new NangongEvolutionFacade({
+  const nangongStore = createEvolutionState(aiMemoryDatabase);
+  personaEvolution = new PersonaEvolutionRuntime({
     store: nangongStore,
     collaboration,
     conversation: {
@@ -475,7 +495,7 @@ app.whenReady().then(async () => {
         "你现在以南宫婉的专项演化调查者身份与用户讨论。只读调查和分析，不修改源码、不执行构建、不越过审批。",
         "语气克制、温和、有判断，不冷硬、不说教，也不故作亲昵。直接回答用户真正关心的内容；不要复述、改写或冒充用户原话，也不要添加固定的意图确认套话。短问题直接短答；复杂问题按内容自然分段，不使用“结论：”“建议：”“1、2、3”这类模板化标题或编号。不要使用“我更希望”“就行”“可以考虑”等没有明确落点的表达。",
         "需要提出方向时，明确说清现在有什么问题、为什么会造成问题，以及什么做法更合理。把已证实事实、基于事实的推断和仍待验证内容自然写进句子，不把推断或用户陈述说成既定事实，也不要机械套固定栏目。",
-        `这段聊天始终只是调查材料；不得声称已形成正式课题、已提交审批或将开始修改。只有用户在界面明确确认转换后，系统才会冻结对话材料为课题；即使提案获批，也不能替代工程写入授权或命令审批。不得提示用户回复 1 直接修改源码。你必须语义判断事实、范围和验收条件是否足以整理课题；成熟时在正文最后原样显示“${NANGONG_ONE_SHOT_INVITATION}”，由程序登记可恢复的等待确认状态；用户已明确要求修正且对话中已有事实、范围和验收条件时，不要重复停留在只读边界说明。条件不足时说明唯一缺口，不得要求用户发送 1。`,
+        "这段聊天始终只是调查材料；不得声称已形成正式课题、已提交审批或将开始修改。只有用户在界面明确确认转换后，系统才会冻结对话材料为课题；即使提案获批，也不能替代工程写入授权或命令审批。不得提示用户回复 1 直接修改源码。你必须语义判断事实、范围和验收条件是否足以整理课题；成熟时在正文最后原样显示“若确认启动本轮完整演化，请回复 1。”，由程序登记可恢复的等待确认状态；用户已明确要求修正且对话中已有事实、范围和验收条件时，不要重复停留在只读边界说明。条件不足时说明唯一缺口，不得要求用户发送 1。",
         "你必须自行判断本轮是否仍在处理当前主题，并在隐藏元数据中用一句清楚的话总结用户这条原话真正要推动的意图。回答正文最后另起一行输出 NANGONG_TOPIC_META={\"title\":\"本轮主题\",\"type\":\"自由判断的类型\",\"switchTopic\":false,\"userIntent\":\"用户意图摘要\",\"tags\":[\"AI理解后给出的标签\"],\"summary\":\"本轮回答核心主旨，最多300字\"}。正文直接回答，userIntent 只供内部检索；主题、类型、标签、意图和摘要必须基于本轮语义判断，不得用关键词规则机械填写。用户明显切换问题中心时 switchTopic 才为 true。该行只供程序登记，正文不得解释它。",
         `最近对话：\n${context}`,
         `用户最新消息：\n${request.message}`,
@@ -525,7 +545,12 @@ app.whenReady().then(async () => {
       }
     } : undefined,
   });
-  nangongEvolution.subscribe((state, reason, topicId, proposalId, previousState) => {
+  // 三个人物和两个共享模块分别取得受控 Facade；完整运行实例只留在组合根，不再传给 IPC。
+  const nangongRuntime = createNangongRuntime({ application: personaEvolution });
+  const hanliRuntime = createHanliRuntime({ application: personaEvolution, screenshots });
+  const evolutionRuntime = createEvolutionRuntime(personaEvolution);
+  const personaWorkflowRuntime = createPersonaWorkflowRuntime(personaEvolution);
+  evolutionRuntime.facade.subscribe((state, reason, topicId, proposalId, previousState) => {
     try { workflowRepository?.syncEvolutionState(state); }
     catch (error) {
       eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_evolution_state", error, correlationId: topicId || proposalId || undefined, details: { reason, topicId, proposalId } });
@@ -534,13 +559,14 @@ app.whenReady().then(async () => {
     const workbenchChange = buildEvolutionWorkbenchChange(previousState, state, reason, topicId, proposalId);
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
       window.webContents.send("desktop:evolution-workbench-changed", workbenchChange);
-      window.webContents.send("desktop:nangong-evolution-state", { state, reason, topicId, proposalId });
+      window.webContents.send("desktop:evolution-state", { state, reason, topicId, proposalId });
     }
   });
-  collaborationMemory?.syncEvolutionState(nangongEvolution.state());
+  collaborationMemory?.syncEvolutionState(evolutionRuntime.facade.state());
   // 令狐内部的 Store、Facade 和状态订阅由功能模块一次性装配，main 只提供跨领域端口。
   linghuRuntime = createLinghuRuntime({
-    stateFilePath: path.join(collaborationRoot, "linghu-automation.json"),
+    // Platform 绑定真实状态路径，令狐人物只接收不含路径信息的 JSON 持久化 Port。
+    persistence: createAtomicJsonPersistence(path.join(collaborationRoot, "linghu-automation.json")),
     collaboration,
     readWorkspaceState: () => workspaces.read(),
     locale: () => settings.read().locale,
@@ -558,9 +584,9 @@ app.whenReady().then(async () => {
         app.exit(0);
       },
     },
-    submitRepairProposal: (request) => nangongEvolution!.createLinghuRepairProposal(request),
-    readEvolutionState: () => nangongEvolution!.state(),
-    reviseReturnedProposal: (proposalId) => nangongEvolution!.investigateAndReviseReturnedProposal(proposalId),
+    submitRepairProposal: (request) => personaEvolution!.createLinghuRepairProposal(request),
+    readEvolutionState: () => personaEvolution!.state(),
+    reviseReturnedProposal: (proposalId) => personaEvolution!.investigateAndReviseReturnedProposal(proposalId),
     onStateChanged: (event) => {
       workflowRepository?.syncLinghuState(event.state);
       eventCenter.recordEvent("linghu.automation.state_changed", { reason: event.reason, enabled: event.state.enabled, cycle: event.state.cycle, module: event.state.currentModule }, event.state.activeTaskId || undefined);
@@ -569,13 +595,21 @@ app.whenReady().then(async () => {
   });
   // 业务调用方只持有 Facade；测试清理通过 Runtime 受控能力完成，Store 不离开令狐边界。
   linghuAutomation = linghuRuntime.facade;
+  // Workflow 只登记人物身份、生命周期和稳定能力，不保存任何人物内部 Store。
+  const personaRegistry = createPersonaCapabilityRegistry();
+  personaRegistry.register({ memberId: nangongRuntime.memberId, displayName: "南宫婉", runtime: nangongRuntime, capabilities: ["investigation", "proposal-authoring"] });
+  personaRegistry.register({ memberId: hanliRuntime.memberId, displayName: "韩立", runtime: hanliRuntime, capabilities: ["deliberation", "proposal-review", "acceptance"] });
+  personaRegistry.register({ memberId: linghuRuntime.memberId, displayName: "令狐老祖", runtime: linghuRuntime, capabilities: ["flow-guard", "unified-test"] });
+  // 独占能力在启动时完成核对；重复负责人会立即阻断，而不是运行中随机选择。
+  personaRegistry.requireCapability("proposal-review");
+  personaRegistry.requireCapability("unified-test");
 
   if (workflowRepository) {
-    workflowSupervisor = new WorkflowSupervisor({
+    workflowSupervisor = createWorkflowSupervisor({
       repository: workflowRepository,
       readers: {
         collaboration: () => collaboration!.state(),
-        evolution: () => nangongEvolution!.state(),
+        evolution: () => personaEvolution!.state(),
         linghu: () => linghuAutomation!.state(),
       },
       projectCollaborationTimeline: (state) => collaborationTimeline?.appendTaskFlowEvents(state, state.tasks.map((task) => task.taskId)),
@@ -597,8 +631,8 @@ app.whenReady().then(async () => {
       workflowSupervisor?.stop();
       workflowSupervisor = null;
       codexAppCorpusWatcher?.stop();
-      linghuAutomation?.stop();
-      nangongEvolution?.stop();
+      personaRegistry.stopAll();
+      personaWorkflowRuntime.stop();
 
       // 固定人物线程是长期会话事实；清空测试数据只清流程运行态，不重置南宫婉、韩立和令狐老祖。
       await collaboration?.dispose();
@@ -639,8 +673,8 @@ app.whenReady().then(async () => {
         setTimeout(() => app.exit(1), 180);
       } else {
         codexAppCorpusWatcher?.start();
-        linghuAutomation?.start();
-        nangongEvolution?.start();
+        personaRegistry.startAll();
+        personaWorkflowRuntime.start();
         workflowSupervisor?.start();
       }
       throw error;
@@ -656,7 +690,10 @@ app.whenReady().then(async () => {
     dispatch,
     collaboration,
     linghuAutomation,
-    nangongEvolution,
+    nangong: nangongRuntime.facade,
+    hanli: hanliRuntime.facade,
+    evolution: evolutionRuntime.facade,
+    personaWorkflow: personaWorkflowRuntime.facade,
     collaborationRegistry,
     eventCenter,
     workflowRepository,
@@ -714,8 +751,8 @@ app.whenReady().then(async () => {
     return;
   }
   collaboration.resumePendingWork();
-  linghuAutomation.start();
-  nangongEvolution.start();
+  personaRegistry.startAll();
+  personaWorkflowRuntime.start();
   workflowSupervisor?.start();
   app.on("activate", () => {
     if (mainApplicationWindow && !mainApplicationWindow.isDestroyed()) {
@@ -733,7 +770,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   linghuAutomation?.stop();
-  nangongEvolution?.stop();
+  personaEvolution?.stop();
   void collaboration?.dispose().catch((error) => eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "collaboration", operation: "dispose", error }));
   codex?.dispose();
   nangongCodex?.dispose();

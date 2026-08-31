@@ -1,6 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 
-import type { EventCenterFacade } from "../services/event-center/event-center-facade.js";
+import type { EventCenterFacade } from "../services/capabilities/event-center/index.js";
 
 /** 所有 invoke IPC 通过同一异常边界登记，仍把原始错误返还调用页面。 */
 export function registerEventCenterIpcHandler<Arguments extends unknown[]>(

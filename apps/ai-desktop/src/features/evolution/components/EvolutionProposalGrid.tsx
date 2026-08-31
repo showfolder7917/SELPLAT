@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 
-import type { Locale, NangongEvolutionState } from "../../../../contracts/desktop/desktop";
+import type { Locale, EvolutionState } from "../../../../contracts/desktop/desktop";
 
-type EvolutionProposal = NangongEvolutionState["proposals"][number];
+type EvolutionProposal = EvolutionState["proposals"][number];
 type SelGridApi = {
   create(host: HTMLElement, options: Record<string, unknown>): HTMLElement | null;
   mount(root: HTMLElement, payload: Record<string, unknown>): { destroy?(): void } | null;

@@ -3,7 +3,7 @@ import { access, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { ScreenshotStore } from "../../../build/ai-desktop/electron/electron/services/screenshot-store.js";
+import { ScreenshotStore } from "../../../build/ai-desktop/electron/electron/services/platform/attachments/internal/screenshot.store.js";
 import { controlledTestRoot } from "./test-paths.mjs";
 
 const fixtureRoot = path.join(controlledTestRoot, `screenshot-store-test-${process.pid}`);

@@ -6,10 +6,17 @@ import { fileURLToPath } from "node:url";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relativePath) => readFileSync(path.join(appRoot, relativePath), "utf8");
-const contracts = [read("contracts/foundation/base.ts"), read("contracts/desktop/settings.ts"), read("contracts/codex/codex.ts")].join("\n");
-const store = read("electron/services/settings-store.ts");
-const service = read("electron/services/codex-service.ts");
-const collaboration = read("electron/services/collaboration/collaboration-codex-sessions.ts");
+// 聚合公开入口及其领域协议正文，既验证唯一出口，也验证实际字段归属。
+const contracts = [
+  read("contracts/foundation/base.ts"),
+  read("contracts/platform/settings/index.ts"),
+  read("contracts/platform/settings/settings.ts"),
+  read("contracts/platform/codex/index.ts"),
+  read("contracts/platform/codex/codex.ts"),
+].join("\n");
+const store = read("electron/services/platform/settings/internal/settings.store.ts");
+const service = read("electron/services/platform/codex/codex.facade.ts");
+const collaboration = read("electron/services/capabilities/conversation/internal/collaboration-codex-sessions.ts");
 const developer = read("src/variants/developer/DeveloperApp.tsx");
 const interactionPreload = read("tests/interaction/isolated-preload.cjs");
 const packageManifest = read("package.json");

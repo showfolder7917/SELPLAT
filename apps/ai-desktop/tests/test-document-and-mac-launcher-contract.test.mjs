@@ -12,8 +12,8 @@ const packagedBootstrap = readFileSync(new URL("../electron/packaged-bootstrap.t
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const developerCss = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
 const conversationCss = readFileSync(new URL("../../../shared/frontend/sel-ui/src/components/conversation/selConversation.css", import.meta.url), "utf8");
-const automaticPreflight = readFileSync(new URL("../electron/services/automatic-test-preflight.ts", import.meta.url), "utf8");
-const trustedCommands = readFileSync(new URL("../electron/services/trusted-command-store.ts", import.meta.url), "utf8");
+const automaticPreflight = readFileSync(new URL("../electron/services/capabilities/testing/automatic-test-preflight.facade.ts", import.meta.url), "utf8");
+const trustedCommands = readFileSync(new URL("../electron/services/platform/security/internal/trusted-command.store.ts", import.meta.url), "utf8");
 const preload = [
   "../electron/preload.cts",
   "../electron/preload/domains/codex-bridge.cts",

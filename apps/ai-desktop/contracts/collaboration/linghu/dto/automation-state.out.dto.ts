@@ -8,9 +8,9 @@
  * 禁止职责：不得检测流程、执行测试、读写状态文件或批准修正提案。
  */
 // 令狐状态输出引用协同任务阶段，但协议层只依赖类型，不触发任何运行逻辑。
-import type { CollaborationTaskState } from "../../collaboration.js";
+import type { CollaborationTaskState } from "../../workflow/collaboration.js";
 // 测试资源快照只作为跨进程数据字段，不能让协议层控制测试执行器。
-import type { TestResourceCoordinatorState } from "../../test-resource.js";
+import type { TestResourceCoordinatorState } from "../../../capabilities/testing/test-resource.js";
 
 // 启动文案属于独立输出 DTO，状态 DTO 只通过类型组合它。
 import type { LinghuStartupPromptOutDto } from "./startup-prompt.out.dto.js";

@@ -6,9 +6,9 @@
  * 数据方向：renderer -> preload -> main，以及 main -> preload -> renderer。
  * 本文件只描述事件，不决定重试、忽略或恢复策略。
  */
-import type { CollaborationState } from "../collaboration/collaboration.js";
+import type { CollaborationState } from "../collaboration/workflow/collaboration.js";
 import type { LinghuAutomationStateOutDto } from "../collaboration/linghu/index.js";
-import type { NangongEvolutionState } from "../collaboration/nangong-evolution.js";
+import type { EvolutionState } from "../collaboration/evolution/index.js";
 
 export type WorkflowEventCategory = "state-change" | "approval" | "execution" | "technical-error" | "business-exception" | "stalled" | "audit";
 export type WorkflowEventSeverity = "info" | "warning" | "error" | "critical";
@@ -82,6 +82,6 @@ export interface StalledTaskDetection {
 
 export interface WorkflowStateReaders {
   collaboration(): CollaborationState;
-  evolution(): NangongEvolutionState;
+  evolution(): EvolutionState;
   linghu(): LinghuAutomationStateOutDto;
 }
