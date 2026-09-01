@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { resolveDependencyCache } from "./dependency-cache.mjs";
@@ -9,10 +11,26 @@ import { assertWorkspaceDataPath, resolveSelectedWorkspaceRoot } from "./selecte
  */
 export function resolveInteractionTestPaths() {
   const { projectRoot: sourceProjectRoot, applicationName } = resolveDependencyCache();
-  const projectRoot = resolveSelectedWorkspaceRoot(sourceProjectRoot);
+  const projectRoot = resolveInteractionTestWorkspaceRoot(sourceProjectRoot);
   const tempRoot = assertWorkspaceDataPath(projectRoot, path.join(projectRoot, "OPTION", "temp", applicationName));
   return {
     temporaryMaterialsRoot: path.join(tempRoot, "临时材料"),
     archiveLogRoot: path.join(projectRoot, "log", applicationName, "归档日志"),
   };
+}
+
+/** 隔离 Playwright 证据只能写入经 Git 公共目录校验的稳定工程根。 */
+function resolveInteractionTestWorkspaceRoot(candidateRoot) {
+  if (String(process.env.SELPLAT_ROOT || "").trim()) return resolveSelectedWorkspaceRoot(candidateRoot);
+  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: candidateRoot,
+    encoding: "utf8",
+    shell: false,
+  });
+  if (result.error || result.status !== 0) return resolveSelectedWorkspaceRoot(candidateRoot);
+  const workspaceRoot = path.dirname(String(result.stdout || "").trim());
+  if (!existsSync(path.join(workspaceRoot, "settings.gradle")) || !existsSync(path.join(workspaceRoot, "apps", "ai-desktop", "package.json"))) {
+    return resolveSelectedWorkspaceRoot(candidateRoot);
+  }
+  return workspaceRoot;
 }
