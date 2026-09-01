@@ -5,7 +5,7 @@ import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../
 import type { CreateNangongTopicInDto, SendNangongConversationMessageInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { SendMessageOutDto } from "../../../../contracts/services/support/capabilities/conversation/index.js";
-import type { EventCenterExceptionInDto } from "../../../../contracts/governance/index.js";
+import type { EventCenterExceptionInDto } from "../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { CollaborationTimelineBusinessEventOutDto } from "../../../../contracts/services/workflow/index.js";
 import type { CodexStreamEventOutDto } from "../../../../contracts/services/support/platform/codex/index.js";
 import type { CollaborationWorkflowFacade } from "../index.js";

@@ -5,10 +5,10 @@
  * 本文件只显式组合公开符号，不定义业务模型、不提供兼容别名，也不隐藏物理来源。
  */
 export { APP_VARIANTS, LOCALES, MANAGED_EXECUTION_MODES, MODEL_SERVICE_TIERS, REASONING_EFFORTS, SANDBOX_MODES, WINDOW_ACTIONS, WORKSPACE_PERMISSIONS } from "../../foundation/index.js";
-export type { AppVariantValue, LocaleValue, ManagedExecutionModeValue, ModelServiceTierValue, ReasoningEffortValue, SandboxModeValue, WindowActionValue, WorkspacePermissionValue } from "../../foundation/index.js";
+export type { AppVariantValue, EventSeverityValue, LocaleValue, ManagedExecutionModeValue, ModelServiceTierValue, ReasoningEffortValue, SandboxModeValue, WindowActionValue, WorkspacePermissionValue } from "../../foundation/index.js";
 export type { DesktopEnvironmentOutDto } from "./dto/desktop-environment.out.dto.js";
 
-export type { ApprovalGovernanceDomainValue, ApprovalGovernanceRecordOutDto, AuditLogInfoOutDto, AuditReasonOutDto, AuditTaskSummaryOutDto, EventCenterExceptionInDto, RendererExceptionInDto, StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventSeverityValue, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto, WorkflowStateReaderPort } from "../../governance/index.js";
+export type { AuditLogInfoOutDto, AuditReasonOutDto, AuditTaskSummaryOutDto, EventCenterExceptionInDto, RendererExceptionInDto } from "../../services/support/capabilities/event-center/index.js";
 
 export type { CodexAccountOutDto, CodexApprovalOutDto, CodexHarnessStatusOutDto, CodexLoginResponseOutDto, CodexModelCatalogOutDto, CodexModelOptionOutDto, CodexRuntimeInfoOutDto, CodexStreamActivityOutDto, CodexStreamEventOutDto, CodexStreamPlanStepOutDto, CodexUserInputOptionOutDto, CodexUserInputQuestionOutDto, CodexUserInputRequestOutDto, ManagedExecutionUpdateEventOutDto, ResolveCodexApprovalOutDto, ResolveCodexUserInputInDto } from "../../services/support/platform/codex/index.js";
 export type { TrustedCommandInfoOutDto } from "../../services/support/platform/security/index.js";
@@ -25,6 +25,8 @@ export type { AutomaticTestPreflightCheckOutDto, AutomaticTestPreflightResultOut
 export type { ResolvedRuntimeRuleOutDto, RuleBundleStatusOutDto, RuntimeRuleOutDto, RuntimeRuleSourceValue } from "../../services/support/capabilities/rules/index.js";
 
 export type {
+  ApprovalGovernanceDomainValue,
+  ApprovalGovernanceRecordOutDto,
   CollaborationAutomationSourceValue,
   CollaborationExecutionRecordOutDto,
   CollaborationExecutionStatusValue,
@@ -67,8 +69,14 @@ export type {
   PersonaCapabilityValue,
   PersonaRuntimePort,
   PersonaWorkflowActionInDto,
+  StalledTaskDetectionOutDto,
   SubmitCollaborationTaskInDto,
   UpdateCollaborationMemberInDto,
+  WorkflowEventCategoryValue,
+  WorkflowEventInDto,
+  WorkflowEventStatusValue,
+  WorkflowExceptionRecordOutDto,
+  WorkflowStateReaderPort,
 } from "../../services/workflow/index.js";
 
 export type {

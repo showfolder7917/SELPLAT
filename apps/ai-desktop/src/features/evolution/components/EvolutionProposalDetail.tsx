@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { EvolutionStateOutDto } from "../../../../contracts/system/desktop/desktop";
+import type { EvolutionStateOutDto } from "../../../../contracts/system/desktop/index";
 import { MarkdownMessage } from "../../../variants/developer/MarkdownMessage";
 import { evolutionStatusLabel } from "../model/evolution-workbench";
 

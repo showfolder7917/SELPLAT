@@ -16,7 +16,7 @@ import type {
   AuditLogInfoOutDto,
   AuditReasonOutDto,
   AuditTaskSummaryOutDto,
-} from "../../../../../../../contracts/governance/index.js";
+} from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { LocaleValue, ManagedExecutionModeValue, SandboxModeValue } from "../../../../../../../contracts/foundation/index.js";
 import type { CodexStreamEventOutDto } from "../../../../../../../contracts/services/support/platform/codex/index.js";
 import type { WorkspaceStateOutDto } from "../../../../../../../contracts/services/support/platform/workspace/index.js";

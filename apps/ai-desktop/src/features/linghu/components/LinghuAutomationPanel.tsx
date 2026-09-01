@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 import { Add24Regular, ShieldCheckmark24Regular } from "@fluentui/react-icons";
 
 // 页面只消费跨进程公开协议，不直接依赖 Electron 主进程中的令狐实现。
-import type { LinghuAutomationStateOutDto, LinghuStartupPromptOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
+import type { LinghuAutomationStateOutDto, LinghuStartupPromptOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 // 删除文案必须复用 SEL UI 的确认窗口，避免浏览器原生弹窗破坏统一交互。
 import { useSelUi } from "../../../theme/SelUiProvider";
 

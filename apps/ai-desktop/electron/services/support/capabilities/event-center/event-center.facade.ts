@@ -1,5 +1,5 @@
 import type { CodexStreamEventOutDto } from "../../../../../contracts/services/support/platform/codex/index.js";
-import type { EventCenterExceptionInDto } from "../../../../../contracts/governance/index.js";
+import type { EventCenterExceptionInDto, RendererExceptionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import { BusinessAuditLog } from "./internal/audit/business-audit-log.js";
 // Event Center 只要求审计事实写入口，不反向依赖 Workflow 的 Repository 实现。
 export interface EventProjectionPort {
@@ -71,7 +71,7 @@ export class EventCenterFacade {
     });
   }
 
-  recordRendererException(input: { operation: string; message: string; stack?: string | null; componentStack?: string | null; url?: string | null }): void {
+  recordRendererException(input: RendererExceptionInDto): void {
     const error = new Error(input.message.slice(0, 4_000));
     if (input.stack) error.stack = input.stack.slice(0, 12_000);
     this.recordException({

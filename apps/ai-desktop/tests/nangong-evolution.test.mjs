@@ -37,6 +37,7 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
   updateTopic(...args) { return this.nangongRuntime.facade.updateTopic(...args); }
   reviseProposal(...args) { return this.nangongRuntime.facade.reviseProposal(...args); }
   investigateAndReviseReturnedProposal(...args) { return this.nangongRuntime.facade.investigateAndReviseReturnedProposal(...args); }
+  dispatch(...args) { return this.nangongRuntime.facade.distributeProposal(...args); }
   advanceHanLiDeliberation(...args) { return this.hanliRuntime.facade.advanceDeliberation(...args); }
   decideProposal(...args) { return this.hanliRuntime.facade.decideProposal(...args); }
   autoApprove(...args) { return this.hanliRuntime.facade.autoApprove(...args); }
@@ -122,7 +123,7 @@ test("审批服务按发生顺序发布申请、决定和补充事实且不会�
     let submitted = 0;
     const facade = new PersonaEvolutionRuntime({
       store: evolutionStore(path.join(directory, "state.json")),
-      collaboration: { state() { return { members: [{ memberId: "nangong-wan", enabled: true }], tasks: [] }; }, submitTask() { submitted += 1; return { tasks: [] }; } },
+      collaboration: { state() { return { members: [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true }], tasks: [] }; }, submitTask() { submitted += 1; return { tasks: [] }; } },
       conversation,
       ...distributionServices,
       recordEvent: () => undefined,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { EvolutionWorkbenchChangeEventOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchRowOutDto, EvolutionWorkbenchViewValue, EvolutionWorkspaceLocationOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
+import type { EvolutionWorkbenchChangeEventOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchRowOutDto, EvolutionWorkbenchViewValue, EvolutionWorkspaceLocationOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 import { evolutionStatusLabel } from "../model/evolution-workbench";
 
 type SelGridApi = {

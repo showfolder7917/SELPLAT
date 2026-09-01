@@ -1,3 +1,5 @@
+import type { CollaborationWorkerPhaseValue } from "./collaboration-member.value.js";
+
 export type CollaborationFlowEventTypeValue =
   | "task.submitted" | "task.legacy_imported" | "executor.assigned" | "executor.reassigned"
   | "technical_analysis.ready" | "execution.started" | `worker.phase.${Exclude<CollaborationWorkerPhaseValue, null>}`

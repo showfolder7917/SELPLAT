@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 
-import type { LocaleValue, EvolutionStateOutDto } from "../../../../contracts/system/desktop/desktop";
+import type { LocaleValue, EvolutionStateOutDto } from "../../../../contracts/system/desktop/index";
 
 type EvolutionProposalOutDto = EvolutionStateOutDto["proposals"][number];
 type SelGridApi = {

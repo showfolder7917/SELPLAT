@@ -1,4 +1,4 @@
-import type { EvolutionWorkspaceLocationOutDto, EvolutionStateOutDto } from "../../../../contracts/system/desktop/desktop";
+import type { EvolutionWorkspaceLocationOutDto, EvolutionStateOutDto } from "../../../../contracts/system/desktop/index";
 
 const STATUS_LABELS: Record<string, string> = {
   registered: "已登记", investigating: "调查中", "pending-approval": "待审批", "supplement-required": "待补充", rejected: "已退回",

@@ -839,6 +839,7 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await expect(group.locator(".task-timeline-node")).toHaveCount(1);
   await group.getByRole("button", { name: "手动审批" }).click();
   approvalWindow = page.getByRole("dialog", { name: "审批任务 · 专题任务 01 · 修订截图按钮可用态" });
+  await expect(approvalWindow.getByLabel("审批内容")).toBeFocused();
   await approvalWindow.getByLabel("审批结论").selectOption("supplement-required");
   await approvalWindow.getByLabel("审批原因").fill("请补充忙碌禁用态的触发条件和解除条件。");
   await expect(approvalWindow.getByLabel("审批原因")).toHaveValue("请补充忙碌禁用态的触发条件和解除条件。");
@@ -854,6 +855,7 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await expect(group.locator(".task-timeline-node")).toHaveCount(1);
   await group.getByRole("button", { name: "手动审批" }).click();
   approvalWindow = page.getByRole("dialog", { name: "审批任务 · 专题任务 01 · 修订截图按钮可用态" });
+  await expect(approvalWindow.getByLabel("审批内容")).toBeFocused();
   await approvalWindow.getByLabel("审批结论").selectOption("rejected");
   await approvalWindow.getByLabel("审批原因").fill("当前方案越过专题范围，审批驳回。");
   await expect(approvalWindow.getByLabel("审批原因")).toHaveValue("当前方案越过专题范围，审批驳回。");

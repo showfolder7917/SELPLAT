@@ -1,6 +1,13 @@
 import type { ApprovalGovernanceDomainValue } from "../value/approval-governance-domain.value.js";
 
-/** 三类审批保持各自决策语义，只通过公共信封形成统一检索和审计视图。 */
+/**
+ * Workflow 输出的统一审批治理投影。
+ *
+ * 生产者：Workflow Repository。
+ * 消费者：DesktopApi 与 Renderer 审批治理视图。
+ * 数据方向：Workflow -> DesktopApi -> Renderer。
+ * 本 DTO 只承载查询结果，不改变 Evolution、协作评审或 Codex 命令审批状态。
+ */
 export interface ApprovalGovernanceRecordOutDto {
   governanceId: string;
   domain: ApprovalGovernanceDomainValue;

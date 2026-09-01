@@ -2,7 +2,7 @@
  * 旧人物页四阶段进度模型，仅供人物页和会话回退视图继续读取。
  * @deprecated 新任务协作群统一消费主进程 CollaborationTimelineSnapshotOutDto；稳定后单独删除本实现。
  */
-import type { CollaborationMemberOutDto, CollaborationTaskOutDto, LinghuAutomationStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
+import type { CollaborationMemberOutDto, CollaborationTaskOutDto, LinghuAutomationStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 
 // 人物页固定展示五个业务环节；审批在协作任务创建前已完成，因此进入任务页时通常已经是完成态。
 export type CollaborationProgressStageId = "intent" | "approval" | "execution" | "repair" | "unified-test";

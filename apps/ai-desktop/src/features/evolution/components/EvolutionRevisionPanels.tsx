@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { CollaborationMemberOutDto, EvolutionStateOutDto } from "../../../../contracts/system/desktop/desktop";
+import type { CollaborationMemberOutDto, EvolutionStateOutDto } from "../../../../contracts/system/desktop/index";
 import { evolutionMutationRequest } from "../model/evolution-workbench";
 
 /** 原提交人依据审批意见形成不可覆盖的新版本，继续返回韩立审批。 */

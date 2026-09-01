@@ -12,9 +12,8 @@
 | `services/evolution/` | 专题、提案、审批、验收共享事实 | Evolution 服务 | 人物、Workflow 与 Renderer |
 | `services/workflow/` | 跨人物任务、状态、事件与恢复协议 | Workflow 服务 | 人物与 Renderer |
 | `services/support/application/` | 跨领域应用用例的输入输出 | Application Service | System/Desktop |
-| `services/support/capabilities/` | 会话、事件、测试、发布和规则协议 | 公共能力服务 | Workflow、人物与 DesktopApi |
+| `services/support/capabilities/` | 会话、异常、审计、测试、发布和规则协议 | 公共能力服务 | Workflow、人物与 DesktopApi |
 | `services/support/platform/` | Codex、工作区、设置、安全、附件和数据库协议 | 平台服务 | 公共能力与 DesktopApi |
-| `governance/` | 工作流事件、异常、审计和审批记录 | 事件中心与审计服务 | Renderer 治理视图 |
 
 ## 数据边界
 
@@ -49,7 +48,7 @@ Electron main handler → application service → infrastructure
 
 ## 路径同构
 
-除 `foundation`、`governance` 和 `system` 三个跨领域边界外，Contracts 与 Electron 保持同一个业务所有者路径：
+除真正跨域的 `foundation` 和跨进程聚合的 `system` 外，Contracts 与 Electron 保持同一个业务所有者路径：
 
 ```text
 electron/services/personas/nangong
@@ -57,9 +56,15 @@ contracts/services/personas/nangong
 
 electron/services/support/platform/codex
 contracts/services/support/platform/codex
+
+electron/services/workflow
+contracts/services/workflow
+
+electron/services/support/capabilities/event-center
+contracts/services/support/capabilities/event-center
 ```
 
-看到实现路径即可把 `electron` 替换为 `contracts` 查找协议；看到协议路径也可反向定位服务。跨模块只引用所有者 `index.ts`，不要深层引用其 `dto/port/value`。
+看到实现路径即可把 `electron` 替换为 `contracts` 查找协议；看到协议路径也可反向定位服务。跨所有者页面只能由 `system/desktop` 或 Application 用例聚合，禁止为了页面主题新建没有 Electron 真实所有者的 Contracts 顶层目录。跨模块只引用所有者 `index.ts`，不要深层引用其 `dto/port/value`。
 
 完整阅读顺序、人物职责和调用流转见 [`../ARCHITECTURE.md`](../ARCHITECTURE.md)。
 

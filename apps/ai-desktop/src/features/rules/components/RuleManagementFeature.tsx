@@ -1,7 +1,7 @@
 /** 规则管理 Feature：展示安装包内置规则、客户覆盖结果和拒绝诊断，不提供规则写入入口。 */
 import { useEffect, useState } from "react";
 
-import type { LocaleValue, RuleBundleStatusOutDto, RuntimeRuleOutDto } from "../../../../contracts/system/desktop/desktop";
+import type { LocaleValue, RuleBundleStatusOutDto, RuntimeRuleOutDto } from "../../../../contracts/system/desktop/index";
 import { getDesktopApi } from "../../../foundation/desktop-api/desktop-api";
 
 export function RuleManagementFeature({ locale }: { locale: LocaleValue }) {

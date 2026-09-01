@@ -30,8 +30,8 @@ const developerSource = readFileSync(new URL("../src/variants/developer/Develope
 const coordinatorSource = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const integrationPipelineSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const releaseBatchStoreSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
-// 入口存在性由边界测试负责；这里读取任务事实 DTO 验证完整状态枚举。
-const collaborationContractSource = readFileSync(new URL("../contracts/services/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
+// 入口存在性由边界测试负责；这里读取 Workflow 稳定 Value 验证完整状态枚举。
+const collaborationContractSource = readFileSync(new URL("../contracts/services/workflow/value/collaboration-task.value.ts", import.meta.url), "utf8");
 const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 const linghuRuntimeSource = readFileSync(new URL("../electron/services/personas/linghu/internal/create-linghu-runtime.ts", import.meta.url), "utf8");
 const integrationVerifierSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
@@ -777,15 +777,16 @@ test("令狐将依赖自动流程的修正任务纳入同一停点检测闭环",
 test("令狐测试漏点模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
   const runner = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
   const facade = readFileSync(new URL("../electron/services/personas/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
+  const collaborationBootstrap = readFileSync(new URL("../electron/system/bootstrap/collaboration.bootstrap.ts", import.meta.url), "utf8");
   assert.match(runner, /\["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:mac:developer"\]/);
   assert.doesNotMatch(runner, /confirmedIntent|prompt\.content/);
   assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\(\) =>/);
   assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
   assert.match(linghuRuntimeSource, /createFixedUnifiedTestRunner[\s\S]*await unifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*options\.unifiedTest\.onVerified\(executable\)/);
   assert.match(main, /unifiedTest:[\s\S]*onVerified: \(executable\)[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
-  assert.match(main, /IntegrationReleaseCoordinatorFacade[\s\S]*createReleaseBatchStore[\s\S]*createVersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
-  assert.match(main, /linghuRuntime!\.runUnifiedTests\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId\)/);
+  assert.match(collaborationBootstrap, /IntegrationReleaseCoordinatorFacade[\s\S]*createReleaseBatchStore[\s\S]*createVersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
+  assert.match(collaborationBootstrap, /runUnifiedTests\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId\)/);
   assert.match(coordinatorSource, /integrationPipeline\.schedule\(\)/);
   assert.doesNotMatch(coordinatorSource, /createReleaseCandidate|promoteIntegrationCandidate|mergeIntoLocalBranch|releaseDocument\.state/);
   assert.match(integrationPipelineSource, /createReleaseCandidate[\s\S]*releaseDocument\.state = "testing"[\s\S]*promoteIntegrationCandidate[\s\S]*mergeIntoLocalBranch[\s\S]*releaseDocument\.state = "published"/);
@@ -793,8 +794,8 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
   assert.match(releaseBatchStoreSource, /initiatorMemberId[\s\S]*state: "frozen", initiatorMemberId/);
   assert.doesNotMatch(releaseBatchStoreSource, /linghu-ancestor/);
   assert.match(facade, /automaticFlowSnapshots[\s\S]*faultFingerprint[\s\S]*moduleCompletionReport/);
-  assert.match(main, /const testResources = new TestResourceCoordinatorFacade[\s\S]*createTaskWorktreeTestRunner\([\s\S]*verifyCandidate:[\s\S]*testResources\.run[\s\S]*linghuRuntime!\.runUnifiedTests\(rootPath\)/);
-  assert.doesNotMatch(main, /TestExecutionGate|test-execution-gate/);
+  assert.match(collaborationBootstrap, /const testResources = new TestResourceCoordinatorFacade[\s\S]*createTaskWorktreeTestRunner\([\s\S]*verifyCandidate:[\s\S]*testResources\.run[\s\S]*runUnifiedTests\(rootPath\)/);
+  assert.doesNotMatch(collaborationBootstrap, /TestExecutionGate|test-execution-gate/);
 });
 
 test("多个真实进程同时集成或发布时全局并发始终为一", async () => {
@@ -979,13 +980,15 @@ test("发布归档只把明确失败且建立过候选的分支交给测试清�
 });
 
 test("一键清空把候选回收与数据库清理解耦并核对全部持久状态", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
+  const resetService = readFileSync(new URL("../electron/services/support/application/test-data-reset.service.ts", import.meta.url), "utf8");
   assert.match(main, /releaseBatches\.failedCandidateBranches\(\)/);
-  assert.match(main, /clearFailedTestReleaseCandidates[\s\S]*\.catch\(/);
+  assert.match(main, /clearFailedTestReleaseCandidates/);
+  assert.match(resetService, /cleanupCandidates\(\)[\s\S]*\.catch\(/);
   assert.match(main, /collaborationStore\.assertTestDataCleared\(\)/);
-  assert.match(main, /nangongStore\.assertTestDataCleared\(\)/);
+  assert.match(main, /evolutionStateStore\.assertTestDataCleared\(\)/);
   assert.match(main, /linghuRuntime!\.assertTestDataCleared\(\)/);
-  assert.match(main, /candidateCleanupWarnings: candidateCleanup\.failures/);
+  assert.match(resetService, /candidateCleanupWarnings: candidateCleanup\.failures/);
 });
 
 test("已有同代成功候选时自动分配重试分支而不阻断统一测试", async () => {

@@ -8,7 +8,7 @@ import type {
   LocaleValue,
   EvolutionStateOutDto,
   WorkspaceStateOutDto,
-} from "../../../../contracts/system/desktop/desktop";
+} from "../../../../contracts/system/desktop/index";
 import { evolutionOwnerForStatus, evolutionStatusLabel, workbenchOwnerLabel } from "../model/evolution-workbench";
 import type { EvolutionWorkspaceFlowNode } from "../../nangong";
 

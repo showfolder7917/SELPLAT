@@ -28,7 +28,8 @@ test("contracts mirror Electron ownership and expose explicit protocol roles", (
     .filter((entry) => entry.isDirectory() && sourceFilesUnder(path.join("contracts", entry.name)).length > 0)
     .map((entry) => entry.name)
     .sort();
-  assert.deepEqual(contractRoots, ["foundation", "governance", "services", "system"]);
+  assert.deepEqual(contractRoots, ["foundation", "services", "system"]);
+  assert.equal(existsSync(path.join(appRoot, "contracts/governance")), false, "ownerless governance contract root must not return");
   for (const mirroredOwner of [
     "personas/nangong", "personas/hanli", "personas/linghu", "personas/executor",
     "evolution", "workflow", "support/application", "support/capabilities", "support/platform",
@@ -40,6 +41,22 @@ test("contracts mirror Electron ownership and expose explicit protocol roles", (
   for (const file of contractSources) assert.doesNotMatch(source(file), /export(?: type)? \*/u, file);
   assert.equal(existsSync(path.join(appRoot, "contracts/services/workflow/port/persona-capability.port.ts")), false);
   assert.equal(existsSync(path.join(appRoot, "contracts/services/workflow/value/persona-capability.value.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "contracts/foundation/value/event-severity.value.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/workflow/dto/approval-governance-record.out.dto.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/workflow/port/workflow-state-reader.port.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/support/capabilities/event-center/dto/audit.out.dto.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/support/capabilities/event-center/dto/event-center-exception.in.dto.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/support/capabilities/event-center/dto/renderer-exception.in.dto.ts")), true);
+  const contractText = contractSources.map((file) => source(file)).join("\n");
+  for (const uniqueSymbol of [
+    "ApprovalGovernanceRecordOutDto", "WorkflowStateReaderPort", "AuditLogInfoOutDto",
+    "EventCenterExceptionInDto", "RendererExceptionInDto", "EventSeverityValue",
+  ]) {
+    assert.equal([...contractText.matchAll(new RegExp(`(?:interface|type) ${uniqueSymbol}\\b`, "gu"))].length, 1, uniqueSymbol);
+  }
+  for (const file of ["contracts", "electron", "src"].flatMap((root) => sourceFilesUnder(root))) {
+    assert.doesNotMatch(source(file), /contracts\/governance|governance\/index/u, file);
+  }
   assert.match(source("contracts/services/workflow/port/persona-runtime.port.ts"), /\w+\([^)]*\)\s*:/u);
 });
 
@@ -58,6 +75,8 @@ test("application-private contracts are domain modules outside shared", () => {
   }
   assert.deepEqual(readdirSync(path.join(appRoot, "contracts")).filter((name) => name.endsWith(".ts")), []);
   assert.equal(existsSync(path.join(appRoot, "ARCHITECTURE.md")), true);
+  assert.equal(existsSync(path.join(appRoot, "contracts/system/desktop/desktop.ts")), false);
+  for (const file of sourceFilesUnder("src")) assert.doesNotMatch(source(file), /contracts\/system\/desktop\/desktop/u, file);
   assert.doesNotMatch(source("contracts/services/workflow/index.ts"), /from ["']\.\/desktop(?:\.js)?["']/);
   assert.match(source("contracts/system/desktop/index.ts"), /export type \{ DesktopApi \} from "\.\/api\/desktop\.api\.js"/);
   assert.match(source("contracts/system/desktop/value/desktop-capability-registry.value.ts"), /keyof DesktopApi/);

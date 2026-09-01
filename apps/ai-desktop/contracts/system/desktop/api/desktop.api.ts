@@ -6,13 +6,13 @@
  * 数据方向：renderer <-> preload <-> main。
  * 本接口只组合已登记能力，不允许暴露 ipcRenderer、文件系统或任意命令执行对象。
  */
-import type { ApprovalGovernanceRecordOutDto, AuditLogInfoOutDto, RendererExceptionInDto } from "../../../governance/index.js";
 import type { WindowActionValue, WorkspacePermissionValue } from "../../../foundation/index.js";
 import type { DesktopEnvironmentOutDto } from "../dto/desktop-environment.out.dto.js";
 import type { CodexApprovalOutDto, CodexHarnessStatusOutDto, CodexLoginResponseOutDto, CodexModelCatalogOutDto, CodexStreamEventOutDto, CodexUserInputRequestOutDto, ResolveCodexApprovalOutDto, ResolveCodexUserInputInDto } from "../../../services/support/platform/codex/index.js";
 import type { TrustedCommandInfoOutDto } from "../../../services/support/platform/security/index.js";
 import type { AutomaticTestPreflightResultOutDto } from "../../../services/support/capabilities/testing/index.js";
-import type { CollaborationStateOutDto, CollaborationStateEventOutDto, CollaborationStreamEventOutDto, CollaborationTimelineChangedEventOutDto, CollaborationTimelineSnapshotOutDto, CreateCollaborationMemberInDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto } from "../../../services/workflow/index.js";
+import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationStateEventOutDto, CollaborationStreamEventOutDto, CollaborationTimelineChangedEventOutDto, CollaborationTimelineSnapshotOutDto, ConfigurePersonaWorkflowInDto, CreateCollaborationMemberInDto, DesktopOperatingModeValue, PersonaWorkflowActionInDto, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto } from "../../../services/workflow/index.js";
+import type { AuditLogInfoOutDto, RendererExceptionInDto } from "../../../services/support/capabilities/event-center/index.js";
 import type { CodexSessionInfoOutDto, ConversationDispatchStateOutDto, EnqueueMessageInDto, SendMessageInDto, SendMessageOutDto } from "../../../services/support/capabilities/conversation/index.js";
 import type { TestDataResetResultOutDto } from "../../../services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../services/support/platform/persistence/index.js";
@@ -20,7 +20,6 @@ import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, 
 import type { EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto, EvolutionWorkbenchChangeEventOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchPreferenceOutDto, EvolutionWorkspaceLocationOutDto, QueryEvolutionWorkbenchInDto, SaveEvolutionWorkbenchPreferenceInDto } from "../../../services/evolution/index.js";
 import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, SendNangongConversationMessageInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../services/workflow/index.js";
 import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
 import type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../../services/support/platform/attachments/index.js";
 import type { WorkspaceEntryOutDto, WorkspaceStateOutDto } from "../../../services/support/platform/workspace/index.js";

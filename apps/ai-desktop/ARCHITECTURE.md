@@ -163,7 +163,7 @@ import type {
 2. 打开该模块 `index.ts`，显式导出语句会直接给出物理文件。
 3. 跨模块只引用目标 `index.ts`；同一模块内部才允许引用自己的具体 DTO 文件。
 
-Renderer 与 preload 是例外：它们通过 `contracts/system/desktop/desktop.ts` 使用完整桌面协议。主进程业务代码不得依赖这个聚合出口。
+Renderer 与 preload 是例外：它们通过唯一公开入口 `contracts/system/desktop/index.ts` 使用完整桌面协议。主进程业务代码不得依赖这个聚合出口。
 
 ## 8. 关键协议位置
 
@@ -180,6 +180,14 @@ Renderer 与 preload 是例外：它们通过 `contracts/system/desktop/desktop.
 | Workflow 当前状态 | `contracts/services/workflow/dto/collaboration-state.out.dto.ts` |
 | Workflow 任务 | `contracts/services/workflow/dto/collaboration-task.out.dto.ts` |
 | Workflow 时间线 | `contracts/services/workflow/dto/collaboration-timeline.out.dto.ts` |
+| Workflow 审批治理投影 | `contracts/services/workflow/dto/approval-governance-record.out.dto.ts` |
+| Workflow 异常与停滞输出 | `contracts/services/workflow/dto/workflow-event.out.dto.ts` |
+| Event Center 异常入口 | `contracts/services/support/capabilities/event-center/dto/event-center-exception.in.dto.ts` |
+| Renderer 异常入口 | `contracts/services/support/capabilities/event-center/dto/renderer-exception.in.dto.ts` |
+| Event Center 审计输出 | `contracts/services/support/capabilities/event-center/dto/audit.out.dto.ts` |
+| 跨域事件严重级别 | `contracts/foundation/value/event-severity.value.ts` |
+
+审批、异常和审计虽然可以在同一 Renderer 页面聚合，但协议仍归各自生产、兼容和持久化责任方。具体归属修正见 [`../../docs/ai-desktop/AI Desktop Governance协议按所有者拆分方案.md`](../../docs/ai-desktop/AI%20Desktop%20Governance协议按所有者拆分方案.md)。
 
 ## 9. 新增能力的固定步骤
 

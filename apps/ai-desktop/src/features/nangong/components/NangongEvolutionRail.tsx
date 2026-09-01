@@ -6,7 +6,7 @@ import type {
   LocaleValue,
   EvolutionStateOutDto,
   WorkspaceStateOutDto,
-} from "../../../../contracts/system/desktop/desktop";
+} from "../../../../contracts/system/desktop/index";
 import { EvolutionProposalDetail } from "../../evolution/components/EvolutionProposalDetail";
 import { EvolutionProposalGrid } from "../../evolution/components/EvolutionProposalGrid";
 import { EvolutionTopicDossierView } from "../../evolution/components/EvolutionTopicDossierView";

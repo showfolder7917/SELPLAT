@@ -68,7 +68,7 @@ import type {
   WorkspaceEntryOutDto,
   WorkspacePermissionValue,
   WorkspaceStateOutDto,
-} from "../../../contracts/system/desktop/desktop";
+} from "../../../contracts/system/desktop/index";
 import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, createUserMessage, managedModeForCommand, nextManagedMode, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "../../features/conversation/model/chat-message";
 import { mergeRealtimeConversationTimeline } from "../../features/conversation/model/realtime-conversation";
 import { SelUiConversation } from "../../features/conversation/components/SelUiConversation";

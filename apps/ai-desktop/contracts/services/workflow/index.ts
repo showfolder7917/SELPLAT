@@ -1,4 +1,7 @@
 /** Workflow 协议唯一入口，显式公开跨人物流程状态、事件、命令和最小端口。 */
+export type { ApprovalGovernanceRecordOutDto } from "./dto/approval-governance-record.out.dto.js";
+export type { WorkflowEventInDto } from "./dto/workflow-event.in.dto.js";
+export type { StalledTaskDetectionOutDto, WorkflowExceptionRecordOutDto } from "./dto/workflow-event.out.dto.js";
 export type {
   CollaborationMemberOutDto,
   CollaborationParticipantSnapshotOutDto,
@@ -32,4 +35,7 @@ export type { CollaborationTimelineBusinessEventTypeValue } from "./value/collab
 export type { ConfigurePersonaWorkflowInDto } from "./dto/configure-persona-workflow.in.dto.js";
 export type { PersonaWorkflowActionInDto } from "./dto/persona-workflow-action.in.dto.js";
 export type { PersonaRuntimePort } from "./port/persona-runtime.port.js";
+export type { WorkflowStateReaderPort } from "./port/workflow-state-reader.port.js";
+export type { ApprovalGovernanceDomainValue } from "./value/approval-governance-domain.value.js";
 export type { PersonaCapabilityValue } from "./value/persona-capability.value.js";
+export type { WorkflowEventCategoryValue, WorkflowEventStatusValue } from "./value/workflow-event.value.js";

@@ -2,7 +2,7 @@ import type { CollaborationMemoryPort } from "../../../../../contracts/services/
 import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { SendNangongConversationMessageInDto } from "../../../../../contracts/services/personas/nangong/index.js";
-import type { EventCenterExceptionInDto } from "../../../../../contracts/governance/index.js";
+import type { EventCenterExceptionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
 
 /** 南宫向韩立申请提案审查的唯一跨人物端口；审批事实仍由韩立模块写入。 */

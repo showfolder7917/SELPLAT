@@ -1,5 +1,5 @@
 // 令狐提案面板只消费跨进程公开状态和工作区协议。
-import type { LocaleValue, EvolutionStateOutDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/desktop";
+import type { LocaleValue, EvolutionStateOutDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
 // 多字段提案使用 SEL UI 的顺序输入窗口，保持与桌面其他审批交互一致。
 import { useSelUi } from "../../../theme/SelUiProvider";
 

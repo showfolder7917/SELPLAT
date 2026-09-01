@@ -4,7 +4,7 @@ import type {
   LocaleValue,
   ScreenCaptureOutDto,
   ScreenCaptureFrameInDto,
-} from "../../../contracts/system/desktop/desktop";
+} from "../../../contracts/system/desktop/index";
 import { ScreenshotEditor } from "../../features/screenshot/components/ScreenshotEditor";
 import "./developer.css";
 

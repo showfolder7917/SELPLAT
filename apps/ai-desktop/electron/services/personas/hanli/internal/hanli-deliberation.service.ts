@@ -2,7 +2,7 @@
 
 import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
-import type { HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
+import type { HanliAcceptanceOperationValue, HanliAcceptancePlanOutDto, HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { EvolutionStatePort } from "../../../evolution/index.js";
 
 /** 韩立研讨所需的外部能力；南宫回答和韩立判断都由明确人物端口提供。 */
@@ -105,7 +105,7 @@ export class HanliDeliberationService {
     proposal: EvolutionProposalOutDto,
     priorFindings: Record<string, unknown>[],
     requestPlan: (prompt: string, workspaceState: typeof topic.workspaceState, locale: typeof topic.locale) => Promise<string>,
-  ): Promise<import("../../../../../contracts/services/evolution/index.js").HanliAcceptancePlanOutDto> {
+  ): Promise<HanliAcceptancePlanOutDto> {
     const response = await requestPlan(acceptancePlanningPrompt(topic, proposal, priorFindings), topic.workspaceState, topic.locale);
     return parseAcceptancePlan(response, topic.topicId, proposal.proposalId);
   }
@@ -133,7 +133,7 @@ function acceptancePlanningPrompt(topic: EvolutionStateOutDto["topics"][number],
   ].join("\n\n");
 }
 
-function parseAcceptancePlan(text: string, topicId: string, proposalId: string): import("../../../../../contracts/services/evolution/index.js").HanliAcceptancePlanOutDto {
+function parseAcceptancePlan(text: string, topicId: string, proposalId: string): HanliAcceptancePlanOutDto {
   const value = parseJsonObject(text);
   const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 2_000) : "";
   const concerns = normalizeList(value.concerns).slice(0, 20);
@@ -152,7 +152,7 @@ function parseAcceptancePlan(text: string, topicId: string, proposalId: string):
   return { version: 1, planId: `hanli-acceptance-plan-${randomUUID()}`, topicId, proposalId, summary, concerns, checks, generatedAt: new Date().toISOString() };
 }
 
-function parseAcceptanceOperation(raw: unknown): import("../../../../../contracts/services/evolution/index.js").HanliAcceptanceOperationValue[] {
+function parseAcceptanceOperation(raw: unknown): HanliAcceptanceOperationValue[] {
   if (!raw || typeof raw !== "object") return [];
   const item = raw as Record<string, unknown>;
   if (item.type === "focus-window") return [{ type: "focus-window" }];

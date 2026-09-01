@@ -8,7 +8,7 @@ import type {
   LocaleValue,
   EvolutionStateOutDto,
   WorkspaceStateOutDto,
-} from "../../../../contracts/system/desktop/desktop";
+} from "../../../../contracts/system/desktop/index";
 import { EvolutionDatabaseGrid } from "./EvolutionDatabaseGrid";
 import { HanLiEvolutionApprovalPanel } from "../../hanli";
 import { NangongEvolutionRail, type EvolutionWorkspaceFlowNode } from "../../nangong";

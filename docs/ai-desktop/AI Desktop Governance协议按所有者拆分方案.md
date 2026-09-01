@@ -2,9 +2,9 @@
 
 ## 1. 文档状态
 
-- 文档性质：实施方案，不代表代码已经迁移完成。
+- 文档性质：已实施并验证方案；源码迁移与三份登记文档的统一测试均已完成。
 - 适用范围：`apps/ai-desktop/contracts/governance` 及其直接导入方、公开聚合出口和说明文档。
-- 当前结论：顶层 `contracts/governance` 没有对应的 Electron 业务模块，属于按“治理主题”形成的跨所有者聚合，应拆回真实业务所有者。
+- 当前结论：原顶层 `contracts/governance` 已按真实业务所有者拆回 Workflow、Event Center 与 Foundation，不再保留主题聚合根或兼容别名。
 - 目标：Contracts 顶层只保留 `foundation`、`system`、`services`；除真正跨域的基础 Value 和系统 API 聚合外，协议路径与 Electron 业务所有者路径保持同构。
 - 非目标：本方案不新建虚假的 `electron/services/governance`，不改变审批、审计、异常处理和工作流恢复的业务行为。
 
@@ -367,3 +367,10 @@ EventSeverityValue 唯一定义位于 foundation
 6. 架构说明和规则已同步；
 7. 测试文档中的全部门禁经用户触发统一测试后通过。
 
+## 14. 实施回执
+
+- 实施日期：2026-09-01。
+- 源码状态：协议物理迁移、公开出口、调用方、结构说明和架构静态门禁已同步。
+- 业务边界：数据库表、IPC channel、Facade 行为和状态机未改动。
+- 验证状态：用户已明确提出统一测试；类型、构建、边界、规则、人物协作、Workflow/Event Center、审计、sandbox preload 与真实 Electron 交互均已通过，状态更新为“已实施并验证”。
+- 规则沉淀评估：无需新增或升级规则。近义规则 `AI_DESKTOP_ARCHITECTURE_BOUNDARY_RULES` 2.4.0 已明确规定协议按语义、生产兼容、真实实现和持久化恢复责任归属，并禁止无所有者 Governance 主题根；本轮修正是该规则的实施与测试同步，不形成新的稳定约束。

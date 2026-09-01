@@ -12,6 +12,7 @@ import type {
   WindowActionValue,
 } from "../../../contracts/foundation/index.js";
 import type { EnqueueMessageInDto, SendMessageInDto } from "../../../contracts/services/support/capabilities/conversation/index.js";
+import type { RendererExceptionInDto } from "../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionWorkspaceLocationOutDto } from "../../../contracts/services/evolution/index.js";
 import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotSaveInDto } from "../../../contracts/services/support/platform/attachments/index.js";
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
@@ -819,13 +820,20 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     const value = report as Record<string, unknown>;
     eventCenter.recordRendererException({
-      operation: typeof value.operation === "string" ? value.operation : "window.error",
+      operation: rendererExceptionOperation(value.operation),
       message: typeof value.message === "string" ? value.message : "Unknown renderer exception.",
       stack: typeof value.stack === "string" ? value.stack : null,
       componentStack: typeof value.componentStack === "string" ? value.componentStack : null,
       url: typeof value.url === "string" ? value.url : null,
     });
   });
+}
+
+/** Renderer 只能上报公开协议允许的三个错误边界，未知值统一降级为 window.error。 */
+function rendererExceptionOperation(value: unknown): RendererExceptionInDto["operation"] {
+  return value === "window.error" || value === "window.unhandledrejection" || value === "react.error-boundary"
+    ? value
+    : "window.error";
 }
 
 function isManagedExecutionMode(value: unknown): value is ManagedExecutionModeValue {

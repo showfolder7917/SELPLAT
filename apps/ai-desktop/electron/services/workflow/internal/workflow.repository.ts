@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-import type { ApprovalGovernanceRecordOutDto } from "../../../../contracts/governance/index.js";
-import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { EventSeverityValue } from "../../../../contracts/foundation/index.js";
+import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
 import type { LinghuAutomationStateOutDto } from "../../../../contracts/services/personas/linghu/index.js";
 import type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionArchiveRecordOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchPreferenceOutDto, EvolutionWorkbenchRowOutDto, EvolutionWorkbenchViewValue, EvolutionStateOutDto, QueryEvolutionWorkbenchInDto, SaveEvolutionWorkbenchPreferenceInDto } from "../../../../contracts/services/evolution/index.js";
-import type { StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventSeverityValue, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto } from "../../../../contracts/governance/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
 
 const STALE_AFTER_MS = 120_000;
@@ -819,7 +818,7 @@ function workbenchStatusFilter(status: string): string {
   } as Record<string, string>)[status] || status;
 }
 
-function classifyAuditEvent(type: string): { category: WorkflowEventCategoryValue; severity: WorkflowEventSeverityValue; status: WorkflowEventStatusValue; sourceType: "member" | "system" | "launcher"; sourceId: string } {
+function classifyAuditEvent(type: string): { category: WorkflowEventCategoryValue; severity: EventSeverityValue; status: WorkflowEventStatusValue; sourceType: "member" | "system" | "launcher"; sourceId: string } {
   const sourceId = type.startsWith("han-li.") ? "han-li" : type.startsWith("nangong.") ? "nangong-wan" : type.startsWith("linghu.") ? "linghu-ancestor" : type.startsWith("application.") ? "evolution-launcher" : "ai-desktop";
   const sourceType = sourceId === "evolution-launcher" ? "launcher" : sourceId === "ai-desktop" ? "system" : "member";
   if (/business[._-]exception|validation[._-]failed/u.test(type)) return { category: "business-exception", severity: "warning", status: "open", sourceType, sourceId };
@@ -836,14 +835,14 @@ function provesFailureResolved(type: string, details: Record<string, unknown>): 
   return /(?:^|[._-])(completed|recovered|revised|passed|integrated|fixed|resolved)(?:$|[._-])/u.test(type);
 }
 
-function defaultSeverity(category: WorkflowEventCategoryValue): WorkflowEventSeverityValue { return category === "technical-error" || category === "stalled" ? "error" : category === "business-exception" ? "warning" : "info"; }
+function defaultSeverity(category: WorkflowEventCategoryValue): EventSeverityValue { return category === "technical-error" || category === "stalled" ? "error" : category === "business-exception" ? "warning" : "info"; }
 function defaultStatus(category: WorkflowEventCategoryValue): WorkflowEventStatusValue { return ["technical-error", "business-exception", "stalled"].includes(category) ? "open" : "observed"; }
 function requiredMutationValue(value: unknown, label: string, maximum: number): string { const text = typeof value === "string" ? value.trim() : ""; if (!text) throw new Error(`${label}不能为空。`); return text.slice(0, maximum); }
 function stringValue(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : null; }
 function workflowSourceType(value: unknown): WorkflowEventInDto["sourceType"] | null {
   return value === "member" || value === "system" || value === "launcher" || value === "task" ? value : null;
 }
-function workflowSeverity(value: unknown): WorkflowEventSeverityValue | null {
+function workflowSeverity(value: unknown): EventSeverityValue | null {
   return value === "info" || value === "warning" || value === "error" || value === "critical" ? value : null;
 }
 function nullableString(value: unknown): string | null { return typeof value === "string" && value ? value : null; }

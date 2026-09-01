@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 
-import type { LocaleValue } from "../../../../contracts/system/desktop/desktop";
+import type { LocaleValue } from "../../../../contracts/system/desktop/index";
 
 type SelFloatingPanelController = {
   body: HTMLElement;

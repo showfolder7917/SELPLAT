@@ -1,4 +1,4 @@
-import type { EvolutionTopicDossierOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
+import type { EvolutionTopicDossierOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 import { EvolutionDisclosure } from "./EvolutionDisclosure";
 
 /** 专题池展示来源对话、研讨和数据库执行时间线，不把原始 JSON 暴露给用户。 */

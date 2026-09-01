@@ -14,7 +14,7 @@ import type { TestResourceCoordinatorStateOutDto } from "../../../../contracts/s
 // 修正方案进入南宫演化状态与韩立审批链，令狐不建立旁路审批。
 import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 // 统一异常记录由 Event Center 产生，本入口只负责受理和触发检查。
-import type { WorkflowExceptionRecordOutDto } from "../../../../contracts/governance/index.js";
+import type { WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
 // Store 持有状态，模块顺序是轮转的唯一事实。
 import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./internal/linghu-automation.store.js";
 // 纯分析函数独立在无副作用模块内，Facade 只编排决策与动作。

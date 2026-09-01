@@ -1,4 +1,4 @@
-import type { CodexStreamActivityOutDto, CodexStreamEventOutDto, CodexStreamPlanStepOutDto, ManagedExecutionModeValue, ManagedExecutionUpdateEventOutDto, ScreenshotAttachmentOutDto } from "../../../../contracts/system/desktop/desktop";
+import type { CodexStreamActivityOutDto, CodexStreamEventOutDto, CodexStreamPlanStepOutDto, ManagedExecutionModeValue, ManagedExecutionUpdateEventOutDto, ScreenshotAttachmentOutDto } from "../../../../contracts/system/desktop/index";
 import type { RealtimeConversationMessage } from "./realtime-conversation";
 
 export type ComposerAttachment = ScreenshotAttachmentOutDto & { dataUrl: string };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { ApprovalGovernanceRecordOutDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, LocaleValue, EvolutionStateOutDto } from "../../../../contracts/system/desktop/desktop";
+import type { ApprovalGovernanceRecordOutDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, LocaleValue, EvolutionStateOutDto } from "../../../../contracts/system/desktop/index";
 import { evolutionMutationRequest } from "../../evolution/model/evolution-workbench";
 import { EvolutionProposalDetail } from "../../evolution/components/EvolutionProposalDetail";
 import { EvolutionProposalGrid } from "../../evolution/components/EvolutionProposalGrid";
