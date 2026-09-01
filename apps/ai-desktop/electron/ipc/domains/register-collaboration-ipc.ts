@@ -80,5 +80,5 @@ export function registerCollaborationIpc(
   handle("desktop:generate-han-li-acceptance-plan", (_event, proposalId: string) => hanli.generateAcceptancePlan(proposalId));
   handle("desktop:revise-evolution-proposal", (_event, proposalId: string, request: ReviseNangongProposalInDto) => nangong.reviseProposal(proposalId, request));
   handle("desktop:auto-approve-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationInDto) => hanli.autoApprove(proposalId, request));
-  handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationInDto) => personaWorkflow.dispatch(proposalId, request));
+  handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationInDto) => nangong.distributeProposal(proposalId, request));
 }

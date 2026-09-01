@@ -1,16 +1,10 @@
 // Workflow 门面是跨人物节点推进、暂停、恢复和人工接管的唯一公开入口。
 export { CollaborationCoordinator as CollaborationWorkflowFacade } from "./collaboration-workflow.facade.js";
 // 会话能力只依赖这些稳定 Workflow Port，不需要看到协调器的内部 Store。
-export type {
-  CollaborationExecutionResult,
-  CollaborationExecutorSession,
-  CollaborationSessionFactory,
-} from "./collaboration-workflow.facade.js";
 import type { DatabasePort } from "../platform/persistence/index.js";
 import { CollaborationDurationLog } from "./internal/collaboration-duration.log.js";
 import { CollaborationStore } from "./internal/collaboration.store.js";
 import { EvolutionFlowOrchestrator } from "./internal/evolution-flow.orchestrator.js";
-import { EvolutionTaskDistributionService } from "./internal/evolution-task-distribution.service.js";
 import { createCollaborationResultSummary } from "./internal/result/result-summary.js";
 import { WorkflowRepository } from "./internal/workflow.repository.js";
 import { WorkflowSupervisor } from "./internal/workflow.supervisor.js";
@@ -24,7 +18,6 @@ export type WorkflowSupervisorPort = WorkflowSupervisor;
 // 演化流程端口只判断下一步，不持有提案业务数据。
 export type EvolutionFlowPort = EvolutionFlowOrchestrator;
 // 分发端口把已审批计划转换为协作任务。
-export type EvolutionTaskDistributionPort = EvolutionTaskDistributionService;
 
 // JSON 状态只由 Workflow 自己创建并维护，人物不能直接修改状态文件。
 export function createCollaborationState(...arguments_: ConstructorParameters<typeof CollaborationStore>): CollaborationStatePort {
@@ -52,12 +45,6 @@ export function createEvolutionFlow(): EvolutionFlowPort {
 }
 
 // 南宫通过公开工厂取得任务分发器，Workflow 保持跨人物编排的所有权。
-export function createEvolutionTaskDistribution(
-  ...arguments_: ConstructorParameters<typeof EvolutionTaskDistributionService>
-): EvolutionTaskDistributionPort {
-  return new EvolutionTaskDistributionService(...arguments_);
-}
-
 // 发布流水线复用同一结果摘要规则，页面与归档因此看到相同结论。
 export { createCollaborationResultSummary };
 

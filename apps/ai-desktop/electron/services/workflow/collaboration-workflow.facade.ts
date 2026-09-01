@@ -15,6 +15,7 @@ import type {
   UpdateCollaborationMemberInDto,
 } from "../../../contracts/collaboration/workflow/index.js";
 import type { CodexStreamEvent } from "../../../contracts/platform/codex/index.js";
+import type { ExecutorSessionPort } from "../../../contracts/collaboration/executor/index.js";
 import { CollaborationDurationLog } from "./internal/collaboration-duration.log.js";
 import { CollaborationStore } from "./internal/collaboration.store.js";
 import type {
@@ -22,37 +23,16 @@ import type {
   VersionWorkspacePort as VersionWorkspaceManager,
 } from "../capabilities/release/index.js";
 import { createCollaborationResultSummary } from "./internal/result/result-summary.js";
+import type { ExecutorFacade } from "../personas/executor/index.js";
 
 const LINGHU_MEMBER_ID = "linghu-ancestor";
 const ORCHESTRATOR_MEMBER_IDS = new Set(["nangong-wan", LINGHU_MEMBER_ID]);
-
-export interface CollaborationExecutionResult {
-  status: "code-verified" | "incomplete";
-  text: string;
-  pendingActions: string[];
-  changedFiles: string[];
-  successfulCommands: string[];
-}
-
-export interface CollaborationExecutorSession {
-  isAlive(): boolean;
-  analyze(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<string>;
-  optimize(task: CollaborationTask, feedback: string, emit: (event: CodexStreamEvent) => void): Promise<string>;
-  execute(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult>;
-  investigateRepair(task: CollaborationTask, failure: string, emit: (event: CodexStreamEvent) => void): Promise<string>;
-  executeRepair(task: CollaborationTask, diagnosis: CollaborationRepairDiagnosis, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult>;
-  dispose(): Promise<void> | void;
-}
-
-export interface CollaborationSessionFactory {
-  createExecutor(task: CollaborationTask, member: CollaborationMember): Promise<CollaborationExecutorSession>;
-}
 
 export interface CollaborationCoordinatorOptions {
   store: CollaborationStore;
   durations: CollaborationDurationLog;
   workspaces: VersionWorkspaceManager;
-  sessions: CollaborationSessionFactory;
+  executor: ExecutorFacade;
   integrationPipeline: VersionIntegrationPipeline;
   emitState(state: CollaborationStateOutDto, reason: string, taskIds: string[]): void;
   emitStream(taskId: string, memberId: string, event: CodexStreamEvent): void;
@@ -63,10 +43,9 @@ export class CollaborationCoordinator {
   readonly #store: CollaborationStore;
   readonly #durations: CollaborationDurationLog;
   readonly #workspaces: VersionWorkspaceManager;
-  readonly #sessions: CollaborationSessionFactory;
+  readonly #executor: ExecutorFacade;
   readonly #integrationPipeline: VersionIntegrationPipeline;
   readonly #emitStream: CollaborationCoordinatorOptions["emitStream"];
-  readonly #executorSessions = new Map<string, CollaborationExecutorSession>();
   readonly #activeTaskRuns = new Set<string>();
   readonly #unifiedTestRepairRuns = new Map<string, Promise<boolean>>();
   readonly #waitSpans = new Map<string, string>();
@@ -79,7 +58,7 @@ export class CollaborationCoordinator {
     this.#store = options.store;
     this.#durations = options.durations;
     this.#workspaces = options.workspaces;
-    this.#sessions = options.sessions;
+    this.#executor = options.executor;
     this.#integrationPipeline = options.integrationPipeline;
     this.#emitStream = options.emitStream;
     this.#unsubscribeStore = this.#store.subscribe((state, reason, taskIds) => {
@@ -152,7 +131,7 @@ export class CollaborationCoordinator {
     if (linghu.state !== "idle") return false;
 
     const originalReason = failedTask.blockingReason || integrationFailure.detail;
-    let repairSession: CollaborationExecutorSession | null = null;
+    let repairSession: ExecutorSessionPort | null = null;
     try {
       this.#store.updateTask(taskId, "unified_test.repair_started", (current, state) => {
         const handler = requireMember(state, LINGHU_MEMBER_ID);
@@ -177,7 +156,7 @@ export class CollaborationCoordinator {
       });
 
       const task = this.#store.task(taskId);
-      repairSession = await this.#sessions.createExecutor(task, requireMember(this.state(), LINGHU_MEMBER_ID));
+      repairSession = await this.#executor.createTransient(task, requireMember(this.state(), LINGHU_MEMBER_ID));
       const diagnosisText = await repairSession.investigateRepair(task, task.integrationFailure?.detail || originalReason, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
       const diagnosis = repairDiagnosis(task, diagnosisText, originalReason, participantSnapshot(requireMember(this.state(), LINGHU_MEMBER_ID)));
       this.#store.updateTask(taskId, "unified_test.repair_investigated", (current, state) => {
@@ -245,12 +224,10 @@ export class CollaborationCoordinator {
 
   async cancelTask(taskId: string): Promise<CollaborationStateOutDto> {
     const task = this.#store.task(taskId);
-    const session = this.#executorSessions.get(taskId);
-    this.#executorSessions.delete(taskId);
     this.#stopHeartbeat(`executor:${taskId}`);
     if (task.executorMemberId) this.#lastProgressWriteMs.delete(`${taskId}:${task.executorMemberId}`);
     const state = this.#store.cancelTask(taskId);
-    await session?.dispose();
+    await this.#executor.close(taskId);
     const waitSpan = this.#waitSpans.get(taskId);
     if (waitSpan) this.#durations.finish(waitSpan, "interrupted", { releaseEvent: "task.cancelled" });
     this.#waitSpans.delete(taskId);
@@ -306,8 +283,7 @@ export class CollaborationCoordinator {
     this.#unsubscribeStore();
     this.#integrationPipeline.dispose();
     this.#durations.interruptOpenSpans("application.before-quit");
-    await Promise.allSettled([...this.#executorSessions.values()].map((session) => session.dispose()));
-    this.#executorSessions.clear();
+    await this.#executor.closeAll();
     for (const timer of this.#heartbeatTimers.values()) clearInterval(timer);
     this.#heartbeatTimers.clear();
   }
@@ -434,12 +410,11 @@ export class CollaborationCoordinator {
       const task = this.#store.task(taskId);
       const member = requireMember(this.state(), memberId);
       startupSpan = this.#durations.start(taskId, "codex-startup", { memberId, role: "executor", generation: member.generation });
-      const session = await this.#sessions.createExecutor(task, member);
-      this.#executorSessions.set(taskId, session);
-      this.#startHeartbeat(`executor:${taskId}`, taskId, memberId, session);
+      await this.#executor.open(task, member);
+      this.#startHeartbeat(`executor:${taskId}`, taskId, memberId, { isAlive: () => this.#executor.isAlive(taskId) });
       this.#durations.finish(startupSpan, "completed", { releaseEvent: "executor.codex.ready" });
       startupSpan = null;
-      await this.#resumeOrAnalyze(taskId, session);
+      await this.#resumeOrAnalyze(taskId);
     } catch (error) {
       if (startupSpan) this.#durations.finish(startupSpan, "failed", { error: errorMessage(error) });
       if (this.#store.task(taskId).state === "cancelled") return;
@@ -450,7 +425,7 @@ export class CollaborationCoordinator {
     }
   }
 
-  async #analyze(taskId: string, session: CollaborationExecutorSession): Promise<void> {
+  async #analyze(taskId: string): Promise<void> {
     const task = this.#store.task(taskId);
     const memberId = task.executorMemberId;
     if (!memberId) throw new Error("任务缺少执行人。");
@@ -473,7 +448,7 @@ export class CollaborationCoordinator {
         }
         this.#emitStream(taskId, memberId, event);
       };
-      const text = await session.analyze(task, emit);
+      const text = await this.#executor.analyze(task, emit);
       this.#assertExecutorLease(taskId, memberId, assignmentId, workerGeneration);
       const plan: CollaborationRequirementPlan = {
         version: task.currentPlanVersion + 1,
@@ -509,7 +484,7 @@ export class CollaborationCoordinator {
     }
   }
 
-  async #resumeOrAnalyze(taskId: string, session: CollaborationExecutorSession): Promise<void> {
+  async #resumeOrAnalyze(taskId: string): Promise<void> {
     const task = this.#store.task(taskId);
     const target = task.recoveryTargetState;
     if (target === "executing" && task.currentPlanVersion > 0) {
@@ -521,13 +496,13 @@ export class CollaborationCoordinator {
       return;
     }
     this.#store.updateTask(taskId, "task.analysis_recovered", (current) => { current.recoveryTargetState = null; });
-    await this.#analyze(taskId, session);
+    await this.#analyze(taskId);
   }
 
   async #execute(taskId: string): Promise<void> {
     const task = this.#store.task(taskId);
     const memberId = task.executorMemberId;
-    const session = this.#executorSessions.get(taskId);
+    const session = this.#executor.session(taskId);
     const plan = task.plans.find((candidate) => candidate.version === task.currentPlanVersion);
     if (!memberId || !session || !plan) return this.#blockTask(taskId, "执行阶段缺少执行人、Codex 或当前方案。");
     const assignmentId = task.assignmentId;
@@ -545,7 +520,7 @@ export class CollaborationCoordinator {
       appendFlow(current, "execution.started", "execution", "started", `${executor.displayName}开始执行已审核方案`, executor);
     });
     try {
-      const result = await session.execute(task, plan, (event) => {
+      const result = await this.#executor.execute(task, plan, (event) => {
         try { this.#assertExecutorLease(taskId, memberId, assignmentId, workerGeneration); }
         catch { return; }
         this.#touchProtocolProgress(taskId, memberId);
@@ -602,7 +577,7 @@ export class CollaborationCoordinator {
         appendFlow(current, "task.code_verified", "execution", "completed", returnsToNangong ? "执行修改已完成代码级验证，结果已返回南宫婉收集" : "执行修改已完成代码级验证，等待集成", execution?.executor || null);
       });
       this.#durations.instant(taskId, "task.integration_ready", { memberId, resultSha });
-      await this.#retireExecutor(taskId, memberId, session);
+      await this.#retireExecutor(taskId, memberId);
       const readyTask = this.#store.task(taskId);
       if (readyTask.state === "returned-to-nangong") return;
       const unsatisfiedDependencies = readyTask.dependencyTaskIds.filter((dependencyId) => this.state().tasks.find((candidate) => candidate.taskId === dependencyId)?.state !== "integrated");
@@ -632,9 +607,7 @@ export class CollaborationCoordinator {
   async #repairFailedExecution(taskId: string, reason: string): Promise<void> {
     const failedTask = this.#store.task(taskId);
     const originalId = failedTask.executorMemberId;
-    const originalSession = this.#executorSessions.get(taskId);
-    this.#executorSessions.delete(taskId);
-    await originalSession?.dispose();
+    await this.#executor.close(taskId);
     const currentLinghu = requireMember(this.state(), LINGHU_MEMBER_ID);
     if (currentLinghu.state !== "idle") {
       this.#store.updateTask(taskId, "execution.repair_queued", (current, state) => {
@@ -656,7 +629,7 @@ export class CollaborationCoordinator {
       });
       return;
     }
-    let repairSession: CollaborationExecutorSession | null = null;
+    let repairSession: ExecutorSessionPort | null = null;
     try {
       this.#store.updateTask(taskId, "execution.repair_started", (current, state) => {
         if (originalId) current.originalExecutor ??= participantSnapshot(requireMember(state, originalId));
@@ -689,7 +662,7 @@ export class CollaborationCoordinator {
         });
       });
       const task = this.#store.task(taskId);
-      repairSession = await this.#sessions.createExecutor(task, requireMember(this.state(), LINGHU_MEMBER_ID));
+      repairSession = await this.#executor.createTransient(task, requireMember(this.state(), LINGHU_MEMBER_ID));
       const diagnosisText = await repairSession.investigateRepair(task, reason, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
       const diagnosis = repairDiagnosis(task, diagnosisText, reason, participantSnapshot(requireMember(this.state(), LINGHU_MEMBER_ID)));
       this.#store.updateTask(taskId, "execution.repair_investigated", (current, state) => {
@@ -768,22 +741,19 @@ export class CollaborationCoordinator {
     });
   }
 
-  async #retireExecutor(taskId: string, memberId: string, session: CollaborationExecutorSession): Promise<void> {
+  async #retireExecutor(taskId: string, memberId: string): Promise<void> {
     this.#stopHeartbeat(`executor:${taskId}`);
     this.#lastProgressWriteMs.delete(`${taskId}:${memberId}`);
-    this.#executorSessions.delete(taskId);
     markMemberRetiring(this.#store, memberId);
-    try { await session.dispose(); }
+    try { await this.#executor.close(taskId); }
     catch (error) { this.#durations.instant(taskId, "executor.retirement_failed", { memberId, error: errorMessage(error) }); }
     finally { releaseMember(this.#store, memberId); }
   }
 
   async #blockTask(taskId: string, reason: string): Promise<void> {
     const task = this.#store.task(taskId);
-    const session = this.#executorSessions.get(taskId);
-    this.#executorSessions.delete(taskId);
     this.#stopHeartbeat(`executor:${taskId}`);
-    try { await session?.dispose(); }
+    try { await this.#executor.close(taskId); }
     catch (error) { this.#durations.instant(taskId, "blocked_executor.retirement_failed", { error: errorMessage(error) }); }
     if (["cancelled", "integrated"].includes(this.#store.task(taskId).state)) return;
     this.#store.updateTask(taskId, "task.blocked", (current, state) => {

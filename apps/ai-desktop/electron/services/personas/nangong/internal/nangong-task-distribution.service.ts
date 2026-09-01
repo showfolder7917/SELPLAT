@@ -1,28 +1,41 @@
 import { randomUUID } from "node:crypto";
 
-import type { CollaborationTimelineBusinessEvent } from "../../../../contracts/collaboration/workflow/index.js";
-import type { CollaborationTask } from "../../../../contracts/collaboration/workflow/index.js";
-import type { CodexStreamEvent } from "../../../../contracts/platform/codex/index.js";
-import type { EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionDistributionValidation, EvolutionProposal, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
-import type { CollaborationCoordinator } from "../collaboration-workflow.facade.js";
-import type { EvolutionStatePort } from "../../evolution/index.js";
+import type { CollaborationTimelineBusinessEvent, CollaborationTask } from "../../../../../contracts/collaboration/workflow/index.js";
+import type { CodexStreamEvent } from "../../../../../contracts/platform/codex/index.js";
+import type { EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionDistributionValidation, EvolutionMutationInDto, EvolutionProposal, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { CollaborationWorkflowFacade } from "../../../workflow/index.js";
+import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
 
 type PlanResult = { summary: string; units: EvolutionDistributionUnit[] };
 
-export interface EvolutionTaskDistributionServiceOptions {
+export interface NangongTaskDistributionServiceOptions {
   store: EvolutionStatePort;
-  collaboration: CollaborationCoordinator;
-  plan(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], feedback: string, emit: (event: CodexStreamEvent) => void): Promise<PlanResult>;
+  mutations: EvolutionMutationPort;
+  collaboration: CollaborationWorkflowFacade;
+  plan(prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEvent) => void): Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   timeline?: (event: CollaborationTimelineBusinessEvent) => void;
   timelineStream?: (taskId: string, memberId: string, event: CodexStreamEvent) => void;
 }
 
 /** 任务分发唯一服务：只消费“已通过审批”命令，不作审批判断。 */
-export class EvolutionTaskDistributionService {
-  constructor(private readonly options: EvolutionTaskDistributionServiceOptions) {}
+export class NangongTaskDistributionService {
+  constructor(private readonly options: NangongTaskDistributionServiceOptions) {}
 
-  async dispatch(proposalId: string): Promise<EvolutionStateOutDto> {
+  async dispatch(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto> {
+    const proposal = requireProposal(this.options.store.state(), proposalId);
+    const mutation = request || { expectedStateVersion: this.options.store.state().updatedAt, idempotencyKey: `distribution:${proposalId}` };
+    return this.options.mutations.runAsync(
+      proposal.topicId,
+      "南宫婉任务分发",
+      mutation,
+      () => this.options.store.state().updatedAt,
+      () => this.options.store.state(),
+      () => this.#dispatch(proposalId),
+    );
+  }
+
+  async #dispatch(proposalId: string): Promise<EvolutionStateOutDto> {
     let state = this.options.store.state();
     let proposal = requireProposal(state, proposalId);
     const topic = requireTopic(state, proposal.topicId);
@@ -37,7 +50,12 @@ export class EvolutionTaskDistributionService {
         this.#publishPlanning(proposal, topic, attempt, "current", "正在生成执行计划并分配执行人", feedback, planningStartedAt);
         let planned: PlanResult;
         try {
-          planned = await this.options.plan(proposal, topic, feedback, (event) => this.options.timelineStream?.(planningTaskId, proposal.submitterMemberId, event));
+          planned = parseDistributionPlan(await this.options.plan(
+            distributionPlanningPrompt(proposal, topic, feedback),
+            topic.workspaceState,
+            topic.locale,
+            (event) => this.options.timelineStream?.(planningTaskId, proposal.submitterMemberId, event),
+          ));
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
           this.#publishPlanning(proposal, topic, attempt, "failed", "生成执行计划失败", detail, planningStartedAt);
@@ -138,6 +156,49 @@ export class EvolutionTaskDistributionService {
       },
     });
   }
+}
+
+function distributionPlanningPrompt(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], feedback: string): string {
+  return [
+    "你是南宫婉，负责在真实工程中调查后形成最小、可独立合并的执行任务。现在只读调查，不修改源码。",
+    "影响范围只是调查边界，不等于任务数量。预计修改文件重叠或必须一起验收的内容必须合并。只有可以独立修改、独立回退、独立验收且预计文件不重叠时才允许并行。",
+    "请读取工作区相关实现并返回 JSON：{\"summary\":\"任务数量理由\",\"units\":[{\"title\":\"任务标题\",\"scope\":\"完整职责边界\",\"acceptanceCriteria\":[\"独立验收条件\"],\"expectedFiles\":[\"工程相对路径\"],\"independentReason\":\"可独立执行或不拆分的理由\"}]}。不要返回 Markdown。",
+    `课题：${topic.title}\n目标：${topic.goal}`,
+    `提案：${proposal.content}`,
+    `影响范围：${proposal.impactScope.join("；")}`,
+    `验收条件：${proposal.acceptanceCriteria.join("；")}`,
+    `排除范围：${proposal.exclusions.join("；") || "无"}`,
+    feedback ? `程序上一轮核对到的确定性冲突：${feedback}` : "这是首次拆分。",
+  ].join("\n\n");
+}
+
+function parseDistributionPlan(text: string): PlanResult {
+  const value = parseJsonObject(text);
+  const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 4_000) : "";
+  const rawUnits = Array.isArray(value.units) ? value.units : [];
+  const units = rawUnits.flatMap((raw): EvolutionDistributionUnit[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const item = raw as Record<string, unknown>;
+    const title = typeof item.title === "string" ? item.title.trim().slice(0, 200) : "";
+    const scope = typeof item.scope === "string" ? item.scope.trim().slice(0, 8_000) : "";
+    const acceptanceCriteria = normalizeDraftList(item.acceptanceCriteria);
+    const expectedFiles = normalizeDraftList(item.expectedFiles).map((file) => file.replaceAll("\\", "/").replace(/^\.\//u, "")).filter((file) => !file.startsWith("/") && !file.split("/").includes(".."));
+    const independentReason = typeof item.independentReason === "string" ? item.independentReason.trim().slice(0, 4_000) : "";
+    return title && scope && acceptanceCriteria.length && expectedFiles.length && independentReason ? [{ title, scope, acceptanceCriteria, expectedFiles, independentReason }] : [];
+  });
+  if (!summary || !units.length) throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
+  return { summary, units };
+}
+
+function normalizeDraftList(value: unknown): string[] {
+  return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : [];
+}
+
+function parseJsonObject(text: string): Record<string, unknown> {
+  const candidate = text.match(/\{[\s\S]*\}/)?.[0];
+  if (!candidate) throw new Error("AI 没有返回可解析的结构化判断。");
+  try { return JSON.parse(candidate) as Record<string, unknown>; }
+  catch { throw new Error("AI 返回的结构化判断不是有效 JSON。"); }
 }
 
 function distributionHardFindings(units: EvolutionDistributionUnit[]): string[] {

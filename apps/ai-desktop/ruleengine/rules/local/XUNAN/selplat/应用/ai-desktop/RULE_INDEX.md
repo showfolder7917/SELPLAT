@@ -15,7 +15,7 @@ load_rule_for_ai_desktop_workflow_event_business_exception_stall_or_runtime_reco
 <!-- AI Desktop 接入 SEL UI、切换主题或调整应用主题适配时加载。 -->
 load_rule_for_ai_desktop_sel_ui_theme_or_react_host_adoption = AI_DESKTOP_OFFICIAL_HARNESS_RULES
 
-<!-- AI Desktop 的 contracts 领域分层、运行边界、沙箱 preload 单文件交付、模块解耦、业务注释、生产规则 bundle 和客户覆盖统一由本规则约束。 -->
+<!-- AI Desktop 的 contracts 领域分层、Electron 薄入口与分层 bootstrap、运行边界、沙箱 preload、模块解耦、业务注释和客户规则交付统一由本规则约束。 -->
 AI_DESKTOP_ARCHITECTURE_BOUNDARY_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop架构边界与客户规则交付规则.md
 
 <!-- 整理 contracts、拆分 main/preload/renderer、修正沙箱 preload 构建、解耦 IPC 与服务或按业务域分模块时加载。 -->

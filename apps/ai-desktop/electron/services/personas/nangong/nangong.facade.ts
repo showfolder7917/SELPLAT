@@ -8,6 +8,7 @@ import type {
   UpdateNangongTopicInDto,
 } from "../../../../contracts/collaboration/nangong/index.js";
 import type { EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionMutationInDto } from "../../../../contracts/collaboration/evolution/index.js";
 import { NangongApplicationService, type NangongApplicationServiceOptions } from "./internal/nangong-application.service.js";
 
 /**
@@ -25,6 +26,7 @@ export interface NangongApplicationPort {
   updateTopic(topicId: string, request: UpdateNangongTopicInDto): EvolutionStateOutDto;
   reviseProposal(proposalId: string, request: ReviseNangongProposalInDto): EvolutionStateOutDto;
   investigateAndReviseReturnedProposal(proposalId: string): Promise<EvolutionStateOutDto>;
+  distributeProposal(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto>;
 }
 
 /** 南宫 Runtime 的装配参数；共享状态和跨人物动作都以最小端口注入。 */
@@ -65,6 +67,8 @@ export class NangongFacade {
   reviseProposal(proposalId: string, request: ReviseNangongProposalInDto) { return this.#application.reviseProposal(proposalId, request); }
   /** 调查退回原因；只有产生新的可核验事实时才提交返修版本。 */
   investigateAndReviseReturnedProposal(proposalId: string) { return this.#application.investigateAndReviseReturnedProposal(proposalId); }
+  /** 将审批通过的提案拆分为独立任务，并指定或排队等待通用执行人。 */
+  distributeProposal(proposalId: string, request?: EvolutionMutationInDto) { return this.#application.distributeProposal(proposalId, request); }
 }
 
 /** 创建南宫独立 Runtime；人物应用服务在模块内部装配，外部只能取得 Facade。 */

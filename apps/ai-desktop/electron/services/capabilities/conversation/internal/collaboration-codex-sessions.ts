@@ -23,10 +23,10 @@ import {
 import { ManagedExecutionFacade as ManagedTaskExecutor } from "../../execution/index.js";
 import { CommandGovernanceFacade as TrustedCommandStore } from "../../../platform/security/index.js";
 import type {
-  CollaborationExecutionResult,
-  CollaborationExecutorSession,
-  CollaborationSessionFactory,
-} from "../../../workflow/index.js";
+  ExecutorExecutionResultOutDto,
+  ExecutorSessionFactoryPort,
+  ExecutorSessionPort,
+} from "../../../personas/executor/index.js";
 import {
   acquireManagedDependencyLease,
   releaseManagedDependencyLease,
@@ -213,7 +213,7 @@ export interface CodexCollaborationSessionFactoryOptions {
 }
 
 /** 每次分配创建一条执行人物 Codex 管道；任务完成后先删线程，再关闭进程并注销请求路由。 */
-export class CodexCollaborationSessionFactory implements CollaborationSessionFactory {
+export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryPort {
   readonly #options: CodexCollaborationSessionFactoryOptions;
   readonly #personaWriters = new PersonaSessionWriterQueue();
 
@@ -222,7 +222,7 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
     mkdirSync(options.sessionRoot, { recursive: true });
   }
 
-  async createExecutor(task: CollaborationTask, member: CollaborationMember): Promise<CollaborationExecutorSession> {
+  async createExecutor(task: CollaborationTask, member: CollaborationMember): Promise<ExecutorSessionPort> {
     const persistentPersona = Boolean(this.#options.personaSessionStore?.(member.memberId));
     const releasePersonaWriter = persistentPersona
       ? await this.#personaWriters.acquire(member.memberId, task.taskId, (state, activeTaskId) => {
@@ -288,7 +288,7 @@ export class CodexCollaborationSessionFactory implements CollaborationSessionFac
   }
 }
 
-class CodexExecutorSession implements CollaborationExecutorSession {
+class CodexExecutorSession implements ExecutorSessionPort {
   readonly #connection: RegisteredConnection;
   readonly #registry: CollaborationCodexRegistry;
   readonly #resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"];
@@ -326,14 +326,14 @@ class CodexExecutorSession implements CollaborationExecutorSession {
     return this.#runRequirement(task, `依据已登记的技术失败证据修正同一实施方案，不重复需求分析。\n\n当前技术分析：\n${currentPlan}\n\n失败证据：\n${feedback}`, emit);
   }
 
-  async execute(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult> {
+  async execute(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<ExecutorExecutionResultOutDto> {
     return this.#executePlan(task, [
       `已确认任务：\n${task.snapshot.confirmedIntent}`,
       `执行人完成的技术分析：\n${plan.text}`,
     ], emit);
   }
 
-  async #executePlan(task: CollaborationTask, instructions: string[], emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult> {
+  async #executePlan(task: CollaborationTask, instructions: string[], emit: (event: CodexStreamEvent) => void): Promise<ExecutorExecutionResultOutDto> {
     const workspaceState = collaborationWorkspaceState(task, this.#readWorkspaceState?.());
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const result = await this.#managed.run({
@@ -359,7 +359,7 @@ class CodexExecutorSession implements CollaborationExecutorSession {
     ].join("\n\n"), emit);
   }
 
-  async executeRepair(task: CollaborationTask, diagnosis: CollaborationRepairDiagnosis, emit: (event: CodexStreamEvent) => void): Promise<CollaborationExecutionResult> {
+  async executeRepair(task: CollaborationTask, diagnosis: CollaborationRepairDiagnosis, emit: (event: CodexStreamEvent) => void): Promise<ExecutorExecutionResultOutDto> {
     return this.#executePlan(task, [
       "[故障修复专用执行]",
       diagnosis.repairInstruction,

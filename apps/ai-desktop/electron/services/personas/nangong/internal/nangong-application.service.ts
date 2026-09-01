@@ -7,6 +7,7 @@ import type {
   UpdateNangongTopicInDto,
 } from "../../../../../contracts/collaboration/nangong/index.js";
 import type { NangongApplicationPort } from "../nangong.facade.js";
+import type { EvolutionMutationInDto } from "../../../../../contracts/collaboration/evolution/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 import { NangongConversationService } from "./nangong-conversation.service.js";
 import { NangongEvolutionAuthoringService } from "./nangong-evolution-authoring.service.js";
@@ -17,11 +18,13 @@ export type { NangongApplicationServiceOptions } from "./nangong-application.por
 export class NangongApplicationService implements NangongApplicationPort {
   readonly #conversation: NangongConversationService;
   readonly #authoring: NangongEvolutionAuthoringService;
+  readonly #taskDistribution: NangongApplicationServiceOptions["taskDistribution"];
 
   /** 装配南宫两个独立业务能力；构造过程不写状态，也不启动 Workflow。 */
   constructor(options: NangongApplicationServiceOptions) {
     this.#conversation = new NangongConversationService(options);
     this.#authoring = new NangongEvolutionAuthoringService(options);
+    this.#taskDistribution = options.taskDistribution;
   }
 
   sendConversationMessage(request: SendNangongConversationMessageInDto) { return this.#conversation.sendConversationMessage(request); }
@@ -32,4 +35,5 @@ export class NangongApplicationService implements NangongApplicationPort {
   updateTopic(topicId: string, request: UpdateNangongTopicInDto) { return this.#authoring.updateTopic(topicId, request); }
   reviseProposal(proposalId: string, request: ReviseNangongProposalInDto) { return this.#authoring.reviseProposal(proposalId, request); }
   investigateAndReviseReturnedProposal(proposalId: string) { return this.#authoring.investigateAndReviseReturnedProposal(proposalId); }
+  distributeProposal(proposalId: string, request?: EvolutionMutationInDto) { return this.#taskDistribution.dispatch(proposalId, request); }
 }

@@ -48,14 +48,14 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
 
 mkdirSync(controlledTestRoot, { recursive: true });
 const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: "/workspace", permission: "workspace-write" }] };
-const nangongPromptSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+const nangongPromptSource = readFileSync(new URL("../electron/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const evolutionFacadeSource = readFileSync(new URL("../electron/services/personas/nangong/nangong.facade.ts", import.meta.url), "utf8");
 const nangongApplicationSource = readFileSync(new URL("../electron/services/personas/nangong/internal/nangong-application.service.ts", import.meta.url), "utf8");
 const personaEvolutionRuntimeSource = readFileSync(new URL("../electron/services/workflow/internal/persona-evolution.runtime.ts", import.meta.url), "utf8");
 const approvalServiceSource = readFileSync(new URL("../electron/services/personas/hanli/internal/evolution-approval.service.ts", import.meta.url), "utf8");
 const hanliDeliberationSource = readFileSync(new URL("../electron/services/personas/hanli/internal/hanli-deliberation.service.ts", import.meta.url), "utf8");
 const hanliApplicationSource = readFileSync(new URL("../electron/services/personas/hanli/internal/hanli-application.service.ts", import.meta.url), "utf8");
-const distributionServiceSource = readFileSync(new URL("../electron/services/workflow/internal/evolution-task-distribution.service.ts", import.meta.url), "utf8");
+const distributionServiceSource = readFileSync(new URL("../electron/services/personas/nangong/internal/nangong-task-distribution.service.ts", import.meta.url), "utf8");
 const persistedEvolutionStates = new Map();
 function evolutionPersistence(key) {
   return {
@@ -110,7 +110,7 @@ test("审批、编排和分发服务不再互相代替职责", () => {
   assert.match(hanliApplicationSource, /new HanliDeliberationService/);
   assert.doesNotMatch(personaEvolutionRuntimeSource, /createEvolutionApprovalService|createHanliDeliberationPort|#approvals|#hanliDecisions/);
   assert.match(personaEvolutionRuntimeSource, /new EvolutionFlowOrchestrator/);
-  assert.match(personaEvolutionRuntimeSource, /new EvolutionTaskDistributionService/);
+  assert.match(personaEvolutionRuntimeSource, /createNangongTaskDistribution/);
   assert.match(nangongApplicationSource, /class NangongApplicationService/);
   assert.doesNotMatch(personaEvolutionRuntimeSource, /parseConversationResponse|revisionInvestigationPrompt/);
 });

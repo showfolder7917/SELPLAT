@@ -1,6 +1,6 @@
 import type { CollaborationMemoryPort } from "../../../../../contracts/capabilities/event-center/index.js";
 import type { SendMessageResponse } from "../../../../../contracts/capabilities/conversation/index.js";
-import type { EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
 import type { SendNangongConversationMessageInDto } from "../../../../../contracts/collaboration/nangong/index.js";
 import type { EventCenterExceptionInput } from "../../../../../contracts/governance/workflow.js";
 import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
@@ -22,6 +22,11 @@ export interface NangongOneShotWorkflowPort {
   blockFailure(kind: "business" | "technical", operation: string, error: unknown, reason: string, details?: Record<string, unknown>): EvolutionStateOutDto;
 }
 
+/** 南宫婉将已审批提案拆分并分发给通用执行人的人物能力。 */
+export interface NangongTaskDistributionPort {
+  dispatch(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto>;
+}
+
 /** 南宫 Runtime 的完整装配参数；共享事实与跨模块动作均通过显式 Port 注入。 */
 export interface NangongApplicationServiceOptions {
   store: EvolutionStatePort;
@@ -37,5 +42,6 @@ export interface NangongApplicationServiceOptions {
   proposalReview: NangongProposalReviewPort;
   memberDirectory: NangongMemberDirectoryPort;
   oneShotWorkflow: NangongOneShotWorkflowPort;
+  taskDistribution: NangongTaskDistributionPort;
   newConversationRetryDelaysMs?: number[];
 }

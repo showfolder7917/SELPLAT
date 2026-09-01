@@ -6,18 +6,38 @@
 
 按以下顺序可以看到一次真实请求如何完成流转：
 
-1. `electron/main.ts`：唯一组合根，创建数据库、公共能力、人物 Runtime、Evolution 和 Workflow。
-2. `electron/ipc/domains/register-collaboration-ipc.ts`：人物与协作 IPC 分发入口。
-3. `electron/services/personas/<persona>/index.ts`：人物模块唯一公开入口。
-4. `electron/services/personas/<persona>/<persona>.facade.ts`：人物公开能力。
-5. `electron/services/personas/<persona>/internal/*-application.service.ts`：人物内部用例组合。
-6. `electron/services/evolution/index.ts`：共享专题、提案、审批、验收状态入口。
-7. `electron/services/workflow/index.ts`：跨人物轮转、分发、恢复和统一测试入口。
-8. `contracts/<domain>/index.ts`：跨模块数据和端口的唯一类型入口。
+1. `electron/main.ts`：只看 Electron 的 `start/dispose` 生命周期入口。
+2. `electron/bootstrap/application-runtime.ts`：查看一次启动怎样按层组合整个应用。
+3. `electron/bootstrap/startup-context.ts`：查看工程根、用户目录、协议和单实例门禁。
+4. `electron/bootstrap/persistence.bootstrap.ts`：查看数据库、Repository、时间线和记忆装配。
+5. `electron/bootstrap/capabilities.bootstrap.ts`：查看设置、规则、附件、会话等公共能力。
+6. `electron/bootstrap/collaboration.bootstrap.ts`：查看执行人、worktree、测试和集成发布。
+7. `electron/bootstrap/personas.bootstrap.ts`：查看并列人物能力登记与 Workflow 监督器。
+8. `electron/bootstrap/ipc.bootstrap.ts` → `electron/ipc/domains/register-collaboration-ipc.ts`：查看公开 Facade 怎样进入 IPC。
+9. `electron/services/personas/<persona>/index.ts` → Facade → internal Application Service：查看某个人物内部能力。
+10. `electron/services/evolution/index.ts` / `electron/services/workflow/index.ts`：查看共享事实与跨人物流转。
+11. `contracts/<domain>/index.ts`：查看跨模块数据和端口的唯一类型入口。
 
 不要从某个 `internal/*.service.ts` 开始猜全局流程。`internal` 文件只说明当前模块怎样完成自己的职责。
 
-## 2. 完整调用流转
+`main.ts` 不是组合根实现，它只是稳定启动壳；新增数据库、人物或 IPC 能力时必须进入对应 bootstrap，不能把初始化代码塞回入口。
+
+## 2. 启动分层
+
+```text
+electron/main.ts
+  → StartupContext
+  → PersistenceContext
+  → CapabilityContext
+  → CollaborationContext
+  → PersonaApplicationContext
+  → IPC Application Ports
+  → BrowserWindow
+```
+
+退出或测试数据重置统一从 `disposeApplication()` / `TestDataResetService` 逆序释放长期资源。数据库层只创建连接和 Repository，应用层只协调公开 Port，人物和 Workflow 不直接初始化 SQLite。
+
+## 3. 完整调用流转
 
 ```text
 Renderer Feature
@@ -57,7 +77,7 @@ electron/ipc/domains/register-*-ipc.ts
 → Evolution 完成本轮并归档
 ```
 
-## 3. 五个主进程区域
+## 4. 五个主进程区域
 
 | 区域 | 唯一职责 | 不得承担 |
 |---|---|---|
@@ -69,7 +89,7 @@ electron/ipc/domains/register-*-ipc.ts
 
 跨区域调用只能导入目标区域的 `index.ts`。禁止导入其他区域的 `internal` 或具体 Facade 文件。
 
-## 4. 三个人物的边界
+## 5. 三个人物的边界
 
 ### 南宫婉
 
@@ -95,7 +115,17 @@ electron/ipc/domains/register-*-ipc.ts
 - DTO 入口：`contracts/collaboration/linghu/index.ts`
 - 不负责：常规任务规划、方向审批、共享 Evolution 状态
 
-## 5. contracts 不是“全部 DTO”
+### 通用执行人
+
+- 入口：`electron/services/personas/executor/index.ts`
+- 对外门面：`executor.facade.ts`
+- 内部能力：统一管理动态执行成员的会话创建、存活检查、复用与释放
+- Contracts：`contracts/collaboration/executor/index.ts`
+- 所有普通执行成员共用一个 Executor Runtime，成员身份由任务分配参数决定，不按姓名复制目录
+- Workflow 只决定何时排队、开始、恢复和流转，不保存执行会话工厂或执行会话 Map
+- 南宫婉负责提案任务拆分与分发；`nangong-task-distribution.service.ts` 不得回迁到 Workflow
+
+## 6. contracts 不是“全部 DTO”
 
 `contracts` 是纯 TypeScript 边界协议根，按职责分为：
 
@@ -110,7 +140,7 @@ electron/ipc/domains/register-*-ipc.ts
 
 这里禁止出现 Electron、React、文件系统、SQLite、Store、Repository、Runner 或业务 Service 实现。
 
-## 6. 类型从哪里来
+## 7. 类型从哪里来
 
 每个 contracts 领域的 `index.ts` 都使用显式符号导出，不使用 `export *` 或 `export type *`。
 
@@ -131,7 +161,7 @@ import type {
 
 Renderer 与 preload 是例外：它们通过 `contracts/desktop/desktop.ts` 使用完整桌面协议。主进程业务代码不得依赖这个聚合出口。
 
-## 7. 关键协议位置
+## 8. 关键协议位置
 
 | 业务事实 | 权威文件 |
 |---|---|
@@ -147,7 +177,7 @@ Renderer 与 preload 是例外：它们通过 `contracts/desktop/desktop.ts` 使
 | Workflow 任务 | `contracts/collaboration/workflow/dto/collaboration-task.out.dto.ts` |
 | Workflow 时间线 | `contracts/collaboration/workflow/dto/collaboration-timeline.out.dto.ts` |
 
-## 8. 新增能力的固定步骤
+## 9. 新增能力的固定步骤
 
 1. 确认能力所有者是某个人物、Evolution、Workflow、公共能力还是平台。
 2. 在所有者模块建立真实定义，禁止在调用方复制类型。
@@ -157,7 +187,7 @@ Renderer 与 preload 是例外：它们通过 `contracts/desktop/desktop.ts` 使
 6. IPC 方法同步登记 `DesktopApi`、preload bridge 和 capability registry。
 7. 更新边界测试和同线程测试文档。
 
-## 9. 验证入口
+## 10. 验证入口
 
 任务托管阶段：
 

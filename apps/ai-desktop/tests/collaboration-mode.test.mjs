@@ -14,6 +14,7 @@ import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensur
 import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/verified-package.release.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration.store.js";
 import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/personas/linghu/index.js";
+import { ExecutorFacade } from "../../../build/ai-desktop/electron/electron/services/personas/executor/index.js";
 import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-automation.store.js";
 import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/capabilities/testing/test-resource-coordinator.facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/integration-release.facade.js";
@@ -544,7 +545,7 @@ test("令狐主动巡检关闭时仍自动修复在途任务的统一测试失�
       store,
       durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
       workspaces: { commitTaskResult: async () => "new-result-sha" },
-      sessions: { createExecutor: async () => ({ isAlive: () => true, analyze: async () => "", optimize: async () => "", execute: async () => { throw new Error("修复流程不得调用原专题 execute"); }, investigateRepair: async (_task, failure) => { investigatedFailure = failure; return "只修正失败断言并重跑原验证命令"; }, executeRepair: async (_task, diagnosis) => { receivedRepairPlan = diagnosis.repairInstruction; return { status: "code-verified", text: "断言已同步并完成代码级验证", pendingActions: [], changedFiles: ["tests/version.test.ts"], successfulCommands: ["npm test"] }; }, dispose: async () => undefined }) },
+      executor: new ExecutorFacade({ createExecutor: async () => ({ isAlive: () => true, analyze: async () => "", optimize: async () => "", execute: async () => { throw new Error("修复流程不得调用原专题 execute"); }, investigateRepair: async (_task, failure) => { investigatedFailure = failure; return "只修正失败断言并重跑原验证命令"; }, executeRepair: async (_task, diagnosis) => { receivedRepairPlan = diagnosis.repairInstruction; return { status: "code-verified", text: "断言已同步并完成代码级验证", pendingActions: [], changedFiles: ["tests/version.test.ts"], successfulCommands: ["npm test"] }; }, dispose: async () => undefined }) }),
       integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => { integrationSchedules += 1; }, dispose: () => undefined },
       emitState: () => undefined,
       emitStream: () => undefined,
@@ -573,7 +574,7 @@ test("执行修复单次未完成后由令狐保留恢复点且不错误归属�
       store,
       durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
       workspaces: { prepareTask: async () => workspace, resumeTask: async () => workspace, commitTaskResult: async () => "result" },
-      sessions: {
+      executor: new ExecutorFacade({
         createExecutor: async (_task, member) => ({
           isAlive: () => true,
           analyze: async () => "只修改目标文件并完成代码级检查",
@@ -585,7 +586,7 @@ test("执行修复单次未完成后由令狐保留恢复点且不错误归属�
             : { status: "partial", text: "执行未完成", pendingActions: ["路径诊断失败"] },
           dispose: async () => undefined,
         }),
-      },
+      }),
       integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
       emitState: () => undefined,
       emitStream: () => undefined,

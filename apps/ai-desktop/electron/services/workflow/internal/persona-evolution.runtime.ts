@@ -1,6 +1,6 @@
 import type { CollaborationMemoryPort } from "../../../../contracts/capabilities/event-center/index.js";
 import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/collaboration/linghu/index.js";
-import type { EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionMutationInDto, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionMutationInDto, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../../contracts/collaboration/evolution/index.js";
 import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/collaboration/hanli/index.js";
 import type { CreateNangongTopicInDto, SendNangongConversationMessageInDto } from "../../../../contracts/collaboration/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/collaboration/workflow/index.js";
@@ -10,9 +10,8 @@ import type { CollaborationTimelineBusinessEvent } from "../../../../contracts/c
 import type { CodexStreamEvent } from "../../../../contracts/platform/codex/index.js";
 import type { CollaborationWorkflowFacade } from "../index.js";
 import { EvolutionFlowOrchestrator } from "./evolution-flow.orchestrator.js";
-import { EvolutionTaskDistributionService } from "./evolution-task-distribution.service.js";
 import type { HanliWorkflowPort } from "../../personas/hanli/index.js";
-import { createNangongRuntime, type NangongRuntime } from "../../personas/nangong/index.js";
+import { createNangongRuntime, createNangongTaskDistribution, type NangongRuntime } from "../../personas/nangong/index.js";
 import {
   createEvolutionMutationCoordinator,
   type EvolutionMutationPort,
@@ -64,7 +63,6 @@ export class PersonaEvolutionRuntime {
   readonly #getWorkbenchPreference: PersonaEvolutionRuntimeOptions["getWorkbenchPreference"];
   readonly #saveWorkbenchPreference: PersonaEvolutionRuntimeOptions["saveWorkbenchPreference"];
   readonly #mutations: EvolutionMutationPort;
-  readonly #distribution: EvolutionTaskDistributionService;
   readonly nangongRuntime: NangongRuntime;
   // 流程判断器只根据已保存事实决定下一步，不替人物作审批决定。
   readonly #flow = new EvolutionFlowOrchestrator();
@@ -99,6 +97,15 @@ export class PersonaEvolutionRuntime {
     // 所有专题写动作共用同一个幂等和互斥协调器。
     this.#mutations = createEvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation });
     // 南宫人物在自己的模块内装配业务服务；Workflow 只提供跨人物推进和成员查询端口。
+    const taskDistribution = createNangongTaskDistribution({
+      store: this.#store,
+      mutations: this.#mutations,
+      collaboration: this.#collaboration,
+      recordEvent: this.#recordEvent,
+      timeline: options.recordTimelineEvent,
+      timelineStream: options.recordTimelineStream,
+      plan: this.#planDistribution,
+    });
     this.nangongRuntime = createNangongRuntime({
       store: this.#store,
       mutations: this.#mutations,
@@ -118,22 +125,10 @@ export class PersonaEvolutionRuntime {
         advance: async () => this.#tick(),
         blockFailure: (kind, operation, error, reason, details) => this.#blockOneShotFailure(kind, operation, error, reason, details),
       },
+      taskDistribution,
       newConversationRetryDelaysMs: options.newConversationRetryDelaysMs,
     });
     // 分发由 Workflow 创建，并把 AI 返回值先解析成确定的结构化计划。
-    this.#distribution = new EvolutionTaskDistributionService({
-      store: this.#store,
-      collaboration: this.#collaboration,
-      recordEvent: this.#recordEvent,
-      timeline: options.recordTimelineEvent,
-      timelineStream: options.recordTimelineStream,
-      plan: async (proposal, topic, feedback, emit) => parseDistributionPlan(await this.#planDistribution(
-        distributionPlanningPrompt(proposal, topic, feedback),
-        topic.workspaceState,
-        topic.locale,
-        emit,
-      )),
-    });
   }
 
   /** 读取当前 Evolution 快照；返回值是副本，调用方不能绕过 Store 直接改状态。 */
@@ -214,11 +209,10 @@ export class PersonaEvolutionRuntime {
     return this.state();
   }
 
-  async dispatch(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto> {
+  async #dispatch(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto> {
     const initialState = this.state();
-    const initialProposal = requireProposal(initialState, proposalId);
     const mutation = request || { expectedStateVersion: initialState.updatedAt, idempotencyKey: `automatic-dispatch:${proposalId}:${initialState.updatedAt}` };
-    return this.#mutations.runAsync(initialProposal.topicId, "南宫婉任务分发", mutation, () => this.state().updatedAt, () => this.state(), () => this.#distribution.dispatch(proposalId));
+    return this.nangongRuntime.facade.distributeProposal(proposalId, mutation);
   }
 
   /** 一次性托管只调度现有动作；每次推进到需要等待真实任务状态的位置即返回。 */
@@ -270,7 +264,7 @@ export class PersonaEvolutionRuntime {
 
       if (flowAction === "dispatch") {
         this.#store.updateOneShotRun("distributing", "nangong-wan", "南宫婉", "审批已通过，正在拆分并分发任务", topic.topicId, proposal.proposalId);
-        try { await this.dispatch(proposal.proposalId); }
+        try { await this.#dispatch(proposal.proposalId); }
         catch (error) {
           const reason = `南宫婉任务拆分或分发失败：${error instanceof Error ? error.message : String(error)}`;
           return this.#blockOneShotFailure("technical", "plan_and_dispatch_one_shot", error, reason);
@@ -408,7 +402,7 @@ export class PersonaEvolutionRuntime {
       }
       // 一个专题完成后重新进入韩立读库与发问流程；禁止复制旧专题标题伪造下一专题。
       for (const proposal of this.#flow.automaticApprovalQueue(state)) state = this.#hanli.autoApprove(proposal.proposalId);
-      for (const proposal of this.#flow.automaticDistributionQueue(state)) state = await this.dispatch(proposal.proposalId);
+      for (const proposal of this.#flow.automaticDistributionQueue(state)) state = await this.#dispatch(proposal.proposalId);
       if (!state.automaticEvolutionEnabled) return;
       const hasOpenTopicFlow = state.topics.some((item) => !["completed", "rejected"].includes(item.status));
       if (!hasOpenTopicFlow) state = await this.#hanli.advanceDeliberation();
@@ -419,7 +413,7 @@ export class PersonaEvolutionRuntime {
       const proposal = next.proposals.at(-1)!;
       if (next.automaticNangongApprovalEnabled) next = this.#hanli.autoApprove(proposal.proposalId);
       const decided = requireProposal(next, proposal.proposalId);
-      if (next.automaticExecutionEnabled && decided.status === "approved") await this.dispatch(proposal.proposalId);
+      if (next.automaticExecutionEnabled && decided.status === "approved") await this.#dispatch(proposal.proposalId);
     } catch (error) {
       const state = this.state();
       if (state.oneShotRun?.status === "running") this.#blockOneShotFailure("technical", "nangong_evolution_tick", error, `南宫婉自动推进失败：${error instanceof Error ? error.message : String(error)}`);
@@ -460,47 +454,6 @@ function currentExecutionActivity(
   if (selected.length <= 1) return { actorName, action: `正在执行：${selected[0]?.snapshot.title || fallbackTitle}` };
   const titles = selected.slice(0, 3).map((task) => `“${task.snapshot.title}”`).join("、");
   return { actorName, action: `正在并行执行 ${selected.length} 个任务：${titles}${selected.length > 3 ? "等" : ""}` };
-}
-
-function distributionPlanningPrompt(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], feedback: string): string {
-  return [
-    "你是南宫婉，负责在真实工程中调查后形成最小、可独立合并的执行任务。现在只读调查，不修改源码。",
-    "影响范围只是调查边界，不等于任务数量。单个按钮、单个页面、同一组件、预计修改文件重叠或必须一起验收的内容必须合并为一个任务。约束、风险、保持功能不变和测试要求不能单独成为任务。只有可以独立修改、独立回退、独立验收且预计文件不重叠时才允许并行。",
-    "请读取工作区相关实现，列出预计修改文件。返回 JSON：{\"summary\":\"为什么采用这个任务数量\",\"units\":[{\"title\":\"任务标题\",\"scope\":\"完整职责边界\",\"acceptanceCriteria\":[\"独立验收条件\"],\"expectedFiles\":[\"工程相对路径\"],\"independentReason\":\"为什么能独立执行；只有一个任务时说明为什么不拆分\"}]}。不要返回 Markdown。",
-    `课题：${topic.title}\n目标：${topic.goal}`,
-    `提案：${proposal.content}`,
-    `影响范围：${proposal.impactScope.join("；")}`,
-    `验收条件：${proposal.acceptanceCriteria.join("；")}`,
-    `排除范围：${proposal.exclusions.join("；") || "无"}`,
-    feedback ? `程序上一轮核对到的确定性冲突：${feedback}` : "这是首次拆分。",
-  ].join("\n\n");
-}
-
-
-function parseDistributionPlan(text: string): Pick<EvolutionDistributionPlan, "summary" | "units"> {
-  const value = parseJsonObject(text);
-  const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 4_000) : "";
-  const rawUnits = Array.isArray(value.units) ? value.units : [];
-  const units = rawUnits.flatMap((raw): EvolutionDistributionUnit[] => {
-    if (!raw || typeof raw !== "object") return [];
-    const item = raw as Record<string, unknown>;
-    const title = typeof item.title === "string" ? item.title.trim().slice(0, 200) : "";
-    const scope = typeof item.scope === "string" ? item.scope.trim().slice(0, 8_000) : "";
-    const acceptanceCriteria = normalizeDraftList(item.acceptanceCriteria);
-    const expectedFiles = normalizeDraftList(item.expectedFiles).map((file) => file.replaceAll("\\", "/").replace(/^\.\//u, "")).filter((file) => !file.startsWith("/") && !file.split("/").includes(".."));
-    const independentReason = typeof item.independentReason === "string" ? item.independentReason.trim().slice(0, 4_000) : "";
-    return title && scope && acceptanceCriteria.length && expectedFiles.length && independentReason ? [{ title, scope, acceptanceCriteria, expectedFiles, independentReason }] : [];
-  });
-  if (!summary || !units.length) throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
-  return { summary, units };
-}
-
-function normalizeDraftList(value: unknown): string[] { return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : []; }
-
-function parseJsonObject(text: string): Record<string, unknown> {
-  const candidate = text.match(/\{[\s\S]*\}/)?.[0];
-  if (!candidate) throw new Error("AI 没有返回可解析的结构化判断。 ");
-  try { return JSON.parse(candidate) as Record<string, unknown>; } catch { throw new Error("AI 返回的结构化判断不是有效 JSON。 "); }
 }
 
 function itemFailureReason(task: ReturnType<CollaborationWorkflowFacade["state"]>["tasks"][number]): string {

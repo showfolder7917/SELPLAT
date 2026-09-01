@@ -1,4 +1,4 @@
-import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionStateOutDto } from "../../../contracts/collaboration/evolution/index.js";
 import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../contracts/collaboration/hanli/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../contracts/collaboration/workflow/index.js";
 
@@ -12,7 +12,6 @@ export interface PersonaWorkflowApplicationPort {
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto;
   controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto;
   resumeOneShotRun(): Promise<EvolutionStateOutDto>;
-  dispatch(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto>;
 }
 
 /** Workflow 唯一跨人物演化门面；它负责编排，不公开任何人物内部 Service。 */
@@ -36,8 +35,6 @@ export class PersonaWorkflowFacade {
   controlAutomation(action: PersonaWorkflowActionInDto) { return this.#application.controlAutomation(action); }
   /** 从已保存卡点恢复同一轮，不创建第二条流程。 */
   resumeOneShotRun() { return this.#application.resumeOneShotRun(); }
-  /** 审批通过后分发协作任务；Workflow 不修改人物判断。 */
-  dispatch(proposalId: string, request?: EvolutionMutationInDto) { return this.#application.dispatch(proposalId, request); }
 }
 
 /** Workflow Runtime 暴露稳定身份和唯一门面，供人物能力注册表登记。 */

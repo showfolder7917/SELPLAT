@@ -50,8 +50,8 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.match(source("contracts/desktop/desktop.ts"), /export type \{ DesktopApi \} from "\.\/desktop-api\.js"/);
   assert.match(source("contracts/desktop/capability-registry.ts"), /keyof DesktopApi/);
   assert.match(source("contracts/desktop/capability-registry.ts"), /satisfies Record<string, readonly \(keyof DesktopCapabilityRegistry\)\[]>/);
-  assert.match(source("electron/main.ts"), /desktop:evolution-workbench-changed/);
-  assert.doesNotMatch(source("electron/main.ts"), /function buildEvolutionWorkbenchChange/);
+  assert.match(source("electron/bootstrap/application-runtime.ts"), /desktop:evolution-workbench-changed/);
+  assert.doesNotMatch(source("electron/bootstrap/application-runtime.ts"), /function buildEvolutionWorkbenchChange/);
   assert.match(source("electron/services/evolution/internal/evolution-workbench-change.assembler.ts"), /previousStateVersion:\s*previous\.updatedAt/);
   assert.match(source("src/features/evolution/components/EvolutionDatabaseGrid.tsx"), /onEvolutionWorkbenchChanged/);
   assert.match(source("src/features/evolution/components/EvolutionDatabaseGrid.tsx"), /visibilitychange/);
@@ -66,14 +66,14 @@ test("application-private contracts are domain modules outside shared", () => {
   const mutationCoordinator = source("electron/services/evolution/internal/evolution-mutation.coordinator.ts");
   assert.match(mutationCoordinator, /class EvolutionMutationCoordinator/);
   assert.match(mutationCoordinator, /runAsync/);
-  assert.match(source("electron/services/workflow/internal/persona-evolution.runtime.ts"), /#mutations\.runAsync\(/);
+  assert.match(source("electron/services/personas/nangong/internal/nangong-task-distribution.service.ts"), /mutations\.runAsync\(/);
   assert.match(source("electron/services/personas/hanli/internal/hanli-application.service.ts"), /#mutations\.run\(/);
   assert.doesNotMatch(source("electron/services/personas/nangong/nangong.facade.ts"), /decideProposal|autoApprove|generateAcceptancePlan|#mutations/);
   assert.doesNotMatch(source("electron/services/personas/hanli/hanli.facade.ts"), /sendConversationMessage|createProposal|resumeOneShotRun/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /automaticApprovalEnabled|raw\.version === [1-7]/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /node:fs|readFileSync|writeFileSync|renameSync/);
-  assert.match(source("electron/main.ts"), /createEvolutionState\(aiMemoryDatabase\)/);
-  assert.doesNotMatch(source("electron/main.ts"), /new NangongEvolutionStore\(path\.join\([^\n]+nangong-evolution\.json/);
+  assert.match(source("electron/bootstrap/application-runtime.ts"), /createEvolutionState\(aiMemoryDatabase\)/);
+  assert.doesNotMatch(source("electron/bootstrap/application-runtime.ts"), /new NangongEvolutionStore\(path\.join\([^\n]+nangong-evolution\.json/);
   assert.match(source("src/features/hanli/components/HanLiEvolutionApprovalPanel.tsx"), /decideEvolutionProposal\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
   assert.match(source("src/features/hanli/components/HanLiEvolutionApprovalPanel.tsx"), /decideEvolutionResult\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
   assert.match(source("src/features/evolution/components/EvolutionRevisionPanels.tsx"), /reviseEvolutionProposal\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
@@ -128,7 +128,7 @@ test("Nangong memory keeps internal intent without rendering it as user-authored
   const memory = source("electron/services/capabilities/event-center/internal/projection/collaboration-memory.service.ts");
   const migration = source("db/sql/schema-AiDesktopCurrent.sql");
   const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");
-  const main = source("electron/main.ts");
+  const main = source("electron/bootstrap/application-runtime.ts");
   const app = source("src/variants/developer/DeveloperApp.tsx");
   assert.match(migration, /content TEXT NOT NULL/);
   assert.match(migration, /contentPreview TEXT NOT NULL/);
@@ -146,7 +146,7 @@ test("Nangong memory keeps internal intent without rendering it as user-authored
 });
 
 test("人物训练语料通过主会话完成钩子和启动补录闭环且清空只重置内部线程", () => {
-  const main = source("electron/main.ts");
+  const main = source("electron/bootstrap/application-runtime.ts");
   const codexService = source("electron/services/platform/codex/codex.facade.ts");
   const ingestion = source("electron/services/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.ts");
   const repository = source("electron/services/workflow/internal/workflow.repository.ts");
@@ -245,9 +245,9 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   const linghuFacadeSource = source("electron/services/personas/linghu/linghu-automation.facade.ts");
   assert.match(linghuFacadeSource, /interface LinghuCollaborationPort/);
   assert.doesNotMatch(linghuFacadeSource, /import \{ CollaborationCoordinator \}/);
-  const electronMainSource = source("electron/main.ts");
+  const electronMainSource = source("electron/bootstrap/collaboration.bootstrap.ts");
   assert.doesNotMatch(electronMainSource, /LinghuAutomationStore|LinghuUnifiedTestRunner|linghuRuntime\.store/);
-  assert.match(electronMainSource, /linghuRuntime!\.runUnifiedTests/);
+  assert.match(electronMainSource, /options\.runUnifiedTests/);
   assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu/index.ts")), true);
   const linghuDtoContracts = new Map([
     ["create-startup-prompt.in.dto.ts", ["CreateLinghuStartupPromptInDto"]],
@@ -315,7 +315,29 @@ test("main-process orchestration delegates IPC and pure collaboration parsing", 
   assert.match(source("electron/ipc/domains/register-collaboration-ipc.ts"), /HanliFacade/);
   assert.match(source("electron/ipc/domains/register-collaboration-ipc.ts"), /EvolutionFacade/);
   assert.match(source("electron/ipc/domains/register-collaboration-ipc.ts"), /PersonaWorkflowFacade/);
-  assert.match(source("electron/services/workflow/internal/evolution-task-distribution.service.ts"), /evolutionProposalId/);
+  assert.match(source("electron/services/personas/nangong/internal/nangong-task-distribution.service.ts"), /evolutionProposalId/);
+});
+
+test("Electron entry delegates startup, persistence, collaboration, personas and IPC to bootstrap boundaries", () => {
+  const main = source("electron/main.ts");
+  assert.ok(main.split(/\r?\n/u).length <= 30, "electron/main.ts must remain a thin lifecycle entry");
+  assert.match(main, /startApplication/);
+  assert.match(main, /disposeApplication/);
+  assert.doesNotMatch(main, /initializeAiMemoryDatabase|createHanliRuntime|createLinghuRuntime|registerDesktopIpc|BrowserWindow/);
+  for (const bootstrap of [
+    "startup-context.ts",
+    "persistence.bootstrap.ts",
+    "capabilities.bootstrap.ts",
+    "collaboration.bootstrap.ts",
+    "personas.bootstrap.ts",
+    "ipc.bootstrap.ts",
+    "application-runtime.ts",
+  ]) assert.equal(existsSync(path.join(appRoot, "electron/bootstrap", bootstrap)), true, bootstrap);
+  assert.match(source("electron/bootstrap/application-runtime.ts"), /createPersistenceContext/);
+  assert.match(source("electron/bootstrap/application-runtime.ts"), /createCapabilityContext/);
+  assert.match(source("electron/bootstrap/application-runtime.ts"), /createCollaborationContext/);
+  assert.match(source("electron/bootstrap/application-runtime.ts"), /createPersonaApplicationContext/);
+  assert.match(source("electron/bootstrap/application-runtime.ts"), /registerApplicationIpc/);
 });
 
 test("customer package config excludes build-machine roots and carries external rule resources", () => {
@@ -325,7 +347,7 @@ test("customer package config excludes build-machine roots and carries external 
   assert.match(customerConfig, /package\/customer/);
   assert.ok(builderManifest.extraResources.some((resource) => resource.to === "ruleengine"));
   assert.match(source("electron/config/app-config.ts"), /userData"\), "workspace"/);
-  assert.match(source("electron/main.ts"), /process\.resourcesPath, "ruleengine"/);
+  assert.match(source("electron/bootstrap/capabilities.bootstrap.ts"), /options\.resourcesPath, "ruleengine"/);
 });
 
 test("公共能力五区只通过唯一 index 交叉协作且旧路径归零", () => {
@@ -432,6 +454,14 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   const nangongPorts = source("electron/services/personas/nangong/internal/nangong-application.ports.ts");
   assert.match(nangongPorts, /interface NangongProposalReviewPort/);
   assert.match(nangongPorts, /interface NangongOneShotWorkflowPort/);
+  assert.match(nangongPorts, /interface NangongTaskDistributionPort/);
+  assert.match(source("electron/services/personas/nangong/internal/nangong-task-distribution.service.ts"), /class NangongTaskDistributionService/);
+  assert.equal(existsSync(path.join(appRoot, "electron/services/workflow/internal/evolution-task-distribution.service.ts")), false);
+  const executorFacade = source("electron/services/personas/executor/executor.facade.ts");
+  assert.match(executorFacade, /class ExecutorFacade/);
+  assert.match(executorFacade, /#sessions = new Map/);
+  assert.doesNotMatch(source("electron/services/workflow/collaboration-workflow.facade.ts"), /#executorSessions|CollaborationSessionFactory/);
+  assert.match(source("electron/ipc/domains/register-collaboration-ipc.ts"), /dispatch-evolution-proposal[\s\S]*nangong\.distributeProposal/);
   assert.match(source("electron/services/personas/nangong/internal/nangong-conversation.service.ts"), /class NangongConversationService/);
   assert.match(source("electron/services/personas/nangong/internal/nangong-evolution-authoring.service.ts"), /class NangongEvolutionAuthoringService/);
   assert.match(source("electron/services/personas/nangong/internal/nangong-conversation.parser.ts"), /parseNangongConversationResponse/);
@@ -441,12 +471,13 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   for (const method of ["sendConversationMessage", "newConversation", "generateTopicDraft", "convertConversationToTopic", "createProposal", "updateTopic", "reviseProposal", "investigateAndReviseReturnedProposal"]) {
     assert.doesNotMatch(personaWorkflow, new RegExp(`\\n\\s{2}${method}\\(`), `${method} 只能由 NangongFacade 公开`);
   }
-  const main = source("electron/main.ts");
+  const main = source("electron/bootstrap/application-runtime.ts");
+  const personaBootstrap = source("electron/bootstrap/personas.bootstrap.ts");
   assert.match(main, /hanli:\s*hanliRuntime\.facade/);
   assert.doesNotMatch(main, /createHanliRuntime\(\{\s*application:/);
   assert.doesNotMatch(main, /const nangongStore\s*=/);
   for (const runtimeName of ["nangongRuntime", "hanliRuntime", "linghuRuntime"]) {
-    assert.match(main, new RegExp(`personaRegistry\\.register\\(\\{ memberId: ${runtimeName}\\.memberId`));
+    assert.match(personaBootstrap, new RegExp(`memberId: (?:options\\.)?${runtimeName}\\.memberId`));
   }
 
   // Contracts 按人物、共享事实、流程以及输入输出方向分层。
@@ -457,6 +488,8 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
     "contracts/collaboration/hanli/dto/decide-proposal.in.dto.ts",
     "contracts/collaboration/hanli/dto/acceptance-plan.out.dto.ts",
     "contracts/collaboration/hanli/dto/acceptance-run.out.dto.ts",
+    "contracts/collaboration/executor/dto/executor-execution-result.out.dto.ts",
+    "contracts/collaboration/executor/port/executor-session.port.ts",
     "contracts/collaboration/evolution/dto/evolution-state.out.dto.ts",
     "contracts/collaboration/evolution/dto/evolution-state.event.out.dto.ts",
     "contracts/collaboration/evolution/dto/evolution-proposal.out.dto.ts",
