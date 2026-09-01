@@ -3,19 +3,58 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { PersonaEvolutionRuntime } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/persona-evolution.runtime.js";
+import { PersonaEvolutionRuntime as WorkflowPersonaEvolutionRuntime } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/persona-evolution.runtime.js";
 import { EvolutionStateStore } from "../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
 import { EvolutionFlowOrchestrator } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution-flow.orchestrator.js";
 import { HanliRealAppAcceptanceRunner } from "../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-real-app-acceptance.runner.js";
+import { createHanliRuntime } from "../../../build/ai-desktop/electron/electron/services/personas/hanli/index.js";
 import { controlledTestRoot } from "./test-paths.mjs";
+
+// 业务回归继续复用既有测试正文；测试适配器把南宫和韩立动作显式转交各自 Facade，生产 Workflow 不保留人物兼容方法。
+class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
+  constructor(options) {
+    const hanliRuntime = createHanliRuntime({
+      store: options.store,
+      memory: options.memory || null,
+      askHanli: options.hanLi?.send,
+      askNangong: options.nangongDeliberation?.send,
+      planAcceptance: options.planAcceptance,
+      recordEvent: options.recordEvent,
+      recordTimelineEvent: options.recordTimelineEvent,
+      beginMutation: options.beginMutation,
+      completeMutation: options.completeMutation,
+      failMutation: options.failMutation,
+      screenshots: {},
+    });
+    super({ ...options, hanli: hanliRuntime.facade });
+    this.hanliRuntime = hanliRuntime;
+  }
+  sendConversationMessage(...args) { return this.nangongRuntime.facade.sendConversationMessage(...args); }
+  newConversation(...args) { return this.nangongRuntime.facade.newConversation(...args); }
+  generateTopicDraft(...args) { return this.nangongRuntime.facade.generateTopicDraft(...args); }
+  convertConversationToTopic(...args) { return this.nangongRuntime.facade.convertConversationToTopic(...args); }
+  createProposal(...args) { return this.nangongRuntime.facade.createProposal(...args); }
+  updateTopic(...args) { return this.nangongRuntime.facade.updateTopic(...args); }
+  reviseProposal(...args) { return this.nangongRuntime.facade.reviseProposal(...args); }
+  investigateAndReviseReturnedProposal(...args) { return this.nangongRuntime.facade.investigateAndReviseReturnedProposal(...args); }
+  advanceHanLiDeliberation(...args) { return this.hanliRuntime.facade.advanceDeliberation(...args); }
+  decideProposal(...args) { return this.hanliRuntime.facade.decideProposal(...args); }
+  autoApprove(...args) { return this.hanliRuntime.facade.autoApprove(...args); }
+  generateAcceptancePlan(...args) { return this.hanliRuntime.facade.generateAcceptancePlan(...args); }
+  acceptancePlan(...args) { return this.hanliRuntime.facade.acceptancePlan(...args); }
+  recordAcceptanceRun(...args) { return this.hanliRuntime.facade.recordAcceptanceRun(...args); }
+  decideResult(...args) { return this.hanliRuntime.facade.decideResult(...args); }
+}
 
 mkdirSync(controlledTestRoot, { recursive: true });
 const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: "/workspace", permission: "workspace-write" }] };
 const nangongPromptSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
 const evolutionFacadeSource = readFileSync(new URL("../electron/services/personas/nangong/nangong.facade.ts", import.meta.url), "utf8");
+const nangongApplicationSource = readFileSync(new URL("../electron/services/personas/nangong/internal/nangong-application.service.ts", import.meta.url), "utf8");
 const personaEvolutionRuntimeSource = readFileSync(new URL("../electron/services/workflow/internal/persona-evolution.runtime.ts", import.meta.url), "utf8");
 const approvalServiceSource = readFileSync(new URL("../electron/services/personas/hanli/internal/evolution-approval.service.ts", import.meta.url), "utf8");
 const hanliDeliberationSource = readFileSync(new URL("../electron/services/personas/hanli/internal/hanli-deliberation.service.ts", import.meta.url), "utf8");
+const hanliApplicationSource = readFileSync(new URL("../electron/services/personas/hanli/internal/hanli-application.service.ts", import.meta.url), "utf8");
 const distributionServiceSource = readFileSync(new URL("../electron/services/workflow/internal/evolution-task-distribution.service.ts", import.meta.url), "utf8");
 const persistedEvolutionStates = new Map();
 function evolutionPersistence(key) {
@@ -67,9 +106,13 @@ test("审批、编排和分发服务不再互相代替职责", () => {
   assert.doesNotMatch(approvalServiceSource, /EvolutionTaskDistributionService|\.submitTask\(|\.dispatch\(/);
   assert.doesNotMatch(distributionServiceSource, /\.decide\(|EvolutionApprovalService/);
   assert.doesNotMatch(evolutionFacadeSource, /#dispatchOnce|#store\.decide\(|createEvolutionApprovalService|EvolutionTaskDistributionService/);
-  assert.match(personaEvolutionRuntimeSource, /createEvolutionApprovalService/);
+  assert.match(hanliApplicationSource, /new EvolutionApprovalService/);
+  assert.match(hanliApplicationSource, /new HanliDeliberationService/);
+  assert.doesNotMatch(personaEvolutionRuntimeSource, /createEvolutionApprovalService|createHanliDeliberationPort|#approvals|#hanliDecisions/);
   assert.match(personaEvolutionRuntimeSource, /new EvolutionFlowOrchestrator/);
   assert.match(personaEvolutionRuntimeSource, /new EvolutionTaskDistributionService/);
+  assert.match(nangongApplicationSource, /class NangongApplicationService/);
+  assert.doesNotMatch(personaEvolutionRuntimeSource, /parseConversationResponse|revisionInvestigationPrompt/);
 });
 
 test("审批服务按发生顺序发布申请、决定和补充事实且不会提前分发", () => {

@@ -8,6 +8,7 @@ import type {
   SendNangongConversationMessageRequest,
   UpdateEvolutionTopicRequest,
 } from "../../../../contracts/collaboration/evolution/index.js";
+import { NangongApplicationService, type NangongApplicationServiceOptions } from "./internal/nangong-application.service.js";
 
 /**
  * 南宫人物所需的最小应用端口。
@@ -26,8 +27,8 @@ export interface NangongApplicationPort {
   investigateAndReviseReturnedProposal(proposalId: string): Promise<EvolutionState>;
 }
 
-/** 南宫 Runtime 的装配参数；真实应用端口由 Workflow 组合根注入。 */
-export interface CreateNangongRuntimeOptions { application: NangongApplicationPort; }
+/** 南宫 Runtime 的装配参数；共享状态和跨人物动作都以最小端口注入。 */
+export type CreateNangongRuntimeOptions = NangongApplicationServiceOptions;
 
 /** 南宫人物运行对象；生命周期只控制人物入口，不拥有共同 Evolution 状态。 */
 export interface NangongRuntime {
@@ -66,8 +67,8 @@ export class NangongFacade {
   investigateAndReviseReturnedProposal(proposalId: string) { return this.#application.investigateAndReviseReturnedProposal(proposalId); }
 }
 
-/** 创建南宫独立 Runtime；start/stop 不接管 Workflow 定时器。 */
+/** 创建南宫独立 Runtime；人物应用服务在模块内部装配，外部只能取得 Facade。 */
 export function createNangongRuntime(options: CreateNangongRuntimeOptions): NangongRuntime {
-  const facade = new NangongFacade(options.application);
+  const facade = new NangongFacade(new NangongApplicationService(options));
   return { memberId: "nangong-wan", facade, start: () => undefined, stop: () => undefined };
 }

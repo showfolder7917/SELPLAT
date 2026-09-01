@@ -65,7 +65,8 @@ test("application-private contracts are domain modules outside shared", () => {
   const mutationCoordinator = source("electron/services/evolution/internal/evolution-mutation.coordinator.ts");
   assert.match(mutationCoordinator, /class EvolutionMutationCoordinator/);
   assert.match(mutationCoordinator, /runAsync/);
-  assert.match(source("electron/services/workflow/internal/persona-evolution.runtime.ts"), /#mutations\.run\(/);
+  assert.match(source("electron/services/workflow/internal/persona-evolution.runtime.ts"), /#mutations\.runAsync\(/);
+  assert.match(source("electron/services/personas/hanli/internal/hanli-application.service.ts"), /#mutations\.run\(/);
   assert.doesNotMatch(source("electron/services/personas/nangong/nangong.facade.ts"), /decideProposal|autoApprove|generateAcceptancePlan|#mutations/);
   assert.doesNotMatch(source("electron/services/personas/hanli/hanli.facade.ts"), /sendConversationMessage|createProposal|resumeOneShotRun/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /automaticApprovalEnabled|raw\.version === [1-7]/);
@@ -410,7 +411,39 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   const personaWorkflow = source("electron/services/workflow/internal/persona-evolution.runtime.ts");
   assert.doesNotMatch(personaWorkflow, /你是韩立|parseHanLiQuestion|parseHanLiJudgment/);
   assert.match(source("electron/services/personas/hanli/internal/hanli-deliberation.service.ts"), /你是韩立/);
+  const hanliApplication = source("electron/services/personas/hanli/internal/hanli-application.service.ts");
+  assert.match(hanliApplication, /class HanliApplicationService/);
+  assert.match(hanliApplication, /new EvolutionApprovalService/);
+  assert.match(hanliApplication, /new HanliDeliberationService/);
+  assert.doesNotMatch(personaWorkflow, /createEvolutionApprovalService|createHanliDeliberationPort|#approvals|#hanliDecisions/);
+  assert.match(source("electron/services/personas/hanli/hanli.facade.ts"), /interface HanliWorkflowPort/);
+  assert.match(personaWorkflow, /hanli:\s*HanliWorkflowPort/);
+  for (const method of ["decideProposal", "decideResult", "autoApprove", "generateAcceptancePlan", "acceptancePlan", "recordAcceptanceRun", "advanceHanLiDeliberation"]) {
+    assert.doesNotMatch(personaWorkflow, new RegExp(`\\n\\s{2}${method}\\(`), `${method} 只能由 HanliFacade 公开`);
+  }
+  const hanliIndex = source("electron/services/personas/hanli/index.ts");
+  assert.doesNotMatch(hanliIndex, /createEvolutionApprovalService|createHanliDeliberationPort|EvolutionApprovalPort|HanliDeliberationPort/);
+  const nangongApplication = source("electron/services/personas/nangong/internal/nangong-application.service.ts");
+  assert.match(nangongApplication, /class NangongApplicationService/);
+  assert.match(nangongApplication, /new NangongConversationService\(options\)/);
+  assert.match(nangongApplication, /new NangongEvolutionAuthoringService\(options\)/);
+  assert.doesNotMatch(nangongApplication, /#store\.(?:appendConversation|createProposal)|revisionInvestigationPrompt/);
+  const nangongPorts = source("electron/services/personas/nangong/internal/nangong-application.ports.ts");
+  assert.match(nangongPorts, /interface NangongProposalReviewPort/);
+  assert.match(nangongPorts, /interface NangongOneShotWorkflowPort/);
+  assert.match(source("electron/services/personas/nangong/internal/nangong-conversation.service.ts"), /class NangongConversationService/);
+  assert.match(source("electron/services/personas/nangong/internal/nangong-evolution-authoring.service.ts"), /class NangongEvolutionAuthoringService/);
+  assert.match(source("electron/services/personas/nangong/internal/nangong-conversation.parser.ts"), /parseNangongConversationResponse/);
+  assert.match(source("electron/services/personas/nangong/internal/nangong-revision.investigator.ts"), /revisionInvestigationPrompt/);
+  assert.doesNotMatch(personaWorkflow, /parseConversationResponse|revisionInvestigationPrompt|NANGONG_TOPIC_META/);
+  assert.doesNotMatch(personaWorkflow, /recordProposalApplication|resolveEnabledMemberDisplayName|hasLiveOneShotOwner|advanceOneShot:/);
+  for (const method of ["sendConversationMessage", "newConversation", "generateTopicDraft", "convertConversationToTopic", "createProposal", "updateTopic", "reviseProposal", "investigateAndReviseReturnedProposal"]) {
+    assert.doesNotMatch(personaWorkflow, new RegExp(`\\n\\s{2}${method}\\(`), `${method} 只能由 NangongFacade 公开`);
+  }
   const main = source("electron/main.ts");
+  assert.match(main, /hanli:\s*hanliRuntime\.facade/);
+  assert.doesNotMatch(main, /createHanliRuntime\(\{\s*application:/);
+  assert.doesNotMatch(main, /const nangongStore\s*=/);
   for (const runtimeName of ["nangongRuntime", "hanliRuntime", "linghuRuntime"]) {
     assert.match(main, new RegExp(`personaRegistry\\.register\\(\\{ memberId: ${runtimeName}\\.memberId`));
   }

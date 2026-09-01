@@ -7,6 +7,8 @@ import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
 import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../contracts/platform/persistence/index.js";
 import type { WorkspaceState } from "../contracts/platform/workspace/index.js";
+import type { EvolutionMutationRequest } from "../contracts/collaboration/evolution/index.js";
+import type { CollaborationTimelineBusinessEvent } from "../contracts/collaboration/workflow/index.js";
 import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
 import {
@@ -44,7 +46,6 @@ import {
   type WorkflowSupervisorPort as WorkflowSupervisor,
 } from "./services/workflow/index.js";
 import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "./services/personas/linghu/index.js";
-import { createNangongRuntime } from "./services/personas/nangong/index.js";
 import { createHanliRuntime } from "./services/personas/hanli/index.js";
 import { buildEvolutionWorkbenchChange, createEvolutionRuntime, createEvolutionState } from "./services/evolution/index.js";
 import { PersonaEvolutionRuntime } from "./services/workflow/index.js";
@@ -486,10 +487,44 @@ app.whenReady().then(async () => {
     },
   });
   // 旧 nangong-evolution.json 仅作为可恢复的历史取证文件保留，生产运行不再读取、写入或回退。
-  const nangongStore = createEvolutionState(aiMemoryDatabase);
+  const evolutionStateStore = createEvolutionState(aiMemoryDatabase);
+  const beginEvolutionMutation = workflowRepository ? (topicId: string, action: string, request: EvolutionMutationRequest, currentStateVersion: string) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined;
+  const completeEvolutionMutation = workflowRepository ? (idempotencyKey: string, resultStateVersion: string) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined;
+  const failEvolutionMutation = workflowRepository ? (idempotencyKey: string, error: unknown) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined;
+  const recordEvolutionTimelineEvent = collaborationTimeline ? (event: CollaborationTimelineBusinessEvent) => {
+    try { collaborationTimeline!.appendTimelineEvent(event); }
+    catch (error) {
+      eventCenter.recordException({
+        kind: "technical", sourceType: "system", sourceId: "collaboration-timeline",
+        operation: "append_business_event", error, correlationId: event.fact.taskId || event.fact.proposalId || undefined,
+        details: { eventId: event.eventId, sourceFactKey: event.fact.sourceFactKey, action: event.fact.action },
+      });
+      throw error;
+    }
+  } : undefined;
+  // 韩立 Runtime 在人物模块内组装研讨、审批和验收；Workflow 只接收公开 Facade。
+  const hanliRuntime = createHanliRuntime({
+    store: evolutionStateStore,
+    memory: collaborationMemory,
+    askHanli: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
+    askNangong: async (question, context, state) => (await nangongDeliberationCodex!.send([
+      "你是南宫婉，正在参加由韩立发起的自动演化专题研讨。韩立是发问方，你只回答他当前提出的问题。",
+      "回答必须区分已知事实、基于记录的判断和仍需调查的内容；不得自行确立专题、拆解任务或开始修改。",
+      `研讨原记录：\n${context}`,
+      `韩立当前问题：\n${question}`,
+    ].join("\n\n"), state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
+    planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
+    recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
+    recordTimelineEvent: recordEvolutionTimelineEvent,
+    beginMutation: beginEvolutionMutation,
+    completeMutation: completeEvolutionMutation,
+    failMutation: failEvolutionMutation,
+    screenshots,
+  });
   personaEvolution = new PersonaEvolutionRuntime({
-    store: nangongStore,
+    store: evolutionStateStore,
     collaboration,
+    hanli: hanliRuntime.facade,
     conversation: {
       send: async (request, context) => nangongCodex!.send([
         "你现在以南宫婉的专项演化调查者身份与用户讨论。只读调查和分析，不修改源码、不执行构建、不越过审批。",
@@ -502,20 +537,8 @@ app.whenReady().then(async () => {
       ].join("\n\n"), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
       newChat: () => nangongCodex!.newChat(),
     },
-    hanLi: {
-      send: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
-    },
-    nangongDeliberation: {
-      send: async (question, context, state) => (await nangongDeliberationCodex!.send([
-        "你是南宫婉，正在参加由韩立发起的自动演化专题研讨。韩立是发问方，你只回答他当前提出的问题。",
-        "回答必须区分已知事实、基于记录的判断和仍需调查的内容；不得自行确立专题、拆解任务或开始修改。",
-        `研讨原记录：\n${context}`,
-        `韩立当前问题：\n${question}`,
-      ].join("\n\n"), state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
-    },
     investigateRevision: async (prompt, workspaceState, locale) => (await nangongDeliberationCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
     planDistribution: async (prompt, workspaceState, locale, emit) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], emit, "conversation-managed")).text,
-    planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordFailure: (input) => eventCenter.recordException(input),
     memory: collaborationMemory,
@@ -523,20 +546,10 @@ app.whenReady().then(async () => {
     queryWorkbench: workflowRepository ? (request) => workflowRepository!.queryEvolutionWorkbench(request) : undefined,
     getWorkbenchPreference: workflowRepository ? (perspective, nodeId) => workflowRepository!.getEvolutionWorkbenchPreference(perspective, nodeId) : undefined,
     saveWorkbenchPreference: workflowRepository ? (request) => workflowRepository!.saveEvolutionWorkbenchPreference(request) : undefined,
-    beginMutation: workflowRepository ? (topicId, action, request, currentStateVersion) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined,
-    completeMutation: workflowRepository ? (idempotencyKey, resultStateVersion) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined,
-    failMutation: workflowRepository ? (idempotencyKey, error) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined,
-    recordTimelineEvent: collaborationTimeline ? (event) => {
-      try { collaborationTimeline!.appendTimelineEvent(event); }
-      catch (error) {
-        eventCenter.recordException({
-          kind: "technical", sourceType: "system", sourceId: "collaboration-timeline",
-          operation: "append_business_event", error, correlationId: event.fact.taskId || event.fact.proposalId || undefined,
-          details: { eventId: event.eventId, sourceFactKey: event.fact.sourceFactKey, action: event.fact.action },
-        });
-        throw error;
-      }
-    } : undefined,
+    beginMutation: beginEvolutionMutation,
+    completeMutation: completeEvolutionMutation,
+    failMutation: failEvolutionMutation,
+    recordTimelineEvent: recordEvolutionTimelineEvent,
     recordTimelineStream: collaborationTimeline ? (taskId, memberId, event) => {
       try { collaborationTimeline!.appendStream(taskId, memberId, event); }
       catch (error) {
@@ -546,8 +559,7 @@ app.whenReady().then(async () => {
     } : undefined,
   });
   // 三个人物和两个共享模块分别取得受控 Facade；完整运行实例只留在组合根，不再传给 IPC。
-  const nangongRuntime = createNangongRuntime({ application: personaEvolution });
-  const hanliRuntime = createHanliRuntime({ application: personaEvolution, screenshots });
+  const nangongRuntime = personaEvolution.nangongRuntime;
   const evolutionRuntime = createEvolutionRuntime(personaEvolution);
   const personaWorkflowRuntime = createPersonaWorkflowRuntime(personaEvolution);
   evolutionRuntime.facade.subscribe((state, reason, topicId, proposalId, previousState) => {
@@ -586,7 +598,7 @@ app.whenReady().then(async () => {
     },
     submitRepairProposal: (request) => personaEvolution!.createLinghuRepairProposal(request),
     readEvolutionState: () => personaEvolution!.state(),
-    reviseReturnedProposal: (proposalId) => personaEvolution!.investigateAndReviseReturnedProposal(proposalId),
+    reviseReturnedProposal: (proposalId) => personaEvolution!.nangongRuntime.facade.investigateAndReviseReturnedProposal(proposalId),
     onStateChanged: (event) => {
       workflowRepository?.syncLinghuState(event.state);
       eventCenter.recordEvent("linghu.automation.state_changed", { reason: event.reason, enabled: event.state.enabled, cycle: event.state.cycle, module: event.state.currentModule }, event.state.activeTaskId || undefined);
@@ -645,11 +657,11 @@ app.whenReady().then(async () => {
       let clearedRecordCount = 0;
       dispatch.clear();
       clearedRecordCount += collaborationStore.clearTestData();
-      clearedRecordCount += nangongStore.clearTestData();
+      clearedRecordCount += evolutionStateStore.clearTestData();
       clearedRecordCount += linghuRuntime!.clearTestData();
       clearedRecordCount += repositoryToClear?.clearTestData() || 0;
       collaborationStore.assertTestDataCleared();
-      nangongStore.assertTestDataCleared();
+      evolutionStateStore.assertTestDataCleared();
       linghuRuntime!.assertTestDataCleared();
       eventCenter.attachRepository(null);
       workflowRepository = null;
