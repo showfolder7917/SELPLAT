@@ -758,6 +758,16 @@ button { color: inherit; }
 .task-node-meta b { color: var(--sel-theme-accent); }
 .task-manual-approval { flex: none; margin-right: 10px; min-height: 32px; padding: 4px 12px; border: 1px solid var(--sel-theme-accent); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-accent); background: transparent; cursor: pointer; }
 .task-manual-approval:hover, .task-manual-approval:focus-visible { background: var(--sel-theme-workbench-surface-hover); outline: none; }
+.task-node-actions { flex: none; display: inline-flex; align-items: center; gap: 8px; margin-right: 10px; }
+.task-node-actions .task-manual-approval { margin-right: 0; }
+.task-recovery-continue { min-height: 36px; display: inline-flex; align-items: center; gap: 7px; padding: 5px 15px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-text-on-accent); background: var(--sel-theme-workbench-accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--sel-theme-workbench-accent) 24%, transparent), 0 6px 18px color-mix(in srgb, var(--sel-theme-workbench-accent) 28%, transparent); font: inherit; font-weight: 700; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
+.task-recovery-continue i { font-size: 18px; }
+.task-recovery-continue:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sel-theme-workbench-accent) 35%, transparent), 0 8px 22px color-mix(in srgb, var(--sel-theme-workbench-accent) 38%, transparent); }
+.task-recovery-continue:focus-visible { outline: 3px solid color-mix(in srgb, var(--sel-theme-workbench-accent) 40%, transparent); outline-offset: 2px; }
+.task-recovery-continue:disabled { opacity: .65; cursor: wait; transform: none; }
+.task-recovery-continue:disabled i { animation: task-recovery-spin .8s linear infinite; }
+.task-recovery-error { margin: 8px 0 0 38px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--sel-theme-semantic-error) 45%, transparent); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-semantic-error); background: var(--sel-theme-workbench-error-surface); }
+@keyframes task-recovery-spin { to { transform: rotate(360deg); } }
 /* 人工审批仍使用正式 SELUI Window；这里只为该业务实例分配更长的只读正文视口，窗口拖动和八向缩放继续由 SELUI 接管。 */
 .selwindow-window-shell[data-sel-window-id="ai-desktop-evolution-approval"] .selwindow-field-row:first-child { min-height: 184px; }
 .selwindow-window-shell[data-sel-window-id="ai-desktop-evolution-approval"] .selwindow-field-row:first-child .selwindow-control-shell-textarea { min-height: 184px; }

@@ -4,15 +4,18 @@ import type { CollaborationTimelineGroupOutDto, CollaborationTimelineNodeOutDto,
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 
 /** 新任务协作群只消费主进程时间线投影；旧四阶段视图保留回退但不再参与本页排序和人物推断。 */
-export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval }: {
+export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval, onContinueTask }: {
   snapshot: CollaborationTimelineSnapshotOutDto | null;
   liveTextByNodeId: Record<string, string>;
   locale: LocaleValue;
   onManualApproval(proposalId: string, title: string, content: string): void;
+  onContinueTask(taskId: string): Promise<void>;
 }) {
   const groups = snapshot?.groups || [];
   const [groupOpenOverrides, setGroupOpenOverrides] = useState<Map<string, boolean>>(new Map());
   const [nodeOpenOverrides, setNodeOpenOverrides] = useState<Map<string, boolean>>(new Map());
+  const [continuingTaskId, setContinuingTaskId] = useState<string | null>(null);
+  const [continueError, setContinueError] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
@@ -34,6 +37,7 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
     <header className="task-collaboration-heading"><div><h1>{locale === "ja" ? "タスク協同グループ" : "任务协作群"}</h1><p>{locale === "ja" ? "案件ごとに完全な処理履歴を確認できます。" : "一个专题一张任务卡，按真实发生顺序查看每个人正在做什么。"}</p></div><button type="button" onClick={locateCurrentStep}>{locale === "ja" ? "現在の工程へ" : "定位当前步骤"}</button><span>{groups.length}</span></header>
     <div className="task-collaboration-groups">{groups.map((group) => {
       const groupOpen = groupOpenOverrides.get(group.groupId) ?? group.groupId === currentGroupId;
+      const visibleNodes = visibleTimelineNodes(group.nodes);
       return <SelUiDisclosure
         key={group.groupId}
         idPrefix="task-collaboration-group"
@@ -42,9 +46,11 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
         onOpenChange={(open) => updateOpenOverride(setGroupOpenOverrides, group.groupId, open)}
         trigger={<TaskGroupHeader group={group} locale={locale} nowMs={nowMs} />}
       >
-        <div className="task-timeline-list">{group.nodes.map((node, index) => {
+        <div className="task-timeline-list">{visibleNodes.map((node, index) => {
           const nodeOpen = nodeOpenOverrides.get(node.nodeId) ?? node.automaticOpen;
           const liveText = node.status === "current" ? liveTextByNodeId[node.nodeId] : "";
+          const recoveryTaskId = latestRecoveryTaskId(visibleNodes, node, index);
+          const continuing = recoveryTaskId === continuingTaskId;
           return <div className={`task-timeline-position ${node.status}`} data-task-timeline-node-id={node.nodeId} key={node.nodeId}>
             <span className="task-timeline-index">{index + 1}</span><i className="task-timeline-dot" aria-hidden="true" />
             <SelUiDisclosure
@@ -53,17 +59,41 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
               open={nodeOpen}
               onOpenChange={(open) => updateOpenOverride(setNodeOpenOverrides, node.nodeId, open)}
               trigger={<TaskNodeHeader node={node} locale={locale} nowMs={nowMs} />}
-              action={node.manualApprovalProposalId ? <button type="button" className="task-manual-approval" onClick={() => onManualApproval(node.manualApprovalProposalId!, group.title, node.content)}>{locale === "ja" ? "手動承認" : "手动审批"}</button> : undefined}
+              action={(node.manualApprovalProposalId || recoveryTaskId) ? <span className="task-node-actions">
+                {node.manualApprovalProposalId && <button type="button" className="task-manual-approval" onClick={() => onManualApproval(node.manualApprovalProposalId!, group.title, node.content)}>{locale === "ja" ? "手動承認" : "手动审批"}</button>}
+                {recoveryTaskId && <button type="button" className="task-recovery-continue" disabled={continuing} aria-label={locale === "ja" ? "復旧待ちタスクを続行" : "继续执行等待恢复任务"} onClick={() => {
+                  setContinuingTaskId(recoveryTaskId);
+                  setContinueError("");
+                  void onContinueTask(recoveryTaskId).catch((error: unknown) => setContinueError(error instanceof Error ? error.message : String(error))).finally(() => setContinuingTaskId(null));
+                }}><i className={continuing ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />{continuing ? (locale === "ja" ? "続行中…" : "继续中…") : (locale === "ja" ? "実行を続ける" : "继续执行")}</button>}
+              </span> : undefined}
             >
               <div className="task-node-content"><p>{presentTimelineText(liveText || node.content || node.summary)}</p>{liveText && <span className="task-live-caret" aria-label={locale === "ja" ? "出力中" : "流式输出中"} />}</div>
               {node.detail && <SelUiDisclosure idPrefix="task-node-detail" className="task-node-detail" open={false} trigger={<span>{detailLabel(node, locale)}</span>}><pre>{presentTimelineText(node.detail)}</pre></SelUiDisclosure>}
             </SelUiDisclosure>
           </div>;
         })}</div>
+        {continueError && <p className="task-recovery-error" role="alert">{continueError}</p>}
         <footer className="task-timeline-next"><i /> <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong><span>{group.nextStep}</span>{group.status === "blocked" && group.failureNextStep && <small>{locale === "ja" ? "失敗時" : "失败后"}：{group.failureNextStep}</small>}</footer>
       </SelUiDisclosure>;
     })}</div>
   </section>;
+}
+
+/** 同一任务可能因连续重启留下多条恢复记录；只在最新等待节点提供一次主操作。 */
+function latestRecoveryTaskId(nodes: CollaborationTimelineNodeOutDto[], node: CollaborationTimelineNodeOutDto, index: number): string | null {
+  if (!node.taskId || node.eventType !== "task.interrupted" || node.status !== "waiting") return null;
+  const hasNewerRecovery = nodes.slice(index + 1).some((candidate) => candidate.taskId === node.taskId && candidate.eventType === "task.interrupted" && candidate.status === "waiting");
+  return hasNewerRecovery ? null : node.taskId;
+}
+
+/** 已持久化的旧数据可能在任务未离开 recovering 时重复记录重启；同一状态段只显示最后一条。 */
+function visibleTimelineNodes(nodes: CollaborationTimelineNodeOutDto[]): CollaborationTimelineNodeOutDto[] {
+  return nodes.filter((node, index) => {
+    if (!node.taskId || node.eventType !== "task.interrupted" || node.status !== "waiting") return true;
+    const nextSameTask = nodes.slice(index + 1).find((candidate) => candidate.taskId === node.taskId);
+    return !nextSameTask || nextSameTask.eventType !== "task.interrupted" || nextSameTask.status !== "waiting";
+  });
 }
 
 function TaskGroupHeader({ group, locale, nowMs }: { group: CollaborationTimelineGroupOutDto; locale: LocaleValue; nowMs: number }) {

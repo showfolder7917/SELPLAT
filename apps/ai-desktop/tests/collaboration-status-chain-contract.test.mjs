@@ -8,6 +8,8 @@ const integrationSource = readFileSync(new URL("../electron/services/support/cap
 const contractSource = readFileSync(new URL("../contracts/services/workflow/index.ts", import.meta.url), "utf8");
 const contractDefinitionSource = readFileSync(new URL("../contracts/services/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
 const contractValueSource = readFileSync(new URL("../contracts/services/workflow/value/collaboration-task.value.ts", import.meta.url), "utf8");
+const taskGroupSource = readFileSync(new URL("../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
+const developerStyles = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
 
 test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
   assert.match(developerSource, /collaborationTaskId/);
@@ -35,4 +37,16 @@ test("执行成功后由令狐老祖记录统一测试结果", () => {
   assert.match(integrationSource, /task\.state = "unified-testing"/);
   assert.match(integrationSource, /unified_test\.passed/);
   assert.match(integrationSource, /unified_test\.failed/);
+});
+
+test("最新等待恢复节点在卡片头提供醒目的继续执行主操作", () => {
+  assert.match(taskGroupSource, /node\.eventType !== "task\.interrupted"/);
+  assert.match(taskGroupSource, /hasNewerRecovery[\s\S]*return hasNewerRecovery \? null : node\.taskId/);
+  assert.match(taskGroupSource, /className="task-recovery-continue"[\s\S]*继续执行等待恢复任务/);
+  assert.match(taskGroupSource, /onContinueTask\(recoveryTaskId\)/);
+  assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
+  assert.match(taskGroupSource, /nextSameTask[\s\S]*nextSameTask\.eventType !== "task\.interrupted"/);
+  assert.match(developerSource, /<TaskCollaborationGroup[\s\S]*onContinueTask=[\s\S]*continueCollaborationTask\(taskId\)/);
+  assert.match(developerStyles, /\.task-recovery-continue[\s\S]*background: var\(--sel-theme-workbench-accent\)[\s\S]*font-weight: 700/);
+  assert.match(developerStyles, /\.task-recovery-continue:focus-visible/);
 });

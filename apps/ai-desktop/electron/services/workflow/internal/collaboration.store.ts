@@ -452,7 +452,8 @@ function mergeDefaultMembers(state: CollaborationStateOutDto): void {
 function recoverInterruptedState(state: CollaborationStateOutDto): void {
   const interruptedTaskIds = new Set<string>();
   for (const task of state.tasks) {
-    if (TERMINAL_TASK_STATES.has(task.state) || task.state === "queued-executor" || task.state === "returned-to-nangong" || task.state === "ready-for-integration" || task.state === "awaiting-restart") continue;
+    // 已在恢复态的任务保持原恢复点；重复启动不能再次追加相同的中断事实。
+    if (TERMINAL_TASK_STATES.has(task.state) || task.state === "queued-executor" || task.state === "returned-to-nangong" || task.state === "ready-for-integration" || task.state === "awaiting-restart" || task.state === "recovering") continue;
     task.recoveryTargetState ??= task.state;
     task.state = "recovering";
     task.phase = null;

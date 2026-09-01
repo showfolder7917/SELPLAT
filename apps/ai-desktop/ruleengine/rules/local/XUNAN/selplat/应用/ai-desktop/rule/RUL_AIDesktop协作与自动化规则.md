@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.120.0
+rule_version = 5.121.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -207,5 +207,7 @@ collaboration_topic_timeline_projection_contract.16 = explicit_eventType_content
 collaboration_topic_timeline_projection_contract.17 = failure_fact_closes_original_execution_and_duration + nangong_explicit_handoff_to_linghu + linghu_read_only_failure_investigation_before_write + repair_instruction_from_diagnosis_only + prohibit_original_topic_plan_reuse + repair_result_to_nangong + nangong_explicit_return_to_original_executor + one_current_owner_per_task
 <!-- 流式正文必须按节点、回合和消息项累计；后到的单项完成快照只能收口本消息项，运行状态事件保留审计但不得刷新正文投影。 -->
 collaboration_topic_timeline_projection_contract.18 = node_turn_item_stream_identity + item_completion_replaces_same_item_deltas_only + preserve_prior_items_and_turns + raw_status_activity_persisted_without_visible_content_revision_or_renderer_refresh + live_and_SQLite_projection_same_item_key
+<!-- 应用重启只在任务首次进入恢复态时产生一条中断事实；旧数据中的同一恢复状态段折叠为最新节点，并在该节点头部提供唯一醒目的继续操作。 -->
+collaboration_topic_timeline_projection_contract.19 = recovering_transition_appends_one_task_interrupted_fact_only + repeated_startup_while_recovering_preserves_checkpoint_without_new_event + legacy_same_task_same_recovery_segment_projects_latest_node_only_after_producer_fix + latest_waiting_recovery_header_one_high_contrast_continue_action + continue_uses_typed_workflow_API + visible_busy_focus_and_failure_feedback + no_duplicate_continue_buttons
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events

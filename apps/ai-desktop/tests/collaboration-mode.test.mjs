@@ -1362,7 +1362,11 @@ test("进程中断后任务显式进入恢复态，继续时重新排队且不�
 
     const restored = new CollaborationStore(filePath);
     assert.equal(restored.task(task.taskId).state, "recovering");
-    const continued = restored.continueTask(task.taskId);
+    assert.equal(restored.task(task.taskId).flowEvents.filter((event) => event.type === "task.interrupted").length, 1);
+    // 再次启动仍处于同一恢复点时不得生成第二条重复恢复节点。
+    const restoredAgain = new CollaborationStore(filePath);
+    assert.equal(restoredAgain.task(task.taskId).flowEvents.filter((event) => event.type === "task.interrupted").length, 1);
+    const continued = restoredAgain.continueTask(task.taskId);
     const continuedTask = continued.tasks.find((candidate) => candidate.taskId === task.taskId);
     assert.equal(continuedTask.state, "queued-executor");
     assert.equal(continuedTask.executorMemberId, "song-yu");
