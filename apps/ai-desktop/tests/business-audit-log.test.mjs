@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync
 import path from "node:path";
 import test from "node:test";
 
-import { BusinessAuditLog } from "../../../build/ai-desktop/electron/electron/services/capabilities/event-center/internal/audit/business-audit-log.js";
+import { BusinessAuditLog } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/audit/business-audit-log.js";
 import { controlledTestRoot } from "./test-paths.mjs";
 
 const controlledTempRoot = controlledTestRoot;

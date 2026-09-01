@@ -6,7 +6,7 @@ import type { CollaborationStateOutDto, CollaborationTask } from "../../../../co
 import type { LinghuAutomationStateOutDto } from "../../../../contracts/collaboration/linghu/index.js";
 import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkbenchRow, EvolutionWorkbenchView, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../../contracts/collaboration/evolution/index.js";
 import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../../contracts/governance/workflow.js";
-import type { DatabasePort as SqliteDatabase } from "../../platform/persistence/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
 
 const STALE_AFTER_MS = 120_000;
 const TERMINAL_TASK_STATES = new Set(["integrated", "cancelled"]);

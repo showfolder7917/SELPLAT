@@ -5,19 +5,19 @@ import test from "node:test";
 const screenshotEditor = readFileSync(new URL("../src/features/screenshot/components/ScreenshotEditor.tsx", import.meta.url), "utf8");
 const screenshotWindow = readFileSync(new URL("../src/variants/developer/ScreenshotWindowApp.tsx", import.meta.url), "utf8");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
-const codexService = readFileSync(new URL("../electron/services/platform/codex/codex.facade.ts", import.meta.url), "utf8");
+const codexService = readFileSync(new URL("../electron/services/support/platform/codex/codex.facade.ts", import.meta.url), "utf8");
 const ipc = [
-  "../electron/ipc/register-desktop-ipc.ts",
-  "../electron/ipc/domains/register-codex-ipc.ts",
-  "../electron/ipc/domains/register-system-ipc.ts",
+  "../electron/system/ipc/register-desktop-ipc.ts",
+  "../electron/system/ipc/domains/register-codex-ipc.ts",
+  "../electron/system/ipc/domains/register-system-ipc.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const preload = [
-  "../electron/preload.cts",
-  "../electron/preload/domains/codex-bridge.cts",
-  "../electron/preload/domains/screenshot-bridge.cts",
-  "../electron/preload/domains/system-bridge.cts",
+  "../electron/system/preload/preload.cts",
+  "../electron/system/preload/domains/codex-bridge.cts",
+  "../electron/system/preload/domains/screenshot-bridge.cts",
+  "../electron/system/preload/domains/system-bridge.cts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
-const executor = readFileSync(new URL("../electron/services/capabilities/execution/internal/managed-task.executor.ts", import.meta.url), "utf8");
+const executor = readFileSync(new URL("../electron/services/support/capabilities/execution/internal/managed-task.executor.ts", import.meta.url), "utf8");
 const developerCss = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
 const mainEntry = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
 

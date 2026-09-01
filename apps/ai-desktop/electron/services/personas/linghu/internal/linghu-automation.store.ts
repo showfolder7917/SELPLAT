@@ -1,7 +1,7 @@
 // UUID 只用于新建启动文案，避免标题重复时发生覆盖。
 import { randomUUID } from "node:crypto";
 // 人物状态只依赖 Platform 提供的持久化 Port，不读取路径或调用 Node 文件系统。
-import type { AtomicJsonPersistencePort } from "../../../platform/persistence/index.js";
+import type { AtomicJsonPersistencePort } from "../../../support/platform/persistence/index.js";
 
 // Store 只读取令狐协议类型，具体状态变化仍由本目录的业务实现负责。
 import type {

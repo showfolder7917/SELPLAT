@@ -20,7 +20,7 @@ import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./internal/lin
 // 纯分析函数独立在无副作用模块内，Facade 只编排决策与动作。
 import { automaticFlowSnapshots, faultFingerprint, moduleCompletionReport, moduleInstruction, moduleLabel, taskHumanReport, testResourceContext } from "./internal/linghu-flow.analyzer.js";
 // 基础设施异常类型留在 internal，外部只能通过 Facade 的静态判断入口识别。
-import { isUnifiedTestInfrastructureError } from "../../capabilities/testing/index.js";
+import { isUnifiedTestInfrastructureError } from "../../support/capabilities/testing/index.js";
 
 // 固定人物 ID 用于任务发起人、恢复负责人和审计关联。
 const LINGHU_MEMBER_ID = "linghu-ancestor";

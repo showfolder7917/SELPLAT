@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.0.0 固化 Electron 薄入口、分层 Bootstrap 和统一资源释放边界，防止数据库与应用初始化回流 main.ts。 -->
-rule_version = 2.0.0
+<!-- 2.2.0 把非人物业务的 application、capabilities、platform 统一收敛到 services/support，顶层只展示核心业务区和支撑区。 -->
+rule_version = 2.2.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -15,7 +15,7 @@ python_ability_refs = none
 <!-- 应用生产程序直接实现规则加载，不在 rule-engine 内伪造第二个 Node ability。 -->
 node_ability_refs = none
 <!-- 真实生产规则加载入口固定为主进程规则服务。 -->
-application_program_path = apps/ai-desktop/electron/services/capabilities/rules/rule-bundle.facade.ts
+application_program_path = apps/ai-desktop/electron/services/support/capabilities/rules/rule-bundle.facade.ts
 
 <!-- 应用私有跨进程协议必须按基础、桌面聚合、平台、能力、协作和治理领域分层，禁止恢复根目录平铺或独立 codex 根。 -->
 contracts_domain_layout_contract = foundation + desktop_aggregate + platform + capabilities + collaboration + governance + no_flat_business_contracts + no_root_codex_domain
@@ -47,12 +47,14 @@ sandboxed_preload_delivery_contract = domain_source_modules + build_single_CJS_b
 composition_root_contract = composition_only + domain_modules_own_implementation + no_god_registration_or_application_component
 <!-- Electron main.ts 只登记 ready、before-quit 和 window-all-closed；环境、数据库、公共能力、协作、人物和 IPC 必须由独立 bootstrap 按单向顺序装配。 -->
 electron_bootstrap_layer_contract = thin_main_lifecycle_entry + startup_context + persistence_context + capability_context + collaboration_context + persona_application_context + IPC_application_ports + application_runtime_composition + no_database_persona_or_IPC_construction_in_main
+<!-- Electron 根除 main 和发布入口外只保留 system 与 services；services 顶层只保留核心业务区和 support，三类非人物业务能力统一进入 support。 -->
+electron_system_services_layout_contract = electron/main_and_packaged_bootstrap + electron/system/bootstrap_config_ipc_preload_policies_window + electron/services/personas_evolution_workflow_support + electron/services/support/application_capabilities_platform + prohibit_legacy_root_bootstrap_config_ipc_preload_policies_window_application + prohibit_services_root_application_capabilities_platform + electron_README_is_structure_entry
 <!-- 长期资源必须由应用运行时统一持有并逆序释放；测试数据重置属于应用用例，不得把跨 Store 清理重新塞回 main 或数据库实现。 -->
 application_lifecycle_contract = one_startApplication + one_disposeApplication + idempotent_persistence_close + stop_watchers_supervisor_persona_and_codex_before_database + test_data_reset_application_service + no_cross_domain_cleanup_in_main
 <!-- 大文件必须按业务能力和状态所有权拆分，禁止只按行数机械切割。 -->
 module_split_contract = split_by_business_capability_and_state_ownership + independently_testable_boundary + no_arbitrary_line_partition
-<!-- Electron 服务固定分为五个平行区域；跨区只能经过目标模块 index，platform 不得反向依赖人物或业务能力。 -->
-electron_service_zone_contract = personas + evolution + workflow + capabilities + platform + public_index_only_cross_zone_import + platform_no_reverse_business_dependency + no_root_service_implementation
+<!-- Electron 服务顶层固定为三个核心业务区与一个 support 支撑区；support 内部三类职责继续隔离，跨区只能经过目标模块 index。 -->
+electron_service_zone_contract = personas + evolution + workflow + support/application_capabilities_platform + public_index_only_cross_zone_import + support_platform_no_reverse_business_dependency + no_root_service_implementation
 <!-- 南宫、韩立和令狐必须作为 personas 下并列一级模块存在；每个人物只公开自己的 Facade、Runtime 工厂和必要 Port 类型，禁止人物之间导入 internal 或具体 Facade 文件。 -->
 parallel_persona_module_contract = personas/nangong + personas/hanli + personas/linghu + personas/executor + one_public_index_per_persona + one_facade_and_runtime_per_persona + no_cross_persona_internal_or_concrete_facade_dependency + no_shared_base_persona
 <!-- 动态普通成员必须共用通用 Executor Runtime；执行会话工厂、会话缓存、存活检查和调用行为不得由 Workflow 持有，也不得按成员姓名复制目录。 -->

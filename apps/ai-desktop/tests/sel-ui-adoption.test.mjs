@@ -14,11 +14,11 @@ const evolutionGrids = [read("../src/features/evolution/components/EvolutionData
 const evolutionDisclosure = read("../src/features/evolution/components/EvolutionDisclosure.tsx");
 const evolutionDossier = read("../src/features/evolution/components/EvolutionTopicDossierView.tsx");
 const desktopChrome = read("../src/features/shell/components/DesktopChrome.tsx");
-const desktopIpc = read("../electron/ipc/register-desktop-ipc.ts");
-const electronMain = read("../electron/main.ts");
+const desktopIpc = read("../electron/system/ipc/register-desktop-ipc.ts");
+const electronMain = read("../electron/system/bootstrap/application-runtime.ts");
 const preload = [
-  read("../electron/preload.cts"),
-  read("../electron/preload/domains/collaboration-bridge.cts"),
+  read("../electron/system/preload/preload.cts"),
+  read("../electron/system/preload/domains/collaboration-bridge.cts"),
 ].join("\n");
 const screenshotEditor = read("../src/features/screenshot/components/ScreenshotEditor.tsx");
 const selUiProvider = read("../src/theme/SelUiProvider.tsx");

@@ -8,33 +8,33 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { CollaborationDurationLog } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration-duration.log.js";
 import { CollaborationCoordinator } from "../../../build/ai-desktop/electron/electron/services/workflow/collaboration-workflow.facade.js";
-import { PersonaSessionWriterQueue } from "../../../build/ai-desktop/electron/electron/services/capabilities/conversation/internal/collaboration-codex-sessions.js";
+import { PersonaSessionWriterQueue } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.js";
 import { createCollaborationResultSummary } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/result/result-summary.js";
-import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/integration.verifier.js";
-import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/verified-package.release.js";
+import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/integration.verifier.js";
+import { stageVerifiedDeveloperExecutable } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/verified-package.release.js";
 import { CollaborationStore } from "../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration.store.js";
 import { LinghuAutomationFacade } from "../../../build/ai-desktop/electron/electron/services/personas/linghu/index.js";
 import { ExecutorFacade } from "../../../build/ai-desktop/electron/electron/services/personas/executor/index.js";
 import { LinghuAutomationStore } from "../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-automation.store.js";
-import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/capabilities/testing/test-resource-coordinator.facade.js";
-import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/integration-release.facade.js";
-import { ReleaseBatchStore } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/release-batch.store.js";
-import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../build/ai-desktop/electron/electron/services/capabilities/release/internal/version-workspace.manager.js";
-import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/capabilities/execution/internal/managed-task.executor.js";
-import { createAtomicJsonPersistence } from "../../../build/ai-desktop/electron/electron/services/platform/persistence/index.js";
+import { TestResourceCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/test-resource-coordinator.facade.js";
+import { IntegrationReleaseCoordinatorFacade } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/release/integration-release.facade.js";
+import { ReleaseBatchStore } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/release-batch.store.js";
+import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-workspace.manager.js";
+import { ManagedTaskExecutor } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/internal/managed-task.executor.js";
+import { createAtomicJsonPersistence } from "../../../build/ai-desktop/electron/electron/services/support/platform/persistence/index.js";
 import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
 const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
 const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const coordinatorSource = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
-const integrationPipelineSource = readFileSync(new URL("../electron/services/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
-const releaseBatchStoreSource = readFileSync(new URL("../electron/services/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
+const integrationPipelineSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
+const releaseBatchStoreSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
 // 入口存在性由边界测试负责；这里读取任务事实 DTO 验证完整状态枚举。
 const collaborationContractSource = readFileSync(new URL("../contracts/collaboration/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
-const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
+const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 const linghuRuntimeSource = readFileSync(new URL("../electron/services/personas/linghu/internal/create-linghu-runtime.ts", import.meta.url), "utf8");
-const integrationVerifierSource = readFileSync(new URL("../electron/services/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
+const integrationVerifierSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
 
 // 测试也经 Platform Port 创建人物 Store，避免用例重新引入文件路径耦合。
@@ -44,7 +44,7 @@ function createTestLinghuStore(filePath) {
 
 function runCoordinatorWorker(coordinationRoot, runId, buildRoot, holdMilliseconds) {
   const worker = new URL("./fixtures/test-resource-coordinator-worker.mjs", import.meta.url);
-  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/capabilities/testing/test-resource-coordinator.facade.js", import.meta.url).href;
+  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/test-resource-coordinator.facade.js", import.meta.url).href;
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [fileURLToPath(worker), moduleUrl, coordinationRoot, runId, buildRoot, String(holdMilliseconds)], {
       stdio: ["ignore", "pipe", "pipe"],
@@ -63,7 +63,7 @@ function runCoordinatorWorker(coordinationRoot, runId, buildRoot, holdMillisecon
 
 function runReleaseWorker(coordinationRoot, releaseBatchId, holdMilliseconds) {
   const worker = new URL("./fixtures/integration-release-coordinator-worker.mjs", import.meta.url);
-  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/capabilities/release/integration-release.facade.js", import.meta.url).href;
+  const moduleUrl = new URL("../../../build/ai-desktop/electron/electron/services/support/capabilities/release/integration-release.facade.js", import.meta.url).href;
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [fileURLToPath(worker), moduleUrl, coordinationRoot, releaseBatchId, String(holdMilliseconds)], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
@@ -775,7 +775,7 @@ test("令狐将依赖自动流程的修正任务纳入同一停点检测闭环",
 });
 
 test("令狐测试漏点模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
-  const runner = readFileSync(new URL("../electron/services/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
+  const runner = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
   const facade = readFileSync(new URL("../electron/services/personas/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
   assert.match(runner, /\["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:mac:developer"\]/);
@@ -1424,7 +1424,7 @@ test("耗时日志按等待原因生成集成批次瓶颈报告", () => {
 
 test("执行人物只做技术分析并直接进入实施，不再创建内部审核连接", () => {
   const coordinator = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
-  const sessions = readFileSync(new URL("../electron/services/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  const sessions = readFileSync(new URL("../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
   assert.match(coordinator, /status: "ready-for-execution"/);
   assert.match(coordinator, /await this\.#execute\(taskId\)/);
   assert.doesNotMatch(coordinator, /createReviewer|scheduleReviewers|beginReview/);
@@ -1589,11 +1589,11 @@ test("协同执行人修改源码后由桌面内部验证分支而不再发起 C
 });
 
 test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出", () => {
-  const runner = readFileSync(new URL("../electron/services/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
+  const runner = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
   const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  const dependencyVerifier = readFileSync(new URL("../electron/services/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
-  const sessions = readFileSync(new URL("../electron/services/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
-  const codex = readFileSync(new URL("../electron/services/platform/codex/codex.facade.ts", import.meta.url), "utf8");
+  const dependencyVerifier = readFileSync(new URL("../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
+  const sessions = readFileSync(new URL("../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  const codex = readFileSync(new URL("../electron/services/support/platform/codex/codex.facade.ts", import.meta.url), "utf8");
   const config = readFileSync(new URL("../playwright.interaction.config.ts", import.meta.url), "utf8");
   assert.match(runner, /worktreeRoot/);
   assert.match(runner, /test-cache|PLAYWRIGHT_BROWSERS_PATH/);
@@ -1616,9 +1616,9 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
 
 test("协同编排保持独立执行连接、心跳和整轮封存集成契约", () => {
   const coordinator = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
-  const sessions = readFileSync(new URL("../electron/services/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
-  const workspaces = readFileSync(new URL("../electron/services/capabilities/release/internal/version-workspace.manager.ts", import.meta.url), "utf8");
-  const integrationVerifier = readFileSync(new URL("../electron/services/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
+  const sessions = readFileSync(new URL("../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  const workspaces = readFileSync(new URL("../electron/services/support/capabilities/release/internal/version-workspace.manager.ts", import.meta.url), "utf8");
+  const integrationVerifier = readFileSync(new URL("../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
   const ui = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
   assert.match(sessions, /new CodexService/);
   assert.match(sessions, /codexHome: this\.#options\.codexHome/);

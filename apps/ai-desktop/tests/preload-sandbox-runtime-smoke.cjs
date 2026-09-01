@@ -2,7 +2,7 @@ const path = require("node:path");
 
 const { app, BrowserWindow } = require("electron");
 
-const preloadPath = path.resolve(__dirname, "../../../build/ai-desktop/electron/electron/preload.cjs");
+const preloadPath = path.resolve(__dirname, "../../../build/ai-desktop/electron/electron/system/preload/preload.cjs");
 const requiredCapabilities = [
   "getEnvironment",
   "getWorkspaces",

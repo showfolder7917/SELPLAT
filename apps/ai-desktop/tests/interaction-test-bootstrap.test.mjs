@@ -9,7 +9,7 @@ const packageJson = readFileSync(new URL("../package.json", import.meta.url), "u
 const isolatedMain = readFileSync(new URL("./interaction/isolated-main.cjs", import.meta.url), "utf8");
 const sidebarSpec = readFileSync(new URL("./interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
 const viteConfig = readFileSync(new URL("../vite.config.mjs", import.meta.url), "utf8");
-const taskTestRunner = readFileSync(new URL("../electron/services/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
+const taskTestRunner = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
 
 test("交互测试引导不依赖尚未编译的本地公共包", () => {
   assert.doesNotMatch(runner, /@selplat\/node-common-core/);

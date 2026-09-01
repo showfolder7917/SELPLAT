@@ -21,7 +21,7 @@ import { CollaborationStore } from "./internal/collaboration.store.js";
 import type {
   VersionIntegrationPort as VersionIntegrationPipeline,
   VersionWorkspacePort as VersionWorkspaceManager,
-} from "../capabilities/release/index.js";
+} from "../support/capabilities/release/index.js";
 import { createCollaborationResultSummary } from "./internal/result/result-summary.js";
 import type { ExecutorFacade } from "../personas/executor/index.js";
 

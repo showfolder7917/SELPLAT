@@ -1,5 +1,5 @@
 // Evolution 门面文件集中提供共同业务数据的装配入口，不把 Repository 或 Store 实现公开给人物和 IPC。
-import type { DatabasePort } from "../platform/persistence/index.js";
+import type { DatabasePort } from "../support/platform/persistence/index.js";
 import type { CreateLinghuRepairProposalOutDto } from "../../../contracts/collaboration/linghu/index.js";
 import type { EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../contracts/collaboration/evolution/index.js";
 import type { CreateNangongTopicInDto } from "../../../contracts/collaboration/nangong/index.js";

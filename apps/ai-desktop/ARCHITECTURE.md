@@ -7,16 +7,17 @@
 按以下顺序可以看到一次真实请求如何完成流转：
 
 1. `electron/main.ts`：只看 Electron 的 `start/dispose` 生命周期入口。
-2. `electron/bootstrap/application-runtime.ts`：查看一次启动怎样按层组合整个应用。
-3. `electron/bootstrap/startup-context.ts`：查看工程根、用户目录、协议和单实例门禁。
-4. `electron/bootstrap/persistence.bootstrap.ts`：查看数据库、Repository、时间线和记忆装配。
-5. `electron/bootstrap/capabilities.bootstrap.ts`：查看设置、规则、附件、会话等公共能力。
-6. `electron/bootstrap/collaboration.bootstrap.ts`：查看执行人、worktree、测试和集成发布。
-7. `electron/bootstrap/personas.bootstrap.ts`：查看并列人物能力登记与 Workflow 监督器。
-8. `electron/bootstrap/ipc.bootstrap.ts` → `electron/ipc/domains/register-collaboration-ipc.ts`：查看公开 Facade 怎样进入 IPC。
-9. `electron/services/personas/<persona>/index.ts` → Facade → internal Application Service：查看某个人物内部能力。
-10. `electron/services/evolution/index.ts` / `electron/services/workflow/index.ts`：查看共享事实与跨人物流转。
-11. `contracts/<domain>/index.ts`：查看跨模块数据和端口的唯一类型入口。
+2. `electron/README.md`：先理解 `system` 与 `services` 两层、六个服务区域和固定依赖方向。
+3. `electron/system/bootstrap/application-runtime.ts`：查看一次启动怎样按层组合整个应用。
+4. `electron/system/bootstrap/startup-context.ts`：查看工程根、用户目录、协议和单实例门禁。
+5. `electron/system/bootstrap/persistence.bootstrap.ts`：查看数据库、Repository、时间线和记忆装配。
+6. `electron/system/bootstrap/capabilities.bootstrap.ts`：查看设置、规则、附件、会话等公共能力。
+7. `electron/system/bootstrap/collaboration.bootstrap.ts`：查看执行人、worktree、测试和集成发布。
+8. `electron/system/bootstrap/personas.bootstrap.ts`：查看并列人物能力登记与 Workflow 监督器。
+9. `electron/system/bootstrap/ipc.bootstrap.ts` → `electron/system/ipc/domains/register-collaboration-ipc.ts`：查看公开 Facade 怎样进入 IPC。
+10. `electron/services/personas/<persona>/index.ts` → Facade → internal Application Service：查看某个人物内部能力。
+11. `electron/services/evolution/index.ts` / `electron/services/workflow/index.ts`：查看共享事实与跨人物流转。
+12. `contracts/<domain>/index.ts`：查看跨模块数据和端口的唯一类型入口。
 
 不要从某个 `internal/*.service.ts` 开始猜全局流程。`internal` 文件只说明当前模块怎样完成自己的职责。
 
@@ -46,17 +47,17 @@ Renderer Feature
 contracts/desktop/DesktopApi
     │
     ▼
-electron/preload/domains/*-bridge.cts
+electron/system/preload/domains/*-bridge.cts
     │ 白名单 IPC channel
     ▼
-electron/ipc/domains/register-*-ipc.ts
+electron/system/ipc/domains/register-*-ipc.ts
     │ 只校验和分发
     ├── Persona Facade：人物自己的判断
     ├── Evolution Facade：共享专题事实
     └── Workflow Facade：跨人物顺序与恢复
              │
              ▼
-       platform/capabilities 基础设施
+       support 应用支撑能力与基础设施
              │
              ▼
       状态事件 → preload → Renderer
@@ -77,15 +78,18 @@ electron/ipc/domains/register-*-ipc.ts
 → Evolution 完成本轮并归档
 ```
 
-## 4. 五个主进程区域
+## 4. System、三个核心业务区与 Support 支撑区
+
+`electron/system` 只管理 Electron 宿主机制；日常业务开发集中在 `electron/services`。
 
 | 区域 | 唯一职责 | 不得承担 |
 |---|---|---|
+| `services/support/application` | 跨多个公开领域协调一个应用用例 | 人物判断、SQL 实现、Electron 生命周期 |
 | `services/personas` | 南宫婉、韩立、令狐各自的业务判断 | 共享 Store、跨人物轮转 |
 | `services/evolution` | 专题、提案、审批、验收和档案的唯一共享状态 | 人物对话实现、任务调度 |
 | `services/workflow` | 跨人物顺序、分发、集成、恢复和生命周期 | 人物判断、人物内部解析 |
-| `services/capabilities` | 会话、事件、测试、发布、规则等公共能力 | 人物专属业务语义 |
-| `services/platform` | Codex、持久化、附件、设置、工作区和安全基础设施 | 反向依赖人物或 Workflow |
+| `services/support/capabilities` | 会话、事件、测试、发布、规则等公共能力 | 人物专属业务语义 |
+| `services/support/platform` | Codex、持久化、附件、设置、工作区和安全基础设施 | 反向依赖人物或 Workflow |
 
 跨区域调用只能导入目标区域的 `index.ts`。禁止导入其他区域的 `internal` 或具体 Facade 文件。
 

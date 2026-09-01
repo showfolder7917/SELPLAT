@@ -4,7 +4,7 @@ const { pathToFileURL } = require("node:url");
 const { app, BrowserWindow, ipcMain } = require("electron");
 const { MAIN_WINDOW_LAYOUT, mainWindowInitialSize } = require(path.resolve(
   __dirname,
-  "../../../../build/ai-desktop/electron/electron/window/main-window-layout.cjs",
+  "../../../../build/ai-desktop/electron/electron/system/window/main-window-layout.cjs",
 ));
 
 app.whenReady().then(async () => {

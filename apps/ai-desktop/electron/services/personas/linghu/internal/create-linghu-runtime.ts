@@ -1,12 +1,12 @@
 // 令狐状态事件类型用于约束组合根的持久化、审计和页面广播回调。
 import type { LinghuAutomationStateEventOutDto } from "../../../../../contracts/collaboration/linghu/index.js";
 // Platform JSON Port 隔离文件路径、原子替换和备份实现。
-import type { AtomicJsonPersistencePort } from "../../../platform/persistence/index.js";
+import type { AtomicJsonPersistencePort } from "../../../support/platform/persistence/index.js";
 // 测试资源协调器作为运行时装配端口传入，Runner 仍由令狐内部创建。
 import {
   createFixedUnifiedTestRunner,
   type TestResourceCoordinatorFacade,
-} from "../../../capabilities/testing/index.js";
+} from "../../../support/capabilities/testing/index.js";
 // 主进程运行时由唯一 Facade 和唯一 Store 组成，调用方不再分别装配内部文件。
 import { LinghuAutomationFacade, type LinghuAutomationFacadeOptions } from "../linghu-automation.facade.js";
 import { LinghuAutomationStore } from "./linghu-automation.store.js";

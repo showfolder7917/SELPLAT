@@ -11,15 +11,18 @@ const expectedDevelopmentRoot = path.resolve(process.env.SELPLAT_ROOT || path.jo
 const developerConfig = require("../electron-builder.developer.config.cjs");
 const archiveConfigSource = readFileSync(new URL("../electron-builder.archive.config.cjs", import.meta.url), "utf8");
 const packageManifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-const appConfigSource = readFileSync(new URL("../electron/config/app-config.ts", import.meta.url), "utf8");
-const unifiedRunnerSource = readFileSync(new URL("../electron/services/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
+const appConfigSource = readFileSync(new URL("../electron/system/config/app-config.ts", import.meta.url), "utf8");
+const unifiedRunnerSource = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 const packagedVerifierSource = readFileSync(new URL("../scripts/verify-developer-package-root.mjs", import.meta.url), "utf8");
 const developerBatchSource = readFileSync(new URL("../启动开发版.bat", import.meta.url), "utf8");
 const variantBatchSource = readFileSync(new URL("../scripts/start-variant.bat", import.meta.url), "utf8");
 const developerDesktopLauncherSource = readFileSync(new URL("../scripts/start-developer-desktop.mjs", import.meta.url), "utf8");
 const archiveReleaseBuilderSource = readFileSync(new URL("../scripts/build-developer-archive-release.mjs", import.meta.url), "utf8");
-const mainSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
-const mainWindowSource = readFileSync(new URL("../electron/window/create-main-window.ts", import.meta.url), "utf8");
+const mainSource = [
+  "../electron/system/bootstrap/application-runtime.ts",
+  "../electron/system/bootstrap/startup-context.ts",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
+const mainWindowSource = readFileSync(new URL("../electron/system/window/create-main-window.ts", import.meta.url), "utf8");
 const developerAppSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 
 test("全部开发版打包入口自动注入稳定 SELPLAT 工程根", () => {
@@ -81,7 +84,7 @@ test("免安装开发 ZIP 携带完整 Electron 运行目录且不依赖源工�
   assert.match(archiveReleaseBuilderSource, /Compress-Archive/);
   assert.match(appConfigSource, /resolveDistributionMode\(\) === "archive"/);
   assert.match(mainSource, /path\.join\(path\.dirname\(process\.execPath\), "dist", "developer"\)/);
-  assert.match(mainSource, /resolveDistributionMode\(\) === "archive"\) app\.disableHardwareAcceleration\(\)/);
+  assert.match(mainSource, /distributionMode === "archive"\) app\.disableHardwareAcceleration\(\)/);
   assert.match(mainSource, /process\.env\.AI_DESKTOP_HEALTH_CHECK_FILE/);
   assert.match(mainWindowSource, /压缩包版/);
   assert.match(mainWindowSource, /webContents\.once\("did-finish-load", options\.onRendererReady\)/);

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { ConversationDispatchStore } from "../../../build/ai-desktop/electron/electron/services/capabilities/conversation/internal/conversation-dispatch.store.js";
+import { ConversationDispatchStore } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/conversation-dispatch.store.js";
 import { controlledTestRoot } from "./test-paths.mjs";
 
 const controlledTempRoot = controlledTestRoot;

@@ -14,9 +14,9 @@ const contracts = [
   read("contracts/platform/codex/index.ts"),
   read("contracts/platform/codex/codex.ts"),
 ].join("\n");
-const store = read("electron/services/platform/settings/internal/settings.store.ts");
-const service = read("electron/services/platform/codex/codex.facade.ts");
-const collaboration = read("electron/services/capabilities/conversation/internal/collaboration-codex-sessions.ts");
+const store = read("electron/services/support/platform/settings/internal/settings.store.ts");
+const service = read("electron/services/support/platform/codex/codex.facade.ts");
+const collaboration = read("electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts");
 const developer = read("src/variants/developer/DeveloperApp.tsx");
 const interactionPreload = read("tests/interaction/isolated-preload.cjs");
 const packageManifest = read("package.json");

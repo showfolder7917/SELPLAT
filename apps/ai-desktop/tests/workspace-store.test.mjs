@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import path from "node:path";
 import test from "node:test";
 
-import { WorkspaceStore } from "../../../build/ai-desktop/electron/electron/services/platform/workspace/internal/workspace.store.js";
-import { createSandboxPolicy } from "../../../build/ai-desktop/electron/electron/services/platform/codex/codex.facade.js";
+import { WorkspaceStore } from "../../../build/ai-desktop/electron/electron/services/support/platform/workspace/internal/workspace.store.js";
+import { createSandboxPolicy } from "../../../build/ai-desktop/electron/electron/services/support/platform/codex/codex.facade.js";
 import { controlledTestRoot } from "./test-paths.mjs";
 
 test("workspace profiles validate, deduplicate, persist, and enforce lifecycle constraints", () => {

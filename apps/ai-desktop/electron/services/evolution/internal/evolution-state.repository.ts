@@ -1,5 +1,5 @@
 import type { EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
-import type { DatabasePort as SqliteDatabase } from "../../platform/persistence/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
 
 /**
  * 作用：为南宫婉专题演化状态提供唯一 SQLite 持久化边界。

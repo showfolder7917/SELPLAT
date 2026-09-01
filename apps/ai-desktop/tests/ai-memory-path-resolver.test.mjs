@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import path from "node:path";
 import test from "node:test";
 
-import { resolveAiMemoryPaths } from "../../../build/ai-desktop/electron/electron/config/ai-memory-path-resolver.js";
+import { resolveAiMemoryPaths } from "../../../build/ai-desktop/electron/electron/system/config/ai-memory-path-resolver.js";
 import { appRoot, controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });

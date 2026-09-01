@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { BrowserWindow } from "electron";
 
 import type { HanliAcceptanceOperation, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto } from "../../../../../contracts/collaboration/hanli/index.js";
-import type { AttachmentFacade as ScreenshotStore } from "../../../platform/attachments/index.js";
+import type { AttachmentFacade as ScreenshotStore } from "../../../support/platform/attachments/index.js";
 
 const BLOCKED_CLICK_TARGET = /删除|清空|移除|退出登录|提交|保存|确认|通过|退回|驳回|分发|发布|重启|delete|clear|remove|submit|approve|reject|dispatch|restart/iu;
 const MAX_OPERATIONS = 120;

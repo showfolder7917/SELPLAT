@@ -48,7 +48,7 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
 
 mkdirSync(controlledTestRoot, { recursive: true });
 const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: "/workspace", permission: "workspace-write" }] };
-const nangongPromptSource = readFileSync(new URL("../electron/bootstrap/application-runtime.ts", import.meta.url), "utf8");
+const nangongPromptSource = readFileSync(new URL("../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const evolutionFacadeSource = readFileSync(new URL("../electron/services/personas/nangong/nangong.facade.ts", import.meta.url), "utf8");
 const nangongApplicationSource = readFileSync(new URL("../electron/services/personas/nangong/internal/nangong-application.service.ts", import.meta.url), "utf8");
 const personaEvolutionRuntimeSource = readFileSync(new URL("../electron/services/workflow/internal/persona-evolution.runtime.ts", import.meta.url), "utf8");

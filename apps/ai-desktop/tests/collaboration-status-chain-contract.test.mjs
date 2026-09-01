@@ -4,7 +4,7 @@ import test from "node:test";
 
 const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const coordinatorSource = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
-const integrationSource = readFileSync(new URL("../electron/services/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
+const integrationSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const contractSource = readFileSync(new URL("../contracts/collaboration/workflow/index.ts", import.meta.url), "utf8");
 const contractDefinitionSource = readFileSync(new URL("../contracts/collaboration/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
 

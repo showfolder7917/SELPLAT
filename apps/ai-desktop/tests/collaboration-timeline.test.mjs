@@ -3,9 +3,9 @@ import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { CollaborationTimelineRepository } from "../../../build/ai-desktop/electron/electron/services/capabilities/event-center/internal/timeline/collaboration-timeline.repository.js";
-import { CollaborationTimelineFacade } from "../../../build/ai-desktop/electron/electron/services/capabilities/event-center/internal/timeline/collaboration-timeline.facade.js";
-import { SqliteDatabase } from "../../../build/ai-desktop/electron/electron/services/platform/persistence/internal/sqlite-database.js";
+import { CollaborationTimelineRepository } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.js";
+import { CollaborationTimelineFacade } from "../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.facade.js";
+import { SqliteDatabase } from "../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-database.js";
 import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
 const member = (memberId, displayName) => ({ memberId, displayName });
@@ -375,7 +375,7 @@ test("未登记的历史流程事件生成可读兜底节点而非静默丢弃",
 });
 
 test("旧状态反推接口和旧表读取已退役", () => {
-  const source = readFileSync(path.join(appRoot, "electron/services/capabilities/event-center/internal/timeline/collaboration-timeline.repository.ts"), "utf8");
+  const source = readFileSync(path.join(appRoot, "electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.ts"), "utf8");
   assert.doesNotMatch(source, /syncEvolutionState|#appendProposalFacts|#appendTaskFacts/);
   assert.doesNotMatch(source, /AiDesktopTaskCollaboration(?:Topic|Event|Stream)/);
   assert.match(source, /appendBusinessEvent/);

@@ -7,7 +7,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const serviceModule = path.resolve(appRoot, "../../build/ai-desktop/electron/electron/services/capabilities/rules/rule-bundle.facade.js");
+const serviceModule = path.resolve(appRoot, "../../build/ai-desktop/electron/electron/services/support/capabilities/rules/rule-bundle.facade.js");
 const { RuleBundleService } = await import(pathToFileURL(serviceModule));
 const sha256 = (content) => createHash("sha256").update(content, "utf8").digest("hex");
 

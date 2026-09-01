@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import path from "node:path";
 import test from "node:test";
 
-import { createCodexChildEnvironment } from "../../../build/ai-desktop/electron/electron/services/platform/codex/codex.facade.js";
-import { toCodexStreamEvent } from "../../../build/ai-desktop/electron/electron/services/platform/codex/internal/codex-stream-event.mapper.js";
-import { CodexSessionStore } from "../../../build/ai-desktop/electron/electron/services/platform/codex/internal/codex-session.repository.js";
+import { createCodexChildEnvironment } from "../../../build/ai-desktop/electron/electron/services/support/platform/codex/codex.facade.js";
+import { toCodexStreamEvent } from "../../../build/ai-desktop/electron/electron/services/support/platform/codex/internal/codex-stream-event.mapper.js";
+import { CodexSessionStore } from "../../../build/ai-desktop/electron/electron/services/support/platform/codex/internal/codex-session.repository.js";
 
 const turnId = "turn-stream-test";
 

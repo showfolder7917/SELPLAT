@@ -4,10 +4,10 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { initializeAiMemoryDatabase } from "../../../build/ai-desktop/electron/electron/services/platform/persistence/internal/sqlite-database.js";
+import { initializeAiMemoryDatabase } from "../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-database.js";
 import { EvolutionStateRepository } from "../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.repository.js";
 import { EvolutionStateStore } from "../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
-import { runSqliteTransaction } from "../../../build/ai-desktop/electron/electron/services/platform/persistence/internal/sqlite-transaction.js";
+import { runSqliteTransaction } from "../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-transaction.js";
 import { appRoot, controlledTestRoot } from "./test-paths.mjs";
 
 mkdirSync(controlledTestRoot, { recursive: true });

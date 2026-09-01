@@ -5,17 +5,20 @@ import test from "node:test";
 // 全局模型配置沿用既有托管契约入口，避免为新增覆盖改变固定 npm 测试脚本签名。
 import "./model-settings-contract.test.mjs";
 
-const executor = readFileSync(new URL("../electron/services/capabilities/execution/internal/managed-task.executor.ts", import.meta.url), "utf8");
-const codexService = readFileSync(new URL("../electron/services/platform/codex/codex.facade.ts", import.meta.url), "utf8");
-const codexStreamMapper = readFileSync(new URL("../electron/services/platform/codex/internal/codex-stream-event.mapper.ts", import.meta.url), "utf8");
-const codexRuntime = readFileSync(new URL("../electron/services/platform/codex/internal/codex-runtime.resolver.ts", import.meta.url), "utf8");
-const codexSessionStore = readFileSync(new URL("../electron/services/platform/codex/internal/codex-session.repository.ts", import.meta.url), "utf8");
-const taskWorktreeTestRunner = readFileSync(new URL("../electron/services/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
-const electronMain = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+const executor = readFileSync(new URL("../electron/services/support/capabilities/execution/internal/managed-task.executor.ts", import.meta.url), "utf8");
+const codexService = readFileSync(new URL("../electron/services/support/platform/codex/codex.facade.ts", import.meta.url), "utf8");
+const codexStreamMapper = readFileSync(new URL("../electron/services/support/platform/codex/internal/codex-stream-event.mapper.ts", import.meta.url), "utf8");
+const codexRuntime = readFileSync(new URL("../electron/services/support/platform/codex/internal/codex-runtime.resolver.ts", import.meta.url), "utf8");
+const codexSessionStore = readFileSync(new URL("../electron/services/support/platform/codex/internal/codex-session.repository.ts", import.meta.url), "utf8");
+const taskWorktreeTestRunner = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
+const electronMain = [
+  "../electron/system/bootstrap/application-runtime.ts",
+  "../electron/system/bootstrap/capabilities.bootstrap.ts",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const ipc = [
-  "../electron/ipc/register-desktop-ipc.ts",
-  "../electron/ipc/domains/register-codex-ipc.ts",
-  "../electron/ipc/domains/register-system-ipc.ts",
+  "../electron/system/ipc/register-desktop-ipc.ts",
+  "../electron/system/ipc/domains/register-codex-ipc.ts",
+  "../electron/system/ipc/domains/register-system-ipc.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const chatMessageModel = readFileSync(new URL("../src/features/conversation/model/chat-message.ts", import.meta.url), "utf8");
@@ -29,8 +32,8 @@ test("任务依赖链接只由统一租约释放入口清理", () => {
 const markdownMessage = readFileSync(new URL("../src/variants/developer/MarkdownMessage.tsx", import.meta.url), "utf8");
 const interactionPreload = readFileSync(new URL("./interaction/isolated-preload.cjs", import.meta.url), "utf8");
 const interactionSpec = readFileSync(new URL("./interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
-const audit = readFileSync(new URL("../electron/services/capabilities/event-center/internal/audit/business-audit-log.ts", import.meta.url), "utf8");
-const dispatchStore = readFileSync(new URL("../electron/services/capabilities/conversation/internal/conversation-dispatch.store.ts", import.meta.url), "utf8");
+const audit = readFileSync(new URL("../electron/services/support/capabilities/event-center/internal/audit/business-audit-log.ts", import.meta.url), "utf8");
+const dispatchStore = readFileSync(new URL("../electron/services/support/capabilities/conversation/internal/conversation-dispatch.store.ts", import.meta.url), "utf8");
 
 test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.match(executor, /task-managed/);
@@ -178,7 +181,8 @@ test("AI Desktop 重建后恢复当前线程且用户新建任务时明确删除
 });
 
 test("AI Desktop 使用专属 Codex 数据域且只精准迁移已保存的旧活动线程", () => {
-  assert.match(electronMain, /path\.join\(app\.getPath\("userData"\), "codex-home"\)/);
+  assert.match(electronMain, /userDataRoot: app\.getPath\("userData"\)/);
+  assert.match(electronMain, /path\.join\(options\.userDataRoot, "codex-home"\)/);
   assert.match(electronMain, /mkdirSync\(codexHome, \{ recursive: true \}\)/);
   assert.match(codexService, /childEnvironment\.CODEX_HOME = codexHome/);
   assert.match(codexService, /delete childEnvironment\.CODEX_INTERNAL_ORIGINATOR_OVERRIDE/);

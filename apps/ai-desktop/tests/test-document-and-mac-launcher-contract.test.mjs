@@ -4,23 +4,23 @@ import test from "node:test";
 
 const runner = readFileSync(new URL("../scripts/test-document-runner.mjs", import.meta.url), "utf8");
 const launcher = readFileSync(new URL("../启动开发版.command", import.meta.url), "utf8");
-const appConfig = readFileSync(new URL("../electron/config/app-config.ts", import.meta.url), "utf8");
-const electronMain = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+const appConfig = readFileSync(new URL("../electron/system/config/app-config.ts", import.meta.url), "utf8");
+const electronMain = readFileSync(new URL("../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../electron-builder.developer.json", import.meta.url), "utf8");
 const macVerifier = readFileSync(new URL("../scripts/verify-mac-developer-app.mjs", import.meta.url), "utf8");
 const packagedBootstrap = readFileSync(new URL("../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
 const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
 const developerCss = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
 const conversationCss = readFileSync(new URL("../../../shared/frontend/sel-ui/src/components/conversation/selConversation.css", import.meta.url), "utf8");
-const automaticPreflight = readFileSync(new URL("../electron/services/capabilities/testing/automatic-test-preflight.facade.ts", import.meta.url), "utf8");
-const trustedCommands = readFileSync(new URL("../electron/services/platform/security/internal/trusted-command.store.ts", import.meta.url), "utf8");
+const automaticPreflight = readFileSync(new URL("../electron/services/support/capabilities/testing/automatic-test-preflight.facade.ts", import.meta.url), "utf8");
+const trustedCommands = readFileSync(new URL("../electron/services/support/platform/security/internal/trusted-command.store.ts", import.meta.url), "utf8");
 const preload = [
-  "../electron/preload.cts",
-  "../electron/preload/domains/codex-bridge.cts",
+  "../electron/system/preload/preload.cts",
+  "../electron/system/preload/domains/codex-bridge.cts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const desktopIpc = [
-  "../electron/ipc/register-desktop-ipc.ts",
-  "../electron/ipc/domains/register-codex-ipc.ts",
+  "../electron/system/ipc/register-desktop-ipc.ts",
+  "../electron/system/ipc/domains/register-codex-ipc.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 
 test("共享测试文档使用独占锁、占用身份、心跳和过期恢复", () => {

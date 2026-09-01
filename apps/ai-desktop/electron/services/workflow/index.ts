@@ -1,7 +1,7 @@
 // Workflow 门面是跨人物节点推进、暂停、恢复和人工接管的唯一公开入口。
 export { CollaborationCoordinator as CollaborationWorkflowFacade } from "./collaboration-workflow.facade.js";
 // 会话能力只依赖这些稳定 Workflow Port，不需要看到协调器的内部 Store。
-import type { DatabasePort } from "../platform/persistence/index.js";
+import type { DatabasePort } from "../support/platform/persistence/index.js";
 import { CollaborationDurationLog } from "./internal/collaboration-duration.log.js";
 import { CollaborationStore } from "./internal/collaboration.store.js";
 import { EvolutionFlowOrchestrator } from "./internal/evolution-flow.orchestrator.js";
