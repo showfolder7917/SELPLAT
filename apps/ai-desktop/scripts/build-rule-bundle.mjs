@@ -5,6 +5,7 @@
  * 输出：build/ai-desktop/rule-bundle 下的 manifest.json 与 rules.json。
  * 副作用：只重建该应用的规则构建目录，不修改规则源、客户覆盖或其他应用产物。
  */
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -14,13 +15,30 @@ import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } fro
 import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const projectRoot = resolveSelectedWorkspaceRoot(path.resolve(appRoot, "../.."));
+const sourceProjectRoot = path.resolve(appRoot, "../..");
+const projectRoot = resolveRuleBundleWorkspaceRoot(sourceProjectRoot);
 const resourceRoot = path.join(appRoot, "ruleengine", "rules");
 const sourceManifestPath = path.join(appRoot, "ruleengine", "manifest", "production-rules.json");
 const applicationName = resolveApplicationNameFromSourceRoot(appRoot);
 const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName });
 const outputRoot = path.join(projectPaths.buildRoot, "rule-bundle");
 const safeResourceRoot = `${path.resolve(resourceRoot)}${path.sep}`;
+
+/** 隔离 worktree 构建只在未显式选择工程时从 Git 公共目录取得稳定输出根。 */
+function resolveRuleBundleWorkspaceRoot(candidateRoot) {
+  if (String(process.env.SELPLAT_ROOT || "").trim()) return resolveSelectedWorkspaceRoot(candidateRoot);
+  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: candidateRoot,
+    encoding: "utf8",
+    shell: false,
+  });
+  if (result.error || result.status !== 0) return resolveSelectedWorkspaceRoot(candidateRoot);
+  const workspaceRoot = path.dirname(String(result.stdout || "").trim());
+  if (!existsSync(path.join(workspaceRoot, "settings.gradle")) || !existsSync(path.join(workspaceRoot, "apps", "ai-desktop", "package.json"))) {
+    return resolveSelectedWorkspaceRoot(candidateRoot);
+  }
+  return workspaceRoot;
+}
 
 /** 读取并校验生产白名单；缺失字段必须在构建期阻断，禁止安装态猜测规则。 */
 function readSourceManifest() {
