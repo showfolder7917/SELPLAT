@@ -105,6 +105,15 @@ test("Codex 执行期间仍允许截图、粘贴和排队发送", () => {
   assert.match(developerApp, /待发送 \{queuedSends\.length\}/);
 });
 
+test("截图按钮状态样式绑定真实对话 footer", () => {
+  assert.match(developerCss, /\.selconversation-footer \.screenshot-button \{/);
+  assert.match(developerCss, /\.selconversation-footer \.screenshot-button:hover \{/);
+  assert.match(developerCss, /\.selconversation-footer \.screenshot-button:disabled \{ cursor: wait; opacity: \.45; \}/);
+  assert.doesNotMatch(developerCss, /\.composer-footer \.screenshot-button/);
+  assert.match(developerApp, /className="selconversation-footer"[\s\S]*disabled=\{screenshotBusy\}/);
+  assert.match(developerApp, /className="selconversation-footer"[\s\S]*onScreenshot\(false\)[\s\S]*onScreenshot\(true\)/);
+});
+
 test("官方 requestUserInput 保持原回合等待逐题答案并通过白名单 IPC 回传", () => {
   assert.match(codexService, /#userInputs = new Map<number, CodexUserInputRequestOutDto>/);
   assert.match(codexService, /normalizeUserInputRequest\(id, params\)/);
