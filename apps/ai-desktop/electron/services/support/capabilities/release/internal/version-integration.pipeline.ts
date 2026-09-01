@@ -23,7 +23,8 @@ export interface VersionIntegrationPipelineOptions {
   acquireRelease(request: IntegrationReleaseInDto): Promise<() => void>;
   releaseVersion: string;
   releaseBatches: ReleaseBatchStore;
-  publishRelease(executable: string, releaseBatchId: string): void;
+  loadedRuntimeSha: string | null;
+  publishRelease(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
 }
 
 export interface IntegrationWaitRegistration {
@@ -44,6 +45,7 @@ export class VersionIntegrationPipeline {
   readonly #acquireRelease: VersionIntegrationPipelineOptions["acquireRelease"];
   readonly #releaseVersion: string;
   readonly #releaseBatches: ReleaseBatchStore;
+  readonly #loadedRuntimeSha: string | null;
   readonly #publishRelease: VersionIntegrationPipelineOptions["publishRelease"];
   readonly #waitSpans = new Map<string, string>();
   #running = false;
@@ -58,6 +60,7 @@ export class VersionIntegrationPipeline {
     this.#acquireRelease = options.acquireRelease;
     this.#releaseVersion = options.releaseVersion;
     this.#releaseBatches = options.releaseBatches;
+    this.#loadedRuntimeSha = options.loadedRuntimeSha;
     this.#publishRelease = options.publishRelease;
   }
 
@@ -96,7 +99,10 @@ export class VersionIntegrationPipeline {
   confirmPublishedRestart(): number[] {
     const state = this.#store.state();
     const generations = state.integrationBatches
-      .filter((batch) => batch.state === "verified" && state.tasks.some((task) => task.integrationGeneration === batch.generation && task.state === "awaiting-restart"))
+      .filter((batch) => batch.state === "verified"
+        && Boolean(batch.integrationSha)
+        && batch.integrationSha === this.#loadedRuntimeSha
+        && state.tasks.some((task) => task.integrationGeneration === batch.generation && task.state === "awaiting-restart"))
       .map((batch) => batch.generation);
     for (const generation of generations) {
       const taskIds = state.tasks.filter((task) => task.integrationGeneration === generation && task.state === "awaiting-restart").map((task) => task.taskId);
@@ -132,7 +138,8 @@ export class VersionIntegrationPipeline {
     if (eligible.length === 0) return;
 
     this.#running = true;
-    const generation = state.nextIntegrationGeneration;
+    // 运行态可能在测试数据清空后从 1 重新计数，发布归档才是批次标识不可复用的长期事实。
+    const generation = this.#releaseBatches.nextAvailableGeneration(this.#releaseVersion, state.nextIntegrationGeneration);
     const taskIds = eligible.map((task) => task.taskId);
     const releaseBatchId = `release-${this.#releaseVersion}-g${generation}`;
     let releaseLease: (() => void) | null = null;
@@ -176,7 +183,8 @@ export class VersionIntegrationPipeline {
         actor.memberId,
       );
       this.#store.updateTask(taskIds[0], "integration.batch_frozen", (_first, mutable) => {
-        mutable.nextIntegrationGeneration += 1;
+        // 本轮可能跳过了归档中的旧代次，下一次必须从实际分配代次之后继续。
+        mutable.nextIntegrationGeneration = generation + 1;
         mutable.integrationBatches.push({ generation, taskIds, state: "frozen", createdAt: new Date().toISOString(), completedAt: null, integrationSha: null, failureReason: null, failureKind: null, conflictFiles: [] });
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
           task.state = "queued-integration";
@@ -323,7 +331,9 @@ export class VersionIntegrationPipeline {
       this.schedule();
     }
     // 发布只消费已经归档为 published 的稳定可执行文件，失败批次不会触发受控重启。
-    if (publishedExecutable && releaseDocument?.state === "published") this.#publishRelease(publishedExecutable, releaseBatchId);
+    if (publishedExecutable && releaseDocument?.state === "published" && candidate) {
+      this.#publishRelease(publishedExecutable, releaseBatchId, candidate.candidateSha);
+    }
   }
 }
 

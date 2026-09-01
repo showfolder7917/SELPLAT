@@ -20,6 +20,8 @@ export interface StartupContext {
   readonly projectPaths: ReturnType<typeof resolveApplicationDataPaths>;
   readonly preloadPath: string;
   readonly healthCheckFile: string | null;
+  /** 当前进程实际装载的候选源码提交；发布重启验收必须与批次集成提交一致。 */
+  readonly runtimeSourceSha: string | null;
   readonly workspaces: WorkspaceFacade;
   readonly eventCenter: EventCenterFacade;
   readonly ownsApplicationInstance: boolean;
@@ -69,6 +71,12 @@ export function createStartupContext(): StartupContext {
     ?.slice("--ai-desktop-health-check-file=".length)
     || process.env.AI_DESKTOP_HEALTH_CHECK_FILE
     || null;
+  const runtimeSourceShaArgument = process.argv.find((argument) => argument.startsWith("--ai-desktop-runtime-sha="))
+    ?.slice("--ai-desktop-runtime-sha=".length)
+    || null;
+  const runtimeSourceSha = runtimeSourceShaArgument && /^[0-9a-f]{40,64}$/.test(runtimeSourceShaArgument)
+    ? runtimeSourceShaArgument
+    : null;
 
   return {
     applicationName,
@@ -78,6 +86,7 @@ export function createStartupContext(): StartupContext {
     projectPaths,
     preloadPath: path.join(electronDirectory, "preload", "preload.cjs"),
     healthCheckFile,
+    runtimeSourceSha,
     workspaces,
     eventCenter,
     ownsApplicationInstance,

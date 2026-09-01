@@ -24,13 +24,13 @@ type CapabilityContext = ReturnType<typeof createCapabilityContext>;
 type CoordinatorOptions = ConstructorParameters<typeof CollaborationWorkflowFacade>[0];
 
 export interface CollaborationBootstrapOptions {
-  startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter">;
+  startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter" | "runtimeSourceSha">;
   capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings">;
   linghuSessions: ReturnType<typeof createSqliteCodexSessionRepository>;
   releaseVersion: string;
   readRuleInstructions(): string;
   runUnifiedTests(rootPath: string): Promise<string>;
-  publishRelease(executable: string, releaseBatchId: string): void;
+  publishRelease(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
   onStateChanged: CoordinatorOptions["emitState"];
   onStream: CoordinatorOptions["emitStream"];
 }
@@ -99,6 +99,7 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     acquireRelease: (request) => integrationReleases.acquire(request),
     releaseVersion: options.releaseVersion,
     releaseBatches,
+    loadedRuntimeSha: options.startup.runtimeSourceSha,
     publishRelease: options.publishRelease,
   });
   const collaboration = new CollaborationWorkflowFacade({

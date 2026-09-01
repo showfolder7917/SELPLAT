@@ -39,7 +39,7 @@ load_rule_for_ai_desktop_harness_workspace_permission_or_runtime_lifecycle_chang
 
 <!-- AI Desktop 托管协作、令狐自动恢复和流式状态呈现的独立职责规则。 -->
 AI_DESKTOP_COLLABORATION_AUTOMATION_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md
-<!-- 修改托管阶段、专题任务时间线、多人并行、人工审批、协作回流、令狐自动化或流式进度时直接加载。 -->
+<!-- 修改托管阶段、专题任务时间线、多人并行、人工审批、协作回流、令狐自动化、统一测试重试、运行版本核验、自身引导升级或流式进度时直接加载。 -->
 load_rule_for_ai_desktop_collaboration_managed_stage_or_linghu_automation_change = AI_DESKTOP_COLLABORATION_AUTOMATION_RULES
 
 <!-- AI Desktop 截图捕获、标注、剪贴板图片与临时素材边界的独立职责规则。 -->
@@ -49,5 +49,5 @@ load_rule_for_ai_desktop_screenshot_annotation_clipboard_or_temp_image_change = 
 
 <!-- AI Desktop 人物演化、可见邀请形成的持久一次性确认、SQLite 持久化、自动测试和跨平台发布的独立职责规则。 -->
 AI_DESKTOP_EVOLUTION_PERSISTENCE_RELEASE_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop演化持久化与发布规则.md
-<!-- 修改专题演化、对话确认后一次性完整推进、持久化、自动测试或 Windows/macOS 发布入口时直接加载。 -->
+<!-- 修改专题演化、对话确认后一次性完整推进、人物自身能力升级、引导安装与受控重启、持久化、自动测试或 Windows/macOS 发布入口时直接加载。 -->
 load_rule_for_ai_desktop_evolution_persistence_automatic_test_or_release_change = AI_DESKTOP_EVOLUTION_PERSISTENCE_RELEASE_RULES

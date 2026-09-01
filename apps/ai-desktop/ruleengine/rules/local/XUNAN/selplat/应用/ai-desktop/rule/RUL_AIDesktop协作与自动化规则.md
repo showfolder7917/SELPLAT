@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.119.0
+rule_version = 5.120.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -33,8 +33,8 @@ collaboration_execution_repair_and_test_contract = execution_failure_dispatches_
 linghu_persona_responsibility_contract = fault_investigation_repair_unified_test_and_failed_retest_only + no_regular_distribution_review + nangong_plans_distribution + deterministic_program_conflict_validation
 <!-- 固定人物会话必须通过人物级唯一 writer 队列；等待是可观察的排队事实，不得记为任务失败，释放后沿原任务断点自动继续。 -->
 persona_session_single_writer_contract = one_writer_per_persona + fifo_waiting_without_renderer_block + queued_acquired_released_audit_events + waiting_is_not_failure + release_on_completion_error_and_dispose + resume_original_task_checkpoint
-<!-- 统一测试失败不能只把同一结果重新排队；结构化 verification 失败由令狐在原任务范围内修复并形成新结果，只有真实业务选择才等待人工。 -->
-collaboration_unified_test_repair_contract = task_state_and_structured_failure_kind_before_free_text_classification + test_failed_or_verification_never_business_due_to_quoted_rule_text + in_flight_verification_failure_directly_schedules_linghu_repair_independent_from_proactive_automation_switch + per_task_idempotent_repair_lock + linghu_repairs_original_task_worktree_with_failure_evidence + code_validation_then_new_resultSHA + retry_unified_test + same_fault_max_three_repair_attempts + external_permission_or_genuine_business_choice_only_waits_for_human
+<!-- 统一测试失败不能只把同一结果重新排队；结构化 verification 失败由令狐在原任务范围内修复并形成新结果。重试前必须核对源码、构建产物与实际运行主进程的修复版本；运行编排器尚未加载修复时禁止继续创建候选批次，必须转入可恢复的自身引导升级，只有缺少外部权限或真实业务选择才等待人工。 -->
+collaboration_unified_test_repair_contract = task_state_and_structured_failure_kind_before_free_text_classification + test_failed_or_verification_never_business_due_to_quoted_rule_text + in_flight_verification_failure_directly_schedules_linghu_repair_independent_from_proactive_automation_switch + per_task_idempotent_repair_lock + linghu_repairs_original_task_worktree_with_failure_evidence + code_validation_then_new_resultSHA + pre_retry_source_bundle_and_loaded_process_provenance_check + runtime_missing_repair_sha_blocks_new_candidate_generation + active_orchestrator_fix_enters_persisted_bootstrap_upgrade_checkpoint + no_same_fault_retry_before_runtime_matches_repair_sha + verified_restart_resumes_original_task_checkpoint + same_fault_max_three_repair_attempts + external_permission_or_genuine_business_choice_only_waits_for_human
 <!-- 任务详细默认折叠，折叠标题中的发起人来自任务冻结快照，禁止展示层按任务类型猜测姓名。 -->
 collaboration_task_detail_disclosure_contract = collapsed_by_default + dynamic_persisted_initiator_snapshot_in_summary + no_inferred_display_name
 <!-- 任务托管负责源码修改、静态检查和后台隔离 Electron 交互测试；失败证据进入应用 temp 并最多自动修复复测五轮，完成点固定为代码级验证。 -->

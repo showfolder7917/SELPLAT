@@ -38,6 +38,17 @@ export class ReleaseBatchStore {
     if (document.completedAt) rmSync(runningRoot, { recursive: true, force: true });
   }
 
+  /**
+   * 从当前运行文档与长期归档中避让已经使用的发布批次代次。
+   * 真实传参示例：版本 0.1.1、请求代次 2，历史已有 release-0.1.1-g2 时返回 3。
+   * 返回值只负责分配新的批次标识，不改写历史批次或稳定应用。
+   */
+  nextAvailableGeneration(version: string, requestedGeneration: number): number {
+    let generation = Math.max(1, requestedGeneration);
+    while (this.#hasReleaseBatch(`release-${version}-g${generation}`)) generation += 1;
+    return generation;
+  }
+
   /** 返回归档中明确失败且实际建立过的候选分支；已验证、已发布和无候选分支的准备失败均不进入清理范围。 */
   failedCandidateBranches(): string[] {
     if (!existsSync(this.#archiveRoot)) return [];
@@ -52,5 +63,14 @@ export class ReleaseBatchStore {
       }
     }
     return [...branches].sort();
+  }
+
+  /** 检查运行态或归档中是否已存在同名批次，防止清空运行态后复用历史发布标识。 */
+  #hasReleaseBatch(releaseBatchId: string): boolean {
+    if (existsSync(path.join(this.#runningRoot, releaseBatchId, "发布批次文档.json"))) return true;
+    if (!existsSync(this.#archiveRoot)) return false;
+    return readdirSync(this.#archiveRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .some((month) => existsSync(path.join(this.#archiveRoot, month.name, releaseBatchId, "发布批次文档.json")));
   }
 }

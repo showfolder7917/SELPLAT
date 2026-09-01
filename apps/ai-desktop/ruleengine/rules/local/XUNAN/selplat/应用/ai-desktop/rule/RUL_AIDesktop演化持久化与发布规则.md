@@ -1,7 +1,7 @@
 # AI Desktop 演化、持久化与发布规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.110.0
+rule_version = 5.111.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -70,8 +70,8 @@ han_li_unified_evolution_approval_contract = source_nangong_or_linghu + title_ty
 han_li_source_specific_automatic_approval_contract = independent_nangong_and_linghu_switches_default_off + complete_fact_gate + same_origin_and_type_manual_history + insufficient_fact_or_history_returns_supplement + later_manual_correction_wins
 <!-- Electron 人物工作区的审批、课题和提案输入必须使用当前页面可见编辑器；系统 prompt 不得成为发送 IPC 的前置条件。 -->
 evolution_person_action_input_contract = visible_inline_editor_in_owning_workspace + no_window_prompt_before_ipc + direct_approve_supplement_reject_dispatch_actions + pending_disables_duplicate_submission + local_error_feedback + interaction_test_covers_topic_proposal_manual_decisions_distribution_and_completed_record
-<!-- 所有人物的自身能力升级只依赖登记人物身份和提案归属，禁止按南宫婉、令狐或未来人物姓名分支实现。 -->
-collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow + approval_feedback_target_proposal_or_submitter_capability + explicit_capability_scope + original_submitter_only_revision + immutable_version_and_supersedes_chain + revision_feedback_approval_link + approved_task_target_member_scope_and_approval_audit + modify_own_rule_prompt_workflow_or_implementation + regression_and_integration_completion_record + no_display_name_business_branch
+<!-- 所有人物的自身能力升级只依赖登记人物身份和提案归属，禁止按南宫婉、令狐或未来人物姓名分支实现。自身修改触及当前运行编排器时，必须以批准提交建立可恢复的引导升级检查点，确保源码、构建产物和新主进程版本一致后再恢复原任务；无法取得构建或重启权限时明确等待所有者，禁止让旧进程反复验证尚未加载的修复。 -->
+collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow + approval_feedback_target_proposal_or_submitter_capability + explicit_capability_scope + original_submitter_only_revision + immutable_version_and_supersedes_chain + revision_feedback_approval_link + approved_task_target_member_scope_and_approval_audit + modify_own_rule_prompt_workflow_or_implementation + active_orchestrator_change_requires_approved_sha_bootstrap_install + persist_pre_restart_task_and_recovery_checkpoint + build_from_source_containing_approved_repair_sha + source_bundle_and_loaded_process_provenance_must_match + single_controlled_restart_and_renderer_health_check + failed_activation_rolls_back_last_verified_runtime + successful_activation_resumes_original_task_before_new_candidate_generation + unavailable_build_or_restart_authority_waits_for_owner + regression_and_integration_completion_record + no_display_name_business_branch
 <!-- 令狐持续修正发现的 Bug 方向必须先形成方案；审批通过后返还令狐并携带 proposalId 进入既有持续恢复和测试链。 -->
 linghu_repair_approval_and_return_contract = detected_bug_to_versioned_repair_proposal + no_repair_execution_before_evolution_approval + approved_return_to_linghu_ancestor + initiator_and_preferred_executor_linghu_ancestor + stable_proposalId + existing_recovery_validation_and_unified_test_pipeline
 <!-- 应用源码、缓存、构建、临时控制面、终态审计和用户私密数据必须按公共路径能力分域。 -->

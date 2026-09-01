@@ -11,11 +11,15 @@ export interface ManagedDependencyLease {
   leaseId: string;
   workspaceProjectRoot: string;
   workspaceDesktopRoot: string;
+  /** 本轮租约建立的临时链接；释放时只能回收这些路径，不能删除 Git 已检出的链接。 */
+  temporaryLinkPaths: readonly string[];
   environment: Readonly<{ AI_DESKTOP_DEPENDENCY_LEASE_ID: string }>;
   released: boolean;
 }
 
 const activeDependencyLeases = new Map<string, Map<string, number>>();
+// 同一工作树可由多个校验共享租约，临时链接归工作树所有，不能依赖最后释放的是哪份租约。
+const activeTemporaryLinkPaths = new Map<string, Set<string>>();
 
 /**
  * 主进程为 Git 已登记的隔离工作树签发共享依赖租约；缓存来源只能是同一公共仓库的主工程锁哈希目录。
@@ -38,18 +42,26 @@ export async function acquireManagedDependencyLease(
   const sourceLockPath = path.join(sourceDesktopRoot, "package-lock.json");
   const sourcePaths = resolveApplicationDataPaths({ selplatRoot: resolvedSourceRoot, applicationName });
   const sourceModules = resolveLockSpecificDependencyPaths(sourcePaths.dependencyCacheRoot, readFileSync(sourceLockPath)).nodeModulesRoot;
+  // 候选检出时可能已有受 Git 跟踪的依赖链接；它不属于本轮租约，必须在结束时保留。
+  const existingLinkPaths = new Set(existingIntegrationDependencyLinkPaths(workspaceDesktopRoot));
   const dependencyMode = await ensureIntegrationDependencies(workspaceDesktopRoot, sourceModules, sourceLockPath, npmCacheRoot);
+  const temporaryLinkPaths = existingIntegrationDependencyLinkPaths(workspaceDesktopRoot)
+    .filter((linkPath) => !existingLinkPaths.has(linkPath));
   if (dependencyMode !== "linked") {
-    cleanupIntegrationDependencyLinks(workspaceDesktopRoot);
+    cleanupIntegrationDependencyLinks(workspaceDesktopRoot, temporaryLinkPaths);
     throw new Error("隔离工作树未能挂载主工程共享依赖缓存，拒绝签发租约。");
   }
   const holders = activeDependencyLeases.get(workspaceDesktopRoot) || new Map<string, number>();
   holders.set(safeLeaseId, (holders.get(safeLeaseId) || 0) + 1);
   activeDependencyLeases.set(workspaceDesktopRoot, holders);
+  const ownedLinks = activeTemporaryLinkPaths.get(workspaceDesktopRoot) || new Set<string>();
+  for (const linkPath of temporaryLinkPaths) ownedLinks.add(linkPath);
+  activeTemporaryLinkPaths.set(workspaceDesktopRoot, ownedLinks);
   return {
     leaseId: safeLeaseId,
     workspaceProjectRoot: resolvedWorkspaceRoot,
     workspaceDesktopRoot,
+    temporaryLinkPaths,
     environment: { AI_DESKTOP_DEPENDENCY_LEASE_ID: safeLeaseId },
     released: false,
   };
@@ -65,7 +77,9 @@ export function releaseManagedDependencyLease(lease: ManagedDependencyLease | nu
   else holders?.delete(lease.leaseId);
   if (holders?.size) return;
   activeDependencyLeases.delete(lease.workspaceDesktopRoot);
-  cleanupIntegrationDependencyLinks(lease.workspaceDesktopRoot);
+  const temporaryLinkPaths = activeTemporaryLinkPaths.get(lease.workspaceDesktopRoot) || new Set(lease.temporaryLinkPaths);
+  activeTemporaryLinkPaths.delete(lease.workspaceDesktopRoot);
+  cleanupIntegrationDependencyLinks(lease.workspaceDesktopRoot, [...temporaryLinkPaths]);
 }
 
 /** 集成批次只运行代码级组合检查；正式构建和当前应用重启仍属于用户明确触发的测试托管。 */
@@ -158,12 +172,24 @@ function safeIdentifier(value: string, label: string): string {
   return value;
 }
 
-/** 同时回收应用目录和构建目录的受控链接；真实依赖目录永不删除。 */
-export function cleanupIntegrationDependencyLinks(candidateDesktopRoot: string): void {
-  for (const linkPath of integrationDependencyLinkPaths(candidateDesktopRoot)) {
+/**
+ * 只回收调用方明确证明由本轮租约创建的链接；真实依赖目录和候选检出的链接永不删除。
+ * 不提供候选目录全量链接的默认值，避免新的调用方重新引入无范围清理。
+ */
+export function cleanupIntegrationDependencyLinks(
+  candidateDesktopRoot: string,
+  linkPaths: readonly string[],
+): void {
+  for (const linkPath of linkPaths) {
     const current = lstatSync(linkPath, { throwIfNoEntry: false });
     if (current?.isSymbolicLink()) unlinkSync(linkPath);
   }
+}
+
+/** 返回当前实际存在的符号链接，供租约区分本轮临时链接与候选检出的链接。 */
+function existingIntegrationDependencyLinkPaths(candidateDesktopRoot: string): string[] {
+  return integrationDependencyLinkPaths(candidateDesktopRoot)
+    .filter((linkPath) => lstatSync(linkPath, { throwIfNoEntry: false })?.isSymbolicLink());
 }
 
 function ensureBuildDependencyLink(candidateDesktopRoot: string, dependencyRoot: string): void {

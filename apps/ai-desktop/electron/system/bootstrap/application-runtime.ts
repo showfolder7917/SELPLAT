@@ -11,6 +11,8 @@
  * 本文件负责装配应用模块；Electron 进程入口位于 electron/main.ts。
  */
 
+// Node.js 子进程 API：发布前只读核对 Git 提交与工作区洁净状态，不执行任何修改命令。
+import { execFileSync } from "node:child_process";
 // Node.js 文件系统 API：检查工程、创建运行目录、读取版本以及写健康检查结果。
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 // 跨平台路径 API：避免手写 Windows 或 macOS 的路径分隔符。
@@ -458,9 +460,9 @@ export async function startApplication(): Promise<void> {
       if (!linghuRuntime) throw new Error("令狐运行时尚未初始化，不能执行统一测试。");
       return linghuRuntime.runUnifiedTests(rootPath);
     },
-    publishRelease: (executable, releaseBatchId) => {
-      eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId });
-      app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
+    publishRelease: (executable, releaseBatchId, runtimeSourceSha) => {
+      eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId, runtimeSourceSha });
+      app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer", `--ai-desktop-runtime-sha=${runtimeSourceSha}`] });
       prepareAiMemoryShutdown();
       app.exit(0);
     },
@@ -602,9 +604,10 @@ export async function startApplication(): Promise<void> {
       buildRoot: projectPaths.buildRoot,
       testResources,
       onVerified: (executable) => {
-        // 统一测试成功后重启到已验证程序；先停后台写入者再退出旧进程。
-        eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed", executable });
-        app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer"] });
+        // 统一测试成功后只发布已提交的源码版本，避免新进程无法证明自己实际装载了哪次修复。
+        const runtimeSourceSha = resolveCleanRuntimeSourceSha(projectRoot);
+        eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed", executable, runtimeSourceSha });
+        app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer", `--ai-desktop-runtime-sha=${runtimeSourceSha}`] });
         prepareAiMemoryShutdown();
         app.exit(0);
       },
@@ -773,6 +776,16 @@ export async function startApplication(): Promise<void> {
     mainApplicationWindow = createMainWindow({ preloadPath, rendererRoot, variant, distributionMode, onRendererFailed });
     mainApplicationWindow.once("closed", () => { mainApplicationWindow = null; });
   });
+}
+
+/** 发布包只能绑定当前干净工作区的 HEAD；存在未提交修改时停止重启，防止再次形成无归属版本。 */
+function resolveCleanRuntimeSourceSha(projectRoot: string): string {
+  const environment = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+  const status = execFileSync("git", ["status", "--porcelain"], { cwd: projectRoot, encoding: "utf8", env: environment }).trim();
+  if (status) throw new Error("统一测试已通过，但源码尚未提交；为避免工作区不干净，已停止发布重启。");
+  const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: projectRoot, encoding: "utf8", env: environment }).trim();
+  if (!/^[0-9a-f]{40,64}$/.test(sha)) throw new Error("无法取得已提交源码版本，已停止发布重启。");
+  return sha;
 }
 
 /** 把启动失败送入统一事件中心。 */

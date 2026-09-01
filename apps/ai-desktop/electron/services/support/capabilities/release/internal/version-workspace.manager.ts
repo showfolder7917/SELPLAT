@@ -63,6 +63,16 @@ export class CandidateBranchConflictError extends Error {
   }
 }
 
+export class CandidateWorkspaceDirtyError extends Error {
+  readonly changedFiles: string[];
+
+  constructor(changedFiles: string[]) {
+    super(`集成候选工作区不干净，禁止提升。未归属路径：${changedFiles.join("、") || "Git 未返回路径"}`);
+    this.name = "CandidateWorkspaceDirtyError";
+    this.changedFiles = changedFiles;
+  }
+}
+
 /** 只在应用签发的目录中建立 Git worktree，执行人永不直接修改用户当前工作目录。 */
 export class VersionWorkspaceManager {
   readonly #repositoryRoot: string;
@@ -239,8 +249,8 @@ export class VersionWorkspaceManager {
   }
 
   async promoteIntegrationCandidate(candidate: IntegrationCandidate): Promise<string> {
-    const clean = await this.#git(candidate.rootPath, ["status", "--porcelain"]);
-    if (clean) throw new Error("集成候选工作区不干净，禁止提升。");
+    const changedFiles = splitStatusPorcelain(await this.#gitRaw(candidate.rootPath, ["status", "--porcelain", "-z"]));
+    if (changedFiles.length) throw new CandidateWorkspaceDirtyError(changedFiles);
     await this.#git(this.#repositoryRoot, ["branch", "-f", "codex/collab/integration", candidate.candidateSha]);
     return candidate.candidateSha;
   }
@@ -388,6 +398,18 @@ function safeVersionSegment(value: string): string {
 
 function normalizedFiles(files: string[]): Set<string> { return new Set(files.map(normalizeFile).filter(Boolean)); }
 function normalizeFile(value: string): string { return value.trim().replaceAll("\\", "/").replace(/^\.\//, ""); }
+function splitStatusPorcelain(value: string): string[] {
+  const entries = value.split("\0").filter(Boolean);
+  const files: string[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const status = entry.slice(0, 2);
+    files.push(normalizeFile(entry.slice(3)));
+    // porcelain -z 的重命名/复制记录紧随第二个原始路径；两端都作为未归属证据返回。
+    if ((status.includes("R") || status.includes("C")) && entries[index + 1]) files.push(normalizeFile(entries[++index]));
+  }
+  return [...new Set(files.filter(Boolean))].sort();
+}
 function splitZero(value: string): string[] { return value.split("\0").filter(Boolean); }
 function splitLines(value: string): string[] { return [...new Set(value.split(/\r?\n/).map(normalizeFile).filter(Boolean))].sort(); }
 

@@ -35,6 +35,8 @@ const collaborationContractSource = readFileSync(new URL("../contracts/services/
 const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 const linghuRuntimeSource = readFileSync(new URL("../electron/services/personas/linghu/internal/create-linghu-runtime.ts", import.meta.url), "utf8");
 const integrationVerifierSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
+const startupContextSource = readFileSync(new URL("../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
+const applicationRuntimeSource = readFileSync(new URL("../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
 
 // 测试也经 Platform Port 创建人物 Store，避免用例重新引入文件路径耦合。
@@ -798,6 +800,17 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
   assert.doesNotMatch(collaborationBootstrap, /TestExecutionGate|test-execution-gate/);
 });
 
+test("发布重启携带候选源码提交且只由同一运行版本完成健康验收", () => {
+  assert.match(startupContextSource, /--ai-desktop-runtime-sha=/);
+  assert.match(startupContextSource, /\^\[0-9a-f\]\{40,64\}\$/);
+  assert.match(applicationRuntimeSource, /publishRelease: \(executable, releaseBatchId, runtimeSourceSha\)/);
+  assert.match(applicationRuntimeSource, /`--ai-desktop-runtime-sha=\$\{runtimeSourceSha\}`/);
+  assert.match(applicationRuntimeSource, /resolveCleanRuntimeSourceSha\(projectRoot\)/);
+  assert.match(applicationRuntimeSource, /源码尚未提交/);
+  assert.match(integrationPipelineSource, /batch\.integrationSha === this\.#loadedRuntimeSha/);
+  assert.match(integrationPipelineSource, /publishRelease\(publishedExecutable, releaseBatchId, candidate\.candidateSha\)/);
+});
+
 test("多个真实进程同时集成或发布时全局并发始终为一", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "integration-release-cross-process-"));
   try {
@@ -976,6 +989,21 @@ test("发布归档只把明确失败且建立过候选的分支交给测试清�
     store.write({ ...base, releaseBatchId: "published", state: "published", candidateBranch: "release/0.1.1-rc-g2" });
     store.write({ ...base, releaseBatchId: "prepare-failed", state: "failed", candidateBranch: null, candidateSha: null, failureReason: "candidate not created" });
     assert.deepEqual(store.failedCandidateBranches(), ["release/0.1.1-rc-g1"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("清空运行态后发布批次仍避让历史归档代次", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "release-generation-reuse-"));
+  try {
+    const store = new ReleaseBatchStore(path.join(directory, "running"), path.join(directory, "archive"));
+    store.write({
+      releaseBatchId: "release-0.1.1-g2", version: "0.1.1", generation: 2, state: "failed", initiatorMemberId: "tester",
+      candidateBranch: "release/0.1.1-rc-g2", candidateSha: "sha", localMergeSha: null, executable: null, tasks: [],
+      startedAt: "2026-08-30T00:00:00.000Z", completedAt: "2026-08-30T01:00:00.000Z", failureReason: "historical failure",
+    });
+    assert.equal(store.nextAvailableGeneration("0.1.1", 2), 3);
+    assert.match(integrationPipelineSource, /nextAvailableGeneration\(this\.#releaseVersion, state\.nextIntegrationGeneration\)/);
+    assert.match(integrationPipelineSource, /mutable\.nextIntegrationGeneration = generation \+ 1/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -1482,7 +1510,7 @@ test("集成工作区锁文件一致时自动复用主工作区依赖", async ()
     assert.equal(readFileSync(path.join(candidate, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "utf8"), "ready");
     const buildModules = path.join(directory, "candidate-project", "build", "ai-desktop", "node_modules");
     assert.equal(readFileSync(path.join(buildModules, ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "utf8"), "ready");
-    cleanupIntegrationDependencyLinks(candidate);
+    cleanupIntegrationDependencyLinks(candidate, [path.join(candidate, "node_modules"), buildModules]);
     assert.equal(existsSync(path.join(candidate, "node_modules")), false);
     assert.equal(existsSync(buildModules), false);
   } finally {
@@ -1494,12 +1522,21 @@ test("开发人物工作树通过 Git 登记签发共享依赖租约并在结束
   const repository = mkdtempSync(path.join(controlledTempRoot, "collaboration-dependency-lease-"));
   const worktree = path.join(controlledTempRoot, `collaboration-dependency-lease-worktree-${Date.now()}`);
   const desktopRoot = path.join(repository, "apps", "ai-desktop");
+  const trackedModules = path.join(repository, "tracked-node-modules");
   const lockContent = "managed-shared-lock";
   try {
     mkdirSync(desktopRoot, { recursive: true });
     mkdirSync(path.join(desktopRoot, "scripts"), { recursive: true });
+    mkdirSync(path.join(trackedModules, ".bin"), { recursive: true });
+    mkdirSync(path.join(trackedModules, "electron", "dist"), { recursive: true });
     writeFileSync(path.join(desktopRoot, "package-lock.json"), lockContent, "utf8");
     writeFileSync(path.join(desktopRoot, "package.json"), JSON.stringify({ name: "ai-desktop" }), "utf8");
+    writeFileSync(path.join(trackedModules, ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
+    const electronExecutable = process.platform === "win32" ? "electron.exe" : "Electron";
+    writeFileSync(path.join(trackedModules, "electron", "path.txt"), electronExecutable, "utf8");
+    writeFileSync(path.join(trackedModules, "electron", "dist", electronExecutable), "ready", "utf8");
+    // 模拟候选工作树检出时已有的受跟踪依赖链接，释放租约后必须保持它不被删除。
+    symlinkSync(trackedModules, path.join(desktopRoot, "node_modules"), process.platform === "win32" ? "junction" : "dir");
     writeFileSync(
       path.join(desktopRoot, "scripts", "dependency-cache.mjs"),
       readFileSync(new URL("../scripts/dependency-cache.mjs", import.meta.url), "utf8"),
@@ -1517,14 +1554,13 @@ test("开发人物工作树通过 Git 登记签发共享依赖租约并在结束
     mkdirSync(path.join(sourceModules, ".bin"), { recursive: true });
     mkdirSync(path.join(sourceModules, "electron", "dist"), { recursive: true });
     writeFileSync(path.join(sourceModules, ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
-    const electronExecutable = process.platform === "win32" ? "electron.exe" : "Electron";
     writeFileSync(path.join(sourceModules, "electron", "path.txt"), electronExecutable, "utf8");
     writeFileSync(path.join(sourceModules, "electron", "dist", electronExecutable), "ready", "utf8");
 
     const lease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "executor-song-yu-g1");
     const validationLease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "task-validation-1");
     assert.deepEqual(lease.environment, { AI_DESKTOP_DEPENDENCY_LEASE_ID: "executor-song-yu-g1" });
-    assert.equal(realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), realpathSync(sourceModules));
+    assert.equal(realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), realpathSync(trackedModules));
     const probeModule = pathToFileURL(path.join(worktree, "apps", "ai-desktop", "scripts", "dependency-cache.mjs")).href;
     const probe = JSON.parse(execFileSync(process.execPath, [
       "--input-type=module",
@@ -1535,10 +1571,12 @@ test("开发人物工作树通过 Git 登记签发共享依赖租约并在结束
     assert.equal(probe.cacheProjectRoot, repository);
     assert.equal(probe.dependencyCacheRoot, path.join(repository, "cache", "ai-desktop", "dependencies"));
     assert.equal(probe.dependencyLeaseId, "executor-song-yu-g1");
+    releaseManagedDependencyLease(lease);
+    assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), true);
     releaseManagedDependencyLease(validationLease);
     assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), true);
-    releaseManagedDependencyLease(lease);
-    assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), false);
+    assert.equal(git(worktree, "status", "--porcelain"), "");
+    assert.equal(existsSync(path.join(worktree, "build", "ai-desktop", "node_modules")), false);
     assert.equal(existsSync(sourceModules), true);
   } finally {
     try { git(repository, "worktree", "remove", "--force", worktree); } catch {}
