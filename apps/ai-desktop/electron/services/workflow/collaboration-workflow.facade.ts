@@ -48,6 +48,7 @@ export class CollaborationCoordinator {
   readonly #emitStream: CollaborationCoordinatorOptions["emitStream"];
   readonly #activeTaskRuns = new Set<string>();
   readonly #unifiedTestRepairRuns = new Map<string, Promise<boolean>>();
+  readonly #mergeConflictCorrectionRuns = new Set<string>();
   readonly #waitSpans = new Map<string, string>();
   readonly #heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
   readonly #lastProgressWriteMs = new Map<string, number>();
@@ -65,9 +66,11 @@ export class CollaborationCoordinator {
       options.emitState(state, reason, taskIds);
       // 在途任务的统一测试失败属于协作主流程安全兜底，不依赖令狐“主动巡检”总开关。
       this.#scheduleUnifiedTestRepairs(state);
+      this.#scheduleMergeConflictCorrections(state);
       this.#scheduleExecutionRepairs(state);
     });
     this.#scheduleUnifiedTestRepairs(this.#store.state());
+    this.#scheduleMergeConflictCorrections(this.#store.state());
   }
 
   state(): CollaborationStateOutDto { return this.#store.state(); }
@@ -300,6 +303,25 @@ export class CollaborationCoordinator {
     });
   }
 
+  /** Git 合并冲突是确定的代码修正停点；无需等待主动巡检或人工点击，直接签发令狐修正版。 */
+  #scheduleMergeConflictCorrections(state: CollaborationStateOutDto): void {
+    if (this.#disposed || state.mode !== "collaboration") return;
+    const task = state.tasks.find((candidate) => ["blocked", "recovering"].includes(candidate.state) && candidate.integrationFailure?.kind === "merge-conflict");
+    if (!task || this.#mergeConflictCorrectionRuns.has(task.taskId)) return;
+    this.#mergeConflictCorrectionRuns.add(task.taskId);
+    queueMicrotask(() => {
+      try {
+        if (this.#disposed) return;
+        const current = this.state().tasks.find((candidate) => candidate.taskId === task.taskId);
+        if (!current || !["blocked", "recovering"].includes(current.state) || current.integrationFailure?.kind !== "merge-conflict") return;
+        const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
+        this.continueTask(task.taskId, linghu);
+      } finally {
+        this.#mergeConflictCorrectionRuns.delete(task.taskId);
+      }
+    });
+  }
+
   /** 令狐释放后自动接续最早进入恢复队列的执行故障；等待期间不占用人物状态，也不记为修复失败。 */
   #scheduleExecutionRepairs(state: CollaborationStateOutDto): void {
     if (this.#disposed || state.mode !== "collaboration") return;
@@ -325,10 +347,14 @@ export class CollaborationCoordinator {
     const state = this.state();
     const allWorkers = state.members.filter((member) => member.kind === "worker" && member.enabled && member.state !== "draining" && member.state !== "offline");
     const workers = allWorkers.filter((member) => !ORCHESTRATOR_MEMBER_IDS.has(member.memberId));
+    // 受保护人物只接收显式严格指派的保障任务，且不消耗普通执行人的容量槽位。
+    const protectedTask = state.tasks.find((task) => task.state === "queued-executor" && task.preferredExecutorMemberId && ORCHESTRATOR_MEMBER_IDS.has(task.preferredExecutorMemberId));
+    const protectedExecutor = protectedTask ? allWorkers.find((member) => member.memberId === protectedTask.preferredExecutorMemberId && member.state === "idle") : null;
+    if (protectedTask && protectedExecutor) void this.#beginExecutor(protectedTask.taskId, protectedExecutor.memberId);
     const activeExecutors = workers.filter((member) => member.role === "executor" && member.currentTaskId).length;
     const executorCapacity = Math.max(0, workers.length - activeExecutors);
     if (executorCapacity === 0) return;
-    const queued = state.tasks.filter((task) => task.state === "queued-executor").slice(0, executorCapacity);
+    const queued = state.tasks.filter((task) => task.state === "queued-executor" && !ORCHESTRATOR_MEMBER_IDS.has(task.preferredExecutorMemberId || "")).slice(0, executorCapacity);
     const idle = fairIdleMembers(workers);
     for (const task of queued) {
       const strictPreferredId = task.preferredExecutorMemberId || null;
@@ -560,6 +586,8 @@ export class CollaborationCoordinator {
         const returnsToNangong = Boolean(current.evolutionProposalId && current.evolutionRoundId);
         current.state = returnsToNangong ? "returned-to-nangong" : "ready-for-integration";
         current.phase = "ready";
+        // 新工作区已经形成新结果后，旧候选的冲突证据完成职责，避免下一轮仍把已修正版识别为失败任务。
+        if (current.integrationFailure?.kind === "merge-conflict") current.integrationFailure = null;
         current.finalResult = result.text;
         current.codeVerifiedAt = new Date().toISOString();
         current.completedAt = null;

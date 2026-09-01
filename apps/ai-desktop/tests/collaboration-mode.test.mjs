@@ -1097,7 +1097,53 @@ test("版本冲突恢复签发新修订而不重复集成旧 resultSha", () => {
     assert.equal(next.workerGeneration, 3);
     assert.equal(next.versionWorkspace, null);
     assert.equal(next.recoveryTargetState, "executing");
+    assert.equal(next.preferredExecutorMemberId, "linghu-ancestor");
+    assert.equal(next.currentHandler.displayName, "令狐老祖");
     assert.match(next.flowEvents.at(-1).summary, /禁止重复集成旧 resultSha/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("重启后的恢复态合并冲突不依赖主动巡检或人工点击并自动交给令狐修正", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "merge-conflict-auto-correction-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    store.setMode("collaboration");
+    const submitted = store.submitTask({ title: "自动修正冲突", problemStatement: "主线与任务结果修改同一文件", confirmedIntent: "令狐基于当前主线生成新结果", workspaceState, locale: "zh-CN" });
+    store.updateTask(submitted.taskId, "fixture.merge_conflict", (task, state) => {
+      task.state = "recovering";
+      task.currentPlanVersion = 1;
+      task.plans = [{ version: 1, ownerMemberId: "mo-caihuan", ownerDisplayName: "墨彩环", status: "approved", text: "保留双方有效修改并完成验证", contentHash: "plan", createdAt: new Date().toISOString() }];
+      task.versionWorkspace = { workspaceId: "worktree:old", rootPath: "/old", branchName: "codex/old", baseSha: "old-base", resultSha: "old-result", createdAt: new Date().toISOString(), retiredAt: null };
+      task.blockingReason = "版本候选合并发生冲突";
+      task.integrationFailure = { kind: "merge-conflict", detail: "CONFLICT in shared.ts", conflictFiles: ["shared.ts"], baseSha: "current-main", resultSha: "old-result", generation: 5, occurredAt: new Date().toISOString() };
+      for (const member of state.members.filter((candidate) => candidate.kind === "worker" && !["nangong-wan", "linghu-ancestor"].includes(candidate.memberId))) {
+        member.state = "working";
+        member.role = "executor";
+        member.currentTaskId = `busy-${member.memberId}`;
+      }
+    });
+    const workspace = { workspaceId: "worktree:fresh", rootPath: directory, branchName: "codex/fresh", baseSha: "current-main", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
+    let preparedFor = "";
+    let executedBy = "";
+    const coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: { prepareTask: async (_task, memberId) => { preparedFor = memberId; return workspace; }, resumeTask: async () => { throw new Error("冲突修正禁止复用旧工作区"); }, commitTaskResult: async () => "new-result" },
+      executor: new ExecutorFacade({ createExecutor: async (_task, member) => ({ isAlive: () => true, analyze: async () => { throw new Error("已有方案时不得重新分析原专题"); }, optimize: async () => "", investigateRepair: async () => "", executeRepair: async () => { throw new Error("冲突修正走新工作区执行"); }, execute: async () => { executedBy = member.memberId; return { status: "code-verified", text: "冲突已修正", pendingActions: [], changedFiles: ["shared.ts"], successfulCommands: ["npm test"] }; }, dispose: async () => undefined }) }),
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      emitState: () => undefined,
+      emitStream: () => undefined,
+    });
+    for (let attempt = 0; attempt < 100 && store.task(submitted.taskId).state !== "ready-for-integration"; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    const corrected = store.task(submitted.taskId);
+    assert.equal(preparedFor, "linghu-ancestor");
+    assert.equal(executedBy, "linghu-ancestor");
+    assert.equal(corrected.versionWorkspace.baseSha, "current-main");
+    assert.equal(corrected.versionWorkspace.resultSha, "new-result");
+    assert.equal(corrected.state, "ready-for-integration");
+    assert.equal(corrected.integrationFailure, null);
+    assert.equal(corrected.flowEvents.filter((event) => event.type === "integration.conflict_correction_requested").length, 1);
+    await coordinator.dispose();
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

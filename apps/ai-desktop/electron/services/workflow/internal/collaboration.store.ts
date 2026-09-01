@@ -14,6 +14,8 @@ import type {
 
 type StateListener = (state: CollaborationStateOutDto, reason: string, taskIds: string[]) => void;
 
+const LINGHU_MEMBER_ID = "linghu-ancestor";
+
 const DEFAULT_MEMBERS: ReadonlyArray<{ memberId: string; displayName: string; kind: CollaborationMemberOutDto["kind"] }> = [
   { memberId: "han-li", displayName: "韩立", kind: "conversation-owner" },
   { memberId: "nangong-wan", displayName: "南宫婉", kind: "worker" },
@@ -298,10 +300,14 @@ export class CollaborationStore {
         task.workerGeneration += 1;
         task.state = "queued-executor";
         task.assignmentId = null;
+        // 冲突修正版必须由令狐在当前主线签发的新工作区内完成，禁止重新落回原执行人或复用旧结果。
+        task.executorMemberId = null;
+        task.preferredExecutorMemberId = LINGHU_MEMBER_ID;
+        task.currentHandler = participantSnapshot(requireMember(state, LINGHU_MEMBER_ID));
         task.versionWorkspace = null;
         task.recoveryTargetState = "executing";
         task.phase = null;
-        task.blockingReason = `基于当前主线重新修正冲突文件：${files}`;
+        task.blockingReason = `等待令狐老祖基于当前主线重新修正冲突文件：${files}`;
         const actor = recoveryActor ? participantSnapshot(recoveryActor) : task.initiator;
         task.flowEvents.push({ eventId: randomUUID(), type: "integration.conflict_correction_requested", stage: "recovery", status: "started", actor, summary: `禁止重复集成旧 resultSha；已签发 r${task.taskRevision} 新修正版处理：${files}`, occurredAt: new Date().toISOString(), error: false });
         return;

@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.121.0
+rule_version = 5.122.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -68,7 +68,7 @@ linghu_automation_liveness_contract = explicit_human_switch + default_off + poll
 <!-- 每轮检测必须从协同权威状态生成全部人物非终态任务快照，联合心跳、协议进展和状态时间判断停点，禁止只看活动任务、自动来源或单一耗时。 -->
 linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_only + cancelled_or_integrated_active_pointer_released_before_dispatch + state_phase_executor_generation + heartbeat_protocol_and_state_progress + waiting_point + completion_conditions_and_completed_conditions + blocking_kind + recovery_checkpoint + persisted_detection_cursor
 <!-- 合并冲突是代码修正事实，不得伪装成统一测试失败或对同一提交盲目重试。 -->
-collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort + persist_structured_failure_kind + blocked_requires_current_mainline_correction + continue_increments_task_revision_and_worker_generation + fresh_signed_worktree + reuse_approved_plan + old_resultSHA_never_retried
+collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort + persist_structured_failure_kind + blocked_or_application_restart_recovering_immediately_schedules_linghu_independent_from_proactive_automation_switch_or_human_continue + per_task_idempotent_correction_lock + continue_increments_task_revision_and_worker_generation + strict_preferred_linghu_executor_independent_from_regular_worker_capacity + fresh_current_mainline_signed_worktree + reuse_approved_plan + old_resultSHA_never_retried + business_ambiguity_permission_or_repeated_failure_only_waits_for_human
 <!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，状态阶段、代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
 linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + local_change_ownership_blocks_without_automatic_retry_until_ownership_fact_changes_or_human_continue + missing_task_same_module_replacement + explicit_human_cancel_waits_with_checkpoint
 <!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
