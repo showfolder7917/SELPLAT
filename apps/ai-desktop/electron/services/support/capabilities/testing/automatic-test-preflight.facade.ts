@@ -6,12 +6,12 @@ import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } fro
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
 
 import type {
-  AutomaticTestPreflightCheck,
-  AutomaticTestPreflightResult,
-} from "../../../../../contracts/capabilities/testing/index.js";
-import type { Locale } from "../../../../../contracts/foundation/base.js";
-import type { CodexHarnessStatus } from "../../../../../contracts/platform/codex/index.js";
-import type { WorkspaceState } from "../../../../../contracts/platform/workspace/index.js";
+  AutomaticTestPreflightCheckOutDto,
+  AutomaticTestPreflightResultOutDto,
+} from "../../../../../contracts/services/support/capabilities/testing/index.js";
+import type { LocaleValue } from "../../../../../contracts/foundation/index.js";
+import type { CodexHarnessStatusOutDto } from "../../../../../contracts/services/support/platform/codex/index.js";
+import type { WorkspaceStateOutDto } from "../../../../../contracts/services/support/platform/workspace/index.js";
 import type { CommandGovernanceFacade as TrustedCommandStore } from "../../platform/security/index.js";
 
 const interactionPort = 4197;
@@ -19,15 +19,15 @@ const staleAfterMs = 10 * 60 * 1_000;
 
 interface AutomaticTestPreflightRequest {
   appRoot: string;
-  codexStatus: CodexHarnessStatus;
-  locale: Locale;
+  codexStatus: CodexHarnessStatusOutDto;
+  locale: LocaleValue;
   trustedCommands: TrustedCommandStore;
-  workspaces: WorkspaceState;
+  workspaces: WorkspaceStateOutDto;
 }
 
 /** 开启自动测试前集中检查已知阻断项，并只授权固定共享测试入口。 */
-export async function prepareAutomaticTesting(request: AutomaticTestPreflightRequest): Promise<AutomaticTestPreflightResult> {
-  const checks: AutomaticTestPreflightCheck[] = [];
+export async function prepareAutomaticTesting(request: AutomaticTestPreflightRequest): Promise<AutomaticTestPreflightResultOutDto> {
+  const checks: AutomaticTestPreflightCheckOutDto[] = [];
   checks.push(checkHarness(request.codexStatus, request.locale));
   checks.push(checkWorkspace(request.appRoot, request.workspaces, request.locale));
   checks.push(checkRunner(request.appRoot, request.locale));
@@ -54,7 +54,7 @@ export async function prepareAutomaticTesting(request: AutomaticTestPreflightReq
   };
 }
 
-function checkHarness(status: CodexHarnessStatus, locale: Locale): AutomaticTestPreflightCheck {
+function checkHarness(status: CodexHarnessStatusOutDto, locale: LocaleValue): AutomaticTestPreflightCheckOutDto {
   const passed = status.connected && status.account.authenticated;
   return {
     id: "harness",
@@ -66,7 +66,7 @@ function checkHarness(status: CodexHarnessStatus, locale: Locale): AutomaticTest
   };
 }
 
-function checkWorkspace(appRoot: string, workspaces: WorkspaceState, locale: Locale): AutomaticTestPreflightCheck {
+function checkWorkspace(appRoot: string, workspaces: WorkspaceStateOutDto, locale: LocaleValue): AutomaticTestPreflightCheckOutDto {
   const root = workspaces.roots.find((workspace) => isInside(appRoot, workspace.path));
   const passed = root?.permission === "workspace-write";
   return {
@@ -79,7 +79,7 @@ function checkWorkspace(appRoot: string, workspaces: WorkspaceState, locale: Loc
   };
 }
 
-function checkRunner(appRoot: string, locale: Locale): AutomaticTestPreflightCheck {
+function checkRunner(appRoot: string, locale: LocaleValue): AutomaticTestPreflightCheckOutDto {
   const runnerPath = path.join(appRoot, "scripts", "test-document-runner.mjs");
   const manifestPath = path.join(appRoot, "package.json");
   const projectRoot = path.resolve(appRoot, "../../../..");
@@ -104,7 +104,7 @@ function checkRunner(appRoot: string, locale: Locale): AutomaticTestPreflightChe
   };
 }
 
-function checkLock(appRoot: string, locale: Locale): AutomaticTestPreflightCheck {
+function checkLock(appRoot: string, locale: LocaleValue): AutomaticTestPreflightCheckOutDto {
   const projectRoot = path.resolve(appRoot, "../../../..");
   const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
   const lockPath = path.join(projectPaths.runningTestRoot, "执行锁.json");
@@ -130,7 +130,7 @@ function checkLock(appRoot: string, locale: Locale): AutomaticTestPreflightCheck
   }
 }
 
-async function checkPort(locale: Locale): Promise<AutomaticTestPreflightCheck> {
+async function checkPort(locale: LocaleValue): Promise<AutomaticTestPreflightCheckOutDto> {
   const available = await new Promise<boolean>((resolve) => {
     const server = createServer();
     server.once("error", () => resolve(false));
@@ -160,6 +160,6 @@ function isInside(candidate: string, parent: string): boolean {
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
-function copy(locale: Locale, chinese: string, japanese: string): string {
+function copy(locale: LocaleValue, chinese: string, japanese: string): string {
   return locale === "ja" ? japanese : chinese;
 }

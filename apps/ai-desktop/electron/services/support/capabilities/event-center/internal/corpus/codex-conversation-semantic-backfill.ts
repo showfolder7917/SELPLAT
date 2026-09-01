@@ -2,7 +2,7 @@ import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
-import type { CorpusSemanticBackfillStatus } from "../../../../../../../contracts/platform/persistence/index.js";
+import type { CorpusSemanticBackfillStatusOutDto } from "../../../../../../../contracts/services/support/platform/persistence/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 
 type JsonObject = Record<string, unknown>;
@@ -49,7 +49,7 @@ export class CodexConversationSemanticBackfill {
   readonly #roots: string[];
   readonly #requiredWorkspaceRoot: string;
   readonly #analyzer: CodexSemanticAnalyzer;
-  #status: CorpusSemanticBackfillStatus = idleStatus();
+  #status: CorpusSemanticBackfillStatusOutDto = idleStatus();
   #running: Promise<void> | null = null;
 
   constructor(options: BackfillOptions) {
@@ -59,11 +59,11 @@ export class CodexConversationSemanticBackfill {
     this.#analyzer = options.analyzer;
   }
 
-  status(): CorpusSemanticBackfillStatus {
+  status(): CorpusSemanticBackfillStatusOutDto {
     return { ...this.#status };
   }
 
-  start(requestedLimit?: number): CorpusSemanticBackfillStatus {
+  start(requestedLimit?: number): CorpusSemanticBackfillStatusOutDto {
     if (this.#running) return this.status();
     const limit = normalizeLimit(requestedLimit);
     this.#status = {
@@ -393,7 +393,7 @@ function isPlatformContext(content: string): boolean {
     || content.startsWith("<multi_agent_role>") || content.startsWith("# AGENTS.md instructions");
 }
 
-function idleStatus(): CorpusSemanticBackfillStatus {
+function idleStatus(): CorpusSemanticBackfillStatusOutDto {
   return { state: "idle", targetCount: 0, discoveredCount: 0, processedCount: 0, insertedCount: 0, failedCount: 0, message: null, startedAt: null, completedAt: null };
 }
 

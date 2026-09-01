@@ -1,13 +1,13 @@
-import type { CollaborationMemoryPort } from "../../../../contracts/capabilities/event-center/index.js";
-import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/collaboration/linghu/index.js";
-import type { EvolutionMutationInDto, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../../contracts/collaboration/evolution/index.js";
-import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/collaboration/hanli/index.js";
-import type { CreateNangongTopicInDto, SendNangongConversationMessageInDto } from "../../../../contracts/collaboration/nangong/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/collaboration/workflow/index.js";
-import type { SendMessageResponse } from "../../../../contracts/capabilities/conversation/index.js";
-import type { EventCenterExceptionInput } from "../../../../contracts/governance/workflow.js";
-import type { CollaborationTimelineBusinessEvent } from "../../../../contracts/collaboration/workflow/index.js";
-import type { CodexStreamEvent } from "../../../../contracts/platform/codex/index.js";
+﻿import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/services/personas/linghu/index.js";
+import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchPreferenceOutDto, EvolutionStateOutDto, QueryEvolutionWorkbenchInDto, SaveEvolutionWorkbenchPreferenceInDto } from "../../../../contracts/services/evolution/index.js";
+import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { CreateNangongTopicInDto, SendNangongConversationMessageInDto } from "../../../../contracts/services/personas/nangong/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
+import type { SendMessageOutDto } from "../../../../contracts/services/support/capabilities/conversation/index.js";
+import type { EventCenterExceptionInDto } from "../../../../contracts/governance/index.js";
+import type { CollaborationTimelineBusinessEventOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { CodexStreamEventOutDto } from "../../../../contracts/services/support/platform/codex/index.js";
 import type { CollaborationWorkflowFacade } from "../index.js";
 import { EvolutionFlowOrchestrator } from "./evolution-flow.orchestrator.js";
 import type { HanliWorkflowPort } from "../../personas/hanli/index.js";
@@ -23,20 +23,20 @@ export interface PersonaEvolutionRuntimeOptions {
   collaboration: CollaborationWorkflowFacade;
   hanli: HanliWorkflowPort;
   conversation: {
-    send(request: SendNangongConversationMessageInDto, context: string): Promise<SendMessageResponse>;
+    send(request: SendNangongConversationMessageInDto, context: string): Promise<SendMessageOutDto>;
     newChat(): Promise<void>;
   };
   investigateRevision?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
-  planDistribution?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEvent) => void) => Promise<string>;
+  planDistribution?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEventOutDto) => void) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
-  recordFailure?(input: EventCenterExceptionInput): void;
-  recordTimelineEvent?: (event: CollaborationTimelineBusinessEvent) => void;
-  recordTimelineStream?: (taskId: string, memberId: string, event: CodexStreamEvent) => void;
+  recordFailure?(input: EventCenterExceptionInDto): void;
+  recordTimelineEvent?: (event: CollaborationTimelineBusinessEventOutDto) => void;
+  recordTimelineStream?: (taskId: string, memberId: string, event: CodexStreamEventOutDto) => void;
   memory?: CollaborationMemoryPort | null;
-  readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossier;
-  queryWorkbench?: (request: QueryEvolutionWorkbenchRequest) => EvolutionWorkbenchPage;
-  getWorkbenchPreference?: (perspective: "nangong" | "hanli", nodeId: string) => EvolutionWorkbenchPreference | null;
-  saveWorkbenchPreference?: (request: SaveEvolutionWorkbenchPreferenceRequest) => EvolutionWorkbenchPreference;
+  readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossierOutDto;
+  queryWorkbench?: (request: QueryEvolutionWorkbenchInDto) => EvolutionWorkbenchPageOutDto;
+  getWorkbenchPreference?: (perspective: "nangong" | "hanli", nodeId: string) => EvolutionWorkbenchPreferenceOutDto | null;
+  saveWorkbenchPreference?: (request: SaveEvolutionWorkbenchPreferenceInDto) => EvolutionWorkbenchPreferenceOutDto;
   beginMutation?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";
   completeMutation?: (idempotencyKey: string, resultStateVersion: string) => void;
   failMutation?: (idempotencyKey: string, error: unknown) => void;
@@ -135,7 +135,7 @@ export class PersonaEvolutionRuntime {
   state(): EvolutionStateOutDto { return this.#store.state(); }
 
   /** 按专题读取来源、研讨、提案和执行档案；数据库读模型不可用时使用当前状态安全降级。 */
-  dossier(topicId: string): EvolutionTopicDossier {
+  dossier(topicId: string): EvolutionTopicDossierOutDto {
     const state = this.state();
     if (this.#readDossier) return this.#readDossier(topicId, state);
     const topic = state.topics.find((item) => item.topicId === topicId);
@@ -144,15 +144,15 @@ export class PersonaEvolutionRuntime {
     return { topic, deliberation, proposals: state.proposals.filter((item) => item.topicId === topicId), archiveRecords: state.archiveRecords.filter((item) => item.topicId === topicId || item.deliberationId === topic.deliberationId), executionRecords: [] };
   }
   /** 查询演化工作台一页数据；数据库不可用时阻止返回不完整的伪结果。 */
-  queryWorkbench(request: QueryEvolutionWorkbenchRequest): EvolutionWorkbenchPage {
+  queryWorkbench(request: QueryEvolutionWorkbenchInDto): EvolutionWorkbenchPageOutDto {
     if (!this.#queryWorkbench) throw new Error("专题演化数据库读模型不可用，请检查数据库初始化状态。");
     return this.#queryWorkbench(request);
   }
   /** 读取指定人物和树节点的显示偏好；未保存时返回 null。 */
-  getWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): EvolutionWorkbenchPreference | null { return this.#getWorkbenchPreference?.(perspective, nodeId) || null; }
+  getWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): EvolutionWorkbenchPreferenceOutDto | null { return this.#getWorkbenchPreference?.(perspective, nodeId) || null; }
 
   /** 保存分页或展开偏好；持久化不可用时明确失败，不只更新当前页面内存。 */
-  saveWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceRequest): EvolutionWorkbenchPreference {
+  saveWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceInDto): EvolutionWorkbenchPreferenceOutDto {
     if (!this.#saveWorkbenchPreference) throw new Error("专题演化视图偏好数据库不可用。");
     return this.#saveWorkbenchPreference(request);
   }
@@ -422,7 +422,7 @@ export class PersonaEvolutionRuntime {
   }
 }
 
-function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposal { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposalOutDto { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
 
 /** 运行中人物以任务当前阶段的权威成员 ID 为准，不能让上一阶段遗留的 currentHandler 覆盖真实执行者。 */
 function taskOwnerName(state: ReturnType<CollaborationWorkflowFacade["state"]>, task: ReturnType<CollaborationWorkflowFacade["state"]>["tasks"][number]): string {

@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { ResolvedRuntimeRule, RuleBundleStatus, RuntimeRule, RuntimeRuleSource } from "../../../../../contracts/capabilities/rules/index.js";
+import type { ResolvedRuntimeRuleOutDto, RuleBundleStatusOutDto, RuntimeRuleOutDto, RuntimeRuleSourceValue } from "../../../../../contracts/services/support/capabilities/rules/index.js";
 import { decideRuleOverlay } from "../../../../system/policies/rule-overlay-policy.js";
 
 const MAX_RULE_CONTENT_BYTES = 512 * 1024;
@@ -46,7 +46,7 @@ interface CustomerOverlayRecord {
 export class RuleBundleService {
   readonly #builtinRoot: string;
   readonly #overlayRoot: string;
-  readonly #rules = new Map<string, RuntimeRule>();
+  readonly #rules = new Map<string, RuntimeRuleOutDto>();
   readonly #builtinIds = new Set<string>();
   readonly #overriddenIds = new Set<string>();
   readonly #diagnostics: string[] = [];
@@ -63,7 +63,7 @@ export class RuleBundleService {
   }
 
   /** 返回规则包健康摘要；不暴露客户覆盖目录的绝对路径。 */
-  status(): RuleBundleStatus {
+  status(): RuleBundleStatusOutDto {
     const state = !this.#builtinAvailable
       ? "unavailable"
       : this.#rejectedOverlayCount > 0 ? "degraded" : "ready";
@@ -79,17 +79,17 @@ export class RuleBundleService {
   }
 
   /** 按逻辑 ID 排序返回有效规则副本，避免调用方修改主进程内的规则快照。 */
-  listEffectiveRules(): RuntimeRule[] {
+  listEffectiveRules(): RuntimeRuleOutDto[] {
     return [...this.#rules.values()]
       .sort((left, right) => left.logicalId.localeCompare(right.logicalId))
       .map((rule) => ({ ...rule }));
   }
 
   /** 查询一个稳定逻辑 ID；未知 ID 返回 `rule: null`，不扫描目录猜测规则。 */
-  resolve(logicalId: string): ResolvedRuntimeRule {
+  resolve(logicalId: string): ResolvedRuntimeRuleOutDto {
     if (!LOGICAL_ID_PATTERN.test(logicalId)) throw new Error("规则逻辑 ID 格式无效。");
     const rule = this.#rules.get(logicalId);
-    const appliedSources: RuntimeRuleSource[] = rule
+    const appliedSources: RuntimeRuleSourceValue[] = rule
       ? ["builtin", ...(rule.source === "customer-overlay" ? ["customer-overlay" as const] : [])]
       : [];
     return {

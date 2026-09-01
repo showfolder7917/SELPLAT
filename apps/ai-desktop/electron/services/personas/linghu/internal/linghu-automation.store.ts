@@ -1,4 +1,4 @@
-// UUID 只用于新建启动文案，避免标题重复时发生覆盖。
+﻿// UUID 只用于新建启动文案，避免标题重复时发生覆盖。
 import { randomUUID } from "node:crypto";
 // 人物状态只依赖 Platform 提供的持久化 Port，不读取路径或调用 Node 文件系统。
 import type { AtomicJsonPersistencePort } from "../../../support/platform/persistence/index.js";
@@ -6,17 +6,17 @@ import type { AtomicJsonPersistencePort } from "../../../support/platform/persis
 // Store 只读取令狐协议类型，具体状态变化仍由本目录的业务实现负责。
 import type {
   CreateLinghuStartupPromptInDto,
-  LinghuAutomationModuleOutDto,
+  LinghuAutomationModuleValue,
   LinghuAutomationStateEventOutDto,
   LinghuAutomationStateOutDto,
   UpdateLinghuStartupPromptInDto,
-} from "../../../../../contracts/collaboration/linghu/index.js";
+} from "../../../../../contracts/services/personas/linghu/index.js";
 
 // 监听器只接收提交后的完整快照，不能在回调中修改 Store 内部状态。
 type StateListener = (event: LinghuAutomationStateEventOutDto) => void;
 
 // 三个模块的稳定顺序同时被 Facade 和只读分析模块使用。
-export const LINGHU_AUTOMATION_MODULES: readonly LinghuAutomationModuleOutDto[] = [
+export const LINGHU_AUTOMATION_MODULES: readonly LinghuAutomationModuleValue[] = [
   "flow-completion",
   "test-coverage",
   "audit-completeness",

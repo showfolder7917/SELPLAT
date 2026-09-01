@@ -1,13 +1,13 @@
-import type { CollaborationStateOutDto } from "../../../../contracts/collaboration/workflow/index.js";
-import type { WorkflowExceptionRecord, WorkflowStateReaders } from "../../../../contracts/governance/workflow.js";
+import type { CollaborationStateOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { WorkflowExceptionRecordOutDto, WorkflowStateReaderPort } from "../../../../contracts/governance/index.js";
 import type { WorkflowRepository } from "./workflow.repository.js";
 
 export interface WorkflowSupervisorOptions {
   repository: WorkflowRepository;
-  readers: WorkflowStateReaders;
+  readers: WorkflowStateReaderPort;
   projectCollaborationTimeline(state: CollaborationStateOutDto): void;
   onStalledTasks(taskIds: string[]): void | Promise<void>;
-  onUnhandledExceptions?(events: WorkflowExceptionRecord[]): void | Promise<void>;
+  onUnhandledExceptions?(events: WorkflowExceptionRecordOutDto[]): void | Promise<void>;
   intervalMs?: number;
   now?: () => Date;
 }
@@ -15,7 +15,7 @@ export interface WorkflowSupervisorOptions {
 /** 独立于任何人物任务的主进程监督器；同步全流程快照、运行心跳并把无进展任务交给令狐入口。 */
 export class WorkflowSupervisor {
   readonly #repository: WorkflowRepository;
-  readonly #readers: WorkflowStateReaders;
+  readonly #readers: WorkflowStateReaderPort;
   readonly #projectCollaborationTimeline: WorkflowSupervisorOptions["projectCollaborationTimeline"];
   readonly #onStalledTasks: WorkflowSupervisorOptions["onStalledTasks"];
   readonly #onUnhandledExceptions: WorkflowSupervisorOptions["onUnhandledExceptions"];

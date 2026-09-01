@@ -1,8 +1,8 @@
-import type { CollaborationMemoryPort } from "../../../../../contracts/capabilities/event-center/index.js";
-import type { SendMessageResponse } from "../../../../../contracts/capabilities/conversation/index.js";
-import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
-import type { SendNangongConversationMessageInDto } from "../../../../../contracts/collaboration/nangong/index.js";
-import type { EventCenterExceptionInput } from "../../../../../contracts/governance/workflow.js";
+import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
+import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { SendNangongConversationMessageInDto } from "../../../../../contracts/services/personas/nangong/index.js";
+import type { EventCenterExceptionInDto } from "../../../../../contracts/governance/index.js";
 import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
 
 /** 南宫向韩立申请提案审查的唯一跨人物端口；审批事实仍由韩立模块写入。 */
@@ -32,13 +32,13 @@ export interface NangongApplicationServiceOptions {
   store: EvolutionStatePort;
   mutations: EvolutionMutationPort;
   conversation: {
-    send(request: SendNangongConversationMessageInDto, context: string): Promise<SendMessageResponse>;
+    send(request: SendNangongConversationMessageInDto, context: string): Promise<SendMessageOutDto>;
     newChat(): Promise<void>;
   };
   memory?: CollaborationMemoryPort | null;
   investigateRevision?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
-  recordFailure?(input: EventCenterExceptionInput): void;
+  recordFailure?(input: EventCenterExceptionInDto): void;
   proposalReview: NangongProposalReviewPort;
   memberDirectory: NangongMemberDirectoryPort;
   oneShotWorkflow: NangongOneShotWorkflowPort;

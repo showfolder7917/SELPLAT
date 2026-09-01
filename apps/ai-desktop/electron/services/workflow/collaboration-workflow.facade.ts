@@ -1,21 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import type {
-  CollaborationMember,
-  CollaborationParticipantSnapshot,
-  CollaborationFlowEventDetails,
-  CollaborationRepairDiagnosis,
-  CollaborationRequirementPlan,
+  CollaborationMemberOutDto,
+  CollaborationParticipantSnapshotOutDto,
+  CollaborationFlowEventDetailsOutDto,
+  CollaborationRepairDiagnosisOutDto,
+  CollaborationRequirementPlanOutDto,
   CollaborationStateOutDto,
-  CollaborationTask,
-  CollaborationWorkerPhase,
+  CollaborationTaskOutDto,
+  CollaborationWorkerPhaseValue,
   CreateCollaborationMemberInDto,
-  DesktopOperatingMode,
+  DesktopOperatingModeValue,
   SubmitCollaborationTaskInDto,
   UpdateCollaborationMemberInDto,
-} from "../../../contracts/collaboration/workflow/index.js";
-import type { CodexStreamEvent } from "../../../contracts/platform/codex/index.js";
-import type { ExecutorSessionPort } from "../../../contracts/collaboration/executor/index.js";
+} from "../../../contracts/services/workflow/index.js";
+import type { CodexStreamEventOutDto } from "../../../contracts/services/support/platform/codex/index.js";
+import type { ExecutorSessionPort } from "../../../contracts/services/personas/executor/index.js";
 import { CollaborationDurationLog } from "./internal/collaboration-duration.log.js";
 import { CollaborationStore } from "./internal/collaboration.store.js";
 import type {
@@ -35,7 +35,7 @@ export interface CollaborationCoordinatorOptions {
   executor: ExecutorFacade;
   integrationPipeline: VersionIntegrationPipeline;
   emitState(state: CollaborationStateOutDto, reason: string, taskIds: string[]): void;
-  emitStream(taskId: string, memberId: string, event: CodexStreamEvent): void;
+  emitStream(taskId: string, memberId: string, event: CodexStreamEventOutDto): void;
 }
 
 /** 编排执行人的技术分析、实施、令狐验证和集成，业务方向审批由韩立专题线路负责。 */
@@ -71,7 +71,7 @@ export class CollaborationCoordinator {
   }
 
   state(): CollaborationStateOutDto { return this.#store.state(); }
-  setMode(mode: DesktopOperatingMode): CollaborationStateOutDto { return this.#store.setMode(mode); }
+  setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto { return this.#store.setMode(mode); }
   selectMember(memberId: string): CollaborationStateOutDto { return this.#store.selectMember(memberId); }
   createMember(request: CreateCollaborationMemberInDto): CollaborationStateOutDto { return this.#store.createMember(request); }
   updateMember(memberId: string, request: UpdateCollaborationMemberInDto): CollaborationStateOutDto { return this.#store.updateMember(memberId, request); }
@@ -86,7 +86,7 @@ export class CollaborationCoordinator {
     return this.state();
   }
 
-  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMember, "memberId" | "displayName">): CollaborationStateOutDto {
+  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto {
     const state = this.#store.continueTask(taskId, recoveryActor);
     const previousWait = this.#waitSpans.get(taskId);
     if (previousWait) this.#durations.finish(previousWait, "interrupted", { releaseEvent: "task.recovery_requested" });
@@ -435,7 +435,7 @@ export class CollaborationCoordinator {
     const span = this.#durations.start(taskId, segment, { memberId, planVersion: task.currentPlanVersion + 1 });
     this.#setTaskAndMemberPhase(taskId, "analyzing", "analyzing");
     try {
-      const emit = (event: CodexStreamEvent) => {
+      const emit = (event: CodexStreamEventOutDto) => {
         try { this.#assertExecutorLease(taskId, memberId, assignmentId, workerGeneration); }
         catch { return; }
         this.#touchProtocolProgress(taskId, memberId);
@@ -450,7 +450,7 @@ export class CollaborationCoordinator {
       };
       const text = await this.#executor.analyze(task, emit);
       this.#assertExecutorLease(taskId, memberId, assignmentId, workerGeneration);
-      const plan: CollaborationRequirementPlan = {
+      const plan: CollaborationRequirementPlanOutDto = {
         version: task.currentPlanVersion + 1,
         ownerMemberId: memberId,
         ownerDisplayName: requireMember(this.state(), memberId).displayName,
@@ -723,7 +723,7 @@ export class CollaborationCoordinator {
     });
   }
 
-  #setTaskAndMemberPhase(taskId: string, stateValue: CollaborationTask["state"], phase: Exclude<CollaborationWorkerPhase, null>): void {
+  #setTaskAndMemberPhase(taskId: string, stateValue: CollaborationTaskOutDto["state"], phase: Exclude<CollaborationWorkerPhaseValue, null>): void {
     this.#store.updateTask(taskId, "worker.phase_changed", (task, state) => {
       const phaseChanged = task.phase !== phase;
       task.state = stateValue;
@@ -826,7 +826,7 @@ export class CollaborationCoordinator {
   }
 }
 
-function fairIdleMembers(members: CollaborationMember[]): CollaborationMember[] {
+function fairIdleMembers(members: CollaborationMemberOutDto[]): CollaborationMemberOutDto[] {
   return members.map((member) => ({ member, tieBreaker: Math.random() })).sort((left, right) => {
     const leftTime = left.member.lastAssignedAt ? Date.parse(left.member.lastAssignedAt) : 0;
     const rightTime = right.member.lastAssignedAt ? Date.parse(right.member.lastAssignedAt) : 0;
@@ -835,13 +835,13 @@ function fairIdleMembers(members: CollaborationMember[]): CollaborationMember[] 
   }).map((entry) => entry.member);
 }
 
-function requireMember(state: CollaborationStateOutDto, memberId: string): CollaborationMember {
+function requireMember(state: CollaborationStateOutDto, memberId: string): CollaborationMemberOutDto {
   const member = state.members.find((candidate) => candidate.memberId === memberId);
   if (!member) throw new Error("协同人物不存在。");
   return member;
 }
 
-function participantSnapshot(member: Pick<CollaborationMember, "memberId" | "displayName">): { memberId: string; displayName: string } {
+function participantSnapshot(member: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): { memberId: string; displayName: string } {
   return { memberId: member.memberId, displayName: member.displayName };
 }
 
@@ -856,14 +856,14 @@ function normalizeChangedFiles(files: string[]): string[] {
 
 /** 流程事件只记录可审计业务事实，不复制原始推理或认证信息。 */
 function appendFlow(
-  task: CollaborationTask,
-  type: CollaborationTask["flowEvents"][number]["type"],
-  stage: CollaborationTask["flowEvents"][number]["stage"],
-  status: CollaborationTask["flowEvents"][number]["status"],
+  task: CollaborationTaskOutDto,
+  type: CollaborationTaskOutDto["flowEvents"][number]["type"],
+  stage: CollaborationTaskOutDto["flowEvents"][number]["stage"],
+  status: CollaborationTaskOutDto["flowEvents"][number]["status"],
   summary: string,
-  actor: Pick<CollaborationMember, "memberId" | "displayName"> | { memberId: string; displayName: string } | null,
+  actor: Pick<CollaborationMemberOutDto, "memberId" | "displayName"> | { memberId: string; displayName: string } | null,
   error = false,
-  details: CollaborationFlowEventDetails | null = null,
+  details: CollaborationFlowEventDetailsOutDto | null = null,
 ): void {
   task.flowEvents.push({
     eventId: randomUUID(),
@@ -879,11 +879,11 @@ function appendFlow(
 }
 
 function repairDiagnosis(
-  task: CollaborationTask,
+  task: CollaborationTaskOutDto,
   repairInstruction: string,
   failureSummary: string,
-  diagnosedBy: CollaborationParticipantSnapshot,
-): CollaborationRepairDiagnosis {
+  diagnosedBy: CollaborationParticipantSnapshotOutDto,
+): CollaborationRepairDiagnosisOutDto {
   return {
     diagnosedAt: new Date().toISOString(), diagnosedBy, failureStage: task.integrationFailure?.phase || task.phase || "execution",
     failureSummary, technicalEvidence: [task.integrationFailure?.detail, task.repairFailureReason, task.blockingReason].filter((value): value is string => Boolean(value)),
@@ -891,7 +891,7 @@ function repairDiagnosis(
   };
 }
 
-function flowRepairDetails(task: CollaborationTask, diagnosis: CollaborationRepairDiagnosis, repairResult?: string): CollaborationFlowEventDetails {
+function flowRepairDetails(task: CollaborationTaskOutDto, diagnosis: CollaborationRepairDiagnosisOutDto, repairResult?: string): CollaborationFlowEventDetailsOutDto {
   return {
     failureStage: diagnosis.failureStage, failureSummary: diagnosis.failureSummary, technicalEvidence: diagnosis.technicalEvidence,
     originalExecutor: diagnosis.originalExecutor, routedBy: task.initiator, repairAssignee: diagnosis.diagnosedBy,
@@ -899,8 +899,8 @@ function flowRepairDetails(task: CollaborationTask, diagnosis: CollaborationRepa
   };
 }
 
-function phaseLabel(phase: Exclude<CollaborationWorkerPhase, null>): string {
-  const labels: Record<Exclude<CollaborationWorkerPhase, null>, string> = {
+function phaseLabel(phase: Exclude<CollaborationWorkerPhaseValue, null>): string {
+  const labels: Record<Exclude<CollaborationWorkerPhaseValue, null>, string> = {
     analyzing: "正在分析需求",
     planning: "正在整理方案",
     implementing: "正在执行修改",
@@ -962,7 +962,7 @@ function releaseMemberFromState(state: CollaborationStateOutDto, memberId: strin
   target.updatedAt = new Date().toISOString();
 }
 
-function phaseFromStreamEvent(event: CodexStreamEvent): Exclude<CollaborationWorkerPhase, null> | null {
+function phaseFromStreamEvent(event: CodexStreamEventOutDto): Exclude<CollaborationWorkerPhaseValue, null> | null {
   if (event.type === "managed-execution" && event.managedExecution?.stage === "code-validation") return "verifying";
   if (event.type === "managed-execution" && event.managedExecution?.stage === "interaction-validation") return "verifying";
   if (event.type === "activity" && event.activity?.itemType === "fileChange") return "implementing";

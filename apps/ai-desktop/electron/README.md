@@ -226,7 +226,7 @@ services/support/platform/<domain>/index.ts
 ### 修改页面到主进程的调用
 
 ```text
-contracts/desktop
+contracts/system/desktop
 → system/preload/domains
 → system/ipc/domains
 → services 公开 Facade

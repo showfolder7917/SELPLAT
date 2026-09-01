@@ -2,7 +2,7 @@
  * 旧人物页四阶段进度模型，仅供人物页和会话回退视图继续读取。
  * @deprecated 新任务协作群统一消费主进程 CollaborationTimelineSnapshotOutDto；稳定后单独删除本实现。
  */
-import type { CollaborationMember, CollaborationTask, LinghuAutomationStateOutDto, Locale } from "../../../../contracts/desktop/desktop";
+import type { CollaborationMemberOutDto, CollaborationTaskOutDto, LinghuAutomationStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
 
 // 人物页固定展示五个业务环节；审批在协作任务创建前已完成，因此进入任务页时通常已经是完成态。
 export type CollaborationProgressStageId = "intent" | "approval" | "execution" | "repair" | "unified-test";
@@ -35,7 +35,7 @@ const STAGE_IDS: CollaborationProgressStageId[] = ["intent", "approval", "execut
 
 /** 流式内容到达时先冻结所属环节，后续状态推进不能把旧报告迁移到新的当前卡点。 */
 export function deriveCollaborationTaskCurrentStage(
-  task: CollaborationTask,
+  task: CollaborationTaskOutDto,
   automation: LinghuAutomationStateOutDto | null,
 ): CollaborationProgressStageId {
   const automationOwnsTask = automation?.activeTaskId === task.taskId;
@@ -57,10 +57,10 @@ export function deriveCollaborationTaskCurrentStage(
 
 /** 把持久化的任务事实收敛成唯一页面进度，避免各卡片分别猜测当前负责人和流程位置。 */
 export function deriveCollaborationTaskProgress(
-  task: CollaborationTask,
-  member: CollaborationMember,
+  task: CollaborationTaskOutDto,
+  member: CollaborationMemberOutDto,
   automation: LinghuAutomationStateOutDto | null,
-  locale: Locale,
+  locale: LocaleValue,
 ): CollaborationTaskProgress {
   const isJapanese = locale === "ja";
   const currentPlan = task.plans.find((plan) => plan.version === task.currentPlanVersion) || task.plans.at(-1);
@@ -122,7 +122,7 @@ export function deriveCollaborationTaskProgress(
   };
 }
 
-function currentAction(task: CollaborationTask, stage: CollaborationProgressStageId, automation: LinghuAutomationStateOutDto | null, ja: boolean): string {
+function currentAction(task: CollaborationTaskOutDto, stage: CollaborationProgressStageId, automation: LinghuAutomationStateOutDto | null, ja: boolean): string {
   if (stage === "unified-test") {
     if (task.state === "integrated") return ja ? "統合テスト完了" : "统一测试已通过";
     if (task.state === "test-failed") return ja ? "統合テスト失敗を修正中" : "正在修复统一测试失败";
@@ -149,7 +149,7 @@ function currentAction(task: CollaborationTask, stage: CollaborationProgressStag
   return ja ? "要件と証拠を分析中" : "正在分析意图与问题证据";
 }
 
-function nextDestination(task: CollaborationTask, stage: CollaborationProgressStageId, executor: string, member: string, ja: boolean) {
+function nextDestination(task: CollaborationTaskOutDto, stage: CollaborationProgressStageId, executor: string, member: string, ja: boolean) {
   if (task.state === "integrated") return { owner: ja ? "完了" : "已完成", action: ja ? "次のタスクを待機" : "等待下一项任务" };
   if (task.state === "cancelled") return { owner: ja ? "担当者" : "人工处理", action: ja ? "再開判断待ち" : "等待是否恢复任务" };
   if (stage === "intent") return { owner: task.sourceEvolutionApprovalId ? "韩立" : executor, action: task.sourceEvolutionApprovalId ? (ja ? "方向を承認" : "审批执行方向") : (ja ? "技術分析に沿って実行" : "按技术分析直接执行") };

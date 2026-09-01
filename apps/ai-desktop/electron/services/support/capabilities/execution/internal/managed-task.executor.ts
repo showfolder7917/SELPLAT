@@ -1,27 +1,27 @@
 import type {
-  CodexStreamActivity,
-  CodexStreamEvent,
-  ManagedExecutionUpdate,
-} from "../../../../../../contracts/platform/codex/index.js";
-import type { ManagedExecutionMode } from "../../../../../../contracts/foundation/base.js";
-import type { SendMessageResponse } from "../../../../../../contracts/capabilities/conversation/index.js";
+  CodexStreamActivityOutDto,
+  CodexStreamEventOutDto,
+  ManagedExecutionUpdateEventOutDto,
+} from "../../../../../../contracts/services/support/platform/codex/index.js";
+import type { ManagedExecutionModeValue } from "../../../../../../contracts/foundation/index.js";
+import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 
 type RunTurn = (
   message: string,
-  onEvent: (event: CodexStreamEvent) => void,
-  mode: ManagedExecutionMode,
-) => Promise<SendMessageResponse>;
+  onEvent: (event: CodexStreamEventOutDto) => void,
+  mode: ManagedExecutionModeValue,
+) => Promise<SendMessageOutDto>;
 
 export interface ManagedExecutionRequest {
-  mode: ManagedExecutionMode;
+  mode: ManagedExecutionModeValue;
   message: string;
   restartRequired: boolean;
   runTurn: RunTurn;
-  runCodeValidation?: (emit: (event: CodexStreamEvent) => void) => Promise<void>;
-  emit(event: CodexStreamEvent): void;
+  runCodeValidation?: (emit: (event: CodexStreamEventOutDto) => void) => Promise<void>;
+  emit(event: CodexStreamEventOutDto): void;
 }
 
-export interface ManagedExecutionResult extends SendMessageResponse {
+export interface ManagedExecutionResult extends SendMessageOutDto {
   managedStatus: "conversation-ready" | "requirement-ready" | "code-verified" | "test-verified" | "incomplete";
   pendingActions: string[];
   restartRequired: boolean;
@@ -60,7 +60,7 @@ export class ManagedTaskExecutor {
 
   async #runTask(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
     const evidence = new ExecutionEvidence();
-    let response: SendMessageResponse = { text: "", itemCount: 0 };
+    let response: SendMessageOutDto = { text: "", itemCount: 0 };
     let taskRound = 0;
     let taskMessage = taskExecutionPrompt(request.message);
 
@@ -132,7 +132,7 @@ export class ManagedTaskExecutor {
   async #runDesktopOwnedCodeValidation(
     request: ManagedExecutionRequest,
     evidence: ExecutionEvidence,
-    initialResponse: SendMessageResponse,
+    initialResponse: SendMessageOutDto,
   ): Promise<ManagedExecutionResult> {
     const runCodeValidation = request.runCodeValidation;
     if (!runCodeValidation) throw new Error("AI Desktop 内部验证入口未配置。");
@@ -173,7 +173,7 @@ export class ManagedTaskExecutor {
 
   async #runBuildValidation(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
     const evidence = new ExecutionEvidence();
-    let response: SendMessageResponse = { text: "", itemCount: 0 };
+    let response: SendMessageOutDto = { text: "", itemCount: 0 };
     let message = buildValidationPrompt(request.message, request.restartRequired);
     for (let round = 1; round <= BUILD_ROUNDS; round += 1) {
       emitManaged(request, "build-validation", round === 1 ? "started" : "continuing", round, BUILD_ROUNDS,
@@ -213,7 +213,7 @@ class ExecutionEvidence {
 
   beginRound(): void { this.#roundFailures = []; }
 
-  record(event: CodexStreamEvent): void {
+  record(event: CodexStreamEventOutDto): void {
     this.#sequence += 1;
     if (event.type === "diff-updated") {
       // diff-updated 是当前工作树的完整路径快照，会在测试结束后重复上报；这里只汇总真实源码路径，不能刷新修改时间。
@@ -276,7 +276,7 @@ export function isManagedValidationArtifact(filePath: string): boolean {
     || /(?:^|\/)log\/[a-zA-Z0-9_-]+\/归档日志\/(?:测试归档\/|执行归档\/|协同归档\/|审批归档\/|诊断归档\/)/.test(normalized);
 }
 
-function commandSucceeded(activity: CodexStreamActivity): boolean {
+function commandSucceeded(activity: CodexStreamActivityOutDto): boolean {
   if (activity.exitCode !== undefined) return activity.exitCode === 0;
   return activity.status === "completed" || activity.status === "success";
 }
@@ -301,7 +301,7 @@ export function isIsolatedInteractionTestCommand(command: string): boolean {
   return /(?:npm|pnpm|yarn)\s+(?:run\s+)?test:(?:interaction|document)\b|\bplaywright\s+test\b/i.test(command);
 }
 
-function emitManaged(request: ManagedExecutionRequest, stage: ManagedExecutionUpdate["stage"], status: ManagedExecutionUpdate["status"], round: number, maximumRounds: number, message: string): void {
+function emitManaged(request: ManagedExecutionRequest, stage: ManagedExecutionUpdateEventOutDto["stage"], status: ManagedExecutionUpdateEventOutDto["status"], round: number, maximumRounds: number, message: string): void {
   request.emit({ type: "managed-execution", turnId: "managed", segmentId: `managed:${request.mode}:${stage}:${round}`, managedExecution: { mode: request.mode, stage, status, round, maximumRounds, message } });
 }
 

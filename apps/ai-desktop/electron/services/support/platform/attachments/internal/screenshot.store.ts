@@ -3,12 +3,12 @@ import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/p
 import path from "node:path";
 
 import type {
-  ScreenshotAttachment,
-  ScreenshotSaveRequest,
-  TempDirectoryInfo,
-} from "../../../../../../contracts/platform/attachments/index.js";
+  ScreenshotAttachmentOutDto,
+  ScreenshotSaveInDto,
+  TempDirectoryInfoOutDto,
+} from "../../../../../../contracts/services/support/platform/attachments/index.js";
 
-interface ScreenshotIndexRecord extends ScreenshotAttachment {
+interface ScreenshotIndexRecord extends ScreenshotAttachmentOutDto {
   relativePath: string;
 }
 
@@ -41,7 +41,7 @@ export class ScreenshotStore {
     return this.#tempRoot;
   }
 
-  async save(request: ScreenshotSaveRequest): Promise<ScreenshotAttachment> {
+  async save(request: ScreenshotSaveInDto): Promise<ScreenshotAttachmentOutDto> {
     const original = decodePng(request?.originalDataUrl, "original screenshot");
     const annotated = decodePng(request?.annotatedDataUrl, "annotated screenshot");
     const id = randomUUID();
@@ -92,13 +92,13 @@ export class ScreenshotStore {
     return paths;
   }
 
-  async info(): Promise<TempDirectoryInfo> {
+  async info(): Promise<TempDirectoryInfoOutDto> {
     await this.ensure();
     const totals = await directoryTotals(this.#tempRoot);
     return { path: this.#tempRoot, ...totals };
   }
 
-  async clear(): Promise<TempDirectoryInfo> {
+  async clear(): Promise<TempDirectoryInfoOutDto> {
     // 只删除构造器固定生成的应用 temp 根，再立即恢复空目录供后续截图使用。
     await rm(this.#tempRoot, { recursive: true, force: true });
     await mkdir(this.#tempRoot, { recursive: true });
@@ -140,7 +140,7 @@ function decodePng(dataUrl: unknown, label: string): Buffer {
   return buffer;
 }
 
-function publicAttachment(record: ScreenshotIndexRecord): ScreenshotAttachment {
+function publicAttachment(record: ScreenshotIndexRecord): ScreenshotAttachmentOutDto {
   const { relativePath: _relativePath, ...attachment } = record;
   return attachment;
 }

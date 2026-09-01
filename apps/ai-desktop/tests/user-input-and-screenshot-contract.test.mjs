@@ -40,7 +40,7 @@ test("macOS 截图预热返回结构化权限结果并提供可恢复入口", ()
   assert.doesNotMatch(ipc, /const accessStatus = getScreenCaptureAccessStatus\(\);[\s\S]*if \(accessStatus === "denied"/);
   assert.match(ipc, /desktopCapturer\.getSources\([\s\S]*const currentAccessStatus = getScreenCaptureAccessStatus\(\)/);
   assert.match(ipc, /new ScreenCapturePreparationError\("permission-required"\)/);
-  assert.match(ipc, /return \{ status: "ready" \} satisfies ScreenCapturePreparationResult/);
+  assert.match(ipc, /return \{ status: "ready" \} satisfies ScreenCapturePreparationOutDto/);
   assert.match(ipc, /desktop:open-screen-recording-settings/);
   assert.match(ipc, /desktop:restart-for-screen-recording-permission/);
   assert.match(ipc, /app\.relaunch\(\);[\s\S]*app\.exit\(0\)/);
@@ -106,7 +106,7 @@ test("Codex 执行期间仍允许截图、粘贴和排队发送", () => {
 });
 
 test("官方 requestUserInput 保持原回合等待逐题答案并通过白名单 IPC 回传", () => {
-  assert.match(codexService, /#userInputs = new Map<number, CodexUserInputRequest>/);
+  assert.match(codexService, /#userInputs = new Map<number, CodexUserInputRequestOutDto>/);
   assert.match(codexService, /normalizeUserInputRequest\(id, params\)/);
   assert.doesNotMatch(codexService, /method === "item\/tool\/requestUserInput"\) \{\s*this\.#respond\(id, \{ answers: \{\} \}\)/);
   assert.match(codexService, /answers\[question\.id\] = \{ answers: \[/);

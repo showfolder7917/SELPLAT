@@ -31,7 +31,7 @@ const coordinatorSource = readFileSync(new URL("../electron/services/workflow/co
 const integrationPipelineSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const releaseBatchStoreSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
 // 入口存在性由边界测试负责；这里读取任务事实 DTO 验证完整状态枚举。
-const collaborationContractSource = readFileSync(new URL("../contracts/collaboration/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
+const collaborationContractSource = readFileSync(new URL("../contracts/services/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
 const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 const linghuRuntimeSource = readFileSync(new URL("../electron/services/personas/linghu/internal/create-linghu-runtime.ts", import.meta.url), "utf8");
 const integrationVerifierSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
@@ -1299,7 +1299,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
 test("自动恢复保留令狐老祖负责人和回流说明", () => {
   const store = readFileSync(new URL("../electron/services/workflow/internal/collaboration.store.ts", import.meta.url), "utf8");
   const facade = readFileSync(new URL("../electron/services/personas/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
-  assert.match(store, /continueTask\(taskId: string, recoveryActor\?: Pick<CollaborationMember/);
+  assert.match(store, /continueTask\(taskId: string, recoveryActor\?: Pick<CollaborationMemberOutDto/);
   assert.match(store, /正在处理流程中断，随后将任务退回原负责人重试/);
   assert.match(facade, /continueTask\(task\.taskId, linghu\)/);
 });

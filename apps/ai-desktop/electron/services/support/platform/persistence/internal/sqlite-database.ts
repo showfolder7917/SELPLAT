@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import type { AiMemoryDatabaseStatus } from "../../../../../../contracts/platform/persistence/index.js";
+import type { AiMemoryDatabaseStatusOutDto } from "../../../../../../contracts/services/support/platform/persistence/index.js";
 import { resolveAiMemoryPaths } from "../../../../../system/config/ai-memory-path-resolver.js";
 import { SqliteMigrationRunner } from "./sqlite-migration.runner.js";
 import { runSqliteTransaction } from "./sqlite-transaction.js";
@@ -18,7 +18,7 @@ type RuntimeMarker = {
 
 export type AiMemoryDatabaseInitialization = {
   database: SqliteDatabase | null;
-  status: AiMemoryDatabaseStatus;
+  status: AiMemoryDatabaseStatusOutDto;
 };
 
 export type InitializeAiMemoryDatabaseOptions = {

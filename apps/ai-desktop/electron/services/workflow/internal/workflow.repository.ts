@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-import type { ApprovalGovernanceRecord } from "../../../../contracts/governance/approval-governance.js";
-import type { CollaborationStateOutDto, CollaborationTask } from "../../../../contracts/collaboration/workflow/index.js";
-import type { LinghuAutomationStateOutDto } from "../../../../contracts/collaboration/linghu/index.js";
-import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkbenchRow, EvolutionWorkbenchView, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../../contracts/collaboration/evolution/index.js";
-import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../../contracts/governance/workflow.js";
+import type { ApprovalGovernanceRecordOutDto } from "../../../../contracts/governance/index.js";
+import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { LinghuAutomationStateOutDto } from "../../../../contracts/services/personas/linghu/index.js";
+import type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionArchiveRecordOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchPreferenceOutDto, EvolutionWorkbenchRowOutDto, EvolutionWorkbenchViewValue, EvolutionStateOutDto, QueryEvolutionWorkbenchInDto, SaveEvolutionWorkbenchPreferenceInDto } from "../../../../contracts/services/evolution/index.js";
+import type { StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventSeverityValue, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto } from "../../../../contracts/governance/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
 
 const STALE_AFTER_MS = 120_000;
@@ -56,7 +56,7 @@ export class WorkflowRepository {
     this.#database.withConnection((connection) => connection.prepare("UPDATE AiDesktopRuntimeSession SET state = 'stopped', heartbeatAt = $now, stoppedAt = $now WHERE sessionId = $sessionId AND state = 'running'").run({ $now: now, $sessionId: this.#sessionId }));
   }
 
-  recordEvent(input: WorkflowEventInput): string {
+  recordEvent(input: WorkflowEventInDto): string {
     return this.#database.withConnection((connection) => this.#insertEvent(connection, input));
   }
 
@@ -168,7 +168,7 @@ export class WorkflowRepository {
     }));
   }
 
-  listApprovalGovernance(limit = 100): ApprovalGovernanceRecord[] {
+  listApprovalGovernance(limit = 100): ApprovalGovernanceRecordOutDto[] {
     return this.#database.withConnection((connection) => {
       const rows = connection.prepare(`
         SELECT governanceId, domain, subjectId, correlationId, title, requestKind, decision,
@@ -178,7 +178,7 @@ export class WorkflowRepository {
         LIMIT $limit
       `).all({ $limit: Math.max(1, Math.min(500, limit)) }) as Array<Record<string, unknown>>;
       return rows.map((row) => ({
-        governanceId: String(row.governanceId), domain: row.domain as ApprovalGovernanceRecord["domain"],
+        governanceId: String(row.governanceId), domain: row.domain as ApprovalGovernanceRecordOutDto["domain"],
         subjectId: String(row.subjectId), correlationId: nullableString(row.correlationId), title: String(row.title),
         requestKind: String(row.requestKind), decision: String(row.decision), initiatorId: nullableString(row.initiatorId),
         initiatorDisplayName: nullableString(row.initiatorDisplayName), approverId: String(row.approverId),
@@ -188,7 +188,7 @@ export class WorkflowRepository {
     });
   }
 
-  listUnhandledExceptions(limit = 50): WorkflowExceptionRecord[] {
+  listUnhandledExceptions(limit = 50): WorkflowExceptionRecordOutDto[] {
     return this.#database.withConnection((connection) => {
       const rows = connection.prepare(`
         SELECT eventId, correlationId, sourceType, sourceId, eventType, category, severity, status,
@@ -202,9 +202,9 @@ export class WorkflowRepository {
       `).all({ $limit: Math.max(1, Math.min(200, limit)) }) as Array<Record<string, unknown>>;
       return rows.map((row) => ({
         eventId: String(row.eventId), correlationId: nullableString(row.correlationId),
-        sourceType: row.sourceType as WorkflowExceptionRecord["sourceType"], sourceId: String(row.sourceId),
-        eventType: String(row.eventType), category: row.category as WorkflowExceptionRecord["category"],
-        severity: row.severity as WorkflowExceptionRecord["severity"], status: row.status as WorkflowExceptionRecord["status"],
+        sourceType: row.sourceType as WorkflowExceptionRecordOutDto["sourceType"], sourceId: String(row.sourceId),
+        eventType: String(row.eventType), category: row.category as WorkflowExceptionRecordOutDto["category"],
+        severity: row.severity as WorkflowExceptionRecordOutDto["severity"], status: row.status as WorkflowExceptionRecordOutDto["status"],
         message: String(row.message), payload: parsePayload(row.payloadJson), fingerprint: nullableString(row.fingerprint),
         occurredAt: String(row.occurredAt), handlingOwnerId: nullableString(row.handlingOwnerId),
         handlingStartedAt: nullableString(row.handlingStartedAt),
@@ -216,7 +216,7 @@ export class WorkflowRepository {
    * 工作台列表只查询 SQLite 当前事实投影，并在数据库完成筛选、排序和分页。
    * 例如查询 topics 第 2 页、每页 20 条时最多返回 20 行及独立 total；不读取 JSON 状态文件，也不返回原始 payload。
    */
-  queryEvolutionWorkbench(request: QueryEvolutionWorkbenchRequest): EvolutionWorkbenchPage {
+  queryEvolutionWorkbench(request: QueryEvolutionWorkbenchInDto): EvolutionWorkbenchPageOutDto {
     const pageSize = Math.max(10, Math.min(100, Math.floor(Number(request.pageSize) || 20)));
     const page = Math.max(1, Math.floor(Number(request.page) || 1));
     const keyword = String(request.keyword || "").trim().slice(0, 120);
@@ -241,7 +241,7 @@ export class WorkflowRepository {
         pageSize,
         total: Number(totalRow.total),
         stateVersion: this.#evolutionWorkbenchStateVersion || String(totalRow.latestVisibleUpdate),
-        rows: rows.map((row): EvolutionWorkbenchRow => ({
+        rows: rows.map((row): EvolutionWorkbenchRowOutDto => ({
           id: String(row.id), topicId: nullableString(row.topicId), proposalId: nullableString(row.proposalId), taskId: nullableString(row.taskId),
           title: String(row.title), status: String(row.status), stage: String(row.stage), owner: workbenchOwnerLabel(String(row.owner)),
           blockedReason: nullableString(row.blockedReason), recoveryPoint: nullableString(row.recoveryPoint), nextStep: String(row.nextStep), updatedAt: String(row.updatedAt),
@@ -251,7 +251,7 @@ export class WorkflowRepository {
     });
   }
 
-  getEvolutionWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): EvolutionWorkbenchPreference | null {
+  getEvolutionWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): EvolutionWorkbenchPreferenceOutDto | null {
     return this.#database.withConnection((connection) => {
       const row = connection.prepare(`SELECT perspective, nodeId, page, pageSize, keyword, status, selectedRowId, updatedAt
         FROM AiDesktopEvolutionWorkbenchPreference WHERE perspective=$perspective AND nodeId=$nodeId`).get({ $perspective: perspective, $nodeId: nodeId }) as Record<string, unknown> | undefined;
@@ -259,8 +259,8 @@ export class WorkflowRepository {
     });
   }
 
-  saveEvolutionWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceRequest, now = new Date().toISOString()): EvolutionWorkbenchPreference {
-    const value: EvolutionWorkbenchPreference = { ...request, page: Math.max(1, Math.floor(request.page)), pageSize: [20, 50, 100].includes(request.pageSize) ? request.pageSize : 20, keyword: request.keyword.slice(0, 120), status: request.status.slice(0, 80), selectedRowId: request.selectedRowId?.slice(0, 200) || null, updatedAt: now };
+  saveEvolutionWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceInDto, now = new Date().toISOString()): EvolutionWorkbenchPreferenceOutDto {
+    const value: EvolutionWorkbenchPreferenceOutDto = { ...request, page: Math.max(1, Math.floor(request.page)), pageSize: [20, 50, 100].includes(request.pageSize) ? request.pageSize : 20, keyword: request.keyword.slice(0, 120), status: request.status.slice(0, 80), selectedRowId: request.selectedRowId?.slice(0, 200) || null, updatedAt: now };
     this.#database.withConnection((connection) => connection.prepare(`INSERT INTO AiDesktopEvolutionWorkbenchPreference
       (perspective, nodeId, page, pageSize, keyword, status, selectedRowId, updatedAt)
       VALUES ($perspective, $nodeId, $page, $pageSize, $keyword, $status, $selectedRowId, $updatedAt)
@@ -409,7 +409,7 @@ export class WorkflowRepository {
     this.#evolutionWorkbenchStateVersion = state.updatedAt;
   }
 
-  getEvolutionTopicDossier(topicId: string, state: EvolutionStateOutDto): EvolutionTopicDossier {
+  getEvolutionTopicDossier(topicId: string, state: EvolutionStateOutDto): EvolutionTopicDossierOutDto {
     const topic = state.topics.find((item) => item.topicId === topicId);
     if (!topic) throw new Error("专题池中不存在该专题。 ");
     const stateDeliberation = topic.deliberationId ? state.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
@@ -447,12 +447,12 @@ export class WorkflowRepository {
         WHERE topicId = $topicId
           OR ($deliberationId IS NOT NULL AND deliberationId = $deliberationId)
         ORDER BY occurredAt, sequenceNumber, recordId
-      `).all({ $topicId: topicId, $deliberationId: storedDeliberation?.deliberationId || null }).map((row: Record<string, unknown>): EvolutionArchiveRecord => ({
+      `).all({ $topicId: topicId, $deliberationId: storedDeliberation?.deliberationId || null }).map((row: Record<string, unknown>): EvolutionArchiveRecordOutDto => ({
         recordId: String(row.recordId), deliberationId: row.deliberationId ? String(row.deliberationId) : null,
         topicId: row.topicId ? String(row.topicId) : null, proposalId: row.proposalId ? String(row.proposalId) : null,
         taskId: row.taskId ? String(row.taskId) : null, sequenceNumber: Number(row.sequenceNumber),
-        category: row.category as EvolutionArchiveRecord["category"], eventType: String(row.eventType),
-        actor: row.actor as EvolutionArchiveRecord["actor"], title: String(row.title),
+        category: row.category as EvolutionArchiveRecordOutDto["category"], eventType: String(row.eventType),
+        actor: row.actor as EvolutionArchiveRecordOutDto["actor"], title: String(row.title),
         payload: parseObject(String(row.originalPayloadJson)), occurredAt: String(row.occurredAt),
       }));
       // 任务即使还没有产生 flowEvent，也已经是专题从审批进入执行的事实，档案不能因此漏掉整条执行记录。
@@ -469,7 +469,7 @@ export class WorkflowRepository {
         JOIN AiDesktopTaskExecution task ON task.taskId = event.correlationId
         ORDER BY event.occurredAt, event.recordedAt
       `).all() as Array<Record<string, unknown>>;
-      const taskRecords = tasks.filter((task) => proposalIds.has(String(task.proposalId))).map((task, index): EvolutionArchiveRecord => ({
+      const taskRecords = tasks.filter((task) => proposalIds.has(String(task.proposalId))).map((task, index): EvolutionArchiveRecordOutDto => ({
         recordId: `task-snapshot:${String(task.taskId)}`, deliberationId: storedDeliberation?.deliberationId || null, topicId,
         proposalId: String(task.proposalId), taskId: String(task.taskId), sequenceNumber: storedArchiveRecords.length + index + 1,
         category: "execution", eventType: "task.execution.snapshot", actor: "system",
@@ -481,7 +481,7 @@ export class WorkflowRepository {
         },
         occurredAt: String(task.updatedAt),
       }));
-      const eventRecords = rows.filter((row) => proposalIds.has(String(row.proposalId))).map((row, index): EvolutionArchiveRecord => ({
+      const eventRecords = rows.filter((row) => proposalIds.has(String(row.proposalId))).map((row, index): EvolutionArchiveRecordOutDto => ({
         recordId: String(row.eventId), deliberationId: storedDeliberation?.deliberationId || null, topicId,
         proposalId: String(row.proposalId), taskId: String(row.correlationId), sequenceNumber: storedArchiveRecords.length + taskRecords.length + index + 1,
         category: dossierEventCategory(String(row.eventType), String(row.category)), eventType: String(row.eventType),
@@ -508,14 +508,14 @@ export class WorkflowRepository {
     }));
   }
 
-  detectStalledTasks(now = new Date().toISOString()): StalledTaskDetection[] {
+  detectStalledTasks(now = new Date().toISOString()): StalledTaskDetectionOutDto[] {
     return this.#database.transaction((connection) => {
       const rows = connection.prepare(`
         SELECT taskId, workflowId, proposalId, executorMemberId, COALESCE(heartbeatAt, updatedAt) AS lastHeartbeatAt,
           timeoutAt, retryCount, maxRetries, blockingKind, blockingReason
         FROM AiDesktopTaskExecution
         WHERE runtimeStatus IN ('running', 'recovering') AND timeoutAt IS NOT NULL AND timeoutAt < $now
-      `).all({ $now: now }) as unknown as StalledTaskDetection[];
+      `).all({ $now: now }) as unknown as StalledTaskDetectionOutDto[];
       for (const row of rows) {
         connection.prepare("UPDATE AiDesktopTaskExecution SET runtimeStatus = 'stalled', updatedAt = $now WHERE taskId = $taskId").run({ $now: now, $taskId: row.taskId });
         this.#insertEvent(connection, {
@@ -561,14 +561,14 @@ export class WorkflowRepository {
     return this.#database.withConnection((connection) => Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count));
   }
 
-  #insertEvent(connection: DatabaseSync, input: WorkflowEventInput): string {
+  #insertEvent(connection: DatabaseSync, input: WorkflowEventInDto): string {
     const occurredAt = input.occurredAt || new Date().toISOString();
     const eventId = input.eventId || `workflow-event-${randomUUID()}`;
     const category = input.category || "audit";
     const severity = input.severity || defaultSeverity(category);
     const status = input.status || defaultStatus(category);
     if (input.fingerprint) {
-      const existing = connection.prepare("SELECT eventId, status FROM AiDesktopEvent WHERE fingerprint = $fingerprint").get({ $fingerprint: input.fingerprint }) as { eventId: string; status: WorkflowEventStatus } | undefined;
+      const existing = connection.prepare("SELECT eventId, status FROM AiDesktopEvent WHERE fingerprint = $fingerprint").get({ $fingerprint: input.fingerprint }) as { eventId: string; status: WorkflowEventStatusValue } | undefined;
       if (existing) {
         const reopenedStatus = existing.status === "processing" && status === "open" ? "processing" : status;
         connection.prepare(`UPDATE AiDesktopEvent SET correlationId=$correlationId, sourceType=$sourceType, sourceId=$sourceId,
@@ -600,7 +600,7 @@ export class WorkflowRepository {
     return eventId;
   }
 
-  #upsertTask(connection: DatabaseSync, state: CollaborationStateOutDto, task: CollaborationTask): void {
+  #upsertTask(connection: DatabaseSync, state: CollaborationStateOutDto, task: CollaborationTaskOutDto): void {
     const member = state.members.find((item) => item.memberId === task.executorMemberId && item.currentTaskId === task.taskId);
     const heartbeatAt = latestTime(member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt);
     const timeoutAt = TERMINAL_TASK_STATES.has(task.state) ? null : new Date(Date.parse(heartbeatAt) + STALE_AFTER_MS).toISOString();
@@ -680,7 +680,7 @@ export class WorkflowRepository {
     });
   }
 
-  #upsertApprovals(connection: DatabaseSync, proposal: EvolutionProposal): void {
+  #upsertApprovals(connection: DatabaseSync, proposal: EvolutionProposalOutDto): void {
     for (const approval of proposal.approvals) {
       connection.prepare(`
       INSERT OR IGNORE INTO AiDesktopApprovalRecord (approvalId, proposalId, title, proposalType, submitterId, submitterDisplayName, approverId, approverDisplayName, decision, source, approvalStage, advice, evidenceJson, referencedApprovalIdsJson, createdAt, approvedAt)
@@ -713,7 +713,7 @@ export class WorkflowRepository {
     }
   }
 
-  #upsertGovernance(connection: DatabaseSync, record: ApprovalGovernanceRecord): void {
+  #upsertGovernance(connection: DatabaseSync, record: ApprovalGovernanceRecordOutDto): void {
     connection.prepare(`
       INSERT INTO AiDesktopApprovalGovernance (governanceId, domain, subjectId, correlationId, title, requestKind, decision, initiatorId, initiatorDisplayName, approverId, approverDisplayName, source, reason, evidenceJson, decidedAt)
       VALUES ($governanceId, $domain, $subjectId, $correlationId, $title, $requestKind, $decision, $initiatorId, $initiatorDisplayName, $approverId, $approverDisplayName, $source, $reason, $evidenceJson, $decidedAt)
@@ -729,7 +729,7 @@ export class WorkflowRepository {
 }
 
 /** 各叶节点只选择既有数据库事实并规范成同一读模型，避免 Renderer 自行拼业务含义。 */
-function evolutionWorkbenchSource(view: EvolutionWorkbenchView): string {
+function evolutionWorkbenchSource(view: EvolutionWorkbenchViewValue): string {
   const workflow = `
     SELECT workflowId AS id, topicId, proposalId, NULL AS taskId, title, state AS status,
       currentStage AS stage, currentOwnerId AS owner, CASE WHEN state = 'blocked' THEN '流程已阻塞' ELSE NULL END AS blockedReason,
@@ -819,7 +819,7 @@ function workbenchStatusFilter(status: string): string {
   } as Record<string, string>)[status] || status;
 }
 
-function classifyAuditEvent(type: string): { category: WorkflowEventCategory; severity: WorkflowEventSeverity; status: WorkflowEventStatus; sourceType: "member" | "system" | "launcher"; sourceId: string } {
+function classifyAuditEvent(type: string): { category: WorkflowEventCategoryValue; severity: WorkflowEventSeverityValue; status: WorkflowEventStatusValue; sourceType: "member" | "system" | "launcher"; sourceId: string } {
   const sourceId = type.startsWith("han-li.") ? "han-li" : type.startsWith("nangong.") ? "nangong-wan" : type.startsWith("linghu.") ? "linghu-ancestor" : type.startsWith("application.") ? "evolution-launcher" : "ai-desktop";
   const sourceType = sourceId === "evolution-launcher" ? "launcher" : sourceId === "ai-desktop" ? "system" : "member";
   if (/business[._-]exception|validation[._-]failed/u.test(type)) return { category: "business-exception", severity: "warning", status: "open", sourceType, sourceId };
@@ -836,27 +836,27 @@ function provesFailureResolved(type: string, details: Record<string, unknown>): 
   return /(?:^|[._-])(completed|recovered|revised|passed|integrated|fixed|resolved)(?:$|[._-])/u.test(type);
 }
 
-function defaultSeverity(category: WorkflowEventCategory): WorkflowEventSeverity { return category === "technical-error" || category === "stalled" ? "error" : category === "business-exception" ? "warning" : "info"; }
-function defaultStatus(category: WorkflowEventCategory): WorkflowEventStatus { return ["technical-error", "business-exception", "stalled"].includes(category) ? "open" : "observed"; }
+function defaultSeverity(category: WorkflowEventCategoryValue): WorkflowEventSeverityValue { return category === "technical-error" || category === "stalled" ? "error" : category === "business-exception" ? "warning" : "info"; }
+function defaultStatus(category: WorkflowEventCategoryValue): WorkflowEventStatusValue { return ["technical-error", "business-exception", "stalled"].includes(category) ? "open" : "observed"; }
 function requiredMutationValue(value: unknown, label: string, maximum: number): string { const text = typeof value === "string" ? value.trim() : ""; if (!text) throw new Error(`${label}不能为空。`); return text.slice(0, maximum); }
 function stringValue(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : null; }
-function workflowSourceType(value: unknown): WorkflowEventInput["sourceType"] | null {
+function workflowSourceType(value: unknown): WorkflowEventInDto["sourceType"] | null {
   return value === "member" || value === "system" || value === "launcher" || value === "task" ? value : null;
 }
-function workflowSeverity(value: unknown): WorkflowEventSeverity | null {
+function workflowSeverity(value: unknown): WorkflowEventSeverityValue | null {
   return value === "info" || value === "warning" || value === "error" || value === "critical" ? value : null;
 }
 function nullableString(value: unknown): string | null { return typeof value === "string" && value ? value : null; }
 function parsePayload(value: unknown): Record<string, unknown> { try { const parsed = JSON.parse(String(value)); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; } }
 function parseObject(value: string): Record<string, unknown> { return parsePayload(value); }
-function dossierEventCategory(eventType: string, category: string): EvolutionArchiveCategory {
+function dossierEventCategory(eventType: string, category: string): EvolutionArchiveCategoryValue {
   if (/test/iu.test(eventType)) return "test";
   if (/release|publish|restart/iu.test(eventType)) return "release";
   if (/approval|review|decided/iu.test(eventType)) return "approval";
   if (/failed|error|stalled|recover/iu.test(eventType) || ["technical-error", "business-exception", "stalled"].includes(category)) return "recovery";
   return "execution";
 }
-function dossierEventActor(sourceId: string): EvolutionArchiveActor {
+function dossierEventActor(sourceId: string): EvolutionArchiveActorValue {
   if (sourceId === "han-li") return "han-li";
   if (sourceId.includes("nangong")) return "nangong-wan";
   if (sourceId.includes("linghu")) return "linghu-ancestor";
@@ -864,7 +864,7 @@ function dossierEventActor(sourceId: string): EvolutionArchiveActor {
   return "system";
 }
 function latestTime(...values: Array<string | null | undefined>): string { return values.filter((value): value is string => Boolean(value)).sort((left, right) => Date.parse(right) - Date.parse(left))[0] || new Date().toISOString(); }
-function taskRuntimeStatus(state: CollaborationTask["state"]): string {
+function taskRuntimeStatus(state: CollaborationTaskOutDto["state"]): string {
   if (state === "integrated") return "completed";
   if (state === "cancelled") return "cancelled";
   if (state === "test-failed" || state === "blocked") return "failed";
@@ -873,7 +873,7 @@ function taskRuntimeStatus(state: CollaborationTask["state"]): string {
   if (state === "preparing-worktree") return "queued";
   return "running";
 }
-function taskBlockingKind(task: CollaborationTask): string {
+function taskBlockingKind(task: CollaborationTaskOutDto): string {
   const reason = task.blockingReason || "";
   // 先使用任务状态和结构化失败类型，避免测试日志引用规则正文时被“用户/人工”等词污染分类。
   if (task.integrationFailure?.kind === "infrastructure") return "infrastructure";
@@ -890,7 +890,7 @@ function taskBlockingKind(task: CollaborationTask): string {
 function evolutionStage(status: string): string { return status === "pending-approval" ? "approval" : status === "approved" ? "distribution" : status === "executing" ? "execution" : status === "verifying" ? "verification" : status === "completed" ? "next-evolution" : "investigation"; }
 function evolutionOwner(status: string, origin: string): string { return status === "pending-approval" ? "han-li" : status === "approved" || status === "completed" ? origin === "linghu" ? "linghu-ancestor" : "nangong-wan" : status === "executing" || status === "verifying" ? "collaboration-coordinator" : origin === "linghu" ? "linghu-ancestor" : "nangong-wan"; }
 
-function evolutionRoundTaskState(task: CollaborationTask): "executing" | "returned" | "sealed" | "integrating" | "blocked" | "completed" {
+function evolutionRoundTaskState(task: CollaborationTaskOutDto): "executing" | "returned" | "sealed" | "integrating" | "blocked" | "completed" {
   if (task.state === "integrated") return "completed";
   if (["blocked", "cancelled", "test-failed"].includes(task.state)) return "blocked";
   if (["queued-integration", "integrating", "unified-testing", "awaiting-restart"].includes(task.state)) return "integrating";

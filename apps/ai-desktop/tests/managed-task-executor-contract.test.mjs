@@ -113,7 +113,7 @@ test("屏幕录制权限恢复只允许用户通过 macOS 专用无参数 IPC �
 });
 
 test("界面按四阶段确认推进，日志记录阶段结果而不强制构建", () => {
-  assert.match(developerApp, /useState<ManagedExecutionMode>\("conversation-managed"\)/);
+  assert.match(developerApp, /useState<ManagedExecutionModeValue>\("conversation-managed"\)/);
   assert.match(developerApp, /就是这意思/);
   assert.match(developerApp, /按这个方案执行/);
   assert.match(developerApp, /测试一下/);

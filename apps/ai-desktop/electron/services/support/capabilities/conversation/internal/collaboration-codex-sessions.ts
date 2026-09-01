@@ -2,18 +2,18 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import type {
-  CollaborationMember,
-  CollaborationRequirementPlan,
-  CollaborationRepairDiagnosis,
-  CollaborationTask,
-} from "../../../../../../contracts/collaboration/workflow/index.js";
+  CollaborationMemberOutDto,
+  CollaborationRequirementPlanOutDto,
+  CollaborationRepairDiagnosisOutDto,
+  CollaborationTaskOutDto,
+} from "../../../../../../contracts/services/workflow/index.js";
 import type {
-  CodexApproval,
-  CodexStreamEvent,
-  CodexUserInputRequest,
-  ResolveCodexUserInputRequest,
-} from "../../../../../../contracts/platform/codex/index.js";
-import type { WorkspaceState } from "../../../../../../contracts/platform/workspace/index.js";
+  CodexApprovalOutDto,
+  CodexStreamEventOutDto,
+  CodexUserInputRequestOutDto,
+  ResolveCodexUserInputInDto,
+} from "../../../../../../contracts/services/support/platform/codex/index.js";
+import type { WorkspaceStateOutDto } from "../../../../../../contracts/services/support/platform/workspace/index.js";
 import {
   CodexFacade as CodexService,
   createFileCodexSessionRepository,
@@ -132,7 +132,7 @@ export class CollaborationCodexRegistry {
     for (const key of this.#userInputKeys.keys()) if (key.startsWith(`${connectionId}:`)) this.#userInputKeys.delete(key);
   }
 
-  pendingApprovals(): CodexApproval[] {
+  pendingApprovals(): CodexApprovalOutDto[] {
     return [...this.#connections.values()].flatMap((connection) => connection.service.pendingApprovals().map((approval) => {
       const globalId = this.#globalId("approval", connection.connectionId, approval.requestId);
       this.#approvalBindings.set(globalId, { connectionId: connection.connectionId, requestId: approval.requestId });
@@ -156,7 +156,7 @@ export class CollaborationCodexRegistry {
     return result;
   }
 
-  pendingUserInputs(): CodexUserInputRequest[] {
+  pendingUserInputs(): CodexUserInputRequestOutDto[] {
     return [...this.#connections.values()].flatMap((connection) => connection.service.pendingUserInputs().map((request) => {
       const globalId = this.#globalId("input", connection.connectionId, request.requestId);
       this.#userInputBindings.set(globalId, { connectionId: connection.connectionId, requestId: request.requestId });
@@ -169,7 +169,7 @@ export class CollaborationCodexRegistry {
     }));
   }
 
-  resolveUserInput(request: ResolveCodexUserInputRequest): void {
+  resolveUserInput(request: ResolveCodexUserInputInDto): void {
     const binding = this.#userInputBindings.get(request.requestId);
     const connection = binding && this.#connections.get(binding.connectionId);
     if (!binding || !connection) throw new Error("协同提问已经失效。");
@@ -204,10 +204,10 @@ export interface CodexCollaborationSessionFactoryOptions {
   trustedCommands: TrustedCommandStore;
   registry: CollaborationCodexRegistry;
   resolveAttachmentPaths(attachmentIds: string[]): Promise<string[]>;
-  runCodeValidation(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<void>;
+  runCodeValidation(task: CollaborationTaskOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<void>;
   readSettings: CodexServiceOptions["readSettings"];
   readRuleInstructions?: CodexServiceOptions["readRuleInstructions"];
-  readWorkspaceState?: () => WorkspaceState;
+  readWorkspaceState?: () => WorkspaceStateOutDto;
   personaSessionStore?: (memberId: string) => CodexSessionPersistence | null;
   recordEvent(type: string, details: Record<string, unknown>, taskId: string): void;
 }
@@ -222,7 +222,7 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
     mkdirSync(options.sessionRoot, { recursive: true });
   }
 
-  async createExecutor(task: CollaborationTask, member: CollaborationMember): Promise<ExecutorSessionPort> {
+  async createExecutor(task: CollaborationTaskOutDto, member: CollaborationMemberOutDto): Promise<ExecutorSessionPort> {
     const persistentPersona = Boolean(this.#options.personaSessionStore?.(member.memberId));
     const releasePersonaWriter = persistentPersona
       ? await this.#personaWriters.acquire(member.memberId, task.taskId, (state, activeTaskId) => {
@@ -258,7 +258,7 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
     }
   }
 
-  #createConnection(task: CollaborationTask, member: CollaborationMember, role: RegisteredConnection["role"], dependencyLease: ManagedDependencyLease | null, releasePersonaWriter: (() => void) | null): RegisteredConnection {
+  #createConnection(task: CollaborationTaskOutDto, member: CollaborationMemberOutDto, role: RegisteredConnection["role"], dependencyLease: ManagedDependencyLease | null, releasePersonaWriter: (() => void) | null): RegisteredConnection {
     const persistentSessions = this.#options.personaSessionStore?.(member.memberId) || null;
     const connectionId = persistentSessions ? `persona:${member.memberId}` : `${task.taskId}:${role}:${member.memberId}:g${member.generation}`;
     const sessionPath = path.join(this.#options.sessionRoot, `${safeName(connectionId)}.json`);
@@ -310,7 +310,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
     this.#readWorkspaceState = readWorkspaceState;
   }
 
-  async analyze(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<string> {
+  async analyze(task: CollaborationTaskOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
     return this.#runRequirement(task, [
       "[执行人物技术分析]",
       "南宫婉已经完成客户需求、目标、范围、验收标准和任务拆分。不要重新解释客户为什么要做，也不要重复南宫婉的需求分析。",
@@ -321,19 +321,19 @@ class CodexExecutorSession implements ExecutorSessionPort {
 
   isAlive(): boolean { return this.#connection.service.isAlive(); }
 
-  async optimize(task: CollaborationTask, feedback: string, emit: (event: CodexStreamEvent) => void): Promise<string> {
+  async optimize(task: CollaborationTaskOutDto, feedback: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
     const currentPlan = task.plans.find((plan) => plan.version === task.currentPlanVersion)?.text || "";
     return this.#runRequirement(task, `依据已登记的技术失败证据修正同一实施方案，不重复需求分析。\n\n当前技术分析：\n${currentPlan}\n\n失败证据：\n${feedback}`, emit);
   }
 
-  async execute(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<ExecutorExecutionResultOutDto> {
+  async execute(task: CollaborationTaskOutDto, plan: CollaborationRequirementPlanOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
     return this.#executePlan(task, [
       `已确认任务：\n${task.snapshot.confirmedIntent}`,
       `执行人完成的技术分析：\n${plan.text}`,
     ], emit);
   }
 
-  async #executePlan(task: CollaborationTask, instructions: string[], emit: (event: CodexStreamEvent) => void): Promise<ExecutorExecutionResultOutDto> {
+  async #executePlan(task: CollaborationTaskOutDto, instructions: string[], emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
     const workspaceState = collaborationWorkspaceState(task, this.#readWorkspaceState?.());
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const result = await this.#managed.run({
@@ -350,7 +350,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
     return { status: result.managedStatus === "code-verified" ? "code-verified" : "incomplete", text: result.text, pendingActions: result.pendingActions, changedFiles: result.changedFiles, successfulCommands: result.successfulCommands };
   }
 
-  async investigateRepair(task: CollaborationTask, failure: string, emit: (event: CodexStreamEvent) => void): Promise<string> {
+  async investigateRepair(task: CollaborationTaskOutDto, failure: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
     return this.#runRequirement(task, [
       "[令狐故障只读调查]",
       "先调查本次真实失败事实，再决定修复。禁止复述或执行原专题方案，禁止修改文件。",
@@ -359,7 +359,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
     ].join("\n\n"), emit);
   }
 
-  async executeRepair(task: CollaborationTask, diagnosis: CollaborationRepairDiagnosis, emit: (event: CodexStreamEvent) => void): Promise<ExecutorExecutionResultOutDto> {
+  async executeRepair(task: CollaborationTaskOutDto, diagnosis: CollaborationRepairDiagnosisOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
     return this.#executePlan(task, [
       "[故障修复专用执行]",
       diagnosis.repairInstruction,
@@ -374,7 +374,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
     await retireConnection(this.#connection, this.#registry);
   }
 
-  async #runRequirement(task: CollaborationTask, message: string, emit: (event: CodexStreamEvent) => void): Promise<string> {
+  async #runRequirement(task: CollaborationTaskOutDto, message: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
     const workspaceState = collaborationWorkspaceState(task, this.#readWorkspaceState?.());
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const result = await this.#managed.run({
@@ -390,7 +390,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
 
 }
 
-function collaborationWorkspaceState(task: CollaborationTask, configured?: WorkspaceState): WorkspaceState {
+function collaborationWorkspaceState(task: CollaborationTaskOutDto, configured?: WorkspaceStateOutDto): WorkspaceStateOutDto {
   const workspace = task.versionWorkspace;
   const base = configured || task.snapshot.workspaceState;
   if (!workspace) return structuredClone(base);

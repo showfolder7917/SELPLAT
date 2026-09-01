@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog } from "electron";
 
-import { WORKSPACE_PERMISSIONS, type WorkspacePermission } from "../../../../contracts/foundation/base.js";
+import { WORKSPACE_PERMISSIONS, type WorkspacePermissionValue } from "../../../../contracts/foundation/index.js";
 import type { EventCenterFacade } from "../../../services/support/capabilities/event-center/index.js";
 import type { WorkspaceFacade as WorkspaceStore } from "../../../services/support/platform/workspace/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
@@ -18,7 +18,7 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
     eventCenter.recordEvent("workspace.added", { path: result.filePaths[0] });
     return state;
   });
-  handle("desktop:update-workspace-permission", (_event, id: string, permission: WorkspacePermission) => {
+  handle("desktop:update-workspace-permission", (_event, id: string, permission: WorkspacePermissionValue) => {
     if (!WORKSPACE_PERMISSIONS.includes(permission)) throw new Error("Invalid workspace permission.");
     const state = workspaces.updatePermission(id, permission);
     eventCenter.recordEvent("workspace.permission_updated", { id, permission });

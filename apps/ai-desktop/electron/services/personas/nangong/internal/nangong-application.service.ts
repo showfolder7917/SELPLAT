@@ -5,9 +5,9 @@ import type {
   ReviseNangongProposalInDto,
   SendNangongConversationMessageInDto,
   UpdateNangongTopicInDto,
-} from "../../../../../contracts/collaboration/nangong/index.js";
+} from "../../../../../contracts/services/personas/nangong/index.js";
 import type { NangongApplicationPort } from "../nangong.facade.js";
-import type { EvolutionMutationInDto } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionMutationInDto } from "../../../../../contracts/services/evolution/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 import { NangongConversationService } from "./nangong-conversation.service.js";
 import { NangongEvolutionAuthoringService } from "./nangong-evolution-authoring.service.js";

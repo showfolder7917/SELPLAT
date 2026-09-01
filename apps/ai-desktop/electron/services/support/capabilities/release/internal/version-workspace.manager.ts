@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import type { CollaborationTask, CollaborationVersionWorkspace } from "../../../../../../contracts/collaboration/workflow/index.js";
+import type { CollaborationTaskOutDto, CollaborationVersionWorkspaceOutDto } from "../../../../../../contracts/services/workflow/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,7 +21,7 @@ export interface IntegrationCandidate {
 export interface LocalChangeOwnershipCandidate {
   taskId: string;
   memberName: string;
-  workspace: CollaborationVersionWorkspace;
+  workspace: CollaborationVersionWorkspaceOutDto;
   changedFiles: string[];
 }
 
@@ -78,7 +78,7 @@ export class VersionWorkspaceManager {
     return this.#git(this.#repositoryRoot, ["rev-parse", "HEAD"]);
   }
 
-  async prepareTask(task: CollaborationTask, memberId: string): Promise<CollaborationVersionWorkspace> {
+  async prepareTask(task: CollaborationTaskOutDto, memberId: string): Promise<CollaborationVersionWorkspaceOutDto> {
     const baseSha = await this.currentBaseSha();
     const safeTaskId = safeSegment(task.taskId);
     const safeMemberId = safeSegment(memberId);
@@ -107,7 +107,7 @@ export class VersionWorkspaceManager {
     };
   }
 
-  async resumeTask(task: CollaborationTask): Promise<CollaborationVersionWorkspace> {
+  async resumeTask(task: CollaborationTaskOutDto): Promise<CollaborationVersionWorkspaceOutDto> {
     const workspace = task.versionWorkspace;
     if (!workspace) throw new Error("任务没有可恢复的版本工作区。");
     const rootPath = this.#validateManagedPath(workspace.rootPath);
@@ -118,7 +118,7 @@ export class VersionWorkspaceManager {
   }
 
   /** 验证测试目标仍是本任务由应用签发的 worktree 与分支，返回可供内部测试器使用的真实根路径。 */
-  async validateTaskWorkspace(task: CollaborationTask): Promise<string> {
+  async validateTaskWorkspace(task: CollaborationTaskOutDto): Promise<string> {
     const workspace = task.versionWorkspace;
     if (!workspace) throw new Error("任务尚未建立独立版本工作区。");
     const rootPath = this.#validateManagedPath(workspace.rootPath);
@@ -130,7 +130,7 @@ export class VersionWorkspaceManager {
     return rootPath;
   }
 
-  async commitTaskResult(task: CollaborationTask, memberName: string): Promise<string> {
+  async commitTaskResult(task: CollaborationTaskOutDto, memberName: string): Promise<string> {
     const workspace = task.versionWorkspace;
     if (!workspace) throw new Error("任务尚未建立独立版本工作区。");
     const rootPath = this.#validateManagedPath(workspace.rootPath);
@@ -195,12 +195,12 @@ export class VersionWorkspaceManager {
     }
   }
 
-  async createIntegrationCandidate(generation: number, tasks: CollaborationTask[]): Promise<IntegrationCandidate> {
+  async createIntegrationCandidate(generation: number, tasks: CollaborationTaskOutDto[]): Promise<IntegrationCandidate> {
     return this.createReleaseCandidate(`integration-g${generation}`, "0.0.0", generation, tasks, true);
   }
 
   /** 从固定基线创建可追溯的 release/<version>-rc 候选；只有发布锁持有者可以调用。 */
-  async createReleaseCandidate(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTask[], legacyIntegrationBranch = false): Promise<IntegrationCandidate> {
+  async createReleaseCandidate(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTaskOutDto[], legacyIntegrationBranch = false): Promise<IntegrationCandidate> {
     if (tasks.length === 0) throw new Error("集成批次不能为空。");
     const baseSha = await this.#integrationBaseSha();
     const safeVersion = safeVersionSegment(version);
@@ -252,7 +252,7 @@ export class VersionWorkspaceManager {
     return this.#git(this.#repositoryRoot, ["rev-parse", "HEAD"]);
   }
 
-  async retireWorkspace(workspace: CollaborationVersionWorkspace): Promise<void> {
+  async retireWorkspace(workspace: CollaborationVersionWorkspaceOutDto): Promise<void> {
     const rootPath = this.#validateManagedPath(workspace.rootPath);
     this.#validateManagedBranch(workspace.branchName);
     await this.#git(this.#repositoryRoot, ["worktree", "remove", rootPath]);

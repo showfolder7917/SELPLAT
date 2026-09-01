@@ -1,20 +1,20 @@
 // 工作区和语言由主进程组合根读取，令狐不自行解析用户设置。
-import type { Locale } from "../../../../contracts/foundation/base.js";
-import type { WorkspaceState } from "../../../../contracts/platform/workspace/index.js";
+import type { LocaleValue } from "../../../../contracts/foundation/index.js";
+import type { WorkspaceStateOutDto } from "../../../../contracts/services/support/platform/workspace/index.js";
 // Coordinator 状态是检测、恢复和派发的权威来源。
-import type { CollaborationMember, CollaborationStateOutDto, CollaborationTask, DesktopOperatingMode, SubmitCollaborationTaskInDto } from "../../../../contracts/collaboration/workflow/index.js";
+import type { CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto } from "../../../../contracts/services/workflow/index.js";
 // 令狐快照、模块和完整状态使用跨进程纯协议，页面与主进程共享同一数据形状。
 import type {
   CreateLinghuRepairProposalOutDto,
   LinghuAutomaticFlowSnapshotOutDto,
   LinghuAutomationStateOutDto,
-} from "../../../../contracts/collaboration/linghu/index.js";
+} from "../../../../contracts/services/personas/linghu/index.js";
 // 测试资源快照只读注入，Facade 不直接争抢端口或构建目录。
-import type { TestResourceCoordinatorState } from "../../../../contracts/capabilities/testing/index.js";
+import type { TestResourceCoordinatorStateOutDto } from "../../../../contracts/services/support/capabilities/testing/index.js";
 // 修正方案进入南宫演化状态与韩立审批链，令狐不建立旁路审批。
-import type { EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 // 统一异常记录由 Event Center 产生，本入口只负责受理和触发检查。
-import type { WorkflowExceptionRecord } from "../../../../contracts/governance/workflow.js";
+import type { WorkflowExceptionRecordOutDto } from "../../../../contracts/governance/index.js";
 // Store 持有状态，模块顺序是轮转的唯一事实。
 import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./internal/linghu-automation.store.js";
 // 纯分析函数独立在无副作用模块内，Facade 只编排决策与动作。
@@ -30,11 +30,11 @@ export interface LinghuCollaborationPort {
   // 返回协作快照，令狐不能直接持有或修改协作 Store。
   state(): CollaborationStateOutDto;
   // 自动保障开启时确保系统进入协作模式。
-  setMode(mode: DesktopOperatingMode): CollaborationStateOutDto;
+  setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto;
   // 派发当前令狐模块任务。
   submitTask(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto;
   // 已有执行人可以继续处理原任务。
-  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMember, "memberId" | "displayName">): CollaborationStateOutDto;
+  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto;
   // 停滞任务通过正式协调入口进入恢复。
   recoverTask(taskId: string, reason: string): Promise<CollaborationStateOutDto>;
   // 统一测试失败沿原工作树生成修正结果。
@@ -48,13 +48,13 @@ export interface LinghuAutomationFacadeOptions {
   // Coordinator 是协同任务唯一副作用入口。
   collaboration: LinghuCollaborationPort;
   // 工作区读取器在真正提交任务或提案时获取最新登记值。
-  readWorkspaceState(): WorkspaceState;
+  readWorkspaceState(): WorkspaceStateOutDto;
   // 语言读取器保持新任务与当前用户设置一致。
-  locale(): Locale;
+  locale(): LocaleValue;
   // 事件端口写入统一事件中心，并可关联具体任务。
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   // 资源读取器只返回快照，申请和释放由 Runner 完成。
-  readTestResourceState(): TestResourceCoordinatorState;
+  readTestResourceState(): TestResourceCoordinatorStateOutDto;
   // 统一测试通过后由组合根安排受控重启。
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
   // 以下三个可选端口把令狐修正接入既有演化审批链。
@@ -74,8 +74,8 @@ export class LinghuAutomationFacade {
   // 私有字段保存注入端口，外部模块不能绕过公开方法调用内部实现。
   readonly #store: LinghuAutomationStore;
   readonly #collaboration: LinghuCollaborationPort;
-  readonly #readWorkspaceState: () => WorkspaceState;
-  readonly #locale: () => Locale;
+  readonly #readWorkspaceState: () => WorkspaceStateOutDto;
+  readonly #locale: () => LocaleValue;
   readonly #recordEvent: LinghuAutomationFacadeOptions["recordEvent"];
   readonly #readTestResourceState: LinghuAutomationFacadeOptions["readTestResourceState"];
   readonly #runUnifiedTestAndRestart: LinghuAutomationFacadeOptions["runUnifiedTestAndRestart"];
@@ -146,7 +146,7 @@ export class LinghuAutomationFacade {
   }
 
   /** 统一异常队列只交给令狐一个入口；受理本身不冒充修复完成，实际恢复仍走既有有限重试流程。 */
-  async handleUnifiedExceptions(events: WorkflowExceptionRecord[]): Promise<void> {
+  async handleUnifiedExceptions(events: WorkflowExceptionRecordOutDto[]): Promise<void> {
     // 每条异常先记录令狐受理事实，不能把批次摘要代替原事件关联。
     for (const event of events) this.#recordEvent("linghu.unified_issue.accepted", {
       sourceEventId: event.eventId,
@@ -305,7 +305,7 @@ export class LinghuAutomationFacade {
   }
 
   /** 对单条流程执行受故障指纹约束的最小恢复；人工业务阻塞只保留恢复点，绝不自动越权续接。 */
-  async #recoverFlow(task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): Promise<void> {
+  async #recoverFlow(task: CollaborationTaskOutDto, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): Promise<void> {
     // 指纹只随真实故障事实变化，恢复动作自己的 updatedAt 不会重置次数。
     const fingerprint = faultFingerprint(task, snapshot);
     // 每个指纹独立计数，单一故障不会阻塞其他流程。
@@ -539,7 +539,7 @@ export class LinghuAutomationFacade {
     this.#recordEvent("linghu.automation.module_dispatched", { cycle: state.cycle, module: state.currentModule, promptId: prompt.promptId }, task.taskId);
   }
 
-  #completeModule(task: CollaborationTask, summary: string): LinghuAutomationStateOutDto {
+  #completeModule(task: CollaborationTaskOutDto, summary: string): LinghuAutomationStateOutDto {
     // 完成报告、模块轮转、循环递增和恢复字段清理由一次原子提交完成。
     return this.#store.updateRuntime("automation.module_completed", (state) => {
       // 先保存完成模块和循环，后续 currentModule 会改变。

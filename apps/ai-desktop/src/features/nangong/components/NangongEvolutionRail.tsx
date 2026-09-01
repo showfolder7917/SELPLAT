@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import type {
-  CollaborationMember,
-  EvolutionTopicDossier,
-  Locale,
+  CollaborationMemberOutDto,
+  EvolutionTopicDossierOutDto,
+  LocaleValue,
   EvolutionStateOutDto,
-  WorkspaceState,
-} from "../../../../contracts/desktop/desktop";
+  WorkspaceStateOutDto,
+} from "../../../../contracts/system/desktop/desktop";
 import { EvolutionProposalDetail } from "../../evolution/components/EvolutionProposalDetail";
 import { EvolutionProposalGrid } from "../../evolution/components/EvolutionProposalGrid";
 import { EvolutionTopicDossierView } from "../../evolution/components/EvolutionTopicDossierView";
@@ -22,7 +22,7 @@ export type EvolutionWorkspaceFlowNode = "manual" | "manual-topic" | "manual-gro
  * 真实返回示例：React 渲染南宫婉专题池、提案编辑器和调查档案，不返回业务数据。
  * 异常或副作用示例：用户保存专题时通过 desktop 门面发起请求；失败信息交给 onError 统一展示。
  */
-export function NangongEvolutionRail({ activeNode, member, state, workspaces, locale, selectedProposalId, databaseManaged, onState, onError }: { activeNode: EvolutionWorkspaceFlowNode; member: CollaborationMember; state: EvolutionStateOutDto; workspaces: WorkspaceState | null; locale: Locale; selectedProposalId: string | null; databaseManaged: boolean; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
+export function NangongEvolutionRail({ activeNode, member, state, workspaces, locale, selectedProposalId, databaseManaged, onState, onError }: { activeNode: EvolutionWorkspaceFlowNode; member: CollaborationMemberOutDto; state: EvolutionStateOutDto; workspaces: WorkspaceStateOutDto | null; locale: LocaleValue; selectedProposalId: string | null; databaseManaged: boolean; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
   const nangongTopics = state.topics.filter((item) => item.origin === "nangong");
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(state.activeTopicId);
   const topic = nangongTopics.find((item) => item.topicId === selectedTopicId) || nangongTopics.find((item) => item.topicId === state.activeTopicId) || nangongTopics.at(-1) || null;
@@ -35,7 +35,7 @@ export function NangongEvolutionRail({ activeNode, member, state, workspaces, lo
   const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", exclusions: "", evidence: "", acceptanceCriteria: "" });
   const [proposalDraft, setProposalDraft] = useState({ content: "", risks: "", rollbackPlan: "" });
   const [automationDraft, setAutomationDraft] = useState({ maxRounds: state.automationSettings.maxRoundsPerTopic === null ? "" : String(state.automationSettings.maxRoundsPerTopic), maxCorrections: String(state.automationSettings.maxCorrectionRounds) });
-  const [dossier, setDossier] = useState<EvolutionTopicDossier | null>(null);
+  const [dossier, setDossier] = useState<EvolutionTopicDossierOutDto | null>(null);
   const [operationBusy, setOperationBusy] = useState(false);
   const [handoverAcknowledged, setHandoverAcknowledged] = useState(false);
   const operationBusyRef = useRef(false);

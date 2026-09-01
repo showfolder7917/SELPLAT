@@ -1,7 +1,7 @@
-import type { CollaborationTask } from "../../../../../contracts/collaboration/workflow/index.js";
+import type { CollaborationTaskOutDto } from "../../../../../contracts/services/workflow/index.js";
 
 /** 把执行人的结构化标题转换为首页短摘要；缺少标题时使用已确认任务事实兜底。 */
-export function createCollaborationResultSummary(task: CollaborationTask, text: string, pendingActions: string[] = []): NonNullable<CollaborationTask["resultSummary"]> {
+export function createCollaborationResultSummary(task: CollaborationTaskOutDto, text: string, pendingActions: string[] = []): NonNullable<CollaborationTaskOutDto["resultSummary"]> {
   const sections = parseResultSections(text);
   const fallback = compactResultText(text);
   return {

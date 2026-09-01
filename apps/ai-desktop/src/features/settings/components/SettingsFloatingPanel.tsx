@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 
-import type { Locale } from "../../../../contracts/desktop/desktop";
+import type { LocaleValue } from "../../../../contracts/system/desktop/desktop";
 
 type SelFloatingPanelController = {
   body: HTMLElement;
@@ -19,7 +19,7 @@ const DEFAULT_WIDTH = 390;
 const MINIMUM_WIDTH = 320;
 const MAXIMUM_WIDTH = 720;
 
-export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { locale: Locale; open: boolean; onOpenChange: (open: boolean) => void; children: ReactNode }) {
+export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: { locale: LocaleValue; open: boolean; onOpenChange: (open: boolean) => void; children: ReactNode }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const openRef = useRef(open);
   const [portalBody, setPortalBody] = useState<HTMLElement | null>(null);

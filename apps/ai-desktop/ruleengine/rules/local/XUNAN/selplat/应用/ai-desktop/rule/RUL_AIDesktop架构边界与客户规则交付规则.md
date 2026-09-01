@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.2.0 把非人物业务的 application、capabilities、platform 统一收敛到 services/support，顶层只展示核心业务区和支撑区。 -->
-rule_version = 2.2.0
+<!-- 2.4.0 删除没有 Electron 真实所有者的 Governance 顶层例外，并固定协议按生产、维护和兼容责任归属。 -->
+rule_version = 2.4.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -17,8 +17,12 @@ node_ability_refs = none
 <!-- 真实生产规则加载入口固定为主进程规则服务。 -->
 application_program_path = apps/ai-desktop/electron/services/support/capabilities/rules/rule-bundle.facade.ts
 
-<!-- 应用私有跨进程协议必须按基础、桌面聚合、平台、能力、协作和治理领域分层，禁止恢复根目录平铺或独立 codex 根。 -->
-contracts_domain_layout_contract = foundation + desktop_aggregate + platform + capabilities + collaboration + governance + no_flat_business_contracts + no_root_codex_domain
+<!-- 应用私有协议顶层只保留 foundation、system、services；services 必须与 Electron 的真实业务所有者路径同构。 -->
+contracts_domain_layout_contract = foundation + system/desktop + services/personas_evolution_workflow_support + services/support/application_capabilities_platform + mirror_electron_service_owner_path + no_ownerless_theme_root + no_flat_business_contracts + no_root_codex_or_governance_domain
+<!-- 协议所有者依次由字段语义、生产与兼容责任、真实 Facade/Service/Repository 和持久化恢复责任判定，页面与消费者不得决定物理归属。 -->
+contracts_owner_resolution_contract = semantic_authority_then_producer_and_compatibility_owner_then_real_implementation_then_persistence_and_recovery_owner + renderer_page_and_consumer_never_define_owner
+<!-- 跨所有者页面只能由 DesktopApi 或 Application 用例组合数据；底层 DTO、Port 和 Value 必须保留在各自真实所有者入口。 -->
+contracts_cross_owner_view_contract = system_desktop_or_application_composition_only + underlying_contracts_stay_with_real_owner + prohibit_ownerless_governance_theme_aggregate
 <!-- contracts 只能定义纯数据和白名单接口，不得依赖 Electron、React、文件系统、SQLite 或具体业务服务。 -->
 contracts_purity_contract = pure_types_and_capability_whitelist_only + no_electron_react_node_filesystem_database_or_service_implementation
 <!-- 每个协议文件必须说明职责、生产者、消费者、数据方向和禁止职责。 -->
@@ -58,7 +62,7 @@ electron_service_zone_contract = personas + evolution + workflow + support/appli
 <!-- 南宫、韩立和令狐必须作为 personas 下并列一级模块存在；每个人物只公开自己的 Facade、Runtime 工厂和必要 Port 类型，禁止人物之间导入 internal 或具体 Facade 文件。 -->
 parallel_persona_module_contract = personas/nangong + personas/hanli + personas/linghu + personas/executor + one_public_index_per_persona + one_facade_and_runtime_per_persona + no_cross_persona_internal_or_concrete_facade_dependency + no_shared_base_persona
 <!-- 动态普通成员必须共用通用 Executor Runtime；执行会话工厂、会话缓存、存活检查和调用行为不得由 Workflow 持有，也不得按成员姓名复制目录。 -->
-generic_executor_persona_contract = personas/executor + contracts/collaboration/executor/dto_and_port + one_runtime_for_all_dynamic_workers + member_identity_passed_at_assignment + executor_owns_session_factory_cache_liveness_and_execution_calls + workflow_no_executor_session_factory_or_session_map + no_per_member_executor_directory
+generic_executor_persona_contract = personas/executor + contracts/services/personas/executor/dto_and_port + one_runtime_for_all_dynamic_workers + member_identity_passed_at_assignment + executor_owns_session_factory_cache_liveness_and_execution_calls + workflow_no_executor_session_factory_or_session_map + no_per_member_executor_directory
 <!-- 南宫婉负责生成、解析和校验任务拆分计划并选择偏好执行人；Workflow 只接收结构化任务、排队、状态迁移、恢复、集成和结果回流。 -->
 nangong_distribution_ownership_contract = nangong_owns_distribution_prompt_parse_validation_assignee_preference_and_idempotent_dispatch + IPC_calls_NangongFacade + workflow_owns_queue_state_recovery_integration_and_result_collection_only + prohibit_distribution_service_under_workflow
 <!-- 人物负责自己的业务判断，Workflow 只依据能力注册和持久事实决定轮转顺序，Evolution 是共同专题、提案、审批与验收状态的唯一所有者。 -->
@@ -67,8 +71,10 @@ persona_evolution_workflow_ownership_contract = persona_owns_own_decision + work
 persona_extension_contract = add_persona_directory + implement_minimal_capability_port + register_capabilities + no_existing_persona_internal_change + workflow_no_persona_internal_import
 <!-- 人物公开入口不得导出 Store、Runner、Repository、Analyzer、内部异常或内部常量；组合根只能取得门面与受控生命周期。 -->
 persona_public_api_contract = facade + runtime_factory + runtime_and_port_types_only + prohibit_store_runner_repository_analyzer_internal_error_and_internal_constant_export
-<!-- 协作 Contracts 必须按 nangong、hanli、linghu、evolution、workflow 分模块，并以 .in.dto、.out.dto、事件或 port 表达数据方向；旧人物混合契约不得保留第二权威定义。 -->
-persona_contract_layout_contract = contracts/collaboration/nangong/dto + contracts/collaboration/hanli/dto + contracts/collaboration/linghu/dto + contracts/collaboration/executor/dto_and_port + contracts/collaboration/evolution/dto + contracts/collaboration/workflow/dto_and_port + directional_in_out_dto_names + one_authoritative_shared_evolution_state + no_legacy_nangong_evolution_contract
+<!-- 人物 Contracts 与 Electron personas 并列同构，Evolution 与 Workflow 保持中立所有者；旧 collaboration 映射不得保留第二权威定义。 -->
+persona_contract_layout_contract = contracts/services/personas/nangong_dto + contracts/services/personas/hanli_dto_and_value + contracts/services/personas/linghu_dto_and_value + contracts/services/personas/executor_dto_and_port + contracts/services/evolution/dto_and_value + contracts/services/workflow/dto_port_value + directional_in_out_and_event_dto_names + one_authoritative_shared_evolution_state + no_legacy_collaboration_contract_root
+<!-- 协议角色必须从文件名、公开类型名和目录共同可见；Port 只表示带方法的行为边界，稳定联合类型必须归入 Value。 -->
+contracts_protocol_role_contract = dto/in_and_out + dto/event_out + port/callable_behavior_only + value/stable_directionless_value + api/capability_aggregate + InDto_OutDto_EventOutDto_Port_Value_Api_suffixes + prohibit_non_callable_port + no_empty_role_directory
 <!-- 每个 contracts 领域 index 必须显式列出公开符号及其物理来源，业务含义是从类型名和唯一入口可以直接定位定义文件。 -->
 contracts_public_index_traceability_contract = explicit_named_symbol_exports_with_physical_source + prohibit_export_star_and_export_type_star + one_authoritative_definition_per_public_symbol + no_forwarding_fake_DTO
 <!-- 跨模块只允许导入目标模块 index，同模块内部才允许导入自己的具体 DTO；Desktop 聚合只服务 preload 和 Renderer，主进程必须导入所属领域入口。 -->
@@ -78,9 +84,9 @@ persona_renderer_boundary_contract = features/nangong + features/hanli + feature
 <!-- 并列人物重构必须以静态边界、业务、并发、交互、构建和真实启动测试共同验收；旧平铺文件、旧公开出口和兼容别名归零后才可完成。 -->
 parallel_persona_completion_gate = boundary + business + concurrency + interaction + build + real_startup + legacy_flat_file_and_public_export_zero + controlled_legacy_state_recovery
 <!-- 令狐在 contracts、Electron 主进程和 Renderer 三个既有编译边界下分别使用同名 linghu 目录；主进程令狐根层只保留 index 和 Facade，技术测试执行与持久化通过公共能力端口注入。 -->
-linghu_vertical_module_contract = contracts/collaboration/linghu + electron/services/personas/linghu + src/features/linghu + public_index_only + public_index_exports_only_facade_runtime_factory_and_runtime_types + prohibit_public_store_runner_internal_error_and_internal_constant_exports + runtime_internally_constructs_store_and_analyzer_and_accepts_testing_and_persistence_ports + fixed_unified_test_runner_owned_by_capabilities/testing + atomic_json_persistence_owned_by_platform/persistence + facade_depends_on_minimal_collaboration_port_not_concrete_coordinator + electron_linghu_root_contains_index_and_linghu_automation_facade_only + internal_contains_runtime_store_and_analyzer + facade_store_analyzer_and_runtime_role_names_not_generic_service_names + prohibit_external_direct_internal_or_facade_file_import + preserve_main_preload_renderer_contract_boundaries + main_and_developer_shell_composition_only + flow_analysis_and_UI_owned_by_linghu_module
+linghu_vertical_module_contract = contracts/services/personas/linghu + electron/services/personas/linghu + src/features/linghu + public_index_only + public_index_exports_only_facade_runtime_factory_and_runtime_types + prohibit_public_store_runner_internal_error_and_internal_constant_exports + runtime_internally_constructs_store_and_analyzer_and_accepts_testing_and_persistence_ports + fixed_unified_test_runner_owned_by_support/capabilities/testing + atomic_json_persistence_owned_by_support/platform/persistence + facade_depends_on_minimal_collaboration_port_not_concrete_coordinator + electron_linghu_root_contains_index_and_linghu_automation_facade_only + internal_contains_runtime_store_and_analyzer + facade_store_analyzer_and_runtime_role_names_not_generic_service_names + prohibit_external_direct_internal_or_facade_file_import + preserve_main_preload_renderer_contract_boundaries + main_and_developer_shell_composition_only + flow_analysis_and_UI_owned_by_linghu_module
 <!-- 令狐 DTO 固定站在令狐模块边界判断方向：进入令狐为 InDto，离开令狐为 OutDto，主动事件为 EventOutDto；每个文件必须写明生产方、接收方、流向和禁止职责。 -->
-linghu_contract_dto_layout_contract = contracts/collaboration/linghu/dto + one_direction_per_kebab_case_dot_in_or_out_dot_dto_dot_ts_file_with_same_direction_supporting_types + linghu_boundary_is_direction_reference + inbound_names_end_with_InDto + outbound_names_end_with_OutDto + outbound_event_names_end_with_EventOutDto + file_comment_declares_producer_consumer_data_flow_and_forbidden_responsibility + linghu_index_is_only_public_facade + prohibit_external_direct_dto_import + repair_proposal_out_owned_by_linghu_not_nangong
+linghu_contract_dto_layout_contract = contracts/services/personas/linghu/dto_and_value + one_direction_per_kebab_case_dot_in_or_out_dot_dto_dot_ts_file_with_same_direction_supporting_types + linghu_boundary_is_direction_reference + inbound_names_end_with_InDto + outbound_names_end_with_OutDto + outbound_event_file_uses_dot_event_dot_out_dot_dto_and_type_ends_with_EventOutDto + stable_union_names_end_with_Value + file_comment_declares_producer_consumer_data_flow_and_forbidden_responsibility + linghu_index_is_only_public_facade + prohibit_external_direct_dto_or_value_import + repair_proposal_out_owned_by_linghu_not_nangong
 
 <!-- 客户安装包必须携带由显式白名单构建的生产规则 bundle，禁止依赖 SELPLAT 源码仓库。 -->
 production_rule_bundle_contract = explicit_allowlist_build + manifest_and_rules_JSON + packaged_extraResources + no_source_repository_dependency

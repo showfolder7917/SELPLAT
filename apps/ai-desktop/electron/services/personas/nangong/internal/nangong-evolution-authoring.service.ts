@@ -3,8 +3,8 @@ import type {
   CreateNangongProposalInDto,
   ReviseNangongProposalInDto,
   UpdateNangongTopicInDto,
-} from "../../../../../contracts/collaboration/nangong/index.js";
-import type { EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+} from "../../../../../contracts/services/personas/nangong/index.js";
+import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 import { hasMaterialRevisionEvidence, parseRevisionInvestigation, revisionInvestigationPrompt } from "./nangong-revision.investigator.js";
 

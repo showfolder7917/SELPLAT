@@ -1,4 +1,4 @@
-import type { EvolutionMutationInDto } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionMutationInDto } from "../../../../contracts/services/evolution/index.js";
 
 export interface EvolutionMutationCoordinatorOptions {
   begin?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";

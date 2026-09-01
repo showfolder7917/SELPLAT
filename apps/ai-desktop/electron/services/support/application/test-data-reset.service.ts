@@ -1,4 +1,4 @@
-import type { TestDataResetResult } from "../../../../contracts/platform/persistence/index.js";
+import type { TestDataResetResultOutDto } from "../../../../contracts/services/support/application/index.js";
 
 export interface CandidateCleanupResult {
   branchCount: number;
@@ -23,7 +23,7 @@ export class TestDataResetService {
 
   constructor(private readonly options: TestDataResetServiceOptions) {}
 
-  async clear(): Promise<TestDataResetResult> {
+  async clear(): Promise<TestDataResetResultOutDto> {
     if (this.#inProgress) throw new Error("测试数据正在清空，请等待应用重启。");
     this.#inProgress = true;
     let runtimeDisposed = false;
@@ -36,7 +36,7 @@ export class TestDataResetService {
       const clearedRecordCount = this.options.clearStores();
       this.options.assertStoresCleared();
       this.options.detachPersistence();
-      const result: TestDataResetResult = {
+      const result: TestDataResetResultOutDto = {
         cleared: true,
         clearedRecordCount,
         clearedCandidateBranchCount: candidateCleanup.branchCount,

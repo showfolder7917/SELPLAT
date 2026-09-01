@@ -1,7 +1,7 @@
 /** Codex 领域 IPC：集中认证、审批、用户输入和自动测试预检，避免桌面组合入口复制治理判断。 */
 import { shell } from "electron";
 
-import type { ResolveCodexUserInputRequest } from "../../../../contracts/platform/codex/index.js";
+import type { ResolveCodexUserInputInDto } from "../../../../contracts/services/support/platform/codex/index.js";
 import { prepareAutomaticTesting } from "../../../services/support/capabilities/testing/index.js";
 import type { CodexFacade as CodexService } from "../../../services/support/platform/codex/index.js";
 import type { ConversationFacade as ConversationDispatchStore } from "../../../services/support/capabilities/conversation/index.js";
@@ -101,7 +101,7 @@ export function registerCodexIpc(dependencies: CodexIpcDependencies): void {
     return result;
   });
   handle("desktop:get-codex-user-inputs", () => [...codex.pendingUserInputs(), ...collaborationRegistry.pendingUserInputs()]);
-  handle("desktop:resolve-codex-user-input", (_event, request: ResolveCodexUserInputRequest) => {
+  handle("desktop:resolve-codex-user-input", (_event, request: ResolveCodexUserInputInDto) => {
     if (request.requestId >= 1_000_000) collaborationRegistry.resolveUserInput(request);
     else codex.resolveUserInput(request);
     // 只记录问题生命周期和回答数量，避免把可能敏感的答案正文写入审计。

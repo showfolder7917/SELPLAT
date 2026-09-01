@@ -3,15 +3,15 @@ import { readFileSync, writeFileSync } from "node:fs";
 import {
   MODEL_SERVICE_TIERS,
   REASONING_EFFORTS,
-  type ModelServiceTier,
-  type ReasoningEffort,
-} from "../../../../../../contracts/foundation/base.js";
-import type { DesktopSettings } from "../../../../../../contracts/platform/settings/index.js";
+  type ModelServiceTierValue,
+  type ReasoningEffortValue,
+} from "../../../../../../contracts/foundation/index.js";
+import type { DesktopSettingsOutDto } from "../../../../../../contracts/services/support/platform/settings/index.js";
 
 export const DEFAULT_AI_DESKTOP_MODEL = "gpt-5.6-terra";
 const SETTINGS_SCHEMA_VERSION = 2;
 
-const DEFAULT_SETTINGS: DesktopSettings = {
+const DEFAULT_SETTINGS: DesktopSettingsOutDto = {
   locale: "ja",
   sandboxMode: "read-only",
   defaultModel: DEFAULT_AI_DESKTOP_MODEL,
@@ -20,19 +20,19 @@ const DEFAULT_SETTINGS: DesktopSettings = {
   codexAppCorpusIngestionEnabled: false,
 };
 
-interface StoredDesktopSettings extends Partial<DesktopSettings> {
+interface StoredDesktopSettings extends Partial<DesktopSettingsOutDto> {
   settingsSchemaVersion?: number;
 }
 
 export class SettingsStore {
   readonly #filePath: string;
-  readonly #listeners = new Set<(settings: DesktopSettings) => void>();
+  readonly #listeners = new Set<(settings: DesktopSettingsOutDto) => void>();
 
   constructor(filePath: string) {
     this.#filePath = filePath;
   }
 
-  read(): DesktopSettings {
+  read(): DesktopSettingsOutDto {
     try {
       const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as StoredDesktopSettings;
       // 旧版本没有模型迁移标记；仅把旧的空默认值升级为 Terra，之后仍允许用户主动选择 Codex 默认。
@@ -52,9 +52,9 @@ export class SettingsStore {
     }
   }
 
-  update(patch: Partial<DesktopSettings>): DesktopSettings {
+  update(patch: Partial<DesktopSettingsOutDto>): DesktopSettingsOutDto {
     const current = this.read();
-    const next: DesktopSettings = {
+    const next: DesktopSettingsOutDto = {
       locale: patch.locale === "ja" || patch.locale === "zh-CN" ? patch.locale : current.locale,
       sandboxMode: patch.sandboxMode === "read-only" || patch.sandboxMode === "workspace-write"
         ? patch.sandboxMode
@@ -74,7 +74,7 @@ export class SettingsStore {
   }
 
   /** 设置保存后通知同一主进程中的运行能力。示例：开启 Codex 入库立即启动补录；监听异常会传播给设置 IPC 并保持旧文件可重读。 */
-  subscribe(listener: (settings: DesktopSettings) => void): () => void {
+  subscribe(listener: (settings: DesktopSettingsOutDto) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
@@ -86,15 +86,15 @@ function validModel(value: unknown): string | null {
 }
 
 /** 推理强度只接受公共契约声明的值，避免旧配置把非法字段传入 Harness。 */
-function validReasoningEffort(value: unknown): ReasoningEffort | null {
-  return typeof value === "string" && REASONING_EFFORTS.includes(value as ReasoningEffort)
-    ? value as ReasoningEffort
+function validReasoningEffort(value: unknown): ReasoningEffortValue | null {
+  return typeof value === "string" && REASONING_EFFORTS.includes(value as ReasoningEffortValue)
+    ? value as ReasoningEffortValue
     : null;
 }
 
 /** 速度选项保持为产品语义，发送时再映射到官方服务层级字段。 */
-function validServiceTier(value: unknown): ModelServiceTier | null {
-  return typeof value === "string" && MODEL_SERVICE_TIERS.includes(value as ModelServiceTier)
-    ? value as ModelServiceTier
+function validServiceTier(value: unknown): ModelServiceTierValue | null {
+  return typeof value === "string" && MODEL_SERVICE_TIERS.includes(value as ModelServiceTierValue)
+    ? value as ModelServiceTierValue
     : null;
 }

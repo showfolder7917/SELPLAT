@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -23,42 +23,54 @@ function sourceFilesUnder(relativeRoot) {
   return collected;
 }
 
+test("contracts mirror Electron ownership and expose explicit protocol roles", () => {
+  const contractRoots = readdirSync(path.join(appRoot, "contracts"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && sourceFilesUnder(path.join("contracts", entry.name)).length > 0)
+    .map((entry) => entry.name)
+    .sort();
+  assert.deepEqual(contractRoots, ["foundation", "governance", "services", "system"]);
+  for (const mirroredOwner of [
+    "personas/nangong", "personas/hanli", "personas/linghu", "personas/executor",
+    "evolution", "workflow", "support/application", "support/capabilities", "support/platform",
+  ]) {
+    assert.equal(existsSync(path.join(appRoot, "contracts/services", mirroredOwner)), true, mirroredOwner);
+    assert.equal(existsSync(path.join(appRoot, "electron/services", mirroredOwner)), true, mirroredOwner);
+  }
+  const contractSources = sourceFilesUnder("contracts");
+  for (const file of contractSources) assert.doesNotMatch(source(file), /export(?: type)? \*/u, file);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/workflow/port/persona-capability.port.ts")), false);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/workflow/value/persona-capability.value.ts")), true);
+  assert.match(source("contracts/services/workflow/port/persona-runtime.port.ts"), /\w+\([^)]*\)\s*:/u);
+});
+
 test("application-private contracts are domain modules outside shared", () => {
   assert.equal(existsSync(path.join(appRoot, "shared")), false);
   for (const contract of [
-    "foundation/base.ts",
-    "platform/workspace/workspace.ts",
-    "platform/codex/codex-stream.ts",
-    "capabilities/conversation/conversation.ts",
-    "platform/codex/codex.ts",
-    "platform/settings/settings.ts",
-    "platform/attachments/screenshot.ts",
-    "governance/audit.ts",
-    "desktop/desktop-api.ts",
-    "desktop/capability-registry.ts",
-    "collaboration/evolution/dto/evolution-state.out.dto.ts",
-    "capabilities/event-center/collaboration-memory.ts",
-    "governance/workflow.ts",
-    "capabilities/rules/rules.ts",
+    "foundation/value/base.value.ts",
+    "services/support/platform/workspace/dto/workspace.out.dto.ts",
+    "services/support/platform/codex/dto/codex-stream.event.out.dto.ts",
+    "services/support/platform/codex/dto/codex.out.dto.ts",
+    "services/support/platform/settings/dto/settings.out.dto.ts",
+    "services/evolution/dto/evolution-state.out.dto.ts",
   ]) {
     assert.equal(existsSync(path.join(appRoot, "contracts", contract)), true, contract);
     assert.match(source(path.join("contracts", contract)), /生产者：|preload 向 Renderer/, `${contract} should explain ownership`);
   }
   assert.deepEqual(readdirSync(path.join(appRoot, "contracts")).filter((name) => name.endsWith(".ts")), []);
   assert.equal(existsSync(path.join(appRoot, "ARCHITECTURE.md")), true);
-  assert.doesNotMatch(source("contracts/collaboration/workflow/index.ts"), /from ["']\.\/desktop(?:\.js)?["']/);
-  assert.match(source("contracts/desktop/desktop.ts"), /export type \{ DesktopApi \} from "\.\/desktop-api\.js"/);
-  assert.match(source("contracts/desktop/capability-registry.ts"), /keyof DesktopApi/);
-  assert.match(source("contracts/desktop/capability-registry.ts"), /satisfies Record<string, readonly \(keyof DesktopCapabilityRegistry\)\[]>/);
+  assert.doesNotMatch(source("contracts/services/workflow/index.ts"), /from ["']\.\/desktop(?:\.js)?["']/);
+  assert.match(source("contracts/system/desktop/index.ts"), /export type \{ DesktopApi \} from "\.\/api\/desktop\.api\.js"/);
+  assert.match(source("contracts/system/desktop/value/desktop-capability-registry.value.ts"), /keyof DesktopApi/);
+  assert.match(source("contracts/system/desktop/value/desktop-capability-registry.value.ts"), /satisfies Record<string, readonly \(keyof DesktopCapabilityRegistryValue\)\[]>/);
   assert.match(source("electron/system/bootstrap/application-runtime.ts"), /desktop:evolution-workbench-changed/);
   assert.doesNotMatch(source("electron/system/bootstrap/application-runtime.ts"), /function buildEvolutionWorkbenchChange/);
   assert.match(source("electron/services/evolution/internal/evolution-workbench-change.assembler.ts"), /previousStateVersion:\s*previous\.updatedAt/);
   assert.match(source("src/features/evolution/components/EvolutionDatabaseGrid.tsx"), /onEvolutionWorkbenchChanged/);
   assert.match(source("src/features/evolution/components/EvolutionDatabaseGrid.tsx"), /visibilitychange/);
-  assert.match(source("contracts/collaboration/evolution/index.ts"), /EvolutionStateOutDto \} from "\.\/dto\/evolution-state\.out\.dto\.js"/);
-  assert.match(source("contracts/collaboration/evolution/dto/evolution-workbench.out.dto.ts"), /interface EvolutionWorkspaceLocation/);
+  assert.match(source("contracts/services/evolution/index.ts"), /EvolutionStateOutDto \} from "\.\/dto\/evolution-state\.out\.dto\.js"/);
+  assert.match(source("contracts/services/evolution/dto/evolution-workbench.out.dto.ts"), /interface EvolutionWorkspaceLocationOutDto/);
   assert.match(source("electron/system/ipc/register-desktop-ipc.ts"), /normalizeEvolutionWorkspaceLocation/);
-  assert.doesNotMatch(source("contracts/desktop/desktop-api.ts"), /onEvolutionWorkspacePerspective|openEvolutionWorkspace\(perspective/);
+  assert.doesNotMatch(source("contracts/system/desktop/api/desktop.api.ts"), /onEvolutionWorkspacePerspective|openEvolutionWorkspace\(perspective/);
   assert.match(source("src/features/evolution/components/EvolutionDatabaseGrid.tsx"), /requestedLocation.*onLocationChange/);
   assert.match(source("src/features/nangong/components/NangongEvolutionRail.tsx"), /dispatchEvolutionProposal\([^\n]+evolutionMutationRequest\(state\)\)/);
   assert.match(source("src/features/evolution/model/evolution-workbench.ts"), /expectedStateVersion:\s*state\.updatedAt/);
@@ -77,8 +89,8 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.match(source("src/features/hanli/components/HanLiEvolutionApprovalPanel.tsx"), /decideEvolutionProposal\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
   assert.match(source("src/features/hanli/components/HanLiEvolutionApprovalPanel.tsx"), /decideEvolutionResult\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
   assert.match(source("src/features/evolution/components/EvolutionRevisionPanels.tsx"), /reviseEvolutionProposal\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
-  const apiMethods = [...source("contracts/desktop/desktop-api.ts").matchAll(/^\s{2}(\w+)\(/gm)].map((match) => match[1]);
-  const registryBody = source("contracts/desktop/capability-registry.ts").split("export const DESKTOP_CAPABILITY_DOMAINS", 2)[1];
+  const apiMethods = [...source("contracts/system/desktop/api/desktop.api.ts").matchAll(/^\s{2}(\w+)\(/gm)].map((match) => match[1]);
+  const registryBody = source("contracts/system/desktop/value/desktop-capability-registry.value.ts").split("export const DESKTOP_CAPABILITY_DOMAINS", 2)[1];
   const registeredMethods = [...registryBody.matchAll(/"(\w+)"/g)].map((match) => match[1]);
   assert.deepEqual(new Set(registeredMethods).size, registeredMethods.length, "capability IDs must not repeat across domains");
   assert.deepEqual([...registeredMethods].sort(), [...apiMethods].sort(), "every DesktopApi method must belong to one capability domain");
@@ -248,25 +260,22 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   const electronMainSource = source("electron/system/bootstrap/collaboration.bootstrap.ts");
   assert.doesNotMatch(electronMainSource, /LinghuAutomationStore|LinghuUnifiedTestRunner|linghuRuntime\.store/);
   assert.match(electronMainSource, /options\.runUnifiedTests/);
-  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu/index.ts")), true);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/personas/linghu/index.ts")), true);
   const linghuDtoContracts = new Map([
     ["create-startup-prompt.in.dto.ts", ["CreateLinghuStartupPromptInDto"]],
     ["update-startup-prompt.in.dto.ts", ["UpdateLinghuStartupPromptInDto"]],
     ["startup-prompt.out.dto.ts", ["LinghuStartupPromptOutDto"]],
     ["repair-proposal.out.dto.ts", ["CreateLinghuRepairProposalOutDto"]],
-    ["automation-state-event.out.dto.ts", ["LinghuAutomationStateEventOutDto"]],
+    ["automation-state.event.out.dto.ts", ["LinghuAutomationStateEventOutDto"]],
     ["automation-state.out.dto.ts", [
-      "LinghuAutomationModuleOutDto",
       "LinghuAutomationFeedbackOutDto",
-      "LinghuFlowHealthOutDto",
-      "LinghuBlockingKindOutDto",
       "LinghuAutomaticFlowSnapshotOutDto",
       "LinghuModuleCompletionReportOutDto",
       "LinghuAutomationStateOutDto",
     ]],
   ]);
   for (const [dtoFile, expectedTypeNames] of linghuDtoContracts) {
-    const relativePath = path.join("contracts/collaboration/linghu/dto", dtoFile);
+    const relativePath = path.join("contracts/services/personas/linghu/dto", dtoFile);
     assert.equal(existsSync(path.join(appRoot, relativePath)), true, relativePath);
     const dtoSource = source(relativePath);
     const exportedTypeNames = [...dtoSource.matchAll(/export (?:interface|type) (\w+)/gu)].map((match) => match[1]);
@@ -277,14 +286,18 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
       assert.ok(dtoSource.includes(requiredCommentLabel), `${dtoFile} must explain ${requiredCommentLabel}`);
     }
   }
-  const linghuContractIndex = source("contracts/collaboration/linghu/index.ts");
+  const linghuValueSource = source("contracts/services/personas/linghu/value/automation.value.ts");
+  for (const valueName of ["LinghuAutomationModuleValue", "LinghuFlowHealthValue", "LinghuBlockingKindValue"]) {
+    assert.match(linghuValueSource, new RegExp(`export type ${valueName}\\b`));
+  }
+  const linghuContractIndex = source("contracts/services/personas/linghu/index.ts");
   for (const dtoFile of linghuDtoContracts.keys()) {
     assert.ok(linghuContractIndex.includes(`./dto/${dtoFile.replace(/\.ts$/u, ".js")}`), `${dtoFile} must be exported by the Linghu facade`);
   }
   for (const legacyDtoFile of ["automation-state.dto.ts", "startup-prompt.dto.ts", "repair-proposal.dto.ts", "automation-event.dto.ts"]) {
-    assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu/dto", legacyDtoFile)), false, legacyDtoFile);
+    assert.equal(existsSync(path.join(appRoot, "contracts/services/personas/linghu/dto", legacyDtoFile)), false, legacyDtoFile);
   }
-  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu/automation.ts")), false);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/personas/linghu/automation.ts")), false);
   for (const sourceRoot of ["contracts", "electron", "src"]) {
     for (const sourceFile of sourceFilesUnder(sourceRoot)) {
       if (sourceFile.startsWith(path.join("contracts", "collaboration", "linghu"))) continue;
@@ -294,7 +307,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu-automation-facade.ts")), false);
   assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu-automation-store.ts")), false);
   assert.equal(existsSync(path.join(appRoot, "electron/services/collaboration/linghu-unified-test-runner.ts")), false);
-  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/linghu-automation.ts")), false);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/personas/linghu-automation.ts")), false);
   assert.doesNotMatch(developerApp, /function NangongEvolutionRail/);
   assert.doesNotMatch(developerApp, /function EvolutionControlWorkspace|function EvolutionModuleOverview|function EvolutionPeopleSummary/);
   assert.doesNotMatch(developerApp, /const EVOLUTION_STATUS_LABELS/);
@@ -503,34 +516,35 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
 
   // Contracts 按人物、共享事实、流程以及输入输出方向分层。
   for (const contract of [
-    "contracts/collaboration/nangong/dto/send-conversation-message.in.dto.ts",
-    "contracts/collaboration/nangong/dto/conversation.out.dto.ts",
-    "contracts/collaboration/nangong/dto/create-proposal.in.dto.ts",
-    "contracts/collaboration/hanli/dto/decide-proposal.in.dto.ts",
-    "contracts/collaboration/hanli/dto/acceptance-plan.out.dto.ts",
-    "contracts/collaboration/hanli/dto/acceptance-run.out.dto.ts",
-    "contracts/collaboration/executor/dto/executor-execution-result.out.dto.ts",
-    "contracts/collaboration/executor/port/executor-session.port.ts",
-    "contracts/collaboration/evolution/dto/evolution-state.out.dto.ts",
-    "contracts/collaboration/evolution/dto/evolution-state.event.out.dto.ts",
-    "contracts/collaboration/evolution/dto/evolution-proposal.out.dto.ts",
-    "contracts/collaboration/workflow/dto/configure-persona-workflow.in.dto.ts",
-    "contracts/collaboration/workflow/dto/persona-workflow-action.in.dto.ts",
-    "contracts/collaboration/workflow/port/persona-capability.port.ts",
+    "contracts/services/personas/nangong/dto/send-conversation-message.in.dto.ts",
+    "contracts/services/personas/nangong/dto/conversation.out.dto.ts",
+    "contracts/services/personas/nangong/dto/create-proposal.in.dto.ts",
+    "contracts/services/personas/hanli/dto/decide-proposal.in.dto.ts",
+    "contracts/services/personas/hanli/dto/acceptance-plan.out.dto.ts",
+    "contracts/services/personas/hanli/dto/acceptance-run.out.dto.ts",
+    "contracts/services/personas/executor/dto/executor-execution-result.out.dto.ts",
+    "contracts/services/personas/executor/port/executor-session.port.ts",
+    "contracts/services/evolution/dto/evolution-state.out.dto.ts",
+    "contracts/services/evolution/dto/evolution-state.event.out.dto.ts",
+    "contracts/services/evolution/dto/evolution-proposal.out.dto.ts",
+    "contracts/services/workflow/dto/configure-persona-workflow.in.dto.ts",
+    "contracts/services/workflow/dto/persona-workflow-action.in.dto.ts",
+    "contracts/services/workflow/port/persona-runtime.port.ts",
+    "contracts/services/workflow/value/persona-capability.value.ts",
   ]) assert.equal(existsSync(path.join(appRoot, contract)), true, contract);
 
   for (const legacyContract of [
-    "contracts/collaboration/nangong/dto/nangong-command.in.dto.ts",
-    "contracts/collaboration/nangong/dto/nangong-result.out.dto.ts",
-    "contracts/collaboration/hanli/dto/hanli-decision.in.dto.ts",
-    "contracts/collaboration/hanli/dto/hanli-acceptance.out.dto.ts",
-    "contracts/collaboration/workflow/dto/persona-workflow.in.dto.ts",
+    "contracts/services/personas/nangong/dto/nangong-command.in.dto.ts",
+    "contracts/services/personas/nangong/dto/nangong-result.out.dto.ts",
+    "contracts/services/personas/hanli/dto/hanli-decision.in.dto.ts",
+    "contracts/services/personas/hanli/dto/hanli-acceptance.out.dto.ts",
+    "contracts/services/workflow/dto/persona-workflow.in.dto.ts",
   ]) assert.equal(existsSync(path.join(appRoot, legacyContract)), false, legacyContract);
 
   const contractSources = sourceFilesUnder("contracts").map((file) => source(file)).join("\n");
   assert.doesNotMatch(contractSources, /export(?: type)? \*/u, "contracts 必须使用显式符号出口");
   assert.doesNotMatch(contractSources, /\b(?:EvolutionState|EvolutionMutationRequest|DecideEvolutionProposalRequest|SendNangongConversationMessageRequest)\b/u, "旧总协议名称必须归零");
-  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/workflow/collaboration.ts")), false, "Workflow 总协议文件必须完成拆分");
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/workflow/collaboration.ts")), false, "Workflow 总协议文件必须完成拆分");
   const electronSources = sourceFilesUnder("electron").map((file) => source(file)).join("\n");
   assert.doesNotMatch(electronSources, /contracts\/desktop\/desktop\.js/u, "主进程必须从目标领域 index 导入，Desktop 聚合只属于 preload 和 Renderer");
 
@@ -543,7 +557,7 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   assert.match(source("src/features/evolution/components/EvolutionControlWorkspace.tsx"), /from "\.\.\/\.\.\/hanli"/);
 
   // 旧混合命名和旧平铺契约必须在完成阶段消失。
-  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/evolution/nangong-evolution.ts")), false);
+  assert.equal(existsSync(path.join(appRoot, "contracts/services/evolution/nangong-evolution.ts")), false);
   assert.equal(existsSync(path.join(appRoot, "electron/services/personas/nangong/internal/nangong-evolution.facade.ts")), false);
   for (const publicIndex of [
     "electron/services/personas/nangong/index.ts",

@@ -1,10 +1,10 @@
-import type { CodexStreamEvent } from "../../../../../../../contracts/platform/codex/index.js";
+﻿import type { CodexStreamEventOutDto } from "../../../../../../../contracts/services/support/platform/codex/index.js";
 import type {
   CollaborationStateOutDto,
   CollaborationTimelineChangedEventOutDto,
   CollaborationTimelineSnapshotOutDto,
-} from "../../../../../../../contracts/collaboration/workflow/index.js";
-import type { CollaborationTimelineBusinessEvent } from "../../../../../../../contracts/collaboration/workflow/index.js";
+} from "../../../../../../../contracts/services/workflow/index.js";
+import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../../../contracts/services/workflow/index.js";
 import { CollaborationTimelineRepository } from "./collaboration-timeline.repository.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 
@@ -22,7 +22,7 @@ export class CollaborationTimelineFacade {
     this.#repository = new CollaborationTimelineRepository(database);
   }
 
-  appendTimelineEvent(event: CollaborationTimelineBusinessEvent): void {
+  appendTimelineEvent(event: CollaborationTimelineBusinessEventOutDto): void {
     const commit = this.#repository.appendBusinessEvent(event);
     if (commit) this.#publish(commit);
   }
@@ -32,7 +32,7 @@ export class CollaborationTimelineFacade {
     if (commit) this.#publish(commit);
   }
 
-  appendStream(taskId: string, memberId: string, event: CodexStreamEvent): string | null {
+  appendStream(taskId: string, memberId: string, event: CodexStreamEventOutDto): string | null {
     const commit = this.#repository.appendStream(taskId, memberId, event);
     if (!commit) return null;
     this.#publish(commit);

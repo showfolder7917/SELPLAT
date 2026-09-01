@@ -2,12 +2,12 @@ import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 
 import type {
-  ConversationDispatchState,
-  ConversationQueueItem,
-  SendMessageRequest,
-} from "../../../../../../contracts/capabilities/conversation/index.js";
+  ConversationDispatchStateOutDto,
+  ConversationQueueItemOutDto,
+  SendMessageInDto,
+} from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 
-interface StoredDispatchState extends ConversationDispatchState {
+interface StoredDispatchState extends ConversationDispatchStateOutDto {
   version: 1;
 }
 
@@ -38,11 +38,11 @@ export class ConversationDispatchStore {
     }
   }
 
-  state(): ConversationDispatchState {
+  state(): ConversationDispatchStateOutDto {
     return structuredClone({ activeTask: this.#state.activeTask, queue: this.#state.queue });
   }
 
-  begin(request: SendMessageRequest, dispatchId: string = randomUUID()): string {
+  begin(request: SendMessageInDto, dispatchId: string = randomUUID()): string {
     if (this.#state.activeTask) throw new Error("当前任务尚未结束，新消息必须先进入队列。");
     this.#state.activeTask = {
       id: dispatchId,
@@ -62,8 +62,8 @@ export class ConversationDispatchStore {
     this.#record("dispatch.finished", { dispatchId, outcome });
   }
 
-  enqueue(request: SendMessageRequest, displayText?: string, automatic = false): ConversationQueueItem {
-    const item: ConversationQueueItem = {
+  enqueue(request: SendMessageInDto, displayText?: string, automatic = false): ConversationQueueItemOutDto {
+    const item: ConversationQueueItemOutDto = {
       id: randomUUID(),
       request: normalizeRequest(request),
       displayText: (displayText || request.message).slice(0, 20_000),
@@ -81,12 +81,12 @@ export class ConversationDispatchStore {
     return structuredClone(item);
   }
 
-  queueItem(itemId: string): ConversationQueueItem | null {
+  queueItem(itemId: string): ConversationQueueItemOutDto | null {
     const item = this.#state.queue.find((candidate) => candidate.id === itemId);
     return item ? structuredClone(item) : null;
   }
 
-  takeQueued(itemId: string): ConversationQueueItem {
+  takeQueued(itemId: string): ConversationQueueItemOutDto {
     const index = this.#state.queue.findIndex((candidate) => candidate.id === itemId);
     if (index < 0) throw new Error("排队消息已被处理或不存在。");
     const [item] = this.#state.queue.splice(index, 1);
@@ -95,16 +95,16 @@ export class ConversationDispatchStore {
     return structuredClone(item);
   }
 
-  removeQueued(itemId: string, reason: "supplemented" | "discarded"): ConversationQueueItem {
+  removeQueued(itemId: string, reason: "supplemented" | "discarded"): ConversationQueueItemOutDto {
     const item = this.takeQueued(itemId);
     this.#record(`dispatch.${reason}`, { dispatchId: item.id });
     return item;
   }
 
-  recover(): ConversationQueueItem {
+  recover(): ConversationQueueItemOutDto {
     const active = this.#state.activeTask;
     if (!active || active.status !== "recoverable") throw new Error("没有可以继续执行的任务。");
-    const item: ConversationQueueItem = {
+    const item: ConversationQueueItemOutDto = {
       id: active.id,
       request: normalizeRequest({
         ...active.request,
@@ -155,7 +155,7 @@ export class ConversationDispatchStore {
   }
 }
 
-function normalizeRequest(request: SendMessageRequest): SendMessageRequest {
+function normalizeRequest(request: SendMessageInDto): SendMessageInDto {
   return {
     message: request.message.slice(0, 20_000),
     locale: request.locale === "ja" ? "ja" : "zh-CN",
@@ -165,15 +165,15 @@ function normalizeRequest(request: SendMessageRequest): SendMessageRequest {
   };
 }
 
-function isQueueItem(value: unknown): value is ConversationQueueItem {
+function isQueueItem(value: unknown): value is ConversationQueueItemOutDto {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<ConversationQueueItem>;
+  const candidate = value as Partial<ConversationQueueItemOutDto>;
   return typeof candidate.id === "string" && typeof candidate.createdAt === "string" && typeof candidate.displayText === "string" && Boolean(candidate.request);
 }
 
-function isActiveTask(value: unknown): value is NonNullable<ConversationDispatchState["activeTask"]> {
+function isActiveTask(value: unknown): value is NonNullable<ConversationDispatchStateOutDto["activeTask"]> {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<NonNullable<ConversationDispatchState["activeTask"]>>;
+  const candidate = value as Partial<NonNullable<ConversationDispatchStateOutDto["activeTask"]>>;
   return typeof candidate.id === "string" && typeof candidate.startedAt === "string"
     && (candidate.status === "running" || candidate.status === "recoverable") && Boolean(candidate.request);
 }

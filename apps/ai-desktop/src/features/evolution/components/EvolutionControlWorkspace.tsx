@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
-  CollaborationMember,
-  EvolutionWorkbenchRow,
-  EvolutionWorkbenchView,
-  EvolutionWorkspaceLocation,
-  Locale,
+  CollaborationMemberOutDto,
+  EvolutionWorkbenchRowOutDto,
+  EvolutionWorkbenchViewValue,
+  EvolutionWorkspaceLocationOutDto,
+  LocaleValue,
   EvolutionStateOutDto,
-  WorkspaceState,
-} from "../../../../contracts/desktop/desktop";
+  WorkspaceStateOutDto,
+} from "../../../../contracts/system/desktop/desktop";
 import { EvolutionDatabaseGrid } from "./EvolutionDatabaseGrid";
 import { HanLiEvolutionApprovalPanel } from "../../hanli";
 import { NangongEvolutionRail, type EvolutionWorkspaceFlowNode } from "../../nangong";
@@ -23,7 +23,7 @@ type EvolutionWorkspaceTreeNode = EvolutionWorkspaceModule | EvolutionWorkspaceF
 const EVOLUTION_WORKSPACE_NODE_IDS = new Set<EvolutionWorkspaceTreeNode>(["people", "evolution", "audit", "manual", "manual-topic", "manual-group", "manual-research", "manual-approval", "manual-proposal", "manual-release", "manual-archive", "automatic", "automatic-console", "automatic-topic", "automatic-queue", "automatic-switches", "automatic-exception", "automatic-recovery", "automatic-history", "people-nangong", "people-hanli", "audit-todo", "audit-approval", "audit-exception", "audit-archive"]);
 const DEFAULT_EXPANDED_NODES = ["evolution", "manual", "automatic"];
 
-function evolutionWorkbenchForNode(node: EvolutionWorkspaceFlowNode): { view: EvolutionWorkbenchView; title: string } | null {
+function evolutionWorkbenchForNode(node: EvolutionWorkspaceFlowNode): { view: EvolutionWorkbenchViewValue; title: string } | null {
   return ({
     "manual-topic": { view: "topics", title: "当前专题" },
     "manual-research": { view: "deliberations", title: "调查与研讨" },
@@ -41,16 +41,16 @@ function evolutionWorkbenchForNode(node: EvolutionWorkspaceFlowNode): { view: Ev
     "audit-approval": { view: "approvals", title: "审批事实" },
     "audit-exception": { view: "exceptions", title: "异常与卡点" },
     "audit-archive": { view: "archives", title: "专题档案" },
-  } as Partial<Record<EvolutionWorkspaceFlowNode, { view: EvolutionWorkbenchView; title: string }>>)[node] || null;
+  } as Partial<Record<EvolutionWorkspaceFlowNode, { view: EvolutionWorkbenchViewValue; title: string }>>)[node] || null;
 }
 
 /** 南宫婉与韩立共用一棵完整业务树；父节点展示总览，叶节点直接路由右侧页面。 */
-export function EvolutionControlWorkspace({ perspective, requestedLocation, onLocationChange, member, state, workspaces, locale, onState, onError }: { perspective: "nangong" | "hanli"; requestedLocation: EvolutionWorkspaceLocation; onLocationChange(location: EvolutionWorkspaceLocation): void; member?: CollaborationMember; state: EvolutionStateOutDto; workspaces: WorkspaceState | null; locale: Locale; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
+export function EvolutionControlWorkspace({ perspective, requestedLocation, onLocationChange, member, state, workspaces, locale, onState, onError }: { perspective: "nangong" | "hanli"; requestedLocation: EvolutionWorkspaceLocationOutDto; onLocationChange(location: EvolutionWorkspaceLocationOutDto): void; member?: CollaborationMemberOutDto; state: EvolutionStateOutDto; workspaces: WorkspaceStateOutDto | null; locale: LocaleValue; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
   const [selectedNode, setSelectedNode] = useState<EvolutionWorkspaceTreeNode>(perspective === "hanli" ? "manual-approval" : "manual-topic");
   const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(false);
   const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>(DEFAULT_EXPANDED_NODES);
   const workspacePreferencePerspectiveRef = useRef<"nangong" | "hanli" | null>(null);
-  const [databaseSelection, setDatabaseSelection] = useState<EvolutionWorkbenchRow | null>(null);
+  const [databaseSelection, setDatabaseSelection] = useState<EvolutionWorkbenchRowOutDto | null>(null);
   const canvasRef = useRef<HTMLElement>(null);
   const module: EvolutionWorkspaceModule = selectedNode === "people" || selectedNode.startsWith("people-")
     ? "people"

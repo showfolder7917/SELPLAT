@@ -11,12 +11,12 @@ import {
 import path from "node:path";
 
 import type {
-  TestResourceCoordinatorState,
-  TestResourceEventType,
-  TestResourceHolder,
-  TestResourceRequest,
-  TestResourceWaiter,
-} from "../../../../../contracts/capabilities/testing/index.js";
+  TestResourceCoordinatorStateOutDto,
+  TestResourceEventTypeValue,
+  TestResourceHolderOutDto,
+  TestResourceInDto,
+  TestResourceWaiterOutDto,
+} from "../../../../../contracts/services/support/capabilities/testing/index.js";
 
 interface TestResourceCoordinatorOptions {
   coordinationRoot: string;
@@ -28,7 +28,7 @@ interface TestResourceCoordinatorOptions {
 }
 
 interface LeaseRuntime {
-  holder: TestResourceHolder;
+  holder: TestResourceHolderOutDto;
   waitDurationMs: number;
   contentionCount: number;
   release(): void;
@@ -53,7 +53,7 @@ export class TestResourceCoordinatorFacade {
   readonly #pollIntervalMs: number;
   #queue: Promise<void> = Promise.resolve();
   #localQueueDepth = 0;
-  #lastEvent: TestResourceCoordinatorState["lastEvent"] = null;
+  #lastEvent: TestResourceCoordinatorStateOutDto["lastEvent"] = null;
 
   constructor(options: TestResourceCoordinatorOptions) {
     this.#coordinationRoot = path.resolve(options.coordinationRoot);
@@ -69,21 +69,21 @@ export class TestResourceCoordinatorFacade {
     mkdirSync(this.#waitersRoot, { recursive: true });
   }
 
-  state(): TestResourceCoordinatorState {
+  state(): TestResourceCoordinatorStateOutDto {
     return {
-      holder: readJson<TestResourceHolder>(this.#ownerFile),
+      holder: readJson<TestResourceHolderOutDto>(this.#ownerFile),
       waiters: readWaiters(this.#waitersRoot, this.#staleHeartbeatMs),
       localQueueDepth: this.#localQueueDepth,
-      lastEvent: readJson<TestResourceCoordinatorState["lastEvent"]>(this.#lastEventFile)
+      lastEvent: readJson<TestResourceCoordinatorStateOutDto["lastEvent"]>(this.#lastEventFile)
         || (this.#lastEvent ? structuredClone(this.#lastEvent) : null),
     };
   }
 
-  run<T>(request: TestResourceRequest, operation: () => Promise<T>): Promise<T> {
+  run<T>(request: TestResourceInDto, operation: () => Promise<T>): Promise<T> {
     validateRequest(request);
     const leaseId = randomUUID();
     const queuedAt = new Date().toISOString();
-    const waiter: TestResourceWaiter = { ...request, leaseId, processId: process.pid, queuedAt };
+    const waiter: TestResourceWaiterOutDto = { ...request, leaseId, processId: process.pid, queuedAt };
     const waiterFile = path.join(this.#waitersRoot, `${leaseId}.json`);
     writeJson(waiterFile, waiter);
     this.#localQueueDepth += 1;
@@ -113,7 +113,7 @@ export class TestResourceCoordinatorFacade {
     return result;
   }
 
-  async #acquire(waiter: TestResourceWaiter, waiterFile: string): Promise<LeaseRuntime> {
+  async #acquire(waiter: TestResourceWaiterOutDto, waiterFile: string): Promise<LeaseRuntime> {
     const queuedAtMs = Date.parse(waiter.queuedAt);
     let contentionCount = 0;
     let lastHolderLeaseId: string | null = null;
@@ -122,7 +122,7 @@ export class TestResourceCoordinatorFacade {
       try {
         mkdirSync(this.#lockRoot);
         const acquiredAt = new Date().toISOString();
-        const holder: TestResourceHolder = { ...waiter, acquiredAt, heartbeatAt: acquiredAt };
+        const holder: TestResourceHolderOutDto = { ...waiter, acquiredAt, heartbeatAt: acquiredAt };
         writeJson(this.#ownerFile, holder);
         rmSync(waiterFile, { force: true });
         const waitDurationMs = Date.now() - queuedAtMs;
@@ -138,7 +138,7 @@ export class TestResourceCoordinatorFacade {
             if (released) return;
             released = true;
             clearInterval(heartbeat);
-            const current = readJson<TestResourceHolder>(this.#ownerFile);
+            const current = readJson<TestResourceHolderOutDto>(this.#ownerFile);
             const releasedAt = new Date().toISOString();
             if (current?.leaseId === holder.leaseId) rmSync(this.#lockRoot, { recursive: true, force: true });
             this.#emit("released", waiter, releasedAt, waitDurationMs, Date.parse(releasedAt) - Date.parse(acquiredAt), contentionCount, { leaseId: waiter.leaseId, processId: process.pid });
@@ -152,7 +152,7 @@ export class TestResourceCoordinatorFacade {
         }
       }
 
-      const holder = readJson<TestResourceHolder>(this.#ownerFile);
+      const holder = readJson<TestResourceHolderOutDto>(this.#ownerFile);
       if (holder && holder.leaseId !== lastHolderLeaseId) {
         contentionCount += 1;
         lastHolderLeaseId = holder.leaseId;
@@ -165,7 +165,7 @@ export class TestResourceCoordinatorFacade {
       if (waitDurationMs >= this.#acquireTimeoutMs) {
         rmSync(waiterFile, { force: true });
         this.#localQueueDepth = Math.max(0, this.#localQueueDepth - 1);
-        this.#emit("timeout", waiter, new Date().toISOString(), waitDurationMs, null, contentionCount, { holder: readJson<TestResourceHolder>(this.#ownerFile) });
+        this.#emit("timeout", waiter, new Date().toISOString(), waitDurationMs, null, contentionCount, { holder: readJson<TestResourceHolderOutDto>(this.#ownerFile) });
         throw new Error(`等待全局测试资源超时：${waiter.runId}`);
       }
       await delay(pollDelayMs);
@@ -173,14 +173,14 @@ export class TestResourceCoordinatorFacade {
     }
   }
 
-  #heartbeat(holder: TestResourceHolder): void {
-    const current = readJson<TestResourceHolder>(this.#ownerFile);
+  #heartbeat(holder: TestResourceHolderOutDto): void {
+    const current = readJson<TestResourceHolderOutDto>(this.#ownerFile);
     if (current?.leaseId !== holder.leaseId) return;
     holder.heartbeatAt = new Date().toISOString();
     writeJson(this.#ownerFile, holder);
   }
 
-  #recoverStaleHolder(holder: TestResourceHolder, waiter: TestResourceWaiter): void {
+  #recoverStaleHolder(holder: TestResourceHolderOutDto, waiter: TestResourceWaiterOutDto): void {
     const staleRoot = `${this.#lockRoot}.stale-${holder.leaseId}`;
     try {
       renameSync(this.#lockRoot, staleRoot);
@@ -191,7 +191,7 @@ export class TestResourceCoordinatorFacade {
     }
   }
 
-  #recoverOrphanLock(waiter: TestResourceWaiter): void {
+  #recoverOrphanLock(waiter: TestResourceWaiterOutDto): void {
     const staleRoot = `${this.#lockRoot}.orphan-${waiter.leaseId}`;
     try {
       renameSync(this.#lockRoot, staleRoot);
@@ -203,8 +203,8 @@ export class TestResourceCoordinatorFacade {
   }
 
   #emit(
-    type: TestResourceEventType,
-    request: TestResourceRequest,
+    type: TestResourceEventTypeValue,
+    request: TestResourceInDto,
     occurredAt: string,
     waitDurationMs: number,
     executionDurationMs: number | null,
@@ -224,26 +224,26 @@ export class TestResourceCoordinatorFacade {
   }
 }
 
-function validateRequest(request: TestResourceRequest): void {
+function validateRequest(request: TestResourceInDto): void {
   if (!request.runId.trim()) throw new Error("测试资源 runId 不能为空。");
   if (!request.initiatorMemberId.trim()) throw new Error("测试资源发起人不能为空。");
   if (!path.isAbsolute(request.buildRoot)) throw new Error("测试资源 buildRoot 必须是已解析绝对路径。");
 }
 
-function readWaiters(root: string, staleAfterMs: number): TestResourceWaiter[] {
+function readWaiters(root: string, staleAfterMs: number): TestResourceWaiterOutDto[] {
   try {
     return readdirSync(root)
       .filter((name) => name.endsWith(".json"))
       .map((name) => {
         const filePath = path.join(root, name);
-        const waiter = readJson<TestResourceWaiter>(filePath);
+        const waiter = readJson<TestResourceWaiterOutDto>(filePath);
         if (waiter && Date.now() - Date.parse(waiter.queuedAt) >= staleAfterMs && !isProcessAlive(waiter.processId)) {
           rmSync(filePath, { force: true });
           return null;
         }
         return waiter;
       })
-      .filter((value): value is TestResourceWaiter => Boolean(value))
+      .filter((value): value is TestResourceWaiterOutDto => Boolean(value))
       .sort((left, right) => Date.parse(left.queuedAt) - Date.parse(right.queuedAt));
   } catch {
     return [];
@@ -265,7 +265,7 @@ function readJson<T>(filePath: string): T | null {
   }
 }
 
-function isRecoverableStaleHolder(holder: TestResourceHolder, staleHeartbeatMs: number): boolean {
+function isRecoverableStaleHolder(holder: TestResourceHolderOutDto, staleHeartbeatMs: number): boolean {
   if (Date.now() - Date.parse(holder.heartbeatAt) < staleHeartbeatMs) return false;
   return !isProcessAlive(holder.processId);
 }

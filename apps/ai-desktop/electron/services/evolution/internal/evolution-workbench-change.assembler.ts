@@ -1,9 +1,9 @@
-import type { EvolutionWorkbenchChangeEvent, EvolutionWorkbenchView, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionWorkbenchChangeEventOutDto, EvolutionWorkbenchViewValue, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 
 /**
  * 把专题前后状态整理为工作台轻量增量事件，不承担持久化或业务推进。
  * 真实传参示例：buildEvolutionWorkbenchChange(previous, current, "proposal.decided", "topic-1", "proposal-1")。
- * 真实返回示例：返回包含前后版本、负责人、下一步和受影响视图的 EvolutionWorkbenchChangeEvent。
+ * 真实返回示例：返回包含前后版本、负责人、下一步和受影响视图的 EvolutionWorkbenchChangeEventOutDto。
  * 异常或副作用示例：纯函数没有写入副作用；缺少关联实体时降级为会话或自动化事件，不改变原始状态。
  */
 export function buildEvolutionWorkbenchChange(
@@ -12,7 +12,7 @@ export function buildEvolutionWorkbenchChange(
   reason: string,
   topicId: string | null,
   proposalId: string | null,
-): EvolutionWorkbenchChangeEvent {
+): EvolutionWorkbenchChangeEventOutDto {
   const proposal = proposalId ? current.proposals.find((item) => item.proposalId === proposalId) || null : null;
   const previousProposal = proposalId ? previous.proposals.find((item) => item.proposalId === proposalId) || null : null;
   const resolvedTopicId = topicId || proposal?.topicId || previousProposal?.topicId || null;
@@ -25,7 +25,7 @@ export function buildEvolutionWorkbenchChange(
   const automationChange = reason.startsWith("automation.");
   const cleared = reason === "test-data.cleared";
   const conversationChange = reason.startsWith("conversation.");
-  const entityType: EvolutionWorkbenchChangeEvent["entityType"] = cleared
+  const entityType: EvolutionWorkbenchChangeEventOutDto["entityType"] = cleared
     ? "workspace"
     : proposal || previousProposal
       ? "proposal"
@@ -50,7 +50,7 @@ export function buildEvolutionWorkbenchChange(
     : ["executing", "verifying", "pending-acceptance"].includes(currentState || "")
       ? "协同调度"
       : origin === "linghu" ? "令狐老祖" : "南宫婉";
-  const affectedViews: EvolutionWorkbenchView[] = cleared
+  const affectedViews: EvolutionWorkbenchViewValue[] = cleared
     ? ["topics", "deliberations", "pending-approvals", "approvals", "proposals", "tasks", "releases", "archives", "automation-runs", "recovery", "exceptions"]
     : proposal || previousProposal
       ? ["topics", "pending-approvals", "approvals", "proposals", "tasks", "releases", "archives", "recovery", "exceptions"]

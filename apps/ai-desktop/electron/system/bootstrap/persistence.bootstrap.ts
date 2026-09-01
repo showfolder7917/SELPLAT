@@ -1,5 +1,5 @@
-import type { AiMemoryDatabaseStatus } from "../../../contracts/platform/persistence/index.js";
-import type { CollaborationTimelineChangedEventOutDto } from "../../../contracts/collaboration/workflow/index.js";
+import type { AiMemoryDatabaseStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
+import type { CollaborationTimelineChangedEventOutDto } from "../../../contracts/services/workflow/index.js";
 import {
   createCollaborationMemory,
   createCollaborationTimeline,
@@ -12,7 +12,7 @@ import { createWorkflowRepository, type WorkflowRepositoryPort } from "../../ser
 
 export interface PersistenceContext {
   readonly database: DatabasePort | null;
-  readonly status: AiMemoryDatabaseStatus;
+  readonly status: AiMemoryDatabaseStatusOutDto;
   readonly workflowRepository: WorkflowRepositoryPort | null;
   readonly collaborationTimeline: EventCenterTimeline | null;
   readonly collaborationMemory: EventCenterMemory | null;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import type { CollaborationIntegrationFailureKind, CollaborationMember, CollaborationStateOutDto, CollaborationTask } from "../../../../../../contracts/collaboration/workflow/index.js";
-import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../../../../contracts/capabilities/release/index.js";
+import type { CollaborationIntegrationFailureKindValue, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
+import type { IntegrationReleaseInDto, ReleaseBatchDocumentOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
 import type { CollaborationDurationPort, CollaborationStatePort } from "../../../../workflow/index.js";
 import { ReleaseBatchStore } from "./release-batch.store.js";
 import { LinghuAutomationFacade } from "../../../../personas/linghu/index.js";
@@ -20,7 +20,7 @@ export interface VersionIntegrationPipelineOptions {
   workspaces: VersionWorkspaceManager;
   actorMemberId: string;
   verifyCandidate(candidate: IntegrationCandidate, taskIds: string[], releaseBatchId: string): Promise<string>;
-  acquireRelease(request: IntegrationReleaseRequest): Promise<() => void>;
+  acquireRelease(request: IntegrationReleaseInDto): Promise<() => void>;
   releaseVersion: string;
   releaseBatches: ReleaseBatchStore;
   publishRelease(executable: string, releaseBatchId: string): void;
@@ -136,7 +136,7 @@ export class VersionIntegrationPipeline {
     const taskIds = eligible.map((task) => task.taskId);
     const releaseBatchId = `release-${this.#releaseVersion}-g${generation}`;
     let releaseLease: (() => void) | null = null;
-    let releaseDocument: ReleaseBatchDocument | null = null;
+    let releaseDocument: ReleaseBatchDocumentOutDto | null = null;
     let publishedExecutable: string | null = null;
     let candidate: IntegrationCandidate | null = null;
     let verifySpan: string | null = null;
@@ -327,7 +327,7 @@ export class VersionIntegrationPipeline {
   }
 }
 
-function integrationFailurePresentation(kind: CollaborationIntegrationFailureKind, generation: number, detail: string): {
+function integrationFailurePresentation(kind: CollaborationIntegrationFailureKindValue, generation: number, detail: string): {
   summary: string;
   impact: string;
   recoveryAction: string;
@@ -359,24 +359,24 @@ function integrationFailurePresentation(kind: CollaborationIntegrationFailureKin
   };
 }
 
-function requireActor(state: CollaborationStateOutDto, memberId: string): CollaborationMember {
+function requireActor(state: CollaborationStateOutDto, memberId: string): CollaborationMemberOutDto {
   const actor = state.members.find((member) => member.memberId === memberId);
   if (!actor) throw new Error("版本集成操作者不存在。");
   return actor;
 }
 
-function participantSnapshot(member: Pick<CollaborationMember, "memberId" | "displayName">): { memberId: string; displayName: string } {
+function participantSnapshot(member: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): { memberId: string; displayName: string } {
   return { memberId: member.memberId, displayName: member.displayName };
 }
 
 /** 流水线只登记可审计的版本集成事实，不保存执行过程中的推理正文。 */
 function appendFlow(
-  task: CollaborationTask,
-  type: CollaborationTask["flowEvents"][number]["type"],
-  stage: CollaborationTask["flowEvents"][number]["stage"],
-  status: CollaborationTask["flowEvents"][number]["status"],
+  task: CollaborationTaskOutDto,
+  type: CollaborationTaskOutDto["flowEvents"][number]["type"],
+  stage: CollaborationTaskOutDto["flowEvents"][number]["stage"],
+  status: CollaborationTaskOutDto["flowEvents"][number]["status"],
   summary: string,
-  actor: Pick<CollaborationMember, "memberId" | "displayName"> | null,
+  actor: Pick<CollaborationMemberOutDto, "memberId" | "displayName"> | null,
   error = false,
 ): void {
   task.flowEvents.push({
@@ -391,11 +391,11 @@ function appendFlow(
   });
 }
 
-function integrationDependenciesSatisfied(task: CollaborationTask, state: CollaborationStateOutDto): boolean {
+function integrationDependenciesSatisfied(task: CollaborationTaskOutDto, state: CollaborationStateOutDto): boolean {
   return task.dependencyTaskIds.every((dependencyId) => state.tasks.find((candidate) => candidate.taskId === dependencyId)?.state === "integrated");
 }
 
-function atomicGroupReady(task: CollaborationTask, ready: CollaborationTask[], state: CollaborationStateOutDto): boolean {
+function atomicGroupReady(task: CollaborationTaskOutDto, ready: CollaborationTaskOutDto[], state: CollaborationStateOutDto): boolean {
   if (!task.atomicGroupId) return false;
   const group = state.tasks.filter((candidate) => candidate.atomicGroupId === task.atomicGroupId);
   return group.length > 0 && group.every((candidate) => ready.some((item) => item.taskId === candidate.taskId));

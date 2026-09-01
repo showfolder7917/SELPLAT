@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 
-import type { ApprovalMemoryEvidence, CollaborationMemoryMessage, CollaborationMemoryPort, ConversationRoundTopicDecision, TrainingCorpusTopicSearchResult } from "../../../../../../../contracts/capabilities/event-center/index.js";
-import type { EvolutionProposalOrigin, EvolutionProposalType, EvolutionSourceMessageSnapshot, EvolutionStateOutDto } from "../../../../../../../contracts/collaboration/evolution/index.js";
-import type { NangongConversationOutDto } from "../../../../../../../contracts/collaboration/nangong/index.js";
+import type { ApprovalMemoryEvidenceOutDto, CollaborationMemoryMessageOutDto, CollaborationMemoryPort, ConversationRoundTopicDecisionInDto, TrainingCorpusTopicSearchResultOutDto } from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../../../contracts/services/evolution/index.js";
+import type { NangongConversationOutDto } from "../../../../../../../contracts/services/personas/nangong/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 
 const CURRENT_CONVERSATION_TURN_LIMIT = 20;
@@ -108,7 +108,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       WHERE role = 'user' AND conversationId <> $conversationId
       ORDER BY createdAt DESC
       LIMIT $limit
-    `).all({ $conversationId: conversation.conversationId, $limit: HISTORICAL_USER_CONCERN_LIMIT }) as unknown as CollaborationMemoryMessage[])
+    `).all({ $conversationId: conversation.conversationId, $limit: HISTORICAL_USER_CONCERN_LIMIT }) as unknown as CollaborationMemoryMessageOutDto[])
       .reverse()
       .map((item) => `用户历史原话：${item.content}${item.inferredIntent ? `\nAI登记的用户意图：${item.inferredIntent}` : ""}`);
     return [
@@ -117,7 +117,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     ].filter(Boolean).join("\n\n");
   }
 
-  approvalEvidence(proposalType: EvolutionProposalType, origin: EvolutionProposalOrigin): ApprovalMemoryEvidence[] {
+  approvalEvidence(proposalType: EvolutionProposalTypeValue, origin: EvolutionProposalOriginValue): ApprovalMemoryEvidenceOutDto[] {
     return this.#database.withConnection((connection) => connection.prepare(`
       SELECT approval.approvalId, approval.proposalType, run.origin, approval.decision, approval.advice, approval.approvedAt
       FROM AiDesktopApprovalRecord approval
@@ -125,10 +125,10 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       WHERE approval.source = 'manual-user' AND approval.proposalType = $proposalType AND run.origin = $origin
       ORDER BY approval.approvedAt DESC
       LIMIT $limit
-    `).all({ $proposalType: proposalType, $origin: origin, $limit: APPROVAL_EVIDENCE_LIMIT }) as unknown as ApprovalMemoryEvidence[]);
+    `).all({ $proposalType: proposalType, $origin: origin, $limit: APPROVAL_EVIDENCE_LIMIT }) as unknown as ApprovalMemoryEvidenceOutDto[]);
   }
 
-  searchTrainingCorpusTopics(query: string, limit = 30): TrainingCorpusTopicSearchResult[] {
+  searchTrainingCorpusTopics(query: string, limit = 30): TrainingCorpusTopicSearchResultOutDto[] {
     const normalized = query.replaceAll(/\s+/g, " ").trim().slice(0, 100);
     if (!normalized) return [];
     const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
@@ -156,15 +156,15 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       `);
       return topics.map((topic) => ({
         corpusTopicId: String(topic.corpusTopicId),
-        source: String(topic.source) as TrainingCorpusTopicSearchResult["source"],
+        source: String(topic.source) as TrainingCorpusTopicSearchResultOutDto["source"],
         title: String(topic.title),
         topicType: String(topic.topicType),
         inferredIntent: topic.inferredIntent ? String(topic.inferredIntent) : null,
         tags: JSON.parse(String(topic.tagsJson)) as string[],
-        definitionSource: String(topic.definitionSource) as TrainingCorpusTopicSearchResult["definitionSource"],
+        definitionSource: String(topic.definitionSource) as TrainingCorpusTopicSearchResultOutDto["definitionSource"],
         createdAt: String(topic.createdAt),
         messages: (readMessages.all({ $topicId: String(topic.corpusTopicId) }) as Array<Record<string, unknown>>).map((message) => ({
-          speakerRole: String(message.speakerRole) as TrainingCorpusTopicSearchResult["messages"][number]["speakerRole"],
+          speakerRole: String(message.speakerRole) as TrainingCorpusTopicSearchResultOutDto["messages"][number]["speakerRole"],
           content: String(message.content),
           createdAt: String(message.createdAt),
         })),
@@ -172,7 +172,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     });
   }
 
-  readHanLiEvolutionCorpus(deliberationId: string): EvolutionSourceMessageSnapshot[] {
+  readHanLiEvolutionCorpus(deliberationId: string): EvolutionSourceMessageSnapshotOutDto[] {
     const capturedAt = new Date().toISOString();
     return this.#database.withConnection((connection) => {
       // 训练只读统一语料表；近期南宫婉和 Codex 用户原话是主资料，AI 摘要只提供少量执行上下文。
@@ -219,7 +219,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     });
   }
 
-  registerRound(conversation: NangongConversationOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision): void {
+  registerRound(conversation: NangongConversationOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecisionInDto): void {
     this.syncConversation(conversation);
     const now = new Date().toISOString();
     this.#database.transaction((connection) => {
@@ -297,7 +297,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
   }
 }
 
-function sourceSnapshot(value: Omit<EvolutionSourceMessageSnapshot, "snapshotId">): EvolutionSourceMessageSnapshot {
+function sourceSnapshot(value: Omit<EvolutionSourceMessageSnapshotOutDto, "snapshotId">): EvolutionSourceMessageSnapshotOutDto {
   return { ...value, snapshotId: `evolution-source:${value.deliberationId}:${value.source}:${value.sourceMessageId}` };
 }
 

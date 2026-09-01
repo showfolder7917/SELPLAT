@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 
 import type { BrowserWindow } from "electron";
 
-import type { HanliAcceptanceOperation, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto } from "../../../../../contracts/collaboration/hanli/index.js";
+import type { HanliAcceptanceOperationValue, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { AttachmentFacade as ScreenshotStore } from "../../../support/platform/attachments/index.js";
 
 const BLOCKED_CLICK_TARGET = /删除|清空|移除|退出登录|提交|保存|确认|通过|退回|驳回|分发|发布|重启|delete|clear|remove|submit|approve|reject|dispatch|restart/iu;
@@ -51,7 +51,7 @@ export class HanliRealAppAcceptanceRunner {
     };
   }
 
-  async #executeOperation(targetWindow: BrowserWindow, checkId: string, operationIndex: number, operation: HanliAcceptanceOperation): Promise<HanliAcceptanceStepResultOutDto> {
+  async #executeOperation(targetWindow: BrowserWindow, checkId: string, operationIndex: number, operation: HanliAcceptanceOperationValue): Promise<HanliAcceptanceStepResultOutDto> {
     try {
       if (operation.type === "focus-window") {
         targetWindow.show(); targetWindow.focus();
@@ -104,7 +104,7 @@ export class HanliRealAppAcceptanceRunner {
   }
 }
 
-function result(checkId: string, operationIndex: number, operation: HanliAcceptanceOperation, status: HanliAcceptanceStepResultOutDto["status"], actual: string): HanliAcceptanceStepResultOutDto {
+function result(checkId: string, operationIndex: number, operation: HanliAcceptanceOperationValue, status: HanliAcceptanceStepResultOutDto["status"], actual: string): HanliAcceptanceStepResultOutDto {
   return { checkId, operationIndex, operation: structuredClone(operation), status, actual: actual.slice(0, 2_000), screenshotAttachmentId: null, occurredAt: new Date().toISOString() };
 }
 

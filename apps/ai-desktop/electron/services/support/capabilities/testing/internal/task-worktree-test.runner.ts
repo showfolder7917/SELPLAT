@@ -2,14 +2,14 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { CodexStreamEvent } from "../../../../../../contracts/platform/codex/index.js";
+import type { CodexStreamEventOutDto } from "../../../../../../contracts/services/support/platform/codex/index.js";
 import { acquireManagedDependencyLease, releaseManagedDependencyLease } from "../../release/index.js";
 import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.facade.js";
 
 interface TaskWorktreeTestRequest {
   taskId: string;
   worktreeRoot: string;
-  emit(event: CodexStreamEvent): void;
+  emit(event: CodexStreamEventOutDto): void;
 }
 
 const TEST_SCRIPTS = [
@@ -140,7 +140,7 @@ function runNpmScript(name: string, cwd: string, environment: NodeJS.ProcessEnv,
 }
 
 function emitActivity(
-  emit: (event: CodexStreamEvent) => void,
+  emit: (event: CodexStreamEventOutDto) => void,
   taskId: string,
   scriptName: string,
   phase: "started" | "completed",

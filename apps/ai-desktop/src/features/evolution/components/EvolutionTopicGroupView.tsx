@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type {
-  EvolutionArchiveCategory,
-  EvolutionArchiveRecord,
-  EvolutionTopic,
-  EvolutionTopicDossier,
-  Locale,
+  EvolutionArchiveCategoryValue,
+  EvolutionArchiveRecordOutDto,
+  EvolutionTopicOutDto,
+  EvolutionTopicDossierOutDto,
+  LocaleValue,
   EvolutionStateOutDto,
-  WorkspaceState,
-} from "../../../../contracts/desktop/desktop";
+  WorkspaceStateOutDto,
+} from "../../../../contracts/system/desktop/desktop";
 import { evolutionOwnerForStatus, evolutionStatusLabel, workbenchOwnerLabel } from "../model/evolution-workbench";
 import type { EvolutionWorkspaceFlowNode } from "../../nangong";
 
@@ -34,16 +34,16 @@ interface TopicGroupEntry {
  * 异常或副作用示例：SQLite 档案读取失败时显示错误并上报；组件本身不审批、不分发、不恢复任务。
  */
 export function EvolutionTopicGroupView({ topic, stateVersion, perspective, locale, workspaces, onNavigate, onState, onError }: {
-  topic: EvolutionTopic | null;
+  topic: EvolutionTopicOutDto | null;
   stateVersion: string;
   perspective: "nangong" | "hanli";
-  locale: Locale;
-  workspaces: WorkspaceState | null;
+  locale: LocaleValue;
+  workspaces: WorkspaceStateOutDto | null;
   onState(state: EvolutionStateOutDto): void;
   onNavigate(nodeId: EvolutionWorkspaceFlowNode, selectedRowId: string | null): void;
   onError(message: string): void;
 }) {
-  const [dossier, setDossier] = useState<EvolutionTopicDossier | null>(null);
+  const [dossier, setDossier] = useState<EvolutionTopicDossierOutDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [filterReady, setFilterReady] = useState(false);
@@ -57,7 +57,7 @@ export function EvolutionTopicGroupView({ topic, stateVersion, perspective, loca
 
   const preferenceNodeId = topic ? `manual-group::${topic.topicId}` : "manual-group";
 
-  const loadDossier = async (target: EvolutionTopic) => {
+  const loadDossier = async (target: EvolutionTopicOutDto) => {
     setLoading(true);
     setLoadError("");
     try {
@@ -189,7 +189,7 @@ export function EvolutionTopicGroupView({ topic, stateVersion, perspective, loca
   </section>;
 }
 
-function buildTimeline(dossier: EvolutionTopicDossier | null): TopicGroupEntry[] {
+function buildTimeline(dossier: EvolutionTopicDossierOutDto | null): TopicGroupEntry[] {
   if (!dossier) return [];
   const sourceEntries: TopicGroupEntry[] = (dossier.deliberation?.sourceSnapshots || []).map((message) => ({
     id: `source:${message.snapshotId}`, actor: message.role === "user" ? "用户" : message.source === "codex" ? "Codex" : "南宫婉",
@@ -207,7 +207,7 @@ function buildTimeline(dossier: EvolutionTopicDossier | null): TopicGroupEntry[]
   return [...sourceEntries, ...roundEntries, ...recordEntries].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.id.localeCompare(right.id));
 }
 
-function recordEntry(record: EvolutionArchiveRecord): TopicGroupEntry {
+function recordEntry(record: EvolutionArchiveRecordOutDto): TopicGroupEntry {
   const targetNode = targetNodeForCategory(record.category);
   return {
     id: `record:${record.recordId}`, actor: typeof record.payload.actorName === "string" ? record.payload.actorName : actorLabel(record.actor), category: categoryLabel(record.category), title: record.title,
@@ -220,7 +220,7 @@ function recordEntry(record: EvolutionArchiveRecord): TopicGroupEntry {
   };
 }
 
-function targetNodeForCategory(category: EvolutionArchiveCategory): EvolutionWorkspaceFlowNode {
+function targetNodeForCategory(category: EvolutionArchiveCategoryValue): EvolutionWorkspaceFlowNode {
   if (["source", "deliberation"].includes(category)) return "manual-research";
   if (category === "approval") return "manual-approval";
   if (["proposal", "distribution", "execution"].includes(category)) return "manual-proposal";
@@ -229,7 +229,7 @@ function targetNodeForCategory(category: EvolutionArchiveCategory): EvolutionWor
   return "manual-topic";
 }
 
-function archiveSummary(record: EvolutionArchiveRecord): string {
+function archiveSummary(record: EvolutionArchiveRecordOutDto): string {
   const payload = record.payload;
   const candidate = payload.experienceCandidate as { title?: string; status?: string; sourceFailureEvidenceIds?: string[] } | null | undefined;
   if (candidate?.title) return concise(`形成候选项目检查经验：${candidate.title}；状态：${candidate.status === "candidate" ? "待跨场景验证" : candidate.status || "待治理"}；来源失败证据 ${candidate.sourceFailureEvidenceIds?.length || 0} 项。`);
@@ -240,7 +240,7 @@ function archiveSummary(record: EvolutionArchiveRecord): string {
 
 function concise(value: string): string { const normalized = value.replace(/\s+/g, " ").trim(); return normalized.length > 300 ? `${normalized.slice(0, 300)}…` : normalized; }
 function actorLabel(actor: string): string { return ({ "han-li": "韩立", "nangong-wan": "南宫婉", codex: "Codex", "linghu-ancestor": "令狐老祖", system: "系统", user: "用户" } as Record<string, string>)[actor] || actor; }
-function categoryLabel(category: EvolutionArchiveCategory): string { return ({ source: "来源", deliberation: "研讨", topic: "专题", proposal: "提案", approval: "审批", distribution: "分发", execution: "执行", test: "测试", release: "发布", acceptance: "验收", recovery: "修复恢复" } as Record<EvolutionArchiveCategory, string>)[category]; }
+function categoryLabel(category: EvolutionArchiveCategoryValue): string { return ({ source: "来源", deliberation: "研讨", topic: "专题", proposal: "提案", approval: "审批", distribution: "分发", execution: "执行", test: "测试", release: "发布", acceptance: "验收", recovery: "修复恢复" } as Record<EvolutionArchiveCategoryValue, string>)[category]; }
 function nextStepForTopic(status: string): string { return ({ registered: "继续调查并形成提案", investigating: "完成调查并形成提案", "pending-approval": "等待韩立审批", "supplement-required": "按审批意见补充提案", rejected: "查看退回意见", approved: "返还南宫婉并分发", executing: "等待执行结果", verifying: "等待令狐测试", "pending-acceptance": "等待韩立验收", completed: "查看归档并准备下一专题", blocked: "交给令狐检查后从恢复点继续" } as Record<string, string>)[status] || "查看专题当前状态"; }
-function formatTime(value: string, locale: Locale): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(date); }
+function formatTime(value: string, locale: LocaleValue): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(date); }
 function readableError(error: unknown, fallback: string): string { const message = error instanceof Error ? error.message : fallback; return message.replace(/^Error invoking remote method '[^']+':\s*/, ""); }

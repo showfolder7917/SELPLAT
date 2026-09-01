@@ -3,18 +3,18 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type {
-  CollaborationMember,
+  CollaborationMemberOutDto,
   CollaborationStateOutDto,
-  CollaborationTask,
+  CollaborationTaskOutDto,
   CreateCollaborationMemberInDto,
-  DesktopOperatingMode,
+  DesktopOperatingModeValue,
   SubmitCollaborationTaskInDto,
   UpdateCollaborationMemberInDto,
-} from "../../../../contracts/collaboration/workflow/index.js";
+} from "../../../../contracts/services/workflow/index.js";
 
 type StateListener = (state: CollaborationStateOutDto, reason: string, taskIds: string[]) => void;
 
-const DEFAULT_MEMBERS: ReadonlyArray<{ memberId: string; displayName: string; kind: CollaborationMember["kind"] }> = [
+const DEFAULT_MEMBERS: ReadonlyArray<{ memberId: string; displayName: string; kind: CollaborationMemberOutDto["kind"] }> = [
   { memberId: "han-li", displayName: "韩立", kind: "conversation-owner" },
   { memberId: "nangong-wan", displayName: "南宫婉", kind: "worker" },
   { memberId: "linghu-ancestor", displayName: "令狐老祖", kind: "worker" },
@@ -29,7 +29,7 @@ const DEFAULT_MEMBERS: ReadonlyArray<{ memberId: string; displayName: string; ki
   { memberId: "li-huayuan", displayName: "李化元", kind: "worker" },
 ];
 
-const TERMINAL_TASK_STATES = new Set<CollaborationTask["state"]>(["integrated", "cancelled"]);
+const TERMINAL_TASK_STATES = new Set<CollaborationTaskOutDto["state"]>(["integrated", "cancelled"]);
 
 /** 持久保存协同人物、任务和恢复点；所有修改都在 Electron 主进程内原子提交。 */
 export class CollaborationStore {
@@ -86,7 +86,7 @@ export class CollaborationStore {
     }
   }
 
-  setMode(mode: DesktopOperatingMode): CollaborationStateOutDto {
+  setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto {
     if (mode !== "single-conversation" && mode !== "collaboration") throw new Error("无效的桌面运行模式。");
     return this.#commit("mode.changed", (state) => { state.mode = mode; });
   }
@@ -100,7 +100,7 @@ export class CollaborationStore {
     const displayName = normalizeMemberName(request?.displayName);
     if (this.#state.members.some((member) => member.displayName === displayName)) throw new Error("协同人物名称已存在。");
     const now = new Date().toISOString();
-    const member: CollaborationMember = {
+    const member: CollaborationMemberOutDto = {
       memberId: `member-${randomUUID()}`,
       displayName,
       kind: "worker",
@@ -154,7 +154,7 @@ export class CollaborationStore {
     });
   }
 
-  submitTask(request: SubmitCollaborationTaskInDto): CollaborationTask {
+  submitTask(request: SubmitCollaborationTaskInDto): CollaborationTaskOutDto {
     if (!request || typeof request.confirmedIntent !== "string" || !request.confirmedIntent.trim()) {
       throw new Error("必须提供韩立已经确认的完整任务意图。");
     }
@@ -170,7 +170,7 @@ export class CollaborationStore {
     if (preferredExecutor && (preferredExecutor.kind !== "worker" || !preferredExecutor.enabled)) {
       throw new Error("指定执行人必须是已启用的协同执行人物。");
     }
-    const task: CollaborationTask = {
+    const task: CollaborationTaskOutDto = {
       taskId,
       taskRevision: 1,
       assignmentId: null,
@@ -238,13 +238,13 @@ export class CollaborationStore {
     return structuredClone(task);
   }
 
-  task(taskId: string): CollaborationTask {
+  task(taskId: string): CollaborationTaskOutDto {
     const task = this.#state.tasks.find((candidate) => candidate.taskId === taskId);
     if (!task) throw new Error("协同任务不存在。");
     return structuredClone(task);
   }
 
-  updateTask(taskId: string, reason: string, update: (task: CollaborationTask, state: CollaborationStateOutDto) => void): CollaborationStateOutDto {
+  updateTask(taskId: string, reason: string, update: (task: CollaborationTaskOutDto, state: CollaborationStateOutDto) => void): CollaborationStateOutDto {
     this.task(taskId);
     return this.#commit(reason, (state) => {
       const task = state.tasks.find((candidate) => candidate.taskId === taskId);
@@ -282,7 +282,7 @@ export class CollaborationStore {
     });
   }
 
-  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMember, "memberId" | "displayName">): CollaborationStateOutDto {
+  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto {
     return this.updateTask(taskId, "task.recovery_requested", (task, state) => {
       if (!["recovering", "blocked", "test-failed"].includes(task.state)) throw new Error("当前任务不需要恢复。");
       if (task.state === "test-failed") {
@@ -321,7 +321,7 @@ export class CollaborationStore {
     });
   }
 
-  #member(memberId: string): CollaborationMember {
+  #member(memberId: string): CollaborationMemberOutDto {
     return structuredClone(requireMember(this.#state, memberId));
   }
 
@@ -383,7 +383,7 @@ function createInitialState(): CollaborationStateOutDto {
   };
 }
 
-function createDefaultMember(member: (typeof DEFAULT_MEMBERS)[number], now: string): CollaborationMember {
+function createDefaultMember(member: (typeof DEFAULT_MEMBERS)[number], now: string): CollaborationMemberOutDto {
   const owner = member.kind === "conversation-owner";
   const protectedMember = owner || member.memberId === "linghu-ancestor";
   return {
@@ -425,7 +425,7 @@ function mergeDefaultMembers(state: CollaborationStateOutDto): void {
     member.lastProtocolProgressAt ??= null;
   }
   for (const task of state.tasks) {
-    const obsolete = task as CollaborationTask & Record<string, unknown>;
+    const obsolete = task as CollaborationTaskOutDto & Record<string, unknown>;
     if (["queued-reviewer", "reviewing", "review-failed", "repairing-review", "optimizing", "approved", "forced-after-review-limit"].includes(String(task.state))) {
       task.state = "blocked";
       task.phase = "blocked";
@@ -515,7 +515,7 @@ function releaseTaskMembers(state: CollaborationStateOutDto, taskId: string): vo
   }
 }
 
-function requireMember(state: CollaborationStateOutDto, memberId: string): CollaborationMember {
+function requireMember(state: CollaborationStateOutDto, memberId: string): CollaborationMemberOutDto {
   const member = state.members.find((candidate) => candidate.memberId === memberId);
   if (!member) throw new Error("协同人物不存在。");
   return member;
@@ -531,12 +531,12 @@ function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
-function participantSnapshot(member: Pick<CollaborationMember, "memberId" | "displayName">): { memberId: string; displayName: string } {
+function participantSnapshot(member: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): { memberId: string; displayName: string } {
   return { memberId: member.memberId, displayName: member.displayName };
 }
 
 /** 旧状态只能恢复当时实际落盘的事实；无法证明的早期参与者明确标为历史不完整，禁止按当前名单猜测。 */
-function migrateTaskHistory(task: CollaborationTask, state: CollaborationStateOutDto): void {
+function migrateTaskHistory(task: CollaborationTaskOutDto, state: CollaborationStateOutDto): void {
   const members = state.members;
   const memberName = (memberId: string | null): string => members.find((member) => member.memberId === memberId)?.displayName || "历史成员（名称未记录）";
   const legacy = !Array.isArray(task.flowEvents) || !Array.isArray(task.executionRecords);

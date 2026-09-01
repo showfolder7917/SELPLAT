@@ -1,23 +1,23 @@
 import type {
-  CollaborationFlowEvent,
-  CollaborationParticipantSnapshot,
-  CollaborationTask,
-  CollaborationTimelineGroup,
-  CollaborationTimelineNode,
-} from "../../../../../../../contracts/collaboration/workflow/index.js";
+  CollaborationFlowEventOutDto,
+  CollaborationParticipantSnapshotOutDto,
+  CollaborationTaskOutDto,
+  CollaborationTimelineGroupOutDto,
+  CollaborationTimelineNodeOutDto,
+} from "../../../../../../../contracts/services/workflow/index.js";
 
-const NANGONG: CollaborationParticipantSnapshot = { memberId: "nangong-wan", displayName: "南宫婉" };
-const LINGHU: CollaborationParticipantSnapshot = { memberId: "linghu-ancestor", displayName: "令狐老祖" };
-const SYSTEM: CollaborationParticipantSnapshot = { memberId: "system", displayName: "系统" };
-const EXECUTION_POOL: CollaborationParticipantSnapshot = { memberId: "execution-pool", displayName: "执行池" };
+const NANGONG: CollaborationParticipantSnapshotOutDto = { memberId: "nangong-wan", displayName: "南宫婉" };
+const LINGHU: CollaborationParticipantSnapshotOutDto = { memberId: "linghu-ancestor", displayName: "令狐老祖" };
+const SYSTEM: CollaborationParticipantSnapshotOutDto = { memberId: "system", displayName: "系统" };
+const EXECUTION_POOL: CollaborationParticipantSnapshotOutDto = { memberId: "execution-pool", displayName: "执行池" };
 
-export type ProjectedTimelineFact = Omit<CollaborationTimelineNode, "durationMs" | "taskId"> & {
+export type ProjectedTimelineFact = Omit<CollaborationTimelineNodeOutDto, "durationMs" | "taskId"> & {
   sourceSuffix: string;
 };
 
 export interface CollaborationFlowProjection {
   facts: ProjectedTimelineFact[];
-  topicStatus: CollaborationTimelineGroup["status"];
+  topicStatus: CollaborationTimelineGroupOutDto["status"];
 }
 
 /**
@@ -28,9 +28,9 @@ export interface CollaborationFlowProjection {
  * 异常或副作用示例：尚未分配执行人时仍返回 waiting，不伪造完成时间；原始数据库事实保持不变。
  */
 export function projectLegacySubmittedFlowCorrection(
-  task: CollaborationTask,
-  event: CollaborationFlowEvent,
-  initiator: CollaborationParticipantSnapshot,
+  task: CollaborationTaskOutDto,
+  event: CollaborationFlowEventOutDto,
+  initiator: CollaborationParticipantSnapshotOutDto,
 ): CollaborationFlowProjection | null {
   if (event.type !== "task.submitted") return null;
   const assigned = task.flowEvents.find((candidate) => candidate.type === "executor.assigned" && candidate.occurredAt >= event.occurredAt);
@@ -54,9 +54,9 @@ export function projectLegacySubmittedFlowCorrection(
  * 异常或副作用示例：历史数据中的未知事件会生成可读兜底节点，不会静默丢失，也不会修改任务快照。
  */
 export function projectCollaborationFlowEvent(
-  task: CollaborationTask,
-  event: CollaborationFlowEvent,
-  initiator: CollaborationParticipantSnapshot,
+  task: CollaborationTaskOutDto,
+  event: CollaborationFlowEventOutDto,
+  initiator: CollaborationParticipantSnapshotOutDto,
 ): CollaborationFlowProjection {
   const actor = event.actor || SYSTEM;
   const assignment = assignmentAt(task, actor.memberId, event.occurredAt);
@@ -362,14 +362,14 @@ export function projectCollaborationFlowEvent(
   })]);
 }
 
-function isCandidatePreparationFailure(task: CollaborationTask): boolean {
+function isCandidatePreparationFailure(task: CollaborationTaskOutDto): boolean {
   const failure = task.integrationFailure;
   return failure?.kind === "candidate-branch-conflict"
     || failure?.phase === "preparation"
     || /发布候选分支\s+\S+\s+已存在|禁止覆盖同一批次证据/.test(failure?.detail || "");
 }
 
-function integrationFailurePresentation(task: CollaborationTask, preparation: boolean): { summary: string; impact: string; detail: string } {
+function integrationFailurePresentation(task: CollaborationTaskOutDto, preparation: boolean): { summary: string; impact: string; detail: string } {
   const failure = task.integrationFailure;
   const evidence = failure?.detail || task.blockingReason || "未记录技术证据";
   const summary = failure?.summary || (preparation ? "发布候选批次冲突，统一测试尚未启动" : "统一测试发现未通过项，已转入修复");
@@ -382,12 +382,12 @@ function integrationFailurePresentation(task: CollaborationTask, preparation: bo
   return { summary, impact, detail: `技术证据：${evidence}\n恢复动作：${recoveryAction}` };
 }
 
-function projection(topicStatus: CollaborationTimelineGroup["status"], facts: ProjectedTimelineFact[]): CollaborationFlowProjection {
+function projection(topicStatus: CollaborationTimelineGroupOutDto["status"], facts: ProjectedTimelineFact[]): CollaborationFlowProjection {
   return { facts, topicStatus };
 }
 
 /** 类型字段只由流程事件和节点职责决定，禁止根据可变 action 文案反推详情含义。 */
-function timelineSemantics(kind: CollaborationTimelineNode["kind"]): Pick<ProjectedTimelineFact, "contentRole" | "detailRole"> {
+function timelineSemantics(kind: CollaborationTimelineNodeOutDto["kind"]): Pick<ProjectedTimelineFact, "contentRole" | "detailRole"> {
   if (kind === "distribution") return { contentRole: "task-content", detailRole: "task-breakdown" };
   if (kind === "analysis") return { contentRole: "analysis-output", detailRole: "acceptance-criteria" };
   if (kind === "execution") return { contentRole: "execution-output", detailRole: "changed-files" };
@@ -398,24 +398,24 @@ function timelineSemantics(kind: CollaborationTimelineNode["kind"]): Pick<Projec
   return { contentRole: "approval-reason", detailRole: "approval-scope" };
 }
 
-function assignmentAt(task: CollaborationTask, memberId: string, occurredAt: string): CollaborationTask["executionRecords"][number] | null {
+function assignmentAt(task: CollaborationTaskOutDto, memberId: string, occurredAt: string): CollaborationTaskOutDto["executionRecords"][number] | null {
   return [...task.executionRecords].reverse().find((record) => record.executor.memberId === memberId && record.assignedAt <= occurredAt) || null;
 }
 
-function priorEventAt(task: CollaborationTask, type: string): string | null {
+function priorEventAt(task: CollaborationTaskOutDto, type: string): string | null {
   return [...task.flowEvents].reverse().find((event) => event.type === type)?.occurredAt || null;
 }
 
-function repairStartedEvent(task: CollaborationTask, event: CollaborationFlowEvent): CollaborationFlowEvent | null {
+function repairStartedEvent(task: CollaborationTaskOutDto, event: CollaborationFlowEventOutDto): CollaborationFlowEventOutDto | null {
   const prefix = event.type.startsWith("unified_test.") ? "unified_test.repair_" : "execution.repair_";
   return [...task.flowEvents].reverse().find((candidate) => candidate.occurredAt <= event.occurredAt && candidate.type === `${prefix}started`) || null;
 }
 
-function latestOriginalExecution(task: CollaborationTask, occurredAt: string): CollaborationTask["executionRecords"][number] | null {
+function latestOriginalExecution(task: CollaborationTaskOutDto, occurredAt: string): CollaborationTaskOutDto["executionRecords"][number] | null {
   return [...task.executionRecords].reverse().find((record) => record.assignedAt <= occurredAt && record.executor.memberId !== LINGHU.memberId) || null;
 }
 
-function repairDetail(event: CollaborationFlowEvent, task: CollaborationTask): string {
+function repairDetail(event: CollaborationFlowEventOutDto, task: CollaborationTaskOutDto): string {
   const evidence = event.details?.technicalEvidence?.filter(Boolean) || [];
   return [event.details?.failureSummary, ...evidence, task.integrationFailure?.detail, task.repairFailureReason].filter(Boolean).join("\n");
 }

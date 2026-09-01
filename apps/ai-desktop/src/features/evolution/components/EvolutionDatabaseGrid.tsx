@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { EvolutionWorkbenchChangeEvent, EvolutionWorkbenchPage, EvolutionWorkbenchRow, EvolutionWorkbenchView, EvolutionWorkspaceLocation, Locale } from "../../../../contracts/desktop/desktop";
+import type { EvolutionWorkbenchChangeEventOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchRowOutDto, EvolutionWorkbenchViewValue, EvolutionWorkspaceLocationOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
 import { evolutionStatusLabel } from "../model/evolution-workbench";
 
 type SelGridApi = {
@@ -19,10 +19,10 @@ type WorkbenchColumnId = typeof WORKBENCH_COLUMN_IDS[number];
  * 真实返回示例：查询返回 20 行时渲染当前页并通过 onSelectRow 返回选中行，页码与选择写入独立视图偏好表。
  * 异常或副作用示例：版本断档或后台恢复只重查当前页；查询失败不修改业务数据；恢复与令狐动作继续调用既有桌面能力。
  */
-export function EvolutionDatabaseGrid({ id, title, view, perspective, nodeId, requestedLocation, onLocationChange, locale, onError, onSelectRow }: { id: string; title: string; view: EvolutionWorkbenchView; perspective: "nangong" | "hanli"; nodeId: string; requestedLocation: EvolutionWorkspaceLocation | null; onLocationChange(location: EvolutionWorkspaceLocation): void; locale: Locale; onError(message: string): void; onSelectRow?(row: EvolutionWorkbenchRow | null): void }) {
+export function EvolutionDatabaseGrid({ id, title, view, perspective, nodeId, requestedLocation, onLocationChange, locale, onError, onSelectRow }: { id: string; title: string; view: EvolutionWorkbenchViewValue; perspective: "nangong" | "hanli"; nodeId: string; requestedLocation: EvolutionWorkspaceLocationOutDto | null; onLocationChange(location: EvolutionWorkspaceLocationOutDto): void; locale: LocaleValue; onError(message: string): void; onSelectRow?(row: EvolutionWorkbenchRowOutDto | null): void }) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState<EvolutionWorkbenchPage>({ view, page: 1, pageSize: 20, total: 0, rows: [], stateVersion: "", generatedAt: "" });
-  const [selected, setSelected] = useState<EvolutionWorkbenchRow | null>(null);
+  const [page, setPage] = useState<EvolutionWorkbenchPageOutDto>({ view, page: 1, pageSize: 20, total: 0, rows: [], stateVersion: "", generatedAt: "" });
+  const [selected, setSelected] = useState<EvolutionWorkbenchRowOutDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [syncNotice, setSyncNotice] = useState("");
@@ -91,7 +91,7 @@ export function EvolutionDatabaseGrid({ id, title, view, perspective, nodeId, re
   }, [nodeId, perspective, requestedLocation, view]);
 
   useEffect(() => {
-    const unsubscribe = window.desktop?.onEvolutionWorkbenchChanged((event: EvolutionWorkbenchChangeEvent) => {
+    const unsubscribe = window.desktop?.onEvolutionWorkbenchChanged((event: EvolutionWorkbenchChangeEventOutDto) => {
       if (!event.affectedViews.includes(view)) return;
       const missedChange = Boolean(pageVersionRef.current && pageVersionRef.current !== event.previousStateVersion);
       setSyncNotice(missedChange ? "检测到状态版本断档，正在重新同步当前页…" : "收到实时状态更新，正在刷新当前页…");
@@ -193,7 +193,7 @@ export function EvolutionDatabaseGrid({ id, title, view, perspective, nodeId, re
 function readableError(error: unknown, fallback: string): string {
   return (error instanceof Error ? error.message : fallback).replace(/^Error invoking remote method '[^']+':\s*/, "");
 }
-function formatTime(value: string, locale: Locale): string {
+function formatTime(value: string, locale: LocaleValue): string {
   return new Intl.DateTimeFormat(locale === "ja" ? "ja-JP" : "zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 

@@ -1,5 +1,5 @@
 // 令狐提案面板只消费跨进程公开状态和工作区协议。
-import type { Locale, EvolutionStateOutDto, WorkspaceState } from "../../../../contracts/desktop/desktop";
+import type { LocaleValue, EvolutionStateOutDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/desktop";
 // 多字段提案使用 SEL UI 的顺序输入窗口，保持与桌面其他审批交互一致。
 import { useSelUi } from "../../../theme/SelUiProvider";
 
@@ -14,9 +14,9 @@ export function LinghuRepairProposalPanel({ state, workspaces, locale, onState, 
   // 演化状态用于统计令狐仍在审批或等待返还的方案。
   state: EvolutionStateOutDto;
   // 工作区是后续修正执行的安全边界，缺失时禁止提交。
-  workspaces: WorkspaceState | null;
+  workspaces: WorkspaceStateOutDto | null;
   // 当前语言随提案一起提交，供后端保持任务语言环境。
-  locale: Locale;
+  locale: LocaleValue;
   // 主进程返回新状态后由上层替换旧快照。
   onState(state: EvolutionStateOutDto): void;
   // 业务校验和 IPC 错误统一交给人物页面显示。

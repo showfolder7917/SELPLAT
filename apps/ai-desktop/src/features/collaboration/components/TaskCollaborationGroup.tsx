@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 
-import type { CollaborationTimelineGroup, CollaborationTimelineNode, CollaborationTimelineSnapshotOutDto, Locale } from "../../../../contracts/desktop/desktop";
+import type { CollaborationTimelineGroupOutDto, CollaborationTimelineNodeOutDto, CollaborationTimelineSnapshotOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 
 /** 新任务协作群只消费主进程时间线投影；旧四阶段视图保留回退但不再参与本页排序和人物推断。 */
 export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval }: {
   snapshot: CollaborationTimelineSnapshotOutDto | null;
   liveTextByNodeId: Record<string, string>;
-  locale: Locale;
+  locale: LocaleValue;
   onManualApproval(proposalId: string, title: string, content: string): void;
 }) {
   const groups = snapshot?.groups || [];
@@ -66,13 +66,13 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
   </section>;
 }
 
-function TaskGroupHeader({ group, locale, nowMs }: { group: CollaborationTimelineGroup; locale: Locale; nowMs: number }) {
+function TaskGroupHeader({ group, locale, nowMs }: { group: CollaborationTimelineGroupOutDto; locale: LocaleValue; nowMs: number }) {
   const activeCount = group.executingCount + group.verifyingCount;
   const duration = group.status === "completed" || group.status === "cancelled" ? group.durationMs : Math.max(group.durationMs, nowMs - Date.parse(group.startedAt));
   return <span className="task-group-header-content"><span><strong>{group.title}</strong><small>{group.summary}</small></span><span className="task-group-facts"><b>{groupStatusLabel(group.status, locale)}</b>{activeCount > 0 && <em>{locale === "ja" ? `並行 ${activeCount}人` : `并行处理中 ${activeCount} 人`}</em>}<small>{locale === "ja" ? "テーマ総所要時間" : "专题总历时"} {formatDuration(duration, locale)}</small></span></span>;
 }
 
-function TaskNodeHeader({ node, locale, nowMs }: { node: CollaborationTimelineNode; locale: Locale; nowMs: number }) {
+function TaskNodeHeader({ node, locale, nowMs }: { node: CollaborationTimelineNodeOutDto; locale: LocaleValue; nowMs: number }) {
   return <span className="task-node-header-content"><span className="task-node-main"><span><strong>{node.actor.displayName}</strong>{node.recipients.length > 0 && <em>{recipientLabel(node)}</em>}<b>{node.action}</b></span><small>{compact(presentTimelineText(node.summary))}</small></span><span className="task-node-meta"><small>{durationLabel(node, locale, nowMs)}</small><b>{nodeStatusLabel(node.status, locale)}</b></span></span>;
 }
 
@@ -90,7 +90,7 @@ function updateOpenOverride(setter: (update: (current: Map<string, boolean>) => 
   });
 }
 
-function recipientLabel(node: CollaborationTimelineNode): string {
+function recipientLabel(node: CollaborationTimelineNodeOutDto): string {
   const visible = node.recipients.slice(0, 3).map((item) => item.displayName).join("、");
   const remaining = node.recipients.length - 3;
   return `→ ${visible}${remaining > 0 ? ` 等 ${node.recipients.length} 人` : ""}`;
@@ -101,26 +101,26 @@ function compact(value: string): string {
   return normalized.length > 120 ? `${normalized.slice(0, 120)}…` : normalized;
 }
 
-function groupStatusLabel(status: CollaborationTimelineGroup["status"], locale: Locale): string {
-  const zh: Record<CollaborationTimelineGroup["status"], string> = { "waiting-approval": "等待审批", running: "进行中", verifying: "验证中", blocked: "已阻塞", completed: "已完成", cancelled: "已取消" };
-  const ja: Record<CollaborationTimelineGroup["status"], string> = { "waiting-approval": "承認待ち", running: "進行中", verifying: "検証中", blocked: "停止", completed: "完了", cancelled: "取消" };
+function groupStatusLabel(status: CollaborationTimelineGroupOutDto["status"], locale: LocaleValue): string {
+  const zh: Record<CollaborationTimelineGroupOutDto["status"], string> = { "waiting-approval": "等待审批", running: "进行中", verifying: "验证中", blocked: "已阻塞", completed: "已完成", cancelled: "已取消" };
+  const ja: Record<CollaborationTimelineGroupOutDto["status"], string> = { "waiting-approval": "承認待ち", running: "進行中", verifying: "検証中", blocked: "停止", completed: "完了", cancelled: "取消" };
   return (locale === "ja" ? ja : zh)[status];
 }
 
-function nodeStatusLabel(status: CollaborationTimelineNode["status"], locale: Locale): string {
+function nodeStatusLabel(status: CollaborationTimelineNodeOutDto["status"], locale: LocaleValue): string {
   const zh = { completed: "已完成", current: "进行中", waiting: "等待中", failed: "未通过" } as const;
   const ja = { completed: "完了", current: "進行中", waiting: "待機", failed: "失敗" } as const;
   return (locale === "ja" ? ja : zh)[status];
 }
 
-function durationLabel(node: CollaborationTimelineNode, locale: Locale, nowMs: number): string {
+function durationLabel(node: CollaborationTimelineNodeOutDto, locale: LocaleValue, nowMs: number): string {
   const prefix = node.status === "completed" ? (locale === "ja" ? "処理時間" : "处理耗时") : node.kind === "verification" ? (locale === "ja" ? "検証済み" : "已验证") : node.status === "waiting" ? (locale === "ja" ? "待機" : "已等待") : (locale === "ja" ? "処理済み" : "已处理");
   const terminal = node.status === "completed" || node.status === "failed";
   const liveDuration = node.completedAt || terminal ? node.durationMs : Math.max(node.durationMs, nowMs - Date.parse(node.startedAt));
   return `${prefix} ${formatDuration(liveDuration, locale)}`;
 }
 
-function formatDuration(durationMs: number, locale: Locale): string {
+function formatDuration(durationMs: number, locale: LocaleValue): string {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1_000));
   const hours = Math.floor(totalSeconds / 3_600);
   const minutes = Math.floor(totalSeconds % 3_600 / 60);
@@ -129,8 +129,8 @@ function formatDuration(durationMs: number, locale: Locale): string {
   return locale === "ja" ? `${minutes}分${seconds}秒` : `${minutes}分${seconds}秒`;
 }
 
-function detailLabel(node: CollaborationTimelineNode, locale: Locale): string {
-  const zh: Record<CollaborationTimelineNode["detailRole"], string> = {
+function detailLabel(node: CollaborationTimelineNodeOutDto, locale: LocaleValue): string {
+  const zh: Record<CollaborationTimelineNodeOutDto["detailRole"], string> = {
     none: "详情",
     "application-evidence": "申请依据",
     "approval-scope": "审批说明",
@@ -141,7 +141,7 @@ function detailLabel(node: CollaborationTimelineNode, locale: Locale): string {
     "recovery-conditions": "阻塞与恢复条件",
     "result-evidence": "结果依据",
   };
-  const ja: Record<CollaborationTimelineNode["detailRole"], string> = {
+  const ja: Record<CollaborationTimelineNodeOutDto["detailRole"], string> = {
     none: "詳細",
     "application-evidence": "申請根拠",
     "approval-scope": "承認説明",

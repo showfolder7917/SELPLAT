@@ -4,8 +4,8 @@ import type {
   DecideHanliResultInDto,
   HanliAcceptancePlanOutDto,
   HanliAcceptanceRunOutDto,
-} from "../../../../contracts/collaboration/hanli/index.js";
-import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
+} from "../../../../contracts/services/personas/hanli/index.js";
+import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
 import { HanliApplicationService, type HanliApplicationServiceOptions } from "./internal/hanli-application.service.js";
 import { HanliRealAppAcceptanceRunner } from "./internal/hanli-real-app-acceptance.runner.js";

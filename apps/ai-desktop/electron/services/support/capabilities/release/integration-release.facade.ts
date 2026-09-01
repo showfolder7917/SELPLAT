@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { IntegrationReleaseEventType, IntegrationReleaseHolder, IntegrationReleaseRequest } from "../../../../../contracts/capabilities/release/index.js";
+import type { IntegrationReleaseEventTypeValue, IntegrationReleaseHolderOutDto, IntegrationReleaseInDto } from "../../../../../contracts/services/support/capabilities/release/index.js";
 
 interface Options {
   coordinationRoot: string;
@@ -34,9 +34,9 @@ export class IntegrationReleaseCoordinatorFacade {
     mkdirSync(this.#root, { recursive: true });
   }
 
-  holder(): IntegrationReleaseHolder | null { return readJson<IntegrationReleaseHolder>(this.#ownerFile); }
+  holder(): IntegrationReleaseHolderOutDto | null { return readJson<IntegrationReleaseHolderOutDto>(this.#ownerFile); }
 
-  run<T>(request: IntegrationReleaseRequest, operation: () => Promise<T>): Promise<T> {
+  run<T>(request: IntegrationReleaseInDto, operation: () => Promise<T>): Promise<T> {
     validate(request);
     this.#emit("queued", request, { queuedAt: new Date().toISOString() });
     const result = this.#queue.then(async () => {
@@ -52,13 +52,13 @@ export class IntegrationReleaseCoordinatorFacade {
   }
 
   /** 供已有集成状态机取得同一把跨进程租约；调用方必须在 finally 中执行返回的释放函数。 */
-  acquire(request: IntegrationReleaseRequest): Promise<() => void> {
+  acquire(request: IntegrationReleaseInDto): Promise<() => void> {
     validate(request);
     this.#emit("queued", request, { queuedAt: new Date().toISOString() });
     return this.#acquireInternal(request);
   }
 
-  async #acquireInternal(request: IntegrationReleaseRequest): Promise<() => void> {
+  async #acquireInternal(request: IntegrationReleaseInDto): Promise<() => void> {
     const leaseId = randomUUID();
     const queuedAt = new Date().toISOString();
     let contentionLeaseId: string | null = null;
@@ -66,11 +66,11 @@ export class IntegrationReleaseCoordinatorFacade {
       try {
         mkdirSync(this.#lockRoot);
         const acquiredAt = new Date().toISOString();
-        const holder: IntegrationReleaseHolder = { ...request, leaseId, processId: process.pid, queuedAt, acquiredAt, heartbeatAt: acquiredAt };
+        const holder: IntegrationReleaseHolderOutDto = { ...request, leaseId, processId: process.pid, queuedAt, acquiredAt, heartbeatAt: acquiredAt };
         writeJson(this.#ownerFile, holder);
         this.#emit("acquired", request, { leaseId, processId: process.pid, acquiredAt, waitDurationMs: Date.now() - Date.parse(queuedAt) });
         const heartbeat = setInterval(() => {
-          const current = readJson<IntegrationReleaseHolder>(this.#ownerFile);
+          const current = readJson<IntegrationReleaseHolderOutDto>(this.#ownerFile);
           if (current?.leaseId !== leaseId) return;
           holder.heartbeatAt = new Date().toISOString();
           writeJson(this.#ownerFile, holder);
@@ -78,7 +78,7 @@ export class IntegrationReleaseCoordinatorFacade {
         heartbeat.unref?.();
         return () => {
           clearInterval(heartbeat);
-          if (readJson<IntegrationReleaseHolder>(this.#ownerFile)?.leaseId === leaseId) rmSync(this.#lockRoot, { recursive: true, force: true });
+          if (readJson<IntegrationReleaseHolderOutDto>(this.#ownerFile)?.leaseId === leaseId) rmSync(this.#lockRoot, { recursive: true, force: true });
           this.#emit("released", request, { leaseId, processId: process.pid, releasedAt: new Date().toISOString() });
         };
       } catch (error) {
@@ -108,12 +108,12 @@ export class IntegrationReleaseCoordinatorFacade {
     }
   }
 
-  #emit(type: IntegrationReleaseEventType, request: IntegrationReleaseRequest, details: Record<string, unknown>): void {
+  #emit(type: IntegrationReleaseEventTypeValue, request: IntegrationReleaseInDto, details: Record<string, unknown>): void {
     this.#recordEvent(`integration.release.${type}`, { ...request, ...details, occurredAt: new Date().toISOString() });
   }
 }
 
-function validate(request: IntegrationReleaseRequest): void {
+function validate(request: IntegrationReleaseInDto): void {
   if (!/^[a-zA-Z0-9._-]+$/.test(request.releaseBatchId)) throw new Error("发布批次 ID 不安全。");
   if (!/^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/.test(request.version)) throw new Error("发布版本号不符合语义化版本格式。");
   if (!Number.isInteger(request.generation) || request.generation < 1 || request.taskIds.length === 0) throw new Error("发布批次必须绑定有效代次和任务。");

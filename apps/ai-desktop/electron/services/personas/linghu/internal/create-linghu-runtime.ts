@@ -1,5 +1,5 @@
 // 令狐状态事件类型用于约束组合根的持久化、审计和页面广播回调。
-import type { LinghuAutomationStateEventOutDto } from "../../../../../contracts/collaboration/linghu/index.js";
+import type { LinghuAutomationStateEventOutDto } from "../../../../../contracts/services/personas/linghu/index.js";
 // Platform JSON Port 隔离文件路径、原子替换和备份实现。
 import type { AtomicJsonPersistencePort } from "../../../support/platform/persistence/index.js";
 // 测试资源协调器作为运行时装配端口传入，Runner 仍由令狐内部创建。

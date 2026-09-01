@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 
-import type { Locale, EvolutionStateOutDto } from "../../../../contracts/desktop/desktop";
+import type { LocaleValue, EvolutionStateOutDto } from "../../../../contracts/system/desktop/desktop";
 
-type EvolutionProposal = EvolutionStateOutDto["proposals"][number];
+type EvolutionProposalOutDto = EvolutionStateOutDto["proposals"][number];
 type SelGridApi = {
   create(host: HTMLElement, options: Record<string, unknown>): HTMLElement | null;
   mount(root: HTMLElement, payload: Record<string, unknown>): { destroy?(): void } | null;
@@ -14,7 +14,7 @@ type SelGridApi = {
  * 真实返回示例：用户选择 p1 时调用 onSelect("p1")，业务详情仍由外层页面决定。
  * 异常或副作用示例：SELUI 尚未装配时保持空宿主；卸载时销毁控制器和事件监听，避免重复响应。
  */
-export function EvolutionProposalGrid({ id, proposals, selectedId, locale, mode, onSelect }: { id: string; proposals: EvolutionProposal[]; selectedId: string | null; locale: Locale; mode: "approval" | "progress"; onSelect(proposalId: string): void }) {
+export function EvolutionProposalGrid({ id, proposals, selectedId, locale, mode, onSelect }: { id: string; proposals: EvolutionProposalOutDto[]; selectedId: string | null; locale: LocaleValue; mode: "approval" | "progress"; onSelect(proposalId: string): void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const payload = useMemo(() => {
     const rows = proposals.map((proposal) => {
@@ -60,7 +60,7 @@ export function EvolutionProposalGrid({ id, proposals, selectedId, locale, mode,
     const host = hostRef.current;
     const grid = (window as typeof window & { sel?: { components?: { grid?: SelGridApi } } }).sel?.components?.grid;
     if (!host || !grid) return;
-    const root = grid.create(host, { gridId: id, entity: "EvolutionProposal", ariaLabel: mode === "approval" ? "统一演化审批表" : "南宫婉提案进度表" });
+    const root = grid.create(host, { gridId: id, entity: "EvolutionProposalOutDto", ariaLabel: mode === "approval" ? "统一演化审批表" : "南宫婉提案进度表" });
     if (!root) return;
     const handleSelection = (event: Event) => {
       const proposalId = String((event as CustomEvent<{ selectedIds?: string[] }>).detail?.selectedIds?.[0] || "");
@@ -78,6 +78,6 @@ export function EvolutionProposalGrid({ id, proposals, selectedId, locale, mode,
   return <div ref={hostRef} className={`evolution-proposal-grid-host${proposals.length ? "" : " empty"}`} />;
 }
 
-function formatTime(value: string, locale: Locale): string {
+function formatTime(value: string, locale: LocaleValue): string {
   return new Intl.DateTimeFormat(locale === "ja" ? "ja-JP" : "zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }

@@ -1,9 +1,9 @@
-import type { CodexStreamActivity, CodexStreamEvent, CodexStreamPlanStep } from "../../../../../../contracts/platform/codex/index.js";
+import type { CodexStreamActivityOutDto, CodexStreamEventOutDto, CodexStreamPlanStepOutDto } from "../../../../../../contracts/services/support/platform/codex/index.js";
 
 type JsonObject = Record<string, unknown>;
 
 /** 把官方 app-server 通知收敛成渲染层允许消费的稳定、最小化实时事件。 */
-export function toCodexStreamEvent(method: string, params: JsonObject, turnId: string): CodexStreamEvent | null {
+export function toCodexStreamEvent(method: string, params: JsonObject, turnId: string): CodexStreamEventOutDto | null {
   if (method === "turn/started") return { type: "turn-started", turnId, segmentId: `${turnId}:turn`, status: "inProgress" };
   if (method === "item/agentMessage/delta") {
     const itemId = stringValue(params.itemId) || "agent";
@@ -17,7 +17,7 @@ export function toCodexStreamEvent(method: string, params: JsonObject, turnId: s
   }
   if (method === "turn/plan/updated") {
     const plan = Array.isArray(params.plan)
-      ? params.plan.map(asObject).map((entry): CodexStreamPlanStep => ({ step: stringValue(entry.step) || "", status: normalizePlanStatus(entry.status) })).filter((entry) => entry.step)
+      ? params.plan.map(asObject).map((entry): CodexStreamPlanStepOutDto => ({ step: stringValue(entry.step) || "", status: normalizePlanStatus(entry.status) })).filter((entry) => entry.step)
       : [];
     return { type: "plan-updated", turnId, plan };
   }
@@ -38,7 +38,7 @@ export function toCodexStreamEvent(method: string, params: JsonObject, turnId: s
   return null;
 }
 
-function createStreamActivity(item: JsonObject, itemId: string, phase: "started" | "completed"): CodexStreamActivity {
+function createStreamActivity(item: JsonObject, itemId: string, phase: "started" | "completed"): CodexStreamActivityOutDto {
   const itemType = stringValue(item.type) || "unknown";
   return {
     id: itemId,
@@ -65,7 +65,7 @@ function summarizeStreamItem(itemType: string, item: JsonObject): string | null 
   return null;
 }
 
-function normalizePlanStatus(value: unknown): CodexStreamPlanStep["status"] {
+function normalizePlanStatus(value: unknown): CodexStreamPlanStepOutDto["status"] {
   return value === "inProgress" || value === "completed" ? value : "pending";
 }
 

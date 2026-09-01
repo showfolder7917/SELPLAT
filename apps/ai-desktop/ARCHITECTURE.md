@@ -44,7 +44,7 @@ electron/main.ts
 Renderer Feature
     │ 调用 window.desktop 的类型化方法
     ▼
-contracts/desktop/DesktopApi
+contracts/system/desktop/DesktopApi
     │
     ▼
 electron/system/preload/domains/*-bridge.cts
@@ -100,7 +100,7 @@ electron/system/ipc/domains/register-*-ipc.ts
 - 入口：`electron/services/personas/nangong/index.ts`
 - 对外门面：`nangong.facade.ts`
 - 内部能力：对话、草稿、专题作者、提案修订调查
-- DTO 入口：`contracts/collaboration/nangong/index.ts`
+- DTO 入口：`contracts/services/personas/nangong/index.ts`
 - 不负责：韩立审批、令狐测试、Workflow 轮转、共享状态持久化
 
 ### 韩立
@@ -108,7 +108,7 @@ electron/system/ipc/domains/register-*-ipc.ts
 - 入口：`electron/services/personas/hanli/index.ts`
 - 对外门面：`hanli.facade.ts`
 - 内部能力：专题研讨、方向审批、结果验收、真实应用验收计划和运行
-- DTO 入口：`contracts/collaboration/hanli/index.ts`
+- DTO 入口：`contracts/services/personas/hanli/index.ts`
 - 不负责：南宫婉会话、提案作者动作、令狐恢复、跨人物顺序
 
 ### 令狐
@@ -116,7 +116,7 @@ electron/system/ipc/domains/register-*-ipc.ts
 - 入口：`electron/services/personas/linghu/index.ts`
 - 对外门面：`linghu-automation.facade.ts`
 - 内部能力：故障调查、修正方案、统一测试、失败复测和恢复保障
-- DTO 入口：`contracts/collaboration/linghu/index.ts`
+- DTO 入口：`contracts/services/personas/linghu/index.ts`
 - 不负责：常规任务规划、方向审批、共享 Evolution 状态
 
 ### 通用执行人
@@ -124,7 +124,7 @@ electron/system/ipc/domains/register-*-ipc.ts
 - 入口：`electron/services/personas/executor/index.ts`
 - 对外门面：`executor.facade.ts`
 - 内部能力：统一管理动态执行成员的会话创建、存活检查、复用与释放
-- Contracts：`contracts/collaboration/executor/index.ts`
+- Contracts：`contracts/services/personas/executor/index.ts`
 - 所有普通执行成员共用一个 Executor Runtime，成员身份由任务分配参数决定，不按姓名复制目录
 - Workflow 只决定何时排队、开始、恢复和流转，不保存执行会话工厂或执行会话 Map
 - 南宫婉负责提案任务拆分与分发；`nangong-task-distribution.service.ts` 不得回迁到 Workflow
@@ -154,7 +154,7 @@ electron/system/ipc/domains/register-*-ipc.ts
 import type {
   DecideHanliProposalInDto,
   HanliAcceptancePlanOutDto,
-} from "../../contracts/collaboration/hanli/index.js";
+} from "../../contracts/services/personas/hanli/index.js";
 ```
 
 定位方式：
@@ -163,23 +163,23 @@ import type {
 2. 打开该模块 `index.ts`，显式导出语句会直接给出物理文件。
 3. 跨模块只引用目标 `index.ts`；同一模块内部才允许引用自己的具体 DTO 文件。
 
-Renderer 与 preload 是例外：它们通过 `contracts/desktop/desktop.ts` 使用完整桌面协议。主进程业务代码不得依赖这个聚合出口。
+Renderer 与 preload 是例外：它们通过 `contracts/system/desktop/desktop.ts` 使用完整桌面协议。主进程业务代码不得依赖这个聚合出口。
 
 ## 8. 关键协议位置
 
 | 业务事实 | 权威文件 |
 |---|---|
-| Evolution 当前状态 | `contracts/collaboration/evolution/dto/evolution-state.out.dto.ts` |
-| Evolution 状态事件 | `contracts/collaboration/evolution/dto/evolution-state.event.out.dto.ts` |
-| 专题 | `contracts/collaboration/evolution/dto/evolution-topic.out.dto.ts` |
-| 提案 | `contracts/collaboration/evolution/dto/evolution-proposal.out.dto.ts` |
-| 审批事实 | `contracts/collaboration/evolution/dto/evolution-approval.out.dto.ts` |
-| 南宫婉会话 | `contracts/collaboration/nangong/dto/conversation.out.dto.ts` |
-| 韩立审批输入 | `contracts/collaboration/hanli/dto/decide-proposal.in.dto.ts` |
-| 韩立验收计划 | `contracts/collaboration/hanli/dto/acceptance-plan.out.dto.ts` |
-| Workflow 当前状态 | `contracts/collaboration/workflow/dto/collaboration-state.out.dto.ts` |
-| Workflow 任务 | `contracts/collaboration/workflow/dto/collaboration-task.out.dto.ts` |
-| Workflow 时间线 | `contracts/collaboration/workflow/dto/collaboration-timeline.out.dto.ts` |
+| Evolution 当前状态 | `contracts/services/evolution/dto/evolution-state.out.dto.ts` |
+| Evolution 状态事件 | `contracts/services/evolution/dto/evolution-state.event.out.dto.ts` |
+| 专题 | `contracts/services/evolution/dto/evolution-topic.out.dto.ts` |
+| 提案 | `contracts/services/evolution/dto/evolution-proposal.out.dto.ts` |
+| 审批事实 | `contracts/services/evolution/dto/evolution-approval.out.dto.ts` |
+| 南宫婉会话 | `contracts/services/personas/nangong/dto/conversation.out.dto.ts` |
+| 韩立审批输入 | `contracts/services/personas/hanli/dto/decide-proposal.in.dto.ts` |
+| 韩立验收计划 | `contracts/services/personas/hanli/dto/acceptance-plan.out.dto.ts` |
+| Workflow 当前状态 | `contracts/services/workflow/dto/collaboration-state.out.dto.ts` |
+| Workflow 任务 | `contracts/services/workflow/dto/collaboration-task.out.dto.ts` |
+| Workflow 时间线 | `contracts/services/workflow/dto/collaboration-timeline.out.dto.ts` |
 
 ## 9. 新增能力的固定步骤
 

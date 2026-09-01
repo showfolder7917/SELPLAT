@@ -4,7 +4,7 @@ import path from "node:path";
 import { app } from "electron";
 import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
-import type { AppVariant } from "../../../contracts/foundation/base.js";
+import type { AppVariantValue } from "../../../contracts/foundation/index.js";
 import { resolveAiMemoryPaths as resolveConfiguredAiMemoryPaths, type ResolvedAiMemoryPaths } from "./ai-memory-path-resolver.js";
 
 type ApplicationMetadata = {
@@ -17,7 +17,7 @@ function readApplicationMetadata(): ApplicationMetadata {
   return JSON.parse(readFileSync(manifestPath, "utf8")) as ApplicationMetadata;
 }
 
-export function resolveAppVariant(): AppVariant {
+export function resolveAppVariant(): AppVariantValue {
   return "developer";
 }
 

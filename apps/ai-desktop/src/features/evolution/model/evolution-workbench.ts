@@ -1,4 +1,4 @@
-import type { EvolutionWorkspaceLocation, EvolutionStateOutDto } from "../../../../contracts/desktop/desktop";
+import type { EvolutionWorkspaceLocationOutDto, EvolutionStateOutDto } from "../../../../contracts/system/desktop/desktop";
 
 const STATUS_LABELS: Record<string, string> = {
   registered: "已登记", investigating: "调查中", "pending-approval": "待审批", "supplement-required": "待补充", rejected: "已退回",
@@ -21,12 +21,12 @@ export function evolutionMutationRequest(state: EvolutionStateOutDto) {
   return { expectedStateVersion: state.updatedAt, idempotencyKey: crypto.randomUUID() };
 }
 
-export function defaultEvolutionWorkspaceLocation(perspective: "nangong" | "hanli", nodeId: string | null = null): EvolutionWorkspaceLocation {
+export function defaultEvolutionWorkspaceLocation(perspective: "nangong" | "hanli", nodeId: string | null = null): EvolutionWorkspaceLocationOutDto {
   return { perspective, nodeId: nodeId || (perspective === "hanli" ? "manual-approval" : "manual-topic"), page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: null };
 }
 
 /** 从窗口地址恢复稳定人物、节点、查询页和选中记录；非法数值回到当前基线，不猜测旧格式。 */
-export function evolutionWorkspaceLocationFromSearch(search: string): EvolutionWorkspaceLocation {
+export function evolutionWorkspaceLocationFromSearch(search: string): EvolutionWorkspaceLocationOutDto {
   const params = new URLSearchParams(search);
   const perspective = params.get("perspective") === "hanli" ? "hanli" : "nangong";
   const pageSizeValue = Number(params.get("pageSize"));
@@ -41,7 +41,7 @@ export function evolutionWorkspaceLocationFromSearch(search: string): EvolutionW
   };
 }
 
-export function evolutionWorkspaceLocationSearch(location: EvolutionWorkspaceLocation): string {
+export function evolutionWorkspaceLocationSearch(location: EvolutionWorkspaceLocationOutDto): string {
   const params = new URLSearchParams({ mode: "evolution-workspace", perspective: location.perspective, node: location.nodeId || "", page: String(location.page), pageSize: String(location.pageSize), keyword: location.keyword, status: location.status, selected: location.selectedRowId || "" });
   return `?${params.toString()}`;
 }

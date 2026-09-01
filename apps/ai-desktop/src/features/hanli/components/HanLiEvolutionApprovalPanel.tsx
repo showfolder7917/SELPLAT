@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { ApprovalGovernanceRecord, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, Locale, EvolutionStateOutDto } from "../../../../contracts/desktop/desktop";
+import type { ApprovalGovernanceRecordOutDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, LocaleValue, EvolutionStateOutDto } from "../../../../contracts/system/desktop/desktop";
 import { evolutionMutationRequest } from "../../evolution/model/evolution-workbench";
 import { EvolutionProposalDetail } from "../../evolution/components/EvolutionProposalDetail";
 import { EvolutionProposalGrid } from "../../evolution/components/EvolutionProposalGrid";
@@ -12,7 +12,7 @@ import { EvolutionProposalGrid } from "../../evolution/components/EvolutionPropo
  * 真实返回示例：React 渲染审批意见、验收计划及运行结果，不直接返回业务对象。
  * 异常或副作用示例：通过 desktop 门面提交韩立决定；失败时保留输入并把可读原因交给 onError。
  */
-export function HanLiEvolutionApprovalPanel({ state, locale, view, selectedProposalId, databaseManaged, onState, onError }: { state: EvolutionStateOutDto; locale: Locale; view: "manual" | "automatic"; selectedProposalId: string | null; databaseManaged: boolean; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
+export function HanLiEvolutionApprovalPanel({ state, locale, view, selectedProposalId, databaseManaged, onState, onError }: { state: EvolutionStateOutDto; locale: LocaleValue; view: "manual" | "automatic"; selectedProposalId: string | null; databaseManaged: boolean; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
   const proposals = [...state.proposals].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   const [selectedId, setSelectedId] = useState<string | null>(proposals[0]?.proposalId || null);
   const [advice, setAdvice] = useState("");
@@ -24,7 +24,7 @@ export function HanLiEvolutionApprovalPanel({ state, locale, view, selectedPropo
   const [generatedPlan, setGeneratedPlan] = useState<HanliAcceptancePlanOutDto | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const [generatedRun, setGeneratedRun] = useState<HanliAcceptanceRunOutDto | null>(null);
-  const [governance, setGovernance] = useState<ApprovalGovernanceRecord[]>([]);
+  const [governance, setGovernance] = useState<ApprovalGovernanceRecordOutDto[]>([]);
   const selected = proposals.find((proposal) => proposal.proposalId === selectedId) || (databaseManaged ? null : proposals[0]) || null;
   useEffect(() => { if (databaseManaged) setSelectedId(selectedProposalId); }, [databaseManaged, selectedProposalId]);
   useEffect(() => { void window.desktop?.getApprovalGovernance().then(setGovernance).catch(() => setGovernance([])); }, [state.updatedAt]);

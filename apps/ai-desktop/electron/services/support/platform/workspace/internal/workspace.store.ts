@@ -4,17 +4,17 @@ import os from "node:os";
 import path from "node:path";
 
 import type {
-  WorkspaceEntry,
-  WorkspaceRoot,
-  WorkspaceState,
-} from "../../../../../../contracts/platform/workspace/index.js";
-import type { WorkspacePermission } from "../../../../../../contracts/foundation/base.js";
+  WorkspaceEntryOutDto,
+  WorkspaceRootOutDto,
+  WorkspaceStateOutDto,
+} from "../../../../../../contracts/services/support/platform/workspace/index.js";
+import type { WorkspacePermissionValue } from "../../../../../../contracts/foundation/index.js";
 
 const MAX_ROOTS = 24;
 const MAX_ENTRIES = 80;
 const CURRENT_PERMISSION_DEFAULTS_VERSION = 1;
 
-type StoredWorkspaceState = Partial<WorkspaceState> & {
+type StoredWorkspaceState = Partial<WorkspaceStateOutDto> & {
   permissionDefaultsVersion?: number;
 };
 
@@ -28,7 +28,7 @@ export class WorkspaceStore {
     this.#defaultRoot = validateDirectory(defaultRoot);
   }
 
-  read(): WorkspaceState {
+  read(): WorkspaceStateOutDto {
     const fallbackRoot = createRoot(this.#defaultRoot, "workspace-write");
     try {
       const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as StoredWorkspaceState;
@@ -50,7 +50,7 @@ export class WorkspaceStore {
     }
   }
 
-  add(directoryPath: string): WorkspaceState {
+  add(directoryPath: string): WorkspaceStateOutDto {
     const state = this.read();
     const directory = validateDirectory(directoryPath);
     if (state.roots.some((root) => samePath(root.path, directory))) return state;
@@ -58,7 +58,7 @@ export class WorkspaceStore {
     return this.#write({ ...state, roots: [...state.roots, createRoot(directory, "workspace-write")] });
   }
 
-  updatePermission(id: string, permission: WorkspacePermission): WorkspaceState {
+  updatePermission(id: string, permission: WorkspacePermissionValue): WorkspaceStateOutDto {
     if (permission !== "read-only" && permission !== "workspace-write") {
       throw new Error("Invalid workspace permission.");
     }
@@ -70,13 +70,13 @@ export class WorkspaceStore {
     });
   }
 
-  setPrimary(id: string): WorkspaceState {
+  setPrimary(id: string): WorkspaceStateOutDto {
     const state = this.read();
     this.#requireRoot(state, id);
     return this.#write({ ...state, primaryId: id });
   }
 
-  remove(id: string): WorkspaceState {
+  remove(id: string): WorkspaceStateOutDto {
     const state = this.read();
     this.#requireRoot(state, id);
     if (state.roots.length === 1) throw new Error("At least one workspace is required.");
@@ -84,7 +84,7 @@ export class WorkspaceStore {
     return this.#write({ primaryId: state.primaryId === id ? roots[0].id : state.primaryId, roots });
   }
 
-  listEntries(id: string): WorkspaceEntry[] {
+  listEntries(id: string): WorkspaceEntryOutDto[] {
     const root = this.#requireRoot(this.read(), id);
     return readdirSync(root.path, { withFileTypes: true })
       .filter((entry) => !entry.name.startsWith(".") && (entry.isDirectory() || entry.isFile()))
@@ -93,14 +93,14 @@ export class WorkspaceStore {
       .map((entry) => ({ name: entry.name, kind: entry.isDirectory() ? "directory" : "file" }));
   }
 
-  #requireRoot(state: WorkspaceState, id: string): WorkspaceRoot {
+  #requireRoot(state: WorkspaceStateOutDto, id: string): WorkspaceRootOutDto {
     if (typeof id !== "string") throw new Error("Invalid workspace id.");
     const root = state.roots.find((candidate) => candidate.id === id);
     if (!root) throw new Error("Workspace is not registered.");
     return root;
   }
 
-  #write(state: WorkspaceState): WorkspaceState {
+  #write(state: WorkspaceStateOutDto): WorkspaceStateOutDto {
     const temporaryPath = `${this.#filePath}.tmp`;
     writeFileSync(temporaryPath, JSON.stringify({ permissionDefaultsVersion: CURRENT_PERMISSION_DEFAULTS_VERSION, ...state }, null, 2), "utf8");
     renameSync(temporaryPath, this.#filePath);
@@ -108,9 +108,9 @@ export class WorkspaceStore {
   }
 }
 
-function normalizeStoredRoot(value: unknown): WorkspaceRoot[] {
+function normalizeStoredRoot(value: unknown): WorkspaceRootOutDto[] {
   if (!value || typeof value !== "object") return [];
-  const candidate = value as Partial<WorkspaceRoot>;
+  const candidate = value as Partial<WorkspaceRootOutDto>;
   if (typeof candidate.path !== "string") return [];
   try {
     const directory = validateDirectory(candidate.path);
@@ -120,7 +120,7 @@ function normalizeStoredRoot(value: unknown): WorkspaceRoot[] {
   }
 }
 
-function createRoot(directoryPath: string, permission: WorkspacePermission): WorkspaceRoot {
+function createRoot(directoryPath: string, permission: WorkspacePermissionValue): WorkspaceRootOutDto {
   return {
     id: createHash("sha256").update(normalizeForComparison(directoryPath)).digest("hex").slice(0, 16),
     name: path.basename(directoryPath) || directoryPath,
@@ -142,7 +142,7 @@ function validateDirectory(directoryPath: string): string {
   return resolved;
 }
 
-function deduplicateRoots(roots: WorkspaceRoot[]): WorkspaceRoot[] {
+function deduplicateRoots(roots: WorkspaceRootOutDto[]): WorkspaceRootOutDto[] {
   return roots.filter((root, index) => roots.findIndex((candidate) => samePath(candidate.path, root.path)) === index);
 }
 

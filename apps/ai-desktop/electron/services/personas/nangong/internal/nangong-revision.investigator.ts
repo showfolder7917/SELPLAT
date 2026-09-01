@@ -1,4 +1,4 @@
-import type { EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 
 export interface RevisionInvestigation {
   content: string;

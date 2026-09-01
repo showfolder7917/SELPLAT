@@ -1,21 +1,21 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 
-import type { CollaborationTimelineBusinessEvent, CollaborationTask } from "../../../../../contracts/collaboration/workflow/index.js";
-import type { CodexStreamEvent } from "../../../../../contracts/platform/codex/index.js";
-import type { EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionDistributionValidation, EvolutionMutationInDto, EvolutionProposal, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { CollaborationTimelineBusinessEventOutDto, CollaborationTaskOutDto } from "../../../../../contracts/services/workflow/index.js";
+import type { CodexStreamEventOutDto } from "../../../../../contracts/services/support/platform/codex/index.js";
+import type { EvolutionDistributionPlanOutDto, EvolutionDistributionUnitOutDto, EvolutionDistributionValidationOutDto, EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { CollaborationWorkflowFacade } from "../../../workflow/index.js";
 import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
 
-type PlanResult = { summary: string; units: EvolutionDistributionUnit[] };
+type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
 
 export interface NangongTaskDistributionServiceOptions {
   store: EvolutionStatePort;
   mutations: EvolutionMutationPort;
   collaboration: CollaborationWorkflowFacade;
-  plan(prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEvent) => void): Promise<string>;
+  plan(prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEventOutDto) => void): Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
-  timeline?: (event: CollaborationTimelineBusinessEvent) => void;
-  timelineStream?: (taskId: string, memberId: string, event: CodexStreamEvent) => void;
+  timeline?: (event: CollaborationTimelineBusinessEventOutDto) => void;
+  timelineStream?: (taskId: string, memberId: string, event: CodexStreamEventOutDto) => void;
 }
 
 /** 任务分发唯一服务：只消费“已通过审批”命令，不作审批判断。 */
@@ -64,7 +64,7 @@ export class NangongTaskDistributionService {
         this.#publishPlanning(proposal, topic, attempt, "completed", "执行计划生成完成", planned.summary, planningStartedAt);
         const hardFindings = distributionHardFindings(planned.units);
         const validation = validateDistributionPlan(planned, hardFindings);
-        const plan: EvolutionDistributionPlan = { version: 1, summary: planned.summary, units: planned.units, validation, plannedAt: new Date().toISOString() };
+        const plan: EvolutionDistributionPlanOutDto = { version: 1, summary: planned.summary, units: planned.units, validation, plannedAt: new Date().toISOString() };
         state = this.options.store.saveDistributionPlan(proposalId, plan);
         proposal = requireProposal(state, proposalId);
         this.options.recordEvent("nangong.evolution.distribution_planned", { proposalId, attempt, unitCount: plan.units.length, expectedFiles: plan.units.flatMap((unit) => unit.expectedFiles), validationDecision: validation.decision, validationFindings: validation.findings });
@@ -84,7 +84,7 @@ export class NangongTaskDistributionService {
       : null;
     const collaborationState = typeof this.options.collaboration.state === "function" ? this.options.collaboration.state() : { members: [], tasks: [] };
     const targetMember = proposal.targetMemberId ? collaborationState.members.find((member) => member.memberId === proposal.targetMemberId) : null;
-    const observedTasks: CollaborationTask[] = collaborationState.tasks.filter((task) => task.evolutionProposalId === proposal.proposalId);
+    const observedTasks: CollaborationTaskOutDto[] = collaborationState.tasks.filter((task) => task.evolutionProposalId === proposal.proposalId);
     const existingTaskTitles = new Set(observedTasks.map((task) => task.snapshot.title));
     for (const [index, unit] of proposal.distributionPlan.units.entries()) {
       if (existingTaskTitles.has(unit.title)) continue;
@@ -114,7 +114,7 @@ export class NangongTaskDistributionService {
     return state;
   }
 
-  #publishPlanning(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], attempt: number, status: "current" | "completed" | "failed", action: string, content: string, startedAt: string): void {
+  #publishPlanning(proposal: EvolutionProposalOutDto, topic: EvolutionStateOutDto["topics"][number], attempt: number, status: "current" | "completed" | "failed", action: string, content: string, startedAt: string): void {
     const occurredAt = new Date().toISOString();
     this.options.timeline?.({
       eventId: `distribution-planning-${proposal.proposalId}-${attempt}-${status}-${randomUUID()}`,
@@ -131,7 +131,7 @@ export class NangongTaskDistributionService {
     });
   }
 
-  #publishDistribution(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], observedTasks: CollaborationTask[]): void {
+  #publishDistribution(proposal: EvolutionProposalOutDto, topic: EvolutionStateOutDto["topics"][number], observedTasks: CollaborationTaskOutDto[]): void {
     const tasks = observedTasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
     // 接收人只来自冻结的执行分配；currentHandler 可能仍是提交人，不能据此反推出“南宫婉发给南宫婉”。
     const recipients = tasks.map((task) => task.executionRecords?.[0]?.executor || task.originalExecutor || { memberId: `pending:${task.taskId}`, displayName: "等待分配" })
@@ -158,7 +158,7 @@ export class NangongTaskDistributionService {
   }
 }
 
-function distributionPlanningPrompt(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], feedback: string): string {
+function distributionPlanningPrompt(proposal: EvolutionProposalOutDto, topic: EvolutionStateOutDto["topics"][number], feedback: string): string {
   return [
     "你是南宫婉，负责在真实工程中调查后形成最小、可独立合并的执行任务。现在只读调查，不修改源码。",
     "影响范围只是调查边界，不等于任务数量。预计修改文件重叠或必须一起验收的内容必须合并。只有可以独立修改、独立回退、独立验收且预计文件不重叠时才允许并行。",
@@ -176,7 +176,7 @@ function parseDistributionPlan(text: string): PlanResult {
   const value = parseJsonObject(text);
   const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 4_000) : "";
   const rawUnits = Array.isArray(value.units) ? value.units : [];
-  const units = rawUnits.flatMap((raw): EvolutionDistributionUnit[] => {
+  const units = rawUnits.flatMap((raw): EvolutionDistributionUnitOutDto[] => {
     if (!raw || typeof raw !== "object") return [];
     const item = raw as Record<string, unknown>;
     const title = typeof item.title === "string" ? item.title.trim().slice(0, 200) : "";
@@ -201,7 +201,7 @@ function parseJsonObject(text: string): Record<string, unknown> {
   catch { throw new Error("AI 返回的结构化判断不是有效 JSON。"); }
 }
 
-function distributionHardFindings(units: EvolutionDistributionUnit[]): string[] {
+function distributionHardFindings(units: EvolutionDistributionUnitOutDto[]): string[] {
   const findings: string[] = [];
   for (let index = 0; index < units.length; index += 1) for (let other = index + 1; other < units.length; other += 1) {
     const overlap = units[index].expectedFiles.filter((file) => units[other].expectedFiles.includes(file));
@@ -211,7 +211,7 @@ function distributionHardFindings(units: EvolutionDistributionUnit[]): string[] 
 }
 
 /** 程序只校验可确定的分发冲突；业务规划仍由南宫婉负责，令狐不参与常规分发审核。 */
-function validateDistributionPlan(plan: PlanResult, hardFindings: string[]): EvolutionDistributionValidation {
+function validateDistributionPlan(plan: PlanResult, hardFindings: string[]): EvolutionDistributionValidationOutDto {
   const findings = [...hardFindings];
   const titles = new Set<string>();
   const scopes = new Set<string>();

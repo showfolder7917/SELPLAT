@@ -1,11 +1,11 @@
-import type { CreateCollaborationMemberInDto, DesktopOperatingMode, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto } from "../../../../contracts/collaboration/workflow/index.js";
-import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, UpdateLinghuStartupPromptInDto } from "../../../../contracts/collaboration/linghu/index.js";
+import type { CreateCollaborationMemberInDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto } from "../../../../contracts/services/workflow/index.js";
+import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, UpdateLinghuStartupPromptInDto } from "../../../../contracts/services/personas/linghu/index.js";
 import type {
   EvolutionMutationInDto,
-  QueryEvolutionWorkbenchRequest,
-  SaveEvolutionWorkbenchPreferenceRequest,
-} from "../../../../contracts/collaboration/evolution/index.js";
-import type { DecideHanliProposalInDto, DecideHanliResultInDto } from "../../../../contracts/collaboration/hanli/index.js";
+  QueryEvolutionWorkbenchInDto,
+  SaveEvolutionWorkbenchPreferenceInDto,
+} from "../../../../contracts/services/evolution/index.js";
+import type { DecideHanliProposalInDto, DecideHanliResultInDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type {
   ConvertNangongConversationToTopicInDto,
   CreateNangongProposalInDto,
@@ -14,8 +14,8 @@ import type {
   ReviseNangongProposalInDto,
   SendNangongConversationMessageInDto,
   UpdateNangongTopicInDto,
-} from "../../../../contracts/collaboration/nangong/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/collaboration/workflow/index.js";
+} from "../../../../contracts/services/personas/nangong/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { CollaborationWorkflowFacade as CollaborationCoordinator } from "../../../services/workflow/index.js";
 import type { LinghuAutomationFacade } from "../../../services/personas/linghu/index.js";
 import type { NangongFacade } from "../../../services/personas/nangong/index.js";
@@ -43,7 +43,7 @@ export function registerCollaborationIpc(
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
     return collaborationTimeline.getTimelineSnapshot();
   });
-  handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
+  handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingModeValue) => collaboration.setMode(mode));
   handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
   handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberInDto) => collaboration.createMember(request));
   handle("desktop:update-collaboration-member", (_event, memberId: string, request: UpdateCollaborationMemberInDto) => collaboration.updateMember(memberId, request));
@@ -59,9 +59,9 @@ export function registerCollaborationIpc(
   handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
   handle("desktop:get-nangong-evolution-state", () => evolution.state());
   handle("desktop:get-evolution-topic-dossier", (_event, topicId: string) => evolution.dossier(topicId));
-  handle("desktop:query-evolution-workbench", (_event, request: QueryEvolutionWorkbenchRequest) => evolution.queryWorkbench(request));
+  handle("desktop:query-evolution-workbench", (_event, request: QueryEvolutionWorkbenchInDto) => evolution.queryWorkbench(request));
   handle("desktop:get-evolution-workbench-preference", (_event, perspective: "nangong" | "hanli", nodeId: string) => evolution.getWorkbenchPreference(perspective, nodeId));
-  handle("desktop:save-evolution-workbench-preference", (_event, request: SaveEvolutionWorkbenchPreferenceRequest) => evolution.saveWorkbenchPreference(request));
+  handle("desktop:save-evolution-workbench-preference", (_event, request: SaveEvolutionWorkbenchPreferenceInDto) => evolution.saveWorkbenchPreference(request));
   handle("desktop:advance-han-li-deliberation", () => hanli.advanceDeliberation());
   handle("desktop:send-nangong-conversation-message", (_event, request: SendNangongConversationMessageInDto) => nangong.sendConversationMessage(request));
   handle("desktop:new-nangong-conversation", () => nangong.newConversation());

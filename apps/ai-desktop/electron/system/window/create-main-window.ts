@@ -1,13 +1,13 @@
 import path from "node:path";
 import { BrowserWindow } from "electron";
 
-import type { AppVariant } from "../../../contracts/foundation/base.js";
+import type { AppVariantValue } from "../../../contracts/foundation/index.js";
 import { MAIN_WINDOW_LAYOUT, mainWindowInitialSize } from "./main-window-layout.cjs";
 
 interface MainWindowOptions {
   preloadPath: string;
   rendererRoot: string;
-  variant: AppVariant;
+  variant: AppVariantValue;
   distributionMode: "standard" | "archive";
   onRendererReady?: () => void;
   onRendererFailed?: (details: { errorCode: number; errorDescription: string; validatedURL: string }) => void;

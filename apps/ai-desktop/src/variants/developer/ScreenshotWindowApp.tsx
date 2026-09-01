@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 
 import type {
-  Locale,
-  ScreenCapture,
-  ScreenCaptureFrameRequest,
-} from "../../../contracts/desktop/desktop";
+  LocaleValue,
+  ScreenCaptureOutDto,
+  ScreenCaptureFrameInDto,
+} from "../../../contracts/system/desktop/desktop";
 import { ScreenshotEditor } from "../../features/screenshot/components/ScreenshotEditor";
 import "./developer.css";
 
 /** 独立截图窗口只负责选择、标注和保存主进程取得的 macOS 原生无光标 PNG。 */
 export function ScreenshotWindowApp() {
-  const [capture, setCapture] = useState<ScreenCapture | null>(null);
+  const [capture, setCapture] = useState<ScreenCaptureOutDto | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
-  const [locale, setLocale] = useState<Locale>("zh-CN");
+  const [locale, setLocale] = useState<LocaleValue>("zh-CN");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export function ScreenshotWindowApp() {
       void window.desktop?.notifyScreenCaptureStage(stage, detail).catch(() => {});
     };
 
-    const receiveNativeFrame = async (request: ScreenCaptureFrameRequest) => {
+    const receiveNativeFrame = async (request: ScreenCaptureFrameInDto) => {
       try {
         const nextCapture = request.capture;
         if (!nextCapture?.dataUrl.startsWith("data:image/png;base64,") || nextCapture.width < 1 || nextCapture.height < 1) {

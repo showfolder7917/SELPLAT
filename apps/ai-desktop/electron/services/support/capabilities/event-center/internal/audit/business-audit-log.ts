@@ -13,15 +13,15 @@ import { randomUUID } from "node:crypto";
 import { resolveArchiveMonth } from "@selplat/node-common-core/path";
 
 import type {
-  AuditLogInfo,
-  AuditReason,
-  AuditTaskSummary,
-} from "../../../../../../../contracts/governance/audit.js";
-import type { Locale, ManagedExecutionMode, SandboxMode } from "../../../../../../../contracts/foundation/base.js";
-import type { CodexStreamEvent } from "../../../../../../../contracts/platform/codex/index.js";
-import type { WorkspaceState } from "../../../../../../../contracts/platform/workspace/index.js";
+  AuditLogInfoOutDto,
+  AuditReasonOutDto,
+  AuditTaskSummaryOutDto,
+} from "../../../../../../../contracts/governance/index.js";
+import type { LocaleValue, ManagedExecutionModeValue, SandboxModeValue } from "../../../../../../../contracts/foundation/index.js";
+import type { CodexStreamEventOutDto } from "../../../../../../../contracts/services/support/platform/codex/index.js";
+import type { WorkspaceStateOutDto } from "../../../../../../../contracts/services/support/platform/workspace/index.js";
 
-interface ActiveAuditTask extends AuditTaskSummary {
+interface ActiveAuditTask extends AuditTaskSummaryOutDto {
   commandIds: Set<string>;
   completedCommandIds: Set<string>;
   successfulCommands: string[];
@@ -30,11 +30,11 @@ interface ActiveAuditTask extends AuditTaskSummary {
 
 interface StartAuditTaskRequest {
   message: string;
-  locale: Locale;
-  sandboxMode: SandboxMode;
-  workspaces: WorkspaceState;
+  locale: LocaleValue;
+  sandboxMode: SandboxModeValue;
+  workspaces: WorkspaceStateOutDto;
   attachmentCount: number;
-  managedMode: ManagedExecutionMode;
+  managedMode: ManagedExecutionModeValue;
 }
 
 type BusinessEventSink = (event: { occurredAt: string; type: string; taskId: string | null; details: Record<string, unknown> }) => void;
@@ -149,7 +149,7 @@ export class BusinessAuditLog {
     return taskId;
   }
 
-  recordStreamEvent(taskId: string, event: CodexStreamEvent): void {
+  recordStreamEvent(taskId: string, event: CodexStreamEventOutDto): void {
     const task = this.#activeTasks.get(taskId);
     if (!task) return;
     task.turnId ||= event.turnId;
@@ -225,13 +225,13 @@ export class BusinessAuditLog {
     this.#activeTasks.delete(taskId);
   }
 
-  info(): AuditLogInfo {
+  info(): AuditLogInfoOutDto {
     this.ensure();
     const files = listFilesRecursively(this.#taskRoot, "摘要.json").sort().reverse();
-    let latestTask: AuditTaskSummary | null = null;
+    let latestTask: AuditTaskSummaryOutDto | null = null;
     for (const name of files) {
       try {
-        latestTask = JSON.parse(readFileSync(name, "utf8")) as AuditTaskSummary;
+        latestTask = JSON.parse(readFileSync(name, "utf8")) as AuditTaskSummaryOutDto;
         break;
       } catch {
         // 单个损坏摘要不阻断其余日志查询，原始 JSONL 仍保留完整事件。
@@ -240,8 +240,8 @@ export class BusinessAuditLog {
     return { path: this.#logRoot, taskCount: files.length, latestTask };
   }
 
-  #diagnose(task: ActiveAuditTask, outcome: string, error?: string): AuditReason[] {
-    const reasons: AuditReason[] = [];
+  #diagnose(task: ActiveAuditTask, outcome: string, error?: string): AuditReasonOutDto[] {
+    const reasons: AuditReasonOutDto[] = [];
     const successful = task.successfulCommands.join("\n");
     if (outcome === "failed") reasons.push({ code: "harness_failed", message: error || "Codex Harness 报告本轮失败。" });
     if (outcome === "interrupted") reasons.push({ code: "turn_interrupted", message: "本轮在完成前被取消。" });
@@ -257,7 +257,7 @@ export class BusinessAuditLog {
     return reasons;
   }
 
-  #safeStreamDetails(event: CodexStreamEvent): Record<string, unknown> {
+  #safeStreamDetails(event: CodexStreamEventOutDto): Record<string, unknown> {
     if (event.type === "message-delta" || event.type === "reasoning-summary-delta" || event.type === "message-completed") {
       return { turnId: event.turnId, itemId: event.itemId || null };
     }
@@ -272,7 +272,7 @@ export class BusinessAuditLog {
     };
   }
 
-  #bundleState(): AuditTaskSummary["bundleState"] {
+  #bundleState(): AuditTaskSummaryOutDto["bundleState"] {
     const sourceMtimeMs = latestMtime(path.join(this.#sourceRoot, "src"), path.join(this.#sourceRoot, "electron"), path.join(this.#sourceRoot, "shared"), path.join(this.#sourceRoot, "package.json"));
     const bundleMtimeMs = latestMtime(path.join(this.#buildRoot, "renderer", "developer"), path.join(this.#buildRoot, "electron"));
     return { sourceMtimeMs, bundleMtimeMs, stale: sourceMtimeMs > bundleMtimeMs };
@@ -280,7 +280,7 @@ export class BusinessAuditLog {
 
   #writeTask(task: ActiveAuditTask): void {
     this.ensure();
-    const serializable: AuditTaskSummary = {
+    const serializable: AuditTaskSummaryOutDto = {
       taskId: task.taskId,
       startedAt: task.startedAt,
       completedAt: task.completedAt,

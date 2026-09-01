@@ -1,5 +1,5 @@
-import type { CodexStreamEvent } from "../../../../../contracts/platform/codex/index.js";
-import type { EventCenterExceptionInput } from "../../../../../contracts/governance/workflow.js";
+import type { CodexStreamEventOutDto } from "../../../../../contracts/services/support/platform/codex/index.js";
+import type { EventCenterExceptionInDto } from "../../../../../contracts/governance/index.js";
 import { BusinessAuditLog } from "./internal/audit/business-audit-log.js";
 // Event Center 只要求审计事实写入口，不反向依赖 Workflow 的 Repository 实现。
 export interface EventProjectionPort {
@@ -43,7 +43,7 @@ export class EventCenterFacade {
   recordApplicationStart(details: Record<string, unknown>): void { this.#archive.recordApplicationStart(details); }
   recordEvent(type: string, details: Record<string, unknown> = {}, taskId?: string): void { this.#archive.recordEvent(type, details, taskId); }
 
-  recordException(input: EventCenterExceptionInput): void {
+  recordException(input: EventCenterExceptionInDto): void {
     const error = normalizeError(input.error);
     const category = input.kind === "business" ? "business.exception" : input.kind === "stalled" ? "workflow.stalled" : "technical.exception";
     this.recordEvent(category, {
@@ -85,7 +85,7 @@ export class EventCenterFacade {
   }
 
   startTask(request: StartTaskRequest): string { return this.#archive.startTask(request); }
-  recordStreamEvent(taskId: string, event: CodexStreamEvent): void { this.#archive.recordStreamEvent(taskId, event); }
+  recordStreamEvent(taskId: string, event: CodexStreamEventOutDto): void { this.#archive.recordStreamEvent(taskId, event); }
   recordApproval(taskId: string | undefined, requestId: number, decision: "accept" | "decline", trusted = false): void { this.#archive.recordApproval(taskId, requestId, decision, trusted); }
   finishTask(...args: FinishTaskArguments): void { this.#archive.finishTask(...args); }
   ensure(): string { return this.#archive.ensure(); }

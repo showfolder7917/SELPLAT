@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { WorkspaceState } from "../../../../../../contracts/platform/workspace/index.js";
+import type { WorkspaceStateOutDto } from "../../../../../../contracts/services/support/platform/workspace/index.js";
 
 interface TrustedCommandEntry {
   id: string;
@@ -27,7 +27,7 @@ export class TrustedCommandStore {
     this.#filePath = filePath;
   }
 
-  isTrusted(command: string, cwd: string | null, workspaces: WorkspaceState | null): TrustedCommandResult {
+  isTrusted(command: string, cwd: string | null, workspaces: WorkspaceStateOutDto | null): TrustedCommandResult {
     const identity = this.#identity(command, cwd, workspaces);
     if (!identity) return { trusted: false, projectRoot: null };
     const trusted = this.#read().some((entry) =>
@@ -40,7 +40,7 @@ export class TrustedCommandStore {
     return { trusted, projectRoot: identity.projectRoot };
   }
 
-  trust(command: string, cwd: string | null, workspaces: WorkspaceState | null): TrustedCommandResult {
+  trust(command: string, cwd: string | null, workspaces: WorkspaceStateOutDto | null): TrustedCommandResult {
     const identity = this.#identity(command, cwd, workspaces);
     if (!identity) return { trusted: false, projectRoot: null };
     const entries = this.#read().filter((entry) => entry.id !== identity.id);
@@ -49,7 +49,7 @@ export class TrustedCommandStore {
   }
 
   /** 用户开启自动测试时只登记无附加参数的共享测试入口，其他命令仍继续走官方逐次审批。 */
-  trustAutomaticTestDocument(cwd: string, workspaces: WorkspaceState | null): TrustedCommandResult {
+  trustAutomaticTestDocument(cwd: string, workspaces: WorkspaceStateOutDto | null): TrustedCommandResult {
     const identity = this.#identity("npm run test:document", cwd, workspaces);
     if (!identity || identity.scriptSignature === "missing-package-script" || identity.scriptSignature === "invalid-package-script") {
       return { trusted: false, projectRoot: null };
@@ -61,7 +61,7 @@ export class TrustedCommandStore {
     return { trusted: true, projectRoot: identity.projectRoot };
   }
 
-  canTrust(command: string | null, cwd: string | null, workspaces: WorkspaceState | null): boolean {
+  canTrust(command: string | null, cwd: string | null, workspaces: WorkspaceStateOutDto | null): boolean {
     return Boolean(command && this.#identity(command, cwd, workspaces));
   }
 
@@ -73,7 +73,7 @@ export class TrustedCommandStore {
     this.#write([]);
   }
 
-  #identity(command: string, cwd: string | null, workspaces: WorkspaceState | null): Omit<TrustedCommandEntry, "createdAt"> | null {
+  #identity(command: string, cwd: string | null, workspaces: WorkspaceStateOutDto | null): Omit<TrustedCommandEntry, "createdAt"> | null {
     if (!cwd || !workspaces || !command.trim() || command.length > 20_000 || isAlwaysReviewCommand(command)) return null;
     let resolvedCwd: string;
     try {

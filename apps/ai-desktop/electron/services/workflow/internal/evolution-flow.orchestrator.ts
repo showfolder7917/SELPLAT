@@ -1,10 +1,10 @@
-import type { EvolutionProposal, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 
 export type EvolutionFlowAction = "await-approval" | "supplement" | "dispatch" | "monitor-execution" | "accept-result" | "complete" | "idle";
 
 /** 流程编排只根据已保存事实产生下一条命令，不自己审批、分发或写时间线。 */
 export class EvolutionFlowOrchestrator {
-  next(proposal: EvolutionProposal): EvolutionFlowAction {
+  next(proposal: EvolutionProposalOutDto): EvolutionFlowAction {
     if (proposal.status === "pending-approval") return "await-approval";
     if (proposal.status === "supplement-required" || proposal.status === "rejected") return "supplement";
     if (proposal.status === "approved" && proposal.distributedTaskIds.length === 0) return "dispatch";
@@ -14,11 +14,11 @@ export class EvolutionFlowOrchestrator {
     return "idle";
   }
 
-  automaticApprovalQueue(state: EvolutionStateOutDto): EvolutionProposal[] {
+  automaticApprovalQueue(state: EvolutionStateOutDto): EvolutionProposalOutDto[] {
     return state.proposals.filter((proposal) => this.next(proposal) === "await-approval" && (proposal.origin === "nangong" ? state.automaticNangongApprovalEnabled : state.automaticLinghuApprovalEnabled));
   }
 
-  automaticDistributionQueue(state: EvolutionStateOutDto): EvolutionProposal[] {
+  automaticDistributionQueue(state: EvolutionStateOutDto): EvolutionProposalOutDto[] {
     return state.proposals.filter((proposal) => this.next(proposal) === "dispatch" && (proposal.origin === "linghu" || state.automaticExecutionEnabled));
   }
 }

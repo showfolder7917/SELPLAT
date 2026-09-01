@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/collaboration/linghu/index.js";
-import type { EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionOneShotPhase, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
-import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/collaboration/hanli/index.js";
-import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/collaboration/nangong/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/collaboration/workflow/index.js";
+import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/services/personas/linghu/index.js";
+import type { EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { EvolutionStatePersistence } from "./evolution-state.repository.js";
 
 type StateListener = (state: EvolutionStateOutDto, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionStateOutDto) => void;
@@ -130,7 +130,7 @@ export class EvolutionStateStore {
   }
 
   /** 更新一次性运行的人物、阶段和动作；专题档案使用同一条状态事实，不创建旁路流程。 */
-  updateOneShotRun(phase: EvolutionOneShotPhase, actor: EvolutionArchiveActor, actorName: string, action: string, topicId?: string | null, proposalId?: string | null): EvolutionStateOutDto {
+  updateOneShotRun(phase: EvolutionOneShotPhaseValue, actor: EvolutionArchiveActorValue, actorName: string, action: string, topicId?: string | null, proposalId?: string | null): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status !== "running") return this.state();
     const resolvedTopicId = topicId === undefined ? current.topicId : topicId;
@@ -251,7 +251,7 @@ export class EvolutionStateStore {
   }
 
   /** 韩立先冻结完整对话库原文，再登记第一轮问题；此时尚未产生正式专题。 */
-  beginDeliberation(deliberationId: string, snapshots: EvolutionSourceMessageSnapshot[], question: string, questionReason: string): EvolutionStateOutDto {
+  beginDeliberation(deliberationId: string, snapshots: EvolutionSourceMessageSnapshotOutDto[], question: string, questionReason: string): EvolutionStateOutDto {
     if (!snapshots.length) throw new Error("对话库没有可供韩立综合的南宫婉或 Codex 原始会话。 ");
     const now = new Date().toISOString();
     return this.#commit("deliberation.started", null, null, (state) => {
@@ -532,7 +532,7 @@ export class EvolutionStateStore {
     });
   }
 
-  decide(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource, referencedApprovalIds: string[], feedbackTarget: EvolutionFeedbackTarget = "proposal-content", capabilityScope = ""): EvolutionStateOutDto {
+  decide(proposalId: string, decision: EvolutionApprovalDecisionValue, advice: string, source: EvolutionApprovalSourceValue, referencedApprovalIds: string[], feedbackTarget: EvolutionFeedbackTargetValue = "proposal-content", capabilityScope = ""): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     const latestApproval = proposal.approvals.at(-1);
     const correctsAutomaticDecision = source === "manual-user"
@@ -543,7 +543,7 @@ export class EvolutionStateStore {
     return this.#commit("proposal.decided", proposal.topicId, proposalId, (state) => {
       if (source === "manual-user") state.preferenceSnapshotVersion += 1;
       const mutable = requireProposal(state, proposalId);
-      const approval: EvolutionApproval = {
+      const approval: EvolutionApprovalOutDto = {
         approvalId: `evolution-approval-${randomUUID()}`, proposalId, decision, source, stage: "direction",
         approverMemberId: "han-li",
         approverDisplayName: "韩立",
@@ -563,7 +563,7 @@ export class EvolutionStateStore {
   }
 
   /** 执行结果必须由韩立单独验收；任务完成事实不能直接替代最终业务判断。 */
-  decideResult(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource = "manual-user"): EvolutionStateOutDto {
+  decideResult(proposalId: string, decision: EvolutionApprovalDecisionValue, advice: string, source: EvolutionApprovalSourceValue = "manual-user"): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
     const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.real_app_checked")?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
@@ -692,7 +692,7 @@ export class EvolutionStateStore {
     });
   }
 
-  saveDistributionPlan(proposalId: string, plan: EvolutionDistributionPlan): EvolutionStateOutDto {
+  saveDistributionPlan(proposalId: string, plan: EvolutionDistributionPlanOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     return this.#commit("proposal.distribution_planned", proposal.topicId, proposalId, (state) => {
       const mutable = requireProposal(state, proposalId);
@@ -831,7 +831,7 @@ function assertTopicEditableBeforeProposal(state: EvolutionStateOutDto, topic: E
 }
 function createConversation(): EvolutionStateOutDto["conversation"] { const now = new Date().toISOString(); return { conversationId: `nangong-conversation-${randomUUID()}`, messages: [], updatedAt: now }; }
 
-function archiveCategory(reason: string): EvolutionArchiveCategory {
+function archiveCategory(reason: string): EvolutionArchiveCategoryValue {
   if (reason.startsWith("one-shot.")) return reason.includes("blocked") || reason.includes("orphan-retired") ? "recovery" : reason.includes("completed") ? "acceptance" : "execution";
   if (reason === "conversation.topic_group_replied") return "source";
   if (reason.startsWith("deliberation.")) return "deliberation";
@@ -844,8 +844,8 @@ function archiveCategory(reason: string): EvolutionArchiveCategory {
   return "topic";
 }
 
-function archiveActor(reason: string, payload: Record<string, unknown>): EvolutionArchiveActor {
-  if (reason.startsWith("one-shot.") && ["han-li", "nangong-wan", "codex", "linghu-ancestor", "system", "user"].includes(String(payload.actor))) return payload.actor as EvolutionArchiveActor;
+function archiveActor(reason: string, payload: Record<string, unknown>): EvolutionArchiveActorValue {
+  if (reason.startsWith("one-shot.") && ["han-li", "nangong-wan", "codex", "linghu-ancestor", "system", "user"].includes(String(payload.actor))) return payload.actor as EvolutionArchiveActorValue;
   if (reason.startsWith("one-shot.")) return "system";
   if (reason.includes("nangong_answered") || reason.includes("proposal.created") || reason.includes("distributed")) return "nangong-wan";
   if (reason.startsWith("deliberation.") || reason.startsWith("acceptance.") || reason.includes("established_from_deliberation") || reason.includes("proposal.decided") || reason.includes("result_decided")) return "han-li";
@@ -877,7 +877,7 @@ function archiveTitle(reason: string): string {
   return titles[reason] || reason;
 }
 
-function archivePayload(topic: EvolutionStateOutDto["topics"][number] | null, proposal: EvolutionProposal | null, deliberation: EvolutionStateOutDto["deliberations"][number] | null): Record<string, unknown> {
+function archivePayload(topic: EvolutionStateOutDto["topics"][number] | null, proposal: EvolutionProposalOutDto | null, deliberation: EvolutionStateOutDto["deliberations"][number] | null): Record<string, unknown> {
   const round = deliberation?.rounds.at(-1);
   return {
     topic: topic ? { topicId: topic.topicId, title: topic.title, status: topic.status, recoveryPoint: topic.recoveryPoint, roundNumber: topic.roundNumber } : null,

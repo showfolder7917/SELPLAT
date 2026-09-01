@@ -1,9 +1,9 @@
-import type { EvolutionTopicDossier, Locale } from "../../../../contracts/desktop/desktop";
+import type { EvolutionTopicDossierOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
 import { EvolutionDisclosure } from "./EvolutionDisclosure";
 
 /** 专题池展示来源对话、研讨和数据库执行时间线，不把原始 JSON 暴露给用户。 */
-export function EvolutionTopicDossierView({ dossier }: { dossier: EvolutionTopicDossier }) {
-  const sourceGroups = new Map<string, NonNullable<EvolutionTopicDossier["deliberation"]>["sourceSnapshots"]>();
+export function EvolutionTopicDossierView({ dossier }: { dossier: EvolutionTopicDossierOutDto }) {
+  const sourceGroups = new Map<string, NonNullable<EvolutionTopicDossierOutDto["deliberation"]>["sourceSnapshots"]>();
   for (const snapshot of dossier.deliberation?.sourceSnapshots || []) {
     const key = `${snapshot.source}:${snapshot.conversationId}`;
     sourceGroups.set(key, [...(sourceGroups.get(key) || []), snapshot]);
@@ -24,4 +24,4 @@ function archiveSummary(payload: Record<string, unknown>): string {
     .filter((entry): entry is [string, string | number | boolean] => ["string", "number", "boolean"].includes(typeof entry[1]) && String(entry[1]).trim().length > 0);
   return values.map(([label, value]) => `${label}：${String(value)}`).join(" · ");
 }
-function formatTime(value: string, locale: Locale): string { return new Intl.DateTimeFormat(locale === "ja" ? "ja-JP" : "zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value)); }
+function formatTime(value: string, locale: LocaleValue): string { return new Intl.DateTimeFormat(locale === "ja" ? "ja-JP" : "zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value)); }

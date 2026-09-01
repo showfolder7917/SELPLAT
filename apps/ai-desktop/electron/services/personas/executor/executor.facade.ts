@@ -1,6 +1,6 @@
-import type { CollaborationMember, CollaborationRequirementPlan, CollaborationTask } from "../../../../contracts/collaboration/workflow/index.js";
-import type { CodexStreamEvent } from "../../../../contracts/platform/codex/index.js";
-import type { ExecutorExecutionResultOutDto, ExecutorSessionFactoryPort, ExecutorSessionPort } from "../../../../contracts/collaboration/executor/index.js";
+import type { CollaborationMemberOutDto, CollaborationRequirementPlanOutDto, CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { CodexStreamEventOutDto } from "../../../../contracts/services/support/platform/codex/index.js";
+import type { ExecutorExecutionResultOutDto, ExecutorSessionFactoryPort, ExecutorSessionPort } from "../../../../contracts/services/personas/executor/index.js";
 
 /** 通用执行人应用入口，统一管理所有普通执行人的任务会话和生命周期。 */
 export class ExecutorFacade {
@@ -8,7 +8,7 @@ export class ExecutorFacade {
 
   constructor(private readonly factory: ExecutorSessionFactoryPort) {}
 
-  async open(task: CollaborationTask, member: CollaborationMember): Promise<ExecutorSessionPort> {
+  async open(task: CollaborationTaskOutDto, member: CollaborationMemberOutDto): Promise<ExecutorSessionPort> {
     await this.close(task.taskId);
     const session = await this.factory.createExecutor(task, member);
     this.#sessions.set(task.taskId, session);
@@ -16,18 +16,18 @@ export class ExecutorFacade {
   }
 
   /** 令狐等特殊人物借用通用执行能力时创建不进入普通任务缓存的临时会话。 */
-  createTransient(task: CollaborationTask, member: CollaborationMember): Promise<ExecutorSessionPort> {
+  createTransient(task: CollaborationTaskOutDto, member: CollaborationMemberOutDto): Promise<ExecutorSessionPort> {
     return this.factory.createExecutor(task, member);
   }
 
   session(taskId: string): ExecutorSessionPort | undefined { return this.#sessions.get(taskId); }
   isAlive(taskId: string): boolean { return this.#sessions.get(taskId)?.isAlive() === true; }
 
-  analyze(task: CollaborationTask, emit: (event: CodexStreamEvent) => void): Promise<string> {
+  analyze(task: CollaborationTaskOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
     return this.#require(task.taskId).analyze(task, emit);
   }
 
-  execute(task: CollaborationTask, plan: CollaborationRequirementPlan, emit: (event: CodexStreamEvent) => void): Promise<ExecutorExecutionResultOutDto> {
+  execute(task: CollaborationTaskOutDto, plan: CollaborationRequirementPlanOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
     return this.#require(task.taskId).execute(task, plan, emit);
   }
 

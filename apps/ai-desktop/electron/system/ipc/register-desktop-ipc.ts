@@ -5,16 +5,17 @@ import { promisify } from "node:util";
 
 import { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, screen, shell, systemPreferences } from "electron";
 
-import { LOCALES, SANDBOX_MODES } from "../../../contracts/foundation/base.js";
+import { LOCALES, SANDBOX_MODES } from "../../../contracts/foundation/index.js";
 import type {
-  AppVariant,
-  ManagedExecutionMode,
-  WindowAction,
-} from "../../../contracts/foundation/base.js";
-import type { EnqueueMessageRequest, SendMessageRequest } from "../../../contracts/capabilities/conversation/index.js";
-import type { EvolutionWorkspaceLocation } from "../../../contracts/collaboration/evolution/index.js";
-import type { ScreenCaptureFrameRequest, ScreenCaptureFrameResult, ScreenCapturePreparationResult, ScreenCaptureRequest, ScreenshotAnnotationWindowRequest, ScreenshotSaveRequest } from "../../../contracts/platform/attachments/index.js";
-import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../../../contracts/platform/persistence/index.js";
+  AppVariantValue,
+  ManagedExecutionModeValue,
+  WindowActionValue,
+} from "../../../contracts/foundation/index.js";
+import type { EnqueueMessageInDto, SendMessageInDto } from "../../../contracts/services/support/capabilities/conversation/index.js";
+import type { EvolutionWorkspaceLocationOutDto } from "../../../contracts/services/evolution/index.js";
+import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotSaveInDto } from "../../../contracts/services/support/platform/attachments/index.js";
+import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
+import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
@@ -40,7 +41,7 @@ import { WorkspaceFacade as WorkspaceStore } from "../../services/support/platfo
 import { RuleBundleFacade as RuleBundleService } from "../../services/support/capabilities/rules/index.js";
 
 interface DesktopIpcDependencies {
-  aiMemoryDatabaseStatus: AiMemoryDatabaseStatus;
+  aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto;
   codex: CodexService;
   screenshots: ScreenshotStore;
   settings: SettingsStore;
@@ -59,14 +60,14 @@ interface DesktopIpcDependencies {
   collaborationTimeline: CollaborationTimelineFacade | null;
   projectRoot: string;
   appRoot: string;
-  variant: AppVariant;
+  variant: AppVariantValue;
   preloadPath: string;
   prepareForApplicationExit: () => void;
   rendererRoot: string;
   rules: RuleBundleService;
-  clearTestData: () => Promise<TestDataResetResult>;
-  corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatus;
-  startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatus;
+  clearTestData: () => Promise<TestDataResetResultOutDto>;
+  corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;
+  startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatusOutDto;
 }
 
 interface ScreenshotWindowSession {
@@ -87,7 +88,7 @@ interface ScreenshotWindowSession {
 const screenshotWindowSessions = new Map<number, ScreenshotWindowSession>();
 const execFileAsync = promisify(execFile);
 
-type ScreenCaptureFailureReason = Extract<ScreenCapturePreparationResult, { status: "blocked" }>["reason"];
+type ScreenCaptureFailureReason = Extract<ScreenCapturePreparationOutDto, { status: "blocked" }>["reason"];
 
 class ScreenCapturePreparationError extends Error {
   constructor(readonly reason: ScreenCaptureFailureReason) {
@@ -111,9 +112,9 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 /** 将 Renderer 请求限制为可写入窗口地址的稳定工作台位置；旧的字符串视角请求直接拒绝，不保留兼容分支。 */
-function normalizeEvolutionWorkspaceLocation(value: unknown): EvolutionWorkspaceLocation {
+function normalizeEvolutionWorkspaceLocation(value: unknown): EvolutionWorkspaceLocationOutDto {
   if (!value || typeof value !== "object") throw new Error("专题演化工作台必须提供完整位置对象。");
-  const request = value as Partial<EvolutionWorkspaceLocation>;
+  const request = value as Partial<EvolutionWorkspaceLocationOutDto>;
   if (request.perspective !== "nangong" && request.perspective !== "hanli") throw new Error("无效的专题演化工作台视角。");
   const text = (candidate: unknown, maximum: number): string => typeof candidate === "string" ? candidate.trim().slice(0, maximum) : "";
   const pageSize = Number(request.pageSize);
@@ -129,7 +130,7 @@ function normalizeEvolutionWorkspaceLocation(value: unknown): EvolutionWorkspace
 }
 
 /** 将完整位置写入独立窗口查询参数，便于复制地址、重启恢复和真实界面验收。 */
-function evolutionWorkspaceLocationQuery(location: EvolutionWorkspaceLocation): Record<string, string> {
+function evolutionWorkspaceLocationQuery(location: EvolutionWorkspaceLocationOutDto): Record<string, string> {
   return {
     mode: "evolution-workspace",
     perspective: location.perspective,
@@ -150,7 +151,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const managedExecutor = new ManagedTaskExecutor();
   let screenCaptureAttemptId = 0;
   let evolutionWorkspaceWindow: BrowserWindow | null = null;
-  let evolutionWorkspaceLocation: EvolutionWorkspaceLocation = { perspective: "nangong", nodeId: null, page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: null };
+  let evolutionWorkspaceLocation: EvolutionWorkspaceLocationOutDto = { perspective: "nangong", nodeId: null, page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: null };
 
   registerRulesIpc(rules, eventCenter);
 
@@ -162,7 +163,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return state;
   };
 
-  const openEvolutionWorkspace = async (location: EvolutionWorkspaceLocation): Promise<void> => {
+  const openEvolutionWorkspace = async (location: EvolutionWorkspaceLocationOutDto): Promise<void> => {
     evolutionWorkspaceLocation = location;
     if (evolutionWorkspaceWindow && !evolutionWorkspaceWindow.isDestroyed()) {
       evolutionWorkspaceWindow.webContents.send("desktop:evolution-workspace-location", location);
@@ -231,7 +232,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     ? systemPreferences.getMediaAccessStatus("screen")
     : "granted";
 
-  const toScreenCapturePreparationResult = (error: unknown): ScreenCapturePreparationResult => ({
+  const toScreenCapturePreparationResult = (error: unknown): ScreenCapturePreparationOutDto => ({
     status: "blocked",
     reason: error instanceof ScreenCapturePreparationError ? error.reason : "source-unavailable",
     canOpenSettings: process.platform === "darwin",
@@ -268,7 +269,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const captureNativeMacScreen = async (
     display: Electron.Display,
     attemptId: number,
-  ): Promise<ScreenCaptureFrameRequest["capture"]> => {
+  ): Promise<ScreenCaptureFrameInDto["capture"]> => {
     if (process.platform !== "darwin") throw new Error("当前无光标截图后端仅支持 macOS。");
     const tempRoot = await screenshots.ensure();
     // screencapture 会拒绝点号开头的目标文件且仍可能返回退出码 0，因此必须使用普通文件名并随后真实读取校验。
@@ -293,7 +294,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   /** Windows 通过 Electron 的显示器源取得一次 PNG；后续框选、标注和保存继续复用统一截图窗口。 */
   const captureNativeWindowsScreen = async (
     display: Electron.Display,
-  ): Promise<ScreenCaptureFrameRequest["capture"]> => {
+  ): Promise<ScreenCaptureFrameInDto["capture"]> => {
     if (process.platform !== "win32") throw new Error("Windows 截图后端只能在 Windows 使用。");
     const thumbnailSize = {
       width: Math.max(1, Math.round(display.size.width * display.scaleFactor)),
@@ -310,7 +311,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const captureNativeScreen = async (
     display: Electron.Display,
     attemptId: number,
-  ): Promise<ScreenCaptureFrameRequest["capture"]> => {
+  ): Promise<ScreenCaptureFrameInDto["capture"]> => {
     if (process.platform === "darwin") return captureNativeMacScreen(display, attemptId);
     if (process.platform === "win32") return captureNativeWindowsScreen(display);
     throw new Error(`当前平台暂不支持截图：${process.platform}`);
@@ -348,7 +349,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       recordScreenCaptureStage("main-source-preflight-started", undefined, { displayId: String(display.id) });
       await waitForScreenCaptureStage(resolveScreenCaptureSource(display), 8_000, "读取屏幕来源超时，请重试。");
       recordScreenCaptureStage("main-source-preflight-ready", undefined, { displayId: String(display.id) });
-      return { status: "ready" } satisfies ScreenCapturePreparationResult;
+      return { status: "ready" } satisfies ScreenCapturePreparationOutDto;
     } catch (error) {
       recordScreenCaptureStage("main-source-preflight-failed", undefined, {
         displayId: String(display.id),
@@ -372,7 +373,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       app.exit(0);
     }, 120);
   });
-  handle("desktop:capture-screen", async (event, request?: ScreenCaptureRequest) => {
+  handle("desktop:capture-screen", async (event, request?: ScreenCaptureInDto) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     if (request && typeof request.hideOwnerWindow !== "undefined" && typeof request.hideOwnerWindow !== "boolean") {
       throw new Error("Invalid screenshot capture mode.");
@@ -515,7 +516,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         width: capture.width,
         height: capture.height,
       });
-      screenshotWindow.webContents.send("desktop:screen-capture-frame-requested", { requestId, capture } satisfies ScreenCaptureFrameRequest);
+      screenshotWindow.webContents.send("desktop:screen-capture-frame-requested", { requestId, capture } satisfies ScreenCaptureFrameInDto);
       recordScreenCaptureStage("main-native-frame-sent", session, { requestId });
       let timeout: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
@@ -554,7 +555,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     recordScreenCaptureStage(stage, session, typeof detail === "string" ? { detail } : {});
   });
-  handle("desktop:screen-capture-frame-result", (event, result: ScreenCaptureFrameResult) => {
+  handle("desktop:screen-capture-frame-result", (event, result: ScreenCaptureFrameOutDto) => {
     const session = screenshotWindowSessions.get(event.sender.id);
     if (!session || !result || !Number.isSafeInteger(result.requestId) || result.requestId !== session.frameRequestId) {
       throw new Error("Invalid screenshot frame result.");
@@ -595,7 +596,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     screenshotWindow.show();
     screenshotWindow.focus();
   });
-  handle("desktop:enter-screenshot-annotation", (event, request: ScreenshotAnnotationWindowRequest) => {
+  handle("desktop:enter-screenshot-annotation", (event, request: ScreenshotAnnotationWindowInDto) => {
     if (!screenshotWindowSessions.has(event.sender.id)) throw new Error("Invalid screenshot window.");
     const screenshotWindow = BrowserWindow.fromWebContents(event.sender);
     if (!screenshotWindow) throw new Error("Screenshot window is unavailable.");
@@ -676,7 +677,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     session.restoreOwnerOnClose = false;
     screenshotWindow.webContents.send("desktop:screen-capture-reset");
   });
-  handle("desktop:save-screenshot", async (event, request: ScreenshotSaveRequest) => {
+  handle("desktop:save-screenshot", async (event, request: ScreenshotSaveInDto) => {
     const saved = await screenshots.save(request);
     const session = screenshotWindowSessions.get(event.sender.id);
     if (session) {
@@ -692,7 +693,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return saved;
   });
   handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
-  handle("desktop:enqueue-message", (_event, value: EnqueueMessageRequest) => {
+  handle("desktop:enqueue-message", (_event, value: EnqueueMessageInDto) => {
     if (!value?.request || typeof value.request.message !== "string") throw new Error("Invalid queued message request.");
     dispatch.enqueue(value.request, value.displayText, value.automatic === true);
     return publishDispatchState();
@@ -728,7 +729,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     audit.recordEvent("task.cancel_requested", {}, taskId);
     return codex.cancel();
   });
-  handle("desktop:send-message", async (ipcEvent, request: SendMessageRequest) => {
+  handle("desktop:send-message", async (ipcEvent, request: SendMessageInDto) => {
     if (!request || typeof request.message !== "string") throw new Error("Invalid message request.");
     if (!LOCALES.includes(request.locale)) throw new Error("Invalid locale.");
     if (!SANDBOX_MODES.includes(request.sandboxMode)) throw new Error("Invalid sandbox mode.");
@@ -744,7 +745,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     publishDispatchState();
     let taskId: string | undefined;
     try {
-      const executionMode: ManagedExecutionMode = isManagedExecutionMode(effectiveRequest.executionMode)
+      const executionMode: ManagedExecutionModeValue = isManagedExecutionMode(effectiveRequest.executionMode)
         ? effectiveRequest.executionMode
         : "conversation-managed";
       const attachmentPaths = await screenshots.resolveAttachmentPaths(effectiveRequest.attachmentIds || []);
@@ -804,7 +805,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
   });
 
-  ipcMain.on("window:control", (event, action: WindowAction) => {
+  ipcMain.on("window:control", (event, action: WindowActionValue) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) return;
     if (action === "minimize") window.minimize();
@@ -827,6 +828,6 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
 }
 
-function isManagedExecutionMode(value: unknown): value is ManagedExecutionMode {
+function isManagedExecutionMode(value: unknown): value is ManagedExecutionModeValue {
   return value === "conversation-managed" || value === "requirement-managed" || value === "task-managed" || value === "test-managed";
 }

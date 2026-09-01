@@ -1,9 +1,9 @@
-// 协同状态与任务类型提供令狐只读分析所需的权威事实，不允许本模块修改任务。
-import type { CollaborationStateOutDto, CollaborationTask } from "../../../../../contracts/collaboration/workflow/index.js";
+﻿// 协同状态与任务类型提供令狐只读分析所需的权威事实，不允许本模块修改任务。
+import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../../contracts/services/workflow/index.js";
 // 令狐协议定义健康状态、阻塞分类、快照和模块报告的数据形状。
-import type { LinghuAutomaticFlowSnapshotOutDto, LinghuAutomationModuleOutDto, LinghuBlockingKindOutDto, LinghuFlowHealthOutDto } from "../../../../../contracts/collaboration/linghu/index.js";
+import type { LinghuAutomaticFlowSnapshotOutDto, LinghuAutomationModuleValue, LinghuBlockingKindValue, LinghuFlowHealthValue } from "../../../../../contracts/services/personas/linghu/index.js";
 // 测试资源快照只被转换为任务说明文字，本模块不申请或释放资源。
-import type { TestResourceCoordinatorState } from "../../../../../contracts/capabilities/testing/index.js";
+import type { TestResourceCoordinatorStateOutDto } from "../../../../../contracts/services/support/capabilities/testing/index.js";
 // 模块顺序来自状态仓库的唯一常量，避免分析与持久化使用不同轮转顺序。
 import { LINGHU_AUTOMATION_MODULES } from "./linghu-automation.store.js";
 
@@ -23,7 +23,7 @@ export function automaticFlowSnapshots(state: CollaborationStateOutDto, activeTa
 }
 
 /** 根据任务、成员心跳和检查时间生成单条自动保障快照。 */
-function automaticFlowSnapshot(state: CollaborationStateOutDto, task: CollaborationTask, checkedAt: string): LinghuAutomaticFlowSnapshotOutDto {
+function automaticFlowSnapshot(state: CollaborationStateOutDto, task: CollaborationTaskOutDto, checkedAt: string): LinghuAutomaticFlowSnapshotOutDto {
   // 只有当前确实持有该任务的成员心跳才属于本任务，避免复用人物上一任务的时间。
   const member = state.members.find((candidate) => candidate.memberId === task.executorMemberId && candidate.currentTaskId === task.taskId);
   // 最近进展优先比较心跳、协议进度和任务状态更新时间。
@@ -56,7 +56,7 @@ function automaticFlowSnapshot(state: CollaborationStateOutDto, task: Collaborat
 }
 
 /** 把结构化停点转换成人可以立即判断“谁、哪项任务、停在哪里、发现什么”的报告。 */
-export function taskHumanReport(state: CollaborationStateOutDto, task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): string {
+export function taskHumanReport(state: CollaborationStateOutDto, task: CollaborationTaskOutDto, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): string {
   // 当前执行人 ID 是负责人判断的第一权威来源。
   const responsibleMemberId = task.executorMemberId;
   // 依次使用实时成员、冻结原执行人和当前处理人，旧记录缺字段时仍能给出可读负责人。
@@ -75,7 +75,7 @@ export function taskHumanReport(state: CollaborationStateOutDto, task: Collabora
 }
 
 /** 将任务状态和停滞事实归一为令狐健康状态。 */
-function flowHealth(task: CollaborationTask, stale: boolean): LinghuFlowHealthOutDto {
+function flowHealth(task: CollaborationTaskOutDto, stale: boolean): LinghuFlowHealthValue {
   // 明确终态和人工终止状态优先于任何时间判断。
   if (task.state === "integrated") return "completed";
   if (task.state === "cancelled") return "human-blocked";
@@ -95,7 +95,7 @@ function flowHealth(task: CollaborationTask, stale: boolean): LinghuFlowHealthOu
 }
 
 /** 为等待或停点状态提供下一步可读说明。 */
-function waitingPoint(task: CollaborationTask, health: LinghuFlowHealthOutDto): string | null {
+function waitingPoint(task: CollaborationTaskOutDto, health: LinghuFlowHealthValue): string | null {
   // 人工终止和结构化停点优先显示恢复条件。
   if (health === "human-blocked") return "等待人工重新选择是否继续";
   if (health === "stalled" || health === "recovering") return task.blockingReason || "等待安全恢复条件";
@@ -109,7 +109,7 @@ function waitingPoint(task: CollaborationTask, health: LinghuFlowHealthOutDto): 
 }
 
 /** 优先根据结构化失败类型判定阻塞类别，最后才使用旧自由文本兼容。 */
-function blockingKind(task: CollaborationTask): LinghuBlockingKindOutDto {
+function blockingKind(task: CollaborationTaskOutDto): LinghuBlockingKindValue {
   // 状态与结构化集成失败比自由文本可靠；测试输出可能引用“用户选择”等规则正文，不能因此误判为业务选择。
   if (task.integrationFailure?.kind === "infrastructure") return "infrastructure";
   if (task.state === "test-failed" || task.integrationFailure?.kind === "verification") return "test";
@@ -135,7 +135,7 @@ function latestTime(...values: Array<string | null | undefined>): string {
 }
 
 /** 生成只随真实故障事实变化的稳定指纹，用于限制重复恢复副作用。 */
-export function faultFingerprint(task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): string {
+export function faultFingerprint(task: CollaborationTaskOutDto, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): string {
   // 任务恢复动作本身会更新 updatedAt，不能把它作为新事实，否则三次上限会被每次副作用自行清零。
   const lastProgressVersion = latestTime(snapshot?.lastHeartbeatAt, snapshot?.lastProtocolProgressAt, task.codeVerifiedAt);
   // 同一状态下的阶段推进同样是新事实，例如失败测试转入修正或验证阶段后应获得新的恢复预算。
@@ -143,7 +143,7 @@ export function faultFingerprint(task: CollaborationTask, snapshot: LinghuAutoma
 }
 
 /** 把已完成任务整理为模块级审计报告。 */
-export function moduleCompletionReport(cycle: number, module: LinghuAutomationModuleOutDto, task: CollaborationTask, summary: string, snapshots: LinghuAutomaticFlowSnapshotOutDto[], completedAt: string) {
+export function moduleCompletionReport(cycle: number, module: LinghuAutomationModuleValue, task: CollaborationTaskOutDto, summary: string, snapshots: LinghuAutomaticFlowSnapshotOutDto[], completedAt: string) {
   // 找到完成任务最近的检测快照，作为报告的结构化证据。
   const snapshot = snapshots.find((candidate) => candidate.sourceTaskId === task.taskId);
   // 报告保留证据、执行者、测试、重启、阻塞和下一模块，供页面和审计共同读取。
@@ -165,14 +165,14 @@ export function moduleCompletionReport(cycle: number, module: LinghuAutomationMo
 }
 
 /** 按固定顺序计算下一个独立模块。 */
-function nextModule(module: LinghuAutomationModuleOutDto): LinghuAutomationModuleOutDto {
+function nextModule(module: LinghuAutomationModuleValue): LinghuAutomationModuleValue {
   // 当前索引加一并取模，第三模块完成后回到流程保障。
   const index = LINGHU_AUTOMATION_MODULES.indexOf(module);
   return LINGHU_AUTOMATION_MODULES[(index + 1) % LINGHU_AUTOMATION_MODULES.length] || "flow-completion";
 }
 
 /** 把模块编码转换为中文业务名称。 */
-export function moduleLabel(module: LinghuAutomationModuleOutDto): string {
+export function moduleLabel(module: LinghuAutomationModuleValue): string {
   // 名称集中在令狐模块，调用方不再重复维护人物文案。
   return {
     "flow-completion": "自动流程完成保障",
@@ -182,7 +182,7 @@ export function moduleLabel(module: LinghuAutomationModuleOutDto): string {
 }
 
 /** 返回派发给令狐执行会话的模块专属职责说明。 */
-export function moduleInstruction(module: LinghuAutomationModuleOutDto): string {
+export function moduleInstruction(module: LinghuAutomationModuleValue): string {
   // 三个说明互斥，防止一条协同任务混入多个职责造成文件冲突。
   return {
     "flow-completion": "最高优先级检查所有人物任务的当前状态、等待点和完成条件。发现停点不能只报告，必须提出最小修正方案并推动审核、执行、集成、统一测试和最终完成。",
@@ -192,7 +192,7 @@ export function moduleInstruction(module: LinghuAutomationModuleOutDto): string 
 }
 
 /** 把测试资源协调快照转换为令狐任务可以理解的结构化上下文。 */
-export function testResourceContext(state: TestResourceCoordinatorState | null): string {
+export function testResourceContext(state: TestResourceCoordinatorStateOutDto | null): string {
   // 首次启动或协调器不可用时明确说明没有快照，不伪造空闲。
   if (!state) return "当前没有测试资源协调快照。";
   // 占用者说明运行、任务、进程、端口、构建目录和心跳，便于判断真实资源争用。

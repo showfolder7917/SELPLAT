@@ -1,21 +1,21 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-import type { CodexStreamEvent } from "../../../../../../../contracts/platform/codex/index.js";
+import type { CodexStreamEventOutDto } from "../../../../../../../contracts/services/support/platform/codex/index.js";
 import type {
-  CollaborationParticipantSnapshot,
+  CollaborationParticipantSnapshotOutDto,
   CollaborationStateOutDto,
-  CollaborationTimelineGroup,
-  CollaborationTimelineNode,
+  CollaborationTimelineGroupOutDto,
+  CollaborationTimelineNodeOutDto,
   CollaborationTimelineSnapshotOutDto,
-} from "../../../../../../../contracts/collaboration/workflow/index.js";
-import type { CollaborationTimelineBusinessEvent } from "../../../../../../../contracts/collaboration/workflow/index.js";
+} from "../../../../../../../contracts/services/workflow/index.js";
+import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../../../contracts/services/workflow/index.js";
 import { projectCollaborationFlowEvent, projectLegacySubmittedFlowCorrection } from "./collaboration-timeline-flow.projector.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 
-const NANGONG: CollaborationParticipantSnapshot = { memberId: "nangong-wan", displayName: "南宫婉" };
+const NANGONG: CollaborationParticipantSnapshotOutDto = { memberId: "nangong-wan", displayName: "南宫婉" };
 
-type TimelineFact = Omit<CollaborationTimelineNode, "durationMs"> & {
+type TimelineFact = Omit<CollaborationTimelineNodeOutDto, "durationMs"> & {
   groupId: string;
   proposalId: string | null;
   sourceFactKey: string;
@@ -32,7 +32,7 @@ export interface CollaborationTimelineStreamCommit extends CollaborationTimeline
   nodeId: string;
 }
 
-const TIMELINE_CONTENT_EVENT_TYPES = new Set<CodexStreamEvent["type"]>([
+const TIMELINE_CONTENT_EVENT_TYPES = new Set<CodexStreamEventOutDto["type"]>([
   "message-delta",
   "message-completed",
   "reasoning-summary-delta",
@@ -54,7 +54,7 @@ export class CollaborationTimelineRepository {
   }
 
   /** 追加一条已发生的业务事件；仓库不接收也不反推提案当前状态。 */
-  appendBusinessEvent(event: CollaborationTimelineBusinessEvent): CollaborationTimelineCommit | null {
+  appendBusinessEvent(event: CollaborationTimelineBusinessEventOutDto): CollaborationTimelineCommit | null {
     const committedAt = new Date().toISOString();
     const changed = this.#database.transaction((connection) => {
       if (connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: event.fact.sourceFactKey })) return false;
@@ -111,7 +111,7 @@ export class CollaborationTimelineRepository {
     return changedGroupIds.size ? this.#commit([...changedGroupIds], committedAt) : null;
   }
 
-  appendStream(taskId: string, memberId: string, event: CodexStreamEvent, occurredAt = new Date().toISOString()): CollaborationTimelineStreamCommit | null {
+  appendStream(taskId: string, memberId: string, event: CodexStreamEventOutDto, occurredAt = new Date().toISOString()): CollaborationTimelineStreamCommit | null {
     const committedAt = new Date().toISOString();
     const stored = this.#database.transaction((connection) => {
       const active = connection.prepare(`
@@ -152,7 +152,7 @@ export class CollaborationTimelineRepository {
 
   #upsertTopic(connection: DatabaseSync, input: {
     groupId: string; topicId: string | null; proposalId: string | null; title: string;
-    status: CollaborationTimelineGroup["status"]; summary: string; startedAt: string; updatedAt: string;
+    status: CollaborationTimelineGroupOutDto["status"]; summary: string; startedAt: string; updatedAt: string;
   }): void {
     connection.prepare(`INSERT INTO AiDesktopTaskTimelineTopic
       (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
@@ -197,7 +197,7 @@ export class CollaborationTimelineRepository {
     return { groupIds, groupVersions, committedAt };
   }
 
-  #group(connection: DatabaseSync, topic: Record<string, unknown>, now: string): CollaborationTimelineGroup {
+  #group(connection: DatabaseSync, topic: Record<string, unknown>, now: string): CollaborationTimelineGroupOutDto {
     const rows = connection.prepare(`SELECT * FROM AiDesktopTaskTimelineEvent WHERE groupId=$groupId
       ORDER BY sequenceNumber, occurredAt, factId`).all({ $groupId: String(topic.groupId) }) as Array<Record<string, unknown>>;
     const latestByNode = new Map<string, Record<string, unknown>>();
@@ -214,7 +214,7 @@ export class CollaborationTimelineRepository {
     const waitingCount = nodes.filter((node) => node.status === "waiting" || node.kind === "approval-application" && node.status === "current").length;
     const completedCount = nodes.filter((node) => node.status === "completed").length;
     const currentNodes = nodes.filter((node) => node.status === "current");
-    const persistedStatus = String(topic.status) as CollaborationTimelineGroup["status"];
+    const persistedStatus = String(topic.status) as CollaborationTimelineGroupOutDto["status"];
     const calculated = persistedStatus === "blocked" || persistedStatus === "cancelled" || persistedStatus === "completed" ? persistedStatus
       : currentNodes.some((node) => node.kind === "approval-application") ? "waiting-approval"
         : currentNodes.some((node) => node.kind === "verification") ? "verifying"
@@ -229,18 +229,18 @@ export class CollaborationTimelineRepository {
     };
   }
 
-  #node(connection: DatabaseSync, row: Record<string, unknown>, now: string): CollaborationTimelineNode {
+  #node(connection: DatabaseSync, row: Record<string, unknown>, now: string): CollaborationTimelineNodeOutDto {
     const nodeId = String(row.nodeId);
     const stream = projectedContentText(connection, String(row.groupId), nodeId);
     const startedAt = String(row.startedAt);
-    const status = row.status as CollaborationTimelineNode["status"];
+    const status = row.status as CollaborationTimelineNodeOutDto["status"];
     // 历史终态事实可能缺少 completedAt；以事实发生时间收口，禁止页面把已完成或失败节点继续计时。
     const completedAt = nullable(row.completedAt) || (status === "completed" || status === "failed" ? String(row.occurredAt) : null);
     return {
-      nodeId, taskId: nullable(row.taskId), eventType: String(row.eventType), kind: row.kind as CollaborationTimelineNode["kind"],
+      nodeId, taskId: nullable(row.taskId), eventType: String(row.eventType), kind: row.kind as CollaborationTimelineNodeOutDto["kind"],
       actor: participant(String(row.actorMemberId), String(row.actorDisplayName)), recipients: parseParticipants(row.recipientsJson),
-      status, action: String(row.action), summary: String(row.summary), contentRole: row.contentRole as CollaborationTimelineNode["contentRole"],
-      content: stream || String(row.content), detailRole: row.detailRole as CollaborationTimelineNode["detailRole"], detail: String(row.detail), startedAt, completedAt,
+      status, action: String(row.action), summary: String(row.summary), contentRole: row.contentRole as CollaborationTimelineNodeOutDto["contentRole"],
+      content: stream || String(row.content), detailRole: row.detailRole as CollaborationTimelineNodeOutDto["detailRole"], detail: String(row.detail), startedAt, completedAt,
       durationMs: durationMs(startedAt, completedAt || now), automaticOpen: Number(row.automaticOpen) === 1,
       manualApprovalProposalId: nullable(row.manualApprovalProposalId),
     };
@@ -254,7 +254,7 @@ function projectedContentText(connection: DatabaseSync, groupId: string, nodeId:
     ORDER BY sequenceNumber, occurredAt, chunkId`).all({ $groupId: groupId, $nodeId: nodeId }) as Array<Record<string, unknown>>;
   const items = new Map<string, { deltas: string[]; completed: string | null }>();
   for (const row of rows) {
-    if (!TIMELINE_CONTENT_EVENT_TYPES.has(String(row.eventType) as CodexStreamEvent["type"])) continue;
+    if (!TIMELINE_CONTENT_EVENT_TYPES.has(String(row.eventType) as CodexStreamEventOutDto["type"])) continue;
     const key = [String(row.turnId), nullable(row.itemId) || nullable(row.segmentId) || "default"].join(":");
     const value = items.get(key) || { deltas: [], completed: null };
     if (row.eventType === "message-completed" && row.snapshotText) value.completed = String(row.snapshotText);
@@ -267,7 +267,7 @@ function projectedContentText(connection: DatabaseSync, groupId: string, nodeId:
   return [...items.values()].map((item) => item.completed || item.deltas.join("")).filter(Boolean).join("\n\n");
 }
 
-function transition(status: CollaborationTimelineGroup["status"], nodes: CollaborationTimelineNode[]): Pick<CollaborationTimelineGroup, "nextStep" | "failureNextStep" | "nextOwner"> {
+function transition(status: CollaborationTimelineGroupOutDto["status"], nodes: CollaborationTimelineNodeOutDto[]): Pick<CollaborationTimelineGroupOutDto, "nextStep" | "failureNextStep" | "nextOwner"> {
   const active = nodes.filter((node) => node.status === "current" || node.status === "waiting");
   const current = active.at(-1);
   if (current?.kind === "approval-application") return { nextStep: `${current.recipients[0]?.displayName || "韩立"} · 审批申请`, failureNextStep: "韩立 → 南宫婉 · 退回补充", nextOwner: current.recipients[0] || null };
@@ -281,16 +281,16 @@ function transition(status: CollaborationTimelineGroup["status"], nodes: Collabo
   return { nextStep: "南宫婉 · 生成执行计划并分配执行人", failureNextStep: "南宫婉 · 说明无法分配的原因", nextOwner: NANGONG };
 }
 
-function activeTaskCount(nodes: CollaborationTimelineNode[], kinds: Set<CollaborationTimelineNode["kind"]>): number {
+function activeTaskCount(nodes: CollaborationTimelineNodeOutDto[], kinds: Set<CollaborationTimelineNodeOutDto["kind"]>): number {
   return new Set(nodes.filter((node) => node.status === "current" && kinds.has(node.kind)).map((node) => node.taskId || node.nodeId)).size;
 }
 
-function participant(memberId: string, displayName: string): CollaborationParticipantSnapshot { return { memberId, displayName }; }
+function participant(memberId: string, displayName: string): CollaborationParticipantSnapshotOutDto { return { memberId, displayName }; }
 function nullable(value: unknown): string | null { return typeof value === "string" && value ? value : null; }
-function parseParticipants(value: unknown): CollaborationParticipantSnapshot[] {
+function parseParticipants(value: unknown): CollaborationParticipantSnapshotOutDto[] {
   try {
     const parsed = JSON.parse(String(value));
-    return Array.isArray(parsed) ? parsed.filter((item): item is CollaborationParticipantSnapshot => Boolean(item) && typeof item.memberId === "string" && typeof item.displayName === "string") : [];
+    return Array.isArray(parsed) ? parsed.filter((item): item is CollaborationParticipantSnapshotOutDto => Boolean(item) && typeof item.memberId === "string" && typeof item.displayName === "string") : [];
   } catch { return []; }
 }
 function durationMs(startedAt: string, endedAt: string): number {

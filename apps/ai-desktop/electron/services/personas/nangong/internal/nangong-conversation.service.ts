@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 
-import type { ConversationRoundTopicDecision } from "../../../../../contracts/capabilities/event-center/index.js";
-import type { EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
-import type { GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, SendNangongConversationMessageInDto } from "../../../../../contracts/collaboration/nangong/index.js";
+import type { ConversationRoundTopicDecisionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, SendNangongConversationMessageInDto } from "../../../../../contracts/services/personas/nangong/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 import { parseNangongConversationResponse, parseNangongTopicDraft } from "./nangong-conversation.parser.js";
 
@@ -137,7 +137,7 @@ export class NangongConversationService {
   }
 
   /** 完整人物回合异步进入训练归档；归档失败不改写已经成功的对话。 */
-  #archiveConversationRound(state: EvolutionStateOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision | null): void {
+  #archiveConversationRound(state: EvolutionStateOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecisionInDto | null): void {
     if (!this.#memory) return;
     queueMicrotask(() => {
       try {

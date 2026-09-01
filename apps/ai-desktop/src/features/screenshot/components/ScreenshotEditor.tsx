@@ -8,15 +8,15 @@ import {
   Square20Regular,
 } from "@fluentui/react-icons";
 
-import type { Locale, ScreenCapture } from "../../../../contracts/desktop/desktop";
+import type { LocaleValue, ScreenCaptureOutDto } from "../../../../contracts/system/desktop/desktop";
 import { useSelUi } from "../../../theme/SelUiProvider";
 import { drawAnnotations, loadDataUrl, nextPaint, syncCanvasViewport } from "../canvas/annotation-renderer";
 import { canvasPointFromClient, clamp, findTopRectangleAtPoint, moveRectangle, normalizeRectangle, rectangleToViewport, resizeRectangle, sameRectangle, selectionConfirmPosition } from "../geometry/annotation-geometry";
 import type { ActiveInteraction, Annotation, CanvasViewport, PenAnnotation, Point, PointerTarget, Rectangle, RectangleAnnotation, ResizeHandle, ScreenshotTool } from "../model/annotations";
 
 interface ScreenshotEditorProps {
-  capture: ScreenCapture;
-  locale: Locale;
+  capture: ScreenCaptureOutDto;
+  locale: LocaleValue;
   onCancel(): void;
   onComplete(originalDataUrl: string, annotatedDataUrl: string, hasAnnotations: boolean): Promise<void>;
 }

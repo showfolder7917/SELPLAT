@@ -89,7 +89,7 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /多个版本并行/);
   assert.match(launcher, /open -n "\$APP_PATH" --args/);
   assert.match(appConfig, /--selplat-root=/);
-  assert.match(appConfig, /resolveAppVariant\(\): AppVariant \{\s+return "developer";/);
+  assert.match(appConfig, /resolveAppVariant\(\): AppVariantValue \{\s+return "developer";/);
   assert.match(electronMain, /--ai-desktop-variant=developer/);
   assert.match(macVerifier, /com\.selplat\.aidesktop\.developer/);
   assert.match(macVerifier, /codesign.*--verify/s);

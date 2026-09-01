@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AI Desktop 应用运行时组合根。
  *
  * 新手阅读地图：
@@ -27,33 +27,33 @@ import { app, BrowserWindow, protocol } from "electron";
  * 每个 index.js 都是对应领域的公开出口；源码是 index.ts，NodeNext 构建后生成运行时使用的 index.js。
  */
 import type {
-  // 来源：contracts/platform/persistence/database.ts。
+  // 来源：contracts/services/support/platform/persistence/index.ts → dto/database-status.out.dto.ts。
   // 含义：AI Memory 数据库健康状态，包含 ready/recovery-required/unavailable、结构版本和提示消息。
   // 用法：main.ts 保存初始化结果，并通过 IPC 交给诊断界面；不会把数据库路径、连接或 SQL 暴露给页面。
-  AiMemoryDatabaseStatus,
+  AiMemoryDatabaseStatusOutDto,
   // 来源：同一个 persistence/database.ts。
   // 含义：历史语料语义补齐任务的进度 DTO，包含目标数、处理数、成功数、失败数和起止时间。
   // 用法：IPC 查询补齐状态时约束返回结构；数据库不可用时也必须返回同样完整的失败结构。
-  CorpusSemanticBackfillStatus,
-} from "../../../contracts/platform/persistence/index.js";
+  CorpusSemanticBackfillStatusOutDto,
+} from "../../../contracts/services/support/platform/persistence/index.js";
 import type {
-  // 来源：contracts/platform/workspace/workspace.ts。
+  // 来源：contracts/services/support/platform/workspace/index.ts → dto/workspace.out.dto.ts。
   // 含义：当前工作区快照，由 primaryId 和多个 { id、name、path、permission } 工程根组成。
   // 用法：mergeWorkspaceState() 合并任务快照和最新工作区配置，再交给 Codex 决定可访问目录与读写权限。
-  WorkspaceState,
-} from "../../../contracts/platform/workspace/index.js";
+  WorkspaceStateOutDto,
+} from "../../../contracts/services/support/platform/workspace/index.js";
 import type {
-  // 来源：contracts/collaboration/evolution/dto/evolution-mutation.in.dto.ts。
+  // 来源：contracts/services/evolution/dto/evolution-mutation.in.dto.ts。
   // 含义：专题写入的并发控制请求，携带页面看到的状态版本和防重复提交的 idempotencyKey。
   // 用法：专题变更开始前交给 Repository；版本落后或幂等键重复时，持久化层可以拒绝错误写入。
   EvolutionMutationInDto,
-} from "../../../contracts/collaboration/evolution/index.js";
+} from "../../../contracts/services/evolution/index.js";
 import type {
-  // 来源：contracts/collaboration/workflow/collaboration-timeline-event.ts。
+  // 来源：contracts/services/workflow/index.ts → dto/collaboration-timeline-business.event.out.dto.ts。
   // 含义：审批申请、审批决定、分发计划等已经发生且不可变的专题业务事实，不是当前状态快照。
   // 用法：recordEvolutionTimelineEvent() 把事件写入 SQLite 时间线，失败时记录异常并向调用方抛出。
-  CollaborationTimelineBusinessEvent,
-} from "../../../contracts/collaboration/workflow/index.js";
+  CollaborationTimelineBusinessEventOutDto,
+} from "../../../contracts/services/workflow/index.js";
 /**
  * Event Center（事件中心）不是一个单纯的“点击事件”工具，而是一组主进程公共能力：
  * - 审计：把应用启动、任务、命令、审批和异常写入 JSONL/摘要文件，并可投影到 SQLite；
@@ -155,14 +155,14 @@ let workflowSupervisor: WorkflowSupervisor | null = null;
 let collaborationMemory: EventCenterMemory | null = null;
 let codexAppCorpusWatcher: CorpusWatcher | null = null;
 // 数据库初始化前先提供稳定状态，Renderer 不会收到含义不明的 undefined。
-let aiMemoryDatabaseStatus: AiMemoryDatabaseStatus = {
+let aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto = {
   state: "unavailable",
   schemaVersion: null,
   message: "AI Memory 数据库尚未初始化。",
 };
 
 /** 当前工作区注册表是唯一入口；任务快照只决定主目录，不覆盖后来新增的工程根。 */
-function mergeWorkspaceState(configured: WorkspaceState, requested: WorkspaceState): WorkspaceState {
+function mergeWorkspaceState(configured: WorkspaceStateOutDto, requested: WorkspaceStateOutDto): WorkspaceStateOutDto {
   // 任务快照指定的主工作区排在首位，保证 Codex 仍在任务原始主目录执行。
   const requestedPrimary = requested.roots.find((root) => root.id === requested.primaryId);
   // 合并任务快照与当前配置，并按规范化后的真实路径去重。
@@ -494,7 +494,7 @@ export async function startApplication(): Promise<void> {
   const beginEvolutionMutation = workflowRepository ? (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined;
   const completeEvolutionMutation = workflowRepository ? (idempotencyKey: string, resultStateVersion: string) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined;
   const failEvolutionMutation = workflowRepository ? (idempotencyKey: string, error: unknown) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined;
-  const recordEvolutionTimelineEvent = collaborationTimeline ? (event: CollaborationTimelineBusinessEvent) => {
+  const recordEvolutionTimelineEvent = collaborationTimeline ? (event: CollaborationTimelineBusinessEventOutDto) => {
     // 时间线失败必须向上抛出，不能把“业务完成但审计丢失”当成成功。
     try { collaborationTimeline!.appendTimelineEvent(event); }
     catch (error) {
@@ -707,7 +707,7 @@ export async function startApplication(): Promise<void> {
       // 功能未创建时返回完整失败 DTO，Renderer 无需猜测 null 的含义。
       state: "failed", targetCount: 0, discoveredCount: 0, processedCount: 0, insertedCount: 0,
       failedCount: 1, message: "AI Memory 数据库不可用，无法补齐历史摘要。", startedAt: null, completedAt: null,
-    } satisfies CorpusSemanticBackfillStatus),
+    } satisfies CorpusSemanticBackfillStatusOutDto),
     startCorpusSemanticBackfill: (limit?: number) => {
       // 用户主动启动补齐时，数据库不可用属于明确业务失败，不能静默忽略。
       if (!corpusSemanticBackfill) throw new Error("AI Memory 数据库不可用，无法补齐历史摘要。");

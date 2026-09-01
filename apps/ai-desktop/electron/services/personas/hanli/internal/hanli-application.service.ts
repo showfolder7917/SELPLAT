@@ -3,8 +3,8 @@ import type {
   DecideHanliResultInDto,
   HanliAcceptancePlanOutDto,
   HanliAcceptanceRunOutDto,
-} from "../../../../../contracts/collaboration/hanli/index.js";
-import type { EvolutionMutationInDto, EvolutionProposal, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+} from "../../../../../contracts/services/personas/hanli/index.js";
+import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { createEvolutionMutationCoordinator, type EvolutionMutationPort } from "../../../evolution/index.js";
 import type { HanliApplicationPort } from "../hanli.facade.js";
 import { EvolutionApprovalService } from "./evolution-approval.service.js";
@@ -116,7 +116,7 @@ export class HanliApplicationService implements HanliApplicationPort {
     return this.#mutations.run(proposal.topicId, "结果验收", request.mutation, () => this.#store.state().updatedAt, () => this.#store.state(), () => this.#store.decideResult(proposalId, request.decision, request.advice || "", source));
   }
 
-  #autoApproveOnce(proposal: EvolutionProposal): EvolutionStateOutDto {
+  #autoApproveOnce(proposal: EvolutionProposalOutDto): EvolutionStateOutDto {
     const state = this.#store.state();
     const manualHistory = state.proposals.flatMap((item) => item.approvals.map((approval) => ({ item, approval })))
       .filter(({ item, approval }) => item.type === proposal.type && item.origin === proposal.origin && approval.source === "manual-user");
@@ -135,7 +135,7 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 }
 
-function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposal {
+function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposalOutDto {
   const proposal = state.proposals.find((item) => item.proposalId === proposalId);
   if (!proposal) throw new Error("演化提案不存在。");
   return proposal;

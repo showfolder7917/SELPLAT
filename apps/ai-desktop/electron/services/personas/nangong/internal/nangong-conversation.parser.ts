@@ -1,5 +1,5 @@
-import type { ConversationRoundTopicDecision } from "../../../../../contracts/capabilities/event-center/index.js";
-import type { NangongTopicDraftOutDto } from "../../../../../contracts/collaboration/nangong/index.js";
+import type { ConversationRoundTopicDecisionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { NangongTopicDraftOutDto } from "../../../../../contracts/services/personas/nangong/index.js";
 
 /** 南宫婉判断本轮事实已经成熟后使用的唯一可见邀请。 */
 const NANGONG_ONE_SHOT_INVITATION = "若确认启动本轮完整演化，请回复 1。";
@@ -24,7 +24,7 @@ export function parseNangongTopicDraft(text: string): NangongTopicDraftOutDto {
 }
 
 /** 保留自然语言正文并读取 AI 生成的自由主题坐标；元数据异常不会丢弃正文。 */
-export function parseNangongConversationResponse(text: string): { reply: string; topic: ConversationRoundTopicDecision; invitesOneShot: boolean } {
+export function parseNangongConversationResponse(text: string): { reply: string; topic: ConversationRoundTopicDecisionInDto; invitesOneShot: boolean } {
   const lines = text.trim().split(/\r?\n/);
   let markerIndex = -1;
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -37,7 +37,7 @@ export function parseNangongConversationResponse(text: string): { reply: string;
   }
   const marker = lines[markerIndex].trim().slice(CONVERSATION_TOPIC_META_PREFIX.length);
   try {
-    const value = JSON.parse(marker) as Partial<ConversationRoundTopicDecision>;
+    const value = JSON.parse(marker) as Partial<ConversationRoundTopicDecisionInDto>;
     const title = typeof value.title === "string" ? value.title.trim().slice(0, 120) : "";
     const type = typeof value.type === "string" ? value.type.trim().slice(0, 120) : "";
     const userIntent = typeof value.userIntent === "string" ? value.userIntent.trim().slice(0, 2_000) : "";
@@ -53,7 +53,7 @@ export function parseNangongConversationResponse(text: string): { reply: string;
 }
 
 /** 兼容只返回工程语料元数据的 Codex 回合，并保持字段完全来自 AI 语义判断。 */
-function parseCorpusMetadata(text: string): ConversationRoundTopicDecision | null {
+function parseCorpusMetadata(text: string): ConversationRoundTopicDecisionInDto | null {
   const match = text.match(/<!--\s*SELPLAT_CORPUS_META\s+(\{[\s\S]*?\})\s*-->/);
   if (!match) return null;
   try {
@@ -67,7 +67,7 @@ function parseCorpusMetadata(text: string): ConversationRoundTopicDecision | nul
   } catch { return null; }
 }
 
-function pendingTopicDecision(): ConversationRoundTopicDecision {
+function pendingTopicDecision(): ConversationRoundTopicDecisionInDto {
   return { title: "待 AI 归类", type: "待归类", switchTopic: false, userIntent: "", tags: [], summary: "" };
 }
 

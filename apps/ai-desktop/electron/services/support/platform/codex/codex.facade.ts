@@ -2,20 +2,20 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 
 import type {
-  CodexAccount,
-  CodexApproval,
-  CodexHarnessStatus,
-  CodexModelCatalog,
-  CodexModelOption,
-  CodexLoginResponse,
-  CodexStreamEvent,
-  CodexUserInputRequest,
-  ResolveCodexUserInputRequest,
-} from "../../../../../contracts/platform/codex/index.js";
-import type { Locale, ManagedExecutionMode, ModelServiceTier, ReasoningEffort, SandboxMode } from "../../../../../contracts/foundation/base.js";
-import type { SendMessageResponse } from "../../../../../contracts/capabilities/conversation/index.js";
-import type { DesktopSettings } from "../../../../../contracts/platform/settings/index.js";
-import type { WorkspaceState } from "../../../../../contracts/platform/workspace/index.js";
+  CodexAccountOutDto,
+  CodexApprovalOutDto,
+  CodexHarnessStatusOutDto,
+  CodexModelCatalogOutDto,
+  CodexModelOptionOutDto,
+  CodexLoginResponseOutDto,
+  CodexStreamEventOutDto,
+  CodexUserInputRequestOutDto,
+  ResolveCodexUserInputInDto,
+} from "../../../../../contracts/services/support/platform/codex/index.js";
+import type { LocaleValue, ManagedExecutionModeValue, ModelServiceTierValue, ReasoningEffortValue, SandboxModeValue } from "../../../../../contracts/foundation/index.js";
+import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
+import type { DesktopSettingsOutDto } from "../../../../../contracts/services/support/platform/settings/index.js";
+import type { WorkspaceStateOutDto } from "../../../../../contracts/services/support/platform/workspace/index.js";
 import type { CodexSessionPersistence } from "./internal/codex-session.repository.js";
 import { resolveCodexRuntime, type CodexRuntime } from "./internal/codex-runtime.resolver.js";
 import { toCodexStreamEvent } from "./internal/codex-stream-event.mapper.js";
@@ -39,8 +39,8 @@ interface PendingRequest {
 interface TurnWaiter {
   itemCount: number;
   messageParts: Map<string, string>;
-  emit(event: CodexStreamEvent): void;
-  resolve(value: SendMessageResponse): void;
+  emit(event: CodexStreamEventOutDto): void;
+  resolve(value: SendMessageOutDto): void;
   reject(error: Error): void;
 }
 
@@ -56,7 +56,7 @@ export interface CodexServiceOptions {
   migrateLegacySession: boolean;
   sessionStorage: "ai-desktop" | "legacy-default";
   validationOwner: "codex" | "desktop";
-  readSettings: () => DesktopSettings;
+  readSettings: () => DesktopSettingsOutDto;
   /** 读取主进程已校验的有效规则；返回空串时仅应用基础会话指令。 */
   readRuleInstructions?: () => string;
   /** 主人物回合完成后触发训练语料增量归档；内部自动化连接不配置此回调。 */
@@ -67,7 +67,7 @@ export interface CodexServiceOptions {
   preserveThreadAcrossWorkspaceChanges?: boolean;
 }
 
-const EMPTY_ACCOUNT: CodexAccount = {
+const EMPTY_ACCOUNT: CodexAccountOutDto = {
   authenticated: false,
   authMode: null,
   email: null,
@@ -79,8 +79,8 @@ const EMPTY_ACCOUNT: CodexAccount = {
 export class CodexService {
   readonly #workingDirectory: string;
   readonly #pending = new Map<number, PendingRequest>();
-  readonly #approvals = new Map<number, CodexApproval>();
-  readonly #userInputs = new Map<number, CodexUserInputRequest>();
+  readonly #approvals = new Map<number, CodexApprovalOutDto>();
+  readonly #userInputs = new Map<number, CodexUserInputRequestOutDto>();
   readonly #turnWaiters = new Map<string, TurnWaiter>();
   readonly #notificationBacklog = new Map<string, BufferedNotification[]>();
   readonly #items = new Map<string, JsonObject>();
@@ -94,8 +94,8 @@ export class CodexService {
   #lastError: string | null = null;
   #runtime: CodexRuntime | null = null;
   #storageReady: Promise<void> | undefined;
-  #activeExecutionMode: ManagedExecutionMode | null = null;
-  #activeWorkspaces: WorkspaceState | null = null;
+  #activeExecutionMode: ManagedExecutionModeValue | null = null;
+  #activeWorkspaces: WorkspaceStateOutDto | null = null;
   readonly #trustedCommands: TrustedCommandStore;
   readonly #sessions: CodexSessionPersistence;
   readonly #options: CodexServiceOptions;
@@ -147,7 +147,7 @@ export class CodexService {
     return Boolean(this.#process && this.#process.exitCode === null && !this.#process.killed);
   }
 
-  async getStatus(): Promise<CodexHarnessStatus> {
+  async getStatus(): Promise<CodexHarnessStatusOutDto> {
     try {
       await this.#ensureReady();
       const result = asObject(await this.#request("account/read", { refreshToken: false }));
@@ -159,14 +159,14 @@ export class CodexService {
   }
 
   /** 模型和能力始终来自当前固定 app-server，避免前端维护会过期的提供商或模型常量。 */
-  async getModels(): Promise<CodexModelCatalog> {
+  async getModels(): Promise<CodexModelCatalogOutDto> {
     await this.#ensureReady();
     const result = asObject(await this.#request("model/list", { includeHidden: false }));
     const source = Array.isArray(result.data) ? result.data : Array.isArray(result.models) ? result.models : [];
-    return { models: source.map(normalizeModelOption).filter((model): model is CodexModelOption => Boolean(model)) };
+    return { models: source.map(normalizeModelOption).filter((model): model is CodexModelOptionOutDto => Boolean(model)) };
   }
 
-  async loginWithChatGPT(): Promise<CodexLoginResponse> {
+  async loginWithChatGPT(): Promise<CodexLoginResponseOutDto> {
     await this.#ensureReady();
     const result = asObject(await this.#request("account/login/start", {
       type: "chatgpt",
@@ -181,14 +181,14 @@ export class CodexService {
     return { loginId, authUrl };
   }
 
-  async logout(): Promise<CodexHarnessStatus> {
+  async logout(): Promise<CodexHarnessStatusOutDto> {
     await this.#ensureReady();
     await this.#request("account/logout", {});
     await this.newChat();
     return this.getStatus();
   }
 
-  pendingApprovals(): CodexApproval[] {
+  pendingApprovals(): CodexApprovalOutDto[] {
     return [...this.#approvals.values()];
   }
 
@@ -208,11 +208,11 @@ export class CodexService {
     return trustResult;
   }
 
-  pendingUserInputs(): CodexUserInputRequest[] {
+  pendingUserInputs(): CodexUserInputRequestOutDto[] {
     return [...this.#userInputs.values()];
   }
 
-  resolveUserInput(request: ResolveCodexUserInputRequest): void {
+  resolveUserInput(request: ResolveCodexUserInputInDto): void {
     if (!request || !Number.isSafeInteger(request.requestId)) throw new Error("Invalid Codex user input request.");
     const pending = this.#userInputs.get(request.requestId);
     if (!pending) throw new Error("Codex user input request is no longer active.");
@@ -254,13 +254,13 @@ export class CodexService {
 
   async send(
     message: string,
-    locale: Locale,
-    sandboxMode: SandboxMode,
-    workspaces: WorkspaceState,
+    locale: LocaleValue,
+    sandboxMode: SandboxModeValue,
+    workspaces: WorkspaceStateOutDto,
     attachmentPaths: string[] = [],
-    onStreamEvent: (event: CodexStreamEvent) => void = () => undefined,
-    executionMode: ManagedExecutionMode | null = null,
-  ): Promise<SendMessageResponse> {
+    onStreamEvent: (event: CodexStreamEventOutDto) => void = () => undefined,
+    executionMode: ManagedExecutionModeValue | null = null,
+  ): Promise<SendMessageOutDto> {
     const normalizedMessage = message.trim();
     if ((!normalizedMessage && attachmentPaths.length === 0) || normalizedMessage.length > 20_000) {
       throw new Error("Message or screenshot attachment is required, with at most 20000 text characters.");
@@ -313,7 +313,7 @@ export class CodexService {
    * app-server 已明确列出模型能力时，禁止把不支持的全局选择静默降级为默认值。
    * 这同时覆盖主会话、协同执行和协同审核，因为三者共用 send 调用路径。
    */
-  async #assertModelSettingsSupported(settings: DesktopSettings): Promise<void> {
+  async #assertModelSettingsSupported(settings: DesktopSettingsOutDto): Promise<void> {
     if (!settings.defaultModel && !settings.reasoningEffort && settings.serviceTier === "default") return;
     const catalog = await this.getModels();
     const model = settings.defaultModel
@@ -338,7 +338,7 @@ export class CodexService {
     this.#ready = undefined;
   }
 
-  async #getThread(sandboxMode: SandboxMode, workspaces: WorkspaceState, cwd: string, locale: Locale): Promise<string> {
+  async #getThread(sandboxMode: SandboxModeValue, workspaces: WorkspaceStateOutDto, cwd: string, locale: LocaleValue): Promise<string> {
     const developerInstructions = this.#developerInstructions(locale);
     const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
     if (this.#threadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return this.#threadId;
@@ -682,7 +682,7 @@ export class CodexService {
     this.#finishTurn(turnId, turn, waiter);
   }
 
-  #waitForTurn(turnId: string, emit: (event: CodexStreamEvent) => void): Promise<SendMessageResponse> {
+  #waitForTurn(turnId: string, emit: (event: CodexStreamEventOutDto) => void): Promise<SendMessageOutDto> {
     return new Promise((resolve, reject) => {
       const waiter: TurnWaiter = { itemCount: 0, messageParts: new Map(), emit, resolve, reject };
       this.#turnWaiters.set(turnId, waiter);
@@ -739,7 +739,7 @@ export class CodexService {
     this.#userInputs.clear();
   }
 
-  #developerInstructions(locale: Locale): string {
+  #developerInstructions(locale: LocaleValue): string {
     const conversationInstructions = locale === "ja"
       ? "Reply in natural Japanese unless the user explicitly requests another language. Lead with the outcome and speak like a thoughtful collaborator with warmth, judgment, and awareness of the user's context. Answer ordinary questions directly instead of converting every message into a formal requirement. Acknowledge frustration or uncertainty when it matters, and be candid about what is known or still unverified. Use Markdown only when it materially improves readability. Keep execution constraints and workflow state internal instead of repeating stage names, rules, tags, or fixed templates."
       : "除非用户明确要求其他语言，否则请使用自然、清晰的简体中文回答。先给结论，像体贴、可靠的协作伙伴一样结合上下文交流，表达应有温度、有判断，也要坦诚说明尚未确认的部分。普通问题直接回答，不要把用户每句话都改写成正式需求；用户困惑或受挫时先回应真正关心的问题。短问题直接说清楚，复杂内容才使用必要的 Markdown 结构。执行门禁和流程状态属于内部约束，不要机械复述阶段名称、规则、标签或固定模板。";
@@ -764,12 +764,12 @@ export function createCodexChildEnvironment(environment: NodeJS.ProcessEnv, code
   return childEnvironment;
 }
 
-function runtimeInfo(runtime: CodexRuntime | null): CodexHarnessStatus["runtime"] {
+function runtimeInfo(runtime: CodexRuntime | null): CodexHarnessStatusOutDto["runtime"] {
   return runtime ? { source: runtime.source, version: runtime.version } : null;
 }
 
 /** 兼容 app-server 模型目录的稳定字段和旧版别名，同时只向渲染层暴露选择器需要的信息。 */
-function normalizeModelOption(value: unknown): CodexModelOption | null {
+function normalizeModelOption(value: unknown): CodexModelOptionOutDto | null {
   const model = asObject(value);
   const id = stringValue(model.id) || stringValue(model.model);
   if (!id) return null;
@@ -778,7 +778,7 @@ function normalizeModelOption(value: unknown): CodexModelOption | null {
     .map((entry) => typeof entry === "string"
       ? normalizeReasoningEffort(entry)
       : normalizeReasoningEffort(stringValue(asObject(entry).reasoningEffort) || stringValue(asObject(entry).effort)))
-    .filter((effort): effort is ReasoningEffort => Boolean(effort));
+    .filter((effort): effort is ReasoningEffortValue => Boolean(effort));
   const serviceTierSource = [
     // 新版目录直接给出受支持服务层级；其他字段保留给固定旧版 app-server 的兼容读取。
     ...(Array.isArray(model.supportedServiceTiers) ? model.supportedServiceTiers : []),
@@ -787,8 +787,8 @@ function normalizeModelOption(value: unknown): CodexModelOption | null {
     ...(model.supportsFastMode === true ? ["fast"] : []),
   ];
   const supportedServiceTiers = [...new Set([
-    "default" as ModelServiceTier,
-    ...serviceTierSource.map((entry) => normalizeServiceTier(typeof entry === "string" ? entry : stringValue(asObject(entry).serviceTier))).filter((tier): tier is ModelServiceTier => Boolean(tier)),
+    "default" as ModelServiceTierValue,
+    ...serviceTierSource.map((entry) => normalizeServiceTier(typeof entry === "string" ? entry : stringValue(asObject(entry).serviceTier))).filter((tier): tier is ModelServiceTierValue => Boolean(tier)),
   ])];
   return {
     id,
@@ -801,12 +801,12 @@ function normalizeModelOption(value: unknown): CodexModelOption | null {
   };
 }
 
-function normalizeReasoningEffort(value: string | null): ReasoningEffort | null {
+function normalizeReasoningEffort(value: string | null): ReasoningEffortValue | null {
   return value === "none" || value === "minimal" || value === "low" || value === "medium"
     || value === "high" || value === "xhigh" || value === "max" ? value : null;
 }
 
-function normalizeServiceTier(value: string | null): ModelServiceTier | null {
+function normalizeServiceTier(value: string | null): ModelServiceTierValue | null {
   return value === "default" || value === "fast" ? value : null;
 }
 
@@ -818,7 +818,7 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function normalizeUserInputRequest(requestId: number, params: JsonObject): CodexUserInputRequest | null {
+function normalizeUserInputRequest(requestId: number, params: JsonObject): CodexUserInputRequestOutDto | null {
   if (!Array.isArray(params.questions)) return null;
   const seenIds = new Set<string>();
   const questions = params.questions.map(asObject).map((question) => {
@@ -852,7 +852,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Codex harness is unavailable.";
 }
 
-function normalizeAccount(result: JsonObject): CodexAccount {
+function normalizeAccount(result: JsonObject): CodexAccountOutDto {
   const account = asObject(result.account);
   const type = stringValue(account.type);
   return {
@@ -883,7 +883,7 @@ function isDesktopOwnedValidationCommand(command: string): boolean {
 }
 
 /** 把全局只读开关和逐目录权限合成为官方 app-server 的精确沙箱策略。 */
-export function createSandboxPolicy(sandboxMode: SandboxMode, workspaces: WorkspaceState): JsonObject {
+export function createSandboxPolicy(sandboxMode: SandboxModeValue, workspaces: WorkspaceStateOutDto): JsonObject {
   if (sandboxMode === "read-only") return { type: "readOnly", networkAccess: false };
   const writableRoots = workspaces.roots
     .filter((root) => root.permission === "workspace-write")
@@ -900,7 +900,7 @@ export function createSandboxPolicy(sandboxMode: SandboxMode, workspaces: Worksp
 }
 
 /** 每轮显式告诉模型哪些目录已登记，避免它把相邻目录误认为已授权工作区。 */
-function workspaceContext(workspaces: WorkspaceState): string {
+function workspaceContext(workspaces: WorkspaceStateOutDto): string {
   const lines = workspaces.roots.map((root) => {
     const role = root.id === workspaces.primaryId ? "primary" : "additional";
     return `- ${root.path} (${role}, ${root.permission})`;

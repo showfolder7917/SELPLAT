@@ -1,6 +1,6 @@
-import type { EvolutionStateOutDto } from "../../../contracts/collaboration/evolution/index.js";
-import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../contracts/collaboration/hanli/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../contracts/collaboration/workflow/index.js";
+import type { EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
+import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../contracts/services/workflow/index.js";
 
 /** Workflow 端口只包含跨人物轮转、分发、恢复和生命周期动作。 */
 export interface PersonaWorkflowApplicationPort {

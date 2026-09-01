@@ -8,11 +8,11 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (relativePath) => readFileSync(path.join(appRoot, relativePath), "utf8");
 // 聚合公开入口及其领域协议正文，既验证唯一出口，也验证实际字段归属。
 const contracts = [
-  read("contracts/foundation/base.ts"),
-  read("contracts/platform/settings/index.ts"),
-  read("contracts/platform/settings/settings.ts"),
-  read("contracts/platform/codex/index.ts"),
-  read("contracts/platform/codex/codex.ts"),
+  read("contracts/foundation/value/base.value.ts"),
+  read("contracts/services/support/platform/settings/index.ts"),
+  read("contracts/services/support/platform/settings/dto/settings.out.dto.ts"),
+  read("contracts/services/support/platform/codex/index.ts"),
+  read("contracts/services/support/platform/codex/dto/codex.out.dto.ts"),
 ].join("\n");
 const store = read("electron/services/support/platform/settings/internal/settings.store.ts");
 const service = read("electron/services/support/platform/codex/codex.facade.ts");
@@ -30,8 +30,8 @@ const harnessRule = [
 
 test("全局设置持久化模型、推理强度和速度且不提供会话覆盖字段", () => {
   assert.match(contracts, /defaultModel: string \| null/);
-  assert.match(contracts, /reasoningEffort: ReasoningEffort \| null/);
-  assert.match(contracts, /serviceTier: ModelServiceTier/);
+  assert.match(contracts, /reasoningEffort: ReasoningEffortValue \| null/);
+  assert.match(contracts, /serviceTier: ModelServiceTierValue/);
   assert.match(store, /defaultModel: patch\.defaultModel/);
   assert.match(store, /DEFAULT_AI_DESKTOP_MODEL = "gpt-5\.6-terra"/);
   assert.match(store, /validModel\(value\.defaultModel\) \|\| DEFAULT_AI_DESKTOP_MODEL/);
@@ -54,7 +54,7 @@ test("模型目录来自官方 app-server 并按模型能力渲染推理强度�
   assert.match(service, /serviceTiers/);
   assert.match(service, /additionalSpeedTiers/);
   assert.match(service, /supportsFastMode === true/);
-  assert.match(contracts, /supportedServiceTiers: ModelServiceTier\[\]/);
+  assert.match(contracts, /supportedServiceTiers: ModelServiceTierValue\[\]/);
   assert.match(developer, /modelCatalog\.models\.map/);
   assert.match(developer, /supportedEfforts\.map/);
   assert.match(developer, /fastServiceTierSupported/);

@@ -1,7 +1,7 @@
-import type { CodexStreamActivity, CodexStreamEvent, CodexStreamPlanStep, ManagedExecutionMode, ManagedExecutionUpdate, ScreenshotAttachment } from "../../../../contracts/desktop/desktop";
+import type { CodexStreamActivityOutDto, CodexStreamEventOutDto, CodexStreamPlanStepOutDto, ManagedExecutionModeValue, ManagedExecutionUpdateEventOutDto, ScreenshotAttachmentOutDto } from "../../../../contracts/system/desktop/desktop";
 import type { RealtimeConversationMessage } from "./realtime-conversation";
 
-export type ComposerAttachment = ScreenshotAttachment & { dataUrl: string };
+export type ComposerAttachment = ScreenshotAttachmentOutDto & { dataUrl: string };
 
 export type Message = RealtimeConversationMessage & {
   id: number;
@@ -12,11 +12,11 @@ export type Message = RealtimeConversationMessage & {
   streamStatus?: string;
   streamError?: string;
   reasoningSummary?: string;
-  activities?: CodexStreamActivity[];
-  plan?: CodexStreamPlanStep[];
+  activities?: CodexStreamActivityOutDto[];
+  plan?: CodexStreamPlanStepOutDto[];
   changedFiles?: string[];
-  managedExecution?: ManagedExecutionUpdate;
-  managedMode?: ManagedExecutionMode;
+  managedExecution?: ManagedExecutionUpdateEventOutDto;
+  managedMode?: ManagedExecutionModeValue;
   actionTriggered?: boolean;
   turnOrder?: string[];
   turnSegments?: Record<string, string>;
@@ -35,7 +35,7 @@ export function createUserMessage(id: number, text: string, attachments: Compose
 }
 
 /** 每个真实 Harness 回合使用一张独立回复卡，禁止后续回合复用并覆盖已有文字。 */
-export function createAssistantMessage(id: number, managedMode: ManagedExecutionMode, replyToMessageId: string | null = null): Message {
+export function createAssistantMessage(id: number, managedMode: ManagedExecutionModeValue, replyToMessageId: string | null = null): Message {
   return {
     id, messageId: `codex-message-${id}`, sequenceNumber: id, replyToMessageId,
     status: "streaming", createdAt: new Date().toISOString(), role: "assistant", text: "", streaming: true,
@@ -43,7 +43,7 @@ export function createAssistantMessage(id: number, managedMode: ManagedExecution
   };
 }
 
-export function applyCodexStreamEvent(message: Message, event: CodexStreamEvent): Message {
+export function applyCodexStreamEvent(message: Message, event: CodexStreamEventOutDto): Message {
   if (message.streamTerminal && event.type !== "error") return message;
   if (event.type === "message-delta") return updateTurnSegment(message, streamItemKey(event), (current) => `${current}${event.delta || ""}`, "responding");
   if (event.type === "message-completed") return updateTurnSegment(message, streamItemKey(event), (current) => event.text ?? current, "responding");
@@ -61,7 +61,7 @@ export function applyCodexStreamEvent(message: Message, event: CodexStreamEvent)
   return message;
 }
 
-function streamItemKey(event: CodexStreamEvent): string {
+function streamItemKey(event: CodexStreamEventOutDto): string {
   return [event.turnId, event.itemId || event.segmentId || "default"].join(":");
 }
 
@@ -72,9 +72,9 @@ function updateTurnSegment(message: Message, turnId: string, update: (current: s
   return { ...message, text, turnOrder: order, turnSegments: segments, streaming, streamStatus };
 }
 
-export function readStoredChat(threadId: string): { executionMode: ManagedExecutionMode; messages: Message[] } | null {
+export function readStoredChat(threadId: string): { executionMode: ManagedExecutionModeValue; messages: Message[] } | null {
   try {
-    const value = JSON.parse(window.localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY) || "null") as { version?: number; threadId?: string; executionMode?: ManagedExecutionMode; messages?: unknown[] } | null;
+    const value = JSON.parse(window.localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY) || "null") as { version?: number; threadId?: string; executionMode?: ManagedExecutionModeValue; messages?: unknown[] } | null;
     if (!value || value.version !== 2 || value.threadId !== threadId || !isManagedExecutionModeValue(value.executionMode)) return null;
     const messages = (value.messages || []).flatMap((entry) => {
       if (!entry || typeof entry !== "object") return [];
@@ -89,7 +89,7 @@ export function readStoredChat(threadId: string): { executionMode: ManagedExecut
   }
 }
 
-export function writeStoredChat(threadId: string, executionMode: ManagedExecutionMode, messages: Message[]): void {
+export function writeStoredChat(threadId: string, executionMode: ManagedExecutionModeValue, messages: Message[]): void {
   window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, JSON.stringify({ version: 2, threadId, executionMode, messages }));
 }
 
@@ -98,11 +98,11 @@ export function clearStoredChat(): void {
   RETIRED_CHAT_STORAGE_KEYS.forEach((storageKey) => window.localStorage.removeItem(storageKey));
 }
 
-function isManagedExecutionModeValue(value: unknown): value is ManagedExecutionMode {
+function isManagedExecutionModeValue(value: unknown): value is ManagedExecutionModeValue {
   return value === "conversation-managed" || value === "requirement-managed" || value === "task-managed" || value === "test-managed";
 }
 
-export function managedModeForCommand(command: string, current: ManagedExecutionMode): ManagedExecutionMode | null {
+export function managedModeForCommand(command: string, current: ManagedExecutionModeValue): ManagedExecutionModeValue | null {
   const normalized = command.trim();
   if (normalized === "1") return nextManagedMode(current);
   if (current === "conversation-managed" && normalized === "就是这意思") return "requirement-managed";
@@ -111,13 +111,13 @@ export function managedModeForCommand(command: string, current: ManagedExecution
   return null;
 }
 
-export function nextManagedMode(current: ManagedExecutionMode): ManagedExecutionMode {
+export function nextManagedMode(current: ManagedExecutionModeValue): ManagedExecutionModeValue {
   if (current === "conversation-managed") return "requirement-managed";
   if (current === "requirement-managed") return "task-managed";
   return "test-managed";
 }
 
-function upsertStreamActivity(current: CodexStreamActivity[], incoming: CodexStreamActivity): CodexStreamActivity[] {
+function upsertStreamActivity(current: CodexStreamActivityOutDto[], incoming: CodexStreamActivityOutDto): CodexStreamActivityOutDto[] {
   const index = current.findIndex((activity) => activity.id === incoming.id);
   if (index < 0) return [...current, incoming].slice(-12);
   const next = [...current];

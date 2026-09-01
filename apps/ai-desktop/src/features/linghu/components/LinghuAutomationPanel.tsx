@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 import { Add24Regular, ShieldCheckmark24Regular } from "@fluentui/react-icons";
 
 // 页面只消费跨进程公开协议，不直接依赖 Electron 主进程中的令狐实现。
-import type { LinghuAutomationStateOutDto, LinghuStartupPromptOutDto, Locale } from "../../../../contracts/desktop/desktop";
+import type { LinghuAutomationStateOutDto, LinghuStartupPromptOutDto, LocaleValue } from "../../../../contracts/system/desktop/desktop";
 // 删除文案必须复用 SEL UI 的确认窗口，避免浏览器原生弹窗破坏统一交互。
 import { useSelUi } from "../../../theme/SelUiProvider";
 
@@ -19,7 +19,7 @@ export function LinghuAutomationPanel({ state, locale, onState }: {
   // `state` 是主进程推送的权威快照，页面不能自行推进循环或恢复次数。
   state: LinghuAutomationStateOutDto;
   // `locale` 决定中文或日文显示，不改变令狐业务状态。
-  locale: Locale;
+  locale: LocaleValue;
   // `onState` 把主进程返回的新快照交回页面上层保存。
   onState(state: LinghuAutomationStateOutDto): void;
 }) {
@@ -134,19 +134,19 @@ export function LinghuAutomationPanel({ state, locale, onState }: {
 }
 
 /** 把稳定模块编码翻译成人能理解的名称，不参与业务状态判断。 */
-function linghuModuleLabel(module: LinghuAutomationStateOutDto["currentModule"], locale: Locale): string {
+function linghuModuleLabel(module: LinghuAutomationStateOutDto["currentModule"], locale: LocaleValue): string {
   // 编码到双语名称的映射固定在令狐页面模块内，避免 Developer 壳层散落人物文案。
   const labels = {
     "flow-completion": { ja: "自動フロー完遂", "zh-CN": "自动流程完成保障" },
     "test-coverage": { ja: "テスト漏れと能力改善", "zh-CN": "测试漏点与能力升级" },
     "audit-completeness": { ja: "監査ログ完全性", "zh-CN": "日志审计完整性" },
   } as const;
-  // `Locale` 与映射键一致，因此可以直接返回当前语言文本。
+  // `LocaleValue` 与映射键一致，因此可以直接返回当前语言文本。
   return labels[module][locale];
 }
 
 /** 格式化令狐最后检查时间；空值明确表示仍在等待第一轮检查。 */
-function formatLinghuTime(value: string | null, locale: Locale): string {
+function formatLinghuTime(value: string | null, locale: LocaleValue): string {
   // 空时间不是错误，而是自动保障尚未产生检查事实。
   if (!value) return locale === "ja" ? "進行中" : "进行中";
   // 先解析 ISO 时间，损坏的历史值保留原文，方便用户和开发者排查。

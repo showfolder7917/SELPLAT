@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { CollaborationTask } from "../../../../../../contracts/collaboration/workflow/index.js";
-import type { ReleaseBatchDocument } from "../../../../../../contracts/capabilities/release/index.js";
+import type { CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
+import type { ReleaseBatchDocumentOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
 
 /** 发布批次文档由发布协调器单点维护，运行中可追踪，结束后进入长期发布归档。 */
 export class ReleaseBatchStore {
@@ -14,8 +14,8 @@ export class ReleaseBatchStore {
     this.#archiveRoot = path.join(path.resolve(archiveLogRoot), "发布归档");
   }
 
-  create(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTask[], initiatorMemberId: string): ReleaseBatchDocument {
-    const document: ReleaseBatchDocument = {
+  create(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTaskOutDto[], initiatorMemberId: string): ReleaseBatchDocumentOutDto {
+    const document: ReleaseBatchDocumentOutDto = {
       releaseBatchId, version, generation, state: "frozen", initiatorMemberId,
       candidateBranch: null, candidateSha: null, localMergeSha: null, executable: null,
       tasks: tasks.map((task) => ({ taskId: task.taskId, title: task.snapshot.title, branchName: task.versionWorkspace?.branchName || null, resultSha: task.versionWorkspace?.resultSha || null })),
@@ -25,7 +25,7 @@ export class ReleaseBatchStore {
     return document;
   }
 
-  write(document: ReleaseBatchDocument): void {
+  write(document: ReleaseBatchDocumentOutDto): void {
     const runningRoot = path.join(this.#runningRoot, document.releaseBatchId);
     const root = document.completedAt
       ? path.join(this.#archiveRoot, document.startedAt.slice(0, 7), document.releaseBatchId)
@@ -47,7 +47,7 @@ export class ReleaseBatchStore {
       for (const batch of readdirSync(monthRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
         const documentPath = path.join(monthRoot, batch.name, "发布批次文档.json");
         if (!existsSync(documentPath)) continue;
-        const document = JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocument;
+        const document = JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocumentOutDto;
         if (document.state === "failed" && document.candidateBranch) branches.add(document.candidateBranch);
       }
     }

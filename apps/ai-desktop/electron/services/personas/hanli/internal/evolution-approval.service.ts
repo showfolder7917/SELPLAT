@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 
-import type { CollaborationTimelineBusinessEvent } from "../../../../../contracts/collaboration/workflow/index.js";
-import type { EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionFeedbackTarget, EvolutionProposal, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../contracts/services/workflow/index.js";
+import type { EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionFeedbackTargetValue, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { EvolutionStatePort } from "../../../evolution/index.js";
 
-type TimelineSink = (event: CollaborationTimelineBusinessEvent) => void;
+type TimelineSink = (event: CollaborationTimelineBusinessEventOutDto) => void;
 
 /** 方向审批唯一服务：只写申请、决定和补充待办，不规划或分发任务。 */
 export class EvolutionApprovalService {
@@ -20,11 +20,11 @@ export class EvolutionApprovalService {
 
   decide(
     proposalId: string,
-    decision: EvolutionApprovalDecision,
+    decision: EvolutionApprovalDecisionValue,
     advice: string,
-    source: EvolutionApprovalSource,
+    source: EvolutionApprovalSourceValue,
     referencedApprovalIds: string[],
-    feedbackTarget: EvolutionFeedbackTarget = "proposal-content",
+    feedbackTarget: EvolutionFeedbackTargetValue = "proposal-content",
     capabilityScope = "",
   ): EvolutionStateOutDto {
     const next = this.store.decide(proposalId, decision, advice, source, referencedApprovalIds, feedbackTarget, capabilityScope);
@@ -64,7 +64,7 @@ export class EvolutionApprovalService {
     return next;
   }
 
-  #publishApplication(state: EvolutionStateOutDto, proposal: EvolutionProposal): void {
+  #publishApplication(state: EvolutionStateOutDto, proposal: EvolutionProposalOutDto): void {
     const topic = requireTopic(state, proposal.topicId);
     const manual = !(proposal.origin === "linghu" ? state.automaticLinghuApprovalEnabled : state.automaticNangongApprovalEnabled);
     this.timeline?.({
@@ -83,7 +83,7 @@ export class EvolutionApprovalService {
     });
   }
 
-  #publishSupplementWaiting(state: EvolutionStateOutDto, proposal: EvolutionProposal, advice: string, occurredAt: string): void {
+  #publishSupplementWaiting(state: EvolutionStateOutDto, proposal: EvolutionProposalOutDto, advice: string, occurredAt: string): void {
     const topic = requireTopic(state, proposal.topicId);
     const automatic = state.automaticEvolutionEnabled || state.oneShotRun?.status === "running";
     this.timeline?.({
@@ -103,7 +103,7 @@ export class EvolutionApprovalService {
     });
   }
 
-  #publishSupplementCompleted(state: EvolutionStateOutDto, revision: EvolutionProposal): void {
+  #publishSupplementCompleted(state: EvolutionStateOutDto, revision: EvolutionProposalOutDto): void {
     const previousId = revision.supersedesProposalId!;
     const previous = requireProposal(state, previousId);
     const feedback = previous.approvals.at(-1);
@@ -130,7 +130,7 @@ export class EvolutionApprovalService {
   }
 }
 
-function group(topic: EvolutionStateOutDto["topics"][number], proposal: EvolutionProposal, status: CollaborationTimelineBusinessEvent["group"]["status"], summary: string, updatedAt: string): CollaborationTimelineBusinessEvent["group"] {
+function group(topic: EvolutionStateOutDto["topics"][number], proposal: EvolutionProposalOutDto, status: CollaborationTimelineBusinessEventOutDto["group"]["status"], summary: string, updatedAt: string): CollaborationTimelineBusinessEventOutDto["group"] {
   return { groupId: `topic:${topic.topicId}`, topicId: topic.topicId, proposalId: proposal.proposalId, title: topic.title, status, summary, startedAt: topic.createdAt, updatedAt };
 }
 function person(memberId: string, displayName: string) { return { memberId, displayName }; }
