@@ -35,13 +35,13 @@ test("业务日志把代码级验证缺失标记为部分完成，而不把待�
     audit.recordStreamEvent(taskId, {
       type: "diff-updated",
       turnId: "turn-1",
-      changedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"],
+      changedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"],
     });
     audit.finishTask(taskId, "completed");
 
     const info = audit.info();
     assert.equal(info.latestTask?.status, "partial");
-    assert.deepEqual(info.latestTask?.changedFiles, ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"]);
+    assert.deepEqual(info.latestTask?.changedFiles, ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"]);
     const codes = info.latestTask?.reasons.map((reason) => reason.code) || [];
     assert.ok(codes.includes("static_check_not_observed"));
     assert.ok(codes.includes("targeted_test_not_observed"));

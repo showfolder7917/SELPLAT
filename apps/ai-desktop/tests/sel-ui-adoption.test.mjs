@@ -8,8 +8,12 @@ const selUiManifest = JSON.parse(read("../../../shared/frontend/sel-ui/package.j
 const selUiRegistry = JSON.parse(read("../../../shared/frontend/sel-ui/src/components/component-registry.json"));
 const themeAdapter = read("../src/theme/selUiTheme.ts");
 const entry = read("../src/main.tsx");
-const developerStyles = read("../src/variants/developer/developer.css");
-const developerApp = read("../src/variants/developer/DeveloperApp.tsx");
+const developerStyles = read("../src/applications/styles/desktop-applications.css");
+const developerApp = [
+  read("../src/applications/developer/DeveloperApplication.tsx"),
+  read("../src/features/nangong/components/NangongConversationWorkspace.tsx"),
+].join("\n");
+const evolutionApplication = read("../src/applications/evolution-workspace/EvolutionWorkspaceApplication.tsx");
 const evolutionGrids = [read("../src/features/evolution/components/EvolutionDatabaseGrid.tsx"), read("../src/features/evolution/components/EvolutionProposalGrid.tsx")].join("\n");
 const evolutionDisclosure = read("../src/features/evolution/components/EvolutionDisclosure.tsx");
 const evolutionDossier = read("../src/features/evolution/components/EvolutionTopicDossierView.tsx");
@@ -99,7 +103,7 @@ test("独立专题演化窗口通过 SELUI Tree 与 Grid 正式出口装配", ()
   assert.match(selGrid, /components\.search\?\.mount/);
   assert.match(selSearch, /function selSearchDestroy/);
   assert.match(entry, /evolution-workspace/);
-  assert.match(developerApp, /EvolutionWorkspaceWindowApp/);
+  assert.match(evolutionApplication, /EvolutionWorkspaceApplication/);
   assert.match(developerStyles, /\.evolution-window-shell/);
   assert.match(developerStyles, /\.evolution-proposal-grid-host/);
   assert.doesNotMatch(developerApp, /<aside className="dev-context">/);

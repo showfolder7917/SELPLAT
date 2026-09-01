@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.4.0 删除没有 Electron 真实所有者的 Governance 顶层例外，并固定协议按生产、维护和兼容责任归属。 -->
-rule_version = 2.4.0
+<!-- 2.5.0 固定 Renderer 按 Application、布局区域和业务控件三级拆分，variants 不再拥有生产页面。 -->
+rule_version = 2.5.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -57,6 +57,14 @@ electron_system_services_layout_contract = electron/main_and_packaged_bootstrap 
 application_lifecycle_contract = one_startApplication + one_disposeApplication + idempotent_persistence_close + stop_watchers_supervisor_persona_and_codex_before_database + test_data_reset_application_service + no_cross_domain_cleanup_in_main
 <!-- 大文件必须按业务能力和状态所有权拆分，禁止只按行数机械切割。 -->
 module_split_contract = split_by_business_capability_and_state_ownership + independently_testable_boundary + no_arbitrary_line_partition
+<!-- Renderer 的真实窗口必须由 applications 独立拥有；Application 只装配布局与 feature，禁止一个文件同时定义多个窗口或人物、协作、会话业务页面。 -->
+renderer_application_structure_contract = applications/developer + applications/evolution-workspace + applications/screenshot + one_real_window_per_application + application_composes_layout_and_features_only + no_variants_production_owner
+<!-- 代码分割后的每个 Application 必须显式加载自身控件注册和样式副作用，禁止依赖其他窗口或懒加载分支先执行。 -->
+renderer_application_runtime_dependency_contract = each_lazy_application_imports_own_control_registration_and_styles + no_cross_application_side_effect_dependency + interaction_test_each_production_application
+<!-- Developer 窗口按 Shell、ActivityBar、Explorer、Workspace、StatusBar 布局区域拆分；布局组件不得直接持有 DesktopApi 业务流程。 -->
+renderer_layout_structure_contract = applications/developer/layout/DeveloperShell_DeveloperActivityBar_DeveloperExplorer_DeveloperWorkspace_DeveloperStatusBar + layout_slots_only + no_DesktopApi_business_flow_in_layout
+<!-- 人物、协作与会话控件必须进入对应 feature；格式化和实时输出类型进入 model，Application 不得重新定义这些控件或保留兼容副本。 -->
+renderer_feature_control_ownership_contract = collaboration_components_and_model + conversation_components_and_model + features/nangong + one_owner_per_control + no_duplicate_component_definition_or_compatibility_copy
 <!-- Electron 服务顶层固定为三个核心业务区与一个 support 支撑区；support 内部三类职责继续隔离，跨区只能经过目标模块 index。 -->
 electron_service_zone_contract = personas + evolution + workflow + support/application_capabilities_platform + public_index_only_cross_zone_import + support_platform_no_reverse_business_dependency + no_root_service_implementation
 <!-- 南宫、韩立和令狐必须作为 personas 下并列一级模块存在；每个人物只公开自己的 Facade、Runtime 工厂和必要 Port 类型，禁止人物之间导入 internal 或具体 Facade 文件。 -->

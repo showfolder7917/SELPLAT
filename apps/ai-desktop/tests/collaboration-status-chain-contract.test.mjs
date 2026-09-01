@@ -2,14 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const developerSource = [
+  "../src/applications/developer/DeveloperApplication.tsx",
+  "../src/features/conversation/components/CollaborationStatusChain.tsx",
+  "../src/features/conversation/components/StreamDetails.tsx",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const coordinatorSource = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const integrationSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const contractSource = readFileSync(new URL("../contracts/services/workflow/index.ts", import.meta.url), "utf8");
 const contractDefinitionSource = readFileSync(new URL("../contracts/services/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
 const contractValueSource = readFileSync(new URL("../contracts/services/workflow/value/collaboration-task.value.ts", import.meta.url), "utf8");
 const taskGroupSource = readFileSync(new URL("../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
-const developerStyles = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
+const developerStyles = readFileSync(new URL("../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 
 test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
   assert.match(developerSource, /collaborationTaskId/);

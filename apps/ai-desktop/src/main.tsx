@@ -30,10 +30,10 @@ const desktopBridgeRequired = !screenshotInteractionMode;
 const Application = lazy(() => screenshotInteractionMode
   ? import("../tests/interaction/ScreenshotEditorHarness").then(({ ScreenshotEditorHarness }) => ({ default: ScreenshotEditorHarness }))
   : screenshotMode
-  ? import("./variants/developer/ScreenshotWindowApp").then(({ ScreenshotWindowApp }) => ({ default: ScreenshotWindowApp }))
+  ? import("./applications/screenshot/ScreenshotApplication").then(({ ScreenshotApplication }) => ({ default: ScreenshotApplication }))
   : evolutionWorkspaceMode
-  ? import("./variants/developer/DeveloperApp").then(({ EvolutionWorkspaceWindowApp }) => ({ default: EvolutionWorkspaceWindowApp }))
-  : import("./variants/developer/DeveloperApp").then(({ DeveloperApp }) => ({ default: DeveloperApp })));
+  ? import("./applications/evolution-workspace/EvolutionWorkspaceApplication").then(({ EvolutionWorkspaceApplication }) => ({ default: EvolutionWorkspaceApplication }))
+  : import("./applications/developer/DeveloperApplication").then(({ DeveloperApplication }) => ({ default: DeveloperApplication })));
 
 const root = createRoot(document.getElementById("root")!);
 if (desktopBridgeRequired && !window.desktop) {

@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const developerApp = [
+  "../src/applications/developer/DeveloperApplication.tsx",
+  "../src/features/collaboration/components/CollaborationTaskProgressView.tsx",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const progressModel = readFileSync(new URL("../src/features/collaboration/model/collaboration-task-progress.ts", import.meta.url), "utf8");
-const developerStyles = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
+const developerStyles = readFileSync(new URL("../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 
 test("人物页以真实五环节进度替代整页报告", () => {
   for (const stageId of ["intent", "approval", "execution", "repair", "unified-test"]) {

@@ -26,7 +26,15 @@ import { controlledTestRoot, projectRoot } from "./test-paths.mjs";
 
 const controlledTempRoot = controlledTestRoot;
 mkdirSync(controlledTempRoot, { recursive: true });
-const developerSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const rendererCollaborationSources = [
+  "../src/applications/developer/DeveloperApplication.tsx",
+  "../src/features/collaboration/components/CollaborationExecutionList.tsx",
+  "../src/features/collaboration/components/CollaborationTaskDetail.tsx",
+  "../src/features/collaboration/components/CollaborationMemberPage.tsx",
+  "../src/features/collaboration/components/CollaborationTaskProgressView.tsx",
+  "../src/features/conversation/components/CollaborationStatusChain.tsx",
+];
+const developerSource = rendererCollaborationSources.map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const coordinatorSource = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const integrationPipelineSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const releaseBatchStoreSource = readFileSync(new URL("../electron/services/support/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
@@ -1710,7 +1718,7 @@ test("协同编排保持独立执行连接、心跳和整轮封存集成契约",
   const sessions = readFileSync(new URL("../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
   const workspaces = readFileSync(new URL("../electron/services/support/capabilities/release/internal/version-workspace.manager.ts", import.meta.url), "utf8");
   const integrationVerifier = readFileSync(new URL("../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
-  const ui = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+  const ui = rendererCollaborationSources.map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
   assert.match(sessions, /new CodexService/);
   assert.match(sessions, /codexHome: this\.#options\.codexHome/);
   assert.match(sessions, /serviceName: "selplat_ai_desktop_collaboration"/);

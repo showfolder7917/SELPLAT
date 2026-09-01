@@ -5,9 +5,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 
-const component = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const component = readFileSync(new URL("../src/applications/developer/DeveloperApplication.tsx", import.meta.url), "utf8");
 const settingsPanel = readFileSync(new URL("../src/features/settings/components/SettingsFloatingPanel.tsx", import.meta.url), "utf8");
-const styles = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const floatingPanel = readFileSync(new URL("../../../shared/frontend/sel-ui/src/components/floating-panel/selFloatingPanel.js", import.meta.url), "utf8");
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const selplatRoot = path.resolve(appRoot, "../..");

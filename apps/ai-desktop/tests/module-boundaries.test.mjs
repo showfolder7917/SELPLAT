@@ -5,6 +5,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const projectAgents = readFileSync(path.join(appRoot, "../../AGENTS.md"), "utf8");
+const activeStableUserId = projectAgents.match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
+assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 
 function source(relativePath) {
   return readFileSync(path.join(appRoot, relativePath), "utf8");
@@ -160,7 +163,7 @@ test("Nangong memory keeps internal intent without rendering it as user-authored
   const migration = source("db/sql/schema-AiDesktopCurrent.sql");
   const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");
   const main = source("electron/system/bootstrap/application-runtime.ts");
-  const app = source("src/variants/developer/DeveloperApp.tsx");
+  const app = source("src/applications/developer/DeveloperApplication.tsx");
   assert.match(migration, /content TEXT NOT NULL/);
   assert.match(migration, /contentPreview TEXT NOT NULL/);
   assert.match(migration, /inferredIntent TEXT/);
@@ -224,14 +227,28 @@ test("统一对话语料不吸收专题审批任务测试与异常业务投影",
 });
 
 test("renderer feature logic is no longer owned by the developer shell", () => {
-  const developerApp = source("src/variants/developer/DeveloperApp.tsx");
+  const developerApp = source("src/applications/developer/DeveloperApplication.tsx");
+  const architectureRule = source(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop架构边界与客户规则交付规则.md`);
   assert.doesNotMatch(developerApp, /function applyCodexStreamEvent/);
   assert.doesNotMatch(developerApp, /function readStoredChat/);
   assert.match(developerApp, /features\/conversation\/model\/chat-message/);
   assert.match(developerApp, /features\/collaboration\/model\/collaboration-task-progress/);
   assert.match(developerApp, /features\/settings\/components\/SettingsFloatingPanel/);
-  assert.match(developerApp, /features\/evolution\/components\/EvolutionRevisionPanels/);
-  assert.match(developerApp, /features\/evolution\/components\/EvolutionControlWorkspace/);
+  assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /evolution\/components\/EvolutionRevisionPanels/);
+  assert.match(architectureRule, /rule_version = 2\.5\.0/);
+  assert.match(architectureRule, /renderer_application_structure_contract/);
+  assert.match(architectureRule, /renderer_application_runtime_dependency_contract/);
+  assert.match(architectureRule, /renderer_layout_structure_contract/);
+  assert.match(architectureRule, /renderer_feature_control_ownership_contract/);
+  assert.equal(sourceFilesUnder("src/variants/developer").length, 0, "variants/developer 不得继续拥有生产源码");
+  for (const application of ["developer/DeveloperApplication.tsx", "evolution-workspace/EvolutionWorkspaceApplication.tsx", "screenshot/ScreenshotApplication.tsx"]) {
+    assert.equal(existsSync(path.join(appRoot, "src/applications", application)), true, `缺少 Renderer Application：${application}`);
+  }
+  const evolutionApplication = source("src/applications/evolution-workspace/EvolutionWorkspaceApplication.tsx");
+  for (const runtimeDependency of ["core/kernel", "components/tooltip", "components/context-menu", "components/tree", "components/grid", "components/search", "components/disclosure"]) {
+    assert.match(evolutionApplication, new RegExp(runtimeDependency.replace("/", "\\/")), `专题演化 Application 缺少自身运行依赖：${runtimeDependency}`);
+  }
+  assert.match(source("src/applications/evolution-workspace/EvolutionWorkspaceApplication.tsx"), /features\/evolution\/components\/EvolutionControlWorkspace/);
   const controlWorkspace = source("src/features/evolution/components/EvolutionControlWorkspace.tsx");
   assert.match(controlWorkspace, /EvolutionTreeNavigation/);
   assert.match(controlWorkspace, /EvolutionDatabaseGrid/);
@@ -248,7 +265,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.doesNotMatch(developerApp, /function EvolutionProposalDetail|function EvolutionTopicDossierView|function HanLiEvolutionApprovalPanel/);
   assert.doesNotMatch(developerApp, /function MemberSelfUpgradePanel|function LinghuRepairProposalPanel/);
   assert.doesNotMatch(developerApp, /function LinghuAutomationPanel|function linghuModuleLabel/);
-  assert.match(developerApp, /features\/linghu/);
+  assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /features\/linghu|\.\.\/\.\.\/linghu/);
   assert.equal(existsSync(path.join(appRoot, "src/features/linghu/index.ts")), true);
   assert.equal(existsSync(path.join(appRoot, "electron/services/personas/linghu/index.ts")), true);
   assert.equal(existsSync(path.join(appRoot, "electron/services/personas/linghu/linghu-automation.facade.ts")), true);
@@ -458,7 +475,7 @@ test("核心业务区与 support 支撑区只通过唯一 index 交叉协作且�
     assert.equal(existsSync(path.join(appRoot, "electron/services", oldRoot)), false, `旧服务目录必须删除：${oldRoot}`);
   }
   assert.equal(existsSync(path.join(appRoot, "contracts/codex")), false, "旧 Codex Contracts 目录必须删除");
-  assert.doesNotMatch(source("src/variants/developer/DeveloperApp.tsx"), /electron\/services|ipcRenderer/u);
+  assert.doesNotMatch(source("src/applications/developer/DeveloperApplication.tsx"), /electron\/services|ipcRenderer/u);
 });
 
 test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow", () => {

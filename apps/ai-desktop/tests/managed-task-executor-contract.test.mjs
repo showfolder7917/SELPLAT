@@ -20,7 +20,11 @@ const ipc = [
   "../electron/system/ipc/domains/register-codex-ipc.ts",
   "../electron/system/ipc/domains/register-system-ipc.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
-const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const developerApp = [
+  "../src/applications/developer/DeveloperApplication.tsx",
+  "../src/features/conversation/components/ManagedStageAction.tsx",
+  "../src/features/conversation/components/StreamDetails.tsx",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const chatMessageModel = readFileSync(new URL("../src/features/conversation/model/chat-message.ts", import.meta.url), "utf8");
 
 test("任务依赖链接只由统一租约释放入口清理", () => {
@@ -29,7 +33,7 @@ test("任务依赖链接只由统一租约释放入口清理", () => {
   assert.doesNotMatch(taskWorktreeTestRunner, /existsSync\(dependencyLink\)/);
 });
 
-const markdownMessage = readFileSync(new URL("../src/variants/developer/MarkdownMessage.tsx", import.meta.url), "utf8");
+const markdownMessage = readFileSync(new URL("../src/features/conversation/components/MarkdownMessage.tsx", import.meta.url), "utf8");
 const interactionPreload = readFileSync(new URL("./interaction/isolated-preload.cjs", import.meta.url), "utf8");
 const interactionSpec = readFileSync(new URL("./interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
 const audit = readFileSync(new URL("../electron/services/support/capabilities/event-center/internal/audit/business-audit-log.ts", import.meta.url), "utf8");

@@ -23,7 +23,10 @@ const mainSource = [
   "../electron/system/bootstrap/startup-context.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const mainWindowSource = readFileSync(new URL("../electron/system/window/create-main-window.ts", import.meta.url), "utf8");
-const developerAppSource = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const developerAppSource = [
+  "../src/applications/developer/DeveloperApplication.tsx",
+  "../src/applications/developer/layout/DeveloperShell.tsx",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 
 test("全部开发版打包入口自动注入稳定 SELPLAT 工程根", () => {
   assert.equal(developerConfig.extraMetadata.selplatDevelopmentRoot, expectedDevelopmentRoot);

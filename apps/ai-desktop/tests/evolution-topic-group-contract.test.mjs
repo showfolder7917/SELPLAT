@@ -4,7 +4,7 @@ import test from "node:test";
 
 const groupSource = readFileSync(new URL("../src/features/evolution/components/EvolutionTopicGroupView.tsx", import.meta.url), "utf8");
 const workspaceSource = readFileSync(new URL("../src/features/evolution/components/EvolutionControlWorkspace.tsx", import.meta.url), "utf8");
-const styles = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 
 test("专题协作群独立于南宫婉个人聊天并按专题折叠展示真实交接", () => {
   assert.match(workspaceSource, /manual-group.*专题协作群/);

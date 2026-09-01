@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const component = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
-const styles = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
+const component = [
+  "../src/applications/developer/DeveloperApplication.tsx",
+  "../src/applications/developer/layout/DeveloperShell.tsx",
+  "../src/applications/developer/layout/DeveloperActivityBar.tsx",
+  "../src/applications/developer/layout/DeveloperExplorer.tsx",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
+const styles = readFileSync(new URL("../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const projectAgents = readFileSync(new URL("../../../AGENTS.md", import.meta.url), "utf8");
 const activeUser = projectAgents.match(/^- 当前稳定用户 ID：`([^`]+)`$/m)?.[1];
 if (!activeUser) throw new Error("AGENTS.md 未声明当前稳定用户 ID。");
@@ -38,7 +43,7 @@ test("资源管理器宽度支持拖拽和键盘调整", () => {
 test("工作区与任务使用单一活动分区并让当前分区置顶占满", () => {
   assert.match(component, /activeExplorerSection/);
   assert.match(component, /setActiveExplorerSection\(\(current\) => current === section \? null : section\)/);
-  assert.match(component, /active-\$\{activeExplorerSection \?\? "none"\}/);
+  assert.match(component, /active-\$\{activeSection \?\? "none"\}/);
   assert.match(component, /aria-controls="developer-task-list"/);
   assert.match(component, /aria-expanded=\{tasksSectionExpanded\}/);
   assert.match(component, /id="developer-task-list"/);

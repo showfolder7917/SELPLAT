@@ -113,7 +113,7 @@ const createCompletedEvolutionTask = (proposal) => {
     taskId: `interaction-evolution-task-${Date.now()}`, taskRevision: 1, state: "integrated", phase: "ready", evolutionProposalId: proposal.proposalId,
     initiator: { memberId: "nangong-wan", displayName: "南宫婉" },
     snapshot: { title: proposal.title, problemStatement: "演化课题等待执行。", confirmedIntent: proposal.content, constraints: [], acceptanceCriteria: proposal.acceptanceCriteria, sourceMessageIds: [], attachmentIds: [], workspaceState: workspace, locale: "zh-CN", contentHash: "interaction-evolution" },
-    executionRecords: [{ assignmentId: "interaction-evolution-assignment", executor: { memberId: "isolated-member-4", displayName: "宋玉" }, workerGeneration: 1, status: "code-verified", assignedAt: now, executionStartedAt: now, completedAt: now, transferFromAssignmentId: null, handoffType: "initial", result: "演化任务已完成", blockingReason: null, changedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"] }],
+    executionRecords: [{ assignmentId: "interaction-evolution-assignment", executor: { memberId: "isolated-member-4", displayName: "宋玉" }, workerGeneration: 1, status: "code-verified", assignedAt: now, executionStartedAt: now, completedAt: now, transferFromAssignmentId: null, handoffType: "initial", result: "演化任务已完成", blockingReason: null, changedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"] }],
     resultSummary: { outcome: "succeeded", finalResult: "南宫婉提案已经审批、分发并完成。", originalProblem: "演化方向尚未进入执行链路。", solvedProblem: "提案已通过韩立审批并形成可审计完成记录。", changes: "完成课题、提案、审批、分发和归档链路。", remaining: "无已知遗留内容。", success: true, generatedAt: now },
     finalResult: "南宫婉提案已经审批、分发并完成。", startedAt: now, createdAt: now, updatedAt: now, completedAt: now,
   };

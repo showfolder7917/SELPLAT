@@ -3,8 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const screenshotEditor = readFileSync(new URL("../src/features/screenshot/components/ScreenshotEditor.tsx", import.meta.url), "utf8");
-const screenshotWindow = readFileSync(new URL("../src/variants/developer/ScreenshotWindowApp.tsx", import.meta.url), "utf8");
-const developerApp = readFileSync(new URL("../src/variants/developer/DeveloperApp.tsx", import.meta.url), "utf8");
+const screenshotWindow = readFileSync(new URL("../src/applications/screenshot/ScreenshotApplication.tsx", import.meta.url), "utf8");
+const developerApp = [
+  "../src/applications/developer/DeveloperApplication.tsx",
+  "../src/features/conversation/components/CodexUserInputPanel.tsx",
+  "../src/features/nangong/components/NangongConversationWorkspace.tsx",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const codexService = readFileSync(new URL("../electron/services/support/platform/codex/codex.facade.ts", import.meta.url), "utf8");
 const ipc = [
   "../electron/system/ipc/register-desktop-ipc.ts",
@@ -18,7 +22,7 @@ const preload = [
   "../electron/system/preload/domains/system-bridge.cts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const executor = readFileSync(new URL("../electron/services/support/capabilities/execution/internal/managed-task.executor.ts", import.meta.url), "utf8");
-const developerCss = readFileSync(new URL("../src/variants/developer/developer.css", import.meta.url), "utf8");
+const developerCss = readFileSync(new URL("../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const mainEntry = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
 
 test("截图编辑器使用可编辑红框并只在选中状态显示完成取消", () => {

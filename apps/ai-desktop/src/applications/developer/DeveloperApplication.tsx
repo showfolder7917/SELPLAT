@@ -56,7 +56,6 @@ import type {
   ManagedExecutionModeValue,
   EvolutionStateOutDto,
   EvolutionStateEventOutDto,
-  EvolutionWorkspaceLocationOutDto,
   ModelServiceTierValue,
   ReasoningEffortValue,
   SandboxModeValue,
@@ -69,19 +68,31 @@ import type {
   WorkspacePermissionValue,
   WorkspaceStateOutDto,
 } from "../../../contracts/system/desktop/index";
-import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, createUserMessage, managedModeForCommand, nextManagedMode, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "../../features/conversation/model/chat-message";
-import { mergeRealtimeConversationTimeline } from "../../features/conversation/model/realtime-conversation";
+import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, createUserMessage, managedModeForCommand, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "../../features/conversation/model/chat-message";
 import { SelUiConversation } from "../../features/conversation/components/SelUiConversation";
-import { MarkdownMessage } from "./MarkdownMessage";
-import { deriveCollaborationTaskCurrentStage, deriveCollaborationTaskProgress, type CollaborationProgressStageId } from "../../features/collaboration/model/collaboration-task-progress";
+import { MarkdownMessage } from "../../features/conversation/components/MarkdownMessage";
+import { CodexUserInputPanel } from "../../features/conversation/components/CodexUserInputPanel";
+import { ManagedStageAction } from "../../features/conversation/components/ManagedStageAction";
+import { managedModeLabel, StreamDetails } from "../../features/conversation/components/StreamDetails";
+import { CollaborationStatusChain } from "../../features/conversation/components/CollaborationStatusChain";
+import { deriveCollaborationTaskCurrentStage } from "../../features/collaboration/model/collaboration-task-progress";
+import type { CollaborationLiveOutput } from "../../features/collaboration/model/collaboration-live-output";
+import { collaborationExecutionStatusLabel, collaborationExecutorNames, collaborationMemberStateLabel, collaborationPlanStatusLabel, collaborationTaskStateLabel, formatCollaborationDuration, formatCollaborationTime } from "../../features/collaboration/model/collaboration-formatters";
+import { CollaborationTaskProgressView } from "../../features/collaboration/components/CollaborationTaskProgressView";
+import { CollaborationExecutionList } from "../../features/collaboration/components/CollaborationExecutionList";
+import { CollaborationTaskDetail } from "../../features/collaboration/components/CollaborationTaskDetail";
+import { CollaborationMemberPage } from "../../features/collaboration/components/CollaborationMemberPage";
 import { TaskCollaborationGroup } from "../../features/collaboration/components/TaskCollaborationGroup";
-import { MemberSelfUpgradePanel } from "../../features/evolution/components/EvolutionRevisionPanels";
-import { LinghuAutomationPanel, LinghuRepairProposalPanel } from "../../features/linghu";
-import { EvolutionControlWorkspace } from "../../features/evolution/components/EvolutionControlWorkspace";
-import { defaultEvolutionWorkspaceLocation, evolutionMutationRequest, evolutionWorkspaceLocationFromSearch, evolutionWorkspaceLocationSearch } from "../../features/evolution/model/evolution-workbench";
+import { defaultEvolutionWorkspaceLocation, evolutionMutationRequest } from "../../features/evolution/model/evolution-workbench";
 import { SettingsFloatingPanel } from "../../features/settings/components/SettingsFloatingPanel";
-import { ChatGPTLoginAction, WindowControls } from "../../features/shell/components/DesktopChrome";
+import { ChatGPTLoginAction } from "../../features/shell/components/DesktopChrome";
+import { DeveloperShell, DeveloperTitleBar } from "./layout/DeveloperShell";
+import { DeveloperActivityBar } from "./layout/DeveloperActivityBar";
+import { DeveloperStatusBar } from "./layout/DeveloperStatusBar";
+import { DeveloperExplorer } from "./layout/DeveloperExplorer";
+import { DeveloperWorkspace } from "./layout/DeveloperWorkspace";
 import { RuleManagementFeature } from "../../features/rules/components/RuleManagementFeature";
+import { NangongConversationWorkspace } from "../../features/nangong/components/NangongConversationWorkspace";
 import { SelUiDialog, useSelUi } from "../../theme/SelUiProvider";
 import "@selplat/sel-ui/core/kernel";
 import "@selplat/sel-ui/components/floating-panel";
@@ -99,7 +110,7 @@ import "@selplat/sel-ui/components/grid/styles";
 import "@selplat/sel-ui/components/search";
 import "@selplat/sel-ui/components/search/styles";
 import "@selplat/sel-ui/components/switch/styles";
-import "./developer.css";
+import "../styles/desktop-applications.css";
 
 type SelGridController = { destroy: () => boolean; setLocale?: (payload: Record<string, unknown>) => boolean };
 type SelGridApi = {
@@ -110,13 +121,6 @@ type SelGridApi = {
 type SelTooltipController = { destroy: () => boolean };
 type SelTooltipApi = {
   attach: (host: Element, options: Record<string, unknown>) => SelTooltipController | null;
-};
-
-/** 每个协同流式回合保留收到时的环节，避免状态推进后把旧报告错放到新环节。 */
-type CollaborationLiveOutput = {
-  message: Message;
-  stageId: CollaborationProgressStageId;
-  turnId: string;
 };
 
 const labels = {
@@ -156,61 +160,7 @@ function readableDesktopError(error: unknown, fallback: string): string {
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
 }
 
-/** 南宫婉与韩立共用一个独立专题演化窗口；人物入口只改变初始视角，不复制业务实现或状态。 */
-export function EvolutionWorkspaceWindowApp() {
-  const [requestedLocation, setRequestedLocation] = useState<EvolutionWorkspaceLocationOutDto>(() => evolutionWorkspaceLocationFromSearch(window.location.search));
-  const perspective = requestedLocation.perspective;
-  const [state, setState] = useState<EvolutionStateOutDto | null>(null);
-  const [workspaces, setWorkspaces] = useState<WorkspaceStateOutDto | null>(null);
-  const [nangongMember, setNangongMember] = useState<CollaborationMemberOutDto | null>(null);
-  const [locale, setLocale] = useState<LocaleValue>("zh-CN");
-  const [error, setError] = useState("");
-  useEffect(() => {
-    let active = true;
-    void Promise.all([
-      window.desktop?.getEvolutionState(),
-      window.desktop?.getWorkspaces(),
-      window.desktop?.getCollaborationState(),
-      window.desktop?.getSettings(),
-    ]).then(([nextState, nextWorkspaces, collaboration, settings]) => {
-      if (!active) return;
-      if (nextState) setState(nextState);
-      if (nextWorkspaces) setWorkspaces(nextWorkspaces);
-      if (collaboration) setNangongMember(collaboration.members.find((member) => member.memberId === "nangong-wan") || null);
-      if (settings) setLocale(settings.locale);
-    }).catch((reason) => { if (active) setError(readableDesktopError(reason, "无法打开专题演化工作台。")); });
-    const unsubscribeState = window.desktop?.onEvolutionState((event) => setState(event.state));
-    const unsubscribeCollaboration = window.desktop?.onCollaborationState((event) => setNangongMember(event.state.members.find((member) => member.memberId === "nangong-wan") || null));
-    const unsubscribeLocation = window.desktop?.onEvolutionWorkspaceLocation((location) => {
-      setRequestedLocation(location);
-      window.history.replaceState(null, "", evolutionWorkspaceLocationSearch(location));
-    });
-    return () => {
-      active = false;
-      unsubscribeState?.();
-      unsubscribeCollaboration?.();
-      unsubscribeLocation?.();
-    };
-  }, []);
-  return <div className="evolution-window-shell" lang={locale}>
-    <header className="dev-titlebar evolution-window-titlebar">
-      <div className="dev-brand"><Code24Regular /><strong>AI Desktop</strong><span>专题演化工作台</span></div>
-      <div className="operating-mode-switch evolution-perspective-switch" role="group" aria-label="工作台人物视角">
-        <button type="button" className={perspective === "nangong" ? "active" : ""} aria-pressed={perspective === "nangong"} onClick={() => { const location = defaultEvolutionWorkspaceLocation("nangong"); setRequestedLocation(location); window.history.replaceState(null, "", evolutionWorkspaceLocationSearch(location)); }}>南宫婉</button>
-        <button type="button" className={perspective === "hanli" ? "active" : ""} aria-pressed={perspective === "hanli"} onClick={() => { const location = defaultEvolutionWorkspaceLocation("hanli"); setRequestedLocation(location); window.history.replaceState(null, "", evolutionWorkspaceLocationSearch(location)); }}>韩立</button>
-      </div>
-      <WindowControls />
-    </header>
-    <main className="evolution-window-main">
-      {error && <div className="evolution-window-error" role="alert">{error}</div>}
-      {state && (perspective === "hanli" || nangongMember)
-        ? <EvolutionControlWorkspace perspective={perspective} requestedLocation={requestedLocation} onLocationChange={(location) => window.history.replaceState(null, "", evolutionWorkspaceLocationSearch(location))} member={nangongMember || undefined} state={state} workspaces={workspaces} locale={locale} onState={setState} onError={setError} />
-        : !error && <div className="evolution-window-loading" role="status">正在读取专题、审批和运行状态…</div>}
-    </main>
-  </div>;
-}
-
-export function DeveloperApp() {
+export function DeveloperApplication() {
   const selUi = useSelUi();
   const shellRef = useRef<HTMLDivElement>(null);
   const archiveDistribution = new URLSearchParams(window.location.search).get("distribution") === "archive";
@@ -1288,16 +1238,10 @@ export function DeveloperApp() {
       : selectedCollaborationMember?.displayName || (locale === "ja" ? "協同" : "协同模式");
   const nangongNewConversationLabel = locale === "ja" ? "南宮婉の会話を新しく作り直す" : "重新建立南宫婉对话";
 
-  return <div ref={shellRef} className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={shellStyle}>
-    <header className="dev-titlebar">
-      <div className="dev-brand"><Code24Regular /><strong>AI Desktop</strong><span>{text.title}</span>{archiveDistribution && <span>压缩包版</span>}</div>
-      <div className="dev-command"><Search24Regular /><span>{projectRoot}</span></div>
-      <WindowControls />
-    </header>
+  return <DeveloperShell shellRef={shellRef} explorerExpanded={explorerExpanded} locale={locale} style={shellStyle}>
+    <DeveloperTitleBar projectRoot={projectRoot} title={text.title} archiveDistribution={archiveDistribution} />
 
-    <aside className="dev-activitybar">
-      <button className="active" title={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} aria-pressed={explorerExpanded} onClick={() => setExplorerExpanded((value) => !value)}><Folder24Regular /></button><button><Search24Regular /></button><button><Branch24Regular /></button><button><Bug24Regular /></button>
-      <SettingsFloatingPanel locale={locale} open={settingsOpen} onOpenChange={setSettingsOpen}>
+    <DeveloperActivityBar explorerExpanded={explorerExpanded} filesLabel={text.files} expandLabel={text.expand} collapseLabel={text.collapse} onToggleExplorer={() => setExplorerExpanded((value) => !value)} settingsControl={<SettingsFloatingPanel locale={locale} open={settingsOpen} onOpenChange={setSettingsOpen}>
         <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button type="button" onClick={() => void logout()}><span>{text.signOut}</span></button> : <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{loginHint && <em>{loginHint}</em>}</div>
         {/* 测试数据清空是重启级危险操作，固定放在账号卡片后，避免被常规设置与长列表挤出首屏。 */}
         <div className="temp-card test-data-reset-card"><span>{testDataResetCopy[locale].title}</span><strong>{testDataResetCopy[locale].summary}</strong><small>{testDataResetCopy[locale].detail}</small>{testDataResetError && <em role="alert">{testDataResetError}</em>}<div><button className="danger" disabled={testDataResetting} onClick={() => void clearTestData()}><Delete24Regular />{testDataResetting ? testDataResetCopy[locale].busy : testDataResetCopy[locale].action}</button></div></div>
@@ -1326,14 +1270,9 @@ export function DeveloperApp() {
         <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void clearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
         <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
         <RuleManagementFeature locale={locale} />
-      </SettingsFloatingPanel>
-    </aside>
+      </SettingsFloatingPanel>} />
 
-    <aside className="dev-explorer">
-      <div className="dev-section-title explorer-title">
-        <button className="section-toggle" aria-expanded={explorerExpanded} aria-controls="developer-explorer-sections" aria-label={`${explorerExpanded ? text.collapse : text.expand}${text.files}`} onClick={() => setExplorerExpanded((value) => !value)}>{explorerExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.files}</span></button>
-      </div>
-      <div id="developer-explorer-sections" className={`dev-explorer-sections active-${activeExplorerSection ?? "none"}`}>
+    <DeveloperExplorer expanded={explorerExpanded} label={text.files} expandLabel={text.expand} collapseLabel={text.collapse} activeSection={activeExplorerSection} onToggle={() => setExplorerExpanded((value) => !value)}>
       <section className={`explorer-pane workspace-pane ${workspaceSectionExpanded ? "expanded" : "collapsed"}`}>
         <div className="dev-section-title workspace-title">
           <button className="section-toggle" aria-expanded={workspaceSectionExpanded} aria-controls="developer-workspace-list" aria-label={`${workspaceSectionExpanded ? text.collapse : text.expand}${text.workspaces}`} onClick={() => toggleExplorerSection("workspace")}>{workspaceSectionExpanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}<span>{text.workspaces}</span></button>
@@ -1384,8 +1323,7 @@ export function DeveloperApp() {
               : <span className="task-empty">{text.noAuditTask}</span>}
         </div>}
       </section>
-      </div>
-    </aside>
+    </DeveloperExplorer>
 
     {explorerExpanded && <div
       className="explorer-resizer"
@@ -1406,8 +1344,7 @@ export function DeveloperApp() {
       }}
     />}
 
-    <div className="workspace-stage-single">
-    <main className="dev-main">
+    <DeveloperWorkspace>
       <div className={`dev-tab${evolutionWorkspacePerspective ? " with-workspace-action" : ""}`}><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{evolutionWorkspacePerspective && <button type="button" className="open-evolution-workspace" onClick={() => { setEvolutionWorkspaceOpenError(""); void window.desktop?.openEvolutionWorkspace(defaultEvolutionWorkspaceLocation(evolutionWorkspacePerspective)).catch((error) => setEvolutionWorkspaceOpenError(readableDesktopError(error, "无法打开专题演化工作台。"))); }}>{locale === "ja" ? "専門進化ワークベンチ" : "打开专题演化工作台"}</button>}{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={text.newCodexSession} data-sel-tooltip-mode="always" aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}{showNangongConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={nangongNewConversationLabel} data-sel-tooltip-mode="always" aria-label={nangongNewConversationLabel} disabled={nangongNewConversationBusy} onClick={() => void startNewNangongConversation()}><ArrowClockwise24Regular className={nangongNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}<Dismiss20Regular /></div>
       {evolutionWorkspaceOpenError && <div className="evolution-window-error" role="alert">{evolutionWorkspaceOpenError} 当前数据没有被修改，请检查工作台位置参数后重试。</div>}
       {aiMemoryDatabaseStatus && aiMemoryDatabaseStatus.state !== "ready" && <div className={`ai-memory-recovery ${aiMemoryDatabaseStatus.state}`} role="alert"><strong>{locale === "ja" ? "AI Memory データベースは停止中です" : "AI Memory 数据库已停用"}</strong><span>{locale === "ja" ? "設定、移行、または整合性の問題を確認し、元のデータベースを復旧してから再起動してください。" : aiMemoryDatabaseStatus.message || "请恢复数据库后重新启动。"}</span></div>}
@@ -1438,10 +1375,9 @@ export function DeveloperApp() {
         {screenshotError && <div className="composer-error" role="alert"><span>{screenshotError}</span>{(screenRecordingSettingsAvailable || screenRecordingRestartRequired) && <div className="composer-error-actions">{screenRecordingSettingsAvailable && <button type="button" onClick={() => void openScreenRecordingSettings()}>{text.openScreenRecordingSettings}</button>}{screenRecordingRestartRequired && <button type="button" className="primary" disabled={screenRecordingRestarting} onClick={() => void restartForScreenRecordingPermission()}>{locale === "ja" ? "AI Desktop を再起動" : "重启 AI Desktop"}</button>}</div>}</div>}
         <div className="selconversation-footer"><div className="composer-tools" aria-label="输入工具栏"><div className="composer-tool-group composer-context-tools"><span><ShieldCheckmark24Regular />{sandboxMode}</span><span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span>{queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}</div><div className="composer-tool-group composer-automation-tools"><button type="button" role="switch" aria-checked={automaticTestEnabled} className="selswitch composer-automatic-test-switch" disabled={automaticTestChecking || (loading && !automaticTestEnabled)} onClick={() => void toggleAutomaticTesting()}><span>{text.automaticTest}</span><i className="selswitch-track" aria-hidden="true"><i className="selswitch-thumb" /></i></button>{(automaticTestChecking || automaticTestEnabled) && <span className="automatic-test-status" role="status">{automaticTestChecking ? text.automaticTestChecking : text.automaticTestReady}</span>}</div><div className="composer-tool-group composer-attachment-tools"><button type="button" className="screenshot-button" aria-label={text.screenshot} data-sel-tooltip={text.screenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot()}>{screenshotMode === "current" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <Screenshot24Regular />}</button><button type="button" className="screenshot-button" aria-label={text.hiddenScreenshot} data-sel-tooltip={text.hiddenScreenshot} data-sel-tooltip-mode="always" disabled={screenshotBusy} onClick={() => void startScreenshot(true)}>{screenshotMode === "hidden" ? <ArrowClockwise24Regular className="screenshot-spinner" /> : <EyeOff24Regular />}</button></div></div><div className="selconversation-actions">{loading && <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={cancelActiveTurn}><Stop24Filled /></button>}<button type="button" className="selconversation-action" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => void send()}><Send24Filled /></button></div></div>
       </form>} />}
-    </main>
-    </div>
+    </DeveloperWorkspace>
 
-    <footer className="dev-statusbar"><span><Branch24Regular /> main*</span><span>0 errors</span><span>{sandboxMode}</span><span>AI Memory {aiMemoryDatabaseStatus?.state === "ready" ? `v${aiMemoryDatabaseStatus.schemaVersion || "-"} · ${locale === "ja" ? "統合イベントセンター" : "统一事件中心"}` : (locale === "ja" ? "要復旧" : "待恢复")}</span><span>UTF-8</span></footer>
+    <DeveloperStatusBar sandboxMode={sandboxMode} memoryStatus={aiMemoryDatabaseStatus} locale={locale} />
 
     <SelUiDialog id="ai-desktop-codex-approval" open={Boolean(approval)} title={approval?.title || "Codex Approval"} kicker="CODEX APPROVAL" dismissible={false} onRequestClose={() => undefined}>
       {approval && <>{approval.reason && <p className="seldialog-copy">{approval.reason}</p>}{approval.command && <pre className="seldialog-code">{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p className="seldialog-copy">{text.trustHint}</p>}{approval.details && <details className="seldialog-detail"><summary>Details</summary><pre className="seldialog-code">{approval.details}</pre></details>}<div className="seldialog-actions"><button onClick={() => void resolveApproval("decline")}>{text.decline}</button><button data-sel-action="primary" onClick={() => void resolveApproval("accept")}>{approval.kind === "command" && approval.trustEligible ? text.approveAndTrust : text.approve}</button></div></>}
@@ -1450,343 +1386,13 @@ export function DeveloperApp() {
     <SelUiDialog id="ai-desktop-automatic-test" open={Boolean(automaticTestDialog)} title={text.automaticTestBlocked} kicker="AUTOMATIC TEST" dismissible size="compact" onRequestClose={() => setAutomaticTestDialog(null)}>
       {automaticTestDialog && <><ul className="seldialog-checks">{automaticTestDialog.checks.map((check) => <li className={check.status} key={check.id}><i /><span><strong>{check.label}</strong><small>{check.detail}</small></span></li>)}</ul><div className="seldialog-actions"><button data-sel-action="primary" onClick={() => setAutomaticTestDialog(null)}>{text.close}</button></div></>}
     </SelUiDialog>
-  </div>;
+  </DeveloperShell>;
 }
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function CollaborationExecutionList({ tasks, locale, onOpen }: { tasks: CollaborationTaskOutDto[]; locale: LocaleValue; onOpen(taskId: string): void }) {
-  if (tasks.length === 0) return <section className="collaboration-execution-page"><div className="execution-list-empty"><Document24Regular /><strong>{locale === "ja" ? "実行履歴はまだありません" : "暂无执行记录"}</strong><span>{locale === "ja" ? "完了した協同タスクはここに保存されます。" : "协同任务完成后会统一归档到这里。"}</span></div></section>;
-  return <section className="collaboration-execution-page" aria-label={locale === "ja" ? "実行一覧" : "执行列表"}>
-    <header><div><h1>{locale === "ja" ? "実行一覧" : "执行列表"}</h1><p>{locale === "ja" ? "完了した協同タスクを結果からすばやく確認できます。" : "按任务结果快速查看全部协同归档。"}</p></div><strong>{tasks.length}</strong></header>
-    <div className="execution-record-list">{tasks.map((task) => {
-      const executors = collaborationExecutorNames(task);
-      return <details className="execution-record" key={task.taskId}>
-        <summary>
-          <span className={`execution-outcome ${task.resultSummary?.success ? "success" : "failed"}`}>{task.resultSummary?.success ? (locale === "ja" ? "完了" : "成功") : (locale === "ja" ? "未完了" : "未完成")}</span>
-          <strong>{task.snapshot.title}</strong>
-          <span className="execution-record-facts"><span><small>{locale === "ja" ? "起案者" : "发起人"}</small><b>{task.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录")}</b></span><span><small>{locale === "ja" ? "実行者" : "执行人"}</small><b>{executors.join("、") || (locale === "ja" ? "未割当" : "未分配")}</b></span><span><small>{locale === "ja" ? "開始" : "开始时间"}</small><b>{formatCollaborationTime(task.startedAt, locale)}</b></span><span><small>{locale === "ja" ? "完了" : "完成时间"}</small><b>{formatCollaborationTime(task.completedAt, locale)}</b></span><span><small>{locale === "ja" ? "所要時間" : "总耗时"}</small><b>{formatCollaborationDuration(task.startedAt, task.completedAt, locale)}</b></span></span>
-        </summary>
-        <div className="execution-record-preview"><strong>{locale === "ja" ? "結果概要" : "任务结果摘要"}</strong><p>{task.resultSummary?.finalResult || task.finalResult || (locale === "ja" ? "結果概要はありません。" : "暂无结果摘要。")}</p><button type="button" onClick={() => onOpen(task.taskId)}>{locale === "ja" ? "完全な記録を開く" : "打开完整记录"}</button></div>
-      </details>;
-    })}</div>
-  </section>;
-}
-
-function CollaborationTaskDetail({ task, member, liveOutput, automation, locale, onBack }: { task: CollaborationTaskOutDto; member: CollaborationMemberOutDto; liveOutput: CollaborationLiveOutput | null; automation: LinghuAutomationStateOutDto | null; locale: LocaleValue; onBack(): void }) {
-  const summary = task.resultSummary;
-  return <section className="collaboration-task-detail" aria-label={task.snapshot.title}>
-    <header><button type="button" onClick={onBack}><ArrowReply24Regular />{locale === "ja" ? "戻る" : "返回"}</button><div><h1>{task.snapshot.title}</h1><p>{collaborationTaskStateLabel(task.state, locale)}</p></div></header>
-    {task.historyCompleteness === "legacy-partial" && <div className="history-incomplete-note">{locale === "ja" ? "旧版の記録には完全な参加者・引継ぎ履歴がありません。" : "历史版本未记录完整参与者与转交流程，以下仅展示可确认事实。"}</div>}
-    <section className={`task-result-hero ${summary?.success ? "success" : "incomplete"}`}>
-      <div><span>{locale === "ja" ? "タスク結果" : "任务结果"}</span><strong>{summary?.success ? (locale === "ja" ? "正常完了" : "成功完成") : (locale === "ja" ? "未完了・要確認" : "未完成或仍有遗留")}</strong></div>
-      <dl><div><dt>{locale === "ja" ? "最終結果" : "最终执行结果"}</dt><dd>{summary?.finalResult || task.finalResult || "—"}</dd></div><div><dt>{locale === "ja" ? "元の問題" : "原来存在的问题"}</dt><dd>{summary?.originalProblem || task.snapshot.problemStatement}</dd></div><div><dt>{locale === "ja" ? "解決した問題" : "本次解决的问题"}</dt><dd>{summary?.solvedProblem || "—"}</dd></div><div><dt>{locale === "ja" ? "変更内容" : "具体修正或改变"}</dt><dd>{summary?.changes || "—"}</dd></div><div><dt>{locale === "ja" ? "残件" : "失败或遗留内容"}</dt><dd>{summary?.remaining || (summary?.success ? (locale === "ja" ? "なし" : "无") : task.blockingReason || "—")}</dd></div></dl>
-    </section>
-    <section className="task-fact-strip"><span>{locale === "ja" ? "起案者" : "发起人"}<strong>{task.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录")}</strong></span><span>{locale === "ja" ? "実行者" : "执行人"}<strong>{collaborationExecutorNames(task).join("、") || "—"}</strong></span><span>{locale === "ja" ? "開始" : "开始"}<strong>{formatCollaborationTime(task.startedAt, locale)}</strong></span><span>{locale === "ja" ? "完了" : "完成"}<strong>{formatCollaborationTime(task.completedAt, locale)}</strong></span><span>{locale === "ja" ? "所要時間" : "总耗时"}<strong>{formatCollaborationDuration(task.startedAt, task.completedAt, locale)}</strong></span></section>
-    <CollaborationTaskProgressView task={task} member={member} liveOutput={liveOutput} automation={automation} locale={locale} />
-  </section>;
-}
-
-function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomation, nangongEvolution, nangongAttachments, workspaces, onLinghuState, onNangongState, onNangongAttachments, onNangongScreenshot, onNangongPaste, onError, onRename, onDelete, onContinue, onCancel, onOpen }: {
-  member: CollaborationMemberOutDto | null;
-  tasks: CollaborationStateOutDto["tasks"];
-  streams: Record<string, CollaborationLiveOutput>;
-  locale: LocaleValue;
-  linghuAutomation: LinghuAutomationStateOutDto | null;
-  nangongEvolution: EvolutionStateOutDto | null;
-  nangongAttachments: ComposerAttachment[];
-  workspaces: WorkspaceStateOutDto | null;
-  onLinghuState(state: LinghuAutomationStateOutDto): void;
-  onNangongState(state: EvolutionStateOutDto): void;
-  onNangongAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>;
-  onNangongScreenshot(hidden: boolean): void;
-  onNangongPaste(files: File[]): void;
-  onError(message: string): void;
-  onRename(member: CollaborationMemberOutDto): void;
-  onDelete(member: CollaborationMemberOutDto): void;
-  onContinue(taskId: string): void;
-  onCancel(taskId: string): void;
-  onOpen(taskId: string): void;
-}) {
-  if (!member) return <section className="collaboration-member-page"><p>{locale === "ja" ? "メンバーを選択してください。" : "请选择人物。"}</p></section>;
-  const orderedTasks = [...tasks].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  const currentTask = orderedTasks.find((task) => !["integrated", "cancelled"].includes(task.state)) || orderedTasks[0] || null;
-  const liveOutput = currentTask ? streams[currentTask.taskId] : null;
-  const taskInitiatorName = currentTask?.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录");
-  return <section className="collaboration-member-page" aria-label={member.displayName}>
-    <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
-    {member.memberId === "linghu-ancestor" && linghuAutomation && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}
-    {member.memberId === "linghu-ancestor" && nangongEvolution && <LinghuRepairProposalPanel state={nangongEvolution} workspaces={workspaces} locale={locale} onState={onNangongState} onError={onError} />}
-    {nangongEvolution && <MemberSelfUpgradePanel member={member} state={nangongEvolution} onState={onNangongState} onError={onError} />}
-    {(currentTask?.blockingReason || member.blockingReason) && <div className="member-blocking-reason" role="status">{currentTask?.blockingReason || member.blockingReason}</div>}
-    {currentTask ? <article className="member-current-task">
-      <details key={currentTask.taskId} className="member-task-detail">
-        <summary>{locale === "ja" ? `タスク詳細 · ${taskInitiatorName}` : `任务详细 · ${taskInitiatorName}`}</summary>
-        <div><MarkdownMessage text={currentTask.snapshot.confirmedIntent} /></div>
-      </details>
-      <CollaborationTaskProgressView task={currentTask} member={member} liveOutput={liveOutput} automation={linghuAutomation} locale={locale} />
-      <div className="member-task-actions"><button type="button" onClick={() => onOpen(currentTask.taskId)}>{locale === "ja" ? "詳細を見る" : "查看任务详情"}</button>{["recovering", "blocked", "test-failed"].includes(currentTask.state) && <button type="button" onClick={() => onContinue(currentTask.taskId)}>{currentTask.state === "test-failed" ? (locale === "ja" ? "再テスト" : "重新测试") : (locale === "ja" ? "続行" : "继续执行")}</button>}{!["integrated", "cancelled"].includes(currentTask.state) && <button type="button" className="danger" onClick={() => onCancel(currentTask.taskId)}>{locale === "ja" ? "キャンセル" : "取消任务"}</button>}</div>
-    </article> : <div className="member-empty-task"><Code24Regular /><strong>{locale === "ja" ? "待機中" : "当前空闲"}</strong><span>{locale === "ja" ? "割り当て時に新しい Codex を作成します。" : "收到任务时才会创建新的 Codex。"}</span></div>}
-    {orderedTasks.length > 1 && <section className="member-task-history"><h2>{locale === "ja" ? "過去のタスク" : "历史任务"}</h2>{orderedTasks.slice(1).map((task) => <div key={task.taskId}><strong>{task.snapshot.title}</strong><span>{collaborationTaskStateLabel(task.state, locale)}</span></div>)}</section>}
-  </section>;
-}
-
-/** 南宫婉沿用韩立主会话的消息区和输入区，只替换人物文案与专项演化发送链路。 */
-function NangongConversationWorkspace({ state, attachments, workspaces, locale, newConversationBusy, error, onState, onAttachments, onScreenshot, onPaste, onError }: { state: EvolutionStateOutDto; attachments: ComposerAttachment[]; workspaces: WorkspaceStateOutDto | null; locale: LocaleValue; newConversationBusy: boolean; error: string; onState(state: EvolutionStateOutDto): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
-  const [chatText, setChatText] = useState("");
-  const [chatBusy, setChatBusy] = useState(false);
-  const [topicDraftOpen, setTopicDraftOpen] = useState(false);
-  const [topicDraftBusy, setTopicDraftBusy] = useState(false);
-  const [topicDraftFeedback, setTopicDraftFeedback] = useState("");
-  const [outgoingMessage, setOutgoingMessage] = useState<{ messageId: string; sequenceNumber: number; content: string; attachments: ComposerAttachment[]; failed: boolean; createdAt: string } | null>(null);
-  const [attachmentPreviews, setAttachmentPreviews] = useState<Record<string, ComposerAttachment[]>>({});
-  const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
-  const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
-  const update = async (operation: () => Promise<EvolutionStateOutDto> | undefined) => {
-    onError("");
-    try { const pending = operation(); if (!pending) return; const next = await pending; onState(next); } catch (error) { onError(readableDesktopError(error, "专项演化操作失败。")); }
-  };
-  const sendChat = async (confirmedMessage?: string) => {
-    const message = confirmedMessage?.trim() || chatText.trim() || (attachments.length ? "请调查并分析这些截图中的问题。" : "");
-    if (!message || !workspaces || chatBusy) return;
-    const sentAttachments = [...attachments];
-    const clientMessageId = `nangong-message-${crypto.randomUUID()}`;
-    const createdAt = new Date().toISOString();
-    // 用户点击发送后立即把文字和图片移入消息区，输入框不再承担后台等待状态。
-    setChatBusy(true);
-    setChatText("");
-    onAttachments([]);
-    setOutgoingMessage({ messageId: clientMessageId, sequenceNumber: state.conversation.messages.length, content: message, attachments: sentAttachments, failed: false, createdAt });
-    onError("");
-    try {
-      const next = await window.desktop?.sendNangongConversationMessage({ clientMessageId, message, attachmentIds: sentAttachments.map((item) => item.id), workspaceState: workspaces, locale });
-      if (!next) throw new Error("南宫婉会话服务未返回结果。");
-      const persisted = next.conversation.messages.find((item) => item.messageId === clientMessageId);
-      if (persisted && sentAttachments.length) setAttachmentPreviews((current) => ({ ...current, [persisted.messageId]: sentAttachments }));
-      onState(next);
-      setOutgoingMessage(null);
-    } catch (error) {
-      setOutgoingMessage((current) => current ? { ...current, failed: true } : null);
-      onError(readableDesktopError(error, "发送给南宫婉失败。"));
-    } finally { setChatBusy(false); }
-  };
-  const convertChat = async () => {
-    if (!workspaces || !state.conversation.messages.length) return;
-    const title = topicDraft.title.trim();
-    const goal = topicDraft.goal.trim();
-    const scope = splitEvolutionList(topicDraft.scope);
-    const evidence = splitEvolutionList(topicDraft.evidence);
-    const acceptanceCriteria = splitEvolutionList(topicDraft.acceptanceCriteria);
-    if (!title || !goal || !scope.length || !evidence.length || !acceptanceCriteria.length) return onError("标题、目标、影响范围、事实证据和验收条件必须完整填写。");
-    await update(() => window.desktop?.convertNangongConversationToTopic({ confirmedByUser: true, title, goal, scope, evidence, acceptanceCriteria, workspaceState: workspaces, locale }));
-    setTopicDraftOpen(false);
-    setTopicDraftFeedback("");
-    setTopicDraft({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
-  };
-  const generateTopicDraft = async () => {
-    if (!workspaces || !state.conversation.messages.length || topicDraftBusy) return;
-    setTopicDraftFeedback("");
-    setTopicDraftBusy(true);
-    try {
-      // 生成结果只作为当前可编辑表单的初值，用户点击保存前不会冻结对话或创建课题。
-      const draft = await window.desktop?.generateNangongTopicDraft({ workspaceState: workspaces, locale });
-      if (draft) {
-        setTopicDraft({ title: draft.title, goal: draft.goal, scope: draft.scope.join("，"), evidence: draft.evidence.join("，"), acceptanceCriteria: draft.acceptanceCriteria.join("，") });
-        setTopicDraftFeedback("已根据当前对话填充草稿");
-      }
-    } catch (error) { onError(readableDesktopError(error, "课题草稿生成失败。")); } finally { setTopicDraftBusy(false); }
-  };
-  const timelineMessages = mergeRealtimeConversationTimeline(
-    state.conversation.messages.map((message, sequenceNumber) => ({
-      ...message,
-      sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : sequenceNumber,
-      status: message.deliveryStatus || "completed" as const,
-      attachments: attachmentPreviews[message.messageId] || [],
-    })),
-    outgoingMessage ? [{
-      messageId: outgoingMessage.messageId, sequenceNumber: outgoingMessage.sequenceNumber, role: "user" as const,
-      content: outgoingMessage.content, replyToMessageId: null, deliveryStatus: outgoingMessage.failed ? "failed" as const : "sending" as const,
-      status: outgoingMessage.failed ? "failed" as const : "sending" as const, attachmentIds: outgoingMessage.attachments.map((item) => item.id),
-      attachments: outgoingMessage.attachments, createdAt: outgoingMessage.createdAt, completedAt: outgoingMessage.failed ? new Date().toISOString() : null,
-    }] : [],
-  );
-  return <SelUiConversation id="selConversationNangongWanId" onSubmit={() => void sendChat()} timeline={<section className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
-      {state.oneShotConfirmation?.status === "awaiting-user-confirmation" && state.oneShotRun?.status !== "running" && <section className="nangong-one-shot-confirmation" role="status" aria-label="本轮演化等待确认">
-        <strong>本轮已具备启动条件</strong>
-        <span>回复 1 将整理为演化课题，并连续进入审批、分发、测试和验收。</span>
-        <button type="button" className="selform-action" disabled={chatBusy || !workspaces} onClick={() => void sendChat("1")}>回复 1 并启动本轮完整流程</button>
-      </section>}
-      {state.conversation.messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
-      {timelineMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.role}><header>{message.role === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "南宫婉"}</header><div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
-    </section>} composer={<form className="selconversation-composer nangong-person-composer" onSubmit={(event) => { event.preventDefault(); void sendChat(); }}>
-      {topicDraftOpen && <section className="selform-root" aria-label="整理演化课题">
-        <header className="selform-header"><strong>整理为演化课题</strong><button type="button" className="selform-action" disabled={topicDraftBusy} onClick={() => setTopicDraftOpen(false)}>取消</button></header>
-        {topicDraftBusy && <p role="status">南宫婉正在根据当前对话整理课题草稿…</p>}
-        {!topicDraftBusy && topicDraftFeedback && <p role="status" className="selform-feedback">{topicDraftFeedback}</p>}
-        <button type="button" className="selform-action" disabled={topicDraftBusy} onClick={() => void generateTopicDraft()}>根据当前对话生成草稿</button>
-        <label className="selform-field">课题标题<input aria-label="课题标题" value={topicDraft.title} onChange={(event) => updateTopicDraft("title", event.currentTarget.value)} /></label>
-        <label className="selform-field">课题目标<textarea aria-label="课题目标" value={topicDraft.goal} onChange={(event) => updateTopicDraft("goal", event.currentTarget.value)} /></label>
-        <label className="selform-field">影响范围<input aria-label="课题影响范围" placeholder="多项用逗号分隔" value={topicDraft.scope} onChange={(event) => updateTopicDraft("scope", event.currentTarget.value)} /></label>
-        <label className="selform-field">事实证据<input aria-label="课题事实证据" placeholder="多项用逗号分隔" value={topicDraft.evidence} onChange={(event) => updateTopicDraft("evidence", event.currentTarget.value)} /></label>
-        <label className="selform-field">验收条件<input aria-label="课题验收条件" placeholder="多项用逗号分隔" value={topicDraft.acceptanceCriteria} onChange={(event) => updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label>
-        <button type="button" className="selform-action" data-tone="primary" disabled={topicDraftBusy} onClick={() => void convertChat()}>确认保存课题</button>
-      </section>}
-      {attachments.length > 0 && <div className="selconversation-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>调查截图</figcaption><button type="button" aria-label="移除截图" onClick={() => onAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
-      {newConversationBusy && <div className="nangong-conversation-refresh-status" role="status">正在关闭当前南宫婉线程并建立新对话…</div>}
-      {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
-      <textarea className="selconversation-input" data-sel-conversation-input aria-label="给南宫婉发送消息" placeholder="描述演化问题、现状和不可改变的约束…（可粘贴截图）" value={chatText} onChange={(event) => setChatText(event.currentTarget.value)} onPaste={(event) => { const files = Array.from(event.clipboardData.items).filter((item) => item.kind === "file" && item.type.startsWith("image/")).map((item) => item.getAsFile()).filter((file): file is File => file !== null); if (files.length) { event.preventDefault(); onPaste(files); } }} />
-      <div className="selconversation-footer"><div className="selconversation-tools"><button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-sel-tooltip="截取当前屏幕" data-sel-tooltip-mode="always" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button><button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" data-sel-tooltip="隐藏窗口后截图" data-sel-tooltip-mode="always" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button><button type="button" className="selconversation-action" data-tone="neutral" disabled={!state.conversation.messages.length || newConversationBusy} onClick={() => setTopicDraftOpen(true)}>整理为演化课题</button></div><div className="selconversation-actions"><button type="submit" className="selconversation-action" disabled={newConversationBusy || (!chatText.trim() && !attachments.length) || chatBusy} aria-label={chatBusy ? "调查中" : "发送给南宫婉"}><Send24Filled /></button></div></div>
-    </form>} />;
-}
-
-/** 人物工作栏把逗号分隔输入统一转换成去重的业务清单，提交给主进程后仍由合同做最终校验。 */
-function splitEvolutionList(value: string): string[] {
-  return [...new Set(value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean))];
-}
-
-
-/** 当前任务只展开真实卡点，报告、证据和评分留在所属流程环节内。 */
-function CollaborationTaskProgressView({ task, member, liveOutput, automation, locale }: {
-  task: CollaborationTaskOutDto;
-  member: CollaborationMemberOutDto;
-  liveOutput: CollaborationLiveOutput | null;
-  automation: LinghuAutomationStateOutDto | null;
-  locale: LocaleValue;
-}) {
-  const progress = useMemo(() => deriveCollaborationTaskProgress(task, member, automation, locale), [task, member, automation, locale]);
-  const [openStages, setOpenStages] = useState<Set<CollaborationProgressStageId>>(() => new Set([progress.currentStageId]));
-  const currentStageRef = useRef<HTMLDetailsElement>(null);
-
-  useEffect(() => {
-    setOpenStages(new Set([progress.currentStageId]));
-    window.requestAnimationFrame(() => currentStageRef.current?.scrollIntoView({ block: "nearest" }));
-  }, [task.taskId, progress.currentStageId]);
-
-  const toggleStage = (stageId: CollaborationProgressStageId, open: boolean) => {
-    setOpenStages((current) => {
-      const next = new Set(current);
-      if (open) next.add(stageId); else next.delete(stageId);
-      return next;
-    });
-  };
-
-  return <>
-    <section className="task-progress-card" aria-label={locale === "ja" ? "現在の進捗" : "当前进度"}>
-      <div className="task-progress-primary"><span>{progress.currentOwner}</span><strong>{progress.currentAction}</strong></div>
-      <div className="task-progress-facts">
-        <span>{locale === "ja" ? "現在の手順" : "当前步骤"}<strong>{locale === "ja" ? `${progress.currentStep}/${progress.totalSteps}` : `第 ${progress.currentStep}/${progress.totalSteps} 步`}</strong></span>
-        <span>{locale === "ja" ? "更新" : "最近更新"}<strong>{formatCollaborationTime(progress.updatedAt, locale)}</strong></span>
-        <span>{locale === "ja" ? "次の担当" : "下一步去向"}<strong>{progress.nextOwner} · {progress.nextAction}</strong></span>
-      </div>
-    </section>
-    <div className="task-progress-stages">
-      {progress.stages.map((stage) => <details
-        key={stage.id}
-        ref={stage.id === progress.currentStageId ? currentStageRef : undefined}
-        className={`task-progress-stage ${stage.status}`}
-        open={openStages.has(stage.id)}
-        onToggle={(event) => toggleStage(stage.id, event.currentTarget.open)}
-      >
-        <summary><span><strong>{stage.label}</strong><b>{stage.owner}</b></span><small>{stage.statusLabel}</small></summary>
-        <div className="task-progress-stage-content">
-          {stage.waitingFor && stage.status !== "current" && <p className="task-stage-waiting">{stage.waitingFor}</p>}
-          <CollaborationStageContent stageId={stage.id} task={task} liveMessage={stage.id === liveOutput?.stageId ? liveOutput.message : null} automation={automation} locale={locale} />
-        </div>
-      </details>)}
-    </div>
-  </>;
-}
-
-function CollaborationStageContent({ stageId, task, liveMessage, automation, locale }: {
-  stageId: CollaborationProgressStageId;
-  task: CollaborationTaskOutDto;
-  liveMessage: Message | null;
-  automation: LinghuAutomationStateOutDto | null;
-  locale: LocaleValue;
-}) {
-  const relevantEvents = task.flowEvents.filter((event) => stageId === "repair"
-    ? event.stage === "recovery" || event.error
-    : stageId === "unified-test"
-      ? /test|测试|restart|重启|verif/i.test(`${event.type} ${event.summary}`)
-      : false);
-  return <>
-    {stageId === "intent" && <>
-      <MarkdownMessage text={task.snapshot.confirmedIntent} />
-      {task.plans.map((plan) => <article key={plan.version} className="task-stage-record"><header><strong>{plan.ownerDisplayName}</strong><span>v{plan.version} · {collaborationPlanStatusLabel(plan.status, locale)}</span></header><MarkdownMessage text={plan.text} /></article>)}
-    </>}
-    {stageId === "execution" && <>
-      {task.executionRecords.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "実行記録はまだありません。" : "暂时没有执行记录。"}</p>}
-      {task.executionRecords.map((record) => <article key={record.assignmentId} className="task-stage-record"><header><strong>{record.executor.displayName}</strong><span>{collaborationExecutionStatusLabel(record.status, locale)}</span></header>{record.changedFiles?.length ? <ChangedFileList files={record.changedFiles} locale={locale} /> : null}{record.result && <MarkdownMessage text={record.result} />}{record.blockingReason && <p className="task-detail-error">{record.blockingReason}</p>}</article>)}
-    </>}
-    {stageId === "repair" && <>
-      {task.blockingReason && <p className="task-detail-error">{task.blockingReason}</p>}
-      {relevantEvents.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "修正が必要な問題はまだ記録されていません。" : "暂未记录需要修复的问题。"}</p>}
-      {relevantEvents.map((event) => <article key={event.eventId} className="task-stage-record"><header><strong>{event.actor?.displayName || (locale === "ja" ? "システム" : "系统")}</strong><span>{formatCollaborationTime(event.occurredAt, locale)}</span></header><p className={event.error ? "task-detail-error" : ""}>{event.summary}</p></article>)}
-    </>}
-    {stageId === "unified-test" && <>
-      {automation?.activeTaskId === task.taskId && automation.currentModule === "test-coverage" && <p>{locale === "ja" ? "テスト漏れ、競合、実行性能を確認しています。" : "正在检查测试漏点、资源竞争与执行性能。"}</p>}
-      {relevantEvents.length === 0 && <p className="task-stage-empty">{locale === "ja" ? "統合テスト結果はまだありません。" : "暂时没有统一测试结果。"}</p>}
-      {relevantEvents.map((event) => <article key={event.eventId} className="task-stage-record"><header><strong>{event.actor?.displayName || (locale === "ja" ? "システム" : "系统")}</strong><span>{formatCollaborationTime(event.occurredAt, locale)}</span></header><p className={event.error ? "task-detail-error" : ""}>{event.summary}</p></article>)}
-      {automation?.lastFeedback?.taskId === task.taskId && <article className="task-stage-record"><MarkdownMessage text={automation.lastFeedback.summary} /></article>}
-    </>}
-    {liveMessage && <div className="member-live-result"><MarkdownMessage text={liveMessage.text} /><StreamDetails message={liveMessage} locale={locale} /></div>}
-  </>;
-}
-
-function ChangedFileList({ files, locale }: { files: string[]; locale: LocaleValue }) {
-  return <div className="collaboration-changed-files"><strong>{locale === "ja" ? "ソース変更" : "源码变化"}</strong><ul>{files.map((file) => <li key={file}>{file}</li>)}</ul></div>;
-}
-
-function collaborationMemberStateLabel(member: CollaborationMemberOutDto, locale: LocaleValue): string {
-  const chinese: Record<CollaborationMemberOutDto["state"], string> = { idle: "空闲", conversation: "会话中", assigned: "已分配", working: member.phase === "verifying" ? "正在验证" : member.phase === "finalizing" ? "正在收尾" : "正在执行", retiring: "正在关闭连接", recovering: "等待恢复", draining: "等待退出", offline: "离线" };
-  const japanese: Record<CollaborationMemberOutDto["state"], string> = { idle: "待機", conversation: "会話中", assigned: "割当済み", working: "実行中", retiring: "接続終了中", recovering: "復旧待ち", draining: "終了待ち", offline: "オフライン" };
-  return (locale === "ja" ? japanese : chinese)[member.state];
-}
-
-function collaborationTaskStateLabel(state: CollaborationStateOutDto["tasks"][number]["state"], locale: LocaleValue): string {
-  const chinese: Record<CollaborationStateOutDto["tasks"][number]["state"], string> = { "queued-executor": "等待执行人", "preparing-worktree": "准备独立版本", analyzing: "技术分析", executing: "执行修改", "repairing-execution": "令狐修复执行问题", "returned-to-nangong": "已返回南宫婉", "ready-for-integration": "本轮已封存", "queued-integration": "已进入测试批次", integrating: "正在集成", "unified-testing": "令狐老祖正在统一测试", "awaiting-restart": "等待重启确认", "test-failed": "统一测试失败", integrated: "统一测试通过", blocked: "已阻塞", recovering: "等待恢复", cancelled: "已取消" };
-  const japanese: Record<CollaborationStateOutDto["tasks"][number]["state"], string> = { "queued-executor": "実行者待ち", "preparing-worktree": "独立版を準備", analyzing: "技術分析", executing: "変更実行中", "repairing-execution": "令狐が実行問題を修復中", "returned-to-nangong": "南宮婉へ返却済み", "ready-for-integration": "ラウンド確定済み", "queued-integration": "テストキュー", integrating: "統合中", "unified-testing": "令狐が統合テスト中", "awaiting-restart": "再起動確認待ち", "test-failed": "統合テスト失敗", integrated: "統合テスト合格", blocked: "ブロック", recovering: "復旧待ち", cancelled: "キャンセル" };
-  return (locale === "ja" ? japanese : chinese)[state];
-}
-
-function collaborationExecutorNames(task: CollaborationTaskOutDto): string[] {
-  return [...new Map(task.executionRecords.map((record) => [record.executor.memberId, record.executor.displayName])).values()];
-}
-
-function collaborationPlanStatusLabel(status: CollaborationTaskOutDto["plans"][number]["status"], locale: LocaleValue): string {
-  const chinese = { "ready-for-execution": "技术分析完成" } as const;
-  const japanese = { "ready-for-execution": "技術分析完了" } as const;
-  return (locale === "ja" ? japanese : chinese)[status];
-}
-
-function collaborationExecutionStatusLabel(status: CollaborationTaskOutDto["executionRecords"][number]["status"], locale: LocaleValue): string {
-  const chinese = { assigned: "已分配", analyzing: "分析中", executing: "执行中", "code-verified": "代码已验证", transferred: "已转交", blocked: "已阻塞", cancelled: "已取消" } as const;
-  const japanese = { assigned: "割当済み", analyzing: "分析中", executing: "実行中", "code-verified": "コード検証済み", transferred: "引継ぎ済み", blocked: "ブロック", cancelled: "キャンセル" } as const;
-  return (locale === "ja" ? japanese : chinese)[status];
-}
-
-function formatCollaborationTime(value: string | null, locale: LocaleValue): string {
-  if (!value) return locale === "ja" ? "進行中" : "进行中";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(locale === "ja" ? "ja-JP" : "zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(parsed);
-}
-
-function formatCollaborationDuration(startedAt: string, completedAt: string | null, locale: LocaleValue): string {
-  if (!completedAt) return locale === "ja" ? "進行中" : "进行中";
-  const durationMs = Math.max(0, Date.parse(completedAt) - Date.parse(startedAt));
-  if (!Number.isFinite(durationMs)) return "—";
-  const totalSeconds = Math.floor(durationMs / 1_000);
-  const days = Math.floor(totalSeconds / 86_400);
-  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-  const units = locale === "ja" ? [days && `${days}日`, hours && `${hours}時間`, minutes && `${minutes}分`, `${seconds}秒`] : [days && `${days}天`, hours && `${hours}小时`, minutes && `${minutes}分钟`, `${seconds}秒`];
-  return units.filter(Boolean).join(" ");
 }
 
 function auditStatusText(status: AuditTaskSummaryOutDto["status"], locale: LocaleValue): string {
@@ -1819,158 +1425,8 @@ async function imageFileToPngDataUrl(file: File): Promise<string> {
   }
 }
 
-function managedModeLabel(mode: ManagedExecutionModeValue, locale: LocaleValue): string {
-  const labelsByMode: Record<ManagedExecutionModeValue, { ja: string; "zh-CN": string }> = {
-    "conversation-managed": { ja: "会話管理", "zh-CN": "会话托管" },
-    "requirement-managed": { ja: "要件管理", "zh-CN": "需求托管" },
-    "task-managed": { ja: "タスク管理", "zh-CN": "任务托管" },
-    "test-managed": { ja: "テスト管理", "zh-CN": "测试托管" },
-  };
-  return labelsByMode[mode][locale];
-}
-
 function reasoningEffortLabel(effort: ReasoningEffortValue, locale: LocaleValue): string {
   const chinese: Record<ReasoningEffortValue, string> = { none: "无", minimal: "最小", low: "低", medium: "中", high: "高", xhigh: "超高", max: "最大" };
   const japanese: Record<ReasoningEffortValue, string> = { none: "なし", minimal: "最小", low: "低", medium: "中", high: "高", xhigh: "最高", max: "最大" };
   return locale === "ja" ? japanese[effort] : chinese[effort];
-}
-
-function CodexUserInputPanel({
-  request,
-  answers,
-  customAnswerIds,
-  confirmedQuestionIds,
-  locale,
-  submitting,
-  onChoose,
-  onChooseCustom,
-  onCustomChange,
-  onConfirm,
-}: {
-  request: CodexUserInputRequestOutDto;
-  answers: Record<string, string>;
-  customAnswerIds: Set<string>;
-  confirmedQuestionIds: Set<string>;
-  locale: LocaleValue;
-  submitting: boolean;
-  onChoose(questionId: string, value: string): void;
-  onChooseCustom(questionId: string): void;
-  onCustomChange(questionId: string, value: string): void;
-  onConfirm(questionId: string): void;
-}) {
-  const otherLabel = locale === "ja" ? "その他" : "其他";
-  return <section className="codex-user-input" aria-label={locale === "ja" ? "確認事項" : "待确认问题"}>
-    {request.questions.map((question) => {
-      const confirmed = confirmedQuestionIds.has(question.id);
-      const hasAnswer = Boolean(answers[question.id]?.trim());
-      return <fieldset key={question.id} className={confirmed ? "confirmed" : ""}>
-      <legend><strong>{question.header}</strong><span>{question.question}</span></legend>
-      {question.options.length > 0 && <div className="codex-user-input-options">{question.options.map((option) => <button type="button" role="radio" disabled={confirmed} aria-checked={!customAnswerIds.has(question.id) && answers[question.id] === option.label} className={!customAnswerIds.has(question.id) && answers[question.id] === option.label ? "selected" : ""} key={option.label} onClick={() => onChoose(question.id, option.label)}><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</button>)}<button type="button" role="radio" disabled={confirmed} aria-checked={customAnswerIds.has(question.id)} className={customAnswerIds.has(question.id) ? "selected" : ""} onClick={() => onChooseCustom(question.id)}><strong>{otherLabel}</strong></button></div>}
-      {customAnswerIds.has(question.id) && <input value={answers[question.id] || ""} disabled={confirmed} maxLength={2_000} autoFocus={request.questions.length === 1} placeholder={locale === "ja" ? "回答を入力" : "请输入答案"} onChange={(event) => onCustomChange(question.id, event.target.value)} />}
-      <div className="codex-user-input-actions"><button type="button" className="primary" disabled={!hasAnswer || confirmed || submitting} onClick={() => onConfirm(question.id)}>{confirmed ? (locale === "ja" ? "確認済み" : "已确认") : submitting ? (locale === "ja" ? "送信中…" : "正在确认…") : (locale === "ja" ? "確認" : "确认")}</button></div>
-    </fieldset>})}
-  </section>;
-}
-
-function ManagedStageAction({ message, locale, actionable, activeMode, onReturn, onAdvance }: { message: Message; locale: LocaleValue; actionable: boolean; activeMode: ManagedExecutionModeValue; onReturn(mode: ManagedExecutionModeValue): void; onAdvance(mode: ManagedExecutionModeValue, label: string): void }) {
-  if (message.collaborationTaskId) return null;
-  const current = message.managedMode;
-  if (!current) return null;
-  const firstLabels: Record<ManagedExecutionModeValue, { ja: string; "zh-CN": string }> = {
-    "conversation-managed": { ja: "この意図で合っています", "zh-CN": "就是这意思" },
-    "requirement-managed": { ja: "この案で実行", "zh-CN": "按这个方案执行" },
-    "task-managed": { ja: "テストする", "zh-CN": "测试一下" },
-    "test-managed": { ja: "再テスト", "zh-CN": "重新测试" },
-  };
-  const repeatLabels: Record<ManagedExecutionModeValue, { ja: string; "zh-CN": string }> = {
-    "conversation-managed": { ja: "要件を再分析", "zh-CN": "重新分析需求" },
-    "requirement-managed": { ja: "再実行", "zh-CN": "重新执行" },
-    "task-managed": { ja: "再テスト", "zh-CN": "重新测试" },
-    "test-managed": { ja: "再テスト", "zh-CN": "重新测试" },
-  };
-  const returnLabels: Record<"conversation-managed" | "task-managed", { ja: string; "zh-CN": string }> = {
-    "conversation-managed": { ja: "会話管理に戻る", "zh-CN": "回到会话托管" },
-    "task-managed": { ja: "タスク管理に戻る", "zh-CN": "回到任务托管" },
-  };
-  const returnTargets: Array<"conversation-managed" | "task-managed"> = current === "requirement-managed"
-    ? ["conversation-managed"]
-    : current === "task-managed" || current === "test-managed"
-      ? ["conversation-managed", "task-managed"]
-      : [];
-  const target = current === "test-managed" ? null : nextManagedMode(current);
-  const label = (message.actionTriggered ? repeatLabels : firstLabels)[current][locale];
-  const Icon = message.actionTriggered ? ArrowClockwise24Regular : target === "requirement-managed" ? CheckmarkCircle24Regular : target === "task-managed" ? Play24Regular : Beaker24Regular;
-  return <div className="managed-stage-action">
-    {returnTargets.map((returnTarget) => <button type="button" className="stage-return" aria-pressed={activeMode === returnTarget} disabled={!actionable || message.streaming || activeMode === returnTarget} key={returnTarget} onClick={() => onReturn(returnTarget)}><ArrowReply24Regular /><span>{returnLabels[returnTarget][locale]}</span></button>)}
-    {target && <button type="button" className={`stage-advance ${message.actionTriggered ? "triggered" : ""}`} disabled={!actionable || message.streaming} onClick={() => onAdvance(target, label)}><Icon /><span>{label}</span></button>}
-  </div>;
-}
-
-function CollaborationStatusChain({ task, locale, onRetry }: { task: CollaborationTaskOutDto; locale: LocaleValue; onRetry(taskId: string): Promise<void> }) {
-  const stages = ["analysis", "execution", "recovery", "integration"] as const;
-  const stageLabels = locale === "ja"
-    ? { analysis: "技術分析", execution: "実行", recovery: "修復", integration: "統合テスト" }
-    : { analysis: "技术分析", execution: "执行", recovery: "令狐修复", integration: "统一测试" };
-  const latestByStage = new Map(stages.map((stage) => [stage, [...task.flowEvents].reverse().find((event) => event.stage === stage)]));
-  const handler = task.currentHandler?.displayName || task.originalExecutor?.displayName || task.initiator?.displayName || (locale === "ja" ? "システム" : "系统");
-  const retryLabel = task.state === "test-failed" ? (locale === "ja" ? "再テスト" : "重新测试") : (locale === "ja" ? "続行" : "继续执行");
-  const retryable = ["test-failed", "blocked", "recovering"].includes(task.state);
-  return <section className={`collaboration-status-chain ${task.blockingReason ? "has-blocker" : ""}`} aria-live="polite">
-    <header><strong>{locale === "ja" ? "協同タスク" : "协作任务状态"}</strong><span>{handler} · {collaborationTaskStateLabel(task.state, locale)}</span></header>
-    <ol>{stages.map((stage) => { const event = latestByStage.get(stage); if (!event && stage !== "analysis") return null; return <li key={stage} className={event?.error ? "failed" : event?.status === "completed" ? "completed" : "active"}><i /><span><strong>{stageLabels[stage]}</strong><small>{event?.summary || (locale === "ja" ? "担当者待ち" : "等待分配负责人")}</small></span></li>; })}</ol>
-    {task.blockingReason && <p role="status"><strong>{locale === "ja" ? "停止理由" : "当前卡点"}</strong>{task.blockingReason}</p>}
-    <details className="collaboration-status-task-details"><summary>{locale === "ja" ? `タスク詳細 · ${task.initiator?.displayName || "システム"}` : `任务详细 · ${task.initiator?.displayName || "系统"}`}</summary><div><MarkdownMessage text={task.snapshot.confirmedIntent} /></div></details>
-    <footer><span>{locale === "ja" ? "現在の担当" : "当前负责人"}：<strong>{handler}</strong></span>{retryable && <button type="button" onClick={() => void onRetry(task.taskId)}><ArrowClockwise24Regular />{retryLabel}</button>}</footer>
-  </section>;
-}
-
-function StreamDetails({ message, locale }: { message: Message; locale: LocaleValue }) {
-  const plan = message.plan || [];
-  const activities = message.activities || [];
-  const changedFiles = message.changedFiles || [];
-  if (!message.streaming && !message.streamError && plan.length === 0 && activities.length === 0 && changedFiles.length === 0) return null;
-  return <div className="stream-details">
-    {message.reasoningSummary && <p className="stream-reasoning">{message.reasoningSummary}</p>}
-    {message.managedExecution && <div className={`managed-execution-status ${message.managedExecution.status}`}><strong>{managedModeLabel(message.managedExecution.mode, locale)}</strong><span>{message.managedExecution.message}</span><small>{message.managedExecution.round}/{message.managedExecution.maximumRounds}</small></div>}
-    {plan.length > 0 && <ol className="stream-plan">{plan.map((entry, index) => <li className={entry.status} key={`${index}:${entry.step}`}><i />{entry.step}</li>)}</ol>}
-    {activities.length > 0 && <details className="stream-activity-details">
-      <summary><span>{locale === "ja" ? "実行プロセス" : "执行过程"}</span><small>{activities.length} {locale === "ja" ? "件" : "项"} · {activityLabel(activities.at(-1)?.itemType || "", locale)}</small></summary>
-      <div className="stream-activities">{activities.map((activity) => <div className={activity.phase} key={activity.id}><i /><span><strong>{activityLabel(activity.itemType, locale)}</strong>{activity.summary && <small>{activity.summary}</small>}</span></div>)}</div>
-    </details>}
-    {changedFiles.length > 0 && <details className="stream-files" open><summary>{locale === "ja" ? `変更ファイル ${changedFiles.length}` : `已涉及 ${changedFiles.length} 个文件`}</summary>{changedFiles.map((file) => <code key={file}>{file}</code>)}</details>}
-    {!message.collaborationTaskId && (message.streaming || message.streamTerminal || message.streamError || message.managedExecution) && <div className={`stream-current ${message.streamError || message.streamStatus === "failed" ? "failed" : message.streaming ? "running" : "completed"}`}><i /><span>{message.streamError || (message.streaming ? streamStatusLabel(message.streamStatus, locale) : completedStatusLabel(message, locale))}</span></div>}
-  </div>;
-}
-
-function activityLabel(itemType: string, locale: LocaleValue): string {
-  const japanese: Record<string, string> = { reasoning: "分析中", commandExecution: "コマンド実行", commandPolicy: "実行ポリシー", fileChange: "ファイル変更", mcpToolCall: "ツール呼び出し", dynamicToolCall: "ツール実行", collabToolCall: "エージェント連携", webSearch: "Web 検索", imageView: "画像確認", contextCompaction: "会話整理", agentMessage: "回答作成" };
-  const chinese: Record<string, string> = { reasoning: "正在分析", commandExecution: "执行命令", commandPolicy: "执行策略", fileChange: "修改文件", mcpToolCall: "调用工具", dynamicToolCall: "执行工具", collabToolCall: "协作处理", webSearch: "搜索网页", imageView: "查看图片", contextCompaction: "整理会话", agentMessage: "生成回答" };
-  return (locale === "ja" ? japanese : chinese)[itemType] || itemType;
-}
-
-function streamStatusLabel(status: string | undefined, locale: LocaleValue): string {
-  if (locale === "ja") {
-    const labelsByStatus: Record<string, string> = { starting: "Codex を開始しています…", inProgress: "Codex が処理中…", planning: "計画を更新しています…", reasoning: "分析中…", responding: "回答を生成しています…", commandExecution: "コマンドを実行しています…", fileChange: "ファイルを変更しています…" };
-    return labelsByStatus[status || ""] || "Codex が処理中…";
-  }
-  const labelsByStatus: Record<string, string> = { starting: "正在启动 Codex…", inProgress: "Codex 正在处理…", planning: "正在更新计划…", reasoning: "正在分析…", responding: "正在生成回答…", commandExecution: "正在执行命令…", fileChange: "正在修改文件…" };
-  return labelsByStatus[status || ""] || "Codex 正在处理…";
-}
-
-function completedStatusLabel(message: Message, locale: LocaleValue): string {
-  if (message.streamStatus === "interrupted") return locale === "ja" ? "中断しました" : "已中断";
-  if (message.streamStatus === "failed") return locale === "ja" ? "失敗しました" : "执行失败";
-  const mode = message.managedExecution?.mode || message.managedMode;
-  if (locale === "ja") {
-    if (mode === "conversation-managed") return "意図の分析が完了しました";
-    if (mode === "requirement-managed") return "要件分析が完了しました";
-    if (mode === "task-managed") return "実行とコード検証が完了しました";
-    if (mode === "test-managed") return "テストが完了しました";
-    return "完了しました";
-  }
-  if (mode === "conversation-managed") return "意图分析完成";
-  if (mode === "requirement-managed") return "需求分析完成";
-  if (mode === "task-managed") return "执行与代码验证完成";
-  if (mode === "test-managed") return "测试完成";
-  return "已完成";
 }

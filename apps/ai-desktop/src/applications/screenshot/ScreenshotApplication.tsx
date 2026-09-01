@@ -6,10 +6,10 @@ import type {
   ScreenCaptureFrameInDto,
 } from "../../../contracts/system/desktop/index";
 import { ScreenshotEditor } from "../../features/screenshot/components/ScreenshotEditor";
-import "./developer.css";
+import "../styles/desktop-applications.css";
 
 /** 独立截图窗口只负责选择、标注和保存主进程取得的 macOS 原生无光标 PNG。 */
-export function ScreenshotWindowApp() {
+export function ScreenshotApplication() {
   const [capture, setCapture] = useState<ScreenCaptureOutDto | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
   const [locale, setLocale] = useState<LocaleValue>("zh-CN");

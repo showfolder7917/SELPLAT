@@ -72,7 +72,7 @@ function topicRequest(title = "协同审批分层") { return { title, goal: "把
 function proposalRequest() { return { type: "代码修正", content: "建立独立演化审批入口，审批通过后返还南宫婉分发。", risks: ["历史记录迁移"], rollbackPlan: "保留旧记录并关闭三项自动开关。" }; }
 const conversation = { async send(_request, context) { return { text: `南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据","tags":["调查","事实依据"],"summary":"围绕当前问题收集事实并形成可继续分析的依据。"}`, itemCount: 1 }; }, async newChat() {} };
 const distributionServices = {
-  async planDistribution() { return JSON.stringify({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
+  async planDistribution() { return JSON.stringify({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
 };
 let mutationSequence = 0;
 function mutation(facade) { return { expectedStateVersion: facade.state().updatedAt, idempotencyKey: `nangong-test-${++mutationSequence}` }; }
@@ -381,8 +381,8 @@ test("预计修改文件重叠时程序阻止多人重复分发", async () => {
     let submitted = 0;
     const collaboration = { submitTask() { submitted += 1; return { tasks: [] }; } };
     const overlappingPlan = JSON.stringify({ summary: "错误地按影响范围拆成两个任务。", units: [
-      { title: "修改按钮", scope: "调整同一工具栏按钮", acceptanceCriteria: ["按钮可用"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "页面改动" },
-      { title: "验证按钮", scope: "验证同一工具栏按钮", acceptanceCriteria: ["按钮通过测试"], expectedFiles: ["apps/ai-desktop/src/variants/developer/DeveloperApp.tsx"], independentReason: "测试改动" },
+      { title: "修改按钮", scope: "调整同一工具栏按钮", acceptanceCriteria: ["按钮可用"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "页面改动" },
+      { title: "验证按钮", scope: "验证同一工具栏按钮", acceptanceCriteria: ["按钮通过测试"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "测试改动" },
     ] });
     const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation, recordEvent: () => undefined,
