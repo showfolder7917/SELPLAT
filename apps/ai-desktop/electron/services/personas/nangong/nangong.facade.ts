@@ -1,13 +1,13 @@
 import type {
-  ConvertNangongConversationToTopicRequest,
-  CreateEvolutionProposalRequest,
-  GenerateNangongTopicDraftRequest,
-  EvolutionState,
-  NangongTopicDraft,
-  ReviseEvolutionProposalRequest,
-  SendNangongConversationMessageRequest,
-  UpdateEvolutionTopicRequest,
-} from "../../../../contracts/collaboration/evolution/index.js";
+  ConvertNangongConversationToTopicInDto,
+  CreateNangongProposalInDto,
+  GenerateNangongTopicDraftInDto,
+  NangongTopicDraftOutDto,
+  ReviseNangongProposalInDto,
+  SendNangongConversationMessageInDto,
+  UpdateNangongTopicInDto,
+} from "../../../../contracts/collaboration/nangong/index.js";
+import type { EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
 import { NangongApplicationService, type NangongApplicationServiceOptions } from "./internal/nangong-application.service.js";
 
 /**
@@ -17,14 +17,14 @@ import { NangongApplicationService, type NangongApplicationServiceOptions } from
  * 它不会暴露韩立审批、令狐测试或 Workflow 自动轮转方法。
  */
 export interface NangongApplicationPort {
-  sendConversationMessage(request: SendNangongConversationMessageRequest): Promise<EvolutionState>;
-  newConversation(): Promise<EvolutionState>;
-  generateTopicDraft(request: GenerateNangongTopicDraftRequest): Promise<NangongTopicDraft>;
-  convertConversationToTopic(request: ConvertNangongConversationToTopicRequest): EvolutionState;
-  createProposal(topicId: string, request: CreateEvolutionProposalRequest): EvolutionState;
-  updateTopic(topicId: string, request: UpdateEvolutionTopicRequest): EvolutionState;
-  reviseProposal(proposalId: string, request: ReviseEvolutionProposalRequest): EvolutionState;
-  investigateAndReviseReturnedProposal(proposalId: string): Promise<EvolutionState>;
+  sendConversationMessage(request: SendNangongConversationMessageInDto): Promise<EvolutionStateOutDto>;
+  newConversation(): Promise<EvolutionStateOutDto>;
+  generateTopicDraft(request: GenerateNangongTopicDraftInDto): Promise<NangongTopicDraftOutDto>;
+  convertConversationToTopic(request: ConvertNangongConversationToTopicInDto): EvolutionStateOutDto;
+  createProposal(topicId: string, request: CreateNangongProposalInDto): EvolutionStateOutDto;
+  updateTopic(topicId: string, request: UpdateNangongTopicInDto): EvolutionStateOutDto;
+  reviseProposal(proposalId: string, request: ReviseNangongProposalInDto): EvolutionStateOutDto;
+  investigateAndReviseReturnedProposal(proposalId: string): Promise<EvolutionStateOutDto>;
 }
 
 /** 南宫 Runtime 的装配参数；共享状态和跨人物动作都以最小端口注入。 */
@@ -50,19 +50,19 @@ export class NangongFacade {
   /** 传入已装配应用端口；构造过程不读写文件，也不启动自动流程。 */
   constructor(application: NangongApplicationPort) { this.#application = application; }
   /** 发送南宫对话；返回包含本轮人物消息的最新状态，失败时保留原发送失败语义。 */
-  sendConversationMessage(request: SendNangongConversationMessageRequest) { return this.#application.sendConversationMessage(request); }
+  sendConversationMessage(request: SendNangongConversationMessageInDto) { return this.#application.sendConversationMessage(request); }
   /** 建立新的南宫会话；不会删除专题、提案或韩立审批记录。 */
   newConversation() { return this.#application.newConversation(); }
   /** 根据当前南宫对话生成可编辑草稿；生成结果尚未成为正式专题。 */
-  generateTopicDraft(request: GenerateNangongTopicDraftRequest) { return this.#application.generateTopicDraft(request); }
+  generateTopicDraft(request: GenerateNangongTopicDraftInDto) { return this.#application.generateTopicDraft(request); }
   /** 把用户确认过的南宫对话转换成 Evolution 专题事实。 */
-  convertConversationToTopic(request: ConvertNangongConversationToTopicRequest) { return this.#application.convertConversationToTopic(request); }
+  convertConversationToTopic(request: ConvertNangongConversationToTopicInDto) { return this.#application.convertConversationToTopic(request); }
   /** 为指定专题创建南宫提案；审批仍由韩立入口处理。 */
-  createProposal(topicId: string, request: CreateEvolutionProposalRequest) { return this.#application.createProposal(topicId, request); }
+  createProposal(topicId: string, request: CreateNangongProposalInDto) { return this.#application.createProposal(topicId, request); }
   /** 修正专题描述；共同专题的新版本仍由 Evolution 原子保存。 */
-  updateTopic(topicId: string, request: UpdateEvolutionTopicRequest) { return this.#application.updateTopic(topicId, request); }
+  updateTopic(topicId: string, request: UpdateNangongTopicInDto) { return this.#application.updateTopic(topicId, request); }
   /** 根据明确反馈提交新提案版本，不覆盖旧版本和审批历史。 */
-  reviseProposal(proposalId: string, request: ReviseEvolutionProposalRequest) { return this.#application.reviseProposal(proposalId, request); }
+  reviseProposal(proposalId: string, request: ReviseNangongProposalInDto) { return this.#application.reviseProposal(proposalId, request); }
   /** 调查退回原因；只有产生新的可核验事实时才提交返修版本。 */
   investigateAndReviseReturnedProposal(proposalId: string) { return this.#application.investigateAndReviseReturnedProposal(proposalId); }
 }

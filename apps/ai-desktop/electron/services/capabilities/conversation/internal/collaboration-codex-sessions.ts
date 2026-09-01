@@ -12,8 +12,8 @@ import type {
   CodexStreamEvent,
   CodexUserInputRequest,
   ResolveCodexUserInputRequest,
-  WorkspaceState,
-} from "../../../../../contracts/desktop/desktop.js";
+} from "../../../../../contracts/platform/codex/index.js";
+import type { WorkspaceState } from "../../../../../contracts/platform/workspace/index.js";
 import {
   CodexFacade as CodexService,
   createFileCodexSessionRepository,

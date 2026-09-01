@@ -16,12 +16,10 @@ import type {
   AuditLogInfo,
   AuditReason,
   AuditTaskSummary,
-  CodexStreamEvent,
-  Locale,
-  ManagedExecutionMode,
-  SandboxMode,
-  WorkspaceState,
-} from "../../../../../../contracts/desktop/desktop.js";
+} from "../../../../../../contracts/governance/audit.js";
+import type { Locale, ManagedExecutionMode, SandboxMode } from "../../../../../../contracts/foundation/base.js";
+import type { CodexStreamEvent } from "../../../../../../contracts/platform/codex/index.js";
+import type { WorkspaceState } from "../../../../../../contracts/platform/workspace/index.js";
 
 interface ActiveAuditTask extends AuditTaskSummary {
   commandIds: Set<string>;

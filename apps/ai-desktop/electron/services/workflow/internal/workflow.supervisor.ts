@@ -1,11 +1,11 @@
-import type { CollaborationState } from "../../../../contracts/collaboration/workflow/index.js";
+import type { CollaborationStateOutDto } from "../../../../contracts/collaboration/workflow/index.js";
 import type { WorkflowExceptionRecord, WorkflowStateReaders } from "../../../../contracts/governance/workflow.js";
 import type { WorkflowRepository } from "./workflow.repository.js";
 
 export interface WorkflowSupervisorOptions {
   repository: WorkflowRepository;
   readers: WorkflowStateReaders;
-  projectCollaborationTimeline(state: CollaborationState): void;
+  projectCollaborationTimeline(state: CollaborationStateOutDto): void;
   onStalledTasks(taskIds: string[]): void | Promise<void>;
   onUnhandledExceptions?(events: WorkflowExceptionRecord[]): void | Promise<void>;
   intervalMs?: number;

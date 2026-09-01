@@ -9,17 +9,13 @@ import type {
   CodexModelOption,
   CodexLoginResponse,
   CodexStreamEvent,
-  Locale,
-  ManagedExecutionMode,
-  DesktopSettings,
-  ModelServiceTier,
-  ReasoningEffort,
   CodexUserInputRequest,
   ResolveCodexUserInputRequest,
-  SandboxMode,
-  SendMessageResponse,
-  WorkspaceState,
-} from "../../../../contracts/desktop/desktop.js";
+} from "../../../../contracts/platform/codex/index.js";
+import type { Locale, ManagedExecutionMode, ModelServiceTier, ReasoningEffort, SandboxMode } from "../../../../contracts/foundation/base.js";
+import type { SendMessageResponse } from "../../../../contracts/capabilities/conversation/index.js";
+import type { DesktopSettings } from "../../../../contracts/platform/settings/index.js";
+import type { WorkspaceState } from "../../../../contracts/platform/workspace/index.js";
 import type { CodexSessionPersistence } from "./internal/codex-session.repository.js";
 import { resolveCodexRuntime, type CodexRuntime } from "./internal/codex-runtime.resolver.js";
 import { toCodexStreamEvent } from "./internal/codex-stream-event.mapper.js";

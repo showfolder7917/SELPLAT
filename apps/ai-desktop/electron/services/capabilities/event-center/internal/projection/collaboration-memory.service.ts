@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 
 import type { ApprovalMemoryEvidence, CollaborationMemoryMessage, CollaborationMemoryPort, ConversationRoundTopicDecision, TrainingCorpusTopicSearchResult } from "../../../../../../contracts/capabilities/event-center/index.js";
-import type { EvolutionProposalOrigin, EvolutionProposalType, EvolutionSourceMessageSnapshot, NangongConversation, EvolutionState } from "../../../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionProposalOrigin, EvolutionProposalType, EvolutionSourceMessageSnapshot, EvolutionStateOutDto } from "../../../../../../contracts/collaboration/evolution/index.js";
+import type { NangongConversationOutDto } from "../../../../../../contracts/collaboration/nangong/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 
 const CURRENT_CONVERSATION_TURN_LIMIT = 20;
@@ -19,7 +20,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     this.#database = database;
   }
 
-  syncConversation(conversation: NangongConversation): void {
+  syncConversation(conversation: NangongConversationOutDto): void {
     const completedMessages = conversation.messages.filter((message) => message.deliveryStatus === undefined || message.deliveryStatus === "completed");
     this.#database.transaction((connection) => {
       const upsert = connection.prepare(`
@@ -76,7 +77,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     });
   }
 
-  syncEvolutionState(state: EvolutionState): void {
+  syncEvolutionState(state: EvolutionStateOutDto): void {
     this.syncConversation(state.conversation);
     this.#database.transaction((connection) => {
       const insert = connection.prepare(`
@@ -95,7 +96,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     });
   }
 
-  buildNangongContext(conversation: NangongConversation): string {
+  buildNangongContext(conversation: NangongConversationOutDto): string {
     const current = conversation.messages.slice(-CURRENT_CONVERSATION_TURN_LIMIT)
       // 用户原话是方向事实，保持完整；AI 回答使用独立预览，避免长回复挤占后续分析上下文。
       .map((item) => item.role === "user"
@@ -218,7 +219,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     });
   }
 
-  registerRound(conversation: NangongConversation, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision): void {
+  registerRound(conversation: NangongConversationOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision): void {
     this.syncConversation(conversation);
     const now = new Date().toISOString();
     this.#database.transaction((connection) => {

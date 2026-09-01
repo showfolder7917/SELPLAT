@@ -1,4 +1,4 @@
-import type { CodexStreamEvent } from "../../../../contracts/desktop/desktop.js";
+import type { CodexStreamEvent } from "../../../../contracts/platform/codex/index.js";
 import type { EventCenterExceptionInput } from "../../../../contracts/governance/workflow.js";
 import { BusinessAuditLog } from "./internal/audit/business-audit-log.js";
 // Event Center 只要求审计事实写入口，不反向依赖 Workflow 的 Repository 实现。

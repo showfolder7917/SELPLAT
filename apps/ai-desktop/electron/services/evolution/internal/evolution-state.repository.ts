@@ -1,4 +1,4 @@
-import type { EvolutionState } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../platform/persistence/index.js";
 
 /**
@@ -8,9 +8,9 @@ import type { DatabasePort as SqliteDatabase } from "../../platform/persistence/
  * 异常或副作用示例：数据库不可用或状态 JSON 损坏时阻断写入，不回退到 JSON 文件。
  */
 export interface EvolutionStatePersistence {
-  load(): EvolutionState | null;
-  loadLatestConversation(): EvolutionState["conversation"] | null;
-  save(state: EvolutionState): void;
+  load(): EvolutionStateOutDto | null;
+  loadLatestConversation(): EvolutionStateOutDto["conversation"] | null;
+  save(state: EvolutionStateOutDto): void;
 }
 
 /** Evolution 状态的 SQLite 投影仓库；只保存共同事实，不保存任何人物私有会话控制器。 */
@@ -21,16 +21,16 @@ export class EvolutionStateRepository implements EvolutionStatePersistence {
     this.#database = database;
   }
 
-  load(): EvolutionState | null {
+  load(): EvolutionStateOutDto | null {
     if (!this.#database) return null;
     const row = this.#database.withConnection((connection) => connection.prepare(`
       SELECT stateJson FROM AiDesktopEvolutionState WHERE singletonId = 1
     `).get() as { stateJson: string } | undefined);
     if (!row) return null;
-    return JSON.parse(row.stateJson) as EvolutionState;
+    return JSON.parse(row.stateJson) as EvolutionStateOutDto;
   }
 
-  loadLatestConversation(): EvolutionState["conversation"] | null {
+  loadLatestConversation(): EvolutionStateOutDto["conversation"] | null {
     if (!this.#database) return null;
     return this.#database.withConnection((connection) => {
       const latest = connection.prepare(`
@@ -69,7 +69,7 @@ export class EvolutionStateRepository implements EvolutionStatePersistence {
     });
   }
 
-  save(state: EvolutionState): void {
+  save(state: EvolutionStateOutDto): void {
     if (!this.#database) throw new Error("AI Memory 数据库当前不可用，专题演化状态未保存；请先恢复数据库后重试。");
     this.#database.transaction((connection) => connection.prepare(`
       INSERT INTO AiDesktopEvolutionState (singletonId, stateVersion, stateJson, updatedAt)

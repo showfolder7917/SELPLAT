@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { ApprovalGovernanceRecord, HanLiAcceptancePlan, HanLiAcceptanceRun, Locale, EvolutionState } from "../../../../contracts/desktop/desktop";
+import type { ApprovalGovernanceRecord, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, Locale, EvolutionStateOutDto } from "../../../../contracts/desktop/desktop";
 import { evolutionMutationRequest } from "../../evolution/model/evolution-workbench";
 import { EvolutionProposalDetail } from "../../evolution/components/EvolutionProposalDetail";
 import { EvolutionProposalGrid } from "../../evolution/components/EvolutionProposalGrid";
@@ -12,7 +12,7 @@ import { EvolutionProposalGrid } from "../../evolution/components/EvolutionPropo
  * 真实返回示例：React 渲染审批意见、验收计划及运行结果，不直接返回业务对象。
  * 异常或副作用示例：通过 desktop 门面提交韩立决定；失败时保留输入并把可读原因交给 onError。
  */
-export function HanLiEvolutionApprovalPanel({ state, locale, view, selectedProposalId, databaseManaged, onState, onError }: { state: EvolutionState; locale: Locale; view: "manual" | "automatic"; selectedProposalId: string | null; databaseManaged: boolean; onState(state: EvolutionState): void; onError(message: string): void }) {
+export function HanLiEvolutionApprovalPanel({ state, locale, view, selectedProposalId, databaseManaged, onState, onError }: { state: EvolutionStateOutDto; locale: Locale; view: "manual" | "automatic"; selectedProposalId: string | null; databaseManaged: boolean; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
   const proposals = [...state.proposals].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   const [selectedId, setSelectedId] = useState<string | null>(proposals[0]?.proposalId || null);
   const [advice, setAdvice] = useState("");
@@ -21,14 +21,14 @@ export function HanLiEvolutionApprovalPanel({ state, locale, view, selectedPropo
   const [decisionBusy, setDecisionBusy] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
-  const [generatedPlan, setGeneratedPlan] = useState<HanLiAcceptancePlan | null>(null);
+  const [generatedPlan, setGeneratedPlan] = useState<HanliAcceptancePlanOutDto | null>(null);
   const [runBusy, setRunBusy] = useState(false);
-  const [generatedRun, setGeneratedRun] = useState<HanLiAcceptanceRun | null>(null);
+  const [generatedRun, setGeneratedRun] = useState<HanliAcceptanceRunOutDto | null>(null);
   const [governance, setGovernance] = useState<ApprovalGovernanceRecord[]>([]);
   const selected = proposals.find((proposal) => proposal.proposalId === selectedId) || (databaseManaged ? null : proposals[0]) || null;
   useEffect(() => { if (databaseManaged) setSelectedId(selectedProposalId); }, [databaseManaged, selectedProposalId]);
   useEffect(() => { void window.desktop?.getApprovalGovernance().then(setGovernance).catch(() => setGovernance([])); }, [state.updatedAt]);
-  const update = async (operation: () => Promise<EvolutionState> | undefined) => {
+  const update = async (operation: () => Promise<EvolutionStateOutDto> | undefined) => {
     if (decisionBusy) return;
     setDecisionBusy(true);
     try { const pending = operation(); if (pending) onState(await pending); } catch (error) { onError(readableError(error, "演化审批操作失败。")); }
@@ -79,16 +79,16 @@ export function HanLiEvolutionApprovalPanel({ state, locale, view, selectedPropo
 
 function readableError(error: unknown, fallback: string): string { return (error instanceof Error ? error.message : fallback).replace(/^Error invoking remote method '[^']+':\s*/, ""); }
 
-function latestAcceptancePlan(state: EvolutionState, proposalId: string): HanLiAcceptancePlan | null {
+function latestAcceptancePlan(state: EvolutionStateOutDto, proposalId: string): HanliAcceptancePlanOutDto | null {
   const payload = [...state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.plan_generated")?.payload.acceptancePlan;
   if (!payload || typeof payload !== "object") return null;
-  const plan = payload as Partial<HanLiAcceptancePlan>;
-  return plan.version === 1 && plan.proposalId === proposalId && Array.isArray(plan.concerns) && Array.isArray(plan.checks) ? plan as HanLiAcceptancePlan : null;
+  const plan = payload as Partial<HanliAcceptancePlanOutDto>;
+  return plan.version === 1 && plan.proposalId === proposalId && Array.isArray(plan.concerns) && Array.isArray(plan.checks) ? plan as HanliAcceptancePlanOutDto : null;
 }
 
-function latestAcceptanceRun(state: EvolutionState, planId: string): HanLiAcceptanceRun | null {
+function latestAcceptanceRun(state: EvolutionStateOutDto, planId: string): HanliAcceptanceRunOutDto | null {
   const payload = [...state.archiveRecords].reverse().find((record) => record.eventType === "acceptance.real_app_checked" && (record.payload.acceptanceRun as { planId?: string } | undefined)?.planId === planId)?.payload.acceptanceRun;
   if (!payload || typeof payload !== "object") return null;
-  const run = payload as Partial<HanLiAcceptanceRun>;
-  return run.version === 1 && run.planId === planId && Array.isArray(run.stepResults) && Array.isArray(run.evidenceAttachmentIds) ? run as HanLiAcceptanceRun : null;
+  const run = payload as Partial<HanliAcceptanceRunOutDto>;
+  return run.version === 1 && run.planId === planId && Array.isArray(run.stepResults) && Array.isArray(run.evidenceAttachmentIds) ? run as HanliAcceptanceRunOutDto : null;
 }

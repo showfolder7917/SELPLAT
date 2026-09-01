@@ -5,7 +5,7 @@ import type {
   ConversationDispatchState,
   ConversationQueueItem,
   SendMessageRequest,
-} from "../../../../../contracts/desktop/desktop.js";
+} from "../../../../../contracts/capabilities/conversation/index.js";
 
 interface StoredDispatchState extends ConversationDispatchState {
   version: 1;

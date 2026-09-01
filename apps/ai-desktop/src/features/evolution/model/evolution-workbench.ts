@@ -1,4 +1,4 @@
-import type { EvolutionWorkspaceLocation, EvolutionState } from "../../../../contracts/desktop/desktop";
+import type { EvolutionWorkspaceLocation, EvolutionStateOutDto } from "../../../../contracts/desktop/desktop";
 
 const STATUS_LABELS: Record<string, string> = {
   registered: "已登记", investigating: "调查中", "pending-approval": "待审批", "supplement-required": "待补充", rejected: "已退回",
@@ -17,7 +17,7 @@ export function evolutionOwnerForStatus(status: string, origin: string): string 
 }
 
 /** 为一次人工专题写操作生成页面版本快照和不可复用的幂等键。 */
-export function evolutionMutationRequest(state: EvolutionState) {
+export function evolutionMutationRequest(state: EvolutionStateOutDto) {
   return { expectedStateVersion: state.updatedAt, idempotencyKey: crypto.randomUUID() };
 }
 

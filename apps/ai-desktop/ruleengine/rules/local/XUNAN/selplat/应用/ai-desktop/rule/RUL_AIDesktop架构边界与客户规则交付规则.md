@@ -50,6 +50,10 @@ persona_extension_contract = add_persona_directory + implement_minimal_capabilit
 persona_public_api_contract = facade + runtime_factory + runtime_and_port_types_only + prohibit_store_runner_repository_analyzer_internal_error_and_internal_constant_export
 <!-- 协作 Contracts 必须按 nangong、hanli、linghu、evolution、workflow 分模块，并以 .in.dto、.out.dto、事件或 port 表达数据方向；旧人物混合契约不得保留第二权威定义。 -->
 persona_contract_layout_contract = contracts/collaboration/nangong/dto + contracts/collaboration/hanli/dto + contracts/collaboration/linghu/dto + contracts/collaboration/evolution/dto + contracts/collaboration/workflow/dto_and_port + directional_in_out_dto_names + one_authoritative_shared_evolution_state + no_legacy_nangong_evolution_contract
+<!-- 每个 contracts 领域 index 必须显式列出公开符号及其物理来源，业务含义是从类型名和唯一入口可以直接定位定义文件。 -->
+contracts_public_index_traceability_contract = explicit_named_symbol_exports_with_physical_source + prohibit_export_star_and_export_type_star + one_authoritative_definition_per_public_symbol + no_forwarding_fake_DTO
+<!-- 跨模块只允许导入目标模块 index，同模块内部才允许导入自己的具体 DTO；Desktop 聚合只服务 preload 和 Renderer，主进程必须导入所属领域入口。 -->
+contracts_import_source_contract = cross_module_target_index_only + same_module_direct_DTO_allowed + desktop_aggregate_for_preload_and_renderer_only + electron_main_process_no_desktop_aggregate_import
 <!-- Renderer 的南宫和韩立输入页面进入各自 feature；Evolution 只保留共享表格、详情、档案、树和工作台模型，开发壳层只组合公开人物页面。 -->
 persona_renderer_boundary_contract = features/nangong + features/hanli + features/linghu + shared_evolution_read_models_and_navigation_only + developer_shell_composition_only
 <!-- 并列人物重构必须以静态边界、业务、并发、交互、构建和真实启动测试共同验收；旧平铺文件、旧公开出口和兼容别名归零后才可完成。 -->

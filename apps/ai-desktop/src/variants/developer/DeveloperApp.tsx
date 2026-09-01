@@ -42,11 +42,11 @@ import type {
   CodexStreamEvent,
   CodexUserInputRequest,
   CollaborationMember,
-  CollaborationState,
-  CollaborationStateEvent,
-  CollaborationStreamEnvelope,
+  CollaborationStateOutDto,
+  CollaborationStateEventOutDto,
+  CollaborationStreamEventOutDto,
   CollaborationTask,
-  CollaborationTimelineSnapshot,
+  CollaborationTimelineSnapshotOutDto,
   ConversationDispatchState,
   ConversationQueueItem,
   DesktopSettings,
@@ -54,8 +54,8 @@ import type {
   LinghuAutomationStateEventOutDto,
   LinghuAutomationStateOutDto,
   ManagedExecutionMode,
-  EvolutionState,
-  EvolutionStateEvent,
+  EvolutionStateOutDto,
+  EvolutionStateEventOutDto,
   EvolutionWorkspaceLocation,
   ModelServiceTier,
   ReasoningEffort,
@@ -160,7 +160,7 @@ function readableDesktopError(error: unknown, fallback: string): string {
 export function EvolutionWorkspaceWindowApp() {
   const [requestedLocation, setRequestedLocation] = useState<EvolutionWorkspaceLocation>(() => evolutionWorkspaceLocationFromSearch(window.location.search));
   const perspective = requestedLocation.perspective;
-  const [state, setState] = useState<EvolutionState | null>(null);
+  const [state, setState] = useState<EvolutionStateOutDto | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceState | null>(null);
   const [nangongMember, setNangongMember] = useState<CollaborationMember | null>(null);
   const [locale, setLocale] = useState<Locale>("zh-CN");
@@ -242,10 +242,10 @@ export function DeveloperApp() {
   const [tempInfo, setTempInfo] = useState<TempDirectoryInfo | null>(null);
   const [auditInfo, setAuditInfo] = useState<AuditLogInfo | null>(null);
   const [aiMemoryDatabaseStatus, setAiMemoryDatabaseStatus] = useState<AiMemoryDatabaseStatus | null>(null);
-  const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
-  const [collaborationTimeline, setCollaborationTimeline] = useState<CollaborationTimelineSnapshot | null>(null);
+  const [collaborationState, setCollaborationState] = useState<CollaborationStateOutDto | null>(null);
+  const [collaborationTimeline, setCollaborationTimeline] = useState<CollaborationTimelineSnapshotOutDto | null>(null);
   const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationStateOutDto | null>(null);
-  const [evolutionState, setEvolutionState] = useState<EvolutionState | null>(null);
+  const [evolutionState, setEvolutionState] = useState<EvolutionStateOutDto | null>(null);
   const [collaborationStreams, setCollaborationStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationTimelineStreams, setCollaborationTimelineStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-group" | "task-detail">("member");
@@ -292,7 +292,7 @@ export function DeveloperApp() {
   const screenRecordingSettingsOpenedRef = useRef(false);
   const screenRecordingRecheckBusyRef = useRef(false);
   const automaticTestEnabledRef = useRef(false);
-  const collaborationStateRef = useRef<CollaborationState | null>(null);
+  const collaborationStateRef = useRef<CollaborationStateOutDto | null>(null);
   const linghuAutomationStateRef = useRef<LinghuAutomationStateOutDto | null>(null);
   const text = labels[locale];
   const screenPermissionRecoveryMessage = locale === "ja"
@@ -405,11 +405,11 @@ export function DeveloperApp() {
     refreshTimeline();
     void desktop.getLinghuAutomationState().then((state) => { linghuAutomationStateRef.current = state; setLinghuAutomationState(state); });
     void desktop.getEvolutionState().then(setEvolutionState);
-    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEvent) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
+    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEventOutDto) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
     const removeTimelineListener = desktop.onCollaborationTimelineChanged(() => refreshTimeline());
     const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEventOutDto) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
-    const removeNangongListener = desktop.onEvolutionState((event: EvolutionStateEvent) => { setEvolutionState(event.state); });
-    const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEnvelope) => {
+    const removeNangongListener = desktop.onEvolutionState((event: EvolutionStateEventOutDto) => { setEvolutionState(event.state); });
+    const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEventOutDto) => {
       // 流式正文以回合开始时的真实状态归档，不会随之后的任务转交迁移到错误环节。
       const updateStream = (current: Record<string, CollaborationLiveOutput>, key: string, preserveNodeHistory = false) => {
         const existing = current[key];
@@ -1493,15 +1493,15 @@ function CollaborationTaskDetail({ task, member, liveOutput, automation, locale,
 
 function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomation, nangongEvolution, nangongAttachments, workspaces, onLinghuState, onNangongState, onNangongAttachments, onNangongScreenshot, onNangongPaste, onError, onRename, onDelete, onContinue, onCancel, onOpen }: {
   member: CollaborationMember | null;
-  tasks: CollaborationState["tasks"];
+  tasks: CollaborationStateOutDto["tasks"];
   streams: Record<string, CollaborationLiveOutput>;
   locale: Locale;
   linghuAutomation: LinghuAutomationStateOutDto | null;
-  nangongEvolution: EvolutionState | null;
+  nangongEvolution: EvolutionStateOutDto | null;
   nangongAttachments: ComposerAttachment[];
   workspaces: WorkspaceState | null;
   onLinghuState(state: LinghuAutomationStateOutDto): void;
-  onNangongState(state: EvolutionState): void;
+  onNangongState(state: EvolutionStateOutDto): void;
   onNangongAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>;
   onNangongScreenshot(hidden: boolean): void;
   onNangongPaste(files: File[]): void;
@@ -1536,7 +1536,7 @@ function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomat
 }
 
 /** 南宫婉沿用韩立主会话的消息区和输入区，只替换人物文案与专项演化发送链路。 */
-function NangongConversationWorkspace({ state, attachments, workspaces, locale, newConversationBusy, error, onState, onAttachments, onScreenshot, onPaste, onError }: { state: EvolutionState; attachments: ComposerAttachment[]; workspaces: WorkspaceState | null; locale: Locale; newConversationBusy: boolean; error: string; onState(state: EvolutionState): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
+function NangongConversationWorkspace({ state, attachments, workspaces, locale, newConversationBusy, error, onState, onAttachments, onScreenshot, onPaste, onError }: { state: EvolutionStateOutDto; attachments: ComposerAttachment[]; workspaces: WorkspaceState | null; locale: Locale; newConversationBusy: boolean; error: string; onState(state: EvolutionStateOutDto): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
   const [chatText, setChatText] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [topicDraftOpen, setTopicDraftOpen] = useState(false);
@@ -1546,7 +1546,7 @@ function NangongConversationWorkspace({ state, attachments, workspaces, locale, 
   const [attachmentPreviews, setAttachmentPreviews] = useState<Record<string, ComposerAttachment[]>>({});
   const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
   const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
-  const update = async (operation: () => Promise<EvolutionState> | undefined) => {
+  const update = async (operation: () => Promise<EvolutionStateOutDto> | undefined) => {
     onError("");
     try { const pending = operation(); if (!pending) return; const next = await pending; onState(next); } catch (error) { onError(readableDesktopError(error, "专项演化操作失败。")); }
   };
@@ -1747,9 +1747,9 @@ function collaborationMemberStateLabel(member: CollaborationMember, locale: Loca
   return (locale === "ja" ? japanese : chinese)[member.state];
 }
 
-function collaborationTaskStateLabel(state: CollaborationState["tasks"][number]["state"], locale: Locale): string {
-  const chinese: Record<CollaborationState["tasks"][number]["state"], string> = { "queued-executor": "等待执行人", "preparing-worktree": "准备独立版本", analyzing: "技术分析", executing: "执行修改", "repairing-execution": "令狐修复执行问题", "returned-to-nangong": "已返回南宫婉", "ready-for-integration": "本轮已封存", "queued-integration": "已进入测试批次", integrating: "正在集成", "unified-testing": "令狐老祖正在统一测试", "awaiting-restart": "等待重启确认", "test-failed": "统一测试失败", integrated: "统一测试通过", blocked: "已阻塞", recovering: "等待恢复", cancelled: "已取消" };
-  const japanese: Record<CollaborationState["tasks"][number]["state"], string> = { "queued-executor": "実行者待ち", "preparing-worktree": "独立版を準備", analyzing: "技術分析", executing: "変更実行中", "repairing-execution": "令狐が実行問題を修復中", "returned-to-nangong": "南宮婉へ返却済み", "ready-for-integration": "ラウンド確定済み", "queued-integration": "テストキュー", integrating: "統合中", "unified-testing": "令狐が統合テスト中", "awaiting-restart": "再起動確認待ち", "test-failed": "統合テスト失敗", integrated: "統合テスト合格", blocked: "ブロック", recovering: "復旧待ち", cancelled: "キャンセル" };
+function collaborationTaskStateLabel(state: CollaborationStateOutDto["tasks"][number]["state"], locale: Locale): string {
+  const chinese: Record<CollaborationStateOutDto["tasks"][number]["state"], string> = { "queued-executor": "等待执行人", "preparing-worktree": "准备独立版本", analyzing: "技术分析", executing: "执行修改", "repairing-execution": "令狐修复执行问题", "returned-to-nangong": "已返回南宫婉", "ready-for-integration": "本轮已封存", "queued-integration": "已进入测试批次", integrating: "正在集成", "unified-testing": "令狐老祖正在统一测试", "awaiting-restart": "等待重启确认", "test-failed": "统一测试失败", integrated: "统一测试通过", blocked: "已阻塞", recovering: "等待恢复", cancelled: "已取消" };
+  const japanese: Record<CollaborationStateOutDto["tasks"][number]["state"], string> = { "queued-executor": "実行者待ち", "preparing-worktree": "独立版を準備", analyzing: "技術分析", executing: "変更実行中", "repairing-execution": "令狐が実行問題を修復中", "returned-to-nangong": "南宮婉へ返却済み", "ready-for-integration": "ラウンド確定済み", "queued-integration": "テストキュー", integrating: "統合中", "unified-testing": "令狐が統合テスト中", "awaiting-restart": "再起動確認待ち", "test-failed": "統合テスト失敗", integrated: "統合テスト合格", blocked: "ブロック", recovering: "復旧待ち", cancelled: "キャンセル" };
   return (locale === "ja" ? japanese : chinese)[state];
 }
 

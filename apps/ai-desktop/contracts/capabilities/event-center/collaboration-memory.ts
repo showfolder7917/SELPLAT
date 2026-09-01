@@ -6,7 +6,8 @@
  * 数据方向：主进程内部端口调用；必要快照再通过桌面 API 返回 Renderer。
  * 本文件不约束 SQLite 表结构，也不直接执行查询。
  */
-import type { EvolutionProposalOrigin, EvolutionProposalType, EvolutionSourceMessageSnapshot, NangongConversation, EvolutionState } from "../../collaboration/evolution/index.js";
+import type { EvolutionProposalOrigin, EvolutionProposalType, EvolutionSourceMessageSnapshot, EvolutionStateOutDto } from "../../collaboration/evolution/index.js";
+import type { NangongConversationOutDto } from "../../collaboration/nangong/index.js";
 
 export interface CollaborationMemoryMessage {
   messageId: string;
@@ -50,12 +51,12 @@ export interface TrainingCorpusTopicSearchResult {
 }
 
 export interface CollaborationMemoryPort {
-  syncConversation(conversation: NangongConversation): void;
-  syncEvolutionState(state: EvolutionState): void;
-  buildNangongContext(conversation: NangongConversation): string;
+  syncConversation(conversation: NangongConversationOutDto): void;
+  syncEvolutionState(state: EvolutionStateOutDto): void;
+  buildNangongContext(conversation: NangongConversationOutDto): string;
   approvalEvidence(proposalType: EvolutionProposalType, origin: EvolutionProposalOrigin): ApprovalMemoryEvidence[];
   searchTrainingCorpusTopics(query: string, limit?: number): TrainingCorpusTopicSearchResult[];
   /** 按完整会话组读取南宫婉与 Codex 原文，供韩立综合后逐轮发问。 */
   readHanLiEvolutionCorpus(deliberationId: string): EvolutionSourceMessageSnapshot[];
-  registerRound(conversation: NangongConversation, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision): void;
+  registerRound(conversation: NangongConversationOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision): void;
 }

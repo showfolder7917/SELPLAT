@@ -1,7 +1,7 @@
-import type { EvolutionMutationRequest } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionMutationInDto } from "../../../../contracts/collaboration/evolution/index.js";
 
 export interface EvolutionMutationCoordinatorOptions {
-  begin?: (topicId: string, action: string, request: EvolutionMutationRequest, currentStateVersion: string) => "started" | "completed";
+  begin?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";
   complete?: (idempotencyKey: string, resultStateVersion: string) => void;
   fail?: (idempotencyKey: string, error: unknown) => void;
 }
@@ -25,7 +25,7 @@ export class EvolutionMutationCoordinator {
     this.#fail = options.fail;
   }
 
-  run<State>(topicId: string, action: string, request: EvolutionMutationRequest, readVersion: () => string, readCurrent: () => State, operation: () => State): State {
+  run<State>(topicId: string, action: string, request: EvolutionMutationInDto, readVersion: () => string, readCurrent: () => State, operation: () => State): State {
     if (this.#start(topicId, action, request, readVersion()) === "completed") return readCurrent();
     try {
       const result = operation();
@@ -37,7 +37,7 @@ export class EvolutionMutationCoordinator {
     }
   }
 
-  async runAsync<State>(topicId: string, action: string, request: EvolutionMutationRequest, readVersion: () => string, readCurrent: () => State, operation: () => Promise<State>): Promise<State> {
+  async runAsync<State>(topicId: string, action: string, request: EvolutionMutationInDto, readVersion: () => string, readCurrent: () => State, operation: () => Promise<State>): Promise<State> {
     if (this.#start(topicId, action, request, readVersion()) === "completed") return readCurrent();
     try {
       const result = await operation();
@@ -49,7 +49,7 @@ export class EvolutionMutationCoordinator {
     }
   }
 
-  #start(topicId: string, action: string, request: EvolutionMutationRequest, currentStateVersion: string): "started" | "completed" {
+  #start(topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string): "started" | "completed" {
     if (this.#begin) return this.#begin(topicId, action, request, currentStateVersion);
     const existing = this.#localMutations.get(request.idempotencyKey);
     if (existing === "resolved") return "completed";
@@ -62,13 +62,13 @@ export class EvolutionMutationCoordinator {
     return "started";
   }
 
-  #finish(topicId: string, request: EvolutionMutationRequest, resultStateVersion: string): void {
+  #finish(topicId: string, request: EvolutionMutationInDto, resultStateVersion: string): void {
     if (this.#complete) this.#complete(request.idempotencyKey, resultStateVersion);
     else this.#localMutations.set(request.idempotencyKey, "resolved");
     if (this.#localTopicLocks.get(topicId) === request.idempotencyKey) this.#localTopicLocks.delete(topicId);
   }
 
-  #abort(topicId: string, request: EvolutionMutationRequest, error: unknown): void {
+  #abort(topicId: string, request: EvolutionMutationInDto, error: unknown): void {
     if (this.#fail) this.#fail(request.idempotencyKey, error);
     else this.#localMutations.set(request.idempotencyKey, "open");
     if (this.#localTopicLocks.get(topicId) === request.idempotencyKey) this.#localTopicLocks.delete(topicId);

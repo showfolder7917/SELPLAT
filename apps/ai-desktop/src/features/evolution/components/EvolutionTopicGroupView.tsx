@@ -6,7 +6,7 @@ import type {
   EvolutionTopic,
   EvolutionTopicDossier,
   Locale,
-  EvolutionState,
+  EvolutionStateOutDto,
   WorkspaceState,
 } from "../../../../contracts/desktop/desktop";
 import { evolutionOwnerForStatus, evolutionStatusLabel, workbenchOwnerLabel } from "../model/evolution-workbench";
@@ -39,7 +39,7 @@ export function EvolutionTopicGroupView({ topic, stateVersion, perspective, loca
   perspective: "nangong" | "hanli";
   locale: Locale;
   workspaces: WorkspaceState | null;
-  onState(state: EvolutionState): void;
+  onState(state: EvolutionStateOutDto): void;
   onNavigate(nodeId: EvolutionWorkspaceFlowNode, selectedRowId: string | null): void;
   onError(message: string): void;
 }) {

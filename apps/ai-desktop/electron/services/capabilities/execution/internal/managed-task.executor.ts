@@ -1,10 +1,10 @@
 import type {
   CodexStreamActivity,
   CodexStreamEvent,
-  ManagedExecutionMode,
   ManagedExecutionUpdate,
-  SendMessageResponse,
-} from "../../../../../contracts/desktop/desktop.js";
+} from "../../../../../contracts/platform/codex/index.js";
+import type { ManagedExecutionMode } from "../../../../../contracts/foundation/base.js";
+import type { SendMessageResponse } from "../../../../../contracts/capabilities/conversation/index.js";
 
 type RunTurn = (
   message: string,

@@ -1,4 +1,4 @@
-import type { EvolutionProposal, EvolutionState } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionProposal, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
 
 export type EvolutionFlowAction = "await-approval" | "supplement" | "dispatch" | "monitor-execution" | "accept-result" | "complete" | "idle";
 
@@ -14,11 +14,11 @@ export class EvolutionFlowOrchestrator {
     return "idle";
   }
 
-  automaticApprovalQueue(state: EvolutionState): EvolutionProposal[] {
+  automaticApprovalQueue(state: EvolutionStateOutDto): EvolutionProposal[] {
     return state.proposals.filter((proposal) => this.next(proposal) === "await-approval" && (proposal.origin === "nangong" ? state.automaticNangongApprovalEnabled : state.automaticLinghuApprovalEnabled));
   }
 
-  automaticDistributionQueue(state: EvolutionState): EvolutionProposal[] {
+  automaticDistributionQueue(state: EvolutionStateOutDto): EvolutionProposal[] {
     return state.proposals.filter((proposal) => this.next(proposal) === "dispatch" && (proposal.origin === "linghu" || state.automaticExecutionEnabled));
   }
 }

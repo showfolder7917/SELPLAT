@@ -7,7 +7,7 @@ import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
 import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../contracts/platform/persistence/index.js";
 import type { WorkspaceState } from "../contracts/platform/workspace/index.js";
-import type { EvolutionMutationRequest } from "../contracts/collaboration/evolution/index.js";
+import type { EvolutionMutationInDto } from "../contracts/collaboration/evolution/index.js";
 import type { CollaborationTimelineBusinessEvent } from "../contracts/collaboration/workflow/index.js";
 import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "./config/app-config.js";
 import { registerDesktopIpc } from "./ipc/register-desktop-ipc.js";
@@ -488,7 +488,7 @@ app.whenReady().then(async () => {
   });
   // 旧 nangong-evolution.json 仅作为可恢复的历史取证文件保留，生产运行不再读取、写入或回退。
   const evolutionStateStore = createEvolutionState(aiMemoryDatabase);
-  const beginEvolutionMutation = workflowRepository ? (topicId: string, action: string, request: EvolutionMutationRequest, currentStateVersion: string) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined;
+  const beginEvolutionMutation = workflowRepository ? (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined;
   const completeEvolutionMutation = workflowRepository ? (idempotencyKey: string, resultStateVersion: string) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined;
   const failEvolutionMutation = workflowRepository ? (idempotencyKey: string, error: unknown) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined;
   const recordEvolutionTimelineEvent = collaborationTimeline ? (event: CollaborationTimelineBusinessEvent) => {

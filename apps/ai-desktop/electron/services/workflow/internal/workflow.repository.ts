@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { ApprovalGovernanceRecord } from "../../../../contracts/governance/approval-governance.js";
-import type { CollaborationState, CollaborationTask } from "../../../../contracts/collaboration/workflow/index.js";
+import type { CollaborationStateOutDto, CollaborationTask } from "../../../../contracts/collaboration/workflow/index.js";
 import type { LinghuAutomationStateOutDto } from "../../../../contracts/collaboration/linghu/index.js";
-import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkbenchRow, EvolutionWorkbenchView, EvolutionState, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionArchiveRecord, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionWorkbenchRow, EvolutionWorkbenchView, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../../contracts/collaboration/evolution/index.js";
 import type { StalledTaskDetection, WorkflowEventCategory, WorkflowEventInput, WorkflowEventSeverity, WorkflowEventStatus, WorkflowExceptionRecord } from "../../../../contracts/governance/workflow.js";
 import type { DatabasePort as SqliteDatabase } from "../../platform/persistence/index.js";
 
@@ -300,7 +300,7 @@ export class WorkflowRepository {
     `).run({ $now: now, $summary: resolutionSummary.slice(0, 2_000), $correlationId: correlationId }));
   }
 
-  syncCollaborationState(state: CollaborationState): void {
+  syncCollaborationState(state: CollaborationStateOutDto): void {
     this.#database.transaction((connection) => {
       for (const member of state.members) connection.prepare(`
         INSERT INTO AiDesktopMemberRuntime (memberId, displayName, state, role, currentTaskId, generation, heartbeatAt, protocolProgressAt, blockingReason, updatedAt)
@@ -319,7 +319,7 @@ export class WorkflowRepository {
     });
   }
 
-  syncEvolutionState(state: EvolutionState): void {
+  syncEvolutionState(state: EvolutionStateOutDto): void {
     this.#database.transaction((connection) => {
       const insertHanLiTopic = connection.prepare(`
         INSERT INTO AiDesktopTrainingCorpusTopic
@@ -409,7 +409,7 @@ export class WorkflowRepository {
     this.#evolutionWorkbenchStateVersion = state.updatedAt;
   }
 
-  getEvolutionTopicDossier(topicId: string, state: EvolutionState): EvolutionTopicDossier {
+  getEvolutionTopicDossier(topicId: string, state: EvolutionStateOutDto): EvolutionTopicDossier {
     const topic = state.topics.find((item) => item.topicId === topicId);
     if (!topic) throw new Error("专题池中不存在该专题。 ");
     const stateDeliberation = topic.deliberationId ? state.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
@@ -600,7 +600,7 @@ export class WorkflowRepository {
     return eventId;
   }
 
-  #upsertTask(connection: DatabaseSync, state: CollaborationState, task: CollaborationTask): void {
+  #upsertTask(connection: DatabaseSync, state: CollaborationStateOutDto, task: CollaborationTask): void {
     const member = state.members.find((item) => item.memberId === task.executorMemberId && item.currentTaskId === task.taskId);
     const heartbeatAt = latestTime(member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt);
     const timeoutAt = TERMINAL_TASK_STATES.has(task.state) ? null : new Date(Date.parse(heartbeatAt) + STALE_AFTER_MS).toISOString();
@@ -643,7 +643,7 @@ export class WorkflowRepository {
   }
 
   /** 保存南宫婉收集屏障和每项返回事实，应用重启后直接从同一轮恢复。 */
-  #upsertEvolutionRound(connection: DatabaseSync, state: CollaborationState, roundId: string): void {
+  #upsertEvolutionRound(connection: DatabaseSync, state: CollaborationStateOutDto, roundId: string): void {
     const tasks = state.tasks.filter((task) => task.evolutionRoundId === roundId);
     if (!tasks.length) return;
     const returnedStates = new Set(["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart", "test-failed", "integrated"]);

@@ -1,4 +1,4 @@
-import type { EvolutionWorkbenchChangeEvent, EvolutionWorkbenchView, EvolutionState } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionWorkbenchChangeEvent, EvolutionWorkbenchView, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
 
 /**
  * 把专题前后状态整理为工作台轻量增量事件，不承担持久化或业务推进。
@@ -7,8 +7,8 @@ import type { EvolutionWorkbenchChangeEvent, EvolutionWorkbenchView, EvolutionSt
  * 异常或副作用示例：纯函数没有写入副作用；缺少关联实体时降级为会话或自动化事件，不改变原始状态。
  */
 export function buildEvolutionWorkbenchChange(
-  previous: EvolutionState,
-  current: EvolutionState,
+  previous: EvolutionStateOutDto,
+  current: EvolutionStateOutDto,
   reason: string,
   topicId: string | null,
   proposalId: string | null,

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { BrowserWindow } from "electron";
 
-import type { AppVariant } from "../../contracts/desktop/desktop.js";
+import type { AppVariant } from "../../contracts/foundation/base.js";
 import { MAIN_WINDOW_LAYOUT, mainWindowInitialSize } from "./main-window-layout.cjs";
 
 interface MainWindowOptions {

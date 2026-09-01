@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
-import type { CollaborationTimelineGroup, CollaborationTimelineNode, CollaborationTimelineSnapshot, Locale } from "../../../../contracts/desktop/desktop";
+import type { CollaborationTimelineGroup, CollaborationTimelineNode, CollaborationTimelineSnapshotOutDto, Locale } from "../../../../contracts/desktop/desktop";
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 
 /** 新任务协作群只消费主进程时间线投影；旧四阶段视图保留回退但不再参与本页排序和人物推断。 */
 export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval }: {
-  snapshot: CollaborationTimelineSnapshot | null;
+  snapshot: CollaborationTimelineSnapshotOutDto | null;
   liveTextByNodeId: Record<string, string>;
   locale: Locale;
   onManualApproval(proposalId: string, title: string, content: string): void;

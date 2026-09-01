@@ -1,12 +1,10 @@
 import type {
-  DecideEvolutionProposalRequest,
-  DecideEvolutionResultRequest,
-  EvolutionMutationRequest,
-  EvolutionProposal,
-  EvolutionState,
-  HanLiAcceptancePlan,
-  HanLiAcceptanceRun,
-} from "../../../../../contracts/collaboration/evolution/index.js";
+  DecideHanliProposalInDto,
+  DecideHanliResultInDto,
+  HanliAcceptancePlanOutDto,
+  HanliAcceptanceRunOutDto,
+} from "../../../../../contracts/collaboration/hanli/index.js";
+import type { EvolutionMutationInDto, EvolutionProposal, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
 import { createEvolutionMutationCoordinator, type EvolutionMutationPort } from "../../../evolution/index.js";
 import type { HanliApplicationPort } from "../hanli.facade.js";
 import { EvolutionApprovalService } from "./evolution-approval.service.js";
@@ -43,26 +41,26 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 
   /** 接收人物提交的提案并登记审批申请；不会提前作出审批结论。 */
-  requestProposalReview(proposalId: string): EvolutionState { return this.#approvals.recordApplication(proposalId); }
+  requestProposalReview(proposalId: string): EvolutionStateOutDto { return this.#approvals.recordApplication(proposalId); }
 
   /** 推进一轮韩立研讨；问题、证据判断和专题确立均留在韩立内部。 */
-  advanceHanLiDeliberation(): Promise<EvolutionState> { return this.#deliberation.advance(); }
+  advanceHanLiDeliberation(): Promise<EvolutionStateOutDto> { return this.#deliberation.advance(); }
 
   /** 保存用户给出的人工方向审批，Mutation 门禁保证重复请求不会覆盖历史。 */
-  decideProposal(proposalId: string, request: DecideEvolutionProposalRequest): EvolutionState {
+  decideProposal(proposalId: string, request: DecideHanliProposalInDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#store.state(), proposalId);
     return this.#mutations.run(proposal.topicId, "人工审批", request.mutation, () => this.#store.state().updatedAt, () => this.#store.state(), () => this.#approvals.decide(proposalId, request.decision, request.advice || "", "manual-user", [], request.feedbackTarget || "proposal-content", request.capabilityScope || ""));
   }
 
   /** 一次性流程请求韩立完成正式判断并保存决定；Workflow 只等待完成状态。 */
-  async reviewAndDecideProposal(proposalId: string): Promise<EvolutionState> {
+  async reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto> {
     const proposal = requireProposal(this.#store.state(), proposalId);
     const decision = await this.#deliberation.reviewOneShotProposal(proposal);
     return this.#approvals.decide(proposalId, decision.decision, decision.advice, "automatic-han-li", []);
   }
 
   /** 根据已保存人工偏好执行受控自动审批；缺少完整事实或历史依据时退回补充。 */
-  autoApprove(proposalId: string, request?: EvolutionMutationRequest): EvolutionState {
+  autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto {
     const state = this.#store.state();
     const proposal = requireProposal(state, proposalId);
     const mutation = request || { expectedStateVersion: state.updatedAt, idempotencyKey: `automatic-approve:${proposalId}:${state.updatedAt}` };
@@ -70,7 +68,7 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 
   /** 根据当前专题与历史发现生成可执行验收计划，但不伪造真实运行结果。 */
-  async generateAcceptancePlan(proposalId: string): Promise<HanLiAcceptancePlan> {
+  async generateAcceptancePlan(proposalId: string): Promise<HanliAcceptancePlanOutDto> {
     const state = this.#store.state();
     const proposal = requireProposal(state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("只有等待结果验收的提案才能生成韩立界面验收计划。");
@@ -84,26 +82,26 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 
   /** 读取已保存的验收计划；返回副本以阻止调用方修改归档事实。 */
-  acceptancePlan(planId: string): HanLiAcceptancePlan {
+  acceptancePlan(planId: string): HanliAcceptancePlanOutDto {
     for (const record of [...this.#store.state().archiveRecords].reverse()) {
       const value = record.eventType === "acceptance.plan_generated" ? record.payload.acceptancePlan : null;
-      if (value && typeof value === "object" && (value as HanLiAcceptancePlan).planId === planId) return structuredClone(value as HanLiAcceptancePlan);
+      if (value && typeof value === "object" && (value as HanliAcceptancePlanOutDto).planId === planId) return structuredClone(value as HanliAcceptancePlanOutDto);
     }
     throw new Error("韩立验收计划不存在或已清理。");
   }
 
   /** 保存真实应用运行证据；计划、专题和提案任一关联不一致都会阻断。 */
-  recordAcceptanceRun(run: HanLiAcceptanceRun): EvolutionState {
+  recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto {
     const plan = this.acceptancePlan(run.planId);
     if (plan.topicId !== run.topicId || plan.proposalId !== run.proposalId) throw new Error("真实验收记录与计划关联不一致。");
     return this.#store.recordAcceptanceRun(run);
   }
 
   /** 保存人工最终验收判断；真实运行证据是否充足仍由 Evolution 状态门禁核对。 */
-  decideResult(proposalId: string, request: DecideEvolutionResultRequest): EvolutionState { return this.#decideResult(proposalId, request, "manual-user"); }
+  decideResult(proposalId: string, request: DecideHanliResultInDto): EvolutionStateOutDto { return this.#decideResult(proposalId, request, "manual-user"); }
 
   /** 一次性流程把真实运行结果交给韩立；韩立保存证据并形成自己的最终判断。 */
-  completeAutomaticAcceptance(run: HanLiAcceptanceRun, idempotencyKey: string): EvolutionState {
+  completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto {
     this.recordAcceptanceRun(run);
     const expectedStateVersion = this.#store.state().updatedAt;
     return this.#decideResult(run.proposalId, {
@@ -113,12 +111,12 @@ export class HanliApplicationService implements HanliApplicationPort {
     }, "automatic-han-li");
   }
 
-  #decideResult(proposalId: string, request: DecideEvolutionResultRequest, source: "manual-user" | "automatic-han-li"): EvolutionState {
+  #decideResult(proposalId: string, request: DecideHanliResultInDto, source: "manual-user" | "automatic-han-li"): EvolutionStateOutDto {
     const proposal = requireProposal(this.#store.state(), proposalId);
     return this.#mutations.run(proposal.topicId, "结果验收", request.mutation, () => this.#store.state().updatedAt, () => this.#store.state(), () => this.#store.decideResult(proposalId, request.decision, request.advice || "", source));
   }
 
-  #autoApproveOnce(proposal: EvolutionProposal): EvolutionState {
+  #autoApproveOnce(proposal: EvolutionProposal): EvolutionStateOutDto {
     const state = this.#store.state();
     const manualHistory = state.proposals.flatMap((item) => item.approvals.map((approval) => ({ item, approval })))
       .filter(({ item, approval }) => item.type === proposal.type && item.origin === proposal.origin && approval.source === "manual-user");
@@ -137,7 +135,7 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 }
 
-function requireProposal(state: EvolutionState, proposalId: string): EvolutionProposal {
+function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposal {
   const proposal = state.proposals.find((item) => item.proposalId === proposalId);
   if (!proposal) throw new Error("演化提案不存在。");
   return proposal;

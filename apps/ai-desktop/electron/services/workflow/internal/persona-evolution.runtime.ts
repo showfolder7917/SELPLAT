@@ -1,6 +1,9 @@
 import type { CollaborationMemoryPort } from "../../../../contracts/capabilities/event-center/index.js";
 import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/collaboration/linghu/index.js";
-import type { ConfigureEvolutionAutomationRequest, CreateEvolutionTopicRequest, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionMutationRequest, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, HanLiAcceptancePlan, HanLiAcceptanceRun, EvolutionState, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest, SendNangongConversationMessageRequest } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionMutationInDto, EvolutionProposal, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../../contracts/collaboration/evolution/index.js";
+import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/collaboration/hanli/index.js";
+import type { CreateNangongTopicInDto, SendNangongConversationMessageInDto } from "../../../../contracts/collaboration/nangong/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/collaboration/workflow/index.js";
 import type { SendMessageResponse } from "../../../../contracts/capabilities/conversation/index.js";
 import type { EventCenterExceptionInput } from "../../../../contracts/governance/workflow.js";
 import type { CollaborationTimelineBusinessEvent } from "../../../../contracts/collaboration/workflow/index.js";
@@ -21,21 +24,21 @@ export interface PersonaEvolutionRuntimeOptions {
   collaboration: CollaborationWorkflowFacade;
   hanli: HanliWorkflowPort;
   conversation: {
-    send(request: SendNangongConversationMessageRequest, context: string): Promise<SendMessageResponse>;
+    send(request: SendNangongConversationMessageInDto, context: string): Promise<SendMessageResponse>;
     newChat(): Promise<void>;
   };
-  investigateRevision?: (prompt: string, workspaceState: EvolutionState["topics"][number]["workspaceState"], locale: EvolutionState["topics"][number]["locale"]) => Promise<string>;
-  planDistribution?: (prompt: string, workspaceState: EvolutionState["topics"][number]["workspaceState"], locale: EvolutionState["topics"][number]["locale"], emit: (event: CodexStreamEvent) => void) => Promise<string>;
+  investigateRevision?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
+  planDistribution?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEvent) => void) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   recordFailure?(input: EventCenterExceptionInput): void;
   recordTimelineEvent?: (event: CollaborationTimelineBusinessEvent) => void;
   recordTimelineStream?: (taskId: string, memberId: string, event: CodexStreamEvent) => void;
   memory?: CollaborationMemoryPort | null;
-  readDossier?: (topicId: string, state: EvolutionState) => EvolutionTopicDossier;
+  readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossier;
   queryWorkbench?: (request: QueryEvolutionWorkbenchRequest) => EvolutionWorkbenchPage;
   getWorkbenchPreference?: (perspective: "nangong" | "hanli", nodeId: string) => EvolutionWorkbenchPreference | null;
   saveWorkbenchPreference?: (request: SaveEvolutionWorkbenchPreferenceRequest) => EvolutionWorkbenchPreference;
-  beginMutation?: (topicId: string, action: string, request: EvolutionMutationRequest, currentStateVersion: string) => "started" | "completed";
+  beginMutation?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";
   completeMutation?: (idempotencyKey: string, resultStateVersion: string) => void;
   failMutation?: (idempotencyKey: string, error: unknown) => void;
   newConversationRetryDelaysMs?: number[];
@@ -67,7 +70,7 @@ export class PersonaEvolutionRuntime {
   readonly #flow = new EvolutionFlowOrchestrator();
   #timer: ReturnType<typeof setInterval> | null = null;
   #running = false;
-  #oneShotAcceptanceRunner: ((plan: HanLiAcceptancePlan) => Promise<HanLiAcceptanceRun>) | null = null;
+  #oneShotAcceptanceRunner: ((plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>) | null = null;
 
   /**
    * 组装跨人物演化顺序以及南宫人物入口。
@@ -134,7 +137,7 @@ export class PersonaEvolutionRuntime {
   }
 
   /** 读取当前 Evolution 快照；返回值是副本，调用方不能绕过 Store 直接改状态。 */
-  state(): EvolutionState { return this.#store.state(); }
+  state(): EvolutionStateOutDto { return this.#store.state(); }
 
   /** 按专题读取来源、研讨、提案和执行档案；数据库读模型不可用时使用当前状态安全降级。 */
   dossier(topicId: string): EvolutionTopicDossier {
@@ -167,19 +170,19 @@ export class PersonaEvolutionRuntime {
   /** 停止自动检查；已持久化的专题和恢复点不会被清除。 */
   stop(): void { if (this.#timer) clearInterval(this.#timer); this.#timer = null; }
   /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
-  setOneShotAcceptanceRunner(runner: (plan: HanLiAcceptancePlan) => Promise<HanLiAcceptanceRun>): void { this.#oneShotAcceptanceRunner = runner; }
+  setOneShotAcceptanceRunner(runner: (plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>): void { this.#oneShotAcceptanceRunner = runner; }
   /** 协作任务状态变化时立即核对一次性流程，避免等待固定轮询间隔。 */
   notifyWorkflowChanged(): void { void this.#tick(); }
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
-  createTopic(request: CreateEvolutionTopicRequest): EvolutionState { return this.#store.createTopic(request); }
+  createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto { return this.#store.createTopic(request); }
   /** 独立开关一个自动化环节，其他审批或执行开关保持原值。 */
-  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionState { return this.#store.setAutomation(kind, enabled); }
+  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionStateOutDto { return this.#store.setAutomation(kind, enabled); }
   /** 保存轮询间隔、最大轮数等受控参数，不立即推进业务状态。 */
-  configureAutomation(request: ConfigureEvolutionAutomationRequest): EvolutionState { return this.#store.configureAutomation(request); }
+  configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto { return this.#store.configureAutomation(request); }
   /** 启动、暂停、恢复或停止自动流程，并保留可恢复的当前卡点。 */
-  controlAutomation(action: EvolutionAutomationAction): EvolutionState { return this.#store.controlAutomation(action); }
+  controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto { return this.#store.controlAutomation(action); }
   /** 只有任务与人物运行事实互相吻合时，才允许旧 running 状态阻止新的用户确认。 */
-  #oneShotHasLiveOwner(state: EvolutionState): boolean {
+  #oneShotHasLiveOwner(state: EvolutionStateOutDto): boolean {
     const run = state.oneShotRun;
     if (!run || run.status !== "running") return false;
     if (!["executing", "testing"].includes(run.phase)) return true;
@@ -190,13 +193,13 @@ export class PersonaEvolutionRuntime {
       .filter((task) => proposal.distributedTaskIds.includes(task.taskId) && !["integrated", "cancelled"].includes(task.state))
       .some((task) => collaboration.members.some((member) => member.currentTaskId === task.taskId && !["idle", "offline"].includes(member.state)));
   }
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionState {
+  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionStateOutDto {
     const next = this.#store.createLinghuRepairProposal(request);
     return this.#hanli.requestProposalReview(next.proposals.at(-1)!.proposalId);
   }
 
   /** 从当前持久化卡点恢复同一轮；恢复后立即沿原状态机推进，不触碰长期自动开关。 */
-  async resumeOneShotRun(): Promise<EvolutionState> {
+  async resumeOneShotRun(): Promise<EvolutionStateOutDto> {
     const before = this.state();
     const run = before.oneShotRun;
     const proposal = run?.proposalId ? before.proposals.find((item) => item.proposalId === run.proposalId) : null;
@@ -211,7 +214,7 @@ export class PersonaEvolutionRuntime {
     return this.state();
   }
 
-  async dispatch(proposalId: string, request?: EvolutionMutationRequest): Promise<EvolutionState> {
+  async dispatch(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto> {
     const initialState = this.state();
     const initialProposal = requireProposal(initialState, proposalId);
     const mutation = request || { expectedStateVersion: initialState.updatedAt, idempotencyKey: `automatic-dispatch:${proposalId}:${initialState.updatedAt}` };
@@ -219,7 +222,7 @@ export class PersonaEvolutionRuntime {
   }
 
   /** 一次性托管只调度现有动作；每次推进到需要等待真实任务状态的位置即返回。 */
-  async #advanceOneShot(): Promise<EvolutionState> {
+  async #advanceOneShot(): Promise<EvolutionStateOutDto> {
     const transitionLimit = Math.max(12, this.state().automationSettings.maxCorrectionRounds * 3 + 8);
     for (let transition = 0; transition < transitionLimit; transition += 1) {
       let state = this.state();
@@ -335,7 +338,7 @@ export class PersonaEvolutionRuntime {
         this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在生成检查计划并验收真实应用界面", topic.topicId, proposal.proposalId);
         if (!this.#oneShotAcceptanceRunner) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立真实应用验收执行器尚未接入。"), "韩立真实应用验收执行器尚未接入。");
         try {
-          const existingPlan = [...state.archiveRecords].reverse().find((record) => record.proposalId === proposal!.proposalId && record.eventType === "acceptance.plan_generated")?.payload.acceptancePlan as HanLiAcceptancePlan | undefined;
+          const existingPlan = [...state.archiveRecords].reverse().find((record) => record.proposalId === proposal!.proposalId && record.eventType === "acceptance.plan_generated")?.payload.acceptancePlan as HanliAcceptancePlanOutDto | undefined;
           const plan = existingPlan || await this.#hanli.generateAcceptancePlan(proposal.proposalId);
           const runResult = await this.#oneShotAcceptanceRunner(plan);
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
@@ -356,7 +359,7 @@ export class PersonaEvolutionRuntime {
   }
 
   /** 被转换为可恢复暂停态的失败也必须进入统一异常中心，不能因 catch 而丢失。 */
-  #blockOneShotFailure(kind: "technical" | "business", operation: string, error: unknown, reason: string, details: Record<string, unknown> = {}): EvolutionState {
+  #blockOneShotFailure(kind: "technical" | "business", operation: string, error: unknown, reason: string, details: Record<string, unknown> = {}): EvolutionStateOutDto {
     const state = this.state();
     const run = state.oneShotRun;
     const topicId = run?.topicId || state.activeTopicId;
@@ -425,7 +428,7 @@ export class PersonaEvolutionRuntime {
   }
 }
 
-function requireProposal(state: EvolutionState, proposalId: string): EvolutionProposal { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposal { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
 
 /** 运行中人物以任务当前阶段的权威成员 ID 为准，不能让上一阶段遗留的 currentHandler 覆盖真实执行者。 */
 function taskOwnerName(state: ReturnType<CollaborationWorkflowFacade["state"]>, task: ReturnType<CollaborationWorkflowFacade["state"]>["tasks"][number]): string {
@@ -459,7 +462,7 @@ function currentExecutionActivity(
   return { actorName, action: `正在并行执行 ${selected.length} 个任务：${titles}${selected.length > 3 ? "等" : ""}` };
 }
 
-function distributionPlanningPrompt(proposal: EvolutionProposal, topic: EvolutionState["topics"][number], feedback: string): string {
+function distributionPlanningPrompt(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], feedback: string): string {
   return [
     "你是南宫婉，负责在真实工程中调查后形成最小、可独立合并的执行任务。现在只读调查，不修改源码。",
     "影响范围只是调查边界，不等于任务数量。单个按钮、单个页面、同一组件、预计修改文件重叠或必须一起验收的内容必须合并为一个任务。约束、风险、保持功能不变和测试要求不能单独成为任务。只有可以独立修改、独立回退、独立验收且预计文件不重叠时才允许并行。",

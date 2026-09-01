@@ -6,15 +6,15 @@ import type {
   CollaborationFlowEventDetails,
   CollaborationRepairDiagnosis,
   CollaborationRequirementPlan,
-  CollaborationState,
+  CollaborationStateOutDto,
   CollaborationTask,
   CollaborationWorkerPhase,
-  CreateCollaborationMemberRequest,
+  CreateCollaborationMemberInDto,
   DesktopOperatingMode,
-  SubmitCollaborationTaskRequest,
-  UpdateCollaborationMemberRequest,
+  SubmitCollaborationTaskInDto,
+  UpdateCollaborationMemberInDto,
 } from "../../../contracts/collaboration/workflow/index.js";
-import type { CodexStreamEvent } from "../../../contracts/desktop/desktop.js";
+import type { CodexStreamEvent } from "../../../contracts/platform/codex/index.js";
 import { CollaborationDurationLog } from "./internal/collaboration-duration.log.js";
 import { CollaborationStore } from "./internal/collaboration.store.js";
 import type {
@@ -54,7 +54,7 @@ export interface CollaborationCoordinatorOptions {
   workspaces: VersionWorkspaceManager;
   sessions: CollaborationSessionFactory;
   integrationPipeline: VersionIntegrationPipeline;
-  emitState(state: CollaborationState, reason: string, taskIds: string[]): void;
+  emitState(state: CollaborationStateOutDto, reason: string, taskIds: string[]): void;
   emitStream(taskId: string, memberId: string, event: CodexStreamEvent): void;
 }
 
@@ -91,14 +91,14 @@ export class CollaborationCoordinator {
     this.#scheduleUnifiedTestRepairs(this.#store.state());
   }
 
-  state(): CollaborationState { return this.#store.state(); }
-  setMode(mode: DesktopOperatingMode): CollaborationState { return this.#store.setMode(mode); }
-  selectMember(memberId: string): CollaborationState { return this.#store.selectMember(memberId); }
-  createMember(request: CreateCollaborationMemberRequest): CollaborationState { return this.#store.createMember(request); }
-  updateMember(memberId: string, request: UpdateCollaborationMemberRequest): CollaborationState { return this.#store.updateMember(memberId, request); }
-  deleteMember(memberId: string): CollaborationState { return this.#store.deleteMember(memberId); }
+  state(): CollaborationStateOutDto { return this.#store.state(); }
+  setMode(mode: DesktopOperatingMode): CollaborationStateOutDto { return this.#store.setMode(mode); }
+  selectMember(memberId: string): CollaborationStateOutDto { return this.#store.selectMember(memberId); }
+  createMember(request: CreateCollaborationMemberInDto): CollaborationStateOutDto { return this.#store.createMember(request); }
+  updateMember(memberId: string, request: UpdateCollaborationMemberInDto): CollaborationStateOutDto { return this.#store.updateMember(memberId, request); }
+  deleteMember(memberId: string): CollaborationStateOutDto { return this.#store.deleteMember(memberId); }
 
-  submitTask(request: SubmitCollaborationTaskRequest): CollaborationState {
+  submitTask(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto {
     const enabledWorkers = this.state().members.filter((member) => member.kind === "worker" && member.enabled).length;
     if (enabledWorkers < 1) throw new Error("协同执行至少需要一名已启用的执行人物。");
     const task = this.#store.submitTask(request);
@@ -107,7 +107,7 @@ export class CollaborationCoordinator {
     return this.state();
   }
 
-  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMember, "memberId" | "displayName">): CollaborationState {
+  continueTask(taskId: string, recoveryActor?: Pick<CollaborationMember, "memberId" | "displayName">): CollaborationStateOutDto {
     const state = this.#store.continueTask(taskId, recoveryActor);
     const previousWait = this.#waitSpans.get(taskId);
     if (previousWait) this.#durations.finish(previousWait, "interrupted", { releaseEvent: "task.recovery_requested" });
@@ -237,13 +237,13 @@ export class CollaborationCoordinator {
   }
 
   /** 把已由自动保障确认的停点转换为可审计恢复态，并立即建立新的执行或集成租约。 */
-  async recoverTask(taskId: string, reason: string): Promise<CollaborationState> {
+  async recoverTask(taskId: string, reason: string): Promise<CollaborationStateOutDto> {
     const task = this.#store.task(taskId);
     if (task.state !== "blocked" && task.state !== "recovering") await this.#blockTask(taskId, reason);
     return this.continueTask(taskId);
   }
 
-  async cancelTask(taskId: string): Promise<CollaborationState> {
+  async cancelTask(taskId: string): Promise<CollaborationStateOutDto> {
     const task = this.#store.task(taskId);
     const session = this.#executorSessions.get(taskId);
     this.#executorSessions.delete(taskId);
@@ -265,7 +265,7 @@ export class CollaborationCoordinator {
   confirmPublishedRestart(): number[] { return this.#integrationPipeline.confirmPublishedRestart(); }
 
   /** 南宫婉确认同一演化轮全部结果已返回后，才把不可拆分的完整批次交给令狐。 */
-  sealEvolutionRound(proposalId: string, taskIds: string[]): CollaborationState {
+  sealEvolutionRound(proposalId: string, taskIds: string[]): CollaborationStateOutDto {
     const uniqueTaskIds = [...new Set(taskIds)];
     if (!uniqueTaskIds.length) throw new Error("演化轮没有可封存的任务。");
     const current = this.state();
@@ -313,7 +313,7 @@ export class CollaborationCoordinator {
   }
 
   /** 只为已有确定验证失败的在途任务排队修复；容量释放后的任意状态更新都会再次尝试。 */
-  #scheduleUnifiedTestRepairs(state: CollaborationState): void {
+  #scheduleUnifiedTestRepairs(state: CollaborationStateOutDto): void {
     if (this.#disposed || state.mode !== "collaboration") return;
     const linghu = state.members.find((member) => member.memberId === LINGHU_MEMBER_ID);
     if (!linghu || linghu.state !== "idle") return;
@@ -325,7 +325,7 @@ export class CollaborationCoordinator {
   }
 
   /** 令狐释放后自动接续最早进入恢复队列的执行故障；等待期间不占用人物状态，也不记为修复失败。 */
-  #scheduleExecutionRepairs(state: CollaborationState): void {
+  #scheduleExecutionRepairs(state: CollaborationStateOutDto): void {
     if (this.#disposed || state.mode !== "collaboration") return;
     const linghu = state.members.find((member) => member.memberId === LINGHU_MEMBER_ID);
     if (!linghu || linghu.state !== "idle") return;
@@ -865,7 +865,7 @@ function fairIdleMembers(members: CollaborationMember[]): CollaborationMember[] 
   }).map((entry) => entry.member);
 }
 
-function requireMember(state: CollaborationState, memberId: string): CollaborationMember {
+function requireMember(state: CollaborationStateOutDto, memberId: string): CollaborationMember {
   const member = state.members.find((candidate) => candidate.memberId === memberId);
   if (!member) throw new Error("协同人物不存在。");
   return member;
@@ -975,7 +975,7 @@ function releaseMember(store: CollaborationStore, memberId: string): void {
 }
 
 /** 同一原子状态变更内释放人物，避免嵌套提交覆盖当前任务刚写入的恢复事实。 */
-function releaseMemberFromState(state: CollaborationState, memberId: string): void {
+function releaseMemberFromState(state: CollaborationStateOutDto, memberId: string): void {
   const target = state.members.find((candidate) => candidate.memberId === memberId);
   if (!target) return;
   const shouldDelete = target.state === "draining" || !target.enabled;

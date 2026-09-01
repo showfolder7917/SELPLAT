@@ -4,10 +4,10 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CodexStreamEvent } from "../../../../../../contracts/platform/codex/index.js";
 import type {
   CollaborationParticipantSnapshot,
-  CollaborationState,
+  CollaborationStateOutDto,
   CollaborationTimelineGroup,
   CollaborationTimelineNode,
-  CollaborationTimelineSnapshot,
+  CollaborationTimelineSnapshotOutDto,
 } from "../../../../../../contracts/collaboration/workflow/index.js";
 import type { CollaborationTimelineBusinessEvent } from "../../../../../../contracts/collaboration/workflow/index.js";
 import { projectCollaborationFlowEvent, projectLegacySubmittedFlowCorrection } from "./collaboration-timeline-flow.projector.js";
@@ -65,7 +65,7 @@ export class CollaborationTimelineRepository {
   }
 
   /** 只消费 Coordinator 已追加的 flowEvents，不再从 executionRecords、plan 或 task.state 重建历史。 */
-  appendTaskFlowEvents(state: CollaborationState, taskIds: string[]): CollaborationTimelineCommit | null {
+  appendTaskFlowEvents(state: CollaborationStateOutDto, taskIds: string[]): CollaborationTimelineCommit | null {
     const committedAt = new Date().toISOString();
     const changedGroupIds = new Set<string>();
     this.#database.transaction((connection) => {
@@ -141,7 +141,7 @@ export class CollaborationTimelineRepository {
     return { nodeId: stored.nodeId, ...this.#commit([stored.groupId], committedAt) };
   }
 
-  snapshot(now = new Date().toISOString()): CollaborationTimelineSnapshot {
+  snapshot(now = new Date().toISOString()): CollaborationTimelineSnapshotOutDto {
     return this.#database.withConnection((connection) => {
       const topics = connection.prepare(`SELECT groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt
         FROM AiDesktopTaskTimelineTopic ORDER BY updatedAt DESC, groupId`).all() as Array<Record<string, unknown>>;

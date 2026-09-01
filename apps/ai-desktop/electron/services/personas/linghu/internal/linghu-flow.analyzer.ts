@@ -1,5 +1,5 @@
 // 协同状态与任务类型提供令狐只读分析所需的权威事实，不允许本模块修改任务。
-import type { CollaborationState, CollaborationTask } from "../../../../../contracts/collaboration/workflow/index.js";
+import type { CollaborationStateOutDto, CollaborationTask } from "../../../../../contracts/collaboration/workflow/index.js";
 // 令狐协议定义健康状态、阻塞分类、快照和模块报告的数据形状。
 import type { LinghuAutomaticFlowSnapshotOutDto, LinghuAutomationModuleOutDto, LinghuBlockingKindOutDto, LinghuFlowHealthOutDto } from "../../../../../contracts/collaboration/linghu/index.js";
 // 测试资源快照只被转换为任务说明文字，本模块不申请或释放资源。
@@ -13,7 +13,7 @@ const LINGHU_MEMBER_ID = "linghu-ancestor";
 const FLOW_STALE_AFTER_MS = 120_000;
 
 /** 把所有未终结协同任务转换为令狐可持久化的只读流程快照。 */
-export function automaticFlowSnapshots(state: CollaborationState, activeTaskId: string | null, checkedAt: string): LinghuAutomaticFlowSnapshotOutDto[] {
+export function automaticFlowSnapshots(state: CollaborationStateOutDto, activeTaskId: string | null, checkedAt: string): LinghuAutomaticFlowSnapshotOutDto[] {
   // `activeTaskId` 暂时只保留为调用契约的一部分；令狐必须检查自身任务和其他人物任务，不能过滤活动任务。
   void activeTaskId;
   // 已集成和已取消任务已经终结，其历史由时间线保存，不进入持续恢复扫描。
@@ -23,7 +23,7 @@ export function automaticFlowSnapshots(state: CollaborationState, activeTaskId: 
 }
 
 /** 根据任务、成员心跳和检查时间生成单条自动保障快照。 */
-function automaticFlowSnapshot(state: CollaborationState, task: CollaborationTask, checkedAt: string): LinghuAutomaticFlowSnapshotOutDto {
+function automaticFlowSnapshot(state: CollaborationStateOutDto, task: CollaborationTask, checkedAt: string): LinghuAutomaticFlowSnapshotOutDto {
   // 只有当前确实持有该任务的成员心跳才属于本任务，避免复用人物上一任务的时间。
   const member = state.members.find((candidate) => candidate.memberId === task.executorMemberId && candidate.currentTaskId === task.taskId);
   // 最近进展优先比较心跳、协议进度和任务状态更新时间。
@@ -56,7 +56,7 @@ function automaticFlowSnapshot(state: CollaborationState, task: CollaborationTas
 }
 
 /** 把结构化停点转换成人可以立即判断“谁、哪项任务、停在哪里、发现什么”的报告。 */
-export function taskHumanReport(state: CollaborationState, task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): string {
+export function taskHumanReport(state: CollaborationStateOutDto, task: CollaborationTask, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): string {
   // 当前执行人 ID 是负责人判断的第一权威来源。
   const responsibleMemberId = task.executorMemberId;
   // 依次使用实时成员、冻结原执行人和当前处理人，旧记录缺字段时仍能给出可读负责人。

@@ -1,16 +1,16 @@
 import type { ConversationRoundTopicDecision } from "../../../../../contracts/capabilities/event-center/index.js";
-import type { NangongTopicDraft } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { NangongTopicDraftOutDto } from "../../../../../contracts/collaboration/nangong/index.js";
 
 /** 南宫婉判断本轮事实已经成熟后使用的唯一可见邀请。 */
 const NANGONG_ONE_SHOT_INVITATION = "若确认启动本轮完整演化，请回复 1。";
 const CONVERSATION_TOPIC_META_PREFIX = "NANGONG_TOPIC_META=";
 
 /** 把人物返回的结构化草稿转换为可编辑字段；缺少必要事实时明确失败。 */
-export function parseNangongTopicDraft(text: string): NangongTopicDraft {
+export function parseNangongTopicDraft(text: string): NangongTopicDraftOutDto {
   const candidate = text.match(/\{[\s\S]*\}/)?.[0];
   if (!candidate) throw new Error("南宫婉未返回可编辑的课题草稿，请重试。");
   try {
-    const value = JSON.parse(candidate) as Partial<NangongTopicDraft>;
+    const value = JSON.parse(candidate) as Partial<NangongTopicDraftOutDto>;
     const title = typeof value.title === "string" ? value.title.trim() : "";
     const goal = typeof value.goal === "string" ? value.goal.trim() : "";
     const scope = normalizeList(value.scope);

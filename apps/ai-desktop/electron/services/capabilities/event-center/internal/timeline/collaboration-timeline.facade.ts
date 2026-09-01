@@ -1,14 +1,14 @@
 import type { CodexStreamEvent } from "../../../../../../contracts/platform/codex/index.js";
 import type {
-  CollaborationState,
-  CollaborationTimelineChangedEvent,
-  CollaborationTimelineSnapshot,
+  CollaborationStateOutDto,
+  CollaborationTimelineChangedEventOutDto,
+  CollaborationTimelineSnapshotOutDto,
 } from "../../../../../../contracts/collaboration/workflow/index.js";
 import type { CollaborationTimelineBusinessEvent } from "../../../../../../contracts/collaboration/workflow/index.js";
 import { CollaborationTimelineRepository } from "./collaboration-timeline.repository.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 
-type TimelineChangedListener = (event: CollaborationTimelineChangedEvent) => void;
+type TimelineChangedListener = (event: CollaborationTimelineChangedEventOutDto) => void;
 
 /**
  * 任务时间线唯一业务门面：所有写入先提交 SQLite，再向订阅者发布变更。
@@ -27,7 +27,7 @@ export class CollaborationTimelineFacade {
     if (commit) this.#publish(commit);
   }
 
-  appendTaskFlowEvents(state: CollaborationState, taskIds: string[]): void {
+  appendTaskFlowEvents(state: CollaborationStateOutDto, taskIds: string[]): void {
     const commit = this.#repository.appendTaskFlowEvents(state, taskIds);
     if (commit) this.#publish(commit);
   }
@@ -39,7 +39,7 @@ export class CollaborationTimelineFacade {
     return commit.nodeId;
   }
 
-  getTimelineSnapshot(now = new Date().toISOString()): CollaborationTimelineSnapshot {
+  getTimelineSnapshot(now = new Date().toISOString()): CollaborationTimelineSnapshotOutDto {
     return this.#repository.snapshot(now);
   }
 
@@ -48,7 +48,7 @@ export class CollaborationTimelineFacade {
     return () => this.#listeners.delete(listener);
   }
 
-  #publish(event: CollaborationTimelineChangedEvent): void {
+  #publish(event: CollaborationTimelineChangedEventOutDto): void {
     for (const listener of this.#listeners) listener(event);
   }
 }

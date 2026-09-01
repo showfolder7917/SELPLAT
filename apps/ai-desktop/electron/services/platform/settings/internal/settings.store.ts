@@ -3,10 +3,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import {
   MODEL_SERVICE_TIERS,
   REASONING_EFFORTS,
-  type DesktopSettings,
   type ModelServiceTier,
   type ReasoningEffort,
-} from "../../../../../contracts/desktop/desktop.js";
+} from "../../../../../contracts/foundation/base.js";
+import type { DesktopSettings } from "../../../../../contracts/platform/settings/index.js";
 
 export const DEFAULT_AI_DESKTOP_MODEL = "gpt-5.6-terra";
 const SETTINGS_SCHEMA_VERSION = 2;

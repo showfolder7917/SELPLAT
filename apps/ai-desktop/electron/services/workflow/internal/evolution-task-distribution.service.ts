@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { CollaborationTimelineBusinessEvent } from "../../../../contracts/collaboration/workflow/index.js";
 import type { CollaborationTask } from "../../../../contracts/collaboration/workflow/index.js";
 import type { CodexStreamEvent } from "../../../../contracts/platform/codex/index.js";
-import type { EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionDistributionValidation, EvolutionProposal, EvolutionState } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionDistributionPlan, EvolutionDistributionUnit, EvolutionDistributionValidation, EvolutionProposal, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
 import type { CollaborationCoordinator } from "../collaboration-workflow.facade.js";
 import type { EvolutionStatePort } from "../../evolution/index.js";
 
@@ -12,7 +12,7 @@ type PlanResult = { summary: string; units: EvolutionDistributionUnit[] };
 export interface EvolutionTaskDistributionServiceOptions {
   store: EvolutionStatePort;
   collaboration: CollaborationCoordinator;
-  plan(proposal: EvolutionProposal, topic: EvolutionState["topics"][number], feedback: string, emit: (event: CodexStreamEvent) => void): Promise<PlanResult>;
+  plan(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], feedback: string, emit: (event: CodexStreamEvent) => void): Promise<PlanResult>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   timeline?: (event: CollaborationTimelineBusinessEvent) => void;
   timelineStream?: (taskId: string, memberId: string, event: CodexStreamEvent) => void;
@@ -22,7 +22,7 @@ export interface EvolutionTaskDistributionServiceOptions {
 export class EvolutionTaskDistributionService {
   constructor(private readonly options: EvolutionTaskDistributionServiceOptions) {}
 
-  async dispatch(proposalId: string): Promise<EvolutionState> {
+  async dispatch(proposalId: string): Promise<EvolutionStateOutDto> {
     let state = this.options.store.state();
     let proposal = requireProposal(state, proposalId);
     const topic = requireTopic(state, proposal.topicId);
@@ -96,7 +96,7 @@ export class EvolutionTaskDistributionService {
     return state;
   }
 
-  #publishPlanning(proposal: EvolutionProposal, topic: EvolutionState["topics"][number], attempt: number, status: "current" | "completed" | "failed", action: string, content: string, startedAt: string): void {
+  #publishPlanning(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], attempt: number, status: "current" | "completed" | "failed", action: string, content: string, startedAt: string): void {
     const occurredAt = new Date().toISOString();
     this.options.timeline?.({
       eventId: `distribution-planning-${proposal.proposalId}-${attempt}-${status}-${randomUUID()}`,
@@ -113,7 +113,7 @@ export class EvolutionTaskDistributionService {
     });
   }
 
-  #publishDistribution(proposal: EvolutionProposal, topic: EvolutionState["topics"][number], observedTasks: CollaborationTask[]): void {
+  #publishDistribution(proposal: EvolutionProposal, topic: EvolutionStateOutDto["topics"][number], observedTasks: CollaborationTask[]): void {
     const tasks = observedTasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
     // 接收人只来自冻结的执行分配；currentHandler 可能仍是提交人，不能据此反推出“南宫婉发给南宫婉”。
     const recipients = tasks.map((task) => task.executionRecords?.[0]?.executor || task.originalExecutor || { memberId: `pending:${task.taskId}`, displayName: "等待分配" })
@@ -170,5 +170,5 @@ function validateDistributionPlan(plan: PlanResult, hardFindings: string[]): Evo
     validatedAt: new Date().toISOString(),
   };
 }
-function requireProposal(state: EvolutionState, proposalId: string) { const value = state.proposals.find((item) => item.proposalId === proposalId); if (!value) throw new Error("演化提案不存在。"); return value; }
-function requireTopic(state: EvolutionState, topicId: string) { const value = state.topics.find((item) => item.topicId === topicId); if (!value) throw new Error("专项课题不存在。"); return value; }
+function requireProposal(state: EvolutionStateOutDto, proposalId: string) { const value = state.proposals.find((item) => item.proposalId === proposalId); if (!value) throw new Error("演化提案不存在。"); return value; }
+function requireTopic(state: EvolutionStateOutDto, topicId: string) { const value = state.topics.find((item) => item.topicId === topicId); if (!value) throw new Error("专项课题不存在。"); return value; }

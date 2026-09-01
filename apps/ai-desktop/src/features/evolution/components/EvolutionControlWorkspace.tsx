@@ -6,7 +6,7 @@ import type {
   EvolutionWorkbenchView,
   EvolutionWorkspaceLocation,
   Locale,
-  EvolutionState,
+  EvolutionStateOutDto,
   WorkspaceState,
 } from "../../../../contracts/desktop/desktop";
 import { EvolutionDatabaseGrid } from "./EvolutionDatabaseGrid";
@@ -45,7 +45,7 @@ function evolutionWorkbenchForNode(node: EvolutionWorkspaceFlowNode): { view: Ev
 }
 
 /** 南宫婉与韩立共用一棵完整业务树；父节点展示总览，叶节点直接路由右侧页面。 */
-export function EvolutionControlWorkspace({ perspective, requestedLocation, onLocationChange, member, state, workspaces, locale, onState, onError }: { perspective: "nangong" | "hanli"; requestedLocation: EvolutionWorkspaceLocation; onLocationChange(location: EvolutionWorkspaceLocation): void; member?: CollaborationMember; state: EvolutionState; workspaces: WorkspaceState | null; locale: Locale; onState(state: EvolutionState): void; onError(message: string): void }) {
+export function EvolutionControlWorkspace({ perspective, requestedLocation, onLocationChange, member, state, workspaces, locale, onState, onError }: { perspective: "nangong" | "hanli"; requestedLocation: EvolutionWorkspaceLocation; onLocationChange(location: EvolutionWorkspaceLocation): void; member?: CollaborationMember; state: EvolutionStateOutDto; workspaces: WorkspaceState | null; locale: Locale; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
   const [selectedNode, setSelectedNode] = useState<EvolutionWorkspaceTreeNode>(perspective === "hanli" ? "manual-approval" : "manual-topic");
   const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(false);
   const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>(DEFAULT_EXPANDED_NODES);
@@ -145,7 +145,7 @@ export function EvolutionControlWorkspace({ perspective, requestedLocation, onLo
 }
 
 /** 单树一级节点拥有自己的右侧总览，点击父节点同样产生可核对的页面切换。 */
-function EvolutionModuleOverview({ module, state, pendingCount }: { module: EvolutionWorkspaceModule; state: EvolutionState; pendingCount: number }) {
+function EvolutionModuleOverview({ module, state, pendingCount }: { module: EvolutionWorkspaceModule; state: EvolutionStateOutDto; pendingCount: number }) {
   const content = module === "people"
     ? { eyebrow: "人物与个性", title: "人物目录", detail: "查看南宫婉与韩立在专题演化中的职责和协作边界。", facts: [["人物", "2 位"], ["专题", `${state.topics.length} 项`]] }
     : module === "audit"

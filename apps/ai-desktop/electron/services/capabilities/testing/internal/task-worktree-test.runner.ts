@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { CodexStreamEvent } from "../../../../../contracts/desktop/desktop.js";
+import type { CodexStreamEvent } from "../../../../../contracts/platform/codex/index.js";
 import { acquireManagedDependencyLease, releaseManagedDependencyLease } from "../../release/index.js";
 import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.facade.js";
 

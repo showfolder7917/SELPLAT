@@ -5,24 +5,16 @@ import { promisify } from "node:util";
 
 import { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, screen, shell, systemPreferences } from "electron";
 
-import { LOCALES, SANDBOX_MODES } from "../../contracts/desktop/desktop.js";
+import { LOCALES, SANDBOX_MODES } from "../../contracts/foundation/base.js";
 import type {
-  AiMemoryDatabaseStatus,
   AppVariant,
-  EnqueueMessageRequest,
   ManagedExecutionMode,
-  ScreenCaptureFrameRequest,
-  ScreenCaptureFrameResult,
-  ScreenCapturePreparationResult,
-  ScreenCaptureRequest,
-  ScreenshotAnnotationWindowRequest,
-  ScreenshotSaveRequest,
-  SendMessageRequest,
   WindowAction,
-  TestDataResetResult,
-  CorpusSemanticBackfillStatus,
-  EvolutionWorkspaceLocation,
-} from "../../contracts/desktop/desktop.js";
+} from "../../contracts/foundation/base.js";
+import type { EnqueueMessageRequest, SendMessageRequest } from "../../contracts/capabilities/conversation/index.js";
+import type { EvolutionWorkspaceLocation } from "../../contracts/collaboration/evolution/index.js";
+import type { ScreenCaptureFrameRequest, ScreenCaptureFrameResult, ScreenCapturePreparationResult, ScreenCaptureRequest, ScreenshotAnnotationWindowRequest, ScreenshotSaveRequest } from "../../contracts/platform/attachments/index.js";
+import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../../contracts/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";

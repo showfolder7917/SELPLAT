@@ -8,10 +8,10 @@ import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/li
 import type {
   AutomaticTestPreflightCheck,
   AutomaticTestPreflightResult,
-  CodexHarnessStatus,
-  Locale,
-  WorkspaceState,
-} from "../../../../contracts/desktop/desktop.js";
+} from "../../../../contracts/capabilities/testing/index.js";
+import type { Locale } from "../../../../contracts/foundation/base.js";
+import type { CodexHarnessStatus } from "../../../../contracts/platform/codex/index.js";
+import type { WorkspaceState } from "../../../../contracts/platform/workspace/index.js";
 import type { CommandGovernanceFacade as TrustedCommandStore } from "../../platform/security/index.js";
 
 const interactionPort = 4197;

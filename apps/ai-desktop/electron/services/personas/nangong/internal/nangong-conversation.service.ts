@@ -1,12 +1,8 @@
 import { randomUUID } from "node:crypto";
 
 import type { ConversationRoundTopicDecision } from "../../../../../contracts/capabilities/event-center/index.js";
-import type {
-  EvolutionState,
-  GenerateNangongTopicDraftRequest,
-  NangongTopicDraft,
-  SendNangongConversationMessageRequest,
-} from "../../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, SendNangongConversationMessageInDto } from "../../../../../contracts/collaboration/nangong/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 import { parseNangongConversationResponse, parseNangongTopicDraft } from "./nangong-conversation.parser.js";
 
@@ -35,7 +31,7 @@ export class NangongConversationService {
   }
 
   /** 保存用户消息并生成南宫回复；独立“1”只在存在可恢复邀请时启动一次性演化。 */
-  async sendConversationMessage(request: SendNangongConversationMessageRequest): Promise<EvolutionState> {
+  async sendConversationMessage(request: SendNangongConversationMessageInDto): Promise<EvolutionStateOutDto> {
     const current = this.#store.state();
     const confirmation = current.oneShotConfirmation;
     const ready = confirmation?.status === "awaiting-user-confirmation" && confirmation.conversationId === current.conversation.conversationId;
@@ -72,7 +68,7 @@ export class NangongConversationService {
   }
 
   /** 删除官方人物线程成功后建立新对话；活动写入竞争只进行有限重试。 */
-  async newConversation(): Promise<EvolutionState> {
+  async newConversation(): Promise<EvolutionStateOutDto> {
     for (const [index, retryDelay] of this.#newConversationRetryDelaysMs.entries()) {
       if (retryDelay) await new Promise((resolve) => setTimeout(resolve, retryDelay));
       try {
@@ -86,7 +82,7 @@ export class NangongConversationService {
   }
 
   /** 根据当前南宫对话生成可编辑草稿；生成动作不会直接保存专题。 */
-  async generateTopicDraft(request: GenerateNangongTopicDraftRequest): Promise<NangongTopicDraft> {
+  async generateTopicDraft(request: GenerateNangongTopicDraftInDto): Promise<NangongTopicDraftOutDto> {
     const messages = this.#store.state().conversation.messages.slice(-20);
     if (!messages.length) throw new Error("当前没有可整理为课题的南宫婉对话。");
     const context = this.#memory?.buildNangongContext(this.#store.state().conversation)
@@ -100,7 +96,7 @@ export class NangongConversationService {
   }
 
   /** 把一次性确认转换为人物课题事实，再请求 Workflow 从已保存卡点继续。 */
-  async #startOneShotFromConversation(request: SendNangongConversationMessageRequest, ready: boolean): Promise<EvolutionState> {
+  async #startOneShotFromConversation(request: SendNangongConversationMessageInDto, ready: boolean): Promise<EvolutionStateOutDto> {
     const userMessageId = request.clientMessageId || `evolution-message-${randomUUID()}`;
     let state = this.#store.appendConversation("user", request.message, request.attachmentIds || [], { messageId: userMessageId, deliveryStatus: "sending" });
     const userMessage = state.conversation.messages.at(-1)!;
@@ -141,7 +137,7 @@ export class NangongConversationService {
   }
 
   /** 完整人物回合异步进入训练归档；归档失败不改写已经成功的对话。 */
-  #archiveConversationRound(state: EvolutionState, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision | null): void {
+  #archiveConversationRound(state: EvolutionStateOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecision | null): void {
     if (!this.#memory) return;
     queueMicrotask(() => {
       try {

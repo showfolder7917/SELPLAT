@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { CollaborationIntegrationFailureKind, CollaborationMember, CollaborationState, CollaborationTask } from "../../../../../contracts/collaboration/workflow/index.js";
+import type { CollaborationIntegrationFailureKind, CollaborationMember, CollaborationStateOutDto, CollaborationTask } from "../../../../../contracts/collaboration/workflow/index.js";
 import type { IntegrationReleaseRequest, ReleaseBatchDocument } from "../../../../../contracts/capabilities/release/index.js";
 import type { CollaborationDurationPort, CollaborationStatePort } from "../../../workflow/index.js";
 import { ReleaseBatchStore } from "./release-batch.store.js";
@@ -359,7 +359,7 @@ function integrationFailurePresentation(kind: CollaborationIntegrationFailureKin
   };
 }
 
-function requireActor(state: CollaborationState, memberId: string): CollaborationMember {
+function requireActor(state: CollaborationStateOutDto, memberId: string): CollaborationMember {
   const actor = state.members.find((member) => member.memberId === memberId);
   if (!actor) throw new Error("版本集成操作者不存在。");
   return actor;
@@ -391,11 +391,11 @@ function appendFlow(
   });
 }
 
-function integrationDependenciesSatisfied(task: CollaborationTask, state: CollaborationState): boolean {
+function integrationDependenciesSatisfied(task: CollaborationTask, state: CollaborationStateOutDto): boolean {
   return task.dependencyTaskIds.every((dependencyId) => state.tasks.find((candidate) => candidate.taskId === dependencyId)?.state === "integrated");
 }
 
-function atomicGroupReady(task: CollaborationTask, ready: CollaborationTask[], state: CollaborationState): boolean {
+function atomicGroupReady(task: CollaborationTask, ready: CollaborationTask[], state: CollaborationStateOutDto): boolean {
   if (!task.atomicGroupId) return false;
   const group = state.tasks.filter((candidate) => candidate.atomicGroupId === task.atomicGroupId);
   return group.length > 0 && group.every((candidate) => ready.some((item) => item.taskId === candidate.taskId));

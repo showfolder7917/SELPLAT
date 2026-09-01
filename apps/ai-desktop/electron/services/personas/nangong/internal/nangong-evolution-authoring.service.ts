@@ -1,10 +1,10 @@
 import type {
-  ConvertNangongConversationToTopicRequest,
-  CreateEvolutionProposalRequest,
-  EvolutionState,
-  ReviseEvolutionProposalRequest,
-  UpdateEvolutionTopicRequest,
-} from "../../../../../contracts/collaboration/evolution/index.js";
+  ConvertNangongConversationToTopicInDto,
+  CreateNangongProposalInDto,
+  ReviseNangongProposalInDto,
+  UpdateNangongTopicInDto,
+} from "../../../../../contracts/collaboration/nangong/index.js";
+import type { EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 import { hasMaterialRevisionEvidence, parseRevisionInvestigation, revisionInvestigationPrompt } from "./nangong-revision.investigator.js";
 
@@ -35,19 +35,19 @@ export class NangongEvolutionAuthoringService {
   }
 
   /** 把用户确认的南宫对话冻结为正式专题事实。 */
-  convertConversationToTopic(request: ConvertNangongConversationToTopicRequest): EvolutionState { return this.#store.convertConversationToTopic(request); }
+  convertConversationToTopic(request: ConvertNangongConversationToTopicInDto): EvolutionStateOutDto { return this.#store.convertConversationToTopic(request); }
 
   /** 创建南宫提案并通过公开协作端口申请韩立审批。 */
-  createProposal(topicId: string, request: CreateEvolutionProposalRequest): EvolutionState {
+  createProposal(topicId: string, request: CreateNangongProposalInDto): EvolutionStateOutDto {
     const next = this.#store.createProposal(topicId, request);
     return this.#proposalReview.requestReview(next.proposals.at(-1)!.proposalId);
   }
 
   /** 修改专题事实；版本和持久化仍由 Evolution Store 负责。 */
-  updateTopic(topicId: string, request: UpdateEvolutionTopicRequest): EvolutionState { return this.#store.updateTopic(topicId, request); }
+  updateTopic(topicId: string, request: UpdateNangongTopicInDto): EvolutionStateOutDto { return this.#store.updateTopic(topicId, request); }
 
   /** 根据明确反馈创建不可覆盖的新提案版本，并重新申请审批。 */
-  reviseProposal(proposalId: string, request: ReviseEvolutionProposalRequest): EvolutionState {
+  reviseProposal(proposalId: string, request: ReviseNangongProposalInDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#store.state(), proposalId);
     const submitterDisplayName = this.#memberDirectory.resolveEnabledDisplayName(request.submitterMemberId);
     if (!submitterDisplayName) throw new Error("重新提交人不是当前已启用的协同人物。");
@@ -58,7 +58,7 @@ export class NangongEvolutionAuthoringService {
   }
 
   /** 驳回后先只读核查工作区；没有新的可验证事实时保留原提案。 */
-  async investigateAndReviseReturnedProposal(proposalId: string): Promise<EvolutionState> {
+  async investigateAndReviseReturnedProposal(proposalId: string): Promise<EvolutionStateOutDto> {
     const state = this.#store.state();
     const proposal = requireProposal(state, proposalId);
     if (state.proposals.some((item) => item.supersedesProposalId === proposal.proposalId)) return state;
@@ -89,7 +89,7 @@ export class NangongEvolutionAuthoringService {
   }
 }
 
-function requireProposal(state: EvolutionState, proposalId: string): EvolutionState["proposals"][number] {
+function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionStateOutDto["proposals"][number] {
   const proposal = state.proposals.find((item) => item.proposalId === proposalId);
   if (!proposal) throw new Error("演化提案不存在。");
   return proposal;

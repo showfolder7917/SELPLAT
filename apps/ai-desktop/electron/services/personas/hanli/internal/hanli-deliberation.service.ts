@@ -1,15 +1,16 @@
 import { randomUUID } from "node:crypto";
 
 import type { CollaborationMemoryPort } from "../../../../../contracts/capabilities/event-center/index.js";
-import type { EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionState, HanLiEvolutionDeliberation, HanLiTopicCandidate } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../../contracts/collaboration/hanli/index.js";
 import type { EvolutionStatePort } from "../../../evolution/index.js";
 
 /** 韩立研讨所需的外部能力；南宫回答和韩立判断都由明确人物端口提供。 */
 export interface HanliDeliberationDependencies {
   store: EvolutionStatePort;
   memory: CollaborationMemoryPort | null;
-  askHanli(prompt: string, state: EvolutionState): Promise<string>;
-  askNangong(question: string, context: string, state: EvolutionState): Promise<string>;
+  askHanli(prompt: string, state: EvolutionStateOutDto): Promise<string>;
+  askNangong(question: string, context: string, state: EvolutionStateOutDto): Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>): void;
 }
 
@@ -17,14 +18,14 @@ export interface HanliDeliberationDependencies {
  * 韩立研讨服务：拥有发问、证据判断、专题确立和一次性方向审批语义。
  *
  * 真实传参示例：Evolution 当前状态、AI Memory 会话证据，以及韩立/南宫各自的会话端口。
- * 真实返回示例：推进一轮后返回已保存回答与韩立判断的 EvolutionState，或返回正式审批决定。
+ * 真实返回示例：推进一轮后返回已保存回答与韩立判断的 EvolutionStateOutDto，或返回正式审批决定。
  * 异常或副作用示例：证据缺失或 AI JSON 无效时明确抛错；成功判断会通过 EvolutionStatePort 原子保存。
  */
 export class HanliDeliberationService {
   constructor(private readonly dependencies: HanliDeliberationDependencies) {}
 
   /** 每次只推进一轮研讨，让页面可以逐条看到问题、回答和判断依据。 */
-  async advance(): Promise<EvolutionState> {
+  async advance(): Promise<EvolutionStateOutDto> {
     const { store, memory, askHanli, askNangong, recordEvent } = this.dependencies;
     let state = store.state();
     if (!state.automationContext.workspaceState?.roots?.length) throw new Error("请先为自动演化保存实施工作区。 ");
@@ -100,11 +101,11 @@ export class HanliDeliberationService {
 
   /** 根据专题事实形成真实应用验收计划；只制定检查，不声称已经操作或通过。 */
   async createAcceptancePlan(
-    topic: EvolutionState["topics"][number],
+    topic: EvolutionStateOutDto["topics"][number],
     proposal: EvolutionProposal,
     priorFindings: Record<string, unknown>[],
     requestPlan: (prompt: string, workspaceState: typeof topic.workspaceState, locale: typeof topic.locale) => Promise<string>,
-  ): Promise<import("../../../../../contracts/collaboration/evolution/index.js").HanLiAcceptancePlan> {
+  ): Promise<import("../../../../../contracts/collaboration/evolution/index.js").HanliAcceptancePlanOutDto> {
     const response = await requestPlan(acceptancePlanningPrompt(topic, proposal, priorFindings), topic.workspaceState, topic.locale);
     return parseAcceptancePlan(response, topic.topicId, proposal.proposalId);
   }
@@ -113,13 +114,13 @@ export class HanliDeliberationService {
 function parseJsonObject(text: string): Record<string, unknown> { const candidate = text.match(/\{[\s\S]*\}/)?.[0]; if (!candidate) throw new Error("AI 没有返回可解析的结构化判断。 "); try { return JSON.parse(candidate) as Record<string, unknown>; } catch { throw new Error("AI 返回的结构化判断不是有效 JSON。 "); } }
 function normalizeList(value: unknown): string[] { return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : []; }
 function parseHanliQuestion(text: string) { const value = parseJsonObject(text); const question = typeof value.question === "string" ? value.question.trim() : ""; const reason = typeof value.reason === "string" ? value.reason.trim() : ""; if (!question || !reason) throw new Error("韩立首轮问题缺少问题正文或发问依据。 "); return { question, reason }; }
-function parseHanliJudgment(text: string): { assessment: string; nextQuestion: { question: string; reason: string } | null; candidate: HanLiTopicCandidate | null } { const value = parseJsonObject(text); const assessment = typeof value.assessment === "string" ? value.assessment.trim() : ""; if (!assessment) throw new Error("韩立研讨判断缺少事实说明。 "); if (value.decision === "establish-topic") { const topic = value.topic as Partial<HanLiTopicCandidate> | undefined; const candidate = topic && { title: typeof topic.title === "string" ? topic.title : "", goal: typeof topic.goal === "string" ? topic.goal : "", scope: normalizeList(topic.scope), exclusions: normalizeList(topic.exclusions), evidence: normalizeList(topic.evidence), acceptanceCriteria: normalizeList(topic.acceptanceCriteria), establishmentReason: typeof topic.establishmentReason === "string" ? topic.establishmentReason : assessment }; if (!candidate?.title || !candidate.goal || !candidate.scope.length || !candidate.evidence.length || !candidate.acceptanceCriteria.length) throw new Error("韩立确立的专题缺少范围、证据或验收条件。 "); return { assessment, nextQuestion: null, candidate }; } const question = typeof value.nextQuestion === "string" ? value.nextQuestion.trim() : ""; const reason = typeof value.questionReason === "string" ? value.questionReason.trim() : ""; if (!question || !reason) throw new Error("韩立决定继续研讨，但没有给出下一问和依据。 "); return { assessment, nextQuestion: { question, reason }, candidate: null }; }
+function parseHanliJudgment(text: string): { assessment: string; nextQuestion: { question: string; reason: string } | null; candidate: HanliTopicCandidateOutDto | null } { const value = parseJsonObject(text); const assessment = typeof value.assessment === "string" ? value.assessment.trim() : ""; if (!assessment) throw new Error("韩立研讨判断缺少事实说明。 "); if (value.decision === "establish-topic") { const topic = value.topic as Partial<HanliTopicCandidateOutDto> | undefined; const candidate = topic && { title: typeof topic.title === "string" ? topic.title : "", goal: typeof topic.goal === "string" ? topic.goal : "", scope: normalizeList(topic.scope), exclusions: normalizeList(topic.exclusions), evidence: normalizeList(topic.evidence), acceptanceCriteria: normalizeList(topic.acceptanceCriteria), establishmentReason: typeof topic.establishmentReason === "string" ? topic.establishmentReason : assessment }; if (!candidate?.title || !candidate.goal || !candidate.scope.length || !candidate.evidence.length || !candidate.acceptanceCriteria.length) throw new Error("韩立确立的专题缺少范围、证据或验收条件。 "); return { assessment, nextQuestion: null, candidate }; } const question = typeof value.nextQuestion === "string" ? value.nextQuestion.trim() : ""; const reason = typeof value.questionReason === "string" ? value.questionReason.trim() : ""; if (!question || !reason) throw new Error("韩立决定继续研讨，但没有给出下一问和依据。 "); return { assessment, nextQuestion: { question, reason }, candidate: null }; }
 function formatEvolutionCorpus(snapshots: EvolutionSourceMessageSnapshot[]): string { const groups = new Map<string, EvolutionSourceMessageSnapshot[]>(); for (const snapshot of snapshots) { const key = `${snapshot.source}:${snapshot.conversationId}`; groups.set(key, [...(groups.get(key) || []), snapshot]); } const newest = Math.max(...snapshots.map((item) => Date.parse(item.originalCreatedAt)).filter(Number.isFinite), 0); return [...groups.entries()].sort(([, left], [, right]) => latest(right) - latest(left)).map(([key, messages]) => [`会话组 ${key}（${maturity(newest, latest(messages))}）`, ...messages.sort((left, right) => left.sequenceNumber - right.sequenceNumber).map((item) => `[${item.originalCreatedAt}] ${item.role}${item.responsePhase ? `/${item.responsePhase}` : ""}：${item.content}`)].join("\n")).join("\n\n---\n\n"); }
 function latest(messages: EvolutionSourceMessageSnapshot[]): number { return Math.max(...messages.map((item) => Date.parse(item.originalCreatedAt)).filter(Number.isFinite), 0); }
 function maturity(newest: number, group: number): string { const days = Math.max(0, newest - group) / 86_400_000; return days <= 30 ? "近期高权重" : days <= 180 ? "中期参考" : "早期低权重，仅用于演变追溯"; }
-function formatDeliberationContext(deliberation: HanLiEvolutionDeliberation): string { return [`研讨编号：${deliberation.deliberationId}`, ...deliberation.rounds.map((round) => [`第 ${round.roundNumber} 轮韩立问题：${round.question}`, `发问依据：${round.questionReason}`, round.answer ? `南宫婉原回答：${round.answer}` : "南宫婉尚未回答", round.assessment ? `韩立判断：${round.assessment}` : ""].filter(Boolean).join("\n"))].join("\n\n"); }
+function formatDeliberationContext(deliberation: HanliEvolutionDeliberationOutDto): string { return [`研讨编号：${deliberation.deliberationId}`, ...deliberation.rounds.map((round) => [`第 ${round.roundNumber} 轮韩立问题：${round.question}`, `发问依据：${round.questionReason}`, round.answer ? `南宫婉原回答：${round.answer}` : "南宫婉尚未回答", round.assessment ? `韩立判断：${round.assessment}` : ""].filter(Boolean).join("\n"))].join("\n\n"); }
 
-function acceptancePlanningPrompt(topic: EvolutionState["topics"][number], proposal: EvolutionProposal, priorFindings: Record<string, unknown>[]): string {
+function acceptancePlanningPrompt(topic: EvolutionStateOutDto["topics"][number], proposal: EvolutionProposal, priorFindings: Record<string, unknown>[]): string {
   return [
     "你是韩立，负责在令狐门禁完成后制定真实应用界面验收计划。只制定计划，不声称已打开应用或已经通过。",
     "必须从本次专题事实中理解用户关注点，并主动覆盖容易遗漏的交互细节：入口可达、按钮响应、状态切换、表格分页与滚动、弹窗或侧栏溢出、窗口缩放、键盘操作、加载/空态/错误态、数据写入与刷新一致性。不要机械复制固定清单；只保留与本专题有关的检查，并补充你根据界面影响合理推断的隐含检查。",
@@ -132,7 +133,7 @@ function acceptancePlanningPrompt(topic: EvolutionState["topics"][number], propo
   ].join("\n\n");
 }
 
-function parseAcceptancePlan(text: string, topicId: string, proposalId: string): import("../../../../../contracts/collaboration/evolution/index.js").HanLiAcceptancePlan {
+function parseAcceptancePlan(text: string, topicId: string, proposalId: string): import("../../../../../contracts/collaboration/evolution/index.js").HanliAcceptancePlanOutDto {
   const value = parseJsonObject(text);
   const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 2_000) : "";
   const concerns = normalizeList(value.concerns).slice(0, 20);
@@ -151,7 +152,7 @@ function parseAcceptancePlan(text: string, topicId: string, proposalId: string):
   return { version: 1, planId: `hanli-acceptance-plan-${randomUUID()}`, topicId, proposalId, summary, concerns, checks, generatedAt: new Date().toISOString() };
 }
 
-function parseAcceptanceOperation(raw: unknown): import("../../../../../contracts/collaboration/evolution/index.js").HanLiAcceptanceOperation[] {
+function parseAcceptanceOperation(raw: unknown): import("../../../../../contracts/collaboration/evolution/index.js").HanliAcceptanceOperation[] {
   if (!raw || typeof raw !== "object") return [];
   const item = raw as Record<string, unknown>;
   if (item.type === "focus-window") return [{ type: "focus-window" }];

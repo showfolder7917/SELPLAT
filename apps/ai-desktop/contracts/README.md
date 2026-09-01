@@ -32,6 +32,18 @@ Electron main handler → application service → infrastructure
 - preload 只桥接已登记能力，不包含业务判断。
 - IPC handler 校验请求并调用应用服务，不直接操作复杂持久化或外部进程。
 - `desktop/desktop.ts` 是 Renderer 的组合出口；主进程新代码必须从所属模块唯一 `index.ts` 导入。
+- 所有领域 `index.ts` 必须显式列出符号及来源文件，禁止 `export *` 和 `export type *`。
+- 跨模块只能从目标模块 `index.ts` 导入；模块内部才允许引用自己的具体 DTO 文件。
+
+## DTO 方向
+
+- `InDto`：数据进入文件所属模块。
+- `OutDto`：数据离开文件所属模块。
+- `EventOutDto`：文件所属模块主动发布事件。
+- `Port`：行为边界，不是 DTO。
+- `foundation` 中的稳定枚举和值对象没有请求/响应方向，不强行改成 DTO。
+
+完整阅读顺序、人物职责和调用流转见 [`../ARCHITECTURE.md`](../ARCHITECTURE.md)。
 
 ## 注释要求
 

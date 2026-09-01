@@ -5,10 +5,10 @@ import path from "node:path";
 
 import type {
   WorkspaceEntry,
-  WorkspacePermission,
   WorkspaceRoot,
   WorkspaceState,
-} from "../../../../../contracts/desktop/desktop.js";
+} from "../../../../../contracts/platform/workspace/index.js";
+import type { WorkspacePermission } from "../../../../../contracts/foundation/base.js";
 
 const MAX_ROOTS = 24;
 const MAX_ENTRIES = 80;

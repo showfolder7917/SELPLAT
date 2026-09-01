@@ -4,7 +4,7 @@ import type {
   CollaborationMember,
   EvolutionTopicDossier,
   Locale,
-  EvolutionState,
+  EvolutionStateOutDto,
   WorkspaceState,
 } from "../../../../contracts/desktop/desktop";
 import { EvolutionProposalDetail } from "../../evolution/components/EvolutionProposalDetail";
@@ -22,7 +22,7 @@ export type EvolutionWorkspaceFlowNode = "manual" | "manual-topic" | "manual-gro
  * 真实返回示例：React 渲染南宫婉专题池、提案编辑器和调查档案，不返回业务数据。
  * 异常或副作用示例：用户保存专题时通过 desktop 门面发起请求；失败信息交给 onError 统一展示。
  */
-export function NangongEvolutionRail({ activeNode, member, state, workspaces, locale, selectedProposalId, databaseManaged, onState, onError }: { activeNode: EvolutionWorkspaceFlowNode; member: CollaborationMember; state: EvolutionState; workspaces: WorkspaceState | null; locale: Locale; selectedProposalId: string | null; databaseManaged: boolean; onState(state: EvolutionState): void; onError(message: string): void }) {
+export function NangongEvolutionRail({ activeNode, member, state, workspaces, locale, selectedProposalId, databaseManaged, onState, onError }: { activeNode: EvolutionWorkspaceFlowNode; member: CollaborationMember; state: EvolutionStateOutDto; workspaces: WorkspaceState | null; locale: Locale; selectedProposalId: string | null; databaseManaged: boolean; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {
   const nangongTopics = state.topics.filter((item) => item.origin === "nangong");
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(state.activeTopicId);
   const topic = nangongTopics.find((item) => item.topicId === selectedTopicId) || nangongTopics.find((item) => item.topicId === state.activeTopicId) || nangongTopics.at(-1) || null;
@@ -61,7 +61,7 @@ export function NangongEvolutionRail({ activeNode, member, state, workspaces, lo
     void window.desktop?.getEvolutionTopicDossier(topic.topicId).then((value) => { if (active) setDossier(value); }).catch((error) => { if (active) onError(readableError(error, "无法读取专题全流程档案。")); });
     return () => { active = false; };
   }, [topic?.topicId, state.updatedAt]);
-  const update = async (operation: () => Promise<EvolutionState> | undefined): Promise<boolean> => {
+  const update = async (operation: () => Promise<EvolutionStateOutDto> | undefined): Promise<boolean> => {
     if (operationBusyRef.current) return false;
     operationBusyRef.current = true;
     setOperationBusy(true);

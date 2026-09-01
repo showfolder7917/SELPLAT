@@ -6,7 +6,7 @@ import type {
   ScreenshotAttachment,
   ScreenshotSaveRequest,
   TempDirectoryInfo,
-} from "../../../../../contracts/desktop/desktop.js";
+} from "../../../../../contracts/platform/attachments/index.js";
 
 interface ScreenshotIndexRecord extends ScreenshotAttachment {
   relativePath: string;

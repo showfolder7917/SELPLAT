@@ -1,6 +1,6 @@
 /**
  * 旧人物页四阶段进度模型，仅供人物页和会话回退视图继续读取。
- * @deprecated 新任务协作群统一消费主进程 CollaborationTimelineSnapshot；稳定后单独删除本实现。
+ * @deprecated 新任务协作群统一消费主进程 CollaborationTimelineSnapshotOutDto；稳定后单独删除本实现。
  */
 import type { CollaborationMember, CollaborationTask, LinghuAutomationStateOutDto, Locale } from "../../../../contracts/desktop/desktop";
 

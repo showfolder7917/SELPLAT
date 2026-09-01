@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/collaboration/linghu/index.js";
-import type { ConfigureEvolutionAutomationRequest, ConvertNangongConversationToTopicRequest, CreateEvolutionProposalRequest, CreateEvolutionTopicRequest, EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionAutomationAction, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionOneShotPhase, EvolutionProposal, EvolutionSourceMessageSnapshot, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiTopicCandidate, EvolutionState, ReviseEvolutionProposalRequest, UpdateEvolutionTopicRequest } from "../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionApproval, EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionArchiveActor, EvolutionArchiveCategory, EvolutionDistributionPlan, EvolutionFeedbackTarget, EvolutionOneShotPhase, EvolutionProposal, EvolutionSourceMessageSnapshot, EvolutionStateOutDto } from "../../../../contracts/collaboration/evolution/index.js";
+import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/collaboration/hanli/index.js";
+import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/collaboration/nangong/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/collaboration/workflow/index.js";
 import type { EvolutionStatePersistence } from "./evolution-state.repository.js";
 
-type StateListener = (state: EvolutionState, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionState) => void;
+type StateListener = (state: EvolutionStateOutDto, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionStateOutDto) => void;
 
 /**
  * Evolution 共同状态的唯一写入者。
@@ -15,14 +18,14 @@ type StateListener = (state: EvolutionState, reason: string, topicId: string | n
 export class EvolutionStateStore {
   readonly #repository: EvolutionStatePersistence;
   readonly #listeners = new Set<StateListener>();
-  #state: EvolutionState;
+  #state: EvolutionStateOutDto;
 
   constructor(repository: EvolutionStatePersistence) {
     this.#repository = repository;
     this.#state = this.#load();
   }
 
-  state(): EvolutionState { return structuredClone(this.#state); }
+  state(): EvolutionStateOutDto { return structuredClone(this.#state); }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
 
   /** 清除专题测试运行态并安全关闭自动流程，保留人物完整对话、训练意图、轮次上限与语言；返回被移除的业务记录数。示例：1 个专题、2 个提案返回 3；写入失败时抛错。 */
@@ -49,7 +52,7 @@ export class EvolutionStateStore {
    */
   assertTestDataCleared(): void {
     const persisted = this.#repository.load();
-    const states = [this.#state, persisted].filter((item): item is EvolutionState => Boolean(item));
+    const states = [this.#state, persisted].filter((item): item is EvolutionStateOutDto => Boolean(item));
     if (states.some((state) => state.oneShotRun !== null
       || state.oneShotConfirmation !== null
       || state.activeTopicId !== null
@@ -61,7 +64,7 @@ export class EvolutionStateStore {
     }
   }
 
-  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionState {
+  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionStateOutDto {
     return this.#commit(`automation.${kind}.${enabled ? "enabled" : "disabled"}`, null, null, (state) => {
       if (kind === "evolution") {
         state.automaticEvolutionEnabled = enabled;
@@ -75,7 +78,7 @@ export class EvolutionStateStore {
     });
   }
 
-  configureAutomation(request: ConfigureEvolutionAutomationRequest): EvolutionState {
+  configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto {
     const maximum = request.maxRoundsPerTopic;
     if (maximum !== null && (!Number.isInteger(maximum) || maximum < 1 || maximum > 100)) throw new Error("专题研讨轮次必须为 1 至 100，或选择无限模式。");
     if (!Number.isInteger(request.maxCorrectionRounds) || request.maxCorrectionRounds < 1 || request.maxCorrectionRounds > 20) throw new Error("纠偏轮次必须为 1 至 20。");
@@ -86,7 +89,7 @@ export class EvolutionStateStore {
     });
   }
 
-  controlAutomation(action: EvolutionAutomationAction): EvolutionState {
+  controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto {
     return this.#commit(`automation.${action}`, null, null, (state) => {
       const now = new Date().toISOString();
       if (action === "start" || action === "resume") {
@@ -115,7 +118,7 @@ export class EvolutionStateStore {
    * 真实返回示例：oneShotRun.actor=nangong-wan，界面显示“南宫婉正在整理演化课题”。
    * 异常或副作用示例：已有未结束的一次性运行时拒绝重复建立；成功后原子保存运行状态。
    */
-  beginOneShotRun(workspaceState: EvolutionState["automationContext"]["workspaceState"], locale: EvolutionState["automationContext"]["locale"]): EvolutionState {
+  beginOneShotRun(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"]): EvolutionStateOutDto {
     if (!workspaceState?.roots?.length) throw new Error("一次性演化必须先登记实施工作区。");
     if (this.#state.oneShotRun?.status === "running") throw new Error("当前已有一次性演化正在运行，请勿重复启动。");
     const now = new Date().toISOString();
@@ -127,7 +130,7 @@ export class EvolutionStateStore {
   }
 
   /** 更新一次性运行的人物、阶段和动作；专题档案使用同一条状态事实，不创建旁路流程。 */
-  updateOneShotRun(phase: EvolutionOneShotPhase, actor: EvolutionArchiveActor, actorName: string, action: string, topicId?: string | null, proposalId?: string | null): EvolutionState {
+  updateOneShotRun(phase: EvolutionOneShotPhase, actor: EvolutionArchiveActor, actorName: string, action: string, topicId?: string | null, proposalId?: string | null): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status !== "running") return this.state();
     const resolvedTopicId = topicId === undefined ? current.topicId : topicId;
@@ -147,7 +150,7 @@ export class EvolutionStateStore {
     }, { phase, actor, actorName, action, status: "running", nextOwner: actorName });
   }
 
-  finishOneShotRun(): EvolutionState {
+  finishOneShotRun(): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status !== "running") return this.state();
     const now = new Date().toISOString();
@@ -164,7 +167,7 @@ export class EvolutionStateStore {
     }, { phase: "completed", actor: "nangong-wan", status: "completed", nextOwner: "user" });
   }
 
-  blockOneShotRun(reason: string): EvolutionState {
+  blockOneShotRun(reason: string): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status !== "running") return this.state();
     const now = new Date().toISOString();
@@ -182,7 +185,7 @@ export class EvolutionStateStore {
   }
 
   /** 把没有真实执行者或任务的遗留 running 状态终止为可审计事实，允许新的用户确认继续。 */
-  retireOrphanedOneShotRun(reason: string): EvolutionState {
+  retireOrphanedOneShotRun(reason: string): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status !== "running") return this.state();
     const now = new Date().toISOString();
@@ -205,7 +208,7 @@ export class EvolutionStateStore {
    * 真实返回示例：界面显示“南宫婉正在重新调查韩立退回项”，后续状态机沿原专题继续。
    * 异常或副作用示例：没有可恢复卡点时拒绝；成功后清除旧阻塞原因但保留全部审批和版本记录。
    */
-  resumeOneShotRun(): EvolutionState {
+  resumeOneShotRun(): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status !== "blocked" || !current.topicId || !current.proposalId) throw new Error("当前没有可原位恢复的一次性演化卡点。");
     const proposal = requireProposal(this.#state, current.proposalId);
@@ -224,7 +227,7 @@ export class EvolutionStateStore {
     }, { phase: "revising", actor: "nangong-wan", status: "running", nextOwner: "nangong-wan" });
   }
 
-  createTopic(request: CreateEvolutionTopicRequest, sourceConversationMessageIds: string[] = []): EvolutionState {
+  createTopic(request: CreateNangongTopicInDto, sourceConversationMessageIds: string[] = []): EvolutionStateOutDto {
     const title = required(request?.title, "专项标题", 160);
     const goal = required(request?.goal, "专项目标", 8_000);
     if (!request.workspaceState?.roots?.length) throw new Error("专项课题至少需要一个已登记工作区。");
@@ -248,7 +251,7 @@ export class EvolutionStateStore {
   }
 
   /** 韩立先冻结完整对话库原文，再登记第一轮问题；此时尚未产生正式专题。 */
-  beginDeliberation(deliberationId: string, snapshots: EvolutionSourceMessageSnapshot[], question: string, questionReason: string): EvolutionState {
+  beginDeliberation(deliberationId: string, snapshots: EvolutionSourceMessageSnapshot[], question: string, questionReason: string): EvolutionStateOutDto {
     if (!snapshots.length) throw new Error("对话库没有可供韩立综合的南宫婉或 Codex 原始会话。 ");
     const now = new Date().toISOString();
     return this.#commit("deliberation.started", null, null, (state) => {
@@ -261,7 +264,7 @@ export class EvolutionStateStore {
     });
   }
 
-  recordDeliberationAnswer(deliberationId: string, roundId: string, answer: string): EvolutionState {
+  recordDeliberationAnswer(deliberationId: string, roundId: string, answer: string): EvolutionStateOutDto {
     return this.#commit("deliberation.nangong_answered", null, null, (state) => {
       const deliberation = requireDeliberation(state, deliberationId);
       const round = requireDeliberationRound(deliberation, roundId);
@@ -272,7 +275,7 @@ export class EvolutionStateStore {
     });
   }
 
-  assessDeliberation(deliberationId: string, roundId: string, assessment: string, nextQuestion: { question: string; reason: string } | null, candidate: HanLiTopicCandidate | null): EvolutionState {
+  assessDeliberation(deliberationId: string, roundId: string, assessment: string, nextQuestion: { question: string; reason: string } | null, candidate: HanliTopicCandidateOutDto | null): EvolutionStateOutDto {
     return this.#commit(candidate ? "deliberation.topic_ready" : "deliberation.follow_up_planned", null, null, (state) => {
       const deliberation = requireDeliberation(state, deliberationId);
       const round = requireDeliberationRound(deliberation, roundId);
@@ -294,7 +297,7 @@ export class EvolutionStateStore {
     });
   }
 
-  blockDeliberation(deliberationId: string, roundId: string, assessment: string, reason: string): EvolutionState {
+  blockDeliberation(deliberationId: string, roundId: string, assessment: string, reason: string): EvolutionStateOutDto {
     return this.#commit("deliberation.blocked", null, null, (state) => {
       const deliberation = requireDeliberation(state, deliberationId);
       const round = requireDeliberationRound(deliberation, roundId);
@@ -311,7 +314,7 @@ export class EvolutionStateStore {
   }
 
   /** 韩立确立后才通知南宫婉把研讨成果登记进长期专题池。 */
-  establishDeliberationTopic(deliberationId: string): EvolutionState {
+  establishDeliberationTopic(deliberationId: string): EvolutionStateOutDto {
     const current = requireDeliberation(this.#state, deliberationId);
     if (current.status !== "ready-to-establish" || !current.candidate) throw new Error("韩立尚未完成专题确立判断。 ");
     if (!this.#state.automationContext.workspaceState?.roots?.length) throw new Error("自动演化尚未登记实施工作区。 ");
@@ -335,7 +338,7 @@ export class EvolutionStateStore {
     });
   }
 
-  createProposal(topicId: string, request: CreateEvolutionProposalRequest): EvolutionState {
+  createProposal(topicId: string, request: CreateNangongProposalInDto): EvolutionStateOutDto {
     const topic = requireTopic(this.#state, topicId);
     assertTopicEditableBeforeProposal(this.#state, topic);
     const now = new Date().toISOString();
@@ -362,7 +365,7 @@ export class EvolutionStateStore {
     });
   }
 
-  updateTopic(topicId: string, request: UpdateEvolutionTopicRequest): EvolutionState {
+  updateTopic(topicId: string, request: UpdateNangongTopicInDto): EvolutionStateOutDto {
     const topic = requireTopic(this.#state, topicId);
     assertTopicEditableBeforeProposal(this.#state, topic);
     if (request.expectedTopicRevision !== topic.topicRevision) throw new Error("课题已被其他保存操作更新，请刷新后重新编辑。");
@@ -382,7 +385,7 @@ export class EvolutionStateStore {
     });
   }
 
-  appendConversation(role: "user" | "nangong", content: string, attachmentIds: string[] = [], options: { messageId?: string; replyToMessageId?: string | null; deliveryStatus?: "sending" | "completed" | "failed" } = {}): EvolutionState {
+  appendConversation(role: "user" | "nangong", content: string, attachmentIds: string[] = [], options: { messageId?: string; replyToMessageId?: string | null; deliveryStatus?: "sending" | "completed" | "failed" } = {}): EvolutionStateOutDto {
     const messageId = options.messageId || `evolution-message-${randomUUID()}`;
     const now = new Date().toISOString();
     return this.#commit("conversation.message_added", null, null, (state) => {
@@ -402,7 +405,7 @@ export class EvolutionStateStore {
   }
 
   /** 用户消息先进入运行态时间线；人物回复完成后原子结束用户消息并向后追加回复。 */
-  completeConversationTurn(userMessageId: string, content: string): EvolutionState {
+  completeConversationTurn(userMessageId: string, content: string): EvolutionStateOutDto {
     const now = new Date().toISOString();
     return this.#commit("conversation.turn_completed", null, null, (state) => {
       const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId && message.role === "user");
@@ -420,7 +423,7 @@ export class EvolutionStateStore {
   }
 
   /** 发送失败只改变原用户消息状态，禁止生成一条脱离原位置的错误消息。 */
-  failConversationTurn(userMessageId: string): EvolutionState {
+  failConversationTurn(userMessageId: string): EvolutionStateOutDto {
     const now = new Date().toISOString();
     return this.#commit("conversation.turn_failed", null, null, (state) => {
       const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId && message.role === "user");
@@ -432,7 +435,7 @@ export class EvolutionStateStore {
   }
 
   /** 把南宫婉正文中的明确邀请登记为可恢复事实；传入 null 表示最新回答尚未具备启动条件。 */
-  setOneShotConfirmation(invitationMessageId: string | null): EvolutionState {
+  setOneShotConfirmation(invitationMessageId: string | null): EvolutionStateOutDto {
     const message = invitationMessageId
       ? this.#state.conversation.messages.find((item) => item.messageId === invitationMessageId && item.role === "nangong")
       : null;
@@ -444,7 +447,7 @@ export class EvolutionStateStore {
     });
   }
 
-  recordConversationIntent(messageId: string, inferredIntent: string): EvolutionState {
+  recordConversationIntent(messageId: string, inferredIntent: string): EvolutionStateOutDto {
     const now = new Date().toISOString();
     return this.#commit("conversation.intent_recorded", null, null, (state) => {
       const message = state.conversation.messages.find((item) => item.messageId === messageId && item.role === "user");
@@ -455,7 +458,7 @@ export class EvolutionStateStore {
   }
 
   /** 专题群只追加人物消息引用与短预览，完整原话继续由人物会话表权威保存。 */
-  recordTopicConversation(topicId: string, userMessageId: string, nangongMessageId: string): EvolutionState {
+  recordTopicConversation(topicId: string, userMessageId: string, nangongMessageId: string): EvolutionStateOutDto {
     const topic = requireTopic(this.#state, topicId);
     const userMessage = this.#state.conversation.messages.find((item) => item.messageId === userMessageId && item.role === "user");
     const nangongMessage = this.#state.conversation.messages.find((item) => item.messageId === nangongMessageId && item.role === "nangong");
@@ -468,27 +471,27 @@ export class EvolutionStateStore {
   }
 
   /** 验收计划作为专题档案事实保存，不改变提案状态，也不伪装成已经执行的验收结果。 */
-  recordAcceptancePlan(plan: HanLiAcceptancePlan): EvolutionState {
+  recordAcceptancePlan(plan: HanliAcceptancePlanOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, plan.proposalId);
     if (proposal.topicId !== plan.topicId) throw new Error("验收计划与专题不一致。 ");
     return this.#commit("acceptance.plan_generated", plan.topicId, plan.proposalId, () => undefined, { acceptancePlan: structuredClone(plan), status: "planned", nextOwner: "han-li" });
   }
 
   /** 真实应用操作证据与计划分开追加，失败事实交由后续结果线路处理。 */
-  recordAcceptanceRun(run: HanLiAcceptanceRun): EvolutionState {
+  recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, run.proposalId);
     if (proposal.topicId !== run.topicId) throw new Error("真实验收记录与专题不一致。 ");
     return this.#commit("acceptance.real_app_checked", run.topicId, run.proposalId, () => undefined, { acceptanceRun: structuredClone(run), status: run.status, nextOwner: run.status === "passed" ? "han-li" : "nangong-wan" });
   }
 
-  newConversation(): EvolutionState {
+  newConversation(): EvolutionStateOutDto {
     return this.#commit("conversation.created", null, null, (state) => {
       state.conversation = createConversation();
       state.oneShotConfirmation = null;
     });
   }
 
-  convertConversationToTopic(request: ConvertNangongConversationToTopicRequest): EvolutionState {
+  convertConversationToTopic(request: ConvertNangongConversationToTopicInDto): EvolutionStateOutDto {
     const messages = this.#state.conversation.messages;
     if (!messages.length) throw new Error("当前没有可转换的南宫婉对话。 ");
     if (request.confirmedByUser !== true) throw new Error("只有用户明确确认后，才能把南宫婉对话整理为正式课题。");
@@ -500,7 +503,7 @@ export class EvolutionStateStore {
     return this.createTopic({ ...request, evidence }, sourceMessages.map((item) => item.messageId));
   }
 
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionState {
+  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionStateOutDto {
     const now = new Date().toISOString();
     const topicId = `evolution-topic-${randomUUID()}`;
     const proposalId = `evolution-proposal-${randomUUID()}`;
@@ -529,7 +532,7 @@ export class EvolutionStateStore {
     });
   }
 
-  decide(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource, referencedApprovalIds: string[], feedbackTarget: EvolutionFeedbackTarget = "proposal-content", capabilityScope = ""): EvolutionState {
+  decide(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource, referencedApprovalIds: string[], feedbackTarget: EvolutionFeedbackTarget = "proposal-content", capabilityScope = ""): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     const latestApproval = proposal.approvals.at(-1);
     const correctsAutomaticDecision = source === "manual-user"
@@ -560,12 +563,12 @@ export class EvolutionStateStore {
   }
 
   /** 执行结果必须由韩立单独验收；任务完成事实不能直接替代最终业务判断。 */
-  decideResult(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource = "manual-user"): EvolutionState {
+  decideResult(proposalId: string, decision: EvolutionApprovalDecision, advice: string, source: EvolutionApprovalSource = "manual-user"): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
-    const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.real_app_checked")?.payload.acceptanceRun as HanLiAcceptanceRun | undefined;
+    const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.real_app_checked")?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
     if (decision === "approved" && run?.status !== "passed") throw new Error("韩立必须先完成真实应用检查且全部通过，才能验收通过。 ");
-    const plan = run ? [...this.#state.archiveRecords].reverse().find((record) => record.eventType === "acceptance.plan_generated" && (record.payload.acceptancePlan as { planId?: string } | undefined)?.planId === run.planId)?.payload.acceptancePlan as HanLiAcceptancePlan | undefined : undefined;
+    const plan = run ? [...this.#state.archiveRecords].reverse().find((record) => record.eventType === "acceptance.plan_generated" && (record.payload.acceptancePlan as { planId?: string } | undefined)?.planId === run.planId)?.payload.acceptancePlan as HanliAcceptancePlanOutDto | undefined : undefined;
     const failureEvidence = decision === "approved" || !run ? [] : run.stepResults.filter((step) => step.status !== "passed").map((step) => {
       const check = plan?.checks.find((item) => item.checkId === step.checkId);
       return {
@@ -630,7 +633,7 @@ export class EvolutionStateStore {
   }
 
   /** 原提交人只能修订退回的本人提案；新版本保留原审批、反馈目标和完整替代链。 */
-  revise(proposalId: string, request: ReviseEvolutionProposalRequest, submitterDisplayName: string): EvolutionState {
+  revise(proposalId: string, request: ReviseNangongProposalInDto, submitterDisplayName: string): EvolutionStateOutDto {
     const previous = requireProposal(this.#state, proposalId);
     if (!['supplement-required', 'rejected'].includes(previous.status)) throw new Error("只有退回补充或驳回的提案可以重新提交。");
     if (previous.submitterMemberId !== request.submitterMemberId) throw new Error("只能由原提交人重新提交该提案。");
@@ -675,7 +678,7 @@ export class EvolutionStateStore {
     });
   }
 
-  markDispatched(proposalId: string, taskId: string): EvolutionState {
+  markDispatched(proposalId: string, taskId: string): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     return this.#commit("proposal.distributed", proposal.topicId, proposalId, (state) => {
       const mutable = requireProposal(state, proposalId);
@@ -689,7 +692,7 @@ export class EvolutionStateStore {
     });
   }
 
-  saveDistributionPlan(proposalId: string, plan: EvolutionDistributionPlan): EvolutionState {
+  saveDistributionPlan(proposalId: string, plan: EvolutionDistributionPlan): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     return this.#commit("proposal.distribution_planned", proposal.topicId, proposalId, (state) => {
       const mutable = requireProposal(state, proposalId);
@@ -699,7 +702,7 @@ export class EvolutionStateStore {
     });
   }
 
-  markProgress(proposalId: string, status: "executing" | "verifying" | "pending-acceptance" | "blocked", resultSummary: string): EvolutionState {
+  markProgress(proposalId: string, status: "executing" | "verifying" | "pending-acceptance" | "blocked", resultSummary: string): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     return this.#commit("proposal.progress_reconciled", proposal.topicId, proposalId, (state) => {
       const mutable = requireProposal(state, proposalId);
@@ -713,7 +716,7 @@ export class EvolutionStateStore {
     });
   }
 
-  #commit(reason: string, topicId: string | null, proposalId: string | null, mutate: (state: EvolutionState) => void, payloadExtra: Record<string, unknown> = {}): EvolutionState {
+  #commit(reason: string, topicId: string | null, proposalId: string | null, mutate: (state: EvolutionStateOutDto) => void, payloadExtra: Record<string, unknown> = {}): EvolutionStateOutDto {
     const previousState = this.state();
     const next = structuredClone(this.#state);
     mutate(next);
@@ -746,13 +749,13 @@ export class EvolutionStateStore {
     return snapshot;
   }
 
-  #load(): EvolutionState {
+  #load(): EvolutionStateOutDto {
     try {
-      const raw = this.#repository.load() as Partial<EvolutionState> | null;
+      const raw = this.#repository.load() as Partial<EvolutionStateOutDto> | null;
       if (raw && raw.version === 8 && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
         && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext
         && typeof raw.automaticNangongApprovalEnabled === "boolean" && typeof raw.automaticLinghuApprovalEnabled === "boolean") {
-        const migrated = migrateDistributionValidation(raw as EvolutionState);
+        const migrated = migrateDistributionValidation(raw as EvolutionStateOutDto);
         if (migrated.changed) this.#repository.save(migrated.state);
         return migrated.state;
       }
@@ -763,13 +766,13 @@ export class EvolutionStateStore {
     return initial;
   }
 
-  #write(state: EvolutionState): void {
+  #write(state: EvolutionStateOutDto): void {
     this.#repository.save(state);
   }
 }
 
 /** 只迁移既有确定性校验事实的字段名，不保留或重新启用令狐常规分发审核入口。 */
-function migrateDistributionValidation(state: EvolutionState): { state: EvolutionState; changed: boolean } {
+function migrateDistributionValidation(state: EvolutionStateOutDto): { state: EvolutionStateOutDto; changed: boolean } {
   let changed = false;
   const proposals = state.proposals.map((proposal) => {
     const plan = proposal.distributionPlan as unknown as Record<string, unknown> | null;
@@ -791,13 +794,13 @@ function migrateDistributionValidation(state: EvolutionState): { state: Evolutio
           findings: Array.isArray(audit.findings) ? audit.findings.filter((item): item is string => typeof item === "string") : [],
           validatedAt: typeof audit.auditedAt === "string" ? audit.auditedAt : proposal.updatedAt,
         },
-      } as EvolutionState["proposals"][number]["distributionPlan"],
+      } as EvolutionStateOutDto["proposals"][number]["distributionPlan"],
     };
   });
   return { state: changed ? { ...state, proposals } : state, changed };
 }
 
-function createInitialState(): EvolutionState {
+function createInitialState(): EvolutionStateOutDto {
   return { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
 }
 
@@ -809,7 +812,7 @@ function required(value: unknown, label: string, maximum: number): string {
 function normalizedList(values: unknown, label: string): string[] { const result = normalizedOptionalList(values); if (!result.length) throw new Error(`${label}至少需要一项。`); return result; }
 function normalizedOptionalList(values: unknown): string[] { return Array.isArray(values) ? [...new Set(values.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean))].slice(0, 100) : []; }
 function preview(value: string): string { const characters = Array.from(value.trim()); return characters.length > 300 ? `${characters.slice(0, 300).join("")}…` : characters.join(""); }
-function normalizeCandidate(candidate: HanLiTopicCandidate): HanLiTopicCandidate {
+function normalizeCandidate(candidate: HanliTopicCandidateOutDto): HanliTopicCandidateOutDto {
   return {
     title: required(candidate.title, "演进专项标题", 160), goal: required(candidate.goal, "演进专项目标", 8_000),
     scope: normalizedList(candidate.scope, "演进专项范围"), exclusions: normalizedOptionalList(candidate.exclusions),
@@ -817,16 +820,16 @@ function normalizeCandidate(candidate: HanLiTopicCandidate): HanLiTopicCandidate
     establishmentReason: required(candidate.establishmentReason, "韩立确立理由", 8_000),
   };
 }
-function requireTopic(state: EvolutionState, topicId: string) { const topic = state.topics.find((item) => item.topicId === topicId); if (!topic) throw new Error("专项课题不存在。"); return topic; }
-function requireProposal(state: EvolutionState, proposalId: string) { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
-function requireDeliberation(state: EvolutionState, deliberationId: string) { const deliberation = state.deliberations.find((item) => item.deliberationId === deliberationId); if (!deliberation) throw new Error("韩立专题研讨不存在。"); return deliberation; }
-function requireDeliberationRound(deliberation: EvolutionState["deliberations"][number], roundId: string) { const round = deliberation.rounds.find((item) => item.roundId === roundId); if (!round) throw new Error("韩立专题研讨轮次不存在。"); return round; }
-function assertTopicEditableBeforeProposal(state: EvolutionState, topic: EvolutionState["topics"][number]): void {
+function requireTopic(state: EvolutionStateOutDto, topicId: string) { const topic = state.topics.find((item) => item.topicId === topicId); if (!topic) throw new Error("专项课题不存在。"); return topic; }
+function requireProposal(state: EvolutionStateOutDto, proposalId: string) { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+function requireDeliberation(state: EvolutionStateOutDto, deliberationId: string) { const deliberation = state.deliberations.find((item) => item.deliberationId === deliberationId); if (!deliberation) throw new Error("韩立专题研讨不存在。"); return deliberation; }
+function requireDeliberationRound(deliberation: EvolutionStateOutDto["deliberations"][number], roundId: string) { const round = deliberation.rounds.find((item) => item.roundId === roundId); if (!round) throw new Error("韩立专题研讨轮次不存在。"); return round; }
+function assertTopicEditableBeforeProposal(state: EvolutionStateOutDto, topic: EvolutionStateOutDto["topics"][number]): void {
   if (!["registered", "investigating"].includes(topic.status) || topic.currentProposalVersion !== 0 || state.proposals.some((item) => item.topicId === topic.topicId)) {
     throw new Error("课题已进入提案流程，不能再修改或重复提交提案。");
   }
 }
-function createConversation(): EvolutionState["conversation"] { const now = new Date().toISOString(); return { conversationId: `nangong-conversation-${randomUUID()}`, messages: [], updatedAt: now }; }
+function createConversation(): EvolutionStateOutDto["conversation"] { const now = new Date().toISOString(); return { conversationId: `nangong-conversation-${randomUUID()}`, messages: [], updatedAt: now }; }
 
 function archiveCategory(reason: string): EvolutionArchiveCategory {
   if (reason.startsWith("one-shot.")) return reason.includes("blocked") || reason.includes("orphan-retired") ? "recovery" : reason.includes("completed") ? "acceptance" : "execution";
@@ -874,7 +877,7 @@ function archiveTitle(reason: string): string {
   return titles[reason] || reason;
 }
 
-function archivePayload(topic: EvolutionState["topics"][number] | null, proposal: EvolutionProposal | null, deliberation: EvolutionState["deliberations"][number] | null): Record<string, unknown> {
+function archivePayload(topic: EvolutionStateOutDto["topics"][number] | null, proposal: EvolutionProposal | null, deliberation: EvolutionStateOutDto["deliberations"][number] | null): Record<string, unknown> {
   const round = deliberation?.rounds.at(-1);
   return {
     topic: topic ? { topicId: topic.topicId, title: topic.title, status: topic.status, recoveryPoint: topic.recoveryPoint, roundNumber: topic.roundNumber } : null,

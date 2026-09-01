@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { CollaborationTimelineBusinessEvent } from "../../../../../contracts/collaboration/workflow/index.js";
-import type { EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionFeedbackTarget, EvolutionProposal, EvolutionState } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionApprovalDecision, EvolutionApprovalSource, EvolutionFeedbackTarget, EvolutionProposal, EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
 import type { EvolutionStatePort } from "../../../evolution/index.js";
 
 type TimelineSink = (event: CollaborationTimelineBusinessEvent) => void;
@@ -10,7 +10,7 @@ type TimelineSink = (event: CollaborationTimelineBusinessEvent) => void;
 export class EvolutionApprovalService {
   constructor(private readonly store: EvolutionStatePort, private readonly timeline: TimelineSink | null) {}
 
-  recordApplication(proposalId: string): EvolutionState {
+  recordApplication(proposalId: string): EvolutionStateOutDto {
     const state = this.store.state();
     const proposal = requireProposal(state, proposalId);
     this.#publishApplication(state, proposal);
@@ -26,7 +26,7 @@ export class EvolutionApprovalService {
     referencedApprovalIds: string[],
     feedbackTarget: EvolutionFeedbackTarget = "proposal-content",
     capabilityScope = "",
-  ): EvolutionState {
+  ): EvolutionStateOutDto {
     const next = this.store.decide(proposalId, decision, advice, source, referencedApprovalIds, feedbackTarget, capabilityScope);
     const proposal = requireProposal(next, proposalId);
     const approval = proposal.approvals.at(-1)!;
@@ -64,7 +64,7 @@ export class EvolutionApprovalService {
     return next;
   }
 
-  #publishApplication(state: EvolutionState, proposal: EvolutionProposal): void {
+  #publishApplication(state: EvolutionStateOutDto, proposal: EvolutionProposal): void {
     const topic = requireTopic(state, proposal.topicId);
     const manual = !(proposal.origin === "linghu" ? state.automaticLinghuApprovalEnabled : state.automaticNangongApprovalEnabled);
     this.timeline?.({
@@ -83,7 +83,7 @@ export class EvolutionApprovalService {
     });
   }
 
-  #publishSupplementWaiting(state: EvolutionState, proposal: EvolutionProposal, advice: string, occurredAt: string): void {
+  #publishSupplementWaiting(state: EvolutionStateOutDto, proposal: EvolutionProposal, advice: string, occurredAt: string): void {
     const topic = requireTopic(state, proposal.topicId);
     const automatic = state.automaticEvolutionEnabled || state.oneShotRun?.status === "running";
     this.timeline?.({
@@ -103,7 +103,7 @@ export class EvolutionApprovalService {
     });
   }
 
-  #publishSupplementCompleted(state: EvolutionState, revision: EvolutionProposal): void {
+  #publishSupplementCompleted(state: EvolutionStateOutDto, revision: EvolutionProposal): void {
     const previousId = revision.supersedesProposalId!;
     const previous = requireProposal(state, previousId);
     const feedback = previous.approvals.at(-1);
@@ -130,9 +130,9 @@ export class EvolutionApprovalService {
   }
 }
 
-function group(topic: EvolutionState["topics"][number], proposal: EvolutionProposal, status: CollaborationTimelineBusinessEvent["group"]["status"], summary: string, updatedAt: string): CollaborationTimelineBusinessEvent["group"] {
+function group(topic: EvolutionStateOutDto["topics"][number], proposal: EvolutionProposal, status: CollaborationTimelineBusinessEvent["group"]["status"], summary: string, updatedAt: string): CollaborationTimelineBusinessEvent["group"] {
   return { groupId: `topic:${topic.topicId}`, topicId: topic.topicId, proposalId: proposal.proposalId, title: topic.title, status, summary, startedAt: topic.createdAt, updatedAt };
 }
 function person(memberId: string, displayName: string) { return { memberId, displayName }; }
-function requireProposal(state: EvolutionState, proposalId: string) { const value = state.proposals.find((item) => item.proposalId === proposalId); if (!value) throw new Error("演化提案不存在。"); return value; }
-function requireTopic(state: EvolutionState, topicId: string) { const value = state.topics.find((item) => item.topicId === topicId); if (!value) throw new Error("专项课题不存在。"); return value; }
+function requireProposal(state: EvolutionStateOutDto, proposalId: string) { const value = state.proposals.find((item) => item.proposalId === proposalId); if (!value) throw new Error("演化提案不存在。"); return value; }
+function requireTopic(state: EvolutionStateOutDto, topicId: string) { const value = state.topics.find((item) => item.topicId === topicId); if (!value) throw new Error("专项课题不存在。"); return value; }

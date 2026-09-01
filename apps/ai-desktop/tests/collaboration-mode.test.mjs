@@ -29,8 +29,8 @@ const developerSource = readFileSync(new URL("../src/variants/developer/Develope
 const coordinatorSource = readFileSync(new URL("../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const integrationPipelineSource = readFileSync(new URL("../electron/services/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const releaseBatchStoreSource = readFileSync(new URL("../electron/services/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
-// 入口存在性由边界测试负责；这里读取领域正文验证完整状态枚举。
-const collaborationContractSource = readFileSync(new URL("../contracts/collaboration/workflow/collaboration.ts", import.meta.url), "utf8");
+// 入口存在性由边界测试负责；这里读取任务事实 DTO 验证完整状态枚举。
+const collaborationContractSource = readFileSync(new URL("../contracts/collaboration/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
 const unifiedTestRunnerSource = readFileSync(new URL("../electron/services/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 const linghuRuntimeSource = readFileSync(new URL("../electron/services/personas/linghu/internal/create-linghu-runtime.ts", import.meta.url), "utf8");
 const integrationVerifierSource = readFileSync(new URL("../electron/services/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");

@@ -1,7 +1,8 @@
 /** 桌面系统 IPC：提供环境、数据库状态、临时目录、审计目录和安全外链能力。 */
 import { shell } from "electron";
 
-import type { AiMemoryDatabaseStatus, AppVariant, CorpusSemanticBackfillStatus, TestDataResetResult } from "../../../contracts/desktop/desktop.js";
+import type { AppVariant } from "../../../contracts/foundation/base.js";
+import type { AiMemoryDatabaseStatus, CorpusSemanticBackfillStatus, TestDataResetResult } from "../../../contracts/platform/persistence/index.js";
 import type { EventCenterFacade } from "../../services/capabilities/event-center/index.js";
 import type { WorkflowRepositoryPort as WorkflowRepository } from "../../services/workflow/index.js";
 import type { AttachmentFacade as ScreenshotStore } from "../../services/platform/attachments/index.js";

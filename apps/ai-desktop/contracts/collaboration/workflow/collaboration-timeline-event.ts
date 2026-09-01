@@ -1,4 +1,5 @@
-import type { CollaborationParticipantSnapshot, CollaborationTimelineGroup, CollaborationTimelineNode } from "./collaboration.js";
+import type { CollaborationParticipantSnapshot } from "./dto/collaboration-member.out.dto.js";
+import type { CollaborationTimelineGroup, CollaborationTimelineNode } from "./dto/collaboration-timeline.out.dto.js";
 
 /** 非执行流的专题业务事件；审批与分发必须显式声明语义，禁止依靠 action 文案反推类型。 */
 export type CollaborationTimelineBusinessEventType =

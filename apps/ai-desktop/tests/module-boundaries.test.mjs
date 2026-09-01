@@ -45,8 +45,9 @@ test("application-private contracts are domain modules outside shared", () => {
     assert.match(source(path.join("contracts", contract)), /生产者：|preload 向 Renderer/, `${contract} should explain ownership`);
   }
   assert.deepEqual(readdirSync(path.join(appRoot, "contracts")).filter((name) => name.endsWith(".ts")), []);
+  assert.equal(existsSync(path.join(appRoot, "ARCHITECTURE.md")), true);
   assert.doesNotMatch(source("contracts/collaboration/workflow/index.ts"), /from ["']\.\/desktop(?:\.js)?["']/);
-  assert.match(source("contracts/desktop/desktop.ts"), /export \* from "\.\/desktop-api\.js"/);
+  assert.match(source("contracts/desktop/desktop.ts"), /export type \{ DesktopApi \} from "\.\/desktop-api\.js"/);
   assert.match(source("contracts/desktop/capability-registry.ts"), /keyof DesktopApi/);
   assert.match(source("contracts/desktop/capability-registry.ts"), /satisfies Record<string, readonly \(keyof DesktopCapabilityRegistry\)\[]>/);
   assert.match(source("electron/main.ts"), /desktop:evolution-workbench-changed/);
@@ -54,8 +55,8 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.match(source("electron/services/evolution/internal/evolution-workbench-change.assembler.ts"), /previousStateVersion:\s*previous\.updatedAt/);
   assert.match(source("src/features/evolution/components/EvolutionDatabaseGrid.tsx"), /onEvolutionWorkbenchChanged/);
   assert.match(source("src/features/evolution/components/EvolutionDatabaseGrid.tsx"), /visibilitychange/);
-  assert.match(source("contracts/collaboration/evolution/index.ts"), /export \* from "\.\/dto\/evolution-state\.out\.dto\.js"/);
-  assert.match(source("contracts/collaboration/evolution/dto/evolution-state.out.dto.ts"), /interface EvolutionWorkspaceLocation/);
+  assert.match(source("contracts/collaboration/evolution/index.ts"), /EvolutionStateOutDto \} from "\.\/dto\/evolution-state\.out\.dto\.js"/);
+  assert.match(source("contracts/collaboration/evolution/dto/evolution-workbench.out.dto.ts"), /interface EvolutionWorkspaceLocation/);
   assert.match(source("electron/ipc/register-desktop-ipc.ts"), /normalizeEvolutionWorkspaceLocation/);
   assert.doesNotMatch(source("contracts/desktop/desktop-api.ts"), /onEvolutionWorkspacePerspective|openEvolutionWorkspace\(perspective/);
   assert.match(source("src/features/evolution/components/EvolutionDatabaseGrid.tsx"), /requestedLocation.*onLocationChange/);
@@ -450,14 +451,34 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
 
   // Contracts 按人物、共享事实、流程以及输入输出方向分层。
   for (const contract of [
+    "contracts/collaboration/nangong/dto/send-conversation-message.in.dto.ts",
+    "contracts/collaboration/nangong/dto/conversation.out.dto.ts",
+    "contracts/collaboration/nangong/dto/create-proposal.in.dto.ts",
+    "contracts/collaboration/hanli/dto/decide-proposal.in.dto.ts",
+    "contracts/collaboration/hanli/dto/acceptance-plan.out.dto.ts",
+    "contracts/collaboration/hanli/dto/acceptance-run.out.dto.ts",
+    "contracts/collaboration/evolution/dto/evolution-state.out.dto.ts",
+    "contracts/collaboration/evolution/dto/evolution-state.event.out.dto.ts",
+    "contracts/collaboration/evolution/dto/evolution-proposal.out.dto.ts",
+    "contracts/collaboration/workflow/dto/configure-persona-workflow.in.dto.ts",
+    "contracts/collaboration/workflow/dto/persona-workflow-action.in.dto.ts",
+    "contracts/collaboration/workflow/port/persona-capability.port.ts",
+  ]) assert.equal(existsSync(path.join(appRoot, contract)), true, contract);
+
+  for (const legacyContract of [
     "contracts/collaboration/nangong/dto/nangong-command.in.dto.ts",
     "contracts/collaboration/nangong/dto/nangong-result.out.dto.ts",
     "contracts/collaboration/hanli/dto/hanli-decision.in.dto.ts",
     "contracts/collaboration/hanli/dto/hanli-acceptance.out.dto.ts",
-    "contracts/collaboration/evolution/dto/evolution-state.out.dto.ts",
     "contracts/collaboration/workflow/dto/persona-workflow.in.dto.ts",
-    "contracts/collaboration/workflow/port/persona-capability.port.ts",
-  ]) assert.equal(existsSync(path.join(appRoot, contract)), true, contract);
+  ]) assert.equal(existsSync(path.join(appRoot, legacyContract)), false, legacyContract);
+
+  const contractSources = sourceFilesUnder("contracts").map((file) => source(file)).join("\n");
+  assert.doesNotMatch(contractSources, /export(?: type)? \*/u, "contracts 必须使用显式符号出口");
+  assert.doesNotMatch(contractSources, /\b(?:EvolutionState|EvolutionMutationRequest|DecideEvolutionProposalRequest|SendNangongConversationMessageRequest)\b/u, "旧总协议名称必须归零");
+  assert.equal(existsSync(path.join(appRoot, "contracts/collaboration/workflow/collaboration.ts")), false, "Workflow 总协议文件必须完成拆分");
+  const electronSources = sourceFilesUnder("electron").map((file) => source(file)).join("\n");
+  assert.doesNotMatch(electronSources, /contracts\/desktop\/desktop\.js/u, "主进程必须从目标领域 index 导入，Desktop 聚合只属于 preload 和 Renderer");
 
   // 人物页面已离开共享 Evolution 组件目录，共享工作区只从人物 index 组合它们。
   assert.equal(existsSync(path.join(appRoot, "src/features/nangong/components/NangongEvolutionRail.tsx")), true);

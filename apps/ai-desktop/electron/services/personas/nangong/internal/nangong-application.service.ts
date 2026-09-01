@@ -1,11 +1,11 @@
 import type {
-  ConvertNangongConversationToTopicRequest,
-  CreateEvolutionProposalRequest,
-  GenerateNangongTopicDraftRequest,
-  ReviseEvolutionProposalRequest,
-  SendNangongConversationMessageRequest,
-  UpdateEvolutionTopicRequest,
-} from "../../../../../contracts/collaboration/evolution/index.js";
+  ConvertNangongConversationToTopicInDto,
+  CreateNangongProposalInDto,
+  GenerateNangongTopicDraftInDto,
+  ReviseNangongProposalInDto,
+  SendNangongConversationMessageInDto,
+  UpdateNangongTopicInDto,
+} from "../../../../../contracts/collaboration/nangong/index.js";
 import type { NangongApplicationPort } from "../nangong.facade.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 import { NangongConversationService } from "./nangong-conversation.service.js";
@@ -24,12 +24,12 @@ export class NangongApplicationService implements NangongApplicationPort {
     this.#authoring = new NangongEvolutionAuthoringService(options);
   }
 
-  sendConversationMessage(request: SendNangongConversationMessageRequest) { return this.#conversation.sendConversationMessage(request); }
+  sendConversationMessage(request: SendNangongConversationMessageInDto) { return this.#conversation.sendConversationMessage(request); }
   newConversation() { return this.#conversation.newConversation(); }
-  generateTopicDraft(request: GenerateNangongTopicDraftRequest) { return this.#conversation.generateTopicDraft(request); }
-  convertConversationToTopic(request: ConvertNangongConversationToTopicRequest) { return this.#authoring.convertConversationToTopic(request); }
-  createProposal(topicId: string, request: CreateEvolutionProposalRequest) { return this.#authoring.createProposal(topicId, request); }
-  updateTopic(topicId: string, request: UpdateEvolutionTopicRequest) { return this.#authoring.updateTopic(topicId, request); }
-  reviseProposal(proposalId: string, request: ReviseEvolutionProposalRequest) { return this.#authoring.reviseProposal(proposalId, request); }
+  generateTopicDraft(request: GenerateNangongTopicDraftInDto) { return this.#conversation.generateTopicDraft(request); }
+  convertConversationToTopic(request: ConvertNangongConversationToTopicInDto) { return this.#authoring.convertConversationToTopic(request); }
+  createProposal(topicId: string, request: CreateNangongProposalInDto) { return this.#authoring.createProposal(topicId, request); }
+  updateTopic(topicId: string, request: UpdateNangongTopicInDto) { return this.#authoring.updateTopic(topicId, request); }
+  reviseProposal(proposalId: string, request: ReviseNangongProposalInDto) { return this.#authoring.reviseProposal(proposalId, request); }
   investigateAndReviseReturnedProposal(proposalId: string) { return this.#authoring.investigateAndReviseReturnedProposal(proposalId); }
 }

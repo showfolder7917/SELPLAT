@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { BrowserWindow } from "electron";
 
-import type { HanLiAcceptanceOperation, HanLiAcceptancePlan, HanLiAcceptanceRun, HanLiAcceptanceStepResult } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { HanliAcceptanceOperation, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto } from "../../../../../contracts/collaboration/hanli/index.js";
 import type { AttachmentFacade as ScreenshotStore } from "../../../platform/attachments/index.js";
 
 const BLOCKED_CLICK_TARGET = /删除|清空|移除|退出登录|提交|保存|确认|通过|退回|驳回|分发|发布|重启|delete|clear|remove|submit|approve|reject|dispatch|restart/iu;
@@ -14,11 +14,11 @@ export class HanliRealAppAcceptanceRunner {
 
   constructor(screenshots: ScreenshotStore) { this.#screenshots = screenshots; }
 
-  async execute(plan: HanLiAcceptancePlan, targetWindow: BrowserWindow): Promise<HanLiAcceptanceRun> {
+  async execute(plan: HanliAcceptancePlanOutDto, targetWindow: BrowserWindow): Promise<HanliAcceptanceRunOutDto> {
     if (targetWindow.isDestroyed()) throw new Error("专题演化工作台已经关闭，无法执行真实界面验收。 ");
     const startedAt = new Date().toISOString();
     const initialBounds = targetWindow.getBounds();
-    const stepResults: HanLiAcceptanceStepResult[] = [];
+    const stepResults: HanliAcceptanceStepResultOutDto[] = [];
     const evidenceAttachmentIds: string[] = [];
     let operationCount = 0;
     targetWindow.show();
@@ -51,7 +51,7 @@ export class HanliRealAppAcceptanceRunner {
     };
   }
 
-  async #executeOperation(targetWindow: BrowserWindow, checkId: string, operationIndex: number, operation: HanLiAcceptanceOperation): Promise<HanLiAcceptanceStepResult> {
+  async #executeOperation(targetWindow: BrowserWindow, checkId: string, operationIndex: number, operation: HanliAcceptanceOperation): Promise<HanliAcceptanceStepResultOutDto> {
     try {
       if (operation.type === "focus-window") {
         targetWindow.show(); targetWindow.focus();
@@ -104,7 +104,7 @@ export class HanliRealAppAcceptanceRunner {
   }
 }
 
-function result(checkId: string, operationIndex: number, operation: HanLiAcceptanceOperation, status: HanLiAcceptanceStepResult["status"], actual: string): HanLiAcceptanceStepResult {
+function result(checkId: string, operationIndex: number, operation: HanliAcceptanceOperation, status: HanliAcceptanceStepResultOutDto["status"], actual: string): HanliAcceptanceStepResultOutDto {
   return { checkId, operationIndex, operation: structuredClone(operation), status, actual: actual.slice(0, 2_000), screenshotAttachmentId: null, occurredAt: new Date().toISOString() };
 }
 

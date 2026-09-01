@@ -1,4 +1,4 @@
-import type { EvolutionState } from "../../../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionStateOutDto } from "../../../../../contracts/collaboration/evolution/index.js";
 
 export interface RevisionInvestigation {
   content: string;
@@ -11,7 +11,7 @@ export interface RevisionInvestigation {
 }
 
 /** 生成只读返修调查指令；审批意见只能作为核查目标，不能冒充新的事实证据。 */
-export function revisionInvestigationPrompt(topic: EvolutionState["topics"][number], proposal: EvolutionState["proposals"][number], advice: string, feedbackTarget: string, capabilityScope: string | null): string {
+export function revisionInvestigationPrompt(topic: EvolutionStateOutDto["topics"][number], proposal: EvolutionStateOutDto["proposals"][number], advice: string, feedbackTarget: string, capabilityScope: string | null): string {
   return [
     "你是南宫婉。韩立已经退回当前提案；先只读检查实际工作区，再决定是否存在足以重新提交的新事实。不得修改文件、启动构建或把审批意见改写成事实。",
     "重点核对韩立指出的实际组件、选择器或文件位置，当前可用、悬停、忙碌或禁用状态，明确影响范围与排除项，具体风险与回退边界，以及能在真实应用中观察的验收条件。",
@@ -39,7 +39,7 @@ export function parseRevisionInvestigation(text: string): RevisionInvestigation 
 }
 
 /** 只有新增可定位证据并且方案结构真实变化时，才允许形成下一版提案。 */
-export function hasMaterialRevisionEvidence(proposal: EvolutionState["proposals"][number], investigation: RevisionInvestigation, advice: string): boolean {
+export function hasMaterialRevisionEvidence(proposal: EvolutionStateOutDto["proposals"][number], investigation: RevisionInvestigation, advice: string): boolean {
   const oldEvidence = new Set(proposal.evidence.map(normalizedComparisonText));
   const approvalText = normalizedComparisonText(advice);
   const hasNewEvidence = investigation.evidence.some((item) => {

@@ -1,7 +1,8 @@
 // Evolution 门面文件集中提供共同业务数据的装配入口，不把 Repository 或 Store 实现公开给人物和 IPC。
 import type { DatabasePort } from "../platform/persistence/index.js";
 import type { CreateLinghuRepairProposalOutDto } from "../../../contracts/collaboration/linghu/index.js";
-import type { CreateEvolutionTopicRequest, EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionState, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../contracts/collaboration/evolution/index.js";
+import type { EvolutionTopicDossier, EvolutionWorkbenchPage, EvolutionWorkbenchPreference, EvolutionStateOutDto, QueryEvolutionWorkbenchRequest, SaveEvolutionWorkbenchPreferenceRequest } from "../../../contracts/collaboration/evolution/index.js";
+import type { CreateNangongTopicInDto } from "../../../contracts/collaboration/nangong/index.js";
 import { EvolutionMutationCoordinator } from "./internal/evolution-mutation.coordinator.js";
 import { EvolutionStateRepository } from "./internal/evolution-state.repository.js";
 import { EvolutionStateStore } from "./internal/evolution-state.store.js";
@@ -28,13 +29,13 @@ export { buildEvolutionWorkbenchChange } from "./internal/evolution-workbench-ch
 
 /** Evolution Facade 使用的最小应用端口，只包含共同状态和共享工作台能力。 */
 export interface EvolutionApplicationPort {
-  state(): EvolutionState;
+  state(): EvolutionStateOutDto;
   dossier(topicId: string): EvolutionTopicDossier;
   queryWorkbench(request: QueryEvolutionWorkbenchRequest): EvolutionWorkbenchPage;
   getWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): EvolutionWorkbenchPreference | null;
   saveWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceRequest): EvolutionWorkbenchPreference;
-  createTopic(request: CreateEvolutionTopicRequest): EvolutionState;
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionState;
+  createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto;
+  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionStateOutDto;
   subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]): () => void;
 }
 
@@ -54,7 +55,7 @@ export class EvolutionFacade {
   /** 保存共享工作台显示偏好，并返回数据库确认后的记录。 */
   saveWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceRequest) { return this.#application.saveWorkbenchPreference(request); }
   /** 创建共同专题；来源人物由请求事实记录，不改变状态所有权。 */
-  createTopic(request: CreateEvolutionTopicRequest) { return this.#application.createTopic(request); }
+  createTopic(request: CreateNangongTopicInDto) { return this.#application.createTopic(request); }
   /** 接收令狐修正提案；令狐不能直接调用南宫或韩立内部服务。 */
   createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto) { return this.#application.createLinghuRepairProposal(request); }
   /** 订阅共同状态原子提交；返回函数用于取消订阅。 */

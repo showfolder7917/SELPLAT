@@ -1,21 +1,21 @@
-import type { CreateCollaborationMemberRequest, DesktopOperatingMode, SubmitCollaborationTaskRequest, UpdateCollaborationMemberRequest } from "../../../contracts/collaboration/workflow/index.js";
+import type { CreateCollaborationMemberInDto, DesktopOperatingMode, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto } from "../../../contracts/collaboration/workflow/index.js";
 import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, UpdateLinghuStartupPromptInDto } from "../../../contracts/collaboration/linghu/index.js";
 import type {
-  ConfigureEvolutionAutomationRequest,
-  ConvertNangongConversationToTopicRequest,
-  CreateEvolutionProposalRequest,
-  CreateEvolutionTopicRequest,
-  DecideEvolutionProposalRequest,
-  DecideEvolutionResultRequest,
-  EvolutionAutomationAction,
-  EvolutionMutationRequest,
-  GenerateNangongTopicDraftRequest,
+  EvolutionMutationInDto,
   QueryEvolutionWorkbenchRequest,
   SaveEvolutionWorkbenchPreferenceRequest,
-  ReviseEvolutionProposalRequest,
-  SendNangongConversationMessageRequest,
-  UpdateEvolutionTopicRequest,
 } from "../../../contracts/collaboration/evolution/index.js";
+import type { DecideHanliProposalInDto, DecideHanliResultInDto } from "../../../contracts/collaboration/hanli/index.js";
+import type {
+  ConvertNangongConversationToTopicInDto,
+  CreateNangongProposalInDto,
+  CreateNangongTopicInDto,
+  GenerateNangongTopicDraftInDto,
+  ReviseNangongProposalInDto,
+  SendNangongConversationMessageInDto,
+  UpdateNangongTopicInDto,
+} from "../../../contracts/collaboration/nangong/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../contracts/collaboration/workflow/index.js";
 import type { CollaborationWorkflowFacade as CollaborationCoordinator } from "../../services/workflow/index.js";
 import type { LinghuAutomationFacade } from "../../services/personas/linghu/index.js";
 import type { NangongFacade } from "../../services/personas/nangong/index.js";
@@ -45,10 +45,10 @@ export function registerCollaborationIpc(
   });
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingMode) => collaboration.setMode(mode));
   handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
-  handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberRequest) => collaboration.createMember(request));
-  handle("desktop:update-collaboration-member", (_event, memberId: string, request: UpdateCollaborationMemberRequest) => collaboration.updateMember(memberId, request));
+  handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberInDto) => collaboration.createMember(request));
+  handle("desktop:update-collaboration-member", (_event, memberId: string, request: UpdateCollaborationMemberInDto) => collaboration.updateMember(memberId, request));
   handle("desktop:delete-collaboration-member", (_event, memberId: string) => collaboration.deleteMember(memberId));
-  handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskRequest) => collaboration.submitTask(request));
+  handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request));
   handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
   handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
   handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
@@ -63,22 +63,22 @@ export function registerCollaborationIpc(
   handle("desktop:get-evolution-workbench-preference", (_event, perspective: "nangong" | "hanli", nodeId: string) => evolution.getWorkbenchPreference(perspective, nodeId));
   handle("desktop:save-evolution-workbench-preference", (_event, request: SaveEvolutionWorkbenchPreferenceRequest) => evolution.saveWorkbenchPreference(request));
   handle("desktop:advance-han-li-deliberation", () => hanli.advanceDeliberation());
-  handle("desktop:send-nangong-conversation-message", (_event, request: SendNangongConversationMessageRequest) => nangong.sendConversationMessage(request));
+  handle("desktop:send-nangong-conversation-message", (_event, request: SendNangongConversationMessageInDto) => nangong.sendConversationMessage(request));
   handle("desktop:new-nangong-conversation", () => nangong.newConversation());
-  handle("desktop:generate-nangong-topic-draft", (_event, request: GenerateNangongTopicDraftRequest) => nangong.generateTopicDraft(request));
-  handle("desktop:convert-nangong-conversation-to-topic", (_event, request: ConvertNangongConversationToTopicRequest) => nangong.convertConversationToTopic(request));
-  handle("desktop:create-evolution-topic", (_event, request: CreateEvolutionTopicRequest) => evolution.createTopic(request));
-  handle("desktop:update-evolution-topic", (_event, topicId: string, request: UpdateEvolutionTopicRequest) => nangong.updateTopic(topicId, request));
+  handle("desktop:generate-nangong-topic-draft", (_event, request: GenerateNangongTopicDraftInDto) => nangong.generateTopicDraft(request));
+  handle("desktop:convert-nangong-conversation-to-topic", (_event, request: ConvertNangongConversationToTopicInDto) => nangong.convertConversationToTopic(request));
+  handle("desktop:create-evolution-topic", (_event, request: CreateNangongTopicInDto) => evolution.createTopic(request));
+  handle("desktop:update-evolution-topic", (_event, topicId: string, request: UpdateNangongTopicInDto) => nangong.updateTopic(topicId, request));
   handle("desktop:set-nangong-automation", (_event, kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean) => personaWorkflow.setAutomation(kind, enabled === true));
-  handle("desktop:configure-evolution-automation", (_event, request: ConfigureEvolutionAutomationRequest) => personaWorkflow.configureAutomation(request));
-  handle("desktop:control-evolution-automation", (_event, action: EvolutionAutomationAction) => personaWorkflow.controlAutomation(action));
+  handle("desktop:configure-evolution-automation", (_event, request: ConfigurePersonaWorkflowInDto) => personaWorkflow.configureAutomation(request));
+  handle("desktop:control-evolution-automation", (_event, action: PersonaWorkflowActionInDto) => personaWorkflow.controlAutomation(action));
   handle("desktop:resume-nangong-one-shot-evolution", () => personaWorkflow.resumeOneShotRun());
-  handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateEvolutionProposalRequest) => nangong.createProposal(topicId, request));
+  handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateNangongProposalInDto) => nangong.createProposal(topicId, request));
   handle("desktop:create-linghu-repair-proposal", (_event, request: CreateLinghuRepairProposalOutDto) => evolution.createLinghuRepairProposal(request));
-  handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideEvolutionProposalRequest) => hanli.decideProposal(proposalId, request));
-  handle("desktop:decide-evolution-result", (_event, proposalId: string, request: DecideEvolutionResultRequest) => hanli.decideResult(proposalId, request));
+  handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideHanliProposalInDto) => hanli.decideProposal(proposalId, request));
+  handle("desktop:decide-evolution-result", (_event, proposalId: string, request: DecideHanliResultInDto) => hanli.decideResult(proposalId, request));
   handle("desktop:generate-han-li-acceptance-plan", (_event, proposalId: string) => hanli.generateAcceptancePlan(proposalId));
-  handle("desktop:revise-evolution-proposal", (_event, proposalId: string, request: ReviseEvolutionProposalRequest) => nangong.reviseProposal(proposalId, request));
-  handle("desktop:auto-approve-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationRequest) => hanli.autoApprove(proposalId, request));
-  handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationRequest) => personaWorkflow.dispatch(proposalId, request));
+  handle("desktop:revise-evolution-proposal", (_event, proposalId: string, request: ReviseNangongProposalInDto) => nangong.reviseProposal(proposalId, request));
+  handle("desktop:auto-approve-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationInDto) => hanli.autoApprove(proposalId, request));
+  handle("desktop:dispatch-evolution-proposal", (_event, proposalId: string, request: EvolutionMutationInDto) => personaWorkflow.dispatch(proposalId, request));
 }

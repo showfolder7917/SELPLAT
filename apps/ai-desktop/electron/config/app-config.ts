@@ -4,7 +4,7 @@ import path from "node:path";
 import { app } from "electron";
 import { validateSafeIdentifier } from "@selplat/node-common-core/validation";
 
-import type { AppVariant } from "../../contracts/desktop/desktop.js";
+import type { AppVariant } from "../../contracts/foundation/base.js";
 import { resolveAiMemoryPaths as resolveConfiguredAiMemoryPaths, type ResolvedAiMemoryPaths } from "./ai-memory-path-resolver.js";
 
 type ApplicationMetadata = {
